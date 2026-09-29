@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.016 :
+
+Documentación del próximo paso, sin cambios en la app. Queda escrita la regla para todo lo que se haga:
+cada instalación es una isla, con su Supabase, su hosting, su correo, su cliente de Google y el
+almacenamiento de sus usuarios, y nada llega a Lega. No se implementa todavía, pero nada puede
+complicarlo: nada fijo en el código, todo lo del servidor en el repo, ningún servicio central. Nueva
+decisión abierta D-17: los archivos grandes (fotos, videos y PDFs de rodaje) salen de Supabase, que en
+el plan gratis trae 1 GB. Entran al roadmap, antes de la fase 2, una guarda para que una versión vieja
+no borre bloques nuevos y la cola de archivos grandes; también dos arreglos chicos (fotos HEIC en
+Windows e imágenes copiadas entre páginas).
+[ Docs - autohosteo aislado y archivos grandes (D-17) ]
+
 v0.015 :
 
 Editor más cómodo, con auditoría. La barra lateral se ensancha arrastrando su borde (doble clic vuelve al

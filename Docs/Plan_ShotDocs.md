@@ -135,11 +135,21 @@ sus ramas hermanas.
 
 ## 8. Autohosteo
 
-- Cada supervisor tiene su propio proyecto de Supabase y su propio proyecto de Vercel.
-- El repo trae un script SQL con las tablas y las políticas de seguridad, y una guía paso a paso.
+**Objetivo: cada instalación es una isla.** Quien instala la app lo hace con sus propias cuentas y nada
+de sus datos, de sus logins ni de sus archivos pasa por Lega. No se implementa todavía (falta la guía y
+el script de instalación), pero **todo lo que se hace desde ya tiene que respetarlo y no complicarlo**:
+ver las reglas del principio de `Doc_Roadmap.md`.
+
+- Cada instalación tiene su propio Supabase (login, tablas, funciones, secretos), su hosting (Vercel u
+  otro), su correo (su clave y su dominio de Resend u otro SMTP) y su cliente OAuth de Google. Los
+  archivos grandes van al almacenamiento de cada usuario (D-17).
+- El repo trae las migraciones con las tablas y las políticas de seguridad, las funciones del servidor y
+  una guía paso a paso.
 - Deploy con un clic desde Vercel, cargando dos o tres variables de entorno.
 - Opción 100 % privada, más adelante: Supabase autohosteado con Docker.
 - Las claves nunca se versionan.
+- El plan gratis de Supabase es el techo por defecto: 500 MB de base, 1 GB de archivos, subidas de hasta
+  50 MB y se pausa tras una semana sin uso (la app sigue andando sin red, pero no sincroniza).
 
 ## 9. Fases
 

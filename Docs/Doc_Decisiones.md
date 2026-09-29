@@ -73,3 +73,15 @@ diga otra cosa.
 - **D-07 · MCP.** Opción indicada: un servidor MCP como función de Vercel, que entra con la sesión del
   usuario y edita con sus permisos. Se hace en la fase 5, después del asistente de la app.
 - **D-08 · Formato por defecto de un espacio nuevo.** Opción indicada: libre.
+- **D-17 · Dónde van los archivos grandes.** El plan gratis de Supabase trae 1 GB de archivos: unas 300
+  fotos de teléfono o un video de rodaje. Opción indicada: los originales van al Google Drive de cada
+  usuario y Supabase guarda solo la tabla de archivos y una vista liviana de cada uno (~1600 px, para
+  mostrar la página rápido, sin red, sin Google y al compartir). La página nunca guarda un link de Drive,
+  así se puede cambiar de destino sin tocar páginas. Falta que Lega decida:
+  - En un proyecto compartido, ¿los archivos de todos van al Drive del dueño o cada uno al suyo?
+  - Orden en Drive: ¿una carpeta por página (espejo del árbol) o por proyecto y fecha (más simple, sin
+    conflictos, más parecido a un backup de rodaje)? ¿La app tiene que seguir lo que se reordene a mano?
+  - En el iPhone, ¿los videos se ven adentro de la app o alcanza con el primer cuadro y "Abrir en Drive"?
+  - ¿Hace falta el original exacto (HEIC, HEVC, ProRes) o alcanza lo que entrega el selector de fotos?
+  - Borrar un archivo de una página: ¿queda en Drive o va a una papelera?
+  - ¿El backup en Drive incluye el texto de las páginas (exportado) o solo los archivos?
