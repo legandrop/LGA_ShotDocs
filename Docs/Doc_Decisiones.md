@@ -16,6 +16,15 @@ diga otra cosa.
 - **D-04 · Tiempo real al final** (2026-09-29). El modelo de datos lo contempla desde el principio, pero
   se implementa en la última fase.
 
+- **D-10 · Ajustes por rama y por cuenta** (2026-09-29). Lo que depende del contenido se guarda en la
+  página y lo heredan las de adentro, salvo que alguna defina lo suyo: el encabezado con los contenedores
+  (cuántos niveles, o oculto) y la división de títulos por "|". Lo que depende de la persona se guarda en
+  su cuenta y la sigue en todos sus dispositivos: tema (sistema, claro, oscuro), fuente (Default con
+  Inter, Editorial con Instrument Serif en títulos), tamaño del texto y ancho de página. Los títulos de
+  una lista se dividen solo si ninguno tiene un código (la parte antes del primer "|") de más de 7
+  caracteres, para que la columna del código quede alineada; si no, la lista se ve con los títulos
+  enteros. El encabezado muestra 2 niveles si nadie lo configuró.
+
 ## Abiertas
 
 - **D-05 · Hosting para trabajos pagos.** El plan Hobby de Vercel es solo para uso no comercial. Para

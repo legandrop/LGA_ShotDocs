@@ -10,7 +10,7 @@ import { useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { notify } from './notice';
-import { useColorScheme } from './useColorScheme';
+import { useScheme } from '../prefs';
 
 // En la fase 1 solo se guardan imágenes (el bucket no acepta otros archivos): sin bloques de archivo,
 // video ni audio.
@@ -76,7 +76,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
 
 function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; editable: boolean }) {
   const { files, user } = useServices();
-  const scheme = useColorScheme();
+  const scheme = useScheme();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
   const editor = useCreateBlockNote(
     withCollaboration({

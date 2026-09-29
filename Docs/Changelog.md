@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.011 :
+
+Diseño nuevo, auditado y con sus correcciones. Login con la franja de la claqueta, ícono
+de anotador con claqueta en blanco y negro, paleta papel y tinta con tema oscuro y acento ámbar. El menú
+de la cuenta elige tema (sistema, claro u oscuro), fuente (Default o Editorial), tamaño del texto y ancho
+de página, y lo guarda en la cuenta (`user_settings`) para todos los dispositivos. En la barra lateral,
+"064 | Nombre | Lugar" se ve como código y nombre si ningún código de la lista pasa de 7 caracteres, y
+arriba del título aparece un encabezado con los contenedores. Los dos ajustes van por rama en
+`pages.settings` y se heredan (D-10). La app tolera una base sin la migración nueva, y las migraciones
+van antes de publicar.
+[ Diseño - login, ícono, temas y ajustes por rama y por cuenta ]
+
 v0.010 :
 
 La app ya está publicada en Vercel, conectada al repo: cada push a `main` se publica solo. La dirección de

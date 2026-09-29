@@ -55,6 +55,7 @@ export class FakeRemote implements Remote {
     this.server.pages.set(page.id, {
       ...page,
       icon: null,
+      settings: {},
       update_seq: 0,
       deleted_at: null,
       created_at: now,

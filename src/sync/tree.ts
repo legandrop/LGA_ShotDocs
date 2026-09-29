@@ -1,6 +1,6 @@
 import { generateKeyBetween } from 'fractional-indexing';
 import type { LocalDb } from './localDb';
-import type { FailedOp, PagePatch, PageRow, QueuedOp, TreeOp } from './types';
+import type { FailedOp, PagePatch, PageRow, PageSettings, QueuedOp, TreeOp } from './types';
 
 export function compareSiblings(a: PageRow, b: PageRow): number {
   if (a.sort_key !== b.sort_key) return a.sort_key < b.sort_key ? -1 : 1;
@@ -44,6 +44,7 @@ function applyOp(pages: Map<string, PageRow>, op: TreeOp, now: string): void {
     pages.set(op.page.id, {
       ...op.page,
       icon: null,
+      settings: {},
       update_seq: 0,
       deleted_at: null,
       created_at: now,
@@ -140,6 +141,24 @@ export class PageTree {
     return out;
   }
 
+  /**
+   * El ajuste que vale para `id`: el suyo o el del ancestro más cercano que lo defina. `from` es la
+   * página que lo define. Un valor que `valid` rechaza (de otra versión de la app, por ejemplo) cuenta
+   * como no puesto y se sigue buscando más arriba. Sin ninguno, `undefined`.
+   */
+  resolveSetting<K extends keyof PageSettings>(
+    id: string,
+    key: K,
+    valid: (value: unknown) => value is NonNullable<PageSettings[K]>,
+  ): { value: NonNullable<PageSettings[K]>; from: PageRow } | undefined {
+    const chain = [this.view.get(id), ...this.ancestors(id).reverse()];
+    for (const page of chain) {
+      const value: unknown = page?.settings?.[key];
+      if (page && valid(value)) return { value, from: page };
+    }
+    return undefined;
+  }
+
   isDescendant(id: string, ofId: string): boolean {
     return this.ancestors(id).some((p) => p.id === ofId);
   }
@@ -198,6 +217,17 @@ export class PageTree {
 
   async restore(id: string): Promise<void> {
     await this.enqueue({ kind: 'update', id, patch: { deleted_at: null } });
+  }
+
+  /** Cambia un ajuste de la rama que empieza en `id`; `undefined` lo borra y vuelve a heredarse. */
+  async setSetting<K extends keyof PageSettings>(id: string, key: K, value: PageSettings[K] | undefined): Promise<void> {
+    const current = this.view.get(id);
+    if (!current) return;
+    const settings: PageSettings = { ...current.settings };
+    if (value === undefined) delete settings[key];
+    else settings[key] = value;
+    if (JSON.stringify(settings) === JSON.stringify(current.settings ?? {})) return;
+    await this.enqueue({ kind: 'update', id, patch: { settings } });
   }
 
   async setPatch(id: string, patch: PagePatch): Promise<void> {

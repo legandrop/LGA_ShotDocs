@@ -5,13 +5,26 @@ export interface PageRow {
   title: string;
   icon: string | null;
   sort_key: string;
+  /** Ajustes de la rama; en copias guardadas por versiones anteriores de la app puede faltar. */
+  settings?: PageSettings;
   update_seq: number;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at'>>;
+/**
+ * Ajustes de una página que valen también para las de adentro, salvo que alguna defina los suyos. Cada
+ * campo se hereda por separado: el que falta se busca en los ancestros.
+ */
+export interface PageSettings {
+  /** Encabezado arriba del título con las páginas contenedoras. `levels: 0` lo oculta; `null`, todas. */
+  header?: { levels: number | null; last?: number | null };
+  /** Dividir por "|" los títulos de las páginas de adentro en la barra lateral. */
+  split?: boolean;
+}
+
+export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings'>>;
 
 export interface NewPage {
   id: string;

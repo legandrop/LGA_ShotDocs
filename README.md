@@ -22,12 +22,17 @@ one tree of pages you own.
 - **Share a branch, never the tree.** Share any page with a public link or with specific people. Sharing
   a page shares everything under it and nothing above it: parent pages and sibling branches stay
   private.
+- **Your look, everywhere.** Light or dark theme, a default or an editorial typeface, text size and page
+  width, saved in your account and applied on every device. Scene titles like `064 | Name | Place` show
+  as a short code and a name in the sidebar, and each page can show the pages that contain it above its
+  title.
 - **Self-hosted.** Each supervisor runs their own copy with their own database. Nothing is shared between
   installations.
 
 ## Status
 
-Phase 1 (MVP) works: email sign-in, the page tree, the block editor with autosave and pasted images.
+Phase 1 (MVP) works: email sign-in, the page tree, the block editor with autosave and pasted images,
+light and dark themes and per-account appearance settings.
 Every edit is saved on the device first and synced when a connection is available; edits made offline on
 several devices are merged. The app can be installed (PWA). Signing in from the installed app on an iPhone
 needs your own mail server (SMTP) configured in Supabase, because the sign-in link opens Safari instead of
@@ -45,7 +50,8 @@ npm run build                # production build in dist/
 ```
 
 The database migrations are in `supabase/migrations/`. See [`Docs/Doc_Supabase.md`](Docs/Doc_Supabase.md)
-to apply them and run the permission tests.
+to apply them and run the permission tests. Apply new migrations before deploying a new version of the
+app.
 
 ## Stack
 

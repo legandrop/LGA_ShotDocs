@@ -19,7 +19,11 @@ export interface Remote {
 
 export const FILES_BUCKET = 'page-files';
 export const PAGE_COLUMNS =
-  'id, workspace_id, parent_id, title, icon, sort_key, update_seq, deleted_at, created_at, updated_at';
+  'id, workspace_id, parent_id, title, icon, sort_key, settings, update_seq, deleted_at, created_at, updated_at';
+// Una instalación que publicó esta versión sin aplicar la migración de ajustes no tiene `pages.settings`:
+// el árbol se sigue bajando sin esa columna, en vez de cortar toda la sincronización.
+const PAGE_COLUMNS_WITHOUT_SETTINGS = PAGE_COLUMNS.replace(' settings,', '');
+const UNDEFINED_COLUMN = '42703';
 
 // 401 llega cuando la sesión venció y se está renovando: se reintenta.
 const TRANSIENT_STATUS = new Set([0, 401, 408, 425, 429, 500, 502, 503, 504]);
@@ -39,6 +43,13 @@ function networkError(err: unknown): RemoteError {
 }
 
 export class SupabaseRemote implements Remote {
+  /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
+  private settingsMissingAt = 0;
+
+  private get settingsMissing(): boolean {
+    return Date.now() - this.settingsMissingAt < 10 * 60_000;
+  }
+
   constructor(private readonly client: SupabaseClient) {}
 
   async ensureWorkspace(): Promise<string> {
@@ -52,11 +63,16 @@ export class SupabaseRemote implements Remote {
     const rows: PageRow[] = [];
     let after: string | null = null;
     for (;;) {
-      let query = this.client.from('pages').select(PAGE_COLUMNS).eq('workspace_id', workspaceId);
+      const columns = this.settingsMissing ? PAGE_COLUMNS_WITHOUT_SETTINGS : PAGE_COLUMNS;
+      let query = this.client.from('pages').select(columns).eq('workspace_id', workspaceId);
       if (after) query = query.gt('id', after);
       const { data, error, status } = await query.order('id').limit(1000);
+      if (error?.code === UNDEFINED_COLUMN && !this.settingsMissing) {
+        this.settingsMissingAt = Date.now();
+        return this.fetchTree(workspaceId);
+      }
       if (error) throw toRemoteError(error, status);
-      const page = data as PageRow[];
+      const page = data as unknown as PageRow[];
       rows.push(...page);
       if (page.length < 1000) return rows;
       after = page[page.length - 1].id;
@@ -71,6 +87,9 @@ export class SupabaseRemote implements Remote {
   }
 
   async updatePage(id: string, patch: PagePatch): Promise<void> {
+    if (this.settingsMissing && patch.settings !== undefined) {
+      throw new RemoteError('The database is missing pages.settings: apply the database migrations.', true, UNDEFINED_COLUMN);
+    }
     const { data, error, status } = await this.client.from('pages').update(patch).eq('id', id).select('id');
     if (error) throw toRemoteError(error, status);
     if (data.length === 0) throw new RemoteError('page_not_found', true, 'P0002');

@@ -22,6 +22,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20260929130000_fase1_archivos.sql` | Bucket privado `page-files` para las imágenes, con los permisos de la página a la que pertenece cada archivo. |
 | `20260929140000_fase1_politica_filas_nuevas.sql` | La política de lectura de `pages` decide con los datos de la fila, para que crear una página con `upsert` funcione. |
 | `20260929150000_fase1_auditoria.sql` | Correcciones de la auditoría: los cambios de padre de un espacio se aplican de a uno (dos movimientos simultáneos ya no arman un ciclo), topes de largo, el bucket acepta solo imágenes raster (sin SVG) y las tablas nuevas no dan TRUNCATE por defecto. |
+| `20260929160000_ajustes.sql` | Columna `pages.settings` (ajustes por rama, un objeto JSON de hasta 2000 caracteres) y tabla `user_settings` con las preferencias de cada cuenta: cada usuario ve y cambia solo la suya, y no se borra desde la API. |
 
 Reglas del esquema:
 
@@ -43,6 +44,13 @@ SUPABASE_URL=https://<ref>.supabase.co SUPABASE_ACCESS_TOKEN=sbp_... npm run db:
 El script aplica solo lo que falta y lo registra en `supabase_migrations.schema_migrations`, la misma tabla
 que usa el CLI de Supabase, así que después también sirve `supabase db push`. Sin token, se puede pegar
 cada archivo en el SQL Editor del proyecto, en orden.
+
+**Las migraciones van antes de publicar la app.** Vercel publica solo con cada push a `main`: si una
+versión nueva usa una columna o una tabla que la base todavía no tiene, esa parte no funciona hasta
+aplicar la migración. La app lo tolera sin perder nada (por ejemplo, sin `pages.settings` sigue bajando
+el árbol y los cambios de ajustes quedan como rechazados en el dispositivo; después de migrar, la app lo
+nota en unos minutos y se pueden reintentar), pero el
+orden correcto es: migrar, probar (`npm run db:test`) y recién después hacer push.
 
 ### Pruebas de permisos
 

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { supabase } from '../supabase';
+import { AppIcon, ArrowLeftIcon, ArrowRightIcon, MailIcon, SlateBand } from './icons';
 
 type Step = { name: 'email' } | { name: 'sent'; email: string };
 
@@ -49,67 +50,144 @@ export function Login() {
     if (error) setError(explain(error));
   }
 
+  const back = () => {
+    setStep({ name: 'email' });
+    setCode('');
+    setError(null);
+  };
+
   return (
-    <main className="center-screen">
-      <div className="card login">
-        <img src="/icons/icon.svg" alt="" width={48} height={48} />
-        <h1>LGA Shot Docs</h1>
-        {step.name === 'email' ? (
-          <form onSubmit={sendEmail}>
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
-            />
-            <button className="primary" disabled={busy}>
-              {busy ? 'Sending…' : 'Continue with email'}
-            </button>
-            <button
-              type="button"
-              className="link"
-              onClick={() => email.trim() && setStep({ name: 'sent', email: email.trim().toLowerCase() })}
-            >
-              I already have a code
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={verify}>
+    <main className="login-screen">
+      <aside className="login-hero">
+        <SlateBand height={12} />
+        <div className="login-hero-body">
+          <div className="brand-row">
+            <AppIcon size={36} />
+            <span>LGA Shot Docs</span>
+          </div>
+          <div>
+            <h1>
+              Notes for every shot.
+              <span>On set, offline, in sync.</span>
+            </h1>
             <p>
-              We sent an email to <strong>{step.email}</strong>. Open the link on this device, or type the code if
-              the email has one.
+              Pre-production notes and on-set reports in one tree of pages. Every edit is saved on your device
+              first, and nothing is lost when the signal drops.
             </p>
-            <label htmlFor="code">Code</label>
-            <input
-              id="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]{6,10}"
-              required
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-              placeholder="12345678"
-            />
-            <button className="primary" disabled={busy || code.length < 6}>
-              {busy ? 'Checking…' : 'Sign in'}
-            </button>
-            <div className="row">
-              <button type="button" className="link" onClick={() => sendEmail()} disabled={busy}>
-                Send the email again
+          </div>
+          <div className="login-tags">
+            <span>Scene notes</span>
+            <span>On-set reports</span>
+            <span>Shot breakdowns</span>
+          </div>
+        </div>
+      </aside>
+
+      <section className="login-panel">
+        <div className="mobile-only band-wrap">
+          <SlateBand height={9} />
+        </div>
+        <div className="brand-row mobile-only">
+          <AppIcon size={32} />
+          <span>LGA Shot Docs</span>
+        </div>
+
+        <div className="login-form-wrap">
+          {step.name === 'email' ? (
+            <form className="login-form" onSubmit={sendEmail}>
+              <div>
+                <h2>Sign in</h2>
+                <p className="lead">Enter your email and we will send you a sign-in link. No password to remember.</p>
+              </div>
+              <div className="field">
+                <label htmlFor="email">Email</label>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  autoFocus
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                />
+              </div>
+              <div className="login-actions">
+                <button className="primary" disabled={busy}>
+                  {busy ? 'Sending…' : 'Continue with email'}
+                  {!busy && <ArrowRightIcon />}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    const address = email.trim().toLowerCase();
+                    if (address) setStep({ name: 'sent', email: address });
+                    else setError('Type your email first.');
+                  }}
+                >
+                  I already have a code
+                </button>
+              </div>
+              {error && <p className="login-error">{error}</p>}
+              <div className="hint">
+                <MailIcon />
+                <span>
+                  On iPhone, open the link on this device or type the code from the email, so you stay signed in
+                  to the installed app.
+                </span>
+              </div>
+            </form>
+          ) : (
+            <form className="login-form" onSubmit={verify}>
+              <button type="button" className="icon-button" aria-label="Back" onClick={back}>
+                <ArrowLeftIcon size={20} />
               </button>
-              <button type="button" className="link" onClick={() => setStep({ name: 'email' })}>
-                Use another email
-              </button>
-            </div>
-          </form>
-        )}
-        {error && <p className="error">{error}</p>}
-      </div>
+              <div>
+                <h2>Check your email</h2>
+                <p className="lead">
+                  We sent a sign-in link to <strong>{step.email}</strong>. Open it on this device, or type the
+                  code if the email has one.
+                </p>
+              </div>
+              <div className="field">
+                <label htmlFor="code">Code</label>
+                <input
+                  id="code"
+                  className="code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{6,10}"
+                  required
+                  autoFocus
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="12345678"
+                />
+              </div>
+              <div className="login-actions">
+                <button className="primary" disabled={busy || code.length < 6}>
+                  {busy ? 'Checking…' : 'Sign in'}
+                </button>
+                <div className="row">
+                  <button type="button" onClick={() => void sendEmail()} disabled={busy}>
+                    Send the email again
+                  </button>
+                  <button type="button" onClick={back}>
+                    Use another email
+                  </button>
+                </div>
+              </div>
+              {error && <p className="login-error">{error}</p>}
+            </form>
+          )}
+        </div>
+
+        <footer className="login-footer">
+          <span>Self-hosted · your data, your database</span>
+          {__APP_VERSION__ && <span>v{__APP_VERSION__}</span>}
+        </footer>
+      </section>
     </main>
   );
 }

@@ -1,21 +1,21 @@
 import { useState } from 'react';
 import { useServices, useSyncStatus, useTree } from '../services';
+import { ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from './icons';
 import { usePendingCount } from './usePendingCount';
+
+type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
+
+const TONE_ICONS = { ok: SyncedIcon, busy: UploadingIcon, offline: OfflineIcon, warn: WarningIcon, error: ErrorIcon };
 
 function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/** Siempre dice si hay cambios sin subir y si algo anda mal (regla 6 de la sincronización). */
-export function SyncBadge() {
+function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   const status = useSyncStatus();
   const pending = usePendingCount();
-  const tree = useTree();
-  const { engine } = useServices();
-  const [details, setDetails] = useState(false);
-
   const rejected = status.failedOps + status.rejectedPages;
-  let tone: 'ok' | 'busy' | 'offline' | 'warn' | 'error' = 'ok';
+  let tone: Tone = 'ok';
   let text = 'All synced';
   if (status.localError) {
     tone = 'error';
@@ -34,16 +34,39 @@ export function SyncBadge() {
     text = 'Syncing…';
   }
   if ((rejected > 0 || status.warning) && tone !== 'error') tone = 'warn';
+  return { tone, text, rejected };
+}
+
+/** Versión chica para la barra de arriba en el teléfono: solo el ícono, con el texto como etiqueta. */
+export function SyncIcon({ onClick }: { onClick: () => void }) {
+  const { tone, text } = useSyncTone();
+  const Icon = TONE_ICONS[tone];
+  return (
+    <button className={`icon-button sync-icon ${tone}`} aria-label={text} title={text} onClick={onClick}>
+      <Icon size={20} />
+    </button>
+  );
+}
+
+/** Siempre dice si hay cambios sin subir y si algo anda mal (regla 6 de la sincronización). */
+export function SyncBadge() {
+  const status = useSyncStatus();
+  const tree = useTree();
+  const { engine } = useServices();
+  const [details, setDetails] = useState(false);
+  const { tone, text, rejected } = useSyncTone();
+  const Icon = TONE_ICONS[tone];
   const hasDetails = rejected > 0 || !!status.localError || !!status.lastError || !!status.warning;
 
   return (
     <div className="sync">
       <button
-        className={`sync-badge ${tone}`}
+        className={`sync-pill ${tone}`}
         title={status.localError ?? status.lastError ?? undefined}
+        aria-expanded={hasDetails ? details : undefined}
         onClick={() => (hasDetails ? setDetails(!details) : void engine.syncNow())}
       >
-        <span className="dot" />
+        <Icon size={15} />
         <span>{text}</span>
       </button>
       {rejected > 0 && (

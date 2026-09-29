@@ -54,9 +54,10 @@ Hecho en la fase 1 (detalle en `Doc_Supabase.md`):
 
 ```
 workspaces     (id, owner_id, name, created_at)
-pages          (id, workspace_id, parent_id, title, icon, sort_key, template_id, update_seq,
-                deleted_at, created_by, created_at, updated_at)
+pages          (id, workspace_id, parent_id, title, icon, sort_key, settings JSONB, template_id,
+                update_seq, deleted_at, created_by, created_at, updated_at)
 page_updates   (id, page_id, seq, client_update_id, update BYTEA, created_by, created_at)  -- solo agregado
+user_settings  (user_id, prefs JSONB, updated_at)            -- tema, fuente, tamaño y ancho: por cuenta
 storage: page-files/<page_id>/<file_id>.<ext>                -- imágenes, con los permisos de su página
 ```
 
@@ -78,6 +79,8 @@ shares         (id, page_id, kind, user_email, token_hash, role, expires_at, cre
   posterior a su último `seq`" sin saltearse nada.
 - Los archivos no tienen tabla propia: la ruta en Storage empieza con el id de la página, y de ahí salen
   sus permisos.
+- `pages.settings` guarda ajustes que valen para la página y las de adentro, salvo que alguna defina los
+  suyos: cuántos contenedores muestra el encabezado y si los títulos con "|" se dividen (D-10).
 - `shares.kind` es `link` o `user`; `role` es `view` o `edit`. El token de un link se guarda en hash.
 
 ## 5. Sincronización offline sin pérdidas
@@ -135,6 +138,9 @@ sus ramas hermanas.
    renombrar, mover, papelera), editor visual con autoguardado, offline con sincronización segura y PWA
    instalable. Incluye pegar imágenes (se guardan en el dispositivo y se suben cuando hay red). Para
    entrar desde la app instalada en el iPhone faltan el deploy y un servidor de correo propio (roadmap).
+   Después de la fase 1, **diseño (hecho, v0.011):** login nuevo con la claqueta, ícono de anotador con claqueta, paleta papel
+   y tinta con tema oscuro, menú de cuenta con tema, fuente (Default o Editorial), tamaño del texto y
+   ancho de página, títulos divididos por "|" en la barra lateral y encabezado con los contenedores.
 2. **Compartir.** Por usuario y por link público, con Row Level Security, visor público y las pruebas de
    la sección 6.
 3. **Plantillas.** Las plantillas iniciales definidas con Lega y la opción de guardar cualquier página

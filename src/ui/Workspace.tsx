@@ -1,18 +1,29 @@
 import { useEffect, useState } from 'react';
 import type { AuthUser } from '../auth';
+import { prefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
 import { ServicesContext, useBootServices, useServices, useTree } from '../services';
 import { supabase } from '../supabase';
-import { MenuIcon, PlusIcon } from './icons';
+import { MenuIcon, MoreIcon, PlusIcon } from './icons';
+import { menuBelow, PageMenu, type MenuPosition } from './menus';
+import { MoveDialog } from './MoveDialog';
 import { useNotice } from './notice';
-import { PageView } from './PageView';
+import { focusTitle, PageView } from './PageView';
 import { Sidebar } from './Sidebar';
+import { SyncIcon } from './SyncBadge';
 import { TrashView } from './TrashView';
 
 const LAST_PAGE_KEY = 'shotdocs-last-page';
 
 export function Workspace({ user }: { user: AuthUser }) {
   const boot = useBootServices(user);
+
+  // Las preferencias de la cuenta (tema, fuente…) se bajan al entrar y se suben cuando cambian.
+  useEffect(() => {
+    if (supabase) void prefs.attach(supabase, user.id);
+    return () => prefs.detach();
+  }, [user.id]);
+
   if (boot.state === 'loading') return <main className="center-screen muted">Opening your workspace…</main>;
   if (boot.state === 'busy') {
     return (
@@ -71,6 +82,8 @@ function Shell() {
   const tree = useTree();
   const { docs } = useServices();
   const [navOpen, setNavOpen] = useState(false);
+  const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
   const [notice, dismissNotice] = useNotice();
 
   // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación.
@@ -82,7 +95,10 @@ function Shell() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [docs]);
 
-  useEffect(() => setNavOpen(false), [route.name, route.name === 'page' ? route.id : null]);
+  useEffect(() => {
+    setNavOpen(false);
+    setPageMenu(null);
+  }, [route.name, route.name === 'page' ? route.id : null]);
 
   useEffect(() => {
     try {
@@ -96,7 +112,9 @@ function Shell() {
     }
   }, [route, tree]);
 
-  const crumbs = route.name === 'page' ? [...tree.ancestors(route.id), tree.get(route.id)] : [];
+  const pageId = route.name === 'page' && tree.get(route.id) ? route.id : null;
+  const crumbs = pageId ? tree.ancestors(pageId) : [];
+  const current = pageId ? tree.get(pageId) : undefined;
 
   return (
     <div className={`shell${navOpen ? ' nav-open' : ''}`}>
@@ -108,18 +126,40 @@ function Shell() {
             <MenuIcon />
           </button>
           <nav className="breadcrumbs" aria-label="Location">
-            {crumbs.map(
-              (p, i) =>
-                p && (
-                  <span key={p.id}>
-                    {i > 0 && <span className="sep">/</span>}
-                    <button className="crumb" onClick={() => navigate(pagePath(p.id))}>
-                      {p.title || 'Untitled'}
-                    </button>
-                  </span>
-                ),
+            {crumbs.map((p) => (
+              <span key={p.id}>
+                <button className="crumb" onClick={() => navigate(pagePath(p.id))}>
+                  {p.title || 'Untitled'}
+                </button>
+                <span className="sep" aria-hidden="true">
+                  /
+                </span>
+              </span>
+            ))}
+            {current && (
+              <span className="crumb current" aria-current="page">
+                {current.title || 'Untitled'}
+              </span>
             )}
+            {route.name === 'trash' && <span className="crumb current">Trash</span>}
           </nav>
+          <span className="only-mobile">
+            <SyncIcon onClick={() => setNavOpen(true)} />
+          </span>
+          {pageId && (
+            <button
+              className="icon-button"
+              aria-label="Page actions"
+              title="Page actions"
+              aria-expanded={!!pageMenu}
+              onClick={(e) => {
+                const anchor = e.currentTarget;
+                setPageMenu(pageMenu ? null : { position: menuBelow(anchor), anchor });
+              }}
+            >
+              <MoreIcon />
+            </button>
+          )}
         </header>
         {route.name === 'page' ? (
           <PageView key={route.id} id={route.id} />
@@ -129,6 +169,23 @@ function Shell() {
           <Home />
         )}
       </main>
+      {pageMenu && pageId && (
+        <PageMenu
+          pageId={pageId}
+          position={pageMenu.position}
+          anchor={pageMenu.anchor}
+          onClose={() => setPageMenu(null)}
+          onNewChild={async () => navigate(pagePath(await tree.create(pageId)))}
+          onRename={focusTitle}
+          onMove={() => setMoving(pageId)}
+          onTrash={async () => {
+            // Primero se manda a la papelera y después se sale: si no, el inicio vuelve a la última página.
+            await tree.trash(pageId);
+            navigate('/');
+          }}
+        />
+      )}
+      {moving && <MoveDialog pageId={moving} onClose={() => setMoving(null)} />}
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
@@ -159,7 +216,7 @@ function Home() {
           navigate(pagePath(id));
         }}
       >
-        <PlusIcon /> New page
+        <PlusIcon size={16} /> New page
       </button>
     </article>
   );

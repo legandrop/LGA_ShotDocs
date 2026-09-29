@@ -71,6 +71,17 @@ Cómo funciona hoy la regla de no perder nunca información. El código está en
   reintentar. "Ocultar" solo descarta rechazos que no dejan nada afuera (renombrar, mover o borrar una
   página que ya está en el servidor).
 - El contenido de una página se sube recién cuando la página existe en el servidor.
+- Los ajustes de una rama (`pages.settings`) viajan como cualquier otro cambio del árbol. Cada cambio
+  manda el objeto entero: si dos dispositivos cambian ajustes distintos de la misma página sin red, queda
+  el último que llega al servidor. Son preferencias de vista, no contenido, y se vuelven a elegir en un
+  toque.
+
+## Preferencias de la cuenta
+
+Tema, fuente, tamaño del texto y ancho de página se aplican al instante y se guardan en el dispositivo
+(`localStorage`), así la app abre con ellas aunque no haya red y sin un destello del otro tema. Al entrar,
+si hay cambios de ese usuario sin subir, se suben; si no, manda lo guardado en la cuenta
+(`user_settings`). Gana el último cambio, igual que con los ajustes de una rama.
 
 ## Imágenes
 

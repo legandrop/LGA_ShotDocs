@@ -1,10 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#1f2228"/>
-  <path d="M156 118h144l76 76v200a18 18 0 0 1-18 18H156a18 18 0 0 1-18-18V136a18 18 0 0 1 18-18z" fill="#f7f7f5"/>
-  <path d="M300 118v58a18 18 0 0 0 18 18h58z" fill="#c9c8c3"/>
-  <rect x="138" y="118" width="162" height="46" fill="#f2b632"/>
-  <path d="M166 118l-28 46M214 118l-28 46M262 118l-28 46M300 128l-22 36" stroke="#1f2228" stroke-width="14"/>
-  <rect x="178" y="236" width="156" height="18" rx="9" fill="#9a9993"/>
-  <rect x="178" y="280" width="156" height="18" rx="9" fill="#9a9993"/>
-  <rect x="178" y="324" width="104" height="18" rx="9" fill="#9a9993"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><defs><clipPath id="c"><rect width="36" height="36" rx="8.5"/></clipPath><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.22"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs><g clip-path="url(#c)"><rect width="36" height="36" fill="#FFFFFF"/><rect y="8.58" width="36" height="2.2" fill="url(#s)"/><rect width="36" height="8.58" fill="#FBFAF8"/><rect width="36" height="4.29" fill="#1B1A17"/><path d="M-3 0h4l1.95 4.29h-4z" fill="#FBFAF8"/><path d="M5 0h4l1.95 4.29h-4z" fill="#FBFAF8"/><path d="M13 0h4l1.95 4.29h-4z" fill="#FBFAF8"/><path d="M21 0h4l1.95 4.29h-4z" fill="#FBFAF8"/><path d="M29 0h4l1.95 4.29h-4z" fill="#FBFAF8"/><rect y="4.59" width="36" height="3.99" fill="#1B1A17"/><path d="M-3 8.58l1.95-3.99h4l-1.95 3.99z" fill="#FBFAF8"/><path d="M5 8.58l1.95-3.99h4l-1.95 3.99z" fill="#FBFAF8"/><path d="M13 8.58l1.95-3.99h4l-1.95 3.99z" fill="#FBFAF8"/><path d="M21 8.58l1.95-3.99h4l-1.95 3.99z" fill="#FBFAF8"/><path d="M29 8.58l1.95-3.99h4l-1.95 3.99z" fill="#FBFAF8"/><rect y="8.58" width="36" height="0.45" fill="#8A857B"/><path d="M7 14.88h22M7 19.38h22M7 23.88h22M7 28.38h14" stroke="#D2CCC0" stroke-width="1.4" stroke-linecap="round"/></g><rect x="0.5" y="0.5" width="35" height="35" rx="8" fill="none" stroke="#DDD8CE"/></svg>

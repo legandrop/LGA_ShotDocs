@@ -1,5 +1,6 @@
 import { navigate, pagePath } from '../router';
 import { useTree } from '../services';
+import { RestoreIcon } from './icons';
 
 export function TrashView() {
   const tree = useTree();
@@ -20,8 +21,10 @@ export function TrashView() {
               <button className="link title" onClick={() => navigate(pagePath(p.id))}>
                 {p.title || 'Untitled'}
               </button>
-              <span className="muted">{new Date(p.deleted_at!).toLocaleString()}</span>
-              <button onClick={() => void tree.restore(p.id)}>Restore</button>
+              <span className="when">{new Date(p.deleted_at!).toLocaleString()}</span>
+              <button onClick={() => void tree.restore(p.id)}>
+                <RestoreIcon size={16} /> Restore
+              </button>
             </li>
           ))}
         </ul>

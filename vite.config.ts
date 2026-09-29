@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { readFileSync } from 'node:fs';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -25,12 +26,23 @@ function decodeJwtPayload(token: string): string {
   }
 }
 
+// La versión que se muestra en la app es la última entrada del changelog.
+function appVersion(): string {
+  try {
+    const changelog = readFileSync(new URL('./Docs/Changelog.md', import.meta.url), 'utf8');
+    return /^v(\d+\.\d+)/m.exec(changelog)?.[1] ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const supabase = supabaseConfig(mode);
   return {
     define: {
       __SUPABASE_URL__: JSON.stringify(supabase.url),
       __SUPABASE_PUBLISHABLE_KEY__: JSON.stringify(supabase.key),
+      __APP_VERSION__: JSON.stringify(appVersion()),
     },
     plugins: [
       react(),
@@ -45,8 +57,8 @@ export default defineConfig(({ mode }) => {
           start_url: '/',
           scope: '/',
           display: 'standalone',
-          background_color: '#f7f7f5',
-          theme_color: '#f7f7f5',
+          background_color: '#FBFAF8',
+          theme_color: '#FBFAF8',
           icons: [
             { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
             { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },

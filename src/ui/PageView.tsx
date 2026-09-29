@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
+import { navigate, pagePath } from '../router';
 import { useSyncStatus, useTree } from '../services';
+import { CollapseIcon, HeaderIcon } from './icons';
 import { PageEditor } from './PageEditor';
+import { useFloating } from './menus';
+import { headerLevels, headerPages, ownHeader } from './titles';
+
+const FOCUS_TITLE = 'shotdocs:focus-title';
+
+/** Lleva el foco al título de la página abierta (renombrar desde la barra de arriba). */
+export function focusTitle(): void {
+  window.dispatchEvent(new Event(FOCUS_TITLE));
+}
 
 export function PageView({ id }: { id: string }) {
   const tree = useTree();
@@ -34,6 +45,7 @@ export function PageView({ id }: { id: string }) {
           </button>
         </div>
       )}
+      <PageHeader id={id} />
       <TitleInput id={id} title={page.title} />
       <PageEditor pageId={id} />
     </article>
@@ -52,6 +64,15 @@ function TitleInput({ id, title }: { id: string; title: string }) {
   useEffect(() => {
     if (!focused.current) setValue(title);
   }, [title]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      ref.current?.focus();
+      ref.current?.select();
+    };
+    window.addEventListener(FOCUS_TITLE, onFocus);
+    return () => window.removeEventListener(FOCUS_TITLE, onFocus);
+  }, []);
 
   useEffect(() => {
     const el = ref.current;
@@ -111,5 +132,146 @@ function TitleInput({ id, title }: { id: string; title: string }) {
         }
       }}
     />
+  );
+}
+
+const LEVEL_CHOICES: { value: number | null; label: string }[] = [
+  { value: 1, label: '1' },
+  { value: 2, label: '2' },
+  { value: 3, label: '3' },
+  { value: null, label: 'All' },
+];
+
+/**
+ * Encabezado arriba del título con las páginas que contienen a esta ("MGTZD | Brief · Uruguay"). Cuántos
+ * niveles muestra, o si se oculta, se guarda en una página y vale para todas las de adentro.
+ */
+function PageHeader({ id }: { id: string }) {
+  const tree = useTree();
+  const [open, setOpen] = useState(false);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const pages = headerPages(tree, id);
+  const hasAncestors = tree.ancestors(id).length > 0;
+
+  return (
+    <div className="page-header">
+      {pages.map((p, i) => (
+        <span key={p.id} style={{ display: 'contents' }}>
+          {i > 0 && (
+            <span className="dot" aria-hidden="true">
+              ·
+            </span>
+          )}
+          <button
+            className={`ancestor${i === pages.length - 1 ? ' nearest' : ''}`}
+            onClick={() => navigate(pagePath(p.id))}
+            title={p.title}
+          >
+            {p.title || 'Untitled'}
+          </button>
+        </span>
+      ))}
+      <button
+        ref={toggle}
+        className={`header-toggle${pages.length ? '' : ' labelled'}`}
+        aria-label={pages.length ? 'Header options' : undefined}
+        title="Header options"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        {pages.length ? (
+          <CollapseIcon size={14} />
+        ) : (
+          <>
+            <HeaderIcon size={14} /> {hasAncestors ? 'Header' : 'Header for pages inside'}
+          </>
+        )}
+      </button>
+      {open && <HeaderOptions id={id} anchor={toggle.current} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function HeaderOptions({ id, anchor, onClose }: { id: string; anchor: HTMLElement | null; onClose: () => void }) {
+  const tree = useTree();
+  const ref = useRef<HTMLDivElement>(null);
+  useFloating(ref, onClose, anchor);
+  const { levels, last, from } = headerLevels(tree, id);
+  // Dónde se puede guardar: esta página o un contenedor, pero no más arriba de la página que ya define el
+  // ajuste que se ve (guardarlo ahí no cambiaría nada acá). Por defecto, en la que lo define.
+  const chain = [tree.get(id), ...tree.ancestors(id).reverse()].filter((p): p is NonNullable<typeof p> => !!p);
+  const branch = from ? chain.slice(0, chain.findIndex((p) => p.id === from.id) + 1) : chain;
+  const [chosen, setTarget] = useState(from?.id ?? id);
+  // Si mientras está abierto cambia dónde se define (otro dispositivo), la elección vieja puede quedar
+  // fuera de la rama: vuelve a la de por defecto.
+  const target = branch.some((p) => p.id === chosen) ? chosen : (from?.id ?? id);
+  const shown = headerPages(tree, id);
+  const own = ownHeader(tree, id);
+  const visible = levels !== 0;
+
+  const save = (next: number | null) =>
+    void tree.setSetting(target, 'header', next === 0 ? { levels: 0, last } : { levels: next });
+
+  return (
+    <div ref={ref} className="header-popover" role="dialog" aria-label="Header">
+      <div className="switch-row">
+        <span id="header-show">Show header</span>
+        <button
+          className="switch"
+          role="switch"
+          aria-checked={visible}
+          aria-labelledby="header-show"
+          onClick={() => save(visible ? 0 : last)}
+        />
+      </div>
+      {visible && (
+        <div className="pref">
+          <span className="pref-label" id="header-levels">
+            Levels shown
+          </span>
+          <div className="segmented" role="group" aria-labelledby="header-levels">
+            {LEVEL_CHOICES.map((c) => (
+              <button key={c.label} aria-pressed={levels === c.value} onClick={() => save(c.value)}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {branch.length > 1 && (
+        <div className="pref">
+          <label className="pref-label" htmlFor="header-target">
+            Save for
+          </label>
+          <select id="header-target" value={target} onChange={(e) => setTarget(e.target.value)}>
+            {branch.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.id === id ? 'This page' : `“${p.title || 'Untitled'}”`} and the pages inside
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <p>
+        {visible && shown.length > 0 ? (
+          <>
+            Starts at <strong>{shown[0].title || 'Untitled'}</strong>.{' '}
+          </>
+        ) : null}
+        {from ? (
+          <>
+            Set on <strong>{from.id === id ? 'this page' : from.title || 'Untitled'}</strong>; pages inside can set
+            their own.
+          </>
+        ) : (
+          <>Not set anywhere yet: showing 2 levels.</>
+        )}
+      </p>
+      {own && (
+        <button className="link" onClick={() => void tree.setSetting(id, 'header', undefined)}>
+          Use the setting from above
+        </button>
+      )}
+    </div>
   );
 }
