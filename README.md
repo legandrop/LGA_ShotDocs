@@ -12,6 +12,8 @@ its own project: a tree of pages you own.
   content and other pages; a "folder" is just a page with no content.
 - **Visual editor.** Headings, lists, checklists, tables and images. You never see Markdown; it is only
   used behind the scenes to import, export and back up your pages.
+- **Script text.** Paste a screenplay and turn it into *Script*: it shows in a screenplay typeface, with
+  INT/EXT, DAY, NIGHT and DAWN/DUSK marked in color.
 - **Templates.** Reusable page layouts such as *Pre-production Notes*, *On-Set Report* or *Shot
   Breakdown*. Pick one when you create a page and start filling it in.
 - **Works everywhere.** macOS, Windows and iPhone, from the same app.

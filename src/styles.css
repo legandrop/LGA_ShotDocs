@@ -542,6 +542,8 @@ code {
 .topbar {
   position: sticky;
   top: 0;
+  /* Si la hoja es más ancha que la ventana, la página se desplaza de costado pero la barra de arriba no. */
+  left: 0;
   z-index: 5;
   display: flex;
   align-items: center;
@@ -1432,8 +1434,8 @@ code {
   --bn-colors-editor-text: var(--text);
   --bn-colors-menu-background: var(--menu-bg);
   --bn-colors-menu-text: var(--text);
-  --bn-colors-tooltip-background: var(--active);
-  --bn-colors-tooltip-text: var(--text);
+  --bn-colors-tooltip-background: #242424;
+  --bn-colors-tooltip-text: #d1d1d1;
   --bn-colors-hovered-background: var(--hover);
   --bn-colors-selected-background: var(--active);
   --bn-colors-border: var(--border);
@@ -1814,4 +1816,285 @@ code {
     z-index: 49;
     background: var(--scrim);
   }
+}
+
+/* --- Ancho de la barra lateral ------------------------------------------------------------------- */
+
+.sidebar-resizer {
+  position: relative;
+  flex: none;
+  z-index: 6;
+  width: 8px;
+  margin: 0 -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.12s;
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after,
+.resizing-sidebar .sidebar-resizer::after {
+  background: var(--accent);
+}
+
+.sidebar-resizer:focus-visible {
+  outline: none;
+}
+
+.resizing-sidebar,
+.resizing-sidebar * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+@media (max-width: 760px) {
+  .sidebar-resizer {
+    display: none;
+  }
+}
+
+/* --- Tooltips (mismo estilo que las apps LGA en Qt) ---------------------------------------------- */
+
+.tooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: 300px;
+  padding: 6px 10px 7px;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  background: #242424;
+  color: #d1d1d1;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  animation: tooltip-in 0.08s ease-out;
+}
+
+.tooltip strong {
+  color: #e8e8e8;
+  font-weight: 700;
+}
+
+.tooltip-line {
+  display: block;
+}
+
+/* La flecha: un triángulo de 16×11 con el mismo borde que el globo, sin trazar su base. */
+.tooltip::before,
+.tooltip::after {
+  content: '';
+  position: absolute;
+}
+
+.tooltip::before {
+  left: calc(var(--arrow-x, 50%) - 8px);
+  width: 16px;
+  height: 11px;
+  background: #3a3a3a;
+}
+
+.tooltip::after {
+  left: calc(var(--arrow-x, 50%) - 6.5px);
+  width: 13px;
+  height: 10px;
+  background: #242424;
+}
+
+.tooltip.below::before {
+  top: -11px;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.tooltip.below::after {
+  top: -9px;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.tooltip.above::before {
+  bottom: -11px;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.tooltip.above::after {
+  bottom: -9px;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    animation: none;
+  }
+}
+
+/* Los tooltips de la barra de formato del editor, con el mismo estilo. */
+.bn-mantine .bn-tooltip {
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.18);
+  font-family: var(--font);
+}
+
+.bn-mantine .bn-tooltip > :nth-child(2) {
+  color: #e8e8e8;
+  font-weight: 700;
+}
+
+/* --- Script (guion) ------------------------------------------------------------------------------ */
+
+.bn-container .script-line {
+  font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+  font-size: calc(var(--doc-size) * 0.95);
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+.script-mark {
+  padding: 1px 3px;
+  margin: 0 -1px;
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.script-place {
+  background: #dfe7dc;
+}
+
+.script-day {
+  background: #fbe7a1;
+}
+
+.script-night {
+  background: #cfe0fa;
+}
+
+.script-golden {
+  background: #ffd9b8;
+}
+
+:root[data-theme='dark'] .script-place {
+  background: #2c3a2d;
+}
+
+:root[data-theme='dark'] .script-day {
+  background: #4a3e16;
+}
+
+:root[data-theme='dark'] .script-night {
+  background: #1f3353;
+}
+
+:root[data-theme='dark'] .script-golden {
+  background: #53331a;
+}
+
+/* --- Hoja (tamaño de página) --------------------------------------------------------------------- */
+
+:root {
+  --desk: #ebe8e2;
+  --sheet-break: #dcd7cd;
+}
+
+:root[data-theme='dark'] {
+  --desk: #0f0f0e;
+  --sheet-break: #34332f;
+}
+
+.page .editor .bn-editor {
+  padding-inline: var(--gutter);
+}
+
+.main:has(.page.sheet) {
+  background: var(--desk);
+}
+
+.page.sheet {
+  flex: none;
+  width: var(--sheet-width);
+  max-width: none;
+  min-height: var(--sheet-height);
+  margin: 40px auto 30vh;
+  padding: var(--gutter) 0;
+  /* Una línea donde termina el texto de cada hoja: el alto de la hoja menos sus márgenes de arriba y de
+     abajo, contado desde el margen de arriba (el área de contenido). Los cortes reales llegan con el PDF. */
+  --sheet-content: calc(var(--sheet-height) - 2 * var(--gutter));
+  background:
+    repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(var(--sheet-content) - 1px),
+        var(--sheet-break) calc(var(--sheet-content) - 1px),
+        var(--sheet-break) var(--sheet-content)
+      )
+      content-box,
+    var(--bg);
+  box-shadow: 0 1px 3px rgba(27, 26, 23, 0.08), 0 10px 30px rgba(27, 26, 23, 0.08);
+}
+
+.page.sheet .bn-container[data-color-scheme] {
+  --bn-colors-editor-background: var(--bg);
+}
+
+.format-dialog .pref {
+  padding: 0;
+}
+
+.format-dialog .modal-actions {
+  gap: 12px;
+  align-items: center;
+}
+
+.format-dialog select {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+@media (max-width: 760px) {
+  /* En el teléfono la hoja no entra: la página se ve libre. */
+  .main:has(.page.sheet) {
+    background: var(--bg);
+  }
+
+  .page.sheet {
+    --gutter: 20px !important;
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 28px 0 30vh;
+    background: var(--bg);
+    box-shadow: none;
+  }
+}
+
+/* El editor no muestra la marca de foco del teclado: el cursor ya dice dónde se está escribiendo. */
+.bn-editor:focus-visible,
+.page-title:focus-visible {
+  outline: none;
 }

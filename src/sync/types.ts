@@ -22,6 +22,8 @@ export interface PageSettings {
   header?: { levels: number | null; last?: number | null };
   /** Dividir por "|" los títulos de las páginas de adentro en la barra lateral. */
   split?: boolean;
+  /** Tamaño de hoja: la página se ve (y más adelante se exporta) con ese tamaño. `free`: sin hoja. */
+  format?: { size: string; landscape?: boolean };
 }
 
 export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings'>>;

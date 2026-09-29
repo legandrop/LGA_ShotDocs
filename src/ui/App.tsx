@@ -1,9 +1,19 @@
 import { useAuth } from '../auth';
 import { supabase } from '../supabase';
 import { Login } from './Login';
+import { TooltipLayer } from './Tooltip';
 import { Workspace } from './Workspace';
 
 export function App() {
+  return (
+    <>
+      <Screen />
+      <TooltipLayer />
+    </>
+  );
+}
+
+function Screen() {
   const auth = useAuth();
 
   if (!supabase) {

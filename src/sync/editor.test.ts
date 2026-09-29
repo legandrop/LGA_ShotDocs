@@ -3,6 +3,7 @@ import { BlockNoteEditor } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
 import { afterEach, expect, it } from 'vitest';
 import type * as Y from 'yjs';
+import { schema } from '../ui/editorSchema';
 import { CONTENT_FRAGMENT } from './structure';
 import { FakeServer, makeDevice, type Device } from './testing';
 
@@ -31,6 +32,7 @@ const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 function mountEditor(doc: Y.Doc): BlockNoteEditor {
   const editor = BlockNoteEditor.create(
     withCollaboration({
+      schema,
       collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
     }),
   ) as unknown as BlockNoteEditor;
@@ -148,6 +150,42 @@ for (let run = 0; run < 6; run++) {
       expect(xml.toString()).toContain(line);
       expect(texts(editorA).join('\n')).toContain(line);
       expect(texts(editorB).join('\n')).toContain(line);
+    }
+  });
+}
+
+// Como en la prueba de punta a punta: los dos escriben en el párrafo vacío de la semilla, sin red.
+for (let run = 0; run < 4; run++) {
+  it(`con semilla, dos dispositivos escriben en la página vacía sin red y se ven las dos líneas (corrida ${run + 1})`, async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const b = await device(server);
+    const pageId = await a.tree.create(null, 'P');
+    await a.engine.syncNow();
+    await b.engine.syncNow();
+
+    const editorA = mountEditor(await a.docs.open(pageId, { seed: true }));
+    const editorB = mountEditor(await b.docs.open(pageId, { seed: true }));
+    await tick();
+    server.online = false;
+    editorA.setTextCursorPosition(editorA.document[0], 'end');
+    editorA.insertInlineContent('Línea escrita en A');
+    editorB.setTextCursorPosition(editorB.document[0], 'end');
+    editorB.insertInlineContent('Línea escrita en B');
+    await tick();
+    await a.docs.flush(pageId);
+    await b.docs.flush(pageId);
+
+    server.online = true;
+    for (let i = 0; i < 3; i++) {
+      await a.engine.syncNow();
+      await b.engine.syncNow();
+      await tick(60);
+    }
+    for (const editor of [editorA, editorB]) {
+      const all = texts(editor).join(' ');
+      expect(all).toContain('Línea escrita en A');
+      expect(all).toContain('Línea escrita en B');
     }
   });
 }

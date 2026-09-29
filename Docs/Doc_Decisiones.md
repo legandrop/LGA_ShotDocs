@@ -44,6 +44,24 @@ diga otra cosa.
   pedazo del id (`/p/064-cubiertos-pegados-3f9c2a`); el id es lo que cuenta, así que renombrar no rompe
   un link compartido.
 
+- **D-14 · Texto Script (Guion)** (2026-09-29). Un tipo de texto para pegar y escribir guiones: tipografía
+  de guion (Courier Prime) y, en mayúsculas, marcas de color de fondo para el lugar (INT, EXT, INT/EXT,
+  I/E), el día (DÍA, DAY: amarillo), la noche (NOCHE, NIGHT: azul) y las luces de transición (AMANECER,
+  ATARDECER, ANOCHECER, DAWN, DUSK, SUNRISE, SUNSET: naranja). Se elige en el menú "/", en el selector de
+  tipo de la barra de formato o con Ctrl+Alt+S; Enter sigue en Script y Enter en una línea vacía sale. En
+  la interfaz en inglés se llama "Script" y en castellano va a ser "Guion" (D-16). **No es un tipo de
+  bloque nuevo sino un párrafo con `script: true`**: una versión de la app que no lo conoce lo ve como
+  párrafo común; si alguien edita esa línea en la versión vieja, la línea vuelve a ser párrafo para todos
+  (el texto queda, se pierde solo el estilo). Un tipo de bloque desconocido se borraría del documento compartido al abrir la página en
+  esa versión (lo encontró la auditoría) y el borrado llegaría a todos los dispositivos.
+- **D-15 · Tooltips propios** (2026-09-29). Mismo estilo que las apps LGA en Qt (fondo `#242424`, borde
+  `#3a3a3a`, flecha de 16×11 que apunta al control y se da vuelta si no entra, rótulos en negrita
+  `#E8E8E8`, 600 ms de espera) y la misma regla: un tooltip nunca repite lo que el control ya dice; va solo
+  cuando suma algo (un atajo, una segunda interacción, un título cortado). Nada de tooltips del navegador.
+- **D-16 · App en castellano e inglés** (2026-09-29). La interfaz va a estar en los dos idiomas, y también
+  las plantillas y los tipos de texto (Script/Guion, Questions/Dudas…). Se implementa más adelante
+  (roadmap); por ahora la interfaz sigue en inglés.
+
 ## Abiertas
 
 - **D-05 · Hosting para trabajos pagos.** El plan Hobby de Vercel es solo para uso no comercial. Para

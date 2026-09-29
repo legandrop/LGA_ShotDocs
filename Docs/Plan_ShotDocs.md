@@ -153,12 +153,14 @@ sus ramas hermanas.
    ancho de página, títulos divididos por "|" en la barra lateral y encabezado con los contenedores.
    **Proyectos (hecho, v0.013):** cada usuario tiene varios proyectos, cada uno con su árbol; se cambia de
    uno a otro con el selector de arriba de la barra (Ctrl+K), que también crea y renombra, con o sin red.
+   **Editor (hecho, v0.015):** barra lateral de ancho ajustable, tooltips propios con el estilo de las
+   apps LGA, bloque **Script** para guiones y tamaño de hoja por rama (sección 10).
 2. **Compartir.** Por usuario y por link público (un proyecto, una página o una subpágina), con Row Level
    Security, visor público, links legibles y las pruebas de la sección 6.
 3. **Plantillas.** Las plantillas iniciales definidas con Lega y la opción de guardar cualquier página
    como plantilla.
-4. **Formato de página y PDF.** Páginas libres o con tamaño de hoja, heredado por rama, y exportar a PDF
-   igual a lo que se ve (sección 10).
+4. **Formato de página y PDF.** Cortes reales entre hojas y exportar a PDF igual a lo que se ve (sección
+   10). La elección del tamaño y la vista como hoja ya están (v0.015).
 5. **Asistente.** Clave propia de cada usuario, revisar y editar textos, dar formato y ajustar imágenes,
    y acceso por MCP (sección 11).
 6. **Pulido.** Compresión de fotos de set en el dispositivo, historial de versiones, exportar e importar
@@ -179,7 +181,13 @@ En Notion y en Coda lo que se ve al editar no es lo que sale en el PDF. Acá sí
   los cortes, los anchos y el tamaño de las imágenes coinciden.
 - **Control de cortes.** Bloque de salto de hoja; las imágenes y las tablas no se parten entre hojas; una
   imagen nunca pasa del ancho imprimible.
-- Datos: `pages.format` y `pages.orientation` (vacío = hereda) y `workspaces.default_format`.
+- Datos: `pages.settings.format` (`{ size, landscape }`, vacío = hereda), como los demás ajustes por
+  rama. El formato "de todo el proyecto" se logra fijándolo en sus páginas raíz.
+- **Hecho en v0.015:** elegir Libre, A5, A4, A3 o Carta, vertical u horizontal, por rama; la página se ve
+  como una hoja con su ancho real (a 96 puntos por pulgada), márgenes de 20 mm y una línea donde termina
+  el texto de cada hoja (su alto menos los márgenes). En el teléfono se ve libre. **Falta (fase 4):** los
+  cortes reales entre hojas, el bloque de salto de hoja, imágenes y tablas que no se parten y la
+  exportación a PDF.
 
 ## 11. Asistente
 

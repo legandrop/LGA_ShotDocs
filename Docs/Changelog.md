@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.015 :
+
+Editor más cómodo, con auditoría. La barra lateral se ensancha arrastrando su borde (doble clic vuelve al
+ancho de fábrica). Los tooltips son propios, con el estilo de las apps LGA en Qt, y solo donde suman algo
+(D-15). Nuevo texto Script para guiones: tipografía de guion y marcas de color para INT/EXT, DÍA, NOCHE y
+AMANECER/ATARDECER; se elige desde "/" o la barra de formato, y Enter sigue en Script (D-14). Es un
+párrafo marcado y no un bloque nuevo: la auditoría mostró que la versión anterior borraba los bloques
+desconocidos de todos los dispositivos. Cada rama elige tamaño de hoja (A5, A4, A3, Carta) y la página
+se ve como esa hoja. El título ya no queda cortado al cambiar de fuente o de ancho. La app en
+castellano e inglés queda en el roadmap (D-16).
+[ Editor - barra ajustable, tooltips, texto Script y tamaño de hoja ]
+
 v0.014 :
 
 Corrección del atajo del selector de proyectos. Con texto elegido en el editor, Ctrl+K (⌘K en Mac) crea

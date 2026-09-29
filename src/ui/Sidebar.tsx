@@ -5,6 +5,7 @@ import type { PageRow } from '../sync/types';
 import { AccountIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, TrashIcon } from './icons';
 import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
+import { PageFormatDialog } from './PageFormatDialog';
 import { useCurrentProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { SyncBadge } from './SyncBadge';
@@ -35,6 +36,7 @@ export function Sidebar() {
   const [account, setAccount] = useState<MenuPosition | null>(null);
   const accountButton = useRef<HTMLButtonElement>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  const [formatting, setFormatting] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ id: string; zone: DropZone } | null>(null);
 
@@ -117,7 +119,8 @@ export function Sidebar() {
         <div
           className={`tree-row${children.length ? ' parent' : ''}${page.id === activeId ? ' active' : ''}${dropClass}`}
           style={{ paddingLeft: 4 + depth * 18 }}
-          title={split ? page.title : undefined}
+          data-tip={split ? page.title : undefined}
+          data-tip-plain
           draggable={renaming !== page.id}
           onDragStart={(e) => {
             e.dataTransfer.effectAllowed = 'move';
@@ -171,13 +174,19 @@ export function Sidebar() {
             </span>
           ) : (
             <span className="label">
-              <span className={`title${page.title ? '' : ' untitled'}`}>{page.title || 'Untitled'}</span>
+              <span
+                className={`title${page.title ? '' : ' untitled'}`}
+                data-tip={page.title || undefined}
+                data-tip-plain
+                data-tip-overflow
+              >
+                {page.title || 'Untitled'}
+              </span>
             </span>
           )}
           <span className="row-actions">
             <button
               aria-label="More actions"
-              title="More actions"
               onClick={(e) => {
                 e.stopPropagation();
                 const anchor = e.currentTarget;
@@ -188,7 +197,7 @@ export function Sidebar() {
             </button>
             <button
               aria-label="Add a page inside"
-              title="Add a page inside"
+              data-tip="Add a page inside"
               onClick={(e) => {
                 e.stopPropagation();
                 void newPage(page.id);
@@ -213,7 +222,7 @@ export function Sidebar() {
 
       <div className="section-title">
         <span className="mono-label">Pages</span>
-        <button aria-label="New page" title="New page" onClick={() => void newPage(null)}>
+        <button aria-label="New page" data-tip="New page" onClick={() => void newPage(null)}>
           <PlusIcon size={16} />
         </button>
       </div>
@@ -259,6 +268,7 @@ export function Sidebar() {
           onNewChild={() => void newPage(menu.id)}
           onRename={() => setRenaming(menu.id)}
           onMove={() => setMoving(menu.id)}
+          onFormat={() => setFormatting(menu.id)}
           onTrash={async () => {
             const id = menu.id;
             const wasOpen = !!activeId && (activeId === id || tree.isDescendant(activeId, id));
@@ -269,6 +279,7 @@ export function Sidebar() {
         />
       )}
       {moving && <MoveDialog pageId={moving} onClose={() => setMoving(null)} />}
+      {formatting && <PageFormatDialog pageId={formatting} onClose={() => setFormatting(null)} />}
     </nav>
   );
 }

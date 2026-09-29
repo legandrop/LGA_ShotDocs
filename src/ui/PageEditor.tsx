@@ -1,21 +1,36 @@
-import { BlockNoteSchema, defaultBlockSpecs, type Block } from '@blocknote/core';
+import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu, type Block } from '@blocknote/core';
 import '@blocknote/core/fonts/inter.css';
 import { withCollaboration } from '@blocknote/core/yjs';
 import { BlockNoteView } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
-import { useCreateBlockNote } from '@blocknote/react';
-import { useEffect, useRef, useState } from 'react';
+import {
+  blockTypeSelectItems,
+  FormattingToolbar,
+  FormattingToolbarController,
+  getDefaultReactSlashMenuItems,
+  SuggestionMenuController,
+  useCreateBlockNote,
+  type BlockTypeSelectItem,
+  type DefaultReactSuggestionItem,
+} from '@blocknote/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as Y from 'yjs';
 import { useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { CONTENT_FRAGMENT } from '../sync/structure';
+import { schema, SCRIPT_PROP } from './editorSchema';
+import { ScriptIcon } from './icons';
 import { notify } from './notice';
 import { useScheme } from '../prefs';
 
-// En la fase 1 solo se guardan imágenes (el bucket no acepta otros archivos): sin bloques de archivo,
-// video ni audio.
-const { audio: _audio, file: _file, video: _video, ...blockSpecs } = defaultBlockSpecs;
-const schema = BlockNoteSchema.create({ blockSpecs });
+// Script es un párrafo con `script: true` (ver editorSchema.ts). El ítem "Paragraph" pide `script: false`
+// para que el selector distinga uno de otro y para que volver a párrafo saque el guion.
+const scriptTypeItem: BlockTypeSelectItem = {
+  name: 'Script',
+  type: 'paragraph',
+  props: { [SCRIPT_PROP]: true },
+  icon: ScriptIcon as unknown as BlockTypeSelectItem['icon'],
+};
 
 type Opening = { state: 'loading' } | { state: 'ready'; doc: Y.Doc; complete: boolean };
 
@@ -146,6 +161,40 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
     }, false);
   }, [editor, files, pageId, editable]);
 
+  const slashItems = useMemo(() => {
+    const script: DefaultReactSuggestionItem = {
+      title: 'Script',
+      subtext: 'Screenplay text: INT/EXT, DAY, NIGHT marked',
+      aliases: ['guion', 'guión', 'screenplay', 'escena', 'scene'],
+      group: 'Basic blocks',
+      icon: <ScriptIcon size={18} />,
+      onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: { [SCRIPT_PROP]: true } }),
+    };
+    // "/Paragraph" en una línea Script también le saca la marca de guion.
+    const items = getDefaultReactSlashMenuItems(editor).map((item) =>
+      (item as { key?: string }).key === 'paragraph' || item.title === editor.dictionary.slash_menu.paragraph.title
+        ? {
+            ...item,
+            onItemClick: () =>
+              insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: { [SCRIPT_PROP]: false } }),
+          }
+        : item,
+    );
+    const at = items.findIndex((i) => i.group !== 'Headings' && i.group !== 'Basic blocks');
+    return (query: string) =>
+      Promise.resolve(filterSuggestionItems([...items.slice(0, at), script, ...items.slice(at)], query));
+  }, [editor]);
+
+  const toolbarItems = useMemo(
+    () => [
+      ...blockTypeSelectItems(editor.dictionary).map((item) =>
+        item.type === 'paragraph' ? { ...item, props: { ...item.props, [SCRIPT_PROP]: false } } : item,
+      ),
+      scriptTypeItem,
+    ],
+    [editor],
+  );
+
   // Pegar o soltar un archivo que no es una imagen permitida haría que el editor intente crear un bloque
   // que no existe en el esquema: se corta antes, con un aviso.
   const rejectOtherFiles = (e: ClipboardEvent | DragEvent, data: DataTransfer | null) => {
@@ -161,7 +210,19 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
       onPasteCapture={(e) => rejectOtherFiles(e.nativeEvent, e.clipboardData)}
       onDropCapture={(e) => rejectOtherFiles(e.nativeEvent, e.dataTransfer)}
     >
-      <BlockNoteView editor={editor} editable={editable} theme={scheme} className="editor" />
+      <BlockNoteView
+        editor={editor}
+        editable={editable}
+        theme={scheme}
+        className="editor"
+        slashMenu={false}
+        formattingToolbar={false}
+      >
+        <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
+        <FormattingToolbarController
+          formattingToolbar={() => <FormattingToolbar blockTypeSelectItems={toolbarItems} />}
+        />
+      </BlockNoteView>
     </div>
   );
 }

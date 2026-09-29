@@ -42,7 +42,7 @@ export function SyncIcon({ onClick }: { onClick: () => void }) {
   const { tone, text } = useSyncTone();
   const Icon = TONE_ICONS[tone];
   return (
-    <button className={`icon-button sync-icon ${tone}`} aria-label={text} title={text} onClick={onClick}>
+    <button className={`icon-button sync-icon ${tone}`} aria-label={text} data-tip={text} onClick={onClick}>
       <Icon size={20} />
     </button>
   );
@@ -62,7 +62,7 @@ export function SyncBadge() {
     <div className="sync">
       <button
         className={`sync-pill ${tone}`}
-        title={status.localError ?? status.lastError ?? undefined}
+        data-tip={status.localError ?? status.lastError ?? undefined}
         aria-expanded={hasDetails ? details : undefined}
         onClick={() => (hasDetails ? setDetails(!details) : void engine.syncNow())}
       >

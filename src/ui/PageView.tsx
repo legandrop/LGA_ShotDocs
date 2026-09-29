@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
 import { useSyncStatus, useTree } from '../services';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { PageEditor } from './PageEditor';
 import { useFloating } from './menus';
+import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
 
 const FOCUS_TITLE = 'shotdocs:focus-title';
@@ -33,8 +35,22 @@ export function PageView({ id }: { id: string }) {
   }
 
   const trashedAt = tree.trashedAncestor(id);
+  const format = pageFormat(tree, id);
+  const sheet = sheetSize(format);
   return (
-    <article className="page">
+    <article
+      className={`page${sheet ? ' sheet' : ''}`}
+      style={
+        sheet
+          ? ({
+              '--sheet-width': `${sheet.width}px`,
+              '--sheet-height': `${sheet.height}px`,
+              '--gutter': `${mm(SHEET_MARGIN_MM)}px`,
+            } as CSSProperties)
+          : undefined
+      }
+      data-format={format.size}
+    >
       {trashedAt && (
         <div className="banner">
           {trashedAt.id === id
@@ -74,12 +90,32 @@ function TitleInput({ id, title }: { id: string; title: string }) {
     return () => window.removeEventListener(FOCUS_TITLE, onFocus);
   }, []);
 
-  useEffect(() => {
+  // El alto del título sigue al texto, pero también al ancho (ventana, barra lateral, tamaño de hoja) y a
+  // la fuente (Editorial, o una fuente que termina de cargar después): sin eso, un título de dos renglones
+  // queda cortado hasta que se escribe algo.
+  const prefsNow = usePrefs();
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+    const fit = () => {
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    };
+    fit();
+    let width = el.clientWidth;
+    const resize = new ResizeObserver(() => {
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      fit();
+    });
+    resize.observe(el);
+    document.fonts?.addEventListener('loadingdone', fit);
+    void document.fonts?.ready.then(fit);
+    return () => {
+      resize.disconnect();
+      document.fonts?.removeEventListener('loadingdone', fit);
+    };
+  }, [value, prefsNow.font, prefsNow.textSize]);
 
   const commit = (next: string) => {
     if (timer.current) clearTimeout(timer.current);
@@ -165,7 +201,9 @@ function PageHeader({ id }: { id: string }) {
           <button
             className={`ancestor${i === pages.length - 1 ? ' nearest' : ''}`}
             onClick={() => navigate(pagePath(p.id))}
-            title={p.title}
+            data-tip={p.title || undefined}
+            data-tip-plain
+            data-tip-overflow
           >
             {p.title || 'Untitled'}
           </button>
@@ -175,7 +213,7 @@ function PageHeader({ id }: { id: string }) {
         ref={toggle}
         className={`header-toggle${pages.length ? '' : ' labelled'}`}
         aria-label={pages.length ? 'Header options' : undefined}
-        title="Header options"
+        data-tip={pages.length ? 'Header: how many containing pages show here' : undefined}
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >

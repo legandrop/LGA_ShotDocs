@@ -55,7 +55,7 @@ export function ProjectSwitcher() {
         className="project-button"
         aria-haspopup="dialog"
         aria-expanded={!!position}
-        title={`Switch project (${SHORTCUT})`}
+        data-tip={`**${SHORTCUT}** to switch projects from anywhere`}
         onClick={toggle}
       >
         <Monogram name={name} />

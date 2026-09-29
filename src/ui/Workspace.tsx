@@ -7,10 +7,12 @@ import { supabase } from '../supabase';
 import { MenuIcon, MoreIcon, PlusIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
+import { PageFormatDialog } from './PageFormatDialog';
 import { useNotice } from './notice';
 import { lastPageOf, rememberPage, useCurrentProject } from './project';
 import { focusTitle, PageView } from './PageView';
 import { Sidebar } from './Sidebar';
+import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
 import { TrashView } from './TrashView';
 
@@ -86,6 +88,7 @@ function Shell() {
   const [navOpen, setNavOpen] = useState(false);
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  const [formatting, setFormatting] = useState<string | null>(null);
   const [notice, dismissNotice] = useNotice();
 
   // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación.
@@ -127,6 +130,7 @@ function Shell() {
   return (
     <div className={`shell${navOpen ? ' nav-open' : ''}`}>
       <Sidebar />
+      <SidebarResizer />
       <div className="scrim" onClick={() => setNavOpen(false)} />
       <main className="main">
         <header className="topbar">
@@ -158,7 +162,6 @@ function Shell() {
             <button
               className="icon-button"
               aria-label="Page actions"
-              title="Page actions"
               aria-expanded={!!pageMenu}
               onClick={(e) => {
                 const anchor = e.currentTarget;
@@ -186,6 +189,7 @@ function Shell() {
           onNewChild={async () => navigate(pagePath(await tree.create(pageId)))}
           onRename={focusTitle}
           onMove={() => setMoving(pageId)}
+          onFormat={() => setFormatting(pageId)}
           onTrash={async () => {
             // Primero se manda a la papelera y después se sale: si no, el inicio vuelve a la última página.
             await tree.trash(pageId);
@@ -194,6 +198,7 @@ function Shell() {
         />
       )}
       {moving && <MoveDialog pageId={moving} onClose={() => setMoving(null)} />}
+      {formatting && <PageFormatDialog pageId={formatting} onClose={() => setFormatting(null)} />}
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } fr
 import { prefs, usePrefs, type Prefs } from '../prefs';
 import { useServices, useTree } from '../services';
 import { supabase } from '../supabase';
+import { PAGE_SIZES, pageFormat } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
   DarkIcon,
@@ -9,6 +10,7 @@ import {
   MoveIcon,
   PlusIcon,
   RenameIcon,
+  SheetIcon,
   SignOutIcon,
   SystemIcon,
   TrashIcon,
@@ -107,9 +109,11 @@ export function PageMenu(props: {
   onNewChild: () => void;
   onRename: () => void;
   onMove: () => void;
+  onFormat: () => void;
   onTrash: () => void;
 }) {
   const tree = useTree();
+  const format = pageFormat(tree, props.pageId);
   const ref = useRef<HTMLDivElement>(null);
   useFloating(ref, props.onClose, props.anchor, true);
   const split = splitEnabled(tree, props.pageId);
@@ -134,11 +138,24 @@ export function PageMenu(props: {
       {item('New page inside', <PlusIcon />, props.onNewChild)}
       {item('Rename', <RenameIcon />, props.onRename)}
       {item('Move to…', <MoveIcon />, props.onMove)}
+      <button
+        role="menuitem"
+        onClick={() => {
+          props.onClose();
+          props.onFormat();
+        }}
+      >
+        <SheetIcon />
+        Page size
+        <span className="check">
+          {format.size === 'free' ? 'Free' : `${PAGE_SIZES[format.size].label}${format.landscape ? ' ↔' : ''}`}
+        </span>
+      </button>
       <hr />
       <button
         role="menuitemcheckbox"
         aria-checked={split}
-        title='Pages inside show "064 | Name | Place" as a short code and a name'
+        data-tip={'Pages inside show **064 | Name | Place**\nas a short code and a name'}
         onClick={() => void tree.setSetting(props.pageId, 'split', !split)}
       >
         <span className="split-sample" aria-hidden="true">
@@ -224,7 +241,9 @@ export function AccountMenu({ position, anchor, onClose }: { position: MenuPosit
       <div className="account-head">
         <span className="avatar large">{user.email.charAt(0) || '?'}</span>
         <div className="who">
-          <strong title={user.email}>{user.email}</strong>
+          <strong data-tip={user.email} data-tip-plain data-tip-overflow>
+            {user.email}
+          </strong>
           <span className="mono-label">Synced to your account</span>
         </div>
       </div>
