@@ -80,6 +80,17 @@ begin
   exception when insufficient_privilege then null;
   end;
 
+  insert into storage.objects (bucket_id, name)
+  values ('page-files', a1::text || '/00000000-0000-4000-8000-0000000000f1.png');
+  assert (select count(*) from storage.objects where bucket_id = 'page-files') = 1,
+    'A no ve su archivo';
+
+  begin
+    insert into storage.objects (bucket_id, name) values ('page-files', 'sin-pagina/x.png');
+    raise exception 'FALLA: se sube un archivo fuera de una página';
+  exception when insufficient_privilege then null;
+  end;
+
   update public.pages set deleted_at = now() where id = a2;
   update public.pages set deleted_at = null, title = 'Hija A (restaurada)' where id = a2;
   assert (select title from public.pages where id = a2) = 'Hija A (restaurada)', 'renombrar';
@@ -123,6 +134,16 @@ begin
     perform public.push_page_update(a1, gen_random_uuid(), encode('x'::bytea, 'base64'));
     raise exception 'FALLA: B escribe contenido en páginas de A';
   exception when no_data_found then null;
+  end;
+
+  assert (select count(*) from storage.objects where bucket_id = 'page-files') = 0,
+    'B ve archivos de A';
+
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('page-files', a1::text || '/00000000-0000-4000-8000-0000000000f2.png');
+    raise exception 'FALLA: B sube archivos a páginas de A';
+  exception when insufficient_privilege then null;
   end;
 
   begin
