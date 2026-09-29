@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.014 :
+
+Corrección del atajo del selector de proyectos. Con texto elegido en el editor, Ctrl+K (⌘K en Mac) crea
+un link, pero si se apretaba apenas elegido el texto, antes de que apareciera la barra de formato, el
+editor todavía no lo había tomado y se abría además el selector de proyectos encima. Ahora, con texto
+elegido adentro del editor, el atajo queda siempre para el link; en cualquier otro lugar sigue abriendo
+el selector. Lo detectó una prueba de punta a punta que falló una vez entre varias corridas; ahora pasa
+de forma estable.
+[ Proyectos - Ctrl+K con texto elegido queda para el link ]
+
 v0.013 :
 
 Proyectos: cada usuario tiene varios, cada uno con su propio árbol de páginas (D-12). Arriba de la barra

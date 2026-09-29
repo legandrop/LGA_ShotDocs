@@ -34,8 +34,11 @@ export function ProjectSwitcher() {
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
-      // En el editor, Ctrl+K con texto elegido crea un link: si el editor ya lo tomó, no se abre el selector.
+      // En el editor, Ctrl+K con texto elegido crea un link. Se deja pasar aunque la barra de formato
+      // todavía no haya aparecido (y no lo haya tomado).
       if (e.defaultPrevented) return;
+      const selection = window.getSelection();
+      if (e.target instanceof Element && e.target.closest('.bn-editor') && selection && !selection.isCollapsed) return;
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         toggle();
