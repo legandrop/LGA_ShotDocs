@@ -1,0 +1,55 @@
+# Politica de line endings del repo.
+#
+# Regla general: LF para todo el codigo fuente y la documentacion.
+# Excepcion: los scripts nativos de Windows (.bat/.cmd/.ps1) necesitan CRLF
+# o cmd.exe los interpreta mal.
+#
+# En .gitattributes gana el ULTIMO patron que matchea, asi que el default va
+# primero y las excepciones despues.
+
+# --- Default: normalizar a LF ---
+* text=auto eol=lf
+
+# --- Scripts nativos de Windows: CRLF obligatorio ---
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# --- Scripts Unix/macOS: LF obligatorio ---
+*.sh text eol=lf
+
+# --- Fuentes, config y docs: LF explicito ---
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.sql   text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.svg   text eol=lf
+
+# --- Binarios: sin conversion ni diff de texto ---
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.icns  binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.zip   binary
+*.mov   binary
+*.mp4   binary
+*.exr   binary
