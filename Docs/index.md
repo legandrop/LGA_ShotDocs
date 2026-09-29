@@ -18,3 +18,17 @@ en inglés.
 - Un documento describe cómo está la app hoy. La historia de por qué cambió algo va al changelog.
 - Nombres: `Doc_<Tema>.md` para documentos de referencia, `Plan_<Tema>.md` para planes que se van
   vaciando a medida que se implementan.
+- Cada cambio suma una entrada al final de `Changelog.md` (`+0.001`) con el título del commit entre
+  corchetes.
+
+## Reglas de trabajo
+
+- **Auditoría antes de cerrar una fase.** Ninguna fase de `Plan_ShotDocs.md` (sección 9) se da por
+  cerrada sin una auditoría independiente contra lo que pide el plan: funcionalidad, permisos y Row Level
+  Security, la regla de no perder datos al sincronizar y la documentación. Lo que encuentre se corrige
+  antes de cerrarla.
+- **Claves.** Nunca se versionan. La app solo lee `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`.
+- **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
+  `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
+  `Doc_Supabase.md`).
+- **Pruebas de la app.** `npm test` corre las pruebas de sincronización y `npm run typecheck` los tipos.

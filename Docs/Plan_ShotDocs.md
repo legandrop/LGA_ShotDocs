@@ -26,6 +26,10 @@ propia cuenta.
 7. Autohosteable: cada instalación tiene su propia base de datos y nada se comparte entre instalaciones
    (sección 8).
 8. Colaboración en tiempo real, al final (D-04).
+9. **Formato de página real.** Una página puede ser libre o tener el tamaño de una hoja (A5, A4, A3, Carta),
+   y lo que se ve al editarla es exactamente lo que sale en el PDF (sección 10).
+10. **Asistente con la clave de cada usuario.** Cada usuario carga la API key de su modelo preferido y el
+    asistente puede revisar y corregir textos, dar formato y ajustar imágenes (sección 11).
 
 ## 3. Arquitectura
 
@@ -53,6 +57,7 @@ pages          (id, workspace_id, parent_id, title, icon, sort_key, template_id,
 page_updates   (id, page_id, client_update_id, update BYTEA, created_by, created_at)   -- solo agregado
 page_snapshots (page_id, state BYTEA, up_to_update_id, created_at)
 page_versions  (id, page_id, state BYTEA, label, created_by, created_at)             -- historial
+-- fase 4: pages.format (null = hereda del padre), pages.orientation, workspaces.default_format
 templates      (id, workspace_id, name, description, content BYTEA, created_at, updated_at)
 shares         (id, page_id, kind, user_email, token_hash, role, expires_at, created_by, created_at)
 files          (id, page_id, storage_path, mime, size, created_by, created_at)
@@ -127,17 +132,53 @@ sus ramas hermanas.
 ## 9. Fases
 
 1. **MVP.** Login por email, árbol de páginas en la barra lateral (crear, renombrar, mover, papelera),
-   editor visual con autoguardado, offline con sincronización segura y PWA instalable.
+   editor visual con autoguardado, offline con sincronización segura y PWA instalable. Incluye pegar
+   imágenes (se guardan en el dispositivo y se suben cuando hay red).
 2. **Compartir.** Por usuario y por link público, con Row Level Security, visor público y las pruebas de
    la sección 6.
 3. **Plantillas.** Las plantillas iniciales definidas con Lega y la opción de guardar cualquier página
    como plantilla.
-4. **Pulido.** Imágenes y fotos de set (con compresión en el dispositivo), historial de versiones,
-   exportar e importar Markdown y búsqueda.
-5. **Distribución.** Guía de autohosteo, deploy con un clic y apps de escritorio e iOS si hacen falta.
-6. **Tiempo real.** Dos personas editando la misma página a la vez.
+4. **Formato de página y PDF.** Páginas libres o con tamaño de hoja, heredado por rama, y exportar a PDF
+   igual a lo que se ve (sección 10).
+5. **Asistente.** Clave propia de cada usuario, revisar y editar textos, dar formato y ajustar imágenes,
+   y acceso por MCP (sección 11).
+6. **Pulido.** Compresión de fotos de set en el dispositivo, historial de versiones, exportar e importar
+   Markdown y búsqueda.
+7. **Distribución.** Guía de autohosteo, deploy con un clic y apps de escritorio e iOS si hacen falta.
+8. **Tiempo real.** Dos personas editando la misma página a la vez.
 
-## 10. Preguntas abiertas
+## 10. Formato de página y PDF
+
+En Notion y en Coda lo que se ve al editar no es lo que sale en el PDF. Acá sí.
+
+- **Libre o con hoja.** Cada página es *libre* (ancho fluido, sin cortes) o tiene formato de hoja: A5,
+  A4, A3 o Carta, vertical u horizontal, con márgenes.
+- **Herencia.** El formato se puede fijar en una página y lo heredan todas las de abajo, o en el espacio
+  entero ("todo este proyecto es A4"). Una página puede pisar lo heredado.
+- **Lo que se ve es lo que sale.** Una página con hoja se edita con el ancho imprimible real y muestra
+  dónde corta cada hoja. El PDF se genera con el mismo motor de render y la misma hoja (`@page`), así que
+  los cortes, los anchos y el tamaño de las imágenes coinciden.
+- **Control de cortes.** Bloque de salto de hoja; las imágenes y las tablas no se parten entre hojas; una
+  imagen nunca pasa del ancho imprimible.
+- Datos: `pages.format` y `pages.orientation` (vacío = hereda) y `workspaces.default_format`.
+
+## 11. Asistente
+
+- **La clave es de cada usuario.** En Ajustes, cada usuario carga la API key de su proveedor (Anthropic,
+  OpenAI, Google u otro) y elige el modelo. La app no trae una clave propia ni cobra por uso. Dónde se
+  guarda la clave es D-06.
+- **Qué hace.** Sobre una página, una selección o una rama: revisar y corregir textos, resumir, pasar a
+  formato de plantilla, reordenar y dar formato, y ajustar imágenes (tamaño, recorte, compresión).
+- **Cómo edita.** Sus cambios entran como ediciones normales del documento: se sincronizan, quedan en el
+  historial y se deshacen como cualquier otra. Antes de aplicar, muestra qué va a cambiar.
+- **Permisos.** Actúa con los permisos del usuario: no ve ni toca nada que el usuario no pueda ver o
+  editar.
+- **MCP.** Además del asistente de la app, un servidor MCP para que un cliente externo lea y edite las
+  páginas con los permisos del usuario (D-07).
+
+## 12. Preguntas abiertas
 
 - **Hosting para trabajos pagos (D-05).** El plan gratis de Vercel es solo para uso no comercial.
 - **Campos de las plantillas iniciales.** Se definen con Lega antes de la fase 3.
+- **Dónde se guarda la clave del asistente (D-06)** y **cómo se expone el MCP (D-07).**
+- **Formato por defecto de un espacio nuevo (D-08).**

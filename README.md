@@ -13,6 +13,10 @@ one tree of pages you own.
 - **Templates.** Reusable page layouts such as *Pre-production Notes*, *On-Set Report* or *Shot
   Breakdown*. Pick one when you create a page and start filling it in.
 - **Works everywhere.** macOS, Windows and iPhone, from the same app.
+- **Real page sizes.** A page can be free-form or set to a paper size (A5, A4, A3, Letter), per page or
+  for a whole branch. What you see while editing is exactly what the PDF export looks like.
+- **Assistant with your own key.** Add the API key of your preferred AI model and let it review and fix
+  text, format pages and resize images. Its edits are regular edits: synced, versioned and undoable.
 - **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
   back online. Edits made offline on two devices are merged, never overwritten.
 - **Share a branch, never the tree.** Share any page with a public link or with specific people. Sharing

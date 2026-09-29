@@ -20,3 +20,10 @@ diga otra cosa.
 
 - **D-05 · Hosting para trabajos pagos.** El plan Hobby de Vercel es solo para uso no comercial. Para
   usar la app en shows pagos hace falta Vercel Pro u otro hosting. Mientras tanto, se desarrolla en Hobby.
+- **D-06 · Dónde se guarda la clave del asistente.** Opción indicada: solo en el dispositivo, sin pasar
+  por el servidor; la app llama directo al proveedor. Es lo más privado, pero hay que cargarla en cada
+  dispositivo. La alternativa es guardarla cifrada en Supabase (Vault) y llamar al proveedor desde una
+  función del servidor: se carga una vez y funciona en todos lados.
+- **D-07 · MCP.** Opción indicada: un servidor MCP como función de Vercel, que entra con la sesión del
+  usuario y edita con sus permisos. Se hace en la fase 5, después del asistente de la app.
+- **D-08 · Formato por defecto de un espacio nuevo.** Opción indicada: libre.
