@@ -24,6 +24,15 @@ insert into public.pages (id, workspace_id, parent_id, title, sort_key) values
   ('00000000-0000-4000-8000-0000000000a2', current_setting('test.ws_a')::uuid,
    '00000000-0000-4000-8000-0000000000a1', 'Hija A', 'a0');
 
+-- Crear con upsert (así lo hace la app) y reintentar no falla.
+insert into public.pages (id, workspace_id, title, sort_key) values
+  ('00000000-0000-4000-8000-0000000000a3', current_setting('test.ws_a')::uuid, 'Upsert A', 'a1')
+on conflict (id) do nothing;
+insert into public.pages (id, workspace_id, title, sort_key) values
+  ('00000000-0000-4000-8000-0000000000a3', current_setting('test.ws_a')::uuid, 'Upsert A', 'a1')
+on conflict (id) do nothing
+returning id;
+
 do $$
 declare
   a1 constant uuid := '00000000-0000-4000-8000-0000000000a1';

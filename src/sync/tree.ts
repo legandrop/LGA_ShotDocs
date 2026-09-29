@@ -123,8 +123,10 @@ export class PageTree {
     return [...this.failed];
   }
 
-  hasPendingCreate(pageId: string): boolean {
-    return this.ops.some((o) => o.op.kind === 'create' && o.op.page.id === pageId);
+  /** La página todavía no existe en el servidor: su creación está en la cola o fue rechazada. */
+  hasUnsentCreate(pageId: string): boolean {
+    const isCreate = (op: TreeOp) => op.kind === 'create' && op.page.id === pageId;
+    return this.ops.some((o) => isCreate(o.op)) || this.failed.some((f) => isCreate(f.op));
   }
 
   // --- cambios locales -----------------------------------------------------------------------------
@@ -145,14 +147,19 @@ export class PageTree {
     await this.enqueue({ kind: 'update', id, patch: { title } });
   }
 
-  /** Mueve `id` adentro de `parentId`, en la posición `index` entre sus hermanas (al final si falta). */
-  async move(id: string, parentId: string | null, index?: number): Promise<void> {
+  /** Mueve `id` adentro de `parentId`: antes o después de una hermana, o al final si no se indica. */
+  async move(id: string, parentId: string | null, position: { before?: string; after?: string } = {}): Promise<void> {
     if (parentId === id || (parentId && this.isDescendant(parentId, id))) {
-      throw new Error('Una página no puede ir adentro de sí misma.');
+      throw new Error('A page cannot go inside itself.');
     }
     const siblings = (this.childrenIndex.get(parentId) ?? []).filter((p) => p.id !== id);
-    const at = Math.max(0, Math.min(index ?? siblings.length, siblings.length));
+    let at = siblings.length;
+    const anchor = position.before ?? position.after;
+    const found = anchor ? siblings.findIndex((p) => p.id === anchor) : -1;
+    if (found >= 0) at = position.before ? found : found + 1;
     const sortKey = keyBetween(siblings[at - 1]?.sort_key ?? null, siblings[at]?.sort_key ?? null);
+    const current = this.view.get(id);
+    if (current?.parent_id === parentId && current.sort_key === sortKey) return;
     await this.enqueue({ kind: 'update', id, patch: { parent_id: parentId, sort_key: sortKey } });
   }
 
@@ -193,7 +200,7 @@ export class PageTree {
 
   /** El servidor rechazó el cambio para siempre (por ejemplo, un movimiento que armaba un ciclo). */
   async failOp(op: QueuedOp, error: string): Promise<void> {
-    const failed: FailedOp = { op: op.op, error, failedAt: Date.now() };
+    const failed: FailedOp = { op: op.op, opSeq: op.seq, error, failedAt: Date.now() };
     const tx = this.db.transaction(['ops', 'failedOps'], 'readwrite');
     await tx.objectStore('ops').delete(op.seq!);
     failed.seq = await tx.objectStore('failedOps').add(failed);
@@ -203,10 +210,41 @@ export class PageTree {
     this.recompute();
   }
 
-  async dismissFailed(): Promise<void> {
-    await this.db.clear('failedOps');
+  /** Vuelve a poner en la cola, en el orden original, todo lo que el servidor rechazó. */
+  async retryFailed(): Promise<void> {
+    const tx = this.db.transaction(['ops', 'failedOps'], 'readwrite');
+    const queued: QueuedOp[] = [];
+    for (const f of this.failed) {
+      const op: QueuedOp = { opId: crypto.randomUUID(), op: f.op, createdAt: Date.now() };
+      if (f.opSeq !== undefined) op.seq = f.opSeq;
+      op.seq = await tx.objectStore('ops').put(op);
+      await tx.objectStore('failedOps').delete(f.seq!);
+      queued.push(op);
+    }
+    await tx.done;
     this.failed = [];
+    this.ops = [...this.ops, ...queued].sort((a, b) => a.seq! - b.seq!);
     this.recompute();
+    this.onQueued?.();
+  }
+
+  /**
+   * Olvida los cambios rechazados que se pueden descartar sin perder nada (renombrar, mover, papelera).
+   * Una creación rechazada nunca se descarta: su página tiene contenido que solo está en el dispositivo.
+   */
+  async dismissFailed(): Promise<void> {
+    const keep = this.failedKeepers();
+    const tx = this.db.transaction('failedOps', 'readwrite');
+    await Promise.all(this.failed.filter((f) => !keep.has(f)).map((f) => tx.store.delete(f.seq!)));
+    await tx.done;
+    this.failed = this.failed.filter((f) => keep.has(f));
+    this.recompute();
+  }
+
+  /** Creaciones rechazadas y los cambios posteriores sobre esas mismas páginas. */
+  private failedKeepers(): Set<FailedOp> {
+    const created = new Set(this.failed.flatMap((f) => (f.op.kind === 'create' ? [f.op.page.id] : [])));
+    return new Set(this.failed.filter((f) => (f.op.kind === 'create' ? true : created.has(f.op.id))));
   }
 
   /** Reemplaza la copia local por el árbol completo que mandó el servidor. */
@@ -222,7 +260,14 @@ export class PageTree {
   private recompute(): void {
     const view = new Map(this.snapshot);
     const now = new Date().toISOString();
-    for (const op of this.ops) applyOp(view, op.op, now);
+    // Una página cuya creación fue rechazada sigue a la vista, con sus cambios: su contenido solo está en
+    // el dispositivo. Todo se aplica en el orden en que se hizo.
+    const keep = this.failedKeepers();
+    const changes = [
+      ...this.ops.map((o) => ({ seq: o.seq ?? 0, op: o.op })),
+      ...this.failed.filter((f) => keep.has(f)).map((f) => ({ seq: f.opSeq ?? 0, op: f.op })),
+    ].sort((a, b) => a.seq - b.seq);
+    for (const change of changes) applyOp(view, change.op, now);
 
     const children = new Map<string | null, PageRow[]>();
     for (const page of view.values()) {

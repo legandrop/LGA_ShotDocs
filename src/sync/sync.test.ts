@@ -143,6 +143,37 @@ describe('sincronización', () => {
     expect(b.engine.getStatus().failedOps).toBe(1);
   });
 
+  it('una creación rechazada no esconde la página ni su contenido, y reintentar la sube', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    server.rejectCreates = true;
+    const pageId = await a.tree.create(null, 'Rechazada');
+    await write(a, pageId, (t) => t.insert(0, 'contenido valioso'));
+    await a.tree.rename(pageId, 'Rechazada y renombrada');
+    await a.engine.syncNow();
+
+    expect(a.tree.failedOps().map((f) => f.op.kind)).toEqual(['create', 'update']);
+    expect(a.tree.children(null).map((p) => p.id)).toEqual([pageId]);
+    expect(await read(a, pageId)).toBe('contenido valioso');
+    expect(server.updates.get(pageId)).toBeUndefined();
+
+    expect(a.tree.get(pageId)?.title).toBe('Rechazada y renombrada');
+
+    // Ocultar no descarta nada que pertenezca a una página que todavía no está en el servidor.
+    await a.tree.dismissFailed();
+    expect(a.tree.failedOps().map((f) => f.op.kind)).toEqual(['create', 'update']);
+    expect(a.tree.get(pageId)?.title).toBe('Rechazada y renombrada');
+
+    server.rejectCreates = false;
+    await a.tree.rename(pageId, 'Aceptada');
+    await a.tree.retryFailed();
+    await a.engine.syncNow();
+    expect(a.tree.failedOps()).toHaveLength(0);
+    expect(server.pages.get(pageId)?.title).toBe('Aceptada');
+    expect(server.updates.get(pageId)).toHaveLength(1);
+    expect(a.engine.getStatus()).toMatchObject({ pendingOps: 0, pendingPages: 0 });
+  });
+
   it('baja el contenido de páginas que nunca se abrieron en el dispositivo', async () => {
     const server = new FakeServer();
     const a = await device(server);
@@ -160,13 +191,33 @@ describe('sincronización', () => {
     for (const [i, id] of ids.entries()) expect(await read(b, id)).toBe(`contenido ${i}`);
   });
 
+  it('las ediciones rápidas se guardan juntas, sin fila de escrituras pendientes', async () => {
+    const server = new FakeServer();
+    const dbName = crypto.randomUUID();
+    const a = await device(server, dbName);
+    const pageId = await a.tree.create(null, 'P');
+    const doc = await a.docs.open(pageId);
+    const text = 'Escrito sin conexión.';
+    for (const [i, ch] of [...text].entries()) doc.getText('t').insert(i, ch);
+    await a.docs.flush(pageId);
+    expect(await a.db.countFromIndex('docUpdates', 'pageId', pageId)).toBeLessThanOrEqual(2);
+    a.docs.close(pageId);
+    a.engine.stop();
+    a.db.close();
+
+    const reopened = await device(server, dbName);
+    expect(await read(reopened, pageId)).toBe(text);
+  });
+
   it('compactar los updates guardados no cambia el contenido', async () => {
     const server = new FakeServer();
     const a = await device(server);
     const pageId = await a.tree.create(null, 'P');
     const doc = await a.docs.open(pageId);
-    for (let i = 0; i < 100; i++) doc.getText('t').insert(i, 'x');
-    await a.docs.flush(pageId);
+    for (let i = 0; i < 100; i++) {
+      doc.getText('t').insert(i, 'x');
+      await a.docs.flush(pageId);
+    }
     a.docs.close(pageId);
     expect(await a.db.countFromIndex('docUpdates', 'pageId', pageId)).toBe(100);
 

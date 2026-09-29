@@ -32,6 +32,9 @@ interface LiveDoc {
 export class PageDocs {
   private readonly live = new Map<string, LiveDoc>();
   private readonly locks = new Map<string, Promise<unknown>>();
+  /** Ediciones locales que todavía no llegaron a IndexedDB, por página. */
+  private readonly unsaved = new Map<string, Uint8Array[]>();
+  /** Escritura en curso por página. Mientras corre, las ediciones nuevas se juntan en `unsaved`. */
   private readonly writes = new Map<string, Promise<void>>();
 
   /** Se llama después de cada edición local guardada. */
@@ -66,7 +69,7 @@ export class PageDocs {
     entry.refs--;
     if (entry.refs > 0) return;
     void this.withLock(pageId, async () => {
-      await this.writes.get(pageId);
+      await this.flush(pageId);
       if (this.live.get(pageId) === entry && entry.refs === 0) {
         this.live.delete(pageId);
         entry.doc.destroy();
@@ -76,8 +79,11 @@ export class PageDocs {
 
   /** Espera a que las ediciones locales ya hechas estén guardadas en el dispositivo. */
   async flush(pageId?: string): Promise<void> {
-    if (pageId) await this.writes.get(pageId);
-    else await Promise.all(this.writes.values());
+    for (;;) {
+      const pending = pageId ? [this.writes.get(pageId)].filter(Boolean) : [...this.writes.values()];
+      if (pending.length === 0) return;
+      await Promise.all(pending);
+    }
   }
 
   async unsyncedPages(): Promise<string[]> {
@@ -93,7 +99,7 @@ export class PageDocs {
   /** Sube lo que falte de una página. Tira error si el servidor no lo confirma. */
   pushPage(pageId: string, remote: Remote): Promise<'clean' | 'pushed'> {
     return this.withLock(pageId, async () => {
-      await this.writes.get(pageId);
+      await this.flush(pageId);
       let state = (await this.db.get('docState', pageId)) ?? emptyDocState(pageId);
       let pushed = false;
       for (let round = 0; round < 5; round++) {
@@ -183,21 +189,41 @@ export class PageDocs {
     }
   }
 
+  /**
+   * Guarda una edición local. La primera escritura arranca en el acto; las ediciones que llegan mientras
+   * corre se juntan y salen todas en la siguiente transacción. Así nunca se acumula una fila de
+   * escrituras: si la app se cierra de golpe, lo que puede faltar es lo de la última transacción.
+   */
   private persistLocal(pageId: string, update: Uint8Array): void {
-    const previous = this.writes.get(pageId) ?? Promise.resolve();
-    const next = previous
-      .then(async () => {
-        const tx = this.db.transaction(['docUpdates', 'docState'], 'readwrite');
-        await tx.objectStore('docUpdates').add({ pageId, data: update });
-        const store = tx.objectStore('docState');
-        const state = (await store.get(pageId)) ?? emptyDocState(pageId);
-        state.version += 1;
-        await store.put(state);
-        await tx.done;
-      })
-      .catch((err) => this.onError?.(err));
-    this.writes.set(pageId, next);
-    void next.then(() => this.onLocalChange?.(pageId));
+    const buffer = this.unsaved.get(pageId);
+    if (buffer) buffer.push(update);
+    else this.unsaved.set(pageId, [update]);
+    if (this.writes.has(pageId)) return;
+
+    const run = (async () => {
+      for (;;) {
+        const batch = this.unsaved.get(pageId) ?? [];
+        if (batch.length === 0) break;
+        this.unsaved.set(pageId, []);
+        try {
+          const tx = this.db.transaction(['docUpdates', 'docState'], 'readwrite');
+          const data = batch.length === 1 ? batch[0] : Y.mergeUpdates(batch);
+          await tx.objectStore('docUpdates').add({ pageId, data });
+          const store = tx.objectStore('docState');
+          const state = (await store.get(pageId)) ?? emptyDocState(pageId);
+          state.version += 1;
+          await store.put(state);
+          await tx.done;
+        } catch (err) {
+          // Vuelven a la cola: siguen en el documento en memoria y se reintentan con la próxima edición.
+          this.unsaved.set(pageId, [...batch, ...(this.unsaved.get(pageId) ?? [])]);
+          this.onError?.(err);
+          break;
+        }
+        this.onLocalChange?.(pageId);
+      }
+    })().finally(() => this.writes.delete(pageId));
+    this.writes.set(pageId, run);
   }
 
   /** Carga en `doc` todo lo guardado de la página, y compacta si hay muchos updates sueltos. */

@@ -31,11 +31,11 @@ export function toRemoteError(
   const code = error?.code === undefined ? undefined : String(error.code);
   const httpStatus = status ?? error?.status ?? 0;
   const permanent = !(TRANSIENT_STATUS.has(httpStatus) || httpStatus >= 500);
-  return new RemoteError(error?.message ?? `HTTP ${httpStatus}`, permanent, code);
+  return new RemoteError(error?.message ?? `HTTP ${httpStatus}`, permanent, code, httpStatus === 0);
 }
 
 function networkError(err: unknown): RemoteError {
-  return new RemoteError(err instanceof Error ? err.message : String(err), false);
+  return new RemoteError(err instanceof Error ? err.message : String(err), false, undefined, true);
 }
 
 export class SupabaseRemote implements Remote {

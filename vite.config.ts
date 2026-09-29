@@ -40,8 +40,8 @@ export default defineConfig(({ mode }) => {
         manifest: {
           name: 'LGA Shot Docs',
           short_name: 'Shot Docs',
-          description: 'Documentación de VFX: notas de preproducción y reportes de rodaje.',
-          lang: 'es',
+          description: 'VFX documentation: pre-production notes and on-set reports.',
+          lang: 'en',
           start_url: '/',
           scope: '/',
           display: 'standalone',

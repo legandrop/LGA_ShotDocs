@@ -3,10 +3,10 @@ import type { PageFiles } from './files';
 import { hasUnsyncedContent } from './localDb';
 import type { Remote } from './remote';
 import type { PageTree } from './tree';
-import { errorMessage, isPermanent, type QueuedOp } from './types';
+import { errorMessage, isNetworkError, isPermanent, type QueuedOp } from './types';
 
 export interface SyncStatus {
-  /** El último intento de hablar con el servidor funcionó. */
+  /** El último intento de hablar con el servidor tuvo respuesta (aunque fuera un error). */
   online: boolean;
   syncing: boolean;
   pendingOps: number;
@@ -33,7 +33,7 @@ const PULL_CONCURRENCY = 4;
  */
 export class SyncEngine {
   private status: SyncStatus = {
-    online: true,
+    online: typeof navigator === 'undefined' ? true : navigator.onLine,
     syncing: false,
     pendingOps: 0,
     pendingPages: 0,
@@ -60,7 +60,7 @@ export class SyncEngine {
     tree.onQueued = poke;
     files.onQueued = poke;
     docs.onLocalChange = poke;
-    docs.onError = (err) => this.patch({ lastError: `No se pudo guardar en el dispositivo: ${errorMessage(err)}` });
+    docs.onError = (err) => this.patch({ lastError: `Could not save on this device: ${errorMessage(err)}` });
   }
 
   subscribe = (fn: () => void): (() => void) => {
@@ -74,11 +74,14 @@ export class SyncEngine {
     const onWake = () => {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') void this.syncNow();
     };
+    const onOffline = () => this.patch({ online: false });
     if (typeof window !== 'undefined') {
+      window.addEventListener('offline', onOffline);
       window.addEventListener('online', onWake);
       window.addEventListener('focus', onWake);
       document.addEventListener('visibilitychange', onWake);
       this.cleanups.push(() => {
+        window.removeEventListener('offline', onOffline);
         window.removeEventListener('online', onWake);
         window.removeEventListener('focus', onWake);
         document.removeEventListener('visibilitychange', onWake);
@@ -94,6 +97,18 @@ export class SyncEngine {
     if (this.interval) clearInterval(this.interval);
     if (this.timer) clearTimeout(this.timer);
     for (const fn of this.cleanups) fn();
+  }
+
+  /**
+   * Antes de abrir una página cuyo contenido el dispositivo todavía no tiene, lo baja. Si no hay red o
+   * tarda más de `timeoutMs`, se abre igual con lo que haya: lo que falte llega después y se fusiona.
+   */
+  async prefetchPage(pageId: string, timeoutMs = 4000): Promise<void> {
+    const serverSeq = this.tree.get(pageId)?.update_seq ?? 0;
+    const cursor = (await this.docs.states()).get(pageId)?.cursor ?? 0;
+    if (serverSeq <= cursor || this.tree.hasUnsentCreate(pageId)) return;
+    const pull = this.docs.pullPage(pageId, this.remote).catch(() => undefined);
+    await Promise.race([pull, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
   }
 
   /** Hubo un cambio local: sincroniza en un rato, agrupando los cambios seguidos. */
@@ -128,11 +143,11 @@ export class SyncEngine {
       const rows = await this.remote.fetchTree(this.tree.workspaceId);
       await this.tree.setSnapshot(rows);
 
-      const fileError = await this.files.pushPending((pageId) => this.tree.hasPendingCreate(pageId));
+      const fileError = await this.files.pushPending((pageId) => this.tree.hasUnsentCreate(pageId));
 
       let contentError: string | null = null;
       for (const pageId of await this.docs.unsyncedPages()) {
-        if (this.tree.hasPendingCreate(pageId)) continue;
+        if (this.tree.hasUnsentCreate(pageId)) continue;
         try {
           await this.docs.pushPage(pageId, this.remote);
         } catch (err) {
@@ -147,7 +162,7 @@ export class SyncEngine {
 
       this.patch({ online: true, lastError: contentError ?? fileError, lastSyncAt: Date.now() });
     } catch (err) {
-      this.patch({ online: isPermanent(err), lastError: errorMessage(err) });
+      this.patch({ online: !isNetworkError(err), lastError: errorMessage(err) });
     } finally {
       await this.refreshCounts();
       this.patch({ syncing: false });

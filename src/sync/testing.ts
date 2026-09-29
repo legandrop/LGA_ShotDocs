@@ -12,13 +12,15 @@ export class FakeServer {
   online = true;
   /** Guarda el próximo update pero hace como si la respuesta se hubiera perdido. */
   loseNextPushResponse = false;
+  /** Rechaza las creaciones de páginas como si faltaran permisos. */
+  rejectCreates = false;
   readonly pages = new Map<string, PageRow>();
   readonly updates = new Map<string, { seq: number; clientUpdateId: string; data: Uint8Array }[]>();
   readonly files = new Map<string, { data: ArrayBuffer; mime: string }>();
   readonly workspaceId = crypto.randomUUID();
 
   check(): void {
-    if (!this.online) throw new RemoteError('Failed to fetch', false);
+    if (!this.online) throw new RemoteError('Failed to fetch', false, undefined, true);
   }
 }
 
@@ -38,6 +40,9 @@ export class FakeRemote implements Remote {
   async createPage(page: NewPage): Promise<void> {
     this.server.check();
     if (this.server.pages.has(page.id)) return;
+    if (this.server.rejectCreates) {
+      throw new RemoteError('new row violates row-level security policy for table "pages"', true, '42501');
+    }
     if (page.parent_id && !this.server.pages.has(page.parent_id)) {
       throw new RemoteError('page_parent_invalid', true, '23503');
     }
@@ -76,7 +81,7 @@ export class FakeRemote implements Remote {
     this.server.updates.set(pageId, list);
     if (this.server.loseNextPushResponse) {
       this.server.loseNextPushResponse = false;
-      throw new RemoteError('Failed to fetch', false);
+      throw new RemoteError('Failed to fetch', false, undefined, true);
     }
     return page.update_seq;
   }
@@ -115,7 +120,7 @@ export interface Device {
 }
 
 /** Un dispositivo con su propia base local. Reusar `dbName` simula cerrar y volver a abrir la app. */
-export async function makeDevice(server: FakeServer, dbName = crypto.randomUUID()): Promise<Device> {
+export async function makeDevice(server: FakeServer, dbName: string = crypto.randomUUID()): Promise<Device> {
   const db = await openLocalDb(dbName);
   const remote = new FakeRemote(server);
   const tree = new PageTree(db, server.workspaceId);

@@ -33,6 +33,8 @@ export interface QueuedOp {
 
 export interface FailedOp {
   seq?: number;
+  /** Posición que tenía en la cola: al reintentar vuelve a ese lugar. */
+  opSeq?: number;
   op: TreeOp;
   error: string;
   failedAt: number;
@@ -49,6 +51,8 @@ export class RemoteError extends Error {
     message: string,
     readonly permanent: boolean,
     readonly code?: string,
+    /** No hubo respuesta del servidor: no hay red. */
+    readonly network = false,
   ) {
     super(message);
     this.name = 'RemoteError';
@@ -57,6 +61,10 @@ export class RemoteError extends Error {
 
 export function isPermanent(err: unknown): boolean {
   return err instanceof RemoteError && err.permanent;
+}
+
+export function isNetworkError(err: unknown): boolean {
+  return err instanceof RemoteError && err.network;
 }
 
 export function errorMessage(err: unknown): string {
