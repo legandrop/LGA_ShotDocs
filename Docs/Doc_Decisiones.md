@@ -102,7 +102,7 @@ diga otra cosa.
     proyecto o página: ver, comentar, editar, editar y crear páginas.
   - Compartir con un cliente: por correo, con login, desde el navegador sin instalar, solo las páginas
     elegidas con sus subpáginas; comenta, responde preguntas y sube archivos según el permiso.
-  - Copia de seguridad automática, antes que todo lo demás: repo privado de GitHub `shotdocs_backup`,
+  - Copia de seguridad automática, antes que todo lo demás: repo privado de GitHub `z_shotdocs_backup`,
     cuatro veces por día, cifrada.
   - Sacar a alguien borra lo de ese workspace en su dispositivo la próxima vez que se conecta; lo que
     tuviera sin subir, mejor que no se pierda. Sus proyectos compartidos pasan a otro admin; los privados

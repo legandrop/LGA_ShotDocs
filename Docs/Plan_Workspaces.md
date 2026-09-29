@@ -157,7 +157,7 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
 El plan gratis de Supabase no hace copias, y hay material sensible. Tiene que existir **antes** de los
 cambios de permisos, que son el momento más riesgoso.
 
-- **Wanka: repo privado de GitHub `shotdocs_backup`** (decisión de Lega). Una tarea de GitHub Actions
+- **Wanka: repo privado de GitHub `z_shotdocs_backup`** (decisión de Lega). Una tarea de GitHub Actions
   copia la base entera **cuatro veces por día** con la CLI de Supabase (roles, esquema y datos, con los
   usuarios, que hacen falta para que los ids no cambien), la cifra con una frase que guarda Lega y la
   deja en la rama `copias` del repo. Se guardan todas las de los últimos 30 días y la primera de cada
