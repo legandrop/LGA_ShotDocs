@@ -10,6 +10,8 @@ en inglés.
 | [`Plan_ShotDocs.md`](Plan_ShotDocs.md) | El plan de arranque: qué es la app, la arquitectura, el modelo de datos, la sincronización offline, los permisos para compartir, las plantillas, el autohosteo y las fases. Lo que se cierra pasa a los otros documentos. |
 | [`Doc_Decisiones.md`](Doc_Decisiones.md) | Las decisiones tomadas y las que siguen abiertas, numeradas `D-XX`. |
 | [`Doc_Roadmap.md`](Doc_Roadmap.md) | Lo que falta, por orden de importancia. |
+| [`Doc_Supabase.md`](Doc_Supabase.md) | Cómo está armado el backend: configuración del proyecto, migraciones, pruebas de permisos y login. |
+| [`Doc_Sincronizacion.md`](Doc_Sincronizacion.md) | Cómo funciona la sincronización offline sin pérdidas: contenido, árbol, imágenes y estado visible. |
 | [`Changelog.md`](Changelog.md) | El historial de cambios. Cada entrada sube `+0.001`. |
 
 ## Convenciones
@@ -18,8 +20,8 @@ en inglés.
 - Un documento describe cómo está la app hoy. La historia de por qué cambió algo va al changelog.
 - Nombres: `Doc_<Tema>.md` para documentos de referencia, `Plan_<Tema>.md` para planes que se van
   vaciando a medida que se implementan.
-- Cada cambio suma una entrada al final de `Changelog.md` (`+0.001`) con el título del commit entre
-  corchetes.
+- Cada tanda de cambios suma una entrada **arriba** en `Changelog.md` (`+0.001`) con el título del commit
+  entre corchetes. Las entradas viejas no se reescriben.
 
 ## Reglas de trabajo
 

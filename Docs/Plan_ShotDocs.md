@@ -71,22 +71,11 @@ files          (id, page_id, storage_path, mime, size, created_by, created_at)
 
 ## 5. Sincronización offline sin pérdidas
 
-Es el punto más delicado. Reglas duras:
+Implementada en la fase 1: cómo funciona está en `Doc_Sincronizacion.md`. Falta:
 
-1. **Primero el dispositivo.** Cada edición se guarda en IndexedDB antes de intentar subirla. La app nunca
-   depende de la red para guardar.
-2. **Fusión, no pisada.** El contenido es Yjs: dos ediciones hechas offline sobre la misma página, en dos
-   dispositivos, se combinan al sincronizar.
-3. **Solo agregado en el servidor.** Las ediciones entran en `page_updates` y nunca se sobrescriben.
-   Compactar en `page_snapshots` no borra nada hasta que el snapshot está confirmado.
-4. **Cola de salida con confirmación.** Lo pendiente se borra del dispositivo solo cuando el servidor
-   confirma que lo guardó. Los reintentos son seguros porque aplicar dos veces un update de Yjs no cambia
-   el resultado.
-5. **Sin borrado duro.** Eliminar manda a la papelera; cada página tiene historial de versiones.
-6. **Estado visible.** La app muestra siempre cuántos cambios faltan subir.
-7. **Estructura del árbol.** Crear, renombrar y mover páginas también pasa por la cola de salida. Si dos
-   dispositivos mueven la misma página offline, gana el último movimiento, pero nunca se pierde la página
-   ni su contenido. Un movimiento que armaría un ciclo se rechaza y la página queda donde estaba.
+- **Compactar en el servidor.** Fusionar los updates viejos de una página en `page_snapshots` sin borrar
+  nada hasta que el snapshot esté confirmado. Hoy solo se compacta en el dispositivo.
+- **Historial de versiones** por página (fase 6).
 
 **Riesgo conocido: el iPhone.** Safari puede borrar el almacenamiento de una web que no está instalada y
 no se usa por varios días. Mitigación: instalar la PWA en la pantalla de inicio, pedir almacenamiento
@@ -131,9 +120,9 @@ sus ramas hermanas.
 
 ## 9. Fases
 
-1. **MVP.** Login por email, árbol de páginas en la barra lateral (crear, renombrar, mover, papelera),
-   editor visual con autoguardado, offline con sincronización segura y PWA instalable. Incluye pegar
-   imágenes (se guardan en el dispositivo y se suben cuando hay red).
+1. **MVP (hecha, v0.006).** Login por email, árbol de páginas en la barra lateral (crear, renombrar,
+   mover, papelera), editor visual con autoguardado, offline con sincronización segura y PWA instalable.
+   Incluye pegar imágenes (se guardan en el dispositivo y se suben cuando hay red).
 2. **Compartir.** Por usuario y por link público, con Row Level Security, visor público y las pruebas de
    la sección 6.
 3. **Plantillas.** Las plantillas iniciales definidas con Lega y la opción de guardar cualquier página

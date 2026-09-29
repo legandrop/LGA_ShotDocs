@@ -619,6 +619,12 @@ code {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
+.editor a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .editor-placeholder {
   min-height: 200px;
 }

@@ -27,15 +27,31 @@ one tree of pages you own.
 
 ## Status
 
-Planning. Nothing to install yet. The plan, the decisions and the roadmap are in [`Docs/`](Docs/index.md)
-(in Spanish).
+Phase 1 (MVP) works: email sign-in, the page tree, the block editor with autosave, pasted images, offline
+editing that syncs without losing anything, and an installable app. Next: sharing, templates, real page
+sizes with PDF export, and the assistant. The plan, the decisions and the roadmap are in
+[`Docs/`](Docs/index.md) (in Spanish).
 
-## Planned stack
+## Development
 
-- Web app installable as a PWA (desktop and iPhone), with native wrappers later if needed.
+```sh
+npm install
+cp .env.example .env.local   # your Supabase project URL and publishable key
+npm run dev                  # http://localhost:5173
+npm test                     # sync tests
+npm run build                # production build in dist/
+```
+
+The database migrations are in `supabase/migrations/`. See [`Docs/Doc_Supabase.md`](Docs/Doc_Supabase.md)
+to apply them and run the permission tests.
+
+## Stack
+
+- React web app installable as a PWA (desktop and iPhone), with native wrappers later if needed.
 - [Supabase](https://supabase.com) for the database, sign-in, file storage and access rules.
 - [Vercel](https://vercel.com) for hosting the web app.
-- A CRDT per page for conflict-free offline editing.
+- A [Yjs](https://yjs.dev) document per page for conflict-free offline editing, and a
+  [BlockNote](https://www.blocknotejs.org) block editor.
 
 ## License
 
