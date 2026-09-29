@@ -29,8 +29,10 @@ en inglés.
   cerrada sin una auditoría independiente contra lo que pide el plan: funcionalidad, permisos y Row Level
   Security, la regla de no perder datos al sincronizar y la documentación. Lo que encuentre se corrige
   antes de cerrarla.
-- **Claves.** Nunca se versionan. La app solo lee `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`.
+- **Claves.** Nunca se versionan. La app solo lee `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` (o sus
+  variantes `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`), nunca una clave secreta.
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las pruebas de sincronización y `npm run typecheck` los tipos.
+- **Pruebas de la app.** `npm test` corre las pruebas de sincronización (algunas con el editor real, en
+  jsdom) y `npm run typecheck` los tipos.

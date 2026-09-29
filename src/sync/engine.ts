@@ -10,10 +10,15 @@ export interface SyncStatus {
   online: boolean;
   syncing: boolean;
   pendingOps: number;
+  /** Páginas con contenido sin subir, incluidas las que todavía no se pudieron guardar en el dispositivo. */
   pendingPages: number;
   pendingFiles: number;
   /** Cambios del árbol que el servidor rechazó para siempre. */
   failedOps: number;
+  /** Páginas cuyo contenido el servidor rechazó para siempre (por ejemplo, por tamaño). */
+  rejectedPages: number;
+  /** No se pudo guardar en el dispositivo. Se reintenta solo y no se limpia hasta que funcione. */
+  localError: string | null;
   lastError: string | null;
   lastSyncAt: number | null;
 }
@@ -26,9 +31,9 @@ const PULL_CONCURRENCY = 4;
  * Un ciclo de sincronización, siempre en este orden:
  * 1. Cambios del árbol, en el orden en que se hicieron (así una página existe antes que su contenido).
  * 2. El árbol completo del servidor.
- * 3. Imágenes pendientes.
- * 4. Contenido pendiente de cada página.
- * 5. Contenido nuevo de las páginas que cambiaron en el servidor.
+ * 3. Contenido pendiente de cada página.
+ * 4. Contenido nuevo de las páginas que cambiaron en el servidor.
+ * 5. Imágenes pendientes (al final: una foto grande en una red mala no frena el texto).
  * Nunca hay dos ciclos a la vez.
  */
 export class SyncEngine {
@@ -39,6 +44,8 @@ export class SyncEngine {
     pendingPages: 0,
     pendingFiles: 0,
     failedOps: 0,
+    rejectedPages: 0,
+    localError: null,
     lastError: null,
     lastSyncAt: null,
   };
@@ -60,7 +67,11 @@ export class SyncEngine {
     tree.onQueued = poke;
     files.onQueued = poke;
     docs.onLocalChange = poke;
-    docs.onError = (err) => this.patch({ lastError: `Could not save on this device: ${errorMessage(err)}` });
+    docs.onWriteError = (message) => {
+      this.patch({ localError: message });
+      void this.refreshCounts();
+    };
+    docs.onWarning = (message) => this.patch({ lastError: message });
   }
 
   subscribe = (fn: () => void): (() => void) => {
@@ -88,8 +99,8 @@ export class SyncEngine {
       });
     }
     this.interval = setInterval(onWake, INTERVAL_MS);
-    void this.refreshCounts();
-    void this.syncNow();
+    // Lo que el servidor rechazó se vuelve a intentar una vez por apertura: puede que ya se haya arreglado.
+    void this.docs.clearRejected().then(() => this.syncNow());
   }
 
   stop(): void {
@@ -99,16 +110,29 @@ export class SyncEngine {
     for (const fn of this.cleanups) fn();
   }
 
-  /**
-   * Antes de abrir una página cuyo contenido el dispositivo todavía no tiene, lo baja. Si no hay red o
-   * tarda más de `timeoutMs`, se abre igual con lo que haya: lo que falte llega después y se fusiona.
-   */
-  async prefetchPage(pageId: string, timeoutMs = 4000): Promise<void> {
+  /** Vuelve a intentar todo lo que el servidor rechazó: cambios del árbol y contenido. */
+  async retryRejected(): Promise<void> {
+    await this.tree.retryFailed();
+    await this.docs.clearRejected();
+    await this.syncNow();
+  }
+
+  /** El servidor tiene contenido de la página que este dispositivo todavía no bajó. */
+  async isMissingContent(pageId: string): Promise<boolean> {
     const serverSeq = this.tree.get(pageId)?.update_seq ?? 0;
     const cursor = (await this.docs.states()).get(pageId)?.cursor ?? 0;
-    if (serverSeq <= cursor || this.tree.hasUnsentCreate(pageId)) return;
+    return serverSeq > cursor && !this.tree.hasUnsentCreate(pageId);
+  }
+
+  /**
+   * Antes de abrir una página cuyo contenido el dispositivo todavía no tiene, lo baja, esperando hasta
+   * `timeoutMs`. Devuelve si quedó todo bajado.
+   */
+  async prefetchPage(pageId: string, timeoutMs = 4000): Promise<boolean> {
+    if (!(await this.isMissingContent(pageId))) return true;
     const pull = this.docs.pullPage(pageId, this.remote).catch(() => undefined);
     await Promise.race([pull, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
+    return !(await this.isMissingContent(pageId));
   }
 
   /** Hubo un cambio local: sincroniza en un rato, agrupando los cambios seguidos. */
@@ -143,11 +167,10 @@ export class SyncEngine {
       const rows = await this.remote.fetchTree(this.tree.workspaceId);
       await this.tree.setSnapshot(rows);
 
-      const fileError = await this.files.pushPending((pageId) => this.tree.hasUnsentCreate(pageId));
-
       let contentError: string | null = null;
+      const states = await this.docs.states();
       for (const pageId of await this.docs.unsyncedPages()) {
-        if (this.tree.hasUnsentCreate(pageId)) continue;
+        if (this.tree.hasUnsentCreate(pageId) || states.get(pageId)?.rejected) continue;
         try {
           await this.docs.pushPage(pageId, this.remote);
         } catch (err) {
@@ -156,9 +179,16 @@ export class SyncEngine {
         }
       }
 
-      const states = await this.docs.states();
-      const stale = rows.filter((r) => r.update_seq > (states.get(r.id)?.cursor ?? 0)).map((r) => r.id);
-      await runPool(stale, PULL_CONCURRENCY, (id) => this.docs.pullPage(id, this.remote));
+      const cursors = await this.docs.states();
+      const stale = rows.filter((r) => r.update_seq > (cursors.get(r.id)?.cursor ?? 0)).map((r) => r.id);
+      await runPool(stale, PULL_CONCURRENCY, (id) =>
+        this.docs.pullPage(id, this.remote).catch((err) => {
+          if (!isPermanent(err)) throw err;
+          contentError = errorMessage(err);
+        }),
+      );
+
+      const fileError = await this.files.pushPending((pageId) => this.tree.hasUnsentCreate(pageId));
 
       this.patch({ online: true, lastError: contentError ?? fileError, lastSyncAt: Date.now() });
     } catch (err) {
@@ -186,13 +216,18 @@ export class SyncEngine {
   }
 
   private async refreshCounts(): Promise<void> {
-    const [states, pendingFiles] = await Promise.all([this.docs.states(), this.files.pendingCount()]);
-    let pendingPages = 0;
-    for (const s of states.values()) if (hasUnsyncedContent(s)) pendingPages++;
+    const [states, unsynced, pendingFiles] = await Promise.all([
+      this.docs.states(),
+      this.docs.unsyncedPages(),
+      this.files.pendingCount(),
+    ]);
+    let rejectedPages = 0;
+    for (const s of states.values()) if (s.rejected && hasUnsyncedContent(s)) rejectedPages++;
     this.patch({
       pendingOps: this.tree.pendingOps().length,
       failedOps: this.tree.failedOps().length,
-      pendingPages,
+      pendingPages: unsynced.length,
+      rejectedPages,
       pendingFiles,
     });
   }

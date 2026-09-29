@@ -116,6 +116,14 @@ export function Sidebar() {
           onDragLeave={() => drop?.id === page.id && setDrop(null)}
           onDrop={(e) => onDrop(e, page)}
           onClick={() => navigate(pagePath(page.id))}
+          tabIndex={0}
+          aria-current={page.id === activeId ? 'page' : undefined}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === 'Enter') navigate(pagePath(page.id));
+            if (e.key === 'ArrowRight' && children.length && !open) toggle(page.id);
+            if (e.key === 'ArrowLeft' && open) toggle(page.id);
+          }}
         >
           <button
             className="toggle"

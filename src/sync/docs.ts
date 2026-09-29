@@ -7,19 +7,30 @@ import {
   type LocalDb,
 } from './localDb';
 import type { Remote } from './remote';
-import { errorMessage, type RemoteUpdate } from './types';
+import { errorMessage, isPermanent, type RemoteUpdate } from './types';
 
 export const ORIGIN_LOAD = Symbol('load');
 export const ORIGIN_REMOTE = Symbol('remote');
+/** Reparaciones de estructura: son ediciones locales, se guardan y se suben como cualquier otra. */
+export const ORIGIN_REPAIR = Symbol('repair');
 
 /** Con más updates guardados que esto, al abrir la página se fusionan en uno solo. */
 const COMPACT_AT = 64;
 const PULL_BATCH = 500;
+const WRITE_RETRY_MS = 3000;
 
 interface LiveDoc {
   doc: Y.Doc;
   refs: number;
   ready: Promise<void>;
+}
+
+export interface PageDocsOptions {
+  /**
+   * Repara la estructura del documento (ver structure.ts) y devuelve si tuvo que hacerlo. Se llama al
+   * abrir y al recibir cambios.
+   */
+  normalize?: (doc: Y.Doc, origin: symbol) => boolean;
 }
 
 /**
@@ -36,12 +47,20 @@ export class PageDocs {
   private readonly unsaved = new Map<string, Uint8Array[]>();
   /** Escritura en curso por página. Mientras corre, las ediciones nuevas se juntan en `unsaved`. */
   private readonly writes = new Map<string, Promise<void>>();
+  private readonly retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private writeError: string | null = null;
 
   /** Se llama después de cada edición local guardada. */
   onLocalChange?: (pageId: string) => void;
-  onError?: (err: unknown) => void;
+  /** Cambió el error de escritura local (null: se volvió a poder guardar). */
+  onWriteError?: (message: string | null) => void;
+  /** Problemas que no son de escritura local, por ejemplo un update ilegible del servidor. */
+  onWarning?: (message: string) => void;
 
-  constructor(private readonly db: LocalDb) {}
+  constructor(
+    private readonly db: LocalDb,
+    private readonly options: PageDocsOptions = {},
+  ) {}
 
   /** Abre la página para editarla. Cada `open` necesita su `close`. */
   async open(pageId: string): Promise<Y.Doc> {
@@ -54,6 +73,7 @@ export class PageDocs {
           if (origin === ORIGIN_LOAD || origin === ORIGIN_REMOTE) return;
           this.persistLocal(pageId, update);
         });
+        this.options.normalize?.(doc, ORIGIN_REPAIR);
       });
       this.live.set(pageId, created);
       entry = created;
@@ -70,6 +90,8 @@ export class PageDocs {
     if (entry.refs > 0) return;
     void this.withLock(pageId, async () => {
       await this.flush(pageId);
+      // Con ediciones que no se pudieron guardar, el documento se queda en memoria y se sigue reintentando.
+      if ((this.unsaved.get(pageId)?.length ?? 0) > 0) return;
       if (this.live.get(pageId) === entry && entry.refs === 0) {
         this.live.delete(pageId);
         entry.doc.destroy();
@@ -77,7 +99,7 @@ export class PageDocs {
     });
   }
 
-  /** Espera a que las ediciones locales ya hechas estén guardadas en el dispositivo. */
+  /** Espera a que terminen las escrituras locales en curso. */
   async flush(pageId?: string): Promise<void> {
     for (;;) {
       const pending = pageId ? [this.writes.get(pageId)].filter(Boolean) : [...this.writes.values()];
@@ -86,17 +108,34 @@ export class PageDocs {
     }
   }
 
+  /** Hay ediciones que todavía no están guardadas en el dispositivo. */
+  hasUnsavedEdits(): boolean {
+    return this.writes.size > 0 || [...this.unsaved.values()].some((b) => b.length > 0);
+  }
+
+  getWriteError(): string | null {
+    return this.writeError;
+  }
+
+  /** Páginas con algo sin subir: sin confirmar por el servidor o todavía sin guardar en el dispositivo. */
   async unsyncedPages(): Promise<string[]> {
     await this.flush();
-    const states = await this.db.getAll('docState');
-    return states.filter(hasUnsyncedContent).map((s) => s.pageId);
+    const pages = new Set((await this.db.getAll('docState')).filter(hasUnsyncedContent).map((s) => s.pageId));
+    for (const [pageId, batch] of this.unsaved) if (batch.length > 0) pages.add(pageId);
+    return [...pages];
   }
 
   async states(): Promise<Map<string, DocState>> {
     return new Map((await this.db.getAll('docState')).map((s) => [s.pageId, s]));
   }
 
-  /** Sube lo que falte de una página. Tira error si el servidor no lo confirma. */
+  /**
+   * Sube lo que falte de una página. Tira error si el servidor no lo confirma.
+   *
+   * Lo que se sube sale de lo guardado en IndexedDB, leído en la misma transacción que la versión: un
+   * ack nunca cubre ediciones que no viajaron (por ejemplo, las de otra pestaña o las todavía sin
+   * guardar).
+   */
   pushPage(pageId: string, remote: Remote): Promise<'clean' | 'pushed'> {
     return this.withLock(pageId, async () => {
       await this.flush(pageId);
@@ -106,15 +145,14 @@ export class PageDocs {
         let pending = state.pending;
         if (!pending) {
           if (state.version <= state.ackedVersion) break;
-          // La versión se lee antes que el contenido: todo lo que cuenta ya está en el doc que se lee
-          // después. En el peor caso se sube algo dos veces, y Yjs lo aplica una sola.
-          const version = state.version;
-          const syncedSV = state.syncedSV;
-          const { update, sv } = await this.withDoc(pageId, (doc) => ({
-            update: Y.encodeStateAsUpdate(doc, syncedSV),
-            sv: Y.encodeStateVector(doc),
-          }));
-          const next = { id: crypto.randomUUID(), update, sv, version };
+          const saved = await this.readSaved(pageId);
+          const next = {
+            id: crypto.randomUUID(),
+            update: Y.encodeStateAsUpdate(saved.doc, saved.state.syncedSV),
+            sv: Y.encodeStateVector(saved.doc),
+            version: saved.state.version,
+          };
+          saved.doc.destroy();
           state = await updateDocState(this.db, pageId, (s) => {
             s.pending = next;
           });
@@ -125,6 +163,7 @@ export class PageDocs {
         } catch (err) {
           await updateDocState(this.db, pageId, (s) => {
             s.lastError = errorMessage(err);
+            s.rejected = isPermanent(err) ? errorMessage(err) : undefined;
           });
           throw err;
         }
@@ -135,11 +174,23 @@ export class PageDocs {
           s.ackedVersion = Math.max(s.ackedVersion, confirmed.version);
           s.pending = undefined;
           s.lastError = undefined;
+          s.rejected = undefined;
         });
         pushed = true;
       }
       return pushed ? 'pushed' : 'clean';
     });
+  }
+
+  /** Vuelve a intentar las páginas que el servidor había rechazado. */
+  async clearRejected(): Promise<void> {
+    for (const state of await this.db.getAll('docState')) {
+      if (state.rejected) {
+        await updateDocState(this.db, state.pageId, (s) => {
+          s.rejected = undefined;
+        });
+      }
+    }
   }
 
   /** Baja lo nuevo de una página y lo guarda. Si está abierta, lo aplica también en el editor. */
@@ -163,8 +214,10 @@ export class PageDocs {
       try {
         Y.decodeUpdate(u.data);
         return true;
-      } catch (err) {
-        this.onError?.(new Error(`Update ${u.seq} de ${pageId} ilegible: ${errorMessage(err)}`));
+      } catch {
+        // Queda intacto en el servidor; este dispositivo no lo puede leer (por ejemplo, porque lo escribió
+        // una versión más nueva de la app).
+        this.onWarning?.(`Could not read an update from the server (page ${pageId}, #${u.seq}).`);
         return false;
       }
     });
@@ -185,8 +238,35 @@ export class PageDocs {
     const live = this.live.get(pageId);
     if (merged && live) {
       await live.ready;
-      Y.applyUpdate(live.doc, merged, ORIGIN_REMOTE);
+      this.applyToLive(live.doc, merged);
     }
+  }
+
+  /**
+   * Aplica lo que llegó del servidor a un documento abierto en el editor. Si lo que llega rompe la
+   * estructura, la reparación va en la MISMA transacción: el editor reacciona al final de cada
+   * transacción y, si llegara a ver la estructura rota, borraría la parte que no puede mostrar.
+   */
+  private applyToLive(doc: Y.Doc, update: Uint8Array): void {
+    const normalize = this.options.normalize;
+    let needsRepair = false;
+    if (normalize) {
+      const probe = new Y.Doc();
+      Y.applyUpdate(probe, Y.encodeStateAsUpdate(doc));
+      Y.applyUpdate(probe, update);
+      needsRepair = normalize(probe, ORIGIN_REPAIR);
+      probe.destroy();
+    }
+    if (!needsRepair) {
+      Y.applyUpdate(doc, update, ORIGIN_REMOTE);
+      return;
+    }
+    // Con origen local: la reparación se guarda y se sube. Lo remoto que viaja con ella ya está en el
+    // servidor, así que subirlo de nuevo no cambia nada.
+    doc.transact(() => {
+      Y.applyUpdate(doc, update);
+      normalize!(doc, ORIGIN_REPAIR);
+    }, ORIGIN_REPAIR);
   }
 
   /**
@@ -198,7 +278,16 @@ export class PageDocs {
     const buffer = this.unsaved.get(pageId);
     if (buffer) buffer.push(update);
     else this.unsaved.set(pageId, [update]);
+    this.startWrite(pageId);
+  }
+
+  private startWrite(pageId: string): void {
     if (this.writes.has(pageId)) return;
+    const timer = this.retryTimers.get(pageId);
+    if (timer) {
+      clearTimeout(timer);
+      this.retryTimers.delete(pageId);
+    }
 
     const run = (async () => {
       for (;;) {
@@ -215,15 +304,41 @@ export class PageDocs {
           await store.put(state);
           await tx.done;
         } catch (err) {
-          // Vuelven a la cola: siguen en el documento en memoria y se reintentan con la próxima edición.
+          // Vuelven a la cola: siguen en el documento en memoria y se reintentan solas.
           this.unsaved.set(pageId, [...batch, ...(this.unsaved.get(pageId) ?? [])]);
-          this.onError?.(err);
+          this.setWriteError(errorMessage(err));
+          this.retryTimers.set(
+            pageId,
+            setTimeout(() => this.startWrite(pageId), WRITE_RETRY_MS),
+          );
           break;
         }
+        this.setWriteError(null);
         this.onLocalChange?.(pageId);
       }
     })().finally(() => this.writes.delete(pageId));
     this.writes.set(pageId, run);
+  }
+
+  private setWriteError(message: string | null): void {
+    // Mientras quede algo sin guardar, el error no se limpia.
+    if (message === null && [...this.unsaved.values()].some((b) => b.length > 0)) return;
+    if (message === this.writeError) return;
+    this.writeError = message;
+    this.onWriteError?.(message);
+  }
+
+  /** Lee en una sola transacción lo guardado de una página y su estado, y arma el documento. */
+  private async readSaved(pageId: string): Promise<{ doc: Y.Doc; state: DocState }> {
+    const tx = this.db.transaction(['docUpdates', 'docState'], 'readonly');
+    const [rows, stored] = await Promise.all([
+      tx.objectStore('docUpdates').index('pageId').getAll(pageId),
+      tx.objectStore('docState').get(pageId),
+    ]);
+    await tx.done;
+    const doc = new Y.Doc();
+    if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)), ORIGIN_LOAD);
+    return { doc, state: stored ?? emptyDocState(pageId) };
   }
 
   /** Carga en `doc` todo lo guardado de la página, y compacta si hay muchos updates sueltos. */
@@ -239,21 +354,6 @@ export class PageDocs {
     }
     await tx.done;
     if (merged) Y.applyUpdate(doc, merged, ORIGIN_LOAD);
-  }
-
-  private async withDoc<T>(pageId: string, fn: (doc: Y.Doc) => T): Promise<T> {
-    const live = this.live.get(pageId);
-    if (live) {
-      await live.ready;
-      return fn(live.doc);
-    }
-    const doc = new Y.Doc();
-    try {
-      await this.loadInto(pageId, doc);
-      return fn(doc);
-    } finally {
-      doc.destroy();
-    }
   }
 
   private withLock<T>(pageId: string, fn: () => Promise<T>): Promise<T> {

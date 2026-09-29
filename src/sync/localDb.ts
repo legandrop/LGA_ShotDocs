@@ -15,6 +15,8 @@ export interface DocState {
   /** Update enviado y todavía sin confirmar. Se reenvía igual (mismo id) hasta que el servidor responde. */
   pending?: { id: string; update: Uint8Array; sv: Uint8Array; version: number };
   lastError?: string;
+  /** El servidor rechazó el contenido para siempre (por ejemplo, por tamaño). Se reintenta al abrir la app. */
+  rejected?: string;
 }
 
 /** Imagen pegada en una página. Se guarda acá primero y se sube cuando hay red. */

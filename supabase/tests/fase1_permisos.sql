@@ -38,6 +38,7 @@ declare
   a1 constant uuid := '00000000-0000-4000-8000-0000000000a1';
   a2 constant uuid := '00000000-0000-4000-8000-0000000000a2';
   c1 constant uuid := '00000000-0000-4000-8000-0000000000c1';
+  n int;
 begin
   assert public.ensure_workspace() = current_setting('test.ws_a')::uuid,
     'ensure_workspace no es estable';
@@ -100,6 +101,24 @@ begin
   exception when insufficient_privilege then null;
   end;
 
+  update storage.objects set name = a1::text || '/otro.png' where bucket_id = 'page-files';
+  get diagnostics n = row_count;
+  assert n = 0, 'A modifica un archivo subido';
+
+  -- Borrar por SQL lo frena Supabase; por la API de Storage, la falta de política de borrado.
+  begin
+    delete from storage.objects where bucket_id = 'page-files';
+    get diagnostics n = row_count;
+    assert n = 0, 'A borra un archivo subido';
+  exception when insufficient_privilege then null;
+  end;
+
+  begin
+    update public.pages set sort_key = repeat('a', 200) where id = a1;
+    raise exception 'FALLA: sort_key sin tope de largo';
+  exception when check_violation then null;
+  end;
+
   update public.pages set deleted_at = now() where id = a2;
   update public.pages set deleted_at = null, title = 'Hija A (restaurada)' where id = a2;
   assert (select title from public.pages where id = a2) = 'Hija A (restaurada)', 'renombrar';
@@ -139,6 +158,30 @@ begin
   get diagnostics n = row_count;
   assert n = 0, 'B renombra páginas de A';
 
+  update public.pages set deleted_at = now() where id = a1;
+  get diagnostics n = row_count;
+  assert n = 0, 'B manda a la papelera páginas de A';
+
+  update public.pages set parent_id = null, sort_key = 'zz' where id = a1;
+  get diagnostics n = row_count;
+  assert n = 0, 'B mueve páginas de A';
+
+  -- Un upsert con el id de una página de A no la toca.
+  insert into public.pages (id, workspace_id, title, sort_key) values (a1, ws_b, 'pisada', 'a0')
+  on conflict (id) do nothing;
+
+  update storage.objects set name = 'x/robada.png' where bucket_id = 'page-files';
+  get diagnostics n = row_count;
+  assert n = 0, 'B modifica archivos de A';
+
+  -- Borrar por SQL lo frena Supabase; por la API de Storage, la falta de política de borrado.
+  begin
+    delete from storage.objects where bucket_id = 'page-files';
+    get diagnostics n = row_count;
+    assert n = 0, 'B borra archivos de A';
+  exception when insufficient_privilege then null;
+  end;
+
   begin
     perform public.push_page_update(a1, gen_random_uuid(), encode('x'::bytea, 'base64'));
     raise exception 'FALLA: B escribe contenido en páginas de A';
@@ -160,6 +203,21 @@ begin
     raise exception 'FALLA: B lee contenido de páginas de A';
   exception when no_data_found then null;
   end;
+end;
+$$;
+
+-- A comprueba que lo que intentó B no cambió nada.
+select pg_temp.as_user('00000000-0000-4000-8000-00000000000a');
+
+do $$
+begin
+  assert (select title from public.pages where id = '00000000-0000-4000-8000-0000000000a1') = 'Raíz A',
+    'B cambió el título de una página de A';
+  assert (select deleted_at is null and parent_id is null and sort_key = 'a0'
+          from public.pages where id = '00000000-0000-4000-8000-0000000000a1'),
+    'B cambió la posición o el estado de una página de A';
+  assert (select count(*) from storage.objects where bucket_id = 'page-files') = 1,
+    'B tocó los archivos de A';
 end;
 $$;
 

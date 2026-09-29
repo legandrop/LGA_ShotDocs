@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.007 :
+
+Cierre de la fase 1 después de la auditoría, que encontró dos fallas que perdían datos. Si dos
+dispositivos empezaban la misma página sin haberse visto, el documento quedaba con dos raíces y el editor
+borraba una en la edición siguiente: ahora se juntan en la misma transacción que aplica lo recibido, y
+una página que el dispositivo no bajó no se abre para editar. Con dos pestañas, una podía dar por subido
+lo de la otra: ahora escribe una sola (Web Locks) y lo que se sube sale de IndexedDB. Además: movimientos
+simultáneos ya no arman ciclos, un error al guardar en el dispositivo queda a la vista hasta resolverse,
+el contenido rechazado se marca, las fotos no frenan el texto y solo se aceptan imágenes raster.
+[ Fase 1 - correcciones de la auditoría ]
+
 v0.006 :
 
 Documentación de la fase 1. `Doc_Supabase.md` explica la configuración del proyecto, las migraciones,

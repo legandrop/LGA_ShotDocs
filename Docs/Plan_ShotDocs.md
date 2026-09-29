@@ -50,23 +50,34 @@ nuevos".
 
 ## 4. Modelo de datos
 
+Hecho en la fase 1 (detalle en `Doc_Supabase.md`):
+
 ```
 workspaces     (id, owner_id, name, created_at)
-pages          (id, workspace_id, parent_id, title, icon, sort_key, template_id,
+pages          (id, workspace_id, parent_id, title, icon, sort_key, template_id, update_seq,
                 deleted_at, created_by, created_at, updated_at)
-page_updates   (id, page_id, client_update_id, update BYTEA, created_by, created_at)   -- solo agregado
-page_snapshots (page_id, state BYTEA, up_to_update_id, created_at)
-page_versions  (id, page_id, state BYTEA, label, created_by, created_at)             -- historial
--- fase 4: pages.format (null = hereda del padre), pages.orientation, workspaces.default_format
-templates      (id, workspace_id, name, description, content BYTEA, created_at, updated_at)
+page_updates   (id, page_id, seq, client_update_id, update BYTEA, created_by, created_at)  -- solo agregado
+storage: page-files/<page_id>/<file_id>.<ext>                -- imágenes, con los permisos de su página
+```
+
+Falta:
+
+```
+page_snapshots (page_id, state BYTEA, up_to_seq, created_at)                 -- compactar en el servidor
+page_versions  (id, page_id, state BYTEA, label, created_by, created_at)     -- historial (fase 6)
+templates      (id, workspace_id, name, description, content BYTEA, created_at, updated_at)   -- fase 3
 shares         (id, page_id, kind, user_email, token_hash, role, expires_at, created_by, created_at)
-files          (id, page_id, storage_path, mime, size, created_by, created_at)
+-- fase 4: pages.format (null = hereda del padre), pages.orientation, workspaces.default_format
 ```
 
 - **Todo es una página.** Una "carpeta" es una página sin contenido.
 - `sort_key` es un índice fraccionario: mover una página cambia una sola fila.
 - `deleted_at` es la papelera. No hay borrado duro desde la app.
 - `client_update_id` lo genera el dispositivo: un reintento con el mismo id no duplica nada.
+- `seq` es correlativo por página y `pages.update_seq` guarda el último: cada dispositivo baja "lo
+  posterior a su último `seq`" sin saltearse nada.
+- Los archivos no tienen tabla propia: la ruta en Storage empieza con el id de la página, y de ahí salen
+  sus permisos.
 - `shares.kind` es `link` o `user`; `role` es `view` o `edit`. El token de un link se guarda en hash.
 
 ## 5. Sincronización offline sin pérdidas
@@ -120,9 +131,10 @@ sus ramas hermanas.
 
 ## 9. Fases
 
-1. **MVP (hecha, v0.006).** Login por email, árbol de páginas en la barra lateral (crear, renombrar,
-   mover, papelera), editor visual con autoguardado, offline con sincronización segura y PWA instalable.
-   Incluye pegar imágenes (se guardan en el dispositivo y se suben cuando hay red).
+1. **MVP (hecha, v0.007, auditada).** Login por email, árbol de páginas en la barra lateral (crear,
+   renombrar, mover, papelera), editor visual con autoguardado, offline con sincronización segura y PWA
+   instalable. Incluye pegar imágenes (se guardan en el dispositivo y se suben cuando hay red). Para
+   entrar desde la app instalada en el iPhone faltan el deploy y un servidor de correo propio (roadmap).
 2. **Compartir.** Por usuario y por link público, con Row Level Security, visor público y las pruebas de
    la sección 6.
 3. **Plantillas.** Las plantillas iniciales definidas con Lega y la opción de guardar cualquier página

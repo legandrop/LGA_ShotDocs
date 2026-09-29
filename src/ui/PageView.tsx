@@ -21,17 +21,17 @@ export function PageView({ id }: { id: string }) {
     );
   }
 
-  const trashed = tree.isTrashed(id);
+  const trashedAt = tree.trashedAncestor(id);
   return (
     <article className="page">
-      {trashed && (
+      {trashedAt && (
         <div className="banner">
-          This page is in the trash.
-          {page.deleted_at && (
-            <button className="link" onClick={() => void tree.restore(id)}>
-              Restore
-            </button>
-          )}
+          {trashedAt.id === id
+            ? 'This page is in the trash.'
+            : `This page is inside “${trashedAt.title || 'Untitled'}”, which is in the trash.`}
+          <button className="link" onClick={() => void tree.restore(trashedAt.id)}>
+            {trashedAt.id === id ? 'Restore' : `Restore “${trashedAt.title || 'Untitled'}”`}
+          </button>
         </div>
       )}
       <TitleInput id={id} title={page.title} />
@@ -66,15 +66,23 @@ function TitleInput({ id, title }: { id: string; title: string }) {
     void tree.rename(id, next.replace(/\s+/g, ' ').trim());
   };
 
-  useEffect(
-    () => () => {
-      if (timer.current) {
-        clearTimeout(timer.current);
-        void tree.rename(id, (ref.current?.value ?? '').replace(/\s+/g, ' ').trim());
-      }
-    },
-    [tree, id],
-  );
+  // Un título escrito justo antes de cambiar de página o de cerrar la app no espera la pausa.
+  useEffect(() => {
+    const flushPending = () => {
+      if (!timer.current) return;
+      clearTimeout(timer.current);
+      timer.current = null;
+      void tree.rename(id, (ref.current?.value ?? '').replace(/\s+/g, ' ').trim());
+    };
+    const onHide = () => document.visibilityState === 'hidden' && flushPending();
+    window.addEventListener('pagehide', flushPending);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', flushPending);
+      document.removeEventListener('visibilitychange', onHide);
+      flushPending();
+    };
+  }, [tree, id]);
 
   return (
     <textarea
@@ -93,7 +101,7 @@ function TitleInput({ id, title }: { id: string; title: string }) {
         setValue(e.target.value);
         if (timer.current) clearTimeout(timer.current);
         const next = e.target.value;
-        timer.current = setTimeout(() => commit(next), 600);
+        timer.current = setTimeout(() => commit(next), 300);
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {

@@ -27,3 +27,7 @@ diga otra cosa.
 - **D-07 · MCP.** Opción indicada: un servidor MCP como función de Vercel, que entra con la sesión del
   usuario y edita con sus permisos. Se hace en la fase 5, después del asistente de la app.
 - **D-08 · Formato por defecto de un espacio nuevo.** Opción indicada: libre.
+- **D-09 · Registro abierto o cerrado.** Hoy cualquiera con la dirección de la app puede crear una cuenta
+  (y usar el Storage del proyecto). Con el plan gratis sin SMTP casi no llegan mails, así que en la
+  práctica está cerrado; al configurar el SMTP hay que decidir. Opción indicada: cerrar el registro y
+  entrar solo por invitación (el dueño invita desde la app en la fase 2).

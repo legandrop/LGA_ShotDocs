@@ -16,6 +16,28 @@ export function keyBetween(before: string | null, after: string | null): string 
   }
 }
 
+/** Páginas que son su propio ancestro. El servidor no lo permite, pero la vista no puede colgarse si pasa. */
+function pagesInCycles(pages: Map<string, PageRow>): Set<string> {
+  const result = new Set<string>();
+  const done = new Set<string>();
+  for (const start of pages.keys()) {
+    const path: string[] = [];
+    const onPath = new Set<string>();
+    let cur: string | null | undefined = start;
+    while (cur && pages.has(cur) && !done.has(cur)) {
+      if (onPath.has(cur)) {
+        for (const id of path.slice(path.indexOf(cur))) result.add(id);
+        break;
+      }
+      onPath.add(cur);
+      path.push(cur);
+      cur = pages.get(cur)!.parent_id;
+    }
+    for (const id of path) done.add(id);
+  }
+  return result;
+}
+
 function applyOp(pages: Map<string, PageRow>, op: TreeOp, now: string): void {
   if (op.kind === 'create') {
     if (pages.has(op.page.id)) return;
@@ -86,10 +108,17 @@ export class PageTree {
 
   /** Está en la papelera ella o alguno de sus ancestros. */
   isTrashed(id: string): boolean {
-    for (let p = this.view.get(id); p; p = p.parent_id ? this.view.get(p.parent_id) : undefined) {
-      if (p.deleted_at) return true;
+    return this.trashedAncestor(id) !== undefined;
+  }
+
+  /** La página más cercana (ella misma o un ancestro) que está en la papelera. */
+  trashedAncestor(id: string): PageRow | undefined {
+    const seen = new Set<string>();
+    for (let p = this.view.get(id); p && !seen.has(p.id); p = p.parent_id ? this.view.get(p.parent_id) : undefined) {
+      if (p.deleted_at) return p;
+      seen.add(p.id);
     }
-    return false;
+    return undefined;
   }
 
   /** Páginas enviadas a la papelera directamente (no las que están adentro de otra borrada). */
@@ -270,9 +299,11 @@ export class PageTree {
     for (const change of changes) applyOp(view, change.op, now);
 
     const children = new Map<string | null, PageRow[]>();
+    const inCycle = pagesInCycles(view);
     for (const page of view.values()) {
-      // Una página cuyo padre no existe (todavía) se muestra en la raíz para no perderla de vista.
-      const parent = page.parent_id && view.has(page.parent_id) ? page.parent_id : null;
+      // Una página cuyo padre no existe (todavía) o que quedó en un ciclo se muestra en la raíz, para no
+      // perderla de vista.
+      const parent = page.parent_id && view.has(page.parent_id) && !inCycle.has(page.id) ? page.parent_id : null;
       const list = children.get(parent);
       if (list) list.push(page);
       else children.set(parent, [page]);

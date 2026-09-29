@@ -6,6 +6,7 @@ import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
 import { localDbName, openLocalDb, type LocalDb } from './sync/localDb';
 import { SupabaseRemote } from './sync/remote';
+import { mergeRootGroups } from './sync/structure';
 import { PageTree } from './sync/tree';
 import { errorMessage } from './sync/types';
 
@@ -38,7 +39,32 @@ export function useSyncStatus(): SyncStatus {
   return useSyncExternalStore(engine.subscribe, engine.getStatus);
 }
 
-type Boot = { state: 'loading' } | { state: 'ready'; services: Services } | { state: 'error'; message: string };
+type Boot =
+  | { state: 'loading' }
+  | { state: 'busy' }
+  | { state: 'ready'; services: Services }
+  | { state: 'error'; message: string };
+
+/**
+ * Una sola pestaña o ventana escribe en la base local de un usuario. Con dos a la vez, cada una tendría
+ * su propia cola y su propio documento en memoria, y una podría pisar o dar por subido lo de la otra.
+ * Devuelve la función que libera el lock. Si otra pestaña lo tiene, llama a `onBusy` y espera a que se
+ * libere (cuando la otra se cierra, esta sigue sola).
+ */
+function acquireTabLock(name: string, onBusy: () => void, signal: AbortSignal): Promise<() => void> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (!locks) return Promise.resolve(() => undefined);
+  return new Promise((resolve, reject) => {
+    const hold = () => new Promise<void>((release) => resolve(release));
+    void locks
+      .request(name, { ifAvailable: true }, (lock) => {
+        if (lock) return hold();
+        onBusy();
+        return locks.request(name, { signal }, hold);
+      })
+      .catch(reject);
+  });
+}
 
 /** Abre la base local del usuario y arranca la sincronización. */
 export function useBootServices(user: AuthUser): Boot {
@@ -48,9 +74,14 @@ export function useBootServices(user: AuthUser): Boot {
   useEffect(() => {
     let cancelled = false;
     let cleanup: (() => void) | null = null;
+    const abort = new AbortController();
+    let releaseLock: (() => void) | null = null;
 
     (async () => {
-      const db = await openLocalDb(localDbName(projectRef, user.id));
+      const dbName = localDbName(projectRef, user.id);
+      releaseLock = await acquireTabLock(`lock:${dbName}`, () => setBoot({ state: 'busy' }), abort.signal);
+      if (cancelled) return releaseLock();
+      const db = await openLocalDb(dbName);
       if (cancelled) return db.close();
       const remote = new SupabaseRemote(supabase!);
       let workspaceId = (await db.get('meta', 'workspaceId')) as string | undefined;
@@ -73,7 +104,7 @@ export function useBootServices(user: AuthUser): Boot {
 
       const tree = new PageTree(db, workspaceId);
       await tree.load();
-      const docs = new PageDocs(db);
+      const docs = new PageDocs(db, { normalize: mergeRootGroups });
       const files = new PageFiles(db, remote);
       const engine = new SyncEngine(remote, tree, docs, files);
       if (cancelled) return db.close();
@@ -81,7 +112,10 @@ export function useBootServices(user: AuthUser): Boot {
       void navigator.storage?.persist?.();
       cleanup = () => {
         engine.stop();
-        void docs.flush().finally(() => db.close());
+        void docs.flush().finally(() => {
+          db.close();
+          releaseLock?.();
+        });
       };
       setBoot({ state: 'ready', services: { user, db, tree, docs, files, engine } });
     })().catch((err) => {
@@ -90,7 +124,9 @@ export function useBootServices(user: AuthUser): Boot {
 
     return () => {
       cancelled = true;
-      cleanup?.();
+      abort.abort();
+      if (cleanup) cleanup();
+      else releaseLock?.();
     };
   }, [user, attempt]);
 

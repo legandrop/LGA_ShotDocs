@@ -4,6 +4,7 @@ import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
 import type { Remote } from './remote';
+import { mergeRootGroups } from './structure';
 import { PageTree } from './tree';
 import { RemoteError, type NewPage, type PagePatch, type PageRow, type RemoteUpdate } from './types';
 
@@ -14,6 +15,10 @@ export class FakeServer {
   loseNextPushResponse = false;
   /** Rechaza las creaciones de páginas como si faltaran permisos. */
   rejectCreates = false;
+  /** Tope de tamaño de un update, como en push_page_update (8 MB). */
+  maxUpdateBytes = 8 * 1024 * 1024;
+  /** Hace fallar las subidas de archivos como si se cortara la red. */
+  failUploads = false;
   readonly pages = new Map<string, PageRow>();
   readonly updates = new Map<string, { seq: number; clientUpdateId: string; data: Uint8Array }[]>();
   readonly files = new Map<string, { data: ArrayBuffer; mime: string }>();
@@ -76,6 +81,9 @@ export class FakeRemote implements Remote {
     const list = this.server.updates.get(pageId) ?? [];
     const existing = list.find((u) => u.clientUpdateId === clientUpdateId);
     if (existing) return existing.seq;
+    if (update.length === 0 || update.length > this.server.maxUpdateBytes) {
+      throw new RemoteError('update_size_invalid', true, '22023');
+    }
     page.update_seq += 1;
     list.push({ seq: page.update_seq, clientUpdateId, data: update.slice() });
     this.server.updates.set(pageId, list);
@@ -97,6 +105,7 @@ export class FakeRemote implements Remote {
 
   async uploadFile(path: string, data: ArrayBuffer, mime: string): Promise<void> {
     this.server.check();
+    if (this.server.failUploads) throw new RemoteError('Failed to fetch', false, undefined, true);
     const pageId = path.split('/')[0];
     if (!this.server.pages.has(pageId)) throw new RemoteError('new row violates row-level security policy', true);
     if (!this.server.files.has(path)) this.server.files.set(path, { data: data.slice(0), mime });
@@ -125,7 +134,7 @@ export async function makeDevice(server: FakeServer, dbName: string = crypto.ran
   const remote = new FakeRemote(server);
   const tree = new PageTree(db, server.workspaceId);
   await tree.load();
-  const docs = new PageDocs(db);
+  const docs = new PageDocs(db, { normalize: mergeRootGroups });
   const files = new PageFiles(db, remote);
   const engine = new SyncEngine(remote, tree, docs, files);
   return { db, tree, docs, files, engine, remote };

@@ -27,9 +27,11 @@ one tree of pages you own.
 
 ## Status
 
-Phase 1 (MVP) works: email sign-in, the page tree, the block editor with autosave, pasted images, offline
-editing that syncs without losing anything, and an installable app. Next: sharing, templates, real page
-sizes with PDF export, and the assistant. The plan, the decisions and the roadmap are in
+Phase 1 (MVP) works: email sign-in, the page tree, the block editor with autosave and pasted images.
+Every edit is saved on the device first and synced when a connection is available; edits made offline on
+several devices are merged. The app can be installed (PWA). Signing in from the installed app on an iPhone
+needs your own mail server (SMTP) configured in Supabase, because the sign-in link opens Safari instead of
+the app. Next: sharing, templates, real page sizes with PDF export, and the assistant. The plan, the decisions and the roadmap are in
 [`Docs/`](Docs/index.md) (in Spanish).
 
 ## Development

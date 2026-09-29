@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { AuthUser } from '../auth';
 import { navigate, pagePath, useRoute } from '../router';
-import { ServicesContext, useBootServices, useTree } from '../services';
+import { ServicesContext, useBootServices, useServices, useTree } from '../services';
 import { supabase } from '../supabase';
 import { MenuIcon, PlusIcon } from './icons';
+import { useNotice } from './notice';
 import { PageView } from './PageView';
 import { Sidebar } from './Sidebar';
 import { TrashView } from './TrashView';
@@ -13,6 +14,19 @@ const LAST_PAGE_KEY = 'shotdocs-last-page';
 export function Workspace({ user }: { user: AuthUser }) {
   const boot = useBootServices(user);
   if (boot.state === 'loading') return <main className="center-screen muted">Opening your workspace…</main>;
+  if (boot.state === 'busy') {
+    return (
+      <main className="center-screen">
+        <div className="card">
+          <h1>Already open in another window</h1>
+          <p className="muted">
+            LGA Shot Docs is open in another tab or window. Keep working there, or close it and this one will
+            open by itself.
+          </p>
+        </div>
+      </main>
+    );
+  }
   if (boot.state === 'error') {
     return (
       <main className="center-screen">
@@ -36,7 +50,18 @@ export function Workspace({ user }: { user: AuthUser }) {
 function Shell() {
   const route = useRoute();
   const tree = useTree();
+  const { docs } = useServices();
   const [navOpen, setNavOpen] = useState(false);
+  const [notice, dismissNotice] = useNotice();
+
+  // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (docs.hasUnsavedEdits()) e.preventDefault();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [docs]);
 
   useEffect(() => setNavOpen(false), [route.name, route.name === 'page' ? route.id : null]);
 
@@ -85,6 +110,14 @@ function Shell() {
           <Home />
         )}
       </main>
+      {notice && (
+        <div className="notice" role="status">
+          <span>{notice}</span>
+          <button className="link" onClick={dismissNotice}>
+            OK
+          </button>
+        </div>
+      )}
     </div>
   );
 }

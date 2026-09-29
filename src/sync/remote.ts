@@ -48,17 +48,18 @@ export class SupabaseRemote implements Remote {
   }
 
   async fetchTree(workspaceId: string): Promise<PageRow[]> {
+    // De a 1000, por id: si se crean páginas mientras se baja, no se saltea ninguna.
     const rows: PageRow[] = [];
-    for (let from = 0; ; from += 1000) {
-      const { data, error, status } = await this.client
-        .from('pages')
-        .select(PAGE_COLUMNS)
-        .eq('workspace_id', workspaceId)
-        .order('id')
-        .range(from, from + 999);
+    let after: string | null = null;
+    for (;;) {
+      let query = this.client.from('pages').select(PAGE_COLUMNS).eq('workspace_id', workspaceId);
+      if (after) query = query.gt('id', after);
+      const { data, error, status } = await query.order('id').limit(1000);
       if (error) throw toRemoteError(error, status);
-      rows.push(...(data as PageRow[]));
-      if (data.length < 1000) return rows;
+      const page = data as PageRow[];
+      rows.push(...page);
+      if (page.length < 1000) return rows;
+      after = page[page.length - 1].id;
     }
   }
 

@@ -1,27 +1,26 @@
 import type { LocalDb } from './localDb';
 import type { Remote } from './remote';
-import { errorMessage, isPermanent } from './types';
+import { errorMessage, isNetworkError } from './types';
 
 /** Las imágenes se guardan en el documento con esta dirección, que no depende de ningún servidor. */
 export const FILE_SCHEME = 'sdfile://';
 
+/** Los mismos tipos que acepta el bucket (ver supabase/migrations). Sin SVG: puede traer scripts. */
 const EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/gif': 'gif',
   'image/webp': 'webp',
+  'image/avif': 'avif',
   'image/heic': 'heic',
   'image/heif': 'heif',
-  'image/avif': 'avif',
-  'image/svg+xml': 'svg',
 };
 
-function extensionFor(file: { name?: string; type: string }): string {
-  const known = EXTENSIONS[file.type];
-  if (known) return known;
-  const fromName = file.name?.match(/\.([a-z0-9]{1,8})$/i)?.[1];
-  return fromName ? fromName.toLowerCase() : 'bin';
-}
+/** El tope del bucket. */
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+/** El archivo no se puede guardar: el mensaje se muestra tal cual. */
+export class FileRejected extends Error {}
 
 /**
  * Imágenes pegadas en las páginas. Se guardan primero en el dispositivo y se suben después, igual que
@@ -39,7 +38,14 @@ export class PageFiles {
   ) {}
 
   async add(pageId: string, file: Blob & { name?: string }): Promise<string> {
-    const path = `${pageId}/${crypto.randomUUID()}.${extensionFor(file)}`;
+    const extension = EXTENSIONS[file.type];
+    if (!extension) {
+      throw new FileRejected('Only images can be added for now (JPEG, PNG, GIF, WebP, AVIF or HEIC).');
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      throw new FileRejected(`This image is ${(file.size / 1024 / 1024).toFixed(0)} MB; the limit is 25 MB.`);
+    }
+    const path = `${pageId}/${crypto.randomUUID()}.${extension}`;
     await this.db.put('files', {
       path,
       pageId,
@@ -89,7 +95,10 @@ export class PageFiles {
     return this.db.countFromIndex('files', 'uploaded', 0);
   }
 
-  /** Sube las imágenes pendientes. Un error en una no frena a las demás; ninguna se descarta. */
+  /**
+   * Sube las imágenes pendientes. Nunca tira: un error en una no frena a las demás ni al resto de la
+   * sincronización, y ninguna se descarta. Devuelve el último error, si hubo.
+   */
   async pushPending(skipPage: (pageId: string) => boolean): Promise<string | null> {
     const pending = await this.db.getAllFromIndex('files', 'uploaded', 0);
     let lastError: string | null = null;
@@ -101,7 +110,7 @@ export class PageFiles {
       } catch (err) {
         lastError = errorMessage(err);
         await this.db.put('files', { ...file, lastError });
-        if (!isPermanent(err)) throw err;
+        if (isNetworkError(err)) break;
       }
     }
     return lastError;
