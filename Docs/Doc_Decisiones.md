@@ -70,8 +70,8 @@ diga otra cosa.
 
 - **D-05 · Hosting para trabajos pagos.** El plan Hobby de Vercel es solo para uso no comercial. Para
   usar la app en shows pagos hace falta Vercel Pro u otro hosting. Mientras tanto, se desarrolla en Hobby.
-  Opción indicada: Cloudflare (Workers con archivos estáticos), gratis y con uso comercial, con la misma
-  dirección propia para no perder lo guardado en los dispositivos (`Plan_Workspaces.md`, sección 9).
+  **Decidido por Lega (2026-09-29): Cloudflare** (Workers con archivos estáticos), gratis y con uso
+  comercial, con la misma dirección propia (`Plan_Workspaces.md`, sección 9).
 - **D-06 · Dónde se guarda la clave del asistente.** Opción indicada: solo en el dispositivo, sin pasar
   por el servidor; la app llama directo al proveedor. Es lo más privado, pero hay que cargarla en cada
   dispositivo. La alternativa es guardarla cifrada en Supabase (Vault) y llamar al proveedor desde una
@@ -91,8 +91,8 @@ diga otra cosa.
   - Papelera de archivos por proyecto, con miniaturas y peso. Vacían el dueño y los admins, a los 30 días.
   - Un portero de archivos por workspace (en Cloudflare) chequea permisos y pasa los archivos de Drive;
     nadie más recibe la conexión con el Drive del dueño.
-  - Falta decidir: si la carpeta va por el día en que se sacó la foto o en que se subió, y si la papelera
-    se vacía sola a los 30 días o recién ahí se puede vaciar.
+  - Carpeta por el día en que se subió. Cada archivo de la papelera se borra solo a los 30 días de haber
+    entrado.
 - **D-18 · Cada workspace es una isla** (2026-09-29). Detalle en `Plan_Workspaces.md`. Decidido por Lega:
   - Un workspace es de un dueño, con varios proyectos y su equipo; usa el Supabase, el Drive, el Resend y
     el portero del dueño. El de Lega se llama **Wanka** (el Supabase de hoy).
@@ -103,6 +103,11 @@ diga otra cosa.
     proyecto o página: ver, comentar, editar, editar y crear páginas.
   - Compartir con un cliente: por correo, con login, desde el navegador sin instalar, solo las páginas
     elegidas con sus subpáginas; comenta, responde preguntas y sube archivos según el permiso.
-  - Copia de seguridad automática: hace falta, antes que todo lo demás.
-  - Sacar a alguien borra lo de ese workspace en su dispositivo la próxima vez que se conecta.
+  - Copia de seguridad automática, antes que todo lo demás: repo privado de GitHub `shotdocs_backup`,
+    cuatro veces por día, cifrada.
+  - Sacar a alguien borra lo de ese workspace en su dispositivo la próxima vez que se conecta; lo que
+    tuviera sin subir, mejor que no se pierda. Sus proyectos compartidos pasan a otro admin; los privados
+    se van con él. Nadie ve los proyectos privados de otro, tampoco el dueño.
+  - Los clientes pueden recibir un proyecto entero o páginas, y ven los nombres del equipo. Ver incluye
+    bajar. La invitación, al principio, es un link que se copia.
   - Falta decidir: las preguntas marcadas "(a decidir)" en `Plan_Workspaces.md`.

@@ -47,7 +47,7 @@ El script aplica solo lo que falta y lo registra en `supabase_migrations.schema_
 que usa el CLI de Supabase, así que después también sirve `supabase db push`. Sin token, se puede pegar
 cada archivo en el SQL Editor del proyecto, en orden.
 
-**Las migraciones van antes de publicar la app.** Vercel publica solo con cada push a `main`: si una
+**Las migraciones van antes de publicar la app.** La app se publica sola con cada push a `main`: si una
 versión nueva usa una columna o una tabla que la base todavía no tiene, esa parte no funciona hasta
 aplicar la migración. La app lo tolera sin perder nada (por ejemplo, sin `pages.settings` sigue bajando
 el árbol y los cambios de ajustes quedan como rechazados en el dispositivo; después de migrar, la app lo
@@ -71,7 +71,7 @@ rechazado.
 - La app manda el mail con `signInWithOtp`. Se entra con el **código** de 8 dígitos (escrito en la app) o
   con el **link** del mail. En el iPhone hace falta el código: el link abre Safari, no la app instalada.
 - En **Authentication → URL Configuration** van la dirección del deploy como *Site URL* y, en *Redirect
-  URLs*, esa dirección, las de preview de Vercel y `http://localhost:5173/**` para desarrollo.
+  URLs*, esa dirección, las de preview del hosting y `http://localhost:5173/**` para desarrollo.
 - **Registro cerrado** (*Allow new users to sign up* apagado, D-09): solo entran cuentas que ya existen o
   que el dueño invita (Authentication → Users → *Invite user*). Un mail sin cuenta ve el aviso de pedir una
   invitación.

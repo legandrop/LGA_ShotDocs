@@ -1,0 +1,11 @@
+// Publicación en Cloudflare (Workers con archivos estáticos). La app es solo archivos: `npm run build` deja
+// todo en dist/ y Cloudflare lo sirve. Una dirección que no es un archivo (una página, /p/...) devuelve
+// index.html, y la app resuelve la ruta.
+{
+  "name": "shotdocs",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

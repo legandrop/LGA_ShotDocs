@@ -18,8 +18,9 @@ sigue abierto está marcado **(a decidir)**.
   necesita publicar su propia copia. Quien quiera, puede. Los datos van directo del navegador al
   workspace; quien publica la app sirve el código, así que hay que confiar en esa publicación.
 - El workspace de hoy (el Supabase de Lega, con el proyecto MGTZD) pasa a ser **Wanka**, sin migrar nada.
-- **El dueño ve todo lo de su workspace**, también lo privado de otros: tiene el panel de Supabase, el
-  Drive, las copias y el portero.
+- **El dueño no ve en la app los proyectos privados de otros** (decisión de Lega: el proyecto personal de
+  un empleado es suyo). Técnicamente siguen en su Supabase, su Drive y sus copias, y hay que decirlo en la
+  guía.
 - Nombres en la base: la tabla `workspaces` hoy guarda **proyectos** (historia de v0.013). Las tablas
   nuevas no usan "workspace" para no mezclar: `workspace_settings` (nombre del workspace, versión de la
   base, generación, dirección del portero), `members` (persona y rol), `grants` (permiso sobre un
@@ -49,8 +50,9 @@ Pantalla de bienvenida con dos caminos:
    4. **Cloudflare** (gratis): publicar el portero con sus secretos (dirección del Supabase, la clave de
       los pases, el cliente de Google), un espacio KV para la conexión con Drive, la dirección de la app
       permitida y la tarea diaria.
-   5. Pegar en la app la dirección y la clave del Supabase, entrar como dueño y conectar el Drive.
-   6. Probar: entrar con código, subir un archivo, hacer y restaurar una copia.
+   5. **GitHub**: un repo privado con la tarea de copias de seguridad (sección 7) y sus dos secretos.
+   6. Pegar en la app la dirección y la clave del Supabase, entrar como dueño y conectar el Drive.
+   7. Probar: entrar con código, subir un archivo, hacer y restaurar una copia.
    - **No hace falta Vercel ni publicar la app.**
    - Un botón "Conectar Supabase" que haga el paso 1 solo exigiría un servidor central de Lega (la
      conexión de Supabase pide una clave secreta de la app): queda descartado. El comando alcanza.
@@ -64,7 +66,7 @@ Después de la primera vez, el selector de arriba muestra **Workspace › Proyec
 
 | Rol | Qué puede |
 |---|---|
-| Dueño | Todo, también ver lo privado de otros. Paga las cuentas. Conecta Drive. |
+| Dueño | Todo lo del workspace salvo los proyectos privados de otros. Paga las cuentas. Conecta Drive. |
 | Admin | Crear proyectos, invitar y sacar gente, dar permisos, vaciar papeleras. No ve ni toca los proyectos privados de otros. |
 | Miembro | Solo lo que se le comparta, con el permiso que se le dé. No crea proyectos. |
 | Invitado | Alguien de afuera (un cliente): solo las páginas que se le compartan. |
@@ -81,8 +83,7 @@ Después de la primera vez, el selector de arriba muestra **Workspace › Proyec
 - Si una persona tiene varios permisos sobre la misma página (uno por el proyecto, otro por la página),
   gana el más alto.
 - Mover una página de una rama a otra pide permiso en las dos.
-- **Proyectos privados:** un proyecto nuevo es privado; solo lo ven su creador, el dueño y quien reciba
-  permiso. Así Lega tiene sus proyectos personales dentro de Wanka sin que el equipo los vea. Protege del
+- **Proyectos privados:** un proyecto nuevo es privado; solo lo ven su creador y quien reciba permiso. Así Lega tiene sus proyectos personales dentro de Wanka sin que el equipo los vea. Protege del
   equipo, no de quien tenga las cuentas de Wanka: si algún día Wanka cambia de manos, lo personal se va
   con Wanka. Un workspace personal aparte es más limpio, pero gasta el segundo y último proyecto gratis
   de Supabase de Lega y se pausa si no se usa. Recomendación: privados dentro de Wanka por ahora.
@@ -99,8 +100,8 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
 - El cliente recibe el link y lo abre **en el navegador, sin instalar nada**. Entra con el código que le
   llega y cae directo en la página. No ve nada más del workspace. En el navegador sin instalar, sus
   comentarios y subidas necesitan red (Safari puede borrar lo guardado tras 7 días sin uso).
-- El correo con el link lo manda el portero (tiene la clave de Resend como secreto). Mientras el portero
-  no exista, la app copia el link para mandarlo a mano.
+- La invitación, al principio: la app copia el link y Lega lo manda por donde quiera. El correo
+  automático (lo mandaría el portero, que tiene la clave de Resend) queda para después.
 - Puede comentar, responder preguntas y subir archivos (según el permiso). Los archivos van al Drive de
   Lega, como todo lo del workspace.
 - **Comentarios:** en una tabla propia de la base (página, bloque, hilo, texto, autor, resuelto), con
@@ -110,14 +111,16 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
   pueda escribir el documento.
 - **Preguntas:** un párrafo marcado como pregunta (como Script), y la respuesta es un hilo de
   comentarios debajo. Así el cliente contesta con el permiso Comentar.
+- El cliente puede recibir un proyecto entero o solo páginas, y ve los nombres y correos del equipo en
+  los comentarios (decisión de Lega).
+- Ver incluye bajar los originales: no hay un permiso "ver sin bajar" (decisión de Lega).
 - Un link público (sin login) es otra cosa y queda para después; para material sensible, siempre con
   login.
 
 ## 5. Archivos (D-17)
 
 - Los originales van al **Drive del dueño del workspace**, también lo que suben miembros e invitados.
-- Carpetas: `<carpeta de Wanka> / <proyecto> / <día de calendario> / IMG_1234.HEIC` (día en que se
-  sacó o en que se subió: a decidir). Renombrar el proyecto renombra su carpeta (si el dueño no la
+- Carpetas: `<carpeta de Wanka> / <proyecto> / <día en que se subió> / IMG_1234.HEIC`. Renombrar el proyecto renombra su carpeta (si el dueño no la
   renombró a mano). Las páginas apuntan al id del archivo, así que moverlo o renombrarlo en Drive no
   rompe nada. Lo que se agregue a mano en Drive la app no lo ve: el Drive es el respaldo, no una carpeta
   que la app lea.
@@ -131,9 +134,10 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
 - **Pegar un link de Drive:** como link, texto o tarjeta reproducible (el reproductor de Drive, que anda
   si quien mira tiene acceso con su Google, como en Coda).
 - **Papelera de archivos** por proyecto: un archivo que ninguna página usa aparece en la pestaña
-  Archivos de la papelera (con miniatura, peso y fecha). Vacían el dueño y los admins, pasados **30
-  días** (a decidir si se borra solo o si recién ahí se puede vaciar). Recién ahí va a la papelera de
-  Drive (30 días más para recuperarlo desde Drive).
+  Archivos de la papelera (con miniatura, peso y fecha). **Cada archivo se borra solo a los 30 días de
+  haber entrado a la papelera** (lo que entró hace dos días espera sus 30). El dueño y los admins pueden
+  además borrar de a uno o vaciar antes. Al borrarse va a la papelera de Drive (30 días más para
+  recuperarlo desde Drive).
 - Sin red (en rodaje): la foto o el video se guarda en el dispositivo y sube por partes cuando hay red,
   con la app abierta.
 
@@ -153,22 +157,23 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
 El plan gratis de Supabase no hace copias, y hay material sensible. Tiene que existir **antes** de los
 cambios de permisos, que son el momento más riesgoso.
 
-- **Ya, para Wanka:** una copia automática diaria de la base entera (textos, permisos y usuarios, que
-  hacen falta para que los ids no cambien) con `pg_dump`, cifrada con una clave que guarda Lega, en un
-  **repo privado de GitHub** con una tarea diaria (el repo de la app es público: ahí no puede ir), y subida
-  a su Drive. Incremental a diario y completa una vez por semana, para no gastar los 5 GB de
-  transferencia ni llenar el Drive.
+- **Wanka: repo privado de GitHub `shotdocs_backup`** (decisión de Lega). Una tarea de GitHub Actions
+  copia la base entera **cuatro veces por día** con la CLI de Supabase (roles, esquema y datos, con los
+  usuarios, que hacen falta para que los ids no cambien), la cifra con una frase que guarda Lega y la
+  deja en la rama `copias` del repo. Se guardan todas las de los últimos 30 días y la primera de cada
+  mes. Si una copia sale sin páginas o sin usuarios, la tarea falla y GitHub avisa. El repo de la app es
+  público: las copias nunca van ahí. Hoy la base pesa unos 2 MB de datos, así que cuatro copias por día
+  casi no gastan transferencia.
+- Quien cree su propio workspace necesita también una cuenta de GitHub para sus copias (paso 5 de la
+  guía).
 - **Restaurar tiene una trampa:** después de volver a la copia de ayer, los dispositivos creen que el
   servidor ya tiene lo de hoy y no lo vuelven a subir. Por eso cada workspace lleva una **generación**:
   si cambia, cada dispositivo vuelve a subir todo lo suyo y Yjs lo junta sin duplicar. Así los
-  dispositivos cubren lo posterior a la copia. La restauración se prueba en una copia local, sin gastar
-  un proyecto de Supabase.
+  dispositivos cubren lo posterior a la copia. La restauración se prueba en una base aparte.
 - No cubre y hay que anotarlo en la guía: la configuración de login (sale del comando del paso 2), los
   secretos del portero y la conexión con Drive (se vuelven a cargar), las miniaturas (se regeneran desde
   Drive).
-- Para otros dueños: la misma tarea en su propio GitHub privado, o el portero con Workers Paid (5 USD al
-  mes; el plan gratis no alcanza para armar la copia). Supabase Pro (25 USD al mes) guarda solo 7 días y
-  no incluye los archivos.
+- Supabase Pro (25 USD al mes) guarda solo 7 días y no incluye los archivos: no hace falta.
 - Más adelante, una copia legible (PDF de cada página) en el Drive.
 
 ## 8. Sacar a alguien
@@ -176,20 +181,23 @@ cambios de permisos, que son el momento más riesgoso.
 - Se le saca la membresía (no se borra la cuenta). Deja de tener acceso en el momento y los pases del
   portero vencen en minutos.
 - La app detecta que perdió el acceso y borra lo de ese workspace en su dispositivo la próxima vez que se
-  conecta (decisión de Lega: alcanza). Lo que tuviera sin subir se pierde (a confirmar con Lega).
-- Qué pasa con los proyectos privados de un admin que se va: a decidir.
+  conecta (decisión de Lega: alcanza).
+- Lo que tuviera sin subir: si se puede, que no se pierda (Lega). Se diseña al implementarlo; una opción
+  es que el dispositivo lo suba antes de que se efectivice la salida (sacar a alguien con aviso, o
+  pedirle que sincronice antes).
+- **Proyectos de quien se va** (decisión de Lega): los que compartía siguen y pasan a otro admin que
+  tenga acceso; los privados que no compartía con nadie se van con él (van a la papelera del workspace y
+  se borran a los 30 días, con su carpeta de Drive). Nadie los ve en la app.
 
 ## 9. Hosting de la app
 
-- La app es solo archivos estáticos: no usa funciones de servidor de Vercel. Vercel gratis no permite
-  uso comercial (D-05).
-- Propuesta: **Cloudflare, con Workers con archivos estáticos** (lo que Cloudflare recomienda hoy en vez
-  de Pages). Gratis, con uso comercial, previews por rama y el portero en la misma cuenta.
-- Lo que se pierde de Vercel: nada que se use hoy. Las funciones que el plan preveía en Vercel (links
-  públicos, MCP de D-07) pasan al portero.
-- **Mudar sin perder nada local:** lo guardado en el dispositivo y la app instalada son por dirección.
-  Se muda con la misma dirección propia (`shotdocs.lega.com.ar`), con todo sincronizado antes. Quien use
-  la dirección de Vercel pierde lo que no haya subido.
+- **Decidido (D-05): chau Vercel, la app pasa a Cloudflare** (Workers con archivos estáticos, lo que
+  Cloudflare recomienda hoy en vez de Pages). Gratis, con uso comercial y previews por rama; el portero
+  va a vivir en la misma cuenta. La app es solo archivos estáticos: de Vercel no se usa nada más.
+- Misma dirección, `shotdocs.lega.com.ar` (el dominio ya está en Cloudflare). Lo guardado en cada
+  dispositivo es por dirección; Lega no tiene nada que no se haya subido y la usa siempre desde su
+  dominio, así que no se pierde nada.
+- Las funciones que el plan preveía en Vercel (links públicos, MCP de D-07) pasan al portero.
 
 ## 10. Orden de trabajo
 

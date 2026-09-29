@@ -61,7 +61,8 @@ app.
 
 - React web app installable as a PWA (desktop and iPhone), with native wrappers later if needed.
 - [Supabase](https://supabase.com) for the database, sign-in, file storage and access rules.
-- [Vercel](https://vercel.com) for hosting the web app.
+- [Cloudflare Workers](https://developers.cloudflare.com/workers/static-assets/) for hosting the web app
+  (`wrangler.jsonc`).
 - A [Yjs](https://yjs.dev) document per page for conflict-free offline editing, and a
   [BlockNote](https://www.blocknotejs.org) block editor.
 

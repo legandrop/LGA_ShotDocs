@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.019 :
+
+Primeros pasos del plan de workspaces. La app queda lista para publicarse en Cloudflare en vez de
+Vercel (`wrangler.jsonc`): gratis, con uso comercial y con la misma dirección (D-05, decidido). Vercel
+sigue andando hasta que el deploy nuevo esté funcionando. El plan anota las respuestas de Lega: copias
+de seguridad en un repo privado de GitHub cuatro veces por día, cifradas; carpetas de Drive por el día en
+que se subió; cada archivo de la papelera se borra a los 30 días de haber entrado; nadie ve los
+proyectos privados de otro, tampoco el dueño, y los de quien se va se van con él; los clientes pueden
+recibir un proyecto entero, ven los nombres del equipo, y la invitación es un link que se copia.
+[ Hosting - Cloudflare y respuestas del plan de workspaces ]
+
 v0.018 :
 
 Documentación, sin cambios en la app. Nuevo `Plan_Workspaces.md`, auditado, con todo lo que Lega fue
