@@ -74,14 +74,21 @@ diga otra cosa.
   usuario y edita con sus permisos. Se hace en la fase 5, después del asistente de la app.
 - **D-08 · Formato por defecto de un espacio nuevo.** Opción indicada: libre.
 - **D-17 · Dónde van los archivos grandes.** El plan gratis de Supabase trae 1 GB de archivos: unas 300
-  fotos de teléfono o un video de rodaje. Opción indicada: los originales van al Google Drive de cada
-  usuario y Supabase guarda solo la tabla de archivos y una vista liviana de cada uno (~1600 px, para
-  mostrar la página rápido, sin red, sin Google y al compartir). La página nunca guarda un link de Drive,
-  así se puede cambiar de destino sin tocar páginas. Falta que Lega decida:
-  - En un proyecto compartido, ¿los archivos de todos van al Drive del dueño o cada uno al suyo?
-  - Orden en Drive: ¿una carpeta por página (espejo del árbol) o por proyecto y fecha (más simple, sin
-    conflictos, más parecido a un backup de rodaje)? ¿La app tiene que seguir lo que se reordene a mano?
-  - En el iPhone, ¿los videos se ven adentro de la app o alcanza con el primer cuadro y "Abrir en Drive"?
-  - ¿Hace falta el original exacto (HEIC, HEVC, ProRes) o alcanza lo que entrega el selector de fotos?
-  - Borrar un archivo de una página: ¿queda en Drive o va a una papelera?
-  - ¿El backup en Drive incluye el texto de las páginas (exportado) o solo los archivos?
+  fotos de teléfono o un video de rodaje. Lo que ya decidió Lega (2026-09-29):
+  - Los originales van al **Drive del dueño del workspace**, también lo que suben los miembros.
+  - Una carpeta por proyecto y adentro por fecha: `<proyecto> / 2026-09-29 / IMG_1234.HEIC`. Renombrar el
+    proyecto renombra su carpeta; las páginas apuntan al id del archivo, así que nada se rompe.
+  - **Los videos se reproducen adentro de la app** (teléfono, web y app instalada), y hay un **carrete**:
+    clic en una foto o video abre la media de la página en orden, con siguiente/anterior y play.
+  - Pegar un link de Drive ofrece mostrarlo como link, texto o tarjeta reproducible, como en Coda.
+  - Borrar un archivo de una página lo manda a una **papelera de archivos** por proyecto, con miniaturas y
+    peso, para borrar de a uno o vaciar.
+  - Propuesta: un portero de archivos por workspace (Cloudflare Worker) que chequea permisos y pasa los
+    videos de Drive en streaming, sin que nadie reciba el token de Google del dueño. Falta probarlo en el
+    iPhone y que Lega responda las preguntas de D-18.
+- **D-18 · Cada workspace es una isla** (2026-09-29, el modelo lo decidió Lega; faltan detalles). Un
+  workspace es de un dueño, con varios proyectos y su equipo; usa el Supabase y el Drive del dueño. Los
+  miembros ven los proyectos o páginas que se les compartan y, si editan, suben y borran ahí. La misma
+  persona puede tener su propio workspace. Faltan: a nombre de quién va el workspace del equipo (cambiar
+  el dueño después es casi imposible), quién puede crear proyectos, cómo se entra (código por mail o
+  Google), copia de seguridad del texto, qué pasa al sacar a alguien, y el hosting (D-05).

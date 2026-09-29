@@ -135,14 +135,14 @@ sus ramas hermanas.
 
 ## 8. Autohosteo
 
-**Objetivo: cada instalación es una isla.** Quien instala la app lo hace con sus propias cuentas y nada
-de sus datos, de sus logins ni de sus archivos pasa por Lega. No se implementa todavía (falta la guía y
-el script de instalación), pero **todo lo que se hace desde ya tiene que respetarlo y no complicarlo**:
-ver las reglas del principio de `Doc_Roadmap.md`.
+**Objetivo: cada workspace es una isla** (D-18). Un workspace es de un dueño, tiene varios proyectos y
+su equipo de miembros invitados; usa el Supabase, el Drive y el portero de archivos de ese dueño. Una
+sola app se conecta a varios workspaces y nada de uno pasa por los servidores de otro ni por los de Lega.
+Se hace por partes, pero **todo lo que se hace desde ya tiene que respetarlo y no complicarlo**: ver las
+reglas del principio de `Doc_Roadmap.md`.
 
-- Cada instalación tiene su propio Supabase (login, tablas, funciones, secretos), su hosting (Vercel u
-  otro), su correo (su clave y su dominio de Resend u otro SMTP) y su cliente OAuth de Google. Los
-  archivos grandes van al almacenamiento de cada usuario (D-17).
+- Cada workspace tiene su propio Supabase (login, tablas, permisos, secretos), el Drive del dueño para
+  los originales (D-17) y su portero de archivos. El correo o el login con Google son del dueño.
 - El repo trae las migraciones con las tablas y las políticas de seguridad, las funciones del servidor y
   una guía paso a paso.
 - Deploy con un clic desde Vercel, cargando dos o tres variables de entorno.

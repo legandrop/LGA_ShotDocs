@@ -2,28 +2,33 @@
 
 Lo que falta, por importancia. Las fases están en `Plan_ShotDocs.md`, sección 9.
 
-## Regla para todo lo que se haga: cada instalación es una isla
+## Regla para todo lo que se haga: cada workspace es una isla
 
-La app se va a poder instalar con cuentas propias: su Supabase, su hosting, su correo, su cliente de
-Google y el almacenamiento de sus usuarios. Nada de sus datos, sus logins ni sus archivos llega a Lega.
-**No se implementa todavía, pero nada de lo que se haga puede complicarlo:**
+Un **workspace** es de un dueño y tiene varios proyectos. Es su Supabase (login, textos, permisos), el
+Drive del dueño (fotos, videos, PDFs) y un portero de archivos del dueño. El dueño invita a su equipo:
+cada miembro ve los proyectos o las páginas que le comparta, y si puede editar, sube y borra en el
+Supabase y el Drive del dueño. La misma persona puede estar en workspaces ajenos y tener el suyo. Una
+sola app se conecta a varios workspaces; nada de un workspace pasa por los servidores de otro (ni por
+los de Lega). Se hace por partes (ver pendientes), pero **nada de lo que se haga puede complicarlo:**
 
-- **Nada fijo a la instalación de Lega en el código.** La dirección de Supabase, el dominio, el correo y
-  los ids de Google salen de variables de entorno o de la configuración de la instalación. Hoy `src/` no
-  tiene ninguno fijo; que siga así.
-- **Todo lo del servidor está en el repo** y se aplica igual en cualquier instalación: migraciones,
-  funciones, políticas. Lo que hoy se configura en el panel de Supabase (correo, plantillas, registro
-  cerrado, direcciones de redirect) tiene que pasar a `supabase/config.toml` o, mientras tanto, estar
-  entero en `Doc_Supabase.md`.
-- **Ningún servicio central.** Ni proxy, ni licencias, ni estadísticas. La app solo habla con los
-  servicios de su instalación y con los que conecta cada usuario (su Drive, su proveedor de IA).
-- **Lo que cueste por uso lo paga cada instalación o cada usuario**, con sus cuentas.
-- **El plan gratis de Supabase es el techo por defecto:** nada pesado en la base ni en Storage.
-- **La app sabe qué versión de la base necesita** y avisa claro si la instalación no migró.
-
-Falta, para cuando se haga: guía de instalación en inglés, script que arma todo en un Supabase nuevo,
-deploy de un clic, cómo migrar de versión, cómo hacer backups y exportar, y definir si una instalación es
-de una persona o de un equipo.
+- **Nada fijo en el código.** La dirección de Supabase, el dominio, el correo y los ids de Google salen
+  de la configuración del workspace. El código recibe el cliente del workspace activo, nunca uno global,
+  y todo lo que se guarda en el dispositivo (sesión, base local, preferencias locales) lleva el workspace
+  en el nombre.
+- **Los permisos pasan por membresías**, aunque hoy haya un solo miembro: nada de "el dueño es el
+  único usuario".
+- **Todo lo del servidor está en el repo** y se aplica igual en cualquier workspace: migraciones,
+  políticas, el portero. Lo que hoy se configura en el panel de Supabase (correo, plantillas, registro
+  cerrado, direcciones de redirect) tiene que pasar a `supabase/config.toml` o estar entero en
+  `Doc_Supabase.md`.
+- **Cada workspace dice qué versión de la base tiene**, y la app avisa claro si el dueño tiene que
+  actualizarla.
+- **Ningún servicio central.** Ni proxy, ni licencias, ni estadísticas. Lo que cueste por uso lo paga el
+  dueño de cada workspace con sus cuentas.
+- **El plan gratis de Supabase es el techo por defecto:** nada pesado en la base ni en Storage (egress:
+  5 GB al mes).
+- **Los miembros nunca reciben las claves del dueño** (ni el token de Google): los archivos pasan por el
+  portero, que pregunta los permisos.
 
 ## Pendientes
 
@@ -31,7 +36,7 @@ de una persona o de un equipo.
    documento trae un tipo de bloque que esta versión no conoce, se abre solo lectura con un aviso de
    actualizar, en vez de borrarlo (y-prosemirror lo borra y el borrado llega a todos). Anda sin red.
    Además, cada cambio subido lleva la versión de la app que lo hizo y el servidor rechaza los de una
-   versión menor a la mínima que declara. Conviene hacerla ya: cada semana sin ella suma dispositivos
+   versión menor a la mínima que declara (la mínima es de cada workspace). Conviene hacerla ya: cada semana sin ella suma dispositivos
    viejos que después pueden borrar un video o un PDF.
 2. **Archivos grandes fuera de Supabase (D-17).** Fotos, videos y PDFs de rodaje, arrastrados o desde el
    teléfono. Pasos:

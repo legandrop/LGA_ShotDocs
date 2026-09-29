@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.017 :
+
+Documentación, sin cambios en la app. Corrige la regla de v0.016: la isla no es la instalación sino el
+workspace (D-18). Un workspace es de un dueño, tiene varios proyectos y su equipo; usa el Supabase y el
+Drive del dueño, y los miembros ven y editan lo que se les comparta. Una sola app se conecta a varios
+workspaces. La regla ahora pide además: nada global en el código ni en el dispositivo (todo por
+workspace), permisos por membresías aunque haya un solo usuario, versión de la base por workspace y que
+los miembros nunca reciban las claves del dueño. D-17 anota lo que Lega ya decidió: originales en el
+Drive del dueño con carpetas por proyecto y fecha, videos que se reproducen en la app, carrete de media,
+links de Drive como en Coda y papelera de archivos por proyecto.
+[ Docs - cada workspace es una isla (D-18) ]
+
 v0.016 :
 
 Documentación del próximo paso, sin cambios en la app. Queda escrita la regla para todo lo que se haga:
