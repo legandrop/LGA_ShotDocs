@@ -1,5 +1,13 @@
 # Changelog — LGA Shot Docs
 
+v0.020 :
+
+La app ya se publica en Cloudflare con la misma dirección, y Vercel quedó dado de baja: se borra su
+configuración del repo y las direcciones permitidas del login en Supabase ya no tienen las de Vercel.
+Las copias de seguridad de la base corren solas cuatro veces por día desde un repo privado, cifradas. Con
+esto quedan hechos los pasos 1 (menos la generación de la base) y 3 del plan de workspaces.
+[ Hosting - mudanza a Cloudflare terminada ]
+
 v0.019 :
 
 Primeros pasos del plan de workspaces. La app queda lista para publicarse en Cloudflare en vez de

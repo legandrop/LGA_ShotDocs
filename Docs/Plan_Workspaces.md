@@ -191,7 +191,7 @@ cambios de permisos, que son el momento más riesgoso.
 
 ## 9. Hosting de la app
 
-- **Decidido (D-05): chau Vercel, la app pasa a Cloudflare** (Workers con archivos estáticos, lo que
+- **Hecho (D-05, 2026-09-29): chau Vercel, la app está en Cloudflare** (Workers con archivos estáticos, lo que
   Cloudflare recomienda hoy en vez de Pages). Gratis, con uso comercial y previews por rama; el portero
   va a vivir en la misma cuenta. La app es solo archivos estáticos: de Vercel no se usa nada más.
 - Misma dirección, `shotdocs.lega.com.ar` (el dominio ya está en Cloudflare). Lo guardado en cada

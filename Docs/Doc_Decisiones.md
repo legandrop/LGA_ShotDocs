@@ -70,7 +70,8 @@ diga otra cosa.
 - **D-05 · Hosting para trabajos pagos.** El plan Hobby de Vercel es solo para uso no comercial. Para
   usar la app en shows pagos hace falta Vercel Pro u otro hosting. Mientras tanto, se desarrolla en Hobby.
   **Decidido por Lega (2026-09-29): Cloudflare** (Workers con archivos estáticos), gratis y con uso
-  comercial, con la misma dirección propia (`Plan_Workspaces.md`, sección 9).
+  comercial, con la misma dirección propia (`Plan_Workspaces.md`, sección 9). Mudanza hecha el mismo día;
+  Vercel quedó dado de baja.
 - **D-06 · Dónde se guarda la clave del asistente.** Opción indicada: solo en el dispositivo, sin pasar
   por el servidor; la app llama directo al proveedor. Es lo más privado, pero hay que cargarla en cada
   dispositivo. La alternativa es guardarla cifrada en Supabase (Vault) y llamar al proveedor desde una
