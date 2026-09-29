@@ -23,7 +23,7 @@ propia cuenta.
 5. Offline y online, **sin perder nunca información al sincronizar** (sección 5).
 6. Compartir cualquier página por link público o con usuarios puntuales. Compartir una página comparte
    todo lo que tiene debajo y **nunca** lo que tiene arriba (sección 6).
-7. Autohosteable: cada instalación tiene su propia base de datos y nada se comparte entre instalaciones
+7. Cada workspace es una isla: su propia base de datos, su Drive y su equipo; nada se comparte entre workspaces
    (sección 8).
 8. Colaboración en tiempo real, al final (D-04).
 9. **Formato de página real.** Una página puede ser libre o tener el tamaño de una hoja (A5, A4, A3, Carta),
