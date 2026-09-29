@@ -1,5 +1,14 @@
 # Changelog — LGA Shot Docs
 
+v0.010 :
+
+La app ya está publicada en Vercel, conectada al repo: cada push a `main` se publica solo. La dirección de
+producción quedó en Supabase como *Site URL* y entre las direcciones permitidas del login, junto con las
+de preview del equipo en Vercel y las locales de desarrollo, así el link del mail vuelve a la app. El
+deploy sale del roadmap. Para entrar desde la app instalada en el iPhone y para invitar a otras personas
+sigue faltando el servidor de correo propio, y antes hay que decidir si el registro queda abierto (D-09).
+[ Deploy - la app publicada en Vercel ]
+
 v0.009 :
 
 Verificación final de la fase 1: la auditoría confirma que la semilla es determinística byte a byte, que
