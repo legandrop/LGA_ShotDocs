@@ -131,7 +131,7 @@ sus ramas hermanas.
 
 ## 9. Fases
 
-1. **MVP (hecha, v0.007, auditada).** Login por email, árbol de páginas en la barra lateral (crear,
+1. **MVP (hecha, v0.008, con auditoría y re-auditoría).** Login por email, árbol de páginas en la barra lateral (crear,
    renombrar, mover, papelera), editor visual con autoguardado, offline con sincronización segura y PWA
    instalable. Incluye pegar imágenes (se guardan en el dispositivo y se suben cuando hay red). Para
    entrar desde la app instalada en el iPhone faltan el deploy y un servidor de correo propio (roadmap).

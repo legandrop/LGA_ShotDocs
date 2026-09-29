@@ -1,7 +1,8 @@
 # Sincronización offline
 
-Cómo funciona hoy la regla de no perder nunca información. El código está en `src/sync/` y las pruebas en
-`src/sync/sync.test.ts` (`npm test`).
+Cómo funciona hoy la regla de no perder nunca información. El código está en `src/sync/` y las pruebas
+(`npm test`) en `src/sync/sync.test.ts`, `audit.test.ts` (los casos de la auditoría de la fase 1) y
+`editor.test.ts` (con el editor real, en jsdom).
 
 ## Piezas
 
@@ -9,7 +10,7 @@ Cómo funciona hoy la regla de no perder nunca información. El código está en
 |---|---|---|
 | Base local | `localDb.ts` | IndexedDB por usuario y por proyecto: copia del árbol, cola de salida, updates de contenido, estado de cada página e imágenes. |
 | Contenido | `docs.ts` | Un documento Yjs por página. Guarda cada edición en el dispositivo y sube o baja lo que falte. |
-| Estructura | `structure.ts` | Repara un documento que quedó con dos raíces al fusionar (ver "Fusión"). |
+| Estructura | `structure.ts` | La raíz inicial de cada página (la "semilla") y la reparación de documentos viejos con dos raíces (ver "Fusión"). |
 | Árbol | `tree.ts` | La copia del árbol que mandó el servidor más la cola de cambios locales encima. |
 | Imágenes | `files.ts` | Guarda la imagen pegada en el dispositivo y la sube cuando hay red. |
 | Servidor | `remote.ts` | Las llamadas a Supabase. Las pruebas usan un servidor en memoria con las mismas reglas (`testing.ts`). |
@@ -35,15 +36,23 @@ Cómo funciona hoy la regla de no perder nunca información. El código está en
 4. **Bajar lo nuevo.** El árbol trae el último `seq` de cada página. Si es mayor que el que tiene el
    dispositivo, se bajan los updates posteriores y se guardan en la misma transacción que el nuevo cursor.
    Así se bajan también las páginas que nunca se abrieron en ese dispositivo, y quedan disponibles offline.
-5. **Fusión.** Dos dispositivos que editan la misma página sin red se fusionan con Yjs al volver. Si los
-   dos empezaron la página sin haberse visto, el documento fusionado queda con dos raíces, y el editor
-   borraría la que no puede mostrar. Por eso, al abrir una página y al recibir cambios, las raíces
-   sobrantes se juntan en la primera **en la misma transacción** que aplica lo recibido, antes de que el
-   editor lo vea. Si dos dispositivos reparan a la vez, algún bloque puede quedar duplicado: se prefiere
-   duplicar a perder. Lo prueba `src/sync/editor.test.ts` con el editor real.
-6. **Abrir en un dispositivo nuevo.** Si el servidor tiene contenido que el dispositivo no, se baja antes de
-   mostrar el editor. Si no llega (sin red o muy lento), la página no se abre para editar: dice que se
-   está bajando o que hace falta conexión, y se abre sola cuando llega.
+5. **Fusión.** Dos dispositivos que editan la misma página sin red se fusionan con Yjs al volver. El editor
+   guarda cada página bajo una única raíz; si cada dispositivo creara la suya, al fusionarse quedarían dos
+   y el editor borraría la que no puede mostrar. Para que eso no pase, al abrir una página vacía para
+   editar se le pone una **semilla**: la raíz inicial, escrita con un autor de Yjs y un contenido que salen
+   del id de la página. Todos los dispositivos escriben exactamente la misma semilla, así que Yjs la toma
+   como un solo cambio y hay una sola raíz. Lo que dos personas escriben a la vez en el mismo renglón se
+   fusiona letra por letra, como en cualquier editor colaborativo.
+   Las páginas creadas antes de la semilla (v0.008) pueden tener igual dos raíces; para ellas queda la
+   reparación: al abrir y al recibir cambios, las raíces sobrantes se juntan en la primera en la misma
+   transacción que aplica lo recibido. La reparación copia los bloques y borra la raíz sobrante, así que lo
+   que otro dispositivo escriba en esa raíz después de la copia se pierde: por eso es solo el último
+   recurso. `src/sync/editor.test.ts` prueba los dos casos con el editor real.
+6. **Páginas a medio bajar.** Si el servidor tiene contenido de una página que el dispositivo no, se baja
+   antes de mostrar el editor. Si no llega (sin red o muy lento), se muestra lo que hay en el dispositivo
+   en **solo lectura**, con un aviso, y la página pasa a editable sola cuando llega lo que falta. Lo que
+   sube el propio dispositivo cuenta como bajado (si nadie subió nada en el medio), así que una página
+   que solo se editó acá siempre se abre para editar, con red o sin ella.
 7. **Compactación local.** Con más de 64 updates guardados, al abrir la página se fusionan en uno solo, en la
    misma transacción. En el servidor no se compacta todavía.
 

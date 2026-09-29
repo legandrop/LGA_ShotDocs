@@ -22,7 +22,7 @@ type DropZone = 'before' | 'inside' | 'after';
 
 export function Sidebar() {
   const tree = useTree();
-  const { user } = useServices();
+  const { user, docs } = useServices();
   const route = useRoute();
   const activeId = route.name === 'page' ? route.id : null;
   const pending = usePendingCount();
@@ -181,6 +181,10 @@ export function Sidebar() {
   const trashCount = tree.trashed().length;
 
   async function signOut() {
+    if (docs.hasUnsavedEdits()) {
+      alert('Some of your latest edits are not saved on this device yet. Wait until the red warning goes away, then sign out.');
+      return;
+    }
     if (
       pending > 0 &&
       !confirm(

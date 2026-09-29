@@ -4,7 +4,7 @@ import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
 import type { Remote } from './remote';
-import { mergeRootGroups } from './structure';
+import { mergeRootGroups, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
 import { RemoteError, type NewPage, type PagePatch, type PageRow, type RemoteUpdate } from './types';
 
@@ -134,7 +134,7 @@ export async function makeDevice(server: FakeServer, dbName: string = crypto.ran
   const remote = new FakeRemote(server);
   const tree = new PageTree(db, server.workspaceId);
   await tree.load();
-  const docs = new PageDocs(db, { normalize: mergeRootGroups });
+  const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty });
   const files = new PageFiles(db, remote);
   const engine = new SyncEngine(remote, tree, docs, files);
   return { db, tree, docs, files, engine, remote };

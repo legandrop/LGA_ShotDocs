@@ -31,6 +31,8 @@ export interface PageDocsOptions {
    * abrir y al recibir cambios.
    */
   normalize?: (doc: Y.Doc, origin: symbol) => boolean;
+  /** Pone la estructura inicial en una página vacía (ver structure.ts). Devuelve si la puso. */
+  seed?: (doc: Y.Doc, pageId: string, origin: symbol) => boolean;
 }
 
 /**
@@ -49,6 +51,7 @@ export class PageDocs {
   private readonly writes = new Map<string, Promise<void>>();
   private readonly retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private writeError: string | null = null;
+  private disposed = false;
 
   /** Se llama después de cada edición local guardada. */
   onLocalChange?: (pageId: string) => void;
@@ -62,8 +65,12 @@ export class PageDocs {
     private readonly options: PageDocsOptions = {},
   ) {}
 
-  /** Abre la página para editarla. Cada `open` necesita su `close`. */
-  async open(pageId: string): Promise<Y.Doc> {
+  /**
+   * Abre la página. Cada `open` necesita su `close`. Con `seed`, si la página está vacía le pone la
+   * estructura inicial: se pide solo cuando el dispositivo tiene todo lo que hay en el servidor, porque
+   * sobre un documento a medio bajar armaría una estructura paralela.
+   */
+  async open(pageId: string, { seed = false }: { seed?: boolean } = {}): Promise<Y.Doc> {
     let entry = this.live.get(pageId);
     if (!entry) {
       const doc = new Y.Doc();
@@ -80,7 +87,15 @@ export class PageDocs {
     }
     entry.refs++;
     await entry.ready;
+    if (seed) this.options.seed?.(entry.doc, pageId, ORIGIN_REPAIR);
     return entry.doc;
+  }
+
+  /** Corta los reintentos de escritura (al cerrar sesión o cambiar de usuario). */
+  dispose(): void {
+    this.disposed = true;
+    for (const timer of this.retryTimers.values()) clearTimeout(timer);
+    this.retryTimers.clear();
   }
 
   close(pageId: string): void {
@@ -158,8 +173,9 @@ export class PageDocs {
           });
           pending = next;
         }
+        let seq: number;
         try {
-          await remote.pushUpdate(pageId, pending.id, pending.update);
+          seq = await remote.pushUpdate(pageId, pending.id, pending.update);
         } catch (err) {
           await updateDocState(this.db, pageId, (s) => {
             s.lastError = errorMessage(err);
@@ -172,6 +188,9 @@ export class PageDocs {
           if (s.pending?.id !== confirmed.id) return;
           s.syncedSV = confirmed.sv;
           s.ackedVersion = Math.max(s.ackedVersion, confirmed.version);
+          // Lo que se acaba de subir ya está en el dispositivo: si nadie subió nada en el medio, el cursor
+          // avanza y la página no figura como "a medio bajar" por culpa de lo propio.
+          if (seq === s.cursor + 1) s.cursor = seq;
           s.pending = undefined;
           s.lastError = undefined;
           s.rejected = undefined;
@@ -182,12 +201,16 @@ export class PageDocs {
     });
   }
 
-  /** Vuelve a intentar las páginas que el servidor había rechazado. */
+  /**
+   * Vuelve a intentar las páginas que el servidor había rechazado. El envío rechazado se descarta (su
+   * contenido sigue en el dispositivo): el próximo se calcula de nuevo e incluye las ediciones posteriores.
+   */
   async clearRejected(): Promise<void> {
     for (const state of await this.db.getAll('docState')) {
       if (state.rejected) {
         await updateDocState(this.db, state.pageId, (s) => {
           s.rejected = undefined;
+          s.pending = undefined;
         });
       }
     }
@@ -282,7 +305,7 @@ export class PageDocs {
   }
 
   private startWrite(pageId: string): void {
-    if (this.writes.has(pageId)) return;
+    if (this.writes.has(pageId) || this.disposed) return;
     const timer = this.retryTimers.get(pageId);
     if (timer) {
       clearTimeout(timer);

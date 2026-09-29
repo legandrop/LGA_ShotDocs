@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { FileRejected } from './files';
+import { buildSeed, seedClientId } from './structure';
+import { RemoteError } from './types';
 import { FakeServer, makeDevice, type Device } from './testing';
 
 // Casos que encontró la auditoría de cierre de la fase 1.
@@ -158,5 +160,64 @@ describe('auditoría de la fase 1', () => {
     const big = { type: 'image/jpeg', size: 26 * 1024 * 1024, arrayBuffer: async () => new ArrayBuffer(0) };
     await expect(a.files.add(pageId, big as unknown as Blob)).rejects.toThrow(/25 MB/);
     expect(await a.files.pendingCount()).toBe(0);
+  });
+
+  it('la semilla es idéntica en todos los dispositivos y distinta por página', () => {
+    const p = crypto.randomUUID();
+    expect(buildSeed(p)).toEqual(buildSeed(p));
+    expect(seedClientId(p)).not.toBe(seedClientId(crypto.randomUUID()));
+  });
+
+  it('una página que solo editó este dispositivo se abre sin red (re-auditoría, N2)', async () => {
+    const server = new FakeServer();
+    const dbName = crypto.randomUUID();
+    const a = await device(server, dbName);
+    const pageId = await a.tree.create(null, 'Día de rodaje 3');
+    await a.engine.syncNow();
+    const doc = await a.docs.open(pageId);
+    doc.getText('t').insert(0, 'mis notas');
+    await a.docs.flush(pageId);
+    await a.engine.syncNow();
+    // El ciclo siguiente baja el árbol pero se corta al bajar contenido.
+    const pull = a.remote.pullUpdates.bind(a.remote);
+    a.remote.pullUpdates = async () => {
+      throw new RemoteError('Failed to fetch', false, undefined, true);
+    };
+    await a.engine.syncNow();
+    a.remote.pullUpdates = pull;
+    a.docs.close(pageId);
+    await a.docs.flush();
+    a.engine.stop();
+    a.db.close();
+
+    server.online = false;
+    const again = await device(server, dbName);
+    expect(await again.engine.prefetchPage(pageId, 200)).toBe(true);
+    expect(await read(again, pageId)).toBe('mis notas');
+  });
+
+  it('después de un rechazo, "Retry" sube también lo escrito después (re-auditoría, N3)', async () => {
+    const server = new FakeServer();
+    server.maxUpdateBytes = 200;
+    const a = await device(server);
+    const pageId = await a.tree.create(null, 'P');
+    const doc = await a.docs.open(pageId);
+    doc.getText('t').insert(0, 'x'.repeat(500));
+    await a.docs.flush(pageId);
+    await a.engine.syncNow();
+    expect(a.engine.getStatus().rejectedPages).toBe(1);
+
+    // El usuario achica la página y agrega algo.
+    doc.getText('t').delete(0, 490);
+    doc.getText('t').insert(10, ' fin');
+    await a.docs.flush(pageId);
+    server.maxUpdateBytes = 8 * 1024 * 1024;
+    await a.engine.retryRejected();
+    expect(a.engine.getStatus()).toMatchObject({ rejectedPages: 0, pendingPages: 0 });
+    a.docs.close(pageId);
+
+    const other = await device(server);
+    await other.engine.syncNow();
+    expect(await read(other, pageId)).toBe('xxxxxxxxxx fin');
   });
 });

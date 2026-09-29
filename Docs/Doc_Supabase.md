@@ -50,8 +50,10 @@ cada archivo en el SQL Editor del proyecto, en orden.
 dentro de una transacción que se deshace al final: no deja nada en el proyecto. Verifican que un usuario
 no ve ni cambia (título, papelera, posición, upsert con el mismo id) las páginas, el contenido ni los
 archivos de otro; que no se pueden borrar páginas, updates ni archivos; que no se arman ciclos; que
-`update_seq` no se edita, y que reintentar un update no lo duplica. Borrar un archivo por la API de
-Storage y los movimientos simultáneos se probaron aparte, contra el proyecto real.
+`update_seq` no se edita, y que reintentar un update no lo duplica. Dos casos no tienen prueba automática
+en el repo y se verificaron a mano contra el proyecto real el 2026-09-29: que la API de Storage no deja
+borrar un archivo, y que dos movimientos simultáneos que juntos arman un ciclo terminan con el segundo
+rechazado.
 
 ## Login
 

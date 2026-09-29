@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.008 :
+
+La re-auditoría de la fase 1 encontró que la reparación de dos raíces seguía perdiendo datos: lo que un
+dispositivo escribía en su raíz después de que otro la copiara se borraba en todos lados. Ahora no se
+llega a eso: al abrir una página vacía se le pone una semilla, la raíz inicial escrita con un autor y un
+contenido que salen del id de la página, igual en todos los dispositivos, así que Yjs ve un solo cambio y
+hay una sola raíz. La reparación queda solo para páginas anteriores. Además, una página a medio bajar se
+muestra en solo lectura en vez de quedar ilegible sin red, lo que sube el propio dispositivo ya no cuenta
+como faltante, "Retry" descarta el envío rechazado, pegar o soltar un archivo que no es imagen avisa en vez
+de romper el editor, no se puede cerrar sesión con ediciones sin guardar y se puede tomar el control de una
+ventana colgada.
+[ Fase 1 - semilla de la raíz y correcciones de la re-auditoría ]
+
 v0.007 :
 
 Cierre de la fase 1 después de la auditoría, que encontró dos fallas que perdían datos. Si dos

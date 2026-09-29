@@ -33,8 +33,8 @@ export function SyncBadge() {
     tone = 'busy';
     text = 'Syncing…';
   }
-  if (rejected > 0 && tone !== 'error') tone = 'warn';
-  const hasDetails = rejected > 0 || !!status.localError || !!status.lastError;
+  if ((rejected > 0 || status.warning) && tone !== 'error') tone = 'warn';
+  const hasDetails = rejected > 0 || !!status.localError || !!status.lastError || !!status.warning;
 
   return (
     <div className="sync">
@@ -63,6 +63,11 @@ export function SyncBadge() {
           {status.lastError && !status.localError && (
             <p>
               Last problem: <code>{status.lastError}</code>. Nothing is lost; syncing keeps retrying.
+            </p>
+          )}
+          {status.warning && (
+            <p>
+              <code>{status.warning}</code> Reopening the app tries again; updating the app may be needed.
             </p>
           )}
           {rejected > 0 && (

@@ -16,6 +16,10 @@ const EXTENSIONS: Record<string, string> = {
   'image/heif': 'heif',
 };
 
+export function isAllowedImage(type: string): boolean {
+  return type in EXTENSIONS;
+}
+
 /** El tope del bucket. */
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 

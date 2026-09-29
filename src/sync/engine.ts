@@ -19,6 +19,8 @@ export interface SyncStatus {
   rejectedPages: number;
   /** No se pudo guardar en el dispositivo. Se reintenta solo y no se limpia hasta que funcione. */
   localError: string | null;
+  /** Algo que no se pudo leer del servidor. Queda a la vista hasta reabrir la app. */
+  warning: string | null;
   lastError: string | null;
   lastSyncAt: number | null;
 }
@@ -46,6 +48,7 @@ export class SyncEngine {
     failedOps: 0,
     rejectedPages: 0,
     localError: null,
+    warning: null,
     lastError: null,
     lastSyncAt: null,
   };
@@ -71,7 +74,7 @@ export class SyncEngine {
       this.patch({ localError: message });
       void this.refreshCounts();
     };
-    docs.onWarning = (message) => this.patch({ lastError: message });
+    docs.onWarning = (message) => this.patch({ warning: message });
   }
 
   subscribe = (fn: () => void): (() => void) => {

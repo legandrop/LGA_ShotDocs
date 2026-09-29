@@ -23,6 +23,25 @@ export function Workspace({ user }: { user: AuthUser }) {
             LGA Shot Docs is open in another tab or window. Keep working there, or close it and this one will
             open by itself.
           </p>
+          <button className="link" onClick={boot.takeOver}>
+            The other window is not responding: use this one
+          </button>
+        </div>
+      </main>
+    );
+  }
+  if (boot.state === 'lost') {
+    return (
+      <main className="center-screen">
+        <div className="card">
+          <h1>Opened in another window</h1>
+          <p className="muted">
+            Another window took over, so this one stopped saving. Your edits are kept on this device; reload to
+            use this window again.
+          </p>
+          <button className="link" onClick={() => location.reload()}>
+            Reload
+          </button>
         </div>
       </main>
     );

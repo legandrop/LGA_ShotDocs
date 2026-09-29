@@ -32,3 +32,54 @@ export function mergeRootGroups(doc: Y.Doc, origin: unknown): boolean {
   }, origin);
   return true;
 }
+
+/**
+ * Versión de la semilla. NUNCA se cambia el contenido de una versión ya publicada: si dos dispositivos
+ * escribieran semillas distintas con el mismo autor y los mismos números, sus documentos divergirían. Un
+ * formato nuevo lleva otra versión (y por lo tanto otro autor).
+ */
+const SEED_VERSION = 1;
+
+/** Autor de Yjs de la semilla: sale del id de la página, así que es el mismo en todos los dispositivos. */
+export function seedClientId(pageId: string): number {
+  let h = 0x811c9dc5;
+  for (const ch of `shotdocs-seed:${SEED_VERSION}:${pageId}`) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  // Los autores normales de Yjs también son de 32 bits; se evita el 0.
+  return h || 1;
+}
+
+/**
+ * La raíz inicial de una página, idéntica a la que crea el editor al escribir en una página vacía. Cada
+ * dispositivo la arma con el mismo autor y el mismo contenido, así que Yjs la reconoce como el mismo
+ * cambio: dos dispositivos que empiezan la misma página sin verse terminan con UNA sola raíz, y no hace
+ * falta reparar nada.
+ */
+export function buildSeed(pageId: string): Uint8Array {
+  const doc = new Y.Doc();
+  doc.clientID = seedClientId(pageId);
+  const group = new Y.XmlElement('blockGroup');
+  const container = new Y.XmlElement('blockContainer');
+  const paragraph = new Y.XmlElement('paragraph');
+  doc.transact(() => {
+    doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+    group.insert(0, [container]);
+    container.setAttribute('id', 'initialBlockId');
+    container.insert(0, [paragraph]);
+    paragraph.setAttribute('backgroundColor', 'default');
+    paragraph.setAttribute('textColor', 'default');
+    paragraph.setAttribute('textAlignment', 'left');
+  });
+  const update = Y.encodeStateAsUpdate(doc);
+  doc.destroy();
+  return update;
+}
+
+/** Si la página está vacía, le pone la raíz inicial. Devuelve true si la puso. */
+export function seedIfEmpty(doc: Y.Doc, pageId: string, origin: unknown): boolean {
+  if (doc.getXmlFragment(CONTENT_FRAGMENT).length > 0) return false;
+  Y.applyUpdate(doc, buildSeed(pageId), origin);
+  return doc.getXmlFragment(CONTENT_FRAGMENT).length > 0;
+}

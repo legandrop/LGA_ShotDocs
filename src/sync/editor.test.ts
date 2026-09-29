@@ -44,7 +44,7 @@ function mountEditor(doc: Y.Doc): BlockNoteEditor {
 const texts = (e: BlockNoteEditor) =>
   e.document.map((b) => (b.content as { text?: string }[] | undefined)?.map((c) => c.text).join('') ?? '');
 
-it('dos dispositivos que empiezan la misma página sin verse no pierden nada al fusionarse', async () => {
+it('páginas sin semilla (anteriores a v0.008): la reparación junta las dos raíces sin perder nada', async () => {
   const server = new FakeServer();
   const a = await device(server);
   const b = await device(server);
@@ -96,3 +96,58 @@ it('dos dispositivos que empiezan la misma página sin verse no pierden nada al 
     expect(xml).toContain(line);
   }
 });
+
+// Con la semilla, dos dispositivos que empiezan la misma página sin verse tienen la MISMA raíz, así que
+// no hay nada que reparar y lo que cada uno siga escribiendo después se conserva (re-auditoría, N1). Se
+// repite porque el resultado de una fusión depende de los ids de Yjs, que son al azar.
+for (let run = 0; run < 6; run++) {
+  it(`con semilla, lo que un dispositivo sigue escribiendo sin red no se pierde (corrida ${run + 1})`, async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const b = await device(server);
+    const pageId = await a.tree.create(null, 'P');
+    await a.engine.syncNow();
+    await b.engine.syncNow();
+
+    const editorA = mountEditor(await a.docs.open(pageId, { seed: true }));
+    const editorB = mountEditor(await b.docs.open(pageId, { seed: true }));
+    await tick();
+    editorA.replaceBlocks(editorA.document, [{ type: 'paragraph', content: 'Línea de A' }]);
+    editorB.replaceBlocks(editorB.document, [{ type: 'paragraph', content: 'B v1' }]);
+    await tick();
+    await a.docs.flush(pageId);
+    await b.docs.flush(pageId);
+
+    // B sube y se queda sin red; sigue escribiendo.
+    await b.engine.syncNow();
+    server.online = false;
+    editorB.insertBlocks([{ type: 'paragraph', content: 'B v2 sin red' }], editorB.document[0], 'after');
+    await tick();
+    await b.docs.flush(pageId);
+
+    // A sube, baja lo de B y sigue.
+    server.online = true;
+    await a.engine.syncNow();
+    await tick(50);
+    await a.engine.syncNow();
+    await tick(50);
+    // B sincroniza, y otra vuelta de los dos.
+    await b.engine.syncNow();
+    await tick(80);
+    await b.engine.syncNow();
+    await a.engine.syncNow();
+    await tick(80);
+
+    const c = await device(server);
+    await c.engine.syncNow();
+    const xml = (await c.docs.open(pageId)).getXmlFragment(CONTENT_FRAGMENT);
+    expect(xml.length).toBe(1);
+    // Lo que A y B escribieron a la vez en el mismo primer párrafo puede quedar junto en ese párrafo (se
+    // fusiona letra por letra); lo que importa es que no falte nada.
+    for (const line of ['Línea de A', 'B v1', 'B v2 sin red']) {
+      expect(xml.toString()).toContain(line);
+      expect(texts(editorA).join('\n')).toContain(line);
+      expect(texts(editorB).join('\n')).toContain(line);
+    }
+  });
+}
