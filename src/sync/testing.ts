@@ -6,7 +6,15 @@ import { openLocalDb, type LocalDb } from './localDb';
 import type { Remote } from './remote';
 import { mergeRootGroups, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
-import { RemoteError, type NewPage, type PagePatch, type PageRow, type RemoteUpdate } from './types';
+import {
+  RemoteError,
+  type NewPage,
+  type NewProject,
+  type PagePatch,
+  type PageRow,
+  type ProjectRow,
+  type RemoteUpdate,
+} from './types';
 
 /** Servidor en memoria con las mismas reglas que el de Supabase (ver supabase/migrations). */
 export class FakeServer {
@@ -23,6 +31,11 @@ export class FakeServer {
   readonly updates = new Map<string, { seq: number; clientUpdateId: string; data: Uint8Array }[]>();
   readonly files = new Map<string, { data: ArrayBuffer; mime: string }>();
   readonly workspaceId = crypto.randomUUID();
+  readonly projects = new Map<string, ProjectRow>([
+    [this.workspaceId, { id: this.workspaceId, name: 'My project', created_at: new Date(0).toISOString() }],
+  ]);
+  /** Rechaza la creación de proyectos como si faltaran permisos. */
+  rejectProjects = false;
 
   check(): void {
     if (!this.online) throw new RemoteError('Failed to fetch', false, undefined, true);
@@ -37,9 +50,31 @@ export class FakeRemote implements Remote {
     return this.server.workspaceId;
   }
 
-  async fetchTree(workspaceId: string): Promise<PageRow[]> {
+  async fetchTree(projectIds: string[]): Promise<PageRow[]> {
     this.server.check();
-    return [...this.server.pages.values()].filter((p) => p.workspace_id === workspaceId).map((p) => ({ ...p }));
+    const ids = new Set(projectIds);
+    return [...this.server.pages.values()].filter((p) => ids.has(p.workspace_id)).map((p) => ({ ...p }));
+  }
+
+  async fetchProjects(): Promise<ProjectRow[]> {
+    this.server.check();
+    return [...this.server.projects.values()].map((p) => ({ ...p }));
+  }
+
+  async createProject(project: NewProject): Promise<void> {
+    this.server.check();
+    if (this.server.projects.has(project.id)) return;
+    if (this.server.rejectProjects) {
+      throw new RemoteError('new row violates row-level security policy for table "workspaces"', true, '42501');
+    }
+    this.server.projects.set(project.id, { ...project, created_at: new Date().toISOString() });
+  }
+
+  async renameProject(id: string, name: string): Promise<void> {
+    this.server.check();
+    const project = this.server.projects.get(id);
+    if (!project) throw new RemoteError('project_not_found', true, 'P0002');
+    this.server.projects.set(id, { ...project, name });
   }
 
   async createPage(page: NewPage): Promise<void> {
@@ -48,7 +83,11 @@ export class FakeRemote implements Remote {
     if (this.server.rejectCreates) {
       throw new RemoteError('new row violates row-level security policy for table "pages"', true, '42501');
     }
-    if (page.parent_id && !this.server.pages.has(page.parent_id)) {
+    if (!this.server.projects.has(page.workspace_id)) {
+      throw new RemoteError('new row violates row-level security policy for table "pages"', true, '42501');
+    }
+    const parent = page.parent_id ? this.server.pages.get(page.parent_id) : undefined;
+    if (page.parent_id && parent?.workspace_id !== page.workspace_id) {
       throw new RemoteError('page_parent_invalid', true, '23503');
     }
     const now = new Date().toISOString();
@@ -67,6 +106,9 @@ export class FakeRemote implements Remote {
     this.server.check();
     const page = this.server.pages.get(id);
     if (!page) throw new RemoteError('page_not_found', true, 'P0002');
+    if (patch.parent_id && this.server.pages.get(patch.parent_id)?.workspace_id !== page.workspace_id) {
+      throw new RemoteError('page_parent_invalid', true, '23503');
+    }
     if (patch.parent_id !== undefined && patch.parent_id !== null) {
       for (let cur: string | null = patch.parent_id; cur; cur = this.server.pages.get(cur)?.parent_id ?? null) {
         if (cur === id) throw new RemoteError('page_cycle', true, '23514');

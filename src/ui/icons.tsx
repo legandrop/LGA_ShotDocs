@@ -56,6 +56,7 @@ export const SignOutIcon = icon('M8 3.75H5a1 1 0 0 0-1 1v10.5a1 1 0 0 0 1 1h3M11
 export const ArrowRightIcon = icon('M4 10h12M11 5l5 5-5 5', { strokeWidth: 1.6 });
 export const ArrowLeftIcon = icon('M16 10H4M9 5l-5 5 5 5', { strokeWidth: 1.6 });
 export const MailIcon = icon('M4.5 5h11a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 13.5v-7A1.5 1.5 0 0 1 4.5 5zM3.5 6l6.5 5 6.5-5');
+export const SearchIcon = icon('M9 3.75a5.25 5.25 0 1 1 0 10.5 5.25 5.25 0 0 1 0-10.5zM13 13l3.5 3.5', { strokeWidth: 1.6 });
 export const HeaderIcon = icon('M4 6h12M4 10h7M4 14h9');
 
 export const MoreIcon = ({ size = 18 }: { size?: number }) => (

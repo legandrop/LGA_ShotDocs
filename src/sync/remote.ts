@@ -1,11 +1,28 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fromBase64, toBase64 } from '../lib/base64';
-import { RemoteError, type NewPage, type PagePatch, type PageRow, type RemoteUpdate } from './types';
+import {
+  RemoteError,
+  type NewPage,
+  type NewProject,
+  type PagePatch,
+  type PageRow,
+  type ProjectRow,
+  type RemoteUpdate,
+} from './types';
 
 /** Todo lo que la sincronización le pide al servidor. Las pruebas usan una versión en memoria. */
 export interface Remote {
+  /** El primer proyecto del usuario; lo crea la primera vez. */
   ensureWorkspace(): Promise<string>;
-  fetchTree(workspaceId: string): Promise<PageRow[]>;
+  /**
+   * Las páginas de estos proyectos. Se pide por proyecto (y no "todo lo visible") para usar el índice y
+   * para que, cuando se pueda compartir, lo compartido llegue por su propio camino.
+   */
+  fetchTree(projectIds: string[]): Promise<PageRow[]>;
+  fetchProjects(): Promise<ProjectRow[]>;
+  /** Idempotente: si el proyecto ya existe no hace nada. */
+  createProject(project: NewProject): Promise<void>;
+  renameProject(id: string, name: string): Promise<void>;
   /** Idempotente: si la página ya existe no hace nada. */
   createPage(page: NewPage): Promise<void>;
   updatePage(id: string, patch: PagePatch): Promise<void>;
@@ -58,18 +75,27 @@ export class SupabaseRemote implements Remote {
     return data as string;
   }
 
-  async fetchTree(workspaceId: string): Promise<PageRow[]> {
+  async fetchTree(projectIds: string[]): Promise<PageRow[]> {
+    // De a 100 proyectos por consulta: la lista viaja en la dirección y tiene un largo máximo.
+    const rows: PageRow[] = [];
+    for (let i = 0; i < projectIds.length; i += 100) {
+      rows.push(...(await this.fetchTreeOf(projectIds.slice(i, i + 100))));
+    }
+    return rows;
+  }
+
+  private async fetchTreeOf(projectIds: string[]): Promise<PageRow[]> {
     // De a 1000, por id: si se crean páginas mientras se baja, no se saltea ninguna.
     const rows: PageRow[] = [];
     let after: string | null = null;
     for (;;) {
       const columns = this.settingsMissing ? PAGE_COLUMNS_WITHOUT_SETTINGS : PAGE_COLUMNS;
-      let query = this.client.from('pages').select(columns).eq('workspace_id', workspaceId);
+      let query = this.client.from('pages').select(columns).in('workspace_id', projectIds);
       if (after) query = query.gt('id', after);
       const { data, error, status } = await query.order('id').limit(1000);
       if (error?.code === UNDEFINED_COLUMN && !this.settingsMissing) {
         this.settingsMissingAt = Date.now();
-        return this.fetchTree(workspaceId);
+        return this.fetchTreeOf(projectIds);
       }
       if (error) throw toRemoteError(error, status);
       const page = data as unknown as PageRow[];
@@ -77,6 +103,29 @@ export class SupabaseRemote implements Remote {
       if (page.length < 1000) return rows;
       after = page[page.length - 1].id;
     }
+  }
+
+  async fetchProjects(): Promise<ProjectRow[]> {
+    const { data, error, status } = await this.client
+      .from('workspaces')
+      .select('id, name, created_at')
+      .order('created_at')
+      .limit(1000);
+    if (error) throw toRemoteError(error, status);
+    return data as ProjectRow[];
+  }
+
+  async createProject(project: NewProject): Promise<void> {
+    const { error, status } = await this.client
+      .from('workspaces')
+      .upsert(project, { onConflict: 'id', ignoreDuplicates: true });
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async renameProject(id: string, name: string): Promise<void> {
+    const { data, error, status } = await this.client.from('workspaces').update({ name }).eq('id', id).select('id');
+    if (error) throw toRemoteError(error, status);
+    if (data.length === 0) throw new RemoteError('project_not_found', true, 'P0002');
   }
 
   async createPage(page: NewPage): Promise<void> {

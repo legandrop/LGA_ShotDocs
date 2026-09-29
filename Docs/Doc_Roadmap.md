@@ -2,7 +2,8 @@
 
 Lo que falta, por importancia. Las fases están en `Plan_ShotDocs.md`, sección 9.
 
-1. **Fase 2.** Compartir por usuario y por link, con las pruebas de permisos.
+1. **Fase 2.** Compartir un proyecto, una página o una subpágina, por usuario y por link, con links
+   legibles (D-13) y las pruebas de permisos. Sumar ahí archivar o borrar un proyecto.
 2. **Fase 3.** Plantillas: definir con Lega los campos de *Pre-production Notes*, *On-Set Report* y
    *Shot Breakdown*.
 3. **Fase 4.** Formato de página real (A5, A4, A3, Carta) y PDF igual a lo que se ve.

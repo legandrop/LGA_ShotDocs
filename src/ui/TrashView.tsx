@@ -1,10 +1,11 @@
 import { navigate, pagePath } from '../router';
 import { useTree } from '../services';
 import { RestoreIcon } from './icons';
+import { useCurrentProject } from './project';
 
 export function TrashView() {
   const tree = useTree();
-  const items = tree.trashed();
+  const items = tree.trashed(useCurrentProject());
   return (
     <article className="page narrow">
       <h1 className="page-heading">Trash</h1>

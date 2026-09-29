@@ -60,6 +60,10 @@ Cómo funciona hoy la regla de no perder nunca información. El código está en
 
 - Crear, renombrar, mover, mandar a la papelera y restaurar entran a una **cola de salida** en IndexedDB y
   se aplican en la vista en el acto.
+- Crear y renombrar **proyectos** va en la misma cola: un proyecto creado sin red sube antes que sus
+  páginas. El dispositivo guarda la lista de proyectos para abrirlos sin red. Si el servidor rechaza un
+  proyecto nuevo, queda a la vista con sus páginas hasta que se lo descarta; si tiene páginas creadas
+  adentro, no se puede descartar, igual que una página rechazada.
 - El servidor rechaza los movimientos que arman un ciclo, también si llegan dos a la vez desde dos
   dispositivos (los cambios de padre de un espacio se aplican de a uno). Si igual apareciera un ciclo, la
   app muestra esas páginas en la raíz en vez de colgarse.
@@ -69,7 +73,7 @@ Cómo funciona hoy la regla de no perder nunca información. El código está en
   ciclo), el cambio pasa a la lista de rechazados y la app lo avisa. Una **creación rechazada nunca
   desaparece**: la página y sus cambios siguen a la vista, su contenido sigue en el dispositivo y se puede
   reintentar. "Ocultar" solo descarta rechazos que no dejan nada afuera (renombrar, mover o borrar una
-  página que ya está en el servidor).
+  página que ya está en el servidor, o un proyecto rechazado sin páginas, con sus renombres).
 - El contenido de una página se sube recién cuando la página existe en el servidor.
 - Los ajustes de una rama (`pages.settings`) viajan como cualquier otro cambio del árbol. Cada cambio
   manda el objeto entero: si dos dispositivos cambian ajustes distintos de la misma página sin red, queda
@@ -91,7 +95,7 @@ si hay cambios de ese usuario sin subir, se suben; si no, manda lo guardado en l
 
 ## Ciclo de sincronización
 
-Nunca corren dos a la vez. En orden: cambios del árbol, árbol completo del servidor, contenido pendiente,
+Nunca corren dos a la vez. En orden: cambios del árbol, los proyectos y sus páginas, contenido pendiente,
 contenido nuevo e imágenes pendientes. Las imágenes van al final y sus errores no cortan el ciclo: una foto
 grande en una red mala no frena el texto. Corre al abrir la app, un poco después de cada cambio, cada 10
 segundos con la app a la vista, al volver la red y al volver a la ventana.

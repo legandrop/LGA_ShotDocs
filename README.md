@@ -1,11 +1,13 @@
 # LGA Shot Docs
 
 Documentation for VFX work, in the spirit of Notion or Coda but much simpler. Write the VFX
-pre-production notes for each scene, fill in the on-set reports during the shoot, and keep everything in
-one tree of pages you own.
+pre-production notes for each scene, fill in the on-set reports during the shoot, and keep each show in
+its own project: a tree of pages you own.
 
 ## Goals
 
+- **Projects.** Each show or job is a project with its own tree of pages. Switch between them from the
+  top of the sidebar (or with Ctrl+K) without leaving the page you are on.
 - **Pages and subpages.** A sidebar with a tree of pages, as deep as you need. Every page can hold
   content and other pages; a "folder" is just a page with no content.
 - **Visual editor.** Headings, lists, checklists, tables and images. You never see Markdown; it is only
@@ -19,9 +21,9 @@ one tree of pages you own.
   text, format pages and resize images. Its edits are regular edits: synced, versioned and undoable.
 - **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
   back online. Edits made offline on two devices are merged, never overwritten.
-- **Share a branch, never the tree.** Share any page with a public link or with specific people. Sharing
-  a page shares everything under it and nothing above it: parent pages and sibling branches stay
-  private.
+- **Share a branch, never the tree.** Share a whole project or any page with a public link or with
+  specific people. Sharing a page shares everything under it and nothing above it: parent pages and
+  sibling branches stay private.
 - **Your look, everywhere.** Light or dark theme, a default or an editorial typeface, text size and page
   width, saved in your account and applied on every device. Scene titles like `064 | Name | Place` show
   as a short code and a name in the sidebar, and each page can show the pages that contain it above its

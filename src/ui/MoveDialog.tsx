@@ -10,7 +10,8 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
   const options = useMemo(() => {
     const out: { page: PageRow; depth: number }[] = [];
     const walk = (parentId: string | null, depth: number) => {
-      for (const p of tree.children(parentId)) {
+      const list = parentId ? tree.children(parentId) : page ? tree.roots(page.workspace_id) : [];
+      for (const p of list) {
         if (p.id === pageId) continue;
         out.push({ page: p, depth });
         walk(p.id, depth + 1);
@@ -18,7 +19,7 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
     };
     walk(null, 0);
     return out;
-  }, [tree, pageId]);
+  }, [tree, pageId, page]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();

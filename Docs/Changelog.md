@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.013 :
+
+Proyectos: cada usuario tiene varios, cada uno con su propio árbol de páginas (D-12). Arriba de la barra
+lateral queda el proyecto abierto, en lugar del ícono grande; un clic o Ctrl+K abre el selector, con
+buscador, flechas y Enter, para cambiar de proyecto sin salir de la página, crear uno nuevo o renombrarlo.
+En el teléfono sube como hoja desde abajo. Crear y renombrar van en la misma cola que las páginas, así
+que funcionan sin red, y un proyecto rechazado nunca se pierde. Cada proyecto recuerda su última página.
+La migración nueva deja crear proyectos solo a nombre propio; el proyecto de Lega pasó a llamarse
+MGTZD. La auditoría de la fase sumó: el selector se dibuja fuera de la barra, no le gana al Ctrl+K del
+editor, el árbol se pide por proyecto y un proyecto vacío rechazado se puede descartar. Quedan decididos
+los links legibles para compartir (D-13).
+[ Proyectos - varios por usuario y selector arriba de la barra ]
+
 v0.012 :
 
 Correo propio: los mails de login salen por Resend desde el dominio de Lega y traen el código de 8

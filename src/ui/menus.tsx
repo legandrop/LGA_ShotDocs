@@ -25,6 +25,7 @@ export function useFloating(
   onClose: () => void,
   anchor?: HTMLElement | null,
   arrows = false,
+  focusFirst = true,
 ) {
   const close = useRef(onClose);
   close.current = onClose;
@@ -56,7 +57,7 @@ export function useFloating(
       el.style.top = `${Math.max(8, Math.min(above, window.innerHeight - 8 - r.height))}px`;
       el.style.bottom = 'auto';
     }
-    items(el)[0]?.focus({ preventScroll: true });
+    if (focusFirst) items(el)[0]?.focus({ preventScroll: true });
     return () => {
       // Si el foco quedó en el menú (o se perdió al desmontarlo), vuelve al botón que lo abrió.
       const active = document.activeElement;
@@ -83,7 +84,7 @@ export function useFloating(
 }
 
 function items(el: HTMLElement): HTMLElement[] {
-  return [...el.querySelectorAll<HTMLElement>('button:not(:disabled), select, [href]')];
+  return [...el.querySelectorAll<HTMLElement>('input, button:not(:disabled), select, [href]')];
 }
 
 export interface MenuPosition {

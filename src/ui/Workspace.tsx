@@ -8,12 +8,14 @@ import { MenuIcon, MoreIcon, PlusIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { useNotice } from './notice';
+import { lastPageOf, rememberPage, useCurrentProject } from './project';
 import { focusTitle, PageView } from './PageView';
 import { Sidebar } from './Sidebar';
 import { SyncIcon } from './SyncBadge';
 import { TrashView } from './TrashView';
 
-const LAST_PAGE_KEY = 'shotdocs-last-page';
+// Versiones anteriores recordaban una sola última página; se sigue leyendo como respaldo.
+const LEGACY_LAST_PAGE_KEY = 'shotdocs-last-page';
 
 export function Workspace({ user }: { user: AuthUser }) {
   const boot = useBootServices(user);
@@ -80,7 +82,7 @@ export function Workspace({ user }: { user: AuthUser }) {
 function Shell() {
   const route = useRoute();
   const tree = useTree();
-  const { docs } = useServices();
+  const { docs, user } = useServices();
   const [navOpen, setNavOpen] = useState(false);
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
@@ -89,28 +91,34 @@ function Shell() {
   // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación.
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (docs.hasUnsavedEdits()) e.preventDefault();
+      if (docs.hasUnsavedEdits() || tree.hasUnsavedWrites()) e.preventDefault();
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [docs]);
+  }, [docs, tree]);
 
   useEffect(() => {
     setNavOpen(false);
     setPageMenu(null);
   }, [route.name, route.name === 'page' ? route.id : null]);
 
+  // Cada proyecto recuerda su última página abierta; el inicio vuelve a la del proyecto abierto.
+  const projectId = useCurrentProject();
+  const revision = tree.getRevision();
   useEffect(() => {
-    try {
-      if (route.name === 'page') localStorage.setItem(LAST_PAGE_KEY, route.id);
-      if (route.name === 'home') {
-        const last = localStorage.getItem(LAST_PAGE_KEY);
-        if (last && tree.get(last) && !tree.isTrashed(last)) navigate(pagePath(last), true);
+    if (route.name === 'page') rememberPage(tree, user.id, route.id);
+    if (route.name !== 'home') return;
+    let last = lastPageOf(projectId);
+    if (!last) {
+      try {
+        last = localStorage.getItem(LEGACY_LAST_PAGE_KEY);
+      } catch {
+        last = null;
       }
-    } catch {
-      // Volver a la última página es solo una comodidad.
     }
-  }, [route, tree]);
+    const page = last ? tree.get(last) : undefined;
+    if (page && page.workspace_id === projectId && !tree.isTrashed(page.id)) navigate(pagePath(page.id), true);
+  }, [route, tree, revision, projectId, user.id]);
 
   const pageId = route.name === 'page' && tree.get(route.id) ? route.id : null;
   const crumbs = pageId ? tree.ancestors(pageId) : [];
@@ -200,10 +208,12 @@ function Shell() {
 
 function Home() {
   const tree = useTree();
-  const empty = tree.children(null).length === 0;
+  const projectId = useCurrentProject();
+  const name = tree.project(projectId)?.name ?? 'This project';
+  const empty = tree.roots(projectId).length === 0;
   return (
     <article className="page narrow home">
-      <h1 className="page-heading">{empty ? 'Your workspace is empty' : 'Pick a page'}</h1>
+      <h1 className="page-heading">{empty ? `${name} is empty` : name}</h1>
       <p className="muted">
         {empty
           ? 'Create your first page: a show, a scene or a shoot day. Every page can hold other pages.'
@@ -212,7 +222,7 @@ function Home() {
       <button
         className="primary"
         onClick={async () => {
-          const id = await tree.create(null);
+          const id = await tree.create(null, '', projectId);
           navigate(pagePath(id));
         }}
       >

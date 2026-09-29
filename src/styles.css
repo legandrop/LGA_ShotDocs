@@ -1617,3 +1617,201 @@ code {
   font-weight: 500;
   color: var(--muted);
 }
+
+/* --- Proyectos --------------------------------------------------------------------------------- */
+
+.monogram {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: #1b1a17;
+  color: #e8b23a;
+  font-family: var(--mono);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+:root[data-theme='dark'] .monogram {
+  background: #e8b23a;
+  color: #1b1a17;
+}
+
+.project-button {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  margin-bottom: 12px;
+  padding: 0 8px;
+  gap: 10px;
+  border-color: var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  text-align: left;
+}
+
+.project-button[aria-expanded='true'] {
+  border-color: var(--faint-2);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.project-button > svg {
+  flex: none;
+  color: var(--muted-2);
+}
+
+.project-label {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.project-label strong {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-label span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-menu {
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  max-height: min(560px, calc(100vh - 80px));
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.project-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  margin-bottom: 4px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--sidebar-bg);
+  color: var(--muted-2);
+}
+
+.project-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.project-search input:focus,
+.project-search input:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
+.sheet-scrim {
+  display: none;
+}
+
+.project-search:focus-within {
+  box-shadow: 0 0 0 2px var(--focus);
+}
+
+.project-section {
+  display: block;
+  padding: 8px 10px 4px;
+  font-size: 10px;
+}
+
+.project-list {
+  display: grid;
+  gap: 2px;
+}
+
+.menu .project-row {
+  height: 48px;
+  gap: 10px;
+  text-align: left;
+}
+
+.menu .project-row.active {
+  background: var(--hover);
+}
+
+.menu .project-row[aria-current='true'] .project-label strong {
+  font-weight: 700;
+}
+
+.current-mark {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+.project-empty {
+  margin: 6px 10px;
+  font-size: 13px;
+}
+
+.project-form {
+  display: grid;
+  gap: 10px;
+  padding: 8px;
+}
+
+.project-form input {
+  height: 40px;
+}
+
+.project-form .row {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.menu .project-form .primary {
+  height: 36px;
+  padding: 0 16px;
+  justify-content: center;
+}
+
+@media (max-width: 760px) {
+  /* En el teléfono el selector sube desde abajo, con filas grandes para el dedo. */
+  .menu.project-menu {
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0;
+    width: auto;
+    max-width: none;
+    max-height: 80vh;
+    padding: 12px 12px calc(16px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+  }
+
+  .menu .project-row {
+    height: 60px;
+  }
+
+  .sheet-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+    background: var(--scrim);
+  }
+}

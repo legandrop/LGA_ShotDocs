@@ -32,7 +32,7 @@ const PULL_CONCURRENCY = 4;
 /**
  * Un ciclo de sincronización, siempre en este orden:
  * 1. Cambios del árbol, en el orden en que se hicieron (así una página existe antes que su contenido).
- * 2. El árbol completo del servidor.
+ * 2. Los proyectos y, después, todas sus páginas.
  * 3. Contenido pendiente de cada página.
  * 4. Contenido nuevo de las páginas que cambiaron en el servidor.
  * 5. Imágenes pendientes (al final: una foto grande en una red mala no frena el texto).
@@ -173,9 +173,12 @@ export class SyncEngine {
     try {
       await this.pushOps();
       halt();
-      const rows = await this.remote.fetchTree(this.tree.workspaceId);
+      // Primero los proyectos y después sus páginas: nunca llega una página de un proyecto desconocido.
+      const projects = await this.remote.fetchProjects();
       halt();
-      await this.tree.setSnapshot(rows);
+      const rows = await this.remote.fetchTree(projects.map((p) => p.id));
+      halt();
+      await this.tree.setSnapshot(rows, projects);
 
       let contentError: string | null = null;
       const states = await this.docs.states();
@@ -227,7 +230,16 @@ export class SyncEngine {
   }
 
   private applyOp({ op }: QueuedOp): Promise<void> {
-    return op.kind === 'create' ? this.remote.createPage(op.page) : this.remote.updatePage(op.id, op.patch);
+    switch (op.kind) {
+      case 'create':
+        return this.remote.createPage(op.page);
+      case 'update':
+        return this.remote.updatePage(op.id, op.patch);
+      case 'createProject':
+        return this.remote.createProject(op.project);
+      case 'renameProject':
+        return this.remote.renameProject(op.id, op.name);
+    }
   }
 
   private async refreshCounts(): Promise<void> {

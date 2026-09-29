@@ -33,6 +33,17 @@ diga otra cosa.
   una dirección del dominio de Lega, con el código de 8 dígitos y el link. Se descartó el SMTP de Gmail
   porque exige verificación en 2 pasos en la cuenta que manda.
 
+- **D-12 · Proyectos** (2026-09-29). Lo que en Coda es un *doc* acá es un **proyecto**: un árbol de
+  páginas propio. Son las filas de `workspaces` (cada usuario tiene los que quiera; el primero arranca como
+  "My project" y se renombra; el de Lega es "MGTZD"). Se cambia de proyecto sin salir de la página, con un selector
+  arriba de la barra lateral (la opción A de las que se diseñaron): un clic o Ctrl+K, buscar, flechas y Enter;
+  en el teléfono sube como hoja desde abajo. Crear y renombrar proyectos entra en la misma cola que las
+  páginas, así que funciona sin red y un proyecto nuevo sube antes que sus páginas. Cada proyecto recuerda
+  su última página abierta. Una página no se mueve entre proyectos.
+- **D-13 · Links legibles** (2026-09-29, para la fase 2). Las direcciones de página llevan el título y un
+  pedazo del id (`/p/064-cubiertos-pegados-3f9c2a`); el id es lo que cuenta, así que renombrar no rompe
+  un link compartido.
+
 ## Abiertas
 
 - **D-05 · Hosting para trabajos pagos.** El plan Hobby de Vercel es solo para uso no comercial. Para

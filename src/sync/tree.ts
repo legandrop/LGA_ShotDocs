@@ -1,11 +1,13 @@
 import { generateKeyBetween } from 'fractional-indexing';
 import type { LocalDb } from './localDb';
-import type { FailedOp, PagePatch, PageRow, PageSettings, QueuedOp, TreeOp } from './types';
+import type { FailedOp, PagePatch, PageRow, PageSettings, ProjectRow, QueuedOp, TreeOp } from './types';
 
 export function compareSiblings(a: PageRow, b: PageRow): number {
   if (a.sort_key !== b.sort_key) return a.sort_key < b.sort_key ? -1 : 1;
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
+
+const PROJECTS_KEY = 'projects';
 
 /** Clave entre dos vecinos. Si dos dispositivos generaron la misma clave, igual devuelve una válida. */
 export function keyBetween(before: string | null, after: string | null): string {
@@ -38,8 +40,14 @@ function pagesInCycles(pages: Map<string, PageRow>): Set<string> {
   return result;
 }
 
-function applyOp(pages: Map<string, PageRow>, op: TreeOp, now: string): void {
-  if (op.kind === 'create') {
+function applyOp(pages: Map<string, PageRow>, projects: Map<string, ProjectRow>, op: TreeOp, now: string): void {
+  if (op.kind === 'createProject') {
+    if (!projects.has(op.project.id)) projects.set(op.project.id, { ...op.project, created_at: now });
+  } else if (op.kind === 'renameProject') {
+    // Un dispositivo que todavía no bajó la lista de proyectos igual muestra el nombre nuevo.
+    const current = projects.get(op.id) ?? { id: op.id, name: op.name, created_at: '' };
+    projects.set(op.id, { ...current, name: op.name });
+  } else if (op.kind === 'create') {
     if (pages.has(op.page.id)) return;
     pages.set(op.page.id, {
       ...op.page,
@@ -62,6 +70,10 @@ function applyOp(pages: Map<string, PageRow>, op: TreeOp, now: string): void {
  */
 export class PageTree {
   private snapshot = new Map<string, PageRow>();
+  private projectSnapshot = new Map<string, ProjectRow>();
+  private projectView = new Map<string, ProjectRow>();
+  private writing = 0;
+  private statsCache: Map<string, { pages: number; updatedAt: string | null }> | null = null;
   private ops: QueuedOp[] = [];
   private failed: FailedOp[] = [];
   private view = new Map<string, PageRow>();
@@ -74,16 +86,19 @@ export class PageTree {
 
   constructor(
     private readonly db: LocalDb,
+    /** El primer proyecto del usuario: ahí va una página nueva sin padre si no se indica otro. */
     readonly workspaceId: string,
   ) {}
 
   async load(): Promise<void> {
-    const [rows, ops, failed] = await Promise.all([
+    const [rows, ops, failed, projects] = await Promise.all([
       this.db.getAll('pages'),
       this.db.getAll('ops'),
       this.db.getAll('failedOps'),
+      this.db.get('meta', PROJECTS_KEY) as Promise<ProjectRow[] | undefined>,
     ]);
-    this.snapshot = new Map(rows.filter((r) => r.workspace_id === this.workspaceId).map((r) => [r.id, r]));
+    this.snapshot = new Map(rows.map((r) => [r.id, r]));
+    this.projectSnapshot = new Map((projects ?? []).map((p) => [p.id, p]));
     this.ops = ops;
     this.failed = failed;
     this.recompute();
@@ -100,6 +115,39 @@ export class PageTree {
 
   get(id: string): PageRow | undefined {
     return this.view.get(id);
+  }
+
+  /** Los proyectos, del más viejo al más nuevo. */
+  projects(): ProjectRow[] {
+    return [...this.projectView.values()].sort((a, b) =>
+      a.created_at === b.created_at ? (a.id < b.id ? -1 : 1) : a.created_at < b.created_at ? -1 : 1,
+    );
+  }
+
+  project(id: string): ProjectRow | undefined {
+    return this.projectView.get(id);
+  }
+
+  /** Las páginas de primer nivel de un proyecto, ordenadas. Sin las que están en la papelera. */
+  roots(projectId: string): PageRow[] {
+    return this.children(null).filter((p) => p.workspace_id === projectId);
+  }
+
+  /** Cuántas páginas tiene un proyecto (sin la papelera) y cuándo se tocó por última vez. */
+  projectStats(projectId: string): { pages: number; updatedAt: string | null } {
+    if (!this.statsCache) {
+      // Una sola pasada por árbol: se recalcula solo cuando el árbol cambia.
+      const stats = new Map<string, { pages: number; updatedAt: string | null }>();
+      for (const p of this.view.values()) {
+        if (this.isTrashed(p.id)) continue;
+        const s = stats.get(p.workspace_id) ?? { pages: 0, updatedAt: null };
+        s.pages++;
+        if (!s.updatedAt || p.updated_at > s.updatedAt) s.updatedAt = p.updated_at;
+        stats.set(p.workspace_id, s);
+      }
+      this.statsCache = stats;
+    }
+    return this.statsCache.get(projectId) ?? { pages: 0, updatedAt: null };
   }
 
   /** Hijas de una página (o raíces con `null`), ordenadas. Sin las que están en la papelera. */
@@ -123,8 +171,9 @@ export class PageTree {
   }
 
   /** Páginas enviadas a la papelera directamente (no las que están adentro de otra borrada). */
-  trashed(): PageRow[] {
+  trashed(projectId?: string): PageRow[] {
     return [...this.view.values()]
+      .filter((p) => !projectId || p.workspace_id === projectId)
       .filter((p) => p.deleted_at && !(p.parent_id && this.isTrashed(p.parent_id)))
       .sort((a, b) => (a.deleted_at! < b.deleted_at! ? 1 : -1));
   }
@@ -179,15 +228,37 @@ export class PageTree {
 
   // --- cambios locales -----------------------------------------------------------------------------
 
-  async create(parentId: string | null, title = ''): Promise<string> {
-    const siblings = this.childrenIndex.get(parentId) ?? [];
+  /** Crea una página adentro de `parentId`, o en la raíz de `projectId` (o del primer proyecto). */
+  async create(parentId: string | null, title = '', projectId?: string): Promise<string> {
+    const parent = parentId ? this.view.get(parentId) : undefined;
+    const workspaceId = parent?.workspace_id ?? projectId ?? this.workspaceId;
+    const siblings = this.siblingsIn(parentId, workspaceId);
     const last = siblings.at(-1)?.sort_key ?? null;
     const id = crypto.randomUUID();
     await this.enqueue({
       kind: 'create',
-      page: { id, workspace_id: this.workspaceId, parent_id: parentId, title, sort_key: keyBetween(last, null) },
+      page: { id, workspace_id: workspaceId, parent_id: parentId, title, sort_key: keyBetween(last, null) },
     });
     return id;
+  }
+
+  /** Crea un proyecto. Funciona sin red: sube antes que las páginas que se le creen. */
+  async createProject(name: string): Promise<string> {
+    const id = crypto.randomUUID();
+    await this.enqueue({ kind: 'createProject', project: { id, name: name.trim() || 'Untitled project' } });
+    return id;
+  }
+
+  async renameProject(id: string, name: string): Promise<void> {
+    const next = name.trim();
+    if (!next || this.projectView.get(id)?.name === next) return;
+    await this.enqueue({ kind: 'renameProject', id, name: next });
+  }
+
+  /** Hermanas en un lugar del árbol; en la raíz, solo las del mismo proyecto. */
+  private siblingsIn(parentId: string | null, workspaceId: string): PageRow[] {
+    const list = this.childrenIndex.get(parentId) ?? [];
+    return parentId ? list : list.filter((p) => p.workspace_id === workspaceId);
   }
 
   async rename(id: string, title: string): Promise<void> {
@@ -200,14 +271,18 @@ export class PageTree {
     if (parentId === id || (parentId && this.isDescendant(parentId, id))) {
       throw new Error('A page cannot go inside itself.');
     }
-    const siblings = (this.childrenIndex.get(parentId) ?? []).filter((p) => p.id !== id);
+    const page = this.view.get(id);
+    if (!page) return;
+    if (parentId && this.view.get(parentId)?.workspace_id !== page.workspace_id) {
+      throw new Error('A page cannot move to another project.');
+    }
+    const siblings = this.siblingsIn(parentId, page.workspace_id).filter((p) => p.id !== id);
     let at = siblings.length;
     const anchor = position.before ?? position.after;
     const found = anchor ? siblings.findIndex((p) => p.id === anchor) : -1;
     if (found >= 0) at = position.before ? found : found + 1;
     const sortKey = keyBetween(siblings[at - 1]?.sort_key ?? null, siblings[at]?.sort_key ?? null);
-    const current = this.view.get(id);
-    if (current?.parent_id === parentId && current.sort_key === sortKey) return;
+    if (page.parent_id === parentId && page.sort_key === sortKey) return;
     await this.enqueue({ kind: 'update', id, patch: { parent_id: parentId, sort_key: sortKey } });
   }
 
@@ -234,9 +309,19 @@ export class PageTree {
     await this.enqueue({ kind: 'update', id, patch });
   }
 
+  /** Hay cambios del árbol que todavía se están guardando en el dispositivo. */
+  hasUnsavedWrites(): boolean {
+    return this.writing > 0;
+  }
+
   private async enqueue(op: TreeOp): Promise<void> {
     const queued: QueuedOp = { opId: crypto.randomUUID(), op, createdAt: Date.now() };
-    queued.seq = await this.db.add('ops', queued);
+    this.writing++;
+    try {
+      queued.seq = await this.db.add('ops', queued);
+    } finally {
+      this.writing--;
+    }
     this.ops.push(queued);
     this.recompute();
     this.onQueued?.();
@@ -246,12 +331,15 @@ export class PageTree {
 
   /** El servidor confirmó el cambio: sale de la cola y queda en la copia local. */
   async ackOp(op: QueuedOp): Promise<void> {
-    applyOp(this.snapshot, op.op, new Date().toISOString());
-    const tx = this.db.transaction(['ops', 'pages'], 'readwrite');
+    applyOp(this.snapshot, this.projectSnapshot, op.op, new Date().toISOString());
+    const tx = this.db.transaction(['ops', 'pages', 'meta'], 'readwrite');
     await tx.objectStore('ops').delete(op.seq!);
-    const row =
-      op.op.kind === 'create' ? this.snapshot.get(op.op.page.id) : this.snapshot.get(op.op.id);
-    if (row) await tx.objectStore('pages').put(row);
+    if (op.op.kind === 'createProject' || op.op.kind === 'renameProject') {
+      await tx.objectStore('meta').put([...this.projectSnapshot.values()], PROJECTS_KEY);
+    } else {
+      const row = this.snapshot.get(op.op.kind === 'create' ? op.op.page.id : op.op.id);
+      if (row) await tx.objectStore('pages').put(row);
+    }
     await tx.done;
     this.ops = this.ops.filter((o) => o.seq !== op.seq);
     this.recompute();
@@ -288,8 +376,9 @@ export class PageTree {
   }
 
   /**
-   * Olvida los cambios rechazados que se pueden descartar sin perder nada (renombrar, mover, papelera).
-   * Una creación rechazada nunca se descarta: su página tiene contenido que solo está en el dispositivo.
+   * Olvida los cambios rechazados que se pueden descartar sin perder nada (renombrar, mover, papelera, o
+   * un proyecto rechazado que no tiene páginas creadas adentro). Una página rechazada nunca se descarta:
+   * su contenido solo está en el dispositivo.
    */
   async dismissFailed(): Promise<void> {
     const keep = this.failedKeepers();
@@ -300,33 +389,66 @@ export class PageTree {
     this.recompute();
   }
 
-  /** Creaciones rechazadas y los cambios posteriores sobre esas mismas páginas. */
+  /**
+   * Lo rechazado que no se puede descartar sin perder algo: creaciones de páginas, proyectos rechazados
+   * que tienen páginas creadas adentro (en la cola o rechazadas), y los cambios posteriores sobre ellos.
+   */
   private failedKeepers(): Set<FailedOp> {
-    const created = new Set(this.failed.flatMap((f) => (f.op.kind === 'create' ? [f.op.page.id] : [])));
-    return new Set(this.failed.filter((f) => (f.op.kind === 'create' ? true : created.has(f.op.id))));
+    const pageOps = [...this.ops.map((o) => o.op), ...this.failed.map((f) => f.op)];
+    const usedProjects = new Set(pageOps.flatMap((op) => (op.kind === 'create' ? [op.page.workspace_id] : [])));
+    const keptCreates = this.failed.filter(
+      (f) => f.op.kind === 'create' || (f.op.kind === 'createProject' && usedProjects.has(f.op.project.id)),
+    );
+    const created = new Set(
+      keptCreates.flatMap((f) =>
+        f.op.kind === 'create' ? [f.op.page.id] : f.op.kind === 'createProject' ? [f.op.project.id] : [],
+      ),
+    );
+    return new Set(
+      this.failed.filter((f) =>
+        keptCreates.includes(f) || ((f.op.kind === 'update' || f.op.kind === 'renameProject') && created.has(f.op.id)),
+      ),
+    );
   }
 
-  /** Reemplaza la copia local por el árbol completo que mandó el servidor. */
-  async setSnapshot(rows: PageRow[]): Promise<void> {
-    const tx = this.db.transaction('pages', 'readwrite');
-    await tx.store.clear();
-    await Promise.all(rows.map((r) => tx.store.put(r)));
+  /** Reemplaza la copia local por el árbol completo (y los proyectos) que mandó el servidor. */
+  async setSnapshot(rows: PageRow[], projects?: ProjectRow[]): Promise<void> {
+    const tx = this.db.transaction(['pages', 'meta'], 'readwrite');
+    const store = tx.objectStore('pages');
+    await store.clear();
+    await Promise.all(rows.map((r) => store.put(r)));
+    if (projects) await tx.objectStore('meta').put(projects, PROJECTS_KEY);
     await tx.done;
     this.snapshot = new Map(rows.map((r) => [r.id, r]));
+    if (projects) this.projectSnapshot = new Map(projects.map((p) => [p.id, p]));
     this.recompute();
   }
 
   private recompute(): void {
     const view = new Map(this.snapshot);
+    const projects = new Map(this.projectSnapshot);
     const now = new Date().toISOString();
     // Una página cuya creación fue rechazada sigue a la vista, con sus cambios: su contenido solo está en
-    // el dispositivo. Todo se aplica en el orden en que se hizo.
+    // el dispositivo. Un proyecto rechazado también sigue a la vista hasta que se lo descarta. Todo se
+    // aplica en el orden en que se hizo.
     const keep = this.failedKeepers();
+    const failedProjects = new Set(this.failed.flatMap((f) => (f.op.kind === 'createProject' ? [f.op.project.id] : [])));
+    const visible = (f: FailedOp) =>
+      keep.has(f) ||
+      f.op.kind === 'createProject' ||
+      (f.op.kind === 'renameProject' && failedProjects.has(f.op.id));
     const changes = [
       ...this.ops.map((o) => ({ seq: o.seq ?? 0, op: o.op })),
-      ...this.failed.filter((f) => keep.has(f)).map((f) => ({ seq: f.opSeq ?? 0, op: f.op })),
+      ...this.failed.filter(visible).map((f) => ({ seq: f.opSeq ?? 0, op: f.op })),
     ].sort((a, b) => a.seq - b.seq);
-    for (const change of changes) applyOp(view, change.op, now);
+    for (const change of changes) applyOp(view, projects, change.op, now);
+    // El primer proyecto siempre está, aunque el dispositivo todavía no haya bajado la lista (por ejemplo,
+    // con datos de una versión anterior y sin red).
+    if (!projects.has(this.workspaceId)) {
+      projects.set(this.workspaceId, { id: this.workspaceId, name: 'My project', created_at: '' });
+    }
+    this.projectView = projects;
+    this.statsCache = null;
 
     const children = new Map<string | null, PageRow[]>();
     const inCycle = pagesInCycles(view);

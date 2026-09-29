@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type K
 import { navigate, pagePath, useRoute } from '../router';
 import { useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
-import { AccountIcon, AppIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, TrashIcon } from './icons';
+import { AccountIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, TrashIcon } from './icons';
 import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
+import { useCurrentProject } from './project';
+import { ProjectSwitcher } from './ProjectSwitcher';
 import { SyncBadge } from './SyncBadge';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
 
@@ -25,6 +27,7 @@ export function Sidebar() {
   const { user } = useServices();
   const route = useRoute();
   const activeId = route.name === 'page' ? route.id : null;
+  const projectId = useCurrentProject();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -60,7 +63,7 @@ export function Sidebar() {
     });
 
   async function newPage(parentId: string | null) {
-    const id = await tree.create(parentId);
+    const id = await tree.create(parentId, '', projectId);
     if (parentId) expand(parentId);
     navigate(pagePath(id));
   }
@@ -200,15 +203,12 @@ export function Sidebar() {
     );
   }
 
-  const roots = tree.children(null);
-  const trashCount = tree.trashed().length;
+  const roots = tree.roots(projectId);
+  const trashCount = tree.trashed(projectId).length;
 
   return (
     <nav className="sidebar" aria-label="Pages">
-      <div className="sidebar-header">
-        <AppIcon size={26} />
-        <span className="brand">Shot Docs</span>
-      </div>
+      <ProjectSwitcher />
       <SyncBadge />
 
       <div className="section-title">

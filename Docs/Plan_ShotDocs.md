@@ -53,7 +53,7 @@ nuevos".
 Hecho en la fase 1 (detalle en `Doc_Supabase.md`):
 
 ```
-workspaces     (id, owner_id, name, created_at)
+workspaces     (id, owner_id, name, created_at)            -- proyectos: cada usuario tiene varios
 pages          (id, workspace_id, parent_id, title, icon, sort_key, settings JSONB, template_id,
                 update_seq, deleted_at, created_by, created_at, updated_at)
 page_updates   (id, page_id, seq, client_update_id, update BYTEA, created_by, created_at)  -- solo agregado
@@ -71,6 +71,8 @@ shares         (id, page_id, kind, user_email, token_hash, role, expires_at, cre
 -- fase 4: pages.format (null = hereda del padre), pages.orientation, workspaces.default_format
 ```
 
+- **Proyectos.** Un proyecto (lo que en Coda es un *doc*) es una fila de `workspaces` con su propio árbol
+  de páginas; cada usuario tiene los que quiera. Una página nunca cambia de proyecto.
 - **Todo es una página.** Una "carpeta" es una página sin contenido.
 - `sort_key` es un índice fraccionario: mover una página cambia una sola fila.
 - `deleted_at` es la papelera. No hay borrado duro desde la app.
@@ -107,6 +109,13 @@ sus ramas hermanas.
 - **Links públicos:** pasan por una función del servidor que valida el token y devuelve solo ese
   subárbol, en modo lectura.
 - **Usuarios puntuales:** se invitan por email con rol de lectura o de edición.
+- **Qué se comparte:** un proyecto entero, una página madre o cualquier subpágina. Compartir un proyecto
+  es compartir todas sus raíces; en el selector de proyectos aparece en "Shared with you".
+- **Lo compartido llega por su propio camino:** hoy el árbol se pide por proyecto propio
+  (`workspace_id in (...)`). Lo que otros comparten con el usuario va en otra consulta, y la app lo
+  muestra como proyecto ajeno: no se crean páginas en la raíz de un proyecto que no es propio.
+- **Links legibles:** `/p/064-cubiertos-pegados-3f9c2a` (el título más un pedazo del id). Lo que manda
+  es el id: renombrar la página no rompe el link (D-13).
 - **Filtraciones a evitar:**
   - El breadcrumb de quien recibe el share arranca en la página compartida.
   - Un link interno a una página sin acceso se muestra sin título.
@@ -142,8 +151,10 @@ sus ramas hermanas.
    Después de la fase 1, **diseño (hecho, v0.011):** login nuevo con la claqueta, ícono de anotador con claqueta, paleta papel
    y tinta con tema oscuro, menú de cuenta con tema, fuente (Default o Editorial), tamaño del texto y
    ancho de página, títulos divididos por "|" en la barra lateral y encabezado con los contenedores.
-2. **Compartir.** Por usuario y por link público, con Row Level Security, visor público y las pruebas de
-   la sección 6.
+   **Proyectos (hecho, v0.013):** cada usuario tiene varios proyectos, cada uno con su árbol; se cambia de
+   uno a otro con el selector de arriba de la barra (Ctrl+K), que también crea y renombra, con o sin red.
+2. **Compartir.** Por usuario y por link público (un proyecto, una página o una subpágina), con Row Level
+   Security, visor público, links legibles y las pruebas de la sección 6.
 3. **Plantillas.** Las plantillas iniciales definidas con Lega y la opción de guardar cualquier página
    como plantilla.
 4. **Formato de página y PDF.** Páginas libres o con tamaño de hoja, heredado por rama, y exportar a PDF

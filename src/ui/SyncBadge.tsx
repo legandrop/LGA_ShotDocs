@@ -104,7 +104,11 @@ export function SyncBadge() {
                   <li key={f.seq}>
                     {f.op.kind === 'create'
                       ? `Create “${f.op.page.title || 'Untitled'}”`
-                      : `Change “${tree.get(f.op.id)?.title || 'Untitled'}”`}
+                      : f.op.kind === 'createProject'
+                        ? `Create the project “${f.op.project.name}”`
+                        : f.op.kind === 'renameProject'
+                          ? `Rename a project to “${f.op.name}”`
+                          : `Change “${tree.get(f.op.id)?.title || 'Untitled'}”`}
                     : <code>{f.error}</code>
                   </li>
                 ))}

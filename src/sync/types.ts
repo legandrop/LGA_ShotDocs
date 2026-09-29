@@ -34,8 +34,27 @@ export interface NewPage {
   sort_key: string;
 }
 
-/** Un cambio del árbol hecho en el dispositivo, en la cola de salida hasta que el servidor lo confirma. */
-export type TreeOp = { kind: 'create'; page: NewPage } | { kind: 'update'; id: string; patch: PagePatch };
+/** Un proyecto (`workspaces` en la base): tiene su propio árbol de páginas. */
+export interface ProjectRow {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface NewProject {
+  id: string;
+  name: string;
+}
+
+/**
+ * Un cambio del árbol hecho en el dispositivo, en la cola de salida hasta que el servidor lo confirma.
+ * Los proyectos van en la misma cola: uno nuevo sube antes que sus páginas.
+ */
+export type TreeOp =
+  | { kind: 'create'; page: NewPage }
+  | { kind: 'update'; id: string; patch: PagePatch }
+  | { kind: 'createProject'; project: NewProject }
+  | { kind: 'renameProject'; id: string; name: string };
 
 export interface QueuedOp {
   seq?: number;
