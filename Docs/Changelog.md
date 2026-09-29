@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.018 :
+
+Documentación, sin cambios en la app. Nuevo `Plan_Workspaces.md`, auditado, con todo lo que Lega fue
+decidiendo: qué es un workspace (el suyo es Wanka), la primera vez que se abre la app (unirse o crear
+uno con una guía y un solo comando para Supabase), roles y permisos, compartir con un cliente que entra
+desde el navegador, comentarios en una tabla propia (los del editor borrarían párrafos en versiones
+viejas), archivos en el Drive del dueño con un portero en Cloudflare, copia de seguridad diaria antes de
+todo, sacar a alguien y la mudanza del hosting a Cloudflare. Se actualizan D-02, D-05, D-09, D-12, D-13,
+D-17 y D-18, y el roadmap apunta al orden de trabajo del plan.
+[ Docs - plan de workspaces, equipo, invitados y archivos ]
+
 v0.017 :
 
 Documentación, sin cambios en la app. Corrige la regla de v0.016: la isla no es la instalación sino el

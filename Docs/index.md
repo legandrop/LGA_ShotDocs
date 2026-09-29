@@ -8,6 +8,7 @@ en inglés.
 | Documento | Qué tiene |
 |---|---|
 | [`Plan_ShotDocs.md`](Plan_ShotDocs.md) | El plan de arranque: qué es la app, la arquitectura, el modelo de datos, la sincronización offline, los permisos para compartir, las plantillas, el autohosteo y las fases. Lo que se cierra pasa a los otros documentos. |
+| [`Plan_Workspaces.md`](Plan_Workspaces.md) | El plan de workspaces, equipo, invitados, archivos en Drive, copia de seguridad y hosting, con su orden de trabajo. |
 | [`Doc_Decisiones.md`](Doc_Decisiones.md) | Las decisiones tomadas y las que siguen abiertas, numeradas `D-XX`. |
 | [`Doc_Roadmap.md`](Doc_Roadmap.md) | Lo que falta, por orden de importancia. |
 | [`Doc_Supabase.md`](Doc_Supabase.md) | Cómo está armado el backend: configuración del proyecto, migraciones, pruebas de permisos y login. |

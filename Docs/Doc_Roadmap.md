@@ -32,48 +32,34 @@ los de Lega). Se hace por partes (ver pendientes), pero **nada de lo que se haga
 
 ## Pendientes
 
-1. **Guarda contra bloques desconocidos** (antes de cualquier bloque nuevo). Al abrir una página, si el
-   documento trae un tipo de bloque que esta versión no conoce, se abre solo lectura con un aviso de
-   actualizar, en vez de borrarlo (y-prosemirror lo borra y el borrado llega a todos). Anda sin red.
-   Además, cada cambio subido lleva la versión de la app que lo hizo y el servidor rechaza los de una
-   versión menor a la mínima que declara (la mínima es de cada workspace). Conviene hacerla ya: cada semana sin ella suma dispositivos
-   viejos que después pueden borrar un video o un PDF.
-2. **Archivos grandes fuera de Supabase (D-17).** Fotos, videos y PDFs de rodaje, arrastrados o desde el
-   teléfono. Pasos:
-   1. Cola de archivos nueva, igual para cualquier destino: guarda el archivo tal cual (no entero en
-      memoria), sube por partes y retoma donde quedó, va aparte de la sincronización del texto y libera
-      el espacio del dispositivo cuando la subida está confirmada. Una vista liviana (~1600 px, y el
-      primer cuadro en los videos) generada en el dispositivo al agregar. Tabla `files` con dónde está
-      cada archivo; la página sigue guardando `sdfile://`, nunca un link de un servicio.
-   2. Prueba en el iPhone con la app instalada: login de Google, subir un video de 1 GB, qué entrega el
-      selector de fotos (¿original o convertido?), reproducir desde Drive.
-   3. Drive de cada usuario para los originales, con lo que decida Lega en D-17.
-   4. Bloques de video y PDF (necesitan el punto 1 de esta lista).
-3. **Fase 2.** Compartir un proyecto, una página o una subpágina, por usuario y por link, con links
+1. **Workspaces, equipo, invitados y archivos (D-17, D-18).** El orden está en `Plan_Workspaces.md`,
+   sección 10. Lo primero: la copia de seguridad diaria de Wanka y la guarda para que una versión vieja
+   nunca borre lo que no conoce (bloques, marcas o contenido nuevos).
+2. **Fase 2** (ahora parte del punto 1: equipo e invitados). Compartir un proyecto, una página o una subpágina, por usuario y por link, con links
    legibles (D-13) y las pruebas de permisos. Sumar ahí archivar o borrar un proyecto.
-4. **Fase 3.** Plantillas: definir con Lega los campos de *Pre-production Notes*, *On-Set Report* y
+3. **Fase 3.** Plantillas: definir con Lega los campos de *Pre-production Notes*, *On-Set Report* y
    *Shot Breakdown*.
-5. **Fase 4.** Cortes reales entre hojas y PDF igual a lo que se ve (el tamaño de hoja ya se elige).
-6. **Castellano e inglés (D-16).** Toda la interfaz en los dos idiomas, con el idioma en las preferencias
+4. **Fase 4.** Cortes reales entre hojas y PDF igual a lo que se ve (el tamaño de hoja ya se elige).
+5. **Castellano e inglés (D-16).** Toda la interfaz en los dos idiomas, con el idioma en las preferencias
    de la cuenta, y las plantillas y los tipos de texto con nombre en cada idioma (Script/Guion,
    Questions/Dudas…).
-7. **Fase 5.** Asistente con la clave de cada usuario y MCP (D-06, D-07).
-8. **Compactar en el servidor** los updates de contenido (`page_snapshots`).
-9. **Subir solo lo propio después de bajar.** Hoy, la primera subida de un dispositivo después de bajar
+6. **Fase 5.** Asistente con la clave de cada usuario y MCP (D-06, D-07).
+7. **Compactar en el servidor** los updates de contenido (`page_snapshots`).
+8. **Subir solo lo propio después de bajar.** Hoy, la primera subida de un dispositivo después de bajar
    cambios de otro reenvía también lo bajado (no se pierde nada, pero pesa más). Hay que avanzar el vector
    de estado confirmado con lo que se baja, con una prueba que demuestre que nunca se saltea nada propio.
-10. **Abrir una página vacía crea un cambio** (la semilla) aunque no se escriba nada. No pierde ni duplica
+9. **Abrir una página vacía crea un cambio** (la semilla) aunque no se escriba nada. No pierde ni duplica
    nada; solo figura un momento como pendiente.
-11. **Tamaño de la app.** El editor pesa unos 450 KB comprimidos; cargarlo aparte acelera la primera
+10. **Tamaño de la app.** El editor pesa unos 450 KB comprimidos; cargarlo aparte acelera la primera
    apertura. Después de la primera, la app queda en caché.
-12. **D-05.** Decidir el hosting antes de usar la app en un show pago.
-13. **Investigar un caso intermitente de la prueba de punta a punta.** Dos dispositivos escriben sin red en
+11. **D-05.** Decidir el hosting antes de usar la app en un show pago.
+12. **Investigar un caso intermitente de la prueba de punta a punta.** Dos dispositivos escriben sin red en
     la misma página nueva; en 1 de 7 corridas (v0.015), uno de los dos tardó más de 40 segundos en mostrar
     la línea del otro aunque los dos decían "All synced". No se confirmó pérdida y no se repitió en las
     corridas siguientes ni en las pruebas con el editor real; hay que ver si es la vista del editor o la
     sincronización.
-14. **Una foto HEIC del iPhone se ve rota en Chrome de Windows**: hoy se muestra el original. Se arregla con
-    la vista liviana del punto 2.
-15. **Una imagen copiada a otra página sigue apuntando a la primera** (`sdfile://<página A>/...`). Hoy no
+13. **Una foto HEIC del iPhone se ve rota en Chrome de Windows**: hoy se muestra el original. Se arregla con
+    las miniaturas del punto 1.
+14. **Una imagen copiada a otra página sigue apuntando a la primera** (`sdfile://<página A>/...`). Hoy no
     molesta, pero al compartir (fase 2) quien ve solo la página B no la vería. Al pegar en otra página hay
     que registrar el archivo también para la página nueva.

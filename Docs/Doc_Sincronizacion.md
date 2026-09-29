@@ -124,7 +124,7 @@ si no hay nada de eso, que todo está sincronizado.
 ## Cambios en el editor: nada que una versión vieja no entienda
 
 Una versión vieja de la app puede seguir abierta en algún dispositivo (una pestaña que no se recargó, el
-iPhone sin red). Si una página tiene un tipo de bloque que su editor no conoce, el editor lo borra del
+iPhone sin red). Si una página tiene un tipo de bloque (o una marca de texto) que su editor no conoce, el editor lo borra del
 documento compartido al abrirla, y ese borrado se sincroniza a todos lados. Por eso todo lo nuevo en el
 editor tiene que degradar en una versión vieja: una propiedad nueva en un bloque existente se ignora al
 mostrar y, si esa versión edita el bloque, se pierde (el texto queda); un tipo de bloque nuevo, en cambio,

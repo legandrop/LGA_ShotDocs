@@ -100,6 +100,9 @@ todo, la versión Capacitor guarda en SQLite nativo.
 
 ## 6. Compartir sin exponer lo de arriba
 
+Con workspaces (D-18), compartir pasa a ser dentro del workspace, con roles y permisos: ver
+`Plan_Workspaces.md`, secciones 3 y 4. La regla de esta sección sigue valiendo.
+
 **Regla:** se puede ver la página P si existe un share sobre P **o sobre algún ancestro de P**. La
 búsqueda va de P hacia arriba, así que un share nunca da acceso a los padres de la página compartida ni a
 sus ramas hermanas.

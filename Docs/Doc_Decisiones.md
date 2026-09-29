@@ -10,7 +10,8 @@ diga otra cosa.
 - **D-02 · Backend: Supabase, frontend en Vercel** (2026-09-29). Lega ya tiene cuentas de Aiven y de
   Neon, pero las dos son solo base de datos: con cualquiera de ellas habría que sumar un servicio de
   login, uno de archivos (los reportes de rodaje llevan muchas fotos) y uno de tiempo real. Supabase trae
-  todo junto, aplica los permisos dentro de la base y le pide una sola cuenta a quien la autohostee.
+  todo junto, aplica los permisos dentro de la base y le pide una sola cuenta a quien la autohostee. El frontend en Vercel queda en revisión por D-05: la
+  propuesta es pasarlo a Cloudflare (`Plan_Workspaces.md`, sección 9).
 - **D-03 · Editor visual por bloques** (2026-09-29). Nadie ve Markdown: se usa solo para importar,
   exportar y hacer backups.
 - **D-04 · Tiempo real al final** (2026-09-29). El modelo de datos lo contempla desde el principio, pero
@@ -28,7 +29,9 @@ diga otra cosa.
 - **D-09 · Registro cerrado, solo por invitación** (2026-09-29). Con el correo propio configurado,
   cualquiera con la dirección de la app podría crearse una cuenta y usar el almacenamiento del proyecto.
   Se cierra el registro: entran solo las cuentas que el dueño invita (desde el panel de Supabase hasta que
-  la fase 2 lo haga desde la app).
+  la fase 2 lo haga desde la app). Con equipo e invitados (D-18) el control pasa a la base: el registro se
+  abre en Supabase, pero un control previo rechaza todo correo que no esté en la lista de invitaciones del
+  workspace. Sigue siendo solo por invitación.
 - **D-11 · Correo con Resend y el dominio propio** (2026-09-29). Los mails de login salen por Resend desde
   una dirección del dominio de Lega, con el código de 8 dígitos y el link. Se descartó el SMTP de Gmail
   porque exige verificación en 2 pasos en la cuenta que manda.
@@ -39,10 +42,11 @@ diga otra cosa.
   arriba de la barra lateral (la opción A de las que se diseñaron): un clic o Ctrl+K, buscar, flechas y Enter;
   en el teléfono sube como hoja desde abajo. Crear y renombrar proyectos entra en la misma cola que las
   páginas, así que funciona sin red y un proyecto nuevo sube antes que sus páginas. Cada proyecto recuerda
-  su última página abierta. Una página no se mueve entre proyectos.
+  su última página abierta. Una página no se mueve entre proyectos. Con equipo (D-18) cambia quién los
+  crea: solo el dueño y los admins del workspace, y un usuario nuevo ya no recibe "My project".
 - **D-13 · Links legibles** (2026-09-29, para la fase 2). Las direcciones de página llevan el título y un
   pedazo del id (`/p/064-cubiertos-pegados-3f9c2a`); el id es lo que cuenta, así que renombrar no rompe
-  un link compartido.
+  un link compartido. Con varios workspaces (D-18), el link también tiene que decir de qué workspace es.
 
 - **D-14 · Texto Script (Guion)** (2026-09-29). Un tipo de texto para pegar y escribir guiones: tipografía
   de guion (Courier Prime) y, en mayúsculas, marcas de color de fondo para el lugar (INT, EXT, INT/EXT,
@@ -66,6 +70,8 @@ diga otra cosa.
 
 - **D-05 · Hosting para trabajos pagos.** El plan Hobby de Vercel es solo para uso no comercial. Para
   usar la app en shows pagos hace falta Vercel Pro u otro hosting. Mientras tanto, se desarrolla en Hobby.
+  Opción indicada: Cloudflare (Workers con archivos estáticos), gratis y con uso comercial, con la misma
+  dirección propia para no perder lo guardado en los dispositivos (`Plan_Workspaces.md`, sección 9).
 - **D-06 · Dónde se guarda la clave del asistente.** Opción indicada: solo en el dispositivo, sin pasar
   por el servidor; la app llama directo al proveedor. Es lo más privado, pero hay que cargarla en cada
   dispositivo. La alternativa es guardarla cifrada en Supabase (Vault) y llamar al proveedor desde una
@@ -74,21 +80,29 @@ diga otra cosa.
   usuario y edita con sus permisos. Se hace en la fase 5, después del asistente de la app.
 - **D-08 · Formato por defecto de un espacio nuevo.** Opción indicada: libre.
 - **D-17 · Dónde van los archivos grandes.** El plan gratis de Supabase trae 1 GB de archivos: unas 300
-  fotos de teléfono o un video de rodaje. Lo que ya decidió Lega (2026-09-29):
-  - Los originales van al **Drive del dueño del workspace**, también lo que suben los miembros.
-  - Una carpeta por proyecto y adentro por fecha: `<proyecto> / 2026-09-29 / IMG_1234.HEIC`. Renombrar el
-    proyecto renombra su carpeta; las páginas apuntan al id del archivo, así que nada se rompe.
-  - **Los videos se reproducen adentro de la app** (teléfono, web y app instalada), y hay un **carrete**:
-    clic en una foto o video abre la media de la página en orden, con siguiente/anterior y play.
+  fotos de teléfono o un video de rodaje. Decidido por Lega (2026-09-29), con el detalle en
+  `Plan_Workspaces.md`, sección 5:
+  - Los originales van al **Drive del dueño del workspace**, también lo que suben miembros e invitados.
+  - Una carpeta por proyecto y adentro por día de calendario. Renombrar el proyecto renombra su carpeta;
+    las páginas apuntan al id del archivo, así que nada se rompe.
+  - **Los videos se reproducen adentro de la app** (teléfono, web y app instalada), y hay un **carrete**
+    de fotos y videos de la página. Lo que el navegador no pueda reproducir muestra la miniatura y se baja.
   - Pegar un link de Drive ofrece mostrarlo como link, texto o tarjeta reproducible, como en Coda.
-  - Borrar un archivo de una página lo manda a una **papelera de archivos** por proyecto, con miniaturas y
-    peso, para borrar de a uno o vaciar.
-  - Propuesta: un portero de archivos por workspace (Cloudflare Worker) que chequea permisos y pasa los
-    videos de Drive en streaming, sin que nadie reciba el token de Google del dueño. Falta probarlo en el
-    iPhone y que Lega responda las preguntas de D-18.
-- **D-18 · Cada workspace es una isla** (2026-09-29, el modelo lo decidió Lega; faltan detalles). Un
-  workspace es de un dueño, con varios proyectos y su equipo; usa el Supabase y el Drive del dueño. Los
-  miembros ven los proyectos o páginas que se les compartan y, si editan, suben y borran ahí. La misma
-  persona puede tener su propio workspace. Faltan: a nombre de quién va el workspace del equipo (cambiar
-  el dueño después es casi imposible), quién puede crear proyectos, cómo se entra (código por mail o
-  Google), copia de seguridad del texto, qué pasa al sacar a alguien, y el hosting (D-05).
+  - Papelera de archivos por proyecto, con miniaturas y peso. Vacían el dueño y los admins, a los 30 días.
+  - Un portero de archivos por workspace (en Cloudflare) chequea permisos y pasa los archivos de Drive;
+    nadie más recibe la conexión con el Drive del dueño.
+  - Falta decidir: si la carpeta va por el día en que se sacó la foto o en que se subió, y si la papelera
+    se vacía sola a los 30 días o recién ahí se puede vaciar.
+- **D-18 · Cada workspace es una isla** (2026-09-29). Detalle en `Plan_Workspaces.md`. Decidido por Lega:
+  - Un workspace es de un dueño, con varios proyectos y su equipo; usa el Supabase, el Drive, el Resend y
+    el portero del dueño. El de Lega se llama **Wanka** (el Supabase de hoy).
+  - La misma persona puede estar en varios workspaces y tener el suyo. Una sola app para todos.
+  - Al abrir la app por primera vez: unirse a un workspace (con invitación) o crear uno con una guía paso
+    a paso. Crear uno exige un dominio propio para el correo (Resend).
+  - Roles: dueño, admin, miembro, invitado. Solo el dueño y los admins crean proyectos. Permisos por
+    proyecto o página: ver, comentar, editar, editar y crear páginas.
+  - Compartir con un cliente: por correo, con login, desde el navegador sin instalar, solo las páginas
+    elegidas con sus subpáginas; comenta, responde preguntas y sube archivos según el permiso.
+  - Copia de seguridad automática: hace falta, antes que todo lo demás.
+  - Sacar a alguien borra lo de ese workspace en su dispositivo la próxima vez que se conecta.
+  - Falta decidir: las preguntas marcadas "(a decidir)" en `Plan_Workspaces.md`.
