@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.012 :
+
+Correo propio: los mails de login salen por Resend desde el dominio de Lega y traen el código de 8
+dígitos, además del link. Con el código se entra desde la app instalada en el iPhone, donde el link abría
+Safari y no la app. El registro queda cerrado y solo entran cuentas invitadas (D-09); un mail sin cuenta
+ve el aviso de pedir una invitación. La app se publica también en un dominio propio, que quedó como
+dirección del login en Supabase junto a la de Vercel. `Doc_Supabase.md` explica cómo configurar el SMTP
+y las plantillas en otra instalación, y el roadmap ya no lleva el SMTP ni la decisión del registro
+(D-11).
+[ Login - correo propio con código y registro cerrado ]
+
 v0.011 :
 
 Diseño nuevo, auditado y con sus correcciones. Login con la franja de la claqueta, ícono

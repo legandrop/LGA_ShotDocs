@@ -136,8 +136,9 @@ sus ramas hermanas.
 
 1. **MVP (hecha, v0.008, con auditoría y re-auditoría).** Login por email, árbol de páginas en la barra lateral (crear,
    renombrar, mover, papelera), editor visual con autoguardado, offline con sincronización segura y PWA
-   instalable. Incluye pegar imágenes (se guardan en el dispositivo y se suben cuando hay red). Para
-   entrar desde la app instalada en el iPhone faltan el deploy y un servidor de correo propio (roadmap).
+   instalable. Incluye pegar imágenes (se guardan en el dispositivo y se suben cuando hay red). Publicada
+   en Vercel, con correo propio (Resend) para entrar con código desde la app instalada en el iPhone y
+   registro cerrado (D-09).
    Después de la fase 1, **diseño (hecho, v0.011):** login nuevo con la claqueta, ícono de anotador con claqueta, paleta papel
    y tinta con tema oscuro, menú de cuenta con tema, fuente (Default o Editorial), tamaño del texto y
    ancho de página, títulos divididos por "|" en la barra lateral y encabezado con los contenedores.

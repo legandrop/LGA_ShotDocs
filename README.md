@@ -34,9 +34,9 @@ one tree of pages you own.
 Phase 1 (MVP) works: email sign-in, the page tree, the block editor with autosave and pasted images,
 light and dark themes and per-account appearance settings.
 Every edit is saved on the device first and synced when a connection is available; edits made offline on
-several devices are merged. The app can be installed (PWA). Signing in from the installed app on an iPhone
-needs your own mail server (SMTP) configured in Supabase, because the sign-in link opens Safari instead of
-the app. Next: sharing, templates, real page sizes with PDF export, and the assistant. The plan, the decisions and the roadmap are in
+several devices are merged. The app can be installed (PWA). You sign in with an 8-digit code sent by email, which
+works inside the installed iPhone app (a sign-in link would open Safari instead); this needs your own mail
+server (SMTP) in Supabase, and sign-ups are invite-only. Next: sharing, templates, real page sizes with PDF export, and the assistant. The plan, the decisions and the roadmap are in
 [`Docs/`](Docs/index.md) (in Spanish).
 
 ## Development

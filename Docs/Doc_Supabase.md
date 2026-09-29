@@ -66,14 +66,31 @@ rechazado.
 ## Login
 
 - Proveedor **Email** activado; el resto, apagado.
-- La app manda el mail con `signInWithOtp`. Entra con el **link** del mail o con el **código** si el mail
-  lo trae.
-- En **Authentication → URL Configuration** tienen que estar las direcciones de la app en *Redirect URLs*
-  (`http://localhost:5173/**` para desarrollo y la del deploy) y la del deploy como *Site URL*.
-- **Límites del plan gratis sin servidor de correo propio (SMTP):** unos pocos mails por hora, solo a
-  direcciones de miembros del proyecto, y las plantillas de los mails no se pueden cambiar. Por eso el mail
-  trae solo el link. Para invitar a otras personas y para entrar desde la app instalada en el iPhone (el
-  link abre Safari, no la app) hace falta configurar un SMTP (por ejemplo Resend) y agregar el código a
-  las plantillas *Magic Link* y *Confirm signup* con `{{ .Token }}`.
-- **Registro abierto:** hoy cualquiera con la dirección de la app puede crear una cuenta. Antes de
-  configurar el SMTP hay que decidir si se cierra (D-09).
+- La app manda el mail con `signInWithOtp`. Se entra con el **código** de 8 dígitos (escrito en la app) o
+  con el **link** del mail. En el iPhone hace falta el código: el link abre Safari, no la app instalada.
+- En **Authentication → URL Configuration** van la dirección del deploy como *Site URL* y, en *Redirect
+  URLs*, esa dirección, las de preview de Vercel y `http://localhost:5173/**` para desarrollo.
+- **Registro cerrado** (*Allow new users to sign up* apagado, D-09): solo entran cuentas que ya existen o
+  que el dueño invita (Authentication → Users → *Invite user*). Un mail sin cuenta ve el aviso de pedir una
+  invitación.
+
+### Correo propio (SMTP)
+
+Sin SMTP propio, Supabase manda unos pocos mails por hora, solo a miembros del proyecto, y no deja cambiar
+las plantillas: el mail trae el link pero no el código. Para usar la app hace falta un SMTP. Con
+[Resend](https://resend.com) (gratis hasta 3000 mails por mes):
+
+1. En Resend, agregar el dominio propio (por ejemplo `ejemplo.com`) con el *return-path* `send` y **sin
+   seguimiento de clics ni de aperturas** (reescribir los links rompe el de login). Cargar los registros
+   DNS que pide (un TXT de DKIM y los de `send`; no tocan el correo que ya tenga el dominio) y esperar a que
+   figure como verificado.
+2. Crear una API key solo de envío para ese dominio.
+3. En Supabase → Authentication → Emails → **SMTP Settings**: host `smtp.resend.com`, puerto `465`,
+   usuario `resend`, contraseña = la API key, y un remitente del dominio (por ejemplo
+   `shotdocs@ejemplo.com`). La clave se carga solo ahí.
+4. En Authentication → Emails → **Templates**, agregar el código a *Magic Link* con `{{ .Token }}` (por
+   ejemplo en el asunto: `Your Shot Docs code: {{ .Token }}`) y subir el límite de mails por hora
+   (Authentication → Rate Limits).
+
+El SMTP de Gmail o Google Workspace también sirve, pero exige verificación en 2 pasos y una contraseña de
+aplicación en la cuenta que manda.

@@ -25,6 +25,14 @@ diga otra cosa.
   caracteres, para que la columna del código quede alineada; si no, la lista se ve con los títulos
   enteros. El encabezado muestra 2 niveles si nadie lo configuró.
 
+- **D-09 · Registro cerrado, solo por invitación** (2026-09-29). Con el correo propio configurado,
+  cualquiera con la dirección de la app podría crearse una cuenta y usar el almacenamiento del proyecto.
+  Se cierra el registro: entran solo las cuentas que el dueño invita (desde el panel de Supabase hasta que
+  la fase 2 lo haga desde la app).
+- **D-11 · Correo con Resend y el dominio propio** (2026-09-29). Los mails de login salen por Resend desde
+  una dirección del dominio de Lega, con el código de 8 dígitos y el link. Se descartó el SMTP de Gmail
+  porque exige verificación en 2 pasos en la cuenta que manda.
+
 ## Abiertas
 
 - **D-05 · Hosting para trabajos pagos.** El plan Hobby de Vercel es solo para uso no comercial. Para
@@ -36,7 +44,3 @@ diga otra cosa.
 - **D-07 · MCP.** Opción indicada: un servidor MCP como función de Vercel, que entra con la sesión del
   usuario y edita con sus permisos. Se hace en la fase 5, después del asistente de la app.
 - **D-08 · Formato por defecto de un espacio nuevo.** Opción indicada: libre.
-- **D-09 · Registro abierto o cerrado.** Hoy cualquiera con la dirección de la app puede crear una cuenta
-  (y usar el Storage del proyecto). Con el plan gratis sin SMTP casi no llegan mails, así que en la
-  práctica está cerrado; al configurar el SMTP hay que decidir. Opción indicada: cerrar el registro y
-  entrar solo por invitación (el dueño invita desde la app en la fase 2).

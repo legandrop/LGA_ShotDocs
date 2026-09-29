@@ -8,6 +8,10 @@ function explain(error: { message: string; code?: string; status?: number }): st
   if (error.code === 'over_email_send_rate_limit' || error.status === 429) {
     return 'Too many emails were sent in a short time. Wait a while and try again.';
   }
+  // El registro está cerrado: solo entran cuentas que ya existen (invitadas por el dueño).
+  if (error.code === 'signup_disabled' || error.code === 'otp_disabled' || /signups? not allowed/i.test(error.message)) {
+    return 'There is no account with this email. Ask the owner of this workspace for an invitation.';
+  }
   if (error.code === 'email_address_not_authorized') {
     return 'The Supabase test mail server only sends to members of the project. Set up your own mail server (SMTP) to let other people in.';
   }
