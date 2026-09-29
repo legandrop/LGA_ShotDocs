@@ -36,7 +36,7 @@ propia cuenta.
 | Pieza | Elección | Por qué |
 |---|---|---|
 | Frontend | App web React instalable como PWA | Un solo código para Mac, Windows y iPhone. Más adelante se empaqueta con Tauri (escritorio) y Capacitor (iOS) sin reescribirla. |
-| Hosting | Vercel | Deploy automático desde GitHub. |
+| Hosting | Cloudflare (Workers con archivos estáticos) | Deploy automático desde GitHub, gratis y con uso comercial (D-05). Antes, Vercel. |
 | Backend | Supabase: Postgres, login, archivos y tiempo real | Un solo servicio. Los permisos se aplican dentro de la base con Row Level Security. Se puede autohostear con Docker (D-02). |
 | Editor | Editor por bloques sobre ProseMirror (TipTap o BlockNote) | Se siente como Notion, soporta Yjs y exporta a Markdown. |
 | Contenido de cada página | Un documento Yjs (CRDT) | Dos ediciones offline se fusionan: nunca gana "el último". |
@@ -44,7 +44,7 @@ propia cuenta.
 | Guardado local | IndexedDB | Toda edición se guarda primero en el dispositivo. |
 
 La sincronización se hace por HTTP (subir lo pendiente, bajar lo nuevo desde el último punto conocido).
-No hace falta un servidor propio con websockets: alcanza con Supabase y las funciones de Vercel, y eso
+No hace falta un servidor propio con websockets: alcanza con Supabase y un Worker de Cloudflare (el portero de archivos), y eso
 simplifica el autohosteo. El tiempo real se suma después con Supabase Realtime como aviso de "hay cambios
 nuevos".
 
@@ -148,7 +148,7 @@ reglas del principio de `Doc_Roadmap.md`.
   los originales (D-17) y su portero de archivos. El correo o el login con Google son del dueño.
 - El repo trae las migraciones con las tablas y las políticas de seguridad, las funciones del servidor y
   una guía paso a paso.
-- Deploy con un clic desde Vercel, cargando dos o tres variables de entorno.
+- No hace falta publicar la app: una sola app se conecta a cualquier workspace (`Plan_Workspaces.md`).
 - Opción 100 % privada, más adelante: Supabase autohosteado con Docker.
 - Las claves nunca se versionan.
 - El plan gratis de Supabase es el techo por defecto: 500 MB de base, 1 GB de archivos, subidas de hasta
@@ -159,7 +159,7 @@ reglas del principio de `Doc_Roadmap.md`.
 1. **MVP (hecha, v0.008, con auditoría y re-auditoría).** Login por email, árbol de páginas en la barra lateral (crear,
    renombrar, mover, papelera), editor visual con autoguardado, offline con sincronización segura y PWA
    instalable. Incluye pegar imágenes (se guardan en el dispositivo y se suben cuando hay red). Publicada
-   en Vercel, con correo propio (Resend) para entrar con código desde la app instalada en el iPhone y
+   en Vercel (hoy en Cloudflare, D-05), con correo propio (Resend) para entrar con código desde la app instalada en el iPhone y
    registro cerrado (D-09).
    Después de la fase 1, **diseño (hecho, v0.011):** login nuevo con la claqueta, ícono de anotador con claqueta, paleta papel
    y tinta con tema oscuro, menú de cuenta con tema, fuente (Default o Editorial), tamaño del texto y
@@ -218,7 +218,6 @@ En Notion y en Coda lo que se ve al editar no es lo que sale en el PDF. Acá sí
 
 ## 12. Preguntas abiertas
 
-- **Hosting para trabajos pagos (D-05).** El plan gratis de Vercel es solo para uso no comercial.
 - **Campos de las plantillas iniciales.** Se definen con Lega antes de la fase 3.
 - **Dónde se guarda la clave del asistente (D-06)** y **cómo se expone el MCP (D-07).**
 - **Formato por defecto de un espacio nuevo (D-08).**

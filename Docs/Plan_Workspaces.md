@@ -3,7 +3,7 @@
 Todo lo que se va decidiendo sobre cómo se organiza la app para trabajar en equipo. Es la base de las
 fases que siguen: se lee antes de tocar login, permisos, archivos o compartir. Lo que se implementa pasa
 a los documentos de referencia y sale de acá. Decisiones: D-17 (archivos) y D-18 (workspaces). Lo que
-sigue abierto está marcado **(a decidir)**.
+queda por diseñar se dice en cada sección.
 
 ## 1. Qué es un workspace
 
@@ -49,7 +49,7 @@ Pantalla de bienvenida con dos caminos:
       en el portero.
    4. **Cloudflare** (gratis): publicar el portero con sus secretos (dirección del Supabase, la clave de
       los pases, el cliente de Google), un espacio KV para la conexión con Drive, la dirección de la app
-      permitida y la tarea diaria.
+      permitida.
    5. **GitHub**: un repo privado con la tarea de copias de seguridad (sección 7) y sus dos secretos.
    6. Pegar en la app la dirección y la clave del Supabase, entrar como dueño y conectar el Drive.
    7. Probar: entrar con código, subir un archivo, hacer y restaurar una copia.
@@ -120,10 +120,10 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
 ## 5. Archivos (D-17)
 
 - Los originales van al **Drive del dueño del workspace**, también lo que suben miembros e invitados.
-- Carpetas: `<carpeta de Wanka> / <proyecto> / <día en que se subió> / IMG_1234.HEIC`. Renombrar el proyecto renombra su carpeta (si el dueño no la
-  renombró a mano). Las páginas apuntan al id del archivo, así que moverlo o renombrarlo en Drive no
-  rompe nada. Lo que se agregue a mano en Drive la app no lo ve: el Drive es el respaldo, no una carpeta
-  que la app lea.
+- Carpetas: `<carpeta de Wanka> / <proyecto> / <día en que se subió> / IMG_1234.HEIC`. Renombrar el
+  proyecto renombra su carpeta (si el dueño no la renombró a mano). Las páginas apuntan al id del
+  archivo, así que moverlo o renombrarlo en Drive no rompe nada. Lo que se agregue a mano en Drive la
+  app no lo ve: el Drive es el respaldo, no una carpeta que la app lea.
 - En la página: una miniatura chica guardada en Supabase. La foto grande y el video vienen del Drive por
   el portero.
 - **Carrete:** clic en una foto o video abre todas las de la página, en orden, con siguiente/anterior,
@@ -201,7 +201,7 @@ cambios de permisos, que son el momento más riesgoso.
 
 ## 10. Orden de trabajo
 
-1. **Copia de seguridad diaria de Wanka** (sección 7) y la generación de la base.
+1. **Copia de seguridad de Wanka, cuatro por día** (sección 7) y la generación de la base.
 2. **Guarda contra lo desconocido:** si una página trae un tipo de bloque, una marca o un contenido que
    esta versión no conoce, se abre solo lectura y pide actualizar, en vez de borrarlo. Más la versión
    mínima por workspace.

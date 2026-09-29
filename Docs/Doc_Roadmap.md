@@ -33,7 +33,7 @@ los de Lega). Se hace por partes (ver pendientes), pero **nada de lo que se haga
 ## Pendientes
 
 1. **Workspaces, equipo, invitados y archivos (D-17, D-18).** El orden está en `Plan_Workspaces.md`,
-   sección 10. Lo primero: la copia de seguridad diaria de Wanka y la guarda para que una versión vieja
+   sección 10. Lo primero: la copia de seguridad de Wanka (cuatro por día) y la guarda para que una versión vieja
    nunca borre lo que no conoce (bloques, marcas o contenido nuevos).
 2. **Fase 2** (ahora parte del punto 1: equipo e invitados). Compartir un proyecto, una página o una subpágina, por usuario y por link, con links
    legibles (D-13) y las pruebas de permisos. Sumar ahí archivar o borrar un proyecto.
