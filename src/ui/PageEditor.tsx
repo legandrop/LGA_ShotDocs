@@ -4,7 +4,7 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import { BlockNoteView } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
 import { useCreateBlockNote } from '@blocknote/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type * as Y from 'yjs';
 import { useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
@@ -23,6 +23,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   const { docs, engine } = useServices();
   const status = useSyncStatus();
   const [opening, setOpening] = useState<Opening>({ state: 'loading' });
+  const [attempt, setAttempt] = useState(0);
   const incomplete = opening.state === 'ready' && !opening.complete;
 
   // Si el servidor tiene contenido de esta página que el dispositivo todavía no bajó, se muestra lo que
@@ -43,8 +44,20 @@ export function PageEditor({ pageId }: { pageId: string }) {
       if (opened) docs.close(pageId);
       setOpening({ state: 'loading' });
     };
-    // Mientras falte contenido, cada sincronización vuelve a probar.
-  }, [docs, engine, pageId, incomplete ? status.lastSyncAt : null]);
+  }, [docs, engine, pageId, attempt]);
+
+  // Mientras falte contenido, cada sincronización se fija si ya llegó; recién entonces se reabre, para
+  // no mover la vista de quien está leyendo.
+  useEffect(() => {
+    if (!incomplete) return;
+    let cancelled = false;
+    void engine.isMissingContent(pageId).then((missing) => {
+      if (!cancelled && !missing) setAttempt((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [engine, pageId, incomplete, status.lastSyncAt]);
 
   if (opening.state === 'loading') return <div className="editor-placeholder" />;
   return (
@@ -64,12 +77,23 @@ export function PageEditor({ pageId }: { pageId: string }) {
 function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; editable: boolean }) {
   const { files, user } = useServices();
   const scheme = useColorScheme();
+  const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
   const editor = useCreateBlockNote(
     withCollaboration({
       schema,
-      uploadFile: (file: File) =>
+      uploadFile: (file: File, blockId?: string) =>
         files.add(pageId, file).catch((err: unknown) => {
           notify(err instanceof FileRejected ? err.message : 'This image could not be saved on this device.');
+          // El editor ya insertó el bloque de la imagen: se quita para que no quede vacío.
+          if (blockId) {
+            setTimeout(() => {
+              try {
+                editorRef.current?.removeBlocks([blockId]);
+              } catch {
+                // El bloque ya no está.
+              }
+            });
+          }
           throw err;
         }),
       resolveFileUrl: (url: string) => files.resolve(url),
@@ -81,6 +105,8 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
     }),
     [doc],
   );
+
+  editorRef.current = editor as unknown as { removeBlocks: (ids: string[]) => unknown };
 
   useEffect(() => {
     const focus = () => editor.focus();

@@ -18,6 +18,8 @@ Lo que falta, por importancia. Las fases están en `Plan_ShotDocs.md`, sección 
 9. **Subir solo lo propio después de bajar.** Hoy, la primera subida de un dispositivo después de bajar
    cambios de otro reenvía también lo bajado (no se pierde nada, pero pesa más). Hay que avanzar el vector
    de estado confirmado con lo que se baja, con una prueba que demuestre que nunca se saltea nada propio.
-10. **Tamaño de la app.** El editor pesa unos 450 KB comprimidos; cargarlo aparte acelera la primera
+10. **Abrir una página vacía crea un cambio** (la semilla) aunque no se escriba nada. No pierde ni duplica
+    nada; solo figura un momento como pendiente.
+11. **Tamaño de la app.** El editor pesa unos 450 KB comprimidos; cargarlo aparte acelera la primera
     apertura. Después de la primera, la app queda en caché.
-11. **D-05.** Decidir el hosting antes de usar la app en un show pago.
+12. **D-05.** Decidir el hosting antes de usar la app en un show pago.

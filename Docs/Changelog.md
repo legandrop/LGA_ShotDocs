@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.009 :
+
+Verificación final de la fase 1: la auditoría confirma que la semilla es determinística byte a byte, que
+nunca se aplica sobre una página a medio bajar y que el editor no la reescribe, y da la fase por cerrada.
+Se corrigen tres detalles menores que dejó: un ciclo de sincronización en curso ahora se corta entre
+pasos cuando otra ventana toma el control (antes podía escribir unos milisegundos más), una página a medio
+bajar en solo lectura se reabre recién cuando llega lo que falta (antes el editor se volvía a montar en
+cada ciclo y la vista saltaba), y una imagen rechazada ya no deja un bloque vacío en la página.
+[ Fase 1 - cierre con la verificación final ]
+
 v0.008 :
 
 La re-auditoría de la fase 1 encontró que la reparación de dos raíces seguía perdiendo datos: lo que un

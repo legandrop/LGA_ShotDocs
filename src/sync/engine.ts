@@ -165,14 +165,22 @@ export class SyncEngine {
 
   private async cycle(): Promise<void> {
     this.patch({ syncing: true });
+    // Después de `stop()` (por ejemplo, porque otra ventana tomó el control) no se escribe nada más,
+    // aunque el ciclo ya estuviera en curso.
+    const halt = () => {
+      if (this.stopped) throw new Error('stopped');
+    };
     try {
       await this.pushOps();
+      halt();
       const rows = await this.remote.fetchTree(this.tree.workspaceId);
+      halt();
       await this.tree.setSnapshot(rows);
 
       let contentError: string | null = null;
       const states = await this.docs.states();
       for (const pageId of await this.docs.unsyncedPages()) {
+        halt();
         if (this.tree.hasUnsentCreate(pageId) || states.get(pageId)?.rejected) continue;
         try {
           await this.docs.pushPage(pageId, this.remote);
@@ -182,6 +190,7 @@ export class SyncEngine {
         }
       }
 
+      halt();
       const cursors = await this.docs.states();
       const stale = rows.filter((r) => r.update_seq > (cursors.get(r.id)?.cursor ?? 0)).map((r) => r.id);
       await runPool(stale, PULL_CONCURRENCY, (id) =>
@@ -191,10 +200,12 @@ export class SyncEngine {
         }),
       );
 
+      halt();
       const fileError = await this.files.pushPending((pageId) => this.tree.hasUnsentCreate(pageId));
 
       this.patch({ online: true, lastError: contentError ?? fileError, lastSyncAt: Date.now() });
     } catch (err) {
+      if (this.stopped) return;
       this.patch({ online: !isNetworkError(err), lastError: errorMessage(err) });
     } finally {
       await this.refreshCounts();
@@ -204,6 +215,7 @@ export class SyncEngine {
 
   private async pushOps(): Promise<void> {
     for (const op of this.tree.pendingOps()) {
+      if (this.stopped) return;
       try {
         await this.applyOp(op);
         await this.tree.ackOp(op);
