@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.045 :
+
+Fotos y videos en fila. La barra de una foto suma cuatro tamaños: todo el ancho, 1/2, 1/3 y 1/4 del ancho
+de la página, y fotos seguidas que entran quedan una al lado de la otra (dos de 1/2, tres de 1/3, cuatro
+de 1/4), igual en la computadora, el teléfono y el PDF. Los tiradores también cambian el ancho y se imantan
+a esos tamaños al pasar cerca. En una fila, las flechas van de una foto a la otra y Enter escribe debajo
+de la fila entera; una hoja nunca corta una fila por la mitad, y dos comentarios en la misma fila no se
+tapan. No es un bloque nuevo: cada foto guarda la parte del ancho que ocupa (`rowWidth`), y una versión
+vieja de la app las muestra una debajo de otra con un ancho parecido.
+[ Fotos - en fila ]
+
 v0.044 :
 
 Con el mouse, el primer clic en una foto o un video la elige y el segundo (o un doble clic) la abre en el

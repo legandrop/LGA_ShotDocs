@@ -67,6 +67,8 @@ del papel menos los dos márgenes.
 - Lo que es **más alto que una hoja se parte**: un texto entre renglones (se miden con `Range.getClientRects`
   y el corte va a mitad del interlineado), una tabla entre filas. Lo que no se puede partir (una imagen
   enorme, que igual se achica al alto de la hoja) empieza en una hoja nueva.
+- **Una fila de fotos** (Doc_Imagenes.md) es una sola unidad (`mergeRowUnits`): arriba donde empieza la más
+  alta, abajo donde termina la más baja. Una hoja nunca la corta, y el salto de hoja va en todas sus fotos.
 - Un **título de sección** no queda solo al pie de una hoja: pasa a la siguiente con el bloque que sigue,
   si los dos entran juntos en una hoja (si no, el título queda y pasa el bloque).
 - **Tolerancia de 4 px** (`SHEET_TOLERANCE_PX`): para decidir si un bloque entero entra se le descuentan 4 px

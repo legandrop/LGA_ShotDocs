@@ -1,7 +1,7 @@
 # Imágenes en la página: elegir, tamaño y filas
 
 Diseño de lo que pidió Lega el 2026-09-30 (fotos y videos del editor; en la página los dos son un bloque
-`image`, ver `Doc_Carrete.md`). Estado: **v0.044 hecha (elegir y abrir); las filas, en curso.** "Correcciones de la auditoría previa" manda sobre lo anterior.
+`image`, ver `Doc_Carrete.md`). Estado: **v0.044 (elegir y abrir) y v0.045 (anchos y filas) hechas; "Acomodar en filas", en curso.** "Correcciones de la auditoría previa" manda sobre lo anterior.
 
 ## Lo que se pide
 
@@ -189,6 +189,27 @@ quedan alineadas arriba).
 
 1. **v0.044 — Elegir y abrir (hecho):** primer clic elige, segundo abre; borde visible; tiradores visibles con la foto
    elegida; cursor de hueco visible. Sin propiedad nueva.
-2. **v0.045 — Anchos y filas:** `rowWidth`, filas del plugin, tamaños rápidos en la barra, tiradores que
+2. **v0.045 — Anchos y filas (hecho):** `rowWidth`, filas del plugin, tamaños rápidos en la barra, tiradores que
    imantan, paginación y PDF, flechas, Enter, comentarios. Sube `min_app_version`.
 3. **v0.046 — Acomodar en filas.**
+
+## Cómo quedó (v0.045)
+
+- `src/ui/imageRows.ts`: las cuentas, sin pantalla (qué fotos van en cada fila, la inversa del CSS para
+  el tirador, el imantado y "Acomodar en filas"), con pruebas en `imageRows.test.ts`.
+- `src/ui/imageRowsEditor.ts`: la propiedad `rowWidth`, el plugin que decora las filas, la conversión del
+  tirador (en la misma transacción, solo con un arrastre de este dispositivo) y las flechas y Enter. Pruebas
+  en `imageRowsEditor.test.ts` (la versión publicada abre la página sin borrar nada, las decoraciones no
+  tocan el documento, el teclado).
+- `src/ui/MediaToolbarButtons.tsx`: los tamaños rápidos (guardan también `previewWidth` en px para las
+  versiones viejas).
+- `src/ui/pagination.ts` (`mergeRowUnits`) y `printView.ts`: una fila es una sola unidad de la paginación y
+  el salto de hoja va en todas sus fotos.
+- `src/ui/EditorComments.tsx`: los contadores de comentarios que caerían uno encima de otro se corren.
+- CSS en `src/styles.css`, "Fotos en fila".
+- Probado en Chromium de punta a punta (repo de pruebas privado, `rows.mjs`): dos fotos de 1/2 en una fila
+  que llena el ancho, el tirador imanta a 1/4, flecha derecha y Enter en una fila, la vista de impresión
+  con la fila y el PDF en una hoja.
+- Pendiente: el indicador de dónde se suelta al arrastrar un bloque sigue horizontal (se podría dibujar
+  vertical entre fotos con `dropCursor.hooks.computeDropPosition`), y el tirador del menú lateral de las
+  fotos de una fila queda a la izquierda de la fila.

@@ -34,6 +34,9 @@ import {
 import { paragraphProps, QUESTION_PROP } from './editorSchema';
 import { CommentIcon, QuestionIcon } from './icons';
 
+/** Lo que se corre un contador de comentarios que caería encima de otro (el alto del botón y un poco). */
+const MARK_STACK_PX = 26;
+
 // Lo que el editor suma para los comentarios y las preguntas (paso 10): el ítem "Question" del menú "/" y
 // del selector de tipo, el botón "Comment" de la barra de formato y del menú del bloque, y el margen con la
 // cantidad de comentarios abiertos de cada bloque y el botón "Answer" de las preguntas. El margen se dibuja
@@ -311,6 +314,15 @@ export function CommentMargin({
         mark.answer = { top: pr.bottom - base.top - 30, left: pr.left - base.left + 32, count: a?.count ?? 0, resolved: !!a && a.count > 0 && a.resolved };
       }
       next.push(mark);
+    }
+    // Dos bloques a la misma altura (fotos en una fila, Docs/Doc_Imagenes.md) no se tapan: el siguiente
+    // contador va debajo del anterior.
+    next.sort((x, y) => x.top - y.top);
+    let below = -Infinity;
+    for (const m of next) {
+      if (m.count === 0 || m.answer) continue;
+      if (m.top < below) m.top = below;
+      below = m.top + MARK_STACK_PX;
     }
     setMarks((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
     // `revision`: cambiaron los comentarios; `layoutTick`: el documento o el tamaño.

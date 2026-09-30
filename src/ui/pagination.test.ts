@@ -6,7 +6,7 @@ import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from './editorSchema';
 import { printGeometry } from './pageFormat';
-import { paginate, UNIT_SELECTOR, type Unit } from './pagination';
+import { mergeRowUnits, paginate, UNIT_SELECTOR, type Unit } from './pagination';
 import { downscale, finishPrint, ORIGINAL_MAX_SIDE, printPage } from './printPage';
 import { buildPrintView, paginateView } from './printView';
 import { isContentMutation, placeMarks } from './SheetBreaks';
@@ -93,6 +93,43 @@ describe('paginate', () => {
       ['b:6', 3],
       ['b:9', 4],
     ]);
+  });
+});
+
+describe('una fila de fotos es una sola unidad', () => {
+  const el = (row: string | null) => {
+    const d = document.createElement('div');
+    if (row) d.dataset.row = row;
+    return d;
+  };
+  it('junta las fotos de la misma fila (arriba la más alta, abajo la más baja) y deja el resto igual', () => {
+    const elements = [el(null), el('r1'), el('r1'), el('r1'), el(null), el('r2')];
+    const units: Unit[] = [
+      { key: 'b:p', top: 0, height: 40 },
+      { key: 'b:a', top: 40, height: 300 },
+      { key: 'b:b', top: 40, height: 180 },
+      { key: 'b:c', top: 38, height: 250 },
+      { key: 'b:q', top: 340, height: 30 },
+      { key: 'b:d', top: 370, height: 200 },
+    ];
+    const merged = mergeRowUnits({ units, elements }, (e) => e.dataset.row ?? null);
+    expect(merged.units.map((u) => [u.key, u.top, u.height])).toEqual([
+      ['b:p', 0, 40],
+      ['b:a', 38, 302],
+      ['b:q', 340, 30],
+      ['b:d', 370, 200],
+    ]);
+    expect(merged.members!.map((m) => m.length)).toEqual([1, 3, 1, 1]);
+    expect(merged.elements[1]).toBe(elements[1]);
+  });
+
+  it('dos filas seguidas distintas no se juntan', () => {
+    const elements = [el('r1'), el('r2')];
+    const units: Unit[] = [
+      { key: 'b:a', top: 0, height: 100 },
+      { key: 'b:b', top: 108, height: 100 },
+    ];
+    expect(mergeRowUnits({ units, elements }, (e) => e.dataset.row ?? null).units).toHaveLength(2);
   });
 });
 
