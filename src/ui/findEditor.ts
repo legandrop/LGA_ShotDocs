@@ -9,6 +9,7 @@ import { unitsFromPM, unitPos, type PMUnit, type UnitField } from '../search/ext
 import { normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from '../search/normalize';
 import { FIND_REPLACE_META } from './editorMeta';
 import { recordFindSelection } from './findUi';
+import { holdKeeper, keepInView, releaseKeeper, SETTLE_MS, stopKeepingInView, watchUser } from './findScroll';
 
 // Buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6, con las correcciones de las
 // auditorías). Buscar no cambia el documento: las coincidencias se marcan con decoraciones, como las marcas de
@@ -478,27 +479,78 @@ export function goToOccurrence(view: EditorView, blockId: string, occurrence: nu
 
 /**
  * Lleva a la vista la coincidencia actual: si está escondida (una lista plegable cerrada, una sección
- * colapsada de P.11) primero la abre; después la centra, y si igual queda debajo de la barra, corre la barra.
+ * colapsada de P.11) primero la abre; después la centra en lo que se ve del contenedor que se desplaza
+ * (`findScroll.ts`), y si igual queda debajo de la barra, corre la barra. Con `settle` (al llegar desde la
+ * búsqueda del proyecto) la sigue centrando mientras la página se acomoda (fotos que bajan, marcas de hoja),
+ * hasta que la persona desplaza o toca algo.
  */
-export function revealCurrent(view: EditorView): FindMatch | null {
+export function revealCurrent(view: EditorView, { settle = false, onUser }: { settle?: boolean; onUser?: () => void } = {}): FindMatch | null {
   const state = getFindState(view.state);
   const match = state.matches[state.current];
   if (!match) return null;
   revealBlock(view, match.blockId);
-  const scroll = () => {
-    if (view.isDestroyed) return;
-    const el = view.dom.querySelector<HTMLElement>('.sd-find-current, .sd-find-block-current');
-    el?.scrollIntoView?.({ block: 'center', inline: 'nearest' });
-    if (el) avoidBar(view, el);
-  };
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(scroll);
-  else scroll();
+  keepInView(view.dom, () => (view.isDestroyed ? null : view.dom.querySelector<HTMLElement>('.sd-find-current, .sd-find-block-current')), {
+    settleMs: settle ? SETTLE_MS : 0,
+    after: (el) => avoidBar(view, el),
+    onUser,
+  });
   return match;
 }
 
+/**
+ * Va a una coincidencia pedida (un resultado de la búsqueda del proyecto: la `occurrence` del bloque, o sin
+ * bloque la primera) y la lleva a la vista mientras la página se acomoda. Si todavía no hay coincidencias (el
+ * documento se está dibujando), espera un momento a que aparezcan, mientras no cambie lo buscado. La espera es
+ * lo que acomoda ese editor (`holdKeeper`): otra llegada, cerrar la barra o cualquier cosa que haga la persona
+ * (desplazar, tocar, una tecla) la corta. `onUser` avisa si la cortó la persona, esperando o ya acomodando.
+ */
+export function landOnOccurrence(
+  view: EditorView,
+  target: { blockId: string; occurrence: number } | null,
+  { onUser }: { onUser?: () => void } = {},
+): void {
+  const land = () => {
+    if (target) goToOccurrence(view, target.blockId, target.occurrence);
+    revealCurrent(view, { settle: true, onUser });
+  };
+  const query = getFindState(view.state).query;
+  if (!query || getFindState(view.state).matches.length > 0) return land();
+  const owner = view.dom;
+  let finished = false;
+  const cleanups: (() => void)[] = [];
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    for (const fn of cleanups.splice(0)) fn();
+    releaseKeeper(owner, done);
+  };
+  holdKeeper(owner, done);
+  cleanups.push(
+    watchUser(owner, () => {
+      done();
+      onUser?.();
+    }),
+  );
+  cleanups.push(
+    subscribeFind(view, () => {
+      if (finished) return;
+      const now = getFindState(view.state);
+      if (view.isDestroyed || now.query !== query) return done();
+      if (now.matches.length === 0) return;
+      done();
+      land();
+    }),
+  );
+  const timer = setTimeout(done, LAND_WAIT_MS);
+  cleanups.push(() => clearTimeout(timer));
+}
+
+/** Cuánto se espera a que aparezcan las coincidencias de un resultado del proyecto. */
+const LAND_WAIT_MS = 3000;
+
 /** Si la barra de buscar tapa la coincidencia (arriba de todo, donde no se puede desplazar más), la baja. */
 function avoidBar(view: EditorView, el: HTMLElement): void {
-  const bar = (view.dom.closest('article') ?? document).querySelector<HTMLElement>('.find-bar');
+  const bar = (view.dom.closest('.main') ?? view.dom.ownerDocument).querySelector<HTMLElement>('.find-bar');
   if (!bar) return;
   bar.style.removeProperty('transform');
   const r = el.getBoundingClientRect();
@@ -510,6 +562,7 @@ function avoidBar(view: EditorView, el: HTMLElement): void {
 
 /** Saca los resaltados (lo buscado quedó vacío), sin tocar la selección. */
 export function clearFind(view: EditorView): void {
+  stopKeepingInView(view.dom);
   if (getFindState(view.state).query) view.dispatch(view.state.tr.setMeta(findKey, { kind: 'clear' } satisfies FindMeta));
   anchors.set(view, null);
 }
@@ -519,6 +572,7 @@ export function clearFind(view: EditorView): void {
  * Code.
  */
 export function closeFind(view: EditorView, { select = true }: { select?: boolean } = {}): void {
+  stopKeepingInView(view.dom);
   const state = getFindState(view.state);
   const match = state.matches[state.current];
   const tr = view.state.tr.setMeta(findKey, { kind: 'clear' } satisfies FindMeta);
