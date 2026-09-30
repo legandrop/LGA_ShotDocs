@@ -45,7 +45,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 836 pruebas (v0.054): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 844 pruebas (v0.054): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`; las de editar a la vez son `src/ui/collab*.test.ts`, ver
   `Doc_Colaboracion.md`), el cliente del portero (`src/media/`), el portero
   (`portero/src/`) y el comando que prepara un workspace (`scripts/*.test.mjs`, sin red). `npm run typecheck`

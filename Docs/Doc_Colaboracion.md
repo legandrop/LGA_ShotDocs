@@ -53,6 +53,12 @@ Dos cosas más, sin pérdida de texto:
 - **Enter con una selección que empieza adentro de un bloque con sangría y termina afuera** tira un error de
   BlockNote y no hace nada. No toca el documento; no se arregló (es de BlockNote y no pierde nada).
 
+Y una que sí puede perder texto, mientras queden páginas de antes: **los párrafos vacíos hechos con v0.053 o
+antes** (cualquiera, no solo el primero de una página) no tienen texto adentro. Siguen expuestos al caso 2 de
+abajo (dos personas escribiendo a la vez en ese mismo párrafo vacío) hasta que alguien escribe en él; desde ahí
+ya tiene su texto y queda como los nuevos. Los párrafos vacíos que se crean desde v0.054 (Enter, un tipo nuevo,
+una página nueva) ya nacen con su texto.
+
 ## Qué se arregló
 
 1. **El editor que se quedaba con lo de antes y deshacía los cambios de los demás.** Con un bloque elegido
@@ -65,7 +71,8 @@ Dos cosas más, sin pérdida de texto:
 2. **Dos personas escribiendo en el mismo párrafo vacío.** Un párrafo vacío no tenía texto adentro (ni vacío):
    cada dispositivo, al escribir, creaba su propio texto, y después y-prosemirror los juntaba copiando uno en el
    otro y borrando el segundo; lo que se escribía en el borrado mientras tanto se perdía (o quedaba dos veces).
-   Arreglado con el otro parche: un párrafo vacío lleva un texto vacío, y los dos escriben en el mismo.
+   Arreglado con el otro parche: un párrafo vacío lleva un texto vacío, y los dos escriben en el mismo. Vale
+   para los párrafos vacíos que se crean desde v0.054; los de antes, ver arriba.
 3. **La primera línea de cada página nueva.** Las páginas nuevas arrancan con la "semilla" (`structure.ts`): un
    párrafo vacío que todos los dispositivos crean igual. Era justo el caso 2: toda página nueva abierta en dos
    dispositivos estaba expuesta. Ahora la semilla lleva el texto vacío, creado igual en todos los dispositivos
@@ -78,8 +85,11 @@ Dos cosas más, sin pérdida de texto:
 5. **Por si algo igual falla al dibujar.** Si el editor tira un error al mostrar un cambio que llegó
    (`docs.ts`, `applyToLive`), la bajada ya no se corta: el cambio está guardado, y la página vuelve a dibujar el
    editor entero desde el documento en el momento, antes de la próxima tecla (`subscribeRenderFailed`,
-   `src/ui/editorRecovery.ts`). Si ni eso anda, el editor queda en solo lectura y se vuelve a montar. Así un
-   editor viejo nunca escribe encima.
+   `src/ui/editorRecovery.ts`), y deja un cursor (no un tramo elegido, que después del cambio podría cubrir otro
+   texto). Si ni eso anda, el editor queda en solo lectura y se vuelve a montar. Así un editor viejo nunca
+   escribe encima. Solo se trata así un error **al dibujar**: si falla la reparación o el cambio mismo, la
+   bajada falla (se ve en el estado de la sincronización), lo bajado queda guardado, y el documento abierto se
+   marca para volver a armarse desde lo guardado (la página lo vuelve a abrir).
 
 ## Los parches de y-prosemirror
 
@@ -88,15 +98,18 @@ Están en `patches/y-prosemirror+1.3.7.patch` y los aplica `patch-package` al in
 `postinstall`). Tocan `src/plugins/sync-plugin.js` (lo que usan Vite y las pruebas) y `dist/y-prosemirror.cjs`
 (por si algo lo pide con `require`). Cada parte lleva la marca `LGA-SHOTDOCS-PATCH`.
 
-- **`restoreRelativeSelection`**: elige un bloque entero solo si hay un bloque en esa posición (si no, pone el
-  cursor en el texto más cercano), usa solo posiciones que existen en el documento y, si igual algo falla, no
-  tira el error: el cambio se muestra con la selección que tenga.
+- **`restoreRelativeSelection`**: vuelve a elegir un bloque entero solo si es **el mismo** bloque: que siga
+  estando (el elemento de Yjs al que apuntaba la selección no se borró; si se borró, Yjs apunta al siguiente, o
+  sea a otro bloque) y que tenga el mismo id (y-prosemirror reescribe bloques por posición, así que el mismo
+  elemento puede tener ahora otro bloque). Si no, pone un cursor en el texto más cercano (si no queda ningún
+  texto en la página, por ejemplo solo una foto, queda elegida esa). Usa solo posiciones que existen en el
+  documento y nunca tira el error: si algo falla, deja un cursor.
 - **`normalizePNodeContent`**: un bloque de texto vacío se representa con un texto vacío (`[[]]`), no con nada.
   Así el editor crea un texto vacío en cada párrafo vacío nuevo (Enter, un tipo nuevo), y lo compara bien con
   uno que ya lo tiene.
 
 **Si los parches faltan, la app no se construye ni corren las pruebas**: `vite.config.ts`
-(`assertYProsemirrorPatched`) revisa la marca y corta con un mensaje (pasa si se instaló con
+(`assertYProsemirrorPatched`) revisa las marcas en los dos archivos (si falta un archivo, también corta) y corta con un mensaje (pasa si se instaló con
 `--ignore-scripts`, o si se actualizó y-prosemirror y el parche no se volvió a hacer). `y-prosemirror` quedó
 fijo en `1.3.7` en `package.json` para que una actualización sea a propósito.
 
@@ -156,8 +169,13 @@ transacción que lo aplica (`docs.ts`, `applyToLive`): el editor nunca ve la est
   (el mismo bloque sangrado por los dos) no se copia.
 - **Dos contenidos en un bloque:** queda el primero. Si el otro tiene el mismo texto (los dos cambiaron el tipo),
   se descarta: gana uno de los dos tipos. Si tiene otro texto, pasa a ser un bloque nuevo justo debajo.
-- Un bloque con hijos y sin contenido recibe un párrafo vacío; un grupo antes del contenido pasa al final; la raíz
-  vacía recibe un párrafo vacío.
+- **Un grupo de hijos antes del contenido:** se mueve el contenido al principio (se copia y se borra el
+  original), no el grupo: así lo que otro escriba a la vez en los hijos no se pierde, y si dos dispositivos
+  reparan a la vez quedan dos copias del contenido con el mismo texto, que la vuelta siguiente junta en una.
+- **Un texto suelto** adentro de un bloque o en una lista de bloques (el editor borraría el bloque o la lista
+  entera): pasa a un bloque propio; si está vacío, se saca.
+- Un bloque con hijos y sin contenido recibe un párrafo vacío; la raíz vacía recibe un párrafo vacío.
+- Solo dice que reparó (y solo escribe) si de verdad cambió algo: un documento sano no se toca.
 
 "El primero" es el primero en el orden de Yjs, que es el mismo en todos los dispositivos: dos dispositivos que
 reparan a la vez descartan lo mismo y terminan iguales. Lo que se copia (Yjs no puede mover, solo copiar y
@@ -173,10 +191,11 @@ borrar uno perdía lo que se escribía en él.
 
 | Archivo | Qué prueba |
 |---|---|
-| `src/ui/collabRegression.test.ts` | Cada pérdida arreglada, con el editor real; todas fallaban antes: el bloque elegido entero contra cada cambio del otro (APP1 por el camino de la app, R1–R4), deshacer con un bloque elegido (R2), un lote bajado como lo baja la app (R3), agendas al azar de dos dispositivos escribiendo en un párrafo vacío (en la semilla y en uno hecho por el editor), los dos cambiando el tipo o sangrando el mismo bloque (S8, S9b, también por PageDocs) y el editor que se vuelve a dibujar si igual falla. |
-| `src/ui/collabRandom.test.ts` | Dos dispositivos escribiendo a la vez en una página nueva por el camino real de la app (PageDocs, IndexedDB, servidor de prueba, respuestas de subida perdidas). En CI, 24 semillas fijas; `COLLAB_SEEDS=100` (o más) para la grande. Antes: 17 a 26 de cada 100 con pérdidas; ahora 0 de 500. |
+| `src/ui/collabRegression.test.ts` | Cada pérdida arreglada, con el editor real; todas fallaban antes: el bloque elegido entero contra cada cambio del otro (APP1 por el camino de la app, R1–R4, y 150 casos al azar donde la selección nunca pasa a otro bloque; `COLLAB_SELECTIONS` para más), deshacer con un bloque elegido (R2), un lote bajado como lo baja la app (R3), agendas al azar de dos dispositivos escribiendo en un párrafo vacío (en la semilla y en uno hecho por el editor), los dos cambiando el tipo o sangrando el mismo bloque (S8, S9b, también por PageDocs), el editor que se vuelve a dibujar si igual falla (con un cursor) y una reparación que falla (no se traga). |
+| `src/ui/collabRandom.test.ts` | Dos dispositivos escribiendo a la vez en una página nueva por el camino real de la app (PageDocs, IndexedDB, servidor de prueba, respuestas de subida perdidas): ninguna marca falta ni queda dos veces. Antes: 17 a 26 de cada 100 con pérdidas; ahora 0 de 500. La segunda prueba suma cambios de estructura (de la auditoría) y exige que terminen iguales al servidor y cada editor al día. En CI, 24 semillas fijas; `COLLAB_SEEDS=100` (o más) para la grande. |
+| `src/ui/collabFuzz.test.ts` | De la auditoría: dos editores con cambios de todo tipo al azar (también elegir bloques enteros), con la reparación: sin errores, sin ida y vuelta de reparaciones, iguales y cada editor al día. En CI, 40 corridas; `COLLAB_FUZZ=300` para la grande. |
 | `src/ui/collabSemantics.test.ts` | La tabla de "Lo que todavía puede pasar" (escenas S1–S13 y C1–C9 de la investigación), en los dos modos de entrega. Documenta lo inherente: falla si cambia. |
-| `src/sync/structure.test.ts` | La semilla (byte por byte la raíz de siempre, la capa de texto, versión vieja y nueva a la vez) y cada caso de la reparación, también dos dispositivos reparando a la vez. |
+| `src/sync/structure.test.ts` | La semilla (byte por byte la raíz de siempre, la capa de texto, versión vieja y nueva a la vez) y cada caso de la reparación, también dos dispositivos reparando a la vez (y un tercero escribiendo en los hijos) y textos sueltos. |
 | `src/ui/collabHarness.ts` | Las ayudas de esas pruebas (no es una prueba). `connect` entrega lo de cada lado **en orden**, como el servidor. |
 
 **Una recomendación para las pruebas de colapsar** (`collapseProperty.test.ts`, en la rama `lega/colapsar`):

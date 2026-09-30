@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import type { BlockNoteEditor, PartialBlock } from '@blocknote/core';
-import { TextSelection } from '@tiptap/pm/state';
+import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { ySyncPluginKey } from 'y-prosemirror';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { buildSeed } from '../sync/structure';
+import { buildSeed, normalizeStructure } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import {
   caretAt,
@@ -12,6 +12,7 @@ import {
   editors,
   mountEditor,
   pmText,
+  posOf,
   press,
   sameDocs,
   seeded,
@@ -158,6 +159,74 @@ describe('un bloque elegido entero mientras llega un cambio de otro (parche de y
       });
     }
   }
+
+  // De la auditoría: con un bloque elegido entero y un cambio del otro que borra, recrea o mueve bloques, la
+  // selección nunca pasa a ser la de OTRO bloque (si el elegido ya no está, queda un cursor).
+  it('selección de un bloque + cambio del otro, al azar: nunca queda elegido otro bloque', async () => {
+    const stats: Record<string, number> = {};
+    const bump = (k: string) => (stats[k] = (stats[k] ?? 0) + 1);
+    const rand = seeded(99);
+    for (let run = 0; run < Number(process.env.COLLAB_SELECTIONS ?? 150); run++) {
+      const docA = new Y.Doc();
+      const docB = new Y.Doc();
+      const net = connect(docA, docB, 'async');
+      const A = mountEditor(docA, 'a');
+      const B = mountEditor(docB, 'b');
+      A.replaceBlocks(A.document, [
+        { id: 'p1', type: 'paragraph', content: 'alpha' },
+        { id: 'p2', type: 'paragraph', content: 'beta', children: [{ id: 'c1', type: 'paragraph', content: 'kid' }] },
+        { id: 'p3', type: 'image', props: { url: 'x' } },
+        { id: 'p4', type: 'paragraph', content: 'delta' },
+      ] as never);
+      net.flush();
+      const ids = ['p1', 'p2', 'c1', 'p3', 'p4'];
+      const id = ids[Math.floor(rand() * ids.length)];
+      const inner = rand() < 0.5;
+      selectNode(A, id, inner);
+      const target = ids[Math.floor(rand() * ids.length)];
+      const k = rand();
+      try {
+        if (k < 0.25) B.removeBlocks([target]);
+        else if (k < 0.45) B.updateBlock(target, { type: 'heading' } as never);
+        else if (k < 0.6) {
+          caretAt(B, target, 'start');
+          press(B, 'Tab');
+        } else if (k < 0.7) {
+          caretAt(B, target, 'start');
+          press(B, 'Tab', { shiftKey: true });
+        } else if (k < 0.8) {
+          caretAt(B, target, 'start');
+          (B as unknown as { moveBlocksUp: () => void }).moveBlocksUp();
+        } else if (k < 0.9) B.removeBlocks(ids.filter((x) => x !== target && x !== 'c1'));
+        else {
+          caretAt(B, target, 'start');
+          press(B, 'Backspace');
+        }
+      } catch {
+        // Un cambio que BlockNote no puede hacer (por ejemplo, sangrar el primero) no toca nada.
+      }
+      try {
+        net.flush();
+      } catch {
+        bump('flush-threw');
+      }
+      if (!showsDoc(A, docA)) bump('stale');
+      const sel = view(A).state.selection;
+      // Si no quedó ningún lugar para un cursor (solo queda una foto), elegirla es lo único posible.
+      let hasText = false;
+      view(A).state.doc.descendants((n) => {
+        if (n.isTextblock) hasText = true;
+        return !hasText;
+      });
+      if (sel instanceof NodeSelection && hasText) {
+        const node = sel.node;
+        const selected = node.type.name === 'blockContainer' ? node.attrs.id : view(A).state.doc.resolve(sel.from).node().attrs.id;
+        if (selected !== id) bump(`node on ${selected} instead of ${id}`);
+      }
+      unmountAll();
+    }
+    expect(stats).toEqual({});
+  }, 300_000);
 
   it('R2: deshacer con un bloque elegido entero funciona y no deja el editor viejo', async () => {
     {
@@ -414,6 +483,10 @@ describe('si el editor igual no puede dibujar un cambio, se vuelve a dibujar (do
       }
       dispatch(tr);
     };
+    // A tiene elegido un tramo de texto: después de volver a dibujar queda un cursor, no un tramo que ahora
+    // podría cubrir otro texto.
+    const range = view(A);
+    range.dispatch(range.state.tr.setSelection(TextSelection.create(range.state.doc, posOf(A, 'p2') + 3, posOf(A, 'p3') + 4)));
     const warn = console.warn;
     console.warn = () => undefined;
     try {
@@ -427,11 +500,58 @@ describe('si el editor igual no puede dibujar un cambio, se vuelve a dibujar (do
     }
     expect(failed).toBe(1);
     expect(showsDoc(A, docA)).toBe(true);
+    expect(view(A).state.selection.empty).toBe(true);
     typeAt(A, 'p2', 'end', ' AAA');
     await sync(a, b);
     expect(yText(docB)).toBe('alpha BBB | beta AAA | gamma');
     expect(yText(docA)).toBe('alpha BBB | beta AAA | gamma');
   });
+
+  // Un error de la reparación (no del editor) no se trata como un error al dibujar: la bajada falla, el
+  // documento abierto queda marcado para volver a armarse desde lo guardado y se avisa a la página.
+  for (const where of ['en la prueba previa', 'en la transacción']) {
+    it(`si la reparación tira un error ${where}, no se traga: la página se vuelve a abrir desde lo guardado`, async () => {
+      const server = new FakeServer();
+      let calls = 0;
+      let failing = false;
+      const normalize = (doc: Y.Doc, origin: symbol) => {
+        if (!failing) return normalizeStructure(doc, origin);
+        calls++;
+        if (where === 'en la prueba previa' || calls > 1) throw new Error('repair failed');
+        return true;
+      };
+      const a = await makeDevice(server, undefined, undefined, { normalize });
+      const b = await makeDevice(server);
+      devices.push(a, b);
+      const pageId = await a.tree.create(null, 'P');
+      await a.engine.syncNow();
+      await b.engine.syncNow();
+      const docA = await a.docs.open(pageId, { seed: true });
+      const A = mountEditor(docA, 'a');
+      A.replaceBlocks(A.document, three as never);
+      await a.docs.flush(pageId);
+      await a.docs.pushPage(pageId, a.remote);
+      const docB = await b.docs.open(pageId);
+      await b.docs.pullPage(pageId, b.remote);
+      const B = mountEditor(docB, 'b');
+      typeAt(B, 'p1', 'end', ' BBB');
+      await b.docs.flush(pageId);
+      await b.docs.pushPage(pageId, b.remote);
+      const unsupported: string[] = [];
+      a.docs.subscribeUnsupported((id) => unsupported.push(id));
+      failing = true;
+      await expect(a.docs.pullPage(pageId, a.remote)).rejects.toThrow('repair failed');
+      failing = false;
+      expect(unsupported).toEqual([pageId]);
+      // Al volver a abrir (sin nadie usándolo), se arma desde lo guardado: lo de B está.
+      unmountAll();
+      a.docs.close(pageId);
+      await a.docs.flush(pageId);
+      const again = await a.docs.open(pageId);
+      expect(yText(again)).toBe('alpha BBB | beta | gamma');
+      a.docs.close(pageId);
+    });
+  }
 
   it('si ni eso anda, el editor queda en solo lectura (y la página lo vuelve a montar)', () => {
     const warn = console.warn;

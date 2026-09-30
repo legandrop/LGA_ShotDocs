@@ -102,6 +102,10 @@ export function connect(docA: Y.Doc, docB: Y.Doc, mode: 'sync' | 'async' = 'asyn
     flush() {
       pump();
     },
+    /** Cambios que todavía no llegaron al otro lado. */
+    pending() {
+      return state.fromA.length + state.fromB.length;
+    },
   };
 }
 

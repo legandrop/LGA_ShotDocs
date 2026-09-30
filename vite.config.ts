@@ -42,17 +42,19 @@ function appVersion(): string {
 // y el parche no se volvió a hacer).
 function assertYProsemirrorPatched(): void {
   const files = ['src/plugins/sync-plugin.js', 'dist/y-prosemirror.cjs'];
+  const marks = ['LGA-SHOTDOCS-PATCH', 'relativeItemDeleted', 'sameSelectedNode', 'pnode.isTextblock && c.length === 0'];
   for (const file of files) {
     let source = '';
     try {
       source = readFileSync(new URL(`./node_modules/y-prosemirror/${file}`, import.meta.url), 'utf8');
     } catch {
-      continue;
+      // Sin el archivo tampoco se sabe si está el parche (la librería cambió de forma): se corta igual.
     }
-    if ((source.match(/LGA-SHOTDOCS-PATCH/g) ?? []).length < 2) {
+    const missing = marks.filter((mark) => !source.includes(mark));
+    if (missing.length > 0) {
       throw new Error(
-        `y-prosemirror sin el parche de la app (node_modules/y-prosemirror/${file}). Correr "npx patch-package" ` +
-          '(o "npm install"). Ver Docs/Doc_Colaboracion.md.',
+        `y-prosemirror sin el parche de la app (node_modules/y-prosemirror/${file}: falta ${missing.join(', ')}). ` +
+          'Correr "npx patch-package" (o "npm install"). Ver Docs/Doc_Colaboracion.md.',
       );
     }
   }

@@ -150,7 +150,7 @@ function paragraph(text: string, type = 'paragraph', attrs: Record<string, strin
   return p;
 }
 
-function block(id: string, kids: Y.XmlElement[]): Y.XmlElement {
+function block(id: string, kids: (Y.XmlElement | Y.XmlText)[]): Y.XmlElement {
   const c = new Y.XmlElement('blockContainer');
   c.setAttribute('id', id);
   c.insert(0, kids);
@@ -244,6 +244,65 @@ describe('la reparación de bloques', () => {
     expect(b.toArray().map((k) => (k as Y.XmlElement).nodeName)).toEqual(['paragraph', 'blockGroup']);
     expect(xml(doc)).toContain('huérfano');
     expect(xml(doc)).toContain('hijo');
+    expect(normalizeStructure(doc, 'repair')).toBe(false);
+  });
+
+  it('un grupo antes del contenido: se mueve el contenido, así lo que otro escribe en los hijos no se pierde', () => {
+    const base = docWith(() =>
+      group([block('a', [group([block('k1', [paragraph('kid1')]), block('k2', [paragraph('kid2')])]), paragraph('content')])]),
+    );
+    const a = clone(base);
+    const b = clone(base);
+    const c = clone(base);
+    // Un tercer dispositivo escribe en un hijo mientras A y B reparan a la vez.
+    const kid1 = (((root(c).get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlElement;
+    (kid1.get(0) as Y.XmlText).insert(4, ' TYPED');
+    normalizeStructure(a, 'repair');
+    normalizeStructure(b, 'repair');
+    for (let i = 0; i < 2; i++) for (const x of [a, b, c]) for (const y of [a, b, c]) if (x !== y) exchange(x, y);
+    normalizeStructure(a, 'repair');
+    exchange(a, b);
+    exchange(a, c);
+    expect(xml(a)).toContain('kid1 TYPED');
+    // Los hijos no quedan dos veces, y el contenido tampoco.
+    expect(xml(a).split('kid1').length - 1).toBe(1);
+    expect(xml(a).split('kid2').length - 1).toBe(1);
+    expect(xml(a).split('content').length - 1).toBe(1);
+    const kids = (root(a).get(0) as Y.XmlElement).toArray().map((k) => (k as Y.XmlElement).nodeName);
+    expect(kids).toEqual(['paragraph', 'blockGroup']);
+    expect(normalizeStructure(a, 'repair')).toBe(false);
+  });
+
+  it('un texto suelto adentro de un bloque pasa a un bloque propio (el editor si no borraba el bloque)', () => {
+    const doc = new Y.Doc();
+    doc.clientID = 1;
+    const stray = new Y.XmlText();
+    stray.insert(0, 'suelto');
+    const empty = new Y.XmlText();
+    fragment(doc).insert(0, [group([block('a', [paragraph('x'), stray, empty])])]);
+    expect(normalizeStructure(doc, 'repair')).toBe(true);
+    const blocks = root(doc).toArray() as Y.XmlElement[];
+    expect(blocks.map((b) => b.toArray().map((k) => (k as Y.XmlElement).nodeName).join('+'))).toEqual(['paragraph', 'paragraph']);
+    expect(xml(doc)).toContain('suelto');
+    // Ya reparado: no dice que reparó ni escribe nada.
+    const updates: Uint8Array[] = [];
+    doc.on('update', (u: Uint8Array) => updates.push(u));
+    expect(normalizeStructure(doc, 'repair')).toBe(false);
+    expect(updates).toHaveLength(0);
+  });
+
+  it('un texto suelto en un grupo de bloques también pasa a un bloque propio', () => {
+    const doc = new Y.Doc();
+    doc.clientID = 1;
+    const stray = new Y.XmlText();
+    stray.insert(0, 'suelto');
+    const g = new Y.XmlElement('blockGroup');
+    g.insert(0, [block('a', [paragraph('x')]), stray]);
+    fragment(doc).insert(0, [g]);
+    expect(normalizeStructure(doc, 'repair')).toBe(true);
+    const blocks = root(doc).toArray();
+    expect(blocks.every((b) => b instanceof Y.XmlElement && b.nodeName === 'blockContainer')).toBe(true);
+    expect(xml(doc)).toContain('suelto');
     expect(normalizeStructure(doc, 'repair')).toBe(false);
   });
 

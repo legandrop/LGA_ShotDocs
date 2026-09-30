@@ -90,15 +90,27 @@ const isContent = (node: unknown): node is Y.XmlElement => isElement(node) && no
 
 function repairGroup(group: Y.XmlElement, isRoot: boolean): boolean {
   let changed = false;
-  // Una sola pasada por la lista (con `get(i)` en cada vuelta sería cuadrático en páginas largas).
-  let inserted = 0;
+  // Una sola pasada por la lista (con `get(i)` en cada vuelta sería cuadrático en páginas largas). `shift`
+  // lleva cuánto se corrió cada posición por lo que ya se insertó o borró.
+  let shift = 0;
   group.toArray().forEach((child, index) => {
-    if (!isElement(child, BLOCK_CONTAINER)) return;
+    const at = index + shift;
+    if (!isElement(child, BLOCK_CONTAINER)) {
+      // Algo suelto en la lista de bloques (un texto, un contenido sin su bloque): el editor borraría la lista
+      // entera. Pasa a un bloque propio, o se saca si no tiene nada.
+      if (isElement(child, BLOCK_GROUP)) return;
+      const block = looseToBlock(child);
+      group.delete(at, 1);
+      if (block) group.insert(at, [block]);
+      else shift--;
+      changed = true;
+      return;
+    }
     if (!wellFormed(child)) {
       const siblings = repairContainer(child);
       if (siblings.length > 0) {
-        group.insert(index + inserted + 1, siblings);
-        inserted += siblings.length;
+        group.insert(at + 1, siblings);
+        shift += siblings.length;
       }
       changed = true;
     }
@@ -123,14 +135,43 @@ function wellFormed(container: Y.XmlElement): boolean {
 }
 
 /**
+ * Un bloque nuevo con lo que quedó suelto: un texto con algo escrito va en un párrafo, un contenido va tal
+ * cual. `null` si no hay nada que guardar (un texto vacío, algo que el editor no conoce como hijo).
+ */
+function looseToBlock(node: unknown): Y.XmlElement | null {
+  let content: Y.XmlElement | null = null;
+  if (node instanceof Y.XmlText) {
+    if (node.length === 0) return null;
+    content = emptyParagraph([node.clone()]);
+  } else if (isContent(node)) {
+    content = node.clone();
+  }
+  if (!content) return null;
+  const block = new Y.XmlElement(BLOCK_CONTAINER);
+  block.setAttribute('id', crypto.randomUUID());
+  block.insert(0, [content]);
+  return block;
+}
+
+/**
  * Deja el bloque con un contenido y a lo sumo un grupo de hijos, en ese orden. Devuelve los bloques nuevos
- * que van justo debajo (el contenido de más con otro texto). Si el bloque ya estaba bien no escribe nada.
+ * que van justo debajo (el contenido de más con otro texto, un texto suelto). Se llama solo si el bloque no
+ * está bien (`wellFormed`), y siempre escribe algo.
  */
 function repairContainer(container: Y.XmlElement): Y.XmlElement[] {
   const kids = container.toArray();
   const groups = kids.filter((k): k is Y.XmlElement => isElement(k, BLOCK_GROUP));
   const contents = kids.filter(isContent);
-  const remove = (node: Y.XmlElement) => container.delete(container.toArray().indexOf(node), 1);
+  const loose = kids.filter((k) => !(k instanceof Y.XmlElement));
+  const remove = (node: unknown) => container.delete(container.toArray().indexOf(node as Y.XmlElement), 1);
+  const siblings: Y.XmlElement[] = [];
+
+  // Lo suelto (un texto directo en el bloque): a un bloque propio debajo, o afuera si está vacío.
+  for (const node of loose) {
+    const block = looseToBlock(node);
+    if (block) siblings.push(block);
+    remove(node);
+  }
 
   // Los grupos de hijos, en el primero.
   if (groups.length > 1) {
@@ -150,7 +191,6 @@ function repairContainer(container: Y.XmlElement): Y.XmlElement[] {
   }
 
   // Los contenidos: queda el primero.
-  const siblings: Y.XmlElement[] = [];
   if (contents.length > 1) {
     const keep = contents[0];
     for (const extra of contents.slice(1)) {
@@ -166,13 +206,16 @@ function repairContainer(container: Y.XmlElement): Y.XmlElement[] {
     container.insert(0, [emptyParagraph()]);
   }
 
-  // El grupo, después del contenido.
-  const group = container.toArray().find((k): k is Y.XmlElement => isElement(k, BLOCK_GROUP));
-  const content = container.toArray().find(isContent);
-  if (group && content && container.toArray().indexOf(group) < container.toArray().indexOf(content)) {
-    const copy = group.clone();
-    remove(group);
-    container.insert(container.length, [copy]);
+  // El contenido, antes del grupo. Se mueve el contenido (se copia al principio y se borra el original) y no
+  // el grupo: así lo que otro escriba a la vez en los hijos no se pierde, y dos dispositivos que reparan a la
+  // vez dejan dos copias del contenido con el mismo texto, que la vuelta siguiente junta en una.
+  const now = container.toArray();
+  const group = now.find((k): k is Y.XmlElement => isElement(k, BLOCK_GROUP));
+  const content = now.find(isContent);
+  if (group && content && now.indexOf(group) < now.indexOf(content)) {
+    const copy = content.clone();
+    remove(content);
+    container.insert(0, [copy]);
   }
   return siblings;
 }
@@ -189,12 +232,12 @@ function sameContent(a: Y.XmlElement, b: Y.XmlElement): boolean {
   return a.toJSON() === b.toJSON();
 }
 
-function emptyParagraph(): Y.XmlElement {
+function emptyParagraph(text: Y.XmlText[] = [new Y.XmlText()]): Y.XmlElement {
   const paragraph = new Y.XmlElement('paragraph');
   paragraph.setAttribute('backgroundColor', 'default');
   paragraph.setAttribute('textColor', 'default');
   paragraph.setAttribute('textAlignment', 'left');
-  paragraph.insert(0, [new Y.XmlText()]);
+  paragraph.insert(0, text);
   return paragraph;
 }
 
