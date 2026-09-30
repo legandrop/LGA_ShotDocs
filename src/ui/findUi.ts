@@ -17,6 +17,22 @@ export interface FindUiState {
   focus: number;
   /** El resultado del último reemplazo ("2 reemplazos · Deshacer"): sigue aunque la barra se vuelva a montar. */
   status: FindStatus | null;
+  /** Al abrir con el foco, tomar lo elegido en el editor como búsqueda (no al ir a un resultado del proyecto). */
+  prefill: boolean;
+  /**
+   * La coincidencia a la que hay que ir en cuanto se busque (un resultado de la búsqueda del proyecto): la
+   * `occurrence` de las del bloque `blockId`. La barra la usa una sola vez (`takeFindTarget`).
+   */
+  target: FindTarget | null;
+}
+
+export interface FindTarget {
+  /** La página del pedido: solo la barra de esa página lo usa. */
+  pageId: string;
+  blockId: string;
+  occurrence: number;
+  /** Cambia en cada pedido, así el mismo resultado dos veces vuelve a ir. */
+  nonce: number;
 }
 
 export interface FindStatus {
@@ -34,7 +50,10 @@ let state: FindUiState = {
   wholeWord: false,
   focus: 0,
   status: null,
+  prefill: true,
+  target: null,
 };
+let nonce = 0;
 /** El último pedido de foco ya atendido: la barra no vuelve a robar el foco al montarse otra vez. */
 let focusHandled = 0;
 const listeners = new Set<() => void>();
@@ -60,11 +79,109 @@ export function useFindUi(): FindUiState {
 
 /** Abre la barra (o, si ya está abierta, lleva el foco al campo). La barra toma lo elegido en el editor. */
 export function openFindBar(): void {
-  set({ open: true, focus: state.focus + 1 });
+  set({ open: true, focus: state.focus + 1, prefill: true });
 }
 
+/**
+ * Abre la barra buscando `query` (sin *Aa* ni palabra entera, como la búsqueda del proyecto) y va a la
+ * coincidencia pedida (Docs/Doc_Buscar.md, sección 8). Con `focus`, el foco va al campo (así se sigue con
+ * Enter); en el teléfono no, para no tapar la página con el teclado.
+ */
+export function openFindBarAt(query: string, target: Omit<FindTarget, 'nonce'> | null, { focus = true }: { focus?: boolean } = {}): void {
+  set({
+    open: true,
+    query,
+    matchCase: false,
+    wholeWord: false,
+    status: null,
+    prefill: false,
+    focus: focus ? state.focus + 1 : state.focus,
+    target: target ? { ...target, nonce: ++nonce } : null,
+  });
+}
+
+/** El último pedido de ir a una coincidencia ya atendido (queda en el estado: borrarlo volvería a buscar). */
+let targetHandled = 0;
+
+/** Si hay una coincidencia pedida sin atender para esa página. */
+export function hasFindTarget(pageId: string | undefined): boolean {
+  return !!state.target && state.target.pageId === pageId && state.target.nonce > targetHandled;
+}
+
+/**
+ * La coincidencia pedida sin atender para esa página, si hay. Se marca como atendida salvo con `keep`: una
+ * página que todavía está bajando se vuelve a abrir al completarse, y ahí se vuelve a ir a la coincidencia
+ * pedida (mientras tanto, cambiar lo buscado o salir de la página la descarta).
+ */
+export function takeFindTarget(pageId: string | undefined, { keep = false }: { keep?: boolean } = {}): FindTarget | null {
+  if (!hasFindTarget(pageId)) return null;
+  if (!keep) targetHandled = state.target!.nonce;
+  return state.target;
+}
+
+// --- Lo que Esc dejó elegido -------------------------------------------------------------------------------
+//
+// Esc en la barra deja elegida la coincidencia (como VS Code). Con texto elegido en el editor, Ctrl/⌘+K es
+// "crear un link" de BlockNote; pero si lo elegido es justo lo que dejó la barra (nadie lo tocó después), la
+// persona no eligió nada: Ctrl/⌘+K abre la búsqueda del proyecto. Sin tipos de ProseMirror: esto va en la
+// primera carga y el editor se baja aparte.
+
+interface ViewLike {
+  isDestroyed: boolean;
+  dom: Element;
+  state: { doc: unknown; selection: { from: number; to: number } };
+}
+
+let findSelection: { view: ViewLike; doc: unknown; from: number; to: number; stop: () => void } | null = null;
+
+/** Se olvida lo que dejó Esc (y se dejan de escuchar el clic y las teclas del editor). */
+export function clearFindSelection(): void {
+  findSelection?.stop();
+  findSelection = null;
+}
+
+/**
+ * La barra se cerró dejando elegida esa coincidencia (`closeFind`). Cualquier clic o tecla en el editor lo
+ * olvida: si después la persona elige lo mismo (un doble clic en la palabra para hacerle un link), lo eligió
+ * ella. Ctrl/⌘+K no llega hasta acá cuando abre la búsqueda (la captura de `Workspace.tsx` lo frena antes).
+ */
+export function recordFindSelection(view: ViewLike, from: number, to: number): void {
+  clearFindSelection();
+  // Apretar solo ⌘, Ctrl, Shift o Alt (el principio de Ctrl/⌘+K) no cuenta.
+  const forget = (e: Event) => {
+    if (e instanceof KeyboardEvent && ['Control', 'Meta', 'Shift', 'Alt', 'AltGraph', 'OS'].includes(e.key)) return;
+    clearFindSelection();
+  };
+  const events = ['pointerdown', 'mousedown', 'keydown'] as const;
+  for (const type of events) view.dom.addEventListener(type, forget, true);
+  findSelection = {
+    view,
+    doc: view.state.doc,
+    from,
+    to,
+    stop: () => {
+      for (const type of events) view.dom.removeEventListener(type, forget, true);
+    },
+  };
+}
+
+/** Si el evento es en el editor y lo elegido ahí sigue siendo exactamente lo que dejó la barra al cerrarse. */
+export function isFindSelectionTarget(target: EventTarget | null): boolean {
+  const record = findSelection;
+  if (!record) return false;
+  if (record.view.isDestroyed) {
+    // El editor ya no está: no se retiene.
+    clearFindSelection();
+    return false;
+  }
+  if (!(target instanceof Node) || !record.view.dom.contains(target)) return false;
+  const { doc, selection } = record.view.state;
+  return doc === record.doc && selection.from === record.from && selection.to === record.to;
+}
+
+/** Cierra la barra; un pedido de ir a una coincidencia que quedaba se descarta (al salir de la página, también). */
 export function closeFindBar(): void {
-  if (state.open) set({ open: false, status: null });
+  if (state.open || state.target) set({ open: false, status: null, target: null });
 }
 
 /** Si hay un pedido de foco sin atender (y lo marca como atendido). */
@@ -74,8 +191,10 @@ export function takeFocusRequest(): boolean {
   return true;
 }
 
-export function updateFindUi(patch: Partial<Omit<FindUiState, 'open' | 'focus'>>): void {
-  set(patch);
+export function updateFindUi(patch: Partial<Omit<FindUiState, 'open' | 'focus' | 'target' | 'prefill'>>): void {
+  // Cambiar lo buscado descarta la coincidencia pedida: ya es otra búsqueda.
+  if (patch.query !== undefined && patch.query !== state.query && state.target) set({ ...patch, target: null });
+  else set(patch);
 }
 
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);

@@ -6,7 +6,9 @@ import { usePermissions, useServices, useSyncStatus, useTree } from '../services
 import { pageFormat, sizeLabel } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
+  CollapseAllIcon,
   DarkIcon,
+  ExpandAllIcon,
   DriveIcon,
   LightIcon,
   MembersIcon,
@@ -21,6 +23,7 @@ import {
   TrashIcon,
 } from './icons';
 import { isPhoneLayout } from './commentsUi';
+import { collapseControlFor } from './collapseControl';
 import { notify } from './notice';
 import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
@@ -134,6 +137,8 @@ export function PageMenu(props: {
   const split = splitEnabled(tree, props.pageId);
   const own = ownSplit(tree, props.pageId);
   const tr = useT();
+  const collapse = collapseControlFor(props.pageId);
+  const counts = collapse?.counts() ?? { headings: 0, collapsed: 0 };
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -185,6 +190,11 @@ export function PageMenu(props: {
         <PrintIcon />
         {tr('pageMenu.print')}
       </button>
+      {/* Colapsar todos los títulos, o abrirlos, para vos: solo la página abierta (P.11, Doc_Colapsar.md). */}
+      {collapse && counts.headings > 0 && item(tr('pageMenu.collapseAll'), <CollapseAllIcon />, () => collapse.setAll(true))}
+      {collapse &&
+        counts.headings > 0 &&
+        item(tr('pageMenu.expandAll'), <ExpandAllIcon />, () => collapse.setAll(false), false, counts.collapsed > 0)}
       <hr />
       <button
         role="menuitemcheckbox"

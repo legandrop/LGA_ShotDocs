@@ -8,6 +8,7 @@ import * as Y from 'yjs';
 import { unitsFromPM, unitPos, type PMUnit, type UnitField } from '../search/extract';
 import { normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from '../search/normalize';
 import { FIND_REPLACE_META } from './editorMeta';
+import { recordFindSelection } from './findUi';
 
 // Buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6, con las correcciones de las
 // auditorías). Buscar no cambia el documento: las coincidencias se marcan con decoraciones, como las marcas de
@@ -78,11 +79,13 @@ export interface FindCollapseHooks {
   anyHidden?(): boolean;
 }
 
-let collapseHooks: FindCollapseHooks | null = null;
+/** Los enganches de cada editor (P.11 los registra por vista: con dos editores, cada uno los suyos). */
+const collapseHooksByView = new WeakMap<EditorView, FindCollapseHooks>();
 
-/** Lo registra el editor cuando existe el colapso (P.11); `null` lo saca. */
-export function setFindCollapseHooks(hooks: FindCollapseHooks | null): void {
-  collapseHooks = hooks;
+/** Lo registra el colapso (P.11) para una vista; `null` lo saca. */
+export function setFindCollapseHooks(view: EditorView, hooks: FindCollapseHooks | null): void {
+  if (hooks) collapseHooksByView.set(view, hooks);
+  else collapseHooksByView.delete(view);
 }
 
 // --- Listas plegables de BlockNote ---------------------------------------------------------------------
@@ -137,7 +140,8 @@ const hiddenMemo = new WeakMap<FindMatch[], { key: string; hooks: FindCollapseHo
  * guarda por lista de coincidencias (la barra lo pide en cada dibujo) mientras no se abra ni se cierre nada.
  */
 export function hiddenCount(matches: FindMatch[], view?: EditorView): number {
-  const hooks = collapseHooks && collapseHooks.anyHidden?.() !== false ? collapseHooks : null;
+  const registered = view ? collapseHooksByView.get(view) : undefined;
+  const hooks = registered && registered.anyHidden?.() !== false ? registered : null;
   if (!hooks && !view) return 0;
   const toggles = view ? closedToggleBlocks(view) : { ids: new Set<string>(), key: '' };
   if (!hooks && toggles.ids.size === 0) return 0;
@@ -158,12 +162,13 @@ export function hiddenCount(matches: FindMatch[], view?: EditorView): number {
 /** Abre lo que esconde el bloque: las listas plegables de arriba y las secciones colapsadas (P.11). */
 function revealBlock(view: EditorView, blockId: string): void {
   const toggles = closedToggles(view, blockId);
-  const collapsed = !!collapseHooks?.isHidden(blockId);
+  const hooks = collapseHooksByView.get(view);
+  const collapsed = !!hooks?.isHidden(blockId);
   // Abrir cambia los altos: las marcas de hoja tienen que recalcular aunque en el mismo momento cambien los
   // resaltados (ver `takeFindOnlyChanges`).
   if (toggles.length > 0 || collapsed) docChanges++;
   for (const wrapper of toggles) wrapper.querySelector<HTMLElement>(':scope > .bn-toggle-button')?.click();
-  if (collapsed) collapseHooks!.reveal(blockId);
+  if (collapsed) hooks!.reveal(blockId);
 }
 
 // --- Buscar ------------------------------------------------------------------------------------------------
@@ -453,6 +458,25 @@ export function stepFind(view: EditorView, dir: 1 | -1): FindMatch | null {
 }
 
 /**
+ * Elige como actual la `occurrence` de las coincidencias del bloque `blockId` (un resultado de la búsqueda del
+ * proyecto, que las cuenta igual). Si el bloque ya no está o tiene menos, la primera de la página. No la lleva
+ * a la vista (eso es `revealCurrent`).
+ */
+export function goToOccurrence(view: EditorView, blockId: string, occurrence: number): FindMatch | null {
+  if (getFindState(view.state).stale) refreshNow(view);
+  const state = getFindState(view.state);
+  if (state.matches.length === 0) return null;
+  const inBlock: number[] = [];
+  state.matches.forEach((m, i) => {
+    if (m.blockId === blockId) inBlock.push(i);
+  });
+  const index = inBlock[Math.min(Math.max(0, occurrence), inBlock.length - 1)] ?? 0;
+  view.dispatch(view.state.tr.setMeta(findKey, { kind: 'current', index } satisfies FindMeta));
+  rememberCurrent(view);
+  return getFindState(view.state).matches[index] ?? null;
+}
+
+/**
  * Lleva a la vista la coincidencia actual: si está escondida (una lista plegable cerrada, una sección
  * colapsada de P.11) primero la abre; después la centra, y si igual queda debajo de la barra, corre la barra.
  */
@@ -498,14 +522,18 @@ export function closeFind(view: EditorView, { select = true }: { select?: boolea
   const state = getFindState(view.state);
   const match = state.matches[state.current];
   const tr = view.state.tr.setMeta(findKey, { kind: 'clear' } satisfies FindMeta);
+  let selected = false;
   if (select && match?.field === 'text' && !state.stale) {
     try {
       tr.setSelection(TextSelection.create(tr.doc, match.from, match.to));
+      selected = true;
     } catch {
       // La posición ya no es de texto: la selección queda donde estaba.
     }
   }
   view.dispatch(tr);
+  // Ctrl/⌘+K sobre esto abre la búsqueda del proyecto, no "crear un link" (findUi.ts).
+  if (selected) recordFindSelection(view, view.state.selection.from, view.state.selection.to);
 }
 
 // --- Reemplazar --------------------------------------------------------------------------------------------

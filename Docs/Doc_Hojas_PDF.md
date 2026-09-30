@@ -13,6 +13,11 @@ Y.Doc: las marcas son una capa encima del editor y el PDF se arma con una copia.
 **Lo que se ve es lo que sale.** Las marcas de la pantalla y los saltos del PDF salen del mismo cálculo,
 hecho sobre la misma vista.
 
+**Con secciones colapsadas** (P.11, `Doc_Colapsar.md`), el cálculo se hace igual con todo abierto: la vista
+no copia lo colapsado, el PDF sale todo abierto y los cortes que caen en algo escondido se muestran juntos en
+el título colapsado ("Hojas 2–4 adentro"); los números de las marcas que se ven cuentan también las hojas
+escondidas.
+
 ## Piezas
 
 | Archivo | Qué hace |

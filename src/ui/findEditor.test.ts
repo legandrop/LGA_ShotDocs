@@ -32,8 +32,8 @@ import {
 
 const editors: BlockNoteEditor[] = [];
 afterEach(() => {
+  // Los enganches de P.11 son por vista: se van con el editor.
   for (const e of editors.splice(0)) e.unmount();
-  setFindCollapseHooks(null);
 });
 
 function mount(doc = new Y.Doc()): BlockNoteEditor {
@@ -185,7 +185,7 @@ describe('buscar en la página', () => {
     const { editor } = page([{ type: 'paragraph', content: 'uno' }, { type: 'paragraph', content: 'dos uno' }]);
     const hidden = editor.document[1].id;
     const reveal = vi.fn();
-    setFindCollapseHooks({ isHidden: (id) => id === hidden, reveal });
+    setFindCollapseHooks(view(editor), { isHidden: (id) => id === hidden, reveal });
     setFind(view(editor), 'uno', {});
     expect(reveal).not.toHaveBeenCalled();
     stepFind(view(editor), 1);

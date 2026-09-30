@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import { MEDIA_SCHEME, mediaIdOf, type MediaQueue } from '../media/queue';
 import { navigate, pagePath } from '../router';
+import { IS_MAC, isLetter, modPressed } from './findUi';
 import { notify } from './notice';
 import type { PageFormat } from './pageFormat';
 import { applyBreaks, buildPrintView, findPageArticle, paginateView, type Paginated, type PrintView } from './printView';
@@ -178,6 +179,14 @@ async function printLater(pageId: string, format: Format, media: PrintMedia | nu
   printNow(job);
 }
 
+/** Imprimir: Ctrl+P (⌘P en la Mac: nunca Ctrl en la Mac), sin Alt ni Shift. `mac` para probar las dos. */
+export function isPrintShortcut(
+  e: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; key: string; code?: string },
+  mac = IS_MAC,
+): boolean {
+  return modPressed(e, mac) && !e.altKey && !e.shiftKey && isLetter(e, 'p');
+}
+
 /**
  * Para imprimir desde el menú del navegador (o Ctrl+P si no se atajó): arma la vista en el momento, con
  * las imágenes que ya se ven. Y Ctrl/⌘+P con la página abierta pasa por `printPage`.
@@ -195,7 +204,7 @@ export function installPrintShortcuts(current: () => { pageId: string; format: F
     }
   };
   const onKey = (e: KeyboardEvent) => {
-    if (e.key.toLowerCase() !== 'p' || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+    if (!isPrintShortcut(e)) return;
     const page = current();
     if (!page) return;
     e.preventDefault();

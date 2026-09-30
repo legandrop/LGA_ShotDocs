@@ -39,10 +39,10 @@ const STUDIO: DeviceWorkspace = {
 const roots: Root[] = [];
 const devices: Device[] = [];
 beforeEach(() => localStorage.clear());
-afterEach(() => {
+afterEach(async () => {
   for (const r of roots.splice(0)) act(() => r.unmount());
   for (const d of devices.splice(0)) {
-    d.engine.stop();
+    await d.engine.stop();
     d.db.close();
     d.mediaDb.close();
     d.commentsDb.close();
@@ -199,7 +199,7 @@ describe('en la app abierta', () => {
       commentsDb: d.commentsDb,
       sizes: d.sizes,
       shutdown: async () => {
-        d.engine.stop();
+        await d.engine.stop();
         d.db.close();
         d.mediaDb.close();
         d.commentsDb.close();
@@ -308,6 +308,8 @@ describe('en la app abierta', () => {
       </ServicesContext.Provider>,
     );
     const remove = button(document.body, 'Remove from this device');
+    // Lo sin subir se cuenta aparte: con la máquina cargada puede tardar más que el montaje.
+    await act(() => vi.waitFor(() => button(document.body, 'Download my unsynced changes')));
     await act(async () => {
       button(document.body, 'Download my unsynced changes').click();
       await new Promise((r) => setTimeout(r, 20));
@@ -349,7 +351,7 @@ describe('quitar sin la base de fotos', () => {
       commentsDb: d.commentsDb,
       sizes: d.sizes,
       shutdown: async () => {
-        d.engine.stop();
+        await d.engine.stop();
         d.db.close();
         d.mediaDb.close();
         d.commentsDb.close();

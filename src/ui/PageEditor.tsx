@@ -32,6 +32,7 @@ import { openAttachmentNow, prepareAttachment } from './attachmentOpen';
 import { AttachmentSheet } from './AttachmentSheet';
 import { editorDictionary } from './editorLocale';
 import { findUnknownContent } from './unknownContent';
+import { redrawFromYjs } from './editorRecovery';
 import {
   CommentMargin,
   CommentSideMenuController,
@@ -49,10 +50,18 @@ import { createDrivePaste } from './drivePaste';
 import { DrivePasteMenu } from './DrivePasteMenu';
 import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
 import { SheetBreaks } from './SheetBreaks';
+import type { HeadingRecord } from './collapse';
+import { collapseExtension, collapseSupported, headingBackspaceExtension, headingCounts, revealBlock, setAllCollapsed } from './collapseEditor';
+import { setCollapseControl } from './collapseControl';
+import { collapseSaver, loadCollapse } from './collapseStore';
+import { CollapseToggles } from './CollapseToggles';
+import { BACKGROUND_META } from './editorMeta';
+import { headingItems, notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
 import { findExtension } from './findEditor';
-import { closeFindBar, isFindShortcut, openFindBar, takesFindShortcut } from './findUi';
+import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
+import { searchSession } from './projectSearchUi';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -71,12 +80,16 @@ function scriptTypeItem(tr: Translate): BlockTypeSelectItem {
 
 type Opening =
   | { state: 'loading' }
-  | { state: 'ready'; doc: Y.Doc; complete: boolean }
+  | { state: 'ready'; doc: Y.Doc; complete: boolean; collapse: Map<string, HeadingRecord> }
   /** La página trae algo que esta versión del editor no conoce: abrirla lo borraría. */
   | { state: 'unsupported'; what: string };
 
+/** En pantallas táctiles no se lleva el foco a la barra al ir a un resultado: el teclado taparía la página. */
+const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
 export function PageEditor({ pageId }: { pageId: string }) {
-  const { docs, engine } = useServices();
+  const services = useServices();
+  const { docs, engine, db } = services;
   const status = useSyncStatus();
   // Sin "Edit" (nivel 3) la página se abre en solo lectura (paso 9): el servidor rechazaría lo escrito.
   const perms = usePermissions();
@@ -95,6 +108,9 @@ export function PageEditor({ pageId }: { pageId: string }) {
   // editor: el editor se vuelve a montar (al terminar de bajar, al cambiar el permiso o el idioma) y la
   // búsqueda sigue.
   const [findEditor, setFindEditor] = useState<FindEditor | null>(null);
+  // Se suma si el editor no se pudo volver a dibujar después de un error (editorRecovery.ts): se monta de nuevo.
+  const [remounts, setRemounts] = useState(0);
+  const remount = useCallback(() => setRemounts((n) => n + 1), []);
 
   // Ctrl/⌘+F abre la barra de la app; con el foco en la barra, se deja pasar al navegador (la segunda vez).
   // Solo con el documento abierto: mientras carga (o si no se puede mostrar) queda la del navegador.
@@ -112,6 +128,28 @@ export function PageEditor({ pageId }: { pageId: string }) {
   // Al salir de la página, la barra se cierra (lo buscado queda para la próxima).
   useEffect(() => () => closeFindBar(), []);
 
+  // Ir a un resultado de la búsqueda del proyecto (Docs/Doc_Buscar.md, sección 8, y corrección 6): el pedido se
+  // toma cuando el editor de esta página está listo, o enseguida si ya lo estaba (un resultado de la misma
+  // página: la dirección no cambia). Abre la barra con la palabra que coincidió, en esa coincidencia; un
+  // resultado del título, la página arriba y sin barra.
+  const search = searchSession(services);
+  useEffect(() => {
+    if (!findEditor) return;
+    const take = () => {
+      const request = search.takeRequest(pageId);
+      if (!request) return;
+      if (request.term) {
+        const target = request.blockId ? { pageId, blockId: request.blockId, occurrence: request.occurrence ?? 0 } : null;
+        openFindBarAt(request.term, target, { focus: !coarsePointer() });
+      } else {
+        closeFindBar();
+        findEditor.prosemirrorView?.dom.closest('.main')?.scrollTo?.({ top: 0 });
+      }
+    };
+    take();
+    return search.subscribe(take);
+  }, [findEditor, pageId, search]);
+
   // Si el servidor tiene contenido de esta página que el dispositivo todavía no bajó, se muestra lo que
   // hay en solo lectura: editar sobre un documento a medio bajar arma una estructura paralela. Cuando
   // llega lo que falta, se vuelve a abrir para editar.
@@ -120,19 +158,20 @@ export function PageEditor({ pageId }: { pageId: string }) {
     let opened = false;
     void engine.prefetchPage(pageId).then(async (complete) => {
       if (cancelled) return;
-      const doc = await docs.open(pageId, { seed: complete && canSeed });
+      // Lo colapsado para vos (P.11) se lee junto con la página: el editor se crea ya colapsado.
+      const [doc, collapse] = await Promise.all([docs.open(pageId, { seed: complete && canSeed }), loadCollapse(db, pageId)]);
       opened = true;
       if (cancelled) return docs.close(pageId);
       const unknown = findUnknownContent(doc);
       if (unknown) setOpening({ state: 'unsupported', what: unknown });
-      else setOpening({ state: 'ready', doc, complete });
+      else setOpening({ state: 'ready', doc, complete, collapse });
     });
     return () => {
       cancelled = true;
       if (opened) docs.close(pageId);
       setOpening({ state: 'loading' });
     };
-  }, [docs, engine, pageId, attempt, canSeed]);
+  }, [docs, engine, db, pageId, attempt, canSeed]);
 
   // Si llega del servidor algo que esta versión no conoce, el editor se cierra antes de que lo vea.
   useEffect(
@@ -167,7 +206,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   if (opening.state === 'loading') {
     return (
       <>
-        <FindBar editor={null} editable={false} />
+        <FindBar editor={null} editable={false} pageId={pageId} />
         <div className="editor-placeholder" />
       </>
     );
@@ -175,7 +214,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   if (opening.state === 'unsupported') return <UnsupportedPage />;
   return (
     <>
-      <FindBar editor={findEditor} editable={opening.complete && canEdit} />
+      <FindBar editor={findEditor} editable={opening.complete && canEdit} complete={opening.complete} pageId={pageId} />
       {!opening.complete && (
         <p className="muted editor-missing">
           {status.online ? tr('editor.missingOnline') : tr('editor.missingOffline')}
@@ -188,12 +227,14 @@ export function PageEditor({ pageId }: { pageId: string }) {
       )}
       {/* Cambiar el idioma vuelve a abrir el editor (sus textos se eligen al crearlo); el documento es el mismo. */}
       <BlockEditor
-        key={`${pageId}:${opening.complete}:${canEdit}:${tr.lang}`}
+        key={`${pageId}:${opening.complete}:${canEdit}:${tr.lang}:${remounts}`}
         doc={opening.doc}
+        collapse={opening.collapse}
         pageId={pageId}
         editable={opening.complete && canEdit}
         canComment={canComment}
         onEditor={setFindEditor}
+        onBroken={remount}
       />
     </>
   );
@@ -221,21 +262,27 @@ function acceptedText(): string {
 
 function BlockEditor({
   doc,
+  collapse,
   pageId,
   editable,
   canComment,
   onEditor,
+  onBroken,
 }: {
   doc: Y.Doc;
+  /** Lo colapsado para vos (P.11): se actualiza en el lugar, así un editor que se vuelve a crear lo conserva. */
+  collapse: Map<string, HeadingRecord>;
   pageId: string;
   editable: boolean;
   canComment: boolean;
   onEditor?: (editor: FindEditor | null) => void;
+  /** El editor no se pudo volver a dibujar después de un error: hay que montarlo de nuevo. */
+  onBroken?: () => void;
 }) {
-  const { files, media, user } = useServices();
+  const { docs, files, media, user, db } = useServices();
   const scheme = useScheme();
   const tr = useT();
-  const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
+  const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
   /** El adjunto con su hoja abierta (Docs/Doc_Adjuntos.md). */
   const [sheet, setSheet] = useState<string | null>(null);
@@ -271,11 +318,30 @@ function BlockEditor({
   // Pegar un link de Drive ofrece dejarlo como link, como texto o como tarjeta (paso 13, drivePaste.ts).
   const drivePaste = useMemo(() => createDrivePaste(), []);
 
+  // Lo colapsado para vos (P.11, Docs/Doc_Colapsar.md): se guarda en la base local con una pausa, y lo que
+  // falte se escribe al cerrar la página.
+  const collapseSave = useMemo(() => collapseSaver(db, pageId), [db, pageId]);
+  // Un navegador sin `:has()` no puede esconder: sin colapsar (collapseEditor.ts, `collapseSupported`).
+  const canCollapse = useMemo(collapseSupported, []);
+  useEffect(() => {
+    // Lo pendiente se escribe al cerrar la página, y también si se va la pestaña o la app queda de fondo (el
+    // teléfono puede cerrarla sin avisar).
+    const flush = () => void collapseSave.flush();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flush();
+    };
+  }, [collapseSave]);
+
   const editor = useCreateBlockNote(
     withCollaboration({
       ...editorSchemaOptions,
-      // Buscar y reemplazar en la página (findEditor.ts): decoraciones, sin tocar el documento.
-      extensions: [findExtension],
       dictionary: editorDictionary(tr.lang),
       // Pegar archivos (con portero, cualquier archivo): un bloque por archivo, en orden (fileDrop.ts).
       pasteHandler: (ctx) => {
@@ -293,7 +359,11 @@ function BlockEditor({
           if (blockId) {
             setTimeout(() => {
               try {
-                editorRef.current?.removeBlocks([blockId]);
+                const current = editorRef.current;
+                current?.transact((tr) => {
+                  tr.setMeta(BACKGROUND_META, true);
+                  current.removeBlocks([blockId]);
+                });
               } catch {
                 // El bloque ya no está.
               }
@@ -316,11 +386,58 @@ function BlockEditor({
         fragment: doc.getXmlFragment(CONTENT_FRAGMENT),
         user: { name: user.email, color: '#2383e2' },
       },
+      // Buscar y reemplazar en la página (findEditor.ts) y colapsar secciones (collapseEditor.ts): las dos con
+      // decoraciones, sin tocar el documento. Colapsar, solo si el navegador puede esconder (`:has()`).
+      extensions: [
+        findExtension,
+        // Retroceso al principio de un título "sube la línea", en todos los navegadores (también sin colapsar).
+        headingBackspaceExtension,
+        ...(canCollapse
+          ? [
+              collapseExtension({
+                initial: collapse,
+                save: (records: ReadonlyMap<string, HeadingRecord>) => {
+                  collapse.clear();
+                  for (const [id, r] of records) collapse.set(id, r);
+                  collapseSave.save(records);
+                },
+              }),
+            ]
+          : []),
+      ],
     }),
     [doc],
   );
 
-  editorRef.current = editor as unknown as { removeBlocks: (ids: string[]) => unknown };
+  // El menú de la página ("Colapsar todo / Abrir todo") y "Ir al bloque" de los comentarios llegan acá.
+  useEffect(() => {
+    if (!canCollapse) return;
+    return setCollapseControl({
+      pageId,
+      counts: () => headingCounts(editor.prosemirrorState),
+      setAll: (collapsed) => {
+        const view = editor.prosemirrorView;
+        if (view) setAllCollapsed(view, collapsed);
+      },
+      reveal: (blockId) => {
+        const view = editor.prosemirrorView;
+        return view ? revealBlock(view, blockId) : false;
+      },
+    });
+  }, [editor, pageId, canCollapse]);
+
+  editorRef.current = editor as unknown as NonNullable<typeof editorRef.current>;
+
+  // Un cambio de otro dispositivo que el editor no pudo dibujar (docs.ts, `subscribeRenderFailed`): se vuelve
+  // a dibujar todo desde el documento en el momento, antes de la próxima tecla. Si ni eso anda, el editor
+  // queda en solo lectura y se monta de nuevo.
+  useEffect(
+    () =>
+      docs.subscribeRenderFailed((id) => {
+        if (id === pageId && !redrawFromYjs(editor as never)) onBroken?.();
+      }),
+    [docs, editor, pageId, onBroken],
+  );
 
   // La barra de buscar (arriba, en PageEditor) usa este editor mientras esté montado.
   useEffect(() => {
@@ -351,7 +468,13 @@ function BlockEditor({
             .then((r) => r.blob())
             .then((blob) => storeEmbedded(blob))
             .then((stored) => {
-              if (editor.getBlock(block.id)) editor.updateBlock(block.id, { props: { url: stored } } as never);
+              // Un cambio de la app, no de la persona: no abre una sección colapsada (Doc_Colapsar.md).
+              if (editor.getBlock(block.id)) {
+                editor.transact((tr) => {
+                  tr.setMeta(BACKGROUND_META, true);
+                  editor.updateBlock(block.id, { props: { url: stored } } as never);
+                });
+              }
             })
             .catch((err: unknown) =>
               notify(
@@ -418,7 +541,10 @@ function BlockEditor({
       onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: { [SCRIPT_PROP]: true } }),
     };
     // "/Paragraph" en una línea Script también le saca la marca de guion.
-    const items = getDefaultReactSlashMenuItems(editor).map((item) =>
+    // Sin los "encabezados plegables" de BlockNote: todos los títulos se colapsan (P.11, Doc_Colapsar.md).
+    const items = getDefaultReactSlashMenuItems(editor)
+      .filter(notToggleHeading)
+      .map((item) =>
       (item as { key?: string }).key === 'paragraph' || item.title === editor.dictionary.slash_menu.paragraph.title
         ? {
             ...item,
@@ -440,7 +566,7 @@ function BlockEditor({
   }, [editor, tr]);
 
   const toolbarItems = useMemo(
-    () => paragraphVariantItems(blockTypeSelectItems(editor.dictionary), scriptTypeItem(tr), tr),
+    () => paragraphVariantItems(headingItems(blockTypeSelectItems(editor.dictionary)), scriptTypeItem(tr), tr),
     [editor, tr],
   );
 
@@ -641,6 +767,8 @@ function BlockEditor({
         <CommentSideMenuController canComment={canComment} />
       </BlockNoteView>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
+      {/* El triángulo de cada título (P.11): una capa encima, como el margen. */}
+      {canCollapse && <CollapseToggles editor={editor} host={host} editable={editable} />}
       {/* Dónde empieza cada hoja (solo una capa encima; roadmap B.7). */}
       <SheetBreaks pageId={pageId} host={host} />
       {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}

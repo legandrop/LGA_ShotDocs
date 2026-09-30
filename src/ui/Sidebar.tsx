@@ -4,7 +4,7 @@ import { useT } from '../i18n';
 import { navigate, pagePath, useRoute } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
-import { AccountIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, TrashIcon } from './icons';
+import { AccountIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, SearchIcon, TrashIcon } from './icons';
 import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
 import { DriveDialogHost, MembersDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
@@ -12,6 +12,7 @@ import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { useCurrentProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
+import { SEARCH_SHORTCUT_LABEL, useSearchSession } from './projectSearchUi';
 import { SyncBadge } from './SyncBadge';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
 
@@ -34,6 +35,7 @@ export function Sidebar() {
   const route = useRoute();
   const activeId = route.name === 'page' ? route.id : null;
   const projectId = useCurrentProject();
+  const search = useSearchSession();
   const tr = useT();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
@@ -261,11 +263,25 @@ export function Sidebar() {
 
       <div className="section-title">
         <span className="mono-label">{tr('sidebar.pages')}</span>
-        {canCreateRoot && (
-          <button aria-label={tr('common.newPage')} data-tip={tr('common.newPage')} onClick={() => void newPage(null)}>
-            <PlusIcon size={16} />
+        <span className="section-actions">
+          {/* Buscar en el proyecto (Docs/Doc_Buscar.md, sección 7): a la izquierda del "+", también para quien
+              no puede crear páginas. */}
+          <button
+            className="search-button"
+            aria-label={tr('sidebar.search', { shortcut: SEARCH_SHORTCUT_LABEL })}
+            aria-haspopup="dialog"
+            aria-expanded={search.isOpen()}
+            data-tip={tr('sidebar.search', { shortcut: SEARCH_SHORTCUT_LABEL })}
+            onClick={() => search.setOpen(true)}
+          >
+            <SearchIcon size={16} />
           </button>
-        )}
+          {canCreateRoot && (
+            <button aria-label={tr('common.newPage')} data-tip={tr('common.newPage')} onClick={() => void newPage(null)}>
+              <PlusIcon size={16} />
+            </button>
+          )}
+        </span>
       </div>
       {renderList(null, roots, 0, 'tree')}
       {roots.length === 0 && canCreateRoot && (

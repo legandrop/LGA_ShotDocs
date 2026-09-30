@@ -1,8 +1,8 @@
 # Buscar en el proyecto y en la página (P.12)
 
-Estado: **entrega 1 hecha (v0.051): buscar y reemplazar en la página**; la búsqueda del proyecto (entrega 2),
-pendiente. "Correcciones de la auditoría" manda sobre lo de arriba y "Cómo quedó (entrega 1)", al final, sobre
-todo lo demás. Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
+Estado: **entrega 1 hecha (v0.051): buscar y reemplazar en la página; entrega 2 hecha (v0.054): buscar en el
+proyecto (Ctrl/⌘+K)**. "Correcciones de la auditoría" manda sobre lo de arriba, y "Cómo quedó (entrega 1)" y
+"Cómo quedó (entrega 2)", al final, sobre todo lo demás. Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
 + de páginas, que busca en todo el proyecto y te lleva al lugar; otra a la izquierda de los comentarios, que
 busca en la página abierta, también adentro de las secciones colapsadas". Después sumó **reemplazar**, como en
 VS Code. Sale de leer el código de `main` (v0.050) y `Doc_Colapsar.md` (rama `lega/colapsar`, en diseño).
@@ -363,7 +363,7 @@ Pruebas:
   problemas.
 - Cómo guarda y-prosemirror un `hardBreak` y una tabla dentro del Y.Doc: el recorrido es genérico (todo
   `Y.XmlText` debajo del bloque), pero lo fija una prueba con el editor real.
-- El diseño de P.11 está en curso: el nombre y la forma de la función que abre las secciones pueden cambiar.
+- ~~El diseño de P.11 está en curso~~: P.11 (entrega 1a, v0.053) registra `setFindCollapseHooks` desde su plugin (`collapseEditor.ts`).
 
 ## Correcciones de la auditoría (mandan sobre lo de arriba)
 
@@ -562,6 +562,188 @@ Yjs aguantó todos los intentos de romperlo. Arreglado además:
   (si no, va por ProseMirror). Prueba con dos párrafos iguales.
 
 **Queda para después:** la búsqueda del proyecto (entrega 2, con las correcciones 5 a 8, 11, 12, 15 a 17);
-reemplazar en pies y nombres, *Conservar mayúsculas* y expresiones regulares; que P.11 registre
-`setFindCollapseHooks` y respete `FIND_REPLACE_META`, `isFindReplaceTransaction` e `isFindReplaceUndo`; probar
+reemplazar en pies y nombres, *Conservar mayúsculas* y expresiones regulares; probar
 a mano Safari de Mac, iPhone y Firefox (Ctrl/⌘+F, el teclado del teléfono, los IME).
+
+**Con P.11 (v0.053):** el plugin de colapsar registra `setFindCollapseHooks(view, hooks)`, por vista (`isHidden`,
+`reveal` para vos, `anyHidden`) y no abre nada por `isFindReplaceTransaction` ni por deshacer o rehacer un reemplazo (la entrada de
+la pila marcada con `FIND_REPLACE_META`). Lo prueban `collapseFind.test.ts` (contar lo escondido, ir a una
+coincidencia escondida abre solo esa sección, "Reemplazar todo" adentro de secciones colapsadas y su deshacer y
+rehacer las dejan colapsadas) y `find.mjs`.
+
+## Cómo quedó (entrega 2, v0.054)
+
+Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo que pidió la auditoría del código
+(al final). Donde esto y lo de arriba no coinciden, vale esto.
+
+- **Cada dispositivo tiene todas las páginas:** verificado en `SyncEngine.cycle` (`fetchTree` de todos los
+  proyectos y `pullPage` de toda página con `update_seq > cursor`), y de punta a punta: un teléfono que entra
+  por primera vez encuentra el texto de una página que nunca abrió.
+- **`src/sync/docs.ts`:** `onLocalChange` pasó a ser un conjunto de escuchas (`subscribeLocalChange`, corrección
+  8); cada escucha va en su `try/catch` (uno que falla no deja sin aviso a los demás ni frena la suma de la
+  versión; el error va a la consola), y la sincronización suelta el suyo en `engine.stop()`. `peek(pageId)` da el Y.Doc vivo de una página
+  abierta (ya cargado y sin `stale`), sin abrirla. `indexSnapshot(pageId)` lee lo guardado con el candado de la
+  página, **primero el estado y después el contenido** (si algo cambia en el medio, el contenido es más nuevo
+  que la marca y se vuelve a leer; nunca al revés), y con más de 64 updates sueltos los fusiona (`loadInto`,
+  corrección 7). No mira si esta versión puede mostrar la página: la búsqueda lee el texto sin depender del
+  esquema (un tipo de bloque desconocido también se encuentra), así que no falta nada por eso.
+- **`src/search/projectIndex.ts`** (`ProjectIndex`, sin React, como `projectSizes.ts`):
+  - **Qué páginas:** las de la barra lateral del proyecto abierto (raíces e hijas, sin la papelera), en ese
+    orden. **Al buscar** se vuelve a mirar el árbol: `tree.get`, el proyecto y `isTrashed` (corrección 15). Una
+    página que salió del árbol (le sacaron el permiso) no da nada aunque siga en IndexedDB o en el índice.
+  - **Por página:** las unidades de `unitsFromYDoc` (la misma regla que la barra; los hijos anidados, pies y
+    nombres son unidades propias, corrección 17) con su texto normalizado (sin el mapa al original), y una
+    marca: `version:cursor` del `docState` (sin los filtros de la papelera de archivos, corrección 16) más las
+    páginas que avisa `subscribeLocalChange` (una edición guardada se vuelve a leer aunque la suma de la versión
+    falle). La página abierta sale de `docs.peek`, con lo recién escrito aunque no esté guardado; su marca es
+    `live:<número del documento>:<cambios>` (`doc.on('update')`: cuenta también los borrados, que no mueven el
+    vector de estado). El índice no guarda el documento: uno cerrado y destruido no queda retenido.
+  - **Cuándo lee:** la primera vez que se abre el panel (no al abrir la app), y después, con el panel abierto,
+    en cada búsqueda, al terminar cada sincronización y con cada cambio del árbol; solo lo que cambió de marca.
+    Cede el hilo cada ~12 ms; **avisa lo leído a lo sumo cada 250 ms** (cada aviso vuelve a buscar) y al
+    terminar. `building` ("Buscando…") se prende **solo si alguna página cambió de marca**: una búsqueda o una
+    sincronización sin cambios no lo prende. Antes de cada página espera si hay ediciones sin guardar (fusionar no les
+    demora el guardado), con un tope de 2 s para toda la pasada y sin esperar si guardar está fallando (sin
+    espacio: no se arregla solo; antes eran hasta 1 s por página, unos 17 minutos con mil páginas), y **cerrar el panel corta la pasada** (`cancel`; lo leído queda). Un
+    error de la base (se está cerrando) no rompe nada: se intenta la próxima vez.
+  - **Buscar:** cada palabra por separado (`parseWords`: sin repetir, sin las que quedan vacías), sin
+    mayúsculas ni tildes, la ñ como n, con partes de palabras; una página entra si tiene todas, en el título o
+    en cualquier bloque. **Para ordenar se cuenta con `indexOf` sobre el texto normalizado, sin mapas**; los
+    mapas y los fragmentos se arman solo para las páginas que se muestran (y no se guardan). Orden: todas las
+    palabras en el título, alguna en el título, el resto; después por cantidad de coincidencias y, a igualdad,
+    el orden de la barra lateral. Hasta 50 páginas, con "Mostrar más". **Una sola letra busca solo en los
+    títulos** (en el texto coincide con casi todo); el panel lo dice. No en chino, japonés y otras escrituras
+    donde un carácter es una palabra: ahí se busca también en el texto. `total` (la cantidad de páginas) puede
+    contar de más una página que queda fuera de las que se muestran y cuyas únicas coincidencias no se confirman
+    con el mapa (solo con medias sílabas coreanas): se deja así.
+  - **Fragmentos:** hasta 3 por página, **el mejor primero** (el bloque con más palabras distintas; a igualdad,
+    el orden del documento), unos 110 caracteres desde un poco antes de la primera coincidencia, sin partir
+    palabras, con "…", todo lo encontrado resaltado y "y N más en esta página". Un pie dice "Pie de foto:" y un
+    nombre "Nombre del archivo:". Cada fragmento lleva **la palabra que coincidió primero en ese bloque** (como
+    se escribió) y **cuál de las de esa palabra en el bloque es** (contando las unidades de antes del mismo
+    bloque: pie y nombre incluidos), que es como las cuenta la barra (corrección 5). Los tramos se confirman con
+    el mapa (una coincidencia que corta un carácter del original, como media sílaba coreana, no cuenta): una
+    página que al final no tiene nada confirmado no se muestra.
+  - **Avisos:** páginas con `update_seq > cursor` (y no creadas acá sin subir): "Todavía bajando N páginas:
+    puede faltar algo" o, sin red, "Sin conexión: N páginas todavía no están en este dispositivo"; páginas con
+    `unreadable`: "N páginas no se pudieron leer enteras en este dispositivo: puede faltar algo" (corrección 17).
+  - **Medido** (fake-indexeddb en Node, 1000 páginas de 10 párrafos): el índice la primera vez, ~1,1 s; la
+    primera búsqueda amplia ("de la", en todas), ~20 ms (antes de la auditoría, ~650 ms: armaba mapas y
+    fragmentos de todas las páginas); una letra, ~2 ms; dos palabras poco comunes, ~8 ms; releer sin cambios,
+    ~6 ms. La prueba tiene esos topes con `SHOTDOCS_STRICT_PERF=1` (5 s, 150 ms, 30 ms, 100 ms, 500 ms) y cinco
+    veces más sin él, para no fallar por el reloj con la máquina cargada.
+  - **No se guarda nada en `meta`** (desvío aceptado de la corrección 7): el índice es en memoria, por sesión.
+    La contra: **en cada apertura de la app, el primer Ctrl/⌘+K vuelve a leer todas las páginas del proyecto**
+    (en un teléfono, con muchas páginas, "Buscando…" un rato y resultados que van apareciendo). Se revisa si en
+    un teléfono tarda de verdad.
+- **`src/ui/projectSearchUi.ts`** (siempre cargado): `searchSession(services)`, una por instancia de servicios
+  (se guarda por `docs`), con el índice (se arma la primera vez que se pide), si el panel está abierto y **el
+  pedido de ir a un resultado** (página, palabra, bloque y cuál; vence al minuto). `Workspace.tsx` la suelta
+  (`disposeSearchSession`: el índice deja de escuchar y se libera) al cerrar sesión o cambiar de workspace.
+  `isSearchShortcut` (**Ctrl+K; en la Mac solo ⌘K**, con `modPressed` e `isLetter` de `findUi.ts`) y
+  `takesSearchShortcut` (no con texto elegido en el editor, que es "link" de BlockNote, ni con otro diálogo o
+  el carrete abiertos).
+- **`src/ui/ProjectSearch.tsx`** (se baja aparte, `lazyDialogs.ts`; textos en `src/i18n/lazy/search.ts`): el
+  panel, `role="dialog"` con `aria-modal`, arriba al centro en la computadora y a pantalla completa en el
+  teléfono. Campo "Buscar en *MGTZD*" (combobox con `aria-activedescendant`), 120 ms de espera al escribir.
+  - Vacío: una línea de ayuda y **todos los proyectos**, el abierto marcado (sin "últimas páginas", corrección
+    12). Con algo escrito: **los otros proyectos** cuyo nombre tiene todas las palabras (hasta 5, arriba; el
+    abierto no, porque elegirlo solo cerraría el panel) y las páginas; la opción activa es siempre la primera.
+    **Si ningún proyecto coincide y la persona puede crear proyectos** (las mismas reglas que el selector), al
+    final de la lista "Proyecto nuevo «…»" (el nombre, hasta 200 caracteres, como la base y el selector). Como un
+    proyecto no se puede borrar, se ofrece **solo con los resultados al día**: lo escrito ya se buscó (no un nombre
+    a medio corregir), el índice no está leyendo y no faltan páginas por bajar. Y **Enter lo crea solo si la
+    persona llegó a esa opción con las flechas** (nunca por ser la primera o la única, ni con el mouse encima); un
+    clic lo crea.
+  - **Teclado:** ↑ ↓ por todas las opciones (dan la vuelta), Enter; Esc cierra con el foco en cualquier lado del
+    panel; Tab no sale del panel. Al cerrar sin ir a ningún lado (Esc, la cruz, afuera o Ctrl/⌘+K otra vez) el
+    foco vuelve adonde estaba. Sin Ctrl/⌘+Enter (corrección 11).
+  - **"Buscando…"** aparece solo si la lectura sigue después de 300 ms; "Sin resultados" no aparece mientras
+    se lee.
+  - **Accesibilidad:** en la lista (`role="listbox"`) solo hay opciones y grupos (los proyectos; cada página
+    con sus fragmentos); la ayuda y los avisos van afuera, y los rótulos de sección y "y N más" van con
+    `aria-hidden`. Una región `aria-live="polite"` dice cuántas páginas se encontraron.
+- **Ir a un resultado** (corrección 6): el panel guarda el pedido, cierra el cajón del teléfono (`onGo`, desde
+  `Workspace.tsx`: en la misma página la dirección no cambia y el cajón no se cerraba solo) y navega.
+  `PageEditor.tsx` toma el pedido de su página cuando su editor está listo, o enseguida si ya lo estaba:
+  `openFindBarAt(palabra, { bloque, cuál })` abre la barra con esa palabra, sin *Aa* ni palabra entera y sin
+  tomar lo elegido en el editor, y la barra elige esa coincidencia (`goToOccurrence` en `findEditor.ts`; si el
+  bloque ya no está, la primera de la página) y la lleva a la vista **una sola vez** (`takeFindTarget`). **Con
+  la página a medio bajar** (el editor en solo lectura) el pedido se guarda: cuando termina de bajar y el
+  editor se vuelve a montar, va otra vez a esa coincidencia. El pedido lleva su página (la barra de otra página
+  no lo usa) y se descarta al cambiar lo buscado, al cerrar la barra o al salir de la página. Enter sigue por las demás. El foco va al campo de
+  la barra, salvo en pantallas táctiles. **La página** (su renglón): si lo encontrado está en el título, se abre
+  arriba y sin barra; si no, va a su mejor fragmento. Lo escondido en una lista plegable o en una sección
+  colapsada (P.11, v0.053) se abre para vos al llegar, con los ganchos de cada editor (`setFindCollapseHooks(view,
+  hooks)`); lo prueba `projectSearch.test.tsx` (una página que abre con la sección colapsada: ir a la coincidencia
+  escondida la abre y queda ahí).
+- **Ctrl/⌘+K** (`Workspace.tsx`): abre el panel desde cualquier lugar; con el panel abierto, lo cierra. Con un
+  IME escribiendo, no. Con el selector de proyectos abierto, el selector se cierra. **Esc en la barra de buscar
+  deja elegida la coincidencia** (entrega 1), y con texto elegido Ctrl/⌘+K sería "link": si lo elegido es
+  exactamente lo que dejó Esc (`closeFind` lo anota con `recordFindSelection` en `findUi.ts`: el editor, el
+  documento y el tramo) y nadie lo tocó, un escucha en `window` en la fase de captura abre la búsqueda antes que
+  BlockNote (`preventDefault` y `stopPropagation`), salvo con un diálogo abierto. **Cualquier clic o tecla en el
+  editor lo olvida** (menos ⌘, Ctrl, Shift o Alt solos: el principio del atajo), y también si el editor ya no
+  está: si la persona vuelve a elegir lo mismo (un doble clic en la palabra para hacerle un link), es "link". **El
+  selector de proyectos se quedó sin atajo** (su tooltip dice ahora "⌘K busca páginas y proyectos"); crear un
+  proyecto desde el teclado sigue andando desde el panel.
+- **La lupa** en `Sidebar.tsx`, a la izquierda del "+" de "Páginas", también para quien no puede crear páginas
+  ("Buscar en el proyecto (Ctrl+K)").
+- **Regla del repo (Lega): en la Mac, siempre ⌘ y nunca Ctrl.** Además de Ctrl/⌘+F y Ctrl/⌘+K, pasaron a
+  `modPressed` (con la plataforma como parámetro, para probar la Mac): mandar un comentario (⌘Enter,
+  `isSendShortcut`), comentar (⌘⌥M, `isCommentShortcut`) e imprimir (⌘P, `isPrintShortcut`). Quedan como están,
+  a propósito: el zoom del carrete con la rueda (`ctrlKey` ahí es el pellizco del trackpad, también en la Mac),
+  el carrete que no deja pasar ninguna combinación con Ctrl o ⌘ al resto de la app, y en `PageEditor.tsx` el
+  clic con modificador (que no abre el carrete) y la barra espaciadora con modificador (que no lo abre): son
+  exclusiones, no atajos.
+- Sin cambios en la base, en el esquema ni en `min_app_version`. Los comentarios y la papelera no entran.
+
+**Pruebas (1039 en total, con lo de `main` hasta v0.053):** `src/search/projectIndex.test.ts` (las palabras; títulos y texto, cada palabra en
+algún lado, la ñ; grupos, camino, 3 fragmentos y "más"; hijos anidados, pies y nombres con cuál de su bloque;
+la papelera y lo de adentro sin volver a leer; una página que sale del árbol y un árbol que la esconde al buscar;
+solo el proyecto abierto; solo relee lo que cambió, local o bajado de otro dispositivo; el aviso de edición
+local aunque la marca no cambie; la página abierta desde su documento vivo, también un borrado; la fusión de
+más de 64 updates; faltan bajar e ilegibles; ceder el hilo y avisar a lo sumo cada 250 ms; sin cambios no se
+prende "leyendo"; cortar la pasada; una letra, solo títulos; `dispose` y un escucha que falla; **80 cruces al
+azar de leer para buscar (fusionando más de 64 updates) con escribir, subir, bajar y otro dispositivo
+escribiendo**, sin perder nada, con lo guardado igual a lo que se ve y un dispositivo nuevo que ve lo mismo;
+**1000 páginas con topes de tiempo**). `src/ui/projectSearch.test.tsx`, con la app de verdad (`Shell`, el
+árbol, la base local y el editor en jsdom): el atajo (Mac: Ctrl+K pasa de largo; ruso; con un diálogo); Ctrl+K
+abre con el foco en el campo, resultados, pies, Esc y Ctrl+K otra vez; cada palabra y "sin resultados"; ↑ ↓;
+los proyectos y cambiar de proyecto; el abierto no aparece con algo escrito, la primera opción activa, crear un
+proyecto desde el panel y quien no puede no lo ve; "Buscando…" que no parpadea y que aparece con una lectura
+lenta; Esc en la barra y Ctrl+K sobre eso abre la búsqueda, y Ctrl+K otra vez devuelve el foco al editor; modal
+(Tab, Esc con el foco en la cruz, el foco que vuelve); la lista solo con opciones y grupos y la cantidad
+anunciada; el selector que se cierra; la lupa para quien solo ve; Ctrl+K con texto elegido en el editor no abre;
+ir a otra página, la coincidencia justa del bloque y que se queda ahí; una página a medio bajar que no pierde la
+coincidencia al completarse; la misma página (cierra el cajón, dos veces seguidas); el título (arriba, sin
+barra); el pedido por instancia de servicios. `src/ui/macShortcuts.test.ts`: los atajos con ⌘ en la Mac y Ctrl
+en el resto (buscar, comentar, mandar, imprimir). De punta a punta: `search.mjs` en el repo de pruebas privado
+(Chromium, usuario temporal que se borra al final, puerto 4176), y `projects.mjs` actualizado (el selector se
+abre con un clic; Ctrl+K con texto elegido no abre la búsqueda; a 700 px, Ctrl+K abre la búsqueda a pantalla
+completa y el selector sube como hoja desde el cajón).
+
+**Auditoría del código (independiente, 2026-09-30).** Nada bloqueante; los cambios en la sincronización se
+verificaron con 80 cruces al azar. Arreglado todo lo que encontró: el proyecto abierto como primera opción
+(Enter solo cerraba), la primera búsqueda amplia lenta con muchas páginas, "Buscando…" que parpadeaba, Esc y
+después Ctrl/⌘+K que creaba un link, crear un proyecto desde el teclado (se había perdido con el atajo del
+selector), escuchas de ediciones sin `try/catch`, el índice y la sesión que no se soltaban al cerrar sesión (y
+documentos cerrados retenidos), un cálculo que no se usaba (`supported`), el foco al cerrar con Ctrl/⌘+K, Tab y
+Esc en el panel, la accesibilidad de la lista, el IME en Ctrl/⌘+K, el selector que quedaba abierto abajo, la
+lectura que seguía con el panel cerrado, y la coincidencia pedida que se perdía con la página a medio bajar. De paso: un ciclo de sincronización cortado por
+`stop()` con la base ya cerrada dejaba un error sin atrapar al contar lo pendiente (`engine.ts`); ahora se ignora.
+
+**Verificación de los arreglos (independiente, 2026-09-30).** Un bloqueante, arreglado: "Proyecto nuevo «…»" se
+creaba con Enter aunque hubiera páginas que coincidían (con el índice leyendo, con páginas por bajar, o con lo
+escrito todavía sin buscar: un nombre viejo o a medio corregir), y un proyecto no se puede borrar. Ahora se
+ofrece solo con los resultados al día y Enter lo crea solo después de llegar con las flechas (pruebas: una
+lectura lenta, páginas por bajar, "Bosquex" corregido a "Bosque", Enter sin flechas). Además: el nombre hasta 200
+caracteres; lo que dejó Esc se olvida con un clic o una tecla en el editor (lo encontró la prueba de punta a
+punta: Ctrl sola no cuenta) o con un diálogo abierto; la coincidencia pedida lleva su página y se descarta al
+cambiar lo buscado o cerrar la barra; esperar a que se guarde tiene un tope por pasada y no espera si guardar
+falla; `onWriteError` después de `stop()`; los topes de tiempo de las pruebas, holgados; una letra en chino o
+japonés busca en el texto; y el error de un escucha a la consola.
+
+**Queda para después:** lo de la sección "Entregas" (reemplazar en el proyecto, la papelera, todos los proyectos,
+comentarios); *Aa* y palabra entera en el panel; guardar el índice en `meta` si en un teléfono tarda.
+**Decidido por Lega:** los proyectos que coinciden van arriba de las páginas; en la Mac, solo ⌘K (nunca Ctrl).

@@ -50,6 +50,10 @@ Lega.
 
 ### P. Pedidos de Lega (2026-09-30), en este orden
 
+**Orden acordado con Lega (2026-09-30) para lo que falta:** después de colapsar 1a (P.11), la búsqueda en el
+proyecto (P.12, entrega 2), colapsar 1b, colapsar para todos (P.11, entrega 2), P.9 carpetas, P.10 copias
+locales, la segunda entrega de adjuntos (vista previa) y P.8.
+
 - **P.1 Hecho (v0.043): el PDF corta donde marca la pantalla.** Las fotos del Drive salían en el PDF con el
   original a todo el ancho (más altas que en pantalla, con la miniatura). Ver `Doc_Hojas_PDF.md`.
 - **P.2 Hecho (v0.044): el primer clic en una foto la elige, el segundo la abre.** Contorno, tiradores a la
@@ -102,9 +106,14 @@ Lega.
   imprime todo abierto por defecto, con una casilla para imprimirlo como se ve; los saltos de página en
   pantalla se marcan como si todo estuviera abierto (si una sección colapsada ocupa las páginas 2 a 4, el
   corte siguiente dice página 5); arrastrar un título colapsado mueve toda su sección; se saca "Encabezado
-  plegable" del menú `/`. Diseño en `Doc_Colapsar.md` (en curso).
-- **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página**
-  (`Doc_Buscar.md`, "Cómo quedó"). Falta la entrega 2, buscar en el proyecto. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
+  plegable" del menú `/`. **Diseño en [`Doc_Colapsar.md`](Doc_Colapsar.md)** (sin tipo de bloque ni propiedad
+  nueva). **Entrega 1a hecha (v0.053):** colapsar para vos, con toda la seguridad al editar, las marcas de hoja
+  contadas con todo abierto y el PDF todo abierto. Faltan la 1b (arrastrar la sección entera,
+  Shift+Ctrl/⌘+↑/↓, "Imprimir como se ve") y la 2 (para todos, Shift+clic).
+- **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página;
+  entrega 2 hecha (v0.054): buscar en el proyecto con Ctrl/⌘+K** (`Doc_Buscar.md`, "Cómo quedó (entrega 1)" y
+  "(entrega 2)"). Queda para después: reemplazar en el proyecto, la papelera, todos los proyectos y los
+  comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y
   contenido) y lleva al lugar. **En la página:** una lupa a la izquierda del ícono de comentarios, que busca en
   la página abierta, también adentro de las secciones colapsadas (P.11: el resultado abre la sección). A pensar
@@ -191,6 +200,15 @@ Lega.
    castellano y las plantillas, que todavía no existen (fase 3), con su nombre en cada idioma.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
    datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes.
+
+10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
+   que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la
+   semilla con un texto vacío, la reparación de bloques con dos contenidos o dos grupos de hijos, y volver a
+   dibujar el editor si igual falla. La prueba al azar por el camino de la app pasó de 26 de cada 100 corridas
+   con pérdidas a 0 de 500. Ver `Doc_Colaboracion.md`. `min_app_version` subió a 0.052 al publicar. **Falta:** **evaluar `@blocknote/core/y`** (la integración nueva de BlockNote sobre y-prosemirror 2 y Yjs 14),
+   que compara bloques por identidad y podría resolver parte de lo que sigue pasando cuando uno cambia el
+   tipo, la sangría o la posición de un renglón mientras otro escribe en él; cambia el formato de lo guardado,
+   así que pide un plan de migración y convivencia de versiones.
 
 ### C. Esperan a Lega
 

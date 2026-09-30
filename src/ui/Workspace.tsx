@@ -15,7 +15,8 @@ import {
   useTree,
 } from '../services';
 import { useWorkspace } from '../workspace';
-import { FIND_SHORTCUT_LABEL, openFindBar } from './findUi';
+import { FIND_SHORTCUT_LABEL, isFindSelectionTarget, openFindBar } from './findUi';
+import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
 import { MenuIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
@@ -24,7 +25,7 @@ import { notify, useNotice } from './notice';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
-import { ImportCodaDialog, ShareDialog } from './lazyDialogs';
+import { ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
 import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
@@ -41,6 +42,11 @@ export function Workspace({ user }: { user: AuthUser }) {
   const { client } = workspace;
   const boot = useBootServices(workspace, user);
   const tr = useT();
+
+  // La búsqueda del proyecto es de esta instancia de servicios: al cerrar sesión o cambiar de workspace se
+  // suelta (el índice deja de escuchar y de leer, y lo leído se libera).
+  const readyServices = boot.state === 'ready' ? boot.services : null;
+  useEffect(() => (readyServices ? () => disposeSearchSession(readyServices) : undefined), [readyServices]);
 
   // Las preferencias de la cuenta (tema, fuente…) se bajan al entrar y se suben cuando cambian.
   useEffect(() => {
@@ -137,7 +143,7 @@ function useInviteTarget(): void {
   }, [tree, revision, status.lastSyncAt, switchTo, key]);
 }
 
-function Shell() {
+export function Shell() {
   const route = useRoute();
   const tree = useTree();
   const { comments, docs, media, user, workspace } = useServices();
@@ -150,7 +156,40 @@ function Shell() {
   const [notice, dismissNotice] = useNotice();
   const perms = usePermissions();
   const tr = useT();
+  const search = useSearchSession();
   useInviteTarget();
+
+  // Ctrl/⌘+K busca en el proyecto desde cualquier lugar (Docs/Doc_Buscar.md, sección 9); con el panel abierto,
+  // lo cierra. En el editor con texto elegido sigue siendo "crear un link" de BlockNote.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Escribiendo con un IME, la tecla es de la composición.
+      if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || !isSearchShortcut(e)) return;
+      if (search.isOpen()) {
+        e.preventDefault();
+        search.setOpen(false);
+        return;
+      }
+      if (!takesSearchShortcut(e.target)) return;
+      e.preventDefault();
+      search.setOpen(true);
+    };
+    // Lo elegido en el editor es lo que dejó Esc en la barra de buscar (la persona no eligió nada): antes que
+    // BlockNote lo tome como "crear un link", en la fase de captura, se abre la búsqueda.
+    const onCapture = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || !isSearchShortcut(e)) return;
+      if (search.isOpen() || otherModalOpen() || !isFindSelectionTarget(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      search.setOpen(true);
+    };
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onCapture, true);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onCapture, true);
+    };
+  }, [search]);
   // Un link de invitación que no sirvió (roto, o de un workspace que no se pudo agregar), abierto con la
   // sesión ya iniciada: el aviso va acá.
   useEffect(() => {
@@ -301,6 +340,12 @@ function Shell() {
       {sharing && (
         <Part onClose={() => setSharing(null)}>
           <ShareDialog target={sharing} onClose={() => setSharing(null)} />
+        </Part>
+      )}
+      {search.isOpen() && (
+        <Part onClose={() => search.setOpen(false)}>
+          {/* Ir a un resultado cierra también el cajón del teléfono (en la misma página no cambia la dirección). */}
+          <ProjectSearch onClose={() => search.setOpen(false)} onGo={() => setNavOpen(false)} />
         </Part>
       )}
       <ImportCodaHost />
