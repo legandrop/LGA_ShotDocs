@@ -3,6 +3,7 @@ import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from '../sync/testing';
 import { RemoteError } from '../sync/types';
+import { exportUnsynced, unsyncedSummary } from '../sync/unsynced';
 import { SupabaseRemote, unlinkIgnored } from '../sync/remote';
 import { autoPurgeFiles, FOREIGN_PLACEHOLDER, MEDIA_SCHEME, mediaIdOf } from './queue';
 import { DRIVE_NOT_CONNECTED, emptyFileTrash, loadFileTrash, sendToDriveTrash, type TrashOutcome } from './fileTrash';
@@ -612,6 +613,34 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     expect(calls(server, 'link_page_file').filter((c) => c.includes(foreign))).toHaveLength(1);
     expect(server.foreignNotices).toHaveLength(1);
     expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
+  });
+
+  it('lo sin subir cuenta solo los usos por mandar, y el archivo exportado dice cuáles son quitados', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const other = await a.tree.create(null, 'Día 2');
+    await sync(a);
+    a.remote.linkPageFile = async () => {
+      throw new RemoteError('Internal Server Error', false, '500');
+    };
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await edit(a, other, (doc) => insertImage(doc, id));
+    await sync(a);
+    // El uso nuevo falta subir; el quitado espera a ese (no es un cambio sin subir).
+    const summary = await unsyncedSummary(a.db, a.mediaDb);
+    expect(summary.media).toBe(1);
+    const out = (await exportUnsynced(a.db, a.mediaDb, {
+      appVersion: '0.1',
+      workspace: { url: 'u', localKey: 'k', name: 'n' },
+      user: { id: 'u', email: 'e' },
+      titleOf: () => undefined,
+    })) as { mediaLinks: { pageId: string; fileId: string; removed: boolean }[] };
+    expect(out.mediaLinks).toEqual(
+      expect.arrayContaining([
+        { pageId: other, fileId: id, removed: false },
+        { pageId: page, fileId: id, removed: true },
+      ]),
+    );
   });
 
   it('mientras el uso nuevo no está confirmado, no quita el de la página original', async () => {
