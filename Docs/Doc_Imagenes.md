@@ -187,7 +187,7 @@ quedan alineadas arriba).
 
 ## Entregas
 
-1. **v0.044 — Elegir y abrir:** primer clic elige, segundo abre; borde visible; tiradores visibles con la foto
+1. **v0.044 — Elegir y abrir (hecho):** primer clic elige, segundo abre; borde visible; tiradores visibles con la foto
    elegida; cursor de hueco visible. Sin propiedad nueva.
 2. **v0.045 — Anchos y filas:** `rowWidth`, filas del plugin, tamaños rápidos en la barra, tiradores que
    imantan, paginación y PDF, flechas, Enter, comentarios. Sube `min_app_version`.

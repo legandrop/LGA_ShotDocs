@@ -1,7 +1,7 @@
 # Carrete de fotos y videos
 
 El carrete es el visor a pantalla completa de las fotos y los videos de una página (paso 7 de
-`Plan_Workspaces.md`, sección 5 y D-17). Un clic o un toque en una foto o un video de la página abre
+`Plan_Workspaces.md`, sección 5 y D-17). Un toque (o, con el mouse, un segundo clic) en una foto o un video de la página abre
 **todas** las de esa página, en el orden en que aparecen, empezando por la tocada. Pensado primero para
 el teléfono.
 
@@ -113,11 +113,14 @@ navegador pide ahorrar datos (`Save-Data`), no se precarga nada.
 
 ## En el editor
 
-- **Un clic o un toque en la foto abre el carrete.** El editor igual elige el bloque debajo (el evento no
-  se corta), así que la edición sigue como siempre:
-  - **Computadora:** al cerrar (Escape o la X) el foco vuelve al editor y la foto queda elegida con su
-    barra (ver, reemplazar, leyenda, nombre, bajar, borrar). Los tiradores para cambiar el tamaño y el de
-    arrastrar el bloque son otros elementos: nunca abren el carrete.
+- **Computadora (mouse), desde v0.044:** el **primer clic elige** la foto (contorno del color de acento,
+  los tiradores a la vista y su barra: ver, reemplazar, leyenda, nombre, bajar, borrar) y **el segundo
+  clic, o un doble clic, abre** el carrete. Con ⌘/Ctrl no abre. En solo lectura, un clic abre. La lupa
+  del cursor aparece solo sobre la foto elegida. Al cerrar (Escape o la X) el foco vuelve al editor y la
+  foto queda elegida. Los tiradores y el de arrastrar el bloque nunca abren el carrete. La decisión es
+  `src/ui/carreteClick.ts` (con pruebas). Ver `Doc_Imagenes.md`.
+- **Un toque en la foto abre el carrete** (teléfono y tableta). El editor igual elige el bloque debajo (el
+  evento no se corta), así que la edición sigue como siempre:
   - **Teléfono:** al cerrar el foco **no** vuelve al editor (abriría el teclado). La foto queda elegida,
     y **otro toque sobre ella no abre el carrete**: la edita (aparece la barra). Vale si el editor tiene
     el foco o si el toque anterior fue en esa misma foto (lo que se toca adentro del carrete no cuenta).
