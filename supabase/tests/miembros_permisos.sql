@@ -333,7 +333,8 @@ begin
   assert (select count(*) from public.pages) = 0, 'las políticas de pages cambiaron';
 
   -- Sin proyectos propios ni rol de admin, no crea proyectos; ensure_workspace no crea nada.
-  assert public.ensure_workspace() = p1, 'ensure_workspace no devuelve el proyecto de una página compartida';
+  -- Hasta el paso 9 (cuando lo compartido se ve) solo devuelve proyectos propios.
+  assert public.ensure_workspace() is null, 'ensure_workspace devuelve un proyecto que todavía no se ve';
   begin
     insert into public.workspaces (id, name) values (gen_random_uuid(), 'No') on conflict (id) do nothing;
     raise exception 'FALLA: un miembro sin proyectos crea uno';
@@ -358,7 +359,7 @@ begin
   assert private.page_level('00000000-0000-4000-8000-000000000305') = 0, 'la invitada ve otro proyecto';
   assert private.project_level(p1) = 1, 'ver P1';
   assert private.project_level(p2) = 0, 'la invitada tiene permiso sobre P2';
-  assert public.ensure_workspace() = p1, 'ensure_workspace no devuelve el proyecto compartido';
+  assert public.ensure_workspace() is null, 'ensure_workspace devuelve un proyecto compartido antes del paso 9';
   begin
     insert into public.workspaces (id, name) values (gen_random_uuid(), 'No');
     raise exception 'FALLA: una invitada crea un proyecto';

@@ -29,9 +29,6 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   } else if (status.outdated) {
     tone = 'warn';
     text = pending > 0 ? `Update the app · ${count(pending, 'change', 'changes')} waiting` : 'Update the app';
-  } else if (status.schemaBehind) {
-    tone = 'warn';
-    text = pending > 0 ? `Workspace needs an update · ${count(pending, 'change', 'changes')} waiting` : 'Workspace needs an update';
   } else if (pending > 0) {
     tone = 'busy';
     text = status.syncing ? `Uploading ${count(pending, 'change', 'changes')}…` : `${count(pending, 'change', 'changes')} not uploaded`;
@@ -39,7 +36,8 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
     tone = 'busy';
     text = 'Syncing…';
   }
-  if ((rejected > 0 || status.warning) && tone !== 'error') tone = 'warn';
+  // La base vieja no frena la subida: el texto sigue diciendo el estado real y el aviso va en el detalle.
+  if ((rejected > 0 || status.warning || status.schemaBehind) && tone !== 'error') tone = 'warn';
   return { tone, text, rejected };
 }
 

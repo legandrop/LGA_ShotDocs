@@ -28,7 +28,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20260929171000_proyectos_nombre.sql` | Los primeros proyectos que se seguían llamando "Mis documentos" pasan a "My project", el nombre de fábrica nuevo. |
 | `20260930100000_workspace_settings.sql` | Tabla `workspace_settings` (una fila, solo lectura para la app): la generación de la base (sube al restaurar una copia de seguridad), la versión mínima de la app que puede subir contenido y la versión de la base. `push_page_update` recibe la versión de la app y la compara con `private.app_version_allowed`; la de siempre (sin versión) queda para las versiones anteriores y deja de andar si hay versión mínima. Ver `Doc_Sincronizacion.md`. |
 | `20260930120000_portero.sql` | `workspace_settings` suma el dueño del workspace (`owner_id`, arranca como el dueño del primer proyecto) y la dirección del portero de archivos (`media_url`, solo https). `media_whoami()` dice quién es la sesión y si es el dueño: la usa el portero (ver `Doc_Portero.md`). |
-| `20260930140000_miembros.sql` | Paso 5 de `Plan_Workspaces.md`, sin cambios visibles. Tablas `members` (persona, rol y `removed_at`: sacar a alguien no borra la fila), `grants` (permiso de una persona sobre un proyecto o una página) e `invitations` (correo en minúsculas, rol, permisos que va a recibir, vencimiento a los 30 días y si se usó). Por ahora la API solo las lee: cada uno ve su fila y sus permisos; el dueño y los admins, todo. Funciones `private.workspace_role`, `private.page_level` y `private.project_level` (0 nada, 1 ver, 2 comentar, 3 editar, 4 editar y crear páginas: quien creó el proyecto tiene 4, los permisos valen para lo de abajo y gana el más alto; los de alguien sacado no cuentan). Las políticas de páginas, contenido y archivos no cambian. `ensure_workspace()` ya no crea "My project": devuelve el primer proyecto que la persona puede ver, o nada. Crear proyectos queda para quien ya tiene alguno o es dueño o admin. `workspace_settings` suma el nombre del workspace (`name`) y la clave local (`local_key`); en Wanka, "Wanka" y `znlvpuddswymxpffgvbz`, y `schema_version` pasa a 2. Las cuentas que ya existen entran como miembros: el dueño como `owner` y las demás con proyectos propios como `member`, con `edit_pages` sobre cada uno. `media_whoami()` suma el rol. |
+| `20260930140000_miembros.sql` | Paso 5 de `Plan_Workspaces.md`, sin cambios visibles. Tablas `members` (persona, rol y `removed_at`: sacar a alguien no borra la fila), `grants` (permiso de una persona sobre un proyecto o una página) e `invitations` (correo en minúsculas, rol, permisos que va a recibir, vencimiento a los 30 días y si se usó). Por ahora la API solo las lee: cada uno ve su fila y sus permisos; el dueño y los admins, todo. Funciones `private.workspace_role`, `private.page_level` y `private.project_level` (0 nada, 1 ver, 2 comentar, 3 editar, 4 editar y crear páginas: quien creó el proyecto tiene 4, los permisos valen para lo de abajo y gana el más alto; los de alguien sacado no cuentan). Las políticas de páginas, contenido y archivos no cambian. `ensure_workspace()` ya no crea "My project": devuelve el primer proyecto propio, o nada (lo compartido se suma en el paso 9, con las políticas que dejan verlo). Crear proyectos queda para quien ya tiene alguno o es dueño o admin (`private.can_create_project`). `workspace_settings` suma el nombre del workspace (`name`) y la clave local (`local_key`); en Wanka, "Wanka" y `znlvpuddswymxpffgvbz`, y `schema_version` pasa a 2. Las cuentas que ya existen entran como miembros: el dueño como `owner` y las demás con proyectos propios como `member`, con `edit_pages` sobre cada uno. `media_whoami()` suma el rol. |
 
 Reglas del esquema:
 
@@ -219,7 +219,25 @@ Con un token personal de Supabase (el mismo de las migraciones), en este orden:
      "external_phone_enabled": false,
      "external_anonymous_users_enabled": false,
      "mailer_autoconfirm": false,
+     "mailer_allow_unverified_email_sign_ins": false,
      "mailer_secure_email_change_enabled": true,
+     "mailer_notifications_email_changed_enabled": false,
+     "mailer_notifications_identity_linked_enabled": false,
+     "mailer_notifications_identity_unlinked_enabled": false,
+     "mailer_notifications_mfa_factor_enrolled_enabled": false,
+     "mailer_notifications_mfa_factor_unenrolled_enabled": false,
+     "mailer_notifications_password_changed_enabled": false,
+     "mailer_notifications_phone_changed_enabled": false,
+     "mfa_totp_enroll_enabled": true,
+     "mfa_totp_verify_enabled": true,
+     "mfa_phone_enroll_enabled": false,
+     "mfa_phone_verify_enabled": false,
+     "mfa_web_authn_enroll_enabled": false,
+     "mfa_web_authn_verify_enabled": false,
+     "password_min_length": 6,
+     "sessions_timebox": 0,
+     "sessions_inactivity_timeout": 0,
+     "sessions_single_per_user": false,
      "mailer_otp_length": 8,
      "mailer_otp_exp": 3600,
      "jwt_exp": 3600,

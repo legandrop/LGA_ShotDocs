@@ -241,10 +241,11 @@ create policy workspaces_insert on public.workspaces
 -- ---------------------------------------------------------------------------------------------------
 -- ensure_workspace: ya no crea "My project"
 -- ---------------------------------------------------------------------------------------------------
--- Devuelve el primer proyecto que la persona puede ver, o null. Primero los que creó (el más viejo: lo
--- mismo que devolvía antes a quien ya tenía proyectos); si no, uno con permiso sobre el proyecto entero, y
--- si no, el proyecto de una página que le compartieron. Las versiones anteriores de la app guardan lo que
--- devuelve como su proyecto: solo las usa gente que ya tiene proyectos, así que para ellas no cambia nada.
+-- Devuelve el primer proyecto de la persona (el más viejo que creó: lo mismo que devolvía antes a quien ya
+-- tenía proyectos), o null. Lo compartido (permisos sobre proyectos o páginas) se suma en el paso 9, junto
+-- con las políticas que dejan verlo: devolver hoy un proyecto que todavía no se ve dejaría a la app con un
+-- proyecto vacío guardado para siempre. Las versiones anteriores de la app guardan lo que devuelve como su
+-- proyecto: solo las usa gente que ya tiene proyectos, así que para ellas no cambia nada.
 create or replace function public.ensure_workspace()
 returns uuid
 language plpgsql stable security definer set search_path = ''
@@ -260,27 +261,6 @@ begin
   select w.id into ws
   from public.workspaces w
   where w.owner_id = uid
-  order by w.created_at, w.id
-  limit 1;
-  if ws is not null or private.workspace_role(uid) is null then
-    return ws;
-  end if;
-
-  select w.id into ws
-  from public.grants g
-  join public.workspaces w on w.id = g.project_id
-  where g.user_id = uid
-  order by w.created_at, w.id
-  limit 1;
-  if ws is not null then
-    return ws;
-  end if;
-
-  select w.id into ws
-  from public.grants g
-  join public.pages pg on pg.id = g.page_id
-  join public.workspaces w on w.id = pg.workspace_id
-  where g.user_id = uid
   order by w.created_at, w.id
   limit 1;
   return ws;
@@ -302,6 +282,8 @@ alter table public.workspace_settings
 
 -- Una instalación que ya existía (tiene dueño) es Wanka: su clave local es el ref de su proyecto de
 -- Supabase, fijo como texto, que es el nombre que ya tiene lo guardado en sus dispositivos y nunca cambia.
+-- Hoy no hay otra instalación anterior a esta migración; una que la hubiera, la corrige su dueño con un
+-- `update` desde el SQL Editor (en una base nueva, el comando del paso 12 carga nombre y clave).
 update public.workspace_settings
 set name = 'Wanka', local_key = 'znlvpuddswymxpffgvbz'
 where id and owner_id is not null and local_key is null;

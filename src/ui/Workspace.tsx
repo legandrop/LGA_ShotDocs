@@ -70,6 +70,9 @@ export function Workspace({ user }: { user: AuthUser }) {
         <div className="card">
           <h1>Could not open your workspace</h1>
           <p className="muted">{boot.message}</p>
+          <button className="primary" onClick={boot.retry}>
+            Try again
+          </button>
           <button className="link" onClick={() => void client.auth.signOut({ scope: 'local' })}>
             Sign out
           </button>
@@ -253,6 +256,8 @@ function Home() {
 function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) {
   const { client, config } = useWorkspace();
   const [canCreate, setCanCreate] = useState(false);
+  // Un id por pantalla: si la respuesta se pierde y se reintenta, no se crea un segundo proyecto.
+  const [projectId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -275,7 +280,9 @@ function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) 
   async function create() {
     setBusy(true);
     setError(null);
-    const { error } = await client.from('workspaces').insert({ id: crypto.randomUUID(), name: 'My project' });
+    const { error } = await client
+      .from('workspaces')
+      .upsert({ id: projectId, name: 'My project' }, { onConflict: 'id', ignoreDuplicates: true });
     setBusy(false);
     if (error) setError(error.message);
     else onRetry();

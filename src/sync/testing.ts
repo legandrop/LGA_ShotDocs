@@ -215,6 +215,7 @@ export async function makeDevice(
   dbName: string = crypto.randomUUID(),
   appVersion = '0.021',
   docsOptions: PageDocsOptions = {},
+  schemaVersion?: number,
 ): Promise<Device> {
   const db = await openLocalDb(dbName);
   const remote = new FakeRemote(server, appVersion);
@@ -222,6 +223,6 @@ export async function makeDevice(
   await tree.load();
   const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, ...docsOptions });
   const files = new PageFiles(db, remote);
-  const engine = new SyncEngine(remote, tree, docs, files, { appVersion });
+  const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion });
   return { db, tree, docs, files, engine, remote };
 }

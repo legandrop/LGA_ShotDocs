@@ -90,8 +90,13 @@ export function buildWorkspace(): WorkspaceConfig | null {
   };
 }
 
+// Un solo cliente por workspace en toda la app: dos con la misma sesión se pisarían al renovarla.
+const clients = new Map<string, SupabaseClient>();
+
 export function createWorkspaceClient(ws: WorkspaceConfig): SupabaseClient {
-  return createClient(ws.url, ws.publishableKey, {
+  const known = clients.get(ws.localKey);
+  if (known) return known;
+  const client = createClient(ws.url, ws.publishableKey, {
     auth: {
       storageKey: ws.storage.auth,
       persistSession: true,
@@ -100,6 +105,8 @@ export function createWorkspaceClient(ws: WorkspaceConfig): SupabaseClient {
       flowType: 'implicit',
     },
   });
+  clients.set(ws.localKey, client);
+  return client;
 }
 
 /** El workspace abierto y su cliente. */

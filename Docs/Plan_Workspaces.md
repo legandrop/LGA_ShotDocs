@@ -23,9 +23,9 @@ queda por diseñar se dice en cada sección.
   guía.
 - Nombres en la base: la tabla `workspaces` hoy guarda **proyectos** (historia de v0.013). Las tablas
   nuevas no usan "workspace" para no mezclar. Ya existe `workspace_settings` (una fila: generación,
-  versión mínima de la app, versión de la base, dueño y dirección del portero; el paso 5 le suma el
-  nombre del workspace y la clave local). Faltan `members` (persona y rol), `grants` (permiso sobre un
-  proyecto o una página) e `invitations`.
+  versión mínima de la app, versión de la base, dueño, dirección del portero, nombre del workspace y
+  clave local), `members` (persona y rol), `grants` (permiso sobre un proyecto o una página) e
+  `invitations` (paso 5).
 
 ## 2. Primera vez que se abre la app
 
@@ -90,8 +90,8 @@ Después de la primera vez, el selector de arriba muestra **Workspace › Proyec
   equipo, no de quien tenga las cuentas de Wanka: si algún día Wanka cambia de manos, lo personal se va
   con Wanka. Un workspace personal aparte es más limpio, pero gasta el segundo y último proyecto gratis
   de Supabase de Lega y se pausa si no se usa. Recomendación: privados dentro de Wanka por ahora.
-- Hoy cada usuario nuevo recibe un proyecto "My project" (`ensure_workspace()`) y puede crear los suyos
-  (D-12): con miembros e invitados eso se saca, porque solo el dueño y los admins crean proyectos.
+- Desde el paso 5 un usuario nuevo ya no recibe "My project": crea proyectos quien ya tiene alguno o es
+  dueño o admin; con las políticas del paso 9, solo el dueño y los admins.
 
 ## 4. Compartir con un cliente (invitado)
 
@@ -322,8 +322,8 @@ Reglas para todos los pasos:
     una cuenta de prueba vieja (`@shotdocs-test.invalid`). No se borra ninguna: eso lo decide Lega.
   - Funciones en `private` para preguntar el rol y el permiso sobre una página. Las políticas de lectura y
     escritura de hoy siguen igual hasta el paso 9.
-- **Sin "My project" automático:** `ensure_workspace()` deja de crear un proyecto y devuelve el primero que
-  la persona puede ver, o nada (las versiones viejas guardan lo que devuelve como proyecto: solo las usa
+- **Sin "My project" automático:** `ensure_workspace()` deja de crear un proyecto y devuelve el primero
+  propio, o nada; lo compartido se suma en el paso 9 con las políticas que dejan verlo (las versiones viejas guardan lo que devuelve como proyecto: solo las usa
   gente que ya tiene proyectos). La app nueva, sin proyectos, muestra un aviso para pedir acceso. Crear
   proyectos queda para quien ya tiene alguno o es `owner`/`admin`; el corte completo (solo dueño y admins)
   entra con las políticas del paso 9. Para quien usa la app hoy no cambia nada.

@@ -51,7 +51,7 @@ type Boot =
   | { state: 'ready'; services: Services }
   /** El usuario no tiene ningún proyecto en este workspace (todavía no le compartieron nada). */
   | { state: 'empty'; retry: () => void }
-  | { state: 'error'; message: string };
+  | { state: 'error'; message: string; retry: () => void };
 
 /**
  * Una sola pestaña o ventana escribe en la base local de un usuario. Con dos a la vez, cada una tendría
@@ -125,6 +125,9 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           const first = await remote.ensureWorkspace();
           if (!first) {
             db.close();
+            // Sin proyectos no se escribe nada: otra pestaña puede abrir mientras tanto.
+            releaseLock?.();
+            releaseLock = null;
             if (!cancelled) setBoot({ state: 'empty', retry: () => setAttempt((n) => n + 1) });
             return;
           }
@@ -136,6 +139,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
             setBoot({
               state: 'error',
               message: `Setting up your workspace the first time needs an internet connection (${errorMessage(err)}).`,
+              retry: () => setAttempt((n) => n + 1),
             });
           }
           return;
@@ -164,7 +168,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       };
       setBoot({ state: 'ready', services: { workspace, client: workspace.client, user, db, tree, docs, files, engine } });
     })().catch((err) => {
-      if (!cancelled) setBoot({ state: 'error', message: errorMessage(err) });
+      if (!cancelled) setBoot({ state: 'error', message: errorMessage(err), retry: () => setAttempt((n) => n + 1) });
     });
 
     return () => {

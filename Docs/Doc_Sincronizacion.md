@@ -4,7 +4,8 @@ Cómo funciona hoy la regla de no perder nunca información. El código está en
 (`npm test`) en `src/sync/sync.test.ts`, `audit.test.ts` (los casos de la auditoría de la fase 1),
 `editor.test.ts` (con el editor real, en jsdom), `projects.test.ts` (proyectos en la cola, también sin
 red y rechazados), `restore.test.ts` (la generación al restaurar una copia y la versión mínima del
-workspace) y `src/ui/unknownContent.test.ts` (la guarda del editor contra lo desconocido).
+workspace, y el aviso de base vieja), `src/workspace.test.ts` (los nombres de lo guardado en el
+dispositivo) y `src/ui/unknownContent.test.ts` (la guarda del editor contra lo desconocido).
 
 ## Piezas
 
@@ -33,13 +34,14 @@ cliente global. Hasta que exista la lista de workspaces del dispositivo (paso 12
 compilación (`SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`).
 
 **Sin proyectos.** El servidor ya no crea "My project" para una cuenta nueva: `ensure_workspace()` devuelve
-el primer proyecto que la persona puede ver, o nada. Sin ninguno, la app muestra *No projects yet* y vuelve
+el primer proyecto propio de la persona, o nada (lo compartido se suma en el paso 9, cuando las políticas
+dejen verlo). Sin ninguno, la app muestra *No projects yet* y vuelve
 a preguntar sola cada minuto, al volver a la ventana y al volver la red; el dueño y los admins ven además
 el botón para crear el primero.
 
 **Versión de la base.** La app sabe qué versión de la base necesita (`DB_SCHEMA_VERSION`) y la compara con
 `workspace_settings.schema_version` en cada sincronización. Si la del workspace es menor, el estado dice
-*Workspace needs an update* y el detalle explica que el dueño tiene que aplicar las migraciones; nada se
+el ícono de advertencia y el detalle explica que el dueño tiene que aplicar las migraciones; nada se
 pierde mientras tanto.
 
 ## Contenido de las páginas
