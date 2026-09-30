@@ -8,7 +8,8 @@ import { fallbackName, type CarreteItem } from './carrete';
 // De dónde saca el carrete lo que muestra (Docs/Doc_Carrete.md). Primero lo que ya está a mano (la
 // miniatura, guardada en el dispositivo), después lo grande: la copia local si el archivo está en el
 // dispositivo (anda sin red) o el archivo entero con un pase del portero. Lo que ya se pidió se guarda
-// mientras el carrete está abierto, así ir y volver no pide dos veces.
+// mientras el carrete está abierto, así ir y volver no pide dos veces; los pases del portero, mientras
+// les falte más de una hora para vencer (también entre un carrete y el siguiente).
 
 export interface Preview {
   /** `null` si no se sabe (sin red y sin datos del archivo). */
@@ -29,8 +30,58 @@ export interface CarreteLoader {
   preview(item: CarreteItem): Promise<Preview>;
   /** La foto grande o el video. Tira si no se puede (sin red, sin portero, error del portero). */
   full(item: CarreteItem): Promise<Full>;
+  /** Olvida lo grande de este elemento (y su pase): la próxima vez se pide de nuevo. */
+  retry(item: CarreteItem): void;
   /** Suelta lo creado para este carrete (las direcciones de los originales en memoria). */
   dispose(): void;
+}
+
+/** El portero da pases de 8 horas: se reusan mientras les falte más de una hora. */
+export const PASS_REUSE_MS = 7 * 60 * 60_000;
+
+// Por cola de archivos (una por sesión del workspace): el pase de una persona no se le da a otra.
+const passCache = new WeakMap<object, Map<string, { url: string; at: number }>>();
+
+/** Un pase del portero para el archivo, reusando el de hace menos de 7 horas. */
+export async function passFor(media: Pick<MediaQueue, 'pass'>, id: string): Promise<string> {
+  let cache = passCache.get(media);
+  if (!cache) {
+    cache = new Map();
+    passCache.set(media, cache);
+  }
+  const known = cache.get(id);
+  if (known && Date.now() - known.at < PASS_REUSE_MS) return known.url;
+  const at = Date.now();
+  const url = await media.pass(id);
+  cache.set(id, { url, at });
+  return url;
+}
+
+/** Olvida el pase guardado (no anduvo: se pide uno nuevo). */
+export function forgetPass(media: Pick<MediaQueue, 'pass'>, id: string): void {
+  passCache.get(media)?.delete(id);
+}
+
+/**
+ * Los atributos del link para bajar el original: con su nombre si está en el dispositivo; si viene del
+ * portero, en otra pestaña (un archivo de otro sitio no se puede bajar con su nombre, ver Doc_Carrete.md).
+ */
+export function downloadProps(full: Full, name: string): { href: string; download: string; target?: string; rel?: string } {
+  return full.local ? { href: full.url, download: name } : { href: full.url, download: name, target: '_blank', rel: 'noreferrer' };
+}
+
+/** Baja el original desde código (la barra de la imagen en el editor). */
+export function startDownload(full: Full, name: string): void {
+  const a = document.createElement('a');
+  const props = downloadProps(full, name);
+  a.href = props.href;
+  a.download = props.download;
+  if (props.target) a.target = props.target;
+  if (props.rel) a.rel = props.rel;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 /** El error es por falta de red (o el navegador dice que no hay). */
@@ -89,7 +140,7 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
         else created.push(url);
         return { url, local: true };
       }
-      return { url: await media.pass(item.mediaId), local: false };
+      return { url: await passFor(media, item.mediaId), local: false };
     }
     if (item.source === 'file') return { url: await files.resolve(item.url), local: true };
     return { url: item.url, local: item.url.startsWith('data:') };
@@ -115,6 +166,10 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
       return pending;
     },
     full: (item) => once(fulls, item.url, () => loadFull(item), false),
+    retry(item) {
+      fulls.delete(item.url);
+      if (item.mediaId) forgetPass(media, item.mediaId);
+    },
     dispose() {
       disposed = true;
       for (const url of created.splice(0)) URL.revokeObjectURL(url);

@@ -461,6 +461,16 @@ describe('de verdad (contra el Supabase falso)', () => {
     expect(fake.state.settings.owner_id).toBe(OWNER_ID);
   });
 
+  it('con el hook conectado y sin la cuenta del dueño no escribe nada (la invitación se rechazaría)', async () => {
+    const config = { ...freshConfig(), hook_before_user_created_enabled: true, hook_before_user_created_uri: HOOK_URI };
+    const fake = fakeSupabase({ config, readOnly: true });
+    const client = createManagementClient({ ref: NEW_REF, fetch: fake.fetch });
+    await expect(runSetup({ client, opts: opts(), templates, env: { SMTP_PASSWORD: SMTP_SECRET }, io: collector().io })).rejects.toThrow(
+      /Nothing was written/,
+    );
+    expect(fake.writes()).toEqual([]);
+  });
+
   it('sin contraseña SMTP ni terminal no escribe nada', async () => {
     const fake = fakeSupabase({ readOnly: true });
     const client = createManagementClient({ ref: NEW_REF, fetch: fake.fetch });

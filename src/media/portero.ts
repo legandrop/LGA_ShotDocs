@@ -75,6 +75,12 @@ export interface UploadOptions {
   resume?: string | null;
   /** Sube un archivo de la app (con permisos por página); sin esto, la prueba de media (solo el dueño). */
   appFile?: AppFile;
+  /**
+   * El archivo ya llegó a Drive y solo falta que la base se entere: se le pregunta al portero (que le avisa
+   * a la base) pero nunca se vuelve a mandar el archivo. Si el portero abriría una subida nueva, falla con
+   * `AlreadySentError` sin mandar nada.
+   */
+  onlyIfSent?: boolean;
 }
 
 export interface PorteroDeps {
@@ -108,6 +114,14 @@ export class UploadError extends PorteroError {
   ) {
     super(message, status, false);
     this.name = 'UploadError';
+  }
+}
+
+/** Con `onlyIfSent`, el portero no sabe que el archivo ya llegó y abriría una subida nueva. */
+export class AlreadySentError extends PorteroError {
+  constructor() {
+    super('The media server does not know this file reached Google Drive.', 409, false);
+    this.name = 'AlreadySentError';
   }
 }
 
@@ -214,7 +228,7 @@ export class Portero {
    * red o por el servidor, espera, pregunta cuánto llegó y sigue desde ahí.
    */
   async upload(file: Blob & { name?: string }, options: UploadOptions = {}): Promise<UploadResult> {
-    const { onProgress, signal, appFile } = options;
+    const { onProgress, signal, appFile, onlyIfSent } = options;
     const total = file.size;
     let uploadId = options.resume ?? null;
     // Al retomar, primero se pregunta; si el portero ya no la tiene, se empieza de nuevo.
@@ -252,7 +266,9 @@ export class Portero {
             sent = total;
             return { ...started.file, ...(started.linked === undefined ? {} : { linked: started.linked }) };
           }
-          if (!started.uploadId) throw new PorteroError('The media server did not start the upload.', 0, true);
+          // Una respuesta que no se entiende no es "sin red" (status 0): es un problema del portero.
+          if (!started.uploadId) throw new PorteroError('The media server did not start the upload.', 502, true);
+          if (onlyIfSent) throw new AlreadySentError();
           uploadId = started.uploadId;
           sent = 0;
           begin();
@@ -284,6 +300,7 @@ export class Portero {
         if (!asked) failures = 0;
         report();
       } catch (err) {
+        if (err instanceof AlreadySentError) throw err;
         if (signal?.aborted) throw new UploadError('Upload cancelled.', 0, uploadId, sent, true);
         const error =
           err instanceof PorteroError ? err : new PorteroError(err instanceof Error ? err.message : String(err));
