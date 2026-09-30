@@ -1,7 +1,5 @@
-import { BlockNoteEditor } from '@blocknote/core';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { schema } from './editorSchema';
 
 // El editor borra del documento compartido lo que no conoce: un tipo de bloque (o de contenido en línea)
 // que no está en su esquema, o un texto con una marca desconocida (en ese caso, el párrafo entero). Ese
@@ -14,17 +12,38 @@ export interface KnownContent {
   marks: ReadonlySet<string>;
 }
 
-let known: KnownContent | null = null;
+// Los nombres de bloques, contenidos en línea y marcas del esquema de esta versión del editor
+// (`editorSchema.ts`), escritos acá para que la sincronización pueda revisar sin cargar el editor, que se
+// baja aparte (roadmap B.4). Una prueba (unknownContent.test.ts) los compara con el esquema real: si el
+// esquema o BlockNote cambian, falla hasta que se actualicen.
+const KNOWN_NODES = [
+  'blockContainer',
+  'blockGroup',
+  'bulletListItem',
+  'checkListItem',
+  'codeBlock',
+  'divider',
+  'doc',
+  'hardBreak',
+  'heading',
+  'image',
+  'numberedListItem',
+  'paragraph',
+  'quote',
+  'table',
+  'tableCell',
+  'tableHeader',
+  'tableParagraph',
+  'tableRow',
+  'text',
+  'toggleListItem',
+];
+const KNOWN_MARKS = ['backgroundColor', 'bold', 'code', 'italic', 'link', 'strike', 'textColor', 'underline'];
+
+const known: KnownContent = { nodes: new Set(KNOWN_NODES), marks: new Set(KNOWN_MARKS) };
 
 /** Los nombres de bloques, contenidos en línea y marcas del esquema de esta versión del editor. */
 export function knownContent(): KnownContent {
-  if (!known) {
-    const editor = BlockNoteEditor.create({ schema });
-    known = {
-      nodes: new Set(Object.keys(editor.pmSchema.nodes)),
-      marks: new Set(Object.keys(editor.pmSchema.marks)),
-    };
-  }
   return known;
 }
 

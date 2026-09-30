@@ -1,13 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { usePermissions, useServices, useSyncStatus } from '../services';
-import {
-  CommentInvalid,
-  LEVEL_COMMENT,
-  LEVEL_DELETE_ANY,
-  MAX_COMMENT_LENGTH,
-  type CommentThread,
-  type CommentView,
-} from '../sync/comments';
+import { useServices, useSyncStatus } from '../services';
+import { CommentInvalid, MAX_COMMENT_LENGTH, type CommentThread, type CommentView } from '../sync/comments';
 import { errorMessage } from '../sync/types';
 import {
   clearCommentsTarget,
@@ -18,13 +11,13 @@ import {
   requestCloseComments,
   setDraft,
   revealBlock,
-  toggleComments,
   useBlockSource,
   useCommentsUi,
   type BlockSource,
   type CommentsTarget,
 } from './commentsUi';
-import { CloseIcon, CollapseIcon, CommentIcon, ExpandIcon, QuestionIcon } from './icons';
+import { CommentsToggle, useCommentAccess } from './CommentsToggle';
+import { CloseIcon, CollapseIcon, ExpandIcon, QuestionIcon } from './icons';
 
 // El panel de comentarios de la página (paso 10): a la derecha en la computadora y como hoja desde abajo en
 // el teléfono. Los hilos abiertos arriba, en el orden de la página; los resueltos, plegados abajo. Cada hilo
@@ -39,33 +32,8 @@ function useThreads(pageId: string): CommentThread[] {
   return comments.threads(pageId);
 }
 
-/** Lo que la persona puede hacer con los comentarios de la página (misma cuenta que la base). */
-export function useCommentAccess(pageId: string): { canComment: boolean; canDeleteAny: boolean; level: number } {
-  const { comments } = useServices();
-  const perms = usePermissions();
-  const level = perms.pageLevel(pageId);
-  return { level, canComment: level >= LEVEL_COMMENT && comments.writable, canDeleteAny: level >= LEVEL_DELETE_ANY };
-}
-
-/** El botón de la barra de arriba: abre y cierra el panel, con la cantidad de hilos abiertos. */
-export function CommentsToggle({ pageId }: { pageId: string }) {
-  const { comments } = useServices();
-  useSyncExternalStore(comments.subscribe, comments.getRevision);
-  useEffect(() => comments.watch(pageId), [comments, pageId]);
-  const { open } = useCommentsUi();
-  const openThreads = comments.threads(pageId).filter((t) => !t.resolved).length;
-  return (
-    <button
-      className={`icon-button comments-toggle${openThreads > 0 ? ' has-count' : ''}`}
-      aria-label={openThreads > 0 ? `Comments, ${openThreads} open` : 'Comments'}
-      aria-pressed={open}
-      onClick={toggleComments}
-    >
-      <CommentIcon size={19} />
-      {openThreads > 0 && <span className="comments-toggle-count">{openThreads > 99 ? '99+' : openThreads}</span>}
-    </button>
-  );
-}
+// El botón y los permisos viven aparte (CommentsToggle.tsx) para no bajar el panel con la primera pantalla.
+export { CommentsToggle, useCommentAccess };
 
 function sortThreads(threads: CommentThread[], source: BlockSource | null): CommentThread[] {
   const order = source?.order() ?? new Map<string, number>();

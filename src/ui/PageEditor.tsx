@@ -19,7 +19,6 @@ import type * as Y from 'yjs';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
-import { Carrete } from './Carrete';
 import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carrete';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
@@ -35,12 +34,16 @@ import {
   useBlockSourceRegistration,
   withParagraphVariants,
 } from './EditorComments';
-import { useCommentAccess } from './CommentsPanel';
+import { useCommentAccess } from './CommentsToggle';
 import { ScriptIcon } from './icons';
 import { notify } from './notice';
 import { useScheme } from '../prefs';
 import { createDrivePaste } from './drivePaste';
 import { DrivePasteMenu } from './DrivePasteMenu';
+import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
+
+// El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
+const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
 
 // Script es un párrafo con `script: true` (ver editorSchema.ts), y una pregunta, uno con `question: true`
 // (EditorComments.tsx). Cada ítem del selector pide las dos propiedades, así el selector distingue uno de
@@ -174,6 +177,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   const scheme = useScheme();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
+  // Con el editor ya abierto, el carrete se baja cuando el navegador está libre: tocar una foto no espera.
+  useEffect(() => preloadWhenIdle(Carrete), []);
   /** El toque empezó sobre una foto que ya estaba elegida (ver `openCarrete`). */
   const pressedSelected = useRef(false);
   /** El bloque de la última foto tocada (`null` si el último toque fue en otro lado; ver `notePress`). */
@@ -455,7 +460,11 @@ interface OpenCarrete {
 /** El carrete con el estado de la red (aparte, para que el editor no se vuelva a dibujar con cada cambio). */
 function CarreteHost(props: OpenCarrete & { onClose: () => void }) {
   const { online } = useSyncStatus();
-  return <Carrete {...props} online={online} />;
+  return (
+    <Part>
+      <Carrete {...props} online={online} />
+    </Part>
+  );
 }
 
 function flatten(blocks: Block[]): Block[] {

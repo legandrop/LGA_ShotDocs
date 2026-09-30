@@ -20,10 +20,11 @@ import { PageFormatDialog } from './PageFormatDialog';
 import { notify, useNotice } from './notice';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
-import { ShareDialog, type ShareTarget } from './ShareDialog';
-import { MediaTest } from './MediaTest';
-import { focusTitle, PageView } from './PageView';
-import { CommentsToggle } from './CommentsPanel';
+import type { ShareTarget } from './ShareDialog';
+import { MediaTest, ShareDialog } from './lazyDialogs';
+import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
+import { focusTitle, PageView, preloadPageParts } from './PageView';
+import { CommentsToggle } from './CommentsToggle';
 import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
@@ -151,14 +152,24 @@ function Shell() {
     if (message) notify(message);
   }, []);
 
-  // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación.
+  // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación. Lo mismo
+  // espera la recarga que sigue a publicar una versión nueva (lazyPart.tsx).
   useEffect(() => {
+    const unsaved = () => docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites();
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites()) e.preventDefault();
+      if (unsaved()) e.preventDefault();
     };
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    const unwatch = watchPendingWrites({ unsaved, flush: () => docs.flush() });
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      unwatch();
+    };
   }, [docs, tree, media]);
+
+  // Con la barra lateral ya dibujada, el editor se baja cuando el navegador está libre: abrir una página
+  // después no espera, y una versión nueva publicada mientras tanto no deja al editor sin sus archivos.
+  useEffect(() => preloadWhenIdle({ preload: preloadPageParts }), []);
 
   useEffect(() => {
     setNavOpen(false);
@@ -239,7 +250,9 @@ function Shell() {
         ) : route.name === 'trash' ? (
           <TrashView />
         ) : route.name === 'media-test' ? (
-          <MediaTest />
+          <Part>
+            <MediaTest />
+          </Part>
         ) : (
           <Home />
         )}
@@ -264,7 +277,11 @@ function Shell() {
       )}
       {moving && <MoveDialog pageId={moving} onClose={() => setMoving(null)} />}
       {formatting && <PageFormatDialog pageId={formatting} onClose={() => setFormatting(null)} />}
-      {sharing && <ShareDialog target={sharing} onClose={() => setSharing(null)} />}
+      {sharing && (
+        <Part>
+          <ShareDialog target={sharing} onClose={() => setSharing(null)} />
+        </Part>
+      )}
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>

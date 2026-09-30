@@ -4,14 +4,13 @@ import { navigate, pagePath, useRoute } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
 import { AccountIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, TrashIcon } from './icons';
-import { DriveDialogHost } from './DriveDialog';
 import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
-import { MembersDialog } from './MembersDialog';
+import { DriveDialogHost, MembersDialog, ShareDialog } from './lazyDialogs';
+import { Part } from './lazyPart';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { useCurrentProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
-import { ShareDialog } from './ShareDialog';
 import { SyncBadge } from './SyncBadge';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
 
@@ -305,9 +304,27 @@ export function Sidebar() {
           onMembers={() => setMembers(true)}
         />
       )}
-      {members && createPortal(<MembersDialog onClose={() => setMembers(false)} />, document.body)}
-      {sharing && createPortal(<ShareDialog target={{ pageId: sharing }} onClose={() => setSharing(null)} />, document.body)}
-      {drive && createPortal(<DriveDialogHost result={drive.result} onClose={() => setDrive(null)} />, document.body)}
+      {members &&
+        createPortal(
+          <Part>
+            <MembersDialog onClose={() => setMembers(false)} />
+          </Part>,
+          document.body,
+        )}
+      {sharing &&
+        createPortal(
+          <Part>
+            <ShareDialog target={{ pageId: sharing }} onClose={() => setSharing(null)} />
+          </Part>,
+          document.body,
+        )}
+      {drive &&
+        createPortal(
+          <Part>
+            <DriveDialogHost result={drive.result} onClose={() => setDrive(null)} />
+          </Part>,
+          document.body,
+        )}
       {menu && (
         <PageMenu
           pageId={menu.id}

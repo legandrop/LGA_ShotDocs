@@ -2,14 +2,26 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useSyncStatus, useTree } from '../services';
+import { clearCommentsTarget, useCommentsUi } from './commentsUi';
 import { CollapseIcon, HeaderIcon } from './icons';
-import { PageEditor } from './PageEditor';
-import { CommentsPanel } from './CommentsPanel';
+import { lazyPart, Part } from './lazyPart';
 import { useFloating } from './menus';
 import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
 
 const FOCUS_TITLE = 'shotdocs:focus-title';
+
+// El editor (BlockNote con ProseMirror, Tiptap y los estilos de texto) y el panel de comentarios se bajan
+// aparte (roadmap B.4): la barra lateral y el árbol salen sin esperarlos. El título y el encabezado de la
+// página se ven enseguida; el cuerpo muestra un esqueleto hasta que el editor está.
+const PageEditor = lazyPart(() => import('./PageEditor').then((m) => m.PageEditor));
+const CommentsPanel = lazyPart(() => import('./CommentsPanel').then((m) => m.CommentsPanel));
+
+/** Empieza a bajar el editor y el panel de comentarios (la app lo pide apenas está libre). */
+export function preloadPageParts(): void {
+  PageEditor.preload();
+  CommentsPanel.preload();
+}
 
 /** Lleva el foco al título de la página abierta (renombrar desde la barra de arriba). */
 export function focusTitle(): void {
@@ -67,9 +79,37 @@ export function PageView({ id }: { id: string }) {
       )}
       <PageHeader id={id} editable={perms.canEditPage(id)} />
       <TitleInput id={id} title={page.title} readOnly={!perms.canEditPage(id)} />
-      <PageEditor pageId={id} />
-      <CommentsPanel pageId={id} />
+      <Part fallback={<EditorSkeleton />}>
+        <PageEditor pageId={id} />
+      </Part>
+      <CommentsSlot pageId={id} />
     </article>
+  );
+}
+
+/** Lo que ocupa el cuerpo de la página mientras baja el editor (aparece solo si tarda, ver styles.css). */
+function EditorSkeleton() {
+  return (
+    <div className="editor-skeleton" aria-busy="true" aria-label="Loading the editor">
+      <span />
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
+
+/** El panel de comentarios se baja recién cuando se abre (o antes, cuando la app está libre). */
+function CommentsSlot({ pageId }: { pageId: string }) {
+  const { open } = useCommentsUi();
+  useEffect(() => CommentsPanel.preload(), []);
+  // Al salir de la página, lo pedido para ella no sigue (también con el panel cerrado).
+  useEffect(() => () => clearCommentsTarget(), [pageId]);
+  if (!open) return null;
+  return (
+    <Part>
+      <CommentsPanel pageId={pageId} />
+    </Part>
   );
 }
 

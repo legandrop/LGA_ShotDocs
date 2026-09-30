@@ -6,7 +6,8 @@ import { AccountIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icon
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, useCurrentProject, useSwitchProject } from './project';
-import { ShareDialog } from './ShareDialog';
+import { ShareDialog } from './lazyDialogs';
+import { Part } from './lazyPart';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
 import {
   RemoveWorkspaceDialog,
@@ -107,7 +108,12 @@ export function ProjectSwitcher() {
           document.body,
         )}
       {sharing &&
-        createPortal(<ShareDialog target={{ projectId: sharing }} onClose={() => setSharing(null)} />, document.body)}
+        createPortal(
+          <Part>
+            <ShareDialog target={{ projectId: sharing }} onClose={() => setSharing(null)} />
+          </Part>,
+          document.body,
+        )}
       {workspaces &&
         createPortal(
           <WorkspacesDialog

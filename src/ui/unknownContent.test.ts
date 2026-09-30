@@ -6,7 +6,7 @@ import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { schema, SCRIPT_PROP } from './editorSchema';
-import { findUnknownContent, supportsContent } from './unknownContent';
+import { findUnknownContent, knownContent, supportsContent } from './unknownContent';
 
 const editors: BlockNoteEditor[] = [];
 const devices: Device[] = [];
@@ -38,6 +38,12 @@ function mount(doc: Y.Doc, withSchema: unknown = schema): BlockNoteEditor {
 const tick = () => new Promise((r) => setTimeout(r, 30));
 
 describe('contenido que esta versión no conoce', () => {
+  it('los nombres escritos a mano son los del esquema del editor (la sincronización no carga el editor)', () => {
+    const editor = BlockNoteEditor.create({ schema });
+    expect([...knownContent().nodes].sort()).toEqual(Object.keys(editor.pmSchema.nodes).sort());
+    expect([...knownContent().marks].sort()).toEqual(Object.keys(editor.pmSchema.marks).sort());
+  });
+
   it('reconoce todo lo que hace esta versión', async () => {
     const doc = new Y.Doc();
     const editor = mount(doc);

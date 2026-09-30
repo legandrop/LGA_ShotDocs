@@ -1426,6 +1426,71 @@ code {
   min-height: 200px;
 }
 
+/* Mientras baja el editor, que se carga aparte (roadmap B.4): renglones con el ancho del texto. Aparece
+   recién si tarda más que un instante, así una apertura desde la caché no parpadea. */
+.editor-skeleton {
+  min-height: 200px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 6px var(--gutter) 0;
+  opacity: 0;
+  animation: skeleton-in 200ms ease 250ms forwards;
+}
+
+.editor-skeleton span {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--border-soft);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.editor-skeleton span:nth-child(1) {
+  width: 92%;
+}
+
+.editor-skeleton span:nth-child(2) {
+  width: 78%;
+}
+
+.editor-skeleton span:nth-child(3) {
+  width: 85%;
+}
+
+.editor-skeleton span:nth-child(4) {
+  width: 40%;
+}
+
+@keyframes skeleton-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-skeleton span {
+    animation: none;
+  }
+}
+
+/* Una parte que se carga aparte y no se pudo bajar (lazyPart.tsx). */
+.banner.part-error {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.banner.part-error p {
+  margin: 0;
+}
+
 .editor .bn-editor {
   background: transparent;
 }

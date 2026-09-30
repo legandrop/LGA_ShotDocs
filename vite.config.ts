@@ -71,12 +71,20 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
+          // Todos los .js entran, también los que se cargan aparte (el editor, el carrete, los diálogos):
+          // sin red, con la app instalada, el editor abre desde la caché. El más grande (el editor) pesa
+          // alrededor de 1 MB, lejos del límite de abajo; un archivo más grande que el límite quedaría
+          // afuera sin aviso en la app, así que el build lo avisa.
           globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
           navigateFallback: '/index.html',
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         },
       }),
     ],
+    build: {
+      // El editor se baja aparte (roadmap B.4) y pesa alrededor de 1 MB sin comprimir (300 KB comprimido).
+      chunkSizeWarningLimit: 1200,
+    },
     test: {
       environment: 'node',
       include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'portero/src/**/*.test.ts', 'scripts/**/*.test.mjs'],
