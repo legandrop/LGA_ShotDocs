@@ -17,4 +17,8 @@ export const common = {
   'common.retry': { en: "Retry", es: "Reintentar" },
   'common.preparing': { en: "Preparing…", es: "Preparando…" },
   'common.close': { en: "Close", es: "Cerrar" },
+  'common.on': { en: "On", es: "Sí" },
+  'common.off': { en: "Off", es: "No" },
+  'common.done': { en: "Done", es: "Listo" },
+  'common.cancel': { en: "Cancel", es: "Cancelar" },
 } satisfies Dict;
