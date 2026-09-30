@@ -128,7 +128,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   desde donde se puede **volver a ver el tutorial**. A pensar en el diseño: el documento de ejemplo no debería
   ensuciar el workspace ni sincronizarse (una página de práctica local, o una plantilla que se crea y se puede
   borrar), los dos idiomas, el teléfono, y que la ayuda se mantenga al día con cada función nueva (una regla:
-  cada feature nueva suma su línea en la ayuda). Diseño y auditoría antes de implementar.
+  cada feature nueva suma su línea en la ayuda). Diseño y auditoría antes de implementar. **Diseño en
+  `Doc_Tutorial.md`** (sin implementar; decisiones a confirmar por Lega al final).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
