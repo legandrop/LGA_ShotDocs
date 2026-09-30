@@ -1,5 +1,13 @@
 # Changelog — LGA Shot Docs
 
+v0.026 :
+
+Prueba de media terminada (paso 4 del plan de workspaces). En el iPhone con Safari, un video 4K de 62 MB
+del carrete subió en 20 segundos sin reintentos y se reprodujo en la app. El selector entrega el archivo
+original (.mov), sin convertirlo. El plan anota los resultados de Windows y del iPhone, lo que implican
+para la cola de archivos y lo que queda por revisar: el video tarda entre 5 y 9 segundos en arrancar.
+[ Docs - resultados de la prueba de media ]
+
 v0.025 :
 
 Primera prueba de media en la computadora: Drive conectado y un video de 25,7 MB subido en 9 segundos.

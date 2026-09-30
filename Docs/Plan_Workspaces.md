@@ -215,9 +215,20 @@ cambios de permisos, que son el momento más riesgoso.
    esta versión no conoce, no se abre en el editor: muestra un aviso para actualizar, y nada se borra. Más
    la versión mínima por workspace.
 3. ✅ **Mudar el hosting** a Cloudflare con la misma dirección, antes de mandar links a clientes.
-4. **Prueba en el iPhone** (uno o dos días). Hecho el portero (`Doc_Portero.md`) y la pantalla *Media test*
-   (menú de la cuenta); falta publicarlo, conectar Drive y probar: qué entrega el
-   selector de fotos y videos, subir 1 GB, reproducir con la app instalada, en Safari, Chrome y Windows.
+4. ✅ **Prueba en el iPhone** (v0.026). Portero publicado (`Doc_Portero.md`), Drive conectado y la pantalla
+   *Media test* (menú de la cuenta). Resultados:
+   - **Windows, Chrome:** video H.264 4K de 25,7 MB subido en 9 s; listo para reproducir en 5,1 s.
+   - **iPhone, Safari (iOS 18.7):** el selector entrega el **original**, `IMG_0666.mov` (`video/quicktime`,
+     62 MB, 4K, 21 s; no lo convierte a H.264). Subió en 20 s (3,5 MB/s) sin reintentos, con la app
+     manteniendo la pantalla encendida. Safari lo reproduce a 3840×2160: datos del video a los 6 s, listo
+     a los 8,66 s.
+   - **Conclusiones para la cola (paso 6):** subir por partes anda bien en los dos; el iPhone manda el
+     archivo tal cual (HEVC si la cámara está en Alta eficiencia), así que llega a Drive sin tocar y el
+     carrete tiene que mostrar miniatura y ofrecer bajarlo donde el navegador no lo reproduzca. **El arranque del video es lento** (5 a 9 s):
+     revisar antes del carrete (paso 7 u 8) si es el portero pidiendo a Drive, o el índice del video al
+     final del archivo.
+   - Queda para cuando haga falta: subir 1 GB y la app instalada en el iPhone (agregada a la pantalla de
+     inicio).
 5. **Preparación sin cambios visibles:** todo por workspace en el código y el dispositivo, tablas
    `workspace_settings`, `members`, `grants`, `invitations`, sacar "My project" automático y que solo
    dueño y admins creen proyectos, versión de la base por workspace.
