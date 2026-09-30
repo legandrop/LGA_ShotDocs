@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AuthUser } from '../auth';
 import { t, useT } from '../i18n';
+import { useCodaOwner } from '../import/codaOwner';
 import { importingElsewhere, importJobFor, useImportJob } from '../import/importJob';
 import { clearInviteTarget, pendingInviteTarget, takeArrivalNotice } from '../invite';
 import { prefs } from '../prefs';
@@ -155,6 +156,8 @@ export function Shell() {
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
   const [notice, dismissNotice] = useNotice();
   const perms = usePermissions();
+  // "Importar de Coda" es solo de la cuenta de Lega (codaOwner.ts): para los demás el diálogo ni se monta.
+  const codaOwner = useCodaOwner();
   const tr = useT();
   const search = useSearchSession();
   useInviteTarget();
@@ -348,7 +351,7 @@ export function Shell() {
           <ProjectSearch onClose={() => search.setOpen(false)} onGo={() => setNavOpen(false)} />
         </Part>
       )}
-      <ImportCodaHost />
+      {codaOwner && <ImportCodaHost />}
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
@@ -363,7 +366,8 @@ export function Shell() {
 
 /**
  * El diálogo de "Importar de Coda" (lo abre el selector de proyectos): se dibuja acá, en el Shell, para que
- * la importación y su resultado sigan a la vista aunque el selector se desmonte.
+ * la importación y su resultado sigan a la vista aunque el selector se desmonte. Solo para la cuenta de
+ * Lega (codaOwner.ts).
  */
 function ImportCodaHost() {
   const { tree } = useServices();

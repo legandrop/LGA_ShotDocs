@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
+import { createHash } from 'node:crypto';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { setCodaOwnerForTests } from '../import/codaOwner';
 import { importJobFor } from '../import/importJob';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
@@ -10,6 +12,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { canPickFolders, ImportCodaDialog } from './ImportCodaDialog';
 import { AccountMenu } from './menus';
+import { ProjectSwitcher } from './ProjectSwitcher';
 
 // El diálogo de "Importar de Coda": avisa de entrada lo que impide importar (sin Drive, sin poder elegir
 // una carpeta en el iPad) y su estado vive afuera, así desmontarlo no pierde la importación ni el resultado.
@@ -28,6 +31,7 @@ afterEach(() => {
   document.body.innerHTML = '';
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  setCodaOwnerForTests();
   act(() => prefs.set({ language: 'en' }));
 });
 
@@ -158,5 +162,55 @@ describe('diálogo de importar de Coda', () => {
     finish();
     await running;
     job.close();
+  });
+});
+
+// Solo la cuenta de Lega ve "Importar de Coda" (codaOwner.ts). Acá el hash permitido es el de un correo de
+// prueba: el real no aparece en las pruebas.
+describe('importar de Coda, solo para la cuenta de Lega', () => {
+  const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
+
+  async function openSwitcher(value: Services): Promise<void> {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    roots.push(root);
+    await act(async () => root.render(<ServicesContext.Provider value={value}><ProjectSwitcher /></ServicesContext.Provider>));
+    // El hash se resuelve aparte (Web Crypto): se espera un instante antes de abrir el selector.
+    await act(async () => new Promise((r) => setTimeout(r, 20)));
+    await act(async () => host.querySelector<HTMLButtonElement>('.project-button')!.click());
+  }
+
+  const importEntry = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Import from Coda…');
+
+  it('con otro correo no aparece la entrada', async () => {
+    setCodaOwnerForTests({ hash: sha256('otra-persona@ejemplo.com') });
+    const { server, d } = await device(true);
+    await openSwitcher(services(d, server.ownerId));
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(importEntry()).toBeUndefined();
+  });
+
+  it('con el correo permitido (sin importar mayúsculas ni espacios) aparece y abre el diálogo', async () => {
+    const { server, d } = await device(true);
+    const value = services(d, server.ownerId);
+    value.user = { ...value.user, email: `  ${value.user.email.toUpperCase()} ` };
+    setCodaOwnerForTests({ hash: sha256(`${server.ownerId}@test`.toLowerCase()) });
+    await openSwitcher(value);
+    const entry = importEntry();
+    expect(entry).toBeDefined();
+    act(() => entry!.click());
+    expect(importJobFor(d.tree).get().open).toBe(true);
+    act(() => importJobFor(d.tree).close());
+  });
+
+  it('una función de hash inyectada decide igual (el resultado se guarda por usuario)', async () => {
+    const hashOf = vi.fn(async (email: string) => (email.endsWith('@test') ? 'permitido' : 'otro'));
+    setCodaOwnerForTests({ hash: 'permitido', hashOf });
+    const { server, d } = await device(true);
+    await openSwitcher(services(d, server.ownerId));
+    expect(importEntry()).toBeDefined();
+    await openSwitcher(services(d, server.ownerId));
+    expect(hashOf).toHaveBeenCalledTimes(1);
   });
 });
