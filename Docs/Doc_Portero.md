@@ -50,11 +50,16 @@ Carpetas en el Drive del dueño, sin espacios (guiones bajos):
   reanudable en Drive y la app manda las partes (`PUT /upload/<id>`) que el portero pasa a Drive. Si se
   corta, la app pregunta cuánto llegó y sigue desde ahí. Las partes pasan por el portero para que la app
   nunca tenga la conexión con Drive. Cuando termina la subida de un archivo de una página, el portero le
-  dice a la base en qué archivo de Drive quedó (`set_file_drive`, con la sesión de la persona). Si eso falla
-  por la red, la respuesta "listo" llega igual y el portero lo vuelve a intentar la próxima vez que alguien
-  pregunte por ese archivo (la app preguntando cuánto llegó, pidiendo la subida de nuevo o pidiendo un
-  pase); mientras tanto el archivo ya se puede ver. Si la app pide de nuevo la subida de un archivo que ya
-  está en Drive, responde "listo" sin volver a subirlo.
+  dice a la base en qué archivo de Drive quedó (`set_file_drive`, con la sesión de la persona). Toda
+  respuesta "listo" (`done`) de un archivo de una página dice además `linked: true` (la base ya lo sabe) o
+  `linked: false` (todavía no). **La app lo marca subido solo con `linked: true`**; con `false` vuelve a
+  preguntar más tarde. Si avisarle a la base falla por la red, el portero lo vuelve a intentar la próxima
+  vez que alguien pregunte por ese archivo (la app preguntando cuánto llegó, pidiendo la subida de nuevo o
+  pidiendo un pase); mientras tanto el archivo ya se puede ver. Si la app pide de nuevo la subida de un
+  archivo que la base ya tiene en Drive, el portero comprueba (una vez) que ese archivo de Drive lleve la
+  marca de este y responde "listo" sin volver a subirlo; si no la lleva o ya no existe, responde `409`
+  (*"This file is registered with a different Drive file: ask the workspace owner."*) y la app lo deja
+  pendiente y a la vista.
 - **Ver**: la app pide un pase (`POST /pass`) y lo usa como dirección del video o la foto
   (`/m/<pase>`). El pase está firmado por el portero con una clave que genera él mismo la primera vez y
   que no sale de ahí, y vence a las 8 horas. El portero pide a Drive solo la parte que pide el navegador
@@ -64,13 +69,25 @@ Carpetas en el Drive del dueño, sin espacios (guiones bajos):
   almacenamiento la primera vez que alguien las pide, y desde entonces las sirve sin ir a Drive:
   - Principio: ~254 KiB. Final: ~508 KiB. En trozos de 127 KiB (cada valor del almacenamiento puede pesar
     hasta 128 KiB). Un archivo de hasta ~762 KiB se guarda entero.
-  - Tope: **256 archivos** (unos 190 MiB como mucho). Al pasarse, olvida el que guardó hace más tiempo.
-    Es solo una copia de las puntas: olvidarla no borra nada.
-  - Solo se sirve desde ahí un pedido por partes que cae **entero** adentro de una punta guardada (con
-    `206`, `Content-Range`, `Content-Length`, `Accept-Ranges` y el tipo del archivo). Lo demás (el archivo
-    entero, `bytes=0-` de un archivo grande, el medio, varias partes en un pedido) va a Drive como siempre.
-  - Para medir: la respuesta que sale de la caché lleva `X-Portero-Cache: hit` (o `fill` la vez que se
-    guarda); se ve en las herramientas de desarrollo del navegador, pestaña *Network*.
+  - Tope: **256 archivos** (unos 190 MiB como mucho). Cada archivo tiene un lugar fijo entre los 256 (sale
+    de su id) y el que llega desplaza al que estaba en ese lugar. Es solo una copia de las puntas:
+    olvidarla no borra nada.
+  - Se sirve desde ahí todo pedido por partes que **empieza** adentro de una punta guardada, con `206`,
+    `Content-Range`, `Content-Length`, `Accept-Ranges` y el tipo del archivo. Si sigue después de la punta
+    (Chrome pide `bytes=0-` para empezar), se devuelve solo lo guardado: un `206` más corto que lo pedido
+    es válido y el navegador pide lo que sigue, que va a Drive. Lo que empieza afuera de las puntas (el
+    medio, lo que sigue al principio), el archivo entero sin Range y varias partes en un pedido van a Drive
+    como siempre.
+  - Dos pedidos a la vez no se pisan: cada punta tiene su descripción, que se escribe entera una sola vez,
+    y la clave de cada trozo dice de qué archivo, de qué peso y de qué lugar son sus bytes. Un trozo que
+    falta o no mide lo que debe, o un archivo que ya no ocupa su lugar, se piden a Drive: nunca se sirven
+    bytes equivocados. Si dos archivos se pelean por el mismo lugar al mismo tiempo, lo del que pierde puede
+    quedar guardado sin usarse (a lo sumo ~762 KiB) hasta que se lo vuelva a pedir.
+  - **Hay que medir con *Media test*** si el video arranca más rápido: en las herramientas de desarrollo
+    del navegador (pestaña *Network*), la respuesta que sale de la caché lleva `X-Portero-Cache: hit`, y
+    `fill` la vez que se trae de Drive y se guarda; sin ese encabezado, vino de Drive. La primera vez que
+    alguien abre un archivo se llena la caché; el arranque rápido se ve desde la segunda (de cualquier
+    persona). Anotar los tiempos en `Plan_Workspaces.md` como los de la prueba del paso 4.
   - Si el dueño reemplaza el contenido de un archivo en Drive (*Manage versions*), las puntas guardadas
     quedan viejas: lo que sube la app nunca se reemplaza, así que no pasa con los archivos de la app.
 - **Dónde guarda**: en un Durable Object con almacenamiento SQLite (lo trae el plan gratis de Workers). No
@@ -87,7 +104,10 @@ Carpetas en el Drive del dueño, sin espacios (guiones bajos):
   | `project:<id del proyecto>` | La carpeta del proyecto y el nombre que le puso la app. |
   | `day:<id del proyecto>:<AAAA-MM-DD>` | La carpeta de ese día. |
   | `file:<id del archivo>` | Lo que subió el portero y si la base ya se enteró; qué id de Drive ya se comprobó. |
-  | `cache:<id de Drive>`, `cache:<id>:h<n>`, `cache:<id>:t<n>`, `cacheIndex` | La caché del arranque del video. |
+  | `cache:<id de Drive>:head`, `cache:<id>:tail` | Qué hay guardado de cada punta de un archivo (peso, largo, tipo). |
+  | `cache:<id>:<peso>:h<n>`, `cache:<id>:<peso>:t<n>` | Los trozos de 127 KiB de cada punta. |
+  | `cacheSlot:<n>` | Qué archivo ocupa cada uno de los 256 lugares de la caché. |
+  | `cache:<id>` | El peso aprendido de un archivo de la prueba de media (su pase no lo trae). |
 
   **Nunca** se cambia el nombre de la clase `Store` ni las `migrations` de `portero/wrangler.jsonc`: ahí vive
   todo esto.
@@ -111,10 +131,10 @@ Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el arc
 | `POST /drive/connect` | Dueño | `{ return?: "/ruta" }` → la dirección de Google para conectar Drive. `return` es la ruta de la app a la que se vuelve (tiene que empezar con `/`). Solo desde una dirección de `APP_ORIGINS`. |
 | `POST /drive/picker` | Dueño | `{ apiKey, appId, token }` para el selector de carpetas de Google: la clave de API, el número del proyecto de Google (el principio de `GOOGLE_CLIENT_ID`, antes del primer `-`) y un token de acceso nuevo, de una hora, solo con `drive.file`. `404` si no está `GOOGLE_API_KEY`. |
 | `POST /drive/folder` | Dueño | `{ parentId: "<id>" \| null }`: guarda dónde va `LGA_ShotDocs` (`null` = la raíz) y, si la carpeta ya existe, la mueve ahí con todo lo que tiene adentro. Devuelve `{ folder }`. |
-| `POST /upload` con `file` | Nivel 3 o más | `{ file: <id>, name, mime, size, day: "AAAA-MM-DD" }`. Abre una subida reanudable en `LGA_ShotDocs/<Proyecto>/<día>` y devuelve `{ uploadId }`; si el archivo ya está en Drive, `{ status: 'done', file }`. `404` si no existe o no lo puede ver; `403` si lo ve pero no puede editar. |
+| `POST /upload` con `file` | Nivel 3 o más | `{ file: <id>, name, mime, size, day: "AAAA-MM-DD" }`. Abre una subida reanudable en `LGA_ShotDocs/<Proyecto>/<día>` y devuelve `{ uploadId }`; si ya está en Drive, `{ status: 'done', file, linked }`. `404` si no existe o no lo puede ver; `403` si lo ve pero no puede editar; `409` si la base lo tiene en un archivo de Drive sin su marca. |
 | `POST /upload` sin `file` | Dueño | La prueba de media: abre una subida en `LGA_ShotDocs/Media_Test`. |
-| `PUT /upload/<id>` | El que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. Al terminar: `{ status: 'done', file }` (con `file`, además `linked`: si la base ya se enteró). |
-| `POST /pass` con `file` | Nivel 1 o más | `{ file: <id> }` → `{ url }` de un pase para `/m/…`, con el tipo de `files.mime`. Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
+| `PUT /upload/<id>` | El que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. Al terminar: `{ status: 'done', file }`; si es un archivo de una página, además `linked: true\|false` (si la base ya se enteró; la app lo marca subido solo con `true`). |
+| `POST /pass` con `file` | Nivel 1 o más | `{ file: <id> }` → `{ url }` de un pase para `/m/…`, siempre con el tipo de `files.mime` (un `type` que mande la app no cuenta). Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
 | `POST /pass` con `fileId` | Dueño | La prueba de media: un pase para un archivo de Drive por su id. |
 
 La app manda partes de 8 MiB (`PART_BYTES` en `src/media/portero.ts`); el portero acepta hasta 64 MiB por

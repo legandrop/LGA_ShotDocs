@@ -80,14 +80,21 @@ interface ProjectFolder {
 // `day:<project_id>:<AAAA-MM-DD>`: el id de la carpeta del día (texto).
 
 /**
- * `cache:<id de Drive>`: qué hay guardado del principio y del final de un archivo, para que el video
- * arranque sin esperar a Drive. Los trozos van en `cache:<id>:h<n>` (desde el byte 0) y `cache:<id>:t<n>`
- * (los últimos `tail` bytes). `cacheIndex` es la lista de archivos guardados, del más viejo al más nuevo.
+ * Caché del arranque del video, por id de Drive. Cada punta tiene su descripción, que se escribe una sola
+ * vez y entera (nunca se lee, se cambia y se vuelve a guardar): `cache:<id>:head` (desde el byte 0) y
+ * `cache:<id>:tail` (los últimos `length` bytes). Sus trozos van en `cache:<id>:<size>:h<n>` y
+ * `cache:<id>:<size>:t<n>`: la clave dice de qué archivo, de qué peso y de qué lugar son los bytes, así
+ * que dos pedidos que se pisan nunca pueden hacer servir bytes de otro lado.
+ *
+ * `cacheSlot:<n>` dice qué archivo ocupa cada uno de los `CACHE_FILES` lugares (el lugar sale del id).
+ * Solo se sirve desde la caché el archivo que ocupa su lugar: lo que quedó de uno desplazado no se usa
+ * nunca, y se reescribe si ese archivo vuelve a ocupar su lugar.
+ *
+ * `cache:<id>` (sin más): el peso aprendido de un archivo de la prueba de media, cuyo pase no lo trae.
  */
-interface CacheMeta {
+interface CacheZone {
   size: number;
-  head: number;
-  tail: number;
+  length: number;
   type?: string;
   etag?: string;
   modified?: string;
@@ -144,8 +151,8 @@ const MIME = /^[\w.+-]+\/[\w.+-]+$/;
  * trozos son de 127 KiB para que, con lo que agrega el almacenamiento al guardarlos, no lleguen al tope.
  * Por archivo se guardan 2 trozos del principio (~254 KiB: el encabezado del video) y 4 del final
  * (~508 KiB: el índice, que los videos del iPhone llevan al final). Un archivo que entra entero en esos
- * ~762 KiB se guarda entero. Como mucho `CACHE_FILES` archivos (~190 MiB en total): al pasarse, se
- * olvida el más viejo.
+ * ~762 KiB se guarda entero. Como mucho `CACHE_FILES` archivos (~190 MiB en total): cada archivo tiene
+ * un lugar fijo (sale de su id) y el que llega desplaza al que estaba en ese lugar.
  */
 export const CACHE_PIECE = 127 * 1024;
 export const CACHE_HEAD_PIECES = 2;
@@ -714,12 +721,16 @@ export class Portero {
     const size = Number(media.size);
     if (body.size !== undefined && Number(body.size) !== size) throw new HttpError(400, 'The size does not match the file.');
 
+    const rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
     if (media.drive_id) {
-      return { status: 'done', file: { id: media.drive_id, name: media.name, mimeType: media.mime, size } };
+      // La base ya lo tiene en Drive: se comprueba (una vez) que ese archivo de Drive sea de verdad este.
+      if ((await this.checkMark(file, media.drive_id, rec)) !== 'ok') {
+        throw new HttpError(409, 'This file is registered with a different Drive file: ask the workspace owner.');
+      }
+      return { status: 'done', file: { id: media.drive_id, name: media.name, mimeType: media.mime, size }, linked: true };
     }
     // Ya se subió pero la base no se enteró (se cortó la red al avisarle): se le avisa ahora.
-    const rec = await this.store.get<FileRecord>(`file:${file}`);
-    if (rec?.drive) {
+    if (rec.drive) {
       const linked = await this.linkFile(who, file, rec.drive);
       return { status: 'done', file: rec.drive, linked };
     }
@@ -815,11 +826,12 @@ export class Portero {
 
   private async makePass(req: Request, who: Who): Promise<{ url: string }> {
     const body = await readBody(req);
-    const asked = typeof body.type === 'string' && MIME.test(body.type) ? body.type : '';
     if (body.file !== undefined) {
+      // El tipo es siempre el de `files.mime`: el que mande la app no cuenta.
       const { drive, type, size } = await this.filePass(body.file, who);
-      return { url: await this.passUrl(req, { f: drive, t: asked || type, u: Date.now() + PASS_MS, s: size }) };
+      return { url: await this.passUrl(req, { f: drive, t: type, u: Date.now() + PASS_MS, s: size }) };
     }
+    const asked = typeof body.type === 'string' && MIME.test(body.type) ? body.type : '';
     // Con el id de Drive (la prueba de media): solo el dueño.
     if (!who.isOwner) throw new HttpError(403, 'Only the owner of the workspace can do this for now.');
     const fileId = body.fileId;
@@ -848,15 +860,26 @@ export class Portero {
       }
     }
     if (!drive) throw new HttpError(409, 'This file has not finished uploading yet.');
-    if (rec.verified !== drive) {
-      const res = await this.drive(`/files/${encodeURIComponent(drive)}?fields=id,appProperties`);
-      if (res.status === 404) throw new HttpError(404, 'This file is not in Google Drive anymore.');
-      if (!res.ok) throw new HttpError(502, `Google Drive answered ${res.status}.`);
-      const found = (await res.json()) as { appProperties?: Record<string, string> };
-      if (found.appProperties?.sdFile !== file) throw new HttpError(403, 'This file in Google Drive does not belong to this file of the app.');
-      await this.store.put(`file:${file}`, { ...rec, verified: drive } satisfies FileRecord);
-    }
+    const mark = await this.checkMark(file, drive, rec);
+    if (mark === 'missing') throw new HttpError(404, 'This file is not in Google Drive anymore.');
+    if (mark === 'other') throw new HttpError(403, 'This file in Google Drive does not belong to this file of the app.');
     return { drive, type: MIME.test(media.mime ?? '') ? media.mime : '', size: Number(media.size) || 0 };
+  }
+
+  /**
+   * Si el archivo de Drive lleva la marca de este archivo de la app (`appProperties.sdFile`). Se le
+   * pregunta a Drive una sola vez por id: lo comprobado queda anotado en `file:<uuid>`.
+   */
+  private async checkMark(file: string, drive: string, rec: FileRecord): Promise<'ok' | 'missing' | 'other'> {
+    if (rec.verified === drive) return 'ok';
+    const res = await this.drive(`/files/${encodeURIComponent(drive)}?fields=id,appProperties`);
+    if (res.status === 404) return 'missing';
+    if (!res.ok) throw new HttpError(502, `Google Drive answered ${res.status}.`);
+    const found = (await res.json()) as { appProperties?: Record<string, string> };
+    if (found.appProperties?.sdFile !== file) return 'other';
+    const latest = (await this.store.get<FileRecord>(`file:${file}`)) ?? rec;
+    await this.store.put(`file:${file}`, { ...latest, verified: drive } satisfies FileRecord);
+    return 'ok';
   }
 
   private async passUrl(req: Request, data: { f: string; t: string; u: number; s?: number }): Promise<string> {
@@ -897,76 +920,87 @@ export class Portero {
   // --- caché del principio y del final de los archivos (arranque del video) -------------------------
 
   /**
-   * Un pedido por partes que cae entero en el principio o en el final guardado se sirve desde el
-   * almacenamiento del portero, sin ir a Drive. Si cae en esa zona pero todavía no está guardada, se le
-   * pide a Drive la zona entera (una sola vez), se guarda y se sirve. Lo demás va a Drive como siempre.
+   * Un pedido por partes que empieza adentro de una punta guardada se sirve desde el almacenamiento del
+   * portero, sin ir a Drive. Si empieza en el principio y sigue después (Chrome pide `bytes=0-`), se
+   * devuelve solo lo guardado, con un 206 más corto que lo pedido: el navegador pide lo que sigue. Si
+   * empieza en una punta que todavía no está guardada, se le pide a Drive la punta entera (una vez), se
+   * guarda y se sirve. Lo demás va a Drive como siempre.
    */
   private async fromCache(req: Request, data: Pass, header: string): Promise<{ response?: Response; learn?: boolean }> {
     const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
     if (!m || (!m[1] && !m[2])) return {};
-    const key = `cache:${data.f}`;
-    const meta = await this.store.get<CacheMeta>(key);
-    const size = meta?.size ?? (Number.isSafeInteger(data.s) && data.s! > 0 ? data.s! : 0);
-    if (!size) return { learn: true };
-    const r = byteRange(m[1], m[2], size);
-    if (!r) return {};
-    if (meta) {
-      const hit = await this.readCache(req, data, meta, r);
+    const id = data.f;
+    const [head, tail, slot] = await Promise.all([
+      this.store.get<CacheZone>(`cache:${id}:head`),
+      this.store.get<CacheZone>(`cache:${id}:tail`),
+      this.store.get<string>(slotKey(id)),
+    ]);
+    const mine = slot === id;
+    if (mine) {
+      const hit = (await this.readZone(req, data, head, 'h', m[1], m[2])) ?? (await this.readZone(req, data, tail, 't', m[1], m[2]));
       if (hit) return { response: hit };
     }
 
+    let size = (mine ? (head?.size ?? tail?.size) : undefined) ?? (Number.isSafeInteger(data.s) && data.s! > 0 ? data.s! : 0);
+    if (!size) size = (await this.store.get<{ size: number }>(`cache:${id}`))?.size ?? 0;
+    if (!size) return { learn: true };
+    const r = byteRange(m[1], m[2], size);
+    if (!r) return {};
     const zone = cacheZones(size);
     let from: number;
     let kind: 'h' | 't';
-    if (r.end < zone.head) [from, kind] = [0, 'h'];
+    if (r.start < zone.head) [from, kind] = [0, 'h'];
     else if (zone.tail > 0 && r.start >= size - zone.tail) [from, kind] = [size - zone.tail, 't'];
     else return {};
     const to = kind === 'h' ? zone.head - 1 : size - 1;
 
-    const res = await this.drive(`/files/${encodeURIComponent(data.f)}?alt=media`, { headers: { Range: `bytes=${from}-${to}` } });
+    const res = await this.drive(`/files/${encodeURIComponent(id)}?alt=media`, { headers: { Range: `bytes=${from}-${to}` } });
     const got = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(res.headers.get('Content-Range') ?? '');
     if (res.status !== 206 || !got || Number(got[1]) !== from || Number(got[2]) !== to || Number(got[3]) !== size) {
       await res.body?.cancel();
-      // El archivo no pesa lo que se creía: se anota el peso de verdad y se va a Drive.
-      if (res.status === 206 && got && Number(got[3]) > 0 && Number(got[3]) !== size) {
-        await this.store.put(key, { size: Number(got[3]), head: 0, tail: 0 } satisfies CacheMeta);
-        if (!meta) await this.remember(data.f);
+      // El archivo no pesa lo que se creía: se olvidan sus puntas (eran de otro peso), se anota el peso de
+      // verdad para la próxima y se va a Drive.
+      if (res.status === 206 && got && Number(got[3]) > 0) {
+        await Promise.all([this.store.delete(`cache:${id}:head`), this.store.delete(`cache:${id}:tail`)]);
+        await this.store.put(`cache:${id}`, { size: Number(got[3]) });
       }
       return {};
     }
     // Es poco (hasta ~762 KiB): se puede tener entero en memoria.
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (bytes.length !== to - from + 1) return {};
+    await this.claim(id, slot);
     // Copias (`slice`), no vistas: una vista se guardaría con todo el búfer de atrás.
     const writes: Promise<void>[] = [];
     for (let i = 0; i * CACHE_PIECE < bytes.length; i++) {
-      writes.push(this.store.put(`${key}:${kind}${i}`, bytes.slice(i * CACHE_PIECE, (i + 1) * CACHE_PIECE)));
+      writes.push(this.store.put(pieceKey(id, size, kind, i), bytes.slice(i * CACHE_PIECE, (i + 1) * CACHE_PIECE)));
     }
     await Promise.all(writes);
-    // Lo último: la descripción, recién cuando los trozos ya están.
-    const latest = await this.store.get<CacheMeta>(key);
-    const base: CacheMeta = latest && latest.size === size ? latest : { size, head: 0, tail: 0 };
-    const next: CacheMeta = {
-      ...base,
-      [kind === 'h' ? 'head' : 'tail']: bytes.length,
-      type: res.headers.get('Content-Type') ?? base.type,
-      etag: res.headers.get('ETag') ?? base.etag,
-      modified: res.headers.get('Last-Modified') ?? base.modified,
+    // Lo último, y entera: la descripción de la punta, recién cuando sus trozos ya están.
+    const saved: CacheZone = {
+      size,
+      length: bytes.length,
+      type: res.headers.get('Content-Type') ?? undefined,
+      etag: res.headers.get('ETag') ?? undefined,
+      modified: res.headers.get('Last-Modified') ?? undefined,
     };
-    await this.store.put(key, next);
-    if (!latest) await this.remember(data.f);
-    return { response: cacheResponse(req, data, next, r, bytes.slice(r.start - from, r.end - from + 1), 'fill') };
+    await this.store.put(`cache:${id}:${kind === 'h' ? 'head' : 'tail'}`, saved);
+    const end = Math.min(r.end, to);
+    return { response: cacheResponse(req, data, saved, { start: r.start, end }, bytes.slice(r.start - from, end - from + 1), 'fill') };
   }
 
-  private async readCache(req: Request, data: Pass, meta: CacheMeta, r: ByteRange): Promise<Response | null> {
-    let start: number;
-    let kind: 'h' | 't';
-    if (meta.head > 0 && r.end < meta.head) [start, kind] = [0, 'h'];
-    else if (meta.tail > 0 && r.start >= meta.size - meta.tail) [start, kind] = [meta.size - meta.tail, 't'];
-    else return null;
+  /** Lo pedido desde una punta guardada, si empieza adentro (hasta donde llegue la punta); si no, `null`. */
+  private async readZone(req: Request, data: Pass, zone: CacheZone | undefined, kind: 'h' | 't', a: string, b: string): Promise<Response | null> {
+    if (!zone || !(zone.length > 0) || !(zone.size > 0) || zone.length > zone.size) return null;
+    const asked = byteRange(a, b, zone.size);
+    if (!asked) return null;
+    const start = kind === 'h' ? 0 : zone.size - zone.length;
+    const last = start + zone.length - 1;
+    if (asked.start < start || asked.start > last) return null;
+    const r = { start: asked.start, end: Math.min(asked.end, last) };
     const first = Math.floor((r.start - start) / CACHE_PIECE);
-    const last = Math.floor((r.end - start) / CACHE_PIECE);
-    const keys = Array.from({ length: last - first + 1 }, (_, i) => `cache:${data.f}:${kind}${first + i}`);
+    const final = Math.floor((r.end - start) / CACHE_PIECE);
+    const keys = Array.from({ length: final - first + 1 }, (_, i) => pieceKey(data.f, zone.size, kind, first + i));
     const pieces = await Promise.all(keys.map((k) => this.store.get<Uint8Array | ArrayBuffer>(k)));
     const out = new Uint8Array(r.end - r.start + 1);
     let pos = 0;
@@ -975,39 +1009,40 @@ export class Portero {
       if (!raw) return null;
       const piece = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
       const pieceStart = start + (first + i) * CACHE_PIECE;
-      const a = Math.max(r.start, pieceStart) - pieceStart;
-      const b = Math.min(r.end, pieceStart + piece.length - 1) - pieceStart;
-      if (b < a || pos + (b - a + 1) > out.length) return null;
-      out.set(piece.subarray(a, b + 1), pos);
-      pos += b - a + 1;
+      // Cada trozo tiene que medir justo lo que le toca; si no, no se usa.
+      if (piece.length !== Math.min(CACHE_PIECE, last + 1 - pieceStart)) return null;
+      const from = Math.max(r.start, pieceStart) - pieceStart;
+      const to = Math.min(r.end, pieceStart + piece.length - 1) - pieceStart;
+      out.set(piece.subarray(from, to + 1), pos);
+      pos += to - from + 1;
     }
     if (pos !== out.length) return null;
-    return cacheResponse(req, data, meta, r, out, 'hit');
+    return cacheResponse(req, data, zone, r, out, 'hit');
   }
 
   private async learnSize(id: string, res: Response): Promise<void> {
     const total = Number(/\/(\d+)$/.exec(res.headers.get('Content-Range') ?? '')?.[1]);
     if (!Number.isSafeInteger(total) || total <= 0) return;
-    await this.store.put(`cache:${id}`, { size: total, head: 0, tail: 0, type: res.headers.get('Content-Type') ?? undefined } satisfies CacheMeta);
-    await this.remember(id);
+    await this.store.put(`cache:${id}`, { size: total });
   }
 
-  /** Anota un archivo más en la caché y olvida los más viejos si se pasa de `CACHE_FILES`. */
-  private async remember(id: string): Promise<void> {
-    const index = (await this.store.get<string[]>('cacheIndex')) ?? [];
-    if (index.includes(id)) return;
-    index.push(id);
-    while (index.length > CACHE_FILES) {
-      const old = index.shift()!;
-      // Primero la descripción: sin ella nadie lee los trozos que se están borrando.
-      await this.store.delete(`cache:${old}`);
-      const keys = [
-        ...Array.from({ length: CACHE_HEAD_PIECES + CACHE_TAIL_PIECES }, (_, i) => `cache:${old}:h${i}`),
-        ...Array.from({ length: CACHE_TAIL_PIECES }, (_, i) => `cache:${old}:t${i}`),
-      ];
+  /** Ocupa el lugar del archivo en la caché; si había otro, lo olvida (primero sus descripciones). */
+  private async claim(id: string, current: string | undefined): Promise<void> {
+    if (current === id) return;
+    if (current) {
+      const [head, tail] = await Promise.all([
+        this.store.get<CacheZone>(`cache:${current}:head`),
+        this.store.get<CacheZone>(`cache:${current}:tail`),
+      ]);
+      await Promise.all([`cache:${current}:head`, `cache:${current}:tail`, `cache:${current}`].map((k) => this.store.delete(k)));
+      const keys: string[] = [];
+      for (const [zone, kind] of [[head, 'h'], [tail, 't']] as const) {
+        if (!zone || !(zone.length > 0)) continue;
+        for (let i = 0; i * CACHE_PIECE < zone.length && i < CACHE_HEAD_PIECES + CACHE_TAIL_PIECES; i++) keys.push(pieceKey(current, zone.size, kind, i));
+      }
       await Promise.all(keys.map((k) => this.store.delete(k)));
     }
-    await this.store.put('cacheIndex', index);
+    await this.store.put(slotKey(id), id);
   }
 }
 
@@ -1037,6 +1072,21 @@ function byteRange(a: string, b: string, size: number): ByteRange | null {
   return { start, end };
 }
 
+/** El lugar de un archivo en la caché (0 a `CACHE_FILES - 1`), sacado de su id. */
+export function cacheSlot(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193) >>> 0;
+  return h % CACHE_FILES;
+}
+
+function slotKey(id: string): string {
+  return `cacheSlot:${cacheSlot(id)}`;
+}
+
+function pieceKey(id: string, size: number, kind: 'h' | 't', n: number): string {
+  return `cache:${id}:${size}:${kind}${n}`;
+}
+
 /** Qué se guarda de un archivo: el principio y el final, o entero si es chico. */
 function cacheZones(size: number): { head: number; tail: number } {
   const all = (CACHE_HEAD_PIECES + CACHE_TAIL_PIECES) * CACHE_PIECE;
@@ -1054,7 +1104,7 @@ function mediaHeaders(): Headers {
   });
 }
 
-function cacheResponse(req: Request, data: Pass, meta: CacheMeta, r: ByteRange, body: Uint8Array<ArrayBuffer>, how: 'hit' | 'fill'): Response {
+function cacheResponse(req: Request, data: Pass, meta: CacheZone, r: ByteRange, body: Uint8Array<ArrayBuffer>, how: 'hit' | 'fill'): Response {
   const out = mediaHeaders();
   out.set('Content-Type', data.t || meta.type || 'application/octet-stream');
   out.set('Content-Length', String(body.length));

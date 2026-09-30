@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CACHE_FILES, CACHE_HEAD_PIECES, CACHE_PIECE, CACHE_TAIL_PIECES, folderName, Portero, type Env, type Store } from './core';
+import { CACHE_FILES, CACHE_HEAD_PIECES, CACHE_PIECE, CACHE_TAIL_PIECES, cacheSlot, folderName, Portero, type Env, type Store } from './core';
 
 const env: Env = {
   SUPABASE_URL: 'https://ws.example',
@@ -614,11 +614,32 @@ describe('portero: archivos de la app', () => {
     expect(await (await ask('editor-jwt')).json()).toEqual({ status: 'incomplete', received: 0 });
   });
 
-  it('si el archivo ya está en Drive según la base, responde done sin subir de nuevo', async () => {
+  it('si el archivo ya está en Drive según la base, comprueba la marca y responde done (linked) sin subir de nuevo', async () => {
     const { world, p } = await setup();
+    world.files.set('yaSubidoxxxxxxxx', { name: 'X.MOV', mime: 'video/quicktime', data: bytes(10), parents: [], appProperties: { sdFile: FILE_A } });
     addBaseFile(world, FILE_A, { drive_id: 'yaSubidoxxxxxxxx', size: 1234, name: 'X.MOV' });
-    const res = await startFile(p, 'editor-jwt', { file: FILE_A, name: 'X.MOV', mime: 'video/quicktime', size: 1234, day: '2026-09-30' });
-    expect(await res.json()).toEqual({ status: 'done', file: { id: 'yaSubidoxxxxxxxx', name: 'X.MOV', mimeType: 'video/quicktime', size: 1234 } });
+    const start = () => startFile(p, 'editor-jwt', { file: FILE_A, name: 'X.MOV', mime: 'video/quicktime', size: 1234, day: '2026-09-30' });
+    const before = world.metaCalls();
+    expect(await (await start()).json()).toEqual({
+      status: 'done',
+      file: { id: 'yaSubidoxxxxxxxx', name: 'X.MOV', mimeType: 'video/quicktime', size: 1234 },
+      linked: true,
+    });
+    await start(); // la segunda vez ya está comprobado: no le pregunta a Drive
+    expect(world.metaCalls()).toBe(before + 1);
+    expect(world.calls.filter((c) => c.includes('/upload/drive'))).toHaveLength(0);
+  });
+
+  it('si la base apunta a un archivo de Drive sin la marca de este archivo (o que no existe), 409 y no sube', async () => {
+    const { world, p } = await setup();
+    world.files.set('deOtroxxxxxxxxxx', { name: 'Y.MOV', mime: 'video/quicktime', data: bytes(10), parents: [], appProperties: { sdFile: FILE_B } });
+    addBaseFile(world, FILE_A, { drive_id: 'deOtroxxxxxxxxxx', size: 10 });
+    const start = () => startFile(p, 'editor-jwt', { file: FILE_A, size: 10, day: '2026-09-30' });
+    const res = await start();
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toBe('This file is registered with a different Drive file: ask the workspace owner.');
+    world.base.get(FILE_A)!.drive_id = 'noExistexxxxxxxx';
+    expect((await start()).status).toBe(409);
     expect(world.calls.filter((c) => c.includes('/upload/drive'))).toHaveLength(0);
   });
 
@@ -706,9 +727,12 @@ describe('portero: archivos de la app', () => {
     expect(world.metaCalls()).toBe(before + 1);
     await filePass(p, 'viewer-jwt', FILE_A);
     expect(world.metaCalls()).toBe(before + 1);
-    // Sirve con el tipo de files.mime.
+    // Sirve con el tipo de files.mime, aunque la app pida otro.
     const media = await p.handle(new Request(((await res.json()) as { url: string }).url, { headers: { Range: 'bytes=0-3' } }));
     expect(media.headers.get('Content-Type')).toBe('video/quicktime');
+    const typed = await call(p, '/pass', { method: 'POST', jwt: 'viewer-jwt', body: JSON.stringify({ file: FILE_A, type: 'text/html' }) });
+    const other = await p.handle(new Request(((await typed.json()) as { url: string }).url, { headers: { Range: 'bytes=0-3' } }));
+    expect(other.headers.get('Content-Type')).toBe('video/quicktime');
   });
 
   it('renombrar el proyecto renombra su carpeta, salvo que el dueño le haya puesto otro nombre a mano', async () => {
@@ -894,10 +918,18 @@ describe('portero: caché del arranque del video', () => {
     await expectPart(await get(`bytes=${SIZE - 10}-${SIZE + 500}`), data, SIZE - 10, SIZE - 1); // pasa del final: se recorta
     expect(drive()).toBe(2);
 
-    // Lo que no cae adentro va a Drive como siempre.
-    await expectPart(await get('bytes=0-'), data, 0, SIZE - 1);
-    await expectPart(await get(`bytes=${HEAD - 10}-${HEAD + 10}`), data, HEAD - 10, HEAD + 10);
+    // Lo que empieza en el principio y sigue después (Chrome: `bytes=0-`): un 206 más corto, hasta donde
+    // llega lo guardado; el navegador pide lo que sigue.
+    const chrome = await get('bytes=0-');
+    expect(chrome.headers.get('X-Portero-Cache')).toBe('hit');
+    await expectPart(chrome, data, 0, HEAD - 1);
+    await expectPart(await get('bytes=100-'), data, 100, HEAD - 1);
+    await expectPart(await get(`bytes=${HEAD - 10}-${HEAD + 10}`), data, HEAD - 10, HEAD - 1);
+    expect(drive()).toBe(2);
+    // Lo que sigue (lo que pide el navegador después) y lo del medio van a Drive como siempre.
+    await expectPart(await get(`bytes=${HEAD}-`), data, HEAD, SIZE - 1);
     await expectPart(await get('bytes=1000000-1000999'), data, 1000000, 1000999);
+    await expectPart(await get(`bytes=${SIZE - TAIL - 10}-${SIZE - TAIL + 10}`), data, SIZE - TAIL - 10, SIZE - TAIL + 10);
     expect(drive()).toBe(5);
     const all = await get();
     expect(all.status).toBe(200);
@@ -915,7 +947,51 @@ describe('portero: caché del arranque del video', () => {
 
     // Cada valor guardado pesa menos de 128 KiB.
     for (const [k, v] of store.data) if (k.startsWith('cache:') && v instanceof Uint8Array) expect(v.byteLength).toBeLessThan(128 * 1024);
-    expect(store.data.get('cacheIndex')).toEqual(['videoxxxxxxxxxxx']);
+    expect(store.data.get(`cacheSlot:${cacheSlot('videoxxxxxxxxxxx')}`)).toBe('videoxxxxxxxxxxx');
+  });
+
+  it('si el principio todavía no está guardado, `bytes=0-` lo trae una vez y responde corto', async () => {
+    const { world, data, get } = await videoPass();
+    const first = await get('bytes=0-');
+    expect(first.headers.get('X-Portero-Cache')).toBe('fill');
+    await expectPart(first, data, 0, HEAD - 1);
+    await expectPart(await get(`bytes=5000-${HEAD + 999999}`), data, 5000, HEAD - 1);
+    expect(world.mediaCalls()).toBe(1);
+  });
+
+  it('el principio y el final pedidos a la vez quedan guardados los dos (no se pisan)', async () => {
+    const { world, data, get } = await videoPass();
+    const [a, b] = await Promise.all([get('bytes=0-1'), get('bytes=-100')]);
+    await expectPart(a, data, 0, 1);
+    await expectPart(b, data, SIZE - 100, SIZE - 1);
+    expect(world.mediaCalls()).toBe(2);
+    await expectPart(await get('bytes=10-20'), data, 10, 20);
+    await expectPart(await get('bytes=-200'), data, SIZE - 200, SIZE - 1);
+    expect(world.mediaCalls()).toBe(2);
+  });
+
+  it('nunca sirve bytes que no son de ese archivo: sin su lugar, o con un trozo que no mide lo que debe, va a Drive', async () => {
+    const { world, store, data, get } = await videoPass();
+    await get('bytes=0-1');
+    expect(world.mediaCalls()).toBe(1);
+    // Otro archivo ocupó su lugar (un pedido que se pisó con otro): lo que quedó no se usa.
+    store.data.set(`cacheSlot:${cacheSlot('videoxxxxxxxxxxx')}`, 'otroxxxxxxxxxxxx');
+    await expectPart(await get('bytes=10-20'), data, 10, 20);
+    expect(world.mediaCalls()).toBe(2); // vuelve a traer el principio y recupera su lugar
+    await expectPart(await get('bytes=10-20'), data, 10, 20);
+    expect(world.mediaCalls()).toBe(2);
+    // Un trozo roto (más corto): no se usa.
+    store.data.set(`cache:videoxxxxxxxxxxx:${SIZE}:h0`, new Uint8Array(10));
+    await expectPart(await get('bytes=10-20'), data, 10, 20);
+    expect(world.mediaCalls()).toBe(3);
+    // Una descripción de otro peso apunta a trozos de otras claves: tampoco mezcla.
+    const zone = store.data.get('cache:videoxxxxxxxxxxx:head') as { size: number };
+    store.data.set('cache:videoxxxxxxxxxxx:head', { ...zone, size: SIZE + 1 });
+    await expectPart(await get('bytes=10-20'), data, 10, 20);
+    expect(world.mediaCalls()).toBe(5); // prueba traer el principio, ve el peso de verdad, olvida y va a Drive
+    await expectPart(await get('bytes=10-20'), data, 10, 20); // lo vuelve a guardar bien
+    await expectPart(await get('bytes=10-20'), data, 10, 20);
+    expect(world.mediaCalls()).toBe(6);
   });
 
   it('otro Portero (otro pedido) usa lo guardado; un archivo chico se guarda entero', async () => {
@@ -951,29 +1027,32 @@ describe('portero: caché del arranque del video', () => {
     expect(world.mediaCalls()).toBe(2);
   });
 
-  it(`guarda como mucho ${CACHE_FILES} archivos: olvida el más viejo`, async () => {
+  it(`guarda como mucho ${CACHE_FILES} archivos: el que llega desplaza al que estaba en su lugar`, async () => {
     const { world, store, p } = await setup();
-    const ids: string[] = [];
-    for (let i = 0; i <= CACHE_FILES; i++) {
-      const id = `chico${String(i).padStart(4, '0')}xxxxxx`;
-      ids.push(id);
+    const first = 'chico0000xxxxxxxxxx';
+    let other = '';
+    for (let i = 1; !other; i++) {
+      const id = `chico${String(i).padStart(4, '0')}xxxxxxxxxx`;
+      if (cacheSlot(id) === cacheSlot(first)) other = id;
+    }
+    const open = async (id: string) => {
       world.files.set(id, { name: 'a', mime: 'image/jpeg', data: bytes(20), parents: [] });
-      store.data.set(`cache:${id}`, { size: 20, head: 0, tail: 0 });
-    }
-    // Se anotan de a uno, como al pedirlos.
-    for (const id of ids) {
-      store.data.delete(`cache:${id}`);
       const pass = await call(p, '/pass', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ fileId: id }) });
-      const { url } = (await pass.json()) as { url: string };
-      await p.handle(new Request(url, { headers: { Range: 'bytes=0-1' } })); // aprende el peso
-      await p.handle(new Request(url, { headers: { Range: 'bytes=0-1' } })); // guarda
-    }
-    const index = store.data.get('cacheIndex') as string[];
-    expect(index).toHaveLength(CACHE_FILES);
-    expect(index[0]).toBe(ids[1]);
-    expect(store.data.has(`cache:${ids[0]}`)).toBe(false);
-    expect(store.data.has(`cache:${ids[0]}:h0`)).toBe(false);
-    expect(store.data.has(`cache:${ids[1]}:h0`)).toBe(true);
+      return ((await pass.json()) as { url: string }).url;
+    };
+    const a = await open(first);
+    const b = await open(other);
+    await p.handle(new Request(a, { headers: { Range: 'bytes=0-1' } })); // aprende el peso
+    await p.handle(new Request(a, { headers: { Range: 'bytes=0-1' } })); // guarda
+    expect(store.data.has(`cache:${first}:20:h0`)).toBe(true);
+    await p.handle(new Request(b, { headers: { Range: 'bytes=0-1' } }));
+    await p.handle(new Request(b, { headers: { Range: 'bytes=0-1' } }));
+    expect(store.data.get(`cacheSlot:${cacheSlot(first)}`)).toBe(other);
+    expect(store.data.has(`cache:${first}:head`)).toBe(false);
+    expect(store.data.has(`cache:${first}:20:h0`)).toBe(false);
+    expect(store.data.has(`cache:${other}:20:h0`)).toBe(true);
+    // Nunca más de CACHE_FILES lugares.
+    expect([...store.data.keys()].filter((k) => k.startsWith('cacheSlot:')).every((k) => Number(k.split(':')[1]) < CACHE_FILES)).toBe(true);
   });
 });
 
