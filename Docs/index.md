@@ -17,7 +17,8 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 | [`Doc_Imagenes.md`](Doc_Imagenes.md) | Fotos en la página: el primer clic elige, tamaños rápidos, fotos en fila, acomodar en filas y la opción del teléfono. |
 | [`Doc_Adjuntos.md`](Doc_Adjuntos.md) | Adjuntar cualquier archivo (PDF, zip…): la tarjeta, abrir y bajar, lo que sirve el portero y la seguridad. |
 | [`Doc_Peso_Proyectos.md`](Doc_Peso_Proyectos.md) | Cuánto ocupa cada proyecto en el Drive (P.7, primera entrega hecha en v0.050) y el diseño de la lista de media por peso (P.8). |
-| [`Doc_Colapsar.md`](Doc_Colapsar.md) | Colapsar secciones por sus títulos (P.11; entrega 1a, para vos, hecha en v0.051): qué esconde cada título, el triángulo, para vos y para todos (Shift+clic), editar con secciones colapsadas, las marcas de hoja y el PDF. |
+| [`Doc_Colapsar.md`](Doc_Colapsar.md) | Colapsar secciones por sus títulos (P.11; entrega 1a, para vos, hecha en v0.052): qué esconde cada título, el triángulo, para vos y para todos (Shift+clic), editar con secciones colapsadas, las marcas de hoja y el PDF. |
+| [`Doc_Buscar.md`](Doc_Buscar.md) | Buscar y reemplazar en la página (Ctrl/⌘+F; entrega 1 hecha en v0.051; desde v0.052 abre las secciones colapsadas) y el diseño de la búsqueda en todo el proyecto (Ctrl/⌘+K): en el dispositivo, permisos, qué se busca, ir al resultado (P.12). |
 | [`Doc_Carrete.md`](Doc_Carrete.md) | El carrete: el visor a pantalla completa de las fotos y los videos de una página (qué entra, gestos, zoom, qué se ve sin red o si el navegador no puede reproducirlo, y cómo convive con la edición). |
 | [`Doc_Sincronizacion.md`](Doc_Sincronizacion.md) | Cómo funciona la sincronización offline sin pérdidas: contenido, árbol, imágenes y estado visible. |
 | [`Doc_Investigacion_Intermitente.md`](Doc_Investigacion_Intermitente.md) | Investigación del caso intermitente de la prueba de punta a punta (roadmap B.5) y de los dos cortes de `e2e.mjs` y `features.mjs`: qué se probó, tiempos, causas y correcciones propuestas sin aplicar. |
@@ -44,7 +45,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 764 pruebas (v0.051): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 823 pruebas (v0.052): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`), el cliente del portero (`src/media/`), el portero
   (`portero/src/`) y el comando que prepara un workspace (`scripts/*.test.mjs`, sin red). `npm run typecheck`
   revisa los tipos de la app pero no los del portero: esos van con `npx tsc -p portero --noEmit`.

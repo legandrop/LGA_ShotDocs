@@ -20,6 +20,7 @@ import {
 } from './collapse';
 import { hiddenInDom } from './collapseDom';
 import { BACKGROUND_META, FIND_REPLACE_META } from './editorMeta';
+import { isFindReplaceTransaction, setFindCollapseHooks, type FindCollapseHooks } from './findEditor';
 import { notify } from './notice';
 
 // Colapsar secciones por sus títulos (P.11, Docs/Doc_Colapsar.md), en el editor. Como las filas de fotos
@@ -302,7 +303,9 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   for (const tr of trs) {
     if (!tr.docChanged) continue;
     const { fromYjs, undo } = yjsOrigin(tr);
-    if (tr.getMeta(FIND_REPLACE_META) || tr.getMeta(BACKGROUND_META) || (undo && taggedUndo(newState))) continue;
+    // Los reemplazos de la búsqueda ("Reemplazar todo" escribe en el Y.Doc y llega como de Yjs) y su deshacer no
+    // abren nada (corrección 18); tampoco lo que hace la app sola (corrección 10).
+    if (isFindReplaceTransaction(tr) || tr.getMeta(BACKGROUND_META) || (undo && taggedUndo(newState))) continue;
     untagged = true;
     if (!fromYjs) plain.add(tr);
     if (!fromYjs || undo) local = true;
@@ -801,9 +804,24 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
         },
       },
     },
-    view: () => {
+    view: (editorView) => {
       let paused = new WeakSet<HTMLIFrameElement>();
+      // La búsqueda en la página (Docs/Doc_Buscar.md) cuenta lo que está en secciones colapsadas y, al ir ahí, lo
+      // abre para vos. Lo registra el editor abierto.
+      const hooks: FindCollapseHooks = {
+        isHidden: (blockId) => !!collapseKey.getState(editorView.state)?.analysis.hidden.has(blockId),
+        reveal: (blockId) => void revealBlock(editorView, blockId),
+        anyHidden: () => (collapseKey.getState(editorView.state)?.analysis.hidden.size ?? 0) > 0,
+      };
+      setFindCollapseHooks(hooks);
+      findHooksOwner = hooks;
       return {
+        destroy: () => {
+          if (findHooksOwner === hooks) {
+            setFindCollapseHooks(null);
+            findHooksOwner = null;
+          }
+        },
         update: (view, prev) => {
           const now = collapseKey.getState(view.state);
           const was = collapseKey.getState(prev);
@@ -826,6 +844,9 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
     },
   });
 }
+
+/** Los enganches de la búsqueda que están registrados (los del último editor abierto). */
+let findHooksOwner: FindCollapseHooks | null = null;
 
 type KeyContext = { editor: BlockNoteEditor<any, any, any> };
 const withView = (fn: (view: EditorView) => boolean) => ({ editor }: KeyContext) => {

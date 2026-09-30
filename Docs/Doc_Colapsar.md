@@ -1,6 +1,6 @@
 # Colapsar secciones por sus títulos (P.11)
 
-Estado: **entrega 1a hecha (v0.051)**: colapsar para vos, con toda la seguridad al editar, las marcas de hoja
+Estado: **entrega 1a hecha (v0.052)**: colapsar para vos, con toda la seguridad al editar, las marcas de hoja
 contadas con todo abierto y el PDF todo abierto (ver "Cómo quedó (1a)", al final). Faltan la 1b y la 2. Lega
 contestó casi todas las decisiones el 2026-09-30 (al final, "Decisiones"); las que faltan siguen "a
 confirmar". **"Correcciones de la auditoría", al final, manda sobre lo de arriba**, y "Cómo quedó" sobre las
@@ -494,7 +494,7 @@ de la auditoría; lo que decidió Lega después (borrar la sección entera, Ente
 
 ## Cómo quedó (1a)
 
-Entrega 1a, v0.051. Sin tipo de bloque ni propiedad nueva, sin migración ni cambios en el portero.
+Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cambios en el portero.
 
 - **`src/ui/collapse.ts`** (cálculo puro): `analyze` recorre la estructura (sin entrar al texto) y da los
   bloques escondidos con el título de más afuera que los esconde, los títulos colapsados y los hermanos
@@ -579,10 +579,16 @@ Entrega 1a, v0.051. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
   borrar e insertar, y dos borrados más dos inserciones se cruzan). Mover una sección entera no tiene que
   agrandarlo: a analizar si conviene un solo borrado más inserción de todos los bloques de la sección, con los
   mismos ids, en una transacción, y probarlo con dos documentos antes de publicarlo.
-- **Pruebas** (69 nuevas, 764 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
+- **Con la búsqueda (P.12, v0.051, unida en v0.052):** el plugin registra `setFindCollapseHooks` por editor
+  (`isHidden`, `reveal` para vos, `anyHidden`); la barra cuenta las coincidencias escondidas y, al ir a una, abre
+  para vos lo que la esconde. "Reemplazar todo" escribe en el Y.Doc (llega como de Yjs): se reconoce con
+  `isFindReplaceTransaction`, y su deshacer y rehacer por la marca de la pila; ninguno abre nada.
+  `collapseFind.test.ts` lo prueba con el editor real y las dos extensiones.
+- **Pruebas** (71 nuevas, 823 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
   (el editor real: cada caso de la sección 5 y de las correcciones, borrar la sección entera con el último título
   y la página vacía, deshacer con los mismos ids, dos documentos para lo de otro, el deshacer marcado por la
-  búsqueda, y la auditoría), `collapseMenus.test.ts`, `collapseStore.test.ts`, `collapsePagination.test.ts` (los cortes iguales con y sin colapsar, la
+  búsqueda, y la auditoría), `collapseMenus.test.ts`, `collapseFind.test.ts`, `collapseStore.test.ts`,
+  `collapsePagination.test.ts` (los cortes iguales con y sin colapsar, la
   etiqueta en el título, la copia abierta) y `collapsePage.test.tsx` (la página montada: triángulos, guardar y
   volver a abrir colapsada, el menú, "Ir al bloque", solo lectura sin subir nada, el margen sin la pregunta
   escondida).

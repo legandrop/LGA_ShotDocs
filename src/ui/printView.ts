@@ -35,6 +35,8 @@ const REMOVE = [
   '.ProseMirror-yjs-cursor',
   '.ProseMirror-gapcursor',
   '.comment-margin',
+  // La barra de buscar y reemplazar (Docs/Doc_Buscar.md).
+  '.find-anchor',
   // El espacio para tocar y agregar un bloque al final: en la última hoja podría sumar una hoja vacía.
   '.bn-trailing-block',
 ].join(',');
@@ -50,6 +52,11 @@ const STATE_CLASSES = [
   'ProseMirror-yjs-selection',
   'sd-collapsed',
   'sd-collapsed-hidden',
+  // Lo resaltado por la búsqueda en la página (findEditor.ts).
+  'sd-find-hit',
+  'sd-find-current',
+  'sd-find-block',
+  'sd-find-block-current',
 ];
 /** Atributos de colapsar que tampoco van en la copia. */
 const STATE_ATTRIBUTES = ['data-sd-collapsed', 'data-sd-hider'];

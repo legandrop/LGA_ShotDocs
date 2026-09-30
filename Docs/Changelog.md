@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.051 :
+v0.052 :
 
 Colapsar secciones por sus títulos (P.11, entrega 1a). Todo título tiene un triángulo a la izquierda (aparece
 al pasar el mouse; colapsado se ve siempre; en pantallas táctiles, siempre y tenue): colapsar un título
@@ -14,11 +14,29 @@ final de un título colapsado crea un renglón después de la sección sin abrir
 vuelve al título sin unirlo a lo escondido); Supr ahí no une lo escondido; ↓ y → lo saltan; si algo que se veía
 fuera a quedar escondido por un cambio (propio o de otro), su sección se abre para vos; "Ir al bloque" de los
 comentarios abre lo que lo esconde. Escribir en una página grande con todo colapsado no recalcula lo escondido
-en cada tecla. Las marcas de hoja
-se cuentan con todo abierto y el título colapsado dice qué hojas tiene adentro ("Hojas 2–4 adentro"); el PDF
+en cada tecla. Las marcas de hoja se cuentan con todo abierto y el título colapsado dice qué hojas tiene adentro ("Hojas 2–4 adentro"); el PDF
 sale todo abierto. Los "Encabezados plegables" de BlockNote salen del menú "/" y del selector de tipo; los que
-ya existían se ven como títulos comunes. Sin tipo de bloque ni propiedad nueva, sin migración.
+ya existían se ven como títulos comunes. Sin tipo de bloque ni propiedad nueva, sin migración. La búsqueda en la página (v0.051) encuentra lo que está en secciones colapsadas y, al ir a una
+coincidencia escondida, abre para vos lo que la esconde; "Reemplazar todo" y su deshacer no abren nada.
 [ Colapsar secciones - entrega 1a ]
+
+v0.051 :
+
+Buscar y reemplazar en la página (P.12, primera entrega). Una lupa a la izquierda del ícono de comentarios, o
+Ctrl/⌘+F, abre una barra como la del navegador que busca en el documento: sin distinguir mayúsculas ni tildes
+("camara" encuentra "Cámara"), con partes de palabras, "3 de 12", Enter y Shift+Enter, *Aa* (exacto) y palabra
+entera; encuentra también los pies de las fotos y los nombres de los archivos (el bloque queda con un
+contorno). Un segundo Ctrl/⌘+F, con el foco en la barra, abre la búsqueda del navegador; Esc la cierra y deja
+elegida la coincidencia. Quien puede editar la página despliega el reemplazo con la flecha de la barra:
+*Reemplazar* (la actual y pasa a la siguiente) y *Reemplazar todo*, que se deshace con un solo Ctrl/⌘+Z (o con
+*Deshacer* en la barra); conserva el formato y los links, no borra un link entero (una tarjeta de Drive sigue
+andando) y no toca pies ni nombres de archivo. Si otra persona cambió la coincidencia justo antes, no se
+reemplaza y se vuelve a buscar. "Reemplazar todo" escribe todo de una vez (cientos de reemplazos en una
+página grande, en una fracción de segundo). Encuentra también lo que está adentro de una lista plegable cerrada
+y la abre al llegar; los resaltados no se mueven cuando llegan cambios de otra persona. Lo resaltado no sale
+al imprimir y no recalcula las marcas de hoja. Queda listo el enganche con las secciones colapsadas (P.11):
+cuando exista, la búsqueda las abre al llegar a una coincidencia escondida.
+[ Buscar y reemplazar en la página - primera entrega ]
 
 v0.050 :
 

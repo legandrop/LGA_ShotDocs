@@ -24,6 +24,7 @@ export const PageIcon = icon('M6 2.75h5.5L15 6.25v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1
 export const PlusIcon = icon('M10 4.5v11M4.5 10h11', { strokeWidth: 1.6 });
 export const ExpandIcon = icon('M8 5.5l4.5 4.5L8 14.5', { strokeWidth: 1.8 });
 export const CollapseIcon = icon('M5.5 8l4.5 4.5L14.5 8', { strokeWidth: 1.8 });
+export const ChevronUpIcon = icon('M5.5 12l4.5-4.5 4.5 4.5', { strokeWidth: 1.8 });
 export const RenameIcon = icon('M12.5 4.5l3 3L8 15H5v-3z');
 export const MoveIcon = icon('M3.75 6.25h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1zM8.5 12h5M11.5 10l2 2-2 2');
 export const TrashIcon = icon(
