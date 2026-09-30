@@ -1,5 +1,13 @@
 # Changelog — LGA Shot Docs
 
+v0.043 :
+
+El PDF corta las hojas donde las marca la pantalla. Al imprimir, las fotos del Drive se cambian por el
+original si está en el dispositivo, y el original llenaba el ancho de la hoja: la foto salía más alta que
+en pantalla (donde se ve con su miniatura) y la hoja se cortaba antes. Ahora cada foto conserva en el PDF
+el ancho que ocupa en pantalla, llevado a la hoja; el original solo la hace más nítida.
+[ PDF - los cortes de la pantalla ]
+
 v0.042 :
 
 Sale la pantalla *Media test* del menú de la cuenta: era la prueba del portero de antes de que las fotos y

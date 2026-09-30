@@ -114,7 +114,11 @@ abierta. Se usa la impresión del navegador, sin librerías de PDF: en el diálo
 4. Las fotos del Drive van **grandes si el original está en el dispositivo** (`localImage`, que no pregunta
    nada a la red), achicadas a 2400 px de lado mayor (`createImageBitmap` y un canvas). Una foto que el
    navegador no sabe abrir (un HEIC en Chrome) sigue con su miniatura, igual que las que no están en el
-   dispositivo. Como mucho 40 originales o 200 MB por PDF (12 o 60 MB en un teléfono o una tableta). Mientras
+   dispositivo. **El tamaño en la hoja no cambia:** cada foto o video conserva el ancho que ocupa en
+   pantalla, llevado al ancho de la hoja (la vista lo fija al armarse), así el original solo gana
+   nitidez y los cortes son los mismos que marca la pantalla. Hasta v0.042 el original llenaba el ancho
+   y en el PDF la foto salía más alta que en pantalla: la hoja se cortaba antes que la marca.
+   Como mucho 40 originales o 200 MB por PDF (12 o 60 MB en un teléfono o una tableta). Mientras
    tanto se ve el aviso "Preparing the PDF…". Si la impresión se cancela (se cerró o empezó otra), no se
    crea nada más.
 5. Cuando cargaron las imágenes de la vista, se vuelve a medir y a cortar.

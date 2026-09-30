@@ -112,7 +112,7 @@ export function buildPrintView(
     shell.setAttribute('data-color-scheme', 'light');
     shell.setAttribute('data-mantine-color-scheme', 'light');
     const copy = live.cloneNode(true) as HTMLElement;
-    cleanCopy(copy, live);
+    cleanCopy(copy, live, geometry.contentWidth / contentWidthOf(live));
     shell.append(copy);
     host.append(shell);
     page.append(host);
@@ -128,17 +128,37 @@ export function buildPrintView(
   return { root, geometry, page };
 }
 
-/** Saca de la copia lo que no va en papel, antes de agregarla al documento (así un iframe no carga). */
-function cleanCopy(copy: HTMLElement, live: HTMLElement): void {
+/** El ancho del área de texto del editor en pantalla (sin su margen interno), o 0 si no se sabe. */
+function contentWidthOf(live: HTMLElement): number {
+  const style = getComputedStyle(live);
+  return live.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+}
+
+/**
+ * Saca de la copia lo que no va en papel, antes de agregarla al documento (así un iframe no carga).
+ * `scale`: el ancho del área de texto de la hoja sobre el del editor en pantalla.
+ */
+function cleanCopy(copy: HTMLElement, live: HTMLElement, scale: number): void {
   // Las imágenes con la proporción que ya tienen en pantalla (emparejadas antes de sacar nada): la copia
-  // mide bien aunque no haya terminado de cargar.
+  // mide bien aunque no haya terminado de cargar. Y las fotos y videos del editor con el ancho que ocupan
+  // en pantalla, llevado a la hoja: sin eso, una foto que en pantalla se ve con su miniatura (480 px) y en
+  // el PDF con el original (que llena el ancho) salía más alta que en pantalla y los cortes no coincidían.
   const liveImages = live.querySelectorAll('img');
+  const lockWidth = Number.isFinite(scale) && scale > 0;
   copy.querySelectorAll('img').forEach((img, i) => {
     const source = liveImages[i];
     img.loading = 'eager';
     img.removeAttribute('srcset');
     if (source && source.naturalWidth > 0 && source.naturalHeight > 0) {
       img.style.aspectRatio = `${source.naturalWidth} / ${source.naturalHeight}`;
+    }
+    const shown = source?.getBoundingClientRect().width ?? 0;
+    if (lockWidth && shown > 0 && img.classList.contains('bn-visual-media')) {
+      img.style.width = `${shown * scale}px`;
+      img.style.height = 'auto';
+      // El ancho que BlockNote le pone al contenedor (el de pantalla, en px) no lo achica.
+      const wrapper = img.closest<HTMLElement>('.bn-file-block-content-wrapper');
+      if (wrapper) wrapper.style.width = 'fit-content';
     }
   });
   for (const el of copy.querySelectorAll(REMOVE)) el.remove();

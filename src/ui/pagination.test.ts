@@ -368,6 +368,52 @@ describe('la vista de impresión y el diálogo', () => {
   });
 });
 
+describe('las fotos en la vista de impresión', () => {
+  // Una página con una foto del Drive que en pantalla se ve con su miniatura (480 px, `fit-content`).
+  function photoPage(editorWidth: number, shown: number) {
+    const article = document.createElement('article');
+    article.className = 'page sheet';
+    article.innerHTML = `<div class="editor-host"><div class="bn-container"><div class="bn-editor">
+      <div class="bn-block-outer"><div data-content-type="image" data-url="sdmedia://x">
+        <div class="bn-file-block-content-wrapper" style="width: fit-content">
+          <div class="bn-visual-media-wrapper"><img class="bn-visual-media" src="blob:thumb"></div>
+        </div></div></div></div></div></div>`;
+    document.body.append(article);
+    cleanups.push(() => article.remove());
+    const editorEl = article.querySelector<HTMLElement>('.bn-editor')!;
+    Object.defineProperty(editorEl, 'clientWidth', { value: editorWidth });
+    const img = article.querySelector('img')!;
+    Object.defineProperty(img, 'naturalWidth', { value: 480 });
+    Object.defineProperty(img, 'naturalHeight', { value: 320 });
+    img.getBoundingClientRect = () => ({ width: shown }) as DOMRect;
+    return article;
+  }
+
+  it('conserva el ancho de pantalla: cambiar la miniatura por el original no cambia el alto', () => {
+    const a3 = printGeometry({ size: 'A3', landscape: false });
+    const view = buildPrintView(photoPage(a3.contentWidth, 480), { size: 'A3', landscape: false }, 'output');
+    const img = view.root.querySelector<HTMLImageElement>('img.bn-visual-media')!;
+    expect(img.style.width).toBe('480px');
+    expect(img.style.aspectRatio).toBe('480 / 320');
+    expect(img.closest<HTMLElement>('.bn-file-block-content-wrapper')!.style.width).toBe('fit-content');
+    view.root.remove();
+  });
+
+  it('en una pantalla más angosta que la hoja, la foto ocupa en la hoja la misma parte del ancho', () => {
+    const a4 = printGeometry({ size: 'A4', landscape: false });
+    const view = buildPrintView(photoPage(350, 175), { size: 'A4', landscape: false }, 'measure');
+    const width = parseFloat(view.root.querySelector<HTMLImageElement>('img.bn-visual-media')!.style.width);
+    expect(width).toBeCloseTo(a4.contentWidth / 2, 3);
+    view.root.remove();
+  });
+
+  it('si no se sabe cuánto mide en pantalla, no le pone ancho', () => {
+    const view = buildPrintView(photoPage(0, 0), { size: 'A4', landscape: false }, 'output');
+    expect(view.root.querySelector<HTMLImageElement>('img.bn-visual-media')!.style.width).toBe('');
+    view.root.remove();
+  });
+});
+
 describe('qué cambios recalculan las marcas', () => {
   const record = (target: Node, type: MutationRecordType, extra: Partial<MutationRecord> = {}) =>
     ({ target, type, addedNodes: [], removedNodes: [], attributeName: null, ...extra }) as unknown as MutationRecord;
