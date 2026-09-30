@@ -23,7 +23,7 @@ import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carrete';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
-import { MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
+import { ImageSizeButtons, MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { editorDictionary } from './editorLocale';
@@ -466,6 +466,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
             ? [
                 <MediaViewButton key="mediaViewButton" onView={(id) => openAtRef.current(id)} />,
                 <MediaDownloadButton key="fileDownloadButton" />,
+                <ImageSizeButtons key="imageSizeButtons" />,
               ]
             : [item],
         )}

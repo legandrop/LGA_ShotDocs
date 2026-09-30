@@ -142,7 +142,8 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement): void {
     if (source && source.naturalWidth > 0 && source.naturalHeight > 0) {
       img.style.aspectRatio = `${source.naturalWidth} / ${source.naturalHeight}`;
     }
-    if (source && img.classList.contains('bn-visual-media')) fixMediaWidth(img, source);
+    // Una foto en fila (con `rowWidth`) ya tiene su ancho: la parte de la fila, igual en cualquier pantalla.
+    if (source && img.classList.contains('bn-visual-media') && !img.closest('.img-sized')) fixMediaWidth(img, source);
   });
   for (const el of copy.querySelectorAll(REMOVE)) el.remove();
   for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('[contenteditable]')]) el.removeAttribute('contenteditable');
@@ -214,10 +215,15 @@ export function paginateView(view: PrintView): Paginated {
  */
 export function applyBreaks(result: Paginated): void {
   result.elements.forEach((el, i) => {
-    el.classList.toggle('sheet-keep', result.units[i].height <= result.sheetHeight);
-    el.classList.remove('sheet-break-before');
+    for (const member of result.members?.[i] ?? [el]) {
+      member.classList.toggle('sheet-keep', result.units[i].height <= result.sheetHeight);
+      member.classList.remove('sheet-break-before');
+    }
   });
   for (const b of result.pagination.breaks) {
-    if (b.offset === 0) result.elements[b.index].classList.add('sheet-break-before');
+    if (b.offset !== 0) continue;
+    // En una fila de fotos, el salto va en cada foto de la fila (cada una es un renglón de flex aparte
+    // para el navegador), así la fila entera empieza la hoja.
+    for (const member of result.members?.[b.index] ?? [result.elements[b.index]]) member.classList.add('sheet-break-before');
   }
 }
