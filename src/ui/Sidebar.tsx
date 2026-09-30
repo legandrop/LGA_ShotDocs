@@ -49,7 +49,9 @@ export function Sidebar() {
   });
   useEffect(() => {
     if (drive?.result && new URLSearchParams(location.search).has('drive')) {
-      history.replaceState(history.state, '', location.pathname + location.hash);
+      // La vieja prueba de media (`/media-test`, adonde vuelve un portero viejo) ya no existe: queda `/`.
+      const path = location.pathname === '/media-test' ? '/' : location.pathname;
+      history.replaceState(history.state, '', path + location.hash);
     }
   }, [drive]);
   const [moving, setMoving] = useState<string | null>(null);

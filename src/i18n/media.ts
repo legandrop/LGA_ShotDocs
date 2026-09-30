@@ -1,6 +1,6 @@
 import type { Dict } from './types';
 
-// Fotos y videos: el carrete, Google Drive, las tarjetas de Drive, la cola de subida y la prueba de media.
+// Fotos y videos: el carrete, Google Drive, las tarjetas de Drive, la cola de subida.
 
 export const media = {
   'media.onlyPhotosVideos': {

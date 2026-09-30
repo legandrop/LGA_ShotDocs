@@ -380,7 +380,7 @@ con Escape. Mientras carga, la miniatura. Pensado primero para el teléfono.
   principio del id del cliente) y un token de acceso en el navegador: el portero se lo da **solo al
   dueño** (que ya es dueño de ese Drive), de corta duración y solo con `drive.file`. Sin esa variable, la
   app ofrece solo la raíz.
-- **Arranque del video:** medir con *Media test* dónde se van los 5 a 9 segundos. Probar que el portero
+- **Arranque del video:** medir (abriendo un video en el carrete; *Media test* salió en v0.042) dónde se van los 5 a 9 segundos. Probar que el portero
   pida a Drive el principio y el final del archivo de una vez (los videos del iPhone suelen tener el
   índice al final). Guardarlos un rato: la caché de Workers probablemente no ande en `*.workers.dev` (a
   confirmar); si no, en el almacenamiento del propio portero.

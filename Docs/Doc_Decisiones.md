@@ -95,7 +95,7 @@ diga otra cosa.
     dispositivo (el motivo de una subida detenida, de un comentario rechazado) se guardan en inglés y se
     traducen al mostrarlos (`localize`), así una versión vieja los sigue mostrando bien.
   - **Los textos de lo que se baja aparte viajan con esas partes** (`src/i18n/lazy/`: editor, carrete,
-    panel de comentarios, miembros y compartir, Drive, prueba de fotos y videos); la primera carga trae el
+    panel de comentarios, miembros y compartir, Drive); la primera carga trae el
     resto, con los dos idiomas (unos 16 KB comprimidos).
 - **D-17 · Archivos grandes en el Drive del dueño** (2026-09-29). El plan gratis de Supabase trae 1 GB
   de archivos: unas 300 fotos de teléfono o un video de rodaje. Detalle en la sección 5 de
