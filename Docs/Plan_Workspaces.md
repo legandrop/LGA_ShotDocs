@@ -252,8 +252,9 @@ cambios de permisos, que son el momento más riesgoso.
    project" (sin proyectos, la app lo avisa), la versión de la base con aviso, el modo de restaurar sobre
    el mismo proyecto (repo de copias) y la configuración de login documentada entera.
 Los pasos 6 a 13 quedaron hechos y auditados el 2026-09-30 en una rama de trabajo, **sin publicar**: sus
-migraciones (`20260930140000` a `20260930180000`) se aplican juntas y la app se publica después (el
-procedimiento está en el relevo de trabajo). Lo que queda para probar a mano está en cada `Doc_*`.
+migraciones (`20260930140000` a `20260930180000`) se aplican juntas, en orden y con la copia de seguridad
+hecha, y recién después se publica la app (`Doc_Supabase.md`). Lo que queda para probar a mano está en
+cada `Doc_*`.
 
 6. ✅ **Cola de archivos nueva** (v0.031): por partes, sin red, miniaturas y la lista de qué archivos usa
    cada página. Va junto con el 8: la cola sube al portero. `Doc_Sincronizacion.md`, "Archivos grandes".
