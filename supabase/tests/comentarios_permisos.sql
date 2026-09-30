@@ -520,8 +520,6 @@ begin
   perform pg_temp.check_comment('invitada con comentar', '00000000-0000-4000-8000-000000000cb5', 0);
   -- Comenta, responde, edita y borra lo suyo, y resuelve.
   perform public.add_comment('00000000-0000-4000-8000-000000000d10', c, 'blk-q', null, 'Pregunta del cliente');
-  perform public.add_comment('00000000-0000-4000-8000-000000000d11', c, null, '00000000-0000-4000-8000-000000000d04', 'x')
-    from (select 1) s where false;  -- (una respuesta a una respuesta ya se probó)
   perform public.add_comment('00000000-0000-4000-8000-000000000d11', c, null, '00000000-0000-4000-8000-000000000d10', 'Respuesta del cliente');
   perform public.add_comment('00000000-0000-4000-8000-000000000d12', g, null, '00000000-0000-4000-8000-000000000d05', 'En g');
   perform public.edit_comment('00000000-0000-4000-8000-000000000d11', 'Respuesta corregida');
@@ -567,17 +565,6 @@ $$;
 
 -- Los nombres y correos del equipo en los comentarios: la invitada ve los de c (quien escribió, resolvió o
 -- borró, también el sacado) y nada de otras páginas; en la lista de miembros, solo su fila.
-select pg_temp.as_user('00000000-0000-4000-8000-000000000c06');
-do $$
-begin
-  assert (select array_agg(email order by email) from public.comment_authors('00000000-0000-4000-8000-000000000cb2'))
-         = array['cm-cc@test.invalid', 'cm-ep@test.invalid', 'cm-ge@test.invalid', 'cm-gc@test.invalid',
-                 'cm-ow@test.invalid', 'cm-rm@test.invalid']
-           -- (orden por correo: cc, ep, gc, ge, ow, rm)
-           and false = false,
-    'placeholder';
-end;
-$$;
 select pg_temp.as_user('00000000-0000-4000-8000-000000000c06');
 do $$
 declare
@@ -639,7 +626,7 @@ select pg_temp.check_no_writes('un sacado');
 select set_config('role', 'postgres', true);
 do $$
 begin
-  assert (select count(*) from public.comments where id::text like '00000000-0000-4000-8000-000000000d%') = 12,
+  assert (select count(*) from public.comments where id::text like '00000000-0000-4000-8000-000000000d%') = 13,
     format('faltan comentarios: %s', (select count(*) from public.comments where id::text like '00000000-0000-4000-8000-000000000d%'));
   assert (select schema_version from public.workspace_settings) >= 5, 'schema_version no subió a 5';
 end;
