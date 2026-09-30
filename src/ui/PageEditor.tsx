@@ -55,6 +55,7 @@ import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
 import { BACKGROUND_META } from './editorMeta';
+import { headingItems, notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens } from './carreteClick';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
@@ -249,7 +250,21 @@ function BlockEditor({
   // Lo colapsado para vos (P.11, Docs/Doc_Colapsar.md): se guarda en la base local con una pausa, y lo que
   // falte se escribe al cerrar la página.
   const collapseSave = useMemo(() => collapseSaver(db, pageId), [db, pageId]);
-  useEffect(() => () => void collapseSave.flush(), [collapseSave]);
+  useEffect(() => {
+    // Lo pendiente se escribe al cerrar la página, y también si se va la pestaña o la app queda de fondo (el
+    // teléfono puede cerrarla sin avisar).
+    const flush = () => void collapseSave.flush();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flush();
+    };
+  }, [collapseSave]);
 
   const editor = useCreateBlockNote(
     withCollaboration({
@@ -430,7 +445,7 @@ function BlockEditor({
     // "/Paragraph" en una línea Script también le saca la marca de guion.
     // Sin los "encabezados plegables" de BlockNote: todos los títulos se colapsan (P.11, Doc_Colapsar.md).
     const items = getDefaultReactSlashMenuItems(editor)
-      .filter((item) => !TOGGLE_HEADING_KEYS.has(String((item as { key?: string }).key)))
+      .filter(notToggleHeading)
       .map((item) =>
       (item as { key?: string }).key === 'paragraph' || item.title === editor.dictionary.slash_menu.paragraph.title
         ? {
@@ -679,23 +694,6 @@ function CarreteHost(props: OpenCarrete & { onClose: () => void }) {
       <Carrete {...props} online={online} />
     </Part>
   );
-}
-
-/** Los "encabezados plegables" del menú "/" (P.11: todos los títulos se colapsan con el triángulo). */
-const TOGGLE_HEADING_KEYS = new Set(['toggle_heading', 'toggle_heading_2', 'toggle_heading_3']);
-
-/**
- * El selector de tipo sin los encabezados plegables, y los títulos sin `isToggleable`: así un plegable viejo
- * aparece como su título en el selector (se compara solo el nivel) y pasar a otro nivel no lo cambia.
- */
-function headingItems(items: BlockTypeSelectItem[]): BlockTypeSelectItem[] {
-  return items
-    .filter((item) => !(item.type === 'heading' && item.props?.isToggleable === true))
-    .map((item) => {
-      if (item.type !== 'heading' || !item.props || !('isToggleable' in item.props)) return item;
-      const { isToggleable: _t, ...props } = item.props;
-      return { ...item, props };
-    });
 }
 
 function flatten(blocks: Block[]): Block[] {

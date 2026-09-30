@@ -1,6 +1,9 @@
 import type { LocalDb } from '../sync/localDb';
 import type { HeadingRecord } from './collapse';
 
+// Una sola pestaña usa la base local a la vez (`acquireTabLock` en services.ts): no hay dos pestañas escribiendo
+// lo colapsado de la misma página al mismo tiempo. Si otra pestaña toma la base, esta deja de usarla.
+//
 // Lo colapsado de cada persona (P.11, Docs/Doc_Colapsar.md, corrección 6): en la base local del dispositivo,
 // en `meta` con la clave `collapse:<página>` (sin cambiar la versión de la base: las versiones anteriores solo
 // leen `meta` por clave). Se lee antes de crear el editor (así la página se abre ya colapsada, sin parpadeo)
@@ -29,11 +32,18 @@ function clean(value: unknown): Map<string, HeadingRecord> {
   return out;
 }
 
-/** Lo guardado de una página (vacío si no hay nada, si está dañado o si la base no se puede leer). */
-export async function loadCollapse(db: LocalDb | null | undefined, pageId: string): Promise<Map<string, HeadingRecord>> {
+/**
+ * Lo guardado de una página (vacío si no hay nada, si está dañado o si la base no se puede leer). Abrirla la
+ * cuenta como usada (las que se conservan son las usadas más recientemente, no las cambiadas).
+ */
+export async function loadCollapse(db: LocalDb | null | undefined, pageId: string, now = Date.now()): Promise<Map<string, HeadingRecord>> {
   if (!db) return new Map();
   try {
-    return clean(await db.get('meta', COLLAPSE_PREFIX + pageId));
+    const key = COLLAPSE_PREFIX + pageId;
+    const saved = await db.get('meta', key);
+    const records = clean(saved);
+    if (records.size > 0) void db.put('meta', { used: now, h: Object.fromEntries(records) } satisfies SavedPage, key).catch(() => undefined);
+    return records;
   } catch {
     return new Map();
   }

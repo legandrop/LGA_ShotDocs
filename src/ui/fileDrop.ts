@@ -1,3 +1,5 @@
+import { BACKGROUND_META } from './editorMeta';
+
 // Soltar o pegar archivos en la página (Docs/Doc_Adjuntos.md). Con portero, cualquier archivo (fotos, videos,
 // PDF, zip…) va al Drive del dueño: la app inserta un bloque `image` por archivo (nunca el bloque `file` de
 // BlockNote, que una versión vieja borraría) y después guarda cada uno. Se hace acá y no con lo de BlockNote
@@ -74,6 +76,8 @@ export interface FileEditor {
   removeBlocks(ids: string[]): unknown;
   updateBlock(id: string, update: unknown): unknown;
   uploadFile?: (file: File, blockId?: string) => Promise<unknown>;
+  /** Una transacción (para marcarla como de la app: no abre una sección colapsada, Doc_Colapsar.md). */
+  transact?: (fn: (tr: { setMeta: (key: string, value: unknown) => unknown }) => void) => unknown;
 }
 
 /**
@@ -112,7 +116,16 @@ export async function insertFiles(editor: FileEditor, files: readonly File[], at
     if (!id) continue;
     try {
       const url = await editor.uploadFile?.(files[i], id);
-      if (typeof url === 'string' && editor.getBlock(id)) editor.updateBlock(id, { props: { url } });
+      if (typeof url === 'string' && editor.getBlock(id)) {
+        // Lo hace la app al terminar de guardar: no abre una sección colapsada (Docs/Doc_Colapsar.md).
+        const update = () => editor.updateBlock(id, { props: { url } });
+        if (editor.transact) {
+          editor.transact((tr) => {
+            tr.setMeta(BACKGROUND_META, true);
+            update();
+          });
+        } else update();
+      }
     } catch {
       // `uploadFile` ya avisó y sacó el bloque: se sigue con el próximo.
     }

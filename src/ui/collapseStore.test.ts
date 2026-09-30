@@ -28,6 +28,14 @@ describe('lo colapsado en el dispositivo', () => {
     expect(await loadCollapse(db, 'p2')).toEqual(new Map());
   });
 
+  it('abrir la página la cuenta como usada (se conservan las usadas más recientemente)', async () => {
+    const db = await freshDb();
+    await saveCollapse(db, 'p1', records([['h1', { c: true, g: null }]]), 1000);
+    await loadCollapse(db, 'p1', 9000);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(((await db.get('meta', `${COLLAPSE_PREFIX}p1`)) as { used: number }).used).toBe(9000);
+  });
+
   it('nada colapsado borra la clave', async () => {
     const db = await freshDb();
     await saveCollapse(db, 'p1', records([['h1', { c: true, g: null }]]));

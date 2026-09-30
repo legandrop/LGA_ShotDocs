@@ -44,7 +44,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 745 pruebas (v0.051): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 764 pruebas (v0.051): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`), el cliente del portero (`src/media/`), el portero
   (`portero/src/`) y el comando que prepara un workspace (`scripts/*.test.mjs`, sin red). `npm run typecheck`
   revisa los tipos de la app pero no los del portero: esos van con `npx tsc -p portero --noEmit`.

@@ -9,7 +9,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { HeadingRecord } from './collapse';
 import { collapseExtension, collapseState, revealBlock, setAllCollapsed, setCollapsed } from './collapseEditor';
 import { hiderInDom } from './collapseDom';
-import { schema } from './editorSchema';
+import { paragraphProps, schema } from './editorSchema';
 import { FIND_REPLACE_META } from './editorMeta';
 
 // Colapsar secciones (Docs/Doc_Colapsar.md) con el editor real: qué se esconde, que colapsar no toca el
@@ -544,7 +544,12 @@ describe('borrar un título colapsado borra su sección entera', () => {
     const { editor } = page([h(1, 'Todo'), p('a'), p('b')]);
     collapse(editor, 'Todo');
     selectBlock(editor, 'Todo');
-    view(editor).dom.dispatchEvent(clipboardEvent('cut'));
+    const event = clipboardEvent('cut');
+    view(editor).dom.dispatchEvent(event);
+    const html = (event as unknown as { clipboardData: { getData: (k: string) => string } }).clipboardData.getData('text/html');
+    expect(html).toContain('Todo');
+    expect(html).toContain('b');
+    expect(html).toMatch(/<p[^>]*>a<\/p>/);
     expect(editor.document).toHaveLength(1);
     expect(texts(editor)).toEqual(['']);
   });
@@ -601,5 +606,310 @@ describe('abrir desde afuera y colapsar todo', () => {
     const pasted = editor.document.find((b) => b.type === 'heading');
     expect(pasted).toBeDefined();
     expect((pasted!.props as { isToggleable?: boolean }).isToggleable).toBe(false);
+  });
+});
+
+// --- Auditoría de la entrega 1a: cada caso verificado, primero como prueba -------------------------------
+
+/** Aplica una transacción como la despacha la vista y devuelve la raíz y lo que agregaron los plugins. */
+function applyWithAppended(editor: BlockNoteEditor, tr: import('@tiptap/pm/state').Transaction) {
+  const v = view(editor);
+  const result = v.state.applyTransaction(tr);
+  v.updateState(result.state);
+  return result;
+}
+
+function idsIn(doc: import('@tiptap/pm/model').Node): Set<string> {
+  const out = new Set<string>();
+  doc.descendants((node) => {
+    if (node.type.name === 'blockContainer' && node.attrs.id) out.add(String(node.attrs.id));
+    return true;
+  });
+  return out;
+}
+
+describe('auditoría 1a', () => {
+  it('1. borrar un título colapsado con un colapsado adentro y un fin no borra lo que se ve después', () => {
+    const { editor } = page([p('P0'), h(1, 'A'), h(2, 'B'), p('P1'), h(1, 'C')]);
+    collapse(editor, 'B');
+    collapse(editor, 'A');
+    putCaret(editor, 'A');
+    press(editor, 'Enter');
+    editor.insertInlineContent('X');
+    press(editor, 'Enter');
+    editor.insertInlineContent('P2');
+    expect(visible(editor)).toEqual(['P0', 'A', 'X', 'P2', 'C']);
+    const v = view(editor);
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, textPos(editor, 'A', 'start'), textPos(editor, 'X'))));
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['P0', '', 'P2', 'C']);
+  });
+
+  it('1. lo mismo con Cortar: lo que se ve después queda', () => {
+    const { editor } = page([p('P0'), h(1, 'A'), h(2, 'B'), p('P1'), h(1, 'C')]);
+    collapse(editor, 'B');
+    collapse(editor, 'A');
+    putCaret(editor, 'A');
+    press(editor, 'Enter');
+    editor.insertInlineContent('X');
+    press(editor, 'Enter');
+    editor.insertInlineContent('P2');
+    const v = view(editor);
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, textPos(editor, 'A', 'start'), textPos(editor, 'X'))));
+    v.dom.dispatchEvent(clipboardEvent('cut'));
+    expect(texts(editor)).toContain('P2');
+  });
+
+  it('1. invariante (al azar): lo que borra la pasada de colapsar estaba escondido por un título que la edición sacó', () => {
+    let seed = 7;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const pick = <T,>(xs: T[]): T => xs[Math.floor(rand() * xs.length)];
+    for (let round = 0; round < 120; round++) {
+      const blocks: PartialBlock[] = [];
+      const n = 6 + Math.floor(rand() * 10);
+      for (let i = 0; i < n; i++) {
+        const kind = rand();
+        const kids = rand() < 0.2 ? [p(`k${round}-${i}`)] : [];
+        blocks.push(kind < 0.45 ? h(1 + Math.floor(rand() * 3), `h${round}-${i}`, kids) : p(`p${round}-${i}`, kids));
+      }
+      for (const e of editors.splice(0)) e.unmount();
+      const { editor } = page(blocks);
+      const heads = editor.document.filter((b) => b.type === 'heading').map((b) => b.id);
+      setCollapsed(view(editor), heads.filter(() => rand() < 0.6), true);
+      // A veces, un renglón después de un título colapsado (el fin).
+      const collapsedNow = [...collapseState(editor.prosemirrorState)!.analysis.collapsed];
+      let withEnd: string | null = null;
+      if (collapsedNow.length && rand() < 0.6) {
+        const id = pick(collapsedNow);
+        if (!collapseState(editor.prosemirrorState)!.analysis.hidden.has(id)) {
+          editor.setTextCursorPosition(id, 'end');
+          press(editor, 'Enter');
+          editor.insertInlineContent(`fin${round}`);
+          press(editor, 'Enter');
+          editor.insertInlineContent(`sigue${round}`);
+          withEnd = id;
+        }
+      }
+      const state = view(editor).state;
+      const before = collapseState(state)!.analysis;
+      const visibleIds = [...idsIn(state.doc)].filter((id) => !before.hidden.has(id));
+      const tr = state.tr;
+      const op = rand();
+      if (withEnd && op < 0.35) {
+        // Del principio del título colapsado al final de su renglón nuevo (el caso de la auditoría).
+        const a = textPos(editor, textOfId(editor, withEnd), 'start');
+        const b = textPos(editor, `fin${round}`);
+        tr.setSelection(TextSelection.create(state.doc, a, b)).deleteSelection();
+      } else if (op < 0.65) {
+        // Una selección de texto entre dos bloques que se ven.
+        const a = textPos(editor, textOfId(editor, pick(visibleIds)), rand() < 0.5 ? 'start' : 'end');
+        const b = textPos(editor, textOfId(editor, pick(visibleIds)), rand() < 0.5 ? 'start' : 'end');
+        if (a < 0 || b < 0 || a === b) continue;
+        tr.setSelection(TextSelection.create(state.doc, Math.min(a, b), Math.max(a, b))).deleteSelection();
+      } else {
+        // Un bloque que se ve, entero.
+        const id = pick(visibleIds);
+        const at = findBlock(state.doc, id);
+        if (!at) continue;
+        tr.delete(at.pos, at.pos + at.node.nodeSize);
+      }
+      let result;
+      try {
+        result = applyWithAppended(editor, tr);
+      } catch {
+        continue; // Un borrado que ProseMirror no acepta (la página sin bloques): no es de colapsar.
+      }
+      const [root, ...appended] = result.transactions;
+      if (appended.length === 0) continue;
+      const afterRoot = idsIn(root.doc);
+      const final = idsIn(result.state.doc);
+      for (const id of afterRoot) {
+        if (final.has(id)) continue;
+        // Lo que sacó la pasada de colapsar: escondido antes, por un título que la edición sacó.
+        expect(before.hidden.has(id), `ronda ${round}: ${textOfId(editor, id)} no estaba escondido`).toBe(true);
+        expect(afterRoot.has(before.hidden.get(id)!), `ronda ${round}: su título sigue`).toBe(false);
+      }
+    }
+  }, 60_000);
+
+  it('2. cambiarle el id al título (UniqueID) no borra su sección y sigue colapsado', () => {
+    const { editor } = page([p('antes'), h(2, 'T'), p('a'), p('b'), h(2, 'U')]);
+    collapse(editor, 'T');
+    const v = view(editor);
+    const at = findBlock(v.state.doc, idOf(editor, 'T'))!;
+    v.dispatch(v.state.tr.setNodeMarkup(at.pos, undefined, { ...at.node.attrs, id: 'renombrado' }));
+    expect(texts(editor)).toEqual(['antes', 'T', 'a', 'b', 'U']);
+    expect(visible(editor)).toEqual(['antes', 'T', 'U']);
+  });
+
+  it('3. abrir un título con fin no esconde el renglón nuevo debajo de uno colapsado de adentro', () => {
+    const { editor } = page([h(1, 'A'), h(2, 'B'), p('P1'), h(1, 'C')]);
+    collapse(editor, 'B');
+    collapse(editor, 'A');
+    putCaret(editor, 'A');
+    press(editor, 'Enter');
+    editor.insertInlineContent('X');
+    setCollapsed(view(editor), [idOf(editor, 'A')], false);
+    expect(visible(editor)).toEqual(['A', 'B', 'X', 'C']);
+  });
+
+  it('3. Ctrl/⌘+Alt+Enter en el renglón nuevo colapsa o abre el título que se ve, no uno escondido', () => {
+    const { editor } = page([h(1, 'A'), h(2, 'B'), p('P1'), h(1, 'C')]);
+    collapse(editor, 'B');
+    collapse(editor, 'A');
+    putCaret(editor, 'A');
+    press(editor, 'Enter');
+    editor.insertInlineContent('X');
+    putCaret(editor, 'X');
+    press(editor, 'Enter', { ctrlKey: true, altKey: true });
+    expect(visible(editor)).toEqual(['A', 'B', 'X', 'C']);
+  });
+
+  it('4. deshacer y rehacer Enter después de un título colapsado deja el renglón a la vista', async () => {
+    const { editor } = page([h(1, 'T'), p('a'), h(1, 'U')]);
+    collapse(editor, 'T');
+    await tick();
+    undoPoint(editor);
+    putCaret(editor, 'T');
+    press(editor, 'Enter');
+    await tick();
+    undoPoint(editor);
+    expect(visible(editor)).toEqual(['T', '', 'U']);
+    editor.undo();
+    await tick();
+    expect(texts(editor)).toEqual(['T', 'a', 'U']);
+    editor.redo();
+    await tick();
+    expect(texts(editor)).toEqual(['T', 'a', '', 'U']);
+    expect(visible(editor)).toEqual(['T', '', 'U']);
+  });
+
+  it('5. escribir en el último renglón vacío después de una sección colapsada no la abre', () => {
+    const { editor } = page([p('antes'), h(2, 'T'), p('a'), p('')]);
+    collapse(editor, 'T');
+    expect(visible(editor)).toEqual(['antes', 'T', '']);
+    editor.setTextCursorPosition(editor.document[3].id, 'start');
+    editor.insertInlineContent('hola');
+    expect(visible(editor)).toEqual(['antes', 'T', 'hola']);
+  });
+
+  it('6. Retroceso en el renglón vacío después de un título colapsado lo borra y vuelve al título, sin abrir', () => {
+    const { editor } = page([h(1, 'T'), p('a'), h(1, 'U')]);
+    collapse(editor, 'T');
+    putCaret(editor, 'T');
+    press(editor, 'Enter');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['T', 'a', 'U']);
+    expect(visible(editor)).toEqual(['T', 'U']);
+    expect(caretBlock(editor)).toBe('T');
+    expect(view(editor).state.selection.head).toBe(textPos(editor, 'T'));
+  });
+
+  it('6. Retroceso al principio de un renglón con texto después de lo escondido no lo une: va al título', () => {
+    const { editor } = page([h(1, 'T', [p('hijo')]), h(1, 'U')]);
+    collapse(editor, 'T');
+    putCaret(editor, 'T');
+    press(editor, 'Enter');
+    editor.insertInlineContent('x');
+    putCaret(editor, 'x', 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['T', 'hijo', 'x', 'U']);
+    expect(visible(editor)).toEqual(['T', 'x', 'U']);
+    expect(caretBlock(editor)).toBe('T');
+  });
+
+  it('7. escribir en una página grande con todo colapsado reusa lo calculado (sin rearmar lo escondido)', () => {
+    const blocks: PartialBlock[] = [];
+    for (let i = 0; i < 500; i++) blocks.push(h(2, `T${i}`), p(`p${i}`));
+    const { editor } = page(blocks);
+    setAllCollapsed(view(editor), true);
+    putCaret(editor, 'T0');
+    const before = collapseState(view(editor).state)!;
+    const started = performance.now();
+    for (let i = 0; i < 40; i++) editor.insertInlineContent('x');
+    const elapsed = performance.now() - started;
+    const after = collapseState(view(editor).state)!;
+    expect(after.analysis.hidden).toBe(before.analysis.hidden);
+    expect(after.analysis.hidden.size).toBe(500);
+    // Holgado (jsdom es lento), pero muy por debajo de rearmar todo en cada tecla.
+    expect(elapsed / 40).toBeLessThan(25);
+  });
+
+  it('8. pegar algo no toca los títulos plegables que ya estaban', () => {
+    const { editor } = page([{ type: 'heading', props: { level: 2, isToggleable: true }, content: 'Viejo' } as PartialBlock, p('antes')]);
+    if (typeof ClipboardEvent === 'undefined') {
+      vi.stubGlobal('ClipboardEvent', class extends Event {
+        clipboardData = null;
+      });
+    }
+    putCaret(editor, 'antes');
+    view(editor).pasteHTML('<p>pegado</p>');
+    expect((editor.document[0].props as { isToggleable?: boolean }).isToggleable).toBe(true);
+  });
+
+  it('9. una subida que termina en una foto escondida no abre la sección', () => {
+    const { editor } = page([h(2, 'T'), { type: 'image', props: { url: '' } } as PartialBlock, h(2, 'U')]);
+    collapse(editor, 'T');
+    const image = editor.document[1].id;
+    editor.updateBlock(image, { props: { url: 'sdmedia://1234' } as never });
+    expect(collapseState(view(editor).state)!.analysis.hidden.has(image)).toBe(true);
+  });
+
+  it('10. copiar la sección entera deja la selección como estaba; el portapapeles lleva lo escondido', async () => {
+    const { editor } = page(SCENES());
+    collapse(editor, 'Escena 1');
+    selectBlock(editor, 'Escena 1');
+    const event = clipboardEvent('copy');
+    view(editor).dom.dispatchEvent(event);
+    const data = (event as unknown as { clipboardData: { getData: (k: string) => string } }).clipboardData;
+    expect(data.getData('text/html')).toContain('Detalle texto');
+    await tick();
+    expect(view(editor).state.selection instanceof NodeSelection).toBe(true);
+  });
+});
+
+function textOfId(editor: BlockNoteEditor, id: string): string {
+  const b = editor.getBlock(id);
+  return b && Array.isArray(b.content) ? b.content.map((c) => ('text' in c ? c.text : '')).join('') : '';
+}
+
+function findBlock(doc: import('@tiptap/pm/model').Node, id: string) {
+  let found: { node: import('@tiptap/pm/model').Node; pos: number } | null = null;
+  doc.descendants((node, pos) => {
+    if (found) return false;
+    if (node.type.name === 'blockContainer' && node.attrs.id === id) {
+      found = { node, pos };
+      return false;
+    }
+    return true;
+  });
+  return found as { node: import('@tiptap/pm/model').Node; pos: number } | null;
+}
+
+describe('auditoría 1a: lo demás', () => {
+  it('13. un reproductor de Drive que queda escondido se para (se vuelve a cargar); abierto, no', async () => {
+    const link = 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view';
+    const { editor } = page([
+      h(2, 'T'),
+      { type: 'paragraph', props: paragraphProps('driveCard') as never, content: [{ type: 'link', href: link, content: 'video' }] } as PartialBlock,
+      h(2, 'U'),
+    ]);
+    await tick();
+    const frame = editor.domElement!.querySelector<HTMLIFrameElement>('iframe.drive-card-player');
+    expect(frame).not.toBeNull();
+    const reloads = vi.fn();
+    const observer = new MutationObserver((records) => {
+      if (records.some((r) => r.attributeName === 'src')) reloads();
+    });
+    observer.observe(frame!, { attributes: true });
+    collapse(editor, 'T');
+    await tick();
+    expect(reloads).toHaveBeenCalledTimes(1);
+    // Seguir escondido (escribir en otro lado) no lo vuelve a cargar.
+    putCaret(editor, 'U');
+    editor.insertInlineContent('!');
+    await tick();
+    expect(reloads).toHaveBeenCalledTimes(1);
+    observer.disconnect();
   });
 });

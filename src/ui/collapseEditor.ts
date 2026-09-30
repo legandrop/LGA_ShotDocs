@@ -1,6 +1,6 @@
 import { createExtension, type BlockNoteEditor, type ExtensionOptions } from '@blocknote/core';
 import { Fragment, Slice, type Node as PMNode, type ResolvedPos } from '@tiptap/pm/model';
-import type { Mappable } from '@tiptap/pm/transform';
+import { AddMarkStep, RemoveMarkStep, ReplaceStep, type Mappable } from '@tiptap/pm/transform';
 import { NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { ySyncPluginKey, yUndoPluginKey } from 'y-prosemirror';
@@ -103,26 +103,41 @@ function sameRecords(a: ReadonlyMap<string, HeadingRecord>, b: ReadonlyMap<strin
   return true;
 }
 
-/** El fin de un título colapsado se borró: pasa al bloque que quedó en su lugar (corrección 19). */
-function remapEnds(tr: Transaction, old: CollapseState): ReadonlyMap<string, HeadingRecord> {
+/**
+ * Después de un cambio propio (no de Yjs) en la estructura:
+ * - un título al que se le cambió el id (BlockNote lo hace al juntar ids repetidos) conserva lo colapsado con el
+ *   id nuevo (auditoría, punto 2);
+ * - el fin de un título colapsado que se borró pasa al bloque que quedó en su lugar (corrección 19). Si no hay
+ *   ninguno, o el cambio vino de Yjs (deshacer, otro), el fin se queda con su id: deshacer y rehacer lo trae de
+ *   vuelta (auditoría, punto 4).
+ */
+function remapRecords(tr: Transaction, old: CollapseState, records: ReadonlyMap<string, HeadingRecord>): ReadonlyMap<string, HeadingRecord> {
+  if (records.size === 0) return records;
+  const ids = blockIds(tr.doc);
+  const local = !yjsOrigin(tr).fromYjs;
   let out: Map<string, HeadingRecord> | null = null;
-  let ids: Set<string> | null = null;
-  for (const [id, record] of old.records) {
-    if (!record.e) continue;
-    ids ??= blockIds(tr.doc);
-    if (ids.has(record.e)) continue;
-    let e: string | undefined;
-    const was = old.analysis.blocks.get(record.e);
-    if (was && !yjsOrigin(tr).fromYjs) {
-      const node = tr.doc.nodeAt(tr.mapping.map(was.pos));
-      if (node?.type.name === 'blockContainer' && node.attrs.id) e = String(node.attrs.id);
-    }
-    out ??= new Map(old.records);
-    const next: HeadingRecord = { c: record.c, g: record.g };
-    if (e) next.e = e;
-    out.set(id, next);
+  const edit = () => (out ??= new Map(records));
+  for (const [id, record] of records) {
+    if (ids.has(id) || !local) continue;
+    const was = old.analysis.blocks.get(id);
+    if (!was) continue;
+    // El texto del título sigue (no se borró): el bloque es el mismo, con otro id.
+    if (tr.mapping.mapResult(was.pos + 2).deletedAcross) continue;
+    const node = tr.doc.nodeAt(tr.mapping.map(was.pos));
+    const renamed = node?.type.name === 'blockContainer' ? String(node.attrs.id ?? '') : '';
+    if (!renamed || renamed === id || old.analysis.blocks.has(renamed) || headingLevel(node!) === null) continue;
+    edit().delete(id);
+    edit().set(renamed, record);
   }
-  return out ?? old.records;
+  for (const [id, record] of out ?? records) {
+    if (!record.e || ids.has(record.e) || !local) continue;
+    const was = old.analysis.blocks.get(record.e);
+    if (!was) continue;
+    const node = tr.doc.nodeAt(tr.mapping.map(was.pos));
+    if (node?.type.name !== 'blockContainer' || !node.attrs.id) continue;
+    edit().set(id, { ...record, e: String(node.attrs.id) });
+  }
+  return out ?? records;
 }
 
 function blockIds(doc: PMNode): Set<string> {
@@ -159,11 +174,30 @@ function hiddenInSelection(analysis: Analysis, sel: Selection): { head: string |
   return { head: hiddenBlockAt(analysis, sel.$head), anchor: hiddenBlockAt(analysis, sel.$anchor) };
 }
 
+/**
+ * Abre, para vos, un título colapsado. Si tenía un fin (Enter después de él), los títulos colapsados de adentro
+ * que llegarían más allá lo heredan: lo que se veía después del fin se sigue viendo (auditoría, punto 3).
+ */
+function openRecord(doc: PMNode, records: Map<string, HeadingRecord>, analysis: Analysis, id: string): void {
+  const record = records.get(id);
+  records.delete(id);
+  if (!record?.e) return;
+  for (const [inner, hider] of analysis.hidden) {
+    if (hider !== id || !analysis.collapsed.has(inner)) continue;
+    const at = analysis.blocks.get(inner);
+    const innerRecord = records.get(inner);
+    if (!at || !innerRecord || innerRecord.e) continue;
+    // Su sección llega hasta el fin del de afuera (o más): corta ahí.
+    const section = sectionAt(doc, at.pos, innerRecord);
+    if (section?.siblings.some((s) => s.node.attrs.id === record.e)) records.set(inner, { ...innerRecord, e: record.e });
+  }
+}
+
 /** Abre, para vos, todos los títulos que esconden `blockId` (de afuera hacia adentro). */
 function revealIn(doc: PMNode, records: Map<string, HeadingRecord>, blockId: string): Analysis {
   let analysis = analyze(doc, records);
   for (let guard = 0; guard < 64 && analysis.hidden.has(blockId); guard++) {
-    records.delete(analysis.hidden.get(blockId)!);
+    openRecord(doc, records, analysis, analysis.hidden.get(blockId)!);
     analysis = analyze(doc, records);
   }
   return analysis;
@@ -212,21 +246,44 @@ function newBlockId(): string {
     : `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-/** Si una transacción propia sacó entero el bloque que estaba en `[from, to)` (no lo juntó con otro). */
+/**
+ * Si una transacción propia sacó entero el bloque que estaba en `[from, to)`: sus dos bordes y el texto de
+ * adentro. No cuenta juntarlo con otro (su texto queda) ni cambiarle solo los atributos, como el id
+ * (auditoría, punto 2).
+ */
 function removedWhole(trs: readonly Transaction[], plain: ReadonlySet<Transaction>, from: number, to: number): boolean {
   let a = from;
   let b = to;
+  let inside = from + 2;
   for (const tr of trs) {
     if (plain.has(tr)) {
       const start = tr.mapping.mapResult(a, 1);
       const end = tr.mapping.mapResult(b, -1);
-      if (start.deletedAfter && end.deletedBefore) return true;
+      if (start.deletedAfter && end.deletedBefore && tr.mapping.mapResult(inside).deletedAcross) return true;
     }
     a = tr.mapping.map(a, 1);
     b = tr.mapping.map(b, -1);
+    inside = tr.mapping.map(inside);
     if (b <= a) return false;
   }
   return false;
+}
+
+/**
+ * Si un bloque escondido cambió de verdad. No cuenta que la app le ponga la dirección a una foto al terminar de
+ * guardarla (el bloque `image` con otra `url` o `name` y nada más; auditoría, punto 9).
+ */
+function changedByPerson(before: PMNode, after: PMNode): boolean {
+  if (before === after || before.eq(after)) return false;
+  const a = before.firstChild;
+  const b = after.firstChild;
+  if (!a || !b || a.type.name !== 'image' || b.type.name !== 'image' || before.childCount !== after.childCount) return true;
+  if (before.childCount > 1 && !before.lastChild!.eq(after.lastChild!)) return true;
+  const strip = (attrs: Record<string, unknown>) => {
+    const { url: _u, name: _n, ...rest } = attrs;
+    return JSON.stringify(rest);
+  };
+  return strip(a.attrs) !== strip(b.attrs) || JSON.stringify(before.attrs) !== JSON.stringify(after.attrs);
 }
 
 function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newState: EditorState): Transaction | null {
@@ -256,17 +313,20 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   const tr = newState.tr;
   const records = new Map(after.records);
 
+  // Escribir en un renglón (lo más común) no saca ni mueve bloques: no hay nada que borrar ni avisar.
+  const structural = [...plain].some((t) => !textOnly(t));
+
   // 1. Un título colapsado sacado entero: se va su sección entera, en la misma pasada (un solo Ctrl+Z).
   const doomed = new Set<string>();
-  if (plain.size > 0) {
+  if (structural) {
     for (const id of before.analysis.collapsed) {
-      if (after.analysis.blocks.has(id)) continue;
+      // Solo un título que se veía: lo que esconde uno escondido lo decide el de afuera.
+      if (before.analysis.hidden.has(id) || after.analysis.blocks.has(id)) continue;
       const at = before.analysis.blocks.get(id);
       if (!at || !removedWhole(trs, plain, at.pos, at.pos + at.node.nodeSize)) continue;
-      const section = sectionAt(oldState.doc, at.pos, before.records.get(id));
-      for (const s of section?.siblings ?? []) {
-        const sid = String(s.node.attrs.id ?? '');
-        if (sid && after.analysis.blocks.has(sid)) doomed.add(sid);
+      // Solo lo que ese título escondía (nunca algo que se veía, aunque sea de su sección: el fin).
+      for (const [sid, hider] of before.analysis.hidden) {
+        if (hider === id && after.analysis.blocks.has(sid)) doomed.add(sid);
       }
     }
     deleteBlocks(tr, doomed);
@@ -278,8 +338,16 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   if (docChanged && !ownAction) {
     // 2. Lo que se veía y quedó escondido (propio o de otro) abre lo que lo esconde.
     if (untagged) {
-      for (const id of analysis.hidden.keys()) {
-        if (before.analysis.blocks.has(id) && !before.analysis.hidden.has(id)) reveal.add(id);
+      for (const [id, hider] of analysis.hidden) {
+        if (!before.analysis.blocks.has(id) || before.analysis.hidden.has(id)) continue;
+        // El último renglón vacío de la página, justo después de una sección colapsada, al escribirle: pasa a
+        // ser el fin de ese título, como con Enter (auditoría, punto 5).
+        if (wasTrailingLine(oldState.doc, id) && records.has(hider) && !records.get(hider)!.e) {
+          records.set(hider, { ...records.get(hider)!, e: id });
+          analysis = analyze(tr.doc, records);
+          continue;
+        }
+        reveal.add(id);
       }
     }
     // 3. Un cambio propio (también deshacer) en algo escondido lo abre.
@@ -287,13 +355,13 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
       for (const [id, at] of before.analysis.blocks) {
         if (!before.analysis.hidden.has(id)) continue;
         const now = after.analysis.blocks.get(id);
-        if (now && now.node !== at.node && !now.node.eq(at.node)) reveal.add(id);
+        if (now && changedByPerson(at.node, now.node)) reveal.add(id);
       }
     }
   }
 
   // Lo escondido que se borró con una edición propia: un aviso (se deshace con Ctrl+Z).
-  if (plain.size > 0) {
+  if (structural) {
     const gone = [...before.analysis.hidden.keys()].some((id) => !analysis.blocks.has(id));
     if (gone) notify(t('collapse.deletedHidden', { shortcut: IS_MAC ? '⌘Z' : 'Ctrl+Z' }));
   }
@@ -324,18 +392,25 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   }
 
   // Un título plegable de BlockNote pegado (`<details><summary><hN>`) queda como título común (corrección 16).
-  if (pasted) normalizeToggles(tr, before.analysis);
+  if (pasted) normalizeToggles(tr, blockIds(oldState.doc));
 
   const recordsChanged = !sameRecords(records, after.records);
   if (recordsChanged) tr.setMeta(collapseKey, { records } satisfies CollapseMeta);
   return tr.docChanged || recordsChanged || tr.selectionSet ? tr : null;
 }
 
-function normalizeToggles(tr: Transaction, before: Analysis): void {
+/** Si el bloque era el último de la página y un párrafo vacío (el lugar para seguir escribiendo). */
+function wasTrailingLine(doc: PMNode, id: string): boolean {
+  const last = doc.firstChild?.lastChild;
+  const content = last?.firstChild;
+  return !!last && last.attrs.id === id && last.childCount === 1 && content?.type.name === 'paragraph' && content.content.size === 0;
+}
+
+function normalizeToggles(tr: Transaction, existing: ReadonlySet<string>): void {
   tr.doc.descendants((node, pos) => {
     if (node.type.name === 'blockContainer') {
       const content = node.firstChild;
-      if (content?.type.name === 'heading' && content.attrs.isToggleable === true && !before.blocks.has(String(node.attrs.id ?? ''))) {
+      if (content?.type.name === 'heading' && content.attrs.isToggleable === true && !existing.has(String(node.attrs.id ?? ''))) {
         tr.setNodeAttribute(pos + 1, 'isToggleable', false);
       }
       return true;
@@ -357,7 +432,7 @@ export function setCollapsed(view: EditorView, ids: readonly string[], collapsed
   const records = new Map(state.records);
   for (const id of ids) {
     if (collapsed) records.set(id, { c: true, g: null });
-    else records.delete(id);
+    else if (records.has(id)) openRecord(view.state.doc, records, state.analysis, id);
   }
   if (!sameRecords(records, state.records)) dispatchRecords(view, records);
 }
@@ -496,19 +571,54 @@ function lastLine(view: EditorView): boolean {
 /** El título de la sección donde está la selección: el bloque mismo, o el título de arriba que lo abarca. */
 function headingOfSelection(state: EditorState): string | null {
   const $head = state.selection.$head;
+  const hidden = collapseKey.getState(state)?.analysis.hidden;
   for (let d = $head.depth; d > 0; d--) {
     const node = $head.node(d);
     if (node.type.name !== 'blockContainer') continue;
     if (headingLevel(node) !== null) return String(node.attrs.id);
-    // Los hermanos de arriba, del más cercano al más lejano: el primer título abarca este bloque.
+    // Los hermanos de arriba, del más cercano al más lejano: el primer título que se ve abarca este bloque
+    // (uno escondido no: auditoría, punto 3).
     const group = $head.node(d - 1);
     const index = $head.index(d - 1);
     for (let k = index - 1; k >= 0; k--) {
       const prev = group.child(k);
-      if (headingLevel(prev) !== null) return String(prev.attrs.id);
+      if (headingLevel(prev) !== null && !hidden?.has(String(prev.attrs.id))) return String(prev.attrs.id);
     }
   }
   return null;
+}
+
+/**
+ * Retroceso al principio de un párrafo que viene justo después de lo escondido (auditoría, punto 6): BlockNote
+ * lo uniría al último bloque escondido y la sección se abriría. Si está vacío, se borra y la selección vuelve
+ * al final del título; si tiene texto, la selección pasa al final del título sin unir nada.
+ */
+function backspaceAfter(view: EditorView): boolean {
+  const state = view.state;
+  const s = collapseKey.getState(state);
+  const sel = state.selection;
+  if (!s || s.analysis.collapsed.size === 0 || !(sel instanceof TextSelection) || !sel.empty) return false;
+  const $head = sel.$head;
+  if ($head.parentOffset !== 0 || $head.parent.type.name !== 'paragraph' || $head.depth < 2) return false;
+  const container = $head.node($head.depth - 1);
+  const groupDepth = $head.depth - 2;
+  const index = $head.index(groupDepth);
+  if (index === 0) return false;
+  const prev = $head.node(groupDepth).child(index - 1);
+  const prevId = String(prev.attrs.id ?? '');
+  const hiderId = s.analysis.hidden.get(prevId) ?? (s.analysis.collapsed.has(prevId) && prev.childCount > 1 ? prevId : null);
+  if (!hiderId || s.analysis.hidden.has(String(container.attrs.id ?? ''))) return false;
+  const heading = s.analysis.blocks.get(hiderId);
+  if (!heading) return false;
+  const tr = state.tr;
+  const empty = $head.parent.content.size === 0 && container.childCount === 1;
+  if (empty) {
+    const pos = $head.before($head.depth - 1);
+    tr.delete(pos, pos + container.nodeSize);
+  }
+  tr.setSelection(TextSelection.create(tr.doc, headingTextEnd({ node: tr.doc.nodeAt(tr.mapping.map(heading.pos))!, pos: tr.mapping.map(heading.pos) })));
+  view.dispatch(tr.scrollIntoView());
+  return true;
 }
 
 /** Ctrl/⌘+Alt+Enter: colapsa o abre el título de la sección donde está la selección. */
@@ -520,10 +630,10 @@ function toggleAtSelection(view: EditorView): boolean {
 }
 
 /** Cortar o copiar el título colapsado elegido entero lleva su sección entera (corrección 1). */
-function widenForClipboard(view: EditorView): void {
+function widenForClipboard(view: EditorView): boolean {
   const state = view.state;
   const sel = state.selection;
-  if (!(sel instanceof NodeSelection)) return;
+  if (!(sel instanceof NodeSelection)) return false;
   const s = collapseKey.getState(state);
   let container = sel.node;
   let pos = sel.from;
@@ -533,10 +643,11 @@ function widenForClipboard(view: EditorView): void {
     pos = $pos.before();
   }
   const id = String(container.attrs.id ?? '');
-  if (container.type.name !== 'blockContainer' || !s?.analysis.collapsed.has(id)) return;
+  if (container.type.name !== 'blockContainer' || !s?.analysis.collapsed.has(id)) return false;
   const section = sectionAt(state.doc, pos, s.records.get(id));
-  if (!section || section.siblings.length === 0) return;
+  if (!section || section.siblings.length === 0) return false;
   view.dispatch(state.tr.setSelection(SectionSelection.create(state.doc, pos, section.after)));
+  return true;
 }
 
 /**
@@ -584,7 +695,63 @@ export class SectionSelection extends Selection {
     return { type: 'sd-section', anchor: this.anchor, head: this.head };
   }
 }
-Selection.jsonID('sd-section', SectionSelection);
+try {
+  Selection.jsonID('sd-section', SectionSelection);
+} catch {
+  // Ya estaba (el módulo se volvió a cargar en desarrollo).
+}
+
+// --- Rapidez: escribir no recalcula lo escondido --------------------------------------------------------
+
+/**
+ * Si la transacción solo cambia texto adentro de renglones (tipear, borrar letras, marcas), sin tocar bloques
+ * ni el último bloque de la página (la regla del párrafo vacío). Las de Yjs no: vienen como un reemplazo de
+ * todo el documento.
+ */
+function textOnly(tr: Transaction): boolean {
+  if (yjsOrigin(tr).fromYjs) return false;
+  for (let i = 0; i < tr.steps.length; i++) {
+    const step = tr.steps[i];
+    if (step instanceof AddMarkStep || step instanceof RemoveMarkStep) continue;
+    if (!(step instanceof ReplaceStep)) return false;
+    const { from, to, slice } = step as unknown as { from: number; to: number; slice: Slice };
+    if (slice.openStart !== 0 || slice.openEnd !== 0) return false;
+    let inline = true;
+    slice.content.forEach((node) => {
+      if (!node.isInline) inline = false;
+    });
+    if (!inline) return false;
+    const doc = tr.docs[i];
+    const $from = doc.resolve(from);
+    const $to = doc.resolve(to);
+    if (!$from.parent.isTextblock || !$from.sameParent($to) || $from.depth < 2) return false;
+    const root = doc.firstChild;
+    if (!root || $from.index(1) === root.childCount - 1) return false;
+  }
+  return true;
+}
+
+/** Lo calculado, con las posiciones corridas y los nodos de ahora (lo escondido es lo mismo). */
+function mapAnalysis(analysis: Analysis, tr: Transaction): Analysis {
+  if (analysis.blocks.size === 0) return analysis;
+  const blocks = new Map<string, BlockAt>();
+  for (const [id, at] of analysis.blocks) {
+    const pos = tr.mapping.map(at.pos);
+    blocks.set(id, { node: tr.doc.nodeAt(pos) ?? at.node, pos });
+  }
+  const top = analysis.top.map((t) => {
+    const at = blocks.get(t.id);
+    return at ? { ...t, pos: at.pos, size: at.node.nodeSize } : t;
+  });
+  return { blocks, hidden: analysis.hidden, collapsed: analysis.collapsed, top };
+}
+
+function sameStructure(a: Analysis, b: Analysis): boolean {
+  if (a.hidden.size !== b.hidden.size || a.collapsed.size !== b.collapsed.size) return false;
+  for (const [id, hider] of a.hidden) if (b.hidden.get(id) !== hider) return false;
+  for (const id of a.collapsed) if (!b.collapsed.has(id)) return false;
+  return true;
+}
 
 // --- El plugin -------------------------------------------------------------------------------------------
 
@@ -595,11 +762,21 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
       init: (_, state) => build(state.doc, new Map(options.initial ?? [])),
       apply: (tr, old) => {
         const meta = tr.getMeta(collapseKey) as CollapseMeta | undefined;
-        let records = tr.docChanged ? remapEnds(tr, old) : old.records;
+        // Escribir en un renglón no cambia qué se esconde: se corren las posiciones y las decoraciones, sin
+        // volver a calcular todo en cada tecla (auditoría, punto 7).
+        if (!meta && tr.docChanged && textOnly(tr)) {
+          return { records: old.records, analysis: mapAnalysis(old.analysis, tr), decorations: old.decorations.map(tr.mapping, tr.doc) };
+        }
+        let records = tr.docChanged ? remapRecords(tr, old, old.records) : old.records;
         if (meta) records = meta.records;
         if (!tr.docChanged && records === old.records) return old;
         if (!tr.docChanged && sameRecords(records, old.records)) return old;
-        return build(tr.doc, records);
+        const next = build(tr.doc, records);
+        // Si lo escondido quedó igual, se conservan los mismos objetos (así nadie vuelve a medir de más).
+        if (sameStructure(next.analysis, old.analysis)) {
+          next.analysis = { ...next.analysis, hidden: old.analysis.hidden, collapsed: old.analysis.collapsed };
+        }
+        return next;
       },
     },
     appendTransaction: appendCollapse,
@@ -607,7 +784,15 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
       decorations: (state) => collapseKey.getState(state)?.decorations,
       handleDOMEvents: {
         copy: (view) => {
-          widenForClipboard(view);
+          // Copiar no cambia la selección: después de copiar, vuelve la de antes (auditoría, punto 10).
+          const previous = view.state.selection;
+          if (widenForClipboard(view)) {
+            setTimeout(() => {
+              if (view.state.selection instanceof SectionSelection && view.state.doc.eq(previous.$anchor.doc)) {
+                view.dispatch(view.state.tr.setSelection(previous.map(view.state.doc, view.state.tr.mapping)));
+              }
+            });
+          }
           return false;
         },
         cut: (view) => {
@@ -624,7 +809,8 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
           const was = collapseKey.getState(prev);
           if (!now || now === was) return;
           if (!was || !sameRecords(now.records, was.records)) options.save?.(now.records);
-          if (was?.analysis.hidden !== now.analysis.hidden) {
+          const structural = !was || was.analysis.hidden !== now.analysis.hidden || was.analysis.collapsed !== now.analysis.collapsed;
+          if (structural) {
             // Un reproductor de Drive que queda escondido se para (se vuelve a cargar).
             const next = new WeakSet<HTMLIFrameElement>();
             for (const frame of view.dom.querySelectorAll<HTMLIFrameElement>('iframe.drive-card-player')) {
@@ -634,7 +820,7 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
             }
             paused = next;
           }
-          for (const fn of listeners.get(view) ?? []) fn();
+          if (structural || !sameRecords(now.records, was!.records)) for (const fn of listeners.get(view) ?? []) fn();
         },
       };
     },
@@ -658,6 +844,7 @@ export const collapseExtension = createExtension(({ options }: ExtensionOptions<
     'Shift-Mod-Alt-Enter': withView(toggleAtSelection),
     Enter: withView(enterAfter),
     Delete: withView(deleteAtEnd),
+    Backspace: withView(backspaceAfter),
     ArrowDown: withView((view) => skipForward(view, 'down', false)),
     'Shift-ArrowDown': withView((view) => skipForward(view, 'down', true)),
     ArrowRight: withView((view) => skipForward(view, 'right', false)),

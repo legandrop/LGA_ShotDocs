@@ -8,7 +8,8 @@ import { collapseExtension, setCollapsed } from './collapseEditor';
 import { schema } from './editorSchema';
 import { UNIT_SELECTOR } from './pagination';
 import { buildPrintView, paginateView } from './printView';
-import { placeMarks } from './SheetBreaks';
+import { placeMarks, sheetLabel } from './SheetBreaks';
+import { t } from '../i18n';
 
 // Colapsar y las hojas (Docs/Doc_Colapsar.md, sección 7): los cortes se cuentan con todo abierto (la vista de
 // impresión no copia lo colapsado), el PDF sale todo abierto, y un corte que cae en algo escondido se muestra
@@ -123,5 +124,13 @@ describe('las hojas con secciones colapsadas', () => {
     } finally {
       view.root.remove();
     }
+  });
+});
+
+describe('la etiqueta de las hojas escondidas', () => {
+  it('"Hoja 5", "Hoja 3 adentro" y "Hojas 2–4 adentro"', () => {
+    expect(sheetLabel({ sheet: 5, y: 0 }, t)).toBe('Page 5');
+    expect(sheetLabel({ sheet: 3, to: 3, y: 0, inside: true }, t)).toBe('Page 3 inside');
+    expect(sheetLabel({ sheet: 2, to: 4, y: 0, inside: true }, t)).toBe('Pages 2–4 inside');
   });
 });

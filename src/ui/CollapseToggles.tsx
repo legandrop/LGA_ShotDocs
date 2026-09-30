@@ -89,7 +89,8 @@ export function CollapseToggles({ editor, host, editable }: { editor: AnyEditor;
       next.push({
         id,
         top: r.top - base.top + Math.min(line, r.height || line) / 2 - BOX / 2,
-        left: r.left - base.left - BOX - 2,
+        // Pegado al texto: entra entero en el margen del teléfono (20 px) sin taparlo.
+        left: r.left - base.left - BOX,
         size: Math.max(8, Math.min(12, Math.round(fontSize * 0.42))),
         color: style.color,
         collapsed: state.analysis.collapsed.has(id),

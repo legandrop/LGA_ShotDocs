@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { useT } from '../i18n';
+import { useT, type Translate } from '../i18n';
 import { usePrefs } from '../prefs';
 import { useServices, useTree } from '../services';
 import { pageFormat } from './pageFormat';
@@ -170,20 +170,22 @@ export function SheetBreaks({ pageId, host }: { pageId: string; host: RefObject<
       {marks.map((m) =>
         m.inside ? (
           <div key={m.sheet} className="sheet-inside" style={{ top: `${m.y}px` }}>
-            <span className="sheet-break-label">
-              {m.to !== undefined && m.to > m.sheet
-                ? tr('print.sheetsInside', { from: m.sheet, to: m.to })
-                : tr('print.sheetInside', { n: m.sheet })}
-            </span>
+            <span className="sheet-break-label">{sheetLabel(m, tr)}</span>
           </div>
         ) : (
           <div key={m.sheet} className="sheet-break" style={{ top: `${m.y}px` }}>
-            <span className="sheet-break-label">{tr('print.sheet', { n: m.sheet })}</span>
+            <span className="sheet-break-label">{sheetLabel(m, tr)}</span>
           </div>
         ),
       )}
     </div>
   );
+}
+
+/** El texto de una marca: "Hoja 5", o en un título colapsado "Hoja 3 adentro" / "Hojas 2–4 adentro". */
+export function sheetLabel(m: SheetMark, tr: Translate): string {
+  if (!m.inside) return tr('print.sheet', { n: m.sheet });
+  return m.to !== undefined && m.to > m.sheet ? tr('print.sheetsInside', { from: m.sheet, to: m.to }) : tr('print.sheetInside', { n: m.sheet });
 }
 
 function sameMarks(a: SheetMark[], b: SheetMark[]): boolean {

@@ -9,9 +9,12 @@ vos**: se guarda en el dispositivo y no cambia la página (los demás la ven igu
 llega en la entrega 2). Ctrl/⌘+Alt+Enter colapsa o abre la sección de la selección; "Colapsar todo" y "Abrir
 todo" en el menú de la página. Editar al lado de lo escondido es seguro: borrar un título colapsado borra su
 sección entera de una vez (también el último de la página; si la página queda vacía, queda un párrafo), con un
-aviso y Ctrl+Z que trae todo; Enter al final de un título colapsado crea un renglón después de la sección sin
-abrirla; Supr ahí no une lo escondido; ↓ y → lo saltan; lo que se veía nunca queda escondido sin querer (un
-cambio propio o de otro lo abre); "Ir al bloque" de los comentarios abre lo que lo esconde. Las marcas de hoja
+aviso y Ctrl+Z que trae todo (solo se borra lo que ese título escondía: nunca algo que se veía); Enter al
+final de un título colapsado crea un renglón después de la sección sin abrirla (y Retroceso en ese renglón
+vuelve al título sin unirlo a lo escondido); Supr ahí no une lo escondido; ↓ y → lo saltan; si algo que se veía
+fuera a quedar escondido por un cambio (propio o de otro), su sección se abre para vos; "Ir al bloque" de los
+comentarios abre lo que lo esconde. Escribir en una página grande con todo colapsado no recalcula lo escondido
+en cada tecla. Las marcas de hoja
 se cuentan con todo abierto y el título colapsado dice qué hojas tiene adentro ("Hojas 2–4 adentro"); el PDF
 sale todo abierto. Los "Encabezados plegables" de BlockNote salen del menú "/" y del selector de tipo; los que
 ya existían se ven como títulos comunes. Sin tipo de bloque ni propiedad nueva, sin migración.
