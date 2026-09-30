@@ -33,10 +33,10 @@ beforeAll(() => {
 
 const roots: Root[] = [];
 const devices: Device[] = [];
-afterEach(() => {
+afterEach(async () => {
   for (const r of roots.splice(0)) act(() => r.unmount());
   for (const d of devices.splice(0)) {
-    d.engine.stop();
+    await d.engine.stop();
     d.db.close();
     d.mediaDb.close();
     d.commentsDb.close();

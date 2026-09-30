@@ -92,11 +92,14 @@ Templates and the assistant come later. The plan, the decisions and the roadmap 
 npm install
 cp .env.example .env.local   # your Supabase project URL and publishable key
 npm run dev                  # http://localhost:5173
-npm test                     # all 752 tests: sync, editor, UI, file gateway client and Worker
+npm test                     # all 844 tests: sync, editor, UI, file gateway client and Worker
 npm run typecheck            # app types
 npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
 npm run build                # production build in dist/
 ```
+
+`npm install` also applies two small fixes to y-prosemirror (`patches/`, via `patch-package`); the build and
+the tests refuse to run without them. Why and how to redo them on an upgrade: `Docs/Doc_Colaboracion.md`.
 
 The database migrations are in `supabase/migrations/`. See [`Docs/Doc_Supabase.md`](Docs/Doc_Supabase.md)
 to apply them and run the permission tests. Apply new migrations before deploying a new version of the

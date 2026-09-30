@@ -271,3 +271,43 @@ describe('sincronización', () => {
     expect(a.tree.children(p).map((x) => x.id)).toEqual([c]);
   });
 });
+
+describe('detener la sincronización', () => {
+  it('stop() espera al ciclo en curso: después se puede cerrar la base sin errores sueltos', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    await a.tree.create(null, 'P');
+    await a.engine.syncNow();
+
+    // El ciclo queda esperando al servidor a la mitad.
+    let release!: () => void;
+    const fetchTree = a.remote.fetchTree.bind(a.remote);
+    a.remote.fetchTree = async (ids) => {
+      await new Promise<void>((r) => (release = r));
+      return fetchTree(ids);
+    };
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      // Como la app: nadie espera al ciclo.
+      void a.engine.syncNow();
+      await new Promise((r) => setTimeout(r, 10));
+      expect(a.engine.getStatus().syncing).toBe(true);
+
+      let stopped = false;
+      const stopping = a.engine.stop().then(() => (stopped = true));
+      await new Promise((r) => setTimeout(r, 10));
+      expect(stopped).toBe(false);
+
+      release();
+      await stopping;
+      expect(a.engine.getStatus().syncing).toBe(false);
+      a.db.close();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+});

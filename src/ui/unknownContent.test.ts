@@ -10,10 +10,10 @@ import { findUnknownContent, knownContent, supportsContent } from './unknownCont
 
 const editors: BlockNoteEditor[] = [];
 const devices: Device[] = [];
-afterEach(() => {
+afterEach(async () => {
   for (const e of editors.splice(0)) e.unmount();
   for (const d of devices.splice(0)) {
-    d.engine.stop();
+    await d.engine.stop();
     d.db.close();
   }
 });
