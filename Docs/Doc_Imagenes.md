@@ -1,7 +1,7 @@
 # Imágenes en la página: elegir, tamaño y filas
 
 Diseño de lo que pidió Lega el 2026-09-30 (fotos y videos del editor; en la página los dos son un bloque
-`image`, ver `Doc_Carrete.md`). Estado: **diseño, antes de implementar** (se audita antes y después).
+`image`, ver `Doc_Carrete.md`). Estado: **auditado antes de implementar** (ver "Correcciones de la auditoría previa", que manda sobre lo anterior).
 
 ## Lo que se pide
 
@@ -132,3 +132,63 @@ se reordenan: el orden de la página lo decide Lega).
 - Clic: elegir y después abrir; doble clic; teléfono igual que antes; solo lectura igual que antes.
 - Imantado de los tiradores.
 - Paginación: una fila es una unidad.
+
+## Correcciones de la auditoría previa (mandan sobre lo de arriba)
+
+Un subagente auditó este diseño contra el código real de BlockNote 0.55 antes de implementar. Cambios:
+
+1. **La propiedad se llama `rowWidth`** (no `width`: BlockNote podría agregar un `width` en px). Se agrega
+   extendiendo el `propSchema` de la spec `image` (el render de BlockNote la lee sola; queda como
+   `data-row-width` en `.bn-block-content`). Una versión vieja la conserva al abrir, pero **la pierde también
+   si mueve un bloque vecino** (probado): se sube `min_app_version` apenas se publique.
+2. **Las filas las calcula el plugin, no el navegador.** Recorre los hermanos: fotos seguidas con
+   `rowWidth > 0` se juntan mientras la suma no pase de 1; una foto sin `rowWidth` o cualquier otro bloque
+   corta la fila. Decora cada foto con `--img-f` (su parte), `--row-n` (cuántas hay en su fila) y clases
+   de primera y última. CSS: `flex-basis: calc(var(--img-f) * (100% - (var(--row-n) - 1) * var(--img-gap)))`,
+   con `column-gap: var(--img-gap)` (nunca `gap`). Así, en una fila, `f_k = a_k / Σa` da **la misma altura
+   exacta con cualquier ancho** (teléfono, computadora, PDF). La última de una fila llena lleva
+   `flex-grow: 1` para absorber el redondeo.
+3. **Flex solo en los grupos que tienen alguna fila** (clase que pone el mismo plugin en el `blockGroup`):
+   las páginas sin filas quedan exactamente como hoy. En esos grupos: `min-width: 0` en cada bloque (si no,
+   una tabla ancha o una URL larga ensancha la página), el espacio del final (`.bn-trailing-block`) con
+   `flex-basis: 100%`, y sin tocar la regla de BlockNote que oculta los hijos de las listas desplegables
+   cerradas.
+4. **Tiradores:** el arrastre de BlockNote (bloque de imagen del núcleo) cambia el ancho del contenedor
+   directo en el DOM y al soltar guarda `previewWidth`. Al empezar (captura de `pointerdown` en
+   `.bn-resize-handle`) se fija el ancho real en px y se avisa al plugin (meta, sin cambiar el documento),
+   que decora el bloque con `img-resizing` (el CSS deja de forzar el ancho). Al soltar, un
+   `appendTransaction` atado a esa sesión (solo local, solo si hubo movimiento) convierte en la misma
+   transacción el px en `rowWidth` con la inversa exacta del CSS y lo imanta a 1, 1/2, 1/3 o 1/4. Nunca
+   clases a mano en el DOM de ProseMirror. Los cambios remotos no se convierten nunca.
+5. **Elegir varias fotos:** la barra de BlockNote no aparece con una selección de texto que solo abarca
+   fotos. Por eso **"Arrange in rows" actúa sobre la tanda de fotos seguidas de la foto elegida** (una
+   sola foto elegida alcanza). Los tamaños rápidos se aplican a la foto elegida.
+6. **Borde de la elegida con `outline`**, nunca `border` (cambiaría el ancho y partiría la fila).
+7. **Clic:** se decide en `pointerdown` mirando la selección del modelo (NodeSelection de esa misma foto y
+   el editor con foco). Con el mouse, el clic abre solo si ya estaba elegida o si es doble clic
+   (`detail >= 2`); con ⌘/Ctrl no abre. Sin escuchar `dblclick` (abriría dos veces). Teléfono y solo
+   lectura, como hoy. `cursor: zoom-in` solo en la elegida o en solo lectura.
+8. **Acomodar en filas:** en orden, programación dinámica con como mucho 4 por fila, costo `ln(h/H)²` con
+   límites 0,5·H a 1,6·H, `H` = el alto de una foto 3:2 a un tercio del ancho (descontando espacios). La
+   última fila se calcula llena y recién después, si queda más alta que 1,5·H, se achica sin llenar (como
+   la tanda termina en un bloque que no es foto, nada sube a esa fila). Toda fila que no es la última
+   llena. Las panorámicas pueden tener fila propia. Redondeo a 4 decimales; la última de la fila = 1 − la
+   suma de las otras. El botón espera a que carguen las miniaturas (la proporción sale de ahí).
+9. **Paginación:** las fotos de una fila son una sola unidad (función pura `mergeRowUnits`, por la marca de
+   fila del plugin). `cleanCopy` no fija px en las fotos con `rowWidth` (su ancho ya sale de la fila).
+10. **Cursor:** entre fotos de una fila, izquierda y derecha van de foto a foto; arriba y abajo, a la fila
+    de arriba o de abajo. El cursor de hueco que igual aparece se dibuja visible (barra de 2 px, vertical
+    en una fila). Enter con una foto de una fila elegida crea el párrafo después de toda la fila.
+11. **Comentarios al margen:** dos fotos comentadas en la misma fila no se tapan (se agrupan).
+
+Decisiones (a confirmar por Lega): sin tiradores en el teléfono; el tirador del menú lateral de las fotos de
+una fila queda a la izquierda de la fila; las leyendas no entran en el cálculo de "Acomodar" (las fotos
+quedan alineadas arriba).
+
+## Entregas
+
+1. **v0.044 — Elegir y abrir:** primer clic elige, segundo abre; borde visible; tiradores visibles con la foto
+   elegida; cursor de hueco visible. Sin propiedad nueva.
+2. **v0.045 — Anchos y filas:** `rowWidth`, filas del plugin, tamaños rápidos en la barra, tiradores que
+   imantan, paginación y PDF, flechas, Enter, comentarios. Sube `min_app_version`.
+3. **v0.046 — Acomodar en filas.**
