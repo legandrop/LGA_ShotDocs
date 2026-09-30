@@ -1,3 +1,6 @@
+// Copia TAL CUAL de src/ui/editorSchema.ts en la rama main (la versión publicada), para probar que una
+// app con el editor anterior no borra lo nuevo. No se toca: se reemplaza por la de main al publicar.
+
 import {
   addDefaultPropsExternalHTML,
   BlockNoteSchema,
@@ -164,22 +167,10 @@ function setParagraph(editor: BlockNoteEditor<any, any, any>, script: boolean): 
   return true;
 }
 
-// Sin bloques de archivo, video ni audio: una versión vieja de la app los borraría (no están en su
-// esquema). Las fotos y los videos que van al Drive del dueño son un bloque `image` con la dirección
-// `sdmedia://<id>` (ver media/queue.ts); la app mira el tipo del archivo y muestra foto o video.
+// En la fase 1 solo se guardan imágenes (el bucket no acepta otros archivos): sin bloques de archivo,
+// video ni audio.
 const { audio: _audio, file: _file, video: _video, ...blockSpecs } = defaultBlockSpecs;
 
-// El bloque `image` acepta también videos al elegir, pegar o soltar un archivo (sin esto, BlockNote
-// buscaría un bloque `video`). Es solo lo que ofrece el selector: el bloque guardado es el mismo de
-// siempre, y sin portero la app rechaza el video con un aviso.
-const image = {
-  ...blockSpecs.image,
-  implementation: {
-    ...blockSpecs.image.implementation,
-    meta: { ...blockSpecs.image.implementation.meta, fileBlockAccept: ['image/*', 'video/*'] },
-  },
-};
-
 export const schema = BlockNoteSchema.create({
-  blockSpecs: { ...blockSpecs, image, paragraph: createParagraph() },
+  blockSpecs: { ...blockSpecs, paragraph: createParagraph() },
 });

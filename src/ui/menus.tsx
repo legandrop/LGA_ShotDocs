@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { prefs, usePrefs, type Prefs } from '../prefs';
 import { navigate } from '../router';
-import { useServices, useTree } from '../services';
+import { useServices, useSyncStatus, useTree } from '../services';
 import { PAGE_SIZES, pageFormat } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
   DarkIcon,
+  DriveIcon,
   FilmIcon,
   LightIcon,
   MoveIcon,
@@ -215,9 +216,22 @@ function Segmented<K extends keyof Prefs>(props: {
   );
 }
 
-export function AccountMenu({ position, anchor, onClose }: { position: MenuPosition; anchor: HTMLElement | null; onClose: () => void }) {
+export function AccountMenu({
+  position,
+  anchor,
+  onClose,
+  onDrive,
+}: {
+  position: MenuPosition;
+  anchor: HTMLElement | null;
+  onClose: () => void;
+  /** Abre "Google Drive" (la conexión y la carpeta); solo se ofrece al dueño de un workspace con portero. */
+  onDrive?: () => void;
+}) {
   const { user, docs, client } = useServices();
+  const status = useSyncStatus();
   const pending = usePendingCount();
+  const isOwner = !!status.mediaUrl && !!status.ownerId && status.ownerId === user.id;
   const ref = useRef<HTMLDivElement>(null);
   useFloating(ref, onClose, anchor);
 
@@ -285,6 +299,18 @@ export function AccountMenu({ position, anchor, onClose }: { position: MenuPosit
         ]}
       />
       <div className="pref-divider" />
+      {isOwner && onDrive && (
+        <button
+          className="menu-row"
+          onClick={() => {
+            onClose();
+            onDrive();
+          }}
+        >
+          <DriveIcon />
+          Google Drive
+        </button>
+      )}
       <button
         className="menu-row"
         onClick={() => {

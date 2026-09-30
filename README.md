@@ -53,6 +53,9 @@ In production (v0.029). What works today:
   work after a backup is restored (v0.021).
 - The file gateway with Google Drive: resumable uploads, and a test screen that uploads a video and plays
   it back inside the app, on desktop and iPhone (v0.022 to v0.028).
+- Photos and videos in pages go to the owner's Google Drive: saved on the device first, uploaded in parts
+  that resume after closing the app or losing the connection, with a small thumbnail on the page. The
+  owner chooses where the folder goes (account menu → *Google Drive*).
 
 Next is the workspace plan: the team, roles and permissions, files in the owner's Drive with an offline
 upload queue, a media carousel, client guests with comments and questions, a file trash, and several

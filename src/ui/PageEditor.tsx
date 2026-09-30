@@ -13,10 +13,12 @@ import {
   type BlockTypeSelectItem,
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type * as Y from 'yjs';
 import { useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
+import { isMediaFile, mediaIdOf } from '../media/queue';
+import { MediaViewer } from './MediaViewer';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema, SCRIPT_PROP } from './editorSchema';
 import { findUnknownContent } from './unknownContent';
@@ -121,16 +123,33 @@ function UnsupportedPage() {
   );
 }
 
+/** Lo que se puede agregar hoy, para el aviso. */
+function acceptedText(withMedia: boolean): string {
+  return withMedia
+    ? 'Only photos and videos can be added.'
+    : 'Only images can be added for now (JPEG, PNG, GIF, WebP, AVIF or HEIC). Videos need the workspace media server (Google Drive).';
+}
+
 function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; editable: boolean }) {
-  const { files, user } = useServices();
+  const { files, media, user } = useServices();
   const scheme = useScheme();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
+
+  // Con portero, las fotos y los videos van al Drive del dueño (`sdmedia://`, primero en el dispositivo);
+  // sin portero, las imágenes a Supabase como siempre (`sdfile://`).
+  const store = (file: Blob & { name?: string }): Promise<string> => {
+    if (media.enabled && isMediaFile(file)) return media.add(pageId, file);
+    if (!isAllowedImage(file.type)) return Promise.reject(new FileRejected(acceptedText(media.enabled)));
+    return files.add(pageId, file);
+  };
+
   const editor = useCreateBlockNote(
     withCollaboration({
       schema,
       uploadFile: (file: File, blockId?: string) =>
-        files.add(pageId, file).catch((err: unknown) => {
-          notify(err instanceof FileRejected ? err.message : 'This image could not be saved on this device.');
+        store(file).catch((err: unknown) => {
+          notify(err instanceof FileRejected ? err.message : 'This file could not be saved on this device.');
           // El editor ya insertó el bloque de la imagen: se quita para que no quede vacío.
           if (blockId) {
             setTimeout(() => {
@@ -143,7 +162,7 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
           }
           throw err;
         }),
-      resolveFileUrl: (url: string) => files.resolve(url),
+      resolveFileUrl: (url: string) => (mediaIdOf(url) ? media.resolve(url) : files.resolve(url)),
       tables: { splitCells: true, cellBackgroundColor: true, cellTextColor: true, headers: true },
       collaboration: {
         fragment: doc.getXmlFragment(CONTENT_FRAGMENT),
@@ -176,7 +195,7 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
           converting.add(block.id);
           void fetch(url)
             .then((r) => r.blob())
-            .then((blob) => files.add(pageId, blob))
+            .then((blob) => store(blob))
             .then((stored) => {
               if (editor.getBlock(block.id)) editor.updateBlock(block.id, { props: { url: stored } } as never);
             })
@@ -192,6 +211,24 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
       }
     }, false);
   }, [editor, files, pageId, editable]);
+
+  // Qué páginas usan cada foto o video: un `sdmedia://` que llega a esta página (se copió o se pegó de
+  // otra) se registra para ella. Al abrir y con cada cambio hecho acá; lo ya visto no se vuelve a pedir.
+  useEffect(() => {
+    if (!editable) return;
+    const collect = (blocks: Block[]) =>
+      flatten(blocks).flatMap((b) => {
+        const id = b.type === 'image' ? mediaIdOf((b.props as { url?: string }).url) : null;
+        return id ? [id] : [];
+      });
+    const link = (ids: string[]) => {
+      if (ids.length > 0) void media.ensureLinks(pageId, ids).catch(() => undefined);
+    };
+    link(collect(editor.document as Block[]));
+    return editor.onChange((_, { getChanges }) => {
+      link(collect(getChanges().filter((c) => c.type === 'insert' || c.type === 'update').map((c) => c.block as Block)));
+    }, false);
+  }, [editor, media, pageId, editable]);
 
   const slashItems = useMemo(() => {
     const script: DefaultReactSuggestionItem = {
@@ -227,20 +264,30 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
     [editor],
   );
 
-  // Pegar o soltar un archivo que no es una imagen permitida haría que el editor intente crear un bloque
-  // que no existe en el esquema: se corta antes, con un aviso.
+  // Pegar o soltar un archivo que no se puede guardar haría que el editor intente crear un bloque que no
+  // existe en el esquema: se corta antes, con un aviso.
   const rejectOtherFiles = (e: ClipboardEvent | DragEvent, data: DataTransfer | null) => {
     const files = Array.from(data?.files ?? []);
-    if (files.length === 0 || files.every((f) => isAllowedImage(f.type))) return;
+    const ok = (f: File) => isAllowedImage(f.type) || (media.enabled && isMediaFile(f));
+    if (files.length === 0 || files.every(ok)) return;
     e.preventDefault();
     e.stopPropagation();
-    notify('Only images can be added for now (JPEG, PNG, GIF, WebP, AVIF or HEIC).');
+    notify(acceptedText(media.enabled));
+  };
+
+  // Un clic en una foto o un video del Drive la abre entera (el carrete del paso 7 la reemplaza).
+  const openMedia = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.matches('img.bn-visual-media')) return;
+    const id = mediaIdOf(target.closest('[data-content-type="image"]')?.getAttribute('data-url'));
+    if (id) setViewing(id);
   };
 
   return (
     <div
       onPasteCapture={(e) => rejectOtherFiles(e.nativeEvent, e.clipboardData)}
       onDropCapture={(e) => rejectOtherFiles(e.nativeEvent, e.dataTransfer)}
+      onClick={openMedia}
     >
       <BlockNoteView
         editor={editor}
@@ -255,6 +302,7 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
           formattingToolbar={() => <FormattingToolbar blockTypeSelectItems={toolbarItems} />}
         />
       </BlockNoteView>
+      {viewing && <MediaViewer fileId={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }

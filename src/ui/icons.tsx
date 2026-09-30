@@ -39,6 +39,7 @@ export const UploadingIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13
 export const OfflineIcon = icon('M6.5 15h7a3 3 0 0 0 .5-5.96A4.5 4.5 0 0 0 6 7.5 3.75 3.75 0 0 0 6.5 15zM3.5 3.5l13 13', {
   strokeWidth: 1.6,
 });
+export const DriveIcon = icon('M6.5 15h7a3 3 0 0 0 .5-5.96A4.5 4.5 0 0 0 6 7.5 3.75 3.75 0 0 0 6.5 15z');
 export const WarningIcon = icon('M10 3.5l7 12.25H3zM10 8.5v3.25M10 13.9v.1', { strokeWidth: 1.6 });
 export const ErrorIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM10 6.75v3.75M10 13.2v.1', {
   strokeWidth: 1.6,

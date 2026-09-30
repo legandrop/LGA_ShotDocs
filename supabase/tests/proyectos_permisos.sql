@@ -13,6 +13,11 @@ insert into auth.users (id, email, aud, role) values
   ('00000000-0000-4000-8000-00000000000a', 'rls-a@test.invalid', 'authenticated', 'authenticated'),
   ('00000000-0000-4000-8000-00000000000b', 'rls-b@test.invalid', 'authenticated', 'authenticated');
 
+-- Crean proyectos solo el dueño y los admins del workspace: A y B son admins.
+insert into public.members (user_id, role) values
+  ('00000000-0000-4000-8000-00000000000a', 'admin'),
+  ('00000000-0000-4000-8000-00000000000b', 'admin');
+
 -- El primer proyecto de cada uno lo crea la base (ensure_workspace ya no crea proyectos), con el nombre
 -- de fábrica.
 insert into public.workspaces (id, owner_id) values
@@ -86,7 +91,7 @@ begin
 end;
 $$;
 
--- B (con su propio proyecto, así puede crear proyectos): no ve los de A ni crea páginas en ellos.
+-- B (admin, así puede crear proyectos): no ve los de A (privados) ni crea páginas en ellos.
 select pg_temp.as_user('00000000-0000-4000-8000-00000000000b');
 
 do $$

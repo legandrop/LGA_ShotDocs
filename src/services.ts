@@ -1,5 +1,8 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { AuthUser } from './auth';
+import { mediaDbName, openMediaDb } from './media/mediaDb';
+import { Portero, sessionToken } from './media/portero';
+import { MediaQueue } from './media/queue';
 import { PageDocs } from './sync/docs';
 import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
@@ -21,6 +24,8 @@ export interface Services {
   tree: PageTree;
   docs: PageDocs;
   files: PageFiles;
+  /** Fotos y videos que van al Drive del dueño por el portero (`sdmedia://`). */
+  media: MediaQueue;
   engine: SyncEngine;
 }
 
@@ -151,22 +156,39 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       await tree.load();
       const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, supports: supportsContent });
       const files = new PageFiles(db, remote);
+      // Los archivos grandes, en una base aparte (la de siempre no cambia de versión).
+      const mediaDb = await openMediaDb(mediaDbName(dbName));
+      if (cancelled) {
+        mediaDb.close();
+        return db.close();
+      }
+      const media = new MediaQueue(mediaDb, remote, {
+        portero: (url) => new Portero(url, { token: sessionToken(workspace.client) }),
+        projectOf: (pageId) => tree.get(pageId)?.workspace_id,
+      });
+      await media.load();
       const engine = new SyncEngine(remote, tree, docs, files, {
         appVersion: __APP_VERSION__,
         schemaVersion: DB_SCHEMA_VERSION,
+        media,
       });
-      if (cancelled) return db.close();
+      if (cancelled) {
+        mediaDb.close();
+        return db.close();
+      }
       engine.start();
       void navigator.storage?.persist?.();
       cleanup = () => {
         engine.stop();
         docs.dispose();
+        media.dispose();
         void docs.flush().finally(() => {
           db.close();
+          mediaDb.close();
           releaseLock?.();
         });
       };
-      setBoot({ state: 'ready', services: { workspace, client: workspace.client, user, db, tree, docs, files, engine } });
+      setBoot({ state: 'ready', services: { workspace, client: workspace.client, user, db, tree, docs, files, media, engine } });
     })().catch((err) => {
       if (!cancelled) setBoot({ state: 'error', message: errorMessage(err), retry: () => setAttempt((n) => n + 1) });
     });

@@ -197,7 +197,8 @@ begin
 end;
 $$;
 
--- Nadie crea, cambia ni borra miembros, permisos o invitaciones desde la API (llega en el paso 9).
+-- Nadie crea, cambia ni borra miembros, permisos o invitaciones desde la API (solo con las funciones del
+-- paso 9).
 create function pg_temp.check_no_writes(who text) returns void language plpgsql as $$
 declare
   self uuid := auth.uid();
@@ -274,6 +275,7 @@ begin
   assert private.page_level('00000000-0000-4000-8000-000000000305') = 0,
     'la dueña tiene permiso sobre una página de otro';
   assert private.page_level(gen_random_uuid()) = 0, 'una página que no existe da permiso';
+  assert (select array_agg(id) from public.workspaces) = array[p1], 'la dueña ve proyectos privados de otros';
 end;
 $$;
 
@@ -329,12 +331,14 @@ begin
   assert private.page_level(q) = 1, 'ver q';
   assert private.project_level(p1) = 0, 'un permiso sobre una página sube al proyecto';
 
-  -- Las políticas de hoy no cambian en este paso: todavía no ve las páginas compartidas.
-  assert (select count(*) from public.pages) = 0, 'las políticas de pages cambiaron';
+  -- Ve exactamente las páginas compartidas (c, g y q) y los proyectos donde están (para su nombre).
+  assert (select array_agg(id order by id) from public.pages) = array[c, g, q],
+    'el miembro no ve exactamente lo compartido';
+  assert (select count(*) from public.workspaces) = 2, 'el miembro no ve los proyectos de sus páginas';
 
-  -- Sin proyectos propios ni rol de admin, no crea proyectos; ensure_workspace no crea nada.
-  -- Hasta el paso 9 (cuando lo compartido se ve) solo devuelve proyectos propios.
-  assert public.ensure_workspace() is null, 'ensure_workspace devuelve un proyecto que todavía no se ve';
+  -- Sin proyectos propios ni rol de admin, no crea proyectos; ensure_workspace no crea nada y, sin
+  -- permisos sobre proyectos, devuelve el de la primera página compartida.
+  assert public.ensure_workspace() = p1, 'ensure_workspace no devuelve el proyecto de una página compartida';
   begin
     insert into public.workspaces (id, name) values (gen_random_uuid(), 'No') on conflict (id) do nothing;
     raise exception 'FALLA: un miembro sin proyectos crea uno';
@@ -359,7 +363,9 @@ begin
   assert private.page_level('00000000-0000-4000-8000-000000000305') = 0, 'la invitada ve otro proyecto';
   assert private.project_level(p1) = 1, 'ver P1';
   assert private.project_level(p2) = 0, 'la invitada tiene permiso sobre P2';
-  assert public.ensure_workspace() is null, 'ensure_workspace devuelve un proyecto compartido antes del paso 9';
+  assert public.ensure_workspace() = p1, 'ensure_workspace no devuelve el proyecto compartido';
+  assert (select count(*) from public.pages) = 4, 'la invitada no ve todo P1';
+  assert (select array_agg(id) from public.workspaces) = array[p1], 'la invitada ve otros proyectos';
   begin
     insert into public.workspaces (id, name) values (gen_random_uuid(), 'No');
     raise exception 'FALLA: una invitada crea un proyecto';
@@ -369,7 +375,7 @@ end;
 $$;
 
 -- Admin sacada: ve su fila (la señal de que la sacaron) y nada de lo del dueño y los admins; sus permisos
--- no cuentan y no crea proyectos aunque tenga uno propio, que sigue siendo suyo como hoy.
+-- no cuentan, no crea proyectos y pierde también el que creó (queda a su nombre, pero no lo ve).
 select pg_temp.as_user('00000000-0000-4000-8000-000000000105');
 do $$
 begin
@@ -381,9 +387,10 @@ begin
   assert public.media_whoami() ->> 'role' is null, 'media_whoami da rol a la sacada';
   assert private.page_level('00000000-0000-4000-8000-000000000301') = 0, 'los permisos de la sacada cuentan';
   assert private.project_level('00000000-0000-4000-8000-000000000201') = 0, 'la sacada tiene P1';
-  assert private.project_level('00000000-0000-4000-8000-000000000204') = 4, 'la sacada perdió su proyecto';
-  assert public.ensure_workspace() = '00000000-0000-4000-8000-000000000204',
-    'ensure_workspace no devuelve el proyecto de la sacada';
+  assert private.project_level('00000000-0000-4000-8000-000000000204') = 0, 'la sacada conserva su proyecto';
+  assert public.ensure_workspace() is null, 'ensure_workspace le devuelve algo a la sacada';
+  assert (select count(*) from public.workspaces) = 0, 'la sacada ve proyectos';
+  assert (select count(*) from public.pages) = 0, 'la sacada ve páginas';
   perform pg_temp.check_no_writes('la sacada');
   begin
     insert into public.workspaces (id, name) values (gen_random_uuid(), 'No');
@@ -413,35 +420,38 @@ begin
 end;
 $$;
 
--- Miembro que ya tiene un proyecto: crea otro y reintenta el mismo id (con la fila devuelta, como la API).
+-- Miembro que ya tiene un proyecto (como las cuentas de antes del paso 5): tiene todo lo suyo, pero desde el
+-- paso 9 no crea otro, ni reintentando ni reusando un id ajeno.
 select pg_temp.as_user('00000000-0000-4000-8000-000000000107');
-select set_config('test.cr_first', public.ensure_workspace()::text, true);
-insert into public.workspaces (id, name) values ('00000000-0000-4000-8000-000000000207', 'Otro de cr')
-on conflict (id) do nothing
-returning id;
-insert into public.workspaces (id, name) values ('00000000-0000-4000-8000-000000000207', 'Otro de cr')
-on conflict (id) do nothing
-returning id;
 do $$
 begin
-  assert current_setting('test.cr_first') = '00000000-0000-4000-8000-000000000202',
-    'ensure_workspace no devuelve el proyecto de cr';
-  assert (select count(*) from public.workspaces) = 2, 'cr no ve sus dos proyectos';
   assert public.ensure_workspace() = '00000000-0000-4000-8000-000000000202',
-    'ensure_workspace cambió al crear otro proyecto';
-  -- Reusar el id de un proyecto ajeno no da acceso.
-  insert into public.workspaces (id, name) values ('00000000-0000-4000-8000-000000000201', 'Copia')
-  on conflict (id) do nothing;
-  assert (select count(*) from public.workspaces) = 2, 'cr tomó un proyecto ajeno reusando su id';
+    'ensure_workspace no devuelve el proyecto de cr';
+  assert (select array_agg(id) from public.workspaces) = array['00000000-0000-4000-8000-000000000202'::uuid],
+    'cr no ve solo su proyecto';
+  assert private.project_level('00000000-0000-4000-8000-000000000202') = 4, 'cr no tiene todo su proyecto';
+  begin
+    insert into public.workspaces (id, name) values ('00000000-0000-4000-8000-000000000207', 'Otro de cr')
+    on conflict (id) do nothing;
+    raise exception 'FALLA: un miembro crea un proyecto';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.workspaces (id, name) values ('00000000-0000-4000-8000-000000000201', 'Copia')
+    on conflict (id) do nothing;
+    raise exception 'FALLA: un miembro pasa la política de crear reusando un id ajeno';
+  exception when insufficient_privilege then null;
+  end;
+  assert (select count(*) from public.workspaces) = 1, 'cr tomó un proyecto ajeno reusando su id';
 end;
 $$;
 
--- ensure_workspace no creó proyectos: solo están los de la prueba (P1 de la dueña, el del admin y el
--- segundo de cr, más P2 y P4).
+-- ensure_workspace no creó proyectos: solo están los de la prueba (P1 de la dueña y el del admin, más P2 y
+-- P4).
 select set_config('role', 'postgres', true);
 do $$
 begin
-  assert (select count(*) from public.workspaces) = current_setting('test.n_projects')::int + 2,
+  assert (select count(*) from public.workspaces) = current_setting('test.n_projects')::int + 1,
     'se crearon proyectos de más';
   assert (select name from public.workspaces where id = '00000000-0000-4000-8000-000000000201') = 'P1',
     'se cambió un proyecto al reusar su id';

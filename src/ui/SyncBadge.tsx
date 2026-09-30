@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { MediaFailure } from '../media/queue';
 import { useServices, useSyncStatus, useTree } from '../services';
 import { ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from './icons';
 import { usePendingCount } from './usePendingCount';
@@ -14,7 +15,9 @@ function count(n: number, one: string, many: string): string {
 function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   const status = useSyncStatus();
   const pending = usePendingCount();
-  const rejected = status.failedOps + status.rejectedPages;
+  const rejected = status.failedOps + status.rejectedPages + status.failedMedia;
+  // La cola de fotos y videos tiene su propio ciclo: su error cuenta mientras le quede algo por subir.
+  const mediaError = status.pendingMedia > 0 ? status.mediaError : null;
   let tone: Tone = 'ok';
   let text = 'All synced';
   if (status.localError) {
@@ -23,7 +26,7 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   } else if (!status.online) {
     tone = 'offline';
     text = pending > 0 ? `Offline · ${count(pending, 'change', 'changes')} saved on this device` : 'Offline';
-  } else if (status.lastError && !status.syncing) {
+  } else if ((status.lastError && !status.syncing) || (mediaError && !status.uploading)) {
     tone = 'warn';
     text = pending > 0 ? `${count(pending, 'change', 'changes')} not uploaded · retrying` : 'Sync problem · retrying';
   } else if (status.outdated) {
@@ -31,7 +34,13 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
     text = pending > 0 ? `Update the app · ${count(pending, 'change', 'changes')} waiting` : 'Update the app';
   } else if (pending > 0) {
     tone = 'busy';
-    text = status.syncing ? `Uploading ${count(pending, 'change', 'changes')}…` : `${count(pending, 'change', 'changes')} not uploaded`;
+    const up = status.uploading;
+    text =
+      up && up.total > 0
+        ? `Uploading ${count(pending, 'change', 'changes')} · ${Math.floor((up.sent / up.total) * 100)}%`
+        : status.syncing
+          ? `Uploading ${count(pending, 'change', 'changes')}…`
+          : `${count(pending, 'change', 'changes')} not uploaded`;
   } else if (status.lastSyncAt === null) {
     tone = 'busy';
     text = 'Syncing…';
@@ -56,18 +65,36 @@ export function SyncIcon({ onClick }: { onClick: () => void }) {
 export function SyncBadge() {
   const status = useSyncStatus();
   const tree = useTree();
-  const { engine } = useServices();
+  const { engine, media } = useServices();
   const [details, setDetails] = useState(false);
   const { tone, text, rejected } = useSyncTone();
   const Icon = TONE_ICONS[tone];
+  const mediaError = status.pendingMedia > 0 ? status.mediaError : null;
   const hasDetails =
-    rejected > 0 || !!status.localError || !!status.lastError || !!status.warning || !!status.notice || status.outdated || !!status.schemaBehind;
+    rejected > 0 ||
+    !!status.localError ||
+    !!status.lastError ||
+    !!mediaError ||
+    !!status.warning ||
+    !!status.notice ||
+    status.outdated ||
+    !!status.schemaBehind;
+  // Las fotos y los videos detenidos por un error, con su nombre, para el detalle.
+  const [mediaFailures, setMediaFailures] = useState<MediaFailure[]>([]);
+  useEffect(() => {
+    if (!details || status.failedMedia === 0) return setMediaFailures([]);
+    let live = true;
+    void media.failures().then((list) => live && setMediaFailures(list), () => undefined);
+    return () => {
+      live = false;
+    };
+  }, [details, media, status.failedMedia]);
 
   return (
     <div className="sync">
       <button
         className={`sync-pill ${tone}`}
-        data-tip={status.localError ?? status.lastError ?? undefined}
+        data-tip={status.localError ?? status.lastError ?? mediaError ?? undefined}
         aria-expanded={hasDetails ? details : undefined}
         onClick={() => (hasDetails ? setDetails(!details) : void engine.syncNow())}
       >
@@ -91,6 +118,11 @@ export function SyncBadge() {
           {status.lastError && !status.localError && (
             <p>
               Last problem: <code>{status.lastError}</code>. Nothing is lost; syncing keeps retrying.
+            </p>
+          )}
+          {mediaError && !status.localError && (
+            <p>
+              Photos and videos: <code>{mediaError}</code>. They are saved on this device and keep retrying.
             </p>
           )}
           {status.outdated && (
@@ -137,6 +169,11 @@ export function SyncBadge() {
                 {status.rejectedPages > 0 && (
                   <li>{count(status.rejectedPages, 'page', 'pages')} whose content could not be uploaded</li>
                 )}
+                {mediaFailures.map((f) => (
+                  <li key={f.id}>
+                    Upload “{f.name}”: <code>{f.error}</code>
+                  </li>
+                ))}
               </ul>
             </>
           )}

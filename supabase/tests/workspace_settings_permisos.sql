@@ -13,6 +13,9 @@ $$;
 insert into auth.users (id, email, aud, role) values
   ('00000000-0000-4000-8000-00000000000a', 'rls-a@test.invalid', 'authenticated', 'authenticated');
 
+-- A es miembro activo: la regla de quien creó un proyecto vale solo para miembros.
+insert into public.members (user_id, role) values ('00000000-0000-4000-8000-00000000000a', 'member');
+
 -- El proyecto de A lo crea la base (ensure_workspace ya no crea proyectos).
 insert into public.workspaces (id, owner_id) values
   ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-00000000000a');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_RETRIES, PART_BYTES, Portero, retryDelay, UploadError } from './portero';
+import { localDay, MAX_RETRIES, PART_BYTES, Portero, retryDelay, UploadError } from './portero';
 
 const MB = 1024 * 1024;
 const BASE = 'https://media.example.com';
@@ -16,6 +16,7 @@ interface Call {
   path: string;
   range?: string;
   bytes?: number;
+  json?: Record<string, unknown>;
 }
 
 /**
@@ -30,6 +31,11 @@ class FakePortero {
   private upload: { size: number; data: Uint8Array; received: number } | null = null;
   fail?: (call: Call, index: number) => 'network' | number | undefined;
   keep = 0;
+  /** El archivo de la app ya está en Drive: `POST /upload` responde `done` en vez de abrir una subida. */
+  alreadyInDrive = false;
+  /** Lo que responde al terminar sobre si la base se enteró (`undefined`: la prueba de media, sin `linked`). */
+  linked?: boolean;
+  folder: { id: string; name: string } | null = null;
 
   readonly fetch = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
     const url = new URL(String(input));
@@ -38,6 +44,7 @@ class FakePortero {
     const call: Call = { method: init.method ?? 'GET', path: url.pathname, range: headers.get('Content-Range') ?? undefined };
     const body = init.body instanceof Blob ? new Uint8Array(await init.body.arrayBuffer()) : null;
     if (body) call.bytes = body.byteLength;
+    if (typeof init.body === 'string') call.json = JSON.parse(init.body) as Record<string, unknown>;
     this.calls.push(call);
     if (init.signal?.aborted) throw init.signal.reason;
 
@@ -55,6 +62,9 @@ class FakePortero {
 
     if (call.method === 'POST' && call.path === '/upload') {
       const { size } = JSON.parse(String(init.body)) as { size: number };
+      if (this.alreadyInDrive) {
+        return json({ status: 'done', file: { id: 'drive-file-9', name: 'IMG_0001.MOV', mimeType: 'video/quicktime', size }, linked: true });
+      }
       this.upload = { size, data: new Uint8Array(size), received: 0 };
       return json({ uploadId: 'up-1' });
     }
@@ -70,13 +80,28 @@ class FakePortero {
         up.received = end + 1;
       }
       if (up.received === up.size) {
-        return json({ status: 'done', file: { id: 'drive-file-1', name: 'IMG_0001.MOV', mimeType: 'video/quicktime', size: up.size } });
+        const file = { id: 'drive-file-1', name: 'IMG_0001.MOV', mimeType: 'video/quicktime', size: up.size };
+        return json(this.linked === undefined ? { status: 'done', file } : { status: 'done', file, linked: this.linked });
       }
       return json({ status: 'incomplete', received: up.received });
     }
     if (call.method === 'POST' && call.path === '/pass') {
-      const { fileId, type } = JSON.parse(String(init.body)) as { fileId: string; type?: string };
-      return json({ url: `${BASE}/m/${fileId}${type ? `-${type}` : ''}` });
+      const { fileId, file, type } = JSON.parse(String(init.body)) as { fileId?: string; file?: string; type?: string };
+      return json({ url: `${BASE}/m/${file ? `app-${file}` : fileId}${type ? `-${type}` : ''}` });
+    }
+    if (call.method === 'GET' && call.path === '/drive/status') {
+      return json({ connected: true, broken: null, email: 'lega@example.com', isOwner: true, folder: this.folder, picker: true });
+    }
+    if (call.method === 'POST' && call.path === '/drive/picker') {
+      return json({ apiKey: 'key-1', appId: '123456789', token: 'ya29.short' });
+    }
+    if (call.method === 'POST' && call.path === '/drive/folder') {
+      const { parentId } = call.json as { parentId: string | null };
+      this.folder = parentId ? { id: parentId, name: 'Trabajo' } : null;
+      return json({ folder: this.folder });
+    }
+    if (call.method === 'POST' && call.path === '/drive/connect') {
+      return json({ url: `https://accounts.google.com/o/oauth2/v2/auth?return=${String(call.json?.return ?? '')}` });
     }
     return json({ error: 'Not found' }, 404);
   };
@@ -264,5 +289,66 @@ describe('portero: subida por partes', () => {
     const server = new FakePortero();
     expect(await server.portero().pass('drive-file-1')).toBe(`${BASE}/m/drive-file-1`);
     expect(await server.portero().pass('drive-file-1', 'video/mp4')).toBe(`${BASE}/m/drive-file-1-video/mp4`);
+  });
+});
+
+describe('portero: archivos de la app (pasos 6 y 8)', () => {
+  it('sube un archivo de la app con su id y el día, y dice si la base se enteró', async () => {
+    const server = new FakePortero();
+    server.linked = false;
+    const file = makeFile(MB);
+    const id = '6f1c2a4e-0b7d-4c8e-9f10-112233445566';
+
+    const result = await server.portero().upload(file, { appFile: { id, day: '2026-09-30' } });
+
+    expect(server.calls[0].json).toEqual({ file: id, name: 'IMG_0001.MOV', mime: 'video/quicktime', size: MB, day: '2026-09-30' });
+    expect(result).toMatchObject({ id: 'drive-file-1', linked: false });
+    expect(await same(file, server.stored())).toBe(true);
+  });
+
+  it('si el archivo ya está en Drive, no manda nada', async () => {
+    const server = new FakePortero();
+    server.alreadyInDrive = true;
+    const result = await server.portero().upload(makeFile(MB), { appFile: { id: 'x', day: '2026-09-30' } });
+    expect(result).toMatchObject({ id: 'drive-file-9', linked: true });
+    expect(server.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /upload']);
+  });
+
+  it('la prueba de media sigue igual: sin file ni day, y sin linked', async () => {
+    const server = new FakePortero();
+    const result = await server.portero().upload(makeFile(MB));
+    expect(server.calls[0].json).toEqual({ name: 'IMG_0001.MOV', mime: 'video/quicktime', size: MB });
+    expect('linked' in result).toBe(false);
+  });
+
+  it('pide un pase para un archivo de la app', async () => {
+    const server = new FakePortero();
+    expect(await server.portero().pass({ file: 'abc' })).toBe(`${BASE}/m/app-abc`);
+    expect(server.calls[0].json).toEqual({ file: 'abc' });
+    expect(await server.portero().pass({ fileId: 'drive-file-1' })).toBe(`${BASE}/m/drive-file-1`);
+  });
+
+  it('estado con la carpeta y el selector, el selector de Google y elegir la carpeta', async () => {
+    const server = new FakePortero();
+    const portero = server.portero();
+    expect(await portero.status()).toMatchObject({ folder: null, picker: true, isOwner: true });
+    expect(await portero.picker()).toEqual({ apiKey: 'key-1', appId: '123456789', token: 'ya29.short' });
+    expect(await portero.setFolder('1AbCdEfGhIjK')).toEqual({ id: '1AbCdEfGhIjK', name: 'Trabajo' });
+    expect(server.calls.at(-1)?.json).toEqual({ parentId: '1AbCdEfGhIjK' });
+    expect(await portero.status()).toMatchObject({ folder: { id: '1AbCdEfGhIjK', name: 'Trabajo' } });
+    expect(await portero.setFolder(null)).toBeNull();
+    expect(server.calls.at(-1)?.json).toEqual({ parentId: null });
+  });
+
+  it('conectar vuelve a la ruta pedida', async () => {
+    const server = new FakePortero();
+    expect(await server.portero().connect('/p/123')).toMatch(/return=\/p\/123$/);
+    expect(server.calls[0].json).toEqual({ return: '/p/123' });
+    await server.portero().connect();
+    expect(server.calls[1].json).toEqual({});
+  });
+
+  it('el día es el local, AAAA-MM-DD', () => {
+    expect(localDay(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05');
   });
 });

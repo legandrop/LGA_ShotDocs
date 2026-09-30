@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { navigate, pagePath, useRoute } from '../router';
 import { useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
 import { AccountIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, TrashIcon } from './icons';
+import { DriveDialog } from './DriveDialog';
 import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
@@ -35,6 +37,17 @@ export function Sidebar() {
   const [menu, setMenu] = useState<{ id: string; position: MenuPosition; anchor: HTMLElement } | null>(null);
   const [account, setAccount] = useState<MenuPosition | null>(null);
   const accountButton = useRef<HTMLButtonElement>(null);
+  // "Google Drive" (menú de la cuenta). Al volver de conectar Drive, Google deja `?drive=<resultado>` en la
+  // dirección (salvo en Media test, que lo muestra ella): el diálogo se abre con el resultado.
+  const [drive, setDrive] = useState<{ result: string | null } | null>(() => {
+    const result = location.pathname === '/media-test' ? null : new URLSearchParams(location.search).get('drive');
+    return result === null ? null : { result };
+  });
+  useEffect(() => {
+    if (drive?.result && new URLSearchParams(location.search).has('drive')) {
+      history.replaceState(history.state, '', location.pathname + location.hash);
+    }
+  }, [drive]);
   const [moving, setMoving] = useState<string | null>(null);
   const [formatting, setFormatting] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -258,7 +271,15 @@ export function Sidebar() {
         </button>
       </div>
 
-      {account && <AccountMenu position={account} anchor={accountButton.current} onClose={() => setAccount(null)} />}
+      {account && (
+        <AccountMenu
+          position={account}
+          anchor={accountButton.current}
+          onClose={() => setAccount(null)}
+          onDrive={() => setDrive({ result: null })}
+        />
+      )}
+      {drive && createPortal(<DriveDialog result={drive.result} onClose={() => setDrive(null)} />, document.body)}
       {menu && (
         <PageMenu
           pageId={menu.id}

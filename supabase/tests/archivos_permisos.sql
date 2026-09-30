@@ -293,8 +293,8 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------------------------------
--- m: permisos por página (ver a1, editar a2). Las políticas de las tablas siguen a can_view_page (solo
--- el dueño hasta el paso 9); file_level y media_file ya miran los permisos.
+-- m: permisos por página (ver a1, editar a2). Las políticas de las tablas siguen a can_view_page, que
+-- desde el paso 9 mira los permisos, igual que file_level y media_file.
 -- ---------------------------------------------------------------------------------------------------
 select pg_temp.as_user('00000000-0000-4000-8000-00000000000c');
 do $$
@@ -307,13 +307,14 @@ begin
   -- f1 está en a2 (editar), así que gana 3.
   assert private.file_level(f1) = 3, 'm no edita el archivo de a2';
   assert (public.media_file(f1) ->> 'level')::int = 3, 'media_file no da el permiso de m';
-  assert (select count(*) from public.files) = 0, 'las políticas de files ya miran los permisos';
+  assert (select array_agg(id) from public.files) = array[f1], 'm no ve el archivo de las páginas que ve';
+  assert (select count(*) from public.page_files) = 2, 'm no ve en qué páginas está el archivo';
 
   perform pg_temp.expect_error(
     format('select public.register_file(%L, %L, %L, %L, 1, null, null, null)', fm, a1, 'm.jpg', 'image/jpeg'),
     'page_not_found', 'm registra en una página que solo ve');
   perform public.register_file(fm, a2, 'm.jpg', 'image/jpeg', 10, null, null, null);
-  assert (select count(*) from public.files) = 1, 'm no ve el archivo que creó';
+  assert (select count(*) from public.files) = 2, 'm no ve el archivo que creó';
   assert private.file_level(fm) = 3, 'm no edita el archivo que creó';
   perform pg_temp.expect_error(format('select public.link_page_file(%L, %L)', a1, fm),
     'page_not_found', 'm linkea en una página que solo ve');
@@ -376,6 +377,8 @@ begin
   assert private.file_level(fm) = 0 and private.file_level(f1) = 0, 'la sacada conserva permisos sobre archivos';
   assert public.media_file(fm) is null and public.media_file(f1) is null, 'media_file le da archivos a la sacada';
   assert (select count(*) from storage.objects where bucket_id = 'thumbs') = 0, 'la sacada ve miniaturas';
+  assert (select count(*) from public.files) = 0, 'la sacada ve archivos, también los que creó';
+  assert (select count(*) from public.page_files) = 0, 'la sacada ve page_files';
   perform pg_temp.expect_error(format('select public.set_file_thumb(%L)', fm),
     'file_not_found', 'la sacada marca la miniatura de lo que creó');
 end;

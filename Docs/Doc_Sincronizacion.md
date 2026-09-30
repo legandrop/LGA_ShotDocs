@@ -5,7 +5,9 @@ Cómo funciona hoy la regla de no perder nunca información. El código está en
 `editor.test.ts` (con el editor real, en jsdom), `projects.test.ts` (proyectos en la cola, también sin
 red y rechazados), `restore.test.ts` (la generación al restaurar una copia y la versión mínima del
 workspace, y el aviso de base vieja), `src/workspace.test.ts` (los nombres de lo guardado en el
-dispositivo) y `src/ui/unknownContent.test.ts` (la guarda del editor contra lo desconocido).
+dispositivo), `src/ui/unknownContent.test.ts` (la guarda del editor contra lo desconocido),
+`src/media/queue.test.ts` (la cola de fotos y videos) y `src/ui/media.test.ts` (`sdmedia://` con el
+editor de la versión publicada).
 
 ## Piezas
 
@@ -15,7 +17,8 @@ dispositivo) y `src/ui/unknownContent.test.ts` (la guarda del editor contra lo d
 | Contenido | `docs.ts` | Un documento Yjs por página. Guarda cada edición en el dispositivo y sube o baja lo que falte. |
 | Estructura | `structure.ts` | La raíz inicial de cada página (la "semilla") y la reparación de documentos viejos con dos raíces (ver "Fusión"). |
 | Árbol | `tree.ts` | La copia del árbol que mandó el servidor más la cola de cambios locales encima. |
-| Imágenes | `files.ts` | Guarda la imagen pegada en el dispositivo y la sube cuando hay red. |
+| Imágenes | `files.ts` | Guarda la imagen pegada en el dispositivo y la sube cuando hay red (sin portero). |
+| Fotos y videos | `../media/queue.ts` | Los guarda en el dispositivo (base aparte) y los sube al Drive del dueño por el portero. Ver "Archivos grandes". |
 | Servidor | `remote.ts` | Las llamadas a Supabase. Las pruebas usan un servidor en memoria con las mismas reglas (`testing.ts`). |
 | Motor | `engine.ts` | El ciclo de sincronización y el estado que muestra la app. |
 
@@ -121,12 +124,72 @@ si hay cambios de ese usuario sin subir, se suben; si no, manda lo guardado en l
   porque puede traer scripts. Otro archivo se rechaza con un aviso.
 - Una imagen pegada adentro de HTML (`data:`) se pasa a archivo para que el documento no cargue megas.
 
+## Archivos grandes (fotos y videos)
+
+Con portero (`workspace_settings.media_url`) y la base en la versión 3 (la migración
+`20260930150000_archivos.sql`), las fotos y los videos que se eligen, pegan o sueltan en una página van al
+Drive del dueño (`Plan_Workspaces.md`, pasos 6 y 8). Sin portero, todo sigue como en "Imágenes" (solo
+imágenes, a Supabase, con `sdfile://`). El código está en `src/media/`: `queue.ts` (la cola),
+`mediaDb.ts` (la base del dispositivo), `probe.ts` (medidas y miniatura), `portero.ts` (el cliente del
+portero) y `picker.ts` (el selector de carpetas de Google).
+
+- **En la página:** el bloque `image` de siempre con `url: "sdmedia://<id>"`, donde `<id>` es el uuid de la
+  fila de `files`, creado en el dispositivo. Nada de bloques `video` o `file`: la versión publicada los
+  borraría. Una versión vieja muestra una imagen rota y conserva la dirección aunque se edite la página
+  (`src/ui/media.test.ts`, con una copia del esquema de `main` en `src/ui/fixtures/`). El bloque `image`
+  acepta videos al elegir, pegar o soltar un archivo (cambia lo que ofrece el selector, no el bloque).
+- **Primero en el dispositivo:** el archivo se guarda en otra base IndexedDB, `<base local>:media` (la de
+  siempre no cambia de versión: una versión vieja de la app no podría abrirla), con su id, página,
+  proyecto, nombre, tipo (en minúsculas, sin parámetros; si el navegador no lo da, sale de la extensión),
+  peso, ancho, alto, duración, el día local (`AAAA-MM-DD`), la miniatura y el archivo, todo en una sola
+  transacción. Recién después se pone el bloque en la página. Mientras se guarda, el navegador pide
+  confirmación antes de cerrar. El original queda en el dispositivo también después de subirlo.
+- **Miniatura:** se hace al elegir el archivo. Foto: reducida a 480 px de lado mayor, JPEG de calidad 0.8
+  (baja la calidad si pasa de 512 KB). Video: un cuadro cerca del primer segundo. Si el navegador no puede
+  abrir el archivo (HEIC en Chrome de Windows, un video que no decodifica), no hay miniatura ni medidas:
+  se registra y se sube igual, y en la página queda un ícono con el nombre. **Queda para después:** que
+  otro dispositivo que sí pueda abrirlo genere la miniatura que falta (`thumb_at` en null).
+- **Subida, con su propio ciclo** (una subida de minutos no frena al texto; nunca hay dos vueltas a la
+  vez): `register_file` → miniatura a `thumbs/<id>.jpg` sin reemplazar (si ya existe, está hecho) y
+  `set_file_thumb` → portero, `POST /upload` con `{ file, name, mime, size, day }` y partes de 8 MiB
+  (`PUT /upload/<id>`) → subido cuando el portero responde `done`. Cada paso queda anotado apenas termina
+  (también el id de la subida y hasta dónde llegó, con cada parte): si la app se cierra a la mitad, al
+  volver sigue desde ahí, y el portero dice cuánto le llegó. Todos los pasos son idempotentes: repetir uno
+  cuya respuesta se perdió no duplica nada. Si el portero responde `done` con `linked: false` (Drive lo
+  tiene pero la base no se enteró), sigue pendiente y se vuelve a preguntar: el portero le avisa a la base
+  sin volver a subir el archivo. Un archivo de una página que todavía no existe en el servidor espera a
+  que la página suba.
+- **Errores:** sin red (o sin respuesta del portero) espera a la próxima sincronización. Lo que se puede
+  arreglar solo (sesión renovándose, Drive sin conectar, 5xx) se reintenta esperando cada vez más, hasta
+  10 minutos, con el error a la vista. Lo que no (`page_not_found`, `file_other_project`, un 400, 403 o
+  404 del portero) queda detenido y a la vista, **sin descartar el archivo**, y se reintenta con "Retry" o
+  al abrir la app.
+- **Qué páginas usan cada archivo** (`page_files`): el dispositivo que registra un archivo ya lo cuelga de
+  su página. Cuando una página tiene un `sdmedia://` que llegó de otra (se copió o se pegó el bloque), al
+  abrirla y con cada cambio hecho en ella se pide `link_page_file`. Los pares ya vistos se guardan en el
+  dispositivo para no llamar de más. Si el archivo todavía no está en el servidor (`file_not_found`: lo
+  registra otro dispositivo), se espera y se reintenta más tarde sin contarlo como pendiente; lo mismo si la
+  persona no puede editar esa página.
+- **Mostrar:** una foto de este dispositivo se muestra entera desde el dispositivo; si no, la miniatura
+  del bucket `thumbs` (bajada con la sesión y guardada en el dispositivo, así se ve sin red). Un video
+  muestra su miniatura con una marca de "play". Un clic en la página abre un visor simple (hasta el
+  carrete del paso 7): el original si está en el dispositivo (anda sin red) o el archivo entero con un
+  pase del portero (`POST /pass` con `{ file }`).
+- **Cuenta en los cambios pendientes** (`pendingMedia` en el estado), también los usos de páginas por
+  confirmar. Los detenidos por un error cuentan como rechazados (`failedMedia`).
+- **Restaurar una copia:** todo lo de este dispositivo vuelve a la cola (registrar, miniatura, usos de
+  páginas); el archivo no se vuelve a subir, porque el portero recuerda lo que ya subió a Drive.
+- **La carpeta en Drive** (paso 8): el dueño la elige en el menú de la cuenta → *Google Drive* (estado de la
+  conexión, conectar o reconectar, dónde está `LGA_ShotDocs` y *Choose folder…* con el selector de
+  Google). Sin `GOOGLE_API_KEY` en el portero, va a la raíz de *My Drive* (`Doc_Portero.md`, paso 2b).
+
 ## Ciclo de sincronización
 
 Nunca corren dos a la vez. En orden: los ajustes del workspace (ver abajo), cambios del árbol, los proyectos y sus páginas, contenido pendiente,
 contenido nuevo e imágenes pendientes. Las imágenes van al final y sus errores no cortan el ciclo: una foto
 grande en una red mala no frena el texto. Corre al abrir la app, un poco después de cada cambio, cada 10
-segundos con la app a la vista, al volver la red y al volver a la ventana.
+segundos con la app a la vista, al volver la red y al volver a la ventana. Al final de cada ciclo arranca,
+sin esperarla, la cola de fotos y videos, que tiene su propio ciclo (ver "Archivos grandes").
 
 ## Una sola pestaña
 
@@ -139,7 +202,9 @@ una tendría su propia cola y su propio documento en memoria.
 La barra lateral dice, en este orden de gravedad: si no se pudo guardar en el dispositivo, si no hay
 conexión (y cuántos cambios quedaron guardados en el dispositivo), si el servidor rechazó algo (con
 "Retry"), si hubo un problema al sincronizar aunque no haya nada pendiente, cuántos cambios faltan subir y,
-si no hay nada de eso, que todo está sincronizado.
+si no hay nada de eso, que todo está sincronizado. Las fotos y los videos cuentan como cambios pendientes
+(con el porcentaje de la subida en curso); los detenidos por un error cuentan como rechazados, con su
+nombre y el error en el detalle.
 
 ## Sin red al abrir
 

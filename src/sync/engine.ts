@@ -1,3 +1,4 @@
+import type { MediaQueue, MediaStatus } from '../media/queue';
 import type { PageDocs } from './docs';
 import type { PageFiles } from './files';
 import { hasUnsyncedContent } from './localDb';
@@ -13,6 +14,18 @@ export interface SyncStatus {
   /** Páginas con contenido sin subir, incluidas las que todavía no se pudieron guardar en el dispositivo. */
   pendingPages: number;
   pendingFiles: number;
+  /** Fotos y videos (y sus usos en otras páginas) que faltan subir: la cola de archivos grandes. */
+  pendingMedia: number;
+  /** Fotos y videos detenidos por un error que no se arregla solo. Siguen en el dispositivo. */
+  failedMedia: number;
+  /** El último error de la cola de archivos grandes, que se va a reintentar. */
+  mediaError: string | null;
+  /** La foto o el video que se está subiendo. */
+  uploading: MediaStatus['uploading'];
+  /** Dirección del portero de archivos del workspace (`workspace_settings.media_url`), si se sabe. */
+  mediaUrl: string | null;
+  /** El dueño del workspace, si se sabe. */
+  ownerId: string | null;
   /** Cambios del árbol que el servidor rechazó para siempre. */
   failedOps: number;
   /** Páginas cuyo contenido el servidor rechazó para siempre (por ejemplo, por tamaño). */
@@ -48,6 +61,8 @@ const PULL_CONCURRENCY = 4;
  * 3. Contenido pendiente de cada página.
  * 4. Contenido nuevo de las páginas que cambiaron en el servidor.
  * 5. Imágenes pendientes (al final: una foto grande en una red mala no frena el texto).
+ * Después arranca, sin esperarla, la cola de fotos y videos (`media/queue.ts`), que tiene su propio ciclo:
+ * una subida de minutos no frena al texto.
  * Nunca hay dos ciclos a la vez.
  */
 export class SyncEngine {
@@ -57,6 +72,12 @@ export class SyncEngine {
     pendingOps: 0,
     pendingPages: 0,
     pendingFiles: 0,
+    pendingMedia: 0,
+    failedMedia: 0,
+    mediaError: null,
+    uploading: null,
+    mediaUrl: null,
+    ownerId: null,
     failedOps: 0,
     rejectedPages: 0,
     localError: null,
@@ -80,11 +101,18 @@ export class SyncEngine {
     private readonly tree: PageTree,
     private readonly docs: PageDocs,
     private readonly files: PageFiles,
-    private readonly options: { appVersion?: string; schemaVersion?: number } = {},
+    private readonly options: { appVersion?: string; schemaVersion?: number; media?: MediaQueue } = {},
   ) {
     const poke = () => this.poke();
     tree.onQueued = poke;
     files.onQueued = poke;
+    if (options.media) {
+      options.media.onQueued = poke;
+      // Después de `stop()` la base puede estar cerrándose: no se cuenta nada más.
+      options.media.onChange = () => {
+        if (!this.stopped) void this.refreshCounts().catch(() => undefined);
+      };
+    }
     docs.onLocalChange = poke;
     docs.onWriteError = (message) => {
       this.patch({ localError: message });
@@ -119,11 +147,12 @@ export class SyncEngine {
     }
     this.interval = setInterval(onWake, INTERVAL_MS);
     // Lo que el servidor rechazó se vuelve a intentar una vez por apertura: puede que ya se haya arreglado.
-    void this.docs.clearRejected().then(() => this.syncNow());
+    void Promise.all([this.docs.clearRejected(), this.options.media?.clearBlocked()]).then(() => this.syncNow());
   }
 
   stop(): void {
     this.stopped = true;
+    this.options.media?.stop();
     if (this.interval) clearInterval(this.interval);
     if (this.timer) clearTimeout(this.timer);
     for (const fn of this.cleanups) fn();
@@ -133,7 +162,16 @@ export class SyncEngine {
   async retryRejected(): Promise<void> {
     await this.tree.retryFailed();
     await this.docs.clearRejected();
+    await this.options.media?.clearBlocked();
     await this.syncNow();
+  }
+
+  /**
+   * Una vuelta por la cola de fotos y videos, si no hay una en curso (si la hay, otra apenas termine).
+   * La sincronización la arranca sola al final de cada ciclo; no hace falta esperarla.
+   */
+  syncMedia(): Promise<void> {
+    return this.options.media?.run((pageId) => this.tree.hasUnsentCreate(pageId)) ?? Promise.resolve();
   }
 
   /** El servidor tiene contenido de la página que este dispositivo todavía no bajó. */
@@ -231,6 +269,8 @@ export class SyncEngine {
       const fileError = await this.files.pushPending((pageId) => this.tree.hasUnsentCreate(pageId));
 
       this.patch({ online: true, lastError: contentError ?? fileError, lastSyncAt: Date.now() });
+      // Sin esperarla: tiene su propio ciclo y sus propios errores.
+      void this.syncMedia();
     } catch (err) {
       if (this.stopped) return;
       this.patch({ online: !isNetworkError(err), lastError: errorMessage(err) });
@@ -257,7 +297,8 @@ export class SyncEngine {
     const needed = this.options.schemaVersion ?? 0;
     const schemaBehind: [number, number] | null = settings.schemaVersion < needed ? [settings.schemaVersion, needed] : null;
     if (schemaBehind?.join() !== this.status.schemaBehind?.join()) this.patch({ schemaBehind });
-    this.patch({ outdated });
+    this.patch({ outdated, mediaUrl: settings.mediaUrl, ownerId: settings.ownerId ?? null });
+    await this.options.media?.configure(settings.mediaUrl, settings.schemaVersion);
 
     // Sin generación guardada vale 1, la que crea la migración: un dispositivo que todavía tenía una versión
     // anterior cuando se restauró la base igual se recupera al actualizar (uno vacío no tiene nada que hacer).
@@ -269,7 +310,8 @@ export class SyncEngine {
       const recovered =
         (await this.tree.recoverAfterRestore(rows, projects)) +
         (await this.docs.resetForRestore()) +
-        (await this.files.resetForRestore());
+        (await this.files.resetForRestore()) +
+        ((await this.options.media?.resetForRestore()) ?? 0);
       // Un dispositivo que no tenía nada (recién entra a un workspace ya restaurado) no avisa nada.
       if (recovered > 0) {
         this.patch({
@@ -310,10 +352,12 @@ export class SyncEngine {
   }
 
   private async refreshCounts(): Promise<void> {
-    const [states, unsynced, pendingFiles] = await Promise.all([
+    const [states, unsynced, pendingFiles, media] = await Promise.all([
       this.docs.states(),
       this.docs.unsyncedPages(),
       this.files.pendingCount(),
+      // La base de archivos puede estar cerrándose (se cierra la app): el conteo se deja como estaba.
+      this.options.media?.status().catch(() => undefined),
     ]);
     let rejectedPages = 0;
     for (const s of states.values()) if (s.rejected && hasUnsyncedContent(s)) rejectedPages++;
@@ -323,6 +367,10 @@ export class SyncEngine {
       pendingPages: unsynced.length,
       rejectedPages,
       pendingFiles,
+      pendingMedia: media?.pending ?? 0,
+      failedMedia: media?.failed ?? 0,
+      mediaError: media?.error ?? null,
+      uploading: media?.uploading ?? null,
     });
   }
 

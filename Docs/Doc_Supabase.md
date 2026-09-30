@@ -30,6 +30,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20260930120000_portero.sql` | `workspace_settings` suma el dueño del workspace (`owner_id`, arranca como el dueño del primer proyecto) y la dirección del portero de archivos (`media_url`, solo https). `media_whoami()` dice quién es la sesión y si es el dueño: la usa el portero (ver `Doc_Portero.md`). |
 | `20260930140000_miembros.sql` | Paso 5 de `Plan_Workspaces.md`, sin cambios visibles. Tablas `members` (persona, rol y `removed_at`: sacar a alguien no borra la fila), `grants` (permiso de una persona sobre un proyecto o una página) e `invitations` (correo en minúsculas, rol, permisos que va a recibir, vencimiento a los 30 días y si se usó). Por ahora la API solo las lee: cada uno ve su fila y sus permisos; el dueño y los admins, todo. Funciones `private.workspace_role`, `private.page_level` y `private.project_level` (0 nada, 1 ver, 2 comentar, 3 editar, 4 editar y crear páginas: quien creó el proyecto tiene 4, los permisos valen para lo de abajo y gana el más alto; los de alguien sacado no cuentan). Las políticas de páginas, contenido y archivos no cambian. `ensure_workspace()` ya no crea "My project": devuelve el primer proyecto propio, o nada (lo compartido se suma en el paso 9, con las políticas que dejan verlo). Crear proyectos queda para quien ya tiene alguno o es dueño o admin (`private.can_create_project`). `workspace_settings` suma el nombre del workspace (`name`) y la clave local (`local_key`); en Wanka, "Wanka" y `znlvpuddswymxpffgvbz`, y `schema_version` pasa a 2. Las cuentas que ya existen entran como miembros: el dueño como `owner` y las demás con proyectos propios como `member`, con `edit_pages` sobre cada uno. `media_whoami()` suma el rol. |
 | `20260930150000_archivos.sql` | Pasos 6 y 8 de `Plan_Workspaces.md`: los archivos de las páginas (fotos y videos que van al Drive del dueño por el portero). Tablas `files` (id creado en el dispositivo, proyecto, nombre, tipo en minúsculas, peso, ancho, alto, duración, id en Drive cuando termina la subida, `thumb_at` si ya hay miniatura, quién y cuándo, `uploaded_at` y `trashed_at` para la papelera del paso 11) y `page_files` (qué páginas usan cada archivo), de solo lectura desde la API y sin borrar nada. Se ve un archivo si se lo creó o si se ve alguna página que lo usa (`can_view_page`, como las páginas hasta el paso 9). `private.file_level` da el permiso sobre un archivo (el más alto sobre sus páginas, con `page_level`; quien lo creó tiene al menos editar mientras pueda editar alguna página de su proyecto, así que sacarlo del workspace le corta también sus archivos). Funciones `register_file` (en una página que se edita; reintentar no cambia nada), `link_page_file` (sumar a otra página del mismo proyecto; `file_not_found` si todavía no llegó), `media_file` (para el portero: el archivo, su proyecto y el permiso, o nada), `set_file_drive` (el id en Drive, una sola vez) y `set_file_thumb`. Bucket privado `thumbs` con las miniaturas (`<id del archivo>.jpg`, JPEG o WebP de hasta 512 KB): lee quien ve el archivo y sube quien lo edita; no se reemplazan ni se borran. `schema_version` pasa a 3. |
+| `20260930160000_equipo.sql` | Paso 9 de `Plan_Workspaces.md` (la base). Las políticas de `pages`, `page_updates`, `page_files`, `files`, el bucket `page-files` y `workspaces`, y `push_page_update`/`pull_page_updates`, pasan a mirar `members` y `grants`: una página se ve con `page_level >= 1` y se edita (título, ícono, ajustes, contenido, imágenes) con 3; crear, mover (4 en la página y en el destino; el orden entre hermanas es del padre) y mandar a la papelera o restaurar piden 4 (trigger `pages_permissions`, con los errores `page_create_denied`, `page_move_denied` y `page_trash_denied`). Quien creó un proyecto tiene 4 solo mientras es miembro activo: sacar a alguien le corta todo, también sus archivos. Un proyecto se ve con permiso sobre él o sobre una página de adentro (para mostrar su nombre); lo crean solo el dueño y los admins y nace privado (el dueño del workspace no ve los privados de otros); lo renombra quien tiene 4. `ensure_workspace()` devuelve el propio más viejo, si no el primero con permiso de proyecto, si no el de una página compartida. Funciones del equipo: `create_invitation` (una invitación viva por correo: invitar de nuevo al mismo correo suma rol y permisos), `accept_invitations`, `list_members`, `set_member_role`, `remove_member` (los proyectos que la persona compartía pasan a un dueño o admin con permiso sobre ellos), `share`, `unshare` y `list_access`; y `private.hook_before_user_created` para el hook *Before User Created* de Supabase, sin conectar (ver "Login"). `schema_version` pasa a 4. Cambio de comportamiento: un `member` ya no crea proyectos (las dos cuentas de antes del paso 5 que no son del dueño siguen con todo lo suyo, pero no crean proyectos nuevos). |
 
 Reglas del esquema:
 
@@ -38,6 +39,8 @@ Reglas del esquema:
 - Supabase Storage (`page-files`) guarda solo las imágenes pegadas en las páginas: JPEG, PNG, GIF, WebP,
   AVIF y HEIC/HEIF de hasta 25 MB, sin SVG. Los originales de fotos y videos van al Drive del dueño por el
   portero (`Doc_Portero.md`).
+- `members`, `grants` e `invitations` se leen desde la API pero se escriben solo con las funciones del equipo
+  (`create_invitation`, `accept_invitations`, `set_member_role`, `remove_member`, `share`, `unshare`).
 - `page_updates` solo se escribe con `push_page_update()`. Cada update tiene un `seq` correlativo por
   página, asignado con la fila de la página bloqueada: bajar "lo posterior a `seq` N" nunca se saltea nada.
 - Las funciones auxiliares de permisos viven en el esquema `private`, que la API no expone.
@@ -78,8 +81,22 @@ un error que dice qué; si todo pasa, devuelve una fila con `result = 'ok'`.
 | `ajustes_permisos.sql` | Los ajustes por rama (`pages.settings`: solo objetos, con tope de tamaño) y las preferencias de cada cuenta (`user_settings`): cada uno ve y cambia solo las suyas, no las crea a nombre de otro ni les cambia el dueño, y no se borran desde la API. |
 | `proyectos_permisos.sql` | Proyectos: crear uno con el id del dispositivo y reintentarlo, que el dueño sea siempre quien lo crea y no se cambie, que no se borre desde la API, que una página no pase a otro proyecto ni cuelgue de una página de otro, y que otro usuario no los vea ni se los quede reusando el id. |
 | `workspace_settings_permisos.sql` | `workspace_settings`: todos la leen y nadie la cambia desde la API; la subida de contenido según la versión de la app (sin mínimo sube; con mínimo, se rechaza la función vieja, una versión menor, ilegible o ausente con `app_outdated`); `media_whoami()` dice bien quién es el dueño, nadie se hace dueño ni cambia la dirección del portero, y `media_url` no acepta `http`. |
-| `miembros_permisos.sql` | Miembros, permisos e invitaciones: cada uno ve solo su fila y sus permisos, el dueño y los admins ven todo, alguien sacado no (y sus permisos no cuentan), y nadie escribe en las tres tablas desde la API; el permiso sobre una página con permisos en el proyecto, en la página y en una de arriba (vale hacia abajo, no hacia arriba, y gana el más alto); `ensure_workspace()` no crea proyectos y da nada a quien no tiene nada; quien no tiene proyectos ni rol no crea uno, el dueño y los admins sí, y quien ya tiene uno crea otro y lo reintenta con el mismo id. |
+| `miembros_permisos.sql` | Miembros, permisos e invitaciones: cada uno ve solo su fila y sus permisos, el dueño y los admins ven todo, alguien sacado no (y sus permisos no cuentan), y nadie escribe en las tres tablas desde la API; el permiso sobre una página con permisos en el proyecto, en la página y en una de arriba (vale hacia abajo, no hacia arriba, y gana el más alto); `ensure_workspace()` no crea proyectos y da nada a quien no tiene nada; crean proyectos solo el dueño y los admins (también reintentando el mismo id), y un miembro con un proyecto propio no crea otro; alguien sacado pierde también lo que creó, y ve solo su fila. |
 | `archivos_permisos.sql` | Archivos: el dueño de un proyecto registra un archivo y lo ve; reintentar `register_file`, `link_page_file` y `set_file_drive` no cambia nada, y un id en Drive ya puesto no se cambia; ni `link_page_file` ni `register_file` cruzan proyectos; `media_file` da el json esperado al dueño y nada a quien no ve el archivo; otro usuario no ve, registra ni linkea los archivos ajenos; los permisos por página (ver, editar) y el piso de quien creó el archivo, que se pierde al dejar de editar el proyecto o al ser sacado; datos con forma inválida; nadie escribe ni borra en `files` y `page_files` desde la API; el bucket `thumbs`: nombres válidos, subir solo con permiso de edición, leer con permiso de ver, sin cambiar ni borrar, y sin sesión nada. |
+| `equipo_permisos.sql` | Equipo: cada nivel sobre una página (ver y bajar; comentar; editar: contenido, título, ícono, ajustes, imágenes y archivos; editar y crear páginas: crear adentro, mover, papelera y restaurar), hacia abajo sí y hacia arriba no, y gana el más alto; mover entre ramas pide permiso en las dos (y reordenar, en el padre) y no arma ciclos; los roles: el dueño y los admins crean proyectos privados, nadie ve los privados de otros (tampoco el dueño), un miembro o una invitada no crean proyectos, quien tiene editar y crear sobre un proyecto lo renombra; `ensure_workspace` en cada caso; invitaciones (correo en minúsculas, solo el dueño invita admins, permisos solo sobre lo que quien invita tiene con 4, invitar de nuevo suma a la viva) y `accept_invitations` (con el correo verificado; no baja un rol ni cambia al dueño; alguien sacado vuelve sin sus permisos de antes); el hook acepta a los invitados y rechaza con `{"error": {"http_code": 403, "message"}}` al resto (sin invitación, vencida, usada, de una admin sacada, sin correo) y solo lo ejecuta `supabase_auth_admin`, que no puede nada más; `list_members`, `set_member_role`, `share`, `unshare` y `list_access` con sus reglas; sacar a alguien (pierde todo al instante, su proyecto compartido pasa a la admin con permiso, el privado no lo ve nadie y nada se borra); nadie escribe en `members`, `grants` ni `invitations` desde la API, y sin sesión nada. |
+
+**Pruebas de punta a punta** (no están en el repo): crean sus usuarios con la API de administración
+(`auth.admin.createUser`, que no pasa por el hook *Before User Created*) y les insertan un proyecto por SQL.
+Desde `20260930160000_equipo.sql`, quien creó un proyecto tiene permiso sobre él solo si es miembro activo,
+así que cada usuario de prueba necesita además su fila en `members`, en el mismo SQL que crea el proyecto:
+
+```sql
+insert into public.members (user_id, role) values ('<id del usuario de prueba>', 'member')
+on conflict (user_id) do update set removed_at = null;
+```
+
+Con `member` alcanza para todo lo de su proyecto. Si la prueba crea proyectos desde la app, el rol tiene que
+ser `admin`.
 
 Dos casos no tienen prueba automática en el repo y se verificaron a mano contra el proyecto real el
 2026-09-29: que la API de Storage no deja borrar un archivo, y que dos movimientos simultáneos que juntos
@@ -98,10 +115,11 @@ Cómo entra la gente:
 - La app manda el mail con `signInWithOtp`. Se entra con el **código** (escrito en la app) o con el
   **link** del mail. En el iPhone hace falta el código: el link abre Safari, no la app instalada.
 - **Registro cerrado** (D-09): solo entran cuentas que ya existen o que el dueño invita (Authentication →
-  Users → *Invite user*). Un mail sin cuenta ve el aviso de pedir una invitación. Está planeado abrirlo en
-  el paso 9 de `Plan_Workspaces.md`, pero solo con el hook *Before User Created* de Supabase conectado a
-  una función que rechaza los correos que no están en `invitations`: **primero** el hook creado y
-  probado, **después** el registro abierto. Al revés, el registro quedaría abierto para cualquiera.
+  Users → *Invite user*). Un mail sin cuenta ve el aviso de pedir una invitación. Se abre solo para
+  invitados con el hook *Before User Created* conectado a `private.hook_before_user_created`, que rechaza
+  los correos sin una invitación viva: **primero** el hook conectado y probado, **después** el registro
+  abierto. Al revés, el registro quedaría abierto para cualquiera. Paso a paso: "Abrir el registro solo
+  para invitados", abajo.
 
 ### Proveedores y registro
 
@@ -124,8 +142,84 @@ Cómo entra la gente:
 - Verificación en dos pasos: vienen prendidos de fábrica los códigos de app autenticadora
   (`mfa_totp_enroll_enabled` y `mfa_totp_verify_enabled`), aunque la app no los ofrece; por teléfono y
   WebAuthn, apagados.
-- Hooks: todos apagados (`hook_*_enabled: false`), incluido *Before User Created* (ver arriba). Captcha
-  apagado (`security_captcha_enabled: false`).
+- Hooks: todos apagados (`hook_*_enabled: false`), incluido *Before User Created*
+  (`hook_before_user_created_enabled` y `hook_before_user_created_uri`; ver "Abrir el registro solo para
+  invitados"). Captcha apagado (`security_captcha_enabled: false`).
+
+### Abrir el registro solo para invitados
+
+Todavía no se hizo en Wanka. La función del hook viene con `20260930160000_equipo.sql`, pero conectarla es
+configuración de login: se hace a mano, por la Management API, **en este orden y nunca al revés**. Qué hace
+Supabase (documentación *Before User Created Hook* y código de Supabase Auth): antes de crear una cuenta
+(registro con código o link, invitación desde el panel, proveedores externos, anónimos) llama a
+`select "private"."hook_before_user_created"(evento)` como `supabase_auth_admin`, con el evento
+`{"metadata": {...}, "user": {"email": ..., ...}}`. Si la función devuelve `{}`, sigue; si devuelve
+`{"error": {"http_code": 403, "message": "..."}}`, no crea la cuenta y la app recibe ese mensaje (empieza
+con "Signups not allowed", así que la app muestra el aviso de pedir una invitación). Crear usuarios con la
+API de administración (`auth.admin.createUser`) no pasa por el hook. Con el registro cerrado, el registro
+por código corta antes de llegar al hook; la invitación desde el panel no.
+
+1. **La migración aplicada.** Control en el SQL Editor (tiene que dar `t`, `t`, `f`):
+
+   ```sql
+   select has_function_privilege('supabase_auth_admin', 'private.hook_before_user_created(jsonb)', 'execute'),
+          has_schema_privilege('supabase_auth_admin', 'private', 'usage'),
+          has_function_privilege('authenticated', 'private.hook_before_user_created(jsonb)', 'execute');
+   ```
+2. **La plantilla de alta con el código.** Una cuenta nueva que pide código no recibe *Magic Link* sino
+   *Confirm signup* (`mailer_templates_confirmation_content`, asunto `mailer_subjects_confirmation`), y la
+   de fábrica trae solo el link: en el iPhone no se podría entrar. Antes de abrir, cargarle el mismo
+   contenido que a *Magic Link* (con `{{ .Token }}` y `{{ .ConfirmationURL }}`), por ejemplo con el `jq` de
+   "Rearmar la configuración" (paso 3) sumando
+   `mailer_templates_confirmation_content: $magic` y `mailer_subjects_confirmation: "Your Shot Docs code: {{ .Token }}"`.
+3. **Una invitación de prueba** (con la sesión del dueño, desde la app, o en el SQL Editor):
+
+   ```sql
+   insert into public.invitations (email, role, invited_by)
+   values ('prueba@dominio-del-duenio', 'guest', (select owner_id from public.workspace_settings));
+   ```
+4. **Conectar el hook**, con el registro todavía cerrado. Guardar como `hook.json`:
+
+   ```json
+   {
+     "hook_before_user_created_enabled": true,
+     "hook_before_user_created_uri": "pg-functions://postgres/private/hook_before_user_created"
+   }
+   ```
+
+   ```sh
+   curl -sS -X PATCH "https://api.supabase.com/v1/projects/<ref>/config/auth" \
+     -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+     --data @hook.json |
+   jq '{hook_before_user_created_enabled, hook_before_user_created_uri, disable_signup}'
+   ```
+
+   Tiene que mostrar el hook prendido, la dirección de arriba y `disable_signup: true`.
+5. **Probar el hook** desde el panel (*Authentication → Users → Invite user*, que pasa por el hook aunque el
+   registro esté cerrado): un correo sin invitación tiene que dar el error "Signups not allowed for this
+   email…" y no aparecer en la lista; el de la invitación de prueba tiene que crearse. Si algo falla, se
+   apaga con `{"hook_before_user_created_enabled": false}` y el registro sigue cerrado. Desde que el hook
+   está prendido, invitar desde el panel pide una invitación en `invitations` antes.
+6. **Recién ahora, abrir el registro.** `signup.json`:
+
+   ```json
+   { "disable_signup": false }
+   ```
+
+   ```sh
+   curl -sS -X PATCH "https://api.supabase.com/v1/projects/<ref>/config/auth" \
+     -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+     --data @signup.json |
+   jq '{hook_before_user_created_enabled, hook_before_user_created_uri, disable_signup}'
+   ```
+7. **Probar en la app:** pedir un código con un correo sin invitación (tiene que verse el aviso de pedir una
+   invitación y no crearse la cuenta) y con uno invitado (llega el código, entra y la app aplica la
+   invitación con `accept_invitations()`).
+8. Actualizar esta sección y `login.json` de "Rearmar la configuración" (`disable_signup: false` y los dos
+   campos del hook; al rearmar, igual van en dos `PATCH` y en este orden).
+
+Para cerrar de nuevo, al revés: primero `{"disable_signup": true}`, después apagar el hook. Nunca el hook
+apagado con el registro abierto.
 
 ### Direcciones permitidas
 

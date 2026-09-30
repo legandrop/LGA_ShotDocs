@@ -91,7 +91,7 @@ export function Workspace({ user }: { user: AuthUser }) {
 function Shell() {
   const route = useRoute();
   const tree = useTree();
-  const { docs, user, workspace } = useServices();
+  const { docs, media, user, workspace } = useServices();
   const keys = workspace.config.storage;
   const [navOpen, setNavOpen] = useState(false);
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
@@ -102,11 +102,11 @@ function Shell() {
   // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación.
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (docs.hasUnsavedEdits() || tree.hasUnsavedWrites()) e.preventDefault();
+      if (docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites()) e.preventDefault();
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [docs, tree]);
+  }, [docs, tree, media]);
 
   useEffect(() => {
     setNavOpen(false);

@@ -2222,3 +2222,68 @@ code {
   margin: 6px 12px 2px;
   text-transform: none;
 }
+
+/* --- Fotos y videos del Drive (sdmedia://) ------------------------------------------------------- */
+
+/* En la página, una foto o un video del Drive se abre con un clic. */
+.editor [data-content-type='image'][data-url^='sdmedia://'] img.bn-visual-media {
+  cursor: zoom-in;
+}
+
+.media-viewer-backdrop {
+  place-items: center;
+  padding: 16px;
+}
+
+.modal.media-viewer {
+  width: min(1100px, 100%);
+  max-height: calc(100vh - 32px);
+  padding: 12px;
+  gap: 8px;
+}
+
+.media-viewer video,
+.media-viewer img {
+  display: block;
+  width: 100%;
+  max-height: calc(100vh - 120px);
+  object-fit: contain;
+  border-radius: var(--radius);
+  background: #000;
+}
+
+.media-viewer .row {
+  align-items: center;
+}
+
+.media-viewer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.media-viewer-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+.drive-dialog {
+  width: min(520px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.drive-dialog p {
+  margin: 0;
+}
+
+.drive-dialog .media-actions {
+  margin: 4px 0;
+}
+
+.drive-dialog .modal-actions {
+  gap: 16px;
+}
