@@ -1,5 +1,21 @@
 # Changelog — LGA Shot Docs
 
+v0.059 :
+
+Fotos nítidas en la página. Las fotos se veían borrosas en la página (y bien en el carrete) porque la página
+mostraba siempre la miniatura de 480 px, estirada al ancho de la foto (hasta ~1100 px, el doble en pantallas
+Retina); no era la exportación de Coda, que baja los originales (en la base, de 2900 a 3840 px). Pasaba con
+cualquier foto y en cualquier dispositivo. Ahora, cuando una foto se ve más grande que su miniatura, la página
+la cambia por una imagen de hasta 2048 px hecha en el dispositivo ("Exportar para web": reducida con buena
+calidad, WebP 0,8, o JPEG 0,8 en Safari; 130 a 350 KB): del original si está en el dispositivo (también sin
+red) o del original bajado una sola vez por el portero, y queda guardada para las próximas veces. Solo las
+fotos a la vista, de a dos; los videos, HEIC y lo de más de 25 MB siguen con la miniatura, y no se baja nada
+sin red, con ahorro de datos o con conexión lenta. La foto no cambia de tamaño (las marcas de hoja y el PDF
+quedan iguales), el documento no cambia y las versiones anteriores siguen mostrando la miniatura. El carrete
+empieza con la imagen nítida; imprimir desde otro dispositivo sale con ella en vez de la miniatura. Ver
+`Doc_Imagenes.md`, "Calidad en la página".
+[ Fotos nítidas en la página ]
+
 v0.057 :
 
 Buscar: tres ajustes que encontró Lega probando. Ir a un resultado de la búsqueda del proyecto (Ctrl/⌘+K) ahora

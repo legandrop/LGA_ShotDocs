@@ -448,6 +448,17 @@ describe('las fotos en la vista de impresión', () => {
     view.root.remove();
   });
 
+  it('una foto que en pantalla ya muestra la imagen nítida mide lo que su miniatura (no los 2048 px de la nítida)', () => {
+    const article = photoPage(1122, 'fit-content', 2048);
+    const live = article.querySelector<HTMLImageElement>('img.bn-visual-media')!;
+    live.dataset.sdSharp = '480';
+    live.style.setProperty('--sd-thumb-w', '480px');
+    const view = buildPrintView(article, { size: 'A3', landscape: false }, 'measure');
+    expect(wrapperOf(view).style.width).toBe('480px');
+    expect(wrapperOf(view).style.maxWidth).toBe('100%');
+    view.root.remove();
+  });
+
   it('el ancho que le puso la persona (previewWidth, en px) se respeta, y nunca pasa del área de texto', () => {
     const view = buildPrintView(photoPage(390, '600px'), { size: 'A4', landscape: false }, 'output');
     expect(wrapperOf(view).style.width).toBe('600px');

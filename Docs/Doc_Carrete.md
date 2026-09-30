@@ -61,8 +61,9 @@ cambia nada de lo que se guarda en el documento**: el carrete solo lee la págin
 Primero lo que ya está a mano y después lo grande:
 
 1. **La miniatura** guardada en el dispositivo (`MediaQueue.thumbnail`, sin la marca de "play" de la
-   página; se baja del bucket `thumbs` si faltaba, igual que en la página). Sin miniatura, lo mismo que
-   muestra la página: un ícono con el nombre.
+   página; se baja del bucket `thumbs` si faltaba, igual que en la página), o, si la página ya la cambió por
+   la imagen nítida (desde v0.059, `Doc_Imagenes.md`, "Calidad en la página"), esa. Sin miniatura, lo mismo
+   que muestra la página: un ícono con el nombre.
 2. **Lo grande:** el original si está en el dispositivo (anda sin red), o el archivo entero con un pase
    del portero (`POST /pass`). Una foto grande aparece encima de la miniatura recién cuando terminó de
    dibujarse (con un indicador de carga mientras tanto), así nunca queda un hueco. Un video muestra la

@@ -1,7 +1,7 @@
 # Imágenes en la página: elegir, tamaño y filas
 
 Diseño de lo que pidió Lega el 2026-09-30 (fotos y videos del editor; en la página los dos son un bloque
-`image`, ver `Doc_Carrete.md`). Estado: **hecho: v0.044 (elegir y abrir), v0.045 (anchos y filas), v0.046 (acomodar en filas) y v0.047 (en el teléfono, en fila o apiladas).** "Correcciones de la auditoría previa" manda sobre lo anterior.
+`image`, ver `Doc_Carrete.md`). Estado: **hecho: v0.044 (elegir y abrir), v0.045 (anchos y filas), v0.046 (acomodar en filas), v0.047 (en el teléfono, en fila o apiladas) y v0.059 (calidad en la página).** "Correcciones de la auditoría previa" manda sobre lo anterior.
 
 ## Lo que se pide
 
@@ -250,3 +250,93 @@ quedan alineadas arriba).
   Pruebas en `prefs.test.ts`.
 - Solo en la página (`#root`): la vista de impresión (que mide las marcas de hoja también en el teléfono) y
   el PDF siguen con las filas.
+
+## Calidad en la página (v0.059)
+
+**El problema** (lo vio Lega con MGTZD importado de Coda): en la página las fotos se veían borrosas y en el
+carrete, nítidas. **Era nuestro, no de la exportación.** `scripts/coda-export.mjs` baja la dirección tal cual
+viene en el HTML de Coda (el blob `codahosted.io/.../blobs/bl-…`, sin parámetros de tamaño), y en la base las 32
+fotos del proyecto tienen su tamaño original: casi todas de 2900 a 3840 px de ancho y de 0,5 a 1,4 MB (las
+capturas PNG, 1100 a 1500 px). Lo que se veía en la página era siempre la **miniatura**: JPEG de 480 px de lado
+mayor (calidad 0,8, 11 a 45 KB), hecha al agregar la foto y guardada en el bucket `thumbs`. `resolve` (lo que
+BlockNote pone en el `<img>`) daba la miniatura en todos los casos y en todos los dispositivos, también en el que
+tiene el original (el importador y quien soltó la foto); el original lo usaban solo el carrete y la impresión
+(esta, solo si está en el dispositivo). Cómo se veía:
+
+| Bloque | Ancho en pantalla | Lo que se mostraba | Resultado |
+|---|---|---|---|
+| Sin ancho propio (la mayoría de lo importado: en Coda iba "a lo ancho") | el natural de la miniatura: 480 px (la caja de BlockNote es `fit-content`) | 480 px | nítida en pantalla común; en una pantalla 2x (Mac, iPhone) la mitad de los píxeles que hacen falta |
+| A todo el ancho (*Full*, filas) o con ancho de Coda/tirador | hasta el área de texto (720 px en A4, ~1040–1100 en hojas anchas) | 480 px estirada | **borrosa**: en 2x, 2200 px de pantalla con 480 de imagen (4,6 veces) |
+| Una captura con letra chica | cualquiera de los dos | 480 px | ilegible |
+
+Pasaba igual con las fotos soltadas o pegadas a mano, en cualquier dispositivo: no dependía de la importación
+ni de tener el original.
+
+**Lo que se hizo:** la página muestra primero la miniatura (enseguida, sin red) y, cuando una foto se dibuja más
+grande que su miniatura, la cambia por una **imagen nítida** de hasta **2048 px** de lado mayor hecha en el
+dispositivo.
+
+- **Cuándo** (`src/ui/sharpImages.ts`, `wantsSharper`): el ancho en pantalla por la densidad (como mucho 2x)
+  supera en 20% el ancho de la miniatura. Solo las fotos a la vista o por verse (`IntersectionObserver`), de a
+  dos a la vez. Una foto chica en una fila de cuatro o sin ancho propio en una pantalla común sigue con la
+  miniatura (se ve perfecta).
+- **De dónde** (`MediaQueue.view`): 1) la ya hecha, guardada en el dispositivo en el almacén `thumbs` de la base
+  de archivos con la clave `view:<id>` (sin cambiar la versión de IndexedDB: una versión vieja no la lee ni se
+  entera); 2) el original del dispositivo, reducido (anda sin red); 3) si no está, el original bajado **una sola
+  vez por dispositivo** con un pase del portero (el mismo del carrete) y reducido acá. Nunca se sube nada: ni a
+  Supabase ni a Drive.
+- **Qué no se baja para la página:** videos (queda la miniatura con la marca de "play"), fotos que no todos los
+  navegadores abren (HEIC, TIFF, RAW: solo del original local, si el navegador puede), las que todavía no
+  llegaron a Drive, las de más de 25 MB, y nada sin red, con *Save-Data* o con una conexión lenta (2g/3g). Una
+  bajada que falla (sin red, el portero) se vuelve a probar al minuto, no en cada dibujo.
+- **El mismo tamaño:** una foto sin ancho propio se veía del ancho natural de la miniatura; la nítida es más
+  grande, así que lleva ese ancho de tope (`data-sd-sharp` y `--sd-thumb-w`, regla en `styles.css`). La foto no
+  crece ni cambian las marcas de hoja ni el PDF; la vista de impresión usa ese ancho (`printView.ts`). Con ancho
+  propio (px o fila) manda ese ancho.
+- **Sin tocar el documento:** BlockNote sigue creyendo que muestra la miniatura; si la vuelve a poner (o la pone
+  `subscribeThumbs`), la nítida vuelve en el acto. Si la foto pasa a mostrar otra cosa (borrada, de otro
+  proyecto), pierde el tope. Una foto mandada a la papelera de Drive borra su nítida guardada.
+- **El carrete** empieza con la nítida si ya está (y después el original, como antes). **La impresión** sigue
+  usando el original del dispositivo; en otro dispositivo, ahora sale con la nítida en vez de la miniatura.
+- **Versiones viejas:** nada cambia en el documento, en la base ni en el bucket. La miniatura sigue siendo el
+  mismo JPEG de 480 px.
+
+**Cómo se codifica** ("Exportar para web", `src/media/probe.ts`, `viewImage`): se decodifica ya reducida
+(`createImageBitmap` con `resizeWidth`/`resizeHeight` y `resizeQuality: 'high'`: una foto de 48 MP entera no
+entra en la memoria de un iPhone); sin esas opciones, se achica en el canvas de a mitades con
+`imageSmoothingQuality: 'high'` (un solo salto grande deja dientes o moiré; la miniatura usa lo mismo). Sale en
+**WebP 0,8** donde el navegador lo hace (Chrome, Edge, Firefox) y en **JPEG 0,8** donde no (Safari), con fondo
+blanco como la miniatura. Un JPEG que ya entra en 2048 px y pesa menos de 900 KB se usa tal cual (del
+dispositivo, sin guardar una copia). Medido en Chromium:
+
+| Original | Miniatura (JPEG 480) | Nítida WebP 0,8 | Nítida JPEG 0,8 (Safari) |
+|---|---|---|---|
+| "12 MP de teléfono" 4032 × 3024, JPEG 2,4 MB (mosaico de fotos reales con ruido de sensor: más detalle que una foto común) | 31 KB | 2048 × 1537, 285 KB | 398 KB |
+| Como las de Coda: 3840 × 1630, JPEG 642 KB | 15 KB | 2048 × 870, 127 KB | 182 KB |
+| Documento escaneado A4 300 dpi, letra chica, 2480 × 3508, JPEG 2,5 MB | 34 KB | 1448 × 2048, 340 KB | 563 KB |
+| Captura de pantalla 2x con una planilla de letra de 12 px, 2880 × 1800, PNG 619 KB | 44 KB | 2048 × 1280, 287 KB | 490 KB |
+
+(WebP 0,75 pesa un 10% menos que 0,8; a 2x de zoom no se distingue de JPEG 0,8.) Con la letra chica, la
+miniatura estirada a 1100 px no se lee y la nítida sí.
+
+**Costos:** en el dispositivo, unos 130 a 350 KB por foto vista grande (en IndexedDB, como las miniaturas;
+se borran con los datos del sitio). En la red, la primera vez en cada dispositivo sin el original, el original
+entero por el portero (las de MGTZD, ~1 MB; una de teléfono, 2 a 5 MB); después, nada. Cloudflare: un pedido por
+foto (el plan gratis da 100.000 por día). Supabase: nada (no se guarda ni se baja nada más de ahí). Se descartó
+guardar una versión mediana en Supabase: ~250 KB por foto llenaría el GB del plan gratis con unas 4000 fotos
+del workspace, y hace falta migración y generarla en el dispositivo que tiene el original (las ya subidas
+quedarían sin ella).
+
+**Pendiente / para después:**
+
+- Si en el teléfono con datos pesa, que el dispositivo que sube la foto suba también la nítida a Drive, al lado
+  del original (ruta nueva del portero): en otro dispositivo se bajarían ~300 KB en vez del original. Necesita
+  el portero publicado y probarlo con el portero real.
+- La nítida guardada no se borra sola (como las miniaturas y los originales del dispositivo).
+- El importador deja sin ancho propio las fotos que en Coda iban a lo ancho: en la página se ven de 480 px (el
+  ancho natural de la miniatura). Si Lega las quiere a todo el ancho, el importador podría ponerles `rowWidth: 1`.
+- Un video a todo el ancho sigue con la miniatura (el póster) de 480 px.
+- Pruebas: `src/media/view.test.ts` (de dónde sale en cada dispositivo, qué no se baja, sin red, una vez por
+  dispositivo), `src/ui/sharpImages.test.ts` (cuándo, el tope, BlockNote que vuelve a poner la miniatura, de a
+  dos, bajar con pase), `pagination.test.ts` (impresión) y `carreteLoader.test.ts`. En Chromium, `sharp.mjs` del
+  repo de pruebas privado: solo el camino del original local (el portero no se alcanza desde la nube).

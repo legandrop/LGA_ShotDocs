@@ -13,6 +13,9 @@ import {
   placeholderUrl,
   probeMedia,
   seconds,
+  THUMB_SIDE,
+  VIEW_GAIN,
+  viewImage,
   withPlayMark,
   type MediaKind,
   type Probe,
@@ -29,6 +32,14 @@ import type { DueFileRow, MediaFileRow } from '../sync/types';
 
 /** Dirección de un archivo grande en el documento. No depende de ningún servidor. */
 export const MEDIA_SCHEME = 'sdmedia://';
+/** La imagen nítida de la página se guarda en `thumbs` con esta clave delante del id (ver `MediaQueue.view`). */
+export const VIEW_PREFIX = 'view:';
+/** Lo más grande que se baja del portero para hacer la imagen nítida de la página (el carrete baja cualquiera). */
+export const VIEW_FETCH_MAX_BYTES = 25 * 1024 * 1024;
+/** Fotos que todos los navegadores abren: las demás (HEIC, TIFF, RAW) no se bajan para la página. */
+export const VIEW_FETCH_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/bmp']);
+/** Después de una bajada que falló, cuánto se espera para volver a probar. */
+export const VIEW_RETRY_MS = 60_000;
 /** La versión de la base con `files`, `register_file` y el bucket `thumbs`. */
 export const MEDIA_SCHEMA_VERSION = 3;
 /** La versión de la base con la papelera de archivos (`unlink_page_file`, `trashed_files`, paso 11). */
@@ -181,6 +192,8 @@ export interface MediaQueueOptions {
   projectOf?: (pageId: string) => string | undefined;
   probe?: (file: Blob, mime: string) => Promise<Probe>;
   playMark?: (thumb: Blob) => Promise<Blob>;
+  /** La imagen para la página cuando la miniatura queda chica (ver `MediaQueue.view`). */
+  viewImage?: (file: Blob, mime: string) => Promise<Blob | null>;
   now?: () => number;
   /**
    * La base de archivos del dispositivo no se pudo abrir: la cola queda apagada (las fotos y videos no se
@@ -306,7 +319,13 @@ export class MediaQueue {
   private readonly thumbListeners = new Set<(id: string) => void>();
   private readonly probe: (file: Blob, mime: string) => Promise<Probe>;
   private readonly playMark: (thumb: Blob) => Promise<Blob>;
+  private readonly makeView: (file: Blob, mime: string) => Promise<Blob | null>;
   private readonly now: () => number;
+  /** La imagen nítida de la página ya lista en esta sesión (ver `view`), con el ancho de su miniatura. */
+  private readonly views = new Map<string, string>();
+  private readonly viewing = new Map<string, Promise<string | null>>();
+  /** Cuándo falló por última vez (sin red, el portero): no se vuelve a pedir enseguida. */
+  private readonly viewFailedAt = new Map<string, number>();
 
   /** `db` en `null`: la base de archivos no se pudo abrir y la cola queda apagada (ver `unavailable`). */
   constructor(
@@ -316,6 +335,7 @@ export class MediaQueue {
   ) {
     this.probe = options.probe ?? probeMedia;
     this.playMark = options.playMark ?? withPlayMark;
+    this.makeView = options.viewImage ?? viewImage;
     this.now = options.now ?? Date.now;
   }
 
@@ -753,7 +773,9 @@ export class MediaQueue {
   /** Revoca las direcciones de las miniaturas en memoria. */
   dispose(): void {
     for (const url of this.objectUrls.values()) URL.revokeObjectURL(url);
+    for (const url of this.views.values()) URL.revokeObjectURL(url);
     this.objectUrls.clear();
+    this.views.clear();
     this.cards.clear();
   }
 
@@ -1358,6 +1380,7 @@ export class MediaQueue {
 
   /** La foto, el video o el adjunto que un dueño o admin mandó a la papelera de Drive. */
   private async deletedDisplay(id: string, meta: KnownFile): Promise<string> {
+    this.forgetView(id);
     // Pedido y confirmado por el portero, o solo pedido (Drive falló: se puede volver a pedir desde la
     // papelera). Sin el dato (guardado antes), se lo da por confirmado.
     const notice = meta.inDriveTrash === false ? requestedLabel() : deletedLabel();
@@ -1507,6 +1530,103 @@ export class MediaQueue {
     if (cached) return cached;
     const thumb = this.db ? await this.db.get('thumbs', id).catch(() => undefined) : undefined;
     return thumb ? this.keep(key, thumb) : null;
+  }
+
+  // --- nítida en la página --------------------------------------------------------------------------
+
+  /**
+   * La dirección con la que la página muestra la foto (la miniatura, `resolve`) es esta: `true` si `src` es la
+   * miniatura de una foto propia de este proyecto (no un ícono, un marcador ni un borrado), la que `view` puede
+   * cambiar por una más nítida.
+   */
+  isThumbUrl(id: string, src: string): boolean {
+    const key = id.toLowerCase();
+    return !!src && this.objectUrls.get(key) === src && this.infos.get(key)?.kind === 'image';
+  }
+
+  /** La imagen nítida ya lista en esta sesión (sin esperar a nada), o `null`. */
+  viewUrl(id: string): string | null {
+    return this.views.get(id.toLowerCase()) ?? null;
+  }
+
+  /**
+   * Una imagen más nítida que la miniatura para mostrar en la página (Docs/Doc_Imagenes.md, "Calidad en la
+   * página"): lado mayor de hasta 2048 px (`VIEW_SIDE`), hecha en este dispositivo y guardada acá (en `thumbs`,
+   * con la clave `view:<id>`), así se hace una sola vez por dispositivo. Sale, en este orden, de la ya
+   * guardada, del original si está en el dispositivo (anda sin red), o, con `download`, del original bajado
+   * con un pase del portero (solo una foto que el navegador abre, ya en Drive y de hasta `VIEW_FETCH_MAX_BYTES`).
+   * `null` si no hay nada mejor que la miniatura (un video, un adjunto, una foto chica, un formato que el
+   * navegador no abre, sin red). Nunca falla. Nada de esto se sube ni cambia el documento.
+   */
+  view(id: string, options: { download?: (id: string) => Promise<Blob> } = {}): Promise<string | null> {
+    const key = id.toLowerCase();
+    const ready = this.views.get(key);
+    if (ready) return Promise.resolve(ready);
+    let pending = this.viewing.get(key);
+    if (!pending) {
+      pending = this.makeViewFor(key, options.download).finally(() => this.viewing.delete(key));
+      this.viewing.set(key, pending);
+    }
+    return pending;
+  }
+
+  private async makeViewFor(id: string, download?: (id: string) => Promise<Blob>): Promise<string | null> {
+    const db = this.db;
+    if (!db) return null;
+    try {
+      const own = await db.get('files', id);
+      const meta = own ?? (await db.get('known', id));
+      if (!meta || fileKind(meta.mime, meta.name) !== 'image') return null;
+      if ('deleted' in meta && meta.deleted) return null;
+      const long = Math.max(meta.width ?? 0, meta.height ?? 0);
+      if (long > 0 && long <= THUMB_SIDE * VIEW_GAIN) return null;
+      const saved = await db.get('thumbs', VIEW_PREFIX + id);
+      if (saved) return this.keepView(id, saved);
+      const original = await db.get('blobs', id);
+      if (original) {
+        const view = await this.makeView(original, meta.mime).catch(() => null);
+        if (!view) return null;
+        // Un JPEG que ya servía tal cual es el mismo original: no se guarda dos veces.
+        if (view !== original) await db.put('thumbs', view, VIEW_PREFIX + id).catch(() => undefined);
+        return this.keepView(id, view);
+      }
+      if (!download || own || !meta.driveId || !VIEW_FETCH_TYPES.has(meta.mime)) return null;
+      if (typeof meta.size === 'number' && meta.size > VIEW_FETCH_MAX_BYTES) return null;
+      const failed = this.viewFailedAt.get(id);
+      if (failed !== undefined && this.now() - failed < VIEW_RETRY_MS) return null;
+      let fetched: Blob;
+      try {
+        fetched = await download(id);
+      } catch {
+        this.viewFailedAt.set(id, this.now());
+        return null;
+      }
+      this.viewFailedAt.delete(id);
+      if (fetched.size > VIEW_FETCH_MAX_BYTES) return null;
+      const typed = fetched.type === meta.mime ? fetched : new Blob([fetched], { type: meta.mime });
+      const view = await this.makeView(typed, meta.mime).catch(() => null);
+      if (!view) return null;
+      await db.put('thumbs', view, VIEW_PREFIX + id).catch(() => undefined);
+      return this.keepView(id, view);
+    } catch {
+      return null;
+    }
+  }
+
+  private keepView(id: string, blob: Blob): string {
+    const url = URL.createObjectURL(blob);
+    const old = this.views.get(id);
+    if (old) URL.revokeObjectURL(old);
+    this.views.set(id, url);
+    return url;
+  }
+
+  /** Olvida la imagen nítida (el archivo se mandó a la papelera de Drive). */
+  private forgetView(id: string): void {
+    const url = this.views.get(id);
+    if (url) URL.revokeObjectURL(url);
+    this.views.delete(id);
+    void this.db?.delete('thumbs', VIEW_PREFIX + id).catch(() => undefined);
   }
 
   /** Un pase del portero para ver el archivo entero (vence a las 8 horas). */

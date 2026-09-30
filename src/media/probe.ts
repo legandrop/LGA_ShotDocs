@@ -60,11 +60,39 @@ export function seconds(value: number | null | undefined): number | null {
 
 type Drawable = CanvasImageSource & { width?: number; height?: number };
 
-/** Dibuja reducido a `THUMB_SIDE` de lado mayor y lo pasa a JPEG de menos de 512 KB. */
-async function toThumb(source: Drawable, width: number, height: number): Promise<Blob | null> {
-  const scale = Math.min(1, THUMB_SIDE / Math.max(width, height));
-  const w = Math.max(1, Math.round(width * scale));
-  const h = Math.max(1, Math.round(height * scale));
+/**
+ * Lado mayor de la imagen que se ve en la página cuando la miniatura queda chica (una foto a lo ancho de la
+ * hoja, o una pantalla de alta densidad). Ver Docs/Doc_Imagenes.md, "Calidad en la página".
+ */
+export const VIEW_SIDE = 2048;
+/**
+ * Calidad de esa imagen (WebP donde el navegador lo hace, si no JPEG): como "Exportar para web", nítida y
+ * liviana (ver las medidas en Docs/Doc_Imagenes.md).
+ */
+export const VIEW_QUALITY = 0.8;
+
+/**
+ * Reduce con buena calidad: el navegador achica de a mitades (con el suavizado en `high`) hasta quedar a
+ * menos del doble del tamaño final. Un solo salto de 4000 a 480 px con el suavizado común deja la imagen
+ * dentada o con moiré; así queda como el "Exportar para web" de Photoshop.
+ */
+function drawScaled(source: Drawable, width: number, height: number, w: number, h: number): HTMLCanvasElement | null {
+  let current: Drawable = source;
+  let cw = width;
+  let ch = height;
+  while (cw / 2 >= w * 1.0001 && ch / 2 >= h * 1.0001) {
+    const step = document.createElement('canvas');
+    step.width = Math.max(1, Math.round(cw / 2));
+    step.height = Math.max(1, Math.round(ch / 2));
+    const sctx = step.getContext('2d');
+    if (!sctx) break;
+    sctx.imageSmoothingEnabled = true;
+    sctx.imageSmoothingQuality = 'high';
+    sctx.drawImage(current, 0, 0, step.width, step.height);
+    current = step;
+    cw = step.width;
+    ch = step.height;
+  }
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
@@ -73,12 +101,45 @@ async function toThumb(source: Drawable, width: number, height: number): Promise
   // Fondo blanco: un PNG con transparencia no queda negro en JPEG.
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(source, 0, 0, w, h);
-  for (let quality = THUMB_QUALITY; quality >= 0.4; quality -= 0.2) {
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
-    if (blob && blob.size <= THUMB_MAX_BYTES && blob.type === 'image/jpeg') return blob;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(current, 0, 0, w, h);
+  return canvas;
+}
+
+/**
+ * Dibuja con el lado mayor en `side` como mucho y lo pasa a JPEG (o, con `webp`, a WebP si el navegador sabe
+ * hacerlo: pesa como 40% menos con la misma nitidez; Safari no lo hace y queda JPEG). Con `maxBytes`, baja la
+ * calidad de a 0,2 hasta que entre (o `null`).
+ */
+async function toJpeg(
+  source: Drawable,
+  width: number,
+  height: number,
+  side: number,
+  quality: number,
+  maxBytes = Infinity,
+  webp = false,
+): Promise<Blob | null> {
+  const scale = Math.min(1, side / Math.max(width, height));
+  const w = Math.max(1, Math.round(width * scale));
+  const h = Math.max(1, Math.round(height * scale));
+  const canvas = drawScaled(source, width, height, w, h);
+  if (!canvas) return null;
+  if (webp) {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+    if (blob && blob.size <= maxBytes && blob.type === 'image/webp') return blob;
+  }
+  for (let q = quality; q >= 0.4; q -= 0.2) {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', q));
+    if (blob && blob.size <= maxBytes && blob.type === 'image/jpeg') return blob;
   }
   return null;
+}
+
+/** Dibuja reducido a `THUMB_SIDE` de lado mayor y lo pasa a JPEG de menos de 512 KB. */
+function toThumb(source: Drawable, width: number, height: number): Promise<Blob | null> {
+  return toJpeg(source, width, height, THUMB_SIDE, THUMB_QUALITY, THUMB_MAX_BYTES);
 }
 
 /** Las medidas de una foto sin decodificarla entera: el navegador las lee de la cabecera al cargarla. */
@@ -95,35 +156,86 @@ function imageSize(file: Blob): Promise<{ width: number; height: number; img: HT
   });
 }
 
-async function probeImage(file: Blob): Promise<Probe> {
-  // Las medidas salen de la cabecera (ya con la orientación de la foto aplicada, como la muestra el
-  // navegador). La miniatura se decodifica ya reducida (`resizeWidth`/`resizeHeight`): una foto de 48 MP
-  // entera en memoria puede cerrar la app en el iPhone. Se pide solo el lado mayor, para que el otro salga
-  // proporcional aunque el navegador aplique la orientación antes o después de reducir.
-  const { width, height, img, url } = await imageSize(file);
+/**
+ * La foto reducida a `side` de lado mayor, en JPEG. Se decodifica ya reducida (`resizeWidth`/`resizeHeight`,
+ * con `resizeQuality: 'high'`): una foto de 48 MP entera en memoria puede cerrar la app en el iPhone. Se
+ * pide solo el lado mayor, para que el otro salga proporcional aunque el navegador aplique la orientación
+ * antes o después de reducir. Sin esas opciones, se dibuja la imagen ya cargada (achicando de a mitades).
+ */
+async function reduced(
+  file: Blob,
+  size: { width: number; height: number; img: HTMLImageElement },
+  side: number,
+  quality: number,
+  maxBytes?: number,
+  webp = false,
+): Promise<Blob | null> {
+  const { width, height, img } = size;
+  const target = Math.min(side, Math.max(width, height));
   try {
-    const side = Math.min(THUMB_SIDE, Math.max(width, height));
-    let thumb: Blob | null = null;
+    const bitmap = await createImageBitmap(file, {
+      imageOrientation: 'from-image',
+      resizeQuality: 'high',
+      ...(width >= height ? { resizeWidth: target } : { resizeHeight: target }),
+    });
     try {
-      const bitmap = await createImageBitmap(file, {
-        imageOrientation: 'from-image',
-        resizeQuality: 'high',
-        ...(width >= height ? { resizeWidth: side } : { resizeHeight: side }),
-      });
-      try {
-        thumb = await toThumb(bitmap, bitmap.width, bitmap.height);
-      } finally {
-        bitmap.close();
-      }
-    } catch {
-      // Un navegador sin las opciones de reducción: se dibuja la imagen ya cargada.
-      thumb = await toThumb(img, width, height).catch(() => null);
+      return await toJpeg(bitmap, bitmap.width, bitmap.height, side, quality, maxBytes, webp);
+    } finally {
+      bitmap.close();
     }
-    return { width: dimension(width), height: dimension(height), duration: null, thumb };
-  } finally {
-    URL.revokeObjectURL(url);
+  } catch {
+    // Un navegador sin las opciones de reducción: se dibuja la imagen ya cargada.
+    return toJpeg(img, width, height, side, quality, maxBytes, webp).catch(() => null);
   }
 }
+
+async function probeImage(file: Blob): Promise<Probe> {
+  // Las medidas salen de la cabecera (ya con la orientación de la foto aplicada, como la muestra el
+  // navegador).
+  const size = await imageSize(file);
+  try {
+    const thumb = await reduced(file, size, THUMB_SIDE, THUMB_QUALITY, THUMB_MAX_BYTES);
+    return { width: dimension(size.width), height: dimension(size.height), duration: null, thumb };
+  } finally {
+    URL.revokeObjectURL(size.url);
+  }
+}
+
+/**
+ * La imagen para la página cuando la miniatura queda chica: el lado mayor en `VIEW_SIDE` como mucho, WebP (o
+ * JPEG en Safari) a `VIEW_QUALITY`. Solo se guarda en el dispositivo que la hizo (nunca se sube). `null` si el navegador no abre el archivo o si no ganaría nada (la foto no es más grande
+ * que la miniatura). Un JPEG que ya entra en `VIEW_SIDE` y no pesa de más se usa tal cual. Nunca falla.
+ */
+export async function viewImage(file: Blob, mime: string): Promise<Blob | null> {
+  if (typeof document === 'undefined' || mediaKind(mime) !== 'image') return null;
+  try {
+    return await withTimeout(
+      (async () => {
+        const size = await imageSize(file);
+        try {
+          const long = Math.max(size.width, size.height);
+          if (long <= THUMB_SIDE * VIEW_GAIN) return null;
+          if (long <= VIEW_SIDE && mime === 'image/jpeg' && file.size <= VIEW_KEEP_BYTES) {
+            return file.type === mime ? file : new Blob([file], { type: mime });
+          }
+          return await reduced(file, size, VIEW_SIDE, VIEW_QUALITY, undefined, true);
+        } finally {
+          URL.revokeObjectURL(size.url);
+        }
+      })(),
+      VIEW_TIMEOUT_MS,
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** La imagen de la página cambia la miniatura solo si es al menos esto más grande. */
+export const VIEW_GAIN = 1.2;
+/** Un JPEG chico de lado que pesa más que esto se vuelve a comprimir igual. */
+const VIEW_KEEP_BYTES = 900 * 1024;
+/** Decodificar una foto de 48 MP en un teléfono puede tardar: más margen que la miniatura. */
+const VIEW_TIMEOUT_MS = 20_000;
 
 async function probeVideo(file: Blob): Promise<Probe> {
   const url = URL.createObjectURL(file);

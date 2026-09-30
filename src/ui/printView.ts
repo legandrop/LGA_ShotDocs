@@ -194,7 +194,7 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement): void {
 /**
  * Las fotos y videos del editor con un ancho fijo, el mismo en cualquier pantalla: el que le puso la persona
  * (`previewWidth`, en px) o, si no tiene, el natural de lo que se ve (la miniatura de una foto del Drive, 480
- * px de lado). Sin esto, al imprimir la miniatura se cambia por el original, que llenaba el ancho de la
+ * px de lado; si ya se cambió por la imagen nítida, el de su miniatura, `data-sd-sharp`). Sin esto, al imprimir la miniatura se cambia por el original, que llenaba el ancho de la
  * hoja: la foto salía más alta que en pantalla y los cortes no coincidían con las marcas. El ancho no sale
  * del de la pantalla (así las marcas del teléfono y de la computadora son las mismas) y nunca pasa del ancho
  * del área de texto (`max-width`).
@@ -203,7 +203,9 @@ function fixMediaWidth(img: HTMLImageElement, source: HTMLImageElement): void {
   const wrapper = img.closest<HTMLElement>('.bn-file-block-content-wrapper');
   if (!wrapper) return;
   const set = /^(\d+(?:\.\d+)?)px$/.exec(wrapper.style.width)?.[1];
-  const width = set ? Number(set) : source.naturalWidth;
+  // Una foto que en pantalla ya se cambió por la imagen nítida (sharpImages.ts) mide lo que medía su miniatura.
+  const sharp = Number(source.dataset.sdSharp);
+  const width = set ? Number(set) : sharp > 0 ? sharp : source.naturalWidth;
   if (!(width > 0)) return;
   wrapper.style.width = `${width}px`;
   wrapper.style.maxWidth = '100%';
