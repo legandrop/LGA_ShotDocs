@@ -5,7 +5,8 @@ v0.044 :
 Con el mouse, el primer clic en una foto o un video la elige y el segundo (o un doble clic) la abre en el
 carrete: antes se abría enseguida y no se podía usar su barra. La foto elegida se ve con un contorno del
 color de acento y sus tiradores para cambiar el tamaño a la vista, también cuando se llega con las
-flechas; la lupa aparece solo sobre la elegida. El cursor entre dos fotos seguidas se ve como una línea.
+flechas, con el editor con foco; la lupa aparece solo sobre la elegida. El cursor entre dos fotos seguidas
+se ve como una línea del ancho de la foto.
 En el teléfono y en solo lectura, un toque o un clic sigue abriendo.
 [ Fotos - el primer clic elige ]
 

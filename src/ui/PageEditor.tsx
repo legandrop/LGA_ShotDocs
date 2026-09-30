@@ -376,8 +376,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   // un doble clic, la abre; con ⌘/Ctrl no abre (ese clic elige el bloque de afuera). En solo lectura, un
   // clic abre. Se decide al apretar (`notePress`), antes de que el editor elija la foto al soltar. Al
   // cerrar con Escape o el mouse, el foco vuelve al editor y la foto queda elegida. Los tiradores para
-  // cambiar el tamaño y el de arrastrar el bloque son otros elementos: nunca abren el carrete. Con el dedo, al cerrar el foco no vuelve al editor
-  // (abriría el teclado); para editar, se toca otra vez la foto: si está elegida y el editor tiene el foco,
+  // cambiar el tamaño y el de arrastrar el bloque son otros elementos: nunca abren el carrete. Con el dedo,
+  // al cerrar el foco no vuelve al editor (abriría el teclado); para editar, se toca otra vez la foto: si está elegida y el editor tiene el foco,
   // o el toque anterior fue en esa misma foto (sin tocar otra cosa en el medio), ese toque muestra la barra
   // en vez de abrir el carrete. Con el teclado: la barra espaciadora sobre la foto elegida, o "View".
   useEffect(() => {
@@ -416,9 +416,10 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
 
   /** La foto elegida en el editor (selección del bloque entero, no un texto), o `null`. */
   const selectedImageId = (): string | null => {
-    const nodeSelected = editor.transact((tr) => 'node' in tr.selection);
+    // La foto misma (no el bloque de afuera, que se elige con ⌘/Ctrl+clic o al arrastrar el bloque).
+    const imageSelected = editor.transact((tr) => (tr.selection as { node?: { type: { name: string } } }).node?.type.name === 'image');
     const block = editor.getTextCursorPosition().block;
-    return nodeSelected && block.type === 'image' ? block.id : null;
+    return imageSelected && block.type === 'image' ? block.id : null;
   };
 
   const openCarrete = (e: MouseEvent) => {
@@ -431,6 +432,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
       detail: e.detail,
       modifier: e.metaKey || e.ctrlKey,
     });
+    // El próximo clic sin `pointerdown` (uno sintético) no usa lo de este.
+    pressKind.current = '';
     if (opens) openAt(blockIdOf(target));
   };
 
@@ -438,9 +441,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   // elegida la barra no escribe nada, y Enter sigue creando un párrafo debajo.
   const openWithKeyboard = (e: KeyboardEvent) => {
     if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !editor.isFocused()) return;
-    const nodeSelected = editor.transact((tr) => 'node' in tr.selection);
     const block = editor.getTextCursorPosition().block;
-    if (!nodeSelected || block.type !== 'image') return;
+    if (selectedImageId() !== block.id) return;
     if (openAt(block.id)) {
       e.preventDefault();
       e.stopPropagation();
