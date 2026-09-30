@@ -13,6 +13,12 @@ export const ORIGIN_LOAD = Symbol('load');
 export const ORIGIN_REMOTE = Symbol('remote');
 /** Reparaciones de estructura: son ediciones locales, se guardan y se suben como cualquier otra. */
 export const ORIGIN_REPAIR = Symbol('repair');
+/**
+ * La semilla de una página vacía (ver structure.ts). Queda solo en memoria hasta la primera edición local
+ * y se guarda junto con ella, en la misma transacción: abrir una página vacía sin escribir no deja nada
+ * pendiente ni sube nada.
+ */
+export const ORIGIN_SEED = Symbol('seed');
 
 /** Con más updates guardados que esto, al abrir la página se fusionan en uno solo. */
 const COMPACT_AT = 64;
@@ -33,6 +39,12 @@ interface LiveDoc {
    * la próxima apertura sin nadie usándolo vuelve a cargar desde lo guardado.
    */
   repairedInMemory?: boolean;
+  /**
+   * La semilla que se le puso a esta página vacía y que todavía no se guardó (el update tal como lo aplicó
+   * Yjs). Sale junto con la primera edición local: lo que se escriba después cuelga de la raíz de la
+   * semilla, así que guardar una sin la otra dejaría la edición sin poder mostrarse al volver a abrir.
+   */
+  unsavedSeed?: Uint8Array;
 }
 
 export interface PageDocsOptions {
@@ -107,8 +119,15 @@ export class PageDocs {
       const created: LiveDoc = { doc, refs: 0, ready: Promise.resolve() };
       created.ready = this.loadInto(pageId, doc).then(() => {
         doc.on('update', (update: Uint8Array, origin: unknown) => {
+          if (origin === ORIGIN_SEED) {
+            created.unsavedSeed = update;
+            return;
+          }
           if (origin === ORIGIN_LOAD || origin === ORIGIN_REMOTE) return;
-          this.persistLocal(pageId, update);
+          const seed = created.unsavedSeed;
+          created.unsavedSeed = undefined;
+          // La semilla va primero y en el mismo lote: se guardan en la misma transacción.
+          this.persistLocal(pageId, seed ? [seed, update] : [update]);
         });
         if (this.options.canWrite?.(pageId) === false) {
           // Solo en memoria (origen que no se guarda): la vista queda bien y no sale ningún cambio.
@@ -122,7 +141,8 @@ export class PageDocs {
     }
     entry.refs++;
     await entry.ready;
-    if (seed) this.options.seed?.(entry.doc, pageId, ORIGIN_REPAIR);
+    // Solo en memoria: se guarda (y se sube) recién con la primera edición local.
+    if (seed) this.options.seed?.(entry.doc, pageId, ORIGIN_SEED);
     return entry.doc;
   }
 
@@ -259,7 +279,9 @@ export class PageDocs {
         const confirmed = pending;
         state = await updateDocState(this.db, pageId, (s) => {
           if (s.pending?.id !== confirmed.id) return;
-          s.syncedSV = confirmed.sv;
+          // Se suma a lo que ya se sabía (lo bajado mientras la subida estaba en vuelo también cuenta): los
+          // dos vectores dicen solo lo que el servidor tiene, así que el mayor de cada autor también.
+          s.syncedSV = mergeStateVectors(s.syncedSV, confirmed.sv);
           s.ackedVersion = Math.max(s.ackedVersion, confirmed.version);
           // Lo que se acaba de subir ya está en el dispositivo: si nadie subió nada en el medio, el cursor
           // avanza y la página no figura como "a medio bajar" por culpa de lo propio.
@@ -316,10 +338,19 @@ export class PageDocs {
     });
   }
 
+  /**
+   * Guarda lo bajado del servidor y avanza el cursor y `syncedSV` en la misma transacción (si la app se
+   * cierra en el medio, no cambia nada de los tres).
+   *
+   * `syncedSV` avanza solo con lo que el servidor mandó (ver `advanceSynced`): así la próxima subida no
+   * reenvía lo bajado, y lo propio sin confirmar sigue quedando afuera del vector, o sea, adentro de lo que
+   * falta subir.
+   */
   private async applyRemote(pageId: string, updates: RemoteUpdate[]): Promise<void> {
+    const decoded: ReturnType<typeof Y.decodeUpdate>[] = [];
     const valid = updates.filter((u) => {
       try {
-        Y.decodeUpdate(u.data);
+        decoded.push(Y.decodeUpdate(u.data));
         return true;
       } catch {
         // Queda intacto en el servidor; este dispositivo no lo puede leer (por ejemplo, porque lo escribió
@@ -337,7 +368,20 @@ export class PageDocs {
       await tx.done;
       return;
     }
-    if (merged) await tx.objectStore('docUpdates').add({ pageId, data: merged });
+    if (merged) {
+      const reach = serverReach(state.syncedSV, decoded);
+      if (reach.size > 0) {
+        // Tope: lo que el documento del dispositivo integró de verdad (lo guardado más lo que llega). Lo que
+        // Yjs deja pendiente porque le falta algo de lo que depende no cuenta.
+        const rows = await tx.objectStore('docUpdates').index('pageId').getAll(pageId);
+        const doc = new Y.Doc();
+        Y.applyUpdate(doc, Y.mergeUpdates([...rows.map((r) => r.data), merged]), ORIGIN_LOAD);
+        const local = Y.decodeStateVector(Y.encodeStateVector(doc));
+        doc.destroy();
+        state.syncedSV = advanceSynced(state.syncedSV, reach, local);
+      }
+      await tx.objectStore('docUpdates').add({ pageId, data: merged });
+    }
     state.cursor = maxSeq;
     if (valid.length < updates.length) state.unreadable = true;
     await tx.objectStore('docState').put(state);
@@ -401,10 +445,10 @@ export class PageDocs {
    * corre se juntan y salen todas en la siguiente transacción. Así nunca se acumula una fila de
    * escrituras: si la app se cierra de golpe, lo que puede faltar es lo de la última transacción.
    */
-  private persistLocal(pageId: string, update: Uint8Array): void {
+  private persistLocal(pageId: string, updates: Uint8Array[]): void {
     const buffer = this.unsaved.get(pageId);
-    if (buffer) buffer.push(update);
-    else this.unsaved.set(pageId, [update]);
+    if (buffer) buffer.push(...updates);
+    else this.unsaved.set(pageId, [...updates]);
     this.startWrite(pageId);
   }
 
@@ -492,4 +536,72 @@ export class PageDocs {
     );
     return run;
   }
+}
+
+/**
+ * Hasta dónde tiene el servidor, sin huecos, lo de cada autor de Yjs, según `syncedSV` más lo que acaba de
+ * mandar. `syncedSV` dice que el servidor tiene los relojes `[0, n)` de cada autor; un update bajado que
+ * trae los relojes `[a, b)` de un autor con `a <= n` lo lleva hasta `b`. Un hueco (un `Skip`, o un tramo que
+ * empieza más adelante) corta: más allá no se sabe. Devuelve solo los autores que avanzan.
+ *
+ * No mira el documento local: es solo lo que el servidor probó tener, porque lo mandó.
+ */
+export function serverReach(
+  syncedSV: Uint8Array | undefined,
+  decoded: ReturnType<typeof Y.decodeUpdate>[],
+): Map<number, number> {
+  const known = syncedSV ? Y.decodeStateVector(syncedSV) : new Map<number, number>();
+  const ranges = new Map<number, [number, number][]>();
+  for (const { structs } of decoded) {
+    for (const struct of structs) {
+      // Solo contenido de verdad (o su lugar ya borrado); un Skip es un hueco.
+      if (!(struct instanceof Y.Item || struct instanceof Y.GC)) continue;
+      const list = ranges.get(struct.id.client) ?? [];
+      list.push([struct.id.clock, struct.id.clock + struct.length]);
+      ranges.set(struct.id.client, list);
+    }
+  }
+  const reach = new Map<number, number>();
+  for (const [client, list] of ranges) {
+    const before = known.get(client) ?? 0;
+    let end = before;
+    list.sort((x, y) => x[0] - y[0]);
+    for (const [from, to] of list) {
+      if (from > end) break;
+      end = Math.max(end, to);
+    }
+    if (end > before) reach.set(client, end);
+  }
+  return reach;
+}
+
+/**
+ * Avanza `syncedSV` con lo que el servidor mandó (`serverReach`), sin pasar de lo que el documento del
+ * dispositivo integró (`local`). Lo propio sin confirmar nunca entra: sus relojes no vinieron del servidor.
+ */
+export function advanceSynced(
+  syncedSV: Uint8Array | undefined,
+  reach: Map<number, number>,
+  local: Map<number, number>,
+): Uint8Array | undefined {
+  const next = syncedSV ? Y.decodeStateVector(syncedSV) : new Map<number, number>();
+  let changed = false;
+  for (const [client, end] of reach) {
+    const capped = Math.min(end, local.get(client) ?? 0);
+    if (capped > (next.get(client) ?? 0)) {
+      next.set(client, capped);
+      changed = true;
+    }
+  }
+  return changed ? Y.encodeStateVector(next) : syncedSV;
+}
+
+/** El mayor de cada autor entre dos vectores de estado. */
+export function mergeStateVectors(a: Uint8Array | undefined, b: Uint8Array): Uint8Array {
+  if (!a) return b;
+  const merged = Y.decodeStateVector(a);
+  for (const [client, clock] of Y.decodeStateVector(b)) {
+    if (clock > (merged.get(client) ?? 0)) merged.set(client, clock);
+  }
+  return Y.encodeStateVector(merged);
 }

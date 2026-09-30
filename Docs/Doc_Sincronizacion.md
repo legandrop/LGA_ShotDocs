@@ -2,7 +2,8 @@
 
 Cómo funciona hoy la regla de no perder nunca información. El código está en `src/sync/` y las pruebas
 (`npm test`) en `src/sync/sync.test.ts`, `audit.test.ts` (los casos de la auditoría de la fase 1),
-`editor.test.ts` (con el editor real, en jsdom), `projects.test.ts` (proyectos en la cola, también sin
+`editor.test.ts` (con el editor real, en jsdom), `docs.test.ts` (qué falta subir después de bajar y la
+semilla solo en memoria), `projects.test.ts` (proyectos en la cola, también sin
 red y rechazados), `restore.test.ts` (la generación al restaurar una copia y la versión mínima del
 workspace, y el aviso de base vieja), `src/workspace.test.ts` (los nombres de lo guardado en el
 dispositivo), `src/workspaces.test.ts` (la lista de workspaces del dispositivo, los nombres de Wanka, los
@@ -80,7 +81,7 @@ pierde mientras tanto.
    dispositivo, se bajan los updates posteriores y se guardan en la misma transacción que el nuevo cursor.
    Así se bajan también las páginas que nunca se abrieron en ese dispositivo, y quedan disponibles offline.
    En esa misma transacción avanza `syncedSV` con lo bajado, así la próxima subida lleva solo lo propio y
-   no reenvía lo que el servidor mandó (desde v0.0xx; antes lo reenviaba una vez, sin perder nada). Avanza
+   no reenvía lo que el servidor mandó (antes lo reenviaba una vez, sin perder nada). Avanza
    con dos límites (`serverReach` y `advanceSynced` en `docs.ts`):
    - **Solo lo que vino del servidor, sin huecos.** `syncedSV` dice que el servidor tiene los relojes
      `[0, n)` de cada autor de Yjs; un update bajado con los relojes `[a, b)` de ese autor, con `a <= n`, lo
@@ -104,6 +105,13 @@ pierde mientras tanto.
    del id de la página. Todos los dispositivos escriben exactamente la misma semilla, así que Yjs la toma
    como un solo cambio y hay una sola raíz. Lo que dos personas escriben a la vez en el mismo renglón se
    fusiona letra por letra, como en cualquier editor colaborativo.
+   La semilla **queda solo en memoria** hasta la primera edición local (origen `ORIGIN_SEED`): abrir una
+   página vacía sin escribir no guarda nada, no cuenta como pendiente y no sube nada. Con la primera
+   edición, la semilla y la edición se guardan juntas, en la misma transacción (lo que se escribe cuelga
+   de la raíz de la semilla: guardar una sin la otra dejaría la edición sin poder mostrarse), y suben
+   juntas. Si guardar falla, se reintentan juntas. Si antes de escribir llega lo de otro dispositivo, se
+   aplica encima como siempre (trae la misma semilla, o se repara). El contenido de la semilla no cambió
+   (`structure.ts`: nunca se cambia).
    Las páginas creadas antes de la semilla (v0.008) pueden tener igual dos raíces; para ellas queda la
    reparación: al abrir y al recibir cambios, las raíces sobrantes se juntan en la primera en la misma
    transacción que aplica lo recibido. La reparación copia los bloques y borra la raíz sobrante, así que lo
