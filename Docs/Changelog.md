@@ -11,6 +11,15 @@ tiene un solo borde fino (amarillo en el tema oscuro, un amarillo más oscuro en
 marco blanco ni el contorno grueso. Con una hoja más ancha que la ventana, la barra de buscar se alinea con los
 íconos de arriba y ya no queda cortada al borde de la hoja.
 [ Buscar - ir al resultado y la barra en hojas anchas ]
+v0.056 :
+
+"Importar de Coda…" (selector de proyectos) queda solo para la cuenta de Lega: es una herramienta suya, no
+una función de la app. Nadie más ve la entrada ni puede abrir el diálogo, que para los demás ni se monta.
+Como el repositorio es público, el correo no está escrito en ningún lado: `src/import/codaOwner.ts` compara
+el SHA-256 del correo del usuario que inició sesión (sin espacios alrededor y en minúsculas, con Web Crypto,
+una vez por usuario) con una constante; la entrada aparece cuando el hash se resolvió. Las pruebas usan el
+hash de un correo de prueba. Ver `Doc_Importar_Coda.md`.
+[ Importar de Coda, solo para Lega ]
 
 v0.055 :
 
