@@ -4,7 +4,7 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { schema } from './editorSchema';
+import { schema, setVideosAccepted } from './editorSchema';
 import { schema as mainSchema } from './fixtures/editorSchemaMain';
 import { findUnknownContent, knownContent } from './unknownContent';
 
@@ -104,9 +104,13 @@ describe('sdmedia:// con el editor de la versión publicada (main)', () => {
     expect([...knownContent().marks].sort()).toEqual([...mainNames.marks].sort());
   });
 
-  it('el bloque image acepta videos al elegir, pegar o soltar, y sigue siendo image', () => {
-    const accept = (schema.blockSpecs.image.implementation.meta as { fileBlockAccept?: string[] }).fileBlockAccept;
-    expect(accept).toEqual(['image/*', 'video/*']);
+  it('el bloque image acepta videos solo con portero, y sigue siendo image', () => {
+    const accept = () => (schema.blockSpecs.image.implementation.meta as { fileBlockAccept?: string[] }).fileBlockAccept;
+    expect(accept()).toEqual(['image/*']);
+    setVideosAccepted(true);
+    expect(accept()).toEqual(['image/*', 'video/*']);
+    setVideosAccepted(false);
+    expect(accept()).toEqual(['image/*']);
     expect('video' in schema.blockSpecs).toBe(false);
     expect('file' in schema.blockSpecs).toBe(false);
   });

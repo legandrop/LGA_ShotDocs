@@ -383,8 +383,11 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     if (d.gesture === 'swipe') setTrack({ x: resistEdges(dx, at, total), anim: false });
     else if (d.gesture === 'dismiss') setDismissY(Math.max(0, dy));
     else if (d.gesture === 'pan' && f) {
+      // El movimiento se calcula ya: `d` cambia antes de que React aplique la actualización.
+      const mx = e.clientX - d.lastX;
+      const my = e.clientY - d.lastY;
       setZoomAnim(false);
-      setZoom((z) => panBy(z, e.clientX - d.lastX, e.clientY - d.lastY, f, size));
+      setZoom((z) => panBy(z, mx, my, f, size));
     }
     d.lastX = e.clientX;
     d.lastY = e.clientY;
@@ -423,7 +426,8 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
       if (canZoom && f && isDoubleTap(lastTap.current, tap)) {
         lastTap.current = null;
         setZoomAnim(true);
-        setZoom((z) => toggleZoom(z, pointFrom(e.clientX, e.clientY), f, size));
+        const at = pointFrom(e.clientX, e.clientY);
+        setZoom((z) => toggleZoom(z, at, f, size));
       } else lastTap.current = tap;
     }
   };

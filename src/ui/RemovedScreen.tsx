@@ -49,7 +49,7 @@ export function RemovedScreen() {
     let live = true;
     void (async () => {
       await docs.flush().catch(() => undefined);
-      const [s, m] = await Promise.all([unsyncedSummary(db, mediaDb), mediaDb.getAllFromIndex('files', 'pending', 1)]);
+      const [s, m] = await Promise.all([unsyncedSummary(db, mediaDb), mediaDb ? mediaDb.getAllFromIndex('files', 'pending', 1) : []]);
       if (!live) return;
       setSummary(s);
       setMedia(m);
@@ -84,7 +84,7 @@ export function RemovedScreen() {
   }
 
   async function downloadMedia(record: MediaRecord) {
-    const blob = await mediaDb.get('blobs', record.id);
+    const blob = await mediaDb?.get('blobs', record.id);
     if (blob) save(blob, record.name);
     else setError(`“${record.name}” is not on this device anymore.`);
   }

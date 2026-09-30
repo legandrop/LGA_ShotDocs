@@ -150,12 +150,14 @@ export class AccessStore {
   /** Guarda la respuesta nueva (o `null`: no hay datos, por ejemplo una base sin migrar). */
   async set(next: AccessSnapshot | null): Promise<void> {
     const same = JSON.stringify(strip(next)) === JSON.stringify(strip(this.snapshot));
+    // Se pregunta en cada ciclo: si no cambió nada, no se escribe.
+    if (same) return;
     if (this.db) {
       if (next) await this.db.put('meta', next, ACCESS_KEY);
       else await this.db.delete('meta', ACCESS_KEY);
     }
     this.snapshot = next;
-    if (!same) this.notify();
+    this.notify();
   }
 
   /** La base dijo que sacaron a la persona del workspace. */

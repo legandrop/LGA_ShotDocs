@@ -253,7 +253,7 @@ cambios de permisos, que son el momento más riesgoso.
    el mismo proyecto (repo de copias) y la configuración de login documentada entera.
 6. **Cola de archivos nueva** (por partes, sin red), miniaturas y la lista de qué archivos usa cada
    página. En la práctica va junto con el 8: la cola sube al portero.
-7. **Carrete** de fotos y videos.
+7. **Carrete** de fotos y videos. Hecho, falta la auditoría: `Doc_Carrete.md`.
 8. **Drive y portero en producción:** permisos por página en el portero, carpetas por proyecto y día, el
    dueño elige dónde va la carpeta `LGA_ShotDocs` (sección 5) y el video arranca más rápido.
 9. **Equipo en Wanka:** invitar, roles, permisos por proyecto y página, proyectos privados, sacar a

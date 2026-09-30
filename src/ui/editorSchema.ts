@@ -169,16 +169,22 @@ function setParagraph(editor: BlockNoteEditor<any, any, any>, script: boolean): 
 // `sdmedia://<id>` (ver media/queue.ts); la app mira el tipo del archivo y muestra foto o video.
 const { audio: _audio, file: _file, video: _video, ...blockSpecs } = defaultBlockSpecs;
 
-// El bloque `image` acepta también videos al elegir, pegar o soltar un archivo (sin esto, BlockNote
-// buscaría un bloque `video`). Es solo lo que ofrece el selector: el bloque guardado es el mismo de
-// siempre, y sin portero la app rechaza el video con un aviso.
+// Lo que ofrece el bloque `image` al elegir, pegar o soltar un archivo. Con portero acepta también
+// videos (sin esto, BlockNote buscaría un bloque `video`); sin portero, solo imágenes, como antes (ver
+// `setVideosAccepted`). Es solo lo que ofrece el selector: el bloque guardado es el mismo de siempre.
+const imageAccept: string[] = ['image/*'];
 const image = {
   ...blockSpecs.image,
   implementation: {
     ...blockSpecs.image.implementation,
-    meta: { ...blockSpecs.image.implementation.meta, fileBlockAccept: ['image/*', 'video/*'] },
+    meta: { ...blockSpecs.image.implementation.meta, fileBlockAccept: imageAccept },
   },
 };
+
+/** El workspace tiene portero: el bloque `image` ofrece también videos. Lo llama el editor al abrirse. */
+export function setVideosAccepted(on: boolean): void {
+  imageAccept.splice(0, imageAccept.length, ...(on ? ['image/*', 'video/*'] : ['image/*']));
+}
 
 export const schema = BlockNoteSchema.create({
   blockSpecs: { ...blockSpecs, image, paragraph: createParagraph() },

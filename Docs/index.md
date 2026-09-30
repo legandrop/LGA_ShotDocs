@@ -13,6 +13,7 @@ en inglés.
 | [`Doc_Roadmap.md`](Doc_Roadmap.md) | Lo que falta, por orden de importancia. |
 | [`Doc_Supabase.md`](Doc_Supabase.md) | Cómo está armado el backend: configuración del proyecto, migraciones, pruebas de permisos y login. |
 | [`Doc_Portero.md`](Doc_Portero.md) | El portero de archivos (Worker de Cloudflare del dueño): cómo guarda la conexión con Drive, sube y devuelve archivos, y cómo publicarlo y conectarlo paso a paso. |
+| [`Doc_Carrete.md`](Doc_Carrete.md) | El carrete: el visor a pantalla completa de las fotos y los videos de una página (qué entra, gestos, zoom, qué se ve sin red o si el navegador no puede reproducirlo, y cómo convive con la edición). |
 | [`Doc_Sincronizacion.md`](Doc_Sincronizacion.md) | Cómo funciona la sincronización offline sin pérdidas: contenido, árbol, imágenes y estado visible. |
 | [`Changelog.md`](Changelog.md) | El historial de cambios. Cada entrada sube `+0.001`. |
 

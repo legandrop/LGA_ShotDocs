@@ -28,7 +28,9 @@ export function Login() {
   // Si se llegó con un link de invitación: de este workspace, se explica qué hacer; de otro, que todavía no.
   const [invite] = useState(() => {
     const arrival = consumeInviteArrival(config);
-    return arrival?.kind === 'other' ? (takeArrivalNotice() ?? null) : arrival?.kind === 'this' ? 'this' : null;
+    if (arrival?.kind === 'other') return takeArrivalNotice();
+    if (arrival?.kind === 'this') return arrival.target ? 'this-page' : 'this';
+    return null;
   });
   const [step, setStep] = useState<Step>({ name: 'email' });
   const [email, setEmail] = useState('');
@@ -110,13 +112,13 @@ export function Login() {
                 <h2>Sign in</h2>
                 <p className="lead">Enter your email and we will send you a sign-in link. No password to remember.</p>
               </div>
-              {invite === 'this' && (
+              {(invite === 'this' || invite === 'this-page') && (
                 <p className="login-invite">
-                  You were invited to {config.name || 'this workspace'}. Use the email the invitation was sent to; the
-                  shared page opens after you sign in.
+                  You were invited to {config.name || 'this workspace'}. Use the email the invitation was sent to.
+                  {invite === 'this-page' && ' The shared page opens after you sign in.'}
                 </p>
               )}
-              {invite && invite !== 'this' && <p className="login-invite">{invite}</p>}
+              {invite && invite !== 'this' && invite !== 'this-page' && <p className="login-invite">{invite}</p>}
               <div className="field">
                 <label htmlFor="email">Email</label>
                 <input

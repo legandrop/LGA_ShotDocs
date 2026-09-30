@@ -78,14 +78,47 @@ async function toThumb(source: Drawable, width: number, height: number): Promise
   return null;
 }
 
+/** Las medidas de una foto sin decodificarla entera: el navegador las lee de la cabecera al cargarla. */
+function imageSize(file: Blob): Promise<{ width: number; height: number; img: HTMLImageElement; url: string }> {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  return new Promise((resolve, reject) => {
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight, img, url });
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('The image could not be opened.'));
+    };
+    img.src = url;
+  });
+}
+
 async function probeImage(file: Blob): Promise<Probe> {
-  // `imageOrientation: 'from-image'`: una foto vertical del teléfono queda vertical.
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  // Las medidas salen de la cabecera (ya con la orientación de la foto aplicada, como la muestra el
+  // navegador). La miniatura se decodifica ya reducida (`resizeWidth`/`resizeHeight`): una foto de 48 MP
+  // entera en memoria puede cerrar la app en el iPhone. Se pide solo el lado mayor, para que el otro salga
+  // proporcional aunque el navegador aplique la orientación antes o después de reducir.
+  const { width, height, img, url } = await imageSize(file);
   try {
-    const thumb = await toThumb(bitmap, bitmap.width, bitmap.height).catch(() => null);
-    return { width: dimension(bitmap.width), height: dimension(bitmap.height), duration: null, thumb };
+    const side = Math.min(THUMB_SIDE, Math.max(width, height));
+    let thumb: Blob | null = null;
+    try {
+      const bitmap = await createImageBitmap(file, {
+        imageOrientation: 'from-image',
+        resizeQuality: 'high',
+        ...(width >= height ? { resizeWidth: side } : { resizeHeight: side }),
+      });
+      try {
+        thumb = await toThumb(bitmap, bitmap.width, bitmap.height);
+      } finally {
+        bitmap.close();
+      }
+    } catch {
+      // Un navegador sin las opciones de reducción: se dibuja la imagen ya cargada.
+      thumb = await toThumb(img, width, height).catch(() => null);
+    }
+    return { width: dimension(width), height: dimension(height), duration: null, thumb };
   } finally {
-    bitmap.close();
+    URL.revokeObjectURL(url);
   }
 }
 

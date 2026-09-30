@@ -37,6 +37,8 @@ export interface MediaRecord {
   probed?: boolean;
   /** Por qué no se pudo subir la miniatura (se siguió con el original sin ella). */
   thumbError?: string | null;
+  /** Veces seguidas que el servidor dijo que el archivo no existe aunque figuraba registrado. */
+  lost?: number;
   /** La subida al portero que quedó a medias: con esto se retoma después de cerrar la app. */
   uploadId: string | null;
   /** Hasta dónde confirmó el portero (bytes). */

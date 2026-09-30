@@ -35,7 +35,8 @@ export interface Services {
   remote: SupabaseRemote;
   /** El nombre de la base local y la de archivos. */
   dbName: string;
-  mediaDb: MediaDb;
+  /** `null` si la base de archivos no se pudo abrir (la cola de fotos y videos queda apagada). */
+  mediaDb: MediaDb | null;
   /** Para la sincronización y cierra las bases del dispositivo (antes de borrarlas). */
   shutdown: () => Promise<void>;
 }
@@ -192,16 +193,25 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, supports: supportsContent });
       const files = new PageFiles(db, remote);
       // Los archivos grandes, en una base aparte (la de siempre no cambia de versión).
-      const mediaDb = await openMediaDb(mediaDbName(dbName));
+      // Si no se puede abrir, la app arranca igual con la cola de fotos y videos apagada y un aviso en el
+      // estado de la sincronización: el texto no depende de ella.
+      let mediaDb: MediaDb | null = null;
+      let mediaProblem: string | undefined;
+      try {
+        mediaDb = await openMediaDb(mediaDbName(dbName));
+      } catch (err) {
+        mediaProblem = `the storage for photos and videos could not be opened (${errorMessage(err)}). Reopening the app tries again.`;
+      }
       if (cancelled) {
-        mediaDb.close();
+        mediaDb?.close();
         return db.close();
       }
       const media = new MediaQueue(mediaDb, remote, {
         portero: (url) => new Portero(url, { token: sessionToken(workspace.client) }),
         projectOf: (pageId) => tree.get(pageId)?.workspace_id,
+        unavailable: mediaProblem,
       });
-      await media.load();
+      await media.load().catch(() => undefined);
       const engine = new SyncEngine(remote, tree, docs, files, {
         appVersion: __APP_VERSION__,
         schemaVersion: DB_SCHEMA_VERSION,
@@ -209,7 +219,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         access,
       });
       if (cancelled) {
-        mediaDb.close();
+        mediaDb?.close();
         return db.close();
       }
       engine.start();
@@ -228,7 +238,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
             await docs.flush();
           } finally {
             db.close();
-            mediaDb.close();
+            mediaDb?.close();
             releaseLock?.();
           }
         })();

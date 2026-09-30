@@ -56,11 +56,17 @@ In production (v0.029). What works today:
 - Photos and videos in pages go to the owner's Google Drive: saved on the device first, uploaded in parts
   that resume after closing the app or losing the connection, with a small thumbnail on the page. The
   owner chooses where the folder goes (account menu → *Google Drive*).
+- The media carousel: tap a photo or video on a page to see all of the page's photos and videos full
+  screen, in order, with swipe, pinch and wheel zoom, video playback, download of the original and the
+  thumbnail when offline or when the browser can't play a file.
+- The team: the owner and admins manage people from the account menu (*Members*: invite with a link to
+  send, change roles, remove), and projects and pages are shared from their menu (*Share…*) with view,
+  comment, edit, or edit and create pages. What you cannot change shows read-only, also offline.
 
 Next is the workspace plan: the team, roles and permissions, files in the owner's Drive with an offline
-upload queue, a media carousel, client guests with comments and questions, a file trash, and several
-workspaces in one app. Templates, PDF export and the assistant come later. The plan, the decisions and
-the roadmap are in [`Docs/`](Docs/index.md) (in Spanish).
+upload queue, client guests with comments and questions, a file trash, and several workspaces in one app.
+Templates, PDF export and the assistant come later. The plan, the decisions and the roadmap are in
+[`Docs/`](Docs/index.md) (in Spanish).
 
 ## Development
 

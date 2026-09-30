@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { pickFolder } from '../media/picker';
 import { Portero, sessionToken, type DriveStatus } from '../media/portero';
-import { useServices } from '../services';
+import { useServices, useSyncStatus } from '../services';
 
 // "Google Drive" en el menú de la cuenta (solo el dueño): la conexión con su Drive y dónde va la carpeta
 // `LGA_ShotDocs` (paso 8 del plan). Elegirla usa el selector de carpetas de Google; sin la clave
@@ -11,6 +11,17 @@ const RESULTS: Record<string, string> = {
   connected: 'Google Drive connected.',
   'drive-permission-missing': 'Google Drive was not connected: the Drive permission was left unchecked. Connect again and keep it checked.',
 };
+
+/**
+ * El diálogo, solo para el dueño del workspace (con portero). Al volver de Google con `?drive=` se espera a
+ * saber quién es el dueño; a cualquier otra persona no se le muestra nada.
+ */
+export function DriveDialogHost({ result, onClose }: { result: string | null; onClose: () => void }) {
+  const { user } = useServices();
+  const { mediaUrl, ownerId } = useSyncStatus();
+  if (!mediaUrl || !ownerId || ownerId !== user.id) return null;
+  return <DriveDialog result={result} onClose={onClose} />;
+}
 
 export function DriveDialog({ result, onClose }: { result: string | null; onClose: () => void }) {
   const { media, client } = useServices();
@@ -87,6 +98,8 @@ export function DriveDialog({ result, onClose }: { result: string | null; onClos
       : status.broken
         ? 'Needs reconnecting'
         : 'Not connected';
+  // Lo dice el portero con la sesión de la persona: solo el dueño conecta Drive y elige la carpeta.
+  const owner = status?.isOwner === true;
   const place = status?.folder ? `“${status.folder.name || 'a folder'}”` : 'My Drive (the root)';
 
   return (
@@ -128,13 +141,14 @@ export function DriveDialog({ result, onClose }: { result: string | null; onClos
               </p>
             )}
             {error && <p className="error">{error}</p>}
+            {status && !owner && <p className="muted">Only the owner of the workspace can change this.</p>}
             <div className="media-actions">
-              {status && !status.connected && (
+              {owner && !status.connected && (
                 <button className="primary" disabled={!!busy} onClick={() => void connect()}>
                   {status.broken ? 'Reconnect Google Drive' : 'Connect Google Drive'}
                 </button>
               )}
-              {status?.connected && status.picker && (
+              {owner && status.connected && status.picker && (
                 <button
                   className="primary"
                   disabled={!!busy}
@@ -144,12 +158,12 @@ export function DriveDialog({ result, onClose }: { result: string | null; onClos
                   {busy === 'choose' ? 'Choosing…' : 'Choose folder…'}
                 </button>
               )}
-              {status?.connected && status.folder && (
+              {owner && status.connected && status.folder && (
                 <button disabled={!!busy} data-tip="Moves the LGA_ShotDocs folder back to the root of My Drive" onClick={() => void useRoot()}>
                   Use My Drive root
                 </button>
               )}
-              {status?.connected && (
+              {owner && status.connected && (
                 <button
                   disabled={!!busy}
                   data-tip="Authorize Google Drive again, with the same Google account"

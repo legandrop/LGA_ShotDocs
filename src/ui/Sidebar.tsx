@@ -4,7 +4,7 @@ import { navigate, pagePath, useRoute } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
 import { AccountIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, TrashIcon } from './icons';
-import { DriveDialog } from './DriveDialog';
+import { DriveDialogHost } from './DriveDialog';
 import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MembersDialog } from './MembersDialog';
 import { MoveDialog } from './MoveDialog';
@@ -92,11 +92,15 @@ export function Sidebar() {
     return !!dragging && dragging !== targetId && !tree.isDescendant(targetId, dragging);
   }
 
-  /** Soltar ahí pide 4 en la página que se mueve y en el destino (adentro de la página, o su padre). */
+  /** Dónde queda la página si se suelta ahí: adentro de `page`, o al lado (con su padre). */
+  function dropParent(page: PageRow, zone: DropZone): string | null {
+    if (zone === 'inside') return page.id;
+    return page.parent_id && tree.get(page.parent_id) ? page.parent_id : null;
+  }
+
+  /** Soltar ahí pide 4 en la página que se mueve y en el destino. */
   function allowedZone(page: PageRow, zone: DropZone): boolean {
-    if (!dragging) return false;
-    const parentId = zone === 'inside' ? page.id : page.parent_id && tree.get(page.parent_id) ? page.parent_id : null;
-    return perms.canMove(dragging, parentId);
+    return !!dragging && perms.canMove(dragging, dropParent(page, zone));
   }
 
   function onDragOver(e: DragEvent, page: PageRow) {
@@ -118,7 +122,7 @@ export function Sidebar() {
     const zone = drop?.zone;
     setDragging(null);
     setDrop(null);
-    if (!id || !zone || !canDrop(page.id) || !perms.canMove(id, zone === 'inside' ? page.id : page.parent_id && tree.get(page.parent_id) ? page.parent_id : null)) return;
+    if (!id || !zone || !canDrop(page.id) || !perms.canMove(id, dropParent(page, zone))) return;
     if (zone === 'inside') {
       await tree.move(id, page.id);
       expand(page.id);
@@ -303,7 +307,7 @@ export function Sidebar() {
       )}
       {members && createPortal(<MembersDialog onClose={() => setMembers(false)} />, document.body)}
       {sharing && createPortal(<ShareDialog target={{ pageId: sharing }} onClose={() => setSharing(null)} />, document.body)}
-      {drive && createPortal(<DriveDialog result={drive.result} onClose={() => setDrive(null)} />, document.body)}
+      {drive && createPortal(<DriveDialogHost result={drive.result} onClose={() => setDrive(null)} />, document.body)}
       {menu && (
         <PageMenu
           pageId={menu.id}

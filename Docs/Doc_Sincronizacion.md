@@ -6,8 +6,10 @@ Cómo funciona hoy la regla de no perder nunca información. El código está en
 red y rechazados), `restore.test.ts` (la generación al restaurar una copia y la versión mínima del
 workspace, y el aviso de base vieja), `src/workspace.test.ts` (los nombres de lo guardado en el
 dispositivo), `src/ui/unknownContent.test.ts` (la guarda del editor contra lo desconocido),
-`src/media/queue.test.ts` (la cola de fotos y videos) y `src/ui/media.test.ts` (`sdmedia://` con el
-editor de la versión publicada).
+`src/media/queue.test.ts` (la cola de fotos y videos), `src/ui/media.test.ts` (`sdmedia://` con el
+editor de la versión publicada) y `team.test.ts` (permisos en el dispositivo, solo lectura, rechazos,
+invitaciones, la señal de que sacaron a alguien y el archivo con lo que no se subió), con las pantallas
+de miembros, compartir y "sacado" montadas en `src/ui/team.test.tsx`.
 
 ## Piezas
 
@@ -21,6 +23,8 @@ editor de la versión publicada).
 | Fotos y videos | `../media/queue.ts` | Los guarda en el dispositivo (base aparte) y los sube al Drive del dueño por el portero. Ver "Archivos grandes". |
 | Servidor | `remote.ts` | Las llamadas a Supabase. Las pruebas usan un servidor en memoria con las mismas reglas (`testing.ts`). |
 | Motor | `engine.ts` | El ciclo de sincronización y el estado que muestra la app. |
+| Permisos | `access.ts` | Los permisos propios guardados en el dispositivo y la misma cuenta de niveles que la base. Ver "Permisos en el dispositivo". |
+| Lo sin subir | `unsynced.ts` | Cuenta lo pendiente y lo arma como archivo JSON (ver "Si sacan a alguien del workspace"). |
 
 El nombre de la base local no se cambia nunca: renombrarla con cambios sin subir es perderlos. Sale de la
 **clave local** del workspace (`src/workspace.ts`), que también nombra la sesión y lo que la app recuerda
@@ -136,60 +140,139 @@ portero) y `picker.ts` (el selector de carpetas de Google).
 - **En la página:** el bloque `image` de siempre con `url: "sdmedia://<id>"`, donde `<id>` es el uuid de la
   fila de `files`, creado en el dispositivo. Nada de bloques `video` o `file`: la versión publicada los
   borraría. Una versión vieja muestra una imagen rota y conserva la dirección aunque se edite la página
-  (`src/ui/media.test.ts`, con una copia del esquema de `main` en `src/ui/fixtures/`). El bloque `image`
-  acepta videos al elegir, pegar o soltar un archivo (cambia lo que ofrece el selector, no el bloque).
+  (`src/ui/media.test.ts`, con una copia del esquema de `main` en `src/ui/fixtures/`). Con portero, el
+  bloque `image` acepta también videos al elegir, pegar o soltar un archivo (cambia lo que ofrece el
+  selector, no el bloque); sin portero, solo imágenes, como antes.
 - **Primero en el dispositivo:** el archivo se guarda en otra base IndexedDB, `<base local>:media` (la de
   siempre no cambia de versión: una versión vieja de la app no podría abrirla), con su id, página,
   proyecto, nombre, tipo (en minúsculas, sin parámetros; si el navegador no lo da, sale de la extensión),
-  peso, ancho, alto, duración, el día local (`AAAA-MM-DD`), la miniatura y el archivo, todo en una sola
-  transacción. Recién después se pone el bloque en la página. Mientras se guarda, el navegador pide
-  confirmación antes de cerrar. El original queda en el dispositivo también después de subirlo.
-- **Miniatura:** se hace al elegir el archivo. Foto: reducida a 480 px de lado mayor, JPEG de calidad 0.8
-  (baja la calidad si pasa de 512 KB). Video: un cuadro cerca del primer segundo. Si el navegador no puede
-  abrir el archivo (HEIC en Chrome de Windows, un video que no decodifica), no hay miniatura ni medidas:
-  se registra y se sube igual, y en la página queda un ícono con el nombre. **Queda para después:** que
-  otro dispositivo que sí pueda abrirlo genere la miniatura que falta (`thumb_at` en null).
+  peso, el día local (`AAAA-MM-DD`) y el archivo, en una sola transacción. El editor inserta el bloque
+  `image` apenas se elige el archivo (vacío, con el nombre) y la dirección `sdmedia://` llega cuando el
+  archivo ya quedó guardado; si no se pudo guardar, el bloque se quita con un aviso. Mientras se guarda, el
+  navegador pide confirmación antes de cerrar. El original queda en el dispositivo también después de
+  subirlo.
+- **Medidas y miniatura:** se sacan después de guardar el archivo, del archivo ya guardado (si la app se
+  cierra antes, se sacan al volver, antes de registrarlo). Foto: se decodifica ya reducida (a 480 px de lado
+  mayor, `createImageBitmap` con `resizeWidth`/`resizeHeight`, para no abrir una foto de 48 MP entera en el
+  iPhone; si el navegador no lo soporta, se dibuja la imagen cargada), JPEG de calidad 0.8 (baja la
+  calidad si pasa de 512 KB). Video: un cuadro cerca del primer segundo. Si el navegador no puede abrir el
+  archivo (HEIC en Chrome de Windows, un video que no decodifica), no hay miniatura ni medidas: se
+  registra y se sube igual, y en la página queda un ícono con el nombre. La primera miniatura que se sube
+  a `thumbs` queda: el bucket no deja reemplazarla. **Queda para después:** que otro dispositivo que sí
+  pueda abrir el archivo genere la miniatura que falta (`thumb_at` en null).
 - **Subida, con su propio ciclo** (una subida de minutos no frena al texto; nunca hay dos vueltas a la
   vez): `register_file` → miniatura a `thumbs/<id>.jpg` sin reemplazar (si ya existe, está hecho) y
   `set_file_thumb` → portero, `POST /upload` con `{ file, name, mime, size, day }` y partes de 8 MiB
-  (`PUT /upload/<id>`) → subido cuando el portero responde `done`. Cada paso queda anotado apenas termina
+  (`PUT /upload/<id>`) → subido cuando el portero responde `done` **y la base lo confirma** (se lee
+  `files.drive_id`; mientras esté vacío, sigue pendiente). Si la miniatura no se puede subir nunca (el
+  bucket la rechaza), se sigue con el original sin ella y queda anotado. Cada paso queda anotado apenas termina
   (también el id de la subida y hasta dónde llegó, con cada parte): si la app se cierra a la mitad, al
   volver sigue desde ahí, y el portero dice cuánto le llegó. Todos los pasos son idempotentes: repetir uno
   cuya respuesta se perdió no duplica nada. Si el portero responde `done` con `linked: false` (Drive lo
   tiene pero la base no se enteró), sigue pendiente y se vuelve a preguntar: el portero le avisa a la base
-  sin volver a subir el archivo. Un archivo de una página que todavía no existe en el servidor espera a
-  que la página suba.
+  sin volver a subir el archivo. Un portero anterior al paso 6 no manda `linked` ni le avisa a la base: el
+  archivo queda pendiente con el aviso *The media server needs an update*. Un archivo de una página que
+  todavía no existe en el servidor espera a que la página suba.
 - **Errores:** sin red (o sin respuesta del portero) espera a la próxima sincronización. Lo que se puede
   arreglar solo (sesión renovándose, Drive sin conectar, 5xx) se reintenta esperando cada vez más, hasta
   10 minutos, con el error a la vista. Lo que no (`page_not_found`, `file_other_project`, un 400, 403 o
   404 del portero) queda detenido y a la vista, **sin descartar el archivo**, y se reintenta con "Retry" o
-  al abrir la app.
+  al abrir la app (lo detenido se vuelve a registrar: `register_file` es idempotente). Si el servidor dice
+  que no existe un archivo que acá figura registrado (un 404 del portero, `file_not_found`), se vuelve a
+  registrar en vez de detenerlo; recién si sigue igual tres veces seguidas, se detiene.
+- **Si la base de archivos del dispositivo no se abre,** la app arranca igual: la cola de fotos y videos
+  queda apagada (no se pueden agregar), el estado lo avisa y el texto sincroniza como siempre. Un error de
+  esa base nunca corta la sincronización del texto.
 - **Qué páginas usan cada archivo** (`page_files`): el dispositivo que registra un archivo ya lo cuelga de
   su página. Cuando una página tiene un `sdmedia://` que llegó de otra (se copió o se pegó el bloque), al
   abrirla y con cada cambio hecho en ella se pide `link_page_file`. Los pares ya vistos se guardan en el
   dispositivo para no llamar de más. Si el archivo todavía no está en el servidor (`file_not_found`: lo
   registra otro dispositivo), se espera y se reintenta más tarde sin contarlo como pendiente; lo mismo si la
   persona no puede editar esa página.
-- **Mostrar:** una foto de este dispositivo se muestra entera desde el dispositivo; si no, la miniatura
-  del bucket `thumbs` (bajada con la sesión y guardada en el dispositivo, así se ve sin red). Un video
-  muestra su miniatura con una marca de "play". Un clic en la página abre un visor simple (hasta el
-  carrete del paso 7): el original si está en el dispositivo (anda sin red) o el archivo entero con un
-  pase del portero (`POST /pass` con `{ file }`).
+- **Mostrar:** en la página, siempre la miniatura: la hecha en este dispositivo o la del bucket `thumbs`
+  (bajada con la sesión y guardada en el dispositivo, así se ve sin red); un video, con una marca de
+  "play"; sin miniatura, un ícono con el nombre. El original solo lo muestra el carrete (paso 7,
+  `Doc_Carrete.md`): el del dispositivo si está (anda sin red), o el archivo entero con un pase del
+  portero (`POST /pass` con `{ file }`). BlockNote resuelve la dirección de una imagen una sola vez:
+  cuando la miniatura llega después (se terminó de hacer acá, o la subió otro dispositivo; esto último se
+  pregunta como mucho una vez por minuto, solo por los archivos que se mostraron con el ícono), el editor
+  cambia la imagen en pantalla sin tocar el documento.
 - **Cuenta en los cambios pendientes** (`pendingMedia` en el estado), también los usos de páginas por
   confirmar. Los detenidos por un error cuentan como rechazados (`failedMedia`).
-- **Restaurar una copia:** todo lo de este dispositivo vuelve a la cola (registrar, miniatura, usos de
-  páginas); el archivo no se vuelve a subir, porque el portero recuerda lo que ya subió a Drive.
+- **Restaurar una copia:** todo lo de este dispositivo vuelve a la cola, también lo que estaba a medio
+  subir: se vuelve a registrar, a marcar la miniatura (si está en el dispositivo) y a colgar de sus
+  páginas. El archivo no se vuelve a subir, porque el portero recuerda lo que ya subió a Drive (y una
+  subida a medias sigue desde donde quedó). Si la base de archivos del dispositivo falla justo ahí, el
+  texto se recupera igual; lo pendiente se recupera cuando el servidor diga que no lo tiene (ver
+  "Errores"), pero lo que ya estaba subido no se vuelve a registrar (caso raro, queda anotado).
 - **La carpeta en Drive** (paso 8): el dueño la elige en el menú de la cuenta → *Google Drive* (estado de la
   conexión, conectar o reconectar, dónde está `LGA_ShotDocs` y *Choose folder…* con el selector de
-  Google). Sin `GOOGLE_API_KEY` en el portero, va a la raíz de *My Drive* (`Doc_Portero.md`, paso 2b).
+  Google). Sin `GOOGLE_API_KEY` en el portero, va a la raíz de *My Drive* (`Doc_Portero.md`, paso 2b). Al
+  volver de Google (`?drive=`), el diálogo se abre solo para el dueño; a otra persona no le ofrece
+  conectar ni elegir.
 
 ## Ciclo de sincronización
 
-Nunca corren dos a la vez. En orden: los ajustes del workspace (ver abajo), cambios del árbol, los proyectos y sus páginas, contenido pendiente,
+Nunca corren dos a la vez. En orden: los ajustes del workspace (ver abajo), los permisos propios (ver
+"Permisos en el dispositivo"; si la base dice que sacaron a la persona, el ciclo termina ahí), cambios del árbol, los proyectos y sus páginas, contenido pendiente,
 contenido nuevo e imágenes pendientes. Las imágenes van al final y sus errores no cortan el ciclo: una foto
 grande en una red mala no frena el texto. Corre al abrir la app, un poco después de cada cambio, cada 10
 segundos con la app a la vista, al volver la red y al volver a la ventana. Al final de cada ciclo arranca,
 sin esperarla, la cola de fotos y videos, que tiene su propio ciclo (ver "Archivos grandes").
+
+## Permisos en el dispositivo
+
+Desde la versión 4 de la base (`20260930160000_equipo.sql`) las páginas, el contenido y los proyectos se
+ven y se cambian según `members` y `grants` (escala 0 nada, 1 ver, 2 comentar, 3 editar, 4 editar y crear
+páginas). La base decide; la app hace la misma cuenta para no ofrecer lo que el servidor va a rechazar:
+
+- **Qué lee:** en cada ciclo, su fila de `members` (rol y `removed_at`) y sus propias filas de `grants`
+  (los admins ven las de todos: se piden solo las propias), más `workspaces.owner_id` de cada proyecto (va
+  con `fetchProjects`). Se guarda en la base local (`meta.access`), así anda sin red. Una respuesta con
+  otra forma tira error y no cambia lo guardado.
+- **La cuenta** (`Permissions` en `access.ts`, igual que `private.page_level` y `private.project_level`):
+  sin membresía activa todo da 0; quien creó el proyecto tiene 4 (solo siendo miembro activo); un permiso
+  sobre el proyecto vale para todas sus páginas y uno sobre una página para ella y las de abajo, nunca para
+  las de arriba; si hay varios, gana el más alto. Un proyecto creado en el dispositivo que todavía no
+  volvió del servidor cuenta como propio.
+- **En la interfaz:** con menos de 3, el editor y el título quedan de solo lectura (y no se ponen la
+  estructura inicial ni los ajustes de la rama); con menos de 4 no se ofrece crear páginas adentro, mover
+  (tampoco arrastrar), mandar a la papelera ni restaurar; mover pide 4 en la página y en el destino.
+  Crear proyectos, solo el dueño y los admins; renombrarlos, quien tiene 4 sobre el proyecto. "Members"
+  (menú de la cuenta) lo ven el dueño y los admins, y "Share…" quien puede compartir (`private.can_share`).
+- **Sin datos no se bloquea nada:** con una base anterior a la versión 4, o sin red la primera vez, todo
+  queda como antes. Lo que el servidor rechace igual (por ejemplo, desde una versión vieja) va a los
+  rechazados que muestra la barra lateral, con el motivo en palabras (`page_create_denied`,
+  `page_move_denied`, `page_trash_denied`; editar sin permiso llega como `page_not_found`). Nunca se pierde
+  en silencio.
+- **Invitaciones:** al entrar, antes de buscar el primer proyecto, la app llama a `accept_invitations()`
+  (una base sin la función, un error o la falta de red no cortan la entrada). Con proyectos ya guardados
+  no se espera, salvo que se venga de un link de invitación; también se llama al volver la red en la
+  pantalla de "sin proyectos".
+- **El link de invitación** es `https://<app>/#invite=<base64url de {"u","k","l","p"}>`: la dirección y la
+  clave publicable del workspace, su clave local (`workspace_settings.local_key`) y la página o el
+  proyecto. Lo que va después del `#` no llega a ningún servidor. Si es el workspace de la compilación
+  (misma dirección y clave local), la app lo saca de la dirección, lleva al login y, después de entrar,
+  abre la página (`src/invite.ts`). De otro workspace, por ahora avisa que llega más adelante (paso 12).
+
+## Si sacan a alguien del workspace
+
+- **La señal es una sola:** la fila propia de `members` con `removed_at` (`isRemovedSignal`). Un error de
+  red, un 500, una lista vacía, una respuesta rara o una base sin la versión del equipo nunca cuentan (hay
+  pruebas de cada caso). Un error después de la señal tampoco la borra; volver a invitar a la persona la
+  levanta en la próxima sincronización.
+- Con la señal, el ciclo no sube ni baja nada más (tampoco la cola de fotos y videos, ni la recuperación
+  tras restaurar una copia) y el árbol guardado no se vacía. La app muestra "You no longer have access to
+  this workspace", también al abrirla sin red (la señal queda guardada).
+- Si hay cambios sin subir (cola del árbol y rechazados, contenido, imágenes, fotos y videos), ofrece
+  "Download my unsynced changes": un JSON con la cola del árbol, los updates de Yjs sin confirmar de cada
+  página en base64 (más el estado entero y el texto, para leerlo sin la app), las imágenes pegadas en
+  base64 y la lista de fotos y videos pendientes con sus nombres. Los originales de las fotos y los
+  videos se bajan aparte, uno por uno.
+- **No se borra nada solo.** "Remove from this device" cierra y borra la base local de ese workspace y
+  usuario y la de `:media`, y cierra la sesión; con cambios sin bajar, pide confirmación antes. Sin cambios
+  pendientes también espera que la persona toque el botón (a confirmar con Lega si ahí se borra solo).
+  "Sign out and keep it on this device" deja todo como está.
 
 ## Una sola pestaña
 

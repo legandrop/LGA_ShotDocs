@@ -563,6 +563,7 @@ export class MediaQueue {
       }
       await this.patch(record.id, {
         pending: 0,
+        lost: 0,
         driveId: result.id,
         uploadId: null,
         sent: record.size,
@@ -582,14 +583,18 @@ export class MediaQueue {
       const notThere =
         record.registered &&
         ((err instanceof PorteroError && err.status === 404) || errorMessage(err) === 'file_not_found');
-      if (notThere) outcome = failures >= 4 ? 'blocked' : 'retry';
+      const lost = notThere ? (record.lost ?? 0) + 1 : 0;
+      if (notThere) outcome = lost >= 3 ? 'blocked' : 'retry';
+      const hasThumb = notThere && (await this.store.count('thumbs', record.id).catch(() => 0)) > 0;
       const changes: Partial<MediaRecord> = {
         error: friendly(err),
         blocked: outcome === 'blocked',
         failures,
         // Sin red no se espera: se vuelve a probar en la próxima sincronización (al volver la red).
         retryAt: outcome === 'offline' || outcome === 'blocked' ? 0 : this.now() + backoff(failures),
-        ...(notThere ? { registered: false } : {}),
+        lost,
+        // Se vuelve a registrar y a marcar la miniatura (los dos son idempotentes).
+        ...(notThere ? { registered: false, thumb: hasThumb ? 'local' : 'none' } : {}),
       };
       // Una subida que el portero ya no tiene se empieza de nuevo.
       if (err instanceof UploadError) Object.assign(changes, { uploadId: err.uploadId, sent: err.uploadId ? err.sent : 0 });
@@ -714,7 +719,7 @@ export class MediaQueue {
     for (const r of await files.index('pending').getAll(1)) {
       // Lo detenido se vuelve a registrar (`register_file` es idempotente): puede que el servidor lo haya
       // perdido (una copia restaurada).
-      if (r.blocked) await files.put({ ...r, blocked: false, retryAt: 0, registered: false, failures: 0 });
+      if (r.blocked) await files.put({ ...r, blocked: false, retryAt: 0, registered: false, failures: 0, lost: 0 });
       else if (r.retryAt > 0) await files.put({ ...r, retryAt: 0 });
     }
     const links = tx.objectStore('links');

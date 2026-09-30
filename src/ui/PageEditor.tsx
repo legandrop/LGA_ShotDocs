@@ -17,12 +17,12 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEven
 import type * as Y from 'yjs';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
-import { isMediaFile, mediaIdOf } from '../media/queue';
+import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { Carrete } from './Carrete';
 import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carrete';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { schema, SCRIPT_PROP } from './editorSchema';
+import { schema, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { findUnknownContent } from './unknownContent';
 import { ScriptIcon } from './icons';
 import { notify } from './notice';
@@ -247,6 +247,25 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
       link(collect(getChanges().filter((c) => c.type === 'insert' || c.type === 'update').map((c) => c.block as Block)));
     }, false);
   }, [editor, media, pageId, editable]);
+
+  // BlockNote resuelve la dirección de una imagen una sola vez. Si la miniatura llega después (se está
+  // haciendo en este dispositivo, o la subió otro), se cambia la imagen en pantalla sin tocar el documento.
+  useEffect(
+    () =>
+      media.subscribeThumbs((id) => {
+        void media.resolve(MEDIA_SCHEME + id).then((src) => {
+          for (const el of editor.domElement?.querySelectorAll<HTMLElement>('[data-content-type="image"]') ?? []) {
+            if (mediaIdOf(el.getAttribute('data-url')) !== id) continue;
+            const img = el.querySelector<HTMLImageElement>('img.bn-visual-media');
+            if (img) img.src = src;
+          }
+        });
+      }),
+    [editor, media],
+  );
+
+  // El selector del bloque `image` ofrece videos solo si el workspace tiene portero.
+  setVideosAccepted(media.enabled);
 
   const slashItems = useMemo(() => {
     const script: DefaultReactSuggestionItem = {

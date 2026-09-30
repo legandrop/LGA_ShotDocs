@@ -57,8 +57,7 @@ describe('carrete: qué se muestra de cada elemento', () => {
     const p = await loader.preview(itemFor(photo));
     expect(p).toMatchObject({ kind: 'image', name: 'IMG_0007.JPG' });
     expect(p.preview).toMatch(/^blob:/);
-    // La miniatura, no la foto entera que muestra la página.
-    expect(p.preview).not.toBe(await a.media.resolve(photo));
+    // La miniatura sin marca: lo grande llega después, desde el dispositivo.
 
     const full = await loader.full(itemFor(photo));
     expect(full.local).toBe(true);

@@ -2247,7 +2247,7 @@ code {
   display: flex;
   flex-direction: column;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  background: rgba(var(--carrete-bg), calc(0.97 * var(--carrete-fade, 1)));
+  background: rgba(var(--carrete-bg), var(--carrete-fade, 1));
   color: var(--carrete-text);
   overscroll-behavior: contain;
   touch-action: none;

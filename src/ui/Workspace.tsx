@@ -293,15 +293,15 @@ function Home() {
             : 'Open a page from the sidebar or create a new one.'}
       </p>
       {canCreate && (
-      <button
-        className="primary"
-        onClick={async () => {
-          const id = await tree.create(null, '', projectId);
-          navigate(pagePath(id));
-        }}
-      >
-        <PlusIcon size={16} /> New page
-      </button>
+        <button
+          className="primary"
+          onClick={async () => {
+            const id = await tree.create(null, '', projectId);
+            navigate(pagePath(id));
+          }}
+        >
+          <PlusIcon size={16} /> New page
+        </button>
       )}
     </article>
   );

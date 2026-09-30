@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
-import { PART_BYTES } from './portero';
-import { localDay } from './portero';
+import { resolveObjectURL } from 'node:buffer';
+import { FileRejected } from '../sync/files';
+import { PART_BYTES, localDay } from './portero';
 import { MEDIA_SCHEME, mediaIdOf, normalizeMime } from './queue';
 
 const MB = 1024 * 1024;
@@ -66,9 +67,14 @@ describe('cola de archivos: guardar primero en el dispositivo', () => {
     const url = await a.media.add(page, makeFile(3 * MB, 'IMG_0666.MOV', 'video/quicktime'));
     const id = mediaIdOf(url)!;
     expect(url).toBe(MEDIA_SCHEME + id);
+    // Primero el archivo; medidas y miniatura se sacan después, del archivo ya guardado.
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ probed: false, width: null, thumb: 'none', pending: 1 });
+    expect((await a.mediaDb.get('blobs', id))?.size).toBe(3 * MB);
+    await a.media.idle();
 
     const record = await a.mediaDb.get('files', id);
     expect(record).toMatchObject({
+      probed: true,
       pageId: page,
       projectId: server.workspaceId,
       name: 'IMG_0666.MOV',
@@ -434,5 +440,156 @@ describe('tipos', () => {
     expect(normalizeMime('', 'IMG_1234.HEIC')).toBe('image/heic');
     expect(normalizeMime('application/octet-stream', 'clip.MOV')).toBe('video/quicktime');
     expect(normalizeMime('', 'sin-extension')).toBe('application/octet-stream');
+  });
+});
+
+describe('cola de archivos: correcciones de la auditoría', () => {
+  it('con un portero viejo (sin linked) no se da por subido y lo avisa', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.portero.legacy = true;
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0100.JPG', 'image/jpeg')))!;
+    await sync(a);
+    expect(server.mediaFiles.get(id)?.drive_id).toBeNull();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, blocked: false });
+    expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 1 });
+    expect(a.engine.getStatus().mediaError).toMatch(/media server needs an update/);
+
+    // Se actualiza el portero: sube de nuevo, ahora a la carpeta del proyecto, y queda confirmado.
+    server.portero.legacy = false;
+    server.clockOffset += 60_000;
+    await sync(a);
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 0, mediaError: null });
+  });
+
+  it('si el portero dice linked pero la base no tiene el id de Drive, sigue pendiente', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.portero.lieLinked = true;
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0101.JPG', 'image/jpeg')))!;
+    await sync(a);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1 });
+    expect(a.engine.getStatus().pendingMedia).toBe(1);
+
+    server.portero.lieLinked = false;
+    server.clockOffset += 60_000;
+    await sync(a);
+    expect(server.portero.drive.size).toBe(1);
+    expect(a.engine.getStatus().pendingMedia).toBe(0);
+  });
+
+  it('después de restaurar, lo que estaba a medio subir se vuelve a registrar', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const a = await device(server);
+    const page = await a.tree.create(null, 'Rodaje');
+    await sync(a);
+    const restore = server.backup();
+    const file = makeFile(PART_BYTES + MB, 'IMG_0102.MOV', 'video/quicktime');
+    const id = mediaIdOf(await a.media.add(page, file))!;
+    server.portero.cutAfterParts = 1;
+    await sync(a);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, registered: true });
+
+    restore();
+    server.portero.reconnect();
+    await sync(a);
+    await sync(a);
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
+    expect(a.engine.getStatus().pendingMedia).toBe(0);
+  });
+
+  it('si el servidor perdió un archivo que figura registrado, lo vuelve a registrar en vez de detenerlo', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const id = mediaIdOf(await a.media.add(page, makeFile(PART_BYTES + MB, 'IMG_0103.MOV', 'video/quicktime')))!;
+    server.portero.cutAfterParts = 1;
+    await sync(a);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ registered: true, pending: 1 });
+
+    // La base ya no lo tiene (por ejemplo, una restauración que este dispositivo no vio).
+    server.mediaFiles.delete(id);
+    server.portero.reconnect();
+    server.portero.uploads.clear();
+    for (let i = 0; i < 3; i++) {
+      server.clockOffset += 20 * 60_000;
+      await sync(a);
+    }
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
+    expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 0, failedMedia: 0 });
+  });
+
+  it('si la miniatura no se puede subir, sigue con el original sin ella', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.rejectThumbs = true;
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0104.JPG', 'image/jpeg')))!;
+    await sync(a);
+    expect(server.mediaFiles.get(id)).toMatchObject({ thumb_at: null });
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, thumb: 'none' });
+    expect((await a.mediaDb.get('files', id))?.thumbError).toMatch(/maximum allowed size/);
+    // En la página se sigue viendo la miniatura del dispositivo.
+    expect(await a.media.resolve(MEDIA_SCHEME + id)).toMatch(/^blob:/);
+  });
+
+  it('en la página muestra la miniatura, no el original', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0105.JPG', 'image/jpeg')))!;
+    // Antes de tener la miniatura, el ícono; cuando llega, se avisa al editor.
+    const ready: string[] = [];
+    a.media.subscribeThumbs((x) => ready.push(x));
+    await a.media.idle();
+    expect(ready).toEqual([id]);
+    const shown = resolveObjectURL(await a.media.resolve(MEDIA_SCHEME + id));
+    expect(shown?.size).toBe(6);
+    expect(shown?.type).toBe('image/jpeg');
+    // El original sigue a mano para el carrete.
+    expect((await a.media.source(id)).original?.size).toBe(MB);
+  });
+
+  it('otro dispositivo que mostró el ícono se entera cuando llega la miniatura', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.online = false;
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0106.JPG', 'image/jpeg')))!;
+    await a.media.idle();
+    server.online = true;
+    // `a` registra el archivo pero todavía no sube la miniatura.
+    server.rejectThumbs = true;
+    await sync(a);
+    const b = await device(server);
+    await sync(b);
+    expect(await b.media.resolve(MEDIA_SCHEME + id)).toMatch(/^data:image\/svg\+xml/);
+    const ready: string[] = [];
+    b.media.subscribeThumbs((x) => ready.push(x));
+
+    // Otro dispositivo sube la miniatura.
+    server.thumbs.set(id, new Blob([new Uint8Array([0xff, 0xd8, 9])], { type: 'image/jpeg' }));
+    server.mediaFiles.get(id)!.thumb_at = new Date().toISOString();
+    server.clockOffset += 61_000;
+    await sync(b);
+    expect(ready).toEqual([id]);
+    expect(await b.media.resolve(MEDIA_SCHEME + id)).toMatch(/^blob:/);
+  });
+
+  it('si la base de archivos no se abre, el texto sincroniza igual y lo avisa', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    server.mediaDbFails = true;
+    const a = await device(server);
+    const page = await a.tree.create(null, 'Solo texto');
+    await sync(a);
+    expect(server.pages.has(page)).toBe(true);
+    expect(a.media.enabled).toBe(false);
+    expect(a.engine.getStatus().warning).toMatch(/Photos and videos are off on this device/);
+    await expect(a.media.add(page, makeFile(MB, 'x.jpg', 'image/jpeg'))).rejects.toBeInstanceOf(FileRejected);
+    expect(await a.media.resolve(MEDIA_SCHEME + crypto.randomUUID())).toMatch(/^data:image\/svg\+xml/);
+    await a.engine.retryRejected();
+    expect(a.engine.getStatus().lastError).toBeNull();
   });
 });

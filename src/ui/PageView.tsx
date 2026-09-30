@@ -215,22 +215,22 @@ function PageHeader({ id, editable }: { id: string; editable: boolean }) {
         </span>
       ))}
       {editable && (
-      <button
-        ref={toggle}
-        className={`header-toggle${pages.length ? '' : ' labelled'}`}
-        aria-label={pages.length ? 'Header options' : undefined}
-        data-tip={pages.length ? 'Header: how many containing pages show here' : undefined}
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        {pages.length ? (
-          <CollapseIcon size={14} />
-        ) : (
-          <>
-            <HeaderIcon size={14} /> {hasAncestors ? 'Header' : 'Header for pages inside'}
-          </>
-        )}
-      </button>
+        <button
+          ref={toggle}
+          className={`header-toggle${pages.length ? '' : ' labelled'}`}
+          aria-label={pages.length ? 'Header options' : undefined}
+          data-tip={pages.length ? 'Header: how many containing pages show here' : undefined}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {pages.length ? (
+            <CollapseIcon size={14} />
+          ) : (
+            <>
+              <HeaderIcon size={14} /> {hasAncestors ? 'Header' : 'Header for pages inside'}
+            </>
+          )}
+        </button>
       )}
       {open && editable && <HeaderOptions id={id} anchor={toggle.current} onClose={() => setOpen(false)} />}
     </div>
