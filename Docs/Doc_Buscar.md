@@ -1,6 +1,6 @@
 # Buscar en el proyecto y en la página (P.12)
 
-Estado: **entrega 1 hecha (v0.052): buscar y reemplazar en la página**; la búsqueda del proyecto (entrega 2),
+Estado: **entrega 1 hecha (v0.051): buscar y reemplazar en la página**; la búsqueda del proyecto (entrega 2),
 pendiente. "Correcciones de la auditoría" manda sobre lo de arriba y "Cómo quedó (entrega 1)", al final, sobre
 todo lo demás. Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
 + de páginas, que busca en todo el proyecto y te lleva al lugar; otra a la izquierda de los comentarios, que
@@ -427,7 +427,7 @@ Cambios:
 
 Y: sumar los proyectos al panel de Ctrl/⌘+K esperaba la decisión de Lega (respondida: sí, en la entrega 2).
 
-## Cómo quedó (entrega 1, v0.052)
+## Cómo quedó (entrega 1, v0.051)
 
 Buscar y reemplazar en la página, con las correcciones de las dos auditorías (la del diseño, arriba, y la del
 código, al final). Donde esto y lo de arriba no coinciden, vale esto.

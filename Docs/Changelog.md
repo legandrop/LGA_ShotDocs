@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.052 :
+v0.051 :
 
 Buscar y reemplazar en la página (P.12, primera entrega). Una lupa a la izquierda del ícono de comentarios, o
 Ctrl/⌘+F, abre una barra como la del navegador que busca en el documento: sin distinguir mayúsculas ni tildes
