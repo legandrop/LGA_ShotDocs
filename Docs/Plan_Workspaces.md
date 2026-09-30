@@ -251,20 +251,26 @@ cambios de permisos, que son el momento más riesgoso.
    `invitations` con sus funciones y pruebas (`Doc_Supabase.md`), `ensure_workspace()` ya no crea "My
    project" (sin proyectos, la app lo avisa), la versión de la base con aviso, el modo de restaurar sobre
    el mismo proyecto (repo de copias) y la configuración de login documentada entera.
-6. **Cola de archivos nueva** (por partes, sin red), miniaturas y la lista de qué archivos usa cada
-   página. En la práctica va junto con el 8: la cola sube al portero.
-7. **Carrete** de fotos y videos. Hecho, falta la auditoría: `Doc_Carrete.md`.
-8. **Drive y portero en producción:** permisos por página en el portero, carpetas por proyecto y día, el
-   dueño elige dónde va la carpeta `LGA_ShotDocs` (sección 5) y el video arranca más rápido.
-9. **Equipo en Wanka:** invitar, roles, permisos por proyecto y página, proyectos privados, sacar a
-   alguien.
-10. **Invitados (clientes):** compartir con su correo (la app copia el link de invitación), comentarios
-    en tabla propia y preguntas.
-11. **Papelera de archivos:** la base (migración `20260930180000_papelera_archivos.sql`), el portero
-    (`POST /trash`) y la app, hechos; falta auditar, probar a mano y aplicar la migración.
-12. **Varios workspaces:** pantalla de bienvenida, selector, guía y comando para crear uno (el comando, la
-    guía y la app, hechos; falta auditar y probar a mano).
-13. Pegar links de Drive; copia liviana de video si hace falta.
+Los pasos 6 a 13 quedaron hechos y auditados el 2026-09-30 en una rama de trabajo, **sin publicar**: sus
+migraciones (`20260930140000` a `20260930180000`) se aplican juntas y la app se publica después (el
+procedimiento está en el relevo de trabajo). Lo que queda para probar a mano está en cada `Doc_*`.
+
+6. ✅ **Cola de archivos nueva** (v0.031): por partes, sin red, miniaturas y la lista de qué archivos usa
+   cada página. Va junto con el 8: la cola sube al portero. `Doc_Sincronizacion.md`, "Archivos grandes".
+7. ✅ **Carrete** de fotos y videos (v0.032): `Doc_Carrete.md`.
+8. ✅ **Drive y portero en producción** (v0.031): permisos por archivo en el portero, carpetas por
+   proyecto y día, el dueño elige dónde va la carpeta `LGA_ShotDocs` (con la clave del selector) y caché
+   del principio y el final para que el video arranque antes (falta medirlo con *Media test*).
+9. ✅ **Equipo en Wanka** (v0.033): invitar, roles, permisos por proyecto y página, proyectos privados,
+   sacar a alguien. El registro para invitados lo abre Lega (`Doc_Supabase.md`).
+10. ✅ **Invitados (clientes)** (v0.034): compartir con su correo (la app copia el link de invitación),
+    comentarios en tabla propia y preguntas.
+11. ✅ **Papelera de archivos** (v0.035): la base, el portero (`POST /trash`) y la app; el borrado
+    automático queda apagado.
+12. ✅ **Varios workspaces** (v0.036): pantalla de bienvenida, selector, guía (`Guide_Create_Workspace.md`)
+    y comando para crear uno (`npm run workspace:setup`).
+13. ✅ **Links de Drive** (v0.037): link, texto o tarjeta reproducible. La copia liviana de video, solo si
+    hace falta.
 
 ## 11. Cómo se hace cada paso
 
