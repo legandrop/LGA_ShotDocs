@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { locale, t as current, useT, type Translate } from '../i18n';
+import { locale, localize, t as current, useT, type Translate } from '../i18n';
+import '../i18n/lazy/commentsPanel';
 import { useServices, useSyncStatus } from '../services';
 import { CommentInvalid, MAX_COMMENT_LENGTH, type CommentThread, type CommentView } from '../sync/comments';
 import { errorMessage } from '../sync/types';
@@ -155,12 +156,12 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
           {status.schemaBehind && (
             <p className="comments-note warn">{tr('comments.schemaBehind')}</p>
           )}
-          {comments.unavailable && <p className="comments-note warn">{tr('comments.readOnlyDevice', { reason: comments.unavailable })}</p>}
+          {comments.unavailable && <p className="comments-note warn">{tr('comments.readOnlyDevice', { reason: localize(comments.unavailable) })}</p>}
           {!canComment && !comments.unavailable && level > 0 && (
             <p className="comments-note">{tr('comments.readOnly')}</p>
           )}
           {comments.pullError(pageId) && status.online && (
-            <p className="comments-note warn">{tr('comments.pullError', { reason: comments.pullError(pageId) ?? '' })}</p>
+            <p className="comments-note warn">{tr('comments.pullError', { reason: localize(comments.pullError(pageId) ?? '') })}</p>
           )}
           {!comments.isFresh(pageId) && status.online && threads.length === 0 && !comments.pullError(pageId) && (
             <p className="muted comments-empty">{tr('comments.loading')}</p>
@@ -465,7 +466,7 @@ function Rejected({ comment }: { comment: CommentView }) {
   const tr = useT();
   return (
     <div className="comment-error" role="status">
-      <span>{tr('comments.rejected', { reason: comment.error ?? '' })}</span>
+      <span>{tr('comments.rejected', { reason: localize(comment.error ?? '') })}</span>
       {info ? (
         <>
           <span>{info.message}</span>

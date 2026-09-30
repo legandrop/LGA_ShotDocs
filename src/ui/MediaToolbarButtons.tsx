@@ -1,6 +1,7 @@
 import { FileDownloadButton, useBlockNoteEditor, useComponentsContext, useDictionary, useEditorState } from '@blocknote/react';
 import { useEffect, useRef } from 'react';
 import { t, useT } from '../i18n';
+import '../i18n/lazy/editor';
 import { mediaIdOf } from '../media/queue';
 import { useServices } from '../services';
 import { carreteSourceOf } from './carrete';

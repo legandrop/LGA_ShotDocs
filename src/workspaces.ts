@@ -379,7 +379,6 @@ export function resolveInvite(list: WorkspaceList, payload: InvitePayload, allow
   return { kind: 'confirm', entry: entryFromInvite(payload, check.url), target };
 }
 
-
 /** Lo que se pega en "Join a workspace": el link entero o solo la parte desde `#invite=`. */
 export function resolveInviteText(list: WorkspaceList, text: string, allowLocalHttp?: boolean): InviteResolution {
   const at = text.indexOf('#invite=');
@@ -447,7 +446,7 @@ export async function probeWorkspace(
   // Sin la tabla, o sin las columnas del paso 5 (una base vieja).
   if (code === 'PGRST205' || code === '42P01' || code === '42703' || res.status === 404) return { kind: 'notSetUp' };
   if (res.status === 401 || res.status === 403) return { kind: 'badKey' };
-  return { kind: 'unreachable', message: `the server answered ${res.status}` };
+  return { kind: 'unreachable', message: t('wsError.answered', { status: res.status }) };
 }
 
 // --- Uno pendiente, después de entrar -----------------------------------------------------------------
@@ -480,7 +479,7 @@ export function adoptPending(
   if (!validLocalKey(localKey)) return { ok: false, reason: needsSetupCommand() };
   const others = { ...list, workspaces: list.workspaces.filter((w) => w.id !== pendingId) };
   const check = checkWorkspace(others, { url: pending.url, publishableKey: pending.publishableKey, localKey }, true);
-  if (check.kind === 'existing') return { ok: false, reason: `“${displayName(check.entry)}” is already on this device.` };
+  if (check.kind === 'existing') return { ok: false, reason: t('create.existing', { name: displayName(check.entry) }) };
   if (check.kind === 'invalid') return { ok: false, reason: check.reason };
   const from = storageNamesFor(pendingId);
   const to = storageNamesFor(localKey);

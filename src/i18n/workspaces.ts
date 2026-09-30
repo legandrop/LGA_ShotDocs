@@ -245,4 +245,5 @@ export const workspaces = {
     en: "This workspace is not on this device anymore.",
     es: "Este workspace ya no está en este dispositivo.",
   },
+  'wsError.answered': { en: "the server answered {status}", es: "el servidor respondió {status}" },
 } satisfies Dict;

@@ -1,4 +1,4 @@
-import { t } from '../i18n';
+import { locale, t } from '../i18n';
 import { errorMessage } from '../sync/types';
 import type { MediaRemote } from '../sync/remote';
 import type { TrashedFileRow } from '../sync/types';
@@ -87,12 +87,14 @@ export async function emptyFileTrash(
   return results;
 }
 
-/** El peso para mostrar: `820 KB`, `61.9 MB`, `1.2 GB`. */
+/** El peso para mostrar: `820 KB`, `61.9 MB`, `1.2 GB` (en castellano, `61,9 MB`). */
 export function formatSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '';
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  const loc = locale();
+  if (bytes < 1024 * 1024) return `${new Intl.NumberFormat(loc).format(Math.max(1, Math.round(bytes / 1024)))} KB`;
+  const oneDecimal = new Intl.NumberFormat(loc, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  if (bytes < 1024 ** 3) return `${oneDecimal.format(bytes / 1024 ** 2)} MB`;
+  return `${oneDecimal.format(bytes / 1024 ** 3)} GB`;
 }
 
 /** Cuánto le falta para los 30 días, dicho corto. */

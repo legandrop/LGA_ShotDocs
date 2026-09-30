@@ -1,0 +1,59 @@
+import { register } from '../index';
+import type { Dict } from '../types';
+
+// El carrete de fotos y videos (se carga aparte, con Carrete.tsx).
+
+export const carrete = {
+  'carrete.label': { en: "Photos and videos", es: "Fotos y videos" },
+  'carrete.download': { en: "Download", es: "Descargar" },
+  'carrete.downloadNamed': { en: "Download {name}", es: "Descargar {name}" },
+  'carrete.downloadOffline': {
+    en: "Download {name} (not available offline)",
+    es: "Descargar {name} (no disponible sin conexión)",
+  },
+  'carrete.keyboard': { en: "**Keyboard:** {key}", es: "**Teclado:** {key}" },
+  'carrete.previous': { en: "Previous", es: "Anterior" },
+  'carrete.next': { en: "Next", es: "Siguiente" },
+  'carrete.offlineMissing': {
+    en: "You're offline, and this file isn't on this device yet.",
+    es: "Estás sin conexión, y este archivo todavía no está en este dispositivo.",
+  },
+  'carrete.offlineVideo': {
+    en: "You're offline. The video plays when you're back online.",
+    es: "Estás sin conexión. El video se reproduce cuando vuelva la conexión.",
+  },
+  'carrete.offlinePhoto': {
+    en: "You're offline: this is the thumbnail. The full photo loads when you're back online.",
+    es: "Estás sin conexión: esta es la miniatura. La foto completa se carga cuando vuelva la conexión.",
+  },
+  'carrete.unplayableVideo': {
+    en: "The video couldn't be loaded or played in this browser.",
+    es: "El video no se pudo cargar ni reproducir en este navegador.",
+  },
+  'carrete.unplayablePhoto': {
+    en: "The photo couldn't be loaded or shown in this browser.",
+    es: "La foto no se pudo cargar ni mostrar en este navegador.",
+  },
+  'carrete.unsupportedVideo': {
+    en: "This video can't be played in this browser.",
+    es: "Este video no se puede reproducir en este navegador.",
+  },
+  'carrete.rarePhoto': {
+    en: "This browser can't show this photo's format.",
+    es: "Este navegador no puede mostrar el formato de esta foto.",
+  },
+  'carrete.unsupportedPhoto': { en: "The full photo couldn't be shown.", es: "La foto completa no se pudo mostrar." },
+  'carrete.failedVideo': { en: "The video couldn't be loaded.", es: "El video no se pudo cargar." },
+  'carrete.failedPhoto': { en: "The full photo couldn't be loaded.", es: "La foto completa no se pudo cargar." },
+  'carrete.failedVideoReason': {
+    en: "The video couldn't be loaded: {reason}",
+    es: "El video no se pudo cargar: {reason}",
+  },
+  'carrete.failedPhotoReason': {
+    en: "The full photo couldn't be loaded: {reason}",
+    es: "La foto completa no se pudo cargar: {reason}",
+  },
+} satisfies Dict;
+
+// Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).
+register(carrete);

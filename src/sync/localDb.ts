@@ -15,6 +15,16 @@ export interface DocState {
   version: number;
   /** Hasta qué `version` confirmó el servidor. Si es menor que `version`, hay cambios sin subir. */
   ackedVersion: number;
+  /**
+   * La "versión guardia": mientras una página se puede editar en esta versión de la app, su `version` queda
+   * siempre por encima de `ackedVersion` (se suma al abrirla y después de cada confirmación con la página
+   * abierta), y acá se anota ese valor. Una versión anterior de la app que abra esta base (solo mira
+   * `version > ackedVersion`) ve pendiente cualquier página que esta tuvo abierta, aunque la app se haya
+   * cerrado antes de sumar la versión de la última edición. Esta versión no la cuenta como pendiente
+   * mientras `version` siga siendo la guardia (ver `hasUnsyncedContent`). Las versiones anteriores la
+   * conservan sin mirarla.
+   */
+  guardVersion?: number;
   /** Vector de estado de lo que el servidor ya tiene. Lo que falta subir se calcula contra esto. */
   syncedSV?: Uint8Array;
   /** Update enviado y todavía sin confirmar. Se reenvía igual (mismo id) hasta que el servidor responde. */
@@ -113,12 +123,18 @@ export function dirtyRange(): IDBKeyRange {
 }
 
 /**
- * Si la página tiene algo sin subir: la marca de ediciones sin subir (`dirty`), una versión mayor que la
- * confirmada (lo de siempre: así lo guardado por una versión anterior se sigue subiendo) o un envío sin
- * confirmar.
+ * Si la página tiene algo sin subir: la marca de ediciones sin subir (`dirty`), un envío sin confirmar o
+ * una versión mayor que la confirmada (lo de siempre: así lo guardado por una versión anterior se sigue
+ * subiendo), salvo que esa versión sea solo la guardia (`guardVersion`).
  */
 export function hasUnsyncedContent(state: DocState, dirty = false): boolean {
-  return dirty || state.version > state.ackedVersion || state.pending !== undefined;
+  if (dirty || state.pending !== undefined) return true;
+  return state.version > state.ackedVersion && !onlyGuard(state);
+}
+
+/** `version` está por encima de la confirmada solo por la guardia (no hubo ediciones después). */
+export function onlyGuard(state: DocState): boolean {
+  return state.guardVersion !== undefined && state.version === state.guardVersion;
 }
 
 /**

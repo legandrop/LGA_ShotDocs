@@ -1,4 +1,4 @@
-import { t } from '../i18n';
+import { localize, stored, t } from '../i18n';
 import { FileRejected } from '../sync/files';
 import type { MediaRemote } from '../sync/remote';
 import { errorMessage, RemoteError } from '../sync/types';
@@ -167,8 +167,8 @@ function classify(err: unknown): Outcome {
 
 function friendly(err: unknown): string {
   const message = errorMessage(err);
-  if (message === 'page_not_found') return t('queue.pageNotFound');
-  if (message === 'file_other_project') return t('queue.otherProject');
+  if (message === 'page_not_found') return stored('queue.pageNotFound');
+  if (message === 'file_other_project') return stored('queue.otherProject');
   return message;
 }
 
@@ -296,7 +296,7 @@ export class MediaQueue {
 
   /** Por qué la cola está apagada en este dispositivo, o `null` si anda. */
   get unavailable(): string | null {
-    return this.db ? null : (this.options.unavailable ?? t('queue.storage'));
+    return this.db ? null : (this.options.unavailable ?? stored('queue.storage'));
   }
 
   private get store(): MediaDb {
@@ -379,7 +379,7 @@ export class MediaQueue {
   }
 
   private async save(pageId: string, file: Blob & { name?: string }): Promise<string> {
-    if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: this.unavailable ?? '' }));
+    if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
     const mime = normalizeMime(file.type, file.name);
     const kind = mediaKind(mime);
     if (!kind || mime === 'image/svg+xml') throw new FileRejected(t('media.onlyPhotosVideos'));
@@ -789,7 +789,7 @@ export class MediaQueue {
 
       const blob = await this.store.get('blobs', record.id);
       if (!blob) {
-        await this.patch(record.id, { error: t('queue.originalMissing'), blocked: true });
+        await this.patch(record.id, { error: stored('queue.originalMissing'), blocked: true });
         return 'blocked';
       }
       const file = new File([blob], record.name, { type: record.mime });
@@ -808,7 +808,7 @@ export class MediaQueue {
               uploadId: null,
               sent: 0,
               blocked: true,
-              error: t('queue.unknownToServer'),
+              error: stored('queue.unknownToServer'),
             });
             this.onChange?.();
             return 'blocked';
@@ -855,7 +855,7 @@ export class MediaQueue {
           uploadId: null,
           sent: 0,
           blocked: true,
-          error: t('queue.serverUpdate'),
+          error: stored('queue.serverUpdate'),
         });
         this.onChange?.();
         return 'blocked';
@@ -902,7 +902,7 @@ export class MediaQueue {
   private async waitForDatabase(record: MediaRecord): Promise<Outcome> {
     const failures = record.failures + 1;
     await this.patch(record.id, {
-      error: t('queue.waitingDb'),
+      error: stored('queue.waitingDb'),
       failures,
       retryAt: this.now() + backoff(failures),
     });
@@ -1049,7 +1049,7 @@ export class MediaQueue {
     return {
       pending: waiting.length,
       failed: records.filter((r) => r.blocked).length + links.filter((l) => l.blocked).length,
-      error: errors.length > 0 ? errors[errors.length - 1].error : null,
+      error: errors.length > 0 ? localize(errors[errors.length - 1].error ?? '') || null : null,
       uploading: this.uploading,
     };
   }
@@ -1063,11 +1063,11 @@ export class MediaQueue {
     ]);
     const out: MediaFailure[] = records
       .filter((r) => r.blocked)
-      .map((r) => ({ id: r.id, name: r.name, error: r.error ?? t('queue.unknownError') }));
+      .map((r) => ({ id: r.id, name: r.name, error: r.error ? localize(r.error) : t('queue.unknownError') }));
     for (const l of links.filter((x) => x.blocked)) {
       const name = (await this.db.get('files', l.fileId))?.name ?? (await this.db.get('known', l.fileId))?.name ?? l.fileId;
       const what = l.removed ? t('queue.removedFromPage') : t('queue.copiedToPage');
-      out.push({ id: l.key, name: `${name} (${what})`, error: l.error ?? t('queue.unknownError') });
+      out.push({ id: l.key, name: `${name} (${what})`, error: l.error ? localize(l.error) : t('queue.unknownError') });
     }
     return out;
   }

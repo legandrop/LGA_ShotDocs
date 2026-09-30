@@ -57,19 +57,20 @@ export function LegalPage({ page }: { page: PublicRoute['name'] }) {
           <AppIcon size={28} />
           <span>LGA Shot Docs</span>
         </a>
-        <nav className="legal-nav" aria-label="Legal">
+        {/* La navegación sigue el idioma de la app; el texto legal queda en inglés (`lang="en"`). */}
+        <nav className="legal-nav" aria-label={tr('legal.label')}>
           <a href={PRIVACY_PATH} aria-current={page === 'privacy' ? 'page' : undefined}>
-            Privacy
+            {tr('legal.privacy')}
           </a>
           <a href={TERMS_PATH} aria-current={page === 'terms' ? 'page' : undefined}>
-            Terms
+            {tr('legal.terms')}
           </a>
           <a className="legal-open" href="/">
-            Open the app
+            {tr('legal.openApp')}
           </a>
         </nav>
       </header>
-      <main className="legal-doc">
+      <main className="legal-doc" lang="en">
         <h1>{title}</h1>
         <p className="legal-updated mono-label">Last updated: {LEGAL_UPDATED}</p>
         {tr.lang !== 'en' && (
@@ -79,7 +80,7 @@ export function LegalPage({ page }: { page: PublicRoute['name'] }) {
         )}
         {page === 'privacy' ? <Privacy /> : <Terms />}
       </main>
-      <footer className="legal-footer">
+      <footer className="legal-footer" lang="en">
         <span>Questions: <Mail /></span>
         <span>
           {page === 'privacy' ? <a href={TERMS_PATH}>Terms of Service</a> : <a href={PRIVACY_PATH}>Privacy Policy</a>}

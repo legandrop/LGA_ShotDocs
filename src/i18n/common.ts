@@ -21,9 +21,6 @@ export const common = {
   'common.off': { en: "Off", es: "No" },
   'common.done': { en: "Done", es: "Listo" },
   'common.cancel': { en: "Cancel", es: "Cancelar" },
-  'common.save': { en: "Save", es: "Guardar" },
-  'common.delete': { en: "Delete", es: "Borrar" },
-  'common.edit': { en: "Edit", es: "Editar" },
   'common.copied': { en: "Copied", es: "Copiado" },
   'common.continue': { en: "Continue", es: "Seguir" },
 } satisfies Dict;

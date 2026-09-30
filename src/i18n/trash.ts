@@ -55,12 +55,12 @@ export const trash = {
     es: "¿Mandar “{name}” a la papelera de Google Drive?",
   },
   'fileTrash.allFiles': {
-    en: { one: "all {count} files", other: "all {count} files" },
-    es: { one: "los {count} archivos", other: "los {count} archivos" },
+    en: { one: "the {count} file", other: "all {count} files" },
+    es: { one: "el único archivo", other: "los {count} archivos" },
   },
   'fileTrash.kept': {
-    en: { one: "({count} used by pages in the trash stay)", other: "({count} used by pages in the trash stay)" },
-    es: { one: "(queda {count} que usan páginas de la papelera)", other: "(quedan {count} que usan páginas de la papelera)" },
+    en: { one: "({count} used by a page in the trash stays)", other: "({count} used by pages in the trash stay)" },
+    es: { one: "(queda {count}, que usa una página de la papelera)", other: "(quedan {count}, que usan páginas de la papelera)" },
   },
   'fileTrash.confirmEmpty': {
     en: "Empty the file trash: send {what}{skip} to the Google Drive trash?",

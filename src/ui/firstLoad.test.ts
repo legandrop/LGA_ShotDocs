@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 // La primera carga no trae el editor (roadmap B.4): desde la entrada de la app y desde lo que arma la
 // primera pantalla, siguiendo solo los imports estáticos (los `import()` se bajan aparte), no se llega a
 // BlockNote, ProseMirror, Tiptap ni Mantine, ni a las partes que se cargan aparte. Un import estático nuevo
-// que los arrastre haría crecer la primera carga de unos 276 KB a unos 590 KB (comprimido).
+// que los arrastre haría crecer la primera carga de unos 295 KB (JS 244 KB, CSS 49 KB, HTML 1 KB) a unos
+// 600 KB (comprimido; medido en v0.041). Los textos de esas partes (`src/i18n/lazy/`) también viajan con ellas.
 
 const SRC = resolve(__dirname, '..');
 
@@ -30,6 +31,15 @@ const LAZY_FILES = [
   'ui/printPage.ts',
   'ui/printView.ts',
   'ui/pagination.ts',
+  // El selector de carpetas de Google, con el diálogo de Drive.
+  'media/picker.ts',
+  // Los textos de las partes que se bajan aparte (src/i18n/index.ts).
+  'i18n/lazy/carrete.ts',
+  'i18n/lazy/commentsPanel.ts',
+  'i18n/lazy/drive.ts',
+  'i18n/lazy/editor.ts',
+  'i18n/lazy/mediaTest.ts',
+  'i18n/lazy/teamDialogs.ts',
 ];
 
 const IMPORT = /^\s*import\s+(type\s+)?(?:[\w$]+\s*,?\s*)?(?:\{[^}]*\}|\*\s+as\s+[\w$]+)?\s*from\s*['"]([^'"]+)['"]/gm;

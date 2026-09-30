@@ -11,8 +11,19 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { editorDictionary } from '../ui/editorLocale';
 import { AccountMenu } from '../ui/menus';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { t, translate, useT, type Entry, type Key } from './index';
+import { localize, stored, t, translate, useT, type Entry, type Key } from './index';
+import { carrete } from './lazy/carrete';
+import { commentsPanel } from './lazy/commentsPanel';
+import { drive } from './lazy/drive';
+import { editor } from './lazy/editor';
+import { mediaTest } from './lazy/mediaTest';
+import { teamDialogs } from './lazy/teamDialogs';
 import { parts, strings } from './strings';
+
+/** Las partes que viajan con lo que se baja aparte (ver `register` en index.ts). */
+const LAZY = { carrete, commentsPanel, drive, editor, mediaTest, teamDialogs };
+const ALL_PARTS: Record<string, Record<string, { en: Entry; es: Entry }>> = { ...parts, ...LAZY };
+const ALL = Object.assign({}, ...Object.values(ALL_PARTS)) as Record<Key, { en: Entry; es: Entry }>;
 
 // El diccionario de la interfaz (D-16): que cada clave tenga los dos idiomas con los mismos `{valores}`, que
 // no se repita ni sobre ninguna, y que cambiar el idioma en la cuenta vuelva a dibujar la interfaz.
@@ -21,19 +32,19 @@ import { parts, strings } from './strings';
 
 const SRC = resolve(__dirname, '..');
 
-/** Todo el código de la app (sin las pruebas ni el propio diccionario). */
-function appSource(dir = SRC): string {
-  let out = '';
+/** Cada archivo de la app (sin las pruebas ni el propio diccionario), con su código. */
+function appFiles(dir = SRC, out = new Map<string, string>()): Map<string, string> {
   for (const name of readdirSync(dir)) {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) {
-      if (path !== join(SRC, 'i18n')) out += appSource(path);
+      if (path !== join(SRC, 'i18n')) appFiles(path, out);
     } else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) && !name.endsWith('.d.ts')) {
-      out += readFileSync(path, 'utf8');
+      out.set(path, readFileSync(path, 'utf8'));
     }
   }
   return out;
 }
+const appSource = () => [...appFiles().values()].join('\n');
 
 const forms = (e: Entry): string[] => (typeof e === 'string' ? [e] : [e.one, e.other]);
 const names = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
@@ -42,7 +53,7 @@ const names = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((
 const UNUSED_ALLOWED = new Set<string>();
 
 describe('diccionario', () => {
-  const entries = Object.entries(strings) as [Key, { en: Entry; es: Entry }][];
+  const entries = Object.entries(ALL) as [Key, { en: Entry; es: Entry }][];
 
   it('cada clave tiene los dos idiomas, con la misma forma y los mismos {valores}', () => {
     expect(entries.length).toBeGreaterThan(100);
@@ -62,7 +73,7 @@ describe('diccionario', () => {
 
   it('ninguna clave se repite entre partes', () => {
     const seen = new Map<string, string>();
-    for (const [part, dict] of Object.entries(parts)) {
+    for (const [part, dict] of Object.entries(ALL_PARTS)) {
       for (const key of Object.keys(dict)) {
         expect(seen.get(key), `${key} en ${part}`).toBeUndefined();
         seen.set(key, part);
@@ -75,6 +86,42 @@ describe('diccionario', () => {
     const source = appSource();
     const unused = entries.map(([key]) => key).filter((key) => !source.includes(`'${key}'`) && !UNUSED_ALLOWED.has(key));
     expect(unused).toEqual([]);
+  });
+
+  it('las claves de una parte que se baja aparte solo se usan en archivos que importan esa parte', () => {
+    // Si no, un archivo de la primera carga mostraría la clave en vez del texto hasta que baje la parte.
+    const files = appFiles();
+    expect(Object.keys(strings).length).toBeLessThan(entries.length);
+    const wrong: string[] = [];
+    for (const [name, dict] of Object.entries(LAZY)) {
+      for (const key of Object.keys(dict)) {
+        for (const [path, code] of files) {
+          if (code.includes(`'${key}'`) && !code.includes(`i18n/lazy/${name}'`)) wrong.push(`${key} en ${path}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it('lo guardado en inglés se muestra en el idioma de ahora, también con valores y avisos seguidos', () => {
+    act(() => prefs.set({ language: 'es' }));
+    try {
+      expect(localize(stored('queue.waitingDb'))).toBe(translate('es', 'queue.waitingDb'));
+      // Con un valor que a su vez es el texto de otra clave.
+      const nested = stored('engine.mediaOff', { reason: stored('boot.mediaStorage', { reason: 'QuotaExceededError' }) });
+      expect(localize(nested)).toBe(
+        translate('es', 'engine.mediaOff', { reason: translate('es', 'boot.mediaStorage', { reason: 'QuotaExceededError' }) }),
+      );
+      const joined = `${stored('engine.restoredAll')} ${stored('engine.skipped', { count: 2, download: stored('sync.downloadUnsynced') })}`;
+      expect(localize(joined)).toBe(
+        `${translate('es', 'engine.restoredAll')} ${translate('es', 'engine.skipped', { count: 2, download: translate('es', 'sync.downloadUnsynced') })}`,
+      );
+      // Lo que no es de ninguna clave (un mensaje del servidor) queda tal cual.
+      expect(localize('row-level security violation')).toBe('row-level security violation');
+    } finally {
+      act(() => prefs.set({ language: 'en' }));
+    }
+    expect(localize(stored('queue.waitingDb'))).toBe('Uploaded to Google Drive; waiting for the database to confirm it.');
   });
 
   it('interpola, elige el plural y deja un {valor} que falta a la vista', () => {

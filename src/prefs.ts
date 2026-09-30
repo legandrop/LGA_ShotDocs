@@ -18,7 +18,7 @@ export interface Prefs {
    * El idioma de la interfaz (D-16). Una versión de la app anterior a los dos idiomas no conoce la clave:
    * `cleanPrefs` la descarta al leer y, si esa versión sube sus preferencias, la borra de la cuenta (sube el
    * objeto entero). No pasa nada grave: los dispositivos con esta versión siguen con el idioma que tenían
-   * (ver `attach`) y uno nuevo arranca con el del navegador.
+   * (ver `read` y `readStored`) y uno nuevo arranca con el del navegador.
    */
   language: Language;
 }
@@ -62,21 +62,51 @@ export function cleanPrefs(raw: unknown, base: Prefs = DEFAULT_PREFS): Prefs {
 
 const STORAGE_KEY = 'shotdocs-prefs';
 
-/** Copia local: se aplica antes de que cargue nada y sirve sin red. `dirty`: cambios sin subir. */
+type PrefKey = keyof Prefs;
+const KEYS = Object.keys(CHOICES) as PrefKey[];
+
+/**
+ * Copia local: se aplica antes de que cargue nada y sirve sin red. `dirtyKeys`: las claves cambiadas en este
+ * dispositivo que todavía no subieron (solo esas le ganan a la cuenta al leerla). `dirty` se sigue
+ * guardando para las versiones de la app que no conocen `dirtyKeys` (es "hay algo sin subir").
+ */
 interface Stored {
   userId: string | null;
   prefs: Prefs;
   dirty: boolean;
+  dirtyKeys: PrefKey[];
 }
 
-function readStored(): Stored {
+/**
+ * Las claves cambiadas de una copia guardada. Una copia de una versión vieja no tiene `dirtyKeys`: si decía
+ * `dirty`, cuenta como cambiado lo que trae (y el idioma no, porque no lo conocía: así no se sube el del
+ * navegador sin haber leído la cuenta).
+ */
+function storedDirtyKeys(raw: { prefs?: unknown; dirty?: unknown; dirtyKeys?: unknown }): PrefKey[] {
+  if (Array.isArray(raw.dirtyKeys)) return KEYS.filter((k) => (raw.dirtyKeys as unknown[]).includes(k));
+  if (raw.dirty !== true || !raw.prefs || typeof raw.prefs !== 'object') return [];
+  return KEYS.filter((k) => k in (raw.prefs as object));
+}
+
+/**
+ * La copia del usuario actual. Lo que falta en ella (el idioma, si la escribió una pestaña con una versión
+ * vieja de la app) sale de `base`, o de la copia aparte de ese usuario, o de fábrica.
+ */
+function readStored(base?: Prefs): Stored {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Partial<Stored> | null;
-    if (raw) return { userId: raw.userId ?? null, prefs: cleanPrefs(raw.prefs), dirty: !!raw.dirty };
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as
+      | { userId?: string | null; prefs?: unknown; dirty?: unknown; dirtyKeys?: unknown }
+      | null;
+    if (raw && typeof raw === 'object') {
+      const userId = raw.userId ?? null;
+      const fallback = base ?? (userId ? readOthers()[userId]?.prefs : undefined) ?? DEFAULT_PREFS;
+      const dirtyKeys = storedDirtyKeys(raw);
+      return { userId, prefs: cleanPrefs(raw.prefs, fallback), dirty: dirtyKeys.length > 0, dirtyKeys };
+    }
   } catch {
     // Sin copia local se arranca con lo de fábrica.
   }
-  return { userId: null, prefs: { ...DEFAULT_PREFS }, dirty: false };
+  return { userId: null, prefs: { ...DEFAULT_PREFS }, dirty: false, dirtyKeys: [] };
 }
 
 // Una copia por usuario del dispositivo (otra cuenta, u otro workspace: cada uno tiene su usuario), también
@@ -86,14 +116,20 @@ function readStored(): Stored {
 const OTHERS_KEY = 'shotdocs-prefs-others';
 const MAX_OTHERS = 20;
 
-type Others = Record<string, { prefs: Prefs; dirty: boolean }>;
+type Others = Record<string, { prefs: Prefs; dirty: boolean; dirtyKeys: PrefKey[] }>;
 
 function readOthers(): Others {
   try {
-    const raw = JSON.parse(localStorage.getItem(OTHERS_KEY) ?? '{}') as Record<string, { prefs?: unknown; dirty?: unknown }>;
+    const raw = JSON.parse(localStorage.getItem(OTHERS_KEY) ?? '{}') as Record<
+      string,
+      { prefs?: unknown; dirty?: unknown; dirtyKeys?: unknown }
+    >;
     const out: Others = {};
     for (const [id, value] of Object.entries(raw && typeof raw === 'object' ? raw : {})) {
-      if (value && typeof value === 'object') out[id] = { prefs: cleanPrefs(value.prefs), dirty: value.dirty === true };
+      if (value && typeof value === 'object') {
+        const dirtyKeys = storedDirtyKeys(value);
+        out[id] = { prefs: cleanPrefs(value.prefs), dirty: dirtyKeys.length > 0, dirtyKeys };
+      }
     }
     return out;
   } catch {
@@ -120,6 +156,13 @@ const darkQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-color-
 const RETRY_MIN_MS = 15_000;
 const RETRY_MAX_MS = 10 * 60_000;
 
+/** Lo de `prefs` en las claves `keys`. */
+function pick(prefs: Prefs, keys: PrefKey[]): Partial<Prefs> {
+  const out: Record<string, unknown> = {};
+  for (const k of keys) out[k] = prefs[k];
+  return out as Partial<Prefs>;
+}
+
 class PrefsStore {
   private state = readStored();
   private listeners = new Set<() => void>();
@@ -127,23 +170,27 @@ class PrefsStore {
   private pushing = false;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private failures = 0;
-  /** Sube con cada cambio local: una respuesta que salió antes de un cambio no lo pisa. */
-  private revision = 0;
   /** El usuario de `attach`: solo sus preferencias se suben con ese cliente. */
   private attachedUser: string | null = null;
+  /**
+   * Ya se leyó la cuenta en esta sesión (desde el último `attach`). Hasta entonces no se sube nada: subir el
+   * objeto entero antes de leer pisaría la cuenta con lo de fábrica de este dispositivo.
+   */
+  private loaded = false;
+  private loading: Promise<void> | null = null;
 
   constructor() {
     darkQuery?.addEventListener('change', () => this.emit());
     if (typeof window === 'undefined') return;
     window.addEventListener('online', () => void this.push());
     // Otra pestaña cambió las preferencias: esta las toma, solo si son del mismo usuario. Otra pestaña con
-    // otro workspace (otro usuario) no se mezcla: esta sigue con las suyas y nunca sube las de la otra.
+    // otro workspace (otro usuario) no se mezcla: esta sigue con las suyas y nunca sube las de la otra. Lo que
+    // la otra no escribió (una pestaña con una versión vieja no conoce el idioma) sigue como estaba acá.
     window.addEventListener('storage', (e) => {
       if (e.key !== STORAGE_KEY) return;
-      const next = readStored();
+      const next = readStored(this.state.prefs);
       if (next.userId !== this.state.userId) return;
       this.state = next;
-      this.revision++;
       this.emit();
     });
   }
@@ -165,8 +212,10 @@ class PrefsStore {
   };
 
   set(patch: Partial<Prefs>): void {
-    this.state = { ...this.state, prefs: cleanPrefs({ ...this.state.prefs, ...patch }), dirty: true };
-    this.revision++;
+    const prefs = cleanPrefs({ ...this.state.prefs, ...patch }, this.state.prefs);
+    const changed = KEYS.filter((k) => k in patch);
+    const dirtyKeys = [...new Set([...this.state.dirtyKeys, ...changed])];
+    this.state = { ...this.state, prefs, dirty: dirtyKeys.length > 0, dirtyKeys };
     this.failures = 0;
     this.save();
     this.emit();
@@ -174,35 +223,60 @@ class PrefsStore {
   }
 
   /**
-   * Al entrar: si hay cambios de este usuario sin subir, ganan y se suben; si no, manda lo guardado en
-   * la cuenta. Otro usuario en el mismo dispositivo nunca hereda ni sube las preferencias del anterior:
-   * las del anterior (con lo que tenga sin subir) quedan guardadas aparte, y el nuevo sigue con su propia
-   * copia si ya había entrado en este dispositivo, o de fábrica. Sin red se sigue con la copia local.
+   * Al entrar: se lee la cuenta y se fusiona con lo de este dispositivo, donde solo ganan las claves
+   * cambiadas acá y todavía sin subir (`dirtyKeys`); después, si quedó algo, se sube. Otro usuario en el
+   * mismo dispositivo nunca hereda ni sube las preferencias del anterior: las del anterior (con lo que tenga
+   * sin subir) quedan guardadas aparte, y el nuevo sigue con su propia copia si ya había entrado en este
+   * dispositivo, o de fábrica. Sin red se sigue con la copia local y se vuelve a leer cuando vuelve.
    */
   async attach(client: SupabaseClient, userId: string): Promise<void> {
     this.client = client;
     this.attachedUser = userId;
+    this.loaded = false;
+    this.loading = null;
     if (this.state.userId !== userId) {
       // La copia aparte de cada usuario se mantiene al día en cada `save` (también la del actual): así otra
       // pestaña con otro usuario que pisó `shotdocs-prefs` no le hace perder nada a este.
       const others = readOthers();
-      if (this.state.userId) others[this.state.userId] = { prefs: this.state.prefs, dirty: this.state.dirty };
+      if (this.state.userId) others[this.state.userId] = { prefs: this.state.prefs, dirty: this.state.dirty, dirtyKeys: this.state.dirtyKeys };
       const mine = others[userId];
       writeOthers(others);
-      this.state = { userId, prefs: mine ? mine.prefs : { ...DEFAULT_PREFS }, dirty: mine?.dirty ?? false };
-      this.revision++;
+      this.state = mine
+        ? { userId, prefs: mine.prefs, dirty: mine.dirty, dirtyKeys: mine.dirtyKeys }
+        : { userId, prefs: { ...DEFAULT_PREFS }, dirty: false, dirtyKeys: [] };
       this.emit();
     }
     this.save();
-    if (this.state.dirty) return this.push();
-    const revision = this.revision;
-    const { data, error } = await client.from('user_settings').select('prefs').eq('user_id', userId).maybeSingle();
-    if (error || this.revision !== revision || this.state.userId !== userId || !data) return;
-    // Lo que la cuenta no tiene (el idioma, si lo borró una versión vieja de la app al subir las suyas) sigue
-    // como estaba en este dispositivo en vez de volver a lo de fábrica.
-    this.state = { ...this.state, prefs: cleanPrefs(data.prefs, this.state.prefs) };
-    this.save();
-    this.emit();
+    await this.load();
+    return this.push();
+  }
+
+  /** Lee la cuenta una vez por sesión y la fusiona (un pedido a la vez). */
+  private load(): Promise<void> {
+    this.loading ??= this.read().finally(() => {
+      this.loading = null;
+    });
+    return this.loading;
+  }
+
+  private async read(): Promise<void> {
+    const client = this.client;
+    const userId = this.attachedUser;
+    if (!client || !userId || this.loaded) return;
+    try {
+      const { data, error } = await client.from('user_settings').select('prefs').eq('user_id', userId).maybeSingle();
+      if (error || this.client !== client || this.attachedUser !== userId || this.state.userId !== userId) return;
+      // Con lo que haya ahora (lo cambiado mientras se esperaba la respuesta está en `dirtyKeys`). Lo que la
+      // cuenta no tiene (el idioma, si lo borró una versión vieja de la app al subir las suyas) sigue como
+      // estaba en este dispositivo en vez de volver a lo de fábrica.
+      const merged = { ...cleanPrefs((data as { prefs?: unknown } | null)?.prefs, this.state.prefs), ...pick(this.state.prefs, this.state.dirtyKeys) };
+      this.loaded = true;
+      this.state = { ...this.state, prefs: merged };
+      this.save();
+      this.emit();
+    } catch {
+      // Sin red: se vuelve a intentar al volver la red o con el próximo cambio.
+    }
   }
 
   /** Hay un cambio de preferencias del usuario actual que todavía no subió. */
@@ -213,8 +287,16 @@ class PrefsStore {
   detach(): void {
     this.client = null;
     this.attachedUser = null;
+    this.loaded = false;
+    this.loading = null;
     if (this.retry) clearTimeout(this.retry);
     this.retry = null;
+  }
+
+  private schedule(): void {
+    if (this.retry) clearTimeout(this.retry);
+    const delay = Math.min(RETRY_MIN_MS * 2 ** Math.max(0, this.failures - 1), RETRY_MAX_MS);
+    this.retry = setTimeout(() => void this.push(), delay);
   }
 
   private async push(): Promise<void> {
@@ -222,12 +304,26 @@ class PrefsStore {
     const userId = this.attachedUser;
     // Solo lo del usuario de `attach`, con su cliente: nunca las de otro usuario en la cuenta equivocada.
     if (!client || !userId || this.state.userId !== userId || !this.state.dirty || this.pushing) return;
+    // Primero leer la cuenta (y fusionar); si no se pudo, se reintenta más tarde sin subir nada.
+    if (!this.loaded) {
+      await this.load();
+      if (!this.loaded) {
+        if (this.client === client) {
+          this.failures++;
+          this.schedule();
+        }
+        return;
+      }
+      if (this.client !== client || this.attachedUser !== userId) return;
+    }
+    if (this.pushing || !this.state.dirty) return;
     if (this.retry) clearTimeout(this.retry);
     this.retry = null;
     this.pushing = true;
     const sent = this.state.prefs;
     let permanent = false;
     let again = false;
+    let ok = false;
     try {
       const update = await client.from('user_settings').update({ prefs: sent }).eq('user_id', userId).select('user_id');
       let error = update.error ? toRemoteError(update.error, update.status) : null;
@@ -237,13 +333,17 @@ class PrefsStore {
         if (insert.error?.code === '23505') again = true;
         else if (insert.error) error = toRemoteError(insert.error, insert.status);
       }
-      if (error) permanent = error.permanent;
-      else if (!again && this.state.userId === userId && this.state.prefs === sent) {
-        this.state = { ...this.state, dirty: false };
+      if (error) {
+        permanent = error.permanent;
+        this.failures++;
+      } else if (!again && this.state.userId === userId) {
+        ok = true;
+        // Quedan sin subir solo las claves que cambiaron mientras se subía.
+        const dirtyKeys = this.state.dirtyKeys.filter((k) => this.state.prefs[k] !== sent[k]);
+        this.state = { ...this.state, dirty: dirtyKeys.length > 0, dirtyKeys };
         this.failures = 0;
         this.save();
       }
-      if (error) this.failures++;
     } catch {
       // Sin red: se reintenta.
       this.failures++;
@@ -253,11 +353,8 @@ class PrefsStore {
     if (!this.state.dirty || !this.client) return;
     // Si cambió algo mientras se subía, se sube ya. Si falló por algo que reintentar no arregla (permisos,
     // una base sin la tabla), se espera al próximo cambio o al próximo inicio; si no, cada vez más tarde.
-    if (again || this.state.prefs !== sent) void this.push();
-    else if (!permanent) {
-      const delay = Math.min(RETRY_MIN_MS * 2 ** Math.max(0, this.failures - 1), RETRY_MAX_MS);
-      this.retry = setTimeout(() => void this.push(), delay);
-    }
+    if (again || ok || this.state.prefs !== sent) void this.push();
+    else if (!permanent) this.schedule();
   }
 
   private save(): void {
@@ -265,7 +362,7 @@ class PrefsStore {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
       if (this.state.userId) {
         const others = readOthers();
-        others[this.state.userId] = { prefs: this.state.prefs, dirty: this.state.dirty };
+        others[this.state.userId] = { prefs: this.state.prefs, dirty: this.state.dirty, dirtyKeys: this.state.dirtyKeys };
         writeOthers(others);
       }
     } catch {

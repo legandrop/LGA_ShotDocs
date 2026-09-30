@@ -69,7 +69,6 @@ let reloading: Promise<never> | null = null;
 /** Recargar la página (aparte para las pruebas: jsdom no deja reemplazar `location.reload`). */
 export const pageReload = { now: (): void => location.reload() };
 
-
 /** El botón "Reload" de los avisos: un comentario sin mandar se pierde, así que pregunta antes. */
 function reloadByHand(): void {
   if (hasDrafts() && !window.confirm(t('lazy.draftQuestion'))) return;

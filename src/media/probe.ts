@@ -248,7 +248,7 @@ export async function deletedUrl(
     '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270">' +
     '<rect width="480" height="270" rx="8" fill="#ebe8e4"/>' +
     picture +
-    `<text x="240" y="130" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="600" fill="${ink}">${escapeXml(notice)}</text>` +
+    `<text x="240" y="130" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" font-weight="600" fill="${ink}">${escapeXml(notice)}</text>` +
     `<text x="240" y="162" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" fill="${ink}">${glyph ? `${glyph} ` : ''}${label}</text>` +
     '</svg>';
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;

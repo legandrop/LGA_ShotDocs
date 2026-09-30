@@ -17,6 +17,7 @@ import {
 import { insertOrUpdateBlockForSlashMenu } from '@blocknote/core';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 import { t, useT, type Translate } from '../i18n';
+import '../i18n/lazy/editor';
 import { useServices } from '../services';
 import { blockIdOf } from './carrete';
 import {

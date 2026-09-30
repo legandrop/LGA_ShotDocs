@@ -1,7 +1,13 @@
 import { createElement, Fragment, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { prefs, type Language } from '../prefs';
+import type { carrete } from './lazy/carrete';
+import type { commentsPanel } from './lazy/commentsPanel';
+import type { drive } from './lazy/drive';
+import type { editor } from './lazy/editor';
+import type { mediaTest } from './lazy/mediaTest';
+import type { teamDialogs } from './lazy/teamDialogs';
 import { strings } from './strings';
-import type { Entry } from './types';
+import type { Dict, Entry } from './types';
 
 // Los textos de la interfaz en inglés y en castellano (D-16). Cada clave tiene los dos idiomas juntos (ver
 // `strings.ts`); el idioma es una preferencia de la cuenta (`prefs.language`). Sin librerías: interpolación
@@ -13,11 +19,28 @@ import type { Entry } from './types';
 //   t.rich('x', { link: <a/> })    // con partes que no son texto (links, negritas)
 //
 // Fuera de un componente (avisos, errores, confirmaciones) se usa `t()` directo: lee el idioma en el
-// momento. Nada de esto toca lo guardado en los documentos: los nombres de los tipos de texto (Script,
+// momento. Los textos de las partes que se bajan aparte (el editor, el carrete, los diálogos, el panel de
+// comentarios) están en `lazy/` y viajan con esas partes: cada archivo que los usa importa su parte, que se
+// suma al diccionario al cargarse (`register`). Una prueba revisa que ningún otro archivo use esas claves. Nada de esto toca lo guardado en los documentos: los nombres de los tipos de texto (Script,
 // Question) son solo etiquetas.
 
 export type { Entry, Plural } from './types';
-export type Key = keyof typeof strings;
+type LazyStrings = typeof carrete &
+  typeof commentsPanel &
+  typeof drive &
+  typeof editor &
+  typeof mediaTest &
+  typeof teamDialogs;
+export type Key = keyof typeof strings | keyof LazyStrings;
+
+/** Todas las claves cargadas hasta ahora: las de la primera carga y las de las partes ya bajadas. */
+const registry: Record<string, { en: Entry; es: Entry }> = { ...strings };
+
+/** Suma los textos de una parte que se bajó aparte. */
+export function register(dict: Dict): void {
+  Object.assign(registry, dict);
+  patterns = null;
+}
 export type Params = Record<string, string | number>;
 
 export interface Translate {
@@ -35,7 +58,7 @@ function pick(entry: Entry, params?: Record<string, unknown>): string {
 
 /** El texto de una clave en un idioma, con los `{valores}` puestos. */
 export function translate(lang: Language, key: Key, params?: Params): string {
-  const pair = strings[key] as { en: Entry; es: Entry } | undefined;
+  const pair = registry[key];
   if (!pair) return key;
   const text = pick(pair[lang] ?? pair.en, params);
   if (!params) return text;
@@ -43,7 +66,7 @@ export function translate(lang: Language, key: Key, params?: Params): string {
 }
 
 function translateRich(lang: Language, key: Key, params: Record<string, ReactNode>): ReactNode {
-  const pair = strings[key] as { en: Entry; es: Entry } | undefined;
+  const pair = registry[key];
   if (!pair) return key;
   const text = pick(pair[lang] ?? pair.en, params as Record<string, unknown>);
   const parts = text.split(/\{(\w+)\}/);
@@ -64,6 +87,66 @@ function make(lang: Language): Translate {
 const cache: Partial<Record<Language, Translate>> = {};
 function translator(lang: Language): Translate {
   return (cache[lang] ??= make(lang));
+}
+
+// --- Textos guardados ------------------------------------------------------------------------------------
+//
+// Lo que se guarda en el dispositivo (el motivo de una subida detenida en IndexedDB, un aviso del arranque)
+// va en inglés, como siempre: una versión vieja de la app lo sigue mostrando bien. Al mostrarlo, `localize`
+// reconoce el texto de una clave (también con `{valores}`, que a su vez pueden ser textos de otra clave) y lo
+// pasa al idioma de ahora; lo que no reconoce (un mensaje del servidor) queda tal cual.
+
+/** El texto para guardar: siempre en inglés (ver `localize`). */
+export function stored(key: Key, params?: Params): string {
+  return translate('en', key, params);
+}
+
+let patterns: { key: Key; names: string[]; re: RegExp }[] | null = null;
+
+function compile() {
+  const out: NonNullable<typeof patterns> = [];
+  for (const [key, pair] of Object.entries(registry) as [Key, { en: Entry }][]) {
+    const forms = typeof pair.en === 'string' ? [pair.en] : [pair.en.one, pair.en.other];
+    for (const text of forms) {
+      const names: string[] = [];
+      const source = text
+        .split(/(\{\w+\})/)
+        .map((part) => {
+          const m = /^\{(\w+)\}$/.exec(part);
+          if (!m) return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          names.push(m[1]);
+          return m[1] === 'count' ? '(\\d+)' : '([\\s\\S]*?)';
+        })
+        .join('');
+      out.push({ key, names, re: new RegExp(`^${source}$`) });
+    }
+  }
+  // Primero los más largos: un texto con valores no se confunde con uno más corto.
+  return out.sort((a, b) => b.re.source.length - a.re.source.length);
+}
+
+/** Un texto guardado en inglés, en el idioma de ahora (o tal cual, si no es de ninguna clave). */
+export function localize(text: string, depth = 0): string {
+  if (!text || language() === 'en' || depth > 2) return text;
+  patterns ??= compile();
+  for (const p of patterns) {
+    const m = p.re.exec(text);
+    if (!m) continue;
+    const params: Params = {};
+    p.names.forEach((name, i) => {
+      params[name] = name === 'count' ? Number(m[i + 1]) : localize(m[i + 1], depth + 1);
+    });
+    return translate(language(), p.key, params);
+  }
+  // Varios avisos seguidos (" "): se prueba cortar entre dos oraciones.
+  for (let at = text.indexOf('. '); at >= 0; at = text.indexOf('. ', at + 1)) {
+    const left = text.slice(0, at + 1);
+    const right = text.slice(at + 2);
+    const a = localize(left, depth + 1);
+    const b = localize(right, depth + 1);
+    if (a !== left && b !== right) return `${a} ${b}`;
+  }
+  return text;
 }
 
 /** El idioma de la interfaz ahora. */

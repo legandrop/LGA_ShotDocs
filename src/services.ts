@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { AuthUser } from './auth';
-import { t } from './i18n';
+import { stored, t } from './i18n';
 import { pendingInviteTarget } from './invite';
 import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
@@ -214,7 +214,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       try {
         mediaDb = await openMediaDb(mediaDbName(dbName));
       } catch (err) {
-        mediaProblem = t('boot.mediaStorage', { reason: errorMessage(err) });
+        mediaProblem = stored('boot.mediaStorage', { reason: errorMessage(err) });
       }
       if (cancelled) {
         mediaDb?.close();
@@ -234,7 +234,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       try {
         commentsDb = await openCommentsDb(commentsDbName(dbName));
       } catch (err) {
-        commentsProblem = t('boot.commentsStorage', { reason: errorMessage(err) });
+        commentsProblem = stored('boot.commentsStorage', { reason: errorMessage(err) });
       }
       const comments = new CommentQueue(commentsDb, new SupabaseCommentRemote(workspace.client), user.id, {
         unavailable: commentsProblem,

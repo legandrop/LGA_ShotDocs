@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useT, type Key } from '../i18n';
+import { localize, useT, type Key } from '../i18n';
+import '../i18n/lazy/drive';
 import { pickFolder } from '../media/picker';
 import { Portero, sessionToken, type DriveStatus } from '../media/portero';
 import { useServices, useSyncStatus } from '../services';
@@ -188,5 +189,5 @@ export function DriveDialog({ result, onClose }: { result: string | null; onClos
 }
 
 function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  return localize(err instanceof Error ? err.message : String(err));
 }

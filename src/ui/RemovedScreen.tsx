@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { t, useT, type Translate } from '../i18n';
 import { clearInviteTarget } from '../invite';
+import { formatSize } from '../media/fileTrash';
 import type { MediaRecord } from '../media/mediaDb';
 import { mediaDbName } from '../media/mediaDb';
 import { commentsDbName } from '../sync/comments';
@@ -82,7 +83,7 @@ export function PendingMediaList(props: {
               {m.name}
             </button>{' '}
             <span className="muted">
-              {sizeLabel(m.size)}
+              {formatSize(m.size)}
               {props.downloaded.has(m.id) ? ` · ${tr('removed.downloaded')}` : ''}
             </span>
           </li>
@@ -105,10 +106,6 @@ export function forgetWorkspaceKeys(storage: StorageNames, userId: string, proje
     // Son comodidades: si no se pueden limpiar, no importa.
   }
   clearInviteTarget(storage.inviteTarget);
-}
-
-function sizeLabel(bytes: number): string {
-  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 export function RemovedScreen() {

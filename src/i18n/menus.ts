@@ -37,7 +37,7 @@ export const menus = {
   'account.theme.system': { en: "System", es: "Sistema" },
   'account.theme.light': { en: "Light", es: "Claro" },
   'account.theme.dark': { en: "Dark", es: "Oscuro" },
-  'account.font': { en: "Text", es: "Texto" },
+  'account.font': { en: "Text", es: "Letra" },
   'account.font.default': { en: "Default", es: "Normal" },
   'account.font.editorial': { en: "Editorial", es: "Editorial" },
   'account.textSize': { en: "Text size", es: "Tamaño del texto" },

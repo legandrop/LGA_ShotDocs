@@ -2,6 +2,7 @@ import type { BlockNoteEditor } from '@blocknote/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import type { EditorView, ViewMutationRecord } from '@tiptap/pm/view';
 import { t } from '../i18n';
+import '../i18n/lazy/editor';
 import { driveOpenUrl, drivePreviewUrl, parseDriveLink, sameDriveLink, type DriveLink } from './driveLinks';
 
 // --- Tarjeta de Drive --------------------------------------------------------------------------------

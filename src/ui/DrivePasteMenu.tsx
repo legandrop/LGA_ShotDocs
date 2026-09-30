@@ -2,6 +2,7 @@ import type { BlockNoteEditor } from '@blocknote/core';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useT, type Key } from '../i18n';
+import '../i18n/lazy/editor';
 import './drive.css';
 import { isTargetValid, type DrivePaste, type DrivePasteChoice } from './drivePaste';
 

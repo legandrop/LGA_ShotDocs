@@ -78,4 +78,5 @@ export const shell = {
   },
   'lazy.couldNotOpen': { en: "Could not open", es: "No se pudo abrir" },
   'lazy.couldNotOpenTitle': { en: "Could not open this", es: "No se pudo abrir esto" },
+  'legal.openApp': { en: "Open the app", es: "Abrir la app" },
 } satisfies Dict;

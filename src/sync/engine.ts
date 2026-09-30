@@ -1,4 +1,5 @@
-import { t } from '../i18n';
+// Los avisos del estado van en inglés y se traducen al mostrarlos (`localize` en SyncBadge.tsx).
+import { stored as t } from '../i18n';
 import type { MediaQueue, MediaStatus } from '../media/queue';
 import { mediaIdsInDoc } from '../media/usage';
 import * as Y from 'yjs';
@@ -9,7 +10,7 @@ import type { PageFiles } from './files';
 import { hasUnsyncedContent, type DocState } from './localDb';
 import { APP_OUTDATED, type Remote } from './remote';
 import type { PageTree } from './tree';
-import { errorMessage, isNetworkError, isPermanent, type QueuedOp, type WorkspaceSettings } from './types';
+import { errorMessage, isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, type QueuedOp, type WorkspaceSettings } from './types';
 
 export interface SyncStatus {
   /** El último intento de hablar con el servidor tuvo respuesta (aunque fuera un error). */
@@ -335,6 +336,12 @@ export class SyncEngine {
         try {
           await this.docs.pushPage(pageId, this.remote);
         } catch (err) {
+          // Muy lenta para esta página (venció el tope): se sigue con las demás y se reintenta en la
+          // próxima vuelta. No es un rechazo.
+          if (isTimeout(err)) {
+            contentError = REQUEST_TIMEOUT;
+            continue;
+          }
           if (!isPermanent(err)) throw err;
           if (errorMessage(err) === APP_OUTDATED) {
             // El workspace subió la versión mínima entre la consulta y la subida.
@@ -350,6 +357,11 @@ export class SyncEngine {
       const stale = rows.filter((r) => r.update_seq > (cursors.get(r.id)?.cursor ?? 0)).map((r) => r.id);
       await runPool(stale, PULL_CONCURRENCY, (id) =>
         this.docs.pullPage(id, this.remote).catch((err) => {
+          // Lo mismo al bajar: esta página se reintenta en la próxima vuelta y las demás siguen.
+          if (isTimeout(err)) {
+            contentError = REQUEST_TIMEOUT;
+            return;
+          }
           if (!isPermanent(err)) throw err;
           contentError = errorMessage(err);
         }),

@@ -6,8 +6,9 @@ La app en castellano e inglés (roadmap B.8, D-16). Toda la interfaz pasa por un
 idiomas: pantallas, menús, avisos, errores, el editor (con el diccionario de BlockNote), el carrete, los
 comentarios, la papelera, miembros y compartir. El idioma se elige en el menú de la cuenta y sigue a la
 cuenta en todos los dispositivos; por defecto, el del navegador. Script se llama Guion y Question,
-Pregunta; lo guardado en las páginas no cambia. Una versión vieja que sube sus preferencias no borra el
-idioma de los dispositivos nuevos. Las páginas legales quedan en inglés, con una nota.
+Pregunta; lo guardado en las páginas no cambia. Los dispositivos que ya tienen la versión nueva conservan
+su idioma aunque una versión vieja suba sus preferencias; uno nuevo toma el del navegador. Las páginas
+legales quedan en inglés, con una nota.
 [ Interfaz - castellano e inglés ]
 
 v0.040 :

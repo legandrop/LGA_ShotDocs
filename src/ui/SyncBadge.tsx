@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { t, useT, type Translate } from '../i18n';
+import { localize, t, useT, type Translate } from '../i18n';
 import type { MediaFailure } from '../media/queue';
 import { useServices, useSyncStatus, useTree } from '../services';
 import { ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from './icons';
@@ -113,7 +113,7 @@ export function SyncBadge() {
     <div className="sync">
       <button
         className={`sync-pill ${tone}`}
-        data-tip={status.localError ?? status.lastError ?? mediaError ?? commentError ?? undefined}
+        data-tip={localize(status.localError ?? status.lastError ?? mediaError ?? commentError ?? '') || undefined}
         aria-expanded={hasDetails ? details : undefined}
         onClick={() => (hasDetails ? setDetails(!details) : void engine.syncNow())}
       >
@@ -136,13 +136,13 @@ export function SyncBadge() {
             </p>
           )}
           {status.lastError && !status.localError && (
-            <p>{tr.rich('sync.detail.lastError', { error: <code>{status.lastError}</code> })}</p>
+            <p>{tr.rich('sync.detail.lastError', { error: <code>{localize(status.lastError)}</code> })}</p>
           )}
           {mediaError && !status.localError && (
-            <p>{tr.rich('sync.detail.mediaError', { error: <code>{mediaError}</code> })}</p>
+            <p>{tr.rich('sync.detail.mediaError', { error: <code>{localize(mediaError)}</code> })}</p>
           )}
           {commentError && !status.localError && (
-            <p>{tr.rich('sync.detail.commentError', { error: <code>{commentError}</code> })}</p>
+            <p>{tr.rich('sync.detail.commentError', { error: <code>{localize(commentError)}</code> })}</p>
           )}
           {status.outdated && (
             <p>
@@ -158,12 +158,12 @@ export function SyncBadge() {
               {tr('sync.detail.schema', { has: status.schemaBehind[0], needs: status.schemaBehind[1] })}
             </p>
           )}
-          {status.notice && <p>{status.notice}</p>}
+          {status.notice && <p>{localize(status.notice)}</p>}
           {/* Ya dice qué hacer (reabrir la app): va solo, sin el texto de los otros avisos. */}
-          {status.mediaWarning && <p>{status.mediaWarning}</p>}
+          {status.mediaWarning && <p>{localize(status.mediaWarning)}</p>}
           {status.warning && (
             <p>
-              <code>{status.warning}</code> {tr('sync.detail.warning')}
+              <code>{localize(status.warning)}</code> {tr('sync.detail.warning')}
             </p>
           )}
           {rejected > 0 && (
@@ -187,7 +187,7 @@ export function SyncBadge() {
                 )}
                 {mediaFailures.map((f) => (
                   <li key={f.id}>
-                    {tr('sync.upload', { name: f.name })}: <code>{f.error}</code>
+                    {tr('sync.upload', { name: f.name })}: <code>{localize(f.error)}</code>
                   </li>
                 ))}
                 {status.failedComments > 0 &&
@@ -195,7 +195,7 @@ export function SyncBadge() {
                     <li key={`comment-${f.seq}`}>
                       {commentAction(tr, f.kind, tree.get(f.pageId)?.title || tr('common.untitled'))}
                       {f.body ? ` (“${f.body.length > 40 ? `${f.body.slice(0, 40)}…` : f.body}”)` : ''}:{' '}
-                      <code>{f.error}</code>{' '}
+                      <code>{localize(f.error)}</code>{' '}
                       {f.body && (
                         <button className="link" onClick={() => void copyText(f.body ?? '')}>
                           {tr('sync.copyText')}

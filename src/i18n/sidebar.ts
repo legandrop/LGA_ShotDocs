@@ -3,8 +3,8 @@ import type { Dict } from './types';
 // La barra lateral, el árbol de páginas y el selector de proyectos.
 
 export const sidebar = {
-  'sidebar.collapse': { en: "Collapse", es: "Cerrar" },
-  'sidebar.expand': { en: "Expand", es: "Abrir" },
+  'sidebar.collapse': { en: "Collapse", es: "Plegar" },
+  'sidebar.expand': { en: "Expand", es: "Desplegar" },
   'sidebar.moreActions': { en: "More actions", es: "Más acciones" },
   'sidebar.addInside': { en: "Add a page inside", es: "Agregar una página adentro" },
   'sidebar.pages': { en: "Pages", es: "Páginas" },

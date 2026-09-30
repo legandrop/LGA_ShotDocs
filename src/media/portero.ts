@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { t } from '../i18n';
+// Los mensajes van en inglés (se guardan con la subida); se traducen al mostrarlos (`localize`).
+import { stored as t } from '../i18n';
 
 // Cliente del portero de archivos del workspace (ver portero/src/core.ts): el estado de la conexión con
 // el Drive del dueño, las subidas por partes y los pases para ver un archivo. Sin React, para poder

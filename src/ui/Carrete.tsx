@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { t as current, useT, type Translate } from '../i18n';
+import '../i18n/lazy/carrete';
 import type { MediaKind } from '../media/probe';
 import {
   clampZoom,

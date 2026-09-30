@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useT } from '../i18n';
+import '../i18n/lazy/teamDialogs';
 import { usePermissions, useServices, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, levelValue, type GrantLevel, type Role } from '../sync/access';
 import type { AccessRow, MemberRow } from '../sync/remote';

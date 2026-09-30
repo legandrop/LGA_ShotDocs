@@ -399,9 +399,10 @@ describe('lo que cada workspace recuerda', () => {
 
   it('otra pestaña con otro workspace no le cambia el usuario ni sube sus preferencias a esta cuenta', async () => {
     const pushed: string[] = [];
+    // La cuenta se lee bien (todavía sin fila); subir falla sin red.
     const client = {
       from: () => ({
-        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: 'offline' } }) }) }),
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
         update: () => ({
           eq: (_col: string, id: string) => {
             pushed.push(id);

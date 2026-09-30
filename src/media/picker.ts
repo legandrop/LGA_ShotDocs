@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import '../i18n/lazy/drive';
 import type { PickerConfig } from './portero';
 
 // El selector de carpetas de Google (Google Picker), para que el dueño elija dónde va la carpeta

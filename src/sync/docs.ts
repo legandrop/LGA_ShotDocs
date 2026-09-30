@@ -6,12 +6,13 @@ import {
   dirtyRange,
   emptyDocState,
   hasUnsyncedContent,
+  onlyGuard,
   updateDocState,
   type DocState,
   type LocalDb,
 } from './localDb';
 import { APP_OUTDATED, type Remote } from './remote';
-import { errorMessage, isPermanent, type RemoteUpdate } from './types';
+import { errorMessage, isPermanent, isTimeout, type RemoteUpdate } from './types';
 
 export const ORIGIN_LOAD = Symbol('load');
 export const ORIGIN_REMOTE = Symbol('remote');
@@ -49,6 +50,8 @@ interface LiveDoc {
    * semilla, así que guardar una sin la otra dejaría la edición sin poder mostrarse al volver a abrir.
    */
   unsavedSeed?: Uint8Array;
+  /** Se armó la versión guardia (ver `DocState.guardVersion`): la página se puede editar. */
+  guarded?: boolean;
 }
 
 export interface PageDocsOptions {
@@ -89,6 +92,12 @@ export class PageDocs {
   private readonly writes = new Map<string, Promise<void>>();
   /** Páginas con una escritura ya programada para el final de la tarea actual del navegador. */
   private readonly scheduled = new Set<string>();
+  /**
+   * Tandas escritas en transacciones que todavía no terminaron, por página. Cada transacción nueva las
+   * vuelve a incluir (Yjs no duplica): si una anterior falla después de que la siguiente se confirmó, lo
+   * guardado nunca queda colgando de una tanda que no está.
+   */
+  private readonly inFlight = new Map<string, Set<Uint8Array>>();
   private readonly retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private writeError: string | null = null;
   private disposed = false;
@@ -123,19 +132,38 @@ export class PageDocs {
     if (!entry) {
       const doc = new Y.Doc();
       const created: LiveDoc = { doc, refs: 0, ready: Promise.resolve() };
-      created.ready = this.loadInto(pageId, doc).then(() => {
+      created.ready = this.loadInto(pageId, doc).then(async () => {
+        const writable = this.options.canWrite?.(pageId) !== false;
+        // Antes de que se pueda editar nada (también la reparación de abajo).
+        if (writable) {
+          created.guarded = true;
+          await this.armGuard(pageId);
+        }
         doc.on('update', (update: Uint8Array, origin: unknown) => {
           if (origin === ORIGIN_SEED) {
             created.unsavedSeed = update;
             return;
           }
           if (origin === ORIGIN_LOAD || origin === ORIGIN_REMOTE) return;
+          if (!created.guarded) {
+            // Se abrió sin permiso de escritura y ahora se escribe (le dieron "Edit" con la página abierta).
+            created.guarded = true;
+            this.track(pageId, this.armGuard(pageId));
+          }
+          if (created.repairedInMemory) {
+            // Lo escrito puede colgar de la reparación hecha solo en memoria (y de la semilla): se guarda el
+            // documento entero, así la reparación queda guardada con lo que depende de ella.
+            created.repairedInMemory = false;
+            created.unsavedSeed = undefined;
+            this.persistLocal(pageId, [Y.encodeStateAsUpdate(doc)]);
+            return;
+          }
           const seed = created.unsavedSeed;
           created.unsavedSeed = undefined;
           // La semilla va primero y en el mismo lote: se guardan en la misma transacción.
           this.persistLocal(pageId, seed ? [seed, update] : [update]);
         });
-        if (this.options.canWrite?.(pageId) === false) {
+        if (!writable) {
           // Solo en memoria (origen que no se guarda): la vista queda bien y no sale ningún cambio.
           if (this.options.normalize?.(doc, ORIGIN_LOAD)) created.repairedInMemory = true;
         } else {
@@ -172,6 +200,8 @@ export class PageDocs {
           s.cursor = 0;
           s.syncedSV = undefined;
           s.ackedVersion = -1;
+          // Todo vuelve a subir: la guardia no puede esconder nada.
+          s.guardVersion = undefined;
           s.pending = undefined;
           s.rejected = undefined;
           s.lastError = undefined;
@@ -181,7 +211,10 @@ export class PageDocs {
     return states.length;
   }
 
-  /** Corta los reintentos de escritura (al cerrar sesión o cambiar de usuario). */
+  /**
+   * Corta los reintentos de escritura (al cerrar sesión o cambiar de usuario). Lo que ya estaba programado
+   * para guardarse se guarda igual (`flush` lo espera).
+   */
   dispose(): void {
     this.disposed = true;
     for (const timer of this.retryTimers.values()) clearTimeout(timer);
@@ -286,9 +319,7 @@ export class PageDocs {
             dirty: saved.dirty,
           };
           saved.doc.destroy();
-          state = await updateDocState(this.db, pageId, (s) => {
-            s.pending = next;
-          });
+          state = await this.savePending(pageId, next);
           pending = next;
         }
         let seq: number;
@@ -308,7 +339,9 @@ export class PageDocs {
           // Se suma a lo que ya se sabía (lo bajado mientras la subida estaba en vuelo también cuenta): los
           // dos vectores dicen solo lo que el servidor tiene, así que el mayor de cada autor también.
           s.syncedSV = mergeStateVectors(s.syncedSV, confirmed.sv);
-          s.ackedVersion = Math.max(s.ackedVersion, confirmed.version);
+          // La versión del envío guardado: puede haber sumado las ediciones que ya entraron en él (ver
+          // `bumpVersion`).
+          s.ackedVersion = Math.max(s.ackedVersion, confirmed.version, s.pending.version);
           // Lo que se acaba de subir ya está en el dispositivo: si nadie subió nada en el medio, el cursor
           // avanza y la página no figura como "a medio bajar" por culpa de lo propio.
           if (seq === s.cursor + 1) s.cursor = seq;
@@ -324,6 +357,31 @@ export class PageDocs {
   }
 
   /**
+   * Guarda el envío armado. Si la marca sigue siendo la que se leyó con lo guardado, no se guardó ninguna
+   * edición después: las sumas de versión que llegaron en el medio son de ediciones que ya van en el envío
+   * (se suman aparte, después de guardar cada una), así que el envío las cubre. Sin esto, la página quedaría
+   * pendiente una vuelta más y saldría una subida vacía.
+   */
+  private async savePending(pageId: string, next: NonNullable<DocState['pending']>): Promise<DocState> {
+    const tx = this.db.transaction(['docState', 'meta'], 'readwrite');
+    const [stored, dirty] = await Promise.all([
+      tx.objectStore('docState').get(pageId),
+      tx.objectStore('meta').get(dirtyKey(pageId)),
+    ]);
+    const state = stored ?? emptyDocState(pageId);
+    if (next.dirty !== undefined && dirty === next.dirty) next.version = Math.max(next.version, state.version);
+    state.pending = next;
+    // Con la página abierta para editar, la guardia queda por encima del envío: si la app se cierra con una
+    // edición guardada que no va en él (y sin su suma de versión), una versión anterior que confirme el
+    // envío igual ve la página pendiente.
+    const live = this.live.get(pageId);
+    if (live?.guarded && live.refs > 0) raiseGuard(state);
+    await tx.objectStore('docState').put(state);
+    await tx.done;
+    return state;
+  }
+
+  /**
    * Actualiza el estado de la página y, en la misma transacción, borra la marca de ediciones sin subir si
    * sigue siendo la que se leyó junto con lo que se subió: si hubo ediciones guardadas después, la marca es
    * otra y queda (se suben en la vuelta siguiente). Si `mutate` devuelve false, la marca no se toca.
@@ -336,6 +394,8 @@ export class PageDocs {
     const tx = this.db.transaction(['docState', 'meta'], 'readwrite');
     const state = (await tx.objectStore('docState').get(pageId)) ?? emptyDocState(pageId);
     const applied = mutate(state) !== false;
+    // Con la página abierta para editar, la guardia se vuelve a armar en la misma transacción.
+    if (this.live.get(pageId)?.guarded && (this.live.get(pageId)?.refs ?? 0) > 0) raiseGuard(state);
     await tx.objectStore('docState').put(state);
     if (applied && dirty !== undefined && (await tx.objectStore('meta').get(dirtyKey(pageId))) === dirty) {
       await tx.objectStore('meta').delete(dirtyKey(pageId));
@@ -391,13 +451,23 @@ export class PageDocs {
   pullPage(pageId: string, remote: Remote): Promise<number> {
     return this.withLock(pageId, async () => {
       let total = 0;
+      // Si un lote vence el tope de tiempo (una red lenta con updates grandes), se pide uno más chico, hasta
+      // de a uno (que tiene el tope más largo). Lo ya bajado queda guardado.
+      let batch = PULL_BATCH;
       for (;;) {
         const cursor = (await this.db.get('docState', pageId))?.cursor ?? 0;
-        const updates = await remote.pullUpdates(pageId, cursor, PULL_BATCH);
+        let updates: RemoteUpdate[];
+        try {
+          updates = await remote.pullUpdates(pageId, cursor, batch);
+        } catch (err) {
+          if (!isTimeout(err) || batch === 1) throw err;
+          batch = Math.max(1, Math.floor(batch / 10));
+          continue;
+        }
         if (updates.length === 0) break;
         await this.applyRemote(pageId, updates);
         total += updates.length;
-        if (updates.length < PULL_BATCH) break;
+        if (updates.length < batch) break;
       }
       return total;
     });
@@ -562,15 +632,19 @@ export class PageDocs {
 
   /** Escribe lo que haya en memoria de la página, en una transacción sin lecturas que se confirma en el acto. */
   private startWrite(pageId: string): Promise<void> {
-    if (this.disposed) return Promise.resolve();
     const timer = this.retryTimers.get(pageId);
     if (timer) {
       clearTimeout(timer);
       this.retryTimers.delete(pageId);
     }
-    const batch = this.unsaved.get(pageId) ?? [];
-    if (batch.length === 0) return Promise.resolve();
+    const fresh = this.unsaved.get(pageId) ?? [];
+    if (fresh.length === 0) return Promise.resolve();
     this.unsaved.set(pageId, []);
+    const flying = this.inFlight.get(pageId) ?? new Set<Uint8Array>();
+    this.inFlight.set(pageId, flying);
+    // Lo de las transacciones anteriores que todavía no terminaron va de nuevo (ver `inFlight`).
+    const batch = [...flying, ...fresh];
+    for (const update of fresh) flying.add(update);
 
     let done: Promise<void>;
     try {
@@ -591,14 +665,18 @@ export class PageDocs {
     }
     return done.then(
       () => {
+        for (const update of batch) flying.delete(update);
         this.setWriteError(null);
         this.onLocalChange?.(pageId);
         // Aparte y después: lo escrito ya está a salvo con su marca.
         this.track(pageId, this.bumpVersion(pageId));
       },
       (err: unknown) => {
-        // Vuelven a la cola: siguen en el documento en memoria y se reintentan solas.
-        this.unsaved.set(pageId, [...batch, ...(this.unsaved.get(pageId) ?? [])]);
+        // Vuelven a la cola: siguen en el documento en memoria y se reintentan solas. (Las que otra
+        // transacción ya guardó no están más en `flying`.)
+        const lost = batch.filter((update) => flying.has(update));
+        for (const update of lost) flying.delete(update);
+        this.unsaved.set(pageId, [...lost, ...(this.unsaved.get(pageId) ?? [])]);
         this.setWriteError(errorMessage(err));
         if (!this.retryTimers.has(pageId) && !this.disposed) {
           this.retryTimers.set(
@@ -616,17 +694,50 @@ export class PageDocs {
   /**
    * Suma uno a la versión de la página, en una transacción aparte y después de que la edición quedó
    * guardada con su marca. No hace falta para no perder nada en esta versión (lo pendiente lo dice la
-   * marca); es para una versión anterior de la app que abra esta misma base (una pestaña que no se
-   * recargó): esa solo mira `version > ackedVersion`. También cambia la marca de "ya mirada" de la papelera
-   * de archivos. Si falla, se vuelve a intentar desde `unsyncedPages`.
+   * marca); es para una versión anterior de la app que abra esta misma base, que solo mira `version >
+   * ackedVersion` (con la página abierta ya la cubre la guardia; esto cubre además la marca de "ya mirada"
+   * de la papelera de archivos, que usa la versión). Si no hay marca ni envío pendiente y estaba al día, la
+   * edición ya entró en una subida confirmada: suma también la confirmada, así no sale una subida vacía de
+   * más. Si falla, se vuelve a intentar desde `unsyncedPages`.
    */
   private async bumpVersion(pageId: string): Promise<void> {
     try {
-      await updateDocState(this.db, pageId, (s) => {
-        s.version += 1;
-      });
+      const tx = this.db.transaction(['docState', 'meta'], 'readwrite');
+      const [stored, dirty] = await Promise.all([
+        tx.objectStore('docState').get(pageId),
+        tx.objectStore('meta').get(dirtyKey(pageId)),
+      ]);
+      const state = stored ?? emptyDocState(pageId);
+      const upToDate = dirty === undefined && state.pending === undefined && !hasUnsyncedContent(state);
+      const guard = onlyGuard(state);
+      state.version += 1;
+      if (upToDate) {
+        state.ackedVersion += 1;
+        if (guard) state.guardVersion = state.version;
+      } else if (state.pending && dirty !== undefined && state.pending.dirty === dirty) {
+        // La marca sigue siendo la del envío en vuelo: esta edición entró en él (se guardó antes de armarlo),
+        // así que la suma también le corresponde al envío (y a la guardia, si estaba armada). Una versión
+        // anterior suma aparte, sin tocar esto.
+        state.pending.version += 1;
+        if (guard) state.guardVersion = state.version;
+      }
+      await tx.objectStore('docState').put(state);
+      await tx.done;
     } catch {
       // La base pudo cerrarse (se cierra la app): la próxima vez se suma desde `unsyncedPages`.
+    }
+  }
+
+  /**
+   * Arma la versión guardia al abrir una página que se puede editar (ver `DocState.guardVersion`), antes
+   * de que se pueda escribir nada. Si falla, la página se abre igual.
+   */
+  private async armGuard(pageId: string): Promise<void> {
+    try {
+      await updateDocState(this.db, pageId, raiseGuard);
+    } catch {
+      // Sin guardia, una versión anterior podría no ver pendiente la última edición si la app se cierra
+      // justo después; esta versión la sube igual (la marca).
     }
   }
 
@@ -757,4 +868,17 @@ export function mergeStateVectors(a: Uint8Array | undefined, b: Uint8Array): Uin
     if (clock > (merged.get(client) ?? 0)) merged.set(client, clock);
   }
   return Y.encodeStateVector(merged);
+}
+
+/**
+ * Deja `version` por encima de la confirmada (y de la de un envío sin confirmar) y la anota como guardia
+ * (ver `DocState.guardVersion`). Si ya estaba por encima (una edición sin confirmar, o la guardia ya
+ * armada), no cambia nada.
+ */
+function raiseGuard(state: DocState): void {
+  // También por encima de un envío sin confirmar: una versión anterior que lo confirme toma su versión.
+  const floor = Math.max(state.ackedVersion, state.pending?.version ?? -Infinity);
+  if (state.version > floor) return;
+  state.version = floor + 1;
+  state.guardVersion = state.version;
 }

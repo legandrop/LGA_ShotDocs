@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { locale, t, useT } from '../i18n';
+import '../i18n/lazy/teamDialogs';
 import { copyWhenReady, inviteLink } from '../invite';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, type GrantLevel, type Role } from '../sync/access';

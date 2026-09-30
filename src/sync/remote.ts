@@ -3,6 +3,7 @@ import { t } from '../i18n';
 import { fromBase64, toBase64 } from '../lib/base64';
 import { parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import {
+  REQUEST_TIMEOUT,
   RemoteError,
   type NewPage,
   type NewProject,
@@ -216,6 +217,10 @@ export function toRemoteError(
 ): RemoteError {
   const code = error?.code === undefined ? undefined : String(error.code);
   const httpStatus = status ?? error?.status ?? 0;
+  // El cliente de Supabase devuelve así una consulta cortada por su tope (`timed`).
+  if (httpStatus === 0 && /^AbortError\b/.test(error?.message ?? '')) {
+    return new RemoteError(REQUEST_TIMEOUT, false, REQUEST_TIMEOUT, true);
+  }
   const permanent = !(TRANSIENT_STATUS.has(httpStatus) || httpStatus >= 500);
   return new RemoteError(error?.message ?? `HTTP ${httpStatus}`, permanent, code, httpStatus === 0);
 }
@@ -230,6 +235,18 @@ export function toRemoteError(
  * una red lenta puede tardar más.
  */
 export const REQUEST_TIMEOUT_MS = 30_000;
+/**
+ * Lo que se le da de más a una consulta por lo que manda: una red lenta de 16 KB/s. Así "lento" nunca se
+ * vuelve "nunca" (una subida de 8 MB tiene unos 12 minutos).
+ */
+const SLOW_BYTES_PER_SECOND = 16 * 1024;
+/** Tope más largo: una subida del tamaño máximo (8 MB, que en base64 son unos 11 MB) a 16 KB/s. */
+export const MAX_REQUEST_TIMEOUT_MS = REQUEST_TIMEOUT_MS + Math.ceil(((8 * 1024 * 1024 * 4) / 3 / SLOW_BYTES_PER_SECOND) * 1000);
+
+/** El tope de una consulta que manda o recibe `bytes` (30 s más lo que tardaría a 16 KB/s, con un máximo). */
+export function timeoutFor(bytes: number): number {
+  return Math.min(MAX_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS + Math.ceil((bytes / SLOW_BYTES_PER_SECOND) * 1000));
+}
 
 export function deadline(ms = REQUEST_TIMEOUT_MS): AbortSignal {
   if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
@@ -239,9 +256,9 @@ export function deadline(ms = REQUEST_TIMEOUT_MS): AbortSignal {
 }
 
 /** Le pone el tope (`deadline`) a una consulta de Supabase. Un cliente de prueba sin `abortSignal` queda igual. */
-export function timed<T>(query: T): T {
+export function timed<T>(query: T, ms = REQUEST_TIMEOUT_MS): T {
   const q = query as T & { abortSignal?: (signal: AbortSignal) => T };
-  return typeof q.abortSignal === 'function' ? q.abortSignal(deadline()) : query;
+  return typeof q.abortSignal === 'function' ? q.abortSignal(deadline(ms)) : query;
 }
 
 function networkError(err: unknown): RemoteError {
@@ -391,10 +408,11 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     const args = { p_page_id: pageId, p_client_update_id: clientUpdateId, p_update: toBase64(update) };
     // Una base sin la migración de ajustes del workspace no tiene la versión con `p_app_version`.
     const versioned = Date.now() - this.versionedPushMissingAt >= 10 * 60_000;
-    const { data, error, status } = await timed(this.client.rpc(
-      'push_page_update',
-      versioned ? { ...args, p_app_version: this.appVersion || null } : args,
-    ));
+    // El tope crece con lo que se sube (hasta 8 MB).
+    const { data, error, status } = await timed(
+      this.client.rpc('push_page_update', versioned ? { ...args, p_app_version: this.appVersion || null } : args),
+      timeoutFor(args.p_update.length),
+    );
     if (error?.code === MISSING_FUNCTION && versioned) {
       this.versionedPushMissingAt = Date.now();
       return this.pushUpdate(pageId, clientUpdateId, update);
@@ -404,11 +422,12 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   }
 
   async pullUpdates(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]> {
-    const { data, error, status } = await timed(this.client.rpc('pull_page_updates', {
-      p_page_id: pageId,
-      p_after_seq: afterSeq,
-      p_limit: limit,
-    }));
+    // Lo que llega no se sabe de antemano: con el lote más chico (uno solo, que puede pesar hasta 8 MB) se
+    // da el tope más largo. Si vence un lote más grande, `PageDocs.pullPage` lo achica.
+    const { data, error, status } = await timed(
+      this.client.rpc('pull_page_updates', { p_page_id: pageId, p_after_seq: afterSeq, p_limit: limit }),
+      limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+    );
     if (error) throw toRemoteError(error, status);
     return (data as { seq: number; update: string }[]).map((r) => ({
       seq: Number(r.seq),

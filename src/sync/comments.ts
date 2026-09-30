@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { errorMessage, isNetworkError, isPermanent } from './types';
-import { t } from '../i18n';
+import { localize, stored, t } from '../i18n';
 
 // Comentarios y preguntas (paso 10 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Comentarios y
 // preguntas"). Viven en una tabla propia de la base, anclados al id de un bloque de la página (o a la página
@@ -178,28 +178,28 @@ export interface CommentThread {
   error: string | null;
 }
 
-/** Los errores de la base, en palabras. */
+/** Los errores de la base, en palabras (en inglés: se guardan; se traducen al mostrarlos con `localize`). */
 export function commentErrorText(error: string, kind?: CommentOp['kind']): string {
   switch (error) {
     case 'page_not_found':
-      return t('commentError.pageNotFound');
+      return stored('commentError.pageNotFound');
     case 'comment_not_found':
-      return t('commentError.commentNotFound');
+      return stored('commentError.commentNotFound');
     case 'thread_not_found':
-      return t('commentError.threadNotFound');
+      return stored('commentError.threadNotFound');
     case 'comment_denied':
-      return t('commentError.denied');
+      return stored('commentError.denied');
     case 'not_allowed':
-      return kind === 'delete' ? t('commentError.deleteNotAllowed') : t('commentError.editNotAllowed');
+      return kind === 'delete' ? stored('commentError.deleteNotAllowed') : stored('commentError.editNotAllowed');
     case 'comment_conflict':
-      return t('commentError.conflict');
+      return stored('commentError.conflict');
     case 'comment_deleted':
-      return t('commentError.deleted');
+      return stored('commentError.deleted');
     case 'thread_other_page':
     case 'thread_invalid':
-      return t('commentError.threadInvalid');
+      return stored('commentError.threadInvalid');
     case 'not_authenticated':
-      return t('commentError.signedOut');
+      return stored('commentError.signedOut');
     default:
       return error;
   }
@@ -306,7 +306,7 @@ export class CommentQueue {
   }
 
   get unavailable(): string | undefined {
-    return this.db ? undefined : (this.options.unavailable ?? t('commentError.storage'));
+    return this.db ? undefined : (this.options.unavailable ?? stored('commentError.storage'));
   }
 
   /** Se puede escribir: la base del dispositivo está abierta. */
@@ -828,7 +828,7 @@ export class CommentQueue {
   }
 
   private async enqueueNow(op: CommentOp): Promise<void> {
-    if (!this.db) throw new CommentInvalid(t('commentError.off', { reason: this.unavailable ?? '' }));
+    if (!this.db) throw new CommentInvalid(t('commentError.off', { reason: localize(this.unavailable ?? '') }));
     const tx = this.db.transaction('outbox', 'readwrite');
     const all = await tx.store.getAll();
     const open = (e: QueuedCommentOp) => !e.attempted && !e.failed && e.op.id === op.id;

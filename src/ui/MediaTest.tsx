@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
-import { locale, translate, useT, type Key, type Params } from '../i18n';
+import { locale, localize, translate, useT, type Key, type Params } from '../i18n';
+import '../i18n/lazy/mediaTest';
 import { useWorkspace } from '../workspace';
 import { openPortero, UploadError, type DriveFile, type DriveStatus, type Portero, type UploadProgress } from '../media/portero';
 
@@ -375,7 +376,7 @@ export function MediaTest() {
             </>
           )}
         </dl>
-        {driveError && <p className="error">{driveError}</p>}
+        {driveError && <p className="error">{localize(driveError)}</p>}
         {status && !status.connected && !status.isOwner && (
           <p className="muted">{tr('mediaTest.ownerOnly')}</p>
         )}
@@ -454,7 +455,7 @@ export function MediaTest() {
             )}
             {run.phase === 'done' && <p className="media-ok">{tr('mediaTest.uploadedIn', { time: clock(elapsed) })}</p>}
             {run.phase === 'cancelled' && <p className="muted">{tr('mediaTest.cancelled')}</p>}
-            {run.phase === 'failed' && <p className="error">{run.error}</p>}
+            {run.phase === 'failed' && <p className="error">{localize(run.error ?? '')}</p>}
           </div>
         )}
       </section>

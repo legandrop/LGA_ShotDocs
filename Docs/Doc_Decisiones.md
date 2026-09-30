@@ -78,7 +78,11 @@ diga otra cosa.
   - **Versiones viejas de la app:** no conocen la clave y la descartan al leer. Si una versión vieja cambia
     una preferencia, sube el objeto entero sin `language` y la clave se borra de la cuenta; no es grave: los
     dispositivos con la versión nueva siguen con el idioma que tenían (lo que la cuenta no trae no vuelve a
-    lo de fábrica) y uno nuevo arranca con el del navegador.
+    lo de fábrica, también si la clave falta en la copia local que escribió una pestaña vieja) y uno nuevo
+    arranca con el del navegador.
+  - **Nada se sube antes de leer la cuenta** en cada sesión: se lee, se fusiona (solo ganan las claves
+    cambiadas en el dispositivo y todavía sin subir, `dirtyKeys`) y recién ahí se escribe. Así un cambio
+    hecho sin red, o mientras se leía, no pisa la cuenta con lo de fábrica.
   - **Nada de lo guardado cambia:** Script y pregunta siguen siendo párrafos con `script: true` y
     `question: true`; "Guion" y "Pregunta" son solo etiquetas del menú "/" y del selector de tipo. Los
     nombres por defecto que la app crea (un proyecto nuevo) salen en el idioma del momento.
@@ -88,7 +92,11 @@ diga otra cosa.
   - **Quedan en inglés:** las páginas legales (`/privacy`, `/terms`: es el texto que revisa Google y el que
     vale; con la app en castellano muestran una nota que lo dice), la guía para crear un workspace, el
     informe técnico de *Media test* y los mensajes que manda el portero. Los avisos que la app guarda en el
-    dispositivo (el motivo de un cambio rechazado) quedan en el idioma en que se escribieron.
+    dispositivo (el motivo de una subida detenida, de un comentario rechazado) se guardan en inglés y se
+    traducen al mostrarlos (`localize`), así una versión vieja los sigue mostrando bien.
+  - **Los textos de lo que se baja aparte viajan con esas partes** (`src/i18n/lazy/`: editor, carrete,
+    panel de comentarios, miembros y compartir, Drive, prueba de fotos y videos); la primera carga trae el
+    resto, con los dos idiomas (unos 16 KB comprimidos).
 - **D-17 · Archivos grandes en el Drive del dueño** (2026-09-29). El plan gratis de Supabase trae 1 GB
   de archivos: unas 300 fotos de teléfono o un video de rodaje. Detalle en la sección 5 de
   `Plan_Workspaces.md`. Hoy el portero está publicado y probado con *Media test* (v0.022 a v0.028); el
