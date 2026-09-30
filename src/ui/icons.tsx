@@ -63,7 +63,15 @@ export const SheetIcon = icon('M5.5 2.75h9v14.5h-9zM7.75 5.5h4.5M7.75 8h4.5M7.75
 export const FilmIcon = icon(
   'M4.75 4.5h10.5c.7 0 1.25.55 1.25 1.25v8.5c0 .7-.55 1.25-1.25 1.25H4.75c-.7 0-1.25-.55-1.25-1.25v-8.5c0-.7.55-1.25 1.25-1.25zM8.5 7.75v4.5l3.75-2.25z',
 );
+export const CloseIcon = icon('M5 5l10 10M15 5L5 15', { strokeWidth: 1.7 });
+export const ChevronLeftIcon = icon('M12 4.5L6.5 10l5.5 5.5', { strokeWidth: 1.8 });
+export const ChevronRightIcon = icon('M8 4.5l5.5 5.5L8 15.5', { strokeWidth: 1.8 });
+export const DownloadIcon = icon('M10 3.5v9M6.25 9L10 12.75 13.75 9M4 16.25h12', { strokeWidth: 1.6 });
 export const HeaderIcon = icon('M4 6h12M4 10h7M4 14h9');
+export const ShareIcon = icon('M10 12.5V3.75M6.75 7L10 3.75 13.25 7M5.5 10.5H5a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1h-.5');
+export const MembersIcon = icon(
+  'M7.5 9.25a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5zM2.75 16.25a4.75 4.75 0 0 1 9.5 0M13.25 4a2.5 2.5 0 0 1 0 5M14.5 11.75a4.25 4.25 0 0 1 2.75 4.5',
+);
 
 export const MoreIcon = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

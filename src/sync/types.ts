@@ -41,6 +41,12 @@ export interface ProjectRow {
   id: string;
   name: string;
   created_at: string;
+  /**
+   * Quien creó el proyecto (`workspaces.owner_id`): tiene 4 sobre él mientras sea miembro activo. Falta en
+   * un proyecto creado en el dispositivo que todavía no volvió del servidor (lo creó esta persona) y en
+   * las copias guardadas por versiones anteriores de la app.
+   */
+  owner_id?: string | null;
 }
 
 export interface NewProject {
@@ -85,6 +91,10 @@ export interface WorkspaceSettings {
   mediaUrl: string | null;
   /** El dueño del workspace (el único que conecta su Drive); `null` si la base todavía no lo tiene. */
   ownerId?: string | null;
+  /** Nombre del workspace (`name`); `null` si la base todavía no lo tiene. */
+  name?: string | null;
+  /** Clave local del workspace (`local_key`), la que viaja en los links de invitación. */
+  localKey?: string | null;
 }
 
 /** Un archivo nuevo para `register_file` (el proyecto sale de la página). */

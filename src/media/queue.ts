@@ -692,6 +692,19 @@ export class MediaQueue {
     return { kind: meta ? mediaKind(meta.mime) : null, name: meta?.name ?? '', original: null };
   }
 
+  /**
+   * La miniatura tal cual, sin la marca de "play" (el carrete la muestra mientras carga la foto grande, y
+   * de póster del video), o `null` si no hay. No baja nada que `resolve` no baje.
+   */
+  async thumbnail(id: string): Promise<string | null> {
+    await this.resolve(MEDIA_SCHEME + id);
+    const key = `thumb:${id}`;
+    const cached = this.objectUrls.get(key);
+    if (cached) return cached;
+    const thumb = await this.db.get('thumbs', id).catch(() => undefined);
+    return thumb ? this.keep(key, thumb) : null;
+  }
+
   /** Un pase del portero para ver el archivo entero (vence a las 8 horas). */
   async pass(id: string): Promise<string> {
     if (!this.url) throw new Error('This workspace has no media server.');

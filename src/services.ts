@@ -1,17 +1,19 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { AuthUser } from './auth';
-import { mediaDbName, openMediaDb } from './media/mediaDb';
+import { pendingInviteTarget } from './invite';
+import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
 import { MediaQueue } from './media/queue';
+import { AccessStore, Permissions } from './sync/access';
 import { PageDocs } from './sync/docs';
 import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
 import { openLocalDb, type LocalDb } from './sync/localDb';
 import { supportsContent } from './ui/unknownContent';
-import { SupabaseRemote } from './sync/remote';
+import { SupabaseRemote, type Remote } from './sync/remote';
 import { mergeRootGroups, seedIfEmpty } from './sync/structure';
 import { PageTree } from './sync/tree';
-import { errorMessage } from './sync/types';
+import { errorMessage, isNetworkError } from './sync/types';
 import { DB_SCHEMA_VERSION, type ActiveWorkspace } from './workspace';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -27,6 +29,15 @@ export interface Services {
   /** Fotos y videos que van al Drive del dueño por el portero (`sdmedia://`). */
   media: MediaQueue;
   engine: SyncEngine;
+  /** Los permisos de la persona, guardados en el dispositivo (paso 9). */
+  access: AccessStore;
+  /** Las funciones del equipo (miembros, compartir), con red. */
+  remote: SupabaseRemote;
+  /** El nombre de la base local y la de archivos. */
+  dbName: string;
+  mediaDb: MediaDb;
+  /** Para la sincronización y cierra las bases del dispositivo (antes de borrarlas). */
+  shutdown: () => Promise<void>;
 }
 
 export const ServicesContext = createContext<Services | null>(null);
@@ -47,6 +58,35 @@ export function useTree(): PageTree {
 export function useSyncStatus(): SyncStatus {
   const { engine } = useServices();
   return useSyncExternalStore(engine.subscribe, engine.getStatus);
+}
+
+/** Qué puede hacer la persona (paso 9); re-renderiza cuando cambian el árbol o los permisos. */
+export function usePermissions(): Permissions {
+  const { access, user } = useServices();
+  const tree = useTree();
+  useSyncExternalStore(access.subscribe, access.getRevision);
+  return new Permissions(tree, access.get(), user.id);
+}
+
+/** La base dijo que sacaron a la persona del workspace. */
+export function useRemoved(): boolean {
+  const { access } = useServices();
+  useSyncExternalStore(access.subscribe, access.getRevision);
+  return access.removed;
+}
+
+/**
+ * Aplica las invitaciones del correo de la sesión (`accept_invitations`). Nunca corta la entrada: sin red,
+ * con una base que todavía no tiene la función o con cualquier error, sigue como si no hubiera ninguna.
+ * Devuelve cuántas aplicó.
+ */
+export async function acceptInvitationsQuietly(remote: Pick<Remote, 'acceptInvitations'>): Promise<number> {
+  try {
+    return (await remote.acceptInvitations()) ?? 0;
+  } catch (err) {
+    if (!isNetworkError(err)) console.warn('accept_invitations:', errorMessage(err));
+    return 0;
+  }
 }
 
 type Boot =
@@ -125,6 +165,12 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       if (cancelled) return db.close();
       const remote = new SupabaseRemote(workspace.client, __APP_VERSION__);
       let workspaceId = (await db.get('meta', 'workspaceId')) as string | undefined;
+      // Las invitaciones se aplican al entrar, antes de buscar el primer proyecto (lo compartido tiene que
+      // estar para encontrarlo). Con proyectos ya guardados no se espera, salvo que se venga de un link.
+      let accepted: Promise<number> | null = null;
+      if (!workspaceId || pendingInviteTarget()) await acceptInvitationsQuietly(remote);
+      else accepted = acceptInvitationsQuietly(remote);
+      if (cancelled) return db.close();
       if (!workspaceId) {
         try {
           const first = await remote.ensureWorkspace();
@@ -154,6 +200,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
 
       const tree = new PageTree(db, workspaceId);
       await tree.load();
+      const access = new AccessStore(db, user.id);
+      await access.load();
       const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, supports: supportsContent });
       const files = new PageFiles(db, remote);
       // Los archivos grandes, en una base aparte (la de siempre no cambia de versión).
@@ -171,24 +219,54 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         appVersion: __APP_VERSION__,
         schemaVersion: DB_SCHEMA_VERSION,
         media,
+        access,
       });
       if (cancelled) {
         mediaDb.close();
         return db.close();
       }
       engine.start();
+      // Si una invitación nueva sumó permisos, se sincroniza de nuevo para traer lo compartido.
+      void accepted?.then((n) => {
+        if (n > 0) void engine.syncNow();
+      });
       void navigator.storage?.persist?.();
-      cleanup = () => {
-        engine.stop();
-        docs.dispose();
-        media.dispose();
-        void docs.flush().finally(() => {
-          db.close();
-          mediaDb.close();
-          releaseLock?.();
-        });
+      let closing: Promise<void> | null = null;
+      const shutdown = () => {
+        closing ??= (async () => {
+          engine.stop();
+          docs.dispose();
+          media.dispose();
+          try {
+            await docs.flush();
+          } finally {
+            db.close();
+            mediaDb.close();
+            releaseLock?.();
+          }
+        })();
+        return closing;
       };
-      setBoot({ state: 'ready', services: { workspace, client: workspace.client, user, db, tree, docs, files, media, engine } });
+      cleanup = () => void shutdown().catch(() => undefined);
+      setBoot({
+        state: 'ready',
+        services: {
+          workspace,
+          client: workspace.client,
+          user,
+          db,
+          tree,
+          docs,
+          files,
+          media,
+          engine,
+          access,
+          remote,
+          dbName,
+          mediaDb,
+          shutdown,
+        },
+      });
     })().catch((err) => {
       if (!cancelled) setBoot({ state: 'error', message: errorMessage(err), retry: () => setAttempt((n) => n + 1) });
     });

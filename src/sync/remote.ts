@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fromBase64, toBase64 } from '../lib/base64';
+import { parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import {
   RemoteError,
   type NewPage,
@@ -40,6 +41,55 @@ export interface Remote {
   /** Idempotente: si el archivo ya está subido no hace nada. */
   uploadFile(path: string, data: ArrayBuffer, mime: string): Promise<void>;
   downloadFile(path: string): Promise<Blob>;
+  /**
+   * Los permisos propios: la fila de `members` (o `null` si no hay) y las filas de `grants` de esta
+   * persona. `null` si la base todavía no tiene esas tablas. Una respuesta rara tira error.
+   */
+  fetchMyAccess(userId: string): Promise<AccessSnapshot | null>;
+  /**
+   * Aplica las invitaciones vivas del correo de la sesión (`accept_invitations`) y devuelve cuántas.
+   * `null` si la base todavía no tiene la función.
+   */
+  acceptInvitations(): Promise<number | null>;
+}
+
+/** Una fila de `list_members`. */
+export interface MemberRow {
+  user_id: string;
+  email: string;
+  role: Role;
+  created_at: string;
+  removed_at: string | null;
+}
+
+/** Una fila de `list_access`: una por origen del permiso (el nivel de cada persona es el más alto). */
+export interface AccessRow {
+  user_id: string;
+  email: string;
+  role: Role;
+  level: GrantLevel;
+  source: 'creator' | 'project' | 'page' | 'parent_page';
+  grant_id: string | null;
+  project_id: string | null;
+  page_id: string | null;
+}
+
+/** Un permiso de una invitación: sobre un proyecto o una página. */
+export type InvitationGrant = { project_id: string; level: GrantLevel } | { page_id: string; level: GrantLevel };
+
+/**
+ * Las funciones del equipo (supabase/migrations/20260930160000_equipo.sql). Solo con red: son la pantalla
+ * de miembros y el diálogo de compartir, que muestran el error si no hay conexión.
+ */
+export interface TeamRemote {
+  listMembers(): Promise<MemberRow[]>;
+  createInvitation(email: string, role: Exclude<Role, 'owner'>, grants: InvitationGrant[]): Promise<string>;
+  setMemberRole(userId: string, role: Exclude<Role, 'owner'>): Promise<void>;
+  /** Devuelve cuántos proyectos pasaron a otra persona. */
+  removeMember(userId: string): Promise<number>;
+  share(userId: string, target: { projectId: string } | { pageId: string }, level: GrantLevel): Promise<string>;
+  unshare(grantId: string): Promise<void>;
+  listAccess(target: { projectId: string } | { pageId: string }): Promise<AccessRow[]>;
 }
 
 /**
@@ -102,7 +152,7 @@ function storageStatus(error: { name?: string; message: string }): number {
   return Number((error as { status?: number; statusCode?: string }).status ?? (error as { statusCode?: string }).statusCode ?? 0);
 }
 
-export class SupabaseRemote implements Remote, MediaRemote {
+export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
   private settingsMissingAt = 0;
 
@@ -140,12 +190,15 @@ export class SupabaseRemote implements Remote, MediaRemote {
       schema_version: number;
       media_url?: string | null;
     };
+    const extra = row as { owner_id?: string | null; name?: string | null; local_key?: string | null };
     return {
       generation: Number(row.generation),
       minAppVersion: row.min_app_version === null ? null : Number(row.min_app_version),
       schemaVersion: Number(row.schema_version),
       mediaUrl: row.media_url || null,
-      ownerId: (row as { owner_id?: string | null }).owner_id ?? null,
+      ownerId: extra.owner_id ?? null,
+      name: extra.name || null,
+      localKey: extra.local_key || null,
     };
   }
 
@@ -188,7 +241,7 @@ export class SupabaseRemote implements Remote, MediaRemote {
   async fetchProjects(): Promise<ProjectRow[]> {
     const { data, error, status } = await this.client
       .from('workspaces')
-      .select('id, name, created_at')
+      .select('id, name, created_at, owner_id')
       .order('created_at')
       .limit(1000);
     if (error) throw toRemoteError(error, status);
@@ -283,6 +336,87 @@ export class SupabaseRemote implements Remote, MediaRemote {
       throw toRemoteError({ message: error.message }, error.name === 'StorageUnknownError' ? 0 : status);
     }
     return data;
+  }
+
+  async fetchMyAccess(userId: string): Promise<AccessSnapshot | null> {
+    const member = await this.client.from('members').select('role, removed_at').eq('user_id', userId).maybeSingle();
+    if (member.error && MISSING_TABLE.has(String(member.error.code))) return null;
+    if (member.error) throw toRemoteError(member.error, member.status);
+    // Los admins ven los permisos de todos: se piden solo los propios.
+    const grants = await this.client
+      .from('grants')
+      .select('id, project_id, page_id, level')
+      .eq('user_id', userId)
+      .limit(10000);
+    if (grants.error && MISSING_TABLE.has(String(grants.error.code))) return null;
+    if (grants.error) throw toRemoteError(grants.error, grants.status);
+    try {
+      return parseAccess(member.data, grants.data);
+    } catch (err) {
+      // No es un rechazo: se vuelve a preguntar en la próxima sincronización y nada cambia.
+      throw new RemoteError(err instanceof Error ? err.message : String(err), false);
+    }
+  }
+
+  async acceptInvitations(): Promise<number | null> {
+    const { data, error, status } = await this.client.rpc('accept_invitations');
+    if (error?.code === MISSING_FUNCTION) return null;
+    if (error) throw toRemoteError(error, status);
+    return Number(data) || 0;
+  }
+
+  // --- equipo (pantalla de miembros y compartir) ---
+
+  async listMembers(): Promise<MemberRow[]> {
+    const { data, error, status } = await this.client.rpc('list_members');
+    if (error) throw toRemoteError(error, status);
+    return (data ?? []) as MemberRow[];
+  }
+
+  async createInvitation(email: string, role: Exclude<Role, 'owner'>, grants: InvitationGrant[]): Promise<string> {
+    const { data, error, status } = await this.client.rpc('create_invitation', {
+      p_email: email,
+      p_role: role,
+      p_grants: grants,
+    });
+    if (error) throw toRemoteError(error, status);
+    return String(data);
+  }
+
+  async setMemberRole(userId: string, role: Exclude<Role, 'owner'>): Promise<void> {
+    const { error, status } = await this.client.rpc('set_member_role', { p_user: userId, p_role: role });
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async removeMember(userId: string): Promise<number> {
+    const { data, error, status } = await this.client.rpc('remove_member', { p_user: userId });
+    if (error) throw toRemoteError(error, status);
+    return Number(data) || 0;
+  }
+
+  async share(userId: string, target: { projectId: string } | { pageId: string }, level: GrantLevel): Promise<string> {
+    const { data, error, status } = await this.client.rpc('share', {
+      p_user: userId,
+      p_project: 'projectId' in target ? target.projectId : null,
+      p_page: 'pageId' in target ? target.pageId : null,
+      p_level: level,
+    });
+    if (error) throw toRemoteError(error, status);
+    return String(data);
+  }
+
+  async unshare(grantId: string): Promise<void> {
+    const { error, status } = await this.client.rpc('unshare', { p_grant: grantId });
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async listAccess(target: { projectId: string } | { pageId: string }): Promise<AccessRow[]> {
+    const { data, error, status } = await this.client.rpc('list_access', {
+      p_project: 'projectId' in target ? target.projectId : null,
+      p_page: 'pageId' in target ? target.pageId : null,
+    });
+    if (error) throw toRemoteError(error, status);
+    return (data ?? []) as AccessRow[];
   }
 
   async registerFile(file: NewMediaFile): Promise<void> {

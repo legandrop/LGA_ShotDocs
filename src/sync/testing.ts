@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { mediaDbName, openMediaDb, type MediaDb } from '../media/mediaDb';
+import { AccessStore, levelValue, parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import { Portero } from '../media/portero';
 import type { Probe } from '../media/probe';
 import { MediaQueue } from '../media/queue';
@@ -7,7 +8,7 @@ import { PageDocs, type PageDocsOptions } from './docs';
 import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
-import type { MediaRemote, Remote } from './remote';
+import type { AccessRow, InvitationGrant, MediaRemote, MemberRow, Remote, TeamRemote } from './remote';
 import { mergeRootGroups, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
 import {
@@ -38,9 +39,21 @@ export class FakeServer {
   readonly updates = new Map<string, { seq: number; clientUpdateId: string; data: Uint8Array }[]>();
   readonly files = new Map<string, { data: ArrayBuffer; mime: string }>();
   readonly workspaceId = crypto.randomUUID();
+  /** El dueño del workspace y creador del primer proyecto; es el usuario de los dispositivos por defecto. */
+  readonly ownerId = 'owner-0000';
   readonly projects = new Map<string, ProjectRow>([
-    [this.workspaceId, { id: this.workspaceId, name: 'My project', created_at: new Date(0).toISOString() }],
+    [this.workspaceId, { id: this.workspaceId, name: 'My project', created_at: new Date(0).toISOString(), owner_id: this.ownerId }],
   ]);
+  /**
+   * Las reglas del paso 9 (supabase/migrations/20260930160000_equipo.sql): con `team`, las páginas y los
+   * proyectos se ven y se cambian según `members` y `grants`, como en la base. Apagado, como antes.
+   */
+  team = false;
+  readonly members = new Map<string, { email: string; role: Role; removed_at: string | null }>();
+  readonly grants: { id: string; user_id: string; project_id: string | null; page_id: string | null; level: GrantLevel }[] = [];
+  readonly invitations: { id: string; email: string; role: Exclude<Role, 'owner'>; grants: InvitationGrant[]; used_at: string | null }[] = [];
+  /** Cómo falla la lectura de los permisos propios (para probar que nada de eso se toma por "sacado"). */
+  accessFailure: null | 'network' | 'server' | 'empty' | 'weird' = null;
   /** Rechaza la creación de proyectos como si faltaran permisos. */
   rejectProjects = false;
   /** Para darle a cada restauración una generación nunca usada. */
@@ -104,6 +117,98 @@ export class FakeServer {
 
   check(): void {
     if (!this.online) throw new RemoteError('Failed to fetch', false, undefined, true);
+  }
+
+  /** Prende las reglas del equipo: base en la versión 4, con el dueño como `owner`. */
+  enableTeam(): void {
+    this.team = true;
+    this.settings = { ...(this.settings ?? { generation: 1, minAppVersion: null, mediaUrl: null, schemaVersion: 1 }), schemaVersion: 4 };
+    if (!this.members.has(this.ownerId)) this.members.set(this.ownerId, { email: 'owner@test', role: 'owner', removed_at: null });
+  }
+
+  /** Suma un miembro activo (como si hubiera entrado con una invitación). */
+  addMember(userId: string, role: Role, email = `${userId}@test`): void {
+    this.members.set(userId, { email, role, removed_at: null });
+  }
+
+  /** Da o cambia un permiso (como `share`). */
+  grant(userId: string, target: { projectId: string } | { pageId: string }, level: GrantLevel): string {
+    const project = 'projectId' in target ? target.projectId : null;
+    const page = 'pageId' in target ? target.pageId : null;
+    const found = this.grants.find((g) => g.user_id === userId && g.project_id === project && g.page_id === page);
+    if (found) {
+      found.level = level;
+      return found.id;
+    }
+    const id = crypto.randomUUID();
+    this.grants.push({ id, user_id: userId, project_id: project, page_id: page, level });
+    return id;
+  }
+
+  /** `private.workspace_role`: el rol activo, o `null`. */
+  role(uid: string): Role | null {
+    const m = this.members.get(uid);
+    return m && !m.removed_at ? m.role : null;
+  }
+
+  /** `private.page_level`. */
+  pageLevel(uid: string, pageId: string): number {
+    if (!this.role(uid)) return 0;
+    const page = this.pages.get(pageId);
+    if (!page) return 0;
+    const chain = new Set<string>();
+    for (let cur: string | null = pageId; cur && !chain.has(cur); cur = this.pages.get(cur)?.parent_id ?? null) chain.add(cur);
+    let level = this.projects.get(page.workspace_id)?.owner_id === uid ? 4 : 0;
+    for (const g of this.grants) {
+      if (g.user_id !== uid) continue;
+      if (g.project_id === page.workspace_id || (g.page_id && chain.has(g.page_id))) level = Math.max(level, levelValue(g.level));
+    }
+    return level;
+  }
+
+  /** `private.project_level`. */
+  projectLevel(uid: string, projectId: string): number {
+    if (!this.role(uid)) return 0;
+    let level = this.projects.get(projectId)?.owner_id === uid ? 4 : 0;
+    for (const g of this.grants) {
+      if (g.user_id === uid && g.project_id === projectId) level = Math.max(level, levelValue(g.level));
+    }
+    return level;
+  }
+
+  /** `private.can_create_page`. */
+  canCreatePage(uid: string, projectId: string, parentId: string | null): boolean {
+    if (!parentId) return this.projectLevel(uid, projectId) >= 4;
+    return this.pageLevel(uid, parentId) >= 4 && this.pages.get(parentId)?.workspace_id === projectId;
+  }
+
+  /** `private.can_view_project_row`. */
+  canViewProject(uid: string, projectId: string): boolean {
+    if (!this.role(uid)) return false;
+    if (this.projects.get(projectId)?.owner_id === uid || this.projectLevel(uid, projectId) >= 1) return true;
+    return this.grants.some((g) => g.user_id === uid && g.page_id && this.pages.get(g.page_id)?.workspace_id === projectId);
+  }
+
+  /** `remove_member`: pone `removed_at`, no borra nada, y pasa los proyectos compartidos a un admin. */
+  removeMember(uid: string): number {
+    const m = this.members.get(uid);
+    if (!m || m.removed_at) return 0;
+    m.removed_at = new Date().toISOString();
+    let moved = 0;
+    for (const p of this.projects.values()) {
+      if (p.owner_id !== uid) continue;
+      const heir = this.grants.find(
+        (g) =>
+          g.user_id !== uid &&
+          (this.role(g.user_id) === 'owner' || this.role(g.user_id) === 'admin') &&
+          (g.project_id === p.id || (g.page_id && this.pages.get(g.page_id)?.workspace_id === p.id)),
+      );
+      if (heir) {
+        p.owner_id = heir.user_id;
+        moved++;
+      }
+    }
+    return moved;
   }
 }
 
@@ -219,15 +324,34 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+const ROLE_RANK: Record<Role, number> = { guest: 1, member: 2, admin: 3, owner: 4 };
+
 /** Los errores de `register_file` y compañía (ver supabase/migrations/20260930150000_archivos.sql). */
 const pageNotFound = () => new RemoteError('page_not_found', true, 'P0002');
 const fileNotFound = () => new RemoteError('file_not_found', true, 'P0002');
 
-export class FakeRemote implements Remote, MediaRemote {
+export class FakeRemote implements Remote, MediaRemote, TeamRemote {
+  /** La sesión: por defecto, el dueño del workspace. */
+  readonly userId: string;
+  readonly email: string;
+
   constructor(
     readonly server: FakeServer,
     readonly appVersion = '',
-  ) {}
+    userId?: string,
+    email?: string,
+  ) {
+    this.userId = userId ?? server.ownerId;
+    this.email = (email ?? server.members.get(this.userId)?.email ?? `${this.userId}@test`).toLowerCase();
+  }
+
+  private get team(): boolean {
+    return this.server.team;
+  }
+
+  private denied(message: string): RemoteError {
+    return new RemoteError(message, true, '42501');
+  }
 
   async fetchWorkspaceSettings(): Promise<WorkspaceSettings | null> {
     this.server.check();
@@ -236,33 +360,50 @@ export class FakeRemote implements Remote, MediaRemote {
 
   async ensureWorkspace(): Promise<string | null> {
     this.server.check();
-    return this.server.workspaceId;
+    if (!this.team) return this.server.workspaceId;
+    const uid = this.userId;
+    if (!this.server.role(uid)) return null;
+    const byAge = [...this.server.projects.values()].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+    const own = byAge.find((p) => p.owner_id === uid);
+    if (own) return own.id;
+    const project = byAge.find((p) => this.server.grants.some((g) => g.user_id === uid && g.project_id === p.id));
+    if (project) return project.id;
+    const page = byAge.find((p) => this.server.canViewProject(uid, p.id));
+    return page?.id ?? null;
   }
 
   async fetchTree(projectIds: string[]): Promise<PageRow[]> {
     this.server.check();
     const ids = new Set(projectIds);
-    return [...this.server.pages.values()].filter((p) => ids.has(p.workspace_id)).map((p) => ({ ...p }));
+    return [...this.server.pages.values()]
+      .filter((p) => ids.has(p.workspace_id))
+      .filter((p) => !this.team || this.server.projectLevel(this.userId, p.workspace_id) >= 1 || this.server.pageLevel(this.userId, p.id) >= 1)
+      .map((p) => ({ ...p }));
   }
 
   async fetchProjects(): Promise<ProjectRow[]> {
     this.server.check();
-    return [...this.server.projects.values()].map((p) => ({ ...p }));
+    return [...this.server.projects.values()]
+      .filter((p) => !this.team || this.server.canViewProject(this.userId, p.id))
+      .map((p) => ({ ...p }));
   }
 
   async createProject(project: NewProject): Promise<void> {
     this.server.check();
     if (this.server.projects.has(project.id)) return;
-    if (this.server.rejectProjects) {
+    const role = this.server.role(this.userId);
+    if (this.server.rejectProjects || (this.team && role !== 'owner' && role !== 'admin')) {
       throw new RemoteError('new row violates row-level security policy for table "workspaces"', true, '42501');
     }
-    this.server.projects.set(project.id, { ...project, created_at: new Date().toISOString() });
+    this.server.projects.set(project.id, { ...project, created_at: new Date().toISOString(), owner_id: this.userId });
   }
 
   async renameProject(id: string, name: string): Promise<void> {
     this.server.check();
     const project = this.server.projects.get(id);
-    if (!project) throw new RemoteError('project_not_found', true, 'P0002');
+    if (!project || (this.team && this.server.projectLevel(this.userId, id) < 4)) {
+      throw new RemoteError('project_not_found', true, 'P0002');
+    }
     this.server.projects.set(id, { ...project, name });
   }
 
@@ -278,6 +419,9 @@ export class FakeRemote implements Remote, MediaRemote {
     const parent = page.parent_id ? this.server.pages.get(page.parent_id) : undefined;
     if (page.parent_id && parent?.workspace_id !== page.workspace_id) {
       throw new RemoteError('page_parent_invalid', true, '23503');
+    }
+    if (this.team && !this.server.canCreatePage(this.userId, page.workspace_id, page.parent_id)) {
+      throw this.denied('page_create_denied');
     }
     const now = new Date().toISOString();
     this.server.pages.set(page.id, {
@@ -295,6 +439,19 @@ export class FakeRemote implements Remote, MediaRemote {
     this.server.check();
     const page = this.server.pages.get(id);
     if (!page) throw new RemoteError('page_not_found', true, 'P0002');
+    if (this.team) {
+      const uid = this.userId;
+      // La política de update pide 3: sin eso, la fila no se ve y el update no toca nada.
+      if (this.server.pageLevel(uid, id) < 3) throw new RemoteError('page_not_found', true, 'P0002');
+      const parentId = patch.parent_id !== undefined ? patch.parent_id : page.parent_id;
+      const moves = parentId !== page.parent_id || (patch.sort_key !== undefined && patch.sort_key !== page.sort_key);
+      if (moves && (this.server.pageLevel(uid, id) < 4 || !this.server.canCreatePage(uid, page.workspace_id, parentId))) {
+        throw this.denied('page_move_denied');
+      }
+      if (patch.deleted_at !== undefined && patch.deleted_at !== page.deleted_at && this.server.pageLevel(uid, id) < 4) {
+        throw this.denied('page_trash_denied');
+      }
+    }
     if (patch.parent_id && this.server.pages.get(patch.parent_id)?.workspace_id !== page.workspace_id) {
       throw new RemoteError('page_parent_invalid', true, '23503');
     }
@@ -309,7 +466,9 @@ export class FakeRemote implements Remote, MediaRemote {
   async pushUpdate(pageId: string, clientUpdateId: string, update: Uint8Array): Promise<number> {
     this.server.check();
     const page = this.server.pages.get(pageId);
-    if (!page) throw new RemoteError('page_not_found', true, 'P0002');
+    if (!page || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) {
+      throw new RemoteError('page_not_found', true, 'P0002');
+    }
     const min = this.server.settings?.minAppVersion;
     if (min != null && !(/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion) && Number(this.appVersion) >= min)) {
       throw new RemoteError('app_outdated', true, 'P0001');
@@ -332,7 +491,9 @@ export class FakeRemote implements Remote, MediaRemote {
 
   async pullUpdates(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]> {
     this.server.check();
-    if (!this.server.pages.has(pageId)) throw new RemoteError('page_not_found', true, 'P0002');
+    if (!this.server.pages.has(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 1)) {
+      throw new RemoteError('page_not_found', true, 'P0002');
+    }
     return (this.server.updates.get(pageId) ?? [])
       .filter((u) => u.seq > afterSeq)
       .slice(0, limit)
@@ -352,6 +513,164 @@ export class FakeRemote implements Remote, MediaRemote {
     const file = this.server.files.get(path);
     if (!file) throw new RemoteError('Object not found', true);
     return new Blob([file.data], { type: file.mime });
+  }
+
+  // --- equipo (mismas reglas que supabase/migrations/20260930160000_equipo.sql) ---
+
+  async fetchMyAccess(userId: string): Promise<AccessSnapshot | null> {
+    this.server.check();
+    if (!this.team) return null;
+    switch (this.server.accessFailure) {
+      case 'network':
+        throw new RemoteError('Failed to fetch', false, undefined, true);
+      case 'server':
+        throw new RemoteError('Internal Server Error', false, '500');
+      case 'empty':
+        return parseAccess(null, []);
+      case 'weird':
+        try {
+          return parseAccess({ role: 'captain', removed_at: 12 }, 'nope');
+        } catch (err) {
+          throw new RemoteError(String(err), false);
+        }
+    }
+    const m = this.server.members.get(userId);
+    return parseAccess(
+      m ? { role: m.role, removed_at: m.removed_at } : null,
+      this.server.grants.filter((g) => g.user_id === userId).map(({ user_id: _u, ...g }) => g),
+    );
+  }
+
+  async acceptInvitations(): Promise<number | null> {
+    this.server.check();
+    if (!this.team) return null;
+    const uid = this.userId;
+    let n = 0;
+    for (const inv of this.server.invitations) {
+      if (inv.used_at || inv.email !== this.email) continue;
+      const cur = this.server.members.get(uid);
+      if (!cur) this.server.members.set(uid, { email: this.email, role: inv.role, removed_at: null });
+      else if (cur.removed_at) {
+        // Vuelve sin los permisos de antes.
+        for (let i = this.server.grants.length - 1; i >= 0; i--) if (this.server.grants[i].user_id === uid) this.server.grants.splice(i, 1);
+        this.server.members.set(uid, { ...cur, role: inv.role, removed_at: null });
+      } else if (cur.role !== 'owner' && ROLE_RANK[inv.role] > ROLE_RANK[cur.role]) {
+        cur.role = inv.role;
+      }
+      for (const g of inv.grants) {
+        const target = 'project_id' in g ? { projectId: g.project_id } : { pageId: g.page_id };
+        const existing = this.server.grants.find(
+          (x) => x.user_id === uid && ('projectId' in target ? x.project_id === target.projectId : x.page_id === target.pageId),
+        );
+        if (!existing || levelValue(g.level) > levelValue(existing.level)) this.server.grant(uid, target, g.level);
+      }
+      inv.used_at = new Date().toISOString();
+      n++;
+    }
+    return n;
+  }
+
+  async listMembers(): Promise<MemberRow[]> {
+    this.server.check();
+    const admin = ['owner', 'admin'].includes(this.server.role(this.userId) ?? '');
+    return [...this.server.members]
+      .filter(([id]) => admin || id === this.userId)
+      .map(([id, m]) => ({ user_id: id, email: m.email, role: m.role, created_at: '', removed_at: m.removed_at }));
+  }
+
+  async createInvitation(email: string, role: Exclude<Role, 'owner'>, grants: InvitationGrant[]): Promise<string> {
+    this.server.check();
+    const mine = this.server.role(this.userId);
+    if (mine !== 'owner' && mine !== 'admin') throw this.denied('not_allowed');
+    if (role === 'admin' && mine !== 'owner') throw this.denied('not_allowed');
+    for (const g of grants) {
+      const level = 'project_id' in g ? this.server.projectLevel(this.userId, g.project_id) : this.server.pageLevel(this.userId, g.page_id);
+      if (level < 4) throw this.denied('grant_not_allowed');
+    }
+    const em = email.trim().toLowerCase();
+    const live = this.server.invitations.find((i) => i.email === em && !i.used_at);
+    if (live) {
+      if (ROLE_RANK[role] > ROLE_RANK[live.role]) live.role = role;
+      live.grants.push(...grants);
+      return live.id;
+    }
+    const id = crypto.randomUUID();
+    this.server.invitations.push({ id, email: em, role, grants: [...grants], used_at: null });
+    return id;
+  }
+
+  async setMemberRole(userId: string, role: Exclude<Role, 'owner'>): Promise<void> {
+    this.server.check();
+    const mine = this.server.role(this.userId);
+    const cur = this.server.members.get(userId);
+    if (mine !== 'owner' && mine !== 'admin') throw this.denied('not_allowed');
+    if (!cur || cur.removed_at) throw new RemoteError('member_not_found', true, 'P0002');
+    if (cur.role === 'owner') throw this.denied('owner_cannot_change');
+    if ((cur.role === 'admin' || role === 'admin') && mine !== 'owner') throw this.denied('not_allowed');
+    cur.role = role;
+  }
+
+  async removeMember(userId: string): Promise<number> {
+    this.server.check();
+    const mine = this.server.role(this.userId);
+    const cur = this.server.members.get(userId);
+    if (mine !== 'owner' && mine !== 'admin') throw this.denied('not_allowed');
+    if (!cur) throw new RemoteError('member_not_found', true, 'P0002');
+    if (cur.role === 'owner') throw this.denied('owner_cannot_change');
+    if (cur.role === 'admin' && mine !== 'owner') throw this.denied('not_allowed');
+    return this.server.removeMember(userId);
+  }
+
+  async share(userId: string, target: { projectId: string } | { pageId: string }, level: GrantLevel): Promise<string> {
+    this.server.check();
+    if (!this.canShare(target)) throw this.denied('not_allowed');
+    if (!this.server.role(userId)) throw new RemoteError('member_not_found', true, 'P0002');
+    return this.server.grant(userId, target, level);
+  }
+
+  async unshare(grantId: string): Promise<void> {
+    this.server.check();
+    const at = this.server.grants.findIndex((g) => g.id === grantId);
+    const g = this.server.grants[at];
+    if (!g || !this.canShare(g.project_id ? { projectId: g.project_id } : { pageId: g.page_id! })) {
+      throw new RemoteError('grant_not_found', true, 'P0002');
+    }
+    this.server.grants.splice(at, 1);
+  }
+
+  async listAccess(target: { projectId: string } | { pageId: string }): Promise<AccessRow[]> {
+    this.server.check();
+    if (!this.canShare(target)) throw this.denied('not_allowed');
+    const projectId = 'projectId' in target ? target.projectId : this.server.pages.get(target.pageId)!.workspace_id;
+    const chain = new Set<string>();
+    if ('pageId' in target) {
+      for (let cur: string | null = target.pageId; cur && !chain.has(cur); cur = this.server.pages.get(cur)?.parent_id ?? null) chain.add(cur);
+    }
+    const rows: AccessRow[] = [];
+    const add = (uid: string, level: GrantLevel, source: AccessRow['source'], grant: string | null, project: string | null, page: string | null) => {
+      const m = this.server.members.get(uid);
+      if (m && !m.removed_at) rows.push({ user_id: uid, email: m.email, role: m.role, level, source, grant_id: grant, project_id: project, page_id: page });
+    };
+    const owner = this.server.projects.get(projectId)?.owner_id;
+    if (owner) add(owner, 'edit_pages', 'creator', null, projectId, null);
+    for (const g of this.server.grants) {
+      if (g.project_id === projectId) add(g.user_id, g.level, 'project', g.id, g.project_id, null);
+      else if (g.page_id && chain.has(g.page_id)) {
+        add(g.user_id, g.level, 'pageId' in target && g.page_id === target.pageId ? 'page' : 'parent_page', g.id, null, g.page_id);
+      }
+    }
+    return rows;
+  }
+
+  /** `private.can_share`. */
+  private canShare(target: { projectId: string } | { pageId: string }): boolean {
+    const uid = this.userId;
+    const role = this.server.role(uid);
+    if (!role) return false;
+    const projectId = 'projectId' in target ? target.projectId : this.server.pages.get(target.pageId)?.workspace_id;
+    if (!projectId) return false;
+    const level = 'projectId' in target ? this.server.projectLevel(uid, projectId) : this.server.pageLevel(uid, target.pageId);
+    return level >= 4 && (role === 'owner' || role === 'admin' || this.server.projects.get(projectId)?.owner_id === uid);
   }
 
   // --- archivos grandes (mismas reglas que la base) ---
@@ -458,6 +777,7 @@ export interface Device {
   mediaDb: MediaDb;
   engine: SyncEngine;
   remote: FakeRemote;
+  access: AccessStore;
 }
 
 /** Un dispositivo con su propia base local. Reusar `dbName` simula cerrar y volver a abrir la app. */
@@ -467,10 +787,14 @@ export async function makeDevice(
   appVersion = '0.021',
   docsOptions: PageDocsOptions = {},
   schemaVersion?: number,
+  /** La persona que usa el dispositivo; por defecto, el dueño del workspace. */
+  user: { id?: string; email?: string } = {},
 ): Promise<Device> {
   const db = await openLocalDb(dbName);
-  const remote = new FakeRemote(server, appVersion);
-  const tree = new PageTree(db, server.workspaceId);
+  const remote = new FakeRemote(server, appVersion, user.id, user.email);
+  const access = new AccessStore(db, remote.userId);
+  await access.load();
+  const tree = new PageTree(db, (server.team ? await remote.ensureWorkspace().catch(() => null) : null) ?? server.workspaceId);
   await tree.load();
   const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, ...docsOptions });
   const files = new PageFiles(db, remote);
@@ -483,6 +807,6 @@ export async function makeDevice(
     now: () => Date.now() + server.clockOffset,
   });
   await media.load();
-  const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media });
-  return { db, tree, docs, files, media, mediaDb, engine, remote };
+  const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media, access });
+  return { db, tree, docs, files, media, mediaDb, engine, remote, access };
 }

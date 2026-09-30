@@ -1,10 +1,11 @@
 import type { MediaQueue, MediaStatus } from '../media/queue';
+import { TEAM_SCHEMA_VERSION, type AccessStore } from './access';
 import type { PageDocs } from './docs';
 import type { PageFiles } from './files';
 import { hasUnsyncedContent } from './localDb';
 import { APP_OUTDATED, type Remote } from './remote';
 import type { PageTree } from './tree';
-import { errorMessage, isNetworkError, isPermanent, type QueuedOp } from './types';
+import { errorMessage, isNetworkError, isPermanent, type QueuedOp, type WorkspaceSettings } from './types';
 
 export interface SyncStatus {
   /** El último intento de hablar con el servidor tuvo respuesta (aunque fuera un error). */
@@ -26,6 +27,9 @@ export interface SyncStatus {
   mediaUrl: string | null;
   /** El dueño del workspace, si se sabe. */
   ownerId: string | null;
+  /** Nombre y clave local del workspace (`workspace_settings`), si se saben: van en los links de invitación. */
+  workspaceName: string | null;
+  workspaceLocalKey: string | null;
   /** Cambios del árbol que el servidor rechazó para siempre. */
   failedOps: number;
   /** Páginas cuyo contenido el servidor rechazó para siempre (por ejemplo, por tamaño). */
@@ -78,6 +82,8 @@ export class SyncEngine {
     uploading: null,
     mediaUrl: null,
     ownerId: null,
+    workspaceName: null,
+    workspaceLocalKey: null,
     failedOps: 0,
     rejectedPages: 0,
     localError: null,
@@ -101,7 +107,13 @@ export class SyncEngine {
     private readonly tree: PageTree,
     private readonly docs: PageDocs,
     private readonly files: PageFiles,
-    private readonly options: { appVersion?: string; schemaVersion?: number; media?: MediaQueue } = {},
+    private readonly options: {
+      appVersion?: string;
+      schemaVersion?: number;
+      media?: MediaQueue;
+      /** Los permisos de la persona: se actualizan en cada sincronización (ver `checkAccess`). */
+      access?: AccessStore;
+    } = {},
   ) {
     const poke = () => this.poke();
     tree.onQueued = poke;
@@ -171,6 +183,7 @@ export class SyncEngine {
    * La sincronización la arranca sola al final de cada ciclo; no hace falta esperarla.
    */
   syncMedia(): Promise<void> {
+    if (this.removed) return Promise.resolve();
     return this.options.media?.run((pageId) => this.tree.hasUnsentCreate(pageId)) ?? Promise.resolve();
   }
 
@@ -190,6 +203,11 @@ export class SyncEngine {
     const pull = this.docs.pullPage(pageId, this.remote).catch(() => undefined);
     await Promise.race([pull, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
     return !(await this.isMissingContent(pageId));
+  }
+
+  /** La base dijo que sacaron a la persona del workspace (lo guardado en el dispositivo). */
+  get removed(): boolean {
+    return this.options.access?.removed ?? false;
   }
 
   /** Hubo un cambio local: sincroniza en un rato, agrupando los cambios seguidos. */
@@ -225,7 +243,14 @@ export class SyncEngine {
       if (this.stopped) throw new Error('stopped');
     };
     try {
-      const outdated = await this.checkWorkspace();
+      const { outdated, removed } = await this.checkWorkspace();
+      halt();
+      // Si la base dice que sacaron a la persona, no se sube ni se baja nada más: lo del dispositivo queda
+      // como está hasta que ella elija qué hacer (pantalla "You no longer have access").
+      if (removed) {
+        this.patch({ online: true, lastError: null, lastSyncAt: Date.now() });
+        return;
+      }
       halt();
       await this.pushOps();
       halt();
@@ -285,11 +310,11 @@ export class SyncEngine {
    * generación), pone en la cola todo lo que el servidor ya no tiene antes de seguir. Devuelve si esta
    * versión de la app es más vieja que la mínima del workspace.
    */
-  private async checkWorkspace(): Promise<boolean> {
+  private async checkWorkspace(): Promise<{ outdated: boolean; removed: boolean }> {
     const settings = await this.remote.fetchWorkspaceSettings();
     if (!settings) {
       this.patch({ outdated: false });
-      return false;
+      return { outdated: false, removed: await this.checkAccess(null) };
     }
     const version = Number(this.options.appVersion);
     const outdated =
@@ -297,13 +322,21 @@ export class SyncEngine {
     const needed = this.options.schemaVersion ?? 0;
     const schemaBehind: [number, number] | null = settings.schemaVersion < needed ? [settings.schemaVersion, needed] : null;
     if (schemaBehind?.join() !== this.status.schemaBehind?.join()) this.patch({ schemaBehind });
-    this.patch({ outdated, mediaUrl: settings.mediaUrl, ownerId: settings.ownerId ?? null });
+    this.patch({
+      outdated,
+      mediaUrl: settings.mediaUrl,
+      ownerId: settings.ownerId ?? null,
+      workspaceName: settings.name ?? null,
+      workspaceLocalKey: settings.localKey ?? null,
+    });
     await this.options.media?.configure(settings.mediaUrl, settings.schemaVersion);
+    // Antes de recuperar nada tras una restauración: a alguien que sacaron no se le arma ninguna cola.
+    if (await this.checkAccess(settings)) return { outdated, removed: true };
 
     // Sin generación guardada vale 1, la que crea la migración: un dispositivo que todavía tenía una versión
     // anterior cuando se restauró la base igual se recupera al actualizar (uno vacío no tiene nada que hacer).
     const known = (await this.tree.knownGeneration()) ?? 1;
-    if (known === settings.generation) return outdated;
+    if (known === settings.generation) return { outdated, removed: false };
     {
       const projects = await this.remote.fetchProjects();
       const rows = await this.remote.fetchTree(projects.map((p) => p.id));
@@ -322,7 +355,26 @@ export class SyncEngine {
     }
     // Recién ahora: si la app se cierra a mitad de camino, la próxima vez se vuelve a hacer todo.
     await this.tree.setKnownGeneration(settings.generation);
-    return outdated;
+    return { outdated, removed: false };
+  }
+
+  /**
+   * Lee los permisos propios (fila de `members` y de `grants`) y los guarda en el dispositivo. Devuelve si
+   * la base dice que sacaron a la persona: SOLO con su fila de `members` con `removed_at`. Un error tira
+   * (y no cambia nada de lo guardado); una base sin la versión del equipo deja los permisos sin datos, y
+   * sin datos no se bloquea nada.
+   */
+  private async checkAccess(settings: WorkspaceSettings | null): Promise<boolean> {
+    const access = this.options.access;
+    if (!access) return false;
+    if (!settings || !(settings.schemaVersion >= TEAM_SCHEMA_VERSION)) {
+      await access.set(null);
+      return false;
+    }
+    const snapshot = await this.remote.fetchMyAccess(access.userId);
+    if (this.stopped) return false;
+    await access.set(snapshot);
+    return access.removed;
   }
 
   private async pushOps(): Promise<void> {

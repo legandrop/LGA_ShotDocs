@@ -13,12 +13,14 @@ import {
   type BlockTypeSelectItem,
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
 import { useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, mediaIdOf } from '../media/queue';
-import { MediaViewer } from './MediaViewer';
+import { Carrete } from './Carrete';
+import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carrete';
+import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema, SCRIPT_PROP } from './editorSchema';
 import { findUnknownContent } from './unknownContent';
@@ -134,7 +136,9 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
   const { files, media, user } = useServices();
   const scheme = useScheme();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
-  const [viewing, setViewing] = useState<string | null>(null);
+  const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
+  /** El toque empezó sobre una foto que ya estaba elegida (ver `openCarrete`). */
+  const pressedSelected = useRef(false);
 
   // Con portero, las fotos y los videos van al Drive del dueño (`sdmedia://`, primero en el dispositivo);
   // sin portero, las imágenes a Supabase como siempre (`sdfile://`).
@@ -275,19 +279,35 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
     notify(acceptedText(media.enabled));
   };
 
-  // Un clic en una foto o un video del Drive la abre entera (el carrete del paso 7 la reemplaza).
-  const openMedia = (e: MouseEvent) => {
+  // El carrete (paso 7): un clic o un toque en una foto o un video abre todas las de la página, empezando
+  // por esa. El editor igual elige el bloque debajo (no se corta el evento), así que al cerrar la foto
+  // queda elegida con su barra (reemplazar, leyenda, nombre, bajar, borrar). Los tiradores para cambiar el
+  // tamaño y el de arrastrar el bloque son otros elementos: nunca abren el carrete. En una página que se
+  // puede editar, tocar una foto que ya estaba elegida no abre el carrete: es para editarla (en el
+  // teléfono, al cerrar el carrete el foco no vuelve al editor, para que no se abra el teclado).
+  const notePress = (e: PointerEvent) => {
     const target = e.target as HTMLElement;
-    if (!target.matches('img.bn-visual-media')) return;
-    const id = mediaIdOf(target.closest('[data-content-type="image"]')?.getAttribute('data-url'));
-    if (id) setViewing(id);
+    pressedSelected.current = editable && !!target.closest?.('img.bn-visual-media') && !!target.closest('.ProseMirror-selectednode');
   };
+
+  const openCarrete = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.matches('img.bn-visual-media') || pressedSelected.current) return;
+    const items = collectCarrete(editor.document as unknown as BlockLike[]);
+    const start = startIndex(items, blockIdOf(target));
+    if (start < 0) return;
+    setCarrete({ items, start, loader: createCarreteLoader({ media, files }) });
+  };
+
+  // Lo creado para el carrete (los originales en memoria) se suelta al cerrarlo o al salir de la página.
+  useEffect(() => () => carrete?.loader.dispose(), [carrete]);
 
   return (
     <div
       onPasteCapture={(e) => rejectOtherFiles(e.nativeEvent, e.clipboardData)}
       onDropCapture={(e) => rejectOtherFiles(e.nativeEvent, e.dataTransfer)}
-      onClick={openMedia}
+      onPointerDownCapture={notePress}
+      onClick={openCarrete}
     >
       <BlockNoteView
         editor={editor}
@@ -302,9 +322,21 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
           formattingToolbar={() => <FormattingToolbar blockTypeSelectItems={toolbarItems} />}
         />
       </BlockNoteView>
-      {viewing && <MediaViewer fileId={viewing} onClose={() => setViewing(null)} />}
+      {carrete && <CarreteHost {...carrete} onClose={() => setCarrete(null)} />}
     </div>
   );
+}
+
+interface OpenCarrete {
+  items: CarreteItem[];
+  start: number;
+  loader: CarreteLoader;
+}
+
+/** El carrete con el estado de la red (aparte, para que el editor no se vuelva a dibujar con cada cambio). */
+function CarreteHost(props: OpenCarrete & { onClose: () => void }) {
+  const { online } = useSyncStatus();
+  return <Carrete {...props} online={online} />;
 }
 
 function flatten(blocks: Block[]): Block[] {
