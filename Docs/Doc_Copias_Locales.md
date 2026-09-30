@@ -155,8 +155,9 @@ tiene la cola) y otro **cuando falta lugar**:
   texto del aviso sin red. `openTarget`, `downloadTarget`, `originalFor` y `localImage` no cambian: ya caen al pase
   cuando no hay original.
 - **Una sola pestaña libera:** la que tiene la cola (la misma que sube); dos pestañas no se pisan.
-- **Carpetas (P.9):** sus archivos son registros como los demás; la carpeta se libera entera cuando todos sus
-  archivos están confirmados.
+- **Carpetas (P.9):** con el rediseño de P.9 (respuestas de Lega del 2026-09-30) una carpeta **no guarda copia en
+  el dispositivo**: los archivos se suben directo desde el disco y lo de adentro vive solo en Drive. No hay nada que
+  liberar; P.10 trata solo las fotos, videos y adjuntos sueltos de las páginas.
 
 ## 8. Varias cuentas y workspaces en el mismo dispositivo
 
@@ -255,10 +256,9 @@ manda sobre todo lo demás.
    `trashed: false` mirando Drive cada vez. Si algún pedido a `/m/` se usa para comprobar algo, con `cache:
    'no-store'` (`/m/` responde `Cache-Control: private, max-age=3600`).
 3. **Límites diarios de Cloudflare (plan gratis: 100.000 pedidos al Worker y 100.000 al Durable Object por día, para
-   toda la cuenta):** un `/verify` por archivo está bien para decenas o cientos de copias; para los miles de archivos
-   de una carpeta de P.9, no. Para una carpeta: confiar en la base (`drive_id` de cada archivo, sin papelera) y
-   verificar con `/verify` la carpeta y una muestra (por ejemplo 20 archivos al azar y todos los de más de 100 MB). Y
-   liberar a mano o sola nunca gasta más de un cupo por día (a medir con la entrega 0 de P.9).
+   toda la cuenta):** un `/verify` por archivo está bien para decenas o cientos de copias. ~~Para los miles de
+   archivos de una carpeta de P.9, una muestra~~: con el rediseño de P.9 las carpetas no guardan copia, así que no
+   hace falta. Liberar nunca gasta más que un cupo chico por día.
 4. **La papelera de la app también frena lo automático:** lo que está en la papelera de la app (`trashed_at`) no se
    libera solo (decisión 4): si alguien vacía la papelera, la copia del dispositivo puede ser la última fuera de la
    papelera de Drive.
@@ -300,3 +300,11 @@ manda sobre todo lo demás.
    `relink`, `lastUsedAt` (con "ahora" para lo anterior), avisos sin red y ofrecer liberar cuando algo no entra.
 3. **Entrega 2:** el interruptor de lo automático (apagado), "Guardar en este dispositivo", compartir sin copia local y
    la búsqueda por la marca.
+
+## Respuestas de Lega (2026-09-30)
+
+- Lega no entendió qué es "liberar las copias locales"; se le explica aparte (el archivo que eligió sigue en su disco
+  o su carrete; lo que se borra es la copia que la app guarda en el navegador después de confirmar que está en el
+  Drive). Mientras tanto queda la propuesta: **a mano por defecto**, con lo automático opcional y apagado.
+- Por las respuestas sobre P.9, las carpetas no guardan copia en el dispositivo (ver `Doc_Carpetas.md`, sección 5):
+  P.10 queda para los archivos sueltos de las páginas.

@@ -1,504 +1,451 @@
 # Arrastrar una carpeta entera (P.9)
 
-Estado: **diseño, sin implementar**. Auditoría previa hecha: "Correcciones de la auditoría", al final, manda
-sobre lo de arriba. Faltan las respuestas de Lega a las decisiones del final.
-Lo pidió Lega el 2026-09-30, al responder las decisiones de P.6 (`Doc_Adjuntos.md`): hoy una carpeta se
-rechaza pidiendo que se comprima; él quiere subirla entera, con sus subcarpetas, y que en la página quede
-algo que al hacer clic muestre lo que tiene adentro. Sale de leer el código de `main` (v0.051): `fileDrop.ts`,
-`queue.ts`, `mediaDb.ts`, `attachments.ts`, el portero y las migraciones de archivos y de la papelera.
+Estado: **diseño, sin implementar**. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
+Lega"): la carpeta de la página es **una vista en vivo de una carpeta del Drive**, sin tope de archivos y en el
+plan gratis de Cloudflare. El primer diseño (commit `47bbbf4`, una fila de `files` por archivo) y su auditoría
+quedan resumidos al final, en "Historia"; lo que la auditoría encontró y sigue valiendo está incorporado.
+Sale de leer `fileDrop.ts`, `queue.ts`, `mediaDb.ts`, `attachments.ts`, el portero (`portero/src/`) y las
+migraciones de archivos y de la papelera en `main` (v0.051).
 
 ## Qué se pide
 
-1. Arrastrar una carpeta (con subcarpetas) a la página. Va al Drive del dueño, como las fotos y los adjuntos.
+1. Arrastrar una carpeta (con subcarpetas) a la página. Va al Drive del dueño, a `<Proyecto>/Carpetas/<nombre>`.
 2. Antes y durante la subida, una **ventana que muestra qué se sube**: "esta carpeta, con todo esto".
-3. En la página queda **un bloque de carpeta**. Al hacer clic muestra su contenido **adentro de la app**.
-4. **Permisos:** quien ve la página ve y baja lo de esa carpeta (como las fotos), pero **nunca** puede subir
-   a la carpeta de arriba ni ver otras carpetas del Drive. Por eso no es un link de Drive: la app arma la
-   lista con lo que sabe la base y el portero sirve cada archivo con los mismos pases de siempre.
+3. En la página queda **un bloque de carpeta**. Al hacer clic muestra, **adentro de la app, lo que hay hoy en esa
+   carpeta del Drive**: si el dueño (o alguien con acceso al Drive) agrega o saca archivos ahí, la app lo muestra.
+   Es "como un link a esa carpeta", pero con los permisos de la app.
+4. **Permisos:** quien ve la página ve y baja lo de esa carpeta y sus subcarpetas, pero **nunca** puede subir a la
+   carpeta de arriba ni ver otras carpetas del Drive. Nada de links compartidos de Google.
+5. **Sin tope de archivos** y **en el plan gratis**.
+6. *Bajar todo* como zip (en la segunda entrega).
+7. En el iPhone, si no se puede elegir una carpeta, se sigue pidiendo comprimirla.
 
 ## Reglas que no se rompen
 
-- **Ningún tipo de bloque nuevo.** Una carpeta es **un bloque `image` con `url: sdmedia://<uuid>`**, como una
-  foto o un adjunto; el uuid es el de una fila de `files` que representa la carpeta (sección 2). El bloque
-  `file` de BlockNote sigue afuera (una versión vieja lo borraría, ver `Doc_Adjuntos.md`).
-- **Nunca se agrega nada a `sdmedia://<uuid>`** (una versión vieja dejaría de reconocer el archivo y lo daría
-  por quitado).
-- Primero en el dispositivo (IndexedDB, la cola de `src/media/queue.ts`), después al Drive por el portero,
-  registrado en `files`/`page_files`; para ver, un pase del portero por archivo. La papelera de archivos
-  sigue funcionando igual, con la carpeta como un solo elemento.
+- **Ningún tipo de bloque nuevo.** Una carpeta es **un bloque `image` con `url: sdmedia://<uuid>`**, como una foto
+  o un adjunto; el uuid es el de **una sola fila de `files`** (`mime = 'inode/directory'`) que apunta a la carpeta
+  de Drive. El bloque `file` de BlockNote sigue afuera (una versión vieja lo borraría, ver `Doc_Adjuntos.md`).
+- **Nunca se agrega nada a `sdmedia://<uuid>`** (una versión vieja dejaría de reconocer el archivo).
+- **El navegador de un miembro nunca recibe un token de Drive.** La conexión con el Drive del dueño vive solo en el
+  portero; el navegador recibe, como hoy, pases firmados de un archivo, y además direcciones de subida de un solo
+  archivo (sección 5).
+- **Nunca hacia arriba:** todo lo que el portero lista o sirve de una carpeta tiene que ser la carpeta registrada o
+  algo que está adentro (sección 8). Los accesos directos de Drive nunca se siguen.
 - Lo que una versión vieja no conozca se ve raro, **nunca se borra**.
-- El portero **nunca lista el Drive**: lo que se ve de una carpeta sale siempre de la base.
 
 ## Resumen
 
-- **En la página:** un bloque `image` con `sdmedia://<id de la carpeta>`, dibujado como una tarjeta de
-  carpeta (la misma técnica que la tarjeta de los adjuntos). Una versión vieja lo ve como un adjunto sin
-  abrir, y no pierde nada.
-- **En la base:** la carpeta es una fila de `files` con `mime = 'inode/directory'`; cada archivo de adentro es
-  otra fila de `files` con `folder_id` (la carpeta) y `rel_path` (`Fotos/Dia 2/IMG_0001.jpg`). Los archivos de
-  adentro **no** tienen filas en `page_files`: heredan el permiso, la papelera y el borrado de la carpeta.
-  Migración nueva (sección 7).
-- **En el Drive:** `LGA_ShotDocs/<Proyecto>/Carpetas/<Carpeta>/<subcarpetas>/<archivo>` (propuesta; a confirmar
-  por Lega), con el árbol de carpetas creado por el portero antes de subir los archivos (corrección 4).
-- **El visor:** una hoja o un diálogo con la lista (carpetas primero, después archivos), migas de pan que
-  **empiezan en la carpeta** (nunca más arriba), el carrete para las fotos y videos, abrir o bajar para el
-  resto y "Bajar todo" armado en el navegador.
+- **En la página:** un bloque `image` con `sdmedia://<id>` dibujado como tarjeta de carpeta. Una versión vieja lo ve
+  como un adjunto que no abre, y no pierde nada.
+- **En la base:** **solo la fila de la carpeta** (registrada con el `register_file` de siempre, tipo
+  `inode/directory`) y su uso en `page_files`. Lo de adentro es de Drive: no tiene filas. **Sin migración en la
+  entrega 1.**
+- **El portero:** crea la carpeta y sus subcarpetas en Drive, **abre las subidas de a tandas** (unas 40 por pedido)
+  y el navegador manda los bytes **directo a Google** (si la prueba de la entrega 0 confirma que Google lo acepta;
+  si no, por el portero como hoy, y entra igual en el plan gratis). Para ver, **lista la carpeta en vivo** y cada
+  archivo sale con su pase, por el portero.
+- **Cuánto entra (plan gratis, 100.000 pedidos por día):** subir una carpeta de 10.000 archivos cuesta unos 270
+  pedidos (unos 10.300 si los bytes pasan por el portero); bajarla entera en un zip, unos 10.000. El límite real de
+  una subida grande pasa a ser el ritmo de Drive (unas pocas creaciones por segundo), no Cloudflare. Sección 12.
+- **El permiso de Drive:** hoy el portero pide `drive.file`, que **solo ve lo que subió la app**. Para que aparezca
+  lo que se agrega a mano en Drive hace falta sumar `drive.readonly` (decisión 1, con sus consecuencias).
 
 ## 1. Qué frena hoy una carpeta
 
 | Dónde | Qué hace hoy |
 |---|---|
 | `src/ui/fileDrop.ts`, `takeFiles` | Mira `webkitGetAsEntry()` de cada ítem; si es una carpeta la cuenta en `folders` y la saltea. `PageEditor.tsx` avisa que hay que comprimirla. |
-| `queue.ts`, `save` | Un archivo por vez, con su bloque; nada sabe de rutas ni de carpetas. `checkRoom` mira el espacio de a un archivo. |
-| `queue.ts`, `round` | Procesa los pendientes por `createdAt`, uno por vez, hasta el final de la vuelta: una tanda de 500 archivos frenaría horas a la foto que se agregue después. |
-| Portero, `startFileUpload` / `dayFolder` | Siempre sube a `LGA_ShotDocs/<Proyecto>/<día>`, sin subcarpetas. |
-| Base (`files`, `page_files`) | Un archivo es visible si alguna página que lo usa es visible (`private.can_view_file`, `private.file_level`). No hay relación entre archivos. `size > 0`. |
-| `private.refresh_file_trash` | Un archivo sin usos vivos en `page_files` entra a la papelera: un archivo de adentro, sin filas propias, entraría enseguida. |
-| `project_sizes`, `trashed_files` | Suman o listan fila por fila: contarían la carpeta y cada archivo. |
+| `queue.ts` | Un archivo por vez, copiado primero al dispositivo, con su bloque; nada sabe de rutas ni de carpetas. |
+| Portero, `startFileUpload` / `dayFolder` | Siempre sube a `LGA_ShotDocs/<Proyecto>/<día>`, sin subcarpetas; los bytes pasan por el portero, 8 MiB por pedido. |
+| Portero, almacenamiento | Cada `store.get`/`put` es un llamado al Durable Object (`index.ts`): una subida cuesta 7–8 al abrirla y unos 5 por parte; y en cada subida mira en Drive la raíz, el proyecto y el día (`once()` junta lo simultáneo, no guarda nada). |
+| Portero, `/m/` | Sin CORS: la app no puede leer las respuestas con `fetch()` (hoy todo va por `<img>`, `<video>` y `<a>`). |
+| Portero, permiso de Google | `drive.file`: ve solo lo que creó la app. |
 
 ## 2. En la página: qué bloque y cómo se degrada
 
-Se compararon cuatro formas. La que decide es cómo reacciona la app publicada (v0.041 en adelante), porque
-una versión vieja puede abrir la misma página en otro dispositivo.
+Se compararon cuatro formas; decide cómo reacciona la app publicada (v0.041 en adelante), porque una versión vieja
+puede abrir la misma página en otro dispositivo.
 
 | Forma | Versión vieja (v0.049–v0.051) | Versión vieja (v0.041–v0.048) | Papelera en versión vieja | Veredicto |
 |---|---|---|---|---|
-| **`image` con `sdmedia://<carpeta>`** (la carpeta es una fila de `files`) | Tarjeta de adjunto con el nombre y el peso total; al abrirla, un aviso genérico ("no se puede abrir"): el texto del portero no llega a verse (corrección 9). | Recuadro gris con el ícono de foto y el nombre; el carrete dice que no se pudo cargar (aviso genérico). | `mediaIdsInDoc` la ve: copiar, pegar, mover y borrar el bloque registran y quitan el uso como con cualquier archivo. | **Elegida.** |
-| `image` con `sdfolder://<id>` | Imagen rota (`<img src="sdfolder://…">`). | Imagen rota. | `mediaIdOf` no la reconoce: copiarla a otra página en una versión vieja no registra el uso. No se pierde nada (la versión nueva lo registra después), pero la carpeta queda sin contar mientras tanto. | Peor sin ganar nada. |
-| Párrafo con una propiedad (`sdFolder`, como `driveCard`) | El párrafo con su texto. **Editar esa línea borra la propiedad** (`Doc_Sincronizacion.md`, "Links de Drive"): la carpeta desaparece de la página y la versión nueva la da por quitada. | Igual. | `mediaIdsInDoc` solo mira `url`: no la cuenta. | Riesgo real de perderla de la página. Descartada. |
-| Bloque `file` o un bloque nuevo | **La borra** al abrir la página (no está en el esquema). | Igual. | — | Prohibido por la regla. |
+| **`image` con `sdmedia://<carpeta>`** (la carpeta es una fila de `files`) | Tarjeta de adjunto con el nombre y el peso subido; abrirla da un aviso genérico ("no se puede abrir"). | Recuadro gris con el ícono de foto; el carrete, su aviso genérico. | `mediaIdsInDoc` la ve: copiar, pegar, mover y borrar el bloque registran y quitan el uso como con cualquier archivo. | **Elegida.** |
+| `image` con `sdfolder://<id>` | Imagen rota. | Imagen rota. | No la cuenta: copiarla en una versión vieja no registra el uso. | Peor sin ganar nada. |
+| Párrafo con una propiedad (`sdFolder`, como `driveCard`) | El párrafo. **Editar esa línea borra la propiedad**: la carpeta desaparece de la página. | Igual. | No la cuenta (`mediaIdsInDoc` solo mira `url`). | Descartada. |
+| Bloque `file` o uno nuevo | **Lo borra** al abrir la página. | Igual. | — | Prohibido. |
 
-**Por qué una fila de `files` para la carpeta:** así el uso en la página (`page_files`), la papelera, "de otro
-proyecto" (`is_foreign`), el permiso (`file_level`), el bucket de miniaturas y el diálogo de Drive funcionan sin
-caminos nuevos. La carpeta pesa lo que suman sus archivos (`size`, útil para la tarjeta de una versión vieja) y
-tiene `item_count`. Su `drive_id` es el de la carpeta en Drive, cuando el portero la crea.
+- **La fila de la carpeta** se registra con `register_file` tal cual (acepta cualquier tipo con forma
+  `tipo/subtipo` y `size > 0`): `mime = 'inode/directory'`, `size` = lo que suma lo que se subió al crearla. El
+  portero le pone `drive_id` (el id de la carpeta en Drive) con `set_file_drive` cuando la crea. Así el uso en la
+  página, la papelera, "de otro proyecto", `file_level`, el peso del proyecto y el diálogo de Drive funcionan sin
+  nada nuevo en la base.
+- **La tarjeta** sale de `display()` como la de los adjuntos (SVG generado, 360×96, fija, sin tiradores): un ícono
+  de carpeta, el nombre y abajo el estado: "subiendo 120 de 512" (en el dispositivo que sube), "subiendo desde otro
+  dispositivo", o "Carpeta de Drive" con el peso subido. No dice cuántos archivos tiene "ahora" (eso pide listar el
+  Drive: lo dice el visor). Variantes: de otro proyecto, en la papelera de Drive. `fileKind` sigue diciendo `'file'`
+  (el carrete la saltea y "Acomodar" corta solos) y `isFolderMime(mime)` hace que el clic abra el visor.
+- **Clic:** como un adjunto: con el mouse, el primero elige y el segundo abre el visor; en el teléfono un toque lo
+  abre; la barra espaciadora también. En la barra, *Open* abre el visor y *Download* ofrece *Bajar todo*.
 
-**La tarjeta:** sale de `display()` como las de los adjuntos (SVG generado, `data:image/svg+xml`, 360×96, sin
-tiradores ni tamaños rápidos ni "Acomodar", fija). Un ícono de carpeta amarillo a la izquierda, el nombre en hasta
-2 renglones y abajo "512 archivos · 4,2 GB". Estados, con la misma forma: guardando en el dispositivo (solo en el
-que la soltó), subiendo "120 de 512", con errores, completa, de otro proyecto ("Carpeta de otro proyecto") y en la
-papelera de Drive. `fileKind` sigue diciendo `'file'` para la carpeta (así el carrete la saltea y "Acomodar" corta
-solos); una función aparte, `isFolderMime(mime)`, decide que el clic abra el visor y no una descarga. La tarjeta se
-vuelve a dibujar con el mismo mecanismo que usa la miniatura cuando llega (`subscribeThumbs`), como mucho una vez
-por segundo mientras sube.
+## 3. La carpeta es una vista en vivo del Drive
 
-**Clic:** igual que un adjunto (Doc_Adjuntos.md, sección 3): con el mouse el primer clic elige y el segundo abre
-el visor; en el teléfono un toque lo abre; la barra espaciadora también. En la barra del bloque, *Open* abre el
-visor y *Download* ofrece "Bajar todo".
+- **Qué se muestra:** lo que hay **ahora** en la carpeta de Drive y sus subcarpetas, sin la papelera de Drive. Si
+  el dueño agrega, borra, renombra o mueve algo adentro desde su Drive, la próxima vez que alguien abre el visor lo ve
+  así. La app no guarda la lista de archivos en la base: la pide al portero cada vez (con una copia en el dispositivo
+  para verla sin red, sección 8).
+- **El problema del permiso de Google.** Con `drive.file` (el de hoy) el portero **solo ve lo que creó la app**:
+  lo que se suba desde la app aparece; **lo que se agregue a mano en Drive, no**. Tres caminos (decisión 1):
+  1. **Sumar `drive.readonly`** al conectar Drive (el dueño reconecta una vez). Se ve todo lo de adentro, lo haya
+     puesto quien lo haya puesto. Consecuencias: la pantalla de Google dice "ver todos tus archivos de Drive"; es un
+     permiso "restringido", así que la app de Google del dueño queda "sin verificar" (el aviso de siempre al conectar;
+     con un solo usuario, el dueño, no hace falta la verificación de Google; una organización de Google Workspace
+     puede bloquear apps sin verificar); y **el portero pasa a poder leer todo el Drive del dueño**: la regla "nunca
+     hacia arriba" (sección 8) deja de ser una limitación de Google y pasa a ser **código del portero**, con pruebas.
+     Subir y mandar a la papelera siguen con `drive.file`.
+  2. **Quedarse con `drive.file`** y sumar en la app "Agregar a esta carpeta" (soltar en el visor o en la tarjeta):
+     lo agregado desde la app se ve; lo agregado a mano en Drive, no. Para lo agregado a mano, el dueño podría
+     "traerlo" con el selector de Google (elegir los archivos le da acceso a la app), a mano.
+  3. `drive` entero: más de lo necesario. Descartado.
 
-## 3. Leer la carpeta
+  La propuesta es el camino 1, porque es lo que pidió Lega, con el camino 2 ("Agregar a esta carpeta") igual en la
+  app.
+- **Qué no se ve nunca:** la carpeta de arriba, las hermanas, lo que está en la papelera de Drive, y el destino de
+  un acceso directo (sección 8).
 
-- **Soltar (computadora):** en el mismo manejador de `fileDrop.ts`, `webkitGetAsEntry()` de **todos** los ítems
-  **en el acto** (la lista de ítems queda vacía al terminar el evento; las entradas sí siguen valiendo después).
-  Después, sin apuro, se recorre cada carpeta con `createReader().readEntries()` **en bucle hasta que devuelva
-  vacío** (Chrome entrega de a 100) y `entry.file()` para cada archivo. Anda en Chrome, Edge, Firefox y Safari de
-  Mac. `DataTransferItem.getAsFileSystemHandle()` (solo Chromium) no suma nada para esto: no se usa.
-- **Mezcla:** en un mismo soltar, los archivos sueltos siguen el camino de hoy (un bloque por archivo) y cada
-  carpeta da un bloque de carpeta, en el orden en que llegaron.
-- **Botón "Carpeta…"** (en el menú `/` y en la barra de la imagen, al lado de subir archivo): un
-  `<input type="file" webkitdirectory>`. Cada `File` trae `webkitRelativePath`. Chrome pregunta "¿Subir N
-  archivos a este sitio?": es del navegador. Con este camino **no llegan las carpetas vacías**.
-- **iPhone y iPad:** arrastrar una carpeta desde Archivos a Safari no es confiable (a probar a mano: puede no
-  llegar nada o llegar sin entradas). `webkitdirectory` en iOS **está por probar** (WebKit anunció soporte en
-  versiones recientes; en las viejas se ignora y abre el selector de archivos común). Si en el iPhone no hay
-  forma, el botón no aparece y el aviso de hoy (comprimirla) se queda para ese caso. Android: a probar
-  `webkitdirectory` en Chrome.
-- **Pegar** una carpeta copiada en el Finder: los navegadores no la entregan bien. Sigue rechazada con el aviso.
-- **Qué se saltea** (y la ventana lo dice con el número): lo que empieza con punto (`.DS_Store`, `._foto.jpg`
-  de AppleDouble, `.git`), `Thumbs.db`, `ehthumbs.db`, `desktop.ini`, `Icon\r`, las carpetas `__MACOSX`, los
-  archivos de bloqueo de Office (`~$…`) y los **archivos vacíos** (la base pide `size > 0` y la cola ya rechaza
-  el vacío). Una casilla "Incluir archivos ocultos" en la ventana (decisión 5). Las carpetas vacías no se crean.
-- **Accesos directos y alias:** llegan como archivos chicos; se suben tal cual. Si leer un archivo falla (un
-  permiso del sistema, un archivo que se movió mientras tanto), queda en la lista como "no se pudo leer" y el
-  resto sigue.
+## 4. Por qué Cloudflare, y qué hace el portero
 
-## 4. La ventana: "esta carpeta, con todo esto"
+Lega preguntó por qué Cloudflare y si se puede saltear. El portero hace una sola cosa que no puede hacer nadie más:
+**guardar la conexión con el Drive del dueño** (el refresh token) y usarla solo para lo que la base dice que cada
+persona puede. Con ese token se abre todo lo que la app subió (y, con `drive.readonly`, todo el Drive del dueño):
+no puede ir nunca al navegador de un miembro.
 
-Una sola ventana (no bloquea la página) con dos momentos:
+- **Lo que queda en el portero:** decidir con la sesión de Supabase de la persona (como hoy), firmar pases, crear
+  carpetas, abrir subidas y listar. **Los bytes de las subidas pueden ir directo del navegador a Google** (sección
+  5). **Los de las descargas no:** Drive no tiene direcciones firmadas para un archivo privado; sin el token, Google
+  no los da. Pasan por el portero en streaming, como hoy (Cloudflare no cobra la transferencia: por eso se eligió).
+- **Menos pedidos y menos llamados al Durable Object:**
+  - Los pedidos "de control" (crear carpetas, abrir subidas, listar, pases) hacen **un solo llamado** al Durable
+    Object, que tiene la lógica adentro (un solo hilo: dos pedidos a la vez no crean dos carpetas iguales) y guarda en
+    memoria el token vigente, la clave de los pases, los ids de raíz, proyecto y `Carpetas`, y el árbol de cada
+    carpeta (con vencimiento de 10 minutos).
+  - `/m/` (los bytes) sigue en el Worker, con el token y la clave de los pases en la memoria de la instancia: con la
+    instancia caliente, **cero llamados** al Durable Object.
+  - Las subidas no guardan nada por archivo en el Durable Object: la dirección de subida la tiene el navegador.
+- **Alternativas, honestas:**
 
-1. **Antes de subir (confirmar):** el nombre, "512 archivos en 38 carpetas · 4,2 GB", el desglose por tipo (310
-   fotos, 12 videos, 190 otros), el árbol plegable (primer nivel abierto), lo salteado ("Se saltean 23 archivos
-   del sistema y 3 vacíos", con la lista), avisos (archivos de más de 1 GB, más de 1000 archivos, lugar en el
-   dispositivo) y *Subir* / *Cancelar*. Con varias carpetas soltadas juntas, una fila por carpeta.
-2. **Después (progreso):** la misma ventana pasa a mostrar las dos etapas: "Guardando en este dispositivo: 120 de
-   512" y "Subiendo al Drive: 34 de 512 · 1,2 de 4,2 GB · faltan unos 6 min" (el tiempo sale del ritmo de los
-   últimos minutos, redondeado). *Pausar* / *Seguir*, la lista de errores con *Reintentar* y *Cerrar* (sigue en
-   segundo plano). Se vuelve a abrir desde la tarjeta (con la carpeta elegida, "Ver subida" en la barra) o desde el
-   indicador de sincronización.
+| Alternativa | Por qué no (o cuándo sí) |
+|---|---|
+| Un token de acceso corto (1 hora) con `drive.file` en el navegador | Con ese token se puede leer, cambiar y **borrar todo lo que subió la app, de todos los proyectos**, durante una hora; Google no deja limitarlo a una carpeta (en Drive no existen los tokens "recortados" de Cloud Storage). Para un miembro rompe los permisos. Para el dueño sería aceptable (ya recibe uno para el selector), pero no hace falta. |
+| Supabase Edge Functions como portero | Plan gratis: unas 500.000 llamadas por mes y **5 GB de transferencia por mes**, que se van con un par de videos: las descargas no entran. Sirve a lo sumo para el control, y entonces habría dos porteros. |
+| Que cada miembro conecte su propia cuenta de Google | Cada carpeta tendría que compartirse en Google con cada persona; un invitado sin cuenta de Google no podría; sacar a alguien de la app no le saca el acceso en Google; y Google deja navegar lo compartido por su cuenta. Rompe el modelo de permisos de la app. |
+| Carpeta compartida "cualquiera con el link" | Quien tenga el link la ve, para siempre; Google muestra una página de "no se pudo analizar" en archivos grandes. No. |
+| Otro hosting (Deno Deploy, Vercel, un servidor propio) | Límites gratis parecidos y la transferencia se paga. Sin ventaja. |
+| Google Apps Script en la cuenta del dueño | Cuotas diarias chicas, sin streaming, respuestas de pocas decenas de MB. No. |
+| Plan pago de Workers (USD 5 por mes) | 10 millones de pedidos por mes. No hace falta con este diseño; queda como salida. |
 
-Otros dispositivos no ven la ventana: ven la tarjeta con "subiendo desde otro dispositivo" y, en el visor, los
-archivos que todavía no llegaron marcados así.
+## 5. Subir: del navegador directo a Google
 
-## 5. En el dispositivo: guardar primero, entera o nada
+- **Sin copia en el dispositivo** (decisión 2). La carpeta original **sigue en el disco** de quien la soltó: si la
+  pestaña se cierra a mitad de camino no se pierde nada, falta subir lo que falta. Así el tamaño no depende del lugar
+  del navegador (sin tope práctico) y P.10 no se complica. Lo que sí se guarda en el dispositivo es **la lista de
+  trabajo** (qué archivo, a qué subcarpeta, cuánto llegó, su dirección de subida), sin bytes, en una base aparte
+  (`<base local>:folders`, que una versión vieja nunca abre; sacar el workspace del dispositivo la borra y la cuenta
+  en lo que falta subir).
+- **Pasos:**
+  1. Leer la carpeta y confirmar en la ventana (secciones 6 y 7).
+  2. `register_file` de la carpeta (con la página, como cualquier archivo; si todo lo de adentro pesa 0, con
+     `size` 1) y **el bloque se inserta enseguida**, en el lugar donde se soltó (no hay minutos de copia en el medio:
+     no hace falta el "ancla" del primer diseño). Este registro lo hace el camino de las carpetas, **no la cola de
+     archivos** (la fila de la carpeta no tiene original: `process()` la detendría con `originalMissing`); en el
+     dispositivo queda anotada como archivo propio ya registrado, para que `reconcilePage` la trate como tal. **Hace
+     falta conexión para empezar**: sin copia no hay nada que guardar para después (sin red, la ventana lo dice).
+  3. `POST /folder/prepare` con la carpeta y la lista de subcarpetas: el Durable Object crea
+     `<Proyecto>/Carpetas/<nombre>` (con la marca `sdFile` = id de la carpeta de la app) y las subcarpetas, **en
+     orden**, de a unas 40 por pedido (el plan gratis deja 50 llamados por pedido; "seguí" si faltan), llama a
+     `set_file_drive` de la carpeta y devuelve el mapa ruta → id de Drive. Si en `Carpetas` ya hay una carpeta con ese
+     nombre subida por la app, la nueva va con " (2)".
+  4. `POST /folder/sessions` con hasta 40 archivos (subcarpeta, nombre, tipo, peso): nivel 3 sobre la carpeta y
+     cada subcarpeta tiene que ser del árbol. Por cada uno, el portero abre una **subida reanudable** en Drive (una
+     llamada) con el nombre, la subcarpeta y el peso fijados, y devuelve su dirección. Se piden a medida que la cola
+     avanza (una ventana de unas 100 por delante), no las 10.000 de golpe (una dirección vence a la semana).
+  5. El navegador manda los bytes **a la dirección de Google**, por partes (8 a 64 MiB), y retoma preguntando cuánto
+     llegó (`bytes */<peso>`), como hoy pero sin pasar por el portero. La respuesta final de Google trae el id del
+     archivo: la lista de trabajo lo anota. **No se registra nada por archivo en la base.**
+- **Qué puede hacer quien tiene una dirección de subida:** subir **ese** archivo, con el nombre, la carpeta y el peso
+  que fijó el portero (Google rechaza otro peso). Lo mismo que hoy, cuando manda las partes al portero.
+- **¿Google acepta esos `PUT` desde el navegador (CORS)?** **Certeza media.** Seguro anda cuando el pedido que abre
+  la subida sale del mismo navegador (el ejemplo `cors-upload-sample` de Google hace eso, con un token en el
+  navegador, que acá no se puede). Para una subida abierta por un servidor, la documentación de **Cloud Storage** dice
+  que el `Origin` del pedido que abre la subida decide el `Access-Control-Allow-Origin` de los siguientes, así que el
+  portero mandaría `Origin: <dirección de la app>` al abrirla (un Worker puede poner ese encabezado). La
+  documentación de **Drive** no lo dice, y hay un reporte público (un proyecto en GitHub) de que el `PUT` al
+  servidor de subidas de Drive vuelve sin CORS; no queda claro si abrieron la subida con `Origin`. **Se prueba en la
+  entrega 0 antes de construir nada.**
+- **Plan B, si Google no lo acepta:** los bytes pasan por el portero como hoy (`PUT /upload/<id>`), pero sin guardar
+  nada en el Durable Object: el `<id>` es la dirección de Google cifrada por el portero (con una clave que no sale de
+  él), así cada parte es **un pedido al Worker y cero al Durable Object**, con partes de hasta 64 MiB. Entra igual en
+  el plan gratis (sección 12).
+- **Retomar después de cerrar la pestaña:** en Chrome y Edge se guarda el acceso a la carpeta (el `FileSystemHandle`
+  que da el soltar o `showDirectoryPicker()`) y, al volver, un clic en "Seguir" pide permiso y continúa. En los demás,
+  la ventana (y la tarjeta) dicen "faltan 120 archivos: soltá de nuevo la carpeta acá para terminar"; la app compara
+  por ruta y peso con lo que ya está en Drive y sube solo lo que falta (las direcciones de menos de una semana se
+  retoman donde quedaron).
+- **La cola:** los archivos de carpetas van por un camino propio, que nunca frena a las fotos y adjuntos sueltos de las
+  páginas. Hasta 3 archivos a la vez. *Pausar* y *Seguir* por carpeta. Un error por archivo, a la vista, que no frena
+  a los demás. Si Drive dice que va demasiado rápido (`userRateLimitExceeded`, 429), espera y sigue: **Drive acepta
+  unas pocas creaciones de archivos por segundo por usuario**, así que 10.000 archivos llevan una hora o más aunque
+  sean chicos.
+- **Archivos vacíos:** ahora se pueden subir (en Drive no hay `size > 0`): no se saltean.
+- **Agregar después** ("Agregar a esta carpeta"): lo mismo, apuntando a la carpeta abierta en el visor. Nivel 3.
+- Más adelante, los adjuntos sueltos de P.6 podrían usar la misma subida directa.
 
-- **Lugar:** antes de *Subir*, `navigator.storage.estimate()` con el total más el margen de siempre
-  (`ROOM_MARGIN`, 200 MB, el texto de las páginas vive en la misma cuota). Si no entra, la ventana lo dice con los
-  números ("hacen falta 4,2 GB y hay 2,9 GB libres") y no deja subir; con P.10 (`Doc_Copias_Locales.md`) ofrece
-  además liberar las copias de archivos que ya están en Drive.
-- **Guardar:** al tocar *Subir* se copian los archivos a IndexedDB **de a uno** (cada uno en su transacción, con
-  su registro), con el progreso en la ventana. `hasUnsavedWrites()` cuenta la carpeta entera: cerrar la pestaña
-  mientras se guarda pide confirmación.
-- **Entera o nada:** el bloque se inserta en la página **recién cuando se guardaron todos**. Si la app se cierra en
-  el medio, en la página no hay nada y lo guardado a medias se borra al volver a abrir (una carpeta en estado
-  `copying` de hace más de 10 minutos, sin sesión que la esté guardando). Así nunca queda una carpeta incompleta que
-  otros vean como "le faltan archivos para siempre": los `File` del soltar no sobreviven a un cierre y no hay cómo
-  completarla.
-- **Registros:** la carpeta es un `MediaRecord` más (con `mime: 'inode/directory'`, `size` total y `items`) y cada
-  archivo de adentro otro, con `folderId` y `relPath` y **`pageId: ''`**. Mientras falta subir, los dos usan
-  **`pending: 2`** en vez de 1 (el índice es un número). Una pestaña vieja y una nueva no corren juntas (el lock
-  de la base, `lock:<base>`, desde v0.041): `pending: 2` solo protege si se vuelve a una versión anterior o queda un
-  paquete viejo en caché, que solo busca `pending = 1`. Todos los lugares que leen o fuerzan `pending: 1` están en la
-  corrección 5. La base del dispositivo **no cambia de
-  versión** (son campos opcionales). Todo lo que hoy cuenta pendientes (`status`, `failures`, `clearBlocked`, la
-  confirmación de sacar el workspace en `WorkspaceMenu.tsx`) pasa a mirar 1 y 2.
-- Las miniaturas de las fotos y los videos de adentro se sacan como hoy (`ensureProbed`), después de guardar y sin
-  frenar la subida del original (decisión 6).
+## 6. Leer la carpeta
 
-## 6. La cola con cientos de archivos
+- **Soltar (computadora):** en el manejador de `fileDrop.ts`, `webkitGetAsEntry()` de **todos** los ítems **en el
+  acto** (después del evento la lista queda vacía; las entradas siguen valiendo). Después, `readEntries()` **en bucle
+  hasta que devuelva vacío** (Chrome entrega de a 100) y `entry.file()`. En Chrome y Edge, además
+  `getAsFileSystemHandle()` en el acto, para poder retomar (sección 5). Anda en Chrome, Edge, Firefox y Safari de Mac.
+- **Mezcla:** en un mismo soltar, los archivos sueltos siguen el camino de hoy y cada carpeta da su bloque, en orden.
+- **Botón "Carpeta…"** (menú `/` y barra de la imagen): `<input type="file" webkitdirectory>` (cada `File` trae
+  `webkitRelativePath`; no llegan las carpetas vacías) o, en Chrome y Edge, `showDirectoryPicker()`.
+- **iPhone y iPad:** a probar a mano (arrastrar desde Archivos y `webkitdirectory`). Si no hay forma, el botón no
+  aparece y se sigue pidiendo comprimir (respondido por Lega). Android: a probar.
+- **Pegar** una carpeta: los navegadores no la entregan bien; sigue rechazada con el aviso.
+- **Qué se saltea** (con el número, en la ventana): lo que empieza con punto (`.DS_Store`, `._foto.jpg`, `.git`),
+  `Thumbs.db`, `ehthumbs.db`, `desktop.ini`, `Icon\r`, `__MACOSX` y los bloqueos de Office (`~$…`). Una casilla
+  "Incluir archivos ocultos". Las carpetas vacías sí se crean (salvo con `webkitdirectory`, que no las ve).
+- Un archivo que no se puede leer queda afuera y figura como salteado.
+- **Nombres:** Drive acepta cualquier nombre; se limpian solo los controles y las marcas de dirección
+  (`cleanFileName`). Dos nombres que solo difieren en mayúsculas se suben tal cual (el zip los desambigua).
 
-- **Orden:** primero lo suelto (fotos y adjuntos de las páginas, los usos) y después los archivos de carpetas.
-  Entre archivo y archivo de una carpeta, la vuelta se fija si llegó algo suelto y lo pasa adelante. Dentro de una
-  carpeta, por `relPath` (el visor se va llenando en orden).
-- **Registrar en tandas:** `register_folder` una vez y `register_folder_files` de a 200 archivos (no 500 llamadas).
-- **En paralelo, un poco:** hasta 3 archivos chicos (menos de 8 MiB, una sola parte) a la vez; los grandes, de a
-  uno como hoy. Con 500 archivos chicos, lo que manda es la cantidad de pedidos (unos 6 a 8 por archivo: miniatura,
-  marcarla, abrir la subida, la parte, confirmar), no los bytes. Drive acepta unas pocas escrituras por segundo por
-  usuario: con 3 alcanza y sobra.
-- **Pausar y seguir:** por carpeta (`paused` en su registro); la cola saltea sus archivos. Una subida a medias
-  guarda su `uploadId` y sigue desde lo que llegó, como hoy.
-- **Errores:** cada archivo tiene su error y su `blocked`, como hoy; uno detenido no frena a los demás. La carpeta
-  está "con errores" si alguno quedó detenido y "completa" cuando todos tienen `drive_id` confirmado en la base.
-  "Drive lleno" (507) pausa la carpeta entera con el aviso.
-- **El indicador de sincronización** cuenta una carpeta como un ítem con su detalle ("Referencias: 34 de 512"), no
-  como 512 pendientes.
-- **Confirmar:** `confirmed()` pregunta por tandas (`fetchMediaFiles` con varios ids).
+## 7. La ventana: "esta carpeta, con todo esto"
 
-## 7. La base: migración (diseño)
+1. **Antes de subir:** el nombre, "512 archivos en 38 carpetas · 4,2 GB", el desglose por tipo, el árbol plegable,
+   lo salteado (con la lista), avisos (más de 1000 archivos: "va a tardar un rato largo"; archivos de más de 1 GB) y
+   *Subir* / *Cancelar*. Con varias carpetas, una fila por carpeta.
+2. **Durante:** "Subiendo al Drive: 34 de 512 · 1,2 de 4,2 GB · faltan unos 6 min", *Pausar* / *Seguir*, errores con
+   *Reintentar*, *Cerrar* (sigue en segundo plano mientras la pestaña esté abierta) y, si se cerró, "Seguir" o
+   "soltá de nuevo la carpeta". Se vuelve a abrir desde la tarjeta o el indicador de sincronización.
 
-Una migración nueva, con la próxima versión libre (hoy sería la 8), y su constante propia en la app
-(`FOLDERS_SCHEMA_VERSION`; `DB_SCHEMA_VERSION` no se sube, como con la papelera y el peso). Aplicarla pide
-autorización de Lega (copia de seguridad antes, `npm run db:migrate`, `npm run db:test`).
+Otros dispositivos no ven la ventana: ven la tarjeta "subiendo desde otro dispositivo" y, en el visor, lo que ya llegó.
 
-**Columnas de `files`:**
+## 8. El visor: listar en vivo, nunca hacia arriba
 
-- `folder_id uuid references public.files (id)`: en un archivo de adentro, su carpeta.
-- `rel_path text`: la ruta adentro de la carpeta, con `/` y el nombre al final. De 1 a 1024 caracteres, sin `/`
-  al principio ni al final, sin segmentos vacíos, `.` ni `..`.
-- `item_count int check (item_count between 1 and 10000)`: solo en la fila de la carpeta.
-- Restricciones: `(folder_id is null) = (rel_path is null)`; `mime = 'inode/directory'` ⇒ `folder_id is null` y
-  `item_count is not null`; `item_count is not null` ⇒ `mime = 'inode/directory'`. Una carpeta no va adentro de
-  otra: las subcarpetas son solo rutas.
-- Índice único `(folder_id, rel_path) where folder_id is not null` (sirve también para listar).
+- **Listar:** `POST /folder/list` con la carpeta (la fila de la app), la subcarpeta (un id de Drive) y la página de
+  resultados. El portero: `media_file` de la carpeta (nivel 1 o más, como ver una foto), comprueba que la subcarpeta
+  sea del árbol, y pide a Drive `files.list` con `'<subcarpeta>' in parents and trashed = false` (hasta 1000 por
+  página; varias páginas en un mismo pedido si hacen falta). Devuelve por cada cosa: nombre, tipo, peso, fecha,
+  si tiene miniatura y, **para cada archivo, ya firmado, su pase** (el mismo `{ f, t, u, s, n }` de hoy, 8 horas) y
+  el de su miniatura. Abrir un archivo no pide nada más al portero que el archivo mismo.
+- **"Del árbol" (nunca hacia arriba):** el Durable Object guarda por carpeta el conjunto de ids de subcarpetas que ya
+  vio adentro (lo aprende al listar). Para listar una subcarpeta o firmar el pase de un archivo, el portero mira sus
+  `parents` **en ese momento** (llega con la lista o con un `files.get`) y exige que el padre sea la carpeta o una
+  subcarpeta conocida; lo conocido se vuelve a comprobar si tiene más de 10 minutos (una subcarpeta que el dueño movió
+  afuera deja de valer). Si no está en el conjunto, sube por los `parents` hasta encontrar la carpeta (sí) o la raíz
+  del Drive, o 30 niveles (no). **La app nunca recibe un id de Drive de afuera del árbol** y el portero nunca responde
+  con algo de afuera.
+- **Accesos directos** (`application/vnd.google-apps.shortcut`): se muestran como "acceso directo" y **no se siguen
+  nunca** (apuntan a cualquier lado del Drive).
+- **Documentos de Google** (Docs, Sheets, Slides): no tienen bytes propios. Se ofrecen bajados como PDF por el portero
+  (`files.export`, que Google corta en 10 MB); si pasa, "no se puede bajar desde la app" (decisión 5).
+- **Cómo se ve:** un diálogo (a pantalla completa en el teléfono) con el nombre y *Bajar todo* arriba, migas de pan que
+  **empiezan en la carpeta** (`Referencias › Fotos › Dia 2`), primero las subcarpetas y después los archivos en orden
+  natural, con miniatura o ícono, nombre y peso. Lista o cuadrícula (se recuerda por dispositivo).
+- **Miniaturas:** las hace Drive (`thumbnailLink`), pero piden la conexión del dueño y Google no deja usarlas directo
+  desde una página. Van por el portero: `/t/<pase>` pide la miniatura a Drive (del tamaño justo) y la guarda en la
+  caché de Cloudflare (gratis) por archivo y fecha de cambio; el navegador la guarda un día. Un pedido por miniatura
+  que aparece en pantalla.
+- **Abrir:** una foto o un video abre **el carrete con las fotos y videos de esa subcarpeta**, en el orden de la lista
+  (el carrete pasa a aceptar elementos sin bloque, con su pase). Un adjunto se abre o se baja como en la página
+  (`attachmentOpen.ts`, `AttachmentSheet.tsx`), con el pase de la lista.
+- **Sin red:** la última lista de cada subcarpeta abierta y sus miniaturas quedan en el dispositivo (con un tope, por
+  ejemplo 50 MB, lo más viejo se va primero): se ve lo último conocido con el aviso "sin conexión: puede haber
+  cambios"; abrir un archivo pide red.
+- **Agregar a esta carpeta** (nivel 3): soltar en el visor o el botón; sube a la subcarpeta abierta (sección 5).
+  Borrar o renombrar desde la app: más adelante.
 
-**Funciones nuevas** (security definer, `search_path = ''`, sin `anon`, como las de siempre):
+## 9. Bajar todo (entrega 2)
 
-- `register_folder(p_id, p_page_id, p_name, p_items, p_size)`: como `register_file` con el tipo fijo; idempotente.
-- `register_folder_files(p_folder, p_items jsonb)`: hasta 200 por llamada, cada uno con id, `rel_path`, nombre,
-  tipo, peso, medidas y duración. Pide nivel 3 sobre la carpeta y que no esté pedida para la papelera de Drive;
-  el proyecto es el de la carpeta; reintentar no duplica. Después de insertar, si la cantidad pasa `item_count` o
-  la suma pasa `size`, error `folder_too_big` (nadie cuelga más de lo declarado). Los de adentro copian el estado
-  de papelera de la carpeta al nacer.
-- `folder_files(p_folder)`: la lista entera (id, `rel_path`, nombre, tipo, peso, medidas, `thumb_at`, si ya está
-  en Drive), ordenada por `rel_path`. Pide `file_level(p_folder) >= 1` **una vez** (la política de `files` fila por
-  fila, con cientos de filas, sería lenta).
-
-**Funciones que cambian:**
-
-- `private.can_view_file` y `private.file_level`: para una fila con `folder_id`, lo que dé la carpeta (más la regla
-  de quien la creó, igual que hoy). La política de `files`, el bucket `thumbs`, `media_file`, `set_file_drive` y
-  `set_file_thumb` quedan cubiertos solos.
-- `media_file`: suma `folder_id`, `rel_path`, `folder_name`, `folder_drive_id` e `is_folder` (sumar campos no rompe
-  al portero publicado).
-- `private.refresh_file_trash`: no hace nada con una fila de adentro; al cambiar la carpeta, copia `trashed_at` a
-  sus archivos.
-- `purge_file` y `media_purged`: con la carpeta marcan también sus archivos; con un archivo de adentro, error
-  (`file_in_folder`): no se manda a la papelera de a uno.
-- `register_file` y `link_page_file`: rechazan un archivo de adentro (`file_in_folder`).
-- `trashed_files` y `files_due_for_purge`: sin los de adentro; `trashed_files` suma `item_count` (columna nueva al
-  final: la app publicada lee por nombre).
-- `project_sizes`: sin las filas de carpeta (sus archivos ya cuentan, cada uno con el estado copiado).
-- `schema_version` a la nueva y `notify pgrst, 'reload schema'`.
-
-**Prueba SQL** `supabase/tests/carpetas_permisos.sql`, en una transacción que se deshace: dueña, admin, miembro con
-Ver, Comentar, Editar, invitada con acceso a una sola página, miembro sacada, `anon`; que ver la página alcanza para
-listar la carpeta y pedir cada archivo; que ver **otra** página del proyecto no alcanza; que colgar más de lo
-declarado falla; papelera (sacar el bloque, restaurar la página, pedir la papelera de Drive) con los archivos
-siguiendo a la carpeta; `project_sizes` y `trashed_files` sin contar dos veces; y que la app publicada (register,
-link, unlink, trashed_files) sigue igual.
-
-## 8. El portero y la estructura en Drive
-
-```
-LGA_ShotDocs
-└── <Proyecto>
-    └── Carpetas                     (propuesta, a confirmar por Lega; antes era la carpeta del día)
-        └── Referencias              (la carpeta; appProperties: sdFile=<id>, sdFolder=1)
-            ├── Fotos
-            │   └── Dia_2
-            │       └── IMG_0001.jpg (appProperties: sdFile=<id del archivo>)
-            └── guion.pdf
-```
-
-- **Subir un archivo de adentro** (`POST /upload` con su `file`, como hoy): `media_file` dice su carpeta y su ruta.
-  ~~El portero crea la carpeta con el primer archivo que llega, con `once`~~ (`once` es por instancia del Worker: con
-  subidas en paralelo puede duplicar carpetas). Ver la corrección 4: el árbol se crea antes, en orden, adentro del
-  Durable Object, y queda anotado en su almacenamiento (`dir:<carpeta>:<ruta>` → id de Drive). Si una carpeta anotada ya no está o está en la papelera,
-  se vuelve a crear (nada se borra, como hoy).
-- **Nombres en Drive:** los de las carpetas se respetan (sin pasarlos a guiones bajos: son del usuario). Si en el
-  mismo día ya hay una carpeta con ese nombre subida por la app, la nueva va con " (2)" para que el dueño las
-  distinga al mirar su Drive (la app no depende del nombre: todo va por id).
-- **Tope por pedido:** el plan gratis de Workers deja unas 50 llamadas por pedido; crear una ruta profunda de una
-  vez podría pasarse. Profundidad máxima 20 y, si faltan muchas carpetas, el portero crea las que puede y responde
-  "seguí" (la app repite).
-- **Ver:** `POST /pass` con un archivo de adentro, igual que hoy (el nivel viene de la carpeta). `POST /pass` con la
-  carpeta: `409` con `code: 'is_folder'` y un texto claro ("Esta carpeta se abre con la app actualizada"): es lo
-  que ve una versión vieja al tocar *Download*.
-- **Papelera:** `POST /trash` con la carpeta manda **la carpeta de Drive** a la papelera de Drive (Drive se lleva
-  todo lo de adentro) y confirma con `media_purged`. Si todavía no existía en Drive, `drive: 'none'`, y cada
-  archivo que termine de subir después se manda solo a la papelera de Drive (como hoy con `trashIfPurged`).
-- **La marca `sdFile` también en la carpeta de Drive:** un portero viejo que recibe `/trash` de una carpeta la
-  manda a la papelera sin problema; un `/pass` de un portero viejo daría un pase que falla al servirlo (Drive no
-  baja carpetas): feo pero inofensivo.
-- **Cómo sabe la app que el portero entiende carpetas:** `/drive/status` suma `features: ['folders']`. Sin eso (el
-  portero se publica aparte y puede atrasarse), soltar una carpeta sigue rechazado con "El dueño tiene que
-  actualizar el portero" (un portero viejo subiría todo aplanado en la carpeta del día).
-- **Por qué no un zip en el portero:** un zip necesita calcular el CRC de todos los bytes (el plan gratis deja 10 ms
-  de CPU por pedido) y pedir cada archivo a Drive (unas 50 llamadas por pedido): no entra ni para una carpeta
-  mediana.
-
-## 9. El visor, adentro de la app
-
-- **Qué es:** un diálogo (en el teléfono, a pantalla completa) con el nombre y "512 archivos · 4,2 GB" arriba,
-  *Bajar todo*, y la lista de la carpeta actual: primero las subcarpetas (con cuántos archivos tienen), después los
-  archivos, en orden natural (`IMG_2` antes que `IMG_10`), con miniatura si hay (del bucket `thumbs`, pedidas a
-  medida que aparecen en pantalla) o el ícono del tipo, el nombre y el peso. Arriba, migas de pan que empiezan en la
-  carpeta: `Referencias › Fotos › Dia 2`. **No hay nada más arriba que la carpeta**: la lista sale de
-  `folder_files`, que solo devuelve lo de adentro.
-- **Lista o cuadrícula:** lista por defecto; un botón pasa a cuadrícula de miniaturas (útil para una carpeta de
-  fotos). Se recuerda por dispositivo.
-- **Abrir:** una foto o un video abre **el carrete con las fotos y videos de esa subcarpeta**, en el orden de la
-  lista (hace falta que el carrete acepte una lista sin bloques: `CarreteItem.blockId` pasa a ser opcional, o un id
-  armado; `carreteLoader.ts` ya trabaja por id de archivo). Un adjunto se abre o se baja como en la página
-  (`attachmentOpen.ts`, `AttachmentSheet.tsx`), por id. Cada archivo pide su propio pase: nunca hay un pase para la
-  carpeta.
-- **Bajar uno:** *Download* en la fila (el pase con `?download=1`, o el original si está en el dispositivo).
-- **Bajar todo:** se arma **en el navegador** (hace falta antes el cambio de CORS del portero, corrección 1). Cada
-  archivo se pide con su pase y se escribe en un zip "sin comprimir" (lo de VFX ya viene comprimido; igual hay que
-  calcular el CRC32 de cada archivo, en un Worker del navegador), con Zip64 para pasar los 4 GB, los
-  nombres repetidos por mayúsculas y minúsculas desambiguados (" (2)") y la estructura de subcarpetas. Dónde se
-  escribe:
-  - Chrome y Edge de computadora: `showSaveFilePicker()` y se escribe a medida que llega (sin llenar la memoria).
-    Además, "Bajar a una carpeta…" con `showDirectoryPicker()` escribe el árbol tal cual, sin zip.
-  - Firefox: por el service worker (una dirección que la app responde con el zip a medida que se arma). Hoy el
-    service worker se genera solo (`generateSW`): una ruta propia pide pasar a `injectManifest`.
-  - Safari (Mac e iPhone): el streaming por el service worker no es confiable: zip en memoria con tope (1 GB; en el
-    iPhone, 500 MB) y, pasado el tope, el aviso de bajarlos de a uno o desde la computadora.
-  - Se puede cancelar; lo que falla (un archivo todavía sin subir, sin red) se saltea y se anota en un
-    `LEEME_faltan.txt` adentro del zip.
-  La librería: una chica de zip en streaming (del orden de 3 KB, a elegir en la implementación) o una propia de
-  unas 200 líneas; nunca una que comprima en el hilo principal.
-- **Sin red:** la lista queda guardada (en `meta`, `folder:<id>`, con los ids y rutas, más `known` de cada archivo):
-  se ve la lista y las miniaturas ya bajadas; se abre solo lo que está en este dispositivo.
-- **De otro proyecto** (se pegó la carpeta en una página de otro proyecto): tarjeta "Carpeta de otro proyecto", sin
-  visor (como las fotos).
+- **Primero, un cambio del portero:** CORS en `/m/` (`Access-Control-Allow-Origin` con el origen si está en
+  `APP_ORIGINS`, `Vary: Origin`, `Access-Control-Expose-Headers: Content-Length, Content-Range, Content-Disposition`),
+  para que la app lea los archivos con `fetch()`. El pase ya es la credencial: no abre nada nuevo.
+- **La lista entera:** el visor recorre el árbol con `/folder/list` (unos 40 listados de subcarpetas por pedido) y
+  recibe los pases. Si el zip tarda más de 8 horas, vuelve a listar lo que falta.
+- **El zip se arma en el navegador:** cada archivo por su pase (los bytes vienen de Drive por el portero), zip "sin
+  comprimir" (lo de VFX ya viene comprimido) con **CRC32 calculado en un Worker del navegador**, Zip64 para pasar los
+  4 GB, las subcarpetas y los nombres repetidos por mayúsculas desambiguados (" (2)"). Dónde se escribe:
+  - Chrome y Edge de computadora: `showSaveFilePicker()`, a medida que llega. Y "Bajar a una carpeta…"
+    (`showDirectoryPicker()`), que escribe el árbol tal cual, sin zip.
+  - Firefox: por el service worker, a medida que se arma (hoy el service worker se genera solo, `generateSW`: una ruta
+    propia pide pasar a `injectManifest`).
+  - Safari (Mac e iPhone): en memoria, con tope (1 GB; en el iPhone, 500 MB); pasado el tope, el aviso de bajar de a
+    uno o desde la computadora.
+  - Se puede cancelar; lo que falla se saltea y se anota en un `LEEME_faltan.txt` adentro del zip.
+- **Por qué no en el portero:** el CRC de todos los bytes no entra en los 10 ms de CPU por pedido del plan gratis, ni
+  pedir miles de archivos a Drive en los 50 llamados por pedido.
 
 ## 10. Permisos
 
-- Quien ve la página ve la carpeta (el uso está en `page_files`, como cualquier archivo) y, a través de ella, **cada
-  archivo de adentro**: `file_level(archivo) = file_level(carpeta)`. Ver, Comentar, Editar e invitados con acceso a
-  esa página: ven y bajan. Subir a la carpeta: nadie (en esta entrega la carpeta no cambia, decisión 3).
-- **Nunca hacia arriba:** la app no recibe nunca un id de Drive de la carpeta del día ni del proyecto (no están en la
-  base); el id de Drive de la carpeta sí está en `files.drive_id`, pero sin acceso al Drive del dueño no sirve para
-  nada, y el portero nunca sirve ni lista carpetas. Cada pase firma **un** id de Drive de un archivo, comprobado con
-  su marca `sdFile`.
-- **Nada se comparte en Google:** los miembros no tienen acceso al Drive del dueño; un link compartido de Drive
-  dejaría subir a la carpeta de arriba. Por eso todo pasa por la app.
-- Un archivo de adentro no se puede colgar de otra página (`register_file` y `link_page_file` lo rechazan): conocer
-  su id no da permiso.
+- Quien ve la página ve la carpeta (el uso está en `page_files`) y, con ella, **todo lo que hay adentro en Drive**:
+  el portero pide `media_file` de la carpeta en cada listado y en cada pase. Ver, Comentar, Editar e invitados con
+  acceso a esa página: ven y bajan. Agregar archivos: nivel 3 (Editar).
+- **Nunca hacia arriba:** sección 8. Cada pase firma **un** id de Drive, comprobado adentro del árbol al firmarlo.
+- **Nada se comparte en Google**; ningún navegador de un miembro recibe un token de Drive.
+- Sacar a alguien de la página o del workspace le corta el acceso en el próximo pedido (los pases ya dados duran hasta
+  8 horas, como hoy con las fotos).
 
-## 11. Papelera
+## 11. Papelera, peso y búsqueda
 
-- **Sacar el bloque** de la página: la carpeta entra a la papelera de archivos como **un solo elemento** ("Referencias
-  · carpeta · 512 archivos · 4,2 GB"), con sus archivos detrás. **Restaurar** (deshacer, volver a pegar el bloque o
-  restaurar la página) la saca con todo.
-- **Mandar a la papelera de Drive** (dueño y admins, como hoy): una sola orden para la carpeta; Drive la guarda 30
-  días con todo adentro. En la página, la tarjeta pasa a "en la papelera de Drive".
-- **Si la carpeta todavía se estaba subiendo:** el dispositivo que la sube deja de subir sus archivos (no tiene
-  sentido mandar gigas a la papelera) y la marca "cancelada: se mandó a la papelera de Drive". Las copias quedan en
-  el dispositivo (nada se borra; se liberan con P.10).
-- El total de la papelera y el peso del proyecto (P.7) cuentan una sola vez cada byte.
+- **Sacar el bloque:** la carpeta entra a la papelera de archivos como **un elemento** (la fila de la carpeta, como
+  cualquier archivo). **Restaurar** (deshacer, volver a pegar, restaurar la página) la saca. En Drive no pasa nada.
+- **Mandar a la papelera de Drive** (dueño y admins, como hoy, con el mismo `/trash`: la carpeta de Drive lleva la
+  marca `sdFile`): Drive se lleva la carpeta con todo lo de adentro, **también lo que se agregó a mano**. La
+  confirmación lo dice. Lo que alguien puso adentro siendo dueño de otra cuenta de Google no va a la papelera del dueño
+  (así funciona Drive).
+- **Peso del proyecto (P.7):** cuenta el `size` de la fila de la carpeta, que es **lo que se subió al crearla**. Lo
+  agregado después (desde la app o a mano) no suma: el diálogo de Drive lo dice en una línea. Más adelante, "Recalcular
+  el peso de las carpetas" (el portero recorre el árbol, unos 40 listados por pedido) con una función nueva de la base
+  que guarde el total (migración aparte).
+- **Buscar (P.12):** encuentra la carpeta por su nombre; lo de adentro, no (está en Drive). Buscar adentro de una
+  carpeta (con `name contains` de Drive, limitado al árbol) queda para más adelante.
+- **P.10:** las carpetas no guardan copia en el dispositivo (sección 5): no hay nada que liberar.
 
-## 12. Tamaños, nombres y límites
+## 12. Cuánto entra en el plan gratis
 
-- **Archivos por carpeta:** hasta 10.000 (tope de la base); aviso desde 1000 ("va a tardar"). Decisión 4, **sujeta a
-  los límites diarios de Cloudflare** (corrección 3): con el plan gratis, el tope real es bastante menor.
-- **Peso:** sin tope propio; manda el lugar del dispositivo (sección 5). Aviso, como los adjuntos, por cada archivo de
-  más de 1 GB.
-- **Profundidad:** 20 niveles. Ruta: 1024 caracteres.
-- **Nombres:** cada segmento pasa por `cleanFileName` (controles, marcas de dirección, pares sueltos); si dos quedan
-  iguales después de limpiar, el segundo lleva " (2)" antes de la extensión. Dos nombres que solo difieren en
-  mayúsculas (llegan desde Linux) se permiten en la base y en Drive; el zip los desambigua.
-- **La misma carpeta dos veces:** son dos carpetas (la app no compara contenidos).
+Límites del plan gratis de Cloudflare: **100.000 pedidos al Worker por día** y 100.000 al Durable Object (para toda la
+cuenta), 50 llamados afuera por pedido y 10 ms de CPU por pedido (el streaming casi no usa CPU). Con el diseño de la
+sección 4, un pedido de control hace 1 llamado al Durable Object y uno de bytes, ninguno (con la instancia caliente):
+**el límite que manda es el del Worker**. Cuentas para una carpeta de 10.000 archivos en 500 subcarpetas (unos 40
+llamados a Drive por pedido):
 
-## 13. Versiones viejas
+| Operación | Pedidos al Worker | Parte del día |
+|---|---|---|
+| Subir, bytes directo a Google (plan A) | ~13 (crear el árbol) + ~250 (abrir las subidas) ≈ **270** | 0,3 % |
+| Subir, bytes por el portero (plan B) | ~270 + 1 por archivo de hasta 64 MiB (y 1 más por cada 64 MiB) ≈ **10.300** | ~10 % |
+| Abrir una subcarpeta del visor | 1 (hasta 1000 cosas; 1 más cada ~40.000) | — |
+| Ver una cuadrícula de 500 fotos | 1 por miniatura que aparece ≈ 500 | 0,5 % |
+| Abrir una foto o un PDF | 1 | — |
+| Ver un video | 1 por cada pedido por partes del navegador (entre 5 y 30) | — |
+| Bajar todo (zip de 10.000 archivos) | ~13 (listar el árbol) + 10.000 ≈ **10.000** | 10 % |
+
+- **Por día**, sin contar el resto del uso: subir unos 300.000 archivos (plan A; antes frena Drive, con unas pocas
+  creaciones por segundo) o unos 95.000 archivos chicos (plan B), o bajar en zips unos 95.000 archivos. **En la
+  práctica no hay tope por carpeta**: una carpeta muy grande se sube en el día (o en varios, si Drive frena) y se
+  puede partir en tandas sin que nadie lo note.
+- El diseño anterior costaba unos 20.000 pedidos al Worker y 130.000–150.000 al Durable Object para lo mismo: se
+  pasaba del día.
+- La caché del arranque de los videos (`Doc_Portero.md`) sigue: suma unos pocos llamados al Durable Object por video,
+  lejos del límite.
+- Si igual un día se pasa, Cloudflare corta los pedidos hasta el día siguiente (UTC) para todo el workspace, también
+  ver fotos. La cola de carpetas lleva la cuenta de lo que pidió en el día y frena antes, con el aviso "sigue mañana";
+  lo suelto nunca espera. Salida: el plan pago de Workers.
+- Los números son cuentas sobre el diseño: la entrega 0 los mide con los registros de Cloudflare.
+
+## 13. Base de datos
+
+- **Entrega 1, sin migración:** la carpeta es una fila de `files` registrada con `register_file` (`mime =
+  'inode/directory'`, `size` = lo subido al crearla) y `set_file_drive` (id de la carpeta en Drive). `media_file`,
+  `file_level`, la papelera, `trashed_files`, `purge_file`, `media_purged`, `project_sizes` y el bucket `thumbs` (sin
+  miniatura) andan tal cual.
+- La app nueva exige una base con la papelera de archivos (`schema_version` 6 o más, `TRASH_SCHEMA_VERSION`); no hace
+  falta otra constante.
+- **Más adelante (migración aparte):** guardar el peso recalculado de una carpeta; y, si hiciera falta, una lista de
+  lo de adentro para buscar sin ir a Drive.
+
+## 14. Versiones viejas
 
 | Quién | Qué ve y qué puede hacer | ¿Se pierde algo? |
 |---|---|---|
-| App v0.049–v0.051 | Tarjeta de adjunto con el nombre y el peso total ("completa" apenas llega el primer archivo; un nombre como `2026.09.30` muestra una extensión falsa). Abrir o bajar: aviso genérico de que no se puede. Copiar, mover, borrar el bloque y la papelera andan. | No. |
-| App v0.041–v0.048 | Recuadro gris con el ícono de foto. El carrete: "no se pudo cargar" y *Download* con el mismo aviso. | No. |
-| App nueva, base sin la migración | Soltar una carpeta: rechazado, "la base todavía no tiene carpetas" (lo ve el dueño). | — |
-| App nueva, portero viejo | Soltar una carpeta: rechazado, "el dueño tiene que actualizar el portero". | — |
-| Portero viejo con una carpeta ya subida | `/trash` de la carpeta anda (tiene la marca); `/pass` de la carpeta da un pase que falla al servir. Los archivos de adentro se ven bien. | No. |
+| App v0.049–v0.051 | Tarjeta de adjunto con el nombre y el peso subido (un nombre como `2026.09.30` muestra una extensión falsa, "30"). Abrir o bajar: aviso genérico. Copiar, mover, borrar el bloque y la papelera andan. | No. |
+| App v0.041–v0.048 | Recuadro gris con el ícono de foto; el carrete, su aviso genérico. | No. |
+| App nueva, portero viejo | Soltar una carpeta: rechazado, "el dueño tiene que actualizar el portero" (lo sabe por `/drive/status`, `features: ['folders']`). Una carpeta ya subida se ve en la página pero el visor dice lo mismo. | No. |
+| App nueva, Drive conectado solo con `drive.file` (si se elige el camino 1) | El visor muestra lo que subió la app y un aviso al dueño: "reconectá Drive para ver lo que se agrega a mano". | No. |
+| Portero viejo con una carpeta ya subida | `/trash` de la carpeta anda (tiene la marca); `/pass` de la carpeta da un pase que falla al servir (Drive no baja carpetas). | No. |
 
-**Sin subir `min_app_version`:** no hay propiedades nuevas en el bloque y una versión vieja no puede romper nada.
+**Sin subir `min_app_version`.**
 
 ## Riesgos
 
-- **El iPhone:** puede que no haya forma de elegir una carpeta. Se prueba antes de prometerlo; si no, en el iPhone se
-  sigue pidiendo comprimir.
-- **Espacio del dispositivo:** una carpeta de 20 GB necesita 20 GB en el navegador antes de subir (primero en el
-  dispositivo). En Safari la cuota es más chica y puede borrar lo de un sitio que no se usó en días (por eso se pide
-  `persist()`). P.10 alivia después, no antes. Alternativa a futuro (solo Chromium): guardar el acceso al archivo en
-  vez de copiarlo; rompe la regla de "primero en el dispositivo" y queda afuera.
-- **Tiempo:** cientos de archivos chicos tardan por la cantidad de pedidos, no por el peso.
-- **Base:** cambian funciones centrales de permisos (`can_view_file`, `file_level`, `refresh_file_trash`); un error
-  ahí afecta a todos los archivos. La prueba SQL tiene que cubrir la app publicada tal cual.
-- **Cuota de Supabase (1 GB gratis):** una miniatura por foto de adentro (unos 30 KB): 10.000 fotos, unos 300 MB.
-- **Pestaña vieja abierta en el mismo dispositivo:** `pending: 2` la aísla; una restauración de la base desde una
-  copia, con una pestaña vieja, podría dejar errores a la vista (nunca pérdida).
-- **Drive:** carpetas creadas a mano por el dueño dentro de la carpeta de la app no aparecen en la app (la lista sale
-  de la base). Es lo esperado, pero conviene decirlo en el diálogo de Drive.
+- **Subida directa sin CORS** (sección 5): si Google no acepta el `PUT` desde el navegador, plan B (10 % del día por
+  cada carpeta de 10.000 archivos). Se sabe en la entrega 0.
+- **`drive.readonly`:** el portero puede leer todo el Drive del dueño; un error en la regla "nunca hacia arriba" sería
+  grave. Pruebas del portero con árboles con accesos directos, archivos movidos afuera, subcarpetas movidas, carpetas
+  compartidas por otros y ciclos de `parents`. Una organización de Google Workspace puede bloquear apps sin verificar.
+- **Vista en vivo:** alguien con acceso al Drive puede poner adentro algo que después todos los que ven la página
+  pueden bajar (también algo que no debería estar ahí). Es lo pedido; conviene decirlo en el diálogo de Drive.
+- **Ritmo de Drive:** miles de archivos chicos llevan horas; el portero y la cola tienen que respetar los 429.
+- **Sin copia en el dispositivo:** si la pestaña se cierra, hay que volver a soltar la carpeta (fuera de Chrome y
+  Edge). Nada se pierde, pero es un paso más.
+- **Pases de 8 horas en la lista:** un miembro sacado de la página conserva hasta 8 horas los pases de lo que ya listó
+  (igual que hoy con las fotos).
+- **El iPhone:** puede que no haya forma de elegir una carpeta (respondido: se pide comprimir).
+- **Peso del proyecto:** subestima lo agregado después.
 
 ## Entregas y pruebas
 
-1. **Entrega 0, prueba a mano (sin código de la app):** leer carpetas al soltar y con `webkitdirectory` en Chrome,
-   Firefox, Safari de Mac, iPhone (Safari y la app instalada), iPad y Android; anotar qué llega (carpetas vacías,
-   rutas, ocultos).
-2. **Entrega 1a, base y portero:** la migración con su prueba SQL (aplicada solo con permiso de Lega), `media_file`
-   con la carpeta, subcarpetas en Drive, `is_folder`, `/trash` de carpetas, `features: ['folders']`, con pruebas en
-   `portero/src/core.test.ts` (rutas profundas en varios pedidos, subcarpeta en la papelera que se vuelve a crear,
-   pase de carpeta rechazado, papelera con archivos subiendo).
-3. **Entrega 1b, app:** leer la carpeta, la ventana, guardar entera o nada, la cola (orden, tandas, paralelo, pausa),
-   la tarjeta, el visor con lista, carrete y abrir o bajar uno, la papelera como un solo elemento, textos, docs.
-4. **Entrega 2:** *Bajar todo* (zip en streaming y "Bajar a una carpeta…"), cuadrícula.
+1. **Entrega 0, pruebas a mano (sin código de la app):**
+   - Subida directa: un Worker de prueba abre una subida reanudable con `Origin: <la app>` y una página de la app
+     manda un archivo de 100 MB por partes y retoma después de cortar la red. En Chrome, Firefox, Safari de Mac y el
+     iPhone. Decide plan A o B.
+   - Leer carpetas al soltar y con `webkitdirectory` / `showDirectoryPicker` en todos los navegadores.
+   - `files.list` con `drive.file` y con `drive.readonly` sobre una carpeta con archivos agregados a mano;
+     `thumbnailLink` por el portero.
+   - Cuántos pedidos y llamados al Durable Object cuesta cada ruta, con los registros de Cloudflare.
+2. **Entrega 1a, portero** (publicado antes que la app): lógica de control en el Durable Object con cachés en memoria,
+   `/folder/prepare`, `/folder/sessions`, `/folder/list` con pases, `/t/<pase>`, la regla del árbol, accesos directos,
+   documentos de Google, `/pass` de una carpeta rechazado (`is_folder`), `features`, y `drive.readonly` si se elige.
+   Pruebas en `portero/src/core.test.ts`.
+3. **Entrega 1b, app:** leer la carpeta, la ventana, registrar e insertar, la subida directa (o plan B) con su cola,
+   retomar, la tarjeta, el visor (lista, cuadrícula, carrete, abrir y bajar uno, sin red), "Agregar a esta carpeta",
+   papelera, textos y docs.
+4. **Entrega 2:** CORS en `/m/` y *Bajar todo*.
 
-Pruebas de la app: unidad (recorrer entradas con más de 100 por carpeta, salteados, nombres limpios y repetidos,
-`pending: 2` invisible para la consulta vieja, orden de la cola con algo suelto en el medio, pausa, error de un
-archivo que no frena, "entera o nada" al cerrar a mitad de camino, lugar insuficiente, zip con Zip64 y nombres
-repetidos), jsdom con el esquema publicado (una página con una carpeta se abre, se edita y se mueve sin perder
+Pruebas de la app: unidad (recorrer entradas con más de 100 por carpeta, salteados, lista de trabajo que sobrevive a
+cerrar, retomar comparando por ruta y peso, ventana de direcciones por delante, 429 que espera, un error que no frena,
+el cupo del día), jsdom con el esquema publicado (una página con una carpeta se abre, se edita y se mueve sin perder
 nada; `mediaIdsInDoc` la cuenta), jsdom con el editor nuevo (soltar `[carpeta, a.pdf]` da dos bloques `image` en
-orden), y de punta a punta con el portero real: una carpeta de 500 archivos en 3 niveles, verla desde otra cuenta con
-permiso de Ver, que una cuenta sin la página no la vea, bajar todo, papelera y restaurar.
+orden) y de punta a punta con el portero real: una carpeta de 2000 archivos en 3 niveles, verla desde una cuenta con
+Ver, que una cuenta sin la página no la vea, un archivo agregado a mano en Drive que aparece (con `drive.readonly`),
+un acceso directo que no se sigue, una subcarpeta movida afuera que deja de verse, papelera y restaurar.
 
-## Decisiones (a confirmar por Lega)
+## Respondidas por Lega (2026-09-30)
 
-Las preguntas que se le mandaron a Lega (sus respuestas, cuando lleguen, van en una sección nueva):
+1. **Dónde va en el Drive:** `<Proyecto>/Carpetas/<nombre>`. De acuerdo.
+2. **No queda congelada:** "quedará como un link a esa carpeta; alguien puede entrar al Drive y modificar el
+   contenido". El bloque es una vista en vivo de la carpeta de Drive (secciones 3 y 8). Por eso cambió el modelo: una
+   sola fila de `files` y nada por archivo.
+3. **Sin tope de archivos y en el plan gratis**, con la pregunta "¿por qué Cloudflare? ¿se puede saltear?": secciones
+   4, 5 y 12. Cloudflare queda solo como portero (la conexión con Google, los permisos, los pases) y los bytes de las
+   subidas pueden ir directo a Google.
+4. **Bajar todo como zip:** sí, en la entrega 2, con los bytes de Drive por el portero (sección 9).
+5. **iPhone sin forma de elegir una carpeta → pedir que se comprima:** de acuerdo.
 
-1. Una carpeta es un bloque `image` con `sdmedia://` y una fila de `files` (no un párrafo con propiedad ni un esquema
-   nuevo).
-2. **Dónde va en el Drive:** propuesta `<Proyecto>/Carpetas/<nombre>` (en vez de la carpeta del día).
-3. **La carpeta no cambia después de subida en la entrega 1** (no se agregan ni se sacan archivos adentro; para
-   cambiarla, se suelta de nuevo). Agregar archivos a una carpeta existente, más adelante.
-4. **Tope:** aviso desde 1000 archivos y límite de 10.000, **ahora sujeto a la corrección 3** (los límites diarios del
-   plan gratis de Cloudflare bajan el tope real, salvo con el plan pago).
-5. Se saltean los archivos del sistema y los vacíos, con una casilla para incluir los ocultos.
-6. Miniatura para cada foto y video de adentro (se ve lindo en la cuadrícula; ocupa la cuota de Supabase).
-7. Se inserta el bloque recién cuando la carpeta entera quedó guardada en el dispositivo (con el ancla de la
-   corrección 7).
-8. *Bajar todo* (zip armado en el navegador; en Chrome, también "Bajar a una carpeta…") **en la entrega 2**.
-9. **En el iPhone**, si la prueba de la entrega 0 sale mal, se sigue pidiendo comprimir la carpeta.
+## Decisiones que quedan (a confirmar por Lega)
 
-## Correcciones de la auditoría (mandan sobre lo de arriba)
+1. **Permiso de Google:** sumar `drive.readonly` para que se vea lo agregado a mano en Drive (el dueño reconecta una
+   vez; el portero puede leer todo su Drive) o quedarse con `drive.file` (solo se ve lo agregado desde la app).
+   Propuesta: sumarlo.
+2. **Sin copia en el dispositivo** para las carpetas (se retoma volviendo a soltar la carpeta, o con "Seguir" en
+   Chrome y Edge), a diferencia de las fotos y los adjuntos.
+3. "Agregar a esta carpeta" desde la app en la entrega 1 (nivel Editar); borrar y renombrar, más adelante.
+4. El peso del proyecto cuenta lo subido al crear la carpeta; recalcularlo, más adelante.
+5. Documentos de Google adentro de una carpeta: bajarlos como PDF (hasta 10 MB) o solo mostrarlos.
+6. Miniaturas de Drive por el portero (un pedido por miniatura) en la cuadrícula.
 
-Una auditoría independiente contrastó el diseño (commit `47bbbf4`) con el código. El modelo (mismo bloque `image`
-con `sdmedia://`, la carpeta como fila de `files`, los de adentro heredando permiso y papelera) se mantiene. Lo
-simple ya se corrigió arriba; esto manda sobre todo lo demás.
+## Historia: el primer diseño y su auditoría
 
-1. **La app no puede leer con `fetch()` lo que sirve el portero en `/m/`** (sin `Access-Control-Allow-Origin`: los
-   encabezados salen de `servedHeaders` y `cacheResponse`, y `cors()` solo va en las respuestas JSON). Hoy todo pasa
-   por `<img>`, `<video>` y `<a>`, que no lo necesitan. *Bajar todo* (el zip) lee cada archivo con `fetch()`: antes,
-   un cambio del portero **publicado primero**: `Access-Control-Allow-Origin` con el origen si está en
-   `APP_ORIGINS` (más `Vary: Origin`) y `Access-Control-Expose-Headers: Content-Length, Content-Range,
-   Content-Disposition` en `/m/`. El pase ya es la credencial: esto no abre nada nuevo. La app lo detecta por
-   `/drive/status` (`features`), como las carpetas.
-2. **"El portero nunca lista el Drive"** se precisa: nunca **muestra** ni devuelve a la app nada que salga de listar el
-   Drive. Una búsqueda interna por la marca `sdFile` (la propone P.10 para recuperar una subida) no rompe esto: busca
-   un id que la base ya conoce y solo devuelve "está" o "no está".
-3. **Límites diarios del plan gratis de Cloudflare** (100.000 pedidos al Worker y 100.000 al Durable Object por día,
-   para toda la cuenta). Hoy cada subida cuesta unos 7–8 llamados al Durable Object en `POST /upload` (más un
-   `look()` a Drive de la raíz, del proyecto y del día **en cada subida**: `once()` junta los pedidos simultáneos
-   pero no guarda nada) y unos 5 más por cada parte. Una carpeta de 10.000 archivos chicos serían ~20.000 pedidos al
-   portero y 130.000–150.000 al Durable Object: **se pasa del día y frena la cola de todo el workspace**, también
-   los pases para ver. Entonces:
-   - **Presupuesto por día**, no un tope por carpeta: la cola sube archivos de carpetas hasta un cupo diario por
-     dispositivo (a medir; del orden de 2.000–3.000 archivos chicos en el plan gratis) y la ventana dice "sigue
-     mañana". Lo suelto (fotos y adjuntos de las páginas) nunca espera por ese cupo. El aviso de 1000 y el límite de
-     10.000 quedan, pero en estos términos (decisión 4).
-   - **Menos llamados por archivo:** guardar en memoria del portero (con vencimiento, por ejemplo 10 minutos) los ids
-     de la raíz, el proyecto y las carpetas, en vez de mirarlos en Drive en cada subida; y una **subida directa** para
-     archivos de hasta 8 MiB (un solo pedido que abre y manda, con `uploadType=multipart` de Drive) en vez de
-     abrir + una parte.
-   - Si el portero responde que se pasó el límite del día, la cola pausa las carpetas hasta el día siguiente (UTC).
-   - Para carpetas grandes de verdad, el plan pago de Workers (a decidir por Lega).
-4. **Carpetas duplicadas en Drive con subidas en paralelo:** `once()` vale por instancia del Worker, no para todas.
-   Además, un segundo `set_file_drive` de la carpeta con otro id da `file_already_uploaded`, que `linkFile` toma como
-   "listo" (`core.ts`, cerca de la línea 381): los archivos podrían quedar en una carpeta que la base no conoce. Por
-   eso el árbol se crea **antes** de subir, con una ruta nueva (`POST /folder/prepare` con la carpeta): el portero
-   lee las rutas de la base (`folder_files`), crea la carpeta y las subcarpetas **en orden y adentro del Durable
-   Object** (un solo hilo: "busca o crea" sin carreras), de a tandas que entren en el límite de llamados por pedido
-   (responde "seguí" si falta), y anota `dir:<carpeta>:<ruta>`. Recién después se sube en paralelo, y cada subida
-   solo lee el mapa.
-5. **`pending: 2`: la premisa era falsa.** Una pestaña vieja y una nueva no corren juntas (el lock de la base,
-   `lock:<base>`, en `src/services.ts`, desde v0.041): solo protege ante una vuelta atrás de versión o un paquete
-   viejo en caché. Y la lista de lugares estaba incompleta. Leen solo `pending = 1`: `unsyncedSummary`
-   (`src/sync/unsynced.ts`, líneas 39 y 152), la lista de `RemovedScreen.tsx` (128), la de `WorkspaceMenu.tsx` (189),
-   `status()` y `failures()` y `round()` en `queue.ts`. **Fuerzan `pending: 1`:** `resetForRestore` y `requeueOwn`.
-   Sin cambiarlos, sacar el workspace del dispositivo podría **borrar archivos de carpetas sin subir sin avisar**, y
-   una restauración volvería los registros de carpetas a `pending: 1`, con `register_file` y `pageId: ''`. Con la
-   corrección 6 los de adentro salen de `files` y esto se achica a la fila de la carpeta, pero todos esos lugares
-   tienen que contarla y conservar su estado.
-6. **Diez mil registros en `files` hacen lenta la cola:** cada `onChange` llama a `status()`, que trae **todos** los
-   pendientes (`getAllFromIndex`), y `reconcilePage` y `wouldUnlink` leen `files.getAll()` por página. Entonces:
-   - **Los archivos de adentro van en una base aparte del dispositivo**, `<base local>:folders` (versión 1, con sus
-     propios registros y originales, guardados juntos en una transacción). Una versión vieja nunca la abre. Sumar un
-     almacén a `…:media` pediría subir su versión, y una versión vieja ya no podría abrirla. La fila de la carpeta sí
-     queda en `files` (es la que usa la página). Sacar el workspace del dispositivo borra también esta base y la cuenta
-     en lo que falta subir.
-   - Contadores por carpeta en su registro (archivos listos, detenidos, bytes mandados) y `countFromIndex` para los
-     números del estado; nunca traer todo en cada cambio.
-7. **Dónde y cuándo se inserta el bloque.** Guardar la carpeta puede tardar minutos: el bloque de referencia puede no
-   estar más, la persona puede estar en otra página o haber cerrado la página. Y `reconcilePage` daría por quitado un
-   archivo propio que la página no muestra pasados 5 minutos (`OWN_GRACE_MS`). Entonces: al soltar se guarda un
-   **ancla** (página, bloque y antes o después); al terminar de guardar se inserta ahí, o **al final de la página** si
-   el bloque ya no está; si el editor de esa página no está abierto, se inserta en el documento de Yjs de la página
-   (con la misma forma que arma el editor; si eso no se puede hacer bien, se abre la página y se inserta ahí). El
-   `pageId` y el `createdAt` del registro de la carpeta se ponen **al insertar**, no al soltar. Si la página se mandó a
-   la papelera en el medio, se pregunta dónde ponerla (lo guardado sigue en el dispositivo).
-8. **Se lee todo antes de confirmar:** un archivo que no se pudo leer se deja afuera de `item_count` y figura como
-   salteado. "Entera o nada" es de lo que se decidió subir. Una carpeta a la que no le queda nada no crea bloque (con el
-   aviso).
-9. **Versiones viejas, menos lindo de lo dicho:** la app publicada no muestra el texto del portero al abrir o bajar (el
-   que prepara el adjunto se traga el error: "no se puede abrir", y el carrete su aviso genérico). En v0.049+ la
-   tarjeta dice "listo" apenas la carpeta tiene `drive_id`, y un nombre como `2026.09.30` muestra una extensión falsa
-   ("30"). Para que la tarjeta vieja no mienta, la carpeta recibe su `drive_id` **al final**, cuando llegaron todos sus
-   archivos (el portero ya conoce su id de Drive por su mapa, también para mandarla a la papelera antes de eso). La
-   extensión falsa no tiene arreglo en las versiones viejas: se acepta.
-10. **Migración, detalles:** `trashed_files` cambia lo que devuelve: `drop function` + `create` + los `grant` de nuevo
-    (no alcanza `create or replace`). `register_folder_files` bloquea la fila de la carpeta (`select … for update`)
-    antes de contar, para que dos tandas a la vez no pasen `folder_too_big`, y solo la puede llamar **quien creó la
-    carpeta** (`created_by = auth.uid()`). Las restricciones `files_purged_trashed` y `files_drive_trashed` obligan
-    también en los de adentro al orden papelera → pedido → papelera de Drive: al copiar el estado de la carpeta hay
-    que respetarlo, y la prueba SQL lo cubre.
-11. **Zip:** el CRC32 hace falta aunque no se comprima (en un Worker del navegador); en Safari, siempre en memoria y con
-    tope; una ruta propia del service worker pide pasar de `generateSW` a `injectManifest` (Firefox). Y depende de la
-    corrección 1.
+El primer diseño (commit `47bbbf4`) tenía una fila de `files` por archivo de adentro, con `folder_id` y `rel_path`,
+una migración grande (`register_folder`, `register_folder_files`, `folder_files` y cambios en permisos, papelera y
+peso), copia de todo en el dispositivo antes de subir y la carpeta congelada después de subida. Una auditoría
+independiente encontró (commit `21ee8e3`): `/m/` sin CORS para el zip; los límites diarios de Cloudflare (10.000
+archivos costaban ~20.000 pedidos al Worker y 130.000–150.000 al Durable Object: se pasaba del día); carpetas
+duplicadas en Drive con subidas en paralelo (`once()` vale por instancia) y un segundo `set_file_drive` tomado como
+"listo"; que `pending: 2` no protegía de pestañas viejas (el lock de la base ya lo impide) y que varios lugares leen o
+fuerzan `pending: 1`; la lentitud de la cola con 10.000 registros; el lugar de inserción del bloque después de minutos
+de copia; archivos ilegibles y `item_count`; textos de las versiones viejas; detalles de la migración; y el zip (CRC32,
+Safari, `injectManifest`).
 
-### Orden de entregas, con las correcciones
-
-1. **Entrega 0:** la prueba a mano de leer carpetas, y medir cuántos pedidos al Worker y al Durable Object cuesta subir
-   un archivo chico (para fijar el cupo diario).
-2. **Entrega 1a, portero** (publicado antes que la app): CORS en `/m/`, ids de carpetas en memoria con vencimiento,
-   subida directa de archivos chicos, `POST /folder/prepare`, `features: ['folders']`, `is_folder`, `/trash` de la
-   carpeta aunque no tenga `drive_id`. **Entrega 1a, base:** la migración con las correcciones 4, 9 y 10.
-3. **Entrega 1b, app:** base aparte para los de adentro, contadores, ancla, cupo diario y lo de arriba.
-4. **Entrega 2:** *Bajar todo*, cuadrícula.
+Con las respuestas de Lega el modelo cambió y casi todo eso desaparece: no hay filas por archivo (ni migración, ni
+registros por archivo en el dispositivo, ni `pending: 2`), no hay copia (ni inserción diferida), el árbol se crea en
+orden adentro del Durable Object y los pedidos bajan a lo de la sección 12. Siguen valiendo, incorporados arriba: CORS en
+`/m/` antes del zip, el CRC32 en un Worker del navegador, Safari en memoria, `injectManifest`, crear el árbol en orden
+en el Durable Object, cachés en memoria con vencimiento, y los textos reales de las versiones viejas.
