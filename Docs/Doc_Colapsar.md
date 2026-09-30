@@ -1,8 +1,9 @@
 # Colapsar secciones por sus títulos (P.11)
 
-Estado: **diseño, sin implementar**. Las decisiones del final son propuestas: Lega todavía no las contestó.
-Sale de leer el código de `main` (v0.050) y el de BlockNote 0.55. Lo pidió Lega: "como en Coda: cada título
-se puede colapsar y abrir con un triángulo a su izquierda".
+Estado: **diseño, sin implementar**. Lega contestó la mayoría de las decisiones el 2026-09-30 (al final,
+"Decisiones respondidas"); las que faltan siguen "a confirmar". Su respuesta cambió cómo se marcan las hojas
+(sección 7). Sale de leer el código de `main` (v0.050) y el de BlockNote 0.55. Lo pidió Lega: "como en Coda:
+cada título se puede colapsar y abrir con un triángulo a su izquierda".
 
 ## Qué se pide
 
@@ -16,6 +17,9 @@ se puede colapsar y abrir con un triángulo a su izquierda".
 4. **Por defecto es de cada persona**: un filtro de su vista, los demás no ven ningún cambio.
 5. **Shift+clic colapsa o abre para todos** los que miran la página. Solo quien puede editar la página; el
    tooltip lo explica. A quien solo ve, el tooltip no menciona Shift y Shift+clic hace lo mismo que el clic.
+6. (Respuestas de Lega.) "Colapsar todo / Abrir todo" y un atajo; el PDF sale todo abierto, con una casilla
+   para imprimirlo como se ve; **las marcas de hoja en pantalla cuentan todo abierto** ("acá corta la página 5,
+   por más que haya colapsado las dos primeras"); arrastrar un título colapsado mueve toda su sección.
 
 ## Reglas que no se rompen
 
@@ -67,7 +71,7 @@ que esconden un bloque (hacen falta para abrirlo desde afuera, sección 6).
 - Es una propiedad del bloque (`isToggleable`), con su propio botón (el triángulo ya se parece al pedido, pero
   es de BlockNote y hace otra cosa).
 
-Propuesta:
+Decidido (Lega):
 
 - **Sacar los encabezados plegables del menú "/"** (las claves `toggle_heading`, `toggle_heading_2`,
   `toggle_heading_3` en `slashItems` de `PageEditor.tsx`) **y del selector de tipo** de la barra
@@ -122,9 +126,22 @@ se puede sumar un toque largo con un menú).
 
 **Teclado:** **Ctrl/⌘+Alt+Enter** colapsa o abre el título donde está la selección (si está en otro bloque,
 el título de su sección, y la selección pasa a ese título). Con Shift además (**Ctrl/⌘+Alt+Shift+Enter**), para
-todos, si se puede editar. No choca con nada de BlockNote 0.55 (sus atajos con Alt son `Mod-Alt-0` a `6`, `q`,
-`c`) ni de la app (`p`, `s`, `m`); hay que probarlo en Mac, Windows y Linux. En el menú de la página, **Colapsar
-todo** y **Abrir todo**, para vos.
+todos, si se puede editar. Ctrl+←/→ y Ctrl+Alt+flechas están ocupados (Lega). Revisado:
+
+- **BlockNote 0.55:** ningún atajo con Enter en el editor de la página. Sus atajos con Alt son `Mod-Alt-0` a
+  `6`, `Mod-Alt-q` y `Mod-Alt-c`; `Mod-Enter` solo existe en su editor de comentarios (que no usamos). Los
+  atajos de base de Tiptap (donde `Mod-Enter` sale de un bloque de código) están apagados:
+  `enableCoreExtensions: false` en `BlockNoteEditor.ts`.
+- **La app:** Ctrl/⌘+Alt+P, S y M, Ctrl/⌘+P; Ctrl/⌘+Enter solo en el campo del panel de comentarios (manda el
+  comentario), que está afuera del editor.
+- **Navegadores y sistemas:** con el foco en la página, Ctrl/⌘+Alt+Enter no está tomado en Chrome, Safari ni
+  Firefox, en Mac, Windows ni Linux. En Windows, Ctrl+Alt es AltGr: AltGr+Enter no escribe nada. A probar
+  igual con los lectores de pantalla (VoiceOver usa Ctrl+Option como prefijo).
+- **Alternativa: Ctrl/⌘+Enter**, como en Notion. También está libre en el editor (mismo control), es más
+  corto y con Shift queda **Ctrl/⌘+Shift+Enter** para todos. Contra: quien viene de Google Docs lo usa para un
+  salto de página. A elegir por Lega.
+
+En el menú de la página, **Colapsar todo** y **Abrir todo**, para vos.
 
 ## 4. Para vos y para todos
 
@@ -154,7 +171,7 @@ decoraciones tienen que estar desde el primer dibujo (con IndexedDB se vería to
 cerraría). Una clave por base local (el nombre de la base ya es por workspace y usuario):
 `sd-collapse:<base>` → por página, la fecha de uso y, por título, `[colapsado, lo que valía para todos]`. Se
 guardan las 300 páginas usadas más recientemente. Si `localStorage` falla (navegación privada, bloqueado),
-anda en memoria. Se borra junto con la base local (`RemovedScreen.tsx`). **Más adelante (opcional):** que siga
+anda en memoria. Se borra junto con la base local (`RemovedScreen.tsx`). **A futuro (Lega lo quiere):** que siga
 a la persona en todos sus dispositivos, como las preferencias.
 
 **La regla entre los dos** (en `collapse.ts`, con prueba):
@@ -192,7 +209,7 @@ Los casos, uno por uno:
 | Enter en el medio o al principio de un título colapsado | Abre la sección y sigue como siempre. |
 | Cambiar el nivel o el tipo de un título colapsado (barra, Ctrl/⌘+Alt+1…6, "## ") | Se abre para vos; y para todos si estaba colapsado para todos (quien lo cambia puede editar). Si no, un H2 que pasa a H1 escondería de golpe las secciones de al lado. |
 | "Borrar" del menú del bloque en un título colapsado | Borra solo el título; su contenido pasa a la sección de arriba y se ve (salvo que esa también esté colapsada). |
-| Arrastrar un título colapsado | **Se mueve la sección entera.** BlockNote arrastra todo lo elegido si el bloque está en la selección (`dragStart` de `SideMenu/dragging.ts`): en la captura del `dragstart` del tirador se elige del título al último bloque escondido (`MultipleNodeSelection`) y BlockNote hace el resto. El estado viaja con el id. Si da problemas, en la primera entrega se mueve solo el título. |
+| Arrastrar un título colapsado | **Se mueve la sección entera.** BlockNote arrastra todo lo elegido si el bloque está en la selección (`dragStart` de `SideMenu/dragging.ts`): en la captura del `dragstart` del tirador se elige del título al último bloque escondido (`MultipleNodeSelection`) y BlockNote hace el resto. El estado viaja con el id. (Decidido por Lega: siempre la sección entera.) |
 | "+" del menú lateral, o soltar algo justo debajo de un título colapsado | El bloque nuevo queda adentro de la sección: se abre. |
 | Una selección que cruza una sección colapsada, y se borra o se escribe encima | Se borra también lo escondido (está en la selección), con un aviso: "Se borraron también 12 bloques escondidos" (Ctrl+Z lo trae). |
 | Copiar o cortar | Lleva lo escondido (está en el documento). Al pegar, BlockNote da ids nuevos: lo pegado aparece abierto. |
@@ -201,7 +218,7 @@ Los casos, uno por uno:
 | Cambios de otros adentro de una sección escondida | Siguen escondidos. Si alguien agrega un título de igual o mayor nivel adentro, la sección se corta ahí y lo de abajo se ve; si pasa el título a párrafo, se ve todo. |
 | Cursores de otros adentro de lo escondido | No se ven. |
 | Ctrl+A | Elige todo, también lo escondido. |
-| Buscar con Ctrl+F del navegador | **No encuentra lo escondido.** Más adelante: `hidden="until-found"` (Chrome y Edge lo encuentran y avisan con `beforematch` para abrir; en Safari y Firefox, a verificar). |
+| Buscar | La búsqueda en la página de la app (P.12) **busca también en lo escondido y abre la sección** del resultado (sección 6). El Ctrl+F del navegador no encuentra lo escondido; si P.12 no toma Ctrl/⌘+F, se puede sumar `hidden="until-found"` (Chrome y Edge lo encuentran y avisan con `beforematch` para abrir; en Safari y Firefox, a verificar). |
 
 Los atajos van con prioridad sobre los de BlockNote (`KeyboardShortcutsExtension`, prioridad 50): lo mismo que
 hoy hace `imageRowsExtension` con Enter y las flechas. Se confirma con las pruebas en jsdom.
@@ -211,6 +228,10 @@ hoy hace `imageRowsExtension` con Enter y las flechas. Se confirma con las prueb
 - **"Ir al bloque" del panel de comentarios** (`revealBlock` en `commentsUi.ts`): antes del scroll y el
   resaltado, abre para vos todos los títulos que esconden el bloque (`hidersOf`). El editor registra esa
   función como ya registra la fuente de bloques (`setBlockSource`).
+- **La búsqueda en la página (P.12 del roadmap):** busca en el documento (no en la pantalla), así que encuentra
+  el texto de las secciones colapsadas; al ir a un resultado escondido, abre para vos los títulos que lo
+  esconden (`hidersOf`), como "Ir al bloque". Ninguna sección se abre solo por aparecer en la lista de
+  resultados. El diseño de P.12 tiene que usar esta misma función.
 - **Links a un bloque:** hoy no existen (`/p/<id>` abre la página). Cuando existan, usan lo mismo.
 - **El margen de comentarios** (`CommentMargin`): un bloque escondido no tiene lugar en pantalla (su contador
   saldría arriba de todo). Primera entrega: sus contadores y el botón "Answer" de las preguntas escondidas no se
@@ -223,23 +244,62 @@ hoy hace `imageRowsExtension` con Enter y las flechas. Se confirma con las prueb
 
 ## 7. Hojas y PDF
 
-- **Las marcas de hoja en pantalla cuentan solo lo visible, casi sin cambios:** la vista para medir es una copia
-  del DOM (`buildPrintView`) y se lleva las clases; `measureUnits` ya saltea lo que mide 0 de alto. Hace
-  falta que el CSS de esconder valga también en `.print-view`, y que colapsar recalcule: `isContentMutation`
-  ignora los cambios de `class` (por eso el atributo `data-sd-collapsed`, que sí cuenta; además cambia el alto,
-  que ya mira el `ResizeObserver`).
-- **El PDF, propuesta: con todo abierto por defecto** (es un documento para mandar), con la opción "Imprimir como
-  se ve". Para imprimir todo abierto, `cleanCopy` saca las clases de colapso en la vista de salida.
-- **Choca con la regla de `Doc_Hojas_PDF.md`, "lo que se ve es lo que sale":** con algo colapsado, las marcas de
-  la pantalla (lo que se ve) y las hojas del PDF (todo abierto) no coinciden. Opciones: (a) lo propuesto, y las
-  marcas siguen lo que se ve; (b) el PDF sale como se ve por defecto y la opción es "Imprimir todo abierto".
-  **A decidir por Lega.**
-- **La opción va en el menú de la página** (una casilla "Al imprimir, abrir todo", guardada en el dispositivo),
-  no en un diálogo al imprimir: en el iPhone el diálogo de impresión tiene que abrirse en el mismo toque
-  (`printPage.ts`). Ctrl/⌘+P usa la misma casilla. Solo se muestra si la página tiene algo colapsado.
-- **Fotos que nunca se vieron:** una foto escondida puede no haber cargado. `imagesPending` (espera de hasta 8
-  s) tiene que saltear las escondidas, y la copia abierta espera sus propias imágenes (`imagesLoaded`, ya
-  está) antes de medir: sin la proporción de la foto en pantalla, la copia mide cuando carga.
+**Lo que pidió Lega:** las marcas de hoja en pantalla se calculan **como si todo estuviera abierto**. Si una
+sección colapsada ocupa las hojas 2 a 4, el próximo corte visible dice "Hoja 5", y el título colapsado avisa
+que adentro hay cortes. Así el PDF de siempre (todo abierto) coincide con las marcas y la regla de
+`Doc_Hojas_PDF.md`, "lo que se ve es lo que sale", se mantiene.
+
+**Cómo funciona hoy** (`SheetBreaks.tsx`, `printView.ts`, `pagination.ts`): `buildPrintView` copia el DOM del
+editor en pantalla (`.bn-editor`) a una vista afuera de la pantalla con el ancho de la hoja; `measureUnits`
+mide cada `.bn-block-content` y **saltea lo que mide 0 de alto**; `paginate` decide los cortes; `placeMarks`
+busca en pantalla el bloque de cada corte **por su clave** (`b:<id>`) y dibuja la marca a su altura (si el
+corte parte un bloque, a la misma altura adentro de él).
+
+**El cambio:**
+
+1. **La copia se mide abierta.** `cleanCopy` saca las marcas del colapso (`sd-collapsed`, `sd-collapsed-hidden`,
+   `data-sd-collapsed`) de la copia, en la vista para medir y en la de salida. Sin nada colapsado, nada
+   cambia.
+2. **Cada corte se ubica en lo visible** (`placeMarks`, con `hidersOf` de `collapse.ts`):
+   - El bloque del corte **se ve en pantalla**: la marca va como hoy, con su número ("Hoja 5"). Los números
+     cuentan todas las hojas, también las escondidas.
+   - El bloque del corte **está escondido**: no hay dónde dibujarlo. Se junta en el **título colapsado de más
+     afuera** que lo esconde (el único que se ve), que muestra una marca compacta en el margen, del mismo
+     estilo que las otras: "Hojas 3–4 adentro" (una sola: "Hoja 3 adentro"; en inglés *Pages 3–4 inside*).
+     Con el tooltip: "Esta sección colapsada tiene cortes de hoja. Abrila para verlos."
+   - El corte cae justo en el título colapsado: marca normal (el título se ve).
+3. **`--sheet-end`** (el alto para que la última hoja se vea entera) sale de la última marca visible; si los
+   últimos cortes están escondidos, del título colapsado que los junta.
+4. **Recalcular al colapsar:** la paginación no cambia (se mide abierta), pero las alturas en pantalla sí.
+   `isContentMutation` ignora los cambios de `class`: por eso el atributo `data-sd-collapsed`, que sí cuenta
+   (además cambia el alto, que ya mira el `ResizeObserver`). Más adelante se puede guardar el resultado de
+   `paginateView` y, al colapsar, correr solo `placeMarks`.
+
+**Fotos en secciones escondidas.** Para medir abierto hace falta el tamaño de cada foto. Hoy `cleanCopy` pone en
+la copia `aspect-ratio` con el `naturalWidth`/`naturalHeight` de la imagen en pantalla, y `fixMediaWidth` el
+ancho de `previewWidth` (el `width` en px del contenedor) o, si no tiene, el ancho natural; las fotos en fila
+usan su `rowWidth`. Una foto escondida **igual se carga**: el `<img>` de BlockNote no lleva `loading="lazy"` y
+el navegador baja las imágenes con `display: none`, así que su tamaño natural está como el de las demás. Si
+todavía no cargó (recién abierta, sin red), pasa lo mismo que hoy con una foto que no cargó: `imagesPending`
+(la espera de hasta 8 s antes de imprimir) ya la cuenta, y la copia espera sus propias imágenes
+(`imagesLoaded`, 6 s) antes de repaginar. Para las marcas en pantalla, cuando la foto carga cambia el alto y se
+recalcula (hoy igual). A verificar en Safari del iPhone, que puede demorar las imágenes que no se ven.
+
+**El PDF:**
+
+- **Por defecto, todo abierto**: la vista de salida es la copia abierta, y las hojas coinciden con las marcas.
+- **"Imprimir como se ve" (colapsado)**, una casilla. Con ella, `cleanCopy` deja las marcas del colapso en la
+  vista de salida y **esa vista pagina su propio contenido** (`paginateView` ya lo hace sobre la copia que va a
+  imprimir): las secciones colapsadas no salen y los cortes son otros. **Las marcas de la pantalla no
+  cambian** (siguen contando todo abierto): las hojas impresas no van a coincidir con ellas, y la casilla lo
+  dice en su tooltip ("Las hojas no coinciden con las marcas de la pantalla").
+- **Dónde va la casilla: al lado de "Imprimir", en el menú de la página, y solo si la página tiene algo
+  colapsado** para vos. No puede ser un diálogo que pregunte antes de imprimir: en el iPhone, el diálogo de
+  impresión del navegador tiene que abrirse **en el mismo toque** (`printPage` imprime antes del primer
+  `await` cuando no hay nada que esperar; ver `printPage.ts`); un diálogo propio en el medio haría que el
+  toque de "Imprimir" ya no cuente y Safari no abriría el de impresión. La casilla se guarda en el dispositivo
+  y la usan también Ctrl/⌘+P y la impresión desde el menú del navegador (`installPrintShortcuts`,
+  `beforeprint`).
 
 ## 8. Riesgos
 
@@ -250,10 +310,12 @@ hoy hace `imageRowsExtension` con Enter y las flechas. Se confirma con las prueb
    une o se borra algo escondido. Lo cubren las pruebas con el editor real.
 3. **Lugar del triángulo** frente al menú lateral de BlockNote, y en el teléfono, donde el margen es angosto.
 4. **Encabezados plegables viejos:** el CSS que los neutraliza depende de clases internas de BlockNote.
-5. **PDF:** la diferencia entre marcas y hojas mientras hay algo colapsado (sección 7), y la espera de fotos
-   escondidas.
+5. **Hojas:** medir abierto cuesta lo mismo que hoy sin colapsar, pero las marcas que caen en lo escondido se
+   juntan en el título y hay que ubicarlas bien (títulos colapsados adentro de otros, el final de la página).
+   Una foto escondida que el navegador no cargó mide mal hasta que carga. Con "Imprimir como se ve", el papel
+   no coincide con las marcas (avisado en la casilla).
 6. **Escribir el mapa sin permiso** dejaría una subida rechazada: por eso la doble revisión (sección 4).
-7. **Ctrl+F no encuentra lo escondido.** Puede confundir en páginas largas.
+7. **El Ctrl+F del navegador no encuentra lo escondido** mientras no esté la búsqueda de la página (P.12).
 8. **Lo tuyo vive en el navegador:** se pierde si se borran los datos del sitio (es solo la vista).
 9. **Versiones viejas** ven todo abierto aunque alguien haya colapsado para todos (esperado; no pierden nada).
 
@@ -261,13 +323,15 @@ hoy hace `imageRowsExtension` con Enter y las flechas. Se confirma con las prueb
 
 1. **Entrega 1, para vos:** `collapse.ts`, el plugin con todos los casos de la sección 5, el triángulo
    (computadora y teléfono), el atajo, "Colapsar todo" y "Abrir todo", abrir desde el panel de comentarios, el
-   margen sin marcas escondidas, las marcas de hoja con lo visible, los encabezados plegables fuera de los
-   menús y neutralizados, textos y docs. Lo tuyo ya se guarda con el `G` que viste (falso), así la entrega 2 no
+   margen sin marcas escondidas, las marcas de hoja contadas con todo abierto (con la marca "Hojas 3–4
+   adentro" en el título), el PDF todo abierto y la casilla "Imprimir como se ve", arrastrar la sección entera,
+   los encabezados plegables fuera de los menús y neutralizados, textos y docs. Lo tuyo ya se guarda con el `G` que viste (falso), así la entrega 2 no
    cambia el formato.
 2. **Entrega 2, para todos:** el `Y.Map`, Shift+clic y el atajo con Shift, los tooltips completos, la regla
    entre los dos.
-3. **Entrega 3:** la opción del PDF, la pista de lo escondido, la suma de comentarios en el título, el toque
-   largo en el teléfono, y (si Lega quiere) lo tuyo en todos tus dispositivos y `hidden="until-found"`.
+3. **Después:** la pista de lo escondido, la suma de comentarios en el título, el toque largo en el teléfono,
+   lo tuyo en todos tus dispositivos (Lega lo quiere, a futuro) y, si hace falta, `hidden="until-found"`. La
+   búsqueda en la página (P.12) abre secciones con `hidersOf` desde que exista.
 
 Pruebas:
 
@@ -284,30 +348,50 @@ Pruebas:
 - **Sincronización:** la versión publicada (`fixtures/publishedDocs.ts`) abre un documento con el mapa, edita,
   sube, y el mapa sigue en el servidor y en un dispositivo nuevo. La subida de alguien con Ver o Comentar se
   rechaza (ya lo prueban las pruebas de permisos).
-- **Hojas:** `measureUnits` con bloques escondidos; la vista de salida con todo abierto.
+- **Hojas:** la copia para medir sale abierta aunque haya secciones colapsadas (mismos cortes que sin
+  colapsar); `placeMarks` con un corte en un bloque visible (número de hoja contando las escondidas), con
+  cortes escondidos (juntos en el título de más afuera: "Hojas 3–4 adentro"), con un corte en el título mismo,
+  y `--sheet-end` con los últimos cortes escondidos; la vista de salida abierta por defecto y colapsada con la
+  casilla; el Y.Doc sigue igual al paginar.
 - **De punta a punta** (`colapsar.mjs`, en el repo de pruebas privado, sin escribir en la base de producción):
   pasar el mouse y ver el triángulo, colapsar un H1 con un H2 colapsado adentro y reabrir, flechas, Shift+clic
-  con dos usuarios (quien edita y quien solo ve), recargar y que siga, imprimir con las dos opciones,
+  con dos usuarios (quien edita y quien solo ve), recargar y que siga, las marcas de hoja con una sección
+  colapsada que ocupa varias hojas, imprimir con y sin la casilla (en el iPhone, el diálogo en el mismo toque),
   arrastrar una sección, un encabezado plegable viejo. A mano: Safari de Mac, iPhone, Firefox.
 
-## Decisiones (a confirmar por Lega)
+## Decisiones
 
-1. **Por secciones, no por hijos:** nuestro triángulo en todos los títulos; los "encabezados plegables" de
-   BlockNote salen del menú "/" y del selector de tipo, y los que ya existan se ven como títulos comunes.
+### Respondidas por Lega el 2026-09-30
+
+1. **Por secciones, no por hijos:** sí. Se sacan "Encabezado plegable 1/2/3" del menú "/" y de "Turn into":
+   todos los títulos se colapsan. Los que ya existan se ven como títulos comunes, con nuestro triángulo.
+2. **Lo tuyo, por dispositivo por ahora.** A futuro, que siga a la persona en todos sus dispositivos.
+3. **Teléfono:** triángulo siempre visible y tenue, un toque solo para vos; para todos, solo desde la
+   computadora.
+4. **"Colapsar todo" / "Abrir todo" en el menú de la página, y un atajo:** sí. Ctrl+←/→ y Ctrl+Alt+flechas
+   están ocupados. Propuesta que queda: Ctrl/⌘+Alt+Enter (con Shift, para todos); ver la alternativa abajo.
+5. **Arrastrar un título colapsado mueve la sección entera:** sí, siempre.
+6. **El tooltip dice si está colapsado para todos o solo para vos:** sí (se ven igual; cambia el tooltip).
+7. **PDF todo abierto por defecto**, con una casilla para imprimirlo como se ve. La casilla va en el menú de la
+   página, al lado de "Imprimir" y solo con algo colapsado, no en un diálogo antes de imprimir (sección 7: el
+   iPhone).
+8. **Las marcas de hoja en pantalla cuentan todo abierto**, y el título colapsado avisa qué hojas tiene
+   adentro. Con eso el PDF de siempre coincide con las marcas.
+9. (Del roadmap, P.12) **La búsqueda en la página encuentra lo que está en secciones colapsadas y las abre.**
+
+### A confirmar por Lega
+
+1. **El atajo:** Ctrl/⌘+Alt+Enter (propuesta) o Ctrl/⌘+Enter, como en Notion (también libre; con Shift, para
+   todos).
 2. **Para todos, en el documento de la página** (un `Y.Map` aparte del contenido): sin propiedad nueva, sin
    migración, sin subir `min_app_version`. Las versiones viejas ven todo abierto.
-3. **Para vos, en el dispositivo.** Que siga a la persona en todos sus dispositivos, más adelante.
-4. **Cuando alguien colapsa o abre para todos, lo tuyo de ese título deja de contar.**
-5. **Teléfono:** triángulo siempre visible y tenue, un toque para vos; para todos, solo desde la computadora.
-6. **Atajo Ctrl/⌘+Alt+Enter** (con Shift, para todos) y "Colapsar todo" / "Abrir todo" en el menú de la página.
-7. **Enter al final de un título colapsado crea un título del mismo nivel después de la sección** (o abre la
+3. **Cuando alguien colapsa o abre para todos, lo tuyo de ese título deja de contar.**
+4. **Enter al final de un título colapsado crea un título del mismo nivel después de la sección** (o abre la
    sección).
-8. **Arrastrar un título colapsado mueve la sección entera.**
-9. **"Borrar" en un título colapsado borra solo el título** y su contenido se ve.
-10. **Borrar una selección que cruza lo escondido lo borra también**, con un aviso.
-11. **El carrete muestra todas las fotos**, también las escondidas.
-12. **PDF con todo abierto por defecto**, con la opción de imprimir como se ve; las marcas de la pantalla,
-    como se ve. (Rompe "lo que se ve es lo que sale" mientras haya algo colapsado.)
-13. **Sin pista de lo escondido** en la primera entrega ("…" o "12 bloques", más adelante si gusta).
-14. **Colapsado para todos y para vos se ven igual**; solo cambia el tooltip.
-15. **Un invitado con Editar sobre la página puede usar Shift+clic**, como puede editarla.
+5. **"Borrar" en un título colapsado borra solo el título** y su contenido se ve.
+6. **Borrar una selección que cruza lo escondido lo borra también**, con un aviso.
+7. **El carrete muestra todas las fotos**, también las escondidas.
+8. **Sin pista de lo escondido** en la primera entrega ("…" o "12 bloques", más adelante si gusta).
+9. **Un invitado con Editar sobre la página puede usar Shift+clic**, como puede editarla.
+10. **La marca de las hojas escondidas:** "Hojas 3–4 adentro" en el margen del título colapsado (el texto y el
+    lugar, con una maqueta).
