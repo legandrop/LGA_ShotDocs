@@ -102,9 +102,11 @@ export function parseAccess(memberRow: unknown, grantRows: unknown, now = Date.n
   }
   if (!Array.isArray(grantRows)) throw new Error('Unexpected answer for grants.');
   const grants: MyGrant[] = [];
-  for (const raw of grantRows as { id?: unknown; project_id?: unknown; page_id?: unknown; level?: unknown }[]) {
-    // Un permiso con un nivel desconocido (de una versión más nueva de la base) no suma nada.
+  for (const raw of grantRows as { id?: unknown; project_id?: unknown; page_id?: unknown; level?: unknown; revoked_at?: unknown }[]) {
+    // Un permiso con un nivel desconocido (de una versión más nueva de la base) no suma nada, ni uno sacado
+    // (`revoked_at`: queda en la tabla sin efecto).
     if (!raw || typeof raw !== 'object' || !isGrantLevel(raw.level)) continue;
+    if (raw.revoked_at !== null && raw.revoked_at !== undefined) continue;
     const project = typeof raw.project_id === 'string' ? raw.project_id : null;
     const page = typeof raw.page_id === 'string' ? raw.page_id : null;
     if ((project === null) === (page === null)) continue;
@@ -203,10 +205,14 @@ export class Permissions {
 
   private isCreator(projectId: string): boolean {
     const project = this.tree.project(projectId);
-    // Un proyecto que el dispositivo todavía no sabe de quién es (creado acá y sin volver del servidor)
-    // cuenta como propio: solo lo pudo crear esta persona.
     if (!project) return false;
-    return project.owner_id === undefined || project.owner_id === this.userId;
+    if (typeof project.owner_id === 'string') return project.owner_id === this.userId;
+    // Creado en este dispositivo y todavía sin volver del servidor: solo lo pudo crear esta persona.
+    if (this.tree.isLocalProject(projectId)) return true;
+    // No se sabe de quién es (el de relleno antes de bajar la lista, o una copia de una versión anterior):
+    // al dueño y a los admins no se les bloquea lo que ya podían hacer; a los demás no se les ofrece crear
+    // ni renombrar hasta saberlo (sus permisos por `grants` valen igual).
+    return this.role === 'owner' || this.role === 'admin';
   }
 
   /** Nivel sobre un proyecto entero (0..4): creador o permiso sobre el proyecto. */
@@ -241,6 +247,14 @@ export class Permissions {
 
   canEditPage(pageId: string): boolean {
     return this.pageLevel(pageId) >= LEVEL_EDIT;
+  }
+
+  /**
+   * Poner la estructura inicial en una página vacía es escribirla: solo con los permisos ya conocidos y
+   * "Edit". Sin datos no se siembra (es la única escritura que la app hace sola al abrir una página).
+   */
+  canSeed(pageId: string): boolean {
+    return this.known && this.canEditPage(pageId);
   }
 
   /** Crear, mover, mandar a la papelera o restaurar: 4 sobre la página. */

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { mediaDbName, openMediaDb, type MediaDb } from '../media/mediaDb';
-import { AccessStore, levelValue, parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
+import { AccessStore, levelValue, parseAccess, Permissions, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import { Portero } from '../media/portero';
 import type { Probe } from '../media/probe';
 import { MediaQueue } from '../media/queue';
@@ -8,7 +8,7 @@ import { PageDocs, type PageDocsOptions } from './docs';
 import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
-import type { AccessRow, InvitationGrant, MediaRemote, MemberRow, Remote, TeamRemote } from './remote';
+import type { AccessRow, InvitationGrant, InvitationRow, MediaRemote, MemberRow, Remote, TeamRemote } from './remote';
 import {
   CommentQueue,
   commentsDbName,
@@ -61,7 +61,17 @@ export class FakeServer {
   team = false;
   readonly members = new Map<string, { email: string; role: Role; removed_at: string | null }>();
   readonly grants: { id: string; user_id: string; project_id: string | null; page_id: string | null; level: GrantLevel }[] = [];
-  readonly invitations: { id: string; email: string; role: Exclude<Role, 'owner'>; grants: InvitationGrant[]; used_at: string | null }[] = [];
+  readonly invitations: {
+    id: string;
+    email: string;
+    role: Exclude<Role, 'owner'>;
+    grants: InvitationGrant[];
+    used_at: string | null;
+    invited_by?: string;
+    revoked_at?: string | null;
+  }[] = [];
+  /** Simula una base sin `list_invitations`/`revoke_invitation` (PGRST202). */
+  noInvitationList = false;
   /** Cómo falla la lectura de los permisos propios (para probar que nada de eso se toma por "sacado"). */
   accessFailure: null | 'network' | 'server' | 'empty' | 'weird' = null;
   /** Rechaza la creación de proyectos como si faltaran permisos. */
@@ -603,7 +613,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     const uid = this.userId;
     let n = 0;
     for (const inv of this.server.invitations) {
-      if (inv.used_at || inv.email !== this.email) continue;
+      if (inv.used_at || inv.revoked_at || inv.email !== this.email) continue;
       const cur = this.server.members.get(uid);
       if (!cur) this.server.members.set(uid, { email: this.email, role: inv.role, removed_at: null });
       else if (cur.removed_at) {
@@ -644,15 +654,46 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       if (level < 4) throw this.denied('grant_not_allowed');
     }
     const em = email.trim().toLowerCase();
-    const live = this.server.invitations.find((i) => i.email === em && !i.used_at);
+    const live = this.server.invitations.find((i) => i.email === em && !i.used_at && !i.revoked_at);
     if (live) {
+      if ((live.invited_by ?? this.server.ownerId) !== this.userId) throw new RemoteError('invitation_exists', true, 'P0001');
       if (ROLE_RANK[role] > ROLE_RANK[live.role]) live.role = role;
       live.grants.push(...grants);
       return live.id;
     }
     const id = crypto.randomUUID();
-    this.server.invitations.push({ id, email: em, role, grants: [...grants], used_at: null });
+    this.server.invitations.push({ id, email: em, role, grants: [...grants], used_at: null, invited_by: this.userId });
     return id;
+  }
+
+  async listInvitations(): Promise<InvitationRow[] | null> {
+    this.server.check();
+    if (this.server.noInvitationList) return null;
+    const mine = this.server.role(this.userId);
+    if (mine !== 'owner' && mine !== 'admin') return [];
+    return this.server.invitations
+      .filter((i) => !i.used_at && !i.revoked_at)
+      .map((i) => ({
+        id: i.id,
+        email: i.email,
+        role: i.role,
+        grants: i.grants,
+        invited_by: i.invited_by ?? null,
+        invited_by_email: this.server.members.get(i.invited_by ?? '')?.email ?? null,
+        created_at: '',
+        expires_at: '',
+      }));
+  }
+
+  async revokeInvitation(id: string): Promise<void> {
+    this.server.check();
+    const inv = this.server.invitations.find((i) => i.id === id);
+    const mine = this.server.role(this.userId);
+    if (!inv || (mine !== 'owner' && (mine !== 'admin' || inv.invited_by !== this.userId))) {
+      throw new RemoteError('invitation_not_found', true, 'P0002');
+    }
+    if (inv.used_at) throw new RemoteError('invitation_used', true, 'P0001');
+    inv.revoked_at ??= new Date().toISOString();
   }
 
   async setMemberRole(userId: string, role: Exclude<Role, 'owner'>): Promise<void> {
@@ -981,7 +1022,13 @@ export async function makeDevice(
   await access.load();
   const tree = new PageTree(db, (server.team ? await remote.ensureWorkspace().catch(() => null) : null) ?? server.workspaceId);
   await tree.load();
-  const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, ...docsOptions });
+  // Como la app: sin "Edit", las reparaciones quedan en memoria.
+  const docs = new PageDocs(db, {
+    normalize: mergeRootGroups,
+    seed: seedIfEmpty,
+    canWrite: (pageId) => new Permissions(tree, access.get(), remote.userId).canEditPage(pageId),
+    ...docsOptions,
+  });
   const files = new PageFiles(db, remote);
   const mediaDb = await openMediaDb(mediaDbName(dbName));
   const media = new MediaQueue(server.mediaDbFails ? null : mediaDb, remote, {

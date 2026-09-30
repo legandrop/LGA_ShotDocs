@@ -1,7 +1,7 @@
 # Documentación de LGA Shot Docs
 
-Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano; el `README.md` de la raíz,
-en inglés.
+Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, salvo las guías para usuarios
+(`Guide_*.md`), en inglés; el `README.md` de la raíz, en inglés.
 
 ## Documentos
 
@@ -15,6 +15,7 @@ en inglés.
 | [`Doc_Portero.md`](Doc_Portero.md) | El portero de archivos (Worker de Cloudflare del dueño): cómo guarda la conexión con Drive, sube y devuelve archivos, y cómo publicarlo y conectarlo paso a paso. |
 | [`Doc_Carrete.md`](Doc_Carrete.md) | El carrete: el visor a pantalla completa de las fotos y los videos de una página (qué entra, gestos, zoom, qué se ve sin red o si el navegador no puede reproducirlo, y cómo convive con la edición). |
 | [`Doc_Sincronizacion.md`](Doc_Sincronizacion.md) | Cómo funciona la sincronización offline sin pérdidas: contenido, árbol, imágenes y estado visible. |
+| [`Guide_Create_Workspace.md`](Guide_Create_Workspace.md) | **En inglés** (es para usuarios): la guía paso a paso para crear un workspace propio (dominio, Supabase y el comando `scripts/setup-workspace.mjs`, Resend, Google Cloud, Cloudflare, copias en GitHub, conectar la app y probar) y lo que las copias no cubren. |
 | [`Changelog.md`](Changelog.md) | El historial de cambios. Cada entrada sube `+0.001`. |
 
 ## Convenciones
@@ -22,7 +23,7 @@ en inglés.
 - Los documentos nuevos van en esta carpeta y se suman a esta tabla en la misma pasada.
 - Un documento describe cómo está la app hoy. La historia de por qué cambió algo va al changelog.
 - Nombres: `Doc_<Tema>.md` para documentos de referencia, `Plan_<Tema>.md` para planes que se van
-  vaciando a medida que se implementan.
+  vaciando a medida que se implementan, `Guide_<Tema>.md` para guías paso a paso para usuarios (en inglés).
 - Cada tanda de cambios suma una entrada **arriba** en `Changelog.md` (`+0.001`) con el título del commit
   entre corchetes. Las entradas viejas no se reescriben.
 
@@ -38,9 +39,9 @@ en inglés.
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
 - **Pruebas de la app.** `npm test` corre las 85 pruebas: sincronización (`src/sync/`, algunas con el
-  editor real, en jsdom), interfaz (`src/ui/`), el cliente del portero (`src/media/`) y el portero
-  (`portero/src/`). `npm run typecheck` revisa los tipos de la app pero no los del portero: esos van con
-  `npx tsc -p portero --noEmit`.
+  editor real, en jsdom), interfaz (`src/ui/`), el cliente del portero (`src/media/`), el portero
+  (`portero/src/`) y el comando que prepara un workspace (`scripts/*.test.mjs`, sin red). `npm run typecheck`
+  revisa los tipos de la app pero no los del portero: esos van con `npx tsc -p portero --noEmit`.
 
 ## Direcciones de la app
 

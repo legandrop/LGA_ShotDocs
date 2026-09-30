@@ -79,7 +79,7 @@ export default defineConfig(({ mode }) => {
     ],
     test: {
       environment: 'node',
-      include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'portero/src/**/*.test.ts'],
+      include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'portero/src/**/*.test.ts', 'scripts/**/*.test.mjs'],
     },
   };
 });

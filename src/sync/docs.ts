@@ -28,6 +28,11 @@ interface LiveDoc {
    * guardado). La próxima vez que se abra la página se vuelve a cargar desde lo guardado.
    */
   stale?: boolean;
+  /**
+   * Se reparó solo en memoria (quien no puede escribir la página): la reparación no está guardada, así que
+   * la próxima apertura sin nadie usándolo vuelve a cargar desde lo guardado.
+   */
+  repairedInMemory?: boolean;
 }
 
 export interface PageDocsOptions {
@@ -44,6 +49,12 @@ export interface PageDocsOptions {
    * llegaría a todos (ver ui/unknownContent.ts).
    */
   supports?: (doc: Y.Doc) => boolean;
+  /**
+   * Si la persona puede escribir el contenido de la página (paso 9: nivel 3 o más). Si no, la reparación se
+   * hace solo en memoria, sin guardarla ni subirla: el servidor la rechazaría en cada apertura. Sin la
+   * opción, se puede.
+   */
+  canWrite?: (pageId: string) => boolean;
 }
 
 /**
@@ -84,7 +95,7 @@ export class PageDocs {
    */
   async open(pageId: string, { seed = false }: { seed?: boolean } = {}): Promise<Y.Doc> {
     let entry = this.live.get(pageId);
-    if (entry?.stale && entry.refs === 0) {
+    if ((entry?.stale || entry?.repairedInMemory) && entry.refs === 0) {
       // Le falta algo que llegó del servidor: se arma de nuevo desde lo guardado. (Con alguien que todavía
       // lo tiene abierto se sigue usando el mismo; ese alguien ya recibió el aviso.)
       this.live.delete(pageId);
@@ -99,7 +110,12 @@ export class PageDocs {
           if (origin === ORIGIN_LOAD || origin === ORIGIN_REMOTE) return;
           this.persistLocal(pageId, update);
         });
-        this.options.normalize?.(doc, ORIGIN_REPAIR);
+        if (this.options.canWrite?.(pageId) === false) {
+          // Solo en memoria (origen que no se guarda): la vista queda bien y no sale ningún cambio.
+          if (this.options.normalize?.(doc, ORIGIN_LOAD)) created.repairedInMemory = true;
+        } else {
+          this.options.normalize?.(doc, ORIGIN_REPAIR);
+        }
       });
       this.live.set(pageId, created);
       entry = created;
@@ -318,7 +334,7 @@ export class PageDocs {
     const live = this.live.get(pageId);
     if (merged && live && !live.stale) {
       await live.ready;
-      if (!this.applyToLive(live.doc, merged)) {
+      if (!this.applyToLive(pageId, live, merged)) {
         live.stale = true;
         for (const fn of this.unsupportedListeners) fn(pageId);
       }
@@ -330,7 +346,8 @@ export class PageDocs {
    * estructura, la reparación va en la MISMA transacción: el editor reacciona al final de cada
    * transacción y, si llegara a ver la estructura rota, borraría la parte que no puede mostrar.
    */
-  private applyToLive(doc: Y.Doc, update: Uint8Array): boolean {
+  private applyToLive(pageId: string, live: LiveDoc, update: Uint8Array): boolean {
+    const { doc } = live;
     const { normalize, supports } = this.options;
     let needsRepair = false;
     if (normalize || supports) {
@@ -346,6 +363,16 @@ export class PageDocs {
     }
     if (!needsRepair) {
       Y.applyUpdate(doc, update, ORIGIN_REMOTE);
+      return true;
+    }
+    // Quien no puede escribir la página repara solo en memoria: lo remoto ya está guardado (applyRemote) y
+    // la reparación no se guarda ni se sube.
+    if (this.options.canWrite?.(pageId) === false) {
+      doc.transact(() => {
+        Y.applyUpdate(doc, update);
+        normalize!(doc, ORIGIN_LOAD);
+      }, ORIGIN_LOAD);
+      live.repairedInMemory = true;
       return true;
     }
     // Con origen local: la reparación se guarda y se sube. Lo remoto que viaja con ella ya está en el

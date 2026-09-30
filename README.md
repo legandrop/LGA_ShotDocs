@@ -59,13 +59,19 @@ In production (v0.029). What works today:
 - The media carousel: tap a photo or video on a page to see all of the page's photos and videos full
   screen, in order, with swipe, pinch and wheel zoom, video playback, download of the original and the
   thumbnail when offline or when the browser can't play a file.
+
+In this branch, not published yet:
+
 - The team: the owner and admins manage people from the account menu (*Members*: invite with a link to
   send, change roles, remove), and projects and pages are shared from their menu (*Share…*) with view,
   comment, edit, or edit and create pages. What you cannot change shows read-only, also offline.
+- Comments and questions: comment on any block (or the whole page) from a side panel, or a bottom sheet
+  on the phone, with replies, resolve and edit, also offline; a *Question* paragraph is answered in its
+  comment thread, so a guest with *Comment* can answer without editing the page.
 
-Next is the workspace plan: the team, roles and permissions, files in the owner's Drive with an offline
-upload queue, client guests with comments and questions, a file trash, and several workspaces in one app.
-Templates, PDF export and the assistant come later. The plan, the decisions and the roadmap are in
+Next in the workspace plan: files in the owner's Drive with an offline upload queue, client guests with
+comments and questions, a file trash, and several workspaces in one app. Templates, PDF export and the
+assistant come later. The plan, the decisions and the roadmap are in
 [`Docs/`](Docs/index.md) (in Spanish).
 
 ## Development
@@ -83,6 +89,9 @@ npm run build                # production build in dist/
 The database migrations are in `supabase/migrations/`. See [`Docs/Doc_Supabase.md`](Docs/Doc_Supabase.md)
 to apply them and run the permission tests. Apply new migrations before deploying a new version of the
 app.
+
+To create your own workspace (your own Supabase, Resend, Google Drive, file gateway and backups), follow
+[`Docs/Guide_Create_Workspace.md`](Docs/Guide_Create_Workspace.md), in English.
 
 ## Stack
 

@@ -71,47 +71,24 @@ export interface UnsyncedExportInfo {
 }
 
 /**
- * Todo lo pendiente, en un objeto que se guarda como JSON: la cola del árbol (y lo rechazado), los updates
- * de Yjs sin confirmar de cada página (en base64, más el texto para leerlo), las imágenes pegadas sin subir
- * (en base64: son de hasta 25 MB) y la lista de fotos y videos pendientes con sus nombres (los originales
- * se bajan aparte, uno por uno).
+ * Todo lo pendiente, como archivo JSON: la cola del árbol (y lo rechazado), los updates de Yjs sin
+ * confirmar de cada página (en base64, más el texto para leerlo), las imágenes pegadas sin subir (en
+ * base64: son de hasta 25 MB), la lista de fotos y videos pendientes con sus nombres (los originales se
+ * bajan aparte, uno por uno) y los comentarios sin subir.
+ *
+ * Se arma por partes (un Blob de muchos pedazos, sin sangría): cada página y cada imagen se serializa y se
+ * suelta antes de pasar a la siguiente, para no juntar todo en un solo texto en la memoria del teléfono.
  */
-export async function exportUnsynced(
+export async function exportUnsyncedBlob(
   db: LocalDb,
   mediaDb: MediaDb | null,
   info: UnsyncedExportInfo,
   commentsDb: CommentsDb | null = null,
-): Promise<unknown> {
-  const [ops, failedOps, states, images] = await Promise.all([
-    db.getAll('ops'),
-    db.getAll('failedOps'),
-    db.getAll('docState'),
-    db.getAllFromIndex('files', 'uploaded', 0),
-  ]);
+): Promise<Blob> {
+  const parts: BlobPart[] = [];
+  const [ops, failedOps, states] = await Promise.all([db.getAll('ops'), db.getAll('failedOps'), db.getAll('docState')]);
 
-  const pages = [];
-  for (const state of states.filter(hasUnsyncedContent)) {
-    const rows = await db.getAllFromIndex('docUpdates', 'pageId', state.pageId);
-    const doc = new Y.Doc();
-    if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)));
-    // Lo que el servidor todavía no confirmó: la diferencia contra lo que ya tiene.
-    const update = Y.encodeStateAsUpdate(doc, state.syncedSV);
-    pages.push({
-      pageId: state.pageId,
-      title: info.titleOf(state.pageId) ?? null,
-      rejected: state.rejected ?? null,
-      text: plainText(doc),
-      yjsUpdate: toBase64(update),
-      yjsFullState: toBase64(Y.encodeStateAsUpdate(doc)),
-    });
-    doc.destroy();
-  }
-
-  const media = mediaDb ? await mediaDb.getAllFromIndex('files', 'pending', 1) : [];
-  const links = mediaDb ? await mediaDb.getAllFromIndex('links', 'pending', 1) : [];
-  const comments = await exportComments(commentsDb).catch(() => []);
-
-  return {
+  const head = {
     kind: 'lga-shotdocs-unsynced',
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
@@ -120,15 +97,58 @@ export async function exportUnsynced(
     user: info.user,
     treeQueue: ops.map((o) => ({ op: o.op, createdAt: new Date(o.createdAt).toISOString() })),
     rejectedTreeChanges: failedOps.map((f) => ({ op: f.op, error: f.error, failedAt: new Date(f.failedAt).toISOString() })),
-    pages,
-    images: images.map((f) => ({
-      path: f.path,
-      pageId: f.pageId,
-      pageTitle: info.titleOf(f.pageId) ?? null,
-      mime: f.mime,
-      size: f.data.byteLength,
-      base64: toBase64(new Uint8Array(f.data)),
-    })),
+  };
+  // El objeto sin la llave final, para seguir agregando secciones.
+  parts.push(JSON.stringify(head).slice(0, -1));
+
+  parts.push(',"pages":[');
+  let first = true;
+  for (const state of states.filter(hasUnsyncedContent)) {
+    const rows = await db.getAllFromIndex('docUpdates', 'pageId', state.pageId);
+    const doc = new Y.Doc();
+    if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)));
+    // Lo que el servidor todavía no confirmó: la diferencia contra lo que ya tiene.
+    const update = Y.encodeStateAsUpdate(doc, state.syncedSV);
+    parts.push(
+      (first ? '' : ',') +
+        JSON.stringify({
+          pageId: state.pageId,
+          title: info.titleOf(state.pageId) ?? null,
+          rejected: state.rejected ?? null,
+          text: plainText(doc),
+          yjsUpdate: toBase64(update),
+          yjsFullState: toBase64(Y.encodeStateAsUpdate(doc)),
+        }),
+    );
+    first = false;
+    doc.destroy();
+  }
+
+  parts.push('],"images":[');
+  first = true;
+  // De a una: cada imagen puede pesar hasta 25 MB.
+  const imageKeys = await db.getAllKeysFromIndex('files', 'uploaded', 0);
+  for (const key of imageKeys) {
+    const f = await db.get('files', key);
+    if (!f) continue;
+    parts.push(
+      (first ? '' : ',') +
+        JSON.stringify({
+          path: f.path,
+          pageId: f.pageId,
+          pageTitle: info.titleOf(f.pageId) ?? null,
+          mime: f.mime,
+          size: f.data.byteLength,
+          base64: toBase64(new Uint8Array(f.data)),
+        }),
+    );
+    first = false;
+  }
+
+  const media = mediaDb ? await mediaDb.getAllFromIndex('files', 'pending', 1) : [];
+  const links = mediaDb ? await mediaDb.getAllFromIndex('links', 'pending', 1) : [];
+  const comments = await exportComments(commentsDb).catch(() => []);
+  const tail = {
     media: media.map((m) => ({
       id: m.id,
       name: m.name,
@@ -142,4 +162,16 @@ export async function exportUnsynced(
     mediaLinks: links.map((l) => ({ pageId: l.pageId, fileId: l.fileId })),
     comments,
   };
+  parts.push('],' + JSON.stringify(tail).slice(1));
+  return new Blob(parts, { type: 'application/json' });
+}
+
+/** Lo mismo como objeto (para las pruebas y para quien necesite leerlo). */
+export async function exportUnsynced(
+  db: LocalDb,
+  mediaDb: MediaDb | null,
+  info: UnsyncedExportInfo,
+  commentsDb: CommentsDb | null = null,
+): Promise<unknown> {
+  return JSON.parse(await (await exportUnsyncedBlob(db, mediaDb, info, commentsDb)).text());
 }

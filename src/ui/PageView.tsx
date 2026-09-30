@@ -4,6 +4,7 @@ import { navigate, pagePath } from '../router';
 import { usePermissions, useSyncStatus, useTree } from '../services';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { PageEditor } from './PageEditor';
+import { CommentsPanel } from './CommentsPanel';
 import { useFloating } from './menus';
 import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
@@ -67,6 +68,7 @@ export function PageView({ id }: { id: string }) {
       <PageHeader id={id} editable={perms.canEditPage(id)} />
       <TitleInput id={id} title={page.title} readOnly={!perms.canEditPage(id)} />
       <PageEditor pageId={id} />
+      <CommentsPanel pageId={id} />
     </article>
   );
 }

@@ -1,5 +1,5 @@
 import type { MediaQueue, MediaStatus } from '../media/queue';
-import { TEAM_SCHEMA_VERSION, type AccessStore } from './access';
+import { Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
 import type { CommentQueue } from './comments';
 import type { PageDocs } from './docs';
 import type { PageFiles } from './files';
@@ -391,18 +391,31 @@ export class SyncEngine {
     {
       const projects = await this.remote.fetchProjects();
       const rows = await this.remote.fetchTree(projects.map((p) => p.id));
+      // Con permisos conocidos, lo que la persona ya no puede crear no vuelve a la cola (se avisa abajo).
+      const access = this.options.access;
+      const perms = access?.get() ? new Permissions(this.tree, access.get(), access.userId) : null;
+      const report = { skipped: 0 };
+      const allow = perms
+        ? { createProject: perms.canCreateProject, createPage: (parentId: string | null, projectId: string) => perms.canCreateIn(parentId, projectId) }
+        : undefined;
       const recovered =
-        (await this.tree.recoverAfterRestore(rows, projects)) +
+        (await this.tree.recoverAfterRestore(rows, projects, allow, report)) +
         (await this.docs.resetForRestore()) +
         (await this.files.resetForRestore()) +
         ((await this.options.media?.resetForRestore().catch(() => 0)) ?? 0);
       // Un dispositivo que no tenía nada (recién entra a un workspace ya restaurado) no avisa nada.
+      const notices: string[] = [];
       if (recovered > 0) {
-        this.patch({
-          notice:
-            'The workspace was restored from a backup. This device is uploading again everything it had, so nothing made after the backup is lost.',
-        });
+        notices.push(
+          'The workspace was restored from a backup. This device is uploading again everything it had, so nothing made after the backup is lost.',
+        );
       }
+      if (report.skipped > 0) {
+        notices.push(
+          `${recovered > 0 ? '' : 'The workspace was restored from a backup. '}${report.skipped} ${report.skipped === 1 ? 'page or project' : 'pages or projects'} made on this device after the backup could not be created again: you no longer have permission to create them there. Their content stays on this device; use “Download my unsynced changes” to keep it.`,
+        );
+      }
+      if (notices.length > 0) this.patch({ notice: notices.join(' ') });
     }
     // Recién ahora: si la app se cierra a mitad de camino, la próxima vez se vuelve a hacer todo.
     await this.tree.setKnownGeneration(settings.generation);

@@ -261,7 +261,8 @@ cambios de permisos, que son el momento más riesgoso.
 10. **Invitados (clientes):** compartir con su correo (la app copia el link de invitación), comentarios
     en tabla propia y preguntas.
 11. **Papelera de archivos.**
-12. **Varios workspaces:** pantalla de bienvenida, selector, guía y comando para crear uno.
+12. **Varios workspaces:** pantalla de bienvenida, selector, guía y comando para crear uno (el comando y la
+    guía, hechos; falta la app).
 13. Pegar links de Drive; copia liviana de video si hace falta.
 
 ## 11. Cómo se hace cada paso
@@ -418,6 +419,11 @@ comando (`scripts/`) que prepara un Supabase nuevo con el token personal de su d
 dos veces sin romper nada y tiene un modo que solo muestra lo que haría. **Contra Wanka, solo ese modo**:
 correrlo de verdad pisaría el SMTP, las plantillas, el registro cerrado y la Site URL. No se crean
 proyectos de Supabase para probarlo: a Lega le queda uno solo gratis.
+Hecho, sin la app: el comando (`scripts/setup-workspace.mjs`, con `--dry-run` y el paso aparte
+`--open-invite-signup`; `Doc_Supabase.md`, "Preparar un workspace nuevo") y la guía
+(`Guide_Create_Workspace.md`, en inglés). La guía nombra la pantalla de bienvenida (**Create my workspace**)
+como la planea esta sección: al hacer la app, revisar que los nombres coincidan. Falta la app (lista de
+workspaces, bienvenida, selector, sesión por workspace); el paso sigue abierto.
 
 **Paso 13 — Links de Drive.** Al pegar un link de Drive: dejarlo como link, como texto o como tarjeta
 reproducible (el reproductor de Drive). La tarjeta es un párrafo con el link y una propiedad: si se pierde

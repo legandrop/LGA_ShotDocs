@@ -1,8 +1,8 @@
 # Supabase
 
-Cómo está armado el backend y cómo se prepara un proyecto nuevo a mano. La guía para crear un workspace
-propio y el comando que prepara su Supabase de una vez están planeados para el paso 12 de
-`Plan_Workspaces.md` (secciones 2 y 11); esto es lo que hace falta hoy.
+Cómo está armado el backend y cómo se prepara un proyecto nuevo. Un workspace nuevo se prepara con el
+comando `scripts/setup-workspace.mjs` ("Preparar un workspace nuevo", abajo), siguiendo la guía para
+usuarios `Guide_Create_Workspace.md` (en inglés); lo que sigue explica qué hace y cómo rearmarlo a mano.
 
 ## Proyecto
 
@@ -113,6 +113,88 @@ Dos casos no tienen prueba automática en el repo y se verificaron a mano contra
 2026-09-29: que la API de Storage no deja borrar un archivo, y que dos movimientos simultáneos que juntos
 arman un ciclo terminan con el segundo rechazado.
 
+## Preparar un workspace nuevo
+
+`scripts/setup-workspace.mjs` (paso 12 de `Plan_Workspaces.md`) prepara el Supabase de un workspace **nuevo**
+con el token personal de su dueño (Management API, `https://api.supabase.com/v1/projects/<ref>/...`). Node 22
+o más, sin dependencias (no hace falta `npm install`). La salida es en inglés porque la lee quien sigue la
+guía. La lógica está en `scripts/lib/setup.mjs`; lo común con `db-migrate.mjs` (el cliente de la Management
+API y las migraciones), en `scripts/lib/management.mjs` y `scripts/lib/migrations.mjs`.
+
+```sh
+SUPABASE_ACCESS_TOKEN=sbp_... node scripts/setup-workspace.mjs --ref <ref> --owner-email <correo del dueño> \
+  --app-url https://shotdocs.lega.com.ar --smtp-from shotdocs@<dominio> --name "<nombre>" [--dry-run]
+```
+
+Opciones: `--ref` (obligatorio, siempre explícito: no se toma de `SUPABASE_URL`, que en esta carpeta apunta a
+Wanka), `--owner-email`, `--app-url` (solo el origen, https), `--smtp-from` (remitente del dominio verificado
+en Resend), `--name`, `--media-url` (el portero, solo el origen), `--redirect-url` (otra dirección permitida;
+se repite), `--smtp-sender-name` (`LGA Shot Docs`), `--smtp-host` (`smtp.resend.com`), `--smtp-port` (`465`),
+`--smtp-user` (`resend`), `--new-smtp-password`, `--dry-run`, `--open-invite-signup` y `--help`.
+`npm run workspace:setup -- …` es lo mismo.
+
+Qué hace, en orden, y solo lo que falta (se puede correr dos veces sin cambiar nada):
+
+1. **Lee el estado**, sin escribir: `GET /config/auth` (los secretos se descartan apenas llegan: de la
+   contraseña SMTP queda solo si hay una guardada) y consultas de una sola sentencia `select` envueltas en
+   `begin read only; …; rollback;` (migraciones aplicadas, `workspace_settings`, la cuenta del dueño por su
+   correo en `auth.users`, el dueño activo en `members`, los permisos de la función del hook).
+2. **Seguros.** No escribe nada si el ref es el de Wanka (`znlvpuddswymxpffgvbz`) ni si el proyecto ya tiene
+   `workspace_settings.owner_id` y su correo no es `--owner-email` (o si `members` ya tiene otro dueño
+   activo): correrlo pisaría el SMTP (y su contraseña), las plantillas, el registro cerrado y la Site URL de
+   ese workspace. En `--dry-run` los muestra y sigue mostrando el plan.
+3. **Muestra el plan:** migraciones pendientes, un diff de la configuración de login actual contra la
+   deseada (campo por campo; de las plantillas, solo el largo), de dónde sale la contraseña SMTP, si la
+   cuenta del dueño existe o se lo invita, y qué cambia en `workspace_settings` y `members`. Con `--dry-run`
+   termina acá.
+4. **La contraseña SMTP** (la API key de Resend), antes de escribir nada: de `SMTP_PASSWORD`, o se pide por
+   la terminal sin mostrarla. Si ya hay una guardada, no la pide (salvo `--new-smtp-password`). Nunca se
+   acepta como opción (quedaría en el historial) ni se imprime.
+5. **Migraciones** pendientes, con `applyPending` (lo mismo que `db:migrate`).
+6. **Login:** un `PATCH /config/auth` solo con los campos que difieren (más `smtp_pass` si hay una nueva), y
+   después vuelve a leer y compara. Los valores son los de Wanka ("Login", abajo) con las direcciones y el
+   remitente de este workspace: código de 8 dígitos que vence en 1 hora; plantillas *Magic Link*, *Confirm
+   signup* (el mismo HTML que *Magic Link*, con el código) e *Invite* con sus asuntos; límites; SMTP;
+   `site_url` = `--app-url`; `uri_allow_list` suma `--app-url/**` y cada `--redirect-url/**` a las que ya
+   estaban (no saca ninguna); todo otro proveedor apagado; **registro cerrado** (`disable_signup: true`),
+   salvo que ya esté abierto para invitados con el hook conectado (no lo vuelve a cerrar). Si estaba abierto
+   **sin** el hook, lo cierra. Nunca toca los campos del hook.
+7. **El dueño:** busca su cuenta por correo; si no existe, lo invita (`POST /auth/v1/invite` del proyecto, con
+   la clave secreta que lee de `GET /v1/projects/<ref>/api-keys?reveal=true`, que no se guarda ni se
+   imprime). Llega el mail de *Invite*: sirve para ver que el correo anda; el dueño entra después con el
+   código. Si el hook ya está conectado, no invita (el hook rechazaría el alta) y pide crear la cuenta desde
+   el panel.
+8. **`workspace_settings` y `members`,** en una transacción: `name` si se pasó `--name`, `local_key` nueva y
+   aleatoria (`ws_` y 20 letras y números) **solo si está vacía**, `owner_id` solo si está vacío, `media_url`
+   si se pasó `--media-url`, y la fila del dueño en `members` como `owner` (si ya estaba, vuelve a `owner`
+   activo). Adentro de la transacción vuelve a mirar que el dueño sea el esperado; si no, no escribe nada.
+9. Imprime la dirección del proyecto y la clave publicable (para la app y el portero).
+
+Si las migraciones están pendientes, parte del plan de `workspace_settings` depende de ellas (la de miembros,
+por ejemplo, carga nombre y clave local en una instalación que ya tiene dueño): el dry-run lo dice, y la
+corrida de verdad vuelve a leer después de migrar.
+
+**`--dry-run` no escribe nada.** Además de que todas las ramas que escriben están después del corte, el
+cliente (`lib/management.mjs`) frena cualquier pedido que no sea un `GET` o un `POST` a `/database/query` con
+una consulta de solo lectura (`begin read only;`, una sola sentencia `select`/`with` sin `;`, `rollback;`):
+Postgres rechaza cualquier escritura dentro de esa transacción, y el cliente corta antes de llegar a la red.
+**Contra Wanka, solo `--dry-run`** (`Plan_Workspaces.md`, paso 12): de verdad, los seguros no lo dejan. Nunca
+se crean proyectos de Supabase para probarlo; las pruebas usan un Supabase falso en memoria.
+
+**`--open-invite-signup`** es un paso aparte (no hace el resto): abre el registro solo para invitados, como
+"Abrir el registro solo para invitados" (abajo), pasos 4 a 6. Pide que ya esté todo lo anterior (migraciones
+al día, la función del hook con sus permisos `t`, `t`, `f`, dueño, SMTP y las plantillas con el código);
+conecta el hook con el registro todavía cerrado, verifica que quedó conectado y que la función rechaza con
+403 un correo sin invitación (una consulta de solo lectura), y **recién después** abre el registro. Si al
+abrir el hook no quedó prendido, vuelve a cerrar el registro. Si ya está abierto con el hook, no hace nada.
+La prueba desde la app (un correo sin invitación y uno invitado) queda a mano.
+
+Pruebas: `scripts/setup-workspace.test.mjs` (entra en `npm test`): la configuración deseada, el diff, que los
+secretos no salen, los seguros, que la clave local y el dueño no se pisan, que dry-run no escribe (con un
+`fetch` falso que falla ante cualquier pedido que no sea `GET` o una consulta de solo lectura, también contra
+un "Wanka" de mentira), que una corrida de verdad deja todo y la segunda no cambia nada, y el orden del
+registro para invitados.
+
 ## Login
 
 La configuración de login vive en el panel de Supabase (Authentication), no en la base: no entra en las
@@ -160,7 +242,9 @@ Cómo entra la gente:
 ### Abrir el registro solo para invitados
 
 Todavía no se hizo en Wanka. La función del hook viene con `20260930160000_equipo.sql`, pero conectarla es
-configuración de login: se hace a mano, por la Management API, **en este orden y nunca al revés**. Qué hace
+configuración de login: se hace a mano, por la Management API, **en este orden y nunca al revés**. En un
+workspace nuevo, los pasos 4 a 6 los hace `setup-workspace.mjs --open-invite-signup` ("Preparar un workspace
+nuevo"); en Wanka, a mano. Qué hace
 Supabase (documentación *Before User Created Hook* y código de Supabase Auth): antes de crear una cuenta
 (registro con código o link, invitación desde el panel, proveedores externos, anónimos) llama a
 `select "private"."hook_before_user_created"(evento)` como `supabase_auth_admin`, con el evento
@@ -281,6 +365,8 @@ apagado con el registro abierto.
 | *Invite* (`invite`) | `You are invited to LGA Shot Docs` | `supabase/templates/invite.html`: la del mail que llega al invitar desde el panel, con un botón para aceptar y crear la cuenta. |
 
 - Las variables `{{ .Token }}` (el código) y `{{ .ConfirmationURL }}` (el link) las completa Supabase.
+- Un workspace nuevo preparado con `setup-workspace.mjs` trae además *Confirm signup* con el HTML de
+  `magic_link.html` y el asunto del código (hace falta para abrir el registro a invitados); en Wanka todavía no.
 - Las demás plantillas quedan como vienen de fábrica, con sus asuntos de fábrica: *Confirm signup*
   (`Confirm your email address`), *Change email* (`Confirm your new email address`), *Reset password*
   (`Reset your password`) y *Reauthentication* (`{{ .Token }} is your verification code`).
@@ -310,7 +396,9 @@ aplicación en la cuenta que manda.
 
 ### Rearmar la configuración
 
-Con un token personal de Supabase (el mismo de las migraciones), en este orden:
+En un workspace nuevo lo hace `setup-workspace.mjs` ("Preparar un workspace nuevo"), también para rearmarlo:
+se vuelve a correr con las mismas opciones. A mano, con un token personal de Supabase (el mismo de las
+migraciones), en este orden:
 
 1. **El dueño carga el SMTP completo a mano**, con la contraseña, como dice "Correo propio" (paso 3).
 2. **Los valores**, con un `PATCH`. Es un cambio parcial: lo que no va en el JSON no se toca, así que la

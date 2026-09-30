@@ -196,7 +196,13 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       await tree.load();
       const access = new AccessStore(db, user.id);
       await access.load();
-      const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, supports: supportsContent });
+      const docs = new PageDocs(db, {
+        normalize: mergeRootGroups,
+        seed: seedIfEmpty,
+        supports: supportsContent,
+        // Sin "Edit", las reparaciones de estructura quedan en memoria: el servidor las rechazaría.
+        canWrite: (pageId) => new Permissions(tree, access.get(), user.id).canEditPage(pageId),
+      });
       const files = new PageFiles(db, remote);
       // Los archivos grandes, en una base aparte (la de siempre no cambia de versión).
       // Si no se puede abrir, la app arranca igual con la cola de fotos y videos apagada y un aviso en el

@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseInviteHash } from '../invite';
+import { copyWhenReady, parseInviteHash } from '../invite';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
@@ -121,6 +121,53 @@ describe('pantallas del equipo', () => {
     const payload = parseInviteHash(copied[0].slice(copied[0].indexOf('#')));
     expect(payload?.l).toBe(WANKA_LOCAL_KEY);
     expect(notices).toContain('Link copied — send it by email or WhatsApp');
+  });
+
+  it('Members muestra las invitaciones sin usar con "Revoke", y las esconde si la base no las tiene', async () => {
+    const { server, device, userId } = await teamDevice();
+    await device.remote.createInvitation('pendiente@test', 'guest', []);
+    const host = await mount(services(device, userId), <MembersDialog onClose={() => undefined} />);
+    expect(host.textContent).toContain('Invitations not used yet');
+    expect(host.textContent).toContain('pendiente@test');
+    vi.stubGlobal('confirm', () => true);
+    click([...host.querySelectorAll('button')].find((b) => b.textContent === 'Revoke'));
+    await act(async () => new Promise((r) => setTimeout(r, 20)));
+    expect(server.invitations[0].revoked_at).toBeTruthy();
+    expect(host.textContent).not.toContain('pendiente@test');
+    vi.unstubAllGlobals();
+
+    server.noInvitationList = true;
+    await device.remote.createInvitation('otra@test', 'guest', []);
+    const again = await mount(services(device, userId), <MembersDialog onClose={() => undefined} />);
+    expect(again.textContent).not.toContain('Invitations not used yet');
+  });
+
+  it('copia con ClipboardItem dentro del gesto (Safari), y si no se puede, avisa para copiar a mano', async () => {
+    const written: string[] = [];
+    class FakeItem {
+      constructor(readonly data: Record<string, Promise<Blob>>) {}
+    }
+    vi.stubGlobal('ClipboardItem', FakeItem);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        write: async (items: FakeItem[]) => void written.push(await (await items[0].data['text/plain']).text()),
+        writeText: async () => {
+          throw new Error('not allowed');
+        },
+      },
+    });
+    let resolve!: (t: string) => void;
+    const link = new Promise<string>((r) => (resolve = r));
+    const copied = copyWhenReady(link);
+    resolve('https://app/#invite=abc');
+    expect(await copied).toBe(true);
+    expect(written).toEqual(['https://app/#invite=abc']);
+    // El texto no llegó (la invitación falló): no copia nada y no rechaza.
+    expect(await copyWhenReady(Promise.reject(new Error('invitation_exists')))).toBe(false);
+    // Sin ClipboardItem y sin permiso: `false` (se muestra el campo para copiar a mano).
+    vi.unstubAllGlobals();
+    expect(await copyWhenReady(Promise.resolve('x'))).toBe(false);
   });
 
   it('Share muestra quién tiene acceso y comparte con un miembro', async () => {

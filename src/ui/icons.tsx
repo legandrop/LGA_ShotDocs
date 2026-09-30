@@ -59,6 +59,10 @@ export const ArrowLeftIcon = icon('M16 10H4M9 5l-5 5 5 5', { strokeWidth: 1.6 })
 export const MailIcon = icon('M4.5 5h11a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 13.5v-7A1.5 1.5 0 0 1 4.5 5zM3.5 6l6.5 5 6.5-5');
 export const SearchIcon = icon('M9 3.75a5.25 5.25 0 1 1 0 10.5 5.25 5.25 0 0 1 0-10.5zM13 13l3.5 3.5', { strokeWidth: 1.6 });
 export const ScriptIcon = icon('M5.5 3h9v14h-9zM8 6.5h4M7.5 9.5h1.5M11 9.5h1.5M8 12.5h4');
+export const CommentIcon = icon('M4.75 4h10.5c.7 0 1.25.55 1.25 1.25v7c0 .7-.55 1.25-1.25 1.25H9l-3.5 2.75V13.5h-.75c-.7 0-1.25-.55-1.25-1.25v-7C3.5 4.55 4.05 4 4.75 4z');
+export const QuestionIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1', {
+  strokeWidth: 1.6,
+});
 export const SheetIcon = icon('M5.5 2.75h9v14.5h-9zM7.75 5.5h4.5M7.75 8h4.5M7.75 10.5h3');
 export const FilmIcon = icon(
   'M4.75 4.5h10.5c.7 0 1.25.55 1.25 1.25v8.5c0 .7-.55 1.25-1.25 1.25H4.75c-.7 0-1.25-.55-1.25-1.25v-8.5c0-.7.55-1.25 1.25-1.25zM8.5 7.75v4.5l3.75-2.25z',

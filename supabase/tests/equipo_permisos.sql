@@ -27,7 +27,7 @@ end;
 $$;
 
 -- Personas (todas con correo @test.invalid):
---   ow  dueña del workspace            ad  admin                     ad2 otra admin
+--   ow  dueña del workspace            ad  admin                     ad2, ad3 otras admins
 --   me  miembro: comentar en P1 y editar en c                      gu  invitada: ver d y ver PS2
 --   uv, uc, ue, ep  miembros con ver, comentar, editar y editar y crear páginas sobre c
 --   mv  miembro con editar y crear páginas sobre c y sobre s       pe  miembro con editar y crear en P1
@@ -48,6 +48,7 @@ insert into auth.users (id, email, aud, role, email_confirmed_at) values
   ('00000000-0000-4000-8000-00000000090c', 'eq-lv@test.invalid', 'authenticated', 'authenticated', now()),
   ('00000000-0000-4000-8000-00000000090d', 'eq-nx@test.invalid', 'authenticated', 'authenticated', now()),
   ('00000000-0000-4000-8000-000000000910', 'eq-rx@test.invalid', 'authenticated', 'authenticated', now()),
+  ('00000000-0000-4000-8000-000000000911', 'eq-ad3@test.invalid', 'authenticated', 'authenticated', now()),
   ('00000000-0000-4000-8000-00000000090f', 'eq-sv@test.invalid', 'authenticated', 'authenticated', null);
 
 -- Si la base ya tiene dueño, queda fuera de la prueba (se deshace al final): hay un solo dueño activo.
@@ -67,7 +68,8 @@ insert into public.members (user_id, role, removed_at) values
   ('00000000-0000-4000-8000-00000000090a', 'member', null),
   ('00000000-0000-4000-8000-00000000090b', 'member', null),
   ('00000000-0000-4000-8000-00000000090c', 'member', null),
-  ('00000000-0000-4000-8000-000000000910', 'admin', now());
+  ('00000000-0000-4000-8000-000000000910', 'admin', now()),
+  ('00000000-0000-4000-8000-000000000911', 'admin', null);
 
 -- La dueña crea P1 y su árbol desde la API: r › c › g, y s › d. La admin crea PA con la página pa.
 select pg_temp.as_user('00000000-0000-4000-8000-000000000901');
@@ -100,22 +102,27 @@ insert into public.pages (id, workspace_id, title, sort_key) values
   ('00000000-0000-4000-8000-000000000b09', '00000000-0000-4000-8000-000000000a02', 'pa', 'a0')
 on conflict (id) do nothing returning id;
 
--- lv tiene tres proyectos de antes (la base los crea, como a las cuentas de antes del paso 5): PP (el más
--- viejo, privado), PS y PS2. Los comparte él mismo, como quien creó el proyecto: PS con me (ver el
--- proyecto) y con ad2 (editar la página ps); PS2 solo con la invitada.
+-- lv tiene cuatro proyectos de antes (la base los crea, como a las cuentas de antes del paso 5): PP (el más
+-- viejo, privado), PS, PS2 y PS3. Los comparte él mismo, como quien creó el proyecto: PS con me (ver),
+-- ad2 (editar) y ad3 (editar y crear), todos sobre el proyecto entero; PS2 solo con la invitada; PS3 con
+-- la dueña, pero solo "ver" sobre una página.
 select set_config('role', 'postgres', true);
 insert into public.workspaces (id, owner_id, name, created_at) values
   ('00000000-0000-4000-8000-000000000a03', '00000000-0000-4000-8000-00000000090c', 'PS', now() - interval '1 day'),
   ('00000000-0000-4000-8000-000000000a04', '00000000-0000-4000-8000-00000000090c', 'PP', now() - interval '2 days'),
-  ('00000000-0000-4000-8000-000000000a05', '00000000-0000-4000-8000-00000000090c', 'PS2', now());
+  ('00000000-0000-4000-8000-000000000a05', '00000000-0000-4000-8000-00000000090c', 'PS2', now()),
+  ('00000000-0000-4000-8000-000000000a06', '00000000-0000-4000-8000-00000000090c', 'PS3', now());
 insert into public.pages (id, workspace_id, title, sort_key) values
   ('00000000-0000-4000-8000-000000000b06', '00000000-0000-4000-8000-000000000a03', 'ps', 'a0'),
   ('00000000-0000-4000-8000-000000000b07', '00000000-0000-4000-8000-000000000a04', 'pp', 'a0'),
-  ('00000000-0000-4000-8000-000000000b08', '00000000-0000-4000-8000-000000000a05', 'ps2', 'a0');
+  ('00000000-0000-4000-8000-000000000b08', '00000000-0000-4000-8000-000000000a05', 'ps2', 'a0'),
+  ('00000000-0000-4000-8000-000000000b0b', '00000000-0000-4000-8000-000000000a06', 'ps3', 'a0');
 
 select pg_temp.as_user('00000000-0000-4000-8000-00000000090c');
 select public.share('00000000-0000-4000-8000-000000000904', '00000000-0000-4000-8000-000000000a03', null, 'view');
-select public.share('00000000-0000-4000-8000-000000000903', null, '00000000-0000-4000-8000-000000000b06', 'edit');
+select public.share('00000000-0000-4000-8000-000000000903', '00000000-0000-4000-8000-000000000a03', null, 'edit');
+select public.share('00000000-0000-4000-8000-000000000911', '00000000-0000-4000-8000-000000000a03', null, 'edit_pages');
+select public.share('00000000-0000-4000-8000-000000000901', null, '00000000-0000-4000-8000-000000000b0b', 'view');
 select public.share('00000000-0000-4000-8000-000000000905', '00000000-0000-4000-8000-000000000a05', null, 'view');
 
 -- La dueña comparte P1 (ella lo creó y es la dueña).
@@ -412,12 +419,15 @@ declare
   p1 constant uuid := '00000000-0000-4000-8000-000000000a01';
   pg uuid;
 begin
-  assert pg_temp.projects() = array[p1], 'la dueña ve proyectos privados de otros';
+  assert pg_temp.projects() = array[p1, '00000000-0000-4000-8000-000000000a06'::uuid],
+    'la dueña ve proyectos privados de otros (o no ve PS3, donde le compartieron una página)';
   assert private.project_level('00000000-0000-4000-8000-000000000a02') = 0, 'la dueña tiene permiso sobre PA';
-  assert (select count(*) from public.pages where workspace_id <> p1) = 0, 'la dueña ve páginas de otros';
+  assert (select count(*) from public.pages where workspace_id not in (p1, '00000000-0000-4000-8000-000000000a06')) = 0,
+    'la dueña ve páginas de otros';
+  perform pg_temp.check_level('dueña', '00000000-0000-4000-8000-000000000a06', '00000000-0000-4000-8000-000000000b0b', 1);
   perform pg_temp.expect_error($q$select public.pull_page_updates('00000000-0000-4000-8000-000000000b09', 0)$q$,
     'page_not_found', 'la dueña baja contenido de un proyecto privado ajeno');
-  for pg in select id from public.pages loop
+  for pg in select id from public.pages where workspace_id = p1 loop
     perform pg_temp.check_level('dueña', p1, pg, 4);
   end loop;
   assert public.ensure_workspace() = p1, 'la dueña: ensure_workspace';
@@ -445,7 +455,7 @@ begin
 end;
 $$;
 
--- La otra admin ve PS solo por su permiso sobre la página ps.
+-- La otra admin ve PS por su permiso (editar) sobre el proyecto.
 select pg_temp.as_user('00000000-0000-4000-8000-000000000903');
 do $$
 begin
@@ -460,7 +470,8 @@ select pg_temp.as_user('00000000-0000-4000-8000-00000000090c');
 do $$
 begin
   assert pg_temp.projects() = array['00000000-0000-4000-8000-000000000a01', '00000000-0000-4000-8000-000000000a03',
-                                    '00000000-0000-4000-8000-000000000a04', '00000000-0000-4000-8000-000000000a05']::uuid[],
+                                    '00000000-0000-4000-8000-000000000a04', '00000000-0000-4000-8000-000000000a05',
+                                    '00000000-0000-4000-8000-000000000a06']::uuid[],
     'lv: proyectos';
   assert public.ensure_workspace() = '00000000-0000-4000-8000-000000000a04', 'lv: ensure_workspace no da el propio más viejo';
   perform pg_temp.check_level('lv', '00000000-0000-4000-8000-000000000a04', '00000000-0000-4000-8000-000000000b07', 4);
@@ -527,24 +538,33 @@ begin
 end;
 $$;
 
--- La dueña suma a la invitación viva del mismo correo: un rol más alto y permisos (gana el más alto).
-select pg_temp.as_user('00000000-0000-4000-8000-000000000901');
+-- Quien la hizo suma a su invitación viva del mismo correo: rol más alto y permisos (gana el más alto).
 do $$
 declare
   i uuid;
 begin
   i := public.create_invitation('nuevo@test.invalid', 'member', jsonb_build_array(
-    jsonb_build_object('page_id', '00000000-0000-4000-8000-000000000b02', 'level', 'view'),
-    jsonb_build_object('page_id', '00000000-0000-4000-8000-000000000b02', 'level', 'edit_pages'),
-    jsonb_build_object('page_id', '00000000-0000-4000-8000-000000000b04', 'level', 'edit')));
+    jsonb_build_object('page_id', '00000000-0000-4000-8000-000000000b09', 'level', 'edit'),
+    jsonb_build_object('project_id', '00000000-0000-4000-8000-000000000a02', 'level', 'view')));
   assert i = current_setting('test.inv')::uuid, 'invitar de nuevo al mismo correo no suma a la invitación viva';
   assert (select count(*) from public.invitations where email = 'nuevo@test.invalid') = 1, 'dos invitaciones';
   assert (select role from public.invitations where id = i) = 'member', 'no queda el rol más alto';
-  assert (select jsonb_array_length(grants) from public.invitations where id = i) = 3, 'los permisos no se juntan';
+  assert (select jsonb_array_length(grants) from public.invitations where id = i) = 2, 'los permisos no se juntan';
   assert (select g ->> 'level' from public.invitations, jsonb_array_elements(grants) g
-          where id = i and g ->> 'page_id' = '00000000-0000-4000-8000-000000000b02') = 'edit_pages',
+          where id = i and g ->> 'page_id' = '00000000-0000-4000-8000-000000000b09') = 'edit',
     'en la misma página no gana el más alto';
-  -- La dueña sí invita admins.
+  assert (select invited_by from public.invitations where id = i) = auth.uid(), 'invited_by cambió';
+end;
+$$;
+
+-- La dueña no suma ni sube el rol de una invitación ajena; sí invita admins.
+select pg_temp.as_user('00000000-0000-4000-8000-000000000901');
+do $$
+begin
+  perform pg_temp.expect_error($q$select public.create_invitation('nuevo@test.invalid', 'admin', '[]')$q$,
+    'invitation_exists', 'la dueña cambia la invitación de otra persona');
+  assert (select role from public.invitations where email = 'nuevo@test.invalid') = 'member',
+    'una invitación ajena cambió de rol';
   perform public.create_invitation('nuevo-admin@test.invalid', 'admin', '[]');
   perform public.create_invitation('eq-sv@test.invalid', 'guest', '[]');
   perform public.create_invitation('eq-lv@test.invalid', 'guest',
@@ -590,6 +610,14 @@ begin
 end;
 $$;
 
+create function pg_temp.check_error_shape(r jsonb, what text) returns void language plpgsql as $$
+begin
+  assert (select array_agg(k) from jsonb_object_keys(r) k) = array['error'], format('%s: no es solo un error: %s', what, r);
+  assert (select array_agg(k order by k) from jsonb_object_keys(r -> 'error') k) = array['http_code', 'message']
+     and r -> 'error' -> 'http_code' = '403'::jsonb, format('%s: forma del error: %s', what, r);
+end;
+$$;
+
 do $$
 declare
   hook constant regprocedure := 'private.hook_before_user_created(jsonb)';
@@ -615,8 +643,17 @@ begin
     'public ejecuta el hook';
   assert (select count(*) from pg_proc p
           where p.pronamespace = 'private'::regnamespace
-            and has_function_privilege('supabase_auth_admin', p.oid, 'execute')) = 1,
-    'supabase_auth_admin ejecuta otras funciones de private';
+            and has_function_privilege('supabase_auth_admin', p.oid, 'execute')) = 2,
+    'supabase_auth_admin ejecuta otras funciones de private (además de los dos hooks)';
+  assert has_function_privilege('supabase_auth_admin', 'private.hook_custom_access_token(jsonb)', 'execute')
+     and not has_function_privilege('authenticated', 'private.hook_custom_access_token(jsonb)', 'execute')
+     and not has_function_privilege('anon', 'private.hook_custom_access_token(jsonb)', 'execute'),
+    'permisos del hook de token';
+  assert not exists (select 1 from pg_proc p, aclexplode(p.proacl) a
+                     where p.oid = 'private.hook_custom_access_token(jsonb)'::regprocedure and a.grantee = 0),
+    'public ejecuta el hook de token';
+  assert (select count(*) from information_schema.role_table_grants where grantee = 'supabase_auth_admin'
+          and table_schema in ('public', 'private')) = 0, 'supabase_auth_admin tiene permisos sobre tablas de la app';
   assert not has_table_privilege('supabase_auth_admin', 'public.invitations', 'select')
      and not has_table_privilege('supabase_auth_admin', 'public.members', 'select')
      and not has_table_privilege('supabase_auth_admin', 'public.grants', 'select'),
@@ -648,12 +685,10 @@ begin
   assert public.accept_invitations() = 0, 'accept_invitations aplica dos veces';
   assert private.workspace_role() = 'member', 'nu no queda con el rol de la invitación';
   assert (select count(*) from public.list_members()) = 1, 'nu ve otros miembros';
-  perform pg_temp.check_level('nu', p1, '00000000-0000-4000-8000-000000000b02', 4);
-  perform pg_temp.check_level('nu', p1, '00000000-0000-4000-8000-000000000b03', 4);
-  perform pg_temp.check_level('nu', p1, '00000000-0000-4000-8000-000000000b05', 3);
-  perform pg_temp.check_level('nu', p1, '00000000-0000-4000-8000-000000000b01', 0);
-  perform pg_temp.check_level('nu', '00000000-0000-4000-8000-000000000a02', '00000000-0000-4000-8000-000000000b09', 2);
-  assert public.ensure_workspace() = p1, 'nu: ensure_workspace';
+  perform pg_temp.check_level('nu', '00000000-0000-4000-8000-000000000a02', '00000000-0000-4000-8000-000000000b09', 3);
+  assert private.project_level('00000000-0000-4000-8000-000000000a02') = 1, 'nu no recibe ver PA';
+  perform pg_temp.check_level('nu', p1, '00000000-0000-4000-8000-000000000b02', 0);
+  assert public.ensure_workspace() = '00000000-0000-4000-8000-000000000a02', 'nu: ensure_workspace';
 end;
 $$;
 
@@ -663,7 +698,7 @@ begin
   assert (select used_at is not null and used_by = '00000000-0000-4000-8000-00000000090e'
           from public.invitations where email = 'nuevo@test.invalid'), 'la invitación no queda usada';
   assert (select added_by from public.members where user_id = '00000000-0000-4000-8000-00000000090e')
-         = '00000000-0000-4000-8000-000000000901', 'added_by no es quien invitó';
+         = '00000000-0000-4000-8000-000000000902', 'added_by no es quien invitó';
 end;
 $$;
 do $$
@@ -769,13 +804,13 @@ begin
   assert g1 = g2, 'compartir de nuevo no reemplaza el permiso';
   perform set_config('test.g_me_pa', g1::text, true);
   assert (select level from public.grants where id = g1) = 'edit', 'compartir de nuevo no cambia el nivel';
-  assert (select array_agg(source order by source) from public.list_access(pa, null)) = array['creator', 'project'],
+  assert (select array_agg(source order by source) from public.list_access(pa, null)) = array['creator', 'project', 'project'],
     'list_access del proyecto';
   assert (select level from public.list_access(pa, null) where user_id = me) = 'edit', 'list_access: nivel';
   assert (select email from public.list_access(pa, null) where source = 'creator') = 'eq-ad@test.invalid',
     'list_access: correo de quien creó';
   assert (select array_agg(source order by source) from public.list_access(null, '00000000-0000-4000-8000-000000000b09'))
-         = array['creator', 'page', 'page', 'project'], 'list_access de una página';
+         = array['creator', 'page', 'page', 'project', 'project'], 'list_access de una página';
 
   perform pg_temp.expect_error(format('select public.share(%L, %L, null, %L)', me, '00000000-0000-4000-8000-000000000a01', 'view'),
     'not_allowed', 'la admin comparte un proyecto ajeno');
@@ -828,7 +863,7 @@ begin
   assert (select count(*) from public.list_access(null, g) where source = 'creator') = 1, 'list_access: creator';
   assert (select array_agg(email order by email) from public.list_access(null, g) where source = 'project')
          = array['eq-me@test.invalid', 'eq-pe@test.invalid'], 'list_access: permisos sobre el proyecto';
-  assert (select count(*) from public.list_access(null, g) where source = 'parent_page') = 8,
+  assert (select count(*) from public.list_access(null, g) where source = 'parent_page') = 7,
     'list_access: permisos sobre páginas de arriba';
   assert (select level from public.list_access(null, g)
           where email = 'eq-lv@test.invalid' and page_id = '00000000-0000-4000-8000-000000000b01') = 'edit',
@@ -840,6 +875,17 @@ $$;
 select pg_temp.as_user('00000000-0000-4000-8000-000000000902');
 do $$
 begin
+  perform public.unshare(current_setting('test.g_me_pa')::uuid);
+  assert (select revoked_at is not null and revoked_by = auth.uid() from public.grants
+          where id = current_setting('test.g_me_pa')::uuid), 'unshare no deja el permiso marcado (o lo borró)';
+  perform public.unshare(current_setting('test.g_me_pa')::uuid);
+  assert (select count(*) from public.list_access('00000000-0000-4000-8000-000000000a02', null)
+          where user_id = '00000000-0000-4000-8000-000000000904') = 0, 'list_access muestra un permiso revocado';
+  -- Compartir de nuevo lo vuelve a activar (la misma fila), y se vuelve a sacar.
+  assert public.share('00000000-0000-4000-8000-000000000904', '00000000-0000-4000-8000-000000000a02', null, 'view')
+         = current_setting('test.g_me_pa')::uuid, 'compartir de nuevo crea otra fila';
+  assert (select revoked_at is null and level = 'view' from public.grants where id = current_setting('test.g_me_pa')::uuid),
+    'compartir de nuevo no vuelve a activar el permiso';
   perform public.unshare(current_setting('test.g_me_pa')::uuid);
   perform pg_temp.expect_error(format('select public.unshare(%L)', gen_random_uuid()), 'grant_not_found', 'unshare de algo que no existe');
   perform pg_temp.expect_error(
@@ -861,6 +907,8 @@ $$;
 -- ---------------------------------------------------------------------------------------------------
 select pg_temp.as_user('00000000-0000-4000-8000-000000000902');
 do $$
+declare
+  r jsonb;
 begin
   perform pg_temp.expect_error($q$select public.remove_member('00000000-0000-4000-8000-000000000903')$q$,
     'not_allowed', 'una admin saca a otra admin');
@@ -868,10 +916,17 @@ begin
     'owner_cannot_change', 'una admin saca a la dueña');
   perform pg_temp.expect_error($q$select public.remove_member('00000000-0000-4000-8000-00000000090d')$q$,
     'member_not_found', 'sacar a alguien sin membresía');
-  -- lv: PS (compartido con me y con ad2) pasa a ad2, la única admin con permiso; PS2 (compartido solo con
-  -- una invitada) queda como está; PP (privado) queda a su nombre.
-  assert public.remove_member('00000000-0000-4000-8000-00000000090c') = 1, 'remove_member no pasa un proyecto';
-  assert public.remove_member('00000000-0000-4000-8000-00000000090c') = 0, 'sacar dos veces';
+  -- lv: PS pasa a ad3 (editar y crear sobre el proyecto gana a editar de ad2). PS2 (compartido solo con una
+  -- invitada) y PS3 (la dueña solo tiene "ver" sobre una página) quedan sin heredero y se informan. PP
+  -- (privado) queda a su nombre y no se informa.
+  r := public.remove_member('00000000-0000-4000-8000-00000000090c');
+  assert r -> 'transferred' = jsonb_build_array(jsonb_build_object(
+           'project_id', '00000000-0000-4000-8000-000000000a03', 'to', '00000000-0000-4000-8000-000000000911')),
+    format('remove_member no pasa PS a ad3: %s', r);
+  assert r -> 'without_heir' = '["00000000-0000-4000-8000-000000000a05", "00000000-0000-4000-8000-000000000a06"]'::jsonb,
+    format('remove_member no informa los proyectos sin heredero: %s', r);
+  assert public.remove_member('00000000-0000-4000-8000-00000000090c') = '{"transferred": [], "without_heir": []}'::jsonb,
+    'sacar dos veces';
 end;
 $$;
 
@@ -893,7 +948,9 @@ begin
   assert (select removed_at is not null from public.members where user_id = '00000000-0000-4000-8000-00000000090c'),
     'lv no quedó sacado';
   assert (select owner_id from public.workspaces where id = '00000000-0000-4000-8000-000000000a03')
-         = '00000000-0000-4000-8000-000000000903', 'PS no pasó a ad2';
+         = '00000000-0000-4000-8000-000000000911', 'PS no pasó a ad3';
+  assert (select owner_id from public.workspaces where id = '00000000-0000-4000-8000-000000000a06')
+         = '00000000-0000-4000-8000-00000000090c', 'PS3 pasó a alguien que solo tenía "ver" sobre una página';
   assert (select owner_id from public.workspaces where id = '00000000-0000-4000-8000-000000000a04')
          = '00000000-0000-4000-8000-00000000090c', 'PP cambió de dueño';
   assert (select owner_id from public.workspaces where id = '00000000-0000-4000-8000-000000000a05')
@@ -918,11 +975,25 @@ begin
 end;
 $$;
 
--- El proyecto que pasó: ad2 lo tiene entero; me lo sigue viendo. Nadie ve PP; la invitada sigue en PS2.
+-- El proyecto que pasó: ad3 lo tiene entero; ad2 y me siguen con lo suyo. La dueña sigue viendo la página de
+-- PS3 (sin el proyecto). Nadie ve PP; la invitada sigue en PS2.
 select pg_temp.as_user('00000000-0000-4000-8000-000000000903');
 do $$
 begin
-  assert private.project_level('00000000-0000-4000-8000-000000000a03') = 4, 'ad2 no tiene PS entero';
+  assert private.project_level('00000000-0000-4000-8000-000000000a03') = 3, 'ad2 cambió de permiso sobre PS';
+end;
+$$;
+select pg_temp.as_user('00000000-0000-4000-8000-000000000901');
+do $$
+begin
+  assert private.project_level('00000000-0000-4000-8000-000000000a06') = 0, 'la dueña heredó PS3';
+  assert private.page_level('00000000-0000-4000-8000-000000000b0b') = 1, 'la dueña dejó de ver la página de PS3';
+end;
+$$;
+select pg_temp.as_user('00000000-0000-4000-8000-000000000911');
+do $$
+begin
+  assert private.project_level('00000000-0000-4000-8000-000000000a03') = 4, 'ad3 no tiene PS entero';
   insert into public.pages (id, workspace_id, title, sort_key)
   values (gen_random_uuid(), '00000000-0000-4000-8000-000000000a03', 'de ad2', 'b0');
 end;
@@ -967,7 +1038,224 @@ begin
   assert private.page_level('00000000-0000-4000-8000-000000000b01') = 0, 'lv recupera el permiso de antes';
   assert private.page_level('00000000-0000-4000-8000-000000000b05') = 1, 'lv no recibe el permiso nuevo';
   assert private.project_level('00000000-0000-4000-8000-000000000a04') = 4, 'lv no recupera su proyecto privado';
-  assert private.project_level('00000000-0000-4000-8000-000000000a03') = 0, 'lv recupera el proyecto que pasó a ad2';
+  assert private.project_level('00000000-0000-4000-8000-000000000a03') = 0, 'lv recupera el proyecto que pasó a ad3';
+end;
+$$;
+select set_config('role', 'postgres', true);
+do $$
+begin
+  assert (select revoked_at is not null from public.grants
+          where user_id = '00000000-0000-4000-8000-00000000090c' and page_id = '00000000-0000-4000-8000-000000000b01'),
+    'el permiso viejo de lv no quedó marcado (o se borró)';
+  assert (select count(*) from public.grants where user_id = '00000000-0000-4000-8000-00000000090c') = 2,
+    'se borraron o duplicaron permisos de lv';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- Invitaciones: lista, revocar, y quien invitó ya no tiene 4
+-- ---------------------------------------------------------------------------------------------------
+select pg_temp.as_user('00000000-0000-4000-8000-000000000902');
+select set_config('test.inv_rev', public.create_invitation('revocada@test.invalid', 'guest', '[]')::text, true);
+select pg_temp.as_user('00000000-0000-4000-8000-000000000901');
+select set_config('test.inv_ow', public.create_invitation('de-la-duenia@test.invalid', 'guest', '[]')::text, true);
+
+select pg_temp.as_user('00000000-0000-4000-8000-000000000902');
+do $$
+declare
+  rev constant uuid := current_setting('test.inv_rev')::uuid;
+begin
+  assert (select count(*) from public.list_invitations()) = (select count(*) from public.invitations i
+          where i.used_at is null and i.revoked_at is null and i.expires_at > now()
+            and i.invited_by in (select m.user_id from public.members m where m.removed_at is null and m.role in ('owner', 'admin'))),
+    'list_invitations no da exactamente las vivas';
+  assert (select invited_by_email = 'eq-ad@test.invalid' and role = 'guest' and grants = '[]'::jsonb
+                 and expires_at > now() + interval '29 days'
+          from public.list_invitations() where id = rev), 'list_invitations: campos';
+  assert not exists (select 1 from public.list_invitations() where email = 'vencida@test.invalid' or email = 'nuevo@test.invalid'),
+    'list_invitations muestra vencidas o usadas';
+  -- La admin no revoca la de la dueña; la suya sí (dos veces no cambia nada).
+  perform pg_temp.expect_error(format('select public.revoke_invitation(%L)', current_setting('test.inv_ow')),
+    'invitation_not_found', 'una admin revoca una invitación ajena');
+  perform public.revoke_invitation(rev);
+  perform public.revoke_invitation(rev);
+  assert not exists (select 1 from public.list_invitations() where id = rev), 'list_invitations muestra una revocada';
+  perform pg_temp.expect_error(format('select public.revoke_invitation(%L)', gen_random_uuid()),
+    'invitation_not_found', 'revocar una invitación que no existe');
+end;
+$$;
+
+select pg_temp.as_user('00000000-0000-4000-8000-000000000904');
+do $$
+begin
+  assert (select count(*) from public.list_invitations()) = 0, 'un miembro ve invitaciones';
+  perform pg_temp.expect_error(format('select public.revoke_invitation(%L)', current_setting('test.inv_ow')),
+    'invitation_not_found', 'un miembro revoca');
+end;
+$$;
+
+-- La dueña revoca la suya y la de otra persona; una usada no se revoca.
+select pg_temp.as_user('00000000-0000-4000-8000-000000000901');
+do $$
+begin
+  perform public.revoke_invitation(current_setting('test.inv_ow')::uuid);
+  perform pg_temp.expect_error(
+    format('select public.revoke_invitation(%L)', (select id from public.invitations where email = 'nuevo@test.invalid')),
+    'invitation_used', 'se revoca una invitación usada');
+end;
+$$;
+
+select set_config('role', 'postgres', true);
+do $$
+begin
+  assert (select revoked_at is not null and revoked_by = '00000000-0000-4000-8000-000000000902'
+          from public.invitations where id = current_setting('test.inv_rev')::uuid), 'la revocada no quedó marcada';
+  perform pg_temp.check_rejected(private.hook_before_user_created(pg_temp.hook_event('revocada@test.invalid')), 'revocada');
+  perform pg_temp.check_rejected(private.hook_before_user_created(pg_temp.hook_event('de-la-duenia@test.invalid')),
+    'revocada por la dueña');
+end;
+$$;
+insert into auth.users (id, email, aud, role, email_confirmed_at) values
+  ('00000000-0000-4000-8000-000000000912', 'revocada@test.invalid', 'authenticated', 'authenticated', now());
+select pg_temp.as_user('00000000-0000-4000-8000-000000000912');
+do $$
+begin
+  assert public.accept_invitations() = 0, 'se aplica una invitación revocada';
+  assert private.workspace_role() is null, 'una invitación revocada da membresía';
+end;
+$$;
+
+-- ad2 invita con dos permisos donde tiene 4 (pa y pa2); antes de que se acepte, la admin le baja pa a
+-- "ver": al aceptar, ese permiso se saltea y el otro no.
+select pg_temp.as_user('00000000-0000-4000-8000-000000000902');
+insert into public.pages (id, workspace_id, title, sort_key) values
+  ('00000000-0000-4000-8000-000000000b0a', '00000000-0000-4000-8000-000000000a02', 'pa2', 'a1');
+select public.share('00000000-0000-4000-8000-000000000903', null, '00000000-0000-4000-8000-000000000b09', 'edit_pages');
+select public.share('00000000-0000-4000-8000-000000000903', null, '00000000-0000-4000-8000-000000000b0a', 'edit_pages');
+select pg_temp.as_user('00000000-0000-4000-8000-000000000903');
+select public.create_invitation('nuevo2@test.invalid', 'guest', jsonb_build_array(
+  jsonb_build_object('page_id', '00000000-0000-4000-8000-000000000b09', 'level', 'view'),
+  jsonb_build_object('page_id', '00000000-0000-4000-8000-000000000b0a', 'level', 'view')));
+select pg_temp.as_user('00000000-0000-4000-8000-000000000902');
+select public.share('00000000-0000-4000-8000-000000000903', null, '00000000-0000-4000-8000-000000000b09', 'view');
+select set_config('role', 'postgres', true);
+insert into auth.users (id, email, aud, role, email_confirmed_at) values
+  ('00000000-0000-4000-8000-000000000913', 'nuevo2@test.invalid', 'authenticated', 'authenticated', now());
+select pg_temp.as_user('00000000-0000-4000-8000-000000000913');
+do $$
+begin
+  assert public.accept_invitations() = 1, 'nuevo2 no acepta';
+  assert private.workspace_role() = 'guest', 'nuevo2: rol';
+  assert private.page_level('00000000-0000-4000-8000-000000000b09') = 0,
+    'se aplicó un permiso sobre algo donde quien invitó ya no tiene 4';
+  assert private.page_level('00000000-0000-4000-8000-000000000b0a') = 1, 'nuevo2 no recibe el otro permiso';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- Sesiones abiertas con contraseña: nada. Con código o link: todo igual.
+-- ---------------------------------------------------------------------------------------------------
+create function pg_temp.as_session(uid uuid, amr jsonb) returns void language sql as $$
+  select set_config('role', 'authenticated', true),
+         set_config('request.jwt.claims',
+                    json_build_object('sub', uid, 'role', 'authenticated', 'aal', 'aal1', 'amr', amr)::text, true);
+$$;
+
+select pg_temp.as_session('00000000-0000-4000-8000-000000000901', '[{"method": "password", "timestamp": 1790000000}]');
+do $$
+declare
+  p1 constant uuid := '00000000-0000-4000-8000-000000000a01';
+begin
+  assert not private.session_allowed(), 'session_allowed con contraseña';
+  assert private.workspace_role() is null, 'con contraseña, la dueña tiene rol';
+  assert pg_temp.projects() = '{}' and (select count(*) from public.pages) = 0
+     and (select count(*) from public.page_updates) = 0, 'con contraseña se ven proyectos, páginas o contenido';
+  assert private.project_level(p1) = 0 and not private.can_create_project(), 'con contraseña hay permisos';
+  perform pg_temp.check_level('dueña con contraseña', p1, '00000000-0000-4000-8000-000000000b01', 0);
+  assert public.ensure_workspace() is null, 'con contraseña: ensure_workspace';
+  assert (select count(*) from public.members) = 0 and (select count(*) from public.grants) = 0
+     and (select count(*) from public.list_members()) = 0, 'con contraseña se ven miembros o permisos';
+  assert not (public.media_whoami() ->> 'is_owner')::boolean and public.media_whoami() ->> 'role' is null,
+    'con contraseña media_whoami da dueña o rol';
+  perform pg_temp.expect_error($q$select public.create_invitation('x@test.invalid', 'guest', '[]')$q$,
+    'not_allowed', 'con contraseña se invita');
+  perform pg_temp.expect_error('select public.accept_invitations()', 'session_not_allowed',
+    'con contraseña se aceptan invitaciones');
+  perform pg_temp.expect_error($q$insert into public.workspaces (id, name) values (gen_random_uuid(), 'No')$q$,
+    '42501', 'con contraseña se crea un proyecto');
+end;
+$$;
+
+-- Contraseña y después un segundo factor: sigue sin contar.
+select pg_temp.as_session('00000000-0000-4000-8000-000000000901',
+  '[{"method": "totp", "timestamp": 1790000100}, {"method": "password", "timestamp": 1790000000}]');
+do $$
+begin
+  assert private.workspace_role() is null and pg_temp.projects() = '{}', 'contraseña más TOTP cuenta';
+end;
+$$;
+
+select pg_temp.as_session('00000000-0000-4000-8000-000000000901', '[{"method": "otp", "timestamp": 1790000000}]');
+do $$
+begin
+  assert private.session_allowed() and private.workspace_role() = 'owner', 'con código, la dueña no tiene su rol';
+  assert '00000000-0000-4000-8000-000000000a01' = any (pg_temp.projects()), 'con código, la dueña no ve P1';
+  perform pg_temp.check_level('dueña con código', '00000000-0000-4000-8000-000000000a01', '00000000-0000-4000-8000-000000000b01', 4);
+  assert (public.media_whoami() ->> 'is_owner')::boolean, 'con código, la dueña no figura como dueña';
+end;
+$$;
+
+select pg_temp.as_session('00000000-0000-4000-8000-000000000908', '[{"method": "password", "timestamp": 1790000000}]');
+do $$
+begin
+  assert private.file_level('00000000-0000-4000-8000-000000000f02') = 0 and (select count(*) from public.files) = 0,
+    'con contraseña se ven archivos';
+end;
+$$;
+select pg_temp.as_session('00000000-0000-4000-8000-000000000908', '[{"method": "magiclink", "timestamp": 1790000000}]');
+do $$
+begin
+  assert private.file_level('00000000-0000-4000-8000-000000000f02') = 3, 'con link, editar no edita el archivo';
+  perform pg_temp.check_level('editar con link', '00000000-0000-4000-8000-000000000a01', '00000000-0000-4000-8000-000000000b02', 3);
+end;
+$$;
+
+-- El hook de token (opcional): deja pasar código, link y renovaciones; rechaza contraseña.
+select set_config('role', 'postgres', true);
+do $$
+declare
+  claims constant jsonb := jsonb_build_object('sub', gen_random_uuid(), 'role', 'authenticated', 'aal', 'aal1',
+    'amr', '[{"method": "otp", "timestamp": 1790000000}]'::jsonb);
+  r jsonb;
+begin
+  r := private.hook_custom_access_token(jsonb_build_object('user_id', gen_random_uuid(), 'claims', claims,
+                                                           'authentication_method', 'otp'));
+  assert r = jsonb_build_object('claims', claims), format('el hook de token cambia los claims: %s', r);
+  r := private.hook_custom_access_token(jsonb_build_object('user_id', gen_random_uuid(), 'claims', claims,
+                                                           'authentication_method', 'token_refresh'));
+  assert r = jsonb_build_object('claims', claims), 'el hook de token rechaza una renovación';
+  r := private.hook_custom_access_token(jsonb_build_object('user_id', gen_random_uuid(),
+         'claims', jsonb_set(claims, '{amr}', '[{"method": "password", "timestamp": 1}]'), 'authentication_method', 'password'));
+  perform pg_temp.check_error_shape(r, 'el hook de token con contraseña');
+  r := private.hook_custom_access_token(jsonb_build_object('user_id', gen_random_uuid(),
+         'claims', jsonb_set(claims, '{amr}', '[{"method": "password", "timestamp": 1}]'), 'authentication_method', 'token_refresh'));
+  perform pg_temp.check_error_shape(r, 'el hook de token renovando una sesión de contraseña');
+end;
+$$;
+
+-- supabase_auth_admin (el rol de Supabase Auth) no ejecuta ninguna función de la app en `public` (la única
+-- que puede es `rls_auto_enable`, de Supabase) ni en `private` salvo los dos hooks, y no tiene tablas.
+do $$
+begin
+  assert not exists (
+    select 1 from pg_proc p
+    where p.pronamespace in ('public'::regnamespace, 'private'::regnamespace)
+      and has_function_privilege('supabase_auth_admin', p.oid, 'execute')
+      and p.oid not in ('private.hook_before_user_created(jsonb)'::regprocedure,
+                        'private.hook_custom_access_token(jsonb)'::regprocedure)
+      and p.proname <> 'rls_auto_enable'
+      and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')),
+    'supabase_auth_admin ejecuta funciones de la app';
 end;
 $$;
 

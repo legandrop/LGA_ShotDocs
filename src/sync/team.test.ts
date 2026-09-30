@@ -6,6 +6,7 @@ import { legacyStorageNames, WANKA_LOCAL_KEY, type WorkspaceConfig } from '../wo
 import { acceptInvitationsQuietly, isRemovedSignal, parseAccess, Permissions, type AccessSnapshot } from './access';
 import { FakeServer, makeDevice, type Device } from './testing';
 import { RemoteError } from './types';
+import { CONTENT_FRAGMENT } from './structure';
 import { exportUnsynced, unsyncedSummary } from './unsynced';
 
 // Paso 9 (equipo), lado de la app: permisos en el dispositivo, solo lectura, rechazos a la vista,
@@ -434,5 +435,137 @@ describe('link de invitación', () => {
     expect(parseInviteHash(bad.slice(bad.indexOf('#')))).toBeNull();
     const noPage = inviteLink('https://a', { u: ws.url, k: 'k', l: 'l' });
     expect(parseInviteHash(noPage.slice(noPage.indexOf('#')))).toEqual({ u: ws.url, k: 'k', l: 'l' });
+  });
+});
+
+/** Un documento con dos raíces (dos dispositivos que empezaron la misma página sin verse). */
+function twoRootsUpdate(extra = 'dos'): Uint8Array {
+  const doc = new Y.Doc();
+  const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  const root = (text: string) => {
+    const group = new Y.XmlElement('blockGroup');
+    const block = new Y.XmlElement('blockContainer');
+    block.insert(0, [new Y.XmlText(text)]);
+    group.insert(0, [block]);
+    return group;
+  };
+  fragment.insert(0, [root('uno'), root(extra)]);
+  return Y.encodeStateAsUpdate(doc);
+}
+
+describe('correcciones de la auditoría', () => {
+  it('quien solo puede ver abre una página con dos raíces: se repara en memoria y no sale nada', async () => {
+    const { server, owner, pages } = await teamWorkspace();
+    // El contenido roto llega al servidor como lo dejaría una versión vieja.
+    await owner.remote.pushUpdate(pages.a, crypto.randomUUID(), twoRootsUpdate());
+    server.addMember('ana', 'member');
+    server.grant('ana', { pageId: pages.a }, 'view');
+    const ana = await device(server, { id: 'ana' });
+    await ana.engine.syncNow();
+    const before = server.updates.get(pages.a)?.length;
+
+    const doc = await ana.docs.open(pages.a);
+    expect(doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+    await ana.docs.flush(pages.a);
+    // Llega otro cambio roto con la página abierta: también se repara solo en memoria.
+    await owner.remote.pushUpdate(pages.a, crypto.randomUUID(), twoRootsUpdate('tres'));
+    await ana.engine.syncNow();
+    expect(doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+    ana.docs.close(pages.a);
+    // Y otra apertura (se vuelve a armar desde lo guardado).
+    await ana.docs.open(pages.a);
+    ana.docs.close(pages.a);
+    await ana.engine.syncNow();
+
+    expect(await ana.docs.unsyncedPages()).toEqual([]);
+    expect(ana.engine.getStatus().rejectedPages).toBe(0);
+    expect(server.updates.get(pages.a)?.length).toBe(before! + 1);
+
+    // Quien puede editar sí guarda y sube la reparación.
+    const owner2 = await device(server);
+    await owner2.engine.syncNow();
+    await owner2.docs.open(pages.a);
+    await owner2.docs.flush(pages.a);
+    owner2.docs.close(pages.a);
+    expect(await owner2.docs.unsyncedPages()).toEqual([pages.a]);
+  });
+
+  it('no se siembra mientras los permisos no se conozcan ni sin "Edit"', async () => {
+    const { server, owner, pages } = await teamWorkspace();
+    const unknown = new Permissions(owner.tree, null, server.ownerId);
+    expect(unknown.canEditPage(pages.a)).toBe(true);
+    expect(unknown.canSeed(pages.a)).toBe(false);
+    expect(perms(owner).canSeed(pages.a)).toBe(true);
+    server.addMember('ana', 'member');
+    server.grant('ana', { pageId: pages.a }, 'view');
+    const ana = await device(server, { id: 'ana' });
+    await ana.engine.syncNow();
+    expect(perms(ana).canSeed(pages.a)).toBe(false);
+  });
+
+  it('un proyecto sin dueño conocido no es propio para un invitado; al dueño no se le bloquea', async () => {
+    const { server, owner, pages } = await teamWorkspace();
+    server.addMember('ana', 'guest');
+    server.grant('ana', { pageId: pages.a }, 'edit_pages');
+    const ana = await device(server, { id: 'ana' });
+    await ana.engine.syncNow();
+    const project = ana.tree.project(server.workspaceId)!;
+    // Como una copia vieja: sin `owner_id`.
+    const snapshot = ana.access.get();
+    const fakeTree = { ...ana.tree, project: () => ({ ...project, owner_id: undefined }), isLocalProject: () => false };
+    const guest = new Permissions(fakeTree as never, snapshot, 'ana');
+    expect(guest.canCreateIn(null, server.workspaceId)).toBe(false);
+    expect(guest.canRenameProject(server.workspaceId)).toBe(false);
+    const ownerPerms = new Permissions({ ...fakeTree, get: owner.tree.get.bind(owner.tree), ancestors: owner.tree.ancestors.bind(owner.tree) } as never, owner.access.get(), server.ownerId);
+    expect(ownerPerms.canCreateIn(null, server.workspaceId)).toBe(true);
+    expect(ownerPerms.pageLevel(pages.a1)).toBe(4);
+    // Un proyecto creado en el dispositivo y sin volver del servidor sí es propio.
+    const local = await owner.tree.createProject('Nuevo');
+    expect(owner.tree.isLocalProject(local)).toBe(true);
+    expect(perms(owner).canCreateIn(null, local)).toBe(true);
+  });
+
+  it('tras restaurar una copia, no vuelve a crear lo que ya no se puede crear, y lo avisa', async () => {
+    const { server, pages } = await teamWorkspace();
+    server.addMember('eli', 'member');
+    server.grant('eli', { pageId: pages.a }, 'edit_pages');
+    const eli = await device(server, { id: 'eli' });
+    await eli.engine.syncNow();
+    const restore = server.backup();
+    const child = await eli.tree.create(pages.a1, 'Después de la copia');
+    await eli.engine.syncNow();
+    expect(server.pages.has(child)).toBe(true);
+    // Le bajan el permiso y se restaura la copia (la página nueva ya no está en el servidor).
+    server.grant('eli', { pageId: pages.a }, 'edit');
+    restore();
+    await eli.engine.syncNow();
+    expect(eli.tree.pendingOps()).toEqual([]);
+    expect(eli.tree.failedOps()).toEqual([]);
+    expect(eli.engine.getStatus().notice).toMatch(/could not be created again/);
+  });
+
+  it('los permisos sacados (revoked_at) no cuentan', () => {
+    const snap = parseAccess({ role: 'member', removed_at: null }, [
+      { id: '1', project_id: 'p', page_id: null, level: 'edit_pages', revoked_at: '2026-09-30T10:00:00Z' },
+      { id: '2', project_id: 'p', page_id: null, level: 'view', revoked_at: null },
+    ]);
+    expect(snap.grants.map((g) => g.id)).toEqual(['2']);
+  });
+
+  it('invitaciones pendientes: listar, revocar, y la de otra persona no se pisa', async () => {
+    const { server, owner } = await teamWorkspace();
+    server.addMember('admin-1', 'admin');
+    const admin = await device(server, { id: 'admin-1' });
+    const id = await owner.remote.createInvitation('x@test', 'guest', []);
+    await expect(admin.remote.createInvitation('x@test', 'member', [])).rejects.toThrow('invitation_exists');
+    expect((await admin.remote.listInvitations())?.map((i) => i.email)).toEqual(['x@test']);
+    await expect(admin.remote.revokeInvitation(id)).rejects.toThrow('invitation_not_found');
+    await owner.remote.revokeInvitation(id);
+    expect(await owner.remote.listInvitations()).toEqual([]);
+    // Revocada: no sirve para entrar.
+    const x = await device(server, { id: 'x', email: 'x@test' });
+    expect(await acceptInvitationsQuietly(x.remote)).toBe(0);
+    server.noInvitationList = true;
+    expect(await owner.remote.listInvitations()).toBeNull();
   });
 });

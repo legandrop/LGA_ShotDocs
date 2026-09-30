@@ -1,35 +1,49 @@
 import { useEffect, useState } from 'react';
+import { clearInviteTarget } from '../invite';
 import type { MediaRecord } from '../media/mediaDb';
 import { mediaDbName } from '../media/mediaDb';
 import { commentsDbName } from '../sync/comments';
 import { useServices, useSyncStatus } from '../services';
-import { exportUnsynced, unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
+import { unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
 import { errorMessage } from '../sync/types';
+import type { StorageNames } from '../workspace';
+import { downloadUnsynced, saveBlob } from './unsyncedDownload';
 
 // Sacaron a la persona del workspace (sección 8 de Docs/Plan_Workspaces.md). Aparece SOLO con la señal
 // explícita de la base (su fila de `members` con `removed_at`). No borra nada sola: si hay cambios sin
 // subir, ofrece bajarlos como archivo, y la base local se borra recién cuando la persona toca "Remove from
 // this device" (decisión a confirmar con Lega: también sin cambios pendientes espera ese toque).
 
-function save(blob: Blob, name: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
+/** Otra pestaña o ventana de la app tiene la base abierta: el borrado queda esperando. */
+export class DeleteBlocked extends Error {}
 
-function deleteDatabase(name: string): Promise<void> {
+/**
+ * Borra una base de IndexedDB. Si otra pestaña la tiene abierta, el navegador avisa `blocked`: en vez de
+ * quedarse colgado, se rechaza con `DeleteBlocked` (el pedido sigue en pie y termina solo cuando la otra
+ * pestaña se cierra; reintentar lo confirma).
+ */
+export function deleteDatabase(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.deleteDatabase(name);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error ?? new Error(`Could not delete ${name}`));
-    // Otra conexión abierta (no debería haber: el lock es de esta ventana). Se resuelve cuando se cierre.
-    req.onblocked = () => undefined;
+    req.onblocked = () => reject(new DeleteBlocked(name));
   });
+}
+
+/** Lo que la app recuerda en este dispositivo de ese workspace y esa persona (proyecto y últimas páginas). */
+export function forgetWorkspaceKeys(storage: StorageNames, userId: string, projectIds: string[]): void {
+  try {
+    const projects = JSON.parse(localStorage.getItem(storage.project) ?? '{}') as Record<string, string>;
+    delete projects[userId];
+    localStorage.setItem(storage.project, JSON.stringify(projects));
+    const pages = JSON.parse(localStorage.getItem(storage.lastPages) ?? '{}') as Record<string, string>;
+    for (const id of projectIds) delete pages[id];
+    localStorage.setItem(storage.lastPages, JSON.stringify(pages));
+  } catch {
+    // Son comodidades: si no se pueden limpiar, no importa.
+  }
+  clearInviteTarget();
 }
 
 function sizeLabel(bytes: number): string {
@@ -39,6 +53,7 @@ function sizeLabel(bytes: number): string {
 export function RemovedScreen() {
   const services = useServices();
   const { db, mediaDb, commentsDb, docs, tree, user, workspace, client, dbName } = services;
+  const [blocked, setBlocked] = useState(false);
   const status = useSyncStatus();
   const [summary, setSummary] = useState<UnsyncedSummary | null>(null);
   const [media, setMedia] = useState<MediaRecord[]>([]);
@@ -67,15 +82,7 @@ export function RemovedScreen() {
     setBusy('download');
     setError(null);
     try {
-      await docs.flush();
-      const data = await exportUnsynced(db, mediaDb, {
-        appVersion: __APP_VERSION__,
-        workspace: { url: workspace.config.url, localKey: workspace.config.localKey, name },
-        user: { id: user.id, email: user.email },
-        titleOf: (id) => tree.get(id)?.title,
-      }, commentsDb);
-      const day = new Date().toISOString().slice(0, 10);
-      save(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `shotdocs-unsynced-${day}.json`);
+      await downloadUnsynced(services, name);
       setDownloaded(true);
     } catch (err) {
       setError(`The file could not be made (${errorMessage(err)}). Nothing was deleted.`);
@@ -86,12 +93,13 @@ export function RemovedScreen() {
 
   async function downloadMedia(record: MediaRecord) {
     const blob = await mediaDb?.get('blobs', record.id);
-    if (blob) save(blob, record.name);
+    if (blob) saveBlob(blob, record.name);
     else setError(`“${record.name}” is not on this device anymore.`);
   }
 
   async function removeFromDevice() {
     if (
+      !blocked &&
       pending > 0 &&
       !downloaded &&
       !confirm(
@@ -102,15 +110,23 @@ export function RemovedScreen() {
     }
     setBusy('remove');
     setError(null);
+    setBlocked(false);
+    const projectIds = tree.projects().map((p) => p.id);
     try {
       await services.shutdown();
       await deleteDatabase(mediaDbName(dbName));
       await deleteDatabase(commentsDbName(dbName));
       await deleteDatabase(dbName);
+      forgetWorkspaceKeys(workspace.config.storage, user.id, projectIds);
       await client.auth.signOut({ scope: 'local' });
     } catch (err) {
       setBusy(null);
-      setError(`Could not remove everything (${errorMessage(err)}). Reload the app and try again.`);
+      if (err instanceof DeleteBlocked) {
+        setBlocked(true);
+        setError('Close other tabs or windows of the app on this device, then tap “Remove from this device” again.');
+      } else {
+        setError(`Could not remove everything (${errorMessage(err)}). Reload the app and try again.`);
+      }
     }
   }
 

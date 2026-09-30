@@ -8,6 +8,7 @@ import {
   FormattingToolbar,
   FormattingToolbarController,
   getDefaultReactSlashMenuItems,
+  getFormattingToolbarItems,
   SuggestionMenuController,
   useCreateBlockNote,
   type BlockTypeSelectItem,
@@ -24,12 +25,23 @@ import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { findUnknownContent } from './unknownContent';
+import {
+  CommentMargin,
+  CommentSideMenuController,
+  CommentToolbarButton,
+  paragraphVariantItems,
+  questionSlashItem,
+  useBlockSourceRegistration,
+  withParagraphVariants,
+} from './EditorComments';
+import { useCommentAccess } from './CommentsPanel';
 import { ScriptIcon } from './icons';
 import { notify } from './notice';
 import { useScheme } from '../prefs';
 
-// Script es un párrafo con `script: true` (ver editorSchema.ts). El ítem "Paragraph" pide `script: false`
-// para que el selector distinga uno de otro y para que volver a párrafo saque el guion.
+// Script es un párrafo con `script: true` (ver editorSchema.ts), y una pregunta, uno con `question: true`
+// (EditorComments.tsx). Cada ítem del selector pide las dos propiedades, así el selector distingue uno de
+// otro y volver a párrafo saca la marca.
 const scriptTypeItem: BlockTypeSelectItem = {
   name: 'Script',
   type: 'paragraph',
@@ -49,8 +61,11 @@ export function PageEditor({ pageId }: { pageId: string }) {
   // Sin "Edit" (nivel 3) la página se abre en solo lectura (paso 9): el servidor rechazaría lo escrito.
   const perms = usePermissions();
   const canEdit = perms.canEditPage(pageId);
-  const canEditRef = useRef(canEdit);
-  canEditRef.current = canEdit;
+  // La estructura inicial es un cambio: solo con los permisos ya conocidos y "Edit". Si cambian, la página
+  // se vuelve a abrir (así se siembra, o se descarta una reparación hecha solo en memoria).
+  const canSeed = perms.canSeed(pageId);
+  // Con "Comment" (nivel 2) se comenta y se contesta aunque el editor quede en solo lectura (paso 10).
+  const { canComment } = useCommentAccess(pageId);
   const [opening, setOpening] = useState<Opening>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const incomplete = opening.state === 'ready' && !opening.complete;
@@ -63,8 +78,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
     let opened = false;
     void engine.prefetchPage(pageId).then(async (complete) => {
       if (cancelled) return;
-      // La estructura inicial es un cambio: en solo lectura no se pone.
-      const doc = await docs.open(pageId, { seed: complete && canEditRef.current });
+      const doc = await docs.open(pageId, { seed: complete && canSeed });
       opened = true;
       if (cancelled) return docs.close(pageId);
       const unknown = findUnknownContent(doc);
@@ -76,7 +90,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
       if (opened) docs.close(pageId);
       setOpening({ state: 'loading' });
     };
-  }, [docs, engine, pageId, attempt]);
+  }, [docs, engine, pageId, attempt, canSeed]);
 
   // Si llega del servidor algo que esta versión no conoce, el editor se cierra antes de que lo vea.
   useEffect(
@@ -112,13 +126,18 @@ export function PageEditor({ pageId }: { pageId: string }) {
         </p>
       )}
       {!canEdit && perms.known && (
-        <p className="muted editor-missing">You can view this page. Ask for edit access to change it.</p>
+        <p className="muted editor-missing">
+          {canComment
+            ? 'You can comment on this page and answer its questions. Ask for edit access to change it.'
+            : 'You can view this page. Ask for edit access to change it.'}
+        </p>
       )}
       <BlockEditor
         key={`${pageId}:${opening.complete}:${canEdit}`}
         doc={opening.doc}
         pageId={pageId}
         editable={opening.complete && canEdit}
+        canComment={canComment}
       />
     </>
   );
@@ -146,7 +165,7 @@ function acceptedText(withMedia: boolean): string {
     : 'Only images can be added for now (JPEG, PNG, GIF, WebP, AVIF or HEIC). Videos need the workspace media server (Google Drive).';
 }
 
-function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; editable: boolean }) {
+function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId: string; editable: boolean; canComment: boolean }) {
   const { files, media, user } = useServices();
   const scheme = useScheme();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
@@ -287,19 +306,22 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
         : item,
     );
     const at = items.findIndex((i) => i.group !== 'Headings' && i.group !== 'Basic blocks');
+    // Script, Question y Paragraph se sacan la marca uno al otro (nunca Script y pregunta juntos).
+    const variants = items.map((i) =>
+      (i as { key?: string }).key === 'paragraph' || i.title === editor.dictionary.slash_menu.paragraph.title
+        ? withParagraphVariants(i, editor, 'paragraph')
+        : i,
+    );
+    const extra = [withParagraphVariants(script, editor, 'script'), questionSlashItem(editor)];
     return (query: string) =>
-      Promise.resolve(filterSuggestionItems([...items.slice(0, at), script, ...items.slice(at)], query));
+      Promise.resolve(filterSuggestionItems([...variants.slice(0, at), ...extra, ...variants.slice(at)], query));
   }, [editor]);
 
-  const toolbarItems = useMemo(
-    () => [
-      ...blockTypeSelectItems(editor.dictionary).map((item) =>
-        item.type === 'paragraph' ? { ...item, props: { ...item.props, [SCRIPT_PROP]: false } } : item,
-      ),
-      scriptTypeItem,
-    ],
-    [editor],
-  );
+  const toolbarItems = useMemo(() => paragraphVariantItems(blockTypeSelectItems(editor.dictionary), scriptTypeItem), [editor]);
+
+  // Comentarios (paso 10): el panel sabe qué dice cada bloque; el margen se dibuja sobre el editor.
+  useBlockSourceRegistration(editor, pageId);
+  const host = useRef<HTMLDivElement>(null);
 
   // Pegar o soltar un archivo que no se puede guardar haría que el editor intente crear un bloque que no
   // existe en el esquema: se corta antes, con un aviso.
@@ -341,6 +363,8 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
 
   return (
     <div
+      ref={host}
+      className="editor-host"
       onPasteCapture={(e) => rejectOtherFiles(e.nativeEvent, e.clipboardData)}
       onDropCapture={(e) => rejectOtherFiles(e.nativeEvent, e.dataTransfer)}
       onPointerDownCapture={notePress}
@@ -353,12 +377,20 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
         className="editor"
         slashMenu={false}
         formattingToolbar={false}
+        sideMenu={false}
       >
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
         <FormattingToolbarController
-          formattingToolbar={() => <FormattingToolbar blockTypeSelectItems={toolbarItems} />}
+          formattingToolbar={() => (
+            <FormattingToolbar blockTypeSelectItems={toolbarItems}>
+              {getFormattingToolbarItems(toolbarItems)}
+              {canComment && <CommentToolbarButton key="comment" />}
+            </FormattingToolbar>
+          )}
         />
+        <CommentSideMenuController />
       </BlockNoteView>
+      <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
       {carrete && <CarreteHost {...carrete} onClose={() => setCarrete(null)} />}
     </div>
   );

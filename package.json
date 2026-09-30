@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "node scripts/db-migrate.mjs",
-    "db:test": "node scripts/db-migrate.mjs --test"
+    "db:test": "node scripts/db-migrate.mjs --test",
+    "workspace:setup": "node scripts/setup-workspace.mjs"
   },
   "dependencies": {
     "@blocknote/core": "^0.55.0",

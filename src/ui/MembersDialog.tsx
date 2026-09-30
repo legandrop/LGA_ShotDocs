@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { copyText, inviteLink } from '../invite';
+import { copyWhenReady, inviteLink } from '../invite';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, type GrantLevel, type Role } from '../sync/access';
-import type { InvitationGrant, MemberRow } from '../sync/remote';
+import type { InvitationGrant, InvitationRow, MemberRow } from '../sync/remote';
 import { notify } from './notice';
 import { useCurrentProject } from './project';
 import { teamErrorText } from './teamText';
@@ -24,13 +24,19 @@ export function useInviteLink(): (target?: string) => string {
   );
 }
 
-/** Copia el link y avisa; si el navegador no deja copiar, lo devuelve para mostrarlo. */
-export async function copyInvite(link: string): Promise<string | null> {
-  if (await copyText(link)) {
+/**
+ * Crea la invitación y copia su link. Se llama dentro del gesto (el envío del formulario), sin esperar nada
+ * antes: así Safari deja copiar aunque el link llegue después. Devuelve el link si no se pudo copiar (se
+ * muestra para copiarlo a mano), o `null` si se copió (y avisa). Si la invitación falla, rechaza.
+ */
+export async function inviteAndCopy(link: Promise<string>): Promise<string | null> {
+  const copied = copyWhenReady(link);
+  const text = await link;
+  if (await copied) {
     notify(LINK_COPIED);
     return null;
   }
-  return link;
+  return text;
 }
 
 type InviteRole = Exclude<Role, 'owner'>;
@@ -46,6 +52,8 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
   const isOwner = myRole === 'owner';
 
   const [members, setMembers] = useState<MemberRow[] | null>(null);
+  // Las invitaciones sin usar; `null` si la base no tiene `list_invitations` (la sección no se muestra).
+  const [invitations, setInvitations] = useState<InvitationRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -70,6 +78,10 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
       (rows) => live && setMembers(rows),
       (err: unknown) => live && setError(teamErrorText(err)),
     );
+    remote.listInvitations().then(
+      (rows) => live && setInvitations(rows),
+      () => live && setInvitations(null),
+    );
     return () => {
       live = false;
     };
@@ -93,10 +105,14 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
     const address = email.trim().toLowerCase();
     if (!address) return;
     const grants: InvitationGrant[] = withProject && canGiveProject ? [{ project_id: projectId, level }] : [];
+    // Sin nada que espere antes: el portapapeles se pide en el mismo gesto.
+    const copying = inviteAndCopy(
+      remote.createInvitation(address, role, grants).then(() => makeLink(grants.length ? projectId : undefined)),
+    );
     await run('invite', async () => {
-      await remote.createInvitation(address, role, grants);
+      const manual = await copying;
       setEmail('');
-      setManualLink(await copyInvite(makeLink(grants.length ? projectId : undefined)));
+      setManualLink(manual);
     });
   }
 
@@ -212,6 +228,46 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
             </li>
           ))}
         </ul>
+
+        {invitations && invitations.length > 0 && (
+          <>
+            <span className="pref-label">Invitations not used yet</span>
+            <ul className="team-list" aria-label="Invitations not used yet">
+              {invitations.map((inv) => {
+                const canRevoke = isOwner || inv.invited_by === user.id;
+                return (
+                  <li key={inv.id}>
+                    <span className="team-who">
+                      <span className="team-email" data-tip={inv.email} data-tip-plain data-tip-overflow>
+                        {inv.email}
+                      </span>
+                      <span className="mono-label">
+                        {inv.invited_by_email ? `Invited by ${inv.invited_by_email}` : 'Invited'}
+                        {inv.expires_at ? ` · until ${new Date(inv.expires_at).toLocaleDateString()}` : ''}
+                      </span>
+                    </span>
+                    <span className="team-role">{ROLE_LABELS[inv.role] ?? inv.role}</span>
+                    {canRevoke ? (
+                      <button
+                        className="link danger"
+                        disabled={busy !== null}
+                        onClick={() => {
+                          if (confirm(`Revoke the invitation for ${inv.email}? They can no longer join with it; nothing else changes.`)) {
+                            void run(`revoke:${inv.id}`, () => remote.revokeInvitation(inv.id));
+                          }
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    ) : (
+                      <span className="team-spacer" />
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
 
         <div className="modal-actions">
           <button onClick={onClose}>Close</button>

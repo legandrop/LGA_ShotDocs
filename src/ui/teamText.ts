@@ -13,6 +13,11 @@ const MESSAGES: Record<string, string> = {
   level_invalid: 'That access level is not valid.',
   target_invalid: 'Choose a project or a page to share.',
   grants_invalid: 'The access for this invitation is not valid.',
+  invitation_exists:
+    'Someone else already invited this email. They can add to their invitation, or it can be revoked in Members.',
+  invitation_used: 'That invitation was already used. To take access away, remove the person instead.',
+  invitation_not_found: 'That invitation is not there anymore, or you cannot revoke it.',
+  session_not_allowed: 'This session cannot do that. Sign out and sign in again with the emailed code.',
   page_create_denied: 'You cannot create pages here: it needs “Edit & create pages”.',
   page_move_denied: 'You cannot move this page there: it needs “Edit & create pages” on the page and on where it goes.',
   page_trash_denied: 'You cannot move this page to the trash or back: it needs “Edit & create pages”.',

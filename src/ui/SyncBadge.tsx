@@ -4,6 +4,8 @@ import { useServices, useSyncStatus, useTree } from '../services';
 import { ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from './icons';
 import { rejectionText } from './teamText';
 import { usePendingCount } from './usePendingCount';
+import { downloadUnsynced } from './unsyncedDownload';
+import { notify } from './notice';
 
 type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
 
@@ -69,8 +71,11 @@ export function SyncIcon({ onClick }: { onClick: () => void }) {
 export function SyncBadge() {
   const status = useSyncStatus();
   const tree = useTree();
-  const { engine, media, comments } = useServices();
+  const services = useServices();
+  const { engine, media, comments } = services;
+  const pending = usePendingCount();
   const [details, setDetails] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const { tone, text, rejected } = useSyncTone();
   const Icon = TONE_ICONS[tone];
   const mediaError = status.pendingMedia > 0 ? status.mediaError : null;
@@ -217,6 +222,21 @@ export function SyncBadge() {
                 }}
               >
                 Hide what can be discarded
+              </button>
+            )}
+            {/* Lo de una página que dejaron de compartir ya no se ve en el árbol, pero sigue acá: se puede bajar. */}
+            {(rejected > 0 || pending > 0) && (
+              <button
+                className="link"
+                disabled={downloading}
+                onClick={() => {
+                  setDownloading(true);
+                  void downloadUnsynced(services, status.workspaceName || services.workspace.config.name || 'Workspace')
+                    .catch(() => notify('The file could not be made. Nothing was deleted; try again.'))
+                    .finally(() => setDownloading(false));
+                }}
+              >
+                {downloading ? 'Preparing…' : 'Download my unsynced changes'}
               </button>
             )}
             <button className="link" onClick={() => setDetails(false)}>

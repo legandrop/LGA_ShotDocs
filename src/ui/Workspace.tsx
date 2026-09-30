@@ -23,6 +23,7 @@ import { RemovedScreen } from './RemovedScreen';
 import { ShareDialog, type ShareTarget } from './ShareDialog';
 import { MediaTest } from './MediaTest';
 import { focusTitle, PageView } from './PageView';
+import { CommentsToggle } from './CommentsPanel';
 import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
@@ -216,6 +217,7 @@ function Shell() {
           <span className="only-mobile">
             <SyncIcon onClick={() => setNavOpen(true)} />
           </span>
+          {pageId && current && <CommentsToggle pageId={pageId} />}
           {pageId && (
             <button
               className="icon-button"

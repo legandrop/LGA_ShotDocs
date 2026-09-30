@@ -74,6 +74,18 @@ export interface AccessRow {
   page_id: string | null;
 }
 
+/** Una fila de `list_invitations`. */
+export interface InvitationRow {
+  id: string;
+  email: string;
+  role: Exclude<Role, 'owner'>;
+  grants: InvitationGrant[];
+  invited_by: string | null;
+  invited_by_email: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
 /** Un permiso de una invitación: sobre un proyecto o una página. */
 export type InvitationGrant = { project_id: string; level: GrantLevel } | { page_id: string; level: GrantLevel };
 
@@ -83,6 +95,10 @@ export type InvitationGrant = { project_id: string; level: GrantLevel } | { page
  */
 export interface TeamRemote {
   listMembers(): Promise<MemberRow[]>;
+  /** Las invitaciones vivas (dueño y admins). `null` si la base todavía no tiene la función. */
+  listInvitations(): Promise<InvitationRow[] | null>;
+  /** Revoca una invitación sin usar (la marca, no la borra). */
+  revokeInvitation(id: string): Promise<void>;
   createInvitation(email: string, role: Exclude<Role, 'owner'>, grants: InvitationGrant[]): Promise<string>;
   setMemberRole(userId: string, role: Exclude<Role, 'owner'>): Promise<void>;
   /** Devuelve cuántos proyectos pasaron a otra persona. */
@@ -345,7 +361,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     // Los admins ven los permisos de todos: se piden solo los propios.
     const grants = await this.client
       .from('grants')
-      .select('id, project_id, page_id, level')
+      // Todas las columnas: `revoked_at` (un permiso sacado queda en la tabla sin efecto) se filtra acá.
+      .select('*')
       .eq('user_id', userId)
       .limit(10000);
     if (grants.error && MISSING_TABLE.has(String(grants.error.code))) return null;
@@ -371,6 +388,18 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     const { data, error, status } = await this.client.rpc('list_members');
     if (error) throw toRemoteError(error, status);
     return (data ?? []) as MemberRow[];
+  }
+
+  async listInvitations(): Promise<InvitationRow[] | null> {
+    const { data, error, status } = await this.client.rpc('list_invitations');
+    if (error?.code === MISSING_FUNCTION) return null;
+    if (error) throw toRemoteError(error, status);
+    return (data ?? []) as InvitationRow[];
+  }
+
+  async revokeInvitation(id: string): Promise<void> {
+    const { error, status } = await this.client.rpc('revoke_invitation', { p_id: id });
+    if (error) throw toRemoteError(error, status);
   }
 
   async createInvitation(email: string, role: Exclude<Role, 'owner'>, grants: InvitationGrant[]): Promise<string> {

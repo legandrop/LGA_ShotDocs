@@ -9,7 +9,9 @@ dispositivo), `src/ui/unknownContent.test.ts` (la guarda del editor contra lo de
 `src/media/queue.test.ts` (la cola de fotos y videos), `src/ui/media.test.ts` (`sdmedia://` con el
 editor de la versión publicada) y `team.test.ts` (permisos en el dispositivo, solo lectura, rechazos,
 invitaciones, la señal de que sacaron a alguien y el archivo con lo que no se subió), con las pantallas
-de miembros, compartir y "sacado" montadas en `src/ui/team.test.tsx`.
+de miembros, compartir y "sacado" montadas en `src/ui/team.test.tsx`, y `comments.test.ts` (la cola de
+comentarios sin red, reintentos, orden, rechazos y niveles), con `src/ui/question.test.ts` (preguntas con
+el editor de la versión publicada) y `src/ui/comments.test.tsx` (el editor y el panel montados).
 
 ## Piezas
 
@@ -24,6 +26,7 @@ de miembros, compartir y "sacado" montadas en `src/ui/team.test.tsx`.
 | Servidor | `remote.ts` | Las llamadas a Supabase. Las pruebas usan un servidor en memoria con las mismas reglas (`testing.ts`). |
 | Motor | `engine.ts` | El ciclo de sincronización y el estado que muestra la app. |
 | Permisos | `access.ts` | Los permisos propios guardados en el dispositivo y la misma cuenta de niveles que la base. Ver "Permisos en el dispositivo". |
+| Comentarios | `comments.ts` | Comentarios y respuestas de las preguntas: una cola en el dispositivo (base aparte) y lo bajado de cada página. Ver "Comentarios y preguntas". |
 | Lo sin subir | `unsynced.ts` | Cuenta lo pendiente y lo arma como archivo JSON (ver "Si sacan a alguien del workspace"). |
 
 El nombre de la base local no se cambia nunca: renombrarla con cambios sin subir es perderlos. Sale de la
@@ -211,12 +214,73 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   volver de Google (`?drive=`), el diálogo se abre solo para el dueño; a otra persona no le ofrece
   conectar ni elegir.
 
+## Comentarios y preguntas
+
+Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
+(`20260930170000_comentarios.sql`). El código está en `src/sync/comments.ts` (la cola),
+`src/sync/commentsRemote.ts` (las llamadas), `src/ui/CommentsPanel.tsx` (el panel), `src/ui/EditorComments.tsx`
+(lo que suma el editor) y `src/ui/commentsUi.ts` (lo que comparten).
+
+- **En una tabla propia, nunca en el documento.** Cada comentario va anclado al id del bloque de BlockNote
+  (o a la página entera). No se usan los comentarios que trae el editor: guardan una marca nueva en el
+  texto, que una versión vieja borraría con el párrafo entero, y obligarían a que quien comenta pueda
+  escribir la página. Un hilo es un comentario sin `thread_id` y sus respuestas (que llevan el bloque del
+  hilo); lo que se resuelve es el hilo. La app lee `comments_view` (la tabla no se puede leer con `*`: el
+  texto sale solo por la vista, vacío si el comentario se borró) y los correos con `comment_authors`.
+- **Primero en el dispositivo:** altas, ediciones, borrados y resoluciones entran a una cola en otra base
+  IndexedDB, `<base local>:comments` (la de siempre no cambia de versión: una versión vieja de la app no
+  podría abrirla), con un id creado en el dispositivo. Se ven en el acto (lo bajado con la cola encima) y
+  cuentan en los cambios pendientes (`pendingComments`). Si esa base no se abre, los comentarios se leen
+  con red pero no se escriben, con un aviso.
+- **Suben en orden** al final de cada ciclo, uno por uno, y cada paso es idempotente por id: reintentar lo
+  que ya llegó no duplica nada. Lo de una página creada sin red espera a que la página suba. Antes de
+  guardar un cambio se junta con lo que todavía no salió: una edición de un comentario cuya alta no se
+  intentó mandar **se funde en el alta** (la base da `comment_conflict` si se reintenta un alta con otro
+  texto); un comentario borrado antes de subir no viaja (salvo que tenga respuestas esperando); resolver y
+  reabrir sin mandar se queda con lo último. El cambio que se manda se marca como intentado en la misma
+  transacción en que se lee: desde ahí nada se le funde, y una edición va aparte.
+- **Errores:** sin red, espera. Un error que se arregla solo (un 500, la sesión renovándose) se reintenta
+  en la próxima sincronización con el error a la vista (`commentError`). Un rechazo (`comment_denied`,
+  `not_allowed`, `comment_deleted`, `comment_conflict`...) queda en el dispositivo con el motivo en
+  palabras, en el panel (junto al comentario) y en el estado ("rejected by the server"), **y no se
+  descarta solo**: se reintenta con "Retry" o al abrir la app, y solo la persona puede descartarlo
+  ("Discard", que se lleva también las respuestas sin subir de un hilo descartado). Lo demás de la cola
+  sigue subiendo.
+- **Bajar:** los comentarios de la página abierta se bajan al abrirla y en cada sincronización mientras
+  siga abierta, y se guardan (con los correos) para verlos sin red. Con la base anterior a la versión 5
+  nada se manda: lo escrito queda en el dispositivo y el estado avisa que falta migrar.
+- **Permisos** (misma cuenta que la base, escala de `access.ts`): con Ver (1) se leen; con Comentar (2) se
+  comenta, se responde y se resuelve **aunque el editor quede en solo lectura**; editar un comentario,
+  solo quien lo escribió; borrarlo, quien lo escribió o quien tiene editar y crear páginas (4). Los nombres
+  son el correo de quien escribió (de `comment_authors`) y "You" para uno mismo.
+- **En la pantalla:** el botón de comentarios de la barra de arriba (con la cantidad de hilos abiertos)
+  abre el panel: a la derecha en la computadora (si hay lugar, la página se corre) y como hoja desde abajo
+  en el teléfono. Arriba los hilos abiertos, en el orden de la página; los resueltos, plegados. Cada hilo
+  muestra el bloque al que apunta: un clic lleva al bloque y lo resalta (en el teléfono, la hoja se
+  cierra). En el margen derecho de cada bloque, la cantidad de comentarios abiertos, y en el bloque que se
+  señala (o se toca) un botón para comentarlo. También "Comment" en la barra de formato, en el menú del
+  bloque (el tirador de la izquierda) y con Ctrl/⌘+Alt+M.
+- **Preguntas:** un párrafo con `question: true` (como Script: **nunca un tipo de bloque nuevo**), en el
+  menú "/", en el selector de tipo de la barra y con **Ctrl/⌘+Alt+P** (Ctrl/⌘+Alt+Q ya es la cita del
+  editor, y con AltGr, Q y E escriben "@" y "€" en los teclados en castellano). Se ve con un ícono de
+  pregunta y un fondo suave; Enter al final sigue en un párrafo común. Su respuesta es un hilo de
+  comentarios de ese bloque: el botón "Answer" (o "2 answers") abajo del texto abre el hilo o empieza uno.
+  Así un invitado con Comentar contesta sin escribir la página. Script y pregunta no van juntos: cada ítem
+  del selector pide las dos propiedades.
+- **Una versión vieja con una pregunta:** el editor publicado no conoce `question`, así que muestra un
+  párrafo común (la guarda contra lo desconocido revisa tipos y marcas, no propiedades, y no la bloquea).
+  Si alguien edita esa línea en la versión vieja, se pierde solo la marca: el texto y el id del bloque
+  quedan, y el hilo de respuestas sigue anclado (`src/ui/question.test.ts`, con el esquema de `main`).
+  **Después de publicar esta versión, Lega sube `min_app_version` a ella** (regla de la sección 11 del
+  plan); no lo hace la app ni la migración.
+
 ## Ciclo de sincronización
 
 Nunca corren dos a la vez. En orden: los ajustes del workspace (ver abajo), los permisos propios (ver
 "Permisos en el dispositivo"; si la base dice que sacaron a la persona, el ciclo termina ahí), cambios del árbol, los proyectos y sus páginas, contenido pendiente,
-contenido nuevo e imágenes pendientes. Las imágenes van al final y sus errores no cortan el ciclo: una foto
-grande en una red mala no frena el texto. Corre al abrir la app, un poco después de cada cambio, cada 10
+contenido nuevo, imágenes pendientes y comentarios (subir la cola y bajar los de las páginas abiertas).
+Las imágenes y los comentarios van al final y sus errores no cortan el ciclo: una foto grande en una red
+mala no frena el texto. Corre al abrir la app, un poco después de cada cambio, cada 10
 segundos con la app a la vista, al volver la red y al volver a la ventana. Al final de cada ciclo arranca,
 sin esperarla, la cola de fotos y videos, que tiene su propio ciclo (ver "Archivos grandes").
 
@@ -227,16 +291,21 @@ ven y se cambian según `members` y `grants` (escala 0 nada, 1 ver, 2 comentar, 
 páginas). La base decide; la app hace la misma cuenta para no ofrecer lo que el servidor va a rechazar:
 
 - **Qué lee:** en cada ciclo, su fila de `members` (rol y `removed_at`) y sus propias filas de `grants`
-  (los admins ven las de todos: se piden solo las propias), más `workspaces.owner_id` de cada proyecto (va
+  (los admins ven las de todos: se piden solo las propias; las que tienen `revoked_at` no cuentan), más `workspaces.owner_id` de cada proyecto (va
   con `fetchProjects`). Se guarda en la base local (`meta.access`), así anda sin red. Una respuesta con
   otra forma tira error y no cambia lo guardado.
 - **La cuenta** (`Permissions` en `access.ts`, igual que `private.page_level` y `private.project_level`):
   sin membresía activa todo da 0; quien creó el proyecto tiene 4 (solo siendo miembro activo); un permiso
   sobre el proyecto vale para todas sus páginas y uno sobre una página para ella y las de abajo, nunca para
   las de arriba; si hay varios, gana el más alto. Un proyecto creado en el dispositivo que todavía no
-  volvió del servidor cuenta como propio.
+  volvió del servidor cuenta como propio. Uno cuyo creador no se sabe todavía (el de relleno antes de
+  bajar la lista, o una copia de una versión anterior) cuenta como propio solo para el dueño y los admins:
+  a los demás no se les ofrece crear ni renombrar hasta saberlo.
 - **En la interfaz:** con menos de 3, el editor y el título quedan de solo lectura (y no se ponen la
-  estructura inicial ni los ajustes de la rama); con menos de 4 no se ofrece crear páginas adentro, mover
+  estructura inicial ni los ajustes de la rama). La reparación de dos raíces (`mergeRootGroups`) se hace
+  solo en memoria, con un origen que no se guarda (opción `canWrite` de `PageDocs`, al abrir y al recibir
+  cambios): el servidor la rechazaría en cada apertura. La estructura inicial (`seedIfEmpty`) se pone solo
+  con los permisos ya conocidos y "Edit"; con menos de 4 no se ofrece crear páginas adentro, mover
   (tampoco arrastrar), mandar a la papelera ni restaurar; mover pide 4 en la página y en el destino.
   Crear proyectos, solo el dueño y los admins; renombrarlos, quien tiene 4 sobre el proyecto. "Members"
   (menú de la cuenta) lo ven el dueño y los admins, y "Share…" quien puede compartir (`private.can_share`).
@@ -244,7 +313,16 @@ páginas). La base decide; la app hace la misma cuenta para no ofrecer lo que el
   queda como antes. Lo que el servidor rechace igual (por ejemplo, desde una versión vieja) va a los
   rechazados que muestra la barra lateral, con el motivo en palabras (`page_create_denied`,
   `page_move_denied`, `page_trash_denied`; editar sin permiso llega como `page_not_found`). Nunca se pierde
-  en silencio.
+  en silencio. Si dejan de compartir una página con cambios sin subir, la página sale del árbol pero su
+  contenido sigue en el dispositivo: el detalle de la sincronización ofrece "Download my unsynced changes"
+  (el mismo archivo que la pantalla de "sacado").
+- **Restaurar una copia con permisos:** lo que el dispositivo recupera no incluye páginas ni proyectos que
+  la persona ya no puede crear (el servidor los rechazaría); se avisan en el estado de la sincronización y
+  su contenido se puede bajar como archivo.
+- **Miembros:** además de la gente, las invitaciones sin usar (`list_invitations`) con "Revoke"
+  (`revoke_invitation`); con una base sin esas funciones, la lista no aparece. El link se copia dentro del
+  mismo toque (Safari no deja después): `ClipboardItem` con la promesa del link, `writeText` de respaldo y,
+  si nada anda, un campo para copiarlo a mano.
 - **Invitaciones:** al entrar, antes de buscar el primer proyecto, la app llama a `accept_invitations()`
   (una base sin la función, un error o la falta de red no cortan la entrada). Con proyectos ya guardados
   no se espera, salvo que se venga de un link de invitación; también se llama al volver la red en la
@@ -267,10 +345,14 @@ páginas). La base decide; la app hace la misma cuenta para no ofrecer lo que el
 - Si hay cambios sin subir (cola del árbol y rechazados, contenido, imágenes, fotos y videos), ofrece
   "Download my unsynced changes": un JSON con la cola del árbol, los updates de Yjs sin confirmar de cada
   página en base64 (más el estado entero y el texto, para leerlo sin la app), las imágenes pegadas en
-  base64 y la lista de fotos y videos pendientes con sus nombres. Los originales de las fotos y los
-  videos se bajan aparte, uno por uno.
+  base64, la lista de fotos y videos pendientes con sus nombres y la cola de comentarios (con el motivo de
+  los rechazados). Los originales de las fotos y los videos se bajan aparte, uno por uno.
+- El archivo se arma por partes (un Blob de muchos pedazos, sin sangría) para no juntar todo en un solo
+  texto en la memoria del teléfono.
 - **No se borra nada solo.** "Remove from this device" cierra y borra la base local de ese workspace y
-  usuario y la de `:media`, y cierra la sesión; con cambios sin bajar, pide confirmación antes. Sin cambios
+  usuario, la de `:media` y la de `:comments`, olvida lo que la app recordaba de ese workspace (proyecto
+  elegido, últimas páginas, el link de invitación pendiente) y cierra la sesión. Si otra pestaña tiene la
+  base abierta, avisa que se cierren las otras pestañas y se reintenta (nunca queda colgado); con cambios sin bajar, pide confirmación antes. Sin cambios
   pendientes también espera que la persona toque el botón (a confirmar con Lega si ahí se borra solo).
   "Sign out and keep it on this device" deja todo como está.
 
@@ -287,7 +369,8 @@ conexión (y cuántos cambios quedaron guardados en el dispositivo), si el servi
 "Retry"), si hubo un problema al sincronizar aunque no haya nada pendiente, cuántos cambios faltan subir y,
 si no hay nada de eso, que todo está sincronizado. Las fotos y los videos cuentan como cambios pendientes
 (con el porcentaje de la subida en curso); los detenidos por un error cuentan como rechazados, con su
-nombre y el error en el detalle.
+nombre y el error en el detalle. Lo mismo los comentarios: pendientes mientras no suben, rechazados (con la
+página, el comienzo del texto y el motivo) si el servidor no los acepta.
 
 ## Sin red al abrir
 
@@ -306,7 +389,8 @@ documento compartido al abrirla, y ese borrado se sincroniza a todos lados. Por 
 editor tiene que degradar en una versión vieja: una propiedad nueva en un bloque existente se ignora al
 mostrar y, si esa versión edita el bloque, se pierde (el texto queda); un tipo de bloque nuevo, en cambio,
 se borra entero. Así está hecho Script: un párrafo con
-`script: true` (D-14).
+`script: true` (D-14), y así las preguntas: un párrafo con `question: true` (ver "Comentarios y
+preguntas").
 
 Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nuevos:
 

@@ -127,3 +127,29 @@ export async function copyText(text: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Copia un texto que todavía se está armando (el link sale recién cuando la base creó la invitación).
+ * Safari solo deja escribir el portapapeles dentro del gesto de la persona: esto se llama en el mismo
+ * toque, SIN esperar nada antes, y le pasa al portapapeles la promesa del texto
+ * (`ClipboardItem` con una promesa). Donde no hay `ClipboardItem`, espera el texto y usa `writeText`.
+ * `false` si no se pudo (o si el texto no llegó): se muestra el link para copiarlo a mano. Nunca rechaza.
+ */
+export function copyWhenReady(text: Promise<string>): Promise<boolean> {
+  const fallback = () => text.then(copyText, () => false);
+  try {
+    if (typeof ClipboardItem !== 'undefined' && typeof navigator.clipboard?.write === 'function') {
+      const blob = text.then((t) => new Blob([t], { type: 'text/plain' }));
+      blob.catch(() => undefined);
+      const item = new ClipboardItem({ 'text/plain': blob });
+      return navigator.clipboard.write([item]).then(
+        () => true,
+        // Si el texto no llegó, no hay nada que copiar; si el navegador no dejó, se prueba `writeText`.
+        () => text.then(() => fallback(), () => false),
+      );
+    }
+  } catch {
+    // Sigue con `writeText`.
+  }
+  return fallback();
+}

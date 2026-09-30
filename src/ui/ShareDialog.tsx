@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { usePermissions, useServices, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, levelValue, type GrantLevel, type Role } from '../sync/access';
 import type { AccessRow, MemberRow } from '../sync/remote';
-import { copyInvite, useInviteLink } from './MembersDialog';
+import { inviteAndCopy, useInviteLink } from './MembersDialog';
 import { teamErrorText } from './teamText';
 
 // "Share…" en el menú de la página y en el del proyecto: quién tiene acceso y con qué nivel, cambiarlo,
@@ -121,14 +121,19 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
       return;
     }
     if (!perms.canInvite) {
-      setError('Only the owner or an admin can invite someone new. Ask them to invite this person first.');
+      setError(
+        `${email.trim()} does not have access here yet, and only the owner or an admin can add someone new. ` +
+          'Ask one of them to invite this person; after that you can change or remove their access here.',
+      );
       return;
     }
     const grant = isProject ? { project_id: target.projectId, level } : { page_id: target.pageId, level };
+    // Sin nada que espere antes: el portapapeles se pide en el mismo gesto.
+    const copying = inviteAndCopy(remote.createInvitation(address, role, [grant]).then(() => makeLink(targetId)));
     await run('add', async () => {
-      await remote.createInvitation(address, role, [grant]);
+      const manual = await copying;
       setEmail('');
-      setManualLink(await copyInvite(makeLink(targetId)));
+      setManualLink(manual);
     });
   }
 
@@ -143,6 +148,12 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
             ? 'Access to a project covers every page in it.'
             : 'Access to a page covers the pages inside it, never the ones above.'}
         </p>
+        {!perms.canInvite && (
+          <p className="muted team-lead">
+            You can share this because you created the project: you can change or remove the access of the people
+            below. To add someone else, ask the owner or an admin of the workspace.
+          </p>
+        )}
 
         <form className="team-invite" onSubmit={(e) => void add(e)}>
           <div className="team-invite-row">
@@ -150,7 +161,7 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
               type="email"
               required
               list="share-members"
-              placeholder="name@example.com or pick a member"
+              placeholder={perms.canInvite ? 'name@example.com or pick a member' : 'Email of someone listed below'}
               aria-label="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
