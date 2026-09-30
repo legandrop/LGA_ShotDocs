@@ -8,10 +8,16 @@ import * as Y from 'yjs';
 // Roadmap B.5: una consulta que no responde nunca dejaba colgado para siempre el ciclo de sincronización
 // (con `syncing` prendido y el estado en "All synced"). Ahora cada consulta a la base tiene un tope.
 
-/** Un `fetch` que nunca responde: solo termina si se lo corta. */
+/**
+ * Un `fetch` que nunca responde: solo termina si se lo corta, y rechaza como el del navegador, con el motivo
+ * de la señal (`TimeoutError` si venció `AbortSignal.timeout`, `AbortError` si se cortó a mano).
+ */
 const hanging: typeof fetch = (_input, init) =>
   new Promise((_resolve, reject) => {
-    init?.signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+    const signal = init?.signal;
+    signal?.addEventListener('abort', () =>
+      reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError')),
+    );
   });
 
 const realTimeout = AbortSignal.timeout;
@@ -28,6 +34,22 @@ afterEach(() => {
 });
 
 describe('tope de tiempo de las consultas', () => {
+  it('reconoce como tope el TimeoutError que da AbortSignal.timeout real (no solo AbortError)', async () => {
+    const client = createClient('https://example.supabase.co', 'sb_publishable_test', {
+      global: { fetch: hanging },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { error, status } = await client.rpc('pull_page_updates', {}).abortSignal(AbortSignal.timeout(20));
+    expect(status).toBe(0);
+    expect(error?.message).toMatch(/^TimeoutError\b/);
+    // El mismo `AbortSignal.timeout` del navegador, pero de 20 ms, para no esperar el tope de verdad.
+    (AbortSignal as { timeout: unknown }).timeout = () => realTimeout.call(AbortSignal, 20);
+    const remote = new SupabaseRemote(client, '0.041');
+    const err = await remote.pullUpdates('00000000-0000-4000-8000-000000000001', 0, 10).catch((e) => e);
+    expect(isTimeout(err)).toBe(true);
+    expect(isPermanent(err)).toBe(false);
+  });
+
   it('una consulta que no responde vuelve como error de red (que se reintenta) al vencer el tope', async () => {
     // El tope con `setTimeout` (el que se usa si el navegador no tiene `AbortSignal.timeout`), para poder
     // adelantar el reloj.

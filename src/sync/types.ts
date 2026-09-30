@@ -196,7 +196,7 @@ export const REQUEST_TIMEOUT = 'request_timeout';
 
 /** Una consulta que venció su tope (o se cortó): la red anda, pero muy lenta para lo que se pidió. */
 export function isTimeout(err: unknown): boolean {
-  return err instanceof RemoteError && (err.code === REQUEST_TIMEOUT || /^AbortError\b/.test(err.message));
+  return err instanceof RemoteError && (err.code === REQUEST_TIMEOUT || /^(AbortError|TimeoutError)\b/.test(err.message));
 }
 
 export function errorMessage(err: unknown): string {

@@ -217,8 +217,9 @@ export function toRemoteError(
 ): RemoteError {
   const code = error?.code === undefined ? undefined : String(error.code);
   const httpStatus = status ?? error?.status ?? 0;
-  // El cliente de Supabase devuelve así una consulta cortada por su tope (`timed`).
-  if (httpStatus === 0 && /^AbortError\b/.test(error?.message ?? '')) {
+  // El cliente de Supabase devuelve así una consulta cortada por su tope (`timed`). Con `AbortSignal.timeout`
+  // el navegador rechaza con el motivo de la señal, `TimeoutError`; con un corte a mano, `AbortError`.
+  if (httpStatus === 0 && /^(AbortError|TimeoutError)\b/.test(error?.message ?? '')) {
     return new RemoteError(REQUEST_TIMEOUT, false, REQUEST_TIMEOUT, true);
   }
   const permanent = !(TRANSIENT_STATUS.has(httpStatus) || httpStatus >= 500);
