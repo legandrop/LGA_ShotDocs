@@ -8,8 +8,6 @@ import type { Language } from '../prefs';
 
 type Deep<T> = { [K in keyof T]?: T[K] extends (...args: never[]) => unknown ? T[K] : T[K] extends object ? Deep<T[K]> : T[K] };
 
-const video = { video: 'Video' };
-
 const RIOPLATENSE: Deep<Dictionary> = {
   slash_menu: {
     emoji: { ...es.slash_menu.emoji, subtext: 'Buscá e insertá un emoji' },

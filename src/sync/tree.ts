@@ -1,4 +1,5 @@
 import { generateKeyBetween } from 'fractional-indexing';
+import { t } from '../i18n';
 import type { LocalDb } from './localDb';
 import type { FailedOp, PagePatch, PageRow, PageSettings, ProjectRow, QueuedOp, TreeOp } from './types';
 
@@ -253,7 +254,7 @@ export class PageTree {
   /** Crea un proyecto. Funciona sin red: sube antes que las páginas que se le creen. */
   async createProject(name: string): Promise<string> {
     const id = crypto.randomUUID();
-    await this.enqueue({ kind: 'createProject', project: { id, name: name.trim() || 'Untitled project' } });
+    await this.enqueue({ kind: 'createProject', project: { id, name: name.trim() || t('project.untitled') } });
     return id;
   }
 
@@ -564,7 +565,7 @@ export class PageTree {
     // El primer proyecto siempre está, aunque el dispositivo todavía no haya bajado la lista (por ejemplo,
     // con datos de una versión anterior y sin red).
     if (!projects.has(this.workspaceId)) {
-      projects.set(this.workspaceId, { id: this.workspaceId, name: 'My project', created_at: '' });
+      projects.set(this.workspaceId, { id: this.workspaceId, name: t('project.defaultName'), created_at: '' });
     }
     this.projectView = projects;
     this.statsCache = null;

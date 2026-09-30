@@ -1,4 +1,5 @@
 import { Component, createElement, lazy, Suspense, type ComponentType, type ReactNode } from 'react';
+import { t } from '../i18n';
 import { hasDrafts } from './commentsUi';
 import { notify } from './notice';
 
@@ -20,13 +21,17 @@ export class PartLoadError extends Error {
   /** `unsaved`: había una versión nueva pero quedaba algo sin guardar, así que no se recargó sola. */
   readonly reason: FailReason;
   constructor(cause: unknown, reason: FailReason = 'failed') {
+    // Queda en inglés a propósito: es el mensaje técnico del error, no lo que se muestra (ver `failureText`).
     super(`A part of the app could not be loaded: ${cause instanceof Error ? cause.message : String(cause)}`);
     this.name = 'PartLoadError';
     this.reason = reason;
   }
 }
 
-export const NEW_VERSION_NOTICE = 'A new version is available — reloading';
+/** El aviso antes de recargar por una versión nueva. */
+export function newVersionNotice(): string {
+  return t('lazy.newVersion');
+}
 
 const RELOAD_KEY = 'shotdocs-part-reload';
 /** Otra falla dentro de este tiempo después de recargar no vuelve a recargar (evita un bucle). */
@@ -64,11 +69,10 @@ let reloading: Promise<never> | null = null;
 /** Recargar la página (aparte para las pruebas: jsdom no deja reemplazar `location.reload`). */
 export const pageReload = { now: (): void => location.reload() };
 
-const DRAFT_QUESTION = 'A comment you wrote has not been sent. Reload anyway and lose it?';
 
 /** El botón "Reload" de los avisos: un comentario sin mandar se pierde, así que pregunta antes. */
 function reloadByHand(): void {
-  if (hasDrafts() && !window.confirm(DRAFT_QUESTION)) return;
+  if (hasDrafts() && !window.confirm(t('lazy.draftQuestion'))) return;
   pageReload.now();
 }
 
@@ -134,7 +138,7 @@ export function reloadForNewVersion(cause: unknown): Promise<never> {
   if (hasDrafts()) return Promise.reject(new PartLoadError(cause, 'unsaved'));
   const run = (async (): Promise<never> => {
     try {
-      notify(NEW_VERSION_NOTICE);
+      notify(newVersionNotice());
       await sleep(reloadTimings.noticeMs);
       if (!(await waitForSaved()) || hasDrafts()) throw new PartLoadError(cause, 'unsaved');
       markReload();
@@ -250,13 +254,9 @@ export function Part({ fallback = null, onClose, children }: PartProps) {
 }
 
 function failureText(error: PartLoadError): string {
-  if (error.reason === 'unsaved') {
-    return 'A new version of the app is available. It did not reload by itself because something you wrote is not saved yet (or a comment is not sent). Finish it, then reload.';
-  }
-  if (navigator.onLine === false) {
-    return 'This part of the app is not on this device yet. Connect to the internet: it tries again by itself.';
-  }
-  return 'This part of the app could not be loaded. Reload to try again.';
+  if (error.reason === 'unsaved') return t('lazy.unsaved');
+  if (navigator.onLine === false) return t('lazy.offline');
+  return t('lazy.failed');
 }
 
 class PartBoundary extends Component<{ onClose?: () => void; children: ReactNode }, { error: unknown }> {
@@ -295,15 +295,15 @@ class PartBoundary extends Component<{ onClose?: () => void; children: ReactNode
           <div
             className="modal part-error-dialog"
             role="alertdialog"
-            aria-label="Could not open"
+            aria-label={t('lazy.couldNotOpen')}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2>Could not open this</h2>
+            <h2>{t('lazy.couldNotOpenTitle')}</h2>
             <p>{failureText(error)}</p>
             <div className="modal-actions">
-              <button onClick={onClose}>Close</button>
+              <button onClick={onClose}>{t('common.close')}</button>
               <button className="primary" onClick={reloadByHand}>
-                Reload
+                {t('shell.lost.reload')}
               </button>
             </div>
           </div>
@@ -314,7 +314,7 @@ class PartBoundary extends Component<{ onClose?: () => void; children: ReactNode
       <div className="banner part-error" role="alert">
         <p>{failureText(error)}</p>
         <button className="link" onClick={reloadByHand}>
-          Reload
+          {t('shell.lost.reload')}
         </button>
       </div>
     );

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { t as current, useT, type Translate } from '../i18n';
 import type { MediaKind } from '../media/probe';
 import {
   clampZoom,
@@ -89,6 +90,7 @@ export interface CarreteProps {
 
 export function Carrete({ items, start, loader, online, onClose }: CarreteProps) {
   const count = items.length;
+  const tr = useT();
   const [index, setIndex] = useState(() => stepIndex(start, 0, count));
   const [views, setViews] = useState<Record<string, View>>({});
   const [zoom, setZoom] = useState<Zoom>(NO_ZOOM);
@@ -549,14 +551,14 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
 
   const downloadLink = (className: string, label: boolean) =>
     download ? (
-      <a className={className} {...downloadProps(download, name)} aria-label={`Download ${name}`}>
+      <a className={className} {...downloadProps(download, name)} aria-label={tr('carrete.downloadNamed', { name })}>
         <DownloadIcon size={20} />
-        {label && <span className="carrete-btn-label">Download</span>}
+        {label && <span className="carrete-btn-label">{tr('carrete.download')}</span>}
       </a>
     ) : (
-      <button className={className} disabled aria-label={`Download ${name} (not available offline)`}>
+      <button className={className} disabled aria-label={tr('carrete.downloadOffline', { name })}>
         <DownloadIcon size={20} />
-        {label && <span className="carrete-btn-label">Download</span>}
+        {label && <span className="carrete-btn-label">{tr('carrete.download')}</span>}
       </button>
     );
 
@@ -624,7 +626,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     );
   };
 
-  const notice = noticeFor(view, name);
+  const notice = noticeFor(view, name, tr);
 
   return createPortal(
     <div
@@ -632,7 +634,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
       className="carrete"
       role="dialog"
       aria-modal="true"
-      aria-label="Photos and videos"
+      aria-label={tr('carrete.label')}
       tabIndex={-1}
       style={{ ['--carrete-fade' as string]: String(fade) }}
       onPointerDownCapture={(e) => {
@@ -647,7 +649,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
           {name}
         </span>
         {downloadLink('carrete-btn', true)}
-        <button className="carrete-btn" aria-label="Close" data-tip="**Keyboard:** Esc" onClick={requestClose}>
+        <button className="carrete-btn" aria-label={tr('common.close')} data-tip={tr('carrete.keyboard', { key: 'Esc' })} onClick={requestClose}>
           <CloseIcon size={22} />
         </button>
       </div>
@@ -667,14 +669,14 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
           {[index - 1, index, index + 1].filter((i) => i >= 0 && i < count).map(renderSlot)}
         </div>
 
-        {view.state === 'loading' && view.preview && <span className="carrete-spinner" role="status" aria-label="Loading" />}
+        {view.state === 'loading' && view.preview && <span className="carrete-spinner" role="status" aria-label={tr('common.loading')} />}
 
         {notice && (
           <div className="carrete-notice" role="status">
             <p>{notice}</p>
             {(view.state === 'unplayable' || view.state === 'failed') && (
               <button className="carrete-notice-btn" onClick={retry}>
-                Retry
+                {tr('common.retry')}
               </button>
             )}
             {(view.state === 'unsupported' || view.state === 'unplayable' || view.state === 'failed') &&
@@ -685,13 +687,17 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
 
         {count > 1 && (
           <>
-            <button className="carrete-nav carrete-prev" aria-label="Previous" data-tip="**Keyboard:** ←" disabled={index === 0} onClick={() => go(-1)}>
+            <button
+              className="carrete-nav carrete-prev"
+              aria-label={tr('carrete.previous')}
+              data-tip={tr('carrete.keyboard', { key: '←' })}
+              disabled={index === 0} onClick={() => go(-1)}>
               <ChevronLeftIcon size={26} />
             </button>
             <button
               className="carrete-nav carrete-next"
-              aria-label="Next"
-              data-tip="**Keyboard:** →"
+              aria-label={tr('carrete.next')}
+              data-tip={tr('carrete.keyboard', { key: '→' })}
               disabled={index === count - 1}
               onClick={() => go(1)}
             >
@@ -713,23 +719,24 @@ function settled(v: View): View {
 }
 
 /** El aviso bajo la foto o el video, si hace falta uno. */
-export function noticeFor(view: Pick<View, 'kind' | 'state' | 'preview' | 'error'>, name: string): string | null {
+export function noticeFor(
+  view: Pick<View, 'kind' | 'state' | 'preview' | 'error'>,
+  name: string,
+  tr: Translate = current,
+): string | null {
   const video = view.kind === 'video';
   switch (view.state) {
     case 'offline':
-      if (!view.kind && !view.preview) return "You're offline, and this file isn't on this device yet.";
-      return video
-        ? "You're offline. The video plays when you're back online."
-        : "You're offline: this is the thumbnail. The full photo loads when you're back online.";
+      if (!view.kind && !view.preview) return tr('carrete.offlineMissing');
+      return video ? tr('carrete.offlineVideo') : tr('carrete.offlinePhoto');
     case 'unplayable':
-      return video
-        ? "The video couldn't be loaded or played in this browser."
-        : "The photo couldn't be loaded or shown in this browser.";
+      return video ? tr('carrete.unplayableVideo') : tr('carrete.unplayablePhoto');
     case 'unsupported':
-      if (video) return "This video can't be played in this browser.";
-      return RARE_PHOTO.test(name) ? "This browser can't show this photo's format." : "The full photo couldn't be shown.";
+      if (video) return tr('carrete.unsupportedVideo');
+      return RARE_PHOTO.test(name) ? tr('carrete.rarePhoto') : tr('carrete.unsupportedPhoto');
     case 'failed':
-      return `${video ? "The video couldn't be loaded" : "The full photo couldn't be loaded"}${view.error ? `: ${view.error}` : '.'}`;
+      if (view.error) return tr(video ? 'carrete.failedVideoReason' : 'carrete.failedPhotoReason', { reason: view.error });
+      return video ? tr('carrete.failedVideo') : tr('carrete.failedPhoto');
     default:
       return null;
   }

@@ -71,11 +71,18 @@ nada, y lo que espera una decisión o una acción de Lega.
    sesión). El service worker precachea todo, así que sin red el editor abre igual; si después de publicar
    una versión nueva falta un archivo viejo, la app avisa y recarga una sola vez sin perder nada. Ver
    `Doc_Sincronizacion.md`, "Sin red al abrir".
-5. **Investigar un caso intermitente de la prueba de punta a punta.** Dos dispositivos escriben sin red en
-   la misma página nueva; en 1 de 7 corridas (v0.015), uno de los dos tardó más de 40 segundos en mostrar
-   la línea del otro aunque los dos decían "All synced". No se confirmó pérdida y no se repitió en las
-   corridas siguientes ni en las pruebas con el editor real; hay que ver si es la vista del editor o la
-   sincronización.
+5. **Hecho: el caso intermitente de la prueba de punta a punta** (`Doc_Investigacion_Intermitente.md`).
+   La vista del editor nunca se atrasó. Los más de 40 s eran un dispositivo que abrió la página en solo
+   lectura ("still downloading") y escribió sin que entrara, o una consulta que no respondía nunca y
+   colgaba el ciclo. Y la investigación encontró una pérdida real: una recarga o un cierre a pocos
+   milisegundos de la última tecla perdía el final de lo escrito. Arreglado en la app: cada edición se
+   guarda en una transacción sin lecturas que se confirma en el acto, con una marca de "sin subir" en
+   `meta` (la base no cambia de versión y una versión anterior que la abra no pierde nada); cada consulta
+   a la base tiene un tope de 30 s; la barra de formato ya no se vuelve a montar (y cerrar su menú) con
+   cada cambio del estado; y en solo lectura por "still downloading" se revisa cada segundo si llegó lo que
+   faltaba. Ver `Doc_Sincronizacion.md`, "Contenido de las páginas" (puntos 1, 3 y 7) y "Ciclo de
+   sincronización". Las correcciones de las pruebas de punta a punta (`e2e.mjs`, `features.mjs`) están en
+   la investigación.
 6. **Hecho: páginas de privacidad y de condiciones** (`/privacy`, `/terms`, en `src/ui/Legal.tsx`), en
    inglés y públicas: se ven sin sesión ni workspace, también sin red, con links en el login, la bienvenida
    y el menú de la cuenta. Son las que pide el punto 13: `https://shotdocs.lega.com.ar/privacy` y

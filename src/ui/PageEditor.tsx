@@ -14,7 +14,7 @@ import {
   type BlockTypeSelectItem,
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
 import { t, useT, type Translate } from '../i18n';
 import { usePermissions, useServices, useSyncStatus } from '../services';
@@ -114,16 +114,22 @@ export function PageEditor({ pageId }: { pageId: string }) {
     [docs, pageId],
   );
 
-  // Mientras falte contenido, cada sincronización se fija si ya llegó; recién entonces se reabre, para
-  // no mover la vista de quien está leyendo.
+  // Mientras falte contenido, se fija si ya llegó con cada sincronización y, además, cada segundo: la
+  // bajada que empezó al abrir sigue después de los 4 s de espera y puede terminar entre dos ciclos (que
+  // son cada 10 s). Recién entonces se reabre, para no mover la vista de quien está leyendo. Mientras
+  // tanto el editor está en solo lectura, así que conviene que dure poco.
   useEffect(() => {
     if (!incomplete) return;
     let cancelled = false;
-    void engine.isMissingContent(pageId).then((missing) => {
-      if (!cancelled && !missing) setAttempt((n) => n + 1);
-    });
+    const check = () =>
+      void engine.isMissingContent(pageId).then((missing) => {
+        if (!cancelled && !missing) setAttempt((n) => n + 1);
+      });
+    check();
+    const timer = setInterval(check, 1000);
     return () => {
       cancelled = true;
+      clearInterval(timer);
     };
   }, [engine, pageId, incomplete, status.lastSyncAt]);
 
@@ -417,6 +423,31 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   // Lo creado para el carrete (los originales en memoria) se suelta al cerrarlo o al salir de la página.
   useEffect(() => () => carrete?.loader.dispose(), [carrete]);
 
+  // BlockNote usa la barra de formato como componente: tiene que ser siempre la misma función. Escrita en
+  // línea, cada vez que la página se vuelve a dibujar (con cada cambio del estado de sincronización, 1,2 s
+  // después de escribir o cada 10 s) la barra se desmontaba y se cerraba el menú que estuviera abierto
+  // ("Turn into"). `openAt` cambia en cada dibujo: la barra usa siempre el último.
+  const openAtRef = useRef(openAt);
+  openAtRef.current = openAt;
+  const formattingToolbar = useCallback(
+    () => (
+      <FormattingToolbar blockTypeSelectItems={toolbarItems}>
+        {getFormattingToolbarItems(toolbarItems).flatMap((item) =>
+          // Para las fotos y videos del Drive, "Download" baja el original (no la miniatura), y
+          // "View" abre el carrete.
+          item.key === 'fileDownloadButton'
+            ? [
+                <MediaViewButton key="mediaViewButton" onView={(id) => openAtRef.current(id)} />,
+                <MediaDownloadButton key="fileDownloadButton" />,
+              ]
+            : [item],
+        )}
+        {canComment && <CommentToolbarButton key="comment" />}
+      </FormattingToolbar>
+    ),
+    [toolbarItems, canComment],
+  );
+
   return (
     <div
       ref={host}
@@ -437,20 +468,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
         sideMenu={false}
       >
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
-        <FormattingToolbarController
-          formattingToolbar={() => (
-            <FormattingToolbar blockTypeSelectItems={toolbarItems}>
-              {getFormattingToolbarItems(toolbarItems).flatMap((item) =>
-                // Para las fotos y videos del Drive, "Download" baja el original (no la miniatura), y
-                // "View" abre el carrete.
-                item.key === 'fileDownloadButton'
-                  ? [<MediaViewButton key="mediaViewButton" onView={openAt} />, <MediaDownloadButton key="fileDownloadButton" />]
-                  : [item],
-              )}
-              {canComment && <CommentToolbarButton key="comment" />}
-            </FormattingToolbar>
-          )}
-        />
+        <FormattingToolbarController formattingToolbar={formattingToolbar} />
         <CommentSideMenuController canComment={canComment} />
       </BlockNoteView>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />

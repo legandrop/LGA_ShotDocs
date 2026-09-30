@@ -7,9 +7,9 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from './editorSchema';
 import { printGeometry } from './pageFormat';
 import { paginate, UNIT_SELECTOR, type Unit } from './pagination';
-import { finishPrint, printPage } from './printPage';
+import { downscale, finishPrint, ORIGINAL_MAX_SIDE, printPage } from './printPage';
 import { buildPrintView, paginateView } from './printView';
-import { placeMarks } from './SheetBreaks';
+import { isContentMutation, placeMarks } from './SheetBreaks';
 
 // Cortes entre hojas (roadmap B.7): el cálculo con alturas simuladas, y que paginar e imprimir no tocan el
 // documento (un corte es un cálculo, no contenido).
@@ -71,6 +71,12 @@ describe('paginate', () => {
     expect(r.breaks).toEqual([{ index: 1, key: 'b:h', offset: 0, sheet: 2 }]);
   });
 
+  it('el título de sección se queda si no entra en una hoja junto con el bloque que sigue', () => {
+    const heading: Unit = { key: 'b:h', top: 600, height: 100, keepWithNext: true };
+    const r = paginate([block('b:1', 0, 600), heading, block('b:img', 700, 950)], H);
+    expect(r.breaks).toEqual([{ index: 2, key: 'b:img', offset: 0, sheet: 2 }]);
+  });
+
   it('la tolerancia manda a la hoja siguiente un bloque entero que entra justo, pero no cambia dónde se parte', () => {
     expect(paginate([block('b:1', 0, 998)], H, 4).breaks).toEqual([]);
     expect(paginate([block('b:1', 0, 500), block('b:2', 500, 498)], H, 4).breaks).toHaveLength(1);
@@ -125,7 +131,7 @@ function fakeLayout() {
   });
 }
 
-function mountPage(): { doc: Y.Doc; editor: BlockNoteEditor; article: HTMLElement; host: HTMLElement } {
+function mountPage(extra: unknown[] = []): { doc: Y.Doc; editor: BlockNoteEditor; article: HTMLElement; host: HTMLElement } {
   const doc = new Y.Doc();
   const editor = BlockNoteEditor.create(
     withCollaboration({
@@ -143,10 +149,13 @@ function mountPage(): { doc: Y.Doc; editor: BlockNoteEditor; article: HTMLElemen
   host.className = 'editor-host';
   const container = document.createElement('div');
   container.className = 'bn-container editor';
+  // Como BlockNoteView: el documento va adentro del contenedor, junto a las barras flotantes.
+  const mountPoint = document.createElement('div');
+  container.append(mountPoint);
   host.append(container);
   article.append(title, host);
   document.body.append(article);
-  editor.mount(container);
+  editor.mount(mountPoint);
   cleanups.push(() => editor.unmount());
   editor.replaceBlocks(
     editor.document,
@@ -154,7 +163,7 @@ function mountPage(): { doc: Y.Doc; editor: BlockNoteEditor; article: HTMLElemen
       i === 2
         ? { type: 'paragraph' as const, props: { script: true } as never, content: 'INT. ROOFTOP - NIGHT' }
         : { type: 'paragraph' as const, content: `Paragraph ${i + 1}` },
-    ),
+    ).concat(extra as never[]),
   );
   return { doc, editor, article, host };
 }
@@ -216,5 +225,175 @@ describe('paginar e imprimir', () => {
     expect(Y.encodeStateAsUpdate(doc)).toEqual(state);
     expect(JSON.stringify(editor.document)).toBe(blocks);
     expect(article.querySelector('.sheet-break-before')).toBeNull();
+  });
+});
+
+describe('la vista de impresión y el diálogo', () => {
+  const notices: string[] = [];
+  const onNotice = (e: Event) => notices.push((e as CustomEvent<string>).detail);
+  const printing = () => document.documentElement.classList.contains('sd-printing');
+  afterEach(() => {
+    window.removeEventListener('shotdocs:notice', onNotice);
+    notices.length = 0;
+    delete document.documentElement.dataset.theme;
+  });
+
+  it('la barra de formato y los menús flotantes del editor no entran en la copia, ni los ids', () => {
+    const { article } = mountPage();
+    const container = article.querySelector('.bn-container')!;
+    const toolbar = document.createElement('div');
+    toolbar.className = 'bn-formatting-toolbar';
+    toolbar.id = 'floating-1';
+    toolbar.textContent = 'Bold Italic';
+    container.append(toolbar);
+    article.querySelector('.bn-editor')!.setAttribute('id', 'editor-1');
+    const view = buildPrintView(article, { size: 'A4', landscape: false }, 'output');
+    expect(view.root.querySelector('.bn-formatting-toolbar')).toBeNull();
+    expect(view.root.textContent).not.toContain('Bold Italic');
+    expect(view.root.querySelector('[id]')).toBeNull();
+    expect(view.root.querySelector('.bn-container .bn-editor')).not.toBeNull();
+    expect(view.root.querySelector('.bn-container')!.getAttribute('data-color-scheme')).toBe('light');
+    view.root.remove();
+  });
+
+  it('no toca el tema de la app (la vista trae sus colores claros)', async () => {
+    mountPage();
+    fakeLayout();
+    document.documentElement.dataset.theme = 'dark';
+    let during = '';
+    vi.spyOn(window, 'print').mockImplementation(() => {
+      during = document.documentElement.dataset.theme ?? '';
+    });
+    await printPage('p1', { format: { size: 'A4', landscape: false } });
+    window.dispatchEvent(new Event('afterprint'));
+    expect(during).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('sin afterprint, el primer toque después del diálogo deja todo como estaba', async () => {
+    mountPage();
+    fakeLayout();
+    vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    await printPage('p1', { format: { size: 'A4', landscape: false } });
+    expect(printing()).toBe(true);
+    expect(document.querySelector('.print-output')).not.toBeNull();
+    window.dispatchEvent(new Event('pointerdown'));
+    expect(printing()).toBe(false);
+    expect(document.querySelector('.print-view')).toBeNull();
+  });
+
+  it('en un táctil, un afterprint que llega enseguida (el iPhone) no limpia; limpia el primer toque', async () => {
+    mountPage();
+    fakeLayout();
+    Object.defineProperty(navigator, 'maxTouchPoints', { value: 5, configurable: true });
+    cleanups.push(() => delete (navigator as { maxTouchPoints?: number }).maxTouchPoints);
+    vi.spyOn(window, 'print').mockImplementation(() => window.dispatchEvent(new Event('afterprint')));
+    await printPage('p1', { format: { size: 'A4', landscape: false } });
+    expect(printing()).toBe(true);
+    window.dispatchEvent(new Event('pointerdown'));
+    expect(printing()).toBe(false);
+  });
+
+  it('si print() falla, se saca todo y avisa', async () => {
+    mountPage();
+    fakeLayout();
+    window.addEventListener('shotdocs:notice', onNotice);
+    vi.spyOn(window, 'print').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    await printPage('p1', { format: { size: 'A4', landscape: false } });
+    expect(printing()).toBe(false);
+    expect(document.querySelector('.print-view')).toBeNull();
+    expect(document.head.textContent ?? '').not.toContain('@page');
+    expect(notices).toHaveLength(1);
+  });
+
+  it('si se cancela mientras busca los originales, no crea nada más ni abre el diálogo', async () => {
+    mountPage([{ type: 'image', props: { url: 'sdmedia://0b7c2f5e-3d1a-4c8e-9f60-2a4b6c8d0e1f' } }]);
+    fakeLayout();
+    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
+    const created = vi.fn(() => 'blob:x');
+    const url = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
+    const before = { create: url.createObjectURL, revoke: url.revokeObjectURL };
+    url.createObjectURL = created;
+    url.revokeObjectURL = () => undefined;
+    cleanups.push(() => {
+      url.createObjectURL = before.create;
+      url.revokeObjectURL = before.revoke;
+    });
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const media = {
+      localImage: vi.fn(async () => {
+        finishPrint(); // se cerró o empezó otra impresión mientras tanto
+        return new Blob(['x'], { type: 'image/jpeg' });
+      }),
+    };
+    await printPage('p1', { format: { size: 'A4', landscape: false }, media: media as never });
+    expect(media.localImage).toHaveBeenCalledWith('0b7c2f5e-3d1a-4c8e-9f60-2a4b6c8d0e1f');
+    expect(created).not.toHaveBeenCalled();
+    expect(print).not.toHaveBeenCalled();
+    expect(document.querySelector('.print-view')).toBeNull();
+  });
+
+  it('espera a que las imágenes de la página terminen de ponerse antes de armar la vista', async () => {
+    mountPage([{ type: 'image', props: { url: 'https://example.com/plate.jpg' } }]);
+    fakeLayout();
+    let loaded = false;
+    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockImplementation(() => loaded);
+    setTimeout(() => (loaded = true), 250);
+    let printedAt = 0;
+    const start = Date.now();
+    vi.spyOn(window, 'print').mockImplementation(() => {
+      printedAt = Date.now();
+    });
+    await printPage('p1', { format: { size: 'A4', landscape: false } });
+    expect(printedAt - start).toBeGreaterThanOrEqual(200);
+    expect(document.querySelector('.print-output img')).not.toBeNull();
+  });
+
+  it('achica una foto grande a 2400 px de lado mayor', async () => {
+    const drawn = vi.fn();
+    (globalThis as { createImageBitmap?: unknown }).createImageBitmap = vi.fn(async () => ({ width: 6000, height: 4000, close: vi.fn() }));
+    cleanups.push(() => delete (globalThis as { createImageBitmap?: unknown }).createImageBitmap);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: drawn } as never);
+    let size = '';
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (this: HTMLCanvasElement, cb: BlobCallback) {
+      size = `${this.width}x${this.height}`;
+      cb(new Blob(['y'], { type: 'image/jpeg' }));
+    });
+    const out = await downscale(new Blob(['x'], { type: 'image/heic' }), ORIGINAL_MAX_SIDE);
+    expect(size).toBe('2400x1600');
+    expect(out?.type).toBe('image/jpeg');
+    expect(drawn).toHaveBeenCalled();
+  });
+});
+
+describe('qué cambios recalculan las marcas', () => {
+  const record = (target: Node, type: MutationRecordType, extra: Partial<MutationRecord> = {}) =>
+    ({ target, type, addedNodes: [], removedNodes: [], attributeName: null, ...extra }) as unknown as MutationRecord;
+
+  it('solo el documento en pantalla y el encabezado; no los menús, la barra, los cursores ni la selección', () => {
+    document.body.innerHTML = `
+      <div class="page-header"><span class="ancestor">A</span></div>
+      <div class="editor-host"><div class="bn-container">
+        <div class="bn-editor"><p id="p">Text</p><span class="bn-collaboration-cursor__base"><span id="c"></span></span></div>
+        <div class="bn-side-menu" id="side"></div><div class="bn-formatting-toolbar" id="bar"></div>
+      </div><div class="carrete" id="carrete"></div></div>`;
+    const $ = (sel: string) => document.querySelector(sel)!;
+    expect(isContentMutation(record($('#p').firstChild!, 'characterData'))).toBe(true);
+    expect(isContentMutation(record($('#p'), 'childList'))).toBe(true);
+    expect(isContentMutation(record($('#p'), 'attributes', { attributeName: 'data-level' }))).toBe(true);
+    expect(isContentMutation(record($('.ancestor'), 'childList'))).toBe(true);
+    for (const name of ['class', 'style', 'draggable', 'id', 'aria-selected']) {
+      expect(isContentMutation(record($('#p'), 'attributes', { attributeName: name }))).toBe(false);
+    }
+    expect(isContentMutation(record($('#side'), 'childList'))).toBe(false);
+    expect(isContentMutation(record($('#bar'), 'attributes', { attributeName: 'data-show' }))).toBe(false);
+    expect(isContentMutation(record($('#carrete'), 'childList'))).toBe(false);
+    expect(isContentMutation(record($('#c'), 'childList'))).toBe(false);
+    // Que aparezca el documento entero sí cuenta.
+    const editor = document.createElement('div');
+    editor.className = 'bn-editor';
+    expect(isContentMutation(record($('.bn-container'), 'childList', { addedNodes: [editor] as never }))).toBe(true);
   });
 });

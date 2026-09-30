@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useT, type Key } from '../i18n';
 import { pickFolder } from '../media/picker';
 import { Portero, sessionToken, type DriveStatus } from '../media/portero';
 import { useServices, useSyncStatus } from '../services';
@@ -7,9 +8,9 @@ import { useServices, useSyncStatus } from '../services';
 // `LGA_ShotDocs` (paso 8 del plan). Elegirla usa el selector de carpetas de Google; sin la clave
 // (`GOOGLE_API_KEY` en el portero) va a la raíz de My Drive. Ver Docs/Doc_Portero.md.
 
-const RESULTS: Record<string, string> = {
-  connected: 'Google Drive connected.',
-  'drive-permission-missing': 'Google Drive was not connected: the Drive permission was left unchecked. Connect again and keep it checked.',
+const RESULTS: Record<string, Key> = {
+  connected: 'drive.connected',
+  'drive-permission-missing': 'drive.permissionMissing',
 };
 
 /**
@@ -33,6 +34,7 @@ export function DriveDialog({ result, onClose }: { result: string | null; onClos
   // Mientras está abierto el selector de Google, este diálogo se oculta para no taparlo.
   const [picking, setPicking] = useState(false);
   const [checking, setChecking] = useState(0);
+  const tr = useT();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !picking && onClose();
@@ -91,85 +93,82 @@ export function DriveDialog({ result, onClose }: { result: string | null; onClos
 
   const connection = !status
     ? error
-      ? 'Could not reach the media server'
-      : 'Checking…'
+      ? tr('drive.unreachable')
+      : tr('login.checking')
     : status.connected
-      ? `Connected${status.email ? ` as ${status.email}` : ''}`
+      ? status.email
+        ? tr('drive.connectedAs', { email: status.email })
+        : tr('drive.connectedShort')
       : status.broken
-        ? 'Needs reconnecting'
-        : 'Not connected';
+        ? tr('drive.needsReconnect')
+        : tr('drive.notConnected');
   // Lo dice el portero con la sesión de la persona: solo el dueño conecta Drive y elige la carpeta.
   const owner = status?.isOwner === true;
-  const place = status?.folder ? `“${status.folder.name || 'a folder'}”` : 'My Drive (the root)';
+  const place = status?.folder ? `“${status.folder.name || tr('drive.aFolder')}”` : tr('drive.root');
 
   return (
     <div className="modal-backdrop" onClick={onClose} style={picking ? { display: 'none' } : undefined}>
       <div className="modal drive-dialog" role="dialog" aria-modal="true" aria-label="Google Drive" onClick={(e) => e.stopPropagation()}>
         <h2>Google Drive</h2>
-        <p className="muted">Photos and videos added to pages are stored in the workspace owner's Google Drive.</p>
+        <p className="muted">{tr('drive.intro')}</p>
         {result && (
           <p className={result === 'connected' ? 'media-ok' : 'error'}>
-            {RESULTS[result] ?? `Google Drive was not connected (${result}).`}
+            {Object.hasOwn(RESULTS, result) ? tr(RESULTS[result]) : tr('drive.notConnectedReason', { reason: result })}
           </p>
         )}
         {!portero ? (
-          <p className="error">This workspace has no media server yet (see Docs/Doc_Portero.md).</p>
+          <p className="error">{tr('drive.noServer')}</p>
         ) : (
           <>
             <dl className="media-facts">
-              <dt className="mono-label">Status</dt>
+              <dt className="mono-label">{tr('drive.status')}</dt>
               <dd className={status?.connected ? 'media-ok' : undefined}>{connection}</dd>
               {status?.broken && (
                 <>
-                  <dt className="mono-label">Problem</dt>
+                  <dt className="mono-label">{tr('drive.problem')}</dt>
                   <dd>{status.broken}</dd>
                 </>
               )}
               {status?.connected && (
                 <>
-                  <dt className="mono-label">Folder</dt>
-                  <dd>
-                    <code>LGA_ShotDocs</code> is in {place}. Inside it: one folder per project, and one per day.
-                  </dd>
+                  <dt className="mono-label">{tr('drive.folder')}</dt>
+                  <dd>{tr.rich('drive.folderText', { folder: <code>LGA_ShotDocs</code>, place })}</dd>
                 </>
               )}
             </dl>
             {status?.connected && status.picker === false && (
-              <p className="muted drive-note">
-                The folder goes to the root of My Drive. To choose another folder, the media server needs a Google API
-                key (<code>GOOGLE_API_KEY</code>, step 2b of the media server guide, Docs/Doc_Portero.md).
-              </p>
+              <p className="muted drive-note">{tr.rich('drive.noPicker', { key: <code>GOOGLE_API_KEY</code> })}</p>
             )}
             {error && <p className="error">{error}</p>}
-            {status && !owner && <p className="muted">Only the owner of the workspace can change this.</p>}
+            {status && !owner && <p className="muted">{tr('drive.ownerOnly')}</p>}
             <div className="media-actions">
               {owner && !status.connected && (
                 <button className="primary" disabled={!!busy} onClick={() => void connect()}>
-                  {status.broken ? 'Reconnect Google Drive' : 'Connect Google Drive'}
+                  {status.broken ? tr('drive.reconnectDrive') : tr('drive.connect')}
                 </button>
               )}
               {owner && status.connected && status.picker && (
                 <button
                   className="primary"
                   disabled={!!busy}
-                  data-tip="Opens Google's folder picker. The LGA_ShotDocs folder moves there with everything in it."
+                  data-tip={tr('drive.chooseTip')}
                   onClick={() => void choose()}
                 >
-                  {busy === 'choose' ? 'Choosing…' : 'Choose folder…'}
+                  {busy === 'choose' ? tr('drive.choosing') : tr('drive.choose')}
                 </button>
               )}
               {owner && status.connected && status.folder && (
-                <button disabled={!!busy} data-tip="Moves the LGA_ShotDocs folder back to the root of My Drive" onClick={() => void useRoot()}>
-                  Use My Drive root
+                <button disabled={!!busy} data-tip={tr('drive.useRootTip')} onClick={() => void useRoot()}>
+                  {tr('drive.useRoot')}
                 </button>
               )}
               {owner && status.connected && (
                 <button
                   disabled={!!busy}
-                  data-tip="Authorize Google Drive again, with the same Google account"
+                  data-tip={tr('drive.reconnectTip')}
                   onClick={() => void connect()}
                 >
-                  Reconnect
+                  {tr('drive.reconnect')}
                 </button>
               )}
             </div>
@@ -177,10 +176,10 @@ export function DriveDialog({ result, onClose }: { result: string | null; onClos
         )}
         <div className="modal-actions">
           <button className="link" onClick={() => setChecking((n) => n + 1)} disabled={!portero || !!busy}>
-            Check again
+            {tr('drive.checkAgain')}
           </button>
           <button className="link" autoFocus onClick={onClose}>
-            Close
+            {tr('common.close')}
           </button>
         </div>
       </div>

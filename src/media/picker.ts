@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { PickerConfig } from './portero';
 
 // El selector de carpetas de Google (Google Picker), para que el dueño elija dónde va la carpeta
@@ -38,6 +39,8 @@ interface PickerBuilder {
   setDeveloperKey(key: string): PickerBuilder;
   setAppId(appId: string): PickerBuilder;
   setTitle(title: string): PickerBuilder;
+  /** El idioma del selector de Google (el de la app). */
+  setLocale(locale: string): PickerBuilder;
   setCallback(callback: (data: PickerData) => void): PickerBuilder;
   build(): { setVisible(visible: boolean): void };
 }
@@ -56,7 +59,7 @@ function loadPicker(): Promise<PickerApi> {
   loading ??= new Promise<PickerApi>((resolve, reject) => {
     const failed = () => {
       loading = null;
-      reject(new Error('Could not load the Google folder picker. Check the connection and try again.'));
+      reject(new Error(t('picker.loadFailed')));
     };
     const ready = () => (window.google?.picker ? resolve(window.google.picker) : failed());
     const load = () => window.gapi?.load('picker', { callback: ready, onerror: failed, timeout: 15_000, ontimeout: failed });
@@ -85,7 +88,8 @@ export async function pickFolder(config: PickerConfig): Promise<{ id: string; na
       .setOAuthToken(config.token)
       .setDeveloperKey(config.apiKey)
       .setAppId(config.appId)
-      .setTitle('Choose where the LGA_ShotDocs folder goes')
+      .setTitle(t('picker.title'))
+      .setLocale(t.lang)
       .setCallback((data) => {
         if (data.action === picker.Action.PICKED) {
           const doc = data.docs?.[0];

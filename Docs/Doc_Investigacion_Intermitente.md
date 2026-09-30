@@ -6,8 +6,10 @@ dos dicen "All synced". También los dos cortes por tiempo sueltos de la noche d
 la aserción "sin red, lo escrito offline sigue ahí después de recargar" de `e2e.mjs` y un `TimeoutError`
 de `features.mjs`.
 
-**Nada de esto está aplicado en la app ni en las pruebas.** Las correcciones propuestas están al final y
-quedaron como parches aparte.
+**Las cuatro correcciones de la app ya están aplicadas** (F2, el tope de 30 s, la barra de formato estable y
+la revisión cada segundo en solo lectura; ver `Doc_Sincronizacion.md`). Las de las pruebas de punta a
+punta (`e2e.mjs`, `features.mjs`) siguen como parche aparte. El resto de este documento cuenta la
+investigación tal como se hizo.
 
 ## Resumen
 

@@ -48,4 +48,5 @@ export const sidebar = {
   'project.editedToday': { en: "edited today", es: "editado hoy" },
   'project.editedYesterday': { en: "edited yesterday", es: "editado ayer" },
   'project.editedOn': { en: "edited {date}", es: "editado el {date}" },
+  'project.untitled': { en: "Untitled project", es: "Proyecto sin título" },
 } satisfies Dict;

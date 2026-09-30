@@ -1,13 +1,14 @@
+import { t } from '../i18n';
 import { FileRejected } from '../sync/files';
 import type { MediaRemote } from '../sync/remote';
 import { errorMessage, RemoteError } from '../sync/types';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
 import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress } from './portero';
 import {
-  DELETED_LABEL,
+  deletedLabel,
   deletedUrl,
   dimension,
-  REQUESTED_LABEL,
+  requestedLabel,
   mediaKind,
   placeholderUrl,
   probeMedia,
@@ -166,8 +167,8 @@ function classify(err: unknown): Outcome {
 
 function friendly(err: unknown): string {
   const message = errorMessage(err);
-  if (message === 'page_not_found') return 'The page is not on the server, or you cannot edit it.';
-  if (message === 'file_other_project') return 'This file belongs to another project.';
+  if (message === 'page_not_found') return t('queue.pageNotFound');
+  if (message === 'file_other_project') return t('queue.otherProject');
   return message;
 }
 
@@ -195,10 +196,14 @@ export interface MediaQueueOptions {
 }
 
 /** Lo que se ve en una página en lugar de una foto o un video de otro proyecto. */
-export const FOREIGN_PLACEHOLDER = 'Photo from another project';
+export function foreignPlaceholder(): string {
+  return t('queue.foreignPlaceholder');
+}
 
-/** Lo que se avisa al pegar una foto o un video de otro proyecto. */
-export const FOREIGN_FILE_NOTICE = 'This photo belongs to another project: it will show broken here.';
+/** Lo que se avisa al pegar una foto o un video de otro proyecto (con el nombre, si se sabe). */
+export function foreignFileNotice(name: string | null): string {
+  return name ? t('queue.foreignNoticeNamed', { name }) : t('queue.foreignNotice');
+}
 
 /**
  * Una página de este dispositivo usa el archivo y todavía no se sincronizó: mandarlo a la papelera de Drive
@@ -206,7 +211,7 @@ export const FOREIGN_FILE_NOTICE = 'This photo belongs to another project: it wi
  */
 export class UnsentUseError extends Error {
   constructor() {
-    super('A page on this device uses this file and has not synced yet, so it was skipped.');
+    super(t('queue.unsentUse'));
     this.name = 'UnsentUseError';
   }
 }
@@ -291,7 +296,7 @@ export class MediaQueue {
 
   /** Por qué la cola está apagada en este dispositivo, o `null` si anda. */
   get unavailable(): string | null {
-    return this.db ? null : (this.options.unavailable ?? 'The storage for photos and videos could not be opened.');
+    return this.db ? null : (this.options.unavailable ?? t('queue.storage'));
   }
 
   private get store(): MediaDb {
@@ -374,11 +379,11 @@ export class MediaQueue {
   }
 
   private async save(pageId: string, file: Blob & { name?: string }): Promise<string> {
-    if (!this.db) throw new FileRejected(`Photos and videos cannot be added on this device right now: ${this.unavailable}`);
+    if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: this.unavailable ?? '' }));
     const mime = normalizeMime(file.type, file.name);
     const kind = mediaKind(mime);
-    if (!kind || mime === 'image/svg+xml') throw new FileRejected('Only photos and videos can be added.');
-    if (file.size <= 0) throw new FileRejected('This file is empty.');
+    if (!kind || mime === 'image/svg+xml') throw new FileRejected(t('media.onlyPhotosVideos'));
+    if (file.size <= 0) throw new FileRejected(t('queue.empty'));
     const id = crypto.randomUUID();
     const record: MediaRecord = {
       id,
@@ -411,7 +416,7 @@ export class MediaQueue {
       await Promise.all([tx.objectStore('blobs').put(file, id), tx.objectStore('files').put(record), tx.done]);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'QuotaExceededError') {
-        throw new FileRejected('There is not enough free storage on this device for this file.');
+        throw new FileRejected(t('queue.noSpace'));
       }
       throw err;
     }
@@ -784,7 +789,7 @@ export class MediaQueue {
 
       const blob = await this.store.get('blobs', record.id);
       if (!blob) {
-        await this.patch(record.id, { error: 'The original file is missing on this device.', blocked: true });
+        await this.patch(record.id, { error: t('queue.originalMissing'), blocked: true });
         return 'blocked';
       }
       const file = new File([blob], record.name, { type: record.mime });
@@ -803,7 +808,7 @@ export class MediaQueue {
               uploadId: null,
               sent: 0,
               blocked: true,
-              error: 'The media server does not know this file reached Google Drive. Retry uploads it again.',
+              error: t('queue.unknownToServer'),
             });
             this.onChange?.();
             return 'blocked';
@@ -850,7 +855,7 @@ export class MediaQueue {
           uploadId: null,
           sent: 0,
           blocked: true,
-          error: 'The media server needs an update: the file reached Google Drive but the workspace was not told.',
+          error: t('queue.serverUpdate'),
         });
         this.onChange?.();
         return 'blocked';
@@ -897,7 +902,7 @@ export class MediaQueue {
   private async waitForDatabase(record: MediaRecord): Promise<Outcome> {
     const failures = record.failures + 1;
     await this.patch(record.id, {
-      error: 'Uploaded to Google Drive; waiting for the database to confirm it.',
+      error: t('queue.waitingDb'),
       failures,
       retryAt: this.now() + backoff(failures),
     });
@@ -1058,11 +1063,11 @@ export class MediaQueue {
     ]);
     const out: MediaFailure[] = records
       .filter((r) => r.blocked)
-      .map((r) => ({ id: r.id, name: r.name, error: r.error ?? 'Unknown error' }));
+      .map((r) => ({ id: r.id, name: r.name, error: r.error ?? t('queue.unknownError') }));
     for (const l of links.filter((x) => x.blocked)) {
       const name = (await this.db.get('files', l.fileId))?.name ?? (await this.db.get('known', l.fileId))?.name ?? l.fileId;
-      const what = l.removed ? 'removed from a page' : 'copied to another page';
-      out.push({ id: l.key, name: `${name} (${what})`, error: l.error ?? 'Unknown error' });
+      const what = l.removed ? t('queue.removedFromPage') : t('queue.copiedToPage');
+      out.push({ id: l.key, name: `${name} (${what})`, error: l.error ?? t('queue.unknownError') });
     }
     return out;
   }
@@ -1158,7 +1163,7 @@ export class MediaQueue {
     if (!id) return Promise.resolve(url);
     if (pageId) {
       return this.foreignTo(id, pageId).then((kind) =>
-        kind === false ? this.resolveOwn(id) : placeholderUrl(kind, FOREIGN_PLACEHOLDER),
+        kind === false ? this.resolveOwn(id) : placeholderUrl(kind, foreignPlaceholder()),
       );
     }
     return this.resolveOwn(id);
@@ -1236,9 +1241,9 @@ export class MediaQueue {
       if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
       // Sin miniatura todavía (otro dispositivo la está subiendo, o no hay red): se vuelve a preguntar.
       this.missing.add(id);
-      return placeholderUrl(kind, meta?.name ?? 'Not available yet');
+      return placeholderUrl(kind, meta?.name ?? t('queue.notYet'));
     } catch {
-      return placeholderUrl(null, 'Not available on this device');
+      return placeholderUrl(null, t('queue.notOnDevice'));
     }
   }
 
@@ -1247,7 +1252,7 @@ export class MediaQueue {
     const thumb = this.db ? await this.db.get('thumbs', id).catch(() => undefined) : undefined;
     // Pedido y confirmado por el portero, o solo pedido (Drive falló: se puede volver a pedir desde la
     // papelera). Sin el dato (guardado antes), se lo da por confirmado.
-    const notice = meta.inDriveTrash === false ? REQUESTED_LABEL : DELETED_LABEL;
+    const notice = meta.inDriveTrash === false ? requestedLabel() : deletedLabel();
     return deletedUrl(kind, meta.name, thumb ?? null, notice);
   }
 
@@ -1320,6 +1325,21 @@ export class MediaQueue {
   }
 
   /**
+   * La foto original si está en este dispositivo, o `null` (un video, o no está). Solo lee lo guardado acá,
+   * nunca la red: la usa la impresión (src/ui/printPage.ts).
+   */
+  async localImage(id: string): Promise<Blob | null> {
+    if (!this.db) return null;
+    try {
+      const own = await this.db.get('files', id);
+      if (!own || mediaKind(own.mime) !== 'image') return null;
+      return (await this.db.get('blobs', id)) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * La miniatura tal cual, sin la marca de "play" (el carrete la muestra mientras carga la foto grande, y
    * de póster del video), o `null` si no hay. No baja nada que `resolve` no baje.
    */
@@ -1334,7 +1354,7 @@ export class MediaQueue {
 
   /** Un pase del portero para ver el archivo entero (vence a las 8 horas). */
   async pass(id: string): Promise<string> {
-    if (!this.url) throw new Error('This workspace has no media server.');
+    if (!this.url) throw new Error(t('queue.noServer'));
     return this.porteroFor(this.url).pass({ file: id });
   }
 
@@ -1346,7 +1366,7 @@ export class MediaQueue {
    * del portero (409: una página lo volvió a usar).
    */
   async trash(id: string): Promise<void> {
-    if (!this.url) throw new PorteroError('This workspace has no media server.', 0);
+    if (!this.url) throw new PorteroError(t('queue.noServer'), 0);
     // Una página de este dispositivo que lo usa y todavía no se sincronizó: se saltea (y se avisa).
     if (await this.hasUnsentUse(id)) throw new UnsentUseError();
     try {

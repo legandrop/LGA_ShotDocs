@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { t } from '../i18n';
 
 // Cliente del portero de archivos del workspace (ver portero/src/core.ts): el estado de la conexión con
 // el Drive del dueño, las subidas por partes y los pases para ver un archivo. Sin React, para poder
@@ -131,7 +132,7 @@ export class UploadError extends PorteroError {
 /** Con `onlyIfSent`, el portero no sabe que el archivo ya llegó y abriría una subida nueva. */
 export class AlreadySentError extends PorteroError {
   constructor() {
-    super('The media server does not know this file reached Google Drive.', 409, false);
+    super(t('portero.alreadySent'), 409, false);
     this.name = 'AlreadySentError';
   }
 }
@@ -169,7 +170,7 @@ export function retryDelay(failures: number): number {
 /** La dirección del portero, de `workspace_settings.media_url`; `null` si el workspace no tiene. */
 export async function readMediaUrl(client: SupabaseClient): Promise<string | null> {
   const { data, error } = await client.from('workspace_settings').select('*').maybeSingle();
-  if (error) throw new PorteroError(`Could not read the workspace settings (${error.message}).`);
+  if (error) throw new PorteroError(t('portero.settings', { reason: error.message }));
   const url = (data as { media_url?: string | null } | null)?.media_url;
   return url ? url.replace(/\/+$/, '') : null;
 }
@@ -291,7 +292,7 @@ export class Portero {
             return { ...started.file, ...(started.linked === undefined ? {} : { linked: started.linked }) };
           }
           // Una respuesta que no se entiende no es "sin red" (status 0): es un problema del portero.
-          if (!started.uploadId) throw new PorteroError('The media server did not start the upload.', 502, true);
+          if (!started.uploadId) throw new PorteroError(t('portero.notStarted'), 502, true);
           if (onlyIfSent) throw new AlreadySentError();
           uploadId = started.uploadId;
           sent = 0;
@@ -311,7 +312,7 @@ export class Portero {
           const end = Math.min(sent + PART_BYTES, total);
           answer = await this.chunk(uploadId, `bytes ${sent}-${end - 1}/${total}`, file.slice(sent, end), signal);
           if (answer.status === 'incomplete' && answer.received <= sent) {
-            throw new PorteroError('The part did not arrive.', 0, true);
+            throw new PorteroError(t('portero.partLost'), 0, true);
           }
         }
         if (answer.status === 'done') {
@@ -325,7 +326,7 @@ export class Portero {
         report();
       } catch (err) {
         if (err instanceof AlreadySentError) throw err;
-        if (signal?.aborted) throw new UploadError('Upload cancelled.', 0, uploadId, sent, true);
+        if (signal?.aborted) throw new UploadError(t('mediaTest.cancelled'), 0, uploadId, sent, true);
         const error =
           err instanceof PorteroError ? err : new PorteroError(err instanceof Error ? err.message : String(err));
         // Al retomar, una subida que el portero ya no tiene se empieza de cero.
@@ -340,7 +341,7 @@ export class Portero {
         }
         if (failures >= MAX_RETRIES) {
           throw new UploadError(
-            `The upload stopped after ${MAX_RETRIES} failed retries in a row: ${error.message}`,
+            t('portero.retries', { max: MAX_RETRIES, reason: error.message }),
             error.status,
             uploadId,
             sent,
@@ -352,7 +353,7 @@ export class Portero {
         try {
           await this.wait(retryDelay(failures), signal);
         } catch {
-          throw new UploadError('Upload cancelled.', 0, uploadId, sent, true);
+          throw new UploadError(t('mediaTest.cancelled'), 0, uploadId, sent, true);
         }
         // No se sabe cuánto de la parte llegó antes del corte: se pregunta antes de seguir.
         if (uploadId) ask = true;
@@ -374,7 +375,7 @@ export class Portero {
     init: { json?: unknown; body?: Blob | null; headers?: Record<string, string>; signal?: AbortSignal } = {},
   ): Promise<T> {
     const token = await this.token();
-    if (!token) throw new PorteroError('Sign in to the app first.', 401);
+    if (!token) throw new PorteroError(t('portero.signIn'), 401);
     const headers: Record<string, string> = { Authorization: `Bearer ${token}`, ...init.headers };
     let body: BodyInit | null = init.body ?? null;
     if (init.json !== undefined) {
@@ -388,16 +389,16 @@ export class Portero {
       data = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
     } catch (err) {
       if (init.signal?.aborted) throw abortError(init.signal);
-      throw new PorteroError(`No connection with the media server (${err instanceof Error ? err.message : err}).`, 0, true);
+      throw new PorteroError(t('portero.noConnection', { reason: err instanceof Error ? err.message : String(err) }), 0, true);
     }
     if (!res.ok) {
       const status = res.status;
       // Un 5xx, un tiempo agotado (408) o demasiados pedidos (429) pueden andar si se repiten; los demás 4xx no.
       const retryable = status >= 500 || status === 408 || status === 429;
       const code = typeof data?.code === 'string' ? data.code : undefined;
-      throw new PorteroError(data?.error ?? `The media server answered ${status}.`, status, retryable, code);
+      throw new PorteroError(data?.error ?? t('portero.answered', { status }), status, retryable, code);
     }
-    if (data === null) throw new PorteroError('The media server gave an answer that could not be read.', res.status, true);
+    if (data === null) throw new PorteroError(t('portero.unreadable'), res.status, true);
     return data as T;
   }
 }

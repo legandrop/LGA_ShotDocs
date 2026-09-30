@@ -1,4 +1,5 @@
 import * as Y from 'yjs';
+import { t } from '../i18n';
 import {
   DIRTY_PREFIX,
   dirtyKey,
@@ -419,7 +420,7 @@ export class PageDocs {
       } catch {
         // Queda intacto en el servidor; este dispositivo no lo puede leer (por ejemplo, porque lo escribió
         // una versión más nueva de la app).
-        this.onWarning?.(`Could not read an update from the server (page ${pageId}, #${u.seq}).`);
+        this.onWarning?.(t('docs.unreadable', { page: pageId, seq: u.seq }));
         return false;
       }
     });

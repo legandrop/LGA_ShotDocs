@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { LocalDb } from './localDb';
 import type { Remote } from './remote';
 import { errorMessage, isNetworkError } from './types';
@@ -44,10 +45,10 @@ export class PageFiles {
   async add(pageId: string, file: Blob & { name?: string }): Promise<string> {
     const extension = EXTENSIONS[file.type];
     if (!extension) {
-      throw new FileRejected('Only images can be added for now (JPEG, PNG, GIF, WebP, AVIF or HEIC).');
+      throw new FileRejected(t('files.onlyImages'));
     }
     if (file.size > MAX_FILE_BYTES) {
-      throw new FileRejected(`This image is ${(file.size / 1024 / 1024).toFixed(0)} MB; the limit is 25 MB.`);
+      throw new FileRejected(t('files.tooBig', { mb: (file.size / 1024 / 1024).toFixed(0) }));
     }
     const path = `${pageId}/${crypto.randomUUID()}.${extension}`;
     await this.db.put('files', {

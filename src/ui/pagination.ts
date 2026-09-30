@@ -11,7 +11,8 @@
 //   (una imagen, un párrafo corto, una tabla chica).
 // - Una unidad más alta que una hoja se parte: un texto entre renglones, una tabla entre filas. Lo que no se
 //   puede partir (una imagen enorme) empieza en una hoja nueva y se corta en el borde.
-// - Un título de sección (heading) no queda solo al pie de una hoja: pasa con el bloque que sigue.
+// - Un título de sección (heading) no queda solo al pie de una hoja: pasa con el bloque que sigue, si
+//   entran juntos en una hoja.
 
 export interface Unit {
   /** `header`, `title` o `b:<id del bloque>`. */
@@ -76,8 +77,10 @@ export function paginate(units: readonly Unit[], sheetHeight: number, tolerance 
       const atStart = u.top <= start + EPS;
       if (!tall && !atStart) {
         // Pasa entera a la hoja siguiente, con los títulos de sección que tenga justo arriba en esta hoja.
+        // Solo si los títulos y el bloque entran juntos en una hoja (si no, el título queda y pasa el bloque).
         let j = i;
         while (j > 0 && units[j - 1].keepWithNext && units[j - 1].top > start + EPS) j--;
+        if (j < i && u.top + u.height - units[j].top > keepHeight + EPS) j = i;
         startAt(j, 0);
         continue;
       }

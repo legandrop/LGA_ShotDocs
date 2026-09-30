@@ -1,6 +1,7 @@
 import type { BlockNoteEditor } from '@blocknote/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import type { EditorView, ViewMutationRecord } from '@tiptap/pm/view';
+import { t } from '../i18n';
 import { driveOpenUrl, drivePreviewUrl, parseDriveLink, sameDriveLink, type DriveLink } from './driveLinks';
 
 // --- Tarjeta de Drive --------------------------------------------------------------------------------
@@ -97,7 +98,9 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
   const shield = document.createElement('button');
   shield.type = 'button';
   shield.className = 'drive-card-shield';
-  shield.innerHTML = '<span>Tap to use the player</span>';
+  const shieldText = document.createElement('span');
+  shieldText.textContent = t('driveCard.tap');
+  shield.append(shieldText);
 
   // Abajo: el pie, con el link (el texto del párrafo, editable) y "Open in Drive".
   const foot = document.createElement('div');
@@ -116,12 +119,12 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
   open.href = driveOpenUrl(link);
   open.target = '_blank';
   open.rel = 'noopener noreferrer';
-  open.textContent = 'Open in Drive';
+  open.textContent = t('driveCard.open');
   // Volver a un link común (solo con permiso de edición; en solo lectura no se ve).
   const unembed = document.createElement('button');
   unembed.type = 'button';
   unembed.className = 'drive-card-unembed';
-  unembed.textContent = 'Show as link';
+  unembed.textContent = t('driveCard.showAsLink');
   actions.append(open, unembed);
   foot.append(icon, text, actions);
 
@@ -137,7 +140,7 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
   hintOpen.href = open.href;
   hintOpen.target = '_blank';
   hintOpen.rel = 'noopener noreferrer';
-  hintOpen.textContent = 'Open in Drive';
+  hintOpen.textContent = t('driveCard.open');
   hint.append(hintText, hintOpen);
   const showHint = (message: string, strong = false) => {
     hintText.textContent = message;
@@ -145,7 +148,7 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
     hint.hidden = false;
   };
   const cookieHint = blocksThirdPartyCookies()
-    ? 'In Safari and on iPhone, only files shared by link may play here.'
+    ? t('driveCard.cookies')
     : null;
   if (cookieHint) showHint(cookieHint);
 
@@ -176,7 +179,7 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
       if (!entries.some((e) => e.isIntersecting)) return;
       observer?.disconnect();
       observer = null;
-      timer = setTimeout(() => showHint("The Drive player didn't load.", true), PLAYER_TIMEOUT_MS);
+      timer = setTimeout(() => showHint(t('driveCard.notLoaded'), true), PLAYER_TIMEOUT_MS);
     });
     observer.observe(frame);
   };
@@ -191,7 +194,7 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
     const notice = document.createElement('div');
     notice.className = 'drive-card-offline';
     notice.setAttribute('role', 'status');
-    notice.textContent = "You're offline. The Drive player loads when you're back online.";
+    notice.textContent = t('driveCard.offline');
     frame.replaceChildren(notice);
   };
   if (typeof navigator !== 'undefined' && navigator.onLine === false) showOffline();
@@ -261,6 +264,6 @@ export function playerFrame(link: DriveLink): HTMLIFrameElement {
   // esto (confirmarlo a mano), el cambio es `strict-origin` (manda solo el dominio de la app).
   iframe.setAttribute('referrerpolicy', 'no-referrer');
   iframe.setAttribute('loading', 'lazy');
-  iframe.setAttribute('aria-label', 'Google Drive player');
+  iframe.setAttribute('aria-label', t('driveCard.player'));
   return iframe;
 }

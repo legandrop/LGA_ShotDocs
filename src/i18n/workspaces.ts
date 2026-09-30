@@ -141,4 +141,108 @@ export const workspaces = {
     en: { one: "{count} comment", other: "{count} comments" },
     es: { one: "{count} comentario", other: "{count} comentarios" },
   },
+  'workspaces.label': { en: "Workspace", es: "Workspace" },
+  'workspaces.change': { en: "Change", es: "Cambiar" },
+  'workspaces.apart': {
+    en: "Each workspace has its own server and its own sign-in. This device keeps them apart.",
+    es: "Cada workspace tiene su propio servidor y su propio acceso. Este dispositivo los mantiene separados.",
+  },
+  'workspaces.removeEmptyConfirm': {
+    en: "Remove “{name}” from this device? Nothing of it is stored here.",
+    es: "¿Quitar “{name}” de este dispositivo? No hay nada de él guardado acá.",
+  },
+  'workspaces.pendingSignIn': {
+    en: "Sign in with the owner’s email to finish adding the workspace at {host}.",
+    es: "Entrá con el correo del dueño para terminar de agregar el workspace de {host}.",
+  },
+  'welcome.title': { en: "Welcome", es: "Te damos la bienvenida" },
+  'welcome.text': {
+    en: "Notes for every shot: on set, offline, in sync. Everything lives in a workspace, which runs on its owner’s own accounts.",
+    es: "Notas para cada plano: en el set, sin señal, sincronizadas. Todo vive en un workspace, que funciona con las cuentas de su dueño.",
+  },
+  'welcome.join': { en: "Join a workspace", es: "Unirse a un workspace" },
+  'welcome.joinHint': { en: "Paste the invitation link you received.", es: "Pegá el link de invitación que te llegó." },
+  'welcome.create': { en: "Create my workspace", es: "Crear mi workspace" },
+  'welcome.createHint': {
+    en: "Set up your own, on free accounts of yours. It takes an afternoon.",
+    es: "Armá el tuyo, con cuentas gratis tuyas. Lleva una tarde.",
+  },
+  'join.questionNamed': { en: "Join {name}?", es: "¿Unirse a {name}?" },
+  'join.question': { en: "Join a workspace?", es: "¿Unirse a un workspace?" },
+  'join.server': { en: "Server", es: "Servidor" },
+  'join.trust': {
+    en: "This workspace runs on that server. What you write there goes to it and stays apart from your other workspaces. The name comes from the link; check the server, and join only if you trust the person who invited you.",
+    es: "Este workspace funciona en ese servidor. Lo que escribas ahí va a ese servidor y queda separado de tus otros workspaces. El nombre sale del link; revisá el servidor, y unite solo si confiás en quien te invitó.",
+  },
+  'join.join': { en: "Join", es: "Unirse" },
+  'join.notNow': { en: "Not now", es: "Ahora no" },
+  'join.pasteHint': {
+    en: "Paste the invitation link you received. Opening the link on this device works too.",
+    es: "Pegá el link de invitación que te llegó. También sirve abrir el link en este dispositivo.",
+  },
+  'create.text': {
+    en: "A workspace of your own runs on free accounts of yours: Supabase, Resend, Google Drive, Cloudflare and GitHub. The guide takes you through it step by step.",
+    es: "Un workspace propio funciona con cuentas gratis tuyas: Supabase, Resend, Google Drive, Cloudflare y GitHub. La guía te lleva paso a paso.",
+  },
+  'create.guide': {
+    en: "Open the guide: Create your own workspace",
+    es: "Abrir la guía: crear tu propio workspace (en inglés)",
+  },
+  'create.paste': {
+    en: "When the setup command has finished (step 4 of the guide), paste what it printed at the end:",
+    es: "Cuando termine el comando de instalación (paso 4 de la guía), pegá lo que muestra al final:",
+  },
+  'create.url': { en: "Project URL", es: "URL del proyecto" },
+  'create.key': { en: "Publishable key", es: "Clave publicable" },
+  'create.existing': { en: "“{name}” is already on this device.", es: "“{name}” ya está en este dispositivo." },
+  'create.openIt': { en: "Open it", es: "Abrirlo" },
+  'create.connect': { en: "Connect", es: "Conectar" },
+  'create.badKey': {
+    en: "This publishable key does not belong to that address. Copy both again from the end of the setup command.",
+    es: "Esta clave publicable no corresponde a esa dirección. Copiá las dos otra vez del final del comando de instalación.",
+  },
+  'create.unreachable': {
+    en: "Could not reach {host} ({reason}). Check the address and your internet connection.",
+    es: "No se pudo llegar a {host} ({reason}). Revisá la dirección y tu conexión a internet.",
+  },
+  'finish.readFailed': {
+    en: "Could not read the workspace settings ({reason}). Check your connection and try again.",
+    es: "No se pudieron leer los ajustes del workspace ({reason}). Revisá tu conexión y probá de nuevo.",
+  },
+  'finish.failed': { en: "The workspace could not be added", es: "No se pudo agregar el workspace" },
+  'finish.adding': { en: "Adding your workspace…", es: "Agregando tu workspace…" },
+  'finish.reading': { en: "Reading the settings of {host}.", es: "Leyendo los ajustes de {host}." },
+  'finish.remove': { en: "Remove it from this device", es: "Quitarlo de este dispositivo" },
+  'wsError.address': {
+    en: "The workspace address must be an https:// address, like https://abcd.supabase.co.",
+    es: "La dirección del workspace tiene que empezar con https://, como https://abcd.supabase.co.",
+  },
+  'wsError.secretKey': {
+    en: "That is a secret key: never paste it anywhere. Use the publishable key (sb_publishable_…).",
+    es: "Esa es una clave secreta: nunca la pegues en ningún lado. Usá la clave publicable (sb_publishable_…).",
+  },
+  'wsError.publishableKey': {
+    en: "The publishable key must start with sb_publishable_.",
+    es: "La clave publicable tiene que empezar con sb_publishable_.",
+  },
+  'wsError.badLocalKey': {
+    en: "This invitation link is damaged (its local key is not valid). Ask for a new one.",
+    es: "Este link de invitación está dañado (su clave local no es válida). Pedí uno nuevo.",
+  },
+  'wsError.localKeyClash': {
+    en: "This link is for a workspace that uses the same local key as “{name}” on this device, but at a different address. Ask the person who invited you for a new link.",
+    es: "Este link es de un workspace que usa la misma clave local que “{name}” en este dispositivo, pero en otra dirección. Pedile un link nuevo a quien te invitó.",
+  },
+  'wsError.brokenLink': {
+    en: "This is not a valid invitation link. Copy the whole link again, or ask for a new one.",
+    es: "Este no es un link de invitación válido. Copiá el link entero otra vez, o pedí uno nuevo.",
+  },
+  'wsError.needsSetup': {
+    en: "This Supabase is not ready for LGA Shot Docs yet: run the setup command (step 4 of the guide), then try again.",
+    es: "Este Supabase todavía no está listo para LGA Shot Docs: corré el comando de instalación (paso 4 de la guía) y probá de nuevo.",
+  },
+  'wsError.gone': {
+    en: "This workspace is not on this device anymore.",
+    es: "Este workspace ya no está en este dispositivo.",
+  },
 } satisfies Dict;

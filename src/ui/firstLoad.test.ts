@@ -25,6 +25,11 @@ const LAZY_FILES = [
   'ui/ShareDialog.tsx',
   'ui/DriveDialog.tsx',
   'ui/MediaTest.tsx',
+  // Hojas y PDF: bajan con el editor (y el menú de la página pide printPage aparte).
+  'ui/SheetBreaks.tsx',
+  'ui/printPage.ts',
+  'ui/printView.ts',
+  'ui/pagination.ts',
 ];
 
 const IMPORT = /^\s*import\s+(type\s+)?(?:[\w$]+\s*,?\s*)?(?:\{[^}]*\}|\*\s+as\s+[\w$]+)?\s*from\s*['"]([^'"]+)['"]/gm;

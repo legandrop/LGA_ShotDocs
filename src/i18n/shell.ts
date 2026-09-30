@@ -52,4 +52,30 @@ export const shell = {
     en: "The shared page is not available to this account yet. Ask the person who invited you.",
     es: "La página compartida todavía no está disponible para esta cuenta. Preguntale a quien te invitó.",
   },
+  'legal.label': { en: "Legal", es: "Legales" },
+  'legal.privacy': { en: "Privacy", es: "Privacidad" },
+  'legal.terms': { en: "Terms", es: "Condiciones" },
+  'legal.englishOnly': {
+    en: "This page is only in English: it is the version Google reviews and the one that applies.",
+    es: "Esta página está solo en inglés: es la versión que revisa Google y la que vale.",
+  },
+  'lazy.newVersion': { en: "A new version is available — reloading", es: "Hay una versión nueva: recargando" },
+  'lazy.draftQuestion': {
+    en: "A comment you wrote has not been sent. Reload anyway and lose it?",
+    es: "Un comentario que escribiste no se mandó. ¿Recargar igual y perderlo?",
+  },
+  'lazy.unsaved': {
+    en: "A new version of the app is available. It did not reload by itself because something you wrote is not saved yet (or a comment is not sent). Finish it, then reload.",
+    es: "Hay una versión nueva de la app. No se recargó sola porque algo que escribiste todavía no se guardó (o un comentario no se mandó). Terminalo y después recargá.",
+  },
+  'lazy.offline': {
+    en: "This part of the app is not on this device yet. Connect to the internet: it tries again by itself.",
+    es: "Esta parte de la app todavía no está en este dispositivo. Conectate a internet: se vuelve a intentar sola.",
+  },
+  'lazy.failed': {
+    en: "This part of the app could not be loaded. Reload to try again.",
+    es: "No se pudo cargar esta parte de la app. Recargá para intentar de nuevo.",
+  },
+  'lazy.couldNotOpen': { en: "Could not open", es: "No se pudo abrir" },
+  'lazy.couldNotOpenTitle': { en: "Could not open this", es: "No se pudo abrir esto" },
 } satisfies Dict;

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
 import { useServices, useTree } from '../services';
 import { pageFormat } from './pageFormat';
-import { SHEET_TOLERANCE_PX, unitKey, type SheetBreak } from './pagination';
+import { SHEET_TOLERANCE_PX, splitPoints, unitKey, type SheetBreak } from './pagination';
 import { installPrintShortcuts } from './printPage';
 import { buildPrintView, paginateView, type Paginated } from './printView';
 
@@ -12,8 +13,31 @@ import { buildPrintView, paginateView, type Paginated } from './printView';
 //
 // Los cortes salen de medir la vista de impresión (printView.ts), no el editor en pantalla: así valen
 // igual en el teléfono, donde la hoja se ve más angosta (cada marca va antes del mismo bloque que en el
-// PDF). Se recalculan al escribir, agrupados (una pausa corta y `requestAnimationFrame`), y cuando cambia
-// el ancho, la fuente, el tamaño del texto o termina de cargar una imagen.
+// PDF). Se recalculan cuando cambia el documento en pantalla (`.bn-editor`: no los menús, los tiradores,
+// la barra de formato, los cursores ni el carrete), agrupados (una pausa corta y `requestAnimationFrame`),
+// y cuando cambia el ancho, la fuente, el tamaño del texto o termina de cargar una imagen del documento.
+
+/** Cambios de atributos que no mueven nada: estado del editor, selección, arrastre, foco. */
+const IGNORED_ATTRIBUTES = new Set(['class', 'style', 'draggable', 'id', 'contenteditable', 'spellcheck', 'data-is-empty-and-focused']);
+
+/** Si un cambio del DOM del editor puede mover los cortes. */
+export function isContentMutation(r: MutationRecord): boolean {
+  const target = r.target instanceof Element ? r.target : r.target.parentElement;
+  if (!target) return false;
+  if (r.type === 'attributes' && (IGNORED_ATTRIBUTES.has(r.attributeName ?? '') || r.attributeName?.startsWith('aria-'))) {
+    return false;
+  }
+  // El encabezado de la página (los contenedores).
+  if (target.closest('.page-header')) return !target.closest('.header-popover');
+  // Afuera del documento (menús, barra de formato, margen de comentarios, carrete, estas marcas): solo
+  // cuenta que aparezca o se vaya el documento entero.
+  if (!target.closest('.bn-editor')) {
+    const nodes = r.type === 'childList' ? [...r.addedNodes, ...r.removedNodes] : [];
+    return nodes.some((n) => n instanceof Element && (n.matches('.bn-editor') || !!n.querySelector('.bn-editor')));
+  }
+  // Los cursores de otras personas.
+  return !target.closest('.bn-collaboration-cursor__base, .ProseMirror-yjs-cursor');
+}
 
 /** La pausa al escribir antes de recalcular, y lo máximo que se espera escribiendo sin parar. */
 const PAUSE_MS = 120;
@@ -30,6 +54,7 @@ export function SheetBreaks({ pageId, host }: { pageId: string; host: RefObject<
   const { media } = useServices();
   const format = pageFormat(tree, pageId);
   const { font, textSize } = usePrefs();
+  const tr = useT();
   const [marks, setMarks] = useState<SheetMark[]>([]);
   const sheet = format.size !== 'free';
 
@@ -61,15 +86,18 @@ export function SheetBreaks({ pageId, host }: { pageId: string; host: RefObject<
     const compute = () => {
       frame = 0;
       firstChange = 0;
-      const view = buildPrintView(article, current, 'measure');
+      let view: ReturnType<typeof buildPrintView> | null = null;
       try {
+        view = buildPrintView(article, current, 'measure');
         const result = paginateView(view);
         const next = placeMarks(article, editorHost, result);
         setMarks((old) => (sameMarks(old, next.marks) ? old : next.marks));
         if (next.sheetEnd === null) article.style.removeProperty('--sheet-end');
         else article.style.setProperty('--sheet-end', `${Math.ceil(next.sheetEnd)}px`);
+      } catch {
+        // Si algo falla al medir, quedan las marcas de antes; el próximo cambio vuelve a probar.
       } finally {
-        view.root.remove();
+        view?.root.remove();
       }
     };
     const schedule = () => {
@@ -86,15 +114,9 @@ export function SheetBreaks({ pageId, host }: { pageId: string; host: RefObject<
       );
     };
 
-    // Lo que cambia el contenido del editor (no la selección, ni el margen de comentarios ni estas marcas).
+    // Lo que cambia el documento en pantalla (ver `isContentMutation`).
     const mutations = new MutationObserver((records) => {
-      for (const r of records) {
-        const target = r.target instanceof Element ? r.target : r.target.parentElement;
-        if (!target || target.closest('.comment-margin, .sheet-breaks')) continue;
-        if (r.type === 'attributes' && r.attributeName === 'class') continue;
-        schedule();
-        return;
-      }
+      if (records.some(isContentMutation)) schedule();
     });
     mutations.observe(editorHost, { subtree: true, childList: true, characterData: true, attributes: true });
     const header = article.querySelector('.page-header');
@@ -117,8 +139,12 @@ export function SheetBreaks({ pageId, host }: { pageId: string; host: RefObject<
     const title = article.querySelector('.page-title');
     if (title) sizes.observe(title);
 
+    // Una imagen del documento que termina de cargar (no las del carrete ni las de los menús).
+    const onLoad = (e: Event) => {
+      if (e.target instanceof Element && e.target.closest('.bn-editor')) schedule();
+    };
     document.fonts?.addEventListener('loadingdone', schedule);
-    editorHost.addEventListener('load', schedule, true);
+    editorHost.addEventListener('load', onLoad, true);
     schedule();
     return () => {
       clearTimeout(timer);
@@ -126,7 +152,7 @@ export function SheetBreaks({ pageId, host }: { pageId: string; host: RefObject<
       mutations.disconnect();
       sizes.disconnect();
       document.fonts?.removeEventListener('loadingdone', schedule);
-      editorHost.removeEventListener('load', schedule, true);
+      editorHost.removeEventListener('load', onLoad, true);
       article.style.removeProperty('--sheet-end');
     };
   }, [host, sheet, format.size, format.landscape, font, textSize]);
@@ -136,7 +162,7 @@ export function SheetBreaks({ pageId, host }: { pageId: string; host: RefObject<
     <div className="sheet-breaks" aria-hidden="true">
       {marks.map((m) => (
         <div key={m.sheet} className="sheet-break" style={{ top: `${m.y}px` }}>
-          <span className="sheet-break-label">Page {m.sheet}</span>
+          <span className="sheet-break-label">{tr('print.sheet', { n: m.sheet })}</span>
         </div>
       ))}
     </div>
@@ -178,7 +204,13 @@ export function placeMarks(
     const same = Math.abs(r.width - copy.width) < 1;
     if (!same) sameWidth = false;
     const height = r.height + marginTop;
-    const offset = b.offset === 0 ? 0 : same ? b.offset : (b.offset * height) / result.units[b.index].height;
+    let offset = b.offset === 0 ? 0 : same ? b.offset : (b.offset * height) / result.units[b.index].height;
+    if (b.offset > 0) {
+      // Al hueco entre renglones (o filas) más cercano en pantalla, no a mitad de uno: con otro ancho (el
+      // teléfono) cambian los renglones, y una tabla en pantalla tiene arriba el lugar de sus tiradores.
+      const gaps = splitPoints(el, r.top - marginTop);
+      if (gaps.length) offset = gaps.reduce((best, g) => (Math.abs(g - offset) < Math.abs(best - offset) ? g : best));
+    }
     return r.top - marginTop - hostTop + offset;
   };
 

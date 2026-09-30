@@ -94,4 +94,64 @@ export const sync = {
     es: "No se pudo armar el archivo. No se borró nada; probá de nuevo.",
   },
   'sync.downloadUnsynced': { en: "Download my unsynced changes", es: "Descargar mis cambios sin sincronizar" },
+  'engine.mediaOff': {
+    en: "Photos and videos are off on this device: {reason}",
+    es: "Las fotos y los videos no andan en este dispositivo: {reason}",
+  },
+  'engine.restored': {
+    en: "The workspace was restored from a backup.",
+    es: "El workspace se restauró desde una copia de seguridad.",
+  },
+  'engine.restoredMedia': {
+    en: "The workspace was restored from a backup. This device is uploading again the photos and videos it had, so nothing made after the backup is lost.",
+    es: "El workspace se restauró desde una copia de seguridad. Este dispositivo está volviendo a subir las fotos y los videos que tenía, así no se pierde nada de lo hecho después de la copia.",
+  },
+  'engine.restoredComments': {
+    en: "The workspace was restored from a backup. This device is uploading again the comments it had, so nothing made after the backup is lost.",
+    es: "El workspace se restauró desde una copia de seguridad. Este dispositivo está volviendo a subir los comentarios que tenía, así no se pierde nada de lo hecho después de la copia.",
+  },
+  'engine.restoredBoth': {
+    en: "The workspace was restored from a backup. This device is uploading again the photos and videos and the comments it had, so nothing made after the backup is lost.",
+    es: "El workspace se restauró desde una copia de seguridad. Este dispositivo está volviendo a subir las fotos, los videos y los comentarios que tenía, así no se pierde nada de lo hecho después de la copia.",
+  },
+  'engine.restoredAll': {
+    en: "The workspace was restored from a backup. This device is uploading again everything it had, so nothing made after the backup is lost.",
+    es: "El workspace se restauró desde una copia de seguridad. Este dispositivo está volviendo a subir todo lo que tenía, así no se pierde nada de lo hecho después de la copia.",
+  },
+  'engine.skipped': {
+    en: { one: "{count} page or project made on this device after the backup could not be created again: you no longer have permission to create them there. Their content stays on this device; use “{download}” to keep it.", other: "{count} pages or projects made on this device after the backup could not be created again: you no longer have permission to create them there. Their content stays on this device; use “{download}” to keep it." },
+    es: { one: "{count} página o proyecto hecho en este dispositivo después de la copia no se pudo volver a crear: ya no tenés permiso para crearlo ahí. Su contenido queda en este dispositivo; usá “{download}” para guardarlo.", other: "{count} páginas o proyectos hechos en este dispositivo después de la copia no se pudieron volver a crear: ya no tenés permiso para crearlos ahí. Su contenido queda en este dispositivo; usá “{download}” para guardarlo." },
+  },
+  'files.onlyImages': {
+    en: "Only images can be added for now (JPEG, PNG, GIF, WebP, AVIF or HEIC).",
+    es: "Por ahora solo se pueden agregar imágenes (JPEG, PNG, GIF, WebP, AVIF o HEIC).",
+  },
+  'files.tooBig': {
+    en: "This image is {mb} MB; the limit is 25 MB.",
+    es: "Esta imagen pesa {mb} MB; el límite es 25 MB.",
+  },
+  'unsynced.note': {
+    en: "The original is not inside this file: download it separately from the app.",
+    es: "El original no está en este archivo: descargalo aparte desde la app.",
+  },
+  'docs.unreadable': {
+    en: "Could not read an update from the server (page {page}, #{seq}).",
+    es: "No se pudo leer un cambio del servidor (página {page}, #{seq}).",
+  },
+  'remote.settingsMissing': {
+    en: "The database is missing pages.settings: apply the database migrations.",
+    es: "A la base de datos le falta pages.settings: aplicá las migraciones de la base.",
+  },
+  'boot.firstTime': {
+    en: "Setting up your workspace the first time needs an internet connection ({reason}).",
+    es: "Para preparar tu workspace la primera vez hace falta conexión a internet ({reason}).",
+  },
+  'boot.mediaStorage': {
+    en: "the storage for photos and videos could not be opened ({reason}). Reopening the app tries again.",
+    es: "no se pudo abrir el almacenamiento de fotos y videos ({reason}). Al volver a abrir la app se intenta de nuevo.",
+  },
+  'boot.commentsStorage': {
+    en: "the storage for comments could not be opened ({reason}). Reopening the app tries again.",
+    es: "no se pudo abrir el almacenamiento de los comentarios ({reason}). Al volver a abrir la app se intenta de nuevo.",
+  },
 } satisfies Dict;

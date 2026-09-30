@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { PageFormat, PrintGeometry } from './pageFormat';
 import { printGeometry } from './pageFormat';
 import { measureUnits, paginate, SHEET_TOLERANCE_PX, type Measured, type Pagination } from './pagination';
@@ -12,8 +13,10 @@ import { measureUnits, paginate, SHEET_TOLERANCE_PX, type Measured, type Paginat
 // - Imprimir: la misma vista, con los saltos calculados, es lo único que se imprime (`window.print()`).
 //
 // Es una copia del DOM: nunca toca el editor ni el documento (el Y.Doc no cambia al paginar ni al
-// imprimir; lo prueba pagination.test.ts). Lo que en papel no sirve se saca de la copia: los controles
-// del editor, el reproductor de las tarjetas de Drive (queda el link), los cursores y las selecciones.
+// imprimir; lo prueba pagination.test.ts). Se copia solo el documento en pantalla (`.bn-editor`), no el
+// contenedor del editor, que también tiene las barras y menús flotantes; y de la copia se saca lo que en
+// papel no sirve: los tiradores, el reproductor de las tarjetas de Drive (queda el link), los cursores y
+// las selecciones.
 
 /** Lo que se saca de la copia. */
 const REMOVE = [
@@ -93,42 +96,42 @@ export function buildPrintView(
   const title = document.createElement('h1');
   title.className = 'page-title';
   title.textContent =
-    (titleField && 'value' in titleField ? titleField.value : titleField?.textContent)?.trim() || 'Untitled';
+    (titleField && 'value' in titleField ? titleField.value : titleField?.textContent)?.trim() || t('common.untitled');
   page.append(title);
 
-  // El contenido del editor.
+  // El contenido del editor: el documento en un contenedor vacío con las clases del de pantalla (sus
+  // estilos) y en claro.
+  const container = article.querySelector<HTMLElement>('.editor-host .bn-container');
   const live =
-    article.querySelector<HTMLElement>('.editor-host .bn-container') ?? article.querySelector<HTMLElement>('.editor-host .bn-editor');
+    container?.querySelector<HTMLElement>('.bn-editor') ?? article.querySelector<HTMLElement>('.editor-host .bn-editor');
   if (live) {
     const host = document.createElement('div');
     host.className = 'editor-host';
+    const shell = document.createElement('div');
+    shell.className = container?.className ?? 'bn-container';
+    shell.setAttribute('data-color-scheme', 'light');
+    shell.setAttribute('data-mantine-color-scheme', 'light');
     const copy = live.cloneNode(true) as HTMLElement;
     cleanCopy(copy, live);
-    host.append(copy);
+    shell.append(copy);
+    host.append(shell);
     page.append(host);
   }
 
   document.body.append(root);
-  fitWideTables(root, geometry.contentWidth);
+  try {
+    fitWideTables(root, geometry.contentWidth);
+  } catch (err) {
+    root.remove();
+    throw err;
+  }
   return { root, geometry, page };
 }
 
 /** Saca de la copia lo que no va en papel, antes de agregarla al documento (así un iframe no carga). */
 function cleanCopy(copy: HTMLElement, live: HTMLElement): void {
-  for (const el of copy.querySelectorAll(REMOVE)) el.remove();
-  for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('[contenteditable]')]) el.removeAttribute('contenteditable');
-  // La selección de otra persona (un fondo de color en el texto).
-  for (const el of copy.querySelectorAll<HTMLElement>('.ProseMirror-yjs-selection')) el.style.removeProperty('background-color');
-  for (const cls of STATE_CLASSES) {
-    for (const el of copy.querySelectorAll(`.${cls}`)) el.classList.remove(cls);
-  }
-  // Siempre en claro: el papel es blanco.
-  for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('[data-color-scheme], [data-mantine-color-scheme]')]) {
-    if (el.hasAttribute('data-color-scheme')) el.setAttribute('data-color-scheme', 'light');
-    if (el.hasAttribute('data-mantine-color-scheme')) el.setAttribute('data-mantine-color-scheme', 'light');
-  }
-  // Las imágenes con la proporción que ya tienen en pantalla: la copia mide bien aunque no haya terminado
-  // de cargar. Un video queda con su cuadro (la miniatura con la marca de "play" que muestra el editor).
+  // Las imágenes con la proporción que ya tienen en pantalla (emparejadas antes de sacar nada): la copia
+  // mide bien aunque no haya terminado de cargar.
   const liveImages = live.querySelectorAll('img');
   copy.querySelectorAll('img').forEach((img, i) => {
     const source = liveImages[i];
@@ -138,6 +141,21 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement): void {
       img.style.aspectRatio = `${source.naturalWidth} / ${source.naturalHeight}`;
     }
   });
+  for (const el of copy.querySelectorAll(REMOVE)) el.remove();
+  for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('[contenteditable]')]) el.removeAttribute('contenteditable');
+  // Sin ids repetidos en la página.
+  for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('[id]')]) el.removeAttribute('id');
+  // La selección de otra persona (un fondo de color en el texto).
+  for (const el of copy.querySelectorAll<HTMLElement>('.ProseMirror-yjs-selection')) el.style.removeProperty('background-color');
+  for (const cls of STATE_CLASSES) {
+    for (const el of copy.querySelectorAll(`.${cls}`)) el.classList.remove(cls);
+  }
+  // Siempre en claro: el papel es blanco.
+  for (const el of copy.querySelectorAll<HTMLElement>('[data-color-scheme], [data-mantine-color-scheme]')) {
+    if (el.hasAttribute('data-color-scheme')) el.setAttribute('data-color-scheme', 'light');
+    if (el.hasAttribute('data-mantine-color-scheme')) el.setAttribute('data-mantine-color-scheme', 'light');
+  }
+  // Un video queda con su cuadro (la miniatura con la marca de "play" que muestra el editor).
   for (const video of copy.querySelectorAll('video')) {
     const img = document.createElement('img');
     img.className = video.className;

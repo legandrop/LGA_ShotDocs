@@ -131,7 +131,7 @@ describe('una parte que se carga aparte', () => {
   const failing = () => Promise.reject(new TypeError('Failed to fetch dynamically imported module'));
 
   it('si no baja (versión nueva): avisa, espera lo que falta guardar y recarga una sola vez', async () => {
-    const { lazyPart, Part, watchPendingWrites, NEW_VERSION_NOTICE, reload, seen } = await reloadSetup();
+    const { lazyPart, Part, watchPendingWrites, newVersionNotice, reload, seen } = await reloadSetup();
     // Hay una edición a medio guardar: la recarga espera a que termine.
     let unsaved = true;
     const flush = vi.fn(async () => {
@@ -153,7 +153,7 @@ describe('una parte que se carga aparte', () => {
       </>,
     );
     await wait(30);
-    expect(seen).toEqual([NEW_VERSION_NOTICE]);
+    expect(seen).toEqual([newVersionNotice()]);
     expect(reload).not.toHaveBeenCalled();
     // Mientras tanto sigue el esqueleto (nada de avisos de error).
     expect(host.querySelector('.skeleton')).not.toBeNull();
@@ -165,7 +165,7 @@ describe('una parte que se carga aparte', () => {
     await wait(300);
     expect(unsaved).toBe(false);
     expect(reload).toHaveBeenCalledTimes(1);
-    expect(seen).toEqual([NEW_VERSION_NOTICE]);
+    expect(seen).toEqual([newVersionNotice()]);
     // La página se va: sigue el esqueleto hasta el final.
     await wait(300);
     expect(host.querySelector('.skeleton')).not.toBeNull();
@@ -305,13 +305,13 @@ describe('una parte que se carga aparte', () => {
   });
 
   it('vite:preloadError (un archivo del import que ya no está) también recarga una vez con el aviso', async () => {
-    const { listenForMissingFiles, NEW_VERSION_NOTICE, reload, seen } = await reloadSetup();
+    const { listenForMissingFiles, newVersionNotice, reload, seen } = await reloadSetup();
     const stop = listenForMissingFiles();
     const event = Object.assign(new Event('vite:preloadError', { cancelable: true }), { payload: new Error('x') });
     window.dispatchEvent(event);
     window.dispatchEvent(event);
     await wait(250);
-    expect(seen).toEqual([NEW_VERSION_NOTICE]);
+    expect(seen).toEqual([newVersionNotice()]);
     expect(reload).toHaveBeenCalledTimes(1);
     stop();
   });

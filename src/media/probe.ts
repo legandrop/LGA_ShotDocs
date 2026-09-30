@@ -2,6 +2,7 @@
 // navegador no puede abrir el archivo (HEIC en Chrome de Windows, un video que no decodifica), no hay
 // miniatura ni medidas: el archivo se guarda y se sube igual, y en la página queda un ícono.
 
+import { t } from '../i18n';
 import { toBase64 } from '../lib/base64';
 
 /** Lado mayor de la miniatura. */
@@ -88,7 +89,7 @@ function imageSize(file: Blob): Promise<{ width: number; height: number; img: HT
     img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight, img, url });
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error('The image could not be opened.'));
+      reject(new Error(t('probe.imageFailed')));
     };
     img.src = url;
   });
@@ -133,7 +134,7 @@ async function probeVideo(file: Blob): Promise<Probe> {
   try {
     await new Promise<void>((resolve, reject) => {
       video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new Error('The video could not be opened.'));
+      video.onerror = () => reject(new Error(t('probe.videoFailed')));
       video.src = url;
     });
     const duration = seconds(video.duration);
@@ -213,9 +214,13 @@ function escapeXml(text: string): string {
 }
 
 /** Lo que dice un archivo que un dueño o admin mandó a la papelera de Drive. */
-export const DELETED_LABEL = 'File deleted (in the Drive trash)';
+export function deletedLabel(): string {
+  return t('probe.deleted');
+}
 /** Se pidió mandarlo a la papelera de Drive pero el portero todavía no lo confirmó (por ejemplo, Drive falló). */
-export const REQUESTED_LABEL = 'Deletion requested (not yet in the Drive trash)';
+export function requestedLabel(): string {
+  return t('probe.requested');
+}
 
 /**
  * Un archivo que un dueño o admin mandó a la papelera de Drive (papelera de archivos): la miniatura
@@ -226,7 +231,7 @@ export async function deletedUrl(
   kind: MediaKind | null,
   name: string,
   thumb: Blob | null,
-  notice: string = DELETED_LABEL,
+  notice: string = deletedLabel(),
 ): Promise<string> {
   const label = escapeXml(name.length > 46 ? `${name.slice(0, 45)}…` : name);
   let picture = '';

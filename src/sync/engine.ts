@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { MediaQueue, MediaStatus } from '../media/queue';
 import { mediaIdsInDoc } from '../media/usage';
 import * as Y from 'yjs';
@@ -152,7 +153,7 @@ export class SyncEngine {
       options.media.onQueued = poke;
       // La base de archivos del dispositivo no se pudo abrir: el texto sigue, las fotos y videos no.
       if (options.media.unavailable) {
-        this.status = { ...this.status, mediaWarning: `Photos and videos are off on this device: ${options.media.unavailable}` };
+        this.status = { ...this.status, mediaWarning: t('engine.mediaOff', { reason: options.media.unavailable }) };
       }
       // Después de `stop()` la base puede estar cerrándose: no se cuenta nada más.
       options.media.onChange = () => {
@@ -165,7 +166,7 @@ export class SyncEngine {
         if (!this.stopped) void this.refreshCounts().catch(() => undefined);
       };
       if (options.comments.unavailable && !this.status.warning) {
-        this.status = { ...this.status, warning: `Comments are read-only on this device: ${options.comments.unavailable}` };
+        this.status = { ...this.status, warning: t('comments.readOnlyDevice', { reason: options.comments.unavailable }) };
       }
     }
     docs.onLocalChange = poke;
@@ -422,12 +423,13 @@ export class SyncEngine {
     const known = (await this.tree.knownGeneration()) ?? 1;
     if (known === settings.generation) {
       if ((mediaRecovered > 0 || commentsRecovered > 0) && !this.status.notice) {
-        const what = [mediaRecovered > 0 ? 'the photos and videos' : null, commentsRecovered > 0 ? 'the comments' : null]
-          .filter(Boolean)
-          .join(' and ');
-        this.patch({
-          notice: `The workspace was restored from a backup. This device is uploading again ${what} it had, so nothing made after the backup is lost.`,
-        });
+        const key =
+          mediaRecovered > 0 && commentsRecovered > 0
+            ? 'engine.restoredBoth'
+            : mediaRecovered > 0
+              ? 'engine.restoredMedia'
+              : 'engine.restoredComments';
+        this.patch({ notice: t(key) });
       }
       return { outdated, removed: false };
     }
@@ -450,14 +452,11 @@ export class SyncEngine {
       // Un dispositivo que no tenía nada (recién entra a un workspace ya restaurado) no avisa nada.
       const notices: string[] = [];
       if (recovered > 0) {
-        notices.push(
-          'The workspace was restored from a backup. This device is uploading again everything it had, so nothing made after the backup is lost.',
-        );
+        notices.push(t('engine.restoredAll'));
       }
       if (report.skipped > 0) {
-        notices.push(
-          `${recovered > 0 ? '' : 'The workspace was restored from a backup. '}${report.skipped} ${report.skipped === 1 ? 'page or project' : 'pages or projects'} made on this device after the backup could not be created again: you no longer have permission to create them there. Their content stays on this device; use “Download my unsynced changes” to keep it.`,
-        );
+        const skipped = t('engine.skipped', { count: report.skipped, download: t('sync.downloadUnsynced') });
+        notices.push(recovered > 0 ? skipped : `${t('engine.restored')} ${skipped}`);
       }
       if (notices.length > 0) this.patch({ notice: notices.join(' ') });
     }

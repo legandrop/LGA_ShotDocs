@@ -1,5 +1,6 @@
 import { FileDownloadButton, useBlockNoteEditor, useComponentsContext, useDictionary, useEditorState } from '@blocknote/react';
 import { useEffect, useRef } from 'react';
+import { t, useT } from '../i18n';
 import { mediaIdOf } from '../media/queue';
 import { useServices } from '../services';
 import { carreteSourceOf } from './carrete';
@@ -72,11 +73,11 @@ function OriginalDownloadButton({ fileId }: { fileId: string }) {
         if (!settled.current) setTimeout(r.release, 60_000);
       },
       (err: unknown) =>
-        notify(isOffline(err) ? "You're offline, and the original isn't on this device." : 'The original could not be downloaded.'),
+        notify(isOffline(err) ? t('mediaButton.offline') : t('mediaButton.failed')),
     );
   };
 
-  const label = dict.formatting_toolbar.file_download.tooltip.image ?? 'Download image';
+  const label = dict.formatting_toolbar.file_download.tooltip.image ?? t('mediaButton.download');
   return (
     <Components.FormattingToolbar.Button
       className="bn-button"
@@ -91,13 +92,14 @@ function OriginalDownloadButton({ fileId }: { fileId: string }) {
 export function MediaViewButton({ onView }: { onView: (blockId: string) => void }) {
   const Components = useComponentsContext()!;
   const block = useSelectedImage();
+  const tr = useT();
   if (!block || !carreteSourceOf(block.url)) return null;
   return (
     <Components.FormattingToolbar.Button
       className="bn-button"
-      label="View full screen"
-      mainTooltip="View full screen"
-      secondaryTooltip="Space"
+      label={tr('mediaButton.view')}
+      mainTooltip={tr('mediaButton.view')}
+      secondaryTooltip={tr('mediaButton.space')}
       icon={<ViewIcon />}
       onClick={() => onView(block.id)}
     />

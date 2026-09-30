@@ -2236,9 +2236,26 @@ code {
   pointer-events: none;
   contain: layout style;
   --gutter: 0px;
-  --bg: #ffffff;
   --title-size: 32px;
   --title-leading: 1.15;
+  /* Siempre en claro (el papel es blanco), sin tocar el tema de la app: los colores claros, acá. */
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --text: #1b1a17;
+  --text-2: #3a3833;
+  --muted: #5e5a52;
+  --muted-2: #6b665d;
+  --faint: #8a857b;
+  --faint-2: #b8b3a8;
+  --border: #e4e0d8;
+  --border-soft: #efece6;
+  --hover: rgba(27, 26, 23, 0.05);
+  --active: #e9e5dd;
+  --accent-text: #8a5700;
+  --question-bg: #eef2fa;
+  --question-border: #c9d6ee;
+  --question-accent: #3d5f9e;
   background: #ffffff;
   color: #1b1a17;
   font-family: var(--font);
@@ -2300,11 +2317,43 @@ code {
   content: none !important;
 }
 
-/* Una imagen nunca pasa del ancho imprimible ni del alto de una hoja. */
+/* Las marcas de Script y el ícono de las preguntas, en claro aunque la app esté en oscuro. */
+.print-view .script-mark.script-place {
+  background: #dfe7dc;
+}
+
+.print-view .script-mark.script-day {
+  background: #fbe7a1;
+}
+
+.print-view .script-mark.script-night {
+  background: #cfe0fa;
+}
+
+.print-view .script-mark.script-golden {
+  background: #ffd9b8;
+}
+
+.print-view.print-view .bn-container .question-line {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%233d5f9e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1'/%3E%3C/svg%3E");
+}
+
+/* Una imagen nunca pasa del ancho imprimible ni del alto de una hoja (en pantalla, igual: ver .page.sheet). */
 .print-view img.bn-visual-media {
   max-width: 100%;
   max-height: calc(var(--print-content-height) - 48px);
   object-fit: contain;
+}
+
+.page.sheet img.bn-visual-media {
+  max-height: calc(var(--sheet-height) - 2 * var(--gutter) - 48px);
+  object-fit: contain;
+}
+
+/* Las tablas sin el lugar de los botones de filas y columnas (y sin recorte, así se parten entre hojas). */
+.print-view .bn-editor [data-content-type='table'] .tableWrapper {
+  padding: 0;
+  overflow: visible;
 }
 
 /* Las tarjetas de Drive quedan como link. */
@@ -2338,6 +2387,8 @@ code {
     min-height: 0 !important;
     overflow: visible !important;
     background: #ffffff !important;
+    /* Con el tema oscuro, el borde de la hoja también blanco. */
+    color-scheme: light !important;
   }
 
   html.sd-printing body > :not(.print-output) {
@@ -2377,6 +2428,11 @@ code {
 
   .sheet-break-label {
     right: 8px;
+    top: -7px;
+    padding: 0 4px;
+    font-size: 9px;
+    line-height: 14px;
+    opacity: 0.8;
   }
 }
 
@@ -3780,6 +3836,16 @@ button.primary.danger {
 .legal-doc .legal-updated {
   margin-bottom: 28px;
   text-transform: none;
+}
+
+/* Con la app en castellano: las páginas legales quedan en inglés y una nota lo dice. */
+.legal-doc .legal-note {
+  margin: -16px 0 24px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 14px;
 }
 
 .legal-summary {

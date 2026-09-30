@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { AuthUser } from './auth';
+import { t } from './i18n';
 import { pendingInviteTarget } from './invite';
 import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
-import { FOREIGN_FILE_NOTICE, MediaQueue } from './media/queue';
+import { foreignFileNotice, MediaQueue } from './media/queue';
 import { notify } from './ui/notice';
 import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/access';
 import { CommentQueue, commentsDbName, openCommentsDb, type CommentsDb } from './sync/comments';
@@ -184,7 +185,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           if (!cancelled) {
             setBoot({
               state: 'error',
-              message: `Setting up your workspace the first time needs an internet connection (${errorMessage(err)}).`,
+              message: t('boot.firstTime', { reason: errorMessage(err) }),
               retry: () => setAttempt((n) => n + 1),
             });
           }
@@ -213,7 +214,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       try {
         mediaDb = await openMediaDb(mediaDbName(dbName));
       } catch (err) {
-        mediaProblem = `the storage for photos and videos could not be opened (${errorMessage(err)}). Reopening the app tries again.`;
+        mediaProblem = t('boot.mediaStorage', { reason: errorMessage(err) });
       }
       if (cancelled) {
         mediaDb?.close();
@@ -224,7 +225,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         projectOf: (pageId) => tree.get(pageId)?.workspace_id,
         unavailable: mediaProblem,
         // Se pegó una foto o un video de otro proyecto (papelera de archivos, paso 11).
-        onForeignFile: (name) => notify(name ? `“${name}”: ${FOREIGN_FILE_NOTICE}` : FOREIGN_FILE_NOTICE),
+        onForeignFile: (name) => notify(foreignFileNotice(name)),
       });
       await media.load().catch(() => undefined);
       // Los comentarios, también en una base aparte. Si no se abre, se leen con red pero no se escriben.
@@ -233,7 +234,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       try {
         commentsDb = await openCommentsDb(commentsDbName(dbName));
       } catch (err) {
-        commentsProblem = `the storage for comments could not be opened (${errorMessage(err)}). Reopening the app tries again.`;
+        commentsProblem = t('boot.commentsStorage', { reason: errorMessage(err) });
       }
       const comments = new CommentQueue(commentsDb, new SupabaseCommentRemote(workspace.client), user.id, {
         unavailable: commentsProblem,

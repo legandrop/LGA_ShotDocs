@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { t, useT } from '../i18n';
 import { clearInviteTarget, rememberInviteTarget } from '../invite';
 import { useWorkspace } from '../workspace';
 import {
@@ -10,7 +11,7 @@ import {
   forgetWorkspaceStorage,
   hasLocalData,
   hostOf,
-  NEEDS_SETUP_COMMAND,
+  needsSetupCommand,
   pendingEntry,
   probeWorkspace,
   removeWorkspace,
@@ -41,6 +42,7 @@ export function Welcome({ onAdded }: { onAdded: OnAdded }) {
   const [mode, setMode] = useState<'start' | 'join' | 'create'>('start');
   // Sin ningún workspace, "ya está en el dispositivo" no puede pasar; si pasara (otra pestaña), se abre.
   const open = (entry: DeviceWorkspace, invite?: { target: string | null }) => onAdded(entry, invite);
+  const tr = useT();
   return (
     <main className="center-screen">
       <div className="card welcome-card">
@@ -50,11 +52,8 @@ export function Welcome({ onAdded }: { onAdded: OnAdded }) {
         </div>
         {mode === 'start' && (
           <>
-            <h1>Welcome</h1>
-            <p className="muted">
-              Notes for every shot: on set, offline, in sync. Everything lives in a workspace, which runs on its
-              owner’s own accounts.
-            </p>
+            <h1>{tr('welcome.title')}</h1>
+            <p className="muted">{tr('welcome.text')}</p>
             <WorkspaceChoices onJoin={() => setMode('join')} onCreate={() => setMode('create')} />
           </>
         )}
@@ -67,20 +66,21 @@ export function Welcome({ onAdded }: { onAdded: OnAdded }) {
 }
 
 function WorkspaceChoices({ onJoin, onCreate }: { onJoin: () => void; onCreate: () => void }) {
+  const tr = useT();
   return (
     <div className="welcome-choices">
       <button className="welcome-choice" onClick={onJoin}>
         <MailIcon />
         <span>
-          <strong>Join a workspace</strong>
-          <span className="muted">Paste the invitation link you received.</span>
+          <strong>{tr('welcome.join')}</strong>
+          <span className="muted">{tr('welcome.joinHint')}</span>
         </span>
       </button>
       <button className="welcome-choice" onClick={onCreate}>
         <PlusIcon />
         <span>
-          <strong>Create my workspace</strong>
-          <span className="muted">Set up your own, on free accounts of yours. It takes an afternoon.</span>
+          <strong>{tr('welcome.create')}</strong>
+          <span className="muted">{tr('welcome.createHint')}</span>
         </span>
       </button>
     </div>
@@ -101,24 +101,21 @@ export function JoinQuestion(props: {
   const host = hostOf(props.entry.url);
   const name = safeWorkspaceName(props.entry.name);
   const Heading = props.modal ? 'h2' : 'h1';
+  const tr = useT();
   return (
     <>
-      <Heading>{name ? `Join ${name}?` : 'Join a workspace?'}</Heading>
+      <Heading>{name ? tr('join.questionNamed', { name }) : tr('join.question')}</Heading>
       <div className="join-host">
-        <span className="mono-label">Server</span>
+        <span className="mono-label">{tr('join.server')}</span>
         <strong>{host}</strong>
       </div>
-      <p className="muted">
-        This workspace runs on that server. What you write there goes to it and stays apart from your other
-        workspaces. The name comes from the link; check the server, and join only if you trust the person who
-        invited you.
-      </p>
+      <p className="muted">{tr('join.trust')}</p>
       <div className="welcome-actions">
         <button className="primary" autoFocus onClick={props.onJoin}>
-          Join
+          {tr('join.join')}
         </button>
         <button className="link" onClick={props.onCancel}>
-          {props.cancelLabel ?? 'Back'}
+          {props.cancelLabel ?? tr('common.back')}
         </button>
       </div>
     </>
@@ -127,6 +124,7 @@ export function JoinQuestion(props: {
 
 /** Se llegó con un link de invitación de un workspace que este dispositivo no tiene. */
 export function JoinConfirm({ entry, onJoin, onCancel }: { entry: DeviceWorkspace; onJoin: () => void; onCancel: () => void }) {
+  const tr = useT();
   return (
     <main className="center-screen">
       <div className="card welcome-card">
@@ -134,7 +132,7 @@ export function JoinConfirm({ entry, onJoin, onCancel }: { entry: DeviceWorkspac
           <AppIcon size={32} />
           <span>LGA Shot Docs</span>
         </div>
-        <JoinQuestion entry={entry} onJoin={onJoin} onCancel={onCancel} cancelLabel="Not now" />
+        <JoinQuestion entry={entry} onJoin={onJoin} onCancel={onCancel} cancelLabel={tr('join.notNow')} />
       </div>
     </main>
   );
@@ -153,6 +151,7 @@ export function JoinForm(props: {
   const [error, setError] = useState<string | null>(null);
   const [asking, setAsking] = useState<{ entry: DeviceWorkspace; target: string | null } | null>(null);
   const Heading = props.modal ? 'h2' : 'h1';
+  const tr = useT();
 
   if (asking) {
     return (
@@ -175,12 +174,10 @@ export function JoinForm(props: {
 
   return (
     <form className="welcome-form" onSubmit={submit}>
-      <Heading>Join a workspace</Heading>
-      <p className="muted">
-        Paste the invitation link you received. Opening the link on this device works too.
-      </p>
+      <Heading>{tr('welcome.join')}</Heading>
+      <p className="muted">{tr('join.pasteHint')}</p>
       <div className="field">
-        <label htmlFor="invite-link">Invitation link</label>
+        <label htmlFor="invite-link">{tr('team.inviteLink')}</label>
         <input
           id="invite-link"
           autoFocus
@@ -197,10 +194,10 @@ export function JoinForm(props: {
       {error && <p className="error">{error}</p>}
       <div className="welcome-actions">
         <button className="primary" disabled={!text.trim()}>
-          Continue <ArrowRightIcon />
+          {tr('common.continue')} <ArrowRightIcon />
         </button>
         <button type="button" className="link" onClick={props.onBack}>
-          Back
+          {tr('common.back')}
         </button>
       </div>
     </form>
@@ -221,6 +218,7 @@ export function CreateForm(props: {
   const [error, setError] = useState<string | null>(null);
   const [existing, setExisting] = useState<DeviceWorkspace | null>(null);
   const Heading = props.modal ? 'h2' : 'h1';
+  const tr = useT();
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -250,27 +248,24 @@ export function CreateForm(props: {
         return props.onAdded(pendingEntry(check.url, key));
       case 'noLocalKey':
       case 'notSetUp':
-        return setError(NEEDS_SETUP_COMMAND);
+        return setError(needsSetupCommand());
       case 'badKey':
-        return setError('This publishable key does not belong to that address. Copy both again from the end of the setup command.');
+        return setError(t('create.badKey'));
       case 'unreachable':
-        return setError(`Could not reach ${hostOf(check.url)} (${probe.message}). Check the address and your internet connection.`);
+        return setError(t('create.unreachable', { host: hostOf(check.url), reason: probe.message }));
     }
   }
 
   return (
     <form className="welcome-form" onSubmit={(e) => void submit(e)}>
-      <Heading>Create my workspace</Heading>
-      <p className="muted">
-        A workspace of your own runs on free accounts of yours: Supabase, Resend, Google Drive, Cloudflare and
-        GitHub. The guide takes you through it step by step.
-      </p>
+      <Heading>{tr('welcome.create')}</Heading>
+      <p className="muted">{tr('create.text')}</p>
       <a className="welcome-guide" href={GUIDE_URL} target="_blank" rel="noopener noreferrer">
-        Open the guide: Create your own workspace <ArrowRightIcon size={16} />
+        {tr('create.guide')} <ArrowRightIcon size={16} />
       </a>
-      <p className="muted">When the setup command has finished (step 4 of the guide), paste what it printed at the end:</p>
+      <p className="muted">{tr('create.paste')}</p>
       <div className="field">
-        <label htmlFor="ws-url">Project URL</label>
+        <label htmlFor="ws-url">{tr('create.url')}</label>
         <input
           id="ws-url"
           inputMode="url"
@@ -282,7 +277,7 @@ export function CreateForm(props: {
         />
       </div>
       <div className="field">
-        <label htmlFor="ws-key">Publishable key</label>
+        <label htmlFor="ws-key">{tr('create.key')}</label>
         <input
           id="ws-key"
           autoComplete="off"
@@ -295,18 +290,18 @@ export function CreateForm(props: {
       {error && <p className="error">{error}</p>}
       {existing && (
         <p className="muted">
-          “{displayName(existing)}” is already on this device.{' '}
+          {tr('create.existing', { name: displayName(existing) })}{' '}
           <button type="button" className="link" onClick={() => props.onExisting(existing)}>
-            Open it
+            {tr('create.openIt')}
           </button>
         </p>
       )}
       <div className="welcome-actions">
         <button className="primary" disabled={busy || !url.trim() || !key.trim()}>
-          {busy ? 'Checking…' : 'Connect'}
+          {busy ? tr('login.checking') : tr('create.connect')}
         </button>
         <button type="button" className="link" onClick={props.onBack}>
-          Back
+          {tr('common.back')}
         </button>
       </div>
     </form>
@@ -321,6 +316,7 @@ export function FinishPending() {
   const { client, config } = useWorkspace();
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const tr = useT();
 
   useEffect(() => {
     let live = true;
@@ -329,12 +325,12 @@ export function FinishPending() {
       const { data, error } = await client.from('workspace_settings').select('*').maybeSingle();
       if (!live) return;
       if (error) {
-        setError(`Could not read the workspace settings (${error.message}). Check your connection and try again.`);
+        setError(t('finish.readFailed', { reason: error.message }));
         return;
       }
       const row = data as { name?: string | null; local_key?: string | null } | null;
       if (!row?.local_key) {
-        setError(NEEDS_SETUP_COMMAND);
+        setError(needsSetupCommand());
         return;
       }
       // Que la sesión no se renueve mientras pasa a su nombre nuevo: la copia quedaría vieja.
@@ -361,15 +357,15 @@ export function FinishPending() {
   return (
     <main className="center-screen">
       <div className="card">
-        <h1>{error ? 'The workspace could not be added' : 'Adding your workspace…'}</h1>
-        <p className="muted">{error ?? `Reading the settings of ${hostOf(config.url)}.`}</p>
+        <h1>{error ? tr('finish.failed') : tr('finish.adding')}</h1>
+        <p className="muted">{error ?? tr('finish.reading', { host: hostOf(config.url) })}</p>
         {error && (
           <>
             <button className="primary" onClick={() => setAttempt((n) => n + 1)}>
-              Try again
+              {tr('common.tryAgain')}
             </button>
             <button className="link" onClick={() => void cancel()}>
-              Remove it from this device
+              {tr('finish.remove')}
             </button>
           </>
         )}
@@ -413,6 +409,7 @@ export function WorkspacesDialog(props: {
   const [mode, setMode] = useState<WorkspacesMode>(props.initial);
   const [removable, setRemovable] = useState(false);
   const current = list.workspaces.find((w) => w.id === props.currentId) ?? null;
+  const tr = useT();
   const back = () => (props.initial === mode ? props.onClose() : setMode(props.initial));
 
   // Desde el login (sin sesión) se ofrece quitar el workspace abierto solo si no tiene nada guardado en el
@@ -442,12 +439,12 @@ export function WorkspacesDialog(props: {
       <div
         className="modal workspaces-dialog"
         role="dialog"
-        aria-label="Workspaces"
+        aria-label={tr('workspaces.title')}
         onClick={(e) => e.stopPropagation()}
       >
         {(mode === 'start' || mode === 'list') && (
           <>
-            <h2>Workspaces</h2>
+            <h2>{tr('workspaces.title')}</h2>
             {mode === 'list' && (
               <div className="workspace-list">
                 {list.workspaces.map((w) => (
@@ -462,34 +459,32 @@ export function WorkspacesDialog(props: {
                     </span>
                     <span className="project-label">
                       <strong>{displayName(w)}</strong>
-                      <span>{w.pending ? `${hostOf(w.url)} · sign in to finish` : hostOf(w.url)}</span>
+                      <span>{w.pending ? `${hostOf(w.url)} · ${tr('workspaces.signInToFinish')}` : hostOf(w.url)}</span>
                     </span>
-                    {w.id === props.currentId && <span className="current-mark">Open</span>}
+                    {w.id === props.currentId && <span className="current-mark">{tr('project.open')}</span>}
                   </button>
                 ))}
               </div>
             )}
             {mode === 'start' && (
-              <p className="muted">
-                Each workspace has its own server and its own sign-in. This device keeps them apart.
-              </p>
+              <p className="muted">{tr('workspaces.apart')}</p>
             )}
             <WorkspaceChoices onJoin={() => setMode('join')} onCreate={() => setMode('create')} />
             {removable && current && (
               <button
                 className="link danger"
                 onClick={() => {
-                  if (!confirm(`Remove “${displayName(current)}” from this device? Nothing of it is stored here.`)) return;
+                  if (!confirm(t('workspaces.removeEmptyConfirm', { name: displayName(current) }))) return;
                   forgetPending(current.id);
                   location.replace('/');
                 }}
               >
-                Remove “{displayName(current)}” from this device
+                {tr('removeWs.title', { name: displayName(current) })}
               </button>
             )}
             <div className="modal-actions">
               <button className="link" onClick={props.onClose}>
-                Close
+                {tr('common.close')}
               </button>
             </div>
           </>
@@ -525,24 +520,21 @@ export function LoginWorkspaceBar() {
   const { config } = useWorkspace();
   const list = useWorkspaceList();
   const [open, setOpen] = useState(false);
+  const tr = useT();
   const current = list.workspaces.find((w) => w.id === config.localKey);
   if (!current || (current.legacy && list.workspaces.length === 1)) return null;
   return (
     <>
       <div className="login-workspace">
-        <span className="muted">Workspace</span>
+        <span className="muted">{tr('workspaces.label')}</span>
         <strong data-tip={hostOf(current.url)} data-tip-plain>
           {displayName(current)}
         </strong>
         <button type="button" className="link" onClick={() => setOpen(true)}>
-          Change
+          {tr('workspaces.change')}
         </button>
       </div>
-      {current.pending && (
-        <p className="login-invite">
-          Sign in with the owner’s email to finish adding the workspace at {hostOf(current.url)}.
-        </p>
-      )}
+      {current.pending && <p className="login-invite">{tr('workspaces.pendingSignIn', { host: hostOf(current.url) })}</p>}
       {open && <WorkspacesDialog initial="list" currentId={current.id} onClose={() => setOpen(false)} />}
     </>
   );

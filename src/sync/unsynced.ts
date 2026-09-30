@@ -1,4 +1,5 @@
 import * as Y from 'yjs';
+import { t } from '../i18n';
 import { toBase64 } from '../lib/base64';
 import type { MediaDb } from '../media/mediaDb';
 import { exportComments, unsyncedComments, type CommentsDb } from './comments';
@@ -160,7 +161,7 @@ export async function exportUnsyncedBlob(
       pageId: m.pageId,
       pageTitle: info.titleOf(m.pageId) ?? null,
       day: m.day,
-      note: 'The original is not inside this file: download it separately from the app.',
+      note: t('unsynced.note'),
     })),
     // `removed`: la página dejó de usar el archivo (falta `unlink_page_file`); si no, lo usa.
     mediaLinks: links.map((l) => ({ pageId: l.pageId, fileId: l.fileId, removed: l.removed === true })),

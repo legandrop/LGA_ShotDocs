@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { t } from './i18n';
 import { parseInviteHash, type InvitePayload } from './invite';
 import { legacyStorageNames, storageNamesFor, WANKA_LOCAL_KEY, type WorkspaceConfig } from './workspace';
 
@@ -278,24 +279,24 @@ export function checkWorkspace(
   allowLocalHttp?: boolean,
 ): WorkspaceCheck {
   const url = workspaceOrigin(input.url, allowLocalHttp);
-  if (!url) return { kind: 'invalid', reason: 'The workspace address must be an https:// address, like https://abcd.supabase.co.' };
+  if (!url) return { kind: 'invalid', reason: t('wsError.address') };
   const key = input.publishableKey.trim();
   // Una clave secreta se avisa siempre, también si el workspace ya está en el dispositivo.
   if (key.startsWith('sb_secret_')) {
-    return { kind: 'invalid', reason: 'That is a secret key: never paste it anywhere. Use the publishable key (sb_publishable_…).' };
+    return { kind: 'invalid', reason: t('wsError.secretKey') };
   }
   const existing = findByUrl(list, url);
   if (existing) return { kind: 'existing', entry: existing };
-  if (!validPublishableKey(key)) return { kind: 'invalid', reason: 'The publishable key must start with sb_publishable_.' };
+  if (!validPublishableKey(key)) return { kind: 'invalid', reason: t('wsError.publishableKey') };
   if (input.localKey !== undefined) {
     if (!validLocalKey(input.localKey)) {
-      return { kind: 'invalid', reason: 'This invitation link is damaged (its local key is not valid). Ask for a new one.' };
+      return { kind: 'invalid', reason: t('wsError.badLocalKey') };
     }
     const clash = list.workspaces.find((w) => !w.pending && configOf(w).localKey === input.localKey);
     if (clash) {
       return {
         kind: 'invalid',
-        reason: `This link is for a workspace that uses the same local key as “${displayName(clash)}” on this device, but at a different address. Ask the person who invited you for a new link.`,
+        reason: t('wsError.localKeyClash', { name: displayName(clash) }),
       };
     }
   }
@@ -378,14 +379,13 @@ export function resolveInvite(list: WorkspaceList, payload: InvitePayload, allow
   return { kind: 'confirm', entry: entryFromInvite(payload, check.url), target };
 }
 
-const BROKEN_LINK = 'This is not a valid invitation link. Copy the whole link again, or ask for a new one.';
 
 /** Lo que se pega en "Join a workspace": el link entero o solo la parte desde `#invite=`. */
 export function resolveInviteText(list: WorkspaceList, text: string, allowLocalHttp?: boolean): InviteResolution {
   const at = text.indexOf('#invite=');
-  if (at < 0) return { kind: 'invalid', reason: BROKEN_LINK };
+  if (at < 0) return { kind: 'invalid', reason: t('wsError.brokenLink') };
   const payload = parseInviteHash(text.slice(at).trim());
-  if (!payload) return { kind: 'invalid', reason: BROKEN_LINK };
+  if (!payload) return { kind: 'invalid', reason: t('wsError.brokenLink') };
   return resolveInvite(list, payload, allowLocalHttp);
 }
 
@@ -457,8 +457,10 @@ const AUTH_SUFFIXES = ['', '-user', '-code-verifier'];
 
 export type AdoptResult = { ok: true; entry: DeviceWorkspace } | { ok: false; reason: string };
 
-export const NEEDS_SETUP_COMMAND =
-  'This Supabase is not ready for LGA Shot Docs yet: run the setup command (step 4 of the guide), then try again.';
+/** Falta correr el comando de la guía en ese Supabase. */
+export function needsSetupCommand(): string {
+  return t('wsError.needsSetup');
+}
 
 /**
  * Completa uno pendiente con lo que la base dio después de entrar: pasa la sesión recién abierta a los
@@ -473,9 +475,9 @@ export function adoptPending(
 ): AdoptResult {
   const list = readWorkspaces(store);
   const pending = list.workspaces.find((w) => w.id === pendingId && w.pending);
-  if (!pending) return { ok: false, reason: 'This workspace is not on this device anymore.' };
+  if (!pending) return { ok: false, reason: t('wsError.gone') };
   const localKey = settings.localKey ?? '';
-  if (!validLocalKey(localKey)) return { ok: false, reason: NEEDS_SETUP_COMMAND };
+  if (!validLocalKey(localKey)) return { ok: false, reason: needsSetupCommand() };
   const others = { ...list, workspaces: list.workspaces.filter((w) => w.id !== pendingId) };
   const check = checkWorkspace(others, { url: pending.url, publishableKey: pending.publishableKey, localKey }, true);
   if (check.kind === 'existing') return { ok: false, reason: `“${displayName(check.entry)}” is already on this device.` };

@@ -8,7 +8,7 @@ import { SupabaseRemote, unlinkIgnored } from '../sync/remote';
 import { autoPurgeFiles, foreignPlaceholder, MEDIA_SCHEME, mediaIdOf } from './queue';
 import { driveNotConnected, emptyFileTrash, loadFileTrash, sendToDriveTrash, type TrashOutcome } from './fileTrash';
 import { mediaIdsInDoc } from './usage';
-import { DELETED_LABEL, REQUESTED_LABEL } from './probe';
+import { deletedLabel, requestedLabel } from './probe';
 
 // Papelera de archivos (paso 11 de Docs/Plan_Workspaces.md): qué archivos usa cada página, la pestaña
 // Archivos de la papelera y el borrado automático, armado y apagado. Con el servidor y el portero en memoria
@@ -488,10 +488,10 @@ describe('papelera de archivos: en las páginas', () => {
     expect(await changed).toBe(id);
     const after = decodeURIComponent(await b2.media.resolve(MEDIA_SCHEME + id));
     expect(after).toMatch(/^data:image\/svg\+xml/);
-    expect(after).toContain(DELETED_LABEL);
+    expect(after).toContain(deletedLabel());
     expect(after).toContain('data:image/jpeg;base64,');
     // En el dispositivo que lo mandó, también.
-    expect(decodeURIComponent(await a.media.resolve(MEDIA_SCHEME + id))).toContain(DELETED_LABEL);
+    expect(decodeURIComponent(await a.media.resolve(MEDIA_SCHEME + id))).toContain(deletedLabel());
   });
 });
 
@@ -921,11 +921,11 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     server.portero.failTrash.add(id);
     expect(await sendToDriveTrash((f) => a.media.trash(f), id)).toMatchObject({ status: 'error' });
     const shown = decodeURIComponent(await a.media.resolve(MEDIA_SCHEME + id));
-    expect(shown).toContain(REQUESTED_LABEL);
-    expect(shown).not.toContain(DELETED_LABEL);
+    expect(shown).toContain(requestedLabel());
+    expect(shown).not.toContain(deletedLabel());
     server.portero.failTrash.clear();
     await a.media.trash(id);
-    expect(decodeURIComponent(await a.media.resolve(MEDIA_SCHEME + id))).toContain(DELETED_LABEL);
+    expect(decodeURIComponent(await a.media.resolve(MEDIA_SCHEME + id))).toContain(deletedLabel());
   });
 
   it('mandar a mano o automáticamente saltea un archivo con un uso de este dispositivo sin mandar', async () => {

@@ -25,4 +25,5 @@ export const common = {
   'common.delete': { en: "Delete", es: "Borrar" },
   'common.edit': { en: "Edit", es: "Editar" },
   'common.copied': { en: "Copied", es: "Copiado" },
+  'common.continue': { en: "Continue", es: "Seguir" },
 } satisfies Dict;

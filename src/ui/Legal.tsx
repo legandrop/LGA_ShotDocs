@@ -1,11 +1,14 @@
 import { useEffect, type ReactNode } from 'react';
+import { useT } from '../i18n';
 import { PRIVACY_PATH, TERMS_PATH, type PublicRoute } from '../router';
 import { AppIcon } from './icons';
 
 // La política de privacidad y las condiciones de uso (`/privacy` y `/terms`), en inglés porque son para
 // usuarios. Se ven sin sesión y sin workspace: App las muestra antes que todo lo demás (Google las pide para
 // la pantalla de consentimiento, ver Docs/Doc_Roadmap.md, puntos 6 y 13). El texto describe la app como es
-// hoy: si cambia qué datos se usan o dónde van, se cambia acá también, con la fecha.
+// hoy: si cambia qué datos se usan o dónde van, se cambia acá también, con la fecha. Quedan en inglés
+// también con la app en castellano (es el texto que revisa Google y el que vale); en castellano se ve una
+// nota arriba que lo explica, y los links del resto de la app sí se traducen.
 
 /** La fecha de la última versión de los dos textos. */
 export const LEGAL_UPDATED = 'September 30, 2026';
@@ -21,14 +24,15 @@ const TITLES: Record<PublicRoute['name'], string> = {
 
 /** "Privacy · Terms": en el login, la bienvenida y el menú de la cuenta. Abre en otra pestaña para no perder lo que se estaba haciendo. */
 export function LegalLinks({ className = 'legal-links' }: { className?: string }) {
+  const tr = useT();
   return (
-    <nav className={className} aria-label="Legal">
+    <nav className={className} aria-label={tr('legal.label')}>
       <a href={PRIVACY_PATH} target="_blank" rel="noopener">
-        Privacy
+        {tr('legal.privacy')}
       </a>
       <span aria-hidden="true">·</span>
       <a href={TERMS_PATH} target="_blank" rel="noopener">
-        Terms
+        {tr('legal.terms')}
       </a>
     </nav>
   );
@@ -36,6 +40,7 @@ export function LegalLinks({ className = 'legal-links' }: { className?: string }
 
 export function LegalPage({ page }: { page: PublicRoute['name'] }) {
   const title = TITLES[page];
+  const tr = useT();
   useEffect(() => {
     const previous = document.title;
     document.title = `${title} · LGA Shot Docs`;
@@ -67,6 +72,11 @@ export function LegalPage({ page }: { page: PublicRoute['name'] }) {
       <main className="legal-doc">
         <h1>{title}</h1>
         <p className="legal-updated mono-label">Last updated: {LEGAL_UPDATED}</p>
+        {tr.lang !== 'en' && (
+          <p className="legal-note" lang={tr.lang}>
+            {tr('legal.englishOnly')}
+          </p>
+        )}
         {page === 'privacy' ? <Privacy /> : <Terms />}
       </main>
       <footer className="legal-footer">
