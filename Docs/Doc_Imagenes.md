@@ -1,7 +1,7 @@
 # Imágenes en la página: elegir, tamaño y filas
 
 Diseño de lo que pidió Lega el 2026-09-30 (fotos y videos del editor; en la página los dos son un bloque
-`image`, ver `Doc_Carrete.md`). Estado: **auditado antes de implementar** (ver "Correcciones de la auditoría previa", que manda sobre lo anterior).
+`image`, ver `Doc_Carrete.md`). Estado: **v0.044 hecha (elegir y abrir); las filas, en curso.** "Correcciones de la auditoría previa" manda sobre lo anterior.
 
 ## Lo que se pide
 

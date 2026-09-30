@@ -29,7 +29,7 @@ cambia nada de lo que se guarda en el documento**: el carrete solo lee la págin
 
 | | Teléfono | Computadora |
 |---|---|---|
-| Abrir | Tocar la foto o el video | Clic en la foto o el video; con la foto elegida, la barra espaciadora o *View* en su barra |
+| Abrir | Tocar la foto o el video | Un clic la elige y otro la abre (o doble clic); con la foto elegida, la barra espaciadora o *View* en su barra |
 | Anterior / siguiente | Deslizar de costado, o los botones ‹ › | Flechas ← →, los botones, o arrastrar con el mouse |
 | Primero / último | | Inicio / Fin |
 | Zoom (fotos) | Pellizco; doble toque para ampliar ahí o volver | Rueda del mouse o pellizco del trackpad (con o sin Ctrl); doble clic |
@@ -130,7 +130,7 @@ navegador pide ahorrar datos (`Save-Data`), no se precarga nada.
     Mac; con una foto elegida la barra no escribe nada). Enter sigue creando un párrafo debajo. En la
     barra de la imagen está también *View*.
 - Funciona igual en una página de solo lectura (ahí no hay barra).
-- La foto muestra el cursor de lupa (*zoom-in*) con el mouse.
+- Con el mouse, la lupa (*zoom-in*) aparece sobre la foto elegida (con el editor con foco) o en solo lectura.
 
 ## Pantalla
 
