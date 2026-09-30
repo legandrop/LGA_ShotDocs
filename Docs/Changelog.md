@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.049 :
+
+Se puede adjuntar cualquier archivo: un PDF, un zip, un rar, un exe, un proyecto de Nuke… Se arrastra o se
+pega en la página (varios a la vez, quedan en orden), va al Drive del dueño como las fotos, y se ve como una
+tarjeta con el tipo, el nombre y el tamaño. Con el mouse, el primer clic la elige y el segundo abre el PDF (o lo
+que el navegador sepa mostrar) en una pestaña nueva, o baja el archivo con su nombre; en el teléfono, un toque
+abre una hoja con Abrir, Descargar y Compartir. Los adjuntos no entran al carrete ni a "Acomodar en filas", y la
+papelera muestra su tipo. Antes de guardar algo grande, la app revisa que haya lugar en el dispositivo. Sin
+Google Drive conectado, solo imágenes, con un aviso. No es un bloque nuevo: una versión vieja ve el archivo con
+el marcador de foto y no lo borra. *Download* con un archivo del Drive (en la barra y en el carrete) ahora
+siempre baja, también un PDF.
+[ Adjuntos - cualquier archivo ]
+
 v0.048 :
 
 El portero les pone su nombre a las descargas y sirve cualquier archivo de forma segura (primera parte de

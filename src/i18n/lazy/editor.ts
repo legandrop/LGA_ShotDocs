@@ -91,6 +91,29 @@ export const editor = {
     en: "Only images can be added for now (JPEG, PNG, GIF, WebP, AVIF or HEIC). Videos need the workspace media server (Google Drive).",
     es: "Por ahora solo se pueden agregar imágenes (JPEG, PNG, GIF, WebP, AVIF o HEIC). Los videos necesitan el servidor de archivos del workspace (Google Drive).",
   },
+  'attachment.title': { en: "Attached file", es: "Archivo adjunto" },
+  'attachment.open': { en: "Open", es: "Abrir" },
+  'attachment.download': { en: "Download", es: "Descargar" },
+  'attachment.share': { en: "Share…", es: "Compartir…" },
+  'attachment.preparing': { en: "Preparing…", es: "Preparando…" },
+  'attachment.unavailable': {
+    en: "It can't be opened right now: it may not have finished uploading, or there is no connection.",
+    es: "Ahora no se puede abrir: puede que no haya terminado de subir, o no hay conexión.",
+  },
+  'attachment.shareFailed': { en: "It couldn't be shared.", es: "No se pudo compartir." },
+  'attachment.openTip': { en: "Open in a new tab", es: "Abrir en una pestaña nueva" },
+  'editor.attachNeedsDrive': {
+    en: "Only images can be added. To attach other files, the owner has to connect Google Drive.",
+    es: "Solo se pueden agregar imágenes. Para adjuntar otros archivos, el dueño tiene que conectar Google Drive.",
+  },
+  'editor.embeddedOnlyMedia': {
+    en: "Only photos and videos pasted inside text are kept; attach other files by dropping them.",
+    es: "De lo pegado dentro de un texto solo se guardan fotos y videos; los otros archivos, arrastrándolos.",
+  },
+  'editor.foldersNotSupported': {
+    en: "Folders can't be added: compress them first (.zip).",
+    es: "No se pueden agregar carpetas: primero comprimilas (.zip).",
+  },
   'editor.fileNotSaved': {
     en: "This file could not be saved on this device.",
     es: "No se pudo guardar este archivo en este dispositivo.",

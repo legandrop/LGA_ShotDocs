@@ -1,6 +1,6 @@
 # Adjuntar cualquier archivo en las páginas (P.6)
 
-Estado: **auditado antes de implementar** (2026-09-30). "Correcciones de la auditoría previa" manda sobre lo anterior. Lo pidió Lega: "intenté
+Estado: **entregas 1a (portero, v0.048) y 1b (app, v0.049) hechas**; la vista previa, pendiente. "Correcciones de la auditoría previa" manda sobre lo anterior. Lo pidió Lega: "intenté
 arrastrar un PDF y no funcionó. Deberíamos poder arrastrar cualquier tipo de archivo, como una interfaz del
 Drive: .zip, .rar, lo que sea, y que alguien lo pueda bajar desde ahí". Sale de leer el código de la rama
 `lega/acomodar`.
@@ -214,12 +214,21 @@ nuevas, sin migración) se mantiene. Cambios:
 1. **Entrega 1a, portero** (compatible con la app de hoy, que gana los nombres en las descargas), con pruebas.
    **Hecha**: detalle en `Doc_Portero.md` (*Lo que se sirve*). El PDF va sin `sandbox` y, por ahora, sin
    `frame-ancestors` (falta probar a mano el visor de Chrome con él).
-2. **Entrega 1b, app:** `fileKind` y `normalizeMime`, nombres limpios, `blob:` envueltos, tarjeta y `display()`,
+2. **Entrega 1b, app (hecha, v0.049; ver "Cómo quedó"):** `fileKind` y `normalizeMime`, nombres limpios, `blob:` envueltos, tarjeta y `display()`,
    el manejador de archivos, abrir y bajar (computadora: segundo clic y barra; teléfono: la hoja), carrete y
    "Acomodar" que cortan, impresión y papelera, espacio.
 3. Después: vista previa con la miniatura de Drive, tarjeta por tema, `/Archivo`.
 
-### Decisiones tomadas (a confirmar por Lega)
+### Decisiones (respondidas por Lega el 2026-09-30)
+
+- Tarjeta horizontal, la propuesta (Lega quiere ver las dos opciones para decidir más adelante).
+- En el teléfono, un toque abre la hoja: de acuerdo.
+- Carpetas: hoy se rechazan pidiendo que se compriman; **Lega quiere subirlas enteras** (P.9 del roadmap).
+- Originales: el archivo que eligió el usuario nunca se toca; se puede liberar la copia de la app en el
+  navegador después de subir (P.10 del roadmap).
+- Vista previa: en una segunda entrega, de acuerdo.
+
+### Decisiones tomadas antes (quedan como estaban salvo lo de arriba)
 
 - Los originales de los adjuntos **se quedan en el dispositivo** después de subir, como las fotos (borrarlos es
   otra decisión, pendiente).
@@ -228,3 +237,44 @@ nuevas, sin migración) se mantiene. Cambios:
 - Sin tope de archivos por tanda.
 - Con un portero sin actualizar, los adjuntos se pueden agregar y se bajan con un nombre feo; el diálogo de Drive
   avisa que conviene actualizar el portero.
+
+## Cómo quedó (v0.049)
+
+- `src/media/attachments.ts`: `fileKind` (un SVG o un subtipo XML es adjunto), `inlineType` (más estricta que el
+  portero: solo fotos y audio que el navegador muestra, videos, PDF y texto plano; un HEIC, un PSD o un AIFF se
+  bajan con su nombre), `attachmentFamily`,
+  `extensionLabel`, `cleanFileName`, `safeBlob` y la tarjeta (`attachmentCardUrl`: SVG de 360×96, texto medido
+  con margen para las fuentes anchas, variantes con la misma forma).
+- `src/media/queue.ts`: acepta cualquier archivo con portero (sin portero, solo imágenes, con el aviso de
+  conectar Drive); aviso de espacio antes de guardar algo grande; `fileInfo`, `localOriginal`, `passInfo`;
+  `display()` con la tarjeta en caché; un Drive lleno (507) deja la subida detenida con el aviso.
+- `src/ui/carreteLoader.ts`: todo original que se baja va como `octet-stream`; `openTarget` y `downloadTarget`;
+  *Download* (en la barra y en el carrete) con un pase del portero lleva `?download=1` (si no, un PDF se abriría
+  en vez de bajarse).
+- `src/ui/fileDrop.ts`: soltar y pegar (un bloque `image` por archivo, en orden, los archivos leídos en el acto,
+  carpetas rechazadas; reemplaza un párrafo vacío solo si no tiene bloques adentro); `PageEditor.tsx` lo usa en `pasteHandler` y en la captura de soltar, con una guarda en
+  `window` para lo que se suelta afuera.
+- `src/ui/attachments.ts` (qué bloque es un adjunto y la clase `sd-attachment`; sin los datos del archivo, solo
+  por una extensión conocida), `src/ui/attachmentOpen.ts` (preparar, abrir, bajar; lo que no se pudo preparar
+  no se guarda y el próximo pedido vuelve a probar) y `src/ui/AttachmentSheet.tsx` (la hoja: *Open*, *Download*, *Share*).
+- Barra: *Open* en un adjunto, sin tamaños rápidos ni "Acomodar"; sin *Rename* ni la vista previa de BlockNote
+  en los archivos del Drive. El carrete y "Acomodar" cortan en los adjuntos. La papelera muestra la etiqueta
+  del tipo.
+- Probado en Chromium (`attach.mjs`, en el repo de pruebas privado; sin llegar al portero real ni escribir en
+  la base): tres archivos soltados quedan en orden, las tarjetas miden 360 px, el primer clic elige y el
+  segundo abre el PDF (desde el dispositivo, con su tipo), el zip se baja con su nombre, la barra, el carrete
+  con solo la foto, soltar afuera no navega, la hoja en el teléfono y el aviso sin portero.
+- Auditoría de la entrega 1b (independiente): arregladas antes de publicar la descarga sin `?download=1`, el
+  párrafo con hijos que se borraba al soltar, la lista de lo que se abre (HEIC, PSD, XML), los caracteres
+  invisibles del nombre, los fallos que quedaban guardados, la barra espaciadora (abre como el teclado) y los
+  estilos de la tarjeta (tiradores, fila, puntero).
+- Pendiente:
+  - Probar a mano con el portero real: PDF en una pestaña con el visor, descargas con nombre, Safari y el
+    iPhone instalado.
+  - La vista previa con la miniatura de Drive (entrega 2).
+  - Un adjunto de otro dispositivo que todavía no está registrado se ve con el marcador de foto hasta que llega
+    su fila.
+  - El aviso "este portero todavía no pone el nombre" (`named: false` de `downloadTarget`) se calcula pero no
+    se muestra: con el portero v0.048 siempre llega el nombre. Mostrarlo si algún día hay porteros viejos.
+  - En el carrete, un adjunto no aparece (se corta en él); mostrarlo como tarjeta grande con *Open* y
+    *Download* queda para más adelante.

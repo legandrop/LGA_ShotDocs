@@ -2,6 +2,7 @@ import { localize, stored, t } from '../i18n';
 import { FileRejected } from '../sync/files';
 import type { MediaRemote } from '../sync/remote';
 import { errorMessage, RemoteError } from '../sync/types';
+import { attachmentCardUrl, cleanFileName, EXTENSION_MIME, fileKind, mimeFromName, type FileKind } from './attachments';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
 import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress } from './portero';
 import {
@@ -9,7 +10,6 @@ import {
   deletedUrl,
   dimension,
   requestedLabel,
-  mediaKind,
   placeholderUrl,
   probeMedia,
   seconds,
@@ -45,44 +45,20 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MIME = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/;
 const MAX_BACKOFF_MS = 10 * 60_000;
 
-/** Tipos por extensión, para lo que el navegador entrega sin tipo (pasa con .mov y .heic en Windows). */
-const EXTENSION_MIME: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  avif: 'image/avif',
-  heic: 'image/heic',
-  heif: 'image/heif',
-  tif: 'image/tiff',
-  tiff: 'image/tiff',
-  dng: 'image/x-adobe-dng',
-  mov: 'video/quicktime',
-  mp4: 'video/mp4',
-  m4v: 'video/x-m4v',
-  webm: 'video/webm',
-  mkv: 'video/x-matroska',
-  avi: 'video/x-msvideo',
-  mts: 'video/mp2t',
-  '3gp': 'video/3gpp',
-};
-
 /**
  * El tipo como lo pide la base: minúsculas, `tipo/subtipo`, sin parámetros. Si el navegador no lo da, sale
- * de la extensión; si tampoco, `application/octet-stream`.
+ * de la extensión (fotos, videos y los adjuntos conocidos: PDF, ZIP, RAR, NK...); si tampoco,
+ * `application/octet-stream`.
  */
 export function normalizeMime(type: string | undefined, name = ''): string {
   const base = (type ?? '').split(';')[0].trim().toLowerCase();
   if (base.length <= 200 && MIME.test(base) && base !== 'application/octet-stream') return base;
-  const ext = /\.([a-z0-9]+)$/i.exec(name.trim())?.[1]?.toLowerCase();
-  return (ext && EXTENSION_MIME[ext]) || 'application/octet-stream';
+  return mimeFromName(name) ?? 'application/octet-stream';
 }
 
-/** Fotos y videos; SVG no (puede traer scripts). */
+/** Fotos y videos que se muestran; SVG (puede traer scripts), PSD, EXR y compañía son adjuntos. */
 export function isMediaFile(file: { type: string; name?: string }): boolean {
-  const mime = normalizeMime(file.type, file.name);
-  return mediaKind(mime) !== null && mime !== 'image/svg+xml';
+  return fileKind(normalizeMime(file.type, file.name), file.name) !== 'file';
 }
 
 /** El id de una dirección `sdmedia://<id>`, o `null` si no es una. */
@@ -92,17 +68,32 @@ export function mediaIdOf(url: string | undefined | null): string | null {
   return UUID.test(id) ? id : null;
 }
 
-/** El nombre para la base (1 a 250 caracteres), conservando la extensión si hay que cortarlo. */
+/**
+ * El nombre para la base (1 a 250 caracteres), limpio (`cleanFileName`) y conservando la extensión si hay que
+ * cortarlo. Sin nombre, uno genérico con la extensión del tipo (`image.jpg`, `file.pdf`).
+ */
 function cleanName(name: string | undefined, mime: string): string {
-  // eslint-disable-next-line no-control-regex
-  const trimmed = (name ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
-  if (!trimmed) {
-    const ext = Object.entries(EXTENSION_MIME).find(([, m]) => m === mime)?.[0] ?? 'bin';
-    return `${mediaKind(mime) ?? 'file'}.${ext}`;
+  const clean = cleanFileName(name ?? '');
+  if (clean !== 'file.bin' || /file\.bin$/i.test((name ?? '').trim())) return clean;
+  const ext = Object.entries(EXTENSION_MIME).find(([, m]) => m === mime)?.[0] ?? 'bin';
+  return `${fileKind(mime)}.${ext}`;
+}
+
+/** Desde este peso, antes de guardar se pregunta cuánto lugar queda. */
+const BIG_FILE = 50 * 1024 * 1024;
+/**
+ * Lo que se deja libre siempre: el texto de las páginas vive en la misma cuota, y quedarse sin lugar ahí es
+ * mucho peor que no poder agregar un archivo.
+ */
+const ROOM_MARGIN = 200 * 1024 * 1024;
+
+/** El almacenamiento del navegador, si lo expone. */
+function storageManager(): StorageManager | undefined {
+  try {
+    return (globalThis as { navigator?: Navigator }).navigator?.storage;
+  } catch {
+    return undefined;
   }
-  if (trimmed.length <= 250) return trimmed;
-  const ext = /\.[A-Za-z0-9]{1,10}$/.exec(trimmed)?.[0] ?? '';
-  return trimmed.slice(0, 250 - ext.length) + ext;
 }
 
 function backoff(failures: number): number {
@@ -144,7 +135,7 @@ function flipLink(link: MediaLink, removed: boolean): MediaLink {
 }
 
 /** Qué hacer con un error: esperar la red, reintentar más tarde, o dejarlo a la vista hasta "Retry". */
-function classify(err: unknown): Outcome {
+export function classify(err: unknown): Outcome {
   if (err instanceof UploadError && err.cancelled) return 'cancelled';
   if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled';
   if (err instanceof RemoteError) {
@@ -156,6 +147,9 @@ function classify(err: unknown): Outcome {
     if (err.status === 0) return 'offline';
     // 400: datos que no coinciden; 403: sin permiso; 404: el archivo no existe para el portero.
     if (err.status === 400 || err.status === 403 || err.status === 404) return 'blocked';
+    // 507: el Drive del dueño está lleno (portero desde v0.048). Mandar otra vez 8 MiB cada tanto no lo
+    // arregla: queda a la vista con el aviso hasta que el dueño haga lugar y se toque "Retry".
+    if (err.status === 507) return 'blocked';
     // La base apunta a otro archivo de Drive: no se arregla solo, lo tiene que ver el dueño.
     if (err.status === 409 && /different Drive file/i.test(err.message)) return 'blocked';
     // 401 (la sesión se está renovando), 409 (Drive sin conectar), 410, 429 y 5xx: se arreglan solos o
@@ -172,8 +166,13 @@ function friendly(err: unknown): string {
   return message;
 }
 
-/** Lo mínimo del portero que usa la cola (las pruebas usan uno en memoria). */
-export type MediaPortero = Pick<Portero, 'upload' | 'pass' | 'trash'>;
+/**
+ * Lo mínimo del portero que usa la cola (las pruebas usan uno en memoria). `passInfo`, si el cliente lo tiene:
+ * el pase con la marca `named` de un portero que ya sirve los archivos con su nombre.
+ */
+export type MediaPortero = Pick<Portero, 'upload' | 'pass' | 'trash'> & {
+  passInfo?: (target: { file: string }) => Promise<{ url: string; named: boolean }>;
+};
 
 export interface MediaQueueOptions {
   /** El cliente del portero para una dirección (`workspace_settings.media_url`). */
@@ -235,10 +234,29 @@ export interface MediaFailure {
 
 /** Lo que el visor necesita para mostrar un archivo. */
 export interface MediaSource {
+  /** Foto o video; `null` si es un adjunto o no se sabe (ver `mime` y `fileInfo`). */
   kind: MediaKind | null;
   name: string;
   /** El original, si está en este dispositivo. */
   original: Blob | null;
+  /** El tipo (`files.mime`), si se sabe. */
+  mime?: string;
+}
+
+/** Lo que se sabe de un archivo sin esperar a nada (ver `MediaQueue.fileInfo`). */
+export interface FileInfo {
+  kind: FileKind;
+  mime: string;
+  name: string;
+  size: number | null;
+  /** El original está en este dispositivo. */
+  local: boolean;
+}
+
+/** Foto o video, o `null` para un adjunto: lo que entiende el visor. */
+function viewKind(mime: string, name: string): MediaKind | null {
+  const kind = fileKind(mime, name);
+  return kind === 'file' ? null : kind;
 }
 
 export class MediaQueue {
@@ -277,7 +295,14 @@ export class MediaQueue {
   private readonly probing = new Map<string, Promise<void>>();
   /** Archivos de otros dispositivos que se mostraron sin miniatura: se vuelve a preguntar cada tanto. */
   private readonly missing = new Set<string>();
+  /** Adjuntos de otros dispositivos que todavía no terminaron de llegar a Drive: se vuelve a preguntar. */
+  private readonly unfinished = new Set<string>();
   private missingCheckedAt = 0;
+  /** Las tarjetas de los adjuntos ya dibujadas (no se vuelve a preguntar nada en cada dibujo). */
+  private readonly cards = new Map<string, string>();
+  /** Lo que se sabe de cada archivo que pasó por acá (ver `fileInfo`). */
+  private readonly infos = new Map<string, FileInfo>();
+  private persistAsked = false;
   private readonly thumbListeners = new Set<(id: string) => void>();
   private readonly probe: (file: Blob, mime: string) => Promise<Probe>;
   private readonly playMark: (thumb: Blob) => Promise<Blob>;
@@ -360,9 +385,9 @@ export class MediaQueue {
   // --- agregar --------------------------------------------------------------------------------------
 
   /**
-   * Guarda la foto o el video en el dispositivo y lo pone en la cola. Devuelve la dirección para el bloque
-   * `image`; recién cuando esto termina el archivo está a salvo. Medidas y miniatura se sacan después, del
-   * archivo ya guardado (ver `ensureProbed`).
+   * Guarda el archivo (foto, video o, con portero, cualquier otro) en el dispositivo y lo pone en la cola.
+   * Devuelve la dirección para el bloque `image`; recién cuando esto termina el archivo está a salvo. Medidas
+   * y miniatura se sacan después, del archivo ya guardado (ver `ensureProbed`).
    */
   async add(pageId: string, file: Blob & { name?: string }): Promise<string> {
     this.adding++;
@@ -380,16 +405,19 @@ export class MediaQueue {
 
   private async save(pageId: string, file: Blob & { name?: string }): Promise<string> {
     if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
-    const mime = normalizeMime(file.type, file.name);
-    const kind = mediaKind(mime);
-    if (!kind || mime === 'image/svg+xml') throw new FileRejected(t('media.onlyPhotosVideos'));
     if (file.size <= 0) throw new FileRejected(t('queue.empty'));
+    const mime = normalizeMime(file.type, file.name);
+    const name = cleanName(file.name, mime);
+    // Un adjunto solo va por el portero (sin él, las fotos siguen por el camino de antes).
+    if (!this.enabled && fileKind(mime, name) === 'file') throw new FileRejected(t('queue.needsDrive'));
+    await this.checkRoom(file.size);
+    this.askPersist();
     const id = crypto.randomUUID();
     const record: MediaRecord = {
       id,
       pageId,
       projectId: this.options.projectOf?.(pageId) ?? null,
-      name: cleanName(file.name, mime),
+      name,
       mime,
       size: file.size,
       width: null,
@@ -421,10 +449,42 @@ export class MediaQueue {
       throw err;
     }
     this.seenLinks.add(`${pageId}:${id}`);
+    this.remember(id, record, true);
     this.onQueued?.();
     // Medidas y miniatura, sin esperarlas: el archivo ya está a salvo. La cola no lo registra antes.
     void this.ensureProbed(id);
     return MEDIA_SCHEME + id;
+  }
+
+  /**
+   * Antes de guardar algo grande: si con el archivo no queda el margen libre en la cuota del navegador, no se
+   * guarda (se avisa). Si el navegador no dice cuánto hay, se prueba igual.
+   */
+  private async checkRoom(size: number): Promise<void> {
+    if (size <= BIG_FILE) return;
+    const storage = storageManager();
+    if (typeof storage?.estimate !== 'function') return;
+    let estimate: StorageEstimate;
+    try {
+      estimate = await storage.estimate();
+    } catch {
+      return;
+    }
+    const quota = estimate.quota;
+    if (typeof quota === 'number' && quota > 0 && (estimate.usage ?? 0) + size + ROOM_MARGIN > quota) {
+      throw new FileRejected(t('queue.noRoom'));
+    }
+  }
+
+  /** Pide una vez que el navegador no borre lo guardado cuando le falte lugar (si no lo da, sigue igual). */
+  private askPersist(): void {
+    if (this.persistAsked) return;
+    this.persistAsked = true;
+    try {
+      void storageManager()?.persist?.().catch(() => false);
+    } catch {
+      // Un navegador sin `persist`.
+    }
   }
 
   /**
@@ -452,9 +512,10 @@ export class MediaQueue {
     const record = await db.get('files', id);
     if (!record || record.probed !== false) return;
     const blob = await db.get('blobs', id);
-    const kind = mediaKind(record.mime);
+    // A un adjunto (también un PSD o un SVG) no se le sacan medidas ni miniatura: se ve como tarjeta.
+    const kind = fileKind(record.mime, record.name);
     const none: Probe = { width: null, height: null, duration: null, thumb: null };
-    const probe = blob ? await this.probe(blob, record.mime).catch(() => none) : none;
+    const probe = blob && kind !== 'file' ? await this.probe(blob, record.mime).catch(() => none) : none;
     const tx = db.transaction(['files', 'thumbs'], 'readwrite');
     const current = await tx.objectStore('files').get(id);
     if (current) {
@@ -485,6 +546,7 @@ export class MediaQueue {
     const old = this.objectUrls.get(id);
     if (old) URL.revokeObjectURL(old);
     this.objectUrls.delete(id);
+    this.cards.delete(id);
     this.missing.delete(id);
     for (const fn of this.thumbListeners) fn(id);
   }
@@ -692,6 +754,7 @@ export class MediaQueue {
   dispose(): void {
     for (const url of this.objectUrls.values()) URL.revokeObjectURL(url);
     this.objectUrls.clear();
+    this.cards.clear();
   }
 
   private async round(skipPage: (pageId: string) => boolean): Promise<void> {
@@ -732,13 +795,26 @@ export class MediaQueue {
 
   /**
    * Los archivos de otros dispositivos que se mostraron con un ícono porque todavía no tenían miniatura:
-   * cada tanto se pregunta si ya la tienen, y si llegó, se baja y se avisa al editor.
+   * cada tanto se pregunta si ya la tienen, y si llegó, se baja y se avisa al editor. Lo mismo con los que
+   * todavía no estaban en la base y resultan ser adjuntos (no tienen miniatura: la tarjeta sale de la fila), y
+   * con los adjuntos que todavía no habían terminado de llegar a Drive.
    */
   private async refreshMissing(): Promise<void> {
-    if (this.missing.size === 0 || this.now() - this.missingCheckedAt < 60_000) return;
+    const ids = [...new Set([...this.missing, ...this.unfinished])];
+    if (ids.length === 0 || this.now() - this.missingCheckedAt < 60_000) return;
     this.missingCheckedAt = this.now();
-    const rows = await this.remote.fetchMediaFiles([...this.missing]);
+    const rows = await this.remote.fetchMediaFiles(ids);
     for (const row of rows) {
+      if (fileKind(row.mime, row.name) === 'file') {
+        // Sigue sin llegar a Drive: la tarjeta que se ve ya es la de "todavía no".
+        if (this.unfinished.has(row.id) && !row.drive_id && !isDeletedRow(row)) continue;
+        const known = this.knownFrom(row);
+        await this.store.put('known', known);
+        this.remember(row.id, known, this.infos.get(row.id)?.local ?? false);
+        this.unfinished.delete(row.id);
+        this.thumbReady(row.id);
+        continue;
+      }
       if (!row.thumb_at) continue;
       const thumb = await this.remote.downloadThumb(row.id).catch(() => undefined);
       if (!thumb) continue;
@@ -1155,25 +1231,33 @@ export class MediaQueue {
    * acá o la bajada del bucket `thumbs`; en un video, con una marca de "play") o, si no hay, un ícono con el
    * nombre. El original solo lo muestra el carrete. Nunca falla. Otra dirección vuelve tal cual.
    *
+   * Un adjunto (ver `fileKind`) se ve como una tarjeta con el ícono del tipo, el nombre y el peso.
+   *
    * `pageId`: la página donde se muestra. Si el archivo es de otro proyecto (se pegó el bloque desde otro
-   * proyecto), se ve el marcador *Photo from another project* en vez de la imagen, en todos los dispositivos.
+   * proyecto), se ve el marcador *Photo from another project* (o la tarjeta de un archivo de otro proyecto) en
+   * vez de la imagen, en todos los dispositivos.
    */
   resolve(url: string, pageId?: string): Promise<string> {
     const id = mediaIdOf(url);
     if (!id) return Promise.resolve(url);
     if (pageId) {
-      return this.foreignTo(id, pageId).then((kind) =>
-        kind === false ? this.resolveOwn(id) : placeholderUrl(kind, foreignPlaceholder()),
-      );
+      return this.foreignTo(id, pageId).then((kind) => {
+        if (kind === false) return this.resolveOwn(id);
+        if (kind === 'file') {
+          const info = this.infos.get(id);
+          return attachmentCardUrl({ name: info?.name ?? '', mime: info?.mime ?? '', size: info?.size, state: 'foreign' });
+        }
+        return placeholderUrl(kind, foreignPlaceholder());
+      });
     }
     return this.resolveOwn(id);
   }
 
   /**
-   * Si el archivo es de otro proyecto que la página: `false` si no (o si no se sabe), o el tipo (foto o
-   * video) para el marcador. Mira lo que sabe el dispositivo y, si no sabe el proyecto, le pregunta a la base.
+   * Si el archivo es de otro proyecto que la página: `false` si no (o si no se sabe), o el tipo (foto, video o
+   * adjunto) para el marcador. Mira lo que sabe el dispositivo y, si no sabe el proyecto, le pregunta a la base.
    */
-  private async foreignTo(id: string, pageId: string): Promise<MediaKind | null | false> {
+  private async foreignTo(id: string, pageId: string): Promise<FileKind | null | false> {
     const pageProject = this.options.projectOf?.(pageId);
     if (!pageProject) return false;
     try {
@@ -1181,21 +1265,25 @@ export class MediaQueue {
       const row = this.db ? await this.db.get('links', `${pageId}:${id}`) : undefined;
       if (row?.foreign && !row.removed && row.pending === 0) {
         const meta = (this.db ? await this.db.get('known', id) : undefined) ?? null;
-        return meta ? mediaKind(meta.mime) : null;
+        if (!meta) return null;
+        this.remember(id, meta, false);
+        return fileKind(meta.mime, meta.name);
       }
       const own = this.db ? await this.db.get('files', id) : undefined;
-      if (own?.projectId) return own.projectId !== pageProject && mediaKind(own.mime);
+      if (own) this.remember(id, own, true);
+      if (own?.projectId) return own.projectId !== pageProject && fileKind(own.mime, own.name);
       let known = this.db ? await this.db.get('known', id) : undefined;
       if (!known || known.projectId === undefined) known = (await this.fetchMeta(id).catch(() => null)) ?? known;
       if (!known?.projectId) return false;
-      return known.projectId !== pageProject && mediaKind(known.mime);
+      this.remember(id, known, !!own);
+      return known.projectId !== pageProject && fileKind(known.mime, known.name);
     } catch {
       return false;
     }
   }
 
   private resolveOwn(id: string): Promise<string> {
-    const cached = this.objectUrls.get(id);
+    const cached = this.objectUrls.get(id) ?? this.cards.get(id);
     if (cached) return Promise.resolve(cached);
     let pending = this.resolving.get(id);
     if (!pending) {
@@ -1211,19 +1299,28 @@ export class MediaQueue {
     return url;
   }
 
+  /** La tarjeta de un adjunto, guardada para los próximos dibujos (hasta que algo cambie: `thumbReady`). */
+  private card(id: string, info: Parameters<typeof attachmentCardUrl>[0]): string {
+    const url = attachmentCardUrl(info);
+    this.cards.set(id, url);
+    return url;
+  }
+
   private async display(id: string): Promise<string> {
     try {
       const db = this.store;
       // Mandado a la papelera de Drive (papelera de archivos): ni roto ni pendiente, borrado, con la
       // miniatura si la hay.
       const cached = await db.get('known', id);
-      if (cached?.deleted) return await this.deletedDisplay(id, cached, mediaKind(cached.mime));
+      if (cached?.deleted) return await this.deletedDisplay(id, cached);
       // Lo que se sabía puede ser de antes: se pregunta una vez por sesión y, si resulta borrado, el editor
       // cambia la imagen (como cuando llega una miniatura).
       void this.checkDeleted(id);
       const own = await db.get('files', id);
       if (own) {
-        const kind = mediaKind(own.mime);
+        this.remember(id, own, true);
+        const kind = viewKind(own.mime, own.name);
+        if (!kind) return this.card(id, { name: own.name, mime: own.mime, size: own.size });
         const thumb = await db.get('thumbs', id);
         if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
         // Si todavía se está sacando, `subscribeThumbs` avisa cuando llega.
@@ -1231,13 +1328,25 @@ export class MediaQueue {
       }
       let thumb = await db.get('thumbs', id);
       let meta = await db.get('known', id);
-      if (!meta || (!thumb && !meta.thumbAt)) meta = (await this.fetchMeta(id).catch(() => null)) ?? meta;
+      const attachment = !!meta && fileKind(meta.mime, meta.name) === 'file';
+      // Un adjunto no tiene miniatura: se pregunta solo si todavía no había llegado a Drive.
+      if (!meta || (attachment ? !meta.driveId : !thumb && !meta.thumbAt)) {
+        meta = (await this.fetchMeta(id).catch(() => null)) ?? meta;
+      }
+      if (meta) this.remember(id, meta, false);
+      if (meta && fileKind(meta.mime, meta.name) === 'file') {
+        if (meta.deleted) return await this.deletedDisplay(id, meta);
+        // No va a `missing`: no hay miniatura que esperar. Si todavía no llegó a Drive, se vuelve a preguntar.
+        if (meta.driveId) this.unfinished.delete(id);
+        else this.unfinished.add(id);
+        return this.card(id, { name: meta.name, mime: meta.mime, size: meta.size, state: meta.driveId ? 'ok' : 'pending' });
+      }
       if (!thumb && meta?.thumbAt) {
         thumb = await this.remote.downloadThumb(id).catch(() => undefined);
         if (thumb) await db.put('thumbs', thumb, id);
       }
-      const kind = meta ? mediaKind(meta.mime) : null;
-      if (meta?.deleted) return await this.deletedDisplay(id, meta, kind);
+      const kind = meta ? viewKind(meta.mime, meta.name) : null;
+      if (meta?.deleted) return await this.deletedDisplay(id, meta);
       if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
       // Sin miniatura todavía (otro dispositivo la está subiendo, o no hay red): se vuelve a preguntar.
       this.missing.add(id);
@@ -1247,12 +1356,14 @@ export class MediaQueue {
     }
   }
 
-  /** La foto o el video que un dueño o admin mandó a la papelera de Drive. */
-  private async deletedDisplay(id: string, meta: KnownFile, kind: MediaKind | null): Promise<string> {
-    const thumb = this.db ? await this.db.get('thumbs', id).catch(() => undefined) : undefined;
+  /** La foto, el video o el adjunto que un dueño o admin mandó a la papelera de Drive. */
+  private async deletedDisplay(id: string, meta: KnownFile): Promise<string> {
     // Pedido y confirmado por el portero, o solo pedido (Drive falló: se puede volver a pedir desde la
     // papelera). Sin el dato (guardado antes), se lo da por confirmado.
     const notice = meta.inDriveTrash === false ? requestedLabel() : deletedLabel();
+    const kind = viewKind(meta.mime, meta.name);
+    if (!kind) return this.card(id, { name: meta.name, mime: meta.mime, size: meta.size, state: 'deleted', notice });
+    const thumb = this.db ? await this.db.get('thumbs', id).catch(() => undefined) : undefined;
     return deletedUrl(kind, meta.name, thumb ?? null, notice);
   }
 
@@ -1284,21 +1395,9 @@ export class MediaQueue {
         const rows = await this.remote.fetchMediaFiles([...ids]);
         const found = new Map<string, KnownFile>();
         for (const row of rows) {
-          const known: KnownFile = {
-            id: row.id,
-            name: row.name,
-            mime: row.mime,
-            width: row.width,
-            height: row.height,
-            duration: row.duration,
-            thumbAt: row.thumb_at,
-            driveId: row.drive_id,
-            deleted: isDeletedRow(row),
-            inDriveTrash: !!row.drive_trashed_at,
-            projectId: row.project_id ?? null,
-            fetchedAt: this.now(),
-          };
+          const known = this.knownFrom(row);
           found.set(row.id, known);
+          this.remember(row.id, known, this.infos.get(row.id)?.local ?? false);
           // Sin base de archivos en el dispositivo se usa igual, sin guardarlo.
           if (this.db) await this.db.put('known', known);
         }
@@ -1310,30 +1409,88 @@ export class MediaQueue {
     return this.metaBatch.result.then((found) => found.get(id) ?? null);
   }
 
+  /** Una fila de `files` como se guarda en el dispositivo. */
+  private knownFrom(row: MediaFileRow): KnownFile {
+    return {
+      id: row.id,
+      name: row.name,
+      mime: row.mime,
+      size: row.size ?? null,
+      width: row.width,
+      height: row.height,
+      duration: row.duration,
+      thumbAt: row.thumb_at,
+      driveId: row.drive_id,
+      deleted: isDeletedRow(row),
+      inDriveTrash: !!row.drive_trashed_at,
+      projectId: row.project_id ?? null,
+      fetchedAt: this.now(),
+    };
+  }
+
+  /** Anota lo que se sabe del archivo para `fileInfo`. */
+  private remember(id: string, file: { mime: string; name: string; size?: number | null }, local: boolean): void {
+    this.infos.set(id, {
+      kind: fileKind(file.mime, file.name),
+      mime: file.mime,
+      name: file.name,
+      size: typeof file.size === 'number' ? file.size : (this.infos.get(id)?.size ?? null),
+      local,
+    });
+  }
+
+  /**
+   * Lo que ya se sabe del archivo (tipo, nombre, peso, si está en este dispositivo), sin esperar a nada:
+   * `null` si todavía no pasó por `resolve`, `source` o la base. Para decidir en el acto (un clic, "Acomodar",
+   * el carrete) si es un adjunto.
+   */
+  fileInfo(id: string): FileInfo | null {
+    return this.infos.get(id.toLowerCase()) ?? null;
+  }
+
   /** El original (si está en el dispositivo), el tipo y el nombre, para el visor. */
   async source(id: string): Promise<MediaSource> {
     if (!this.db) {
       // Sin base de archivos: el tipo y el nombre salen del servidor (no hay original en el dispositivo).
       const meta = await this.fetchMeta(id).catch(() => null);
-      return { kind: meta ? mediaKind(meta.mime) : null, name: meta?.name ?? '', original: null };
+      if (!meta) return { kind: null, name: '', original: null };
+      return { kind: viewKind(meta.mime, meta.name), name: meta.name, original: null, mime: meta.mime };
     }
     const db = this.db;
     const own = await db.get('files', id);
-    if (own) return { kind: mediaKind(own.mime), name: own.name, original: (await db.get('blobs', id)) ?? null };
+    if (own) {
+      this.remember(id, own, true);
+      return { kind: viewKind(own.mime, own.name), name: own.name, original: (await db.get('blobs', id)) ?? null, mime: own.mime };
+    }
     const meta = (await db.get('known', id)) ?? (await this.fetchMeta(id).catch(() => null));
-    return { kind: meta ? mediaKind(meta.mime) : null, name: meta?.name ?? '', original: null };
+    if (!meta) return { kind: null, name: '', original: null };
+    this.remember(id, meta, false);
+    return { kind: viewKind(meta.mime, meta.name), name: meta.name, original: null, mime: meta.mime };
   }
 
   /**
-   * La foto original si está en este dispositivo, o `null` (un video, o no está). Solo lee lo guardado acá,
-   * nunca la red: la usa la impresión (src/ui/printPage.ts).
+   * La foto original si está en este dispositivo, o `null` (un video, un adjunto, o no está). Solo lee lo
+   * guardado acá, nunca la red: la usa la impresión (src/ui/printPage.ts).
    */
   async localImage(id: string): Promise<Blob | null> {
     if (!this.db) return null;
     try {
       const own = await this.db.get('files', id);
-      if (!own || mediaKind(own.mime) !== 'image') return null;
+      if (!own || fileKind(own.mime, own.name) !== 'image') return null;
       return (await this.db.get('blobs', id)) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * El original guardado en este dispositivo, de cualquier tipo y tal cual, o `null` si no está. Nunca la
+   * red. Ojo: antes de darle una dirección `blob:`, envolverlo con `safeBlob`.
+   */
+  async localOriginal(id: string): Promise<Blob | null> {
+    if (!this.db) return null;
+    try {
+      return (await this.db.get('blobs', id.toLowerCase())) ?? null;
     } catch {
       return null;
     }
@@ -1356,6 +1513,20 @@ export class MediaQueue {
   async pass(id: string): Promise<string> {
     if (!this.url) throw new Error(t('queue.noServer'));
     return this.porteroFor(this.url).pass({ file: id });
+  }
+
+  /**
+   * El pase y si el portero lo sirve con el nombre del archivo (`named`, de un portero actualizado). Con un
+   * portero anterior, el mismo pase con `named: false`: se baja igual, con un nombre feo.
+   */
+  async passInfo(id: string): Promise<{ url: string; named: boolean }> {
+    if (!this.url) throw new Error(t('queue.noServer'));
+    const portero = this.porteroFor(this.url);
+    if (portero.passInfo) {
+      const info = await portero.passInfo({ file: id });
+      return { url: info.url, named: info.named === true };
+    }
+    return { url: await portero.pass({ file: id }), named: false };
   }
 
   // --- papelera de archivos -------------------------------------------------------------------------

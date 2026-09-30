@@ -17,6 +17,7 @@ import { errorMessage } from '../sync/types';
 import { RestoreIcon, TrashIcon } from './icons';
 import { notify } from './notice';
 import { useCurrentProject } from './project';
+import { extensionLabel, fileKind } from '../media/attachments';
 
 // La papelera del proyecto: las páginas y, desde el paso 11 (Docs/Plan_Workspaces.md), la pestaña Archivos
 // con las fotos y los videos que ninguna página usa. La pestaña se muestra solo si la base deja verla
@@ -289,7 +290,10 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
   );
 }
 
-/** La miniatura del archivo (la del dispositivo o la del bucket `thumbs`), o un recuadro vacío. */
+/**
+ * La miniatura del archivo (la del dispositivo o la del bucket `thumbs`); un adjunto sin miniatura, la etiqueta
+ * de su tipo (PDF, ZIP…); si no, un recuadro vacío.
+ */
 function FileThumb({ id, name }: { id: string; name: string }) {
   const { media } = useServices();
   const [src, setSrc] = useState<string | null>(null);
@@ -303,5 +307,7 @@ function FileThumb({ id, name }: { id: string; name: string }) {
       alive = false;
     };
   }, [media, id]);
-  return src ? <img className="trash-thumb" src={src} alt={name} /> : <span className="trash-thumb" aria-hidden="true" />;
+  if (src) return <img className="trash-thumb" src={src} alt={name} />;
+  if (fileKind(null, name) === 'file') return <span className="trash-thumb trash-thumb-file" aria-hidden="true">{extensionLabel(name, null)}</span>;
+  return <span className="trash-thumb" aria-hidden="true" />;
 }

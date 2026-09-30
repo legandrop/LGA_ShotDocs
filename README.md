@@ -37,7 +37,7 @@ its own project: a tree of pages you own.
 
 ## Status
 
-In production (v0.042). What works today:
+In production (v0.049). What works today:
 
 - Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
   open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
@@ -70,6 +70,12 @@ In production (v0.042). What works today:
 - A file trash per project: photos and videos no page uses anymore show in the *Files* tab of the trash, and
   the owner and admins can send them to the Google Drive trash (recoverable there for 30 days).
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
+- Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
+  (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
+  photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the
+  rows and breaks sheets where the page shows them.
+- Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;
+  a PDF opens in a new tab and everything else downloads with its name.
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets.
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
@@ -83,7 +89,7 @@ Templates and the assistant come later. The plan, the decisions and the roadmap 
 npm install
 cp .env.example .env.local   # your Supabase project URL and publishable key
 npm run dev                  # http://localhost:5173
-npm test                     # all 622 tests: sync, editor, UI, file gateway client and Worker
+npm test                     # all 678 tests: sync, editor, UI, file gateway client and Worker
 npm run typecheck            # app types
 npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
 npm run build                # production build in dist/

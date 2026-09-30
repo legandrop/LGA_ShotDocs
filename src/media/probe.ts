@@ -209,7 +209,8 @@ export async function withPlayMark(thumb: Blob): Promise<Blob> {
   }
 }
 
-function escapeXml(text: string): string {
+/** El texto listo para ir dentro de un SVG (sin `<`, `&` ni comillas sueltas). */
+export function escapeXml(text: string): string {
   return text.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 

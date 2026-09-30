@@ -1,6 +1,7 @@
+import { fileKind, inlineType, safeBlob } from '../media/attachments';
 import { PorteroError } from '../media/portero';
 import type { MediaKind } from '../media/probe';
-import type { MediaQueue, MediaSource } from '../media/queue';
+import { normalizeMime, type MediaQueue, type MediaSource } from '../media/queue';
 import type { PageFiles } from '../sync/files';
 import { isNetworkError } from '../sync/types';
 import { fallbackName, type CarreteItem } from './carrete';
@@ -10,6 +11,10 @@ import { fallbackName, type CarreteItem } from './carrete';
 // dispositivo (anda sin red) o el archivo entero con un pase del portero. Lo que ya se pidió se guarda
 // mientras el carrete está abierto, así ir y volver no pide dos veces; los pases del portero, mientras
 // les falte más de una hora para vencer (también entre un carrete y el siguiente).
+//
+// Todo `blob:` que sale de un original se envuelve de nuevo (Docs/Doc_Adjuntos.md): un `blob:` tiene el origen
+// de la app, y con los adjuntos un original puede ser un HTML o un SVG. Para bajar, siempre
+// `application/octet-stream`; para mostrar en el carrete, su tipo solo si es una foto o un video.
 
 export interface Preview {
   /** `null` si no se sabe (sin red y sin datos del archivo). */
@@ -24,6 +29,8 @@ export interface Full {
   url: string;
   /** Está en este dispositivo (se baja con su nombre y anda sin red). */
   local: boolean;
+  /** Es un pase del portero: para bajarlo se le agrega `?download=1` (si no, un PDF se abriría). */
+  portero?: boolean;
 }
 
 export interface CarreteLoader {
@@ -39,22 +46,63 @@ export interface CarreteLoader {
 /** El portero da pases de 8 horas: se reusan mientras les falte más de una hora. */
 export const PASS_REUSE_MS = 7 * 60 * 60_000;
 
-// Por cola de archivos (una por sesión del workspace): el pase de una persona no se le da a otra.
-const passCache = new WeakMap<object, Map<string, { url: string; at: number }>>();
+// Por cola de archivos (una por sesión del workspace): el pase de una persona no se le da a otra. `named`: el
+// portero dijo que lo sirve con su nombre; sin el dato (pedido con `pass`), no se sabe.
+const passCache = new WeakMap<object, Map<string, { url: string; at: number; named?: boolean }>>();
 
-/** Un pase del portero para el archivo, reusando el de hace menos de 7 horas. */
-export async function passFor(media: Pick<MediaQueue, 'pass'>, id: string): Promise<string> {
+function passesOf(media: object): Map<string, { url: string; at: number; named?: boolean }> {
   let cache = passCache.get(media);
   if (!cache) {
     cache = new Map();
     passCache.set(media, cache);
   }
+  return cache;
+}
+
+/** Un pase del portero para el archivo, reusando el de hace menos de 7 horas. */
+export async function passFor(media: Pick<MediaQueue, 'pass'>, id: string): Promise<string> {
+  const cache = passesOf(media);
   const known = cache.get(id);
   if (known && Date.now() - known.at < PASS_REUSE_MS) return known.url;
   const at = Date.now();
   const url = await media.pass(id);
   cache.set(id, { url, at });
   return url;
+}
+
+/**
+ * Un pase para bajar: con `named` si el portero lo sirve con su nombre. Un pase guardado sin esa marca no se
+ * usa para bajar (se pide otro: el portero pudo actualizarse); uno con nombre se reusa como `passFor`.
+ */
+async function namedPassFor(media: Pick<MediaQueue, 'pass' | 'passInfo'>, id: string): Promise<{ url: string; named: boolean }> {
+  const cache = passesOf(media);
+  const known = cache.get(id);
+  if (known?.named && Date.now() - known.at < PASS_REUSE_MS) return { url: known.url, named: true };
+  const at = Date.now();
+  const info = await media.passInfo(id);
+  cache.set(id, { url: info.url, at, named: info.named });
+  return info;
+}
+
+/** La dirección del portero que obliga a bajar el archivo (en vez de abrirlo). */
+function forceDownload(url: string): string {
+  return `${url}${url.includes('?') ? '&' : '?'}download=1`;
+}
+
+/** El original con el tipo que le corresponde (el guardado puede no tenerlo: un .mov de Windows llega sin tipo). */
+function typed(original: Blob, mime: string | undefined, name: string): Blob {
+  const type = normalizeMime(mime || original.type, name);
+  return original.type === type ? original : new Blob([original], { type });
+}
+
+/**
+ * El original para mostrar dentro de la app (un `<img>` o un `<video>` del carrete): con su tipo solo si es una
+ * foto o un video; si no, como algo para bajar.
+ */
+function viewBlob(source: MediaSource): Blob {
+  const original = source.original!;
+  const blob = typed(original, source.mime, source.name);
+  return fileKind(blob.type, source.name) === 'file' ? safeBlob(blob, 'download') : blob;
 }
 
 /** Olvida el pase guardado (no anduvo: se pide uno nuevo). */
@@ -64,10 +112,13 @@ export function forgetPass(media: Pick<MediaQueue, 'pass'>, id: string): void {
 
 /**
  * Los atributos del link para bajar el original: con su nombre si está en el dispositivo; si viene del
- * portero, en otra pestaña (un archivo de otro sitio no se puede bajar con su nombre, ver Doc_Carrete.md).
+ * portero, con `?download=1` (el portero lo manda como descarga, con su nombre) y en otra pestaña (si
+ * respondiera un error, no reemplaza la app; ver Doc_Carrete.md).
  */
 export function downloadProps(full: Full, name: string): { href: string; download: string; target?: string; rel?: string } {
-  return full.local ? { href: full.url, download: name } : { href: full.url, download: name, target: '_blank', rel: 'noreferrer' };
+  if (full.local) return { href: full.url, download: name };
+  const href = full.portero ? forceDownload(full.url) : full.url;
+  return { href, download: name, target: '_blank', rel: 'noreferrer' };
 }
 
 /**
@@ -80,14 +131,59 @@ export async function originalFor(
 ): Promise<{ full: Full; name: string; release: () => void }> {
   const source = await media.source(id);
   if (source.original) {
-    const url = URL.createObjectURL(source.original);
+    const url = URL.createObjectURL(safeBlob(source.original, 'download'));
     return { full: { url, local: true }, name: source.name, release: () => URL.revokeObjectURL(url) };
   }
-  return { full: { url: await passFor(media, id), local: false }, name: source.name, release: () => undefined };
+  return { full: { url: await passFor(media, id), local: false, portero: true }, name: source.name, release: () => undefined };
 }
 
-/** Baja el original desde código (la barra de la imagen en el editor). */
-export function startDownload(full: Full, name: string): void {
+type Opener = Pick<MediaQueue, 'source' | 'pass' | 'passInfo' | 'mediaUrl'>;
+
+/**
+ * La dirección para abrir un adjunto en otra pestaña. Si está en el dispositivo, un `blob:` que conserva su
+ * tipo solo si está en la lista de lo que se puede abrir (`inline`; si no, se bajaría); si no, un pase del
+ * portero (que decide por su cuenta si lo muestra o lo baja). `null` si no está acá y no hay portero. Tira si
+ * el pase falla (sin red, todavía sin subir).
+ */
+export async function openTarget(media: Opener, id: string): Promise<{ url: string; release: () => void; inline: boolean } | null> {
+  const source = await media.source(id);
+  if (source.original) {
+    const blob = safeBlob(typed(source.original, source.mime, source.name), 'open');
+    const url = URL.createObjectURL(blob);
+    return { url, release: () => URL.revokeObjectURL(url), inline: inlineType(blob.type) };
+  }
+  if (!media.mediaUrl) return null;
+  const url = await passFor(media, id);
+  return { url, release: () => undefined, inline: inlineType(source.mime ?? '') };
+}
+
+/**
+ * La dirección para bajar un adjunto (o una foto) con su nombre. En el dispositivo, un `blob:` que no se puede
+ * abrir (`application/octet-stream`) para un `<a download>`; si no, el pase con `?download=1`. `named`: `false`
+ * si el portero todavía no pone el nombre (se baja igual, con un nombre feo). `null` si no está acá y no hay
+ * portero.
+ */
+export async function downloadTarget(
+  media: Opener,
+  id: string,
+): Promise<{ url: string; name: string; release: () => void; named: boolean } | null> {
+  const source = await media.source(id);
+  if (source.original) {
+    const url = URL.createObjectURL(safeBlob(source.original, 'download'));
+    return { url, name: source.name, release: () => URL.revokeObjectURL(url), named: true };
+  }
+  if (!media.mediaUrl) return null;
+  const pass = await namedPassFor(media, id);
+  return { url: forceDownload(pass.url), name: source.name, release: () => undefined, named: pass.named };
+}
+
+/**
+ * Baja el original desde código (la barra de la imagen en el editor). Con un `Blob`, lo baja sin que se pueda
+ * abrir (`application/octet-stream`) y suelta la dirección enseguida.
+ */
+export function startDownload(target: Full | Blob, name: string): void {
+  const blobUrl = target instanceof Blob ? URL.createObjectURL(safeBlob(target, 'download')) : null;
+  const full: Full = blobUrl ? { url: blobUrl, local: true } : (target as Full);
   const a = document.createElement('a');
   const props = downloadProps(full, name);
   a.href = props.href;
@@ -98,6 +194,8 @@ export function startDownload(full: Full, name: string): void {
   document.body.appendChild(a);
   a.click();
   a.remove();
+  // La descarga empieza después del clic: la dirección se suelta un rato más tarde.
+  if (blobUrl) setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }
 
 /** El error es por falta de red (o el navegador dice que no hay). */
@@ -151,12 +249,12 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
     if (item.source === 'media' && item.mediaId) {
       const source = await sourceOf(item.mediaId);
       if (source.original) {
-        const url = URL.createObjectURL(source.original);
+        const url = URL.createObjectURL(viewBlob(source));
         if (disposed) URL.revokeObjectURL(url);
         else created.push(url);
         return { url, local: true };
       }
-      return { url: await passFor(media, item.mediaId), local: false };
+      return { url: await passFor(media, item.mediaId), local: false, portero: true };
     }
     if (item.source === 'file') return { url: await files.resolve(item.url), local: true };
     return { url: item.url, local: item.url.startsWith('data:') };

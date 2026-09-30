@@ -1,5 +1,5 @@
 import { FileDownloadButton, useBlockNoteEditor, useComponentsContext, useDictionary, useEditorState } from '@blocknote/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { mediaIdOf } from '../media/queue';
@@ -7,6 +7,7 @@ import { useServices } from '../services';
 import { carreteSourceOf } from './carrete';
 import { isOffline, originalFor, startDownload } from './carreteLoader';
 import { DownloadIcon } from './icons';
+import { isAttachment } from './attachments';
 import { arrangeRows, ROW_PRESETS } from './imageRows';
 import { ROW_WIDTH_PROP } from './imageRowsEditor';
 import { notify } from './notice';
@@ -21,19 +22,20 @@ import { notify } from './notice';
 //     altura (`arrangeRows`).
 
 /** El bloque `image` elegido (uno solo), o `undefined`. */
-function useSelectedImage(): { id: string; url: string; rowWidth: number } | undefined {
+function useSelectedImage(): { id: string; url: string; name: string; rowWidth: number } | undefined {
   const editor = useBlockNoteEditor();
   return useEditorState({
     editor,
     selector: ({ editor: e }) => {
       const blocks = e.getSelection()?.blocks ?? [e.getTextCursorPosition().block];
       if (blocks.length !== 1 || blocks[0].type !== 'image') return undefined;
-      const props = blocks[0].props as { url?: unknown; [ROW_WIDTH_PROP]?: unknown };
+      const props = blocks[0].props as { url?: unknown; name?: unknown; [ROW_WIDTH_PROP]?: unknown };
       const rowWidth = Number(props[ROW_WIDTH_PROP]) || 0;
-      return typeof props.url === 'string' ? { id: blocks[0].id, url: props.url, rowWidth } : undefined;
+      const name = typeof props.name === 'string' ? props.name : '';
+      return typeof props.url === 'string' ? { id: blocks[0].id, url: props.url, name, rowWidth } : undefined;
     },
     // Un objeto nuevo en cada cambio volvería a dibujar la barra: se compara lo que importa.
-    equalityFn: (a, b) => a?.id === b?.id && a?.url === b?.url && a?.rowWidth === b?.rowWidth,
+    equalityFn: (a, b) => a?.id === b?.id && a?.url === b?.url && a?.name === b?.name && a?.rowWidth === b?.rowWidth,
   });
 }
 
@@ -103,16 +105,44 @@ export function MediaViewButton({ onView }: { onView: (blockId: string) => void 
   const Components = useComponentsContext()!;
   const block = useSelectedImage();
   const tr = useT();
+  const attachment = useIsAttachment(block);
   if (!block || !carreteSourceOf(block.url)) return null;
+  // Un adjunto (Docs/Doc_Adjuntos.md) no va al carrete: *Open* lo abre en otra pestaña o lo baja.
+  const label = attachment ? tr('attachment.open') : tr('mediaButton.view');
   return (
     <Components.FormattingToolbar.Button
       className="bn-button"
-      label={tr('mediaButton.view')}
-      mainTooltip={tr('mediaButton.view')}
-      secondaryTooltip={tr('mediaButton.space')}
-      icon={<ViewIcon />}
+      label={label}
+      mainTooltip={label}
+      secondaryTooltip={attachment ? tr('attachment.openTip') : tr('mediaButton.space')}
+      icon={attachment ? <OpenIcon /> : <ViewIcon />}
       onClick={() => onView(block.id)}
     />
+  );
+}
+
+/** La foto elegida es un adjunto (un PDF, un zip…) y no una foto o un video. */
+function useIsAttachment(block: { url: string; name?: string } | undefined): boolean {
+  const { media } = useServices();
+  const id = mediaIdOf(block?.url);
+  return !!id && isAttachment(media, id, block?.name ?? '');
+}
+
+/**
+ * Los botones de BlockNote que no sirven en un archivo del Drive (`sdmedia://`): renombrar (la tarjeta y la
+ * descarga usan el nombre del archivo) y ver u ocultar la vista previa (sin la imagen no se puede abrir).
+ */
+export function HideForDriveFiles({ children }: { children: ReactNode }) {
+  const block = useSelectedImage();
+  if (block && mediaIdOf(block.url)) return null;
+  return <>{children}</>;
+}
+
+function OpenIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 4h5v5M16 4l-7 7M14 11.5V16H4V6h4.5" />
+    </svg>
   );
 }
 
@@ -135,14 +165,19 @@ const SIZE_LABELS: Record<number, { text: string; tip: 'imageSize.full' | 'image
 const ROW_GAP_PX = 8;
 
 /** Los ids de la tanda de fotos seguidas (hermanas) que incluye a `id`, en orden. */
-function runOf(editor: { getParentBlock: (id: string) => { children: unknown[] } | undefined; document: unknown[] }, id: string): string[] {
-  const siblings = (editor.getParentBlock(id)?.children ?? editor.document) as { id: string; type: string }[];
+function runOf(
+  editor: { getParentBlock: (id: string) => { children: unknown[] } | undefined; document: unknown[] },
+  id: string,
+  isPhoto: (block: { id: string; type: string; props?: Record<string, unknown> }) => boolean,
+): string[] {
+  const siblings = (editor.getParentBlock(id)?.children ?? editor.document) as { id: string; type: string; props?: Record<string, unknown> }[];
   const at = siblings.findIndex((b) => b.id === id);
   if (at < 0) return [id];
   let from = at;
   let to = at;
-  while (from > 0 && siblings[from - 1].type === 'image') from--;
-  while (to < siblings.length - 1 && siblings[to + 1].type === 'image') to++;
+  // La tanda corta en lo que no es foto ni video, también en un adjunto (su tarjeta desarmaría la galería).
+  while (from > 0 && isPhoto(siblings[from - 1])) from--;
+  while (to < siblings.length - 1 && isPhoto(siblings[to + 1])) to++;
   return siblings.slice(from, to + 1).map((b) => b.id);
 }
 
@@ -192,20 +227,29 @@ export function ImageSizeButtons() {
   const Components = useComponentsContext()!;
   const block = useSelectedImage();
   const tr = useT();
+  const { media } = useServices();
   useImageLoads(block ? editor.domElement : null);
-  if (!block || !editor.isEditable) return null;
+  const attachment = useIsAttachment(block);
+  // Un adjunto tiene tamaño fijo (su tarjeta): sin tamaños rápidos ni "Acomodar".
+  if (!block || !editor.isEditable || attachment) return null;
+  const isPhoto = (b: { type: string; props?: Record<string, unknown> }) => {
+    if (b.type !== 'image') return false;
+    const url = typeof b.props?.url === 'string' ? b.props.url : '';
+    const id = mediaIdOf(url);
+    return !id || !isAttachment(media, id, typeof b.props?.name === 'string' ? b.props.name : '');
+  };
   const setSize = (f: number) => {
     const width = groupWidth(editor.domElement, block.id);
     const props: Record<string, number> = { [ROW_WIDTH_PROP]: f };
     if (width > 0) props.previewWidth = Math.round(f * width);
     editor.updateBlock(block.id, { props });
   };
-  const run = runOf(editor as never, block.id);
+  const run = runOf(editor as never, block.id, isPhoto);
   const ready = run.every((id) => aspectOf(editor.domElement, id) !== null);
   const arrange = () => {
     // La tanda y las proporciones al hacer clic: pudo cambiar (otra persona, un deshacer) sin cambiar la foto
     // elegida.
-    const now = runOf(editor as never, block.id);
+    const now = runOf(editor as never, block.id, isPhoto);
     const aspects = now.map((id) => aspectOf(editor.domElement, id));
     const width = groupWidth(editor.domElement, block.id);
     if (!(width > 0) || aspects.some((x) => x === null)) return;
