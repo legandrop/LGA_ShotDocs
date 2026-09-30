@@ -572,7 +572,7 @@ export class Portero {
   /** Una sola búsqueda o creación a la vez por carpeta (dos subidas juntas no crean dos iguales). */
   private once(key: string, work: () => Promise<string>): Promise<string> {
     const running = pending.get(key);
-    if (running && false) return running;
+    if (running) return running;
     const started = work().finally(() => pending.delete(key));
     pending.set(key, started);
     return started;

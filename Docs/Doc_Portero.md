@@ -5,32 +5,92 @@ conexión con el Google Drive del dueño, sube los archivos a su Drive y los dev
 más recibe la conexión con Drive: con ella se abre todo lo que la app subió, de todos los proyectos. El
 plan está en `Plan_Workspaces.md`, secciones 5 y 6.
 
-Hoy sirve para la **prueba de media** (paso 4 del plan): solo el dueño conecta Drive, sube y reproduce, y
-lo subido va a la carpeta `LGA_ShotDocs / Media_Test`, en la raíz de su Drive. Los nombres no llevan
-espacios; las carpetas creadas antes de v0.027 con el nombre viejo (`LGA Shot Docs`, `Media test`) el
-portero las renombra por su cuenta la próxima vez que sube algo, salvo que el dueño les haya puesto otro
-nombre a mano. Elegir dónde va la carpeta llega con el paso 8 del plan. La pantalla de prueba está en la
-app, en el menú de la cuenta → *Media test*.
+Sirve para los archivos de las páginas (pasos 6 y 8 del plan) y para la **prueba de media** (paso 4, la
+pantalla *Media test*, en el menú de la cuenta). Conectar Drive, elegir dónde va la carpeta de la app y la
+prueba de media los hace solo el dueño; subir y ver un archivo de una página depende del permiso de cada
+persona sobre esa página.
+
+Carpetas en el Drive del dueño, sin espacios (guiones bajos):
+
+```
+<carpeta elegida por el dueño, o la raíz de su Drive>
+└── LGA_ShotDocs
+    ├── Media_Test                      (lo de la prueba de media)
+    └── <Proyecto>                      (el nombre del proyecto, con _ y sin caracteres raros)
+        └── <AAAA-MM-DD>                (el día en que se subió)
+            └── IMG_1234.MOV
+```
+
+- **El nombre del proyecto** se pasa a guiones bajos y se le sacan los caracteres raros (barras, dos puntos,
+  comodines, comillas, emojis); las letras con acento y la ñ quedan. `Spot Coca-Cola / 2026` →
+  `Spot_Coca-Cola_2026`. Hasta 100 caracteres; si no queda nada, `Project`.
+- **Renombrar el proyecto** renombra su carpeta la próxima vez que se sube algo a ese proyecto, pero solo si
+  la carpeta todavía tiene el nombre que le puso la app (el portero lo recuerda). Si el dueño la renombró a
+  mano, se respeta y se sigue subiendo ahí.
+- **Nada se borra en Drive.** Una carpeta que el dueño mandó a la papelera se vuelve a crear (la vieja queda
+  en la papelera). Mover o renombrar a mano un archivo o una carpeta no rompe nada: todo se busca por id.
+- Cada archivo lleva en Drive una marca oculta (`appProperties.sdFile` = el id del archivo en la app), y la
+  carpeta de cada proyecto otra (`sdProject`). Con la primera el portero comprueba, antes de dar un pase, que
+  el archivo de Drive es de verdad ese archivo de la app.
+- Las carpetas creadas antes de v0.027 con el nombre viejo (`LGA Shot Docs`, `Media test`) el portero las
+  renombra por su cuenta la próxima vez que sube algo, salvo que el dueño les haya puesto otro nombre.
 
 ## Cómo funciona
 
 - **Quién pide.** Cada pedido trae la sesión de Supabase de la persona. El portero le pregunta a
   `media_whoami()` del Supabase del workspace, con esa misma sesión: el propio Supabase la valida y dice
-  quién es y si es el dueño. El portero no tiene ninguna clave de la base.
+  quién es y si es el dueño. Para un archivo de una página le pregunta a `media_file(id)`, que dice el
+  proyecto, el nombre, el tipo, el peso, si ya está en Drive y el **nivel** de la persona sobre el archivo
+  (el más alto de las páginas que lo usan): subir pide nivel 3 (editar), ver pide nivel 1. El portero no
+  tiene ninguna clave de la base.
 - **Conectar Drive** (una vez por workspace, lo hace el dueño): la app pide al portero la dirección de
   Google, el dueño acepta, Google vuelve al portero (`/drive/callback`) y el portero guarda la conexión
   (refresh token). Permiso `drive.file`: la app solo ve lo que ella misma sube, nada más del Drive.
 - **Subir** por partes de 8 MiB: la app pide una subida (`POST /upload`), el portero abre una subida
   reanudable en Drive y la app manda las partes (`PUT /upload/<id>`) que el portero pasa a Drive. Si se
   corta, la app pregunta cuánto llegó y sigue desde ahí. Las partes pasan por el portero para que la app
-  nunca tenga la conexión con Drive.
+  nunca tenga la conexión con Drive. Cuando termina la subida de un archivo de una página, el portero le
+  dice a la base en qué archivo de Drive quedó (`set_file_drive`, con la sesión de la persona). Si eso falla
+  por la red, la respuesta "listo" llega igual y el portero lo vuelve a intentar la próxima vez que alguien
+  pregunte por ese archivo (la app preguntando cuánto llegó, pidiendo la subida de nuevo o pidiendo un
+  pase); mientras tanto el archivo ya se puede ver. Si la app pide de nuevo la subida de un archivo que ya
+  está en Drive, responde "listo" sin volver a subirlo.
 - **Ver**: la app pide un pase (`POST /pass`) y lo usa como dirección del video o la foto
   (`/m/<pase>`). El pase está firmado por el portero con una clave que genera él mismo la primera vez y
   que no sale de ahí, y vence a las 8 horas. El portero pide a Drive solo la parte que pide el navegador
   (Range), así un video se reproduce sin bajarlo entero.
-- **Dónde guarda**: en un Durable Object con almacenamiento SQLite (lo trae el plan gratis de Workers): la
-  conexión con Drive, las carpetas, las subidas en curso y la clave de los pases. No hay que crear nada a
-  mano.
+- **Arranque del video (caché).** Para empezar a reproducir, el navegador pide primero el principio del
+  archivo y, en los videos del iPhone, el final (ahí va el índice). El portero guarda esas dos puntas en su
+  almacenamiento la primera vez que alguien las pide, y desde entonces las sirve sin ir a Drive:
+  - Principio: ~254 KiB. Final: ~508 KiB. En trozos de 127 KiB (cada valor del almacenamiento puede pesar
+    hasta 128 KiB). Un archivo de hasta ~762 KiB se guarda entero.
+  - Tope: **256 archivos** (unos 190 MiB como mucho). Al pasarse, olvida el que guardó hace más tiempo.
+    Es solo una copia de las puntas: olvidarla no borra nada.
+  - Solo se sirve desde ahí un pedido por partes que cae **entero** adentro de una punta guardada (con
+    `206`, `Content-Range`, `Content-Length`, `Accept-Ranges` y el tipo del archivo). Lo demás (el archivo
+    entero, `bytes=0-` de un archivo grande, el medio, varias partes en un pedido) va a Drive como siempre.
+  - Para medir: la respuesta que sale de la caché lleva `X-Portero-Cache: hit` (o `fill` la vez que se
+    guarda); se ve en las herramientas de desarrollo del navegador, pestaña *Network*.
+  - Si el dueño reemplaza el contenido de un archivo en Drive (*Manage versions*), las puntas guardadas
+    quedan viejas: lo que sube la app nunca se reemplaza, así que no pasa con los archivos de la app.
+- **Dónde guarda**: en un Durable Object con almacenamiento SQLite (lo trae el plan gratis de Workers). No
+  hay que crear nada a mano. Lo guardado, por clave (lo de antes se sigue leyendo igual):
+
+  | Clave | Qué es |
+  |---|---|
+  | `google` | La conexión con Drive (refresh token), el correo y los ids de `LGA_ShotDocs` y `Media_Test`. |
+  | `accessToken` | El token de acceso vigente (dura una hora). |
+  | `passSecret` | La clave con la que firma los pases. |
+  | `state:<id>` | Un pedido de conexión con Google en curso (15 minutos), con la ruta de la app a la que vuelve. |
+  | `upload:<id>` | Una subida en curso o terminada (con el archivo de la app, si es uno). |
+  | `drivePlace` | La carpeta que eligió el dueño para `LGA_ShotDocs` (sin la clave: la raíz). |
+  | `project:<id del proyecto>` | La carpeta del proyecto y el nombre que le puso la app. |
+  | `day:<id del proyecto>:<AAAA-MM-DD>` | La carpeta de ese día. |
+  | `file:<id del archivo>` | Lo que subió el portero y si la base ya se enteró; qué id de Drive ya se comprobó. |
+  | `cache:<id de Drive>`, `cache:<id>:h<n>`, `cache:<id>:t<n>`, `cacheIndex` | La caché del arranque del video. |
+
+  **Nunca** se cambia el nombre de la clase `Store` ni las `migrations` de `portero/wrangler.jsonc`: ahí vive
+  todo esto.
 - **Por qué Cloudflare y no Supabase**: Supabase gratis deja 5 GB de transferencia al mes; Cloudflare no
   cobra la transferencia.
 
@@ -40,21 +100,27 @@ de la base, ver abajo). Quién es el dueño: `workspace_settings.owner_id`.
 ### Rutas
 
 Todas están en `portero/src/core.ts`. Las tres primeras no llevan sesión; las demás llevan la sesión de
-Supabase (`Authorization: Bearer …`) y, salvo `/drive/status`, hoy solo las puede usar el dueño.
+Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el archivo, según `media_file`.
 
 | Ruta | Quién | Qué hace |
 |---|---|---|
 | `GET /health` | Cualquiera | Responde `{ ok: true }`: sirve para ver que el portero está publicado. |
-| `GET /drive/callback` | Google | Vuelta de Google al conectar Drive. Guarda la conexión y vuelve a `/media-test` de la app con el resultado. |
-| `GET` o `HEAD /m/<pase>` | Quien tenga el pase | Devuelve el archivo desde Drive, por partes (Range). El pase firmado es la única credencial y vence a las 8 horas. |
-| `GET /drive/status` | Cualquier sesión | Si Drive está conectado y si quien pregunta es el dueño. El correo de la cuenta de Google solo se le muestra al dueño. |
-| `POST /drive/connect` | Dueño | Devuelve la dirección de Google para conectar Drive. Solo desde una dirección de `APP_ORIGINS`. |
-| `POST /upload` | Dueño | Abre una subida reanudable en Drive y devuelve su id. |
-| `PUT /upload/<id>` | Dueño, el que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. |
-| `POST /pass` | Dueño | Firma un pase para un archivo de Drive y devuelve su dirección `/m/<pase>`. |
+| `GET /drive/callback` | Google | Vuelta de Google al conectar Drive. Guarda la conexión y vuelve a la ruta de la app que pidió `/drive/connect` (por defecto `/media-test`) con `?drive=<resultado>`. |
+| `GET` o `HEAD /m/<pase>` | Quien tenga el pase | Devuelve el archivo desde Drive o desde la caché del arranque, por partes (Range). El pase firmado es la única credencial y vence a las 8 horas. |
+| `GET /drive/status` | Cualquier sesión | `{ connected, broken, email, isOwner, folder, picker }`. `email` y `folder` (la carpeta elegida para `LGA_ShotDocs`, `{ id, name }`, o `null` si va en la raíz) solo se le muestran al dueño. `picker`: si está `GOOGLE_API_KEY`. |
+| `POST /drive/connect` | Dueño | `{ return?: "/ruta" }` → la dirección de Google para conectar Drive. `return` es la ruta de la app a la que se vuelve (tiene que empezar con `/`). Solo desde una dirección de `APP_ORIGINS`. |
+| `POST /drive/picker` | Dueño | `{ apiKey, appId, token }` para el selector de carpetas de Google: la clave de API, el número del proyecto de Google (el principio de `GOOGLE_CLIENT_ID`, antes del primer `-`) y un token de acceso nuevo, de una hora, solo con `drive.file`. `404` si no está `GOOGLE_API_KEY`. |
+| `POST /drive/folder` | Dueño | `{ parentId: "<id>" \| null }`: guarda dónde va `LGA_ShotDocs` (`null` = la raíz) y, si la carpeta ya existe, la mueve ahí con todo lo que tiene adentro. Devuelve `{ folder }`. |
+| `POST /upload` con `file` | Nivel 3 o más | `{ file: <id>, name, mime, size, day: "AAAA-MM-DD" }`. Abre una subida reanudable en `LGA_ShotDocs/<Proyecto>/<día>` y devuelve `{ uploadId }`; si el archivo ya está en Drive, `{ status: 'done', file }`. `404` si no existe o no lo puede ver; `403` si lo ve pero no puede editar. |
+| `POST /upload` sin `file` | Dueño | La prueba de media: abre una subida en `LGA_ShotDocs/Media_Test`. |
+| `PUT /upload/<id>` | El que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. Al terminar: `{ status: 'done', file }` (con `file`, además `linked`: si la base ya se enteró). |
+| `POST /pass` con `file` | Nivel 1 o más | `{ file: <id> }` → `{ url }` de un pase para `/m/…`, con el tipo de `files.mime`. Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
+| `POST /pass` con `fileId` | Dueño | La prueba de media: un pase para un archivo de Drive por su id. |
 
 La app manda partes de 8 MiB (`PART_BYTES` en `src/media/portero.ts`); el portero acepta hasta 64 MiB por
-parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida.
+parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida. El permiso para subir se mira al abrir la
+subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuelve a mirar en
+`set_file_drive`. Si `day` no viene, se usa el día de hoy en UTC.
 
 ### Lado de la app
 
@@ -67,7 +133,10 @@ parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida.
 
 ## Publicarlo y conectarlo (una vez por workspace)
 
-Hace falta la app ya publicada y la migración `20260930120000_portero.sql` aplicada.
+Hace falta la app ya publicada y la migración `20260930120000_portero.sql` aplicada. Para los archivos de
+las páginas, además, la migración de archivos (`20260930150000_archivos.sql`, con `media_file` y
+`set_file_drive`); sin ella, lo de la prueba de media sigue andando y lo de los archivos responde
+*"The workspace database is not up to date for files yet."*
 
 ### 1. Publicar el portero en Cloudflare
 
@@ -83,6 +152,10 @@ Hace falta la app ya publicada y la migración `20260930120000_portero.sql` apli
      con `sb_publishable_`). Las dos son las mismas que usa la app al publicarse.
    - `APP_ORIGINS` (texto): las direcciones de la app separadas por comas, sin barra al final (por ejemplo
      `https://shotdocs.lega.com.ar,https://shotdocs.<tu-subdominio>.workers.dev`).
+   - `GOOGLE_API_KEY` (**Secret**, opcional): la clave del selector de carpetas (paso 2b). Sin ella, la
+     carpeta de la app va a la raíz del Drive.
+
+   Las variables cargadas en el panel no se borran al publicar (`keep_vars` en `portero/wrangler.jsonc`).
 
 ### 2. Crear el cliente de Google (Google Cloud)
 
@@ -102,6 +175,30 @@ Hace falta la app ya publicada y la migración `20260930120000_portero.sql` apli
 8. De vuelta en el Worker → Variables and Secrets: `GOOGLE_CLIENT_ID` (texto) y `GOOGLE_CLIENT_SECRET`
    (**Secret**). Guardar.
 
+### 2b. Clave para el selector de carpetas (`GOOGLE_API_KEY`, opcional)
+
+Con ella, el dueño elige con el selector de Google en qué carpeta de su Drive va `LGA_ShotDocs`. Sin ella,
+va a la raíz (*My Drive*). Se hace en el **mismo proyecto** de Google Cloud del paso 2.
+
+1. En https://console.cloud.google.com, arriba a la izquierda, elegir el proyecto (por ejemplo
+   `LGA Shot Docs`).
+2. **APIs & Services → Library**, buscar **Google Picker API**, abrirla y tocar **Enable**.
+3. **APIs & Services → Credentials → + Create credentials → API key.** Google crea la clave y la muestra:
+   copiarla (se puede volver a ver después con *Show key*).
+4. Tocar el nombre de la clave nueva (o *Edit API key*) para restringirla:
+   - **Name**: `LGA Shot Docs picker`.
+   - **Application restrictions → Websites**, y en *Website restrictions* agregar cada dirección de la app
+     con `/*` al final, una por renglón (las mismas de `APP_ORIGINS`), por ejemplo
+     `https://shotdocs.lega.com.ar/*` y `https://shotdocs.<tu-subdominio>.workers.dev/*`.
+   - **API restrictions → Restrict key**, y en la lista marcar solo **Google Picker API**.
+   - **Save.** Las restricciones tardan hasta 5 minutos en valer.
+5. En Cloudflare: el Worker `shotdocs-portero` → **Settings → Variables and Secrets → + Add**. Type:
+   **Secret**. Variable name: `GOOGLE_API_KEY`. Value: la clave. **Deploy** (o *Save*).
+
+El número del proyecto que usa el selector no hace falta cargarlo: es el principio del Client ID (los
+números antes del primer `-`). La clave y un token de una hora llegan al navegador del dueño (así funciona
+el selector de Google): por eso la clave queda restringida al selector y a las direcciones de la app.
+
 ### 3. Decirle a la app dónde está el portero
 
 En Supabase → SQL Editor (lo hace el dueño de la base):
@@ -118,6 +215,10 @@ cuenta de Google cuyo Drive va a usar el workspace. Si Google avisa que la app n
 
 Mejor hacerlo desde la computadora: la conexión queda en el portero y vale para todos los dispositivos.
 
+Si está `GOOGLE_API_KEY` (paso 2b), después se puede elegir con el selector de Google en qué carpeta va
+`LGA_ShotDocs`. Si la carpeta ya existe, el portero la mueve ahí con todo lo que tiene adentro; no crea
+otra.
+
 ## Si algo falla
 
 - *"The connection with Google Drive stopped working"*: el dueño revocó el acceso, cambió la contraseña,
@@ -128,5 +229,15 @@ Mejor hacerlo desde la computadora: la conexión queda en el portero y vale para
 - Google dice `redirect_uri_mismatch`: la dirección del paso 2.6 no coincide con la del portero.
 - Vuelve con *"drive-permission-missing"*: en la pantalla de permisos de Google quedó destildado el acceso
   a Drive. Conectar de nuevo y dejarlo marcado.
+- *"The folder where "LGA_ShotDocs" goes is not available anymore: choose another one."*: la carpeta que
+  eligió el dueño se borró o ya no se puede abrir. Elegir otra (o la raíz) desde la app.
+- El selector de Google dice que la clave no es válida (*The API developer key is invalid*): revisar que la
+  Picker API esté habilitada, que la dirección desde la que se abrió la app esté en *Website restrictions*
+  (con `/*`) y esperar 5 minutos después de cambiar las restricciones. Si sigue, agregar también **Google
+  Drive API** en *API restrictions* de la clave.
+- *"This file has not finished uploading yet."*: el archivo está registrado pero todavía no terminó de
+  subir desde el dispositivo que lo agregó.
+- *"This file in Google Drive does not belong to this file of the app."*: la base apunta a un archivo de
+  Drive que no tiene la marca de ese archivo; el portero no lo sirve.
 - Otro workspace (otro dueño) publica su portero importando su propia copia del repo (un fork).
 - Los registros del portero están en Cloudflare → el Worker → **Logs**.

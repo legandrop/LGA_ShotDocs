@@ -24,7 +24,7 @@ function memoryStore(): Store & { data: Map<string, unknown> } {
 type FakeFile = {
   name: string;
   mime: string;
-  data: Uint8Array;
+  data: Uint8Array<ArrayBuffer>;
   parents: string[];
   appProperties?: Record<string, string>;
   trashed?: boolean;
@@ -52,7 +52,7 @@ function fakeWorld() {
   const base = new Map<string, BaseFile>();
   const uploads = new Map<
     string,
-    { name: string; mime: string; size: number; parents: string[]; appProperties?: Record<string, string>; data: Uint8Array; got: number }
+    { name: string; mime: string; size: number; parents: string[]; appProperties?: Record<string, string>; data: Uint8Array<ArrayBuffer>; got: number }
   >();
   let refreshValid = true;
   let tokenRefreshes = 0;
@@ -480,7 +480,7 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && Buffer.compare(Buffer.from(a.buffer, a.byteOffset, a.length), Buffer.from(b.buffer, b.byteOffset, b.length)) === 0;
 }
 
-function bytes(length: number): Uint8Array {
+function bytes(length: number): Uint8Array<ArrayBuffer> {
   return Uint8Array.from({ length }, (_, i) => (i * 7 + (i >> 8)) % 256);
 }
 
@@ -489,7 +489,7 @@ function startFile(p: Portero, jwt: string, body: Record<string, unknown>): Prom
 }
 
 /** Sube un archivo de la app entero (una sola parte) y devuelve la última respuesta del portero. */
-async function uploadFile(p: Portero, jwt: string, file: string, data: Uint8Array, day = '2026-09-30'): Promise<Record<string, unknown>> {
+async function uploadFile(p: Portero, jwt: string, file: string, data: Uint8Array<ArrayBuffer>, day = '2026-09-30'): Promise<Record<string, unknown>> {
   const res = await startFile(p, jwt, { file, name: 'IMG_0100.MOV', mime: 'video/quicktime', size: data.length, day });
   const started = (await res.json()) as Record<string, unknown>;
   if (!res.ok) throw new Error(`${res.status} ${JSON.stringify(started)}`);
@@ -629,7 +629,7 @@ describe('portero: archivos de la app', () => {
     const data = bytes(1000);
     const res = await startFile(p, 'editor-jwt', { file: FILE_A, size: data.length, day: '2026-09-30' });
     const { uploadId } = (await res.json()) as { uploadId: string };
-    const put = (range: string, body?: Uint8Array) =>
+    const put = (range: string, body?: Uint8Array<ArrayBuffer>) =>
       call(p, `/upload/${uploadId}`, { method: 'PUT', jwt: 'editor-jwt', headers: { 'Content-Range': range }, body });
     const done = (await (await put('bytes 0-999/1000', data)).json()) as { status: string; file: { id: string }; linked: boolean };
     expect(done).toMatchObject({ status: 'done', linked: false });
