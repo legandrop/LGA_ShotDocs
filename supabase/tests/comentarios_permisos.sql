@@ -1,6 +1,7 @@
 -- Pruebas de los comentarios (paso 10): ver y comentar según el nivel sobre la página, hilos, reintentos de
--- la cola, editar, borrar, resolver, alguien sacado, invitados (lo que pueden con comentar y con editar, y
--- los correos de los autores) y que nadie escriba directo en la tabla. Corre dentro de una transacción que
+-- la cola (también con el permiso ya bajado), editar, borrar, resolver, alguien sacado, invitados (lo que
+-- pueden con comentar y con editar, y los correos de los autores), `list_comments` con y sin fecha, una sesión
+-- con contraseña y que nadie escriba directo en la tabla. Corre dentro de una transacción que
 -- se deshace al final: no deja usuarios ni datos. Si todo pasa, devuelve una fila con result = 'ok'.
 
 begin;
@@ -352,6 +353,21 @@ do $$
 begin
   perform pg_temp.expect_error($q$select public.edit_comment('00000000-0000-4000-8000-000000000d03', 'x')$q$,
     'comment_denied', 'con ver, el autor edita');
+  -- Los reintentos de lo que ya hizo (la respuesta se perdió antes de que le bajaran el permiso) dan bien.
+  perform public.edit_comment('00000000-0000-4000-8000-000000000d03', 'Editado');
+  perform public.add_comment('00000000-0000-4000-8000-000000000d04', '00000000-0000-4000-8000-000000000cb2', null,
+    '00000000-0000-4000-8000-000000000d02', 'Respuesta');
+  perform public.add_comment('00000000-0000-4000-8000-000000000d04', '00000000-0000-4000-8000-000000000cb2', 'blk-k2',
+    '00000000-0000-4000-8000-000000000d02', 'Respuesta');
+  perform pg_temp.expect_error(
+    $q$select public.add_comment('00000000-0000-4000-8000-000000000d04', '00000000-0000-4000-8000-000000000cb2', null, '00000000-0000-4000-8000-000000000d02', 'Otra')$q$,
+    'comment_denied', 'con ver, reintenta el alta con otro texto');
+  perform pg_temp.expect_error(
+    $q$select public.add_comment('00000000-0000-4000-8000-000000000d04', '00000000-0000-4000-8000-000000000cb2', 'otro', '00000000-0000-4000-8000-000000000d02', 'Respuesta')$q$,
+    'comment_denied', 'con ver, reintenta el alta en otro bloque');
+  perform pg_temp.expect_error(
+    $q$select public.add_comment(gen_random_uuid(), '00000000-0000-4000-8000-000000000cb2', null, null, 'Respuesta')$q$,
+    'comment_denied', 'con ver, comenta');
   perform pg_temp.expect_error($q$select public.delete_comment('00000000-0000-4000-8000-000000000d03')$q$,
     'not_allowed', 'con ver, el autor borra');
 end;
@@ -423,6 +439,23 @@ begin
 end;
 $$;
 
+-- El reintento de un borrado que hizo la misma persona da bien aunque ya no tenga permiso; otro no.
+select pg_temp.as_user('00000000-0000-4000-8000-000000000c01');
+select public.share('00000000-0000-4000-8000-000000000c03', null, '00000000-0000-4000-8000-000000000cb2', 'view');
+select pg_temp.as_user('00000000-0000-4000-8000-000000000c03');
+do $$
+begin
+  perform public.delete_comment('00000000-0000-4000-8000-000000000d03');
+  perform pg_temp.expect_error($q$select public.delete_comment('00000000-0000-4000-8000-000000000d04')$q$,
+    'not_allowed', 'con ver, el autor borra');
+  -- d02 lo borró ep, no cc: no es su reintento.
+  perform pg_temp.expect_error($q$select public.delete_comment('00000000-0000-4000-8000-000000000d02')$q$,
+    'not_allowed', 'con ver, reintenta un borrado ajeno');
+end;
+$$;
+select pg_temp.as_user('00000000-0000-4000-8000-000000000c01');
+select public.share('00000000-0000-4000-8000-000000000c03', null, '00000000-0000-4000-8000-000000000cb2', 'comment');
+
 -- La dueña (4 sobre todo P1) borra el de cc en g... dentro de una subtransacción que se deshace.
 select pg_temp.as_user('00000000-0000-4000-8000-000000000c01');
 do $$
@@ -492,9 +525,17 @@ begin
     'comment_not_found', 'sacado: borra lo suyo');
   perform pg_temp.expect_error($q$select public.resolve_thread('00000000-0000-4000-8000-000000000d07', true)$q$,
     'thread_not_found', 'sacado: resuelve');
+  -- El reintento exacto de un alta que ya se hizo da bien (no filtra nada: es suyo y con el mismo texto);
+  -- con otro contenido, o uno nuevo, no.
+  perform public.add_comment('00000000-0000-4000-8000-000000000d07', '00000000-0000-4000-8000-000000000cb2', null, null, 'De rm');
   perform pg_temp.expect_error(
-    $q$select public.add_comment('00000000-0000-4000-8000-000000000d07', '00000000-0000-4000-8000-000000000cb2', null, null, 'De rm')$q$,
-    'page_not_found', 'sacado: reintenta el alta');
+    $q$select public.add_comment('00000000-0000-4000-8000-000000000d07', '00000000-0000-4000-8000-000000000cb2', null, null, 'Otro')$q$,
+    'page_not_found', 'sacado: reintenta el alta con otro texto');
+  perform pg_temp.expect_error(
+    $q$select public.add_comment(gen_random_uuid(), '00000000-0000-4000-8000-000000000cb2', null, null, 'De rm')$q$,
+    'page_not_found', 'sacado: comenta');
+  perform pg_temp.expect_error($q$select * from public.list_comments('00000000-0000-4000-8000-000000000cb2')$q$,
+    'page_not_found', 'sacado: lista comentarios');
 end;
 $$;
 
@@ -592,6 +633,106 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------------------------------
+-- list_comments: lo mismo que la vista más updated_at, y solo lo cambiado desde una fecha
+-- ---------------------------------------------------------------------------------------------------
+select pg_temp.as_user('00000000-0000-4000-8000-000000000c03');
+do $$
+declare
+  c constant uuid := '00000000-0000-4000-8000-000000000cb2';
+  g constant uuid := '00000000-0000-4000-8000-000000000cb3';
+  p uuid;
+begin
+  foreach p in array array[c, g] loop
+    assert (select jsonb_agg(to_jsonb(l) order by l.id) from public.list_comments(p) l)
+           = (select jsonb_agg(to_jsonb(v) order by v.id) from public.comments_view v where v.page_id = p),
+      format('list_comments de %s no da lo mismo que la vista', p);
+  end loop;
+  assert (select count(*) from public.list_comments(c)) = (select count(*) from public.comments where page_id = c),
+    'list_comments no da todos los de c';
+  assert (select body is null and deleted_at is not null from public.list_comments(c) where id = '00000000-0000-4000-8000-000000000d02'),
+    'list_comments da el texto de un borrado';
+  assert (select body from public.list_comments(c) where id = '00000000-0000-4000-8000-000000000d04') = 'Respuesta',
+    'list_comments no da el texto';
+  perform pg_temp.expect_error($q$select * from public.list_comments('00000000-0000-4000-8000-000000000cb1')$q$,
+    'page_not_found', 'list_comments de una página que no ve');
+  perform pg_temp.expect_error($q$select * from public.list_comments(gen_random_uuid(), null)$q$,
+    'page_not_found', 'list_comments de una página que no existe');
+end;
+$$;
+
+select pg_temp.as_user('00000000-0000-4000-8000-000000000c02');
+select pg_temp.expect_error($q$select * from public.list_comments('00000000-0000-4000-8000-000000000cb4')$q$,
+  'page_not_found', 'ver: list_comments de otra rama');
+select count(*) from public.list_comments('00000000-0000-4000-8000-000000000cb2');
+
+-- Con p_since: todo c queda como cambiado en 2000, y cada cambio lo vuelve a traer.
+select set_config('role', 'postgres', true);
+update public.comments set updated_at = '2000-01-01' where page_id = '00000000-0000-4000-8000-000000000cb2';
+select pg_temp.as_user('00000000-0000-4000-8000-000000000c03');
+do $$
+declare
+  c     constant uuid := '00000000-0000-4000-8000-000000000cb2';
+  since constant timestamptz := '2001-01-01';
+  k     uuid := gen_random_uuid();
+begin
+  assert (select count(*) from public.list_comments(c, since)) = 0, 'p_since trae lo que no cambió';
+  assert (select count(*) from public.list_comments(c, '2000-01-01')) = (select count(*) from public.list_comments(c)),
+    'p_since no incluye la fecha pedida';
+  perform public.add_comment(k, c, null, null, 'Nuevo');
+  perform public.edit_comment('00000000-0000-4000-8000-000000000d04', 'Respuesta editada');
+  perform public.resolve_thread('00000000-0000-4000-8000-000000000d10', false);
+  assert (select array_agg(id order by id) from public.list_comments(c, since))
+         = array['00000000-0000-4000-8000-000000000d04', '00000000-0000-4000-8000-000000000d10', k]::uuid[],
+    'p_since no trae exactamente el alta, la edición y el hilo reabierto';
+  -- Lo que no cambia no toca updated_at: el mismo texto, reintentos, resolver lo ya abierto.
+  perform public.edit_comment('00000000-0000-4000-8000-000000000d08', 'Respuesta a un borrado');
+  perform public.add_comment('00000000-0000-4000-8000-000000000d08', c, null, '00000000-0000-4000-8000-000000000d02', 'Respuesta a un borrado');
+  perform public.resolve_thread('00000000-0000-4000-8000-000000000d02', false);
+  assert (select count(*) from public.list_comments(c, since)) = 3, 'algo que no cambió actualiza updated_at';
+  -- Borrar sí.
+  perform public.delete_comment('00000000-0000-4000-8000-000000000d08');
+  assert (select body is null and updated_at = now() from public.list_comments(c, since)
+          where id = '00000000-0000-4000-8000-000000000d08'), 'borrar no actualiza updated_at';
+  -- En orden de cambio: lo de 2000 primero.
+  assert (select (array_agg(updated_at order by ord))[1] = '2000-01-01'
+          from public.list_comments(c) with ordinality t(id, page_id, block_id, thread_id, body, author_id,
+            created_at, edited_at, resolved_at, resolved_by, deleted_at, deleted_by, updated_at, ord)),
+    'list_comments no ordena por updated_at';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- Una sesión abierta con contraseña no ve ni comenta (private.session_allowed)
+-- ---------------------------------------------------------------------------------------------------
+create function pg_temp.as_session(uid uuid, amr jsonb) returns void language sql as $$
+  select set_config('role', 'authenticated', true),
+         set_config('request.jwt.claims',
+                    json_build_object('sub', uid, 'role', 'authenticated', 'aal', 'aal1', 'amr', amr)::text, true);
+$$;
+
+select pg_temp.as_session('00000000-0000-4000-8000-000000000c03', '[{"method": "password", "timestamp": 1790000000}]');
+do $$
+begin
+  perform pg_temp.check_comment('contraseña', '00000000-0000-4000-8000-000000000cb2', 0);
+  assert (select count(*) from public.comments_view) = 0, 'contraseña: ve comentarios en la vista';
+  assert (select count(*) from public.comments) = 0, 'contraseña: la tabla le da filas';
+  perform pg_temp.expect_error($q$select * from public.list_comments('00000000-0000-4000-8000-000000000cb2')$q$,
+    'page_not_found', 'contraseña: lista comentarios');
+  perform pg_temp.expect_error($q$select public.edit_comment('00000000-0000-4000-8000-000000000d04', 'Pisado')$q$,
+    'comment_not_found', 'contraseña: edita');
+  perform pg_temp.expect_error($q$select public.delete_comment('00000000-0000-4000-8000-000000000d04')$q$,
+    'comment_not_found', 'contraseña: borra');
+  perform pg_temp.expect_error($q$select public.resolve_thread('00000000-0000-4000-8000-000000000d10', true)$q$,
+    'thread_not_found', 'contraseña: resuelve');
+  assert private.comment_body('00000000-0000-4000-8000-000000000d04') is null, 'contraseña: comment_body da el texto';
+end;
+$$;
+
+-- La misma persona con código sí.
+select pg_temp.as_session('00000000-0000-4000-8000-000000000c03', '[{"method": "otp", "timestamp": 1790000000}]');
+select pg_temp.check_comment('código', '00000000-0000-4000-8000-000000000cb2', 2);
+
+-- ---------------------------------------------------------------------------------------------------
 -- Nadie escribe directo en la tabla ni en la vista
 -- ---------------------------------------------------------------------------------------------------
 create function pg_temp.check_no_writes(who text) returns void language plpgsql as $$
@@ -603,6 +744,7 @@ begin
     '42501', who || ' revive comentarios');
   perform pg_temp.expect_error($q$update public.comments set body = 'x'$q$, '42501', who || ' cambia textos');
   perform pg_temp.expect_error($q$update public.comments set resolved_at = now()$q$, '42501', who || ' resuelve en la tabla');
+  perform pg_temp.expect_error($q$update public.comments set updated_at = now()$q$, '42501', who || ' cambia updated_at');
   perform pg_temp.expect_error($q$delete from public.comments$q$, '42501', who || ' borra en comments');
   perform pg_temp.expect_error($q$truncate public.comments$q$, '42501', who || ' vacía comments');
   perform pg_temp.expect_error(
@@ -645,6 +787,8 @@ begin
   perform pg_temp.expect_error($q$select public.delete_comment('00000000-0000-4000-8000-000000000d04')$q$, '42501', 'anon borra');
   perform pg_temp.expect_error($q$select public.resolve_thread('00000000-0000-4000-8000-000000000d02', true)$q$, '42501', 'anon resuelve');
   perform pg_temp.expect_error($q$select * from public.comment_authors('00000000-0000-4000-8000-000000000cb2')$q$, '42501', 'anon ve autores');
+  perform pg_temp.expect_error($q$select * from public.list_comments('00000000-0000-4000-8000-000000000cb2')$q$, '42501', 'anon lista comentarios');
+  perform pg_temp.expect_error($q$select private.comment_body('00000000-0000-4000-8000-000000000d04')$q$, '42501', 'anon llama a comment_body');
 end;
 $$;
 

@@ -8,8 +8,10 @@
 -- Permisos (la escala de `private.page_level`): se ven los comentarios de las páginas que se ven (1); comentar,
 -- responder y resolver piden comentar (2); editar un comentario, solo quien lo escribió (con 2); borrarlo,
 -- quien lo escribió (con 2) o quien tiene editar y crear páginas (4). Desde la API la tabla solo se lee, y sin
--- la columna del texto: el texto se lee por la vista `comments_view`, que lo devuelve vacío si el comentario se
--- borró. Nada se borra de verdad: borrar marca `deleted_at` y el texto queda en la base.
+-- la columna del texto: la app lee los comentarios de una página con `list_comments` (calcula el permiso una
+-- sola vez y puede pedir solo lo cambiado desde una fecha, con `updated_at`), que da el texto vacío si el
+-- comentario se borró; la vista `comments_view` da lo mismo y queda para compatibilidad (calcula el permiso
+-- en cada fila). Nada se borra de verdad: borrar marca `deleted_at` y el texto queda en la base.
 --
 -- Invitados (`guest`): no hay nada especial para ellos; valen los permisos por página del paso 9. Con comentar
 -- en una página, un invitado comenta y responde ahí y en lo de abajo, pero no edita el contenido ni sube
@@ -38,6 +40,8 @@ create table public.comments (
   resolved_by uuid references auth.users (id) on delete set null,
   deleted_at  timestamptz,                                        -- borrado: el texto queda en la base
   deleted_by  uuid references auth.users (id) on delete set null,
+  -- El último cambio (alta, edición, borrado, resolver o volver a abrir): `list_comments` pide lo posterior.
+  updated_at  timestamptz not null default now(),
   constraint comments_id_page_key unique (id, page_id),
   -- Una respuesta cuelga de un comentario de la misma página.
   constraint comments_thread_fk foreign key (thread_id, page_id) references public.comments (id, page_id),
@@ -47,6 +51,7 @@ create table public.comments (
   constraint comments_deleted_by check (deleted_by is null or deleted_at is not null)
 );
 create index comments_page_idx on public.comments (page_id, created_at);
+create index comments_page_updated_idx on public.comments (page_id, updated_at);
 create index comments_thread_idx on public.comments (thread_id) where thread_id is not null;
 
 -- ---------------------------------------------------------------------------------------------------
@@ -58,10 +63,11 @@ alter table public.comments enable row level security;
 create policy comments_select on public.comments
   for select to authenticated using (private.page_level(page_id) >= 1);
 
--- La tabla se lee sin `body` (pedir esa columna, o `*`, da 42501). El texto sale por `comments_view`.
+-- La tabla se lee sin `body` (pedir esa columna, o `*`, da 42501). El texto sale por `list_comments` y por
+-- `comments_view`.
 revoke all on public.comments from public, anon, authenticated;
 grant select (id, page_id, block_id, thread_id, author_id, created_at, edited_at, resolved_at, resolved_by,
-              deleted_at, deleted_by)
+              deleted_at, deleted_by, updated_at)
   on public.comments to authenticated;
 
 -- El texto de un comentario que no se borró, a quien ve su página; null en cualquier otro caso. Corre como
@@ -78,15 +84,17 @@ $$;
 revoke all on function private.comment_body(uuid) from public, anon;
 grant execute on function private.comment_body(uuid) to authenticated;
 
--- Lo que usa la app: la tabla con el texto. Corre con los permisos de quien consulta (`security_invoker`),
--- así que las filas las filtra la política de la tabla. Un comentario borrado sigue apareciendo (para que los
--- dispositivos se enteren y el hilo no quede cortado), con `body` vacío.
+-- La tabla con el texto, para compatibilidad (la app usa `list_comments`, que es más rápida). Corre con los
+-- permisos de quien consulta (`security_invoker`), así que las filas las filtra la política de la tabla. Un
+-- comentario borrado sigue apareciendo (para que los dispositivos se enteren y el hilo no quede cortado), con
+-- `body` vacío.
 create view public.comments_view
 with (security_invoker = true)
 as
   select c.id, c.page_id, c.block_id, c.thread_id,
          case when c.deleted_at is null then private.comment_body(c.id) end as body,
-         c.author_id, c.created_at, c.edited_at, c.resolved_at, c.resolved_by, c.deleted_at, c.deleted_by
+         c.author_id, c.created_at, c.edited_at, c.resolved_at, c.resolved_by, c.deleted_at, c.deleted_by,
+         c.updated_at
   from public.comments c;
 
 revoke all on public.comments_view from public, anon, authenticated;
@@ -101,10 +109,39 @@ grant select on public.comments_view to authenticated;
 -- `comment_conflict` y `comment_deleted` (P0001); `thread_invalid` y `resolved_invalid` (22023), y los de las
 -- restricciones de la tabla (23514) si el texto o el bloque no tienen la forma esperada.
 
+-- Los comentarios de una página: lo mismo que `comments_view` (el texto vacío si se borró) más `updated_at`,
+-- calculando el permiso una sola vez. Con `p_since`, solo los que cambiaron desde esa fecha (incluida): la
+-- app pide desde el último `updated_at` que tiene menos un margen (una transacción larga puede guardar una
+-- fecha anterior a la de otra que ya terminó), y volver a recibir un comentario no cambia nada. En orden de
+-- cambio. `page_not_found` si la sesión no ve la página.
+create function public.list_comments(p_page_id uuid, p_since timestamptz default null)
+returns table (id uuid, page_id uuid, block_id text, thread_id uuid, body text, author_id uuid,
+               created_at timestamptz, edited_at timestamptz, resolved_at timestamptz, resolved_by uuid,
+               deleted_at timestamptz, deleted_by uuid, updated_at timestamptz)
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if private.page_level(p_page_id) < 1 then
+    raise exception 'page_not_found' using errcode = 'P0002';
+  end if;
+  return query
+    select c.id, c.page_id, c.block_id, c.thread_id,
+           case when c.deleted_at is null then c.body end,
+           c.author_id, c.created_at, c.edited_at, c.resolved_at, c.resolved_by, c.deleted_at, c.deleted_by,
+           c.updated_at
+    from public.comments c
+    where c.page_id = p_page_id and (p_since is null or c.updated_at >= p_since)
+    order by c.updated_at, c.id;
+end;
+$$;
+
 -- Agrega un comentario (o una respuesta, con `p_thread_id`: el id del primer comentario del hilo, que tiene
 -- que ser de la misma página; la respuesta toma el bloque del hilo). Pide comentar en la página. Reintentar
 -- (la cola sin red) con el mismo id y el mismo contenido no hace nada, también si el comentario ya se borró;
 -- con otro contenido, o de otra persona, es `comment_conflict`: la app no junta el alta con una edición.
+-- El reintento se reconoce antes de mirar el permiso: si la respuesta se perdió y después le bajaron el
+-- permiso (o la sacaron), el alta ya estaba hecha y da bien. No filtra nada: solo coincide para su autor y
+-- con el texto exacto.
 create function public.add_comment(
   p_id uuid, p_page_id uuid, p_block_id text, p_thread_id uuid, p_body text)
 returns void
@@ -112,7 +149,7 @@ language plpgsql security definer set search_path = ''
 as $$
 declare
   uid  uuid := auth.uid();
-  lvl  int := private.page_level(p_page_id);
+  lvl  int;
   blk  text := p_block_id;
   root public.comments;
   cur  public.comments;
@@ -120,6 +157,15 @@ begin
   if uid is null then
     raise exception 'not_authenticated' using errcode = '28000';
   end if;
+
+  select * into cur from public.comments c where c.id = p_id;
+  if found and cur.author_id = uid and cur.page_id = p_page_id and cur.body = p_body
+     and cur.thread_id is not distinct from p_thread_id
+     and (cur.block_id is not distinct from p_block_id or (p_thread_id is not null and p_block_id is null)) then
+    return;
+  end if;
+
+  lvl := private.page_level(p_page_id);
   if p_id is null or lvl < 1 then
     raise exception 'page_not_found' using errcode = 'P0002';
   end if;
@@ -162,7 +208,8 @@ end;
 $$;
 
 -- Cambia el texto de un comentario: solo quien lo escribió, mientras tenga comentar en la página. El mismo
--- texto no cambia nada (tampoco `edited_at`). Un comentario borrado no se edita (`comment_deleted`).
+-- texto no cambia nada (tampoco `edited_at`), y se reconoce antes de mirar el permiso (el reintento de una
+-- edición que ya se hizo). Un comentario borrado no se edita (`comment_deleted`).
 create function public.edit_comment(p_id uuid, p_body text)
 returns void
 language plpgsql security definer set search_path = ''
@@ -172,6 +219,9 @@ declare
   lvl int;
 begin
   select * into cur from public.comments c where c.id = p_id for update;
+  if found and cur.author_id = auth.uid() and cur.deleted_at is null and cur.body = p_body then
+    return;
+  end if;
   if found then
     lvl := private.page_level(cur.page_id);
   end if;
@@ -187,16 +237,14 @@ begin
   if cur.deleted_at is not null then
     raise exception 'comment_deleted' using errcode = 'P0001';
   end if;
-  if cur.body = p_body then
-    return;
-  end if;
-  update public.comments set body = p_body, edited_at = now() where id = p_id;
+  update public.comments set body = p_body, edited_at = now(), updated_at = now() where id = p_id;
 end;
 $$;
 
 -- Borra un comentario: lo marca (`deleted_at`, `deleted_by`) y el texto queda en la base, pero la vista ya no
 -- lo devuelve. Lo hace quien lo escribió (con comentar) o quien tiene editar y crear páginas en la página.
--- Borrar uno ya borrado no hace nada. Las respuestas de un hilo no se tocan.
+-- Borrar uno ya borrado no hace nada; si lo borró la misma persona, da bien antes de mirar el permiso (el
+-- reintento de un borrado que ya se hizo). Las respuestas de un hilo no se tocan.
 create function public.delete_comment(p_id uuid)
 returns void
 language plpgsql security definer set search_path = ''
@@ -207,6 +255,9 @@ declare
   lvl int;
 begin
   select * into cur from public.comments c where c.id = p_id for update;
+  if found and cur.deleted_at is not null and cur.deleted_by = uid then
+    return;
+  end if;
   if found then
     lvl := private.page_level(cur.page_id);
   end if;
@@ -218,7 +269,7 @@ begin
       hint = 'The author or someone with "edit and create pages" on the page deletes a comment.';
   end if;
   if cur.deleted_at is null then
-    update public.comments set deleted_at = now(), deleted_by = uid where id = p_id;
+    update public.comments set deleted_at = now(), deleted_by = uid, updated_at = now() where id = p_id;
   end if;
 end;
 $$;
@@ -250,9 +301,11 @@ begin
     raise exception 'comment_denied' using errcode = '42501';
   end if;
   if p_resolved and root.resolved_at is null then
-    update public.comments set resolved_at = now(), resolved_by = auth.uid() where id = p_thread_id;
+    update public.comments set resolved_at = now(), resolved_by = auth.uid(), updated_at = now()
+    where id = p_thread_id;
   elsif not p_resolved and root.resolved_at is not null then
-    update public.comments set resolved_at = null, resolved_by = null where id = p_thread_id;
+    update public.comments set resolved_at = null, resolved_by = null, updated_at = now()
+    where id = p_thread_id;
   end if;
 end;
 $$;
@@ -282,11 +335,13 @@ begin
 end;
 $$;
 
+revoke all on function public.list_comments(uuid, timestamptz) from public, anon;
 revoke all on function public.add_comment(uuid, uuid, text, uuid, text) from public, anon;
 revoke all on function public.edit_comment(uuid, text) from public, anon;
 revoke all on function public.delete_comment(uuid) from public, anon;
 revoke all on function public.resolve_thread(uuid, boolean) from public, anon;
 revoke all on function public.comment_authors(uuid) from public, anon;
+grant execute on function public.list_comments(uuid, timestamptz) to authenticated;
 grant execute on function public.add_comment(uuid, uuid, text, uuid, text) to authenticated;
 grant execute on function public.edit_comment(uuid, text) to authenticated;
 grant execute on function public.delete_comment(uuid) to authenticated;
