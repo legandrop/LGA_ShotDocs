@@ -68,6 +68,14 @@ describe('carrete: qué se muestra de cada elemento', () => {
     expect((await loader.full(itemFor(video))).local).toBe(true);
   });
 
+  it('si la página ya tiene la imagen nítida, el carrete empieza con esa (no con la miniatura)', async () => {
+    const { a, photo } = await setup();
+    const sharp = (await a.media.view(mediaIdOf(photo)!))?.url;
+    expect(sharp).toMatch(/^blob:/);
+    const p = await createCarreteLoader(a).preview(itemFor(photo));
+    expect(p.preview).toBe(sharp);
+  });
+
   it('en otro dispositivo: la miniatura bajada y el archivo con un pase, pedido una sola vez', async () => {
     const { server, a, photo, video } = await setup();
     await sync(a);

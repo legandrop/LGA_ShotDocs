@@ -2621,6 +2621,14 @@ code {
   }
 }
 
+/* Fotos nítidas (Docs/Doc_Imagenes.md, "Calidad en la página"): una foto sin ancho propio (la caja de BlockNote
+   es `fit-content`) se ve del ancho natural de su miniatura. Cuando la app la cambia por la imagen nítida (más
+   grande), el ancho de la miniatura queda de tope: la foto no crece, solo se ve mejor. Con ancho propio (px o
+   en fila) manda ese ancho. */
+.bn-block-outer:not(.img-sized) > .bn-block > .bn-block-content .bn-file-block-content-wrapper[style*='fit-content'] img.bn-visual-media[data-sd-sharp] {
+  max-width: var(--sd-thumb-w, 100%);
+}
+
 /* Adjuntos (Docs/Doc_Adjuntos.md): la tarjeta de un PDF, un zip… tiene tamaño fijo (su texto no se estira como
    una foto), sin tiradores; el cursor es una mano (un segundo clic la abre o la baja). La clase `sd-attachment`
    la pone la app en la imagen (attachments.ts). Si una versión vieja le puso un ancho o la puso en fila, no

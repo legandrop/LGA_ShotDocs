@@ -57,7 +57,8 @@ In production (v0.049). What works today:
 - The file gateway with Google Drive: resumable uploads and streaming, tested on desktop and iPhone
   (v0.022 to v0.028).
 - Photos and videos in pages go to the owner's Google Drive: saved on the device first, uploaded in parts
-  that resume after closing the app or losing the connection, with a small thumbnail on the page. The
+  that resume after closing the app or losing the connection, with a small thumbnail on the page that is
+  swapped for a sharp version (up to 2048 px, made on the device) when the photo is shown large. The
   owner chooses where the folder goes (account menu → *Google Drive*).
 - The media carousel: tap a photo or video on a page to see all of the page's photos and videos full
   screen, in order, with swipe, pinch and wheel zoom, video playback, download of the original and the
@@ -99,7 +100,7 @@ Templates and the assistant come later. The plan, the decisions and the roadmap 
 npm install
 cp .env.example .env.local   # your Supabase project URL and publishable key
 npm run dev                  # http://localhost:5173
-npm test                     # all 1133 tests: sync, editor, UI, file gateway client and Worker
+npm test                     # all 1190 tests: sync, editor, UI, file gateway client and Worker
 npm run typecheck            # app types
 npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
 npm run build                # production build in dist/

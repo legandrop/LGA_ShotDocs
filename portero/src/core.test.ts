@@ -1671,3 +1671,67 @@ describe('portero: nombres y encabezados de lo que se sirve', () => {
     expect(await (await put('bytes 0-9/10', bytes(10))).json()).toMatchObject({ status: 'done', linked: true });
   });
 });
+
+describe('portero: la app puede leer lo que se sirve (CORS, fotos nítidas de v0.059)', () => {
+  // La app baja el original con `fetch` para hacer la imagen nítida de la página (src/ui/sharpImages.ts): sin
+  // `Access-Control-Allow-Origin` el navegador no le deja leer la respuesta. Un `<img>` o un `<video>` (lo
+  // que usaban las versiones anteriores y el carrete) no manda `Origin` y sale igual que antes.
+  it('GET desde la app: 200 con el origen de la app, Vary: Origin y los encabezados que la app lee', async () => {
+    const { get, data } = await servedFile('IMG_0007.JPG', 'image/jpeg', 300);
+    const res = await get('', { headers: { Origin: APP } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+    expect(res.headers.get('Vary')).toContain('Origin');
+    expect(res.headers.get('Access-Control-Expose-Headers')).toContain('Content-Length');
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(data);
+    expectSafe(res);
+  });
+
+  it('otro origen no queda habilitado; sin Origin (un <img>, las versiones anteriores) sale como antes', async () => {
+    const { get } = await servedFile('IMG_0007.JPG', 'image/jpeg');
+    const evil = await get('', { headers: { Origin: 'https://evil.example' } });
+    expect(evil.status).toBe(200);
+    expect(evil.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(evil.headers.get('Vary')).toContain('Origin');
+    const plain = await get();
+    expect(plain.status).toBe(200);
+    expect(plain.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    // La caché del navegador no mezcla la respuesta sin CORS con la de la app.
+    expect(plain.headers.get('Vary')).toContain('Origin');
+    expect(plain.headers.get('Content-Type')).toBe('image/jpeg');
+  });
+
+  it('por partes (206, también de la caché del arranque del video), HEAD y 416, con CORS', async () => {
+    const { get } = await servedFile('IMG_0008.MOV', 'video/quicktime', 1000);
+    const part = await get('', { headers: { Origin: APP, Range: 'bytes=0-99' } });
+    expect(part.status).toBe(206);
+    expect(part.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+    expect(part.headers.get('Access-Control-Expose-Headers')).toContain('Content-Range');
+    const tail = await get('', { headers: { Origin: APP, Range: 'bytes=900-' } });
+    expect(tail.status).toBe(206);
+    expect(tail.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+    const head = await get('', { method: 'HEAD', headers: { Origin: APP } });
+    expect(head.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+    const out = await get('', { headers: { Origin: APP, Range: 'bytes=5000-' } });
+    expect(out.status).toBe(416);
+    expect(out.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+  });
+
+  it('el preflight de un pedido por partes desde la app deja pasar Range', async () => {
+    const { answer, p } = await servedFile('IMG_0007.JPG', 'image/jpeg');
+    const res = await p.handle(
+      new Request(answer.url, { method: 'OPTIONS', headers: { Origin: APP, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'range' } }),
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+    expect(res.headers.get('Access-Control-Allow-Headers')?.toLowerCase().split(/,\s*/)).toContain('range');
+  });
+
+  it('un error de un pase (vencido) también lo puede leer la app', async () => {
+    const { store, p } = await servedFile('IMG_0007.JPG', 'image/jpeg');
+    const expired = await signedPass(store, { f: 'adjuntoxxxxxxxxx', u: Date.now() - 1000, t: 'image/jpeg' });
+    const res = await p.handle(new Request(expired, { headers: { Origin: APP } }));
+    expect(res.status).toBe(403);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+  });
+});
