@@ -86,12 +86,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   del Drive. Por eso no puede ser un link a Drive con permisos de Google (los miembros no tienen acceso al
   Drive del dueño, y un link compartido deja subir a la carpeta de arriba): la carpeta se muestra adentro de
   la app, con la lista de archivos que sirve el portero con los mismos pases. Diseño y auditoría antes de
-  implementar (sin tipo de bloque nuevo).
+  implementar (sin tipo de bloque nuevo). **Diseño en `Doc_Carpetas.md`**, rediseñado con las respuestas de
+  Lega: vista en vivo de la carpeta de Drive, subida directa a Google, sin tope y en el plan gratis.
 - **P.10 Liberar la copia de la app en el dispositivo** (Lega, 2026-09-30): el archivo que el usuario eligió
   nunca se toca (queda en su disco); lo que se puede liberar es la copia que la app guarda en el almacenamiento
   del navegador después de que el archivo está confirmado en el Drive (por ejemplo, un video grande subido
   desde el iPhone). Pensar cuándo (tamaño, días), qué se pierde (verlo sin red en ese dispositivo) y que la
-  miniatura se queda. Diseño antes.
+  miniatura se queda. **Diseño en `Doc_Copias_Locales.md`** (auditado; a mano por defecto, esperando la respuesta de Lega).
 - **P.11 Colapsar secciones por sus títulos, como en Coda** (Lega, 2026-09-30): cualquier título (H1, H2, H3…)
   se colapsa con un triángulo lleno a su izquierda (apunta a la derecha colapsado, abajo abierto). Colapsar un
   título esconde todo lo que sigue hasta el próximo título de su nivel o mayor (un H1 esconde sus H2 y H3, que
@@ -128,7 +129,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   desde donde se puede **volver a ver el tutorial**. A pensar en el diseño: el documento de ejemplo no debería
   ensuciar el workspace ni sincronizarse (una página de práctica local, o una plantilla que se crea y se puede
   borrar), los dos idiomas, el teléfono, y que la ayuda se mantenga al día con cada función nueva (una regla:
-  cada feature nueva suma su línea en la ayuda). Diseño y auditoría antes de implementar.
+  cada feature nueva suma su línea en la ayuda). Diseño y auditoría antes de implementar. **Diseño en
+  `Doc_Tutorial.md`** (sin implementar; auditado; Lega ya respondió sus preguntas).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
