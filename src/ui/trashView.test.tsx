@@ -115,7 +115,7 @@ describe('papelera: pestaña Archivos', () => {
     const { server, owner, id } = await trashedPhoto();
     const host = await mount(services(owner, server.ownerId));
     await act(async () => byText(host, 'Files')!.click());
-    await settle();
+    await vi.waitFor(() => expect(host.textContent).toContain('IMG_0042.JPG'));
 
     const text = host.textContent ?? '';
     expect(text).toContain('IMG_0042.JPG');
@@ -135,9 +135,11 @@ describe('papelera: pestaña Archivos', () => {
 
     confirm.mockReturnValue(true);
     await act(async () => byText(host, 'Send to Drive trash')!.click());
-    await settle();
+    await vi.waitFor(async () => {
+      await settle();
+      expect(host.textContent).toContain('No files in the trash.');
+    });
     expect(server.mediaFiles.get(id)?.drive_trashed_at).toBeTruthy();
-    expect(host.textContent).toContain('No files in the trash.');
   });
 
   it('marca los que usa una página de la papelera y "Empty" los deja afuera', async () => {
@@ -168,8 +170,7 @@ describe('papelera: pestaña Archivos', () => {
     const host = await mount(services(owner, server.ownerId));
     expect(host.textContent).toContain('already sent to the Google Drive trash');
     await act(async () => byText(host, 'Files')!.click());
-    await settle();
-    expect(host.textContent).toContain('Used by “Día 1” in the trash');
+    await vi.waitFor(() => expect(host.textContent).toContain('Used by “Día 1” in the trash'));
     expect(byText(host, 'Empty')!.disabled).toBe(true);
     // De a uno se puede, con su propia confirmación.
     const confirm = vi.fn((_message: string) => false);
@@ -197,8 +198,7 @@ describe('papelera: pestaña Archivos', () => {
     await sync(lead);
     const hostLead = await mount(services(lead, 'lead-1'));
     await act(async () => byText(hostLead, 'Files')!.click());
-    await settle();
-    expect(hostLead.textContent).toContain('IMG_0042.JPG');
+    await vi.waitFor(() => expect(hostLead.textContent).toContain('IMG_0042.JPG'));
     expect(byText(hostLead, 'Send to Drive trash')).toBeUndefined();
     expect(byText(hostLead, 'Empty')).toBeUndefined();
   });
