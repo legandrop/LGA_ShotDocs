@@ -1,0 +1,169 @@
+diff --git a/node_modules/@y/prosemirror/src/commands.js b/node_modules/@y/prosemirror/src/commands.js
+index 3b7ec2c..46755a2 100644
+--- a/node_modules/@y/prosemirror/src/commands.js
++++ b/node_modules/@y/prosemirror/src/commands.js
+@@ -4,9 +4,7 @@ import { absolutePositionToRelativePosition } from './positions.js'
+ 
+ /**
+  * Switch to pause mode (stop synchronization between prosemirror and ytype)
+- * @param {import('prosemirror-state').EditorState} state
+- * @param {((tr: import('prosemirror-state').Transaction) => void)?} dispatch
+- * @returns {boolean}
++ * @type {import('prosemirror-state').Command}
+  */
+ export function pauseSync (state, dispatch) {
+   const pluginState = ySyncPluginKey.getState(state)
+diff --git a/node_modules/@y/prosemirror/src/index.js b/node_modules/@y/prosemirror/src/index.js
+index 2e75b5a..2763e7f 100644
+--- a/node_modules/@y/prosemirror/src/index.js
++++ b/node_modules/@y/prosemirror/src/index.js
+@@ -1,7 +1,7 @@
+ export * from './sync-plugin.js'
+ export * from './keys.js'
+ export * from './positions.js'
+-export { docToDelta, $prosemirrorDelta, defaultMapAttributionToMark, defaultAttributionConf, attributionMapperToConf, yattr2markname, pmToFragment, fragmentToPm } from './sync-utils.js'
++export { docToDelta, $prosemirrorDelta, defaultMapAttributionToMark, defaultAttributionConf, attributionMapperToConf, yattr2markname, pmToFragment, fragmentToPm, deltaAttributionToFormat, deltaToPNode, deltaToPSteps, nodeToDelta } from './sync-utils.js'
+ export * from './commands.js'
+ export * from './undo-plugin.js'
+ export * from './cursor-plugin.js'
+diff --git a/node_modules/@y/prosemirror/src/rdt/prosemirror.js b/node_modules/@y/prosemirror/src/rdt/prosemirror.js
+index cfc7690..f666671 100644
+--- a/node_modules/@y/prosemirror/src/rdt/prosemirror.js
++++ b/node_modules/@y/prosemirror/src/rdt/prosemirror.js
+@@ -270,7 +270,12 @@ export class ProsemirrorRdt extends ObservableV2 {
+       // skeleton, and the fix below would write the skeleton into Y.
+       this._defaultFingerprint = null
+       tr = this.view.state.tr
+-      tr.replaceWith(0, tr.doc.content.size, deltaToPNode(/** @type {any} */ (expected), tr.doc.type.schema, null, this.attributedNodes))
++      const pDoc = deltaToPNode(/** @type {any} */ (expected), tr.doc.type.schema, null, this.attributedNodes)
++      if (pDoc === null) {
++        // The root document itself can't be materialized — nothing to recover.
++        throw new Error('[y/prosemirror]: failed to create document node')
++      }
++      tr.replaceWith(0, tr.doc.content.size, pDoc)
+     } else {
+       try {
+         tr = deltaToPSteps(this.view.state.tr, /** @type {any} */ (d), undefined, undefined, this.attributedNodes)
+@@ -278,7 +283,12 @@ export class ProsemirrorRdt extends ObservableV2 {
+         // Raw steps could not express the change against the schema — replace
+         // the whole document through ProseMirror's fitting `replaceWith`.
+         tr = this.view.state.tr
+-        tr.replaceWith(0, tr.doc.content.size, deltaToPNode(/** @type {any} */ (expected), tr.doc.type.schema, null, this.attributedNodes))
++        const pDoc = deltaToPNode(/** @type {any} */ (expected), tr.doc.type.schema, null, this.attributedNodes)
++        if (pDoc === null) {
++          // The root document itself can't be materialized — nothing to recover.
++          throw new Error('[y/prosemirror]: failed to create document node')
++        }
++        tr.replaceWith(0, tr.doc.content.size, pDoc)
+       }
+     }
+     if (tr.docChanged && !this._dispatch(tr)) {
+diff --git a/node_modules/@y/prosemirror/src/sync-utils.js b/node_modules/@y/prosemirror/src/sync-utils.js
+index 834e759..e62e6c8 100644
+--- a/node_modules/@y/prosemirror/src/sync-utils.js
++++ b/node_modules/@y/prosemirror/src/sync-utils.js
+@@ -638,7 +638,14 @@ export const deltaToPSteps = (tr, d, pnode = tr.doc, currPos = { i: 0 }, attribu
+       for (const ins of bundle.inserts) {
+         if (delta.$insertOp.check(ins)) {
+           for (const n of ins.insert) {
+-            newPChildren.push(deltaToPNode(n, schema, ins.format, attributedNodes))
++            const pn = deltaToPNode(n, schema, ins.format, attributedNodes)
++            if (pn === null) {
++              // Can't materialize this node incrementally — bail out so the
++              // caller falls back to the whole-document path, which drops
++              // invalid nodes coherently (#258).
++              throw new Error('[y/prosemirror]: failed to create node: ' + n.name)
++            }
++            newPChildren.push(pn)
+           }
+         } else { // text op
+           newPChildren.push(schema.text(ins.insert, formattingAttributesToMarks(ins.format, schema)))
+@@ -676,11 +683,24 @@ export const deltaToPSteps = (tr, d, pnode = tr.doc, currPos = { i: 0 }, attribu
+ }
+ 
+ /**
++ * Materialize a delta node as a ProseMirror node, or return null if the local
++ * schema can't represent it (yjs/y-prosemirror#258 — "delete the invalid
++ * node"). A null child is dropped by its parent; the dropped content surfaces
++ * as a "fix" diff in `ProsemirrorRdt.applyDelta`, which the binding
++ * propagates back into the ytype so all peers converge on the same
++ * schema-valid document. Callers that cannot recover from a null root must
++ * throw themselves. Null is returned when:
++ * - the node type doesn't exist in the schema (e.g. a peer runs a newer
++ *   schema version)
++ * - the node is missing a required attribute without a default
++ * - the children violate the content expression and dropping the rejected
++ *   ones still doesn't produce a fillable node
++ *
+  * @param {ProsemirrorDelta} d
+  * @param {import('prosemirror-model').Schema} schema
+  * @param {delta.Formats|null} dformat
+  * @param {AttributedNodesPredicate} [attributedNodes]
+- * @return {Node}
++ * @return {Node|null}
+  */
+ export const deltaToPNode = (d, schema, dformat, attributedNodes = defaultAttributedNodes) => {
+   /**
+@@ -690,13 +710,12 @@ export const deltaToPNode = (d, schema, dformat, attributedNodes = defaultAttrib
+   for (const attr of d.attrs) {
+     attrs[attr.key] = attr.value
+   }
+-  const dc = d.children.map(c => delta.$insertOp.check(c) ? c.insert.map(cn => deltaToPNode(cn, schema, c.format, attributedNodes)) : (delta.$textOp.check(c) ? [schema.text(c.insert, formattingAttributesToMarks(c.format, schema))] : []))
++  const dc = d.children.map(c => delta.$insertOp.check(c) ? c.insert.map(cn => deltaToPNode(cn, schema, c.format, attributedNodes)).filter(cn => cn !== null) : (delta.$textOp.check(c) ? [schema.text(c.insert, formattingAttributesToMarks(c.format, schema))] : []))
+   const canonical = d.name == null ? 'doc' : canonicalNodeName(d.name)
+   const nodeType = schema.nodes[attributedVariant(canonical, dformat, attributedNodes, schema)]
+   if (!nodeType) {
+-    throw new Error(
+-      '[y/prosemirror]: node type does not exist in the schema: ' + d.name
+-    )
++    // unknown node type — drop the node (#258)
++    return null
+   }
+   const inputChildren = dc.flat(1)
+   const inputMarks = formattingAttributesToMarks(dformat, schema)
+@@ -705,13 +724,38 @@ export const deltaToPNode = (d, schema, dformat, attributedNodes = defaultAttrib
+       'y-attributed': true
+     }, attrs)
+     : attrs
+-  const pNode = nodeType.createAndFill(
+-    finalAttrs,
+-    inputChildren,
+-    inputMarks
+-  )
+-  if (pNode === null) {
+-    throw new Error('[y/prosemirror]: failed to create node: ' + d.name)
++  /**
++   * @type {Node|null}
++   */
++  let pNode = null
++  try {
++    pNode = nodeType.createAndFill(
++      finalAttrs,
++      inputChildren,
++      inputMarks
++    )
++    if (pNode === null) {
++      // The children don't satisfy the node's content expression — e.g. two
++      // concurrently-initialized documents were merged, concatenating content
++      // that the schema only allows once (`doc { content: 'blockquote' }`
++      // holding two blockquotes). Greedily keep the children the content
++      // expression accepts and drop the ones it rejects — deterministic, so
++      // every peer materializes the same schema-valid document.
++      const fitted = []
++      let match = nodeType.contentMatch
++      for (const child of inputChildren) {
++        const nextMatch = match.matchType(child.type)
++        if (nextMatch != null) {
++          match = nextMatch
++          fitted.push(child)
++        }
++      }
++      pNode = nodeType.createAndFill(finalAttrs, fitted, inputMarks)
++    }
++  } catch (_e) {
++    // createAndFill throws e.g. for a missing required attribute without a
++    // default — the node can't be materialized at all; drop it (#258)
++    return null
+   }
+   return pNode
+ }

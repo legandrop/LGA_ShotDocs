@@ -1,8 +1,9 @@
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { t } from '../i18n';
 import { toBase64 } from '../lib/base64';
 import type { MediaDb } from '../media/mediaDb';
 import { exportComments, unsyncedComments, type CommentsDb } from './comments';
+import { bytes } from './docs';
 import { unsyncedDocStates, type LocalDb } from './localDb';
 import { CONTENT_FRAGMENT } from './structure';
 
@@ -52,17 +53,13 @@ export async function unsyncedSummary(
 /** Texto plano de un documento de BlockNote, para leer el archivo sin la app. */
 function plainText(doc: Y.Doc): string {
   const lines: string[] = [];
-  const walk = (node: Y.XmlElement | Y.XmlFragment | Y.XmlText) => {
-    if (node instanceof Y.XmlText) {
-      const text = (node.toDelta() as { insert?: unknown }[]).map((d) => (typeof d.insert === 'string' ? d.insert : '')).join('');
-      if (text) lines.push(text);
-      return;
-    }
-    for (const child of node.toArray()) {
-      if (child instanceof Y.XmlElement || child instanceof Y.XmlText) walk(child);
-    }
+  // En Yjs 14 el texto vive adentro del elemento: `toArray()` mezcla tramos de texto y elementos hijos.
+  const walk = (node: Y.Type) => {
+    const text = node.toArray().filter((c): c is string => typeof c === 'string').join('');
+    if (text) lines.push(text);
+    for (const child of node.toArray()) if (child instanceof Y.Type) walk(child);
   };
-  walk(doc.getXmlFragment(CONTENT_FRAGMENT));
+  walk(doc.get(CONTENT_FRAGMENT));
   return lines.join('\n');
 }
 
@@ -110,7 +107,7 @@ export async function exportUnsyncedBlob(
   for (const state of states) {
     const rows = await db.getAllFromIndex('docUpdates', 'pageId', state.pageId);
     const doc = new Y.Doc();
-    if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)));
+    if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(bytes(rows.map((r) => r.data))));
     // Lo que el servidor todavía no confirmó: la diferencia contra lo que ya tiene.
     const update = Y.encodeStateAsUpdate(doc, state.syncedSV);
     parts.push(

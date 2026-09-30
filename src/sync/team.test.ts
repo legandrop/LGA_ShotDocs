@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { fromBase64 } from '../lib/base64';
 import { inviteLink, parseInviteHash } from '../invite';
 import { loadWorkspaces, resolveInvite } from '../workspaces';
@@ -49,7 +49,7 @@ function perms(d: Device): Permissions {
 
 async function write(d: Device, pageId: string, text: string): Promise<void> {
   const doc = await d.docs.open(pageId);
-  doc.getText('t').insert(0, text);
+  doc.get('t').insert(0, text);
   await d.docs.flush(pageId);
   d.docs.close(pageId);
 }
@@ -402,7 +402,7 @@ describe('sacar a alguien', () => {
     expect(data.pages[0].title).toBe('B');
     const doc = new Y.Doc();
     Y.applyUpdate(doc, fromBase64(data.pages[0].yjsUpdate));
-    expect(doc.getText('t').toString()).toBe('Nota de rodaje');
+    expect(doc.get('t').toString()).toBe('Nota de rodaje');
     expect(data.images[0].mime).toBe('image/png');
     expect([...fromBase64(data.images[0].base64)]).toEqual([1, 2, 3]);
   });
@@ -449,15 +449,17 @@ describe('link de invitación', () => {
 /** Un documento con dos raíces (dos dispositivos que empezaron la misma página sin verse). */
 function twoRootsUpdate(extra = 'dos'): Uint8Array {
   const doc = new Y.Doc();
-  const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  const fragment = doc.get(CONTENT_FRAGMENT);
+  const pending: (() => void)[] = [];
   const root = (text: string) => {
-    const group = new Y.XmlElement('blockGroup');
-    const block = new Y.XmlElement('blockContainer');
-    block.insert(0, [new Y.XmlText(text)]);
+    const group = new Y.Type('blockGroup');
+    const block = new Y.Type('blockContainer');
     group.insert(0, [block]);
+    pending.push(() => block.insert(0, text));
     return group;
   };
   fragment.insert(0, [root('uno'), root(extra)]);
+  for (const p of pending) p();
   return Y.encodeStateAsUpdate(doc);
 }
 
@@ -473,12 +475,12 @@ describe('correcciones de la auditoría', () => {
     const before = server.updates.get(pages.a)?.length;
 
     const doc = await ana.docs.open(pages.a);
-    expect(doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+    expect(doc.get(CONTENT_FRAGMENT).length).toBe(1);
     await ana.docs.flush(pages.a);
     // Llega otro cambio roto con la página abierta: también se repara solo en memoria.
     await owner.remote.pushUpdate(pages.a, crypto.randomUUID(), twoRootsUpdate('tres'));
     await ana.engine.syncNow();
-    expect(doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+    expect(doc.get(CONTENT_FRAGMENT).length).toBe(1);
     ana.docs.close(pages.a);
     // Y otra apertura (se vuelve a armar desde lo guardado).
     await ana.docs.open(pages.a);

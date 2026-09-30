@@ -22,7 +22,7 @@ afterEach(() => {
 
 async function read(d: Device, pageId: string): Promise<string> {
   const doc = await d.docs.open(pageId);
-  const text = doc.getText('t').toString();
+  const text = doc.get('t').toString();
   d.docs.close(pageId);
   return text;
 }
@@ -34,13 +34,13 @@ describe('auditoría de la fase 1', () => {
     const tabA = await device(server, dbName);
     const pageId = await tabA.tree.create(null, 'P');
     const docA = await tabA.docs.open(pageId);
-    docA.getText('t').insert(0, 'A1 ');
+    docA.get('t').insert(0, 'A1 ');
     await tabA.docs.flush(pageId);
     await tabA.engine.syncNow();
 
     const tabB = await device(server, dbName);
     const docB = await tabB.docs.open(pageId);
-    docB.getText('t').insert(docB.getText('t').length, 'B-EDIT');
+    docB.get('t').insert(docB.get('t').length, 'B-EDIT');
     await tabB.docs.flush(pageId);
 
     // La pestaña A sube sin tener en memoria lo que escribió B.
@@ -93,7 +93,7 @@ describe('auditoría de la fase 1', () => {
     }) as never;
 
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'importante');
+    doc.get('t').insert(0, 'importante');
     await a.docs.flush(pageId);
     await a.engine.syncNow();
     expect(a.engine.getStatus().localError).toMatch(/Quota/);
@@ -104,8 +104,8 @@ describe('auditoría de la fase 1', () => {
 
     failing = false;
     const again = await a.docs.open(pageId);
-    expect(again.getText('t').toString()).toBe('importante');
-    again.getText('t').insert(again.getText('t').length, '!');
+    expect(again.get('t').toString()).toBe('importante');
+    again.get('t').insert(again.get('t').length, '!');
     await a.docs.flush(pageId);
     a.docs.close(pageId);
     expect(a.engine.getStatus().localError).toBeNull();
@@ -123,7 +123,7 @@ describe('auditoría de la fase 1', () => {
     const a = await device(server);
     const pageId = await a.tree.create(null, 'P');
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'x'.repeat(500));
+    doc.get('t').insert(0, 'x'.repeat(500));
     await a.docs.flush(pageId);
     await a.engine.syncNow();
     expect(a.engine.getStatus()).toMatchObject({ rejectedPages: 1, pendingPages: 1 });
@@ -142,7 +142,7 @@ describe('auditoría de la fase 1', () => {
     const pageId = await a.tree.create(null, 'P');
     await a.files.add(pageId, new Blob([new Uint8Array(10)], { type: 'image/jpeg' }));
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'texto del reporte');
+    doc.get('t').insert(0, 'texto del reporte');
     await a.docs.flush(pageId);
     await a.engine.syncNow();
     await a.engine.syncNow();
@@ -175,7 +175,7 @@ describe('auditoría de la fase 1', () => {
     const pageId = await a.tree.create(null, 'Día de rodaje 3');
     await a.engine.syncNow();
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'mis notas');
+    doc.get('t').insert(0, 'mis notas');
     await a.docs.flush(pageId);
     await a.engine.syncNow();
     // El ciclo siguiente baja el árbol pero se corta al bajar contenido.
@@ -202,14 +202,14 @@ describe('auditoría de la fase 1', () => {
     const a = await device(server);
     const pageId = await a.tree.create(null, 'P');
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'x'.repeat(500));
+    doc.get('t').insert(0, 'x'.repeat(500));
     await a.docs.flush(pageId);
     await a.engine.syncNow();
     expect(a.engine.getStatus().rejectedPages).toBe(1);
 
     // El usuario achica la página y agrega algo.
-    doc.getText('t').delete(0, 490);
-    doc.getText('t').insert(10, ' fin');
+    doc.get('t').delete(0, 490);
+    doc.get('t').insert(10, ' fin');
     await a.docs.flush(pageId);
     server.maxUpdateBytes = 8 * 1024 * 1024;
     await a.engine.retryRejected();

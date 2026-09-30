@@ -1,4 +1,4 @@
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 
 /** Fragmento de Yjs donde vive el contenido de una página. No se cambia: lo usan todos los documentos. */
 export const CONTENT_FRAGMENT = 'document-store';
@@ -14,16 +14,16 @@ export const CONTENT_FRAGMENT = 'document-store';
  * duplicar a perder. Devuelve true si tuvo que reparar.
  */
 export function mergeRootGroups(doc: Y.Doc, origin: unknown): boolean {
-  const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  const fragment = doc.get(CONTENT_FRAGMENT);
   if (fragment.length <= 1) return false;
   const roots = fragment.toArray();
-  const first = roots.find((r): r is Y.XmlElement => r instanceof Y.XmlElement);
+  const first = roots.find((r): r is Y.Type => r instanceof Y.Type);
   if (!first) return false;
   doc.transact(() => {
     for (const extra of roots) {
       if (extra === first) continue;
-      const blocks = extra instanceof Y.XmlElement ? extra.toArray() : [];
-      const copies = blocks.map((b) => (b as Y.XmlElement | Y.XmlText).clone());
+      const blocks = extra instanceof Y.Type ? extra.toArray() : [];
+      const copies = blocks.filter((b): b is Y.Type => b instanceof Y.Type).map((b) => b.clone());
       if (copies.length > 0) first.insert(first.length, copies);
     }
     const firstIndex = roots.indexOf(first);
@@ -38,7 +38,9 @@ export function mergeRootGroups(doc: Y.Doc, origin: unknown): boolean {
  * escribieran semillas distintas con el mismo autor y los mismos números, sus documentos divergirían. Un
  * formato nuevo lleva otra versión (y por lo tanto otro autor).
  */
-const SEED_VERSION = 1;
+// 2: formato de Yjs 14 (@y/prosemirror 2): los atributos del párrafo son todos los que escribe el editor,
+// incluidos los propios (driveCard, question, script), para que el editor no reescriba la semilla al abrir.
+const SEED_VERSION = 2;
 
 /** Autor de Yjs de la semilla: sale del id de la página, así que es el mismo en todos los dispositivos. */
 export function seedClientId(pageId: string): number {
@@ -60,17 +62,20 @@ export function seedClientId(pageId: string): number {
 export function buildSeed(pageId: string): Uint8Array {
   const doc = new Y.Doc();
   doc.clientID = seedClientId(pageId);
-  const group = new Y.XmlElement('blockGroup');
-  const container = new Y.XmlElement('blockContainer');
-  const paragraph = new Y.XmlElement('paragraph');
+  const group = new Y.Type('blockGroup');
+  const container = new Y.Type('blockContainer');
+  const paragraph = new Y.Type('paragraph');
   doc.transact(() => {
-    doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+    doc.get(CONTENT_FRAGMENT).insert(0, [group]);
     group.insert(0, [container]);
-    container.setAttribute('id', 'initialBlockId');
+    container.setAttr('id', 'initialBlockId');
     container.insert(0, [paragraph]);
-    paragraph.setAttribute('backgroundColor', 'default');
-    paragraph.setAttribute('textColor', 'default');
-    paragraph.setAttribute('textAlignment', 'left');
+    paragraph.setAttr('backgroundColor', 'default');
+    paragraph.setAttr('driveCard', false);
+    paragraph.setAttr('question', false);
+    paragraph.setAttr('script', false);
+    paragraph.setAttr('textAlignment', 'left');
+    paragraph.setAttr('textColor', 'default');
   });
   const update = Y.encodeStateAsUpdate(doc);
   doc.destroy();
@@ -79,7 +84,7 @@ export function buildSeed(pageId: string): Uint8Array {
 
 /** Si la página está vacía, le pone la raíz inicial. Devuelve true si la puso. */
 export function seedIfEmpty(doc: Y.Doc, pageId: string, origin: unknown): boolean {
-  if (doc.getXmlFragment(CONTENT_FRAGMENT).length > 0) return false;
+  if (doc.get(CONTENT_FRAGMENT).length > 0) return false;
   Y.applyUpdate(doc, buildSeed(pageId), origin);
-  return doc.getXmlFragment(CONTENT_FRAGMENT).length > 0;
+  return doc.get(CONTENT_FRAGMENT).length > 0;
 }

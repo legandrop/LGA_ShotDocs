@@ -1,6 +1,6 @@
 // Copia de la versión publicada (main, v0.029: commit cb285c1) de src/sync/docs.ts, solo para probar que
 // una versión anterior de la app que abre la misma base local no pierde nada. No se toca.
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import {
   emptyDocState,
   hasUnsyncedContent,

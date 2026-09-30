@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, SupabaseRemote, timed, timeoutFor } from './remote';
 import { FakeServer, makeDevice, type Device } from './testing';
 import { isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, RemoteError } from './types';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 
 // Roadmap B.5: una consulta que no responde nunca dejaba colgado para siempre el ciclo de sincronización
 // (con `syncing` prendido y el estado en "All synced"). Ahora cada consulta a la base tiene un tope.
@@ -132,7 +132,7 @@ describe('una página que vence el tope no traba al resto', () => {
     const doc = new Y.Doc();
     for (let i = 0; i < 12; i++) {
       const before = Y.encodeStateVector(doc);
-      doc.getText('t').insert(doc.getText('t').length, `${i} `);
+      doc.get('t').insert(doc.get('t').length, `${i} `);
       await a.remote.pushUpdate(pageId, crypto.randomUUID(), Y.encodeStateAsUpdate(doc, before));
     }
     // Como una red lenta: un lote de más de uno vence el tope.
@@ -146,7 +146,7 @@ describe('una página que vence el tope no traba al resto', () => {
     expect(await a.docs.pullPage(pageId, a.remote)).toBe(12);
     expect(limits.slice(0, 4)).toEqual([500, 50, 5, 1]);
     const opened = await a.docs.open(pageId);
-    expect(opened.getText('t').toString()).toBe(doc.getText('t').toString());
+    expect(opened.get('t').toString()).toBe(doc.get('t').toString());
     a.docs.close(pageId);
   });
 
@@ -161,12 +161,12 @@ describe('una página que vence el tope no traba al resto', () => {
     await b.engine.syncNow();
     for (const [p, text] of [[big, 'mucho texto'], [small, 'una línea']] as const) {
       const doc = await a.docs.open(p);
-      doc.getText('t').insert(0, text);
+      doc.get('t').insert(0, text);
       await a.docs.flush(p);
       a.docs.close(p);
     }
     const docB = await b.docs.open(small);
-    docB.getText('t').insert(0, 'de B ');
+    docB.get('t').insert(0, 'de B ');
     await b.docs.flush(small);
     b.docs.close(small);
     await b.engine.syncNow();
@@ -180,7 +180,7 @@ describe('una página que vence el tope no traba al resto', () => {
     const serverDoc = new Y.Doc();
     Y.applyUpdate(serverDoc, Y.mergeUpdates(server.updates.get(small)!.map((u) => u.data)));
     const opened = await a.docs.open(small);
-    for (const text of [serverDoc.getText('t').toString(), opened.getText('t').toString()]) {
+    for (const text of [serverDoc.get('t').toString(), opened.get('t').toString()]) {
       expect(text).toContain('de B ');
       expect(text).toContain('una línea');
     }

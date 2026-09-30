@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from '../sync/testing';
 import { RemoteError } from '../sync/types';
@@ -57,14 +57,14 @@ async function sync(d: Device): Promise<void> {
 
 /** Agrega un bloque `image` con `sdmedia://<id>` al final de la página, como lo deja el editor. */
 function insertImage(doc: Y.Doc, fileId: string): void {
-  const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  const fragment = doc.get(CONTENT_FRAGMENT);
   doc.transact(() => {
-    if (fragment.length === 0) fragment.insert(0, [new Y.XmlElement('blockGroup')]);
-    const group = fragment.get(0) as Y.XmlElement;
-    const container = new Y.XmlElement('blockContainer');
-    container.setAttribute('id', crypto.randomUUID());
-    const image = new Y.XmlElement('image');
-    image.setAttribute('url', MEDIA_SCHEME + fileId);
+    if (fragment.length === 0) fragment.insert(0, [new Y.Type('blockGroup')]);
+    const group = fragment.get(0) as Y.Type;
+    const container = new Y.Type('blockContainer');
+    container.setAttr('id', crypto.randomUUID());
+    const image = new Y.Type('image');
+    image.setAttr('url', MEDIA_SCHEME + fileId);
     container.insert(0, [image]);
     group.insert(group.length, [container]);
   });
@@ -72,10 +72,10 @@ function insertImage(doc: Y.Doc, fileId: string): void {
 
 /** Borra el bloque del archivo (como borrarlo o cortarlo en el editor). */
 function removeImage(doc: Y.Doc, fileId: string): void {
-  const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+  const group = doc.get(CONTENT_FRAGMENT).get(0) as Y.Type;
   const at = group
     .toArray()
-    .findIndex((c) => ((c as Y.XmlElement).get(0) as Y.XmlElement | undefined)?.getAttribute('url') === MEDIA_SCHEME + fileId);
+    .findIndex((c) => ((c as Y.Type).get(0) as Y.Type | undefined)?.getAttr('url') === MEDIA_SCHEME + fileId);
   if (at >= 0) group.delete(at, 1);
 }
 
@@ -118,9 +118,9 @@ describe('papelera de archivos: qué archivos usa cada página', () => {
     insertImage(doc, a);
     insertImage(doc, b);
     // Un bloque que esta versión no conoce, con una dirección: cuenta igual.
-    const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
-    const other = new Y.XmlElement('futureVideo');
-    other.setAttribute('url', MEDIA_SCHEME + a.toUpperCase());
+    const group = doc.get(CONTENT_FRAGMENT).get(0) as Y.Type;
+    const other = new Y.Type('futureVideo');
+    other.setAttr('url', MEDIA_SCHEME + a.toUpperCase());
     group.insert(0, [other]);
     expect(mediaIdsInDoc(doc)).toEqual(new Set([a, b]));
   });
@@ -130,7 +130,7 @@ describe('papelera de archivos: qué archivos usa cada página', () => {
     const { a, page, id } = await withPhoto(server);
 
     const doc = await a.docs.open(page);
-    const undo = new Y.UndoManager(doc.getXmlFragment(CONTENT_FRAGMENT));
+    const undo = new Y.UndoManager(doc.get(CONTENT_FRAGMENT));
     removeImage(doc, id);
     await a.docs.flush();
     await sync(a);
@@ -158,7 +158,7 @@ describe('papelera de archivos: qué archivos usa cada página', () => {
     const server = new FakeServer();
     const { a, page, id } = await withPhoto(server);
     const doc = await a.docs.open(page);
-    const undo = new Y.UndoManager(doc.getXmlFragment(CONTENT_FRAGMENT));
+    const undo = new Y.UndoManager(doc.get(CONTENT_FRAGMENT));
     removeImage(doc, id);
     undo.undo();
     a.docs.close(page);
@@ -679,8 +679,8 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
       if (first) {
         first = false;
         await edit(b, page, (doc) => {
-          const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
-          group.insert(group.length, [new Y.XmlElement('blockContainer')]);
+          const group = doc.get(CONTENT_FRAGMENT).get(0) as Y.Type;
+          group.insert(group.length, [new Y.Type('blockContainer')]);
         });
         await b.docs.pushPage(page, b.remote);
       }
@@ -786,7 +786,7 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     await sync(b);
     // En `a`: se borra la foto y se deshace, en dos subidas.
     const doc = await a.docs.open(page);
-    const undo = new Y.UndoManager(doc.getXmlFragment(CONTENT_FRAGMENT));
+    const undo = new Y.UndoManager(doc.get(CONTENT_FRAGMENT));
     removeImage(doc, id);
     await a.docs.flush();
     await a.docs.pushPage(page, a.remote);
@@ -812,11 +812,11 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     const server = new FakeServer();
     server.enableTrash();
     const hasFuture = (doc: Y.Doc) => {
-      const stack: unknown[] = doc.getXmlFragment(CONTENT_FRAGMENT).toArray();
+      const stack: unknown[] = doc.get(CONTENT_FRAGMENT).toArray();
       while (stack.length) {
         const item = stack.pop();
-        if (item instanceof Y.XmlElement) {
-          if (item.nodeName === 'futureBlock') return true;
+        if (item instanceof Y.Type) {
+          if (item.name === 'futureBlock') return true;
           stack.push(...item.toArray());
         }
       }
@@ -830,15 +830,15 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     await edit(a, page, (doc) => insertImage(doc, id));
     await sync(a);
     await edit(a, page, (doc) => {
-      const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
-      group.insert(group.length, [new Y.XmlElement('futureBlock')]);
+      const group = doc.get(CONTENT_FRAGMENT).get(0) as Y.Type;
+      group.insert(group.length, [new Y.Type('futureBlock')]);
       removeImage(doc, id);
     });
     await sync(a);
     expect(calls(server, 'unlink_page_file')).toEqual([]);
     expect(a.media.usageMark(page)).not.toBe(await markOf(a, page));
     await edit(a, page, (doc) => {
-      const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+      const group = doc.get(CONTENT_FRAGMENT).get(0) as Y.Type;
       group.delete(group.length - 1, 1);
     });
     await sync(a);

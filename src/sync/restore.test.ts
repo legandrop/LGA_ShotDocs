@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { FakeServer, makeDevice, type Device } from './testing';
 
 const devices: Device[] = [];
@@ -16,16 +16,16 @@ afterEach(() => {
   }
 });
 
-async function write(d: Device, pageId: string, fn: (text: Y.Text) => void): Promise<void> {
+async function write(d: Device, pageId: string, fn: (text: Y.Type) => void): Promise<void> {
   const doc = await d.docs.open(pageId);
-  fn(doc.getText('t'));
+  fn(doc.get('t'));
   await d.docs.flush(pageId);
   d.docs.close(pageId);
 }
 
 async function read(d: Device, pageId: string): Promise<string> {
   const doc = await d.docs.open(pageId);
-  const text = doc.getText('t').toString();
+  const text = doc.get('t').toString();
   d.docs.close(pageId);
   return text;
 }

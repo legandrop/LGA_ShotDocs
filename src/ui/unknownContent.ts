@@ -1,4 +1,4 @@
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 
 // El editor borra del documento compartido lo que no conoce: un tipo de bloque (o de contenido en línea)
@@ -40,7 +40,21 @@ const KNOWN_NODES = [
   'tableRow',
   'toggleListItem',
 ];
-const KNOWN_MARKS = ['backgroundColor', 'bold', 'code', 'italic', 'link', 'strike', 'textColor', 'underline'];
+// Las `y-attributed-*` las agrega al esquema la entrada `@blocknote/core/y` (modo sugerencia de @y/prosemirror);
+// nunca se guardan en el Y.Doc, pero son marcas del esquema.
+const KNOWN_MARKS = [
+  'backgroundColor',
+  'bold',
+  'code',
+  'italic',
+  'link',
+  'strike',
+  'textColor',
+  'underline',
+  'y-attributed-delete',
+  'y-attributed-format',
+  'y-attributed-insert',
+];
 
 const known: KnownContent = { nodes: new Set(KNOWN_NODES), marks: new Set(KNOWN_MARKS) };
 
@@ -54,18 +68,21 @@ const hashedMark = /(.*)(--[a-zA-Z0-9+/=]{8})$/;
 
 /** Lo primero que el editor no conoce en el contenido de la página, o `null` si conoce todo. */
 export function findUnknownContent(doc: Y.Doc, schemaNames: KnownContent = knownContent()): string | null {
-  const stack: unknown[] = doc.getXmlFragment(CONTENT_FRAGMENT).toArray();
+  const stack: Y.Type[] = [doc.get(CONTENT_FRAGMENT)];
+  let root = true;
   while (stack.length > 0) {
-    const item = stack.pop();
-    if (item instanceof Y.XmlElement) {
-      if (NEVER_ELEMENTS.has(item.nodeName) || !schemaNames.nodes.has(item.nodeName)) return `"${item.nodeName}"`;
-      stack.push(...item.toArray());
-    } else if (item instanceof Y.XmlText) {
-      for (const op of item.toDelta() as { attributes?: Record<string, unknown> }[]) {
-        for (const key of Object.keys(op.attributes ?? {})) {
+    const item = stack.pop()!;
+    // En Yjs 14 el texto vive adentro del elemento: las marcas son el `format` de cada tramo de texto.
+    if (!root && (item.name == null || NEVER_ELEMENTS.has(item.name) || !schemaNames.nodes.has(item.name))) return `"${item.name}"`;
+    root = false;
+    for (const op of item.toDelta().children as Iterable<{ insert: unknown; format?: Record<string, unknown> | null }>) {
+      if (typeof op.insert === 'string') {
+        for (const key of Object.keys(op.format ?? {})) {
           const mark = hashedMark.exec(key)?.[1] ?? key;
           if (!schemaNames.marks.has(mark)) return `"${mark}"`;
         }
+      } else if (Array.isArray(op.insert)) {
+        for (const child of op.insert) if (child instanceof Y.Type) stack.push(child);
       }
     }
   }

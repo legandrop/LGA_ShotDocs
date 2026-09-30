@@ -1,5 +1,5 @@
 import type { Node as PMNode } from '@tiptap/pm/model';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 
 // Qué texto tiene cada bloque, para buscar (Docs/Doc_Buscar.md, sección 4 y corrección 5). Una sola regla con
@@ -128,29 +128,31 @@ export function unitPos(unit: PMUnit, at: number): number {
 /** Las unidades de un Y.Doc guardado (sin editor y sin depender del esquema). */
 export function unitsFromYDoc(doc: Y.Doc): SearchUnit[] {
   const out: SearchUnit[] = [];
-  const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  const fragment = doc.get(CONTENT_FRAGMENT);
   for (const child of fragment.toArray()) visitYNode(child, out);
   return out;
 }
 
-function visitYNode(node: Y.XmlElement | Y.XmlText | Y.XmlHook, out: SearchUnit[]): void {
-  if (!(node instanceof Y.XmlElement)) return;
-  if (node.nodeName === NESTED) {
+// En Yjs 14 (@y/prosemirror 2) el texto vive adentro del elemento: `toArray()` da strings (tramos de texto)
+// y Y.Type (elementos hijos) mezclados.
+function visitYNode(node: unknown, out: SearchUnit[]): void {
+  if (!(node instanceof Y.Type)) return;
+  if (node.name === NESTED) {
     for (const child of node.toArray()) visitYNode(child, out);
     return;
   }
-  if (node.nodeName !== CONTAINER) return;
-  const blockId = String(node.getAttribute('id') ?? '');
-  let nested: Y.XmlElement | null = null;
+  if (node.name !== CONTAINER) return;
+  const blockId = String(node.getAttr('id') ?? '');
+  let nested: Y.Type | null = null;
   for (const child of node.toArray()) {
-    if (!(child instanceof Y.XmlElement)) continue;
-    if (child.nodeName === NESTED) {
+    if (!(child instanceof Y.Type)) continue;
+    if (child.name === NESTED) {
       nested = child;
       continue;
     }
     collectYText(child, blockId, out);
     for (const field of ['caption', 'name'] as const) {
-      const value = child.getAttribute(field) as unknown;
+      const value = child.getAttr(field) as unknown;
       if (typeof value === 'string' && keep(value)) out.push({ blockId, field, text: value });
     }
   }
@@ -158,30 +160,24 @@ function visitYNode(node: Y.XmlElement | Y.XmlText | Y.XmlHook, out: SearchUnit[
 }
 
 /** Un elemento es un bloque de texto si tiene texto adentro, o si no tiene ningún elemento hijo. */
-function isYTextblock(el: Y.XmlElement): boolean {
+function isYTextblock(el: Y.Type): boolean {
   const kids = el.toArray();
-  return kids.some((k) => k instanceof Y.XmlText) || kids.every((k) => !(k instanceof Y.XmlElement) || isInlineLeaf(k));
+  return kids.some((k) => typeof k === 'string') || kids.every((k) => !(k instanceof Y.Type) || isInlineLeaf(k));
 }
 
 /** Un nodo en línea sin texto adentro (un salto de línea). */
-function isInlineLeaf(el: Y.XmlElement): boolean {
-  return el.length === 0 && el.nodeName !== NESTED && el.nodeName !== CONTAINER;
+function isInlineLeaf(el: Y.Type): boolean {
+  return el.length === 0 && el.name !== NESTED && el.name !== CONTAINER;
 }
 
-function collectYText(el: Y.XmlElement, blockId: string, out: SearchUnit[]): void {
+function collectYText(el: Y.Type, blockId: string, out: SearchUnit[]): void {
   if (isYTextblock(el)) {
     let text = '';
-    for (const child of el.toArray()) {
-      if (child instanceof Y.XmlText) {
-        for (const op of child.toDelta() as { insert: unknown }[]) text += typeof op.insert === 'string' ? lines(op.insert) : SEPARATOR;
-      } else {
-        text += SEPARATOR;
-      }
-    }
+    for (const child of el.toArray()) text += typeof child === 'string' ? lines(child) : SEPARATOR;
     if (keep(text)) out.push({ blockId, field: 'text', text });
     return;
   }
   for (const child of el.toArray()) {
-    if (child instanceof Y.XmlElement && child.nodeName !== NESTED && child.nodeName !== CONTAINER) collectYText(child, blockId, out);
+    if (child instanceof Y.Type && child.name !== NESTED && child.name !== CONTAINER) collectYText(child, blockId, out);
   }
 }

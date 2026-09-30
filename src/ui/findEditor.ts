@@ -3,8 +3,8 @@ import type { Mark, Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { Mapping, StepMap } from '@tiptap/pm/transform';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
-import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition, ySyncPluginKey, yUndoPluginKey } from 'y-prosemirror';
-import * as Y from 'yjs';
+import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition, ySyncPluginKey, yUndoPluginKey } from '@y/prosemirror';
+import * as Y from '@y/y';
 import { unitsFromPM, unitPos, type PMUnit, type UnitField } from '../search/extract';
 import { normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from '../search/normalize';
 import { FIND_REPLACE_META } from './editorMeta';
@@ -240,14 +240,24 @@ function build(doc: PMNode, query: string, options: SearchOptions, anchor: numbe
 
 interface Binding {
   doc: Y.Doc;
-  type: Y.XmlFragment;
-  mapping: unknown;
+  type: Y.Type;
+  renderer: Y.AbstractRenderer | null;
 }
+
+/** Una transacción de ProseMirror que armó la vinculación con Yjs (un cambio que llegó del Y.Doc). */
+function fromYjs(tr: Transaction): boolean {
+  return !!tr.getMeta('y-sync-transaction');
+}
+
+/** Origen de Yjs de "Reemplazar todo": no puede ser el del plugin (la vinculación lo toma como su propio eco). */
+const FIND_REPLACE_ORIGIN = { findReplace: true };
 
 const anchors = new WeakMap<EditorView, { from: Y.RelativePosition; to: Y.RelativePosition } | null>();
 
 function bindingOf(state: EditorState): Binding | null {
-  return ((ySyncPluginKey.getState(state) as { binding?: Binding } | undefined)?.binding ?? null) as Binding | null;
+  const st = ySyncPluginKey.getState(state) as { ytype?: Y.Type | null; renderer?: Y.AbstractRenderer | null } | undefined;
+  if (!st?.ytype?.doc) return null;
+  return { doc: st.ytype.doc, type: st.ytype, renderer: st.renderer ?? null };
 }
 
 /** Guarda dónde está la actual (después de cada cambio de la actual). */
@@ -261,8 +271,8 @@ function rememberCurrent(view: EditorView): void {
   }
   try {
     anchors.set(view, {
-      from: absolutePositionToRelativePosition(match.from, binding.type, binding.mapping as never),
-      to: absolutePositionToRelativePosition(match.to, binding.type, binding.mapping as never),
+      from: absolutePositionToRelativePosition(view.state.doc.resolve(match.from), binding.type, binding.renderer),
+      to: absolutePositionToRelativePosition(view.state.doc.resolve(match.to), binding.type, binding.renderer),
     });
   } catch {
     anchors.set(view, null);
@@ -278,8 +288,8 @@ function currentPlace(view: EditorView): { from: number; to: number } | null {
     const match = state.matches[state.current];
     return match ? { from: match.from, to: match.to } : null;
   }
-  const from = relativePositionToAbsolutePosition(binding.doc, binding.type, anchor.from, binding.mapping as never);
-  const to = relativePositionToAbsolutePosition(binding.doc, binding.type, anchor.to, binding.mapping as never);
+  const from = relativePositionToAbsolutePosition(anchor.from, binding.type, view.state.doc, binding.renderer);
+  const to = relativePositionToAbsolutePosition(anchor.to, binding.type, view.state.doc, binding.renderer);
   return from === null || to === null ? null : { from, to };
 }
 
@@ -363,7 +373,7 @@ export const findPlugin = new Plugin<FindState>({
       let state = old;
       if (tr.docChanged) {
         // Se corren las que había (el resaltado sigue en su lugar) y se vuelve a buscar en un momento.
-        const remote = (tr.getMeta(ySyncPluginKey) as { isChangeOrigin?: boolean } | undefined)?.isChangeOrigin;
+        const remote = fromYjs(tr);
         const mapping = remote ? narrowMapping(tr.before, tr.doc) : tr.mapping;
         const matches = old.matches
           .map((m) => ({ ...m, from: mapping.map(m.from, 1), to: mapping.map(m.to, -1) }))
@@ -543,6 +553,8 @@ function undoManagerOf(state: EditorState): UndoManagerLike | null {
 function ensureTagging(um: UndoManagerLike): void {
   if (tagging.has(um)) return;
   tagging.add(um);
+  // "Reemplazar todo" escribe en el Y.Doc con su propio origen: tiene que entrar en la pila de deshacer.
+  um.trackedOrigins.add(FIND_REPLACE_ORIGIN);
   um.on('stack-item-added', ({ stackItem }: { stackItem: { meta: Map<unknown, unknown> } }) => {
     if (replacing || um.currStackItem?.meta.get(FIND_REPLACE_META) === true) stackItem.meta.set(FIND_REPLACE_META, true);
   });
@@ -562,7 +574,7 @@ export function isFindReplaceUndo(state: EditorState): boolean {
  */
 export function isFindReplaceTransaction(tr: Transaction): boolean {
   if (tr.getMeta(FIND_REPLACE_META) === true) return true;
-  return replacing && !!(tr.getMeta(ySyncPluginKey) as { isChangeOrigin?: boolean } | undefined)?.isChangeOrigin;
+  return replacing && fromYjs(tr);
 }
 
 /** Lo que dispara `fn` es un solo paso de deshacer, separado de lo que se escribió antes y después. */
@@ -690,7 +702,7 @@ export function replaceAll(editor: EditorLike, text: string): ReplaceResult {
           ytext.delete(index, length);
           if (text) ytext.insert(index, text, { ...attrs });
         }
-      }, ySyncPluginKey),
+      }, FIND_REPLACE_ORIGIN),
     );
   } else {
     result.undoItem = asOneStep(view, () => {
@@ -703,18 +715,19 @@ export function replaceAll(editor: EditorLike, text: string): ReplaceResult {
 }
 
 interface YEdit {
-  ytext: Y.XmlText;
+  /** El elemento del bloque de texto: en Yjs 14 el texto vive adentro (un carácter = un lugar). */
+  ytext: Y.Type;
   index: number;
   length: number;
   attrs: Record<string, unknown>;
 }
 
-/** El id del bloque (`blockContainer`) que contiene un texto del Y.Doc. */
-function containerIdOf(type: Y.XmlText): string | null {
-  let at: Y.AbstractType<any> | null = type; // eslint-disable-line @typescript-eslint/no-explicit-any
+/** El id del bloque (`blockContainer`) que contiene un elemento del Y.Doc. */
+function containerIdOf(type: Y.Type): string | null {
+  let at: Y.Type | null = type;
   while (at) {
-    if (at instanceof Y.XmlElement && at.nodeName === 'blockContainer') return String(at.getAttribute('id') ?? '');
-    at = at.parent as Y.AbstractType<any> | null; // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (at.name === 'blockContainer') return String(at.getAttr('id') ?? '');
+    at = at.parent as Y.Type | null;
   }
   return null;
 }
@@ -723,18 +736,18 @@ function containerIdOf(type: Y.XmlText): string | null {
 function yjsEdits(view: EditorView, targets: FindMatch[]): YEdit[] | null {
   const binding = bindingOf(view.state);
   if (!binding) return null;
-  const deltas = new Map<Y.XmlText, { text: string; ops: { at: number; length: number; attrs: Record<string, unknown> }[] }>();
+  const deltas = new Map<Y.Type, { text: string; ops: { at: number; length: number; attrs: Record<string, unknown> }[] }>();
   const edits: YEdit[] = [];
   for (const m of targets) {
     let abs: Y.AbsolutePosition | null;
     try {
       // Desde adentro de la coincidencia (su primer carácter): el borde podría caer al final del texto de antes.
-      const rel = absolutePositionToRelativePosition(m.from + 1, binding.type, binding.mapping as never);
+      const rel = absolutePositionToRelativePosition(view.state.doc.resolve(m.from + 1), binding.type, binding.renderer);
       abs = Y.createAbsolutePositionFromRelativePosition(rel, binding.doc);
     } catch {
       return null;
     }
-    if (!abs || !(abs.type instanceof Y.XmlText) || abs.index < 1) return null;
+    if (!abs || !(abs.type instanceof Y.Type) || abs.index < 1) return null;
     const ytext = abs.type;
     // Tiene que ser el texto del mismo bloque que encontró la búsqueda.
     if (containerIdOf(ytext) !== m.blockId) return null;
@@ -742,9 +755,9 @@ function yjsEdits(view: EditorView, targets: FindMatch[]): YEdit[] | null {
     let delta = deltas.get(ytext);
     if (!delta) {
       delta = { text: '', ops: [] };
-      for (const op of ytext.toDelta() as { insert: unknown; attributes?: Record<string, unknown> }[]) {
-        const piece = typeof op.insert === 'string' ? op.insert : '\uFFFC';
-        delta.ops.push({ at: delta.text.length, length: piece.length, attrs: op.attributes ?? {} });
+      for (const op of ytext.toDelta().children as Iterable<{ insert: unknown; format?: Record<string, unknown> | null }>) {
+        const piece = typeof op.insert === 'string' ? op.insert : '\uFFFC'.repeat(Array.isArray(op.insert) ? op.insert.length : 1);
+        delta.ops.push({ at: delta.text.length, length: piece.length, attrs: op.format ?? {} });
         delta.text += piece;
       }
       deltas.set(ytext, delta);

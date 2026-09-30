@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { PageDocs as PublishedPageDocs } from './fixtures/publishedDocs';
 import { openLocalDb as openPublishedDb } from './fixtures/publishedLocalDb';
 import { dirtyKey, type LocalDb } from './localDb';
@@ -50,14 +50,14 @@ function serverText(server: FakeServer, pageId: string): string {
   const doc = new Y.Doc();
   const list = server.updates.get(pageId) ?? [];
   if (list.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(list.map((u) => u.data)));
-  const text = doc.getText('t').toString();
+  const text = doc.get('t').toString();
   doc.destroy();
   return text;
 }
 
 async function readText(docs: { open(id: string): Promise<Y.Doc>; close(id: string): void }, pageId: string): Promise<string> {
   const doc = await docs.open(pageId);
-  const text = doc.getText('t').toString();
+  const text = doc.get('t').toString();
   docs.close(pageId);
   return text;
 }
@@ -66,7 +66,7 @@ async function readText(docs: { open(id: string): Promise<Y.Doc>; close(id: stri
 async function writeAndKill(d: Device, doc: Y.Doc, text: string): Promise<void> {
   const watch = watchTransactions();
   try {
-    doc.getText('t').insert(doc.getText('t').length, text);
+    doc.get('t').insert(doc.get('t').length, text);
     await microtasks();
     await watch.kill(d);
   } finally {
@@ -105,7 +105,7 @@ describe('la misma base con la versión publicada', () => {
       const pageId = await a.tree.create(null, 'P');
       await a.engine.syncNow();
       let doc = await a.docs.open(pageId);
-      doc.getText('t').insert(0, 'A');
+      doc.get('t').insert(0, 'A');
       await a.docs.flush(pageId);
       if (!openWhenPushed) a.docs.close(pageId);
       // El envío llega al servidor pero la respuesta se pierde: queda en vuelo.
@@ -133,12 +133,12 @@ describe('la misma base con la versión publicada', () => {
     const pageId = await a.tree.create(null, 'P');
     await a.engine.syncNow();
     let doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'N1');
+    doc.get('t').insert(0, 'N1');
     await a.docs.flush(pageId);
     server.loseNextPushResponse = true;
     await a.engine.syncNow().catch(() => undefined);
     expect((await a.db.get('docState', pageId))?.pending?.dirty).toBeTypeOf('string');
-    doc.getText('t').insert(2, ' N2');
+    doc.get('t').insert(2, ' N2');
     await a.docs.flush(pageId);
     a.docs.close(pageId);
     await a.docs.flush();
@@ -147,7 +147,7 @@ describe('la misma base con la versión publicada', () => {
 
     const old = await openPublished(server, dbName);
     doc = await old.docs.open(pageId);
-    doc.getText('t').insert(doc.getText('t').length, ' L1');
+    doc.get('t').insert(doc.get('t').length, ' L1');
     await old.docs.flush(pageId);
     old.docs.close(pageId);
     await publishedSync(old, [pageId]);
@@ -171,7 +171,7 @@ describe('la misma base con la versión publicada', () => {
     expect(state.version).toBeGreaterThan(state.ackedVersion);
     expect(state.guardVersion).toBe(state.version);
     expect(await a.docs.unsyncedPages()).toEqual([]);
-    doc.getText('t').insert(0, 'uno');
+    doc.get('t').insert(0, 'uno');
     await a.docs.flush(pageId);
     await a.engine.syncNow();
     const after = (await a.db.get('docState', pageId))!;
@@ -191,7 +191,7 @@ describe('la misma base con la versión publicada', () => {
     const pageId = await a.tree.create(null, 'P');
     await a.engine.syncNow();
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'antes y después');
+    doc.get('t').insert(0, 'antes y después');
     await a.docs.flush(pageId);
     await a.engine.syncNow();
     expect((await a.db.get('docState', pageId))?.guardVersion).toBeDefined();

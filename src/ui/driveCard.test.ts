@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
-import { withCollaboration } from '@blocknote/core/yjs';
+import { withCollaboration } from '@blocknote/core/y';
 import { TextSelection } from '@tiptap/pm/state';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { blocksThirdPartyCookies, DRIVE_FRAME_SANDBOX, PLAYER_TIMEOUT_MS } from './driveCard';
 import { applyDrivePaste, createDrivePaste, driveLinkFromClipboard, findPastedDriveLink } from './drivePaste';
@@ -40,7 +40,7 @@ function mount(doc: Y.Doc, withSchema: unknown = schema, extra: Record<string, u
   const editor = BlockNoteEditor.create(
     withCollaboration({
       schema: withSchema as typeof schema,
-      collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
+      collaboration: { fragment: doc.get(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
       ...extra,
     }),
   ) as unknown as BlockNoteEditor;

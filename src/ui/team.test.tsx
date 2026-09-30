@@ -189,7 +189,7 @@ describe('pantallas del equipo', () => {
 
   it('la pantalla de sacado ofrece bajar lo pendiente y no borra nada hasta que se elige', async () => {
     const { server, device, page } = await teamDevice('ana');
-    await device.docs.open(page).then((doc) => doc.getText('t').insert(0, 'x'));
+    await device.docs.open(page).then((doc) => doc.get('t').insert(0, 'x'));
     await device.docs.flush(page);
     server.removeMember('ana');
     await device.engine.syncNow();

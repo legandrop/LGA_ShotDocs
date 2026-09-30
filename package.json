@@ -11,7 +11,8 @@
     "test": "vitest run",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:test": "node scripts/db-migrate.mjs --test",
-    "workspace:setup": "node scripts/setup-workspace.mjs"
+    "workspace:setup": "node scripts/setup-workspace.mjs",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@blocknote/core": "^0.55.0",
@@ -24,13 +25,13 @@
     "@mantine/hooks": "^9.6.3",
     "@supabase/supabase-js": "^2.117.2",
     "@tiptap/pm": "^3.31.3",
+    "@y/prosemirror": "2.0.0-6",
+    "@y/protocols": "1.0.6-rc.1",
+    "@y/y": "14.0.0-rc.23",
     "fractional-indexing": "^4.0.0",
     "idb": "^8.0.3",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "y-prosemirror": "^1.3.7",
-    "y-protocols": "^1.0.7",
-    "yjs": "^13.6.33"
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
@@ -39,9 +40,20 @@
     "@vitejs/plugin-react": "^6.1.1",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.1.1",
+    "patch-package": "^8.0.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vite-plugin-pwa": "^1.3.0",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "y-prosemirror": "^1.3.7",
+    "yjs": "^13.6.33"
+  },
+  "overrides": {
+    "@y/y": {
+      "lib0": "1.0.0-rc.22"
+    },
+    "@y/prosemirror": {
+      "lib0": "1.0.0-rc.22"
+    }
   }
 }

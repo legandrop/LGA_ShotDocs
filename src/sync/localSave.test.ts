@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { dirtyKey, emptyDocState, hasUnsyncedContent } from './localDb';
 import { FakeServer, makeDevice, microtasks, watchTransactions, type Device } from './testing';
 
@@ -22,16 +22,16 @@ afterEach(() => {
   }
 });
 
-async function write(d: Device, pageId: string, fn: (text: Y.Text) => void): Promise<void> {
+async function write(d: Device, pageId: string, fn: (text: Y.Type) => void): Promise<void> {
   const doc = await d.docs.open(pageId);
-  fn(doc.getText('t'));
+  fn(doc.get('t'));
   await d.docs.flush(pageId);
   d.docs.close(pageId);
 }
 
 async function read(d: Device, pageId: string): Promise<string> {
   const doc = await d.docs.open(pageId);
-  const text = doc.getText('t').toString();
+  const text = doc.get('t').toString();
   d.docs.close(pageId);
   return text;
 }
@@ -58,9 +58,9 @@ describe('B.5: guardado local sin lecturas', () => {
     const watch = watchTransactions();
     try {
       // Dos teclas en dos tareas del navegador, y la página se va enseguida de la segunda.
-      doc.getText('t').insert(0, 'Escrito ');
+      doc.get('t').insert(0, 'Escrito ');
       await microtasks();
-      doc.getText('t').insert(8, 'sin conexión.');
+      doc.get('t').insert(8, 'sin conexión.');
       await microtasks();
       await watch.kill(a);
     } finally {
@@ -80,12 +80,12 @@ describe('B.5: guardado local sin lecturas', () => {
     const a = await device(server, dbName);
     const pageId = await a.tree.create(null, 'P');
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'Escrito sin co');
+    doc.get('t').insert(0, 'Escrito sin co');
     await a.docs.flush(pageId);
 
     const watch = watchTransactions();
     try {
-      doc.getText('t').insert(14, 'nexión 1.');
+      doc.get('t').insert(14, 'nexión 1.');
       await microtasks();
       await watch.kill(a);
     } finally {
@@ -107,10 +107,8 @@ describe('B.5: guardado local sin lecturas', () => {
     const watch = watchTransactions();
     try {
       doc.transact(() => {
-        const paragraph = ((doc.getXmlFragment('document-store').get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlElement;
-        const text = new Y.XmlText();
-        paragraph.insert(0, [text]);
-        text.insert(0, 'hola');
+        const paragraph = ((doc.get('document-store').get(0) as Y.Type).get(0) as Y.Type).get(0) as Y.Type;
+        paragraph.insert(0, 'hola');
       });
       await microtasks();
       await watch.kill(a);
@@ -120,7 +118,7 @@ describe('B.5: guardado local sin lecturas', () => {
 
     const again = await device(server, dbName);
     const reloaded = await again.docs.open(pageId);
-    expect(reloaded.getXmlFragment('document-store').toString()).toContain('hola');
+    expect(reloaded.get('document-store').toString()).toContain('hola');
     expect(reloaded.store.pendingStructs).toBeNull();
     again.docs.close(pageId);
   });
@@ -131,14 +129,14 @@ describe('B.5: guardado local sin lecturas', () => {
     const pageId = await a.tree.create(null, 'P');
     await a.engine.syncNow();
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'A1');
+    doc.get('t').insert(0, 'A1');
     await a.docs.flush(pageId);
     expect(await meta(a, pageId)).toBeTypeOf('string');
 
     // Mientras la subida viaja, se escribe y se guarda algo más.
     const push = a.remote.pushUpdate.bind(a.remote);
     a.remote.pushUpdate = async (...args) => {
-      doc.getText('t').insert(2, ' A2');
+      doc.get('t').insert(2, ' A2');
       await a.docs.flush(pageId);
       a.remote.pushUpdate = push;
       return push(...args);
@@ -148,7 +146,7 @@ describe('B.5: guardado local sin lecturas', () => {
     expect(server.updates.get(pageId)?.length).toBeGreaterThanOrEqual(1);
     const pushedFirst = new Y.Doc();
     Y.applyUpdate(pushedFirst, server.updates.get(pageId)![0].data);
-    expect(pushedFirst.getText('t').toString()).toBe('A1');
+    expect(pushedFirst.get('t').toString()).toBe('A1');
 
     await a.engine.syncNow();
     expect(await meta(a, pageId)).toBeUndefined();
@@ -176,12 +174,12 @@ describe('B.5: guardado local sin lecturas', () => {
 
 describe('B.5: la misma base con una versión anterior de la app', () => {
   /** Guarda una edición como lo hacía la versión anterior: el update y la versión +1, sin marca. */
-  async function legacyWrite(d: Device, pageId: string, fn: (text: Y.Text) => void): Promise<void> {
+  async function legacyWrite(d: Device, pageId: string, fn: (text: Y.Type) => void): Promise<void> {
     const rows = await d.db.getAllFromIndex('docUpdates', 'pageId', pageId);
     const doc = new Y.Doc();
     if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)));
     const before = Y.encodeStateVector(doc);
-    fn(doc.getText('t'));
+    fn(doc.get('t'));
     const update = Y.encodeStateAsUpdate(doc, before);
     doc.destroy();
     const tx = d.db.transaction(['docUpdates', 'docState'], 'readwrite');
@@ -239,7 +237,7 @@ describe('B.5: la misma base con una versión anterior de la app', () => {
       return realTransaction(stores as never, mode);
     }) as never;
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'sin sumar');
+    doc.get('t').insert(0, 'sin sumar');
     await a.docs.flush(pageId);
     a.docs.close(pageId);
     await a.docs.flush();
@@ -344,7 +342,7 @@ describe('B.5: restaurar y cerrar en cada punto', () => {
 
       const watch = watchTransactions();
       try {
-        doc.getText('t').insert(5, ' nuevo.');
+        doc.get('t').insert(5, ' nuevo.');
         if (point !== 'antes de guardar') await a.docs.flush(pageId);
         if (point === 'envío armado') {
           a.remote.pushUpdate = async () => {
@@ -384,7 +382,7 @@ async function savedText(db: Device['db'], pageId: string): Promise<{ text: stri
   const rows = await db.getAllFromIndex('docUpdates', 'pageId', pageId);
   const doc = new Y.Doc();
   if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)));
-  const out = { text: doc.getText('t').toString(), pending: doc.store.pendingStructs !== null };
+  const out = { text: doc.get('t').toString(), pending: doc.store.pendingStructs !== null };
   doc.destroy();
   return out;
 }
@@ -396,7 +394,7 @@ describe('B.5: carreras del guardado sin lecturas', () => {
     const pageId = await a.tree.create(null, 'P');
     await a.engine.syncNow();
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'uno');
+    doc.get('t').insert(0, 'uno');
     await a.docs.flush(pageId);
     await a.engine.syncNow();
     const before = server.updates.get(pageId)?.length ?? 0;
@@ -407,7 +405,7 @@ describe('B.5: carreras del guardado sin lecturas', () => {
     (a.db as { get: unknown }).get = ((store: never, key: never) => {
       if (!fired && store === 'docState') {
         fired = true;
-        doc.getText('t').insert(3, ' dos');
+        doc.get('t').insert(3, ' dos');
       }
       return realGet(store, key);
     }) as never;
@@ -428,13 +426,13 @@ describe('B.5: carreras del guardado sin lecturas', () => {
     const pageId = await a.tree.create(null, 'P');
     await a.engine.syncNow();
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'uno');
+    doc.get('t').insert(0, 'uno');
     await a.docs.flush(pageId);
     const before = server.updates.get(pageId)?.length ?? 0;
     const push = a.remote.pushUpdate.bind(a.remote);
     a.remote.pushUpdate = async (...args) => {
       a.remote.pushUpdate = push;
-      doc.getText('t').insert(3, ' dos');
+      doc.get('t').insert(3, ' dos');
       await a.docs.flush(pageId);
       return push(...args);
     };
@@ -476,9 +474,9 @@ describe('B.5: carreras del guardado sin lecturas', () => {
     };
     const watch = watchTransactions();
     try {
-      doc.getText('t').insert(0, 'AAAA');
+      doc.get('t').insert(0, 'AAAA');
       await microtasks(1);
-      doc.getText('t').insert(4, 'BBBB');
+      doc.get('t').insert(4, 'BBBB');
       await microtasks();
       await new Promise((r) => setTimeout(r, 30));
       proto.transaction = real;
@@ -501,7 +499,7 @@ describe('B.5: carreras del guardado sin lecturas', () => {
     const pageId = await a.tree.create(null, 'P');
     await a.engine.syncNow();
     const doc = await a.docs.open(pageId);
-    doc.getText('t').insert(0, 'antes del cierre');
+    doc.get('t').insert(0, 'antes del cierre');
     // Como al cerrar sesión: dispose, flush y cerrar la base.
     a.docs.dispose();
     await a.docs.flush();
@@ -517,15 +515,13 @@ describe('B.5: carreras del guardado sin lecturas', () => {
     // Dos raíces de dos autores (como dos dispositivos que empezaron la página sin verse), ya guardadas.
     const root = (text: string) => {
       const d = new Y.Doc();
-      const group = new Y.XmlElement('blockGroup');
-      const container = new Y.XmlElement('blockContainer');
-      const paragraph = new Y.XmlElement('paragraph');
-      const t = new Y.XmlText();
-      d.getXmlFragment('document-store').insert(0, [group]);
+      const group = new Y.Type('blockGroup');
+      const container = new Y.Type('blockContainer');
+      const paragraph = new Y.Type('paragraph');
+      d.get('document-store').insert(0, [group]);
       group.insert(0, [container]);
       container.insert(0, [paragraph]);
-      paragraph.insert(0, [t]);
-      t.insert(0, text);
+      paragraph.insert(0, text);
       const u = Y.encodeStateAsUpdate(d);
       d.destroy();
       return u;
@@ -535,12 +531,12 @@ describe('B.5: carreras del guardado sin lecturas', () => {
     let canWrite = false;
     const docs = new PageDocs(db, { normalize: mergeRootGroups, canWrite: () => canWrite });
     const doc = await docs.open(pageId);
-    expect(doc.getXmlFragment('document-store').length).toBe(1);
+    expect(doc.get('document-store').length).toBe(1);
     // Le dan "Edit" con la página abierta y escribe en el bloque que vino de la segunda raíz (una copia en
     // memoria).
     canWrite = true;
-    const group = doc.getXmlFragment('document-store').get(0) as Y.XmlElement;
-    const cloned = ((group.get(group.length - 1) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText;
+    const group = doc.get('document-store').get(0) as Y.Type;
+    const cloned = (group.get(group.length - 1) as Y.Type).get(0) as Y.Type;
     cloned.insert(cloned.length, ' EDITADO');
     await docs.flush(pageId);
     docs.close(pageId);
@@ -551,8 +547,8 @@ describe('B.5: carreras del guardado sin lecturas', () => {
     Y.applyUpdate(saved, Y.mergeUpdates(rows.map((r) => r.data)));
     expect(saved.store.pendingStructs).toBeNull();
     const again = await docs.open(pageId);
-    expect(again.getXmlFragment('document-store').length).toBe(1);
-    const xml = again.getXmlFragment('document-store').toString();
+    expect(again.get('document-store').length).toBe(1);
+    const xml = again.get('document-store').toString();
     for (const part of ['uno', 'dos', ' EDITADO']) expect(xml).toContain(part);
     expect(await db.get('meta', dirtyKey(pageId))).toBeTypeOf('string');
     docs.close(pageId);

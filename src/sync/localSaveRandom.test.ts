@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { PageDocs as PublishedPageDocs } from './fixtures/publishedDocs';
 import { DIRTY_PREFIX, dirtyRange, type LocalDb } from './localDb';
 import { mergeRootGroups, seedIfEmpty } from './structure';
@@ -37,7 +37,7 @@ async function legacySync(l: LegacyDevice, pageIds: string[]): Promise<void> {
 
 async function readText(docs: { open(id: string): Promise<Y.Doc>; close(id: string): void }, pageId: string): Promise<{ text: string; pending: boolean }> {
   const doc = await docs.open(pageId);
-  const text = doc.getText('t').toString();
+  const text = doc.get('t').toString();
   const pending = doc.store.pendingStructs !== null || doc.store.pendingDs !== null;
   docs.close(pageId);
   return { text, pending };
@@ -55,7 +55,7 @@ async function savedText(db: LocalDb, pageId: string): Promise<{ text: string; p
   const rows = await db.getAllFromIndex('docUpdates', 'pageId', pageId);
   const doc = new Y.Doc();
   if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)));
-  const out = { text: doc.getText('t').toString(), pending: doc.store.pendingStructs !== null, rows: rows.length };
+  const out = { text: doc.get('t').toString(), pending: doc.store.pendingStructs !== null, rows: rows.length };
   doc.destroy();
   return out;
 }
@@ -131,7 +131,7 @@ async function runSeed(seed: number): Promise<string[]> {
       doc = await docsOf(cur).open(pageId);
       open.set(pageId, doc);
     }
-    const t = doc.getText('t');
+    const t = doc.get('t');
     const s = token();
     t.insert(t.length, s);
     return s;
@@ -295,7 +295,7 @@ async function runSeed(seed: number): Promise<string[]> {
       const p = pick(pages);
       const doc = await other.docs.open(p);
       const s = token();
-      doc.getText('t').insert(doc.getText('t').length, s);
+      doc.get('t').insert(doc.get('t').length, s);
       await other.docs.flush(p);
       other.docs.close(p);
       mustHave.get(p)!.add(s);

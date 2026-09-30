@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = resolve(__dirname, '..');
 
-const HEAVY_PACKAGES = [/^@blocknote\//, /^@tiptap\//, /^@mantine\//, /^prosemirror-/, /^y-prosemirror/, /^@emoji-mart\//];
+const HEAVY_PACKAGES = [/^@blocknote\//, /^@tiptap\//, /^@mantine\//, /^prosemirror-/, /^@y\/prosemirror/, /^@emoji-mart\//];
 /** Lo que se baja aparte (lazyPart.tsx, lazyDialogs.ts) y lo que es solo del editor. */
 const LAZY_FILES = [
   'ui/PageEditor.tsx',
@@ -109,7 +109,7 @@ describe('la primera carga no trae el editor', () => {
   it('lee los imports de verdad (llega a React, Supabase, Yjs y a la barra lateral)', () => {
     expect(packages.has('react')).toBe(true);
     expect(packages.has('@supabase/supabase-js')).toBe(true);
-    expect(packages.has('yjs')).toBe(true);
+    expect(packages.has('@y/y')).toBe(true);
     expect(files.has(join(SRC, 'ui/Sidebar.tsx'))).toBe(true);
     expect(files.has(join(SRC, 'ui/PageView.tsx'))).toBe(true);
     // El que controla el recorrido: PageEditor.tsx sí importa el editor.

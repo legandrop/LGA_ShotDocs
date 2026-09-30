@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
-import { withCollaboration } from '@blocknote/core/yjs';
+import { withCollaboration } from '@blocknote/core/y';
 import { afterEach, describe, expect, it } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { editorSchemaOptions, schema, SCRIPT_PROP } from './editorSchema';
@@ -25,7 +25,7 @@ function mount(doc: Y.Doc, withSchema: unknown = schema): BlockNoteEditor {
   const editor = BlockNoteEditor.create(
     withCollaboration({
       schema: withSchema as typeof schema,
-      collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
+      collaboration: { fragment: doc.get(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
     }),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
@@ -43,7 +43,7 @@ describe('contenido que esta versión no conoce', () => {
     const editor = BlockNoteEditor.create(
       withCollaboration({
         ...editorSchemaOptions,
-        collaboration: { fragment: new Y.Doc().getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
+        collaboration: { fragment: new Y.Doc().get(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
       }),
     ) as unknown as BlockNoteEditor;
     // `doc` y `text` están en el esquema pero nunca como elemento guardado (ver unknownContent.ts).
@@ -54,9 +54,9 @@ describe('contenido que esta versión no conoce', () => {
   it('un elemento llamado "doc" o "text" no pasa la guarda (el editor lo borraría)', () => {
     for (const name of ['doc', 'text']) {
       const doc = new Y.Doc();
-      const group = new Y.XmlElement('blockGroup');
-      group.insert(0, [new Y.XmlElement(name)]);
-      doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+      const group = new Y.Type('blockGroup');
+      group.insert(0, [new Y.Type(name)]);
+      doc.get(CONTENT_FRAGMENT).insert(0, [group]);
       expect(findUnknownContent(doc)).toBe(`"${name}"`);
       // Aunque la lista que se pase los tenga (como el esquema entero de una versión publicada).
       const all = { nodes: new Set([...knownContent().nodes, 'doc', 'text']), marks: knownContent().marks };
@@ -87,10 +87,9 @@ describe('contenido que esta versión no conoce', () => {
     expect(findUnknownContent(doc)).toBe('"video"');
 
     const text = new Y.Doc();
-    const para = new Y.XmlElement('paragraph');
-    const t = new Y.XmlText();
-    para.insert(0, [t]);
-    text.getXmlFragment(CONTENT_FRAGMENT).insert(0, [para]);
+    const para = new Y.Type('paragraph');
+    text.get(CONTENT_FRAGMENT).insert(0, [para]);
+    const t = para; // Yjs 14: el texto vive adentro del párrafo
     t.insert(0, 'hola', { bold: {} });
     expect(findUnknownContent(text)).toBeNull();
     t.insert(4, ' mundo', { 'bold--AbCd1234': {} });
@@ -101,9 +100,9 @@ describe('contenido que esta versión no conoce', () => {
 
   it('un atributo desconocido en un bloque no molesta (se ignora sin borrar nada)', () => {
     const doc = new Y.Doc();
-    const para = new Y.XmlElement('paragraph');
-    para.setAttribute('algoNuevo', 'x');
-    doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [para]);
+    const para = new Y.Type('paragraph');
+    para.setAttr('algoNuevo', 'x');
+    doc.get(CONTENT_FRAGMENT).insert(0, [para]);
     expect(findUnknownContent(doc)).toBeNull();
   });
 

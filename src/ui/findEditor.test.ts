@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
-import { withCollaboration } from '@blocknote/core/yjs';
+import { withCollaboration } from '@blocknote/core/y';
 import { TextSelection } from '@tiptap/pm/state';
-import { yUndoPluginKey } from 'y-prosemirror';
+import { yUndoPluginKey } from '@y/prosemirror';
+import { yUndoExtension } from './yUndo';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { unitsFromPM, unitsFromYDoc } from '../search/extract';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { driveLinkInNode } from './driveCard';
@@ -40,8 +41,8 @@ function mount(doc = new Y.Doc()): BlockNoteEditor {
   const editor = BlockNoteEditor.create(
     withCollaboration({
       schema,
-      extensions: [findExtension],
-      collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
+      extensions: [findExtension, yUndoExtension(doc.get(CONTENT_FRAGMENT))],
+      collaboration: { fragment: doc.get(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
     }),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
@@ -111,17 +112,15 @@ describe('extraer el texto de cada bloque', () => {
 
   it('un Y.Doc con un tipo que el esquema no conoce igual se lee', () => {
     const doc = new Y.Doc();
-    const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
-    const group = new Y.XmlElement('blockGroup');
-    const container = new Y.XmlElement('blockContainer');
-    container.setAttribute('id', 'b1');
-    const unknown = new Y.XmlElement('futureBlock');
-    const text = new Y.XmlText();
-    text.insert(0, 'texto del futuro');
-    unknown.insert(0, [text]);
+    const fragment = doc.get(CONTENT_FRAGMENT);
+    const group = new Y.Type('blockGroup');
+    const container = new Y.Type('blockContainer');
+    container.setAttr('id', 'b1');
+    const unknown = new Y.Type('futureBlock');
     container.insert(0, [unknown]);
     group.insert(0, [container]);
     fragment.insert(0, [group]);
+    unknown.insert(0, 'texto del futuro');
     expect(unitsFromYDoc(doc)).toEqual([{ blockId: 'b1', field: 'text', text: 'texto del futuro' }]);
   });
 });

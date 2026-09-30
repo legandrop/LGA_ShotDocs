@@ -1,6 +1,6 @@
 import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu, type Block } from '@blocknote/core';
 import '@blocknote/core/fonts/inter.css';
-import { withCollaboration } from '@blocknote/core/yjs';
+import { withCollaboration } from '@blocknote/core/y';
 import { BlockNoteView } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
 import {
@@ -15,7 +15,7 @@ import {
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
-import type * as Y from 'yjs';
+import type * as Y from '@y/y';
 import { t, useT, type Translate } from '../i18n';
 import '../i18n/lazy/editor';
 import { usePermissions, useServices, useSyncStatus } from '../services';
@@ -26,6 +26,7 @@ import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { HideForDriveFiles, ImageSizeButtons, MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
+import { yUndoExtension } from './yUndo';
 import { dropTarget, insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
 import { isAttachment, markAttachments } from './attachments';
 import { openAttachmentNow, prepareAttachment } from './attachmentOpen';
@@ -275,7 +276,7 @@ function BlockEditor({
     withCollaboration({
       ...editorSchemaOptions,
       // Buscar y reemplazar en la página (findEditor.ts): decoraciones, sin tocar el documento.
-      extensions: [findExtension],
+      extensions: [findExtension, yUndoExtension(doc.get(CONTENT_FRAGMENT))],
       dictionary: editorDictionary(tr.lang),
       // Pegar archivos (con portero, cualquier archivo): un bloque por archivo, en orden (fileDrop.ts).
       pasteHandler: (ctx) => {
@@ -313,7 +314,7 @@ function BlockEditor({
         });
       },
       collaboration: {
-        fragment: doc.getXmlFragment(CONTENT_FRAGMENT),
+        fragment: doc.get(CONTENT_FRAGMENT),
         user: { name: user.email, color: '#2383e2' },
       },
     }),

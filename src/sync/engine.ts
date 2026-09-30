@@ -2,7 +2,7 @@
 import { stored as t } from '../i18n';
 import type { MediaQueue, MediaStatus } from '../media/queue';
 import { mediaIdsInDoc } from '../media/usage';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
 import type { CommentQueue } from './comments';
 import type { PageDocs } from './docs';

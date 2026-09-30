@@ -1,4 +1,4 @@
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { mediaIdOf } from './queue';
 
@@ -13,11 +13,11 @@ import { mediaIdOf } from './queue';
  */
 export function mediaIdsInDoc(doc: Y.Doc): Set<string> {
   const ids = new Set<string>();
-  const stack: unknown[] = doc.getXmlFragment(CONTENT_FRAGMENT).toArray();
+  const stack: unknown[] = doc.get(CONTENT_FRAGMENT).toArray();
   while (stack.length > 0) {
     const item = stack.pop();
-    if (!(item instanceof Y.XmlElement)) continue;
-    const url = item.getAttribute('url') as unknown;
+    if (!(item instanceof Y.Type)) continue;
+    const url = item.getAttr('url') as unknown;
     const id = typeof url === 'string' ? mediaIdOf(url) : null;
     if (id) ids.add(id);
     stack.push(...item.toArray());

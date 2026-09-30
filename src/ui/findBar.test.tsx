@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
-import { withCollaboration } from '@blocknote/core/yjs';
+import { withCollaboration } from '@blocknote/core/y';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
+import { yUndoExtension } from './yUndo';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -60,11 +61,12 @@ afterEach(() => {
 const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
 
 function mountEditor(content: string[]): BlockNoteEditor {
+  const fragment = new Y.Doc().get(CONTENT_FRAGMENT);
   const editor = BlockNoteEditor.create(
     withCollaboration({
       schema,
-      extensions: [findExtension],
-      collaboration: { fragment: new Y.Doc().getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
+      extensions: [findExtension, yUndoExtension(fragment)],
+      collaboration: { fragment, user: { name: 'u', color: '#000' } },
     }),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');

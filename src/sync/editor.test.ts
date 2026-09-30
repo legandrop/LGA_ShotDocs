@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
-import { withCollaboration } from '@blocknote/core/yjs';
+import { withCollaboration } from '@blocknote/core/y';
 import { afterEach, expect, it } from 'vitest';
-import type * as Y from 'yjs';
+import type * as Y from '@y/y';
 import { schema } from '../ui/editorSchema';
 import { Permissions } from './access';
 import { CONTENT_FRAGMENT } from './structure';
@@ -34,7 +34,7 @@ function mountEditor(doc: Y.Doc): BlockNoteEditor {
   const editor = BlockNoteEditor.create(
     withCollaboration({
       schema,
-      collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
+      collaboration: { fragment: doc.get(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
     }),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
@@ -89,12 +89,12 @@ it('páginas sin semilla (anteriores a v0.008): la reparación junta las dos ra�
   const c = await device(server);
   await c.engine.syncNow();
   const docC = await c.docs.open(pageId);
-  expect(docC.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+  expect(docC.get(CONTENT_FRAGMENT).length).toBe(1);
   const editorC = mountEditor(docC);
   await tick(100);
   editorC.insertBlocks([{ type: 'paragraph', content: 'Edición en C' }], editorC.document[0], 'after');
   await tick();
-  const xml = docC.getXmlFragment(CONTENT_FRAGMENT).toString();
+  const xml = docC.get(CONTENT_FRAGMENT).toString();
   for (const line of ['Línea 1 de A', 'Línea 2 de A', 'Escrito en B sin red', 'Edición en C']) {
     expect(xml).toContain(line);
   }
@@ -143,7 +143,7 @@ for (let run = 0; run < 6; run++) {
 
     const c = await device(server);
     await c.engine.syncNow();
-    const xml = (await c.docs.open(pageId)).getXmlFragment(CONTENT_FRAGMENT);
+    const xml = (await c.docs.open(pageId)).get(CONTENT_FRAGMENT);
     expect(xml.length).toBe(1);
     // Lo que A y B escribieron a la vez en el mismo primer párrafo puede quedar junto en ese párrafo (se
     // fusiona letra por letra); lo que importa es que no falte nada.
@@ -221,8 +221,8 @@ it('con el editor real, abrir una página vacía sin escribir no crea un cambio,
   const b = await device(server);
   await b.engine.syncNow();
   for (const snap of [await a.docs.snapshot(pageId), await b.docs.snapshot(pageId)]) {
-    expect(snap.doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
-    expect(snap.doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('Primera línea');
+    expect(snap.doc.get(CONTENT_FRAGMENT).length).toBe(1);
+    expect(snap.doc.get(CONTENT_FRAGMENT).toString()).toContain('Primera línea');
     expect(snap.doc.store.pendingStructs).toBeNull();
     snap.doc.destroy();
   }
@@ -250,7 +250,7 @@ it('sin datos de permisos (workspace sin equipo) se siembra, abrir no crea cambi
     // Como PageEditor: con todo bajado y editable, se siembra.
     const complete = await d.engine.prefetchPage(pageId);
     const doc = await d.docs.open(pageId, { seed: complete && perms.canSeed(pageId) });
-    expect(doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+    expect(doc.get(CONTENT_FRAGMENT).length).toBe(1);
     editors.push(mountEditor(doc));
   }
   await tick(100);
@@ -287,5 +287,5 @@ it('sin datos de permisos (workspace sin equipo) se siembra, abrir no crea cambi
   const c = await device(server);
   await c.engine.syncNow();
   const docC = await c.docs.open(pageId);
-  expect(docC.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+  expect(docC.get(CONTENT_FRAGMENT).length).toBe(1);
 });

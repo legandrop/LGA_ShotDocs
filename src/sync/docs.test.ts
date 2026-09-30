@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { advanceSynced, serverReach } from './docs';
 import { CONTENT_FRAGMENT, seedClientId } from './structure';
 import { RemoteError } from './types';
@@ -26,16 +26,16 @@ afterEach(() => {
   }
 });
 
-async function write(d: Device, pageId: string, fn: (text: Y.Text) => void): Promise<void> {
+async function write(d: Device, pageId: string, fn: (text: Y.Type) => void): Promise<void> {
   const doc = await d.docs.open(pageId);
-  fn(doc.getText('t'));
+  fn(doc.get('t'));
   await d.docs.flush(pageId);
   d.docs.close(pageId);
 }
 
 async function read(d: Device, pageId: string): Promise<string> {
   const doc = await d.docs.open(pageId);
-  const text = doc.getText('t').toString();
+  const text = doc.get('t').toString();
   d.docs.close(pageId);
   return text;
 }
@@ -89,8 +89,8 @@ async function expectNothingMissing(d: Device, server: FakeServer, pageId: strin
   for (const [client, clock] of stateVector(snap.doc)) {
     expect(has.get(client) ?? 0, `autor ${client}`).toBeGreaterThanOrEqual(clock);
   }
-  expect(doc.getText('t').toString()).toBe(snap.doc.getText('t').toString());
-  expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toBe(snap.doc.getXmlFragment(CONTENT_FRAGMENT).toString());
+  expect(doc.get('t').toString()).toBe(snap.doc.get('t').toString());
+  expect(doc.get(CONTENT_FRAGMENT).toString()).toBe(snap.doc.get(CONTENT_FRAGMENT).toString());
   snap.doc.destroy();
   doc.destroy();
 }
@@ -179,7 +179,7 @@ describe('B.2: después de bajar se sube solo lo propio', () => {
     const snap = await b.docs.snapshot(pageId);
     const pendingDoc = serverDoc(server, pageId);
     Y.applyUpdate(pendingDoc, Y.encodeStateAsUpdate(snap.doc, snap.state.syncedSV));
-    expect(pendingDoc.getText('t').toString()).toContain('B1');
+    expect(pendingDoc.get('t').toString()).toContain('B1');
     snap.doc.destroy();
     pendingDoc.destroy();
 
@@ -203,12 +203,12 @@ describe('B.2: después de bajar se sube solo lo propio', () => {
     // Otro dispositivo escribe "hola" (autor X) y encima " mundo" (autor Y, que depende de X).
     const x = new Y.Doc();
     x.clientID = 1001;
-    x.getText('t').insert(0, 'hola');
+    x.get('t').insert(0, 'hola');
     const updX = Y.encodeStateAsUpdate(x);
     const y = new Y.Doc();
     y.clientID = 1002;
     Y.applyUpdate(y, updX);
-    y.getText('t').insert(4, ' mundo');
+    y.get('t').insert(4, ' mundo');
     const updY = Y.encodeStateAsUpdate(y, Y.encodeStateVector(x));
 
     // A escribe sin subir, y le llega solo lo de Y (lo de X todavía no).
@@ -392,9 +392,9 @@ describe('B.2: después de bajar se sube solo lo propio', () => {
   it('el vector solo avanza por tramos sin huecos desde lo confirmado, y nunca más que lo integrado', () => {
     const doc = new Y.Doc();
     doc.clientID = 7;
-    doc.getText('t').insert(0, 'abc');
+    doc.get('t').insert(0, 'abc');
     const first = Y.encodeStateAsUpdate(doc);
-    doc.getText('t').insert(3, 'def');
+    doc.get('t').insert(3, 'def');
     const second = Y.encodeStateAsUpdate(doc, Y.encodeStateVector(new Map([[7, 3]])));
 
     // Solo el segundo tramo: empieza en 3 y no se sabe nada de [0, 3).
@@ -473,7 +473,7 @@ describe('B.2 al azar', () => {
 
       server.online = true;
       for (let round = 0; round < 2; round++) for (const d of list) await d.engine.syncNow();
-      const expected = serverDoc(server, pageId).getText('t').toString();
+      const expected = serverDoc(server, pageId).get('t').toString();
       for (const d of list) {
         await expectSound(d, server, pageId);
         await expectNothingMissing(d, server, pageId);
@@ -490,14 +490,9 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
   function typeInSeed(doc: Y.Doc, text: string): void {
     // En una sola transacción, como cada tecla en el editor.
     doc.transact(() => {
-      const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
-      const paragraph = (group.get(0) as Y.XmlElement).get(0) as Y.XmlElement;
-      let node = paragraph.get(0) as Y.XmlText | undefined;
-      if (!node) {
-        node = new Y.XmlText();
-        paragraph.insert(0, [node]);
-      }
-      node.insert(node.length, text);
+      const group = doc.get(CONTENT_FRAGMENT).get(0) as Y.Type;
+      const paragraph = (group.get(0) as Y.Type).get(0) as Y.Type;
+      paragraph.insert(paragraph.length, text);
     });
   }
 
@@ -509,7 +504,7 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
 
     const doc = await a.docs.open(pageId, { seed: true });
     // La raíz está (el editor la necesita), pero solo en memoria.
-    expect(doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+    expect(doc.get(CONTENT_FRAGMENT).length).toBe(1);
     await a.docs.flush(pageId);
     expect(a.docs.hasUnsavedEdits()).toBe(false);
     expect(await a.db.countFromIndex('docUpdates', 'pageId', pageId)).toBe(0);
@@ -521,7 +516,7 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
 
     // Abrir de nuevo pone otra vez la misma raíz.
     const again = await a.docs.open(pageId, { seed: true });
-    expect(again.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+    expect(again.get(CONTENT_FRAGMENT).length).toBe(1);
     a.docs.close(pageId);
   });
 
@@ -543,8 +538,8 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
     // Al volver a abrir, lo escrito se ve (no quedó colgado de una raíz que no se guardó).
     const again = await reopen(a, server);
     const reloaded = await again.docs.open(pageId);
-    expect(reloaded.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
-    expect(reloaded.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('hola mundo');
+    expect(reloaded.get(CONTENT_FRAGMENT).length).toBe(1);
+    expect(reloaded.get(CONTENT_FRAGMENT).toString()).toContain('hola mundo');
     expect(reloaded.store.pendingStructs).toBeNull();
     again.docs.close(pageId);
 
@@ -553,7 +548,7 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
     const c = await device(server);
     await c.engine.syncNow();
     const fromServer = await c.docs.open(pageId);
-    expect(fromServer.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('hola mundo');
+    expect(fromServer.get(CONTENT_FRAGMENT).toString()).toContain('hola mundo');
     expect(stateVector(fromServer).get(seedClientId(pageId))).toBeGreaterThan(0);
     c.docs.close(pageId);
   });
@@ -586,7 +581,7 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
 
     const again = await reopen(a, server);
     const reloaded = await again.docs.open(pageId);
-    expect(reloaded.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('importante!');
+    expect(reloaded.get(CONTENT_FRAGMENT).toString()).toContain('importante!');
     expect(reloaded.store.pendingStructs).toBeNull();
     again.docs.close(pageId);
   });
@@ -615,9 +610,9 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
     await a.engine.syncNow();
 
     for (const doc of [docA, docB]) {
-      expect(doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
-      expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('de A');
-      expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('de B');
+      expect(doc.get(CONTENT_FRAGMENT).length).toBe(1);
+      expect(doc.get(CONTENT_FRAGMENT).toString()).toContain('de A');
+      expect(doc.get(CONTENT_FRAGMENT).toString()).toContain('de B');
     }
     a.docs.close(pageId);
     b.docs.close(pageId);
@@ -639,8 +634,8 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
     await b.docs.flush(pageId);
     await b.engine.syncNow();
     await a.engine.syncNow();
-    expect(docA.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
-    expect(docA.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('B escribe primero');
+    expect(docA.get(CONTENT_FRAGMENT).length).toBe(1);
+    expect(docA.get(CONTENT_FRAGMENT).toString()).toContain('B escribe primero');
 
     typeInSeed(docA, ' y A sigue');
     await a.docs.flush(pageId);
@@ -651,7 +646,7 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
 
     const again = await reopen(a, server);
     const reloaded = await again.docs.open(pageId);
-    expect(reloaded.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('B escribe primero y A sigue');
+    expect(reloaded.get(CONTENT_FRAGMENT).toString()).toContain('B escribe primero y A sigue');
     again.docs.close(pageId);
     await expectNothingMissing(again, server, pageId);
   });
@@ -674,7 +669,7 @@ describe('B.2: el tope se calcula fuera de la transacción que escribe', () => {
       const cap = await original(...args);
       calls++;
       const doc = await a.docs.open(pageId);
-      doc.getText('t').insert(0, 'A1 ');
+      doc.get('t').insert(0, 'A1 ');
       await a.docs.flush(pageId);
       a.docs.close(pageId);
       return cap;

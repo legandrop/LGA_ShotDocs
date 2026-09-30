@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
-import { withCollaboration } from '@blocknote/core/yjs';
+import { withCollaboration } from '@blocknote/core/y';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -105,7 +105,7 @@ async function sharedPage(level: 'view' | 'comment') {
   await owner.engine.syncNow();
   const doc = await owner.docs.open(page, { seed: true });
   const editor = BlockNoteEditor.create(
-    withCollaboration({ schema, collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'o', color: '#000' } } }),
+    withCollaboration({ schema, collaboration: { fragment: doc.get(CONTENT_FRAGMENT), user: { name: 'o', color: '#000' } } }),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
   editor.mount(el);

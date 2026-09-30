@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { FILE_SCHEME } from './files';
 import { FakeServer, makeDevice, type Device } from './testing';
 
@@ -17,16 +17,16 @@ afterEach(() => {
   }
 });
 
-async function write(d: Device, pageId: string, fn: (text: Y.Text) => void): Promise<void> {
+async function write(d: Device, pageId: string, fn: (text: Y.Type) => void): Promise<void> {
   const doc = await d.docs.open(pageId);
-  fn(doc.getText('t'));
+  fn(doc.get('t'));
   await d.docs.flush(pageId);
   d.docs.close(pageId);
 }
 
 async function read(d: Device, pageId: string): Promise<string> {
   const doc = await d.docs.open(pageId);
-  const text = doc.getText('t').toString();
+  const text = doc.get('t').toString();
   d.docs.close(pageId);
   return text;
 }
@@ -198,7 +198,7 @@ describe('sincronización', () => {
     const pageId = await a.tree.create(null, 'P');
     const doc = await a.docs.open(pageId);
     const text = 'Escrito sin conexión.';
-    for (const [i, ch] of [...text].entries()) doc.getText('t').insert(i, ch);
+    for (const [i, ch] of [...text].entries()) doc.get('t').insert(i, ch);
     await a.docs.flush(pageId);
     expect(await a.db.countFromIndex('docUpdates', 'pageId', pageId)).toBeLessThanOrEqual(2);
     a.docs.close(pageId);
@@ -215,7 +215,7 @@ describe('sincronización', () => {
     const pageId = await a.tree.create(null, 'P');
     const doc = await a.docs.open(pageId);
     for (let i = 0; i < 100; i++) {
-      doc.getText('t').insert(i, 'x');
+      doc.get('t').insert(i, 'x');
       await a.docs.flush(pageId);
     }
     a.docs.close(pageId);

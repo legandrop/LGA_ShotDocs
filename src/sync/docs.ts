@@ -1,4 +1,4 @@
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { t } from '../i18n';
 import {
   DIRTY_PREFIX,
@@ -494,7 +494,7 @@ export class PageDocs {
         return false;
       }
     });
-    const merged = valid.length > 0 ? Y.mergeUpdates(valid.map((u) => u.data)) : null;
+    const merged = valid.length > 0 ? Y.mergeUpdates(bytes(valid.map((u) => u.data))) : null;
     const maxSeq = Math.max(...updates.map((u) => u.seq));
 
     // Tope del vector: lo que el documento del dispositivo integró de verdad (lo guardado más lo que llega).
@@ -555,7 +555,7 @@ export class PageDocs {
     const rows = await tx.objectStore('docUpdates').index('pageId').getAll(pageId);
     await tx.done;
     const doc = new Y.Doc();
-    Y.applyUpdate(doc, Y.mergeUpdates([...rows.map((r) => r.data), merged]), ORIGIN_LOAD);
+    Y.applyUpdate(doc, Y.mergeUpdates(bytes([...rows.map((r) => r.data), merged])), ORIGIN_LOAD);
     const local = Y.decodeStateVector(Y.encodeStateVector(doc));
     doc.destroy();
     return { local, rows: rows.length };
@@ -649,7 +649,7 @@ export class PageDocs {
     let done: Promise<void>;
     try {
       const tx = this.db.transaction(['docUpdates', 'meta'], 'readwrite');
-      const data = batch.length === 1 ? batch[0] : Y.mergeUpdates(batch);
+      const data = batch.length === 1 ? batch[0] : Y.mergeUpdates(bytes(batch));
       // Los errores de cada pedido llegan también por `tx.done`.
       void tx.objectStore('docUpdates').add({ pageId, data }).catch(() => undefined);
       void tx.objectStore('meta').put(crypto.randomUUID(), dirtyKey(pageId)).catch(() => undefined);
@@ -772,7 +772,7 @@ export class PageDocs {
     ]);
     await tx.done;
     const doc = new Y.Doc();
-    if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)), ORIGIN_LOAD);
+    if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(bytes(rows.map((r) => r.data))), ORIGIN_LOAD);
     return { doc, state: stored ?? emptyDocState(pageId), dirty: typeof dirty === 'string' ? dirty : undefined };
   }
 
@@ -782,7 +782,7 @@ export class PageDocs {
     const index = tx.store.index('pageId');
     const keys = await index.getAllKeys(pageId);
     const rows = await index.getAll(pageId);
-    const merged = rows.length > 0 ? Y.mergeUpdates(rows.map((r) => r.data)) : null;
+    const merged = rows.length > 0 ? Y.mergeUpdates(bytes(rows.map((r) => r.data))) : null;
     if (merged && rows.length > COMPACT_AT) {
       await tx.store.add({ pageId, data: merged });
       await Promise.all(keys.map((k) => tx.store.delete(k)));
@@ -881,4 +881,9 @@ function raiseGuard(state: DocState): void {
   if (state.version > floor) return;
   state.version = floor + 1;
   state.guardVersion = state.version;
+}
+
+/** Yjs 14 declara sus bytes como `Uint8Array<ArrayBuffer>`; los de IndexedDB y la red son `Uint8Array`. */
+export function bytes(list: Uint8Array[]): Uint8Array<ArrayBuffer>[] {
+  return list as Uint8Array<ArrayBuffer>[];
 }

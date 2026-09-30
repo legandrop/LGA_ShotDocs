@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
-import { withCollaboration } from '@blocknote/core/yjs';
+import { withCollaboration } from '@blocknote/core/y';
 import { afterEach, describe, expect, it } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from './editorSchema';
 import { insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
@@ -49,7 +49,7 @@ function mount(): BlockNoteEditor {
   const editor = BlockNoteEditor.create(
     withCollaboration({
       schema,
-      collaboration: { fragment: new Y.Doc().getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
+      collaboration: { fragment: new Y.Doc().get(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
     }),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');

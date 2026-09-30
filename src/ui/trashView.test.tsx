@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as Y from 'yjs';
+import * as Y from '@y/y';
 import { MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -89,14 +89,14 @@ async function trashedPhoto(): Promise<{ server: FakeServer; owner: Device; id: 
   await sync(owner);
   const id = mediaIdOf(await owner.media.add(page, new File([new Uint8Array(2048)], 'IMG_0042.JPG', { type: 'image/jpeg' })))!;
   const doc = await owner.docs.open(page);
-  const group = new Y.XmlElement('blockGroup');
-  const container = new Y.XmlElement('blockContainer');
-  const image = new Y.XmlElement('image');
+  const group = new Y.Type('blockGroup');
+  const container = new Y.Type('blockContainer');
+  const image = new Y.Type('image');
   doc.transact(() => {
-    doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+    doc.get(CONTENT_FRAGMENT).insert(0, [group]);
     group.insert(0, [container]);
     container.insert(0, [image]);
-    image.setAttribute('url', MEDIA_SCHEME + id);
+    image.setAttr('url', MEDIA_SCHEME + id);
   });
   await owner.docs.flush();
   await sync(owner);
@@ -154,13 +154,13 @@ describe('papelera: pestaña Archivos', () => {
     const id = mediaIdOf(await owner.media.add(page, new File([new Uint8Array(2048)], 'IMG_0042.JPG', { type: 'image/jpeg' })))!;
     const doc = await owner.docs.open(page);
     doc.transact(() => {
-      const group = new Y.XmlElement('blockGroup');
-      const container = new Y.XmlElement('blockContainer');
-      const image = new Y.XmlElement('image');
-      doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+      const group = new Y.Type('blockGroup');
+      const container = new Y.Type('blockContainer');
+      const image = new Y.Type('image');
+      doc.get(CONTENT_FRAGMENT).insert(0, [group]);
       group.insert(0, [container]);
       container.insert(0, [image]);
-      image.setAttribute('url', MEDIA_SCHEME + id);
+      image.setAttr('url', MEDIA_SCHEME + id);
     });
     owner.docs.close(page);
     await owner.docs.flush();
