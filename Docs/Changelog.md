@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.059 :
+v0.056 :
 
 "Importar de Coda…" (selector de proyectos) queda solo para la cuenta de Lega: es una herramienta suya, no
 una función de la app. Nadie más ve la entrada ni puede abrir el diálogo, que para los demás ni se monta.

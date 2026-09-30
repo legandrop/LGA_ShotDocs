@@ -52,7 +52,7 @@ código está en `src/import/` y el diálogo en `src/ui/ImportCodaDialog.tsx`.
   sin espacios alrededor y en minúsculas, con una constante (`CODA_OWNER_HASH`). El hash se calcula con Web
   Crypto (`crypto.subtle.digest`), una vez por usuario, y la entrada aparece cuando se resolvió (un instante).
   Sin Web Crypto (una página servida sin HTTPS) no la ve nadie. Para cambiar de cuenta, el comentario de
-  `codaOwner.ts` dice cómo calcular el hash nuevo. Desde v0.059.
+  `codaOwner.ts` dice cómo calcular el hash nuevo. Desde v0.056.
 
 - **De entrada** el diálogo dice lo que impide importar, antes de elegir nada: con el Drive sin conectar (sin
   portero) las fotos no tendrían adónde ir; en el iPad y el iPhone Safari no elige carpetas enteras (hay que
