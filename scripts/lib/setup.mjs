@@ -69,7 +69,8 @@ export function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const m = /^--([a-z-]+)(?:=(.*))?$/s.exec(arg);
-    if (!m) throw new Error(`Unexpected argument: ${arg}`);
+    // Sin repetir el valor: podría ser una clave pegada por error.
+    if (!m) throw new Error('Unexpected argument (value hidden). Options start with --; run with --help.');
     const [, key, inline] = m;
     if (/pass/.test(key)) {
       if (key === 'new-smtp-password') {
@@ -313,10 +314,11 @@ export function formatAuthDiff(changes, total) {
   return lines;
 }
 
-// Qué hacer con la contraseña SMTP: 'env' (viene en SMTP_PASSWORD), 'keep' (ya hay una guardada) o 'ask'.
+// Qué hacer con la contraseña SMTP: 'keep' (ya hay una guardada: no se reescribe aunque esté SMTP_PASSWORD,
+// salvo --new-smtp-password, así correrlo de nuevo no cambia nada), 'env' (viene en SMTP_PASSWORD) o 'ask'.
 export function smtpPasswordSource({ envPassword, saved, forceNew }) {
-  if (envPassword) return 'env';
   if (saved && !forceNew) return 'keep';
+  if (envPassword) return 'env';
   return 'ask';
 }
 
@@ -477,6 +479,9 @@ export function planSetup(opts, state, templates, migrations, env = {}) {
   });
   const settings = planSettings(opts, state);
   const warnings = [...settings.warnings];
+  if (smtpPassword === 'keep' && env.SMTP_PASSWORD) {
+    warnings.push('SMTP_PASSWORD is set but not used: a password is already saved. Pass --new-smtp-password to replace it.');
+  }
   if (
     smtpPassword === 'keep' &&
     state.config.smtp_host &&
@@ -564,12 +569,19 @@ async function findAuthKey(client) {
   return key;
 }
 
+// La clave publicable (`sb_publishable_…`) para la app y el portero. La `anon` vieja (un JWT) no se imprime:
+// si es la única, hay que crear la publicable en el panel.
+export function publishableKeyLine(keys) {
+  const pub = (keys ?? []).find((k) => k.type === 'publishable' && /^sb_publishable_/.test(k.api_key ?? ''));
+  if (pub) return pub.api_key;
+  return '(none yet: in Supabase, Project Settings → API Keys → create a publishable key, sb_publishable_…)';
+}
+
 async function publishableKey(client) {
   try {
-    const keys = await client.get('/api-keys');
-    return (keys.find((k) => k.type === 'publishable') ?? keys.find((k) => k.name === 'anon'))?.api_key ?? null;
+    return publishableKeyLine(await client.get('/api-keys'));
   } catch {
-    return null;
+    return '(Project Settings → API Keys → Publishable key)';
   }
 }
 
@@ -660,7 +672,7 @@ export async function runSetup({ client, opts, templates, env = {}, io, migratio
   io.log('');
   io.log('Done. Write these down for the app and the file gateway:');
   io.log(`  Project URL:     https://${opts.ref}.supabase.co`);
-  io.log(`  Publishable key: ${(await publishableKey(client)) ?? '(Project Settings → API Keys)'}`);
+  io.log(`  Publishable key: ${await publishableKey(client)}`);
   if (problems.length) {
     throw new Error(
       `Finished, but these sign-in settings did not stick: ${problems.join(', ')}. ` +

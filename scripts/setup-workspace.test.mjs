@@ -2,7 +2,10 @@
 // API. Sin red: un Supabase falso en memoria que, en modo "solo lectura", falla ante cualquier pedido que no
 // sea un GET o una consulta envuelta en `begin read only; … rollback;`.
 
-import { readFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { allowedInDryRun, createManagementClient, isReadOnlyQuery, readOnlySql } from './lib/management.mjs';
 import {
@@ -14,6 +17,7 @@ import {
   inviteSignupPreconditions,
   parseArgs,
   planSettings,
+  publishableKeyLine,
   runOpenInviteSignup,
   runSetup,
   sanitizeAuthConfig,
@@ -242,6 +246,15 @@ describe('opciones', () => {
     expect(parseArgs(['--new-smtp-password'])['new-smtp-password']).toBe(true);
   });
 
+  it('no repite el valor de un argumento inesperado (podría ser una clave pegada)', () => {
+    expect(() => parseArgs(['re_pegada_por_error'])).toThrow(/value hidden/);
+    try {
+      parseArgs(['re_pegada_por_error']);
+    } catch (e) {
+      expect(e.message).not.toContain('re_pegada_por_error');
+    }
+  });
+
   it('valida y normaliza', () => {
     const o = opts({ args: ['--media-url', 'https://portero.studio.workers.dev/', '--redirect-url', 'http://localhost:5173'] });
     expect(o.ownerEmail).toBe('owner@studio.com');
@@ -325,10 +338,43 @@ describe('configuración de login', () => {
   });
 
   it('decide de dónde sale la contraseña SMTP', () => {
-    expect(smtpPasswordSource({ envPassword: 'x', saved: true })).toBe('env');
+    // Una guardada no se reescribe aunque esté la variable, salvo --new-smtp-password.
+    expect(smtpPasswordSource({ envPassword: 'x', saved: true })).toBe('keep');
+    expect(smtpPasswordSource({ envPassword: 'x', saved: true, forceNew: true })).toBe('env');
+    expect(smtpPasswordSource({ envPassword: 'x', saved: false })).toBe('env');
     expect(smtpPasswordSource({ saved: true })).toBe('keep');
     expect(smtpPasswordSource({ saved: true, forceNew: true })).toBe('ask');
     expect(smtpPasswordSource({ saved: false })).toBe('ask');
+  });
+});
+
+describe('clave publicable', () => {
+  it('da la publicable, y nunca la anon vieja', () => {
+    expect(publishableKeyLine([{ name: 'anon', type: 'legacy', api_key: 'eyJ.old.jwt' }, { type: 'publishable', api_key: 'sb_publishable_x' }])).toBe(
+      'sb_publishable_x',
+    );
+    const line = publishableKeyLine([{ name: 'anon', type: 'legacy', api_key: 'eyJ.old.jwt' }]);
+    expect(line).not.toContain('eyJ');
+    expect(line).toMatch(/create a publishable key/);
+  });
+});
+
+describe('migraciones', () => {
+  it('encuentra las migraciones en una carpeta con espacios', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'shot docs con espacios '));
+    try {
+      const repo = fileURLToPath(new URL('..', import.meta.url));
+      await cp(join(repo, 'scripts/lib'), join(base, 'scripts/lib'), { recursive: true });
+      await cp(join(repo, 'supabase/migrations'), join(base, 'supabase/migrations'), { recursive: true });
+      const copy = await import(pathToFileURL(join(base, 'scripts/lib/migrations.mjs')).href);
+      expect(copy.migrationsDir).toContain('con espacios');
+      expect(copy.migrationsDir).not.toContain('%20');
+      const found = await copy.readMigrations();
+      expect(found.length).toBeGreaterThan(0);
+      expect(found[0].file).toMatch(/^\d+_.+\.sql$/);
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
   });
 });
 
@@ -448,6 +494,22 @@ describe('de verdad (contra el Supabase falso)', () => {
     expect(second.some((r) => r.url.includes('/invite'))).toBe(false);
     expect(second.some((r) => r.body?.includes('update public.workspace_settings'))).toBe(false);
     expect(fake.state.settings.local_key).toBe(key);
+  });
+
+  it('con una contraseña ya guardada no la reescribe aunque esté SMTP_PASSWORD', async () => {
+    const fake = fakeSupabase();
+    const client = createManagementClient({ ref: NEW_REF, fetch: fake.fetch });
+    await runSetup({ client, opts: opts(), templates, env: { SMTP_PASSWORD: SMTP_SECRET }, io: collector().io });
+    const before = fake.requests.length;
+    const out = collector();
+    await runSetup({ client, opts: opts(), templates, env: { SMTP_PASSWORD: 're_otra' }, io: out.io });
+    expect(fake.requests.slice(before).filter((r) => r.method === 'PATCH')).toEqual([]);
+    expect(fake.state.config.smtp_pass).toBe(SMTP_SECRET);
+    expect(out.text()).toContain('SMTP_PASSWORD is set but not used');
+    // Con --new-smtp-password, sí.
+    const o = opts({ args: ['--new-smtp-password'] });
+    await runSetup({ client, opts: o, templates, env: { SMTP_PASSWORD: 're_otra' }, io: collector().io });
+    expect(fake.state.config.smtp_pass).toBe('re_otra');
   });
 
   it('no pisa una clave local que ya existe', async () => {

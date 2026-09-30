@@ -54,7 +54,10 @@ The file gateway is published from a copy of the app's code, and the setup comma
    Desktop). You will run the command from that folder.
 
 When the app gets updates, open your fork and click **Sync fork** → **Update branch**: that also updates your
-file gateway (step 5), which must stay in step with the app.
+file gateway (step 5), which must stay in step with the app. The folder you unzipped does **not** update by
+itself: after syncing, download the ZIP again (step 3), unzip it, and use the new folder from then on (you
+can delete the old one). The command always has to run from a fresh copy, or it would not know the latest
+database changes.
 
 ## 2. Supabase: create the project
 
@@ -256,7 +259,8 @@ times a day, encrypted with a passphrase only you know.
 - **Upload a file**: open a page and drag a photo or a short video onto it. It shows a thumbnail, and after
   the upload it appears in your Drive under `LGA_ShotDocs / <project> / <date>`.
 - **Make a backup**: run the backup by hand as in step 7.3 and check that it finishes green.
-- **Invite someone**: account menu → **Members** → invite an email of yours, and open the link it copies.
+- **Invite someone** (after step 10, because until then only accounts that already exist can sign in):
+  see the end of step 10.
 
 ## 10. Let invited people create their account
 
@@ -270,7 +274,12 @@ node scripts/setup-workspace.mjs --ref <project ref> --owner-email you@yourstudi
 
 It first connects and checks the rule that rejects any email without an invitation, and only then opens
 sign-up; if the check fails, sign-up stays closed. Then test it: sign in with an email that was **not**
-invited (it must say to ask for an invitation) and with one you invited (the code arrives and it gets in).
+invited (it must say to ask for an invitation) and with one you invited (the code arrives and it gets in):
+
+1. In the app, account menu → **Members** → invite another email of yours (one that has never signed in to
+   this workspace) and copy the link it gives you.
+2. Open that link in a private browser window, type that email → **Continue with email**, and sign in with
+   the code. It must open what you shared with it.
 
 When you are done with all the steps, delete the Supabase access token (step 2.4) if you will not use the
 command again for a while.
@@ -298,5 +307,8 @@ with help, testing first on a separate project.
   them. Tell your team.
 - **Sending limits.** 30 emails an hour for the whole workspace (Resend's free plan allows 100 a day), and
   one email a minute to the same address: asking for another code sooner shows an error.
-- **Staying up to date.** When the app changes, **Sync fork** on GitHub (step 1) and run the setup command
-  again: it applies the new database changes and leaves the rest as it is.
+- **Staying up to date.** When the app changes: **Sync fork** on GitHub (step 1), **download the ZIP again**
+  and unzip it (the old folder has the old database changes), open the terminal in the new folder as in
+  step 4, and run the setup command again with the same options. It applies the new database changes and
+  leaves the rest as it is: it does not ask for the SMTP password again, and it does not touch the owner or
+  the local key.

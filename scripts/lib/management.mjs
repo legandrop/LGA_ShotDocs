@@ -16,8 +16,8 @@ const READ_ONLY_RE = /^begin read only;\n\s*(select|with)\b[^;]*;\nrollback;$/i;
 
 export function readOnlySql(select) {
   const sql = select.trim();
-  if (sql.includes(';')) throw new Error(`Consulta de lectura con ";": ${sql.slice(0, 80)}`);
-  if (!/^(select|with)\b/i.test(sql)) throw new Error(`Consulta de lectura que no es select: ${sql.slice(0, 80)}`);
+  if (sql.includes(';')) throw new Error(`Read-only query with ";": ${sql.slice(0, 80)}`);
+  if (!/^(select|with)\b/i.test(sql)) throw new Error(`Read-only query that is not a select: ${sql.slice(0, 80)}`);
   return `begin read only;\n${sql};\nrollback;`;
 }
 
@@ -39,7 +39,7 @@ export function allowedInDryRun(method, url, body) {
 }
 
 export function createManagementClient({ ref, token, dryRun = false, fetch: fetchImpl = globalThis.fetch }) {
-  if (!/^[a-z0-9]{20}$/.test(ref ?? '')) throw new Error(`Ref de proyecto inválido: ${ref}`);
+  if (!/^[a-z0-9]{20}$/.test(ref ?? '')) throw new Error('Invalid project ref: it must be 20 lowercase letters and numbers.');
   const base = `${API}/projects/${ref}`;
 
   // `target` es una ruta del proyecto ("/config/auth") o una dirección completa (la API de Auth del
@@ -48,7 +48,7 @@ export function createManagementClient({ ref, token, dryRun = false, fetch: fetc
     const url = target.startsWith('https://') ? target : `${base}${target}`;
     const payload = body === undefined ? undefined : JSON.stringify(body);
     if (dryRun && !allowedInDryRun(method, url, payload)) {
-      throw new Error(`Dry run: se frenó un ${method} a ${url.replace(/\?.*$/, '')}. No se escribió nada.`);
+      throw new Error(`Dry run: stopped a ${method} to ${url.replace(/\?.*$/, '')}. Nothing was written.`);
     }
     const h = headers ?? {};
     if (!headers && token) h.Authorization = `Bearer ${token}`;
@@ -58,7 +58,7 @@ export function createManagementClient({ ref, token, dryRun = false, fetch: fetc
     if (!res.ok) {
       const hint =
         res.status === 401
-          ? ' (¿falta SUPABASE_ACCESS_TOKEN o no es de la cuenta dueña del proyecto?)'
+          ? ' (is SUPABASE_ACCESS_TOKEN missing, or not from the account that owns the project?)'
           : '';
       throw new Error(`${method} ${url.replace(/\?.*$/, '')}: ${res.status}${hint}: ${text.slice(0, 500)}`);
     }

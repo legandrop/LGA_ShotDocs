@@ -4,9 +4,12 @@
 
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { quote } from './management.mjs';
 
-export const migrationsDir = new URL('../../supabase/migrations/', import.meta.url).pathname;
+// fileURLToPath y no `.pathname`: con `.pathname` una carpeta con espacios queda con %20 y en Windows sale
+// /C:/..., y readdir no la encuentra.
+export const migrationsDir = fileURLToPath(new URL('../../supabase/migrations/', import.meta.url));
 
 // Las migraciones del repo, en orden: [{ file, version, name, sql }].
 export async function readMigrations(dir = migrationsDir) {
