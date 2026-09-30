@@ -112,6 +112,14 @@ Lega.
   texto derivado; buscar en el dispositivo solo ve las páginas que ya bajó; atajos (Ctrl/Cmd+F para la página,
   Ctrl/Cmd+K para el proyecto) y permisos (nunca mostrar algo que la persona no ve). Lega sumó reemplazar, como
   VS Code (sin atajo propio: se despliega desde la barra de Ctrl/⌘+F).
+- **P.13 Tutorial animado y ayuda (Lega, 2026-09-30; "sí o sí lo tenemos que tener"):** la primera vez que
+  alguien entra, un documento de ejemplo ya armado y una recorrida con globitos ("acá hacés esto", "acá
+  aquello") que se avanza con *Siguiente*, como en tantas apps. Una **ayuda** fija (desde el menú o un "?") que
+  explica cada función y **todos los atajos** (Ctrl/⌘+F, Ctrl/⌘+K, Ctrl/⌘+Alt+Enter, filas de fotos, etc.) y
+  desde donde se puede **volver a ver el tutorial**. A pensar en el diseño: el documento de ejemplo no debería
+  ensuciar el workspace ni sincronizarse (una página de práctica local, o una plantilla que se crea y se puede
+  borrar), los dos idiomas, el teléfono, y que la ayuda se mantenga al día con cada función nueva (una regla:
+  cada feature nueva suma su línea en la ayuda). Diseño y auditoría antes de implementar.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
