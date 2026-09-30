@@ -7,7 +7,7 @@ import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { HeadingRecord } from './collapse';
-import { collapseExtension, collapseState, revealBlock, setAllCollapsed, setCollapsed } from './collapseEditor';
+import { collapseExtension, collapseState, removeWithSections, revealBlock, setAllCollapsed, setCollapsed } from './collapseEditor';
 import { hiderInDom } from './collapseDom';
 import { paragraphProps, schema } from './editorSchema';
 import { FIND_REPLACE_META } from './editorMeta';
@@ -189,8 +189,8 @@ describe('qué esconde un título', () => {
     collapse(editor, 'Escena 1');
     expect(Y.encodeStateAsUpdate(doc)).toEqual(before);
     const dom = editor.domElement!;
-    expect(dom.querySelectorAll('.bn-block-outer.sd-collapsed')).toHaveLength(1);
-    const hidden = [...dom.querySelectorAll<HTMLElement>('.bn-block-outer.sd-collapsed-hidden')];
+    expect(dom.querySelectorAll('.bn-block-content.sd-collapsed')).toHaveLength(1);
+    const hidden = [...dom.querySelectorAll<HTMLElement>('.bn-block-content.sd-collapsed-hidden')];
     expect(hidden).toHaveLength(3);
     expect(hidden.every((el) => el.dataset.sdHider === idOf(editor, 'Escena 1'))).toBe(true);
     expect(saves.at(-1)?.get(idOf(editor, 'Escena 1'))).toEqual({ c: true, g: null });
@@ -446,7 +446,7 @@ describe('borrar un título colapsado borra su sección entera', () => {
     const ids = texts(editor).map((t) => (t ? idOf(editor, t) : ''));
     collapse(editor, 'Sub', 'Acto');
     undoPoint(editor);
-    editor.removeBlocks([idOf(editor, 'Acto')]);
+    removeWithSections(view(editor), [idOf(editor, 'Acto')]);
     expect(texts(editor)).toEqual(['antes', 'Otro', 'c']);
     expect(seen.at(-1)).toMatch(/colapsado|collapsed/);
     await tick();
@@ -473,7 +473,7 @@ describe('borrar un título colapsado borra su sección entera', () => {
   it('el último título colapsado de la página', () => {
     const { editor } = page([p('antes'), h(2, 'Último'), p('a'), p('b', [p('b1')])]);
     collapse(editor, 'Último');
-    editor.removeBlocks([idOf(editor, 'Último')]);
+    removeWithSections(view(editor), [idOf(editor, 'Último')]);
     expect(texts(editor)).toEqual(['antes']);
   });
 
@@ -504,14 +504,14 @@ describe('borrar un título colapsado borra su sección entera', () => {
     expect(seen).toHaveLength(1);
   });
 
-  it('juntar el título con el bloque de arriba no es borrarlo: lo escondido queda', () => {
-    const { editor } = page([p('antes'), h(2, 'T'), p('a'), h(2, 'U')]);
-    collapse(editor, 'T');
+  it('juntar el título con el bloque de arriba (con parte de su texto) no es borrarlo: lo escondido queda y se abre', () => {
+    const { editor } = page([p('antes'), h(2, 'Titulo'), p('a'), h(2, 'U')]);
+    collapse(editor, 'Titulo');
     const v = view(editor);
-    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, textPos(editor, 'antes'), textPos(editor, 'T'))));
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, textPos(editor, 'antes'), textPos(editor, 'Titulo', 'start') + 2)));
     press(editor, 'Backspace');
-    expect(texts(editor)).toEqual(['antes', 'a', 'U']);
-    expect(visible(editor)).toEqual(['antes', 'a', 'U']);
+    expect(texts(editor)).toEqual(['antestulo', 'a', 'U']);
+    expect(visible(editor)).toEqual(['antestulo', 'a', 'U']);
   });
 
   it('si otro edita adentro mientras tanto, no se rompe nada y su bloque nuevo queda a la vista', async () => {
@@ -520,7 +520,7 @@ describe('borrar un título colapsado borra su sección entera', () => {
     const other = linked(doc);
     await tick();
     collapse(editor, 'Escena 1');
-    editor.removeBlocks([idOf(editor, 'Escena 1')]);
+    removeWithSections(view(editor), [idOf(editor, 'Escena 1')]);
     other.editor.insertBlocks([{ type: 'paragraph', content: 'de otro' }], idOf(other.editor, 'Uno'), 'after');
     other.editor.updateBlock(idOf(other.editor, 'Detalle texto'), { content: 'cambiado' });
     other.sync();
@@ -818,9 +818,9 @@ describe('auditoría 1a', () => {
     expect(caretBlock(editor)).toBe('T');
   });
 
-  it('7. escribir en una página grande con todo colapsado reusa lo calculado (sin rearmar lo escondido)', () => {
+  it('7. escribir en una página grande (2.000 bloques) con todo colapsado reusa lo calculado y es rápido', () => {
     const blocks: PartialBlock[] = [];
-    for (let i = 0; i < 500; i++) blocks.push(h(2, `T${i}`), p(`p${i}`));
+    for (let i = 0; i < 1000; i++) blocks.push(h(2, `T${i}`), p(`p${i}`));
     const { editor } = page(blocks);
     setAllCollapsed(view(editor), true);
     putCaret(editor, 'T0');
@@ -830,9 +830,10 @@ describe('auditoría 1a', () => {
     const elapsed = performance.now() - started;
     const after = collapseState(view(editor).state)!;
     expect(after.analysis.hidden).toBe(before.analysis.hidden);
-    expect(after.analysis.hidden.size).toBe(500);
-    // Holgado (jsdom es lento), pero muy por debajo de rearmar todo en cada tecla.
-    expect(elapsed / 40).toBeLessThan(25);
+    expect(after.analysis.hidden.size).toBe(1000);
+    // 2.000 bloques. Holgado (jsdom es lento; unos 7 ms por tecla en la nube), pero muy por debajo de lo que
+    // costaba antes (28 ms con las decoraciones en los bloques, 45 rearmando todo).
+    expect(elapsed / 40).toBeLessThan(20);
   });
 
   it('8. pegar algo no toca los títulos plegables que ya estaban', () => {
@@ -911,5 +912,81 @@ describe('auditoría 1a: lo demás', () => {
     await tick();
     expect(reloads).toHaveBeenCalledTimes(1);
     observer.disconnect();
+  });
+});
+
+// --- Verificación de 1258807: borrar la sección solo cuando la persona borró el título ---------------------
+
+describe('verificación: borrar la sección solo a propósito', () => {
+  it('a. Supr en un renglón vacío justo arriba de un título colapsado borra el renglón y deja el título colapsado', () => {
+    const { editor } = page([p('P0'), p(''), h(1, 'T'), p('a'), p('b'), h(1, 'U')]);
+    collapse(editor, 'T');
+    editor.setTextCursorPosition(editor.document[1].id, 'start');
+    press(editor, 'Delete');
+    expect(texts(editor)).toEqual(['P0', 'T', 'a', 'b', 'U']);
+    expect(visible(editor)).toEqual(['P0', 'T', 'U']);
+    expect(view(editor).state.selection.head).toBe(textPos(editor, 'T', 'start'));
+  });
+
+  it('a. Supr al final de un renglón con texto justo arriba de un título colapsado no hace nada', () => {
+    const { editor } = page([p('x'), h(1, 'T'), p('a'), h(1, 'U')]);
+    collapse(editor, 'T');
+    putCaret(editor, 'x');
+    press(editor, 'Delete');
+    expect(texts(editor)).toEqual(['x', 'T', 'a', 'U']);
+    expect(visible(editor)).toEqual(['x', 'T', 'U']);
+  });
+
+  for (const parent of ['paragraph', 'bulletListItem']) {
+    it(`b. Supr al final de un bloque (${parent}) cuyo primer hijo es un título colapsado no borra lo escondido`, () => {
+      const { editor } = page([
+        { type: parent, content: 'Q', children: [h(1, 'H', [p('kid')]), p('x')] } as PartialBlock,
+        p('R'),
+      ]);
+      collapse(editor, 'H');
+      putCaret(editor, 'Q');
+      press(editor, 'Delete');
+      expect(texts(editor)).toEqual(['Q', 'H', 'kid', 'x', 'R']);
+    });
+  }
+
+  for (const op of ['Backspace', 'cut']) {
+    it(`c. una selección que toma parte del texto del título (${op}) no borra lo escondido: se abre`, () => {
+      const { editor } = page([p('Q', [p('P0')]), h(2, 'Head'), p('secret'), h(2, 'U')]);
+      collapse(editor, 'Head');
+      const v = view(editor);
+      v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, textPos(editor, 'P0', 'start') + 1, textPos(editor, 'Head', 'start') + 2)));
+      if (op === 'cut') v.dom.dispatchEvent(clipboardEvent('cut'));
+      else press(editor, op);
+      expect(texts(editor)).toContain('secret');
+      expect(visible(editor)).toContain('secret');
+    });
+  }
+
+  it('un removeBlocks sin intención (no desde "Borrar") no borra lo escondido: se abre', () => {
+    const { editor } = page([p('antes'), h(1, 'T'), p('a'), h(1, 'U')]);
+    collapse(editor, 'T');
+    editor.removeBlocks([idOf(editor, 'T')]);
+    expect(texts(editor)).toEqual(['antes', 'a', 'U']);
+    expect(visible(editor)).toEqual(['antes', 'a', 'U']);
+  });
+
+  it('elegir todo el texto del título (y más) y borrarlo sí borra su sección', () => {
+    const { editor } = page([p('antes'), h(1, 'T'), p('a'), h(1, 'U')]);
+    collapse(editor, 'T');
+    const v = view(editor);
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, textPos(editor, 'antes'), textPos(editor, 'T'))));
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['antes', 'U']);
+  });
+
+  it('2. Retroceso después de un bloque cuyo último descendiente está escondido va al título, sin unir', () => {
+    const { editor } = page([p('Q', [h(1, 'H'), p('x')]), p('R')]);
+    collapse(editor, 'H');
+    putCaret(editor, 'R', 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['Q', 'H', 'x', 'R']);
+    expect(visible(editor)).toEqual(['Q', 'H', 'R']);
+    expect(caretBlock(editor)).toBe('H');
   });
 });

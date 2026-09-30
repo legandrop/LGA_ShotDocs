@@ -565,8 +565,8 @@ Yjs aguantó todos los intentos de romperlo. Arreglado además:
 reemplazar en pies y nombres, *Conservar mayúsculas* y expresiones regulares; probar
 a mano Safari de Mac, iPhone y Firefox (Ctrl/⌘+F, el teclado del teléfono, los IME).
 
-**Con P.11 (v0.052):** el plugin de colapsar registra `setFindCollapseHooks` (`isHidden`, `reveal` para vos,
-`anyHidden`) y no abre nada por `isFindReplaceTransaction` ni por deshacer o rehacer un reemplazo (la entrada de
+**Con P.11 (v0.052):** el plugin de colapsar registra `setFindCollapseHooks(view, hooks)`, por vista (`isHidden`,
+`reveal` para vos, `anyHidden`) y no abre nada por `isFindReplaceTransaction` ni por deshacer o rehacer un reemplazo (la entrada de
 la pila marcada con `FIND_REPLACE_META`). Lo prueban `collapseFind.test.ts` (contar lo escondido, ir a una
 coincidencia escondida abre solo esa sección, "Reemplazar todo" adentro de secciones colapsadas y su deshacer y
 rehacer las dejan colapsadas) y `find.mjs`.

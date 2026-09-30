@@ -63,15 +63,19 @@ export function collapseState(state: EditorState): CollapseState | undefined {
   return collapseKey.getState(state);
 }
 
+/**
+ * Las decoraciones van en el contenido de cada bloque (`.bn-block-content`), no en el bloque: con cientos de
+ * bloques escondidos, ProseMirror corre y dibuja las del bloque (todas en el mismo grupo) con un costo que crece
+ * con el cuadrado (verificación, punto 3). El CSS esconde el bloque entero con `:has()`.
+ */
 function decorate(doc: PMNode, analysis: Analysis): DecorationSet {
   const decorations: Decoration[] = [];
-  for (const id of analysis.collapsed) {
-    const at = analysis.blocks.get(id);
-    if (at) decorations.push(Decoration.node(at.pos, at.pos + at.node.nodeSize, { class: 'sd-collapsed', 'data-sd-collapsed': 'true' }));
-  }
-  for (const top of analysis.top) {
-    decorations.push(Decoration.node(top.pos, top.pos + top.size, { class: 'sd-collapsed-hidden', 'data-sd-hider': top.hider }));
-  }
+  const onContent = (at: BlockAt | undefined, attrs: Record<string, string>) => {
+    const content = at?.node.firstChild;
+    if (at && content) decorations.push(Decoration.node(at.pos + 1, at.pos + 1 + content.nodeSize, attrs));
+  };
+  for (const id of analysis.collapsed) onContent(analysis.blocks.get(id), { class: 'sd-collapsed', 'data-sd-collapsed': 'true' });
+  for (const top of analysis.top) onContent(analysis.blocks.get(top.id), { class: 'sd-collapsed-hidden', 'data-sd-hider': top.hider });
   return DecorationSet.create(doc, decorations);
 }
 
@@ -248,26 +252,37 @@ function newBlockId(): string {
 }
 
 /**
- * Si una transacción propia sacó entero el bloque que estaba en `[from, to)`: sus dos bordes y el texto de
- * adentro. No cuenta juntarlo con otro (su texto queda) ni cambiarle solo los atributos, como el id
- * (auditoría, punto 2).
+ * Si una transacción propia (no de Yjs) borró el texto del título que empezaba en `textStart`: el bloque se fue
+ * con su texto. No cuenta juntarlo con el de arriba (el texto queda) ni cambiarle solo el id.
  */
-function removedWhole(trs: readonly Transaction[], plain: ReadonlySet<Transaction>, from: number, to: number): boolean {
-  let a = from;
-  let b = to;
-  let inside = from + 2;
+function textDeleted(trs: readonly Transaction[], plain: ReadonlySet<Transaction>, textStart: number): boolean {
+  let at = textStart;
   for (const tr of trs) {
-    if (plain.has(tr)) {
-      const start = tr.mapping.mapResult(a, 1);
-      const end = tr.mapping.mapResult(b, -1);
-      if (start.deletedAfter && end.deletedBefore && tr.mapping.mapResult(inside).deletedAcross) return true;
-    }
-    a = tr.mapping.map(a, 1);
-    b = tr.mapping.map(b, -1);
-    inside = tr.mapping.map(inside);
-    if (b <= a) return false;
+    const result = tr.mapping.mapResult(at);
+    if (plain.has(tr) && result.deletedAcross) return true;
+    at = result.pos;
   }
   return false;
+}
+
+/**
+ * La marca de "Borrar" con la sección (el menú del bloque, `removeWithSections`): lleva los ids de los bloques
+ * que la persona pidió borrar.
+ */
+export const SECTION_DELETE_META = 'sd-section-delete';
+
+/**
+ * Si la persona quiso borrar el título entero (auditoría, verificación): lo pidió con "Borrar", o la selección
+ * de antes de la edición abarcaba todo su texto (el bloque elegido entero, la sección elegida para cortar, o
+ * una selección de texto que lo cubre de punta a punta). Juntarlo con otro bloque, Supr, o una selección que
+ * toma solo parte de su texto, no.
+ */
+function meantToDelete(id: string, at: BlockAt, explicit: ReadonlySet<string>, selection: Selection): boolean {
+  if (explicit.has(id)) return true;
+  if (selection.empty) return false;
+  const textStart = at.pos + 2;
+  const textEnd = textStart + at.node.firstChild!.content.size;
+  return selection.from <= textStart && selection.to >= textEnd;
 }
 
 /**
@@ -319,24 +334,31 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   // Escribir en un renglón (lo más común) no saca ni mueve bloques: no hay nada que borrar ni avisar.
   const structural = [...plain].some((t) => !textOnly(t));
 
-  // 1. Un título colapsado sacado entero: se va su sección entera, en la misma pasada (un solo Ctrl+Z).
+  // 1. Un título colapsado que la persona borró a propósito (con su texto): se va su sección entera, en la
+  // misma pasada (un solo Ctrl+Z). Si el título se fue de otra manera (se juntó con otro bloque, una selección
+  // tomó solo parte de su texto), lo que escondía no se borra nunca: se abre.
   const doomed = new Set<string>();
+  const orphaned = new Set<string>();
   if (structural) {
+    const explicit = new Set<string>();
+    for (const t of plain) for (const id of (t.getMeta(SECTION_DELETE_META) as string[] | undefined) ?? []) explicit.add(id);
     for (const id of before.analysis.collapsed) {
       // Solo un título que se veía: lo que esconde uno escondido lo decide el de afuera.
-      if (before.analysis.hidden.has(id) || after.analysis.blocks.has(id)) continue;
+      // Un título al que solo se le cambió el id (su estado pasó al id nuevo) no se borró.
+      if (before.analysis.hidden.has(id) || after.analysis.blocks.has(id) || !after.records.has(id)) continue;
       const at = before.analysis.blocks.get(id);
-      if (!at || !removedWhole(trs, plain, at.pos, at.pos + at.node.nodeSize)) continue;
+      if (!at) continue;
+      const meant = textDeleted(trs, plain, at.pos + 2) && meantToDelete(id, at, explicit, oldState.selection);
       // Solo lo que ese título escondía (nunca algo que se veía, aunque sea de su sección: el fin).
       for (const [sid, hider] of before.analysis.hidden) {
-        if (hider === id && after.analysis.blocks.has(sid)) doomed.add(sid);
+        if (hider === id && after.analysis.blocks.has(sid)) (meant ? doomed : orphaned).add(sid);
       }
     }
     deleteBlocks(tr, doomed);
   }
 
   let analysis = tr.docChanged ? analyze(tr.doc, records) : after.analysis;
-  const reveal = new Set<string>();
+  const reveal = new Set<string>(orphaned);
 
   if (docChanged && !ownAction) {
     // 2. Lo que se veía y quedó escondido (propio o de otro) abre lo que lo esconde.
@@ -468,6 +490,17 @@ export function revealBlock(view: EditorView, blockId: string): boolean {
   return true;
 }
 
+/**
+ * "Borrar" del menú del bloque: saca esos bloques y, si alguno es un título colapsado, su sección entera (la
+ * transacción lleva `SECTION_DELETE_META`). Si la página queda sin bloques, queda un párrafo vacío.
+ */
+export function removeWithSections(view: EditorView, ids: readonly string[]): void {
+  const tr = view.state.tr;
+  deleteBlocks(tr, new Set(ids));
+  if (!tr.docChanged) return;
+  view.dispatch(tr.setMeta(SECTION_DELETE_META, [...ids]).scrollIntoView());
+}
+
 /** Cuántos títulos tiene la página y cuántos están colapsados. */
 export function headingCounts(state: EditorState): { headings: number; collapsed: number } {
   const s = collapseKey.getState(state);
@@ -539,11 +572,51 @@ function enterAfter(view: EditorView): boolean {
   return true;
 }
 
-/** Supr al final de un título colapsado no une lo escondido al título. */
+/**
+ * Supr al final de un renglón:
+ * - en un título colapsado, no une lo escondido al título;
+ * - si lo que sigue (el primer hijo, o el bloque de abajo) es un título colapsado que esconde algo: un renglón
+ *   vacío se borra y la selección va al principio del título; uno con texto no hace nada (BlockNote uniría el
+ *   título al renglón y lo escondido quedaría suelto; verificación, punto 1).
+ */
 function deleteAtEnd(view: EditorView): boolean {
-  const found = collapsedHeadingAt(view.state);
-  if (!found || !view.state.selection.empty || found.offset !== found.text.content.size) return false;
-  return hidesSomething(sectionAt(view.state.doc, found.at.pos, found.record));
+  const state = view.state;
+  const sel = state.selection;
+  if (!(sel instanceof TextSelection) || !sel.empty || sel.$head.parentOffset !== sel.$head.parent.content.size) return false;
+  const found = collapsedHeadingAt(state);
+  if (found) return hidesSomething(sectionAt(state.doc, found.at.pos, found.record));
+  const s = collapseKey.getState(state);
+  if (!s || s.analysis.collapsed.size === 0 || sel.$head.depth < 2) return false;
+  const containerDepth = sel.$head.depth - 1;
+  const container = sel.$head.node(containerDepth);
+  const next = nextBlock(state.doc, sel.$head.before(containerDepth), container);
+  if (!next) return false;
+  const nextId = String(next.node.attrs.id ?? '');
+  if (!s.analysis.collapsed.has(nextId) || s.analysis.hidden.has(nextId)) return false;
+  if (!hidesSomething(sectionAt(state.doc, next.pos, s.records.get(nextId)))) return false;
+  const empty = sel.$head.parent.content.size === 0 && container.childCount === 1;
+  if (!empty) return true;
+  const from = sel.$head.before(containerDepth);
+  const tr = state.tr.delete(from, from + container.nodeSize);
+  tr.setSelection(TextSelection.create(tr.doc, tr.mapping.map(next.pos) + 2));
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+/** El bloque que sigue en el orden del documento: el primer hijo, o el de abajo (subiendo si hace falta). */
+function nextBlock(doc: PMNode, pos: number, container: PMNode): BlockAt | null {
+  const children = container.childCount > 1 ? container.lastChild : null;
+  if (children?.type.name === 'blockGroup' && children.firstChild) {
+    return { node: children.firstChild, pos: pos + 1 + container.firstChild!.nodeSize + 1 };
+  }
+  let $pos = doc.resolve(pos + container.nodeSize);
+  for (;;) {
+    const after = $pos.nodeAfter;
+    if (after?.type.name === 'blockContainer') return { node: after, pos: $pos.pos };
+    // Al final de un grupo: se sube al bloque de afuera.
+    if ($pos.depth < 2) return null;
+    $pos = doc.resolve($pos.after($pos.depth - 1));
+  }
 }
 
 /** ↓ o → al final de un título colapsado: al primer bloque que se ve después (con Shift, extiende). */
@@ -607,9 +680,10 @@ function backspaceAfter(view: EditorView): boolean {
   const groupDepth = $head.depth - 2;
   const index = $head.index(groupDepth);
   if (index === 0) return false;
-  const prev = $head.node(groupDepth).child(index - 1);
-  const prevId = String(prev.attrs.id ?? '');
-  const hiderId = s.analysis.hidden.get(prevId) ?? (s.analysis.collapsed.has(prevId) && prev.childCount > 1 ? prevId : null);
+  // El bloque al que BlockNote uniría este: el último descendiente del de arriba (verificación, punto 2).
+  let prev = $head.node(groupDepth).child(index - 1);
+  while (prev.childCount > 1 && prev.lastChild?.type.name === 'blockGroup' && prev.lastChild.lastChild) prev = prev.lastChild.lastChild;
+  const hiderId = s.analysis.hidden.get(String(prev.attrs.id ?? '')) ?? null;
   if (!hiderId || s.analysis.hidden.has(String(container.attrs.id ?? ''))) return false;
   const heading = s.analysis.blocks.get(hiderId);
   if (!heading) return false;
@@ -712,35 +786,52 @@ try {
  * todo el documento.
  */
 function textOnly(tr: Transaction): boolean {
-  if (yjsOrigin(tr).fromYjs) return false;
+  return editedPoints(tr) !== null;
+}
+
+/**
+ * Si la transacción solo cambia texto adentro de renglones, los lugares tocados (en el documento de antes);
+ * si no, `null`.
+ */
+function editedPoints(tr: Transaction): number[] | null {
+  if (yjsOrigin(tr).fromYjs) return null;
+  const points: number[] = [];
   for (let i = 0; i < tr.steps.length; i++) {
     const step = tr.steps[i];
-    if (step instanceof AddMarkStep || step instanceof RemoveMarkStep) continue;
-    if (!(step instanceof ReplaceStep)) return false;
-    const { from, to, slice } = step as unknown as { from: number; to: number; slice: Slice };
-    if (slice.openStart !== 0 || slice.openEnd !== 0) return false;
-    let inline = true;
-    slice.content.forEach((node) => {
-      if (!node.isInline) inline = false;
-    });
-    if (!inline) return false;
+    const { from, to } = step as unknown as { from: number; to: number };
+    if (step instanceof ReplaceStep) {
+      const { slice } = step as unknown as { slice: Slice };
+      if (slice.openStart !== 0 || slice.openEnd !== 0) return null;
+      let inline = true;
+      slice.content.forEach((node) => {
+        if (!node.isInline) inline = false;
+      });
+      if (!inline) return null;
+    } else if (!(step instanceof AddMarkStep || step instanceof RemoveMarkStep)) return null;
     const doc = tr.docs[i];
     const $from = doc.resolve(from);
     const $to = doc.resolve(to);
-    if (!$from.parent.isTextblock || !$from.sameParent($to) || $from.depth < 2) return false;
+    if (!$from.parent.isTextblock || !$from.sameParent($to) || $from.depth < 2) return null;
     const root = doc.firstChild;
-    if (!root || $from.index(1) === root.childCount - 1) return false;
+    if (!root || $from.index(1) === root.childCount - 1) return null;
+    points.push(i === 0 ? from : tr.mapping.slice(0, i).invert().map(from));
   }
-  return true;
+  return points;
 }
 
-/** Lo calculado, con las posiciones corridas y los nodos de ahora (lo escondido es lo mismo). */
+/**
+ * Lo calculado, con las posiciones corridas (lo escondido es lo mismo). Solo los bloques que contienen lo
+ * editado (el renglón y los de afuera) cambian de nodo; los demás son los mismos (una sola pasada).
+ */
 function mapAnalysis(analysis: Analysis, tr: Transaction): Analysis {
   if (analysis.blocks.size === 0) return analysis;
+  const points = editedPoints(tr) ?? [];
   const blocks = new Map<string, BlockAt>();
   for (const [id, at] of analysis.blocks) {
     const pos = tr.mapping.map(at.pos);
-    blocks.set(id, { node: tr.doc.nodeAt(pos) ?? at.node, pos });
+    const end = at.pos + at.node.nodeSize;
+    const touched = points.some((p) => p > at.pos && p < end);
+    blocks.set(id, { node: touched ? (tr.doc.nodeAt(pos) ?? at.node) : at.node, pos });
   }
   const top = analysis.top.map((t) => {
     const at = blocks.get(t.id);
@@ -807,21 +898,15 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
     view: (editorView) => {
       let paused = new WeakSet<HTMLIFrameElement>();
       // La búsqueda en la página (Docs/Doc_Buscar.md) cuenta lo que está en secciones colapsadas y, al ir ahí, lo
-      // abre para vos. Lo registra el editor abierto.
+      // abre para vos. Cada editor registra los suyos (por vista).
       const hooks: FindCollapseHooks = {
         isHidden: (blockId) => !!collapseKey.getState(editorView.state)?.analysis.hidden.has(blockId),
         reveal: (blockId) => void revealBlock(editorView, blockId),
         anyHidden: () => (collapseKey.getState(editorView.state)?.analysis.hidden.size ?? 0) > 0,
       };
-      setFindCollapseHooks(hooks);
-      findHooksOwner = hooks;
+      setFindCollapseHooks(editorView, hooks);
       return {
-        destroy: () => {
-          if (findHooksOwner === hooks) {
-            setFindCollapseHooks(null);
-            findHooksOwner = null;
-          }
-        },
+        destroy: () => setFindCollapseHooks(editorView, null),
         update: (view, prev) => {
           const now = collapseKey.getState(view.state);
           const was = collapseKey.getState(prev);
@@ -844,9 +929,6 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
     },
   });
 }
-
-/** Los enganches de la búsqueda que están registrados (los del último editor abierto). */
-let findHooksOwner: FindCollapseHooks | null = null;
 
 type KeyContext = { editor: BlockNoteEditor<any, any, any> };
 const withView = (fn: (view: EditorView) => boolean) => ({ editor }: KeyContext) => {

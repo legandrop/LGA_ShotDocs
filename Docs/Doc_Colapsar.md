@@ -319,6 +319,12 @@ recalcula (hoy igual). A verificar en Safari del iPhone, que puede demorar las i
 7. **El Ctrl+F del navegador no encuentra lo escondido** mientras no esté la búsqueda de la página (P.12).
 8. **Lo tuyo vive en el navegador:** se pierde si se borran los datos del sitio (es solo la vista).
 9. **Versiones viejas** ven todo abierto aunque alguien haya colapsado para todos (esperado; no pierden nada).
+10. **Problemas de BlockNote y y-prosemirror que no son de esta función** (la verificación los vio también sin
+    nada colapsado, y la prueba al azar no los cuenta como fallas de colapsar): dos documentos que divergen
+    después de ids repetidos o de juntar cambios hechos sin red; `restoreRelativeSelection` que tira un error
+    en algunos deshacer o rehacer; cambios concurrentes sin red que pierden texto al juntarse; y un aviso de
+    ProseMirror ("TextSelection endpoint not pointing into a node with inline content") al cortar. Quedan
+    anotados para mirarlos aparte.
 
 ## 9. Entregas y pruebas
 
@@ -501,8 +507,8 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
   escondidos a decorar; `sectionAt` da la sección de un título (sus hermanos escondidos y dónde termina);
   `runEnd` tiene las reglas: nivel, el fin (`e`) y el último párrafo vacío de la página.
 - **`src/ui/collapseEditor.ts`** (el plugin y la extensión `collapseExtension`, con prioridad sobre los atajos
-  de BlockNote): las decoraciones (`sd-collapsed` y `data-sd-collapsed` en el título; `sd-collapsed-hidden` y
-  `data-sd-hider` en cada hermano escondido) y, en `appendTransaction`, las correcciones 1, 2, 3, 10, 12, 16 y
+  de BlockNote): las decoraciones, en el contenido de cada bloque (`sd-collapsed` y `data-sd-collapsed` en el
+  título; `sd-collapsed-hidden` y `data-sd-hider` en cada hermano escondido) y, en `appendTransaction`, las correcciones 1, 2, 3, 10, 12, 16 y
   18 más la regla de la selección. Atajos: Ctrl/⌘+Alt+Enter (con Shift, por ahora igual), Enter, Supr,
   Retroceso (después de lo escondido), ↓ y → (con Shift, extienden). Copiar y cortar el título elegido entero
   eligen antes la sección entera.
@@ -532,11 +538,10 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
     se llama a sí misma sin fin (la clase no define su `fromJSON`). Para arrastrar (1b) sirve otro camino:
     `dragStart` de BlockNote trata como varios bloques una selección de texto que va de un bloque a otro, así
     que alcanza con elegir del texto del título al del último bloque escondido antes del `dragstart`.
-  - Borrar la sección entera no reemplaza "Borrar" del menú: cualquier transacción propia (no de Yjs) que saca
-    entero el bloque de un título colapsado que se veía (sus bordes y su texto) dispara el borrado de lo que
-    escondía, en la misma pasada. Cubre el menú,
-    Retroceso y Supr con el bloque elegido, Cortar y cualquier `removeBlocks`. Juntar el título con el bloque de
-    arriba no cuenta (su texto queda).
+  - Borrar la sección entera es por intención (ver "Verificación", abajo): "Borrar" del menú usa
+    `removeWithSections` (reemplaza el ítem de BlockNote en `EditorComments.tsx`), el bloque elegido entero, o
+    una selección que cubría todo el texto del título. Un `removeBlocks` común, juntar el título con otro
+    bloque o tomar solo parte de su texto no borran lo escondido: lo abren.
   - Enter al principio de un título colapsado (con texto) deja un renglón arriba y el título sigue colapsado;
     en el medio, BlockNote lo parte y la sección se abre (el pedazo nuevo cae adentro).
   - El fin (`e`) se conserva aunque su bloque falte (deshacer y rehacer); si una edición propia lo borra, pasa al
@@ -574,6 +579,33 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
   13. Más pruebas: los menús sin plegables (`collapseMenus.test.ts`), la pausa del reproductor de Drive, la
       etiqueta "Hojas N–M adentro", el portapapeles de copiar y cortar con lo escondido; en `collapse.mjs`, el
       menú lateral corrido que no tapa el triángulo.
+- **Verificación de `1258807` + `520652b`** (independiente; el bloqueante de la auditoría quedó arreglado en las
+  84 combinaciones probadas). Encontró otro del mismo tipo, arreglado con su prueba (fallaba antes):
+  1. (Bloqueante) Un título colapsado **juntado** con el bloque de arriba contaba como "borrado entero" y se
+     borraba lo que escondía: Supr en un renglón vacío arriba del título, Supr al final de un bloque cuyo
+     primer hijo es el título, o una selección que toma solo parte del texto del título. **Ahora borrar la
+     sección es por intención:** solo cuando la persona borró el título a propósito, con su texto: "Borrar"
+     del menú (`removeWithSections`, que marca la transacción con `SECTION_DELETE_META`), el bloque elegido
+     entero con Retroceso, Supr o Cortar, o una selección de texto que cubría todo su texto (borrada, cortada,
+     escrita o pegada encima). En cualquier otro caso (juntar, partes, un `removeBlocks` de otro lado) lo
+     escondido **nunca** se borra: se abre. Además, Supr al final de un renglón cuando lo que sigue (el primer
+     hijo o el bloque de abajo) es un título colapsado que esconde algo: un renglón vacío se borra y la
+     selección va al principio del título; uno con texto no hace nada.
+  2. Retroceso después de lo escondido mira el último descendiente del bloque de arriba (como BlockNote), no
+     solo el hermano.
+  3. Rapidez: las decoraciones pasaron del bloque a su contenido (`.bn-block-content`, el CSS esconde el bloque
+     con `:has()`): ProseMirror corría y dibujaba las del bloque con un costo que crecía con el cuadrado.
+     Escribir con todo colapsado: 6,5 ms por tecla con 2.000 bloques (antes 28) y 17 ms con 4.000 (antes 104),
+     en jsdom.
+  4. Los enganches de la búsqueda son por vista (`setFindCollapseHooks(view, hooks)` en `findEditor.ts`), no del
+     último editor abierto.
+  - La prueba al azar de la verificación está en el repo (`collapseProperty.test.ts`): dos editores sobre el
+    mismo Y.Doc y 40 pasos al azar por ronda (colapsar, teclas, selecciones borradas o cortadas o escritas o
+    pegadas encima, bloques elegidos, "Borrar", deshacer y rehacer, ids repetidos, "Reemplazar todo", sin red,
+    cambios del otro), con siete verificaciones después de cada paso. En CI corren 2 semillas; con
+    `COLLAPSE_SEEDS=1-70` corre la grande: **pasa con las 70 semillas** (30 rondas de 40 pasos cada una,
+    84.000 pasos). Lo que pasa igual sin nada colapsado (ver "Riesgos", punto 10) se cuenta aparte; se comprobó
+    corriendo la grande con `NOTOGGLE=1`, donde aparece lo mismo.
 - **Para la 1b (riesgo):** la auditoría vio que dos personas moviendo el mismo título a la vez con
   Shift+Ctrl/⌘+↑/↓ pierden bloques aun sin colapsar (un problema de BlockNote con y-prosemirror: cada mover es
   borrar e insertar, y dos borrados más dos inserciones se cruzan). Mover una sección entera no tiene que
@@ -584,7 +616,7 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
   para vos lo que la esconde. "Reemplazar todo" escribe en el Y.Doc (llega como de Yjs): se reconoce con
   `isFindReplaceTransaction`, y su deshacer y rehacer por la marca de la pila; ninguno abre nada.
   `collapseFind.test.ts` lo prueba con el editor real y las dos extensiones.
-- **Pruebas** (71 nuevas, 823 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
+- **Pruebas** (82 nuevas, 834 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
   (el editor real: cada caso de la sección 5 y de las correcciones, borrar la sección entera con el último título
   y la página vacía, deshacer con los mismos ids, dos documentos para lo de otro, el deshacer marcado por la
   búsqueda, y la auditoría), `collapseMenus.test.ts`, `collapseFind.test.ts`, `collapseStore.test.ts`,

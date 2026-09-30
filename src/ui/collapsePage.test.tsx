@@ -130,7 +130,7 @@ async function scenesPage() {
 }
 
 const toggles = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>('.sd-collapse-toggle')];
-const hiddenCount = (host: HTMLElement) => host.querySelectorAll('.bn-block-outer.sd-collapsed-hidden').length;
+const hiddenCount = (host: HTMLElement) => host.querySelectorAll('.bn-block-content.sd-collapsed-hidden').length;
 
 describe('colapsar en la página', () => {
   it('el triángulo colapsa para vos, se guarda en el dispositivo y la página vuelve a abrir colapsada', async () => {

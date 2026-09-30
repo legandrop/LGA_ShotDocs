@@ -4037,8 +4037,9 @@ button.primary.danger {
 
 /* Lo escondido (decoraciones de collapseEditor.ts). Con !important: le gana al CSS de BlockNote y al de los
    encabezados plegables viejos de abajo. La vista de impresión no copia estas clases (sale todo abierto). */
-.bn-editor .bn-block-outer.sd-collapsed-hidden,
-.bn-editor .bn-block-outer.sd-collapsed > .bn-block > .bn-block-group {
+/* Las clases van en el contenido del bloque (collapseEditor.ts, por rapidez): se esconde el bloque entero. */
+.bn-editor .bn-block-outer:has(> .bn-block > .bn-block-content.sd-collapsed-hidden),
+.bn-editor .bn-block-outer:has(> .bn-block > .bn-block-content.sd-collapsed) > .bn-block > .bn-block-group {
   display: none !important;
 }
 

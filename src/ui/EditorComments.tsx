@@ -2,7 +2,6 @@ import { SideMenuExtension, type BlockNoteEditor } from '@blocknote/core';
 import {
   BlockColorsItem,
   DragHandleMenu,
-  RemoveBlockItem,
   SideMenu,
   SideMenuController,
   TableColumnHeaderItem,
@@ -15,13 +14,13 @@ import {
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
 import { insertOrUpdateBlockForSlashMenu } from '@blocknote/core';
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FC, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FC, type ReactNode, type RefObject } from 'react';
 import { t, useT, type Translate } from '../i18n';
 import '../i18n/lazy/editor';
 import { useServices } from '../services';
 import { blockIdOf } from './carrete';
 import { hiddenInDom } from './collapseDom';
-import { onCollapseChange } from './collapseEditor';
+import { onCollapseChange, removeWithSections } from './collapseEditor';
 import {
   answerQuestion,
   blocksChanged,
@@ -162,12 +161,37 @@ function CommentMenuItem() {
   );
 }
 
+/**
+ * "Borrar" del menú del bloque, como el de BlockNote (los bloques elegidos si el del menú está entre ellos), pero
+ * un título colapsado se va con su sección entera (P.11, Docs/Doc_Colapsar.md): la transacción dice que la
+ * persona pidió borrarlo.
+ */
+function RemoveWithSectionItem({ children }: { children: ReactNode }) {
+  const Components = useComponentsContext()!;
+  const editor = useBlockNoteEditor();
+  const block = useExtensionState(SideMenuExtension, { editor, selector: (s) => s?.block });
+  if (!block) return null;
+  return (
+    <Components.Generic.Menu.Item
+      className="bn-menu-item"
+      onClick={() => {
+        const selected = editor.getSelection()?.blocks;
+        const blocks = selected && selected.some((b) => b.id === block.id) ? selected : [block];
+        const view = editor.prosemirrorView;
+        if (view) removeWithSections(view, blocks.map((b) => b.id));
+      }}
+    >
+      {children}
+    </Components.Generic.Menu.Item>
+  );
+}
+
 /** El menú del bloque (el tirador de la izquierda) de siempre, con "Comment" al final. */
 function CommentDragHandleMenu({ canComment }: { canComment: boolean }) {
   const dict = useDictionary();
   return (
     <DragHandleMenu>
-      <RemoveBlockItem>{dict.drag_handle.delete_menuitem}</RemoveBlockItem>
+      <RemoveWithSectionItem>{dict.drag_handle.delete_menuitem}</RemoveWithSectionItem>
       <BlockColorsItem>{dict.drag_handle.colors_menuitem}</BlockColorsItem>
       <TableRowHeaderItem>{dict.drag_handle.header_row_menuitem}</TableRowHeaderItem>
       <TableColumnHeaderItem>{dict.drag_handle.header_column_menuitem}</TableColumnHeaderItem>

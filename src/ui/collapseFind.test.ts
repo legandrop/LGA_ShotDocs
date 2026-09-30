@@ -82,4 +82,16 @@ describe('buscar con secciones colapsadas', () => {
     expect(texts(editor)).toEqual(['T', 'dos dos', 'U', 'otro dos', 'V', 'dos']);
     expect(hiddenTexts(editor)).toEqual(['dos dos', 'otro dos']);
   });
+
+  it('los enganches son de cada editor: abrir otro y cerrarlo no se los saca al primero', () => {
+    const one = page([h('T'), p('uno'), h('U')]);
+    const two = page([h('T'), p('uno'), h('U')]);
+    two.editor.unmount();
+    editors.splice(editors.indexOf(two.editor), 1);
+    setCollapsed(view(one.editor), [one.editor.document[0].id], true);
+    setFind(view(one.editor), 'uno', {});
+    expect(hiddenCount(getFindState(view(one.editor).state).matches, view(one.editor))).toBe(1);
+    stepFind(view(one.editor), 1);
+    expect(hiddenTexts(one.editor)).toEqual([]);
+  });
 });
