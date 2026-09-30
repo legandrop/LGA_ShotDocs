@@ -45,6 +45,8 @@ export interface CollapseState {
   records: ReadonlyMap<string, HeadingRecord>;
   analysis: Analysis;
   decorations: DecorationSet;
+  /** La selección de ahora es la de Ctrl+A (la eligió el navegador justo después de la tecla). */
+  selectAll?: boolean;
 }
 
 interface CollapseMeta {
@@ -321,15 +323,14 @@ function blockRange(sel: Selection): { from: number; to: number } | null {
 }
 
 /**
- * Las selecciones que armó Shift+→ o Shift+↓ desde un título colapsado (`skipForward`): aunque vayan de punta a
- * punta de la página (un título vacío arriba de todo, un renglón vacío al final), no son Ctrl+A.
+ * Si la selección es la página entera de Ctrl+A: el navegador elige todo y ProseMirror lo toma como texto, así que
+ * se mira además que la selección haya llegado justo después de la tecla (`selectAll`, verificación de fbaef68).
+ * Elegir de punta a punta con el mouse o con Shift+flechas no cuenta: si borraría algo escondido sin cruzar la
+ * sección entera, no se hace.
  */
-const skipSelections = new WeakSet<Selection>();
-
-/** Si la selección es la página entera (Ctrl+A: el navegador elige todo y ProseMirror lo toma como texto). */
-function selectsAll(sel: Selection): boolean {
+function selectsAll(sel: Selection, state: EditorState): boolean {
   if (sel instanceof AllSelection) return true;
-  if (sel.empty || skipSelections.has(sel)) return false;
+  if (sel.empty || !collapseKey.getState(state)?.selectAll) return false;
   const doc = sel.$from.doc;
   return sel.from <= Selection.atStart(doc).from && sel.to >= Selection.atEnd(doc).to;
 }
@@ -365,7 +366,7 @@ function hiddenLost(tr: Transaction, state: EditorState): string[] {
   const lost = [...s.analysis.hidden.keys()].filter((id) => !ids.has(id));
   if (lost.length === 0) return [];
   const sel = state.selection;
-  if (selectsAll(sel)) return [];
+  if (selectsAll(sel, state)) return [];
   const range = blockRange(sel);
   const ends = new Map<string, number>();
   /** Dónde termina lo que esconde un título (él con sus hijos, y sus hermanos escondidos). */
@@ -389,14 +390,40 @@ function hiddenLost(tr: Transaction, state: EditorState): string[] {
   });
 }
 
-/** Abre, para vos, lo que esconde cada uno de estos bloques. */
-function revealAll(view: EditorView, ids: readonly string[]): void {
+/**
+ * Una edición que no se hizo: abre, para vos, lo que escondía cada uno de estos bloques y deja la selección vacía
+ * al principio de lo elegido, en la misma transacción. Así una composición del teclado (una tecla muerta, el
+ * teclado del teléfono) no sigue sobre la misma selección, ahora a la vista (verificación de fbaef68, punto B1).
+ */
+function revealAndCollapse(view: EditorView, ids: readonly string[]): void {
   const state = collapseKey.getState(view.state);
   if (!state) return;
   const records = new Map(state.records);
   let analysis = state.analysis;
   for (const id of ids) if (analysis.hidden.has(id)) analysis = revealIn(view.state.doc, records, id);
-  if (!sameRecords(records, state.records)) dispatchRecords(view, records);
+  const tr = view.state.tr;
+  if (!sameRecords(records, state.records)) tr.setMeta(collapseKey, { records } satisfies CollapseMeta);
+  const sel = view.state.selection;
+  if (!sel.empty) tr.setSelection(Selection.near(view.state.doc.resolve(sel.from)));
+  if (tr.selectionSet || tr.getMeta(collapseKey)) view.dispatch(tr);
+}
+
+/**
+ * Los bloques recién abiertos por una edición que no se hizo, que por un rato (un segundo, o mientras dure la
+ * composición del teclado) no se pueden borrar con lo que llega de la pantalla en medio de una composición: el
+ * navegador puede volver a aplicar la composición sobre la selección de antes (verificación de fbaef68, B1).
+ */
+interface Guard {
+  ids: Set<string>;
+  until: number;
+}
+
+function guardedLost(guard: Guard, view: EditorView | null, tr: Transaction, state: EditorState): string[] {
+  if (!tr.docChanged || tr.getMeta(ySyncPluginKey as never) || tr.getMeta('appendedTransaction')) return [];
+  if (tr.getMeta('composition') === undefined && !view?.composing) return [];
+  const now = blockIds(tr.doc);
+  const before = blockIds(state.doc);
+  return [...guard.ids].filter((id) => before.has(id) && !now.has(id));
 }
 
 /**
@@ -533,7 +560,7 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   // del título que lo esconde.
   const sel = tr.selection;
   // Ni la sección elegida, ni varios bloques, ni la página entera (Ctrl+A, que llega hasta lo escondido del final).
-  if (!(sel instanceof SectionSelection) && (sel.toJSON() as { type?: string }).type !== 'multiple-node' && !selectsAll(sel)) {
+  if (!(sel instanceof SectionSelection) && (sel.toJSON() as { type?: string }).type !== 'multiple-node' && !selectsAll(sel, newState)) {
     const inside = hiddenInSelection(analysis, sel);
     if (inside.head || inside.anchor) {
       if (docChanged && local) {
@@ -766,7 +793,6 @@ function skipForward(view: EditorView, key: 'down' | 'right', extend: boolean): 
   const target = Selection.findFrom(state.doc.resolve(section.after), 1, extend);
   if (!target) return true;
   const next = extend ? TextSelection.create(state.doc, state.selection.anchor, target.head) : target;
-  if (extend) skipSelections.add(next);
   view.dispatch(state.tr.setSelection(next).scrollIntoView());
   return true;
 }
@@ -802,16 +828,17 @@ function headingOfSelection(state: EditorState): string | null {
 
 /**
  * Retroceso al principio de un título "sube la línea", como un párrafo (Lega, 2026-09-30): BlockNote lo pasaría
- * a párrafo. Lo mismo que BlockNote hace con un párrafo:
- * - anidado, sale un nivel;
+ * a párrafo. Hace lo mismo que BlockNote con un párrafo (`KeyboardShortcutsExtension`, verificación de fbaef68):
+ * - justo después de una regla ("## "), la deshace (lo hace BlockNote);
+ * - anidado, sale un nivel (como hijo que sea);
  * - sin nada arriba (el primer bloque de la página), no hace nada;
- * - un título vacío se borra y la selección va al final del renglón de arriba;
- * - si arriba (el último descendiente del bloque de arriba) hay un renglón con texto, el título se le une (sus
- *   hijos quedan); si ese renglón está escondido, se une al título colapsado que lo esconde, que es el renglón
- *   que se ve;
- * - si arriba hay un bloque sin texto (una foto, un renglón vacío), ese bloque se borra y el título queda;
+ * - si arriba (el último descendiente del bloque de arriba) hay un renglón con texto, el título se le une y sus
+ *   hijos quedan en su nivel, después;
+ * - vacío, se borra (sus hijos quedan en su lugar) y la selección va arriba;
+ * - si arriba hay un bloque sin texto (una foto, un renglón vacío), el título ocupa su lugar;
  * - después de una tabla, no hace nada.
- * Un título colapsado que se une deja de existir: lo que escondía se ve (nunca se borra; verificación, punto 1).
+ * Si ese renglón de arriba está escondido, el título se une al título colapsado que lo esconde, que es el
+ * renglón que se ve. Un título colapsado que se une deja de existir: lo que escondía se ve (nunca se borra).
  */
 function headingBackspace(view: EditorView, editor: BlockNoteEditor<any, any, any>): boolean {
   const state = view.state;
@@ -819,13 +846,15 @@ function headingBackspace(view: EditorView, editor: BlockNoteEditor<any, any, an
   if (!(sel instanceof TextSelection) || !sel.empty) return false;
   const $head = sel.$head;
   if ($head.parentOffset !== 0 || $head.parent.type.name !== 'heading' || $head.depth < 2) return false;
+  // Justo después de una regla de escritura ("## "): Retroceso la deshace (lo primero que hace BlockNote).
+  if (state.plugins.some((pl) => (pl.spec as { isInputRules?: boolean }).isInputRules && pl.getState(state))) return false;
   const containerDepth = $head.depth - 1;
   const container = $head.node(containerDepth);
   const pos = $head.before(containerDepth);
   const groupDepth = containerDepth - 1;
   const index = $head.index(groupDepth);
-  // Anidado: sale un nivel (lo primero que hace BlockNote con un párrafo).
-  if (groupDepth > 1 && index === 0) {
+  // Anidado: sale un nivel.
+  if (groupDepth > 1) {
     if (editor.canUnnestBlock()) editor.unnestBlock();
     return true;
   }
@@ -833,6 +862,7 @@ function headingBackspace(view: EditorView, editor: BlockNoteEditor<any, any, an
   const s = collapseKey.getState(state);
   const text = $head.parent;
   const tr = state.tr;
+  const kids = container.childCount > 1 ? container.lastChild! : null;
   // El último descendiente del bloque de arriba (con qué lo uniría BlockNote).
   let prev = $head.node(groupDepth).child(index - 1);
   let prevPos = pos - prev.nodeSize;
@@ -841,47 +871,54 @@ function headingBackspace(view: EditorView, editor: BlockNoteEditor<any, any, an
     prevPos = prevPos + prev.nodeSize - 2 - group.lastChild!.nodeSize;
     prev = group.lastChild!;
   }
-  const prevId = String(prev.attrs.id ?? '');
-  const hider = s?.analysis.hidden.get(prevId);
-  let target: BlockAt = { node: prev, pos: prevPos };
+  const prevContent = prev.firstChild!;
+  const prevInline = prevContent.type.spec.content === 'inline*';
+  const hider = s?.analysis.hidden.get(String(prev.attrs.id ?? ''));
+  const done = () => {
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  };
+  /** El título sin su bloque: sus hijos quedan en su lugar. */
+  const removeKeepingKids = () => {
+    if (kids) tr.replaceWith(pos, pos + container.nodeSize, kids.content);
+    else tr.delete(pos, pos + container.nodeSize);
+  };
   if (hider) {
+    // El de arriba está escondido: el texto va al final del título colapsado que se ve (el renglón de arriba en
+    // la pantalla), y el bloque del título se reemplaza por sus hijos.
     const at = s!.analysis.blocks.get(hider);
     if (!at) return true;
-    target = at;
-  }
-  const targetContent = target.node.firstChild!;
-  const inline = targetContent.type.spec.content === 'inline*';
-  // Un título vacío: se borra (sus hijos quedan en su lugar) y la selección va al final de arriba.
-  if (text.content.size === 0 && (inline || hider)) {
-    const kids = container.childCount > 1 ? container.lastChild!.content : null;
-    if (kids) tr.replaceWith(pos, pos + container.nodeSize, kids);
-    else tr.delete(pos, pos + container.nodeSize);
-    tr.setSelection(TextSelection.create(tr.doc, headingTextEnd({ node: tr.doc.nodeAt(tr.mapping.map(target.pos))!, pos: tr.mapping.map(target.pos) })));
-    view.dispatch(tr.scrollIntoView());
-    return true;
-  }
-  if (inline && (targetContent.content.size > 0 || hider)) {
-    const joinAt = headingTextEnd(target);
-    if (!hider && target.pos === prevPos) {
-      // Como BlockNote: se borra el borde entre los dos renglones.
-      tr.delete(joinAt, pos + 2);
-    } else {
-      // El de arriba está escondido: el texto va al final del título colapsado que se ve, y el bloque del título
-      // se reemplaza por sus hijos.
-      const kids = container.childCount > 1 ? container.lastChild!.content : null;
-      if (kids) tr.replaceWith(pos, pos + container.nodeSize, kids);
-      else tr.delete(pos, pos + container.nodeSize);
-      tr.insert(joinAt, text.content);
-    }
+    const joinAt = headingTextEnd(at);
+    removeKeepingKids();
+    if (text.content.size) tr.insert(joinAt, text.content);
     tr.setSelection(TextSelection.create(tr.doc, joinAt));
-    view.dispatch(tr.scrollIntoView());
-    return true;
+    return done();
   }
-  // Arriba, un bloque sin texto (una foto, un renglón vacío): se borra y el título queda.
-  if (targetContent.type.spec.content === '' || (inline && targetContent.content.size === 0)) {
-    deleteBlocks(tr, new Set([prevId]));
-    view.dispatch(tr.scrollIntoView());
-    return true;
+  if (prevInline && prevContent.content.size > 0) {
+    // Se une al renglón de arriba; sus hijos suben a su nivel (después), como con un párrafo.
+    if (kids) {
+      const range = tr.doc.resolve(pos + 1 + text.nodeSize + 1).blockRange(tr.doc.resolve(pos + 1 + text.nodeSize + kids.nodeSize - 1));
+      if (range) tr.lift(range, tr.doc.resolve(pos).depth);
+    }
+    const joinAt = prevPos + 2 + prevContent.content.size;
+    tr.delete(joinAt, tr.mapping.map(pos + 2));
+    tr.setSelection(TextSelection.create(tr.doc, joinAt));
+    return done();
+  }
+  if (text.content.size === 0) {
+    // Vacío: se borra y la selección va arriba (a la foto, elegida entera).
+    removeKeepingKids();
+    if (prevContent.type.spec.content === '') tr.setSelection(NodeSelection.create(tr.doc, prevPos + 1));
+    else if (prevInline) tr.setSelection(TextSelection.create(tr.doc, prevPos + 2 + prevContent.content.size));
+    else tr.setSelection(Selection.near(tr.doc.resolve(prevPos + prev.nodeSize), -1));
+    return done();
+  }
+  if (prevContent.type.spec.content === '' || prevInline) {
+    // Arriba, un bloque sin texto (una foto, un renglón vacío): el título ocupa su lugar.
+    tr.delete(pos, pos + container.nodeSize);
+    tr.replaceWith(prevPos, prevPos + prev.nodeSize, container);
+    tr.setSelection(TextSelection.create(tr.doc, prevPos + 2));
+    return done();
   }
   // Después de una tabla: nada.
   return true;
@@ -1074,45 +1111,105 @@ function sameStructure(a: Analysis, b: Analysis): boolean {
 
 // --- El plugin -------------------------------------------------------------------------------------------
 
+/** Lo nuevo del plugin después de una transacción (sin la marca de Ctrl+A). */
+function applyCollapse(tr: Transaction, old: CollapseState): CollapseState {
+  const meta = tr.getMeta(collapseKey) as CollapseMeta | undefined;
+  // Escribir en un renglón no cambia qué se esconde: se corren las posiciones y las decoraciones, sin
+  // volver a calcular todo en cada tecla (auditoría, punto 7).
+  if (!meta && tr.docChanged && textOnly(tr)) {
+    return { records: old.records, analysis: mapAnalysis(old.analysis, tr), decorations: old.decorations.map(tr.mapping, tr.doc) };
+  }
+  let records = tr.docChanged ? remapRecords(tr, old, old.records) : old.records;
+  if (meta) records = meta.records;
+  if (!tr.docChanged && records === old.records) return old;
+  if (!tr.docChanged && sameRecords(records, old.records)) return old;
+  const analysis = analyze(tr.doc, records);
+  const next: CollapseState = { records, analysis, decorations: redecorate(old.decorations, tr, analysis) };
+  // Si lo escondido quedó igual, se conservan los mismos objetos (así nadie vuelve a medir de más).
+  if (sameStructure(next.analysis, old.analysis)) {
+    next.analysis = { ...next.analysis, hidden: old.analysis.hidden, collapsed: old.analysis.collapsed };
+  }
+  return next;
+}
+
 function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
   let pluginView: EditorView | null = null;
+  /** Se apretó Ctrl/⌘+A: la próxima selección que ponga la persona es la de todo. */
+  let pendingAll = false;
+  let guard: Guard | null = null;
+  const armGuard = (ids: readonly string[]) => {
+    const until = Date.now() + 1000;
+    if (guard && guard.until >= Date.now()) {
+      for (const id of ids) guard.ids.add(id);
+      guard.until = until;
+    } else guard = { ids: new Set(ids), until };
+  };
+  /**
+   * Lo que haría una edición con esta selección (componer, escribir encima), mirado antes de que el navegador
+   * cambie la pantalla: si borraría algo escondido, se abre y la selección queda vacía.
+   */
+  const refuseAhead = (view: EditorView): boolean => {
+    if (view.state.selection.empty) return false;
+    const lost = hiddenLost(view.state.tr.deleteSelection(), view.state);
+    if (lost.length === 0) return false;
+    armGuard(lost);
+    revealAndCollapse(view, lost);
+    return true;
+  };
+  /** La marca de Ctrl+A: la pone la primera selección de la persona después de la tecla; la saca la siguiente. */
+  const selectAllAfter = (tr: Transaction, old: boolean): boolean => {
+    if (!tr.selectionSet) return old;
+    if (tr.getMeta(ySyncPluginKey as never) || tr.getMeta('appendedTransaction')) return old;
+    const on = pendingAll;
+    pendingAll = false;
+    return on;
+  };
   return new Plugin<CollapseState>({
     key: collapseKey,
     state: {
       init: (_, state) => build(state.doc, new Map(options.initial ?? [])),
       apply: (tr, old) => {
-        const meta = tr.getMeta(collapseKey) as CollapseMeta | undefined;
-        // Escribir en un renglón no cambia qué se esconde: se corren las posiciones y las decoraciones, sin
-        // volver a calcular todo en cada tecla (auditoría, punto 7).
-        if (!meta && tr.docChanged && textOnly(tr)) {
-          return { records: old.records, analysis: mapAnalysis(old.analysis, tr), decorations: old.decorations.map(tr.mapping, tr.doc) };
-        }
-        let records = tr.docChanged ? remapRecords(tr, old, old.records) : old.records;
-        if (meta) records = meta.records;
-        if (!tr.docChanged && records === old.records) return old;
-        if (!tr.docChanged && sameRecords(records, old.records)) return old;
-        const analysis = analyze(tr.doc, records);
-        const next: CollapseState = { records, analysis, decorations: redecorate(old.decorations, tr, analysis) };
-        // Si lo escondido quedó igual, se conservan los mismos objetos (así nadie vuelve a medir de más).
-        if (sameStructure(next.analysis, old.analysis)) {
-          next.analysis = { ...next.analysis, hidden: old.analysis.hidden, collapsed: old.analysis.collapsed };
-        }
-        return next;
+        const next = applyCollapse(tr, old);
+        const selectAll = selectAllAfter(tr, !!old.selectAll);
+        return !!next.selectAll === selectAll ? next : { ...next, selectAll };
       },
     },
     appendTransaction: appendCollapse,
-    // Lo que borraría algo escondido sin que la persona lo haya querido no se hace: la sección se abre (después,
-    // porque adentro de un despacho no se puede despachar otro) y la tecla no hace nada.
+    // Lo que borraría algo escondido sin que la persona lo haya querido no se hace: la sección se abre y la
+    // selección queda vacía (después, porque adentro de un despacho no se puede despachar otro); la tecla no hace
+    // nada. Por un rato, lo que llega de una composición tampoco borra lo recién abierto (`Guard`).
     filterTransaction: (tr, state) => {
-      const lost = hiddenLost(tr, state);
+      let lost = hiddenLost(tr, state);
+      if (lost.length === 0 && guard) {
+        if (Date.now() > guard.until && !pluginView?.composing) guard = null;
+        else lost = guardedLost(guard, pluginView, tr, state);
+      }
       if (lost.length === 0) return true;
+      armGuard(lost);
       const view = pluginView;
-      if (view) queueMicrotask(() => !view.isDestroyed && revealAll(view, lost));
+      if (view) queueMicrotask(() => !view.isDestroyed && revealAndCollapse(view, lost));
       return false;
     },
     props: {
       decorations: (state) => collapseKey.getState(state)?.decorations,
+      handleKeyDown: (_view, event) => {
+        pendingAll = (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a';
+        return false;
+      },
       handleDOMEvents: {
+        // Empezar a componer (una tecla muerta, el teclado del teléfono) o escribir encima de una selección que
+        // borraría algo escondido: se abre y la selección queda vacía antes de que el navegador toque la pantalla.
+        compositionstart: (view) => {
+          refuseAhead(view);
+          return false;
+        },
+        beforeinput: (view, event) => {
+          const type = (event as InputEvent).inputType ?? '';
+          if (!/^(insert|delete)/.test(type) || !refuseAhead(view)) return false;
+          if (!event.cancelable) return false;
+          event.preventDefault();
+          return true;
+        },
         copy: (view) => {
           // Copiar no cambia la selección: después de copiar, vuelve la de antes (auditoría, punto 10).
           const previous = view.state.selection;
@@ -1131,7 +1228,8 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
           const lost = hiddenLost(view.state.tr.deleteSelection().setMeta('uiEvent', 'cut'), view.state);
           if (lost.length === 0) return false;
           event.preventDefault();
-          revealAll(view, lost);
+          armGuard(lost);
+          revealAndCollapse(view, lost);
           return true;
         },
       },
@@ -1192,16 +1290,28 @@ export const collapseExtension = createExtension(({ options }: ExtensionOptions<
     'Shift-Mod-Alt-Enter': withView(toggleAtSelection),
     Enter: withView(enterAfter),
     Delete: withView(deleteAtEnd),
-    Backspace: ({ editor }: KeyContext) => {
-      const view = editor.prosemirrorView;
-      return !!view && (backspaceAfter(view) || headingBackspace(view, editor));
-    },
+    Backspace: withView(backspaceAfter),
     ArrowDown: withView((view) => skipForward(view, 'down', false)),
     'Shift-ArrowDown': withView((view) => skipForward(view, 'down', true)),
     ArrowRight: withView((view) => skipForward(view, 'right', false)),
     'Shift-ArrowRight': withView((view) => skipForward(view, 'right', true)),
   },
 }));
+
+/**
+ * Retroceso al principio de un título "sube la línea" (`headingBackspace`): una extensión aparte, que va siempre,
+ * también en un navegador que no puede colapsar (verificación de fbaef68, punto M5), así editar es igual en todos.
+ */
+export const headingBackspaceExtension = createExtension({
+  key: 'shotdocs-heading-backspace',
+  runsBefore: ['default'],
+  keyboardShortcuts: {
+    Backspace: ({ editor }: KeyContext) => {
+      const view = editor.prosemirrorView;
+      return !!view && headingBackspace(view, editor);
+    },
+  },
+});
 
 /**
  * Si el navegador puede esconder lo colapsado: el CSS usa `:has()` (Chrome 105, Safari e iOS 15.4, Firefox 121).

@@ -7,7 +7,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { collapseExtension, collapseState, removeWithSections, setCollapsed } from './collapseEditor';
+import { collapseExtension, collapseState, headingBackspaceExtension, removeWithSections, setCollapsed } from './collapseEditor';
 import { schema } from './editorSchema';
 import { findExtension, replaceAll, setFind, clearFind, stepFind } from './findEditor';
 
@@ -67,7 +67,7 @@ function mk(doc: Y.Doc, withCollapse: boolean, name: string) {
     withCollaboration({
       schema,
       collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name, color: '#000' } },
-      extensions: withCollapse ? [findExtension, collapseExtension({})] : [],
+      extensions: withCollapse ? [findExtension, collapseExtension({}), headingBackspaceExtension] : [],
     }),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
@@ -221,12 +221,6 @@ describe('colapsar, al azar', () => {
           for (const hd of hidersNow()) if (bl.has(hd) && a < bl.get(hd)!.pos && b > hiddenEndOf(hd)) allowed.add(hd);
           if (allowed.size) mode += ' B';
         };
-        /** (A): una selección de texto de toda la página (del primer renglón al último) es como Ctrl+A. */
-        const wholePage = () => {
-          if (from > Selection.atStart(st.doc).from || to < Selection.atEnd(st.doc).to) return;
-          for (const hd of hidersNow()) allowed.add(hd);
-          mode += ' A';
-        };
         /** (A): los títulos que esconden algo adentro de un bloque elegido entero. */
         const whole = (b: Blk) => {
           for (const hd of hidersNow()) {
@@ -358,7 +352,6 @@ describe('colapsar, al azar', () => {
             from = sel.from;
             to = sel.to;
             crossed(from, to);
-            wholePage();
             const k = pick(['Backspace', 'Delete', 'cut', 'type', 'paste', 'pasteHTML', 'Enter']);
             kind += ` ${k} ${from}-${to}`;
             act(k);
@@ -375,7 +368,6 @@ describe('colapsar, al azar', () => {
             to = posIn(pick(afterIds));
             view(A).dispatch(st.tr.setSelection(rand() < 0.5 ? TextSelection.create(st.doc, from, to) : TextSelection.create(st.doc, to, from)));
             crossed(from, to);
-            wholePage();
             const k = pick(['Backspace', 'Delete', 'cut', 'type', 'paste', 'pasteHTML']);
             kind += ` ${k} ${bl.get(hd)!.text} ${from}-${to}`;
             act(k);
@@ -414,6 +406,8 @@ describe('colapsar, al azar', () => {
             // Toda la página (Ctrl+A: el navegador la elige como texto; o AllSelection) y borrar o cortar.
             kind = 'all';
             const d = st.doc;
+            // Ctrl+A: la tecla y después la selección de todo como texto (como la pone el navegador).
+            press(A, 'a', { ctrlKey: true });
             view(A).dispatch(st.tr.setSelection(rand() < 0.5 ? new AllSelection(d) : TextSelection.create(d, Selection.atStart(d).from, Selection.atEnd(d).to)));
             for (const id of bl.keys()) intent.add(id);
             for (const hd of hidersNow()) allowed.add(hd);

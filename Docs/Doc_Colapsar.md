@@ -199,7 +199,8 @@ y-prosemirror con `isChangeOrigin` y sin `isUndoRedoOperation` es de otro; desha
 - **Si una edición local cambió bloques escondidos** sin que la selección quede adentro, también se abre la
   sección.
 - **Lo escondido se borra solo a propósito** (verificación de `cbed5dc`, lo que manda): (A) "Borrar" del menú;
-  el título elegido entero (el bloque, la sección, varios bloques) o toda la página (Ctrl+A) y borrar, cortar,
+  el título elegido entero (el bloque, la sección, varios bloques) o toda la página (Ctrl+A de verdad: elegir de
+  punta a punta con el mouse o con Shift+flechas no cuenta) y borrar, cortar,
   pegar o escribir encima; (B) una selección de texto que cruza la sección entera: empieza antes del texto del
   título (en un bloque de arriba) y termina en un bloque después de todo lo escondido. **Cualquier otra edición
   que borraría algo escondido no se hace**: la sección se abre y la tecla no hace nada (así la persona ve lo
@@ -228,7 +229,7 @@ Los casos, uno por uno:
 | Deshacer | Colapsar no se deshace. Si deshacer cambia algo escondido o deja la selección ahí, se abre. |
 | Cambios de otros adentro de una sección escondida | Siguen escondidos. Si alguien agrega un título de igual o mayor nivel adentro, la sección se corta ahí y lo de abajo se ve; si pasa el título a párrafo, se ve todo. |
 | Cursores de otros adentro de lo escondido | No se ven. |
-| Ctrl+A | Elige todo, también lo escondido del final de la página (la selección no se achica al título). Borrar o cortar se lleva todo. |
+| Ctrl+A | Elige todo, también lo escondido del final de la página (la selección no se achica al título). Borrar o cortar se lleva todo. Solo la tecla: elegir de punta a punta con el mouse o con Shift+flechas desde un título colapsado del principio no cuenta como Ctrl+A (si borraría algo escondido sin cruzar la sección entera, no se hace). |
 | Buscar | La búsqueda en la página de la app (P.12) **busca también en lo escondido y abre la sección** del resultado (sección 6). El Ctrl+F del navegador no encuentra lo escondido; si P.12 no toma Ctrl/⌘+F, se puede sumar `hidden="until-found"` (Chrome y Edge lo encuentran y avisan con `beforematch` para abrir; en Safari y Firefox, a verificar). |
 
 Los atajos van con prioridad sobre los de BlockNote (`KeyboardShortcutsExtension`, prioridad 50): lo mismo que
@@ -343,9 +344,11 @@ recalcula (hoy igual). A verificar en Safari del iPhone, que puede demorar las i
 12. **Navegadores:** colapsar necesita `:has()` en el CSS (Chrome 105, Safari e iOS 15.4, Firefox 121). En uno
     más viejo no se colapsa nada (no hay triángulos y lo guardado no se usa).
 13. **Una edición que no se hace** (lo escondido no se borra sin querer, sección 5) se rechaza en
-    `filterTransaction`. Con teclado de computadora, ProseMirror maneja la tecla y no cambia nada; en medio de
-    una composición (teclado del teléfono, IME) la pantalla podría quedar distinta del documento hasta el
-    próximo cambio: a probar a mano en el iPhone.
+    `filterTransaction`. La pantalla no queda distinta del documento: si el navegador ya la cambió, ProseMirror
+    lo nota y la vuelve a dibujar. El riesgo real era la composición del teclado (una tecla muerta, el teclado
+    del teléfono), que el navegador volvía a aplicar sobre la misma selección ya abierta (verificación de
+    `fbaef68`, B1): ahora la selección queda vacía, se mira antes de componer y, por un rato, lo que llega de una
+    composición no borra lo recién abierto. Probado en Chromium con CDP; en el iPhone, a probar a mano.
 14. **Rapidez:** con miles de bloques colapsados, lo que tarda un Enter es sobre todo ProseMirror dibujando las
     decoraciones (unos 25 ms con 4.000 bloques en jsdom, contra 10 sin colapsar).
 
@@ -424,6 +427,7 @@ Pruebas:
 18. **Retroceso al principio de un título "sube la línea"** como cualquier renglón (2026-09-30): no lo pasa a
     párrafo; su texto se une al renglón de arriba. Un título colapsado que se une deja de existir y lo que
     escondía se ve (nunca se borra). En el primer bloque de la página no hace nada. (Las listas, a confirmar.)
+    Colapsar no se deshace: Ctrl+Z trae el título, abierto.
 19. **Orden de lo que sigue** (2026-09-30): después de 1a, la búsqueda en el proyecto (P.12, entrega 2), colapsar
     1b, colapsar para todos (entrega 2), P.9 carpetas, P.10 copias locales, la segunda entrega de adjuntos y P.8.
 
@@ -571,12 +575,14 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
     borraría no se hace (`filterTransaction`) y la sección se abre. Juntar el título con otro bloque o borrar
     solo su texto no borran lo escondido: lo abren.
   - Retroceso al principio de un título (colapsado o no) "sube la línea" (decisión 18), con prioridad sobre
-    BlockNote y solo en títulos (`headingBackspace`), igual que BlockNote con un párrafo: anidado, sale un nivel;
-    en el primer bloque, nada; vacío, se borra y la selección va arriba; si arriba hay un renglón con texto (el
-    último descendiente del bloque de arriba), se le une con sus hijos; si ese renglón está escondido, se une al
-    título colapsado que lo esconde; si arriba hay una foto o un renglón vacío, ese bloque se borra y el título
-    queda (así lo hace BlockNote con un párrafo); después de una tabla, nada. Un título colapsado que se une
-    deja ver lo que escondía, y un Ctrl+Z trae todo.
+    BlockNote y solo en títulos (`headingBackspace`, una extensión aparte que va en todos los navegadores,
+    también sin colapsar), igual que BlockNote con un párrafo: justo después de una regla ("## "), la deshace;
+    anidado (como hijo que sea), sale un nivel; en el primer bloque, nada; si arriba hay un renglón con texto (el
+    último descendiente del bloque de arriba), se le une y sus hijos suben a su nivel, después; vacío, se borra
+    (sus hijos quedan) y la selección va arriba; si arriba hay una foto o un renglón vacío, el título ocupa su
+    lugar; después de una tabla, nada. Si ese renglón de arriba está escondido, se une al título colapsado que
+    lo esconde. Un título colapsado que se une deja ver lo que escondía, y un Ctrl+Z trae todo (el título
+    vuelve abierto: colapsar no se deshace).
   - Enter al principio de un título colapsado (con texto) deja un renglón arriba y el título sigue colapsado;
     en el medio, BlockNote lo parte y la sección se abre (el pedazo nuevo cae adentro).
   - El fin (`e`) se conserva aunque su bloque falte (deshacer y rehacer); si una edición propia lo borra, pasa al
@@ -680,6 +686,38 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
      un título con varios bloques pegados, toda la página, "Borrar" del menú, mover bloques (Shift+Ctrl+flechas
      y arrastrar). Verifica además que lo escondido no pase a otro título que ya se veía. Los errores del Enter
      de BlockNote se reconocen por su mensaje y solo en un Enter. **Pasa con las 70 semillas.**
+- **Verificación de `a2390e6` + `fbaef68`** (independiente; la prueba al azar pasaba y el rechazo le pareció
+  bien, con un bloqueante). Cada punto con su prueba, que fallaba antes (`collapseEditor.test.ts`, "verificación
+  de a2390e6 + fbaef68"; el B1 también en `collapse.mjs`, que con la versión anterior perdía la sección):
+  - **B1 (bloqueante).** En Chromium, una composición del teclado (la tecla muerta del acento en la Mac) sobre la
+    selección de Shift+→ borraba lo escondido sin aviso: el primer cambio se rechazaba y la sección se abría,
+    pero el navegador volvía a aplicar la composición sobre la misma selección, ya a la vista, y esa sí se hacía.
+    Ahora: (1) una edición que no se hace abre la sección **y deja la selección vacía** al principio de lo
+    elegido, en la misma transacción (`revealAndCollapse`); (2) al empezar a componer (`compositionstart`) o en
+    `beforeinput` (escribir o borrar encima), si la edición borraría algo escondido se abre y la selección queda
+    vacía antes de que el navegador toque la pantalla (`beforeinput` además se cancela cuando se puede); (3) por
+    un segundo, o mientras dure la composición, lo que llega de la pantalla en medio de una composición
+    (`composition` en la transacción o `view.composing`) no puede sacar los bloques recién abiertos (`Guard`).
+    `collapse.mjs` lo prueba con `Input.imeSetComposition` e `Input.insertText` de CDP.
+  - **I1.** Retroceso en un título con hijos, unido a un renglón más adentro, dejaba un bloque vacío suelto con
+    los hijos. Ahora hace lo de BlockNote con un párrafo: los hijos suben al nivel del título (después) y se une
+    el texto. La prueba compara el árbol entero con BlockNote solo (con el título como párrafo) en 120 páginas al
+    azar; antes diferían 38.
+  - **I2.** Retroceso justo después de una regla ("## " o "# " al principio de "Hola") la deshace, como
+    BlockNote (antes el título quedaba).
+  - **M1.** Un título anidado que no es el primer hijo sale un nivel, como un párrafo.
+  - **M2 y M3.** Ctrl+A cuenta solo si la selección llega justo después de la tecla (una marca en el estado del
+    plugin, `selectAll`, que un cambio de otro no borra ni pone). Elegir de punta a punta con el mouse o con
+    Shift+flechas desde un título colapsado del principio ya no cuenta como Ctrl+A: antes, con un título vacío
+    arriba de todo y un cambio de otro en el medio, Shift+→ y Retroceso borraban la página entera.
+  - **M4.** Documentado: después de Ctrl+Z de un título colapsado que se unió, el título vuelve abierto
+    (colapsar no se deshace).
+  - **M5.** Sin `:has()` no se perdía solo colapsar sino también el Retroceso de los títulos: ahora es una
+    extensión aparte (`headingBackspaceExtension`) que va siempre.
+  - **M6.** Corregido el riesgo 13 (la pantalla no queda distinta; el riesgo era la composición).
+  - Las pruebas de punta a punta borran el usuario de prueba antes de cerrar el navegador y no dejan un error
+    suelto después de terminar; `deleteUser` avisa si falla y saca antes los archivos del usuario (repo de
+    pruebas privado).
 - **Para la 1b (riesgo):** la auditoría vio que dos personas moviendo el mismo título a la vez con
   Shift+Ctrl/⌘+↑/↓ pierden bloques aun sin colapsar (un problema de BlockNote con y-prosemirror: cada mover es
   borrar e insertar, y dos borrados más dos inserciones se cruzan). Mover una sección entera no tiene que
@@ -690,7 +728,7 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
   para vos lo que la esconde. "Reemplazar todo" escribe en el Y.Doc (llega como de Yjs): se reconoce con
   `isFindReplaceTransaction`, y su deshacer y rehacer por la marca de la pila; ninguno abre nada.
   `collapseFind.test.ts` lo prueba con el editor real y las dos extensiones.
-- **Pruebas** (125 nuevas, 877 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
+- **Pruebas** (136 nuevas, 888 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
   (el editor real: cada caso de la sección 5 y de las correcciones, borrar la sección entera con el último título
   y la página vacía, deshacer con los mismos ids, dos documentos para lo de otro, el deshacer marcado por la
   búsqueda, la auditoría y las verificaciones), `collapseProperty.test.ts` (al azar), `collapseMenus.test.ts`, `collapseFind.test.ts`, `collapseStore.test.ts`,
@@ -701,7 +739,7 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
 - **De punta a punta:** `collapse.mjs` (repo de pruebas privado) en Chromium: el triángulo al pasar el mouse y
   a la izquierda del texto, el menú lateral que no lo tapa, colapsar con las marcas "Page 5" y "Pages 2–4 inside", los de adentro con su
   estado, Enter después del título colapsado, el PDF todo abierto, recargar, Shift+→ y Retroceso (no borra:
-  abre), Ctrl+A y copiar (lleva lo escondido del final), borrar el último título colapsado
+  abre), una composición del teclado sobre esa selección (tampoco borra), Ctrl+A y copiar (lleva lo escondido del final), borrar el último título colapsado
   (sección entera, aviso, Ctrl+Z la trae colapsada), "Colapsar todo" y borrar todo hasta la página vacía.
 - **Pendiente:**
   - 1b: arrastrar la sección entera (corrección 7), Shift+Ctrl/⌘+↑/↓ (corrección 4), "Imprimir como se ve"

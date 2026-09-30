@@ -50,7 +50,7 @@ import { DrivePasteMenu } from './DrivePasteMenu';
 import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
 import { SheetBreaks } from './SheetBreaks';
 import type { HeadingRecord } from './collapse';
-import { collapseExtension, collapseSupported, headingCounts, revealBlock, setAllCollapsed } from './collapseEditor';
+import { collapseExtension, collapseSupported, headingBackspaceExtension, headingCounts, revealBlock, setAllCollapsed } from './collapseEditor';
 import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
@@ -355,6 +355,8 @@ function BlockEditor({
       // decoraciones, sin tocar el documento. Colapsar, solo si el navegador puede esconder (`:has()`).
       extensions: [
         findExtension,
+        // Retroceso al principio de un título "sube la línea", en todos los navegadores (también sin colapsar).
+        headingBackspaceExtension,
         ...(canCollapse
           ? [
               collapseExtension({

@@ -10,26 +10,28 @@ llega en la entrega 2). Ctrl/⌘+Alt+Enter colapsa o abre la sección de la sele
 todo" en el menú de la página. Editar al lado de lo escondido es seguro: borrar un título colapsado borra su
 sección entera de una vez (también el último de la página; si la página queda vacía, queda un párrafo), con un
 aviso y Ctrl+Z que trae todo; lo escondido se borra solo a propósito: con "Borrar", con el título elegido
-entero (o toda la página, Ctrl+A) y borrarlo, cortarlo o pegar o escribir encima, o con una selección de texto
-que cruza la sección entera (empieza arriba del título y termina después de lo escondido), y cortar lleva
-justo lo que se borra; cualquier otra edición que borraría algo escondido (por ejemplo Shift+→ desde un título
-colapsado y después Retroceso) no se hace y la sección se abre; juntar el título con otro bloque o borrar solo
-su texto no borra lo escondido (se abre), y Supr justo arriba de un título colapsado no lo junta; mover un
-título colapsado (con el tirador o Shift+Ctrl/⌘+flechas) deja ver lo que escondía hasta que mover la sección
-entera llegue en la entrega 1b; Enter al final de un título colapsado crea un renglón después de la sección
-sin abrirla (y Retroceso en ese renglón vuelve al título sin unirlo a lo escondido); Supr ahí no une lo
-escondido; ↓ y → lo saltan; si algo que se veía fuera a quedar escondido por un cambio (propio o de otro), su
-sección se abre para vos; "Ir al bloque" de los comentarios abre lo que lo esconde. Escribir en una página
-grande con todo colapsado no recalcula lo escondido en cada tecla (unos pocos ms con miles de bloques), y
-Enter no rearma todas las marcas. Hace falta un navegador con `:has()` en el CSS (Chrome 105, Safari e iOS
-15.4, Firefox 121); en uno más viejo no aparecen los triángulos y no se esconde nada. Las marcas de hoja se
-cuentan con todo abierto y el título colapsado dice qué hojas tiene adentro ("Hojas 2–4 adentro"); el PDF sale
-todo abierto. Los "Encabezados plegables" de BlockNote salen del menú "/" y del selector de tipo; los que ya
-existían se ven como títulos comunes. Sin tipo de bloque ni propiedad nueva, sin migración. La búsqueda en la
-página (v0.051) encuentra lo que está en secciones colapsadas y, al ir a una coincidencia escondida, abre para
-vos lo que la esconde; "Reemplazar todo" y su deshacer no abren nada. Retroceso al principio de un título ya
-no lo pasa a párrafo: "sube la línea" como cualquier renglón (se une al de arriba; un título colapsado que se
-une deja ver lo que escondía).
+entero (o toda la página con Ctrl+A) y borrarlo, cortarlo o pegar o escribir encima, o con una selección de
+texto que cruza la sección entera (empieza arriba del título y termina después de lo escondido), y cortar
+lleva justo lo que se borra; cualquier otra edición que borraría algo escondido (por ejemplo Shift+→ desde un
+título colapsado y después Retroceso, o una tecla muerta de acento) no se hace, la sección se abre y la
+selección queda vacía; juntar el título con otro bloque o borrar solo su texto no borra lo escondido (se
+abre), y Supr justo arriba de un título colapsado no lo junta; mover un título colapsado (con el tirador o
+Shift+Ctrl/⌘+flechas) deja ver lo que escondía hasta que mover la sección entera llegue en la entrega 1b;
+Enter al final de un título colapsado crea un renglón después de la sección sin abrirla (y Retroceso en ese
+renglón vuelve al título sin unirlo a lo escondido); Supr ahí no une lo escondido; ↓ y → lo saltan; si algo
+que se veía fuera a quedar escondido por un cambio (propio o de otro), su sección se abre para vos; "Ir al
+bloque" de los comentarios abre lo que lo esconde. Escribir en una página grande con todo colapsado no
+recalcula lo escondido en cada tecla (unos pocos ms con miles de bloques), y Enter no rearma todas las marcas.
+Hace falta un navegador con `:has()` en el CSS (Chrome 105, Safari e iOS 15.4, Firefox 121); en uno más viejo
+no aparecen los triángulos y no se esconde nada. Las marcas de hoja se cuentan con todo abierto y el título
+colapsado dice qué hojas tiene adentro ("Hojas 2–4 adentro"); el PDF sale todo abierto. Los "Encabezados
+plegables" de BlockNote salen del menú "/" y del selector de tipo; los que ya existían se ven como títulos
+comunes. Sin tipo de bloque ni propiedad nueva, sin migración. La búsqueda en la página (v0.051) encuentra lo
+que está en secciones colapsadas y, al ir a una coincidencia escondida, abre para vos lo que la esconde;
+"Reemplazar todo" y su deshacer no abren nada. Retroceso al principio de un título ya no lo pasa a párrafo:
+"sube la línea" como cualquier renglón (se une al de arriba; un título colapsado que se une deja ver lo que
+escondía, y sus hijos quedan como con un párrafo); justo después de escribir "## ", Retroceso lo deshace como
+siempre, y funciona igual en un navegador sin colapsar.
 [ Colapsar secciones - entrega 1a ]
 
 v0.051 :

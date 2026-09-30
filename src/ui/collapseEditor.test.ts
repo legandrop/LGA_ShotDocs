@@ -8,7 +8,7 @@ import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { HeadingRecord } from './collapse';
-import { collapseExtension, collapseState, removeWithSections, revealBlock, setAllCollapsed, setCollapsed } from './collapseEditor';
+import { collapseExtension, collapseState, headingBackspaceExtension, removeWithSections, revealBlock, setAllCollapsed, setCollapsed } from './collapseEditor';
 import { hiderInDom } from './collapseDom';
 import { paragraphProps, schema } from './editorSchema';
 import { FIND_REPLACE_META } from './editorMeta';
@@ -31,7 +31,7 @@ function mount(doc = new Y.Doc(), initial?: Saved): { editor: BlockNoteEditor; d
     withCollaboration({
       schema,
       collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
-      extensions: [collapseExtension({ initial, save: (r: Saved) => saves.push(r) })],
+      extensions: [collapseExtension({ initial, save: (r: Saved) => saves.push(r) }), headingBackspaceExtension],
     }),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
@@ -1249,6 +1249,8 @@ describe('verificación de cbed5dc: lo escondido se borra solo a propósito', ()
   it('1. una selección de texto de toda la página (Ctrl+A) no se achica al final de lo escondido, y cortar lleva todo', async () => {
     const { editor } = page([p('Before'), h(1, 'Heading'), p('x1'), h(1, 'Z'), p('z1')]);
     collapse(editor, 'Heading', 'Z');
+    // En jsdom no hay nada que elija todo: se aprieta la tecla y se pone la selección como la pondría el navegador.
+    press(editor, 'a', { ctrlKey: true });
     selectText(editor, textPos(editor, 'Before', 'start'), textPos(editor, 'z1'));
     expect(view(editor).state.selection.head).toBe(textPos(editor, 'z1'));
     const event = act(editor, 'cut')!;
@@ -1317,5 +1319,226 @@ describe('verificación de cbed5dc: lo escondido se borra solo a propósito', ()
     expect(collapseState(view(editor).state)!.analysis.hidden.size).toBe(2001);
     // 4.000 bloques: unos 37 ms por Enter en jsdom (antes, 83 a 108). Lo que queda es de ProseMirror al dibujar
     // miles de decoraciones (sin colapsar, unos 15). No se mide acá: con otras pruebas a la vez, varía mucho.
+  }, 30_000);
+});
+
+// --- Verificación de a2390e6 + fbaef68 -----------------------------------------------------------------------
+
+/** El árbol de la página: tipo, texto e hijos (el tipo del bloque con el texto `normal`, como 'T'). */
+function tree(editor: BlockNoteEditor, normal: string): unknown[] {
+  const walk = (blocks: typeof editor.document): unknown[] =>
+    blocks.map((b) => {
+      const text = Array.isArray(b.content) ? b.content.map((c) => ('text' in c ? c.text : '')).join('') : '';
+      const type = text === normal && (b.type === 'heading' || b.type === 'paragraph') ? 'T' : b.type;
+      return b.children.length ? [type, text, walk(b.children)] : [type, text];
+    });
+  return walk(editor.document);
+}
+
+function plainEditor(blocks: PartialBlock[]): BlockNoteEditor {
+  const editor = BlockNoteEditor.create({ schema }) as unknown as BlockNoteEditor;
+  const el = document.createElement('div');
+  document.body.appendChild(el);
+  editor.mount(el);
+  editors.push(editor);
+  editor.replaceBlocks(editor.document, blocks as never);
+  return editor;
+}
+
+/** Escribe como el teclado (pasa por las reglas de "## " y compañía). */
+function typeText(editor: BlockNoteEditor, text: string) {
+  const v = view(editor);
+  for (const ch of text) {
+    const { from, to } = v.state.selection;
+    if (!v.someProp('handleTextInput', (f) => f(v, from, to, ch, () => v.state.tr.insertText(ch, from, to)))) v.dispatch(v.state.tr.insertText(ch, from, to));
+  }
+}
+
+describe('verificación de a2390e6 + fbaef68', () => {
+  it('B1. una edición que no se hace deja la selección vacía (así la composición del teclado no sigue encima)', async () => {
+    const { editor } = page(SECTION());
+    collapse(editor, 'Heading');
+    putCaret(editor, 'Heading');
+    press(editor, 'ArrowRight', { shiftKey: true });
+    press(editor, 'Backspace');
+    await settle();
+    expect(texts(editor)).toEqual(['Before', 'Heading', 'x1', 'x2', 'Zeta']);
+    expect(visible(editor)).toEqual(['Before', 'Heading', 'x1', 'x2', 'Zeta']);
+    expect(view(editor).state.selection.empty).toBe(true);
+  });
+
+  it('B1. empezar a componer (tecla muerta) sobre una selección que borraría lo escondido: se abre y la selección queda vacía antes', () => {
+    const { editor } = page(SECTION());
+    collapse(editor, 'Heading');
+    putCaret(editor, 'Heading');
+    press(editor, 'ArrowRight', { shiftKey: true });
+    const v = view(editor);
+    v.dom.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+    expect(visible(editor)).toEqual(['Before', 'Heading', 'x1', 'x2', 'Zeta']);
+    expect(v.state.selection.empty).toBe(true);
+    v.dom.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }));
+  });
+
+  it('B1. después de una edición que no se hizo, lo que llega de la composición y borraría lo recién abierto tampoco se hace', async () => {
+    const { editor } = page(SECTION());
+    collapse(editor, 'Heading');
+    putCaret(editor, 'Heading');
+    press(editor, 'ArrowRight', { shiftKey: true });
+    const from = view(editor).state.selection.from;
+    const to = view(editor).state.selection.to;
+    press(editor, 'Backspace');
+    await settle();
+    const v = view(editor);
+    // Lo que ProseMirror arma al leer la pantalla en medio de una composición: la selección vieja por el texto.
+    v.dispatch(v.state.tr.replaceWith(from, to, v.state.schema.text('é')).setMeta('composition', 1));
+    expect(texts(editor)).toEqual(['Before', 'Heading', 'x1', 'x2', 'Zeta']);
+    // Una edición común (a la vista, sin componer) sí se hace.
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, from, to)));
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['Before', 'HeadingZeta']);
+  });
+
+  it('I1. Retroceso en un título con hijos unido a un renglón más adentro: los hijos quedan como con un párrafo', () => {
+    const { editor } = page([p('A', [p('a1')]), h(2, 'H', [p('k')]), p('Z')]);
+    putCaret(editor, 'H', 'start');
+    press(editor, 'Backspace');
+    expect(tree(editor, '')).toEqual([['paragraph', 'A', [['paragraph', 'a1H']]], ['paragraph', 'k'], ['paragraph', 'Z']]);
+  });
+
+  it('I1/M1. al azar: Retroceso al principio de un título hace lo mismo que BlockNote con un párrafo', () => {
+    let seed = 11;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const differ: string[] = [];
+    for (let round = 0; round < 120; round++) {
+      let n = 0;
+      const texts: string[] = [];
+      const gen = (depth: number, heading: number | null): PartialBlock[] => {
+        const out: PartialBlock[] = [];
+        const count = depth === 0 ? 3 + Math.floor(rand() * 4) : 1 + Math.floor(rand() * 2);
+        for (let i = 0; i < count; i++) {
+          const text = rand() < 0.12 ? '' : `t${n}`;
+          const me = n++;
+          texts.push(text);
+          const kids = depth < 2 && rand() < 0.35 ? gen(depth + 1, heading) : [];
+          const r = rand();
+          const asHeading = me === heading || (r < 0.2 && text !== '');
+          out.push((asHeading ? h(me === heading ? 2 : 3, text, kids) : p(text, kids)) as PartialBlock);
+        }
+        return out;
+      };
+      // Primero, cuántos bloques hay; después el mismo árbol (la misma semilla) con el elegido como título (acá) y
+      // como párrafo (BlockNote solo).
+      const saved = seed;
+      gen(0, null);
+      const target = 1 + Math.floor(rand() * (n - 1));
+      const after = seed;
+      seed = saved;
+      n = 0;
+      texts.length = 0;
+      const withHeading = gen(0, target);
+      const targetText = texts[target];
+      seed = after;
+      const setType = (blocks: PartialBlock[], idx: { n: number }) => {
+        for (const b of blocks) {
+          if (idx.n === target) Object.assign(b, { type: 'paragraph', props: {} });
+          idx.n++;
+          setType((b.children ?? []) as PartialBlock[], idx);
+        }
+      };
+      const plainBlocks = JSON.parse(JSON.stringify(withHeading)) as PartialBlock[];
+      setType(plainBlocks, { n: 0 });
+      const ours = page(withHeading).editor;
+      const theirs = plainEditor(plainBlocks);
+      const caret = (e: BlockNoteEditor) => {
+        let id = '';
+        let k = 0;
+        const walk = (bs: typeof e.document) => bs.forEach((b) => ((k++ === target ? (id = b.id) : null), walk(b.children)));
+        walk(e.document);
+        e.setTextCursorPosition(id, 'start');
+      };
+      caret(ours);
+      caret(theirs);
+      press(ours, 'Backspace');
+      press(theirs, 'Backspace');
+      const a = JSON.stringify(tree(ours, targetText));
+      const b = JSON.stringify(tree(theirs, targetText));
+      if (a !== b) differ.push(`round ${round} target ${target} "${targetText}"\n  ours:   ${a}\n  theirs: ${b}`);
+      ours.unmount();
+      theirs.unmount();
+      editors.splice(editors.indexOf(ours), 1);
+      editors.splice(editors.indexOf(theirs), 1);
+    }
+    expect(differ).toEqual([]);
+  }, 120_000);
+
+  // La regla se deshace como en BlockNote solo (en jsdom deja un espacio de más: pasa igual sin esta extensión).
+  for (const [name, start, typed] of [
+    ['justo después de "## " (vuelve "## ")', '', '## '],
+    ['después de "# " al principio de "Hola"', 'Hola', '# '],
+  ] as const) {
+    it(`I2. Retroceso ${name} deshace la regla, como BlockNote`, () => {
+      const run = (editor: BlockNoteEditor) => {
+        editor.setTextCursorPosition(editor.document[0].id, 'start');
+        typeText(editor, typed);
+        expect(editor.document[0].type).toBe('heading');
+        press(editor, 'Backspace');
+        return JSON.stringify(editor.document.map((b) => [b.type, b.content]));
+      };
+      const ours = run(page([p(start)]).editor);
+      const theirs = run(plainEditor([p(start)]));
+      expect(ours).toContain('paragraph');
+      expect(ours).toBe(theirs);
+    });
+  }
+
+  it('M1. un título anidado que no es el primer hijo sale un nivel, como un párrafo', () => {
+    const { editor } = page([p('Q', [p('a'), h(2, 'N')])]);
+    putCaret(editor, 'N', 'start');
+    press(editor, 'Backspace');
+    expect(tree(editor, 'N')).toEqual([['paragraph', 'Q', [['paragraph', 'a']]], ['T', 'N']]);
+  });
+
+  it('M2. Shift+→ desde un título vacío arriba de todo, un cambio de otro y Retroceso: no borra la página', async () => {
+    const { editor, doc } = page([h(1, ''), p('x1'), p('x2'), p('')]);
+    await tick();
+    const other = linked(doc);
+    await tick();
+    setCollapsed(view(editor), [editor.document[0].id], true);
+    editor.setTextCursorPosition(editor.document[0].id, 'end');
+    press(editor, 'ArrowRight', { shiftKey: true });
+    other.editor.updateBlock(idOf(other.editor, 'x2'), { content: 'x2 de otro' });
+    other.sync();
+    await tick();
+    press(editor, 'Backspace');
+    await settle();
+    expect(texts(editor)).toEqual(['', 'x1', 'x2 de otro', '']);
+  });
+
+  it('M3. elegir con el mouse del principio de la página al final (sin Ctrl+A) no cuenta como Ctrl+A', async () => {
+    const { editor } = page([h(1, 'Heading'), p('x1'), h(1, 'Z'), p('z1')]);
+    collapse(editor, 'Heading', 'Z');
+    selectText(editor, textPos(editor, 'Heading', 'start'), textPos(editor, 'z1'));
+    press(editor, 'Backspace');
+    await settle();
+    expect(texts(editor)).toEqual(['Heading', 'x1', 'Z', 'z1']);
+    expect(visible(editor)).toContain('x1');
+  });
+
+  it('M5. Retroceso al principio de un título sube la línea también sin colapsar (un navegador sin :has())', () => {
+    const editor = BlockNoteEditor.create(
+      withCollaboration({
+        schema,
+        collaboration: { fragment: new Y.Doc().getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
+        extensions: [headingBackspaceExtension],
+      }),
+    ) as unknown as BlockNoteEditor;
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    editor.mount(el);
+    editors.push(editor);
+    editor.replaceBlocks(editor.document, [p('Uno'), h(2, 'Dos')] as never);
+    putCaret(editor, 'Dos', 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['UnoDos']);
   });
 });
