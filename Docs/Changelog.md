@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.054 :
+
+Importar de Coda con fotos. Antes una página pasaba sin sus imágenes: el Markdown de Coda las descarta, y el
+editor tira una <img> que está adentro de un párrafo o de un ítem de lista, que es como las exporta Coda.
+Ahora `scripts/coda-export.mjs` baja el doc por la API en HTML, con cada foto y video a una carpeta, y
+*Import from Coda…* (selector de proyectos) la importa a un proyecto nuevo: páginas con `tree.create`,
+archivos con `media.add` (se suben al Drive por el portero, como al soltarlos) y cada foto como bloque propio,
+dentro del ítem cuando estaba en una lista. Los colores pasan a los del editor y el guion a texto Script.
+Probado con MGTZD (35 páginas, 32 fotos). Ver `Doc_Importar_Coda.md`.
+[ Importar de Coda con fotos ]
+
 v0.051 :
 
 Buscar y reemplazar en la página (P.12, primera entrega). Una lupa a la izquierda del ícono de comentarios, o

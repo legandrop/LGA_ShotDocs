@@ -4,11 +4,11 @@ import { t, useT } from '../i18n';
 import { formatSize } from '../media/fileTrash';
 import { usePermissions, useProjectSizes, useServices, useTree } from '../services';
 import { displayName } from '../workspaces';
-import { AccountIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
+import { AccountIcon, MoveIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, useCurrentProject, useSwitchProject } from './project';
-import { ShareDialog } from './lazyDialogs';
+import { ImportCodaDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
 import {
@@ -48,6 +48,7 @@ export function ProjectSwitcher() {
   const [sharing, setSharing] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspacesMode | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const project = tree.project(current);
   const stats = tree.projectStats(current);
@@ -107,6 +108,7 @@ export function ProjectSwitcher() {
               onShare={(id) => setSharing(id)}
               onWorkspaces={(mode) => setWorkspaces(mode)}
               onRemoveWorkspace={() => setRemoving(true)}
+              onImport={() => setImporting(true)}
             />
           </>,
           document.body,
@@ -128,6 +130,13 @@ export function ProjectSwitcher() {
           />,
           document.body,
         )}
+      {importing &&
+        createPortal(
+          <Part onClose={() => setImporting(false)}>
+            <ImportCodaDialog onClose={() => setImporting(false)} />
+          </Part>,
+          document.body,
+        )}
       {removing && createPortal(<RemoveWorkspaceDialog onClose={() => setRemoving(false)} />, document.body)}
     </>
   );
@@ -143,6 +152,7 @@ function ProjectMenu(props: {
   onShare: (projectId: string) => void;
   onWorkspaces: (mode: WorkspacesMode) => void;
   onRemoveWorkspace: () => void;
+  onImport: () => void;
 }) {
   const tree = useTree();
   const perms = usePermissions();
@@ -291,6 +301,17 @@ function ProjectMenu(props: {
         <button onClick={() => setMode({ name: 'new' })}>
           <PlusIcon size={16} />
           {needle && projects.length === 0 ? tr('project.newNamed', { name: query.trim() }) : tr('project.new')}
+        </button>
+      )}
+      {perms.canCreateProject && (
+        <button
+          onClick={() => {
+            props.onClose();
+            props.onImport();
+          }}
+        >
+          <MoveIcon size={16} />
+          {tr('import.menu')}
         </button>
       )}
       {perms.canRenameProject(props.current) && (

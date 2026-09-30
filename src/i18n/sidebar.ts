@@ -49,4 +49,26 @@ export const sidebar = {
   'project.editedYesterday': { en: "edited yesterday", es: "editado ayer" },
   'project.editedOn': { en: "edited {date}", es: "editado el {date}" },
   'project.untitled': { en: "Untitled project", es: "Proyecto sin título" },
+  'import.menu': { en: "Import from Coda…", es: "Importar de Coda…" },
+  'import.title': { en: "Import from Coda", es: "Importar de Coda" },
+  'import.text': {
+    en: "Choose the folder made by coda-export. Everything goes into a new project; photos and videos upload to your Drive in the background.",
+    es: "Elegí la carpeta que armó coda-export. Todo entra a un proyecto nuevo; las fotos y los videos se suben a tu Drive en segundo plano.",
+  },
+  'import.choose': { en: "Choose folder", es: "Elegir carpeta" },
+  'import.chooseOther': { en: "Choose another folder", es: "Elegir otra carpeta" },
+  'import.found': { en: "{pages} pages and {files} files.", es: "{pages} páginas y {files} archivos." },
+  'import.start': { en: "Import", es: "Importar" },
+  'import.importing': { en: "Importing…", es: "Importando…" },
+  'import.progress': { en: "Page {done} of {total}:", es: "Página {done} de {total}:" },
+  'import.done': { en: "Imported {pages} pages and {files} files.", es: "Se importaron {pages} páginas y {files} archivos." },
+  'import.uploading': {
+    en: "Files keep uploading to Drive while the app is open. Keep it open until the sync status says everything is uploaded.",
+    es: "Los archivos se siguen subiendo al Drive mientras la app está abierta. Dejala abierta hasta que el estado diga que se subió todo.",
+  },
+  'import.problems': {
+    en: { one: "{count} thing could not be imported:", other: "{count} things could not be imported:" },
+    es: { one: "{count} cosa no se pudo importar:", other: "{count} cosas no se pudieron importar:" },
+  },
+  'import.open': { en: "Open the project", es: "Abrir el proyecto" },
 } satisfies Dict;
