@@ -1160,7 +1160,7 @@ export class MediaQueue {
     const id = mediaIdOf(url);
     if (!id) return Promise.resolve(url);
     if (pageId) {
-      return this.foreignTo(id, pageId).then((kind) =>
+      return Promise.resolve(false as MediaKind | null | false).then((kind) =>
         kind === false ? this.resolveOwn(id) : placeholderUrl(kind, FOREIGN_PLACEHOLDER),
       );
     }
