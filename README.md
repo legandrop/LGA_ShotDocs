@@ -68,6 +68,8 @@ In this branch, not published yet:
 - Comments and questions: comment on any block (or the whole page) from a side panel, or a bottom sheet
   on the phone, with replies, resolve and edit, also offline; a *Question* paragraph is answered in its
   comment thread, so a guest with *Comment* can answer without editing the page.
+- Several workspaces: a welcome screen to join one with an invitation link or connect one you created with
+  the guide, and a workspace list in the project menu to switch, join, create or remove one from the device.
 
 Next in the workspace plan: files in the owner's Drive with an offline upload queue, client guests with
 comments and questions, a file trash, and several workspaces in one app. Templates, PDF export and the

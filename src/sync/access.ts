@@ -315,6 +315,24 @@ export class Permissions {
   get canInvite(): boolean {
     return this.role === 'owner' || this.role === 'admin';
   }
+
+  /**
+   * La pestaña Archivos de la papelera (paso 11, `private.can_see_file_trash`): "Edit & create pages" sobre
+   * el proyecto entero, o dueño o admin con algún permiso sobre él. Sin datos, se le pregunta a la base.
+   */
+  canSeeFileTrash(projectId: string): boolean {
+    if (!this.access) return true;
+    const level = this.projectLevel(projectId);
+    return level >= LEVEL_EDIT_PAGES || ((this.role === 'owner' || this.role === 'admin') && level >= LEVEL_VIEW);
+  }
+
+  /**
+   * Mandar archivos de la papelera a la papelera de Drive (`private.can_purge_files`): dueño o admin con
+   * algún permiso sobre el proyecto entero. Sin datos, no se ofrece.
+   */
+  canPurgeFiles(projectId: string): boolean {
+    return (this.role === 'owner' || this.role === 'admin') && this.projectLevel(projectId) >= LEVEL_VIEW;
+  }
 }
 
 /**

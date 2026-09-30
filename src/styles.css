@@ -1491,6 +1491,55 @@ code {
   white-space: nowrap;
 }
 
+/* Papelera: pestañas Páginas / Archivos y la lista de archivos (paso 11). */
+.trash-tabs {
+  max-width: 260px;
+  margin: 16px 0 4px;
+}
+
+.trash-files-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.trash-files .trash-thumb {
+  flex: none;
+  width: 56px;
+  height: 42px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--seg-bg);
+  border: 1px solid var(--border);
+}
+
+.trash-files .trash-file {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trash-files .trash-file .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-files .trash-file .when {
+  white-space: normal;
+}
+
+.trash-files .small {
+  font-size: 12px;
+}
+
+.trash-files .trash-error {
+  color: var(--danger);
+}
+
 .notice {
   position: fixed;
   left: 50%;
@@ -2867,12 +2916,12 @@ button.link.danger {
 }
 
 @media (min-width: 1180px) {
-  /* Con lugar, la página se corre para que el panel no la tape. */
-  .main:has(> .comments-panel) {
+  /* Con lugar, la página se corre para que el panel no la tape (el panel va adentro de la página). */
+  .main:has(.comments-panel) {
     padding-right: var(--comments-width);
   }
 
-  .main:has(> .comments-panel) > .topbar {
+  .main:has(.comments-panel) > .topbar {
     margin-right: calc(-1 * var(--comments-width));
   }
 }
@@ -3155,12 +3204,15 @@ button.thread-anchor:hover:not(:disabled) {
     background: var(--scrim);
   }
 
+  /* `--kb-inset` y `--vv-height` los pone el panel con `visualViewport`: en iOS el teclado no achica la
+     página, así que la hoja se sube por encima del teclado y no pasa del alto que queda a la vista. */
   .comments-panel {
     top: auto;
     left: 0;
+    bottom: var(--kb-inset, 0px);
     width: auto;
-    max-height: 82vh;
-    min-height: 40vh;
+    max-height: calc(var(--vv-height, 100vh) * 0.82);
+    min-height: min(40vh, calc(var(--vv-height, 100vh) * 0.6));
     z-index: 45;
     border-left: none;
     border-top: 1px solid var(--border);

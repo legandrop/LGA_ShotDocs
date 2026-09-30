@@ -236,10 +236,12 @@ times a day, encrypted with a passphrase only you know.
 
 1. Open `https://shotdocs.lega.com.ar` (on iPhone, you can also add it to the Home Screen: **Share** → **Add
    to Home Screen**).
-2. On the welcome screen, choose **Create my workspace** and paste your **Project URL** and **Publishable
-   key**. (If you already use the app with another workspace, it is in the workspace menu at the top of the
-   sidebar.)
+2. On the welcome screen, choose **Create my workspace**, paste your **Project URL** and **Publishable
+   key**, and click **Connect**. (If you already use the app with another workspace: click the project name
+   at the top of the sidebar → **Join or create a workspace…** → **Create my workspace**, or **Create a
+   workspace…** if you have more than one.)
 3. Type the owner's email → **Continue with email**. Type the 8-digit code from the email → **Sign in**.
+   The app then reads your workspace settings and opens it.
 4. On **No projects yet**, click **New project**.
 5. Account menu (bottom of the sidebar) → **Google Drive** → **Connect Google Drive**. Choose the Google
    account from step 6 and allow access (keep the Drive permission checked). If Google warns that the app is

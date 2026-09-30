@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from '../sync/testing';
+import { RemoteError } from '../sync/types';
 import { autoPurgeFiles, MEDIA_SCHEME, mediaIdOf } from './queue';
 import { emptyFileTrash, loadFileTrash, sendToDriveTrash, type TrashOutcome } from './fileTrash';
 import { mediaIdsInDoc } from './usage';
@@ -194,34 +195,58 @@ describe('papelera de archivos: qué archivos usa cada página', () => {
 
   it('una página a medio bajar nunca quita: solo con el documento completo y al día', async () => {
     const server = new FakeServer();
-    const { a, page, id } = await withPhoto(server);
+    server.enableTrash();
+    const a = await device(server);
+    const page = await a.tree.create(null, 'Día 1');
+    await sync(a);
     const b = await device(server);
     await sync(b);
-    expect(await b.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ removed: false });
 
-    // En `a` se borra la foto y se escribe algo más; `b` no puede bajar la página (se corta a la mitad) y en
-    // su dispositivo el documento queda sin la foto por otro camino (un documento a medio armar).
-    await edit(a, page, (doc) => removeImage(doc, id));
-    a.engine.stop();
-    await a.docs.pushPage(page, a.remote);
+    // `a` agrega una foto a la página. `b` todavía no la puede bajar (se corta a la mitad), pero ya sabe que
+    // la página usa el archivo (lo vio el editor).
+    const id = mediaIdOf(await a.media.add(page, photo()))!;
+    await edit(a, page, (doc) => insertImage(doc, id));
+    await sync(a);
     const pull = b.remote.pullUpdates.bind(b.remote);
     b.remote.pullUpdates = async () => {
-      throw new Error('Failed to fetch');
+      throw new RemoteError('canceling statement due to statement timeout', true, '57014');
     };
-    // Un documento local distinto del servidor: sin la foto, y con el cursor atrasado.
-    const state = (await b.docs.states()).get(page)!;
-    expect(server.pages.get(page)!.update_seq).toBeGreaterThan(state.cursor);
-    await b.media.setUsageMarks({ [page]: 'nada' });
-    await b.engine.syncNow();
-    await b.engine.syncMedia();
+    await b.media.ensureLinks(page, [id]);
+    await sync(b);
+    // Su documento no tiene la foto y el servidor tiene más: no dice que se quitó, dice que no llegó.
+    expect(mediaIdsInDoc((await b.docs.snapshot(page)).doc).size).toBe(0);
+    expect(server.pages.get(page)!.update_seq).toBeGreaterThan((await b.docs.states()).get(page)?.cursor ?? 0);
     expect(calls(server, 'unlink_page_file')).toEqual([]);
-    expect(await b.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ removed: false });
+    expect(await b.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ removed: false, pending: 0 });
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
 
-    // Con el documento completo, se quita (una sola vez, aunque dos dispositivos lo vean).
+    // Completo: tiene la foto, no quita nada.
     b.remote.pullUpdates = pull;
     await sync(b);
-    expect(calls(server, 'unlink_page_file')).toEqual([`unlink_page_file ${page} ${id}`]);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+
+    // Se borra en `a`: con el documento completo y al día, sí. Cada dispositivo que lo vio lo manda; el
+    // segundo no cambia nada (la fila ya estaba marcada).
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await sync(a);
+    await sync(b);
+    expect(calls(server, 'unlink_page_file')).toEqual([`unlink_page_file ${page} ${id}`, `unlink_page_file ${page} ${id}`]);
+    expect(await b.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ removed: true, pending: 0 });
     expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
+  });
+
+  it('un documento que trae algo que esta versión no pudo leer nunca quita', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    // Llega del servidor un update que no se puede leer: al documento le puede faltar contenido.
+    const seq = ++server.pages.get(page)!.update_seq;
+    server.updates.get(page)!.push({ seq, clientUpdateId: crypto.randomUUID(), data: new Uint8Array([9, 9, 9]) });
+    await sync(a);
+    expect((await a.docs.states()).get(page)?.unreadable).toBe(true);
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await sync(a);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
   });
 
   it('con un documento que el servidor rechazó (sin subir) no quita nada', async () => {

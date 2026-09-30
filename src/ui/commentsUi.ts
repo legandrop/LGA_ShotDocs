@@ -37,11 +37,57 @@ export function useCommentsUi(): CommentsUiState {
 }
 
 export function toggleComments(): void {
-  set({ open: !state.open, target: null });
+  if (state.open) requestCloseComments();
+  else set({ open: true, target: null });
 }
 
 export function closeComments(): void {
+  drafts.clear();
   set({ open: false, target: null });
+}
+
+// Lo escrito a medias en el panel (una respuesta, un hilo nuevo, una edición). Vive en memoria.
+const drafts = new Set<symbol>();
+
+export function setDraft(key: symbol, dirty: boolean): void {
+  if (dirty) drafts.add(key);
+  else drafts.delete(key);
+}
+
+export function hasDrafts(): boolean {
+  return drafts.size > 0;
+}
+
+/** Cierra el panel; si hay algo escrito sin mandar, pregunta antes. Devuelve si lo cerró. */
+export function requestCloseComments(): boolean {
+  if (drafts.size > 0 && !confirm('Discard what you wrote?')) return false;
+  closeComments();
+  return true;
+}
+
+/** Copia un texto (el de un cambio rechazado, antes de descartarlo). Devuelve si pudo. */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Sin permiso para el portapapeles: el camino viejo.
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.append(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {
+      ok = false;
+    }
+    area.remove();
+    return ok;
+  }
 }
 
 /** Abre el panel en lo que se pida. */
@@ -146,7 +192,18 @@ export const COMMENT_SHORTCUT_LABEL = IS_MAC ? '⌘⌥M' : 'Ctrl+Alt+M';
 /** El atajo de las preguntas (`QUESTION_SHORTCUT` del esquema). */
 export const QUESTION_SHORTCUT_LABEL = IS_MAC ? '⌘⌥P' : 'Ctrl+Alt+P';
 
-/** Ctrl/⌘+Alt+M. */
-export function isCommentShortcut(e: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; code: string; key: string }): boolean {
+/**
+ * Ctrl/⌘+Alt+M. Con AltGr (en Windows llega como Ctrl+Alt) no: en algunos teclados escribe un carácter.
+ */
+export function isCommentShortcut(e: {
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  code: string;
+  key: string;
+  getModifierState?: (key: string) => boolean;
+}): boolean {
+  if (e.getModifierState?.('AltGraph')) return false;
   return (e.ctrlKey || e.metaKey) && e.altKey && !e.shiftKey && (e.code === 'KeyM' || e.key.toLowerCase() === 'm');
 }

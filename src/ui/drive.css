@@ -1,0 +1,180 @@
+/* --- Links de Drive (paso 13): el menú al pegar y la tarjeta con el reproductor ------------------------
+   Aparte de styles.css para no mezclarse con otros cambios; usa los mismos tokens. */
+
+/* El menú chico junto al cursor. Usa `.menu` (styles.css) y no se lleva el foco. */
+.drive-paste-menu {
+  min-width: 168px;
+  padding: 4px;
+}
+
+.drive-paste-caption {
+  padding: 4px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.drive-paste-menu button {
+  height: 32px;
+  gap: 10px;
+}
+
+.drive-paste-menu button.is-active {
+  background: var(--hover);
+}
+
+/* La tarjeta: un párrafo con el link y `driveCard: true`. Una versión vieja de la app no la dibuja y
+   muestra el párrafo con el link. */
+.drive-card {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* Proporción de video, con un alto razonable; en una hoja se ajusta al ancho del texto. */
+.drive-card-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: min(480px, 70vh);
+  background: #111;
+}
+
+/* Un documento o una carpeta se lee mejor más alto. */
+.drive-card[data-drive-kind='doc'] .drive-card-frame,
+.drive-card[data-drive-kind='folder'] .drive-card-frame {
+  aspect-ratio: 4 / 3;
+  max-height: min(560px, 75vh);
+  background: var(--sidebar-bg);
+}
+
+.drive-card-player {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.drive-card-offline {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--sidebar-bg);
+}
+
+/* La tapa del teléfono (ver driveCard.ts): solo con el dedo, hasta que se toca. */
+.drive-card-shield {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .drive-card:not(.drive-card-live) .drive-card-shield {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 10px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    touch-action: pan-x pan-y;
+  }
+
+  .drive-card-shield span {
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.62);
+    color: #fff;
+    font-size: 12px;
+  }
+}
+
+.drive-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 7px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.drive-card-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--muted);
+}
+
+.bn-container .drive-card-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.drive-card-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.drive-card-open,
+button.drive-card-unembed {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-2);
+  text-decoration: none;
+  white-space: nowrap;
+  background: transparent;
+}
+
+.drive-card-open:hover,
+button.drive-card-unembed:hover {
+  background: var(--hover);
+}
+
+/* En solo lectura no se puede volver a link. */
+.bn-editor[contenteditable='false'] .drive-card-unembed {
+  display: none;
+}
+
+@media (max-width: 520px) {
+  .drive-card-foot {
+    flex-wrap: wrap;
+  }
+
+  .drive-card-actions {
+    margin-left: auto;
+  }
+}
+
+/* Al imprimir queda el link: el reproductor no sirve en papel. */
+@media print {
+  .drive-card-frame,
+  .drive-card-actions {
+    display: none;
+  }
+
+  .drive-card-foot {
+    border-top: 0;
+  }
+}

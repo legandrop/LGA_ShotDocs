@@ -12,7 +12,11 @@ import { errorMessage } from '../sync/types';
 import {
   clearCommentsTarget,
   closeComments,
+  copyText,
+  hasDrafts,
   isPhoneLayout,
+  requestCloseComments,
+  setDraft,
   revealBlock,
   toggleComments,
   useBlockSource,
@@ -122,16 +126,38 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
-      if (ref.current?.contains(document.activeElement) || isPhoneLayout()) closeComments();
+      if (ref.current?.contains(document.activeElement) || isPhoneLayout()) requestCloseComments();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  // En el teléfono la hoja va anclada abajo: con el teclado abierto (iOS no achica la página), se sube por
+  // encima del teclado y no pasa del alto que queda a la vista.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const el = ref.current;
+    if (!vv || !el) return;
+    const update = () => {
+      el.style.setProperty('--kb-inset', `${Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))}px`);
+      el.style.setProperty('--vv-height', `${Math.round(vv.height)}px`);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
+
   const reveal = (blockId: string | null) => {
     if (!blockId) return;
-    // En el teléfono la hoja tapa la página: se cierra para ver el bloque.
-    if (isPhoneLayout()) closeComments();
+    // En el teléfono la hoja tapa la página: se cierra para ver el bloque (si no hay nada escrito a medias).
+    if (isPhoneLayout()) {
+      if (hasDrafts() && !requestCloseComments()) return;
+      closeComments();
+    }
     revealBlock(blockId);
   };
 
@@ -139,7 +165,7 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
 
   return (
     <>
-      <div className="comments-scrim" onClick={closeComments} />
+      <div className="comments-scrim" onClick={() => requestCloseComments()} />
       <aside ref={ref} className="comments-panel" aria-label="Comments">
         <header className="comments-head">
           <h2>Comments</h2>
@@ -148,7 +174,7 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
               Comment on the page
             </button>
           )}
-          <button className="icon-button" aria-label="Close comments" onClick={closeComments}>
+          <button className="icon-button" aria-label="Close comments" onClick={() => requestCloseComments()}>
             <CloseIcon size={18} />
           </button>
         </header>
@@ -165,7 +191,12 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
           {!canComment && !comments.unavailable && level > 0 && (
             <p className="comments-note">You can read the comments here. Ask for comment access to add yours.</p>
           )}
-          {!comments.isFresh(pageId) && status.online && threads.length === 0 && <p className="muted comments-empty">Loading comments…</p>}
+          {comments.pullError(pageId) && status.online && (
+            <p className="comments-note warn">Could not download the latest comments: {comments.pullError(pageId)}</p>
+          )}
+          {!comments.isFresh(pageId) && status.online && threads.length === 0 && !comments.pullError(pageId) && (
+            <p className="muted comments-empty">Loading comments…</p>
+          )}
 
           {composing && (
             <NewThread
@@ -337,7 +368,8 @@ function Thread({
           onCancel={() => setReplying(false)}
         />
       ) : (
-        canComment && (
+        canComment &&
+        !thread.root.deleted && (
           <div className="thread-actions">
             {!thread.resolved && (
               <button className="link" onClick={() => setReplying(true)}>
@@ -363,18 +395,20 @@ function nameOf(comments: Names, userId: string | null, me: string): string {
 }
 
 function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentView; me: string; canComment: boolean; canDeleteAny: boolean }) {
-  const { comments, engine } = useServices();
+  const { comments } = useServices();
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mine = comment.authorId === me;
+  // `canComment` ya pide que la base de comentarios del dispositivo esté abierta; borrar lo ajeno también.
   const canEdit = mine && canComment && !comment.deleted;
-  const canDelete = !comment.deleted && ((mine && canComment) || canDeleteAny);
+  const canDelete = !comment.deleted && comments.writable && ((mine && canComment) || canDeleteAny);
 
   if (comment.deleted) {
     return (
       <div className="comment deleted">
         <p className="muted">This comment was deleted.</p>
+        {comment.error && <Rejected comment={comment} />}
       </div>
     );
   }
@@ -404,25 +438,7 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
       ) : (
         <p className="comment-body">{comment.body}</p>
       )}
-      {comment.error && (
-        <div className="comment-error">
-          <span>Not accepted by the server: {comment.error} It stays on this device.</span>
-          <span className="row">
-            <button className="link" onClick={() => void engine.retryRejected()}>
-              Retry
-            </button>
-            <button
-              className="link danger"
-              onClick={() => {
-                if (!confirm('Discard this change? It was never uploaded and is only on this device.')) return;
-                void Promise.all(comment.failedSeqs.map((s) => comments.discard(s)));
-              }}
-            >
-              Discard
-            </button>
-          </span>
-        </div>
-      )}
+      {comment.error && <Rejected comment={comment} />}
       {error && <p className="comment-error">{error}</p>}
       {!editing && (canEdit || canDelete) && (
         <div className="comment-actions">
@@ -462,6 +478,60 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
   );
 }
 
+/**
+ * Un cambio que el servidor no aceptó: el motivo, "Retry" y "Discard". Descartar pide confirmación y dice
+ * qué pasa (vuelve el comentario, se reabre el hilo, se van también las respuestas), con el texto para
+ * copiar antes.
+ */
+function Rejected({ comment }: { comment: CommentView }) {
+  const { comments, engine } = useServices();
+  const [asking, setAsking] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const info = asking ? comments.describeDiscard(comment.failedSeqs) : null;
+  const text = info?.text ?? comment.rejectedText;
+  const copy = () => void copyText(text ?? '').then((ok) => setCopied(ok));
+  return (
+    <div className="comment-error" role="status">
+      <span>Not accepted by the server: {comment.error} It stays on this device.</span>
+      {info ? (
+        <>
+          <span>{info.message}</span>
+          <span className="row">
+            {text && (
+              <button className="link" onClick={copy}>
+                {copied ? 'Copied' : 'Copy text'}
+              </button>
+            )}
+            <button
+              className="link danger"
+              onClick={() => void Promise.all(comment.failedSeqs.map((s) => comments.discard(s))).then(() => setAsking(false))}
+            >
+              Discard
+            </button>
+            <button className="link" onClick={() => setAsking(false)}>
+              Cancel
+            </button>
+          </span>
+        </>
+      ) : (
+        <span className="row">
+          <button className="link" onClick={() => void engine.retryRejected()}>
+            Retry
+          </button>
+          {text && (
+            <button className="link" onClick={copy}>
+              {copied ? 'Copied' : 'Copy text'}
+            </button>
+          )}
+          <button className="link danger" onClick={() => setAsking(true)}>
+            Discard…
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** El cuadro para escribir: Ctrl/⌘+Enter manda, Escape cancela. Crece con el texto. */
 function Composer({
   initial = '',
@@ -482,6 +552,26 @@ function Composer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const dirty = text.trim() !== '' && text !== initial;
+
+  // Lo escrito a medias: cerrar el panel (tocar afuera, Escape, la X) pide confirmación.
+  const draftKey = useRef(Symbol('draft'));
+  useEffect(() => {
+    const key = draftKey.current;
+    setDraft(key, dirty);
+    return () => setDraft(key, false);
+  }, [dirty]);
+
+  // En el teléfono, cuando aparece el teclado, el cuadro queda a la vista.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const keep = () => {
+      if (document.activeElement === ref.current && isPhoneLayout()) ref.current?.scrollIntoView?.({ block: 'nearest' });
+    };
+    vv.addEventListener('resize', keep);
+    return () => vv.removeEventListener('resize', keep);
+  }, []);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -492,8 +582,8 @@ function Composer({
 
   useEffect(() => {
     if (!autoFocus) return;
-    // En el teléfono se enfoca igual: se tocó un botón para escribir.
-    ref.current?.focus({ preventScroll: true });
+    // En el teléfono se enfoca igual (se tocó un botón para escribir) y se deja que el navegador lo muestre.
+    ref.current?.focus({ preventScroll: !isPhoneLayout() });
     const end = ref.current?.value.length ?? 0;
     ref.current?.setSelectionRange(end, end);
   }, [autoFocus]);
@@ -534,6 +624,7 @@ function Composer({
             void submit();
           } else if (e.key === 'Escape') {
             e.preventDefault();
+            if (dirty && !confirm('Discard what you wrote?')) return;
             onCancel();
           }
         }}

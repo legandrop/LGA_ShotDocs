@@ -145,7 +145,7 @@ function CommentMenuItem() {
 }
 
 /** El menú del bloque (el tirador de la izquierda) de siempre, con "Comment" al final. */
-function CommentDragHandleMenu() {
+function CommentDragHandleMenu({ canComment }: { canComment: boolean }) {
   const dict = useDictionary();
   return (
     <DragHandleMenu>
@@ -153,14 +153,22 @@ function CommentDragHandleMenu() {
       <BlockColorsItem>{dict.drag_handle.colors_menuitem}</BlockColorsItem>
       <TableRowHeaderItem>{dict.drag_handle.header_row_menuitem}</TableRowHeaderItem>
       <TableColumnHeaderItem>{dict.drag_handle.header_column_menuitem}</TableColumnHeaderItem>
-      <CommentMenuItem />
+      {canComment && <CommentMenuItem />}
     </DragHandleMenu>
   );
 }
 
-/** El menú lateral del editor con "Comment" en el menú del bloque. */
-export function CommentSideMenuController() {
-  return <SideMenuController sideMenu={(props) => <SideMenu {...props} dragHandleMenu={CommentDragHandleMenu} />} />;
+// Dos componentes fijos (no uno armado en cada dibujo, que se volvería a montar con el menú abierto).
+const DragHandleMenuWithComment = () => <CommentDragHandleMenu canComment />;
+const DragHandleMenuPlain = () => <CommentDragHandleMenu canComment={false} />;
+
+/** El menú lateral del editor con "Comment" en el menú del bloque (si se puede comentar). */
+export function CommentSideMenuController({ canComment }: { canComment: boolean }) {
+  return (
+    <SideMenuController
+      sideMenu={(props) => <SideMenu {...props} dragHandleMenu={canComment ? DragHandleMenuWithComment : DragHandleMenuPlain} />}
+    />
+  );
 }
 
 // --- Los bloques para el panel -------------------------------------------------------------------------
@@ -231,9 +239,22 @@ export function CommentMargin({
   const [layoutTick, setLayoutTick] = useState(0);
   const activeRef = useRef<string | null>(null);
 
-  // Se vuelve a medir con cada cambio del documento, de los comentarios o del tamaño.
+  // Se vuelve a medir con cada cambio del documento, de los comentarios o del tamaño, agrupado por cuadro
+  // (escribir rápido no mide una vez por tecla).
   useEffect(() => {
-    const bump = () => setLayoutTick((n) => n + 1);
+    let frame: number | null = null;
+    const schedule =
+      typeof requestAnimationFrame === 'function'
+        ? (fn: () => void) => requestAnimationFrame(fn)
+        : (fn: () => void) => setTimeout(fn, 100) as unknown as number;
+    const cancel = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : (id: number) => clearTimeout(id);
+    const bump = () => {
+      if (frame !== null) return;
+      frame = schedule(() => {
+        frame = null;
+        setLayoutTick((n) => n + 1);
+      });
+    };
     const off = editor.onChange(bump);
     const el = host.current;
     const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(bump) : null;
@@ -241,6 +262,7 @@ export function CommentMargin({
     window.addEventListener('resize', bump);
     document.fonts?.addEventListener?.('loadingdone', bump);
     return () => {
+      if (frame !== null) cancel(frame);
       off?.();
       resize?.disconnect();
       window.removeEventListener('resize', bump);
@@ -260,7 +282,7 @@ export function CommentMargin({
       const prev = answers.get(t.blockId) ?? { count: 0, resolved: true };
       answers.set(t.blockId, { count: prev.count + t.count, resolved: prev.resolved && t.resolved });
     }
-    const questions = new Set(flatten(editor.document as BlockLike[]).filter(isQuestion).map((b) => b.id));
+    const questions = questionIds(editor);
     const ids = new Set([...counts.keys(), ...questions]);
     const next: Mark[] = [];
     for (const id of ids) {
@@ -290,8 +312,9 @@ export function CommentMargin({
       const id = blockIdOf(el);
       const container = id ? root.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${cssId(id)}"] > .bn-block-content`) : null;
       if (!id || !container) return;
+      const top = container.getBoundingClientRect().top - root.getBoundingClientRect().top;
       activeRef.current = id;
-      setActive({ id, top: container.getBoundingClientRect().top - root.getBoundingClientRect().top });
+      setActive((prev) => (prev?.id === id && prev.top === top ? prev : { id, top }));
     };
     const onMove = (e: PointerEvent) => pick(e.target);
     // Con el dedo, `pointerleave` llega apenas se levanta: el botón queda en el último bloque tocado.
@@ -365,6 +388,19 @@ export function CommentMargin({
       )}
     </div>
   );
+}
+
+/** Las preguntas de la página, recorriendo el documento de ProseMirror (sin armar los bloques de BlockNote). */
+function questionIds(editor: AnyEditor): Set<string> {
+  const ids = new Set<string>();
+  editor.prosemirrorState.doc.descendants((node) => {
+    if (node.type.name === 'blockContainer') {
+      const content = node.firstChild;
+      if (content?.type.name === 'paragraph' && content.attrs[QUESTION_PROP] === true) ids.add(String(node.attrs.id));
+    }
+    return !node.isTextblock;
+  });
+  return ids;
 }
 
 // Ids de BlockNote: uuid o `initialBlockId`; nada que escapar, pero por las dudas no se arma un selector raro.

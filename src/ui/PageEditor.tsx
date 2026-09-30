@@ -39,6 +39,8 @@ import { useCommentAccess } from './CommentsPanel';
 import { ScriptIcon } from './icons';
 import { notify } from './notice';
 import { useScheme } from '../prefs';
+import { createDrivePaste } from './drivePaste';
+import { DrivePasteMenu } from './DrivePasteMenu';
 
 // Script es un párrafo con `script: true` (ver editorSchema.ts), y una pregunta, uno con `question: true`
 // (EditorComments.tsx). Cada ítem del selector pide las dos propiedades, así el selector distingue uno de
@@ -184,9 +186,13 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
     return files.add(pageId, file);
   };
 
+  // Pegar un link de Drive ofrece dejarlo como link, como texto o como tarjeta (paso 13, drivePaste.ts).
+  const drivePaste = useMemo(() => createDrivePaste(), []);
+
   const editor = useCreateBlockNote(
     withCollaboration({
       schema,
+      pasteHandler: drivePaste.pasteHandler,
       uploadFile: (file: File, blockId?: string) =>
         store(file).catch((err: unknown) => {
           notify(err instanceof FileRejected ? err.message : 'This file could not be saved on this device.');
@@ -430,9 +436,10 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
             </FormattingToolbar>
           )}
         />
-        <CommentSideMenuController />
+        <CommentSideMenuController canComment={canComment} />
       </BlockNoteView>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
+      {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}
       {carrete && <CarreteHost {...carrete} onClose={() => setCarrete(null)} />}
     </div>
   );

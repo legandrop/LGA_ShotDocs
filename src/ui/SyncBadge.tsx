@@ -3,6 +3,7 @@ import type { MediaFailure } from '../media/queue';
 import { useServices, useSyncStatus, useTree } from '../services';
 import { ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from './icons';
 import { rejectionText } from './teamText';
+import { copyText } from './commentsUi';
 import { usePendingCount } from './usePendingCount';
 import { downloadUnsynced } from './unsyncedDownload';
 import { notify } from './notice';
@@ -198,7 +199,22 @@ export function SyncBadge() {
                     <li key={`comment-${f.seq}`}>
                       {COMMENT_ACTIONS[f.kind]} on “{tree.get(f.pageId)?.title || 'Untitled'}”
                       {f.body ? ` (“${f.body.length > 40 ? `${f.body.slice(0, 40)}…` : f.body}”)` : ''}:{' '}
-                      <code>{f.error}</code>
+                      <code>{f.error}</code>{' '}
+                      {f.body && (
+                        <button className="link" onClick={() => void copyText(f.body ?? '')}>
+                          Copy text
+                        </button>
+                      )}{' '}
+                      <button
+                        className="link danger"
+                        onClick={() => {
+                          // Nunca se descarta solo: la persona lo pide y confirma sabiendo qué pasa.
+                          const info = comments.describeDiscard([f.seq]);
+                          if (confirm(`${info.message} This cannot be undone.`)) void comments.discard(f.seq);
+                        }}
+                      >
+                        Discard
+                      </button>
                     </li>
                   ))}
               </ul>
