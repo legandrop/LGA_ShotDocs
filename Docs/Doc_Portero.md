@@ -37,6 +37,34 @@ app, en el menú de la cuenta → *Media test*.
 Direcciones que la app conoce: la del portero está en `workspace_settings.media_url` (la carga el dueño
 de la base, ver abajo). Quién es el dueño: `workspace_settings.owner_id`.
 
+### Rutas
+
+Todas están en `portero/src/core.ts`. Las tres primeras no llevan sesión; las demás llevan la sesión de
+Supabase (`Authorization: Bearer …`) y, salvo `/drive/status`, hoy solo las puede usar el dueño.
+
+| Ruta | Quién | Qué hace |
+|---|---|---|
+| `GET /health` | Cualquiera | Responde `{ ok: true }`: sirve para ver que el portero está publicado. |
+| `GET /drive/callback` | Google | Vuelta de Google al conectar Drive. Guarda la conexión y vuelve a `/media-test` de la app con el resultado. |
+| `GET` o `HEAD /m/<pase>` | Quien tenga el pase | Devuelve el archivo desde Drive, por partes (Range). El pase firmado es la única credencial y vence a las 8 horas. |
+| `GET /drive/status` | Cualquier sesión | Si Drive está conectado y si quien pregunta es el dueño. El correo de la cuenta de Google solo se le muestra al dueño. |
+| `POST /drive/connect` | Dueño | Devuelve la dirección de Google para conectar Drive. Solo desde una dirección de `APP_ORIGINS`. |
+| `POST /upload` | Dueño | Abre una subida reanudable en Drive y devuelve su id. |
+| `PUT /upload/<id>` | Dueño, el que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. |
+| `POST /pass` | Dueño | Firma un pase para un archivo de Drive y devuelve su dirección `/m/<pase>`. |
+
+La app manda partes de 8 MiB (`PART_BYTES` en `src/media/portero.ts`); el portero acepta hasta 64 MiB por
+parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida.
+
+### Lado de la app
+
+- `src/media/portero.ts`: el cliente del portero (estado de Drive, conectar, subir por partes retomando lo
+  que ya llegó, pedir pases). Lee la dirección de `workspace_settings.media_url`.
+- `src/ui/MediaTest.tsx`: la pantalla *Media test*, en la ruta `/media-test` de la app.
+- Pruebas (entran en `npm test`): `portero/src/core.test.ts` (el Worker, con Drive y Supabase simulados)
+  y `src/media/portero.test.ts` (el cliente). Los tipos del portero se revisan aparte, con
+  `npx tsc -p portero --noEmit` (`npm run typecheck` no los cubre).
+
 ## Publicarlo y conectarlo (una vez por workspace)
 
 Hace falta la app ya publicada y la migración `20260930120000_portero.sql` aplicada.
@@ -92,8 +120,10 @@ Mejor hacerlo desde la computadora: la conexión queda en el portero y vale para
 
 ## Si algo falla
 
-- *"The connection with Google Drive stopped working"*: el dueño revocó el acceso, cambió la contraseña o
-  pasaron 6 meses sin uso. Volver a conectar desde *Media test*.
+- *"The connection with Google Drive stopped working"*: el dueño revocó el acceso, cambió la contraseña,
+  pasaron 6 meses sin uso, o la app de Google sigue en modo **Testing**, donde la conexión vence a los 7
+  días. Volver a conectar desde *Media test*. Lo del modo Testing se evita publicando la app en Google
+  (paso 2.5, *In production*; ver `Doc_Roadmap.md`).
 - *"This app address is not allowed"*: la dirección desde la que se abrió la app no está en `APP_ORIGINS`.
 - Google dice `redirect_uri_mismatch`: la dirección del paso 2.6 no coincide con la del portero.
 - Vuelve con *"drive-permission-missing"*: en la pantalla de permisos de Google quedó destildado el acceso

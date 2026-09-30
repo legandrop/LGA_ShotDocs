@@ -11,8 +11,9 @@ Una app de documentación para VFX al estilo de Notion o Coda, pero simple. Sirv
 - **Preproducción:** las notas de VFX de cada escena (qué se necesita, referencias, plan de rodaje).
 - **Rodaje:** los reportes en set (datos de cámara, lentes, referencias, fotos, notas por toma).
 
-Un supervisor la usa para sus shows y la puede compartir con otros supervisores, que la instalan en su
-propia cuenta.
+Un supervisor la usa para sus shows y la comparte con su equipo y sus clientes. Es una sola app que se
+conecta a varios workspaces, cada uno con las cuentas de su dueño: otro supervisor no instala su copia,
+crea su workspace (D-18, `Plan_Workspaces.md`).
 
 ## 2. Requisitos
 
@@ -23,11 +24,11 @@ propia cuenta.
 5. Offline y online, **sin perder nunca información al sincronizar** (sección 5).
 6. Compartir cualquier página por link público o con usuarios puntuales. Compartir una página comparte
    todo lo que tiene debajo y **nunca** lo que tiene arriba (sección 6).
-7. Cada workspace es una isla: su propia base de datos, su Drive y su equipo; nada se comparte entre workspaces
-   (sección 8).
+7. Cada workspace es una isla: su propia base de datos, su Drive y su equipo; nada se comparte entre
+   workspaces (sección 8).
 8. Colaboración en tiempo real, al final (D-04).
-9. **Formato de página real.** Una página puede ser libre o tener el tamaño de una hoja (A5, A4, A3, Carta),
-   y lo que se ve al editarla es exactamente lo que sale en el PDF (sección 10).
+9. **Formato de página real.** Una página puede ser libre o tener el tamaño de una hoja (A5, A4, A3,
+   Carta), y lo que se ve al editarla es exactamente lo que sale en el PDF (sección 10).
 10. **Asistente con la clave de cada usuario.** Cada usuario carga la API key de su modelo preferido y el
     asistente puede revisar y corregir textos, dar formato y ajustar imágenes (sección 11).
 
@@ -38,19 +39,20 @@ propia cuenta.
 | Frontend | App web React instalable como PWA | Un solo código para Mac, Windows y iPhone. Más adelante se empaqueta con Tauri (escritorio) y Capacitor (iOS) sin reescribirla. |
 | Hosting | Cloudflare (Workers con archivos estáticos) | Deploy automático desde GitHub, gratis y con uso comercial (D-05). Antes, Vercel. |
 | Backend | Supabase: Postgres, login, archivos y tiempo real | Un solo servicio. Los permisos se aplican dentro de la base con Row Level Security. Se puede autohostear con Docker (D-02). |
-| Editor | Editor por bloques sobre ProseMirror (TipTap o BlockNote) | Se siente como Notion, soporta Yjs y exporta a Markdown. |
+| Archivos grandes | Drive del dueño del workspace, con un portero (Worker de Cloudflare, `portero/`) | Supabase gratis trae 1 GB de archivos y 5 GB de transferencia al mes; Cloudflare no cobra la transferencia (D-17). Hoy en prueba (*Media test*); en producción en el paso 8 de `Plan_Workspaces.md`. |
+| Editor | BlockNote, editor por bloques sobre ProseMirror | Se siente como Notion, soporta Yjs y exporta a Markdown. |
 | Contenido de cada página | Un documento Yjs (CRDT) | Dos ediciones offline se fusionan: nunca gana "el último". |
 | Árbol de páginas | Filas de Postgres | Si el árbol fuera un documento Yjs único, cualquiera con acceso a una página recibiría el árbol entero. |
 | Guardado local | IndexedDB | Toda edición se guarda primero en el dispositivo. |
 
 La sincronización se hace por HTTP (subir lo pendiente, bajar lo nuevo desde el último punto conocido).
-No hace falta un servidor propio con websockets: alcanza con Supabase y un Worker de Cloudflare (el portero de archivos), y eso
-simplifica el autohosteo. El tiempo real se suma después con Supabase Realtime como aviso de "hay cambios
-nuevos".
+No hace falta un servidor propio con websockets: alcanza con Supabase y un Worker de Cloudflare (el
+portero de archivos), y eso simplifica el autohosteo. El tiempo real se suma después con Supabase Realtime
+como aviso de "hay cambios nuevos".
 
 ## 4. Modelo de datos
 
-Hecho en la fase 1 (detalle en `Doc_Supabase.md`):
+Hecho (detalle en `Doc_Supabase.md`):
 
 ```
 workspaces     (id, owner_id, name, created_at)            -- proyectos: cada usuario tiene varios
@@ -58,6 +60,8 @@ pages          (id, workspace_id, parent_id, title, icon, sort_key, settings JSO
                 update_seq, deleted_at, created_by, created_at, updated_at)
 page_updates   (id, page_id, seq, client_update_id, update BYTEA, created_by, created_at)  -- solo agregado
 user_settings  (user_id, prefs JSONB, updated_at)            -- tema, fuente, tamaño y ancho: por cuenta
+workspace_settings (id, generation, min_app_version, schema_version, owner_id, media_url, updated_at)
+               -- una fila: generación, versión mínima de la app, versión de la base, dueño, portero
 storage: page-files/<page_id>/<file_id>.<ext>                -- imágenes, con los permisos de su página
 ```
 
@@ -67,8 +71,7 @@ Falta:
 page_snapshots (page_id, state BYTEA, up_to_seq, created_at)                 -- compactar en el servidor
 page_versions  (id, page_id, state BYTEA, label, created_by, created_at)     -- historial (fase 6)
 templates      (id, workspace_id, name, description, content BYTEA, created_at, updated_at)   -- fase 3
-shares         (id, page_id, kind, user_email, token_hash, role, expires_at, created_by, created_at)
--- fase 4: pages.format (null = hereda del padre), pages.orientation, workspaces.default_format
+members, grants, invitations                                  -- equipo y permisos (Plan_Workspaces)
 ```
 
 - **Proyectos.** Un proyecto (lo que en Coda es un *doc*) es una fila de `workspaces` con su propio árbol
@@ -82,8 +85,12 @@ shares         (id, page_id, kind, user_email, token_hash, role, expires_at, cre
 - Los archivos no tienen tabla propia: la ruta en Storage empieza con el id de la página, y de ahí salen
   sus permisos.
 - `pages.settings` guarda ajustes que valen para la página y las de adentro, salvo que alguna defina los
-  suyos: cuántos contenedores muestra el encabezado y si los títulos con "|" se dividen (D-10).
-- `shares.kind` es `link` o `user`; `role` es `view` o `edit`. El token de un link se guarda en hash.
+  suyos: cuántos contenedores muestra el encabezado, si los títulos con "|" se dividen (D-10) y el
+  formato de hoja, `format = { size, landscape }` (`src/ui/pageFormat.ts`, sección 10). No hay
+  `pages.format` ni un formato guardado en el proyecto.
+- La tabla `shares` del plan original queda reemplazada por `members` (persona y rol), `grants` (permiso
+  sobre un proyecto o una página) e `invitations` (`Plan_Workspaces.md`, sección 1 y paso 5 de la
+  sección 11). El link público sin login queda para después.
 
 ## 5. Sincronización offline sin pérdidas
 
@@ -103,17 +110,20 @@ todo, la versión Capacitor guarda en SQLite nativo.
 Con workspaces (D-18), compartir pasa a ser dentro del workspace, con roles y permisos: ver
 `Plan_Workspaces.md`, secciones 3 y 4. La regla de esta sección sigue valiendo.
 
-**Regla:** se puede ver la página P si existe un share sobre P **o sobre algún ancestro de P**. La
-búsqueda va de P hacia arriba, así que un share nunca da acceso a los padres de la página compartida ni a
-sus ramas hermanas.
+**Regla:** se puede ver la página P si existe un permiso sobre P **o sobre algún ancestro de P**. La
+búsqueda va de P hacia arriba, así que un permiso nunca da acceso a los padres de la página compartida ni
+a sus ramas hermanas.
 
 - **Se aplica en la base**, con Row Level Security. Si el frontend tiene un bug, la base igual no devuelve
   lo que no corresponde: ni en el árbol, ni en la búsqueda, ni en lo que se guarda offline.
 - **Links públicos:** pasan por una función del servidor que valida el token y devuelve solo ese
   subárbol, en modo lectura.
-- **Usuarios puntuales:** se invitan por email con rol de lectura o de edición.
+- **Usuarios puntuales:** se invitan por correo con un permiso: ver, comentar, editar o editar y crear
+  páginas (`Plan_Workspaces.md`, sección 3).
 - **Qué se comparte:** un proyecto entero, una página madre o cualquier subpágina. Compartir un proyecto
-  es compartir todas sus raíces; en el selector de proyectos aparece en "Shared with you".
+  es compartir todas sus raíces. Dónde aparece lo compartido queda por revisar: con varios workspaces el
+  selector pasa a ser **Workspace › Proyecto** (`Plan_Workspaces.md`, sección 2), y una lista aparte
+  "Shared with you" puede no hacer falta.
 - **Lo compartido llega por su propio camino:** hoy el árbol se pide por proyecto propio
   (`workspace_id in (...)`). Lo que otros comparten con el usuario va en otra consulta, y la app lo
   muestra como proyecto ajeno: no se crean páginas en la raíz de un proyecto que no es propio.
@@ -147,7 +157,8 @@ reglas del principio de `Doc_Roadmap.md`.
 - Cada workspace tiene su propio Supabase (login, tablas, permisos, secretos), el Drive del dueño para
   los originales (D-17) y su portero de archivos. El correo o el login con Google son del dueño.
 - El repo trae las migraciones con las tablas y las políticas de seguridad, las funciones del servidor y
-  una guía paso a paso.
+  el portero (`portero/`). La guía paso a paso y el comando que prepara un Supabase nuevo no existen
+  todavía: son el paso 12 de `Plan_Workspaces.md`.
 - No hace falta publicar la app: una sola app se conecta a cualquier workspace (`Plan_Workspaces.md`).
 - Opción 100 % privada, más adelante: Supabase autohosteado con Docker.
 - Las claves nunca se versionan.
@@ -156,20 +167,25 @@ reglas del principio de `Doc_Roadmap.md`.
 
 ## 9. Fases
 
-1. **MVP (hecha, v0.008, con auditoría y re-auditoría).** Login por email, árbol de páginas en la barra lateral (crear,
-   renombrar, mover, papelera), editor visual con autoguardado, offline con sincronización segura y PWA
-   instalable. Incluye pegar imágenes (se guardan en el dispositivo y se suben cuando hay red). Publicada
-   en Vercel (hoy en Cloudflare, D-05), con correo propio (Resend) para entrar con código desde la app instalada en el iPhone y
-   registro cerrado (D-09).
-   Después de la fase 1, **diseño (hecho, v0.011):** login nuevo con la claqueta, ícono de anotador con claqueta, paleta papel
-   y tinta con tema oscuro, menú de cuenta con tema, fuente (Default o Editorial), tamaño del texto y
-   ancho de página, títulos divididos por "|" en la barra lateral y encabezado con los contenedores.
+1. **MVP (cerrada en v0.009, con auditoría y re-auditoría).** Login por email, árbol de páginas en la
+   barra lateral (crear, renombrar, mover, papelera), editor visual con autoguardado, offline con
+   sincronización segura y PWA instalable. Incluye pegar imágenes (se guardan en el dispositivo y se
+   suben cuando hay red). Publicada en Vercel (hoy en Cloudflare, D-05), con correo propio (Resend) para
+   entrar con código desde la app instalada en el iPhone y registro cerrado (D-09).
+   Después de la fase 1, **diseño (hecho, v0.011):** login nuevo con la claqueta, ícono de anotador
+   con claqueta, paleta papel y tinta con tema oscuro, menú de cuenta con tema, fuente (Default o
+   Editorial), tamaño del texto y ancho de página, títulos divididos por "|" en la barra lateral y
+   encabezado con los contenedores.
    **Proyectos (hecho, v0.013):** cada usuario tiene varios proyectos, cada uno con su árbol; se cambia de
    uno a otro con el selector de arriba de la barra (Ctrl+K), que también crea y renombra, con o sin red.
    **Editor (hecho, v0.015):** barra lateral de ancho ajustable, tooltips propios con el estilo de las
    apps LGA, bloque **Script** para guiones y tamaño de hoja por rama (sección 10).
-2. **Compartir.** Por usuario y por link público (un proyecto, una página o una subpágina), con Row Level
-   Security, visor público, links legibles y las pruebas de la sección 6.
+   **Plan de workspaces, pasos 1 a 4 (hecho, v0.016 a v0.028):** D-17 y D-18, copias de seguridad cuatro
+   veces por día, generación de la base, guarda contra lo desconocido y versión mínima de la app, hosting
+   en Cloudflare, portero de archivos con Drive y la prueba de media en el iPhone.
+2. **Compartir.** Absorbida por los pasos 9 (equipo) y 10 (invitados) de `Plan_Workspaces.md`: permisos
+   por proyecto y página con Row Level Security, links legibles y las pruebas de la sección 6. El link
+   público sin login queda para después.
 3. **Plantillas.** Las plantillas iniciales definidas con Lega y la opción de guardar cualquier página
    como plantilla.
 4. **Formato de página y PDF.** Cortes reales entre hojas y exportar a PDF igual a lo que se ve (sección
@@ -178,7 +194,9 @@ reglas del principio de `Doc_Roadmap.md`.
    y acceso por MCP (sección 11).
 6. **Pulido.** Compresión de fotos de set en el dispositivo, historial de versiones, exportar e importar
    Markdown y búsqueda.
-7. **Distribución.** Guía de autohosteo, deploy con un clic y apps de escritorio e iOS si hacen falta.
+7. **Distribución.** No hace falta publicar la app: una sola app se conecta a cualquier workspace, y un
+   comando con su guía prepara el Supabase de uno nuevo (`Plan_Workspaces.md`, sección 2 y paso 12).
+   Apps de escritorio e iOS si hacen falta.
 8. **Tiempo real.** Dos personas editando la misma página a la vez.
 
 ## 10. Formato de página y PDF
@@ -187,8 +205,8 @@ En Notion y en Coda lo que se ve al editar no es lo que sale en el PDF. Acá sí
 
 - **Libre o con hoja.** Cada página es *libre* (ancho fluido, sin cortes) o tiene formato de hoja: A5,
   A4, A3 o Carta, vertical u horizontal, con márgenes.
-- **Herencia.** El formato se puede fijar en una página y lo heredan todas las de abajo, o en el espacio
-  entero ("todo este proyecto es A4"). Una página puede pisar lo heredado.
+- **Herencia.** El formato se puede fijar en una página y lo heredan todas las de abajo; para todo un
+  proyecto ("todo este proyecto es A4") se fija en sus páginas raíz. Una página puede pisar lo heredado.
 - **Lo que se ve es lo que sale.** Una página con hoja se edita con el ancho imprimible real y muestra
   dónde corta cada hoja. El PDF se genera con el mismo motor de render y la misma hoja (`@page`), así que
   los cortes, los anchos y el tamaño de las imágenes coinciden.
@@ -220,4 +238,4 @@ En Notion y en Coda lo que se ve al editar no es lo que sale en el PDF. Acá sí
 
 - **Campos de las plantillas iniciales.** Se definen con Lega antes de la fase 3.
 - **Dónde se guarda la clave del asistente (D-06)** y **cómo se expone el MCP (D-07).**
-- **Formato por defecto de un espacio nuevo (D-08).**
+- **Formato por defecto de un proyecto nuevo (D-08).**

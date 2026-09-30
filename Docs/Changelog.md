@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.029 :
+
+Documentación al día para seguir con el plan de workspaces. `Plan_Workspaces.md` suma la sección 11,
+con cómo se hace cada paso del 5 al 13: reglas comunes (copia antes de cada migración, nada de tipos de
+bloque nuevos, no tocar la base local de Wanka), la clave local por workspace, las tablas de miembros,
+permisos e invitaciones, la cola de archivos con miniaturas, videos en el bloque de imagen, el hook que
+abre el registro solo para invitados y la papelera de archivos. El roadmap queda en tres grupos: el
+plan, lo que no espera decisiones y lo que espera a Lega. Se corrigieron README, índice, plan de
+arranque, decisiones (D-05, D-17 y D-18 pasan a tomadas) y los documentos de Supabase, del portero y de
+sincronización para que describan la app de hoy.
+[ Docs - plan de los pasos 5 a 13 y documentación al día ]
+
 v0.028 :
 
 Ajustes del portero después de la auditoría: si Drive falla un momento al revisar una carpeta, la subida

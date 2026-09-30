@@ -5,7 +5,7 @@
 //
 // Uso:
 //   SUPABASE_PROJECT_REF=abcd SUPABASE_ACCESS_TOKEN=sbp_... node scripts/db-migrate.mjs
-//   node scripts/db-migrate.mjs --test    # además corre supabase/tests/*.sql (todo en rollback)
+//   node scripts/db-migrate.mjs --test    # aplica lo pendiente DE VERDAD y después corre supabase/tests/*.sql (las pruebas en rollback)
 //
 // Si falta SUPABASE_PROJECT_REF se toma de SUPABASE_URL. El token es un Personal Access Token de
 // supabase.com/dashboard/account/tokens; nunca se versiona.

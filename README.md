@@ -23,25 +23,41 @@ its own project: a tree of pages you own.
   text, format pages and resize images. Its edits are regular edits: synced, versioned and undoable.
 - **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
   back online. Edits made offline on two devices are merged, never overwritten.
-- **Share a branch, never the tree.** Share a whole project or any page with a public link or with
-  specific people. Sharing a page shares everything under it and nothing above it: parent pages and
-  sibling branches stay private.
+- **Share a branch, never the tree.** Inside a workspace, people get a role and a permission on a
+  project or a page (view, comment, edit, or edit and create pages). A permission covers everything under
+  that page and nothing above it: parent pages and sibling branches stay private. Clients join as guests
+  and sign in to see only the pages shared with them. A public link without sign-in comes later.
 - **Your look, everywhere.** Light or dark theme, a default or an editorial typeface, text size and page
   width, saved in your account and applied on every device. Scene titles like `064 | Name | Place` show
   as a short code and a name in the sidebar, and each page can show the pages that contain it above its
   title.
-- **Self-hosted.** Each supervisor runs their own copy with their own database. Nothing is shared between
-  installations.
+- **One app, many workspaces.** The same app connects to several workspaces. Each workspace is an island
+  that runs on its owner's own Supabase, Google Drive and file gateway: nothing from one workspace goes
+  through anyone else's servers, and nobody needs to publish their own copy of the app.
 
 ## Status
 
-Phase 1 (MVP) works: email sign-in, the page tree, the block editor with autosave and pasted images,
-light and dark themes and per-account appearance settings.
-Every edit is saved on the device first and synced when a connection is available; edits made offline on
-several devices are merged. The app can be installed (PWA). You sign in with an 8-digit code sent by email, which
-works inside the installed iPhone app (a sign-in link would open Safari instead); this needs your own mail
-server (SMTP) in Supabase, and sign-ups are invite-only. Next: sharing, templates, real page sizes with PDF export, and the assistant. The plan, the decisions and the roadmap are in
-[`Docs/`](Docs/index.md) (in Spanish).
+In production (v0.029). What works today:
+
+- Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
+  open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
+- The page tree, the block editor with autosave and pasted images, light and dark themes and
+  per-account appearance settings. The app can be installed (PWA).
+- Offline first: every edit is saved on the device first and synced when a connection is available;
+  edits made offline on several devices are merged.
+- Projects, each with its own page tree (v0.013).
+- Script text, a resizable sidebar and paper sizes per branch (v0.015).
+- Hosting on Cloudflare, and encrypted database backups four times a day.
+- A guard against content the running version does not know (the page does not open and nothing is
+  deleted), a minimum app version per workspace, and a database generation so devices re-upload their
+  work after a backup is restored (v0.021).
+- The file gateway with Google Drive: resumable uploads, and a test screen that uploads a video and plays
+  it back inside the app, on desktop and iPhone (v0.022 to v0.028).
+
+Next is the workspace plan: the team, roles and permissions, files in the owner's Drive with an offline
+upload queue, a media carousel, client guests with comments and questions, a file trash, and several
+workspaces in one app. Templates, PDF export and the assistant come later. The plan, the decisions and
+the roadmap are in [`Docs/`](Docs/index.md) (in Spanish).
 
 ## Development
 
@@ -49,7 +65,9 @@ server (SMTP) in Supabase, and sign-ups are invite-only. Next: sharing, template
 npm install
 cp .env.example .env.local   # your Supabase project URL and publishable key
 npm run dev                  # http://localhost:5173
-npm test                     # sync tests
+npm test                     # all 82 tests: sync, editor, UI, file gateway client and Worker
+npm run typecheck            # app types
+npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
 npm run build                # production build in dist/
 ```
 
@@ -60,9 +78,13 @@ app.
 ## Stack
 
 - React web app installable as a PWA (desktop and iPhone), with native wrappers later if needed.
-- [Supabase](https://supabase.com) for the database, sign-in, file storage and access rules.
+- [Supabase](https://supabase.com) for the database, sign-in and access rules. Its file storage only
+  holds the images pasted into pages so far.
+- [Google Drive](https://developers.google.com/drive) for original photos, videos and documents, in the
+  workspace owner's Drive.
 - [Cloudflare Workers](https://developers.cloudflare.com/workers/static-assets/) for hosting the web app
-  (`wrangler.jsonc`).
+  (`wrangler.jsonc`) and for the file gateway (`portero/`, with its own `wrangler.jsonc`), which keeps the
+  connection to the owner's Drive and passes files to and from it.
 - A [Yjs](https://yjs.dev) document per page for conflict-free offline editing, and a
   [BlockNote](https://www.blocknotejs.org) block editor.
 

@@ -1,20 +1,26 @@
 # Sincronización offline
 
 Cómo funciona hoy la regla de no perder nunca información. El código está en `src/sync/` y las pruebas
-(`npm test`) en `src/sync/sync.test.ts`, `audit.test.ts` (los casos de la auditoría de la fase 1) y
-`editor.test.ts` (con el editor real, en jsdom).
+(`npm test`) en `src/sync/sync.test.ts`, `audit.test.ts` (los casos de la auditoría de la fase 1),
+`editor.test.ts` (con el editor real, en jsdom), `projects.test.ts` (proyectos en la cola, también sin
+red y rechazados), `restore.test.ts` (la generación al restaurar una copia y la versión mínima del
+workspace) y `src/ui/unknownContent.test.ts` (la guarda del editor contra lo desconocido).
 
 ## Piezas
 
 | Pieza | Archivo | Qué hace |
 |---|---|---|
-| Base local | `localDb.ts` | IndexedDB por usuario y por proyecto: copia del árbol, cola de salida, updates de contenido, estado de cada página e imágenes. |
+| Base local | `localDb.ts` | Una base IndexedDB por proyecto de Supabase y usuario (`shotdocs:<ref>:<userId>`, con `<ref>` sacado de la dirección del Supabase), compartida por todos los proyectos de la app: copia del árbol, cola de salida, updates de contenido, estado de cada página e imágenes. |
 | Contenido | `docs.ts` | Un documento Yjs por página. Guarda cada edición en el dispositivo y sube o baja lo que falte. |
 | Estructura | `structure.ts` | La raíz inicial de cada página (la "semilla") y la reparación de documentos viejos con dos raíces (ver "Fusión"). |
 | Árbol | `tree.ts` | La copia del árbol que mandó el servidor más la cola de cambios locales encima. |
 | Imágenes | `files.ts` | Guarda la imagen pegada en el dispositivo y la sube cuando hay red. |
 | Servidor | `remote.ts` | Las llamadas a Supabase. Las pruebas usan un servidor en memoria con las mismas reglas (`testing.ts`). |
 | Motor | `engine.ts` | El ciclo de sincronización y el estado que muestra la app. |
+
+El nombre de la base local no se cambia nunca: renombrarla con cambios sin subir es perderlos. El paso 5
+de `Plan_Workspaces.md` (sección 11) la pasa a una clave local por workspace, guardada en
+`workspace_settings`; la de Wanka va a ser el nombre que ya usa hoy, así que no se renombra nada.
 
 ## Contenido de las páginas
 
@@ -115,7 +121,8 @@ si no hay nada de eso, que todo está sincronizado.
 
 ## Sin red al abrir
 
-- La app queda en caché con un service worker (PWA), así que abre sin red.
+- La app queda en caché con un service worker (PWA), así que abre sin red, en cualquiera de sus
+  direcciones (`/`, `/p/<uuid>`, `/trash`, `/media-test`; ver `index.md`).
 - Si la sesión venció y no hay red para renovarla, se sigue con el último usuario conocido y se renueva sola
   cuando vuelve la red.
 - La app pide almacenamiento persistente (`navigator.storage.persist()`) para que el navegador no borre los
