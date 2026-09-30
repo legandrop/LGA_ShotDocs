@@ -578,6 +578,9 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     // Se saca de la otra página: recién ahí se quita de la original.
     await edit(a, foreign, (doc) => removeImage(doc, id));
     await sync(a);
+    // Los dos son "quitados" de la misma vuelta: la cola los lee del índice `pending` en el orden de su clave
+    // (`<página>:<archivo>`, con ids de página al azar), así que el orden entre ellos cambia de corrida en
+    // corrida. Da igual: cuando sale el de la página original, el de la otra ya es "quitado" y no la frena.
     expect(calls(server, 'unlink_page_file').sort()).toEqual([`unlink_page_file ${foreign} ${id}`, `unlink_page_file ${page} ${id}`].sort());
     expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
   });

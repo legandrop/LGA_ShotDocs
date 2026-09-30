@@ -64,8 +64,9 @@ export function PageEditor({ pageId }: { pageId: string }) {
   // Sin "Edit" (nivel 3) la página se abre en solo lectura (paso 9): el servidor rechazaría lo escrito.
   const perms = usePermissions();
   const canEdit = perms.canEditPage(pageId);
-  // La estructura inicial es un cambio: solo con los permisos ya conocidos y "Edit". Si cambian, la página
-  // se vuelve a abrir (así se siembra, o se descarta una reparación hecha solo en memoria).
+  // La estructura inicial (la semilla) se pone siempre que el editor quede editable, también sin datos de
+  // permisos: queda solo en memoria hasta la primera edición. Si los permisos cambian, la página se vuelve
+  // a abrir (así se siembra, o se descarta una semilla o una reparación hecha solo en memoria).
   const canSeed = perms.canSeed(pageId);
   // Con "Comment" (nivel 2) se comenta y se contesta aunque el editor quede en solo lectura (paso 10).
   const { canComment } = useCommentAccess(pageId);

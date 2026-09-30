@@ -374,6 +374,12 @@ export class PageDocs {
     const merged = valid.length > 0 ? Y.mergeUpdates(valid.map((u) => u.data)) : null;
     const maxSeq = Math.max(...updates.map((u) => u.seq));
 
+    // Tope del vector: lo que el documento del dispositivo integró de verdad (lo guardado más lo que llega).
+    // Lo que Yjs deja pendiente porque le falta algo de lo que depende no cuenta. Se calcula antes y fuera
+    // de la transacción que escribe, para no frenar el guardado de ninguna página mientras se arma el
+    // documento; adentro se comprueba que lo guardado no cambió en el medio.
+    const cap = merged ? await this.integratedCap(pageId, maxSeq, decoded, merged) : null;
+
     const tx = this.db.transaction(['docUpdates', 'docState'], 'readwrite');
     const state = (await tx.objectStore('docState').get(pageId)) ?? emptyDocState(pageId);
     if (maxSeq <= state.cursor) {
@@ -381,16 +387,13 @@ export class PageDocs {
       return;
     }
     if (merged) {
-      const reach = serverReach(state.syncedSV, decoded);
-      if (reach.size > 0) {
-        // Tope: lo que el documento del dispositivo integró de verdad (lo guardado más lo que llega). Lo que
-        // Yjs deja pendiente porque le falta algo de lo que depende no cuenta.
-        const rows = await tx.objectStore('docUpdates').index('pageId').getAll(pageId);
-        const doc = new Y.Doc();
-        Y.applyUpdate(doc, Y.mergeUpdates([...rows.map((r) => r.data), merged]), ORIGIN_LOAD);
-        const local = Y.decodeStateVector(Y.encodeStateVector(doc));
-        doc.destroy();
-        state.syncedSV = advanceSynced(state.syncedSV, reach, local);
+      if (cap) {
+        const rows = await tx.objectStore('docUpdates').index('pageId').count(pageId);
+        // Si lo guardado cambió (una edición local, una compactación), el vector no avanza en esta vuelta: se
+        // subirá de más, nunca de menos. (Lo guardado solo crece, así que un tope viejo igual sería menor.)
+        if (rows === cap.rows) {
+          state.syncedSV = advanceSynced(state.syncedSV, serverReach(state.syncedSV, decoded), cap.local);
+        }
       }
       await tx.objectStore('docUpdates').add({ pageId, data: merged });
     }
@@ -407,6 +410,32 @@ export class PageDocs {
         for (const fn of this.unsupportedListeners) fn(pageId);
       }
     }
+  }
+
+  /**
+   * El vector de estado del documento que queda al sumar `merged` a lo guardado, y cuántas filas había
+   * guardadas al leerlo. `null` si lo bajado no puede hacer avanzar `syncedSV` (nada que calcular). Lee en
+   * una transacción de solo lectura y arma el documento cuando ya terminó.
+   */
+  private async integratedCap(
+    pageId: string,
+    maxSeq: number,
+    decoded: ReturnType<typeof Y.decodeUpdate>[],
+    merged: Uint8Array,
+  ): Promise<{ local: Map<number, number>; rows: number } | null> {
+    const tx = this.db.transaction(['docUpdates', 'docState'], 'readonly');
+    const state = await tx.objectStore('docState').get(pageId);
+    if (maxSeq <= (state?.cursor ?? 0) || serverReach(state?.syncedSV, decoded).size === 0) {
+      await tx.done;
+      return null;
+    }
+    const rows = await tx.objectStore('docUpdates').index('pageId').getAll(pageId);
+    await tx.done;
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, Y.mergeUpdates([...rows.map((r) => r.data), merged]), ORIGIN_LOAD);
+    const local = Y.decodeStateVector(Y.encodeStateVector(doc));
+    doc.destroy();
+    return { local, rows: rows.length };
   }
 
   /**

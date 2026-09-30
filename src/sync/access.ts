@@ -250,11 +250,13 @@ export class Permissions {
   }
 
   /**
-   * Poner la estructura inicial en una página vacía es escribirla: solo con los permisos ya conocidos y
-   * "Edit". Sin datos no se siembra (es la única escritura que la app hace sola al abrir una página).
+   * Poner la estructura inicial (la semilla) en una página vacía: siempre que el editor vaya a quedar
+   * editable, también sin datos de permisos (una base sin la versión del equipo, o la primera apertura sin
+   * red). Sin semilla, el editor crearía su propia raíz y dos dispositivos terminarían con dos. La semilla
+   * queda solo en memoria hasta la primera edición (docs.ts, `ORIGIN_SEED`): abrir no escribe nada.
    */
   canSeed(pageId: string): boolean {
-    return this.known && this.canEditPage(pageId);
+    return this.canEditPage(pageId);
   }
 
   /** Crear, mover, mandar a la papelera o restaurar: 4 sobre la página. */
