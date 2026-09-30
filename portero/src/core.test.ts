@@ -1199,7 +1199,7 @@ describe('portero: caché del arranque del video', () => {
   });
 
   it('si otro archivo toma el lugar mientras se espera a Drive, lo olvida entero (no quedan trozos sin dueño)', async () => {
-    const { world, store, p } = await setup();
+    const { world, store } = await setup();
     const video = 'videoxxxxxxxxxxx';
     let other = '';
     for (let i = 0; !other; i++) if (cacheSlot(`otro${i}xxxxxxxxxxxx`) === cacheSlot(video)) other = `otro${i}xxxxxxxxxxxx`;
@@ -1224,7 +1224,6 @@ describe('portero: caché del arranque del video', () => {
     expect(store.data.has(`cache:${other}:head`)).toBe(false);
     expect(store.data.has(`cache:${other}:20:h0`)).toBe(false);
     expect(world.mediaCalls()).toBe(1);
-    void p;
   });
 
   it(`guarda como mucho ${CACHE_FILES} archivos: el que llega desplaza al que estaba en su lugar`, async () => {

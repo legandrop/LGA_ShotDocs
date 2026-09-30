@@ -1041,7 +1041,7 @@ export class Portero {
     if (bytes.length !== to - from + 1) return {};
     // El lugar se vuelve a leer ahora: mientras se esperaba a Drive, otro archivo pudo haberlo tomado, y
     // hay que olvidar ese (no el que estaba al principio) para no dejar trozos sin dueño.
-    await this.claim(id, slot);
+    await this.claim(id, await this.store.get<string>(slotKey(id)));
     // Copias (`slice`), no vistas: una vista se guardaría con todo el búfer de atrás.
     const writes: Promise<void>[] = [];
     for (let i = 0; i * CACHE_PIECE < bytes.length; i++) {
