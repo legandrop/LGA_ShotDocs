@@ -44,6 +44,14 @@ export const comments = {
     es: "El servidor ya tiene otro comentario con este id.",
   },
   'commentError.deleted': { en: "The comment was deleted.", es: "El comentario se borró." },
+  'commentError.importDenied': {
+    en: "Importing comments needs permission to edit and create pages here.",
+    es: "Importar comentarios pide permiso para editar y crear páginas acá.",
+  },
+  'commentError.importInvalid': {
+    en: "The imported comment has an invalid date.",
+    es: "El comentario importado tiene una fecha inválida.",
+  },
   'commentError.threadInvalid': {
     en: "The reply does not match its thread.",
     es: "La respuesta no corresponde a su hilo.",

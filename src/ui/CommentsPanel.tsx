@@ -361,6 +361,11 @@ function Thread({
 
 type Names = { emailOf(id: string | null): string | undefined };
 
+/** El nombre de la herramienta de la que vino un comentario importado. */
+function sourceName(source: string): string {
+  return source === 'coda' ? 'Coda' : source;
+}
+
 function nameOf(comments: Names, userId: string | null, me: string, tr: Translate): string {
   if (userId && userId === me) return tr('comments.you');
   if (!userId) return tr('comments.deletedAccount');
@@ -390,10 +395,26 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
   return (
     <div className={`comment${comment.pending ? ' pending' : ''}`}>
       <div className="comment-meta">
-        <strong className="comment-author" data-tip={comment.authorId && !mine ? comments.emailOf(comment.authorId) : undefined} data-tip-plain data-tip-overflow>
-          {nameOf(comments, comment.authorId, me, tr)}
-        </strong>
+        {comment.importedAuthor ? (
+          // De afuera (importado, sin cuenta en la app): el nombre de la herramienta de origen y su correo.
+          <strong className="comment-author" data-tip={comment.importedAuthorEmail ?? undefined} data-tip-plain data-tip-overflow>
+            {comment.importedAuthor}
+          </strong>
+        ) : (
+          <strong className="comment-author" data-tip={comment.authorId && !mine ? comments.emailOf(comment.authorId) : undefined} data-tip-plain data-tip-overflow>
+            {nameOf(comments, comment.authorId, me, tr)}
+          </strong>
+        )}
         <time dateTime={comment.createdAt}>{when(comment.createdAt, Date.now(), tr)}</time>
+        {comment.importedFrom && (
+          <span
+            className="comment-edited comment-imported"
+            data-tip={comment.importedBy ? tr('comments.importedBy', { name: nameOf(comments, comment.importedBy, me, tr) }) : undefined}
+            data-tip-plain
+          >
+            {tr('comments.importedFrom', { source: sourceName(comment.importedFrom) })}
+          </span>
+        )}
         {comment.editedAt && <span className="comment-edited">{tr('comments.edited')}</span>}
         {comment.pending && !comment.error && <span className="comment-pending">{tr('comments.notUploaded')}</span>}
       </div>

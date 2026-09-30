@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { CommentAuthor, CommentRemote, CommentRow, ListedComment, NewComment } from './comments';
+import type { CommentAuthor, CommentRemote, CommentRow, ImportedComment, ListedComment, NewComment } from './comments';
 import { timed, toRemoteError } from './remote';
 
 // Las llamadas de los comentarios a Supabase (supabase/migrations/20260930170000_comentarios.sql). La tabla
@@ -70,6 +70,23 @@ export class SupabaseCommentRemote implements CommentRemote {
       p_block_id: c.blockId,
       p_thread_id: c.threadId,
       p_body: c.body,
+    }));
+    if (error) throw toRemoteError(error, status);
+  }
+
+  /** `import_comment` (20260930200000_comentarios_importados.sql). */
+  async importComment(c: ImportedComment): Promise<void> {
+    const { error, status } = await timed(this.client.rpc('import_comment', {
+      p_id: c.id,
+      p_page_id: c.pageId,
+      p_block_id: c.blockId,
+      p_thread_id: c.threadId,
+      p_body: c.body,
+      p_created_at: c.createdAt,
+      p_resolved_at: c.resolvedAt,
+      p_source: c.source,
+      p_author_name: c.authorName,
+      p_author_email: c.authorEmail,
     }));
     if (error) throw toRemoteError(error, status);
   }

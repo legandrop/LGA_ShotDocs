@@ -393,7 +393,7 @@ describe('importar la carpeta', () => {
       (onProgress) =>
         new Promise((resolve) => {
           onProgress({ done: 1, total: 3, page: 'B' });
-          finish = () => resolve({ projectId: 'p', pages: 3, files: 0, problems: [], exportProblems: [], resumable: false });
+          finish = () => resolve({ projectId: 'p', pages: 3, files: 0, comments: 0, problems: [], exportProblems: [], resumable: false });
         }),
     );
     expect(job.get()).toMatchObject({ running: true, open: true, progress: { done: 1, page: 'B' } });
@@ -767,7 +767,7 @@ describe('importar la carpeta', () => {
     const job = importJobFor({});
     let finish!: () => void;
     const running = job.run(
-      () => new Promise((resolve) => (finish = () => resolve({ projectId: 'p', pages: 0, files: 0, problems: [], exportProblems: [], resumable: false }))),
+      () => new Promise((resolve) => (finish = () => resolve({ projectId: 'p', pages: 0, files: 0, comments: 0, problems: [], exportProblems: [], resumable: false }))),
       { beacon: 'db-test' },
     );
     expect(importingElsewhere('db-test')).toBe(true);

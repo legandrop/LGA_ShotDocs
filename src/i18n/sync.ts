@@ -84,6 +84,7 @@ export const sync = {
   },
   'sync.upload': { en: "Upload “{name}”", es: "Subir “{name}”" },
   'sync.comment.add': { en: "A comment on “{page}”", es: "Un comentario en “{page}”" },
+  'sync.comment.import': { en: "An imported comment on “{page}”", es: "Un comentario importado en “{page}”" },
   'sync.comment.edit': { en: "An edited comment on “{page}”", es: "Un comentario editado en “{page}”" },
   'sync.comment.delete': { en: "A deleted comment on “{page}”", es: "Un comentario borrado en “{page}”" },
   'sync.comment.resolve': { en: "A resolved thread on “{page}”", es: "Un hilo resuelto en “{page}”" },

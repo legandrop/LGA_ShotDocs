@@ -54,6 +54,8 @@ export const commentsPanel = {
   'comments.you': { en: "You", es: "Vos" },
   'comments.deletedAccount': { en: "Deleted account", es: "Cuenta borrada" },
   'comments.someone': { en: "Someone", es: "Alguien" },
+  'comments.importedFrom': { en: "from {source}", es: "de {source}" },
+  'comments.importedBy': { en: "Imported by {name}", es: "Lo importó {name}" },
   'comments.deleted': { en: "This comment was deleted.", es: "Este comentario se borró." },
   'comments.edited': { en: "edited", es: "editado" },
   'comments.notUploaded': { en: "Not uploaded yet", es: "Todavía sin subir" },

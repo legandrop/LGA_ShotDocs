@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.060 :
+
+Comentarios de Coda al importar. No pasaban a Shot Docs porque la API REST de Coda y su exportación HTML no los
+dan. Ahora se capturan con el servidor MCP de Coda a `comments.json`, en la carpeta exportada, y la importación
+los pone en la cola de comentarios página por página: cada hilo en el bloque que contiene el texto marcado en
+Coda (o en la página entera, si ese texto ya no está), con su fecha original, y resuelto si lo estaba. Los de
+personas sin cuenta en la app quedan con su nombre de Coda y la marca "from Coda": no se les crea cuenta ni se
+les avisa nada. Los de quien importa quedan a su nombre. Seguir una importación cortada no los repite. Migración
+`20260930200000_comentarios_importados.sql`: el autor importado y `import_comment`, que pide editar y crear
+páginas.
+[ Importar de Coda - comentarios ]
+
 v0.059 :
 
 El margen de cada bloque, como pidió Lega. Al pasar el mouse por un bloque aparecen tres puntos verticales,

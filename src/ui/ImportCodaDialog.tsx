@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/importCoda';
-import { findResumable, folderFromFiles, importCoda, importSize, metaJournal } from '../import/codaImport';
+import { countComments, findResumable, folderFromFiles, importCoda, importSize, metaJournal } from '../import/codaImport';
 import { useImportJob } from '../import/importJob';
 import { formatSize } from '../media/fileTrash';
 import { useServices, useSyncStatus } from '../services';
@@ -31,7 +31,7 @@ async function freeSpace(): Promise<number | null> {
 }
 
 export function ImportCodaDialog() {
-  const { tree, docs, media, db, dbName } = useServices();
+  const { tree, docs, media, db, dbName, comments, user } = useServices();
   // Se vuelve a dibujar con el estado de la sincronización: así se entera cuando el Drive queda conectado.
   useSyncStatus();
   const [state, job] = useImportJob(tree);
@@ -40,6 +40,7 @@ export function ImportCodaDialog() {
   const tr = useT();
   const input = useRef<HTMLInputElement>(null);
   const [free, setFree] = useState<number | null>(null);
+  const [commentCount, setCommentCount] = useState(0);
   const folders = canPickFolders();
   const ready = media.enabled && folders;
   const journal = metaJournal(db);
@@ -49,6 +50,7 @@ export function ImportCodaDialog() {
     if (!folder) return;
     let live = true;
     void freeSpace().then((bytes) => live && setFree(bytes));
+    void countComments(folder).then((n) => live && setCommentCount(n));
     return () => {
       live = false;
     };
@@ -68,7 +70,8 @@ export function ImportCodaDialog() {
 
   const start = (resume: boolean) => {
     if (!folder || busy) return;
-    void job.run((onProgress) => importCoda(folder, { tree, docs, media, journal }, { projectName: name.trim(), resume, onProgress }), {
+    const deps = { tree, docs, media, journal, comments, userEmail: user.email || undefined };
+    void job.run((onProgress) => importCoda(folder, deps, { projectName: name.trim(), resume, onProgress }), {
       beacon: dbName,
     });
   };
@@ -101,7 +104,10 @@ export function ImportCodaDialog() {
             </button>
             {folder && (
               <>
-                <p>{tr('import.found', { pages: folder.manifest.pages.length, files, size: formatSize(size) })}</p>
+                <p>
+                  {tr('import.found', { pages: folder.manifest.pages.length, files, size: formatSize(size) })}
+                  {commentCount > 0 && ` ${tr('import.foundComments', { count: commentCount })}`}
+                </p>
                 {free !== null &&
                   (size > free ? (
                     <p className="error">{tr('import.noRoom', { size: formatSize(size), free: formatSize(free) })}</p>
@@ -129,7 +135,10 @@ export function ImportCodaDialog() {
         )}
         {result && (
           <>
-            <p>{tr('import.done', { pages: result.pages, files: result.files })}</p>
+            <p>
+              {tr('import.done', { pages: result.pages, files: result.files })}
+              {result.comments > 0 && ` ${tr('import.doneComments', { count: result.comments })}`}
+            </p>
             <p className="muted">{tr('import.uploading')}</p>
             {result.resumable && <p>{tr('import.canResume')}</p>}
             {result.problems.length > 0 && (

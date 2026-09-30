@@ -43,6 +43,31 @@ export const importCoda = {
   },
   'import.progress': { en: "Page {current} of {total}:", es: "Página {current} de {total}:" },
   'import.done': { en: "Imported {pages} pages and {files} files.", es: "Se importaron {pages} páginas y {files} archivos." },
+  'import.foundComments': {
+    en: { one: "It also has {count} comment.", other: "It also has {count} comments." },
+    es: { one: "Trae además {count} comentario.", other: "Trae además {count} comentarios." },
+  },
+  'import.doneComments': {
+    en: { one: "{count} comment uploads with the sync.", other: "{count} comments upload with the sync." },
+    es: { one: "{count} comentario se sube con la sincronización.", other: "{count} comentarios se suben con la sincronización." },
+  },
+  'import.badComments': {
+    en: "The comments.json in this folder can't be read: the comments were not imported.",
+    es: "No se puede leer el comments.json de esta carpeta: los comentarios no se importaron.",
+  },
+  'import.commentsOtherDoc': {
+    en: "The comments.json in this folder is from another doc: the comments were not imported.",
+    es: "El comments.json de esta carpeta es de otro doc: los comentarios no se importaron.",
+  },
+  'import.commentsOff': {
+    en: "Comments can't be saved on this device: they were not imported.",
+    es: "En este dispositivo no se pueden guardar comentarios: no se importaron.",
+  },
+  'import.commentsOnPage': {
+    en: { one: "the text of {count} comment was not found; it is on the whole page", other: "the text of {count} comments was not found; they are on the whole page" },
+    es: { one: "no se encontró el texto de {count} comentario; quedó en la página entera", other: "no se encontró el texto de {count} comentarios; quedaron en la página entera" },
+  },
+  'import.commentsFailed': { en: "comments not imported ({reason})", es: "no se importaron los comentarios ({reason})" },
   'import.uploading': {
     en: "Files keep uploading to Drive while the app is open. Keep it open until the sync status says everything is uploaded.",
     es: "Los archivos se siguen subiendo al Drive mientras la app está abierta. Dejala abierta hasta que el estado diga que se subió todo.",

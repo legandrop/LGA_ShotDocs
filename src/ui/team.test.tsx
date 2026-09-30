@@ -225,7 +225,7 @@ describe('pantallas del equipo', () => {
     const job = importJobFor(device.tree);
     let finish!: () => void;
     const running = job.run(
-      () => new Promise((resolve) => (finish = () => resolve({ projectId: 'p', pages: 0, files: 0, problems: [], exportProblems: [], resumable: false }))),
+      () => new Promise((resolve) => (finish = () => resolve({ projectId: 'p', pages: 0, files: 0, comments: 0, problems: [], exportProblems: [], resumable: false }))),
     );
     try {
       const host = await mount(value, <RemovedScreen />);

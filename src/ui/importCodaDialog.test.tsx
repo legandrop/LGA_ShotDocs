@@ -113,7 +113,7 @@ describe('diálogo de importar de Coda', () => {
         (onProgress) =>
           new Promise((resolve) => {
             onProgress({ done: 0, total: 3, page: 'Primera' });
-            finish = () => resolve({ projectId: 'p', pages: 3, files: 2, problems: ['A: algo'], exportProblems: ['B: otra cosa'], resumable: true });
+            finish = () => resolve({ projectId: 'p', pages: 3, files: 2, comments: 0, problems: ['A: algo'], exportProblems: ['B: otra cosa'], resumable: true });
           }),
       );
     });
@@ -143,7 +143,7 @@ describe('diálogo de importar de Coda', () => {
     const job = importJobFor(d.tree);
     let finish!: () => void;
     const running = job.run(
-      () => new Promise((resolve) => (finish = () => resolve({ projectId: 'p', pages: 0, files: 0, problems: [], exportProblems: [], resumable: false }))),
+      () => new Promise((resolve) => (finish = () => resolve({ projectId: 'p', pages: 0, files: 0, comments: 0, problems: [], exportProblems: [], resumable: false }))),
     );
     const host = document.createElement('div');
     document.body.append(host);

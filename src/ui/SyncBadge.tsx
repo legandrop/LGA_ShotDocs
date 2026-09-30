@@ -14,8 +14,9 @@ type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
 const TONE_ICONS = { ok: SyncedIcon, busy: UploadingIcon, offline: OfflineIcon, warn: WarningIcon, error: ErrorIcon };
 
 /** Qué comentario no se pudo subir, en el detalle. */
-function commentAction(tr: Translate, kind: 'add' | 'edit' | 'delete' | 'resolve', page: string): string {
+function commentAction(tr: Translate, kind: 'add' | 'edit' | 'delete' | 'resolve' | 'import', page: string): string {
   if (kind === 'add') return tr('sync.comment.add', { page });
+  if (kind === 'import') return tr('sync.comment.import', { page });
   if (kind === 'edit') return tr('sync.comment.edit', { page });
   if (kind === 'delete') return tr('sync.comment.delete', { page });
   return tr('sync.comment.resolve', { page });

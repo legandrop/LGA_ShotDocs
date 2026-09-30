@@ -9,7 +9,9 @@ import { t } from '../i18n';
 import '../i18n/lazy/importCoda';
 import type { LocalDb } from '../sync/localDb';
 import { editorSchemaOptions } from '../ui/editorSchema';
+import type { CommentQueue } from '../sync/comments';
 import { checkForeignImages, finishBlocks, prepareCodaHtml, type CodaMedia, type LooseBlock } from './codaHtml';
+import { buildComments, pageBlocks, parseCodaComments, type CodaComments, type PageBlock } from './codaComments';
 
 // Importa a un proyecto nuevo la carpeta que arma `scripts/coda-export.mjs` (Docs/Doc_Importar_Coda.md):
 // `manifest.json` con el árbol de páginas, `pages/<n>_<id>.html` con el HTML de Coda y `media/bl-….<ext>`.
@@ -17,7 +19,12 @@ import { checkForeignImages, finishBlocks, prepareCodaHtml, type CodaMedia, type
 // para cada archivo (queda en el dispositivo y la sincronización lo sube al Drive por el portero) y el
 // documento de la página con un editor sin pantalla. Por eso funciona sin red y lo que ya se guardó en el
 // dispositivo se sube solo. Si se corta a mitad, el diario (`ImportJournal`) deja seguir en el mismo
-// proyecto sin repetir páginas ni archivos (y sin duplicarlos en el Drive).
+// proyecto sin repetir páginas ni archivos (y sin duplicarlos en el Drive). Si la carpeta tiene
+// `comments.json` (los comentarios, capturados aparte: ver codaComments.ts), cada página suma los suyos a la
+// cola de comentarios apenas se escribe.
+
+/** Los comentarios capturados, en la raíz de la carpeta exportada. */
+export const COMMENTS_FILE = 'comments.json';
 
 export interface CodaManifestPage {
   id: string;
@@ -73,6 +80,8 @@ export interface JournalPage {
   written?: string;
   done?: boolean;
   files?: number;
+  /** Comentarios de Coda que quedaron en la cola. */
+  comments?: number;
 }
 
 export interface JournalStore {
@@ -100,6 +109,10 @@ export interface ImportDeps {
   media: Pick<MediaQueue, 'add' | 'enabled'>;
   /** Sin diario, una importación cortada no se puede seguir (las pruebas lo omiten a veces). */
   journal?: JournalStore;
+  /** La cola de comentarios, para los de `comments.json`. Sin ella, los comentarios no se importan. */
+  comments?: Pick<CommentQueue, 'importComments'>;
+  /** El correo de quien importa: sus propios comentarios de Coda quedan a su nombre. */
+  userEmail?: string;
 }
 
 export interface ImportProgress {
@@ -114,6 +127,8 @@ export interface ImportResult {
   projectId: string;
   pages: number;
   files: number;
+  /** Comentarios de Coda que quedaron en la cola (suben con la sincronización). */
+  comments: number;
   /** Lo que no se pudo traer, por página. */
   problems: string[];
   /** Lo que anotó `coda-export` al bajar el doc (`manifest.problems`). */
@@ -220,6 +235,33 @@ export async function folderFromFiles(files: Iterable<File>): Promise<CodaFolder
     file: async (p) => get(p),
     size: (p) => byPath.get(p)?.size ?? 0,
   };
+}
+
+/**
+ * Los comentarios de la carpeta (`comments.json`), o `null` si no tiene. Un archivo que no se puede leer, o
+ * de otro doc, es un error con su motivo (la importación lo anota y sigue sin comentarios).
+ */
+export async function readComments(folder: CodaFolder): Promise<CodaComments | null> {
+  if (!folder.has(COMMENTS_FILE)) return null;
+  let parsed: CodaComments;
+  try {
+    parsed = parseCodaComments(JSON.parse(await folder.text(COMMENTS_FILE)));
+  } catch {
+    throw new Error(t('import.badComments'));
+  }
+  const docId = folder.manifest.doc.id;
+  if (parsed.docId && docId && parsed.docId !== docId) throw new Error(t('import.commentsOtherDoc'));
+  return parsed;
+}
+
+/** Cuántos comentarios trae la carpeta (0 sin `comments.json` o si no se puede leer). */
+export async function countComments(folder: CodaFolder): Promise<number> {
+  const found = await readComments(folder).catch(() => null);
+  if (!found) return 0;
+  const ids = new Set(folder.manifest.pages.map((p) => p.id));
+  let n = 0;
+  for (const [pageId, threads] of found.pages) if (ids.has(pageId)) for (const th of threads) n += th.comments.length;
+  return n;
 }
 
 /** Cuánto pesan los archivos que se van a importar (cada uno una vez), en bytes. */
@@ -344,9 +386,22 @@ export async function importCoda(
   };
   await save();
 
+  let codaComments: CodaComments | null = null;
+  try {
+    codaComments = await readComments(folder);
+  } catch (err) {
+    problems.push(err instanceof Error ? err.message : String(err));
+  }
+  if (codaComments && !deps.comments) {
+    problems.push(t('import.commentsOff'));
+    codaComments = null;
+  }
+  const context: PageContext = { comments: codaComments, projectId: state.projectId };
+
   const live = (pageId: string | undefined): pageId is string => !!pageId && !!deps.tree.get(pageId) && !deps.tree.isTrashed(pageId);
   const parser = BlockNoteEditor.create(editorSchemaOptions) as unknown as BlockNoteEditor<any, any, any>;
   let files = 0;
+  let comments = 0;
 
   for (const [i, page] of pages.entries()) {
     if (i > 0) await breathe();
@@ -358,6 +413,7 @@ export async function importCoda(
     // papelera después (no vuelve).
     if (entry?.done) {
       files += entry.files ?? 0;
+      comments += entry.comments ?? 0;
       continue;
     }
     // Una página que falla queda creada (vacía o a medias) y anotada, sin terminar: al seguir se reintenta.
@@ -369,10 +425,11 @@ export async function importCoda(
         state.pages[page.id] = { pageId };
         await save();
       }
-      const got = await importPage(folder, deps, parser, page, pageId, title, problems, state, save);
-      state.pages[page.id] = { pageId, files: got.files, written: got.written, done: got.complete || undefined };
+      const got = await importPage(folder, deps, parser, page, pageId, title, problems, state, save, context);
+      state.pages[page.id] = { pageId, files: got.files, comments: got.comments || undefined, written: got.written, done: got.complete || undefined };
       await save();
       files += got.files;
+      comments += got.comments;
     } catch (err) {
       problems.push(`${title}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -385,10 +442,51 @@ export async function importCoda(
     projectId: state.projectId,
     pages: pages.length,
     files,
+    comments,
     problems,
     exportProblems: manifest.problems ?? [],
     resumable: resumable && !!store,
   };
+}
+
+/** Lo que comparten todas las páginas de una importación. */
+interface PageContext {
+  comments: CodaComments | null;
+  projectId: string;
+}
+
+/**
+ * Pone en la cola los comentarios de Coda de una página, cada hilo en el bloque que tiene su texto (`blocks`,
+ * los de la página ya escrita) o en la página si no se encuentra. Devuelve cuántos quedaron en la cola, y si
+ * algo falló (la página queda sin terminar para reintentarlo al seguir: el mismo id no se repite).
+ */
+async function importPageComments(
+  deps: ImportDeps,
+  context: PageContext,
+  page: CodaManifestPage,
+  pageId: string,
+  title: string,
+  blocks: PageBlock[],
+  problems: string[],
+): Promise<{ count: number; ok: boolean }> {
+  const threads = context.comments?.pages.get(page.id) ?? [];
+  if (threads.length === 0 || !deps.comments) return { count: 0, ok: true };
+  try {
+    const built = await buildComments(threads, {
+      projectId: context.projectId,
+      pageId,
+      codaPageId: page.id,
+      blocks,
+      userEmail: deps.userEmail,
+      capturedAt: context.comments?.capturedAt,
+    });
+    const count = await deps.comments.importComments(built.comments);
+    if (built.lost) problems.push(`${title}: ${t('import.commentsOnPage', { count: built.lost })}`);
+    return { count, ok: true };
+  } catch (err) {
+    problems.push(`${title}: ${t('import.commentsFailed', { reason: err instanceof Error ? err.message : String(err) })}`);
+    return { count: 0, ok: false };
+  }
 }
 
 async function importPage(
@@ -401,10 +499,13 @@ async function importPage(
   problems: string[],
   journal: ImportJournal,
   save: () => Promise<void>,
-): Promise<{ files: number; complete: boolean; written?: string }> {
+  context: PageContext,
+): Promise<{ files: number; comments: number; complete: boolean; written?: string }> {
   if (!page.file || !folder.has(`pages/${page.file}`)) {
     problems.push(`${title}: ${page.contentType === 'canvas' ? t('import.notExported') : t('import.notCanvas', { type: page.contentType })}`);
-    return { files: 0, complete: true };
+    // Sin contenido, los comentarios van a la página.
+    const got = await importPageComments(deps, context, page, pageId, title, [], problems);
+    return { files: 0, comments: got.count, complete: got.ok };
   }
 
   const { html, media, embeds } = prepareCodaHtml(await folder.text(`pages/${page.file}`));
@@ -492,11 +593,13 @@ async function importPage(
   }
   // Lo que la persona escribió en la página después del corte nunca se pisa.
   if (outcome.result === 'appended') problems.push(`${title}: ${t('import.appended')}`);
+  // Los comentarios, con los bloques como quedaron (también en una página que la persona editó).
+  const got = await importPageComments(deps, context, page, pageId, title, outcome.blocks, problems);
   if (outcome.result === 'kept') {
     problems.push(`${title}: ${t('import.keptEdited')}`);
-    return { files, complete: true };
+    return { files, comments: got.count, complete: got.ok };
   }
-  return { files, complete, written: outcome.fingerprint };
+  return { files, comments: got.count, complete: complete && got.ok, written: outcome.fingerprint };
 }
 
 /** El archivo bajado de una foto: por su blob (`bl-….<ext>`), o por la dirección que anotó el manifest. */
@@ -558,13 +661,14 @@ async function writePage(
   pageId: string,
   blocks: PartialBlock<any, any, any>[],
   previous?: string,
-): Promise<{ result: 'replaced' | 'appended' | 'kept'; fingerprint?: string }> {
+): Promise<{ result: 'replaced' | 'appended' | 'kept'; fingerprint?: string; blocks: PageBlock[] }> {
   const doc = await docs.open(pageId, { seed: true });
   const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
   const edited = hasContent(fragment) && contentFingerprint(fragment) !== previous;
   if (edited && previous) {
+    const blocks = pageBlocks(fragment);
     docs.close(pageId);
-    return { result: 'kept' };
+    return { result: 'kept', blocks };
   }
   const editor = BlockNoteEditor.create(
     withCollaboration({
@@ -581,7 +685,7 @@ async function writePage(
     if (blocks.length && edited) editor.insertBlocks(blocks, editor.document[editor.document.length - 1], 'after');
     else if (blocks.length) editor.replaceBlocks(editor.document, blocks);
     await docs.flush(pageId);
-    return { result: edited ? 'appended' : 'replaced', fingerprint: contentFingerprint(fragment) };
+    return { result: edited ? 'appended' : 'replaced', fingerprint: contentFingerprint(fragment), blocks: pageBlocks(fragment) };
   } finally {
     editor.unmount();
     host.remove();

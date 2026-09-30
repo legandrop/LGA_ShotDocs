@@ -2,7 +2,7 @@
 
 Cómo se pasa un doc de Coda (con sus páginas, subpáginas, fotos y videos) a un proyecto de Shot Docs. Son
 dos pasos: un comando que baja el doc a una carpeta de la PC, y la app, que importa esa carpeta. Los
-comentarios todavía no pasan (ver "3. Comentarios").
+comentarios se capturan aparte, con el servidor MCP de Coda (ver "3. Comentarios").
 
 ## Paso a paso
 
@@ -10,12 +10,15 @@ comentarios todavía no pasan (ver "3. Comentarios").
    Coda lo ofrece. Se guarda como único contenido de `%USERPROFILE%\.coda-token` (fuera del repo).
 2. **Bajar el doc**: `node scripts/coda-export.mjs "<nombre del doc>"`. Termina con "Listo: N páginas, M
    archivos. Problemas: 0"; con problemas sale con error y se vuelve a correr (trae solo lo que falta).
-3. **Revisar la carpeta** (`%USERPROFILE%\Coda_Export\<doc>`): cualquier `pages/*.local.html` se abre en el
+3. **Capturar los comentarios** (si el doc tiene): con el MCP de Coda, `comments.json` en la misma carpeta
+   (ver "3. Comentarios"). Sin ese archivo se importa igual, sin comentarios.
+4. **Revisar la carpeta** (`%USERPROFILE%\Coda_Export\<doc>`): cualquier `pages/*.local.html` se abre en el
    navegador con sus fotos, y `manifest.json` lista el árbol y lo que no se pudo bajar.
-4. **Importar**: en la app, selector de proyectos → *Import from Coda…* → la carpeta → un nombre para el
-   proyecto nuevo.
-5. **Esperar la subida**: dejar la app abierta hasta que el estado diga que se subió todo al Drive.
-6. **Comprobar**: el árbol de páginas y las fotos de algunas páginas, comparando con Coda.
+5. **Importar**: recargar las pestañas abiertas de la app y, en la app, selector de proyectos → *Import from
+   Coda…* → la carpeta → un nombre para el proyecto nuevo.
+6. **Esperar la subida**: dejar la app abierta hasta que el estado diga que se subió todo al Drive y que no
+   quedan cambios por sincronizar (los comentarios suben con ellos).
+7. **Comprobar**: el árbol de páginas, las fotos y los comentarios de algunas páginas, comparando con Coda.
 
 Así se probó con MGTZD (35 páginas, 32 fotos, 28 MB): la importación salió completa. Dos exportaciones
 desde cero dieron los mismos archivos byte por byte, y una segunda corrida sobre la misma carpeta no bajó
@@ -188,72 +191,115 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   (colaboración) se fija al crear el editor, así que no se puede reusar uno para todas. El que convierte el
   HTML sí es uno solo para toda la importación.
 
-## 3. Comentarios (pendiente)
+## 3. Comentarios
 
-Los comentarios de Coda todavía no se importan. Lo averiguado hasta ahora (2026-09-30):
+Desde v0.060 los comentarios de Coda entran con la importación, también los de personas que no tienen cuenta
+en la app. Esas personas no se enteran de nada: no se les crea cuenta, no se las invita y la app no manda
+correos por comentarios.
 
 ### Dónde están
 
 - **La API REST de Coda no los da.** La especificación (`https://coda.io/apis/v1/openapi.json`, versión 1.6.0)
   no tiene ningún endpoint de comentarios: solo aparece "comment" como nivel de permiso de un doc.
 - **La exportación HTML tampoco** (`beginPageContentExport`): el HTML de una página con comentarios no trae
-  ni el texto ni una marca de dónde estaban.
-- **El servidor MCP de Coda (Superhuman Docs MCP) sí.** Su herramienta `content_read` lee el contenido de una
-  página y, con `contentTypesToInclude: ["comments"]`, también los comentarios. Tiene además `comment_add` y
-  permite resolver y reabrir hilos. Es la única vía documentada; el comando `coda-export` no puede usarla
-  porque habla con la API REST.
-- **Falta comprobar qué trae cada comentario**: nombre o correo del autor, fecha, respuestas del hilo, si está
-  resuelto y a qué está anclado (un texto, el id `cl-…` del elemento). La documentación del MCP no lo detalla:
-  lo primero es leer con `content_read` una página de MGTZD que tenga comentarios y anotar acá la forma real.
+  ni el texto ni una marca de dónde estaban, ni los ids `cl-…` de los bloques.
+- **El servidor MCP de Coda (Superhuman Docs MCP) sí**: `content_read` con
+  `contentTypesToInclude: ["comments"]`, página por página. Es de solo lectura. El mismo servidor tiene
+  herramientas que escriben (`comment_add`, `comment_resolve`, `comment_delete`, las de notificaciones):
+  **para capturar no se usa ninguna**, porque avisarían a la gente del doc.
 
-### Cómo llegarían a la carpeta exportada
-
-Para que la importación siga siendo "elegir una carpeta", los comentarios se guardan en la misma carpeta, un
-archivo por página: `comments/<id de la página de Coda>.json` (el `id` del manifest, `canvas-…`). Forma
-propuesta (se ajusta a lo que devuelva el MCP):
+Lo que devuelve, por hilo (verificado con MGTZD el 2026-09-30):
 
 ```json
 {
-  "pageId": "canvas-…",
-  "threads": [
-    {
-      "anchorText": "el texto al que estaba pegado, o null",
-      "anchorElement": "cl-… o null",
-      "resolved": false,
-      "comments": [{ "author": "nombre o correo, como lo muestre Coda", "createdAt": "2026-09-30T12:00:00Z", "body": "…" }]
-    }
+  "threadUri": "threads/r-…",
+  "state": "Active | Resolved | New",
+  "reference": { "type": "text", "text": "- el texto marcado, en Markdown", "referenceBlockIds": ["cl-…"] },
+  "comments": [
+    { "commentUri": "comments/i-…", "authorName": "…", "authorEmail": "…", "userId": 123,
+      "createdAt": 1790794845.411, "text": "…", "reactions": [] }
   ]
 }
 ```
 
-Los comentarios tienen nombres y correos de otras personas: quedan en la carpeta exportada (fuera del repo,
-`Coda_Export/` está en `.gitignore`) y en la base del workspace. Nunca en el repo ni en las pruebas.
+- `createdAt` son segundos Unix con decimales. El primer comentario abre el hilo; los demás son respuestas.
+- `reference` es `null` cuando el hilo no está pegado a nada (en MGTZD, todos los de ese tipo estaban
+  resueltos). Coda no dice quién resolvió un hilo ni cuándo.
+- Las reacciones no se importan.
 
-### Cómo entrarían a Shot Docs (diseño propuesto, sin hacer)
+### La captura: `comments.json`
 
-Hoy todo comentario pertenece a una cuenta de la app (`comments.author_id` apunta a `auth.users`, y el nombre
-que se ve sale del correo de esa cuenta, `comment_authors`). Quien comentó en Coda puede no tener cuenta y no
-tiene por qué enterarse. Propuesta:
+La hace alguien con el MCP de Coda conectado, **después** de `coda-export` (y con `--refresh` si el doc
+cambió): para cada página del manifest, `content_read` con `comments`, y la respuesta tal cual, sin
+transformarla, en `comments.json` en la raíz de la carpeta exportada:
 
-- **Migración**: `comments.imported_author text` (el nombre o correo que da Coda) e `imported_by uuid` (quien
-  importó). Un comentario importado va con `author_id` nulo y `imported_author` puesto; `created_at` guarda la
-  fecha original.
-- **`import_comment(...)`** en la base, `security definer`, con el mismo estilo que `add_comment` (el mismo id
-  dos veces no duplica): pide nivel 3 (editar) sobre la página, acepta `imported_author`, la fecha original y,
-  en el primer comentario del hilo, si estaba resuelto. `list_comments` devuelve también `imported_author`.
-- **En la app**: el nombre original con una marca "from Coda". Se responde y se resuelve como cualquier otro;
-  nadie lo edita (no hay autor en la app); lo borra quien hoy borra comentarios ajenos (nivel 4).
-- **Dónde va**: en Coda un comentario está pegado a un texto; en la app, al bloque que contiene ese texto
-  (normalizado: sin mayúsculas, tildes ni espacios de más). Si el texto ya no está, va como comentario de la
-  página (`block_id` nulo).
-- **Cuándo**: la página tiene que existir en el servidor antes que su comentario (clave foránea), y la
-  importación crea las páginas en el dispositivo. O los comentarios esperan en una cola hasta que su página
-  subió (como `CommentQueue`, `src/sync/comments.ts`), o se importan en un segundo paso, con la app
-  sincronizada. La relación "página de Coda → página de la app" está en la anotación de la importación
-  (`codaImport:<id del doc>`), que se borra al terminar: o se importan en la misma pasada, o se guarda esa
-  relación aparte.
-- Es una migración de la base: va antes de publicar la app y no puede romper la versión publicada (ver
-  `Doc_Supabase.md`).
+```json
+{
+  "source": "Coda MCP content_read, contentTypesToInclude: [\"comments\"]",
+  "docId": "<el doc.id del manifest>",
+  "capturedAt": "2026-09-30T23:30:00Z",
+  "pages": { "<id de la página del manifest, canvas-…>": [ <hilo>, … ], "…": [] }
+}
+```
+
+- Todas las páginas del manifest van en `pages`, también las que no tienen hilos (`[]`): así se ve que la
+  captura está completa.
+- Tiene nombres y correos de otras personas: queda en la carpeta exportada (fuera del repo, `Coda_Export/`
+  está en `.gitignore`) y en la base del workspace. Nunca en el repo ni en las pruebas.
+- El comando `coda-export` no puede hacerla: habla con la API REST, que no tiene comentarios.
+
+### Cómo entran (`src/import/codaComments.ts`)
+
+- **Al elegir la carpeta** el diálogo dice cuántos comentarios trae. Un `comments.json` roto o de otro doc
+  (`docId` distinto del manifest) queda anotado y la importación sigue sin comentarios.
+- **Página por página**, apenas se escribe su contenido, sus hilos van a la cola de comentarios
+  (`CommentQueue.importComments`, una operación `import`) y suben con la sincronización cuando la página
+  llegó al servidor, como cualquier comentario hecho sin red.
+- **Dónde va cada hilo:** al bloque de la página que tiene el texto marcado, comparado sin el Markdown de
+  Coda (viñetas, casillas, títulos, negritas, cursivas, links, escapes), sin mayúsculas ni tildes y con los
+  espacios juntados. Primero un bloque cuyo texto es exactamente ese (entero, o una de sus líneas si abarcaba
+  varios bloques); si no hay, el primero que lo contiene, de la línea más larga a la más corta y solo con
+  textos de 8 letras o más, o de dos palabras ("ok" no se busca adentro de "Plano 12: ok"). Si no se encuentra
+  (se borró en Coda, por ejemplo), el hilo va a la página entera y queda anotado en la lista del final. Sin
+  `reference`, o con un texto que queda vacío al limpiarlo, va a la página entera sin anotarlo.
+- **Autor:** un comentario con el correo de quien importa queda a su nombre (es suyo: lo edita y lo borra
+  como cualquier otro). Los demás quedan sin autor de la app, con el nombre y el correo que da Coda; se ven
+  con el nombre, la marca "from Coda" y el correo en el tooltip; el tooltip de la marca dice quién los importó.
+  Nadie los edita; los borra quien tiene editar y crear páginas. Se responden y se resuelven como cualquier
+  otro.
+- **Fechas:** la original de cada comentario. Un hilo resuelto entra resuelto, con la fecha de su último
+  comentario (Coda no dice cuándo se resolvió) y sin quién.
+- **Ids estables:** el id de cada comentario sale del proyecto y del `commentUri` de Coda (SHA-256 con forma
+  de uuid). Seguir una importación cortada no repite nada: lo que ya está en la cola no se vuelve a poner, y lo
+  que ya subió lo reconoce la base. Si la página se vuelve a escribir al seguir (sus bloques cambian de id), el
+  hilo pasa al bloque nuevo: si todavía no salió de la cola, ahí mismo; si ya subió, la base lo mueve (con sus
+  respuestas) al recibirlo de nuevo.
+- **Datos raros:** un comentario sin texto en Coda (solo una imagen o un adjunto) entra como "(no text in
+  Coda)", así el hilo no se pierde; un nombre de más de 200 caracteres se corta; un correo que no parece correo
+  no se guarda; una fecha anterior a 2000 o futura queda como la de la importación. Uno de más de 10.000
+  caracteres se corta.
+
+### En la base (`20260930200000_comentarios_importados.sql`)
+
+- `comments` suma `imported_from` (`'coda'`), `imported_author`, `imported_author_email` e `imported_by`.
+  Un autor de afuera va con `author_id` nulo.
+- `import_comment(...)` escribe uno: pide **editar y crear páginas** sobre la página (importar arma
+  contenido con autores y fechas de otra herramienta: un invitado que solo edita no puede), acepta solo el
+  origen `coda` y fechas desde 2000 y no futuras, guarda la fecha original en `created_at` y la de la
+  importación en `updated_at` (así los demás dispositivos lo bajan solos), acepta el hilo resuelto y es
+  idempotente por id, como `add_comment`. El mismo comentario importado de nuevo por la misma persona con otro
+  bloque no es un conflicto: el hilo pasa a ese bloque con sus respuestas (seguir una importación).
+- `list_comments` y `comments_view` devuelven las columnas nuevas, y `comment_authors` suma a quien importó.
+  Quien ve la página ve el nombre y el correo del autor importado (como los correos del equipo).
+- Compatible con la app publicada: una versión anterior muestra un comentario importado de otra persona como
+  de una cuenta borrada, sin perder nada. **Antes de importar, recargar todas las pestañas de la app**: una
+  versión anterior a v0.060 que tome el control de la sincronización no conoce la operación `import` de la
+  cola y la daría por subida sin mandarla. Por si pasa igual, cada comentario importado queda además en
+  `meta` del dispositivo (`import:<id>`) hasta que el servidor lo confirma, y al abrir la app vuelve a la cola
+  si desapareció sin llegar.
+- Si se restaura una copia de seguridad de la base, todo lo que importó una persona (de afuera o suyo) vuelve
+  solo desde su dispositivo, con su autor, su fecha y resuelto si entró resuelto, como cualquier comentario
+  propio.
 
 ## Migración definitiva
 
@@ -261,7 +307,7 @@ Lo importado hasta ahora es una prueba. Después de importar, Coda se siguió ed
 cambiaron): la importación no se entera de los cambios posteriores. Para migrar de verdad un doc:
 
 1. Dejar de editarlo en Coda.
-2. Bajarlo de nuevo con `--refresh` (o a una carpeta nueva), con sus comentarios cuando estén resueltos.
+2. Bajarlo de nuevo con `--refresh` (o a una carpeta nueva) y capturar de nuevo sus comentarios.
 3. Importarlo a un proyecto nuevo y comprobarlo.
 4. Mandar a la papelera el proyecto de prueba.
 
@@ -275,6 +321,9 @@ cambiaron): la importación no se entera de los cambios posteriores. Para migrar
 - `src/ui/ImportCodaDialog.tsx` (se baja aparte, con sus textos en `src/i18n/lazy/importCoda.ts`); la entrada
   del menú (`import.menu`, con su ícono propio) está en la primera carga.
 - `src/import/codaOwner.ts`: quién ve "Importar de Coda" (solo la cuenta de Lega, por el hash de su correo).
+- `src/import/codaComments.ts`: `comments.json`, el anclaje por texto, los ids estables y los comentarios para
+  la cola; la operación `import` de la cola en `src/sync/comments.ts`; `import_comment` en
+  `supabase/migrations/20260930200000_comentarios_importados.sql`.
 
 ### Correcciones de la auditoría (2026-09-30)
 
@@ -340,3 +389,15 @@ permitido, con el hash permitido de un correo de prueba (el real no aparece en l
 `src/import/codaOwner.test.ts`, el hash (sin espacios, en minúsculas), sin correo o sin Web Crypto nadie, y
 una sola vez por usuario; `src/ui/team.test.tsx`, la pantalla de "te sacaron" con una importación en curso.
 Con MGTZD real (35 páginas, 32 fotos, 28 MB) se probó igual, fuera del repo, el 2026-09-30.
+
+Comentarios: `src/import/codaComments.test.ts`, con `comments.json` inventado con la forma del MCP de Coda: el
+Markdown de Coda normalizado, el anclaje (texto exacto antes que contenido, textos cortos, cursivas, varias
+líneas, texto que ya no está, sin anclaje), datos raros (sin texto, nombre largo, correo inválido, fecha
+imposible), ids estables por proyecto, lo propio a nombre de quien importa, y la importación entera contra el
+servidor en memoria (cada hilo en el bloque con su texto, resueltos, a la página, otro dispositivo que los ve,
+seguir sin repetir, sin red y con red después de subir, con los bloques nuevos, un `comments.json` roto, de otro
+doc o sin cola). `src/sync/commentsImport.test.ts`: la cola
+(fecha original, autor de afuera, esperar a la página, reintentos, textos vacíos o largos, la base sin
+`import_comment`, pedir editar y crear, quién edita y borra, restaurar una copia, una versión vieja que los saca
+de la cola, borrar antes de subir). `supabase/tests/comentarios_importados_permisos.sql`: la
+función en la base.

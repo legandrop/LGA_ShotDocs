@@ -460,6 +460,14 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
   texto); un comentario borrado antes de subir no viaja (salvo que tenga respuestas esperando); resolver y
   reabrir sin mandar se queda con lo último. El cambio que se manda se marca como intentado en la misma
   transacción en que se lee: desde ahí nada se le funde, y una edición va aparte.
+- **Comentarios importados** (`Doc_Importar_Coda.md`, "3. Comentarios"): la operación `import` de la cola lleva
+  la fecha original y, si es de alguien de afuera, su nombre y correo; sube con `import_comment` (base en la
+  versión 8) y en todo lo demás se trata como un alta (se le funde una edición, descartarla se lleva sus
+  respuestas). Volver a ponerla en la cola con el mismo id no la repite; si todavía no salió, toma el bloque
+  nuevo. Una versión de la app anterior a v0.060 no la conoce y la daría por subida sin mandarla: por eso se
+  recargan las pestañas antes de importar, y además cada una queda en `meta` (`import:<id>`) hasta que el
+  servidor la confirma; al abrir, lo que está ahí y ya no está ni en la cola ni en lo bajado vuelve a la cola.
+  Después de restaurar una copia, lo importado por esta persona vuelve como `import`, con su autor y resuelto.
 - **Errores:** sin red, espera. Un error que se arregla solo (un 500, la sesión renovándose) se reintenta
   en la próxima sincronización con el error a la vista (`commentError`). Un rechazo (`comment_denied`,
   `not_allowed`, `comment_deleted`, `comment_conflict`, una página que dejó de estar compartida...) queda

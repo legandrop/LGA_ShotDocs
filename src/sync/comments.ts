@@ -22,6 +22,13 @@ export const LEVEL_DELETE_ANY = 4;
 /** El largo máximo del texto (la restricción de `comments.body`). */
 export const MAX_COMMENT_LENGTH = 10_000;
 
+// Cada comentario importado se guarda además en `meta` (`import:<id>`) hasta que el servidor lo confirma. Una
+// versión de la app anterior a los comentarios importados (misma base del dispositivo) no conoce la operación
+// `import`: si toma el control de la sincronización, la da por subida sin mandarla y la saca de la cola. Esa
+// versión solo borra en `meta` las claves `since:`, así que al abrir, lo que está en `meta` y ya no está ni en
+// la cola ni en lo bajado vuelve a la cola (el mismo id: nada se duplica).
+const IMPORT_KEY = 'import:';
+
 /** La forma que acepta `comments.block_id`. */
 const BLOCK_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -44,6 +51,26 @@ export interface CommentRow {
   resolved_by: string | null;
   deleted_at: string | null;
   deleted_by: string | null;
+  /** De dónde vino un comentario importado (`'coda'`); ausente o `null` en los demás. */
+  imported_from?: string | null;
+  /** El nombre del autor de afuera (sin cuenta en la app); `null` si es de una cuenta de la app. */
+  imported_author?: string | null;
+  imported_author_email?: string | null;
+  /** Quien importó el comentario (una cuenta de la app). */
+  imported_by?: string | null;
+}
+
+/** Un comentario que viene de otra herramienta (`import_comment`, 20260930200000_comentarios_importados.sql). */
+export interface ImportedComment extends NewComment {
+  /** La fecha original. */
+  createdAt: string;
+  /** Solo en el primer comentario del hilo: el hilo entra resuelto. */
+  resolvedAt: string | null;
+  /** De dónde viene (`'coda'`). */
+  source: string;
+  /** `null`: el comentario era de quien importa y queda a su nombre. */
+  authorName: string | null;
+  authorEmail: string | null;
 }
 
 export interface NewComment {
@@ -72,6 +99,8 @@ export interface CommentRemote {
   deleteComment(id: string): Promise<void>;
   /** Resolver uno resuelto (o abrir uno abierto) no cambia nada. */
   resolveThread(threadId: string, resolved: boolean): Promise<void>;
+  /** `import_comment`: idempotente como `addComment` (pide editar la página). */
+  importComment(comment: ImportedComment): Promise<void>;
   /**
    * `list_comments(p_page_id, p_since)`, si la base la tiene: lo mismo que `comments_view` más
    * `updated_at`, y con `since` solo lo que cambió desde entonces. `null` si la base no tiene la función
@@ -91,7 +120,21 @@ export type CommentOp =
   | { kind: 'add'; id: string; pageId: string; blockId: string | null; threadId: string | null; body: string; at: string }
   | { kind: 'edit'; id: string; pageId: string; body: string; at: string }
   | { kind: 'delete'; id: string; pageId: string; at: string }
-  | { kind: 'resolve'; id: string; pageId: string; resolved: boolean; at: string };
+  | { kind: 'resolve'; id: string; pageId: string; resolved: boolean; at: string }
+  // Un comentario importado (Doc_Importar_Coda.md): `at` es la fecha original.
+  | {
+      kind: 'import';
+      id: string;
+      pageId: string;
+      blockId: string | null;
+      threadId: string | null;
+      body: string;
+      at: string;
+      resolvedAt: string | null;
+      source: string;
+      authorName: string | null;
+      authorEmail: string | null;
+    };
 
 export interface QueuedCommentOp {
   seq?: number;
@@ -143,6 +186,13 @@ export interface CommentView {
   threadId: string | null;
   body: string;
   authorId: string | null;
+  /** Importado de otra herramienta (`'coda'`), o `null`. */
+  importedFrom: string | null;
+  /** El autor de afuera (sin cuenta en la app) de un comentario importado, o `null`. */
+  importedAuthor: string | null;
+  importedAuthorEmail: string | null;
+  /** Quien lo importó (una cuenta de la app), o `null`. */
+  importedBy: string | null;
   createdAt: string;
   editedAt: string | null;
   deleted: boolean;
@@ -198,6 +248,11 @@ export function commentErrorText(error: string, kind?: CommentOp['kind']): strin
     case 'thread_other_page':
     case 'thread_invalid':
       return stored('commentError.threadInvalid');
+    case 'import_denied':
+      return stored('commentError.importDenied');
+    case 'created_invalid':
+    case 'resolved_invalid':
+      return stored('commentError.importInvalid');
     case 'not_authenticated':
       return stored('commentError.signedOut');
     default:
@@ -321,10 +376,34 @@ export class CommentQueue {
 
   async load(): Promise<void> {
     if (!this.db) return;
+    await this.restoreImports().catch(() => undefined);
     const [ops, authors] = await Promise.all([this.db.getAll('outbox'), this.db.getAll('authors')]);
     this.ops = ops.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
     for (const a of authors) this.authors.set(a.userId, a.email);
     this.changed();
+  }
+
+  /**
+   * Los comentarios importados que están en `meta` y ya no están ni en la cola ni en lo bajado (una versión
+   * vieja de la app los sacó de la cola sin mandarlos) vuelven a la cola. Los que ya bajaron se olvidan.
+   */
+  private async restoreImports(): Promise<void> {
+    const db = this.db!;
+    const tx = db.transaction(['outbox', 'meta', 'comments'], 'readwrite');
+    const outbox = tx.objectStore('outbox');
+    const meta = tx.objectStore('meta');
+    const rows = tx.objectStore('comments');
+    const keys = (await meta.getAllKeys()).filter((k): k is string => typeof k === 'string' && k.startsWith(IMPORT_KEY));
+    if (keys.length > 0) {
+      const queued = new Set((await outbox.getAll()).filter((e) => e.op.kind === 'import').map((e) => e.op.id));
+      for (const key of keys) {
+        const op = (await meta.get(key)) as CommentOp | undefined;
+        if (!op || op.kind !== 'import' || queued.has(op.id)) continue;
+        if (await rows.get(op.id)) await meta.delete(key);
+        else await outbox.add({ op, attempted: false, failed: false, error: null, queuedAt: this.now() });
+      }
+    }
+    await tx.done;
   }
 
   /**
@@ -422,6 +501,72 @@ export class CommentQueue {
     await this.enqueue({ kind: 'resolve', id: threadId, pageId, resolved, at: this.stamp() });
   }
 
+  /**
+   * Pone en la cola comentarios importados de otra herramienta (Doc_Importar_Coda.md), en el orden dado: cada
+   * hilo antes que sus respuestas. Suben cuando su página llegó al servidor, como los demás. Los que ya están
+   * en la cola (una importación cortada que se sigue) no se repiten, y los que el servidor ya tiene los
+   * reconoce la base por el id. Un texto vacío no entra; uno más largo que el máximo se corta. Devuelve
+   * cuántos quedaron en la cola.
+   */
+  async importComments(comments: ImportedComment[]): Promise<number> {
+    if (!this.db) throw new CommentInvalid(t('commentError.off', { reason: localize(this.unavailable ?? '') }));
+    const ops: Extract<CommentOp, { kind: 'import' }>[] = [];
+    // Un hilo que no entra se lleva sus respuestas (sin él, la base las rechazaría).
+    const skipped = new Set<string>();
+    for (const c of comments) {
+      const body = c.body.replace(/\r\n?/g, '\n').replace(/\s+$/u, '').replace(/^\s*\n/u, '');
+      const bad = !/\S/u.test(body) || !isCommentId(c.id) || (c.blockId !== null && !BLOCK_ID.test(c.blockId));
+      if (bad || (c.threadId && skipped.has(c.threadId))) {
+        skipped.add(c.id);
+        continue;
+      }
+      ops.push({
+        kind: 'import',
+        id: c.id,
+        pageId: c.pageId,
+        blockId: c.threadId ? null : c.blockId,
+        threadId: c.threadId,
+        body: body.length > MAX_COMMENT_LENGTH ? `${body.slice(0, MAX_COMMENT_LENGTH - 1)}…` : body,
+        at: c.createdAt,
+        resolvedAt: c.threadId ? null : c.resolvedAt,
+        source: c.source,
+        authorName: c.authorName?.trim() || null,
+        authorEmail: c.authorName?.trim() ? c.authorEmail?.trim().toLowerCase() || null : null,
+      });
+    }
+    if (ops.length === 0) return 0;
+    this.writing++;
+    try {
+      const tx = this.db.transaction(['outbox', 'meta'], 'readwrite');
+      const outbox = tx.objectStore('outbox');
+      const meta = tx.objectStore('meta');
+      const queued = new Map((await outbox.getAll()).filter((e) => e.op.kind === 'import').map((e) => [e.op.id, e]));
+      for (const op of ops) {
+        const earlier = queued.get(op.id);
+        // Ya en la cola: si todavía no salió, toma el bloque de ahora (al seguir una importación la página se
+        // vuelve a escribir y sus bloques cambian de id), con el texto que tenga (una edición sin mandar se
+        // funde en el alta). Si ya salió, queda como está: el panel lo muestra igual, como un hilo cuyo bloque
+        // ya no está.
+        if (earlier) {
+          if (!earlier.attempted && !earlier.failed && earlier.op.kind === 'import') {
+            const next = { ...op, body: earlier.op.body };
+            await outbox.put({ ...earlier, op: next });
+            await meta.put(next, IMPORT_KEY + op.id);
+          }
+          continue;
+        }
+        await outbox.add({ op, attempted: false, failed: false, error: null, queuedAt: this.now() });
+        await meta.put(op, IMPORT_KEY + op.id);
+      }
+      await tx.done;
+    } finally {
+      this.writing--;
+    }
+    await this.reloadOps();
+    this.onQueued?.();
+    return ops.length;
+  }
+
   /** Vuelve a intentar lo rechazado (el botón "Retry" y cada vez que se abre la app). */
   async retryFailed(): Promise<void> {
     if (!this.db || !this.ops.some((o) => o.failed)) return;
@@ -441,20 +586,25 @@ export class CommentQueue {
    */
   async discard(seq: number): Promise<void> {
     if (!this.db) return;
-    const tx = this.db.transaction('outbox', 'readwrite');
-    const all = await tx.store.getAll();
+    const tx = this.db.transaction(['outbox', 'meta'], 'readwrite');
+    const store = tx.objectStore('outbox');
+    const all = await store.getAll();
     const entry = all.find((e) => e.seq === seq);
     if (!entry?.failed) {
       await tx.done;
       return;
     }
     const drop = new Set<number>([seq]);
-    if (entry.op.kind === 'add') {
+    if (isNew(entry.op)) {
       const gone = new Set([entry.op.id]);
-      for (const e of all) if (e.op.kind === 'add' && e.op.threadId === entry.op.id) gone.add(e.op.id);
+      for (const e of all) if (isNew(e.op) && e.op.threadId === entry.op.id) gone.add(e.op.id);
       for (const e of all) if (gone.has(e.op.id)) drop.add(e.seq!);
     }
-    for (const s of drop) await tx.store.delete(s);
+    for (const e of all) {
+      if (!drop.has(e.seq!)) continue;
+      await store.delete(e.seq!);
+      if (e.op.kind === 'import') await tx.objectStore('meta').delete(IMPORT_KEY + e.op.id);
+    }
     await tx.done;
     await this.reloadOps();
   }
@@ -466,9 +616,9 @@ export class CommentQueue {
     let text: string | null = null;
     for (const e of entries) {
       const op = e.op;
-      if (op.kind === 'add') {
+      if (isNew(op)) {
         text ??= op.body;
-        const replies = this.ops.filter((o) => o.op.kind === 'add' && o.op.threadId === op.id).length;
+        const replies = this.ops.filter((o) => isNew(o.op) && o.op.threadId === op.id).length;
         parts.push(replies > 0 ? t('commentDiscard.addWithReplies', { count: replies }) : t('commentDiscard.add'));
       } else if (op.kind === 'edit') {
         text ??= op.body;
@@ -520,7 +670,7 @@ export class CommentQueue {
         seq: o.seq!,
         kind: o.op.kind,
         pageId: o.op.pageId,
-        body: o.op.kind === 'add' || o.op.kind === 'edit' ? o.op.body : null,
+        body: isNew(o.op) || o.op.kind === 'edit' ? o.op.body : null,
         error: o.error ?? '',
       }));
   }
@@ -647,18 +797,32 @@ export class CommentQueue {
         return this.remote.deleteComment(op.id);
       case 'resolve':
         return this.remote.resolveThread(op.id, op.resolved);
+      case 'import':
+        return this.remote.importComment({
+          id: op.id,
+          pageId: op.pageId,
+          blockId: op.blockId,
+          threadId: op.threadId,
+          body: op.body,
+          createdAt: op.at,
+          resolvedAt: op.resolvedAt,
+          source: op.source,
+          authorName: op.authorName,
+          authorEmail: op.authorEmail,
+        });
     }
   }
 
   /** Confirmado: sale de la cola y queda en lo guardado, así se sigue viendo hasta la próxima bajada. */
   private async ack(entry: QueuedCommentOp): Promise<void> {
     if (!this.db) return;
-    const tx = this.db.transaction(['outbox', 'comments'], 'readwrite');
+    const tx = this.db.transaction(['outbox', 'comments', 'meta'], 'readwrite');
     const rows = tx.objectStore('comments');
     const current = await rows.get(entry.op.id);
     const next = applyOp(current, entry.op, this.userId);
     if (next) await rows.put(next);
     await tx.objectStore('outbox').delete(entry.seq!);
+    if (entry.op.kind === 'import') await tx.objectStore('meta').delete(IMPORT_KEY + entry.op.id);
     await tx.done;
     if (next) this.pageRows(entry.op.pageId)?.set(next.id, next);
     this.ops = this.ops.filter((o) => o.seq !== entry.seq);
@@ -713,7 +877,9 @@ export class CommentQueue {
 
     const unknown = new Set<string>();
     for (const r of map.values()) {
-      for (const id of [r.author_id, r.resolved_by, r.deleted_by]) if (id && id !== this.userId && !this.authors.has(id)) unknown.add(id);
+      for (const id of [r.author_id, r.resolved_by, r.deleted_by, r.imported_by]) {
+        if (id && id !== this.userId && !this.authors.has(id)) unknown.add(id);
+      }
     }
     if (unknown.size > 0) await this.pullAuthors(pageId);
   }
@@ -747,7 +913,9 @@ export class CommentQueue {
     const db = this.db!;
     const me = this.userId;
     const saved = await db.getAll('comments');
-    const pages = new Set(saved.filter((r) => r.author_id === me || r.resolved_by === me || r.deleted_by === me).map((r) => r.page_id));
+    const pages = new Set(
+      saved.filter((r) => r.author_id === me || r.resolved_by === me || r.deleted_by === me || r.imported_by === me).map((r) => r.page_id),
+    );
     const recovered: CommentOp[] = [];
     for (const pageId of pages) {
       let server: Map<string, CommentRow>;
@@ -764,7 +932,15 @@ export class CommentQueue {
         .sort((a, b) => (a.thread_id === null) !== (b.thread_id === null) ? (a.thread_id === null ? -1 : 1) : a.created_at < b.created_at ? -1 : 1);
       for (const r of local) {
         const s = server.get(r.id);
-        if (r.author_id === me && !r.deleted_at && r.body) {
+        if (!s && r.imported_from && r.imported_by === me && !r.deleted_at && r.body) {
+          // Lo que importó esta persona vuelve importado: con su fecha original, su autor (de afuera o ella) y
+          // resuelto si lo estaba por la importación (una resolución posterior, suya, vuelve aparte).
+          recovered.push({
+            kind: 'import', id: r.id, pageId, blockId: r.block_id, threadId: r.thread_id, body: r.body, at: r.created_at,
+            resolvedAt: r.thread_id === null && r.resolved_at && !r.resolved_by ? r.resolved_at : null,
+            source: r.imported_from, authorName: r.imported_author ?? null, authorEmail: r.imported_author_email ?? null,
+          });
+        } else if (r.author_id === me && !r.deleted_at && r.body) {
           if (!s) {
             recovered.push({ kind: 'add', id: r.id, pageId, blockId: r.block_id, threadId: r.thread_id, body: r.body, at: r.created_at });
           } else if (!s.deleted_at && s.body !== r.body && r.edited_at && (!s.edited_at || r.edited_at > s.edited_at)) {
@@ -774,7 +950,7 @@ export class CommentQueue {
         if (r.deleted_by === me && r.deleted_at && s && !s.deleted_at) {
           recovered.push({ kind: 'delete', id: r.id, pageId, at: r.deleted_at });
         }
-        const reAdded = !s && r.author_id === me && !r.deleted_at && !!r.body;
+        const reAdded = !s && (r.author_id === me || (r.imported_from && r.imported_by === me)) && !r.deleted_at && !!r.body;
         if (r.thread_id === null && r.resolved_at && r.resolved_by === me && (s ? !s.resolved_at : reAdded)) {
           recovered.push({ kind: 'resolve', id: r.id, pageId, resolved: true, at: r.resolved_at });
         }
@@ -829,46 +1005,54 @@ export class CommentQueue {
 
   private async enqueueNow(op: CommentOp): Promise<void> {
     if (!this.db) throw new CommentInvalid(t('commentError.off', { reason: localize(this.unavailable ?? '') }));
-    const tx = this.db.transaction('outbox', 'readwrite');
-    const all = await tx.store.getAll();
+    const tx = this.db.transaction(['outbox', 'meta'], 'readwrite');
+    const store = tx.objectStore('outbox');
+    const all = await store.getAll();
+    // Sacar de la cola un importado que no salió (se borró antes de subir) lo olvida también en `meta`.
+    const drop = async (e: QueuedCommentOp) => {
+      await store.delete(e.seq!);
+      if (e.op.kind === 'import') await tx.objectStore('meta').delete(IMPORT_KEY + e.op.id);
+    };
     const open = (e: QueuedCommentOp) => !e.attempted && !e.failed && e.op.id === op.id;
     let done = false;
     if (op.kind === 'edit') {
-      const add = all.find((e) => open(e) && e.op.kind === 'add');
+      const add = all.find((e) => open(e) && isNew(e.op));
       const edit = all.find((e) => open(e) && e.op.kind === 'edit');
-      if (add && add.op.kind === 'add') {
-        await tx.store.put({ ...add, op: { ...add.op, body: op.body } });
+      if (add && isNew(add.op)) {
+        const merged = { ...add.op, body: op.body };
+        await store.put({ ...add, op: merged });
+        if (merged.kind === 'import') await tx.objectStore('meta').put(merged, IMPORT_KEY + merged.id);
         done = true;
       } else if (edit) {
-        await tx.store.put({ ...edit, op });
+        await store.put({ ...edit, op });
         done = true;
       }
     } else if (op.kind === 'delete') {
-      const add = all.find((e) => open(e) && e.op.kind === 'add');
-      const replies = all.some((e) => e.op.kind === 'add' && e.op.threadId === op.id);
+      const add = all.find((e) => open(e) && isNew(e.op));
+      const replies = all.some((e) => isNew(e.op) && e.op.threadId === op.id);
       // Un alta rechazada nunca llegó al servidor: borrarla es sacarla de la cola, con lo que depende de ella.
-      const rejected = all.find((e) => e.failed && e.op.kind === 'add' && e.op.id === op.id);
+      const rejected = all.find((e) => e.failed && isNew(e.op) && e.op.id === op.id);
       if (rejected) {
         const gone = new Set([op.id]);
-        for (const e of all) if (e.op.kind === 'add' && e.op.threadId === op.id) gone.add(e.op.id);
-        for (const e of all) if (gone.has(e.op.id)) await tx.store.delete(e.seq!);
+        for (const e of all) if (isNew(e.op) && e.op.threadId === op.id) gone.add(e.op.id);
+        for (const e of all) if (gone.has(e.op.id)) await drop(e);
         done = true;
       } else if (add && !replies) {
-        for (const e of all) if (e.op.id === op.id && !e.attempted && !e.failed) await tx.store.delete(e.seq!);
+        for (const e of all) if (e.op.id === op.id && !e.attempted && !e.failed) await drop(e);
         done = true;
       } else {
         // Una edición sin mandar de algo que se borra ya no hace falta.
-        for (const e of all) if (open(e) && e.op.kind === 'edit') await tx.store.delete(e.seq!);
+        for (const e of all) if (open(e) && e.op.kind === 'edit') await drop(e);
       }
     } else if (op.kind === 'resolve') {
       const same = all.find((e) => open(e) && e.op.kind === 'resolve');
       if (same) {
-        await tx.store.put({ ...same, op });
+        await store.put({ ...same, op });
         done = true;
       }
     }
     if (!done) {
-      await tx.store.add({ op, attempted: false, failed: false, error: null, queuedAt: this.now() });
+      await store.add({ op, attempted: false, failed: false, error: null, queuedAt: this.now() });
     }
     await tx.done;
     await this.reloadOps();
@@ -919,24 +1103,8 @@ export class CommentQueue {
       const op = entry.op;
       if (op.pageId !== pageId) continue;
       let c = out.get(op.id);
-      if (op.kind === 'add' && !c) {
-        c = {
-          ...fromRow({
-            id: op.id,
-            page_id: op.pageId,
-            block_id: op.blockId,
-            thread_id: op.threadId,
-            body: op.body,
-            author_id: this.userId,
-            created_at: op.at,
-            edited_at: null,
-            resolved_at: null,
-            resolved_by: null,
-            deleted_at: null,
-            deleted_by: null,
-          }),
-          local: true,
-        };
+      if (isNew(op) && !c) {
+        c = { ...fromRow(newRow(op, this.userId)), local: true };
         out.set(op.id, c);
       }
       if (!c) continue;
@@ -947,8 +1115,8 @@ export class CommentQueue {
         c.error = entry.error ?? t('commentError.rejected');
         c.failedSeqs.push(entry.seq!);
         c.failedKinds.push(op.kind);
-        if (op.kind === 'add' || op.kind === 'edit') c.rejectedText ??= op.body;
-        if (op.kind !== 'add') continue;
+        if (isNew(op) || op.kind === 'edit') c.rejectedText ??= op.body;
+        if (!isNew(op)) continue;
       }
       if (op.kind === 'edit' && !c.deleted) {
         c.body = op.body;
@@ -1000,6 +1168,10 @@ function fromRow(r: CommentRow): ViewWithResolution {
     threadId: r.thread_id,
     body: r.deleted_at ? '' : (r.body ?? ''),
     authorId: r.author_id,
+    importedFrom: r.imported_from ?? null,
+    importedAuthor: r.imported_author ?? null,
+    importedAuthorEmail: r.imported_author_email ?? null,
+    importedBy: r.imported_by ?? null,
     createdAt: r.created_at,
     editedAt: r.edited_at,
     deleted: !!r.deleted_at,
@@ -1014,26 +1186,40 @@ function fromRow(r: CommentRow): ViewWithResolution {
   };
 }
 
+type NewOp = Extract<CommentOp, { kind: 'add' | 'import' }>;
+
+/** Un alta: un comentario nuevo de la persona o uno importado. */
+function isNew(op: CommentOp): op is NewOp {
+  return op.kind === 'add' || op.kind === 'import';
+}
+
+/** La fila que deja un alta (hasta que la bajada traiga la de verdad). */
+function newRow(op: NewOp, userId: string): CommentRow {
+  const imported = op.kind === 'import';
+  const external = imported && op.authorName !== null;
+  return {
+    id: op.id,
+    page_id: op.pageId,
+    block_id: op.blockId,
+    thread_id: op.threadId,
+    body: op.body,
+    author_id: external ? null : userId,
+    created_at: op.at,
+    edited_at: null,
+    resolved_at: imported && !op.threadId ? op.resolvedAt : null,
+    resolved_by: null,
+    deleted_at: null,
+    deleted_by: null,
+    imported_from: imported ? op.source : null,
+    imported_author: external ? op.authorName : null,
+    imported_author_email: external ? op.authorEmail : null,
+    imported_by: imported ? userId : null,
+  };
+}
+
 /** Un cambio confirmado, aplicado a lo guardado (hasta que la próxima bajada traiga la fila de verdad). */
 function applyOp(row: CommentRow | undefined, op: CommentOp, userId: string): CommentRow | null {
-  if (op.kind === 'add') {
-    return (
-      row ?? {
-        id: op.id,
-        page_id: op.pageId,
-        block_id: op.blockId,
-        thread_id: op.threadId,
-        body: op.body,
-        author_id: userId,
-        created_at: op.at,
-        edited_at: null,
-        resolved_at: null,
-        resolved_by: null,
-        deleted_at: null,
-        deleted_by: null,
-      }
-    );
-  }
+  if (isNew(op)) return row ?? newRow(op, userId);
   if (!row) return null;
   switch (op.kind) {
     case 'edit':

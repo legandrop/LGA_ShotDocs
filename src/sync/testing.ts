@@ -19,6 +19,7 @@ import {
   type CommentRemote,
   type CommentRow,
   type CommentsDb,
+  type ImportedComment,
   type NewComment,
 } from './comments';
 import { normalizeStructure, seedIfEmpty } from './structure';
@@ -38,6 +39,9 @@ import {
   type RemoteUpdate,
   type WorkspaceSettings,
 } from './types';
+
+/** Una fila de `comments` en el servidor en memoria: con el texto aunque se haya borrado, como la tabla. */
+type StoredComment = CommentRow & { body: string; updated_at?: string };
 
 /** Servidor en memoria con las mismas reglas que el de Supabase (ver supabase/migrations). */
 export class FakeServer {
@@ -122,13 +126,15 @@ export class FakeServer {
   /** La base de archivos del dispositivo no se puede abrir (los dispositivos nuevos arrancan sin ella). */
   mediaDbFails = false;
   /** `comments`, con el texto aunque se haya borrado (como la tabla; la vista lo devuelve vacío). */
-  readonly comments = new Map<string, CommentRow & { body: string; updated_at?: string }>();
+  readonly comments = new Map<string, StoredComment>();
+  /** La base tiene `import_comment` (versión 8); apagado, la función no existe (PGRST202). */
+  importCommentsEnabled = false;
   /** La base tiene `list_comments` (bajar solo lo cambiado); apagado, la app lee la vista entera. */
   listCommentsEnabled = false;
   /** Las funciones de comentarios que se llamaron, en orden (`add <id>`, `edit <id>`...). */
   readonly commentCalls: string[] = [];
   /** Funciones de comentarios que hacen su trabajo y después pierden la respuesta, una vez cada una. */
-  readonly loseCommentResponse = new Set<'add' | 'edit' | 'delete' | 'resolve'>();
+  readonly loseCommentResponse = new Set<'add' | 'edit' | 'delete' | 'resolve' | 'import'>();
   /** Las funciones de comentarios fallan como un 500 (se arregla solo). */
   commentsServerError = false;
   private commentClock = 0;
@@ -137,6 +143,13 @@ export class FakeServer {
   enableComments(): void {
     this.enableTeam();
     this.settings = { ...this.settings!, schemaVersion: 5 };
+  }
+
+  /** Prende los comentarios importados: la base en la versión 8 (`import_comment`). */
+  enableImportedComments(): void {
+    this.enableComments();
+    this.importCommentsEnabled = true;
+    this.settings = { ...this.settings!, schemaVersion: 8 };
   }
 
   /** Una hora del servidor que siempre avanza (para el orden de los comentarios). */
@@ -1114,7 +1127,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (this.server.commentsServerError) throw new RemoteError('Internal Server Error', false, '500');
   }
 
-  private lostCommentResponse(name: 'add' | 'edit' | 'delete' | 'resolve'): void {
+  private lostCommentResponse(name: 'add' | 'edit' | 'delete' | 'resolve' | 'import'): void {
     if (this.server.loseCommentResponse.delete(name)) throw new RemoteError('Failed to fetch', false, undefined, true);
   }
 
@@ -1145,7 +1158,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     const ids = new Set<string>();
     for (const c of this.server.comments.values()) {
       if (c.page_id !== pageId) continue;
-      for (const id of [c.author_id, c.resolved_by, c.deleted_by]) if (id) ids.add(id);
+      for (const id of [c.author_id, c.resolved_by, c.deleted_by, c.imported_by]) if (id) ids.add(id);
     }
     return [...ids].map((id) => ({ user_id: id, email: this.server.members.get(id)?.email ?? `${id}@test` }));
   }
@@ -1190,6 +1203,81 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       });
     }
     this.lostCommentResponse('add');
+  }
+
+  /** Las reglas de `import_comment` (20260930200000_comentarios_importados.sql). */
+  async importComment(c: ImportedComment): Promise<void> {
+    this.commentCheck(`import ${c.id}`);
+    const name = c.authorName?.trim() || null;
+    const email = name ? c.authorEmail?.trim().toLowerCase() || null : null;
+    const author = name ? null : this.userId;
+    // Las fechas se comparan como fechas (la base las guarda como timestamptz, no como el texto que llega).
+    const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) : NaN);
+    // El mismo comentario importado por la misma persona: todo igual salvo, quizás, el bloque y el texto.
+    const sameOrigin = (cur: StoredComment) =>
+      cur.imported_by === this.userId && cur.page_id === c.pageId && cur.thread_id === c.threadId &&
+      time(cur.created_at) === time(c.createdAt) && cur.imported_from === c.source && cur.author_id === author &&
+      (cur.imported_author ?? null) === name && (cur.imported_author_email ?? null) === email;
+    const existing = this.server.comments.get(c.id);
+    const exactBlock = existing && (existing.block_id === c.blockId || (c.threadId !== null && c.blockId === null));
+    if (existing && sameOrigin(existing) && existing.body === c.body && exactBlock) {
+      this.lostCommentResponse('import');
+      return;
+    }
+    if (!this.server.importCommentsEnabled) throw new RemoteError('Could not find the function public.import_comment', true, 'PGRST202');
+    const lvl = this.commentLevel(c.pageId);
+    if (lvl < 1) throw new RemoteError('page_not_found', true, 'P0002');
+    if (lvl < 4) throw new RemoteError('import_denied', true, '42501');
+    const min = Date.parse('2000-01-01T00:00:00Z');
+    const created = time(c.createdAt);
+    if (!(created >= min) || created > time(this.server.commentNow()) + 5 * 60_000) throw new RemoteError('created_invalid', true, '22023');
+    if (c.resolvedAt && (c.threadId || !(time(c.resolvedAt) >= min))) throw new RemoteError('resolved_invalid', true, '22023');
+    let block = c.blockId;
+    if (c.threadId) {
+      if (c.threadId === c.id) throw new RemoteError('thread_invalid', true, '22023');
+      const root = this.server.comments.get(c.threadId);
+      if (!root) throw new RemoteError('thread_not_found', true, 'P0002');
+      if (root.page_id !== c.pageId) throw new RemoteError('thread_other_page', true, 'P0001');
+      if (root.thread_id || (block !== null && block !== root.block_id)) throw new RemoteError('thread_invalid', true, '22023');
+      block = root.block_id;
+    }
+    if (c.source !== 'coda' || !/\S/.test(c.body) || c.body.length > 10000 || (block !== null && !/^[A-Za-z0-9_-]{1,128}$/.test(block))) {
+      throw new RemoteError('new row for relation "comments" violates check constraint', true, '23514');
+    }
+    if (existing) {
+      if (!sameOrigin(existing)) throw new RemoteError('comment_conflict', true, 'P0001');
+      // Importado de nuevo: el hilo va al bloque de ahora, con sus respuestas (el texto de la base queda).
+      if (existing.thread_id === null && !existing.deleted_at && block !== null && existing.block_id !== block) {
+        const at = this.server.commentNow();
+        for (const r of this.server.comments.values()) {
+          if (r.id === c.id || (r.thread_id === c.id && r.page_id === c.pageId)) {
+            r.block_id = block;
+            r.updated_at = at;
+          }
+        }
+      }
+    } else {
+      this.server.comments.set(c.id, {
+        id: c.id,
+        page_id: c.pageId,
+        block_id: block,
+        thread_id: c.threadId,
+        body: c.body,
+        author_id: author,
+        created_at: c.createdAt,
+        updated_at: this.server.commentNow(),
+        edited_at: null,
+        resolved_at: c.resolvedAt,
+        resolved_by: null,
+        deleted_at: null,
+        deleted_by: null,
+        imported_from: c.source,
+        imported_author: name,
+        imported_author_email: email,
+        imported_by: this.userId,
+      });
+    }
+    this.lostCommentResponse('import');
   }
 
   async editComment(id: string, body: string): Promise<void> {
