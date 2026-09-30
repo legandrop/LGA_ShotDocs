@@ -83,6 +83,32 @@ export interface WorkspaceSettings {
   schemaVersion: number;
   /** Dirección del portero de archivos del workspace (ver portero/); `null` si todavía no hay. */
   mediaUrl: string | null;
+  /** El dueño del workspace (el único que conecta su Drive); `null` si la base todavía no lo tiene. */
+  ownerId?: string | null;
+}
+
+/** Un archivo nuevo para `register_file` (el proyecto sale de la página). */
+export interface NewMediaFile {
+  id: string;
+  pageId: string;
+  name: string;
+  mime: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+}
+
+/** Lo que la app lee de `files`. */
+export interface MediaFileRow {
+  id: string;
+  name: string;
+  mime: string;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+  thumb_at: string | null;
+  drive_id: string | null;
 }
 
 export interface RemoteUpdate {

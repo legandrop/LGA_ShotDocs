@@ -7,6 +7,8 @@ import {
   type PagePatch,
   type PageRow,
   type ProjectRow,
+  type MediaFileRow,
+  type NewMediaFile,
   type RemoteUpdate,
   type WorkspaceSettings,
 } from './types';
@@ -40,7 +42,32 @@ export interface Remote {
   downloadFile(path: string): Promise<Blob>;
 }
 
+/**
+ * Los archivos grandes (fotos y videos que van al Drive del dueño por el portero): la base guarda de qué
+ * proyecto son y qué páginas los usan, y la miniatura va al bucket `thumbs` (ver
+ * supabase/migrations/20260930150000_archivos.sql). Todo es idempotente.
+ */
+export interface MediaRemote {
+  /** `page_not_found` si no se puede editar la página; `file_other_project` si el id es de otro proyecto. */
+  registerFile(file: NewMediaFile): Promise<void>;
+  /** `file_not_found` si el archivo todavía no está en el servidor (se reintenta más tarde). */
+  linkPageFile(pageId: string, fileId: string): Promise<void>;
+  /** Sube `thumbs/<id>.jpg` sin reemplazar: si ya existe, está hecho. */
+  uploadThumb(fileId: string, data: Blob): Promise<void>;
+  setFileThumb(fileId: string): Promise<void>;
+  downloadThumb(fileId: string): Promise<Blob>;
+  /** Las filas de `files` que la sesión puede ver (las demás no vuelven). */
+  fetchMediaFiles(ids: string[]): Promise<MediaFileRow[]>;
+}
+
 export const FILES_BUCKET = 'page-files';
+export const THUMBS_BUCKET = 'thumbs';
+const MEDIA_COLUMNS = 'id, name, mime, width, height, duration, thumb_at, drive_id';
+
+/** El nombre de la miniatura de un archivo en el bucket `thumbs`: `<uuid en minúsculas>.jpg`. */
+export function thumbPath(fileId: string): string {
+  return `${fileId.toLowerCase()}.jpg`;
+}
 export const PAGE_COLUMNS =
   'id, workspace_id, parent_id, title, icon, sort_key, settings, update_seq, deleted_at, created_at, updated_at';
 // Una instalación que publicó esta versión sin aplicar la migración de ajustes no tiene `pages.settings`:
@@ -70,7 +97,12 @@ function networkError(err: unknown): RemoteError {
   return new RemoteError(err instanceof Error ? err.message : String(err), false, undefined, true);
 }
 
-export class SupabaseRemote implements Remote {
+function storageStatus(error: { name?: string; message: string }): number {
+  if (error.name === 'StorageUnknownError') return 0;
+  return Number((error as { status?: number; statusCode?: string }).status ?? (error as { statusCode?: string }).statusCode ?? 0);
+}
+
+export class SupabaseRemote implements Remote, MediaRemote {
   /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
   private settingsMissingAt = 0;
 
@@ -113,6 +145,7 @@ export class SupabaseRemote implements Remote {
       minAppVersion: row.min_app_version === null ? null : Number(row.min_app_version),
       schemaVersion: Number(row.schema_version),
       mediaUrl: row.media_url || null,
+      ownerId: (row as { owner_id?: string | null }).owner_id ?? null,
     };
   }
 
@@ -250,5 +283,68 @@ export class SupabaseRemote implements Remote {
       throw toRemoteError({ message: error.message }, error.name === 'StorageUnknownError' ? 0 : status);
     }
     return data;
+  }
+
+  async registerFile(file: NewMediaFile): Promise<void> {
+    const { error, status } = await this.client.rpc('register_file', {
+      p_id: file.id,
+      p_page_id: file.pageId,
+      p_name: file.name,
+      p_mime: file.mime,
+      p_size: file.size,
+      p_width: file.width,
+      p_height: file.height,
+      p_duration: file.duration,
+    });
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async linkPageFile(pageId: string, fileId: string): Promise<void> {
+    const { error, status } = await this.client.rpc('link_page_file', { p_page_id: pageId, p_file_id: fileId });
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async uploadThumb(fileId: string, data: Blob): Promise<void> {
+    let result;
+    try {
+      result = await this.client.storage
+        .from(THUMBS_BUCKET)
+        .upload(thumbPath(fileId), data, { contentType: 'image/jpeg', upsert: false });
+    } catch (err) {
+      throw networkError(err);
+    }
+    const { error } = result;
+    if (!error) return;
+    const status = storageStatus(error);
+    // Sin update en el bucket: una miniatura que ya está no se reemplaza, y eso cuenta como hecho.
+    if (status === 409 || /already exists|duplicate/i.test(error.message)) return;
+    throw toRemoteError({ message: error.message }, status);
+  }
+
+  async setFileThumb(fileId: string): Promise<void> {
+    const { error, status } = await this.client.rpc('set_file_thumb', { p_file_id: fileId });
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async downloadThumb(fileId: string): Promise<Blob> {
+    let result;
+    try {
+      result = await this.client.storage.from(THUMBS_BUCKET).download(thumbPath(fileId));
+    } catch (err) {
+      throw networkError(err);
+    }
+    const { data, error } = result;
+    if (error) throw toRemoteError({ message: error.message }, storageStatus(error));
+    return data;
+  }
+
+  async fetchMediaFiles(ids: string[]): Promise<MediaFileRow[]> {
+    const rows: MediaFileRow[] = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data, error, status } = await this.client.from('files').select(MEDIA_COLUMNS).in('id', ids.slice(i, i + 100));
+      if (error) throw toRemoteError(error, status);
+      rows.push(...(data as unknown as MediaFileRow[]));
+    }
+    return rows.map((r) => ({ ...r, duration: r.duration === null ? null : Number(r.duration) }));
   }
 }
