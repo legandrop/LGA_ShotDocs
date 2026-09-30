@@ -28,6 +28,7 @@ borra o la reemplaza." En el roadmap, P.7 y P.8.
 |---|---|---|
 | Subido (`drive_id`), fuera de la papelera | Sí | Número principal |
 | Subido, en la papelera de la app (`trashed_at`, sin `drive_trashed_at`) | Sí | Número principal, y aparte "en la papelera: se puede liberar" |
+| En la papelera de la app sin haberse subido nunca | No | Solo en la papelera de la app (coincide con la papelera de archivos), no en el número principal |
 | En la papelera de Drive hace menos de 30 días | Sí, hasta que Google la vacía | Solo en el detalle |
 | En la papelera de Drive hace más de 30 días | No (Google ya lo borró) | No |
 | Registrado y todavía sin subir | Todavía no | Solo en el detalle: "todavía subiendo desde los dispositivos" |
@@ -49,7 +50,8 @@ están en Supabase): lo dice una línea del diálogo.
   los proyectos que no ve enteros (privados de otros, sin heredero), sin nombres (decisión 2).
 - **Caché:** store sin React (`src/media/projectSizes.ts`), pedido una vez por apertura (después de la
   primera sincronización y solo si la persona ve alguna papelera), al abrir el selector si pasaron 5 minutos,
-  siempre al abrir el diálogo de Drive y después de mandar archivos a la papelera de Drive. Nunca en cada
+  siempre al abrir el diálogo de Drive y una vez al terminar de vaciar la papelera (mandar un solo archivo a
+  la papelera de Drive no pide; ver "Cómo quedó"). Nunca en cada
   render. Con `schemaVersion` menor que 7 no se pide; si igual falta la función (`PGRST202`), no se muestra y no
   se vuelve a probar por 10 minutos.
 
@@ -90,8 +92,11 @@ en la papelera de Drive hoy y hace 40 días, sin subir); que llamarla no cambia 
 viendo y editando todo.
 
 - La app publicada no la llama: no cambia nada.
-- La app nueva sube `DB_SCHEMA_VERSION` a 7: un workspace sin migrar ve el aviso de siempre y el peso no se
-  muestra; todo lo demás sigue.
+- ~~La app nueva sube `DB_SCHEMA_VERSION` a 7~~ (corrección 2): **`DB_SCHEMA_VERSION` queda en 6** y el peso
+  usa su propia constante, `SIZES_SCHEMA_VERSION = 7`. Un workspace sin migrar no ve ningún aviso (el peso es
+  opcional) y el peso no se muestra; todo lo demás sigue. Subir `DB_SCHEMA_VERSION` a 7 dejaría el aviso
+  amarillo de "aplicar migraciones" en cada workspace sin migrar y el panel de comentarios diría, sin razón,
+  que no se suben.
 - Sin propiedades nuevas en el editor ni cambios en el portero: no hace falta subir `min_app_version`.
 - Aplicarla en producción pide autorización de Lega (copia de seguridad antes, `npm run db:migrate`,
   `npm run db:test`).
@@ -101,7 +106,8 @@ viendo y editando todo.
 Migración y prueba SQL; `ProjectSizeRow` en `src/sync/types.ts`; `projectSizes()` en `src/sync/remote.ts` (y
 en el `FakeRemote` de pruebas); `src/media/projectSizes.ts`; `formatTotal`; el store en `src/services.ts`; el
 subtítulo en `src/ui/ProjectSwitcher.tsx`; la sección en `src/ui/DriveDialog.tsx`; el total en
-`src/ui/TrashView.tsx`; `DB_SCHEMA_VERSION = 7`; textos; docs. Pruebas: el store (vida de 5 minutos, sin red,
+`src/ui/TrashView.tsx`; ~~`DB_SCHEMA_VERSION = 7`~~ `SIZES_SCHEMA_VERSION = 7` (`DB_SCHEMA_VERSION` sigue en 6, ver
+§6); textos; docs. Pruebas: el store (vida de 5 minutos, sin red,
 versión 6 no llama, `PGRST202`, respuesta sin un proyecto lo saca, la fila sin proyecto), `formatTotal` en los
 dos idiomas, jsdom del selector, el diálogo y la papelera, y a mano el total de un proyecto contra la carpeta
 en Drive.
@@ -166,7 +172,7 @@ coinciden, vale este.
 
 **La base** (`supabase/migrations/20260930190000_peso_proyectos.sql`, sin aplicar en Wanka todavía).
 `public.project_sizes()` devuelve `project_id`, `drive_bytes`/`drive_files` (el número principal: en uso más
-la papelera de la app), `trash_bytes`/`trash_files` (papelera de la app), `drive_trash_bytes`/`drive_trash_files`
+lo subido de la papelera de la app; lo que fue a la papelera sin llegar a subirse no está en Drive y no suma), `trash_bytes`/`trash_files` (papelera de la app), `drive_trash_bytes`/`drive_trash_files`
 (papelera de Drive, menos de 30 días) y `pending_bytes`/`pending_files` (sin subir). Bytes en `bigint`,
 archivos en `int`. Los estados son excluyentes y en el orden de la corrección 1; se suma solo `files` por
 `files.project_id`. La puerta (`private.can_see_file_trash`) va en un CTE materializado, una vez por proyecto;
@@ -223,3 +229,17 @@ la base 1024 con un archivo conocido en el Drive de Lega y el total de un proyec
 migración en Wanka (autorizada por Lega: copia de seguridad antes, `npm run db:migrate`, `npm run db:test`); el
 hueco de la corrección 10, en una tarea aparte.
 
+**Auditoría de la implementación (independiente, 2026-09-30).** Nada bloqueante: la puerta, los permisos
+(`anon` y `public` sin ejecutar, `search_path` vacío), la sesión con contraseña y la subida de `schema_version`
+a 7 (ninguna versión de la app se traba con una base más nueva) están bien; migración y prueba corridas en
+rollback contra la base real. Arreglado:
+- El número principal contaba lo de la papelera de la app que nunca se subió (un video grande que se sacó
+  antes de terminar de subir sumaba para siempre): ahora solo suma lo subido; la papelera de la app sigue
+  entera (coincide con `trashed_files`).
+- El diálogo decía "Todavía no se subió nada. + 2 GB en la papelera de Google Drive" cuando todo estaba en la
+  papelera de Drive: ahora dice "Nada en Drive fuera de su papelera".
+- Docs que decían que `DB_SCHEMA_VERSION` sube a 7 (§6 y §7), corregidos; el comentario de `src/workspace.ts` y
+  `Doc_Sincronizacion.md` explican el patrón de las constantes propias.
+- Pruebas nuevas: un archivo vaciado que el portero todavía no mandó a Drive (cuenta en la papelera de la app y
+  en el principal), uno en la papelera de Drive hace 29 días (todavía cuenta) y el diálogo con todo en la
+  papelera de Drive.

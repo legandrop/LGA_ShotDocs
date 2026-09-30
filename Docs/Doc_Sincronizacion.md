@@ -54,7 +54,9 @@ el botón para crear el primero.
 **Versión de la base.** La app sabe qué versión de la base necesita (`DB_SCHEMA_VERSION`) y la compara con
 `workspace_settings.schema_version` en cada sincronización. Si la del workspace es menor, el estado dice
 el ícono de advertencia y el detalle explica que el dueño tiene que aplicar las migraciones; nada se
-pierde mientras tanto.
+pierde mientras tanto. Lo que una migración agrega de forma opcional (la papelera de archivos, los comentarios, el peso de los
+proyectos) tiene su propia constante (`TRASH_SCHEMA_VERSION`, `COMMENTS_SCHEMA_VERSION`, `SIZES_SCHEMA_VERSION`)
+y no sube `DB_SCHEMA_VERSION`: con la base sin migrar, eso no se muestra y no hay aviso.
 
 ## Contenido de las páginas
 

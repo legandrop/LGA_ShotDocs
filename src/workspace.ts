@@ -3,7 +3,9 @@ import { createContext, useContext } from 'react';
 
 /**
  * La versión de la base (`workspace_settings.schema_version`) que necesita esta versión de la app. Sube con
- * las migraciones que agregan algo que la app usa; si la del workspace es menor, la app avisa.
+ * las migraciones que agregan algo sin lo cual la app no anda bien; si la del workspace es menor, la app avisa.
+ * Lo que solo agrega algo opcional usa su propia constante y no sube esta (`TRASH_SCHEMA_VERSION`,
+ * `COMMENTS_SCHEMA_VERSION`, `SIZES_SCHEMA_VERSION`): con la base sin migrar, eso no se muestra y nada avisa.
  */
 export const DB_SCHEMA_VERSION = 6;
 

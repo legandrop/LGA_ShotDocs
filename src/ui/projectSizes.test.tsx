@@ -181,6 +181,16 @@ describe('diálogo de Google Drive', () => {
     expect(host.textContent).toContain('5 GB in 7 files');
   });
 
+  it('con todo en la papelera de Drive no dice "todavía no se subió nada"', async () => {
+    const { server, owner } = await workspace();
+    server.sizes = [size(server.workspaceId, 0, { drive_trash_bytes: 2 * GB, drive_trash_files: 2 }), size(null, 0, { drive_files: 0 })];
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('Failed to fetch'))));
+    const host = await mount(services(owner, server.ownerId), <DriveDialog result={null} onClose={() => undefined} />);
+    await vi.waitFor(() => expect(host.textContent).toContain('+ 2 GB in the Google Drive trash'));
+    expect(host.textContent).toContain('Nothing in Drive outside its trash');
+    expect(host.textContent).not.toContain('Nothing uploaded yet');
+  });
+
   it('con una base sin project_sizes no muestra la sección', async () => {
     const server = new FakeServer();
     server.enableTrash();

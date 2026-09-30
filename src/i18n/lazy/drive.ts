@@ -50,6 +50,7 @@ export const drive = {
     es: { one: "{size} en {files} archivo", other: "{size} en {files} archivos" },
   },
   'drive.spaceNothing': { en: "Nothing uploaded yet.", es: "Todavía no se subió nada." },
+  'drive.spaceNothingOutside': { en: "Nothing in Drive outside its trash", es: "Nada en Drive fuera de su papelera" },
   'drive.spaceDriveTrash': { en: "+ {size} in the Google Drive trash", es: "+ {size} en la papelera de Google Drive" },
   'drive.spaceInTrash': { en: "{size} of it in the app's trash", es: "{size} de eso en la papelera de la app" },
   'drive.spacePending': {

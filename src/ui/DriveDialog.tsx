@@ -228,7 +228,9 @@ function DriveSpace() {
         <span>
           {total.driveFiles > 0
             ? tr('drive.spaceTotal', { size: size(total.driveBytes), count: total.driveFiles, files: count(total.driveFiles) })
-            : tr('drive.spaceNothing')}
+            : total.driveTrashBytes > 0
+              ? tr('drive.spaceNothingOutside')
+              : tr('drive.spaceNothing')}
           {total.driveTrashBytes > 0 && <span className="muted"> {tr('drive.spaceDriveTrash', { size: size(total.driveTrashBytes) })}</span>}
         </span>
         {details.length > 0 && <span className="muted small">{details.join(' · ')}</span>}

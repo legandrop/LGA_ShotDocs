@@ -116,6 +116,8 @@ insert into public.grants (user_id, project_id, page_id, level) values
 --   a7  en la papelera de Drive sin haberse subido nunca           7.000.000.000
 --   a8  registrado y todavía sin subir, en uso en p1                         80
 --   a9  a la papelera de Drive hace 40 días pero subido hace 10 (el portero lo mandó al terminar la subida) 900
+--   a10 en la papelera de la app, subido, vaciado y el portero todavía no lo mandó a Drive                3
+--   a11 en la papelera de Drive hace 29 días (todavía cuenta: Google borra a los 30)                  40.000
 insert into public.files (id, project_id, name, mime, size, drive_id, uploaded_at, trashed_at, purged_at, drive_trashed_at) values
   ('00000000-0000-4000-8000-0000000c3001', '00000000-0000-4000-8000-0000000c1001', 'a1.jpg', 'image/jpeg', 1000,
    'drive_a1_xxxxxxxx', now() - interval '5 days', null, null, null),
@@ -134,7 +136,11 @@ insert into public.files (id, project_id, name, mime, size, drive_id, uploaded_a
   ('00000000-0000-4000-8000-0000000c3008', '00000000-0000-4000-8000-0000000c1001', 'a8.jpg', 'image/jpeg', 80,
    null, null, null, null, null),
   ('00000000-0000-4000-8000-0000000c3009', '00000000-0000-4000-8000-0000000c1001', 'a9.jpg', 'image/jpeg', 900,
-   'drive_a9_xxxxxxxx', now() - interval '10 days', now() - interval '45 days', now() - interval '44 days', now() - interval '40 days');
+   'drive_a9_xxxxxxxx', now() - interval '10 days', now() - interval '45 days', now() - interval '44 days', now() - interval '40 days'),
+  ('00000000-0000-4000-8000-0000000c3010', '00000000-0000-4000-8000-0000000c1001', 'a10.jpg', 'image/jpeg', 3,
+   'drive_a10_xxxxxxx', now() - interval '5 days', now() - interval '2 days', now() - interval '1 hour', null),
+  ('00000000-0000-4000-8000-0000000c3011', '00000000-0000-4000-8000-0000000c1001', 'a11.jpg', 'image/jpeg', 40000,
+   'drive_a11_xxxxxxx', now() - interval '60 days', now() - interval '31 days', now() - interval '30 days', now() - interval '29 days');
 insert into public.page_files (page_id, file_id, is_foreign) values
   ('00000000-0000-4000-8000-0000000c2001', '00000000-0000-4000-8000-0000000c3001', false),
   ('00000000-0000-4000-8000-0000000c2002', '00000000-0000-4000-8000-0000000c3001', true),
@@ -198,10 +204,12 @@ declare
   t  record;
   r  record;
 begin
-  -- Principal: a1 + a2 (en uso) + a3 + a4 (papelera de la app). Papelera de Drive: a5 + a9. Sin subir: a8.
-  -- a6 (Google ya lo borró) y a7 (nunca llegó a Drive) no cuentan. El uso de a1 en O no suma dos veces.
+  -- Principal: a1 + a2 (en uso) + a3 + a10 (papelera de la app, subidos); a4 va a la papelera de la app
+  -- pero no al principal (nunca llegó a Drive). Papelera de la app: a3 + a4 + a10. Papelera de Drive: a5 + a9
+  -- + a11. Sin subir: a8. a6 (Google ya lo borró) y a7 (nunca llegó a Drive) no cuentan. El uso de a1 en O
+  -- no suma dos veces.
   got := pg_temp.size_of(p);
-  assert got = '4321000/4 4300000/2 50000900/2 80/1', format('P para la dueña: %s', got);
+  assert got = '321003/4 4300003/3 50040900/3 80/1', format('P para la dueña: %s', got);
   got := pg_temp.size_of(o);
   assert got = '0/0 0/0 0/0 0/0', format('O (sin archivos propios) para la dueña: %s', got);
   assert pg_temp.seen() = array[p, o]::uuid[], format('la dueña ve otros proyectos: %s', pg_temp.seen());
@@ -246,7 +254,7 @@ select pg_temp.as_user('00000000-0000-4000-8000-0000000c0002');
 do $$
 begin
   assert pg_temp.seen() = array['00000000-0000-4000-8000-0000000c1001']::uuid[], 'la admin con ver no ve solo P';
-  assert pg_temp.size_of('00000000-0000-4000-8000-0000000c1001') = '4321000/4 4300000/2 50000900/2 80/1',
+  assert pg_temp.size_of('00000000-0000-4000-8000-0000000c1001') = '321003/4 4300003/3 50040900/3 80/1',
     'la admin con ver ve otro peso';
   assert pg_temp.hidden_rows() = 0, 'la admin tiene fila sin proyecto';
 end;
@@ -268,7 +276,7 @@ select pg_temp.as_user('00000000-0000-4000-8000-0000000c0004');
 do $$
 begin
   assert pg_temp.seen() = array['00000000-0000-4000-8000-0000000c1001']::uuid[], 'editar y crear no ve P';
-  assert pg_temp.size_of('00000000-0000-4000-8000-0000000c1001') = '4321000/4 4300000/2 50000900/2 80/1',
+  assert pg_temp.size_of('00000000-0000-4000-8000-0000000c1001') = '321003/4 4300003/3 50040900/3 80/1',
     'editar y crear ve otro peso';
   assert pg_temp.hidden_rows() = 0, 'editar y crear tiene fila sin proyecto';
 end;

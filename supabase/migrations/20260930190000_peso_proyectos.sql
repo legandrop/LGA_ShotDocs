@@ -15,8 +15,10 @@
 --       coincide con el de la papelera).
 --   (c) `drive_id` nulo: registrado y todavía sin subir (esperando a un dispositivo).
 --   (d) El resto: en uso.
--- El número principal (`drive_bytes`, `drive_files`) es (b) + (d): lo que la app tiene en Drive fuera de
--- la papelera de Drive. Así baja al vaciar la papelera de la app. (b), (a) y (c) vienen aparte.
+-- El número principal (`drive_bytes`, `drive_files`) es (d) más lo de (b) que está subido (`drive_id`
+-- puesto): lo que la app tiene en Drive fuera de la papelera de Drive. Así baja al vaciar la papelera de la
+-- app, y un archivo que fue a la papelera antes de subirse no suma lo que no está en Drive. (b) entero, (a) y
+-- (c) vienen aparte.
 --
 -- La puerta se calcula una vez por proyecto (CTE materializado), nunca por fila de `files`. Devuelve
 -- también los proyectos permitidos sin archivos (en cero). Solo al dueño (con una sesión válida:
@@ -43,7 +45,7 @@ as $$
     select coalesce(private.workspace_role() = 'owner', false) as is_owner
   ),
   state as (
-    select f.project_id, f.size,
+    select f.project_id, f.size, f.drive_id is not null as uploaded,
            case
              when f.drive_trashed_at is not null then
                case when f.drive_id is not null
@@ -59,8 +61,8 @@ as $$
   ),
   per_project as (
     select s.project_id,
-           coalesce(sum(s.size) filter (where s.st in ('trash', 'live')), 0)::bigint as drive_bytes,
-           (count(*) filter (where s.st in ('trash', 'live')))::int as drive_files,
+           coalesce(sum(s.size) filter (where s.st = 'live' or (s.st = 'trash' and s.uploaded)), 0)::bigint as drive_bytes,
+           (count(*) filter (where s.st = 'live' or (s.st = 'trash' and s.uploaded)))::int as drive_files,
            coalesce(sum(s.size) filter (where s.st = 'trash'), 0)::bigint as trash_bytes,
            (count(*) filter (where s.st = 'trash'))::int as trash_files,
            coalesce(sum(s.size) filter (where s.st = 'drive_trash'), 0)::bigint as drive_trash_bytes,
