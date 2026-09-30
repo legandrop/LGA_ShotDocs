@@ -20,6 +20,22 @@ export interface DriveStatus {
   /** La cuenta de Google conectada; solo la ve el dueño. */
   email: string | null;
   isOwner: boolean;
+  /**
+   * Dónde está la carpeta `LGA_ShotDocs` (solo se le dice al dueño): la carpeta de Drive elegida, o `null`
+   * si va en la raíz de *My Drive*. Un portero anterior al paso 8 no lo manda.
+   */
+  folder?: { id: string; name: string } | null;
+  /** El portero tiene la clave del selector de carpetas de Google (`GOOGLE_API_KEY`). */
+  picker?: boolean;
+}
+
+/** Lo que necesita el selector de carpetas de Google (Google Picker) en el navegador del dueño. */
+export interface PickerConfig {
+  apiKey: string;
+  /** El número del proyecto de Google Cloud. */
+  appId: string;
+  /** Token de acceso de Google de corta duración, solo con `drive.file`. */
+  token: string;
 }
 
 export interface DriveFile {
@@ -27,6 +43,19 @@ export interface DriveFile {
   name: string;
   mimeType: string;
   size: number;
+}
+
+/** El resultado de una subida. `linked: false`: terminó en Drive pero la base todavía no se enteró. */
+export interface UploadResult extends DriveFile {
+  linked?: boolean;
+}
+
+/** Un archivo de la app (fila de `files`): el portero lo sube a `LGA_ShotDocs/<Proyecto>/<day>`. */
+export interface AppFile {
+  /** El id de la fila de `files` (uuid creado en el dispositivo). */
+  id: string;
+  /** El día local en que se agregó, `AAAA-MM-DD`: la carpeta del día en Drive. */
+  day: string;
 }
 
 export interface UploadProgress {
@@ -44,6 +73,8 @@ export interface UploadOptions {
   signal?: AbortSignal;
   /** Una subida que quedó a medias: se pregunta cuánto llegó y se sigue desde ahí. */
   resume?: string | null;
+  /** Sube un archivo de la app (con permisos por página); sin esto, la prueba de media (solo el dueño). */
+  appFile?: AppFile;
 }
 
 export interface PorteroDeps {
@@ -118,7 +149,13 @@ export async function readMediaUrl(client: SupabaseClient): Promise<string | nul
   return url ? url.replace(/\/+$/, '') : null;
 }
 
-type ChunkAnswer = { status: 'incomplete'; received: number } | { status: 'done'; file: DriveFile };
+type ChunkAnswer = { status: 'incomplete'; received: number } | { status: 'done'; file: DriveFile; linked?: boolean };
+
+/** El día local de una fecha, `AAAA-MM-DD` (la carpeta del día en Drive). */
+export function localDay(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 
 export class Portero {
   private readonly http: typeof fetch;
@@ -140,22 +177,44 @@ export class Portero {
     return this.request<DriveStatus>('GET', '/drive/status');
   }
 
-  /** La dirección de Google para autorizar el Drive del dueño: la app navega ahí. */
-  async connect(): Promise<string> {
-    return (await this.request<{ url: string }>('POST', '/drive/connect', { json: {} })).url;
+  /**
+   * La dirección de Google para autorizar el Drive del dueño: la app navega ahí. Al terminar, Google vuelve
+   * a `returnTo` (una ruta de la app, `/…`; sin ella, `/media-test`) con `?drive=<resultado>`.
+   */
+  async connect(returnTo?: string): Promise<string> {
+    return (await this.request<{ url: string }>('POST', '/drive/connect', { json: returnTo ? { return: returnTo } : {} })).url;
   }
 
-  /** Una dirección para `<video src>` o `<img src>`. `type` fuerza el Content-Type que se devuelve. */
-  async pass(fileId: string, type?: string): Promise<string> {
-    return (await this.request<{ url: string }>('POST', '/pass', { json: type ? { fileId, type } : { fileId } })).url;
+  /**
+   * Una dirección para `<video src>` o `<img src>`, que vence a las 8 horas. `{ file }`: un archivo de la
+   * app (con el tipo de `files.mime`); un texto o `{ fileId }`: un archivo de Drive por su id (la prueba de
+   * media, solo el dueño). `type` fuerza el Content-Type que se devuelve.
+   */
+  async pass(target: string | { file: string } | { fileId: string }, type?: string): Promise<string> {
+    const ref = typeof target === 'string' ? { fileId: target } : target;
+    return (await this.request<{ url: string }>('POST', '/pass', { json: type ? { ...ref, type } : ref })).url;
+  }
+
+  /** Lo que necesita el selector de carpetas de Google (solo el dueño; 404 si el portero no tiene la clave). */
+  picker(): Promise<PickerConfig> {
+    return this.request<PickerConfig>('POST', '/drive/picker', { json: {} });
+  }
+
+  /**
+   * Dónde va la carpeta `LGA_ShotDocs`: adentro de la carpeta de Drive `parentId`, o en la raíz de *My
+   * Drive* (`null`). Si ya existe, el portero la mueve ahí. Solo el dueño.
+   */
+  async setFolder(parentId: string | null): Promise<{ id: string; name: string } | null> {
+    return (await this.request<{ folder: { id: string; name: string } | null }>('POST', '/drive/folder', { json: { parentId } }))
+      .folder;
   }
 
   /**
    * Sube el archivo por partes, leyendo del disco solo la parte que se manda. Si una parte falla por la
    * red o por el servidor, espera, pregunta cuánto llegó y sigue desde ahí.
    */
-  async upload(file: Blob & { name?: string }, options: UploadOptions = {}): Promise<DriveFile> {
-    const { onProgress, signal } = options;
+  async upload(file: Blob & { name?: string }, options: UploadOptions = {}): Promise<UploadResult> {
+    const { onProgress, signal, appFile } = options;
     const total = file.size;
     let uploadId = options.resume ?? null;
     // Al retomar, primero se pregunta; si el portero ya no la tiene, se empieza de nuevo.
@@ -183,10 +242,17 @@ export class Portero {
       try {
         if (signal?.aborted) throw abortError(signal);
         if (!uploadId) {
-          const started = await this.request<{ uploadId: string }>('POST', '/upload', {
-            json: { name: file.name || 'file', mime: file.type || 'application/octet-stream', size: total },
+          const meta = { name: file.name || 'file', mime: file.type || 'application/octet-stream', size: total };
+          const started = await this.request<{ uploadId?: string } & Partial<ChunkAnswer>>('POST', '/upload', {
+            json: appFile ? { file: appFile.id, ...meta, day: appFile.day } : meta,
             signal,
           });
+          // Un archivo de la app que ya está en Drive (lo subió otro intento): no hay nada que mandar.
+          if (started.status === 'done' && started.file) {
+            sent = total;
+            return { ...started.file, ...(started.linked === undefined ? {} : { linked: started.linked }) };
+          }
+          if (!started.uploadId) throw new PorteroError('The media server did not start the upload.', 0, true);
           uploadId = started.uploadId;
           sent = 0;
           begin();
@@ -211,7 +277,7 @@ export class Portero {
         if (answer.status === 'done') {
           sent = total;
           report();
-          return answer.file;
+          return { ...answer.file, ...(answer.linked === undefined ? {} : { linked: answer.linked }) };
         }
         sent = answer.received;
         // Solo una parte que llegó corta la racha de fallas; la pregunta de cuánto llegó no.
