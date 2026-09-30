@@ -9,6 +9,8 @@ type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
 
 const TONE_ICONS = { ok: SyncedIcon, busy: UploadingIcon, offline: OfflineIcon, warn: WarningIcon, error: ErrorIcon };
 
+const COMMENT_ACTIONS = { add: 'A comment', edit: 'An edited comment', delete: 'A deleted comment', resolve: 'A resolved thread' };
+
 function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
@@ -16,9 +18,10 @@ function count(n: number, one: string, many: string): string {
 function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   const status = useSyncStatus();
   const pending = usePendingCount();
-  const rejected = status.failedOps + status.rejectedPages + status.failedMedia;
+  const rejected = status.failedOps + status.rejectedPages + status.failedMedia + status.failedComments;
   // La cola de fotos y videos tiene su propio ciclo: su error cuenta mientras le quede algo por subir.
   const mediaError = status.pendingMedia > 0 ? status.mediaError : null;
+  const commentError = status.pendingComments > 0 ? status.commentError : null;
   let tone: Tone = 'ok';
   let text = 'All synced';
   if (status.localError) {
@@ -27,7 +30,7 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   } else if (!status.online) {
     tone = 'offline';
     text = pending > 0 ? `Offline · ${count(pending, 'change', 'changes')} saved on this device` : 'Offline';
-  } else if ((status.lastError && !status.syncing) || (mediaError && !status.uploading)) {
+  } else if ((status.lastError && !status.syncing) || (mediaError && !status.uploading) || (commentError && !status.syncing)) {
     tone = 'warn';
     text = pending > 0 ? `${count(pending, 'change', 'changes')} not uploaded · retrying` : 'Sync problem · retrying';
   } else if (status.outdated) {
@@ -66,13 +69,15 @@ export function SyncIcon({ onClick }: { onClick: () => void }) {
 export function SyncBadge() {
   const status = useSyncStatus();
   const tree = useTree();
-  const { engine, media } = useServices();
+  const { engine, media, comments } = useServices();
   const [details, setDetails] = useState(false);
   const { tone, text, rejected } = useSyncTone();
   const Icon = TONE_ICONS[tone];
   const mediaError = status.pendingMedia > 0 ? status.mediaError : null;
+  const commentError = status.pendingComments > 0 ? status.commentError : null;
   const hasDetails =
     rejected > 0 ||
+    !!commentError ||
     !!status.localError ||
     !!status.lastError ||
     !!mediaError ||
@@ -95,7 +100,7 @@ export function SyncBadge() {
     <div className="sync">
       <button
         className={`sync-pill ${tone}`}
-        data-tip={status.localError ?? status.lastError ?? mediaError ?? undefined}
+        data-tip={status.localError ?? status.lastError ?? mediaError ?? commentError ?? undefined}
         aria-expanded={hasDetails ? details : undefined}
         onClick={() => (hasDetails ? setDetails(!details) : void engine.syncNow())}
       >
@@ -124,6 +129,11 @@ export function SyncBadge() {
           {mediaError && !status.localError && (
             <p>
               Photos and videos: <code>{mediaError}</code>. They are saved on this device and keep retrying.
+            </p>
+          )}
+          {commentError && !status.localError && (
+            <p>
+              Comments: <code>{commentError}</code>. They are saved on this device and keep retrying.
             </p>
           )}
           {status.outdated && (
@@ -175,6 +185,14 @@ export function SyncBadge() {
                     Upload “{f.name}”: <code>{f.error}</code>
                   </li>
                 ))}
+                {status.failedComments > 0 &&
+                  comments.failures().map((f) => (
+                    <li key={`comment-${f.seq}`}>
+                      {COMMENT_ACTIONS[f.kind]} on “{tree.get(f.pageId)?.title || 'Untitled'}”
+                      {f.body ? ` (“${f.body.length > 40 ? `${f.body.slice(0, 40)}…` : f.body}”)` : ''}:{' '}
+                      <code>{f.error}</code>
+                    </li>
+                  ))}
               </ul>
             </>
           )}

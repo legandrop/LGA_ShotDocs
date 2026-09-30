@@ -162,7 +162,7 @@ export interface CommentThread {
 }
 
 /** Los errores de la base, en palabras. */
-export function commentErrorText(error: string): string {
+export function commentErrorText(error: string, kind?: CommentOp['kind']): string {
   switch (error) {
     case 'page_not_found':
       return 'The page is not on the server, or you can no longer see it.';
@@ -173,7 +173,9 @@ export function commentErrorText(error: string): string {
     case 'comment_denied':
       return 'You can view this page but not comment on it.';
     case 'not_allowed':
-      return 'Only the author edits a comment; deleting someone else’s needs “Edit & create pages”.';
+      return kind === 'delete'
+        ? 'Only the author, or someone who can edit and create pages here, can delete this comment.'
+        : 'Only the author can edit this comment.';
     case 'comment_conflict':
       return 'The server already has a different comment with this id.';
     case 'comment_deleted':
@@ -400,7 +402,6 @@ export class CommentQueue {
     if (entry.op.kind === 'add') {
       const gone = new Set([entry.op.id]);
       for (const e of all) if (e.op.kind === 'add' && e.op.threadId === entry.op.id) gone.add(e.op.id);
-      for (const e of all) if (gone.has(e.op.id) && (e.failed || e.op.kind !== 'add' || e.op.id !== entry.op.id)) drop.add(e.seq!);
       for (const e of all) if (gone.has(e.op.id)) drop.add(e.seq!);
     }
     for (const s of drop) await tx.store.delete(s);
@@ -494,7 +495,7 @@ export class CommentQueue {
         await this.send(entry.op);
       } catch (err) {
         if (!isPermanent(err)) throw err;
-        await this.fail(entry, commentErrorText(errorMessage(err)));
+        await this.fail(entry, commentErrorText(errorMessage(err), entry.op.kind));
         continue;
       }
       await this.ack(entry);
@@ -677,8 +678,8 @@ export class CommentQueue {
   }
 
   /** Lo guardado con la cola encima. */
-  private view(pageId: string): Map<string, CommentView> {
-    const out = new Map<string, CommentView>();
+  private view(pageId: string): Map<string, ViewWithResolution> {
+    const out = new Map<string, ViewWithResolution>();
     for (const r of this.rows.get(pageId)?.values() ?? []) out.set(r.id, fromRow(r));
     const resolutions = new Map<string, { at: string | null; by: string | null }>();
     for (const entry of this.ops) {

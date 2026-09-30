@@ -9,6 +9,16 @@ import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
 import type { AccessRow, InvitationGrant, MediaRemote, MemberRow, Remote, TeamRemote } from './remote';
+import {
+  CommentQueue,
+  commentsDbName,
+  openCommentsDb,
+  type CommentAuthor,
+  type CommentRemote,
+  type CommentRow,
+  type CommentsDb,
+  type NewComment,
+} from './comments';
 import { mergeRootGroups, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
 import {
@@ -78,6 +88,26 @@ export class FakeServer {
   rejectThumbs = false;
   /** La base de archivos del dispositivo no se puede abrir (los dispositivos nuevos arrancan sin ella). */
   mediaDbFails = false;
+  /** `comments`, con el texto aunque se haya borrado (como la tabla; la vista lo devuelve vacío). */
+  readonly comments = new Map<string, CommentRow & { body: string }>();
+  /** Las funciones de comentarios que se llamaron, en orden (`add <id>`, `edit <id>`...). */
+  readonly commentCalls: string[] = [];
+  /** Funciones de comentarios que hacen su trabajo y después pierden la respuesta, una vez cada una. */
+  readonly loseCommentResponse = new Set<'add' | 'edit' | 'delete' | 'resolve'>();
+  /** Las funciones de comentarios fallan como un 500 (se arregla solo). */
+  commentsServerError = false;
+  private commentClock = 0;
+
+  /** Prende los comentarios: la base en la versión 5 (y las reglas del equipo, que la versión 5 incluye). */
+  enableComments(): void {
+    this.enableTeam();
+    this.settings = { ...this.settings!, schemaVersion: 5 };
+  }
+
+  /** Una hora del servidor que siempre avanza (para el orden de los comentarios). */
+  commentNow(): string {
+    return new Date(Date.UTC(2026, 8, 30, 12) + ++this.commentClock * 1000).toISOString();
+  }
 
   /** Pierde la respuesta de una función de archivos si se pidió. */
   lostMediaResponse(name: string): void {
@@ -356,7 +386,7 @@ const ROLE_RANK: Record<Role, number> = { guest: 1, member: 2, admin: 3, owner: 
 const pageNotFound = () => new RemoteError('page_not_found', true, 'P0002');
 const fileNotFound = () => new RemoteError('file_not_found', true, 'P0002');
 
-export class FakeRemote implements Remote, MediaRemote, TeamRemote {
+export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemote {
   /** La sesión: por defecto, el dueño del workspace. */
   readonly userId: string;
   readonly email: string;
@@ -777,6 +807,132 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote {
     });
   }
 
+  // --- comentarios (mismas reglas que supabase/migrations/20260930170000_comentarios.sql) ---
+
+  /** `private.page_level`; sin las reglas del equipo, quien ve la página la puede todo (como antes). */
+  private commentLevel(pageId: string): number {
+    if (!this.server.pages.has(pageId)) return 0;
+    return this.team ? this.server.pageLevel(this.userId, pageId) : 4;
+  }
+
+  private commentCheck(name: string): void {
+    this.server.check();
+    this.server.commentCalls.push(name);
+    if (this.server.commentsServerError) throw new RemoteError('Internal Server Error', false, '500');
+  }
+
+  private lostCommentResponse(name: 'add' | 'edit' | 'delete' | 'resolve'): void {
+    if (this.server.loseCommentResponse.delete(name)) throw new RemoteError('Failed to fetch', false, undefined, true);
+  }
+
+  async fetchComments(pageId: string): Promise<CommentRow[]> {
+    this.server.check();
+    // La política de la tabla: se ven los de las páginas que se ven.
+    if (this.commentLevel(pageId) < 1) return [];
+    return [...this.server.comments.values()]
+      .filter((c) => c.page_id === pageId)
+      .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1))
+      .map((c) => ({ ...c, body: c.deleted_at ? null : c.body }));
+  }
+
+  async fetchCommentAuthors(pageId: string): Promise<CommentAuthor[]> {
+    this.server.check();
+    if (this.commentLevel(pageId) < 1) throw new RemoteError('page_not_found', true, 'P0002');
+    const ids = new Set<string>();
+    for (const c of this.server.comments.values()) {
+      if (c.page_id !== pageId) continue;
+      for (const id of [c.author_id, c.resolved_by, c.deleted_by]) if (id) ids.add(id);
+    }
+    return [...ids].map((id) => ({ user_id: id, email: this.server.members.get(id)?.email ?? `${id}@test` }));
+  }
+
+  async addComment(c: NewComment): Promise<void> {
+    this.commentCheck(`add ${c.id}`);
+    const lvl = this.commentLevel(c.pageId);
+    if (lvl < 1) throw new RemoteError('page_not_found', true, 'P0002');
+    if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
+    let block = c.blockId;
+    if (c.threadId) {
+      if (c.threadId === c.id) throw new RemoteError('thread_invalid', true, '22023');
+      const root = this.server.comments.get(c.threadId);
+      if (!root) throw new RemoteError('thread_not_found', true, 'P0002');
+      if (root.page_id !== c.pageId) throw new RemoteError('thread_other_page', true, 'P0001');
+      if (root.thread_id || (block !== null && block !== root.block_id)) throw new RemoteError('thread_invalid', true, '22023');
+      block = root.block_id;
+    }
+    if (!/\S/.test(c.body) || c.body.length > 10000 || (block !== null && !/^[A-Za-z0-9_-]{1,128}$/.test(block))) {
+      throw new RemoteError('new row for relation "comments" violates check constraint', true, '23514');
+    }
+    const cur = this.server.comments.get(c.id);
+    if (cur) {
+      if (cur.author_id !== this.userId || cur.page_id !== c.pageId || cur.block_id !== block || cur.thread_id !== c.threadId || cur.body !== c.body) {
+        throw new RemoteError('comment_conflict', true, 'P0001');
+      }
+    } else {
+      this.server.comments.set(c.id, {
+        id: c.id,
+        page_id: c.pageId,
+        block_id: block,
+        thread_id: c.threadId,
+        body: c.body,
+        author_id: this.userId,
+        created_at: this.server.commentNow(),
+        edited_at: null,
+        resolved_at: null,
+        resolved_by: null,
+        deleted_at: null,
+        deleted_by: null,
+      });
+    }
+    this.lostCommentResponse('add');
+  }
+
+  async editComment(id: string, body: string): Promise<void> {
+    this.commentCheck(`edit ${id}`);
+    const cur = this.server.comments.get(id);
+    const lvl = cur ? this.commentLevel(cur.page_id) : 0;
+    if (!cur || lvl < 1) throw new RemoteError('comment_not_found', true, 'P0002');
+    if (cur.author_id !== this.userId) throw new RemoteError('not_allowed', true, '42501');
+    if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
+    if (cur.deleted_at) throw new RemoteError('comment_deleted', true, 'P0001');
+    if (cur.body !== body) {
+      if (!/\S/.test(body) || body.length > 10000) throw new RemoteError('check constraint', true, '23514');
+      cur.body = body;
+      cur.edited_at = this.server.commentNow();
+    }
+    this.lostCommentResponse('edit');
+  }
+
+  async deleteComment(id: string): Promise<void> {
+    this.commentCheck(`delete ${id}`);
+    const cur = this.server.comments.get(id);
+    const lvl = cur ? this.commentLevel(cur.page_id) : 0;
+    if (!cur || lvl < 1) throw new RemoteError('comment_not_found', true, 'P0002');
+    if (!((cur.author_id === this.userId && lvl >= 2) || lvl >= 4)) throw new RemoteError('not_allowed', true, '42501');
+    if (!cur.deleted_at) {
+      cur.deleted_at = this.server.commentNow();
+      cur.deleted_by = this.userId;
+    }
+    this.lostCommentResponse('delete');
+  }
+
+  async resolveThread(threadId: string, resolved: boolean): Promise<void> {
+    this.commentCheck(`resolve ${threadId} ${resolved}`);
+    const root = this.server.comments.get(threadId);
+    const lvl = root ? this.commentLevel(root.page_id) : 0;
+    if (!root || lvl < 1) throw new RemoteError('thread_not_found', true, 'P0002');
+    if (root.thread_id) throw new RemoteError('thread_invalid', true, '22023');
+    if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
+    if (resolved && !root.resolved_at) {
+      root.resolved_at = this.server.commentNow();
+      root.resolved_by = this.userId;
+    } else if (!resolved && root.resolved_at) {
+      root.resolved_at = null;
+      root.resolved_by = null;
+    }
+    this.lostCommentResponse('resolve');
+  }
+
 }
 
 
@@ -805,6 +961,8 @@ export interface Device {
   engine: SyncEngine;
   remote: FakeRemote;
   access: AccessStore;
+  comments: CommentQueue;
+  commentsDb: CommentsDb;
 }
 
 /** Un dispositivo con su propia base local. Reusar `dbName` simula cerrar y volver a abrir la app. */
@@ -834,6 +992,9 @@ export async function makeDevice(
     now: () => Date.now() + server.clockOffset,
   });
   await media.load();
-  const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media, access });
-  return { db, tree, docs, files, media, mediaDb, engine, remote, access };
+  const commentsDb = await openCommentsDb(commentsDbName(dbName));
+  const comments = new CommentQueue(commentsDb, remote, remote.userId);
+  await comments.load();
+  const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media, access, comments });
+  return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb };
 }

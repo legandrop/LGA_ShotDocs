@@ -1,6 +1,7 @@
 import * as Y from 'yjs';
 import { toBase64 } from '../lib/base64';
 import type { MediaDb } from '../media/mediaDb';
+import { exportComments, unsyncedComments, type CommentsDb } from './comments';
 import { hasUnsyncedContent, type LocalDb } from './localDb';
 import { CONTENT_FRAGMENT } from './structure';
 
@@ -19,21 +20,28 @@ export interface UnsyncedSummary {
   images: number;
   /** Fotos y videos (`sdmedia://`) sin terminar de subir, y sus usos en otras páginas. */
   media: number;
+  /** Comentarios (altas, ediciones, borrados, resoluciones) sin subir, también los rechazados. */
+  comments: number;
   total: number;
 }
 
-export async function unsyncedSummary(db: LocalDb, mediaDb: MediaDb | null): Promise<UnsyncedSummary> {
-  const [ops, failed, states, images, media, links] = await Promise.all([
+export async function unsyncedSummary(
+  db: LocalDb,
+  mediaDb: MediaDb | null,
+  commentsDb: CommentsDb | null = null,
+): Promise<UnsyncedSummary> {
+  const [ops, failed, states, images, media, links, comments] = await Promise.all([
     db.count('ops'),
     db.count('failedOps'),
     db.getAll('docState'),
     db.countFromIndex('files', 'uploaded', 0),
     mediaDb ? mediaDb.countFromIndex('files', 'pending', 1) : 0,
     mediaDb ? mediaDb.countFromIndex('links', 'pending', 1) : 0,
+    unsyncedComments(commentsDb).catch(() => 0),
   ]);
   const pages = states.filter(hasUnsyncedContent).length;
-  const summary = { ops, failedOps: failed, pages, images, media: media + links, total: 0 };
-  summary.total = ops + failed + pages + images + media + links;
+  const summary = { ops, failedOps: failed, pages, images, media: media + links, comments, total: 0 };
+  summary.total = ops + failed + pages + images + media + links + comments;
   return summary;
 }
 
@@ -68,7 +76,12 @@ export interface UnsyncedExportInfo {
  * (en base64: son de hasta 25 MB) y la lista de fotos y videos pendientes con sus nombres (los originales
  * se bajan aparte, uno por uno).
  */
-export async function exportUnsynced(db: LocalDb, mediaDb: MediaDb | null, info: UnsyncedExportInfo): Promise<unknown> {
+export async function exportUnsynced(
+  db: LocalDb,
+  mediaDb: MediaDb | null,
+  info: UnsyncedExportInfo,
+  commentsDb: CommentsDb | null = null,
+): Promise<unknown> {
   const [ops, failedOps, states, images] = await Promise.all([
     db.getAll('ops'),
     db.getAll('failedOps'),
@@ -96,6 +109,7 @@ export async function exportUnsynced(db: LocalDb, mediaDb: MediaDb | null, info:
 
   const media = mediaDb ? await mediaDb.getAllFromIndex('files', 'pending', 1) : [];
   const links = mediaDb ? await mediaDb.getAllFromIndex('links', 'pending', 1) : [];
+  const comments = await exportComments(commentsDb).catch(() => []);
 
   return {
     kind: 'lga-shotdocs-unsynced',
@@ -126,5 +140,6 @@ export async function exportUnsynced(db: LocalDb, mediaDb: MediaDb | null, info:
       note: 'The original is not inside this file: download it separately from the app.',
     })),
     mediaLinks: links.map((l) => ({ pageId: l.pageId, fileId: l.fileId })),
+    comments,
   };
 }

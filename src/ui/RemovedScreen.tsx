@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { MediaRecord } from '../media/mediaDb';
 import { mediaDbName } from '../media/mediaDb';
+import { commentsDbName } from '../sync/comments';
 import { useServices, useSyncStatus } from '../services';
 import { exportUnsynced, unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
 import { errorMessage } from '../sync/types';
@@ -37,7 +38,7 @@ function sizeLabel(bytes: number): string {
 
 export function RemovedScreen() {
   const services = useServices();
-  const { db, mediaDb, docs, tree, user, workspace, client, dbName } = services;
+  const { db, mediaDb, commentsDb, docs, tree, user, workspace, client, dbName } = services;
   const status = useSyncStatus();
   const [summary, setSummary] = useState<UnsyncedSummary | null>(null);
   const [media, setMedia] = useState<MediaRecord[]>([]);
@@ -49,7 +50,7 @@ export function RemovedScreen() {
     let live = true;
     void (async () => {
       await docs.flush().catch(() => undefined);
-      const [s, m] = await Promise.all([unsyncedSummary(db, mediaDb), mediaDb ? mediaDb.getAllFromIndex('files', 'pending', 1) : []]);
+      const [s, m] = await Promise.all([unsyncedSummary(db, mediaDb, commentsDb), mediaDb ? mediaDb.getAllFromIndex('files', 'pending', 1) : []]);
       if (!live) return;
       setSummary(s);
       setMedia(m);
@@ -57,7 +58,7 @@ export function RemovedScreen() {
     return () => {
       live = false;
     };
-  }, [db, mediaDb, docs, status.pendingOps, status.pendingPages, status.pendingMedia]);
+  }, [db, mediaDb, commentsDb, docs, status.pendingOps, status.pendingPages, status.pendingMedia, status.pendingComments]);
 
   const pending = summary?.total ?? 0;
   const name = status.workspaceName || workspace.config.name || 'this workspace';
@@ -72,7 +73,7 @@ export function RemovedScreen() {
         workspace: { url: workspace.config.url, localKey: workspace.config.localKey, name },
         user: { id: user.id, email: user.email },
         titleOf: (id) => tree.get(id)?.title,
-      });
+      }, commentsDb);
       const day = new Date().toISOString().slice(0, 10);
       save(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `shotdocs-unsynced-${day}.json`);
       setDownloaded(true);
@@ -104,6 +105,7 @@ export function RemovedScreen() {
     try {
       await services.shutdown();
       await deleteDatabase(mediaDbName(dbName));
+      await deleteDatabase(commentsDbName(dbName));
       await deleteDatabase(dbName);
       await client.auth.signOut({ scope: 'local' });
     } catch (err) {
@@ -129,7 +131,8 @@ export function RemovedScreen() {
               {summary.pages > 0 && ` · ${summary.pages} ${summary.pages === 1 ? 'page' : 'pages'}`}
               {summary.ops + summary.failedOps > 0 && ` · ${summary.ops + summary.failedOps} page changes`}
               {summary.images > 0 && ` · ${summary.images} ${summary.images === 1 ? 'image' : 'images'}`}
-              {summary.media > 0 && ` · ${summary.media} photos or videos`}. Download them before removing this
+              {summary.media > 0 && ` · ${summary.media} photos or videos`}
+              {summary.comments > 0 && ` · ${summary.comments} ${summary.comments === 1 ? 'comment' : 'comments'}`}. Download them before removing this
               workspace from the device.
             </p>
             <button className="primary" disabled={busy !== null} onClick={() => void download()}>

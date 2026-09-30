@@ -5,7 +5,7 @@ import { createContext, useContext } from 'react';
  * La versión de la base (`workspace_settings.schema_version`) que necesita esta versión de la app. Sube con
  * las migraciones que agregan algo que la app usa; si la del workspace es menor, la app avisa.
  */
-export const DB_SCHEMA_VERSION = 4;
+export const DB_SCHEMA_VERSION = 5;
 
 /**
  * Un workspace: el Supabase de su dueño (dirección y clave publicable), su nombre y la clave local, que

@@ -51,6 +51,8 @@ function services(d: Device, userId: string, signOut = vi.fn(async () => ({ erro
     remote: d.remote as unknown as SupabaseRemote,
     dbName: 'test',
     mediaDb: d.mediaDb,
+    comments: d.comments,
+    commentsDb: d.commentsDb,
     shutdown: async () => undefined,
   };
 }

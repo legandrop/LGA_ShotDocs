@@ -5,6 +5,8 @@ import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
 import { MediaQueue } from './media/queue';
 import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/access';
+import { CommentQueue, commentsDbName, openCommentsDb, type CommentsDb } from './sync/comments';
+import { SupabaseCommentRemote } from './sync/commentsRemote';
 import { PageDocs } from './sync/docs';
 import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
@@ -37,6 +39,10 @@ export interface Services {
   dbName: string;
   /** `null` si la base de archivos no se pudo abrir (la cola de fotos y videos queda apagada). */
   mediaDb: MediaDb | null;
+  /** Comentarios y respuestas de las preguntas (paso 10), primero en el dispositivo. */
+  comments: CommentQueue;
+  /** `null` si la base de comentarios no se pudo abrir (se leen con red, no se escriben). */
+  commentsDb: CommentsDb | null;
   /** Para la sincronización y cierra las bases del dispositivo (antes de borrarlas). */
   shutdown: () => Promise<void>;
 }
@@ -212,14 +218,28 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         unavailable: mediaProblem,
       });
       await media.load().catch(() => undefined);
+      // Los comentarios, también en una base aparte. Si no se abre, se leen con red pero no se escriben.
+      let commentsDb: CommentsDb | null = null;
+      let commentsProblem: string | undefined;
+      try {
+        commentsDb = await openCommentsDb(commentsDbName(dbName));
+      } catch (err) {
+        commentsProblem = `the storage for comments could not be opened (${errorMessage(err)}). Reopening the app tries again.`;
+      }
+      const comments = new CommentQueue(commentsDb, new SupabaseCommentRemote(workspace.client), user.id, {
+        unavailable: commentsProblem,
+      });
+      await comments.load().catch(() => undefined);
       const engine = new SyncEngine(remote, tree, docs, files, {
         appVersion: __APP_VERSION__,
         schemaVersion: DB_SCHEMA_VERSION,
         media,
         access,
+        comments,
       });
       if (cancelled) {
         mediaDb?.close();
+        commentsDb?.close();
         return db.close();
       }
       engine.start();
@@ -239,6 +259,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           } finally {
             db.close();
             mediaDb?.close();
+            commentsDb?.close();
             releaseLock?.();
           }
         })();
@@ -261,6 +282,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           remote,
           dbName,
           mediaDb,
+          comments,
+          commentsDb,
           shutdown,
         },
       });

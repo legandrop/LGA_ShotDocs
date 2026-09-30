@@ -28,6 +28,19 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 
 export const SCRIPT_PROP = 'script';
 
+// --- Preguntas ---------------------------------------------------------------------------------------
+//
+// Un párrafo marcado como pregunta (paso 10 de Docs/Plan_Workspaces.md): se ve con un ícono de pregunta y
+// un color suave, y su respuesta es un hilo de comentarios de ese bloque (ver sync/comments.ts), así un
+// invitado con el permiso Comentar contesta sin escribir la página. Igual que Script, NO es un tipo de
+// bloque nuevo sino un párrafo con `question: true`: una versión de la app que no lo conoce lo muestra
+// como párrafo común, y si alguien edita esa línea en la versión vieja se pierde solo la marca (el texto
+// queda, y los comentarios siguen anclados al id del bloque). Script y pregunta no van juntos.
+
+export const QUESTION_PROP = 'question';
+/** El atajo de las preguntas (en el formato de ProseMirror): Ctrl/⌘+Alt+P. */
+export const QUESTION_SHORTCUT = 'Mod-Alt-p';
+
 /** Una "Í" pegada desde macOS puede venir descompuesta (I + tilde combinada). */
 const I_ACUTE = '(?:Í|I\\u0301)';
 const BEFORE = '(?<![\\p{L}\\p{N}])';
@@ -59,7 +72,8 @@ export function scriptMarks(text: string): [number, number, string][] {
   return out.sort((a, b) => a[0] - b[0]);
 }
 
-const isScript = (node: PMNode) => node.type.name === 'paragraph' && node.attrs[SCRIPT_PROP] === true;
+const isScript = (node: PMNode) =>
+  node.type.name === 'paragraph' && node.attrs[SCRIPT_PROP] === true && node.attrs[QUESTION_PROP] !== true;
 
 function decorate(doc: PMNode): DecorationSet {
   const decorations: Decoration[] = [];
@@ -97,24 +111,32 @@ const scriptMarksPlugin = new Plugin<DecorationSet>({
 const createParagraph = createBlockSpec(
   {
     type: 'paragraph',
-    propSchema: { ...defaultProps, [SCRIPT_PROP]: { default: false } },
+    propSchema: { ...defaultProps, [SCRIPT_PROP]: { default: false }, [QUESTION_PROP]: { default: false } },
     content: 'inline',
   },
   {
     meta: { isolating: false },
     parse: (element) => {
       if (element.tagName !== 'P' || !element.textContent?.trim()) return undefined;
-      return { ...parseDefaultProps(element), [SCRIPT_PROP]: element.classList.contains('script-line') };
+      const question = element.classList.contains('question-line');
+      return {
+        ...parseDefaultProps(element),
+        [SCRIPT_PROP]: !question && element.classList.contains('script-line'),
+        [QUESTION_PROP]: question,
+      };
     },
     render: (block) => {
       const dom = document.createElement('p');
-      if (block.props[SCRIPT_PROP]) dom.className = 'script-line';
+      if (block.props[QUESTION_PROP]) dom.className = 'question-line';
+      else if (block.props[SCRIPT_PROP]) dom.className = 'script-line';
       return { dom, contentDOM: dom };
     },
     toExternalHTML: (block) => {
       const dom = document.createElement('p');
       addDefaultPropsExternalHTML(block.props, dom);
-      if (block.props[SCRIPT_PROP]) {
+      if (block.props[QUESTION_PROP]) {
+        dom.className = 'question-line';
+      } else if (block.props[SCRIPT_PROP]) {
         dom.className = 'script-line';
         dom.style.fontFamily = "'Courier Prime', 'Courier New', Courier, monospace";
       }
@@ -127,9 +149,12 @@ const createParagraph = createBlockSpec(
       key: 'shotdocs-paragraph',
       prosemirrorPlugins: [scriptMarksPlugin],
       keyboardShortcuts: {
-        'Mod-Alt-0': ({ editor }) => setParagraph(editor, false),
+        'Mod-Alt-0': ({ editor }) => setParagraph(editor, 'paragraph'),
         // Ctrl/⌘+Alt+S convierte el bloque en Script.
-        'Mod-Alt-s': ({ editor }) => setParagraph(editor, true),
+        'Mod-Alt-s': ({ editor }) => setParagraph(editor, 'script'),
+        // Ctrl/⌘+Alt+P, en una pregunta (Ctrl/⌘+Alt+Q ya es la cita del editor; con AltGr, Q y E escriben
+        // "@" y "€" en los teclados en castellano).
+        [QUESTION_SHORTCUT]: ({ editor }) => setParagraph(editor, 'question'),
         // Como en un procesador de guiones: Enter en una línea de guion con texto sigue en Script; en una
         // línea vacía sale a un párrafo común.
         Enter: ({ editor }) =>
@@ -157,10 +182,15 @@ const createParagraph = createBlockSpec(
   ],
 );
 
-function setParagraph(editor: BlockNoteEditor<any, any, any>, script: boolean): boolean {
+/** Las propiedades de cada variante del párrafo: común, Script o pregunta (nunca Script y pregunta juntos). */
+export function paragraphProps(kind: 'paragraph' | 'script' | 'question'): Record<string, boolean> {
+  return { [SCRIPT_PROP]: kind === 'script', [QUESTION_PROP]: kind === 'question' };
+}
+
+function setParagraph(editor: BlockNoteEditor<any, any, any>, kind: 'paragraph' | 'script' | 'question'): boolean {
   const { block } = editor.getTextCursorPosition();
   if (editor.schema.blockSchema[block.type]?.content !== 'inline') return false;
-  editor.updateBlock(block, { type: 'paragraph', props: { [SCRIPT_PROP]: script } });
+  editor.updateBlock(block, { type: 'paragraph', props: paragraphProps(kind) });
   return true;
 }
 

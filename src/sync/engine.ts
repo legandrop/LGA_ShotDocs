@@ -1,5 +1,6 @@
 import type { MediaQueue, MediaStatus } from '../media/queue';
 import { TEAM_SCHEMA_VERSION, type AccessStore } from './access';
+import type { CommentQueue } from './comments';
 import type { PageDocs } from './docs';
 import type { PageFiles } from './files';
 import { hasUnsyncedContent } from './localDb';
@@ -23,6 +24,12 @@ export interface SyncStatus {
   mediaError: string | null;
   /** La foto o el video que se está subiendo. */
   uploading: MediaStatus['uploading'];
+  /** Comentarios (altas, ediciones, borrados y resoluciones) que faltan subir. */
+  pendingComments: number;
+  /** Comentarios que el servidor rechazó para siempre. Siguen en el dispositivo, a la vista. */
+  failedComments: number;
+  /** El último error de la cola de comentarios, que se va a reintentar. */
+  commentError: string | null;
   /** Dirección del portero de archivos del workspace (`workspace_settings.media_url`), si se sabe. */
   mediaUrl: string | null;
   /** El dueño del workspace, si se sabe. */
@@ -80,6 +87,9 @@ export class SyncEngine {
     failedMedia: 0,
     mediaError: null,
     uploading: null,
+    pendingComments: 0,
+    failedComments: 0,
+    commentError: null,
     mediaUrl: null,
     ownerId: null,
     workspaceName: null,
@@ -113,6 +123,8 @@ export class SyncEngine {
       media?: MediaQueue;
       /** Los permisos de la persona: se actualizan en cada sincronización (ver `checkAccess`). */
       access?: AccessStore;
+      /** La cola de comentarios (paso 10): sube y baja al final de cada ciclo. */
+      comments?: CommentQueue;
     } = {},
   ) {
     const poke = () => this.poke();
@@ -128,6 +140,15 @@ export class SyncEngine {
       options.media.onChange = () => {
         if (!this.stopped) void this.refreshCounts().catch(() => undefined);
       };
+    }
+    if (options.comments) {
+      options.comments.onQueued = poke;
+      options.comments.onChange = () => {
+        if (!this.stopped) void this.refreshCounts().catch(() => undefined);
+      };
+      if (options.comments.unavailable && !this.status.warning) {
+        this.status = { ...this.status, warning: `Comments are read-only on this device: ${options.comments.unavailable}` };
+      }
     }
     docs.onLocalChange = poke;
     docs.onWriteError = (message) => {
@@ -164,7 +185,11 @@ export class SyncEngine {
     this.interval = setInterval(onWake, INTERVAL_MS);
     // Lo que el servidor rechazó se vuelve a intentar una vez por apertura: puede que ya se haya arreglado.
     // Un error de la base de archivos nunca saltea la sincronización del texto.
-    void Promise.all([this.docs.clearRejected(), this.clearMediaBlocked()]).then(
+    void Promise.all([
+      this.docs.clearRejected(),
+      this.clearMediaBlocked(),
+      this.options.comments?.retryFailed().catch(() => undefined),
+    ]).then(
       () => this.syncNow(),
       () => this.syncNow(),
     );
@@ -173,6 +198,7 @@ export class SyncEngine {
   stop(): void {
     this.stopped = true;
     this.options.media?.stop();
+    this.options.comments?.stop();
     if (this.interval) clearInterval(this.interval);
     if (this.timer) clearTimeout(this.timer);
     for (const fn of this.cleanups) fn();
@@ -183,6 +209,7 @@ export class SyncEngine {
     await this.tree.retryFailed();
     await this.docs.clearRejected();
     await this.clearMediaBlocked();
+    await this.options.comments?.retryFailed().catch(() => undefined);
     await this.syncNow();
   }
 
@@ -310,6 +337,11 @@ export class SyncEngine {
       halt();
       const fileError = await this.files.pushPending((pageId) => this.tree.hasUnsentCreate(pageId));
 
+      halt();
+      // Los comentarios de páginas que todavía no están en el servidor esperan. Sus errores no cortan el
+      // ciclo: quedan en su propia cola (`commentError`, `failedComments`).
+      await this.options.comments?.run((pageId) => this.tree.hasUnsentCreate(pageId));
+
       this.patch({ online: true, lastError: contentError ?? fileError, lastSyncAt: Date.now() });
       // Sin esperarla: tiene su propio ciclo y sus propios errores.
       void this.syncMedia();
@@ -329,6 +361,7 @@ export class SyncEngine {
    */
   private async checkWorkspace(): Promise<{ outdated: boolean; removed: boolean }> {
     const settings = await this.remote.fetchWorkspaceSettings();
+    this.options.comments?.configure(settings?.schemaVersion ?? null);
     if (!settings) {
       this.patch({ outdated: false });
       return { outdated: false, removed: await this.checkAccess(null) };
@@ -422,6 +455,7 @@ export class SyncEngine {
   }
 
   private async refreshCounts(): Promise<void> {
+    const comments = this.options.comments?.status();
     const [states, unsynced, pendingFiles, media] = await Promise.all([
       this.docs.states(),
       this.docs.unsyncedPages(),
@@ -441,6 +475,9 @@ export class SyncEngine {
       failedMedia: media?.failed ?? 0,
       mediaError: media?.error ?? null,
       uploading: media?.uploading ?? null,
+      pendingComments: comments?.pending ?? 0,
+      failedComments: comments?.failed ?? 0,
+      commentError: comments?.error ?? null,
     });
   }
 
