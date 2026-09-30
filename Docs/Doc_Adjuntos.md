@@ -34,7 +34,7 @@ Cuatro frenos en la app; el portero y la base ya aceptan cualquier tipo.
 | `queue.ts`, `save` | Rechaza lo que no es foto o video y el SVG (`FileRejected`); `queue.test.ts` lo fija con `notas.pdf`. |
 | `queue.ts`, `normalizeMime` | Solo conoce extensiones de fotos y videos; un .rar sin tipo queda `application/octet-stream`. |
 | Portero, `startFileUpload` | **Acepta cualquier tipo** (usa `files.mime`), **sin tope de tamaño** (partes de hasta 64 MiB; la app manda de 8 MiB). |
-| Portero al servir (`media`, `mediaHeaders`) | `Content-Type` = `files.mime`, siempre `nosniff` y `CSP: sandbox`. **Nunca manda `Content-Disposition`**: no se puede pedir descarga ni poner el nombre. |
+| Portero al servir (`media`, `mediaHeaders`) | (Antes de v0.048.) `Content-Type` = `files.mime`, siempre `nosniff` y `CSP: sandbox`. **Nunca mandaba `Content-Disposition`**: no se podía pedir descarga ni poner el nombre. Resuelto en la entrega 1a. |
 | Base (`register_file`, `files`) | **No restringe el tipo** (solo la forma `tipo/subtipo`), `size bigint > 0`. |
 | Carrete (`collectCarrete`) | Mete todo `image` con `sdmedia://`: un PDF entraría y se vería *The photo couldn't be loaded*. |
 | `display()` en `queue.ts` | Un tipo desconocido muestra el recuadro gris con el ícono de foto; si lo subió otro dispositivo, además le pregunta a la base cada 60 s por una miniatura que nunca llega. |

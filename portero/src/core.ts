@@ -1033,7 +1033,7 @@ export class Portero {
     if (mark === 'missing') throw new HttpError(404, 'This file is not in Google Drive anymore.');
     if (mark === 'other') throw new HttpError(403, 'This file in Google Drive does not belong to this file of the app.');
     // El nombre va tal cual (con un tope, para que el pase no crezca de más): se limpia al servir.
-    const name = typeof media.name === 'string' ? Array.from(media.name).slice(0, NAME_MAX).join('') : '';
+    const name = typeof media.name === 'string' ? keepExtension(Array.from(media.name), NAME_MAX) : '';
     return { drive, type: MIME.test(media.mime ?? '') ? media.mime : '', size: Number(media.size) || 0, name };
   }
 
@@ -1306,21 +1306,35 @@ function isVideo(type: string): boolean {
 export function inlineType(type: string): string | null {
   const base = (type.split(';')[0] ?? '').trim().toLowerCase();
   if (!MIME.test(base)) return null;
-  if (base === 'application/pdf' || base === 'text/plain') return base;
+  if (base === 'application/pdf') return base;
+  // El texto, como UTF-8 (sin eso, un navegador puede mostrar mal los acentos).
+  if (base === 'text/plain') return 'text/plain; charset=utf-8';
   const [top, sub = ''] = base.split('/');
+  // Un subtipo XML (`image/x+xml`, lo puede escribir cualquiera en `files.mime`) el navegador lo muestra como
+  // documento: se baja.
+  if (sub === 'xml' || sub.endsWith('+xml')) return null;
   if (top === 'image' && !sub.includes('svg')) return base;
   if (top === 'video' || top === 'audio') return base;
   return null;
 }
 
-// Controles (C0, DEL, C1) y marcas de dirección (bidi): con un U+202E, `gpj.exe` se lee `exe.jpg`.
-const HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+// Controles (C0, DEL, C1), marcas de dirección (bidi: con un U+202E, `gpj.exe` se lee `exe.jpg`), los de ancho
+// cero y los separadores de renglón.
+const HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060\u2066-\u2069]/g;
 // Mitades de un par sustituto sin su pareja: `encodeURIComponent` no las acepta.
 const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 /** El nombre de un archivo listo para `Content-Disposition`: sin controles, bidi ni barras; `''` si no queda nada. */
 export function cleanFileName(name: string): string {
   const clean = name.replace(LONE_SURROGATE, '').normalize('NFC').replace(HIDDEN_CHARS, '').replace(/[/\\]/g, '_').trim();
-  return Array.from(clean).slice(0, NAME_MAX).join('');
+  return keepExtension(Array.from(clean), NAME_MAX);
+}
+
+/** Un nombre de hasta `max` caracteres; si hay que cortar, se corta antes de la extensión (queda `.pdf`). */
+function keepExtension(chars: string[], max: number): string {
+  if (chars.length <= max) return chars.join('');
+  const dot = chars.lastIndexOf('.');
+  const ext = dot > 0 && chars.length - dot <= 16 ? chars.slice(dot) : [];
+  return [...chars.slice(0, max - ext.length), ...ext].join('');
 }
 
 /**

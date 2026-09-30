@@ -1440,6 +1440,15 @@ describe('portero: nombres y encabezados de lo que se sirve', () => {
     expect(await legacy.json()).toMatchObject({ named: true });
   });
 
+  it('un nombre muy largo se corta antes de la extensión (la descarga sigue siendo .pdf)', async () => {
+    const { cleanFileName } = await import('./core');
+    const long = 'a'.repeat(400) + '.pdf';
+    const clean = cleanFileName(long);
+    expect(Array.from(clean).length).toBeLessThanOrEqual(255);
+    expect(clean.endsWith('.pdf')).toBe(true);
+    expect(cleanFileName('x\u200by\u2028z.txt')).toBe('xyz.txt');
+  });
+
   it('encabezados por tipo: la lista inline con su tipo; lo demás, octet-stream y attachment', async () => {
     const cases: [mime: string, type: string, kind: 'inline' | 'attachment', sandbox: boolean][] = [
       ['application/pdf', 'application/pdf', 'inline', false],
@@ -1448,7 +1457,9 @@ describe('portero: nombres y encabezados de lo que se sirve', () => {
       ['video/mp4', 'video/mp4', 'inline', true],
       ['video/quicktime', 'video/quicktime', 'inline', true],
       ['audio/mpeg', 'audio/mpeg', 'inline', true],
-      ['text/plain', 'text/plain', 'inline', true],
+      ['text/plain', 'text/plain; charset=utf-8', 'inline', true],
+      ['image/x+xml', 'application/octet-stream', 'attachment', true],
+      ['video/foo+xml', 'application/octet-stream', 'attachment', true],
       ['application/zip', 'application/octet-stream', 'attachment', true],
       ['application/x-rar-compressed', 'application/octet-stream', 'attachment', true],
       ['application/octet-stream', 'application/octet-stream', 'attachment', true],
