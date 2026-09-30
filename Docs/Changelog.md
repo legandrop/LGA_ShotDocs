@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.056 :
+v0.058 :
 
 El margen de cada bloque, como pidió Lega. Al pasar el mouse por un bloque aparecen tres puntos verticales,
 redondos y gruesos (como en Coda), en vez de los seis de BlockNote, y ya no está el "+" de al lado. En un título
@@ -10,13 +10,35 @@ el mouse encima toma el color del título (blanco en el tema oscuro); ahora se p
 vista mientras el mouse va del título al margen, y los puntos también. En el teléfono todo entra en el margen
 sin tapar el texto. Un clic en los puntos elige el bloque entero y abre la barra de formato entera (tipo de
 bloque, negrita, colores, alinear, link, comentar) en vez del menú del tirador, que ya no tiene "Borrar": un
-bloque elegido se borra con Retroceso o Supr (un título colapsado, con su sección entera, como antes).
+bloque elegido se borra con Retroceso, Supr o Cortar, y toda la página con Ctrl/⌘+A (un título colapsado,
+con su sección entera, como antes; ver Doc_Colapsar.md).
 Arrastrar los puntos sigue moviendo el bloque. Arreglado: después de borrar un bloque desde el menú hacía falta
 apretar Ctrl+Z varias veces, y los primeros deshacían otras cosas. El foco quedaba afuera del editor y el
 deshacer propio del navegador cambiaba el texto como si fuera una edición nueva; ahora ese deshacer hace el de la
 página, cada borrado de bloques enteros es un solo Ctrl+Z (aunque se haga enseguida después de escribir) y los
 puntos dejan el foco en el editor.
 [ Menú del bloque - tres puntos, barra entera y deshacer ]
+
+v0.057 :
+
+Buscar: tres ajustes que encontró Lega probando. Ir a un resultado de la búsqueda del proyecto (Ctrl/⌘+K) ahora
+lleva de verdad a la coincidencia, también en páginas largas con fotos y en hojas anchas como A3: se centra en
+la parte que se desplaza de la app (y de costado si hace falta) y se sigue centrando unos segundos mientras la
+página se acomoda (fotos que bajan, marcas de hoja), hasta que desplazás, tocás o escribís; antes se centraba
+una sola vez y las fotos de arriba la empujaban fuera de la pantalla. El campo de la barra de buscar enfocado
+tiene un solo borde fino (amarillo en el tema oscuro, un amarillo más oscuro en el claro para que se vea), sin el
+marco blanco ni el contorno grueso. Con una hoja más ancha que la ventana, la barra de buscar se alinea con los
+íconos de arriba y ya no queda cortada al borde de la hoja.
+[ Buscar - ir al resultado y la barra en hojas anchas ]
+v0.056 :
+
+"Importar de Coda…" (selector de proyectos) queda solo para la cuenta de Lega: es una herramienta suya, no
+una función de la app. Nadie más ve la entrada ni puede abrir el diálogo, que para los demás ni se monta.
+Como el repositorio es público, el correo no está escrito en ningún lado: `src/import/codaOwner.ts` compara
+el SHA-256 del correo del usuario que inició sesión (sin espacios alrededor y en minúsculas, con Web Crypto,
+una vez por usuario) con una constante; la entrada aparece cuando el hash se resolvió. Las pruebas usan el
+hash de un correo de prueba. Ver `Doc_Importar_Coda.md`.
+[ Importar de Coda, solo para Lega ]
 
 v0.055 :
 

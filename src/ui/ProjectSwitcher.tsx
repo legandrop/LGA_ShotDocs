@@ -4,6 +4,7 @@ import { t, useT } from '../i18n';
 import { formatSize } from '../media/fileTrash';
 import { usePermissions, useProjectSizes, useServices, useTree } from '../services';
 import { displayName } from '../workspaces';
+import { useCodaOwner } from '../import/codaOwner';
 import { importJobFor } from '../import/importJob';
 import { AccountIcon, ImportIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
@@ -44,6 +45,9 @@ export function ProjectSwitcher() {
   const { workspace } = useServices();
   const { current: ws, all } = useCurrentWorkspace();
   const leave = useLeaveGuard();
+  // "Importar de Coda", solo para la cuenta de Lega (codaOwner.ts). Acá y no en el menú: el hash ya está
+  // resuelto cuando se abre.
+  const codaOwner = useCodaOwner();
   useRememberWorkspaceName();
   const [position, setPosition] = useState<MenuPosition | null>(null);
   const [sharing, setSharing] = useState<string | null>(null);
@@ -98,7 +102,7 @@ export function ProjectSwitcher() {
               onShare={(id) => setSharing(id)}
               onWorkspaces={(mode) => setWorkspaces(mode)}
               onRemoveWorkspace={() => setRemoving(true)}
-              onImport={() => importJobFor(tree).show()}
+              onImport={codaOwner ? () => importJobFor(tree).show() : undefined}
             />
           </>,
           document.body,
@@ -135,7 +139,8 @@ function ProjectMenu(props: {
   onShare: (projectId: string) => void;
   onWorkspaces: (mode: WorkspacesMode) => void;
   onRemoveWorkspace: () => void;
-  onImport: () => void;
+  /** Solo para la cuenta de Lega (codaOwner.ts); sin esto no aparece "Importar de Coda". */
+  onImport?: () => void;
 }) {
   const tree = useTree();
   const perms = usePermissions();
@@ -286,11 +291,11 @@ function ProjectMenu(props: {
           {needle && projects.length === 0 ? tr('project.newNamed', { name: query.trim() }) : tr('project.new')}
         </button>
       )}
-      {perms.canCreateProject && (
+      {perms.canCreateProject && props.onImport && (
         <button
           onClick={() => {
             props.onClose();
-            props.onImport();
+            props.onImport?.();
           }}
         >
           <ImportIcon size={16} />

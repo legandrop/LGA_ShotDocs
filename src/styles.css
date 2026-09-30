@@ -532,6 +532,8 @@ code {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
+  /* Lo que se lleva a la vista (la coincidencia de la búsqueda) no queda debajo de la barra de arriba. */
+  scroll-padding-top: calc(52px + env(safe-area-inset-top));
   display: flex;
   flex-direction: column;
 }
@@ -3361,6 +3363,12 @@ button.link.danger {
   .main:has(.comments-panel) > .topbar {
     margin-right: calc(-1 * var(--comments-width));
   }
+
+  /* Llevar algo a la vista de costado (la coincidencia de la búsqueda en una hoja ancha) no lo deja debajo
+     del panel. */
+  .main:has(.comments-panel) {
+    scroll-padding-right: var(--comments-width);
+  }
 }
 
 .comments-head {
@@ -4166,6 +4174,8 @@ button.primary.danger {
   --find-current: rgba(242, 125, 38, 0.55);
   --find-block: #408cdc;
   --find-block-current: #f27d26;
+  /* El borde del campo enfocado: el acento, más oscuro en el tema claro (contraste de 3:1 con el fondo). */
+  --find-focus: #a47300;
 }
 
 :root[data-theme='dark'] {
@@ -4173,6 +4183,7 @@ button.primary.danger {
   --find-current: rgba(242, 125, 38, 0.6);
   --find-block: #6aa8ec;
   --find-block-current: #f59a55;
+  --find-focus: var(--accent);
 }
 
 /* Lo encontrado: decoraciones de ProseMirror, sin tocar el documento. */
@@ -4182,8 +4193,6 @@ button.primary.danger {
 }
 
 .editor .sd-find-current {
-  /* Al llevarla a la vista, que no quede debajo de la barra de arriba ni de la de buscar. */
-  scroll-margin: 140px 0 80px;
   background-color: var(--find-current);
   box-shadow: 0 0 0 1px var(--find-current);
 }
@@ -4209,11 +4218,16 @@ button.primary.danger {
   text-decoration-color: var(--find-block-current);
 }
 
-/* La barra: un ancla sin alto, pegada debajo de la barra de arriba al desplazarse; la barra, a la derecha. */
+/* La barra: un ancla sin alto, pegada debajo de la barra de arriba al desplazarse; la barra, a su derecha.
+   Con una hoja más ancha que lo que se ve (A3 en una ventana angosta), el ancla no pasa del ancho visible de
+   `.main` (`--find-visible-width`, lo mide FindBar.tsx) y se queda en lo que se ve al desplazarse de costado,
+   como los íconos de la barra de arriba: la barra nunca queda cortada. */
 .find-anchor {
   position: sticky;
   top: calc(60px + env(safe-area-inset-top));
+  left: 0;
   z-index: 4;
+  width: min(100%, calc(var(--find-visible-width, 100vw) - 12px));
   height: 0;
 }
 
@@ -4246,9 +4260,23 @@ button.primary.danger {
   font-size: 13px;
 }
 
+/* El campo enfocado: un solo borde fino del color de acento (sin el anillo ni el contorno de los demás campos,
+   que con el borde de la barra se veían como un marco doble y grueso). */
+.find-bar .find-input:focus,
+.find-bar .find-input:focus-visible {
+  outline: none;
+  border-color: var(--find-focus);
+  box-shadow: none;
+}
+
 .find-bar .find-input[aria-invalid='true'] {
   border-color: var(--danger-border);
   background: var(--danger-bg);
+}
+
+/* Sin resultados y enfocado: el rojo fuerte (el suave no se distingue del campo sin foco). */
+.find-bar .find-input[aria-invalid='true']:focus {
+  border-color: var(--danger);
 }
 
 .find-count {
@@ -4317,6 +4345,7 @@ button.primary.danger {
 
   /* En el teléfono la barra ocupa su lugar (no tapa los primeros renglones): la página baja un poco. */
   .find-anchor {
+    width: auto;
     height: auto;
     margin: 0 0 8px;
   }

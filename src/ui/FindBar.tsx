@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useReducer, useRef, type KeyboardEvent } from 'react';
 import type { EditorView } from '@tiptap/pm/view';
 import { useT } from '../i18n';
 import '../i18n/lazy/editor';
@@ -7,8 +7,8 @@ import {
   clearFind,
   closeFind,
   getFindState,
-  goToOccurrence,
   hiddenCount,
+  landOnOccurrence,
   replaceAll,
   replaceCurrent,
   revealCurrent,
@@ -18,7 +18,8 @@ import {
   undoReplace,
   type ReplaceResult,
 } from './findEditor';
-import { closeFindBar, getFindUi, hasFindTarget, takeFindTarget, isStepShortcut, takeFocusRequest, takesStepShortcut, updateFindUi, useFindUi, type FindStatus } from './findUi';
+import { closeFindBar, dropFindTarget, getFindUi, hasFindTarget, takeFindTarget, isStepShortcut, takeFocusRequest, takesStepShortcut, updateFindUi, useFindUi, type FindStatus } from './findUi';
+import { scrollParent, stopKeepingInView } from './findScroll';
 import { ChevronUpIcon, CloseIcon, CollapseIcon, ExpandIcon } from './icons';
 
 // La barra de buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6). Como la del navegador,
@@ -52,6 +53,7 @@ export function FindBar({
   const tr = useT();
   const view = editor?.prosemirrorView;
   const input = useRef<HTMLInputElement>(null);
+  const anchor = useRef<HTMLDivElement>(null);
   const [, redraw] = useReducer((n: number) => n + 1, 0);
   const status = ui.status;
   const setStatus = (next: FindStatus | null) => updateFindUi({ status: next });
@@ -74,10 +76,36 @@ export function FindBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ui.open, ui.focus]);
 
+  // El ancho que se ve del contenedor que se desplaza (`.main`, sin la parte que tapa el panel de comentarios):
+  // con una hoja más ancha que la ventana (A3), la barra se alinea a lo que se ve y no al borde de la hoja
+  // (styles.css, `.find-anchor`). Se vuelve a medir al cambiar la ventana, la barra lateral o el panel.
+  useLayoutEffect(() => {
+    const el = anchor.current;
+    if (!ui.open || !el) return;
+    const scroller = scrollParent(el);
+    if (!scroller || scroller === el.ownerDocument.scrollingElement) return;
+    const measure = () => {
+      const style = getComputedStyle(scroller);
+      const width = scroller.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+      el.style.setProperty('--find-visible-width', `${Math.max(0, width)}px`);
+    };
+    measure();
+    if (typeof ResizeObserver !== 'function') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [ui.open]);
+
+  // Lo último que se llevó a la vista: si el efecto vuelve a correr solo porque el editor se volvió a montar
+  // (la página terminó de bajar), se busca otra vez pero no se mueve la página (la persona puede estar leyendo
+  // otra parte).
+  const revealed = useRef<string | null>(null);
+
   // Buscar mientras se escribe; también al volver a montarse el editor (el estado vive en `findUi`).
   useEffect(() => {
     if (!view) return;
     if (!ui.open) {
+      revealed.current = null;
       clearFind(view);
       return;
     }
@@ -90,8 +118,14 @@ export function FindBar({
           setFind(view, ui.query, { matchCase: ui.matchCase, wholeWord: ui.wholeWord });
           // Con la página a medio bajar el pedido se guarda: al completarse el editor se vuelve a montar.
           const target = takeFindTarget(pageId, { keep: !complete });
-          if (target) goToOccurrence(view, target.blockId, target.occurrence);
-          revealCurrent(view);
+          // Al llegar desde la búsqueda del proyecto, la coincidencia se sigue llevando a la vista mientras la
+          // página se acomoda (fotos que bajan, marcas de hoja), hasta que la persona desplaza o toca algo.
+          // Si la persona desplaza o toca algo, la coincidencia pedida se descarta: al completarse la página no
+          // se vuelve a ir ahí.
+          const key = `${ui.query}\u0000${ui.matchCase}\u0000${ui.wholeWord}`;
+          if (target) landOnOccurrence(view, target, { onUser: () => dropFindTarget(pageId) });
+          else if (revealed.current !== key) revealCurrent(view);
+          revealed.current = key;
         } else {
           clearFind(view);
         }
@@ -100,6 +134,14 @@ export function FindBar({
     );
     return () => clearTimeout(timer);
   }, [view, ui.open, ui.query, ui.matchCase, ui.wholeWord, ui.target, complete, pageId]);
+
+  // Al irse este editor (o la barra), deja de acomodar su coincidencia: sin escuchas ni observadores sueltos.
+  useEffect(
+    () => () => {
+      if (view) stopKeepingInView(view.dom);
+    },
+    [view],
+  );
 
   // Con la barra abierta: F3 y Ctrl/⌘+G van a la siguiente (con Shift, a la anterior), desde la barra o el
   // editor y sin un diálogo abierto.
@@ -182,7 +224,7 @@ export function FindBar({
   const keepFocus = (e: React.MouseEvent) => e.preventDefault();
 
   return (
-    <div className="find-anchor">
+    <div ref={anchor} className="find-anchor">
       <div className={`find-bar${editable && ui.expanded ? ' expanded' : ''}`} role="search" aria-label={tr('find.label')}>
         <div className="find-row">
           {editable && (

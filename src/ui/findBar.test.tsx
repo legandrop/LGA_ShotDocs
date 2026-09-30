@@ -12,8 +12,9 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { schema } from './editorSchema';
 import { FindBar } from './FindBar';
-import { findExtension, getFindState } from './findEditor';
-import { closeFindBar, getFindUi, isFindShortcut, isStepShortcut, openFindBar, takesFindShortcut, takesStepShortcut, updateFindUi } from './findUi';
+import { findExtension, getFindState, landOnOccurrence, setFind } from './findEditor';
+import { isKeepingInView, stopKeepingInView } from './findScroll';
+import { closeFindBar, getFindUi, hasFindTarget, isFindShortcut, isStepShortcut, openFindBar, openFindBarAt, takesFindShortcut, takesStepShortcut, updateFindUi } from './findUi';
 
 // La barra de buscar y reemplazar (Docs/Doc_Buscar.md): el atajo, la cuenta, reemplazar solo si se puede
 // editar, y Ctrl/⌘+F en la página (la segunda vez, al navegador).
@@ -59,7 +60,7 @@ afterEach(async () => {
 
 const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
 
-function mountEditor(content: string[]): BlockNoteEditor {
+function mountEditor(content: string[], parent: HTMLElement = document.body): BlockNoteEditor {
   const editor = BlockNoteEditor.create(
     withCollaboration({
       schema,
@@ -69,7 +70,7 @@ function mountEditor(content: string[]): BlockNoteEditor {
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
   el.className = 'editor';
-  document.body.appendChild(el);
+  parent.appendChild(el);
   editor.mount(el);
   editors.push(editor);
   editor.replaceBlocks(editor.document, content.map((text) => ({ type: 'paragraph' as const, content: text })));
@@ -325,6 +326,202 @@ async function openPage(services: (device: Device, page: string) => Services = (
   for (let i = 0; i < 100 && !host.querySelector('.bn-editor'); i++) await wait(50);
   return { host, device, page };
 }
+
+describe('ir a un resultado del proyecto (v0.057)', () => {
+  it('si el documento todavía no tiene la coincidencia (se está dibujando), espera a que aparezca y va a la pedida', async () => {
+    const editor = mountEditor(['nada por ahora']);
+    const view = editor.prosemirrorView!;
+    act(() => setFind(view, 'zanahoria', {}));
+    expect(getFindState(view.state).matches).toHaveLength(0);
+    act(() => landOnOccurrence(view, { blockId: 'b2', occurrence: 1 }));
+    act(() => {
+      editor.replaceBlocks(editor.document, [
+        { id: 'b1', type: 'paragraph', content: 'una zanahoria' },
+        { id: 'b2', type: 'paragraph', content: 'zanahoria y otra zanahoria' },
+      ]);
+    });
+    await wait(400);
+    const state = getFindState(view.state);
+    expect(state.matches).toHaveLength(3);
+    // La segunda del bloque b2: la tercera de la página.
+    expect(state.current).toBe(2);
+  });
+
+  it('si mientras espera se busca otra cosa, no salta a la pedida', async () => {
+    const editor = mountEditor(['nada']);
+    const view = editor.prosemirrorView!;
+    act(() => setFind(view, 'zanahoria', {}));
+    act(() => landOnOccurrence(view, { blockId: 'b2', occurrence: 0 }));
+    act(() => setFind(view, 'nada', {}));
+    act(() => {
+      editor.replaceBlocks(editor.document, [
+        { id: 'b1', type: 'paragraph', content: 'nada zanahoria' },
+        { id: 'b2', type: 'paragraph', content: 'zanahoria nada' },
+      ]);
+    });
+    await wait(400);
+    const state = getFindState(view.state);
+    expect(state.query).toBe('nada');
+    expect(state.current).toBe(0);
+  });
+
+  it('la barra no pasa del ancho que se ve de la página que se desplaza (una hoja A3 en una ventana angosta)', async () => {
+    const main = document.createElement('main');
+    main.style.overflowY = 'auto';
+    main.style.paddingRight = '40px';
+    Object.defineProperty(main, 'clientWidth', { value: 700 });
+    const article = document.createElement('article');
+    main.append(article);
+    document.body.append(main);
+    const editor = mountEditor(['uno']);
+    act(() => openFindBar());
+    const root = createRoot(article);
+    roots.push(root);
+    act(() => root.render(<FindBar editor={editor} editable />));
+    const anchorEl = article.querySelector<HTMLElement>('.find-anchor')!;
+    // 700 de ancho visible menos los 40 que tapa el panel de comentarios.
+    expect(anchorEl.style.getPropertyValue('--find-visible-width')).toBe('660px');
+  });
+});
+
+/**
+ * Un `.main` que se desplaza (800 de alto) y una coincidencia actual a 3000 px en el contenido: así se ve si
+ * algo la centró (`scrollTop` deja de ser 0).
+ */
+function scroller(): HTMLElement {
+  const main = document.createElement('main');
+  main.style.overflowY = 'auto';
+  document.body.append(main);
+  let top = 0;
+  Object.defineProperty(main, 'scrollTop', { get: () => top, set: (v: number) => (top = Math.max(0, v)) });
+  Object.defineProperty(main, 'clientHeight', { value: 800 });
+  Object.defineProperty(main, 'clientWidth', { value: 900 });
+  main.getBoundingClientRect = () => ({ top: 0, left: 0, right: 900, bottom: 800, width: 900, height: 800 }) as DOMRect;
+  const real = Element.prototype.getBoundingClientRect;
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    if (this === main) return main.getBoundingClientRect();
+    if (this.classList.contains('sd-find-current')) return { top: 3000 - top, bottom: 3020 - top, left: 100, right: 180, width: 80, height: 20 } as DOMRect;
+    return real.call(this);
+  });
+  return main;
+}
+
+const userInputs = {
+  wheel: (main: HTMLElement) => main.dispatchEvent(new Event('wheel', { bubbles: true })),
+  pointerdown: (main: HTMLElement) => main.dispatchEvent(new Event('pointerdown', { bubbles: true })),
+  keydown: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' })),
+  drop: (main: HTMLElement) => main.dispatchEvent(new Event('drop', { bubbles: true })),
+};
+
+describe('sin pelearse con la persona (auditoría de v0.057)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('mientras espera a que aparezca la coincidencia, desplazar, un clic, una tecla o soltar algo lo corta', async () => {
+    for (const [name, input] of Object.entries(userInputs)) {
+      const main = scroller();
+      const editor = mountEditor(['nada por ahora'], main);
+      const view = editor.prosemirrorView!;
+      act(() => setFind(view, 'zanahoria', {}));
+      const onUser = vi.fn();
+      act(() => landOnOccurrence(view, { blockId: 'b2', occurrence: 1 }, { onUser }));
+      expect(isKeepingInView(view.dom), name).toBe(true);
+      act(() => void input(main));
+      expect(onUser, name).toHaveBeenCalled();
+      expect(isKeepingInView(view.dom), name).toBe(false);
+      act(() => {
+        editor.replaceBlocks(editor.document, [
+          { id: 'b1', type: 'paragraph', content: 'una zanahoria' },
+          { id: 'b2', type: 'paragraph', content: 'zanahoria y otra zanahoria' },
+        ]);
+      });
+      await wait(400);
+      expect(getFindState(view.state).current, name).toBe(0);
+      expect(main.scrollTop, name).toBe(0);
+      main.remove();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('una segunda llegada corta la espera de la primera, y cerrar la barra corta la que queda', async () => {
+    const main = scroller();
+    const editor = mountEditor(['nada'], main);
+    const view = editor.prosemirrorView!;
+    act(() => setFind(view, 'zanahoria', {}));
+    const onFirst = vi.fn();
+    act(() => landOnOccurrence(view, { blockId: 'b2', occurrence: 1 }, { onUser: onFirst }));
+    act(() => landOnOccurrence(view, { blockId: 'b2', occurrence: 1 }));
+    act(() => stopKeepingInView(view.dom));
+    act(() => void userInputs.wheel(main));
+    expect(onFirst).not.toHaveBeenCalled();
+    act(() => {
+      editor.replaceBlocks(editor.document, [
+        { id: 'b1', type: 'paragraph', content: 'una zanahoria' },
+        { id: 'b2', type: 'paragraph', content: 'zanahoria y otra zanahoria' },
+      ]);
+    });
+    await wait(400);
+    expect(getFindState(view.state).current).toBe(0);
+    expect(main.scrollTop).toBe(0);
+  });
+
+  it('después de llegar, desplazar corta el centrado y avisa (onUser)', async () => {
+    const main = scroller();
+    const editor = mountEditor(['una zanahoria'], main);
+    const view = editor.prosemirrorView!;
+    act(() => setFind(view, 'zanahoria', {}));
+    const onUser = vi.fn();
+    act(() => landOnOccurrence(view, null, { onUser }));
+    await wait(50);
+    expect(main.scrollTop).toBeGreaterThan(0);
+    expect(isKeepingInView(view.dom)).toBe(true);
+    act(() => void userInputs.wheel(main));
+    expect(onUser).toHaveBeenCalledTimes(1);
+    expect(isKeepingInView(view.dom)).toBe(false);
+  });
+
+  it('una página a medio bajar: si la persona se fue a otro lado, al completarse no vuelve a la coincidencia', async () => {
+    const main = scroller();
+    const content = [
+      { id: 'b1', type: 'paragraph' as const, content: 'una zanahoria' },
+      { id: 'b2', type: 'paragraph' as const, content: 'otra zanahoria' },
+    ];
+    const first = mountEditor(['x'], main);
+    act(() => first.replaceBlocks(first.document, content));
+    act(() => openFindBarAt('zanahoria', { pageId: 'p1', blockId: 'b2', occurrence: 0 }, { focus: false }));
+    const host = render(<FindBar editor={first} editable={false} complete={false} pageId="p1" />);
+    await wait(80);
+    expect(main.scrollTop).toBeGreaterThan(0);
+    expect(hasFindTarget('p1')).toBe(true);
+    // La persona desplaza a otro lado.
+    act(() => void userInputs.wheel(main));
+    main.scrollTop = 0;
+    expect(hasFindTarget('p1')).toBe(false);
+    // Termina de bajar: el editor se vuelve a montar.
+    const second = mountEditor(['x'], main);
+    act(() => second.replaceBlocks(second.document, content));
+    act(() => roots[roots.length - 1].render(<FindBar editor={second} editable complete pageId="p1" />));
+    await wait(200);
+    expect(getFindState(second.prosemirrorView!.state).matches).toHaveLength(2);
+    expect(host.querySelector('.find-count')?.textContent).not.toBe('');
+    expect(main.scrollTop).toBe(0);
+  });
+
+  it('al desmontarse la barra deja de acomodar (suelta los escuchas y el ResizeObserver)', async () => {
+    const main = scroller();
+    const editor = mountEditor(['una zanahoria'], main);
+    const disconnect = vi.spyOn(globalThis.ResizeObserver.prototype, 'disconnect');
+    const removed = vi.spyOn(main, 'removeEventListener');
+    act(() => openFindBarAt('zanahoria', { pageId: 'p2', blockId: 'x', occurrence: 0 }, { focus: false }));
+    render(<FindBar editor={editor} editable pageId="p2" />);
+    await wait(80);
+    expect(isKeepingInView(editor.prosemirrorView!.dom)).toBe(true);
+    act(() => roots[roots.length - 1].unmount());
+    roots.pop();
+    expect(isKeepingInView(editor.prosemirrorView!.dom)).toBe(false);
+    expect(disconnect).toHaveBeenCalled();
+    expect(removed.mock.calls.map((c) => c[0])).toEqual(expect.arrayContaining(['wheel', 'pointerdown', 'touchstart', 'drop']));
+  });
+});
 
 describe('Ctrl/⌘+F en la página', () => {
   it('abre la barra de la app; con el foco en la barra, pasa al navegador', async () => {
