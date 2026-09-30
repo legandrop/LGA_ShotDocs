@@ -48,10 +48,15 @@ export const SHEET_TOLERANCE_PX = 4;
 
 const EPS = 0.5;
 
-/** Dónde empieza cada hoja. `sheetHeight`: el alto del área de texto (la hoja menos sus márgenes). */
-export function paginate(units: readonly Unit[], sheetHeight: number): Pagination {
+/**
+ * Dónde empieza cada hoja. `sheetHeight`: el alto del área de texto (la hoja menos sus márgenes).
+ * `tolerance`: lo que se descuenta para decidir si un bloque entero entra (ver `SHEET_TOLERANCE_PX`). Donde
+ * se parte un bloque alto no se descuenta: ahí corta el navegador, en el último renglón que entra en la hoja.
+ */
+export function paginate(units: readonly Unit[], sheetHeight: number, tolerance = 0): Pagination {
   const breaks: SheetBreak[] = [];
   if (!(sheetHeight > 0)) return { breaks, sheets: 1 };
+  const keepHeight = sheetHeight - tolerance;
   let start = 0;
   const startAt = (index: number, offset: number) => {
     const u = units[index];
@@ -62,27 +67,35 @@ export function paginate(units: readonly Unit[], sheetHeight: number): Paginatio
   for (let i = 0; i < units.length; i++) {
     const u = units[i];
     if (!(u.height > 0)) continue;
+    const splits = (u.splits ?? []).filter((s) => s > EPS && s < u.height - EPS);
+    // Más alta que una hoja y con dónde partirla (renglones, filas): se parte.
+    const tall = u.height > keepHeight + EPS && splits.length > 0;
+    const room = tall ? sheetHeight : keepHeight;
     // Cada vuelta empieza una hoja nueva, así que termina (el tope es por si llega algo raro).
-    for (let guard = 0; u.top + u.height > start + sheetHeight + EPS && guard < 10_000; guard++) {
-      const limit = start + sheetHeight;
+    for (let guard = 0; u.top + u.height > start + room + EPS && guard < 10_000; guard++) {
       const atStart = u.top <= start + EPS;
-      const splits = (u.splits ?? []).filter((s) => s > EPS && s < u.height - EPS);
-      if (!atStart && (u.height <= sheetHeight + EPS || splits.length === 0)) {
+      if (!tall && !atStart) {
         // Pasa entera a la hoja siguiente, con los títulos de sección que tenga justo arriba en esta hoja.
         let j = i;
         while (j > 0 && units[j - 1].keepWithNext && units[j - 1].top > start + EPS) j--;
         startAt(j, 0);
         continue;
       }
-      // Más alta que una hoja: se parte en el último renglón (o fila) que entra.
+      if (!tall) {
+        // Ya empieza la hoja: si entra en la hoja entera, queda; si no (una imagen enorme), se corta en el borde.
+        if (u.top + u.height <= start + sheetHeight + EPS) break;
+        startAt(i, start + sheetHeight - u.top);
+        continue;
+      }
+      // Se parte en el último renglón (o fila) que entra; si no entra ninguno, empieza en la hoja siguiente.
       let fit: number | undefined;
       for (const s of splits) {
-        if (u.top + s > limit + EPS) break;
+        if (u.top + s > start + sheetHeight + EPS) break;
         if (u.top + s > start + EPS) fit = s;
       }
       if (fit !== undefined) startAt(i, fit);
       else if (!atStart) startAt(i, 0);
-      else startAt(i, limit - u.top);
+      else startAt(i, start + sheetHeight - u.top);
     }
   }
   return { breaks, sheets: breaks.length + 1 };

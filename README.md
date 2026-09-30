@@ -73,11 +73,12 @@ In this branch, not published yet:
 - A file trash per project: photos and videos no page uses anymore show in the *Files* tab of the trash, and
   the owner and admins can send them to the Google Drive trash (recoverable there for 30 days).
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
+- Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets.
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
 Next in the workspace plan: files in the owner's Drive with an offline upload queue, client guests with
-comments and questions, a file trash, and several workspaces in one app. Templates, PDF export and the
-assistant come later. The plan, the decisions and the roadmap are in
+comments and questions, a file trash, and several workspaces in one app. Templates and the assistant come
+later. The plan, the decisions and the roadmap are in
 [`Docs/`](Docs/index.md) (in Spanish).
 
 ## Development

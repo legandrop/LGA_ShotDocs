@@ -189,7 +189,8 @@ reglas del principio de `Doc_Roadmap.md`.
 3. **Plantillas.** Las plantillas iniciales definidas con Lega y la opción de guardar cualquier página
    como plantilla.
 4. **Formato de página y PDF.** Cortes reales entre hojas y exportar a PDF igual a lo que se ve (sección
-   10). La elección del tamaño y la vista como hoja ya están (v0.015).
+   10). La elección del tamaño y la vista como hoja ya están (v0.015); los cortes y el PDF también
+   (`Doc_Hojas_PDF.md`). Falta el bloque de salto de hoja.
 5. **Asistente.** Clave propia de cada usuario, revisar y editar textos, dar formato y ajustar imágenes,
    y acceso por MCP (sección 11).
 6. **Pulido.** Compresión de fotos de set en el dispositivo, historial de versiones, exportar e importar
@@ -216,9 +217,14 @@ En Notion y en Coda lo que se ve al editar no es lo que sale en el PDF. Acá sí
   rama. El formato "de todo el proyecto" se logra fijándolo en sus páginas raíz.
 - **Hecho en v0.015:** elegir Libre, A5, A4, A3 o Carta, vertical u horizontal, por rama; la página se ve
   como una hoja con su ancho real (a 96 puntos por pulgada), márgenes de 20 mm y una línea donde termina
-  el texto de cada hoja (su alto menos los márgenes). En el teléfono se ve libre. **Falta (fase 4):** los
-  cortes reales entre hojas, el bloque de salto de hoja, imágenes y tablas que no se parten y la
-  exportación a PDF.
+  el texto de cada hoja (su alto menos los márgenes). En el teléfono se ve libre.
+- **Hecho en la fase 4 (`Doc_Hojas_PDF.md`):** los cortes reales entre hojas, calculados sobre una vista de
+  impresión con el ancho real del área de texto y marcados en el editor como una capa (el documento no
+  cambia); imágenes, tablas y párrafos que entran en una hoja no se parten, lo más alto que una hoja se
+  parte entre renglones o filas, y una imagen nunca pasa del ancho ni del alto imprimible. La exportación a
+  PDF es la impresión del navegador con la misma vista, la misma hoja (`@page`) y los mismos cortes; una
+  página libre sale en A4. En el teléfono la página sigue libre, con las marcas antes de los mismos bloques.
+  **Falta:** el bloque de salto de hoja.
 
 ## 11. Asistente
 

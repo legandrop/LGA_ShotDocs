@@ -32,6 +32,8 @@ const REMOVE = [
   '.ProseMirror-yjs-cursor',
   '.ProseMirror-gapcursor',
   '.comment-margin',
+  // El espacio para tocar y agregar un bloque al final: en la última hoja podría sumar una hoja vacía.
+  '.bn-trailing-block',
 ].join(',');
 
 /** Clases de estado del editor que no van en papel. */
@@ -154,15 +156,16 @@ function fitWideTables(root: HTMLElement, width: number): void {
 
 export interface Paginated extends Measured {
   pagination: Pagination;
-  /** El alto que se usó para cortar (el del área de texto menos la tolerancia). */
+  /** Lo que entra de un bloque entero en una hoja (el área de texto menos la tolerancia). */
   sheetHeight: number;
 }
 
 /** Mide la vista y calcula los cortes. */
 export function paginateView(view: PrintView): Paginated {
-  const sheetHeight = view.geometry.contentHeight - SHEET_TOLERANCE_PX;
+  const { contentHeight } = view.geometry;
+  const sheetHeight = contentHeight - SHEET_TOLERANCE_PX;
   const measured = measureUnits(view.page, sheetHeight);
-  return { ...measured, pagination: paginate(measured.units, sheetHeight), sheetHeight };
+  return { ...measured, pagination: paginate(measured.units, contentHeight, SHEET_TOLERANCE_PX), sheetHeight };
 }
 
 /**

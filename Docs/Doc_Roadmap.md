@@ -81,7 +81,16 @@ nada, y lo que espera una decisión o una acción de Lega.
    y el menú de la cuenta. Son las que pide el punto 13: `https://shotdocs.lega.com.ar/privacy` y
    `https://shotdocs.lega.com.ar/terms`. Si cambia qué datos usa la app o dónde van, se cambia el texto y
    su fecha (`LEGAL_UPDATED`).
-7. **Fase 4.** Cortes reales entre hojas y PDF igual a lo que se ve (el tamaño de hoja ya se elige).
+7. **Fase 4: hecho lo principal (cortes entre hojas y PDF).** En una página con tamaño de hoja, el editor
+   marca dónde empieza cada hoja ("Page 2"…) con el alto real de la hoja menos los márgenes, sin partir un
+   bloque que entra en una hoja (pasa entero a la siguiente) y partiendo entre renglones o filas lo que es
+   más alto que una hoja; un título de sección pasa con el bloque que sigue. Es solo una capa: el documento
+   no cambia. **Export PDF / Print** (menú de la página, o Ctrl/⌘+P) imprime con la impresión del navegador
+   la misma hoja (`@page`) y los mismos cortes, sin barra lateral ni controles, con las fotos grandes si el
+   original está en el dispositivo, las tarjetas de Drive como link y Script con sus colores; una página
+   libre sale en A4. En el teléfono la página se ve libre y las marcas van antes de los mismos bloques. Ver
+   `Doc_Hojas_PDF.md`. **Falta:** el bloque de salto de hoja (una propiedad de párrafo, para que degrade en
+   una versión vieja) y probar a mano en Safari y en el iPhone.
 8. **Castellano e inglés (D-16).** Toda la interfaz en los dos idiomas, con el idioma en las preferencias
    de la cuenta, y las plantillas y los tipos de texto con nombre en cada idioma (Script/Guion,
    Questions/Dudas…).
