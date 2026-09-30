@@ -3,7 +3,8 @@ import type { AuthUser } from './auth';
 import { pendingInviteTarget } from './invite';
 import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
-import { MediaQueue } from './media/queue';
+import { FOREIGN_FILE_NOTICE, MediaQueue } from './media/queue';
+import { notify } from './ui/notice';
 import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/access';
 import { CommentQueue, commentsDbName, openCommentsDb, type CommentsDb } from './sync/comments';
 import { SupabaseCommentRemote } from './sync/commentsRemote';
@@ -222,6 +223,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         portero: (url) => new Portero(url, { token: sessionToken(workspace.client) }),
         projectOf: (pageId) => tree.get(pageId)?.workspace_id,
         unavailable: mediaProblem,
+        // Se pegó una foto o un video de otro proyecto (papelera de archivos, paso 11).
+        onForeignFile: (name) => notify(name ? `“${name}”: ${FOREIGN_FILE_NOTICE}` : FOREIGN_FILE_NOTICE),
       });
       await media.load().catch(() => undefined);
       // Los comentarios, también en una base aparte. Si no se abre, se leen con red pero no se escriben.

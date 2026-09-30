@@ -11,6 +11,7 @@ describe('nombres de lo guardado en el dispositivo', () => {
     expect(names.lastUser).toBe('shotdocs-last-user');
     expect(names.project).toBe('shotdocs-project');
     expect(names.lastPages).toBe('shotdocs-last-pages');
+    expect(names.inviteTarget).toBe('shotdocs-invite-target');
     expect(names.db('u1')).toBe('shotdocs:znlvpuddswymxpffgvbz:u1');
     expect(localDbName(WANKA_LOCAL_KEY, 'u1')).toBe('shotdocs:znlvpuddswymxpffgvbz:u1');
   });
@@ -18,7 +19,7 @@ describe('nombres de lo guardado en el dispositivo', () => {
   it('un workspace nuevo lleva su clave local en cada nombre y no choca con Wanka', () => {
     const names = storageNamesFor('k9x2');
     const wanka = legacyStorageNames(WANKA_LOCAL_KEY);
-    for (const key of ['auth', 'lastUser', 'project', 'lastPages'] as const) {
+    for (const key of ['auth', 'lastUser', 'project', 'lastPages', 'inviteTarget'] as const) {
       expect(names[key]).toContain('k9x2');
       expect(names[key]).not.toBe(wanka[key]);
     }

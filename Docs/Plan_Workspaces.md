@@ -422,18 +422,24 @@ Hecho en la app (falta auditar y probar a mano; `Doc_Sincronizacion.md`, "Papele
   respuesta que llega después de un cambio no lo marca como hecho). **Solo se quita con el documento
   completo y al día** (todo lo que el servidor tenía al bajar el árbol en ese ciclo, sin updates que esta
   versión no pudo leer, sin contenido desconocido y con lo propio ya subido); si falta algo, solo se suman
-  usos. Con la base anterior a la versión 6 no se manda nada.
+  usos. Con la base anterior a la versión 6 no se manda nada. Correcciones de la auditoría: un `unlink` no
+  sale mientras el dispositivo tenga otro uso del mismo archivo sin confirmar (cortar y pegar en otro
+  proyecto ya no lo manda a la papelera); pegar una foto de otro proyecto avisa y no la registra; cada
+  `unlink` lleva `p_seen_seq`; la primera vez que una página quitaría algo se comprueba que todo su
+  historial se pueda leer.
 - **Pestaña Archivos** en la papelera (`TrashView`), para quien `trashed_files` no rechaza: miniatura,
   nombre, peso, fecha de entrada y días que faltan para los 30, con *Auto-delete is off* mientras el
   interruptor esté apagado y el aviso *A file can show here while still in use on a page this device
-  hasn't synced*.
+  hasn't synced*. Los que usa una página de la papelera de páginas se marcan y quedan fuera de *Empty*.
 - **Mandar a la papelera de Drive** (dueño y admins): de a uno o *Empty*, con confirmación, por el portero
-  (`POST /trash`, `src/media/portero.ts`). 200 sale de la lista; 409 vuelve a leerla; los demás errores
-  quedan a la vista. *Empty* va de a uno, con el avance, y sigue si uno falla.
-- **En las páginas**, un archivo con `purged_at` o `drive_trashed_at` se ve como *File deleted (in the Drive
-  trash)*, con su miniatura si la hay.
+  (`POST /trash`, `src/media/portero.ts`). 200 sale de la lista; 409 con `code: 'in_use'` vuelve a leerla;
+  `drive_not_connected` avisa sin marcar nada; los demás errores quedan a la vista. *Empty* va de a uno, con
+  el avance, y sigue si uno falla. Lo que una página de este dispositivo usa sin sincronizar se saltea.
+- **En las páginas**, un archivo con `drive_trashed_at` se ve como *File deleted (in the Drive trash)* y uno
+  solo pedido como *Deletion requested (not yet in the Drive trash)*, con su miniatura si la hay.
 - **Borrado automático:** armado detrás de `auto_purge_files` (al abrir la app, dueño y admins,
-  `files_due_for_purge` y `/trash` de a uno); con el interruptor apagado no se llama a nada (hay una prueba).
+  después de una vuelta de la cola de usos, `files_due_for_purge` y `/trash` de a uno, salteando lo que tenga
+  usos sin mandar); con el interruptor apagado no se llama a nada (hay una prueba).
 - `DB_SCHEMA_VERSION = 6`. Pruebas en `src/media/trash.test.ts` y `src/media/portero.test.ts`, con el
   servidor y el portero en memoria (`src/sync/testing.ts`).
 - Queda: el carrete no sabe todavía que un archivo está borrado (abre el pase del portero como siempre).
@@ -457,15 +463,19 @@ Hecho: el comando (`scripts/setup-workspace.mjs`, con `--dry-run` y el paso apar
 - **Cambiar de workspace recarga la app** con el elegido: nunca hay dos clientes escribiendo a la vez.
 - Bienvenida sin ningún workspace (*Join a workspace* / *Create my workspace*); unirse con un link de otro
   workspace revisa la dirección, la clave publicable y la clave local, rechaza una clave local que ya usa
-  otro workspace del dispositivo con otra dirección, y pregunta "Join <nombre> at <host>?" (el link lleva
-  ahora el nombre, opcional).
+  otro workspace del dispositivo con otra dirección, y pregunta "Join <nombre>?" con el host aparte y
+  destacado (el link lleva ahora el nombre, opcional, que se muestra limpio y recortado).
 - Crear: enlaza la guía y lee `workspace_settings` con la clave publicable. **La base de hoy solo la deja
   leer con sesión**, así que en la práctica el workspace entra pendiente y se completa después de que el
   dueño entra (la sesión pasa a los nombres de su clave local). Si se quiere avisar antes de entrar que falta
   correr el comando, hace falta una migración que deje leer a `anon` solo `name`, `local_key` y
   `schema_version` (no está hecha: a decidir).
 - Selector **Workspace › Proyecto** (con un solo workspace, igual que antes más una línea discreta) y quitar
-  del dispositivo el workspace abierto, solo sin cambios sin subir o después de bajarlos, con confirmación.
+  del dispositivo el workspace abierto, solo sin cambios sin subir o después de bajarlos (el archivo y cada
+  original de foto o video), con confirmación.
+- Correcciones de la auditoría: con compilación siempre hay una entrada de Wanka con sus nombres y se
+  descarta cualquier otra con su dirección o su clave local; la página de un link se guarda por workspace;
+  las preferencias sin subir quedan por usuario (`shotdocs-prefs-others`, sin tocar `shotdocs-prefs`).
 
 **Paso 13 — Links de Drive.** Al pegar un link de Drive: dejarlo como link, como texto o como tarjeta
 reproducible (el reproductor de Drive). La tarjeta es un párrafo con el link y una propiedad: si se pierde

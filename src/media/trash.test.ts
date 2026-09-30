@@ -3,10 +3,11 @@ import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from '../sync/testing';
 import { RemoteError } from '../sync/types';
+import { SupabaseRemote, unlinkIgnored } from '../sync/remote';
 import { autoPurgeFiles, MEDIA_SCHEME, mediaIdOf } from './queue';
-import { emptyFileTrash, loadFileTrash, sendToDriveTrash, type TrashOutcome } from './fileTrash';
+import { DRIVE_NOT_CONNECTED, emptyFileTrash, loadFileTrash, sendToDriveTrash, type TrashOutcome } from './fileTrash';
 import { mediaIdsInDoc } from './usage';
-import { DELETED_LABEL } from './probe';
+import { DELETED_LABEL, REQUESTED_LABEL } from './probe';
 
 // Papelera de archivos (paso 11 de Docs/Plan_Workspaces.md): qué archivos usa cada página, la pestaña
 // Archivos de la papelera y el borrado automático, armado y apagado. Con el servidor y el portero en memoria
@@ -98,6 +99,12 @@ async function withPhoto(server: FakeServer): Promise<{ a: Device; page: string;
   expect(server.pageFiles.has(`${page}:${id}`)).toBe(true);
   expect(server.mediaFiles.get(id)).toMatchObject({ trashed_at: null });
   return { a, page, id };
+}
+
+/** La marca de "ya mirada" que tendría la página con su documento de ahora. */
+async function markOf(d: Device, pageId: string): Promise<string> {
+  const state = (await d.docs.states()).get(pageId)!;
+  return `${state.version}:${state.cursor}:1`;
 }
 
 const calls = (server: FakeServer, name: string) => server.mediaCalls.filter((c) => c.startsWith(name));
@@ -244,10 +251,14 @@ describe('papelera de archivos: qué archivos usa cada página', () => {
     server.updates.get(page)!.push({ seq, clientUpdateId: crypto.randomUUID(), data: new Uint8Array([9, 9, 9]) });
     await sync(a);
     expect((await a.docs.states()).get(page)?.unreadable).toBe(true);
+    // Aunque la página ya se hubiera comprobado antes (la marca de esta versión alcanza sola).
+    await a.media.setVerified(page);
     await edit(a, page, (doc) => removeImage(doc, id));
     await sync(a);
     expect(calls(server, 'unlink_page_file')).toEqual([]);
     expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
+    // No queda como "mirada": se vuelve a mirar en cada ciclo.
+    expect(a.media.usageMark(page)).not.toBe(await markOf(a, page));
   });
 
   it('con un documento que el servidor rechazó (sin subir) no quita nada', async () => {
@@ -532,5 +543,301 @@ describe('papelera de archivos: borrado automático (apagado)', () => {
     await sync(owner);
     await vi.waitFor(() => expect(server.mediaFiles.get(id)?.drive_trashed_at).toBeTruthy());
     expect(calls(server, 'files_due_for_purge')).toEqual([`files_due_for_purge ${server.workspaceId}`]);
+  });
+});
+
+describe('papelera de archivos: correcciones de la auditoría', () => {
+  /** Dos proyectos del dueño, con una página cada uno, y una foto en la del primero. */
+  async function twoProjects(server: FakeServer) {
+    const { a, page, id } = await withPhoto(server);
+    const other = await a.tree.createProject('Otro rodaje');
+    const foreign = await a.tree.create(null, 'Día 1 (otro)', other);
+    await sync(a);
+    return { a, page, id, foreign };
+  }
+
+  it('cortar de un proyecto y pegar en otro: avisa, no lo registra y no lo quita de la página original', async () => {
+    const server = new FakeServer();
+    const { a, page, id, foreign } = await twoProjects(server);
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await edit(a, foreign, (doc) => insertImage(doc, id));
+    // El editor, al pegarlo.
+    await a.media.ensureLinks(foreign, [id]);
+    expect(server.foreignNotices).toEqual(['IMG_0001.JPG']);
+    await sync(a);
+    expect(calls(server, 'link_page_file')).toEqual([]);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    expect(server.pageFiles.has(`${page}:${id}`)).toBe(true);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
+    expect(await a.mediaDb.get('links', `${foreign}:${id}`)).toMatchObject({ pending: 1, waiting: 'other_project' });
+    expect(await a.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ pending: 1, removed: true, waiting: 'held' });
+    // Esperar no cuenta como pendiente ni como rechazado.
+    expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 0, failedMedia: 0 });
+    expect(server.foreignNotices).toHaveLength(1);
+
+    // Se saca de la otra página: recién ahí se quita de la original.
+    await edit(a, foreign, (doc) => removeImage(doc, id));
+    await sync(a);
+    expect(calls(server, 'unlink_page_file')).toEqual([`unlink_page_file ${foreign} ${id}`, `unlink_page_file ${page} ${id}`]);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
+  });
+
+  it('en otro dispositivo que no sabía de qué proyecto era: el servidor lo rechaza, avisa y tampoco quita', async () => {
+    const server = new FakeServer();
+    const { a, page, id, foreign } = await twoProjects(server);
+    const b = await device(server);
+    await sync(b);
+    // `b` corta y pega (sin saber de qué proyecto es el archivo).
+    await edit(b, page, (doc) => removeImage(doc, id));
+    await edit(b, foreign, (doc) => insertImage(doc, id));
+    await sync(b);
+    expect(calls(server, 'link_page_file').filter((c) => c.includes(foreign))).toHaveLength(1);
+    expect(server.foreignNotices).toEqual(['IMG_0001.JPG']);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    expect(await b.mediaDb.get('links', `${foreign}:${id}`)).toMatchObject({ waiting: 'other_project', blocked: false });
+    expect(b.engine.getStatus()).toMatchObject({ pendingMedia: 0, failedMedia: 0 });
+    // Al volver a abrir la app no se reintenta ni se vuelve a avisar.
+    await b.engine.retryRejected();
+    await sync(b);
+    expect(calls(server, 'link_page_file').filter((c) => c.includes(foreign))).toHaveLength(1);
+    expect(server.foreignNotices).toHaveLength(1);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
+    void a;
+  });
+
+  it('manda el seq con el que decidió; si la página cambió después, la base lo ignora y se vuelve a comparar', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const b = await device(server);
+    await sync(b);
+    await edit(a, page, (doc) => removeImage(doc, id));
+    // Justo antes de que llegue el unlink, `b` escribe en la página (con la foto todavía, para `b`).
+    const original = a.remote.unlinkPageFile.bind(a.remote);
+    let first = true;
+    a.remote.unlinkPageFile = async (p, f, seen) => {
+      if (first) {
+        first = false;
+        await edit(b, page, (doc) => {
+          const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+          group.insert(group.length, [new Y.XmlElement('blockContainer')]);
+        });
+        await b.docs.pushPage(page, b.remote);
+      }
+      return original(p, f, seen);
+    };
+    await sync(a);
+    expect(server.seenSeqs.length).toBeGreaterThanOrEqual(2);
+    const [ignored, applied] = server.seenSeqs;
+    expect(ignored).toBeLessThan(server.pages.get(page)!.update_seq);
+    expect(applied).toBe(server.pages.get(page)!.update_seq);
+    expect(server.removedPageFiles.has(`${page}:${id}`)).toBe(true);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
+  });
+
+  it('si la función de la base no acepta p_seen_seq, sigue sin él; y entiende "ignorado"', async () => {
+    const rpc = vi.fn(async (_fn: string, args: Record<string, unknown>) =>
+      'p_seen_seq' in args ? { data: null, error: { code: 'PGRST202', message: 'Could not find the function' }, status: 404 } : { data: null, error: null, status: 200 },
+    );
+    const remote = new SupabaseRemote({ rpc } as never);
+    expect(await remote.unlinkPageFile('p', 'f', 7)).toBe(true);
+    expect(rpc.mock.calls.map((c) => c[1])).toEqual([
+      { p_page_id: 'p', p_file_id: 'f', p_seen_seq: 7 },
+      { p_page_id: 'p', p_file_id: 'f' },
+    ]);
+    // Durante un rato ya no lo prueba.
+    await remote.unlinkPageFile('p', 'f', 8);
+    expect(rpc.mock.calls[2][1]).toEqual({ p_page_id: 'p', p_file_id: 'f' });
+    expect(unlinkIgnored(null)).toBe(false);
+    expect(unlinkIgnored(true)).toBe(false);
+    expect(unlinkIgnored(false)).toBe(true);
+    expect(unlinkIgnored('ignored')).toBe(true);
+    expect(unlinkIgnored({ ignored: true })).toBe(true);
+    expect(unlinkIgnored([{ status: 'ignored' }])).toBe(true);
+  });
+
+  it('bajada a medias (el segundo lote falla después de aplicar el primero): no quita', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const b = await device(server);
+    await sync(b);
+    // En `a`: se borra la foto y se deshace, en dos subidas.
+    const doc = await a.docs.open(page);
+    const undo = new Y.UndoManager(doc.getXmlFragment(CONTENT_FRAGMENT));
+    removeImage(doc, id);
+    await a.docs.flush();
+    await a.docs.pushPage(page, a.remote);
+    const removedAt = server.pages.get(page)!.update_seq;
+    undo.undo();
+    await a.docs.flush();
+    await a.docs.pushPage(page, a.remote);
+    a.docs.close(page);
+    a.engine.stop();
+    // `b` baja el borrado y se corta antes del deshacer.
+    const pull = b.remote.pullUpdates.bind(b.remote);
+    b.remote.pullUpdates = async (p, after, limit) => {
+      if (after >= removedAt) throw new RemoteError('canceling statement due to statement timeout', true, '57014');
+      return (await pull(p, after, limit)).filter((u) => u.seq <= removedAt);
+    };
+    await sync(b);
+    expect(mediaIdsInDoc((await b.docs.snapshot(page)).doc).size).toBe(0);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
+  });
+
+  it('un bloque que esta versión no conoce en el documento: no quita, y se vuelve a mirar', async () => {
+    const server = new FakeServer();
+    server.enableTrash();
+    const hasFuture = (doc: Y.Doc) => {
+      const stack: unknown[] = doc.getXmlFragment(CONTENT_FRAGMENT).toArray();
+      while (stack.length) {
+        const item = stack.pop();
+        if (item instanceof Y.XmlElement) {
+          if (item.nodeName === 'futureBlock') return true;
+          stack.push(...item.toArray());
+        }
+      }
+      return false;
+    };
+    const a = await makeDevice(server, undefined, '0.021', { supports: (doc) => !hasFuture(doc) });
+    devices.push(a);
+    const page = await a.tree.create(null, 'Día 1');
+    await sync(a);
+    const id = mediaIdOf(await a.media.add(page, photo()))!;
+    await edit(a, page, (doc) => insertImage(doc, id));
+    await sync(a);
+    await edit(a, page, (doc) => {
+      const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+      group.insert(group.length, [new Y.XmlElement('futureBlock')]);
+      removeImage(doc, id);
+    });
+    await sync(a);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    expect(a.media.usageMark(page)).not.toBe(await markOf(a, page));
+    await edit(a, page, (doc) => {
+      const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+      group.delete(group.length - 1, 1);
+    });
+    await sync(a);
+    expect(calls(server, 'unlink_page_file')).toEqual([`unlink_page_file ${page} ${id}`]);
+  });
+
+  it('el unlink de un archivo propio espera a que esté registrado', async () => {
+    const server = new FakeServer();
+    server.enableTrash();
+    const a = await device(server);
+    const page = await a.tree.create(null, 'Día 1');
+    await sync(a);
+    const register = a.remote.registerFile.bind(a.remote);
+    a.remote.registerFile = async () => {
+      server.mediaCalls.push('register_file (falla)');
+      throw new RemoteError('Internal Server Error', false, '500');
+    };
+    const id = mediaIdOf(await a.media.add(page, photo()))!;
+    await edit(a, page, (doc) => insertImage(doc, id));
+    await sync(a);
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await sync(a);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    expect(await a.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ removed: true, pending: 1, waiting: 'held' });
+
+    a.remote.registerFile = register;
+    server.clockOffset += 60 * 60_000;
+    await sync(a);
+    const order = server.mediaCalls.filter((c) => c === `register_file ${id}` || c.startsWith('unlink_page_file'));
+    expect(order).toEqual([`register_file ${id}`, `unlink_page_file ${page} ${id}`]);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
+  });
+
+  it('antes de quitar por primera vez comprueba que todo el historial de la página se pueda leer', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    // Un update ilegible que una versión anterior descartó sin anotarlo: el cursor ya lo pasó.
+    const seq = ++server.pages.get(page)!.update_seq;
+    server.updates.get(page)!.push({ seq, clientUpdateId: crypto.randomUUID(), data: new Uint8Array([9, 9, 9]) });
+    const state = (await a.docs.states()).get(page)!;
+    await a.db.put('docState', { ...state, cursor: seq });
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await sync(a);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    expect((await a.docs.states()).get(page)?.unreadable).toBe(true);
+    expect(a.media.isVerified(page)).toBe(false);
+  });
+
+  it('con Drive sin conectar no marca nada y "Empty" para; "in_use" solo con ese código', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const second = mediaIdOf(await a.media.add(page, photo('IMG_0002.JPG')))!;
+    await edit(a, page, (doc) => insertImage(doc, second));
+    await sync(a);
+    await edit(a, page, (doc) => {
+      removeImage(doc, id);
+      removeImage(doc, second);
+    });
+    await sync(a);
+    server.portero.driveDisconnected = true;
+    const results = await emptyFileTrash((f) => a.media.trash(f), [id, second]);
+    expect([...results.values()]).toEqual([{ status: 'not_connected', message: DRIVE_NOT_CONNECTED }]);
+    expect(server.mediaFiles.get(id)?.purged_at ?? null).toBeNull();
+    expect(server.portero.calls.filter((c) => c.path === '/trash')).toHaveLength(1);
+
+    // Un 409 sin el código no es "en uso".
+    server.portero.driveDisconnected = false;
+    const plain409 = await sendToDriveTrash(async () => {
+      const { PorteroError } = await import('./portero');
+      throw new PorteroError('This file is not in the trash.', 409);
+    }, id);
+    expect(plain409).toEqual({ status: 'error', message: 'This file is not in the trash.' });
+  });
+
+  it('si Drive falló después de pedirlo, en las páginas dice que se pidió, no que está en la papelera de Drive', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await sync(a);
+    server.portero.failTrash.add(id);
+    expect(await sendToDriveTrash((f) => a.media.trash(f), id)).toMatchObject({ status: 'error' });
+    const shown = decodeURIComponent(await a.media.resolve(MEDIA_SCHEME + id));
+    expect(shown).toContain(REQUESTED_LABEL);
+    expect(shown).not.toContain(DELETED_LABEL);
+    server.portero.failTrash.clear();
+    await a.media.trash(id);
+    expect(decodeURIComponent(await a.media.resolve(MEDIA_SCHEME + id))).toContain(DELETED_LABEL);
+  });
+
+  it('mandar a mano o automáticamente saltea un archivo con un uso de este dispositivo sin mandar', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await sync(a);
+    // Se vuelve a pegar en otra página, pero el uso todavía no sale (el servidor falla un momento).
+    const other = await a.tree.create(null, 'Día 2');
+    await sync(a);
+    a.remote.linkPageFile = async () => {
+      throw new RemoteError('Internal Server Error', false, '500');
+    };
+    await edit(a, other, (doc) => insertImage(doc, id));
+    await sync(a);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
+    expect(await sendToDriveTrash((f) => a.media.trash(f), id)).toMatchObject({ status: 'unsent_use' });
+    expect(server.portero.calls.filter((c) => c.path === '/trash')).toEqual([]);
+
+    // Automático (prendido para la prueba), al abrir la app: también lo saltea.
+    server.mediaFiles.get(id)!.trashed_at = new Date(Date.now() - 40 * DAY).toISOString();
+    server.settings = { ...server.settings!, autoPurgeFiles: true };
+    const dbName = crypto.randomUUID();
+    void dbName;
+    expect(await a.media.autoPurge(true, [server.workspaceId])).toBe(0);
+    expect(calls(server, 'files_due_for_purge')).toHaveLength(1);
+    expect(server.portero.calls.filter((c) => c.path === '/trash')).toEqual([]);
+    expect(server.mediaFiles.get(id)?.purged_at ?? null).toBeNull();
+  });
+
+  it('marca los que usa una página que está en la papelera de páginas', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    await a.tree.trash(page);
+    await sync(a);
+    const [row] = (await loadFileTrash(a.remote, server.workspaceId))!;
+    expect(row).toMatchObject({ id, in_trashed_page: true, trashed_page_title: 'Día 1' });
   });
 });

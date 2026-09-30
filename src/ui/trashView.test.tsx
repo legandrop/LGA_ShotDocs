@@ -140,6 +140,44 @@ describe('papelera: pestaña Archivos', () => {
     expect(host.textContent).toContain('No files in the trash.');
   });
 
+  it('marca los que usa una página de la papelera y "Empty" los deja afuera', async () => {
+    const server = new FakeServer();
+    server.enableTrash();
+    const owner = await makeDevice(server);
+    devices.push(owner);
+    await sync(owner);
+    const page = await owner.tree.create(null, 'Día 1');
+    await sync(owner);
+    const id = mediaIdOf(await owner.media.add(page, new File([new Uint8Array(2048)], 'IMG_0042.JPG', { type: 'image/jpeg' })))!;
+    const doc = await owner.docs.open(page);
+    doc.transact(() => {
+      const group = new Y.XmlElement('blockGroup');
+      const container = new Y.XmlElement('blockContainer');
+      const image = new Y.XmlElement('image');
+      doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+      group.insert(0, [container]);
+      container.insert(0, [image]);
+      image.setAttribute('url', MEDIA_SCHEME + id);
+    });
+    owner.docs.close(page);
+    await owner.docs.flush();
+    await sync(owner);
+    await owner.tree.trash(page);
+    await sync(owner);
+
+    const host = await mount(services(owner, server.ownerId));
+    expect(host.textContent).toContain('already sent to the Google Drive trash');
+    await act(async () => byText(host, 'Files')!.click());
+    await settle();
+    expect(host.textContent).toContain('Used by “Día 1” in the trash');
+    expect(byText(host, 'Empty')!.disabled).toBe(true);
+    // De a uno se puede, con su propia confirmación.
+    const confirm = vi.fn((_message: string) => false);
+    vi.stubGlobal('confirm', confirm);
+    await act(async () => byText(host, 'Send to Drive trash')!.click());
+    expect(confirm.mock.calls[0]?.[0]).toMatch(/a page in the trash\. Restoring that page will not bring it back/);
+  });
+
   it('quien no puede verla no tiene la pestaña; quien la ve sin ser dueño ni admin no puede mandar nada', async () => {
     const { server } = await trashedPhoto();
     server.addMember('editor-1', 'member');

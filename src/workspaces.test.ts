@@ -14,7 +14,10 @@ import {
   readWorkspaces,
   removeWorkspace,
   renameWorkspace,
+  resolveInvite,
   resolveInviteText,
+  safeWorkspaceName,
+  sameOrigin,
   switchWorkspace,
   updateWorkspaces,
   workspaceOrigin,
@@ -94,6 +97,39 @@ describe('lista de workspaces del dispositivo', () => {
     expect(configOf(wanka).storage.db('u1')).toBe('shotdocs:znlvpuddswymxpffgvbz:u1');
   });
 
+  it('una lista tocada con otra entrada para la dirección de Wanka nunca le cambia los nombres', () => {
+    const evil = { id: 'ws_evil1', url: WANKA.url, publishableKey: 'sb_publishable_evilKey123', localKey: 'ws_evil1', name: 'Wanka' };
+    const sameKey = {
+      id: WANKA_LOCAL_KEY,
+      url: 'https://atacante0000000000.supabase.co',
+      publishableKey: 'sb_publishable_evilKey123',
+      localKey: WANKA_LOCAL_KEY,
+      name: 'Wanka',
+    };
+    for (const workspaces of [[evil], [sameKey], [evil, { ...evil, id: 'ws_evil2', localKey: 'ws_evil2', url: `${WANKA.url}.` }]]) {
+      const store = memoryStore({ [WORKSPACES_KEY]: JSON.stringify({ active: workspaces[0].id, workspaces }) });
+      const list = loadWorkspaces(WANKA, store);
+      expect(list.workspaces).toHaveLength(1);
+      const opened = activeWorkspace(list)!;
+      expect(opened.legacy).toBe(true);
+      expect(configOf(opened).storage.auth).toBe('shotdocs-auth');
+      expect(configOf(opened).storage.db('u1')).toBe('shotdocs:znlvpuddswymxpffgvbz:u1');
+      // Y así quedó guardada.
+      expect(readWorkspaces(store).workspaces.map((w) => w.id)).toEqual([WANKA_LOCAL_KEY]);
+    }
+  });
+
+  it('al leer, descarta entradas con una dirección o una clave publicable que no se podrían haber agregado', () => {
+    const bad = [
+      { ...studio('ws_http00000'), url: 'http://abcdefghijklmnopqrst.supabase.co' },
+      { ...studio('ws_path00000'), url: `${STUDIO_URL}/rest/v1` },
+      { ...studio('ws_secret0000'), url: 'https://otro0000000000000000.supabase.co', publishableKey: 'sb_secret_abcdefghijkl' },
+      { ...studio('ws_nokey00000'), url: 'https://otro1111111111111111.supabase.co', publishableKey: '' },
+    ];
+    const store = memoryStore({ [WORKSPACES_KEY]: JSON.stringify({ active: null, workspaces: [...bad, studio()] }) });
+    expect(readWorkspaces(store).workspaces.map((w) => w.id)).toEqual(['ws_studio1234567890abc']);
+  });
+
   it('un workspace nuevo usa los nombres con su clave local', () => {
     const config = configOf(studio());
     const expected = storageNamesFor('ws_studio1234567890abc');
@@ -144,6 +180,9 @@ describe('validar un workspace nuevo y los links de invitación', () => {
     expect(workspaceOrigin('https://abc.supabase.co/rest/v1', false)).toBeNull();
     expect(workspaceOrigin('http://localhost:54321', false)).toBeNull();
     expect(workspaceOrigin('http://localhost:54321', true)).toBe('http://localhost:54321');
+    // El punto final del DNS es el mismo host.
+    expect(workspaceOrigin('https://ABC.supabase.co./', false)).toBe('https://abc.supabase.co');
+    expect(sameOrigin('https://abc.supabase.co.', 'https://abc.supabase.co/')).toBe(true);
 
     const list = base();
     expect(checkWorkspace(list, { url: STUDIO_URL, publishableKey: STUDIO_KEY, localKey: 'ws_nueva1234' })).toEqual({
@@ -174,6 +213,10 @@ describe('validar un workspace nuevo y los links de invitación', () => {
     const list = base();
     const check = checkWorkspace(list, { url: `${WANKA.url}/`, publishableKey: STUDIO_KEY, localKey: 'ws_otraclave123' });
     expect(check.kind === 'existing' && check.entry.legacy).toBe(true);
+    const dotted = checkWorkspace(list, { url: `${WANKA.url}.`, publishableKey: STUDIO_KEY, localKey: 'ws_otraclave123' });
+    expect(dotted.kind).toBe('existing');
+    // Una clave secreta se avisa aunque el workspace ya esté.
+    expect(checkWorkspace(list, { url: WANKA.url, publishableKey: 'sb_secret_abcdefghijkl' }).kind).toBe('invalid');
   });
 
   it('un link de otro workspace pide confirmación con su nombre; uno del que ya está lo abre', () => {
@@ -189,6 +232,15 @@ describe('validar un workspace nuevo y los links de invitación', () => {
     const own = resolveInviteText(list, inviteLink('https://shotdocs.lega.com.ar', { u: WANKA.url, k: WANKA.publishableKey, l: WANKA_LOCAL_KEY }));
     expect(own).toMatchObject({ kind: 'open', target: null, entry: { legacy: true } });
     expect(resolveInviteText(list, 'https://shotdocs.lega.com.ar/').kind).toBe('invalid');
+    // El nombre lo arma quien manda el link: sin comillas ni saltos, recortado.
+    const disguised = resolveInvite(list, {
+      u: STUDIO_URL,
+      k: STUDIO_KEY,
+      l: 'ws_nueva1234',
+      n: '"Wanka"\nat znlvpuddswymxpffgvbz.supabase.co and a very long tail',
+    });
+    expect(disguised.kind === 'confirm' && disguised.entry.name).toBe('Wanka at znlvpuddswymxpffgvbz.supabase.…');
+    expect(safeWorkspaceName('  Studio\u202e  ')).toBe('Studio');
     expect(resolveInviteText(list, '#invite=%%%').kind).toBe('invalid');
     const badKey = inviteLink('https://a', { u: STUDIO_URL, k: 'no-es-una-clave', l: 'ws_nueva1234' });
     expect(resolveInviteText(list, badKey).kind).toBe('invalid');

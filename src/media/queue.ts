@@ -958,7 +958,9 @@ export class MediaQueue {
         // Se pegó un bloque de otro proyecto: se ve roto y no se registra como uso. No es un error por
         // reintentar; se avisa una vez.
         await this.patchLink(link.key, { waiting: 'other_project', error: null, blocked: false }, link.rev ?? 0);
-        const name = (await this.store.get('known', link.fileId).catch(() => undefined))?.name ?? null;
+        // Lo que la base sabe del archivo (el nombre, y su proyecto para la próxima vez).
+        const meta = await this.fetchMeta(link.fileId).catch(() => null);
+        const name = meta?.name ?? (await this.store.get('known', link.fileId).catch(() => undefined))?.name ?? null;
         this.options.onForeignFile?.(name);
         this.onChange?.();
         return 'done';

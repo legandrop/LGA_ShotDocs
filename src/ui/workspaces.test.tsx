@@ -2,7 +2,8 @@
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { inviteLink } from '../invite';
+import { inviteLink, markInviteArrival, pendingInviteTarget } from '../invite';
+import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
@@ -16,6 +17,7 @@ import {
   type DeviceWorkspace,
 } from '../workspaces';
 import { GUIDE_URL, JoinConfirm, LoginWorkspaceBar, Welcome } from './Welcome';
+import { DeleteBlocked, deleteWorkspaceDatabases } from './RemovedScreen';
 import { RemoveWorkspaceDialog, WorkspaceSection } from './WorkspaceMenu';
 
 vi.mock('./unsyncedDownload', () => ({ downloadUnsynced: vi.fn(async () => undefined), saveBlob: vi.fn() }));
@@ -101,7 +103,8 @@ describe('bienvenida', () => {
 
     type(host.querySelector('#invite-link') as HTMLInputElement, link);
     await submit(host);
-    expect(host.textContent).toContain('Join “Studio” at abcdefghijklmnopqrst.supabase.co?');
+    expect(host.querySelector('h1')?.textContent).toBe('Join Studio?');
+    expect(host.querySelector('.join-host')?.textContent).toContain('abcdefghijklmnopqrst.supabase.co');
     expect(onAdded).not.toHaveBeenCalled();
     click(button(host, 'Join'));
     expect(onAdded).toHaveBeenCalledWith(STUDIO, { target: page });
@@ -146,7 +149,8 @@ describe('bienvenida', () => {
   it('el link de otro workspace muestra el host antes de unirse', async () => {
     const onJoin = vi.fn();
     const host = await mount(<JoinConfirm entry={{ ...STUDIO, name: '' }} onJoin={onJoin} onCancel={() => undefined} />);
-    expect(host.textContent).toContain('Join a workspace at abcdefghijklmnopqrst.supabase.co?');
+    expect(host.textContent).toContain('Join a workspace?');
+    expect(host.querySelector('.join-host strong')?.textContent).toBe('abcdefghijklmnopqrst.supabase.co');
     click(button(host, 'Join'));
     expect(onJoin).toHaveBeenCalledTimes(1);
   });
@@ -285,5 +289,96 @@ describe('en la app abierta', () => {
     const left = await indexedDB.databases();
     expect(left.some((db) => db.name === dbName)).toBe(false);
     expect(host).toBeTruthy();
+  });
+
+  it('con fotos o videos sin subir, quitar espera también a que se baje cada original', async () => {
+    loadWorkspaces(WANKA);
+    updateWorkspaces((l) => addWorkspace(l, STUDIO));
+    const dbName = configOf(STUDIO).storage.db('owner');
+    const d = await device(dbName);
+    const page = await d.tree.create(null, 'Rodaje');
+    await d.media.add(page, new File([new Uint8Array(64)], 'IMG_0001.MOV', { type: 'video/quicktime' }));
+    const saved: string[] = [];
+    const { saveBlob } = await import('./unsyncedDownload');
+    vi.mocked(saveBlob).mockImplementation((_blob, name) => void saved.push(name));
+    await mount(
+      <ServicesContext.Provider value={services(d, STUDIO, dbName)}>
+        <RemoveWorkspaceDialog onClose={() => undefined} />
+      </ServicesContext.Provider>,
+    );
+    const remove = button(document.body, 'Remove from this device');
+    await act(async () => {
+      button(document.body, 'Download my unsynced changes').click();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    // El archivo no trae los originales: todavía no.
+    expect(document.body.textContent).toContain('does not include the original photos and videos');
+    expect(remove.disabled).toBe(true);
+    await act(async () => {
+      button(document.body, 'IMG_0001.MOV').click();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(saved).toEqual(['IMG_0001.MOV']);
+    expect(remove.disabled).toBe(false);
+  });
+});
+
+describe('lo que cada workspace recuerda', () => {
+  it('la página de un link queda en el workspace del link, nunca en otro', () => {
+    const wanka = configOf(loadWorkspaces(WANKA).workspaces[0]).storage;
+    const studio = configOf(STUDIO).storage;
+    markInviteArrival('0b7e5a52-8d1d-4a0f-9d62-3f1f1a2b3c4d', studio.inviteTarget);
+    expect(pendingInviteTarget(studio.inviteTarget)).toBe('0b7e5a52-8d1d-4a0f-9d62-3f1f1a2b3c4d');
+    expect(pendingInviteTarget(wanka.inviteTarget)).toBeNull();
+    expect(wanka.inviteTarget).toBe('shotdocs-invite-target');
+  });
+
+  it('las preferencias sin subir de un usuario no se pierden al entrar con otro, y vuelven sin red', async () => {
+    // Un cliente sin red: toda llamada falla, como en el rodaje.
+    const offline = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: 'offline' } }) }) }),
+        update: () => ({ eq: () => ({ select: async () => ({ data: null, error: { message: 'Failed to fetch' }, status: 0 }) }) }),
+        insert: async () => ({ error: { message: 'Failed to fetch' }, status: 0 }),
+      }),
+    } as never;
+    await prefs.attach(offline, 'lega-wanka');
+    prefs.set({ theme: 'dark' });
+    expect(prefs.hasUnsynced()).toBe(true);
+    await prefs.attach(offline, 'lega-studio');
+    expect(prefs.get().theme).toBe('system');
+    expect(prefs.hasUnsynced()).toBe(false);
+    // La clave de siempre sigue teniendo al usuario actual.
+    expect(JSON.parse(localStorage.getItem('shotdocs-prefs')!).userId).toBe('lega-studio');
+    await prefs.attach(offline, 'lega-wanka');
+    expect(prefs.get().theme).toBe('dark');
+    expect(prefs.hasUnsynced()).toBe(true);
+    prefs.detach();
+  });
+});
+
+describe('borrar las bases de un workspace', () => {
+  function open(name: string): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(name, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('x');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  it('primero la principal: si otra pestaña la tiene abierta no borra nada, y reintentar termina', async () => {
+    const name = `shotdocs:ws_borrar0000:${crypto.randomUUID()}`;
+    const main = await open(name);
+    (await open(`${name}:media`)).close();
+    (await open(`${name}:comments`)).close();
+    await expect(deleteWorkspaceDatabases(name)).rejects.toBeInstanceOf(DeleteBlocked);
+    let names = (await indexedDB.databases()).map((d) => d.name);
+    expect(names).toContain(`${name}:media`);
+    expect(names).toContain(`${name}:comments`);
+    main.close();
+    await deleteWorkspaceDatabases(name);
+    names = (await indexedDB.databases()).map((d) => d.name);
+    expect(names.filter((n) => n?.startsWith(name))).toEqual([]);
   });
 });

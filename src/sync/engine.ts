@@ -510,7 +510,8 @@ export class SyncEngine {
       if (media.usageMark(pageId) === mark(state)) continue;
       const snap = await this.docs.snapshot(pageId);
       try {
-        const current = snap.state.cursor >= row.update_seq && !snap.state.unreadable && snap.supported;
+        // Completo ya se miró arriba (el cursor solo avanza); acá, que todo se haya podido leer.
+        const current = !snap.state.unreadable && snap.supported;
         const uploaded = !hasUnsyncedContent(snap.state) && !snap.state.rejected;
         const ids = mediaIdsInDoc(snap.doc);
         let unlink = current && uploaded;

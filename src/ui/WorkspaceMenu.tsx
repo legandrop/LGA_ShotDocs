@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MediaRecord } from '../media/mediaDb';
+import { prefs } from '../prefs';
 import { useServices, useSyncStatus } from '../services';
 import { errorMessage } from '../sync/types';
 import { unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
@@ -47,21 +48,29 @@ export function useRememberWorkspaceName(): void {
  * vez que se abra ese workspace. `false` cancela.
  */
 export function useLeaveGuard(): () => boolean {
-  const { docs, tree, media } = useServices();
+  const { docs, tree, media, comments } = useServices();
   const pending = usePendingCount();
   const { current } = useCurrentWorkspace();
   const name = current ? displayName(current) : 'this workspace';
   return useCallback(() => {
-    if (docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites()) {
+    if (docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites() || comments.hasUnsavedWrites()) {
       alert('Some of your latest edits are not saved on this device yet. Wait a moment and try again.');
       return false;
     }
-    if (pending === 0) return true;
+    // Las preferencias sin subir quedan en el dispositivo (una copia por usuario) y suben al volver.
+    const settings = prefs.hasUnsynced();
+    if (pending === 0 && !settings) return true;
+    const what = [
+      pending > 0 ? `${pending} ${pending === 1 ? 'change' : 'changes'}` : '',
+      settings ? 'your appearance settings' : '',
+    ]
+      .filter(Boolean)
+      .join(' and ');
     return confirm(
-      `${pending} ${pending === 1 ? 'change' : 'changes'} in ${name} ${pending === 1 ? 'is' : 'are'} not uploaded yet. ` +
+      `${what[0].toUpperCase()}${what.slice(1)} in ${name} ${pending + (settings ? 1 : 0) === 1 ? 'is' : 'are'} not uploaded yet. ` +
         `They stay saved on this device and upload the next time you open ${name}. Continue?`,
     );
-  }, [docs, tree, media, pending, name]);
+  }, [docs, tree, media, comments, pending, name]);
 }
 
 /**

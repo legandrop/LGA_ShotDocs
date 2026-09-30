@@ -154,7 +154,10 @@ pierde mientras tanto.
 Tema, fuente, tamaño del texto y ancho de página se aplican al instante y se guardan en el dispositivo
 (`localStorage`), así la app abre con ellas aunque no haya red y sin un destello del otro tema. Al entrar,
 si hay cambios de ese usuario sin subir, se suben; si no, manda lo guardado en la cuenta
-(`user_settings`). Gana el último cambio, igual que con los ajustes de una rama.
+(`user_settings`). Gana el último cambio, igual que con los ajustes de una rama. `shotdocs-prefs` guarda
+siempre las del usuario actual (el nombre de siempre); al entrar con otro usuario (otra cuenta u otro
+workspace), las del anterior, con lo que tenga sin subir, pasan a `shotdocs-prefs-others` (una copia por
+usuario, hasta 20), y el nuevo vuelve a la suya si ya había entrado en el dispositivo, también sin red.
 
 ## Imágenes
 
@@ -268,25 +271,48 @@ pestaña en `src/ui/TrashView.tsx` y `src/media/fileTrash.ts`.
   que el dispositivo sabe que el servidor tiene y la diferencia va a la cola de archivos: lo nuevo,
   `link_page_file`; lo que ya no está, `unlink_page_file`. Qué versión de cada documento ya se comparó
   (ediciones, cursor y si la base tiene la papelera) queda anotado en la base de archivos del dispositivo:
-  mientras no cambie, no se vuelve a leer.
+  mientras no cambie, no se vuelve a leer. Solo queda anotada si se pudo quitar lo que hiciera falta: una
+  página a medio subir, con algo ilegible o desconocido, o sin comprobar (ver abajo), se vuelve a mirar en
+  cada ciclo.
 - **Una sola fila por página y archivo** (store `links`, con `removed` y una revisión `rev`): gana lo último
   que se vio en el documento. Borrar y deshacer antes de sincronizar no manda nada; si el deshacer llega
   mientras viaja el `unlink`, la respuesta no marca la fila como hecha (cambió la revisión) y después sale el
   `link`, que reactiva el uso. El editor, al volver a ver un archivo (deshacer, pegar), también da vuelta la
   fila en el acto (`ensureLinks`). Los dos pedidos son idempotentes: repetir uno cuya respuesta se perdió no
-  cambia nada. Primero van los usos nuevos y después los quitados: un archivo cortado de una página y pegado
-  en otra no pasa por la papelera.
+  cambia nada. Primero van los usos nuevos y después los quitados.
+- **Nunca se quita mientras haya otro uso sin confirmar.** Un `unlink` de un archivo no sale mientras este
+  dispositivo tenga, para el mismo archivo, un uso que el servidor todavía no confirmó: por mandar, detenido
+  por un error, esperando (`file_not_found`), sin permiso sobre esa página, de otro proyecto, o un archivo
+  agregado acá y todavía sin registrar (`register_file` lo volvería a colgar de la página). Queda esperando
+  (`held`, sin contar como pendiente) y sale solo cuando ese otro uso se confirma o se quita. Así, cortar una
+  foto de una página y pegarla en otra nunca la manda a la papelera en el medio, aunque el `link` de la
+  página nueva falle.
+- **Una foto o un video de otro proyecto** (se pegó el bloque desde otro proyecto) se ve roto en esa página
+  y no se registra como uso: la app avisa *This photo belongs to another project: it will show broken here*
+  y anota la fila como `other_project`, sin mandarla (si no sabía de qué proyecto era, la manda una vez, el
+  servidor responde `file_other_project` y queda igual). No cuenta como pendiente ni como rechazada, no se
+  reintenta con "Retry" y mientras esté en la página frena el `unlink` de la página original (regla de
+  arriba). De otro workspace no se sabe nada: queda esperando como un archivo que todavía no llegó.
 - **Solo se quita con el documento completo y al día.** Un documento a medio bajar no dice que un archivo se
   quitó, dice que todavía no llegó. Para mandar un `unlink`: el dispositivo tiene todo lo que el servidor
   tenía al bajar el árbol en ese ciclo, no llegó ningún update que esta versión no pudo leer (queda marcado
   en la página, `unreadable`, y esa página nunca quita), el documento no trae contenido que esta versión no
   conoce, lo propio ya está subido (si no, el servidor todavía muestra el bloque) y no hay ediciones sin
-  guardar en el dispositivo. Si falta algo, solo se suman usos y la página se vuelve a mirar en el próximo
-  ciclo. Las páginas que la persona no puede editar y las que el servidor todavía no tiene no se miran.
+  guardar en el dispositivo. Si falta algo, solo se suman usos. Las páginas que la persona no puede editar y
+  las que el servidor todavía no tiene no se miran.
+- **La primera vez que una página quitaría un archivo**, se baja su historial entero del servidor y se
+  comprueba que esta versión lo pueda leer: una versión anterior de la app descartaba un update ilegible sin
+  anotarlo (la marca `unreadable` es de esta versión), así que en un dispositivo que se actualizó el
+  documento local podría estar incompleto sin saberlo. Si algo no se lee, la página queda marcada y nunca
+  quita; si se lee todo, queda anotada como comprobada (en la base de archivos) y no se vuelve a hacer. Sin
+  red, no se quita y se prueba en el próximo ciclo.
+- **`p_seen_seq`:** cada `unlink` lleva el `seq` del documento con el que se decidió. Si la página cambió
+  después en el servidor (otro dispositivo pudo volver a poner la foto), la base no hace nada y lo dice; la
+  fila vuelve a "usado" y la página se compara otra vez con el documento nuevo en el próximo ciclo. Con la
+  función anterior (sin ese parámetro) se manda sin él.
 - **Lo agregado en este dispositivo:** `register_file` ya lo cuelga de su página. Cuando el documento lo
   muestra por primera vez se anota (sin mandar nada) para saber después si se quitó; si el documento nunca lo
-  tuvo (se agregó y se borró enseguida), se quita pasados 5 minutos. Un `unlink` de un archivo propio espera
-  a que esté registrado (si no, `register_file` lo volvería a colgar).
+  tuvo (se agregó y se borró enseguida), se quita pasados 5 minutos.
 - **Sin red** no se compara nada (el documento guarda el cambio) y lo que ya está en la cola espera,
   guardado en el dispositivo; cuenta en los cambios pendientes y sale al volver la red. Con la base
   anterior a la versión 6 no se manda ningún `unlink`.
@@ -295,23 +321,32 @@ pestaña en `src/ui/TrashView.tsx` y `src/media/fileTrash.ts`.
   *Edit & create pages* sobre el proyecto entero, y el dueño y los admins con algún permiso sobre él). Lista
   del proyecto abierto, lo último primero: miniatura (la del dispositivo o la del bucket `thumbs`), nombre,
   peso, el día en que entró y los días que faltan para los 30; mientras `auto_purge_files` esté apagado dice
-  *Auto-delete is off* (los días son solo una referencia). Arriba, el aviso *A file can show here while
-  still in use on a page this device hasn't synced*, que se repite en la confirmación. Solo con red.
+  *Auto-delete is off* y que, prendido, cada uno se mandaría a los 30 días. Los que usa una página que está
+  en la papelera de páginas dicen *Used by “<título>” in the trash* (`in_trashed_page` de `trashed_files`).
+  Arriba, el aviso *A file can show here while still in use on a page this device hasn't synced*, que se
+  repite en la confirmación. Solo con red. La pestaña Pages avisa que restaurar una página no trae de vuelta
+  lo que ya se mandó a la papelera de Drive (se ve como borrado).
 - **Mandar a la papelera de Drive** (dueño y admins con permiso sobre el proyecto): de a uno o *Empty*, con
   una confirmación que dice que van a la papelera de Drive del dueño y que se recuperan desde ahí durante 30
-  días. Cada uno es `POST /trash` al portero con la sesión (`Doc_Portero.md`). 200: sale de la lista. 409:
-  una página lo volvió a usar, se vuelve a leer la lista. 403, 404 y 502: el error queda a la vista en ese
-  archivo. *Empty* manda de a uno, mostrando el avance, y si uno falla sigue con los demás. Uno pedido y sin
-  confirmar (`purged_at` sin `drive_trashed_at`, por ejemplo porque Drive falló) sigue en la lista y se puede
-  volver a pedir. Pedirlo es definitivo para la app: aunque una página lo vuelva a usar, no sale de la
-  papelera.
-- **En las páginas**, un archivo con `purged_at` o `drive_trashed_at` se muestra como *File deleted (in the
-  Drive trash)*, con su miniatura oscurecida si la hay, no como roto ni como pendiente. Lo guardado de cada
-  archivo se vuelve a preguntar una vez por sesión al mostrarlo; si resultó borrado, el editor cambia la
-  imagen en pantalla (como cuando llega una miniatura). El carrete todavía no lo distingue.
+  días. Cada uno es `POST /trash` al portero con la sesión (`Doc_Portero.md`). 200: sale de la lista. 409 con
+  `code: 'in_use'`: una página lo volvió a usar, se vuelve a leer la lista. 503 con `code:
+  'drive_not_connected'`: se avisa *Google Drive is not connected: ask the workspace owner to reconnect it*
+  sin marcar nada (y *Empty* para). Otro 409, 403, 404 y 502: el error queda a la vista en ese archivo.
+  *Empty* manda de a uno, mostrando el avance, sigue si uno falla y deja afuera los que usa una página de la
+  papelera (esos se mandan de a uno, con una confirmación que dice que restaurar la página no los recupera).
+  Un archivo que una página de este dispositivo usa sin haberse sincronizado se saltea con un aviso. Uno
+  pedido y sin confirmar (`purged_at` sin `drive_trashed_at`, por ejemplo porque Drive falló) sigue en la
+  lista y se puede volver a pedir. Pedirlo es definitivo para la app: aunque una página lo vuelva a usar, no
+  sale de la papelera.
+- **En las páginas**, un archivo con `drive_trashed_at` se muestra como *File deleted (in the Drive trash)*
+  y uno pedido pero sin confirmar (`purged_at` solo) como *Deletion requested (not yet in the Drive trash)*,
+  con su miniatura oscurecida si la hay, no como roto ni como pendiente. Lo guardado de cada archivo se
+  vuelve a preguntar una vez por sesión al mostrarlo; si resultó borrado, el editor cambia la imagen en
+  pantalla (como cuando llega una miniatura). El carrete todavía no lo distingue.
 - **Borrado automático a los 30 días: armado y apagado.** Mientras `workspace_settings.auto_purge_files` sea
   `false` (hoy siempre; lo decide Lega) no se pregunta ni se manda nada. Prendido, al abrir la app un dueño
-  o admin pediría `files_due_for_purge` de cada proyecto y mandaría cada vencido a `/trash`, de a uno
+  o admin esperaría una vuelta de la cola de usos, pediría `files_due_for_purge` de cada proyecto y mandaría
+  cada vencido a `/trash`, de a uno, salteando los que tengan usos de este dispositivo sin mandar
   (`MediaQueue.autoPurge`). Una prueba confirma que apagado no se llama nunca.
 
 ## Comentarios y preguntas
@@ -464,35 +499,43 @@ el diálogo de workspaces) y `src/ui/WorkspaceMenu.tsx` (el selector y quitar de
 - **La lista del dispositivo** vive en `localStorage`, en `shotdocs-workspaces` (una clave nueva: ninguna de
   las de siempre cambia): de cada workspace la dirección, la clave publicable, la clave local, el nombre
   (`workspace_settings.name`, que se guarda al sincronizar) y cuál fue el último abierto. Hace falta antes
-  de entrar y sin red. Una entrada rota o repetida se descarta al leerla.
+  de entrar y sin red. Al leerla se descarta una entrada rota, repetida (mismo id o misma dirección) o con
+  una dirección o una clave publicable que no pasarían la revisión de "Unirse".
 - **El de la compilación** (`SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`; en la dirección de Lega, Wanka)
   entra siempre a la lista al abrir la app, marcado como `legacy`: usa `legacyStorageNames` con la clave
   local fija `znlvpuddswymxpffgvbz`, así que su base local, su sesión y lo que recuerda la app se siguen
   llamando igual que siempre (pruebas en `src/workspaces.test.ts`). Su dirección y su clave salen siempre
   de la compilación: si Wanka se restaura en otro proyecto de Supabase y la app se publica con la dirección
-  nueva, el dispositivo sigue con la base de siempre (y la generación hace el resto). No se puede quitar del
-  dispositivo: volvería a entrar solo al abrir la app.
+  nueva, el dispositivo sigue con la base de siempre (y la generación hace el resto). Con compilación
+  configurada siempre hay una entrada así, y cualquier otra con su dirección o con su clave local (una lista
+  tocada o armada a propósito) se descarta al abrir: si no, Wanka abriría con otros nombres y Lega quedaría
+  deslogueado y sin su base. No se puede quitar del dispositivo: volvería a entrar solo al abrir la app.
 - **Los demás** usan `storageNamesFor(<clave local>)`: `shotdocs-auth:<clave>`, `shotdocs-last-user:<clave>`,
-  `shotdocs-project:<clave>`, `shotdocs-last-pages:<clave>` y la base `shotdocs:<clave>:<usuario>` (con sus
-  `:media` y `:comments`). Nada se renombra nunca.
+  `shotdocs-project:<clave>`, `shotdocs-last-pages:<clave>`, `shotdocs-invite-target:<clave>` y la base
+  `shotdocs:<clave>:<usuario>` (con sus `:media` y `:comments`). Nada se renombra nunca. La página de un link
+  de invitación se guarda con el nombre del workspace del link (la de Wanka, en `shotdocs-invite-target`,
+  el de siempre): nunca se abre en otro workspace.
 - **Sesión separada:** cada workspace tiene su cliente de Supabase y su sesión (`storage.auth`). **Cambiar
   de workspace guarda el elegido como el último abierto y recarga la app en el inicio** (`switchWorkspace`):
   así nunca hay dos clientes ni dos sincronizaciones andando a la vez en la misma pestaña, y no queda nada
-  en memoria del anterior. Antes de irse, si algo no llegó todavía al dispositivo, espera; si hay cambios
-  guardados sin subir, lo avisa: quedan en el dispositivo y suben la próxima vez que se abra ese workspace.
+  en memoria del anterior. Antes de irse, si algo no llegó todavía al dispositivo (texto, árbol, fotos o un
+  comentario a medio guardar), espera; si hay cambios guardados sin subir (también las preferencias), lo
+  avisa: quedan en el dispositivo y suben la próxima vez que se abra ese workspace.
   Otra pestaña puede seguir en otro workspace (cada base tiene su propio lock de pestaña).
 - **Al abrir la app**, antes de crear ningún cliente: se arma la lista, se lee el link de invitación de la
   dirección (una sola vez, y se saca de ahí) y se abre el último workspace abierto. Sin ninguno (una
   publicación sin `SUPABASE_URL`, o después de quitar el último), la **pantalla de bienvenida**: *Join a
   workspace* o *Create my workspace*.
 - **Unirse con un link:** se revisa que la dirección sea `https://` (solo la dirección, sin camino ni
-  usuario; `http://localhost` solo con la app corriendo en la computadora), la clave publicable
-  (`sb_publishable_…`; una `sb_secret_` se rechaza con un aviso) y la clave local (la forma de
+  usuario, y el punto final del host se ignora; `http://localhost` solo con la app corriendo en la
+  computadora), la clave publicable (`sb_publishable_…`; una `sb_secret_` se rechaza con un aviso, aunque
+  el workspace ya esté) y la clave local (la forma de
   `workspace_settings.local_key`). Si la dirección es la de un workspace que ya está, se abre ese sin tocar
   nada. Si la clave local es la de otro workspace del dispositivo (también la de Wanka) con otra dirección,
   se rechaza: compartirían la base local, y un link armado a propósito mandaría lo sin subir de uno al
-  servidor de otro. Si todo está bien, pregunta **"Join <nombre> at <host>?"** con el host del Supabase;
-  al aceptar, lo agrega, lo abre y sigue al login, con la página del link pendiente para después de entrar.
+  servidor de otro. Si todo está bien, pregunta **"Join <nombre>?"** con el host del Supabase aparte y
+  destacado: el nombre lo arma quien manda el link, así que se muestra sin comillas, saltos ni caracteres
+  de control y recortado a 40 letras (también en la lista, hasta que la base da el suyo). Al aceptar, lo agrega, lo abre y sigue al login, con la página del link pendiente para después de entrar.
   El link se puede abrir o pegar en *Join a workspace* (en la bienvenida o en el selector).
 - **Crear:** la bienvenida (o *Create a workspace…* en el selector) enlaza la guía en el repo público
   (`Guide_Create_Workspace.md` en GitHub) y pide la dirección y la clave publicable que imprime el comando.
@@ -511,8 +554,10 @@ el diálogo de workspaces) y `src/ui/WorkspaceMenu.tsx` (el selector y quitar de
   en cuál se entra y *Change* abre la lista.
 - **Quitar un workspace del dispositivo** (*Remove “…” from this device…* en el selector, solo el abierto y
   nunca el de la compilación): cuenta lo sin subir como la pantalla de "sacado"; con cambios pendientes, el
-  botón queda apagado hasta bajarlos con *Download my unsynced changes* (o hasta que suban). Con
-  confirmación, borra la base local de esa cuenta (y las de `:media` y `:comments`), lo que la app recordaba
+  botón queda apagado hasta bajarlos con *Download my unsynced changes* y, uno por uno, cada original de
+  foto o video sin subir (el archivo no los trae; la lista es la misma de la pantalla de "sacado"), o hasta
+  que suban. Con confirmación, borra la base local de esa cuenta y después las de `:media` y `:comments`
+  (si otra pestaña tiene abierta la principal no se borra nada; reintentar sigue desde donde quedó), lo que la app recordaba
   y la sesión, lo saca de la lista y recarga en otro workspace o en la bienvenida. Las bases de otras
   cuentas de ese workspace en el mismo dispositivo quedan (vuelven si se une de nuevo con esa cuenta). Sin
   sesión (desde el login) solo se ofrece quitar uno que no tiene ninguna base en el dispositivo (un
@@ -535,9 +580,11 @@ el diálogo de workspaces) y `src/ui/WorkspaceMenu.tsx` (el selector y quitar de
 - El archivo se arma por partes (un Blob de muchos pedazos, sin sangría) para no juntar todo en un solo
   texto en la memoria del teléfono.
 - **No se borra nada solo.** "Remove from this device" cierra y borra la base local de ese workspace y
-  usuario, la de `:media` y la de `:comments`, olvida lo que la app recordaba de ese workspace (proyecto
+  usuario y, después, la de `:media` y la de `:comments` (en ese orden: si otra pestaña tiene la principal
+  abierta no se borra nada), olvida lo que la app recordaba de ese workspace (proyecto
   elegido, últimas páginas, el link de invitación pendiente) y cierra la sesión. Si otra pestaña tiene la
-  base abierta, avisa que se cierren las otras pestañas y se reintenta (nunca queda colgado); con cambios sin bajar, pide confirmación antes. Sin cambios
+  base abierta, avisa que se cierren las otras pestañas y se reintenta (nunca queda colgado); con cambios sin bajar
+  (el archivo o algún original de foto o video), pide confirmación antes. Sin cambios
   pendientes también espera que la persona toque el botón (a confirmar con Lega si ahí se borra solo).
   "Sign out and keep it on this device" deja todo como está.
 

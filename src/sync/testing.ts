@@ -90,6 +90,8 @@ export class FakeServer {
   readonly removedPageFiles = new Set<string>();
   /** El `p_seen_seq` de cada `unlink_page_file`, en orden. */
   readonly seenSeqs: (number | null)[] = [];
+  /** Los avisos de "foto de otro proyecto" que mostraron los dispositivos (nombre del archivo o `null`). */
+  readonly foreignNotices: (string | null)[] = [];
   /** El bucket `thumbs`. */
   readonly thumbs = new Map<string, Blob>();
   /** Cuántas veces se llamó cada función de archivos (para ver que no se llama de más). */
@@ -1255,6 +1257,7 @@ export async function makeDevice(
     portero: (url) =>
       new Portero(url, { fetch: server.portero.fetch, token: async () => `token:${remote.userId}`, wait: async () => undefined }),
     projectOf: (pageId) => tree.get(pageId)?.workspace_id,
+    onForeignFile: (name) => server.foreignNotices.push(name),
     probe: fakeProbe,
     playMark: async (thumb) => thumb,
     now: () => Date.now() + server.clockOffset,

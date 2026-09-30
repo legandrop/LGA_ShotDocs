@@ -61,12 +61,16 @@ export function TrashView() {
 function PagesTrash({ projectId }: { projectId: string }) {
   const tree = useTree();
   const perms = usePermissions();
+  const { media } = useServices();
   const items = tree.trashed(projectId);
   return (
     <>
       <p className="muted">
         Nothing here is ever deleted from the app. Restoring a page brings it back with everything that was inside
-        it.
+        it
+        {media.trashEnabled
+          ? ', except photos and videos that were already sent to the Google Drive trash from the Files tab: those show as deleted.'
+          : '.'}
       </p>
       {items.length === 0 ? (
         <p className="muted">The trash is empty.</p>
@@ -152,12 +156,20 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
       notify(`A page uses “${file.name}” again, so it is not in the trash anymore.`);
       return true;
     }
+    // Sin Drive conectado no se mandó ni se marcó nada: se avisa, sin error en el archivo.
+    if (outcome.status === 'not_connected') {
+      notify(outcome.message);
+      return false;
+    }
     setErrors((e) => ({ ...e, [file.id]: outcome.message }));
     return false;
   };
 
   const sendOne = async (file: TrashedFileRow) => {
-    if (!confirm(confirmText(`Send “${file.name}” to the Google Drive trash?`, false))) return;
+    const question = file.in_trashed_page
+      ? `“${file.name}” is used by “${file.trashed_page_title || 'Untitled'}”, a page in the trash. Restoring that page will not bring it back. Send it to the Google Drive trash anyway?`
+      : `Send “${file.name}” to the Google Drive trash?`;
+    if (!confirm(confirmText(question, false))) return;
     setBusy(file.id);
     const outcome = await sendToDriveTrash(trash, file.id);
     if (!live.current) return;
@@ -165,11 +177,17 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
     if (settle(file, outcome)) await reload();
   };
 
+  // "Empty" deja afuera los que usa una página que está en la papelera de páginas: se mandan de a uno, con su
+  // propia confirmación.
+  const emptiable = files.filter((f) => !f.in_trashed_page);
+
   const emptyAll = async () => {
-    const list = files;
+    const list = emptiable;
     if (list.length === 0) return;
     const what = list.length === 1 ? `“${list[0].name}”` : `all ${list.length} files`;
-    if (!confirm(confirmText(`Empty the file trash: send ${what} to the Google Drive trash?`, list.length > 1))) return;
+    const kept = files.length - list.length;
+    const skip = kept > 0 ? ` (${kept} used by pages in the trash stay)` : '';
+    if (!confirm(confirmText(`Empty the file trash: send ${what}${skip} to the Google Drive trash?`, list.length > 1))) return;
     setProgress({ done: 0, total: list.length });
     let refresh = false;
     const byId = new Map(list.map((f) => [f.id, f]));
@@ -189,8 +207,11 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
     );
     if (!live.current) return;
     setProgress(null);
-    const failed = [...results.values()].filter((r) => r.status === 'error').length;
-    if (failed > 0) notify(`${failed} of ${list.length} could not be sent. They stay in the list with the reason.`);
+    const outcomes = [...results.values()];
+    const failed = outcomes.filter((r) => r.status === 'error' || r.status === 'unsent_use').length;
+    if (!outcomes.some((r) => r.status === 'not_connected') && failed > 0) {
+      notify(`${failed} of ${list.length} could not be sent. They stay in the list with the reason.`);
+    }
     if (refresh) await reload();
   };
 
@@ -200,10 +221,15 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
   return (
     <>
       <p className="muted">
-        Photos and videos that no page uses anymore. Each one is sent to the Google Drive trash {TRASH_DAYS} days
-        after it got here.{' '}
-        {!status.autoPurgeFiles && <strong>Auto-delete is off:</strong>}
-        {!status.autoPurgeFiles && ' nothing is sent on its own; the days are only a reference.'}
+        Photos and videos that no page outside the trash uses anymore.{' '}
+        {status.autoPurgeFiles ? (
+          <>Each one is sent to the Google Drive trash {TRASH_DAYS} days after it got here.</>
+        ) : (
+          <>
+            <strong>Auto-delete is off:</strong> nothing is sent on its own. When auto-delete is on, each one would be
+            sent to the Google Drive trash {TRASH_DAYS} days after it got here.
+          </>
+        )}
       </p>
       <p className="muted trash-warning">{UNSYNCED_USE_WARNING}</p>
       {loaded.state === 'loading' && <p className="muted">Loading…</p>}
@@ -222,8 +248,12 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
             <div className="row trash-files-actions">
               <button
                 className="link danger"
-                disabled={working || offline}
-                data-tip={offline ? 'Needs an internet connection' : 'Send every file in this list to the Google Drive trash'}
+                disabled={working || offline || emptiable.length === 0}
+                data-tip={
+                  offline
+                    ? 'Needs an internet connection'
+                    : 'Send every file in this list to the Google Drive trash, except those used by pages in the trash'
+                }
                 onClick={() => void emptyAll()}
               >
                 <TrashIcon size={16} /> Empty
@@ -244,6 +274,9 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
                   <span className="when">
                     {formatSize(f.size)} · {new Date(f.trashed_at).toLocaleDateString()} · {daysLeftText(f.days_left)}
                   </span>
+                  {f.in_trashed_page && (
+                    <span className="muted small">Used by “{f.trashed_page_title || 'Untitled'}” in the trash</span>
+                  )}
                   {f.purged_at && !errors[f.id] && (
                     <span className="muted small">Sending it to the Google Drive trash was not confirmed yet. Try again.</span>
                   )}
