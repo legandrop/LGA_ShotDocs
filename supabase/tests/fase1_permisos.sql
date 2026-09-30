@@ -56,11 +56,11 @@ begin
   assert public.ensure_workspace() = current_setting('test.ws_a')::uuid,
     'ensure_workspace no es estable';
 
-  assert public.push_page_update(a1, c1, encode('hola'::bytea, 'base64')) = 1, 'primer seq';
-  assert public.push_page_update(a1, c1, encode('hola'::bytea, 'base64')) = 1,
+  assert public.push_page_update(a1, c1, encode('hola'::bytea, 'base64'), '9.999') = 1, 'primer seq';
+  assert public.push_page_update(a1, c1, encode('hola'::bytea, 'base64'), '9.999') = 1,
     'reintentar con el mismo client_update_id duplicó el update';
   assert (select update_seq from public.pages where id = a1) = 1, 'update_seq no avanzó';
-  assert public.push_page_update(a1, gen_random_uuid(), encode('chau'::bytea, 'base64')) = 2,
+  assert public.push_page_update(a1, gen_random_uuid(), encode('chau'::bytea, 'base64'), '9.999') = 2,
     'segundo seq';
   assert (select count(*) from public.pull_page_updates(a1, 0)) = 2, 'pull desde 0';
   assert (select update from public.pull_page_updates(a1, 1)) = encode('chau'::bytea, 'base64'),
@@ -196,7 +196,7 @@ begin
   end;
 
   begin
-    perform public.push_page_update(a1, gen_random_uuid(), encode('x'::bytea, 'base64'));
+    perform public.push_page_update(a1, gen_random_uuid(), encode('x'::bytea, 'base64'), '9.999');
     raise exception 'FALLA: B escribe contenido en páginas de A';
   exception when no_data_found then null;
   end;

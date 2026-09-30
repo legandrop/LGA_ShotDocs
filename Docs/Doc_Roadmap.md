@@ -69,7 +69,7 @@ Lega.
   navegador sabe mostrar) se abre en una pestaña nueva; el resto se baja con su nombre; en el teléfono, un
   toque abre una hoja. Falta: la vista previa (entrega 2), la tarjeta grande en el carrete y probar a mano con
   el portero real.
-- **P.7 Hecho (v0.050, primera entrega; la migración 7 falta aplicarla en Wanka): cuánto ocupa cada proyecto
+- **P.7 Hecho (v0.050, primera entrega; migración 7 aplicada en Wanka): cuánto ocupa cada proyecto
   en el Drive.** El peso en el renglón de cada proyecto del selector, el total con su desglose en el diálogo
   de Google Drive (solo el dueño) y el total de la papelera de archivos, con la confirmación de vaciar
   corregida. Sale de sumar `files.size` en la base (`project_sizes`), sin preguntarle a Drive. Ver

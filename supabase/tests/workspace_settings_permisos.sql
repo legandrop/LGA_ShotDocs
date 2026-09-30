@@ -20,6 +20,9 @@ insert into public.members (user_id, role) values ('00000000-0000-4000-8000-0000
 insert into public.workspaces (id, owner_id) values
   ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-00000000000a');
 
+-- La prueba arranca sin versión mínima (la base real puede tener una; se deshace al final).
+update public.workspace_settings set min_app_version = null;
+
 select pg_temp.as_user('00000000-0000-4000-8000-00000000000a');
 select set_config('test.ws_a', public.ensure_workspace()::text, true);
 insert into public.pages (id, workspace_id, title, sort_key) values

@@ -1,6 +1,6 @@
 # Cuánto ocupa cada proyecto en el Drive (P.7), y la lista por peso (P.8)
 
-Estado: **primera entrega hecha (v0.050)**; la migración falta aplicarla en Wanka (ver "Cómo quedó", al final). "Correcciones de la auditoría previa" manda sobre lo anterior. Pedido de Lega: "sería
+Estado: **primera entrega hecha (v0.050)**; migración aplicada en Wanka el 2026-09-30 ~13:35 UTC, con la copia de seguridad en verde antes y las 10 pruebas SQL ok (ver "Cómo quedó", al final). "Correcciones de la auditoría previa" manda sobre lo anterior. Pedido de Lega: "sería
 bueno tener el peso en Drive de cada proyecto, de alguna forma que esté visible, tal vez al momento de elegir
 proyectos… para que el usuario vea 'este proyecto me está ocupando 30 gigas en el Drive'. Más adelante (no
 urgente) ver toda la media ordenada por peso, cliquear e ir a la página donde está, y decidir si la deja, la
@@ -170,7 +170,7 @@ seguridad antes).
 Lo de la corrección 7, con las correcciones aplicadas. Donde este texto y las secciones de arriba no
 coinciden, vale este.
 
-**La base** (`supabase/migrations/20260930190000_peso_proyectos.sql`, sin aplicar en Wanka todavía).
+**La base** (`supabase/migrations/20260930190000_peso_proyectos.sql`, aplicada en Wanka el 2026-09-30).
 `public.project_sizes()` devuelve `project_id`, `drive_bytes`/`drive_files` (el número principal: en uso más
 lo subido de la papelera de la app; lo que fue a la papelera sin llegar a subirse no está en Drive y no suma), `trash_bytes`/`trash_files` (papelera de la app), `drive_trash_bytes`/`drive_trash_files`
 (papelera de Drive, menos de 30 días) y `pending_bytes`/`pending_files` (sin subir). Bytes en `bigint`,
@@ -225,9 +225,11 @@ permiso en el dispositivo, el diálogo con el desglose, "Volver a calcular" y si
 en `src/ui/trashView.test.tsx` (el total, la confirmación y el pedido al terminar de vaciar).
 
 **Queda para después:** la lista por proyecto en el diálogo y el orden por peso (con P.8); verificar a mano
-la base 1024 con un archivo conocido en el Drive de Lega y el total de un proyecto contra su carpeta; aplicar la
-migración en Wanka (autorizada por Lega: copia de seguridad antes, `npm run db:migrate`, `npm run db:test`); el
-hueco de la corrección 10, en una tarea aparte.
+la base 1024 con un archivo conocido en el Drive de Lega y el total de un proyecto contra su carpeta; el hueco
+de la corrección 10, en una tarea aparte. (La migración ya está aplicada en Wanka: copia de seguridad en verde
+antes, `npm run db:migrate` y las 10 pruebas de `npm run db:test` ok. Dos pruebas viejas, `fase1_permisos.sql`
+y `workspace_settings_permisos.sql`, suponían que la base no tiene versión mínima; ahora pasan una versión o la
+sacan dentro de su transacción.)
 
 **Auditoría de la implementación (independiente, 2026-09-30).** Nada bloqueante: la puerta, los permisos
 (`anon` y `public` sin ejecutar, `search_path` vacío), la sesión con contraseña y la subida de `schema_version`
