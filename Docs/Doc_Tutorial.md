@@ -1,7 +1,8 @@
 # Tutorial animado y ayuda (P.13)
 
 Estado: **diseño, sin implementar; auditoría previa hecha.** "Correcciones de la auditoría" (al final) manda
-sobre lo anterior; lo simple ya está corregido en su lugar. Falta que Lega confirme las decisiones. Lo
+sobre lo anterior; lo simple ya está corregido en su lugar. **Lega respondió las preguntas el 2026-09-30**
+("Decisiones", al final; el texto ya está ajustado). Falta elegir las fotos de la lista. Lo
 pidió Lega el 2026-09-30 ("sí o sí lo tenemos que tener"). Sale de leer el código de `main` (v0.051) y el
 diseño de colapsar (`Doc_Colapsar.md`, rama `lega/colapsar`).
 
@@ -129,8 +130,8 @@ choca con los permisos; la estática no deja probar, que es lo que más enseña.
 
 - **Dirección propia: `/practice`** (`src/router.ts` suma la ruta `practice`). Se muestra adentro de la misma
   pantalla de siempre (barra lateral, barra de arriba), así la recorrida puede señalar el árbol, el selector y
-  el pie. No aparece en el árbol; se entra desde la recorrida y desde la ayuda ("Abrir la página de
-  práctica").
+  el pie. No aparece en el árbol; se entra desde la recorrida y, **siempre**, desde la entrada *Practicar* de la
+  ayuda, que la abre (o la vuelve a armar de cero si ya estaba abierta).
 - **Un aviso arriba** de la página, siempre visible: "Página de práctica: lo que hagas acá no se guarda ni lo ve
   nadie." con *Empezar de nuevo* y *Salir*. Las migas dicen "Práctica".
 - **El documento:** un `Y.Doc` en memoria, armado al abrir desde una plantilla de la app en el idioma de la
@@ -148,8 +149,9 @@ choca con los permisos; la estática no deja probar, que es lo que más enseña.
   con la dirección **absoluta** de la app (`https://<app>/tutorial/terraza-1.webp`; una relativa no la acepta
   `carreteSourceOf`). El carrete ya las acepta (fuente `web`), sin pasar por la cola, y los tamaños rápidos y
   "Acomodar en filas" andan igual. Para que la práctica ande sin red, una regla de caché del service worker
-  para `/tutorial/` que las guarda la primera vez (no en la instalación; corrección 18). Tienen que ser fotos
-  propias o con licencia libre, anotada al lado.
+  para `/tutorial/` que las guarda la primera vez (no en la instalación; corrección 18). **Fotos con licencia
+  libre** (Lega), elegidas en la sección "Fotos del ejemplo", con autor, fuente y licencia anotados en un
+  `public/tutorial/LICENSES.txt` al lado.
 - **Fotos o archivos propios en la práctica:** en la entrega 2, soltar o pegar un archivo avisa "En la práctica
   no se suben archivos: probá con las fotos de ejemplo" y no hace nada. Si Lega lo quiere, más adelante: se
   guardan como `data:` achicados (hasta 1600 px) solo en memoria; pegados después en una página real pasan
@@ -283,7 +285,7 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
     el "?" lleva un punto hasta que se abre la ayuda.
   - **Con un link de invitación a una página** (`inviteTarget`): primero se abre esa página, y la recorrida se
     ofrece con una tarjeta chica ("¿Primera vez? Recorrida de 2 minutos · *Empezar* · *Ahora no*") en vez de
-    llevar a la práctica. A confirmar (decisión 3).
+    llevar a la práctica (respondida por Lega, decisión 2).
   - Sin proyectos (la pantalla "todavía no tenés proyectos") no arranca: espera a la pantalla de siempre.
 - **Retomar:** si se recarga a mitad (`state: 'running'`), al volver aparece la tarjeta "¿Seguimos la
   recorrida? · Paso 4 de 10 · *Seguir* · *Terminar*".
@@ -293,13 +295,11 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 
 ### Dónde está
 
-- **Un botón "?"** en el pie de la barra lateral, al lado de Papelera (en el teléfono, en el cajón), con
-  `data-tip` "Ayuda y atajos (?)".
+- **Un botón "?"** en el pie de la barra lateral, al lado de Papelera (en el teléfono, en el cajón). Su
+  `aria-label` es "Ayuda y atajos"; sin `data-tip` (no agregaría nada al ícono, D-15).
 - **En el menú de la cuenta**, "Ayuda y atajos".
-- **Teclado:** "?" (la tecla que escriba "?", mirando `e.key`) con el foco fuera de un lugar donde se escribe,
-  como en Gmail o GitHub; no con un diálogo o el carrete abiertos ni durante una composición (IME). **Sin
-  Mod+/**: en un teclado en castellano "/" es Shift+7 y chocaría con la lista numerada (corrección 6). Va al
-  registro.
+- **Sin atajo de teclado** (Lega): la ayuda se abre solo con el botón o con la entrada del menú. Ni "?" ni
+  Mod+/ (este último, además, chocaba con la lista numerada en los teclados en castellano).
 - **Cómo se ve:** un diálogo grande (720 px, con el índice a la izquierda) en la computadora; pantalla completa
   en el teléfono. Es una parte que se baja aparte (`lazyPart`), con sus textos en `src/i18n/lazy/help.ts`. Se
   abre en la sección que corresponde si se llama desde un lugar (por ejemplo, "Atajos").
@@ -308,7 +308,7 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 
 Arriba, un campo de búsqueda; abajo, las secciones:
 
-1. **Primeros pasos:** *Ver la recorrida*, *Abrir la página de práctica*.
+1. **Primeros pasos:** *Ver la recorrida* y *Practicar* (abre la página de práctica, o la arma de nuevo).
 2. **Páginas y proyectos:** crear, anidar, arrastrar, renombrar, mover, títulos cortos, proyectos, workspaces.
 3. **Escribir:** menú "/", títulos, listas, tabla, cita, código, divisor, atajos de Markdown, Script (con sus
    colores de escena), deshacer.
@@ -342,7 +342,7 @@ Arriba, un campo de búsqueda; abajo, las secciones:
 ## 6. Un solo registro de atajos
 
 - **`src/ui/shortcuts.ts`** (en la parte que se baja siempre, chico): una lista con `id`, `keys` en el formato de
-  ProseMirror (`'Mod-Alt-m'`, `'Mod-f'`, `'F3'`, `'?'`), el lugar (`global`, `editor`, `photos`, `carrete`,
+  ProseMirror (`'Mod-Alt-m'`, `'Mod-f'`, `'F3'`), el lugar (`global`, `editor`, `photos`, `carrete`,
   `find`, `comments`, `tree`, `menus`), la clave del texto, de quién es (`app`, `blocknote`, `tiptap`) y el
   estado (`on`, o `soon` con el ítem del roadmap: Mod+Alt+Enter hasta P.11).
 - **`shortcutLabel(id, mac = IS_MAC)`** arma el rótulo: ⌘⌥M / Ctrl+Alt+M, ⌘⇧Z / Ctrl+Shift+Z. Un solo `IS_MAC`.
@@ -382,8 +382,8 @@ Y pruebas que lo sostienen sin depender de acordarse:
 
 ## 8. Tamaño y carga
 
-- En la parte que se baja siempre: el registro, la decisión de si arrancar la recorrida, el botón "?" y los
-  atajos para abrir la ayuda. Menos de 3 KB comprimidos.
+- En la parte que se baja siempre: el registro, la decisión de si arrancar la recorrida y el botón "?". Menos
+  de 3 KB comprimidos.
 - Aparte, cada una con sus textos: la ayuda (`HelpDialog`), el motor y los pasos (`TourLayer`), la práctica
   (`PracticeView` y las plantillas; el editor ya se baja aparte). Todo `.js`, así que entra en la caché del
   service worker: anda sin red con la app instalada. Las fotos, si Lega acepta sumar `.webp` a la caché.
@@ -404,12 +404,11 @@ Y pruebas que lo sostienen sin depender de acordarse:
    que citan atajos por id.
 6. **Mod+K cambia de dueño con P.12 entrega 2** y Mod+Alt+Enter llega con P.11: si la ayuda sale antes, esas
    entradas se marcan `soon` y se prenden con su tanda.
-7. **"?" en teclados distintos:** se mira por lo que escribe (`e.key`), no por la posición. Mod+/ se descartó
-   (corrección 6).
+7. (Sacado: la ayuda ya no tiene atajo de teclado.)
 8. **Sin red al terminar la recorrida,** la marca de la cuenta no se escribe: queda la del dispositivo y se
    reintenta al volver la red.
 9. **Mostrar la recorrida de más o de menos:** una persona nueva en un dispositivo donde otra ya la vio no la ve
-   sola (le queda el punto en el "?"). Aceptable; a confirmar.
+   sola (le queda el punto en el "?"). Aceptable.
 10. **Lectores de pantalla:** el foco de luz es solo visual; el orden del foco y la región `aria-live` tienen que
     alcanzar. Probar con VoiceOver.
 
@@ -417,12 +416,12 @@ Y pruebas que lo sostienen sin depender de acordarse:
 
 1. **Entrega 1, ayuda y registro de atajos.** `shortcuts.ts` y `shortcutLabel`, los tooltips pasan a usarlo, el
    esquema importa sus atajos, `HelpDialog` con las 15 secciones, la búsqueda, el botón "?", la entrada del menú
-   de la cuenta y "?"; la regla en `Docs/index.md`. Sin práctica ni recorrida ("Ver la recorrida" y
+   de la cuenta; la regla en `Docs/index.md`. Sin práctica ni recorrida ("Ver la recorrida" y
    "Mostrame" no aparecen todavía). README y changelog.
    - Pruebas: unidad del registro (ids, textos, rótulos, choques), el editor real contra el registro (jsdom), las
      funciones `is…Shortcut` contra sus entradas, la búsqueda de la ayuda ("ctrl f", "carrete", tildes), la ayuda
-     en jsdom (abre con "?" fuera del texto y no al escribir "?" en el editor ni en un campo; no abre con un diálogo abierto ni durante una composición; Esc
-     cierra y devuelve el foco), textos en los dos idiomas.
+     en jsdom (abre con el botón y con la entrada del menú; ninguna tecla la abre, tampoco "?" ni Mod+/; Esc
+     cierra y devuelve el foco al botón), textos en los dos idiomas.
 2. **Entrega 2, práctica y recorrida.** Ruta `/practice`, `PracticeView` con los servicios en memoria y los que
    tiran error, plantillas es/en, las tres fotos, `floating.ts` común con `Tooltip.tsx`, `TourLayer` y los diez
    pasos, `data-tour` en los componentes, `navOpen` como almacén, la marca `shotdocs_tour` de la cuenta, el
@@ -452,25 +451,54 @@ Y pruebas que lo sostienen sin depender de acordarse:
    vuelta a donde estaba), y un punto en el "?" cuando hay entradas con `since` más nuevo que la última vez que la
    persona abrió la ayuda ("Novedades"). Pruebas en jsdom del paso suelto y de la vuelta.
 
-## Decisiones (a confirmar por Lega)
+## Fotos del ejemplo
 
-1. **Práctica en memoria:** se pierde al recargar (se arma de nuevo, limpia). Alternativa: guardarla en el
-   dispositivo.
-2. **Sin fotos ni archivos propios en la práctica** en la entrega 2 (aviso); más adelante, fotos propias solo en
-   memoria.
-3. **Arranca sola la primera vez** (alguien nuevo, en el inicio). Con un link a una página, o si ya usaba la app,
-   se abre lo de siempre y se ofrece la recorrida con una tarjeta o el punto en el "?".
-4. **"Ya la vi" en la cuenta (metadatos del usuario, por workspace) y en el dispositivo;** no se repite en otro
-   dispositivo ni en otro workspace (queda el punto en el "?").
-5. **Motor propio**, sin librerías (las buenas son AGPL o pesan más que lo que hacen).
-6. **Diez pasos** con los textos de la tabla de la sección 4 (nueve en el teléfono).
-7. **"Animado" = el foco de luz que se desliza y un pulso suave**, sin videos ni GIF. Si Lega quiere
-   animaciones dentro de los globitos (por ejemplo, alguien escribiendo "/"), van en una entrega aparte, chicas.
-8. **La ayuda: botón "?" al lado de Papelera, "Ayuda y atajos" en el menú de la cuenta y la tecla "?"** (sin
-   Mod+/), en un diálogo grande (pantalla completa en el teléfono).
-9. **Las tres fotos del ejemplo:** ¿las pone Lega (fotos propias de VFX) o se usan unas con licencia libre? ¿Se
-   guardan en la caché la primera vez que se abre la práctica (corrección 18) para que después ande sin red?
-10. **La regla de la ayuda** en `Docs/index.md` y en las reglas de trabajo, revisada en cada auditoría.
+Lega pidió fotos con **licencia libre**. Se prefieren las **CC0** (dominio público, sin condiciones) de Wikimedia
+Commons; las licencias de Unsplash y Pexels también dejan usarlas gratis y sin atribución, pero no son CC0 (no
+dejan, por ejemplo, juntarlas para armar un servicio parecido) y conviene evitarlas en un repo público. Se
+bajan, se recortan a unos 1200 px de ancho, se pasan a WebP (30 a 60 KB cada una) y se anota cada una en
+`public/tutorial/LICENSES.txt`. Para que "Acomodar en filas" se luzca, conviene que no tengan todas la misma
+proporción (una vertical).
+
+Candidatas (tema: una ciudad de noche, como el plano de la terraza del ejemplo). Las encontré por búsqueda; la
+red de trabajo no dejó abrir Commons, así que **la licencia y el autor de cada una se confirman en su página al
+bajarla**, y si alguna no es CC0 se cambia por otra:
+
+| Archivo en el repo | Fuente (Wikimedia Commons) | Autor | Licencia |
+|---|---|---|---|
+| `terraza-1.webp` | [File:City Lights at Night (Unsplash -uzgaA9LfNw).jpg](https://commons.wikimedia.org/wiki/File:City_Lights_at_Night_(Unsplash_-uzgaA9LfNw).jpg) | Alex Wong (vía Unsplash) | CC0 1.0 (a confirmar) |
+| `terraza-2.webp` | [File:City-lights-night-street (24326520255).jpg](https://commons.wikimedia.org/wiki/File:City-lights-night-street_(24326520255).jpg) | (se anota al bajarla) | CC0 1.0 (a confirmar) |
+| `terraza-3.webp` | [File:City at Night (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:City_at_Night_(Unsplash).jpg) | (se anota al bajarla) | CC0 1.0 (a confirmar) |
+
+De repuesto: [File:Night (251499349).jpeg](https://commons.wikimedia.org/wiki/File:Night_(251499349).jpeg) y
+[File:City lights from air at night 1.jpg](https://commons.wikimedia.org/wiki/File:City_lights_from_air_at_night_1.jpg)
+(también CC0 según la búsqueda).
+
+## Decisiones
+
+### Respondidas por Lega el 2026-09-30
+
+1. **La práctica se pierde al recargar:** de acuerdo, **pero siempre se puede volver a cargar**: la entrada
+   *Practicar* de la ayuda la abre, o la arma de nuevo de cero, cuando se quiera (además de *Empezar de nuevo*
+   en el aviso de la página).
+2. **Arranca sola solo la primera vez, para alguien nuevo y en el inicio:** de acuerdo. Con un link a una
+   página, o si ya usaba la app, se abre lo de siempre y la recorrida queda ofrecida con la tarjeta o el punto
+   en el "?".
+3. **Fotos del ejemplo con licencia libre:** sí; la lista y cómo se anotan, en "Fotos del ejemplo".
+4. **"Animado" = el foco de luz que se desliza y un pulso suave, sin videos ni GIF:** de acuerdo.
+5. **La ayuda se abre solo con el botón "?"** (al lado de Papelera) **y con "Ayuda y atajos" del menú de la
+   cuenta. Ningún atajo de teclado:** ni "?" ni Mod+/.
+
+### Tomadas en el diseño (sin objeciones)
+
+- "Ya la vi" en la cuenta (metadatos del usuario de Supabase Auth, por workspace) y en el dispositivo; no se
+  repite en otro dispositivo ni en otro workspace (queda el punto en el "?").
+- Sin fotos ni archivos propios en la práctica en la entrega 2 (aviso); más adelante, fotos propias solo en
+  memoria.
+- Motor propio, sin librerías (las buenas son AGPL o pesan más que lo que hacen).
+- Diez pasos con los textos de la sección 4 (nueve en el teléfono).
+- La ayuda en un diálogo grande (pantalla completa en el teléfono).
+- La regla de la ayuda en `Docs/index.md` y en las reglas de trabajo, revisada en cada auditoría.
 
 ## Correcciones de la auditoría (mandan sobre lo de arriba)
 
@@ -515,8 +543,8 @@ sobre lo que quede.
 ### Teclado y registro
 
 6. **Sin Mod+/.** En un teclado en castellano "/" es Shift+7: ProseMirror cae al código de la tecla y Mod+/
-   termina en Mod+Shift+7 (lista numerada). Quedan la tecla "?", el botón y la entrada del menú (si algún día se
-   quiere un atajo, solo `e.code === 'Slash'` sin Shift, probado en Safari).
+   termina en Mod+Shift+7 (lista numerada). (Después Lega decidió que la ayuda no tenga ningún atajo: quedan
+   solo el botón y la entrada del menú.)
 7. **Mod+K y Mod+P no miran la distribución del teclado** (`ProjectSwitcher.tsx`, `printPage.ts`): antes de la
    prueba del registro se sacan `isProjectShortcut` e `isPrintShortcut` con `modPressed` e `isLetter`
    (`findUi.ts`). Mod+K pasa a la búsqueda del proyecto en la rama de P.12 entrega 2.
@@ -555,8 +583,7 @@ sobre lo que quede.
 19. `TourLayer` se monta adentro de `Shell` (necesita los servicios y el almacén del cajón).
 20. **Qué aviso se cuida:** `useLeaveGuard` es el del cambio de workspace; el de salir de la sesión es
     `AccountMenu.signOut` (`menus.tsx`). La prueba de aislamiento mira los dos.
-21. **"?"** no abre la ayuda con un diálogo o el carrete abiertos (`modalOpen` de `findUi.ts`) ni durante una
-    composición (IME).
+21. (Ya no aplica: la ayuda no tiene atajo de teclado, decisión de Lega.)
 22. **Más simple en la primera versión:** el estado del dispositivo queda en `{ v, done, step }` (sin `skipped`
     aparte); `MemoryComments` se tipa como `Pick<CommentQueue, …>` con lo que se usa. La prueba de punta a punta
     suma la red (ningún pedido a Supabase ni al portero) y la diferencia de `localStorage` y de `meta` en
@@ -571,10 +598,6 @@ sobre lo que quede.
     shotdocs_tour: 1 } })`. Es por workspace (cada uno tiene su Supabase), sin migración, ninguna versión vieja
     lo reescribe y llega con la sesión (no hay que esperar otra lectura).
 
-### A confirmar por Lega (lo que quedó de estas correcciones)
+### Preguntas de estas correcciones
 
-- ¿Está bien que la práctica **se pierda al recargar**?
-- ¿**Arranca sola la primera vez** (solo alguien nuevo, en el inicio)?
-- **Las fotos del ejemplo:** ¿suyas o con licencia libre?
-- **"Animado"** = el foco de luz que se desliza y un pulso suave, **sin videos**: ¿alcanza?
-- **La ayuda con la tecla "?"** (sin Mod+/), el botón "?" y la entrada del menú de la cuenta: ¿de acuerdo?
+Respondidas por Lega el 2026-09-30: ver "Decisiones".
