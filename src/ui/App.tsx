@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../auth';
+import { t, useT } from '../i18n';
 import { isPublicRoute, useRoute } from '../router';
 import { markInviteArrival, setArrivalNotice, takeInviteHash } from '../invite';
 import { buildWorkspace, createWorkspaceClient, WorkspaceContext, type ActiveWorkspace } from '../workspace';
@@ -56,7 +57,7 @@ function computeStart(): Start {
   const list = loadWorkspaces(build ? { url: build.url, publishableKey: build.publishableKey } : null);
   const fallback = activeWorkspace(list);
   const { payload, broken } = takeInviteHash();
-  if (broken) setArrivalNotice('This invitation link is incomplete. Copy the whole link again, or ask for a new one.');
+  if (broken) setArrivalNotice(t('invite.incomplete'));
   if (payload) {
     const invite = resolveInvite(list, payload);
     if (invite.kind === 'open') {
@@ -112,7 +113,8 @@ function Opened({ entry }: { entry: DeviceWorkspace }) {
 
 function Signed({ active, pending }: { active: ActiveWorkspace; pending: boolean }) {
   const auth = useAuth(active.config, active.client);
-  if (auth.status === 'loading') return <main className="center-screen muted">Loading…</main>;
+  const tr = useT();
+  if (auth.status === 'loading') return <main className="center-screen muted">{tr('common.loading')}</main>;
   if (auth.status === 'signedOut') return <Login />;
   // Agregado con "Create" sin poder leer la clave local antes de entrar: se completa ahora.
   if (pending) return <FinishPending />;

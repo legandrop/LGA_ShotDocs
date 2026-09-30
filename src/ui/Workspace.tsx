@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AuthUser } from '../auth';
+import { t, useT } from '../i18n';
 import { clearInviteTarget, pendingInviteTarget, takeArrivalNotice } from '../invite';
 import { prefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
@@ -37,6 +38,7 @@ export function Workspace({ user }: { user: AuthUser }) {
   const workspace = useWorkspace();
   const { client } = workspace;
   const boot = useBootServices(workspace, user);
+  const tr = useT();
 
   // Las preferencias de la cuenta (tema, fuente…) se bajan al entrar y se suben cuando cambian.
   useEffect(() => {
@@ -44,18 +46,15 @@ export function Workspace({ user }: { user: AuthUser }) {
     return () => prefs.detach();
   }, [client, user.id]);
 
-  if (boot.state === 'loading') return <main className="center-screen muted">Opening your workspace…</main>;
+  if (boot.state === 'loading') return <main className="center-screen muted">{tr('shell.opening')}</main>;
   if (boot.state === 'busy') {
     return (
       <main className="center-screen">
         <div className="card">
-          <h1>Already open in another window</h1>
-          <p className="muted">
-            LGA Shot Docs is open in another tab or window. Keep working there, or close it and this one will
-            open by itself.
-          </p>
+          <h1>{tr('shell.busy.title')}</h1>
+          <p className="muted">{tr('shell.busy.text')}</p>
           <button className="link" onClick={boot.takeOver}>
-            The other window is not responding: use this one
+            {tr('shell.busy.takeOver')}
           </button>
         </div>
       </main>
@@ -65,13 +64,10 @@ export function Workspace({ user }: { user: AuthUser }) {
     return (
       <main className="center-screen">
         <div className="card">
-          <h1>Opened in another window</h1>
-          <p className="muted">
-            Another window took over, so this one stopped saving. Your edits are kept on this device; reload to
-            use this window again.
-          </p>
+          <h1>{tr('shell.lost.title')}</h1>
+          <p className="muted">{tr('shell.lost.text')}</p>
           <button className="link" onClick={() => location.reload()}>
-            Reload
+            {tr('shell.lost.reload')}
           </button>
         </div>
       </main>
@@ -81,13 +77,13 @@ export function Workspace({ user }: { user: AuthUser }) {
     return (
       <main className="center-screen">
         <div className="card">
-          <h1>Could not open your workspace</h1>
+          <h1>{tr('shell.error.title')}</h1>
           <p className="muted">{boot.message}</p>
           <button className="primary" onClick={boot.retry}>
-            Try again
+            {tr('common.tryAgain')}
           </button>
           <button className="link" onClick={() => void client.auth.signOut({ scope: 'local' })}>
-            Sign out
+            {tr('common.signOut')}
           </button>
         </div>
       </main>
@@ -127,7 +123,7 @@ function useInviteTarget(): void {
       switchTo(target);
     } else if (status.lastSyncAt !== null) {
       clearInviteTarget(key);
-      notify('The shared page is not available to this account yet. Ask the person who invited you.');
+      notify(t('invite.targetMissing'));
     }
   }, [tree, revision, status.lastSyncAt, switchTo, key]);
 }
@@ -144,6 +140,7 @@ function Shell() {
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
   const [notice, dismissNotice] = useNotice();
   const perms = usePermissions();
+  const tr = useT();
   useInviteTarget();
   // Un link de invitación que no sirvió (roto, o de un workspace que no se pudo agregar), abierto con la
   // sesión ya iniciada: el aviso va acá.
@@ -209,14 +206,14 @@ function Shell() {
       <div className="scrim" onClick={() => setNavOpen(false)} />
       <main className="main">
         <header className="topbar">
-          <button className="icon-button only-mobile" aria-label="Open pages" onClick={() => setNavOpen(true)}>
+          <button className="icon-button only-mobile" aria-label={tr('shell.openPages')} onClick={() => setNavOpen(true)}>
             <MenuIcon />
           </button>
-          <nav className="breadcrumbs" aria-label="Location">
+          <nav className="breadcrumbs" aria-label={tr('shell.location')}>
             {crumbs.map((p) => (
               <span key={p.id}>
                 <button className="crumb" onClick={() => navigate(pagePath(p.id))}>
-                  {p.title || 'Untitled'}
+                  {p.title || tr('common.untitled')}
                 </button>
                 <span className="sep" aria-hidden="true">
                   /
@@ -225,11 +222,11 @@ function Shell() {
             ))}
             {current && (
               <span className="crumb current" aria-current="page">
-                {current.title || 'Untitled'}
+                {current.title || tr('common.untitled')}
               </span>
             )}
-            {route.name === 'trash' && <span className="crumb current">Trash</span>}
-            {route.name === 'media-test' && <span className="crumb current">Media test</span>}
+            {route.name === 'trash' && <span className="crumb current">{tr('trash.title')}</span>}
+            {route.name === 'media-test' && <span className="crumb current">{tr('mediaTest.title')}</span>}
           </nav>
           <span className="only-mobile">
             <SyncIcon onClick={() => setNavOpen(true)} />
@@ -238,7 +235,7 @@ function Shell() {
           {pageId && (
             <button
               className="icon-button"
-              aria-label="Page actions"
+              aria-label={tr('pageMenu.label')}
               aria-expanded={!!pageMenu}
               onClick={(e) => {
                 const anchor = e.currentTarget;
@@ -290,7 +287,7 @@ function Shell() {
         <div className="notice" role="status">
           <span>{notice}</span>
           <button className="link" onClick={dismissNotice}>
-            OK
+            {tr('common.ok')}
           </button>
         </div>
       )}
@@ -302,20 +299,21 @@ function Home() {
   const tree = useTree();
   const perms = usePermissions();
   const projectId = useCurrentProject();
-  const name = tree.project(projectId)?.name ?? 'This project';
+  const tr = useT();
+  const name = tree.project(projectId)?.name ?? tr('home.thisProject');
   const empty = tree.roots(projectId).length === 0;
   const canCreate = perms.canCreateIn(null, projectId);
   return (
     <article className="page narrow home">
-      <h1 className="page-heading">{empty ? `${name} is empty` : name}</h1>
+      <h1 className="page-heading">{empty ? tr('home.empty', { name }) : name}</h1>
       <p className="muted">
         {!canCreate
           ? empty
-            ? 'Nothing here is shared with you yet.'
-            : 'Open a page from the sidebar.'
+            ? tr('home.nothingShared')
+            : tr('home.openPage')
           : empty
-            ? 'Create your first page: a show, a scene or a shoot day. Every page can hold other pages.'
-            : 'Open a page from the sidebar or create a new one.'}
+            ? tr('home.createFirst')
+            : tr('home.openOrCreate')}
       </p>
       {canCreate && (
         <button
@@ -325,7 +323,7 @@ function Home() {
             navigate(pagePath(id));
           }}
         >
-          <PlusIcon size={16} /> New page
+          <PlusIcon size={16} /> {tr('common.newPage')}
         </button>
       )}
     </article>
@@ -344,6 +342,7 @@ function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) 
   const [projectId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const tr = useT();
 
   useEffect(() => {
     let live = true;
@@ -366,7 +365,7 @@ function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) 
     setError(null);
     const { error } = await client
       .from('workspaces')
-      .upsert({ id: projectId, name: 'My project' }, { onConflict: 'id', ignoreDuplicates: true });
+      .upsert({ id: projectId, name: t('project.defaultName') }, { onConflict: 'id', ignoreDuplicates: true });
     setBusy(false);
     if (error) setError(error.message);
     else onRetry();
@@ -375,20 +374,21 @@ function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) 
   return (
     <main className="center-screen">
       <div className="card">
-        <h1>No projects yet</h1>
+        <h1>{tr('noProjects.title')}</h1>
         <p className="muted">
-          {canCreate
-            ? `You are signed in to ${config.name || 'this workspace'} as ${user.email}. Create the first project to start.`
-            : `You are signed in to ${config.name || 'this workspace'} as ${user.email}, but nothing has been shared with you yet. Ask the workspace owner for access; this page opens your projects as soon as they share one.`}
+          {tr(canCreate ? 'noProjects.canCreate' : 'noProjects.wait', {
+            workspace: config.name || tr('noProjects.thisWorkspace'),
+            email: user.email,
+          })}
         </p>
         {canCreate && (
           <button className="primary" disabled={busy} onClick={() => void create()}>
-            <PlusIcon size={16} /> New project
+            <PlusIcon size={16} /> {tr('project.new')}
           </button>
         )}
         {error && <p className="error">{error}</p>}
         <button className="link" onClick={() => void client.auth.signOut({ scope: 'local' })}>
-          Sign out
+          {tr('common.signOut')}
         </button>
       </div>
     </main>

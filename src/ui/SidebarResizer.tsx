@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useT } from '../i18n';
 
 // El ancho de la barra lateral es de cada dispositivo (depende de la pantalla), no de la cuenta.
 const KEY = 'shotdocs-sidebar-width';
@@ -41,6 +42,7 @@ if (typeof window !== 'undefined') apply(readWidth());
  */
 export function SidebarResizer() {
   const [width, setWidth] = useState(readWidth);
+  const tr = useT();
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
 
   useEffect(() => apply(width), [width]);
@@ -96,12 +98,12 @@ export function SidebarResizer() {
       className="sidebar-resizer"
       role="separator"
       aria-orientation="vertical"
-      aria-label="Sidebar width"
+      aria-label={tr('sidebar.width')}
       aria-valuemin={MIN}
       aria-valuemax={clamp(MAX)}
       aria-valuenow={width}
       tabIndex={0}
-      data-tip={'**Drag:** resize the sidebar\n**Double-click:** back to the default width\n**Arrow keys:** resize from the keyboard'}
+      data-tip={tr('sidebar.widthTip')}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={end}

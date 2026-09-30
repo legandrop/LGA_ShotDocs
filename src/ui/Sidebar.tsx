@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { useT } from '../i18n';
 import { navigate, pagePath, useRoute } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
@@ -33,6 +34,7 @@ export function Sidebar() {
   const route = useRoute();
   const activeId = route.name === 'page' ? route.id : null;
   const projectId = useCurrentProject();
+  const tr = useT();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -179,7 +181,7 @@ export function Sidebar() {
           {children.length > 0 ? (
             <button
               className="toggle"
-              aria-label={open ? 'Collapse' : 'Expand'}
+              aria-label={open ? tr('sidebar.collapse') : tr('sidebar.expand')}
               tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation();
@@ -212,13 +214,13 @@ export function Sidebar() {
                 data-tip-plain
                 data-tip-overflow
               >
-                {page.title || 'Untitled'}
+                {page.title || tr('common.untitled')}
               </span>
             </span>
           )}
           <span className="row-actions">
             <button
-              aria-label="More actions"
+              aria-label={tr('sidebar.moreActions')}
               onClick={(e) => {
                 e.stopPropagation();
                 const anchor = e.currentTarget;
@@ -229,8 +231,8 @@ export function Sidebar() {
             </button>
             {perms.canManagePage(page.id) && (
               <button
-                aria-label="Add a page inside"
-                data-tip="Add a page inside"
+                aria-label={tr('sidebar.addInside')}
+                data-tip={tr('sidebar.addInside')}
                 onClick={(e) => {
                   e.stopPropagation();
                   void newPage(page.id);
@@ -251,14 +253,14 @@ export function Sidebar() {
   const canCreateRoot = perms.canCreateIn(null, projectId);
 
   return (
-    <nav className="sidebar" aria-label="Pages">
+    <nav className="sidebar" aria-label={tr('sidebar.pages')}>
       <ProjectSwitcher />
       <SyncBadge />
 
       <div className="section-title">
-        <span className="mono-label">Pages</span>
+        <span className="mono-label">{tr('sidebar.pages')}</span>
         {canCreateRoot && (
-          <button aria-label="New page" data-tip="New page" onClick={() => void newPage(null)}>
+          <button aria-label={tr('common.newPage')} data-tip={tr('common.newPage')} onClick={() => void newPage(null)}>
             <PlusIcon size={16} />
           </button>
         )}
@@ -266,7 +268,7 @@ export function Sidebar() {
       {renderList(null, roots, 0, 'tree')}
       {roots.length === 0 && canCreateRoot && (
         <button className="empty-new" onClick={() => void newPage(null)}>
-          <PlusIcon size={16} /> New page
+          <PlusIcon size={16} /> {tr('common.newPage')}
         </button>
       )}
 
@@ -276,7 +278,8 @@ export function Sidebar() {
           className={`footer-item${route.name === 'trash' ? ' active' : ''}`}
           onClick={() => navigate('/trash')}
         >
-          <TrashIcon size={17} /> Trash{trashCount > 0 ? ` (${trashCount})` : ''}
+          <TrashIcon size={17} /> {tr('trash.title')}
+          {trashCount > 0 ? ` (${trashCount})` : ''}
         </button>
         <button
           ref={accountButton}

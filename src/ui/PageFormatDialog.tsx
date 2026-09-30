@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useT } from '../i18n';
 import { useTree } from '../services';
-import { ownFormat, PAGE_SIZES, pageFormat, type PageSize } from './pageFormat';
+import { ownFormat, PAGE_SIZES, pageFormat, sizeLabel, type PageSize } from './pageFormat';
 
-const SIZES: { value: PageSize; label: string }[] = [
-  { value: 'free', label: 'Free' },
-  ...(Object.keys(PAGE_SIZES) as (keyof typeof PAGE_SIZES)[]).map((k) => ({ value: k, label: PAGE_SIZES[k].label })),
-];
+const SIZES: PageSize[] = ['free', ...(Object.keys(PAGE_SIZES) as (keyof typeof PAGE_SIZES)[])];
 
 /** Elegir el tamaño de hoja de una página y de las de adentro (se guarda en la página elegida de la rama). */
 export function PageFormatDialog({ pageId, onClose }: { pageId: string; onClose: () => void }) {
@@ -21,6 +19,8 @@ export function PageFormatDialog({ pageId, onClose }: { pageId: string; onClose:
   // Lo que quedaría si esta página deja de definir su tamaño.
   const parentId = page?.parent_id;
   const inheritsFrom = parentId && tree.get(parentId) ? pageFormat(tree, parentId).from : null;
+  const tr = useT();
+  const titled = (p: { title: string }) => p.title || tr('common.untitled');
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -37,23 +37,23 @@ export function PageFormatDialog({ pageId, onClose }: { pageId: string; onClose:
         className="modal format-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Page size"
+        aria-label={tr('pageMenu.pageSize')}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2>Page size</h2>
+        <h2>{tr('pageMenu.pageSize')}</h2>
         <div className="pref">
           <span className="pref-label" id="format-size">
-            Size
+            {tr('pageFormat.size')}
           </span>
           <div className="segmented" role="group" aria-labelledby="format-size">
             {SIZES.map((s) => (
               <button
-                key={s.value}
-                autoFocus={format.size === s.value}
-                aria-pressed={format.size === s.value}
-                onClick={() => save(s.value, format.landscape)}
+                key={s}
+                autoFocus={format.size === s}
+                aria-pressed={format.size === s}
+                onClick={() => save(s, format.landscape)}
               >
-                {s.label}
+                {sizeLabel(s, tr)}
               </button>
             ))}
           </div>
@@ -61,14 +61,14 @@ export function PageFormatDialog({ pageId, onClose }: { pageId: string; onClose:
         {format.size !== 'free' && (
           <div className="pref">
             <span className="pref-label" id="format-orientation">
-              Orientation
+              {tr('pageFormat.orientation')}
             </span>
             <div className="segmented" role="group" aria-labelledby="format-orientation">
               <button aria-pressed={!format.landscape} onClick={() => save(format.size, false)}>
-                Portrait
+                {tr('pageFormat.portrait')}
               </button>
               <button aria-pressed={format.landscape} onClick={() => save(format.size, true)}>
-                Landscape
+                {tr('pageFormat.landscape')}
               </button>
             </div>
           </div>
@@ -76,12 +76,12 @@ export function PageFormatDialog({ pageId, onClose }: { pageId: string; onClose:
         {branch.length > 1 && (
           <div className="pref">
             <label className="pref-label" htmlFor="format-target">
-              Save for
+              {tr('pageFormat.saveFor')}
             </label>
             <select id="format-target" value={target} onChange={(e) => setChosen(e.target.value)}>
               {branch.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.id === pageId ? 'This page' : `“${p.title || 'Untitled'}”`} and the pages inside
+                  {p.id === pageId ? tr('pageFormat.thisBranch') : tr('pageFormat.branch', { title: titled(p) })}
                 </option>
               ))}
             </select>
@@ -89,17 +89,19 @@ export function PageFormatDialog({ pageId, onClose }: { pageId: string; onClose:
         )}
         <p className="muted">
           {format.from
-            ? `Set on ${format.from.id === pageId ? 'this page' : `“${format.from.title || 'Untitled'}”`}; pages inside can set their own.`
-            : 'Free: the page follows the width of the window.'}{' '}
-          Export PDF / Print is in the page menu (free pages print on A4).
+            ? format.from.id === pageId
+              ? tr('pageFormat.setHere')
+              : tr('pageFormat.setOn', { title: titled(format.from) })
+            : tr('pageFormat.freeHint')}{' '}
+          {tr('pageFormat.printHint')}
         </p>
         <div className="modal-actions">
           {ownFormat(tree, pageId) && (
             <button className="link" onClick={() => void tree.setSetting(pageId, 'format', undefined)}>
-              {inheritsFrom ? `Use the size from “${inheritsFrom.title || 'Untitled'}”` : 'Remove (back to Free)'}
+              {inheritsFrom ? tr('pageFormat.useFrom', { title: titled(inheritsFrom) }) : tr('pageFormat.remove')}
             </button>
           )}
-          <button onClick={onClose}>Done</button>
+          <button onClick={onClose}>{tr('common.done')}</button>
         </div>
       </div>
     </div>

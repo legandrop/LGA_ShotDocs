@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useT } from '../i18n';
 import { usePermissions, useTree } from '../services';
 import type { PageRow } from '../sync/types';
 
@@ -7,6 +8,7 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
   const perms = usePermissions();
   const [filter, setFilter] = useState('');
   const page = tree.get(pageId);
+  const tr = useT();
 
   const options = useMemo(() => {
     const out: { page: PageRow; depth: number }[] = [];
@@ -40,13 +42,13 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" role="dialog" aria-label="Move page" onClick={(e) => e.stopPropagation()}>
-        <h2>Move “{page?.title || 'Untitled'}”</h2>
-        <input autoFocus placeholder="Search pages…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <div className="modal" role="dialog" aria-label={tr('move.label')} onClick={(e) => e.stopPropagation()}>
+        <h2>{tr('move.title', { title: page?.title || tr('common.untitled') })}</h2>
+        <input autoFocus placeholder={tr('move.search')} value={filter} onChange={(e) => setFilter(e.target.value)} />
         <ul className="move-list">
           {!needle && page?.parent_id && perms.canMove(pageId, null) && (
             <li>
-              <button onClick={() => void moveTo(null)}>Top level</button>
+              <button onClick={() => void moveTo(null)}>{tr('move.top')}</button>
             </li>
           )}
           {visible.map(({ page: p, depth }) => (
@@ -56,14 +58,14 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
                 disabled={p.id === page?.parent_id}
                 onClick={() => void moveTo(p.id)}
               >
-                {p.title || 'Untitled'}
+                {p.title || tr('common.untitled')}
               </button>
             </li>
           ))}
-          {visible.length === 0 && <li className="muted">No pages with that name.</li>}
+          {visible.length === 0 && <li className="muted">{tr('move.noMatch')}</li>}
         </ul>
         <div className="modal-actions">
-          <button onClick={onClose}>Cancel</button>
+          <button onClick={onClose}>{tr('common.cancel')}</button>
         </div>
       </div>
     </div>

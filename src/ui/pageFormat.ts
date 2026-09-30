@@ -1,3 +1,4 @@
+import type { Translate } from '../i18n';
 import type { PageTree } from '../sync/tree';
 import type { PageRow, PageSettings } from '../sync/types';
 
@@ -13,6 +14,13 @@ export const PAGE_SIZES = {
 } as const;
 
 export type PageSize = keyof typeof PAGE_SIZES | 'free';
+
+/** El nombre de un tamaño en el idioma de la interfaz ("Letter" es "Carta"; lo guardado no cambia). */
+export function sizeLabel(size: PageSize, t: Translate): string {
+  if (size === 'free') return t('pageFormat.free');
+  if (size === 'Letter') return t('pageFormat.letter');
+  return PAGE_SIZES[size].label;
+}
 
 /** Margen de la hoja, en milímetros. */
 export const SHEET_MARGIN_MM = 20;

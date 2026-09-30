@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
+import { locale, t as current, type Translate } from '../i18n';
 import { navigate, pagePath, useRoute } from '../router';
 import { useServices, useTree } from '../services';
 import type { PageTree } from '../sync/tree';
@@ -92,16 +93,17 @@ export function monogram(name: string): string {
   return letters.toUpperCase();
 }
 
-/** "edited today", "edited yesterday", "edited Sep 12". */
-export function editedLabel(iso: string | null): string {
-  if (!iso) return 'empty';
+/** "edited today", "edited yesterday", "edited Sep 12" (o en castellano, con `t`). */
+export function editedLabel(iso: string | null, t: Translate = current): string {
+  if (!iso) return t('project.emptyStats');
   const date = new Date(iso);
   const today = new Date();
   const days = Math.round(
     (new Date(today.toDateString()).getTime() - new Date(date.toDateString()).getTime()) / 86_400_000,
   );
-  if (days <= 0) return 'edited today';
-  if (days === 1) return 'edited yesterday';
+  if (days <= 0) return t('project.editedToday');
+  if (days === 1) return t('project.editedYesterday');
   const sameYear = date.getFullYear() === today.getFullYear();
-  return `edited ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) })}`;
+  const day = date.toLocaleDateString(locale(t.lang), { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
+  return t('project.editedOn', { date: day });
 }

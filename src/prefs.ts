@@ -6,6 +6,7 @@ export type Theme = 'system' | 'light' | 'dark';
 export type Font = 'default' | 'editorial';
 export type TextSize = 'small' | 'normal' | 'large';
 export type PageWidth = 'normal' | 'wide';
+export type Language = 'en' | 'es';
 
 /** Preferencias de la cuenta: siguen al usuario en todos sus dispositivos. */
 export interface Prefs {
@@ -13,20 +14,44 @@ export interface Prefs {
   font: Font;
   textSize: TextSize;
   pageWidth: PageWidth;
+  /**
+   * El idioma de la interfaz (D-16). Una versión de la app anterior a los dos idiomas no conoce la clave:
+   * `cleanPrefs` la descarta al leer y, si esa versión sube sus preferencias, la borra de la cuenta (sube el
+   * objeto entero). No pasa nada grave: los dispositivos con esta versión siguen con el idioma que tenían
+   * (ver `attach`) y uno nuevo arranca con el del navegador.
+   */
+  language: Language;
 }
 
-export const DEFAULT_PREFS: Prefs = { theme: 'system', font: 'default', textSize: 'normal', pageWidth: 'normal' };
+/** El idioma de fábrica: castellano si el navegador está en castellano (`es`, `es-AR`…); si no, inglés. */
+export function detectLanguage(): Language {
+  if (typeof navigator === 'undefined') return 'en';
+  const first = navigator.languages?.[0] ?? navigator.language ?? '';
+  return /^es\b/i.test(first) ? 'es' : 'en';
+}
+
+export const DEFAULT_PREFS: Prefs = {
+  theme: 'system',
+  font: 'default',
+  textSize: 'normal',
+  pageWidth: 'normal',
+  language: detectLanguage(),
+};
 
 const CHOICES: { [K in keyof Prefs]: readonly Prefs[K][] } = {
   theme: ['system', 'light', 'dark'],
   font: ['default', 'editorial'],
   textSize: ['small', 'normal', 'large'],
   pageWidth: ['normal', 'wide'],
+  language: ['en', 'es'],
 };
 
-/** Lo que llega de otro dispositivo o de una versión futura se filtra: un valor desconocido no rompe nada. */
-export function cleanPrefs(raw: unknown): Prefs {
-  const out: Prefs = { ...DEFAULT_PREFS };
+/**
+ * Lo que llega de otro dispositivo o de una versión futura se filtra: un valor desconocido no rompe nada.
+ * Lo que falta o no se entiende toma el valor de `base` (de fábrica, si no se pasa otra cosa).
+ */
+export function cleanPrefs(raw: unknown, base: Prefs = DEFAULT_PREFS): Prefs {
+  const out: Prefs = { ...base };
   if (!raw || typeof raw !== 'object') return out;
   for (const key of Object.keys(CHOICES) as (keyof Prefs)[]) {
     const value = (raw as Record<string, unknown>)[key];
@@ -173,7 +198,9 @@ class PrefsStore {
     const revision = this.revision;
     const { data, error } = await client.from('user_settings').select('prefs').eq('user_id', userId).maybeSingle();
     if (error || this.revision !== revision || this.state.userId !== userId || !data) return;
-    this.state = { ...this.state, prefs: cleanPrefs(data.prefs) };
+    // Lo que la cuenta no tiene (el idioma, si lo borró una versión vieja de la app al subir las suyas) sigue
+    // como estaba en este dispositivo en vez de volver a lo de fábrica.
+    this.state = { ...this.state, prefs: cleanPrefs(data.prefs, this.state.prefs) };
     this.save();
     this.emit();
   }
@@ -266,6 +293,7 @@ function applyToDocument(prefs: Prefs, scheme: 'light' | 'dark'): void {
   root.dataset.font = prefs.font;
   root.dataset.textSize = prefs.textSize;
   root.dataset.pageWidth = prefs.pageWidth;
+  root.lang = prefs.language;
   for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
     meta.content = THEME_COLORS[scheme];
     meta.removeAttribute('media');
