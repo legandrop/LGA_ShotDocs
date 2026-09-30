@@ -26,8 +26,9 @@ v0.039 :
 Las últimas teclas ya no se pierden y la app abre más rápido (roadmap B.4 y B.5). La investigación del
 caso intermitente encontró que recargar o cerrar la página a milisegundos de escribir podía perder lo
 último: el guardado local ahora escribe en una transacción que no espera ninguna lectura y se confirma en
-el acto, con una marca de "falta subir" que solo se borra si el servidor confirmó eso mismo. Cada consulta
-al servidor tiene un tope de 30 segundos, y los menús de la barra del editor ya no se cierran solos. El
+el acto, con una marca de "falta subir" que solo se borra si el servidor confirmó eso mismo, y una versión
+vieja que abra la misma base igual ve lo pendiente. Cada consulta al servidor tiene un tope según su
+tamaño y una página lenta no frena a las demás; los menús de la barra del editor ya no se cierran solos. El
 editor, el carrete y los diálogos se cargan aparte: la primera carga baja de 591 KB a 278 KB.
 [ Sincronización - sin perder las últimas teclas; carga más liviana ]
 
