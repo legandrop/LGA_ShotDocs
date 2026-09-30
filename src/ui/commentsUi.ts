@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { t } from '../i18n';
 
 // Lo que comparten el botón de comentarios de la barra de arriba, el panel (o la hoja en el teléfono), el
 // margen del editor y los botones "Comment" del editor: si el panel está abierto y qué mostrar. Vive en
@@ -60,7 +61,7 @@ export function hasDrafts(): boolean {
 
 /** Cierra el panel; si hay algo escrito sin mandar, pregunta antes. Devuelve si lo cerró. */
 export function requestCloseComments(): boolean {
-  if (drafts.size > 0 && !confirm('Discard what you wrote?')) return false;
+  if (drafts.size > 0 && !confirm(t('comments.discardDraft'))) return false;
   closeComments();
   return true;
 }

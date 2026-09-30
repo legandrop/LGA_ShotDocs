@@ -5,8 +5,8 @@ import { FakeRemote, FakeServer, makeDevice, type Device } from '../sync/testing
 import { RemoteError } from '../sync/types';
 import { exportUnsynced, unsyncedSummary } from '../sync/unsynced';
 import { SupabaseRemote, unlinkIgnored } from '../sync/remote';
-import { autoPurgeFiles, FOREIGN_PLACEHOLDER, MEDIA_SCHEME, mediaIdOf } from './queue';
-import { DRIVE_NOT_CONNECTED, emptyFileTrash, loadFileTrash, sendToDriveTrash, type TrashOutcome } from './fileTrash';
+import { autoPurgeFiles, foreignPlaceholder, MEDIA_SCHEME, mediaIdOf } from './queue';
+import { driveNotConnected, emptyFileTrash, loadFileTrash, sendToDriveTrash, type TrashOutcome } from './fileTrash';
 import { mediaIdsInDoc } from './usage';
 import { DELETED_LABEL, REQUESTED_LABEL } from './probe';
 
@@ -583,8 +583,8 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
 
     // En la página del otro proyecto se ve el marcador, no la foto; en su proyecto, la foto.
     const shown = decodeURIComponent(await a.media.resolve(MEDIA_SCHEME + id, foreign));
-    expect(shown).toContain(FOREIGN_PLACEHOLDER);
-    expect(await b.media.resolve(MEDIA_SCHEME + id, foreign).then(decodeURIComponent)).toContain(FOREIGN_PLACEHOLDER);
+    expect(shown).toContain(foreignPlaceholder());
+    expect(await b.media.resolve(MEDIA_SCHEME + id, foreign).then(decodeURIComponent)).toContain(foreignPlaceholder());
     expect(await a.media.resolve(MEDIA_SCHEME + id, page)).toMatch(/^blob:/);
 
     // Se saca de la otra página: recién ahí entra a la papelera.
@@ -900,7 +900,7 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     await sync(a);
     server.portero.driveDisconnected = true;
     const results = await emptyFileTrash((f) => a.media.trash(f), [id, second]);
-    expect([...results.values()]).toEqual([{ status: 'not_connected', message: DRIVE_NOT_CONNECTED }]);
+    expect([...results.values()]).toEqual([{ status: 'not_connected', message: driveNotConnected() }]);
     expect(server.mediaFiles.get(id)?.purged_at ?? null).toBeNull();
     expect(server.portero.calls.filter((c) => c.path === '/trash')).toHaveLength(1);
 

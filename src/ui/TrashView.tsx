@@ -6,9 +6,10 @@ import {
   loadFileTrash,
   sendToDriveTrash,
   TRASH_DAYS,
-  UNSYNCED_USE_WARNING,
+  unsyncedUseWarning,
   type TrashOutcome,
 } from '../media/fileTrash';
+import { locale, t, useT } from '../i18n';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import type { TrashedFileRow } from '../sync/types';
@@ -35,17 +36,18 @@ export function TrashView() {
   useEffect(() => setFilesAllowed(true), [projectId]);
   const hideFiles = useCallback(() => setFilesAllowed(false), []);
   const current = offerFiles ? tab : 'pages';
+  const tr = useT();
 
   return (
     <article className="page narrow">
-      <h1 className="page-heading">Trash</h1>
+      <h1 className="page-heading">{tr('trash.title')}</h1>
       {offerFiles && (
-        <div className="segmented trash-tabs" role="group" aria-label="Trash contents">
+        <div className="segmented trash-tabs" role="group" aria-label={tr('trash.contents')}>
           <button aria-pressed={current === 'pages'} onClick={() => setTab('pages')}>
-            Pages
+            {tr('trash.pages')}
           </button>
           <button aria-pressed={current === 'files'} onClick={() => setTab('files')}>
-            Files
+            {tr('trash.files')}
           </button>
         </div>
       )}
@@ -63,28 +65,23 @@ function PagesTrash({ projectId }: { projectId: string }) {
   const perms = usePermissions();
   const { media } = useServices();
   const items = tree.trashed(projectId);
+  const tr = useT();
   return (
     <>
-      <p className="muted">
-        Nothing here is ever deleted from the app. Restoring a page brings it back with everything that was inside
-        it
-        {media.trashEnabled
-          ? ', except photos and videos that were already sent to the Google Drive trash from the Files tab: those show as deleted.'
-          : '.'}
-      </p>
+      <p className="muted">{media.trashEnabled ? tr('trash.pagesHintMedia') : tr('trash.pagesHint')}</p>
       {items.length === 0 ? (
-        <p className="muted">The trash is empty.</p>
+        <p className="muted">{tr('trash.empty')}</p>
       ) : (
         <ul className="trash-list">
           {items.map((p) => (
             <li key={p.id}>
               <button className="link title" onClick={() => navigate(pagePath(p.id))}>
-                {p.title || 'Untitled'}
+                {p.title || tr('common.untitled')}
               </button>
-              <span className="when">{new Date(p.deleted_at!).toLocaleString()}</span>
+              <span className="when">{new Date(p.deleted_at!).toLocaleString(locale(tr.lang))}</span>
               {perms.canManagePage(p.id) && (
                 <button onClick={() => void tree.restore(p.id)}>
-                  <RestoreIcon size={16} /> Restore
+                  <RestoreIcon size={16} /> {tr('trash.restore')}
                 </button>
               )}
             </li>
@@ -99,10 +96,8 @@ type Loaded = { state: 'loading' } | { state: 'error'; message: string } | { sta
 
 /** Lo que dice la confirmación: adónde van, cómo se recuperan y el riesgo que anota el plan. */
 function confirmText(question: string, many: boolean): string {
-  const where = many
-    ? 'They go to the Google Drive trash of the workspace owner and can be recovered from there for 30 days. Pages that still show one of them will say it was deleted.'
-    : 'It goes to the Google Drive trash of the workspace owner and can be recovered from there for 30 days. A page that still shows it will say it was deleted.';
-  return `${question}\n\n${where}\n\n${UNSYNCED_USE_WARNING}`;
+  const where = many ? t('fileTrash.whereMany') : t('fileTrash.whereOne');
+  return `${question}\n\n${where}\n\n${unsyncedUseWarning()}`;
 }
 
 /** Las fotos y los videos que ninguna página usa. Solo con red: lo que dice la base y el portero. */
@@ -115,6 +110,7 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const tr = useT();
   const live = useRef(true);
   useEffect(
     () => () => {
@@ -153,7 +149,7 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
       return false;
     }
     if (outcome.status === 'in_use') {
-      notify(`A page uses “${file.name}” again, so it is not in the trash anymore.`);
+      notify(t('fileTrash.inUse', { name: file.name }));
       return true;
     }
     // Sin Drive conectado no se mandó ni se marcó nada: se avisa, sin error en el archivo.
@@ -167,8 +163,8 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
 
   const sendOne = async (file: TrashedFileRow) => {
     const question = file.in_trashed_page
-      ? `“${file.name}” is used by “${file.trashed_page_title || 'Untitled'}”, a page in the trash. Restoring that page will not bring it back. Send it to the Google Drive trash anyway?`
-      : `Send “${file.name}” to the Google Drive trash?`;
+      ? t('fileTrash.confirmUsed', { name: file.name, page: file.trashed_page_title || t('common.untitled') })
+      : t('fileTrash.confirmOne', { name: file.name });
     if (!confirm(confirmText(question, false))) return;
     setBusy(file.id);
     const outcome = await sendToDriveTrash(trash, file.id);
@@ -184,10 +180,10 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
   const emptyAll = async () => {
     const list = emptiable;
     if (list.length === 0) return;
-    const what = list.length === 1 ? `“${list[0].name}”` : `all ${list.length} files`;
+    const what = list.length === 1 ? `“${list[0].name}”` : t('fileTrash.allFiles', { count: list.length });
     const kept = files.length - list.length;
-    const skip = kept > 0 ? ` (${kept} used by pages in the trash stay)` : '';
-    if (!confirm(confirmText(`Empty the file trash: send ${what}${skip} to the Google Drive trash?`, list.length > 1))) return;
+    const skip = kept > 0 ? ` ${t('fileTrash.kept', { count: kept })}` : '';
+    if (!confirm(confirmText(t('fileTrash.confirmEmpty', { what, skip }), list.length > 1))) return;
     setProgress({ done: 0, total: list.length });
     let refresh = false;
     const byId = new Map(list.map((f) => [f.id, f]));
@@ -210,7 +206,7 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
     const outcomes = [...results.values()];
     const failed = outcomes.filter((r) => r.status === 'error' || r.status === 'unsent_use').length;
     if (!outcomes.some((r) => r.status === 'not_connected') && failed > 0) {
-      notify(`${failed} of ${list.length} could not be sent. They stay in the list with the reason.`);
+      notify(t('fileTrash.someFailed', { failed, total: list.length }));
     }
     if (refresh) await reload();
   };
@@ -221,27 +217,26 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
   return (
     <>
       <p className="muted">
-        Photos and videos that no page outside the trash uses anymore.{' '}
+        {tr('fileTrash.intro')}{' '}
         {status.autoPurgeFiles ? (
-          <>Each one is sent to the Google Drive trash {TRASH_DAYS} days after it got here.</>
+          tr('fileTrash.autoOn', { days: TRASH_DAYS })
         ) : (
           <>
-            <strong>Auto-delete is off:</strong> nothing is sent on its own. When auto-delete is on, each one would be
-            sent to the Google Drive trash {TRASH_DAYS} days after it got here.
+            <strong>{tr('fileTrash.autoOffTitle')}</strong> {tr('fileTrash.autoOff', { days: TRASH_DAYS })}
           </>
         )}
       </p>
-      <p className="muted trash-warning">{UNSYNCED_USE_WARNING}</p>
-      {loaded.state === 'loading' && <p className="muted">Loading…</p>}
+      <p className="muted trash-warning">{tr('fileTrash.unsyncedUse')}</p>
+      {loaded.state === 'loading' && <p className="muted">{tr('common.loading')}</p>}
       {loaded.state === 'error' && (
         <p className="muted">
-          The file trash could not be read ({loaded.message}). It needs an internet connection.{' '}
+          {tr('fileTrash.loadFailed', { reason: loaded.message })}{' '}
           <button className="link" onClick={() => void reload()}>
-            Retry
+            {tr('common.retry')}
           </button>
         </p>
       )}
-      {loaded.state === 'ready' && files.length === 0 && <p className="muted">No files in the trash.</p>}
+      {loaded.state === 'ready' && files.length === 0 && <p className="muted">{tr('fileTrash.none')}</p>}
       {loaded.state === 'ready' && files.length > 0 && (
         <>
           {canPurge && (
@@ -249,18 +244,14 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
               <button
                 className="link danger"
                 disabled={working || offline || emptiable.length === 0}
-                data-tip={
-                  offline
-                    ? 'Needs an internet connection'
-                    : 'Send every file in this list to the Google Drive trash, except those used by pages in the trash'
-                }
+                data-tip={offline ? tr('fileTrash.needsInternet') : tr('fileTrash.emptyTip')}
                 onClick={() => void emptyAll()}
               >
-                <TrashIcon size={16} /> Empty
+                <TrashIcon size={16} /> {tr('fileTrash.emptyButton')}
               </button>
               {progress && (
                 <span className="muted" role="status">
-                  Sending {Math.min(progress.done + 1, progress.total)} of {progress.total}…
+                  {tr('fileTrash.sendingOf', { n: Math.min(progress.done + 1, progress.total), total: progress.total })}
                 </span>
               )}
             </div>
@@ -272,23 +263,21 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
                 <div className="trash-file">
                   <span className="title">{f.name}</span>
                   <span className="when">
-                    {formatSize(f.size)} · {new Date(f.trashed_at).toLocaleDateString()} · {daysLeftText(f.days_left)}
+                    {formatSize(f.size)} · {new Date(f.trashed_at).toLocaleDateString(locale(tr.lang))} · {daysLeftText(f.days_left)}
                   </span>
                   {f.in_trashed_page && (
-                    <span className="muted small">Used by “{f.trashed_page_title || 'Untitled'}” in the trash</span>
+                    <span className="muted small">{tr('fileTrash.usedBy', { page: f.trashed_page_title || tr('common.untitled') })}</span>
                   )}
-                  {f.purged_at && !errors[f.id] && (
-                    <span className="muted small">Sending it to the Google Drive trash was not confirmed yet. Try again.</span>
-                  )}
+                  {f.purged_at && !errors[f.id] && <span className="muted small">{tr('fileTrash.notConfirmed')}</span>}
                   {errors[f.id] && <span className="trash-error small">{errors[f.id]}</span>}
                 </div>
                 {canPurge && (
                   <button
                     disabled={working || offline}
-                    data-tip={offline ? 'Needs an internet connection' : 'Send to the Google Drive trash (recoverable there for 30 days)'}
+                    data-tip={offline ? tr('fileTrash.needsInternet') : tr('fileTrash.sendTip')}
                     onClick={() => void sendOne(f)}
                   >
-                    {busy === f.id ? 'Sending…' : 'Send to Drive trash'}
+                    {busy === f.id ? tr('fileTrash.sending') : tr('fileTrash.send')}
                   </button>
                 )}
               </li>

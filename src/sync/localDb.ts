@@ -6,14 +6,30 @@ export interface DocState {
   pageId: string;
   /** Último `seq` del servidor que ya está guardado acá. */
   cursor: number;
-  /** Cuenta las ediciones locales guardadas. Sube una vez por update de Yjs. */
+  /**
+   * Cuenta las ediciones locales guardadas. Desde el guardado sin lecturas (ver `dirtyKey`) sube en una
+   * transacción aparte, justo después de cada edición guardada: lo que falta subir lo dice la marca, y la
+   * versión se sigue sumando para las versiones anteriores de la app que abran esta misma base (y para la
+   * papelera de archivos, que la usa para saber si el documento cambió).
+   */
   version: number;
   /** Hasta qué `version` confirmó el servidor. Si es menor que `version`, hay cambios sin subir. */
   ackedVersion: number;
   /** Vector de estado de lo que el servidor ya tiene. Lo que falta subir se calcula contra esto. */
   syncedSV?: Uint8Array;
   /** Update enviado y todavía sin confirmar. Se reenvía igual (mismo id) hasta que el servidor responde. */
-  pending?: { id: string; update: Uint8Array; sv: Uint8Array; version: number };
+  pending?: {
+    id: string;
+    update: Uint8Array;
+    sv: Uint8Array;
+    version: number;
+    /**
+     * La marca de ediciones sin subir (`dirtyKey`) que había al armar el envío, leída en la misma
+     * transacción que lo guardado. Al confirmarse, la marca se borra solo si sigue siendo esta. Un envío
+     * armado por una versión anterior no la tiene.
+     */
+    dirty?: string;
+  };
   lastError?: string;
   /** El servidor rechazó el contenido para siempre (por ejemplo, por tamaño). Se reintenta al abrir la app. */
   rejected?: string;
@@ -81,6 +97,42 @@ export async function updateDocState(
   return state;
 }
 
-export function hasUnsyncedContent(state: DocState): boolean {
-  return state.version > state.ackedVersion || state.pending !== undefined;
+/**
+ * Clave en `meta` de la marca de ediciones locales guardadas que todavía no entraron en una subida
+ * confirmada. Cada escritura local pone una marca nueva (un id al azar) en la misma transacción que el
+ * update, sin leer nada antes: así la transacción se confirma en el acto (ver docs.ts, `startWrite`).
+ * `meta` ya existe y las versiones anteriores solo la leen por clave, así que la base no cambia de versión.
+ */
+export function dirtyKey(pageId: string): string {
+  return `${DIRTY_PREFIX}${pageId}`;
+}
+export const DIRTY_PREFIX = 'docDirty:';
+/** Todas las marcas de `meta`. */
+export function dirtyRange(): IDBKeyRange {
+  return IDBKeyRange.bound(DIRTY_PREFIX, `${DIRTY_PREFIX}\uffff`);
+}
+
+/**
+ * Si la página tiene algo sin subir: la marca de ediciones sin subir (`dirty`), una versión mayor que la
+ * confirmada (lo de siempre: así lo guardado por una versión anterior se sigue subiendo) o un envío sin
+ * confirmar.
+ */
+export function hasUnsyncedContent(state: DocState, dirty = false): boolean {
+  return dirty || state.version > state.ackedVersion || state.pending !== undefined;
+}
+
+/**
+ * El estado de las páginas con algo sin subir (ver `hasUnsyncedContent`), leído en una sola transacción con
+ * las marcas. Una página con marca y sin estado guardado todavía (la app se cerró antes de sumar la
+ * versión) viene con el estado vacío.
+ */
+export async function unsyncedDocStates(db: LocalDb): Promise<DocState[]> {
+  const tx = db.transaction(['docState', 'meta'], 'readonly');
+  const [states, keys] = await Promise.all([tx.objectStore('docState').getAll(), tx.objectStore('meta').getAllKeys(dirtyRange())]);
+  await tx.done;
+  const dirty = new Set(keys.map((k) => String(k).slice(DIRTY_PREFIX.length)));
+  const out = states.filter((s) => hasUnsyncedContent(s, dirty.has(s.pageId)));
+  const known = new Set(states.map((s) => s.pageId));
+  for (const pageId of dirty) if (!known.has(pageId)) out.push(emptyDocState(pageId));
+  return out;
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useT } from '../i18n';
 import { usePermissions, useServices, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, levelValue, type GrantLevel, type Role } from '../sync/access';
 import type { AccessRow, MemberRow } from '../sync/remote';
@@ -30,9 +31,10 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
   const makeLink = useInviteLink();
   const isProject = 'projectId' in target;
   const targetId = isProject ? target.projectId : target.pageId;
+  const tr = useT();
   const title = isProject
-    ? (tree.project(target.projectId)?.name ?? 'this project')
-    : tree.get(target.pageId)?.title || 'Untitled';
+    ? (tree.project(target.projectId)?.name ?? tr('project.thisProject'))
+    : tree.get(target.pageId)?.title || tr('common.untitled');
 
   const [rows, setRows] = useState<AccessRow[] | null>(null);
   const [members, setMembers] = useState<MemberRow[]>([]);
@@ -79,13 +81,13 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
         from === null
           ? null
           : from.source === 'creator'
-            ? 'created the project'
+            ? tr('share.via.creator')
             : from.source === 'project'
-              ? 'from the project'
-              : `from “${(from.page_id && tree.get(from.page_id)?.title) || 'a page above'}”`;
+              ? tr('share.via.project')
+              : tr('share.via.page', { title: (from.page_id && tree.get(from.page_id)?.title) || tr('share.via.pageAbove') });
       return { userId: best.user_id, email: best.email, role: best.role, level: best.level, direct, via };
     });
-  }, [rows, isProject, tree]);
+  }, [rows, isProject, tree, tr]);
 
   async function run(label: string, work: () => Promise<void>) {
     setBusy(label);
@@ -121,10 +123,7 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
       return;
     }
     if (!perms.canInvite) {
-      setError(
-        `${email.trim()} does not have access here yet, and only the owner or an admin can add someone new. ` +
-          'Ask one of them to invite this person; after that you can change or remove their access here.',
-      );
+      setError(tr('share.cannotInvite', { email: email.trim() }));
       return;
     }
     const grant = isProject ? { project_id: target.projectId, level } : { page_id: target.pageId, level };
@@ -141,19 +140,10 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal team-dialog" role="dialog" aria-label="Share" onClick={(e) => e.stopPropagation()}>
-        <h2>Share “{title}”</h2>
-        <p className="muted team-lead">
-          {isProject
-            ? 'Access to a project covers every page in it.'
-            : 'Access to a page covers the pages inside it, never the ones above.'}
-        </p>
-        {!perms.canInvite && (
-          <p className="muted team-lead">
-            You can share this because you created the project: you can change or remove the access of the people
-            below. To add someone else, ask the owner or an admin of the workspace.
-          </p>
-        )}
+      <div className="modal team-dialog" role="dialog" aria-label={tr('share.label')} onClick={(e) => e.stopPropagation()}>
+        <h2>{tr('share.title', { title })}</h2>
+        <p className="muted team-lead">{isProject ? tr('share.projectScope') : tr('share.pageScope')}</p>
+        {!perms.canInvite && <p className="muted team-lead">{tr('share.creatorOnly')}</p>}
 
         <form className="team-invite" onSubmit={(e) => void add(e)}>
           <div className="team-invite-row">
@@ -161,15 +151,15 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
               type="email"
               required
               list="share-members"
-              placeholder={perms.canInvite ? 'name@example.com or pick a member' : 'Email of someone listed below'}
-              aria-label="Email"
+              placeholder={perms.canInvite ? tr('share.emailOrMember') : tr('share.emailListed')}
+              aria-label={tr('team.email')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-            <select aria-label="Access" value={level} onChange={(e) => setLevel(e.target.value as GrantLevel)}>
+            <select aria-label={tr('team.access')} value={level} onChange={(e) => setLevel(e.target.value as GrantLevel)}>
               {GRANT_LEVELS.map((l) => (
                 <option key={l} value={l}>
-                  {LEVEL_LABELS[l]}
+                  {tr(LEVEL_LABELS[l])}
                 </option>
               ))}
             </select>
@@ -181,35 +171,35 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
           </datalist>
           {address && !knownUser && perms.canInvite && (
             <label className="team-check">
-              <span>New to the workspace: invite as</span>
-              <select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as 'member' | 'guest')}>
-                <option value="guest">{ROLE_LABELS.guest}</option>
-                <option value="member">{ROLE_LABELS.member}</option>
+              <span>{tr('share.inviteAs')}</span>
+              <select aria-label={tr('team.role')} value={role} onChange={(e) => setRole(e.target.value as 'member' | 'guest')}>
+                <option value="guest">{tr(ROLE_LABELS.guest)}</option>
+                <option value="member">{tr(ROLE_LABELS.member)}</option>
               </select>
             </label>
           )}
           <div className="team-invite-actions">
             <span className="muted">
-              {address && !knownUser ? 'The app copies an invitation link for you to send.' : ''}
+              {address && !knownUser ? tr('members.inviteHint') : ''}
             </span>
             <button className="primary" disabled={busy !== null || !address}>
-              {busy === 'add' ? 'Sharing…' : address && !knownUser ? 'Invite and copy link' : 'Share'}
+              {busy === 'add' ? tr('share.sharing') : address && !knownUser ? tr('team.inviteAndCopy') : tr('share.share')}
             </button>
           </div>
           {manualLink && (
             <div className="team-link">
-              <span className="muted">Copy this link and send it:</span>
-              <input readOnly value={manualLink} onFocus={(e) => e.currentTarget.select()} aria-label="Invitation link" />
+              <span className="muted">{tr('team.copyManually')}</span>
+              <input readOnly value={manualLink} onFocus={(e) => e.currentTarget.select()} aria-label={tr('team.inviteLink')} />
             </div>
           )}
         </form>
 
         {error && <p className="error">{error}</p>}
 
-        <span className="pref-label">Who has access</span>
-        <ul className="team-list" aria-label="Who has access">
-          {rows === null && !error && <li className="muted">Loading…</li>}
-          {rows !== null && people.length === 0 && <li className="muted">Nobody yet.</li>}
+        <span className="pref-label">{tr('share.who')}</span>
+        <ul className="team-list" aria-label={tr('share.who')}>
+          {rows === null && !error && <li className="muted">{tr('common.loading')}</li>}
+          {rows !== null && people.length === 0 && <li className="muted">{tr('share.nobody')}</li>}
           {people.map((p) => (
             <li key={p.userId}>
               <span className="team-who">
@@ -217,13 +207,13 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
                   {p.email}
                 </span>
                 <span className="mono-label">
-                  {ROLE_LABELS[p.role] ?? p.role}
-                  {p.via ? ` · ${LEVEL_LABELS[p.level]} ${p.via}` : ''}
+                  {ROLE_LABELS[p.role] ? tr(ROLE_LABELS[p.role]) : p.role}
+                  {p.via ? ` · ${tr(LEVEL_LABELS[p.level])} ${p.via}` : ''}
                 </span>
               </span>
               {p.direct ? (
                 <select
-                  aria-label={`Access of ${p.email}`}
+                  aria-label={tr('share.accessOf', { email: p.email })}
                   value={p.direct.level}
                   disabled={busy !== null}
                   onChange={(e) => {
@@ -233,12 +223,12 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
                 >
                   {GRANT_LEVELS.map((l) => (
                     <option key={l} value={l}>
-                      {LEVEL_LABELS[l]}
+                      {tr(LEVEL_LABELS[l])}
                     </option>
                   ))}
                 </select>
               ) : (
-                <span className="team-role">{LEVEL_LABELS[p.level]}</span>
+                <span className="team-role">{tr(LEVEL_LABELS[p.level])}</span>
               )}
               {p.direct?.grant_id ? (
                 <button
@@ -246,7 +236,7 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
                   disabled={busy !== null}
                   onClick={() => void run(`unshare:${p.userId}`, () => remote.unshare(p.direct!.grant_id!))}
                 >
-                  Remove
+                  {tr('members.remove')}
                 </button>
               ) : (
                 <span className="team-spacer" />
@@ -256,7 +246,7 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
         </ul>
 
         <div className="modal-actions">
-          <button onClick={onClose}>Close</button>
+          <button onClick={onClose}>{tr('common.close')}</button>
         </div>
       </div>
     </div>

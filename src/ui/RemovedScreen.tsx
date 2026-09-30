@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { t, useT, type Translate } from '../i18n';
 import { clearInviteTarget } from '../invite';
 import type { MediaRecord } from '../media/mediaDb';
 import { mediaDbName } from '../media/mediaDb';
@@ -46,9 +47,19 @@ export async function deleteWorkspaceDatabases(dbName: string, keepMedia = false
   await deleteDatabase(commentsDbName(dbName));
 }
 
-/** El aviso cuando la base de fotos y videos no abrió: no se borra (podría tener originales sin subir). */
-export const MEDIA_KEPT_NOTE =
-  'The storage for photos and videos could not be opened on this device, so it may still hold originals that were never uploaded. It stays on this device; everything else is removed.';
+/**
+ * Qué hay sin subir, en detalle (" · 2 pages · 3 page changes · 1 comment"). El aviso cuando la base de fotos
+ * y videos no abrió (no se borra: podría tener originales sin subir) es `removed.mediaKept`.
+ */
+export function unsyncedDetail(summary: UnsyncedSummary, tr: Translate): string {
+  const parts: string[] = [];
+  if (summary.pages > 0) parts.push(tr('unsynced.pages', { count: summary.pages }));
+  if (summary.ops + summary.failedOps > 0) parts.push(tr('unsynced.pageChanges', { count: summary.ops + summary.failedOps }));
+  if (summary.images > 0) parts.push(tr('unsynced.images', { count: summary.images }));
+  if (summary.media > 0) parts.push(tr('unsynced.media', { count: summary.media }));
+  if (summary.comments > 0) parts.push(tr('unsynced.comments', { count: summary.comments }));
+  return parts.map((p) => ` · ${p}`).join('');
+}
 
 /**
  * Los originales de fotos y videos que nunca subieron: el archivo JSON no los trae, así que se bajan de a
@@ -59,10 +70,11 @@ export function PendingMediaList(props: {
   downloaded: ReadonlySet<string>;
   onDownload: (record: MediaRecord) => void;
 }) {
+  const tr = useT();
   if (props.media.length === 0) return null;
   return (
     <div className="removed-media">
-      <span className="muted">The file does not include the original photos and videos. Download each one:</span>
+      <span className="muted">{tr('removed.mediaList')}</span>
       <ul>
         {props.media.map((m) => (
           <li key={m.id}>
@@ -71,7 +83,7 @@ export function PendingMediaList(props: {
             </button>{' '}
             <span className="muted">
               {sizeLabel(m.size)}
-              {props.downloaded.has(m.id) ? ' · downloaded' : ''}
+              {props.downloaded.has(m.id) ? ` · ${tr('removed.downloaded')}` : ''}
             </span>
           </li>
         ))}
@@ -110,6 +122,7 @@ export function RemovedScreen() {
   const [mediaDone, setMediaDone] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const tr = useT();
 
   useEffect(() => {
     let live = true;
@@ -126,7 +139,7 @@ export function RemovedScreen() {
   }, [db, mediaDb, commentsDb, docs, status.pendingOps, status.pendingPages, status.pendingMedia, status.pendingComments]);
 
   const pending = summary?.total ?? 0;
-  const name = status.workspaceName || workspace.config.name || 'this workspace';
+  const name = status.workspaceName || workspace.config.name || tr('noProjects.thisWorkspace');
 
   async function download() {
     setBusy('download');
@@ -135,7 +148,7 @@ export function RemovedScreen() {
       await downloadUnsynced(services, name);
       setDownloaded(true);
     } catch (err) {
-      setError(`The file could not be made (${errorMessage(err)}). Nothing was deleted.`);
+      setError(t('removed.downloadFailed', { reason: errorMessage(err) }));
     } finally {
       setBusy(null);
     }
@@ -146,7 +159,7 @@ export function RemovedScreen() {
     if (blob) {
       saveBlob(blob, record.name);
       setMediaDone((prev) => new Set(prev).add(record.id));
-    } else setError(`“${record.name}” is not on this device anymore.`);
+    } else setError(t('removed.mediaGone', { name: record.name }));
   }
 
   async function removeFromDevice() {
@@ -156,7 +169,9 @@ export function RemovedScreen() {
       pending > 0 &&
       (!downloaded || mediaLeft > 0) &&
       !confirm(
-        `${pending} changes on this device were never uploaded, and you have not downloaded ${downloaded ? `${mediaLeft} of the photos and videos` : 'them'}. Removing deletes them for good. Remove anyway?`,
+        downloaded
+          ? t('removed.confirmMediaLeft', { count: pending, left: mediaLeft })
+          : t('removed.confirmNotDownloaded', { count: pending }),
       )
     ) {
       return;
@@ -182,9 +197,9 @@ export function RemovedScreen() {
       setBusy(null);
       if (err instanceof DeleteBlocked) {
         setBlocked(true);
-        setError('Close other tabs or windows of the app on this device, then tap “Remove from this device” again.');
+        setError(t('removed.blocked'));
       } else {
-        setError(`Could not remove everything (${errorMessage(err)}). Reload the app and try again.`);
+        setError(t('removed.failed', { reason: errorMessage(err) }));
       }
     }
   }
@@ -192,40 +207,29 @@ export function RemovedScreen() {
   return (
     <main className="center-screen">
       <div className="card removed-card">
-        <h1>You no longer have access to this workspace</h1>
-        <p className="muted">
-          The owner or an admin of {name} removed {user.email}. Nothing was sent or changed since then.
-        </p>
-        {summary === null && !error && <p className="muted">Checking this device…</p>}
+        <h1>{tr('removed.title')}</h1>
+        <p className="muted">{tr('removed.text', { name, email: user.email })}</p>
+        {summary === null && !error && <p className="muted">{tr('removed.checking')}</p>}
         {summary !== null && pending > 0 && (
           <>
             <p>
-              <strong>
-                This device has {pending} {pending === 1 ? 'change' : 'changes'} that were never uploaded
-              </strong>
-              {summary.pages > 0 && ` · ${summary.pages} ${summary.pages === 1 ? 'page' : 'pages'}`}
-              {summary.ops + summary.failedOps > 0 && ` · ${summary.ops + summary.failedOps} page changes`}
-              {summary.images > 0 && ` · ${summary.images} ${summary.images === 1 ? 'image' : 'images'}`}
-              {summary.media > 0 && ` · ${summary.media} photos or videos`}
-              {summary.comments > 0 && ` · ${summary.comments} ${summary.comments === 1 ? 'comment' : 'comments'}`}. Download them before removing this
-              workspace from the device.
+              <strong>{tr('removed.pending', { count: pending })}</strong>
+              {unsyncedDetail(summary, tr)}. {tr('removed.downloadFirst')}
             </p>
             <button className="primary" disabled={busy !== null} onClick={() => void download()}>
-              {busy === 'download' ? 'Preparing…' : downloaded ? 'Download again' : 'Download my unsynced changes'}
+              {busy === 'download' ? tr('common.preparing') : downloaded ? tr('removed.downloadAgain') : tr('sync.downloadUnsynced')}
             </button>
             <PendingMediaList media={media} downloaded={mediaDone} onDownload={(m) => void downloadMedia(m)} />
           </>
         )}
-        {summary !== null && pending === 0 && (
-          <p className="muted">Everything on this device was already uploaded. You can remove it from here.</p>
-        )}
-        {mediaDb === null && <p className="muted">{MEDIA_KEPT_NOTE}</p>}
+        {summary !== null && pending === 0 && <p className="muted">{tr('removed.allUploaded')}</p>}
+        {mediaDb === null && <p className="muted">{tr('removed.mediaKept')}</p>}
         {error && <p className="error">{error}</p>}
         <button className={pending > 0 ? 'secondary' : 'primary'} disabled={busy !== null || summary === null} onClick={() => void removeFromDevice()}>
-          {busy === 'remove' ? 'Removing…' : 'Remove from this device'}
+          {busy === 'remove' ? tr('removed.removing') : tr('removed.remove')}
         </button>
         <button className="link" disabled={busy !== null} onClick={() => void client.auth.signOut({ scope: 'local' })}>
-          Sign out and keep it on this device
+          {tr('removed.signOutKeep')}
         </button>
       </div>
     </main>

@@ -274,6 +274,8 @@ export class SyncEngine {
 
   /** Hubo un cambio local: sincroniza en un rato, agrupando los cambios seguidos. */
   poke(): void {
+    // Después de `stop()` la base puede estar cerrándose (se cierra la app o se cambia de workspace).
+    if (this.stopped) return;
     void this.refreshCounts();
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.syncNow(), DEBOUNCE_MS);
@@ -517,7 +519,7 @@ export class SyncEngine {
       try {
         // Completo ya se miró arriba (el cursor solo avanza); acá, que todo se haya podido leer.
         const current = !snap.state.unreadable && snap.supported;
-        const uploaded = !hasUnsyncedContent(snap.state) && !snap.state.rejected;
+        const uploaded = !hasUnsyncedContent(snap.state, snap.dirty) && !snap.state.rejected;
         const ids = mediaIdsInDoc(snap.doc);
         let unlink = current && uploaded;
         // La primera vez que esta página quitaría un archivo, se comprueba que todo su historial en el
@@ -635,7 +637,9 @@ export class SyncEngine {
       this.options.media?.status().catch(() => undefined),
     ]);
     let rejectedPages = 0;
-    for (const s of states.values()) if (s.rejected && hasUnsyncedContent(s)) rejectedPages++;
+    // Rechazada y con algo sin subir (la lista ya cuenta la marca de ediciones sin subir).
+    const unsyncedSet = new Set(unsynced);
+    for (const s of states.values()) if (s.rejected && unsyncedSet.has(s.pageId)) rejectedPages++;
     this.patch({
       pendingOps: this.tree.pendingOps().length,
       failedOps: this.tree.failedOps().length,

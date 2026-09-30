@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { locale, t, useT } from '../i18n';
 import { copyWhenReady, inviteLink } from '../invite';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, type GrantLevel, type Role } from '../sync/access';
@@ -10,7 +11,6 @@ import { teamErrorText } from './teamText';
 // "Members" en el menú de la cuenta (dueño y admins): quién está en el workspace, invitar, cambiar el rol y
 // sacar a alguien. Un modal rápido, nunca una página nueva (paso 9 de Docs/Plan_Workspaces.md).
 
-export const LINK_COPIED = 'Link copied — send it by email or WhatsApp';
 
 /** Arma el link de invitación del workspace abierto, hacia una página o un proyecto. */
 export function useInviteLink(): (target?: string) => string {
@@ -35,7 +35,7 @@ export async function inviteAndCopy(link: Promise<string>): Promise<string | nul
   const copied = copyWhenReady(link);
   const text = await link;
   if (await copied) {
-    notify(LINK_COPIED);
+    notify(t('team.linkCopied'));
     return null;
   }
   return text;
@@ -48,7 +48,8 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
   const perms = usePermissions();
   const tree = useTree();
   const projectId = useCurrentProject();
-  const projectName = tree.project(projectId)?.name ?? 'this project';
+  const tr = useT();
+  const projectName = tree.project(projectId)?.name ?? tr('project.thisProject');
   const makeLink = useInviteLink();
   const myRole = perms.role;
   const isOwner = myRole === 'owner';
@@ -124,12 +125,7 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
   }
 
   function remove(m: MemberRow) {
-    const ok = confirm(
-      `Remove ${m.email} from the workspace?\n\n` +
-        'They lose access right away, on every device. Projects they shared with others move to an admin, ' +
-        'and their private projects stay hidden. Nothing is deleted. Their app offers to keep any changes ' +
-        'that were not uploaded yet.',
-    );
+    const ok = confirm(t('members.removeConfirm', { email: m.email }));
     if (ok) void run(`remove:${m.user_id}`, async () => void (await remote.removeMember(m.user_id)));
   }
 
@@ -137,24 +133,24 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal team-dialog" role="dialog" aria-label="Members" onClick={(e) => e.stopPropagation()}>
-        <h2>Members</h2>
+      <div className="modal team-dialog" role="dialog" aria-label={tr('members.title')} onClick={(e) => e.stopPropagation()}>
+        <h2>{tr('members.title')}</h2>
 
         <form className="team-invite" onSubmit={(e) => void invite(e)}>
-          <span className="pref-label">Invite someone</span>
+          <span className="pref-label">{tr('members.invite')}</span>
           <div className="team-invite-row">
             <input
               type="email"
               required
-              placeholder="name@example.com"
-              aria-label="Email"
+              placeholder={tr('team.emailPlaceholder')}
+              aria-label={tr('team.email')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-            <select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as InviteRole)}>
+            <select aria-label={tr('team.role')} value={role} onChange={(e) => setRole(e.target.value as InviteRole)}>
               {roleChoices.map((r) => (
                 <option key={r} value={r}>
-                  {ROLE_LABELS[r]}
+                  {tr(ROLE_LABELS[r])}
                 </option>
               ))}
             </select>
@@ -162,12 +158,12 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
           {canGiveProject && (
             <label className="team-check">
               <input type="checkbox" checked={withProject} onChange={(e) => setWithProject(e.target.checked)} />
-              <span>Give access to “{projectName}”</span>
+              <span>{tr('members.giveAccess', { name: projectName })}</span>
               {withProject && (
-                <select aria-label="Access" value={level} onChange={(e) => setLevel(e.target.value as GrantLevel)}>
+                <select aria-label={tr('team.access')} value={level} onChange={(e) => setLevel(e.target.value as GrantLevel)}>
                   {GRANT_LEVELS.map((l) => (
                     <option key={l} value={l}>
-                      {LEVEL_LABELS[l]}
+                      {tr(LEVEL_LABELS[l])}
                     </option>
                   ))}
                 </select>
@@ -175,35 +171,39 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
             </label>
           )}
           <div className="team-invite-actions">
-            <span className="muted">The app copies an invitation link for you to send.</span>
+            <span className="muted">{tr('members.inviteHint')}</span>
             <button className="primary" disabled={busy !== null || !email.trim()}>
-              {busy === 'invite' ? 'Inviting…' : 'Invite and copy link'}
+              {busy === 'invite' ? tr('team.inviting') : tr('team.inviteAndCopy')}
             </button>
           </div>
           {manualLink && (
             <div className="team-link">
-              <span className="muted">Copy this link and send it:</span>
-              <input readOnly value={manualLink} onFocus={(e) => e.currentTarget.select()} aria-label="Invitation link" />
+              <span className="muted">{tr('team.copyManually')}</span>
+              <input readOnly value={manualLink} onFocus={(e) => e.currentTarget.select()} aria-label={tr('team.inviteLink')} />
             </div>
           )}
         </form>
 
         {error && <p className="error">{error}</p>}
 
-        <ul className="team-list" aria-label="People in the workspace">
-          {members === null && !error && <li className="muted">Loading…</li>}
+        <ul className="team-list" aria-label={tr('members.people')}>
+          {members === null && !error && <li className="muted">{tr('common.loading')}</li>}
           {members?.map((m) => (
             <li key={m.user_id} className={m.removed_at ? 'removed' : undefined}>
               <span className="team-who">
                 <span className="team-email" data-tip={m.email} data-tip-plain data-tip-overflow>
                   {m.email}
-                  {m.user_id === user.id && <span className="muted"> (you)</span>}
+                  {m.user_id === user.id && <span className="muted"> {tr('members.you')}</span>}
                 </span>
-                <span className="mono-label">{m.removed_at ? `Removed ${new Date(m.removed_at).toLocaleDateString()}` : 'Active'}</span>
+                <span className="mono-label">
+                  {m.removed_at
+                    ? tr('members.removedOn', { date: new Date(m.removed_at).toLocaleDateString(locale(tr.lang)) })
+                    : tr('members.active')}
+                </span>
               </span>
               {canChangeRole(m) ? (
                 <select
-                  aria-label={`Role of ${m.email}`}
+                  aria-label={tr('members.roleOf', { email: m.email })}
                   value={m.role}
                   disabled={busy !== null}
                   onChange={(e) => {
@@ -213,16 +213,16 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
                 >
                   {(isOwner ? (['admin', 'member', 'guest'] as InviteRole[]) : (['member', 'guest'] as InviteRole[])).map((r) => (
                     <option key={r} value={r}>
-                      {ROLE_LABELS[r]}
+                      {tr(ROLE_LABELS[r])}
                     </option>
                   ))}
                 </select>
               ) : (
-                <span className="team-role">{ROLE_LABELS[m.role] ?? m.role}</span>
+                <span className="team-role">{ROLE_LABELS[m.role] ? tr(ROLE_LABELS[m.role]) : m.role}</span>
               )}
               {canChangeRole(m) ? (
                 <button className="link danger" disabled={busy !== null} onClick={() => remove(m)}>
-                  Remove
+                  {tr('members.remove')}
                 </button>
               ) : (
                 <span className="team-spacer" />
@@ -233,8 +233,8 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
 
         {invitations && invitations.length > 0 && (
           <>
-            <span className="pref-label">Invitations not used yet</span>
-            <ul className="team-list" aria-label="Invitations not used yet">
+            <span className="pref-label">{tr('members.invitations')}</span>
+            <ul className="team-list" aria-label={tr('members.invitations')}>
               {invitations.map((inv) => {
                 const canRevoke = isOwner || inv.invited_by === user.id;
                 return (
@@ -244,22 +244,24 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
                         {inv.email}
                       </span>
                       <span className="mono-label">
-                        {inv.invited_by_email ? `Invited by ${inv.invited_by_email}` : 'Invited'}
-                        {inv.expires_at ? ` · until ${new Date(inv.expires_at).toLocaleDateString()}` : ''}
+                        {inv.invited_by_email ? tr('members.invitedBy', { email: inv.invited_by_email }) : tr('members.invited')}
+                        {inv.expires_at
+                          ? ` · ${tr('members.until', { date: new Date(inv.expires_at).toLocaleDateString(locale(tr.lang)) })}`
+                          : ''}
                       </span>
                     </span>
-                    <span className="team-role">{ROLE_LABELS[inv.role] ?? inv.role}</span>
+                    <span className="team-role">{ROLE_LABELS[inv.role] ? tr(ROLE_LABELS[inv.role]) : inv.role}</span>
                     {canRevoke ? (
                       <button
                         className="link danger"
                         disabled={busy !== null}
                         onClick={() => {
-                          if (confirm(`Revoke the invitation for ${inv.email}? They can no longer join with it; nothing else changes.`)) {
+                          if (confirm(t('members.revokeConfirm', { email: inv.email }))) {
                             void run(`revoke:${inv.id}`, () => remote.revokeInvitation(inv.id));
                           }
                         }}
                       >
-                        Revoke
+                        {tr('members.revoke')}
                       </button>
                     ) : (
                       <span className="team-spacer" />
@@ -272,7 +274,7 @@ export function MembersDialog({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="modal-actions">
-          <button onClick={onClose}>Close</button>
+          <button onClick={onClose}>{tr('common.close')}</button>
         </div>
       </div>
     </div>

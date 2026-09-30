@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { errorMessage, isNetworkError, isPermanent } from './types';
+import { t } from '../i18n';
 
 // Comentarios y preguntas (paso 10 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Comentarios y
 // preguntas"). Viven en una tabla propia de la base, anclados al id de un bloque de la página (o a la página
@@ -181,26 +182,24 @@ export interface CommentThread {
 export function commentErrorText(error: string, kind?: CommentOp['kind']): string {
   switch (error) {
     case 'page_not_found':
-      return 'The page is not on the server, or you can no longer see it.';
+      return t('commentError.pageNotFound');
     case 'comment_not_found':
-      return 'The comment is not on the server, or you can no longer see it.';
+      return t('commentError.commentNotFound');
     case 'thread_not_found':
-      return 'The thread is not on the server, or you can no longer see it.';
+      return t('commentError.threadNotFound');
     case 'comment_denied':
-      return 'You can view this page but not comment on it.';
+      return t('commentError.denied');
     case 'not_allowed':
-      return kind === 'delete'
-        ? 'Only the author, or someone who can edit and create pages here, can delete this comment.'
-        : 'Only the author can edit this comment.';
+      return kind === 'delete' ? t('commentError.deleteNotAllowed') : t('commentError.editNotAllowed');
     case 'comment_conflict':
-      return 'The server already has a different comment with this id.';
+      return t('commentError.conflict');
     case 'comment_deleted':
-      return 'The comment was deleted.';
+      return t('commentError.deleted');
     case 'thread_other_page':
     case 'thread_invalid':
-      return 'The reply does not match its thread.';
+      return t('commentError.threadInvalid');
     case 'not_authenticated':
-      return 'You are signed out: sign in again to send it.';
+      return t('commentError.signedOut');
     default:
       return error;
   }
@@ -209,8 +208,8 @@ export function commentErrorText(error: string, kind?: CommentOp['kind']): strin
 /** Valida un texto antes de guardarlo (lo mismo que pide la base). */
 export function cleanBody(body: string): string {
   const text = body.replace(/\r\n?/g, '\n').replace(/\s+$/u, '').replace(/^\s*\n/u, '');
-  if (!/\S/u.test(text)) throw new CommentInvalid('Write something first.');
-  if (text.length > MAX_COMMENT_LENGTH) throw new CommentInvalid(`A comment can have up to ${MAX_COMMENT_LENGTH} characters.`);
+  if (!/\S/u.test(text)) throw new CommentInvalid(t('commentError.empty'));
+  if (text.length > MAX_COMMENT_LENGTH) throw new CommentInvalid(t('commentError.tooLong', { max: MAX_COMMENT_LENGTH }));
   return text;
 }
 
@@ -307,7 +306,7 @@ export class CommentQueue {
   }
 
   get unavailable(): string | undefined {
-    return this.db ? undefined : (this.options.unavailable ?? 'the storage for comments could not be opened.');
+    return this.db ? undefined : (this.options.unavailable ?? t('commentError.storage'));
   }
 
   /** Se puede escribir: la base del dispositivo está abierta. */
@@ -397,11 +396,11 @@ export class CommentQueue {
   /** Abre un hilo (o responde, con `threadId`). Devuelve el id nuevo. */
   async add(pageId: string, blockId: string | null, body: string, threadId: string | null = null): Promise<string> {
     const text = cleanBody(body);
-    if (blockId !== null && !BLOCK_ID.test(blockId)) throw new CommentInvalid('This block cannot take comments.');
+    if (blockId !== null && !BLOCK_ID.test(blockId)) throw new CommentInvalid(t('commentError.badBlock'));
     let block = blockId;
     if (threadId) {
       const root = this.view(pageId).get(threadId);
-      if (!root || root.threadId) throw new CommentInvalid('The thread is not here anymore.');
+      if (!root || root.threadId) throw new CommentInvalid(t('commentError.threadGone'));
       // La respuesta va en el bloque del hilo (lo pide la base).
       block = root.blockId;
     }
@@ -470,21 +469,17 @@ export class CommentQueue {
       if (op.kind === 'add') {
         text ??= op.body;
         const replies = this.ops.filter((o) => o.op.kind === 'add' && o.op.threadId === op.id).length;
-        parts.push(
-          `This comment was never uploaded: discarding removes it from this device${
-            replies > 0 ? `, and also discards ${replies} ${replies === 1 ? 'reply' : 'replies'} to it` : ''
-          }.`,
-        );
+        parts.push(replies > 0 ? t('commentDiscard.addWithReplies', { count: replies }) : t('commentDiscard.add'));
       } else if (op.kind === 'edit') {
         text ??= op.body;
-        parts.push('Discarding the edit: the comment comes back as it is on the server.');
+        parts.push(t('commentDiscard.edit'));
       } else if (op.kind === 'delete') {
-        parts.push('Discarding the delete: the comment comes back.');
+        parts.push(t('commentDiscard.delete'));
       } else {
-        parts.push(op.resolved ? 'Discarding: the thread reopens.' : 'Discarding: the thread stays resolved.');
+        parts.push(op.resolved ? t('commentDiscard.resolve') : t('commentDiscard.reopen'));
       }
     }
-    return { message: [...new Set(parts)].join(' ') || 'Discard this change?', text };
+    return { message: [...new Set(parts)].join(' ') || t('commentDiscard.generic'), text };
   }
 
   // --- Lectura (la interfaz) ------------------------------------------------------------------------------
@@ -833,7 +828,7 @@ export class CommentQueue {
   }
 
   private async enqueueNow(op: CommentOp): Promise<void> {
-    if (!this.db) throw new CommentInvalid(`Comments are off on this device: ${this.unavailable}`);
+    if (!this.db) throw new CommentInvalid(t('commentError.off', { reason: this.unavailable ?? '' }));
     const tx = this.db.transaction('outbox', 'readwrite');
     const all = await tx.store.getAll();
     const open = (e: QueuedCommentOp) => !e.attempted && !e.failed && e.op.id === op.id;
@@ -949,7 +944,7 @@ export class CommentQueue {
       if (entry.failed) {
         // Un cambio rechazado no se aplica: se ve el comentario como está, con el motivo (el alta, que solo
         // existe acá, sí se ve).
-        c.error = entry.error ?? 'Rejected by the server.';
+        c.error = entry.error ?? t('commentError.rejected');
         c.failedSeqs.push(entry.seq!);
         c.failedKinds.push(op.kind);
         if (op.kind === 'add' || op.kind === 'edit') c.rejectedText ??= op.body;

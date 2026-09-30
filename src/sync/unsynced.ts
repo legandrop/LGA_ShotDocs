@@ -2,7 +2,7 @@ import * as Y from 'yjs';
 import { toBase64 } from '../lib/base64';
 import type { MediaDb } from '../media/mediaDb';
 import { exportComments, unsyncedComments, type CommentsDb } from './comments';
-import { hasUnsyncedContent, type LocalDb } from './localDb';
+import { unsyncedDocStates, type LocalDb } from './localDb';
 import { CONTENT_FRAGMENT } from './structure';
 
 // Lo que el dispositivo tiene sin subir, para no perderlo cuando sacan a alguien del workspace (sección 8
@@ -33,7 +33,7 @@ export async function unsyncedSummary(
   const [ops, failed, states, images, media, pendingLinks, comments] = await Promise.all([
     db.count('ops'),
     db.count('failedOps'),
-    db.getAll('docState'),
+    unsyncedDocStates(db),
     db.countFromIndex('files', 'uploaded', 0),
     mediaDb ? mediaDb.countFromIndex('files', 'pending', 1) : 0,
     mediaDb ? mediaDb.getAllFromIndex('links', 'pending', 1) : [],
@@ -42,7 +42,7 @@ export async function unsyncedSummary(
   // Un uso que espera algo que no depende de este dispositivo (que el archivo llegue, permiso sobre la
   // página, otro uso sin confirmar) no es un cambio sin subir.
   const links = pendingLinks.filter((l) => !l.waiting).length;
-  const pages = states.filter(hasUnsyncedContent).length;
+  const pages = states.length;
   const summary = { ops, failedOps: failed, pages, images, media: media + links, comments, total: 0 };
   summary.total = ops + failed + pages + images + media + links + comments;
   return summary;
@@ -89,7 +89,7 @@ export async function exportUnsyncedBlob(
   commentsDb: CommentsDb | null = null,
 ): Promise<Blob> {
   const parts: BlobPart[] = [];
-  const [ops, failedOps, states] = await Promise.all([db.getAll('ops'), db.getAll('failedOps'), db.getAll('docState')]);
+  const [ops, failedOps, states] = await Promise.all([db.getAll('ops'), db.getAll('failedOps'), unsyncedDocStates(db)]);
 
   const head = {
     kind: 'lga-shotdocs-unsynced',
@@ -106,7 +106,7 @@ export async function exportUnsyncedBlob(
 
   parts.push(',"pages":[');
   let first = true;
-  for (const state of states.filter(hasUnsyncedContent)) {
+  for (const state of states) {
     const rows = await db.getAllFromIndex('docUpdates', 'pageId', state.pageId);
     const doc = new Y.Doc();
     if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)));

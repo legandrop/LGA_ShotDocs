@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { t, useT } from '../i18n';
 import { inviteArrival, takeArrivalNotice } from '../invite';
 import { useWorkspace } from '../workspace';
 import { AppIcon, ArrowLeftIcon, ArrowRightIcon, MailIcon, SlateBand } from './icons';
@@ -9,19 +10,19 @@ type Step = { name: 'email' } | { name: 'sent'; email: string };
 
 function explain(error: { message: string; code?: string; status?: number }): string {
   if (error.code === 'over_email_send_rate_limit' || error.status === 429) {
-    return 'Too many emails were sent in a short time. Wait a while and try again.';
+    return t('login.error.rateLimit');
   }
   // El registro está cerrado: solo entran cuentas que ya existen (invitadas por el dueño).
   if (error.code === 'signup_disabled' || error.code === 'otp_disabled' || /signups? not allowed/i.test(error.message)) {
-    return 'There is no account with this email. Ask the owner of this workspace for an invitation.';
+    return t('login.error.noAccount');
   }
   if (error.code === 'email_address_not_authorized') {
-    return 'The Supabase test mail server only sends to members of the project. Set up your own mail server (SMTP) to let other people in.';
+    return t('login.error.testSmtp');
   }
   if (error.code === 'otp_expired' || /expired|invalid/i.test(error.message)) {
-    return 'That code is not valid or has expired. Ask for a new one.';
+    return t('login.error.code');
   }
-  if (/fetch/i.test(error.message)) return 'You are offline. Signing in needs an internet connection.';
+  if (/fetch/i.test(error.message)) return t('login.error.offline');
   return error.message;
 }
 
@@ -39,6 +40,7 @@ export function Login() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const tr = useT();
 
   async function sendEmail(e?: FormEvent) {
     e?.preventDefault();
@@ -82,18 +84,15 @@ export function Login() {
           </div>
           <div>
             <h1>
-              Notes for every shot.
-              <span>On set, offline, in sync.</span>
+              {tr('login.hero.title')}
+              <span>{tr('login.hero.subtitle')}</span>
             </h1>
-            <p>
-              Pre-production notes and on-set reports in one tree of pages. Every edit is saved on your device
-              first, and nothing is lost when the signal drops.
-            </p>
+            <p>{tr('login.hero.text')}</p>
           </div>
           <div className="login-tags">
-            <span>Scene notes</span>
-            <span>On-set reports</span>
-            <span>Shot breakdowns</span>
+            <span>{tr('login.tag.scenes')}</span>
+            <span>{tr('login.tag.reports')}</span>
+            <span>{tr('login.tag.breakdowns')}</span>
           </div>
         </div>
       </aside>
@@ -111,19 +110,19 @@ export function Login() {
           {step.name === 'email' ? (
             <form className="login-form" onSubmit={sendEmail}>
               <div>
-                <h2>Sign in</h2>
-                <p className="lead">Enter your email and we will send you a sign-in link. No password to remember.</p>
+                <h2>{tr('login.title')}</h2>
+                <p className="lead">{tr('login.lead')}</p>
               </div>
               <LoginWorkspaceBar />
               {(invite === 'this' || invite === 'this-page') && (
                 <p className="login-invite">
-                  You were invited to {config.name || 'this workspace'}. Use the email the invitation was sent to.
-                  {invite === 'this-page' && ' The shared page opens after you sign in.'}
+                  {tr('login.invited', { workspace: config.name || tr('noProjects.thisWorkspace') })}
+                  {invite === 'this-page' && ` ${tr('login.invitedPage')}`}
                 </p>
               )}
               {invite && invite !== 'this' && invite !== 'this-page' && <p className="login-invite">{invite}</p>}
               <div className="field">
-                <label htmlFor="email">Email</label>
+                <label htmlFor="email">{tr('team.email')}</label>
                 <input
                   id="email"
                   type="email"
@@ -132,12 +131,12 @@ export function Login() {
                   autoFocus
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
+                  placeholder={tr('team.emailPlaceholder')}
                 />
               </div>
               <div className="login-actions">
                 <button className="primary" disabled={busy}>
-                  {busy ? 'Sending…' : 'Continue with email'}
+                  {busy ? tr('login.sending') : tr('login.continue')}
                   {!busy && <ArrowRightIcon />}
                 </button>
                 <button
@@ -146,35 +145,29 @@ export function Login() {
                   onClick={() => {
                     const address = email.trim().toLowerCase();
                     if (address) setStep({ name: 'sent', email: address });
-                    else setError('Type your email first.');
+                    else setError(tr('login.emailFirst'));
                   }}
                 >
-                  I already have a code
+                  {tr('login.haveCode')}
                 </button>
               </div>
               {error && <p className="login-error">{error}</p>}
               <div className="hint">
                 <MailIcon />
-                <span>
-                  On iPhone, open the link on this device or type the code from the email, so you stay signed in
-                  to the installed app.
-                </span>
+                <span>{tr('login.iphoneHint')}</span>
               </div>
             </form>
           ) : (
             <form className="login-form" onSubmit={verify}>
-              <button type="button" className="icon-button" aria-label="Back" onClick={back}>
+              <button type="button" className="icon-button" aria-label={tr('common.back')} onClick={back}>
                 <ArrowLeftIcon size={20} />
               </button>
               <div>
-                <h2>Check your email</h2>
-                <p className="lead">
-                  We sent a sign-in link to <strong>{step.email}</strong>. Open it on this device, or type the
-                  code if the email has one.
-                </p>
+                <h2>{tr('login.checkEmail')}</h2>
+                <p className="lead">{tr.rich('login.sent', { email: <strong>{step.email}</strong> })}</p>
               </div>
               <div className="field">
-                <label htmlFor="code">Code</label>
+                <label htmlFor="code">{tr('login.code')}</label>
                 <input
                   id="code"
                   className="code"
@@ -190,14 +183,14 @@ export function Login() {
               </div>
               <div className="login-actions">
                 <button className="primary" disabled={busy || code.length < 6}>
-                  {busy ? 'Checking…' : 'Sign in'}
+                  {busy ? tr('login.checking') : tr('login.title')}
                 </button>
                 <div className="row">
                   <button type="button" onClick={() => void sendEmail()} disabled={busy}>
-                    Send the email again
+                    {tr('login.resend')}
                   </button>
                   <button type="button" onClick={back}>
-                    Use another email
+                    {tr('login.otherEmail')}
                   </button>
                 </div>
               </div>
@@ -207,7 +200,7 @@ export function Login() {
         </div>
 
         <footer className="login-footer">
-          <span>Self-hosted · your data, your database</span>
+          <span>{tr('login.footer')}</span>
           <LegalLinks />
           {__APP_VERSION__ && <span>v{__APP_VERSION__}</span>}
         </footer>

@@ -16,6 +16,7 @@ import {
 } from '@blocknote/react';
 import { insertOrUpdateBlockForSlashMenu } from '@blocknote/core';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
+import { t, useT, type Translate } from '../i18n';
 import { useServices } from '../services';
 import { blockIdOf } from './carrete';
 import {
@@ -67,30 +68,39 @@ function plainText(content: unknown): string {
 
 // --- Tipos de párrafo --------------------------------------------------------------------------------
 
-/** El ítem "Question" del selector de tipo de la barra de formato. */
-export const questionTypeItem: BlockTypeSelectItem = {
-  name: 'Question',
-  type: 'paragraph',
-  props: paragraphProps('question'),
-  icon: QuestionIcon as unknown as BlockTypeSelectItem['icon'],
-};
+/**
+ * El ítem "Question" (en castellano "Pregunta") del selector de tipo de la barra de formato. El nombre es
+ * solo la etiqueta: lo guardado es siempre un párrafo con `question: true`.
+ */
+export function questionTypeItem(tr: Translate): BlockTypeSelectItem {
+  return {
+    name: tr('editor.question'),
+    type: 'paragraph',
+    props: paragraphProps('question'),
+    icon: QuestionIcon as unknown as BlockTypeSelectItem['icon'],
+  };
+}
 
 /** Los ítems del selector con Script y Question: cada variante del párrafo pide sus dos propiedades. */
-export function paragraphVariantItems(items: BlockTypeSelectItem[], script: BlockTypeSelectItem): BlockTypeSelectItem[] {
+export function paragraphVariantItems(
+  items: BlockTypeSelectItem[],
+  script: BlockTypeSelectItem,
+  tr: Translate,
+): BlockTypeSelectItem[] {
   return [
     ...items.map((item) => (item.type === 'paragraph' ? { ...item, props: { ...item.props, ...paragraphProps('paragraph') } } : item)),
     { ...script, props: { ...script.props, ...paragraphProps('script') } },
-    questionTypeItem,
+    questionTypeItem(tr),
   ];
 }
 
-/** El ítem "Question" del menú "/". */
-export function questionSlashItem(editor: AnyEditor): DefaultReactSuggestionItem {
+/** El ítem "Question" del menú "/", en el grupo de los bloques básicos (`group`, el nombre del idioma). */
+export function questionSlashItem(editor: AnyEditor, tr: Translate, group: string): DefaultReactSuggestionItem {
   return {
-    title: 'Question',
-    subtext: 'A question for the team or the client, answered in comments',
+    title: tr('editor.question'),
+    subtext: tr('editor.questionHint'),
     aliases: ['pregunta', 'duda', 'dudas', 'question', 'ask', 'q'],
-    group: 'Basic blocks',
+    group,
     badge: QUESTION_SHORTCUT_LABEL,
     icon: <QuestionIcon size={18} />,
     onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: paragraphProps('question') } as never),
@@ -120,11 +130,12 @@ function currentBlockId(editor: AnyEditor): string | null {
 export function CommentToolbarButton() {
   const Components = useComponentsContext()!;
   const editor = useBlockNoteEditor();
+  const tr = useT();
   return (
     <Components.FormattingToolbar.Button
       className="bn-button"
-      label="Comment"
-      mainTooltip="Comment"
+      label={tr('comments.comment')}
+      mainTooltip={tr('comments.comment')}
       secondaryTooltip={COMMENT_SHORTCUT_LABEL}
       icon={<CommentIcon size={18} />}
       onClick={() => commentOnBlock(currentBlockId(editor as AnyEditor))}
@@ -136,10 +147,11 @@ function CommentMenuItem() {
   const Components = useComponentsContext()!;
   const editor = useBlockNoteEditor();
   const block = useExtensionState(SideMenuExtension, { editor, selector: (s) => s?.block });
+  const tr = useT();
   if (!block) return null;
   return (
     <Components.Generic.Menu.Item className="bn-menu-item" onClick={() => commentOnBlock(block.id)}>
-      Comment
+      {tr('comments.comment')}
     </Components.Generic.Menu.Item>
   );
 }
@@ -186,7 +198,7 @@ export function useBlockSourceRegistration(editor: AnyEditor, pageId: string): v
           block = undefined;
         }
         if (!block) return null;
-        const text = plainText(block.content) || (block.type === 'image' ? String(block.props?.name || block.props?.caption || 'Image') : '');
+        const text = plainText(block.content) || (block.type === 'image' ? String(block.props?.name || block.props?.caption || t('editor.image')) : '');
         return { text: text || block.type, question: isQuestion(block) };
       },
       order: () => new Map(flatten(editor.document as BlockLike[]).map((b, i) => [b.id, i])),
@@ -238,6 +250,7 @@ export function CommentMargin({
   const [active, setActive] = useState<{ id: string; top: number } | null>(null);
   const [layoutTick, setLayoutTick] = useState(0);
   const activeRef = useRef<string | null>(null);
+  const tr = useT();
 
   // Se vuelve a medir con cada cambio del documento, de los comentarios o del tamaño, agrupado por cuadro
   // (escribir rápido no mide una vez por tecla).
@@ -348,14 +361,14 @@ export function CommentMargin({
 
   const badged = new Set(marks.filter((m) => m.count > 0 && !m.answer).map((m) => m.id));
   return (
-    <div className="comment-margin" aria-label="Comments in the margin">
+    <div className="comment-margin" aria-label={tr('comments.margin')}>
       {marks.map((m) => (
         <span key={m.id} style={{ display: 'contents' }}>
           {m.count > 0 && !m.answer && (
             <button
               className="comment-margin-button comment-count"
               style={{ top: m.top }}
-              aria-label={`${m.count} open ${m.count === 1 ? 'comment' : 'comments'} on this block`}
+              aria-label={tr('comments.openOnBlock', { count: m.count })}
               onClick={() => commentOnBlock(m.id)}
             >
               <CommentIcon size={14} />
@@ -369,8 +382,8 @@ export function CommentMargin({
               onClick={() => answerQuestion(m.id)}
             >
               <CommentIcon size={14} />
-              {m.answer.count === 0 ? 'Answer' : `${m.answer.count} ${m.answer.count === 1 ? 'answer' : 'answers'}`}
-              {m.answer.resolved && ' · resolved'}
+              {m.answer.count === 0 ? tr('comments.answer') : tr('comments.answers', { count: m.answer.count })}
+              {m.answer.resolved && ` · ${tr('comments.resolvedMark')}`}
             </button>
           )}
         </span>
@@ -379,8 +392,8 @@ export function CommentMargin({
         <button
           className="comment-margin-button comment-add"
           style={{ top: active.top }}
-          aria-label="Comment on this block"
-          data-tip={`Comment\n${COMMENT_SHORTCUT_LABEL}`}
+          aria-label={tr('comments.onBlock')}
+          data-tip={`${tr('comments.comment')}\n${COMMENT_SHORTCUT_LABEL}`}
           onClick={() => commentOnBlock(active.id)}
         >
           <CommentIcon size={15} />

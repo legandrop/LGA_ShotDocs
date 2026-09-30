@@ -219,6 +219,23 @@ export function toRemoteError(
   return new RemoteError(error?.message ?? `HTTP ${httpStatus}`, permanent, code, httpStatus === 0);
 }
 
+/**
+ * Tope de cada consulta a la base. Sin él, una respuesta que no llega nunca (una red que se corta a mitad
+ * de camino) deja colgado para siempre el ciclo de sincronización (nunca corren dos a la vez): no se baja
+ * nada más hasta recargar, con `syncing` prendido y el estado diciendo "All synced" porque no queda nada sin
+ * subir. Al vencer, la consulta vuelve como un error de red (estado 0) y el próximo ciclo la reintenta; las
+ * subidas son idempotentes (`clientUpdateId`, ids creados en el dispositivo). Los archivos (Storage) no lo
+ * usan: una foto grande en una red lenta puede tardar más.
+ */
+export const REQUEST_TIMEOUT_MS = 30_000;
+
+export function deadline(ms = REQUEST_TIMEOUT_MS): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
 function networkError(err: unknown): RemoteError {
   return new RemoteError(err instanceof Error ? err.message : String(err), false, undefined, true);
 }
@@ -253,7 +270,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     if (Date.now() - this.settingsTableMissingAt < 10 * 60_000) return null;
     // Todas las columnas: una base a la que le falta una migración más nueva (p. ej. `media_url`) sigue
     // devolviendo los ajustes, y lo que falta queda vacío.
-    const { data, error, status } = await this.client.from('workspace_settings').select('*').maybeSingle();
+    const { data, error, status } = await this.client.from('workspace_settings').select('*')
+      .abortSignal(deadline()).maybeSingle();
     if (error && MISSING_TABLE.has(String(error.code))) {
       this.settingsTableMissingAt = Date.now();
       return null;
@@ -286,7 +304,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   }
 
   async ensureWorkspace(): Promise<string | null> {
-    const { data, error, status } = await this.client.rpc('ensure_workspace');
+    const { data, error, status } = await this.client.rpc('ensure_workspace').abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return (data as string | null) || null;
   }
@@ -308,7 +326,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       const columns = this.settingsMissing ? PAGE_COLUMNS_WITHOUT_SETTINGS : PAGE_COLUMNS;
       let query = this.client.from('pages').select(columns).in('workspace_id', projectIds);
       if (after) query = query.gt('id', after);
-      const { data, error, status } = await query.order('id').limit(1000);
+      const { data, error, status } = await query.order('id').limit(1000).abortSignal(deadline());
       if (error?.code === UNDEFINED_COLUMN && !this.settingsMissing) {
         this.settingsMissingAt = Date.now();
         return this.fetchTreeOf(projectIds);
@@ -326,7 +344,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       .from('workspaces')
       .select('id, name, created_at, owner_id')
       .order('created_at')
-      .limit(1000);
+      .limit(1000).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return data as ProjectRow[];
   }
@@ -334,12 +352,13 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   async createProject(project: NewProject): Promise<void> {
     const { error, status } = await this.client
       .from('workspaces')
-      .upsert(project, { onConflict: 'id', ignoreDuplicates: true });
+      .upsert(project, { onConflict: 'id', ignoreDuplicates: true }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
   }
 
   async renameProject(id: string, name: string): Promise<void> {
-    const { data, error, status } = await this.client.from('workspaces').update({ name }).eq('id', id).select('id');
+    const { data, error, status } = await this.client.from('workspaces').update({ name }).eq('id', id).select('id')
+      .abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     if (data.length === 0) throw new RemoteError('project_not_found', true, 'P0002');
   }
@@ -347,7 +366,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   async createPage(page: NewPage): Promise<void> {
     const { error, status } = await this.client
       .from('pages')
-      .upsert(page, { onConflict: 'id', ignoreDuplicates: true });
+      .upsert(page, { onConflict: 'id', ignoreDuplicates: true }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
   }
 
@@ -355,7 +374,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     if (this.settingsMissing && patch.settings !== undefined) {
       throw new RemoteError('The database is missing pages.settings: apply the database migrations.', true, UNDEFINED_COLUMN);
     }
-    const { data, error, status } = await this.client.from('pages').update(patch).eq('id', id).select('id');
+    const { data, error, status } = await this.client.from('pages').update(patch).eq('id', id).select('id')
+      .abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     if (data.length === 0) throw new RemoteError('page_not_found', true, 'P0002');
   }
@@ -367,7 +387,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     const { data, error, status } = await this.client.rpc(
       'push_page_update',
       versioned ? { ...args, p_app_version: this.appVersion || null } : args,
-    );
+    ).abortSignal(deadline());
     if (error?.code === MISSING_FUNCTION && versioned) {
       this.versionedPushMissingAt = Date.now();
       return this.pushUpdate(pageId, clientUpdateId, update);
@@ -381,7 +401,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       p_page_id: pageId,
       p_after_seq: afterSeq,
       p_limit: limit,
-    });
+    }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return (data as { seq: number; update: string }[]).map((r) => ({
       seq: Number(r.seq),
@@ -422,7 +442,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   }
 
   async fetchMyAccess(userId: string): Promise<AccessSnapshot | null> {
-    const member = await this.client.from('members').select('role, removed_at').eq('user_id', userId).maybeSingle();
+    const member = await this.client.from('members').select('role, removed_at').eq('user_id', userId)
+      .abortSignal(deadline()).maybeSingle();
     if (member.error && MISSING_TABLE.has(String(member.error.code))) return null;
     if (member.error) throw toRemoteError(member.error, member.status);
     // Los admins ven los permisos de todos: se piden solo los propios.
@@ -431,7 +452,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       // Todas las columnas: `revoked_at` (un permiso sacado queda en la tabla sin efecto) se filtra acá.
       .select('*')
       .eq('user_id', userId)
-      .limit(10000);
+      .limit(10000).abortSignal(deadline());
     if (grants.error && MISSING_TABLE.has(String(grants.error.code))) return null;
     if (grants.error) throw toRemoteError(grants.error, grants.status);
     try {
@@ -443,7 +464,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   }
 
   async acceptInvitations(): Promise<number | null> {
-    const { data, error, status } = await this.client.rpc('accept_invitations');
+    const { data, error, status } = await this.client.rpc('accept_invitations').abortSignal(deadline());
     if (error?.code === MISSING_FUNCTION) return null;
     if (error) throw toRemoteError(error, status);
     return Number(data) || 0;
@@ -452,20 +473,20 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   // --- equipo (pantalla de miembros y compartir) ---
 
   async listMembers(): Promise<MemberRow[]> {
-    const { data, error, status } = await this.client.rpc('list_members');
+    const { data, error, status } = await this.client.rpc('list_members').abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return (data ?? []) as MemberRow[];
   }
 
   async listInvitations(): Promise<InvitationRow[] | null> {
-    const { data, error, status } = await this.client.rpc('list_invitations');
+    const { data, error, status } = await this.client.rpc('list_invitations').abortSignal(deadline());
     if (error?.code === MISSING_FUNCTION) return null;
     if (error) throw toRemoteError(error, status);
     return (data ?? []) as InvitationRow[];
   }
 
   async revokeInvitation(id: string): Promise<void> {
-    const { error, status } = await this.client.rpc('revoke_invitation', { p_id: id });
+    const { error, status } = await this.client.rpc('revoke_invitation', { p_id: id }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
   }
 
@@ -474,18 +495,19 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       p_email: email,
       p_role: role,
       p_grants: grants,
-    });
+    }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return String(data);
   }
 
   async setMemberRole(userId: string, role: Exclude<Role, 'owner'>): Promise<void> {
-    const { error, status } = await this.client.rpc('set_member_role', { p_user: userId, p_role: role });
+    const { error, status } = await this.client.rpc('set_member_role', { p_user: userId, p_role: role })
+      .abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
   }
 
   async removeMember(userId: string): Promise<RemovedMember> {
-    const { data, error, status } = await this.client.rpc('remove_member', { p_user: userId });
+    const { data, error, status } = await this.client.rpc('remove_member', { p_user: userId }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return parseRemovedMember(data);
   }
@@ -496,13 +518,13 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       p_project: 'projectId' in target ? target.projectId : null,
       p_page: 'pageId' in target ? target.pageId : null,
       p_level: level,
-    });
+    }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return String(data);
   }
 
   async unshare(grantId: string): Promise<void> {
-    const { error, status } = await this.client.rpc('unshare', { p_grant: grantId });
+    const { error, status } = await this.client.rpc('unshare', { p_grant: grantId }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
   }
 
@@ -510,7 +532,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     const { data, error, status } = await this.client.rpc('list_access', {
       p_project: 'projectId' in target ? target.projectId : null,
       p_page: 'pageId' in target ? target.pageId : null,
-    });
+    }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return (data ?? []) as AccessRow[];
   }
@@ -525,13 +547,14 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       p_width: file.width,
       p_height: file.height,
       p_duration: file.duration,
-    });
+    }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return linkResult(data);
   }
 
   async linkPageFile(pageId: string, fileId: string): Promise<LinkResult> {
-    const { data, error, status } = await this.client.rpc('link_page_file', { p_page_id: pageId, p_file_id: fileId });
+    const { data, error, status } = await this.client.rpc('link_page_file', { p_page_id: pageId, p_file_id: fileId })
+      .abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return linkResult(data);
   }
@@ -554,7 +577,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   }
 
   async setFileThumb(fileId: string): Promise<void> {
-    const { error, status } = await this.client.rpc('set_file_thumb', { p_file_id: fileId });
+    const { error, status } = await this.client.rpc('set_file_thumb', { p_file_id: fileId }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
   }
 
@@ -575,7 +598,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     for (let i = 0; i < ids.length; i += 100) {
       // Todas las columnas: una base anterior a la papelera de archivos (versión 6) no tiene `purged_at` ni
       // `drive_trashed_at`, y pedirlas por nombre fallaría.
-      const { data, error, status } = await this.client.from('files').select('*').in('id', ids.slice(i, i + 100));
+      const { data, error, status } = await this.client.from('files').select('*').in('id', ids.slice(i, i + 100))
+        .abortSignal(deadline());
       if (error) throw toRemoteError(error, status);
       rows.push(...(data as unknown as MediaFileRow[]));
     }
@@ -600,13 +624,14 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       p_page_id: pageId,
       p_file_id: fileId,
       p_seen_seq: seenSeq ?? null,
-    });
+    }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return !unlinkIgnored(data);
   }
 
   async trashedFiles(projectId: string): Promise<TrashedFileRow[]> {
-    const { data, error, status } = await this.client.rpc('trashed_files', { p_project: projectId });
+    const { data, error, status } = await this.client.rpc('trashed_files', { p_project: projectId })
+      .abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return ((data ?? []) as (TrashedFileRow & { page_title?: string | null; trashed_page?: string | null })[]).map((r) => ({
       ...r,
@@ -618,7 +643,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   }
 
   async filesDueForPurge(projectId: string): Promise<DueFileRow[]> {
-    const { data, error, status } = await this.client.rpc('files_due_for_purge', { p_project: projectId });
+    const { data, error, status } = await this.client.rpc('files_due_for_purge', { p_project: projectId })
+      .abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return (data ?? []) as DueFileRow[];
   }

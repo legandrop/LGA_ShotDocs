@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
+import { useT } from '../i18n';
 import { usePermissions, useServices } from '../services';
 import { LEVEL_COMMENT, LEVEL_DELETE_ANY } from '../sync/comments';
 import { toggleComments, useCommentsUi } from './commentsUi';
@@ -21,11 +22,12 @@ export function CommentsToggle({ pageId }: { pageId: string }) {
   useSyncExternalStore(comments.subscribe, comments.getRevision);
   useEffect(() => comments.watch(pageId), [comments, pageId]);
   const { open } = useCommentsUi();
+  const tr = useT();
   const openThreads = comments.threads(pageId).filter((t) => !t.resolved).length;
   return (
     <button
       className={`icon-button comments-toggle${openThreads > 0 ? ' has-count' : ''}`}
-      aria-label={openThreads > 0 ? `Comments, ${openThreads} open` : 'Comments'}
+      aria-label={openThreads > 0 ? tr('comments.toggleOpen', { count: openThreads }) : tr('comments.title')}
       aria-pressed={open}
       onClick={toggleComments}
     >

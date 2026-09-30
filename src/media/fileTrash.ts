@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { errorMessage } from '../sync/types';
 import type { MediaRemote } from '../sync/remote';
 import type { TrashedFileRow } from '../sync/types';
@@ -12,7 +13,9 @@ import { UnsentUseError } from './queue';
 export const TRASH_DAYS = 30;
 
 /** Lo que se avisa antes de mandar nada a la papelera de Drive (el riesgo que anota el plan). */
-export const UNSYNCED_USE_WARNING = "A file can show here while still in use on a page this device hasn't synced.";
+export function unsyncedUseWarning(): string {
+  return t('fileTrash.unsyncedUse');
+}
 
 /**
  * La papelera de archivos del proyecto, o `null` si la sesión no la ve (`not_allowed`) o la base todavía no
@@ -31,7 +34,9 @@ export async function loadFileTrash(remote: Pick<MediaRemote, 'trashedFiles'>, p
 }
 
 /** Lo que se dice si el Drive del dueño no está conectado al portero. */
-export const DRIVE_NOT_CONNECTED = 'Google Drive is not connected: ask the workspace owner to reconnect it.';
+export function driveNotConnected(): string {
+  return t('fileTrash.driveNotConnected');
+}
 
 /** Cómo terminó mandar un archivo a la papelera de Drive. */
 export type TrashOutcome =
@@ -53,9 +58,9 @@ export async function sendToDriveTrash(trash: (fileId: string) => Promise<unknow
   } catch (err) {
     if (err instanceof UnsentUseError) return { status: 'unsent_use', message: err.message };
     if (err instanceof PorteroError && err.code === 'in_use') return { status: 'in_use', message: err.message };
-    if (err instanceof PorteroError && err.code === 'drive_not_connected') return { status: 'not_connected', message: DRIVE_NOT_CONNECTED };
+    if (err instanceof PorteroError && err.code === 'drive_not_connected') return { status: 'not_connected', message: driveNotConnected() };
     if (err instanceof PorteroError && err.status === 0) {
-      return { status: 'error', message: 'No connection with the media server. Nothing was sent; try again when online.' };
+      return { status: 'error', message: t('fileTrash.noConnection') };
     }
     return { status: 'error', message: errorMessage(err) };
   }
@@ -92,6 +97,6 @@ export function formatSize(bytes: number): string {
 
 /** Cuánto le falta para los 30 días, dicho corto. */
 export function daysLeftText(days: number): string {
-  if (days <= 0) return `${TRASH_DAYS} days passed`;
-  return days === 1 ? '1 day left' : `${days} days left`;
+  if (days <= 0) return t('fileTrash.daysPassed', { days: TRASH_DAYS });
+  return t('fileTrash.daysLeft', { count: days });
 }

@@ -569,7 +569,7 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
     let failing = true;
     (a.db as { transaction: unknown }).transaction = ((stores: string | string[], mode?: IDBTransactionMode) => {
       const names = [stores].flat();
-      if (failing && mode === 'readwrite' && names.includes('docUpdates') && names.includes('docState')) {
+      if (failing && mode === 'readwrite' && names.includes('docUpdates') && names.includes('meta')) {
         throw new DOMException('Quota exceeded', 'QuotaExceededError');
       }
       return realTransaction(stores as never, mode);

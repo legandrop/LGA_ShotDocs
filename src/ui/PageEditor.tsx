@@ -16,6 +16,7 @@ import {
 } from '@blocknote/react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
+import { t, useT, type Translate } from '../i18n';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
@@ -24,6 +25,7 @@ import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
+import { editorDictionary } from './editorLocale';
 import { findUnknownContent } from './unknownContent';
 import {
   CommentMargin,
@@ -48,13 +50,15 @@ const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
 
 // Script es un párrafo con `script: true` (ver editorSchema.ts), y una pregunta, uno con `question: true`
 // (EditorComments.tsx). Cada ítem del selector pide las dos propiedades, así el selector distingue uno de
-// otro y volver a párrafo saca la marca.
-const scriptTypeItem: BlockTypeSelectItem = {
-  name: 'Script',
-  type: 'paragraph',
-  props: { [SCRIPT_PROP]: true },
-  icon: ScriptIcon as unknown as BlockTypeSelectItem['icon'],
-};
+// otro y volver a párrafo saca la marca. El nombre ("Script", en castellano "Guion") es solo la etiqueta.
+function scriptTypeItem(tr: Translate): BlockTypeSelectItem {
+  return {
+    name: tr('editor.script'),
+    type: 'paragraph',
+    props: { [SCRIPT_PROP]: true },
+    icon: ScriptIcon as unknown as BlockTypeSelectItem['icon'],
+  };
+}
 
 type Opening =
   | { state: 'loading' }
@@ -77,6 +81,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   const [opening, setOpening] = useState<Opening>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const incomplete = opening.state === 'ready' && !opening.complete;
+  const tr = useT();
 
   // Si el servidor tiene contenido de esta página que el dispositivo todavía no bajó, se muestra lo que
   // hay en solo lectura: editar sobre un documento a medio bajar arma una estructura paralela. Cuando
@@ -128,20 +133,17 @@ export function PageEditor({ pageId }: { pageId: string }) {
     <>
       {!opening.complete && (
         <p className="muted editor-missing">
-          {status.online
-            ? 'Part of this page is still downloading. It opens for editing as soon as it arrives.'
-            : 'Part of this page has not been downloaded to this device yet. You can read what is here; connect to the internet to edit it.'}
+          {status.online ? tr('editor.missingOnline') : tr('editor.missingOffline')}
         </p>
       )}
       {!canEdit && perms.known && (
         <p className="muted editor-missing">
-          {canComment
-            ? 'You can comment on this page and answer its questions. Ask for edit access to change it.'
-            : 'You can view this page. Ask for edit access to change it.'}
+          {canComment ? tr('editor.commentOnly') : tr('page.viewOnly')}
         </p>
       )}
+      {/* Cambiar el idioma vuelve a abrir el editor (sus textos se eligen al crearlo); el documento es el mismo. */}
       <BlockEditor
-        key={`${pageId}:${opening.complete}:${canEdit}`}
+        key={`${pageId}:${opening.complete}:${canEdit}:${tr.lang}`}
         doc={opening.doc}
         pageId={pageId}
         editable={opening.complete && canEdit}
@@ -153,14 +155,14 @@ export function PageEditor({ pageId }: { pageId: string }) {
 
 /** La página tiene algo hecho con una versión más nueva de la app. Nada se borra: está guardado. */
 function UnsupportedPage() {
+  const tr = useT();
   return (
     <div className="banner unsupported-page" role="status">
       <p>
-        <strong>This page was edited with a newer version of the app.</strong> This version can't show all of it
-        without losing part, so it stays closed. Nothing is lost.
+        <strong>{tr('editor.unsupportedTitle')}</strong> {tr('editor.unsupported')}
       </p>
       <button className="link" onClick={() => window.location.reload()}>
-        Update the app
+        {tr('editor.updateApp')}
       </button>
     </div>
   );
@@ -168,14 +170,13 @@ function UnsupportedPage() {
 
 /** Lo que se puede agregar hoy, para el aviso. */
 function acceptedText(withMedia: boolean): string {
-  return withMedia
-    ? 'Only photos and videos can be added.'
-    : 'Only images can be added for now (JPEG, PNG, GIF, WebP, AVIF or HEIC). Videos need the workspace media server (Google Drive).';
+  return withMedia ? t('media.onlyPhotosVideos') : t('editor.onlyImages');
 }
 
 function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId: string; editable: boolean; canComment: boolean }) {
   const { files, media, user } = useServices();
   const scheme = useScheme();
+  const tr = useT();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
   // Con el editor ya abierto, el carrete se baja cuando el navegador está libre: tocar una foto no espera.
@@ -199,10 +200,11 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   const editor = useCreateBlockNote(
     withCollaboration({
       ...editorSchemaOptions,
+      dictionary: editorDictionary(tr.lang),
       pasteHandler: drivePaste.pasteHandler,
       uploadFile: (file: File, blockId?: string) =>
         store(file).catch((err: unknown) => {
-          notify(err instanceof FileRejected ? err.message : 'This file could not be saved on this device.');
+          notify(err instanceof FileRejected ? err.message : t('editor.fileNotSaved'));
           // El editor ya insertó el bloque de la imagen: se quita para que no quede vacío.
           if (blockId) {
             setTimeout(() => {
@@ -255,8 +257,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
             .catch((err: unknown) =>
               notify(
                 err instanceof FileRejected
-                  ? `A pasted image stays embedded in the page: ${err.message}`
-                  : 'A pasted image could not be saved as a file; it stays embedded in the page.',
+                  ? t('editor.pastedEmbedded', { reason: err.message })
+                  : t('editor.pastedNotSaved'),
               ),
             )
             .finally(() => converting.delete(block.id));
@@ -303,11 +305,14 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   setVideosAccepted(media.enabled);
 
   const slashItems = useMemo(() => {
+    // Los grupos del menú llevan el nombre del idioma del editor: Script y Question van con los básicos.
+    const basic = editor.dictionary.slash_menu.paragraph.group;
+    const headings = editor.dictionary.slash_menu.heading.group;
     const script: DefaultReactSuggestionItem = {
-      title: 'Script',
-      subtext: 'Screenplay text: INT/EXT, DAY, NIGHT marked',
-      aliases: ['guion', 'guión', 'screenplay', 'escena', 'scene'],
-      group: 'Basic blocks',
+      title: tr('editor.script'),
+      subtext: tr('editor.scriptHint'),
+      aliases: ['guion', 'guión', 'screenplay', 'script', 'escena', 'scene'],
+      group: basic,
       icon: <ScriptIcon size={18} />,
       onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: { [SCRIPT_PROP]: true } }),
     };
@@ -321,19 +326,22 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
           }
         : item,
     );
-    const at = items.findIndex((i) => i.group !== 'Headings' && i.group !== 'Basic blocks');
+    const at = items.findIndex((i) => i.group !== headings && i.group !== basic);
     // Script, Question y Paragraph se sacan la marca uno al otro (nunca Script y pregunta juntos).
     const variants = items.map((i) =>
       (i as { key?: string }).key === 'paragraph' || i.title === editor.dictionary.slash_menu.paragraph.title
         ? withParagraphVariants(i, editor, 'paragraph')
         : i,
     );
-    const extra = [withParagraphVariants(script, editor, 'script'), questionSlashItem(editor)];
+    const extra = [withParagraphVariants(script, editor, 'script'), questionSlashItem(editor, tr, basic)];
     return (query: string) =>
       Promise.resolve(filterSuggestionItems([...variants.slice(0, at), ...extra, ...variants.slice(at)], query));
-  }, [editor]);
+  }, [editor, tr]);
 
-  const toolbarItems = useMemo(() => paragraphVariantItems(blockTypeSelectItems(editor.dictionary), scriptTypeItem), [editor]);
+  const toolbarItems = useMemo(
+    () => paragraphVariantItems(blockTypeSelectItems(editor.dictionary), scriptTypeItem(tr), tr),
+    [editor, tr],
+  );
 
   // Comentarios (paso 10): el panel sabe qué dice cada bloque; el margen se dibuja sobre el editor.
   useBlockSourceRegistration(editor, pageId);

@@ -1,3 +1,4 @@
+import type { Key } from '../i18n';
 import type { LocalDb } from './localDb';
 import type { Remote } from './remote';
 import type { PageTree } from './tree';
@@ -16,19 +17,21 @@ export type GrantLevel = 'view' | 'comment' | 'edit' | 'edit_pages';
 export const ROLES: Role[] = ['owner', 'admin', 'member', 'guest'];
 export const GRANT_LEVELS: GrantLevel[] = ['view', 'comment', 'edit', 'edit_pages'];
 
-export const LEVEL_LABELS: Record<GrantLevel, string> = {
-  view: 'View',
-  comment: 'Comment',
-  edit: 'Edit',
-  edit_pages: 'Edit & create pages',
-};
+/** El nombre de cada permiso en la interfaz (la clave de `src/i18n`). */
+export const LEVEL_LABELS = {
+  view: 'level.view',
+  comment: 'level.comment',
+  edit: 'level.edit',
+  edit_pages: 'level.editPages',
+} as const satisfies Record<GrantLevel, Key>;
 
-export const ROLE_LABELS: Record<Role, string> = {
-  owner: 'Owner',
-  admin: 'Admin',
-  member: 'Member',
-  guest: 'Guest',
-};
+/** El nombre de cada rol en la interfaz (la clave de `src/i18n`). */
+export const ROLE_LABELS = {
+  owner: 'role.owner',
+  admin: 'role.admin',
+  member: 'role.member',
+  guest: 'role.guest',
+} as const satisfies Record<Role, Key>;
 
 /** La escala de la base: 0 nada, 1 ver, 2 comentar, 3 editar, 4 editar y crear páginas. */
 export const LEVEL_VIEW = 1;

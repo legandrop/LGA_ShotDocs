@@ -1,45 +1,48 @@
+import { t, type Key } from '../i18n';
 import { isNetworkError, RemoteError } from '../sync/types';
 
-// Los errores del equipo y de permisos, en palabras (ver supabase/migrations/20260930160000_equipo.sql).
+// Los errores del equipo y de permisos, en palabras (ver supabase/migrations/20260930160000_equipo.sql). Se
+// traducen al mostrarlos, con el idioma de ese momento.
 
-const MESSAGES: Record<string, string> = {
-  not_allowed: 'You are not allowed to do this.',
-  owner_cannot_change: 'Nobody can change or remove the owner of the workspace.',
-  member_not_found: 'This person is not an active member of the workspace anymore.',
-  grant_not_found: 'That access was already removed, or you cannot change it.',
-  grant_not_allowed: 'You can only share what you can edit and create pages in.',
-  email_invalid: 'That email does not look right.',
-  role_invalid: 'That role is not valid.',
-  level_invalid: 'That access level is not valid.',
-  target_invalid: 'Choose a project or a page to share.',
-  grants_invalid: 'The access for this invitation is not valid.',
-  invitation_exists:
-    'Someone else already invited this email. They can add to their invitation, or it can be revoked in Members.',
-  invitation_used: 'That invitation was already used. To take access away, remove the person instead.',
-  invitation_not_found: 'That invitation is not there anymore, or you cannot revoke it.',
-  session_not_allowed: 'This session cannot do that. Sign out and sign in again with the emailed code.',
-  page_create_denied: 'You cannot create pages here: it needs “Edit & create pages”.',
-  page_move_denied: 'You cannot move this page there: it needs “Edit & create pages” on the page and on where it goes.',
-  page_trash_denied: 'You cannot move this page to the trash or back: it needs “Edit & create pages”.',
-  page_edit_denied: 'You cannot edit this page: it needs “Edit”.',
-  page_not_found: 'The page is not there anymore, or you cannot edit it (it needs “Edit”).',
-  project_not_found: 'The project is not there anymore, or you cannot rename it (it needs “Edit & create pages”).',
+const MESSAGES: Record<string, Key> = {
+  not_allowed: 'teamError.notAllowed',
+  owner_cannot_change: 'teamError.ownerCannotChange',
+  member_not_found: 'teamError.memberNotFound',
+  grant_not_found: 'teamError.grantNotFound',
+  grant_not_allowed: 'teamError.grantNotAllowed',
+  email_invalid: 'teamError.emailInvalid',
+  role_invalid: 'teamError.roleInvalid',
+  level_invalid: 'teamError.levelInvalid',
+  target_invalid: 'teamError.targetInvalid',
+  grants_invalid: 'teamError.grantsInvalid',
+  invitation_exists: 'teamError.invitationExists',
+  invitation_used: 'teamError.invitationUsed',
+  invitation_not_found: 'teamError.invitationNotFound',
+  session_not_allowed: 'teamError.sessionNotAllowed',
+  page_create_denied: 'teamError.pageCreateDenied',
+  page_move_denied: 'teamError.pageMoveDenied',
+  page_trash_denied: 'teamError.pageTrashDenied',
+  page_edit_denied: 'teamError.pageEditDenied',
+  page_not_found: 'teamError.pageNotFound',
+  project_not_found: 'teamError.projectNotFound',
 };
+
+const known = (message: string): string | null => (Object.hasOwn(MESSAGES, message) ? t(MESSAGES[message]) : null);
 
 /** El error de una función del equipo, para mostrarlo en el diálogo. */
 export function teamErrorText(err: unknown): string {
-  if (isNetworkError(err)) return 'You are offline. Managing people needs an internet connection.';
+  if (isNetworkError(err)) return t('teamError.offline');
   const message = err instanceof Error ? err.message : String(err);
-  if (MESSAGES[message]) return MESSAGES[message];
-  if (err instanceof RemoteError && err.code === 'PGRST202') {
-    return 'The workspace database needs an update before people can be managed from the app.';
-  }
+  const text = known(message);
+  if (text) return text;
+  if (err instanceof RemoteError && err.code === 'PGRST202') return t('teamError.schema');
   return message;
 }
 
 /** Un cambio que el servidor rechazó (lista de rechazados): el motivo en palabras si se conoce. */
 export function rejectionText(error: string): string {
-  if (MESSAGES[error]) return MESSAGES[error];
-  if (/row-level security/i.test(error)) return `You do not have permission for this (${error}).`;
+  const text = known(error);
+  if (text) return text;
+  if (/row-level security/i.test(error)) return t('teamError.rls', { error });
   return error;
 }

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CommentAuthor, CommentRemote, CommentRow, ListedComment, NewComment } from './comments';
-import { toRemoteError } from './remote';
+import { deadline, toRemoteError } from './remote';
 
 // Las llamadas de los comentarios a Supabase (supabase/migrations/20260930170000_comentarios.sql). La tabla
 // `comments` no se puede leer con `*` (la columna del texto no se da): se lee `comments_view`, que devuelve
@@ -28,7 +28,7 @@ export class SupabaseCommentRemote implements CommentRemote {
     for (let from = 0; ; from += PAGE) {
       const { data, error, status } = await this.client
         .rpc('list_comments', { p_page_id: pageId, p_since: since })
-        .range(from, from + PAGE - 1);
+        .range(from, from + PAGE - 1).abortSignal(deadline());
       if (error?.code === MISSING_FUNCTION) {
         this.listMissingAt = Date.now();
         return null;
@@ -49,7 +49,7 @@ export class SupabaseCommentRemote implements CommentRemote {
         .eq('page_id', pageId)
         .order('created_at')
         .order('id')
-        .range(from, from + PAGE - 1);
+        .range(from, from + PAGE - 1).abortSignal(deadline());
       if (error) throw toRemoteError(error, status);
       const page = (data ?? []) as unknown as CommentRow[];
       rows.push(...page);
@@ -58,7 +58,8 @@ export class SupabaseCommentRemote implements CommentRemote {
   }
 
   async fetchCommentAuthors(pageId: string): Promise<CommentAuthor[]> {
-    const { data, error, status } = await this.client.rpc('comment_authors', { p_page_id: pageId });
+    const { data, error, status } = await this.client.rpc('comment_authors', { p_page_id: pageId })
+      .abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
     return (data ?? []) as CommentAuthor[];
   }
@@ -70,22 +71,23 @@ export class SupabaseCommentRemote implements CommentRemote {
       p_block_id: c.blockId,
       p_thread_id: c.threadId,
       p_body: c.body,
-    });
+    }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
   }
 
   async editComment(id: string, body: string): Promise<void> {
-    const { error, status } = await this.client.rpc('edit_comment', { p_id: id, p_body: body });
+    const { error, status } = await this.client.rpc('edit_comment', { p_id: id, p_body: body }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
   }
 
   async deleteComment(id: string): Promise<void> {
-    const { error, status } = await this.client.rpc('delete_comment', { p_id: id });
+    const { error, status } = await this.client.rpc('delete_comment', { p_id: id }).abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
   }
 
   async resolveThread(threadId: string, resolved: boolean): Promise<void> {
-    const { error, status } = await this.client.rpc('resolve_thread', { p_thread_id: threadId, p_resolved: resolved });
+    const { error, status } = await this.client.rpc('resolve_thread', { p_thread_id: threadId, p_resolved: resolved })
+      .abortSignal(deadline());
     if (error) throw toRemoteError(error, status);
   }
 }

@@ -86,7 +86,7 @@ describe('auditoría de la fase 1', () => {
     (a.db as { transaction: unknown }).transaction = ((stores: string | string[], mode?: IDBTransactionMode) => {
       const names = [stores].flat();
       // Así escribe una edición local; la carga al abrir usa otra transacción.
-      if (failing && mode === 'readwrite' && names.includes('docUpdates') && names.includes('docState')) {
+      if (failing && mode === 'readwrite' && names.includes('docUpdates') && names.includes('meta')) {
         throw new DOMException('Quota exceeded', 'QuotaExceededError');
       }
       return realTransaction(stores as never, mode);

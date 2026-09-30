@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { locale, t as current, useT, type Translate } from '../i18n';
 import { useServices, useSyncStatus } from '../services';
 import { CommentInvalid, MAX_COMMENT_LENGTH, type CommentThread, type CommentView } from '../sync/comments';
 import { errorMessage } from '../sync/types';
@@ -59,6 +60,7 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   const [composing, setComposing] = useState<{ blockId: string | null; answer: boolean } | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
   const ref = useRef<HTMLElement>(null);
+  const tr = useT();
 
   const open = sortThreads(threads.filter((t) => !t.resolved), source);
   const resolved = sortThreads(threads.filter((t) => t.resolved), source);
@@ -134,36 +136,34 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
   return (
     <>
       <div className="comments-scrim" onClick={() => requestCloseComments()} />
-      <aside ref={ref} className="comments-panel" aria-label="Comments">
+      <aside ref={ref} className="comments-panel" aria-label={tr('comments.title')}>
         <header className="comments-head">
-          <h2>Comments</h2>
+          <h2>{tr('comments.title')}</h2>
           {canComment && (
             <button className="link" onClick={() => setComposing({ blockId: null, answer: false })}>
-              Comment on the page
+              {tr('comments.onPage')}
             </button>
           )}
-          <button className="icon-button" aria-label="Close comments" onClick={() => requestCloseComments()}>
+          <button className="icon-button" aria-label={tr('comments.close')} onClick={() => requestCloseComments()}>
             <CloseIcon size={18} />
           </button>
         </header>
         <div className="comments-body">
           {!status.online && (
-            <p className="comments-note">Offline: what you write is saved on this device and uploads when you’re back online.</p>
+            <p className="comments-note">{tr('comments.offline')}</p>
           )}
           {status.schemaBehind && (
-            <p className="comments-note warn">
-              The workspace database needs an update before comments can upload. Yours stay saved on this device.
-            </p>
+            <p className="comments-note warn">{tr('comments.schemaBehind')}</p>
           )}
-          {comments.unavailable && <p className="comments-note warn">Comments are read-only on this device: {comments.unavailable}</p>}
+          {comments.unavailable && <p className="comments-note warn">{tr('comments.readOnlyDevice', { reason: comments.unavailable })}</p>}
           {!canComment && !comments.unavailable && level > 0 && (
-            <p className="comments-note">You can read the comments here. Ask for comment access to add yours.</p>
+            <p className="comments-note">{tr('comments.readOnly')}</p>
           )}
           {comments.pullError(pageId) && status.online && (
-            <p className="comments-note warn">Could not download the latest comments: {comments.pullError(pageId)}</p>
+            <p className="comments-note warn">{tr('comments.pullError', { reason: comments.pullError(pageId) ?? '' })}</p>
           )}
           {!comments.isFresh(pageId) && status.online && threads.length === 0 && !comments.pullError(pageId) && (
-            <p className="muted comments-empty">Loading comments…</p>
+            <p className="muted comments-empty">{tr('comments.loading')}</p>
           )}
 
           {composing && (
@@ -183,12 +183,12 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
 
           {empty && comments.isFresh(pageId) && (
             <p className="muted comments-empty">
-              No comments on this page yet.
-              {canComment && ' Select a block and choose Comment, or use the comment button in its margin.'}
+              {tr('comments.none')}
+              {canComment && ` ${tr('comments.noneHint')}`}
             </p>
           )}
           {empty && !comments.isFresh(pageId) && !status.online && (
-            <p className="muted comments-empty">No comments saved on this device for this page.</p>
+            <p className="muted comments-empty">{tr('comments.noneOffline')}</p>
           )}
 
           {open.map((t) => (
@@ -209,7 +209,7 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
             <div className="comments-resolved">
               <button className="comments-resolved-toggle" aria-expanded={showResolved} onClick={() => setShowResolved(!showResolved)}>
                 {showResolved ? <CollapseIcon size={14} /> : <ExpandIcon size={14} />}
-                {resolved.length} resolved {resolved.length === 1 ? 'thread' : 'threads'}
+                {tr('comments.resolvedThreads', { count: resolved.length })}
               </button>
               {showResolved &&
                 resolved.map((t) => (
@@ -235,12 +235,13 @@ function Panel({ pageId, target, nonce }: { pageId: string; target: CommentsTarg
 
 /** A qué apunta un hilo: el texto del bloque (cortado), la página entera o un bloque que ya no está. */
 function Anchor({ blockId, source, onReveal }: { blockId: string | null; source: BlockSource | null; onReveal: (id: string | null) => void }) {
-  if (blockId === null) return <p className="thread-anchor page-wide">On the whole page</p>;
+  const tr = useT();
+  if (blockId === null) return <p className="thread-anchor page-wide">{tr('comments.wholePage')}</p>;
   const info = source?.describe(blockId) ?? null;
-  if (!info && source) return <p className="thread-anchor gone">The block it pointed to is no longer on the page</p>;
-  const text = info?.text.trim() || 'Empty block';
+  if (!info && source) return <p className="thread-anchor gone">{tr('comments.blockGone')}</p>;
+  const text = info?.text.trim() || tr('comments.emptyBlock');
   return (
-    <button className={`thread-anchor${info?.question ? ' question' : ''}`} onClick={() => onReveal(blockId)} data-tip="Go to the block">
+    <button className={`thread-anchor${info?.question ? ' question' : ''}`} onClick={() => onReveal(blockId)} data-tip={tr('comments.goToBlock')}>
       {info?.question && <QuestionIcon size={14} />}
       <span>{text.length > 140 ? `${text.slice(0, 140)}…` : text}</span>
     </button>
@@ -264,13 +265,14 @@ function NewThread({
 }) {
   const { comments } = useServices();
   const question = answer || (blockId ? !!source?.describe(blockId)?.question : false);
+  const tr = useT();
   return (
     <section className="comment-thread composing">
       <Anchor blockId={blockId} source={source} onReveal={onReveal} />
       <Composer
         autoFocus
-        placeholder={question ? 'Write your answer…' : 'Write a comment…'}
-        submitLabel={question ? 'Answer' : 'Comment'}
+        placeholder={question ? tr('comments.writeAnswer') : tr('comments.write')}
+        submitLabel={question ? tr('comments.answer') : tr('comments.comment')}
         onSubmit={async (text) => onDone(await comments.add(pageId, blockId, text))}
         onCancel={() => onDone(null)}
       />
@@ -302,6 +304,7 @@ function Thread({
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLElement>(null);
   const question = thread.blockId ? !!source?.describe(thread.blockId)?.question : false;
+  const tr = useT();
 
   useLayoutEffect(() => {
     if (focused) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
@@ -315,8 +318,8 @@ function Thread({
       <Anchor blockId={thread.blockId} source={source} onReveal={onReveal} />
       {thread.resolved && (
         <p className="thread-resolved-by">
-          Resolved{thread.resolvedBy ? ` by ${nameOf(comments, thread.resolvedBy, me)}` : ''}
-          {thread.resolvedAt ? ` · ${when(thread.resolvedAt)}` : ''}
+          {thread.resolvedBy ? tr('comments.resolvedBy', { name: nameOf(comments, thread.resolvedBy, me, tr) }) : tr('comments.resolved')}
+          {thread.resolvedAt ? ` · ${when(thread.resolvedAt, Date.now(), tr)}` : ''}
         </p>
       )}
       <Comment comment={thread.root} me={me} canComment={canComment} canDeleteAny={canDeleteAny} />
@@ -327,8 +330,8 @@ function Thread({
       {replying ? (
         <Composer
           autoFocus
-          placeholder={question ? 'Write your answer…' : 'Reply…'}
-          submitLabel={question ? 'Answer' : 'Reply'}
+          placeholder={question ? tr('comments.writeAnswer') : tr('comments.replyPlaceholder')}
+          submitLabel={question ? tr('comments.answer') : tr('comments.reply')}
           onSubmit={async (text) => {
             await comments.add(thread.pageId, thread.blockId, text, thread.id);
             setReplying(false);
@@ -341,11 +344,11 @@ function Thread({
           <div className="thread-actions">
             {!thread.resolved && (
               <button className="link" onClick={() => setReplying(true)}>
-                {question ? 'Answer' : 'Reply'}
+                {question ? tr('comments.answer') : tr('comments.reply')}
               </button>
             )}
             <button className="link" onClick={() => resolve(!thread.resolved)}>
-              {thread.resolved ? 'Reopen' : 'Resolve'}
+              {thread.resolved ? tr('comments.reopen') : tr('comments.resolve')}
             </button>
           </div>
         )
@@ -356,10 +359,10 @@ function Thread({
 
 type Names = { emailOf(id: string | null): string | undefined };
 
-function nameOf(comments: Names, userId: string | null, me: string): string {
-  if (userId && userId === me) return 'You';
-  if (!userId) return 'Deleted account';
-  return comments.emailOf(userId) ?? 'Someone';
+function nameOf(comments: Names, userId: string | null, me: string, tr: Translate): string {
+  if (userId && userId === me) return tr('comments.you');
+  if (!userId) return tr('comments.deletedAccount');
+  return comments.emailOf(userId) ?? tr('comments.someone');
 }
 
 function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentView; me: string; canComment: boolean; canDeleteAny: boolean }) {
@@ -371,11 +374,12 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
   // `canComment` ya pide que la base de comentarios del dispositivo esté abierta; borrar lo ajeno también.
   const canEdit = mine && canComment && !comment.deleted;
   const canDelete = !comment.deleted && comments.writable && ((mine && canComment) || canDeleteAny);
+  const tr = useT();
 
   if (comment.deleted) {
     return (
       <div className="comment deleted">
-        <p className="muted">This comment was deleted.</p>
+        <p className="muted">{tr('comments.deleted')}</p>
         {comment.error && <Rejected comment={comment} />}
       </div>
     );
@@ -385,18 +389,18 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
     <div className={`comment${comment.pending ? ' pending' : ''}`}>
       <div className="comment-meta">
         <strong className="comment-author" data-tip={comment.authorId && !mine ? comments.emailOf(comment.authorId) : undefined} data-tip-plain data-tip-overflow>
-          {nameOf(comments, comment.authorId, me)}
+          {nameOf(comments, comment.authorId, me, tr)}
         </strong>
-        <time dateTime={comment.createdAt}>{when(comment.createdAt)}</time>
-        {comment.editedAt && <span className="comment-edited">edited</span>}
-        {comment.pending && !comment.error && <span className="comment-pending">Not uploaded yet</span>}
+        <time dateTime={comment.createdAt}>{when(comment.createdAt, Date.now(), tr)}</time>
+        {comment.editedAt && <span className="comment-edited">{tr('comments.edited')}</span>}
+        {comment.pending && !comment.error && <span className="comment-pending">{tr('comments.notUploaded')}</span>}
       </div>
       {editing ? (
         <Composer
           autoFocus
           initial={comment.body}
-          submitLabel="Save"
-          placeholder="Edit the comment…"
+          submitLabel={tr('common.save')}
+          placeholder={tr('comments.editPlaceholder')}
           onSubmit={async (text) => {
             if (text !== comment.body) await comments.edit(comment.pageId, comment.id, text);
             setEditing(false);
@@ -412,7 +416,7 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
         <div className="comment-actions">
           {confirming ? (
             <>
-              <span>Delete this comment?</span>
+              <span>{tr('comments.deleteConfirm')}</span>
               <button
                 className="link danger"
                 onClick={() => {
@@ -420,22 +424,22 @@ function Comment({ comment, me, canComment, canDeleteAny }: { comment: CommentVi
                   void comments.remove(comment.pageId, comment.id).catch((err: unknown) => setError(errorMessage(err)));
                 }}
               >
-                Delete
+                {tr('common.delete')}
               </button>
               <button className="link" onClick={() => setConfirming(false)}>
-                Cancel
+                {tr('common.cancel')}
               </button>
             </>
           ) : (
             <>
               {canEdit && (
                 <button className="link" onClick={() => setEditing(true)}>
-                  Edit
+                  {tr('common.edit')}
                 </button>
               )}
               {canDelete && (
                 <button className="link" onClick={() => setConfirming(true)}>
-                  Delete
+                  {tr('common.delete')}
                 </button>
               )}
             </>
@@ -458,41 +462,42 @@ function Rejected({ comment }: { comment: CommentView }) {
   const info = asking ? comments.describeDiscard(comment.failedSeqs) : null;
   const text = info?.text ?? comment.rejectedText;
   const copy = () => void copyText(text ?? '').then((ok) => setCopied(ok));
+  const tr = useT();
   return (
     <div className="comment-error" role="status">
-      <span>Not accepted by the server: {comment.error} It stays on this device.</span>
+      <span>{tr('comments.rejected', { reason: comment.error ?? '' })}</span>
       {info ? (
         <>
           <span>{info.message}</span>
           <span className="row">
             {text && (
               <button className="link" onClick={copy}>
-                {copied ? 'Copied' : 'Copy text'}
+                {copied ? tr('common.copied') : tr('sync.copyText')}
               </button>
             )}
             <button
               className="link danger"
               onClick={() => void Promise.all(comment.failedSeqs.map((s) => comments.discard(s))).then(() => setAsking(false))}
             >
-              Discard
+              {tr('common.discard')}
             </button>
             <button className="link" onClick={() => setAsking(false)}>
-              Cancel
+              {tr('common.cancel')}
             </button>
           </span>
         </>
       ) : (
         <span className="row">
           <button className="link" onClick={() => void engine.retryRejected()}>
-            Retry
+            {tr('common.retry')}
           </button>
           {text && (
             <button className="link" onClick={copy}>
-              {copied ? 'Copied' : 'Copy text'}
+              {copied ? tr('common.copied') : tr('sync.copyText')}
             </button>
           )}
           <button className="link danger" onClick={() => setAsking(true)}>
-            Discard…
+            {tr('comments.discardEllipsis')}
           </button>
         </span>
       )}
@@ -521,6 +526,7 @@ function Composer({
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const dirty = text.trim() !== '' && text !== initial;
+  const tr = useT();
 
   // Lo escrito a medias: cerrar el panel (tocar afuera, Escape, la X) pide confirmación.
   const draftKey = useRef(Symbol('draft'));
@@ -563,7 +569,7 @@ function Composer({
     try {
       await onSubmit(text);
     } catch (err) {
-      setError(err instanceof CommentInvalid ? err.message : `Could not save it on this device (${errorMessage(err)}).`);
+      setError(err instanceof CommentInvalid ? err.message : tr('comments.saveFailed', { reason: errorMessage(err) }));
       setBusy(false);
       return;
     }
@@ -592,20 +598,20 @@ function Composer({
             void submit();
           } else if (e.key === 'Escape') {
             e.preventDefault();
-            if (dirty && !confirm('Discard what you wrote?')) return;
+            if (dirty && !confirm(tr('comments.discardDraft'))) return;
             onCancel();
           }
         }}
       />
       {(error || tooLong) && (
-        <p className="comment-error">{tooLong ? `Up to ${MAX_COMMENT_LENGTH} characters (${text.length} now).` : error}</p>
+        <p className="comment-error">{tooLong ? tr('comments.tooLong', { max: MAX_COMMENT_LENGTH, now: text.length }) : error}</p>
       )}
       <div className="row">
         <button type="submit" className="primary" disabled={busy || !text.trim() || tooLong} data-tip={IS_MAC ? '⌘↩' : 'Ctrl+Enter'}>
           {submitLabel}
         </button>
         <button type="button" className="link" onClick={onCancel}>
-          Cancel
+          {tr('common.cancel')}
         </button>
       </div>
     </form>
@@ -614,19 +620,31 @@ function Composer({
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
-const timeFormat = new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' });
-const dayFormat = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' });
-const yearFormat = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' });
+const formats = new Map<string, { time: Intl.DateTimeFormat; day: Intl.DateTimeFormat; year: Intl.DateTimeFormat }>();
+function formatsFor(lang: Translate['lang']) {
+  const loc = locale(lang);
+  let f = formats.get(loc);
+  if (!f) {
+    f = {
+      time: new Intl.DateTimeFormat(loc, { hour: 'numeric', minute: '2-digit' }),
+      day: new Intl.DateTimeFormat(loc, { month: 'short', day: 'numeric' }),
+      year: new Intl.DateTimeFormat(loc, { month: 'short', day: 'numeric', year: 'numeric' }),
+    };
+    formats.set(loc, f);
+  }
+  return f;
+}
 
-/** "just now", "5 min", "3:40 PM", "Sep 30", "Sep 30, 2025". */
-export function when(iso: string, now = Date.now()): string {
+/** "just now", "5 min", "3:40 PM", "Sep 30", "Sep 30, 2025" (o en castellano, con `tr`). */
+export function when(iso: string, now = Date.now(), tr: Translate = current): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return '';
   const diff = now - t;
-  if (diff < 60_000) return 'just now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min`;
+  if (diff < 60_000) return tr('comments.justNow');
+  if (diff < 3_600_000) return tr('comments.minutes', { count: Math.floor(diff / 60_000) });
   const d = new Date(t);
   const today = new Date(now);
-  if (d.toDateString() === today.toDateString()) return timeFormat.format(d);
-  return d.getFullYear() === today.getFullYear() ? dayFormat.format(d) : yearFormat.format(d);
+  const f = formatsFor(tr.lang);
+  if (d.toDateString() === today.toDateString()) return f.time.format(d);
+  return d.getFullYear() === today.getFullYear() ? f.day.format(d) : f.year.format(d);
 }

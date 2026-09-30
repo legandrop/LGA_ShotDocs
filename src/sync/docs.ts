@@ -1,5 +1,8 @@
 import * as Y from 'yjs';
 import {
+  DIRTY_PREFIX,
+  dirtyKey,
+  dirtyRange,
   emptyDocState,
   hasUnsyncedContent,
   updateDocState,
@@ -81,8 +84,10 @@ export class PageDocs {
   private readonly locks = new Map<string, Promise<unknown>>();
   /** Ediciones locales que todavía no llegaron a IndexedDB, por página. */
   private readonly unsaved = new Map<string, Uint8Array[]>();
-  /** Escritura en curso por página. Mientras corre, las ediciones nuevas se juntan en `unsaved`. */
+  /** Escrituras en curso por página: la cadena de todas, para poder esperarlas (`flush`). */
   private readonly writes = new Map<string, Promise<void>>();
+  /** Páginas con una escritura ya programada para el final de la tarea actual del navegador. */
+  private readonly scheduled = new Set<string>();
   private readonly retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private writeError: string | null = null;
   private disposed = false;
@@ -209,7 +214,7 @@ export class PageDocs {
 
   /** Hay ediciones que todavía no están guardadas en el dispositivo. */
   hasUnsavedEdits(): boolean {
-    return this.writes.size > 0 || [...this.unsaved.values()].some((b) => b.length > 0);
+    return this.writes.size > 0 || this.scheduled.size > 0 || [...this.unsaved.values()].some((b) => b.length > 0);
   }
 
   getWriteError(): string | null {
@@ -219,7 +224,23 @@ export class PageDocs {
   /** Páginas con algo sin subir: sin confirmar por el servidor o todavía sin guardar en el dispositivo. */
   async unsyncedPages(): Promise<string[]> {
     await this.flush();
-    const pages = new Set((await this.db.getAll('docState')).filter(hasUnsyncedContent).map((s) => s.pageId));
+    // Una sola transacción: el estado y las marcas se leen juntos.
+    const tx = this.db.transaction(['docState', 'meta'], 'readonly');
+    const [states, keys] = await Promise.all([
+      tx.objectStore('docState').getAll(),
+      tx.objectStore('meta').getAllKeys(dirtyRange()),
+    ]);
+    await tx.done;
+    const dirty = new Set(keys.map((k) => String(k).slice(DIRTY_PREFIX.length)));
+    const pages = new Set(states.filter((s) => hasUnsyncedContent(s, dirty.has(s.pageId))).map((s) => s.pageId));
+    // Con marca pero sin la versión sumada (la app se cerró entre la edición guardada y la suma, que va
+    // aparte): se suma ahora, para que una versión anterior que abra esta base también la vea pendiente.
+    const behind = [...dirty].filter((pageId) => {
+      const state = states.find((s) => s.pageId === pageId);
+      return !state || state.version <= state.ackedVersion;
+    });
+    for (const pageId of behind) await this.bumpVersion(pageId);
+    for (const pageId of dirty) pages.add(pageId);
     for (const [pageId, batch] of this.unsaved) if (batch.length > 0) pages.add(pageId);
     return [...pages];
   }
@@ -243,12 +264,15 @@ export class PageDocs {
       for (let round = 0; round < 5; round++) {
         let pending = state.pending;
         if (!pending) {
-          if (state.version <= state.ackedVersion) break;
           const saved = await this.readSaved(pageId);
+          if (!hasUnsyncedContent(saved.state, saved.dirty !== undefined)) {
+            saved.doc.destroy();
+            break;
+          }
           if (Y.encodeStateVector(saved.doc).length <= 1) {
             // Nada que subir (una página que este dispositivo nunca tuvo con contenido): queda al día.
             saved.doc.destroy();
-            state = await updateDocState(this.db, pageId, (s) => {
+            state = await this.confirm(pageId, saved.dirty, (s) => {
               s.ackedVersion = Math.max(s.ackedVersion, saved.state.version);
             });
             continue;
@@ -258,6 +282,7 @@ export class PageDocs {
             update: Y.encodeStateAsUpdate(saved.doc, saved.state.syncedSV),
             sv: Y.encodeStateVector(saved.doc),
             version: saved.state.version,
+            dirty: saved.dirty,
           };
           saved.doc.destroy();
           state = await updateDocState(this.db, pageId, (s) => {
@@ -277,8 +302,8 @@ export class PageDocs {
           throw err;
         }
         const confirmed = pending;
-        state = await updateDocState(this.db, pageId, (s) => {
-          if (s.pending?.id !== confirmed.id) return;
+        state = await this.confirm(pageId, confirmed.dirty, (s) => {
+          if (s.pending?.id !== confirmed.id) return false;
           // Se suma a lo que ya se sabía (lo bajado mientras la subida estaba en vuelo también cuenta): los
           // dos vectores dicen solo lo que el servidor tiene, así que el mayor de cada autor también.
           s.syncedSV = mergeStateVectors(s.syncedSV, confirmed.sv);
@@ -289,11 +314,33 @@ export class PageDocs {
           s.pending = undefined;
           s.lastError = undefined;
           s.rejected = undefined;
+          return true;
         });
         pushed = true;
       }
       return pushed ? 'pushed' : 'clean';
     });
+  }
+
+  /**
+   * Actualiza el estado de la página y, en la misma transacción, borra la marca de ediciones sin subir si
+   * sigue siendo la que se leyó junto con lo que se subió: si hubo ediciones guardadas después, la marca es
+   * otra y queda (se suben en la vuelta siguiente). Si `mutate` devuelve false, la marca no se toca.
+   */
+  private async confirm(
+    pageId: string,
+    dirty: string | undefined,
+    mutate: (state: DocState) => boolean | void,
+  ): Promise<DocState> {
+    const tx = this.db.transaction(['docState', 'meta'], 'readwrite');
+    const state = (await tx.objectStore('docState').get(pageId)) ?? emptyDocState(pageId);
+    const applied = mutate(state) !== false;
+    await tx.objectStore('docState').put(state);
+    if (applied && dirty !== undefined && (await tx.objectStore('meta').get(dirtyKey(pageId))) === dirty) {
+      await tx.objectStore('meta').delete(dirtyKey(pageId));
+    }
+    await tx.done;
+    return state;
   }
 
   /**
@@ -316,10 +363,15 @@ export class PageDocs {
    * leído en la misma transacción y si esta versión puede leer todo lo que trae. Para mirar qué archivos
    * usa la página (papelera de archivos) sin tocar el documento abierto en el editor.
    */
-  async snapshot(pageId: string): Promise<{ doc: Y.Doc; state: DocState; supported: boolean }> {
+  async snapshot(pageId: string): Promise<{ doc: Y.Doc; state: DocState; dirty: boolean; supported: boolean }> {
     await this.flush(pageId);
     const saved = await this.readSaved(pageId);
-    return { ...saved, supported: this.options.supports?.(saved.doc) ?? true };
+    return {
+      doc: saved.doc,
+      state: saved.state,
+      dirty: saved.dirty !== undefined,
+      supported: this.options.supports?.(saved.doc) ?? true,
+    };
   }
 
   /**
@@ -482,54 +534,109 @@ export class PageDocs {
   }
 
   /**
-   * Guarda una edición local. La primera escritura arranca en el acto; las ediciones que llegan mientras
-   * corre se juntan y salen todas en la siguiente transacción. Así nunca se acumula una fila de
-   * escrituras: si la app se cierra de golpe, lo que puede faltar es lo de la última transacción.
+   * Guarda una edición local. Las ediciones de un mismo momento (la misma tarea del navegador) se juntan y
+   * salen en una transacción que **no lee nada**: agrega el update y pone una marca nueva de "sin subir" en
+   * `meta` (`dirtyKey`), y se confirma en el acto (`commit`). Cada tanda tiene su propia transacción, sin
+   * esperar a la anterior.
+   *
+   * Antes la transacción leía el estado de la página para sumar la versión, así que no podía confirmarse
+   * hasta tener la respuesta, y lo que se escribía mientras tanto esperaba en memoria: una recarga o un
+   * cierre en ese rato perdía el final de lo escrito (el navegador aborta las transacciones sin confirmar
+   * de una página que se va), aunque el estado ya dijera "saved on this device".
    */
   private persistLocal(pageId: string, updates: Uint8Array[]): void {
     const buffer = this.unsaved.get(pageId);
     if (buffer) buffer.push(...updates);
     else this.unsaved.set(pageId, [...updates]);
-    this.startWrite(pageId);
+    if (this.scheduled.has(pageId)) return;
+    this.scheduled.add(pageId);
+    this.track(
+      pageId,
+      Promise.resolve().then(() => {
+        this.scheduled.delete(pageId);
+        return this.startWrite(pageId);
+      }),
+    );
   }
 
-  private startWrite(pageId: string): void {
-    if (this.writes.has(pageId) || this.disposed) return;
+  /** Escribe lo que haya en memoria de la página, en una transacción sin lecturas que se confirma en el acto. */
+  private startWrite(pageId: string): Promise<void> {
+    if (this.disposed) return Promise.resolve();
     const timer = this.retryTimers.get(pageId);
     if (timer) {
       clearTimeout(timer);
       this.retryTimers.delete(pageId);
     }
+    const batch = this.unsaved.get(pageId) ?? [];
+    if (batch.length === 0) return Promise.resolve();
+    this.unsaved.set(pageId, []);
 
-    const run = (async () => {
-      for (;;) {
-        const batch = this.unsaved.get(pageId) ?? [];
-        if (batch.length === 0) break;
-        this.unsaved.set(pageId, []);
-        try {
-          const tx = this.db.transaction(['docUpdates', 'docState'], 'readwrite');
-          const data = batch.length === 1 ? batch[0] : Y.mergeUpdates(batch);
-          await tx.objectStore('docUpdates').add({ pageId, data });
-          const store = tx.objectStore('docState');
-          const state = (await store.get(pageId)) ?? emptyDocState(pageId);
-          state.version += 1;
-          await store.put(state);
-          await tx.done;
-        } catch (err) {
-          // Vuelven a la cola: siguen en el documento en memoria y se reintentan solas.
-          this.unsaved.set(pageId, [...batch, ...(this.unsaved.get(pageId) ?? [])]);
-          this.setWriteError(errorMessage(err));
-          this.retryTimers.set(
-            pageId,
-            setTimeout(() => this.startWrite(pageId), WRITE_RETRY_MS),
-          );
-          break;
-        }
+    let done: Promise<void>;
+    try {
+      const tx = this.db.transaction(['docUpdates', 'meta'], 'readwrite');
+      const data = batch.length === 1 ? batch[0] : Y.mergeUpdates(batch);
+      // Los errores de cada pedido llegan también por `tx.done`.
+      void tx.objectStore('docUpdates').add({ pageId, data }).catch(() => undefined);
+      void tx.objectStore('meta').put(crypto.randomUUID(), dirtyKey(pageId)).catch(() => undefined);
+      // Sin esperar a nada: el navegador ya tiene todo lo que tiene que guardar.
+      try {
+        (tx as unknown as { commit?: () => void }).commit?.();
+      } catch {
+        // Sin `commit` (o ya confirmándose), se confirma sola al terminar la tarea: tampoco espera lecturas.
+      }
+      done = tx.done;
+    } catch (err) {
+      done = Promise.reject(err);
+    }
+    return done.then(
+      () => {
         this.setWriteError(null);
         this.onLocalChange?.(pageId);
-      }
-    })().finally(() => this.writes.delete(pageId));
-    this.writes.set(pageId, run);
+        // Aparte y después: lo escrito ya está a salvo con su marca.
+        this.track(pageId, this.bumpVersion(pageId));
+      },
+      (err: unknown) => {
+        // Vuelven a la cola: siguen en el documento en memoria y se reintentan solas.
+        this.unsaved.set(pageId, [...batch, ...(this.unsaved.get(pageId) ?? [])]);
+        this.setWriteError(errorMessage(err));
+        if (!this.retryTimers.has(pageId) && !this.disposed) {
+          this.retryTimers.set(
+            pageId,
+            setTimeout(() => {
+              this.retryTimers.delete(pageId);
+              this.track(pageId, this.startWrite(pageId));
+            }, WRITE_RETRY_MS),
+          );
+        }
+      },
+    );
+  }
+
+  /**
+   * Suma uno a la versión de la página, en una transacción aparte y después de que la edición quedó
+   * guardada con su marca. No hace falta para no perder nada en esta versión (lo pendiente lo dice la
+   * marca); es para una versión anterior de la app que abra esta misma base (una pestaña que no se
+   * recargó): esa solo mira `version > ackedVersion`. También cambia la marca de "ya mirada" de la papelera
+   * de archivos. Si falla, se vuelve a intentar desde `unsyncedPages`.
+   */
+  private async bumpVersion(pageId: string): Promise<void> {
+    try {
+      await updateDocState(this.db, pageId, (s) => {
+        s.version += 1;
+      });
+    } catch {
+      // La base pudo cerrarse (se cierra la app): la próxima vez se suma desde `unsyncedPages`.
+    }
+  }
+
+  /** `writes` guarda, por página, la cadena de todas las escrituras en curso (para `flush`). */
+  private track(pageId: string, run: Promise<void>): void {
+    const previous = this.writes.get(pageId);
+    const chained = previous ? Promise.all([previous, run]).then(() => undefined) : run;
+    this.writes.set(pageId, chained);
+    void chained.finally(() => {
+      if (this.writes.get(pageId) === chained) this.writes.delete(pageId);
+    });
   }
 
   private setWriteError(message: string | null): void {
@@ -540,17 +647,21 @@ export class PageDocs {
     this.onWriteError?.(message);
   }
 
-  /** Lee en una sola transacción lo guardado de una página y su estado, y arma el documento. */
-  private async readSaved(pageId: string): Promise<{ doc: Y.Doc; state: DocState }> {
-    const tx = this.db.transaction(['docUpdates', 'docState'], 'readonly');
-    const [rows, stored] = await Promise.all([
+  /**
+   * Lee en una sola transacción lo guardado de una página, su estado y su marca de ediciones sin subir, y
+   * arma el documento. La marca que se lee corresponde a la última escritura que entró en lo leído.
+   */
+  private async readSaved(pageId: string): Promise<{ doc: Y.Doc; state: DocState; dirty?: string }> {
+    const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readonly');
+    const [rows, stored, dirty] = await Promise.all([
       tx.objectStore('docUpdates').index('pageId').getAll(pageId),
       tx.objectStore('docState').get(pageId),
+      tx.objectStore('meta').get(dirtyKey(pageId)),
     ]);
     await tx.done;
     const doc = new Y.Doc();
     if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)), ORIGIN_LOAD);
-    return { doc, state: stored ?? emptyDocState(pageId) };
+    return { doc, state: stored ?? emptyDocState(pageId), dirty: typeof dirty === 'string' ? dirty : undefined };
   }
 
   /** Carga en `doc` todo lo guardado de la página, y compacta si hay muchos updates sueltos. */

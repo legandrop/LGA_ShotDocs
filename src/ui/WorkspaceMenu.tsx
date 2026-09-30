@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { t, useT } from '../i18n';
 import type { MediaRecord } from '../media/mediaDb';
 import { prefs } from '../prefs';
 import { useServices, useSyncStatus } from '../services';
@@ -17,7 +18,7 @@ import {
 } from '../workspaces';
 import { AccountIcon, PlusIcon, TrashIcon } from './icons';
 import { monogram } from './project';
-import { DeleteBlocked, deleteWorkspaceDatabases, forgetWorkspaceKeys, MEDIA_KEPT_NOTE, PendingMediaList } from './RemovedScreen';
+import { DeleteBlocked, deleteWorkspaceDatabases, forgetWorkspaceKeys, PendingMediaList } from './RemovedScreen';
 import { downloadUnsynced, saveBlob } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import type { WorkspacesMode } from './Welcome';
@@ -51,25 +52,18 @@ export function useLeaveGuard(): () => boolean {
   const { docs, tree, media, comments } = useServices();
   const pending = usePendingCount();
   const { current } = useCurrentWorkspace();
-  const name = current ? displayName(current) : 'this workspace';
+  const name = current ? displayName(current) : t('noProjects.thisWorkspace');
   return useCallback(() => {
     if (docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites() || comments.hasUnsavedWrites()) {
-      alert('Some of your latest edits are not saved on this device yet. Wait a moment and try again.');
+      alert(t('leave.unsaved'));
       return false;
     }
     // Las preferencias sin subir quedan en el dispositivo (una copia por usuario) y suben al volver.
     const settings = prefs.hasUnsynced();
     if (pending === 0 && !settings) return true;
-    const what = [
-      pending > 0 ? `${pending} ${pending === 1 ? 'change' : 'changes'}` : '',
-      settings ? 'your appearance settings' : '',
-    ]
-      .filter(Boolean)
-      .join(' and ');
-    return confirm(
-      `${what[0].toUpperCase()}${what.slice(1)} in ${name} ${pending + (settings ? 1 : 0) === 1 ? 'is' : 'are'} not uploaded yet. ` +
-        `They stay saved on this device and upload the next time you open ${name}. Continue?`,
-    );
+    if (!settings) return confirm(t('leave.pending', { count: pending, name }));
+    if (pending === 0) return confirm(t('leave.settings', { name }));
+    return confirm(t('leave.both', { count: pending, name }));
   }, [docs, tree, media, comments, pending, name]);
 }
 
@@ -86,6 +80,7 @@ export function WorkspaceSection(props: {
   const { current, all } = useCurrentWorkspace();
   const leave = useLeaveGuard();
   const removable = !!current && !current.legacy;
+  const tr = useT();
   const open = (mode: WorkspacesMode) => {
     props.onClose();
     props.onDialog(mode);
@@ -96,7 +91,7 @@ export function WorkspaceSection(props: {
         <hr />
         <button className="workspace-more" onClick={() => open('start')}>
           <AccountIcon size={16} />
-          Join or create a workspace…
+          {tr('workspaces.joinOrCreate')}
         </button>
         {removable && (
           <button
@@ -106,7 +101,7 @@ export function WorkspaceSection(props: {
             }}
           >
             <TrashIcon size={16} />
-            Remove “{displayName(current)}” from this device…
+            {tr('workspaces.removeNamed', { name: displayName(current) })}
           </button>
         )}
       </>
@@ -115,8 +110,8 @@ export function WorkspaceSection(props: {
   return (
     <>
       <hr />
-      <span className="mono-label project-section">Workspaces</span>
-      <div className="project-list" role="list" aria-label="Workspaces">
+      <span className="mono-label project-section">{tr('workspaces.title')}</span>
+      <div className="project-list" role="list" aria-label={tr('workspaces.title')}>
         {all.map((w) => (
           <button
             key={w.id}
@@ -135,19 +130,19 @@ export function WorkspaceSection(props: {
             </span>
             <span className="project-label">
               <strong>{displayName(w)}</strong>
-              <span>{w.pending ? `${hostOf(w.url)} · sign in to finish` : hostOf(w.url)}</span>
+              <span>{w.pending ? `${hostOf(w.url)} · ${tr('workspaces.signInToFinish')}` : hostOf(w.url)}</span>
             </span>
-            {w.id === current?.id && <span className="current-mark">Open</span>}
+            {w.id === current?.id && <span className="current-mark">{tr('project.open')}</span>}
           </button>
         ))}
       </div>
       <button onClick={() => open('join')}>
         <AccountIcon size={16} />
-        Join a workspace…
+        {tr('workspaces.joinEllipsis')}
       </button>
       <button onClick={() => open('create')}>
         <PlusIcon size={16} />
-        Create a workspace…
+        {tr('workspaces.createEllipsis')}
       </button>
       {removable && (
         <button
@@ -157,7 +152,7 @@ export function WorkspaceSection(props: {
           }}
         >
           <TrashIcon size={16} />
-          Remove “{displayName(current)}” from this device…
+          {tr('workspaces.removeNamed', { name: displayName(current) })}
         </button>
       )}
     </>
@@ -182,7 +177,8 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
   const [mediaDone, setMediaDone] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState<'download' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const name = current ? displayName(current) : 'this workspace';
+  const tr = useT();
+  const name = current ? displayName(current) : tr('noProjects.thisWorkspace');
 
   useEffect(() => {
     let live = true;
@@ -218,7 +214,7 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
       saveBlob(blob, record.name);
       setMediaDone((prev) => new Set(prev).add(record.id));
     } else {
-      setError(`“${record.name}” is not on this device anymore.`);
+      setError(t('removed.mediaGone', { name: record.name }));
     }
   }
 
@@ -229,7 +225,7 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
       await downloadUnsynced(services, name);
       setDownloaded(true);
     } catch (err) {
-      setError(`The file could not be made (${errorMessage(err)}). Nothing was deleted.`);
+      setError(t('removed.downloadFailed', { reason: errorMessage(err) }));
     } finally {
       setBusy(null);
     }
@@ -239,9 +235,9 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
     if (!current || current.legacy) return;
     const warning =
       pending > 0
-        ? `The ${pending} changes that were never uploaded will only be in what you downloaded${media.length > 0 ? ' (the file and the photos and videos)' : ''}. `
+        ? `${media.length > 0 ? t('removeWs.warningMedia', { count: pending }) : t('removeWs.warning', { count: pending })} `
         : '';
-    if (!confirm(`Remove “${name}” from this device? ${warning}You can join it again later with an invitation link.`)) return;
+    if (!confirm(t('removeWs.confirm', { name, warning }))) return;
     setBusy('remove');
     setError(null);
     const projectIds = tree.projects().map((p) => p.id);
@@ -257,47 +253,40 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
     } catch (err) {
       setBusy(null);
       if (err instanceof DeleteBlocked) {
-        setError('Close other tabs or windows of the app on this device, then reload and try again.');
+        setError(t('removeWs.blocked'));
       } else {
-        setError(`Could not remove everything (${errorMessage(err)}). Reload the app and try again.`);
+        setError(t('removed.failed', { reason: errorMessage(err) }));
       }
     }
   }
 
   return (
     <div className="modal-backdrop" onClick={() => busy !== 'remove' && onClose()}>
-      <div className="modal workspaces-dialog" role="dialog" aria-label="Remove workspace" onClick={(e) => e.stopPropagation()}>
-        <h2>Remove “{name}” from this device</h2>
-        <p className="muted">
-          This deletes what this device keeps of {name} for {user.email} and signs you out of it. Nothing
-          changes on the server or for anyone else.
-        </p>
-        {summary === null && !error && <p className="muted">Checking this device…</p>}
+      <div className="modal workspaces-dialog" role="dialog" aria-label={tr('removeWs.label')} onClick={(e) => e.stopPropagation()}>
+        <h2>{tr('removeWs.title', { name })}</h2>
+        <p className="muted">{tr('removeWs.text', { name, email: user.email })}</p>
+        {summary === null && !error && <p className="muted">{tr('removed.checking')}</p>}
         {summary !== null && pending > 0 && (
           <>
             <p>
-              <strong>
-                This device has {pending} {pending === 1 ? 'change' : 'changes'} that {pending === 1 ? 'was' : 'were'} never
-                uploaded.
-              </strong>{' '}
-              Open the workspace with internet until they upload, or download them first
-              {media.length > 0 ? ': the file, and each photo or video below' : ''}.
+              <strong>{tr('removeWs.pending', { count: pending })}</strong>{' '}
+              {media.length > 0 ? tr('removeWs.uploadOrDownloadMedia') : tr('removeWs.uploadOrDownload')}
             </p>
             <button className="secondary" disabled={busy !== null} onClick={() => void download()}>
-              {busy === 'download' ? 'Preparing…' : downloaded ? 'Download again' : 'Download my unsynced changes'}
+              {busy === 'download' ? tr('common.preparing') : downloaded ? tr('removed.downloadAgain') : tr('sync.downloadUnsynced')}
             </button>
             <PendingMediaList media={media} downloaded={mediaDone} onDownload={(m) => void downloadMedia(m)} />
           </>
         )}
-        {summary !== null && pending === 0 && <p className="muted">Everything on this device was already uploaded.</p>}
-        {mediaDb === null && <p className="muted">{MEDIA_KEPT_NOTE}</p>}
+        {summary !== null && pending === 0 && <p className="muted">{tr('removeWs.allUploaded')}</p>}
+        {mediaDb === null && <p className="muted">{tr('removed.mediaKept')}</p>}
         {error && <p className="error">{error}</p>}
         <div className="welcome-actions">
           <button className="primary danger" disabled={!canRemove || busy !== null} onClick={() => void remove()}>
-            {busy === 'remove' ? 'Removing…' : 'Remove from this device'}
+            {busy === 'remove' ? tr('removed.removing') : tr('removed.remove')}
           </button>
           <button className="link" disabled={busy === 'remove'} onClick={onClose}>
-            Cancel
+            {tr('common.cancel')}
           </button>
         </div>
       </div>
