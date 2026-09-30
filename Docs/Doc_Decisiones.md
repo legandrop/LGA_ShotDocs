@@ -111,6 +111,35 @@ diga otra cosa.
     Propuesta, a confirmar por Lega (`Plan_Workspaces.md`, paso 9 de la sección 11): antes de borrar lo
     del workspace en el dispositivo, si hay cambios sin subir, la app ofrece bajarlos como archivo.
 
+## Decididas en la implementación, a confirmar por Lega (2026-09-30)
+
+Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de
+`Plan_Workspaces.md` con la opción más simple que no cierra caminos. Siguen así hasta que Lega diga otra
+cosa.
+
+- **Crear proyectos:** con las políticas del equipo, solo el dueño y los admins. Las cuentas `member` que
+  ya tenían proyectos conservan todo lo suyo pero no crean proyectos nuevos (se las puede pasar a admin).
+- **Sacar a alguien:** su dispositivo no borra nada solo; ofrece bajar lo que no subió (un archivo con los
+  cambios y cada original pendiente) y borra recién cuando la persona toca *Remove from this device*. Sus
+  proyectos compartidos pasan a un dueño o admin con permiso sobre el proyecto entero; si no hay, quedan
+  como están.
+- **Invitaciones:** una sola viva por correo; invitar de nuevo suma permisos y conserva quién invitó;
+  se pueden revocar. Un correo nuevo en *Share* entra como invitado (*Guest*) por defecto.
+- **Sesiones con contraseña:** la base no les da acceso a nada (la app entra solo con código o link),
+  para que abrir el registro a invitados no permita quedarse con la cuenta de otro.
+- **Archivos:** con portero, también las fotos van a Drive. La carpeta del día es el día en que se agregó
+  el archivo en el dispositivo. El original queda también en el dispositivo después de subir.
+- **Papelera de archivos:** la ve quien tiene "editar y crear páginas" sobre el proyecto; mandar a la
+  papelera de Drive, solo el dueño y los admins; una vez pedido no vuelve atrás desde la app (se recupera
+  desde la papelera de Drive). Un archivo pegado en otro proyecto se ve como "Photo from another project"
+  y nunca entra a la papelera mientras se use.
+- **Comentarios:** atajo Ctrl/⌘+Alt+M; preguntas Ctrl/⌘+Alt+P; borrar un comentario lo marca (el texto
+  queda en la base). Los invitados ven los correos de quienes comentan (D-18).
+- **Varios workspaces:** cambiar de workspace recarga la app; el de la compilación (Wanka) no se puede
+  quitar del dispositivo; un link cuya clave local ya usa otro workspace con otra dirección se rechaza.
+- **Restaurar sobre el mismo proyecto:** nunca devuelve accesos quitados; las cuentas borradas después de
+  la copia vuelven bloqueadas hasta que el dueño decida.
+
 ## Abiertas
 
 - **D-06 · Dónde se guarda la clave del asistente.** Opción indicada: solo en el dispositivo, sin pasar
