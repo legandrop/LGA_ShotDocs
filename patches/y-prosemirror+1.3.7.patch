@@ -1,0 +1,180 @@
+diff --git a/node_modules/y-prosemirror/dist/y-prosemirror.cjs b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
+index de4d1e6..a216a3d 100644
+--- a/node_modules/y-prosemirror/dist/y-prosemirror.cjs
++++ b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
+@@ -322,33 +322,47 @@ const ySyncPlugin = (yXmlFragment, {
+  */
+ const restoreRelativeSelection = (tr, relSel, binding) => {
+   if (relSel !== null && relSel.anchor !== null && relSel.head !== null) {
+-    if (relSel.type === 'all') {
+-      tr.setSelection(new prosemirrorState.AllSelection(tr.doc));
+-    } else if (relSel.type === 'node') {
+-      const anchor = relativePositionToAbsolutePosition(
+-        binding.doc,
+-        binding.type,
+-        relSel.anchor,
+-        binding.mapping
+-      );
+-      tr.setSelection(prosemirrorState.NodeSelection.create(tr.doc, anchor));
+-    } else {
+-      const anchor = relativePositionToAbsolutePosition(
+-        binding.doc,
+-        binding.type,
+-        relSel.anchor,
+-        binding.mapping
+-      );
+-      const head = relativePositionToAbsolutePosition(
+-        binding.doc,
+-        binding.type,
+-        relSel.head,
+-        binding.mapping
+-      );
+-      if (anchor !== null && head !== null) {
+-        const sel = prosemirrorState.TextSelection.between(tr.doc.resolve(anchor), tr.doc.resolve(head));
+-        tr.setSelection(sel);
++    // LGA-SHOTDOCS-PATCH (patches/y-prosemirror+1.3.7.patch): this runs inside the Yjs observer that
++    // renders a change into the editor. If it throws, the change stays in the Y.Doc but the editor never
++    // shows it, and the next local keystroke writes the stale editor back over it. So: only a node
++    // selection when a node is there, only positions inside the document, and never throw.
++    try {
++      const size = tr.doc.content.size
++      const inDoc = (pos) => pos !== null && pos >= 0 && pos <= size
++      if (relSel.type === 'all') {
++        tr.setSelection(new prosemirrorState.AllSelection(tr.doc));
++      } else if (relSel.type === 'node') {
++        const anchor = relativePositionToAbsolutePosition(
++          binding.doc,
++          binding.type,
++          relSel.anchor,
++          binding.mapping
++        );
++        if (!inDoc(anchor)) return
++        const $anchor = tr.doc.resolve(anchor);
++        tr.setSelection($anchor.nodeAfter
++          ? prosemirrorState.NodeSelection.create(tr.doc, anchor)
++          : prosemirrorState.TextSelection.near($anchor));
++      } else {
++        const anchor = relativePositionToAbsolutePosition(
++          binding.doc,
++          binding.type,
++          relSel.anchor,
++          binding.mapping
++        );
++        const head = relativePositionToAbsolutePosition(
++          binding.doc,
++          binding.type,
++          relSel.head,
++          binding.mapping
++        );
++        if (inDoc(anchor) && inDoc(head)) {
++          const sel = prosemirrorState.TextSelection.between(tr.doc.resolve(anchor), tr.doc.resolve(head));
++          tr.setSelection(sel);
++        }
+       }
++    } catch (_err) {
++      // The transaction keeps its mapped selection: the change is shown anyway.
+     }
+   }
+ };
+@@ -1009,6 +1023,11 @@ const equalAttrs = (pattrs, yattrs) => {
+ const normalizePNodeContent = (pnode) => {
+   const c = pnode.content.content;
+   const res = [];
++  // LGA-SHOTDOCS-PATCH: an empty textblock is represented by an empty Y.XmlText (not by nothing), so
++  // two devices typing into the same empty paragraph write into the same Y.XmlText instead of each
++  // creating its own (y-prosemirror later merges two of them by copying one and deleting the other, and
++  // what was typed into the deleted one in the meantime is lost).
++  if (pnode.isTextblock && c.length === 0) return [[]];
+   for (let i = 0; i < c.length; i++) {
+     const n = c[i];
+     if (n.isText) {
+diff --git a/node_modules/y-prosemirror/src/plugins/sync-plugin.js b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
+index dccfb76..cc6611b 100644
+--- a/node_modules/y-prosemirror/src/plugins/sync-plugin.js
++++ b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
+@@ -248,33 +248,47 @@ export const ySyncPlugin = (yXmlFragment, {
+  */
+ const restoreRelativeSelection = (tr, relSel, binding) => {
+   if (relSel !== null && relSel.anchor !== null && relSel.head !== null) {
+-    if (relSel.type === 'all') {
+-      tr.setSelection(new AllSelection(tr.doc))
+-    } else if (relSel.type === 'node') {
+-      const anchor = relativePositionToAbsolutePosition(
+-        binding.doc,
+-        binding.type,
+-        relSel.anchor,
+-        binding.mapping
+-      )
+-      tr.setSelection(NodeSelection.create(tr.doc, anchor))
+-    } else {
+-      const anchor = relativePositionToAbsolutePosition(
+-        binding.doc,
+-        binding.type,
+-        relSel.anchor,
+-        binding.mapping
+-      )
+-      const head = relativePositionToAbsolutePosition(
+-        binding.doc,
+-        binding.type,
+-        relSel.head,
+-        binding.mapping
+-      )
+-      if (anchor !== null && head !== null) {
+-        const sel = TextSelection.between(tr.doc.resolve(anchor), tr.doc.resolve(head))
+-        tr.setSelection(sel)
++    // LGA-SHOTDOCS-PATCH (patches/y-prosemirror+1.3.7.patch): this runs inside the Yjs observer that
++    // renders a change into the editor. If it throws, the change stays in the Y.Doc but the editor never
++    // shows it, and the next local keystroke writes the stale editor back over it. So: only a node
++    // selection when a node is there, only positions inside the document, and never throw.
++    try {
++      const size = tr.doc.content.size
++      const inDoc = (pos) => pos !== null && pos >= 0 && pos <= size
++      if (relSel.type === 'all') {
++        tr.setSelection(new AllSelection(tr.doc))
++      } else if (relSel.type === 'node') {
++        const anchor = relativePositionToAbsolutePosition(
++          binding.doc,
++          binding.type,
++          relSel.anchor,
++          binding.mapping
++        )
++        if (!inDoc(anchor)) return
++        const $anchor = tr.doc.resolve(anchor)
++        tr.setSelection($anchor.nodeAfter
++          ? NodeSelection.create(tr.doc, anchor)
++          : TextSelection.near($anchor))
++      } else {
++        const anchor = relativePositionToAbsolutePosition(
++          binding.doc,
++          binding.type,
++          relSel.anchor,
++          binding.mapping
++        )
++        const head = relativePositionToAbsolutePosition(
++          binding.doc,
++          binding.type,
++          relSel.head,
++          binding.mapping
++        )
++        if (inDoc(anchor) && inDoc(head)) {
++          const sel = TextSelection.between(tr.doc.resolve(anchor), tr.doc.resolve(head))
++          tr.setSelection(sel)
++        }
+       }
++    } catch (_err) {
++      // The transaction keeps its mapped selection: the change is shown anyway.
+     }
+   }
+ }
+@@ -935,6 +949,11 @@ const equalAttrs = (pattrs, yattrs) => {
+ const normalizePNodeContent = (pnode) => {
+   const c = pnode.content.content
+   const res = []
++  // LGA-SHOTDOCS-PATCH: an empty textblock is represented by an empty Y.XmlText (not by nothing), so
++  // two devices typing into the same empty paragraph write into the same Y.XmlText instead of each
++  // creating its own (y-prosemirror later merges two of them by copying one and deleting the other, and
++  // what was typed into the deleted one in the meantime is lost).
++  if (pnode.isTextblock && c.length === 0) return [[]]
+   for (let i = 0; i < c.length; i++) {
+     const n = c[i]
+     if (n.isText) {
