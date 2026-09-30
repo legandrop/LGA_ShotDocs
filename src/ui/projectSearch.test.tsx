@@ -9,6 +9,7 @@ import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
+import { saveCollapse } from './collapseStore';
 import { closeFindBar, getFindUi, hasFindTarget, openFindBarAt, updateFindUi } from './findUi';
 import { isSearchShortcut, searchSession, takesSearchShortcut } from './projectSearchUi';
 import { Sidebar } from './Sidebar';
@@ -120,7 +121,7 @@ function services(device: Device, overrides: Partial<Services> = {}): Services {
   } as unknown as Services;
 }
 
-type Block = { id: string; text?: string; caption?: string; name?: string };
+type Block = { id: string; text?: string; caption?: string; name?: string; heading?: number };
 
 /** Escribe los bloques en la página, como los deja el editor, y la cierra. */
 async function edit(d: Device, pageId: string, blocks: Block[]): Promise<void> {
@@ -138,7 +139,8 @@ async function edit(d: Device, pageId: string, blocks: Block[]): Promise<void> {
         image.setAttribute('name', b.name ?? '');
         container.insert(0, [image]);
       } else {
-        const paragraph = new Y.XmlElement('paragraph');
+        const paragraph = new Y.XmlElement(b.heading ? 'heading' : 'paragraph');
+        if (b.heading) paragraph.setAttribute('level', b.heading as never);
         paragraph.insert(0, [new Y.XmlText(b.text ?? '')]);
         container.insert(0, [paragraph]);
       }
@@ -679,6 +681,51 @@ describe('la coincidencia pedida (verificación)', () => {
     act(() => openFindBarAt('camara', { pageId: 'A', blockId: 'b', occurrence: 1 }, { focus: false }));
     act(() => closeFindBar());
     expect(hasFindTarget('A')).toBe(false);
+  });
+});
+
+describe('con secciones colapsadas (P.11)', () => {
+  it('ir a un resultado escondido en una sección colapsada la abre para vos y queda en la coincidencia', async () => {
+    // jsdom dice que no sabe `:has()`: se hace de cuenta que sí (como en collapsePage.test.tsx).
+    const realCSS = globalThis.CSS;
+    vi.stubGlobal('CSS', {
+      escape: (v: string) => realCSS.escape(v),
+      supports: (q: string, v?: string) => (q.includes(':has(') ? true : v === undefined ? realCSS.supports(q) : realCSS.supports(q, v)),
+    });
+    try {
+      const { host, d } = await app();
+      const hidden = await act(async () => {
+        const id = await d.tree.create(null, 'Colapsada');
+        await edit(d, id, [
+          { id: 'h1', text: 'Título', heading: 1 },
+          { id: 'c1', text: 'arriba' },
+          { id: 'c2', text: 'la grúa escondida' },
+          { id: 'h2', text: 'Otro título', heading: 1 },
+        ]);
+        await saveCollapse(d.db, id, new Map([['h1', { c: true, g: null }]]));
+        return id;
+      });
+      // La página abre con la sección colapsada (lo de adentro, escondido).
+      const { navigate } = await import('../router');
+      act(() => navigate(pagePath(hidden)));
+      await until(() => host.querySelector('.bn-block-content.sd-collapsed-hidden'), 'la sección colapsada');
+      act(() => navigate(pagePath(devices[0].tree.roots(devices[0].tree.workspaceId)[0].id)));
+      await until(() => !host.querySelector('.sd-collapsed-hidden') && host.querySelector('.bn-editor'), 'otra página');
+      await openWithKeys();
+      await search('grua');
+      const snippet = options().find((o) => o.classList.contains('search-snippet'))!;
+      act(() => snippet.click());
+      expect(location.pathname).toBe(pagePath(hidden));
+      await until(() => host.querySelector('.sd-find-current'), 'la coincidencia');
+      const current = host.querySelector('.sd-find-current')!;
+      const block = current.closest<HTMLElement>('[data-node-type="blockContainer"]')!;
+      expect(block.dataset.id).toBe('c2');
+      // La sección se abrió: el bloque ya no está escondido.
+      await until(() => !block.querySelector('.bn-block-content.sd-collapsed-hidden'), 'la sección abierta');
+      expect(host.querySelector('.find-count')!.textContent).toBe('1 of 1');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

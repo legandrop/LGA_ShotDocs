@@ -218,13 +218,20 @@ export class SyncEngine {
     );
   }
 
-  stop(): void {
+  /**
+   * Deja de sincronizar. Lo que devuelve se cumple cuando termina el ciclo en curso (si lo hay), que
+   * corta en su próximo paso: antes de cerrar la base hay que esperarlo. Nunca se rechaza. Desde adentro
+   * del ciclo (por ejemplo, en una llamada al servidor) no se espera: se quedaría esperándose a sí mismo.
+   */
+  stop(): Promise<void> {
     this.stopped = true;
     this.options.media?.stop();
     this.options.comments?.stop();
     if (this.interval) clearInterval(this.interval);
     if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
     for (const fn of this.cleanups) fn();
+    return this.running?.catch(() => undefined) ?? Promise.resolve();
   }
 
   /** Vuelve a intentar todo lo que el servidor rechazó: cambios del árbol y contenido. */
@@ -391,8 +398,8 @@ export class SyncEngine {
       if (this.stopped) return;
       this.patch({ online: !isNetworkError(err), lastError: errorMessage(err) });
     } finally {
-      // Después de `stop()` la base puede estar cerrada (se cierra sesión con un ciclo en curso): contar ya no
-      // importa y no tiene que quedar un error sin atrapar.
+      // Con la sincronización andando, un error al contar se ve. Después de `stop()` la base puede estar
+      // cerrándose (quien la cierra no esperó a `stop()`): ahí el conteo ya no le importa a nadie.
       await this.refreshCounts().catch((err) => {
         if (!this.stopped) throw err;
       });

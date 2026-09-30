@@ -44,7 +44,7 @@ diga otra cosa.
   páginas propio. Son las filas de `workspaces` (cada usuario tiene los que quiera; el primero arranca
   como "My project" y se renombra; el de Lega es "MGTZD"). Se cambia de proyecto sin salir de la página,
   con un selector arriba de la barra lateral (la opción A de las que se diseñaron): un clic o Ctrl+K (desde
-  v0.053, Ctrl/⌘+K abre la búsqueda del proyecto, que también lista los proyectos; ver `Doc_Buscar.md`),
+  v0.054, Ctrl/⌘+K abre la búsqueda del proyecto, que también lista los proyectos; ver `Doc_Buscar.md`),
   buscar, flechas y Enter; en el teléfono sube como hoja desde abajo. Crear y renombrar proyectos entra en
   la misma cola que las páginas, así que funciona sin red y un proyecto nuevo sube antes que sus páginas.
   Cada proyecto recuerda su última página abierta. Una página no se mueve entre proyectos. Con equipo

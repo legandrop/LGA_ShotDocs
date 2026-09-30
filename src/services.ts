@@ -16,7 +16,7 @@ import { PageFiles } from './sync/files';
 import { openLocalDb, type LocalDb } from './sync/localDb';
 import { supportsContent } from './ui/unknownContent';
 import { SupabaseRemote } from './sync/remote';
-import { mergeRootGroups, seedIfEmpty } from './sync/structure';
+import { normalizeStructure, seedIfEmpty } from './sync/structure';
 import { PageTree } from './sync/tree';
 import { errorMessage } from './sync/types';
 import { DB_SCHEMA_VERSION, type ActiveWorkspace } from './workspace';
@@ -208,7 +208,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       const access = new AccessStore(db, user.id);
       await access.load();
       const docs = new PageDocs(db, {
-        normalize: mergeRootGroups,
+        normalize: normalizeStructure,
         seed: seedIfEmpty,
         supports: supportsContent,
         // Sin "Edit", las reparaciones de estructura quedan en memoria: el servidor las rechazaría.
@@ -273,11 +273,16 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       let closing: Promise<void> | null = null;
       const shutdown = () => {
         closing ??= (async () => {
-          engine.stop();
+          const stopping = engine.stop();
           docs.dispose();
           media.dispose();
           try {
             await docs.flush();
+            // El ciclo en curso corta en su próximo paso, pero puede estar esperando al servidor: se lo
+            // espera un rato, no más (cerrar la base igual no rompe nada, ver `SyncEngine.cycle`).
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            await Promise.race([stopping, new Promise((r) => (timer = setTimeout(r, 2000)))]);
+            clearTimeout(timer);
           } finally {
             db.close();
             mediaDb?.close();

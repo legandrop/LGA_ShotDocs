@@ -41,18 +41,25 @@ const REMOVE = [
   '.bn-trailing-block',
 ].join(',');
 
-/** Clases de estado del editor que no van en papel. */
+/**
+ * Clases de estado del editor que no van en papel. También las de colapsar (P.11, Docs/Doc_Colapsar.md): la
+ * vista se mide y se imprime con todo abierto, así las marcas de hoja cuentan todo y coinciden con el PDF.
+ */
 const STATE_CLASSES = [
   'ProseMirror-selectednode',
   'ProseMirror-focused',
   'comment-flash',
   'ProseMirror-yjs-selection',
+  'sd-collapsed',
+  'sd-collapsed-hidden',
   // Lo resaltado por la búsqueda en la página (findEditor.ts).
   'sd-find-hit',
   'sd-find-current',
   'sd-find-block',
   'sd-find-block-current',
 ];
+/** Atributos de colapsar que tampoco van en la copia. */
+const STATE_ATTRIBUTES = ['data-sd-collapsed', 'data-sd-hider'];
 
 export interface PrintView {
   root: HTMLElement;
@@ -165,6 +172,9 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement): void {
   for (const el of copy.querySelectorAll<HTMLElement>('.ProseMirror-yjs-selection')) el.style.removeProperty('background-color');
   for (const cls of STATE_CLASSES) {
     for (const el of copy.querySelectorAll(`.${cls}`)) el.classList.remove(cls);
+  }
+  for (const attr of STATE_ATTRIBUTES) {
+    for (const el of copy.querySelectorAll(`[${attr}]`)) el.removeAttribute(attr);
   }
   // Siempre en claro: el papel es blanco.
   for (const el of copy.querySelectorAll<HTMLElement>('[data-color-scheme], [data-mantine-color-scheme]')) {

@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.053 :
+v0.054 :
 
 Buscar en todo el proyecto (P.12, segunda entrega). Una lupa a la izquierda del "+" de "Páginas" en la barra
 lateral (la ve cualquiera, también quien no puede crear páginas), o Ctrl/⌘+K desde cualquier lado, abre un panel
@@ -14,11 +14,65 @@ título abre la página arriba. Busca en el dispositivo: anda sin red, un dispos
 nunca abrió, y avisa si faltan páginas por bajar o alguna no se pudo leer entera. El panel lista también los
 otros proyectos que coinciden: Ctrl/⌘+K ahora busca, y cambiar de proyecto sigue a dos teclas (el selector de
 arriba se abre con un clic); si ninguno coincide (y ya no se está buscando), ofrece crear uno con ese nombre: se llega con las flechas y Enter. Una sola letra busca solo en
-los títulos. Con texto elegido en el editor, Ctrl/⌘+K sigue creando un link, salvo que lo elegido sea lo que dejó
+los títulos. Un resultado adentro de una sección colapsada la abre para vos al llegar. Con texto elegido en el editor, Ctrl/⌘+K sigue creando un link, salvo que lo elegido sea lo que dejó
 Esc en la barra de buscar. En el teléfono el panel ocupa toda la pantalla y el cajón se cierra al ir al
 resultado. En la Mac los atajos son siempre con ⌘ y nunca con Ctrl (también mandar un comentario, comentar e
 imprimir). Con mil páginas, la primera búsqueda tarda unos milisegundos.
 [ Buscar en el proyecto - segunda entrega ]
+
+v0.053 :
+
+Colapsar secciones por sus títulos (P.11, entrega 1a). Todo título tiene un triángulo a la izquierda (aparece
+al pasar el mouse; colapsado se ve siempre; en pantallas táctiles, siempre y tenue): colapsar un título
+esconde todo hasta el próximo título de su nivel o mayor, y los de adentro guardan su estado. Es **solo para
+vos**: se guarda en el dispositivo y no cambia la página (los demás la ven igual; "para todos" con Shift+clic
+llega en la entrega 2). Ctrl/⌘+Alt+Enter colapsa o abre la sección de la selección; "Colapsar todo" y "Abrir
+todo" en el menú de la página. Editar al lado de lo escondido es seguro: borrar un título colapsado borra su
+sección entera de una vez (también el último de la página; si la página queda vacía, queda un párrafo), con un
+aviso y Ctrl+Z que trae todo; lo escondido se borra solo a propósito: con "Borrar", con el título elegido
+entero (o toda la página con Ctrl+A) y borrarlo, cortarlo o pegar o escribir encima, o con una selección de
+texto que cruza la sección entera (empieza arriba del título y termina después de lo escondido), y cortar
+lleva justo lo que se borra; cualquier otra edición que borraría algo escondido (por ejemplo Shift+→ desde un
+título colapsado y después Retroceso, o una tecla muerta de acento) no se hace, la sección se abre y la
+selección queda vacía; juntar el título con otro bloque o borrar solo su texto no borra lo escondido (se
+abre), y Supr justo arriba de un título colapsado no lo junta; mover un título colapsado (con el tirador o
+Shift+Ctrl/⌘+flechas) deja ver lo que escondía hasta que mover la sección entera llegue en la entrega 1b;
+Enter al final de un título colapsado crea un renglón después de la sección sin abrirla (y Retroceso en ese
+renglón vuelve al título sin unirlo a lo escondido); Supr ahí no une lo escondido; ↓ y → lo saltan; si algo
+que se veía fuera a quedar escondido por un cambio (propio o de otro), su sección se abre para vos; "Ir al
+bloque" de los comentarios abre lo que lo esconde. Escribir en una página grande con todo colapsado no
+recalcula lo escondido en cada tecla (unos pocos ms con miles de bloques), y Enter no rearma todas las marcas.
+Hace falta un navegador con `:has()` en el CSS (Chrome 105, Safari e iOS 15.4, Firefox 121); en uno más viejo
+no aparecen los triángulos y no se esconde nada. Las marcas de hoja se cuentan con todo abierto y el título
+colapsado dice qué hojas tiene adentro ("Hojas 2–4 adentro"); el PDF sale todo abierto. Los "Encabezados
+plegables" de BlockNote salen del menú "/" y del selector de tipo; los que ya existían se ven como títulos
+comunes. Sin tipo de bloque ni propiedad nueva, sin migración. La búsqueda en la página (v0.051) encuentra lo
+que está en secciones colapsadas y, al ir a una coincidencia escondida, abre para vos lo que la esconde;
+"Reemplazar todo" y su deshacer no abren nada. Retroceso al principio de un título ya no lo pasa a párrafo:
+"sube la línea" como cualquier renglón (se une al de arriba; un título colapsado que se une deja ver lo que
+escondía, y sus hijos quedan como con un párrafo); justo después de escribir "## ", Retroceso lo deshace como
+siempre, y funciona igual en un navegador sin colapsar.
+[ Colapsar secciones - entrega 1a ]
+
+v0.052 :
+
+Editar a la vez sin perder texto (`Doc_Colaboracion.md`). Una investigación con el editor real encontró
+pérdidas que no tenían por qué pasar, y quedan arregladas: con un bloque elegido entero (una foto tocada), un
+cambio de otro dispositivo sobre ese bloque dejaba el editor mostrando lo de antes, y la próxima tecla
+deshacía el cambio del otro para todos (también hacía que deshacer pareciera no andar); dos personas
+escribiendo en el mismo párrafo vacío perdían texto, y eso pasaba en la primera línea de toda página nueva
+abierta en dos dispositivos; y si los dos le cambiaban el tipo o la sangría al mismo renglón, el editor lo
+borraba entero con sus hijos. Son dos parches a y-prosemirror (`patches/`, los aplica `patch-package` al
+instalar; sin ellos la app no se construye), la semilla de las páginas nuevas con un texto vacío (la raíz es la
+de siempre, así una versión vieja y una nueva siguen compartiéndola), una reparación de bloques en la misma
+transacción que aplica lo que llega, y, si igual el editor no puede mostrar un cambio, se vuelve a dibujar
+desde el documento antes de la próxima tecla. La prueba al azar por el camino de la app perdía texto en 26 de
+cada 100 corridas; ahora en 0 de 500. Lo que sigue pudiendo pasar (si uno le cambia el tipo, la sangría o la
+posición a un renglón mientras otro escribe en ese mismo renglón, lo del segundo se puede perder) es como
+funciona la librería y está explicado en el documento. `min_app_version` sube a 0.052: las versiones
+anteriores no tienen estos arreglos. Además, al cerrar la app se espera a que termine la sincronización en curso
+(hasta 2 segundos) antes de cerrar la base, y las pruebas ya no dejan errores sueltos al cerrarla.
+[ Sync - editar a la vez sin perder texto ]
 
 v0.051 :
 

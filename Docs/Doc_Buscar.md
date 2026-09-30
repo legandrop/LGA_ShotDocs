@@ -1,6 +1,6 @@
 # Buscar en el proyecto y en la página (P.12)
 
-Estado: **entrega 1 hecha (v0.051): buscar y reemplazar en la página; entrega 2 hecha (v0.053): buscar en el
+Estado: **entrega 1 hecha (v0.051): buscar y reemplazar en la página; entrega 2 hecha (v0.054): buscar en el
 proyecto (Ctrl/⌘+K)**. "Correcciones de la auditoría" manda sobre lo de arriba, y "Cómo quedó (entrega 1)" y
 "Cómo quedó (entrega 2)", al final, sobre todo lo demás. Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
 + de páginas, que busca en todo el proyecto y te lleva al lugar; otra a la izquierda de los comentarios, que
@@ -363,7 +363,7 @@ Pruebas:
   problemas.
 - Cómo guarda y-prosemirror un `hardBreak` y una tabla dentro del Y.Doc: el recorrido es genérico (todo
   `Y.XmlText` debajo del bloque), pero lo fija una prueba con el editor real.
-- El diseño de P.11 está en curso: el nombre y la forma de la función que abre las secciones pueden cambiar.
+- ~~El diseño de P.11 está en curso~~: P.11 (entrega 1a, v0.053) registra `setFindCollapseHooks` desde su plugin (`collapseEditor.ts`).
 
 ## Correcciones de la auditoría (mandan sobre lo de arriba)
 
@@ -562,11 +562,16 @@ Yjs aguantó todos los intentos de romperlo. Arreglado además:
   (si no, va por ProseMirror). Prueba con dos párrafos iguales.
 
 **Queda para después:** la búsqueda del proyecto (entrega 2, con las correcciones 5 a 8, 11, 12, 15 a 17);
-reemplazar en pies y nombres, *Conservar mayúsculas* y expresiones regulares; que P.11 registre
-`setFindCollapseHooks` y respete `FIND_REPLACE_META`, `isFindReplaceTransaction` e `isFindReplaceUndo`; probar
+reemplazar en pies y nombres, *Conservar mayúsculas* y expresiones regulares; probar
 a mano Safari de Mac, iPhone y Firefox (Ctrl/⌘+F, el teclado del teléfono, los IME).
 
-## Cómo quedó (entrega 2, v0.053)
+**Con P.11 (v0.053):** el plugin de colapsar registra `setFindCollapseHooks(view, hooks)`, por vista (`isHidden`,
+`reveal` para vos, `anyHidden`) y no abre nada por `isFindReplaceTransaction` ni por deshacer o rehacer un reemplazo (la entrada de
+la pila marcada con `FIND_REPLACE_META`). Lo prueban `collapseFind.test.ts` (contar lo escondido, ir a una
+coincidencia escondida abre solo esa sección, "Reemplazar todo" adentro de secciones colapsadas y su deshacer y
+rehacer las dejan colapsadas) y `find.mjs`.
+
+## Cómo quedó (entrega 2, v0.054)
 
 Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo que pidió la auditoría del código
 (al final). Donde esto y lo de arriba no coinciden, vale esto.
@@ -668,8 +673,10 @@ Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo qu
   editor se vuelve a montar, va otra vez a esa coincidencia. El pedido lleva su página (la barra de otra página
   no lo usa) y se descarta al cambiar lo buscado, al cerrar la barra o al salir de la página. Enter sigue por las demás. El foco va al campo de
   la barra, salvo en pantallas táctiles. **La página** (su renglón): si lo encontrado está en el título, se abre
-  arriba y sin barra; si no, va a su mejor fragmento. Lo escondido en una lista plegable (y, con P.11, en una
-  sección colapsada) se abre con los ganchos de la entrega 1.
+  arriba y sin barra; si no, va a su mejor fragmento. Lo escondido en una lista plegable o en una sección
+  colapsada (P.11, v0.053) se abre para vos al llegar, con los ganchos de cada editor (`setFindCollapseHooks(view,
+  hooks)`); lo prueba `projectSearch.test.tsx` (una página que abre con la sección colapsada: ir a la coincidencia
+  escondida la abre y queda ahí).
 - **Ctrl/⌘+K** (`Workspace.tsx`): abre el panel desde cualquier lugar; con el panel abierto, lo cierra. Con un
   IME escribiendo, no. Con el selector de proyectos abierto, el selector se cierra. **Esc en la barra de buscar
   deja elegida la coincidencia** (entrega 1), y con texto elegido Ctrl/⌘+K sería "link": si lo elegido es
@@ -691,7 +698,7 @@ Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo qu
   exclusiones, no atajos.
 - Sin cambios en la base, en el esquema ni en `min_app_version`. Los comentarios y la papelera no entran.
 
-**Pruebas (805 en total):** `src/search/projectIndex.test.ts` (las palabras; títulos y texto, cada palabra en
+**Pruebas (1039 en total, con lo de `main` hasta v0.053):** `src/search/projectIndex.test.ts` (las palabras; títulos y texto, cada palabra en
 algún lado, la ñ; grupos, camino, 3 fragmentos y "más"; hijos anidados, pies y nombres con cuál de su bloque;
 la papelera y lo de adentro sin volver a leer; una página que sale del árbol y un árbol que la esconde al buscar;
 solo el proyecto abierto; solo relee lo que cambió, local o bajado de otro dispositivo; el aviso de edición

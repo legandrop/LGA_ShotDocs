@@ -11,9 +11,7 @@ type Deep<T> = { [K in keyof T]?: T[K] extends (...args: never[]) => unknown ? T
 const RIOPLATENSE: Deep<Dictionary> = {
   // Mayúscula solo al principio, como en el resto de la app.
   slash_menu: {
-    toggle_heading: { ...es.slash_menu.toggle_heading, title: 'Encabezado plegable 1' },
-    toggle_heading_2: { ...es.slash_menu.toggle_heading_2, title: 'Encabezado plegable 2' },
-    toggle_heading_3: { ...es.slash_menu.toggle_heading_3, title: 'Encabezado plegable 3' },
+    // Sin "Encabezado plegable 1/2/3": no se ofrecen (todos los títulos se colapsan, Docs/Doc_Colapsar.md).
     numbered_list: { ...es.slash_menu.numbered_list, title: 'Lista numerada' },
     bullet_list: { ...es.slash_menu.bullet_list, title: 'Lista con viñetas' },
     check_list: { ...es.slash_menu.check_list, title: 'Lista de verificación' },
