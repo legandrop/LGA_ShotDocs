@@ -494,7 +494,7 @@ sobre lo que quede.
    nuevo; `mediaDb`, `commentsDb`, `access`, `sizes`, `shutdown` y `dbName` se listan explícitamente (nulos o
    que tiran al escribir). La prueba de aislamiento compara `meta` y el `localStorage` antes y después.
 3. **`PracticeView` copia lo que hacen `PageView` y `PageEditor`,** porque la práctica no pasa por ellos: el Mod+F
-   y la `FindBar` viven en `PageEditor`; `BlockEditor` no se exporta (se exporta); la impresión necesita
+   y la `FindBar` viven en `PageEditor`; `BlockEditor` hoy no se exporta (hay que exportarlo); la impresión necesita
    `article.page[data-page-id]` y `.page-header` (si no, `printPage` va a `openPage`, navega y espera 20 s);
    el editor se vuelve a montar al cambiar el idioma. La barra de arriba muestra lupa, comentarios y "⋯" solo
    con `pageId && current` (`Workspace.tsx`), y `CommentsToggle` queda afuera de cualquier `Provider` de la
