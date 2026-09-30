@@ -101,8 +101,12 @@ export interface TeamRemote {
   revokeInvitation(id: string): Promise<void>;
   createInvitation(email: string, role: Exclude<Role, 'owner'>, grants: InvitationGrant[]): Promise<string>;
   setMemberRole(userId: string, role: Exclude<Role, 'owner'>): Promise<void>;
-  /** Devuelve cuántos proyectos pasaron a otra persona. */
-  removeMember(userId: string): Promise<number>;
+  /**
+   * Qué pasó con los proyectos compartidos de quien se saca: cuántos pasaron a otra persona y cuántos
+   * quedaron sin heredero (solo compartidos por páginas sueltas: los siguen viendo aquellos con quienes
+   * estaban compartidos). Los privados no se informan.
+   */
+  removeMember(userId: string): Promise<RemovedMember>;
   share(userId: string, target: { projectId: string } | { pageId: string }, level: GrantLevel): Promise<string>;
   unshare(grantId: string): Promise<void>;
   listAccess(target: { projectId: string } | { pageId: string }): Promise<AccessRow[]>;
@@ -124,6 +128,21 @@ export interface MediaRemote {
   downloadThumb(fileId: string): Promise<Blob>;
   /** Las filas de `files` que la sesión puede ver (las demás no vuelven). */
   fetchMediaFiles(ids: string[]): Promise<MediaFileRow[]>;
+}
+
+export interface RemovedMember {
+  transferred: number;
+  withoutHeir: number;
+}
+
+/** Lo que devuelve `remove_member`: `{ transferred: [...], without_heir: [...] }` (antes, un número). */
+export function parseRemovedMember(data: unknown): RemovedMember {
+  if (typeof data === 'number') return { transferred: data, withoutHeir: 0 };
+  const row = (data ?? {}) as { transferred?: unknown; without_heir?: unknown };
+  return {
+    transferred: Array.isArray(row.transferred) ? row.transferred.length : 0,
+    withoutHeir: Array.isArray(row.without_heir) ? row.without_heir.length : 0,
+  };
 }
 
 export const FILES_BUCKET = 'page-files';
@@ -417,10 +436,10 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     if (error) throw toRemoteError(error, status);
   }
 
-  async removeMember(userId: string): Promise<number> {
+  async removeMember(userId: string): Promise<RemovedMember> {
     const { data, error, status } = await this.client.rpc('remove_member', { p_user: userId });
     if (error) throw toRemoteError(error, status);
-    return Number(data) || 0;
+    return parseRemovedMember(data);
   }
 
   async share(userId: string, target: { projectId: string } | { pageId: string }, level: GrantLevel): Promise<string> {

@@ -184,7 +184,8 @@ Postgres rechaza cualquier escritura dentro de esa transacción, y el cliente co
 se crean proyectos de Supabase para probarlo; las pruebas usan un Supabase falso en memoria.
 
 **`--open-invite-signup`** es un paso aparte (no hace el resto): abre el registro solo para invitados, como
-"Abrir el registro solo para invitados" (abajo), pasos 4 a 6. Pide que ya esté todo lo anterior (migraciones
+"Abrir el registro solo para invitados" (abajo), pasos 4, 5 y 7 (no conecta el hook opcional *Custom Access
+Token* del paso 6: si fallara, no entraría nadie, y se prueba a mano). Pide que ya esté todo lo anterior (migraciones
 al día, la función del hook con sus permisos `t`, `t`, `f`, dueño, SMTP y las plantillas con el código);
 conecta el hook con el registro todavía cerrado, verifica que quedó conectado y que la función rechaza con
 403 un correo sin invitación (una consulta de solo lectura), y **recién después** abre el registro. Si al
@@ -233,8 +234,8 @@ Cómo entra la gente:
   `mailer_otp_length: 8` y `mailer_otp_exp: 3600`). Supabase trae 6; la app acepta de 6 a 10
   (`src/ui/Login.tsx`).
 - Contraseñas: la app no las usa y la base no las acepta: una sesión abierta con contraseña no ve ni puede
-  nada (`private.session_allowed`, ver "Abrir el registro solo para invitados"). Quedan los valores de fábrica (`password_min_length: 6`, sin chequeo de
-  contraseñas filtradas).
+  nada (`private.session_allowed`, ver "Abrir el registro solo para invitados"). Quedan los valores de
+  fábrica (`password_min_length: 6`, sin chequeo de contraseñas filtradas).
 - Verificación en dos pasos: vienen prendidos de fábrica los códigos de app autenticadora
   (`mfa_totp_enroll_enabled` y `mfa_totp_verify_enabled`), aunque la app no los ofrece; por teléfono y
   WebAuthn, apagados.
@@ -247,8 +248,9 @@ Cómo entra la gente:
 
 Todavía no se hizo en Wanka. La función del hook viene con `20260930160000_equipo.sql`, pero conectarla es
 configuración de login: se hace a mano, por la Management API, **en este orden y nunca al revés**. En un
-workspace nuevo, los pasos 4 a 6 los hace `setup-workspace.mjs --open-invite-signup` ("Preparar un workspace
-nuevo"); en Wanka, a mano. Qué hace
+workspace nuevo, los pasos 4, 5 (una verificación automática; la prueba desde el panel queda a mano) y 7 los
+hace `setup-workspace.mjs --open-invite-signup` ("Preparar un workspace nuevo"); el hook opcional del paso 6
+no lo toca. En Wanka, todo a mano. Qué hace
 Supabase (documentación *Before User Created Hook* y código de Supabase Auth): antes de crear una cuenta
 (registro con código o link, invitación desde el panel, proveedores externos, anónimos) llama a
 `select "private"."hook_before_user_created"(evento)` como `supabase_auth_admin`, con el evento

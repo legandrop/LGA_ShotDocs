@@ -233,26 +233,32 @@ export class FakeServer {
     return this.grants.some((g) => g.user_id === uid && g.page_id && this.pages.get(g.page_id)?.workspace_id === projectId);
   }
 
-  /** `remove_member`: pone `removed_at`, no borra nada, y pasa los proyectos compartidos a un admin. */
-  removeMember(uid: string): number {
+  /**
+   * `remove_member`: pone `removed_at`, no borra nada, y pasa cada proyecto compartido a un dueño o admin
+   * con permiso sobre el proyecto entero (gana `edit_pages`). Compartido solo por páginas: sin heredero.
+   */
+  removeMember(uid: string): { transferred: number; withoutHeir: number } {
     const m = this.members.get(uid);
-    if (!m || m.removed_at) return 0;
+    if (!m || m.removed_at) return { transferred: 0, withoutHeir: 0 };
     m.removed_at = new Date().toISOString();
-    let moved = 0;
+    let transferred = 0;
+    let withoutHeir = 0;
+    const rank = { view: 1, comment: 2, edit: 3, edit_pages: 4 } as Record<string, number>;
     for (const p of this.projects.values()) {
       if (p.owner_id !== uid) continue;
-      const heir = this.grants.find(
-        (g) =>
-          g.user_id !== uid &&
-          (this.role(g.user_id) === 'owner' || this.role(g.user_id) === 'admin') &&
-          (g.project_id === p.id || (g.page_id && this.pages.get(g.page_id)?.workspace_id === p.id)),
+      const others = this.grants.filter(
+        (g) => g.user_id !== uid && (g.project_id === p.id || (g.page_id && this.pages.get(g.page_id)?.workspace_id === p.id)),
       );
+      if (others.length === 0) continue;
+      const heir = others
+        .filter((g) => g.project_id === p.id && (this.role(g.user_id) === 'owner' || this.role(g.user_id) === 'admin'))
+        .sort((a, b) => (rank[b.level] ?? 0) - (rank[a.level] ?? 0))[0];
       if (heir) {
         p.owner_id = heir.user_id;
-        moved++;
-      }
+        transferred++;
+      } else withoutHeir++;
     }
-    return moved;
+    return { transferred, withoutHeir };
   }
 }
 
@@ -707,7 +713,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     cur.role = role;
   }
 
-  async removeMember(userId: string): Promise<number> {
+  async removeMember(userId: string): Promise<{ transferred: number; withoutHeir: number }> {
     this.server.check();
     const mine = this.server.role(this.userId);
     const cur = this.server.members.get(userId);
