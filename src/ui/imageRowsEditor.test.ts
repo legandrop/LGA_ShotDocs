@@ -165,6 +165,25 @@ describe('fotos en fila en esta versión', () => {
     expect(sel instanceof NodeSelection && (sel.node.attrs.url as string)).toBe('https://example.com/3.jpg');
   });
 
+  it('abajo desde una fila hacia un separador lo elige (no lo saltea)', async () => {
+    const editor = mount(new Y.Doc());
+    editor.replaceBlocks(editor.document, [photo(1, 0.5), photo(2, 0.5), { type: 'divider' } as never, { type: 'paragraph', content: 'Fin' }]);
+    await tick();
+    selectImage(editor, 1);
+    press(editor, 'ArrowDown');
+    const sel = editor.prosemirrorView!.state.selection;
+    expect(sel instanceof NodeSelection && sel.node.type.name).toBe('divider');
+  });
+
+  it('una foto sola que no llena el renglón respeta su alineación', async () => {
+    const editor = mount(new Y.Doc());
+    editor.replaceBlocks(editor.document, [
+      { type: 'image', props: { url: 'https://example.com/c.jpg', [ROW_WIDTH_PROP]: 0.5, textAlignment: 'center' } as never },
+    ]);
+    await tick();
+    expect(editor.domElement!.querySelector('.img-sized')!.classList.contains('img-align-center')).toBe(true);
+  });
+
   it('Enter con la primera foto de la fila elegida escribe después de la fila', async () => {
     const { editor } = newPage();
     await tick();

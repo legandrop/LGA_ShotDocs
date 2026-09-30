@@ -102,7 +102,7 @@ describe('una fila de fotos es una sola unidad', () => {
     if (row) d.dataset.row = row;
     return d;
   };
-  it('junta las fotos de la misma fila (arriba la más alta, abajo la más baja) y deja el resto igual', () => {
+  it('junta las fotos de la misma fila (de la que empieza más arriba a la que termina más abajo) y deja el resto igual', () => {
     const elements = [el(null), el('r1'), el('r1'), el('r1'), el(null), el('r2')];
     const units: Unit[] = [
       { key: 'b:p', top: 0, height: 40 },

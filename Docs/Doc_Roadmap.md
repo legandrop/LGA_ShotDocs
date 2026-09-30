@@ -71,7 +71,7 @@ Lega.
   como miniatura). Diseño y auditoría antes de implementar.
 - **P.7 Cuánto ocupa cada proyecto en el Drive:** que se vea (por ejemplo, al elegir proyecto o en su
   menú) cuánto ocupan sus archivos en el Drive del dueño ("30 GB"). Sale de sumar `files.size` del
-  proyecto, sin preguntarle a Drive. Auditar antes con un subagente dónde y cómo mostrarlo.
+  proyecto, sin preguntarle a Drive. Antes de implementarlo, una auditoría independiente de dónde y cómo mostrarlo.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

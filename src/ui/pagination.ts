@@ -145,13 +145,17 @@ export function measureUnits(root: HTMLElement, sheetHeight: number): Measured {
     units.push(unit);
     elements.push(el);
   }
-  return mergeRowUnits({ units, elements }, (el) => el.closest<HTMLElement>('.img-sized')?.dataset.imgRow ?? null);
+  // La fila del bloque mismo (no la de un bloque de afuera: el hijo de una foto en fila no es parte de la fila).
+  return mergeRowUnits({ units, elements }, (el) => {
+    const outer = el.closest<HTMLElement>('.bn-block-outer');
+    return outer?.classList.contains('img-sized') ? (outer.dataset.imgRow ?? null) : null;
+  });
 }
 
 /**
  * Las fotos de una misma fila (Docs/Doc_Imagenes.md) son una sola unidad: una hoja nunca corta en el medio
- * de una fila. La unidad lleva la clave y el elemento de la primera, arriba donde empieza la más alta y
- * abajo donde termina la más baja. `rowOf`: la fila de un elemento (la marca que pone el plugin de filas),
+ * de una fila. La unidad lleva la clave y el elemento de la primera, arriba donde empieza la que empieza
+ * más arriba y abajo donde termina la que termina más abajo. `rowOf`: la fila de un elemento (la marca que pone el plugin de filas),
  * o `null`. Las demás unidades de la fila quedan en `members` para los saltos (`applyBreaks`).
  */
 export function mergeRowUnits(measured: Measured, rowOf: (el: HTMLElement) => string | null): Measured {
