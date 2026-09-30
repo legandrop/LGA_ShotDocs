@@ -7,7 +7,8 @@ lleva de verdad a la coincidencia, también en páginas largas con fotos y en ho
 la parte que se desplaza de la app (y de costado si hace falta) y se sigue centrando unos segundos mientras la
 página se acomoda (fotos que bajan, marcas de hoja), hasta que desplazás, tocás o escribís; antes se centraba
 una sola vez y las fotos de arriba la empujaban fuera de la pantalla. El campo de la barra de buscar enfocado
-tiene un solo borde fino amarillo, sin el marco blanco ni el contorno grueso, en claro y oscuro. Con una hoja más
+tiene un solo borde fino (amarillo en el tema oscuro, un amarillo más oscuro en el claro para que se vea), sin el
+marco blanco ni el contorno grueso. Con una hoja más
 ancha que la ventana, la barra de buscar se alinea con los íconos de arriba y ya no queda cortada al borde de la
 hoja.
 [ Buscar - ir al resultado y la barra en hojas anchas ]

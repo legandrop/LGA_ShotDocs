@@ -132,7 +132,7 @@ describe('llevar a la vista', () => {
   });
 
   it('no se pelea con la persona: desplazar, hacer clic o una tecla lo corta', () => {
-    for (const stopWith of ['wheel', 'pointerdown', 'keydown'] as const) {
+    for (const stopWith of ['wheel', 'pointerdown', 'touchstart', 'dragenter', 'drop', 'keydown'] as const) {
       document.body.innerHTML = '';
       vi.restoreAllMocks();
       const { scroller, owner, match, at } = fake();

@@ -3363,6 +3363,12 @@ button.link.danger {
   .main:has(.comments-panel) > .topbar {
     margin-right: calc(-1 * var(--comments-width));
   }
+
+  /* Llevar algo a la vista de costado (la coincidencia de la búsqueda en una hoja ancha) no lo deja debajo
+     del panel. */
+  .main:has(.comments-panel) {
+    scroll-padding-right: var(--comments-width);
+  }
 }
 
 .comments-head {
@@ -4136,6 +4142,8 @@ button.primary.danger {
   --find-current: rgba(242, 125, 38, 0.55);
   --find-block: #408cdc;
   --find-block-current: #f27d26;
+  /* El borde del campo enfocado: el acento, más oscuro en el tema claro (contraste de 3:1 con el fondo). */
+  --find-focus: #a47300;
 }
 
 :root[data-theme='dark'] {
@@ -4143,6 +4151,7 @@ button.primary.danger {
   --find-current: rgba(242, 125, 38, 0.6);
   --find-block: #6aa8ec;
   --find-block-current: #f59a55;
+  --find-focus: var(--accent);
 }
 
 /* Lo encontrado: decoraciones de ProseMirror, sin tocar el documento. */
@@ -4224,13 +4233,18 @@ button.primary.danger {
 .find-bar .find-input:focus,
 .find-bar .find-input:focus-visible {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--find-focus);
   box-shadow: none;
 }
 
 .find-bar .find-input[aria-invalid='true'] {
   border-color: var(--danger-border);
   background: var(--danger-bg);
+}
+
+/* Sin resultados y enfocado: el rojo fuerte (el suave no se distingue del campo sin foco). */
+.find-bar .find-input[aria-invalid='true']:focus {
+  border-color: var(--danger);
 }
 
 .find-count {

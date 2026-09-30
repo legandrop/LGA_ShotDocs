@@ -119,6 +119,14 @@ export function takeFindTarget(pageId: string | undefined, { keep = false }: { k
   return state.target;
 }
 
+/**
+ * Descarta la coincidencia pedida para esa página: la persona se fue a otro lado (desplazó o tocó algo) y, si
+ * el editor se vuelve a montar (la página terminó de bajar), no hay que volver a llevarla ahí.
+ */
+export function dropFindTarget(pageId: string | undefined): void {
+  if (state.target && state.target.pageId === pageId) targetHandled = Math.max(targetHandled, state.target.nonce);
+}
+
 // --- Lo que Esc dejó elegido -------------------------------------------------------------------------------
 //
 // Esc en la barra deja elegida la coincidencia (como VS Code). Con texto elegido en el editor, Ctrl/⌘+K es

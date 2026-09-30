@@ -9,7 +9,7 @@ import { unitsFromPM, unitPos, type PMUnit, type UnitField } from '../search/ext
 import { normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from '../search/normalize';
 import { FIND_REPLACE_META } from './editorMeta';
 import { recordFindSelection } from './findUi';
-import { keepInView, SETTLE_MS, stopKeepingInView } from './findScroll';
+import { holdKeeper, keepInView, releaseKeeper, SETTLE_MS, stopKeepingInView, watchUser } from './findScroll';
 
 // Buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6, con las correcciones de las
 // auditorías). Buscar no cambia el documento: las coincidencias se marcan con decoraciones, como las marcas de
@@ -484,7 +484,7 @@ export function goToOccurrence(view: EditorView, blockId: string, occurrence: nu
  * búsqueda del proyecto) la sigue centrando mientras la página se acomoda (fotos que bajan, marcas de hoja),
  * hasta que la persona desplaza o toca algo.
  */
-export function revealCurrent(view: EditorView, { settle = false }: { settle?: boolean } = {}): FindMatch | null {
+export function revealCurrent(view: EditorView, { settle = false, onUser }: { settle?: boolean; onUser?: () => void } = {}): FindMatch | null {
   const state = getFindState(view.state);
   const match = state.matches[state.current];
   if (!match) return null;
@@ -492,6 +492,7 @@ export function revealCurrent(view: EditorView, { settle = false }: { settle?: b
   keepInView(view.dom, () => (view.isDestroyed ? null : view.dom.querySelector<HTMLElement>('.sd-find-current, .sd-find-block-current')), {
     settleMs: settle ? SETTLE_MS : 0,
     after: (el) => avoidBar(view, el),
+    onUser,
   });
   return match;
 }
@@ -499,28 +500,49 @@ export function revealCurrent(view: EditorView, { settle = false }: { settle?: b
 /**
  * Va a una coincidencia pedida (un resultado de la búsqueda del proyecto: la `occurrence` del bloque, o sin
  * bloque la primera) y la lleva a la vista mientras la página se acomoda. Si todavía no hay coincidencias (el
- * documento se está dibujando), espera un momento a que aparezcan, mientras no cambie lo buscado.
+ * documento se está dibujando), espera un momento a que aparezcan, mientras no cambie lo buscado. La espera es
+ * lo que acomoda ese editor (`holdKeeper`): otra llegada, cerrar la barra o cualquier cosa que haga la persona
+ * (desplazar, tocar, una tecla) la corta. `onUser` avisa si la cortó la persona, esperando o ya acomodando.
  */
-export function landOnOccurrence(view: EditorView, target: { blockId: string; occurrence: number } | null): void {
+export function landOnOccurrence(
+  view: EditorView,
+  target: { blockId: string; occurrence: number } | null,
+  { onUser }: { onUser?: () => void } = {},
+): void {
   const land = () => {
     if (target) goToOccurrence(view, target.blockId, target.occurrence);
-    revealCurrent(view, { settle: true });
+    revealCurrent(view, { settle: true, onUser });
   };
   const query = getFindState(view.state).query;
   if (!query || getFindState(view.state).matches.length > 0) return land();
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  const owner = view.dom;
+  let finished = false;
+  const cleanups: (() => void)[] = [];
   const done = () => {
-    off();
-    clearTimeout(timer);
+    if (finished) return;
+    finished = true;
+    for (const fn of cleanups.splice(0)) fn();
+    releaseKeeper(owner, done);
   };
-  const off = subscribeFind(view, () => {
-    const now = getFindState(view.state);
-    if (view.isDestroyed || now.query !== query) return done();
-    if (now.matches.length === 0) return;
-    done();
-    land();
-  });
-  timer = setTimeout(done, LAND_WAIT_MS);
+  holdKeeper(owner, done);
+  cleanups.push(
+    watchUser(owner, () => {
+      done();
+      onUser?.();
+    }),
+  );
+  cleanups.push(
+    subscribeFind(view, () => {
+      if (finished) return;
+      const now = getFindState(view.state);
+      if (view.isDestroyed || now.query !== query) return done();
+      if (now.matches.length === 0) return;
+      done();
+      land();
+    }),
+  );
+  const timer = setTimeout(done, LAND_WAIT_MS);
+  cleanups.push(() => clearTimeout(timer));
 }
 
 /** Cuánto se espera a que aparezcan las coincidencias de un resultado del proyecto. */

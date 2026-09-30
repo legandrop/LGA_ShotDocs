@@ -775,13 +775,25 @@ vale esto.
      cerrar la barra o borrar lo buscado corta lo anterior. Ir con Enter a la siguiente la centra una sola vez.
    - **Si el documento todavía no tiene la coincidencia** cuando se busca (se está dibujando o terminando de
      bajar), espera hasta 3 s a que aparezca y recién ahí va a la pedida; si mientras tanto se busca otra cosa,
-     no salta.
+     no salta. La espera es lo que acomoda ese editor (`holdKeeper`, uno por editor): otra llegada, cerrar la
+     barra o **cualquier cosa que haga la persona la corta**, con los mismos escuchas que el centrado
+     (`watchUser`: rueda o trackpad, toque, clic, arrastrar o soltar algo, una tecla).
+   - **Si la persona se va a otro lado** (esperando o ya acomodando), la coincidencia pedida se descarta
+     (`dropFindTarget`): con la página a medio bajar, cuando termina y el editor se vuelve a montar, no se
+     vuelve a ir ahí. Y cuando el editor se vuelve a montar sin nada nuevo que buscar (la misma búsqueda), se
+     busca otra vez pero la página no se mueve. Al desmontarse la barra o el editor se sueltan los escuchas y el
+     `ResizeObserver`.
+   - No hay un escucha de `scroll` para cortar: el ajuste del navegador al crecer algo arriba (*scroll
+     anchoring*) también dispara `scroll` y se confundiría con la persona; la rueda, el toque, el clic en la
+     barra de desplazamiento y las teclas ya cubren cómo se desplaza a mano.
    - Un resultado del título vuelve arriba **y al borde izquierdo** de la hoja.
 2. **El campo enfocado tenía un marco doble y grueso**: el `:focus-visible` global (contorno de 2 px de acento),
    el anillo de `input:focus` (3 px) y su borde del color del texto (blanco en el tema oscuro). Ahora el campo
-   de la barra enfocado tiene **un solo borde de 1 px del color de acento**, sin contorno ni anillo, en los dos
-   temas; sin resultados sigue el borde rojo. El foco se sigue viendo: el borde pasa del gris de siempre al
-   amarillo, y el campo tiene el cursor de texto. Los botones de la barra mantienen su contorno de teclado.
+   de la barra enfocado tiene **un solo borde de 1 px** (`--find-focus`), sin contorno ni anillo: el amarillo de
+   acento en el tema oscuro y un amarillo más oscuro (`#a47300`) en el claro, porque el acento sobre blanco
+   tiene 1,9:1 y un indicador de foco pide 3:1 (WCAG 1.4.11). Sin resultados, el borde rojo suave; sin
+   resultados y enfocado, el rojo fuerte (`--danger`), para que el foco se siga viendo. Los botones de la
+   barra mantienen su contorno de teclado.
 3. **Con una hoja más ancha que la ventana (A3), la barra quedaba al borde derecho de la hoja** y se cortaba.
    Ahora el ancla de la barra (`.find-anchor`, pegada arriba al desplazarse) también se pega a la izquierda de
    lo que se ve (`position: sticky; left: 0`, como la barra de arriba) y no pasa del ancho visible de `.main`
@@ -789,10 +801,21 @@ vale esto.
    lateral, la barra de desplazamiento y el panel de comentarios, que con lugar ocupa el `padding-right` de
    `.main`). Así, con la hoja entera a la vista la barra sigue al borde derecho de la página, como antes; con
    la hoja más ancha, queda **alineada con los íconos de arriba** (comentarios y "⋯") y los sigue al achicar la
-   ventana o al desplazarse de costado. En el teléfono, igual que antes: a todo el ancho y sin scroll de
+   ventana o al desplazarse de costado; con el panel de comentarios abierto (1180 px o más), a 12 px del borde
+   izquierdo del panel. Con el panel abierto, `.main` también tiene `scroll-padding-right` con su ancho: traer
+   una coincidencia de costado no la deja debajo del panel. En el teléfono, igual que antes: a todo el ancho y sin scroll de
    costado (la hoja no pasa del ancho de la pantalla).
 
-**Pruebas (1050 en total en esta rama):** `src/ui/findScroll.test.ts` (el contenedor que se desplaza; centrar
+**Auditoría (independiente, sobre b9d4bea).** Nada bloqueante; arreglado todo lo que encontró: la espera de
+3 s no escuchaba a la persona y una segunda llegada dejaba viva la primera; con la página a medio bajar, al
+completarse volvía a la coincidencia aunque la persona se hubiera ido; el contraste del borde en el tema claro;
+el foco sin resultados; arrastrar y soltar también cortan; el panel de comentarios al traer de costado; soltar
+todo al desmontarse la barra. Pruebas nuevas en `findBar.test.tsx`: cada entrada de la persona corta la espera
+(y avisa), una segunda llegada y cerrar la barra la cortan, desplazar después de llegar corta y avisa, la
+página a medio bajar que al completarse no vuelve si la persona se fue, y al desmontarse se sueltan escuchas y
+`ResizeObserver`; en `find.mjs`, el color del borde en cada tema y el rojo sin resultados.
+
+**Pruebas (1050 en total en esta rama antes de la auditoría, 1055 después):** `src/ui/findScroll.test.ts` (el contenedor que se desplaza; centrar
 debajo de la barra de arriba; de costado con una hoja ancha y sin mover si ya se ve; una escondida no mueve;
 volver a centrar con cada cambio de tamaño y con el `load` de una foto; desplazar, un clic o una tecla lo
 cortan; se termina a los 4 s, al ir a otra o al cerrar; con Enter, una sola vez) y en `src/ui/findBar.test.tsx`

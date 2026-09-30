@@ -50,12 +50,61 @@ export function centerInScroller(scroller: HTMLElement, el: Element): boolean {
   return true;
 }
 
-/** Lo que está acomodando cada editor (uno por vez: ir a otra coincidencia corta el anterior). */
+/**
+ * Lo que está acomodando cada editor, o esperando para hacerlo (uno por vez: una llegada nueva, ir a otra
+ * coincidencia o cerrar la barra corta el anterior).
+ */
 const keepers = new WeakMap<Element, () => void>();
 
-/** Deja de acomodar lo de ese editor (se cerró la barra, se fue a otra coincidencia). */
+/** Deja de acomodar (o de esperar para hacerlo) lo de ese editor. */
 export function stopKeepingInView(owner: Element): void {
   keepers.get(owner)?.();
+}
+
+/** Si algo está acomodando o esperando para hacerlo en ese editor. */
+export function isKeepingInView(owner: Element): boolean {
+  return keepers.has(owner);
+}
+
+/**
+ * `stop` pasa a ser lo que acomoda ese editor (corta lo anterior). `stop` tiene que llamar a `releaseKeeper`
+ * al terminar.
+ */
+export function holdKeeper(owner: Element, stop: () => void): void {
+  const previous = keepers.get(owner);
+  if (previous && previous !== stop) previous();
+  keepers.set(owner, stop);
+}
+
+export function releaseKeeper(owner: Element, stop: () => void): void {
+  if (keepers.get(owner) === stop) keepers.delete(owner);
+}
+
+/**
+ * Avisa la primera vez que la persona hace algo que dice "yo manejo": desplazar (rueda o trackpad), tocar,
+ * hacer clic (también en la barra de desplazamiento), arrastrar o soltar algo, o apretar una tecla. Devuelve
+ * cómo dejar de escuchar.
+ */
+export function watchUser(owner: Element, onUser: () => void): () => void {
+  const doc = owner.ownerDocument;
+  const scroller = scrollParent(owner);
+  const target: EventTarget = !scroller || scroller === doc.scrollingElement ? doc : scroller;
+  const events = ['wheel', 'touchstart', 'pointerdown', 'mousedown', 'dragenter', 'drop'] as const;
+  const win = doc.defaultView;
+  let done = false;
+  const stop = () => {
+    done = true;
+    for (const type of events) target.removeEventListener(type, user, { capture: true });
+    win?.removeEventListener('keydown', user, true);
+  };
+  const user = () => {
+    if (done) return;
+    stop();
+    onUser();
+  };
+  for (const type of events) target.addEventListener(type, user, { passive: true, capture: true });
+  win?.addEventListener('keydown', user, true);
+  return stop;
 }
 
 const frame = (fn: () => void): (() => void) => {
@@ -76,9 +125,8 @@ const frame = (fn: () => void): (() => void) => {
 export function keepInView(
   owner: HTMLElement,
   find: () => HTMLElement | null,
-  { settleMs = 0, after }: { settleMs?: number; after?: (el: HTMLElement) => void } = {},
+  { settleMs = 0, after, onUser }: { settleMs?: number; after?: (el: HTMLElement) => void; onUser?: () => void } = {},
 ): () => void {
-  stopKeepingInView(owner);
   const scroller = scrollParent(owner);
   let cancelFrame: (() => void) | null = null;
   let stopped = false;
@@ -88,7 +136,7 @@ export function keepInView(
     stopped = true;
     cancelFrame?.();
     for (const fn of cleanups.splice(0)) fn();
-    if (keepers.get(owner) === stop) keepers.delete(owner);
+    releaseKeeper(owner, stop);
   };
   const apply = () => {
     cancelFrame = null;
@@ -108,7 +156,7 @@ export function keepInView(
     });
     if (!ran) cancelFrame = cancel;
   };
-  keepers.set(owner, stop);
+  holdKeeper(owner, stop);
   schedule();
   // Una sola vez (ir con Enter a la siguiente): se termina en cuanto se aplica.
   if (settleMs <= 0 || !scroller || stopped) return stop;
@@ -124,16 +172,13 @@ export function keepInView(
   // Las fotos avisan cuando terminan de bajar (por si no cambia el tamaño de lo observado).
   owner.addEventListener('load', schedule, true);
   cleanups.push(() => owner.removeEventListener('load', schedule, true));
-  // La persona manda: desplazar, tocar, hacer clic o una tecla lo corta.
-  const user = () => stop();
-  const target = scroller === owner.ownerDocument.scrollingElement ? owner.ownerDocument : scroller;
-  for (const type of ['wheel', 'touchstart', 'pointerdown', 'mousedown'] as const) {
-    target.addEventListener(type, user, { passive: true, capture: true });
-    cleanups.push(() => target.removeEventListener(type, user, { capture: true }));
-  }
-  const win = owner.ownerDocument.defaultView;
-  win?.addEventListener('keydown', user, true);
-  cleanups.push(() => win?.removeEventListener('keydown', user, true));
+  // La persona manda: desplazar, tocar, hacer clic, soltar algo o una tecla lo corta (y se avisa).
+  cleanups.push(
+    watchUser(owner, () => {
+      stop();
+      onUser?.();
+    }),
+  );
   const timer = setTimeout(stop, settleMs);
   cleanups.push(() => clearTimeout(timer));
   return stop;

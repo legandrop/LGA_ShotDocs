@@ -18,8 +18,8 @@ import {
   undoReplace,
   type ReplaceResult,
 } from './findEditor';
-import { closeFindBar, getFindUi, hasFindTarget, takeFindTarget, isStepShortcut, takeFocusRequest, takesStepShortcut, updateFindUi, useFindUi, type FindStatus } from './findUi';
-import { scrollParent } from './findScroll';
+import { closeFindBar, dropFindTarget, getFindUi, hasFindTarget, takeFindTarget, isStepShortcut, takeFocusRequest, takesStepShortcut, updateFindUi, useFindUi, type FindStatus } from './findUi';
+import { scrollParent, stopKeepingInView } from './findScroll';
 import { ChevronUpIcon, CloseIcon, CollapseIcon, ExpandIcon } from './icons';
 
 // La barra de buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6). Como la del navegador,
@@ -96,10 +96,16 @@ export function FindBar({
     return () => observer.disconnect();
   }, [ui.open]);
 
+  // Lo último que se llevó a la vista: si el efecto vuelve a correr solo porque el editor se volvió a montar
+  // (la página terminó de bajar), se busca otra vez pero no se mueve la página (la persona puede estar leyendo
+  // otra parte).
+  const revealed = useRef<string | null>(null);
+
   // Buscar mientras se escribe; también al volver a montarse el editor (el estado vive en `findUi`).
   useEffect(() => {
     if (!view) return;
     if (!ui.open) {
+      revealed.current = null;
       clearFind(view);
       return;
     }
@@ -114,8 +120,12 @@ export function FindBar({
           const target = takeFindTarget(pageId, { keep: !complete });
           // Al llegar desde la búsqueda del proyecto, la coincidencia se sigue llevando a la vista mientras la
           // página se acomoda (fotos que bajan, marcas de hoja), hasta que la persona desplaza o toca algo.
-          if (target) landOnOccurrence(view, target);
-          else revealCurrent(view);
+          // Si la persona desplaza o toca algo, la coincidencia pedida se descarta: al completarse la página no
+          // se vuelve a ir ahí.
+          const key = `${ui.query}\u0000${ui.matchCase}\u0000${ui.wholeWord}`;
+          if (target) landOnOccurrence(view, target, { onUser: () => dropFindTarget(pageId) });
+          else if (revealed.current !== key) revealCurrent(view);
+          revealed.current = key;
         } else {
           clearFind(view);
         }
@@ -124,6 +134,14 @@ export function FindBar({
     );
     return () => clearTimeout(timer);
   }, [view, ui.open, ui.query, ui.matchCase, ui.wholeWord, ui.target, complete, pageId]);
+
+  // Al irse este editor (o la barra), deja de acomodar su coincidencia: sin escuchas ni observadores sueltos.
+  useEffect(
+    () => () => {
+      if (view) stopKeepingInView(view.dom);
+    },
+    [view],
+  );
 
   // Con la barra abierta: F3 y Ctrl/⌘+G van a la siguiente (con Shift, a la anterior), desde la barra o el
   // editor y sin un diálogo abierto.
