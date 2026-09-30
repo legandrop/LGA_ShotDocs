@@ -1,5 +1,23 @@
 # Changelog — LGA Shot Docs
 
+v0.051 :
+
+Buscar y reemplazar en la página (P.12, primera entrega). Una lupa a la izquierda del ícono de comentarios, o
+Ctrl/⌘+F, abre una barra como la del navegador que busca en el documento: sin distinguir mayúsculas ni tildes
+("camara" encuentra "Cámara"), con partes de palabras, "3 de 12", Enter y Shift+Enter, *Aa* (exacto) y palabra
+entera; encuentra también los pies de las fotos y los nombres de los archivos (el bloque queda con un
+contorno). Un segundo Ctrl/⌘+F, con el foco en la barra, abre la búsqueda del navegador; Esc la cierra y deja
+elegida la coincidencia. Quien puede editar la página despliega el reemplazo con la flecha de la barra:
+*Reemplazar* (la actual y pasa a la siguiente) y *Reemplazar todo*, que se deshace con un solo Ctrl/⌘+Z (o con
+*Deshacer* en la barra); conserva el formato y los links, no borra un link entero (una tarjeta de Drive sigue
+andando) y no toca pies ni nombres de archivo. Si otra persona cambió la coincidencia justo antes, no se
+reemplaza y se vuelve a buscar. "Reemplazar todo" escribe todo de una vez (cientos de reemplazos en una
+página grande, en una fracción de segundo). Encuentra también lo que está adentro de una lista plegable cerrada
+y la abre al llegar; los resaltados no se mueven cuando llegan cambios de otra persona. Lo resaltado no sale
+al imprimir y no recalcula las marcas de hoja. Queda listo el enganche con las secciones colapsadas (P.11):
+cuando exista, la búsqueda las abre al llegar a una coincidencia escondida.
+[ Buscar y reemplazar en la página - primera entrega ]
+
 v0.050 :
 
 Cuánto ocupa cada proyecto en el Drive (P.7, primera entrega). El selector de proyectos lo muestra en el

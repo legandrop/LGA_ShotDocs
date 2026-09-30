@@ -14,7 +14,8 @@ import {
   useTree,
 } from '../services';
 import { useWorkspace } from '../workspace';
-import { MenuIcon, MoreIcon, PlusIcon } from './icons';
+import { FIND_SHORTCUT_LABEL, openFindBar } from './findUi';
+import { MenuIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
@@ -230,6 +231,16 @@ function Shell() {
           <span className="only-mobile">
             <SyncIcon onClick={() => setNavOpen(true)} />
           </span>
+          {pageId && current && (
+            <button
+              className="icon-button"
+              aria-label={tr('shell.findInPage', { shortcut: FIND_SHORTCUT_LABEL })}
+              data-tip={tr('shell.findInPage', { shortcut: FIND_SHORTCUT_LABEL })}
+              onClick={() => openFindBar()}
+            >
+              <SearchIcon size={18} />
+            </button>
+          )}
           {pageId && current && <CommentsToggle pageId={pageId} />}
           {pageId && (
             <button
