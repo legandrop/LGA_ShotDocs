@@ -109,7 +109,8 @@ Lega.
   la página abierta, también adentro de las secciones colapsadas (P.11: el resultado abre la sección). A pensar
   en el diseño: el contenido se guarda como updates de Yjs (no texto), así que buscar en el servidor pide un
   texto derivado; buscar en el dispositivo solo ve las páginas que ya bajó; atajos (Ctrl/Cmd+F para la página,
-  Ctrl/Cmd+K para el proyecto) y permisos (nunca mostrar algo que la persona no ve). Diseño y auditoría antes.
+  Ctrl/Cmd+K para el proyecto) y permisos (nunca mostrar algo que la persona no ve). Lega sumó reemplazar, como
+  VS Code. Diseño en `Doc_Buscar.md` (en curso); auditoría antes de implementar.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
