@@ -37,7 +37,7 @@ its own project: a tree of pages you own.
 
 ## Status
 
-In production (v0.029). What works today:
+In production (v0.042). What works today:
 
 - Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
   open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
@@ -51,11 +51,8 @@ In production (v0.029). What works today:
 - A guard against content the running version does not know (the page does not open and nothing is
   deleted), a minimum app version per workspace, and a database generation so devices re-upload their
   work after a backup is restored (v0.021).
-- The file gateway with Google Drive: resumable uploads, and a test screen that uploads a video and plays
-  it back inside the app, on desktop and iPhone (v0.022 to v0.028).
-
-In this branch, not published yet (v0.041):
-
+- The file gateway with Google Drive: resumable uploads and streaming, tested on desktop and iPhone
+  (v0.022 to v0.028).
 - Photos and videos in pages go to the owner's Google Drive: saved on the device first, uploaded in parts
   that resume after closing the app or losing the connection, with a small thumbnail on the page. The
   owner chooses where the folder goes (account menu → *Google Drive*).

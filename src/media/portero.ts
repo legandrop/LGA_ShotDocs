@@ -206,7 +206,8 @@ export class Portero {
 
   /**
    * La dirección de Google para autorizar el Drive del dueño: la app navega ahí. Al terminar, Google vuelve
-   * a `returnTo` (una ruta de la app, `/…`; sin ella, `/media-test`) con `?drive=<resultado>`.
+   * a `returnTo` (una ruta de la app, `/…`; sin ella, el portero vuelve a `/media-test`, que hoy abre la app)
+   * con `?drive=<resultado>`.
    */
   async connect(returnTo?: string): Promise<string> {
     return (await this.request<{ url: string }>('POST', '/drive/connect', { json: returnTo ? { return: returnTo } : {} })).url;

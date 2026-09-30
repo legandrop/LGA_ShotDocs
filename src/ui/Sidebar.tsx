@@ -42,9 +42,9 @@ export function Sidebar() {
   const [account, setAccount] = useState<MenuPosition | null>(null);
   const accountButton = useRef<HTMLButtonElement>(null);
   // "Google Drive" (menú de la cuenta). Al volver de conectar Drive, Google deja `?drive=<resultado>` en la
-  // dirección (salvo en Media test, que lo muestra ella): el diálogo se abre con el resultado.
+  // dirección: el diálogo se abre con el resultado.
   const [drive, setDrive] = useState<{ result: string | null } | null>(() => {
-    const result = location.pathname === '/media-test' ? null : new URLSearchParams(location.search).get('drive');
+    const result = new URLSearchParams(location.search).get('drive');
     return result === null ? null : { result };
   });
   useEffect(() => {

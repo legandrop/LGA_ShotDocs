@@ -111,8 +111,7 @@ nada, y lo que espera una decisión o una acción de Lega.
    castellano si el navegador está en castellano. El editor usa el diccionario en castellano de BlockNote,
    pasado a vos. Los tipos de texto se llaman Script/Guion y Question/Pregunta en la interfaz; lo guardado en
    los documentos no cambia. Quedan en inglés, a propósito: las páginas legales (con una nota en
-   castellano), la guía para crear un workspace, el informe técnico de *Media test* y los mensajes que
-   manda el portero. **Falta:** el correo con el código (su plantilla está en `supabase/`), la guía en
+   castellano), la guía para crear un workspace y los mensajes que manda el portero. **Falta:** el correo con el código (su plantilla está en `supabase/`), la guía en
    castellano y las plantillas, que todavía no existen (fase 3), con su nombre en cada idioma.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
    datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes.

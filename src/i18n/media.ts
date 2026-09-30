@@ -25,7 +25,6 @@ export const media = {
   'drive.problem': { en: "Problem", es: "Problema" },
   'drive.connect': { en: "Connect Google Drive", es: "Conectar Google Drive" },
   'drive.checkAgain': { en: "Check again", es: "Revisar de nuevo" },
-  'mediaTest.title': { en: "Media test", es: "Prueba de fotos y videos" },
   'mediaTest.cancelled': { en: "Upload cancelled.", es: "Subida cancelada." },
   'queue.pageNotFound': {
     en: "The page is not on the server, or you cannot edit it.",

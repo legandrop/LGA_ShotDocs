@@ -4,7 +4,6 @@ import type { carrete } from './lazy/carrete';
 import type { commentsPanel } from './lazy/commentsPanel';
 import type { drive } from './lazy/drive';
 import type { editor } from './lazy/editor';
-import type { mediaTest } from './lazy/mediaTest';
 import type { teamDialogs } from './lazy/teamDialogs';
 import { strings } from './strings';
 import type { Dict, Entry } from './types';
@@ -29,7 +28,6 @@ type LazyStrings = typeof carrete &
   typeof commentsPanel &
   typeof drive &
   typeof editor &
-  typeof mediaTest &
   typeof teamDialogs;
 export type Key = keyof typeof strings | keyof LazyStrings;
 

@@ -90,8 +90,8 @@ diga otra cosa.
     papelera, compartir, miembro, invitado, dueño, admin. Los permisos: Ver, Comentar, Editar, Editar y crear
     páginas.
   - **Quedan en inglés:** las páginas legales (`/privacy`, `/terms`: es el texto que revisa Google y el que
-    vale; con la app en castellano muestran una nota que lo dice), la guía para crear un workspace, el
-    informe técnico de *Media test* y los mensajes que manda el portero. Los avisos que la app guarda en el
+    vale; con la app en castellano muestran una nota que lo dice), la guía para crear un workspace y los
+    mensajes que manda el portero (el informe técnico de *Media test* también, hasta que salió en v0.042). Los avisos que la app guarda en el
     dispositivo (el motivo de una subida detenida, de un comentario rechazado) se guardan en inglés y se
     traducen al mostrarlos (`localize`), así una versión vieja los sigue mostrando bien.
   - **Los textos de lo que se baja aparte viajan con esas partes** (`src/i18n/lazy/`: editor, carrete,

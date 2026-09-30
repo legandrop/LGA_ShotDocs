@@ -55,7 +55,7 @@ cualquier dirección que no sea un archivo, y sin red lo hace el service worker.
 | `/` | El inicio: salta a la última página abierta del proyecto elegido en ese dispositivo. |
 | `/p/<uuid>` | Una página, por su id. |
 | `/trash` | La papelera de páginas. |
-| `/media-test` | La prueba de media del portero (menú de la cuenta → *Media test*, ver `Doc_Portero.md`). |
+| `/media-test` | Ya no existe (v0.042): abre la app, como `/`. Queda por si está en un link guardado o en la vuelta de Google de un portero viejo. |
 | `/privacy` | La política de privacidad, en inglés (`src/ui/Legal.tsx`). **Pública:** se ve sin sesión ni workspace. |
 | `/terms` | Las condiciones de uso, en inglés (`src/ui/Legal.tsx`). **Pública:** se ve sin sesión ni workspace. |
 

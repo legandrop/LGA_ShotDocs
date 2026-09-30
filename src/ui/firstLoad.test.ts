@@ -25,7 +25,6 @@ const LAZY_FILES = [
   'ui/MembersDialog.tsx',
   'ui/ShareDialog.tsx',
   'ui/DriveDialog.tsx',
-  'ui/MediaTest.tsx',
   // Hojas y PDF: bajan con el editor (y el menú de la página pide printPage aparte).
   'ui/SheetBreaks.tsx',
   'ui/printPage.ts',
@@ -38,7 +37,6 @@ const LAZY_FILES = [
   'i18n/lazy/commentsPanel.ts',
   'i18n/lazy/drive.ts',
   'i18n/lazy/editor.ts',
-  'i18n/lazy/mediaTest.ts',
   'i18n/lazy/teamDialogs.ts',
 ];
 

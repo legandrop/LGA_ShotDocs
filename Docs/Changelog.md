@@ -1,5 +1,13 @@
 # Changelog — LGA Shot Docs
 
+v0.042 :
+
+Sale la pantalla *Media test* del menú de la cuenta: era la prueba del portero de antes de que las fotos y
+los videos anduvieran en las páginas. Conectar y reconectar Drive sigue en el menú de la cuenta → *Google
+Drive*. La dirección `/media-test` ahora abre la app (y si trae la vuelta de Google, muestra el resultado en
+el diálogo de Drive). El portero no cambia: sigue aceptando la subida de prueba de una versión vieja.
+[ Interfaz - sin Media test ]
+
 v0.041 :
 
 La app en castellano e inglés (roadmap B.8, D-16). Toda la interfaz pasa por un diccionario con los dos
