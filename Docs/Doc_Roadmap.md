@@ -50,6 +50,10 @@ Lega.
 
 ### P. Pedidos de Lega (2026-09-30), en este orden
 
+**Orden acordado con Lega (2026-09-30) para lo que falta:** después de colapsar 1a (P.11), la búsqueda en el
+proyecto (P.12, entrega 2), colapsar 1b, colapsar para todos (P.11, entrega 2), P.9 carpetas, P.10 copias
+locales, la segunda entrega de adjuntos (vista previa) y P.8.
+
 - **P.1 Hecho (v0.043): el PDF corta donde marca la pantalla.** Las fotos del Drive salían en el PDF con el
   original a todo el ancho (más altas que en pantalla, con la miniatura). Ver `Doc_Hojas_PDF.md`.
 - **P.2 Hecho (v0.044): el primer clic en una foto la elige, el segundo la abre.** Contorno, tiradores a la
@@ -102,7 +106,10 @@ Lega.
   imprime todo abierto por defecto, con una casilla para imprimirlo como se ve; los saltos de página en
   pantalla se marcan como si todo estuviera abierto (si una sección colapsada ocupa las páginas 2 a 4, el
   corte siguiente dice página 5); arrastrar un título colapsado mueve toda su sección; se saca "Encabezado
-  plegable" del menú `/`. Diseño en `Doc_Colapsar.md` (en curso).
+  plegable" del menú `/`. **Diseño en [`Doc_Colapsar.md`](Doc_Colapsar.md)** (sin tipo de bloque ni propiedad
+  nueva). **Entrega 1a hecha (v0.053):** colapsar para vos, con toda la seguridad al editar, las marcas de hoja
+  contadas con todo abierto y el PDF todo abierto. Faltan la 1b (arrastrar la sección entera,
+  Shift+Ctrl/⌘+↑/↓, "Imprimir como se ve") y la 2 (para todos, Shift+clic).
 - **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página**
   (`Doc_Buscar.md`, "Cómo quedó"). Falta la entrega 2, buscar en el proyecto. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y

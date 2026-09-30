@@ -78,11 +78,13 @@ export interface FindCollapseHooks {
   anyHidden?(): boolean;
 }
 
-let collapseHooks: FindCollapseHooks | null = null;
+/** Los enganches de cada editor (P.11 los registra por vista: con dos editores, cada uno los suyos). */
+const collapseHooksByView = new WeakMap<EditorView, FindCollapseHooks>();
 
-/** Lo registra el editor cuando existe el colapso (P.11); `null` lo saca. */
-export function setFindCollapseHooks(hooks: FindCollapseHooks | null): void {
-  collapseHooks = hooks;
+/** Lo registra el colapso (P.11) para una vista; `null` lo saca. */
+export function setFindCollapseHooks(view: EditorView, hooks: FindCollapseHooks | null): void {
+  if (hooks) collapseHooksByView.set(view, hooks);
+  else collapseHooksByView.delete(view);
 }
 
 // --- Listas plegables de BlockNote ---------------------------------------------------------------------
@@ -137,7 +139,8 @@ const hiddenMemo = new WeakMap<FindMatch[], { key: string; hooks: FindCollapseHo
  * guarda por lista de coincidencias (la barra lo pide en cada dibujo) mientras no se abra ni se cierre nada.
  */
 export function hiddenCount(matches: FindMatch[], view?: EditorView): number {
-  const hooks = collapseHooks && collapseHooks.anyHidden?.() !== false ? collapseHooks : null;
+  const registered = view ? collapseHooksByView.get(view) : undefined;
+  const hooks = registered && registered.anyHidden?.() !== false ? registered : null;
   if (!hooks && !view) return 0;
   const toggles = view ? closedToggleBlocks(view) : { ids: new Set<string>(), key: '' };
   if (!hooks && toggles.ids.size === 0) return 0;
@@ -158,12 +161,13 @@ export function hiddenCount(matches: FindMatch[], view?: EditorView): number {
 /** Abre lo que esconde el bloque: las listas plegables de arriba y las secciones colapsadas (P.11). */
 function revealBlock(view: EditorView, blockId: string): void {
   const toggles = closedToggles(view, blockId);
-  const collapsed = !!collapseHooks?.isHidden(blockId);
+  const hooks = collapseHooksByView.get(view);
+  const collapsed = !!hooks?.isHidden(blockId);
   // Abrir cambia los altos: las marcas de hoja tienen que recalcular aunque en el mismo momento cambien los
   // resaltados (ver `takeFindOnlyChanges`).
   if (toggles.length > 0 || collapsed) docChanges++;
   for (const wrapper of toggles) wrapper.querySelector<HTMLElement>(':scope > .bn-toggle-button')?.click();
-  if (collapsed) collapseHooks!.reveal(blockId);
+  if (collapsed) hooks!.reveal(blockId);
 }
 
 // --- Buscar ------------------------------------------------------------------------------------------------

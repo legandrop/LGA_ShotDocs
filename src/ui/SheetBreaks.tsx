@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { useT } from '../i18n';
+import { useT, type Translate } from '../i18n';
 import { usePrefs } from '../prefs';
 import { useServices, useTree } from '../services';
 import { pageFormat } from './pageFormat';
@@ -7,6 +7,7 @@ import { SHEET_TOLERANCE_PX, splitPoints, unitKey, type SheetBreak } from './pag
 import { installPrintShortcuts } from './printPage';
 import { takeFindOnlyChanges } from './findEditor';
 import { buildPrintView, paginateView, type Paginated } from './printView';
+import { hiderInDom } from './collapseDom';
 
 // Las marcas de hoja en el editor (roadmap B.7, Docs/Doc_Hojas_PDF.md): en una página con tamaño de hoja,
 // una línea con el número de hoja donde empieza cada una, en el mismo lugar donde corta el PDF. Es solo
@@ -63,6 +64,12 @@ export interface SheetMark {
   sheet: number;
   /** Desde arriba del contenedor del editor, en píxeles. */
   y: number;
+  /**
+   * Hojas que empiezan adentro de una sección colapsada (P.11, Docs/Doc_Colapsar.md): no hay dónde dibujar su
+   * línea, así que van juntas en el título colapsado ("Hojas 3–4 adentro"), de `sheet` a `to`.
+   */
+  to?: number;
+  inside?: boolean;
 }
 
 export function SheetBreaks({ pageId, host }: { pageId: string; host: RefObject<HTMLDivElement | null> }) {
@@ -176,17 +183,29 @@ export function SheetBreaks({ pageId, host }: { pageId: string; host: RefObject<
   if (!sheet || marks.length === 0) return null;
   return (
     <div className="sheet-breaks" aria-hidden="true">
-      {marks.map((m) => (
-        <div key={m.sheet} className="sheet-break" style={{ top: `${m.y}px` }}>
-          <span className="sheet-break-label">{tr('print.sheet', { n: m.sheet })}</span>
-        </div>
-      ))}
+      {marks.map((m) =>
+        m.inside ? (
+          <div key={m.sheet} className="sheet-inside" style={{ top: `${m.y}px` }}>
+            <span className="sheet-break-label">{sheetLabel(m, tr)}</span>
+          </div>
+        ) : (
+          <div key={m.sheet} className="sheet-break" style={{ top: `${m.y}px` }}>
+            <span className="sheet-break-label">{sheetLabel(m, tr)}</span>
+          </div>
+        ),
+      )}
     </div>
   );
 }
 
+/** El texto de una marca: "Hoja 5", o en un título colapsado "Hoja 3 adentro" / "Hojas 2–4 adentro". */
+export function sheetLabel(m: SheetMark, tr: Translate): string {
+  if (!m.inside) return tr('print.sheet', { n: m.sheet });
+  return m.to !== undefined && m.to > m.sheet ? tr('print.sheetsInside', { from: m.sheet, to: m.to }) : tr('print.sheetInside', { n: m.sheet });
+}
+
 function sameMarks(a: SheetMark[], b: SheetMark[]): boolean {
-  return a.length === b.length && a.every((m, i) => m.sheet === b[i].sheet && Math.abs(m.y - b[i].y) < 0.5);
+  return a.length === b.length && a.every((m, i) => m.sheet === b[i].sheet && m.to === b[i].to && Math.abs(m.y - b[i].y) < 0.5);
 }
 
 /**
@@ -231,10 +250,28 @@ export function placeMarks(
   };
 
   const marks: SheetMark[] = [];
+  // Los cortes se calculan con todo abierto (la vista no copia lo colapsado): un corte que cae en algo
+  // escondido se junta en el título colapsado que lo esconde.
+  const inside = new Map<string, number[]>();
   for (const b of result.pagination.breaks) {
+    const el = live.get(b.key);
+    const hider = el ? hiderInDom(el) : null;
+    if (hider) {
+      inside.set(hider, [...(inside.get(hider) ?? []), b.sheet]);
+      continue;
+    }
     const y = place(b);
     if (y !== null) marks.push({ sheet: b.sheet, y });
   }
+  for (const [hider, sheets] of inside) {
+    const heading = /^[A-Za-z0-9_-]+$/.test(hider)
+      ? editorHost.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${hider}"] > .bn-block-content`)
+      : null;
+    if (!heading) continue;
+    const r = heading.getBoundingClientRect();
+    marks.push({ sheet: Math.min(...sheets), to: Math.max(...sheets), y: r.top - hostTop + r.height / 2, inside: true });
+  }
+  marks.sort((a, b) => a.sheet - b.sheet);
 
   // Con el ancho de la hoja, la página llega hasta el final de la última hoja.
   const editor = editorHost.querySelector('.bn-editor');

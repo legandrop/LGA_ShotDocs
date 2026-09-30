@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { t } from '../i18n';
+import { revealCollapsed } from './collapseControl';
 
 // Lo que comparten el botón de comentarios de la barra de arriba, el panel (o la hoja en el teléfono), el
 // margen del editor y los botones "Comment" del editor: si el panel está abierto y qué mostrar. Vive en
@@ -172,6 +173,8 @@ export function blockElement(blockId: string, root: ParentNode = document): HTML
 
 /** Lleva la vista al bloque y lo resalta un momento. Devuelve si lo encontró. */
 export function revealBlock(blockId: string): boolean {
+  // Si está en una sección colapsada, primero se abre para vos (P.11, Docs/Doc_Colapsar.md).
+  revealCollapsed(blockId);
   const el = blockElement(blockId);
   if (!el) return false;
   el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });

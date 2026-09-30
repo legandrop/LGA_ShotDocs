@@ -363,7 +363,7 @@ Pruebas:
   problemas.
 - Cómo guarda y-prosemirror un `hardBreak` y una tabla dentro del Y.Doc: el recorrido es genérico (todo
   `Y.XmlText` debajo del bloque), pero lo fija una prueba con el editor real.
-- El diseño de P.11 está en curso: el nombre y la forma de la función que abre las secciones pueden cambiar.
+- ~~El diseño de P.11 está en curso~~: P.11 (entrega 1a, v0.053) registra `setFindCollapseHooks` desde su plugin (`collapseEditor.ts`).
 
 ## Correcciones de la auditoría (mandan sobre lo de arriba)
 
@@ -562,6 +562,11 @@ Yjs aguantó todos los intentos de romperlo. Arreglado además:
   (si no, va por ProseMirror). Prueba con dos párrafos iguales.
 
 **Queda para después:** la búsqueda del proyecto (entrega 2, con las correcciones 5 a 8, 11, 12, 15 a 17);
-reemplazar en pies y nombres, *Conservar mayúsculas* y expresiones regulares; que P.11 registre
-`setFindCollapseHooks` y respete `FIND_REPLACE_META`, `isFindReplaceTransaction` e `isFindReplaceUndo`; probar
+reemplazar en pies y nombres, *Conservar mayúsculas* y expresiones regulares; probar
 a mano Safari de Mac, iPhone y Firefox (Ctrl/⌘+F, el teclado del teléfono, los IME).
+
+**Con P.11 (v0.053):** el plugin de colapsar registra `setFindCollapseHooks(view, hooks)`, por vista (`isHidden`,
+`reveal` para vos, `anyHidden`) y no abre nada por `isFindReplaceTransaction` ni por deshacer o rehacer un reemplazo (la entrada de
+la pila marcada con `FIND_REPLACE_META`). Lo prueban `collapseFind.test.ts` (contar lo escondido, ir a una
+coincidencia escondida abre solo esa sección, "Reemplazar todo" adentro de secciones colapsadas y su deshacer y
+rehacer las dejan colapsadas) y `find.mjs`.

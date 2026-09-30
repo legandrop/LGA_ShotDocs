@@ -4,6 +4,9 @@ import type { Dict } from './types';
 
 export const print = {
   'print.sheet': { en: "Page {n}", es: "Hoja {n}" },
+  // Cortes de hoja adentro de una sección colapsada (Docs/Doc_Colapsar.md): van en el título.
+  'print.sheetInside': { en: "Page {n} inside", es: "Hoja {n} adentro" },
+  'print.sheetsInside': { en: "Pages {from}–{to} inside", es: "Hojas {from}–{to} adentro" },
   'print.preparing': { en: "Preparing the PDF…", es: "Preparando el PDF…" },
   'print.failed': {
     en: "The page could not be prepared for printing. Open it and try again.",

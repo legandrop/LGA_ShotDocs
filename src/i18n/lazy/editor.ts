@@ -169,6 +169,16 @@ export const editor = {
     en: "A pasted image could not be saved as a file; it stays embedded in the page.",
     es: "Una imagen pegada no se pudo guardar como archivo; queda guardada dentro de la página.",
   },
+  // Colapsar secciones por sus títulos (Docs/Doc_Colapsar.md).
+  'collapse.deletedHidden': {
+    en: "What was collapsed was deleted too. Undo with {shortcut}.",
+    es: "Se borró también lo que estaba colapsado. Se deshace con {shortcut}.",
+  },
+  'collapse.collapse': { en: "Collapse", es: "Colapsar" },
+  'collapse.expand': { en: "Expand", es: "Abrir" },
+  'collapse.onlyYou': { en: "Just for you: others still see it as it was.", es: "Solo para vos: los demás lo siguen viendo como estaba." },
+  'collapse.collapsedForYou': { en: "Collapsed just for you.", es: "Colapsado solo para vos." },
+  'collapse.label': { en: "{action} section “{title}”", es: "{action} la sección «{title}»" },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

@@ -2236,6 +2236,20 @@ code {
   text-transform: uppercase;
 }
 
+/* Hojas que empiezan adentro de una sección colapsada (Docs/Doc_Colapsar.md): una etiqueta en el título,
+   sin línea (la línea no tiene dónde ir). */
+.sheet-inside {
+  position: absolute;
+  left: -14px;
+  right: -14px;
+  height: 0;
+}
+
+.sheet-inside .sheet-break-label {
+  top: -8px;
+  border: 1px dashed var(--sheet-break);
+}
+
 /* La vista de impresión (printView.ts): afuera de la pantalla, con el ancho del área de texto de la hoja.
    Las reglas de adentro valen igual en pantalla (donde se mide) y al imprimir, así los cortes coinciden;
    por eso no dependen del ancho de la ventana (las del teléfono se pisan acá). */
@@ -4017,6 +4031,94 @@ button.primary.danger {
   font-family: var(--mono);
   font-size: 14px;
   overflow-wrap: anywhere;
+}
+
+/* --- Colapsar secciones por sus títulos (P.11, Docs/Doc_Colapsar.md) ------------------------------------ */
+
+/* Lo escondido (decoraciones de collapseEditor.ts). Con !important: le gana al CSS de BlockNote y al de los
+   encabezados plegables viejos de abajo. La vista de impresión no copia estas clases (sale todo abierto). */
+/* Las clases van en el contenido del bloque (collapseEditor.ts, por rapidez): se esconde el bloque entero. */
+.bn-editor .bn-block-outer:has(> .bn-block > .bn-block-content.sd-collapsed-hidden),
+.bn-editor .bn-block-outer:has(> .bn-block > .bn-block-content.sd-collapsed) > .bn-block > .bn-block-group {
+  display: none !important;
+}
+
+/* Los "encabezados plegables" viejos de BlockNote (`isToggleable`) se ven como títulos comunes: sin su botón
+   ni su "agregar bloque", y con los hijos siempre a la vista (salvo que se colapse con el triángulo). Más
+   específico que la regla de BlockNote (Block.css), que se carga después. */
+.bn-editor [data-content-type='heading'] .bn-toggle-button,
+.bn-editor [data-content-type='heading'] .bn-toggle-add-block-button {
+  display: none !important;
+}
+
+.bn-editor .bn-block:has(> .bn-block-content[data-content-type='heading'] > div > .bn-toggle-wrapper) > .bn-block-group {
+  display: block;
+}
+
+/* El triángulo: una capa encima del editor, como el margen de comentarios. */
+.sd-collapse-toggles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.sd-collapse-toggle {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  /* Al irse el mouse se esconde con una pausa, así se llega del título al triángulo. */
+  transition: opacity 120ms ease 300ms;
+}
+
+.sd-collapse-toggle svg {
+  opacity: 0.5;
+  transform: rotate(90deg);
+  transition: transform 120ms ease;
+}
+
+.sd-collapse-toggle.collapsed svg {
+  opacity: 0.8;
+  transform: none;
+}
+
+.sd-collapse-toggle.shown,
+.sd-collapse-toggle.collapsed,
+.sd-collapse-toggle:hover,
+.sd-collapse-toggle:focus-visible {
+  opacity: 1;
+  transition-delay: 0s;
+}
+
+.sd-collapse-toggle:hover {
+  background: var(--hover);
+}
+
+.sd-collapse-toggle:hover svg {
+  opacity: 1;
+}
+
+/* En pantallas táctiles se ve siempre, tenue (no hay mouse que pase por el título). */
+.sd-touch .sd-collapse-toggle {
+  opacity: 0.5;
+  transition: none;
+}
+
+.sd-touch .sd-collapse-toggle.collapsed {
+  opacity: 1;
+}
+
+/* En un título, el menú lateral se corre: el triángulo va pegado al texto. */
+.sd-side-menu-heading {
+  transform: translateX(-22px);
 }
 
 /* --- Buscar y reemplazar en la página (Docs/Doc_Buscar.md) --------------------------------------------- */
