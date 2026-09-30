@@ -54,9 +54,10 @@ function readStored(): Stored {
   return { userId: null, prefs: { ...DEFAULT_PREFS }, dirty: false };
 }
 
-// La copia de los otros usuarios del dispositivo (otra cuenta, u otro workspace: cada uno tiene su usuario).
-// `shotdocs-prefs` sigue siendo la del usuario actual, con el nombre de siempre; esta es una clave aparte
-// para que cambiar de workspace no pierda un cambio sin subir ni vuelva a lo de fábrica sin red.
+// Una copia por usuario del dispositivo (otra cuenta, u otro workspace: cada uno tiene su usuario), también
+// la del actual. `shotdocs-prefs` sigue siendo la del usuario actual, con el nombre de siempre; esta es una
+// clave aparte para que cambiar de workspace (o tener dos pestañas con workspaces distintos) no pierda un
+// cambio sin subir ni vuelva a lo de fábrica sin red.
 const OTHERS_KEY = 'shotdocs-prefs-others';
 const MAX_OTHERS = 20;
 
@@ -103,15 +104,20 @@ class PrefsStore {
   private failures = 0;
   /** Sube con cada cambio local: una respuesta que salió antes de un cambio no lo pisa. */
   private revision = 0;
+  /** El usuario de `attach`: solo sus preferencias se suben con ese cliente. */
+  private attachedUser: string | null = null;
 
   constructor() {
     darkQuery?.addEventListener('change', () => this.emit());
     if (typeof window === 'undefined') return;
     window.addEventListener('online', () => void this.push());
-    // Otra pestaña cambió las preferencias: esta las toma.
+    // Otra pestaña cambió las preferencias: esta las toma, solo si son del mismo usuario. Otra pestaña con
+    // otro workspace (otro usuario) no se mezcla: esta sigue con las suyas y nunca sube las de la otra.
     window.addEventListener('storage', (e) => {
       if (e.key !== STORAGE_KEY) return;
-      this.state = readStored();
+      const next = readStored();
+      if (next.userId !== this.state.userId) return;
+      this.state = next;
       this.revision++;
       this.emit();
     });
@@ -150,11 +156,13 @@ class PrefsStore {
    */
   async attach(client: SupabaseClient, userId: string): Promise<void> {
     this.client = client;
+    this.attachedUser = userId;
     if (this.state.userId !== userId) {
+      // La copia aparte de cada usuario se mantiene al día en cada `save` (también la del actual): así otra
+      // pestaña con otro usuario que pisó `shotdocs-prefs` no le hace perder nada a este.
       const others = readOthers();
       if (this.state.userId) others[this.state.userId] = { prefs: this.state.prefs, dirty: this.state.dirty };
       const mine = others[userId];
-      delete others[userId];
       writeOthers(others);
       this.state = { userId, prefs: mine ? mine.prefs : { ...DEFAULT_PREFS }, dirty: mine?.dirty ?? false };
       this.revision++;
@@ -177,14 +185,16 @@ class PrefsStore {
 
   detach(): void {
     this.client = null;
+    this.attachedUser = null;
     if (this.retry) clearTimeout(this.retry);
     this.retry = null;
   }
 
   private async push(): Promise<void> {
     const client = this.client;
-    const userId = this.state.userId;
-    if (!client || !userId || !this.state.dirty || this.pushing) return;
+    const userId = this.attachedUser;
+    // Solo lo del usuario de `attach`, con su cliente: nunca las de otro usuario en la cuenta equivocada.
+    if (!client || !userId || this.state.userId !== userId || !this.state.dirty || this.pushing) return;
     if (this.retry) clearTimeout(this.retry);
     this.retry = null;
     this.pushing = true;
@@ -226,6 +236,11 @@ class PrefsStore {
   private save(): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      if (this.state.userId) {
+        const others = readOthers();
+        others[this.state.userId] = { prefs: this.state.prefs, dirty: this.state.dirty };
+        writeOthers(others);
+      }
     } catch {
       // Sin almacenamiento, las preferencias duran lo que dure la pestaña.
     }
