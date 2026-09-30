@@ -80,8 +80,9 @@ describe('carrete: qué se muestra de cada elemento', () => {
     expect(p).toMatchObject({ kind: 'video', name: 'IMG_0008.MOV' });
     expect(p.preview).toMatch(/^blob:/);
     const full = await loader.full(itemFor(video));
-    expect(full).toMatchObject({ local: false });
+    expect(full).toMatchObject({ local: false, portero: true });
     expect(full.url).toMatch(/\/m\/drive-/);
+    expect(full.url).not.toContain('download=1');
 
     await loader.full(itemFor(video));
     await loader.full(itemFor(photo));

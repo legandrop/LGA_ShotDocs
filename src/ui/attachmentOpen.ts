@@ -39,6 +39,15 @@ export function prepareAttachment(media: Media, id: string): Promise<void> {
     ]);
     entry.open = open;
     entry.download = download;
+    // Lo que no se pudo preparar (sin red, todavía subiendo, o sin saber el tipo) no se guarda: el próximo
+    // pedido vuelve a probar.
+    if (!download || (!open && (!info || inlineType(info.mime)))) {
+      if (prepared.get(id) === entry) prepared.delete(id);
+      setTimeout(() => {
+        open?.release();
+        download?.release();
+      }, KEEP_MS);
+    }
   })();
   prepared.set(id, entry);
   setTimeout(() => {
@@ -55,6 +64,13 @@ export function preparedFor(id: string): { open: Ready | null; download: Ready |
   const entry = prepared.get(id);
   if (!entry || entry.download === undefined) return undefined;
   return { open: entry.open ?? null, download: entry.download ?? null };
+}
+
+/** Lo que dejó preparado el último intento, aunque haya fallado (la hoja lo usa para decir qué pasa). */
+export async function prepareAndGet(media: Media, id: string): Promise<{ open: Ready | null; download: Ready | null }> {
+  const entry = prepared.get(id) ?? (prepareAttachment(media, id), prepared.get(id));
+  await entry?.pending;
+  return { open: entry?.open ?? null, download: entry?.download ?? null };
 }
 
 /** Olvida lo preparado (un pase que no anduvo, o un archivo que cambió). */

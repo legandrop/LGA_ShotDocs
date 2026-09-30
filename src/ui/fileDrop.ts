@@ -63,6 +63,7 @@ interface BlockLike {
   type: string;
   props?: Record<string, unknown>;
   content?: unknown;
+  children?: unknown[];
 }
 
 /** Lo que usa `insertFiles` del editor (la parte de la API de BlockNote que hace falta). */
@@ -75,9 +76,13 @@ export interface FileEditor {
   uploadFile?: (file: File, blockId?: string) => Promise<unknown>;
 }
 
-/** Un párrafo común y vacío (se reemplaza, como hace BlockNote; cualquier otro bloque se deja). */
+/**
+ * Un párrafo común, vacío y sin bloques adentro (se reemplaza, como hace BlockNote; cualquier otro bloque se
+ * deja: sacar un párrafo con hijos se los llevaría).
+ */
 function isEmptyParagraph(block: BlockLike | undefined): boolean {
   if (!block || block.type !== 'paragraph') return false;
+  if (Array.isArray(block.children) && block.children.length > 0) return false;
   const props = block.props ?? {};
   if (props.script === true || props.question === true || props.driveCard === true) return false;
   return !Array.isArray(block.content) || block.content.length === 0;

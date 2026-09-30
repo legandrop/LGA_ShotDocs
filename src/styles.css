@@ -2598,11 +2598,19 @@ code {
   max-width: 100% !important;
 }
 
-.editor .bn-visual-media-wrapper:has(img.sd-attachment) .bn-resize-handle {
+/* Sin tiradores, también con la tarjeta elegida (le gana a la regla que los muestra en una foto elegida). */
+.editor .bn-visual-media-wrapper:has(img.sd-attachment) .bn-resize-handle,
+.editor .bn-editor.ProseMirror-focused[contenteditable='true'] .ProseMirror-selectednode[data-content-type='image'] .bn-visual-media-wrapper:has(img.sd-attachment) .bn-resize-handle {
   display: none !important;
 }
 
+/* En una fila (una versión vieja pudo darle un ancho), la tarjeta ocupa su renglón con su tamaño. */
+.bn-block-group.img-rows > .bn-block-outer.img-sized:has(img.sd-attachment) {
+  flex: 0 0 100% !important;
+}
+
 .editor img.bn-visual-media.sd-attachment,
+.editor .bn-editor[contenteditable='false'] [data-content-type='image'] img.bn-visual-media.sd-attachment,
 .editor .bn-editor.ProseMirror-focused .ProseMirror-selectednode[data-content-type='image'] img.bn-visual-media.sd-attachment {
   cursor: pointer;
 }

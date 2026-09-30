@@ -29,6 +29,8 @@ export interface Full {
   url: string;
   /** Está en este dispositivo (se baja con su nombre y anda sin red). */
   local: boolean;
+  /** Es un pase del portero: para bajarlo se le agrega `?download=1` (si no, un PDF se abriría). */
+  portero?: boolean;
 }
 
 export interface CarreteLoader {
@@ -110,10 +112,13 @@ export function forgetPass(media: Pick<MediaQueue, 'pass'>, id: string): void {
 
 /**
  * Los atributos del link para bajar el original: con su nombre si está en el dispositivo; si viene del
- * portero, en otra pestaña (un archivo de otro sitio no se puede bajar con su nombre, ver Doc_Carrete.md).
+ * portero, con `?download=1` (el portero lo manda como descarga, con su nombre) y en otra pestaña (si
+ * respondiera un error, no reemplaza la app; ver Doc_Carrete.md).
  */
 export function downloadProps(full: Full, name: string): { href: string; download: string; target?: string; rel?: string } {
-  return full.local ? { href: full.url, download: name } : { href: full.url, download: name, target: '_blank', rel: 'noreferrer' };
+  if (full.local) return { href: full.url, download: name };
+  const href = full.portero ? forceDownload(full.url) : full.url;
+  return { href, download: name, target: '_blank', rel: 'noreferrer' };
 }
 
 /**
@@ -129,7 +134,7 @@ export async function originalFor(
     const url = URL.createObjectURL(safeBlob(source.original, 'download'));
     return { full: { url, local: true }, name: source.name, release: () => URL.revokeObjectURL(url) };
   }
-  return { full: { url: await passFor(media, id), local: false }, name: source.name, release: () => undefined };
+  return { full: { url: await passFor(media, id), local: false, portero: true }, name: source.name, release: () => undefined };
 }
 
 type Opener = Pick<MediaQueue, 'source' | 'pass' | 'passInfo' | 'mediaUrl'>;
@@ -249,7 +254,7 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
         else created.push(url);
         return { url, local: true };
       }
-      return { url: await passFor(media, item.mediaId), local: false };
+      return { url: await passFor(media, item.mediaId), local: false, portero: true };
     }
     if (item.source === 'file') return { url: await files.resolve(item.url), local: true };
     return { url: item.url, local: item.url.startsWith('data:') };
