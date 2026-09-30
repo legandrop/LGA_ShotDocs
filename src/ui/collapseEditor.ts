@@ -21,6 +21,7 @@ import {
 import { hiddenInDom } from './collapseDom';
 import { BACKGROUND_META, FIND_REPLACE_META } from './editorMeta';
 import { isFindReplaceTransaction, setFindCollapseHooks, type FindCollapseHooks } from './findEditor';
+import { isLetter, modPressed } from './findUi';
 import { notify } from './notice';
 
 // Colapsar secciones por sus títulos (P.11, Docs/Doc_Colapsar.md), en el editor. Como las filas de fotos
@@ -1193,7 +1194,7 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
     props: {
       decorations: (state) => collapseKey.getState(state)?.decorations,
       handleKeyDown: (_view, event) => {
-        pendingAll = (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a';
+        pendingAll = isSelectAllKey(event);
         return false;
       },
       handleDOMEvents: {
@@ -1204,10 +1205,23 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
           return false;
         },
         beforeinput: (view, event) => {
-          const type = (event as InputEvent).inputType ?? '';
-          if (!/^(insert|delete)/.test(type) || !refuseAhead(view)) return false;
-          if (!event.cancelable) return false;
+          const input = event as InputEvent;
+          const type = input.inputType ?? '';
+          if (!/^(insert|delete)/.test(type)) return false;
+          // Se rechazó: queda manejado aunque no se pueda cancelar (si no, en Android ProseMirror mandaría su
+          // propio Retroceso sobre la selección ya vacía; verificación de 6f47844).
+          if (refuseAhead(view)) {
+            if (event.cancelable) event.preventDefault();
+            return true;
+          }
+          // Ctrl+A y un texto que no pasa por el teclado (el dictado, los emojis): el navegador reemplazaría solo lo
+          // que ve; se escribe sobre la selección de ProseMirror, que llega hasta lo escondido del final.
+          const text = input.data ?? input.dataTransfer?.getData('text/plain') ?? '';
+          const sel = view.state.selection;
+          if (!event.cancelable || !text || !/^insert(Text|ReplacementText)$/.test(type)) return false;
+          if (!(sel instanceof TextSelection) || !selectsAll(sel, view.state)) return false;
           event.preventDefault();
+          view.dispatch(view.state.tr.insertText(text).scrollIntoView());
           return true;
         },
         copy: (view) => {
@@ -1325,6 +1339,14 @@ export function collapseSupported(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Si la tecla es la de elegir todo: ⌘+A en la Mac (Ctrl+A no), Ctrl+A en las demás; la letra que escribe la
+ * tecla, o la posición de la A si no da una letra latina (verificación de 6f47844).
+ */
+export function isSelectAllKey(event: KeyboardEvent, mac = IS_MAC): boolean {
+  return modPressed(event, mac) && !event.altKey && !event.shiftKey && isLetter(event, 'a');
 }
 
 /** El atajo, como se ve en los tooltips. */

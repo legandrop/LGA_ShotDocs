@@ -331,12 +331,14 @@ recalcula (hoy igual). A verificar en Safari del iPhone, que puede demorar las i
 8. **Lo tuyo vive en el navegador:** se pierde si se borran los datos del sitio (es solo la vista).
 9. **Versiones viejas** ven todo abierto aunque alguien haya colapsado para todos (esperado; no pierden nada).
 10. **Problemas de BlockNote y y-prosemirror que no son de esta función** (la verificación los vio también sin
-    nada colapsado, y la prueba al azar no los cuenta como fallas de colapsar): dos documentos que divergen
-    después de ids repetidos o de juntar cambios hechos sin red; `restoreRelativeSelection` que tira un error
-    en algunos deshacer o rehacer; cambios concurrentes sin red que pierden texto al juntarse; y un aviso de
+    nada colapsado, y la prueba al azar no los cuenta como fallas de colapsar): cambios concurrentes sin red que
+    pierden texto al juntarse (lo inherente de y-prosemirror, `Doc_Colaboracion.md`); y un aviso de
     ProseMirror ("TextSelection endpoint not pointing into a node with inline content") al cortar. Con ids
     repetidos, UniqueID le da un id nuevo a cada copia y un título colapsado pierde lo colapsado (no se sabe
     cuál era), y `removeBlocks` de BlockNote saca el primer bloque con ese id. Quedan anotados para mirarlos aparte.
+    Los documentos que divergían y `restoreRelativeSelection` que tiraba un error al deshacer desaparecieron con
+    los parches de y-prosemirror (v0.052) y la entrega en orden en la prueba (`connect` de `collabHarness.ts`,
+    como el servidor): ahora son fallas.
 11. **El Enter de BlockNote con una selección** a veces tira un error de ProseMirror ("Cannot join blockGroup
     onto …", "Position N out of range", "Inserted content deeper than insertion position"): pasa igual en
     BlockNote solo, sin Yjs y sin colapsar. Enter no hace nada, queda el error en la consola y no se pierde
@@ -718,6 +720,21 @@ Entrega 1a, v0.053. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
   - Las pruebas de punta a punta borran el usuario de prueba antes de cerrar el navegador y no dejan un error
     suelto después de terminar; `deleteUser` avisa si falla y saca antes los archivos del usuario (repo de
     pruebas privado).
+- **Verificación de `6f47844`** (sin bloqueantes ni importantes; B1 aguanta en Chromium en una matriz grande y
+  cada capa hace falta):
+  1. Un `beforeinput` que no se puede cancelar (Android, la composición) y que se rechaza queda manejado: si no,
+     ProseMirror mandaba en Android su propio Retroceso sobre la selección ya vacía y borraba una letra del
+     título. `preventDefault` solo cuando se puede.
+  2. Ctrl+A según la plataforma (`isSelectAllKey`, con `modPressed` e `isLetter` de `findUi.ts`): en la Mac solo
+     ⌘+A (Ctrl+A en la Mac mueve al principio de la línea y no elige todo), en las demás solo Ctrl+A; en otro
+     alfabeto, la tecla de la A. Antes Ctrl+A en la Mac contaba y borrar se llevaba lo escondido del final.
+  3. Ctrl+A y un texto que no pasa por el teclado (el dictado, los emojis, `beforeinput` de `insertText` que se
+     puede cancelar): se escribe sobre la selección de ProseMirror, que llega hasta lo escondido del final (el
+     navegador reemplazaba solo lo que se ve y quedaba la última sección escondida). Una composición (IME) no se
+     puede cancelar: esa sigue como la maneja ProseMirror.
+  - Unido con main (v0.052, editar a la vez sin perder texto): colapsar pasa a v0.053. La prueba al azar entrega
+    los cambios en orden y compara los documentos de Yjs y los editores sin ids (recomendación de
+    `Doc_Colaboracion.md`).
 - **Para la 1b (riesgo):** la auditoría vio que dos personas moviendo el mismo título a la vez con
   Shift+Ctrl/⌘+↑/↓ pierden bloques aun sin colapsar (un problema de BlockNote con y-prosemirror: cada mover es
   borrar e insertar, y dos borrados más dos inserciones se cruzan). Mover una sección entera no tiene que
@@ -728,7 +745,7 @@ Entrega 1a, v0.053. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
   para vos lo que la esconde. "Reemplazar todo" escribe en el Y.Doc (llega como de Yjs): se reconoce con
   `isFindReplaceTransaction`, y su deshacer y rehacer por la marca de la pila; ninguno abre nada.
   `collapseFind.test.ts` lo prueba con el editor real y las dos extensiones.
-- **Pruebas** (136 nuevas, 981 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
+- **Pruebas** (140 nuevas, 985 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
   (el editor real: cada caso de la sección 5 y de las correcciones, borrar la sección entera con el último título
   y la página vacía, deshacer con los mismos ids, dos documentos para lo de otro, el deshacer marcado por la
   búsqueda, la auditoría y las verificaciones), `collapseProperty.test.ts` (al azar), `collapseMenus.test.ts`, `collapseFind.test.ts`, `collapseStore.test.ts`,

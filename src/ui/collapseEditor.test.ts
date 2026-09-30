@@ -8,7 +8,7 @@ import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { HeadingRecord } from './collapse';
-import { collapseExtension, collapseState, headingBackspaceExtension, removeWithSections, revealBlock, setAllCollapsed, setCollapsed } from './collapseEditor';
+import { collapseExtension, collapseKey, collapseState, headingBackspaceExtension, isSelectAllKey, removeWithSections, revealBlock, setAllCollapsed, setCollapsed } from './collapseEditor';
 import { hiderInDom } from './collapseDom';
 import { paragraphProps, schema } from './editorSchema';
 import { FIND_REPLACE_META } from './editorMeta';
@@ -1540,5 +1540,57 @@ describe('verificación de a2390e6 + fbaef68', () => {
     putCaret(editor, 'Dos', 'start');
     press(editor, 'Backspace');
     expect(texts(editor)).toEqual(['UnoDos']);
+  });
+});
+
+// --- Verificación de 6f47844 ----------------------------------------------------------------------------------
+
+describe('verificación de 6f47844', () => {
+  it('1. un beforeinput que no se puede cancelar (Android) y se rechaza queda manejado: ProseMirror no manda su Retroceso', () => {
+    const { editor } = page(SECTION());
+    collapse(editor, 'Heading');
+    putCaret(editor, 'Heading');
+    press(editor, 'ArrowRight', { shiftKey: true });
+    const v = view(editor);
+    const event = new InputEvent('beforeinput', { bubbles: true, cancelable: false, inputType: 'deleteContentBackward' });
+    const handler = (collapseKey.get(v.state)!.props.handleDOMEvents as Record<string, (view: unknown, e: Event) => boolean>).beforeinput;
+    expect(handler(v, event)).toBe(true);
+    expect(texts(editor)).toEqual(['Before', 'Heading', 'x1', 'x2', 'Zeta']);
+    expect(visible(editor)).toEqual(['Before', 'Heading', 'x1', 'x2', 'Zeta']);
+    expect(v.state.selection.empty).toBe(true);
+  });
+
+  it('2. Ctrl+A según la plataforma: en la Mac solo ⌘ (Ctrl+A no), en las demás solo Ctrl; en otro alfabeto, la tecla A', () => {
+    const k = (key: string, mods: Partial<KeyboardEventInit>, code = 'KeyA') => new KeyboardEvent('keydown', { key, code, ...mods });
+    expect(isSelectAllKey(k('a', { metaKey: true }), true)).toBe(true);
+    expect(isSelectAllKey(k('a', { ctrlKey: true }), true)).toBe(false);
+    expect(isSelectAllKey(k('a', { ctrlKey: true }), false)).toBe(true);
+    expect(isSelectAllKey(k('a', { metaKey: true }), false)).toBe(false);
+    expect(isSelectAllKey(k('ф', { ctrlKey: true }), false)).toBe(true);
+    expect(isSelectAllKey(k('a', { ctrlKey: true, shiftKey: true }), false)).toBe(false);
+    expect(isSelectAllKey(k('q', { ctrlKey: true }, 'KeyA'), false)).toBe(false);
+  });
+
+  it('2. ⌘+A fuera de la Mac (o Ctrl+A en la Mac) no es elegir todo: cortar no se lleva lo escondido del final', async () => {
+    const { editor } = page([p('Before'), h(1, 'Heading'), p('x1'), h(1, 'Z'), p('z1')]);
+    collapse(editor, 'Heading', 'Z');
+    press(editor, 'a', { metaKey: true });
+    selectText(editor, textPos(editor, 'Before', 'start'), textPos(editor, 'z1'));
+    // No es Ctrl+A: la selección se achica al final del título Z. Lo de Heading se borra (la selección cruza su
+    // sección entera, B); lo escondido del final queda.
+    press(editor, 'Backspace');
+    await settle();
+    expect(texts(editor)).toContain('z1');
+  });
+
+  it('3. Ctrl+A y un texto que no pasa por el teclado (dictado, emojis) reemplaza todo, también lo escondido del final', () => {
+    const { editor } = page([p('Before'), h(1, 'Heading'), p('x1'), h(1, 'Z'), p('z1')]);
+    collapse(editor, 'Heading', 'Z');
+    press(editor, 'a', { ctrlKey: true });
+    selectText(editor, textPos(editor, 'Before', 'start'), textPos(editor, 'z1'));
+    const event = new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: '😀' });
+    view(editor).dom.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(texts(editor)).toEqual(['😀']);
   });
 });

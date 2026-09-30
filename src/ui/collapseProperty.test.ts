@@ -10,6 +10,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { collapseExtension, collapseState, headingBackspaceExtension, removeWithSections, setCollapsed } from './collapseEditor';
 import { schema } from './editorSchema';
 import { findExtension, replaceAll, setFind, clearFind, stepFind } from './findEditor';
+import { connect, sameDocs } from './collabHarness';
 
 // Colapsar (Docs/Doc_Colapsar.md): prueba de propiedades al azar, traída de la verificación independiente de la
 // entrega 1a. Dos editores sobre el mismo Y.Doc (A con colapsar y la búsqueda, B sin nada), con pasos al azar:
@@ -23,16 +24,18 @@ import { findExtension, replaceAll, setFind, clearFind, stepFind } from './findE
 //   (1) lo que borra la pasada de colapsar estaba escondido por un título que la edición sacó a propósito (A);
 //   (2) no se pierde texto que se veía fuera de lo elegido, ni texto escondido salvo por (A) o (B);
 //   (3) un cambio propio en algo escondido lo abre;  (4) nada que se veía queda escondido (salvo colapsar);
-//   (5) "Reemplazar todo" no abre nada;  (6) la selección no queda en algo escondido;  (7) A y B coinciden;
+//   (5) "Reemplazar todo" no abre nada;  (6) la selección no queda en algo escondido;  (7) A y B coinciden (los
+//   documentos de Yjs, y lo que muestran los editores sin los ids);
 //   (8) lo que escondía un título colapsado que se ve no pasa a esconderlo otro (mover un título);
 //   (9) una edición que no se hizo (Shift+→ y borrar, por ejemplo) abre la sección.
 // En CI corren unas pocas semillas; con COLLAPSE_SEEDS=1-70 (y ROUNDS, STEPS) corre la prueba grande.
 //
 // Lo que pasa igual sin nada colapsado (problemas de BlockNote y y-prosemirror, Doc_Colapsar.md, "Riesgos") se
-// cuenta aparte y no es una falla de colapsar: `restoreRelativeSelection` que tira un error al deshacer, rehacer
-// o juntar cambios; A y B que divergen después de deshacer, rehacer o volver a tener red; y texto que se pierde
-// en los dos al juntar cambios hechos sin red; y el Enter de BlockNote con una selección que tira un error y no
-// hace nada. Se verificó corriendo la prueba grande sin colapsar nada (NOTOGGLE=1): aparecen los mismos.
+// cuenta aparte y no es una falla de colapsar: texto que se pierde en los dos al juntar cambios hechos sin red
+// (lo inherente de y-prosemirror, Doc_Colaboracion.md); lo que pasa con ids repetidos; y el Enter de BlockNote con
+// una selección que tira un error y no hace nada. Desde los parches de y-prosemirror (v0.052) y con la entrega en
+// orden (`connect` de collabHarness.ts, como el servidor), `restoreRelativeSelection` y A y B que divergían ya no
+// aparecen: son fallas.
 
 // Se anota cada applyTransaction del editor con colapsar (para mirar lo que agregan los plugins).
 type Rec = { old: EditorState; trs: readonly Transaction[]; state: EditorState };
@@ -155,18 +158,10 @@ describe('colapsar, al azar', () => {
       const docA = new Y.Doc();
       const docB = new Y.Doc();
       let online = true;
-      const pendA: Uint8Array[] = [];
-      const pendB: Uint8Array[] = [];
-      docA.on('update', (u: Uint8Array, origin: unknown) => {
-        if (origin === 'remote') return;
-        if (online) Y.applyUpdate(docB, u, 'remote');
-        else pendA.push(u);
-      });
-      docB.on('update', (u: Uint8Array, origin: unknown) => {
-        if (origin === 'remote') return;
-        if (online) Y.applyUpdate(docA, u, 'remote');
-        else pendB.push(u);
-      });
+      // Como el servidor de la app: lo de cada lado llega al otro en orden, y se aplica como en la app (con la
+      // reparación de estructura; Doc_Colaboracion.md).
+      const link = connect(docA, docB, 'sync');
+      let diverged = false;
       const A = mk(docA, true, 'a');
       const B = mk(docB, false, 'b');
       let n = 0;
@@ -532,12 +527,13 @@ describe('colapsar, al azar', () => {
             checkTokens = false;
           } else if (r < 0.9) {
             kind = online ? 'offline' : 'online';
-            if (online) online = false;
-            else {
+            if (online) {
+              online = false;
+              link.offline();
+            } else {
               online = true;
               remote = true;
-              for (const u of pendB.splice(0)) Y.applyUpdate(docA, u, 'remote');
-              for (const u of pendA.splice(0)) Y.applyUpdate(docB, u, 'remote');
+              link.online();
             }
             checkTokens = false;
           } else {
@@ -567,10 +563,6 @@ describe('colapsar, al azar', () => {
             }
           }
         } catch (err) {
-          if (String((err as Error).stack).includes('restoreRelativeSelection')) {
-            known('restoreRelativeSelection');
-            break;
-          }
           failures.push(`seed ${seedArg} round ${round} step ${step} ${kind}: EXCEPTION ${(err as Error).stack?.split("\n").slice(0, 14).join(' | ')}`);
           break;
         }
@@ -686,17 +678,14 @@ describe('colapsar, al azar', () => {
         // (9) una edición que no se hizo abre la sección.
         if (revealOf && after.doc.eq(st.doc) && [...acs.analysis.hidden.values()].includes(revealOf)) fail('an edit was swallowed but the section stayed collapsed');
         // (7) convergence
-        if (online && !dup) {
-          const ja = JSON.stringify(A.document);
-          const jb = JSON.stringify(B.document);
-          if (ja !== jb && history.some((h) => /^(undo|redo|offline|online)/.test(h))) {
-            // Pasa igual sin colapsar: divergen después de deshacer, rehacer o de juntar cambios sin red.
-            known('divergen después de deshacer, rehacer o sin red');
-            dup = true;
-          } else if (ja !== jb) {
-            const sh = (e: BlockNoteEditor) => { const o: string[] = []; const w = (bs: any[], d: number) => bs.forEach((b) => { o.push(`${d}${b.type[0]}:${String(b.id).slice(0,4)}:${Array.isArray(b.content) ? b.content.map((c: any) => c.text ?? '').join('') : ''}`); w(b.children, d + 1); }); w(e.document, 0); return o.join(' '); };
-            dup = true;
-            fail('A and B diverged\n   A: ' + sh(A) + '\n   B: ' + sh(B));
+        // Los documentos de Yjs iguales, y lo que muestran los editores igual sin los ids de los bloques (el editor
+        // les cambia el id a los repetidos). Recomendación de Doc_Colaboracion.md.
+        if (online && !diverged) {
+          const noIds = (e: BlockNoteEditor) => JSON.stringify(e.document, (k, v) => (k === 'id' ? undefined : v));
+          if (!sameDocs(docA, docB) || noIds(A) !== noIds(B)) {
+            const sh = (e: BlockNoteEditor) => { const o: string[] = []; const w = (bs: any[], d: number) => bs.forEach((b) => { o.push(`${d}${b.type[0]}:${Array.isArray(b.content) ? b.content.map((c: any) => c.text ?? '').join('') : ''}`); w(b.children, d + 1); }); w(e.document, 0); return o.join(' '); };
+            diverged = true;
+            fail(`A and B diverged (Yjs ${sameDocs(docA, docB) ? 'same' : 'different'})\n   A: ` + sh(A) + '\n   B: ' + sh(B));
           }
         }
         if (failures.length > 40) break;
