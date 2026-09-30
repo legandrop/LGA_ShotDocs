@@ -431,9 +431,10 @@ Hecho en la app (falta auditar y probar a mano; `Doc_Sincronizacion.md`, "Papele
   versión no pudo leer, sin contenido desconocido y con lo propio ya subido); si falta algo, solo se suman
   usos. Con la base anterior a la versión 6 no se manda nada. Correcciones de la auditoría: un `unlink` no
   sale mientras el dispositivo tenga otro uso del mismo archivo sin confirmar (cortar y pegar en otro
-  proyecto ya no lo manda a la papelera); pegar una foto de otro proyecto avisa y no la registra; cada
-  `unlink` lleva `p_seen_seq`; la primera vez que una página quitaría algo se comprueba que todo su
-  historial se pueda leer.
+  proyecto ya no lo manda a la papelera); pegar una foto de otro proyecto avisa, la base guarda el uso como
+  ajeno (cuenta para la papelera) y la página muestra *Photo from another project*; cada `unlink` lleva
+  `p_seen_seq`; la primera vez que una página quitaría algo se comprueba que todo su historial se pueda leer
+  (si falla, se reintenta cada vez más espaciado).
 - **Pestaña Archivos** en la papelera (`TrashView`), para quien `trashed_files` no rechaza: miniatura,
   nombre, peso, fecha de entrada y días que faltan para los 30, con *Auto-delete is off* mientras el
   interruptor esté apagado y el aviso *A file can show here while still in use on a page this device

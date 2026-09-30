@@ -8,7 +8,7 @@ import { PageDocs, type PageDocsOptions } from './docs';
 import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
-import type { AccessRow, InvitationGrant, InvitationRow, MediaRemote, MemberRow, Remote, TeamRemote } from './remote';
+import type { AccessRow, InvitationGrant, InvitationRow, LinkResult, MediaRemote, MemberRow, Remote, TeamRemote } from './remote';
 import {
   CommentQueue,
   commentsDbName,
@@ -89,8 +89,8 @@ export class FakeServer {
   /** `page_files` con `removed_at` (la página dejó de usar el archivo; la fila queda). */
   readonly removedPageFiles = new Set<string>();
   /**
-   * Usos ajenos (`<página>:<archivo>` de otro proyecto): `link_page_file` los guarda, cuentan como uso para
-   * la papelera y responde igual `file_other_project`.
+   * Usos ajenos (`<página>:<archivo>` de otro proyecto, `page_files.is_foreign`): `link_page_file` y
+   * `register_file` los guardan, cuentan como uso para la papelera y devuelven `'file_other_project'`.
    */
   readonly foreignPageFiles = new Set<string>();
   /** El `p_seen_seq` de cada `unlink_page_file`, en orden. */
@@ -920,13 +920,19 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
 
   // --- archivos grandes (mismas reglas que la base) ---
 
-  async registerFile(file: NewMediaFile): Promise<void> {
+  async registerFile(file: NewMediaFile): Promise<LinkResult> {
     this.server.check();
     this.server.mediaCalls.push(`register_file ${file.id}`);
     const page = this.server.pages.get(file.pageId);
     if (!page) throw pageNotFound();
     const existing = this.server.mediaFiles.get(file.id);
-    if (existing && existing.project_id !== page.workspace_id) throw new RemoteError('file_other_project', true, 'P0001');
+    if (existing && existing.project_id !== page.workspace_id) {
+      // De otro proyecto (que la sesión ve): guarda el uso ajeno y lo dice con el valor, sin error.
+      this.server.foreignPageFiles.add(`${file.pageId}:${file.id}`);
+      this.server.refreshFileTrash(file.id);
+      this.server.lostMediaResponse('register_file');
+      return 'foreign';
+    }
     if (!existing) {
       if (!/^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(file.mime)) {
         throw new RemoteError('new row for relation "files" violates check constraint "files_mime_check"', true, '23514');
@@ -952,9 +958,10 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.server.removedPageFiles.delete(`${file.pageId}:${file.id}`);
     this.server.refreshFileTrash(file.id);
     this.server.lostMediaResponse('register_file');
+    return 'ok';
   }
 
-  async linkPageFile(pageId: string, fileId: string): Promise<void> {
+  async linkPageFile(pageId: string, fileId: string): Promise<LinkResult> {
     this.server.check();
     this.server.mediaCalls.push(`link_page_file ${pageId} ${fileId}`);
     const page = this.server.pages.get(pageId);
@@ -962,15 +969,17 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     const file = this.server.mediaFiles.get(fileId);
     if (!file) throw fileNotFound();
     if (file.project_id !== page.workspace_id) {
-      // Uso ajeno: se guarda (cuenta para la papelera) y se responde igual con el error.
+      // Uso ajeno: se guarda (cuenta para la papelera) y se dice con el valor, sin error.
       this.server.foreignPageFiles.add(`${pageId}:${fileId}`);
       this.server.refreshFileTrash(fileId);
-      throw new RemoteError('file_other_project', true, 'P0001');
+      this.server.lostMediaResponse('link_page_file');
+      return 'foreign';
     }
     this.server.pageFiles.add(`${pageId}:${fileId}`);
     this.server.removedPageFiles.delete(`${pageId}:${fileId}`);
     this.server.refreshFileTrash(fileId);
     this.server.lostMediaResponse('link_page_file');
+    return 'ok';
   }
 
   // --- papelera de archivos (supabase/migrations/20260930180000_papelera_archivos.sql) ---

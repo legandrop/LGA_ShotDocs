@@ -937,18 +937,10 @@ export class MediaQueue {
           await this.forgetUsageMark(link.pageId);
           return 'done';
         }
-      } else {
-        await this.remote.linkPageFile(link.pageId, link.fileId);
-      }
-      await this.patchLink(link.key, { pending: 0, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 }, link.rev ?? 0);
-      return 'done';
-    } catch (err) {
-      const outcome = classify(err);
-      if (outcome === 'offline') return outcome;
-      if (!link.removed && errorMessage(err) === 'file_other_project') {
-        // Se pegó un bloque de otro proyecto: la base ya guardó el uso como ajeno (cuenta para la papelera,
-        // así el archivo no se va mientras se ve acá) y lo dice con este error. Queda confirmado; se avisa
-        // una vez y en la página se ve el marcador de otro proyecto.
+      } else if ((await this.remote.linkPageFile(link.pageId, link.fileId)) === 'foreign') {
+        // Se pegó un bloque de otro proyecto: la base guardó el uso como ajeno (cuenta para la papelera, así
+        // el archivo no se va mientras se ve acá, pero no da permiso) y lo dice con `'file_other_project'`.
+        // Queda confirmado, sin reintentar; se avisa una vez y en la página se ve el marcador de otro proyecto.
         await this.patchLink(
           link.key,
           { pending: 0, foreign: true, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 },
@@ -962,6 +954,11 @@ export class MediaQueue {
         this.onChange?.();
         return 'done';
       }
+      await this.patchLink(link.key, { pending: 0, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 }, link.rev ?? 0);
+      return 'done';
+    } catch (err) {
+      const outcome = classify(err);
+      if (outcome === 'offline') return outcome;
       const failures = link.failures + 1;
       const denied = errorMessage(err) === 'page_not_found';
       // Un archivo de este dispositivo que figura registrado pero el servidor no tiene (se restauró la base):
@@ -1175,6 +1172,12 @@ export class MediaQueue {
     const pageProject = this.options.projectOf?.(pageId);
     if (!pageProject) return false;
     try {
+      // La base ya dijo que en esta página es un uso ajeno (quien no ve el archivo no sabe su proyecto).
+      const row = this.db ? await this.db.get('links', `${pageId}:${id}`) : undefined;
+      if (row?.foreign && !row.removed && row.pending === 0) {
+        const meta = (this.db ? await this.db.get('known', id) : undefined) ?? null;
+        return meta ? mediaKind(meta.mime) : null;
+      }
       const own = this.db ? await this.db.get('files', id) : undefined;
       if (own?.projectId) return own.projectId !== pageProject && mediaKind(own.mime);
       let known = this.db ? await this.db.get('known', id) : undefined;

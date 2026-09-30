@@ -292,17 +292,20 @@ pestaña en `src/ui/TrashView.tsx` y `src/media/fileTrash.ts`.
   cambia nada. Primero van los usos nuevos y después los quitados.
 - **Nunca se quita mientras haya otro uso sin confirmar.** Un `unlink` de un archivo no sale mientras este
   dispositivo tenga, para el mismo archivo, un uso que el servidor todavía no confirmó: por mandar, detenido
-  por un error, esperando (`file_not_found`), sin permiso sobre esa página, de otro proyecto, o un archivo
-  agregado acá y todavía sin registrar (`register_file` lo volvería a colgar de la página). Queda esperando
-  (`held`, sin contar como pendiente) y sale solo cuando ese otro uso se confirma o se quita. Así, cortar una
+  por un error, esperando (`file_not_found`), sin permiso sobre esa página, o un archivo agregado acá y
+  todavía sin registrar (`register_file` lo volvería a colgar de la página). Queda esperando (`held`, sin
+  contar como pendiente) y sale solo cuando ese otro uso se confirma o se quita. Así, cortar una
   foto de una página y pegarla en otra nunca la manda a la papelera en el medio, aunque el `link` de la
   página nueva falle.
-- **Una foto o un video de otro proyecto** (se pegó el bloque desde otro proyecto) se ve roto en esa página
-  y no se registra como uso: la app avisa *This photo belongs to another project: it will show broken here*
-  y anota la fila como `other_project`, sin mandarla (si no sabía de qué proyecto era, la manda una vez, el
-  servidor responde `file_other_project` y queda igual). No cuenta como pendiente ni como rechazada, no se
-  reintenta con "Retry" y mientras esté en la página frena el `unlink` de la página original (regla de
-  arriba). De otro workspace no se sabe nada: queda esperando como un archivo que todavía no llegó.
+- **Una foto o un video de otro proyecto** (se pegó el bloque desde otro proyecto): el uso se manda igual.
+  `link_page_file` (y `register_file`) lo guardan como uso ajeno (`page_files.is_foreign`: cuenta para la
+  papelera, así el archivo no se va mientras está en esa página, pero no da permiso sobre el archivo) y
+  devuelven `'file_other_project'` sin error. La app lo toma como confirmado (`foreign` en la fila), no lo
+  reintenta y avisa una vez *This photo belongs to another project: it will show broken here* (al pegarlo,
+  si ya sabe de qué proyecto es; si no, cuando responde la base). En esa página se ve el marcador *Photo
+  from another project* en vez de la foto (`MediaQueue.resolve` con la página): lo decide el proyecto del
+  archivo, si el dispositivo lo sabe, o la fila confirmada como ajena. Quien no ve el archivo lo ve como
+  no disponible. De otro workspace no se sabe nada: queda esperando como un archivo que todavía no llegó.
 - **Solo se quita con el documento completo y al día.** Un documento a medio bajar no dice que un archivo se
   quitó, dice que todavía no llegó. Para mandar un `unlink`: el dispositivo tiene todo lo que el servidor
   tenía al bajar el árbol en ese ciclo, no llegó ningún update que esta versión no pudo leer (queda marcado
@@ -314,17 +317,19 @@ pestaña en `src/ui/TrashView.tsx` y `src/media/fileTrash.ts`.
   comprueba que esta versión lo pueda leer: una versión anterior de la app descartaba un update ilegible sin
   anotarlo (la marca `unreadable` es de esta versión), así que en un dispositivo que se actualizó el
   documento local podría estar incompleto sin saberlo. Si algo no se lee, la página queda marcada y nunca
-  quita; si se lee todo, queda anotada como comprobada (en la base de archivos) y no se vuelve a hacer. Sin
-  red, no se quita y se prueba en el próximo ciclo.
+  quita; si se lee todo, queda anotada como comprobada (en la base de archivos) y no se vuelve a hacer. Si
+  la comprobación falla (sin red o un error), no se quita y no se vuelve a bajar el historial hasta pasado
+  un rato que crece cada vez (1 minuto, 2, 4… hasta 1 hora).
 - **`p_seen_seq`:** cada `unlink` lleva el `seq` del documento con el que se decidió. Si la página cambió
   después en el servidor (otro dispositivo pudo volver a poner la foto), la base no hace nada y lo dice; la
-  fila vuelve a "usado" y la página se compara otra vez con el documento nuevo en el próximo ciclo. Con la
-  función anterior (sin ese parámetro) se manda sin él.
+  fila vuelve a "usado" y la página se compara otra vez con el documento nuevo en el próximo ciclo.
 - **Lo agregado en este dispositivo:** `register_file` ya lo cuelga de su página. Cuando el documento lo
   muestra por primera vez se anota (sin mandar nada) para saber después si se quitó; si el documento nunca lo
   tuvo (se agregó y se borró enseguida), se quita pasados 5 minutos.
 - **Sin red** no se compara nada (el documento guarda el cambio) y lo que ya está en la cola espera,
-  guardado en el dispositivo; cuenta en los cambios pendientes y sale al volver la red. Con la base
+  guardado en el dispositivo; cuenta en los cambios pendientes y sale al volver la red. Los usos que esperan
+  algo que no depende del dispositivo (`held`, `denied`, `file_not_found`) no cuentan como cambios sin subir
+  (tampoco en "Download my unsynced changes", donde `mediaLinks` trae cada uso con `removed`). Con la base
   anterior a la versión 6 no se manda ningún `unlink`.
 - **La pestaña Archivos** de la papelera: se muestra si la base tiene la papelera, los permisos del
   dispositivo no la descartan y `trashed_files` no responde `not_allowed` (ven la de un proyecto quien tiene

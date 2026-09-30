@@ -120,10 +120,17 @@ export interface TeamRemote {
  * supabase/migrations/20260930150000_archivos.sql). Todo es idempotente.
  */
 export interface MediaRemote {
-  /** `page_not_found` si no se puede editar la página; `file_other_project` si el id es de otro proyecto. */
-  registerFile(file: NewMediaFile): Promise<void>;
-  /** `file_not_found` si el archivo todavía no está en el servidor (se reintenta más tarde). */
-  linkPageFile(pageId: string, fileId: string): Promise<void>;
+  /**
+   * `page_not_found` si no se puede editar la página; el error `file_other_project` si el id es de otro
+   * proyecto y la sesión no lo ve. Devuelve `foreign` si es de otro proyecto que la sesión ve: la base guardó
+   * el uso como ajeno (cuenta para la papelera, no da permiso); si no, `ok`.
+   */
+  registerFile(file: NewMediaFile): Promise<LinkResult>;
+  /**
+   * `file_not_found` si el archivo todavía no está en el servidor o la sesión no lo ve (se reintenta más
+   * tarde). Devuelve `foreign` si es de otro proyecto: la base guardó el uso como ajeno; si no, `ok`.
+   */
+  linkPageFile(pageId: string, fileId: string): Promise<LinkResult>;
   /** Sube `thumbs/<id>.jpg` sin reemplazar: si ya existe, está hecho. */
   uploadThumb(fileId: string, data: Blob): Promise<void>;
   setFileThumb(fileId: string): Promise<void>;
@@ -144,6 +151,17 @@ export interface MediaRemote {
    * `not_allowed` si la sesión no es dueño o admin con permiso sobre el proyecto.
    */
   filesDueForPurge(projectId: string): Promise<DueFileRow[]>;
+}
+
+/**
+ * Lo que devuelven `register_file` y `link_page_file` (versión 6 de la base): `'ok'`, o
+ * `'file_other_project'` (sin error) cuando guardaron el uso de un archivo de otro proyecto. Una base anterior
+ * no devuelve nada: cuenta como `ok`.
+ */
+export type LinkResult = 'ok' | 'foreign';
+
+export function linkResult(data: unknown): LinkResult {
+  return data === 'file_other_project' ? 'foreign' : 'ok';
 }
 
 export interface RemovedMember {
@@ -497,8 +515,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     return (data ?? []) as AccessRow[];
   }
 
-  async registerFile(file: NewMediaFile): Promise<void> {
-    const { error, status } = await this.client.rpc('register_file', {
+  async registerFile(file: NewMediaFile): Promise<LinkResult> {
+    const { data, error, status } = await this.client.rpc('register_file', {
       p_id: file.id,
       p_page_id: file.pageId,
       p_name: file.name,
@@ -509,11 +527,13 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       p_duration: file.duration,
     });
     if (error) throw toRemoteError(error, status);
+    return linkResult(data);
   }
 
-  async linkPageFile(pageId: string, fileId: string): Promise<void> {
-    const { error, status } = await this.client.rpc('link_page_file', { p_page_id: pageId, p_file_id: fileId });
+  async linkPageFile(pageId: string, fileId: string): Promise<LinkResult> {
+    const { data, error, status } = await this.client.rpc('link_page_file', { p_page_id: pageId, p_file_id: fileId });
     if (error) throw toRemoteError(error, status);
+    return linkResult(data);
   }
 
   async uploadThumb(fileId: string, data: Blob): Promise<void> {
