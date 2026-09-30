@@ -77,8 +77,9 @@ nada, y lo que espera una decisión o una acción de Lega.
    colgaba el ciclo. Y la investigación encontró una pérdida real: una recarga o un cierre a pocos
    milisegundos de la última tecla perdía el final de lo escrito. Arreglado en la app: cada edición se
    guarda en una transacción sin lecturas que se confirma en el acto, con una marca de "sin subir" en
-   `meta` (la base no cambia de versión y una versión anterior que la abra no pierde nada); cada consulta
-   a la base tiene un tope de 30 s; la barra de formato ya no se vuelve a montar (y cerrar su menú) con
+   `meta` (la base no cambia de versión, y la "versión guardia" hace que una versión anterior que la abra
+   vea pendiente todo lo que esta tuvo abierto); cada consulta a la base tiene un tope de tiempo (30 s
+   más lo que tardaría a 16 KB/s, y una página que vence no frena a las demás); la barra de formato ya no se vuelve a montar (y cerrar su menú) con
    cada cambio del estado; y en solo lectura por "still downloading" se revisa cada segundo si llegó lo que
    faltaba. Ver `Doc_Sincronizacion.md`, "Contenido de las páginas" (puntos 1, 3 y 7) y "Ciclo de
    sincronización". Las correcciones de las pruebas de punta a punta (`e2e.mjs`, `features.mjs`) están en

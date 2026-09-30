@@ -70,11 +70,21 @@ pierde mientras tanto.
    en la misma tarea en que la página se va todavía se puede perder, y el navegador pide confirmación antes
    de cerrar si hay algo sin guardar.
    Si guardar falla (por ejemplo, disco lleno), la edición queda en memoria, se reintenta cada 3 segundos,
-   cuenta como pendiente y la app lo avisa en rojo hasta que se pueda guardar.
+   cuenta como pendiente y la app lo avisa en rojo hasta que se pueda guardar. Cada transacción lleva
+   también las tandas de las anteriores que todavía no terminaron (Yjs no duplica): si una falla después de
+   que la siguiente se confirmó, lo guardado nunca queda colgando de algo que no está. Lo que ya estaba
+   programado para guardarse cuando se cierra la sesión (`dispose`) se guarda igual; solo se cortan los
+   reintentos.
    **La versión** (`DocState.version`) se sigue sumando, pero aparte y después, en otra transacción (si la
    app se cierra antes, se suma la próxima vez que se cuenta lo pendiente). Ya no hace falta para no perder
    nada; es para una versión anterior de la app que abra esta misma base (ver "La misma base con una
    versión anterior", abajo) y para la papelera de archivos, que la usa para saber si el documento cambió.
+   La suma lee la marca: si la edición ya entró en una subida (la marca es la del envío en vuelo, o ya no
+   hay marca porque se confirmó), suma también la versión del envío o la confirmada, así no sale una
+   subida vacía de más.
+   Una edición sobre un documento reparado solo en memoria (quien no podía escribir y recibe "Edit" con la
+   página abierta, ver "Permisos en el dispositivo") guarda el documento entero: la reparación queda
+   guardada junto con lo que depende de ella.
 2. **Qué falta subir.** Cada página guarda `syncedSV`, el vector de estado de Yjs de lo que el servidor ya
    tiene. Lo pendiente es siempre la diferencia entre el documento local y ese vector, así que no
    importa si la app se cerró a mitad de camino: al volver se recalcula entera. La única regla es que
@@ -155,22 +165,34 @@ pierde mientras tanto.
      ackedVersion` y sin marca, y esta versión lo cuenta y lo sube igual. Un envío sin confirmar armado por
      la anterior (sin marca guardada) se reenvía y, al confirmarse, no borra ninguna marca.
    - **Una versión anterior que abre la base después** (una pestaña que no se recargó, cuando la nueva la
-     suelta): solo mira `version > ackedVersion`. Por eso la versión se sigue sumando después de cada
-     edición guardada, y si la app se cerró antes de sumarla, se suma apenas esta versión vuelve a contar
-     lo pendiente. Lo que la anterior sube y confirma no borra la marca: esta versión, al volver, sube lo
-     que falte (casi nada) y la borra. Si la anterior escribe mientras un envío de esta está sin confirmar,
-     su versión queda por encima de la confirmada y esas ediciones van en la vuelta siguiente. La única
-     ventana: la app se cierra entre guardar una edición y sumar la versión, y lo próximo que abre la base
-     es una versión anterior; esa edición no figura como pendiente allá (sigue guardada y a la vista) hasta
-     que se escribe otra cosa ahí o vuelve esta versión.
-   - Una suma de versión que llega después de armar un envío deja la página como pendiente una vuelta más:
-     se sube un update casi vacío. Se prefiere subir de más a subir de menos.
-   Las pruebas están en `src/sync/localSave.test.ts`: la pérdida al irse la página en medio de la
-   transacción (falla con la versión anterior del guardado, "Escrito sin co" en vez de "Escrito sin
-   conexión 1.", y pasa con esta), la marca que queda si hubo ediciones durante una subida, un dispositivo
-   que actualiza con cambios pendientes, una versión anterior que abre la base, restaurar una copia y
-   cerrar la app en cada punto (antes de guardar, guardado, envío armado, enviado sin respuesta,
-   confirmado).
+     suelta): solo mira `version > ackedVersion`. Como la versión se suma aparte, la app se podría cerrar
+     entre guardar una edición y sumarla. Para eso está **la versión guardia** (`DocState.guardVersion`):
+     al abrir una página que se puede editar, antes de que se pueda escribir nada, si la versión no está
+     por encima de la confirmada (ni de la de un envío en vuelo) se le suma uno y se anota ese valor como
+     guardia; lo mismo al armar un envío y al confirmarlo, en la misma transacción, mientras la página
+     siga abierta. Así, cualquier página que esta versión tuvo abierta queda pendiente para una versión
+     anterior, también si esa confirma un envío de esta que no llevaba la última edición. Esta versión no
+     cuenta como pendiente una página cuya versión es solo la guardia (sin marca ni envío sin confirmar), así
+     que la guardia no la hace subir nada; una versión anterior, en cambio, sube una vez un update casi
+     vacío (se prefiere subir de más). Restaurar una copia borra la guardia. Lo que la anterior sube y
+     confirma no borra la marca: esta versión, al volver, sube lo que falte (casi nada) y la borra. Si la
+     anterior escribe mientras un envío de esta está sin confirmar, su versión queda por encima de la
+     confirmada y esas ediciones van en la vuelta siguiente. La suma de versión de cada edición sigue:
+     cubre también la papelera de archivos, y si la app se cerró antes de sumarla, se suma apenas esta
+     versión vuelve a contar lo pendiente. Queda una sola ventana: recibir "Edit" con la página abierta y
+     cerrar la app enseguida de la primera edición, antes de armar la guardia (que ahí se arma aparte).
+     Otra pestaña con la misma base, que la app no permite (una sola pestaña, Web Locks), tampoco se
+     cubre.
+   Las pruebas están en `src/sync/localSave.test.ts` (la pérdida al irse la página en medio de la
+   transacción, que falla con la versión anterior del guardado, "Escrito sin co" en vez de "Escrito sin
+   conexión 1.", y pasa con esta; la marca que queda si hubo ediciones durante una subida; un dispositivo
+   que actualiza con cambios pendientes; restaurar una copia; cerrar la app en cada punto; las carreras de
+   la suma de versión, las tandas que fallan, `dispose` y la edición sobre una reparación en memoria),
+   `publishedCompat.test.ts` (con una copia de la versión publicada, `fixtures/publishedDocs.ts`: cerrar
+   justo después de escribir, un envío en vuelo con una edición que no entra, la publicada que escribe
+   con un envío pendiente, y que la guardia no suba nada de más) y `localSaveRandom.test.ts` (corridas al
+   azar con cierres de golpe en cualquier microtarea, subidas en vuelo, compactación, restauraciones y la
+   versión publicada sobre la misma base; `LOCAL_SAVE_SEEDS` y `LOCAL_SAVE_STEPS` para correr más).
 8. **Compactación local.** Con más de 64 updates guardados, al abrir la página se fusionan en uno solo, en la
    misma transacción. En el servidor no se compacta todavía.
 
@@ -495,14 +517,20 @@ mala no frena el texto. Corre al abrir la app, un poco después de cada cambio, 
 segundos con la app a la vista, al volver la red y al volver a la ventana. Al final de cada ciclo arranca,
 sin esperarla, la cola de fotos y videos, que tiene su propio ciclo (ver "Archivos grandes").
 
-**Cada consulta a la base tiene un tope de 30 s** (`timed` en `remote.ts`, con `abortSignal`; también las
-de los comentarios y las de la cola de fotos y videos). Sin él, una respuesta que no llegaba nunca (una red
-que se corta a mitad de camino) dejaba el ciclo colgado para siempre, con `syncing` prendido y el estado en
-"All synced" porque no quedaba nada sin subir, y como nunca corren dos a la vez, los siguientes se colgaban
-del mismo hasta recargar. Al vencer, la consulta vuelve como un error de red y la vuelta siguiente la
-reintenta: todo lo que se manda es idempotente. Los archivos de Storage no lo usan (una foto grande en una
-red lenta puede tardar más). No cubre una espera adentro del cliente de sesión de Supabase (la renovación
-del token): si se viera, haría falta un vigilante del ciclo en `engine.ts`.
+**Cada consulta a la base tiene un tope de tiempo** (`timed` en `remote.ts`, con `abortSignal`; también
+las de los comentarios y las de la cola de fotos y videos). Sin él, una respuesta que no llegaba nunca (una
+red que se corta a mitad de camino) dejaba el ciclo colgado para siempre, con `syncing` prendido y el
+estado en "All synced" porque no quedaba nada sin subir, y como nunca corren dos a la vez, los siguientes
+se colgaban del mismo hasta recargar. El tope es de 30 s más lo que tardaría lo que se manda a 16 KB/s
+(`timeoutFor`; una subida de contenido de 8 MB, el máximo, tiene unos 12 minutos), así "lento" nunca se
+vuelve "nunca". La bajada no sabe de antemano cuánto llega: pide lotes de hasta 500 updates con 30 s, y si
+un lote vence, pide uno más chico (50, 5 y 1; de a uno tiene el tope más largo). Al vencer, la consulta
+vuelve como un error de red (`request_timeout`) y la vuelta siguiente la reintenta: todo lo que se manda es
+idempotente. **El vencimiento de una página no corta el ciclo:** se sigue con las demás (subir y bajar),
+el estado lo avisa como último error (`request_timeout`) y la página no queda rechazada; se reintenta en
+la vuelta siguiente. Los archivos de Storage no lo usan (una foto grande en una red lenta puede tardar
+más). No cubre una espera adentro del cliente de sesión de Supabase (la renovación del token): si se viera,
+haría falta un vigilante del ciclo en `engine.ts`. Pruebas en `src/sync/remoteTimeout.test.ts`.
 
 ## Permisos en el dispositivo
 

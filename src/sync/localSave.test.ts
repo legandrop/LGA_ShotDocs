@@ -1,8 +1,7 @@
-import { wrap } from 'idb';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { dirtyKey, emptyDocState, hasUnsyncedContent } from './localDb';
-import { FakeServer, makeDevice, type Device } from './testing';
+import { FakeServer, makeDevice, microtasks, watchTransactions, type Device } from './testing';
 
 // Roadmap B.5: el guardado local sin lecturas. Una recarga o un cierre a pocos milisegundos de la última
 // tecla perdía el final de lo escrito: la transacción que guardaba cada edición leía el estado antes de
@@ -42,66 +41,6 @@ async function fromServer(server: FakeServer, pageId: string): Promise<string> {
   const c = await device(server);
   await c.engine.syncNow();
   return read(c, pageId);
-}
-
-const microtasks = async () => {
-  for (let i = 0; i < 20; i++) await Promise.resolve();
-};
-
-/**
- * La página se va de golpe (una recarga, un cierre, el sistema que mata la app): se pierde todo lo que está
- * en memoria y el navegador aborta las transacciones que todavía no se estaban confirmando. Las que ya
- * llamaron a `commit()` terminan (es lo que se midió en el navegador: ver
- * Docs/Doc_Investigacion_Intermitente.md). Hay que llamar a `watchTransactions` antes de lo que se quiera
- * cortar.
- */
-function watchTransactions(): { kill: (d: Device) => Promise<void>; restore: () => void } {
-  const proto = IDBDatabase.prototype as unknown as { transaction: (...args: unknown[]) => IDBTransaction };
-  const txProto = IDBTransaction.prototype as unknown as { commit: () => void };
-  const realTransaction = proto.transaction;
-  const realCommit = txProto.commit;
-  const open = new Set<IDBTransaction>();
-  const committing = new WeakSet<IDBTransaction>();
-  proto.transaction = function (this: IDBDatabase, ...args: unknown[]) {
-    const tx = realTransaction.apply(this, args);
-    open.add(tx);
-    const finish = () => open.delete(tx);
-    tx.addEventListener('complete', finish);
-    tx.addEventListener('abort', finish);
-    tx.addEventListener('error', finish);
-    return tx;
-  };
-  txProto.commit = function (this: IDBTransaction) {
-    committing.add(this);
-    return realCommit.call(this);
-  };
-  const restore = () => {
-    proto.transaction = realTransaction;
-    txProto.commit = realCommit;
-  };
-  return {
-    restore,
-    kill: async (d: Device) => {
-      for (const tx of open) {
-        // Las de solo lectura no cambian nada de lo guardado: da igual si terminan.
-        if (committing.has(tx) || tx.mode !== 'readwrite') continue;
-        // En el navegador no queda nadie esperando a la transacción; acá sí, y su rechazo no se atiende.
-        (wrap(tx) as unknown as { done: Promise<void> }).done.catch(() => undefined);
-        try {
-          tx.abort();
-        } catch {
-          // Ya estaba terminando.
-        }
-      }
-      restore();
-      // Lo de memoria se pierde: no se escribe nada más desde este dispositivo.
-      d.docs.dispose();
-      d.engine.stop();
-      d.db.close();
-      // Que terminen de abortarse (y de confirmarse) antes de volver a abrir la base.
-      await new Promise((r) => setTimeout(r, 20));
-    },
-  };
 }
 
 async function meta(d: Device, pageId: string): Promise<unknown> {
@@ -287,11 +226,13 @@ describe('B.5: la misma base con una versión anterior de la app', () => {
     const a = await device(server, dbName);
     const pageId = await a.tree.create(null, 'P');
     await a.engine.syncNow();
-    // La suma de la versión (una transacción aparte, solo de `docState`) no llega a guardarse.
+    // Ni la guardia al abrir (`docState`) ni la suma de la versión (`docState` y `meta`, aparte de la
+    // edición) llegan a guardarse.
     const realTransaction = a.db.transaction.bind(a.db);
     let blocked = 0;
     (a.db as { transaction: unknown }).transaction = ((stores: string | string[], mode?: IDBTransactionMode) => {
-      if (mode === 'readwrite' && stores === 'docState') {
+      const names = [stores].flat();
+      if (mode === 'readwrite' && names.includes('docState') && !names.includes('docUpdates')) {
         blocked++;
         throw new DOMException('closing', 'InvalidStateError');
       }
@@ -436,4 +377,186 @@ describe('B.5: restaurar y cerrar en cada punto', () => {
       if (point === 'enviado sin respuesta') expect(server.updates.get(pageId)).toHaveLength(2);
     });
   }
+});
+
+/** Lo guardado en IndexedDB, armado directamente con Yjs (sin PageDocs). */
+async function savedText(db: Device['db'], pageId: string): Promise<{ text: string; pending: boolean }> {
+  const rows = await db.getAllFromIndex('docUpdates', 'pageId', pageId);
+  const doc = new Y.Doc();
+  if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)));
+  const out = { text: doc.getText('t').toString(), pending: doc.store.pendingStructs !== null };
+  doc.destroy();
+  return out;
+}
+
+describe('B.5: carreras del guardado sin lecturas', () => {
+  it('una edición guardada entre leer lo que se sube y la suma de su versión no provoca una subida vacía de más', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const pageId = await a.tree.create(null, 'P');
+    await a.engine.syncNow();
+    const doc = await a.docs.open(pageId);
+    doc.getText('t').insert(0, 'uno');
+    await a.docs.flush(pageId);
+    await a.engine.syncNow();
+    const before = server.updates.get(pageId)?.length ?? 0;
+
+    // La edición entra justo cuando la subida lee el estado (después de esperar lo que se estaba guardando).
+    const realGet = a.db.get.bind(a.db);
+    let fired = false;
+    (a.db as { get: unknown }).get = ((store: never, key: never) => {
+      if (!fired && store === 'docState') {
+        fired = true;
+        doc.getText('t').insert(3, ' dos');
+      }
+      return realGet(store, key);
+    }) as never;
+    await a.docs.pushPage(pageId, a.remote);
+    (a.db as { get: unknown }).get = realGet;
+    await a.docs.flush();
+    await a.engine.syncNow();
+    await a.engine.syncNow();
+    const rows = server.updates.get(pageId)!.slice(before);
+    expect(rows.map((u) => Y.decodeUpdate(u.data).structs.length > 0)).toEqual([true]);
+    expect(await fromServer(server, pageId)).toBe('uno dos');
+    a.docs.close(pageId);
+  });
+
+  it('una edición guardada mientras viaja la subida sale en la siguiente, sin subidas vacías', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const pageId = await a.tree.create(null, 'P');
+    await a.engine.syncNow();
+    const doc = await a.docs.open(pageId);
+    doc.getText('t').insert(0, 'uno');
+    await a.docs.flush(pageId);
+    const before = server.updates.get(pageId)?.length ?? 0;
+    const push = a.remote.pushUpdate.bind(a.remote);
+    a.remote.pushUpdate = async (...args) => {
+      a.remote.pushUpdate = push;
+      doc.getText('t').insert(3, ' dos');
+      await a.docs.flush(pageId);
+      return push(...args);
+    };
+    await a.engine.syncNow();
+    await a.engine.syncNow();
+    await a.engine.syncNow();
+    const rows = server.updates.get(pageId)!.slice(before);
+    expect(rows.map((u) => Y.decodeUpdate(u.data).structs.length > 0)).toEqual([true, true]);
+    expect(a.engine.getStatus().pendingPages).toBe(0);
+    a.docs.close(pageId);
+  });
+
+  it('si la transacción de una tanda falla después de que la siguiente se confirmó, lo guardado no queda colgando de algo que no está', async () => {
+    const server = new FakeServer();
+    const dbName = crypto.randomUUID();
+    const a = await device(server, dbName);
+    const pageId = await a.tree.create(null, 'P');
+    await a.engine.syncNow();
+    const doc = await a.docs.open(pageId);
+
+    // La primera transacción de guardado falla después de recibir sus pedidos (como un error al confirmar).
+    const proto = IDBDatabase.prototype as unknown as { transaction: (...args: unknown[]) => IDBTransaction };
+    const real = proto.transaction;
+    let n = 0;
+    proto.transaction = function (this: IDBDatabase, ...args: unknown[]) {
+      const tx = real.apply(this, args);
+      const stores = args[0];
+      if (Array.isArray(stores) && stores.includes('meta') && stores.includes('docUpdates') && args[1] === 'readwrite' && n++ === 0) {
+        (tx as unknown as { commit: () => void }).commit = () => undefined;
+        void Promise.resolve().then(() => {
+          try {
+            tx.abort();
+          } catch {
+            // Ya terminó.
+          }
+        });
+      }
+      return tx;
+    };
+    const watch = watchTransactions();
+    try {
+      doc.getText('t').insert(0, 'AAAA');
+      await microtasks(1);
+      doc.getText('t').insert(4, 'BBBB');
+      await microtasks();
+      await new Promise((r) => setTimeout(r, 30));
+      proto.transaction = real;
+      // Se cierra antes del reintento (3 s).
+      await watch.kill(a);
+    } finally {
+      proto.transaction = real;
+      watch.restore();
+    }
+    const again = await device(server, dbName);
+    const saved = await savedText(again.db, pageId);
+    expect(saved.pending).toBe(false);
+    // La segunda transacción llevó también la primera tanda: no se perdió nada.
+    expect(saved.text).toBe('AAAABBBB');
+  });
+
+  it('lo programado para guardarse antes de `dispose()` se guarda igual', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const pageId = await a.tree.create(null, 'P');
+    await a.engine.syncNow();
+    const doc = await a.docs.open(pageId);
+    doc.getText('t').insert(0, 'antes del cierre');
+    // Como al cerrar sesión: dispose, flush y cerrar la base.
+    a.docs.dispose();
+    await a.docs.flush();
+    expect((await savedText(a.db, pageId)).text).toBe('antes del cierre');
+  });
+
+  it('una edición sobre un documento reparado solo en memoria guarda también la reparación', async () => {
+    const { PageDocs } = await import('./docs');
+    const { openLocalDb } = await import('./localDb');
+    const { mergeRootGroups } = await import('./structure');
+    const db = await openLocalDb(crypto.randomUUID());
+    const pageId = crypto.randomUUID();
+    // Dos raíces de dos autores (como dos dispositivos que empezaron la página sin verse), ya guardadas.
+    const root = (text: string) => {
+      const d = new Y.Doc();
+      const group = new Y.XmlElement('blockGroup');
+      const container = new Y.XmlElement('blockContainer');
+      const paragraph = new Y.XmlElement('paragraph');
+      const t = new Y.XmlText();
+      d.getXmlFragment('document-store').insert(0, [group]);
+      group.insert(0, [container]);
+      container.insert(0, [paragraph]);
+      paragraph.insert(0, [t]);
+      t.insert(0, text);
+      const u = Y.encodeStateAsUpdate(d);
+      d.destroy();
+      return u;
+    };
+    await db.add('docUpdates', { pageId, data: root('uno') });
+    await db.add('docUpdates', { pageId, data: root('dos') });
+    let canWrite = false;
+    const docs = new PageDocs(db, { normalize: mergeRootGroups, canWrite: () => canWrite });
+    const doc = await docs.open(pageId);
+    expect(doc.getXmlFragment('document-store').length).toBe(1);
+    // Le dan "Edit" con la página abierta y escribe en el bloque que vino de la segunda raíz (una copia en
+    // memoria).
+    canWrite = true;
+    const group = doc.getXmlFragment('document-store').get(0) as Y.XmlElement;
+    const cloned = ((group.get(group.length - 1) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText;
+    cloned.insert(cloned.length, ' EDITADO');
+    await docs.flush(pageId);
+    docs.close(pageId);
+    await docs.flush();
+    await new Promise((r) => setTimeout(r, 10));
+    const rows = await db.getAllFromIndex('docUpdates', 'pageId', pageId);
+    const saved = new Y.Doc();
+    Y.applyUpdate(saved, Y.mergeUpdates(rows.map((r) => r.data)));
+    expect(saved.store.pendingStructs).toBeNull();
+    const again = await docs.open(pageId);
+    expect(again.getXmlFragment('document-store').length).toBe(1);
+    const xml = again.getXmlFragment('document-store').toString();
+    for (const part of ['uno', 'dos', ' EDITADO']) expect(xml).toContain(part);
+    expect(await db.get('meta', dirtyKey(pageId))).toBeTypeOf('string');
+    docs.close(pageId);
+    saved.destroy();
+    db.close();
+  });
 });

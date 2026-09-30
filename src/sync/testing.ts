@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import { wrap } from 'idb';
 import { mediaDbName, openMediaDb, type MediaDb } from '../media/mediaDb';
 import { AccessStore, levelValue, parseAccess, Permissions, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import { Portero } from '../media/portero';
@@ -1290,4 +1291,72 @@ export async function makeDevice(
   await comments.load();
   const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media, access, comments });
   return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb };
+}
+
+/** Lo que se corta al matar la app (un dispositivo, o la versión publicada sin motor). */
+export interface Killable {
+  docs: { dispose(): void };
+  engine?: { stop(): void };
+  db: { close(): void };
+}
+
+/** Deja correr `n` microtareas (sin que avance IndexedDB, que va por tareas). */
+export const microtasks = async (n = 20) => {
+  for (let i = 0; i < n; i++) await Promise.resolve();
+};
+
+/**
+ * La página se va de golpe (una recarga, un cierre, el sistema que mata la app): se pierde todo lo que está
+ * en memoria y el navegador aborta las transacciones que todavía no se estaban confirmando. Las que ya
+ * llamaron a `commit()` terminan (es lo que se midió en el navegador: ver
+ * Docs/Doc_Investigacion_Intermitente.md). Hay que llamar a `watchTransactions` antes de lo que se quiera
+ * cortar.
+ */
+export function watchTransactions(): { kill: (d: Killable) => Promise<void>; restore: () => void } {
+  const proto = IDBDatabase.prototype as unknown as { transaction: (...args: unknown[]) => IDBTransaction };
+  const txProto = IDBTransaction.prototype as unknown as { commit: () => void };
+  const realTransaction = proto.transaction;
+  const realCommit = txProto.commit;
+  const open = new Set<IDBTransaction>();
+  const committing = new WeakSet<IDBTransaction>();
+  proto.transaction = function (this: IDBDatabase, ...args: unknown[]) {
+    const tx = realTransaction.apply(this, args);
+    open.add(tx);
+    const finish = () => open.delete(tx);
+    tx.addEventListener('complete', finish);
+    tx.addEventListener('abort', finish);
+    tx.addEventListener('error', finish);
+    return tx;
+  };
+  txProto.commit = function (this: IDBTransaction) {
+    committing.add(this);
+    return realCommit.call(this);
+  };
+  const restore = () => {
+    proto.transaction = realTransaction;
+    txProto.commit = realCommit;
+  };
+  return {
+    restore,
+    kill: async (d: Killable) => {
+      for (const tx of open) {
+        // Las de solo lectura no cambian nada de lo guardado: da igual si terminan.
+        if (committing.has(tx) || tx.mode !== 'readwrite') continue;
+        // En el navegador no queda nadie esperando a la transacción; acá sí, y su rechazo no se atiende.
+        (wrap(tx) as unknown as { done: Promise<void> }).done.catch(() => undefined);
+        try {
+          tx.abort();
+        } catch {
+          // Ya estaba terminando.
+        }
+      }
+      restore();
+      // Lo de memoria se pierde: no se escribe nada más desde este dispositivo.
+      d.docs.dispose();
+      d.engine?.stop();
+      d.db.close();
+      // Que terminen de abortarse (y de confirmarse) antes de volver a abrir la base.
+      await new Promise((r) => setTimeout(r, 20));
+    },
+  };
 }
