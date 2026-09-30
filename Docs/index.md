@@ -17,7 +17,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 | [`Doc_Imagenes.md`](Doc_Imagenes.md) | Fotos en la página: el primer clic elige, tamaños rápidos, fotos en fila, acomodar en filas, la opción del teléfono y la calidad en la página (v0.058: la imagen nítida que reemplaza a la miniatura). |
 | [`Doc_Adjuntos.md`](Doc_Adjuntos.md) | Adjuntar cualquier archivo (PDF, zip…): la tarjeta, abrir y bajar, lo que sirve el portero y la seguridad. |
 | [`Doc_Peso_Proyectos.md`](Doc_Peso_Proyectos.md) | Cuánto ocupa cada proyecto en el Drive (P.7, primera entrega hecha en v0.050) y el diseño de la lista de media por peso (P.8). |
-| [`Doc_Colapsar.md`](Doc_Colapsar.md) | Colapsar secciones por sus títulos (P.11; entrega 1a, para vos, hecha en v0.053): qué esconde cada título, el triángulo, para vos y para todos (Shift+clic), editar con secciones colapsadas, las marcas de hoja y el PDF. |
+| [`Doc_Colapsar.md`](Doc_Colapsar.md) | Colapsar secciones por sus títulos (P.11; entrega 1a, para vos, hecha en v0.053): qué esconde cada título, el triángulo, para vos y para todos (Shift+clic), editar con secciones colapsadas, las marcas de hoja y el PDF; el margen del bloque (tres puntos, [puntos] [triángulo] [texto], la barra al hacer clic, sin "Borrar") y deshacer un borrado en un paso (v0.059). |
 | [`Doc_Buscar.md`](Doc_Buscar.md) | Buscar y reemplazar en la página (Ctrl/⌘+F; entrega 1, v0.051; desde v0.053 abre las secciones colapsadas) y buscar en todo el proyecto (Ctrl/⌘+K; entrega 2, v0.054): en el dispositivo, permisos, qué se busca, el índice, ir al resultado (P.12); ajustes de v0.057 (llegar a la coincidencia en páginas largas, el campo enfocado, la barra con hojas anchas). |
 | [`Doc_Tutorial.md`](Doc_Tutorial.md) | Diseño del tutorial y la ayuda (P.13, sin implementar): la página de práctica en memoria que no se guarda ni sincroniza, la recorrida con globitos (motor propio, pasos, teléfono, dónde se guarda que ya se vio), la ayuda con todas las funciones y un registro único de atajos, y la regla de que cada función nueva suma su ayuda. |
 | [`Doc_Carpetas.md`](Doc_Carpetas.md) | Diseño de arrastrar una carpeta entera (P.9, sin implementar): el bloque de carpeta (el mismo `image` con `sdmedia://`), una vista en vivo de la carpeta de Drive, la subida directa del navegador a Google, el portero como portero, cuánto entra en el plan gratis, el visor adentro de la app, permisos, papelera y versiones viejas. |
@@ -53,7 +53,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 1153 pruebas (v0.058): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 1190 pruebas (v0.059): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`; las de editar a la vez son `src/ui/collab*.test.ts`, ver
   `Doc_Colaboracion.md`), el cliente del portero (`src/media/`), el portero
   (`portero/src/`), el importador de Coda (`src/import/`) y los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`

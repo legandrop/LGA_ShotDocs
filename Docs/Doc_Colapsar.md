@@ -4,7 +4,8 @@ Estado: **entrega 1a hecha (v0.053)**: colapsar para vos, con toda la seguridad 
 contadas con todo abierto y el PDF todo abierto (ver "Cómo quedó (1a)", al final). Faltan la 1b y la 2. Lega
 contestó casi todas las decisiones el 2026-09-30 (al final, "Decisiones"); las que faltan siguen "a
 confirmar". **"Correcciones de la auditoría", al final, manda sobre lo de arriba**, y "Cómo quedó" sobre las
-dos.
+dos. **"El margen del bloque y deshacer (v0.059)", lo último, manda sobre todo lo anterior** en lo que toca: los
+puntos, el triángulo y "Borrar".
 
 ## Qué se pide
 
@@ -92,13 +93,15 @@ Decidido (Lega):
   (un widget al principio del texto del título trae problemas conocidos con el cursor en Safari y Chrome) y
   anda igual en solo lectura. Se ubica midiendo cada `[data-content-type="heading"]`, con los mismos avisos
   de cambio de tamaño que ya usa el margen.
-- **Dibujo:** triángulo lleno (SVG), de unos 10 px, del **color del título** (`currentColor`, así respeta el
+- **Dibujo** (v0.059: más grande, gris y del color del título solo con el mouse encima; ver al final)**:**
+  triángulo lleno (SVG), de unos 10 px, del **color del título** (`currentColor`, así respeta el
   color de texto del bloque), centrado en el primer renglón, en el margen izquierdo junto al texto. Zona
   para el mouse de 24×24 px. Abierto: apunta abajo, se ve al pasar el mouse por el título (suave) y fuerte
   sobre el triángulo. Colapsado: apunta a la derecha y se ve siempre.
 - **Choque con el menú lateral de BlockNote** (el tirador ⋮⋮ y el "+", que aparecen a la izquierda del bloque
   al pasar el mouse): los dos quieren el mismo lugar. Propuesta: en los títulos el menú lateral se corre unos
   20 px a la izquierda y el triángulo queda pegado al texto, como en Coda. Se decide con una maqueta.
+  (v0.059: sin el "+", tres puntos y [puntos] [triángulo] [texto] con el mismo espacio; ver al final.)
 - **Accesibilidad:** es un `button` con `aria-expanded` y un `aria-label` con el texto del título; no entra en
   el orden de Tab (en el editor Tab anida bloques). Con el teclado se usa el atajo.
 - **Shift+clic:** el `pointerdown` del botón hace `preventDefault`, así Shift no extiende la selección del
@@ -198,8 +201,8 @@ y-prosemirror con `isChangeOrigin` y sin `isUndoRedoOperation` es de otro; desha
   colapsado**, sin abrir nada.
 - **Si una edición local cambió bloques escondidos** sin que la selección quede adentro, también se abre la
   sección.
-- **Lo escondido se borra solo a propósito** (verificación de `cbed5dc`, lo que manda): (A) "Borrar" del menú;
-  el título elegido entero (el bloque, la sección, varios bloques) o toda la página (Ctrl+A de verdad: elegir de
+- **Lo escondido se borra solo a propósito** (verificación de `cbed5dc`, lo que manda): (A) el
+  título elegido entero (clic en los puntos: el bloque; la sección, varios bloques) o toda la página (Ctrl+A de verdad: elegir de
   punta a punta con el mouse o con Shift+flechas no cuenta) y borrar, cortar,
   pegar o escribir encima; (B) una selección de texto que cruza la sección entera: empieza antes del texto del
   título (en un bloque de arriba) y termina en un bloque después de todo lo escondido. **Cualquier otra edición
@@ -219,9 +222,9 @@ Los casos, uno por uno:
 | Enter al final de un título colapsado | **Un título nuevo del mismo nivel después de la sección**, con la selección ahí (un párrafo ahí quedaría adentro de la sección, escondido). Alternativa: abrir la sección y seguir como siempre. |
 | Enter en el medio o al principio de un título colapsado | Abre la sección y sigue como siempre. |
 | Cambiar el nivel o el tipo de un título colapsado (barra, Ctrl/⌘+Alt+1…6, "## ") | Se abre para vos; y para todos si estaba colapsado para todos (quien lo cambia puede editar). Si no, un H2 que pasa a H1 escondería de golpe las secciones de al lado. |
-| "Borrar" del menú del bloque en un título colapsado | Borra solo el título; su contenido pasa a la sección de arriba y se ve (salvo que esa también esté colapsada). |
+| ~~"Borrar" del menú del bloque en un título colapsado~~ | (v0.059: ya no hay "Borrar" en un menú.) Clic en los puntos y Retroceso, Supr o Cortar: se va la sección entera (decisión 12, corrección 1). |
 | Arrastrar un título colapsado | **Se mueve la sección entera.** BlockNote arrastra todo lo elegido si el bloque está en la selección (`dragStart` de `SideMenu/dragging.ts`): en la captura del `dragstart` del tirador se elige del título al último bloque escondido (`MultipleNodeSelection`) y BlockNote hace el resto. El estado viaja con el id. (Decidido por Lega: siempre la sección entera.) |
-| "+" del menú lateral, o soltar algo justo debajo de un título colapsado | El bloque nuevo queda adentro de la sección: se abre. |
+| ~~"+" del menú lateral~~ (sacado en v0.059), o soltar algo justo debajo de un título colapsado | El bloque nuevo queda adentro de la sección: se abre. |
 | Una selección que cruza una sección colapsada, y se borra o se escribe encima | Si empieza arriba del título y termina después de lo escondido (B), se borra también lo escondido, con un aviso (Ctrl+Z lo trae). Si no (empieza en el título, por ejemplo con Shift+→ o Shift+↓ desde su final), no se hace: la sección se abre. |
 | Una selección que toma el texto del título (o parte), sin pasar lo escondido | Se borra ese texto (el título puede juntarse con el renglón de arriba); lo escondido queda y se abre. Pegar varios bloques sobre el texto exacto del título (triple clic) tampoco borra la sección. |
 | Copiar o cortar | Lleva lo escondido (está en el documento); cortar lleva justo lo que se borra (el título elegido entero corta la sección entera; Ctrl+A, todo, también lo escondido del final). Un corte que no se puede hacer no lleva nada y abre la sección. Al pegar, BlockNote da ids nuevos: lo pegado aparece abierto. |
@@ -446,7 +449,7 @@ modelo (secciones, decoraciones, sin tipo de bloque ni propiedad nueva) se manti
 de la auditoría; lo que decidió Lega después (borrar la sección entera, Enter sin abrir) ya va incluido.
 
 1. **Borrar un título colapsado borra su sección entera, siempre de una vez** (decisión de Lega). Vale para
-   "Borrar" del menú del bloque (`removeBlocks`), el bloque elegido entero (clic en el tirador, Ctrl/⌘+clic) con
+   ~~"Borrar" del menú del bloque~~ (sacado en v0.059), el bloque elegido entero (clic en los puntos, Ctrl/⌘+clic) con
    Retroceso, Supr o Cortar, y cualquier otra edición local que saque el bloque del título entero. Cómo: después
    de cada transacción local de la app (no de Yjs: ni de otro ni deshacer), si un paso borró el
    `blockContainer` entero de un título colapsado, en la misma pasada (`appendTransaction`, un solo Ctrl+Z) se
@@ -550,8 +553,8 @@ Entrega 1a, v0.053. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
 - **`src/ui/CollapseToggles.tsx`**: los triángulos, una capa encima del editor (con el color calculado del
   título; se esconden con una pausa al irse el mouse, así se llega del título al triángulo; en táctiles, siempre
   y tenues; en solo lectura entran en el orden de Tab). Tooltip: "**Colapsar** / Solo para vos: los demás lo
-  siguen viendo como estaba. / ⌘⌥↩" y "**Abrir** / Colapsado solo para vos." (en inglés, igual). El menú
-  lateral de BlockNote se corre 22 px a la izquierda en los títulos.
+  siguen viendo como estaba. / ⌘⌥↩" y "**Abrir** / Colapsado solo para vos." (en inglés, igual). ~~El menú
+  lateral de BlockNote se corre 22 px a la izquierda en los títulos~~ (v0.059: `gutterLayout.ts`, ver al final).
 - **`src/ui/collapseDom.ts`**: qué está escondido y quién lo esconde, leído del DOM (lo usan el margen de
   comentarios, las marcas de hoja y los triángulos). **`src/ui/collapseControl.ts`**: el menú de la página
   ("Colapsar todo" / "Abrir todo", solo con la página abierta y si tiene títulos) y "Ir al bloque"
@@ -571,8 +574,8 @@ Entrega 1a, v0.053. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
     se llama a sí misma sin fin (la clase no define su `fromJSON`). Para arrastrar (1b) sirve otro camino:
     `dragStart` de BlockNote trata como varios bloques una selección de texto que va de un bloque a otro, así
     que alcanza con elegir del texto del título al del último bloque escondido antes del `dragstart`.
-  - Lo escondido se borra solo a propósito (ver "Verificación de `cbed5dc`", abajo): (A) "Borrar" del menú
-    (`removeWithSections`, que reemplaza el ítem de BlockNote en `EditorComments.tsx`), el título elegido entero
+  - Lo escondido se borra solo a propósito (ver "Verificación de `cbed5dc`", abajo): (A) ~~"Borrar" del menú
+    (`removeWithSections`)~~ (sacado en v0.059), el título elegido entero
     o toda la página; (B) una selección de texto que cruza la sección entera. Cualquier otra edición que lo
     borraría no se hace (`filterTransaction`) y la sección se abre. Juntar el título con otro bloque o borrar
     solo su texto no borran lo escondido: lo abren.
@@ -627,8 +630,8 @@ Entrega 1a, v0.053. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
   1. (Bloqueante) Un título colapsado **juntado** con el bloque de arriba contaba como "borrado entero" y se
      borraba lo que escondía: Supr en un renglón vacío arriba del título, Supr al final de un bloque cuyo
      primer hijo es el título, o una selección que toma solo parte del texto del título. **Ahora borrar la
-     sección es por intención:** solo cuando la persona borró el título a propósito, con su texto: "Borrar"
-     del menú (`removeWithSections`, que marca la transacción con `SECTION_DELETE_META`), el bloque elegido
+     sección es por intención:** solo cuando la persona borró el título a propósito, con su texto: ~~"Borrar"
+     del menú (`removeWithSections`, `SECTION_DELETE_META`)~~ (sacados en v0.059), el bloque elegido
      entero con Retroceso, Supr o Cortar, o una selección de texto que cubría todo su texto (borrada, cortada,
      escrita o pegada encima; esto último cambió en la verificación de `cbed5dc`: una selección de texto borra lo
      escondido solo si cruza la sección entera). En cualquier otro caso (juntar, partes, un `removeBlocks` de otro lado) lo
@@ -766,3 +769,106 @@ Entrega 1a, v0.053. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
     el toque en el margen de 20 px, el atajo).
   - Opcional: la suma de comentarios de lo escondido en el título, `hidden="until-found"` si la búsqueda (P.12)
     no toma Ctrl/⌘+F.
+
+## El margen del bloque y deshacer (v0.059)
+
+Pedido de Lega sobre v0.053/v0.054. **Manda sobre lo de arriba.**
+
+- **Tres puntos, sin "+".** El menú lateral de BlockNote queda solo con su tirador: tres puntos verticales, llenos
+  y gruesos, como en Coda (4 px, 6,5 px de centro a centro; `BlockDotsIcon`), grises y del color del texto con el
+  mouse encima. El "+" (`AddBlockButton`) no está: bloques nuevos con Enter o "/". `BlockSideMenu.tsx`
+  (reemplaza el menú de `EditorComments.tsx`).
+- **[puntos] [triángulo] [texto]**, con el mismo espacio a la vista entre cada cosa (`GUTTER_GAP`, 6 px): en un
+  título el triángulo pegado al texto y los puntos a su izquierda; en lo demás, solo los puntos. El triángulo va
+  centrado en el primer renglón del título y los puntos en el primer renglón del bloque (a la misma altura en un
+  título). Las medidas salen de un solo lugar, `gutterLayout.ts`: el triángulo (`triangleBox`) y los puntos
+  (`handlePlace`, con un `middleware` propio de floating-ui en vez del corrimiento fijo de BlockNote, pensado para
+  sus tamaños de título). Las zonas del clic no se pisan: los puntos van contra el borde derecho de su botón.
+  Los puntos se miden desde el **borde izquierdo del contenido** del bloque (`.bn-block-content`), no desde el
+  texto: en las listas el texto va después de la casilla (tareas), del botón que abre (desplegable) o de la viñeta
+  o el número (24–28 px), y los puntos encima los tapaban (un clic en la casilla elegía el bloque en vez de
+  marcarla, y la lista desplegable no se podía abrir; auditoría de la rama).
+- **Teléfono:** todo entra en el margen de 20 px sin tapar el texto: el triángulo se achica si hace falta; en
+  un título, si no entran los puntos al lado del triángulo, va solo el triángulo (en pantallas táctiles BlockNote
+  no muestra los puntos: no hay mouse). En táctiles el triángulo se ve siempre, tenue, como antes. Lo mismo en
+  una ventana angosta de la computadora (el margen del editor queda en 20 px): en los títulos va solo el triángulo,
+  sin los puntos; se elige el título con el mouse o el teclado como cualquier texto.
+- **El triángulo**, más grande: la mitad del cuerpo del título (del tamaño de sus minúsculas), entre 10 y 20 px
+  (16 px en un H2 de la computadora). **Gris**; con el mouse encima (o con el foco del teclado), **del color del
+  título** (blanco en el tema oscuro). Colapsado se ve siempre, gris. El color del título se vuelve a medir al
+  cambiar el tema, la letra o el tamaño del texto (`<html>`, prefs.ts): si no, con el tema cambiado en vivo el
+  triángulo tomaba con el mouse el color del tema de antes (negro sobre el fondo oscuro, no se veía).
+- **Se puede llegar al triángulo.** Antes solo el texto del título lo mostraba: al ir hacia el triángulo el mouse
+  pasaba por el margen (que es del editor, no del título) y se escondía; además BlockNote escondía los puntos
+  al pasar por la capa de los triángulos. Ahora el título se señala en toda su franja, del borde izquierdo del
+  editor al final del título (el margen, los puntos y el triángulo incluidos), y la capa se registra en BlockNote
+  como parte del editor (`registerPortalElement`): el triángulo y los puntos siguen a la vista en todo el camino.
+  Por eso BlockNote no mueve los puntos con el mouse sobre el triángulo: al llegar a uno (también de un salto, sin
+  pasar por el título) se le avisa un movimiento sobre el principio de su título y los puntos pasan a ese título.
+- **Un clic en los puntos elige el bloque entero** (una `NodeSelection` del `blockContainer`, como BlockNote al
+  arrastrar; `blockHandle.ts`), deja el foco en el editor y aparece **la barra de formato entera**: tipo de bloque
+  ("Turn into"), negrita…, colores, alinear, comentar (`PageToolbar.tsx`). Ya no está el menú del tirador de
+  BlockNote, así que **no hay "Borrar"** (Lega: "saquemos el borrar"). Lo que tenía: "Colors" (los colores del
+  bloque entero, sus propiedades `textColor` y `backgroundColor`) pasa a la barra como **"Colores del bloque"**,
+  solo con el bloque elegido con los puntos, con "Default" para sacarlos (los bloques de antes que tenían color se
+  pueden limpiar); "Comment" está en la barra, y las filas y columnas de encabezado de una tabla siguen en los
+  tiradores de la tabla. Con el bloque elegido **no está "Link"**: BlockNote pondría el link sobre otra parte del
+  texto (toma el principio de la selección y el largo del texto: en "Título" quedaba "Tít"); para un link se
+  elige el texto. Los puntos **no se alcanzan con el teclado** (como antes el tirador de BlockNote): aparecen con
+  el mouse; con el teclado se elige texto o bloques con Shift+flechas.
+- **Cómo se borra un bloque ahora** (sin "Borrar" en un menú):
+  - Clic en los puntos (elige el bloque entero) y **Retroceso** o **Supr**; o **Cortar** (Ctrl/⌘+X), que además
+    lo lleva al portapapeles. Un título colapsado elegido así se va con su sección entera.
+  - Varios bloques: elegir de un bloque a otro con el mouse o con Shift+flechas y Retroceso, Supr o Cortar (con
+    lo escondido, lo de "Borrar lo escondido a propósito", abajo).
+  - Toda la página: **Ctrl/⌘+A** dos veces (la primera elige el renglón, la segunda todo) y Retroceso o Supr.
+  - El texto de un bloque, como siempre: elegirlo y borrarlo; un bloque vacío se va con Retroceso al principio.
+  - Cada una de estas es un solo Ctrl/⌘+Z (ver "Deshacer", abajo).
+  - **Escribir o pegar sobre el bloque elegido** también lo reemplaza entero. En un título colapsado, eso borra su
+    sección entera (regla (A), abajo), con el aviso "Se borró también lo que estaba colapsado. Se deshace con Ctrl+Z."; un
+    Ctrl/⌘+Z la trae entera.
+- **Arrastrar los puntos** es el arrastre de BlockNote, igual que antes (con lo de "mover un título colapsado" de
+  arriba: hasta la 1b se abre lo que escondía).
+- **Borrar lo escondido a propósito**, sin "Borrar": (A) el título elegido entero (clic en los puntos,
+  Ctrl/⌘+clic, varios bloques, la sección) y Retroceso, Supr, Cortar, pegar o escribir encima; o Ctrl/⌘+A; (B) una
+  selección de texto que cruza la sección entera. `removeWithSections` y `SECTION_DELETE_META` se sacaron (no los
+  usaba nada más); un `removeBlocks` sin selección sigue sin borrar lo escondido: lo abre. La prueba al azar
+  (`collapseProperty.test.ts`) cambió el paso de "Borrar" por los puntos y Retroceso o Supr.
+- **Deshacer (el error de "Borrar").** Después de "Borrar" hacían falta varios Ctrl+Z, y los primeros deshacían
+  otras cosas. La causa (reproducida en Chromium): el menú se cerraba con el bloque y el foco quedaba en la página
+  (`body`), no en el editor. Ctrl+Z ahí no llega a los atajos del editor: el navegador hace su propio deshacer
+  (`beforeinput` con `historyUndo`) sobre lo último que se escribió en el editor, cambia el texto en pantalla y
+  ProseMirror lo toma como una edición nueva, que Yjs guarda en su pila; los Ctrl+Z siguientes deshacían esas
+  ediciones antes de llegar al borrado. La pila de Yjs estaba bien: el borrado (con la pasada de colapsar, en la
+  misma transacción) siempre fue un solo paso; ninguna transacción del borrado va sin historia (solo las de foco
+  de Tiptap, sin cambios) ni con otro origen. Arreglo (`undoGuard.ts`, en el editor de la página):
+  - El deshacer y el rehacer del navegador sobre el editor (`historyUndo`/`historyRedo`: Ctrl+Z con el foco
+    afuera, el menú Edición) se cancelan y hacen los de la página (Yjs). Con el foco en **otro campo** (el título
+    de la página, un comentario, la búsqueda, un diálogo), el navegador manda su deshacer al editor cuando ese
+    campo se quedó sin nada que deshacer: se cancela y **no se hace nada** (si no, cada Ctrl+Z en el título iba
+    deshaciendo la página). Con el foco en un botón de la app o en ningún lado, sí es el de la página. Si el
+    navegador no deja cancelarlo, o la página es de solo lectura, no se deshace nada desde acá.
+  - **Todo lo que saca bloques** es siempre su propio paso: borrar bloques elegidos (los puntos, varios bloques,
+    la sección, Ctrl+A), una selección de texto de un bloque a otro, juntar dos renglones. La pila de Yjs junta lo
+    hecho en medio segundo (`captureTimeout`), así que antes y después se corta (`stopCapturing`): un Ctrl+Z trae
+    justo lo borrado, aunque se haya borrado enseguida después de escribir; el siguiente, lo escrito antes.
+  - Los puntos dejan el foco en el editor.
+- **Pruebas:** `undoGuard.test.ts` (el editor real con las extensiones de la página: escribir, esperar, borrar con
+  los puntos y Retroceso, Supr o Cortar, un bloque o un título colapsado, deshacer con el atajo o con el deshacer
+  del navegador: un Ctrl+Z trae justo el bloque y el segundo deshace lo escrito; borrar enseguida después de
+  escribir y escribir enseguida después de borrar; una selección de texto de un bloque a otro; el deshacer del
+  navegador cancelado, sin tocar la página con el foco en otro campo, sin poder cancelarse y en solo lectura;
+  escribir sobre un título colapsado elegido: la sección se va con aviso y vuelve con un Ctrl+Z),
+  `blockSideMenu.test.tsx` (con la barra de la página: tres puntos, sin "+", el clic elige el bloque y abre la
+  barra sin "Delete" ni "Link" y con los colores del bloque, que se cambian y se sacan con "Default"; con texto
+  elegido, "Link" sí; arrastrar llama al de BlockNote), `gutterLayout.test.ts` (el triángulo crece con el título,
+  los espacios parejos [puntos] [triángulo] [texto], la misma altura, el teléfono sin pisar el texto, y en las
+  listas de tareas, desplegables, de viñetas y numeradas los puntos a la izquierda del contenido).
+  En `collapse.mjs`: espacios parejos y alturas del margen, el camino real del mouse del texto al triángulo por el
+  hueco (sigue a la vista, del color del título, y el clic colapsa), el clic en los puntos con la barra, borrar con
+  Retroceso y Supr, y deshacer un borrado con el foco en el editor y afuera; capturas del margen
+  (`shots/collapse/gutter-*.png`: claro y oscuro, H1, H2 y párrafo, con el mouse en el texto y sobre el triángulo,
+  y el ancho del teléfono), con el color del triángulo comparado con el del título de verdad; llegar de un salto al
+  triángulo (los puntos pasan a su título); en las listas, los puntos a la izquierda y un clic de verdad en la
+  casilla la marca y en el botón abre la desplegable; arrastrar los puntos con el mouse mueve el bloque.
+

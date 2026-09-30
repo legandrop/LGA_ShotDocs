@@ -8,10 +8,15 @@ import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { HeadingRecord } from './collapse';
-import { collapseExtension, collapseKey, collapseState, headingBackspaceExtension, isSelectAllKey, removeWithSections, revealBlock, setAllCollapsed, setCollapsed } from './collapseEditor';
+import { collapseExtension, collapseKey, collapseState, headingBackspaceExtension, isSelectAllKey, revealBlock, setAllCollapsed, setCollapsed } from './collapseEditor';
 import { hiderInDom } from './collapseDom';
+import { selectWholeBlock } from './blockHandle';
 import { paragraphProps, schema } from './editorSchema';
 import { FIND_REPLACE_META } from './editorMeta';
+
+// jsdom: ProseMirror mide la selección al llevarla a la vista (los puntos dejan el foco en el editor).
+Range.prototype.getClientRects ??= (() => []) as never;
+Range.prototype.getBoundingClientRect ??= (() => ({ top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0 })) as never;
 
 // Colapsar secciones (Docs/Doc_Colapsar.md) con el editor real: qué se esconde, que colapsar no toca el
 // documento, y cada caso de edición al lado de lo escondido.
@@ -446,14 +451,15 @@ describe('editar al lado de lo escondido', () => {
 });
 
 describe('borrar un título colapsado borra su sección entera', () => {
-  it('"Borrar" (removeBlocks): el título, lo escondido, los hijos y las secciones colapsadas de adentro; un aviso; deshacer trae todo', async () => {
+  it('clic en los puntos (el bloque elegido) y Retroceso: el título, lo escondido, los hijos y las secciones colapsadas de adentro; un aviso; deshacer trae todo', async () => {
     const seen = notices();
     const { editor } = page([p('antes'), h(1, 'Acto', [p('hijo')]), p('a'), h(2, 'Sub'), p('b'), h(1, 'Otro'), p('c')]);
     await tick();
     const ids = texts(editor).map((t) => (t ? idOf(editor, t) : ''));
     collapse(editor, 'Sub', 'Acto');
     undoPoint(editor);
-    removeWithSections(view(editor), [idOf(editor, 'Acto')]);
+    selectWholeBlock(view(editor), idOf(editor, 'Acto'));
+    press(editor, 'Backspace');
     expect(texts(editor)).toEqual(['antes', 'Otro', 'c']);
     expect(seen.at(-1)).toMatch(/colapsado|collapsed/);
     await tick();
@@ -480,7 +486,8 @@ describe('borrar un título colapsado borra su sección entera', () => {
   it('el último título colapsado de la página', () => {
     const { editor } = page([p('antes'), h(2, 'Último'), p('a'), p('b', [p('b1')])]);
     collapse(editor, 'Último');
-    removeWithSections(view(editor), [idOf(editor, 'Último')]);
+    selectWholeBlock(view(editor), idOf(editor, 'Último'));
+    press(editor, 'Delete');
     expect(texts(editor)).toEqual(['antes']);
   });
 
@@ -527,7 +534,8 @@ describe('borrar un título colapsado borra su sección entera', () => {
     const other = linked(doc);
     await tick();
     collapse(editor, 'Escena 1');
-    removeWithSections(view(editor), [idOf(editor, 'Escena 1')]);
+    selectWholeBlock(view(editor), idOf(editor, 'Escena 1'));
+    press(editor, 'Backspace');
     other.editor.insertBlocks([{ type: 'paragraph', content: 'de otro' }], idOf(other.editor, 'Uno'), 'after');
     other.editor.updateBlock(idOf(other.editor, 'Detalle texto'), { content: 'cambiado' });
     other.sync();
@@ -974,7 +982,7 @@ describe('verificación: borrar la sección solo a propósito', () => {
     });
   }
 
-  it('un removeBlocks sin intención (no desde "Borrar") no borra lo escondido: se abre', () => {
+  it('un removeBlocks sin intención (no desde el bloque elegido) no borra lo escondido: se abre', () => {
     const { editor } = page([p('antes'), h(1, 'T'), p('a'), h(1, 'U')]);
     collapse(editor, 'T');
     editor.removeBlocks([idOf(editor, 'T')]);
@@ -1109,7 +1117,7 @@ describe('Retroceso al principio de un título', () => {
 });
 
 // --- Verificación de cbed5dc: lo escondido se borra solo a propósito ----------------------------------------
-// (A) a propósito: "Borrar", el título elegido entero (o la sección, o varios bloques) y borrar, cortar, pegar o
+// (A) a propósito: el título elegido entero (clic en los puntos) (o la sección, o varios bloques) y borrar, cortar, pegar o
 // escribir encima; Ctrl+A. (B) una selección de texto que cruza la sección entera: empieza antes del título (en
 // un bloque de arriba) y termina en un bloque después de lo escondido. Cualquier otra cosa que borraría algo
 // escondido no hace nada: se abre la sección.

@@ -1,5 +1,25 @@
 # Changelog — LGA Shot Docs
 
+v0.059 :
+
+El margen de cada bloque, como pidió Lega. Al pasar el mouse por un bloque aparecen tres puntos verticales,
+redondos y gruesos (como en Coda), en vez de los seis de BlockNote, y ya no está el "+" de al lado. En un título
+el orden es [puntos] [triángulo] [texto], con el mismo espacio entre cada cosa y todo centrado en el primer
+renglón; en lo demás, solo los puntos, siempre a la izquierda de la casilla, el botón o la viñeta de las listas.
+El triángulo de colapsar es más grande (crece con el título), gris, y con el mouse encima toma el color del
+título (blanco en el tema oscuro, también si se cambia el tema en vivo); ahora se puede llegar a él: sigue a la
+vista mientras el mouse va del título al margen, y los puntos van con él. En el teléfono todo entra en el margen
+sin tapar el texto. Un clic en los puntos elige el bloque entero y abre la barra de formato entera (tipo de
+bloque, negrita, colores del texto y del bloque, alinear, comentar) en vez del menú del tirador, que ya no tiene
+"Borrar": un bloque elegido se borra con Retroceso, Supr o Cortar, y toda la página con Ctrl/⌘+A (un título
+colapsado, con su sección entera, como antes; ver Doc_Colapsar.md). Arrastrar los puntos sigue moviendo el
+bloque. Arreglado: después de borrar un bloque desde el menú hacía falta apretar Ctrl+Z varias veces, y los
+primeros deshacían otras cosas. El foco quedaba afuera del editor y el deshacer propio del navegador cambiaba el
+texto como si fuera una edición nueva; ahora ese deshacer hace el de la página (salvo con el foco en otro campo,
+como el título, donde no toca la página), todo lo que saca bloques es un solo Ctrl+Z (aunque se haga enseguida
+después de escribir) y los puntos dejan el foco en el editor.
+[ Menú del bloque - tres puntos, barra entera y deshacer ]
+
 v0.058 :
 
 Fotos nítidas en la página. Las fotos se veían borrosas en la página (y bien en el carrete) porque la página
