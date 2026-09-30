@@ -34,8 +34,9 @@ los de Lega). Se hace por partes (ver pendientes), pero **nada de lo que se haga
 
 ## Pendientes
 
-Ordenados en tres grupos: el plan de workspaces (primero), lo que se puede hacer sin que Lega decida
-nada, y lo que espera una decisión o una acción de Lega.
+Ordenados en cuatro grupos: el plan de workspaces (primero), los pedidos de Lega del 2026-09-30 (se hacen
+ya, en orden), lo que se puede hacer sin que Lega decida nada, y lo que espera una decisión o una acción de
+Lega.
 
 ### A. Plan de workspaces (D-17, D-18)
 
@@ -46,6 +47,28 @@ nada, y lo que espera una decisión o una acción de Lega.
    hechos y publicados** (v0.031 a v0.041, migraciones aplicadas en Wanka el 2026-09-30). Absorbe la vieja fase 2 (compartir un proyecto, una
    página o una subpágina con usuarios y con links legibles, D-13) y los que figuran abajo en "Resueltos
    adentro del plan".
+
+### P. Pedidos de Lega (2026-09-30), en este orden
+
+- **P.1 Hecho (v0.043): el PDF corta donde marca la pantalla.** Las fotos del Drive salían en el PDF con el
+  original a todo el ancho (más altas que en pantalla, con la miniatura). Ver `Doc_Hojas_PDF.md`.
+- **P.2 Hecho (v0.044): el primer clic en una foto la elige, el segundo la abre.** Contorno, tiradores a la
+  vista y su barra. Ver `Doc_Imagenes.md`.
+- **P.3 Fotos y videos en fila** (`Doc_Imagenes.md`, entrega 2): tamaños rápidos 1/1, 1/2, 1/3 y 1/4 en la
+  barra, fotos seguidas que entran quedan en una fila, tiradores que imantan a esos tamaños, flechas y Enter
+  en una fila, paginación y PDF con la fila entera. Propiedad nueva `rowWidth` en el bloque `image` (sin
+  tipo de bloque nuevo): después de publicar, subir `min_app_version` (pide autorización de Lega).
+- **P.4 Acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos
+  y videos seguidos en una o más filas de la misma altura, sin cambiar el orden. Se audita antes y después.
+- **P.5 En el teléfono, filas o apiladas:** una opción de la cuenta (solo tiene efecto en pantallas
+  angostas) para ver las fotos y videos en fila, como en la computadora, o uno debajo del otro. No cambia lo
+  guardado. Por defecto, en fila.
+- **P.6 Adjuntar cualquier archivo:** arrastrar o pegar un PDF, un .zip, un .rar o lo que sea; va al Drive
+  del dueño como las fotos y se ve como una tarjeta con ícono, nombre y tamaño. Al hacer clic: un PDF (o lo
+  que el navegador sepa mostrar) se abre en una pestaña nueva; el resto se descarga. Sin tipo de bloque
+  nuevo (el bloque `file` de BlockNote lo borraría una versión vieja): el mismo bloque `image` con
+  `sdmedia://`, que la app ya muestra según el tipo del archivo. Pensar vista previa (primera página del PDF
+  como miniatura). Diseño y auditoría antes de implementar.
 
 ### B. Sin decisiones pendientes
 
