@@ -2516,6 +2516,69 @@ code {
   }
 }
 
+/* Fotos en fila (imageRowsEditor.ts, Docs/Doc_Imagenes.md). Solo los grupos de bloques con alguna foto con
+   ancho propio pasan a flex: las páginas sin filas quedan como antes. Valen igual en el editor, en la vista
+   de impresión y en el PDF. En una fila de n fotos, cada una ocupa su parte de lo que queda después de los
+   espacios: con partes proporcionales a su ancho sobre su alto, todas quedan con la misma altura. */
+.bn-block-group.img-rows {
+  --img-gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  column-gap: var(--img-gap);
+}
+
+/* Cada bloque, un renglón entero. Con `min-width: 0` una tabla ancha o un link largo no ensanchan la página. */
+.bn-block-group.img-rows > .bn-block-outer,
+.bn-block-group.img-rows > .bn-trailing-block {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.bn-block-group.img-rows > .bn-block-outer.img-sized {
+  flex: 0 0 calc(var(--img-f) * (100% - (var(--row-n) - 1) * var(--img-gap)));
+}
+
+/* La última de una fila llena absorbe el redondeo (medio píxel no manda la foto al renglón siguiente). */
+.bn-block-group.img-rows > .bn-block-outer.img-sized.img-row-last {
+  flex-grow: 1;
+  flex-basis: calc(var(--img-f) * (100% - (var(--row-n) - 1) * var(--img-gap)) - 1px);
+}
+
+/* Una foto sola que no llena el renglón, centrada o a la derecha según su alineación. */
+.bn-block-group.img-rows > .bn-block-outer.img-sized.img-align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.bn-block-group.img-rows > .bn-block-outer.img-sized.img-align-right {
+  margin-left: auto;
+}
+
+/* La foto llena su lugar en la fila (le gana al ancho en px que BlockNote pone en línea). Mientras se arrastra
+   un tirador, no: se ve el ancho que va quedando. */
+.img-sized:not(.img-resizing) > .bn-block > .bn-block-content .bn-file-block-content-wrapper {
+  min-width: 100%;
+  max-width: 100%;
+}
+
+.bn-block-group.img-rows > .bn-block-outer.img-sized.img-resizing {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+/* Los tamaños rápidos de la barra de una foto (1/1, 1/2, 1/3, 1/4): texto, y el elegido marcado. */
+.bn-formatting-toolbar .image-size-button {
+  font-family: var(--mono);
+  font-size: 12px;
+  min-width: 30px;
+}
+
+.bn-formatting-toolbar .image-size-button[data-selected] {
+  color: var(--text);
+  font-weight: 700;
+}
+
 /* El cursor entre dos bloques sin texto (dos fotos seguidas): una línea visible del ancho del bloque, en
    vez de la raya negra de 20 px que no se veía (y nada en el tema oscuro). El cursor es un elemento sin
    ancho: se estira sobre el bloque que lo contiene. */

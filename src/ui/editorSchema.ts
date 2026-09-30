@@ -13,6 +13,7 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from './driveCard';
+import { imageRowsExtension, ROW_WIDTH_PROP } from './imageRowsEditor';
 
 // --- Script (guion) ----------------------------------------------------------------------------------
 //
@@ -236,12 +237,22 @@ const { audio: _audio, file: _file, video: _video, ...blockSpecs } = defaultBloc
 // videos (sin esto, BlockNote buscaría un bloque `video`); sin portero, solo imágenes, como antes (ver
 // `setVideosAccepted`). Es solo lo que ofrece el selector: el bloque guardado es el mismo de siempre.
 const imageAccept: string[] = ['image/*'];
+//
+// Y una propiedad más, `rowWidth` (Docs/Doc_Imagenes.md): la parte del ancho de la página que ocupa la foto
+// (0 = sin ancho propio, como antes). Fotos seguidas con `rowWidth` se ven en fila (imageRowsEditor.ts).
+// El tipo sigue siendo `image`: una versión vieja muestra la foto con su `previewWidth` (px), una debajo
+// de otra, y si edita ese bloque o uno vecino pierde solo `rowWidth`.
 const image = {
   ...blockSpecs.image,
+  config: {
+    ...blockSpecs.image.config,
+    propSchema: { ...blockSpecs.image.config.propSchema, [ROW_WIDTH_PROP]: { default: 0 } },
+  },
   implementation: {
     ...blockSpecs.image.implementation,
     meta: { ...blockSpecs.image.implementation.meta, fileBlockAccept: imageAccept },
   },
+  extensions: [...(blockSpecs.image.extensions ?? []), imageRowsExtension],
 };
 
 /** El workspace tiene portero: el bloque `image` ofrece también videos. Lo llama el editor al abrirse. */
