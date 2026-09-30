@@ -46,7 +46,8 @@ DÍA, NOCHE…), las preguntas y las tablas.
 Los estilos de `.print-view` valen **igual en pantalla y al imprimir** y no dependen del ancho de la
 ventana: al imprimir, las reglas del teléfono (`max-width: 760px`) se aplicarían porque una hoja A4 mide
 menos de 760 px de texto, así que la vista las pisa (margen, tamaño del título, relleno del editor). Por
-eso la vista se mide igual en la computadora, en el teléfono y en el PDF.
+eso la vista se mide igual en la computadora, en el teléfono y en el PDF. Las fotos y videos del editor
+también: en la vista van con un ancho fijo en px que no sale de la pantalla (ver "Imprimir", punto 4).
 
 Otros ajustes del papel: una imagen nunca pasa del ancho imprimible ni del alto de una hoja
 (`object-fit: contain`; en pantalla, en una página con hoja, el mismo tope); una tabla más ancha que el área
@@ -114,7 +115,13 @@ abierta. Se usa la impresión del navegador, sin librerías de PDF: en el diálo
 4. Las fotos del Drive van **grandes si el original está en el dispositivo** (`localImage`, que no pregunta
    nada a la red), achicadas a 2400 px de lado mayor (`createImageBitmap` y un canvas). Una foto que el
    navegador no sabe abrir (un HEIC en Chrome) sigue con su miniatura, igual que las que no están en el
-   dispositivo. Como mucho 40 originales o 200 MB por PDF (12 o 60 MB en un teléfono o una tableta). Mientras
+   dispositivo. **El tamaño en la hoja no cambia:** al armarse, la vista le fija a cada foto o video un
+   ancho en px, el mismo desde cualquier pantalla: el que le puso la persona (`previewWidth`) o, si no
+   tiene, el natural de lo que se ve (la miniatura, 480 px de lado), sin pasar del área de texto. Así el
+   original solo gana nitidez y los cortes son los que marca la pantalla. Hasta v0.042 el original
+   llenaba el ancho y en el PDF la foto salía más alta que en pantalla: la hoja se cortaba antes que la
+   marca.
+   Como mucho 40 originales o 200 MB por PDF (12 o 60 MB en un teléfono o una tableta). Mientras
    tanto se ve el aviso "Preparing the PDF…". Si la impresión se cancela (se cerró o empezó otra), no se
    crea nada más.
 5. Cuando cargaron las imágenes de la vista, se vuelve a medir y a cortar.
@@ -152,7 +159,9 @@ Los links (también el de cada tarjeta de Drive) quedan como links en el PDF.
 - En `pagination.test.ts`, además: la barra flotante y los `id` fuera de la copia, el tema de la app sin
   tocar, el respaldo sin `afterprint`, el `afterprint` temprano en un táctil, un `print()` que falla, la
   espera de las imágenes de la página, la cancelación mientras se buscan los originales, el achique a
-  2400 px y qué cambios recalculan las marcas.
+  2400 px, qué cambios recalculan las marcas, y el ancho fijo de las fotos en la vista (el mismo desde el
+  teléfono o la computadora, que no cambia al poner el original, que respeta `previewWidth` y que no toca
+  otras imágenes).
 
 ## Pendiente
 

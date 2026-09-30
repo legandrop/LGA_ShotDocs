@@ -368,6 +368,66 @@ describe('la vista de impresión y el diálogo', () => {
   });
 });
 
+describe('las fotos en la vista de impresión', () => {
+  // Una página con una foto (del Drive: en pantalla, su miniatura de 480 × 320), antes un ícono que no es
+  // una foto del editor. `editorWidth`: el ancho del editor en pantalla (teléfono o computadora).
+  function photoPage(editorWidth: number, wrapperWidth: string, natural = 480) {
+    const article = document.createElement('article');
+    article.className = 'page sheet';
+    article.innerHTML = `<div class="editor-host"><div class="bn-container"><div class="bn-editor" style="padding: 0 20px">
+      <p><img class="icon" src="data:,"></p>
+      <div class="bn-block-outer"><div data-content-type="image" data-url="sdmedia://x">
+        <div class="bn-file-block-content-wrapper" style="width: ${wrapperWidth}">
+          <div class="bn-visual-media-wrapper"><img class="bn-visual-media" src="blob:thumb"></div>
+        </div></div></div></div></div></div>`;
+    document.body.append(article);
+    cleanups.push(() => article.remove());
+    Object.defineProperty(article.querySelector('.bn-editor')!, 'clientWidth', { value: editorWidth });
+    const img = article.querySelector<HTMLImageElement>('img.bn-visual-media')!;
+    Object.defineProperty(img, 'naturalWidth', { value: natural });
+    Object.defineProperty(img, 'naturalHeight', { value: natural ? 320 : 0 });
+    img.getBoundingClientRect = () => ({ width: Math.min(natural, editorWidth - 40) }) as DOMRect;
+    return article;
+  }
+  const wrapperOf = (view: { root: HTMLElement }) =>
+    view.root.querySelector<HTMLImageElement>('img.bn-visual-media')!.closest<HTMLElement>('.bn-file-block-content-wrapper')!;
+
+  it('una miniatura sin ancho propio va con su ancho natural, el mismo desde el teléfono o la computadora', () => {
+    for (const editorWidth of [390, 1122]) {
+      const view = buildPrintView(photoPage(editorWidth, 'fit-content'), { size: 'A3', landscape: false }, 'measure');
+      expect(wrapperOf(view).style.width).toBe('480px');
+      expect(wrapperOf(view).style.maxWidth).toBe('100%');
+      expect(view.root.querySelector<HTMLImageElement>('img.bn-visual-media')!.style.aspectRatio).toBe('480 / 320');
+      view.root.remove();
+    }
+  });
+
+  it('cambiar la miniatura por el original no cambia el ancho (ni, con la proporción fija, el alto)', () => {
+    const view = buildPrintView(photoPage(1122, 'fit-content'), { size: 'A3', landscape: false }, 'output');
+    const img = view.root.querySelector<HTMLImageElement>('img.bn-visual-media')!;
+    img.src = 'blob:original-2400';
+    expect(wrapperOf(view).style.width).toBe('480px');
+    expect(img.style.aspectRatio).toBe('480 / 320');
+    view.root.remove();
+  });
+
+  it('el ancho que le puso la persona (previewWidth, en px) se respeta, y nunca pasa del área de texto', () => {
+    const view = buildPrintView(photoPage(390, '600px'), { size: 'A4', landscape: false }, 'output');
+    expect(wrapperOf(view).style.width).toBe('600px');
+    expect(wrapperOf(view).style.maxWidth).toBe('100%');
+    view.root.remove();
+  });
+
+  it('lo que no es una foto del editor no se toca, y si no se sabe el tamaño no se fija ninguno', () => {
+    const view = buildPrintView(photoPage(1122, 'fit-content', 0), { size: 'A4', landscape: false }, 'output');
+    expect(wrapperOf(view).style.width).toBe('fit-content');
+    const icon = view.root.querySelector<HTMLImageElement>('img.icon')!;
+    expect(icon.style.width).toBe('');
+    expect(icon.style.aspectRatio).toBe('');
+    view.root.remove();
+  });
+});
+
 describe('qué cambios recalculan las marcas', () => {
   const record = (target: Node, type: MutationRecordType, extra: Partial<MutationRecord> = {}) =>
     ({ target, type, addedNodes: [], removedNodes: [], attributeName: null, ...extra }) as unknown as MutationRecord;
