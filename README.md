@@ -74,6 +74,7 @@ In this branch, not published yet:
   the owner and admins can send them to the Google Drive trash (recoverable there for 30 days).
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets.
+- English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
 Next in the workspace plan: files in the owner's Drive with an offline upload queue, client guests with

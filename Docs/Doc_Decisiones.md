@@ -68,9 +68,27 @@ diga otra cosa.
   `#3a3a3a`, flecha de 16×11 que apunta al control y se da vuelta si no entra, rótulos en negrita
   `#E8E8E8`, 600 ms de espera) y la misma regla: un tooltip nunca repite lo que el control ya dice; va solo
   cuando suma algo (un atajo, una segunda interacción, un título cortado). Nada de tooltips del navegador.
-- **D-16 · App en castellano e inglés** (2026-09-29). La interfaz va a estar en los dos idiomas, y también
-  las plantillas y los tipos de texto (Script/Guion, Questions/Dudas…). Se implementa más adelante
-  (roadmap); por ahora la interfaz sigue en inglés.
+- **D-16 · App en castellano e inglés** (2026-09-29; implementado 2026-09-30, roadmap B.8). La interfaz
+  está en los dos idiomas, y también las plantillas (cuando existan) y los tipos de texto (Script/Guion,
+  Question/Pregunta). Cómo quedó:
+  - **El idioma es una preferencia de la cuenta** (`language: 'en' | 'es'`, en `user_settings`), se elige en
+    el menú de la cuenta junto al tema y la fuente y sigue a la persona en todos sus dispositivos. De
+    fábrica, castellano si el navegador está en castellano (`es`, `es-AR`…); si no, inglés. Antes de entrar
+    (login, bienvenida) se usa el último elegido en el dispositivo o el del navegador.
+  - **Versiones viejas de la app:** no conocen la clave y la descartan al leer. Si una versión vieja cambia
+    una preferencia, sube el objeto entero sin `language` y la clave se borra de la cuenta; no es grave: los
+    dispositivos con la versión nueva siguen con el idioma que tenían (lo que la cuenta no trae no vuelve a
+    lo de fábrica) y uno nuevo arranca con el del navegador.
+  - **Nada de lo guardado cambia:** Script y pregunta siguen siendo párrafos con `script: true` y
+    `question: true`; "Guion" y "Pregunta" son solo etiquetas del menú "/" y del selector de tipo. Los
+    nombres por defecto que la app crea (un proyecto nuevo) salen en el idioma del momento.
+  - **Castellano rioplatense y claro, con vos.** Términos fijos: página, proyecto, workspace (queda así),
+    papelera, compartir, miembro, invitado, dueño, admin. Los permisos: Ver, Comentar, Editar, Editar y crear
+    páginas.
+  - **Quedan en inglés:** las páginas legales (`/privacy`, `/terms`: es el texto que revisa Google y el que
+    vale; con la app en castellano muestran una nota que lo dice), la guía para crear un workspace, el
+    informe técnico de *Media test* y los mensajes que manda el portero. Los avisos que la app guarda en el
+    dispositivo (el motivo de un cambio rechazado) quedan en el idioma en que se escribieron.
 - **D-17 · Archivos grandes en el Drive del dueño** (2026-09-29). El plan gratis de Supabase trae 1 GB
   de archivos: unas 300 fotos de teléfono o un video de rodaje. Detalle en la sección 5 de
   `Plan_Workspaces.md`. Hoy el portero está publicado y probado con *Media test* (v0.022 a v0.028); el

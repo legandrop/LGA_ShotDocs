@@ -98,9 +98,18 @@ nada, y lo que espera una decisión o una acción de Lega.
    libre sale en A4. En el teléfono la página se ve libre y las marcas van antes de los mismos bloques. Ver
    `Doc_Hojas_PDF.md`. **Falta:** el bloque de salto de hoja (una propiedad de párrafo, para que degrade en
    una versión vieja) y probar a mano en Safari y en el iPhone.
-8. **Castellano e inglés (D-16).** Toda la interfaz en los dos idiomas, con el idioma en las preferencias
-   de la cuenta, y las plantillas y los tipos de texto con nombre en cada idioma (Script/Guion,
-   Questions/Dudas…).
+8. **Hecho: castellano e inglés (D-16).** Toda la interfaz en los dos idiomas: pantallas, menús, diálogos,
+   avisos, tooltips, estados de sincronización, errores, el carrete, comentarios, papelera, miembros,
+   compartir, workspaces, bienvenida y login. Los textos están en `src/i18n/` (cada clave con los dos
+   idiomas juntos, `{valores}` y plurales; `useT()` en los componentes y `t()` en lo demás), y una prueba
+   revisa que cada clave tenga los dos idiomas con los mismos valores y que no sobre ninguna. El idioma es
+   una preferencia de la cuenta (`language`, en el menú de la cuenta junto al tema y la fuente); de fábrica,
+   castellano si el navegador está en castellano. El editor usa el diccionario en castellano de BlockNote,
+   pasado a vos. Los tipos de texto se llaman Script/Guion y Question/Pregunta en la interfaz; lo guardado en
+   los documentos no cambia. Quedan en inglés, a propósito: las páginas legales (con una nota en
+   castellano), la guía para crear un workspace, el informe técnico de *Media test* y los mensajes que
+   manda el portero. **Falta:** el correo con el código (su plantilla está en `supabase/`), la guía en
+   castellano y las plantillas, que todavía no existen (fase 3), con su nombre en cada idioma.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
    datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes.
 
