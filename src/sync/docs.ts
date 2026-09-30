@@ -109,6 +109,7 @@ export class PageDocs {
   /** Problemas que no son de escritura local, por ejemplo un update ilegible del servidor. */
   onWarning?: (message: string) => void;
   private readonly unsupportedListeners = new Set<(pageId: string) => void>();
+  private readonly renderFailedListeners = new Set<(pageId: string) => void>();
 
   constructor(
     private readonly db: LocalDb,
@@ -184,6 +185,18 @@ export class PageDocs {
   subscribeUnsupported(fn: (pageId: string) => void): () => void {
     this.unsupportedListeners.add(fn);
     return () => this.unsupportedListeners.delete(fn);
+  }
+
+  /**
+   * Avisa cuando un cambio que llegó del servidor entró en el documento pero el editor abierto no lo pudo
+   * mostrar (el editor tiró un error al dibujarlo). Quien escucha tiene que volver a dibujar el editor desde
+   * el documento ANTES de la próxima tecla: un editor que se quedó con lo de antes, en la próxima edición,
+   * escribe su versión vieja encima y deshace el cambio para todos (Docs/Doc_Colaboracion.md). Se llama en
+   * el momento, dentro de la misma tarea del navegador.
+   */
+  subscribeRenderFailed(fn: (pageId: string) => void): () => void {
+    this.renderFailedListeners.add(fn);
+    return () => this.renderFailedListeners.delete(fn);
   }
 
   /**
@@ -582,26 +595,52 @@ export class PageDocs {
       probe.destroy();
     }
     if (!needsRepair) {
-      Y.applyUpdate(doc, update, ORIGIN_REMOTE);
+      this.applyRendering(pageId, () => Y.applyUpdate(doc, update, ORIGIN_REMOTE));
       return true;
     }
     // Quien no puede escribir la página repara solo en memoria: lo remoto ya está guardado (applyRemote) y
     // la reparación no se guarda ni se sube.
     if (this.options.canWrite?.(pageId) === false) {
-      doc.transact(() => {
-        Y.applyUpdate(doc, update);
-        normalize!(doc, ORIGIN_LOAD);
-      }, ORIGIN_LOAD);
       live.repairedInMemory = true;
+      this.applyRendering(pageId, () =>
+        doc.transact(() => {
+          Y.applyUpdate(doc, update);
+          normalize!(doc, ORIGIN_LOAD);
+        }, ORIGIN_LOAD),
+      );
       return true;
     }
     // Con origen local: la reparación se guarda y se sube. Lo remoto que viaja con ella ya está en el
     // servidor, así que subirlo de nuevo no cambia nada.
-    doc.transact(() => {
-      Y.applyUpdate(doc, update);
-      normalize!(doc, ORIGIN_REPAIR);
-    }, ORIGIN_REPAIR);
+    this.applyRendering(pageId, () =>
+      doc.transact(() => {
+        Y.applyUpdate(doc, update);
+        normalize!(doc, ORIGIN_REPAIR);
+      }, ORIGIN_REPAIR),
+    );
     return true;
+  }
+
+  /**
+   * Aplica un cambio a un documento abierto. El editor lo dibuja al final de la transacción, y si al
+   * dibujarlo tira un error, Yjs lo pasa para afuera: el cambio YA está en el documento (y guardado), pero el
+   * editor quedó mostrando lo de antes. No se corta la bajada (lo bajado ya está guardado y el cursor
+   * avanzó): se avisa a quien tiene el editor para que lo vuelva a dibujar desde el documento
+   * (`subscribeRenderFailed`).
+   */
+  private applyRendering(pageId: string, apply: () => void): void {
+    try {
+      apply();
+    } catch (err) {
+      console.warn(`The editor could not show a change of page ${pageId}; redrawing it.`, err);
+      for (const fn of this.renderFailedListeners) {
+        try {
+          fn(pageId);
+        } catch (listenerError) {
+          console.warn('Redrawing the editor failed.', listenerError);
+        }
+      }
+    }
   }
 
   /**

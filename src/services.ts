@@ -16,7 +16,7 @@ import { PageFiles } from './sync/files';
 import { openLocalDb, type LocalDb } from './sync/localDb';
 import { supportsContent } from './ui/unknownContent';
 import { SupabaseRemote } from './sync/remote';
-import { mergeRootGroups, seedIfEmpty } from './sync/structure';
+import { normalizeStructure, seedIfEmpty } from './sync/structure';
 import { PageTree } from './sync/tree';
 import { errorMessage } from './sync/types';
 import { DB_SCHEMA_VERSION, type ActiveWorkspace } from './workspace';
@@ -208,7 +208,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       const access = new AccessStore(db, user.id);
       await access.load();
       const docs = new PageDocs(db, {
-        normalize: mergeRootGroups,
+        normalize: normalizeStructure,
         seed: seedIfEmpty,
         supports: supportsContent,
         // Sin "Edit", las reparaciones de estructura quedan en memoria: el servidor las rechazaría.

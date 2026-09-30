@@ -32,6 +32,7 @@ import { openAttachmentNow, prepareAttachment } from './attachmentOpen';
 import { AttachmentSheet } from './AttachmentSheet';
 import { editorDictionary } from './editorLocale';
 import { findUnknownContent } from './unknownContent';
+import { redrawFromYjs } from './editorRecovery';
 import {
   CommentMargin,
   CommentSideMenuController,
@@ -95,6 +96,9 @@ export function PageEditor({ pageId }: { pageId: string }) {
   // editor: el editor se vuelve a montar (al terminar de bajar, al cambiar el permiso o el idioma) y la
   // búsqueda sigue.
   const [findEditor, setFindEditor] = useState<FindEditor | null>(null);
+  // Se suma si el editor no se pudo volver a dibujar después de un error (editorRecovery.ts): se monta de nuevo.
+  const [remounts, setRemounts] = useState(0);
+  const remount = useCallback(() => setRemounts((n) => n + 1), []);
 
   // Ctrl/⌘+F abre la barra de la app; con el foco en la barra, se deja pasar al navegador (la segunda vez).
   // Solo con el documento abierto: mientras carga (o si no se puede mostrar) queda la del navegador.
@@ -188,12 +192,13 @@ export function PageEditor({ pageId }: { pageId: string }) {
       )}
       {/* Cambiar el idioma vuelve a abrir el editor (sus textos se eligen al crearlo); el documento es el mismo. */}
       <BlockEditor
-        key={`${pageId}:${opening.complete}:${canEdit}:${tr.lang}`}
+        key={`${pageId}:${opening.complete}:${canEdit}:${tr.lang}:${remounts}`}
         doc={opening.doc}
         pageId={pageId}
         editable={opening.complete && canEdit}
         canComment={canComment}
         onEditor={setFindEditor}
+        onBroken={remount}
       />
     </>
   );
@@ -225,14 +230,17 @@ function BlockEditor({
   editable,
   canComment,
   onEditor,
+  onBroken,
 }: {
   doc: Y.Doc;
   pageId: string;
   editable: boolean;
   canComment: boolean;
   onEditor?: (editor: FindEditor | null) => void;
+  /** El editor no se pudo volver a dibujar después de un error: hay que montarlo de nuevo. */
+  onBroken?: () => void;
 }) {
-  const { files, media, user } = useServices();
+  const { docs, files, media, user } = useServices();
   const scheme = useScheme();
   const tr = useT();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
@@ -321,6 +329,17 @@ function BlockEditor({
   );
 
   editorRef.current = editor as unknown as { removeBlocks: (ids: string[]) => unknown };
+
+  // Un cambio de otro dispositivo que el editor no pudo dibujar (docs.ts, `subscribeRenderFailed`): se vuelve
+  // a dibujar todo desde el documento en el momento, antes de la próxima tecla. Si ni eso anda, el editor
+  // queda en solo lectura y se monta de nuevo.
+  useEffect(
+    () =>
+      docs.subscribeRenderFailed((id) => {
+        if (id === pageId && !redrawFromYjs(editor as never)) onBroken?.();
+      }),
+    [docs, editor, pageId, onBroken],
+  );
 
   // La barra de buscar (arriba, en PageEditor) usa este editor mientras esté montado.
   useEffect(() => {
