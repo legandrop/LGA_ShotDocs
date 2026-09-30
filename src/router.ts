@@ -5,7 +5,14 @@ export type Route =
   | { name: 'page'; id: string }
   | { name: 'trash' }
   // Pantalla de prueba del portero de archivos (subir y ver videos desde el teléfono).
-  | { name: 'media-test' };
+  | { name: 'media-test' }
+  // Política de privacidad y condiciones de uso: públicas, se ven sin sesión y sin workspace (Google las pide
+  // para la pantalla de consentimiento).
+  | { name: 'privacy' }
+  | { name: 'terms' };
+
+export const PRIVACY_PATH = '/privacy';
+export const TERMS_PATH = '/terms';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EVENT = 'shotdocs:navigate';
@@ -15,7 +22,16 @@ export function parseRoute(pathname: string): Route {
   if (page && UUID.test(page)) return { name: 'page', id: page };
   if (pathname === '/trash') return { name: 'trash' };
   if (pathname === '/media-test') return { name: 'media-test' };
+  if (pathname === PRIVACY_PATH || pathname === PRIVACY_PATH + '/') return { name: 'privacy' };
+  if (pathname === TERMS_PATH || pathname === TERMS_PATH + '/') return { name: 'terms' };
   return { name: 'home' };
+}
+
+/** Las direcciones que se muestran sin sesión ni workspace: la app no crea ningún cliente para ellas. */
+export type PublicRoute = Extract<Route, { name: 'privacy' | 'terms' }>;
+
+export function isPublicRoute(route: Route): route is PublicRoute {
+  return route.name === 'privacy' || route.name === 'terms';
 }
 
 export function pagePath(id: string): string {

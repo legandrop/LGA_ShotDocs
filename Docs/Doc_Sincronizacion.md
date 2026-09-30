@@ -64,17 +64,39 @@ pierde mientras tanto.
    Si guardar falla (por ejemplo, disco lleno), la edición queda en memoria, se reintenta cada 3 segundos,
    cuenta como pendiente y la app lo avisa en rojo hasta que se pueda guardar.
 2. **Qué falta subir.** Cada página guarda `syncedSV`, el vector de estado de Yjs de lo que el servidor ya
-   confirmó. Lo pendiente es siempre la diferencia entre el documento local y ese vector, así que no
-   importa si la app se cerró a mitad de camino: al volver se recalcula entera.
+   tiene. Lo pendiente es siempre la diferencia entre el documento local y ese vector, así que no
+   importa si la app se cerró a mitad de camino: al volver se recalcula entera. La única regla es que
+   `syncedSV` nunca diga que el servidor tiene algo que no tiene: avanza solo con lo que el servidor
+   confirma al subir (punto 3) o manda al bajar (punto 4). Los borrados viajan siempre todos en cada
+   subida (Yjs los manda enteros), así que no dependen del vector.
 3. **Envío con confirmación.** Lo que se sube se calcula desde lo guardado en IndexedDB, leído en la misma
    transacción que el contador de ediciones: la confirmación nunca cubre algo que no viajó. Antes de
    enviar, el update se guarda con un id propio. Si la respuesta no llega, se reenvía el mismo update con
    el mismo id y el servidor devuelve el mismo `seq` sin duplicar nada. Recién con la confirmación avanza
-   `syncedSV`. Si el servidor lo rechaza para siempre (por ejemplo, por tamaño), la página queda marcada
+   `syncedSV` (se suma, autor por autor, a lo que ya decía: lo bajado mientras la subida estaba en vuelo
+   también cuenta). Si el servidor lo rechaza para siempre (por ejemplo, por tamaño), la página queda marcada
    como rechazada, la app lo avisa y se reintenta al abrirla de nuevo o con "Retry".
 4. **Bajar lo nuevo.** El árbol trae el último `seq` de cada página. Si es mayor que el que tiene el
    dispositivo, se bajan los updates posteriores y se guardan en la misma transacción que el nuevo cursor.
    Así se bajan también las páginas que nunca se abrieron en ese dispositivo, y quedan disponibles offline.
+   En esa misma transacción avanza `syncedSV` con lo bajado, así la próxima subida lleva solo lo propio y
+   no reenvía lo que el servidor mandó (desde v0.0xx; antes lo reenviaba una vez, sin perder nada). Avanza
+   con dos límites (`serverReach` y `advanceSynced` en `docs.ts`):
+   - **Solo lo que vino del servidor, sin huecos.** `syncedSV` dice que el servidor tiene los relojes
+     `[0, n)` de cada autor de Yjs; un update bajado con los relojes `[a, b)` de ese autor, con `a <= n`, lo
+     lleva hasta `b`. Un hueco corta. Lo propio sin confirmar nunca vino del servidor, así que sigue afuera
+     del vector, o sea, adentro de lo que falta subir; lo propio que vuelve del servidor (una subida cuya
+     respuesta se perdió) sí cuenta, porque el servidor lo tiene.
+   - **Nunca más de lo que el documento del dispositivo integró.** Si lo bajado depende de algo que
+     todavía no llegó, Yjs lo deja pendiente y el vector no avanza por eso (en la próxima subida viaja de
+     más, sin daño).
+   Si la app se cierra antes de terminar la transacción, no cambia nada (ni lo guardado, ni el cursor, ni
+   el vector). Restaurar una copia borra el vector y el cursor (ver "Restaurar una copia de seguridad"), y
+   lo que se baja después cuenta solo lo que tiene el servidor restaurado. Las pruebas están en
+   `src/sync/docs.test.ts`: en cada paso revisan contra el servidor que el vector no diga de más, con
+   ediciones sin subir mezcladas con lo bajado, updates que dependen de algo que falta, lo propio que
+   vuelve, una subida en vuelo (con la respuesta perdida o sin llegar), cerrar la app a la mitad,
+   restaurar y corridas al azar con tres dispositivos.
 5. **Fusión.** Dos dispositivos que editan la misma página sin red se fusionan con Yjs al volver. El editor
    guarda cada página bajo una única raíz; si cada dispositivo creara la suya, al fusionarse quedarían dos
    y el editor borraría la que no puede mostrar. Para que eso no pase, al abrir una página vacía para

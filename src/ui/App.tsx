@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../auth';
+import { isPublicRoute, useRoute } from '../router';
 import { markInviteArrival, setArrivalNotice, takeInviteHash } from '../invite';
 import { buildWorkspace, createWorkspaceClient, WorkspaceContext, type ActiveWorkspace } from '../workspace';
 import {
@@ -12,15 +13,19 @@ import {
   updateWorkspaces,
   type DeviceWorkspace,
 } from '../workspaces';
+import { LegalPage } from './Legal';
 import { Login } from './Login';
 import { TooltipLayer } from './Tooltip';
 import { FinishPending, JoinConfirm, Welcome } from './Welcome';
 import { Workspace } from './Workspace';
 
 export function App() {
+  // La política de privacidad y las condiciones se ven antes de todo lo demás: sin sesión, sin workspace y sin
+  // crear ningún cliente de Supabase ni leer el link de invitación (Google las revisa sin cuenta).
+  const route = useRoute();
   return (
     <>
-      <Screen />
+      {isPublicRoute(route) ? <LegalPage page={route.name} /> : <Screen />}
       <TooltipLayer />
     </>
   );

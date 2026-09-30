@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { inviteArrival, takeArrivalNotice } from '../invite';
 import { useWorkspace } from '../workspace';
 import { AppIcon, ArrowLeftIcon, ArrowRightIcon, MailIcon, SlateBand } from './icons';
+import { LegalLinks } from './Legal';
 import { LoginWorkspaceBar } from './Welcome';
 
 type Step = { name: 'email' } | { name: 'sent'; email: string };
@@ -207,6 +208,7 @@ export function Login() {
 
         <footer className="login-footer">
           <span>Self-hosted · your data, your database</span>
+          <LegalLinks />
           {__APP_VERSION__ && <span>v{__APP_VERSION__}</span>}
         </footer>
       </section>

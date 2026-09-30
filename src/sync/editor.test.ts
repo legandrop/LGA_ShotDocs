@@ -189,3 +189,43 @@ for (let run = 0; run < 4; run++) {
     }
   });
 }
+
+// Roadmap B.3: abrir una página vacía con el editor montado no deja nada pendiente; la semilla se guarda
+// recién con lo primero que se escribe, y al volver a abrir se ve.
+it('con el editor real, abrir una página vacía sin escribir no crea un cambio, y lo escrito después se guarda con la semilla', async () => {
+  const server = new FakeServer();
+  const a = await device(server);
+  const pageId = await a.tree.create(null, 'P');
+  await a.engine.syncNow();
+
+  const doc = await a.docs.open(pageId, { seed: true });
+  const editor = mountEditor(doc);
+  await tick(100);
+  await a.docs.flush(pageId);
+  expect(await a.db.countFromIndex('docUpdates', 'pageId', pageId)).toBe(0);
+  expect(await a.docs.unsyncedPages()).toEqual([]);
+  expect(a.docs.hasUnsavedEdits()).toBe(false);
+  await a.engine.syncNow();
+  expect(server.updates.get(pageId) ?? []).toHaveLength(0);
+
+  editor.setTextCursorPosition(editor.document[0], 'end');
+  editor.insertInlineContent('Primera línea');
+  await tick();
+  await a.docs.flush(pageId);
+  expect(await a.docs.unsyncedPages()).toEqual([pageId]);
+  await a.engine.syncNow();
+  expect(await a.docs.unsyncedPages()).toEqual([]);
+
+  // Otro dispositivo (y lo guardado en este) tienen una sola raíz, con lo escrito.
+  const b = await device(server);
+  await b.engine.syncNow();
+  for (const snap of [await a.docs.snapshot(pageId), await b.docs.snapshot(pageId)]) {
+    expect(snap.doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+    expect(snap.doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('Primera línea');
+    expect(snap.doc.store.pendingStructs).toBeNull();
+    snap.doc.destroy();
+  }
+  const editorB = mountEditor(await b.docs.open(pageId, { seed: true }));
+  await tick(100);
+  expect(texts(editorB)).toEqual(['Primera línea']);
+});

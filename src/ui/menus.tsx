@@ -20,6 +20,7 @@ import {
   TrashIcon,
 } from './icons';
 import { usePendingCount } from './usePendingCount';
+import { LegalLinks } from './Legal';
 
 /**
  * Comportamiento común de menús y paneles flotantes: se cierran con Escape o tocando afuera (tocar el
@@ -354,8 +355,12 @@ export function AccountMenu({
         <SignOutIcon />
         Sign out
       </button>
-      {/* La versión de la app: así se ve enseguida si este dispositivo ya tiene la última. */}
-      {__APP_VERSION__ && <p className="mono-label menu-version">v{__APP_VERSION__}</p>}
+      {/* La versión de la app (así se ve enseguida si este dispositivo ya tiene la última) y los links a la
+          política de privacidad y las condiciones, en otra pestaña. */}
+      <div className="menu-foot">
+        {__APP_VERSION__ && <p className="mono-label menu-version">v{__APP_VERSION__}</p>}
+        <LegalLinks />
+      </div>
     </div>
   );
 }

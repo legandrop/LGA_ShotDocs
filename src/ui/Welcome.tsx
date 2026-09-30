@@ -21,6 +21,7 @@ import {
   type DeviceWorkspace,
 } from '../workspaces';
 import { AppIcon, ArrowRightIcon, MailIcon, PlusIcon } from './icons';
+import { LegalLinks } from './Legal';
 import { monogram } from './project';
 
 // La pantalla de bienvenida (la primera vez, sin ningún workspace en el dispositivo), unirse con un link de
@@ -57,6 +58,7 @@ export function Welcome({ onAdded }: { onAdded: OnAdded }) {
         )}
         {mode === 'join' && <JoinForm onJoined={open} onExisting={open} onBack={() => setMode('start')} />}
         {mode === 'create' && <CreateForm onAdded={(e) => open(e)} onExisting={(e) => open(e)} onBack={() => setMode('start')} />}
+        <LegalLinks className="legal-links card-legal" />
       </div>
     </main>
   );

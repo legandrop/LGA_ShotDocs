@@ -48,11 +48,17 @@ nada, y lo que espera una decisión o una acción de Lega.
 
 ### B. Sin decisiones pendientes
 
-2. **Subir solo lo propio después de bajar.** Hoy, la primera subida de un dispositivo después de bajar
-   cambios de otro reenvía también lo bajado (no se pierde nada, pero pesa más). Hay que avanzar el vector
-   de estado confirmado con lo que se baja, con una prueba que demuestre que nunca se saltea nada propio.
-3. **Abrir una página vacía crea un cambio** (la semilla) aunque no se escriba nada. No pierde ni duplica
-   nada; solo figura un momento como pendiente.
+2. **Hecho: subir solo lo propio después de bajar.** Lo bajado avanza `syncedSV` en la misma transacción
+   que lo guarda, solo con lo que el servidor mandó (tramos sin huecos desde lo ya confirmado) y sin pasar
+   de lo que el documento del dispositivo integró; lo propio sin confirmar nunca entra. Las pruebas
+   (`src/sync/docs.test.ts`) revisan en cada paso que el vector no diga más de lo que tiene el servidor:
+   ediciones sin subir mezcladas con lo bajado, updates que dependen de algo que falta, lo propio que
+   vuelve del servidor, una subida en vuelo, cerrar la app a la mitad, restaurar una copia y corridas al
+   azar. Ver `Doc_Sincronizacion.md`, "Contenido de las páginas", punto 4.
+3. **Hecho: abrir una página vacía ya no crea un cambio.** La semilla queda en memoria y se guarda (y
+   sube) junto con la primera edición, en la misma transacción; la semilla no cambió, así que dos
+   dispositivos que empiezan la misma página siguen compartiendo la raíz. Ver `Doc_Sincronizacion.md`,
+   "Contenido de las páginas", punto 5.
 4. **Tamaño de la app.** El editor pesa unos 450 KB comprimidos; cargarlo aparte acelera la primera
    apertura. Después de la primera, la app queda en caché.
 5. **Investigar un caso intermitente de la prueba de punta a punta.** Dos dispositivos escriben sin red en
@@ -60,8 +66,11 @@ nada, y lo que espera una decisión o una acción de Lega.
    la línea del otro aunque los dos decían "All synced". No se confirmó pérdida y no se repitió en las
    corridas siguientes ni en las pruebas con el editor real; hay que ver si es la vista del editor o la
    sincronización.
-6. **Páginas de privacidad y de condiciones** en la app (`/privacy`, `/terms`), en inglés: Google las pide
-   para el punto 13.
+6. **Hecho: páginas de privacidad y de condiciones** (`/privacy`, `/terms`, en `src/ui/Legal.tsx`), en
+   inglés y públicas: se ven sin sesión ni workspace, también sin red, con links en el login, la bienvenida
+   y el menú de la cuenta. Son las que pide el punto 13: `https://shotdocs.lega.com.ar/privacy` y
+   `https://shotdocs.lega.com.ar/terms`. Si cambia qué datos usa la app o dónde van, se cambia el texto y
+   su fecha (`LEGAL_UPDATED`).
 7. **Fase 4.** Cortes reales entre hojas y PDF igual a lo que se ve (el tamaño de hoja ya se elige).
 8. **Castellano e inglés (D-16).** Toda la interfaz en los dos idiomas, con el idioma en las preferencias
    de la cuenta, y las plantillas y los tipos de texto con nombre en cada idioma (Script/Guion,
@@ -80,8 +89,8 @@ nada, y lo que espera una decisión o una acción de Lega.
     muestra `cold-salad-d599.workers.dev` porque la app no tiene la marca verificada. Hace falta: una
     dirección propia para el portero (por ejemplo `media.lega.com.ar`, con su dirección de vuelta en el
     cliente de Google), completar **Branding** en Google Cloud (nombre, logo, página de inicio, política de
-    privacidad del punto 6 y dominio autorizado `lega.com.ar`), publicar la app (**In production**, así la
-    conexión tampoco vence a los 7 días) y pedir la verificación de marca. Hasta entonces, la conexión con
+    privacidad y condiciones del punto 6 y dominio autorizado `lega.com.ar`), publicar la app (**In
+    production**, así la conexión tampoco vence a los 7 días) y pedir la verificación de marca. Hasta entonces, la conexión con
     Drive vence cada 7 días y se reconecta desde la app.
 
 ### Resueltos adentro del plan

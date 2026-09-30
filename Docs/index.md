@@ -54,5 +54,11 @@ cualquier dirección que no sea un archivo, y sin red lo hace el service worker.
 | `/p/<uuid>` | Una página, por su id. |
 | `/trash` | La papelera de páginas. |
 | `/media-test` | La prueba de media del portero (menú de la cuenta → *Media test*, ver `Doc_Portero.md`). |
+| `/privacy` | La política de privacidad, en inglés (`src/ui/Legal.tsx`). **Pública:** se ve sin sesión ni workspace. |
+| `/terms` | Las condiciones de uso, en inglés (`src/ui/Legal.tsx`). **Pública:** se ve sin sesión ni workspace. |
+
+`/privacy` y `/terms` (también con barra al final) son las únicas que no pasan por el login: `App.tsx` las
+muestra antes de crear el cliente del workspace. Están enlazadas en el login, la bienvenida y el menú de la
+cuenta, y son las que se cargan en Google Cloud (*Branding*, ver `Doc_Roadmap.md`, punto 13).
 
 Cualquier otra dirección (también `/p/` con algo que no es un id) se trata como el inicio.
