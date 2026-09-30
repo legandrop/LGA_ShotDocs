@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.027 :
+
+Las carpetas de Drive ya no llevan espacios: la de la app se llama `LGA_ShotDocs`, igual que el repo, y
+la de prueba `Media_Test`. El portero renombra solo las que se crearon con el nombre viejo, salvo que el
+dueño les haya puesto otro nombre a mano, con una prueba nueva. El plan de workspaces anota la regla
+(nunca espacios en nombres de carpeta, siempre guiones bajos) y que el dueño va a elegir dónde va la
+carpeta de la app (la raíz u otra carpeta suya) al conectar Drive, en vez de que la app la ponga en la
+raíz sin preguntar.
+[ Portero - carpetas sin espacios ]
+
 v0.026 :
 
 Prueba de media terminada (paso 4 del plan de workspaces). En el iPhone con Safari, un video 4K de 62 MB

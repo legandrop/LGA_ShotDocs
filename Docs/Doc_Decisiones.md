@@ -85,6 +85,9 @@ diga otra cosa.
   - Los originales van al **Drive del dueño del workspace**, también lo que suben miembros e invitados.
   - Una carpeta por proyecto y adentro por día de calendario. Renombrar el proyecto renombra su carpeta;
     las páginas apuntan al id del archivo, así que nada se rompe.
+  - **El dueño elige dónde va la carpeta de la app** (la raíz de su Drive u otra carpeta suya); la app no
+    decide por él. **Ningún nombre de carpeta lleva espacios:** guiones bajos, y la de la app se llama
+    `LGA_ShotDocs`, igual que el repo (pedido de Lega, 2026-09-30).
   - **Los videos se reproducen adentro de la app** (teléfono, web y app instalada), y hay un **carrete**
     de fotos y videos de la página. Lo que el navegador no pueda reproducir muestra la miniatura y se baja.
   - Pegar un link de Drive ofrece mostrarlo como link, texto o tarjeta reproducible, como en Coda.

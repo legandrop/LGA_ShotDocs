@@ -79,7 +79,16 @@ function fakeWorld() {
         headers: { 'Content-Type': f.mime, 'Content-Range': `bytes ${start}-${end}/${f.data.length}`, 'Content-Length': String(end - start + 1) },
       });
     }
-    if (one) return files.has(one) ? jsonRes({ id: one, trashed: false }) : jsonRes({ error: 'not found' }, 404);
+    if (one && init.method === 'PATCH') {
+      const f = files.get(one);
+      if (!f) return jsonRes({ error: 'not found' }, 404);
+      f.name = (JSON.parse(String(init.body)) as { name: string }).name;
+      return jsonRes({ id: one });
+    }
+    if (one) {
+      const f = files.get(one);
+      return f ? jsonRes({ id: one, name: f.name, trashed: false }) : jsonRes({ error: 'not found' }, 404);
+    }
     if (url.host === 'www.googleapis.com' && url.pathname === '/upload/drive/v3/files') {
       const meta = JSON.parse(String(init.body)) as { name: string; parents: string[] };
       const id = `session${++n}`;
@@ -218,10 +227,10 @@ describe('portero', () => {
     expect(done.file.size).toBe(1000);
     const saved = world.files.get(done.file.id)!;
     expect(saved.data).toEqual(data);
-    // Adentro de "Media test", adentro de "LGA Shot Docs".
+    // Adentro de "Media_Test", adentro de "LGA_ShotDocs": sin espacios.
     const folder = world.files.get(saved.parents[0])!;
-    expect(folder.name).toBe('Media test');
-    expect(world.files.get(folder.parents[0])!.name).toBe('LGA Shot Docs');
+    expect(folder.name).toBe('Media_Test');
+    expect(world.files.get(folder.parents[0])!.name).toBe('LGA_ShotDocs');
 
     // Si la respuesta de la última parte se perdió, preguntar devuelve el archivo en vez de empezar de nuevo.
     const again = await call(p, `/upload/${uploadId}`, {
@@ -277,6 +286,27 @@ describe('portero', () => {
     expect(back.headers.get('Location')).toBe(`${APP}/media-test?drive=drive-permission-missing`);
     const status = (await (await call(p, '/drive/status', { jwt: 'owner-jwt' })).json()) as { connected: boolean };
     expect(status.connected).toBe(false);
+  });
+
+  it('renombra las carpetas que conservan el nombre viejo con espacios, y respeta un nombre puesto a mano', async () => {
+    const world = fakeWorld();
+    const store = memoryStore();
+    const p = new Portero(env, store, world.http);
+    await connect(p);
+    world.files.set('oldrootxxxxxxxx', { name: 'LGA Shot Docs', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: [] });
+    world.files.set('oldtestxxxxxxxx', { name: 'Mis pruebas', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: ['oldrootxxxxxxxx'] });
+    const google = store.data.get('google') as object;
+    store.data.set('google', { ...google, rootFolder: 'oldrootxxxxxxxx', testFolder: 'oldtestxxxxxxxx' });
+
+    const start = await call(p, '/upload', {
+      method: 'POST',
+      jwt: 'owner-jwt',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'IMG_0002.MOV', mime: 'video/quicktime', size: 10 }),
+    });
+    expect(start.status).toBe(200);
+    expect(world.files.get('oldrootxxxxxxxx')!.name).toBe('LGA_ShotDocs');
+    expect(world.files.get('oldtestxxxxxxxx')!.name).toBe('Mis pruebas');
   });
 
   it('no le pide a Google un token nuevo en cada pedido (cada pedido es un Portero nuevo)', async () => {

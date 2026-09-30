@@ -120,8 +120,16 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
 ## 5. Archivos (D-17)
 
 - Los originales van al **Drive del dueño del workspace**, también lo que suben miembros e invitados.
-- Carpetas: `<carpeta de Wanka> / <proyecto> / <día en que se subió> / IMG_1234.HEIC`. Renombrar el
-  proyecto renombra su carpeta (si el dueño no la renombró a mano). Las páginas apuntan al id del
+- **Dónde:** al conectar Drive, el dueño elige dónde va la carpeta de la app: la raíz de su Drive (*My
+  Drive*) u otra carpeta suya, con el selector de carpetas de Google. La app no decide por él. Debería
+  alcanzar con el permiso chico que ya usamos (`drive.file`): elegir una carpeta en ese selector le da a
+  la app acceso a esa carpeta, para crear adentro (se confirma al hacerlo). Hace falta activar *Google Picker API* y crear una clave de API
+  en el proyecto de Google Cloud (paso 8).
+- **Nombres sin espacios, nunca:** guiones bajos en todas las carpetas. La de la app se llama
+  `LGA_ShotDocs`, igual que el repo; la del proyecto, su nombre con guiones bajos en vez de espacios; la
+  del día, `AAAA-MM-DD`.
+- Carpetas: `<donde eligió el dueño> / LGA_ShotDocs / <Proyecto> / <día en que se subió> / IMG_1234.HEIC`.
+  Renombrar el proyecto renombra su carpeta (si el dueño no la renombró a mano). Las páginas apuntan al id del
   archivo, así que moverlo o renombrarlo en Drive no rompe nada. Lo que se agregue a mano en Drive la
   app no lo ve: el Drive es el respaldo, no una carpeta que la app lea.
 - En la página: una miniatura chica guardada en Supabase. La foto grande y el video vienen del Drive por
@@ -235,7 +243,8 @@ cambios de permisos, que son el momento más riesgoso.
 6. **Cola de archivos nueva** (por partes, sin red), miniaturas y la lista de qué archivos usa cada
    página.
 7. **Carrete** de fotos.
-8. **Drive y portero;** videos en el carrete.
+8. **Drive y portero;** videos en el carrete. Al conectar Drive, el dueño elige dónde va la carpeta
+   `LGA_ShotDocs` (sección 5).
 9. **Equipo en Wanka:** invitar, roles, permisos por proyecto y página, proyectos privados, sacar a
    alguien.
 10. **Invitados (clientes):** compartir por correo, comentarios en tabla propia y preguntas.

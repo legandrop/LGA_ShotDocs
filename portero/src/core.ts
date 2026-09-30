@@ -52,8 +52,11 @@ const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const DRIVE = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const ROOT_FOLDER = 'LGA Shot Docs';
-const TEST_FOLDER = 'Media test';
+/** Nombres de carpeta sin espacios: guiones bajos, y el de la app igual al del repo. */
+const ROOT_FOLDER = 'LGA_ShotDocs';
+const TEST_FOLDER = 'Media_Test';
+/** Los nombres con espacios de v0.022–v0.026: una carpeta que todavía se llame así se renombra sola. */
+const OLD_NAMES: Record<string, string> = { [ROOT_FOLDER]: 'LGA Shot Docs', [TEST_FOLDER]: 'Media test' };
 /** Un pase de reproducción dura esto: si vence en medio de un video, la reproducción se corta. */
 const PASS_MS = 8 * 60 * 60 * 1000;
 /** Una parte de subida no puede pasar esto (el plan gratis de Workers acepta hasta 100 MB por pedido). */
@@ -313,8 +316,19 @@ export class Portero {
 
   private async folder(known: string | undefined, name: string, parent: string | null): Promise<string> {
     if (known) {
-      const res = await this.drive(`/files/${known}?fields=id,trashed`);
-      if (res.ok && !((await res.json()) as { trashed?: boolean }).trashed) return known;
+      const res = await this.drive(`/files/${known}?fields=id,name,trashed`);
+      const found = res.ok ? ((await res.json()) as { name?: string; trashed?: boolean }) : null;
+      if (found && !found.trashed) {
+        // Solo si conserva el nombre viejo: si el dueño la renombró a mano, se respeta.
+        if (found.name === OLD_NAMES[name]) {
+          await this.drive(`/files/${known}?fields=id`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+          });
+        }
+        return known;
+      }
     }
     const res = await this.drive('/files?fields=id', {
       method: 'POST',
