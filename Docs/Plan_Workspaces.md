@@ -23,9 +23,9 @@ queda por diseñar se dice en cada sección.
   guía.
 - Nombres en la base: la tabla `workspaces` hoy guarda **proyectos** (historia de v0.013). Las tablas
   nuevas no usan "workspace" para no mezclar. Ya existe `workspace_settings` (una fila: generación,
-  versión mínima de la app, versión de la base, dueño y dirección del portero; el paso 5 le suma el
-  nombre del workspace y la clave local). Faltan `members` (persona y rol), `grants` (permiso sobre un
-  proyecto o una página) e `invitations`.
+  versión mínima de la app, versión de la base, dueño, dirección del portero, nombre del workspace y
+  clave local), `members` (persona y rol), `grants` (permiso sobre un proyecto o una página) e
+  `invitations` (paso 5).
 
 ## 2. Primera vez que se abre la app
 
@@ -90,8 +90,8 @@ Después de la primera vez, el selector de arriba muestra **Workspace › Proyec
   equipo, no de quien tenga las cuentas de Wanka: si algún día Wanka cambia de manos, lo personal se va
   con Wanka. Un workspace personal aparte es más limpio, pero gasta el segundo y último proyecto gratis
   de Supabase de Lega y se pausa si no se usa. Recomendación: privados dentro de Wanka por ahora.
-- Hoy cada usuario nuevo recibe un proyecto "My project" (`ensure_workspace()`) y puede crear los suyos
-  (D-12): con miembros e invitados eso se saca, porque solo el dueño y los admins crean proyectos.
+- Desde el paso 5 un usuario nuevo ya no recibe "My project": crea proyectos quien ya tiene alguno o es
+  dueño o admin; con las políticas del paso 9, solo el dueño y los admins.
 
 ## 4. Compartir con un cliente (invitado)
 
@@ -187,12 +187,12 @@ cambios de permisos, que son el momento más riesgoso.
   servidor ya tiene lo de hoy y no lo vuelven a subir. Por eso cada workspace lleva una **generación**
   (hecha en v0.021): si cambia, cada dispositivo vuelve a subir todo lo suyo y Yjs lo junta sin
   duplicar. Así los dispositivos cubren lo posterior a la copia.
-- **Pendiente: restaurar sobre el mismo proyecto de Supabase.** Lo guardado en cada dispositivo lleva el
-  proyecto en el nombre: si se restaura en un proyecto nuevo, los dispositivos arrancan de cero y lo
-  posterior a la copia queda en su base vieja, sin subir. Hoy el script de copias restaura sobre una base
-  vacía; falta el modo "sobre el mismo proyecto" (reemplazar los datos sin tocar el esquema), probado,
-  y que el nombre de lo guardado dependa del workspace y no del proyecto (paso 5). Mientras tanto, una
-  restauración se hace con ayuda y probando antes en una base aparte.
+- **Restaurar sobre el mismo proyecto de Supabase** (paso 5, v0.030): el script de copias tiene un modo
+  que reemplaza los datos sin tocar el esquema (README del repo de copias), y el nombre de lo guardado en
+  los dispositivos ya no sale de la dirección del Supabase sino de la clave local del workspace (fija para
+  Wanka). Así, restaurar en el mismo proyecto o en uno nuevo no deja a los dispositivos con una base
+  vieja sin subir. Igual, una restauración de verdad conviene hacerla con ayuda y probando antes en una
+  base aparte.
 - No cubre y hay que anotarlo en la guía: la configuración de login (sale del comando del paso 1 de la
   guía, sección 2), los secretos del portero y la conexión con Drive (se vuelven a cargar), las imágenes
   pegadas en las páginas (bucket `page-files` de Supabase: hoy solo las tienen los dispositivos que las
@@ -246,19 +246,32 @@ cambios de permisos, que son el momento más riesgoso.
      pidiendo a Drive, o el índice del video al final del archivo.
    - Queda para cuando haga falta: subir 1 GB y la app instalada en el iPhone (agregada a la pantalla de
      inicio).
-5. **Preparación sin cambios visibles** (ver "Cómo se hace cada paso").
-6. **Cola de archivos nueva** (por partes, sin red), miniaturas y la lista de qué archivos usa cada
-   página. En la práctica va junto con el 8: la cola sube al portero.
-7. **Carrete** de fotos y videos.
-8. **Drive y portero en producción:** permisos por página en el portero, carpetas por proyecto y día, el
-   dueño elige dónde va la carpeta `LGA_ShotDocs` (sección 5) y el video arranca más rápido.
-9. **Equipo en Wanka:** invitar, roles, permisos por proyecto y página, proyectos privados, sacar a
-   alguien.
-10. **Invitados (clientes):** compartir con su correo (la app copia el link de invitación), comentarios
-    en tabla propia y preguntas.
-11. **Papelera de archivos.**
-12. **Varios workspaces:** pantalla de bienvenida, selector, guía y comando para crear uno.
-13. Pegar links de Drive; copia liviana de video si hace falta.
+5. ✅ **Preparación sin cambios visibles** (v0.030). El workspace es un objeto en el código con su clave
+   local (Wanka conserva sus nombres; `Doc_Sincronizacion.md`), tablas `members`, `grants` e
+   `invitations` con sus funciones y pruebas (`Doc_Supabase.md`), `ensure_workspace()` ya no crea "My
+   project" (sin proyectos, la app lo avisa), la versión de la base con aviso, el modo de restaurar sobre
+   el mismo proyecto (repo de copias) y la configuración de login documentada entera.
+Los pasos 6 a 13 quedaron hechos y auditados el 2026-09-30 en una rama de trabajo, **sin publicar**: sus
+migraciones (`20260930140000` a `20260930180000`) se aplican juntas, en orden y con la copia de seguridad
+hecha, y recién después se publica la app (`Doc_Supabase.md`). Lo que queda para probar a mano está en
+cada `Doc_*`.
+
+6. ✅ **Cola de archivos nueva** (v0.031): por partes, sin red, miniaturas y la lista de qué archivos usa
+   cada página. Va junto con el 8: la cola sube al portero. `Doc_Sincronizacion.md`, "Archivos grandes".
+7. ✅ **Carrete** de fotos y videos (v0.032): `Doc_Carrete.md`.
+8. ✅ **Drive y portero en producción** (v0.031): permisos por archivo en el portero, carpetas por
+   proyecto y día, el dueño elige dónde va la carpeta `LGA_ShotDocs` (con la clave del selector) y caché
+   del principio y el final para que el video arranque antes (falta medirlo con *Media test*).
+9. ✅ **Equipo en Wanka** (v0.033): invitar, roles, permisos por proyecto y página, proyectos privados,
+   sacar a alguien. El registro para invitados lo abre Lega (`Doc_Supabase.md`).
+10. ✅ **Invitados (clientes)** (v0.034): compartir con su correo (la app copia el link de invitación),
+    comentarios en tabla propia y preguntas.
+11. ✅ **Papelera de archivos** (v0.035): la base, el portero (`POST /trash`) y la app; el borrado
+    automático queda apagado.
+12. ✅ **Varios workspaces** (v0.036): pantalla de bienvenida, selector, guía (`Guide_Create_Workspace.md`)
+    y comando para crear uno (`npm run workspace:setup`).
+13. ✅ **Links de Drive** (v0.037): link, texto o tarjeta reproducible. La copia liviana de video, solo si
+    hace falta.
 
 ## 11. Cómo se hace cada paso
 
@@ -318,8 +331,8 @@ Reglas para todos los pasos:
     una cuenta de prueba vieja (`@shotdocs-test.invalid`). No se borra ninguna: eso lo decide Lega.
   - Funciones en `private` para preguntar el rol y el permiso sobre una página. Las políticas de lectura y
     escritura de hoy siguen igual hasta el paso 9.
-- **Sin "My project" automático:** `ensure_workspace()` deja de crear un proyecto y devuelve el primero que
-  la persona puede ver, o nada (las versiones viejas guardan lo que devuelve como proyecto: solo las usa
+- **Sin "My project" automático:** `ensure_workspace()` deja de crear un proyecto y devuelve el primero
+  propio, o nada; lo compartido se suma en el paso 9 con las políticas que dejan verlo (las versiones viejas guardan lo que devuelve como proyecto: solo las usa
   gente que ya tiene proyectos). La app nueva, sin proyectos, muestra un aviso para pedir acceso. Crear
   proyectos queda para quien ya tiene alguno o es `owner`/`admin`; el corte completo (solo dueño y admins)
   entra con las políticas del paso 9. Para quien usa la app hoy no cambia nada.
@@ -407,6 +420,38 @@ vencidos, confirmándolo con la base con la sesión de esa persona) **queda arma
 ver usos que no llegaron a registrarse (una versión vieja que copió el bloque, un dispositivo sin red, una
 página en la papelera de páginas).
 
+Hecho en la app (falta auditar y probar a mano; `Doc_Sincronizacion.md`, "Papelera de archivos"):
+
+- **Quitar un archivo de una página:** en cada sincronización, cada página que cambió (acá o en otro
+  dispositivo) se compara con sus `sdmedia://` (leídos del documento de Yjs, de cualquier bloque) y la
+  diferencia va a la cola de archivos, guardada en el dispositivo: primero `link_page_file` y después
+  `unlink_page_file`. Una sola fila por página y archivo, así un deshacer no se pisa con el borrado (una
+  respuesta que llega después de un cambio no lo marca como hecho). **Solo se quita con el documento
+  completo y al día** (todo lo que el servidor tenía al bajar el árbol en ese ciclo, sin updates que esta
+  versión no pudo leer, sin contenido desconocido y con lo propio ya subido); si falta algo, solo se suman
+  usos. Con la base anterior a la versión 6 no se manda nada. Correcciones de la auditoría: un `unlink` no
+  sale mientras el dispositivo tenga otro uso del mismo archivo sin confirmar (cortar y pegar en otro
+  proyecto ya no lo manda a la papelera); pegar una foto de otro proyecto avisa, la base guarda el uso como
+  ajeno (cuenta para la papelera) y la página muestra *Photo from another project*; cada `unlink` lleva
+  `p_seen_seq`; la primera vez que una página quitaría algo se comprueba que todo su historial se pueda leer
+  (si falla, se reintenta cada vez más espaciado).
+- **Pestaña Archivos** en la papelera (`TrashView`), para quien `trashed_files` no rechaza: miniatura,
+  nombre, peso, fecha de entrada y días que faltan para los 30, con *Auto-delete is off* mientras el
+  interruptor esté apagado y el aviso *A file can show here while still in use on a page this device
+  hasn't synced*. Los que usa una página de la papelera de páginas se marcan y quedan fuera de *Empty*.
+- **Mandar a la papelera de Drive** (dueño y admins): de a uno o *Empty*, con confirmación, por el portero
+  (`POST /trash`, `src/media/portero.ts`). 200 sale de la lista; 409 con `code: 'in_use'` vuelve a leerla;
+  `drive_not_connected` avisa sin marcar nada; los demás errores quedan a la vista. *Empty* va de a uno, con
+  el avance, y sigue si uno falla. Lo que una página de este dispositivo usa sin sincronizar se saltea.
+- **En las páginas**, un archivo con `drive_trashed_at` se ve como *File deleted (in the Drive trash)* y uno
+  solo pedido como *Deletion requested (not yet in the Drive trash)*, con su miniatura si la hay.
+- **Borrado automático:** armado detrás de `auto_purge_files` (al abrir la app, dueño y admins,
+  después de una vuelta de la cola de usos, `files_due_for_purge` y `/trash` de a uno, salteando lo que tenga
+  usos sin mandar); con el interruptor apagado no se llama a nada (hay una prueba).
+- `DB_SCHEMA_VERSION = 6`. Pruebas en `src/media/trash.test.ts` y `src/media/portero.test.ts`, con el
+  servidor y el portero en memoria (`src/sync/testing.ts`).
+- Queda: el carrete no sabe todavía que un archivo está borrado (abre el pase del portero como siempre).
+
 **Paso 12 — Varios workspaces.** Lista de workspaces guardada en el dispositivo (dirección, clave
 publicable, clave local, nombre); Wanka entra a esa lista con sus nombres de hoy. Pantalla de bienvenida
 (unirme o crear), selector **Workspace › Proyecto** y sesión separada por workspace. Guía en inglés y un
@@ -414,8 +459,43 @@ comando (`scripts/`) que prepara un Supabase nuevo con el token personal de su d
 dos veces sin romper nada y tiene un modo que solo muestra lo que haría. **Contra Wanka, solo ese modo**:
 correrlo de verdad pisaría el SMTP, las plantillas, el registro cerrado y la Site URL. No se crean
 proyectos de Supabase para probarlo: a Lega le queda uno solo gratis.
+Hecho: el comando (`scripts/setup-workspace.mjs`, con `--dry-run` y el paso aparte
+`--open-invite-signup`; `Doc_Supabase.md`, "Preparar un workspace nuevo"), la guía
+(`Guide_Create_Workspace.md`, en inglés; los nombres de la app coinciden: **Create my workspace**,
+*Project URL*, *Publishable key*) y la app, que falta auditar y probar a mano. Detalle en
+`Doc_Sincronizacion.md`, "Varios workspaces":
+- Lista del dispositivo en `localStorage` (`shotdocs-workspaces`, `src/workspaces.ts`) con el último abierto.
+  Wanka entra marcada como la de la compilación, con sus nombres de siempre (prueba en
+  `src/workspaces.test.ts`), sigue la dirección de la compilación y no se puede quitar. Los nuevos usan
+  `storageNamesFor(<clave local>)`.
+- **Cambiar de workspace recarga la app** con el elegido: nunca hay dos clientes escribiendo a la vez.
+- Bienvenida sin ningún workspace (*Join a workspace* / *Create my workspace*); unirse con un link de otro
+  workspace revisa la dirección, la clave publicable y la clave local, rechaza una clave local que ya usa
+  otro workspace del dispositivo con otra dirección, y pregunta "Join <nombre>?" con el host aparte y
+  destacado (el link lleva ahora el nombre, opcional, que se muestra limpio y recortado).
+- Crear: enlaza la guía y lee `workspace_settings` con la clave publicable. **La base de hoy solo la deja
+  leer con sesión**, así que en la práctica el workspace entra pendiente y se completa después de que el
+  dueño entra (la sesión pasa a los nombres de su clave local). Si se quiere avisar antes de entrar que falta
+  correr el comando, hace falta una migración que deje leer a `anon` solo `name`, `local_key` y
+  `schema_version` (no está hecha: a decidir).
+- Selector **Workspace › Proyecto** (con un solo workspace, igual que antes más una línea discreta) y quitar
+  del dispositivo el workspace abierto, solo sin cambios sin subir o después de bajarlos (el archivo y cada
+  original de foto o video), con confirmación.
+- Correcciones de la auditoría: con compilación siempre hay una entrada de Wanka con sus nombres y se
+  descarta cualquier otra con su dirección o su clave local; la página de un link se guarda por workspace;
+  las preferencias sin subir quedan por usuario (`shotdocs-prefs-others`, sin tocar `shotdocs-prefs`).
 
 **Paso 13 — Links de Drive.** Al pegar un link de Drive: dejarlo como link, como texto o como tarjeta
 reproducible (el reproductor de Drive). La tarjeta es un párrafo con el link y una propiedad: si se pierde
 la propiedad (regla de arriba), queda el link. La copia liviana de un video solo si hace falta (sin
 servidor que convierta videos, se haría en el navegador).
+Hecho en la app (sin publicar): al pegar un link de Drive (archivo, `open?id=`, carpeta o `docs.google.com`)
+aparece junto al cursor el menú **Link / Text / Card**; la tarjeta es un párrafo con el link y
+`driveCard: true`, con el reproductor de Drive (iframe solo de Drive, armado con el id), el pie con el link
+y **Open in Drive**, aviso sin red, tapa en el teléfono para no quedarse con el scroll, y la prueba con el
+esquema de `main` (la versión vieja muestra el link y no borra nada). Detalle en `Doc_Sincronizacion.md`,
+"Links de Drive". Correcciones de la auditoría: sin `allow-popups-to-escape-sandbox`, los formularios de
+Google quedan como link (nunca tarjeta), aviso de Safari/iPhone (solo andan los archivos compartidos por
+link) y de reproductor que no carga, con **Open in Drive** bien visible. Falta confirmar a mano que el
+reproductor carga con `referrerpolicy="no-referrer"`. Al publicar: subir `min_app_version` a esa versión y
+actualizar el fixture del esquema de `main`. La copia liviana de un video no se hizo (solo si hace falta).

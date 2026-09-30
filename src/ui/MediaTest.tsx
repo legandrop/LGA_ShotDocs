@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
+import { locale, localize, translate, useT, type Key, type Params } from '../i18n';
+import '../i18n/lazy/mediaTest';
+import { useWorkspace } from '../workspace';
 import { openPortero, UploadError, type DriveFile, type DriveStatus, type Portero, type UploadProgress } from '../media/portero';
 
 // Pantalla temporal para probar el portero de archivos desde el teléfono: conectar el Drive del dueño,
-// subir un video tal como lo entrega el dispositivo y ver si se reproduce. Arma un informe para copiar.
+// subir un video tal como lo entrega el dispositivo y ver si se reproduce. Arma un informe para copiar. La
+// pantalla sigue el idioma de la app; el informe y el registro de la reproducción quedan en inglés (son
+// técnicos, para mandar a quien lo revisa).
 
 const ITEMS_KEY = 'shotdocs-media-test';
 
@@ -93,6 +98,7 @@ function useTicking(active: boolean): void {
 }
 
 export function MediaTest() {
+  const { client } = useWorkspace();
   // `undefined`: todavía se está leyendo la dirección del portero; `null`: el workspace no tiene.
   const [portero, setPortero] = useState<Portero | null | undefined>(undefined);
   const [status, setStatus] = useState<DriveStatus | null>(null);
@@ -104,7 +110,9 @@ export function MediaTest() {
 
   const [file, setFile] = useState<File | null>(null);
   const [run, setRun] = useState<Run | null>(null);
-  const [wake, setWake] = useState<string | null>(null);
+  /** El estado del pedido de pantalla encendida (una clave de texto, para mostrarla y para el informe). */
+  const [wake, setWake] = useState<{ key: Key; params?: Params } | null>(null);
+  const tr = useT();
   const controller = useRef<AbortController | null>(null);
 
   const [items, setItems] = useState(loadItems);
@@ -124,7 +132,7 @@ export function MediaTest() {
     setDriveError(null);
     void (async () => {
       try {
-        const p = await openPortero();
+        const p = await openPortero(client);
         if (!live) return;
         setPortero(p);
         if (p) {
@@ -140,7 +148,7 @@ export function MediaTest() {
     return () => {
       live = false;
     };
-  }, [checking]);
+  }, [checking, client]);
 
   // Si se vuelve a esta pantalla sin recargarla después de ir a Google (el botón Atrás, o la app instalada
   // en el iPhone, que puede abrir Google en una hoja aparte), el botón se destraba y se vuelve a preguntar.
@@ -173,7 +181,7 @@ export function MediaTest() {
     let stopped = false;
     const acquire = async () => {
       if (!('wakeLock' in navigator)) {
-        setWake('Not available on this device');
+        setWake({ key: 'mediaTest.wake.unavailable' });
         return;
       }
       try {
@@ -183,12 +191,12 @@ export function MediaTest() {
           return;
         }
         sentinel = s;
-        setWake('On: the screen stays on');
+        setWake({ key: 'mediaTest.wake.on' });
         s.addEventListener('release', () => {
-          if (!stopped) setWake('Released by the system');
+          if (!stopped) setWake({ key: 'mediaTest.wake.released' });
         });
       } catch (err) {
-        setWake(`Refused (${message(err)})`);
+        setWake({ key: 'mediaTest.wake.refused', params: { reason: message(err) } });
       }
     };
     const onVisible = () => {
@@ -291,13 +299,13 @@ export function MediaTest() {
     const text = reportRef.current?.value ?? '';
     try {
       await navigator.clipboard.writeText(text);
-      setCopied('Copied');
+      setCopied(tr('common.copied'));
     } catch {
       // Sin permiso para el portapapeles: queda seleccionado para copiarlo a mano.
       const el = reportRef.current;
       el?.focus();
       el?.setSelectionRange(0, el.value.length);
-      setCopied('Selected: copy it from the menu');
+      setCopied(tr('mediaTest.selected'));
     }
     setTimeout(() => setCopied(null), 3000);
   }
@@ -306,66 +314,76 @@ export function MediaTest() {
   const elapsed = run ? (run.endedAt ?? Date.now()) - run.startedAt : 0;
   const percent = progress && progress.total > 0 ? (progress.sent / progress.total) * 100 : 0;
 
-  const driveLine =
+  const driveKey: [Key, Params?] =
     portero === undefined
-      ? 'Checking…'
+      ? ['login.checking']
       : portero === null
         ? driveError
-          ? 'Could not read the workspace settings'
-          : 'The workspace has no media server yet'
+          ? ['mediaTest.settingsFailed']
+          : ['mediaTest.noServer']
         : !status
           ? driveError
-            ? 'Could not reach the media server'
-            : 'Checking…'
+            ? ['drive.unreachable']
+            : ['login.checking']
           : status.connected
-            ? `Connected${status.email ? ` as ${status.email}` : ''}`
+            ? status.email
+              ? ['drive.connectedAs', { email: status.email }]
+              : ['drive.connectedShort']
             : status.broken
-              ? 'Needs reconnecting'
-              : 'Not connected';
+              ? ['drive.needsReconnect']
+              : ['drive.notConnected'];
+  const driveLine = tr(...driveKey);
+  const wakeText = wake ? tr(wake.key, wake.params) : null;
 
-  const report = buildReport({ device, portero, driveLine, status, file, run, wake, elapsed, playback });
+  // El informe, siempre en inglés.
+  const report = buildReport({
+    device,
+    portero,
+    driveLine: translate('en', ...driveKey),
+    status,
+    file,
+    run,
+    wake: wake ? translate('en', wake.key, wake.params) : null,
+    elapsed,
+    playback,
+  });
 
   return (
     <article className="page narrow media-test">
-      <h1 className="page-heading">Media test</h1>
-      <p className="muted">Upload a video from this device to Google Drive and check that it plays back here.</p>
+      <h1 className="page-heading">{tr('mediaTest.title')}</h1>
+      <p className="muted">{tr('mediaTest.intro')}</p>
 
       <section>
         <h2>Google Drive</h2>
-        {driveReturn === 'connected' && <p className="media-ok">Google Drive connected.</p>}
-        {driveReturn === 'drive-permission-missing' && (
-          <p className="error">
-            Google Drive was not connected: the Drive permission was left unchecked. Connect again and keep it
-            checked.
-          </p>
-        )}
+        {driveReturn === 'connected' && <p className="media-ok">{tr('drive.connected')}</p>}
+        {driveReturn === 'drive-permission-missing' && <p className="error">{tr('drive.permissionMissing')}</p>}
         {driveReturn !== null && driveReturn !== 'connected' && driveReturn !== 'drive-permission-missing' && (
-          <p className="error">Google Drive was not connected ({driveReturn}).</p>
+          <p className="error">{tr('drive.notConnectedReason', { reason: driveReturn })}</p>
         )}
         <dl className="media-facts">
-          <dt className="mono-label">Status</dt>
+          <dt className="mono-label">{tr('drive.status')}</dt>
           <dd className={status?.connected ? 'media-ok' : undefined}>{driveLine}</dd>
           {status?.broken && (
             <>
-              <dt className="mono-label">Problem</dt>
+              <dt className="mono-label">{tr('drive.problem')}</dt>
               <dd>{status.broken}</dd>
             </>
           )}
           {portero && (
             <>
-              <dt className="mono-label">Server</dt>
+              <dt className="mono-label">{tr('join.server')}</dt>
               <dd>{portero.baseUrl}</dd>
             </>
           )}
         </dl>
-        {driveError && <p className="error">{driveError}</p>}
+        {driveError && <p className="error">{localize(driveError)}</p>}
         {status && !status.connected && !status.isOwner && (
-          <p className="muted">Only the owner of the workspace can connect Google Drive.</p>
+          <p className="muted">{tr('mediaTest.ownerOnly')}</p>
         )}
         <div className="media-actions">
           {portero && status?.isOwner && !status.connected && (
             <button className="primary" disabled={connecting} onClick={() => void connect()}>
-              Connect Google Drive
+              {tr('drive.connect')}
             </button>
           )}
           {portero !== undefined && (
@@ -376,17 +394,17 @@ export function MediaTest() {
               }}
               disabled={uploading}
             >
-              Check again
+              {tr('drive.checkAgain')}
             </button>
           )}
         </div>
       </section>
 
       <section>
-        <h2>Upload</h2>
+        <h2>{tr('mediaTest.upload')}</h2>
         <input
           type="file"
-          aria-label="Choose a video or a photo"
+          aria-label={tr('mediaTest.choose')}
           accept="video/*,image/*"
           disabled={uploading}
           onChange={(e) => {
@@ -396,25 +414,26 @@ export function MediaTest() {
         />
         {file && (
           <dl className="media-facts">
-            <dt className="mono-label">Name</dt>
+            <dt className="mono-label">{tr('mediaTest.name')}</dt>
             <dd>{file.name}</dd>
-            <dt className="mono-label">Type</dt>
-            <dd>{file.type || '(none)'}</dd>
-            <dt className="mono-label">Size</dt>
+            <dt className="mono-label">{tr('mediaTest.type')}</dt>
+            <dd>{file.type || tr('mediaTest.none')}</dd>
+            <dt className="mono-label">{tr('pageFormat.size')}</dt>
             <dd>
-              {mb(file.size)} <span className="muted">({file.size.toLocaleString('en-US')} bytes)</span>
+              {mb(file.size)}{' '}
+              <span className="muted">{tr('mediaTest.bytes', { bytes: file.size.toLocaleString(locale(tr.lang)) })}</span>
             </dd>
-            <dt className="mono-label">Modified</dt>
-            <dd>{new Date(file.lastModified).toLocaleString()}</dd>
+            <dt className="mono-label">{tr('mediaTest.modified')}</dt>
+            <dd>{new Date(file.lastModified).toLocaleString(locale(tr.lang))}</dd>
           </dl>
         )}
         <div className="media-actions">
           <button className="primary" disabled={!portero || !file || file.size === 0 || uploading} onClick={() => void upload(false)}>
-            Upload to Drive
+            {tr('mediaTest.uploadToDrive')}
           </button>
-          {uploading && <button onClick={() => controller.current?.abort()}>Cancel</button>}
+          {uploading && <button onClick={() => controller.current?.abort()}>{tr('common.cancel')}</button>}
           {(run?.phase === 'failed' || run?.phase === 'cancelled') && (
-            <button onClick={() => void upload(true)}>Try again</button>
+            <button onClick={() => void upload(true)}>{tr('common.tryAgain')}</button>
           )}
         </div>
         {run && (
@@ -423,36 +442,33 @@ export function MediaTest() {
               <span style={{ width: `${percent}%` }} />
             </div>
             <p className="media-stats" aria-live="polite">
-              {progress ? `${mb(progress.sent)} / ${mb(progress.total)}` : 'Starting…'}
+              {progress ? `${mb(progress.sent)} / ${mb(progress.total)}` : tr('mediaTest.starting')}
               {progress && ` · ${mb(progress.bytesPerSecond)}/s`}
-              {` · ${progress?.retries ?? 0} ${progress?.retries === 1 ? 'retry' : 'retries'}`}
+              {` · ${tr('mediaTest.retries', { count: progress?.retries ?? 0 })}`}
               {` · ${clock(elapsed)}`}
             </p>
             {uploading && (
               <p className="media-note">
-                Keep the app open and the screen on.
-                {wake && <span className="muted"> Screen lock: {wake}.</span>}
+                {tr('mediaTest.keepOpen')}
+                {wakeText && <span className="muted"> {tr('mediaTest.screenLock', { state: wakeText })}</span>}
               </p>
             )}
-            {run.phase === 'done' && <p className="media-ok">Uploaded in {clock(elapsed)}.</p>}
-            {run.phase === 'cancelled' && <p className="muted">Upload cancelled.</p>}
-            {run.phase === 'failed' && <p className="error">{run.error}</p>}
+            {run.phase === 'done' && <p className="media-ok">{tr('mediaTest.uploadedIn', { time: clock(elapsed) })}</p>}
+            {run.phase === 'cancelled' && <p className="muted">{tr('mediaTest.cancelled')}</p>}
+            {run.phase === 'failed' && <p className="error">{localize(run.error ?? '')}</p>}
           </div>
         )}
       </section>
 
       <section>
-        <h2>Play</h2>
+        <h2>{tr('mediaTest.play')}</h2>
         {items.length === 0 ? (
-          <p className="muted">Nothing uploaded from this device yet.</p>
+          <p className="muted">{tr('mediaTest.nothing')}</p>
         ) : (
           <>
-            <label
-              className="media-check"
-              data-tip={'Labels the file as MP4 when it is sent back,\nto test whether a .mov plays that way'}
-            >
+            <label className="media-check" data-tip={tr('mediaTest.asMp4Tip')}>
               <input type="checkbox" checked={asMp4} onChange={(e) => setAsMp4(e.currentTarget.checked)} />
-              Serve as video/mp4
+              {tr('mediaTest.asMp4')}
             </label>
             <ul className="trash-list">
               {items.map((item) => (
@@ -461,10 +477,10 @@ export function MediaTest() {
                     {item.name}
                   </span>
                   <span className="when">
-                    {mb(item.size)} · {new Date(item.uploadedAt).toLocaleDateString()}
+                    {mb(item.size)} · {new Date(item.uploadedAt).toLocaleDateString(locale(tr.lang))}
                   </span>
                   <button disabled={!portero} onClick={() => void open(item)}>
-                    Open
+                    {tr('mediaTest.open')}
                   </button>
                 </li>
               ))}
@@ -474,8 +490,8 @@ export function MediaTest() {
         {playback && (
           <div className="media-player">
             <p className="media-stats">
-              {playback.item.name} · {playback.item.type || '(no type)'}
-              {playback.servedAs && ` · served as ${playback.servedAs}`}
+              {playback.item.name} · {playback.item.type || tr('mediaTest.noType')}
+              {playback.servedAs && ` · ${tr('mediaTest.servedAs', { type: playback.servedAs })}`}
             </p>
             {playback.url &&
               (isVideo(playback.item) ? (
@@ -499,23 +515,23 @@ export function MediaTest() {
                 />
               ))}
             <ul className="media-log">
-              {playback.readyMs !== null && <li>Ready to play after {secs(playback.readyMs)}</li>}
+              {playback.readyMs !== null && <li>{tr('mediaTest.readyAfter', { time: secs(playback.readyMs) })}</li>}
               {playback.events.map((e, i) => (
                 <li key={i}>{e}</li>
               ))}
-              {!playback.url && playback.events.length === 0 && <li>Asking for a link…</li>}
+              {!playback.url && playback.events.length === 0 && <li>{tr('mediaTest.asking')}</li>}
             </ul>
           </div>
         )}
       </section>
 
       <section>
-        <h2>This device</h2>
+        <h2>{tr('mediaTest.device')}</h2>
         <dl className="media-facts">
-          <dt className="mono-label">Browser</dt>
+          <dt className="mono-label">{tr('mediaTest.browser')}</dt>
           <dd>{device.userAgent}</dd>
-          <dt className="mono-label">Installed</dt>
-          <dd>{device.installed ? 'Yes' : 'No'}</dd>
+          <dt className="mono-label">{tr('mediaTest.installed')}</dt>
+          <dd>{device.installed ? tr('mediaTest.yes') : tr('mediaTest.no')}</dd>
         </dl>
         <ul className="media-log">
           {device.codecs.map((c) => (
@@ -527,11 +543,11 @@ export function MediaTest() {
       </section>
 
       <section>
-        <h2>Report</h2>
+        <h2>{tr('mediaTest.report')}</h2>
         <textarea ref={reportRef} className="media-report" readOnly value={report} rows={16} />
         <div className="media-actions">
           <button className="primary" onClick={() => void copyReport()}>
-            Copy report
+            {tr('mediaTest.copyReport')}
           </button>
           {copied && <span className="muted">{copied}</span>}
         </div>

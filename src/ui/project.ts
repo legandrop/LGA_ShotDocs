@@ -1,13 +1,15 @@
 import { useCallback, useSyncExternalStore } from 'react';
+import { locale, t as current, type Translate } from '../i18n';
 import { navigate, pagePath, useRoute } from '../router';
 import { useServices, useTree } from '../services';
 import type { PageTree } from '../sync/tree';
+import type { StorageNames } from '../workspace';
 
 // El proyecto abierto sale de la página abierta; en el inicio o en la papelera, del último elegido en
 // este dispositivo. Cambiar de proyecto vuelve a la última página que se abrió en él.
 
-const CURRENT_KEY = 'shotdocs-project';
-const LAST_PAGES_KEY = 'shotdocs-last-pages';
+// Los nombres salen del workspace (`StorageNames`); los de Wanka son los de siempre.
+type Keys = Pick<StorageNames, 'project' | 'lastPages'>;
 const EVENT = 'shotdocs:project';
 
 function read<T>(key: string, fallback: T): T {
@@ -28,25 +30,25 @@ function write(key: string, value: unknown): void {
 }
 
 /** Proyecto elegido por usuario, en este dispositivo. */
-function storedProject(userId: string): string | null {
-  return read<Record<string, string>>(CURRENT_KEY, {})[userId] ?? null;
+function storedProject(keys: Keys, userId: string): string | null {
+  return read<Record<string, string>>(keys.project, {})[userId] ?? null;
 }
 
-function storeProject(userId: string, projectId: string): void {
-  if (storedProject(userId) === projectId) return;
-  write(CURRENT_KEY, { ...read<Record<string, string>>(CURRENT_KEY, {}), [userId]: projectId });
+function storeProject(keys: Keys, userId: string, projectId: string): void {
+  if (storedProject(keys, userId) === projectId) return;
+  write(keys.project, { ...read<Record<string, string>>(keys.project, {}), [userId]: projectId });
   window.dispatchEvent(new Event(EVENT));
 }
 
-export function lastPageOf(projectId: string): string | null {
-  return read<Record<string, string>>(LAST_PAGES_KEY, {})[projectId] ?? null;
+export function lastPageOf(keys: Keys, projectId: string): string | null {
+  return read<Record<string, string>>(keys.lastPages, {})[projectId] ?? null;
 }
 
-export function rememberPage(tree: PageTree, userId: string, pageId: string): void {
+export function rememberPage(keys: Keys, tree: PageTree, userId: string, pageId: string): void {
   const page = tree.get(pageId);
   if (!page) return;
-  write(LAST_PAGES_KEY, { ...read<Record<string, string>>(LAST_PAGES_KEY, {}), [page.workspace_id]: pageId });
-  storeProject(userId, page.workspace_id);
+  write(keys.lastPages, { ...read<Record<string, string>>(keys.lastPages, {}), [page.workspace_id]: pageId });
+  storeProject(keys, userId, page.workspace_id);
 }
 
 function subscribe(fn: () => void): () => void {
@@ -57,9 +59,10 @@ function subscribe(fn: () => void): () => void {
 /** El id del proyecto abierto. */
 export function useCurrentProject(): string {
   const tree = useTree();
-  const { user } = useServices();
+  const { user, workspace } = useServices();
   const route = useRoute();
-  const stored = useSyncExternalStore(subscribe, () => storedProject(user.id));
+  const keys = workspace.config.storage;
+  const stored = useSyncExternalStore(subscribe, () => storedProject(keys, user.id));
   const page = route.name === 'page' ? tree.get(route.id) : undefined;
   if (page) return page.workspace_id;
   if (stored && tree.project(stored)) return stored;
@@ -69,16 +72,17 @@ export function useCurrentProject(): string {
 /** Abre un proyecto: su última página abierta, o su inicio. */
 export function useSwitchProject(): (projectId: string) => void {
   const tree = useTree();
-  const { user } = useServices();
+  const { user, workspace } = useServices();
+  const keys = workspace.config.storage;
   return useCallback(
     (projectId: string) => {
-      storeProject(user.id, projectId);
-      const last = lastPageOf(projectId);
+      storeProject(keys, user.id, projectId);
+      const last = lastPageOf(keys, projectId);
       const page = last ? tree.get(last) : undefined;
       if (page && page.workspace_id === projectId && !tree.isTrashed(page.id)) navigate(pagePath(page.id));
       else navigate('/');
     },
-    [tree, user.id],
+    [tree, user.id, keys],
   );
 }
 
@@ -89,16 +93,17 @@ export function monogram(name: string): string {
   return letters.toUpperCase();
 }
 
-/** "edited today", "edited yesterday", "edited Sep 12". */
-export function editedLabel(iso: string | null): string {
-  if (!iso) return 'empty';
+/** "edited today", "edited yesterday", "edited Sep 12" (o en castellano, con `t`). */
+export function editedLabel(iso: string | null, t: Translate = current): string {
+  if (!iso) return t('project.emptyStats');
   const date = new Date(iso);
   const today = new Date();
   const days = Math.round(
     (new Date(today.toDateString()).getTime() - new Date(date.toDateString()).getTime()) / 86_400_000,
   );
-  if (days <= 0) return 'edited today';
-  if (days === 1) return 'edited yesterday';
+  if (days <= 0) return t('project.editedToday');
+  if (days === 1) return t('project.editedYesterday');
   const sameYear = date.getFullYear() === today.getFullYear();
-  return `edited ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) })}`;
+  const day = date.toLocaleDateString(locale(t.lang), { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
+  return t('project.editedOn', { date: day });
 }

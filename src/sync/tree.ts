@@ -1,4 +1,5 @@
 import { generateKeyBetween } from 'fractional-indexing';
+import { t } from '../i18n';
 import type { LocalDb } from './localDb';
 import type { FailedOp, PagePatch, PageRow, PageSettings, ProjectRow, QueuedOp, TreeOp } from './types';
 
@@ -222,6 +223,12 @@ export class PageTree {
     return [...this.failed];
   }
 
+  /** El proyecto se creó en este dispositivo y todavía no volvió del servidor (en la cola o rechazado). */
+  isLocalProject(projectId: string): boolean {
+    const isCreate = (op: TreeOp) => op.kind === 'createProject' && op.project.id === projectId;
+    return this.ops.some((o) => isCreate(o.op)) || this.failed.some((f) => isCreate(f.op));
+  }
+
   /** La página todavía no existe en el servidor: su creación está en la cola o fue rechazada. */
   hasUnsentCreate(pageId: string): boolean {
     const isCreate = (op: TreeOp) => op.kind === 'create' && op.page.id === pageId;
@@ -247,7 +254,7 @@ export class PageTree {
   /** Crea un proyecto. Funciona sin red: sube antes que las páginas que se le creen. */
   async createProject(name: string): Promise<string> {
     const id = crypto.randomUUID();
-    await this.enqueue({ kind: 'createProject', project: { id, name: name.trim() || 'Untitled project' } });
+    await this.enqueue({ kind: 'createProject', project: { id, name: name.trim() || t('project.untitled') } });
     return id;
   }
 
@@ -429,14 +436,29 @@ export class PageTree {
    * proyectos y las páginas que el servidor ya no tiene (primero los padres) y los cambios a páginas que
    * este dispositivo vio más nuevos que lo restaurado. Los renombres de proyectos no vuelven: el
    * servidor no dice cuándo se hicieron. Devuelve cuántos cambios puso en la cola.
+   *
+   * Con `allow` (los permisos del paso 9), no vuelve a crear lo que la persona ya no puede crear: el
+   * servidor lo rechazaría. Esas creaciones se cuentan en `report.skipped` para avisarlo; su contenido
+   * sigue en el dispositivo (se puede bajar como archivo).
    */
-  async recoverAfterRestore(serverRows: PageRow[], serverProjects: ProjectRow[]): Promise<number> {
+  async recoverAfterRestore(
+    serverRows: PageRow[],
+    serverProjects: ProjectRow[],
+    allow?: { createProject: boolean; createPage: (parentId: string | null, projectId: string) => boolean },
+    report?: { skipped: number },
+  ): Promise<number> {
     const onServer = new Map(serverRows.map((r) => [r.id, r]));
     const projectsOnServer = new Set(serverProjects.map((p) => p.id));
     const ops: TreeOp[] = [];
+    let skipped = 0;
 
     for (const p of this.projectSnapshot.values()) {
-      if (!projectsOnServer.has(p.id)) ops.push({ kind: 'createProject', project: { id: p.id, name: p.name } });
+      if (projectsOnServer.has(p.id)) continue;
+      if (allow && !allow.createProject) {
+        skipped++;
+        continue;
+      }
+      ops.push({ kind: 'createProject', project: { id: p.id, name: p.name } });
     }
 
     const depth = (row: PageRow): number => {
@@ -450,6 +472,10 @@ export class PageTree {
     };
     const missing = [...this.snapshot.values()].filter((r) => !onServer.has(r.id)).sort((a, b) => depth(a) - depth(b));
     for (const r of missing) {
+      if (allow && !allow.createPage(r.parent_id, r.workspace_id)) {
+        skipped++;
+        continue;
+      }
       ops.push({
         kind: 'create',
         page: { id: r.id, workspace_id: r.workspace_id, parent_id: r.parent_id, title: r.title, sort_key: r.sort_key },
@@ -474,6 +500,7 @@ export class PageTree {
       if (Object.keys(patch).length > 0) ops.push({ kind: 'update', id: r.id, patch });
     }
 
+    if (report) report.skipped = skipped;
     await this.enqueueFirst(ops);
     return ops.length;
   }
@@ -538,7 +565,7 @@ export class PageTree {
     // El primer proyecto siempre está, aunque el dispositivo todavía no haya bajado la lista (por ejemplo,
     // con datos de una versión anterior y sin red).
     if (!projects.has(this.workspaceId)) {
-      projects.set(this.workspaceId, { id: this.workspaceId, name: 'My project', created_at: '' });
+      projects.set(this.workspaceId, { id: this.workspaceId, name: t('project.defaultName'), created_at: '' });
     }
     this.projectView = projects;
     this.statsCache = null;

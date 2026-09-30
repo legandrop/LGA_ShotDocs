@@ -1,14 +1,28 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
-import { useSyncStatus, useTree } from '../services';
+import { usePermissions, useSyncStatus, useTree } from '../services';
+import { clearCommentsTarget, closeComments, useCommentsUi } from './commentsUi';
 import { CollapseIcon, HeaderIcon } from './icons';
-import { PageEditor } from './PageEditor';
+import { lazyPart, Part } from './lazyPart';
 import { useFloating } from './menus';
 import { pageFormat, sheetSize, SHEET_MARGIN_MM, mm } from './pageFormat';
 import { headerLevels, headerPages, ownHeader } from './titles';
 
 const FOCUS_TITLE = 'shotdocs:focus-title';
+
+// El editor (BlockNote con ProseMirror, Tiptap y los estilos de texto) y el panel de comentarios se bajan
+// aparte (roadmap B.4): la barra lateral y el árbol salen sin esperarlos. El título y el encabezado de la
+// página se ven enseguida; el cuerpo muestra un esqueleto hasta que el editor está.
+const PageEditor = lazyPart(() => import('./PageEditor').then((m) => m.PageEditor));
+const CommentsPanel = lazyPart(() => import('./CommentsPanel').then((m) => m.CommentsPanel));
+
+/** Empieza a bajar el editor y el panel de comentarios (la app lo pide apenas está libre). */
+export function preloadPageParts(): void {
+  PageEditor.preload();
+  CommentsPanel.preload();
+}
 
 /** Lleva el foco al título de la página abierta (renombrar desde la barra de arriba). */
 export function focusTitle(): void {
@@ -18,17 +32,19 @@ export function focusTitle(): void {
 export function PageView({ id }: { id: string }) {
   const tree = useTree();
   const status = useSyncStatus();
+  const perms = usePermissions();
   const page = tree.get(id);
+  const tr = useT();
 
   useEffect(() => {
-    document.title = page ? `${page.title || 'Untitled'} · Shot Docs` : 'LGA Shot Docs';
-  }, [page]);
+    document.title = page ? `${page.title || tr('common.untitled')} · Shot Docs` : 'LGA Shot Docs';
+  }, [page, tr]);
 
   if (!page) {
     return (
       <article className="page narrow">
         <p className="muted">
-          {status.lastSyncAt === null ? 'Looking for the page…' : 'This page does not exist or you do not have access to it.'}
+          {status.lastSyncAt === null ? tr('page.looking') : tr('page.notFound')}
         </p>
       </article>
     );
@@ -50,26 +66,60 @@ export function PageView({ id }: { id: string }) {
           : undefined
       }
       data-format={format.size}
+      data-page-id={id}
     >
       {trashedAt && (
         <div className="banner">
           {trashedAt.id === id
-            ? 'This page is in the trash.'
-            : `This page is inside “${trashedAt.title || 'Untitled'}”, which is in the trash.`}
-          <button className="link" onClick={() => void tree.restore(trashedAt.id)}>
-            {trashedAt.id === id ? 'Restore' : `Restore “${trashedAt.title || 'Untitled'}”`}
-          </button>
+            ? tr('page.inTrash')
+            : tr('page.insideTrashed', { title: trashedAt.title || tr('common.untitled') })}
+          {perms.canManagePage(trashedAt.id) && (
+            <button className="link" onClick={() => void tree.restore(trashedAt.id)}>
+              {trashedAt.id === id ? tr('trash.restore') : tr('page.restoreNamed', { title: trashedAt.title || tr('common.untitled') })}
+            </button>
+          )}
         </div>
       )}
-      <PageHeader id={id} />
-      <TitleInput id={id} title={page.title} />
-      <PageEditor pageId={id} />
+      <PageHeader id={id} editable={perms.canEditPage(id)} />
+      <TitleInput id={id} title={page.title} readOnly={!perms.canEditPage(id)} />
+      <Part fallback={<EditorSkeleton />}>
+        <PageEditor pageId={id} />
+      </Part>
+      <CommentsSlot pageId={id} />
     </article>
   );
 }
 
-function TitleInput({ id, title }: { id: string; title: string }) {
+/** Lo que ocupa el cuerpo de la página mientras baja el editor (aparece solo si tarda, ver styles.css). */
+function EditorSkeleton() {
+  const tr = useT();
+  return (
+    <div className="editor-skeleton" aria-busy="true" aria-label={tr('page.loadingEditor')}>
+      <span />
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
+
+/** El panel de comentarios se baja recién cuando se abre (o antes, cuando la app está libre). */
+function CommentsSlot({ pageId }: { pageId: string }) {
+  const { open } = useCommentsUi();
+  useEffect(() => CommentsPanel.preload(), []);
+  // Al salir de la página, lo pedido para ella no sigue (también con el panel cerrado).
+  useEffect(() => () => clearCommentsTarget(), [pageId]);
+  if (!open) return null;
+  return (
+    <Part onClose={closeComments}>
+      <CommentsPanel pageId={pageId} />
+    </Part>
+  );
+}
+
+function TitleInput({ id, title, readOnly }: { id: string; title: string; readOnly: boolean }) {
   const tree = useTree();
+  const tr = useT();
   const [value, setValue] = useState(title);
   const focused = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -147,12 +197,13 @@ function TitleInput({ id, title }: { id: string; title: string }) {
       className="page-title"
       rows={1}
       value={value}
-      placeholder="Untitled"
-      aria-label="Title"
+      placeholder={tr('common.untitled')}
+      aria-label={tr('page.title')}
+      readOnly={readOnly}
       onFocus={() => (focused.current = true)}
       onBlur={() => {
         focused.current = false;
-        commit(value);
+        if (!readOnly) commit(value);
       }}
       onChange={(e) => {
         setValue(e.target.value);
@@ -163,6 +214,7 @@ function TitleInput({ id, title }: { id: string; title: string }) {
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
+          if (readOnly) return;
           commit(value);
           window.dispatchEvent(new Event('shotdocs:focus-editor'));
         }
@@ -175,19 +227,20 @@ const LEVEL_CHOICES: { value: number | null; label: string }[] = [
   { value: 1, label: '1' },
   { value: 2, label: '2' },
   { value: 3, label: '3' },
-  { value: null, label: 'All' },
+  { value: null, label: 'all' },
 ];
 
 /**
  * Encabezado arriba del título con las páginas que contienen a esta ("MGTZD | Brief · Uruguay"). Cuántos
  * niveles muestra, o si se oculta, se guarda en una página y vale para todas las de adentro.
  */
-function PageHeader({ id }: { id: string }) {
+function PageHeader({ id, editable }: { id: string; editable: boolean }) {
   const tree = useTree();
   const [open, setOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
   const pages = headerPages(tree, id);
   const hasAncestors = tree.ancestors(id).length > 0;
+  const tr = useT();
 
   return (
     <div className="page-header">
@@ -205,27 +258,29 @@ function PageHeader({ id }: { id: string }) {
             data-tip-plain
             data-tip-overflow
           >
-            {p.title || 'Untitled'}
+            {p.title || tr('common.untitled')}
           </button>
         </span>
       ))}
-      <button
-        ref={toggle}
-        className={`header-toggle${pages.length ? '' : ' labelled'}`}
-        aria-label={pages.length ? 'Header options' : undefined}
-        data-tip={pages.length ? 'Header: how many containing pages show here' : undefined}
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        {pages.length ? (
-          <CollapseIcon size={14} />
-        ) : (
-          <>
-            <HeaderIcon size={14} /> {hasAncestors ? 'Header' : 'Header for pages inside'}
-          </>
-        )}
-      </button>
-      {open && <HeaderOptions id={id} anchor={toggle.current} onClose={() => setOpen(false)} />}
+      {editable && (
+        <button
+          ref={toggle}
+          className={`header-toggle${pages.length ? '' : ' labelled'}`}
+          aria-label={pages.length ? tr('header.options') : undefined}
+          data-tip={pages.length ? tr('header.optionsTip') : undefined}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {pages.length ? (
+            <CollapseIcon size={14} />
+          ) : (
+            <>
+              <HeaderIcon size={14} /> {hasAncestors ? tr('header.title') : tr('header.forInside')}
+            </>
+          )}
+        </button>
+      )}
+      {open && editable && <HeaderOptions id={id} anchor={toggle.current} onClose={() => setOpen(false)} />}
     </div>
   );
 }
@@ -246,14 +301,15 @@ function HeaderOptions({ id, anchor, onClose }: { id: string; anchor: HTMLElemen
   const shown = headerPages(tree, id);
   const own = ownHeader(tree, id);
   const visible = levels !== 0;
+  const tr = useT();
 
   const save = (next: number | null) =>
     void tree.setSetting(target, 'header', next === 0 ? { levels: 0, last } : { levels: next });
 
   return (
-    <div ref={ref} className="header-popover" role="dialog" aria-label="Header">
+    <div ref={ref} className="header-popover" role="dialog" aria-label={tr('header.title')}>
       <div className="switch-row">
-        <span id="header-show">Show header</span>
+        <span id="header-show">{tr('header.show')}</span>
         <button
           className="switch"
           role="switch"
@@ -265,12 +321,12 @@ function HeaderOptions({ id, anchor, onClose }: { id: string; anchor: HTMLElemen
       {visible && (
         <div className="pref">
           <span className="pref-label" id="header-levels">
-            Levels shown
+            {tr('header.levels')}
           </span>
           <div className="segmented" role="group" aria-labelledby="header-levels">
             {LEVEL_CHOICES.map((c) => (
               <button key={c.label} aria-pressed={levels === c.value} onClick={() => save(c.value)}>
-                {c.label}
+                {c.value === null ? tr('header.all') : c.label}
               </button>
             ))}
           </div>
@@ -279,12 +335,12 @@ function HeaderOptions({ id, anchor, onClose }: { id: string; anchor: HTMLElemen
       {branch.length > 1 && (
         <div className="pref">
           <label className="pref-label" htmlFor="header-target">
-            Save for
+            {tr('pageFormat.saveFor')}
           </label>
           <select id="header-target" value={target} onChange={(e) => setTarget(e.target.value)}>
             {branch.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.id === id ? 'This page' : `“${p.title || 'Untitled'}”`} and the pages inside
+                {p.id === id ? tr('pageFormat.thisBranch') : tr('pageFormat.branch', { title: p.title || tr('common.untitled') })}
               </option>
             ))}
           </select>
@@ -292,22 +348,19 @@ function HeaderOptions({ id, anchor, onClose }: { id: string; anchor: HTMLElemen
       )}
       <p>
         {visible && shown.length > 0 ? (
-          <>
-            Starts at <strong>{shown[0].title || 'Untitled'}</strong>.{' '}
-          </>
+          <>{tr.rich('header.startsAt', { title: <strong>{shown[0].title || tr('common.untitled')}</strong> })} </>
         ) : null}
         {from ? (
-          <>
-            Set on <strong>{from.id === id ? 'this page' : from.title || 'Untitled'}</strong>; pages inside can set
-            their own.
-          </>
+          tr.rich('header.setOn', {
+            where: <strong>{from.id === id ? tr('header.thisPage') : from.title || tr('common.untitled')}</strong>,
+          })
         ) : (
-          <>Not set anywhere yet: showing 2 levels.</>
+          tr('header.notSet')
         )}
       </p>
       {own && (
         <button className="link" onClick={() => void tree.setSetting(id, 'header', undefined)}>
-          Use the setting from above
+          {tr('header.inherit')}
         </button>
       )}
     </div>

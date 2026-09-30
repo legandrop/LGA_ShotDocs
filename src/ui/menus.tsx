@@ -1,23 +1,29 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { t, useT } from '../i18n';
 import { prefs, usePrefs, type Prefs } from '../prefs';
 import { navigate } from '../router';
-import { useServices, useTree } from '../services';
-import { supabase } from '../supabase';
-import { PAGE_SIZES, pageFormat } from './pageFormat';
+import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
+import { pageFormat, sizeLabel } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
   DarkIcon,
+  DriveIcon,
   FilmIcon,
   LightIcon,
+  MembersIcon,
   MoveIcon,
   PlusIcon,
+  PrintIcon,
   RenameIcon,
   SheetIcon,
+  ShareIcon,
   SignOutIcon,
   SystemIcon,
   TrashIcon,
 } from './icons';
+import { notify } from './notice';
 import { usePendingCount } from './usePendingCount';
+import { LegalLinks } from './Legal';
 
 /**
  * Comportamiento común de menús y paneles flotantes: se cierran con Escape o tocando afuera (tocar el
@@ -113,17 +119,26 @@ export function PageMenu(props: {
   onMove: () => void;
   onFormat: () => void;
   onTrash: () => void;
+  /** "Share…": solo si la persona puede compartir esta página. */
+  onShare?: () => void;
 }) {
   const tree = useTree();
+  const perms = usePermissions();
+  // Lo que el servidor rechazaría no se ofrece: editar pide 3; crear, mover y la papelera, 4.
+  const canEdit = perms.canEditPage(props.pageId);
+  const canManage = perms.canManagePage(props.pageId);
   const format = pageFormat(tree, props.pageId);
+  const { media } = useServices();
   const ref = useRef<HTMLDivElement>(null);
   useFloating(ref, props.onClose, props.anchor, true);
   const split = splitEnabled(tree, props.pageId);
   const own = ownSplit(tree, props.pageId);
+  const tr = useT();
 
-  const item = (label: string, icon: ReactNode, action: () => void, danger = false) => (
+  const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
       role="menuitem"
+      disabled={!enabled}
       className={danger ? 'danger' : undefined}
       onClick={() => {
         props.onClose();
@@ -136,37 +151,55 @@ export function PageMenu(props: {
   );
 
   return (
-    <div ref={ref} className="menu" role="menu" aria-label="Page actions" style={props.position}>
-      {item('New page inside', <PlusIcon />, props.onNewChild)}
-      {item('Rename', <RenameIcon />, props.onRename)}
-      {item('Move to…', <MoveIcon />, props.onMove)}
+    <div ref={ref} className="menu" role="menu" aria-label={tr('pageMenu.label')} style={props.position}>
+      {props.onShare && item(tr('pageMenu.share'), <ShareIcon />, props.onShare)}
+      {item(tr('pageMenu.newInside'), <PlusIcon />, props.onNewChild, false, canManage)}
+      {item(tr('common.rename'), <RenameIcon />, props.onRename, false, canEdit)}
+      {item(tr('pageMenu.move'), <MoveIcon />, props.onMove, false, canManage)}
       <button
         role="menuitem"
+        disabled={!canEdit}
         onClick={() => {
           props.onClose();
           props.onFormat();
         }}
       >
         <SheetIcon />
-        Page size
+        {tr('pageMenu.pageSize')}
         <span className="check">
-          {format.size === 'free' ? 'Free' : `${PAGE_SIZES[format.size].label}${format.landscape ? ' ↔' : ''}`}
+          {`${sizeLabel(format.size, tr)}${format.size !== 'free' && format.landscape ? ' ↔' : ''}`}
         </span>
+      </button>
+      {/* La impresión del navegador con la vista de impresión (se baja aparte; Docs/Doc_Hojas_PDF.md). */}
+      <button
+        role="menuitem"
+        data-tip={tr('pageMenu.printTip')}
+        onClick={() => {
+          props.onClose();
+          const page = { format: { size: format.size, landscape: format.landscape }, media: media.enabled ? media : null };
+          void import('./printPage')
+            .then((m) => m.printPage(props.pageId, page))
+            .catch(() => notify(t('pageMenu.printFailed')));
+        }}
+      >
+        <PrintIcon />
+        {tr('pageMenu.print')}
       </button>
       <hr />
       <button
         role="menuitemcheckbox"
         aria-checked={split}
-        data-tip={'Pages inside show **064 | Name | Place**\nas a short code and a name'}
+        disabled={!canEdit}
+        data-tip={tr('pageMenu.shortTitlesTip')}
         onClick={() => void tree.setSetting(props.pageId, 'split', !split)}
       >
         <span className="split-sample" aria-hidden="true">
           |
         </span>
-        Short titles inside
-        <span className="check">{split ? 'On' : 'Off'}</span>
+        {tr('pageMenu.shortTitles')}
+        <span className="check">{split ? tr('common.on') : tr('common.off')}</span>
       </button>
-      {own && (
+      {own && canEdit && (
         <button
           role="menuitem"
           onClick={() => {
@@ -175,11 +208,12 @@ export function PageMenu(props: {
           }}
         >
           <span className="split-sample" aria-hidden="true" />
-          Short titles: use the setting from above
+          {tr('pageMenu.shortTitlesInherit')}
         </button>
       )}
       <hr />
-      {item('Move to trash', <TrashIcon />, props.onTrash, true)}
+      {item(tr('pageMenu.trash'), <TrashIcon />, props.onTrash, true, canManage)}
+      {!canEdit && perms.known && <p className="menu-note">{tr('page.viewOnly')}</p>}
     </div>
   );
 }
@@ -216,76 +250,125 @@ function Segmented<K extends keyof Prefs>(props: {
   );
 }
 
-export function AccountMenu({ position, anchor, onClose }: { position: MenuPosition; anchor: HTMLElement | null; onClose: () => void }) {
-  const { user, docs } = useServices();
+export function AccountMenu({
+  position,
+  anchor,
+  onClose,
+  onDrive,
+  onMembers,
+}: {
+  position: MenuPosition;
+  anchor: HTMLElement | null;
+  onClose: () => void;
+  /** Abre "Google Drive" (la conexión y la carpeta); solo se ofrece al dueño de un workspace con portero. */
+  onDrive?: () => void;
+  /** Abre "Members"; solo se ofrece al dueño y a los admins. */
+  onMembers?: () => void;
+}) {
+  const perms = usePermissions();
+  const { user, docs, client } = useServices();
+  const status = useSyncStatus();
   const pending = usePendingCount();
+  const isOwner = !!status.mediaUrl && !!status.ownerId && status.ownerId === user.id;
   const ref = useRef<HTMLDivElement>(null);
+  const tr = useT();
   useFloating(ref, onClose, anchor);
 
   async function signOut() {
     if (docs.hasUnsavedEdits()) {
-      alert('Some of your latest edits are not saved on this device yet. Wait until the red warning goes away, then sign out.');
+      alert(t('account.signOutUnsaved'));
       return;
     }
     if (
       pending > 0 &&
-      !confirm(
-        `${pending} changes are not uploaded yet. They stay saved on this device and upload the next time you sign in with this account. Sign out anyway?`,
-      )
+      !confirm(t('account.signOutPending', { count: pending }))
     ) {
       return;
     }
-    await supabase!.auth.signOut({ scope: 'local' });
+    await client.auth.signOut({ scope: 'local' });
   }
 
   return (
-    <div ref={ref} className="menu account-menu" role="dialog" aria-label="Account" style={position}>
+    <div ref={ref} className="menu account-menu" role="dialog" aria-label={tr('account.label')} style={position}>
       <div className="account-head">
         <span className="avatar large">{user.email.charAt(0) || '?'}</span>
         <div className="who">
           <strong data-tip={user.email} data-tip-plain data-tip-overflow>
             {user.email}
           </strong>
-          <span className="mono-label">Synced to your account</span>
+          <span className="mono-label">{tr('account.synced')}</span>
         </div>
       </div>
       <Segmented
-        label="Appearance"
+        label={tr('account.appearance')}
         pref="theme"
         tall
         options={[
-          { value: 'system', label: 'System', icon: <SystemIcon /> },
-          { value: 'light', label: 'Light', icon: <LightIcon /> },
-          { value: 'dark', label: 'Dark', icon: <DarkIcon /> },
+          { value: 'system', label: tr('account.theme.system'), icon: <SystemIcon /> },
+          { value: 'light', label: tr('account.theme.light'), icon: <LightIcon /> },
+          { value: 'dark', label: tr('account.theme.dark'), icon: <DarkIcon /> },
         ]}
       />
       <Segmented
-        label="Text"
+        label={tr('account.font')}
         pref="font"
         tall
         options={[
-          { value: 'default', label: 'Default', sample: <span className="sample sans">Aa</span> },
-          { value: 'editorial', label: 'Editorial', sample: <span className="sample serif">Aa</span> },
+          { value: 'default', label: tr('account.font.default'), sample: <span className="sample sans">Aa</span> },
+          { value: 'editorial', label: tr('account.font.editorial'), sample: <span className="sample serif">Aa</span> },
         ]}
       />
       <Segmented
-        label="Text size"
+        label={tr('account.textSize')}
         pref="textSize"
         options={[
-          { value: 'small', label: 'Small' },
-          { value: 'normal', label: 'Normal' },
-          { value: 'large', label: 'Large' },
+          { value: 'small', label: tr('account.textSize.small') },
+          { value: 'normal', label: tr('account.textSize.normal') },
+          { value: 'large', label: tr('account.textSize.large') },
         ]}
       />
       <Segmented
-        label="Page width"
+        label={tr('account.pageWidth')}
         pref="pageWidth"
         options={[
-          { value: 'normal', label: 'Normal' },
-          { value: 'wide', label: 'Wide' },
+          { value: 'normal', label: tr('account.pageWidth.normal') },
+          { value: 'wide', label: tr('account.pageWidth.wide') },
+        ]}
+      />
+      {/* Cada idioma con su propio nombre, así se encuentra aunque la app esté en el otro. */}
+      <Segmented
+        label={tr('account.language')}
+        pref="language"
+        options={[
+          { value: 'en', label: 'English' },
+          { value: 'es', label: 'Español' },
         ]}
       />
       <div className="pref-divider" />
+      {perms.canManageMembers && onMembers && (
+        <button
+          className="menu-row"
+          onClick={() => {
+            onClose();
+            onMembers();
+          }}
+        >
+          <MembersIcon />
+          {tr('members.title')}
+        </button>
+      )}
+      {isOwner && onDrive && (
+        <button
+          className="menu-row"
+          onClick={() => {
+            onClose();
+            onDrive();
+          }}
+        >
+          <DriveIcon />
+          Google Drive
+        </button>
+      )}
       <button
         className="menu-row"
         onClick={() => {
@@ -294,14 +377,18 @@ export function AccountMenu({ position, anchor, onClose }: { position: MenuPosit
         }}
       >
         <FilmIcon />
-        Media test
+        {tr('mediaTest.title')}
       </button>
       <button className="menu-row" onClick={() => void signOut()}>
         <SignOutIcon />
-        Sign out
+        {tr('common.signOut')}
       </button>
-      {/* La versión de la app: así se ve enseguida si este dispositivo ya tiene la última. */}
-      {__APP_VERSION__ && <p className="mono-label menu-version">v{__APP_VERSION__}</p>}
+      {/* La versión de la app (así se ve enseguida si este dispositivo ya tiene la última) y los links a la
+          política de privacidad y las condiciones, en otra pestaña. */}
+      <div className="menu-foot">
+        {__APP_VERSION__ && <p className="mono-label menu-version">v{__APP_VERSION__}</p>}
+        <LegalLinks />
+      </div>
     </div>
   );
 }

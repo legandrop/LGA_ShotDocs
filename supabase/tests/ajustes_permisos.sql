@@ -13,6 +13,16 @@ insert into auth.users (id, email, aud, role) values
   ('00000000-0000-4000-8000-00000000000a', 'rls-a@test.invalid', 'authenticated', 'authenticated'),
   ('00000000-0000-4000-8000-00000000000b', 'rls-b@test.invalid', 'authenticated', 'authenticated');
 
+-- Miembros activos del workspace: la regla de quien creó un proyecto (4 sobre todo lo suyo) vale solo para
+-- ellos.
+insert into public.members (user_id, role) values
+  ('00000000-0000-4000-8000-00000000000a', 'member'),
+  ('00000000-0000-4000-8000-00000000000b', 'member');
+
+-- El proyecto de A lo crea la base (ensure_workspace ya no crea proyectos).
+insert into public.workspaces (id, owner_id) values
+  ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-00000000000a');
+
 -- A: una página con ajustes y sus preferencias.
 select pg_temp.as_user('00000000-0000-4000-8000-00000000000a');
 select set_config('test.ws_a', public.ensure_workspace()::text, true);

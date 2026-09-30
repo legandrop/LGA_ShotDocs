@@ -1,5 +1,130 @@
 # Changelog — LGA Shot Docs
 
+v0.041 :
+
+La app en castellano e inglés (roadmap B.8, D-16). Toda la interfaz pasa por un diccionario con los dos
+idiomas: pantallas, menús, avisos, errores, el editor (con el diccionario de BlockNote), el carrete, los
+comentarios, la papelera, miembros y compartir. El idioma se elige en el menú de la cuenta y sigue a la
+cuenta en todos los dispositivos; por defecto, el del navegador. Script se llama Guion y Question,
+Pregunta; lo guardado en las páginas no cambia. Los dispositivos que ya tienen la versión nueva conservan
+su idioma aunque una versión vieja suba sus preferencias; uno nuevo toma el del navegador. Las páginas
+legales quedan en inglés, con una nota.
+[ Interfaz - castellano e inglés ]
+
+v0.040 :
+
+Hojas y PDF (roadmap B.7, fase 4). En una página con tamaño de hoja, el editor marca dónde empieza cada
+hoja, y *Export PDF / Print* (o Ctrl/⌘+P) imprime exactamente esas hojas: el mismo cálculo sirve para la
+pantalla y para el PDF, sobre una copia de la página. Un bloque que entra en una hoja no se parte; uno más
+alto se parte entre renglones o filas; un título pasa a la hoja siguiente con su bloque. El PDF sale sin
+barra lateral ni controles, con las fotos del dispositivo reducidas y en tema claro. Nada de esto toca el
+documento.
+[ Páginas - cortes de hoja y PDF ]
+
+v0.039 :
+
+Las últimas teclas ya no se pierden y la app abre más rápido (roadmap B.4 y B.5). La investigación del
+caso intermitente encontró que recargar o cerrar la página a milisegundos de escribir podía perder lo
+último: el guardado local ahora escribe en una transacción que no espera ninguna lectura y se confirma en
+el acto, con una marca de "falta subir" que solo se borra si el servidor confirmó eso mismo, y una versión
+vieja que abra la misma base igual ve lo pendiente. Cada consulta al servidor tiene un tope según su
+tamaño y una página lenta no frena a las demás; los menús de la barra del editor ya no se cierran solos. El
+editor, el carrete y los diálogos se cargan aparte: la primera carga baja de 591 KB a 276 KB (283 KB en v0.041, con los idiomas).
+[ Sincronización - sin perder las últimas teclas; carga más liviana ]
+
+v0.038 :
+
+Sincronización más liviana y páginas legales (roadmap B.2, B.3 y B.6). Después de bajar cambios de otro
+dispositivo, la siguiente subida ya no reenvía lo bajado: el vector de lo que el servidor tiene avanza
+solo con lo que el servidor mandó, sin huecos, y nunca por encima de lo que el dispositivo integró; lo
+propio sin confirmar sigue siempre pendiente (pruebas al azar con varios dispositivos, cortes y
+restauraciones). Abrir una página vacía ya no crea un cambio: la raíz inicial queda en memoria y se guarda
+junto con la primera edición, sin cambiar la semilla. Páginas `/privacy` y `/terms` en inglés, sin
+iniciar sesión, para la pantalla de Google.
+[ Sincronización - subir solo lo propio y páginas legales ]
+
+v0.037 :
+
+Links de Drive (paso 13 del plan de workspaces). Al pegar un link de Google Drive aparece un menú chico:
+dejarlo como link, como texto o como tarjeta con el reproductor de Drive. La tarjeta es un párrafo con el
+link y una propiedad nueva: una versión vieja de la app ve el párrafo con el link y no borra nada (prueba
+con el esquema publicado). El reproductor se arma solo con ids válidos y dominios de Drive, en un marco
+aislado. En Safari y el iPhone avisa que solo los archivos compartidos por link se ven ahí, con un botón
+para abrirlo en Drive. Los formularios de Google quedan como link.
+[ Editor - links de Drive como tarjeta ]
+
+v0.036 :
+
+Varios workspaces (paso 12). La app guarda una lista de workspaces en el dispositivo; Wanka entra con los
+nombres de siempre y nada se renombra, aun con la lista alterada. Pantalla de bienvenida (unirse con un
+link o crear uno), selector Workspace › Proyecto y cambio de workspace recargando la app, sin dos clientes
+a la vez. Un link de otro workspace muestra el servidor antes de unirse. Quitar un workspace del
+dispositivo pide bajar antes lo que no subió, originales incluidos. Comando `workspace:setup` que prepara
+un Supabase nuevo (con modo que solo muestra, y seguros que impiden correrlo contra Wanka) y guía en
+inglés para crear un workspace.
+[ Workspaces - varios workspaces, comando y guía ]
+
+v0.035 :
+
+Papelera de archivos (paso 11). Un archivo que ninguna página viva usa entra a la papelera del proyecto;
+vuelve si se lo usa de nuevo. Pestaña Archivos en la papelera con miniatura, peso y días; el dueño y los
+admins lo mandan a la papelera de Drive (nunca se borra de verdad), de a uno o todos, con confirmación. El
+borrado automático a los 30 días queda armado y apagado hasta que Lega lo confirme. La app solo quita un
+uso con el documento completo y al día, espera los usos sin confirmar (cortar y pegar entre proyectos) y
+la base ignora un aviso viejo.
+[ Archivos - papelera de archivos ]
+
+v0.034 :
+
+Comentarios y preguntas (paso 10). Comentarios anclados a un bloque o a la página, en una tabla propia con
+permisos (Comentar alcanza, aunque no se pueda editar), panel lateral en la computadora y hoja en el
+teléfono, responder, editar, borrar (marca, no borra) y resolver. Funcionan sin red con su cola y nunca
+se descartan solos. Preguntas: un párrafo marcado como pregunta cuya respuesta es un hilo; una versión
+vieja lo ve como párrafo común. Los invitados ven los correos del equipo en los comentarios.
+[ Comentarios - comentarios, preguntas y su cola sin red ]
+
+v0.033 :
+
+Equipo (paso 9). Los permisos pasan por miembros y permisos por proyecto o página: ver, comentar, editar,
+editar y crear páginas, hacia abajo y nunca hacia arriba. Un proyecto nuevo es privado; el dueño no ve los
+privados de otros. Pantalla de miembros (invitar copiando el link, cambiar rol, sacar) y diálogo de
+compartir. Solo lectura real con Ver. Sacar a alguien corta el acceso al instante y, en su dispositivo,
+ofrece bajar lo que no subió antes de borrar. La base niega todo a sesiones con contraseña, para que el
+registro de invitados no se pueda usurpar. El registro sigue cerrado hasta que Lega lo abra.
+[ Equipo - miembros, permisos, compartir e invitaciones ]
+
+v0.032 :
+
+Carrete (paso 7). Un toque en una foto o video abre todas las de la página a pantalla completa, en orden:
+deslizar o flechas, zoom con pellizco, rueda y doble toque, video con reproducción en línea, bajar el
+original y cerrar con Escape, la X, deslizando hacia abajo o con "atrás". Primero la miniatura y después
+la grande; sin red, lo que está en el dispositivo. Accesible (foco atrapado y devuelto) y sin cambiar nada
+de lo guardado en la página.
+[ Archivos - carrete de fotos y videos ]
+
+v0.031 :
+
+Archivos en Drive (pasos 6 y 8). Una foto o un video pegado en una página se guarda primero en el
+dispositivo y sube por partes al Drive del dueño a través del portero, retomando lo que ya llegó; sin red,
+espera. En la página queda el bloque de imagen de siempre con una dirección `sdmedia://` y una miniatura
+en Supabase; una versión vieja muestra una imagen rota y no borra nada. El portero pregunta los permisos
+de cada archivo a la base con la sesión de la persona, arma carpetas por proyecto y día sin espacios,
+verifica cada archivo con una marca en Drive y guarda el principio y el final para que el video arranque
+antes. El dueño elige dónde va la carpeta con el selector de Google (si se carga la clave).
+[ Archivos - cola, miniaturas y Drive ]
+
+v0.030 :
+
+Preparación para el equipo, sin cambios para quien ya usa la app (paso 5 del plan de workspaces). El
+cliente de Supabase ya no es global: sale del workspace abierto, que tiene su clave local; la de Wanka
+queda fija como texto y conserva los nombres de siempre (sesión y base local), con una prueba que lo
+protege. La base suma miembros, permisos por proyecto o página e invitaciones, con sus pruebas; el dueño
+entra como `owner` y las otras cuentas con proyectos como miembros con permiso completo sobre lo suyo.
+El servidor ya no crea "My project" para una cuenta nueva: sin proyectos, la app lo avisa y vuelve a
+preguntar sola. La app avisa si la base del workspace es más vieja que la que necesita. El repo de
+copias restaura sobre el mismo proyecto y la configuración de login quedó documentada entera.
+[ Workspaces - preparación: workspace en el código, miembros y permisos ]
+
 v0.029 :
 
 Documentación al día para seguir con el plan de workspaces. `Plan_Workspaces.md` suma la sección 11,

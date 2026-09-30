@@ -8,3 +8,4 @@ dev-dist/
 .DS_Store
 test-results/
 .wrangler/
+*.tsbuildinfo

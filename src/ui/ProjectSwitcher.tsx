@@ -1,10 +1,22 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { useTree } from '../services';
-import { AccountIcon, PlusIcon, RenameIcon, SearchIcon } from './icons';
+import { t, useT } from '../i18n';
+import { usePermissions, useServices, useTree } from '../services';
+import { displayName } from '../workspaces';
+import { AccountIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, useCurrentProject, useSwitchProject } from './project';
+import { ShareDialog } from './lazyDialogs';
+import { Part } from './lazyPart';
+import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
+import {
+  RemoveWorkspaceDialog,
+  useCurrentWorkspace,
+  useLeaveGuard,
+  useRememberWorkspaceName,
+  WorkspaceSection,
+} from './WorkspaceMenu';
 
 export function Monogram({ name, size = 26 }: { name: string; size?: number }) {
   return (
@@ -20,15 +32,26 @@ const SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl+K';
 // En pantallas táctiles no se enfoca el buscador al abrir: el teclado taparía la lista.
 const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
-/** Arriba de la barra lateral: el proyecto abierto. Abre el selector con un clic o con Ctrl+K (⌘K). */
+/**
+ * Arriba de la barra lateral: el proyecto abierto (y, con varios workspaces en el dispositivo, antes el
+ * workspace: Workspace › Proyecto). Abre el selector con un clic o con Ctrl+K (⌘K).
+ */
 export function ProjectSwitcher() {
   const tree = useTree();
   const current = useCurrentProject();
+  const { workspace } = useServices();
+  const { current: ws, all } = useCurrentWorkspace();
+  const leave = useLeaveGuard();
+  useRememberWorkspaceName();
   const [position, setPosition] = useState<MenuPosition | null>(null);
+  const [sharing, setSharing] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspacesMode | null>(null);
+  const [removing, setRemoving] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const project = tree.project(current);
   const stats = tree.projectStats(current);
-  const name = project?.name ?? 'My project';
+  const tr = useT();
+  const name = project?.name ?? tr('project.defaultName');
 
   const toggle = () => setPosition((open) => (open || !button.current ? null : menuBelow(button.current, 340)));
 
@@ -55,14 +78,16 @@ export function ProjectSwitcher() {
         className="project-button"
         aria-haspopup="dialog"
         aria-expanded={!!position}
-        data-tip={`**${SHORTCUT}** to switch projects from anywhere`}
+        data-tip={tr('project.switchTip', { shortcut: SHORTCUT })}
         onClick={toggle}
       >
         <Monogram name={name} />
         <span className="project-label">
           <strong>{name}</strong>
           <span>
-            Project · {stats.pages} {stats.pages === 1 ? 'page' : 'pages'}
+            {/* Con un solo workspace, igual que siempre. */}
+            {all.length > 1 && ws ? `${displayName(ws)} › ` : ''}
+            {tr('project.summary', { count: stats.pages })}
           </span>
         </span>
         <AccountIcon size={16} />
@@ -73,18 +98,53 @@ export function ProjectSwitcher() {
         createPortal(
           <>
             <div className="sheet-scrim" aria-hidden="true" />
-            <ProjectMenu current={current} position={position} anchor={button.current} onClose={() => setPosition(null)} />
+            <ProjectMenu
+              current={current}
+              position={position}
+              anchor={button.current}
+              onClose={() => setPosition(null)}
+              onShare={(id) => setSharing(id)}
+              onWorkspaces={(mode) => setWorkspaces(mode)}
+              onRemoveWorkspace={() => setRemoving(true)}
+            />
           </>,
           document.body,
         )}
+      {sharing &&
+        createPortal(
+          <Part onClose={() => setSharing(null)}>
+            <ShareDialog target={{ projectId: sharing }} onClose={() => setSharing(null)} />
+          </Part>,
+          document.body,
+        )}
+      {workspaces &&
+        createPortal(
+          <WorkspacesDialog
+            initial={workspaces}
+            currentId={workspace.config.localKey}
+            beforeLeave={leave}
+            onClose={() => setWorkspaces(null)}
+          />,
+          document.body,
+        )}
+      {removing && createPortal(<RemoveWorkspaceDialog onClose={() => setRemoving(false)} />, document.body)}
     </>
   );
 }
 
 type Mode = { name: 'list' } | { name: 'new' } | { name: 'rename'; id: string };
 
-function ProjectMenu(props: { current: string; position: MenuPosition; anchor: HTMLElement | null; onClose: () => void }) {
+function ProjectMenu(props: {
+  current: string;
+  position: MenuPosition;
+  anchor: HTMLElement | null;
+  onClose: () => void;
+  onShare: (projectId: string) => void;
+  onWorkspaces: (mode: WorkspacesMode) => void;
+  onRemoveWorkspace: () => void;
+}) {
   const tree = useTree();
+  const perms = usePermissions();
   const switchTo = useSwitchProject();
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
@@ -92,6 +152,7 @@ function ProjectMenu(props: { current: string; position: MenuPosition; anchor: H
   const [mode, setMode] = useState<Mode>({ name: 'list' });
   const [touch] = useState(coarsePointer);
   const [returned, setReturned] = useState(false);
+  const tr = useT();
   useFloating(ref, props.onClose, props.anchor, false, !touch);
 
   const needle = query.trim().toLowerCase();
@@ -99,9 +160,9 @@ function ProjectMenu(props: { current: string; position: MenuPosition; anchor: H
   const known = tree.projects();
   const all = known.some((p) => p.id === props.current)
     ? known
-    : [{ id: props.current, name: 'My project', created_at: '' }, ...known];
+    : [{ id: props.current, name: tr('project.defaultName'), created_at: '' }, ...known];
   const projects = all.filter((p) => !needle || p.name.toLowerCase().includes(needle));
-  const currentName = tree.project(props.current)?.name ?? 'this project';
+  const currentName = tree.project(props.current)?.name ?? tr('project.thisProject');
 
   const pick = (id: string) => {
     props.onClose();
@@ -117,18 +178,18 @@ function ProjectMenu(props: { current: string; position: MenuPosition; anchor: H
       e.preventDefault();
       const target = projects[Math.min(active, projects.length - 1)];
       if (target) pick(target.id);
-      else if (needle) setMode({ name: 'new' });
+      else if (needle && perms.canCreateProject) setMode({ name: 'new' });
     }
   };
 
   if (mode.name !== 'list') {
     const renaming = mode.name === 'rename';
     return (
-      <div ref={ref} className="menu project-menu" role="dialog" aria-label={renaming ? 'Rename project' : 'New project'} style={props.position}>
+      <div ref={ref} className="menu project-menu" role="dialog" aria-label={renaming ? tr('project.rename') : tr('project.new')} style={props.position}>
         <NameForm
-          label={renaming ? 'Project name' : 'New project name'}
+          label={renaming ? tr('project.name') : tr('project.newName')}
           initial={renaming ? currentName : query.trim()}
-          submit={renaming ? 'Rename' : 'Create'}
+          submit={renaming ? tr('common.rename') : tr('common.create')}
           onCancel={() => {
             setReturned(true);
             setMode({ name: 'list' });
@@ -144,7 +205,7 @@ function ProjectMenu(props: { current: string; position: MenuPosition; anchor: H
                 switchTo(id);
               }
             } catch {
-              notify('This device could not save the change. Free up some storage and try again.');
+              notify(t('project.saveFailed'));
               return false;
             }
             return true;
@@ -155,7 +216,7 @@ function ProjectMenu(props: { current: string; position: MenuPosition; anchor: H
   }
 
   return (
-    <div ref={ref} className="menu project-menu" role="dialog" aria-label="Projects" style={props.position}>
+    <div ref={ref} className="menu project-menu" role="dialog" aria-label={tr('project.projects')} style={props.position}>
       <label className="project-search">
         <SearchIcon size={16} />
         <input
@@ -165,8 +226,8 @@ function ProjectMenu(props: { current: string; position: MenuPosition; anchor: H
           aria-autocomplete="list"
           aria-activedescendant={projects[active] ? `project-option-${projects[active].id}` : undefined}
           autoFocus={returned && !touch}
-          aria-label="Find a project"
-          placeholder="Find a project…"
+          aria-label={tr('project.find')}
+          placeholder={tr('project.findPlaceholder')}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -175,8 +236,8 @@ function ProjectMenu(props: { current: string; position: MenuPosition; anchor: H
           onKeyDown={onSearchKey}
         />
       </label>
-      <span className="mono-label project-section">Your projects</span>
-      <div className="project-list" id="project-listbox" role="listbox" aria-label="Your projects">
+      <span className="mono-label project-section">{tr('project.yours')}</span>
+      <div className="project-list" id="project-listbox" role="listbox" aria-label={tr('project.yours')}>
         {projects.map((p, i) => {
           const stats = tree.projectStats(p.id);
           return (
@@ -195,24 +256,40 @@ function ProjectMenu(props: { current: string; position: MenuPosition; anchor: H
               <span className="project-label">
                 <strong>{p.name}</strong>
                 <span>
-                  {stats.pages} {stats.pages === 1 ? 'page' : 'pages'} · {editedLabel(stats.updatedAt)}
+                  {tr('project.pages', { count: stats.pages })} · {editedLabel(stats.updatedAt, tr)}
                 </span>
               </span>
-              {p.id === props.current && <span className="current-mark">Open</span>}
+              {p.id === props.current && <span className="current-mark">{tr('project.open')}</span>}
             </button>
           );
         })}
-        {projects.length === 0 && <p className="muted project-empty">No project with that name.</p>}
+        {projects.length === 0 && <p className="muted project-empty">{tr('project.noMatch')}</p>}
       </div>
-      <hr />
-      <button onClick={() => setMode({ name: 'new' })}>
-        <PlusIcon size={16} />
-        {needle && projects.length === 0 ? `New project “${query.trim()}”` : 'New project'}
-      </button>
-      <button onClick={() => setMode({ name: 'rename', id: props.current })}>
-        <RenameIcon size={16} />
-        Rename “{currentName}”
-      </button>
+      {(perms.canCreateProject || perms.canRenameProject(props.current) || perms.canShareProject(props.current)) && <hr />}
+      {perms.canShareProject(props.current) && (
+        <button
+          onClick={() => {
+            props.onClose();
+            props.onShare(props.current);
+          }}
+        >
+          <ShareIcon size={16} />
+          {tr('project.share', { name: currentName })}
+        </button>
+      )}
+      {perms.canCreateProject && (
+        <button onClick={() => setMode({ name: 'new' })}>
+          <PlusIcon size={16} />
+          {needle && projects.length === 0 ? tr('project.newNamed', { name: query.trim() }) : tr('project.new')}
+        </button>
+      )}
+      {perms.canRenameProject(props.current) && (
+        <button onClick={() => setMode({ name: 'rename', id: props.current })}>
+          <RenameIcon size={16} />
+          {tr('project.renameNamed', { name: currentName })}
+        </button>
+      )}
+      <WorkspaceSection onClose={props.onClose} onDialog={props.onWorkspaces} onRemove={props.onRemoveWorkspace} />
     </div>
   );
 }
@@ -227,6 +304,7 @@ function NameForm(props: {
 }) {
   const [value, setValue] = useState(props.initial);
   const [busy, setBusy] = useState(false);
+  const tr = useT();
   return (
     <form
       className="project-form"
@@ -250,7 +328,7 @@ function NameForm(props: {
       />
       <div className="row">
         <button type="button" className="link" onClick={props.onCancel}>
-          Back
+          {tr('common.back')}
         </button>
         <button className="primary" disabled={!value.trim() || busy}>
           {props.submit}

@@ -68,9 +68,35 @@ diga otra cosa.
   `#3a3a3a`, flecha de 16×11 que apunta al control y se da vuelta si no entra, rótulos en negrita
   `#E8E8E8`, 600 ms de espera) y la misma regla: un tooltip nunca repite lo que el control ya dice; va solo
   cuando suma algo (un atajo, una segunda interacción, un título cortado). Nada de tooltips del navegador.
-- **D-16 · App en castellano e inglés** (2026-09-29). La interfaz va a estar en los dos idiomas, y también
-  las plantillas y los tipos de texto (Script/Guion, Questions/Dudas…). Se implementa más adelante
-  (roadmap); por ahora la interfaz sigue en inglés.
+- **D-16 · App en castellano e inglés** (2026-09-29; implementado 2026-09-30, roadmap B.8). La interfaz
+  está en los dos idiomas, y también las plantillas (cuando existan) y los tipos de texto (Script/Guion,
+  Question/Pregunta). Cómo quedó:
+  - **El idioma es una preferencia de la cuenta** (`language: 'en' | 'es'`, en `user_settings`), se elige en
+    el menú de la cuenta junto al tema y la fuente y sigue a la persona en todos sus dispositivos. De
+    fábrica, castellano si el navegador está en castellano (`es`, `es-AR`…); si no, inglés. Antes de entrar
+    (login, bienvenida) se usa el último elegido en el dispositivo o el del navegador.
+  - **Versiones viejas de la app:** no conocen la clave y la descartan al leer. Si una versión vieja cambia
+    una preferencia, sube el objeto entero sin `language` y la clave se borra de la cuenta; no es grave: los
+    dispositivos con la versión nueva siguen con el idioma que tenían (lo que la cuenta no trae no vuelve a
+    lo de fábrica, también si la clave falta en la copia local que escribió una pestaña vieja) y uno nuevo
+    arranca con el del navegador.
+  - **Nada se sube antes de leer la cuenta** en cada sesión: se lee, se fusiona (solo ganan las claves
+    cambiadas en el dispositivo y todavía sin subir, `dirtyKeys`) y recién ahí se escribe. Así un cambio
+    hecho sin red, o mientras se leía, no pisa la cuenta con lo de fábrica.
+  - **Nada de lo guardado cambia:** Script y pregunta siguen siendo párrafos con `script: true` y
+    `question: true`; "Guion" y "Pregunta" son solo etiquetas del menú "/" y del selector de tipo. Los
+    nombres por defecto que la app crea (un proyecto nuevo) salen en el idioma del momento.
+  - **Castellano rioplatense y claro, con vos.** Términos fijos: página, proyecto, workspace (queda así),
+    papelera, compartir, miembro, invitado, dueño, admin. Los permisos: Ver, Comentar, Editar, Editar y crear
+    páginas.
+  - **Quedan en inglés:** las páginas legales (`/privacy`, `/terms`: es el texto que revisa Google y el que
+    vale; con la app en castellano muestran una nota que lo dice), la guía para crear un workspace, el
+    informe técnico de *Media test* y los mensajes que manda el portero. Los avisos que la app guarda en el
+    dispositivo (el motivo de una subida detenida, de un comentario rechazado) se guardan en inglés y se
+    traducen al mostrarlos (`localize`), así una versión vieja los sigue mostrando bien.
+  - **Los textos de lo que se baja aparte viajan con esas partes** (`src/i18n/lazy/`: editor, carrete,
+    panel de comentarios, miembros y compartir, Drive, prueba de fotos y videos); la primera carga trae el
+    resto, con los dos idiomas (unos 16 KB comprimidos).
 - **D-17 · Archivos grandes en el Drive del dueño** (2026-09-29). El plan gratis de Supabase trae 1 GB
   de archivos: unas 300 fotos de teléfono o un video de rodaje. Detalle en la sección 5 de
   `Plan_Workspaces.md`. Hoy el portero está publicado y probado con *Media test* (v0.022 a v0.028); el
@@ -110,6 +136,35 @@ diga otra cosa.
   - Queda por diseñar al implementarlo: cómo no perder lo que tuviera sin subir alguien a quien se saca.
     Propuesta, a confirmar por Lega (`Plan_Workspaces.md`, paso 9 de la sección 11): antes de borrar lo
     del workspace en el dispositivo, si hay cambios sin subir, la app ofrece bajarlos como archivo.
+
+## Decididas en la implementación, a confirmar por Lega (2026-09-30)
+
+Decisiones de diseño que el plan no fijaba, tomadas al implementar los pasos 5 a 13 de
+`Plan_Workspaces.md` con la opción más simple que no cierra caminos. Siguen así hasta que Lega diga otra
+cosa.
+
+- **Crear proyectos:** con las políticas del equipo, solo el dueño y los admins. Las cuentas `member` que
+  ya tenían proyectos conservan todo lo suyo pero no crean proyectos nuevos (se las puede pasar a admin).
+- **Sacar a alguien:** su dispositivo no borra nada solo; ofrece bajar lo que no subió (un archivo con los
+  cambios y cada original pendiente) y borra recién cuando la persona toca *Remove from this device*. Sus
+  proyectos compartidos pasan a un dueño o admin con permiso sobre el proyecto entero; si no hay, quedan
+  como están.
+- **Invitaciones:** una sola viva por correo; invitar de nuevo suma permisos y conserva quién invitó;
+  se pueden revocar. Un correo nuevo en *Share* entra como invitado (*Guest*) por defecto.
+- **Sesiones con contraseña:** la base no les da acceso a nada (la app entra solo con código o link),
+  para que abrir el registro a invitados no permita quedarse con la cuenta de otro.
+- **Archivos:** con portero, también las fotos van a Drive. La carpeta del día es el día en que se agregó
+  el archivo en el dispositivo. El original queda también en el dispositivo después de subir.
+- **Papelera de archivos:** la ve quien tiene "editar y crear páginas" sobre el proyecto; mandar a la
+  papelera de Drive, solo el dueño y los admins; una vez pedido no vuelve atrás desde la app (se recupera
+  desde la papelera de Drive). Un archivo pegado en otro proyecto se ve como "Photo from another project"
+  y nunca entra a la papelera mientras se use.
+- **Comentarios:** atajo Ctrl/⌘+Alt+M; preguntas Ctrl/⌘+Alt+P; borrar un comentario lo marca (el texto
+  queda en la base). Los invitados ven los correos de quienes comentan (D-18).
+- **Varios workspaces:** cambiar de workspace recarga la app; el de la compilación (Wanka) no se puede
+  quitar del dispositivo; un link cuya clave local ya usa otro workspace con otra dirección se rechaza.
+- **Restaurar sobre el mismo proyecto:** nunca devuelve accesos quitados; las cuentas borradas después de
+  la copia vuelven bloqueadas hasta que el dueño decida.
 
 ## Abiertas
 

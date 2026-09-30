@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { supabase } from '../supabase';
+// Los mensajes van en inglés (se guardan con la subida); se traducen al mostrarlos (`localize`).
+import { stored as t } from '../i18n';
 
 // Cliente del portero de archivos del workspace (ver portero/src/core.ts): el estado de la conexión con
 // el Drive del dueño, las subidas por partes y los pases para ver un archivo. Sin React, para poder
@@ -21,6 +22,22 @@ export interface DriveStatus {
   /** La cuenta de Google conectada; solo la ve el dueño. */
   email: string | null;
   isOwner: boolean;
+  /**
+   * Dónde está la carpeta `LGA_ShotDocs` (solo se le dice al dueño): la carpeta de Drive elegida, o `null`
+   * si va en la raíz de *My Drive*. Un portero anterior al paso 8 no lo manda.
+   */
+  folder?: { id: string; name: string } | null;
+  /** El portero tiene la clave del selector de carpetas de Google (`GOOGLE_API_KEY`). */
+  picker?: boolean;
+}
+
+/** Lo que necesita el selector de carpetas de Google (Google Picker) en el navegador del dueño. */
+export interface PickerConfig {
+  apiKey: string;
+  /** El número del proyecto de Google Cloud. */
+  appId: string;
+  /** Token de acceso de Google de corta duración, solo con `drive.file`. */
+  token: string;
 }
 
 export interface DriveFile {
@@ -28,6 +45,26 @@ export interface DriveFile {
   name: string;
   mimeType: string;
   size: number;
+}
+
+/** El resultado de una subida. `linked: false`: terminó en Drive pero la base todavía no se enteró. */
+export interface UploadResult extends DriveFile {
+  linked?: boolean;
+}
+
+/** Un archivo de la app (fila de `files`): el portero lo sube a `LGA_ShotDocs/<Proyecto>/<day>`. */
+export interface AppFile {
+  /** El id de la fila de `files` (uuid creado en el dispositivo). */
+  id: string;
+  /** El día local en que se agregó, `AAAA-MM-DD`: la carpeta del día en Drive. */
+  day: string;
+}
+
+/** La respuesta de `POST /trash`. */
+export interface TrashResult {
+  status: 'done';
+  file: string;
+  drive: 'trashed' | 'missing' | 'none';
 }
 
 export interface UploadProgress {
@@ -45,6 +82,14 @@ export interface UploadOptions {
   signal?: AbortSignal;
   /** Una subida que quedó a medias: se pregunta cuánto llegó y se sigue desde ahí. */
   resume?: string | null;
+  /** Sube un archivo de la app (con permisos por página); sin esto, la prueba de media (solo el dueño). */
+  appFile?: AppFile;
+  /**
+   * El archivo ya llegó a Drive y solo falta que la base se entere: se le pregunta al portero (que le avisa
+   * a la base) pero nunca se vuelve a mandar el archivo. Si el portero abriría una subida nueva, falla con
+   * `AlreadySentError` sin mandar nada.
+   */
+  onlyIfSent?: boolean;
 }
 
 export interface PorteroDeps {
@@ -55,12 +100,16 @@ export interface PorteroDeps {
   wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
-/** `retryable`: puede andar si se repite (se cortó la red, el portero o Drive fallaron un momento). */
+/**
+ * `retryable`: puede andar si se repite (se cortó la red, el portero o Drive fallaron un momento). `code`: el
+ * código que manda el portero con algunos errores (por ejemplo `in_use` o `drive_not_connected` en `/trash`).
+ */
 export class PorteroError extends Error {
   constructor(
     message: string,
     readonly status = 0,
     readonly retryable = false,
+    readonly code?: string,
   ) {
     super(message);
     this.name = 'PorteroError';
@@ -81,10 +130,17 @@ export class UploadError extends PorteroError {
   }
 }
 
-async function sessionToken(): Promise<string | null> {
-  if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+/** Con `onlyIfSent`, el portero no sabe que el archivo ya llegó y abriría una subida nueva. */
+export class AlreadySentError extends PorteroError {
+  constructor() {
+    super(t('portero.alreadySent'), 409, false);
+    this.name = 'AlreadySentError';
+  }
+}
+
+/** El token de la sesión del workspace; se pide en cada pedido porque se renueva solo. */
+export function sessionToken(client: SupabaseClient): () => Promise<string | null> {
+  return async () => (await client.auth.getSession()).data.session?.access_token ?? null;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -113,15 +169,20 @@ export function retryDelay(failures: number): number {
 }
 
 /** La dirección del portero, de `workspace_settings.media_url`; `null` si el workspace no tiene. */
-export async function readMediaUrl(client: SupabaseClient | null = supabase): Promise<string | null> {
-  if (!client) return null;
+export async function readMediaUrl(client: SupabaseClient): Promise<string | null> {
   const { data, error } = await client.from('workspace_settings').select('*').maybeSingle();
-  if (error) throw new PorteroError(`Could not read the workspace settings (${error.message}).`);
+  if (error) throw new PorteroError(t('portero.settings', { reason: error.message }));
   const url = (data as { media_url?: string | null } | null)?.media_url;
   return url ? url.replace(/\/+$/, '') : null;
 }
 
-type ChunkAnswer = { status: 'incomplete'; received: number } | { status: 'done'; file: DriveFile };
+type ChunkAnswer = { status: 'incomplete'; received: number } | { status: 'done'; file: DriveFile; linked?: boolean };
+
+/** El día local de una fecha, `AAAA-MM-DD` (la carpeta del día en Drive). */
+export function localDay(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 
 export class Portero {
   private readonly http: typeof fetch;
@@ -135,7 +196,7 @@ export class Portero {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     // `fetch` suelto pierde su `this` en Safari: se llama siempre como función global.
     this.http = deps.fetch ?? ((input, init) => fetch(input, init));
-    this.token = deps.token ?? sessionToken;
+    this.token = deps.token ?? (async () => null);
     this.wait = deps.wait ?? sleep;
   }
 
@@ -143,22 +204,57 @@ export class Portero {
     return this.request<DriveStatus>('GET', '/drive/status');
   }
 
-  /** La dirección de Google para autorizar el Drive del dueño: la app navega ahí. */
-  async connect(): Promise<string> {
-    return (await this.request<{ url: string }>('POST', '/drive/connect', { json: {} })).url;
+  /**
+   * La dirección de Google para autorizar el Drive del dueño: la app navega ahí. Al terminar, Google vuelve
+   * a `returnTo` (una ruta de la app, `/…`; sin ella, `/media-test`) con `?drive=<resultado>`.
+   */
+  async connect(returnTo?: string): Promise<string> {
+    return (await this.request<{ url: string }>('POST', '/drive/connect', { json: returnTo ? { return: returnTo } : {} })).url;
   }
 
-  /** Una dirección para `<video src>` o `<img src>`. `type` fuerza el Content-Type que se devuelve. */
-  async pass(fileId: string, type?: string): Promise<string> {
-    return (await this.request<{ url: string }>('POST', '/pass', { json: type ? { fileId, type } : { fileId } })).url;
+  /**
+   * Una dirección para `<video src>` o `<img src>`, que vence a las 8 horas. `{ file }`: un archivo de la
+   * app (con el tipo de `files.mime`); un texto o `{ fileId }`: un archivo de Drive por su id (la prueba de
+   * media, solo el dueño). `type` fuerza el Content-Type que se devuelve.
+   */
+  async pass(target: string | { file: string } | { fileId: string }, type?: string): Promise<string> {
+    const ref = typeof target === 'string' ? { fileId: target } : target;
+    return (await this.request<{ url: string }>('POST', '/pass', { json: type ? { ...ref, type } : ref })).url;
+  }
+
+  /** Lo que necesita el selector de carpetas de Google (solo el dueño; 404 si el portero no tiene la clave). */
+  picker(): Promise<PickerConfig> {
+    return this.request<PickerConfig>('POST', '/drive/picker', { json: {} });
+  }
+
+  /**
+   * Dónde va la carpeta `LGA_ShotDocs`: adentro de la carpeta de Drive `parentId`, o en la raíz de *My
+   * Drive* (`null`). Si ya existe, el portero la mueve ahí. Solo el dueño.
+   */
+  async setFolder(parentId: string | null): Promise<{ id: string; name: string } | null> {
+    return (await this.request<{ folder: { id: string; name: string } | null }>('POST', '/drive/folder', { json: { parentId } }))
+      .folder;
+  }
+
+  /**
+   * Manda un archivo de la papelera de la app a la papelera de Drive (`POST /trash`): la base decide si se
+   * puede (solo dueño y admins, y solo si está en la papelera) y el portero lo mueve, nunca lo borra (Drive
+   * lo guarda 30 días). `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba)
+   * o `none` (nunca terminó de subirse). Pedirlo de nuevo no hace nada de más. Errores (`PorteroError` con
+   * el estado y, si lo manda, el código): 403 sin permiso o si el archivo de Drive no es ese; 404 si no
+   * existe; 409 con `code: 'in_use'` si una página lo volvió a usar; 503 con `code: 'drive_not_connected'`;
+   * 502 si Drive falló (se puede volver a pedir).
+   */
+  async trash(file: string): Promise<TrashResult> {
+    return this.request<TrashResult>('POST', '/trash', { json: { file } });
   }
 
   /**
    * Sube el archivo por partes, leyendo del disco solo la parte que se manda. Si una parte falla por la
    * red o por el servidor, espera, pregunta cuánto llegó y sigue desde ahí.
    */
-  async upload(file: Blob & { name?: string }, options: UploadOptions = {}): Promise<DriveFile> {
-    const { onProgress, signal } = options;
+  async upload(file: Blob & { name?: string }, options: UploadOptions = {}): Promise<UploadResult> {
+    const { onProgress, signal, appFile, onlyIfSent } = options;
     const total = file.size;
     let uploadId = options.resume ?? null;
     // Al retomar, primero se pregunta; si el portero ya no la tiene, se empieza de nuevo.
@@ -186,10 +282,19 @@ export class Portero {
       try {
         if (signal?.aborted) throw abortError(signal);
         if (!uploadId) {
-          const started = await this.request<{ uploadId: string }>('POST', '/upload', {
-            json: { name: file.name || 'file', mime: file.type || 'application/octet-stream', size: total },
+          const meta = { name: file.name || 'file', mime: file.type || 'application/octet-stream', size: total };
+          const started = await this.request<{ uploadId?: string } & Partial<ChunkAnswer>>('POST', '/upload', {
+            json: appFile ? { file: appFile.id, ...meta, day: appFile.day } : meta,
             signal,
           });
+          // Un archivo de la app que ya está en Drive (lo subió otro intento): no hay nada que mandar.
+          if (started.status === 'done' && started.file) {
+            sent = total;
+            return { ...started.file, ...(started.linked === undefined ? {} : { linked: started.linked }) };
+          }
+          // Una respuesta que no se entiende no es "sin red" (status 0): es un problema del portero.
+          if (!started.uploadId) throw new PorteroError(t('portero.notStarted'), 502, true);
+          if (onlyIfSent) throw new AlreadySentError();
           uploadId = started.uploadId;
           sent = 0;
           begin();
@@ -208,20 +313,21 @@ export class Portero {
           const end = Math.min(sent + PART_BYTES, total);
           answer = await this.chunk(uploadId, `bytes ${sent}-${end - 1}/${total}`, file.slice(sent, end), signal);
           if (answer.status === 'incomplete' && answer.received <= sent) {
-            throw new PorteroError('The part did not arrive.', 0, true);
+            throw new PorteroError(t('portero.partLost'), 0, true);
           }
         }
         if (answer.status === 'done') {
           sent = total;
           report();
-          return answer.file;
+          return { ...answer.file, ...(answer.linked === undefined ? {} : { linked: answer.linked }) };
         }
         sent = answer.received;
         // Solo una parte que llegó corta la racha de fallas; la pregunta de cuánto llegó no.
         if (!asked) failures = 0;
         report();
       } catch (err) {
-        if (signal?.aborted) throw new UploadError('Upload cancelled.', 0, uploadId, sent, true);
+        if (err instanceof AlreadySentError) throw err;
+        if (signal?.aborted) throw new UploadError(t('mediaTest.cancelled'), 0, uploadId, sent, true);
         const error =
           err instanceof PorteroError ? err : new PorteroError(err instanceof Error ? err.message : String(err));
         // Al retomar, una subida que el portero ya no tiene se empieza de cero.
@@ -236,7 +342,7 @@ export class Portero {
         }
         if (failures >= MAX_RETRIES) {
           throw new UploadError(
-            `The upload stopped after ${MAX_RETRIES} failed retries in a row: ${error.message}`,
+            t('portero.retries', { max: MAX_RETRIES, reason: error.message }),
             error.status,
             uploadId,
             sent,
@@ -248,7 +354,7 @@ export class Portero {
         try {
           await this.wait(retryDelay(failures), signal);
         } catch {
-          throw new UploadError('Upload cancelled.', 0, uploadId, sent, true);
+          throw new UploadError(t('mediaTest.cancelled'), 0, uploadId, sent, true);
         }
         // No se sabe cuánto de la parte llegó antes del corte: se pregunta antes de seguir.
         if (uploadId) ask = true;
@@ -270,7 +376,7 @@ export class Portero {
     init: { json?: unknown; body?: Blob | null; headers?: Record<string, string>; signal?: AbortSignal } = {},
   ): Promise<T> {
     const token = await this.token();
-    if (!token) throw new PorteroError('Sign in to the app first.', 401);
+    if (!token) throw new PorteroError(t('portero.signIn'), 401);
     const headers: Record<string, string> = { Authorization: `Bearer ${token}`, ...init.headers };
     let body: BodyInit | null = init.body ?? null;
     if (init.json !== undefined) {
@@ -278,27 +384,28 @@ export class Portero {
       body = JSON.stringify(init.json);
     }
     let res: Response;
-    let data: { error?: string } | null = null;
+    let data: { error?: string; code?: string } | null = null;
     try {
       res = await this.http(`${this.baseUrl}${path}`, { method, headers, body, signal: init.signal });
-      data = (await res.json().catch(() => null)) as { error?: string } | null;
+      data = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
     } catch (err) {
       if (init.signal?.aborted) throw abortError(init.signal);
-      throw new PorteroError(`No connection with the media server (${err instanceof Error ? err.message : err}).`, 0, true);
+      throw new PorteroError(t('portero.noConnection', { reason: err instanceof Error ? err.message : String(err) }), 0, true);
     }
     if (!res.ok) {
       const status = res.status;
       // Un 5xx, un tiempo agotado (408) o demasiados pedidos (429) pueden andar si se repiten; los demás 4xx no.
       const retryable = status >= 500 || status === 408 || status === 429;
-      throw new PorteroError(data?.error ?? `The media server answered ${status}.`, status, retryable);
+      const code = typeof data?.code === 'string' ? data.code : undefined;
+      throw new PorteroError(data?.error ?? t('portero.answered', { status }), status, retryable, code);
     }
-    if (data === null) throw new PorteroError('The media server gave an answer that could not be read.', res.status, true);
+    if (data === null) throw new PorteroError(t('portero.unreadable'), res.status, true);
     return data as T;
   }
 }
 
 /** El portero del workspace, o `null` si todavía no tiene. */
-export async function openPortero(deps: PorteroDeps = {}): Promise<Portero | null> {
-  const url = await readMediaUrl();
-  return url ? new Portero(url, deps) : null;
+export async function openPortero(client: SupabaseClient, deps: PorteroDeps = {}): Promise<Portero | null> {
+  const url = await readMediaUrl(client);
+  return url ? new Portero(url, { token: sessionToken(client), ...deps }) : null;
 }

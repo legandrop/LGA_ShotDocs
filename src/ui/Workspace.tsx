@@ -1,17 +1,31 @@
 import { useEffect, useState } from 'react';
 import type { AuthUser } from '../auth';
+import { t, useT } from '../i18n';
+import { clearInviteTarget, pendingInviteTarget, takeArrivalNotice } from '../invite';
 import { prefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
-import { ServicesContext, useBootServices, useServices, useTree } from '../services';
-import { supabase } from '../supabase';
+import {
+  ServicesContext,
+  useBootServices,
+  usePermissions,
+  useRemoved,
+  useServices,
+  useSyncStatus,
+  useTree,
+} from '../services';
+import { useWorkspace } from '../workspace';
 import { MenuIcon, MoreIcon, PlusIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
-import { useNotice } from './notice';
-import { lastPageOf, rememberPage, useCurrentProject } from './project';
-import { MediaTest } from './MediaTest';
-import { focusTitle, PageView } from './PageView';
+import { notify, useNotice } from './notice';
+import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
+import { RemovedScreen } from './RemovedScreen';
+import type { ShareTarget } from './ShareDialog';
+import { MediaTest, ShareDialog } from './lazyDialogs';
+import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
+import { focusTitle, PageView, preloadPageParts } from './PageView';
+import { CommentsToggle } from './CommentsToggle';
 import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
@@ -21,26 +35,26 @@ import { TrashView } from './TrashView';
 const LEGACY_LAST_PAGE_KEY = 'shotdocs-last-page';
 
 export function Workspace({ user }: { user: AuthUser }) {
-  const boot = useBootServices(user);
+  const workspace = useWorkspace();
+  const { client } = workspace;
+  const boot = useBootServices(workspace, user);
+  const tr = useT();
 
   // Las preferencias de la cuenta (tema, fuente…) se bajan al entrar y se suben cuando cambian.
   useEffect(() => {
-    if (supabase) void prefs.attach(supabase, user.id);
+    void prefs.attach(client, user.id);
     return () => prefs.detach();
-  }, [user.id]);
+  }, [client, user.id]);
 
-  if (boot.state === 'loading') return <main className="center-screen muted">Opening your workspace…</main>;
+  if (boot.state === 'loading') return <main className="center-screen muted">{tr('shell.opening')}</main>;
   if (boot.state === 'busy') {
     return (
       <main className="center-screen">
         <div className="card">
-          <h1>Already open in another window</h1>
-          <p className="muted">
-            LGA Shot Docs is open in another tab or window. Keep working there, or close it and this one will
-            open by itself.
-          </p>
+          <h1>{tr('shell.busy.title')}</h1>
+          <p className="muted">{tr('shell.busy.text')}</p>
           <button className="link" onClick={boot.takeOver}>
-            The other window is not responding: use this one
+            {tr('shell.busy.takeOver')}
           </button>
         </div>
       </main>
@@ -50,13 +64,10 @@ export function Workspace({ user }: { user: AuthUser }) {
     return (
       <main className="center-screen">
         <div className="card">
-          <h1>Opened in another window</h1>
-          <p className="muted">
-            Another window took over, so this one stopped saving. Your edits are kept on this device; reload to
-            use this window again.
-          </p>
+          <h1>{tr('shell.lost.title')}</h1>
+          <p className="muted">{tr('shell.lost.text')}</p>
           <button className="link" onClick={() => location.reload()}>
-            Reload
+            {tr('shell.lost.reload')}
           </button>
         </div>
       </main>
@@ -66,40 +77,100 @@ export function Workspace({ user }: { user: AuthUser }) {
     return (
       <main className="center-screen">
         <div className="card">
-          <h1>Could not open your workspace</h1>
+          <h1>{tr('shell.error.title')}</h1>
           <p className="muted">{boot.message}</p>
-          <button className="link" onClick={() => void supabase!.auth.signOut({ scope: 'local' })}>
-            Sign out
+          <button className="primary" onClick={boot.retry}>
+            {tr('common.tryAgain')}
+          </button>
+          <button className="link" onClick={() => void client.auth.signOut({ scope: 'local' })}>
+            {tr('common.signOut')}
           </button>
         </div>
       </main>
     );
   }
+  if (boot.state === 'empty') return <NoProjects user={user} onRetry={boot.retry} />;
   return (
     <ServicesContext.Provider value={boot.services}>
-      <Shell />
+      <Gate />
     </ServicesContext.Provider>
   );
+}
+
+/** Si la base dijo que sacaron a la persona del workspace, en vez de la app va la pantalla que lo explica. */
+function Gate() {
+  return useRemoved() ? <RemovedScreen /> : <Shell />;
+}
+
+/**
+ * Después de entrar con un link de invitación, abre la página o el proyecto del link apenas el árbol lo
+ * tiene. Si después de sincronizar no está (la invitación no daba acceso a eso), avisa y lo olvida.
+ */
+function useInviteTarget(): void {
+  const tree = useTree();
+  const status = useSyncStatus();
+  const switchTo = useSwitchProject();
+  const key = useServices().workspace.config.storage.inviteTarget;
+  const revision = tree.getRevision();
+  useEffect(() => {
+    const target = pendingInviteTarget(key);
+    if (!target) return;
+    if (tree.get(target)) {
+      clearInviteTarget(key);
+      navigate(pagePath(target));
+    } else if (tree.project(target) && status.lastSyncAt !== null) {
+      clearInviteTarget(key);
+      switchTo(target);
+    } else if (status.lastSyncAt !== null) {
+      clearInviteTarget(key);
+      notify(t('invite.targetMissing'));
+    }
+  }, [tree, revision, status.lastSyncAt, switchTo, key]);
 }
 
 function Shell() {
   const route = useRoute();
   const tree = useTree();
-  const { docs, user } = useServices();
+  const { comments, docs, media, user, workspace } = useServices();
+  const keys = workspace.config.storage;
   const [navOpen, setNavOpen] = useState(false);
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [formatting, setFormatting] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<ShareTarget | null>(null);
   const [notice, dismissNotice] = useNotice();
-
-  // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación.
+  const perms = usePermissions();
+  const tr = useT();
+  useInviteTarget();
+  // Un link de invitación que no sirvió (roto, o de un workspace que no se pudo agregar), abierto con la
+  // sesión ya iniciada: el aviso va acá.
   useEffect(() => {
+    const message = takeArrivalNotice();
+    if (message) notify(message);
+  }, []);
+
+  // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación. Lo mismo
+  // espera la recarga que sigue a publicar una versión nueva (lazyPart.tsx).
+  useEffect(() => {
+    const unsaved = () =>
+      docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites() || comments.hasUnsavedWrites();
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (docs.hasUnsavedEdits() || tree.hasUnsavedWrites()) e.preventDefault();
+      if (!unsaved()) return;
+      e.preventDefault();
+      // Safari y los Chrome viejos preguntan solo con `returnValue`.
+      e.returnValue = '';
     };
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [docs, tree]);
+    const unwatch = watchPendingWrites({ unsaved, flush: () => docs.flush() });
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      unwatch();
+    };
+  }, [comments, docs, tree, media]);
+
+  // Con la barra lateral ya dibujada, el editor se baja cuando el navegador está libre: abrir una página
+  // después no espera, y una versión nueva publicada mientras tanto no deja al editor sin sus archivos.
+  useEffect(() => preloadWhenIdle({ preload: preloadPageParts }), []);
 
   useEffect(() => {
     setNavOpen(false);
@@ -110,9 +181,9 @@ function Shell() {
   const projectId = useCurrentProject();
   const revision = tree.getRevision();
   useEffect(() => {
-    if (route.name === 'page') rememberPage(tree, user.id, route.id);
+    if (route.name === 'page') rememberPage(keys, tree, user.id, route.id);
     if (route.name !== 'home') return;
-    let last = lastPageOf(projectId);
+    let last = lastPageOf(keys, projectId);
     if (!last) {
       try {
         last = localStorage.getItem(LEGACY_LAST_PAGE_KEY);
@@ -122,7 +193,7 @@ function Shell() {
     }
     const page = last ? tree.get(last) : undefined;
     if (page && page.workspace_id === projectId && !tree.isTrashed(page.id)) navigate(pagePath(page.id), true);
-  }, [route, tree, revision, projectId, user.id]);
+  }, [route, tree, revision, projectId, user.id, keys]);
 
   const pageId = route.name === 'page' && tree.get(route.id) ? route.id : null;
   const crumbs = pageId ? tree.ancestors(pageId) : [];
@@ -135,14 +206,14 @@ function Shell() {
       <div className="scrim" onClick={() => setNavOpen(false)} />
       <main className="main">
         <header className="topbar">
-          <button className="icon-button only-mobile" aria-label="Open pages" onClick={() => setNavOpen(true)}>
+          <button className="icon-button only-mobile" aria-label={tr('shell.openPages')} onClick={() => setNavOpen(true)}>
             <MenuIcon />
           </button>
-          <nav className="breadcrumbs" aria-label="Location">
+          <nav className="breadcrumbs" aria-label={tr('shell.location')}>
             {crumbs.map((p) => (
               <span key={p.id}>
                 <button className="crumb" onClick={() => navigate(pagePath(p.id))}>
-                  {p.title || 'Untitled'}
+                  {p.title || tr('common.untitled')}
                 </button>
                 <span className="sep" aria-hidden="true">
                   /
@@ -151,19 +222,20 @@ function Shell() {
             ))}
             {current && (
               <span className="crumb current" aria-current="page">
-                {current.title || 'Untitled'}
+                {current.title || tr('common.untitled')}
               </span>
             )}
-            {route.name === 'trash' && <span className="crumb current">Trash</span>}
-            {route.name === 'media-test' && <span className="crumb current">Media test</span>}
+            {route.name === 'trash' && <span className="crumb current">{tr('trash.title')}</span>}
+            {route.name === 'media-test' && <span className="crumb current">{tr('mediaTest.title')}</span>}
           </nav>
           <span className="only-mobile">
             <SyncIcon onClick={() => setNavOpen(true)} />
           </span>
+          {pageId && current && <CommentsToggle pageId={pageId} />}
           {pageId && (
             <button
               className="icon-button"
-              aria-label="Page actions"
+              aria-label={tr('pageMenu.label')}
               aria-expanded={!!pageMenu}
               onClick={(e) => {
                 const anchor = e.currentTarget;
@@ -179,7 +251,9 @@ function Shell() {
         ) : route.name === 'trash' ? (
           <TrashView />
         ) : route.name === 'media-test' ? (
-          <MediaTest />
+          <Part>
+            <MediaTest />
+          </Part>
         ) : (
           <Home />
         )}
@@ -194,6 +268,7 @@ function Shell() {
           onRename={focusTitle}
           onMove={() => setMoving(pageId)}
           onFormat={() => setFormatting(pageId)}
+          onShare={perms.canSharePage(pageId) ? () => setSharing({ pageId }) : undefined}
           onTrash={async () => {
             // Primero se manda a la papelera y después se sale: si no, el inicio vuelve a la última página.
             await tree.trash(pageId);
@@ -203,11 +278,16 @@ function Shell() {
       )}
       {moving && <MoveDialog pageId={moving} onClose={() => setMoving(null)} />}
       {formatting && <PageFormatDialog pageId={formatting} onClose={() => setFormatting(null)} />}
+      {sharing && (
+        <Part onClose={() => setSharing(null)}>
+          <ShareDialog target={sharing} onClose={() => setSharing(null)} />
+        </Part>
+      )}
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
           <button className="link" onClick={dismissNotice}>
-            OK
+            {tr('common.ok')}
           </button>
         </div>
       )}
@@ -217,26 +297,100 @@ function Shell() {
 
 function Home() {
   const tree = useTree();
+  const perms = usePermissions();
   const projectId = useCurrentProject();
-  const name = tree.project(projectId)?.name ?? 'This project';
+  const tr = useT();
+  const name = tree.project(projectId)?.name ?? tr('home.thisProject');
   const empty = tree.roots(projectId).length === 0;
+  const canCreate = perms.canCreateIn(null, projectId);
   return (
     <article className="page narrow home">
-      <h1 className="page-heading">{empty ? `${name} is empty` : name}</h1>
+      <h1 className="page-heading">{empty ? tr('home.empty', { name }) : name}</h1>
       <p className="muted">
-        {empty
-          ? 'Create your first page: a show, a scene or a shoot day. Every page can hold other pages.'
-          : 'Open a page from the sidebar or create a new one.'}
+        {!canCreate
+          ? empty
+            ? tr('home.nothingShared')
+            : tr('home.openPage')
+          : empty
+            ? tr('home.createFirst')
+            : tr('home.openOrCreate')}
       </p>
-      <button
-        className="primary"
-        onClick={async () => {
-          const id = await tree.create(null, '', projectId);
-          navigate(pagePath(id));
-        }}
-      >
-        <PlusIcon size={16} /> New page
-      </button>
+      {canCreate && (
+        <button
+          className="primary"
+          onClick={async () => {
+            const id = await tree.create(null, '', projectId);
+            navigate(pagePath(id));
+          }}
+        >
+          <PlusIcon size={16} /> {tr('common.newPage')}
+        </button>
+      )}
     </article>
+  );
+}
+
+/**
+ * El usuario todavía no tiene ningún proyecto en este workspace. El dueño y los admins pueden crear el
+ * primero (con red: es la puesta en marcha); los demás esperan a que les compartan uno, y la app vuelve a
+ * preguntar sola.
+ */
+function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) {
+  const { client, config } = useWorkspace();
+  const [canCreate, setCanCreate] = useState(false);
+  // Un id por pantalla: si la respuesta se pierde y se reintenta, no se crea un segundo proyecto.
+  const [projectId] = useState(() => crypto.randomUUID());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const tr = useT();
+
+  useEffect(() => {
+    let live = true;
+    void client
+      .from('members')
+      .select('role, removed_at')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const row = data as { role: string; removed_at: string | null } | null;
+        if (live) setCanCreate(!!row && !row.removed_at && (row.role === 'owner' || row.role === 'admin'));
+      });
+    return () => {
+      live = false;
+    };
+  }, [client, user.id]);
+
+  async function create() {
+    setBusy(true);
+    setError(null);
+    const { error } = await client
+      .from('workspaces')
+      .upsert({ id: projectId, name: t('project.defaultName') }, { onConflict: 'id', ignoreDuplicates: true });
+    setBusy(false);
+    if (error) setError(error.message);
+    else onRetry();
+  }
+
+  return (
+    <main className="center-screen">
+      <div className="card">
+        <h1>{tr('noProjects.title')}</h1>
+        <p className="muted">
+          {tr(canCreate ? 'noProjects.canCreate' : 'noProjects.wait', {
+            workspace: config.name || tr('noProjects.thisWorkspace'),
+            email: user.email,
+          })}
+        </p>
+        {canCreate && (
+          <button className="primary" disabled={busy} onClick={() => void create()}>
+            <PlusIcon size={16} /> {tr('project.new')}
+          </button>
+        )}
+        {error && <p className="error">{error}</p>}
+        <button className="link" onClick={() => void client.auth.signOut({ scope: 'local' })}>
+          {tr('common.signOut')}
+        </button>
+      </div>
+    </main>
   );
 }

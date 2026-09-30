@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { useT } from '../i18n';
 import { navigate, pagePath, useRoute } from '../router';
-import { useServices, useTree } from '../services';
+import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
 import { AccountIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, TrashIcon } from './icons';
 import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
+import { DriveDialogHost, MembersDialog, ShareDialog } from './lazyDialogs';
+import { Part } from './lazyPart';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { useCurrentProject } from './project';
@@ -25,18 +29,33 @@ type DropZone = 'before' | 'inside' | 'after';
 
 export function Sidebar() {
   const tree = useTree();
+  const perms = usePermissions();
   const { user } = useServices();
   const route = useRoute();
   const activeId = route.name === 'page' ? route.id : null;
   const projectId = useCurrentProject();
+  const tr = useT();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ id: string; position: MenuPosition; anchor: HTMLElement } | null>(null);
   const [account, setAccount] = useState<MenuPosition | null>(null);
   const accountButton = useRef<HTMLButtonElement>(null);
+  // "Google Drive" (menú de la cuenta). Al volver de conectar Drive, Google deja `?drive=<resultado>` en la
+  // dirección (salvo en Media test, que lo muestra ella): el diálogo se abre con el resultado.
+  const [drive, setDrive] = useState<{ result: string | null } | null>(() => {
+    const result = location.pathname === '/media-test' ? null : new URLSearchParams(location.search).get('drive');
+    return result === null ? null : { result };
+  });
+  useEffect(() => {
+    if (drive?.result && new URLSearchParams(location.search).has('drive')) {
+      history.replaceState(history.state, '', location.pathname + location.hash);
+    }
+  }, [drive]);
   const [moving, setMoving] = useState<string | null>(null);
   const [formatting, setFormatting] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<string | null>(null);
+  const [members, setMembers] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ id: string; zone: DropZone } | null>(null);
 
@@ -74,12 +93,27 @@ export function Sidebar() {
     return !!dragging && dragging !== targetId && !tree.isDescendant(targetId, dragging);
   }
 
+  /** Dónde queda la página si se suelta ahí: adentro de `page`, o al lado (con su padre). */
+  function dropParent(page: PageRow, zone: DropZone): string | null {
+    if (zone === 'inside') return page.id;
+    return page.parent_id && tree.get(page.parent_id) ? page.parent_id : null;
+  }
+
+  /** Soltar ahí pide 4 en la página que se mueve y en el destino. */
+  function allowedZone(page: PageRow, zone: DropZone): boolean {
+    return !!dragging && perms.canMove(dragging, dropParent(page, zone));
+  }
+
   function onDragOver(e: DragEvent, page: PageRow) {
     if (!canDrop(page.id)) return;
-    e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
     const y = (e.clientY - rect.top) / rect.height;
     const zone: DropZone = y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside';
+    if (!allowedZone(page, zone)) {
+      if (drop?.id === page.id) setDrop(null);
+      return;
+    }
+    e.preventDefault();
     if (drop?.id !== page.id || drop.zone !== zone) setDrop({ id: page.id, zone });
   }
 
@@ -89,7 +123,7 @@ export function Sidebar() {
     const zone = drop?.zone;
     setDragging(null);
     setDrop(null);
-    if (!id || !zone || !canDrop(page.id)) return;
+    if (!id || !zone || !canDrop(page.id) || !perms.canMove(id, dropParent(page, zone))) return;
     if (zone === 'inside') {
       await tree.move(id, page.id);
       expand(page.id);
@@ -121,7 +155,7 @@ export function Sidebar() {
           style={{ paddingLeft: 4 + depth * 18 }}
           data-tip={split ? page.title : undefined}
           data-tip-plain
-          draggable={renaming !== page.id}
+          draggable={renaming !== page.id && perms.canManagePage(page.id)}
           onDragStart={(e) => {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', page.id);
@@ -147,7 +181,7 @@ export function Sidebar() {
           {children.length > 0 ? (
             <button
               className="toggle"
-              aria-label={open ? 'Collapse' : 'Expand'}
+              aria-label={open ? tr('sidebar.collapse') : tr('sidebar.expand')}
               tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation();
@@ -180,13 +214,13 @@ export function Sidebar() {
                 data-tip-plain
                 data-tip-overflow
               >
-                {page.title || 'Untitled'}
+                {page.title || tr('common.untitled')}
               </span>
             </span>
           )}
           <span className="row-actions">
             <button
-              aria-label="More actions"
+              aria-label={tr('sidebar.moreActions')}
               onClick={(e) => {
                 e.stopPropagation();
                 const anchor = e.currentTarget;
@@ -195,16 +229,18 @@ export function Sidebar() {
             >
               <MoreIcon size={16} />
             </button>
-            <button
-              aria-label="Add a page inside"
-              data-tip="Add a page inside"
-              onClick={(e) => {
-                e.stopPropagation();
-                void newPage(page.id);
-              }}
-            >
-              <PlusIcon size={16} />
-            </button>
+            {perms.canManagePage(page.id) && (
+              <button
+                aria-label={tr('sidebar.addInside')}
+                data-tip={tr('sidebar.addInside')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void newPage(page.id);
+                }}
+              >
+                <PlusIcon size={16} />
+              </button>
+            )}
           </span>
         </div>
         {open && children.length > 0 && renderList(page.id, children, depth + 1, 'group')}
@@ -214,22 +250,25 @@ export function Sidebar() {
 
   const roots = tree.roots(projectId);
   const trashCount = tree.trashed(projectId).length;
+  const canCreateRoot = perms.canCreateIn(null, projectId);
 
   return (
-    <nav className="sidebar" aria-label="Pages">
+    <nav className="sidebar" aria-label={tr('sidebar.pages')}>
       <ProjectSwitcher />
       <SyncBadge />
 
       <div className="section-title">
-        <span className="mono-label">Pages</span>
-        <button aria-label="New page" data-tip="New page" onClick={() => void newPage(null)}>
-          <PlusIcon size={16} />
-        </button>
+        <span className="mono-label">{tr('sidebar.pages')}</span>
+        {canCreateRoot && (
+          <button aria-label={tr('common.newPage')} data-tip={tr('common.newPage')} onClick={() => void newPage(null)}>
+            <PlusIcon size={16} />
+          </button>
+        )}
       </div>
       {renderList(null, roots, 0, 'tree')}
-      {roots.length === 0 && (
+      {roots.length === 0 && canCreateRoot && (
         <button className="empty-new" onClick={() => void newPage(null)}>
-          <PlusIcon size={16} /> New page
+          <PlusIcon size={16} /> {tr('common.newPage')}
         </button>
       )}
 
@@ -239,7 +278,8 @@ export function Sidebar() {
           className={`footer-item${route.name === 'trash' ? ' active' : ''}`}
           onClick={() => navigate('/trash')}
         >
-          <TrashIcon size={17} /> Trash{trashCount > 0 ? ` (${trashCount})` : ''}
+          <TrashIcon size={17} /> {tr('trash.title')}
+          {trashCount > 0 ? ` (${trashCount})` : ''}
         </button>
         <button
           ref={accountButton}
@@ -258,7 +298,36 @@ export function Sidebar() {
         </button>
       </div>
 
-      {account && <AccountMenu position={account} anchor={accountButton.current} onClose={() => setAccount(null)} />}
+      {account && (
+        <AccountMenu
+          position={account}
+          anchor={accountButton.current}
+          onClose={() => setAccount(null)}
+          onDrive={() => setDrive({ result: null })}
+          onMembers={() => setMembers(true)}
+        />
+      )}
+      {members &&
+        createPortal(
+          <Part onClose={() => setMembers(false)}>
+            <MembersDialog onClose={() => setMembers(false)} />
+          </Part>,
+          document.body,
+        )}
+      {sharing &&
+        createPortal(
+          <Part onClose={() => setSharing(null)}>
+            <ShareDialog target={{ pageId: sharing }} onClose={() => setSharing(null)} />
+          </Part>,
+          document.body,
+        )}
+      {drive &&
+        createPortal(
+          <Part onClose={() => setDrive(null)}>
+            <DriveDialogHost result={drive.result} onClose={() => setDrive(null)} />
+          </Part>,
+          document.body,
+        )}
       {menu && (
         <PageMenu
           pageId={menu.id}
@@ -269,6 +338,7 @@ export function Sidebar() {
           onRename={() => setRenaming(menu.id)}
           onMove={() => setMoving(menu.id)}
           onFormat={() => setFormatting(menu.id)}
+          onShare={perms.canSharePage(menu.id) ? () => setSharing(menu.id) : undefined}
           onTrash={async () => {
             const id = menu.id;
             const wasOpen = !!activeId && (activeId === id || tree.isDescendant(activeId, id));

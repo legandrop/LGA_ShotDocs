@@ -41,6 +41,12 @@ export interface ProjectRow {
   id: string;
   name: string;
   created_at: string;
+  /**
+   * Quien creó el proyecto (`workspaces.owner_id`): tiene 4 sobre él mientras sea miembro activo. Falta en
+   * un proyecto creado en el dispositivo que todavía no volvió del servidor (lo creó esta persona) y en
+   * las copias guardadas por versiones anteriores de la app.
+   */
+  owner_id?: string | null;
 }
 
 export interface NewProject {
@@ -83,6 +89,79 @@ export interface WorkspaceSettings {
   schemaVersion: number;
   /** Dirección del portero de archivos del workspace (ver portero/); `null` si todavía no hay. */
   mediaUrl: string | null;
+  /** El dueño del workspace (el único que conecta su Drive); `null` si la base todavía no lo tiene. */
+  ownerId?: string | null;
+  /** Nombre del workspace (`name`); `null` si la base todavía no lo tiene. */
+  name?: string | null;
+  /** Clave local del workspace (`local_key`), la que viaja en los links de invitación. */
+  localKey?: string | null;
+  /**
+   * El borrado automático de la papelera de archivos a los 30 días (`auto_purge_files`, paso 11). Apagado
+   * hasta que Lega lo confirme; `false` también si la base todavía no tiene la columna.
+   */
+  autoPurgeFiles?: boolean;
+}
+
+/** Un archivo nuevo para `register_file` (el proyecto sale de la página). */
+export interface NewMediaFile {
+  id: string;
+  pageId: string;
+  name: string;
+  mime: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+}
+
+/** Lo que la app lee de `files`. */
+export interface MediaFileRow {
+  id: string;
+  name: string;
+  mime: string;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+  thumb_at: string | null;
+  drive_id: string | null;
+  /**
+   * La papelera de archivos (versión 6 de la base; en una anterior faltan): desde cuándo ninguna página lo
+   * usa, cuándo un dueño o admin pidió mandarlo a la papelera de Drive y cuándo el portero lo confirmó.
+   */
+  trashed_at?: string | null;
+  purged_at?: string | null;
+  drive_trashed_at?: string | null;
+  /** El proyecto del archivo. */
+  project_id?: string | null;
+}
+
+/** Una fila de `trashed_files`: un archivo en la papelera que todavía no llegó a la papelera de Drive. */
+export interface TrashedFileRow {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  thumb_at: string | null;
+  /** Cuándo entró a la papelera. */
+  trashed_at: string;
+  /** Cuántos días faltan para los 30 (30 el día que entra, 0 si ya pasaron). */
+  days_left: number;
+  /** Ya se pidió mandarlo a la papelera de Drive y el portero todavía no lo confirmó (se puede repetir). */
+  purged_at: string | null;
+  /**
+   * Lo usa una página que está en la papelera de páginas (ella o una de arriba): restaurarla lo vuelve a
+   * usar, salvo que ya se haya mandado a la papelera de Drive. Falta en una base sin esa columna.
+   */
+  in_trashed_page?: boolean;
+  /** El título de esa página. */
+  trashed_page_title?: string | null;
+}
+
+/** Una fila de `files_due_for_purge`. */
+export interface DueFileRow {
+  id: string;
+  name: string;
+  trashed_at: string;
 }
 
 export interface RemoteUpdate {
@@ -110,6 +189,14 @@ export function isPermanent(err: unknown): boolean {
 
 export function isNetworkError(err: unknown): boolean {
   return err instanceof RemoteError && err.network;
+}
+
+/** La consulta venció su tope de tiempo (ver `timed` en remote.ts). Cuenta como sin red: se reintenta. */
+export const REQUEST_TIMEOUT = 'request_timeout';
+
+/** Una consulta que venció su tope (o se cortó): la red anda, pero muy lenta para lo que se pidió. */
+export function isTimeout(err: unknown): boolean {
+  return err instanceof RemoteError && (err.code === REQUEST_TIMEOUT || /^(AbortError|TimeoutError)\b/.test(err.message));
 }
 
 export function errorMessage(err: unknown): string {

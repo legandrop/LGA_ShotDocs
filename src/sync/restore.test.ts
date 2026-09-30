@@ -222,6 +222,23 @@ describe('versión mínima del workspace', () => {
     expect(await read(c, page)).toBe('Hecho con la versión vieja.');
   });
 
+  it('una base más vieja que la que pide la app avisa y no frena la subida', async () => {
+    const server = new FakeServer();
+    const a = await makeDevice(server, undefined, '0.030', {}, 2);
+    devices.push(a);
+    const page = await a.tree.create(null, 'Escena');
+    await write(a, page, (t) => t.insert(0, 'Texto.'));
+    await a.engine.syncNow();
+    expect(a.engine.getStatus().schemaBehind).toEqual([1, 2]);
+    expect(a.engine.getStatus().pendingPages).toBe(0);
+    expect(server.updates.get(page)?.length ?? 0).toBeGreaterThan(0);
+
+    // El dueño aplica las migraciones: el aviso se va solo en la próxima sincronización.
+    server.settings = { ...server.settings!, schemaVersion: 2 };
+    await a.engine.syncNow();
+    expect(a.engine.getStatus().schemaBehind).toBeNull();
+  });
+
   it('una base sin la tabla de ajustes sigue sincronizando', async () => {
     const server = new FakeServer();
     server.settings = null;

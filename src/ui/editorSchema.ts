@@ -11,7 +11,8 @@ import {
 } from '@blocknote/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from './driveCard';
 
 // --- Script (guion) ----------------------------------------------------------------------------------
 //
@@ -27,6 +28,27 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 // degradar así en una versión vieja.
 
 export const SCRIPT_PROP = 'script';
+
+// --- Preguntas ---------------------------------------------------------------------------------------
+//
+// Un párrafo marcado como pregunta (paso 10 de Docs/Plan_Workspaces.md): se ve con un ícono de pregunta y
+// un color suave, y su respuesta es un hilo de comentarios de ese bloque (ver sync/comments.ts), así un
+// invitado con el permiso Comentar contesta sin escribir la página. Igual que Script, NO es un tipo de
+// bloque nuevo sino un párrafo con `question: true`: una versión de la app que no lo conoce lo muestra
+// como párrafo común, y si alguien edita esa línea en la versión vieja se pierde solo la marca (el texto
+// queda, y los comentarios siguen anclados al id del bloque). Script y pregunta no van juntos.
+
+export const QUESTION_PROP = 'question';
+
+// --- Tarjetas de Drive -------------------------------------------------------------------------------
+//
+// Un link de Drive que se ve como tarjeta con el reproductor (paso 13): un párrafo con el link y
+// `driveCard: true` (ver driveCard.ts). Si se pierde la propiedad, queda el párrafo con el link. No va
+// junto con Script ni con pregunta.
+
+export { DRIVE_CARD_PROP };
+/** El atajo de las preguntas (en el formato de ProseMirror): Ctrl/⌘+Alt+P. */
+export const QUESTION_SHORTCUT = 'Mod-Alt-p';
 
 /** Una "Í" pegada desde macOS puede venir descompuesta (I + tilde combinada). */
 const I_ACUTE = '(?:Í|I\\u0301)';
@@ -59,7 +81,8 @@ export function scriptMarks(text: string): [number, number, string][] {
   return out.sort((a, b) => a[0] - b[0]);
 }
 
-const isScript = (node: PMNode) => node.type.name === 'paragraph' && node.attrs[SCRIPT_PROP] === true;
+const isScript = (node: PMNode) =>
+  node.type.name === 'paragraph' && node.attrs[SCRIPT_PROP] === true && node.attrs[QUESTION_PROP] !== true;
 
 function decorate(doc: PMNode): DecorationSet {
   const decorations: Decoration[] = [];
@@ -97,26 +120,50 @@ const scriptMarksPlugin = new Plugin<DecorationSet>({
 const createParagraph = createBlockSpec(
   {
     type: 'paragraph',
-    propSchema: { ...defaultProps, [SCRIPT_PROP]: { default: false } },
+    propSchema: {
+      ...defaultProps,
+      [SCRIPT_PROP]: { default: false },
+      [QUESTION_PROP]: { default: false },
+      [DRIVE_CARD_PROP]: { default: false },
+    },
     content: 'inline',
   },
   {
     meta: { isolating: false },
     parse: (element) => {
       if (element.tagName !== 'P' || !element.textContent?.trim()) return undefined;
-      return { ...parseDefaultProps(element), [SCRIPT_PROP]: element.classList.contains('script-line') };
+      const question = element.classList.contains('question-line');
+      const script = !question && element.classList.contains('script-line');
+      return {
+        ...parseDefaultProps(element),
+        [SCRIPT_PROP]: script,
+        [QUESTION_PROP]: question,
+        [DRIVE_CARD_PROP]: !question && !script && element.classList.contains('drive-card-line'),
+      };
     },
-    render: (block) => {
+    render: function (block, editor) {
+      // La tarjeta de Drive, solo en el editor y con un link de Drive válido; si no, un párrafo común.
+      const ctx = this as { renderType?: string; props?: { node: PMNode; view: EditorView; getPos: () => number | undefined } };
+      const link = isDriveCard(block.props) ? driveLinkInContent(block.content) : null;
+      if (link && ctx.renderType === 'nodeView' && ctx.props) {
+        return createDriveCardView({ link, node: ctx.props.node, editor, view: ctx.props.view, getPos: ctx.props.getPos });
+      }
       const dom = document.createElement('p');
-      if (block.props[SCRIPT_PROP]) dom.className = 'script-line';
+      if (block.props[QUESTION_PROP]) dom.className = 'question-line';
+      else if (block.props[SCRIPT_PROP]) dom.className = 'script-line';
       return { dom, contentDOM: dom };
     },
     toExternalHTML: (block) => {
       const dom = document.createElement('p');
       addDefaultPropsExternalHTML(block.props, dom);
-      if (block.props[SCRIPT_PROP]) {
+      if (block.props[QUESTION_PROP]) {
+        dom.className = 'question-line';
+      } else if (block.props[SCRIPT_PROP]) {
         dom.className = 'script-line';
         dom.style.fontFamily = "'Courier Prime', 'Courier New', Courier, monospace";
+      } else if (isDriveCard(block.props)) {
+        // Afuera de la app (copiar a otro programa) va el link; la clase la reconoce al pegar en la app.
+        dom.className = 'drive-card-line';
       }
       return { dom, contentDOM: dom };
     },
@@ -127,9 +174,12 @@ const createParagraph = createBlockSpec(
       key: 'shotdocs-paragraph',
       prosemirrorPlugins: [scriptMarksPlugin],
       keyboardShortcuts: {
-        'Mod-Alt-0': ({ editor }) => setParagraph(editor, false),
+        'Mod-Alt-0': ({ editor }) => setParagraph(editor, 'paragraph'),
         // Ctrl/⌘+Alt+S convierte el bloque en Script.
-        'Mod-Alt-s': ({ editor }) => setParagraph(editor, true),
+        'Mod-Alt-s': ({ editor }) => setParagraph(editor, 'script'),
+        // Ctrl/⌘+Alt+P, en una pregunta (Ctrl/⌘+Alt+Q ya es la cita del editor; con AltGr, Q y E escriben
+        // "@" y "€" en los teclados en castellano).
+        [QUESTION_SHORTCUT]: ({ editor }) => setParagraph(editor, 'question'),
         // Como en un procesador de guiones: Enter en una línea de guion con texto sigue en Script; en una
         // línea vacía sale a un párrafo común.
         Enter: ({ editor }) =>
@@ -157,17 +207,57 @@ const createParagraph = createBlockSpec(
   ],
 );
 
-function setParagraph(editor: BlockNoteEditor<any, any, any>, script: boolean): boolean {
+/** Un párrafo que se ve como tarjeta de Drive (nunca Script ni pregunta a la vez). */
+function isDriveCard(props: Record<string, unknown>): boolean {
+  return props[DRIVE_CARD_PROP] === true && props[QUESTION_PROP] !== true && props[SCRIPT_PROP] !== true;
+}
+
+/**
+ * Las propiedades de cada variante del párrafo: común, Script, pregunta o tarjeta de Drive (nunca dos a la
+ * vez). Pasar una tarjeta a párrafo, Script o pregunta le saca la tarjeta (queda el link).
+ */
+export function paragraphProps(kind: 'paragraph' | 'script' | 'question' | 'driveCard'): Record<string, boolean> {
+  return { [SCRIPT_PROP]: kind === 'script', [QUESTION_PROP]: kind === 'question', [DRIVE_CARD_PROP]: kind === 'driveCard' };
+}
+
+function setParagraph(editor: BlockNoteEditor<any, any, any>, kind: 'paragraph' | 'script' | 'question'): boolean {
   const { block } = editor.getTextCursorPosition();
   if (editor.schema.blockSchema[block.type]?.content !== 'inline') return false;
-  editor.updateBlock(block, { type: 'paragraph', props: { [SCRIPT_PROP]: script } });
+  editor.updateBlock(block, { type: 'paragraph', props: paragraphProps(kind) });
   return true;
 }
 
-// En la fase 1 solo se guardan imágenes (el bucket no acepta otros archivos): sin bloques de archivo,
-// video ni audio.
+// Sin bloques de archivo, video ni audio: una versión vieja de la app los borraría (no están en su
+// esquema). Las fotos y los videos que van al Drive del dueño son un bloque `image` con la dirección
+// `sdmedia://<id>` (ver media/queue.ts); la app mira el tipo del archivo y muestra foto o video.
 const { audio: _audio, file: _file, video: _video, ...blockSpecs } = defaultBlockSpecs;
 
+// Lo que ofrece el bloque `image` al elegir, pegar o soltar un archivo. Con portero acepta también
+// videos (sin esto, BlockNote buscaría un bloque `video`); sin portero, solo imágenes, como antes (ver
+// `setVideosAccepted`). Es solo lo que ofrece el selector: el bloque guardado es el mismo de siempre.
+const imageAccept: string[] = ['image/*'];
+const image = {
+  ...blockSpecs.image,
+  implementation: {
+    ...blockSpecs.image.implementation,
+    meta: { ...blockSpecs.image.implementation.meta, fileBlockAccept: imageAccept },
+  },
+};
+
+/** El workspace tiene portero: el bloque `image` ofrece también videos. Lo llama el editor al abrirse. */
+export function setVideosAccepted(on: boolean): void {
+  imageAccept.splice(0, imageAccept.length, ...(on ? ['image/*', 'video/*'] : ['image/*']));
+}
+
 export const schema = BlockNoteSchema.create({
-  blockSpecs: { ...blockSpecs, paragraph: createParagraph() },
+  blockSpecs: { ...blockSpecs, image, paragraph: createParagraph() },
 });
+
+/**
+ * Las opciones del editor que cambian qué nodos y marcas tiene su esquema: las usa el editor de la app
+ * (PageEditor.tsx) y la prueba que compara los nombres de `unknownContent.ts` con el esquema real.
+ */
+export const editorSchemaOptions = {
+  schema,
+  tables: { splitCells: true, cellBackgroundColor: true, cellTextColor: true, headers: true },
+};

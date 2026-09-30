@@ -1,42 +1,64 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { localize, t, useT, type Translate } from '../i18n';
+import type { MediaFailure } from '../media/queue';
 import { useServices, useSyncStatus, useTree } from '../services';
 import { ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from './icons';
+import { rejectionText } from './teamText';
+import { copyText } from './commentsUi';
 import { usePendingCount } from './usePendingCount';
+import { downloadUnsynced } from './unsyncedDownload';
+import { notify } from './notice';
 
 type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
 
 const TONE_ICONS = { ok: SyncedIcon, busy: UploadingIcon, offline: OfflineIcon, warn: WarningIcon, error: ErrorIcon };
 
-function count(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
+/** Qué comentario no se pudo subir, en el detalle. */
+function commentAction(tr: Translate, kind: 'add' | 'edit' | 'delete' | 'resolve', page: string): string {
+  if (kind === 'add') return tr('sync.comment.add', { page });
+  if (kind === 'edit') return tr('sync.comment.edit', { page });
+  if (kind === 'delete') return tr('sync.comment.delete', { page });
+  return tr('sync.comment.resolve', { page });
 }
 
 function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   const status = useSyncStatus();
   const pending = usePendingCount();
-  const rejected = status.failedOps + status.rejectedPages;
+  const tr = useT();
+  const changes = tr('sync.changes', { count: pending });
+  const rejected = status.failedOps + status.rejectedPages + status.failedMedia + status.failedComments;
+  // La cola de fotos y videos tiene su propio ciclo: su error cuenta mientras le quede algo por subir.
+  const mediaError = status.pendingMedia > 0 ? status.mediaError : null;
+  const commentError = status.pendingComments > 0 ? status.commentError : null;
   let tone: Tone = 'ok';
-  let text = 'All synced';
+  let text = tr('sync.allSynced');
   if (status.localError) {
     tone = 'error';
-    text = 'Could not save on this device · retrying';
+    text = tr('sync.localError');
   } else if (!status.online) {
     tone = 'offline';
-    text = pending > 0 ? `Offline · ${count(pending, 'change', 'changes')} saved on this device` : 'Offline';
-  } else if (status.lastError && !status.syncing) {
+    text = pending > 0 ? tr('sync.offlinePending', { changes }) : tr('sync.offline');
+  } else if ((status.lastError && !status.syncing) || (mediaError && !status.uploading) || (commentError && !status.syncing)) {
     tone = 'warn';
-    text = pending > 0 ? `${count(pending, 'change', 'changes')} not uploaded · retrying` : 'Sync problem · retrying';
+    text = pending > 0 ? tr('sync.notUploadedRetrying', { changes }) : tr('sync.problem');
   } else if (status.outdated) {
     tone = 'warn';
-    text = pending > 0 ? `Update the app · ${count(pending, 'change', 'changes')} waiting` : 'Update the app';
+    text = pending > 0 ? tr('sync.updatePending', { changes }) : tr('sync.update');
   } else if (pending > 0) {
     tone = 'busy';
-    text = status.syncing ? `Uploading ${count(pending, 'change', 'changes')}…` : `${count(pending, 'change', 'changes')} not uploaded`;
+    const up = status.uploading;
+    text =
+      up && up.total > 0
+        ? tr('sync.uploadingPercent', { changes, percent: Math.floor((up.sent / up.total) * 100) })
+        : status.syncing
+          ? tr('sync.uploading', { changes })
+          : tr('sync.notUploaded', { changes });
   } else if (status.lastSyncAt === null) {
     tone = 'busy';
-    text = 'Syncing…';
+    text = tr('sync.syncing');
   }
-  if ((rejected > 0 || status.warning) && tone !== 'error') tone = 'warn';
+  // La base vieja no frena la subida: el texto sigue diciendo el estado real y el aviso va en el detalle.
+  if ((rejected > 0 || status.warning || status.mediaWarning || status.schemaBehind) && tone !== 'error') tone = 'warn';
   return { tone, text, rejected };
 }
 
@@ -55,18 +77,43 @@ export function SyncIcon({ onClick }: { onClick: () => void }) {
 export function SyncBadge() {
   const status = useSyncStatus();
   const tree = useTree();
-  const { engine } = useServices();
+  const services = useServices();
+  const { engine, media, comments } = services;
+  const pending = usePendingCount();
   const [details, setDetails] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const { tone, text, rejected } = useSyncTone();
+  const tr = useT();
   const Icon = TONE_ICONS[tone];
+  const mediaError = status.pendingMedia > 0 ? status.mediaError : null;
+  const commentError = status.pendingComments > 0 ? status.commentError : null;
   const hasDetails =
-    rejected > 0 || !!status.localError || !!status.lastError || !!status.warning || !!status.notice || status.outdated;
+    rejected > 0 ||
+    !!commentError ||
+    !!status.localError ||
+    !!status.lastError ||
+    !!mediaError ||
+    !!status.warning ||
+    !!status.mediaWarning ||
+    !!status.notice ||
+    status.outdated ||
+    !!status.schemaBehind;
+  // Las fotos y los videos detenidos por un error, con su nombre, para el detalle.
+  const [mediaFailures, setMediaFailures] = useState<MediaFailure[]>([]);
+  useEffect(() => {
+    if (!details || status.failedMedia === 0) return setMediaFailures([]);
+    let live = true;
+    void media.failures().then((list) => live && setMediaFailures(list), () => undefined);
+    return () => {
+      live = false;
+    };
+  }, [details, media, status.failedMedia]);
 
   return (
     <div className="sync">
       <button
         className={`sync-pill ${tone}`}
-        data-tip={status.localError ?? status.lastError ?? undefined}
+        data-tip={localize(status.localError ?? status.lastError ?? mediaError ?? commentError ?? '') || undefined}
         aria-expanded={hasDetails ? details : undefined}
         onClick={() => (hasDetails ? setDetails(!details) : void engine.syncNow())}
       >
@@ -75,60 +122,97 @@ export function SyncBadge() {
       </button>
       {rejected > 0 && (
         <button className="sync-warning" onClick={() => setDetails(!details)}>
-          {count(rejected, 'change', 'changes')} rejected by the server
+          {tr('sync.rejected', { count: rejected })}
         </button>
       )}
       {details && (
         <div className="sync-details">
           {status.localError && (
             <p>
-              <strong>This device could not save your last edits</strong> ({status.localError}). They are kept in
-              memory and saving is retried every few seconds. Do not close the app until this message goes away;
-              freeing up storage space usually fixes it.
+              {tr.rich('sync.detail.localError', {
+                title: <strong>{tr('sync.detail.localErrorTitle')}</strong>,
+                error: status.localError,
+              })}
             </p>
           )}
           {status.lastError && !status.localError && (
-            <p>
-              Last problem: <code>{status.lastError}</code>. Nothing is lost; syncing keeps retrying.
-            </p>
+            <p>{tr.rich('sync.detail.lastError', { error: <code>{localize(status.lastError)}</code> })}</p>
+          )}
+          {mediaError && !status.localError && (
+            <p>{tr.rich('sync.detail.mediaError', { error: <code>{localize(mediaError)}</code> })}</p>
+          )}
+          {commentError && !status.localError && (
+            <p>{tr.rich('sync.detail.commentError', { error: <code>{localize(commentError)}</code> })}</p>
           )}
           {status.outdated && (
             <p>
-              <strong>This workspace needs a newer version of the app.</strong> Your edits are saved on this device
-              and upload after updating.{' '}
+              <strong>{tr('sync.detail.outdatedTitle')}</strong> {tr('sync.detail.outdated')}{' '}
               <button className="link" onClick={() => location.reload()}>
-                Update now
+                {tr('sync.detail.updateNow')}
               </button>
             </p>
           )}
-          {status.notice && <p>{status.notice}</p>}
+          {status.schemaBehind && (
+            <p>
+              <strong>{tr('sync.detail.schemaTitle')}</strong>{' '}
+              {tr('sync.detail.schema', { has: status.schemaBehind[0], needs: status.schemaBehind[1] })}
+            </p>
+          )}
+          {status.notice && <p>{localize(status.notice)}</p>}
+          {/* Ya dice qué hacer (reabrir la app): va solo, sin el texto de los otros avisos. */}
+          {status.mediaWarning && <p>{localize(status.mediaWarning)}</p>}
           {status.warning && (
             <p>
-              <code>{status.warning}</code> Reopening the app tries again; updating the app may be needed.
+              <code>{localize(status.warning)}</code> {tr('sync.detail.warning')}
             </p>
           )}
           {rejected > 0 && (
             <>
-              <p>
-                The server did not accept these changes. Nothing was lost: they stay on this device until you
-                retry.
-              </p>
+              <p>{tr('sync.detail.rejected')}</p>
               <ul>
                 {tree.failedOps().map((f) => (
                   <li key={f.seq}>
                     {f.op.kind === 'create'
-                      ? `Create “${f.op.page.title || 'Untitled'}”`
+                      ? tr('sync.op.create', { title: f.op.page.title || tr('common.untitled') })
                       : f.op.kind === 'createProject'
-                        ? `Create the project “${f.op.project.name}”`
+                        ? tr('sync.op.createProject', { name: f.op.project.name })
                         : f.op.kind === 'renameProject'
-                          ? `Rename a project to “${f.op.name}”`
-                          : `Change “${tree.get(f.op.id)?.title || 'Untitled'}”`}
-                    : <code>{f.error}</code>
+                          ? tr('sync.op.renameProject', { name: f.op.name })
+                          : tr('sync.op.change', { title: tree.get(f.op.id)?.title || tr('common.untitled') })}
+                    : <code>{rejectionText(f.error)}</code>
                   </li>
                 ))}
                 {status.rejectedPages > 0 && (
-                  <li>{count(status.rejectedPages, 'page', 'pages')} whose content could not be uploaded</li>
+                  <li>{tr('sync.rejectedPages', { count: status.rejectedPages })}</li>
                 )}
+                {mediaFailures.map((f) => (
+                  <li key={f.id}>
+                    {tr('sync.upload', { name: f.name })}: <code>{localize(f.error)}</code>
+                  </li>
+                ))}
+                {status.failedComments > 0 &&
+                  comments.failures().map((f) => (
+                    <li key={`comment-${f.seq}`}>
+                      {commentAction(tr, f.kind, tree.get(f.pageId)?.title || tr('common.untitled'))}
+                      {f.body ? ` (“${f.body.length > 40 ? `${f.body.slice(0, 40)}…` : f.body}”)` : ''}:{' '}
+                      <code>{localize(f.error)}</code>{' '}
+                      {f.body && (
+                        <button className="link" onClick={() => void copyText(f.body ?? '')}>
+                          {tr('sync.copyText')}
+                        </button>
+                      )}{' '}
+                      <button
+                        className="link danger"
+                        onClick={() => {
+                          // Nunca se descarta solo: la persona lo pide y confirma sabiendo qué pasa.
+                          const info = comments.describeDiscard([f.seq]);
+                          if (confirm(`${info.message} ${t('common.cannotUndo')}`)) void comments.discard(f.seq);
+                        }}
+                      >
+                        {tr('common.discard')}
+                      </button>
+                    </li>
+                  ))}
               </ul>
             </>
           )}
@@ -141,7 +225,7 @@ export function SyncBadge() {
                   setDetails(false);
                 }}
               >
-                Retry
+                {tr('common.retry')}
               </button>
             )}
             {status.failedOps > 0 && (
@@ -152,11 +236,26 @@ export function SyncBadge() {
                   setDetails(false);
                 }}
               >
-                Hide what can be discarded
+                {tr('sync.hideDiscardable')}
+              </button>
+            )}
+            {/* Lo de una página que dejaron de compartir ya no se ve en el árbol, pero sigue acá: se puede bajar. */}
+            {(rejected > 0 || pending > 0) && (
+              <button
+                className="link"
+                disabled={downloading}
+                onClick={() => {
+                  setDownloading(true);
+                  void downloadUnsynced(services, status.workspaceName || services.workspace.config.name || 'Workspace')
+                    .catch(() => notify(t('sync.downloadFailed')))
+                    .finally(() => setDownloading(false));
+                }}
+              >
+                {downloading ? tr('common.preparing') : tr('sync.downloadUnsynced')}
               </button>
             )}
             <button className="link" onClick={() => setDetails(false)}>
-              Close
+              {tr('common.close')}
             </button>
           </div>
         </div>

@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
-import { schema, SCRIPT_PROP } from './editorSchema';
-import { findUnknownContent, supportsContent } from './unknownContent';
+import { editorSchemaOptions, schema, SCRIPT_PROP } from './editorSchema';
+import { findUnknownContent, knownContent, supportsContent } from './unknownContent';
 
 const editors: BlockNoteEditor[] = [];
 const devices: Device[] = [];
@@ -38,6 +38,32 @@ function mount(doc: Y.Doc, withSchema: unknown = schema): BlockNoteEditor {
 const tick = () => new Promise((r) => setTimeout(r, 30));
 
 describe('contenido que esta versión no conoce', () => {
+  it('los nombres escritos a mano son los del esquema del editor (la sincronización no carga el editor)', () => {
+    // Con las mismas opciones que el editor de la app (tablas, colaboración).
+    const editor = BlockNoteEditor.create(
+      withCollaboration({
+        ...editorSchemaOptions,
+        collaboration: { fragment: new Y.Doc().getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
+      }),
+    ) as unknown as BlockNoteEditor;
+    // `doc` y `text` están en el esquema pero nunca como elemento guardado (ver unknownContent.ts).
+    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual(Object.keys(editor.pmSchema.nodes).sort());
+    expect([...knownContent().marks].sort()).toEqual(Object.keys(editor.pmSchema.marks).sort());
+  });
+
+  it('un elemento llamado "doc" o "text" no pasa la guarda (el editor lo borraría)', () => {
+    for (const name of ['doc', 'text']) {
+      const doc = new Y.Doc();
+      const group = new Y.XmlElement('blockGroup');
+      group.insert(0, [new Y.XmlElement(name)]);
+      doc.getXmlFragment(CONTENT_FRAGMENT).insert(0, [group]);
+      expect(findUnknownContent(doc)).toBe(`"${name}"`);
+      // Aunque la lista que se pase los tenga (como el esquema entero de una versión publicada).
+      const all = { nodes: new Set([...knownContent().nodes, 'doc', 'text']), marks: knownContent().marks };
+      expect(findUnknownContent(doc, all)).toBe(`"${name}"`);
+    }
+  });
+
   it('reconoce todo lo que hace esta versión', async () => {
     const doc = new Y.Doc();
     const editor = mount(doc);

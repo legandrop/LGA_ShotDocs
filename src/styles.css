@@ -498,6 +498,7 @@ code {
 
 .login-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   font-family: var(--mono);
@@ -1425,6 +1426,81 @@ code {
   min-height: 200px;
 }
 
+/* Mientras baja el editor, que se carga aparte (roadmap B.4): renglones con el ancho del texto. Aparece
+   recién si tarda más que un instante, así una apertura desde la caché no parpadea. */
+.editor-skeleton {
+  min-height: 200px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 6px var(--gutter) 0;
+  opacity: 0;
+  animation: skeleton-in 200ms ease 250ms forwards;
+}
+
+.editor-skeleton span {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--border-soft);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.editor-skeleton span:nth-child(1) {
+  width: 92%;
+}
+
+.editor-skeleton span:nth-child(2) {
+  width: 78%;
+}
+
+.editor-skeleton span:nth-child(3) {
+  width: 85%;
+}
+
+.editor-skeleton span:nth-child(4) {
+  width: 40%;
+}
+
+@keyframes skeleton-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-skeleton span {
+    animation: none;
+  }
+}
+
+/* Una parte que se carga aparte y no se pudo bajar (lazyPart.tsx). */
+.banner.part-error {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.banner.part-error p {
+  margin: 0;
+}
+
+/* El mismo aviso para un diálogo o el carrete, que se abren encima: como diálogo. */
+.part-error-dialog p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.part-error-dialog .modal-actions {
+  gap: 8px;
+}
+
 .editor .bn-editor {
   background: transparent;
 }
@@ -1489,6 +1565,55 @@ code {
   letter-spacing: 0.04em;
   color: var(--muted-2);
   white-space: nowrap;
+}
+
+/* Papelera: pestañas Páginas / Archivos y la lista de archivos (paso 11). */
+.trash-tabs {
+  max-width: 260px;
+  margin: 16px 0 4px;
+}
+
+.trash-files-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.trash-files .trash-thumb {
+  flex: none;
+  width: 56px;
+  height: 42px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--seg-bg);
+  border: 1px solid var(--border);
+}
+
+.trash-files .trash-file {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trash-files .trash-file .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-files .trash-file .when {
+  white-space: normal;
+}
+
+.trash-files .small {
+  font-size: 12px;
+}
+
+.trash-files .trash-error {
+  color: var(--danger);
 }
 
 .notice {
@@ -2013,12 +2138,12 @@ code {
 
 :root {
   --desk: #ebe8e2;
-  --sheet-break: #dcd7cd;
+  --sheet-break: #cfc9bd;
 }
 
 :root[data-theme='dark'] {
   --desk: #0f0f0e;
-  --sheet-break: #34332f;
+  --sheet-break: #45433e;
 }
 
 .page .editor .bn-editor {
@@ -2030,25 +2155,15 @@ code {
 }
 
 .page.sheet {
+  position: relative;
   flex: none;
   width: var(--sheet-width);
   max-width: none;
-  min-height: var(--sheet-height);
+  /* Al menos una hoja; con las marcas de hoja (SheetBreaks.tsx), hasta el final de la última. */
+  min-height: max(var(--sheet-height), var(--sheet-end, 0px));
   margin: 40px auto 30vh;
   padding: var(--gutter) 0;
-  /* Una línea donde termina el texto de cada hoja: el alto de la hoja menos sus márgenes de arriba y de
-     abajo, contado desde el margen de arriba (el área de contenido). Los cortes reales llegan con el PDF. */
-  --sheet-content: calc(var(--sheet-height) - 2 * var(--gutter));
-  background:
-    repeating-linear-gradient(
-        to bottom,
-        transparent 0,
-        transparent calc(var(--sheet-content) - 1px),
-        var(--sheet-break) calc(var(--sheet-content) - 1px),
-        var(--sheet-break) var(--sheet-content)
-      )
-      content-box,
-    var(--bg);
+  background: var(--bg);
   box-shadow: 0 1px 3px rgba(27, 26, 23, 0.08), 0 10px 30px rgba(27, 26, 23, 0.08);
 }
 
@@ -2076,8 +2191,221 @@ code {
   font: inherit;
 }
 
+/* --- Marcas de hoja y vista de impresión (roadmap B.7, Docs/Doc_Hojas_PDF.md) ------------------------- */
+
+/* Dónde empieza cada hoja: una capa encima del editor, sin tocar el documento. */
+.sheet-breaks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sheet-break {
+  position: absolute;
+  left: -14px;
+  right: -14px;
+  height: 0;
+  border-top: 1px dashed var(--sheet-break);
+}
+
+.sheet-break-label {
+  position: absolute;
+  right: 14px;
+  top: -9px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 16px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* La vista de impresión (printView.ts): afuera de la pantalla, con el ancho del área de texto de la hoja.
+   Las reglas de adentro valen igual en pantalla (donde se mide) y al imprimir, así los cortes coinciden;
+   por eso no dependen del ancho de la ventana (las del teléfono se pisan acá). */
+.print-view {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+  width: var(--print-content-width);
+  visibility: hidden;
+  pointer-events: none;
+  contain: layout style;
+  --gutter: 0px;
+  --title-size: 32px;
+  --title-leading: 1.15;
+  /* Siempre en claro (el papel es blanco), sin tocar el tema de la app: los colores claros, acá. */
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --text: #1b1a17;
+  --text-2: #3a3833;
+  --muted: #5e5a52;
+  --muted-2: #6b665d;
+  --faint: #8a857b;
+  --faint-2: #b8b3a8;
+  --border: #e4e0d8;
+  --border-soft: #efece6;
+  --hover: rgba(27, 26, 23, 0.05);
+  --active: #e9e5dd;
+  --accent-text: #8a5700;
+  --question-bg: #eef2fa;
+  --question-border: #c9d6ee;
+  --question-accent: #3d5f9e;
+  background: #ffffff;
+  color: #1b1a17;
+  font-family: var(--font);
+  font-size: 14px;
+  orphans: 1;
+  widows: 1;
+  overflow-wrap: break-word;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+:root[data-font='editorial'] .print-view {
+  --title-size: 38px;
+  --title-leading: 1.08;
+}
+
+.print-view *,
+.print-view *::before,
+.print-view *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+.print-view .page-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 0;
+  margin: 0 0 8px;
+  font-size: 11px;
+}
+
+.print-view .page-header .ancestor {
+  max-width: none;
+  padding: 0;
+  color: #6b665d;
+}
+
+.print-view .page-header .nearest {
+  color: #3a3833;
+}
+
+.print-view .page-title {
+  margin: 0;
+  padding: 0 0 20px !important;
+  white-space: pre-wrap;
+}
+
+.print-view .bn-editor {
+  padding: 0 !important;
+}
+
+.print-view .bn-container[data-color-scheme] {
+  --bn-colors-editor-background: transparent;
+}
+
+/* Sin los textos de ayuda del editor ("Heading", "Enter text…"). */
+.print-view .bn-block-content::after {
+  content: none !important;
+}
+
+/* Las marcas de Script y el ícono de las preguntas, en claro aunque la app esté en oscuro. */
+.print-view .script-mark.script-place {
+  background: #dfe7dc;
+}
+
+.print-view .script-mark.script-day {
+  background: #fbe7a1;
+}
+
+.print-view .script-mark.script-night {
+  background: #cfe0fa;
+}
+
+.print-view .script-mark.script-golden {
+  background: #ffd9b8;
+}
+
+.print-view.print-view .bn-container .question-line {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%233d5f9e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1'/%3E%3C/svg%3E");
+}
+
+/* Una imagen nunca pasa del ancho imprimible ni del alto de una hoja (en pantalla, igual: ver .page.sheet). */
+.print-view img.bn-visual-media {
+  max-width: 100%;
+  max-height: calc(var(--print-content-height) - 48px);
+  object-fit: contain;
+}
+
+.page.sheet img.bn-visual-media {
+  max-height: calc(var(--sheet-height) - 2 * var(--gutter) - 48px);
+  object-fit: contain;
+}
+
+/* Las tablas sin el lugar de los botones de filas y columnas (y sin recorte, así se parten entre hojas). */
+.print-view .bn-editor [data-content-type='table'] .tableWrapper {
+  padding: 0;
+  overflow: visible;
+}
+
+/* Las tarjetas de Drive quedan como link. */
+.print-view .drive-card-foot {
+  flex-wrap: nowrap !important;
+  border-top: 0;
+}
+
+.print-view .print-fit table {
+  width: 100% !important;
+  table-layout: fixed;
+}
+
+.print-view .print-fit col {
+  width: auto !important;
+}
+
+.print-view .sheet-keep {
+  break-inside: avoid;
+}
+
+.print-view .sheet-break-before {
+  break-before: page;
+}
+
+@media print {
+  html.sd-printing,
+  html.sd-printing body,
+  html.sd-printing #root {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    /* Con el tema oscuro, el borde de la hoja también blanco. */
+    color-scheme: light !important;
+  }
+
+  html.sd-printing body > :not(.print-output) {
+    display: none !important;
+  }
+
+  html.sd-printing .print-output {
+    position: static;
+    left: auto;
+    width: auto;
+    visibility: visible;
+    contain: none;
+  }
+}
+
 @media (max-width: 760px) {
-  /* En el teléfono la hoja no entra: la página se ve libre. */
+  /* En el teléfono la hoja no entra: la página se ve libre (con las marcas de hoja). */
   .main:has(.page.sheet) {
     background: var(--bg);
   }
@@ -2090,6 +2418,21 @@ code {
     padding: 28px 0 30vh;
     background: var(--bg);
     box-shadow: none;
+  }
+
+  /* Las marcas de hoja van igual (antes del mismo bloque que en el PDF), dentro del ancho de la pantalla. */
+  .sheet-break {
+    left: 0;
+    right: 0;
+  }
+
+  .sheet-break-label {
+    right: 8px;
+    top: -7px;
+    padding: 0 4px;
+    font-size: 9px;
+    line-height: 14px;
+    opacity: 0.8;
   }
 }
 
@@ -2221,4 +2564,1346 @@ code {
 .menu-version {
   margin: 6px 12px 2px;
   text-transform: none;
+}
+
+/* Pie del menú de la cuenta: la versión a la izquierda y "Privacy · Terms" a la derecha. */
+.menu-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.menu-foot .legal-links {
+  margin: 6px 12px 2px auto;
+}
+
+/* --- Fotos y videos del Drive (sdmedia://) ------------------------------------------------------- */
+
+/* En la página, un clic en una foto o un video abre el carrete. */
+.editor [data-content-type='image'] img.bn-visual-media {
+  cursor: zoom-in;
+}
+
+/* --- Carrete (Carrete.tsx): fotos y videos de la página a pantalla completa --------------------------
+   Oscuro en los dos temas, como cualquier visor de fotos. Encima de la barra del editor y debajo de los
+   tooltips (100). */
+
+.carrete {
+  --carrete-bg: 12, 12, 11;
+  --carrete-text: #ece9e2;
+  --carrete-muted: #b3ada3;
+  --carrete-btn: rgba(255, 255, 255, 0.1);
+  --carrete-btn-hover: rgba(255, 255, 255, 0.2);
+  --carrete-panel: rgba(28, 27, 25, 0.92);
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: rgba(var(--carrete-bg), var(--carrete-fade, 1));
+  color: var(--carrete-text);
+  overscroll-behavior: contain;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+.carrete :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.carrete-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 6px 8px 6px 16px;
+  opacity: var(--carrete-fade, 1);
+}
+
+.carrete-count {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  color: var(--carrete-muted);
+}
+
+.carrete-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.carrete-btn,
+.carrete-notice-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--carrete-text);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.carrete-btn:hover:not(:disabled),
+.carrete-notice-btn:hover {
+  background: var(--carrete-btn-hover);
+}
+
+.carrete-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.carrete-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.carrete-stage[data-zoomable] {
+  cursor: zoom-in;
+}
+
+.carrete-stage[data-zoomed] {
+  cursor: grab;
+}
+
+.carrete-stage[data-zoomed]:active {
+  cursor: grabbing;
+}
+
+.carrete-track,
+.carrete-slot {
+  position: absolute;
+  inset: 0;
+}
+
+.carrete-track[data-anim] {
+  transition: transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.carrete-slot {
+  display: grid;
+  place-items: center;
+}
+
+.carrete-media {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.carrete-media[data-anim] {
+  transition: transform 220ms ease-out;
+}
+
+.carrete-media img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+
+/* La grande aparece encima de la miniatura cuando termina de dibujarse. */
+.carrete-full {
+  opacity: 0;
+}
+
+.carrete-full[data-shown] {
+  opacity: 1;
+}
+
+.carrete-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.carrete-nav {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-top: -24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  cursor: pointer;
+  opacity: var(--carrete-fade, 1);
+}
+
+.carrete-nav:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.carrete-nav:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.carrete-prev {
+  left: 12px;
+}
+
+.carrete-next {
+  right: 12px;
+}
+
+.carrete-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 12px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 8px 8px 8px 16px;
+  border-radius: 12px;
+  background: var(--carrete-panel);
+  transform: translateX(-50%);
+  font-size: 14px;
+  line-height: 1.4;
+  touch-action: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.carrete-notice p {
+  margin: 0;
+}
+
+.carrete-notice-btn {
+  background: var(--carrete-btn);
+}
+
+.carrete-spinner {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: carrete-spin 0.8s linear infinite;
+}
+
+@keyframes carrete-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.carrete-caption {
+  flex-shrink: 0;
+  max-height: 30vh;
+  margin: 0;
+  padding: 10px 16px 14px;
+  overflow-y: auto;
+  color: var(--carrete-text);
+  font-size: 15px;
+  line-height: 1.45;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  opacity: var(--carrete-fade, 1);
+  touch-action: pan-y;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+@media (max-width: 520px) {
+  .carrete-bar {
+    padding-left: 12px;
+  }
+
+  .carrete-bar .carrete-btn-label {
+    display: none;
+  }
+
+  .carrete-nav {
+    width: 44px;
+    height: 44px;
+    margin-top: -22px;
+  }
+
+  .carrete-prev {
+    left: 6px;
+  }
+
+  .carrete-next {
+    right: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carrete-track[data-anim],
+  .carrete-media[data-anim] {
+    transition: none;
+  }
+
+  .carrete-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+.drive-dialog {
+  width: min(520px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.drive-dialog p {
+  margin: 0;
+}
+
+.drive-dialog .media-actions {
+  margin: 4px 0;
+}
+
+.drive-dialog .modal-actions {
+  gap: 16px;
+}
+
+/* --- Equipo: miembros, compartir y acceso (paso 9) -------------------------------------------------- */
+
+.team-dialog {
+  width: min(560px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.team-dialog select {
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  max-width: 100%;
+}
+
+.team-lead {
+  margin: -4px 0 0;
+  font-size: 13px;
+}
+
+.team-invite {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.team-invite-row {
+  display: flex;
+  gap: 8px;
+}
+
+.team-invite-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-check {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.team-check input[type='checkbox'] {
+  width: auto;
+}
+
+.team-invite-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.team-link {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.team-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.team-list li.removed .team-email {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.team-who {
+  display: grid;
+  min-width: 0;
+}
+
+.team-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.team-role {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.team-spacer {
+  width: 52px;
+}
+
+button.link.danger {
+  color: var(--danger);
+}
+
+.menu-note {
+  margin: 4px 8px 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.login-invite {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--warn-border);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.removed-card {
+  width: min(480px, 100%);
+}
+
+.removed-media ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+@media (max-width: 520px) {
+  .team-invite-row,
+  .team-invite-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .team-list li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .team-list li .team-spacer {
+    display: none;
+  }
+}
+
+/* --- Comentarios y preguntas (paso 10) ------------------------------------------------------------- */
+
+:root {
+  --comments-width: 360px;
+  --question-bg: #eef2fa;
+  --question-border: #c9d6ee;
+  --question-accent: #3d5f9e;
+  --comment-flash: rgba(232, 178, 58, 0.22);
+}
+
+:root[data-theme='dark'] {
+  --question-bg: #1c2230;
+  --question-border: #2d3a54;
+  --question-accent: #9db8ea;
+  --comment-flash: rgba(232, 178, 58, 0.16);
+}
+
+/* Una pregunta: párrafo con `question: true`. Abajo queda lugar para el botón "Answer" (va en el margen,
+   afuera del documento). Una versión vieja de la app no pone la clase y la ve como párrafo común. */
+.bn-container .question-line {
+  position: relative;
+  padding: 7px 12px 36px 34px;
+  border: 1px solid var(--question-border);
+  border-radius: 8px;
+  background-color: var(--question-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%233d5f9e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 10px 9px;
+  background-size: 17px 17px;
+}
+
+:root[data-theme='dark'] .bn-container .question-line {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%239db8ea' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1'/%3E%3C/svg%3E");
+}
+
+.editor-host {
+  position: relative;
+}
+
+/* El margen: encima del editor, sin tapar los clics salvo en sus botones. */
+.comment-margin {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.comment-margin-button {
+  position: absolute;
+  pointer-events: auto;
+  z-index: 4;
+  height: 24px;
+  padding: 0 7px;
+  gap: 4px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.comment-count,
+.comment-add {
+  right: max(0px, calc(var(--gutter) / 2 - 16px));
+  margin-top: 1px;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.comment-count {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.comment-add {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+  opacity: 0.75;
+}
+
+.comment-add:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--text);
+}
+
+.question-answer {
+  height: 24px;
+  border-color: var(--question-border);
+  background: var(--surface);
+  color: var(--question-accent);
+}
+
+.question-answer.answered {
+  background: var(--question-bg);
+}
+
+.question-answer.resolved {
+  color: var(--muted);
+}
+
+/* El bloque al que lleva un hilo, un momento. */
+.editor [data-node-type='blockContainer'].comment-flash > .bn-block-content {
+  border-radius: 6px;
+  animation: comment-flash 1.8s ease-out;
+}
+
+@keyframes comment-flash {
+  0%,
+  40% {
+    background-color: var(--comment-flash);
+    box-shadow: 0 0 0 4px var(--comment-flash);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 4px transparent;
+  }
+}
+
+/* El botón de la barra de arriba. */
+.comments-toggle {
+  position: relative;
+}
+
+.comments-toggle[aria-pressed='true'] {
+  background: var(--active);
+}
+
+.comments-toggle-count {
+  position: absolute;
+  top: 3px;
+  right: 1px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #1b1a17;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* El panel: a la derecha en la computadora. */
+.comments-scrim {
+  display: none;
+}
+
+.comments-panel {
+  position: fixed;
+  top: calc(52px + env(safe-area-inset-top));
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  width: var(--comments-width);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: -8px 0 24px rgba(27, 26, 23, 0.06);
+}
+
+@media (min-width: 1180px) {
+  /* Con lugar, la página se corre para que el panel no la tape (el panel va adentro de la página). */
+  .main:has(.comments-panel) {
+    padding-right: var(--comments-width);
+  }
+
+  .main:has(.comments-panel) > .topbar {
+    margin-right: calc(-1 * var(--comments-width));
+  }
+}
+
+.comments-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px 10px 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.comments-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.comments-head .link {
+  font-size: 13px;
+}
+
+.comments-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 12px calc(24px + env(safe-area-inset-bottom));
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.comments-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--sidebar-bg);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.comments-note.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.comments-empty {
+  margin: 8px 4px;
+  font-size: 14px;
+}
+
+.comment-thread {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.comment-thread.focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.comment-thread.resolved {
+  background: var(--bg);
+}
+
+.comment-thread.composing {
+  border-style: dashed;
+}
+
+.thread-anchor {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 2px 0 2px 8px;
+  border: none;
+  border-left: 3px solid var(--accent);
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.thread-anchor span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+button.thread-anchor:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.thread-anchor.question {
+  border-left-color: var(--question-accent);
+  color: var(--question-accent);
+}
+
+.thread-anchor.question svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.thread-anchor.page-wide,
+.thread-anchor.gone {
+  border-left-color: var(--border);
+  font-style: italic;
+}
+
+.thread-resolved-by {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.comment {
+  display: grid;
+  gap: 3px;
+}
+
+.comment + .comment {
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.comment.deleted p {
+  margin: 0;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.comment-author {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.comment-edited,
+.comment-pending {
+  font-style: italic;
+}
+
+.comment-pending {
+  color: var(--warn);
+}
+
+.comment-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comment.pending .comment-body {
+  color: var(--text-2);
+}
+
+.comment-actions,
+.thread-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.comment-actions .link,
+.thread-actions .link {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.thread-actions .link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.link.danger,
+.comment-actions .link.danger {
+  color: var(--danger);
+}
+
+.comment-error {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--danger-border);
+  border-radius: 6px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.comment-error .row {
+  display: flex;
+  gap: 12px;
+}
+
+.comment-composer {
+  display: grid;
+  gap: 8px;
+}
+
+.comment-composer textarea {
+  width: 100%;
+  min-height: 60px;
+  resize: none;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.comment-composer textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.comment-composer .row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.comment-composer .primary {
+  height: 32px;
+  padding: 0 14px;
+}
+
+.comments-resolved {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.comments-resolved-toggle {
+  justify-self: start;
+  border: none;
+  padding: 4px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* En el teléfono, una hoja desde abajo con filas grandes para el dedo. */
+@media (max-width: 760px) {
+  .comments-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 44;
+    background: var(--scrim);
+  }
+
+  /* `--kb-inset` y `--vv-height` los pone el panel con `visualViewport`: en iOS el teclado no achica la
+     página, así que la hoja se sube por encima del teclado y no pasa del alto que queda a la vista. */
+  .comments-panel {
+    top: auto;
+    left: 0;
+    bottom: var(--kb-inset, 0px);
+    width: auto;
+    max-height: calc(var(--vv-height, 100vh) * 0.82);
+    min-height: min(40vh, calc(var(--vv-height, 100vh) * 0.6));
+    z-index: 45;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    box-shadow: var(--shadow);
+  }
+
+  .comments-head {
+    padding: 14px 8px 10px 18px;
+  }
+
+  .comment-actions .link,
+  .thread-actions .link,
+  .comments-head .link {
+    min-height: 36px;
+  }
+
+  .comment-composer textarea {
+    font-size: 16px; /* sin zoom automático en el iPhone */
+  }
+
+  .comment-count,
+  .comment-add {
+    right: -4px;
+  }
+}
+
+/* --- Workspaces: bienvenida, unirse, crear, selector (paso 12) ----------------------------------- */
+
+.welcome-card {
+  width: min(460px, 100%);
+}
+
+.welcome-card .brand-row {
+  margin-bottom: 4px;
+}
+
+.welcome-choices {
+  display: grid;
+  gap: 8px;
+}
+
+.welcome-choice {
+  width: 100%;
+  padding: 12px 14px;
+  gap: 12px;
+  align-items: flex-start;
+  text-align: left;
+  border-radius: 10px;
+}
+
+.welcome-choice > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted-2);
+}
+
+.welcome-choice > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.welcome-choice .muted {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.welcome-form {
+  display: grid;
+  gap: 12px;
+}
+
+.welcome-form h1,
+.welcome-form h2 {
+  margin: 0;
+}
+
+.welcome-form input {
+  font-size: 14px;
+}
+
+.welcome-guide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.workspaces-dialog {
+  overflow-y: auto;
+}
+
+.workspaces-dialog .muted {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.workspace-list {
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-row {
+  width: 100%;
+  min-height: 48px;
+  border: none;
+  gap: 10px;
+  text-align: left;
+}
+
+.workspace-row .monogram {
+  width: 26px;
+  height: 26px;
+  font-size: 10px;
+}
+
+.workspace-row[aria-current='true'] .project-label strong {
+  font-weight: 700;
+}
+
+.menu .workspace-more {
+  color: var(--muted);
+}
+
+button.primary.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.login-workspace {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.login-workspace strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .workspace-row {
+    min-height: 60px;
+  }
+
+  .welcome-form input {
+    font-size: 16px; /* sin zoom automático en el iPhone */
+  }
+}
+
+/* --- Privacidad y condiciones (/privacy, /terms), públicas ------------------------------------------ */
+
+/* "Privacy · Terms": en el pie del login, en la tarjeta de bienvenida y en el menú de la cuenta. */
+.legal-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted-2);
+}
+
+.legal-links a {
+  color: inherit;
+  text-decoration: none;
+  padding: 2px 0;
+}
+
+.legal-links a:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.login-footer .legal-links {
+  font-size: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+.card-legal {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.legal-screen {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.legal-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: calc(12px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px
+    max(16px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.legal-brand {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.legal-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.legal-nav a {
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.legal-nav a:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.legal-nav a[aria-current='page'] {
+  background: var(--active);
+  color: var(--text);
+}
+
+.legal-nav .legal-open {
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.legal-doc {
+  flex: 1;
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 40px 16px 56px;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.legal-doc h1 {
+  margin: 0 0 8px;
+  font-size: 36px;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  color: var(--text);
+}
+
+.legal-doc h2 {
+  margin: 40px 0 12px;
+  font-size: 20px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.legal-doc h3 {
+  margin: 28px 0 8px;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.legal-doc p,
+.legal-doc ul {
+  margin: 0 0 14px;
+}
+
+.legal-doc ul {
+  padding-left: 22px;
+}
+
+.legal-doc li + li {
+  margin-top: 8px;
+}
+
+.legal-doc strong {
+  color: var(--text);
+}
+
+.legal-doc a {
+  color: var(--accent-text);
+  text-underline-offset: 2px;
+}
+
+.legal-doc .legal-updated {
+  margin-bottom: 28px;
+  text-transform: none;
+}
+
+/* Con la app en castellano: las páginas legales quedan en inglés y una nota lo dice. */
+.legal-doc .legal-note {
+  margin: -16px 0 24px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.legal-summary {
+  margin: 28px 0 8px;
+  padding: 18px 20px 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.legal-summary h2 {
+  margin-top: 0;
+  font-size: 17px;
+}
+
+.legal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 20px max(16px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted-2);
+}
+
+.legal-footer a {
+  color: inherit;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  .legal-doc {
+    padding-top: 28px;
+  }
+
+  .legal-doc h1 {
+    font-size: 28px;
+  }
+
+  .legal-summary {
+    padding: 14px 16px 4px;
+  }
+}
+
+.join-host {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.join-host strong {
+  font-family: var(--mono);
+  font-size: 14px;
+  overflow-wrap: anywhere;
 }

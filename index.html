@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#FBFAF8" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#171716" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -23,6 +23,11 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Sin JavaScript (algunos lectores automáticos): qué es la app y los links a privacidad y condiciones. -->
+    <noscript>
+      <p>LGA Shot Docs: VFX documentation, pre-production notes and on-set reports. It needs JavaScript.</p>
+      <p><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a></p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

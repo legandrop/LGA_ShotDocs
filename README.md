@@ -54,10 +54,31 @@ In production (v0.029). What works today:
 - The file gateway with Google Drive: resumable uploads, and a test screen that uploads a video and plays
   it back inside the app, on desktop and iPhone (v0.022 to v0.028).
 
-Next is the workspace plan: the team, roles and permissions, files in the owner's Drive with an offline
-upload queue, a media carousel, client guests with comments and questions, a file trash, and several
-workspaces in one app. Templates, PDF export and the assistant come later. The plan, the decisions and
-the roadmap are in [`Docs/`](Docs/index.md) (in Spanish).
+In this branch, not published yet (v0.041):
+
+- Photos and videos in pages go to the owner's Google Drive: saved on the device first, uploaded in parts
+  that resume after closing the app or losing the connection, with a small thumbnail on the page. The
+  owner chooses where the folder goes (account menu → *Google Drive*).
+- The media carousel: tap a photo or video on a page to see all of the page's photos and videos full
+  screen, in order, with swipe, pinch and wheel zoom, video playback, download of the original and the
+  thumbnail when offline or when the browser can't play a file.
+- The team: the owner and admins manage people from the account menu (*Members*: invite with a link to
+  send, change roles, remove), and projects and pages are shared from their menu (*Share…*) with view,
+  comment, edit, or edit and create pages. What you cannot change shows read-only, also offline.
+- Comments and questions: comment on any block (or the whole page) from a side panel, or a bottom sheet
+  on the phone, with replies, resolve and edit, also offline; a *Question* paragraph is answered in its
+  comment thread, so a guest with *Comment* can answer without editing the page.
+- Several workspaces: a welcome screen to join one with an invitation link or connect one you created with
+  the guide, and a workspace list in the project menu to switch, join, create or remove one from the device.
+- A file trash per project: photos and videos no page uses anymore show in the *Files* tab of the trash, and
+  the owner and admins can send them to the Google Drive trash (recoverable there for 30 days).
+- Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
+- Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets.
+- English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
+- Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
+
+Templates and the assistant come later. The plan, the decisions and the roadmap are in
+[`Docs/`](Docs/index.md) (in Spanish).
 
 ## Development
 
@@ -65,7 +86,7 @@ the roadmap are in [`Docs/`](Docs/index.md) (in Spanish).
 npm install
 cp .env.example .env.local   # your Supabase project URL and publishable key
 npm run dev                  # http://localhost:5173
-npm test                     # all 82 tests: sync, editor, UI, file gateway client and Worker
+npm test                     # all 566 tests: sync, editor, UI, file gateway client and Worker
 npm run typecheck            # app types
 npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
 npm run build                # production build in dist/
@@ -74,6 +95,9 @@ npm run build                # production build in dist/
 The database migrations are in `supabase/migrations/`. See [`Docs/Doc_Supabase.md`](Docs/Doc_Supabase.md)
 to apply them and run the permission tests. Apply new migrations before deploying a new version of the
 app.
+
+To create your own workspace (your own Supabase, Resend, Google Drive, file gateway and backups), follow
+[`Docs/Guide_Create_Workspace.md`](Docs/Guide_Create_Workspace.md), in English.
 
 ## Stack
 

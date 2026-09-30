@@ -1,13 +1,33 @@
 import 'fake-indexeddb/auto';
+import { wrap } from 'idb';
+import { mediaDbName, openMediaDb, type MediaDb } from '../media/mediaDb';
+import { AccessStore, levelValue, parseAccess, Permissions, type AccessSnapshot, type GrantLevel, type Role } from './access';
+import { Portero } from '../media/portero';
+import type { Probe } from '../media/probe';
+import { MediaQueue } from '../media/queue';
 import { PageDocs, type PageDocsOptions } from './docs';
 import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
-import type { Remote } from './remote';
+import type { AccessRow, InvitationGrant, InvitationRow, LinkResult, MediaRemote, MemberRow, Remote, TeamRemote } from './remote';
+import {
+  CommentQueue,
+  commentsDbName,
+  openCommentsDb,
+  type CommentAuthor,
+  type CommentRemote,
+  type CommentRow,
+  type CommentsDb,
+  type NewComment,
+} from './comments';
 import { mergeRootGroups, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
 import {
   RemoteError,
+  type DueFileRow,
+  type MediaFileRow,
+  type TrashedFileRow,
+  type NewMediaFile,
   type NewPage,
   type NewProject,
   type PagePatch,
@@ -32,15 +52,173 @@ export class FakeServer {
   readonly updates = new Map<string, { seq: number; clientUpdateId: string; data: Uint8Array }[]>();
   readonly files = new Map<string, { data: ArrayBuffer; mime: string }>();
   readonly workspaceId = crypto.randomUUID();
+  /** El dueño del workspace y creador del primer proyecto; es el usuario de los dispositivos por defecto. */
+  readonly ownerId = 'owner-0000';
   readonly projects = new Map<string, ProjectRow>([
-    [this.workspaceId, { id: this.workspaceId, name: 'My project', created_at: new Date(0).toISOString() }],
+    [this.workspaceId, { id: this.workspaceId, name: 'My project', created_at: new Date(0).toISOString(), owner_id: this.ownerId }],
   ]);
+  /**
+   * Las reglas del paso 9 (supabase/migrations/20260930160000_equipo.sql): con `team`, las páginas y los
+   * proyectos se ven y se cambian según `members` y `grants`, como en la base. Apagado, como antes.
+   */
+  team = false;
+  readonly members = new Map<string, { email: string; role: Role; removed_at: string | null }>();
+  readonly grants: { id: string; user_id: string; project_id: string | null; page_id: string | null; level: GrantLevel }[] = [];
+  readonly invitations: {
+    id: string;
+    email: string;
+    role: Exclude<Role, 'owner'>;
+    grants: InvitationGrant[];
+    used_at: string | null;
+    invited_by?: string;
+    revoked_at?: string | null;
+  }[] = [];
+  /** Simula una base sin `list_invitations`/`revoke_invitation` (PGRST202). */
+  noInvitationList = false;
+  /** Cómo falla la lectura de los permisos propios (para probar que nada de eso se toma por "sacado"). */
+  accessFailure: null | 'network' | 'server' | 'empty' | 'weird' = null;
   /** Rechaza la creación de proyectos como si faltaran permisos. */
   rejectProjects = false;
   /** Para darle a cada restauración una generación nunca usada. */
   static generations = 100;
   /** `workspace_settings`; `null` simula una base sin esa migración. */
   settings: WorkspaceSettings | null = { generation: 1, minAppVersion: null, schemaVersion: 1, mediaUrl: null };
+  /** `files`, con el proyecto (sale de la página), el tamaño y quién lo registró. */
+  readonly mediaFiles = new Map<string, MediaFileRow & { project_id: string; size: number; created_by?: string }>();
+  /** `page_files` en uso (sin `removed_at`): `<página>:<archivo>`. */
+  readonly pageFiles = new Set<string>();
+  /** `page_files` con `removed_at` (la página dejó de usar el archivo; la fila queda). */
+  readonly removedPageFiles = new Set<string>();
+  /**
+   * Usos ajenos (`<página>:<archivo>` de otro proyecto, `page_files.is_foreign`): `link_page_file` y
+   * `register_file` los guardan, cuentan como uso para la papelera y devuelven `'file_other_project'`.
+   */
+  readonly foreignPageFiles = new Set<string>();
+  /** El `p_seen_seq` de cada `unlink_page_file`, en orden. */
+  readonly seenSeqs: (number | null)[] = [];
+  /** Los avisos de "foto de otro proyecto" que mostraron los dispositivos (nombre del archivo o `null`). */
+  readonly foreignNotices: (string | null)[] = [];
+  /** El bucket `thumbs`. */
+  readonly thumbs = new Map<string, Blob>();
+  /** Cuántas veces se llamó cada función de archivos (para ver que no se llama de más). */
+  readonly mediaCalls: string[] = [];
+  /** El portero del workspace, en memoria. */
+  readonly portero = new FakePortero(this);
+  /** Funciones de archivos que hacen su trabajo y después pierden la respuesta, una vez cada una. */
+  readonly loseMediaResponse = new Set<string>();
+  /** Cuánto adelantar el reloj de la cola de archivos (para no esperar de verdad entre reintentos). */
+  clockOffset = 0;
+  /** El bucket `thumbs` rechaza las miniaturas para siempre (por ejemplo, por tamaño). */
+  rejectThumbs = false;
+  /** La base de archivos del dispositivo no se puede abrir (los dispositivos nuevos arrancan sin ella). */
+  mediaDbFails = false;
+  /** `comments`, con el texto aunque se haya borrado (como la tabla; la vista lo devuelve vacío). */
+  readonly comments = new Map<string, CommentRow & { body: string; updated_at?: string }>();
+  /** La base tiene `list_comments` (bajar solo lo cambiado); apagado, la app lee la vista entera. */
+  listCommentsEnabled = false;
+  /** Las funciones de comentarios que se llamaron, en orden (`add <id>`, `edit <id>`...). */
+  readonly commentCalls: string[] = [];
+  /** Funciones de comentarios que hacen su trabajo y después pierden la respuesta, una vez cada una. */
+  readonly loseCommentResponse = new Set<'add' | 'edit' | 'delete' | 'resolve'>();
+  /** Las funciones de comentarios fallan como un 500 (se arregla solo). */
+  commentsServerError = false;
+  private commentClock = 0;
+
+  /** Prende los comentarios: la base en la versión 5 (y las reglas del equipo, que la versión 5 incluye). */
+  enableComments(): void {
+    this.enableTeam();
+    this.settings = { ...this.settings!, schemaVersion: 5 };
+  }
+
+  /** Una hora del servidor que siempre avanza (para el orden de los comentarios). */
+  commentNow(): string {
+    return new Date(Date.UTC(2026, 8, 30, 12) + ++this.commentClock * 1000).toISOString();
+  }
+
+  /** Pierde la respuesta de una función de archivos si se pidió. */
+  lostMediaResponse(name: string): void {
+    if (this.loseMediaResponse.delete(name)) throw new RemoteError('Failed to fetch', false, undefined, true);
+  }
+
+  /**
+   * Prende la papelera de archivos: portero, reglas del equipo y la base en la versión 6
+   * (supabase/migrations/20260930180000_papelera_archivos.sql), con el borrado automático apagado.
+   */
+  enableTrash(): void {
+    this.enableTeam();
+    this.settings = { ...this.settings!, schemaVersion: 6, mediaUrl: PORTERO_URL, autoPurgeFiles: false };
+  }
+
+  /** `private.page_alive`: la página existe y ni ella ni ninguna de arriba está en la papelera de páginas. */
+  pageAlive(pageId: string): boolean {
+    const seen = new Set<string>();
+    for (let cur: string | null = pageId; cur && !seen.has(cur); ) {
+      seen.add(cur);
+      const page = this.pages.get(cur);
+      if (!page || page.deleted_at) return false;
+      cur = page.parent_id;
+    }
+    return true;
+  }
+
+  /**
+   * `private.refresh_file_trash`: entra a la papelera (con la hora de ahora) si ninguna página viva lo usa y
+   * sale si alguna lo usa. Uno con `purged_at` no cambia más.
+   */
+  refreshFileTrash(fileId: string): void {
+    const f = this.mediaFiles.get(fileId);
+    if (!f || f.purged_at) return;
+    const used = [...this.pageFiles, ...this.foreignPageFiles].some(
+      (k) => k.endsWith(`:${fileId}`) && this.pageAlive(k.slice(0, k.indexOf(':'))),
+    );
+    if (used) f.trashed_at = null;
+    else if (!f.trashed_at) f.trashed_at = new Date().toISOString();
+  }
+
+  /** Si lo usa una página que está en la papelera de páginas (ella o una de arriba), y su título. */
+  trashedPageUse(fileId: string): { in_trashed_page: boolean; trashed_page_title: string | null } {
+    for (const k of this.pageFiles) {
+      if (!k.endsWith(`:${fileId}`)) continue;
+      const pageId = k.slice(0, k.indexOf(':'));
+      if (this.pages.has(pageId) && !this.pageAlive(pageId)) {
+        return { in_trashed_page: true, trashed_page_title: this.pages.get(pageId)!.title };
+      }
+    }
+    return { in_trashed_page: false, trashed_page_title: null };
+  }
+
+  /** Los triggers de `pages`: una página entra, sale o se mueve de la papelera de páginas. */
+  refreshAllFileTrash(): void {
+    for (const id of this.mediaFiles.keys()) this.refreshFileTrash(id);
+  }
+
+  /** `private.can_see_file_trash`. Sin las reglas del equipo, solo el dueño. */
+  canSeeFileTrash(uid: string, projectId: string): boolean {
+    if (!this.team) return uid === this.ownerId;
+    const role = this.role(uid);
+    return this.projectLevel(uid, projectId) >= 4 || ((role === 'owner' || role === 'admin') && this.projectLevel(uid, projectId) >= 1);
+  }
+
+  /** `private.can_purge_files`. Sin las reglas del equipo, solo el dueño. */
+  canPurgeFiles(uid: string, projectId: string): boolean {
+    if (!this.team) return uid === this.ownerId;
+    const role = this.role(uid);
+    return (role === 'owner' || role === 'admin') && this.projectLevel(uid, projectId) >= 1;
+  }
+
+  /** `purge_file`, como lo llama el portero con la sesión de la persona. */
+  purgeFile(uid: string, fileId: string): void {
+    const f = this.mediaFiles.get(fileId);
+    if (!f) throw fileNotFound();
+    if (!this.canPurgeFiles(uid, f.project_id)) throw new RemoteError('not_allowed', true, '42501');
+    if (!f.trashed_at) throw new RemoteError('file_not_trashed', true, 'P0001');
+    f.purged_at ??= new Date().toISOString();
+  }
+
+  /** Prende el portero y la base con archivos (versión 3). */
+  enableMedia(): void {
+    this.settings = { ...(this.settings ?? { generation: 1, minAppVersion: null, schemaVersion: 1, mediaUrl: null }), schemaVersion: 3, mediaUrl: PORTERO_URL };
+  }
 
   /** Una copia de seguridad: todo lo que hay en la base en este momento. */
   backup(): () => void {
@@ -48,8 +226,14 @@ export class FakeServer {
     const updates = new Map([...this.updates].map(([id, list]) => [id, list.map((u) => ({ ...u }))]));
     const projects = new Map([...this.projects].map(([id, p]) => [id, { ...p }]));
     const files = new Map(this.files);
+    const mediaFiles = new Map([...this.mediaFiles].map(([id, f]) => [id, { ...f }]));
+    const pageFiles = new Set(this.pageFiles);
+    const thumbs = new Map(this.thumbs);
+    const comments = new Map([...this.comments].map(([id, c]) => [id, { ...c }]));
     /** Restaura la copia y sube la generación, como scripts/restore.sh del repo de copias. */
     return () => {
+      this.comments.clear();
+      for (const [id, c] of comments) this.comments.set(id, { ...c });
       this.pages.clear();
       for (const [id, p] of pages) this.pages.set(id, { ...p });
       this.updates.clear();
@@ -58,6 +242,12 @@ export class FakeServer {
       for (const [id, p] of projects) this.projects.set(id, { ...p });
       this.files.clear();
       for (const [path, f] of files) this.files.set(path, f);
+      this.mediaFiles.clear();
+      for (const [id, f] of mediaFiles) this.mediaFiles.set(id, { ...f });
+      this.pageFiles.clear();
+      for (const k of pageFiles) this.pageFiles.add(k);
+      this.thumbs.clear();
+      for (const [id, t] of thumbs) this.thumbs.set(id, t);
       // Como scripts/restore.sh: un valor que no se usó nunca, aunque la copia traiga uno viejo.
       if (this.settings) this.settings = { ...this.settings, generation: ++FakeServer.generations };
     };
@@ -66,48 +256,367 @@ export class FakeServer {
   check(): void {
     if (!this.online) throw new RemoteError('Failed to fetch', false, undefined, true);
   }
+
+  /** Prende las reglas del equipo: base en la versión 4, con el dueño como `owner`. */
+  enableTeam(): void {
+    this.team = true;
+    this.settings = { ...(this.settings ?? { generation: 1, minAppVersion: null, mediaUrl: null, schemaVersion: 1 }), schemaVersion: 4 };
+    if (!this.members.has(this.ownerId)) this.members.set(this.ownerId, { email: 'owner@test', role: 'owner', removed_at: null });
+  }
+
+  /** Suma un miembro activo (como si hubiera entrado con una invitación). */
+  addMember(userId: string, role: Role, email = `${userId}@test`): void {
+    this.members.set(userId, { email, role, removed_at: null });
+  }
+
+  /** Da o cambia un permiso (como `share`). */
+  grant(userId: string, target: { projectId: string } | { pageId: string }, level: GrantLevel): string {
+    const project = 'projectId' in target ? target.projectId : null;
+    const page = 'pageId' in target ? target.pageId : null;
+    const found = this.grants.find((g) => g.user_id === userId && g.project_id === project && g.page_id === page);
+    if (found) {
+      found.level = level;
+      return found.id;
+    }
+    const id = crypto.randomUUID();
+    this.grants.push({ id, user_id: userId, project_id: project, page_id: page, level });
+    return id;
+  }
+
+  /** `private.workspace_role`: el rol activo, o `null`. */
+  role(uid: string): Role | null {
+    const m = this.members.get(uid);
+    return m && !m.removed_at ? m.role : null;
+  }
+
+  /** `private.page_level`. */
+  pageLevel(uid: string, pageId: string): number {
+    if (!this.role(uid)) return 0;
+    const page = this.pages.get(pageId);
+    if (!page) return 0;
+    const chain = new Set<string>();
+    for (let cur: string | null = pageId; cur && !chain.has(cur); cur = this.pages.get(cur)?.parent_id ?? null) chain.add(cur);
+    let level = this.projects.get(page.workspace_id)?.owner_id === uid ? 4 : 0;
+    for (const g of this.grants) {
+      if (g.user_id !== uid) continue;
+      if (g.project_id === page.workspace_id || (g.page_id && chain.has(g.page_id))) level = Math.max(level, levelValue(g.level));
+    }
+    return level;
+  }
+
+  /** `private.project_level`. */
+  projectLevel(uid: string, projectId: string): number {
+    if (!this.role(uid)) return 0;
+    let level = this.projects.get(projectId)?.owner_id === uid ? 4 : 0;
+    for (const g of this.grants) {
+      if (g.user_id === uid && g.project_id === projectId) level = Math.max(level, levelValue(g.level));
+    }
+    return level;
+  }
+
+  /** `private.can_create_page`. */
+  canCreatePage(uid: string, projectId: string, parentId: string | null): boolean {
+    if (!parentId) return this.projectLevel(uid, projectId) >= 4;
+    return this.pageLevel(uid, parentId) >= 4 && this.pages.get(parentId)?.workspace_id === projectId;
+  }
+
+  /** `private.can_view_project_row`. */
+  canViewProject(uid: string, projectId: string): boolean {
+    if (!this.role(uid)) return false;
+    if (this.projects.get(projectId)?.owner_id === uid || this.projectLevel(uid, projectId) >= 1) return true;
+    return this.grants.some((g) => g.user_id === uid && g.page_id && this.pages.get(g.page_id)?.workspace_id === projectId);
+  }
+
+  /**
+   * `remove_member`: pone `removed_at`, no borra nada, y pasa cada proyecto compartido a un dueño o admin
+   * con permiso sobre el proyecto entero (gana `edit_pages`). Compartido solo por páginas: sin heredero.
+   */
+  removeMember(uid: string): { transferred: number; withoutHeir: number } {
+    const m = this.members.get(uid);
+    if (!m || m.removed_at) return { transferred: 0, withoutHeir: 0 };
+    m.removed_at = new Date().toISOString();
+    let transferred = 0;
+    let withoutHeir = 0;
+    const rank = { view: 1, comment: 2, edit: 3, edit_pages: 4 } as Record<string, number>;
+    for (const p of this.projects.values()) {
+      if (p.owner_id !== uid) continue;
+      const others = this.grants.filter(
+        (g) => g.user_id !== uid && (g.project_id === p.id || (g.page_id && this.pages.get(g.page_id)?.workspace_id === p.id)),
+      );
+      if (others.length === 0) continue;
+      const heir = others
+        .filter((g) => g.project_id === p.id && (this.role(g.user_id) === 'owner' || this.role(g.user_id) === 'admin'))
+        .sort((a, b) => (rank[b.level] ?? 0) - (rank[a.level] ?? 0))[0];
+      if (heir) {
+        p.owner_id = heir.user_id;
+        transferred++;
+      } else withoutHeir++;
+    }
+    return { transferred, withoutHeir };
+  }
 }
 
-export class FakeRemote implements Remote {
+export const PORTERO_URL = 'https://portero.test';
+
+/** El usuario de un pedido al portero en memoria (`Bearer token:<usuario>`; si no, el dueño). */
+function porteroUser(server: FakeServer, headers: Headers): string {
+  return /^Bearer token:(.+)$/.exec(headers.get('Authorization') ?? '')?.[1] ?? server.ownerId;
+}
+
+interface FakeUpload {
+  file: string;
+  size: number;
+  data: Uint8Array;
+  received: number;
+  done?: { id: string; name: string; mimeType: string; size: number };
+  /** Subida de un portero anterior al paso 6 (ver `FakePortero.legacy`). */
+  legacy?: boolean;
+}
+
+/**
+ * El portero en memoria, con las mismas respuestas que portero/src/core.ts para los archivos de la app:
+ * `POST /upload` con `file` (pregunta a la base si existe y si ya está en Drive), `PUT /upload/<id>` por
+ * partes (o `bytes *\/total` para preguntar cuánto llegó), y `POST /pass` con `file`.
+ */
+export class FakePortero {
+  readonly uploads = new Map<string, FakeUpload>();
+  /** Lo que llegó a Drive: id de Drive → contenido y carpeta. */
+  readonly drive = new Map<string, { file: string; data: Uint8Array; folder: string; name: string }>();
+  readonly calls: { method: string; path: string; range?: string; body?: Record<string, unknown> }[] = [];
+  /** Después de esta cantidad de partes, se corta la red (todas las partes fallan). */
+  cutAfterParts: number | null = null;
+  /** La base no se entera al terminar (`set_file_drive` falla por red): responde `linked: false`. */
+  failLink = false;
+  /** Responde 403 a las subidas, como si la persona no pudiera editar la página. */
+  forbid = false;
+  /** La base apunta a otro archivo de Drive (409 que no se arregla solo). */
+  conflict = false;
+  /**
+   * Un portero anterior al paso 6: ignora `file`, sube igual, responde `done` sin `linked` y no le avisa a
+   * la base.
+   */
+  legacy = false;
+  /** Responde `linked: true` pero la base no quedó con el id de Drive. */
+  lieLinked = false;
+  /** Los archivos de Drive que `/trash` mandó a la papelera de Drive (nunca se borra nada). */
+  readonly driveTrash = new Set<string>();
+  /** Archivos de la app para los que Drive falla al mandarlos a la papelera (502, sin confirmar). */
+  readonly failTrash = new Set<string>();
+  /** El Drive del dueño no está conectado: `/trash` responde 503 con `code: 'drive_not_connected'`. */
+  driveDisconnected = false;
+  private parts = 0;
+  private next = 1;
+
+  constructor(private readonly server: FakeServer) {}
+
+  readonly fetch = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
+    const url = new URL(String(input));
+    const method = init.method ?? 'GET';
+    const headers = new Headers(init.headers);
+    const range = headers.get('Content-Range') ?? undefined;
+    const body = typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined;
+    this.calls.push({ method, path: url.pathname, range, body });
+    if (!this.server.online) throw new TypeError('Failed to fetch');
+
+    if (method === 'POST' && url.pathname === '/upload' && this.legacy) {
+      const uploadId = `up-${this.next++}`;
+      const size = Number(body?.size);
+      this.uploads.set(uploadId, { file: String(body?.file ?? ''), size, data: new Uint8Array(size), received: 0, legacy: true });
+      return json({ uploadId });
+    }
+    if (method === 'POST' && url.pathname === '/upload') {
+      const id = String(body?.file ?? '');
+      const media = this.server.mediaFiles.get(id);
+      if (!media) return json({ error: 'This file does not exist or you cannot see it.' }, 404);
+      if (this.forbid) return json({ error: 'You cannot add files to this page.' }, 403);
+      if (this.conflict) {
+        return json({ error: 'This file is registered with a different Drive file: ask the workspace owner.' }, 409);
+      }
+      if (typeof body?.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.day)) return json({ error: 'The day must look like 2026-09-30.' }, 400);
+      if (Number(body.size) !== media.size) return json({ error: 'The size does not match the file.' }, 400);
+      if (media.drive_id) {
+        return json({ status: 'done', file: { id: media.drive_id, name: media.name, mimeType: media.mime, size: media.size } });
+      }
+      // Ya está en Drive pero la base no se enteró: se le avisa ahora.
+      const stored = [...this.drive].find(([, d]) => d.file === id);
+      if (stored) {
+        const linked = this.link(id, stored[0]);
+        return json({ status: 'done', file: { id: stored[0], name: media.name, mimeType: media.mime, size: media.size }, linked });
+      }
+      const uploadId = `up-${this.next++}`;
+      this.uploads.set(uploadId, { file: id, size: media.size, data: new Uint8Array(media.size), received: 0 });
+      return json({ uploadId, folder: `LGA_ShotDocs/${this.server.projects.get(media.project_id)?.name}/${body.day}` });
+    }
+    const uploadId = /^\/upload\/(.+)$/.exec(url.pathname)?.[1];
+    if (method === 'PUT' && uploadId) {
+      const up = this.uploads.get(uploadId);
+      if (!up) return json({ error: 'This upload does not exist anymore: start it again.' }, 404);
+      if (up.done && up.legacy) return json({ status: 'done', file: up.done });
+      if (up.done) return json({ status: 'done', file: up.done, linked: this.link(up.file, up.done.id) });
+      const part = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(range ?? '');
+      if (part && init.body instanceof Blob) {
+        if (this.cutAfterParts !== null && this.parts >= this.cutAfterParts) throw new TypeError('Load failed');
+        const start = Number(part[1]);
+        if (start !== up.received) return json({ error: 'The part does not match the upload.' }, 400);
+        const bytes = new Uint8Array(await init.body.arrayBuffer());
+        up.data.set(bytes, start);
+        up.received = start + bytes.byteLength;
+        this.parts++;
+      }
+      if (up.received === up.size) {
+        const media = this.server.mediaFiles.get(up.file)!;
+        const driveId = `drive-${up.file.slice(0, 8)}-${this.drive.size + 1}`;
+        up.done = { id: driveId, name: media.name, mimeType: media.mime, size: up.size };
+        if (up.legacy) {
+          // A `Media_Test`, sin la marca del archivo ni aviso a la base.
+          this.drive.set(driveId, { file: '', data: up.data, folder: 'LGA_ShotDocs/Media_Test', name: media.name });
+          return json({ status: 'done', file: up.done });
+        }
+        this.drive.set(driveId, { file: up.file, data: up.data, folder: `LGA_ShotDocs/${this.server.projects.get(media.project_id)?.name}`, name: media.name });
+        return json({ status: 'done', file: up.done, linked: this.link(up.file, driveId) });
+      }
+      return json({ status: 'incomplete', received: up.received });
+    }
+    if (method === 'POST' && url.pathname === '/trash') {
+      // Como portero/src/core.ts (`trashFile`): `purge_file` con la sesión, recién ahí Drive, y al final
+      // `media_purged`.
+      const id = String(body?.file ?? '').toLowerCase();
+      const uid = porteroUser(this.server, headers);
+      if (this.driveDisconnected) {
+        return json({ error: 'Google Drive is not connected yet.', code: 'drive_not_connected' }, 503);
+      }
+      try {
+        this.server.purgeFile(uid, id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '';
+        if (message === 'not_allowed') {
+          return json({ error: 'Only the owner or an admin of the workspace can send files to the Google Drive trash.' }, 403);
+        }
+        if (message === 'file_not_trashed') {
+          return json({ error: 'A page still uses this file: it is not in the trash.', code: 'in_use' }, 409);
+        }
+        return json({ error: 'This file does not exist or you cannot see it.' }, 404);
+      }
+      const media = this.server.mediaFiles.get(id)!;
+      if (media.drive_trashed_at) return json({ status: 'done', file: id, drive: media.drive_id ? 'trashed' : 'none' });
+      if (this.failTrash.has(id)) return json({ error: 'Could not send the file to the Google Drive trash (500).' }, 502);
+      let drive: 'trashed' | 'missing' | 'none' = 'none';
+      if (media.drive_id) {
+        drive = this.drive.has(media.drive_id) ? 'trashed' : 'missing';
+        if (drive === 'trashed') this.driveTrash.add(media.drive_id);
+      }
+      media.drive_trashed_at = new Date().toISOString();
+      return json({ status: 'done', file: id, drive });
+    }
+    if (method === 'POST' && url.pathname === '/pass') {
+      const media = this.server.mediaFiles.get(String(body?.file ?? ''));
+      if (!media) return json({ error: 'This file does not exist or you cannot see it.' }, 404);
+      if (!media.drive_id) return json({ error: 'This file has not finished uploading yet.' }, 409);
+      return json({ url: `${PORTERO_URL}/m/${media.drive_id}` });
+    }
+    return json({ error: 'Not found' }, 404);
+  };
+
+  /** `set_file_drive`, como lo llama el portero. */
+  private link(file: string, driveId: string): boolean {
+    if (this.failLink) return false;
+    if (this.lieLinked) return true;
+    const media = this.server.mediaFiles.get(file);
+    if (media && !media.drive_id) media.drive_id = driveId;
+    return true;
+  }
+
+  /** Vuelve a dejar pasar las partes. */
+  reconnect(): void {
+    this.cutAfterParts = null;
+    this.parts = 0;
+  }
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+const ROLE_RANK: Record<Role, number> = { guest: 1, member: 2, admin: 3, owner: 4 };
+
+/** Los errores de `register_file` y compañía (ver supabase/migrations/20260930150000_archivos.sql). */
+const pageNotFound = () => new RemoteError('page_not_found', true, 'P0002');
+const fileNotFound = () => new RemoteError('file_not_found', true, 'P0002');
+
+export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemote {
+  /** La sesión: por defecto, el dueño del workspace. */
+  readonly userId: string;
+  readonly email: string;
+
   constructor(
     readonly server: FakeServer,
     readonly appVersion = '',
-  ) {}
+    userId?: string,
+    email?: string,
+  ) {
+    this.userId = userId ?? server.ownerId;
+    this.email = (email ?? server.members.get(this.userId)?.email ?? `${this.userId}@test`).toLowerCase();
+  }
+
+  private get team(): boolean {
+    return this.server.team;
+  }
+
+  private denied(message: string): RemoteError {
+    return new RemoteError(message, true, '42501');
+  }
 
   async fetchWorkspaceSettings(): Promise<WorkspaceSettings | null> {
     this.server.check();
     return this.server.settings && { ...this.server.settings };
   }
 
-  async ensureWorkspace(): Promise<string> {
+  async ensureWorkspace(): Promise<string | null> {
     this.server.check();
-    return this.server.workspaceId;
+    if (!this.team) return this.server.workspaceId;
+    const uid = this.userId;
+    if (!this.server.role(uid)) return null;
+    const byAge = [...this.server.projects.values()].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+    const own = byAge.find((p) => p.owner_id === uid);
+    if (own) return own.id;
+    const project = byAge.find((p) => this.server.grants.some((g) => g.user_id === uid && g.project_id === p.id));
+    if (project) return project.id;
+    const page = byAge.find((p) => this.server.canViewProject(uid, p.id));
+    return page?.id ?? null;
   }
 
   async fetchTree(projectIds: string[]): Promise<PageRow[]> {
     this.server.check();
     const ids = new Set(projectIds);
-    return [...this.server.pages.values()].filter((p) => ids.has(p.workspace_id)).map((p) => ({ ...p }));
+    return [...this.server.pages.values()]
+      .filter((p) => ids.has(p.workspace_id))
+      .filter((p) => !this.team || this.server.projectLevel(this.userId, p.workspace_id) >= 1 || this.server.pageLevel(this.userId, p.id) >= 1)
+      .map((p) => ({ ...p }));
   }
 
   async fetchProjects(): Promise<ProjectRow[]> {
     this.server.check();
-    return [...this.server.projects.values()].map((p) => ({ ...p }));
+    return [...this.server.projects.values()]
+      .filter((p) => !this.team || this.server.canViewProject(this.userId, p.id))
+      .map((p) => ({ ...p }));
   }
 
   async createProject(project: NewProject): Promise<void> {
     this.server.check();
     if (this.server.projects.has(project.id)) return;
-    if (this.server.rejectProjects) {
+    const role = this.server.role(this.userId);
+    if (this.server.rejectProjects || (this.team && role !== 'owner' && role !== 'admin')) {
       throw new RemoteError('new row violates row-level security policy for table "workspaces"', true, '42501');
     }
-    this.server.projects.set(project.id, { ...project, created_at: new Date().toISOString() });
+    this.server.projects.set(project.id, { ...project, created_at: new Date().toISOString(), owner_id: this.userId });
   }
 
   async renameProject(id: string, name: string): Promise<void> {
     this.server.check();
     const project = this.server.projects.get(id);
-    if (!project) throw new RemoteError('project_not_found', true, 'P0002');
+    if (!project || (this.team && this.server.projectLevel(this.userId, id) < 4)) {
+      throw new RemoteError('project_not_found', true, 'P0002');
+    }
     this.server.projects.set(id, { ...project, name });
   }
 
@@ -123,6 +632,9 @@ export class FakeRemote implements Remote {
     const parent = page.parent_id ? this.server.pages.get(page.parent_id) : undefined;
     if (page.parent_id && parent?.workspace_id !== page.workspace_id) {
       throw new RemoteError('page_parent_invalid', true, '23503');
+    }
+    if (this.team && !this.server.canCreatePage(this.userId, page.workspace_id, page.parent_id)) {
+      throw this.denied('page_create_denied');
     }
     const now = new Date().toISOString();
     this.server.pages.set(page.id, {
@@ -140,6 +652,19 @@ export class FakeRemote implements Remote {
     this.server.check();
     const page = this.server.pages.get(id);
     if (!page) throw new RemoteError('page_not_found', true, 'P0002');
+    if (this.team) {
+      const uid = this.userId;
+      // La política de update pide 3: sin eso, la fila no se ve y el update no toca nada.
+      if (this.server.pageLevel(uid, id) < 3) throw new RemoteError('page_not_found', true, 'P0002');
+      const parentId = patch.parent_id !== undefined ? patch.parent_id : page.parent_id;
+      const moves = parentId !== page.parent_id || (patch.sort_key !== undefined && patch.sort_key !== page.sort_key);
+      if (moves && (this.server.pageLevel(uid, id) < 4 || !this.server.canCreatePage(uid, page.workspace_id, parentId))) {
+        throw this.denied('page_move_denied');
+      }
+      if (patch.deleted_at !== undefined && patch.deleted_at !== page.deleted_at && this.server.pageLevel(uid, id) < 4) {
+        throw this.denied('page_trash_denied');
+      }
+    }
     if (patch.parent_id && this.server.pages.get(patch.parent_id)?.workspace_id !== page.workspace_id) {
       throw new RemoteError('page_parent_invalid', true, '23503');
     }
@@ -149,12 +674,16 @@ export class FakeRemote implements Remote {
       }
     }
     this.server.pages.set(id, { ...page, ...patch, updated_at: new Date().toISOString() });
+    // Los triggers de la papelera de archivos: la página entró, salió o se movió de la papelera de páginas.
+    if (patch.deleted_at !== undefined || patch.parent_id !== undefined) this.server.refreshAllFileTrash();
   }
 
   async pushUpdate(pageId: string, clientUpdateId: string, update: Uint8Array): Promise<number> {
     this.server.check();
     const page = this.server.pages.get(pageId);
-    if (!page) throw new RemoteError('page_not_found', true, 'P0002');
+    if (!page || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) {
+      throw new RemoteError('page_not_found', true, 'P0002');
+    }
     const min = this.server.settings?.minAppVersion;
     if (min != null && !(/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion) && Number(this.appVersion) >= min)) {
       throw new RemoteError('app_outdated', true, 'P0001');
@@ -177,7 +706,9 @@ export class FakeRemote implements Remote {
 
   async pullUpdates(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]> {
     this.server.check();
-    if (!this.server.pages.has(pageId)) throw new RemoteError('page_not_found', true, 'P0002');
+    if (!this.server.pages.has(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 1)) {
+      throw new RemoteError('page_not_found', true, 'P0002');
+    }
     return (this.server.updates.get(pageId) ?? [])
       .filter((u) => u.seq > afterSeq)
       .slice(0, limit)
@@ -198,6 +729,511 @@ export class FakeRemote implements Remote {
     if (!file) throw new RemoteError('Object not found', true);
     return new Blob([file.data], { type: file.mime });
   }
+
+  // --- equipo (mismas reglas que supabase/migrations/20260930160000_equipo.sql) ---
+
+  async fetchMyAccess(userId: string): Promise<AccessSnapshot | null> {
+    this.server.check();
+    if (!this.team) return null;
+    switch (this.server.accessFailure) {
+      case 'network':
+        throw new RemoteError('Failed to fetch', false, undefined, true);
+      case 'server':
+        throw new RemoteError('Internal Server Error', false, '500');
+      case 'empty':
+        return parseAccess(null, []);
+      case 'weird':
+        try {
+          return parseAccess({ role: 'captain', removed_at: 12 }, 'nope');
+        } catch (err) {
+          throw new RemoteError(String(err), false);
+        }
+    }
+    const m = this.server.members.get(userId);
+    return parseAccess(
+      m ? { role: m.role, removed_at: m.removed_at } : null,
+      this.server.grants.filter((g) => g.user_id === userId).map(({ user_id: _u, ...g }) => g),
+    );
+  }
+
+  async acceptInvitations(): Promise<number | null> {
+    this.server.check();
+    if (!this.team) return null;
+    const uid = this.userId;
+    let n = 0;
+    for (const inv of this.server.invitations) {
+      if (inv.used_at || inv.revoked_at || inv.email !== this.email) continue;
+      const cur = this.server.members.get(uid);
+      if (!cur) this.server.members.set(uid, { email: this.email, role: inv.role, removed_at: null });
+      else if (cur.removed_at) {
+        // Vuelve sin los permisos de antes.
+        for (let i = this.server.grants.length - 1; i >= 0; i--) if (this.server.grants[i].user_id === uid) this.server.grants.splice(i, 1);
+        this.server.members.set(uid, { ...cur, role: inv.role, removed_at: null });
+      } else if (cur.role !== 'owner' && ROLE_RANK[inv.role] > ROLE_RANK[cur.role]) {
+        cur.role = inv.role;
+      }
+      for (const g of inv.grants) {
+        const target = 'project_id' in g ? { projectId: g.project_id } : { pageId: g.page_id };
+        const existing = this.server.grants.find(
+          (x) => x.user_id === uid && ('projectId' in target ? x.project_id === target.projectId : x.page_id === target.pageId),
+        );
+        if (!existing || levelValue(g.level) > levelValue(existing.level)) this.server.grant(uid, target, g.level);
+      }
+      inv.used_at = new Date().toISOString();
+      n++;
+    }
+    return n;
+  }
+
+  async listMembers(): Promise<MemberRow[]> {
+    this.server.check();
+    const admin = ['owner', 'admin'].includes(this.server.role(this.userId) ?? '');
+    return [...this.server.members]
+      .filter(([id]) => admin || id === this.userId)
+      .map(([id, m]) => ({ user_id: id, email: m.email, role: m.role, created_at: '', removed_at: m.removed_at }));
+  }
+
+  async createInvitation(email: string, role: Exclude<Role, 'owner'>, grants: InvitationGrant[]): Promise<string> {
+    this.server.check();
+    const mine = this.server.role(this.userId);
+    if (mine !== 'owner' && mine !== 'admin') throw this.denied('not_allowed');
+    if (role === 'admin' && mine !== 'owner') throw this.denied('not_allowed');
+    for (const g of grants) {
+      const level = 'project_id' in g ? this.server.projectLevel(this.userId, g.project_id) : this.server.pageLevel(this.userId, g.page_id);
+      if (level < 4) throw this.denied('grant_not_allowed');
+    }
+    const em = email.trim().toLowerCase();
+    const live = this.server.invitations.find((i) => i.email === em && !i.used_at && !i.revoked_at);
+    if (live) {
+      if ((live.invited_by ?? this.server.ownerId) !== this.userId) throw new RemoteError('invitation_exists', true, 'P0001');
+      if (ROLE_RANK[role] > ROLE_RANK[live.role]) live.role = role;
+      live.grants.push(...grants);
+      return live.id;
+    }
+    const id = crypto.randomUUID();
+    this.server.invitations.push({ id, email: em, role, grants: [...grants], used_at: null, invited_by: this.userId });
+    return id;
+  }
+
+  async listInvitations(): Promise<InvitationRow[] | null> {
+    this.server.check();
+    if (this.server.noInvitationList) return null;
+    const mine = this.server.role(this.userId);
+    if (mine !== 'owner' && mine !== 'admin') return [];
+    return this.server.invitations
+      .filter((i) => !i.used_at && !i.revoked_at)
+      .map((i) => ({
+        id: i.id,
+        email: i.email,
+        role: i.role,
+        grants: i.grants,
+        invited_by: i.invited_by ?? null,
+        invited_by_email: this.server.members.get(i.invited_by ?? '')?.email ?? null,
+        created_at: '',
+        expires_at: '',
+      }));
+  }
+
+  async revokeInvitation(id: string): Promise<void> {
+    this.server.check();
+    const inv = this.server.invitations.find((i) => i.id === id);
+    const mine = this.server.role(this.userId);
+    if (!inv || (mine !== 'owner' && (mine !== 'admin' || inv.invited_by !== this.userId))) {
+      throw new RemoteError('invitation_not_found', true, 'P0002');
+    }
+    if (inv.used_at) throw new RemoteError('invitation_used', true, 'P0001');
+    inv.revoked_at ??= new Date().toISOString();
+  }
+
+  async setMemberRole(userId: string, role: Exclude<Role, 'owner'>): Promise<void> {
+    this.server.check();
+    const mine = this.server.role(this.userId);
+    const cur = this.server.members.get(userId);
+    if (mine !== 'owner' && mine !== 'admin') throw this.denied('not_allowed');
+    if (!cur || cur.removed_at) throw new RemoteError('member_not_found', true, 'P0002');
+    if (cur.role === 'owner') throw this.denied('owner_cannot_change');
+    if ((cur.role === 'admin' || role === 'admin') && mine !== 'owner') throw this.denied('not_allowed');
+    cur.role = role;
+  }
+
+  async removeMember(userId: string): Promise<{ transferred: number; withoutHeir: number }> {
+    this.server.check();
+    const mine = this.server.role(this.userId);
+    const cur = this.server.members.get(userId);
+    if (mine !== 'owner' && mine !== 'admin') throw this.denied('not_allowed');
+    if (!cur) throw new RemoteError('member_not_found', true, 'P0002');
+    if (cur.role === 'owner') throw this.denied('owner_cannot_change');
+    if (cur.role === 'admin' && mine !== 'owner') throw this.denied('not_allowed');
+    return this.server.removeMember(userId);
+  }
+
+  async share(userId: string, target: { projectId: string } | { pageId: string }, level: GrantLevel): Promise<string> {
+    this.server.check();
+    if (!this.canShare(target)) throw this.denied('not_allowed');
+    if (!this.server.role(userId)) throw new RemoteError('member_not_found', true, 'P0002');
+    return this.server.grant(userId, target, level);
+  }
+
+  async unshare(grantId: string): Promise<void> {
+    this.server.check();
+    const at = this.server.grants.findIndex((g) => g.id === grantId);
+    const g = this.server.grants[at];
+    if (!g || !this.canShare(g.project_id ? { projectId: g.project_id } : { pageId: g.page_id! })) {
+      throw new RemoteError('grant_not_found', true, 'P0002');
+    }
+    this.server.grants.splice(at, 1);
+  }
+
+  async listAccess(target: { projectId: string } | { pageId: string }): Promise<AccessRow[]> {
+    this.server.check();
+    if (!this.canShare(target)) throw this.denied('not_allowed');
+    const projectId = 'projectId' in target ? target.projectId : this.server.pages.get(target.pageId)!.workspace_id;
+    const chain = new Set<string>();
+    if ('pageId' in target) {
+      for (let cur: string | null = target.pageId; cur && !chain.has(cur); cur = this.server.pages.get(cur)?.parent_id ?? null) chain.add(cur);
+    }
+    const rows: AccessRow[] = [];
+    const add = (uid: string, level: GrantLevel, source: AccessRow['source'], grant: string | null, project: string | null, page: string | null) => {
+      const m = this.server.members.get(uid);
+      if (m && !m.removed_at) rows.push({ user_id: uid, email: m.email, role: m.role, level, source, grant_id: grant, project_id: project, page_id: page });
+    };
+    const owner = this.server.projects.get(projectId)?.owner_id;
+    if (owner) add(owner, 'edit_pages', 'creator', null, projectId, null);
+    for (const g of this.server.grants) {
+      if (g.project_id === projectId) add(g.user_id, g.level, 'project', g.id, g.project_id, null);
+      else if (g.page_id && chain.has(g.page_id)) {
+        add(g.user_id, g.level, 'pageId' in target && g.page_id === target.pageId ? 'page' : 'parent_page', g.id, null, g.page_id);
+      }
+    }
+    return rows;
+  }
+
+  /** `private.can_share`. */
+  private canShare(target: { projectId: string } | { pageId: string }): boolean {
+    const uid = this.userId;
+    const role = this.server.role(uid);
+    if (!role) return false;
+    const projectId = 'projectId' in target ? target.projectId : this.server.pages.get(target.pageId)?.workspace_id;
+    if (!projectId) return false;
+    const level = 'projectId' in target ? this.server.projectLevel(uid, projectId) : this.server.pageLevel(uid, target.pageId);
+    return level >= 4 && (role === 'owner' || role === 'admin' || this.server.projects.get(projectId)?.owner_id === uid);
+  }
+
+  // --- archivos grandes (mismas reglas que la base) ---
+
+  async registerFile(file: NewMediaFile): Promise<LinkResult> {
+    this.server.check();
+    this.server.mediaCalls.push(`register_file ${file.id}`);
+    const page = this.server.pages.get(file.pageId);
+    if (!page) throw pageNotFound();
+    const existing = this.server.mediaFiles.get(file.id);
+    if (existing && existing.project_id !== page.workspace_id) {
+      // De otro proyecto (que la sesión ve): guarda el uso ajeno y lo dice con el valor, sin error.
+      this.server.foreignPageFiles.add(`${file.pageId}:${file.id}`);
+      this.server.refreshFileTrash(file.id);
+      this.server.lostMediaResponse('register_file');
+      return 'foreign';
+    }
+    if (!existing) {
+      if (!/^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(file.mime)) {
+        throw new RemoteError('new row for relation "files" violates check constraint "files_mime_check"', true, '23514');
+      }
+      this.server.mediaFiles.set(file.id, {
+        id: file.id,
+        project_id: page.workspace_id,
+        name: file.name,
+        mime: file.mime,
+        size: file.size,
+        width: file.width,
+        height: file.height,
+        duration: file.duration,
+        thumb_at: null,
+        drive_id: null,
+        trashed_at: null,
+        purged_at: null,
+        drive_trashed_at: null,
+        created_by: this.userId,
+      });
+    }
+    this.server.pageFiles.add(`${file.pageId}:${file.id}`);
+    this.server.removedPageFiles.delete(`${file.pageId}:${file.id}`);
+    this.server.refreshFileTrash(file.id);
+    this.server.lostMediaResponse('register_file');
+    return 'ok';
+  }
+
+  async linkPageFile(pageId: string, fileId: string): Promise<LinkResult> {
+    this.server.check();
+    this.server.mediaCalls.push(`link_page_file ${pageId} ${fileId}`);
+    const page = this.server.pages.get(pageId);
+    if (!page) throw pageNotFound();
+    const file = this.server.mediaFiles.get(fileId);
+    if (!file) throw fileNotFound();
+    if (file.project_id !== page.workspace_id) {
+      // Uso ajeno: se guarda (cuenta para la papelera) y se dice con el valor, sin error.
+      this.server.foreignPageFiles.add(`${pageId}:${fileId}`);
+      this.server.refreshFileTrash(fileId);
+      this.server.lostMediaResponse('link_page_file');
+      return 'foreign';
+    }
+    this.server.pageFiles.add(`${pageId}:${fileId}`);
+    this.server.removedPageFiles.delete(`${pageId}:${fileId}`);
+    this.server.refreshFileTrash(fileId);
+    this.server.lostMediaResponse('link_page_file');
+    return 'ok';
+  }
+
+  // --- papelera de archivos (supabase/migrations/20260930180000_papelera_archivos.sql) ---
+
+  async unlinkPageFile(pageId: string, fileId: string, seenSeq?: number | null): Promise<boolean> {
+    this.server.check();
+    this.server.mediaCalls.push(`unlink_page_file ${pageId} ${fileId}`);
+    this.server.seenSeqs.push(seenSeq ?? null);
+    const page = this.server.pages.get(pageId);
+    if (!page || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) throw pageNotFound();
+    // `p_seen_seq`: si la página cambió después del documento con el que se decidió, no hace nada.
+    if (seenSeq != null && page.update_seq > seenSeq) {
+      this.server.lostMediaResponse('unlink_page_file');
+      return false;
+    }
+    const key = `${pageId}:${fileId}`;
+    if (this.server.foreignPageFiles.delete(key)) this.server.refreshFileTrash(fileId);
+    // La fila queda, marcada; si no existe o ya estaba marcada, no hace nada.
+    if (this.server.pageFiles.delete(key)) {
+      this.server.removedPageFiles.add(key);
+      this.server.refreshFileTrash(fileId);
+    }
+    this.server.lostMediaResponse('unlink_page_file');
+    return true;
+  }
+
+  async trashedFiles(projectId: string): Promise<TrashedFileRow[]> {
+    this.server.check();
+    this.server.mediaCalls.push(`trashed_files ${projectId}`);
+    if (!this.server.canSeeFileTrash(this.userId, projectId)) throw this.denied('not_allowed');
+    const day = 86_400_000;
+    return [...this.server.mediaFiles.values()]
+      .filter((f) => f.project_id === projectId && f.trashed_at && !f.drive_trashed_at)
+      .sort((a, b) => (a.trashed_at! < b.trashed_at! ? 1 : a.trashed_at! > b.trashed_at! ? -1 : a.id < b.id ? -1 : 1))
+      .map((f) => ({
+        id: f.id,
+        name: f.name,
+        mime: f.mime,
+        size: f.size,
+        thumb_at: f.thumb_at,
+        trashed_at: f.trashed_at!,
+        days_left: Math.max(0, Math.ceil((Date.parse(f.trashed_at!) + 30 * day - Date.now()) / day)),
+        purged_at: f.purged_at ?? null,
+        ...this.server.trashedPageUse(f.id),
+      }));
+  }
+
+  async filesDueForPurge(projectId: string): Promise<DueFileRow[]> {
+    this.server.check();
+    this.server.mediaCalls.push(`files_due_for_purge ${projectId}`);
+    if (!this.server.canPurgeFiles(this.userId, projectId)) throw this.denied('not_allowed');
+    if (this.server.settings?.autoPurgeFiles !== true) return [];
+    const limit = Date.now() - 30 * 86_400_000;
+    return [...this.server.mediaFiles.values()]
+      .filter((f) => f.project_id === projectId && f.trashed_at && Date.parse(f.trashed_at) <= limit && !f.drive_trashed_at)
+      .sort((a, b) => (a.trashed_at! < b.trashed_at! ? -1 : 1))
+      .map((f) => ({ id: f.id, name: f.name, trashed_at: f.trashed_at! }));
+  }
+
+  async uploadThumb(fileId: string, data: Blob): Promise<void> {
+    this.server.check();
+    this.server.mediaCalls.push(`thumb ${fileId}`);
+    if (!this.server.mediaFiles.has(fileId)) throw new RemoteError('new row violates row-level security policy', true, '42501');
+    if (this.server.rejectThumbs) throw new RemoteError('The object exceeded the maximum allowed size', true);
+    // Sin upsert: si ya existe, está hecho.
+    if (!this.server.thumbs.has(fileId)) this.server.thumbs.set(fileId, data);
+    this.server.lostMediaResponse('thumb');
+  }
+
+  async setFileThumb(fileId: string): Promise<void> {
+    this.server.check();
+    this.server.mediaCalls.push(`set_file_thumb ${fileId}`);
+    const file = this.server.mediaFiles.get(fileId);
+    if (!file) throw fileNotFound();
+    file.thumb_at = new Date().toISOString();
+    this.server.lostMediaResponse('set_file_thumb');
+  }
+
+  async downloadThumb(fileId: string): Promise<Blob> {
+    this.server.check();
+    const thumb = this.server.thumbs.get(fileId);
+    if (!thumb) throw new RemoteError('Object not found', true);
+    return thumb;
+  }
+
+  async fetchMediaFiles(ids: string[]): Promise<MediaFileRow[]> {
+    this.server.check();
+    return ids.flatMap((id) => {
+      const f = this.server.mediaFiles.get(id);
+      if (!f) return [];
+      const { size: _s, created_by: _c, ...row } = f;
+      return [{ ...row }];
+    });
+  }
+
+  // --- comentarios (mismas reglas que supabase/migrations/20260930170000_comentarios.sql) ---
+
+  /** `private.page_level`; sin las reglas del equipo, quien ve la página la puede todo (como antes). */
+  private commentLevel(pageId: string): number {
+    if (!this.server.pages.has(pageId)) return 0;
+    return this.team ? this.server.pageLevel(this.userId, pageId) : 4;
+  }
+
+  private commentCheck(name: string): void {
+    this.server.check();
+    this.server.commentCalls.push(name);
+    if (this.server.commentsServerError) throw new RemoteError('Internal Server Error', false, '500');
+  }
+
+  private lostCommentResponse(name: 'add' | 'edit' | 'delete' | 'resolve'): void {
+    if (this.server.loseCommentResponse.delete(name)) throw new RemoteError('Failed to fetch', false, undefined, true);
+  }
+
+  async fetchComments(pageId: string): Promise<CommentRow[]> {
+    this.server.check();
+    // La política de la tabla: se ven los de las páginas que se ven.
+    if (this.commentLevel(pageId) < 1) return [];
+    return [...this.server.comments.values()]
+      .filter((c) => c.page_id === pageId)
+      .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1))
+      .map(({ updated_at: _u, ...c }) => ({ ...c, body: c.deleted_at ? null : c.body }));
+  }
+
+  async listComments(pageId: string, since: string | null): Promise<(CommentRow & { updated_at?: string })[] | null> {
+    this.server.check();
+    if (!this.server.listCommentsEnabled) return null;
+    this.server.commentCalls.push(`list ${since ?? 'all'}`);
+    if (this.commentLevel(pageId) < 1) throw new RemoteError('page_not_found', true, 'P0002');
+    return [...this.server.comments.values()]
+      .filter((c) => c.page_id === pageId && (since === null || (c.updated_at ?? c.created_at) > since))
+      .map((c) => ({ ...c, body: c.deleted_at ? null : c.body, updated_at: c.updated_at ?? c.created_at }));
+  }
+
+  async fetchCommentAuthors(pageId: string): Promise<CommentAuthor[]> {
+    this.server.check();
+    this.server.commentCalls.push('authors');
+    if (this.commentLevel(pageId) < 1) throw new RemoteError('page_not_found', true, 'P0002');
+    const ids = new Set<string>();
+    for (const c of this.server.comments.values()) {
+      if (c.page_id !== pageId) continue;
+      for (const id of [c.author_id, c.resolved_by, c.deleted_by]) if (id) ids.add(id);
+    }
+    return [...ids].map((id) => ({ user_id: id, email: this.server.members.get(id)?.email ?? `${id}@test` }));
+  }
+
+  async addComment(c: NewComment): Promise<void> {
+    this.commentCheck(`add ${c.id}`);
+    const lvl = this.commentLevel(c.pageId);
+    if (lvl < 1) throw new RemoteError('page_not_found', true, 'P0002');
+    if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
+    let block = c.blockId;
+    if (c.threadId) {
+      if (c.threadId === c.id) throw new RemoteError('thread_invalid', true, '22023');
+      const root = this.server.comments.get(c.threadId);
+      if (!root) throw new RemoteError('thread_not_found', true, 'P0002');
+      if (root.page_id !== c.pageId) throw new RemoteError('thread_other_page', true, 'P0001');
+      if (root.thread_id || (block !== null && block !== root.block_id)) throw new RemoteError('thread_invalid', true, '22023');
+      block = root.block_id;
+    }
+    if (!/\S/.test(c.body) || c.body.length > 10000 || (block !== null && !/^[A-Za-z0-9_-]{1,128}$/.test(block))) {
+      throw new RemoteError('new row for relation "comments" violates check constraint', true, '23514');
+    }
+    const cur = this.server.comments.get(c.id);
+    if (cur) {
+      if (cur.author_id !== this.userId || cur.page_id !== c.pageId || cur.block_id !== block || cur.thread_id !== c.threadId || cur.body !== c.body) {
+        throw new RemoteError('comment_conflict', true, 'P0001');
+      }
+    } else {
+      this.server.comments.set(c.id, {
+        id: c.id,
+        page_id: c.pageId,
+        block_id: block,
+        thread_id: c.threadId,
+        body: c.body,
+        author_id: this.userId,
+        created_at: this.server.commentNow(),
+        updated_at: this.server.commentNow(),
+        edited_at: null,
+        resolved_at: null,
+        resolved_by: null,
+        deleted_at: null,
+        deleted_by: null,
+      });
+    }
+    this.lostCommentResponse('add');
+  }
+
+  async editComment(id: string, body: string): Promise<void> {
+    this.commentCheck(`edit ${id}`);
+    const cur = this.server.comments.get(id);
+    const lvl = cur ? this.commentLevel(cur.page_id) : 0;
+    if (!cur || lvl < 1) throw new RemoteError('comment_not_found', true, 'P0002');
+    if (cur.author_id !== this.userId) throw new RemoteError('not_allowed', true, '42501');
+    if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
+    if (cur.deleted_at) throw new RemoteError('comment_deleted', true, 'P0001');
+    if (cur.body !== body) {
+      if (!/\S/.test(body) || body.length > 10000) throw new RemoteError('check constraint', true, '23514');
+      cur.body = body;
+      cur.edited_at = this.server.commentNow();
+      cur.updated_at = cur.edited_at;
+    }
+    this.lostCommentResponse('edit');
+  }
+
+  async deleteComment(id: string): Promise<void> {
+    this.commentCheck(`delete ${id}`);
+    const cur = this.server.comments.get(id);
+    const lvl = cur ? this.commentLevel(cur.page_id) : 0;
+    if (!cur || lvl < 1) throw new RemoteError('comment_not_found', true, 'P0002');
+    if (!((cur.author_id === this.userId && lvl >= 2) || lvl >= 4)) throw new RemoteError('not_allowed', true, '42501');
+    if (!cur.deleted_at) {
+      cur.deleted_at = this.server.commentNow();
+      cur.deleted_by = this.userId;
+      cur.updated_at = cur.deleted_at;
+    }
+    this.lostCommentResponse('delete');
+  }
+
+  async resolveThread(threadId: string, resolved: boolean): Promise<void> {
+    this.commentCheck(`resolve ${threadId} ${resolved}`);
+    const root = this.server.comments.get(threadId);
+    const lvl = root ? this.commentLevel(root.page_id) : 0;
+    if (!root || lvl < 1) throw new RemoteError('thread_not_found', true, 'P0002');
+    if (root.thread_id) throw new RemoteError('thread_invalid', true, '22023');
+    if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
+    if (resolved && !root.resolved_at) {
+      root.resolved_at = this.server.commentNow();
+      root.resolved_by = this.userId;
+      root.updated_at = root.resolved_at;
+    } else if (!resolved && root.resolved_at) {
+      root.resolved_at = null;
+      root.resolved_by = null;
+      root.updated_at = this.server.commentNow();
+    }
+    this.lostCommentResponse('resolve');
+  }
+
+}
+
+
+/**
+ * Lo que el navegador saca de un archivo, simulado: una foto o un video tienen medidas y miniatura; un HEIC
+ * no (como en Chrome de Windows).
+ */
+export async function fakeProbe(_file: Blob, mime: string): Promise<Probe> {
+  if (mime === 'image/heic') return { width: null, height: null, duration: null, thumb: null };
+  const video = mime.startsWith('video/');
+  return {
+    width: video ? 3840 : 4032,
+    height: video ? 2160 : 3024,
+    duration: video ? 21.4 : null,
+    thumb: new Blob([new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3])], { type: 'image/jpeg' }),
+  };
 }
 
 export interface Device {
@@ -205,8 +1241,13 @@ export interface Device {
   tree: PageTree;
   docs: PageDocs;
   files: PageFiles;
+  media: MediaQueue;
+  mediaDb: MediaDb;
   engine: SyncEngine;
   remote: FakeRemote;
+  access: AccessStore;
+  comments: CommentQueue;
+  commentsDb: CommentsDb;
 }
 
 /** Un dispositivo con su propia base local. Reusar `dbName` simula cerrar y volver a abrir la app. */
@@ -215,13 +1256,107 @@ export async function makeDevice(
   dbName: string = crypto.randomUUID(),
   appVersion = '0.021',
   docsOptions: PageDocsOptions = {},
+  schemaVersion?: number,
+  /** La persona que usa el dispositivo; por defecto, el dueño del workspace. */
+  user: { id?: string; email?: string } = {},
 ): Promise<Device> {
   const db = await openLocalDb(dbName);
-  const remote = new FakeRemote(server, appVersion);
-  const tree = new PageTree(db, server.workspaceId);
+  const remote = new FakeRemote(server, appVersion, user.id, user.email);
+  const access = new AccessStore(db, remote.userId);
+  await access.load();
+  const tree = new PageTree(db, (server.team ? await remote.ensureWorkspace().catch(() => null) : null) ?? server.workspaceId);
   await tree.load();
-  const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, ...docsOptions });
+  // Como la app: sin "Edit", las reparaciones quedan en memoria.
+  const docs = new PageDocs(db, {
+    normalize: mergeRootGroups,
+    seed: seedIfEmpty,
+    canWrite: (pageId) => new Permissions(tree, access.get(), remote.userId).canEditPage(pageId),
+    ...docsOptions,
+  });
   const files = new PageFiles(db, remote);
-  const engine = new SyncEngine(remote, tree, docs, files, { appVersion });
-  return { db, tree, docs, files, engine, remote };
+  const mediaDb = await openMediaDb(mediaDbName(dbName));
+  const media = new MediaQueue(server.mediaDbFails ? null : mediaDb, remote, {
+    // El portero en memoria sabe quién pide por el token (`token:<usuario>`).
+    portero: (url) =>
+      new Portero(url, { fetch: server.portero.fetch, token: async () => `token:${remote.userId}`, wait: async () => undefined }),
+    projectOf: (pageId) => tree.get(pageId)?.workspace_id,
+    onForeignFile: (name) => server.foreignNotices.push(name),
+    probe: fakeProbe,
+    playMark: async (thumb) => thumb,
+    now: () => Date.now() + server.clockOffset,
+  });
+  await media.load();
+  const commentsDb = await openCommentsDb(commentsDbName(dbName));
+  const comments = new CommentQueue(commentsDb, remote, remote.userId, { now: () => Date.now() + server.clockOffset });
+  await comments.load();
+  const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media, access, comments });
+  return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb };
+}
+
+/** Lo que se corta al matar la app (un dispositivo, o la versión publicada sin motor). */
+export interface Killable {
+  docs: { dispose(): void };
+  engine?: { stop(): void };
+  db: { close(): void };
+}
+
+/** Deja correr `n` microtareas (sin que avance IndexedDB, que va por tareas). */
+export const microtasks = async (n = 20) => {
+  for (let i = 0; i < n; i++) await Promise.resolve();
+};
+
+/**
+ * La página se va de golpe (una recarga, un cierre, el sistema que mata la app): se pierde todo lo que está
+ * en memoria y el navegador aborta las transacciones que todavía no se estaban confirmando. Las que ya
+ * llamaron a `commit()` terminan (es lo que se midió en el navegador: ver
+ * Docs/Doc_Investigacion_Intermitente.md). Hay que llamar a `watchTransactions` antes de lo que se quiera
+ * cortar.
+ */
+export function watchTransactions(): { kill: (d: Killable) => Promise<void>; restore: () => void } {
+  const proto = IDBDatabase.prototype as unknown as { transaction: (...args: unknown[]) => IDBTransaction };
+  const txProto = IDBTransaction.prototype as unknown as { commit: () => void };
+  const realTransaction = proto.transaction;
+  const realCommit = txProto.commit;
+  const open = new Set<IDBTransaction>();
+  const committing = new WeakSet<IDBTransaction>();
+  proto.transaction = function (this: IDBDatabase, ...args: unknown[]) {
+    const tx = realTransaction.apply(this, args);
+    open.add(tx);
+    const finish = () => open.delete(tx);
+    tx.addEventListener('complete', finish);
+    tx.addEventListener('abort', finish);
+    tx.addEventListener('error', finish);
+    return tx;
+  };
+  txProto.commit = function (this: IDBTransaction) {
+    committing.add(this);
+    return realCommit.call(this);
+  };
+  const restore = () => {
+    proto.transaction = realTransaction;
+    txProto.commit = realCommit;
+  };
+  return {
+    restore,
+    kill: async (d: Killable) => {
+      for (const tx of open) {
+        // Las de solo lectura no cambian nada de lo guardado: da igual si terminan.
+        if (committing.has(tx) || tx.mode !== 'readwrite') continue;
+        // En el navegador no queda nadie esperando a la transacción; acá sí, y su rechazo no se atiende.
+        (wrap(tx) as unknown as { done: Promise<void> }).done.catch(() => undefined);
+        try {
+          tx.abort();
+        } catch {
+          // Ya estaba terminando.
+        }
+      }
+      restore();
+      // Lo de memoria se pierde: no se escribe nada más desde este dispositivo.
+      d.docs.dispose();
+      d.engine?.stop();
+      d.db.close();
+      // Que terminen de abortarse (y de confirmarse) antes de volver a abrir la base.
+      await new Promise((r) => setTimeout(r, 20));
+    },
+  };
 }

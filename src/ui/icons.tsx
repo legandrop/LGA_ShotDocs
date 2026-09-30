@@ -39,6 +39,7 @@ export const UploadingIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13
 export const OfflineIcon = icon('M6.5 15h7a3 3 0 0 0 .5-5.96A4.5 4.5 0 0 0 6 7.5 3.75 3.75 0 0 0 6.5 15zM3.5 3.5l13 13', {
   strokeWidth: 1.6,
 });
+export const DriveIcon = icon('M6.5 15h7a3 3 0 0 0 .5-5.96A4.5 4.5 0 0 0 6 7.5 3.75 3.75 0 0 0 6.5 15z');
 export const WarningIcon = icon('M10 3.5l7 12.25H3zM10 8.5v3.25M10 13.9v.1', { strokeWidth: 1.6 });
 export const ErrorIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM10 6.75v3.75M10 13.2v.1', {
   strokeWidth: 1.6,
@@ -58,11 +59,26 @@ export const ArrowLeftIcon = icon('M16 10H4M9 5l-5 5 5 5', { strokeWidth: 1.6 })
 export const MailIcon = icon('M4.5 5h11a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 13.5v-7A1.5 1.5 0 0 1 4.5 5zM3.5 6l6.5 5 6.5-5');
 export const SearchIcon = icon('M9 3.75a5.25 5.25 0 1 1 0 10.5 5.25 5.25 0 0 1 0-10.5zM13 13l3.5 3.5', { strokeWidth: 1.6 });
 export const ScriptIcon = icon('M5.5 3h9v14h-9zM8 6.5h4M7.5 9.5h1.5M11 9.5h1.5M8 12.5h4');
+export const CommentIcon = icon('M4.75 4h10.5c.7 0 1.25.55 1.25 1.25v7c0 .7-.55 1.25-1.25 1.25H9l-3.5 2.75V13.5h-.75c-.7 0-1.25-.55-1.25-1.25v-7C3.5 4.55 4.05 4 4.75 4z');
+export const QuestionIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1', {
+  strokeWidth: 1.6,
+});
 export const SheetIcon = icon('M5.5 2.75h9v14.5h-9zM7.75 5.5h4.5M7.75 8h4.5M7.75 10.5h3');
+export const PrintIcon = icon(
+  'M5.5 7.5V3.25h9V7.5M5.5 14H3.75a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1h12.5a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H14.5M5.5 11.5h9v5.25h-9z',
+);
 export const FilmIcon = icon(
   'M4.75 4.5h10.5c.7 0 1.25.55 1.25 1.25v8.5c0 .7-.55 1.25-1.25 1.25H4.75c-.7 0-1.25-.55-1.25-1.25v-8.5c0-.7.55-1.25 1.25-1.25zM8.5 7.75v4.5l3.75-2.25z',
 );
+export const CloseIcon = icon('M5 5l10 10M15 5L5 15', { strokeWidth: 1.7 });
+export const ChevronLeftIcon = icon('M12 4.5L6.5 10l5.5 5.5', { strokeWidth: 1.8 });
+export const ChevronRightIcon = icon('M8 4.5l5.5 5.5L8 15.5', { strokeWidth: 1.8 });
+export const DownloadIcon = icon('M10 3.5v9M6.25 9L10 12.75 13.75 9M4 16.25h12', { strokeWidth: 1.6 });
 export const HeaderIcon = icon('M4 6h12M4 10h7M4 14h9');
+export const ShareIcon = icon('M10 12.5V3.75M6.75 7L10 3.75 13.25 7M5.5 10.5H5a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1h-.5');
+export const MembersIcon = icon(
+  'M7.5 9.25a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5zM2.75 16.25a4.75 4.75 0 0 1 9.5 0M13.25 4a2.5 2.5 0 0 1 0 5M14.5 11.75a4.25 4.25 0 0 1 2.75 4.5',
+);
 
 export const MoreIcon = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

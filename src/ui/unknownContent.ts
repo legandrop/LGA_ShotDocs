@@ -1,7 +1,5 @@
-import { BlockNoteEditor } from '@blocknote/core';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { schema } from './editorSchema';
 
 // El editor borra del documento compartido lo que no conoce: un tipo de bloque (o de contenido en línea)
 // que no está en su esquema, o un texto con una marca desconocida (en ese caso, el párrafo entero). Ese
@@ -14,17 +12,40 @@ export interface KnownContent {
   marks: ReadonlySet<string>;
 }
 
-let known: KnownContent | null = null;
+// Los nombres de bloques, contenidos en línea y marcas del esquema de esta versión del editor
+// (`editorSchema.ts`), escritos acá para que la sincronización pueda revisar sin cargar el editor, que se
+// baja aparte (roadmap B.4). Una prueba (unknownContent.test.ts) los compara con el esquema real: si el
+// esquema o BlockNote cambian, falla hasta que se actualicen.
+//
+// Sin `doc` ni `text`: están en el esquema, pero y-prosemirror nunca los guarda como elemento (la raíz es
+// el fragmento y el texto es XmlText). Un elemento con uno de esos nombres el editor lo borraría.
+const NEVER_ELEMENTS: ReadonlySet<string> = new Set(['doc', 'text']);
+const KNOWN_NODES = [
+  'blockContainer',
+  'blockGroup',
+  'bulletListItem',
+  'checkListItem',
+  'codeBlock',
+  'divider',
+  'hardBreak',
+  'heading',
+  'image',
+  'numberedListItem',
+  'paragraph',
+  'quote',
+  'table',
+  'tableCell',
+  'tableHeader',
+  'tableParagraph',
+  'tableRow',
+  'toggleListItem',
+];
+const KNOWN_MARKS = ['backgroundColor', 'bold', 'code', 'italic', 'link', 'strike', 'textColor', 'underline'];
 
-/** Los nombres de bloques, contenidos en línea y marcas del esquema de esta versión del editor. */
+const known: KnownContent = { nodes: new Set(KNOWN_NODES), marks: new Set(KNOWN_MARKS) };
+
+/** Los nombres de elementos (bloques, contenidos en línea) y de marcas que esta versión del editor conoce. */
 export function knownContent(): KnownContent {
-  if (!known) {
-    const editor = BlockNoteEditor.create({ schema });
-    known = {
-      nodes: new Set(Object.keys(editor.pmSchema.nodes)),
-      marks: new Set(Object.keys(editor.pmSchema.marks)),
-    };
-  }
   return known;
 }
 
@@ -37,7 +58,7 @@ export function findUnknownContent(doc: Y.Doc, schemaNames: KnownContent = known
   while (stack.length > 0) {
     const item = stack.pop();
     if (item instanceof Y.XmlElement) {
-      if (!schemaNames.nodes.has(item.nodeName)) return `"${item.nodeName}"`;
+      if (NEVER_ELEMENTS.has(item.nodeName) || !schemaNames.nodes.has(item.nodeName)) return `"${item.nodeName}"`;
       stack.push(...item.toArray());
     } else if (item instanceof Y.XmlText) {
       for (const op of item.toDelta() as { attributes?: Record<string, unknown> }[]) {
