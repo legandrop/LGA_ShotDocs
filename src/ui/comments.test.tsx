@@ -10,7 +10,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { CommentsPanel, when } from './CommentsPanel';
-import { closeComments } from './commentsUi';
+import { closeComments, showComments } from './commentsUi';
 import { paragraphProps, schema } from './editorSchema';
 import { PageEditor } from './PageEditor';
 
@@ -203,6 +203,32 @@ describe('comentarios en la página', () => {
     expect(panel.querySelector('textarea')).toBeNull();
     expect([...panel.querySelectorAll('button')].map((b) => b.textContent)).not.toContain('Reply');
     expect(host.querySelector('.comment-add')).toBeNull();
+  });
+});
+
+describe('el panel en la página', () => {
+  it('en la computadora ancha la página se corre: el selector de styles.css aplica con el panel adentro de la página', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(`${process.cwd()}/src/styles.css`, 'utf8');
+    const selectors = [...css.matchAll(/^\s*(\.main:has\([^)]*comments-panel[^)]*\)[^{]*)\{/gm)].map((m) => m[1].trim());
+    expect(selectors.length).toBeGreaterThanOrEqual(2);
+
+    const { guest, page } = await sharedPage('comment');
+    const { PageView } = await import('./PageView');
+    const host = await mount(
+      services(guest, 'cli'),
+      <main className="main">
+        <header className="topbar" />
+        <PageView id={page} />
+      </main>,
+    );
+    await act(async () => showComments());
+    await wait();
+    const main = host.querySelector('main')!;
+    expect(main.querySelector('.comments-panel')).not.toBeNull();
+    for (const sel of selectors) expect(document.querySelector(sel), sel).not.toBeNull();
+    await act(async () => closeComments());
+    for (const sel of selectors) expect(document.querySelector(sel), sel).toBeNull();
   });
 });
 
