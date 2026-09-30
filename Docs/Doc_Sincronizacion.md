@@ -22,7 +22,7 @@ el editor de la versión publicada) y `src/ui/comments.test.tsx` (el editor y el
 |---|---|---|
 | Base local | `localDb.ts` | Una base IndexedDB por workspace y usuario (`shotdocs:<clave local>:<userId>`, ver abajo), compartida por todos los proyectos de la app: copia del árbol, cola de salida, updates de contenido, estado de cada página e imágenes. |
 | Contenido | `docs.ts` | Un documento Yjs por página. Guarda cada edición en el dispositivo y sube o baja lo que falte. |
-| Estructura | `structure.ts` | La raíz inicial de cada página (la "semilla", con su texto vacío desde v0.054) y la reparación de estructura: documentos viejos con dos raíces y bloques que el editor borraría (ver "Fusión" y `Doc_Colaboracion.md`). |
+| Estructura | `structure.ts` | La raíz inicial de cada página (la "semilla", con su texto vacío desde v0.052) y la reparación de estructura: documentos viejos con dos raíces y bloques que el editor borraría (ver "Fusión" y `Doc_Colaboracion.md`). |
 | Árbol | `tree.ts` | La copia del árbol que mandó el servidor más la cola de cambios locales encima. |
 | Imágenes | `files.ts` | Guarda la imagen pegada en el dispositivo y la sube cuando hay red (sin portero). |
 | Fotos y videos | `../media/queue.ts` | Los guarda en el dispositivo (base aparte) y los sube al Drive del dueño por el portero. Ver "Archivos grandes". |
@@ -153,7 +153,7 @@ y no sube `DB_SCHEMA_VERSION`: con la base sin migrar, eso no se muestra y no ha
    transacción que aplica lo recibido. La reparación copia los bloques y borra la raíz sobrante, así que lo
    que otro dispositivo escriba en esa raíz después de la copia se pierde: por eso es solo el último
    recurso. `src/sync/editor.test.ts` prueba los dos casos con el editor real.
-   Desde v0.054 la semilla lleva además, con otro autor fijo que también sale del id de la página, un texto
+   Desde v0.052 la semilla lleva además, con otro autor fijo que también sale del id de la página, un texto
    vacío adentro del párrafo (la raíz sigue igual, byte por byte): dos dispositivos que escriben a la vez en la
    primera línea de una página nueva escriben en el mismo texto. Y la reparación, además de juntar raíces,
    arregla los bloques que dos cambios de estructura a la vez dejan de una forma que el editor no acepta (dos

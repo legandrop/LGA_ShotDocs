@@ -1,6 +1,6 @@
 # Editar a la vez: qué puede pasar y qué se arregló
 
-Estado: **hecho en v0.054** (rama `lega/sync-arreglos`). Sale de una investigación con el editor real
+Estado: **hecho en v0.052** (rama `lega/sync-arreglos`). Sale de una investigación con el editor real
 (BlockNote 0.55, y-prosemirror 1.3.7, Yjs 13.6) que encontró pérdidas de texto reales cuando dos personas (o
 dos dispositivos de la misma persona) editan la misma página a la vez. Complementa `Doc_Sincronizacion.md`
 ("Contenido de las páginas", punto 5), que explica cómo se guarda y se sube cada cambio.
@@ -56,7 +56,7 @@ Dos cosas más, sin pérdida de texto:
 Y una que sí puede perder texto, mientras queden páginas de antes: **los párrafos vacíos hechos con v0.053 o
 antes** (cualquiera, no solo el primero de una página) no tienen texto adentro. Siguen expuestos al caso 2 de
 abajo (dos personas escribiendo a la vez en ese mismo párrafo vacío) hasta que alguien escribe en él; desde ahí
-ya tiene su texto y queda como los nuevos. Los párrafos vacíos que se crean desde v0.054 (Enter, un tipo nuevo,
+ya tiene su texto y queda como los nuevos. Los párrafos vacíos que se crean desde v0.052 (Enter, un tipo nuevo,
 una página nueva) ya nacen con su texto.
 
 ## Qué se arregló
@@ -72,7 +72,7 @@ una página nueva) ya nacen con su texto.
    cada dispositivo, al escribir, creaba su propio texto, y después y-prosemirror los juntaba copiando uno en el
    otro y borrando el segundo; lo que se escribía en el borrado mientras tanto se perdía (o quedaba dos veces).
    Arreglado con el otro parche: un párrafo vacío lleva un texto vacío, y los dos escriben en el mismo. Vale
-   para los párrafos vacíos que se crean desde v0.054; los de antes, ver arriba.
+   para los párrafos vacíos que se crean desde v0.052; los de antes, ver arriba.
 3. **La primera línea de cada página nueva.** Las páginas nuevas arrancan con la "semilla" (`structure.ts`): un
    párrafo vacío que todos los dispositivos crean igual. Era justo el caso 2: toda página nueva abierta en dos
    dispositivos estaba expuesta. Ahora la semilla lleva el texto vacío, creado igual en todos los dispositivos
@@ -135,7 +135,7 @@ formato de lo guardado (Yjs 14), así que no es una actualización común: hay q
 páginas guardadas, la convivencia con versiones viejas (`min_app_version`) y volver a pasar todas estas pruebas.
 Está en el roadmap (B.10).
 
-## La semilla (v0.054)
+## La semilla (v0.052)
 
 La raíz de la semilla es **la misma de siempre** (versión 1, v0.008), byte por byte: mismo autor de Yjs (sale del
 id de la página) y mismo contenido. Encima lleva una **capa de texto**: el texto vacío adentro del párrafo, escrito
@@ -159,7 +159,7 @@ Por qué así y no con una semilla "versión 2" entera:
 
 `src/sync/structure.test.ts` fija que la raíz es byte por byte la de la versión 1 y prueba cada caso.
 
-## La reparación (v0.054)
+## La reparación (v0.052)
 
 `normalizeStructure` (`structure.ts`) corre al abrir una página y con cada cambio que llega, en la misma
 transacción que lo aplica (`docs.ts`, `applyToLive`): el editor nunca ve la estructura rota. Hace lo de antes
@@ -211,6 +211,6 @@ del otro lado borra el bloque que quedó vacío). Con este arreglo, lo que esa p
 
 Nada de esto cambia el formato: una versión vieja lee todo. Pero una versión vieja **no tiene los arreglos**:
 sigue pudiendo deshacer cambios de otros con un editor viejo (caso 1) y borrar el bloque entero en el caso 4, y
-esos borrados le llegan a todos. **Conviene que Lega suba `min_app_version` a 0.054** después de publicar esta
+esos borrados le llegan a todos. **`min_app_version` sube a 0.052** al publicar esta
 versión (hoy está en 0.045): una versión vieja deja de poder subir contenido hasta actualizarse. No hace falta
-para no perder datos con la versión nueva; es para cerrar la puerta a las viejas. Decide Lega.
+para no perder datos con la versión nueva; es para cerrar la puerta a las viejas.

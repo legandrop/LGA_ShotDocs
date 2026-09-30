@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.054 :
+v0.052 :
 
 Editar a la vez sin perder texto (`Doc_Colaboracion.md`). Una investigación con el editor real encontró
 pérdidas que no tenían por qué pasar, y quedan arregladas: con un bloque elegido entero (una foto tocada), un
@@ -15,7 +15,9 @@ transacción que aplica lo que llega, y, si igual el editor no puede mostrar un 
 desde el documento antes de la próxima tecla. La prueba al azar por el camino de la app perdía texto en 26 de
 cada 100 corridas; ahora en 0 de 500. Lo que sigue pudiendo pasar (si uno le cambia el tipo, la sangría o la
 posición a un renglón mientras otro escribe en ese mismo renglón, lo del segundo se puede perder) es como
-funciona la librería y está explicado en el documento. Conviene subir `min_app_version` a esta versión.
+funciona la librería y está explicado en el documento. `min_app_version` sube a 0.052: las versiones
+anteriores no tienen estos arreglos. Además, al cerrar la app se espera a que termine la sincronización en curso
+(hasta 2 segundos) antes de cerrar la base, y las pruebas ya no dejan errores sueltos al cerrarla.
 [ Sync - editar a la vez sin perder texto ]
 
 v0.051 :

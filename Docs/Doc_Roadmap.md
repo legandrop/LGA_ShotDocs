@@ -192,12 +192,11 @@ Lega.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
    datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes.
 
-10. **Hecho lo principal: editar a la vez sin perder texto (v0.054).** Dos parches a y-prosemirror (el editor
+10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la
    semilla con un texto vacío, la reparación de bloques con dos contenidos o dos grupos de hijos, y volver a
    dibujar el editor si igual falla. La prueba al azar por el camino de la app pasó de 26 de cada 100 corridas
-   con pérdidas a 0 de 500. Ver `Doc_Colaboracion.md`. **Falta:** que Lega decida si sube `min_app_version` a
-   0.054; y **evaluar `@blocknote/core/y`** (la integración nueva de BlockNote sobre y-prosemirror 2 y Yjs 14),
+   con pérdidas a 0 de 500. Ver `Doc_Colaboracion.md`. `min_app_version` subió a 0.052 al publicar. **Falta:** **evaluar `@blocknote/core/y`** (la integración nueva de BlockNote sobre y-prosemirror 2 y Yjs 14),
    que compara bloques por identidad y podría resolver parte de lo que sigue pasando cuando uno cambia el
    tipo, la sangría o la posición de un renglón mientras otro escribe en él; cambia el formato de lo guardado,
    así que pide un plan de migración y convivencia de versiones.

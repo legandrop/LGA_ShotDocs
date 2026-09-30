@@ -19,7 +19,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 | [`Doc_Peso_Proyectos.md`](Doc_Peso_Proyectos.md) | Cuánto ocupa cada proyecto en el Drive (P.7, primera entrega hecha en v0.050) y el diseño de la lista de media por peso (P.8). |
 | [`Doc_Buscar.md`](Doc_Buscar.md) | Buscar y reemplazar en la página (Ctrl/⌘+F; entrega 1 hecha en v0.051; con P.11 abrirá las secciones colapsadas) y el diseño de la búsqueda en todo el proyecto (Ctrl/⌘+K): en el dispositivo, permisos, qué se busca, ir al resultado (P.12). |
 | [`Doc_Carrete.md`](Doc_Carrete.md) | El carrete: el visor a pantalla completa de las fotos y los videos de una página (qué entra, gestos, zoom, qué se ve sin red o si el navegador no puede reproducirlo, y cómo convive con la edición). |
-| [`Doc_Colaboracion.md`](Doc_Colaboracion.md) | Editar a la vez: qué puede pasar cuando dos personas cambian el mismo bloque (lo inherente de y-prosemirror), qué se arregló en v0.054, los parches de y-prosemirror y cómo revisarlos al actualizar, la semilla con texto y la reparación de bloques. |
+| [`Doc_Colaboracion.md`](Doc_Colaboracion.md) | Editar a la vez: qué puede pasar cuando dos personas cambian el mismo bloque (lo inherente de y-prosemirror), qué se arregló en v0.052, los parches de y-prosemirror y cómo revisarlos al actualizar, la semilla con texto y la reparación de bloques. |
 | [`Doc_Sincronizacion.md`](Doc_Sincronizacion.md) | Cómo funciona la sincronización offline sin pérdidas: contenido, árbol, imágenes y estado visible. |
 | [`Doc_Investigacion_Intermitente.md`](Doc_Investigacion_Intermitente.md) | Investigación del caso intermitente de la prueba de punta a punta (roadmap B.5) y de los dos cortes de `e2e.mjs` y `features.mjs`: qué se probó, tiempos, causas y correcciones propuestas sin aplicar. |
 | [`Guide_Create_Workspace.md`](Guide_Create_Workspace.md) | **En inglés** (es para usuarios): la guía paso a paso para crear un workspace propio (dominio, Supabase y el comando `scripts/setup-workspace.mjs`, Resend, Google Cloud, Cloudflare, copias en GitHub, conectar la app y probar) y lo que las copias no cubren. |
@@ -45,7 +45,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 844 pruebas (v0.054): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 844 pruebas (v0.052): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`; las de editar a la vez son `src/ui/collab*.test.ts`, ver
   `Doc_Colaboracion.md`), el cliente del portero (`src/media/`), el portero
   (`portero/src/`) y el comando que prepara un workspace (`scripts/*.test.mjs`, sin red). `npm run typecheck`
