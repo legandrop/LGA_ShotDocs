@@ -7,7 +7,10 @@ its own project: a tree of pages you own.
 ## Goals
 
 - **Projects.** Each show or job is a project with its own tree of pages. Switch between them from the
-  top of the sidebar (or with Ctrl+K) without leaving the page you are on.
+  top of the sidebar without leaving the page you are on.
+- **Search.** Ctrl/⌘+F finds and replaces in the open page. Ctrl/⌘+K (or the magnifying glass next to
+  "+" in the sidebar) searches the titles and text of every page in the project, on your device and
+  offline, takes you to the exact spot, and lists matching projects to switch to.
 - **Pages and subpages.** A sidebar with a tree of pages, as deep as you need. Every page can hold
   content and other pages; a "folder" is just a page with no content.
 - **Visual editor.** Headings, lists, checklists, tables and images. You never see Markdown; it is only
@@ -92,7 +95,7 @@ Templates and the assistant come later. The plan, the decisions and the roadmap 
 npm install
 cp .env.example .env.local   # your Supabase project URL and publishable key
 npm run dev                  # http://localhost:5173
-npm test                     # all 752 tests: sync, editor, UI, file gateway client and Worker
+npm test                     # all 779 tests: sync, editor, UI, file gateway client and Worker
 npm run typecheck            # app types
 npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
 npm run build                # production build in dist/

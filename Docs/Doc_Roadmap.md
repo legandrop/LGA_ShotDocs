@@ -103,8 +103,10 @@ Lega.
   pantalla se marcan como si todo estuviera abierto (si una sección colapsada ocupa las páginas 2 a 4, el
   corte siguiente dice página 5); arrastrar un título colapsado mueve toda su sección; se saca "Encabezado
   plegable" del menú `/`. Diseño en `Doc_Colapsar.md` (en curso).
-- **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página**
-  (`Doc_Buscar.md`, "Cómo quedó"). Falta la entrega 2, buscar en el proyecto. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
+- **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página;
+  entrega 2 hecha (v0.053): buscar en el proyecto con Ctrl/⌘+K** (`Doc_Buscar.md`, "Cómo quedó (entrega 1)" y
+  "(entrega 2)"). Queda para después: reemplazar en el proyecto, la papelera, todos los proyectos y los
+  comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y
   contenido) y lleva al lugar. **En la página:** una lupa a la izquierda del ícono de comentarios, que busca en
   la página abierta, también adentro de las secciones colapsadas (P.11: el resultado abre la sección). A pensar

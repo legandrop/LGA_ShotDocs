@@ -1,5 +1,22 @@
 # Changelog — LGA Shot Docs
 
+v0.053 :
+
+Buscar en todo el proyecto (P.12, segunda entrega). Una lupa a la izquierda del "+" de "Páginas" en la barra
+lateral (la ve cualquiera, también quien no puede crear páginas), o Ctrl/⌘+K desde cualquier lado, abre un panel
+que busca en los títulos y el texto de todas las páginas del proyecto abierto que la persona ve, también en los
+pies de las fotos y los nombres de los archivos; no en la papelera ni en los comentarios. Sin mayúsculas ni
+tildes (la ñ vale como n) y con partes de palabras; cada palabra tiene que estar en algún lado de la página.
+Los resultados salen por página, con el camino ("Brief › Uruguay") y hasta tres fragmentos con lo encontrado
+resaltado; se recorren con ↑ ↓ y Enter, y Esc cierra. Elegir un resultado abre la página con la barra de
+buscar ya puesta en esa coincidencia (Enter sigue por las demás), también en la misma página; un resultado del
+título abre la página arriba. Busca en el dispositivo: anda sin red, un dispositivo nuevo encuentra páginas que
+nunca abrió, y avisa si faltan páginas por bajar o alguna no se pudo leer entera. El panel lista también los
+proyectos que coinciden: Ctrl/⌘+K ahora busca, y cambiar de proyecto sigue a dos teclas (el selector de
+arriba se abre con un clic). Con texto elegido en el editor, Ctrl/⌘+K sigue creando un link. En el teléfono el
+panel ocupa toda la pantalla y el cajón se cierra al ir al resultado.
+[ Buscar en el proyecto - segunda entrega ]
+
 v0.051 :
 
 Buscar y reemplazar en la página (P.12, primera entrega). Una lupa a la izquierda del ícono de comentarios, o
