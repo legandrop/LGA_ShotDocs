@@ -137,7 +137,9 @@ export class Portero {
   constructor(
     private readonly env: Env,
     private readonly store: Store,
-    private readonly http: typeof fetch = fetch,
+    // `fetch` guardado suelto y llamado como método pierde su `this`, y Workers lo corta ("Illegal
+    // invocation"): se llama siempre como la función global.
+    private readonly http: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
   async handle(req: Request): Promise<Response> {

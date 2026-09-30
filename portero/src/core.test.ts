@@ -304,4 +304,19 @@ describe('portero', () => {
     expect(status.connected).toBe(false);
     expect(status.broken).toMatch(/connect it again/);
   });
+
+  it('llama a fetch como función global (Workers corta un fetch con otro this: "Illegal invocation")', async () => {
+    const world = fakeWorld();
+    const real = globalThis.fetch;
+    globalThis.fetch = function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+      return world.http(input, init);
+    } as typeof fetch;
+    try {
+      const res = await call(new Portero(env, memoryStore()), '/drive/status', { jwt: 'owner-jwt' });
+      expect(res.status).toBe(200);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
 });

@@ -1,5 +1,13 @@
 # Changelog — LGA Shot Docs
 
+v0.024 :
+
+Corrección del portero: en Cloudflare cortaba cada pedido con "Illegal invocation", porque llamaba a la
+función que habla con Google y con Supabase desde otro objeto. Ahora la llama como función global, con
+una prueba que reproduce la regla de Cloudflare. Era lo que hacía que *Media test* dijera que no podía
+llegar al portero.
+[ Portero - Illegal invocation en Cloudflare ]
+
 v0.023 :
 
 El menú de la cuenta muestra la versión de la app al pie, así se ve enseguida si un dispositivo ya tiene
