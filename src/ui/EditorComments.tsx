@@ -15,11 +15,13 @@ import {
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
 import { insertOrUpdateBlockForSlashMenu } from '@blocknote/core';
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FC, type RefObject } from 'react';
 import { t, useT, type Translate } from '../i18n';
 import '../i18n/lazy/editor';
 import { useServices } from '../services';
 import { blockIdOf } from './carrete';
+import { hiddenInDom } from './collapseDom';
+import { onCollapseChange } from './collapseEditor';
 import {
   answerQuestion,
   blocksChanged,
@@ -180,12 +182,22 @@ const DragHandleMenuPlain = () => <CommentDragHandleMenu canComment={false} />;
 
 /** El menú lateral del editor con "Comment" en el menú del bloque (si se puede comentar). */
 export function CommentSideMenuController({ canComment }: { canComment: boolean }) {
-  return (
-    <SideMenuController
-      sideMenu={(props) => <SideMenu {...props} dragHandleMenu={canComment ? DragHandleMenuWithComment : DragHandleMenuPlain} />}
-    />
-  );
+  return <SideMenuController sideMenu={canComment ? SideMenuWithComment : SideMenuPlain} />;
 }
+
+/**
+ * El menú lateral de siempre. En un título se corre a la izquierda: ahí, pegado al texto, va el triángulo para
+ * colapsar (P.11, Docs/Doc_Colapsar.md).
+ */
+function ShiftedSideMenu({ dragHandleMenu }: { dragHandleMenu: FC }) {
+  const editor = useBlockNoteEditor();
+  const type = useExtensionState(SideMenuExtension, { editor, selector: (s) => s?.block?.type });
+  const menu = <SideMenu dragHandleMenu={dragHandleMenu} />;
+  return type === 'heading' ? <div className="sd-side-menu-heading">{menu}</div> : menu;
+}
+
+const SideMenuWithComment = () => <ShiftedSideMenu dragHandleMenu={DragHandleMenuWithComment} />;
+const SideMenuPlain = () => <ShiftedSideMenu dragHandleMenu={DragHandleMenuPlain} />;
 
 // --- Los bloques para el panel -------------------------------------------------------------------------
 
@@ -273,6 +285,8 @@ export function CommentMargin({
       });
     };
     const off = editor.onChange(bump);
+    // Colapsar o abrir una sección (P.11) mueve los bloques sin cambiar el documento.
+    const offCollapse = editor.prosemirrorView ? onCollapseChange(editor.prosemirrorView, bump) : undefined;
     const el = host.current;
     const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(bump) : null;
     if (el) resize?.observe(el);
@@ -281,6 +295,7 @@ export function CommentMargin({
     return () => {
       if (frame !== null) cancel(frame);
       off?.();
+      offCollapse?.();
       resize?.disconnect();
       window.removeEventListener('resize', bump);
       document.fonts?.removeEventListener?.('loadingdone', bump);
@@ -304,7 +319,8 @@ export function CommentMargin({
     const next: Mark[] = [];
     for (const id of ids) {
       const content = root.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${cssId(id)}"] > .bn-block-content`);
-      if (!content) continue;
+      // Un bloque en una sección colapsada no tiene lugar en pantalla (el panel lo sigue mostrando).
+      if (!content || hiddenInDom(content)) continue;
       const r = content.getBoundingClientRect();
       const mark: Mark = { id, top: r.top - base.top, count: counts.get(id) ?? 0 };
       if (questions.has(id)) {

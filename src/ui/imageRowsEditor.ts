@@ -2,6 +2,7 @@ import { createExtension, type BlockNoteEditor } from '@blocknote/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { NodeSelection, Plugin, PluginKey, Selection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import { BACKGROUND_META } from './editorMeta';
 import { groupRows, pxToRowWidth, snapRowWidth } from './imageRows';
 
 // Fotos en fila (Docs/Doc_Imagenes.md). Una fila NO es un bloque: son bloques `image` hermanos y seguidos
@@ -121,7 +122,8 @@ function convertResize(trs: readonly Transaction[], oldState: EditorState, newSt
   if (!(px > 0) || px === Number(before?.attrs.previewWidth)) return null;
   const f = snapRowWidth(pxToRowWidth(px, session.width, session.gap, session.n));
   if (f === Number(content.attrs[ROW_WIDTH_PROP])) return null;
-  return newState.tr.setNodeMarkup(now.pos + 1, undefined, { ...content.attrs, [ROW_WIDTH_PROP]: f });
+  // Lo hace la app (no la persona): no abre una sección colapsada (Docs/Doc_Colapsar.md).
+  return newState.tr.setNodeMarkup(now.pos + 1, undefined, { ...content.attrs, [ROW_WIDTH_PROP]: f }).setMeta(BACKGROUND_META, true);
 }
 
 /** Lo que hay que mover el tirador para que cuente como arrastre. */

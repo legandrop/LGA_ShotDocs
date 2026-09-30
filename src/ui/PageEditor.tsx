@@ -49,6 +49,12 @@ import { createDrivePaste } from './drivePaste';
 import { DrivePasteMenu } from './DrivePasteMenu';
 import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
 import { SheetBreaks } from './SheetBreaks';
+import type { HeadingRecord } from './collapse';
+import { collapseExtension, headingCounts, revealBlock, setAllCollapsed } from './collapseEditor';
+import { setCollapseControl } from './collapseControl';
+import { collapseSaver, loadCollapse } from './collapseStore';
+import { CollapseToggles } from './CollapseToggles';
+import { BACKGROUND_META } from './editorMeta';
 import { clickOpens, mousePressOpens } from './carreteClick';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
@@ -68,12 +74,12 @@ function scriptTypeItem(tr: Translate): BlockTypeSelectItem {
 
 type Opening =
   | { state: 'loading' }
-  | { state: 'ready'; doc: Y.Doc; complete: boolean }
+  | { state: 'ready'; doc: Y.Doc; complete: boolean; collapse: Map<string, HeadingRecord> }
   /** La página trae algo que esta versión del editor no conoce: abrirla lo borraría. */
   | { state: 'unsupported'; what: string };
 
 export function PageEditor({ pageId }: { pageId: string }) {
-  const { docs, engine } = useServices();
+  const { docs, engine, db } = useServices();
   const status = useSyncStatus();
   // Sin "Edit" (nivel 3) la página se abre en solo lectura (paso 9): el servidor rechazaría lo escrito.
   const perms = usePermissions();
@@ -97,19 +103,20 @@ export function PageEditor({ pageId }: { pageId: string }) {
     let opened = false;
     void engine.prefetchPage(pageId).then(async (complete) => {
       if (cancelled) return;
-      const doc = await docs.open(pageId, { seed: complete && canSeed });
+      // Lo colapsado para vos (P.11) se lee junto con la página: el editor se crea ya colapsado.
+      const [doc, collapse] = await Promise.all([docs.open(pageId, { seed: complete && canSeed }), loadCollapse(db, pageId)]);
       opened = true;
       if (cancelled) return docs.close(pageId);
       const unknown = findUnknownContent(doc);
       if (unknown) setOpening({ state: 'unsupported', what: unknown });
-      else setOpening({ state: 'ready', doc, complete });
+      else setOpening({ state: 'ready', doc, complete, collapse });
     });
     return () => {
       cancelled = true;
       if (opened) docs.close(pageId);
       setOpening({ state: 'loading' });
     };
-  }, [docs, engine, pageId, attempt, canSeed]);
+  }, [docs, engine, db, pageId, attempt, canSeed]);
 
   // Si llega del servidor algo que esta versión no conoce, el editor se cierra antes de que lo vea.
   useEffect(
@@ -157,6 +164,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
       <BlockEditor
         key={`${pageId}:${opening.complete}:${canEdit}:${tr.lang}`}
         doc={opening.doc}
+        collapse={opening.collapse}
         pageId={pageId}
         editable={opening.complete && canEdit}
         canComment={canComment}
@@ -185,11 +193,24 @@ function acceptedText(): string {
   return t('editor.attachNeedsDrive');
 }
 
-function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId: string; editable: boolean; canComment: boolean }) {
-  const { files, media, user } = useServices();
+function BlockEditor({
+  doc,
+  collapse,
+  pageId,
+  editable,
+  canComment,
+}: {
+  doc: Y.Doc;
+  /** Lo colapsado para vos (P.11): se actualiza en el lugar, así un editor que se vuelve a crear lo conserva. */
+  collapse: Map<string, HeadingRecord>;
+  pageId: string;
+  editable: boolean;
+  canComment: boolean;
+}) {
+  const { files, media, user, db } = useServices();
   const scheme = useScheme();
   const tr = useT();
-  const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
+  const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
   /** El adjunto con su hoja abierta (Docs/Doc_Adjuntos.md). */
   const [sheet, setSheet] = useState<string | null>(null);
@@ -225,6 +246,11 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   // Pegar un link de Drive ofrece dejarlo como link, como texto o como tarjeta (paso 13, drivePaste.ts).
   const drivePaste = useMemo(() => createDrivePaste(), []);
 
+  // Lo colapsado para vos (P.11, Docs/Doc_Colapsar.md): se guarda en la base local con una pausa, y lo que
+  // falte se escribe al cerrar la página.
+  const collapseSave = useMemo(() => collapseSaver(db, pageId), [db, pageId]);
+  useEffect(() => () => void collapseSave.flush(), [collapseSave]);
+
   const editor = useCreateBlockNote(
     withCollaboration({
       ...editorSchemaOptions,
@@ -245,7 +271,11 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
           if (blockId) {
             setTimeout(() => {
               try {
-                editorRef.current?.removeBlocks([blockId]);
+                const current = editorRef.current;
+                current?.transact((tr) => {
+                  tr.setMeta(BACKGROUND_META, true);
+                  current.removeBlocks([blockId]);
+                });
               } catch {
                 // El bloque ya no está.
               }
@@ -268,11 +298,39 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
         fragment: doc.getXmlFragment(CONTENT_FRAGMENT),
         user: { name: user.email, color: '#2383e2' },
       },
+      extensions: [
+        collapseExtension({
+          initial: collapse,
+          save: (records: ReadonlyMap<string, HeadingRecord>) => {
+            collapse.clear();
+            for (const [id, r] of records) collapse.set(id, r);
+            collapseSave.save(records);
+          },
+        }),
+      ],
     }),
     [doc],
   );
 
-  editorRef.current = editor as unknown as { removeBlocks: (ids: string[]) => unknown };
+  // El menú de la página ("Colapsar todo / Abrir todo") y "Ir al bloque" de los comentarios llegan acá.
+  useEffect(
+    () =>
+      setCollapseControl({
+        pageId,
+        counts: () => headingCounts(editor.prosemirrorState),
+        setAll: (collapsed) => {
+          const view = editor.prosemirrorView;
+          if (view) setAllCollapsed(view, collapsed);
+        },
+        reveal: (blockId) => {
+          const view = editor.prosemirrorView;
+          return view ? revealBlock(view, blockId) : false;
+        },
+      }),
+    [editor, pageId],
+  );
+
+  editorRef.current = editor as unknown as NonNullable<typeof editorRef.current>;
 
   useEffect(() => {
     const focus = () => editor.focus();
@@ -297,7 +355,13 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
             .then((r) => r.blob())
             .then((blob) => storeEmbedded(blob))
             .then((stored) => {
-              if (editor.getBlock(block.id)) editor.updateBlock(block.id, { props: { url: stored } } as never);
+              // Un cambio de la app, no de la persona: no abre una sección colapsada (Doc_Colapsar.md).
+              if (editor.getBlock(block.id)) {
+                editor.transact((tr) => {
+                  tr.setMeta(BACKGROUND_META, true);
+                  editor.updateBlock(block.id, { props: { url: stored } } as never);
+                });
+              }
             })
             .catch((err: unknown) =>
               notify(
@@ -364,7 +428,10 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
       onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: { [SCRIPT_PROP]: true } }),
     };
     // "/Paragraph" en una línea Script también le saca la marca de guion.
-    const items = getDefaultReactSlashMenuItems(editor).map((item) =>
+    // Sin los "encabezados plegables" de BlockNote: todos los títulos se colapsan (P.11, Doc_Colapsar.md).
+    const items = getDefaultReactSlashMenuItems(editor)
+      .filter((item) => !TOGGLE_HEADING_KEYS.has(String((item as { key?: string }).key)))
+      .map((item) =>
       (item as { key?: string }).key === 'paragraph' || item.title === editor.dictionary.slash_menu.paragraph.title
         ? {
             ...item,
@@ -386,7 +453,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   }, [editor, tr]);
 
   const toolbarItems = useMemo(
-    () => paragraphVariantItems(blockTypeSelectItems(editor.dictionary), scriptTypeItem(tr), tr),
+    () => paragraphVariantItems(headingItems(blockTypeSelectItems(editor.dictionary)), scriptTypeItem(tr), tr),
     [editor, tr],
   );
 
@@ -587,6 +654,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
         <CommentSideMenuController canComment={canComment} />
       </BlockNoteView>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
+      {/* El triángulo de cada título (P.11): una capa encima, como el margen. */}
+      <CollapseToggles editor={editor} host={host} editable={editable} />
       {/* Dónde empieza cada hoja (solo una capa encima; roadmap B.7). */}
       <SheetBreaks pageId={pageId} host={host} />
       {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}
@@ -610,6 +679,23 @@ function CarreteHost(props: OpenCarrete & { onClose: () => void }) {
       <Carrete {...props} online={online} />
     </Part>
   );
+}
+
+/** Los "encabezados plegables" del menú "/" (P.11: todos los títulos se colapsan con el triángulo). */
+const TOGGLE_HEADING_KEYS = new Set(['toggle_heading', 'toggle_heading_2', 'toggle_heading_3']);
+
+/**
+ * El selector de tipo sin los encabezados plegables, y los títulos sin `isToggleable`: así un plegable viejo
+ * aparece como su título en el selector (se compara solo el nivel) y pasar a otro nivel no lo cambia.
+ */
+function headingItems(items: BlockTypeSelectItem[]): BlockTypeSelectItem[] {
+  return items
+    .filter((item) => !(item.type === 'heading' && item.props?.isToggleable === true))
+    .map((item) => {
+      if (item.type !== 'heading' || !item.props || !('isToggleable' in item.props)) return item;
+      const { isToggleable: _t, ...props } = item.props;
+      return { ...item, props };
+    });
 }
 
 function flatten(blocks: Block[]): Block[] {

@@ -103,7 +103,9 @@ Lega.
   pantalla se marcan como si todo estuviera abierto (si una sección colapsada ocupa las páginas 2 a 4, el
   corte siguiente dice página 5); arrastrar un título colapsado mueve toda su sección; se saca "Encabezado
   plegable" del menú `/`. **Diseño en [`Doc_Colapsar.md`](Doc_Colapsar.md)** (sin tipo de bloque ni propiedad
-  nueva; quedan algunas decisiones a confirmar).
+  nueva). **Entrega 1a hecha (v0.051):** colapsar para vos, con toda la seguridad al editar, las marcas de hoja
+  contadas con todo abierto y el PDF todo abierto. Faltan la 1b (arrastrar la sección entera,
+  Shift+Ctrl/⌘+↑/↓, "Imprimir como se ve") y la 2 (para todos, Shift+clic).
 - **P.12 Buscar (urgente, Lega 2026-09-30):** dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y
   contenido) y lleva al lugar. **En la página:** una lupa a la izquierda del ícono de comentarios, que busca en

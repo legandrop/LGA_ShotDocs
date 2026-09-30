@@ -1,10 +1,10 @@
 # Colapsar secciones por sus títulos (P.11)
 
-Estado: **diseño, sin implementar**. Lega contestó casi todas las decisiones el 2026-09-30 (al final,
-"Decisiones"); las que faltan siguen "a confirmar". Hubo una auditoría independiente: **"Correcciones de la
-auditoría", al final, manda sobre lo de arriba** (incluye lo que cambió con las respuestas: borrar un título
-colapsado borra su sección, y Enter crea un renglón después sin abrirla). Sale de leer el código de `main` (v0.050) y el de BlockNote 0.55. Lo pidió Lega: "como en Coda:
-cada título se puede colapsar y abrir con un triángulo a su izquierda".
+Estado: **entrega 1a hecha (v0.051)**: colapsar para vos, con toda la seguridad al editar, las marcas de hoja
+contadas con todo abierto y el PDF todo abierto (ver "Cómo quedó (1a)", al final). Faltan la 1b y la 2. Lega
+contestó casi todas las decisiones el 2026-09-30 (al final, "Decisiones"); las que faltan siguen "a
+confirmar". **"Correcciones de la auditoría", al final, manda sobre lo de arriba**, y "Cómo quedó" sobre las
+dos.
 
 ## Qué se pide
 
@@ -494,4 +494,65 @@ de la auditoría; lo que decidió Lega después (borrar la sección entera, Ente
 
 ## Cómo quedó (1a)
 
-(Se completa con la implementación.)
+Entrega 1a, v0.051. Sin tipo de bloque ni propiedad nueva, sin migración ni cambios en el portero.
+
+- **`src/ui/collapse.ts`** (cálculo puro): `analyze` recorre la estructura (sin entrar al texto) y da los
+  bloques escondidos con el título de más afuera que los esconde, los títulos colapsados y los hermanos
+  escondidos a decorar; `sectionAt` da la sección de un título (sus hermanos escondidos y dónde termina);
+  `runEnd` tiene las reglas: nivel, el fin (`e`) y el último párrafo vacío de la página.
+- **`src/ui/collapseEditor.ts`** (el plugin y la extensión `collapseExtension`, con prioridad sobre los atajos
+  de BlockNote): las decoraciones (`sd-collapsed` y `data-sd-collapsed` en el título; `sd-collapsed-hidden` y
+  `data-sd-hider` en cada hermano escondido) y, en `appendTransaction`, las correcciones 1, 2, 3, 10, 12, 16 y
+  18 más la regla de la selección. Atajos: Ctrl/⌘+Alt+Enter (con Shift, por ahora igual), Enter, Supr, ↓ y →
+  (con Shift, extienden). Copiar y cortar el título elegido entero eligen antes la sección entera.
+- **`src/ui/collapseStore.ts`**: lo tuyo en la base local (`meta`, `collapse:<página>`, las 300 páginas usadas
+  más recientemente), leído en `PageEditor` junto con `docs.open`; se guarda con una pausa de 300 ms.
+- **`src/ui/CollapseToggles.tsx`**: los triángulos, una capa encima del editor (con el color calculado del
+  título; se esconden con una pausa al irse el mouse, así se llega del título al triángulo; en táctiles, siempre
+  y tenues; en solo lectura entran en el orden de Tab). Tooltip: "**Colapsar** / Solo para vos: los demás lo
+  siguen viendo como estaba. / ⌘⌥↩" y "**Abrir** / Colapsado solo para vos." (en inglés, igual). El menú
+  lateral de BlockNote se corre 22 px a la izquierda en los títulos.
+- **`src/ui/collapseDom.ts`**: qué está escondido y quién lo esconde, leído del DOM (lo usan el margen de
+  comentarios, las marcas de hoja y los triángulos). **`src/ui/collapseControl.ts`**: el menú de la página
+  ("Colapsar todo" / "Abrir todo", solo con la página abierta y si tiene títulos) y "Ir al bloque"
+  (`revealBlock` de `commentsUi.ts`) llegan al editor sin cargarlo. **`src/ui/editorMeta.ts`**:
+  `FIND_REPLACE_META` (`'sd-find-replace'`) y `BACKGROUND_META` (`'sd-background'`), para esta rama y la de la
+  búsqueda; los usan la conversión de imágenes `data:`, el bloque de una subida que falló y `convertResize`.
+- **Hojas y PDF:** `printView.ts` saca las clases y atributos de colapsar de la copia (la vista mide e imprime
+  todo abierto); `placeMarks` (`SheetBreaks.tsx`) junta los cortes que caen en algo escondido en una etiqueta
+  en el título colapsado ("Hojas 2–4 adentro", `print.sheetsInside`). Colapsar recalcula las marcas (cambia
+  `data-sd-collapsed`, que `isContentMutation` sí cuenta).
+- **Plegables de BlockNote:** fuera del menú "/" (`TOGGLE_HEADING_KEYS`) y del selector de tipo
+  (`headingItems`, que además compara solo el nivel); los viejos, neutralizados con CSS; los pegados, con
+  `isToggleable: false`.
+- **Diferencias con lo de arriba:**
+  - La selección de la sección entera (para copiar y cortar) es una clase propia, `SectionSelection`: la
+    `MultipleNodeSelection` de BlockNote 0.55 no se exporta y `Selection.fromJSON(..., {type: 'multiple-node'})`
+    se llama a sí misma sin fin (la clase no define su `fromJSON`). Para arrastrar (1b) sirve otro camino:
+    `dragStart` de BlockNote trata como varios bloques una selección de texto que va de un bloque a otro, así
+    que alcanza con elegir del texto del título al del último bloque escondido antes del `dragstart`.
+  - Borrar la sección entera no reemplaza "Borrar" del menú: cualquier transacción propia (no de Yjs) que saca
+    entero el bloque de un título colapsado dispara el borrado del resto en la misma pasada. Cubre el menú,
+    Retroceso y Supr con el bloque elegido, Cortar y cualquier `removeBlocks`. Juntar el título con el bloque de
+    arriba no cuenta (su texto queda).
+  - Enter al principio de un título colapsado (con texto) deja un renglón arriba y el título sigue colapsado;
+    en el medio, BlockNote lo parte y la sección se abre (el pedazo nuevo cae adentro).
+- **Pruebas** (50 nuevas, 745 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
+  (el editor real: cada caso de la sección 5 y de las correcciones, borrar la sección entera con el último título
+  y la página vacía, deshacer con los mismos ids, dos documentos para lo de otro, el deshacer marcado por la
+  búsqueda), `collapseStore.test.ts`, `collapsePagination.test.ts` (los cortes iguales con y sin colapsar, la
+  etiqueta en el título, la copia abierta) y `collapsePage.test.tsx` (la página montada: triángulos, guardar y
+  volver a abrir colapsada, el menú, "Ir al bloque", solo lectura sin subir nada, el margen sin la pregunta
+  escondida).
+- **De punta a punta:** `collapse.mjs` (repo de pruebas privado) en Chromium: el triángulo al pasar el mouse y
+  a la izquierda del texto, colapsar con las marcas "Page 5" y "Pages 2–4 inside", los de adentro con su
+  estado, Enter después del título colapsado, el PDF todo abierto, recargar, borrar el último título colapsado
+  (sección entera, aviso, Ctrl+Z la trae colapsada), "Colapsar todo" y borrar todo hasta la página vacía.
+- **Pendiente:**
+  - 1b: arrastrar la sección entera (corrección 7), Shift+Ctrl/⌘+↑/↓ (corrección 4), "Imprimir como se ve"
+    (corrección 13).
+  - 2: para todos (Shift+clic), con las correcciones 5, 8 y 9.
+  - Probar a mano en Safari, Firefox, el iPhone y un lector de pantalla (las flechas alrededor de lo escondido,
+    el toque en el margen de 20 px, el atajo).
+  - Opcional: la suma de comentarios de lo escondido en el título, `hidden="until-found"` si la búsqueda (P.12)
+    no toma Ctrl/⌘+F.

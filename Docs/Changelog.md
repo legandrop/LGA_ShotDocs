@@ -1,5 +1,22 @@
 # Changelog — LGA Shot Docs
 
+v0.051 :
+
+Colapsar secciones por sus títulos (P.11, entrega 1a). Todo título tiene un triángulo a la izquierda (aparece
+al pasar el mouse; colapsado se ve siempre; en pantallas táctiles, siempre y tenue): colapsar un título
+esconde todo hasta el próximo título de su nivel o mayor, y los de adentro guardan su estado. Es **solo para
+vos**: se guarda en el dispositivo y no cambia la página (los demás la ven igual; "para todos" con Shift+clic
+llega en la entrega 2). Ctrl/⌘+Alt+Enter colapsa o abre la sección de la selección; "Colapsar todo" y "Abrir
+todo" en el menú de la página. Editar al lado de lo escondido es seguro: borrar un título colapsado borra su
+sección entera de una vez (también el último de la página; si la página queda vacía, queda un párrafo), con un
+aviso y Ctrl+Z que trae todo; Enter al final de un título colapsado crea un renglón después de la sección sin
+abrirla; Supr ahí no une lo escondido; ↓ y → lo saltan; lo que se veía nunca queda escondido sin querer (un
+cambio propio o de otro lo abre); "Ir al bloque" de los comentarios abre lo que lo esconde. Las marcas de hoja
+se cuentan con todo abierto y el título colapsado dice qué hojas tiene adentro ("Hojas 2–4 adentro"); el PDF
+sale todo abierto. Los "Encabezados plegables" de BlockNote salen del menú "/" y del selector de tipo; los que
+ya existían se ven como títulos comunes. Sin tipo de bloque ni propiedad nueva, sin migración.
+[ Colapsar secciones - entrega 1a ]
+
 v0.050 :
 
 Cuánto ocupa cada proyecto en el Drive (P.7, primera entrega). El selector de proyectos lo muestra en el

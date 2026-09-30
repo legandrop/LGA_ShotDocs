@@ -9,6 +9,8 @@ export const menus = {
   'pageMenu.move': { en: "Move to…", es: "Mover a…" },
   'pageMenu.pageSize': { en: "Page size", es: "Tamaño de hoja" },
   'pageMenu.print': { en: "Export PDF / Print", es: "Exportar PDF / Imprimir" },
+  'pageMenu.collapseAll': { en: "Collapse all", es: "Colapsar todo" },
+  'pageMenu.expandAll': { en: "Expand all", es: "Abrir todo" },
   'pageMenu.printTip': {
     en: "Opens the print dialog with this page size.\nChoose **Save as PDF** to export.",
     es: "Abre la impresión con este tamaño de hoja.\nElegí **Guardar como PDF** para exportar.",
