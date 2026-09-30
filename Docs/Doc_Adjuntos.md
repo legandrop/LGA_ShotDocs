@@ -212,6 +212,8 @@ nuevas, sin migración) se mantiene. Cambios:
 ### Orden
 
 1. **Entrega 1a, portero** (compatible con la app de hoy, que gana los nombres en las descargas), con pruebas.
+   **Hecha**: detalle en `Doc_Portero.md` (*Lo que se sirve*). El PDF va sin `sandbox` y, por ahora, sin
+   `frame-ancestors` (falta probar a mano el visor de Chrome con él).
 2. **Entrega 1b, app:** `fileKind` y `normalizeMime`, nombres limpios, `blob:` envueltos, tarjeta y `display()`,
    el manejador de archivos, abrir y bajar (computadora: segundo clic y barra; teléfono: la hoja), carrete y
    "Acomodar" que cortan, impresión y papelera, espacio.

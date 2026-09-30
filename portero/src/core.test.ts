@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { CACHE_FILES, CACHE_HEAD_PIECES, CACHE_PIECE, CACHE_TAIL_PIECES, cacheSlot, folderName, Portero, type Env, type Store } from './core';
+import {
+  CACHE_FILES,
+  CACHE_HEAD_PIECES,
+  CACHE_PIECE,
+  CACHE_TAIL_PIECES,
+  cacheSlot,
+  cleanFileName,
+  contentDisposition,
+  folderName,
+  inlineType,
+  Portero,
+  type Env,
+  type Store,
+} from './core';
 
 const env: Env = {
   SUPABASE_URL: 'https://ws.example',
@@ -1311,8 +1324,8 @@ describe('portero: caché del arranque del video', () => {
       if (cacheSlot(id) === cacheSlot(first)) other = id;
     }
     const open = async (id: string) => {
-      world.files.set(id, { name: 'a', mime: 'image/jpeg', data: bytes(20), parents: [] });
-      const pass = await call(p, '/pass', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ fileId: id }) });
+      world.files.set(id, { name: 'a', mime: 'video/mp4', data: bytes(20), parents: [] });
+      const pass = await call(p, '/pass', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ fileId: id, type: 'video/mp4' }) });
       return ((await pass.json()) as { url: string }).url;
     };
     const a = await open(first);
@@ -1375,5 +1388,275 @@ describe('portero: compatibilidad con lo guardado y la app de hoy', () => {
     store.data.set('google', { ...(store.data.get('google') as object), email: 'otra@example.com' });
     await connect(p);
     expect(store.data.has('drivePlace')).toBe(false);
+  });
+});
+
+// --- nombres y encabezados de lo que se sirve (adjuntos, entrega 1a) ------------------------------------
+
+/** Un archivo de la app ya subido, con su tipo y su nombre en la base, y un pase para verlo. */
+async function servedFile(name: string, mime: string, size = 100) {
+  const { world, store, p } = await setup();
+  const data = bytes(size);
+  world.files.set('adjuntoxxxxxxxxx', { name: 'en-drive.bin', mime, data, parents: [], appProperties: { sdFile: FILE_A } });
+  addBaseFile(world, FILE_A, { drive_id: 'adjuntoxxxxxxxxx', size, mime, name });
+  const answer = (await (await filePass(p, 'viewer-jwt', FILE_A)).json()) as { url: string; named?: boolean };
+  const get = (query = '', init: RequestInit = {}) => p.handle(new Request(`${answer.url}${query}`, init));
+  return { world, store, p, data, answer, get };
+}
+
+/** Un pase firmado a mano con la clave del portero (como los que ya emitió una versión anterior). */
+async function signedPass(store: ReturnType<typeof memoryStore>, data: Record<string, unknown>): Promise<string> {
+  const secret = store.data.get('passSecret') as string;
+  const key = await crypto.subtle.importKey('raw', Buffer.from(secret, 'base64url'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const payload = Buffer.from(JSON.stringify(data)).toString('base64url');
+  const signature = Buffer.from(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload))).toString('base64url');
+  return `${SELF}/m/${payload}.${signature}`;
+}
+
+function driveError(status: number, reason: string): Response {
+  const body = { error: { code: status, message: reason, errors: [{ domain: 'global', reason, message: reason }] } };
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+function expectSafe(res: Response) {
+  expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+  expect(res.headers.get('Referrer-Policy')).toBe('no-referrer');
+}
+
+describe('portero: nombres y encabezados de lo que se sirve', () => {
+  it('/pass dice named: true y el nombre sale de files.name, no de lo que mande la app', async () => {
+    const { answer, p, get } = await servedFile('Guion final.pdf', 'application/pdf');
+    expect(answer.named).toBe(true);
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toBe(`inline; filename="Guion final.pdf"; filename*=UTF-8''Guion%20final.pdf`);
+    // Un `name` (o un `type`) en el pedido no cuenta.
+    const asked = await call(p, '/pass', { method: 'POST', jwt: 'viewer-jwt', body: JSON.stringify({ file: FILE_A, name: 'x.html', type: 'text/html' }) });
+    const other = await p.handle(new Request(((await asked.json()) as { url: string }).url));
+    expect(other.headers.get('Content-Disposition')).toContain('filename="Guion final.pdf"');
+    expect(other.headers.get('Content-Type')).toBe('application/pdf');
+    // El pase de la prueba de media también lo dice.
+    const legacy = await call(p, '/pass', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ fileId: 'adjuntoxxxxxxxxx' }) });
+    expect(await legacy.json()).toMatchObject({ named: true });
+  });
+
+  it('encabezados por tipo: la lista inline con su tipo; lo demás, octet-stream y attachment', async () => {
+    const cases: [mime: string, type: string, kind: 'inline' | 'attachment', sandbox: boolean][] = [
+      ['application/pdf', 'application/pdf', 'inline', false],
+      ['image/jpeg', 'image/jpeg', 'inline', true],
+      ['image/heic', 'image/heic', 'inline', true],
+      ['video/mp4', 'video/mp4', 'inline', true],
+      ['video/quicktime', 'video/quicktime', 'inline', true],
+      ['audio/mpeg', 'audio/mpeg', 'inline', true],
+      ['text/plain', 'text/plain', 'inline', true],
+      ['application/zip', 'application/octet-stream', 'attachment', true],
+      ['application/x-rar-compressed', 'application/octet-stream', 'attachment', true],
+      ['application/octet-stream', 'application/octet-stream', 'attachment', true],
+      ['text/html', 'application/octet-stream', 'attachment', true],
+      ['application/xhtml+xml', 'application/octet-stream', 'attachment', true],
+      ['image/svg+xml', 'application/octet-stream', 'attachment', true],
+      ['application/xml', 'application/octet-stream', 'attachment', true],
+      ['text/xml', 'application/octet-stream', 'attachment', true],
+      ['text/javascript', 'application/octet-stream', 'attachment', true],
+      ['application/json', 'application/octet-stream', 'attachment', true],
+      ['text/csv', 'application/octet-stream', 'attachment', true],
+    ];
+    for (const [mime, type, kind, sandbox] of cases) {
+      const { get } = await servedFile('archivo.bin', mime);
+      const res = await get();
+      expect(res.status, mime).toBe(200);
+      expect(res.headers.get('Content-Type'), mime).toBe(type);
+      expect(res.headers.get('Content-Disposition'), mime).toBe(`${kind}; filename="archivo.bin"; filename*=UTF-8''archivo.bin`);
+      // El PDF que se muestra va sin `sandbox`: con él, el visor de PDF del navegador no carga.
+      expect(res.headers.get('Content-Security-Policy'), mime).toBe(sandbox ? 'sandbox' : null);
+      expectSafe(res);
+    }
+    expect(inlineType('IMAGE/JPEG; charset=x')).toBe('image/jpeg');
+    expect(inlineType('')).toBeNull();
+    expect(inlineType('image/svg')).toBeNull();
+  });
+
+  it('?download=1 fuerza attachment (con sandbox) y nada lo pasa a inline', async () => {
+    const pdf = await servedFile('Guion.pdf', 'application/pdf');
+    const down = await pdf.get('?download=1');
+    expect(down.headers.get('Content-Disposition')).toBe(`attachment; filename="Guion.pdf"; filename*=UTF-8''Guion.pdf`);
+    expect(down.headers.get('Content-Type')).toBe('application/pdf');
+    expect(down.headers.get('Content-Security-Policy')).toBe('sandbox');
+    expectSafe(down);
+    expect((await pdf.get('?download=0')).headers.get('Content-Disposition')).toMatch(/^inline;/);
+
+    const photo = await servedFile('IMG_0001.JPG', 'image/jpeg');
+    expect((await photo.get('?download=1', { headers: { Range: 'bytes=0-9' } })).headers.get('Content-Disposition')).toMatch(/^attachment;/);
+
+    const html = await servedFile('pagina.html', 'text/html');
+    for (const query of ['', '?download=0', '?download=inline', '?inline=1', '?download=1&download=0']) {
+      const res = await html.get(query);
+      expect(res.headers.get('Content-Disposition'), query).toMatch(/^attachment;/);
+      expect(res.headers.get('Content-Type'), query).toBe('application/octet-stream');
+      expect(res.headers.get('Content-Security-Policy'), query).toBe('sandbox');
+    }
+  });
+
+  it('filename* bien codificado (acentos, comillas, paréntesis, emojis) y sin controles ni bidi', () => {
+    expect(contentDisposition('attachment', 'Informe año 2026.pdf')).toBe(
+      `attachment; filename="Informe a_o 2026.pdf"; filename*=UTF-8''Informe%20a%C3%B1o%202026.pdf`,
+    );
+    expect(contentDisposition('inline', 'dijo "hola".txt')).toBe(`inline; filename="dijo _hola_.txt"; filename*=UTF-8''dijo%20%22hola%22.txt`);
+    expect(contentDisposition('inline', "O'Brien (final).pdf")).toBe(
+      `inline; filename="O'Brien (final).pdf"; filename*=UTF-8''O%27Brien%20%28final%29.pdf`,
+    );
+    expect(contentDisposition('attachment', 'a*b.zip')).toBe(`attachment; filename="a*b.zip"; filename*=UTF-8''a%2Ab.zip`);
+    // Un emoji (un par sustituto) es un solo `_` en el ASCII.
+    expect(contentDisposition('attachment', 'rodaje 🎬.zip')).toBe(`attachment; filename="rodaje _.zip"; filename*=UTF-8''rodaje%20%F0%9F%8E%AC.zip`);
+    // Una letra con el acento aparte (NFD, como los nombres de macOS) queda compuesta.
+    expect(contentDisposition('inline', 'Cafe\u0301.pdf')).toBe(`inline; filename="Caf_.pdf"; filename*=UTF-8''Caf%C3%A9.pdf`);
+    // U+202E da vuelta lo que sigue: `factura` + U+202E + `gpj.exe` se vería como `facturaexe.jpg`.
+    expect(contentDisposition('attachment', 'factura\u202Egpj.exe')).toBe(`attachment; filename="facturagpj.exe"; filename*=UTF-8''facturagpj.exe`);
+    expect(cleanFileName('\u2066a\u2069\u200Eb\u200F\u202Ac\u202B\u202C\u202D\u2067\u2068.txt')).toBe('abc.txt');
+    // Controles: nada de cortar el encabezado con un salto de línea.
+    expect(contentDisposition('attachment', 'a\r\nSet-Cookie: x\u0000\u0085.txt')).toBe(
+      `attachment; filename="aSet-Cookie: x.txt"; filename*=UTF-8''aSet-Cookie%3A%20x.txt`,
+    );
+    expect(cleanFileName('../dir\\x.txt')).toBe('.._dir_x.txt');
+    expect(cleanFileName('a\uD800b.txt')).toBe('ab.txt'); // media pareja sustituta: se saca (no rompe)
+    expect(cleanFileName('x'.repeat(400))).toHaveLength(255);
+    // Si no queda nada, sin nombre.
+    expect(contentDisposition('inline', '\u202E \u0007')).toBe('inline');
+    expect(contentDisposition('attachment', undefined)).toBe('attachment');
+    // Lo que va en filename* vuelve a ser el nombre limpio.
+    const header = contentDisposition('attachment', 'Ñandú "final" (v2) 🎬 100%.mov');
+    expect(decodeURIComponent(header.split("filename*=UTF-8''")[1]!)).toBe('Ñandú "final" (v2) 🎬 100%.mov');
+    expect(header).toMatch(/^[\x20-\x7e]+$/); // el encabezado es todo ASCII
+  });
+
+  it('el nombre llega a la respuesta desde files.name, limpio', async () => {
+    const { get } = await servedFile('Toma\u202E 3 "buena" 🎬.mov', 'video/quicktime');
+    const res = await get();
+    expect(res.headers.get('Content-Disposition')).toBe(
+      `inline; filename="Toma 3 _buena_ _.mov"; filename*=UTF-8''Toma%203%20%22buena%22%20%F0%9F%8E%AC.mov`,
+    );
+  });
+
+  it('un pase viejo (sin n) sigue valiendo: sin nombre, pero con los encabezados de ahora', async () => {
+    const { store, p, data } = await servedFile('Guion.pdf', 'application/pdf');
+    // Como lo firmaba la versión anterior: { f, t, u, s }, sin el nombre.
+    const oldPdf = await signedPass(store, { f: 'adjuntoxxxxxxxxx', t: 'application/pdf', u: Date.now() + 60_000, s: data.length });
+    const pdf = await p.handle(new Request(oldPdf));
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers.get('Content-Disposition')).toBe('inline');
+    expect(pdf.headers.get('Content-Type')).toBe('application/pdf');
+    expect(pdf.headers.get('Content-Security-Policy')).toBeNull();
+    expectSafe(pdf);
+    expect(sameBytes(new Uint8Array(await pdf.arrayBuffer()), data)).toBe(true);
+  });
+
+  it('un pase viejo de un HTML (sin peso ni nombre) se baja como octet-stream; el de una foto respeta ?download=1', async () => {
+    const { world, store, p, data } = await servedFile('x.html', 'text/html');
+    const u = Date.now() + 60_000;
+    const old = await signedPass(store, { f: 'adjuntoxxxxxxxxx', t: 'text/html', u });
+    const res = await p.handle(new Request(old));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('application/octet-stream');
+    expect(res.headers.get('Content-Disposition')).toBe('attachment');
+    expect(res.headers.get('Content-Security-Policy')).toBe('sandbox');
+    expect(sameBytes(new Uint8Array(await res.arrayBuffer()), data)).toBe(true);
+    // Un pase viejo de una foto: inline sin nombre, y con ?download=1, attachment sin nombre.
+    world.files.get('adjuntoxxxxxxxxx')!.mime = 'image/jpeg';
+    const photo = await signedPass(store, { f: 'adjuntoxxxxxxxxx', t: 'image/jpeg', u, s: data.length });
+    expect((await p.handle(new Request(photo))).headers.get('Content-Disposition')).toBe('inline');
+    expect((await p.handle(new Request(`${photo}?download=1`))).headers.get('Content-Disposition')).toBe('attachment');
+    // Un nombre agregado a un pase firmado sin él lo rompe.
+    const [payload, signature] = photo.slice(`${SELF}/m/`.length).split('.');
+    const withName = { ...(JSON.parse(Buffer.from(payload!, 'base64url').toString()) as object), n: 'x.html' };
+    const forged = `${SELF}/m/${Buffer.from(JSON.stringify(withName)).toString('base64url')}.${signature}`;
+    expect((await p.handle(new Request(forged))).status).toBe(403);
+  });
+
+  it('la respuesta 206 de la caché del arranque lleva los mismos encabezados (y respeta ?download=1)', async () => {
+    const SIZE = 2 * 1024 * 1024;
+    const { world, get } = await servedFile('Toma 1 (buena).mov', 'video/quicktime', SIZE);
+    const fill = await get('', { headers: { Range: 'bytes=0-1' } });
+    expect(fill.headers.get('X-Portero-Cache')).toBe('fill');
+    const hit = await get('', { headers: { Range: 'bytes=10-20' } });
+    expect(hit.status).toBe(206);
+    expect(hit.headers.get('X-Portero-Cache')).toBe('hit');
+    for (const res of [fill, hit]) {
+      expect(res.headers.get('Content-Type')).toBe('video/quicktime');
+      expect(res.headers.get('Content-Disposition')).toBe(`inline; filename="Toma 1 (buena).mov"; filename*=UTF-8''Toma%201%20%28buena%29.mov`);
+      expect(res.headers.get('Content-Security-Policy')).toBe('sandbox');
+      expect(res.headers.get('Accept-Ranges')).toBe('bytes');
+      expectSafe(res);
+    }
+    const down = await get('?download=1', { headers: { Range: 'bytes=0-99' } });
+    expect(down.headers.get('X-Portero-Cache')).toBe('hit');
+    expect(down.headers.get('Content-Disposition')).toMatch(/^attachment; filename="Toma 1 \(buena\)\.mov"/);
+    expect(world.mediaCalls()).toBe(1);
+  });
+
+  it('la caché del arranque es solo para videos: un PDF pedido por partes va siempre a Drive y no ocupa lugar', async () => {
+    const SIZE = 2 * 1024 * 1024;
+    const { world, store, data, get } = await servedFile('Plano.pdf', 'application/pdf', SIZE);
+    for (let i = 0; i < 3; i++) {
+      const res = await get('', { headers: { Range: 'bytes=0-1023' } });
+      expect(res.status).toBe(206);
+      expect(res.headers.get('X-Portero-Cache')).toBeNull();
+      expect(res.headers.get('Content-Type')).toBe('application/pdf');
+      expect(sameBytes(new Uint8Array(await res.arrayBuffer()), data.subarray(0, 1024))).toBe(true);
+    }
+    await get('', { headers: { Range: `bytes=${SIZE - 100}-` } });
+    expect(world.mediaCalls()).toBe(4);
+    expect([...store.data.keys()].filter((k) => k.startsWith('cache'))).toEqual([]);
+  });
+
+  it('un archivo que Drive marcó como malware: 403 con code abusive (también un video por partes)', async () => {
+    for (const [mime, init] of [
+      ['application/zip', {}],
+      ['video/mp4', { headers: { Range: 'bytes=0-1' } }],
+    ] as const) {
+      const { world, store, answer } = await servedFile('raro.zip', mime);
+      const flagged: typeof fetch = (input, i) =>
+        new URL(String(input)).searchParams.get('alt') === 'media' ? Promise.resolve(driveError(403, 'cannotDownloadAbusiveFile')) : world.http(input, i);
+      const res = await new Portero(env, store, flagged).handle(new Request(answer.url, init));
+      expect(res.status, mime).toBe(403);
+      expect(await res.json()).toEqual({ error: 'Google Drive flagged this file as malware or spam and does not let it be downloaded.', code: 'abusive' });
+    }
+    // Otro 403 de Drive (demasiados pedidos) sigue siendo un 502 como siempre.
+    const { world, store, answer } = await servedFile('a.zip', 'application/zip');
+    const limited: typeof fetch = (input, i) =>
+      new URL(String(input)).searchParams.get('alt') === 'media' ? Promise.resolve(driveError(403, 'userRateLimitExceeded')) : world.http(input, i);
+    const res = await new Portero(env, store, limited).handle(new Request(answer.url));
+    expect(res.status).toBe(502);
+    expect(((await res.json()) as { code?: string }).code).toBeUndefined();
+  });
+
+  it('el Drive del dueño lleno: 507 drive_full al empezar la subida o en una parte, y la subida se puede retomar', async () => {
+    const { world, store } = await setup();
+    addBaseFile(world, FILE_A, { size: 10 });
+    let full = true;
+    const quota: typeof fetch = (input, init) => {
+      const url = new URL(String(input));
+      if (full && url.pathname === '/upload/drive/v3/files') return Promise.resolve(driveError(403, 'storageQuotaExceeded'));
+      if (full && url.pathname.startsWith('/session/') && init?.method === 'PUT' && String(new Headers(init.headers).get('Content-Range')).startsWith('bytes 0-')) {
+        return Promise.resolve(driveError(403, 'storageQuotaExceeded'));
+      }
+      return world.http(input, init);
+    };
+    const p = new Portero(env, store, quota);
+    const start = await startFile(p, 'editor-jwt', { file: FILE_A, size: 10, day: '2026-09-30' });
+    expect(start.status).toBe(507);
+    expect(await start.json()).toEqual({ error: 'The Google Drive of the workspace owner is full: free up space in it and try again.', code: 'drive_full' });
+
+    full = false;
+    const { uploadId } = (await (await startFile(p, 'editor-jwt', { file: FILE_A, size: 10, day: '2026-09-30' })).json()) as { uploadId: string };
+    full = true;
+    const put = (range: string, body?: Uint8Array<ArrayBuffer>) =>
+      call(p, `/upload/${uploadId}`, { method: 'PUT', jwt: 'editor-jwt', headers: { 'Content-Range': range }, body });
+    const part = await put('bytes 0-9/10', bytes(10));
+    expect(part.status).toBe(507);
+    expect(await part.json()).toMatchObject({ code: 'drive_full' });
+    // Con espacio de nuevo, la misma subida sigue.
+    full = false;
+    expect(await (await put('bytes */10')).json()).toEqual({ status: 'incomplete', received: 0 });
+    expect(await (await put('bytes 0-9/10', bytes(10))).json()).toMatchObject({ status: 'done', linked: true });
   });
 });
