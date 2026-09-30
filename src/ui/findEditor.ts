@@ -453,6 +453,25 @@ export function stepFind(view: EditorView, dir: 1 | -1): FindMatch | null {
 }
 
 /**
+ * Elige como actual la `occurrence` de las coincidencias del bloque `blockId` (un resultado de la búsqueda del
+ * proyecto, que las cuenta igual). Si el bloque ya no está o tiene menos, la primera de la página. No la lleva
+ * a la vista (eso es `revealCurrent`).
+ */
+export function goToOccurrence(view: EditorView, blockId: string, occurrence: number): FindMatch | null {
+  if (getFindState(view.state).stale) refreshNow(view);
+  const state = getFindState(view.state);
+  if (state.matches.length === 0) return null;
+  const inBlock: number[] = [];
+  state.matches.forEach((m, i) => {
+    if (m.blockId === blockId) inBlock.push(i);
+  });
+  const index = inBlock[Math.min(Math.max(0, occurrence), inBlock.length - 1)] ?? 0;
+  view.dispatch(view.state.tr.setMeta(findKey, { kind: 'current', index } satisfies FindMeta));
+  rememberCurrent(view);
+  return getFindState(view.state).matches[index] ?? null;
+}
+
+/**
  * Lleva a la vista la coincidencia actual: si está escondida (una lista plegable cerrada, una sección
  * colapsada de P.11) primero la abre; después la centra, y si igual queda debajo de la barra, corre la barra.
  */

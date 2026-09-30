@@ -52,7 +52,8 @@ import { SheetBreaks } from './SheetBreaks';
 import { clickOpens, mousePressOpens } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
 import { findExtension } from './findEditor';
-import { closeFindBar, isFindShortcut, openFindBar, takesFindShortcut } from './findUi';
+import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
+import { searchSession } from './projectSearchUi';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -75,8 +76,12 @@ type Opening =
   /** La página trae algo que esta versión del editor no conoce: abrirla lo borraría. */
   | { state: 'unsupported'; what: string };
 
+/** En pantallas táctiles no se lleva el foco a la barra al ir a un resultado: el teclado taparía la página. */
+const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
 export function PageEditor({ pageId }: { pageId: string }) {
-  const { docs, engine } = useServices();
+  const services = useServices();
+  const { docs, engine } = services;
   const status = useSyncStatus();
   // Sin "Edit" (nivel 3) la página se abre en solo lectura (paso 9): el servidor rechazaría lo escrito.
   const perms = usePermissions();
@@ -111,6 +116,28 @@ export function PageEditor({ pageId }: { pageId: string }) {
   }, [ready]);
   // Al salir de la página, la barra se cierra (lo buscado queda para la próxima).
   useEffect(() => () => closeFindBar(), []);
+
+  // Ir a un resultado de la búsqueda del proyecto (Docs/Doc_Buscar.md, sección 8, y corrección 6): el pedido se
+  // toma cuando el editor de esta página está listo, o enseguida si ya lo estaba (un resultado de la misma
+  // página: la dirección no cambia). Abre la barra con la palabra que coincidió, en esa coincidencia; un
+  // resultado del título, la página arriba y sin barra.
+  const search = searchSession(services);
+  useEffect(() => {
+    if (!findEditor) return;
+    const take = () => {
+      const request = search.takeRequest(pageId);
+      if (!request) return;
+      if (request.term) {
+        const target = request.blockId ? { blockId: request.blockId, occurrence: request.occurrence ?? 0 } : null;
+        openFindBarAt(request.term, target, { focus: !coarsePointer() });
+      } else {
+        closeFindBar();
+        findEditor.prosemirrorView?.dom.closest('.main')?.scrollTo?.({ top: 0 });
+      }
+    };
+    take();
+    return search.subscribe(take);
+  }, [findEditor, pageId, search]);
 
   // Si el servidor tiene contenido de esta página que el dispositivo todavía no bajó, se muestra lo que
   // hay en solo lectura: editar sobre un documento a medio bajar arma una estructura paralela. Cuando

@@ -7,6 +7,7 @@ import {
   clearFind,
   closeFind,
   getFindState,
+  goToOccurrence,
   hiddenCount,
   replaceAll,
   replaceCurrent,
@@ -17,7 +18,7 @@ import {
   undoReplace,
   type ReplaceResult,
 } from './findEditor';
-import { closeFindBar, getFindUi, isStepShortcut, takeFocusRequest, takesStepShortcut, updateFindUi, useFindUi, type FindStatus } from './findUi';
+import { closeFindBar, getFindUi, hasFindTarget, takeFindTarget, isStepShortcut, takeFocusRequest, takesStepShortcut, updateFindUi, useFindUi, type FindStatus } from './findUi';
 import { ChevronUpIcon, CloseIcon, CollapseIcon, ExpandIcon } from './icons';
 
 // La barra de buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6). Como la del navegador,
@@ -51,7 +52,7 @@ export function FindBar({ editor, editable }: { editor: FindEditor | null; edita
   // con un pedido nuevo: si la barra se vuelve a montar (el editor se reabrió), no le roba el foco a nadie.
   useEffect(() => {
     if (!ui.open || !takeFocusRequest()) return;
-    if (view) {
+    if (view && getFindUi().prefill) {
       const { from, to } = view.state.selection;
       const selected = from < to ? view.state.doc.textBetween(from, to, '\n', ' ') : '';
       if (selected.trim() && !selected.includes('\n') && selected.length <= PREFILL_MAX) updateFindUi({ query: selected });
@@ -69,17 +70,24 @@ export function FindBar({ editor, editable }: { editor: FindEditor | null; edita
       clearFind(view);
       return;
     }
-    const timer = setTimeout(() => {
-      if (view.isDestroyed) return;
-      if (ui.query.trim()) {
-        setFind(view, ui.query, { matchCase: ui.matchCase, wholeWord: ui.wholeWord });
-        revealCurrent(view);
-      } else {
-        clearFind(view);
-      }
-    }, TYPE_MS);
+    // Un resultado de la búsqueda del proyecto: sin esperar, y a la coincidencia pedida (una sola vez: si el
+    // editor se vuelve a montar, se busca como siempre).
+    const timer = setTimeout(
+      () => {
+        if (view.isDestroyed) return;
+        if (ui.query.trim()) {
+          setFind(view, ui.query, { matchCase: ui.matchCase, wholeWord: ui.wholeWord });
+          const target = takeFindTarget();
+          if (target) goToOccurrence(view, target.blockId, target.occurrence);
+          revealCurrent(view);
+        } else {
+          clearFind(view);
+        }
+      },
+      hasFindTarget() ? 0 : TYPE_MS,
+    );
     return () => clearTimeout(timer);
-  }, [view, ui.open, ui.query, ui.matchCase, ui.wholeWord]);
+  }, [view, ui.open, ui.query, ui.matchCase, ui.wholeWord, ui.target]);
 
   // Con la barra abierta: F3 y Ctrl/⌘+G van a la siguiente (con Shift, a la anterior), desde la barra o el
   // editor y sin un diálogo abierto.

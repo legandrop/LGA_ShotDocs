@@ -172,7 +172,7 @@ export class SyncEngine {
         this.status = { ...this.status, warning: t('comments.readOnlyDevice', { reason: options.comments.unavailable }) };
       }
     }
-    docs.onLocalChange = poke;
+    docs.subscribeLocalChange(poke);
     docs.onWriteError = (message) => {
       this.patch({ localError: message });
       void this.refreshCounts();

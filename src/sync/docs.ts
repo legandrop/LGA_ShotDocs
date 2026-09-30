@@ -52,6 +52,8 @@ interface LiveDoc {
   unsavedSeed?: Uint8Array;
   /** Se armó la versión guardia (ver `DocState.guardVersion`): la página se puede editar. */
   guarded?: boolean;
+  /** Ya terminó de cargar lo guardado (`ready` se resolvió): `peek` lo puede devolver. */
+  loaded?: boolean;
 }
 
 export interface PageDocsOptions {
@@ -102,8 +104,11 @@ export class PageDocs {
   private writeError: string | null = null;
   private disposed = false;
 
-  /** Se llama después de cada edición local guardada. */
-  onLocalChange?: (pageId: string) => void;
+  /**
+   * Quienes escuchan cada edición local guardada: la sincronización (para subirla) y el índice de la
+   * búsqueda del proyecto (para volver a leer la página). Ver `subscribeLocalChange`.
+   */
+  private readonly localChangeListeners = new Set<(pageId: string) => void>();
   /** Cambió el error de escritura local (null: se volvió a poder guardar). */
   onWriteError?: (message: string | null) => void;
   /** Problemas que no son de escritura local, por ejemplo un update ilegible del servidor. */
@@ -169,6 +174,7 @@ export class PageDocs {
         } else {
           this.options.normalize?.(doc, ORIGIN_REPAIR);
         }
+        created.loaded = true;
       });
       this.live.set(pageId, created);
       entry = created;
@@ -178,6 +184,49 @@ export class PageDocs {
     // Solo en memoria: se guarda (y se sube) recién con la primera edición local.
     if (seed) this.options.seed?.(entry.doc, pageId, ORIGIN_SEED);
     return entry.doc;
+  }
+
+  /** Avisa después de cada edición local guardada en el dispositivo. Devuelve la función que deja de escuchar. */
+  subscribeLocalChange(fn: (pageId: string) => void): () => void {
+    this.localChangeListeners.add(fn);
+    return () => this.localChangeListeners.delete(fn);
+  }
+
+  /**
+   * El documento vivo de una página abierta (con lo recién escrito, aunque todavía no esté guardado), o `null`
+   * si no está abierta, todavía está cargando o le falta algo que llegó del servidor (`stale`: lo guardado
+   * tiene más). Solo para leer: no cuenta como `open` y no hay que cerrarlo.
+   */
+  peek(pageId: string): Y.Doc | null {
+    const entry = this.live.get(pageId);
+    return entry?.loaded && !entry.stale ? entry.doc : null;
+  }
+
+  /**
+   * Lo guardado de una página para la búsqueda del proyecto (Docs/Doc_Buscar.md, corrección 7), armado en un
+   * documento aparte (hay que destruirlo después). El estado se lee **antes** que el contenido: si algo cambia
+   * en el medio, el contenido es más nuevo que la marca y la próxima comparación lo vuelve a leer (nunca al
+   * revés). Con el candado de la página (como bajar y subir), y si hay muchos updates sueltos se fusionan
+   * (`loadInto`, lo mismo que al abrirla): la próxima lectura es rápida.
+   */
+  indexSnapshot(pageId: string): Promise<{ doc: Y.Doc; state: DocState | undefined; supported: boolean }> {
+    return this.withLock(pageId, async () => {
+      await this.flush(pageId);
+      const tx = this.db.transaction(['docState', 'docUpdates'], 'readonly');
+      const [state, rows] = await Promise.all([
+        tx.objectStore('docState').get(pageId),
+        tx.objectStore('docUpdates').index('pageId').count(pageId),
+      ]);
+      await tx.done;
+      const doc = new Y.Doc();
+      if (rows > COMPACT_AT) {
+        await this.loadInto(pageId, doc);
+      } else if (rows > 0) {
+        const data = await this.db.getAllFromIndex('docUpdates', 'pageId', pageId);
+        if (data.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(data.map((r) => r.data)), ORIGIN_LOAD);
+      }
+      return { doc, state, supported: this.options.supports?.(doc) ?? true };
+    });
   }
 
   /** Avisa cuando llega del servidor algo que esta versión no puede mostrar en una página abierta. */
@@ -667,7 +716,7 @@ export class PageDocs {
       () => {
         for (const update of batch) flying.delete(update);
         this.setWriteError(null);
-        this.onLocalChange?.(pageId);
+        for (const fn of this.localChangeListeners) fn(pageId);
         // Aparte y después: lo escrito ya está a salvo con su marca.
         this.track(pageId, this.bumpVersion(pageId));
       },

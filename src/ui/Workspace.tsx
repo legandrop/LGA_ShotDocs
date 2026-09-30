@@ -15,6 +15,7 @@ import {
 } from '../services';
 import { useWorkspace } from '../workspace';
 import { FIND_SHORTCUT_LABEL, openFindBar } from './findUi';
+import { isSearchShortcut, takesSearchShortcut, useSearchSession } from './projectSearchUi';
 import { MenuIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
@@ -23,7 +24,7 @@ import { notify, useNotice } from './notice';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
-import { ShareDialog } from './lazyDialogs';
+import { ProjectSearch, ShareDialog } from './lazyDialogs';
 import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
@@ -129,7 +130,7 @@ function useInviteTarget(): void {
   }, [tree, revision, status.lastSyncAt, switchTo, key]);
 }
 
-function Shell() {
+export function Shell() {
   const route = useRoute();
   const tree = useTree();
   const { comments, docs, media, user, workspace } = useServices();
@@ -142,7 +143,26 @@ function Shell() {
   const [notice, dismissNotice] = useNotice();
   const perms = usePermissions();
   const tr = useT();
+  const search = useSearchSession();
   useInviteTarget();
+
+  // Ctrl/⌘+K busca en el proyecto desde cualquier lugar (Docs/Doc_Buscar.md, sección 9); con el panel abierto,
+  // lo cierra. En el editor con texto elegido sigue siendo "crear un link" de BlockNote.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !isSearchShortcut(e)) return;
+      if (search.isOpen()) {
+        e.preventDefault();
+        search.setOpen(false);
+        return;
+      }
+      if (!takesSearchShortcut(e.target)) return;
+      e.preventDefault();
+      search.setOpen(true);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [search]);
   // Un link de invitación que no sirvió (roto, o de un workspace que no se pudo agregar), abierto con la
   // sesión ya iniciada: el aviso va acá.
   useEffect(() => {
@@ -287,6 +307,12 @@ function Shell() {
       {sharing && (
         <Part onClose={() => setSharing(null)}>
           <ShareDialog target={sharing} onClose={() => setSharing(null)} />
+        </Part>
+      )}
+      {search.isOpen() && (
+        <Part onClose={() => search.setOpen(false)}>
+          {/* Ir a un resultado cierra también el cajón del teléfono (en la misma página no cambia la dirección). */}
+          <ProjectSearch onClose={() => search.setOpen(false)} onGo={() => setNavOpen(false)} />
         </Part>
       )}
       {notice && (

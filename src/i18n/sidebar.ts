@@ -16,9 +16,10 @@ export const sidebar = {
   'project.defaultName': { en: "My project", es: "Mi proyecto" },
   'project.thisProject': { en: "this project", es: "este proyecto" },
   'project.switchTip': {
-    en: "**{shortcut}** to switch projects from anywhere",
-    es: "**{shortcut}** para cambiar de proyecto desde cualquier lado",
+    en: "**{shortcut}** searches pages and projects from anywhere",
+    es: "**{shortcut}** busca páginas y proyectos desde cualquier lado",
   },
+  'sidebar.search': { en: "Search this project ({shortcut})", es: "Buscar en el proyecto ({shortcut})" },
   'project.summary': {
     en: { one: "Project · {count} page", other: "Project · {count} pages" },
     es: { one: "Proyecto · {count} página", other: "Proyecto · {count} páginas" },
