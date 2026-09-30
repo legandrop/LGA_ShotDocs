@@ -10,6 +10,7 @@ import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { useNotice } from './notice';
 import { lastPageOf, rememberPage, useCurrentProject } from './project';
+import { MediaTest } from './MediaTest';
 import { focusTitle, PageView } from './PageView';
 import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
@@ -154,6 +155,7 @@ function Shell() {
               </span>
             )}
             {route.name === 'trash' && <span className="crumb current">Trash</span>}
+            {route.name === 'media-test' && <span className="crumb current">Media test</span>}
           </nav>
           <span className="only-mobile">
             <SyncIcon onClick={() => setNavOpen(true)} />
@@ -176,6 +178,8 @@ function Shell() {
           <PageView key={route.id} id={route.id} />
         ) : route.name === 'trash' ? (
           <TrashView />
+        ) : route.name === 'media-test' ? (
+          <MediaTest />
         ) : (
           <Home />
         )}

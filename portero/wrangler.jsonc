@@ -1,0 +1,15 @@
+// El portero de archivos: un Worker aparte de la app, en la cuenta de Cloudflare del dueño del workspace.
+// Sus variables (dirección y clave publicable del Supabase, direcciones de la app, cliente de Google) se
+// cargan en el panel de Cloudflare, no acá: `keep_vars` hace que publicar no las borre.
+// Ver Docs/Doc_Portero.md.
+{
+  "name": "shotdocs-portero",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "keep_vars": true,
+  "durable_objects": {
+    "bindings": [{ "name": "STORE", "class_name": "Store" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Store"] }],
+  "observability": { "enabled": true }
+}

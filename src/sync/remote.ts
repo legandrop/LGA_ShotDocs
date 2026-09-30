@@ -90,21 +90,26 @@ export class SupabaseRemote implements Remote {
 
   async fetchWorkspaceSettings(): Promise<WorkspaceSettings | null> {
     if (Date.now() - this.settingsTableMissingAt < 10 * 60_000) return null;
-    const { data, error, status } = await this.client
-      .from('workspace_settings')
-      .select('generation, min_app_version, schema_version')
-      .maybeSingle();
+    // Todas las columnas: una base a la que le falta una migración más nueva (p. ej. `media_url`) sigue
+    // devolviendo los ajustes, y lo que falta queda vacío.
+    const { data, error, status } = await this.client.from('workspace_settings').select('*').maybeSingle();
     if (error && MISSING_TABLE.has(String(error.code))) {
       this.settingsTableMissingAt = Date.now();
       return null;
     }
     if (error) throw toRemoteError(error, status);
     if (!data) return null;
-    const row = data as { generation: number; min_app_version: number | string | null; schema_version: number };
+    const row = data as {
+      generation: number;
+      min_app_version: number | string | null;
+      schema_version: number;
+      media_url?: string | null;
+    };
     return {
       generation: Number(row.generation),
       minAppVersion: row.min_app_version === null ? null : Number(row.min_app_version),
       schemaVersion: Number(row.schema_version),
+      mediaUrl: row.media_url || null,
     };
   }
 

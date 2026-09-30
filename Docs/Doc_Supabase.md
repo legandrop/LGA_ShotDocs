@@ -26,6 +26,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20260929170000_proyectos.sql` | Proyectos: cada usuario puede crear los suyos (`workspaces`, con el id generado en el dispositivo). El dueño es siempre quien lo crea y no se puede cambiar; un proyecto no se borra desde la API. |
 | `20260929171000_proyectos_nombre.sql` | Los primeros proyectos que se seguían llamando "Mis documentos" pasan a "My project", el nombre de fábrica nuevo. |
 | `20260930100000_workspace_settings.sql` | Tabla `workspace_settings` (una fila, solo lectura para la app): la generación de la base (sube al restaurar una copia de seguridad), la versión mínima de la app que puede subir contenido y la versión de la base. `push_page_update` recibe la versión de la app; la de siempre (sin versión) queda para las versiones anteriores y deja de andar si hay versión mínima. Ver `Doc_Sincronizacion.md`. |
+| `20260930120000_portero.sql` | `workspace_settings` suma el dueño del workspace (`owner_id`, arranca como el dueño del primer proyecto) y la dirección del portero de archivos (`media_url`, solo https). `media_whoami()` dice quién es la sesión y si es el dueño: la usa el portero (ver `Doc_Portero.md`). |
 
 Reglas del esquema:
 
@@ -37,7 +38,8 @@ Reglas del esquema:
 - Cada migración que crea una tabla hace `revoke all` sobre ella y da solo los permisos que hacen falta.
 - `workspace_settings` se cambia solo desde el SQL Editor (o la Management API), nunca desde la app:
   `update public.workspace_settings set min_app_version = 0.021;` pide esa versión o más para subir
-  contenido; `set generation = generation + 1` después de restaurar una copia.
+  contenido; `set generation = …` después de restaurar una copia (lo hace el script de restauración);
+  `set media_url = 'https://…'` cuando se publica el portero.
 
 ### Aplicar las migraciones
 

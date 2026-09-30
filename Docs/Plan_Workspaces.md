@@ -145,9 +145,12 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
 
 - Un programa chico en la cuenta de Cloudflare del dueño (gratis). Guarda la conexión con el Drive del
   dueño; nadie más recibe esa llave (con ella se abre todo lo que la app subió, de todos los proyectos).
-- Para cada archivo, la app pide en Supabase un pase firmado que solo se da si la persona tiene permiso;
-  el portero lo verifica y recién ahí sube o pasa el archivo en streaming. Los pases duran poco, así que
-  sacar a alguien le corta el acceso enseguida.
+- Cada pedido trae la sesión de Supabase de la persona, y el portero le pregunta al Supabase del
+  workspace, con esa sesión, quién es y qué puede (hoy: solo el dueño; con equipo, por página). Así no
+  tiene ninguna clave de la base. Para ver un video o una foto entrega un pase firmado por él mismo, que
+  vence a las 8 horas (más corto cortaría videos a la mitad): sacar a alguien le impide pedir pases
+  nuevos enseguida; uno ya dado sirve hasta que vence.
+- Hecho para la prueba del paso 4: `Doc_Portero.md`.
 - Cloudflare y no Supabase porque Supabase gratis solo deja 5 GB de transferencia al mes; Cloudflare no
   la cobra.
 - Manda los correos de invitación.
@@ -184,8 +187,8 @@ cambios de permisos, que son el momento más riesgoso.
 
 ## 8. Sacar a alguien
 
-- Se le saca la membresía (no se borra la cuenta). Deja de tener acceso en el momento y los pases del
-  portero vencen en minutos.
+- Se le saca la membresía (no se borra la cuenta). Deja de tener acceso en el momento; un pase del
+  portero que ya tenía sirve hasta que vence (8 horas).
 - La app detecta que perdió el acceso y borra lo de ese workspace en su dispositivo la próxima vez que se
   conecta (decisión de Lega: alcanza).
 - Lo que tuviera sin subir: si se puede, que no se pierda (Lega). Se diseña al implementarlo; una opción
@@ -212,7 +215,8 @@ cambios de permisos, que son el momento más riesgoso.
    esta versión no conoce, no se abre en el editor: muestra un aviso para actualizar, y nada se borra. Más
    la versión mínima por workspace.
 3. ✅ **Mudar el hosting** a Cloudflare con la misma dirección, antes de mandar links a clientes.
-4. **Prueba en el iPhone** (uno o dos días), con un portero y un Drive de prueba: qué entrega el
+4. **Prueba en el iPhone** (uno o dos días). Hecho el portero (`Doc_Portero.md`) y la pantalla *Media test*
+   (menú de la cuenta); falta publicarlo, conectar Drive y probar: qué entrega el
    selector de fotos y videos, subir 1 GB, reproducir con la app instalada, en Safari, Chrome y Windows.
 5. **Preparación sin cambios visibles:** todo por workspace en el código y el dispositivo, tablas
    `workspace_settings`, `members`, `grants`, `invitations`, sacar "My project" automático y que solo

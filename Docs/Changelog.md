@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.022 :
+
+Portero de archivos y pantalla de prueba de media, con auditoría (paso 4 del plan de workspaces). El
+portero es un Worker de Cloudflare del dueño del workspace: guarda la conexión con su Google Drive, sube
+archivos por partes que se pueden retomar y los devuelve en streaming con un pase firmado, para que un
+video se reproduzca sin bajarlo entero. Quién pide lo decide el Supabase del workspace, con la sesión de
+cada persona. La pantalla *Media test* (menú de la cuenta) conecta Drive, sube un video o una foto con
+progreso y reintentos, lo reproduce y arma un informe para copiar. Migración: dueño del workspace y
+dirección del portero. Guía para publicarlo en `Doc_Portero.md`.
+[ Portero - Drive, subida por partes y prueba de media ]
+
 v0.021 :
 
 Protecciones para lo que viene, con auditoría. Si una página trae algo que esta versión no conoce (un

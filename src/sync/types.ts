@@ -81,6 +81,8 @@ export interface WorkspaceSettings {
   /** Versión mínima de la app que puede subir contenido (como en el changelog: 0.021). */
   minAppVersion: number | null;
   schemaVersion: number;
+  /** Dirección del portero de archivos del workspace (ver portero/); `null` si todavía no hay. */
+  mediaUrl: string | null;
 }
 
 export interface RemoteUpdate {

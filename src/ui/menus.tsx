@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { prefs, usePrefs, type Prefs } from '../prefs';
+import { navigate } from '../router';
 import { useServices, useTree } from '../services';
 import { supabase } from '../supabase';
 import { PAGE_SIZES, pageFormat } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
   DarkIcon,
+  FilmIcon,
   LightIcon,
   MoveIcon,
   PlusIcon,
@@ -284,6 +286,16 @@ export function AccountMenu({ position, anchor, onClose }: { position: MenuPosit
         ]}
       />
       <div className="pref-divider" />
+      <button
+        className="menu-row"
+        onClick={() => {
+          onClose();
+          navigate('/media-test');
+        }}
+      >
+        <FilmIcon />
+        Media test
+      </button>
       <button className="menu-row" onClick={() => void signOut()}>
         <SignOutIcon />
         Sign out

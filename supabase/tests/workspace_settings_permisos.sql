@@ -118,6 +118,57 @@ exception when insufficient_privilege then null;
 end;
 $$;
 
+-- Portero: quién soy y si soy el dueño. Nadie cambia el dueño ni la dirección del portero desde la API.
+select set_config('role', 'postgres', true);
+update public.workspace_settings set owner_id = '00000000-0000-4000-8000-00000000000a';
+insert into auth.users (id, email, aud, role) values
+  ('00000000-0000-4000-8000-00000000000b', 'rls-b@test.invalid', 'authenticated', 'authenticated');
+
+select pg_temp.as_user('00000000-0000-4000-8000-00000000000a');
+do $$
+begin
+  assert (public.media_whoami() ->> 'is_owner')::boolean, 'el dueño no figura como dueño';
+  assert public.media_whoami() ->> 'user_id' = '00000000-0000-4000-8000-00000000000a', 'user_id equivocado';
+  begin
+    update public.workspace_settings set media_url = 'https://otro.example';
+    raise exception 'FALLA: un usuario cambia la dirección del portero';
+  exception when insufficient_privilege then null;
+  end;
+end;
+$$;
+
+select pg_temp.as_user('00000000-0000-4000-8000-00000000000b');
+do $$
+begin
+  assert not (public.media_whoami() ->> 'is_owner')::boolean, 'otro usuario figura como dueño';
+  begin
+    update public.workspace_settings set owner_id = '00000000-0000-4000-8000-00000000000b';
+    raise exception 'FALLA: un usuario se hace dueño';
+  exception when insufficient_privilege then null;
+  end;
+end;
+$$;
+
+select set_config('role', 'postgres', true);
+do $$
+begin
+  begin
+    update public.workspace_settings set media_url = 'http://sin-https.example';
+    raise exception 'FALLA: media_url acepta http';
+  exception when check_violation then null;
+  end;
+end;
+$$;
+
+select set_config('role', 'anon', true);
+do $$
+begin
+  perform public.media_whoami();
+  raise exception 'FALLA: anon llama a media_whoami';
+exception when insufficient_privilege then null;
+end;
+$$;
+
 rollback;
 
 select 'ok' as result;

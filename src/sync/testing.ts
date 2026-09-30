@@ -40,7 +40,7 @@ export class FakeServer {
   /** Para darle a cada restauración una generación nunca usada. */
   static generations = 100;
   /** `workspace_settings`; `null` simula una base sin esa migración. */
-  settings: WorkspaceSettings | null = { generation: 1, minAppVersion: null, schemaVersion: 1 };
+  settings: WorkspaceSettings | null = { generation: 1, minAppVersion: null, schemaVersion: 1, mediaUrl: null };
 
   /** Una copia de seguridad: todo lo que hay en la base en este momento. */
   backup(): () => void {

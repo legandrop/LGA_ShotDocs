@@ -59,6 +59,9 @@ export const MailIcon = icon('M4.5 5h11a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.
 export const SearchIcon = icon('M9 3.75a5.25 5.25 0 1 1 0 10.5 5.25 5.25 0 0 1 0-10.5zM13 13l3.5 3.5', { strokeWidth: 1.6 });
 export const ScriptIcon = icon('M5.5 3h9v14h-9zM8 6.5h4M7.5 9.5h1.5M11 9.5h1.5M8 12.5h4');
 export const SheetIcon = icon('M5.5 2.75h9v14.5h-9zM7.75 5.5h4.5M7.75 8h4.5M7.75 10.5h3');
+export const FilmIcon = icon(
+  'M4.75 4.5h10.5c.7 0 1.25.55 1.25 1.25v8.5c0 .7-.55 1.25-1.25 1.25H4.75c-.7 0-1.25-.55-1.25-1.25v-8.5c0-.7.55-1.25 1.25-1.25zM8.5 7.75v4.5l3.75-2.25z',
+);
 export const HeaderIcon = icon('M4 6h12M4 10h7M4 14h9');
 
 export const MoreIcon = ({ size = 18 }: { size?: number }) => (
