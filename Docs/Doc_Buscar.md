@@ -357,3 +357,71 @@ Pruebas:
 - Cómo guarda y-prosemirror un `hardBreak` y una tabla dentro del Y.Doc: el recorrido es genérico (todo
   `Y.XmlText` debajo del bloque), pero lo fija una prueba con el editor real.
 - El diseño de P.11 está en curso: el nombre y la forma de la función que abre las secciones pueden cambiar.
+
+## Correcciones de la auditoría (mandan sobre lo de arriba)
+
+Una auditoría independiente contrastó el diseño con el código (y-prosemirror, el router, `PageDocs`, la
+impresión). El modelo (buscar en el dispositivo, decoraciones, reemplazar como edición común) se mantiene.
+Cambios:
+
+1. **Un solo deshacer, de verdad.** El `UndoManager` de y-prosemirror junta lo que pasa en 500 ms
+   (`captureTimeout`): un "Reemplazar todo" rápido después de escribir quedaba en el mismo paso que lo escrito
+   (verificado). Se llama `undoManager.stopCapturing()` justo antes y justo después de cada reemplazo. El
+   *Deshacer* del aviso solo deshace mientras el último paso de la pila sea ese reemplazo.
+2. **Una transacción por coincidencia**, de atrás para adelante, todas entre los dos `stopCapturing()` (siguen
+   siendo un solo paso). Con una sola transacción por párrafo, `updateYText` borra y vuelve a escribir todo lo
+   que hay entre la primera y la última coincidencia.
+3. **Deshacer y rehacer un reemplazo no abren secciones colapsadas.** El `meta` (`sd-find-replace`) solo marca
+   la transacción original; al deshacer, P.11 abriría todo. Se marca también el paso de la pila (en
+   `stack-item-added`, `stackItem.meta.set('sd-find-replace', true)`), y P.11 no abre secciones al deshacer o
+   rehacer un paso marcado.
+4. **Reemplazar se bloquea en el código**, no solo escondiendo la flecha: cada comando de reemplazo revisa
+   `editor.isEditable` (permiso **y** página completa). Prueba: el reemplazo de quien solo ve deja el vector
+   de estado igual.
+5. **Una sola función que saca el texto de cada bloque**, alimentada por el Y.Doc (proyecto) y por el
+   documento de ProseMirror (página), así los números de coincidencia son los mismos. El proyecto busca
+   palabras y la página frases: el resultado del proyecto le pasa a la página el término que coincidió en
+   ese bloque (o un modo "palabras").
+6. **Ir a un resultado:** `navigate()` no hace nada si ya se está en esa dirección (`router.ts`), y ahí el cajón
+   del teléfono no se cierra; `BlockEditor` se vuelve a montar al cambiar su `key` (`PageEditor.tsx`). El pedido
+   queda en un store por instancia de servicios, que se consume cuando el editor de esa página está listo (o
+   enseguida si ya lo está); el estado de la barra vive arriba del `BlockEditor` y se vuelve a aplicar al
+   remontarlo.
+7. **Leer páginas cuesta:** `docs.snapshot()` junta todas las filas guardadas; una página sin compactar puede
+   tardar segundos. La página abierta se lee del Y.Doc vivo (un `peek` nuevo en `PageDocs`); al indexar, se
+   compacta con el candado (reusando `loadInto`); desde la entrega 2 se guarda el texto sacado con su marca en
+   `meta`. Si se usa un worker, se le pasan los bytes: nunca abre IndexedDB.
+8. `docs.onLocalChange` es un solo lugar que ya usa la sincronización (`engine.ts`): pasa a ser un conjunto
+   de escuchas.
+9. **Formato al reemplazar:** `insertText` conserva el link si el rango empieza adentro, pero lo pierde si la
+   coincidencia termina justo al final del link (el texto entero de una tarjeta de Drive). Reemplazar el texto
+   entero de un link por nada borra el `href` y rompe la tarjeta: eso se saltea con un aviso.
+10. **Normalizar:** el final de una coincidencia se extiende sobre las marcas combinadas que siguen
+    (`\p{M}`); `toLowerCase()` y no `toLocaleLowerCase()`; se recorre por punto de código. NFD no descompone
+    ligaduras, ø ni ł: se usa NFD y no se promete eso. "ß" no es "ss" (documentado).
+11. Sin Ctrl/⌘+Enter "abrir en otra pestaña": la base local es de una pestaña a la vez.
+12. Con el campo vacío, el panel del proyecto no muestra "últimas páginas": no hay de dónde sacarlas (se
+    guarda solo la última por proyecto). Se saca, o se suma una lista chica más adelante.
+13. **Impresión:** `STATE_CLASSES` de `printView.ts` saca también `sd-find-hit`, `sd-find-current` y
+    `sd-find-block`, y la barra no entra en la copia.
+14. **Atajos:** `Mod` (⌘ en Mac, Ctrl en el resto); las teclas con Alt se comparan por `e.code`. Reemplazar:
+    **⌘⇧H en Mac** (como Google Docs) y **Ctrl+H** en Windows y Linux.
+15. **Permisos al buscar:** el árbol (`tree.get`, `isTrashed`) se mira al momento de buscar, y los resultados se
+    redibujan con `tree.getRevision()`. El índice y el pedido son de cada instancia de servicios (como
+    `projectSizes.ts`), no del módulo.
+16. La marca para saber si una página cambió no es la de la papelera de archivos
+    (`${version}:${cursor}:${trash}`, y `reconcileMedia` saltea las páginas que no se editan o están a medio
+    bajar): no se copian esos filtros.
+17. **Extracción:** los hijos anidados (`blockGroup`) son bloques propios, no se suman al de arriba; las páginas
+    `unreadable` entran en el aviso "puede faltar algo"; las decoraciones se mapean en cada `docChanged`.
+18. **Antes de reemplazar** se revisa que el texto de la coincidencia actual siga siendo el buscado (alguien
+    pudo cambiarlo).
+
+Y: sumar los proyectos al panel de Ctrl/⌘+K espera la decisión de Lega.
+
+### Propuesto, a confirmar (se usa en la entrega 1)
+
+- La ñ vale como n, salvo con *Aa*.
+- Pies de foto y nombres de archivo: se encuentran, no se reemplazan.
+- Esc deja elegida la coincidencia actual.
+- El título de la página no entra en la barra de la página.
