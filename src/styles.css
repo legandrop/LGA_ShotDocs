@@ -1020,6 +1020,9 @@ code {
 
 .account-menu {
   width: 300px;
+  /* En una pantalla baja (el teléfono acostado), el menú se recorre sin perder "Sign out". */
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
   padding: 8px;
   gap: 4px;
 }
@@ -2568,10 +2571,10 @@ code {
 }
 
 /* En el teléfono, si la cuenta lo pide (menú de la cuenta → Fotos en fila → Apiladas), cada foto de una
-   fila ocupa el renglón entero, como antes de las filas. Solo en pantalla: la vista de impresión y el PDF
-   no cambian. */
+   fila ocupa el renglón entero, como antes de las filas. Solo en la página (`#root`): la vista de impresión,
+   que se agrega afuera, mide y dibuja las filas como el PDF. */
 @media (max-width: 760px) {
-  html[data-phone-images='stacked'] .editor .bn-block-group.img-rows > .bn-block-outer.img-sized {
+  html[data-phone-images='stacked'] #root .editor .bn-block-group.img-rows > .bn-block-outer.img-sized {
     flex: 0 0 100%;
   }
 }

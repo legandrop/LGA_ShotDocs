@@ -1,5 +1,5 @@
 import { FileDownloadButton, useBlockNoteEditor, useComponentsContext, useDictionary, useEditorState } from '@blocknote/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { mediaIdOf } from '../media/queue';
@@ -146,10 +146,33 @@ function runOf(editor: { getParentBlock: (id: string) => { children: unknown[] }
   return siblings.slice(from, to + 1).map((b) => b.id);
 }
 
-/** La proporción (ancho / alto) de lo que se ve de una foto (la miniatura la conserva), o 0 si no cargó. */
-function aspectOf(dom: Element | null | undefined, id: string): number {
+/**
+ * La proporción (ancho / alto) de lo que se ve de una foto (la miniatura la conserva). `null` mientras carga;
+ * 0 si no se sabe (sin imagen, rota, o el marcador de "todavía no está": ahí se usa 3:2).
+ */
+function aspectOf(dom: Element | null | undefined, id: string): number | null {
   const img = dom?.querySelector<HTMLImageElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"] img.bn-visual-media`);
-  return img && img.naturalWidth > 0 && img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 0;
+  if (!img || !img.getAttribute('src')) return 0;
+  if (!img.complete) return null;
+  if (img.src.startsWith('data:image/svg')) return 0;
+  return img.naturalWidth > 0 && img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 0;
+}
+
+/** Vuelve a dibujar cuando termina de cargar una imagen del editor (el botón espera a que carguen). */
+function useImageLoads(dom: Element | null | undefined): void {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!dom) return;
+    const onLoad = (e: Event) => {
+      if ((e.target as Element | null)?.matches?.('img.bn-visual-media')) setTick((n) => n + 1);
+    };
+    dom.addEventListener('load', onLoad, true);
+    dom.addEventListener('error', onLoad, true);
+    return () => {
+      dom.removeEventListener('load', onLoad, true);
+      dom.removeEventListener('error', onLoad, true);
+    };
+  }, [dom]);
 }
 
 /** El ancho del área de texto donde está el bloque (su grupo), en px, o 0. */
@@ -169,6 +192,7 @@ export function ImageSizeButtons() {
   const Components = useComponentsContext()!;
   const block = useSelectedImage();
   const tr = useT();
+  useImageLoads(block ? editor.domElement : null);
   if (!block || !editor.isEditable) return null;
   const setSize = (f: number) => {
     const width = groupWidth(editor.domElement, block.id);
@@ -177,15 +201,19 @@ export function ImageSizeButtons() {
     editor.updateBlock(block.id, { props });
   };
   const run = runOf(editor as never, block.id);
-  const aspects = run.map((id) => aspectOf(editor.domElement, id));
-  const ready = aspects.every((x) => x > 0);
+  const ready = run.every((id) => aspectOf(editor.domElement, id) !== null);
   const arrange = () => {
+    // La tanda y las proporciones al hacer clic: pudo cambiar (otra persona, un deshacer) sin cambiar la foto
+    // elegida.
+    const now = runOf(editor as never, block.id);
+    const aspects = now.map((id) => aspectOf(editor.domElement, id));
     const width = groupWidth(editor.domElement, block.id);
-    if (!(width > 0) || !ready) return;
-    const fracs = arrangeRows(aspects, { gapRatio: ROW_GAP_PX / width });
+    if (!(width > 0) || aspects.some((x) => x === null)) return;
+    // Una proporción desconocida (0: sin foto, rota o todavía el marcador) cuenta como 3:2 en `arrangeRows`.
+    const fracs = arrangeRows(aspects as number[], { gapRatio: ROW_GAP_PX / width });
     // Un solo cambio (un solo deshacer).
     editor.transact(() => {
-      run.forEach((id, i) => editor.updateBlock(id, { props: { [ROW_WIDTH_PROP]: fracs[i], previewWidth: Math.round(fracs[i] * width) } }));
+      now.forEach((id, i) => editor.updateBlock(id, { props: { [ROW_WIDTH_PROP]: fracs[i], previewWidth: Math.round(fracs[i] * width) } }));
     });
   };
   return (
