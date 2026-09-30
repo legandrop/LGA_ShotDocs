@@ -1,7 +1,25 @@
 # Importar de Coda
 
 Cómo se pasa un doc de Coda (con sus páginas, subpáginas, fotos y videos) a un proyecto de Shot Docs. Son
-dos pasos: un comando que baja el doc a una carpeta de la PC, y la app, que importa esa carpeta.
+dos pasos: un comando que baja el doc a una carpeta de la PC, y la app, que importa esa carpeta. Los
+comentarios todavía no pasan (ver "3. Comentarios").
+
+## Paso a paso
+
+1. **Token de Coda** (una vez): *Account settings → API settings → Generate API token*, de solo lectura si
+   Coda lo ofrece. Se guarda como único contenido de `%USERPROFILE%\.coda-token` (fuera del repo).
+2. **Bajar el doc**: `node scripts/coda-export.mjs "<nombre del doc>"`. Termina con "Listo: N páginas, M
+   archivos. Problemas: 0"; con problemas sale con error y se vuelve a correr (trae solo lo que falta).
+3. **Revisar la carpeta** (`%USERPROFILE%\Coda_Export\<doc>`): cualquier `pages/*.local.html` se abre en el
+   navegador con sus fotos, y `manifest.json` lista el árbol y lo que no se pudo bajar.
+4. **Importar**: en la app, selector de proyectos → *Import from Coda…* → la carpeta → un nombre para el
+   proyecto nuevo.
+5. **Esperar la subida**: dejar la app abierta hasta que el estado diga que se subió todo al Drive.
+6. **Comprobar**: el árbol de páginas y las fotos de algunas páginas, comparando con Coda.
+
+Así se probó con MGTZD (35 páginas, 32 fotos, 28 MB): la importación salió completa. Dos exportaciones
+desde cero dieron los mismos archivos byte por byte, y una segunda corrida sobre la misma carpeta no bajó
+nada (un segundo).
 
 ## 1. Bajar el doc (`scripts/coda-export.mjs`)
 
@@ -169,6 +187,83 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
 - **Un editor por página.** Cada página se escribe con un editor sin pantalla atado a su documento; la atadura
   (colaboración) se fija al crear el editor, así que no se puede reusar uno para todas. El que convierte el
   HTML sí es uno solo para toda la importación.
+
+## 3. Comentarios (pendiente)
+
+Los comentarios de Coda todavía no se importan. Lo averiguado hasta ahora (2026-09-30):
+
+### Dónde están
+
+- **La API REST de Coda no los da.** La especificación (`https://coda.io/apis/v1/openapi.json`, versión 1.6.0)
+  no tiene ningún endpoint de comentarios: solo aparece "comment" como nivel de permiso de un doc.
+- **La exportación HTML tampoco** (`beginPageContentExport`): el HTML de una página con comentarios no trae
+  ni el texto ni una marca de dónde estaban.
+- **El servidor MCP de Coda (Superhuman Docs MCP) sí.** Su herramienta `content_read` lee el contenido de una
+  página y, con `contentTypesToInclude: ["comments"]`, también los comentarios. Tiene además `comment_add` y
+  permite resolver y reabrir hilos. Es la única vía documentada; el comando `coda-export` no puede usarla
+  porque habla con la API REST.
+- **Falta comprobar qué trae cada comentario**: nombre o correo del autor, fecha, respuestas del hilo, si está
+  resuelto y a qué está anclado (un texto, el id `cl-…` del elemento). La documentación del MCP no lo detalla:
+  lo primero es leer con `content_read` una página de MGTZD que tenga comentarios y anotar acá la forma real.
+
+### Cómo llegarían a la carpeta exportada
+
+Para que la importación siga siendo "elegir una carpeta", los comentarios se guardan en la misma carpeta, un
+archivo por página: `comments/<id de la página de Coda>.json` (el `id` del manifest, `canvas-…`). Forma
+propuesta (se ajusta a lo que devuelva el MCP):
+
+```json
+{
+  "pageId": "canvas-…",
+  "threads": [
+    {
+      "anchorText": "el texto al que estaba pegado, o null",
+      "anchorElement": "cl-… o null",
+      "resolved": false,
+      "comments": [{ "author": "nombre o correo, como lo muestre Coda", "createdAt": "2026-09-30T12:00:00Z", "body": "…" }]
+    }
+  ]
+}
+```
+
+Los comentarios tienen nombres y correos de otras personas: quedan en la carpeta exportada (fuera del repo,
+`Coda_Export/` está en `.gitignore`) y en la base del workspace. Nunca en el repo ni en las pruebas.
+
+### Cómo entrarían a Shot Docs (diseño propuesto, sin hacer)
+
+Hoy todo comentario pertenece a una cuenta de la app (`comments.author_id` apunta a `auth.users`, y el nombre
+que se ve sale del correo de esa cuenta, `comment_authors`). Quien comentó en Coda puede no tener cuenta y no
+tiene por qué enterarse. Propuesta:
+
+- **Migración**: `comments.imported_author text` (el nombre o correo que da Coda) e `imported_by uuid` (quien
+  importó). Un comentario importado va con `author_id` nulo y `imported_author` puesto; `created_at` guarda la
+  fecha original.
+- **`import_comment(...)`** en la base, `security definer`, con el mismo estilo que `add_comment` (el mismo id
+  dos veces no duplica): pide nivel 3 (editar) sobre la página, acepta `imported_author`, la fecha original y,
+  en el primer comentario del hilo, si estaba resuelto. `list_comments` devuelve también `imported_author`.
+- **En la app**: el nombre original con una marca "from Coda". Se responde y se resuelve como cualquier otro;
+  nadie lo edita (no hay autor en la app); lo borra quien hoy borra comentarios ajenos (nivel 4).
+- **Dónde va**: en Coda un comentario está pegado a un texto; en la app, al bloque que contiene ese texto
+  (normalizado: sin mayúsculas, tildes ni espacios de más). Si el texto ya no está, va como comentario de la
+  página (`block_id` nulo).
+- **Cuándo**: la página tiene que existir en el servidor antes que su comentario (clave foránea), y la
+  importación crea las páginas en el dispositivo. O los comentarios esperan en una cola hasta que su página
+  subió (como `CommentQueue`, `src/sync/comments.ts`), o se importan en un segundo paso, con la app
+  sincronizada. La relación "página de Coda → página de la app" está en la anotación de la importación
+  (`codaImport:<id del doc>`), que se borra al terminar: o se importan en la misma pasada, o se guarda esa
+  relación aparte.
+- Es una migración de la base: va antes de publicar la app y no puede romper la versión publicada (ver
+  `Doc_Supabase.md`).
+
+## Migración definitiva
+
+Lo importado hasta ahora es una prueba. Después de importar, Coda se siguió editando (en MGTZD, cinco páginas
+cambiaron): la importación no se entera de los cambios posteriores. Para migrar de verdad un doc:
+
+1. Dejar de editarlo en Coda.
+2. Bajarlo de nuevo con `--refresh` (o a una carpeta nueva), con sus comentarios cuando estén resueltos.
+3. Importarlo a un proyecto nuevo y comprobarlo.
+4. Mandar a la papelera el proyecto de prueba.
 
 ## Cómo quedó
 
