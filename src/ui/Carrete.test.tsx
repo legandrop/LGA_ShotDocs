@@ -142,17 +142,47 @@ describe('carrete: pantalla', () => {
     expect(button('Next')).toBeNull();
   });
 
-  it('cierra con Escape y con el botón, y los atajos de la app no pasan por debajo', async () => {
+  it('cierra con Escape, y los atajos de la app no pasan por debajo', async () => {
     const outside = vi.fn();
     document.addEventListener('keydown', outside);
     const { onClose } = await open();
-    await key('Escape');
-    expect(onClose).toHaveBeenCalledTimes(1);
     await key('k', { ctrlKey: true });
     expect(outside).not.toHaveBeenCalled();
-    await act(async () => button('Close').click());
-    expect(onClose).toHaveBeenCalledTimes(2);
+    await key('Escape');
+    await settle();
+    expect(onClose).toHaveBeenCalledTimes(1);
     document.removeEventListener('keydown', outside);
+  });
+
+  it('"atrás" del navegador cierra; la X saca la entrada del historial sin salir de la página', async () => {
+    const path = location.pathname;
+    const first = await open();
+    expect((history.state as { carrete?: string }).carrete).toMatch(/^carrete-/);
+    // "Atrás" (Android, el navegador).
+    await act(async () => history.back());
+    await settle();
+    expect(first.onClose).toHaveBeenCalledTimes(1);
+    act(() => root!.unmount());
+    root = null;
+
+    const second = await open();
+    const token = (history.state as { carrete?: string }).carrete;
+    await act(async () => button('Close').click());
+    await settle();
+    expect(second.onClose).toHaveBeenCalledTimes(1);
+    expect((history.state as { carrete?: string } | null)?.carrete).not.toBe(token);
+    expect(location.pathname).toBe(path);
+  });
+
+  it('deja inerte lo de atrás mientras está abierto', async () => {
+    const app = document.createElement('main');
+    document.body.appendChild(app);
+    await open();
+    expect(app.hasAttribute('inert')).toBe(true);
+    expect(dialog().hasAttribute('inert')).toBe(false);
+    act(() => root!.unmount());
+    root = null;
+    expect(app.hasAttribute('inert')).toBe(false);
   });
 
   it('el foco da la vuelta adentro con Tab y vuelve a donde estaba al cerrar', async () => {
@@ -219,6 +249,13 @@ describe('carrete: fotos', () => {
     expect([...current().querySelectorAll('img')].map((i) => i.getAttribute('src'))).toEqual(['blob:thumb-a']);
   });
 
+  it('no precarga fotos en formatos que muchos navegadores no abren (HEIC)', async () => {
+    const entries: Record<string, Entry> = { ...ENTRIES, [PHOTO_A]: { ...ENTRIES[PHOTO_A], name: 'IMG_0001.HEIC' } };
+    const { loader, full } = fakeLoader(entries);
+    await open({ start: 1, loader });
+    expect(full.mock.calls.map(([i]) => i.url).sort()).toEqual([VIDEO_B, PHOTO_C].sort());
+  });
+
   it('precarga la foto de al lado, nunca el video', async () => {
     const { full } = await open({ start: 1 });
     // En el video (2): se pide el video y, ya listo, las fotos de los dos lados.
@@ -244,8 +281,11 @@ describe('carrete: videos', () => {
     expect(link.getAttribute('target')).toBe('_blank');
   });
 
-  it('si el navegador no lo puede reproducir (HEVC): la miniatura, el aviso y el botón para bajarlo', async () => {
-    await open({ start: 1 });
+  const localVideo: Record<string, Entry> = { ...ENTRIES, [VIDEO_B]: { ...ENTRIES[VIDEO_B], full: { url: 'blob:video-b', local: true } } };
+
+  it('el original del dispositivo que el navegador no reproduce (HEVC): la miniatura, el aviso y bajarlo', async () => {
+    const { loader } = fakeLoader(localVideo);
+    await open({ start: 1, loader });
     const video = current().querySelector('video')!;
     Object.defineProperty(video, 'error', { value: { code: 4 } });
     await fire(video, 'error');
@@ -253,12 +293,40 @@ describe('carrete: videos', () => {
     expect(current().querySelector('img')!.getAttribute('src')).toBe('blob:thumb-b');
     expect(document.querySelector('.carrete-notice')!.textContent).toMatch(/This video can't be played in this browser/);
     expect(document.querySelector('.carrete-notice a[aria-label="Download IMG_0666.MOV"]')).not.toBeNull();
+    expect(button('Retry')).toBeNull();
   });
 
   it('un video que abre sin imagen (sin ancho ni alto) cuenta como no reproducible', async () => {
-    await open({ start: 1 });
+    const { loader } = fakeLoader(localVideo);
+    await open({ start: 1, loader });
     await fire(current().querySelector('video')!, 'loadedmetadata');
     expect(document.querySelector('.carrete-notice')!.textContent).toMatch(/can't be played/);
+  });
+
+  it('lo que vino del portero y no anduvo: aviso neutro, bajarlo, y reintentar con un pase nuevo', async () => {
+    const { loader, full } = fakeLoader();
+    await open({ start: 1, loader });
+    const video = current().querySelector('video')!;
+    Object.defineProperty(video, 'error', { value: { code: 4 } });
+    await fire(video, 'error');
+    expect(document.querySelector('.carrete-notice')!.textContent).toMatch(/couldn't be loaded or played in this browser/);
+    expect(document.querySelector('.carrete-notice a[aria-label="Download IMG_0666.MOV"]')).not.toBeNull();
+    full.mockClear();
+    await act(async () => document.querySelector<HTMLButtonElement>('.carrete-notice button')!.click());
+    await settle();
+    expect(loader.retry).toHaveBeenCalledWith(items[1]);
+    expect(full.mock.calls.map(([i]) => i.url)).toContain(VIDEO_B);
+    expect(current().querySelector('video')).not.toBeNull();
+    expect(document.querySelector('.carrete-notice')).toBeNull();
+  });
+
+  it('al cambiar de elemento el video se suelta del todo', async () => {
+    await open({ start: 1 });
+    const video = current().querySelector('video')!;
+    expect(video.hasAttribute('src')).toBe(true);
+    await key('ArrowRight');
+    expect(video.hasAttribute('src')).toBe(false);
+    expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
   });
 
   it('se pausa al cambiar de elemento', async () => {

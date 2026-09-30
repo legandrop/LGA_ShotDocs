@@ -290,6 +290,8 @@ export class FakePortero {
   failLink = false;
   /** Responde 403 a las subidas, como si la persona no pudiera editar la página. */
   forbid = false;
+  /** La base apunta a otro archivo de Drive (409 que no se arregla solo). */
+  conflict = false;
   /**
    * Un portero anterior al paso 6: ignora `file`, sube igual, responde `done` sin `linked` y no le avisa a
    * la base.
@@ -322,6 +324,9 @@ export class FakePortero {
       const media = this.server.mediaFiles.get(id);
       if (!media) return json({ error: 'This file does not exist or you cannot see it.' }, 404);
       if (this.forbid) return json({ error: 'You cannot add files to this page.' }, 403);
+      if (this.conflict) {
+        return json({ error: 'This file is registered with a different Drive file: ask the workspace owner.' }, 409);
+      }
       if (typeof body?.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.day)) return json({ error: 'The day must look like 2026-09-30.' }, 400);
       if (Number(body.size) !== media.size) return json({ error: 'The size does not match the file.' }, 400);
       if (media.drive_id) {

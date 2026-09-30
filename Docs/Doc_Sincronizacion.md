@@ -172,20 +172,25 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   (también el id de la subida y hasta dónde llegó, con cada parte): si la app se cierra a la mitad, al
   volver sigue desde ahí, y el portero dice cuánto le llegó. Todos los pasos son idempotentes: repetir uno
   cuya respuesta se perdió no duplica nada. Si el portero responde `done` con `linked: false` (Drive lo
-  tiene pero la base no se enteró), sigue pendiente y se vuelve a preguntar: el portero le avisa a la base
-  sin volver a subir el archivo. Un portero anterior al paso 6 no manda `linked` ni le avisa a la base: el
-  archivo queda pendiente con el aviso *The media server needs an update*. Un archivo de una página que
-  todavía no existe en el servidor espera a que la página suba.
+  tiene pero la base no se enteró), sigue pendiente con el id de Drive anotado, y las vueltas siguientes
+  **nunca vuelven a subir el archivo**: leen la base y le preguntan al portero sin abrir una subida nueva
+  (`onlyIfSent`), y el portero le avisa a la base. Si el portero ya no sabe que el archivo llegó (abriría
+  una subida nueva), se detiene y recién "Retry" lo vuelve a subir entero. Un portero anterior al paso 6
+  no manda `linked`, no le avisa a la base y sube a `Media_Test` sin la marca del archivo: el archivo se
+  detiene con el aviso *The media server needs an update* (cada reintento lo subiría entero otra vez), y
+  "Retry", después de actualizar el portero, lo sube bien (la copia de `Media_Test` queda de más en el
+  Drive). Un archivo de una página que todavía no existe en el servidor espera a que la página suba.
 - **Errores:** sin red (o sin respuesta del portero) espera a la próxima sincronización. Lo que se puede
   arreglar solo (sesión renovándose, Drive sin conectar, 5xx) se reintenta esperando cada vez más, hasta
   10 minutos, con el error a la vista. Lo que no (`page_not_found`, `file_other_project`, un 400, 403 o
-  404 del portero) queda detenido y a la vista, **sin descartar el archivo**, y se reintenta con "Retry" o
+  404 del portero, o el 409 de un archivo que la base tiene con otro archivo de Drive) queda detenido y a la vista, **sin descartar el archivo**, y se reintenta con "Retry" o
   al abrir la app (lo detenido se vuelve a registrar: `register_file` es idempotente). Si el servidor dice
   que no existe un archivo que acá figura registrado (un 404 del portero, `file_not_found`), se vuelve a
   registrar en vez de detenerlo; recién si sigue igual tres veces seguidas, se detiene.
 - **Si la base de archivos del dispositivo no se abre,** la app arranca igual: la cola de fotos y videos
-  queda apagada (no se pueden agregar), el estado lo avisa y el texto sincroniza como siempre. Un error de
-  esa base nunca corta la sincronización del texto.
+  queda apagada (no se pueden agregar), el estado lo avisa con un aviso propio (`mediaWarning`, que no
+  pisa ni es pisado por los demás) y el texto sincroniza como siempre. Un error de esa base nunca corta la
+  sincronización del texto.
 - **Qué páginas usan cada archivo** (`page_files`): el dispositivo que registra un archivo ya lo cuelga de
   su página. Cuando una página tiene un `sdmedia://` que llegó de otra (se copió o se pegó el bloque), al
   abrirla y con cada cambio hecho en ella se pide `link_page_file`. Los pares ya vistos se guardan en el
@@ -205,9 +210,9 @@ portero) y `picker.ts` (el selector de carpetas de Google).
 - **Restaurar una copia:** todo lo de este dispositivo vuelve a la cola, también lo que estaba a medio
   subir: se vuelve a registrar, a marcar la miniatura (si está en el dispositivo) y a colgar de sus
   páginas. El archivo no se vuelve a subir, porque el portero recuerda lo que ya subió a Drive (y una
-  subida a medias sigue desde donde quedó). Si la base de archivos del dispositivo falla justo ahí, el
-  texto se recupera igual; lo pendiente se recupera cuando el servidor diga que no lo tiene (ver
-  "Errores"), pero lo que ya estaba subido no se vuelve a registrar (caso raro, queda anotado).
+  subida a medias sigue desde donde quedó). La cola guarda en su propia base la última generación que
+  vio y hace su parte aparte del resto: si su base falla o está cerrada, el texto se recupera igual y la
+  cola lo hace en la próxima sincronización (o al abrirse), antes de guardar la generación nueva.
 - **La carpeta en Drive** (paso 8): el dueño la elige en el menú de la cuenta → *Google Drive* (estado de la
   conexión, conectar o reconectar, dónde está `LGA_ShotDocs` y *Choose folder…* con el selector de
   Google). Sin `GOOGLE_API_KEY` en el portero, va a la raíz de *My Drive* (`Doc_Portero.md`, paso 2b). Al

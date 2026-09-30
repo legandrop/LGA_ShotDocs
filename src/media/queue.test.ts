@@ -444,23 +444,109 @@ describe('tipos', () => {
 });
 
 describe('cola de archivos: correcciones de la auditoría', () => {
-  it('con un portero viejo (sin linked) no se da por subido y lo avisa', async () => {
+  it('con un portero viejo (sin linked) se detiene y no vuelve a subir el archivo en cada vuelta', async () => {
     const server = new FakeServer();
     const { a, page } = await withPage(server);
     server.portero.legacy = true;
     const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0100.JPG', 'image/jpeg')))!;
-    await sync(a);
+    for (let i = 0; i < 5; i++) {
+      server.clockOffset += 20 * 60_000;
+      await sync(a);
+    }
+    expect(server.portero.drive.size).toBe(1);
     expect(server.mediaFiles.get(id)?.drive_id).toBeNull();
-    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, blocked: false });
-    expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 1 });
-    expect(a.engine.getStatus().mediaError).toMatch(/media server needs an update/);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, blocked: true, driveId: null });
+    expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 0, failedMedia: 1 });
+    expect((await a.media.failures())[0].error).toMatch(/media server needs an update/);
 
-    // Se actualiza el portero: sube de nuevo, ahora a la carpeta del proyecto, y queda confirmado.
+    // Se actualiza el portero y se toca "Retry": sube bien, a la carpeta del proyecto, una sola vez más.
     server.portero.legacy = false;
-    server.clockOffset += 60_000;
+    await a.engine.retryRejected();
+    await a.engine.syncMedia();
+    await a.engine.syncNow();
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(server.portero.drive.size).toBe(2);
+    expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 0, failedMedia: 0 });
+  });
+
+  it('si la base no se enteró de la subida, vuelve a preguntar sin volver a subir el archivo', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.portero.failLink = true;
+    const id = mediaIdOf(await a.media.add(page, makeFile(PART_BYTES + MB, 'IMG_0107.MOV', 'video/quicktime')))!;
+    for (let i = 0; i < 4; i++) {
+      server.clockOffset += 20 * 60_000;
+      await sync(a);
+    }
+    expect(server.portero.drive.size).toBe(1);
+    // Una sola subida con partes: las vueltas siguientes solo preguntan (`POST /upload`, sin partes).
+    expect(server.portero.calls.filter((c) => c.method === 'PUT' && c.range?.startsWith('bytes 0-'))).toHaveLength(1);
+    expect(a.engine.getStatus().pendingMedia).toBe(1);
+
+    server.portero.failLink = false;
+    server.clockOffset += 20 * 60_000;
     await sync(a);
     expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
-    expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 0, mediaError: null });
+    expect(server.portero.drive.size).toBe(1);
+    expect(a.engine.getStatus().pendingMedia).toBe(0);
+  });
+
+  it('si el portero no sabe que el archivo llegó, se detiene en vez de subirlo otra vez', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.portero.failLink = true;
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0108.JPG', 'image/jpeg')))!;
+    await sync(a);
+    // El portero perdió lo que recordaba (por ejemplo, otra publicación): abriría una subida nueva.
+    server.portero.drive.clear();
+    server.portero.failLink = false;
+    server.clockOffset += 20 * 60_000;
+    await sync(a);
+    expect(server.portero.calls.filter((c) => c.method === 'PUT').length).toBe(1);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ blocked: true, driveId: null });
+    expect(a.engine.getStatus().failedMedia).toBe(1);
+  });
+
+  it('un 409 porque la base apunta a otro archivo de Drive queda detenido, sin reintentar', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.portero.conflict = true;
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0109.JPG', 'image/jpeg')))!;
+    await sync(a);
+    const starts = server.portero.calls.filter((c) => c.path === '/upload').length;
+    for (let i = 0; i < 3; i++) {
+      server.clockOffset += 20 * 60_000;
+      await sync(a);
+    }
+    expect(server.portero.calls.filter((c) => c.path === '/upload')).toHaveLength(starts);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ blocked: true });
+    expect((await a.media.failures())[0].error).toMatch(/different Drive file/);
+  });
+
+  it('si la cola falla al restaurar, el texto se recupera igual y la cola hace su parte después', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const restore = server.backup();
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0110.JPG', 'image/jpeg')))!;
+    const text = await a.tree.create(null, 'Después de la copia');
+    await sync(a);
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+
+    restore();
+    const reset = a.media.resetForRestore.bind(a.media);
+    a.media.resetForRestore = async () => {
+      throw new Error('IndexedDB closed');
+    };
+    await sync(a);
+    expect(server.pages.has(text)).toBe(true);
+    expect(server.mediaFiles.has(id)).toBe(false);
+
+    a.media.resetForRestore = reset;
+    await sync(a);
+    await sync(a);
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(server.portero.drive.size).toBe(1);
+    expect(a.engine.getStatus().pendingMedia).toBe(0);
   });
 
   it('si el portero dice linked pero la base no tiene el id de Drive, sigue pendiente', async () => {
@@ -586,7 +672,8 @@ describe('cola de archivos: correcciones de la auditoría', () => {
     await sync(a);
     expect(server.pages.has(page)).toBe(true);
     expect(a.media.enabled).toBe(false);
-    expect(a.engine.getStatus().warning).toMatch(/Photos and videos are off on this device/);
+    expect(a.engine.getStatus().mediaWarning).toMatch(/Photos and videos are off on this device/);
+    expect(a.engine.getStatus().warning).toBeNull();
     await expect(a.media.add(page, makeFile(MB, 'x.jpg', 'image/jpeg'))).rejects.toBeInstanceOf(FileRejected);
     expect(await a.media.resolve(MEDIA_SCHEME + crypto.randomUUID())).toMatch(/^data:image\/svg\+xml/);
     await a.engine.retryRejected();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localDay, MAX_RETRIES, PART_BYTES, Portero, retryDelay, UploadError } from './portero';
+import { AlreadySentError, localDay, MAX_RETRIES, PART_BYTES, Portero, retryDelay, UploadError } from './portero';
 
 const MB = 1024 * 1024;
 const BASE = 'https://media.example.com';
@@ -33,6 +33,8 @@ class FakePortero {
   keep = 0;
   /** El archivo de la app ya está en Drive: `POST /upload` responde `done` en vez de abrir una subida. */
   alreadyInDrive = false;
+  /** `POST /upload` responde 200 sin `uploadId` (una respuesta que no se entiende). */
+  emptyStart = false;
   /** Lo que responde al terminar sobre si la base se enteró (`undefined`: la prueba de media, sin `linked`). */
   linked?: boolean;
   folder: { id: string; name: string } | null = null;
@@ -62,6 +64,7 @@ class FakePortero {
 
     if (call.method === 'POST' && call.path === '/upload') {
       const { size } = JSON.parse(String(init.body)) as { size: number };
+      if (this.emptyStart) return json({});
       if (this.alreadyInDrive) {
         return json({ status: 'done', file: { id: 'drive-file-9', name: 'IMG_0001.MOV', mimeType: 'video/quicktime', size }, linked: true });
       }
@@ -350,5 +353,27 @@ describe('portero: archivos de la app (pasos 6 y 8)', () => {
 
   it('el día es el local, AAAA-MM-DD', () => {
     expect(localDay(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05');
+  });
+
+  it('una respuesta que no se entiende al empezar no se toma como falta de red', async () => {
+    const server = new FakePortero();
+    server.emptyStart = true;
+    const error = (await server.portero().upload(makeFile(MB)).catch((e: unknown) => e)) as UploadError;
+    expect(error).toBeInstanceOf(UploadError);
+    expect(error.status).toBe(502);
+    expect(error.message).toMatch(/did not start the upload/);
+  });
+
+  it('con onlyIfSent nunca abre una subida nueva', async () => {
+    const server = new FakePortero();
+    const error = await server
+      .portero()
+      .upload(makeFile(MB), { appFile: { id: 'x', day: '2026-09-30' }, onlyIfSent: true })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AlreadySentError);
+    expect(server.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /upload']);
+    server.alreadyInDrive = true;
+    const done = await server.portero().upload(makeFile(MB), { appFile: { id: 'x', day: '2026-09-30' }, onlyIfSent: true });
+    expect(done).toMatchObject({ id: 'drive-file-9', linked: true });
   });
 });

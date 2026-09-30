@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { collectCarrete, type CarreteItem } from './carrete';
-import { createCarreteLoader, isOffline } from './carreteLoader';
+import { createCarreteLoader, isOffline, passFor, PASS_REUSE_MS } from './carreteLoader';
 
 // De dónde saca el carrete lo que muestra: primero la miniatura, después lo grande (la copia del
 // dispositivo o un pase del portero), con una cola de verdad y un servidor en memoria.
@@ -139,6 +139,38 @@ describe('carrete: qué se muestra de cada elemento', () => {
     expect((await loader.full(embedded)).local).toBe(true);
     expect((await loader.preview(embedded)).name).toBe('image.png');
     expect(media.pass).not.toHaveBeenCalled();
+  });
+
+  it('reusa el pase mientras le falte más de una hora (también en otro carrete); "Retry" pide uno nuevo', async () => {
+    const media = { pass: vi.fn(async (id: string) => `https://portero.test/m/${id}-${media.pass.mock.calls.length}`) };
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const first = await passFor(media, 'f1');
+    now.mockReturnValue(1_000_000 + PASS_REUSE_MS - 1);
+    expect(await passFor(media, 'f1')).toBe(first);
+    const loader = createCarreteLoader({ media: { ...media, resolve: vi.fn(), thumbnail: vi.fn(), source: vi.fn() }, files: { resolve: vi.fn() } } as never);
+    expect(media.pass).toHaveBeenCalledTimes(1);
+    now.mockReturnValue(1_000_000 + PASS_REUSE_MS + 1);
+    expect(await passFor(media, 'f1')).not.toBe(first);
+    expect(media.pass).toHaveBeenCalledTimes(2);
+    // Otra cola (otra sesión) no reusa el pase.
+    await passFor({ pass: media.pass }, 'f1');
+    expect(media.pass).toHaveBeenCalledTimes(3);
+    loader.dispose();
+  });
+
+  it('"Retry" olvida lo grande y el pase: se pide otro', async () => {
+    const { server, a, video } = await setup();
+    await sync(a);
+    const b = await device(server);
+    await sync(b);
+    const pass = vi.spyOn(b.media, 'pass');
+    const loader = createCarreteLoader(b);
+    await loader.full(itemFor(video));
+    await loader.full(itemFor(video));
+    expect(pass).toHaveBeenCalledTimes(1);
+    loader.retry(itemFor(video));
+    await loader.full(itemFor(video));
+    expect(pass).toHaveBeenCalledTimes(2);
   });
 
   it('al cerrar suelta los originales que puso en memoria', async () => {

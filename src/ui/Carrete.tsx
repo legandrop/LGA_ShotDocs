@@ -139,15 +139,13 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     root.style.overflow = 'hidden';
     // Lo de atrás (la app) queda inerte: ni el foco ni los lectores de pantalla llegan ahí.
     const dialog = dialogRef.current;
-    const inerted = [...document.body.children].filter(
-      (el): el is HTMLElement => el instanceof HTMLElement && el !== dialog && !el.inert && !el.contains(dialog),
-    );
-    for (const el of inerted) el.inert = true;
+    const inerted = [...document.body.children].filter((el) => el !== dialog && !el.hasAttribute('inert') && !el.contains(dialog));
+    for (const el of inerted) el.setAttribute('inert', '');
     dialog?.focus({ preventScroll: true });
     return () => {
       mounted.current = false;
       root.style.overflow = overflow;
-      for (const el of inerted) el.inert = false;
+      for (const el of inerted) el.removeAttribute('inert');
       // Vuelve el foco a donde estaba. Con el dedo, no al editor: abriría el teclado.
       if (previous?.isConnected && !(lastPointerType.current !== 'mouse' && previous.isContentEditable)) {
         previous.focus({ preventScroll: true });
