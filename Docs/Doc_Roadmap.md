@@ -88,6 +88,15 @@ Lega.
   del navegador después de que el archivo está confirmado en el Drive (por ejemplo, un video grande subido
   desde el iPhone). Pensar cuándo (tamaño, días), qué se pierde (verlo sin red en ese dispositivo) y que la
   miniatura se queda. Diseño antes.
+- **P.11 Colapsar secciones por sus títulos, como en Coda** (Lega, 2026-09-30): cualquier título (H1, H2, H3…)
+  se colapsa con un triángulo lleno a su izquierda (apunta a la derecha colapsado, abajo abierto). Colapsar un
+  título esconde todo lo que sigue hasta el próximo título de su nivel o mayor (un H1 esconde sus H2 y H3, que
+  guardan su propio estado al abrirlo). El triángulo aparece al pasar el mouse por el título; en un título
+  colapsado se ve siempre. Nada que activar: todos los títulos lo tienen. **Por defecto es de cada persona**
+  (un filtro suyo, no cambia lo que ven los demás). **Shift+clic lo colapsa o lo abre para todos** los que
+  miran la página; solo quien puede editar la página, y el tooltip lo dice (a quien solo ve, el tooltip no
+  menciona Shift y Shift+clic hace lo mismo que el clic). Diseño y auditoría antes de implementar, sin tipo
+  de bloque nuevo; ver las preguntas y propuestas en la respuesta a Lega (se pasan al diseño).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
