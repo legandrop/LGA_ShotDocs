@@ -15,8 +15,8 @@ los de Lega). Se hace por partes (ver pendientes), pero **nada de lo que se haga
 - **Nada fijo en el código.** La dirección de Supabase, el dominio, el correo y los ids de Google salen
   de la configuración del workspace. El código recibe el cliente del workspace activo, nunca uno global,
   y todo lo que se guarda en el dispositivo (sesión, base local, preferencias locales) lleva el workspace
-  en el nombre. **Hoy no se cumple todavía** (hay un cliente global en `src/supabase.ts` y las claves
-  locales no llevan workspace): lo corrige el paso 5, sin renombrar lo guardado de Wanka.
+  en el nombre. Hecho en el paso 5 (v0.030): el cliente sale del workspace (`src/workspace.ts`) y los
+  nombres salen de su clave local; los de Wanka siguen siendo los de siempre.
 - **Los permisos pasan por membresías**, aunque hoy haya un solo miembro: nada de "el dueño es el
   único usuario".
 - **Todo lo del servidor está en el repo** y se aplica igual en cualquier workspace: migraciones,
@@ -24,7 +24,7 @@ los de Lega). Se hace por partes (ver pendientes), pero **nada de lo que se haga
   cerrado, direcciones de redirect) tiene que pasar a `supabase/config.toml` o estar entero en
   `Doc_Supabase.md`.
 - **Cada workspace dice qué versión de la base tiene** (`workspace_settings.schema_version`), y la app
-  avisa claro si el dueño tiene que actualizarla (el aviso llega en el paso 5; hoy se lee y no se usa).
+  avisa claro si el dueño tiene que actualizarla (desde v0.030).
 - **Ningún servicio central.** Ni proxy, ni licencias, ni estadísticas. Lo que cueste por uso lo paga el
   dueño de cada workspace con sus cuentas.
 - **El plan gratis de Supabase es el techo por defecto:** nada pesado en la base ni en Storage (egress:
@@ -40,8 +40,9 @@ nada, y lo que espera una decisión o una acción de Lega.
 ### A. Plan de workspaces (D-17, D-18)
 
 1. **Los pasos 5 a 13 de `Plan_Workspaces.md`** (sección 10, y sección 11 para cómo se hace cada uno).
-   Hechos los pasos 1 a 4: copias de seguridad, guarda contra lo desconocido, hosting en Cloudflare y la
-   prueba de media en la computadora y el iPhone. Absorbe la vieja fase 2 (compartir un proyecto, una
+   Hechos los pasos 1 a 5: copias de seguridad, guarda contra lo desconocido, hosting en Cloudflare, la
+   prueba de media en la computadora y el iPhone, y la preparación (workspace en el código, miembros,
+   permisos e invitaciones en la base, restaurar sobre el mismo proyecto). Absorbe la vieja fase 2 (compartir un proyecto, una
    página o una subpágina con usuarios y con links legibles, D-13) y los que figuran abajo en "Resueltos
    adentro del plan".
 

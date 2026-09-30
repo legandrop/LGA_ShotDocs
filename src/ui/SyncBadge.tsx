@@ -29,6 +29,9 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   } else if (status.outdated) {
     tone = 'warn';
     text = pending > 0 ? `Update the app · ${count(pending, 'change', 'changes')} waiting` : 'Update the app';
+  } else if (status.schemaBehind) {
+    tone = 'warn';
+    text = pending > 0 ? `Workspace needs an update · ${count(pending, 'change', 'changes')} waiting` : 'Workspace needs an update';
   } else if (pending > 0) {
     tone = 'busy';
     text = status.syncing ? `Uploading ${count(pending, 'change', 'changes')}…` : `${count(pending, 'change', 'changes')} not uploaded`;
@@ -60,7 +63,7 @@ export function SyncBadge() {
   const { tone, text, rejected } = useSyncTone();
   const Icon = TONE_ICONS[tone];
   const hasDetails =
-    rejected > 0 || !!status.localError || !!status.lastError || !!status.warning || !!status.notice || status.outdated;
+    rejected > 0 || !!status.localError || !!status.lastError || !!status.warning || !!status.notice || status.outdated || !!status.schemaBehind;
 
   return (
     <div className="sync">
@@ -99,6 +102,13 @@ export function SyncBadge() {
               <button className="link" onClick={() => location.reload()}>
                 Update now
               </button>
+            </p>
+          )}
+          {status.schemaBehind && (
+            <p>
+              <strong>The workspace database needs an update.</strong> It is at version {status.schemaBehind[0]} and this
+              version of the app needs {status.schemaBehind[1]}. The workspace owner has to apply the database
+              migrations; until then, new features may not work. Your edits are safe on this device.
             </p>
           )}
           {status.notice && <p>{status.notice}</p>}

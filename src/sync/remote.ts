@@ -13,8 +13,11 @@ import {
 
 /** Todo lo que la sincronización le pide al servidor. Las pruebas usan una versión en memoria. */
 export interface Remote {
-  /** El primer proyecto del usuario; lo crea la primera vez. */
-  ensureWorkspace(): Promise<string>;
+  /**
+   * El primer proyecto que el usuario puede ver, o `null` si no tiene ninguno. Desde el paso 5 del plan de
+   * workspaces el servidor ya no crea "My project": los proyectos los crean el dueño y los admins.
+   */
+  ensureWorkspace(): Promise<string | null>;
   /**
    * Las páginas de estos proyectos. Se pide por proyecto (y no "todo lo visible") para usar el índice y
    * para que, cuando se pueda compartir, lo compartido llegue por su propio camino.
@@ -113,10 +116,10 @@ export class SupabaseRemote implements Remote {
     };
   }
 
-  async ensureWorkspace(): Promise<string> {
+  async ensureWorkspace(): Promise<string | null> {
     const { data, error, status } = await this.client.rpc('ensure_workspace');
     if (error) throw toRemoteError(error, status);
-    return data as string;
+    return (data as string | null) || null;
   }
 
   async fetchTree(projectIds: string[]): Promise<PageRow[]> {

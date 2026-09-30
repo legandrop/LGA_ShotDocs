@@ -13,14 +13,23 @@ insert into auth.users (id, email, aud, role) values
   ('00000000-0000-4000-8000-00000000000a', 'rls-a@test.invalid', 'authenticated', 'authenticated'),
   ('00000000-0000-4000-8000-00000000000b', 'rls-b@test.invalid', 'authenticated', 'authenticated');
 
--- A: su primer proyecto y uno nuevo creado con el id del dispositivo (dos veces, como un reintento).
+-- El primer proyecto de cada uno lo crea la base (ensure_workspace ya no crea proyectos), con el nombre
+-- de fábrica.
+insert into public.workspaces (id, owner_id) values
+  ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-00000000000a'),
+  ('00000000-0000-4000-8000-0000000000e2', '00000000-0000-4000-8000-00000000000b');
+
+-- A: su primer proyecto y uno nuevo creado con el id del dispositivo (dos veces, como un reintento; el
+-- segundo devuelve la fila, como hace la API, así pasa también por la política de lectura).
 select pg_temp.as_user('00000000-0000-4000-8000-00000000000a');
 select set_config('test.ws_a', public.ensure_workspace()::text, true);
 
 insert into public.workspaces (id, name) values ('00000000-0000-4000-8000-0000000000f1', 'Bosque Negro')
-on conflict (id) do nothing;
+on conflict (id) do nothing
+returning id;
 insert into public.workspaces (id, name) values ('00000000-0000-4000-8000-0000000000f1', 'Bosque Negro')
-on conflict (id) do nothing;
+on conflict (id) do nothing
+returning id;
 
 insert into public.pages (id, workspace_id, title, sort_key) values
   ('00000000-0000-4000-8000-0000000000a1', current_setting('test.ws_a')::uuid, 'Raíz del primero', 'a0'),
@@ -30,6 +39,8 @@ do $$
 declare
   f1 constant uuid := '00000000-0000-4000-8000-0000000000f1';
 begin
+  assert current_setting('test.ws_a')::uuid = '00000000-0000-4000-8000-0000000000e1',
+    'ensure_workspace no devuelve el primer proyecto de A';
   assert (select count(*) from public.workspaces) = 2, 'A no ve sus dos proyectos';
   assert (select owner_id from public.workspaces where id = f1) = '00000000-0000-4000-8000-00000000000a',
     'el dueño del proyecto nuevo no es quien lo creó';
@@ -75,12 +86,13 @@ begin
 end;
 $$;
 
--- B: no ve los proyectos de A ni crea páginas en ellos.
+-- B (con su propio proyecto, así puede crear proyectos): no ve los de A ni crea páginas en ellos.
 select pg_temp.as_user('00000000-0000-4000-8000-00000000000b');
 
 do $$
 begin
-  assert (select count(*) from public.workspaces) = 0, 'B ve proyectos de A';
+  assert (select count(*) from public.workspaces) = 1, 'B ve proyectos de A';
+  assert (select id from public.workspaces) = '00000000-0000-4000-8000-0000000000e2', 'B no ve el suyo';
   assert (select count(*) from public.pages) = 0, 'B ve páginas de A';
 
   begin
@@ -95,7 +107,7 @@ begin
   -- Reusar el id de un proyecto de A no le da acceso: el insert choca y no pasa nada.
   insert into public.workspaces (id, name) values ('00000000-0000-4000-8000-0000000000f1', 'Copia')
   on conflict (id) do nothing;
-  assert (select count(*) from public.workspaces) = 0, 'B tomó un proyecto de A reusando su id';
+  assert (select count(*) from public.workspaces) = 1, 'B tomó un proyecto de A reusando su id';
 end;
 $$;
 

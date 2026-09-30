@@ -28,6 +28,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20260929171000_proyectos_nombre.sql` | Los primeros proyectos que se seguían llamando "Mis documentos" pasan a "My project", el nombre de fábrica nuevo. |
 | `20260930100000_workspace_settings.sql` | Tabla `workspace_settings` (una fila, solo lectura para la app): la generación de la base (sube al restaurar una copia de seguridad), la versión mínima de la app que puede subir contenido y la versión de la base. `push_page_update` recibe la versión de la app y la compara con `private.app_version_allowed`; la de siempre (sin versión) queda para las versiones anteriores y deja de andar si hay versión mínima. Ver `Doc_Sincronizacion.md`. |
 | `20260930120000_portero.sql` | `workspace_settings` suma el dueño del workspace (`owner_id`, arranca como el dueño del primer proyecto) y la dirección del portero de archivos (`media_url`, solo https). `media_whoami()` dice quién es la sesión y si es el dueño: la usa el portero (ver `Doc_Portero.md`). |
+| `20260930140000_miembros.sql` | Paso 5 de `Plan_Workspaces.md`, sin cambios visibles. Tablas `members` (persona, rol y `removed_at`: sacar a alguien no borra la fila), `grants` (permiso de una persona sobre un proyecto o una página) e `invitations` (correo en minúsculas, rol, permisos que va a recibir, vencimiento a los 30 días y si se usó). Por ahora la API solo las lee: cada uno ve su fila y sus permisos; el dueño y los admins, todo. Funciones `private.workspace_role`, `private.page_level` y `private.project_level` (0 nada, 1 ver, 2 comentar, 3 editar, 4 editar y crear páginas: quien creó el proyecto tiene 4, los permisos valen para lo de abajo y gana el más alto; los de alguien sacado no cuentan). Las políticas de páginas, contenido y archivos no cambian. `ensure_workspace()` ya no crea "My project": devuelve el primer proyecto que la persona puede ver, o nada. Crear proyectos queda para quien ya tiene alguno o es dueño o admin. `workspace_settings` suma el nombre del workspace (`name`) y la clave local (`local_key`); en Wanka, "Wanka" y `znlvpuddswymxpffgvbz`, y `schema_version` pasa a 2. Las cuentas que ya existen entran como miembros: el dueño como `owner` y las demás con proyectos propios como `member`, con `edit_pages` sobre cada uno. `media_whoami()` suma el rol. |
 
 Reglas del esquema:
 
@@ -76,6 +77,7 @@ un error que dice qué; si todo pasa, devuelve una fila con `result = 'ok'`.
 | `ajustes_permisos.sql` | Los ajustes por rama (`pages.settings`: solo objetos, con tope de tamaño) y las preferencias de cada cuenta (`user_settings`): cada uno ve y cambia solo las suyas, no las crea a nombre de otro ni les cambia el dueño, y no se borran desde la API. |
 | `proyectos_permisos.sql` | Proyectos: crear uno con el id del dispositivo y reintentarlo, que el dueño sea siempre quien lo crea y no se cambie, que no se borre desde la API, que una página no pase a otro proyecto ni cuelgue de una página de otro, y que otro usuario no los vea ni se los quede reusando el id. |
 | `workspace_settings_permisos.sql` | `workspace_settings`: todos la leen y nadie la cambia desde la API; la subida de contenido según la versión de la app (sin mínimo sube; con mínimo, se rechaza la función vieja, una versión menor, ilegible o ausente con `app_outdated`); `media_whoami()` dice bien quién es el dueño, nadie se hace dueño ni cambia la dirección del portero, y `media_url` no acepta `http`. |
+| `miembros_permisos.sql` | Miembros, permisos e invitaciones: cada uno ve solo su fila y sus permisos, el dueño y los admins ven todo, alguien sacado no (y sus permisos no cuentan), y nadie escribe en las tres tablas desde la API; el permiso sobre una página con permisos en el proyecto, en la página y en una de arriba (vale hacia abajo, no hacia arriba, y gana el más alto); `ensure_workspace()` no crea proyectos y da nada a quien no tiene nada; quien no tiene proyectos ni rol no crea uno, el dueño y los admins sí, y quien ya tiene uno crea otro y lo reintenta con el mismo id. |
 
 Dos casos no tienen prueba automática en el repo y se verificaron a mano contra el proyecto real el
 2026-09-29: que la API de Storage no deja borrar un archivo, y que dos movimientos simultáneos que juntos
@@ -83,27 +85,100 @@ arman un ciclo terminan con el segundo rechazado.
 
 ## Login
 
-La configuración de login está solo en el panel de Supabase (Authentication), no en el repo. Se carga
-a mano o con la Management API (`PATCH /v1/projects/<ref>/config/auth`). Lo que tiene que quedar:
+La configuración de login vive en el panel de Supabase (Authentication), no en la base: no entra en las
+migraciones ni en las copias de seguridad. Esta sección tiene todo lo necesario para rearmar un proyecto
+igual. Los valores son los de Wanka, leídos del proyecto el 2026-09-30; cada uno lleva dónde está en el
+panel y su nombre en la Management API (`/v1/projects/<ref>/config/auth`). Si se cambia algo en el panel,
+se actualiza acá (y el HTML en `supabase/templates/` si es una plantilla).
 
-- Proveedor **Email** activado; el resto, apagado.
+Cómo entra la gente:
+
 - La app manda el mail con `signInWithOtp`. Se entra con el **código** (escrito en la app) o con el
   **link** del mail. En el iPhone hace falta el código: el link abre Safari, no la app instalada.
-- **Código de 8 dígitos** (Supabase trae 6; la app acepta de 6 a 10, `src/ui/Login.tsx`) que **vence en
-  1 hora**: *Sign In / Providers → Email*, o `mailer_otp_length = 8` y `mailer_otp_exp = 3600`.
-- En **Authentication → URL Configuration** van la dirección del deploy como *Site URL* y, en *Redirect
-  URLs*, esa dirección y la de `workers.dev` del hosting (también con `/**`), y `http://localhost:5173/**`
-  y `http://localhost:4173/**` para desarrollo (`uri_allow_list` por la API).
-- **Registro cerrado** (*Allow new users to sign up* apagado, `disable_signup`, D-09): solo entran cuentas
-  que ya existen o que el dueño invita (Authentication → Users → *Invite user*). Un mail sin cuenta ve el
-  aviso de pedir una invitación. Está planeado abrirlo en el paso 9 de `Plan_Workspaces.md`, pero solo
-  con el hook *Before User Created* de Supabase conectado a una función que rechaza los correos que no
-  están en `invitations`: **primero** el hook creado y probado, **después** el registro abierto. Al revés,
-  el registro quedaría abierto para cualquiera.
-- **Plantillas** (Authentication → Emails → *Templates*): *Magic Link* con el código grande y un botón
-  con el link, asunto `Your Shot Docs code: {{ .Token }}`; e *Invite*, la del mail que llega al invitar
-  desde el panel. Por la API son los campos `mailer_subjects_*` y `mailer_templates_*_content`.
-- **Límite: 30 mails por hora** (Authentication → Rate Limits, o `rate_limit_email_sent`).
+- **Registro cerrado** (D-09): solo entran cuentas que ya existen o que el dueño invita (Authentication →
+  Users → *Invite user*). Un mail sin cuenta ve el aviso de pedir una invitación. Está planeado abrirlo en
+  el paso 9 de `Plan_Workspaces.md`, pero solo con el hook *Before User Created* de Supabase conectado a
+  una función que rechaza los correos que no están en `invitations`: **primero** el hook creado y
+  probado, **después** el registro abierto. Al revés, el registro quedaría abierto para cualquiera.
+
+### Proveedores y registro
+
+*Authentication → Sign In / Providers*:
+
+- **Email** prendido (`external_email_enabled: true`).
+- Todo lo demás apagado: teléfono (`external_phone_enabled`), usuarios anónimos
+  (`external_anonymous_users_enabled`), Google, Apple, GitHub y el resto de los `external_*_enabled`,
+  Web3, SAML (`saml_enabled`), passkeys (`passkey_enabled`) y el servidor OAuth (`oauth_server_enabled`).
+- **Allow new users to sign up** apagado (`disable_signup: true`).
+- **Confirm email** prendido (`mailer_autoconfirm: false`): una cuenta nueva confirma su correo antes de
+  entrar, y no se entra con un correo sin verificar (`mailer_allow_unverified_email_sign_ins: false`).
+- **Secure email change** prendido (`mailer_secure_email_change_enabled: true`, la doble confirmación):
+  para cambiar el correo de una cuenta hay que confirmar desde la dirección vieja y desde la nueva.
+- **Código de 8 dígitos** que **vence en 1 hora** (*Email → Email OTP Length / Expiration*,
+  `mailer_otp_length: 8` y `mailer_otp_exp: 3600`). Supabase trae 6; la app acepta de 6 a 10
+  (`src/ui/Login.tsx`).
+- Contraseñas: la app no las usa; quedan los valores de fábrica (`password_min_length: 6`, sin chequeo de
+  contraseñas filtradas).
+- Verificación en dos pasos: vienen prendidos de fábrica los códigos de app autenticadora
+  (`mfa_totp_enroll_enabled` y `mfa_totp_verify_enabled`), aunque la app no los ofrece; por teléfono y
+  WebAuthn, apagados.
+- Hooks: todos apagados (`hook_*_enabled: false`), incluido *Before User Created* (ver arriba). Captcha
+  apagado (`security_captcha_enabled: false`).
+
+### Direcciones permitidas
+
+*Authentication → URL Configuration*:
+
+- **Site URL**: `https://shotdocs.lega.com.ar` (`site_url`).
+- **Redirect URLs** (`uri_allow_list`, una sola cadena separada por comas):
+  - `https://shotdocs.lega.com.ar/**`
+  - `https://shotdocs.cold-salad-d599.workers.dev/**` (la dirección del hosting)
+  - `http://localhost:5173/**` y `http://localhost:4173/**` (desarrollo y vista previa)
+- Un link de login que pide volver a una dirección que no está en la lista termina en la Site URL. Otro
+  workspace pone acá sus propias direcciones.
+
+### Sesiones
+
+*Authentication → Sessions* (la duración del token está en la configuración de JWT del proyecto):
+
+- El token de acceso dura **1 hora** (`jwt_exp: 3600`); la app lo renueva sola.
+- **Rotación del refresh token** prendida (`refresh_token_rotation_enabled: true`), con **10 segundos**
+  para reusar el anterior (`security_refresh_token_reuse_interval: 10`): cubre dos pestañas que renuevan
+  a la vez.
+- Sin vencimiento de sesión por tiempo ni por inactividad (`sessions_timebox: 0`,
+  `sessions_inactivity_timeout: 0`) y con varias sesiones por cuenta (`sessions_single_per_user: false`):
+  quien entró sigue adentro en cada dispositivo hasta que sale.
+
+### Límites
+
+*Authentication → Rate Limits* (y *Emails → SMTP Settings* para el último):
+
+| Campo | Valor | Qué limita |
+|---|---|---|
+| `rate_limit_email_sent` | 30 | Mails por hora, en todo el proyecto. |
+| `rate_limit_otp` | 30 | Pedidos de ingreso (mails de código) cada 5 minutos, por IP. |
+| `rate_limit_verify` | 30 | Códigos o links verificados cada 5 minutos, por IP. |
+| `rate_limit_token_refresh` | 150 | Renovaciones de sesión cada 5 minutos, por IP. |
+| `rate_limit_anonymous_users` | 30 | Ingresos anónimos por hora, por IP (están apagados). |
+| `rate_limit_sms_sent` | 30 | SMS por hora (no se usan). |
+| `rate_limit_web3` | 30 | Ingresos Web3 cada 5 minutos, por IP (no se usan). |
+| `smtp_max_frequency` | 60 | Segundos mínimos entre dos mails a la misma dirección: pedir otro código antes da error. |
+
+### Plantillas
+
+*Authentication → Emails → Templates*. Hay dos personalizadas; el HTML está en el repo:
+
+| Plantilla | Asunto (`mailer_subjects_*`) | Cuerpo (`mailer_templates_*_content`) |
+|---|---|---|
+| *Magic Link* (`magic_link`) | `Your Shot Docs code: {{ .Token }}` | `supabase/templates/magic_link.html`: el código grande y un botón con el link; avisa que los dos vencen en 1 hora y sirven una vez. |
+| *Invite* (`invite`) | `You are invited to LGA Shot Docs` | `supabase/templates/invite.html`: la del mail que llega al invitar desde el panel, con un botón para aceptar y crear la cuenta. |
+
+- Las variables `{{ .Token }}` (el código) y `{{ .ConfirmationURL }}` (el link) las completa Supabase.
+- Las demás plantillas quedan como vienen de fábrica, con sus asuntos de fábrica: *Confirm signup*
+  (`Confirm your email address`), *Change email* (`Confirm your new email address`), *Reset password*
+  (`Reset your password`) y *Reauthentication* (`{{ .Token }} is your verification code`).
+- Los avisos de seguridad (correo, contraseña o teléfono cambiados, métodos de ingreso o de verificación
+  agregados o quitados) están apagados (`mailer_notifications_*_enabled: false`).
 
 ### Correo propio (SMTP)
 
@@ -116,13 +191,82 @@ las plantillas: el mail trae el link pero no el código. Para usar la app hace f
    DNS que pide (un TXT de DKIM y los de `send`; no tocan el correo que ya tenga el dominio) y esperar a que
    figure como verificado.
 2. Crear una API key solo de envío para ese dominio.
-3. En Supabase → Authentication → Emails → **SMTP Settings**: host `smtp.resend.com`, puerto `465`,
-   usuario `resend`, contraseña = la API key, y un remitente del dominio (por ejemplo
-   `shotdocs@ejemplo.com`, con nombre `LGA Shot Docs`). La clave se carga solo ahí.
-4. Cargar las plantillas y el límite de mails de la sección anterior.
+3. En Supabase → Authentication → Emails → **SMTP Settings**: host `smtp.resend.com` (`smtp_host`),
+   puerto `465` (`smtp_port`), usuario `resend` (`smtp_user`), contraseña = la API key (`smtp_pass`), y
+   un remitente del dominio con su nombre (`smtp_admin_email` y `smtp_sender_name`). En Wanka el
+   remitente es `shotdocs@lega.com.ar`, con nombre `LGA Shot Docs`. La clave se carga solo ahí: nunca va
+   al repo ni a un archivo.
+4. Cargar el resto de la configuración (ver "Rearmar la configuración", abajo).
 
 El SMTP de Gmail o Google Workspace también sirve, pero exige verificación en 2 pasos y una contraseña de
 aplicación en la cuenta que manda.
 
-La configuración de login no entra en las copias de seguridad de la base: al armar un proyecto de nuevo
-se vuelve a cargar desde esta sección.
+### Rearmar la configuración
+
+Con un token personal de Supabase (el mismo de las migraciones), en este orden:
+
+1. **El dueño carga el SMTP completo a mano**, con la contraseña, como dice "Correo propio" (paso 3).
+2. **Los valores**, con un `PATCH`. Es un cambio parcial: lo que no va en el JSON no se toca, así que la
+   contraseña SMTP del paso 1 queda. Guardar esto como `login.json` (no lleva secretos), con las
+   direcciones y el remitente del workspace que se arma:
+
+   ```json
+   {
+     "site_url": "https://shotdocs.lega.com.ar",
+     "uri_allow_list": "https://shotdocs.lega.com.ar/**,https://shotdocs.cold-salad-d599.workers.dev/**,http://localhost:5173/**,http://localhost:4173/**",
+     "disable_signup": true,
+     "external_email_enabled": true,
+     "external_phone_enabled": false,
+     "external_anonymous_users_enabled": false,
+     "mailer_autoconfirm": false,
+     "mailer_secure_email_change_enabled": true,
+     "mailer_otp_length": 8,
+     "mailer_otp_exp": 3600,
+     "jwt_exp": 3600,
+     "refresh_token_rotation_enabled": true,
+     "security_refresh_token_reuse_interval": 10,
+     "rate_limit_email_sent": 30,
+     "rate_limit_otp": 30,
+     "rate_limit_verify": 30,
+     "rate_limit_token_refresh": 150,
+     "smtp_host": "smtp.resend.com",
+     "smtp_port": "465",
+     "smtp_user": "resend",
+     "smtp_admin_email": "shotdocs@lega.com.ar",
+     "smtp_sender_name": "LGA Shot Docs",
+     "smtp_max_frequency": 60,
+     "mailer_subjects_magic_link": "Your Shot Docs code: {{ .Token }}",
+     "mailer_subjects_invite": "You are invited to LGA Shot Docs"
+   }
+   ```
+
+   ```sh
+   curl -sS -X PATCH "https://api.supabase.com/v1/projects/<ref>/config/auth" \
+     -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+     --data @login.json
+   ```
+
+   Los otros proveedores ya vienen apagados en un proyecto nuevo; si no, se suman al JSON con `false`.
+3. **Las plantillas**, leyendo los HTML del repo:
+
+   ```sh
+   jq -n --rawfile magic supabase/templates/magic_link.html --rawfile invite supabase/templates/invite.html \
+     '{mailer_templates_magic_link_content: $magic, mailer_templates_invite_content: $invite}' |
+   curl -sS -X PATCH "https://api.supabase.com/v1/projects/<ref>/config/auth" \
+     -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @-
+   ```
+4. **Control**: leer la configuración y mirar solo algunos campos. La respuesta del `GET` trae secretos
+   (entre ellos la contraseña SMTP): siempre filtrada, nunca guardada entera ni pegada en ningún lado.
+
+   ```sh
+   curl -sS "https://api.supabase.com/v1/projects/<ref>/config/auth" \
+     -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" |
+   jq '{site_url, uri_allow_list, disable_signup, mailer_otp_length, mailer_otp_exp, rate_limit_email_sent, smtp_host, smtp_admin_email}'
+   ```
+5. Probar: pedir un código con una cuenta invitada, ver que llega con el asunto y el código de 8 dígitos,
+   y que un correo sin cuenta recibe el aviso de pedir una invitación.
+
+**Nunca `supabase config push` contra Wanka.** Ese comando sube la configuración de login de un
+`supabase/config.toml` al proyecto y pisa lo que haya: se llevaría el SMTP (y su contraseña), las
+plantillas y el registro cerrado. El repo no tiene `config.toml` a propósito; si alguna vez se escribe
+uno, es solo de referencia.

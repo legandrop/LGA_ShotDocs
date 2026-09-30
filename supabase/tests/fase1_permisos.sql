@@ -14,6 +14,11 @@ insert into auth.users (id, email, aud, role) values
   ('00000000-0000-4000-8000-00000000000a', 'rls-a@test.invalid', 'authenticated', 'authenticated'),
   ('00000000-0000-4000-8000-00000000000b', 'rls-b@test.invalid', 'authenticated', 'authenticated');
 
+-- El proyecto de cada uno lo crea la base (ensure_workspace ya no crea proyectos).
+insert into public.workspaces (id, owner_id) values
+  ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-00000000000a'),
+  ('00000000-0000-4000-8000-0000000000e2', '00000000-0000-4000-8000-00000000000b');
+
 -- Usuario A: su espacio, una raíz y una hija, y un update de contenido.
 select pg_temp.as_user('00000000-0000-4000-8000-00000000000a');
 select set_config('test.ws_a', public.ensure_workspace()::text, true);
@@ -40,6 +45,8 @@ declare
   c1 constant uuid := '00000000-0000-4000-8000-0000000000c1';
   n int;
 begin
+  assert current_setting('test.ws_a')::uuid = '00000000-0000-4000-8000-0000000000e1',
+    'ensure_workspace no devuelve el proyecto de A';
   assert public.ensure_workspace() = current_setting('test.ws_a')::uuid,
     'ensure_workspace no es estable';
 

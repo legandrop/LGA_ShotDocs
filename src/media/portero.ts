@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { supabase } from '../supabase';
 
 // Cliente del portero de archivos del workspace (ver portero/src/core.ts): el estado de la conexión con
 // el Drive del dueño, las subidas por partes y los pases para ver un archivo. Sin React, para poder
@@ -81,10 +80,9 @@ export class UploadError extends PorteroError {
   }
 }
 
-async function sessionToken(): Promise<string | null> {
-  if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+/** El token de la sesión del workspace; se pide en cada pedido porque se renueva solo. */
+export function sessionToken(client: SupabaseClient): () => Promise<string | null> {
+  return async () => (await client.auth.getSession()).data.session?.access_token ?? null;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -113,8 +111,7 @@ export function retryDelay(failures: number): number {
 }
 
 /** La dirección del portero, de `workspace_settings.media_url`; `null` si el workspace no tiene. */
-export async function readMediaUrl(client: SupabaseClient | null = supabase): Promise<string | null> {
-  if (!client) return null;
+export async function readMediaUrl(client: SupabaseClient): Promise<string | null> {
   const { data, error } = await client.from('workspace_settings').select('*').maybeSingle();
   if (error) throw new PorteroError(`Could not read the workspace settings (${error.message}).`);
   const url = (data as { media_url?: string | null } | null)?.media_url;
@@ -135,7 +132,7 @@ export class Portero {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     // `fetch` suelto pierde su `this` en Safari: se llama siempre como función global.
     this.http = deps.fetch ?? ((input, init) => fetch(input, init));
-    this.token = deps.token ?? sessionToken;
+    this.token = deps.token ?? (async () => null);
     this.wait = deps.wait ?? sleep;
   }
 
@@ -298,7 +295,7 @@ export class Portero {
 }
 
 /** El portero del workspace, o `null` si todavía no tiene. */
-export async function openPortero(deps: PorteroDeps = {}): Promise<Portero | null> {
-  const url = await readMediaUrl();
-  return url ? new Portero(url, deps) : null;
+export async function openPortero(client: SupabaseClient, deps: PorteroDeps = {}): Promise<Portero | null> {
+  const url = await readMediaUrl(client);
+  return url ? new Portero(url, { token: sessionToken(client), ...deps }) : null;
 }

@@ -3,7 +3,7 @@ import type { AuthUser } from '../auth';
 import { prefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
 import { ServicesContext, useBootServices, useServices, useTree } from '../services';
-import { supabase } from '../supabase';
+import { useWorkspace } from '../workspace';
 import { MenuIcon, MoreIcon, PlusIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
@@ -21,13 +21,15 @@ import { TrashView } from './TrashView';
 const LEGACY_LAST_PAGE_KEY = 'shotdocs-last-page';
 
 export function Workspace({ user }: { user: AuthUser }) {
-  const boot = useBootServices(user);
+  const workspace = useWorkspace();
+  const { client } = workspace;
+  const boot = useBootServices(workspace, user);
 
   // Las preferencias de la cuenta (tema, fuente…) se bajan al entrar y se suben cuando cambian.
   useEffect(() => {
-    if (supabase) void prefs.attach(supabase, user.id);
+    void prefs.attach(client, user.id);
     return () => prefs.detach();
-  }, [user.id]);
+  }, [client, user.id]);
 
   if (boot.state === 'loading') return <main className="center-screen muted">Opening your workspace…</main>;
   if (boot.state === 'busy') {
@@ -68,13 +70,14 @@ export function Workspace({ user }: { user: AuthUser }) {
         <div className="card">
           <h1>Could not open your workspace</h1>
           <p className="muted">{boot.message}</p>
-          <button className="link" onClick={() => void supabase!.auth.signOut({ scope: 'local' })}>
+          <button className="link" onClick={() => void client.auth.signOut({ scope: 'local' })}>
             Sign out
           </button>
         </div>
       </main>
     );
   }
+  if (boot.state === 'empty') return <NoProjects user={user} onRetry={boot.retry} />;
   return (
     <ServicesContext.Provider value={boot.services}>
       <Shell />
@@ -85,7 +88,8 @@ export function Workspace({ user }: { user: AuthUser }) {
 function Shell() {
   const route = useRoute();
   const tree = useTree();
-  const { docs, user } = useServices();
+  const { docs, user, workspace } = useServices();
+  const keys = workspace.config.storage;
   const [navOpen, setNavOpen] = useState(false);
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
@@ -110,9 +114,9 @@ function Shell() {
   const projectId = useCurrentProject();
   const revision = tree.getRevision();
   useEffect(() => {
-    if (route.name === 'page') rememberPage(tree, user.id, route.id);
+    if (route.name === 'page') rememberPage(keys, tree, user.id, route.id);
     if (route.name !== 'home') return;
-    let last = lastPageOf(projectId);
+    let last = lastPageOf(keys, projectId);
     if (!last) {
       try {
         last = localStorage.getItem(LEGACY_LAST_PAGE_KEY);
@@ -122,7 +126,7 @@ function Shell() {
     }
     const page = last ? tree.get(last) : undefined;
     if (page && page.workspace_id === projectId && !tree.isTrashed(page.id)) navigate(pagePath(page.id), true);
-  }, [route, tree, revision, projectId, user.id]);
+  }, [route, tree, revision, projectId, user.id, keys]);
 
   const pageId = route.name === 'page' && tree.get(route.id) ? route.id : null;
   const crumbs = pageId ? tree.ancestors(pageId) : [];
@@ -238,5 +242,64 @@ function Home() {
         <PlusIcon size={16} /> New page
       </button>
     </article>
+  );
+}
+
+/**
+ * El usuario todavía no tiene ningún proyecto en este workspace. El dueño y los admins pueden crear el
+ * primero (con red: es la puesta en marcha); los demás esperan a que les compartan uno, y la app vuelve a
+ * preguntar sola.
+ */
+function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) {
+  const { client, config } = useWorkspace();
+  const [canCreate, setCanCreate] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void client
+      .from('members')
+      .select('role, removed_at')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const row = data as { role: string; removed_at: string | null } | null;
+        if (live) setCanCreate(!!row && !row.removed_at && (row.role === 'owner' || row.role === 'admin'));
+      });
+    return () => {
+      live = false;
+    };
+  }, [client, user.id]);
+
+  async function create() {
+    setBusy(true);
+    setError(null);
+    const { error } = await client.from('workspaces').insert({ id: crypto.randomUUID(), name: 'My project' });
+    setBusy(false);
+    if (error) setError(error.message);
+    else onRetry();
+  }
+
+  return (
+    <main className="center-screen">
+      <div className="card">
+        <h1>No projects yet</h1>
+        <p className="muted">
+          {canCreate
+            ? `You are signed in to ${config.name || 'this workspace'} as ${user.email}. Create the first project to start.`
+            : `You are signed in to ${config.name || 'this workspace'} as ${user.email}, but nothing has been shared with you yet. Ask the workspace owner for access; this page opens your projects as soon as they share one.`}
+        </p>
+        {canCreate && (
+          <button className="primary" disabled={busy} onClick={() => void create()}>
+            <PlusIcon size={16} /> New project
+          </button>
+        )}
+        {error && <p className="error">{error}</p>}
+        <button className="link" onClick={() => void client.auth.signOut({ scope: 'local' })}>
+          Sign out
+        </button>
+      </div>
+    </main>
   );
 }

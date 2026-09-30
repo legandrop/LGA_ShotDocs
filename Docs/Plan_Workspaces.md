@@ -187,12 +187,12 @@ cambios de permisos, que son el momento más riesgoso.
   servidor ya tiene lo de hoy y no lo vuelven a subir. Por eso cada workspace lleva una **generación**
   (hecha en v0.021): si cambia, cada dispositivo vuelve a subir todo lo suyo y Yjs lo junta sin
   duplicar. Así los dispositivos cubren lo posterior a la copia.
-- **Pendiente: restaurar sobre el mismo proyecto de Supabase.** Lo guardado en cada dispositivo lleva el
-  proyecto en el nombre: si se restaura en un proyecto nuevo, los dispositivos arrancan de cero y lo
-  posterior a la copia queda en su base vieja, sin subir. Hoy el script de copias restaura sobre una base
-  vacía; falta el modo "sobre el mismo proyecto" (reemplazar los datos sin tocar el esquema), probado,
-  y que el nombre de lo guardado dependa del workspace y no del proyecto (paso 5). Mientras tanto, una
-  restauración se hace con ayuda y probando antes en una base aparte.
+- **Restaurar sobre el mismo proyecto de Supabase** (paso 5, v0.030): el script de copias tiene un modo
+  que reemplaza los datos sin tocar el esquema (README del repo de copias), y el nombre de lo guardado en
+  los dispositivos ya no sale de la dirección del Supabase sino de la clave local del workspace (fija para
+  Wanka). Así, restaurar en el mismo proyecto o en uno nuevo no deja a los dispositivos con una base
+  vieja sin subir. Igual, una restauración de verdad conviene hacerla con ayuda y probando antes en una
+  base aparte.
 - No cubre y hay que anotarlo en la guía: la configuración de login (sale del comando del paso 1 de la
   guía, sección 2), los secretos del portero y la conexión con Drive (se vuelven a cargar), las imágenes
   pegadas en las páginas (bucket `page-files` de Supabase: hoy solo las tienen los dispositivos que las
@@ -246,7 +246,11 @@ cambios de permisos, que son el momento más riesgoso.
      pidiendo a Drive, o el índice del video al final del archivo.
    - Queda para cuando haga falta: subir 1 GB y la app instalada en el iPhone (agregada a la pantalla de
      inicio).
-5. **Preparación sin cambios visibles** (ver "Cómo se hace cada paso").
+5. ✅ **Preparación sin cambios visibles** (v0.030). El workspace es un objeto en el código con su clave
+   local (Wanka conserva sus nombres; `Doc_Sincronizacion.md`), tablas `members`, `grants` e
+   `invitations` con sus funciones y pruebas (`Doc_Supabase.md`), `ensure_workspace()` ya no crea "My
+   project" (sin proyectos, la app lo avisa), la versión de la base con aviso, el modo de restaurar sobre
+   el mismo proyecto (repo de copias) y la configuración de login documentada entera.
 6. **Cola de archivos nueva** (por partes, sin red), miniaturas y la lista de qué archivos usa cada
    página. En la práctica va junto con el 8: la cola sube al portero.
 7. **Carrete** de fotos y videos.

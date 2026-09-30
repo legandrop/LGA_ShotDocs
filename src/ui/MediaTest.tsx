@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
+import { useWorkspace } from '../workspace';
 import { openPortero, UploadError, type DriveFile, type DriveStatus, type Portero, type UploadProgress } from '../media/portero';
 
 // Pantalla temporal para probar el portero de archivos desde el teléfono: conectar el Drive del dueño,
@@ -93,6 +94,7 @@ function useTicking(active: boolean): void {
 }
 
 export function MediaTest() {
+  const { client } = useWorkspace();
   // `undefined`: todavía se está leyendo la dirección del portero; `null`: el workspace no tiene.
   const [portero, setPortero] = useState<Portero | null | undefined>(undefined);
   const [status, setStatus] = useState<DriveStatus | null>(null);
@@ -124,7 +126,7 @@ export function MediaTest() {
     setDriveError(null);
     void (async () => {
       try {
-        const p = await openPortero();
+        const p = await openPortero(client);
         if (!live) return;
         setPortero(p);
         if (p) {
@@ -140,7 +142,7 @@ export function MediaTest() {
     return () => {
       live = false;
     };
-  }, [checking]);
+  }, [checking, client]);
 
   // Si se vuelve a esta pantalla sin recargarla después de ir a Google (el botón Atrás, o la app instalada
   // en el iPhone, que puede abrir Google en una hoja aparte), el botón se destraba y se vuelve a preguntar.

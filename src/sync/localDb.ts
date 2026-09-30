@@ -43,10 +43,6 @@ interface ShotDocsDB extends DBSchema {
 
 export type LocalDb = IDBPDatabase<ShotDocsDB>;
 
-export function localDbName(projectRef: string, userId: string): string {
-  return `shotdocs:${projectRef}:${userId}`;
-}
-
 export function openLocalDb(name: string): Promise<LocalDb> {
   return openDB<ShotDocsDB>(name, 1, {
     upgrade(db) {

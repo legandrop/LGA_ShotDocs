@@ -1,6 +1,6 @@
-import type { Session } from '@supabase/supabase-js';
+import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react';
-import { AUTH_STORAGE_KEY, supabase } from './supabase';
+import type { WorkspaceConfig } from './workspace';
 
 export interface AuthUser {
   id: string;
@@ -12,12 +12,10 @@ export type AuthState =
   | { status: 'signedOut' }
   | { status: 'signedIn'; user: AuthUser };
 
-const LAST_USER_KEY = 'shotdocs-last-user';
-
-function readLastUser(): AuthUser | null {
+function readLastUser(ws: WorkspaceConfig): AuthUser | null {
   try {
-    if (!localStorage.getItem(AUTH_STORAGE_KEY)) return null;
-    const raw = localStorage.getItem(LAST_USER_KEY);
+    if (!localStorage.getItem(ws.storage.auth)) return null;
+    const raw = localStorage.getItem(ws.storage.lastUser);
     return raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
     return null;
@@ -33,16 +31,15 @@ function userFrom(session: Session | null): AuthUser | null {
  * ese caso se sigue con el último usuario conocido: la app funciona offline y la sesión se renueva sola
  * cuando vuelve la red. Si Supabase la invalida de verdad, avisa con SIGNED_OUT.
  */
-export function useAuth(): AuthState {
+export function useAuth(ws: WorkspaceConfig, client: SupabaseClient): AuthState {
   const [state, setState] = useState<AuthState>({ status: 'loading' });
 
   useEffect(() => {
-    if (!supabase) return;
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data } = client.auth.onAuthStateChange((event, session) => {
       const user = userFrom(session);
       if (user) {
         try {
-          localStorage.setItem(LAST_USER_KEY, JSON.stringify(user));
+          localStorage.setItem(ws.storage.lastUser, JSON.stringify(user));
         } catch {
           // Sin almacenamiento solo se pierde el modo offline.
         }
@@ -51,18 +48,18 @@ export function useAuth(): AuthState {
         );
       } else if (event === 'SIGNED_OUT') {
         try {
-          localStorage.removeItem(LAST_USER_KEY);
+          localStorage.removeItem(ws.storage.lastUser);
         } catch {
           // Nada que limpiar.
         }
         setState({ status: 'signedOut' });
       } else if (event === 'INITIAL_SESSION') {
-        const last = readLastUser();
+        const last = readLastUser(ws);
         setState(last ? { status: 'signedIn', user: last } : { status: 'signedOut' });
       }
     });
     return () => data.subscription.unsubscribe();
-  }, []);
+  }, [ws, client]);
 
   return state;
 }

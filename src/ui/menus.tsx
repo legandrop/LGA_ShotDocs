@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } fr
 import { prefs, usePrefs, type Prefs } from '../prefs';
 import { navigate } from '../router';
 import { useServices, useTree } from '../services';
-import { supabase } from '../supabase';
 import { PAGE_SIZES, pageFormat } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
@@ -217,7 +216,7 @@ function Segmented<K extends keyof Prefs>(props: {
 }
 
 export function AccountMenu({ position, anchor, onClose }: { position: MenuPosition; anchor: HTMLElement | null; onClose: () => void }) {
-  const { user, docs } = useServices();
+  const { user, docs, client } = useServices();
   const pending = usePendingCount();
   const ref = useRef<HTMLDivElement>(null);
   useFloating(ref, onClose, anchor);
@@ -235,7 +234,7 @@ export function AccountMenu({ position, anchor, onClose }: { position: MenuPosit
     ) {
       return;
     }
-    await supabase!.auth.signOut({ scope: 'local' });
+    await client.auth.signOut({ scope: 'local' });
   }
 
   return (

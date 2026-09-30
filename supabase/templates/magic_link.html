@@ -1,0 +1,15 @@
+<div style="margin:0;padding:32px 16px;background:#f4f2ee;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1b1a17">
+  <div style="max-width:440px;margin:0 auto;background:#ffffff;border:1px solid #e4e0d8;border-radius:14px;overflow:hidden">
+    <div style="height:10px;background:repeating-linear-gradient(60deg,#1b1a17 0 12px,#f4f2ee 12px 24px)"></div>
+    <div style="height:10px;background:repeating-linear-gradient(120deg,#1b1a17 0 12px,#f4f2ee 12px 24px);border-top:1px solid #9a958b"></div>
+    <div style="padding:28px 28px 32px">
+      <p style="margin:0 0 20px;font-size:14px;font-weight:600">LGA Shot Docs</p>
+      <h1 style="margin:0 0 12px;font-size:22px;line-height:1.25">Your sign-in code</h1>
+      <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#5e5a52">Type this code in the app. On iPhone, type it in the installed app to stay signed in there.</p>
+      <p style="margin:0 0 24px;padding:16px;border-radius:10px;background:#f4f2ee;text-align:center;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:30px;letter-spacing:0.3em;font-weight:600">{{ .Token }}</p>
+      <p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:#5e5a52">Or open this link on the device where you want to sign in:</p>
+      <p style="margin:0 0 28px"><a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#1b1a17;color:#fbfaf8;text-decoration:none;font-size:15px;font-weight:600">Sign in to Shot Docs</a></p>
+      <p style="margin:0;font-size:12px;line-height:1.5;color:#8a857b">The code and the link expire in 1 hour and work once. If you did not ask to sign in, ignore this email.</p>
+    </div>
+  </div>
+</div>

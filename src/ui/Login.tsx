@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { supabase } from '../supabase';
+import { useWorkspace } from '../workspace';
 import { AppIcon, ArrowLeftIcon, ArrowRightIcon, MailIcon, SlateBand } from './icons';
 
 type Step = { name: 'email' } | { name: 'sent'; email: string };
@@ -23,6 +23,7 @@ function explain(error: { message: string; code?: string; status?: number }): st
 }
 
 export function Login() {
+  const { client } = useWorkspace();
   const [step, setStep] = useState<Step>({ name: 'email' });
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -35,7 +36,7 @@ export function Login() {
     if (!address) return;
     setBusy(true);
     setError(null);
-    const { error } = await supabase!.auth.signInWithOtp({
+    const { error } = await client.auth.signInWithOtp({
       email: address,
       options: { emailRedirectTo: location.origin },
     });
@@ -49,7 +50,7 @@ export function Login() {
     if (step.name !== 'sent') return;
     setBusy(true);
     setError(null);
-    const { error } = await supabase!.auth.verifyOtp({ email: step.email, token: code.trim(), type: 'email' });
+    const { error } = await client.auth.verifyOtp({ email: step.email, token: code.trim(), type: 'email' });
     setBusy(false);
     if (error) setError(explain(error));
   }

@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.030 :
+
+Preparación para el equipo, sin cambios para quien ya usa la app (paso 5 del plan de workspaces). El
+cliente de Supabase ya no es global: sale del workspace abierto, que tiene su clave local; la de Wanka
+queda fija como texto y conserva los nombres de siempre (sesión y base local), con una prueba que lo
+protege. La base suma miembros, permisos por proyecto o página e invitaciones, con sus pruebas; el dueño
+entra como `owner` y las otras cuentas con proyectos como miembros con permiso completo sobre lo suyo.
+El servidor ya no crea "My project" para una cuenta nueva: sin proyectos, la app lo avisa y vuelve a
+preguntar sola. La app avisa si la base del workspace es más vieja que la que necesita. El repo de
+copias restaura sobre el mismo proyecto y la configuración de login quedó documentada entera.
+[ Workspaces - preparación: workspace en el código, miembros y permisos ]
+
 v0.029 :
 
 Documentación al día para seguir con el plan de workspaces. `Plan_Workspaces.md` suma la sección 11,

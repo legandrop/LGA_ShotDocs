@@ -28,6 +28,11 @@ export interface SyncStatus {
    * hasta actualizar.
    */
   outdated: boolean;
+  /**
+   * La base del workspace es más vieja que la que necesita esta versión de la app: `[la que tiene, la que
+   * hace falta]`. Lo arregla el dueño aplicando las migraciones; mientras tanto, lo nuevo puede no andar.
+   */
+  schemaBehind: [number, number] | null;
   lastError: string | null;
   lastSyncAt: number | null;
 }
@@ -58,6 +63,7 @@ export class SyncEngine {
     warning: null,
     notice: null,
     outdated: false,
+    schemaBehind: null,
     lastError: null,
     lastSyncAt: null,
   };
@@ -74,7 +80,7 @@ export class SyncEngine {
     private readonly tree: PageTree,
     private readonly docs: PageDocs,
     private readonly files: PageFiles,
-    private readonly options: { appVersion?: string } = {},
+    private readonly options: { appVersion?: string; schemaVersion?: number } = {},
   ) {
     const poke = () => this.poke();
     tree.onQueued = poke;
@@ -248,6 +254,9 @@ export class SyncEngine {
     const version = Number(this.options.appVersion);
     const outdated =
       settings.minAppVersion !== null && !(Number.isFinite(version) && version >= settings.minAppVersion);
+    const needed = this.options.schemaVersion ?? 0;
+    const schemaBehind: [number, number] | null = settings.schemaVersion < needed ? [settings.schemaVersion, needed] : null;
+    if (schemaBehind?.join() !== this.status.schemaBehind?.join()) this.patch({ schemaBehind });
     this.patch({ outdated });
 
     // Sin generación guardada vale 1, la que crea la migración: un dispositivo que todavía tenía una versión

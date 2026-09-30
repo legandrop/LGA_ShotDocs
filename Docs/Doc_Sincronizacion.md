@@ -10,7 +10,7 @@ workspace) y `src/ui/unknownContent.test.ts` (la guarda del editor contra lo des
 
 | Pieza | Archivo | Qué hace |
 |---|---|---|
-| Base local | `localDb.ts` | Una base IndexedDB por proyecto de Supabase y usuario (`shotdocs:<ref>:<userId>`, con `<ref>` sacado de la dirección del Supabase), compartida por todos los proyectos de la app: copia del árbol, cola de salida, updates de contenido, estado de cada página e imágenes. |
+| Base local | `localDb.ts` | Una base IndexedDB por workspace y usuario (`shotdocs:<clave local>:<userId>`, ver abajo), compartida por todos los proyectos de la app: copia del árbol, cola de salida, updates de contenido, estado de cada página e imágenes. |
 | Contenido | `docs.ts` | Un documento Yjs por página. Guarda cada edición en el dispositivo y sube o baja lo que falte. |
 | Estructura | `structure.ts` | La raíz inicial de cada página (la "semilla") y la reparación de documentos viejos con dos raíces (ver "Fusión"). |
 | Árbol | `tree.ts` | La copia del árbol que mandó el servidor más la cola de cambios locales encima. |
@@ -18,9 +18,29 @@ workspace) y `src/ui/unknownContent.test.ts` (la guarda del editor contra lo des
 | Servidor | `remote.ts` | Las llamadas a Supabase. Las pruebas usan un servidor en memoria con las mismas reglas (`testing.ts`). |
 | Motor | `engine.ts` | El ciclo de sincronización y el estado que muestra la app. |
 
-El nombre de la base local no se cambia nunca: renombrarla con cambios sin subir es perderlos. El paso 5
-de `Plan_Workspaces.md` (sección 11) la pasa a una clave local por workspace, guardada en
-`workspace_settings`; la de Wanka va a ser el nombre que ya usa hoy, así que no se renombra nada.
+El nombre de la base local no se cambia nunca: renombrarla con cambios sin subir es perderlos. Sale de la
+**clave local** del workspace (`src/workspace.ts`), que también nombra la sesión y lo que la app recuerda
+en el dispositivo (proyecto elegido, última página de cada proyecto). La de Wanka está fija como texto
+(`znlvpuddswymxpffgvbz`, el ref de su proyecto de Supabase, ya no sacado de la dirección) y sus nombres
+son los de siempre: `shotdocs-auth`, `shotdocs-last-user`, `shotdocs-project`, `shotdocs-last-pages` y
+la base `shotdocs:znlvpuddswymxpffgvbz:<usuario>`; una prueba (`src/workspace.test.ts`) los protege. Un
+workspace nuevo (paso 12 del plan) usa nombres que llevan su clave local. La base guarda la de cada
+workspace en `workspace_settings.local_key`, para los links de invitación y para que una copia restaurada
+en otro proyecto de Supabase la conserve.
+
+El cliente de Supabase sale del workspace abierto (`WorkspaceContext` y `Services.client`); no hay un
+cliente global. Hasta que exista la lista de workspaces del dispositivo (paso 12), el único es el de la
+compilación (`SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`).
+
+**Sin proyectos.** El servidor ya no crea "My project" para una cuenta nueva: `ensure_workspace()` devuelve
+el primer proyecto que la persona puede ver, o nada. Sin ninguno, la app muestra *No projects yet* y vuelve
+a preguntar sola cada minuto, al volver a la ventana y al volver la red; el dueño y los admins ven además
+el botón para crear el primero.
+
+**Versión de la base.** La app sabe qué versión de la base necesita (`DB_SCHEMA_VERSION`) y la compara con
+`workspace_settings.schema_version` en cada sincronización. Si la del workspace es menor, el estado dice
+*Workspace needs an update* y el detalle explica que el dueño tiene que aplicar las migraciones; nada se
+pierde mientras tanto.
 
 ## Contenido de las páginas
 

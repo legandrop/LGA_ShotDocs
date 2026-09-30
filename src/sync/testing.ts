@@ -79,7 +79,7 @@ export class FakeRemote implements Remote {
     return this.server.settings && { ...this.server.settings };
   }
 
-  async ensureWorkspace(): Promise<string> {
+  async ensureWorkspace(): Promise<string | null> {
     this.server.check();
     return this.server.workspaceId;
   }
