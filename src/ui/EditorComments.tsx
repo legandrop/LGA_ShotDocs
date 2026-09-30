@@ -1,26 +1,18 @@
-import { SideMenuExtension, type BlockNoteEditor } from '@blocknote/core';
+import { type BlockNoteEditor } from '@blocknote/core';
 import {
-  BlockColorsItem,
-  DragHandleMenu,
-  SideMenu,
-  SideMenuController,
-  TableColumnHeaderItem,
-  TableRowHeaderItem,
   useBlockNoteEditor,
   useComponentsContext,
-  useDictionary,
-  useExtensionState,
   type BlockTypeSelectItem,
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
 import { insertOrUpdateBlockForSlashMenu } from '@blocknote/core';
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FC, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 import { t, useT, type Translate } from '../i18n';
 import '../i18n/lazy/editor';
 import { useServices } from '../services';
 import { blockIdOf } from './carreteModel';
 import { hiddenInDom } from './collapseDom';
-import { onCollapseChange, removeWithSections } from './collapseEditor';
+import { onCollapseChange } from './collapseEditor';
 import {
   answerQuestion,
   blocksChanged,
@@ -147,81 +139,6 @@ export function CommentToolbarButton() {
     />
   );
 }
-
-function CommentMenuItem() {
-  const Components = useComponentsContext()!;
-  const editor = useBlockNoteEditor();
-  const block = useExtensionState(SideMenuExtension, { editor, selector: (s) => s?.block });
-  const tr = useT();
-  if (!block) return null;
-  return (
-    <Components.Generic.Menu.Item className="bn-menu-item" onClick={() => commentOnBlock(block.id)}>
-      {tr('comments.comment')}
-    </Components.Generic.Menu.Item>
-  );
-}
-
-/**
- * "Borrar" del menú del bloque, como el de BlockNote (los bloques elegidos si el del menú está entre ellos), pero
- * un título colapsado se va con su sección entera (P.11, Docs/Doc_Colapsar.md): la transacción dice que la
- * persona pidió borrarlo.
- */
-function RemoveWithSectionItem({ children }: { children: ReactNode }) {
-  const Components = useComponentsContext()!;
-  const editor = useBlockNoteEditor();
-  const block = useExtensionState(SideMenuExtension, { editor, selector: (s) => s?.block });
-  if (!block) return null;
-  return (
-    <Components.Generic.Menu.Item
-      className="bn-menu-item"
-      onClick={() => {
-        const selected = editor.getSelection()?.blocks;
-        const blocks = selected && selected.some((b) => b.id === block.id) ? selected : [block];
-        const view = editor.prosemirrorView;
-        if (view) removeWithSections(view, blocks.map((b) => b.id));
-      }}
-    >
-      {children}
-    </Components.Generic.Menu.Item>
-  );
-}
-
-/** El menú del bloque (el tirador de la izquierda) de siempre, con "Comment" al final. */
-function CommentDragHandleMenu({ canComment }: { canComment: boolean }) {
-  const dict = useDictionary();
-  return (
-    <DragHandleMenu>
-      <RemoveWithSectionItem>{dict.drag_handle.delete_menuitem}</RemoveWithSectionItem>
-      <BlockColorsItem>{dict.drag_handle.colors_menuitem}</BlockColorsItem>
-      <TableRowHeaderItem>{dict.drag_handle.header_row_menuitem}</TableRowHeaderItem>
-      <TableColumnHeaderItem>{dict.drag_handle.header_column_menuitem}</TableColumnHeaderItem>
-      {canComment && <CommentMenuItem />}
-    </DragHandleMenu>
-  );
-}
-
-// Dos componentes fijos (no uno armado en cada dibujo, que se volvería a montar con el menú abierto).
-const DragHandleMenuWithComment = () => <CommentDragHandleMenu canComment />;
-const DragHandleMenuPlain = () => <CommentDragHandleMenu canComment={false} />;
-
-/** El menú lateral del editor con "Comment" en el menú del bloque (si se puede comentar). */
-export function CommentSideMenuController({ canComment }: { canComment: boolean }) {
-  return <SideMenuController sideMenu={canComment ? SideMenuWithComment : SideMenuPlain} />;
-}
-
-/**
- * El menú lateral de siempre. En un título se corre a la izquierda: ahí, pegado al texto, va el triángulo para
- * colapsar (P.11, Docs/Doc_Colapsar.md).
- */
-function ShiftedSideMenu({ dragHandleMenu }: { dragHandleMenu: FC }) {
-  const editor = useBlockNoteEditor();
-  const type = useExtensionState(SideMenuExtension, { editor, selector: (s) => s?.block?.type });
-  const menu = <SideMenu dragHandleMenu={dragHandleMenu} />;
-  return type === 'heading' ? <div className="sd-side-menu-heading">{menu}</div> : menu;
-}
-
-const SideMenuWithComment = () => <ShiftedSideMenu dragHandleMenu={DragHandleMenuWithComment} />;
-const SideMenuPlain = () => <ShiftedSideMenu dragHandleMenu={DragHandleMenuPlain} />;
 
 // --- Los bloques para el panel -------------------------------------------------------------------------
 

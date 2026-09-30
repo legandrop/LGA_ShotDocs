@@ -179,6 +179,10 @@ export const editor = {
   'collapse.onlyYou': { en: "Just for you: others still see it as it was.", es: "Solo para vos: los demás lo siguen viendo como estaba." },
   'collapse.collapsedForYou': { en: "Collapsed just for you.", es: "Colapsado solo para vos." },
   'collapse.label': { en: "{action} section “{title}”", es: "{action} la sección «{title}»" },
+  // Los tres puntos de cada bloque (BlockSideMenu.tsx).
+  'block.handleLabel': { en: "Select block (drag to move)", es: "Elegir el bloque (arrastrar para moverlo)" },
+  'block.handleClick': { en: "Click: select the block", es: "Clic: elegir el bloque" },
+  'block.handleDrag': { en: "Drag: move it", es: "Arrastrar: moverlo" },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

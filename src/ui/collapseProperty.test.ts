@@ -7,17 +7,22 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { collapseExtension, collapseState, headingBackspaceExtension, removeWithSections, setCollapsed } from './collapseEditor';
+import { selectWholeBlock } from './blockHandle';
+import { collapseExtension, collapseState, headingBackspaceExtension, setCollapsed } from './collapseEditor';
 import { schema } from './editorSchema';
 import { findExtension, replaceAll, setFind, clearFind, stepFind } from './findEditor';
 import { connect, sameDocs } from './collabHarness';
+
+// jsdom: ProseMirror mide la selección al llevarla a la vista (los puntos dejan el foco en el editor).
+Range.prototype.getClientRects ??= (() => []) as never;
+Range.prototype.getBoundingClientRect ??= (() => ({ top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0 })) as never;
 
 // Colapsar (Docs/Doc_Colapsar.md): prueba de propiedades al azar, traída de la verificación independiente de la
 // entrega 1a. Dos editores sobre el mismo Y.Doc (A con colapsar y la búsqueda, B sin nada), con pasos al azar:
 // colapsar y abrir, Enter después de un título colapsado, teclas con la selección vacía, selecciones borradas,
 // cortadas, escritas o pegadas encima (al azar, las que cruzan una sección entera, Shift+→ o Shift+↓ desde un
 // título colapsado, el texto exacto de un título con varios bloques pegados, toda la página), bloques elegidos
-// enteros, "Borrar", mover bloques (Shift+Ctrl+flechas y arrastrar), deshacer y rehacer, cambios de tipo, ids
+// enteros, los puntos (el bloque elegido) y Retroceso o Supr, mover bloques (Shift+Ctrl+flechas y arrastrar), deshacer y rehacer, cambios de tipo, ids
 // repetidos, "Reemplazar todo", sin red y de vuelta, y cambios de B. Cada paso anota a propósito qué se puede
 // borrar de lo escondido: (A) lo del título elegido entero (o todo), (B) lo de las secciones que la selección de
 // texto cruza enteras (empieza arriba del título y termina después de lo escondido). Después se verifica:
@@ -454,11 +459,19 @@ describe('colapsar, al azar', () => {
             kind += ` ${k} ${b.text}`;
             act(k);
           } else if (r < 0.7) {
-            // "Borrar" (el menú del bloque, con la sección) o `removeBlocks` de BlockNote (sin ella).
-            const menu = rand() < 0.5;
-            kind = menu ? 'remove-menu' : 'removeBlocks';
+            // Clic en los puntos (el bloque elegido, con la sección) y Retroceso o Supr, o `removeBlocks` de BlockNote
+            // (sin ella: lo escondido se abre, no se borra).
+            let menu = rand() < 0.5;
             if (!visibleIds.length) continue;
             const id = pick(visibleIds);
+            // Los puntos eligen el bloque por su id (el primero con ese id): con ids repetidos, `removeBlocks`.
+            let copies = 0;
+            st.doc.descendants((node) => {
+              if (node.type.name === 'blockContainer' && node.attrs.id === id) copies++;
+              return true;
+            });
+            if (copies > 1) menu = false;
+            kind = menu ? 'handle' : 'removeBlocks';
             intent.add(id);
             for (const d of descendantsIds(bl.get(id)!.node)) intent.add(d);
             // Con ids repetidos, BlockNote saca el primer bloque con ese id (no es de colapsar).
@@ -471,8 +484,12 @@ describe('colapsar, al azar', () => {
             });
             if (menu) whole(bl.get(id)!);
             kind += ` ${bl.get(id)!.text}`;
-            if (menu) removeWithSections(view(A), [id]);
-            else A.removeBlocks([id]);
+            if (menu) {
+              const k = pick(['Backspace', 'Delete']);
+              kind += ` ${k}`;
+              if (!selectWholeBlock(view(A), id)) continue;
+              act(k);
+            } else A.removeBlocks([id]);
           } else if (r < 0.77) {
             kind = rand() < 0.6 ? 'undo' : 'redo';
             checkTokens = false;

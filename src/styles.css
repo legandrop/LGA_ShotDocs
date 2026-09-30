@@ -4078,21 +4078,21 @@ button.primary.danger {
   border: 0;
   border-radius: 4px;
   background: none;
+  /* Gris; con el mouse encima, del color del título (`--sd-heading-color`, el calculado del título). */
+  color: var(--faint);
   pointer-events: auto;
   cursor: pointer;
   opacity: 0;
-  /* Al irse el mouse se esconde con una pausa, así se llega del título al triángulo. */
-  transition: opacity 120ms ease 300ms;
+  /* Al irse el mouse se esconde con una pausa (la franja del título lo mantiene mientras se va hacia él). */
+  transition: opacity 120ms ease 300ms, color 120ms ease;
 }
 
 .sd-collapse-toggle svg {
-  opacity: 0.5;
   transform: rotate(90deg);
   transition: transform 120ms ease;
 }
 
 .sd-collapse-toggle.collapsed svg {
-  opacity: 0.8;
   transform: none;
 }
 
@@ -4104,17 +4104,15 @@ button.primary.danger {
   transition-delay: 0s;
 }
 
-.sd-collapse-toggle:hover {
-  background: var(--hover);
-}
-
-.sd-collapse-toggle:hover svg {
-  opacity: 1;
+.sd-collapse-toggle:hover:not(:disabled),
+.sd-collapse-toggle:focus-visible {
+  color: var(--sd-heading-color, var(--text));
+  background: none;
 }
 
 /* En pantallas táctiles se ve siempre, tenue (no hay mouse que pase por el título). */
 .sd-touch .sd-collapse-toggle {
-  opacity: 0.5;
+  opacity: 0.6;
   transition: none;
 }
 
@@ -4122,9 +4120,43 @@ button.primary.danger {
   opacity: 1;
 }
 
-/* En un título, el menú lateral se corre: el triángulo va pegado al texto. */
-.sd-side-menu-heading {
-  transform: translateX(-22px);
+/* Los puntos de cada bloque (BlockSideMenu.tsx): solo el tirador, sin el "+" de BlockNote. Tres puntos llenos,
+   del gris del margen; con el mouse encima, del color del texto. Se ubican con gutterLayout.ts. */
+.bn-side-menu.sd-side-menu {
+  height: auto;
+  padding: 0;
+  gap: 0;
+}
+
+.sd-side-menu .sd-drag-handle {
+  display: flex;
+  align-items: center;
+  /* Los puntos contra el borde derecho (gutterLayout.ts, `DOTS_RIGHT_PAD`). */
+  justify-content: flex-end;
+  width: 14px;
+  height: 24px;
+  padding: 0 1px 0 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--faint);
+  cursor: grab;
+  transition: color 120ms ease;
+}
+
+.sd-side-menu .sd-drag-handle:hover:not(:disabled),
+.sd-side-menu .sd-drag-handle:focus-visible {
+  color: var(--text);
+  background: none;
+}
+
+.sd-side-menu .sd-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Un título en un margen angosto (el teléfono): no entran los puntos y el triángulo; va solo el triángulo. */
+.sd-side-menu.sd-no-room {
+  visibility: hidden;
 }
 
 /* --- Buscar y reemplazar en la página (Docs/Doc_Buscar.md) --------------------------------------------- */

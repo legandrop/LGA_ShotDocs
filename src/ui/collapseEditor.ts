@@ -28,8 +28,8 @@ import { notify } from './notice';
 // (imageRowsEditor.ts): un plugin de ProseMirror que calcula qué se esconde (collapse.ts) y lo dibuja con
 // decoraciones. Nunca cambia el documento por colapsar o abrir; sí cuida lo que se edita al lado de lo
 // escondido:
-// - Lo escondido se borra solo a propósito (verificación de cbed5dc): (A) "Borrar", el título elegido entero
-//   (o la sección, varios bloques, todo) y borrar, cortar, pegar o escribir encima: se va su sección entera, de
+// - Lo escondido se borra solo a propósito (verificación de cbed5dc): (A) el título elegido entero (clic en los
+//   puntos, o la sección, varios bloques, todo) y borrar, cortar, pegar o escribir encima: se va su sección entera, de
 //   una vez (corrección 1); (B) una selección de texto que cruza la sección entera (empieza arriba del título y
 //   termina después de lo escondido). Cualquier otra edición que borraría algo escondido no se hace: la sección
 //   se abre y la tecla no hace nada.
@@ -303,12 +303,6 @@ function textDeleted(trs: readonly Transaction[], plain: ReadonlySet<Transaction
 }
 
 /**
- * La marca de "Borrar" con la sección (el menú del bloque, `removeWithSections`): lleva los ids de los bloques
- * que la persona pidió borrar.
- */
-export const SECTION_DELETE_META = 'sd-section-delete';
-
-/**
  * Una selección de bloques enteros (el bloque elegido, la sección, varios bloques, todo): lo que abarca. BlockNote
  * elige el contenido del bloque (el `heading`), no el bloque: cuenta el bloque.
  */
@@ -339,13 +333,12 @@ function selectsAll(sel: Selection, state: EditorState): boolean {
 const covers = (range: { from: number; to: number }, at: BlockAt) => range.from <= at.pos && range.to >= at.pos + at.node.nodeSize;
 
 /**
- * (A) Si la persona quiso borrar el título entero: lo pidió con "Borrar", o la selección de antes de la edición
- * abarcaba el bloque entero (el bloque elegido, la sección elegida para cortar, varios bloques, todo). Una
+ * (A) Si la persona quiso borrar el título entero: la selección de antes de la edición abarcaba el bloque entero
+ * (el bloque elegido con los puntos, la sección elegida para cortar, varios bloques, todo). Una
  * selección de texto nunca: si cruza la sección entera (B), lo escondido ya se borró con ella; si no, lo
  * escondido queda y se abre (verificación de cbed5dc, puntos 2 y 3).
  */
-function meantToDelete(id: string, at: BlockAt, explicit: ReadonlySet<string>, selection: Selection): boolean {
-  if (explicit.has(id)) return true;
+function meantToDelete(at: BlockAt, selection: Selection): boolean {
   const range = blockRange(selection);
   return !!range && covers(range, at);
 }
@@ -353,7 +346,7 @@ function meantToDelete(id: string, at: BlockAt, explicit: ReadonlySet<string>, s
 /**
  * Los bloques escondidos que una transacción propia borraría sin que la persona lo haya querido (verificación de
  * cbed5dc). Se pueden borrar solo (A) con una selección de bloques enteros que abarca el título que los esconde
- * (o el bloque mismo), toda la página, o "Borrar"; (B) con una selección de texto que empieza antes del título
+ * (o el bloque mismo) o toda la página; (B) con una selección de texto que empieza antes del título
  * (en un bloque de arriba) y termina en un bloque después de todo lo que esconde. No cuentan los cambios de Yjs
  * (de otro, deshacer), la búsqueda, lo que hace la app sola, lo que agregan los plugins, ni mover bloques (el id
  * queda).
@@ -362,7 +355,7 @@ function hiddenLost(tr: Transaction, state: EditorState): string[] {
   const s = collapseKey.getState(state);
   if (!s || s.analysis.hidden.size === 0 || !tr.docChanged) return [];
   if (tr.getMeta(ySyncPluginKey as never) || tr.getMeta('appendedTransaction') || isFindReplaceTransaction(tr)) return [];
-  if (tr.getMeta(BACKGROUND_META) || tr.getMeta(SECTION_DELETE_META) || tr.getMeta(collapseKey) || textOnly(tr)) return [];
+  if (tr.getMeta(BACKGROUND_META) || tr.getMeta(collapseKey) || textOnly(tr)) return [];
   const ids = blockIds(tr.doc);
   const lost = [...s.analysis.hidden.keys()].filter((id) => !ids.has(id));
   if (lost.length === 0) return [];
@@ -484,15 +477,13 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   const doomed = new Set<string>();
   const orphaned = new Set<string>();
   if (structural) {
-    const explicit = new Set<string>();
-    for (const t of plain) for (const id of (t.getMeta(SECTION_DELETE_META) as string[] | undefined) ?? []) explicit.add(id);
     for (const id of before.analysis.collapsed) {
       // Solo un título que se veía: lo que esconde uno escondido lo decide el de afuera.
       // Un título al que solo se le cambió el id (su estado pasó al id nuevo) no se borró.
       if (before.analysis.hidden.has(id) || after.analysis.blocks.has(id) || !after.records.has(id)) continue;
       const at = before.analysis.blocks.get(id);
       if (!at) continue;
-      const meant = textDeleted(trs, plain, at.pos + 2) && meantToDelete(id, at, explicit, oldState.selection);
+      const meant = textDeleted(trs, plain, at.pos + 2) && meantToDelete(at, oldState.selection);
       // Solo lo que ese título escondía (nunca algo que se veía, aunque sea de su sección: el fin).
       for (const [sid, hider] of before.analysis.hidden) {
         if (hider === id && after.analysis.blocks.has(sid)) (meant ? doomed : orphaned).add(sid);
@@ -651,17 +642,6 @@ export function revealBlock(view: EditorView, blockId: string): boolean {
   revealIn(view.state.doc, records, blockId);
   dispatchRecords(view, records);
   return true;
-}
-
-/**
- * "Borrar" del menú del bloque: saca esos bloques y, si alguno es un título colapsado, su sección entera (la
- * transacción lleva `SECTION_DELETE_META`). Si la página queda sin bloques, queda un párrafo vacío.
- */
-export function removeWithSections(view: EditorView, ids: readonly string[]): void {
-  const tr = view.state.tr;
-  deleteBlocks(tr, new Set(ids));
-  if (!tr.docChanged) return;
-  view.dispatch(tr.setMeta(SECTION_DELETE_META, [...ids]).scrollIntoView());
 }
 
 /** Cuántos títulos tiene la página y cuántos están colapsados. */

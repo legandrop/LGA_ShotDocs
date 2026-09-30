@@ -138,3 +138,17 @@ export function SlateBand({ height = 12 }: { height?: number }) {
     </div>
   );
 }
+
+/**
+ * Los tres puntos verticales del bloque (el tirador, BlockSideMenu.tsx): círculos llenos y gruesos, como en Coda.
+ * 4 px de diámetro, 6,5 px de centro a centro.
+ */
+export function BlockDotsIcon() {
+  return (
+    <svg className="sd-dots" width={4} height={17} viewBox="0 0 4 17" fill="currentColor" aria-hidden="true">
+      <circle cx={2} cy={2} r={2} />
+      <circle cx={2} cy={8.5} r={2} />
+      <circle cx={2} cy={15} r={2} />
+    </svg>
+  );
+}

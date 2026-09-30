@@ -35,7 +35,6 @@ import { findUnknownContent } from './unknownContent';
 import { redrawFromYjs } from './editorRecovery';
 import {
   CommentMargin,
-  CommentSideMenuController,
   CommentToolbarButton,
   paragraphVariantItems,
   questionSlashItem,
@@ -55,6 +54,8 @@ import { collapseExtension, collapseSupported, headingBackspaceExtension, headin
 import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
+import { BlockSideMenuController } from './BlockSideMenu';
+import { undoGuardExtension } from './undoGuard';
 import { BACKGROUND_META } from './editorMeta';
 import { headingItems, notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens } from './carreteClick';
@@ -390,6 +391,8 @@ function BlockEditor({
       // decoraciones, sin tocar el documento. Colapsar, solo si el navegador puede esconder (`:has()`).
       extensions: [
         findExtension,
+        // Cada borrado es un solo Ctrl+Z, y el deshacer del navegador nunca edita la página (undoGuard.ts).
+        undoGuardExtension(),
         // Retroceso al principio de un título "sube la línea", en todos los navegadores (también sin colapsar).
         headingBackspaceExtension,
         ...(canCollapse
@@ -764,7 +767,8 @@ function BlockEditor({
       >
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
         <FormattingToolbarController formattingToolbar={formattingToolbar} />
-        <CommentSideMenuController canComment={canComment} />
+        {/* Los tres puntos de cada bloque: arrastrar lo mueve, un clic lo elige y abre la barra de formato. */}
+        <BlockSideMenuController />
       </BlockNoteView>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
       {/* El triángulo de cada título (P.11): una capa encima, como el margen. */}
