@@ -4,8 +4,10 @@ import { errorMessage, RemoteError } from '../sync/types';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
 import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress } from './portero';
 import {
+  DELETED_LABEL,
   deletedUrl,
   dimension,
+  REQUESTED_LABEL,
   mediaKind,
   placeholderUrl,
   probeMedia,
@@ -1082,6 +1084,8 @@ export class MediaQueue {
     }
     const links = tx.objectStore('links');
     for (const l of await links.index('pending').getAll(1)) {
+      // Un bloque de otro proyecto no se vuelve a intentar: el servidor lo rechazaría igual (y se avisaría otra vez).
+      if (l.waiting === 'other_project') continue;
       if (l.blocked || l.waiting || l.retryAt > 0) await links.put({ ...l, blocked: false, waiting: null, retryAt: 0 });
     }
     await tx.done;
@@ -1177,7 +1181,7 @@ export class MediaQueue {
       // Mandado a la papelera de Drive (papelera de archivos): ni roto ni pendiente, borrado, con la
       // miniatura si la hay.
       const cached = await db.get('known', id);
-      if (cached?.deleted) return await this.deletedDisplay(id, cached.name, mediaKind(cached.mime));
+      if (cached?.deleted) return await this.deletedDisplay(id, cached, mediaKind(cached.mime));
       // Lo que se sabía puede ser de antes: se pregunta una vez por sesión y, si resulta borrado, el editor
       // cambia la imagen (como cuando llega una miniatura).
       void this.checkDeleted(id);
@@ -1197,7 +1201,7 @@ export class MediaQueue {
         if (thumb) await db.put('thumbs', thumb, id);
       }
       const kind = meta ? mediaKind(meta.mime) : null;
-      if (meta?.deleted) return await this.deletedDisplay(id, meta.name, kind);
+      if (meta?.deleted) return await this.deletedDisplay(id, meta, kind);
       if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
       // Sin miniatura todavía (otro dispositivo la está subiendo, o no hay red): se vuelve a preguntar.
       this.missing.add(id);
@@ -1208,9 +1212,12 @@ export class MediaQueue {
   }
 
   /** La foto o el video que un dueño o admin mandó a la papelera de Drive. */
-  private async deletedDisplay(id: string, name: string, kind: MediaKind | null): Promise<string> {
+  private async deletedDisplay(id: string, meta: KnownFile, kind: MediaKind | null): Promise<string> {
     const thumb = this.db ? await this.db.get('thumbs', id).catch(() => undefined) : undefined;
-    return deletedUrl(kind, name, thumb ?? null);
+    // Pedido y confirmado por el portero, o solo pedido (Drive falló: se puede volver a pedir desde la
+    // papelera). Sin el dato (guardado antes), se lo da por confirmado.
+    const notice = meta.inDriveTrash === false ? REQUESTED_LABEL : DELETED_LABEL;
+    return deletedUrl(kind, meta.name, thumb ?? null, notice);
   }
 
   /**
@@ -1251,6 +1258,8 @@ export class MediaQueue {
             thumbAt: row.thumb_at,
             driveId: row.drive_id,
             deleted: isDeletedRow(row),
+            inDriveTrash: !!row.drive_trashed_at,
+            projectId: row.project_id ?? null,
             fetchedAt: this.now(),
           };
           found.set(row.id, known);

@@ -476,5 +476,8 @@ aparece junto al cursor el menú **Link / Text / Card**; la tarjeta es un párra
 `driveCard: true`, con el reproductor de Drive (iframe solo de Drive, armado con el id), el pie con el link
 y **Open in Drive**, aviso sin red, tapa en el teléfono para no quedarse con el scroll, y la prueba con el
 esquema de `main` (la versión vieja muestra el link y no borra nada). Detalle en `Doc_Sincronizacion.md`,
-"Links de Drive". Al publicar: subir `min_app_version` a esa versión. La copia liviana de un video no se
-hizo (solo si hace falta).
+"Links de Drive". Correcciones de la auditoría: sin `allow-popups-to-escape-sandbox`, los formularios de
+Google quedan como link (nunca tarjeta), aviso de Safari/iPhone (solo andan los archivos compartidos por
+link) y de reproductor que no carga, con **Open in Drive** bien visible. Falta confirmar a mano que el
+reproductor carga con `referrerpolicy="no-referrer"`. Al publicar: subir `min_app_version` a esa versión y
+actualizar el fixture del esquema de `main`. La copia liviana de un video no se hizo (solo si hace falta).

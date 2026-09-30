@@ -32,6 +32,48 @@ export function deleteDatabase(name: string): Promise<void> {
   });
 }
 
+/**
+ * Borra las bases de un workspace y usuario en el dispositivo: primero la principal (el texto, la cola del
+ * árbol y lo que dice qué falta subir) y después la de fotos y videos y la de comentarios. Si otra pestaña
+ * tiene la principal abierta, no se borra nada; si después se bloquea otra, reintentar sigue desde ahí
+ * (borrar una base que ya no existe no falla). Rechaza con `DeleteBlocked` si hay que cerrar otras pestañas.
+ */
+export async function deleteWorkspaceDatabases(dbName: string): Promise<void> {
+  await deleteDatabase(dbName);
+  await deleteDatabase(mediaDbName(dbName));
+  await deleteDatabase(commentsDbName(dbName));
+}
+
+/**
+ * Los originales de fotos y videos que nunca subieron: el archivo JSON no los trae, así que se bajan de a
+ * uno. `downloaded` marca los ya bajados.
+ */
+export function PendingMediaList(props: {
+  media: MediaRecord[];
+  downloaded: ReadonlySet<string>;
+  onDownload: (record: MediaRecord) => void;
+}) {
+  if (props.media.length === 0) return null;
+  return (
+    <div className="removed-media">
+      <span className="muted">The file does not include the original photos and videos. Download each one:</span>
+      <ul>
+        {props.media.map((m) => (
+          <li key={m.id}>
+            <button className="link" onClick={() => props.onDownload(m)}>
+              {m.name}
+            </button>{' '}
+            <span className="muted">
+              {sizeLabel(m.size)}
+              {props.downloaded.has(m.id) ? ' · downloaded' : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Lo que la app recuerda en este dispositivo de ese workspace y esa persona (proyecto y últimas páginas). */
 export function forgetWorkspaceKeys(storage: StorageNames, userId: string, projectIds: string[]): void {
   try {
@@ -59,6 +101,7 @@ export function RemovedScreen() {
   const [summary, setSummary] = useState<UnsyncedSummary | null>(null);
   const [media, setMedia] = useState<MediaRecord[]>([]);
   const [downloaded, setDownloaded] = useState(false);
+  const [mediaDone, setMediaDone] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,17 +137,20 @@ export function RemovedScreen() {
 
   async function downloadMedia(record: MediaRecord) {
     const blob = await mediaDb?.get('blobs', record.id);
-    if (blob) saveBlob(blob, record.name);
-    else setError(`“${record.name}” is not on this device anymore.`);
+    if (blob) {
+      saveBlob(blob, record.name);
+      setMediaDone((prev) => new Set(prev).add(record.id));
+    } else setError(`“${record.name}” is not on this device anymore.`);
   }
 
   async function removeFromDevice() {
+    const mediaLeft = media.filter((m) => !mediaDone.has(m.id)).length;
     if (
       !blocked &&
       pending > 0 &&
-      !downloaded &&
+      (!downloaded || mediaLeft > 0) &&
       !confirm(
-        `${pending} changes on this device were never uploaded, and you have not downloaded them. Removing deletes them for good. Remove anyway?`,
+        `${pending} changes on this device were never uploaded, and you have not downloaded ${downloaded ? `${mediaLeft} of the photos and videos` : 'them'}. Removing deletes them for good. Remove anyway?`,
       )
     ) {
       return;
@@ -115,9 +161,7 @@ export function RemovedScreen() {
     const projectIds = tree.projects().map((p) => p.id);
     try {
       await services.shutdown();
-      await deleteDatabase(mediaDbName(dbName));
-      await deleteDatabase(commentsDbName(dbName));
-      await deleteDatabase(dbName);
+      await deleteWorkspaceDatabases(dbName);
       forgetWorkspaceKeys(workspace.config.storage, user.id, projectIds);
       await client.auth.signOut({ scope: 'local' });
       // Un workspace que no es el de la compilación sale también de la lista del dispositivo (paso 12), y la
@@ -163,21 +207,7 @@ export function RemovedScreen() {
             <button className="primary" disabled={busy !== null} onClick={() => void download()}>
               {busy === 'download' ? 'Preparing…' : downloaded ? 'Download again' : 'Download my unsynced changes'}
             </button>
-            {media.length > 0 && (
-              <div className="removed-media">
-                <span className="muted">Photos and videos go one by one:</span>
-                <ul>
-                  {media.map((m) => (
-                    <li key={m.id}>
-                      <button className="link" onClick={() => void downloadMedia(m)}>
-                        {m.name}
-                      </button>{' '}
-                      <span className="muted">{sizeLabel(m.size)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <PendingMediaList media={media} downloaded={mediaDone} onDownload={(m) => void downloadMedia(m)} />
           </>
         )}
         {summary !== null && pending === 0 && (

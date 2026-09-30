@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { fromBase64 } from '../lib/base64';
-import { isThisWorkspace, inviteLink, parseInviteHash } from '../invite';
+import { inviteLink, parseInviteHash } from '../invite';
+import { loadWorkspaces, resolveInvite } from '../workspaces';
 import { legacyStorageNames, WANKA_LOCAL_KEY, type WorkspaceConfig } from '../workspace';
 import { acceptInvitationsQuietly, isRemovedSignal, parseAccess, Permissions, type AccessSnapshot } from './access';
 import { FakeServer, makeDevice, type Device } from './testing';
@@ -423,9 +424,12 @@ describe('link de invitación', () => {
     expect(link).not.toMatch(/[+/=]$/);
     const parsed = parseInviteHash(link.slice(link.indexOf('#')));
     expect(parsed).toEqual({ u: ws.url, k: ws.publishableKey, l: ws.localKey, p: page });
-    expect(isThisWorkspace(parsed!, ws)).toBe(true);
-    expect(isThisWorkspace({ ...parsed!, u: 'https://otro.supabase.co' }, ws)).toBe(false);
-    expect(isThisWorkspace({ ...parsed!, l: 'otra-clave' }, ws)).toBe(false);
+    // La lista del dispositivo lo reconoce como el de la compilación (paso 12).
+    const data = new Map<string, string>();
+    const store = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v), removeItem: (k: string) => void data.delete(k) };
+    const list = loadWorkspaces({ url: ws.url, publishableKey: ws.publishableKey }, store);
+    expect(resolveInvite(list, parsed!)).toMatchObject({ kind: 'open', target: page, entry: { legacy: true } });
+    expect(resolveInvite(list, { ...parsed!, u: 'https://otro.supabase.co' }).kind).not.toBe('open');
   });
 
   it('un link roto o sin https no cuenta', () => {
@@ -433,6 +437,10 @@ describe('link de invitación', () => {
     expect(parseInviteHash('#invite=%%%')).toBeNull();
     const bad = inviteLink('https://a', { u: 'javascript:alert(1)', k: 'k', l: 'l' });
     expect(parseInviteHash(bad.slice(bad.indexOf('#')))).toBeNull();
+    const fakeLocal = inviteLink('https://a', { u: 'http://localhost.evil.example', k: 'k', l: 'l' });
+    expect(parseInviteHash(fakeLocal.slice(fakeLocal.indexOf('#')))).toBeNull();
+    const local = inviteLink('https://a', { u: 'http://localhost:54321', k: 'k', l: 'l' });
+    expect(parseInviteHash(local.slice(local.indexOf('#')))?.u).toBe('http://localhost:54321');
     const noPage = inviteLink('https://a', { u: ws.url, k: 'k', l: 'l' });
     expect(parseInviteHash(noPage.slice(noPage.indexOf('#')))).toEqual({ u: ws.url, k: 'k', l: 'l' });
   });

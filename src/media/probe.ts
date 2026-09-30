@@ -214,13 +214,20 @@ function escapeXml(text: string): string {
 
 /** Lo que dice un archivo que un dueño o admin mandó a la papelera de Drive. */
 export const DELETED_LABEL = 'File deleted (in the Drive trash)';
+/** Se pidió mandarlo a la papelera de Drive pero el portero todavía no lo confirmó (por ejemplo, Drive falló). */
+export const REQUESTED_LABEL = 'Deletion requested (not yet in the Drive trash)';
 
 /**
  * Un archivo que un dueño o admin mandó a la papelera de Drive (papelera de archivos): la miniatura
  * oscurecida, si la hay, con el aviso y el nombre; sin miniatura, el ícono. Es un SVG sin scripts, como
  * dirección `data:`, con la miniatura adentro (un `<img>` no carga nada de afuera de un SVG).
  */
-export async function deletedUrl(kind: MediaKind | null, name: string, thumb: Blob | null): Promise<string> {
+export async function deletedUrl(
+  kind: MediaKind | null,
+  name: string,
+  thumb: Blob | null,
+  notice: string = DELETED_LABEL,
+): Promise<string> {
   const label = escapeXml(name.length > 46 ? `${name.slice(0, 45)}…` : name);
   let picture = '';
   if (thumb) {
@@ -236,7 +243,7 @@ export async function deletedUrl(kind: MediaKind | null, name: string, thumb: Bl
     '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270">' +
     '<rect width="480" height="270" rx="8" fill="#ebe8e4"/>' +
     picture +
-    `<text x="240" y="130" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="600" fill="${ink}">${escapeXml(DELETED_LABEL)}</text>` +
+    `<text x="240" y="130" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="600" fill="${ink}">${escapeXml(notice)}</text>` +
     `<text x="240" y="162" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" fill="${ink}">${glyph ? `${glyph} ` : ''}${label}</text>` +
     '</svg>';
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;

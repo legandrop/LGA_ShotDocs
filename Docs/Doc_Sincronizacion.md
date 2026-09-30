@@ -605,9 +605,11 @@ opción), `ui/DrivePasteMenu.tsx` (el menú), `ui/driveCard.ts` (la tarjeta) y `
 
 - **Links que reconoce:** `drive.google.com/file/d/<id>/…` (también con `/u/<n>/`), `/open?id=<id>`,
   `/uc?id=<id>`, carpetas `drive.google.com/drive/folders/<id>` (también `/u/<n>/` y `/mobile/`) y
-  `docs.google.com/<document|spreadsheets|presentation|drawings|forms>/d/<id>/…`, siempre con `https`. El id
+  `docs.google.com/<document|spreadsheets|presentation|drawings>/d/<id>/…`, siempre con `https`. El id
   solo puede tener letras, números, `_` y `-` (10 a 128). Se guarda la `resourcekey` de los links
-  compartidos, que Drive pide para verlos.
+  compartidos, que Drive pide para verlos (validada igual que el id en todas las direcciones que se arman).
+  **Los formularios de Google (`docs.google.com/forms/…`) no se reconocen:** se pegan como link común y
+  nunca son tarjeta, para que un formulario no pueda parecer parte de la app.
 - **La tarjeta es un párrafo con el link y `driveCard: true`** (nunca un tipo de bloque nuevo, D-14). Si el
   link estaba solo en su línea, esa línea pasa a ser la tarjeta; si estaba en medio de un texto o en una
   tabla, sale de ahí y la tarjeta va debajo del bloque. Arriba, el reproductor de Drive; abajo, el pie con
@@ -618,11 +620,30 @@ opción), `ui/DrivePasteMenu.tsx` (el menú), `ui/driveCard.ts` (la tarjeta) y `
 - **El iframe:** la dirección se arma con una plantilla fija y el id (`https://drive.google.com/file/d/<id>/preview`;
   una carpeta, `drive.google.com/embeddedfolderview`; un documento, `docs.google.com/<tipo>/d/<id>/preview`),
   nunca con el link tal cual: un link que no es de Drive, o con un id raro, deja un párrafo común.
-  `sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"` (el reproductor
-  necesita sus scripts y la sesión de Google; es de otro origen, así que no ve nada de la app; los popups,
-  para el botón de Drive que abre el archivo en otra pestaña; un formulario suma `allow-forms`),
-  `allow="fullscreen"`, `referrerpolicy="no-referrer"` y `loading="lazy"`. Anda si quien mira tiene acceso
-  al archivo con su cuenta de Google: la app no ve el archivo ni los permisos.
+  `sandbox="allow-scripts allow-same-origin allow-popups allow-storage-access-by-user-activation"` (el
+  reproductor necesita sus scripts y la sesión de Google; es de otro origen, así que no ve nada de la app;
+  los popups, para el botón de Drive que abre el archivo, que queda con las mismas restricciones: sin
+  `allow-popups-to-escape-sandbox`, porque para abrirlo en una pestaña normal está **Open in Drive** en el
+  pie; sin `allow-forms` ni `allow-top-navigation`), `allow="fullscreen"`, `referrerpolicy="no-referrer"` y
+  `loading="lazy"`. Anda si quien mira tiene acceso al archivo con su cuenta de Google: la app no ve el
+  archivo ni los permisos.
+- **`referrerpolicy="no-referrer"` falta confirmarlo a mano:** que el reproductor cargue un video privado y
+  uno compartido por link en Chrome, Safari y el iPhone. Si Drive no carga sin referrer, se cambia a
+  `strict-origin` (manda solo el dominio de la app, nunca la dirección de la página) en `playerFrame`
+  (`ui/driveCard.ts`) y en la prueba de `ui/driveCard.test.ts` que lo afirma.
+- **Safari y el iPhone:** bloquean las cookies de terceros (en el iPhone y el iPad, todos los navegadores,
+  que usan el motor de Safari), así que el reproductor no tiene la sesión de Google de quien mira: un
+  archivo privado pide iniciar sesión y en general solo andan los **compartidos por link**. Por eso:
+  - En esos navegadores la tarjeta muestra debajo del reproductor el aviso discreto *In Safari and on iPhone,
+    only files shared by link may play here* con **Open in Drive** (`blocksThirdPartyCookies` en
+    `ui/driveCard.ts`), y el tooltip de **Card** en el menú lo dice.
+  - **Open in Drive** en el pie es un botón bien visible (abre Drive en otra pestaña, con la sesión normal).
+  - Si el reproductor, ya en pantalla, no termina de cargar en 15 segundos, aparece el aviso *The Drive
+    player didn't load* con **Open in Drive**. Un reproductor que carga pero pide iniciar sesión no se puede
+    detectar (es de otro origen): para eso quedan el aviso de Safari y el botón del pie.
+  - `allow-storage-access-by-user-activation` deja que el reproductor, después de un toque, le pida al
+    navegador su propia sesión (API Storage Access). **Solo ayuda si Drive la pide**, y hoy no está
+    documentado que lo haga: no hay que contar con eso. No le da acceso a nada de la app.
 - **Tamaño:** todo el ancho del texto (en una hoja, el ancho de la hoja) con proporción de video y a lo sumo
   480 px o el 70 % del alto de la pantalla; un documento o una carpeta, 4:3. Al imprimir queda solo el link.
 - **Sin red** la tarjeta muestra el link y el aviso *You're offline*; el reproductor carga solo cuando
@@ -631,9 +652,13 @@ opción), `ui/DrivePasteMenu.tsx` (el menú), `ui/driveCard.ts` (la tarjeta) y `
   quede con el scroll; un toque (*Tap to use the player*) la saca hasta tocar afuera de la tarjeta.
 - **Solo lectura:** la tarjeta se ve igual y el link se abre; no aparece **Show as link** y no se pega nada.
 - **Una versión vieja** (sin la propiedad) muestra el párrafo con el link. Si edita esa línea, la propiedad
-  se pierde y queda el link (la guarda de `ui/unknownContent.ts` revisa tipos y marcas, no propiedades, así
-  que no la bloquea). Lo prueban `ui/driveCard.test.ts` con el esquema de `main` (`ui/fixtures/`),
-  `ui/driveLinks.test.ts` y `ui/DrivePasteMenu.test.tsx`.
+  se pierde y quedan el texto, el link y el id del bloque; si pega una tarjeta copiada
+  (`drive-card-line`), queda un párrafo con el link. La guarda de `ui/unknownContent.ts` revisa tipos y
+  marcas, no propiedades, así que no la bloquea. Lo prueban `ui/driveCard.test.ts` con el esquema de `main`
+  (`ui/fixtures/editorSchemaMain.ts`), `ui/driveLinks.test.ts` y `ui/DrivePasteMenu.test.tsx`.
+- **El fixture se actualiza en cada publicación:** `ui/fixtures/editorSchemaMain.ts` es la copia del
+  `ui/editorSchema.ts` de `main`. Al publicar, se reemplaza por el de la nueva `main` (entonces ya con
+  `driveCard`), para que las pruebas sigan comparando contra la versión publicada.
 - **Después de publicar** la versión con las tarjetas, subir `workspace_settings.min_app_version` a esa
   versión (regla de la sección 11 de `Plan_Workspaces.md`): así ninguna versión anterior vuelve a sacarle la
   propiedad a una tarjeta al editarla.

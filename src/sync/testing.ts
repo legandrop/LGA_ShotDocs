@@ -88,6 +88,8 @@ export class FakeServer {
   readonly pageFiles = new Set<string>();
   /** `page_files` con `removed_at` (la página dejó de usar el archivo; la fila queda). */
   readonly removedPageFiles = new Set<string>();
+  /** El `p_seen_seq` de cada `unlink_page_file`, en orden. */
+  readonly seenSeqs: (number | null)[] = [];
   /** El bucket `thumbs`. */
   readonly thumbs = new Map<string, Blob>();
   /** Cuántas veces se llamó cada función de archivos (para ver que no se llama de más). */
@@ -161,6 +163,18 @@ export class FakeServer {
     const used = [...this.pageFiles].some((k) => k.endsWith(`:${fileId}`) && this.pageAlive(k.slice(0, k.indexOf(':'))));
     if (used) f.trashed_at = null;
     else if (!f.trashed_at) f.trashed_at = new Date().toISOString();
+  }
+
+  /** Si lo usa una página que está en la papelera de páginas (ella o una de arriba), y su título. */
+  trashedPageUse(fileId: string): { in_trashed_page: boolean; trashed_page_title: string | null } {
+    for (const k of this.pageFiles) {
+      if (!k.endsWith(`:${fileId}`)) continue;
+      const pageId = k.slice(0, k.indexOf(':'));
+      if (this.pages.has(pageId) && !this.pageAlive(pageId)) {
+        return { in_trashed_page: true, trashed_page_title: this.pages.get(pageId)!.title };
+      }
+    }
+    return { in_trashed_page: false, trashed_page_title: null };
   }
 
   /** Los triggers de `pages`: una página entra, sale o se mueve de la papelera de páginas. */
@@ -378,6 +392,8 @@ export class FakePortero {
   readonly driveTrash = new Set<string>();
   /** Archivos de la app para los que Drive falla al mandarlos a la papelera (502, sin confirmar). */
   readonly failTrash = new Set<string>();
+  /** El Drive del dueño no está conectado: `/trash` responde 503 con `code: 'drive_not_connected'`. */
+  driveDisconnected = false;
   private parts = 0;
   private next = 1;
 
@@ -456,6 +472,9 @@ export class FakePortero {
       // `media_purged`.
       const id = String(body?.file ?? '').toLowerCase();
       const uid = porteroUser(this.server, headers);
+      if (this.driveDisconnected) {
+        return json({ error: 'Google Drive is not connected yet.', code: 'drive_not_connected' }, 503);
+      }
       try {
         this.server.purgeFile(uid, id);
       } catch (err) {
@@ -463,7 +482,9 @@ export class FakePortero {
         if (message === 'not_allowed') {
           return json({ error: 'Only the owner or an admin of the workspace can send files to the Google Drive trash.' }, 403);
         }
-        if (message === 'file_not_trashed') return json({ error: 'A page still uses this file: it is not in the trash.' }, 409);
+        if (message === 'file_not_trashed') {
+          return json({ error: 'A page still uses this file: it is not in the trash.', code: 'in_use' }, 409);
+        }
         return json({ error: 'This file does not exist or you cannot see it.' }, 404);
       }
       const media = this.server.mediaFiles.get(id)!;
@@ -940,10 +961,17 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
 
   // --- papelera de archivos (supabase/migrations/20260930180000_papelera_archivos.sql) ---
 
-  async unlinkPageFile(pageId: string, fileId: string): Promise<void> {
+  async unlinkPageFile(pageId: string, fileId: string, seenSeq?: number | null): Promise<boolean> {
     this.server.check();
     this.server.mediaCalls.push(`unlink_page_file ${pageId} ${fileId}`);
-    if (!this.server.pages.has(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) throw pageNotFound();
+    this.server.seenSeqs.push(seenSeq ?? null);
+    const page = this.server.pages.get(pageId);
+    if (!page || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) throw pageNotFound();
+    // `p_seen_seq`: si la página cambió después del documento con el que se decidió, no hace nada.
+    if (seenSeq != null && page.update_seq > seenSeq) {
+      this.server.lostMediaResponse('unlink_page_file');
+      return false;
+    }
     const key = `${pageId}:${fileId}`;
     // La fila queda, marcada; si no existe o ya estaba marcada, no hace nada.
     if (this.server.pageFiles.delete(key)) {
@@ -951,6 +979,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       this.server.refreshFileTrash(fileId);
     }
     this.server.lostMediaResponse('unlink_page_file');
+    return true;
   }
 
   async trashedFiles(projectId: string): Promise<TrashedFileRow[]> {
@@ -970,6 +999,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
         trashed_at: f.trashed_at!,
         days_left: Math.max(0, Math.ceil((Date.parse(f.trashed_at!) + 30 * day - Date.now()) / day)),
         purged_at: f.purged_at ?? null,
+        ...this.server.trashedPageUse(f.id),
       }));
   }
 
@@ -1016,7 +1046,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     return ids.flatMap((id) => {
       const f = this.server.mediaFiles.get(id);
       if (!f) return [];
-      const { project_id: _p, size: _s, created_by: _c, ...row } = f;
+      const { size: _s, created_by: _c, ...row } = f;
       return [{ ...row }];
     });
   }
