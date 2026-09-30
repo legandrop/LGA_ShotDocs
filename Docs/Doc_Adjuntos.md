@@ -219,7 +219,16 @@ nuevas, sin migración) se mantiene. Cambios:
    "Acomodar" que cortan, impresión y papelera, espacio.
 3. Después: vista previa con la miniatura de Drive, tarjeta por tema, `/Archivo`.
 
-### Decisiones tomadas (a confirmar por Lega)
+### Decisiones (respondidas por Lega el 2026-09-30)
+
+- Tarjeta horizontal, la propuesta (Lega quiere ver las dos opciones para decidir más adelante).
+- En el teléfono, un toque abre la hoja: de acuerdo.
+- Carpetas: hoy se rechazan pidiendo que se compriman; **Lega quiere subirlas enteras** (P.9 del roadmap).
+- Originales: el archivo que eligió el usuario nunca se toca; se puede liberar la copia de la app en el
+  navegador después de subir (P.10 del roadmap).
+- Vista previa: en una segunda entrega, de acuerdo.
+
+### Decisiones tomadas antes (quedan como estaban salvo lo de arriba)
 
 - Los originales de los adjuntos **se quedan en el dispositivo** después de subir, como las fotos (borrarlos es
   otra decisión, pendiente).

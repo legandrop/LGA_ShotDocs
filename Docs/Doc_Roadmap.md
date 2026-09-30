@@ -69,6 +69,20 @@ Lega.
   nuevo (el bloque `file` de BlockNote lo borraría una versión vieja): el mismo bloque `image` con
   `sdmedia://`, que la app ya muestra según el tipo del archivo. Pensar vista previa (primera página del PDF
   como miniatura). Diseño y auditoría antes de implementar.
+- **P.9 Arrastrar una carpeta** (pedido de Lega, 2026-09-30, al responder las decisiones de P.6): hoy se
+  rechaza pidiendo que se comprima. Lo que quiere: subir la carpeta entera, con sus subcarpetas, al Drive del
+  dueño, con una ventana que muestre qué se está subiendo ("esta carpeta, con todo esto"); en la página queda
+  como un bloque de carpeta que al hacer clic muestra su contenido. **Permisos:** quien ve la página tiene que
+  poder ver y bajar lo de esa carpeta (como las fotos), pero nunca navegar hacia arriba ni ver otras carpetas
+  del Drive. Por eso no puede ser un link a Drive con permisos de Google (los miembros no tienen acceso al
+  Drive del dueño, y un link compartido deja subir a la carpeta de arriba): la carpeta se muestra adentro de
+  la app, con la lista de archivos que sirve el portero con los mismos pases. Diseño y auditoría antes de
+  implementar (sin tipo de bloque nuevo).
+- **P.10 Liberar la copia de la app en el dispositivo** (Lega, 2026-09-30): el archivo que el usuario eligió
+  nunca se toca (queda en su disco); lo que se puede liberar es la copia que la app guarda en el almacenamiento
+  del navegador después de que el archivo está confirmado en el Drive (por ejemplo, un video grande subido
+  desde el iPhone). Pensar cuándo (tamaño, días), qué se pierde (verlo sin red en ese dispositivo) y que la
+  miniatura se queda. Diseño antes.
 - **P.7 Cuánto ocupa cada proyecto en el Drive:** que se vea (por ejemplo, al elegir proyecto o en su
   menú) cuánto ocupan sus archivos en el Drive del dueño ("30 GB"). Sale de sumar `files.size` del
   proyecto, sin preguntarle a Drive. Antes de implementarlo, una auditoría independiente de dónde y cómo mostrarlo.

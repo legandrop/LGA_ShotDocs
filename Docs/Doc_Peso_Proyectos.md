@@ -151,3 +151,10 @@ en Drive.
 Preguntas para Lega: si el número principal muestra además "+ X en la papelera de Drive"; si el peso lo ven
 admins y "Editar y crear páginas" o solo la dueña; si va la fila de "proyectos que no ves"; y verificar la base
 1024 con un archivo conocido en su Drive.
+
+## Respuestas de Lega (2026-09-30)
+
+Todo como se propuso: ven el peso quienes ven la papelera de archivos; el número principal sin la papelera de
+Drive, que se muestra aparte ("+ 2 GB en la papelera de Drive"); la fila de "proyectos que no ves" en el diálogo
+de Drive. **Autorizó aplicar la migración** en producción cuando esté lista y auditada (con la copia de
+seguridad antes).
