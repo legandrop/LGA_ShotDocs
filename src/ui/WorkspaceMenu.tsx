@@ -17,7 +17,7 @@ import {
 } from '../workspaces';
 import { AccountIcon, PlusIcon, TrashIcon } from './icons';
 import { monogram } from './project';
-import { DeleteBlocked, deleteWorkspaceDatabases, forgetWorkspaceKeys, PendingMediaList } from './RemovedScreen';
+import { DeleteBlocked, deleteWorkspaceDatabases, forgetWorkspaceKeys, MEDIA_KEPT_NOTE, PendingMediaList } from './RemovedScreen';
 import { downloadUnsynced, saveBlob } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import type { WorkspacesMode } from './Welcome';
@@ -247,7 +247,8 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
     const projectIds = tree.projects().map((p) => p.id);
     try {
       await services.shutdown();
-      await deleteWorkspaceDatabases(dbName);
+      // Sin la base de fotos abierta no se sabe si tiene originales sin subir: queda en el dispositivo.
+      await deleteWorkspaceDatabases(dbName, mediaDb === null);
       forgetWorkspaceKeys(services.workspace.config.storage, user.id, projectIds);
       await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
       forgetWorkspaceStorage(current);
@@ -289,6 +290,7 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
           </>
         )}
         {summary !== null && pending === 0 && <p className="muted">Everything on this device was already uploaded.</p>}
+        {mediaDb === null && <p className="muted">{MEDIA_KEPT_NOTE}</p>}
         {error && <p className="error">{error}</p>}
         <div className="welcome-actions">
           <button className="primary danger" disabled={!canRemove || busy !== null} onClick={() => void remove()}>

@@ -4,7 +4,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from '../sync/testing';
 import { RemoteError } from '../sync/types';
 import { SupabaseRemote, unlinkIgnored } from '../sync/remote';
-import { autoPurgeFiles, MEDIA_SCHEME, mediaIdOf } from './queue';
+import { autoPurgeFiles, FOREIGN_PLACEHOLDER, MEDIA_SCHEME, mediaIdOf } from './queue';
 import { DRIVE_NOT_CONNECTED, emptyFileTrash, loadFileTrash, sendToDriveTrash, type TrashOutcome } from './fileTrash';
 import { mediaIdsInDoc } from './usage';
 import { DELETED_LABEL, REQUESTED_LABEL } from './probe';
@@ -556,38 +556,46 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     return { a, page, id, foreign };
   }
 
-  it('cortar de un proyecto y pegar en otro: avisa, no lo registra y no lo quita de la página original', async () => {
+  it('cortar de un proyecto y pegar en otro: avisa, la base guarda el uso ajeno y el archivo nunca entra a la papelera', async () => {
     const server = new FakeServer();
     const { a, page, id, foreign } = await twoProjects(server);
+    const b = await device(server);
+    await sync(b);
     await edit(a, page, (doc) => removeImage(doc, id));
     await edit(a, foreign, (doc) => insertImage(doc, id));
-    // El editor, al pegarlo.
+    // El editor, al pegarlo: avisa (sabe de qué proyecto es) y lo manda igual.
     await a.media.ensureLinks(foreign, [id]);
     expect(server.foreignNotices).toEqual(['IMG_0001.JPG']);
     await sync(a);
-    expect(calls(server, 'link_page_file')).toEqual([]);
-    expect(calls(server, 'unlink_page_file')).toEqual([]);
-    expect(server.pageFiles.has(`${page}:${id}`)).toBe(true);
-    expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
-    expect(await a.mediaDb.get('links', `${foreign}:${id}`)).toMatchObject({ pending: 1, waiting: 'other_project' });
-    expect(await a.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ pending: 1, removed: true, waiting: 'held' });
-    // Esperar no cuenta como pendiente ni como rechazado.
+    expect(calls(server, 'link_page_file').filter((c) => c.includes(foreign))).toEqual([`link_page_file ${foreign} ${id}`]);
+    expect(server.foreignPageFiles.has(`${foreign}:${id}`)).toBe(true);
+    // Confirmado como uso ajeno: no queda pendiente ni frena nada, y el de la página original sale.
+    expect(await a.mediaDb.get('links', `${foreign}:${id}`)).toMatchObject({ pending: 0, foreign: true, waiting: null });
+    expect(calls(server, 'unlink_page_file')).toEqual([`unlink_page_file ${page} ${id}`]);
     expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 0, failedMedia: 0 });
     expect(server.foreignNotices).toHaveLength(1);
 
-    // Se saca de la otra página: recién ahí se quita de la original.
+    // El otro dispositivo sincroniza el proyecto de origen: también quita, y el archivo sigue sin entrar.
+    await sync(b);
+    await sync(a);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
+
+    // En la página del otro proyecto se ve el marcador, no la foto; en su proyecto, la foto.
+    const shown = decodeURIComponent(await a.media.resolve(MEDIA_SCHEME + id, foreign));
+    expect(shown).toContain(FOREIGN_PLACEHOLDER);
+    expect(await b.media.resolve(MEDIA_SCHEME + id, foreign).then(decodeURIComponent)).toContain(FOREIGN_PLACEHOLDER);
+    expect(await a.media.resolve(MEDIA_SCHEME + id, page)).toMatch(/^blob:/);
+
+    // Se saca de la otra página: recién ahí entra a la papelera.
     await edit(a, foreign, (doc) => removeImage(doc, id));
     await sync(a);
-    // Los dos son "quitados" de la misma vuelta: la cola los lee del índice `pending` en el orden de su clave
-    // (`<página>:<archivo>`, con ids de página al azar), así que el orden entre ellos cambia de corrida en
-    // corrida. Da igual: cuando sale el de la página original, el de la otra ya es "quitado" y no la frena.
-    expect(calls(server, 'unlink_page_file').sort()).toEqual([`unlink_page_file ${foreign} ${id}`, `unlink_page_file ${page} ${id}`].sort());
+    expect(server.foreignPageFiles.size).toBe(0);
     expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
   });
 
-  it('en otro dispositivo que no sabía de qué proyecto era: el servidor lo rechaza, avisa y tampoco quita', async () => {
+  it('en otro dispositivo que no sabía de qué proyecto era: la base guarda el uso ajeno, avisa y no reintenta', async () => {
     const server = new FakeServer();
-    const { a, page, id, foreign } = await twoProjects(server);
+    const { page, id, foreign } = await twoProjects(server);
     const b = await device(server);
     await sync(b);
     // `b` corta y pega (sin saber de qué proyecto es el archivo).
@@ -596,16 +604,37 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     await sync(b);
     expect(calls(server, 'link_page_file').filter((c) => c.includes(foreign))).toHaveLength(1);
     expect(server.foreignNotices).toEqual(['IMG_0001.JPG']);
-    expect(calls(server, 'unlink_page_file')).toEqual([]);
-    expect(await b.mediaDb.get('links', `${foreign}:${id}`)).toMatchObject({ waiting: 'other_project', blocked: false });
+    expect(await b.mediaDb.get('links', `${foreign}:${id}`)).toMatchObject({ pending: 0, foreign: true, blocked: false });
     expect(b.engine.getStatus()).toMatchObject({ pendingMedia: 0, failedMedia: 0 });
-    // Al volver a abrir la app no se reintenta ni se vuelve a avisar.
+    // Reintentar lo rechazado no lo vuelve a mandar ni a avisar.
     await b.engine.retryRejected();
     await sync(b);
     expect(calls(server, 'link_page_file').filter((c) => c.includes(foreign))).toHaveLength(1);
     expect(server.foreignNotices).toHaveLength(1);
     expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
-    void a;
+  });
+
+  it('mientras el uso nuevo no está confirmado, no quita el de la página original', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const other = await a.tree.create(null, 'Día 2');
+    await sync(a);
+    const link = a.remote.linkPageFile.bind(a.remote);
+    a.remote.linkPageFile = async () => {
+      throw new RemoteError('Internal Server Error', false, '500');
+    };
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await edit(a, other, (doc) => insertImage(doc, id));
+    await sync(a);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    expect(await a.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ removed: true, waiting: 'held' });
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
+    a.remote.linkPageFile = link;
+    server.clockOffset += 60 * 60_000;
+    await sync(a);
+    expect(server.pageFiles.has(`${other}:${id}`)).toBe(true);
+    expect(calls(server, 'unlink_page_file')).toEqual([`unlink_page_file ${page} ${id}`]);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
   });
 
   it('manda el seq con el que decidió; si la página cambió después, la base lo ignora y se vuelve a comparar', async () => {
@@ -637,25 +666,88 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
   });
 
-  it('si la función de la base no acepta p_seen_seq, sigue sin él; y entiende "ignorado"', async () => {
-    const rpc = vi.fn(async (_fn: string, args: Record<string, unknown>) =>
-      'p_seen_seq' in args ? { data: null, error: { code: 'PGRST202', message: 'Could not find the function' }, status: 404 } : { data: null, error: null, status: 200 },
-    );
+  it('manda p_seen_seq siempre y solo `false` es "ignorado"', async () => {
+    const rpc = vi.fn(async (_fn: string, _args: Record<string, unknown>) => ({ data: null, error: null, status: 200 }));
     const remote = new SupabaseRemote({ rpc } as never);
     expect(await remote.unlinkPageFile('p', 'f', 7)).toBe(true);
-    expect(rpc.mock.calls.map((c) => c[1])).toEqual([
-      { p_page_id: 'p', p_file_id: 'f', p_seen_seq: 7 },
-      { p_page_id: 'p', p_file_id: 'f' },
-    ]);
-    // Durante un rato ya no lo prueba.
-    await remote.unlinkPageFile('p', 'f', 8);
-    expect(rpc.mock.calls[2][1]).toEqual({ p_page_id: 'p', p_file_id: 'f' });
+    expect(rpc.mock.calls[0][1]).toEqual({ p_page_id: 'p', p_file_id: 'f', p_seen_seq: 7 });
+    rpc.mockResolvedValueOnce({ data: false as never, error: null, status: 200 });
+    expect(await remote.unlinkPageFile('p', 'f', 8)).toBe(false);
     expect(unlinkIgnored(null)).toBe(false);
     expect(unlinkIgnored(true)).toBe(false);
     expect(unlinkIgnored(false)).toBe(true);
-    expect(unlinkIgnored('ignored')).toBe(true);
-    expect(unlinkIgnored({ ignored: true })).toBe(true);
-    expect(unlinkIgnored([{ status: 'ignored' }])).toBe(true);
+    expect(unlinkIgnored('ignored')).toBe(false);
+    expect(unlinkIgnored({ ignored: true })).toBe(false);
+  });
+
+  it('con ediciones que no se pudieron guardar en el dispositivo no quita nada', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    await edit(a, page, (doc) => removeImage(doc, id));
+    const writeError = a.docs.getWriteError.bind(a.docs);
+    a.docs.getWriteError = () => 'QuotaExceededError';
+    await sync(a);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    a.docs.getWriteError = writeError;
+    await sync(a);
+    expect(calls(server, 'unlink_page_file')).toEqual([`unlink_page_file ${page} ${id}`]);
+  });
+
+  it('las páginas que la persona no puede editar no se miran (ni para sumar ni para quitar)', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    server.addMember('viewer-1', 'member');
+    server.grant('viewer-1', { projectId: server.workspaceId }, 'view');
+    const viewer = await device(server, undefined, { id: 'viewer-1' });
+    const before = server.mediaCalls.length;
+    await sync(viewer);
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await sync(a);
+    const afterOwner = server.mediaCalls.length;
+    await sync(viewer);
+    expect(server.mediaCalls.slice(before, afterOwner).filter((c) => c.includes('link_page_file'))).toEqual([
+      `unlink_page_file ${page} ${id}`,
+    ]);
+    expect(server.mediaCalls.slice(afterOwner)).toEqual([]);
+    expect(await viewer.mediaDb.count('links')).toBe(0);
+  });
+
+  it('si la comprobación del historial falla, espera cada vez más antes de volver a bajarlo', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const pull = a.remote.pullUpdates.bind(a.remote);
+    let fromStart = 0;
+    a.remote.pullUpdates = async (p, after, limit) => {
+      if (after === 0) {
+        fromStart++;
+        throw new RemoteError('Internal Server Error', false, '500');
+      }
+      return pull(p, after, limit);
+    };
+    await edit(a, page, (doc) => removeImage(doc, id));
+    await a.engine.syncNow();
+    expect(fromStart).toBe(1);
+    await a.engine.syncNow();
+    await a.engine.syncNow();
+    expect(fromStart).toBe(1);
+    expect(calls(server, 'unlink_page_file')).toEqual([]);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 61_000);
+    try {
+      await a.engine.syncNow();
+      expect(fromStart).toBe(2);
+      // La segunda espera es más larga (2 minutos).
+      clock.mockReturnValue(now + 61_000 + 90_000);
+      await a.engine.syncNow();
+      expect(fromStart).toBe(2);
+      a.remote.pullUpdates = pull;
+      clock.mockReturnValue(now + 61_000 + 121_000);
+      await a.engine.syncNow();
+      await a.engine.syncMedia();
+      expect(calls(server, 'unlink_page_file')).toEqual([`unlink_page_file ${page} ${id}`]);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('bajada a medias (el segundo lote falla después de aplicar el primero): no quita', async () => {

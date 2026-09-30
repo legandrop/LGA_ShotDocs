@@ -239,8 +239,16 @@ describe('validar un workspace nuevo y los links de invitación', () => {
       l: 'ws_nueva1234',
       n: '"Wanka"\nat znlvpuddswymxpffgvbz.supabase.co and a very long tail',
     });
-    expect(disguised.kind === 'confirm' && disguised.entry.name).toBe('Wanka at znlvpuddswymxpffgvbz.supabase.…');
+    // Con forma de dominio o dirección, el nombre se descarta entero.
+    expect(disguised.kind === 'confirm' && disguised.entry.name).toBe('');
     expect(safeWorkspaceName('  Studio\u202e  ')).toBe('Studio');
+    expect(safeWorkspaceName('"Bosque"\nNegro and a name that is much longer than forty letters')).toBe(
+      'Bosque Negro and a name that is much lo…',
+    );
+    for (const name of ['znlvpuddswymxpffgvbz.supabase.co', 'wanka.com', 'https://x', 'a/b', 'host:443', 'x@y', 'wanka\uFF0Ecom', 'wanka\u3002com']) {
+      expect(safeWorkspaceName(name)).toBe('');
+    }
+    for (const name of ['Studio v2.0', 'Mr. Smith', 'Bosque Negro']) expect(safeWorkspaceName(name)).toBe(name);
     expect(resolveInviteText(list, '#invite=%%%').kind).toBe('invalid');
     const badKey = inviteLink('https://a', { u: STUDIO_URL, k: 'no-es-una-clave', l: 'ws_nueva1234' });
     expect(resolveInviteText(list, badKey).kind).toBe('invalid');

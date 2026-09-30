@@ -59,8 +59,18 @@ nada, y lo que espera una decisión o una acción de Lega.
    sube) junto con la primera edición, en la misma transacción; la semilla no cambió, así que dos
    dispositivos que empiezan la misma página siguen compartiendo la raíz. Ver `Doc_Sincronizacion.md`,
    "Contenido de las páginas", punto 5.
-4. **Tamaño de la app.** El editor pesa unos 450 KB comprimidos; cargarlo aparte acelera la primera
-   apertura. Después de la primera, la app queda en caché.
+4. **Hecho: tamaño de la app.** El editor (BlockNote con ProseMirror, Tiptap y Mantine), el carrete, el
+   panel de comentarios, los diálogos de miembros, compartir y Drive y la página de prueba de media se
+   bajan aparte (`src/ui/lazyPart.tsx`); la primera pantalla (login, barra lateral, árbol) sale sin
+   esperarlos y el editor se baja apenas el navegador queda libre. Mientras baja, el cuerpo de la página
+   muestra un esqueleto (el título ya se ve). Lo que se baja al abrir, comprimido: de 591 KB (JS 542 KB,
+   CSS 48 KB, HTML 1 KB) a 276 KB (JS 227 KB, CSS 48 KB, HTML 1 KB). Aparte: el editor 302 KB, el carrete
+   5 KB, el panel de comentarios 4 KB, la prueba de media 5 KB, cada diálogo 2 KB (y los emojis del editor,
+   110 KB, que ya se bajaban aparte). Los estilos del editor siguen en la primera carga para no cambiar el
+   orden en que se aplican; las páginas de privacidad y condiciones también (son chicas y se ven sin
+   sesión). El service worker precachea todo, así que sin red el editor abre igual; si después de publicar
+   una versión nueva falta un archivo viejo, la app avisa y recarga una sola vez sin perder nada. Ver
+   `Doc_Sincronizacion.md`, "Sin red al abrir".
 5. **Investigar un caso intermitente de la prueba de punta a punta.** Dos dispositivos escriben sin red en
    la misma página nueva; en 1 de 7 corridas (v0.015), uno de los dos tardó más de 40 segundos en mostrar
    la línea del otro aunque los dos decían "All synced". No se confirmó pérdida y no se repitió en las

@@ -112,12 +112,13 @@ begin
   perform public.register_file(f1, a2, 'IMG_0666.MOV', 'video/quicktime', 62000000, null, null, null);
   assert (select count(*) from public.page_files where file_id = f1) = 2, 'link_page_file no es idempotente';
 
-  -- Entre proyectos, no (a ve los dos).
-  perform pg_temp.expect_error(format('select public.link_page_file(%L, %L)', c1, f1),
-    'file_other_project', 'link_page_file entre proyectos');
-  perform pg_temp.expect_error(
-    format('select public.register_file(%L, %L, %L, %L, 1, null, null, null)', f1, c1, 'x.jpg', 'image/jpeg'),
-    'file_other_project', 'register_file con un id de otro proyecto');
+  -- Entre proyectos: el archivo sigue siendo de su proyecto. Como a ve los dos, desde el paso 11 queda un uso
+  -- de afuera (`is_foreign`, para la papelera) y la función lo dice con 'file_other_project' (sin error).
+  assert public.link_page_file(c1, f1) = 'file_other_project', 'link_page_file entre proyectos';
+  assert public.register_file(f1, c1, 'x.jpg', 'image/jpeg', 1, null, null, null) = 'file_other_project',
+    'register_file con un id de otro proyecto';
+  assert (select project_id from public.files where id = f1) = e1, 'el archivo cambió de proyecto';
+  assert (select is_foreign from public.page_files where page_id = c1 and file_id = f1), 'el uso de afuera no queda marcado';
   perform pg_temp.expect_error(format('select public.link_page_file(%L, %L)', a1, gen_random_uuid()),
     'file_not_found', 'link_page_file de un archivo que no existe');
   perform pg_temp.expect_error(format('select public.link_page_file(%L, %L)', gen_random_uuid(), f1),
@@ -289,7 +290,7 @@ begin
   assert (select count(*) from public.files) = 1, 'a ve archivos de b';
   assert public.media_file('00000000-0000-4000-8000-0000000000fb') is null, 'media_file le da el de b a a';
   assert (select name from public.files) = 'IMG_0666.MOV' , 'b cambió el archivo de a';
-  assert (select count(*) from public.page_files) = 2, 'b cambió las páginas del archivo de a';
+  assert (select count(*) from public.page_files where not is_foreign) = 2, 'b cambió las páginas del archivo de a';
   assert (select count(*) from storage.objects where bucket_id = 'thumbs') = 1, 'b tocó la miniatura de a';
 end;
 $$;

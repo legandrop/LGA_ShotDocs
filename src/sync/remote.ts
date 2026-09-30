@@ -162,16 +162,11 @@ export function parseRemovedMember(data: unknown): RemovedMember {
 }
 
 /**
- * `unlink_page_file` no hizo nada porque la página cambió después del `seq` con el que se decidió. La
- * función anterior no devuelve nada (`null`: hecho); se aceptan las formas razonables de decir "ignorado".
+ * `unlink_page_file` no hizo nada porque la página cambió después del `seq` con el que se decidió: la base
+ * responde `false` (hecho: `true`).
  */
 export function unlinkIgnored(data: unknown): boolean {
-  if (data === false || data === 'ignored' || data === 'stale') return true;
-  if (data && typeof data === 'object') {
-    const row = (Array.isArray(data) ? data[0] : data) as { ignored?: unknown; status?: unknown } | undefined;
-    return row?.ignored === true || row?.status === 'ignored' || row?.status === 'stale';
-  }
-  return false;
+  return data === false;
 }
 
 export const FILES_BUCKET = 'page-files';
@@ -580,18 +575,12 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
     }));
   }
 
-  /** Desde cuándo la base no tiene `unlink_page_file` con `p_seen_seq`; se vuelve a probar cada tanto. */
-  private seenSeqMissingAt = 0;
-
   async unlinkPageFile(pageId: string, fileId: string, seenSeq?: number | null): Promise<boolean> {
-    const args = { p_page_id: pageId, p_file_id: fileId };
-    const withSeq = seenSeq != null && Date.now() - this.seenSeqMissingAt >= 10 * 60_000;
-    const { data, error, status } = await this.client.rpc('unlink_page_file', withSeq ? { ...args, p_seen_seq: seenSeq } : args);
-    // La función anterior no acepta `p_seen_seq`: se sigue sin él.
-    if (error?.code === MISSING_FUNCTION && withSeq) {
-      this.seenSeqMissingAt = Date.now();
-      return this.unlinkPageFile(pageId, fileId, seenSeq);
-    }
+    const { data, error, status } = await this.client.rpc('unlink_page_file', {
+      p_page_id: pageId,
+      p_file_id: fileId,
+      p_seen_seq: seenSeq ?? null,
+    });
     if (error) throw toRemoteError(error, status);
     return !unlinkIgnored(data);
   }

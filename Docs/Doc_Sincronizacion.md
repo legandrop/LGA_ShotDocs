@@ -164,8 +164,10 @@ Tema, fuente, tamaño del texto y ancho de página se aplican al instante y se g
 si hay cambios de ese usuario sin subir, se suben; si no, manda lo guardado en la cuenta
 (`user_settings`). Gana el último cambio, igual que con los ajustes de una rama. `shotdocs-prefs` guarda
 siempre las del usuario actual (el nombre de siempre); al entrar con otro usuario (otra cuenta u otro
-workspace), las del anterior, con lo que tenga sin subir, pasan a `shotdocs-prefs-others` (una copia por
-usuario, hasta 20), y el nuevo vuelve a la suya si ya había entrado en el dispositivo, también sin red.
+workspace), el nuevo vuelve a la suya si ya había entrado en el dispositivo, también sin red:
+`shotdocs-prefs-others` guarda una copia por usuario (hasta 20, también la del actual, al día con cada
+cambio). Con dos pestañas en workspaces distintos, una no toma las preferencias de la otra (el aviso de
+otra pestaña con otro usuario se ignora) y solo sube las del usuario con que entró, con su cliente.
 
 ## Imágenes
 
@@ -545,7 +547,9 @@ el diálogo de workspaces) y `src/ui/WorkspaceMenu.tsx` (el selector y quitar de
   se rechaza: compartirían la base local, y un link armado a propósito mandaría lo sin subir de uno al
   servidor de otro. Si todo está bien, pregunta **"Join <nombre>?"** con el host del Supabase aparte y
   destacado: el nombre lo arma quien manda el link, así que se muestra sin comillas, saltos ni caracteres
-  de control y recortado a 40 letras (también en la lista, hasta que la base da el suyo). Al aceptar, lo agrega, lo abre y sigue al login, con la página del link pendiente para después de entrar.
+  de control y recortado a 40 letras (también en la lista, hasta que la base da el suyo); uno con forma de
+  dirección o de dominio (`/`, `:`, `@` o un punto seguido de letras) se descarta y queda "Join a
+  workspace?". Al aceptar, lo agrega, lo abre y sigue al login, con la página del link pendiente para después de entrar.
   El link se puede abrir o pegar en *Join a workspace* (en la bienvenida o en el selector).
 - **Crear:** la bienvenida (o *Create a workspace…* en el selector) enlaza la guía en el repo público
   (`Guide_Create_Workspace.md` en GitHub) y pide la dirección y la clave publicable que imprime el comando.
@@ -567,7 +571,8 @@ el diálogo de workspaces) y `src/ui/WorkspaceMenu.tsx` (el selector y quitar de
   botón queda apagado hasta bajarlos con *Download my unsynced changes* y, uno por uno, cada original de
   foto o video sin subir (el archivo no los trae; la lista es la misma de la pantalla de "sacado"), o hasta
   que suban. Con confirmación, borra la base local de esa cuenta y después las de `:media` y `:comments`
-  (si otra pestaña tiene abierta la principal no se borra nada; reintentar sigue desde donde quedó), lo que la app recordaba
+  (si otra pestaña tiene abierta la principal no se borra nada; reintentar sigue desde donde quedó; si la
+  base de fotos y videos no se pudo abrir, no se borra y se avisa: podría tener originales sin subir), lo que la app recordaba
   y la sesión, lo saca de la lista y recarga en otro workspace o en la bienvenida. Las bases de otras
   cuentas de ese workspace en el mismo dispositivo quedan (vuelven si se une de nuevo con esa cuenta). Sin
   sesión (desde el login) solo se ofrece quitar uno que no tiene ninguna base en el dispositivo (un
@@ -591,7 +596,7 @@ el diálogo de workspaces) y `src/ui/WorkspaceMenu.tsx` (el selector y quitar de
   texto en la memoria del teléfono.
 - **No se borra nada solo.** "Remove from this device" cierra y borra la base local de ese workspace y
   usuario y, después, la de `:media` y la de `:comments` (en ese orden: si otra pestaña tiene la principal
-  abierta no se borra nada), olvida lo que la app recordaba de ese workspace (proyecto
+  abierta no se borra nada; la de `:media` queda, con un aviso, si no se pudo abrir), olvida lo que la app recordaba de ese workspace (proyecto
   elegido, últimas páginas, el link de invitación pendiente) y cierra la sesión. Si otra pestaña tiene la
   base abierta, avisa que se cierren las otras pestañas y se reintenta (nunca queda colgado); con cambios sin bajar
   (el archivo o algún original de foto o video), pide confirmación antes. Sin cambios
@@ -618,6 +623,11 @@ página, el comienzo del texto y el motivo) si el servidor no los acepta.
 
 - La app queda en caché con un service worker (PWA), así que abre sin red, en cualquiera de sus
   direcciones (`/`, `/p/<uuid>`, `/trash`, `/media-test`; ver `index.md`).
+- El editor, el carrete, el panel de comentarios y los diálogos se bajan aparte (`ui/lazyPart.tsx`), pero el
+  service worker precachea todos los `.js` (`globPatterns` en `vite.config.ts`): con la app instalada, el
+  editor abre sin red desde la caché. Al publicar una versión nueva, el service worker nuevo borra los
+  archivos viejos; si una pestaña vieja pide uno, la app avisa ("A new version is available — reloading"),
+  espera a que lo escrito esté guardado en el dispositivo y recarga una sola vez.
 - Si la sesión venció y no hay red para renovarla, se sigue con el último usuario conocido y se renueva sola
   cuando vuelve la red.
 - La app pide almacenamiento persistente (`navigator.storage.persist()`) para que el navegador no borre los
@@ -640,7 +650,10 @@ Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nu
   trae (tipos de bloque, contenido en línea, marcas de texto) esté en el esquema de esta versión. Si no,
   la página no se abre en el editor: se ve un aviso para actualizar la app, y nada se borra. Lo mismo con
   cada cambio que llega con la página abierta: se guarda en el dispositivo pero no entra al editor, que
-  se cierra. Los atributos desconocidos de un bloque no cuentan: se ignoran sin borrar nada.
+  se cierra. Los atributos desconocidos de un bloque no cuentan: se ignoran sin borrar nada. Los nombres
+  del esquema están escritos en el archivo (la sincronización revisa sin cargar el editor, que se baja
+  aparte); una prueba los compara con el esquema real, así que un cambio de esquema o de BlockNote la hace
+  fallar hasta actualizarlos.
 - **La versión mínima del workspace** (`workspace_settings.min_app_version`). Cada subida de contenido
   lleva la versión de la app, y el servidor rechaza las de una versión menor (también las de versiones
   anteriores a v0.021, que no mandan versión). La app vieja lo ve, deja de subir contenido (queda en el

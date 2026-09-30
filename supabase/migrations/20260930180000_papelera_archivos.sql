@@ -4,7 +4,9 @@
 -- usa. Una página está viva si ni ella ni ninguna de las de arriba está en la papelera de páginas (como en
 -- la app: mandar una página a la papelera se lleva sus subpáginas). Usar un archivo es tener una fila de
 -- `page_files` sin `removed_at`: la app la marca con `unlink_page_file` cuando el bloque `sdmedia://`
--- desaparece de la página, y `link_page_file` o `register_file` la reactivan. Nada saca filas.
+-- desaparece de la página, y `link_page_file` o `register_file` la reactivan. Nada saca filas. Un uso en
+-- una página de otro proyecto (una foto cortada de un proyecto y pegada en otro) queda guardado como uso de
+-- afuera (`page_files.is_foreign`): cuenta para la papelera pero no da permisos sobre el archivo.
 --
 -- El estado se recalcula solo (`private.refresh_file_trash`) cada vez que cambia una fila de `page_files` o
 -- una página entra, sale o se mueve de la papelera de páginas: si la página vuelve, el archivo sale.
@@ -45,7 +47,16 @@ alter table public.files
 create index files_trash_idx on public.files (project_id, trashed_at) where trashed_at is not null;
 
 -- La página dejó de usar el archivo (el bloque desapareció). La fila queda: volver a usarlo la reactiva.
-alter table public.page_files add column removed_at timestamptz;
+--
+-- `is_foreign`: un uso en una página de OTRO proyecto (se cortó una foto de un proyecto y se pegó en otro).
+-- El archivo sigue siendo de su proyecto (la página de afuera lo muestra roto), pero ese uso cuenta para la
+-- papelera: mientras una página viva lo use, aunque sea de otro proyecto, no entra. No da ningún permiso
+-- sobre el archivo (file_level y can_view_file no lo cuentan) y quien no ve el archivo no ve la fila.
+-- (El nombre no es `foreign` porque es una palabra reservada de SQL: habría que escribirla entre comillas
+-- en todos lados, también en la API.)
+alter table public.page_files
+  add column removed_at timestamptz,
+  add column is_foreign boolean not null default false;
 
 -- Borrado automático a los 30 días de haber entrado a la papelera: apagado. Se cambia solo desde el SQL
 -- Editor (lo decide Lega); la app lo lee como el resto de la fila.
@@ -98,6 +109,47 @@ begin
   end if;
 end;
 $$;
+
+-- Los usos de otro proyecto (`is_foreign`) no dan permiso sobre el archivo: file_level y can_view_file
+-- quedan como en las migraciones de archivos y equipo, sin contarlos.
+create or replace function private.can_view_file(p_file uuid, p_created_by uuid)
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select (coalesce(p_created_by = (select auth.uid()), false) and private.workspace_role() is not null)
+      or exists (
+        select 1 from public.page_files pf
+        where pf.file_id = p_file and not pf.is_foreign and private.can_view_page(pf.page_id));
+$$;
+
+create or replace function private.file_level(p_file uuid)
+returns int
+language plpgsql stable security definer set search_path = ''
+as $$
+declare
+  f   record;
+  lvl int;
+begin
+  select fl.project_id, fl.created_by into f from public.files fl where fl.id = p_file;
+  if not found then
+    return 0;
+  end if;
+  select coalesce(max(private.page_level(pf.page_id)), 0) into lvl
+  from public.page_files pf
+  where pf.file_id = p_file and not pf.is_foreign;
+  if lvl < 3 and f.created_by = auth.uid() and private.can_edit_some_page(f.project_id) then
+    lvl := 3;
+  end if;
+  return lvl;
+end;
+$$;
+
+-- Un uso de otro proyecto lo ve solo quien ve también el archivo (no filtra el id a quien solo ve la página
+-- de afuera, aunque el id ya está en el contenido de esa página).
+drop policy page_files_select on public.page_files;
+create policy page_files_select on public.page_files
+  for select to authenticated
+  using (private.can_view_page(page_id) and (not is_foreign or private.file_level(file_id) >= 1));
 
 -- ¿La sesión ve la papelera de archivos del proyecto? 4 sobre el proyecto entero, o dueño o admin activo
 -- con algún permiso sobre el proyecto entero.
@@ -192,13 +244,34 @@ execute function private.pages_file_trash();
 -- ---------------------------------------------------------------------------------------------------
 -- Usar y dejar de usar un archivo en una página
 -- ---------------------------------------------------------------------------------------------------
--- register_file y link_page_file, iguales que en la migración de archivos, salvo que un uso marcado con
--- `removed_at` se reactiva.
+-- register_file y link_page_file, como en la migración de archivos, salvo dos cosas:
+--   - Un uso marcado con `removed_at` se reactiva.
+--   - Un archivo de OTRO proyecto que la sesión ve (file_level >= 1), en una página que edita: en vez de solo
+--     fallar, guardan el uso marcado `is_foreign` (cuenta para la papelera, ver arriba) y devuelven el texto
+--     'file_other_project' (sin error). Devolver el error desharía la fila en el mismo pedido: por eso es un
+--     valor. Si la sesión no ve el archivo, el error de siempre (`file_other_project` en register_file,
+--     `file_not_found` en link_page_file) y no se guarda nada.
+-- Devuelven 'ok' cuando el archivo es del proyecto de la página. Antes no devolvían nada: la app publicada
+-- ignora el valor (un archivo de otro proyecto le queda como hecho, sin su aviso de "otro proyecto").
+drop function public.register_file(uuid, uuid, text, text, bigint, int, int, real);
+drop function public.link_page_file(uuid, uuid);
 
-create or replace function public.register_file(
+-- Guarda el uso de un archivo de otro proyecto (ya se comprobó que la sesión lo ve y edita la página).
+create function private.link_foreign_file(p_page_id uuid, p_file_id uuid)
+returns text
+language sql security definer set search_path = ''
+as $$
+  insert into public.page_files as pf (page_id, file_id, is_foreign) values (p_page_id, p_file_id, true)
+  on conflict (page_id, file_id) do update set removed_at = null where pf.removed_at is not null;
+  select 'file_other_project';
+$$;
+
+revoke all on function private.link_foreign_file(uuid, uuid) from public, anon, authenticated;
+
+create function public.register_file(
   p_id uuid, p_page_id uuid, p_name text, p_mime text, p_size bigint,
   p_width int, p_height int, p_duration real)
-returns void
+returns text
 language plpgsql security definer set search_path = ''
 as $$
 declare
@@ -221,16 +294,22 @@ begin
   end if;
 
   if file_ws is distinct from ws then
+    -- De otro proyecto: si la sesión lo ve, se guarda el uso de afuera (si otro lo acaba de crear en otro
+    -- proyecto y no lo ve, el error de siempre).
+    if private.file_level(p_id) >= 1 then
+      return private.link_foreign_file(p_page_id, p_id);
+    end if;
     raise exception 'file_other_project' using errcode = 'P0001';
   end if;
 
   insert into public.page_files as pf (page_id, file_id) values (p_page_id, p_id)
   on conflict (page_id, file_id) do update set removed_at = null where pf.removed_at is not null;
+  return 'ok';
 end;
 $$;
 
-create or replace function public.link_page_file(p_page_id uuid, p_file_id uuid)
-returns void
+create function public.link_page_file(p_page_id uuid, p_file_id uuid)
+returns text
 language plpgsql security definer set search_path = ''
 as $$
 declare
@@ -247,13 +326,19 @@ begin
     raise exception 'file_not_found' using errcode = 'P0002';
   end if;
   if file_ws <> ws then
-    raise exception 'file_other_project' using errcode = 'P0001';
+    return private.link_foreign_file(p_page_id, p_file_id);
   end if;
 
   insert into public.page_files as pf (page_id, file_id) values (p_page_id, p_file_id)
   on conflict (page_id, file_id) do update set removed_at = null where pf.removed_at is not null;
+  return 'ok';
 end;
 $$;
+
+revoke all on function public.register_file(uuid, uuid, text, text, bigint, int, int, real) from public, anon;
+revoke all on function public.link_page_file(uuid, uuid) from public, anon;
+grant execute on function public.register_file(uuid, uuid, text, text, bigint, int, int, real) to authenticated;
+grant execute on function public.link_page_file(uuid, uuid) to authenticated;
 
 -- La página dejó de usar el archivo (el bloque `sdmedia://` desapareció): marca el uso con `removed_at`,
 -- sin borrarlo. Pide editar la página (`page_not_found` si no). Si el uso no existe o ya estaba marcado, no
@@ -297,8 +382,9 @@ $$;
 -- cuántos días faltan para los 30 (30 el día que entra, 0 si ya pasaron). `purged_at`: ya se pidió
 -- mandarlo a Drive y el portero todavía no lo confirmó (se puede volver a pedir). `in_trashed_page`: lo usa
 -- (sin `removed_at`) alguna página que está en la papelera de páginas, o adentro de una; restaurarla lo
--- saca de acá. `trashed_page_title` es el título de una de esas páginas (la primera por título), para
--- mostrarlo; la app no los incluye en "vaciar".
+-- saca de acá. `trashed_page_title` es el título de una de esas páginas (la primera por título, entre las
+-- que la sesión ve; null si no ve ninguna, por ejemplo una de otro proyecto), para mostrarlo; la app no los
+-- incluye en "vaciar". Los usos de otro proyecto (`is_foreign`) cuentan.
 create function public.trashed_files(p_project uuid)
 returns table (id uuid, name text, mime text, size bigint, thumb_at timestamptz, trashed_at timestamptz,
                days_left int, purged_at timestamptz, in_trashed_page boolean, trashed_page_title text)
@@ -311,14 +397,15 @@ begin
   return query
     select f.id, f.name, f.mime, f.size, f.thumb_at, f.trashed_at,
            greatest(0, ceil(extract(epoch from (f.trashed_at + interval '30 days' - now())) / 86400))::int,
-           f.purged_at, tp.title is not null, tp.title
+           f.purged_at, tp.id is not null, tp.title
     from public.files f
     left join lateral (
-      select pg.title
+      -- El título solo si la sesión ve esa página (puede ser de otro proyecto): si no, null.
+      select pg.id, case when private.page_level(pg.id) >= 1 then pg.title end as title
       from public.page_files pf
       join public.pages pg on pg.id = pf.page_id
       where pf.file_id = f.id and pf.removed_at is null and not private.page_alive(pf.page_id)
-      order by pg.title, pg.id
+      order by private.page_level(pg.id) >= 1 desc, pg.title, pg.id
       limit 1
     ) tp on true
     where f.project_id = p_project and f.trashed_at is not null and f.drive_trashed_at is null

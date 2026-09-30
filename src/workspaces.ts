@@ -334,7 +334,8 @@ export function removeWorkspace(list: WorkspaceList, id: string): WorkspaceList 
 
 /**
  * El nombre que trae un link lo arma quien lo manda: sin comillas, saltos ni caracteres de control, y
- * recortado, para que no pueda hacerse pasar por el host.
+ * recortado, para que no pueda hacerse pasar por el host. Uno con forma de dirección o de dominio queda
+ * vacío (se muestra "Join a workspace?").
  */
 export function safeWorkspaceName(name: string): string {
   const clean = name
@@ -342,6 +343,9 @@ export function safeWorkspaceName(name: string): string {
     .replace(/["'“”‘’«»`]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+  // Con forma de dirección o de dominio (`/`, `:`, `@`, o un punto seguido de letras, también con los puntos
+  // que se le parecen), se descarta entero: el título "Join …?" no puede parecer un host.
+  if (/[/\\:@]|[.\u2024\u3002\uFF0E\uFE52]\p{L}/u.test(clean)) return '';
   return clean.length > 40 ? `${clean.slice(0, 39).trimEnd()}…` : clean;
 }
 

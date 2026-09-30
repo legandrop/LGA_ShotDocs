@@ -30,15 +30,18 @@ export async function unsyncedSummary(
   mediaDb: MediaDb | null,
   commentsDb: CommentsDb | null = null,
 ): Promise<UnsyncedSummary> {
-  const [ops, failed, states, images, media, links, comments] = await Promise.all([
+  const [ops, failed, states, images, media, pendingLinks, comments] = await Promise.all([
     db.count('ops'),
     db.count('failedOps'),
     db.getAll('docState'),
     db.countFromIndex('files', 'uploaded', 0),
     mediaDb ? mediaDb.countFromIndex('files', 'pending', 1) : 0,
-    mediaDb ? mediaDb.countFromIndex('links', 'pending', 1) : 0,
+    mediaDb ? mediaDb.getAllFromIndex('links', 'pending', 1) : [],
     unsyncedComments(commentsDb).catch(() => 0),
   ]);
+  // Un uso que espera algo que no depende de este dispositivo (que el archivo llegue, permiso sobre la
+  // página, otro uso sin confirmar) no es un cambio sin subir.
+  const links = pendingLinks.filter((l) => !l.waiting).length;
   const pages = states.filter(hasUnsyncedContent).length;
   const summary = { ops, failedOps: failed, pages, images, media: media + links, comments, total: 0 };
   summary.total = ops + failed + pages + images + media + links + comments;
@@ -159,7 +162,8 @@ export async function exportUnsyncedBlob(
       day: m.day,
       note: 'The original is not inside this file: download it separately from the app.',
     })),
-    mediaLinks: links.map((l) => ({ pageId: l.pageId, fileId: l.fileId })),
+    // `removed`: la página dejó de usar el archivo (falta `unlink_page_file`); si no, lo usa.
+    mediaLinks: links.map((l) => ({ pageId: l.pageId, fileId: l.fileId, removed: l.removed === true })),
     comments,
   };
   parts.push('],' + JSON.stringify(tail).slice(1));

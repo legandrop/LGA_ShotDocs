@@ -69,12 +69,11 @@ export interface MediaLink {
   pending: 0 | 1;
   /**
    * `file_not_found`: el archivo todavía no llegó al servidor (lo registra otro dispositivo); `denied`: la
-   * persona no puede editar esa página; `other_project`: el archivo es de otro proyecto (se pegó el bloque
-   * de otro proyecto: se ve roto y no se registra como uso); `held`: la página dejó de usarlo, pero este
-   * dispositivo tiene otro uso del mismo archivo sin confirmar, y quitarlo lo mandaría a la papelera
-   * mientras se ve en otra página. En todos los casos se espera sin contarlo como pendiente.
+   * persona no puede editar esa página; `held`: la página dejó de usarlo, pero este dispositivo tiene otro
+   * uso del mismo archivo sin confirmar, y quitarlo lo mandaría a la papelera mientras se ve en otra página.
+   * En todos los casos se espera sin contarlo como cambio sin subir.
    */
-  waiting: 'file_not_found' | 'denied' | 'other_project' | 'held' | null;
+  waiting: 'file_not_found' | 'denied' | 'held' | null;
   error: string | null;
   blocked: boolean;
   failures: number;
@@ -95,6 +94,12 @@ export interface MediaLink {
    * vuelve a comparar con el documento nuevo.
    */
   seenSeq?: number;
+  /**
+   * El archivo es de otro proyecto (se pegó el bloque desde otro proyecto): la base guardó el uso como ajeno
+   * (cuenta para la papelera, así el archivo no se va mientras se ve acá) y respondió `file_other_project`.
+   * Confirmado: no hay nada más que mandar. En la página se ve el marcador de otro proyecto.
+   */
+  foreign?: boolean;
 }
 
 /** Lo que el servidor sabe de un archivo (fila de `files`), guardado para mostrarlo sin red. */

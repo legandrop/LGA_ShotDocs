@@ -88,6 +88,11 @@ export class FakeServer {
   readonly pageFiles = new Set<string>();
   /** `page_files` con `removed_at` (la página dejó de usar el archivo; la fila queda). */
   readonly removedPageFiles = new Set<string>();
+  /**
+   * Usos ajenos (`<página>:<archivo>` de otro proyecto): `link_page_file` los guarda, cuentan como uso para
+   * la papelera y responde igual `file_other_project`.
+   */
+  readonly foreignPageFiles = new Set<string>();
   /** El `p_seen_seq` de cada `unlink_page_file`, en orden. */
   readonly seenSeqs: (number | null)[] = [];
   /** Los avisos de "foto de otro proyecto" que mostraron los dispositivos (nombre del archivo o `null`). */
@@ -162,7 +167,9 @@ export class FakeServer {
   refreshFileTrash(fileId: string): void {
     const f = this.mediaFiles.get(fileId);
     if (!f || f.purged_at) return;
-    const used = [...this.pageFiles].some((k) => k.endsWith(`:${fileId}`) && this.pageAlive(k.slice(0, k.indexOf(':'))));
+    const used = [...this.pageFiles, ...this.foreignPageFiles].some(
+      (k) => k.endsWith(`:${fileId}`) && this.pageAlive(k.slice(0, k.indexOf(':'))),
+    );
     if (used) f.trashed_at = null;
     else if (!f.trashed_at) f.trashed_at = new Date().toISOString();
   }
@@ -954,7 +961,12 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (!page) throw pageNotFound();
     const file = this.server.mediaFiles.get(fileId);
     if (!file) throw fileNotFound();
-    if (file.project_id !== page.workspace_id) throw new RemoteError('file_other_project', true, 'P0001');
+    if (file.project_id !== page.workspace_id) {
+      // Uso ajeno: se guarda (cuenta para la papelera) y se responde igual con el error.
+      this.server.foreignPageFiles.add(`${pageId}:${fileId}`);
+      this.server.refreshFileTrash(fileId);
+      throw new RemoteError('file_other_project', true, 'P0001');
+    }
     this.server.pageFiles.add(`${pageId}:${fileId}`);
     this.server.removedPageFiles.delete(`${pageId}:${fileId}`);
     this.server.refreshFileTrash(fileId);
@@ -975,6 +987,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       return false;
     }
     const key = `${pageId}:${fileId}`;
+    if (this.server.foreignPageFiles.delete(key)) this.server.refreshFileTrash(fileId);
     // La fila queda, marcada; si no existe o ya estaba marcada, no hace nada.
     if (this.server.pageFiles.delete(key)) {
       this.server.removedPageFiles.add(key);

@@ -539,6 +539,146 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------------------------------
+-- Un archivo cortado de un proyecto y pegado en otro: el uso de afuera cuenta para la papelera y no da
+-- permisos. R es otro proyecto de la dueña con la página rb; vb edita R y no ve P; la admin ad ve P y no R.
+-- ---------------------------------------------------------------------------------------------------
+select set_config('role', 'postgres', true);
+insert into auth.users (id, email, aud, role, email_confirmed_at) values
+  ('00000000-0000-4000-8000-000000000b08', 'pa-vb@test.invalid', 'authenticated', 'authenticated', now());
+insert into public.members (user_id, role) values ('00000000-0000-4000-8000-000000000b08', 'member');
+insert into public.workspaces (id, owner_id, name) values
+  ('00000000-0000-4000-8000-000000000e03', '00000000-0000-4000-8000-000000000b01', 'R');
+insert into public.pages (id, workspace_id, parent_id, title, sort_key) values
+  ('00000000-0000-4000-8000-000000000d10', '00000000-0000-4000-8000-000000000e03', null, 'rb', 'a0');
+insert into public.grants (user_id, project_id, level) values
+  ('00000000-0000-4000-8000-000000000b08', '00000000-0000-4000-8000-000000000e03', 'edit');
+
+select pg_temp.as_user('00000000-0000-4000-8000-000000000b01');
+do $$
+declare
+  c  constant uuid := '00000000-0000-4000-8000-000000000d02';
+  rb constant uuid := '00000000-0000-4000-8000-000000000d10';
+  f4 constant uuid := '00000000-0000-4000-8000-0000000000f4';
+begin
+  perform public.register_file(f4, c, 'IMG_0004.JPG', 'image/jpeg', 100, null, null, null);
+  -- Se corta de c y se pega en rb: el uso queda marcado de afuera, la función lo dice (sin error) y el
+  -- archivo sigue siendo de P. Repetirlo no cambia nada.
+  assert public.link_page_file(rb, f4) = 'file_other_project', 'link_page_file entre proyectos no lo dice';
+  assert public.link_page_file(rb, f4) = 'file_other_project', 'repetir link_page_file entre proyectos';
+  assert (select is_foreign from public.page_files where page_id = rb and file_id = f4), 'el uso de afuera no queda marcado';
+  assert (select count(*) from public.page_files where file_id = f4) = 2, 'el uso de afuera se duplicó';
+  assert (select project_id from public.files where id = f4) = '00000000-0000-4000-8000-000000000e01', 'el archivo cambió de proyecto';
+  assert public.link_page_file(c, f4) = 'ok', 'link_page_file en su proyecto no devuelve ok';
+
+  -- Otro dispositivo sincroniza P y lo saca de c: no entra, porque rb (viva, de otro proyecto) lo usa.
+  perform public.unlink_page_file(c, f4);
+  assert pg_temp.t('f4') is null, 'f4 entra a la papelera aunque una página de otro proyecto lo usa';
+  perform pg_temp.expect_error(format('select public.purge_file(%L)', f4), 'file_not_trashed', 'la dueña manda a Drive algo en uso afuera');
+end;
+$$;
+
+-- La admin que ve P y no R: no lo ve en la papelera ni lo puede mandar.
+select pg_temp.as_user('00000000-0000-4000-8000-000000000b02');
+do $$
+begin
+  assert (select count(*) from public.trashed_files('00000000-0000-4000-8000-000000000e01')
+          where id = '00000000-0000-4000-8000-0000000000f4') = 0, 'la admin ve en la papelera algo en uso afuera';
+  perform pg_temp.expect_error($q$select public.purge_file('00000000-0000-4000-8000-0000000000f4')$q$,
+    'file_not_trashed', 'la admin sin acceso a R manda a Drive algo que usa R');
+  -- Ve el archivo por P, pero no la fila de afuera (no ve rb) ni el proyecto R.
+  assert (select count(*) from public.page_files where file_id = '00000000-0000-4000-8000-0000000000f4') = 1,
+    'la admin ve el uso en una página que no ve';
+end;
+$$;
+
+-- vb edita rb pero no ve P: la fila de afuera no le da nada, ni siquiera saber que existe.
+select pg_temp.as_user('00000000-0000-4000-8000-000000000b08');
+do $$
+declare
+  rb constant uuid := '00000000-0000-4000-8000-000000000d10';
+  f4 constant uuid := '00000000-0000-4000-8000-0000000000f4';
+begin
+  assert private.file_level(f4) = 0, 'el uso de afuera da permiso sobre el archivo';
+  assert not private.can_view_file(f4, null), 'el uso de afuera deja ver el archivo';
+  assert public.media_file(f4) is null, 'media_file le da el archivo a quien solo ve la página de afuera';
+  assert (select count(*) from public.files where id = f4) = 0, 'quien solo ve la página de afuera ve el archivo';
+  assert (select count(*) from public.page_files where file_id = f4) = 0, 'quien solo ve la página de afuera ve la fila';
+  assert (select count(*) from public.page_files where page_id = rb) = 0, 'la fila de afuera se ve desde su página';
+  perform pg_temp.expect_error(format('select public.link_page_file(%L, %L)', rb, f4), 'file_not_found', 'vb linkea un archivo que no ve');
+  perform pg_temp.expect_error(format('select public.register_file(%L, %L, %L, %L, 1, null, null, null)', f4, rb, 'x.jpg', 'image/jpeg'),
+    'file_other_project', 'vb registra un archivo de otro proyecto que no ve');
+  perform pg_temp.expect_error(format('select public.set_file_thumb(%L)', f4), 'file_not_found', 'vb marca la miniatura');
+  perform pg_temp.expect_error(format('select public.purge_file(%L)', f4), 'file_not_found', 'vb manda a Drive');
+  perform pg_temp.expect_error(
+    $q$insert into storage.objects (bucket_id, name) values ('thumbs', '00000000-0000-4000-8000-0000000000f4.jpg')$q$,
+    '42501', 'vb sube la miniatura');
+  assert (select count(*) from storage.objects where bucket_id = 'thumbs' and name like '00000000-0000-4000-8000-0000000000f4%') = 0,
+    'vb ve la miniatura';
+end;
+$$;
+
+-- rb a la papelera de páginas: ahora sí entra, y la papelera de P dice que lo usa una página en la papelera
+-- (con el título para quien la ve; sin título para la admin, que no ve R).
+select pg_temp.as_user('00000000-0000-4000-8000-000000000b01');
+do $$
+declare
+  x record;
+begin
+  update public.pages set deleted_at = now() where id = '00000000-0000-4000-8000-000000000d10';
+  assert pg_temp.t('f4') is not null, 'f4 no entra con rb en la papelera de páginas';
+  select * into strict x from public.trashed_files('00000000-0000-4000-8000-000000000e01') where id = '00000000-0000-4000-8000-0000000000f4';
+  assert x.in_trashed_page and x.trashed_page_title = 'rb', format('la dueña no ve que lo usa rb: %s', x);
+end;
+$$;
+select pg_temp.as_user('00000000-0000-4000-8000-000000000b02');
+do $$
+declare
+  x record;
+begin
+  select * into strict x from public.trashed_files('00000000-0000-4000-8000-000000000e01') where id = '00000000-0000-4000-8000-0000000000f4';
+  assert x.in_trashed_page and x.trashed_page_title is null, format('a la admin se le filtra el título de rb: %s', x);
+end;
+$$;
+-- Vencido y con el borrado automático prendido: no se devuelve (lo usa una página en la papelera).
+select set_config('role', 'postgres', true);
+update public.files set trashed_at = now() - interval '40 days' where id = '00000000-0000-4000-8000-0000000000f4';
+update public.workspace_settings set auto_purge_files = true;
+select pg_temp.as_user('00000000-0000-4000-8000-000000000b01');
+do $$
+begin
+  assert (select count(*) from public.files_due_for_purge('00000000-0000-4000-8000-000000000e01')
+          where id = '00000000-0000-4000-8000-0000000000f4') = 0, 'files_due_for_purge da uno que usa una página de afuera en la papelera';
+end;
+$$;
+select set_config('role', 'postgres', true);
+update public.workspace_settings set auto_purge_files = false;
+
+-- Restaurar rb lo saca; dejar de usarlo en rb (unlink marca también la fila de afuera) lo manda; volver a
+-- pegarlo (link_page_file o register_file) lo saca.
+select pg_temp.as_user('00000000-0000-4000-8000-000000000b01');
+do $$
+declare
+  rb constant uuid := '00000000-0000-4000-8000-000000000d10';
+  f4 constant uuid := '00000000-0000-4000-8000-0000000000f4';
+begin
+  update public.pages set deleted_at = null where id = rb;
+  assert pg_temp.t('f4') is null, 'restaurar rb no saca f4';
+  assert public.unlink_page_file(rb, f4) = true, 'unlink en la página de afuera';
+  assert (select removed_at is not null and is_foreign from public.page_files where page_id = rb and file_id = f4),
+    'unlink no marca la fila de afuera';
+  assert pg_temp.t('f4') is not null, 'f4 no entra al dejar de usarse afuera';
+  assert public.link_page_file(rb, f4) = 'file_other_project', 'volver a pegarlo afuera';
+  assert pg_temp.t('f4') is null, 'volver a pegarlo afuera no lo saca';
+  perform public.unlink_page_file(rb, f4);
+  assert public.register_file(f4, rb, 'IMG_0004.JPG', 'image/jpeg', 100, null, null, null) = 'file_other_project',
+    'register_file afuera no lo dice';
+  assert pg_temp.t('f4') is null, 'register_file afuera no lo saca';
+  assert (select count(*) from public.page_files where file_id = f4) = 2 and (select count(*) from public.files where id = f4) = 1,
+    'se duplicó o se borró algo';
+end;
+$$;
+
 -- Sin sesión: nada.
 select set_config('role', 'anon', true);
 do $$

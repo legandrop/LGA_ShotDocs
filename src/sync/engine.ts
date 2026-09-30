@@ -124,6 +124,11 @@ export class SyncEngine {
   private readonly cleanups: (() => void)[] = [];
   /** El borrado automático de la papelera de archivos ya se miró en esta apertura de la app. */
   private autoPurgeChecked = false;
+  /**
+   * Páginas cuya comprobación de historial (ver `verifyHistory`) falló por un error: no se vuelve a bajar
+   * el historial hasta `until`, esperando cada vez más (1 minuto, 2, 4… hasta 1 hora).
+   */
+  private readonly verifyWait = new Map<string, { failures: number; until: number }>();
 
   constructor(
     private readonly remote: Remote,
@@ -519,7 +524,20 @@ export class SyncEngine {
         // servidor se pueda leer: una versión anterior de la app pudo descartar un update ilegible sin
         // anotarlo (`unreadable` es de esta versión). Sin red o con algo ilegible, no se quita nada.
         if (unlink && !media.isVerified(pageId) && (await media.wouldUnlink(pageId, ids))) {
-          unlink = await this.verifyHistory(pageId, snap.state.cursor).catch(() => false);
+          const wait = this.verifyWait.get(pageId);
+          if (wait && Date.now() < wait.until) {
+            unlink = false;
+          } else {
+            try {
+              unlink = await this.verifyHistory(pageId, snap.state.cursor);
+              this.verifyWait.delete(pageId);
+            } catch {
+              // Sin red o con un error: no se quita, y no se vuelve a bajar el historial en cada ciclo.
+              const failures = (wait?.failures ?? 0) + 1;
+              this.verifyWait.set(pageId, { failures, until: Date.now() + Math.min(60_000 * 2 ** (failures - 1), 3_600_000) });
+              unlink = false;
+            }
+          }
         }
         await media.reconcilePage(pageId, ids, { unlink, seenSeq: snap.state.cursor });
         // Solo queda "mirada" si se pudo quitar lo que hiciera falta; si no (a medio subir, algo ilegible o

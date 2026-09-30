@@ -37,12 +37,18 @@ export function deleteDatabase(name: string): Promise<void> {
  * árbol y lo que dice qué falta subir) y después la de fotos y videos y la de comentarios. Si otra pestaña
  * tiene la principal abierta, no se borra nada; si después se bloquea otra, reintentar sigue desde ahí
  * (borrar una base que ya no existe no falla). Rechaza con `DeleteBlocked` si hay que cerrar otras pestañas.
+ * `keepMedia`: la base de fotos y videos no se pudo abrir, así que no se sabe si tiene originales sin subir
+ * y queda en el dispositivo.
  */
-export async function deleteWorkspaceDatabases(dbName: string): Promise<void> {
+export async function deleteWorkspaceDatabases(dbName: string, keepMedia = false): Promise<void> {
   await deleteDatabase(dbName);
-  await deleteDatabase(mediaDbName(dbName));
+  if (!keepMedia) await deleteDatabase(mediaDbName(dbName));
   await deleteDatabase(commentsDbName(dbName));
 }
+
+/** El aviso cuando la base de fotos y videos no abrió: no se borra (podría tener originales sin subir). */
+export const MEDIA_KEPT_NOTE =
+  'The storage for photos and videos could not be opened on this device, so it may still hold originals that were never uploaded. It stays on this device; everything else is removed.';
 
 /**
  * Los originales de fotos y videos que nunca subieron: el archivo JSON no los trae, así que se bajan de a
@@ -161,7 +167,7 @@ export function RemovedScreen() {
     const projectIds = tree.projects().map((p) => p.id);
     try {
       await services.shutdown();
-      await deleteWorkspaceDatabases(dbName);
+      await deleteWorkspaceDatabases(dbName, mediaDb === null);
       forgetWorkspaceKeys(workspace.config.storage, user.id, projectIds);
       await client.auth.signOut({ scope: 'local' });
       // Un workspace que no es el de la compilación sale también de la lista del dispositivo (paso 12), y la
@@ -213,6 +219,7 @@ export function RemovedScreen() {
         {summary !== null && pending === 0 && (
           <p className="muted">Everything on this device was already uploaded. You can remove it from here.</p>
         )}
+        {mediaDb === null && <p className="muted">{MEDIA_KEPT_NOTE}</p>}
         {error && <p className="error">{error}</p>}
         <button className={pending > 0 ? 'secondary' : 'primary'} disabled={busy !== null || summary === null} onClick={() => void removeFromDevice()}>
           {busy === 'remove' ? 'Removing…' : 'Remove from this device'}

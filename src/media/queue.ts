@@ -127,11 +127,6 @@ function newLink(pageId: string, fileId: string, pending: 0 | 1): MediaLink {
   };
 }
 
-/** Un bloque de otro proyecto pegado en la página: se anota, pero no se manda (se ve roto ahí). */
-function foreignLink(pageId: string, fileId: string): MediaLink {
-  return { ...newLink(pageId, fileId, 1), waiting: 'other_project' };
-}
-
 /** La misma fila con lo contrario por mandar (usado o quitado), desde cero y con otra revisión. */
 function flipLink(link: MediaLink, removed: boolean): MediaLink {
   return {
@@ -198,6 +193,9 @@ export interface MediaQueueOptions {
    */
   onForeignFile?: (name: string | null) => void;
 }
+
+/** Lo que se ve en una página en lugar de una foto o un video de otro proyecto. */
+export const FOREIGN_PLACEHOLDER = 'Photo from another project';
 
 /** Lo que se avisa al pegar una foto o un video de otro proyecto. */
 export const FOREIGN_FILE_NOTICE = 'This photo belongs to another project: it will show broken here.';
@@ -510,10 +508,10 @@ export class MediaQueue {
         added = true;
       } else if (!link && own?.pageId !== pageId) {
         // El archivo que se agregó en esta página se registra con ella (`register_file`). Uno de otro
-        // proyecto no se registra: se anota para esperar, sin mandar nada.
+        // proyecto también se manda (la base lo guarda como uso ajeno); acá solo se avisa.
         foreign = this.isForeign(pageId, own?.projectId ?? known?.projectId);
-        await tx.objectStore('links').put(foreign ? foreignLink(pageId, fileId) : newLink(pageId, fileId, 1));
-        added = !foreign;
+        await tx.objectStore('links').put(newLink(pageId, fileId, 1));
+        added = true;
       }
       await tx.done;
       this.seenLinks.add(key);
@@ -541,15 +539,12 @@ export class MediaQueue {
   ): Promise<boolean> {
     if (!this.db || !this.schemaReady) return false;
     const allowUnlink = unlink && this.trashReady;
-    const tx = this.db.transaction(['links', 'files', 'known'], 'readwrite');
+    const tx = this.db.transaction(['links', 'files'], 'readwrite');
     const store = tx.objectStore('links');
-    const [links, records, known] = await Promise.all([
+    const [links, records] = await Promise.all([
       store.getAll(IDBKeyRange.bound(`${pageId}:`, `${pageId}:\uffff`)),
       tx.objectStore('files').getAll(),
-      Promise.all([...docIds].map((id) => tx.objectStore('known').get(id))),
     ]);
-    const projectOf = new Map<string, string | null | undefined>(records.map((r) => [r.id, r.projectId]));
-    for (const k of known) if (k && !projectOf.has(k.id)) projectOf.set(k.id, k.projectId);
     const byFile = new Map(links.map((l) => [l.fileId, l]));
     const own = records.filter((r) => r.pageId === pageId);
     const ownIds = new Set(own.map((r) => r.id));
@@ -562,10 +557,8 @@ export class MediaQueue {
         // Lo registra `register_file` con esta página: solo se anota que el documento lo tiene, para saber
         // después si se quitó. No hay nada que mandar.
         writes.push(newLink(pageId, id, 0));
-      } else if (this.isForeign(pageId, projectOf.get(id))) {
-        // De otro proyecto (se pegó el bloque): se ve roto y no se registra como uso.
-        writes.push(foreignLink(pageId, id));
       } else {
+        // También uno de otro proyecto: la base lo guarda como uso ajeno (ver `linkOne`).
         writes.push(newLink(pageId, id, 1));
       }
     }
@@ -595,8 +588,7 @@ export class MediaQueue {
 
   /**
    * Algún uso del archivo en este dispositivo todavía no está confirmado por el servidor (por mandar,
-   * detenido, esperando, sin permiso o de otro proyecto), o es un archivo agregado acá y todavía sin
-   * registrar.
+   * detenido, esperando o sin permiso), o es un archivo agregado acá y todavía sin registrar.
    */
   async hasUnsentUse(fileId: string, pending?: MediaLink[]): Promise<boolean> {
     if (!this.db) return false;
@@ -714,15 +706,14 @@ export class MediaQueue {
     let stillPending: MediaLink[] | null = null;
     for (const link of links) {
       if (this.stopped) return;
-      const waits = link.waiting === 'denied' || link.waiting === 'other_project';
-      if (link.blocked || waits || link.retryAt > this.now() || skipPage(link.pageId)) continue;
+      if (link.blocked || link.waiting === 'denied' || link.retryAt > this.now() || skipPage(link.pageId)) continue;
       if (link.removed) {
         // Sin la papelera en la base no se manda (la función no existe todavía).
         if (!this.trashReady) continue;
         // Mientras este dispositivo tenga otro uso del mismo archivo sin confirmar (por mandar, detenido,
-        // esperando, sin permiso o de otro proyecto; también un archivo propio sin registrar, que
-        // `register_file` volvería a colgar de la página), no se quita: lo mandaría a la papelera mientras
-        // se ve en otra página. Se lee después de mandar los usos nuevos de esta vuelta.
+        // esperando o sin permiso; también un archivo propio sin registrar, que `register_file` volvería a
+        // colgar de la página), no se quita: lo mandaría a la papelera mientras se ve en otra página. Se lee
+        // después de mandar los usos nuevos de esta vuelta.
         stillPending ??= await db.getAllFromIndex('links', 'pending', 1);
         if (await this.hasUnsentUse(link.fileId, stillPending)) {
           if (link.waiting !== 'held') await this.patchLink(link.key, { waiting: 'held', error: null }, link.rev ?? 0);
@@ -955,9 +946,14 @@ export class MediaQueue {
       const outcome = classify(err);
       if (outcome === 'offline') return outcome;
       if (!link.removed && errorMessage(err) === 'file_other_project') {
-        // Se pegó un bloque de otro proyecto: se ve roto y no se registra como uso. No es un error por
-        // reintentar; se avisa una vez.
-        await this.patchLink(link.key, { waiting: 'other_project', error: null, blocked: false }, link.rev ?? 0);
+        // Se pegó un bloque de otro proyecto: la base ya guardó el uso como ajeno (cuenta para la papelera,
+        // así el archivo no se va mientras se ve acá) y lo dice con este error. Queda confirmado; se avisa
+        // una vez y en la página se ve el marcador de otro proyecto.
+        await this.patchLink(
+          link.key,
+          { pending: 0, foreign: true, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 },
+          link.rev ?? 0,
+        );
         // Lo que la base sabe del archivo (el nombre, y su proyecto para la próxima vez).
         const meta = await this.fetchMeta(link.fileId).catch(() => null);
         const name = meta?.name ?? (await this.store.get('known', link.fileId).catch(() => undefined))?.name ?? null;
@@ -1086,8 +1082,6 @@ export class MediaQueue {
     }
     const links = tx.objectStore('links');
     for (const l of await links.index('pending').getAll(1)) {
-      // Un bloque de otro proyecto no se vuelve a intentar: el servidor lo rechazaría igual (y se avisaría otra vez).
-      if (l.waiting === 'other_project') continue;
       if (l.blocked || l.waiting || l.retryAt > 0) await links.put({ ...l, blocked: false, waiting: null, retryAt: 0 });
     }
     await tx.done;
@@ -1157,10 +1151,41 @@ export class MediaQueue {
    * Convierte `sdmedia://<id>` en algo que un `<img>` pueda mostrar en la página: la miniatura (la hecha
    * acá o la bajada del bucket `thumbs`; en un video, con una marca de "play") o, si no hay, un ícono con el
    * nombre. El original solo lo muestra el carrete. Nunca falla. Otra dirección vuelve tal cual.
+   *
+   * `pageId`: la página donde se muestra. Si el archivo es de otro proyecto (se pegó el bloque desde otro
+   * proyecto), se ve el marcador *Photo from another project* en vez de la imagen, en todos los dispositivos.
    */
-  resolve(url: string): Promise<string> {
+  resolve(url: string, pageId?: string): Promise<string> {
     const id = mediaIdOf(url);
     if (!id) return Promise.resolve(url);
+    if (pageId) {
+      return this.foreignTo(id, pageId).then((kind) =>
+        kind === false ? this.resolveOwn(id) : placeholderUrl(kind, FOREIGN_PLACEHOLDER),
+      );
+    }
+    return this.resolveOwn(id);
+  }
+
+  /**
+   * Si el archivo es de otro proyecto que la página: `false` si no (o si no se sabe), o el tipo (foto o
+   * video) para el marcador. Mira lo que sabe el dispositivo y, si no sabe el proyecto, le pregunta a la base.
+   */
+  private async foreignTo(id: string, pageId: string): Promise<MediaKind | null | false> {
+    const pageProject = this.options.projectOf?.(pageId);
+    if (!pageProject) return false;
+    try {
+      const own = this.db ? await this.db.get('files', id) : undefined;
+      if (own?.projectId) return own.projectId !== pageProject && mediaKind(own.mime);
+      let known = this.db ? await this.db.get('known', id) : undefined;
+      if (!known || known.projectId === undefined) known = (await this.fetchMeta(id).catch(() => null)) ?? known;
+      if (!known?.projectId) return false;
+      return known.projectId !== pageProject && mediaKind(known.mime);
+    } catch {
+      return false;
+    }
+  }
+
+  private resolveOwn(id: string): Promise<string> {
     const cached = this.objectUrls.get(id);
     if (cached) return Promise.resolve(cached);
     let pending = this.resolving.get(id);

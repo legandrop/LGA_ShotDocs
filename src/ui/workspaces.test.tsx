@@ -323,6 +323,70 @@ describe('en la app abierta', () => {
   });
 });
 
+describe('quitar sin la base de fotos', () => {
+  it('si la base de fotos y videos no abrió, no la borra (podría tener originales sin subir)', async () => {
+    loadWorkspaces(WANKA);
+    updateWorkspaces((l) => addWorkspace(l, STUDIO));
+    const dbName = configOf(STUDIO).storage.db(crypto.randomUUID());
+    const d = await makeDevice(new FakeServer(), dbName);
+    devices.push(d);
+    const value: Services = {
+      workspace: { config: configOf(STUDIO), client: { auth: { signOut: vi.fn(async () => ({ error: null })) } } as never },
+      client: { auth: { signOut: vi.fn(async () => ({ error: null })) } } as never,
+      user: { id: 'owner', email: 'owner@test' },
+      db: d.db,
+      tree: d.tree,
+      docs: d.docs,
+      files: d.files,
+      media: d.media,
+      engine: d.engine,
+      access: d.access,
+      remote: d.remote as unknown as SupabaseRemote,
+      dbName,
+      mediaDb: null,
+      comments: d.comments,
+      commentsDb: d.commentsDb,
+      shutdown: async () => {
+        d.engine.stop();
+        d.db.close();
+        d.mediaDb.close();
+        d.commentsDb.close();
+      },
+    };
+    await mount(
+      <ServicesContext.Provider value={value}>
+        <RemoveWorkspaceDialog onClose={() => undefined} />
+      </ServicesContext.Provider>,
+    );
+    expect(document.body.textContent).toContain('could not be opened');
+    vi.stubGlobal('confirm', () => true);
+    await act(async () => {
+      button(document.body, 'Remove from this device').click();
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    const names = (await indexedDB.databases()).map((db) => db.name);
+    expect(names).not.toContain(dbName);
+    expect(names).not.toContain(`${dbName}:comments`);
+    expect(names).toContain(`${dbName}:media`);
+  });
+
+  it('deleteWorkspaceDatabases con keepMedia deja la base de fotos', async () => {
+    const name = `shotdocs:ws_keepmedia0:${crypto.randomUUID()}`;
+    for (const n of [name, `${name}:media`, `${name}:comments`]) {
+      await new Promise<void>((resolve) => {
+        const req = indexedDB.open(n, 1);
+        req.onsuccess = () => {
+          req.result.close();
+          resolve();
+        };
+      });
+    }
+    await deleteWorkspaceDatabases(name, true);
+    const names = (await indexedDB.databases()).map((db) => db.name).filter((n) => n?.startsWith(name));
+    expect(names).toEqual([`${name}:media`]);
+  });
+});
+
 describe('lo que cada workspace recuerda', () => {
   it('la página de un link queda en el workspace del link, nunca en otro', () => {
     const wanka = configOf(loadWorkspaces(WANKA).workspaces[0]).storage;
@@ -331,6 +395,44 @@ describe('lo que cada workspace recuerda', () => {
     expect(pendingInviteTarget(studio.inviteTarget)).toBe('0b7e5a52-8d1d-4a0f-9d62-3f1f1a2b3c4d');
     expect(pendingInviteTarget(wanka.inviteTarget)).toBeNull();
     expect(wanka.inviteTarget).toBe('shotdocs-invite-target');
+  });
+
+  it('otra pestaña con otro workspace no le cambia el usuario ni sube sus preferencias a esta cuenta', async () => {
+    const pushed: string[] = [];
+    const client = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: 'offline' } }) }) }),
+        update: () => ({
+          eq: (_col: string, id: string) => {
+            pushed.push(id);
+            return { select: async () => ({ data: null, error: { message: 'Failed to fetch' }, status: 0 }) };
+          },
+        }),
+        insert: async () => ({ error: { message: 'Failed to fetch' }, status: 0 }),
+      }),
+    } as never;
+    await prefs.attach(client, 'tab-a');
+    prefs.set({ font: 'editorial' });
+    expect(pushed).toEqual(['tab-a']);
+
+    // La otra pestaña (otro workspace, otro usuario) escribe `shotdocs-prefs`.
+    const other = JSON.stringify({ userId: 'tab-b', prefs: { theme: 'light', font: 'default', textSize: 'large', pageWidth: 'wide' }, dirty: true });
+    localStorage.setItem('shotdocs-prefs', other);
+    window.dispatchEvent(new StorageEvent('storage', { key: 'shotdocs-prefs', newValue: other }));
+    expect(prefs.get().font).toBe('editorial');
+    expect(prefs.get().textSize).toBe('normal');
+    // Al volver la red solo sube lo de esta pestaña, con su usuario.
+    window.dispatchEvent(new Event('online'));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(pushed.every((id) => id === 'tab-a')).toBe(true);
+    prefs.detach();
+
+    // Si esta pestaña se recarga después de que la otra pisó la clave de siempre, vuelve a lo suyo.
+    await prefs.attach(client, 'tab-b');
+    await prefs.attach(client, 'tab-a');
+    expect(prefs.get().font).toBe('editorial');
+    expect(prefs.hasUnsynced()).toBe(true);
+    prefs.detach();
   });
 
   it('las preferencias sin subir de un usuario no se pierden al entrar con otro, y vuelven sin red', async () => {

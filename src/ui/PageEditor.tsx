@@ -214,7 +214,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
           }
           throw err;
         }),
-      resolveFileUrl: (url: string) => (mediaIdOf(url) ? media.resolve(url) : files.resolve(url)),
+      // Con la página: una foto de otro proyecto se ve con su marcador (papelera de archivos, paso 11).
+      resolveFileUrl: (url: string) => (mediaIdOf(url) ? media.resolve(url, pageId) : files.resolve(url)),
       tables: { splitCells: true, cellBackgroundColor: true, cellTextColor: true, headers: true },
       collaboration: {
         fragment: doc.getXmlFragment(CONTENT_FRAGMENT),
@@ -287,7 +288,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   useEffect(
     () =>
       media.subscribeThumbs((id) => {
-        void media.resolve(MEDIA_SCHEME + id).then((src) => {
+        void media.resolve(MEDIA_SCHEME + id, pageId).then((src) => {
           for (const el of editor.domElement?.querySelectorAll<HTMLElement>('[data-content-type="image"]') ?? []) {
             if (mediaIdOf(el.getAttribute('data-url')) !== id) continue;
             const img = el.querySelector<HTMLImageElement>('img.bn-visual-media');
@@ -295,7 +296,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
           }
         });
       }),
-    [editor, media],
+    [editor, media, pageId],
   );
 
   // El selector del bloque `image` ofrece videos solo si el workspace tiene portero.
