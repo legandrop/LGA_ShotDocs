@@ -204,9 +204,11 @@ Use the Google account whose Drive will keep the workspace's photos and videos.
 
 **Tell your workspace where the gateway is**
 
-13. In the terminal of step 4, run the setup line again (without `--dry-run`) adding
+13. Run the setup line of step 4 again (without `--dry-run`) adding
     `--media-url https://shotdocs-portero.<your-subdomain>.workers.dev`. It only changes that; everything
-    else is already in place.
+    else is already in place. The token only works in the terminal window where you set it, and only for
+    the days you chose: if you closed that window, set it again (step 4.2); if it expired, create a new one
+    (step 2.4) first.
 
 ## 7. GitHub: backups
 
@@ -309,6 +311,8 @@ with help, testing first on a separate project.
   one email a minute to the same address: asking for another code sooner shows an error.
 - **Staying up to date.** When the app changes: **Sync fork** on GitHub (step 1), **download the ZIP again**
   and unzip it (the old folder has the old database changes), open the terminal in the new folder as in
-  step 4, and run the setup command again with the same options. It applies the new database changes and
+  step 4, and run the setup command again with the same options. The token from the first time has probably
+  expired and only worked in that terminal window: create a new one (step 2.4), set it in the new terminal
+  (step 4.2), and delete it in Supabase when you are done. The command applies the new database changes and
   leaves the rest as it is: it does not ask for the SMTP password again, and it does not touch the owner or
   the local key.

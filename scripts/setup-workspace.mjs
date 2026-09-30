@@ -5,9 +5,12 @@
 // y la fila del dueño en members. Se puede correr dos veces. Ver Docs/Doc_Supabase.md, "Preparar un
 // workspace nuevo", y la guía para usuarios Docs/Guide_Create_Workspace.md.
 //
+// Mac o Linux (POSIX):
 //   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/setup-workspace.mjs --ref <ref> --owner-email <correo> \
 //     --app-url https://<app> --smtp-from shotdocs@<dominio> --name <nombre> [--dry-run]
 //   node scripts/setup-workspace.mjs --ref <ref> --owner-email <correo> --open-invite-signup [--dry-run]
+// Windows (PowerShell), en una línea:
+//   $env:SUPABASE_ACCESS_TOKEN="sbp_..."; node scripts/setup-workspace.mjs --ref <ref> --owner-email <correo> --app-url https://<app> --smtp-from shotdocs@<dominio> --name <nombre> [--dry-run]
 //
 // El ref va siempre explícito (no se toma de SUPABASE_URL, que en esta carpeta apunta a Wanka). La lógica
 // está en scripts/lib/setup.mjs.
@@ -67,7 +70,11 @@ async function main() {
     return;
   }
   if (!process.env.SUPABASE_ACCESS_TOKEN) {
-    console.error('Note: SUPABASE_ACCESS_TOKEN is not set (supabase.com → Account → Access Tokens).');
+    console.error(
+      'Note: SUPABASE_ACCESS_TOKEN is not set (supabase.com → Account → Access Tokens). Set it in this terminal:\n' +
+        '  Mac or Linux:        export SUPABASE_ACCESS_TOKEN=sbp_...\n' +
+        '  Windows PowerShell:  $env:SUPABASE_ACCESS_TOKEN="sbp_..."',
+    );
   }
   const client = createManagementClient({
     ref: opts.ref,

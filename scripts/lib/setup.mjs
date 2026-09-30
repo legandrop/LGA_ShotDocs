@@ -32,10 +32,12 @@ const EMAIL_RE = /^[^\s@;'"\\]+@[^\s@;'"\\]+\.[^\s@;'"\\]+$/;
 
 export const USAGE = `Prepares the Supabase project of a NEW LGA Shot Docs workspace.
 
-Usage:
-  SUPABASE_ACCESS_TOKEN=sbp_... node scripts/setup-workspace.mjs --ref <project ref> \\
-    --owner-email <you@yourdomain.com> --app-url <https://app address> \\
-    --smtp-from <shotdocs@yourdomain.com> [--name <workspace name>] [options]
+Usage (first give the command your Supabase personal access token, in the same terminal):
+  Mac or Linux:        export SUPABASE_ACCESS_TOKEN=sbp_...
+  Windows PowerShell:  $env:SUPABASE_ACCESS_TOKEN="sbp_..."
+then, on one line:
+  node scripts/setup-workspace.mjs --ref <project ref> --owner-email <you@yourdomain.com>
+    --app-url <https://app address> --smtp-from <shotdocs@yourdomain.com> [--name <workspace name>] [options]
 
 Options:
   --ref <ref>                The project ref (the part before .supabase.co). Required.
