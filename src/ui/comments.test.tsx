@@ -206,6 +206,55 @@ describe('comentarios en la página', () => {
   });
 });
 
+describe('rechazos y borradores en el panel', () => {
+  it('un borrado rechazado deja ver el comentario con Retry y Discard; lo escrito a medias pide confirmación', async () => {
+    const { owner, guest, page, questionId } = await sharedPage('comment');
+    const id = await owner.comments.add(page, questionId, 'Nota del equipo');
+    await owner.engine.syncNow();
+    const host = await mount(
+      services(guest, 'cli'),
+      <>
+        <PageEditor pageId={page} />
+        <CommentsPanel pageId={page} />
+      </>,
+    );
+    await act(async () => showComments());
+    await act(async () => guest.engine.syncNow());
+    await wait();
+    // El invitado intenta borrar lo del dueño (una versión con permisos viejos): la base lo rechaza.
+    await act(async () => guest.comments.remove(page, id));
+    await act(async () => guest.engine.syncNow());
+    await wait();
+    const panel = host.querySelector('.comments-panel')!;
+    expect(panel.textContent).toContain('Nota del equipo');
+    expect(panel.textContent).toContain('Not accepted by the server');
+    const button = (label: string) => [...panel.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label)!;
+    expect(button('Retry')).toBeDefined();
+    await act(async () => button('Discard…').click());
+    expect(panel.textContent).toContain('Discarding the delete: the comment comes back.');
+    await act(async () => button('Discard').click());
+    await wait();
+    expect(panel.textContent).not.toContain('Not accepted by the server');
+    expect(guest.comments.status().failed).toBe(0);
+
+    // Lo escrito a medias: tocar afuera pregunta, y si no se confirma el panel queda abierto.
+    await act(async () => button('Answer').click());
+    const textarea = panel.querySelector<HTMLTextAreaElement>('textarea')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, 'A medio escribir');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await act(async () => host.querySelector<HTMLElement>('.comments-scrim')!.click());
+    expect(ask).toHaveBeenCalledWith('Discard what you wrote?');
+    expect(host.querySelector('.comments-panel')).not.toBeNull();
+    ask.mockReturnValue(true);
+    await act(async () => host.querySelector<HTMLElement>('.comments-scrim')!.click());
+    expect(host.querySelector('.comments-panel')).toBeNull();
+    ask.mockRestore();
+  });
+});
+
 describe('el panel en la página', () => {
   it('en la computadora ancha la página se corre: el selector de styles.css aplica con el panel adentro de la página', async () => {
     const { readFileSync } = await import('node:fs');

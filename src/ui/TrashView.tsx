@@ -33,6 +33,7 @@ export function TrashView() {
   const [filesAllowed, setFilesAllowed] = useState(true);
   const offerFiles = media.trashEnabled && perms.canSeeFileTrash(projectId) && filesAllowed;
   useEffect(() => setFilesAllowed(true), [projectId]);
+  const hideFiles = useCallback(() => setFilesAllowed(false), []);
   const current = offerFiles ? tab : 'pages';
 
   return (
@@ -51,7 +52,7 @@ export function TrashView() {
       {current === 'pages' ? (
         <PagesTrash projectId={projectId} />
       ) : (
-        <FilesTrash key={projectId} projectId={projectId} onNotAllowed={() => setFilesAllowed(false)} />
+        <FilesTrash key={projectId} projectId={projectId} onNotAllowed={hideFiles} />
       )}
     </article>
   );
@@ -92,7 +93,13 @@ function PagesTrash({ projectId }: { projectId: string }) {
 
 type Loaded = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; files: TrashedFileRow[] };
 
-const confirmTail = `They go to the Google Drive trash of the workspace owner and can be recovered from there for 30 days. Pages that still show one of them will say it was deleted.\n\n${UNSYNCED_USE_WARNING}`;
+/** Lo que dice la confirmación: adónde van, cómo se recuperan y el riesgo que anota el plan. */
+function confirmText(question: string, many: boolean): string {
+  const where = many
+    ? 'They go to the Google Drive trash of the workspace owner and can be recovered from there for 30 days. Pages that still show one of them will say it was deleted.'
+    : 'It goes to the Google Drive trash of the workspace owner and can be recovered from there for 30 days. A page that still shows it will say it was deleted.';
+  return `${question}\n\n${where}\n\n${UNSYNCED_USE_WARNING}`;
+}
 
 /** Las fotos y los videos que ninguna página usa. Solo con red: lo que dice la base y el portero. */
 function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllowed: () => void }) {
@@ -150,7 +157,7 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
   };
 
   const sendOne = async (file: TrashedFileRow) => {
-    if (!confirm(`Send “${file.name}” to the Google Drive trash?\n\n${confirmTail}`)) return;
+    if (!confirm(confirmText(`Send “${file.name}” to the Google Drive trash?`, false))) return;
     setBusy(file.id);
     const outcome = await sendToDriveTrash(trash, file.id);
     if (!live.current) return;
@@ -162,7 +169,7 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
     const list = files;
     if (list.length === 0) return;
     const what = list.length === 1 ? `“${list[0].name}”` : `all ${list.length} files`;
-    if (!confirm(`Empty the file trash: send ${what} to the Google Drive trash?\n\n${confirmTail}`)) return;
+    if (!confirm(confirmText(`Empty the file trash: send ${what} to the Google Drive trash?`, list.length > 1))) return;
     setProgress({ done: 0, total: list.length });
     let refresh = false;
     const byId = new Map(list.map((f) => [f.id, f]));

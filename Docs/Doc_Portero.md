@@ -149,7 +149,8 @@ subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuel
 ### Lado de la app
 
 - `src/media/portero.ts`: el cliente del portero (estado de Drive, conectar, subir por partes retomando lo
-  que ya llegó, pedir pases). Lee la dirección de `workspace_settings.media_url`.
+  que ya llegó, pedir pases y mandar a la papelera de Drive, `trash`). Lee la dirección de
+  `workspace_settings.media_url`.
 - `src/ui/MediaTest.tsx`: la pantalla *Media test*, en la ruta `/media-test` de la app.
 - Pruebas (entran en `npm test`): `portero/src/core.test.ts` (el Worker, con Drive y Supabase simulados)
   y `src/media/portero.test.ts` (el cliente). Los tipos del portero se revisan aparte, con

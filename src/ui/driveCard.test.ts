@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
+import { TextSelection } from '@tiptap/pm/state';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -333,7 +334,7 @@ describe('pegar un link de Drive', () => {
     editor.replaceBlocks(editor.document, [{ type: 'paragraph', content: 'Mirá  y avisame' }]);
     editor.setTextCursorPosition(editor.document[0], 'start');
     const start = editor.prosemirrorState.selection.from;
-    editor.transact((tr) => tr.setSelection(tr.selection.constructor.near(tr.doc.resolve(start + 5))));
+    editor.transact((tr) => tr.setSelection(TextSelection.create(tr.doc, start + 5)));
     paste(editor, { 'text/plain': URL_FILE });
     drivePaste.choose(editor, 'card');
     expect(texts(editor).slice(0, 2)).toEqual(['Mirá  y avisame', URL_FILE]);

@@ -197,7 +197,8 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   abrirla y con cada cambio hecho en ella se pide `link_page_file`. Los pares ya vistos se guardan en el
   dispositivo para no llamar de más. Si el archivo todavía no está en el servidor (`file_not_found`: lo
   registra otro dispositivo), se espera y se reintenta más tarde sin contarlo como pendiente; lo mismo si la
-  persona no puede editar esa página.
+  persona no puede editar esa página. Desde el paso 11, también lo que una página deja de usar: ver
+  "Papelera de archivos".
 - **Mostrar:** en la página, siempre la miniatura: la hecha en este dispositivo o la del bucket `thumbs`
   (bajada con la sesión y guardada en el dispositivo, así se ve sin red); un video, con una marca de
   "play"; sin miniatura, un ícono con el nombre. El original solo lo muestra el carrete (paso 7,
@@ -219,6 +220,69 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   Google). Sin `GOOGLE_API_KEY` en el portero, va a la raíz de *My Drive* (`Doc_Portero.md`, paso 2b). Al
   volver de Google (`?drive=`), el diálogo se abre solo para el dueño; a otra persona no le ofrece
   conectar ni elegir.
+
+## Papelera de archivos
+
+Paso 11 de `Plan_Workspaces.md`, con la base en la versión 6 (migración
+`20260930180000_papelera_archivos.sql`). Un archivo está en la papelera (`files.trashed_at`) cuando ninguna
+página viva lo usa; la base lo recalcula sola con cada cambio de `page_files` y cada vez que una página entra
+o sale de la papelera de páginas. Usar un archivo es una fila de `page_files` sin `removed_at`, y eso lo
+mantienen los dispositivos. El código: `src/media/usage.ts` (qué archivos tiene un documento),
+`MediaQueue.reconcilePage` y la cola en `src/media/queue.ts`, `reconcileMedia` en `src/sync/engine.ts`, la
+pestaña en `src/ui/TrashView.tsx` y `src/media/fileTrash.ts`.
+
+- **Qué archivos usa cada página.** En cada sincronización, después de subir y bajar el contenido, cada
+  página cuyo documento cambió desde la última vez (acá o en otro dispositivo, abierta o no) se lee de lo
+  guardado en el dispositivo y se juntan sus `sdmedia://<id>`: el atributo `url` de cualquier elemento, no
+  solo del bloque `image` (un bloque que esta versión no conoce igual cuenta como uso). Eso se compara con lo
+  que el dispositivo sabe que el servidor tiene y la diferencia va a la cola de archivos: lo nuevo,
+  `link_page_file`; lo que ya no está, `unlink_page_file`. Qué versión de cada documento ya se comparó
+  (ediciones, cursor y si la base tiene la papelera) queda anotado en la base de archivos del dispositivo:
+  mientras no cambie, no se vuelve a leer.
+- **Una sola fila por página y archivo** (store `links`, con `removed` y una revisión `rev`): gana lo último
+  que se vio en el documento. Borrar y deshacer antes de sincronizar no manda nada; si el deshacer llega
+  mientras viaja el `unlink`, la respuesta no marca la fila como hecha (cambió la revisión) y después sale el
+  `link`, que reactiva el uso. El editor, al volver a ver un archivo (deshacer, pegar), también da vuelta la
+  fila en el acto (`ensureLinks`). Los dos pedidos son idempotentes: repetir uno cuya respuesta se perdió no
+  cambia nada. Primero van los usos nuevos y después los quitados: un archivo cortado de una página y pegado
+  en otra no pasa por la papelera.
+- **Solo se quita con el documento completo y al día.** Un documento a medio bajar no dice que un archivo se
+  quitó, dice que todavía no llegó. Para mandar un `unlink`: el dispositivo tiene todo lo que el servidor
+  tenía al bajar el árbol en ese ciclo, no llegó ningún update que esta versión no pudo leer (queda marcado
+  en la página, `unreadable`, y esa página nunca quita), el documento no trae contenido que esta versión no
+  conoce, lo propio ya está subido (si no, el servidor todavía muestra el bloque) y no hay ediciones sin
+  guardar en el dispositivo. Si falta algo, solo se suman usos y la página se vuelve a mirar en el próximo
+  ciclo. Las páginas que la persona no puede editar y las que el servidor todavía no tiene no se miran.
+- **Lo agregado en este dispositivo:** `register_file` ya lo cuelga de su página. Cuando el documento lo
+  muestra por primera vez se anota (sin mandar nada) para saber después si se quitó; si el documento nunca lo
+  tuvo (se agregó y se borró enseguida), se quita pasados 5 minutos. Un `unlink` de un archivo propio espera
+  a que esté registrado (si no, `register_file` lo volvería a colgar).
+- **Sin red** no se compara nada (el documento guarda el cambio) y lo que ya está en la cola espera,
+  guardado en el dispositivo; cuenta en los cambios pendientes y sale al volver la red. Con la base
+  anterior a la versión 6 no se manda ningún `unlink`.
+- **La pestaña Archivos** de la papelera: se muestra si la base tiene la papelera, los permisos del
+  dispositivo no la descartan y `trashed_files` no responde `not_allowed` (ven la de un proyecto quien tiene
+  *Edit & create pages* sobre el proyecto entero, y el dueño y los admins con algún permiso sobre él). Lista
+  del proyecto abierto, lo último primero: miniatura (la del dispositivo o la del bucket `thumbs`), nombre,
+  peso, el día en que entró y los días que faltan para los 30; mientras `auto_purge_files` esté apagado dice
+  *Auto-delete is off* (los días son solo una referencia). Arriba, el aviso *A file can show here while
+  still in use on a page this device hasn't synced*, que se repite en la confirmación. Solo con red.
+- **Mandar a la papelera de Drive** (dueño y admins con permiso sobre el proyecto): de a uno o *Empty*, con
+  una confirmación que dice que van a la papelera de Drive del dueño y que se recuperan desde ahí durante 30
+  días. Cada uno es `POST /trash` al portero con la sesión (`Doc_Portero.md`). 200: sale de la lista. 409:
+  una página lo volvió a usar, se vuelve a leer la lista. 403, 404 y 502: el error queda a la vista en ese
+  archivo. *Empty* manda de a uno, mostrando el avance, y si uno falla sigue con los demás. Uno pedido y sin
+  confirmar (`purged_at` sin `drive_trashed_at`, por ejemplo porque Drive falló) sigue en la lista y se puede
+  volver a pedir. Pedirlo es definitivo para la app: aunque una página lo vuelva a usar, no sale de la
+  papelera.
+- **En las páginas**, un archivo con `purged_at` o `drive_trashed_at` se muestra como *File deleted (in the
+  Drive trash)*, con su miniatura oscurecida si la hay, no como roto ni como pendiente. Lo guardado de cada
+  archivo se vuelve a preguntar una vez por sesión al mostrarlo; si resultó borrado, el editor cambia la
+  imagen en pantalla (como cuando llega una miniatura). El carrete todavía no lo distingue.
+- **Borrado automático a los 30 días: armado y apagado.** Mientras `workspace_settings.auto_purge_files` sea
+  `false` (hoy siempre; lo decide Lega) no se pregunta ni se manda nada. Prendido, al abrir la app un dueño
+  o admin pediría `files_due_for_purge` de cada proyecto y mandaría cada vencido a `/trash`, de a uno
+  (`MediaQueue.autoPurge`). Una prueba confirma que apagado no se llama nunca.
 
 ## Comentarios y preguntas
 
@@ -247,14 +311,28 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
   transacción en que se lee: desde ahí nada se le funde, y una edición va aparte.
 - **Errores:** sin red, espera. Un error que se arregla solo (un 500, la sesión renovándose) se reintenta
   en la próxima sincronización con el error a la vista (`commentError`). Un rechazo (`comment_denied`,
-  `not_allowed`, `comment_deleted`, `comment_conflict`...) queda en el dispositivo con el motivo en
-  palabras, en el panel (junto al comentario) y en el estado ("rejected by the server"), **y no se
-  descarta solo**: se reintenta con "Retry" o al abrir la app, y solo la persona puede descartarlo
-  ("Discard", que se lleva también las respuestas sin subir de un hilo descartado). Lo demás de la cola
-  sigue subiendo.
-- **Bajar:** los comentarios de la página abierta se bajan al abrirla y en cada sincronización mientras
-  siga abierta, y se guardan (con los correos) para verlos sin red. Con la base anterior a la versión 5
-  nada se manda: lo escrito queda en el dispositivo y el estado avisa que falta migrar.
+  `not_allowed`, `comment_deleted`, `comment_conflict`, una página que dejó de estar compartida...) queda
+  en el dispositivo con el motivo en palabras, en el panel (junto al comentario) y en el estado ("rejected
+  by the server"), **y no se descarta solo**: se reintenta con "Retry" o al abrir la app, va en el archivo
+  de "Download my unsynced changes", y solo la persona puede descartarlo ("Discard…", en el panel o en el
+  detalle del estado). Antes de descartar, la app dice qué pasa (el comentario vuelve como está en el
+  servidor, el hilo se reabre, se van también N respuestas sin subir) y ofrece copiar el texto. **Un cambio
+  rechazado no se aplica en pantalla:** un borrado que la base no aceptó deja ver el comentario, y una
+  edición de un comentario que otro borró lo muestra borrado, las dos con el motivo. Borrar un comentario
+  propio cuya alta fue rechazada lo saca de la cola sin mandar nada. Lo demás de la cola sigue subiendo.
+- **Bajar:** los comentarios de la página abierta se bajan al abrirla y después **como mucho cada 10
+  segundos** mientras siga abierta (en el acto si se subió algo de ella), y se guardan para verlos sin
+  red. Si la base tiene `list_comments(p_page_id, p_since)`, se baja solo lo que cambió desde la última
+  vez (el cursor, `updated_at`, se guarda con lo bajado); si no la tiene (PGRST202), la vista entera. Los
+  correos (`comment_authors`) se piden solo cuando aparece alguien que el dispositivo no conoce. Una página
+  que ya no se ve no corta la bajada de las demás, y el error se ve en el panel. Con la base anterior a la
+  versión 5 nada se manda: lo escrito queda en el dispositivo y el estado avisa que falta migrar.
+- **Restaurar una copia** (la generación, ver abajo): la cola de comentarios guarda la última generación
+  que vio (en su base). Si cambió, **antes de la primera bajada** (que pisaría lo guardado) compara lo
+  guardado con lo que tiene el servidor y vuelve a poner en la cola, delante de lo que ya había: los
+  comentarios propios que ya no están (con el mismo id: el alta es idempotente), sus ediciones más nuevas
+  que las del servidor, y los borrados y resoluciones hechos por esta persona. Lo de otra persona lo
+  recupera su dispositivo. La próxima bajada es entera. Se suma al aviso de recuperación.
 - **Permisos** (misma cuenta que la base, escala de `access.ts`): con Ver (1) se leen; con Comentar (2) se
   comenta, se responde y se resuelve **aunque el editor quede en solo lectura**; editar un comentario,
   solo quien lo escribió; borrarlo, quien lo escribió o quien tiene editar y crear páginas (4). Los nombres
@@ -265,7 +343,12 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
   muestra el bloque al que apunta: un clic lleva al bloque y lo resalta (en el teléfono, la hoja se
   cierra). En el margen derecho de cada bloque, la cantidad de comentarios abiertos, y en el bloque que se
   señala (o se toca) un botón para comentarlo. También "Comment" en la barra de formato, en el menú del
-  bloque (el tirador de la izquierda) y con Ctrl/⌘+Alt+M.
+  bloque (el tirador de la izquierda) y con Ctrl/⌘+Alt+M (con AltGr no). Si la base de comentarios del
+  dispositivo no se abrió, no se ofrece comentar. Cerrar el panel con algo escrito sin mandar (tocar
+  afuera, Escape, la X) pide confirmación. **En el teléfono**, la hoja se sube por encima del teclado (el
+  panel lee `visualViewport`, porque en iOS el teclado no achica la página) y el cuadro de texto queda a la
+  vista; en Android, `interactive-widget=resizes-content` (en `index.html`) hace que el teclado achique la
+  página, como hacía Chrome antes de la versión 108.
 - **Preguntas:** un párrafo con `question: true` (como Script: **nunca un tipo de bloque nuevo**), en el
   menú "/", en el selector de tipo de la barra y con **Ctrl/⌘+Alt+P** (Ctrl/⌘+Alt+Q ya es la cita del
   editor, y con AltGr, Q y E escriben "@" y "€" en los teclados en castellano). Se ve con un ícono de
@@ -284,7 +367,8 @@ Paso 10 de `Plan_Workspaces.md` (sección 4), con la base en la versión 5
 
 Nunca corren dos a la vez. En orden: los ajustes del workspace (ver abajo), los permisos propios (ver
 "Permisos en el dispositivo"; si la base dice que sacaron a la persona, el ciclo termina ahí), cambios del árbol, los proyectos y sus páginas, contenido pendiente,
-contenido nuevo, imágenes pendientes y comentarios (subir la cola y bajar los de las páginas abiertas).
+contenido nuevo, qué fotos y videos usa cada página que cambió (ver "Papelera de archivos"), imágenes
+pendientes y comentarios (subir la cola y bajar los de las páginas abiertas).
 Las imágenes y los comentarios van al final y sus errores no cortan el ciclo: una foto grande en una red
 mala no frena el texto. Corre al abrir la app, un poco después de cada cambio, cada 10
 segundos con la app a la vista, al volver la red y al volver a la ventana. Al final de cada ciclo arranca,
@@ -460,8 +544,8 @@ documento compartido al abrirla, y ese borrado se sincroniza a todos lados. Por 
 editor tiene que degradar en una versión vieja: una propiedad nueva en un bloque existente se ignora al
 mostrar y, si esa versión edita el bloque, se pierde (el texto queda); un tipo de bloque nuevo, en cambio,
 se borra entero. Así está hecho Script: un párrafo con
-`script: true` (D-14), y así las preguntas: un párrafo con `question: true` (ver "Comentarios y
-preguntas").
+`script: true` (D-14), así las preguntas: un párrafo con `question: true` (ver "Comentarios y
+preguntas"), y así las tarjetas de Drive: un párrafo con el link y `driveCard: true` (ver "Links de Drive").
 
 Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nuevos:
 
@@ -477,6 +561,54 @@ Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nu
 
 **Regla para un bloque nuevo:** antes de publicar la versión que lo trae, subir `min_app_version` a la
 primera versión con la guarda (0.021) o más, para que ninguna versión sin guarda pueda mandar el borrado.
+
+## Links de Drive
+
+Pegar en el editor un link de Google Drive (paso 13 de `Plan_Workspaces.md`) lo pega como siempre, un
+texto con el link, y abre al lado del cursor un menú chico, **Paste as**: **Link** (queda así), **Text** (el
+mismo texto sin el link: el título si se copió un link con título, si no la dirección) o **Card** (una
+tarjeta con el reproductor de Drive). Se elige con el mouse, con el dedo o con las flechas y Enter; Escape,
+tocar afuera o seguir escribiendo lo cierran y queda el link. Solo aparece si lo pegado es un link de Drive
+solo (en texto, o un link solo en HTML); cualquier otra cosa se pega como siempre. Código:
+`ui/driveLinks.ts` (reconocer el link y sacar el id), `ui/drivePaste.ts` (qué se pegó y qué hace cada
+opción), `ui/DrivePasteMenu.tsx` (el menú), `ui/driveCard.ts` (la tarjeta) y `ui/drive.css`.
+
+- **Links que reconoce:** `drive.google.com/file/d/<id>/…` (también con `/u/<n>/`), `/open?id=<id>`,
+  `/uc?id=<id>`, carpetas `drive.google.com/drive/folders/<id>` (también `/u/<n>/` y `/mobile/`) y
+  `docs.google.com/<document|spreadsheets|presentation|drawings|forms>/d/<id>/…`, siempre con `https`. El id
+  solo puede tener letras, números, `_` y `-` (10 a 128). Se guarda la `resourcekey` de los links
+  compartidos, que Drive pide para verlos.
+- **La tarjeta es un párrafo con el link y `driveCard: true`** (nunca un tipo de bloque nuevo, D-14). Si el
+  link estaba solo en su línea, esa línea pasa a ser la tarjeta; si estaba en medio de un texto o en una
+  tabla, sale de ahí y la tarjeta va debajo del bloque. Arriba, el reproductor de Drive; abajo, el pie con
+  el link (el texto del párrafo, que se edita como cualquier texto) y **Open in Drive**. **Show as link** (solo
+  con permiso de edición) la vuelve un link común, igual que pasarla a párrafo, Script o pregunta desde el
+  menú "/" (la tarjeta no va junto con Script ni con pregunta). Al copiar a otro programa sale el link
+  (`<p class="drive-card-line">`), y al pegarlo en la app vuelve a ser tarjeta.
+- **El iframe:** la dirección se arma con una plantilla fija y el id (`https://drive.google.com/file/d/<id>/preview`;
+  una carpeta, `drive.google.com/embeddedfolderview`; un documento, `docs.google.com/<tipo>/d/<id>/preview`),
+  nunca con el link tal cual: un link que no es de Drive, o con un id raro, deja un párrafo común.
+  `sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"` (el reproductor
+  necesita sus scripts y la sesión de Google; es de otro origen, así que no ve nada de la app; los popups,
+  para el botón de Drive que abre el archivo en otra pestaña; un formulario suma `allow-forms`),
+  `allow="fullscreen"`, `referrerpolicy="no-referrer"` y `loading="lazy"`. Anda si quien mira tiene acceso
+  al archivo con su cuenta de Google: la app no ve el archivo ni los permisos.
+- **Tamaño:** todo el ancho del texto (en una hoja, el ancho de la hoja) con proporción de video y a lo sumo
+  480 px o el 70 % del alto de la pantalla; un documento o una carpeta, 4:3. Al imprimir queda solo el link.
+- **Sin red** la tarjeta muestra el link y el aviso *You're offline*; el reproductor carga solo cuando
+  vuelve la red.
+- **En el teléfono** una tapa transparente sobre el reproductor deja deslizar la página sin que el iframe se
+  quede con el scroll; un toque (*Tap to use the player*) la saca hasta tocar afuera de la tarjeta.
+- **Solo lectura:** la tarjeta se ve igual y el link se abre; no aparece **Show as link** y no se pega nada.
+- **Una versión vieja** (sin la propiedad) muestra el párrafo con el link. Si edita esa línea, la propiedad
+  se pierde y queda el link (la guarda de `ui/unknownContent.ts` revisa tipos y marcas, no propiedades, así
+  que no la bloquea). Lo prueban `ui/driveCard.test.ts` con el esquema de `main` (`ui/fixtures/`),
+  `ui/driveLinks.test.ts` y `ui/DrivePasteMenu.test.tsx`.
+- **Después de publicar** la versión con las tarjetas, subir `workspace_settings.min_app_version` a esa
+  versión (regla de la sección 11 de `Plan_Workspaces.md`): así ninguna versión anterior vuelve a sacarle la
+  propiedad a una tarjeta al editarla.
+- **La copia liviana de un video** (para verlo sin el reproductor de Drive) queda para más adelante, solo si
+  hace falta: sin un servidor que convierta videos, se haría en el navegador.
 
 ## Restaurar una copia de seguridad: la generación
 

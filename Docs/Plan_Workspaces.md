@@ -260,7 +260,8 @@ cambios de permisos, que son el momento más riesgoso.
    alguien.
 10. **Invitados (clientes):** compartir con su correo (la app copia el link de invitación), comentarios
     en tabla propia y preguntas.
-11. **Papelera de archivos.**
+11. **Papelera de archivos:** la base (migración `20260930180000_papelera_archivos.sql`), el portero
+    (`POST /trash`) y la app, hechos; falta auditar, probar a mano y aplicar la migración.
 12. **Varios workspaces:** pantalla de bienvenida, selector, guía y comando para crear uno (el comando, la
     guía y la app, hechos; falta auditar y probar a mano).
 13. Pegar links de Drive; copia liviana de video si hace falta.
@@ -412,6 +413,31 @@ vencidos, confirmándolo con la base con la sesión de esa persona) **queda arma
 ver usos que no llegaron a registrarse (una versión vieja que copió el bloque, un dispositivo sin red, una
 página en la papelera de páginas).
 
+Hecho en la app (falta auditar y probar a mano; `Doc_Sincronizacion.md`, "Papelera de archivos"):
+
+- **Quitar un archivo de una página:** en cada sincronización, cada página que cambió (acá o en otro
+  dispositivo) se compara con sus `sdmedia://` (leídos del documento de Yjs, de cualquier bloque) y la
+  diferencia va a la cola de archivos, guardada en el dispositivo: primero `link_page_file` y después
+  `unlink_page_file`. Una sola fila por página y archivo, así un deshacer no se pisa con el borrado (una
+  respuesta que llega después de un cambio no lo marca como hecho). **Solo se quita con el documento
+  completo y al día** (todo lo que el servidor tenía al bajar el árbol en ese ciclo, sin updates que esta
+  versión no pudo leer, sin contenido desconocido y con lo propio ya subido); si falta algo, solo se suman
+  usos. Con la base anterior a la versión 6 no se manda nada.
+- **Pestaña Archivos** en la papelera (`TrashView`), para quien `trashed_files` no rechaza: miniatura,
+  nombre, peso, fecha de entrada y días que faltan para los 30, con *Auto-delete is off* mientras el
+  interruptor esté apagado y el aviso *A file can show here while still in use on a page this device
+  hasn't synced*.
+- **Mandar a la papelera de Drive** (dueño y admins): de a uno o *Empty*, con confirmación, por el portero
+  (`POST /trash`, `src/media/portero.ts`). 200 sale de la lista; 409 vuelve a leerla; los demás errores
+  quedan a la vista. *Empty* va de a uno, con el avance, y sigue si uno falla.
+- **En las páginas**, un archivo con `purged_at` o `drive_trashed_at` se ve como *File deleted (in the Drive
+  trash)*, con su miniatura si la hay.
+- **Borrado automático:** armado detrás de `auto_purge_files` (al abrir la app, dueño y admins,
+  `files_due_for_purge` y `/trash` de a uno); con el interruptor apagado no se llama a nada (hay una prueba).
+- `DB_SCHEMA_VERSION = 6`. Pruebas en `src/media/trash.test.ts` y `src/media/portero.test.ts`, con el
+  servidor y el portero en memoria (`src/sync/testing.ts`).
+- Queda: el carrete no sabe todavía que un archivo está borrado (abre el pase del portero como siempre).
+
 **Paso 12 — Varios workspaces.** Lista de workspaces guardada en el dispositivo (dirección, clave
 publicable, clave local, nombre); Wanka entra a esa lista con sus nombres de hoy. Pantalla de bienvenida
 (unirme o crear), selector **Workspace › Proyecto** y sesión separada por workspace. Guía en inglés y un
@@ -445,3 +471,10 @@ Hecho: el comando (`scripts/setup-workspace.mjs`, con `--dry-run` y el paso apar
 reproducible (el reproductor de Drive). La tarjeta es un párrafo con el link y una propiedad: si se pierde
 la propiedad (regla de arriba), queda el link. La copia liviana de un video solo si hace falta (sin
 servidor que convierta videos, se haría en el navegador).
+Hecho en la app (sin publicar): al pegar un link de Drive (archivo, `open?id=`, carpeta o `docs.google.com`)
+aparece junto al cursor el menú **Link / Text / Card**; la tarjeta es un párrafo con el link y
+`driveCard: true`, con el reproductor de Drive (iframe solo de Drive, armado con el id), el pie con el link
+y **Open in Drive**, aviso sin red, tapa en el teléfono para no quedarse con el scroll, y la prueba con el
+esquema de `main` (la versión vieja muestra el link y no borra nada). Detalle en `Doc_Sincronizacion.md`,
+"Links de Drive". Al publicar: subir `min_app_version` a esa versión. La copia liviana de un video no se
+hizo (solo si hace falta).
