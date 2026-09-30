@@ -25,6 +25,7 @@ Las migraciones están en `supabase/migrations/`, en orden:
 | `20260929160000_ajustes.sql` | Columna `pages.settings` (ajustes por rama, un objeto JSON de hasta 2000 caracteres) y tabla `user_settings` con las preferencias de cada cuenta: cada usuario ve y cambia solo la suya, y no se borra desde la API. |
 | `20260929170000_proyectos.sql` | Proyectos: cada usuario puede crear los suyos (`workspaces`, con el id generado en el dispositivo). El dueño es siempre quien lo crea y no se puede cambiar; un proyecto no se borra desde la API. |
 | `20260929171000_proyectos_nombre.sql` | Los primeros proyectos que se seguían llamando "Mis documentos" pasan a "My project", el nombre de fábrica nuevo. |
+| `20260930100000_workspace_settings.sql` | Tabla `workspace_settings` (una fila, solo lectura para la app): la generación de la base (sube al restaurar una copia de seguridad), la versión mínima de la app que puede subir contenido y la versión de la base. `push_page_update` recibe la versión de la app; la de siempre (sin versión) queda para las versiones anteriores y deja de andar si hay versión mínima. Ver `Doc_Sincronizacion.md`. |
 
 Reglas del esquema:
 
@@ -34,6 +35,9 @@ Reglas del esquema:
   página, asignado con la fila de la página bloqueada: bajar "lo posterior a `seq` N" nunca se saltea nada.
 - Las funciones auxiliares de permisos viven en el esquema `private`, que la API no expone.
 - Cada migración que crea una tabla hace `revoke all` sobre ella y da solo los permisos que hacen falta.
+- `workspace_settings` se cambia solo desde el SQL Editor (o la Management API), nunca desde la app:
+  `update public.workspace_settings set min_app_version = 0.021;` pide esa versión o más para subir
+  contenido; `set generation = generation + 1` después de restaurar una copia.
 
 ### Aplicar las migraciones
 

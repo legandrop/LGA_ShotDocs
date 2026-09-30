@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.021 :
+
+Protecciones para lo que viene, con auditoría. Si una página trae algo que esta versión no conoce (un
+bloque, una marca de texto), no se abre en el editor: se ve un aviso para actualizar y nada se borra; lo
+mismo con lo que llega con la página abierta. El workspace puede pedir una versión mínima de la app para
+subir contenido: una versión vieja guarda lo suyo en el dispositivo y lo sube al actualizar. Si la base
+se restaura desde una copia de seguridad, cada dispositivo vuelve a subir lo que hizo después de la copia
+(páginas, proyectos, contenido e imágenes), así no se pierde nada. Nueva tabla `workspace_settings`, con
+su prueba de permisos.
+[ Sync - guarda contra lo desconocido y restaurar copias sin perder nada ]
+
 v0.020 :
 
 La app ya se publica en Cloudflare con la misma dirección, y Vercel quedó dado de baja: se borra su

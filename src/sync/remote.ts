@@ -8,6 +8,7 @@ import {
   type PageRow,
   type ProjectRow,
   type RemoteUpdate,
+  type WorkspaceSettings,
 } from './types';
 
 /** Todo lo que la sincronización le pide al servidor. Las pruebas usan una versión en memoria. */
@@ -26,6 +27,8 @@ export interface Remote {
   /** Idempotente: si la página ya existe no hace nada. */
   createPage(page: NewPage): Promise<void>;
   updatePage(id: string, patch: PagePatch): Promise<void>;
+  /** Los ajustes del workspace; `null` si la base todavía no tiene la tabla (falta migrar). */
+  fetchWorkspaceSettings(): Promise<WorkspaceSettings | null>;
   /** Idempotente por `clientUpdateId`. Devuelve el `seq` asignado. */
   pushUpdate(pageId: string, clientUpdateId: string, update: Uint8Array): Promise<number>;
   pullUpdates(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]>;
@@ -41,6 +44,11 @@ export const PAGE_COLUMNS =
 // el árbol se sigue bajando sin esa columna, en vez de cortar toda la sincronización.
 const PAGE_COLUMNS_WITHOUT_SETTINGS = PAGE_COLUMNS.replace(' settings,', '');
 const UNDEFINED_COLUMN = '42703';
+// La tabla o la función todavía no existen en la base (falta aplicar una migración).
+const MISSING_TABLE = new Set(['42P01', 'PGRST205']);
+const MISSING_FUNCTION = 'PGRST202';
+/** Lo que manda push_page_update cuando la app es más vieja que la mínima del workspace. */
+export const APP_OUTDATED = 'app_outdated';
 
 // 401 llega cuando la sesión venció y se está renovando: se reintenta.
 const TRANSIENT_STATUS = new Set([0, 401, 408, 425, 429, 500, 502, 503, 504]);
@@ -67,7 +75,38 @@ export class SupabaseRemote implements Remote {
     return Date.now() - this.settingsMissingAt < 10 * 60_000;
   }
 
-  constructor(private readonly client: SupabaseClient) {}
+  /** Desde cuándo la base no tiene `workspace_settings` (o la subida con versión); se reintenta cada tanto. */
+  private settingsTableMissingAt = 0;
+  private versionedPushMissingAt = 0;
+
+  /**
+   * `appVersion` viaja con cada subida de contenido: el servidor rechaza las de una versión más vieja que
+   * la mínima del workspace.
+   */
+  constructor(
+    private readonly client: SupabaseClient,
+    private readonly appVersion = '',
+  ) {}
+
+  async fetchWorkspaceSettings(): Promise<WorkspaceSettings | null> {
+    if (Date.now() - this.settingsTableMissingAt < 10 * 60_000) return null;
+    const { data, error, status } = await this.client
+      .from('workspace_settings')
+      .select('generation, min_app_version, schema_version')
+      .maybeSingle();
+    if (error && MISSING_TABLE.has(String(error.code))) {
+      this.settingsTableMissingAt = Date.now();
+      return null;
+    }
+    if (error) throw toRemoteError(error, status);
+    if (!data) return null;
+    const row = data as { generation: number; min_app_version: number | string | null; schema_version: number };
+    return {
+      generation: Number(row.generation),
+      minAppVersion: row.min_app_version === null ? null : Number(row.min_app_version),
+      schemaVersion: Number(row.schema_version),
+    };
+  }
 
   async ensureWorkspace(): Promise<string> {
     const { data, error, status } = await this.client.rpc('ensure_workspace');
@@ -145,11 +184,17 @@ export class SupabaseRemote implements Remote {
   }
 
   async pushUpdate(pageId: string, clientUpdateId: string, update: Uint8Array): Promise<number> {
-    const { data, error, status } = await this.client.rpc('push_page_update', {
-      p_page_id: pageId,
-      p_client_update_id: clientUpdateId,
-      p_update: toBase64(update),
-    });
+    const args = { p_page_id: pageId, p_client_update_id: clientUpdateId, p_update: toBase64(update) };
+    // Una base sin la migración de ajustes del workspace no tiene la versión con `p_app_version`.
+    const versioned = Date.now() - this.versionedPushMissingAt >= 10 * 60_000;
+    const { data, error, status } = await this.client.rpc(
+      'push_page_update',
+      versioned ? { ...args, p_app_version: this.appVersion || null } : args,
+    );
+    if (error?.code === MISSING_FUNCTION && versioned) {
+      this.versionedPushMissingAt = Date.now();
+      return this.pushUpdate(pageId, clientUpdateId, update);
+    }
     if (error) throw toRemoteError(error, status);
     return Number(data);
   }

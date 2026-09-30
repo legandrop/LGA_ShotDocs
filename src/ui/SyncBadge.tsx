@@ -26,6 +26,9 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
   } else if (status.lastError && !status.syncing) {
     tone = 'warn';
     text = pending > 0 ? `${count(pending, 'change', 'changes')} not uploaded · retrying` : 'Sync problem · retrying';
+  } else if (status.outdated) {
+    tone = 'warn';
+    text = pending > 0 ? `Update the app · ${count(pending, 'change', 'changes')} waiting` : 'Update the app';
   } else if (pending > 0) {
     tone = 'busy';
     text = status.syncing ? `Uploading ${count(pending, 'change', 'changes')}…` : `${count(pending, 'change', 'changes')} not uploaded`;
@@ -56,7 +59,8 @@ export function SyncBadge() {
   const [details, setDetails] = useState(false);
   const { tone, text, rejected } = useSyncTone();
   const Icon = TONE_ICONS[tone];
-  const hasDetails = rejected > 0 || !!status.localError || !!status.lastError || !!status.warning;
+  const hasDetails =
+    rejected > 0 || !!status.localError || !!status.lastError || !!status.warning || !!status.notice || status.outdated;
 
   return (
     <div className="sync">
@@ -88,6 +92,16 @@ export function SyncBadge() {
               Last problem: <code>{status.lastError}</code>. Nothing is lost; syncing keeps retrying.
             </p>
           )}
+          {status.outdated && (
+            <p>
+              <strong>This workspace needs a newer version of the app.</strong> Your edits are saved on this device
+              and upload after updating.{' '}
+              <button className="link" onClick={() => location.reload()}>
+                Update now
+              </button>
+            </p>
+          )}
+          {status.notice && <p>{status.notice}</p>}
           {status.warning && (
             <p>
               <code>{status.warning}</code> Reopening the app tries again; updating the app may be needed.

@@ -74,6 +74,15 @@ export interface FailedOp {
   failedAt: number;
 }
 
+/** Los ajustes del workspace (`workspace_settings`): una sola fila que la app lee en cada sincronización. */
+export interface WorkspaceSettings {
+  /** Sube cuando se restaura una copia de seguridad: cada dispositivo vuelve a subir todo lo suyo. */
+  generation: number;
+  /** Versión mínima de la app que puede subir contenido (como en el changelog: 0.021). */
+  minAppVersion: number | null;
+  schemaVersion: number;
+}
+
 export interface RemoteUpdate {
   seq: number;
   data: Uint8Array;

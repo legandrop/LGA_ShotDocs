@@ -19,6 +19,7 @@ import { useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema, SCRIPT_PROP } from './editorSchema';
+import { findUnknownContent } from './unknownContent';
 import { ScriptIcon } from './icons';
 import { notify } from './notice';
 import { useScheme } from '../prefs';
@@ -32,7 +33,11 @@ const scriptTypeItem: BlockTypeSelectItem = {
   icon: ScriptIcon as unknown as BlockTypeSelectItem['icon'],
 };
 
-type Opening = { state: 'loading' } | { state: 'ready'; doc: Y.Doc; complete: boolean };
+type Opening =
+  | { state: 'loading' }
+  | { state: 'ready'; doc: Y.Doc; complete: boolean }
+  /** La página trae algo que esta versión del editor no conoce: abrirla lo borraría. */
+  | { state: 'unsupported'; what: string };
 
 export function PageEditor({ pageId }: { pageId: string }) {
   const { docs, engine } = useServices();
@@ -51,7 +56,9 @@ export function PageEditor({ pageId }: { pageId: string }) {
       if (cancelled) return;
       const doc = await docs.open(pageId, { seed: complete });
       opened = true;
-      if (cancelled) docs.close(pageId);
+      if (cancelled) return docs.close(pageId);
+      const unknown = findUnknownContent(doc);
+      if (unknown) setOpening({ state: 'unsupported', what: unknown });
       else setOpening({ state: 'ready', doc, complete });
     });
     return () => {
@@ -60,6 +67,15 @@ export function PageEditor({ pageId }: { pageId: string }) {
       setOpening({ state: 'loading' });
     };
   }, [docs, engine, pageId, attempt]);
+
+  // Si llega del servidor algo que esta versión no conoce, el editor se cierra antes de que lo vea.
+  useEffect(
+    () =>
+      docs.subscribeUnsupported((id) => {
+        if (id === pageId) setAttempt((n) => n + 1);
+      }),
+    [docs, pageId],
+  );
 
   // Mientras falte contenido, cada sincronización se fija si ya llegó; recién entonces se reabre, para
   // no mover la vista de quien está leyendo.
@@ -75,6 +91,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   }, [engine, pageId, incomplete, status.lastSyncAt]);
 
   if (opening.state === 'loading') return <div className="editor-placeholder" />;
+  if (opening.state === 'unsupported') return <UnsupportedPage />;
   return (
     <>
       {!opening.complete && (
@@ -86,6 +103,21 @@ export function PageEditor({ pageId }: { pageId: string }) {
       )}
       <BlockEditor key={`${pageId}:${opening.complete}`} doc={opening.doc} pageId={pageId} editable={opening.complete} />
     </>
+  );
+}
+
+/** La página tiene algo hecho con una versión más nueva de la app. Nada se borra: está guardado. */
+function UnsupportedPage() {
+  return (
+    <div className="banner unsupported-page" role="status">
+      <p>
+        <strong>This page was edited with a newer version of the app.</strong> This version can't show all of it
+        without losing part, so it stays closed. Nothing is lost.
+      </p>
+      <button className="link" onClick={() => window.location.reload()}>
+        Update the app
+      </button>
+    </div>
   );
 }
 

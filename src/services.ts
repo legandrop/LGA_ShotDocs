@@ -5,6 +5,7 @@ import { PageDocs } from './sync/docs';
 import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
 import { localDbName, openLocalDb, type LocalDb } from './sync/localDb';
+import { supportsContent } from './ui/unknownContent';
 import { SupabaseRemote } from './sync/remote';
 import { mergeRootGroups, seedIfEmpty } from './sync/structure';
 import { PageTree } from './sync/tree';
@@ -111,7 +112,7 @@ export function useBootServices(user: AuthUser): Boot {
       if (cancelled) return releaseLock();
       const db = await openLocalDb(dbName);
       if (cancelled) return db.close();
-      const remote = new SupabaseRemote(supabase!);
+      const remote = new SupabaseRemote(supabase!, __APP_VERSION__);
       let workspaceId = (await db.get('meta', 'workspaceId')) as string | undefined;
       if (!workspaceId) {
         try {
@@ -132,9 +133,9 @@ export function useBootServices(user: AuthUser): Boot {
 
       const tree = new PageTree(db, workspaceId);
       await tree.load();
-      const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty });
+      const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, supports: supportsContent });
       const files = new PageFiles(db, remote);
-      const engine = new SyncEngine(remote, tree, docs, files);
+      const engine = new SyncEngine(remote, tree, docs, files, { appVersion: __APP_VERSION__ });
       if (cancelled) return db.close();
       engine.start();
       void navigator.storage?.persist?.();

@@ -95,7 +95,7 @@ si hay cambios de ese usuario sin subir, se suben; si no, manda lo guardado en l
 
 ## Ciclo de sincronización
 
-Nunca corren dos a la vez. En orden: cambios del árbol, los proyectos y sus páginas, contenido pendiente,
+Nunca corren dos a la vez. En orden: los ajustes del workspace (ver abajo), cambios del árbol, los proyectos y sus páginas, contenido pendiente,
 contenido nuevo e imágenes pendientes. Las imágenes van al final y sus errores no cortan el ciclo: una foto
 grande en una red mala no frena el texto. Corre al abrir la app, un poco después de cada cambio, cada 10
 segundos con la app a la vista, al volver la red y al volver a la ventana.
@@ -129,5 +129,43 @@ documento compartido al abrirla, y ese borrado se sincroniza a todos lados. Por 
 editor tiene que degradar en una versión vieja: una propiedad nueva en un bloque existente se ignora al
 mostrar y, si esa versión edita el bloque, se pierde (el texto queda); un tipo de bloque nuevo, en cambio,
 se borra entero. Así está hecho Script: un párrafo con
-`script: true` (D-14). Un tipo de bloque realmente nuevo necesita antes una versión mínima de la app que
-se haga cumplir.
+`script: true` (D-14).
+
+Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nuevos:
+
+- **La guarda del editor** (`ui/unknownContent.ts`). Antes de abrir una página se revisa que todo lo que
+  trae (tipos de bloque, contenido en línea, marcas de texto) esté en el esquema de esta versión. Si no,
+  la página no se abre en el editor: se ve un aviso para actualizar la app, y nada se borra. Lo mismo con
+  cada cambio que llega con la página abierta: se guarda en el dispositivo pero no entra al editor, que
+  se cierra. Los atributos desconocidos de un bloque no cuentan: se ignoran sin borrar nada.
+- **La versión mínima del workspace** (`workspace_settings.min_app_version`). Cada subida de contenido
+  lleva la versión de la app, y el servidor rechaza las de una versión menor (también las de versiones
+  anteriores a v0.021, que no mandan versión). La app vieja lo ve, deja de subir contenido (queda en el
+  dispositivo), y pide actualizar; al actualizar, sube todo.
+
+**Regla para un bloque nuevo:** antes de publicar la versión que lo trae, subir `min_app_version` a la
+primera versión con la guarda (0.021) o más, para que ninguna versión sin guarda pueda mandar el borrado.
+
+## Restaurar una copia de seguridad: la generación
+
+Las copias de seguridad de la base (`Plan_Workspaces.md`, sección 7) se pueden restaurar, pero lo que se
+hizo después de la copia solo queda en los dispositivos, que además creen que el servidor ya lo tiene.
+`workspace_settings.generation` resuelve eso:
+
+- La restauración le pone a la generación un valor que no se haya usado nunca (la hora en minutos, o la
+  actual más uno si es mayor): así también se nota restaurar dos veces la misma copia. Lo hace el script
+  de restauración del repo de copias.
+- Solo funciona si se restaura **sobre el mismo proyecto de Supabase**: lo guardado en cada dispositivo
+  lleva el proyecto en el nombre (`Plan_Workspaces.md`, sección 7).
+- Cada dispositivo guarda la última generación que vio. Al ver una distinta, antes de sincronizar: vuelve
+  a poner en la cola los proyectos y las páginas que el servidor ya no tiene (primero los padres) y los
+  cambios a páginas que vio más nuevos que lo restaurado, todo antes de lo que ya estaba en la cola sin
+  subir (que es más nuevo y va después); marca todo su contenido para volver a subirlo
+  entero (Yjs no duplica lo que el servidor ya tiene) y bajarlo desde el principio; y vuelve a poner en la
+  cola todas sus imágenes (las que el servidor todavía tiene no se vuelven a mandar). Recién después guarda
+  la generación nueva: si la app se cierra en el medio, la próxima vez hace todo de nuevo.
+- Lo que no vuelve: los renombres de proyectos hechos después de la copia (el servidor no dice cuándo se
+  hizo cada uno).
+- Un dispositivo sin generación guardada cuenta la 1 (la que crea la migración): uno que todavía tenía una
+  versión anterior cuando se restauró se recupera al actualizar, y uno vacío no tiene nada que hacer.
+- Si dos dispositivos recuperan cambios de la misma página, gana el primero que sincroniza.

@@ -1,7 +1,7 @@
 import type { PageDocs } from './docs';
 import type { PageFiles } from './files';
 import { hasUnsyncedContent } from './localDb';
-import type { Remote } from './remote';
+import { APP_OUTDATED, type Remote } from './remote';
 import type { PageTree } from './tree';
 import { errorMessage, isNetworkError, isPermanent, type QueuedOp } from './types';
 
@@ -21,6 +21,13 @@ export interface SyncStatus {
   localError: string | null;
   /** Algo que no se pudo leer del servidor. Queda a la vista hasta reabrir la app. */
   warning: string | null;
+  /** Algo que pasó y conviene saber, sin que sea un problema (por ejemplo, que se restauró una copia). */
+  notice: string | null;
+  /**
+   * El workspace pide una versión más nueva de la app. El contenido no se sube (queda en el dispositivo)
+   * hasta actualizar.
+   */
+  outdated: boolean;
   lastError: string | null;
   lastSyncAt: number | null;
 }
@@ -49,6 +56,8 @@ export class SyncEngine {
     rejectedPages: 0,
     localError: null,
     warning: null,
+    notice: null,
+    outdated: false,
     lastError: null,
     lastSyncAt: null,
   };
@@ -65,6 +74,7 @@ export class SyncEngine {
     private readonly tree: PageTree,
     private readonly docs: PageDocs,
     private readonly files: PageFiles,
+    private readonly options: { appVersion?: string } = {},
   ) {
     const poke = () => this.poke();
     tree.onQueued = poke;
@@ -171,6 +181,8 @@ export class SyncEngine {
       if (this.stopped) throw new Error('stopped');
     };
     try {
+      const outdated = await this.checkWorkspace();
+      halt();
       await this.pushOps();
       halt();
       // Primero los proyectos y después sus páginas: nunca llega una página de un proyecto desconocido.
@@ -182,13 +194,19 @@ export class SyncEngine {
 
       let contentError: string | null = null;
       const states = await this.docs.states();
-      for (const pageId of await this.docs.unsyncedPages()) {
+      // Con la app vieja para este workspace, el contenido se queda en el dispositivo hasta actualizar.
+      for (const pageId of outdated ? [] : await this.docs.unsyncedPages()) {
         halt();
         if (this.tree.hasUnsentCreate(pageId) || states.get(pageId)?.rejected) continue;
         try {
           await this.docs.pushPage(pageId, this.remote);
         } catch (err) {
           if (!isPermanent(err)) throw err;
+          if (errorMessage(err) === APP_OUTDATED) {
+            // El workspace subió la versión mínima entre la consulta y la subida.
+            this.patch({ outdated: true });
+            break;
+          }
           contentError = errorMessage(err);
         }
       }
@@ -214,6 +232,46 @@ export class SyncEngine {
       await this.refreshCounts();
       this.patch({ syncing: false });
     }
+  }
+
+  /**
+   * Lee los ajustes del workspace. Si la base se restauró desde una copia de seguridad (cambió la
+   * generación), pone en la cola todo lo que el servidor ya no tiene antes de seguir. Devuelve si esta
+   * versión de la app es más vieja que la mínima del workspace.
+   */
+  private async checkWorkspace(): Promise<boolean> {
+    const settings = await this.remote.fetchWorkspaceSettings();
+    if (!settings) {
+      this.patch({ outdated: false });
+      return false;
+    }
+    const version = Number(this.options.appVersion);
+    const outdated =
+      settings.minAppVersion !== null && !(Number.isFinite(version) && version >= settings.minAppVersion);
+    this.patch({ outdated });
+
+    // Sin generación guardada vale 1, la que crea la migración: un dispositivo que todavía tenía una versión
+    // anterior cuando se restauró la base igual se recupera al actualizar (uno vacío no tiene nada que hacer).
+    const known = (await this.tree.knownGeneration()) ?? 1;
+    if (known === settings.generation) return outdated;
+    {
+      const projects = await this.remote.fetchProjects();
+      const rows = await this.remote.fetchTree(projects.map((p) => p.id));
+      const recovered =
+        (await this.tree.recoverAfterRestore(rows, projects)) +
+        (await this.docs.resetForRestore()) +
+        (await this.files.resetForRestore());
+      // Un dispositivo que no tenía nada (recién entra a un workspace ya restaurado) no avisa nada.
+      if (recovered > 0) {
+        this.patch({
+          notice:
+            'The workspace was restored from a backup. This device is uploading again everything it had, so nothing made after the backup is lost.',
+        });
+      }
+    }
+    // Recién ahora: si la app se cierra a mitad de camino, la próxima vez se vuelve a hacer todo.
+    await this.tree.setKnownGeneration(settings.generation);
+    return outdated;
   }
 
   private async pushOps(): Promise<void> {

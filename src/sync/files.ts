@@ -95,6 +95,23 @@ export class PageFiles {
     return objectUrl;
   }
 
+  /**
+   * La base se restauró desde una copia de seguridad: las imágenes subidas después de esa copia ya no
+   * figuran en el servidor. Todas las que están en el dispositivo vuelven a la cola; las que el servidor
+   * todavía tiene se dan por subidas sin volver a mandarlas.
+   */
+  async resetForRestore(): Promise<number> {
+    // De a una, con un cursor: puede haber muchas y pesadas.
+    const tx = this.db.transaction('files', 'readwrite');
+    let count = 0;
+    for (let cursor = await tx.store.index('uploaded').openCursor(1); cursor; cursor = await cursor.continue()) {
+      await cursor.update({ ...cursor.value, uploaded: 0 });
+      count++;
+    }
+    await tx.done;
+    return count;
+  }
+
   async pendingCount(): Promise<number> {
     return this.db.countFromIndex('files', 'uploaded', 0);
   }

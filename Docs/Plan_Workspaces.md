@@ -167,9 +167,15 @@ cambios de permisos, que son el momento más riesgoso.
 - Quien cree su propio workspace necesita también una cuenta de GitHub para sus copias (paso 5 de la
   guía).
 - **Restaurar tiene una trampa:** después de volver a la copia de ayer, los dispositivos creen que el
-  servidor ya tiene lo de hoy y no lo vuelven a subir. Por eso cada workspace lleva una **generación**:
-  si cambia, cada dispositivo vuelve a subir todo lo suyo y Yjs lo junta sin duplicar. Así los
-  dispositivos cubren lo posterior a la copia. La restauración se prueba en una base aparte.
+  servidor ya tiene lo de hoy y no lo vuelven a subir. Por eso cada workspace lleva una **generación**
+  (hecha en v0.021): si cambia, cada dispositivo vuelve a subir todo lo suyo y Yjs lo junta sin
+  duplicar. Así los dispositivos cubren lo posterior a la copia.
+- **Pendiente: restaurar sobre el mismo proyecto de Supabase.** Lo guardado en cada dispositivo lleva el
+  proyecto en el nombre: si se restaura en un proyecto nuevo, los dispositivos arrancan de cero y lo
+  posterior a la copia queda en su base vieja, sin subir. Hoy el script de copias restaura sobre una base
+  vacía; falta el modo "sobre el mismo proyecto" (reemplazar los datos sin tocar el esquema), probado,
+  y que el nombre de lo guardado dependa del workspace y no del proyecto (paso 5). Mientras tanto, una
+  restauración se hace con ayuda y probando antes en una base aparte.
 - No cubre y hay que anotarlo en la guía: la configuración de login (sale del comando del paso 2), los
   secretos del portero y la conexión con Drive (se vuelven a cargar), las miniaturas (se regeneran desde
   Drive).
@@ -201,11 +207,11 @@ cambios de permisos, que son el momento más riesgoso.
 
 ## 10. Orden de trabajo
 
-1. **Copia de seguridad de Wanka, cuatro por día** (sección 7) y la generación de la base.
-2. **Guarda contra lo desconocido:** si una página trae un tipo de bloque, una marca o un contenido que
-   esta versión no conoce, se abre solo lectura y pide actualizar, en vez de borrarlo. Más la versión
-   mínima por workspace.
-3. **Mudar el hosting** a Cloudflare con la misma dirección, antes de mandar links a clientes.
+1. ✅ **Copia de seguridad de Wanka, cuatro por día** (sección 7) y la generación de la base (v0.021).
+2. ✅ **Guarda contra lo desconocido** (v0.021): si una página trae un tipo de bloque, una marca o un contenido que
+   esta versión no conoce, no se abre en el editor: muestra un aviso para actualizar, y nada se borra. Más
+   la versión mínima por workspace.
+3. ✅ **Mudar el hosting** a Cloudflare con la misma dirección, antes de mandar links a clientes.
 4. **Prueba en el iPhone** (uno o dos días), con un portero y un Drive de prueba: qué entrega el
    selector de fotos y videos, subir 1 GB, reproducir con la app instalada, en Safari, Chrome y Windows.
 5. **Preparación sin cambios visibles:** todo por workspace en el código y el dispositivo, tablas

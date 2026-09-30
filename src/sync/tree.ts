@@ -8,6 +8,8 @@ export function compareSiblings(a: PageRow, b: PageRow): number {
 }
 
 const PROJECTS_KEY = 'projects';
+/** La generación de la base que este dispositivo vio por última vez (ver `recoverAfterRestore`). */
+const GENERATION_KEY = 'generation';
 
 /** Clave entre dos vecinos. Si dos dispositivos generaron la misma clave, igual devuelve una válida. */
 export function keyBetween(before: string | null, after: string | null): string {
@@ -409,6 +411,97 @@ export class PageTree {
         keptCreates.includes(f) || ((f.op.kind === 'update' || f.op.kind === 'renameProject') && created.has(f.op.id)),
       ),
     );
+  }
+
+  // --- restauración de una copia de seguridad -------------------------------------------------------
+
+  async knownGeneration(): Promise<number | undefined> {
+    return (await this.db.get('meta', GENERATION_KEY)) as number | undefined;
+  }
+
+  async setKnownGeneration(generation: number): Promise<void> {
+    await this.db.put('meta', generation, GENERATION_KEY);
+  }
+
+  /**
+   * La base se restauró desde una copia: lo que se hizo después de esa copia ya no está en el servidor,
+   * pero sí en la última copia del árbol que este dispositivo bajó. Vuelve a poner en la cola los
+   * proyectos y las páginas que el servidor ya no tiene (primero los padres) y los cambios a páginas que
+   * este dispositivo vio más nuevos que lo restaurado. Los renombres de proyectos no vuelven: el
+   * servidor no dice cuándo se hicieron. Devuelve cuántos cambios puso en la cola.
+   */
+  async recoverAfterRestore(serverRows: PageRow[], serverProjects: ProjectRow[]): Promise<number> {
+    const onServer = new Map(serverRows.map((r) => [r.id, r]));
+    const projectsOnServer = new Set(serverProjects.map((p) => p.id));
+    const ops: TreeOp[] = [];
+
+    for (const p of this.projectSnapshot.values()) {
+      if (!projectsOnServer.has(p.id)) ops.push({ kind: 'createProject', project: { id: p.id, name: p.name } });
+    }
+
+    const depth = (row: PageRow): number => {
+      let d = 0;
+      const seen = new Set<string>();
+      for (let cur = row.parent_id; cur && this.snapshot.has(cur) && !seen.has(cur); cur = this.snapshot.get(cur)!.parent_id) {
+        seen.add(cur);
+        d++;
+      }
+      return d;
+    };
+    const missing = [...this.snapshot.values()].filter((r) => !onServer.has(r.id)).sort((a, b) => depth(a) - depth(b));
+    for (const r of missing) {
+      ops.push({
+        kind: 'create',
+        page: { id: r.id, workspace_id: r.workspace_id, parent_id: r.parent_id, title: r.title, sort_key: r.sort_key },
+      });
+      const patch: PagePatch = {};
+      if (r.icon) patch.icon = r.icon;
+      if (r.deleted_at) patch.deleted_at = r.deleted_at;
+      if (r.settings && Object.keys(r.settings).length > 0) patch.settings = r.settings;
+      if (Object.keys(patch).length > 0) ops.push({ kind: 'update', id: r.id, patch });
+    }
+
+    for (const r of this.snapshot.values()) {
+      const server = onServer.get(r.id);
+      if (!server || !(Date.parse(r.updated_at) > Date.parse(server.updated_at))) continue;
+      const patch: PagePatch = {};
+      if (r.title !== server.title) patch.title = r.title;
+      if (r.icon !== server.icon) patch.icon = r.icon;
+      if (r.parent_id !== server.parent_id) patch.parent_id = r.parent_id;
+      if (r.sort_key !== server.sort_key) patch.sort_key = r.sort_key;
+      if (r.deleted_at !== server.deleted_at) patch.deleted_at = r.deleted_at;
+      if (r.settings && JSON.stringify(r.settings) !== JSON.stringify(server.settings ?? {})) patch.settings = r.settings;
+      if (Object.keys(patch).length > 0) ops.push({ kind: 'update', id: r.id, patch });
+    }
+
+    await this.enqueueFirst(ops);
+    return ops.length;
+  }
+
+  /**
+   * Pone cambios en la cola ANTES de los que ya estaban. Lo recuperado es más viejo que lo que quedó en la
+   * cola sin subir: si fuera después, un renombre en la cola lo pisaría el título de la copia, y una
+   * página nueva en la cola adentro de una recuperada llegaría antes que su padre.
+   */
+  private async enqueueFirst(ops: TreeOp[]): Promise<void> {
+    if (ops.length === 0) return;
+    const moved = [...this.ops];
+    const now = Date.now();
+    const first: QueuedOp[] = ops.map((op) => ({ opId: crypto.randomUUID(), op, createdAt: now }));
+    const again: QueuedOp[] = moved.map(({ seq: _seq, ...rest }) => rest);
+    this.writing++;
+    try {
+      const tx = this.db.transaction('ops', 'readwrite');
+      for (const o of moved) await tx.store.delete(o.seq!);
+      for (const o of [...first, ...again]) o.seq = await tx.store.add(o);
+      await tx.done;
+    } finally {
+      this.writing--;
+    }
+    const movedSeqs = new Set(moved.map((o) => o.seq));
+    this.ops = [...first, ...again, ...this.ops.filter((o) => !movedSeqs.has(o.seq))];
+    this.recompute();
+    this.onQueued?.();
   }
 
   /** Reemplaza la copia local por el árbol completo (y los proyectos) que mandó el servidor. */

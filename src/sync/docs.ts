@@ -6,7 +6,7 @@ import {
   type DocState,
   type LocalDb,
 } from './localDb';
-import type { Remote } from './remote';
+import { APP_OUTDATED, type Remote } from './remote';
 import { errorMessage, isPermanent, type RemoteUpdate } from './types';
 
 export const ORIGIN_LOAD = Symbol('load');
@@ -23,6 +23,11 @@ interface LiveDoc {
   doc: Y.Doc;
   refs: number;
   ready: Promise<void>;
+  /**
+   * Llegó del servidor algo que esta versión no puede mostrar y no se aplicó en memoria (sí quedó
+   * guardado). La próxima vez que se abra la página se vuelve a cargar desde lo guardado.
+   */
+  stale?: boolean;
 }
 
 export interface PageDocsOptions {
@@ -33,6 +38,12 @@ export interface PageDocsOptions {
   normalize?: (doc: Y.Doc, origin: symbol) => boolean;
   /** Pone la estructura inicial en una página vacía (ver structure.ts). Devuelve si la puso. */
   seed?: (doc: Y.Doc, pageId: string, origin: symbol) => boolean;
+  /**
+   * Si esta versión de la app puede mostrar el documento sin perder nada. Si no, lo que llega del servidor
+   * se guarda pero no se aplica en el editor abierto: el editor borraría lo que no conoce, y ese borrado
+   * llegaría a todos (ver ui/unknownContent.ts).
+   */
+  supports?: (doc: Y.Doc) => boolean;
 }
 
 /**
@@ -59,6 +70,7 @@ export class PageDocs {
   onWriteError?: (message: string | null) => void;
   /** Problemas que no son de escritura local, por ejemplo un update ilegible del servidor. */
   onWarning?: (message: string) => void;
+  private readonly unsupportedListeners = new Set<(pageId: string) => void>();
 
   constructor(
     private readonly db: LocalDb,
@@ -72,6 +84,13 @@ export class PageDocs {
    */
   async open(pageId: string, { seed = false }: { seed?: boolean } = {}): Promise<Y.Doc> {
     let entry = this.live.get(pageId);
+    if (entry?.stale && entry.refs === 0) {
+      // Le falta algo que llegó del servidor: se arma de nuevo desde lo guardado. (Con alguien que todavía
+      // lo tiene abierto se sigue usando el mismo; ese alguien ya recibió el aviso.)
+      this.live.delete(pageId);
+      entry.doc.destroy();
+      entry = undefined;
+    }
     if (!entry) {
       const doc = new Y.Doc();
       const created: LiveDoc = { doc, refs: 0, ready: Promise.resolve() };
@@ -89,6 +108,35 @@ export class PageDocs {
     await entry.ready;
     if (seed) this.options.seed?.(entry.doc, pageId, ORIGIN_REPAIR);
     return entry.doc;
+  }
+
+  /** Avisa cuando llega del servidor algo que esta versión no puede mostrar en una página abierta. */
+  subscribeUnsupported(fn: (pageId: string) => void): () => void {
+    this.unsupportedListeners.add(fn);
+    return () => this.unsupportedListeners.delete(fn);
+  }
+
+  /**
+   * La base se restauró desde una copia de seguridad: el servidor ya no tiene todo lo que este dispositivo
+   * cree que tiene. Todas las páginas vuelven a subir su contenido entero (Yjs no duplica lo que el
+   * servidor ya tenga) y se bajan de nuevo desde el principio.
+   */
+  async resetForRestore(): Promise<number> {
+    await this.flush();
+    const states = await this.db.getAll('docState');
+    for (const state of states) {
+      await this.withLock(state.pageId, () =>
+        updateDocState(this.db, state.pageId, (s) => {
+          s.cursor = 0;
+          s.syncedSV = undefined;
+          s.ackedVersion = -1;
+          s.pending = undefined;
+          s.rejected = undefined;
+          s.lastError = undefined;
+        }),
+      );
+    }
+    return states.length;
   }
 
   /** Corta los reintentos de escritura (al cerrar sesión o cambiar de usuario). */
@@ -161,6 +209,14 @@ export class PageDocs {
         if (!pending) {
           if (state.version <= state.ackedVersion) break;
           const saved = await this.readSaved(pageId);
+          if (Y.encodeStateVector(saved.doc).length <= 1) {
+            // Nada que subir (una página que este dispositivo nunca tuvo con contenido): queda al día.
+            saved.doc.destroy();
+            state = await updateDocState(this.db, pageId, (s) => {
+              s.ackedVersion = Math.max(s.ackedVersion, saved.state.version);
+            });
+            continue;
+          }
           const next = {
             id: crypto.randomUUID(),
             update: Y.encodeStateAsUpdate(saved.doc, saved.state.syncedSV),
@@ -179,7 +235,8 @@ export class PageDocs {
         } catch (err) {
           await updateDocState(this.db, pageId, (s) => {
             s.lastError = errorMessage(err);
-            s.rejected = isPermanent(err) ? errorMessage(err) : undefined;
+            // Una app vieja para el workspace no es un rechazo: el contenido sube al actualizar.
+            s.rejected = isPermanent(err) && errorMessage(err) !== APP_OUTDATED ? errorMessage(err) : undefined;
           });
           throw err;
         }
@@ -259,9 +316,12 @@ export class PageDocs {
     await tx.done;
 
     const live = this.live.get(pageId);
-    if (merged && live) {
+    if (merged && live && !live.stale) {
       await live.ready;
-      this.applyToLive(live.doc, merged);
+      if (!this.applyToLive(live.doc, merged)) {
+        live.stale = true;
+        for (const fn of this.unsupportedListeners) fn(pageId);
+      }
     }
   }
 
@@ -270,19 +330,23 @@ export class PageDocs {
    * estructura, la reparación va en la MISMA transacción: el editor reacciona al final de cada
    * transacción y, si llegara a ver la estructura rota, borraría la parte que no puede mostrar.
    */
-  private applyToLive(doc: Y.Doc, update: Uint8Array): void {
-    const normalize = this.options.normalize;
+  private applyToLive(doc: Y.Doc, update: Uint8Array): boolean {
+    const { normalize, supports } = this.options;
     let needsRepair = false;
-    if (normalize) {
+    if (normalize || supports) {
       const probe = new Y.Doc();
       Y.applyUpdate(probe, Y.encodeStateAsUpdate(doc));
       Y.applyUpdate(probe, update);
-      needsRepair = normalize(probe, ORIGIN_REPAIR);
+      if (supports && !supports(probe)) {
+        probe.destroy();
+        return false;
+      }
+      needsRepair = normalize ? normalize(probe, ORIGIN_REPAIR) : false;
       probe.destroy();
     }
     if (!needsRepair) {
       Y.applyUpdate(doc, update, ORIGIN_REMOTE);
-      return;
+      return true;
     }
     // Con origen local: la reparación se guarda y se sube. Lo remoto que viaja con ella ya está en el
     // servidor, así que subirlo de nuevo no cambia nada.
@@ -290,6 +354,7 @@ export class PageDocs {
       Y.applyUpdate(doc, update);
       normalize!(doc, ORIGIN_REPAIR);
     }, ORIGIN_REPAIR);
+    return true;
   }
 
   /**

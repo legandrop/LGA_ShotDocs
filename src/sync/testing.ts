@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { PageDocs } from './docs';
+import { PageDocs, type PageDocsOptions } from './docs';
 import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
@@ -14,6 +14,7 @@ import {
   type PageRow,
   type ProjectRow,
   type RemoteUpdate,
+  type WorkspaceSettings,
 } from './types';
 
 /** Servidor en memoria con las mismas reglas que el de Supabase (ver supabase/migrations). */
@@ -36,6 +37,31 @@ export class FakeServer {
   ]);
   /** Rechaza la creación de proyectos como si faltaran permisos. */
   rejectProjects = false;
+  /** Para darle a cada restauración una generación nunca usada. */
+  static generations = 100;
+  /** `workspace_settings`; `null` simula una base sin esa migración. */
+  settings: WorkspaceSettings | null = { generation: 1, minAppVersion: null, schemaVersion: 1 };
+
+  /** Una copia de seguridad: todo lo que hay en la base en este momento. */
+  backup(): () => void {
+    const pages = new Map([...this.pages].map(([id, p]) => [id, { ...p }]));
+    const updates = new Map([...this.updates].map(([id, list]) => [id, list.map((u) => ({ ...u }))]));
+    const projects = new Map([...this.projects].map(([id, p]) => [id, { ...p }]));
+    const files = new Map(this.files);
+    /** Restaura la copia y sube la generación, como scripts/restore.sh del repo de copias. */
+    return () => {
+      this.pages.clear();
+      for (const [id, p] of pages) this.pages.set(id, { ...p });
+      this.updates.clear();
+      for (const [id, list] of updates) this.updates.set(id, list.map((u) => ({ ...u })));
+      this.projects.clear();
+      for (const [id, p] of projects) this.projects.set(id, { ...p });
+      this.files.clear();
+      for (const [path, f] of files) this.files.set(path, f);
+      // Como scripts/restore.sh: un valor que no se usó nunca, aunque la copia traiga uno viejo.
+      if (this.settings) this.settings = { ...this.settings, generation: ++FakeServer.generations };
+    };
+  }
 
   check(): void {
     if (!this.online) throw new RemoteError('Failed to fetch', false, undefined, true);
@@ -43,7 +69,15 @@ export class FakeServer {
 }
 
 export class FakeRemote implements Remote {
-  constructor(readonly server: FakeServer) {}
+  constructor(
+    readonly server: FakeServer,
+    readonly appVersion = '',
+  ) {}
+
+  async fetchWorkspaceSettings(): Promise<WorkspaceSettings | null> {
+    this.server.check();
+    return this.server.settings && { ...this.server.settings };
+  }
 
   async ensureWorkspace(): Promise<string> {
     this.server.check();
@@ -121,6 +155,10 @@ export class FakeRemote implements Remote {
     this.server.check();
     const page = this.server.pages.get(pageId);
     if (!page) throw new RemoteError('page_not_found', true, 'P0002');
+    const min = this.server.settings?.minAppVersion;
+    if (min != null && !(/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion) && Number(this.appVersion) >= min)) {
+      throw new RemoteError('app_outdated', true, 'P0001');
+    }
     const list = this.server.updates.get(pageId) ?? [];
     const existing = list.find((u) => u.clientUpdateId === clientUpdateId);
     if (existing) return existing.seq;
@@ -172,13 +210,18 @@ export interface Device {
 }
 
 /** Un dispositivo con su propia base local. Reusar `dbName` simula cerrar y volver a abrir la app. */
-export async function makeDevice(server: FakeServer, dbName: string = crypto.randomUUID()): Promise<Device> {
+export async function makeDevice(
+  server: FakeServer,
+  dbName: string = crypto.randomUUID(),
+  appVersion = '0.021',
+  docsOptions: PageDocsOptions = {},
+): Promise<Device> {
   const db = await openLocalDb(dbName);
-  const remote = new FakeRemote(server);
+  const remote = new FakeRemote(server, appVersion);
   const tree = new PageTree(db, server.workspaceId);
   await tree.load();
-  const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty });
+  const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, ...docsOptions });
   const files = new PageFiles(db, remote);
-  const engine = new SyncEngine(remote, tree, docs, files);
+  const engine = new SyncEngine(remote, tree, docs, files, { appVersion });
   return { db, tree, docs, files, engine, remote };
 }
