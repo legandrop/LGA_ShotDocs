@@ -1,0 +1,167 @@
+# Adjuntar cualquier archivo en las páginas (P.6)
+
+Estado: **diseño, antes de implementar** (2026-09-30; se audita antes y después). Lo pidió Lega: "intenté
+arrastrar un PDF y no funcionó. Deberíamos poder arrastrar cualquier tipo de archivo, como una interfaz del
+Drive: .zip, .rar, lo que sea, y que alguien lo pueda bajar desde ahí". Sale de leer el código de la rama
+`lega/acomodar`.
+
+## Qué se pide
+
+1. Arrastrar, pegar o elegir **cualquier archivo** (PDF, .zip, .rar, .exe, .psd, .nk…). Va al Drive del dueño,
+   igual que las fotos.
+2. En la página se ve como una **tarjeta con ícono** según el tipo, con nombre y tamaño.
+3. **Clic:** el primero elige y el segundo abre, como las fotos desde v0.044. Un PDF (o lo que el navegador
+   sepa mostrar) se abre en una **pestaña nueva**; un .zip, un .exe y el resto se **bajan** con su nombre.
+4. La vista previa (la primera página del PDF como miniatura), en una segunda entrega.
+
+## Reglas que no se rompen
+
+- **Ningún tipo de bloque nuevo.** El bloque `file` de BlockNote queda afuera del esquema. Un adjunto es **un
+  bloque `image` con `url: sdmedia://<uuid>`**, como las fotos y los videos: la app mira `files.mime` para
+  dibujar foto, video o tarjeta.
+- Primero en el dispositivo (IndexedDB y la cola de `src/media/queue.ts`), después al Drive por el portero,
+  registrado en `files`/`page_files`; para ver, un pase del portero. La papelera de archivos sigue igual.
+- Lo que una versión vieja no conozca se ve raro, **nunca se borra**.
+
+## 1. Qué frena hoy un PDF o un zip
+
+Cuatro frenos en la app; el portero y la base ya aceptan cualquier tipo.
+
+| Dónde | Qué hace hoy |
+|---|---|
+| `PageEditor.tsx`, `rejectOtherFiles` (pegar y soltar en captura) | **El que vio Lega.** Deja pasar solo imágenes (`isAllowedImage`) o, con portero, `image/*` y `video/*` (`isMediaFile`); con lo demás corta y avisa *Only photos and videos*. |
+| `editorSchema.ts`, `fileBlockAccept` del bloque `image` | Solo `image/*` (y `video/*` con portero). Sin el freno de arriba, BlockNote no encontraría un bloque que acepte el PDF y **crearía un bloque `file`**, que no está en el esquema. Un archivo sin `type` (.rar o .exe en Windows) nunca coincide; `*/*` tampoco sirve (compara `application` con `*`). |
+| `queue.ts`, `save` | Rechaza lo que no es foto o video y el SVG (`FileRejected`); `queue.test.ts` lo fija con `notas.pdf`. |
+| `queue.ts`, `normalizeMime` | Solo conoce extensiones de fotos y videos; un .rar sin tipo queda `application/octet-stream`. |
+| Portero, `startFileUpload` | **Acepta cualquier tipo** (usa `files.mime`), **sin tope de tamaño** (partes de hasta 64 MiB; la app manda de 8 MiB). |
+| Portero al servir (`media`, `mediaHeaders`) | `Content-Type` = `files.mime`, siempre `nosniff` y `CSP: sandbox`. **Nunca manda `Content-Disposition`**: no se puede pedir descarga ni poner el nombre. |
+| Base (`register_file`, `files`) | **No restringe el tipo** (solo la forma `tipo/subtipo`), `size bigint > 0`. |
+| Carrete (`collectCarrete`) | Mete todo `image` con `sdmedia://`: un PDF entraría y se vería *The photo couldn't be loaded*. |
+| `display()` en `queue.ts` | Un tipo desconocido muestra el recuadro gris con el ícono de foto; si lo subió otro dispositivo, además le pregunta a la base cada 60 s por una miniatura que nunca llega. |
+| Impresión, papelera, `mediaIdsInDoc` | Andan con cualquier archivo. |
+
+## 2. El modelo: el mismo bloque `image`, dibujado como tarjeta
+
+- `fileKind(mime, name)` (en `src/media/probe.ts`): `'image' | 'video' | 'file'`. Es foto o video si
+  `mediaKind(mime)` no es nulo **y** no es uno de los tipos que el navegador nunca muestra (SVG, que puede traer
+  scripts; PSD, EXR, DPX, TGA, DWG: en VFX son adjuntos). Todo lo demás es `'file'`. HEIC, TIFF, DNG y los
+  videos que no se reproducen siguen siendo media (D-17). `mediaKind` no cambia.
+- **La tarjeta sale de `display()`** como imagen SVG generada (`data:image/svg+xml`, sin scripts), igual que hoy
+  los marcadores (`placeholderUrl`, `deletedUrl`). BlockNote la pone en su `<img class="bn-visual-media">`, así
+  que **nada del editor cambia**: elegir, contorno, tiradores, barra, `rowWidth` y filas, arrastrar,
+  comentarios, marcas de hoja e impresión. Se descartaron: `showPreview: false` (un segundo dato que se
+  desincroniza), un render propio del bloque (el tipo llega después, asíncrono; lo más riesgoso) y una capa
+  encima (no sale en la impresión).
+- **Cómo es:** horizontal, 360×96 (como la lista del Drive). A la izquierda un documento con la esquina doblada
+  y la extensión (PDF, ZIP, RAR, EXE, NK…) con un color por familia (PDF rojo, comprimidos amarillo, audio
+  violeta, textos y hojas azul o verde, presentaciones naranja, ejecutables gris oscuro, 3D y proyectos
+  celeste, el resto gris; `attachmentFamily(mime, name)`). A la derecha el nombre en hasta 2 renglones (si hay
+  que cortar, en el medio, conservando la extensión) y abajo "PDF · 2,4 MB". Texto escapado y `system-ui`.
+  Variantes: sin datos todavía, de otro proyecto ("Archivo de otro proyecto"), en la papelera de Drive. Colores
+  neutros como los marcadores de hoy (una por tema, más adelante).
+- **`queue.ts`:** `save` acepta cualquier archivo con portero (solo rechaza el vacío); `normalizeMime` suma
+  extensiones que no son media (pdf, zip, rar, 7z, tar, gz, txt, csv, json, doc(x), xls(x), ppt(x), pages,
+  numbers, key, mp3, wav, aif, m4a, flac, ogg, psd, exr, svg, exe, dmg); `display()` devuelve la tarjeta y
+  **no lo anota en `missing`**; `size` llega con `fetchMediaFiles` (campo opcional en `MediaFileRow` y
+  `KnownFile`, sin cambiar la versión de la base local); método sincrónico `fileInfo(id)` (tipo, nombre,
+  tamaño, si está en el dispositivo) desde un `Map` que llenan `display()`, `source()` y `fetchMeta`;
+  `foreignTo` también para adjuntos.
+- **Una versión vieja (v0.041 en adelante)** ve el recuadro gris con el ícono de foto y el nombre; dos clics
+  abren su carrete con el aviso y *Download*, que con el portero nuevo baja el archivo con su nombre. No puede
+  agregar adjuntos. **No se pierde nada** aunque edite o mueva el bloque: no hay propiedad nueva.
+
+## 3. Clic, abrir y bajar
+
+| | Foto o video | Adjunto |
+|---|---|---|
+| Mouse, 1.er clic | Elige | Elige |
+| Mouse, 2.º clic o doble clic | Carrete | Abre (pestaña nueva) o baja, según el tipo |
+| Toque (teléfono) | Carrete | Abre o baja; tocarlo ya elegido muestra la barra |
+| Barra espaciadora con el bloque elegido | Carrete | Abre o baja |
+| Barra: *View* | Carrete | *Open*, con otro ícono |
+| Barra: *Download* | Original | Original con su nombre (forzado a descarga) |
+| Solo lectura | Un clic abre | Un clic abre o baja |
+
+- **Qué se abre (`inline`)**, una lista compartida por la app y el portero, con prueba: `application/pdf`,
+  `text/plain`, imágenes comunes y audio. **Todo lo demás se baja (`attachment`)**, incluidos HTML, XHTML, SVG,
+  XML, JS, CSV, JSON, Office, comprimidos, ejecutables y `octet-stream`.
+- **Portero:** el pase suma, firmados, `n` (el nombre, de `files.name`) y `d` (`i` o `a`, calculado de
+  `files.mime`, nunca de lo que mande la app); un pase viejo sigue valiendo y se sirve como hoy.
+  `/m/<pase>?download=1` (sin firmar) **solo puede forzar la descarga**. Una sola función arma los encabezados
+  de `media()` y de las respuestas por partes de la caché: `Content-Disposition` con `filename*` (RFC 5987),
+  `Referrer-Policy: no-referrer` (el pase no se filtra desde los links de un PDF), `nosniff` y `sandbox`; con
+  `attachment` y un tipo activo (HTML, SVG, XML, JS), `Content-Type: application/octet-stream`.
+- **La app (`src/ui/attachmentOpen.ts`, nuevo):** si el archivo está en el dispositivo, se baja con
+  `<a download>` y un `blob:`; se abre solo si es de la lista `inline`, **envuelto de nuevo con ese tipo** (un
+  `blob:` tiene el origen de la app: abrir ahí un HTML o un SVG sería peligroso). Si no está, un pase:
+  `window.open` para abrir, `?download=1` para bajar. Safari bloquea `window.open` después de un `await`: el
+  pase o el `blob:` se preparan al elegir el bloque (primer clic o `pointerdown`), así el segundo clic abre en
+  el acto; si no está listo, se abre en el mismo clic una pestaña vacía y después se la lleva a la dirección.
+- **Barra:** *Open* para un adjunto; *Download* con `?download=1` también en las fotos (baja con su nombre); sin
+  *Rename* para `sdmedia://` (la tarjeta usa `files.name`); sin *Toggle preview* para `sdmedia://`.
+
+## 4. Vista previa (entrega 2)
+
+La primera entrega es solo la tarjeta con el ícono. La segunda reusa el camino de las miniaturas (bucket
+`thumbs`, `set_file_thumb`, sin migración) con la **miniatura que ya hace Drive**, pedida por el portero (ruta
+nueva `POST /thumb`, a verificar con el permiso `drive.file`): sirve para PDF, Office, PSD y más, y no suma
+peso a la app. pdf.js (unos 350 KB comprimidos, con un historial de fallas de seguridad) solo si la de Drive no
+anda bien. Una versión vieja mostraría la miniatura como si fuera una foto.
+
+## 5. Carrete y filas
+
+- **El carrete saltea los adjuntos** (`collectCarrete` recibe qué saltear). Si uno igual entra, muestra la
+  tarjeta grande con *Open* y *Download* en vez de la foto rota.
+- Un adjunto puede tener `rowWidth`: los tamaños rápidos lo ponen en fila como a una foto. **"Acomodar en filas"
+  corta la tanda en los adjuntos** (una tarjeta de 3,75:1 desarmaría la galería); con un adjunto elegido, el
+  botón no aparece.
+
+## 6. Seguridad y tamaños
+
+- HTML, SVG, XML y JS **nunca se sirven `inline`**. `CSP: sandbox` sin `allow-scripts` y `nosniff` siguen. En
+  el origen del portero no hay sesión en cookies ni claves que robar, igual se mantienen las barreras.
+- **PDF y `sandbox`:** probablemente el visor de PDF de Chrome no carga en un documento con `CSP: sandbox`. Se
+  verifica en la entrega 1; si pasa, el PDF se sirve sin CSP (a lo sumo `frame-ancestors 'none'`), con
+  `nosniff`, `inline` y `Referrer-Policy: no-referrer`.
+- **Malware:** Drive analiza los archivos; uno marcado como malicioso responde 403 y el portero lo informa. No
+  se pide `acknowledgeAbuse`.
+- **Tamaños grandes:** portero y Drive sin tope (partes de 8 MiB que se retoman). El riesgo es el espacio del
+  dispositivo: el original queda también ahí después de subir (Doc_Decisiones). No se borra nada en esta tanda;
+  aviso (no bloqueo) al agregar algo de más de 1 GB, y un ítem nuevo del roadmap para liberar originales ya
+  subidos.
+- **Sin portero** (workspace sin Drive): como hoy, solo imágenes; lo demás se rechaza con un aviso que dice que
+  el dueño tiene que conectar Google Drive.
+
+## 7. Base de datos y versión mínima
+
+- **Sin migración:** `files.mime` acepta cualquier tipo; no se agrega `kind` (sale siempre de `mime` y del
+  nombre).
+- **Sin propiedad nueva** en el bloque: no hace falta subir `min_app_version` para proteger datos.
+- El portero sale con la misma subida que la app y sirve los pases viejos.
+
+## 8. Entregas y pruebas
+
+1. **Entrega 1:** soltar y pegar cualquier archivo (un solo manejador en captura, que toma el evento solo si
+   BlockNote lo trataría como archivos, inserta en orden un bloque `image` por archivo y usa `uploadFile`; con
+   `fileBlockAccept = ['*/*']` solo para el selector), la cola, la tarjeta, abrir y bajar, el carrete que
+   saltea, "Acomodar" que corta, el portero (pase con nombre, `?download=1`, encabezados), la papelera con el
+   ícono de tipo, textos y docs.
+2. **Entrega 2:** vista previa con la miniatura de Drive.
+3. **Opcional:** tarjeta por tema, `/Archivo` en el menú "/", audio en el carrete.
+
+Pruebas: unidad (`fileKind`, `normalizeMime`, `attachmentFamily`, la tarjeta con un nombre con `<script>` y el
+corte en el medio, la lista `inline`, la cola con `notas.pdf`, el carrete que saltea, abrir o bajar y el
+`blob:` re-tipado), portero (encabezados por tipo, `?download=1`, `filename*`, pase viejo, 206 de la caché,
+HTML como `octet-stream`), jsdom con el esquema publicado (una página con un PDF adjunto se abre, se edita y se
+mueve sin perder nada; la guarda no marca nada), jsdom con el editor nuevo (soltar `[a.pdf, b.zip, c.jpg]` da
+tres `image` en orden y ningún `file`) y de punta a punta (soltar PDF, zip y .exe, tarjeta, PDF en pestaña
+nueva con el visor, zip bajado con su nombre, sin red desde el dispositivo, impresión). A mano: Safari de Mac,
+iPhone (Safari y la app instalada), Firefox y un archivo de 1 GB.
+
+## Decisiones (a confirmar por Lega)
+
+1. Tarjeta horizontal (como la lista del Drive), no baldosa.
+2. Un toque en el teléfono sobre un zip lo baja enseguida (como una foto abre el carrete).
+3. Aviso, sin tope, al agregar algo de más de 1 GB.
+4. Sin subir `min_app_version` por los adjuntos (no hace falta).
+5. Vista previa con la miniatura de Drive, en una segunda entrega.
