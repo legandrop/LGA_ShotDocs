@@ -1,6 +1,6 @@
 # Adjuntar cualquier archivo en las páginas (P.6)
 
-Estado: **diseño, antes de implementar** (2026-09-30; se audita antes y después). Lo pidió Lega: "intenté
+Estado: **auditado antes de implementar** (2026-09-30). "Correcciones de la auditoría previa" manda sobre lo anterior. Lo pidió Lega: "intenté
 arrastrar un PDF y no funcionó. Deberíamos poder arrastrar cualquier tipo de archivo, como una interfaz del
 Drive: .zip, .rar, lo que sea, y que alguien lo pueda bajar desde ahí". Sale de leer el código de la rama
 `lega/acomodar`.
@@ -165,3 +165,64 @@ iPhone (Safari y la app instalada), Firefox y un archivo de 1 GB.
 3. Aviso, sin tope, al agregar algo de más de 1 GB.
 4. Sin subir `min_app_version` por los adjuntos (no hace falta).
 5. Vista previa con la miniatura de Drive, en una segunda entrega.
+
+## Correcciones de la auditoría previa (mandan sobre lo de arriba)
+
+Una auditoría independiente contrastó el diseño con el código. El modelo (mismo bloque `image`, sin propiedades
+nuevas, sin migración) se mantiene. Cambios:
+
+1. **Todo `blob:` que sale de un original se envuelve de nuevo:** `application/octet-stream` para bajar, y para
+   abrir solo los tipos de la lista `inline`. Vale también para el carrete y la barra de hoy (con adjuntos, un
+   original puede ser HTML o SVG, y un `blob:` tiene el origen de la app).
+2. **El portero se publica aparte** (en la cuenta de cada dueño, puede atrasarse): la app nueva tiene que andar con
+   un portero viejo. `/pass` suma una marca (`named: true`); sin ella, las descargas siguen con un nombre feo y el
+   diálogo de Drive avisa que conviene actualizar el portero. Los pases guardados sin nombre no se usan para bajar.
+3. **Portero:** el `d` no va en el pase: se calcula al servir a partir de `t` (ya firmado), así los pases viejos
+   también reciben los encabezados seguros. Solo se suma `n` (el nombre), firmado. `Content-Type` = `t` solo si
+   está en una lista permitida (imágenes menos SVG, video, audio, PDF, texto plano); si no, `octet-stream` y
+   `attachment`. `video/*` también es `inline`. Una función de encabezados para `media()` y la caché por partes;
+   `filename*` bien codificado (también `'()*`) más `filename` en ASCII; sin caracteres de control ni bidi. PDF sin
+   `sandbox` si la prueba confirma que el visor no carga con él. 403 de Drive por malware o por Drive lleno, con
+   códigos fijos (la cola deja de reintentar un Drive lleno). La caché del arranque, solo para videos.
+4. **Soltar y pegar:** pegar por la opción `pasteHandler` del editor (si hay `Files` y no hay HTML de BlockNote,
+   `text/html` ni de VS Code); soltar en captura solo si se puede editar y el destino está en el editor, sin
+   procesar dos veces el mismo `DataTransfer` (el menú lateral reenvía el evento), copiando la lista de archivos en
+   el acto (BlockNote la lee después de un `await` y con varios archivos entra solo el primero). Todos los bloques
+   se insertan de una vez, en orden, con `url: ""` y `name`; después se guarda cada uno (`uploadFile`) y un error
+   no corta los demás. Se inserta siempre (no se reemplaza un bloque vacío, salvo un párrafo común). Las carpetas se
+   rechazan pidiendo que se compriman. Una guarda en `window` evita que soltar un archivo afuera del editor (o en
+   solo lectura) abra el PDF en la pestaña y reemplace la app. El conversor de imágenes `data:` sigue solo para
+   media.
+5. **`display()`:** la tarjeta se guarda en caché (sin preguntar a la base en cada dibujo); `refreshMissing` pasa
+   de "todavía no está" a adjunto cuando aparece la fila; las variantes (borrado, de otro proyecto) tienen la misma
+   forma; los nombres se limpian (controles, bidi, pares sustitutos) y el texto se corta midiéndolo.
+6. **La tarjeta tiene tamaño fijo** (360 px, `max-width: 100%`): sin tiradores, sin tamaños rápidos ni "Acomodar",
+   y `rowWidth`/`previewWidth` se ignoran al dibujarla; sin lupa. "Acomodar" y el carrete cortan en los adjuntos
+   con un dato sincrónico (`fileInfo`, y mientras tanto la extensión de `name`).
+7. **`localImage`, la miniatura y `foreignTo`** usan `fileKind`; la papelera muestra el ícono del tipo.
+8. **Espacio:** antes de guardar algo grande, `navigator.storage.estimate()` con margen (si no entra, se avisa y no
+   se agrega: el texto de las páginas vive en la misma cuota); `navigator.storage.persist()` al empezar.
+9. **En pantallas táctiles, un toque en un adjunto abre una hoja** con la tarjeta grande y *Open*, *Download* y
+   *Share* (el pase se prepara mientras está abierta; cada botón es un gesto nuevo, sin pestañas vacías). Con el
+   mouse, el segundo clic abre si el pase está listo y si no, la misma hoja. En iOS, para lo que está en el
+   dispositivo, *Share* con `navigator.share({ files })` ("Guardar en Archivos").
+10. **Nunca se agrega nada a `sdmedia://<uuid>`** (las versiones viejas dejarían de reconocer el archivo y lo
+    mandarían a la papelera).
+
+### Orden
+
+1. **Entrega 1a, portero** (compatible con la app de hoy, que gana los nombres en las descargas), con pruebas.
+2. **Entrega 1b, app:** `fileKind` y `normalizeMime`, nombres limpios, `blob:` envueltos, tarjeta y `display()`,
+   el manejador de archivos, abrir y bajar (computadora: segundo clic y barra; teléfono: la hoja), carrete y
+   "Acomodar" que cortan, impresión y papelera, espacio.
+3. Después: vista previa con la miniatura de Drive, tarjeta por tema, `/Archivo`.
+
+### Decisiones tomadas (a confirmar por Lega)
+
+- Los originales de los adjuntos **se quedan en el dispositivo** después de subir, como las fotos (borrarlos es
+  otra decisión, pendiente).
+- En el teléfono, un toque abre la hoja (no baja enseguida).
+- Una carpeta se rechaza pidiendo que se comprima.
+- Sin tope de archivos por tanda.
+- Con un portero sin actualizar, los adjuntos se pueden agregar y se bajan con un nombre feo; el diálogo de Drive
+  avisa que conviene actualizar el portero.
