@@ -71,6 +71,7 @@ function services(d: Device): Services {
     mediaDb: d.mediaDb,
     comments: d.comments,
     commentsDb: d.commentsDb,
+    sizes: d.sizes,
     shutdown: async () => undefined,
   };
 }

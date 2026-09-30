@@ -13,6 +13,7 @@ import {
   type DueFileRow,
   type MediaFileRow,
   type NewMediaFile,
+  type ProjectSizeRow,
   type TrashedFileRow,
   type RemoteUpdate,
   type WorkspaceSettings,
@@ -156,6 +157,19 @@ export interface MediaRemote {
 }
 
 /**
+ * El peso de los proyectos en el Drive (P.7, supabase/migrations/20260930190000_peso_proyectos.sql). Aparte
+ * de `MediaRemote`: solo lo pide el store de `src/media/projectSizes.ts`, así las pruebas no tienen que
+ * simularlo.
+ */
+export interface SizesRemote {
+  /**
+   * Una fila por proyecto cuya papelera de archivos ve la sesión (y, solo al dueño, la de los que no ve).
+   * `null` si la base todavía no tiene la función (`PGRST202`).
+   */
+  projectSizes(): Promise<ProjectSizeRow[] | null>;
+}
+
+/**
  * Lo que devuelven `register_file` y `link_page_file` (versión 6 de la base): `'ok'`, o
  * `'file_other_project'` (sin error) cuando guardaron el uso de un archivo de otro proyecto. Una base anterior
  * no devuelve nada: cuenta como `ok`.
@@ -271,7 +285,23 @@ function storageStatus(error: { name?: string; message: string }): number {
   return Number((error as { status?: number; statusCode?: string }).status ?? (error as { statusCode?: string }).statusCode ?? 0);
 }
 
-export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
+/** Una fila de `project_sizes` como llega (los `bigint` pueden venir como texto). */
+export function parseProjectSize(row: Record<string, unknown>): ProjectSizeRow {
+  const n = (v: unknown) => Number(v) || 0;
+  return {
+    project_id: typeof row.project_id === 'string' ? row.project_id : null,
+    drive_bytes: n(row.drive_bytes),
+    drive_files: n(row.drive_files),
+    trash_bytes: n(row.trash_bytes),
+    trash_files: n(row.trash_files),
+    drive_trash_bytes: n(row.drive_trash_bytes),
+    drive_trash_files: n(row.drive_trash_files),
+    pending_bytes: n(row.pending_bytes),
+    pending_files: n(row.pending_files),
+  };
+}
+
+export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRemote {
   /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
   private settingsMissingAt = 0;
 
@@ -670,6 +700,13 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       in_trashed_page: r.in_trashed_page === true,
       trashed_page_title: r.trashed_page_title ?? r.page_title ?? r.trashed_page ?? null,
     }));
+  }
+
+  async projectSizes(): Promise<ProjectSizeRow[] | null> {
+    const { data, error, status } = await timed(this.client.rpc('project_sizes'));
+    if (error?.code === MISSING_FUNCTION) return null;
+    if (error) throw toRemoteError(error, status);
+    return ((data ?? []) as Record<string, unknown>[]).map(parseProjectSize);
   }
 
   async filesDueForPurge(projectId: string): Promise<DueFileRow[]> {

@@ -4,6 +4,7 @@ import { stored, t } from './i18n';
 import { pendingInviteTarget } from './invite';
 import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
+import { ProjectSizes, type SizesView } from './media/projectSizes';
 import { foreignFileNotice, MediaQueue } from './media/queue';
 import { notify } from './ui/notice';
 import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/access';
@@ -45,6 +46,8 @@ export interface Services {
   comments: CommentQueue;
   /** `null` si la base de comentarios no se pudo abrir (se leen con red, no se escriben). */
   commentsDb: CommentsDb | null;
+  /** Cuánto ocupa cada proyecto en el Drive (P.7), con la última respuesta guardada en el dispositivo. */
+  sizes: ProjectSizes;
   /** Para la sincronización y cierra las bases del dispositivo (antes de borrarlas). */
   shutdown: () => Promise<void>;
 }
@@ -75,6 +78,12 @@ export function usePermissions(): Permissions {
   const tree = useTree();
   useSyncExternalStore(access.subscribe, access.getRevision);
   return new Permissions(tree, access.get(), user.id);
+}
+
+/** El peso de los proyectos en el Drive (P.7); re-renderiza cuando llega una respuesta nueva. */
+export function useProjectSizes(): SizesView {
+  const { sizes } = useServices();
+  return useSyncExternalStore(sizes.subscribe, sizes.getSnapshot);
 }
 
 /** La base dijo que sacaron a la persona del workspace. */
@@ -240,12 +249,15 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         unavailable: commentsProblem,
       });
       await comments.load().catch(() => undefined);
+      const sizes = new ProjectSizes(db, remote);
+      await sizes.load().catch(() => undefined);
       const engine = new SyncEngine(remote, tree, docs, files, {
         appVersion: __APP_VERSION__,
         schemaVersion: DB_SCHEMA_VERSION,
         media,
         access,
         comments,
+        sizes,
       });
       if (cancelled) {
         mediaDb?.close();
@@ -294,6 +306,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           mediaDb,
           comments,
           commentsDb,
+          sizes,
           shutdown,
         },
       });

@@ -53,6 +53,7 @@ function services(d: Device, userId: string, signOut = vi.fn(async () => ({ erro
     mediaDb: d.mediaDb,
     comments: d.comments,
     commentsDb: d.commentsDb,
+    sizes: d.sizes,
     shutdown: async () => undefined,
   };
 }

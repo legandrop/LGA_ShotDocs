@@ -257,6 +257,7 @@ describe('cambio de idioma', () => {
       mediaDb: d.mediaDb,
       comments: d.comments,
       commentsDb: d.commentsDb,
+      sizes: d.sizes,
       shutdown: async () => undefined,
     };
     const host = await mount(

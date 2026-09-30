@@ -95,15 +95,22 @@ function PagesTrash({ projectId }: { projectId: string }) {
 
 type Loaded = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; files: TrashedFileRow[] };
 
-/** Lo que dice la confirmación: adónde van, cómo se recuperan y el riesgo que anota el plan. */
-function confirmText(question: string, many: boolean): string {
+/**
+ * Lo que dice la confirmación: adónde van, cómo se recuperan y el riesgo que anota el plan. Al vaciar,
+ * además cuánto pasa a la papelera de Drive (que no libera nada hasta que Google la vacía).
+ */
+function confirmText(question: string, many: boolean, space?: string): string {
   const where = many ? t('fileTrash.whereMany') : t('fileTrash.whereOne');
-  return `${question}\n\n${where}\n\n${unsyncedUseWarning()}`;
+  return [question, where, space, unsyncedUseWarning()].filter(Boolean).join('\n\n');
+}
+
+function sumSizes(files: TrashedFileRow[]): number {
+  return files.reduce((sum, f) => sum + (Number.isFinite(f.size) ? f.size : 0), 0);
 }
 
 /** Las fotos y los videos que ninguna página usa. Solo con red: lo que dice la base y el portero. */
 function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllowed: () => void }) {
-  const { media, remote } = useServices();
+  const { media, remote, sizes } = useServices();
   const perms = usePermissions();
   const status = useSyncStatus();
   const canPurge = perms.canPurgeFiles(projectId);
@@ -184,7 +191,9 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
     const what = list.length === 1 ? `“${list[0].name}”` : t('fileTrash.allFiles', { count: list.length });
     const kept = files.length - list.length;
     const skip = kept > 0 ? ` ${t('fileTrash.kept', { count: kept })}` : '';
-    if (!confirm(confirmText(t('fileTrash.confirmEmpty', { what, skip }), list.length > 1))) return;
+    // Solo lo que se va a mandar (sin los que usa una página de la papelera).
+    const space = t('fileTrash.emptySpace', { size: formatSize(sumSizes(list)) });
+    if (!confirm(confirmText(t('fileTrash.confirmEmpty', { what, skip }), list.length > 1, space))) return;
     setProgress({ done: 0, total: list.length });
     let refresh = false;
     const byId = new Map(list.map((f) => [f.id, f]));
@@ -202,6 +211,8 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
       },
       stop,
     );
+    // El peso de los proyectos cambió: se vuelve a pedir una vez, al terminar (aunque se haya cerrado la vista).
+    void sizes.refresh();
     if (!live.current) return;
     setProgress(null);
     const outcomes = [...results.values()];
@@ -240,6 +251,9 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
       {loaded.state === 'ready' && files.length === 0 && <p className="muted">{tr('fileTrash.none')}</p>}
       {loaded.state === 'ready' && files.length > 0 && (
         <>
+          <p className="muted">
+            {tr('fileTrash.total', { count: files.length, size: formatSize(sumSizes(files), tr.lang) })}
+          </p>
           {canPurge && (
             <div className="row trash-files-actions">
               <button

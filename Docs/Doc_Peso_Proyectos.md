@@ -1,6 +1,6 @@
 # Cuánto ocupa cada proyecto en el Drive (P.7), y la lista por peso (P.8)
 
-Estado: **auditado antes de implementar** (2026-09-30). "Correcciones de la auditoría previa" manda sobre lo anterior. Pedido de Lega: "sería
+Estado: **primera entrega hecha (v0.050)**; la migración falta aplicarla en Wanka (ver "Cómo quedó", al final). "Correcciones de la auditoría previa" manda sobre lo anterior. Pedido de Lega: "sería
 bueno tener el peso en Drive de cada proyecto, de alguna forma que esté visible, tal vez al momento de elegir
 proyectos… para que el usuario vea 'este proyecto me está ocupando 30 gigas en el Drive'. Más adelante (no
 urgente) ver toda la media ordenada por peso, cliquear e ir a la página donde está, y decidir si la deja, la
@@ -158,3 +158,68 @@ Todo como se propuso: ven el peso quienes ven la papelera de archivos; el númer
 Drive, que se muestra aparte ("+ 2 GB en la papelera de Drive"); la fila de "proyectos que no ves" en el diálogo
 de Drive. **Autorizó aplicar la migración** en producción cuando esté lista y auditada (con la copia de
 seguridad antes).
+
+## Cómo quedó (primera entrega, v0.050)
+
+Lo de la corrección 7, con las correcciones aplicadas. Donde este texto y las secciones de arriba no
+coinciden, vale este.
+
+**La base** (`supabase/migrations/20260930190000_peso_proyectos.sql`, sin aplicar en Wanka todavía).
+`public.project_sizes()` devuelve `project_id`, `drive_bytes`/`drive_files` (el número principal: en uso más
+la papelera de la app), `trash_bytes`/`trash_files` (papelera de la app), `drive_trash_bytes`/`drive_trash_files`
+(papelera de Drive, menos de 30 días) y `pending_bytes`/`pending_files` (sin subir). Bytes en `bigint`,
+archivos en `int`. Los estados son excluyentes y en el orden de la corrección 1; se suma solo `files` por
+`files.project_id`. La puerta (`private.can_see_file_trash`) va en un CTE materializado, una vez por proyecto;
+para alguien sin permisos no se recorre ningún archivo. La fila sin proyecto sale solo para
+`private.workspace_role() = 'owner'` y solo si hay algún proyecto cuya papelera no ve (un proyecto privado de
+otro, o uno donde tiene permiso solo sobre páginas sueltas). `language sql`, `stable`, `security definer`,
+`search_path = ''`, sin `public` ni `anon`, `schema_version` a 7 y `notify pgrst`.
+
+**La prueba** (`supabase/tests/peso_proyectos_permisos.sql`) tiene los casos del diseño y de la corrección 9.
+Como la base real ya tiene proyectos que la dueña de la prueba no ve, la fila sin proyecto se compara contra
+lo que daba antes de crear los dos proyectos ocultos de la prueba. Corrida con la migración dentro de una
+transacción que se deshace (Management API): `[{"result":"ok"}]`, y después `to_regproc('public.project_sizes')`
+nulo y `schema_version` en 6.
+
+**La app.**
+
+- `ProjectSizeRow` en `src/sync/types.ts`; `projectSizes()` en `SupabaseRemote` (con su tope `timed()`,
+  `Number()` en cada campo, `null` con `PGRST202`), en una interfaz aparte (`SizesRemote`) para no obligar al
+  `FakeRemote`. En las pruebas, `FakeServer.sizes` responde lo que se le ponga (las reglas ya las prueba el SQL).
+- `src/media/projectSizes.ts`: el store, sin React, con la última respuesta en `meta.projectSizes` (`{ rows, at }`).
+  `SIZES_SCHEMA_VERSION = 7`; `DB_SCHEMA_VERSION` sigue en 6 (corrección 2). La sincronización le pasa la
+  versión de la base en cada vuelta (`SyncEngine`, opción `sizes`; 0 si la base no tiene ajustes). Mientras no
+  se sabe la versión (se abrió sin red) muestra lo guardado y deja el pedido para cuando se sepa; con una versión
+  menor que 7 no pide y no muestra. Un `PGRST202` borra lo guardado y no vuelve a probar por 10 minutos. Los 5
+  minutos del selector cuentan desde el último intento (también uno fallido); dos pedidos a la vez son uno.
+  Sin red queda lo último y la vista lo dice.
+- Pedidos: al abrir el selector si pasaron 5 minutos, siempre al abrir el diálogo de Drive y con "Volver a
+  calcular", y una vez al terminar un vaciado de la papelera de archivos (aunque se haya cerrado la vista).
+- `formatSize` (`src/media/fileTrash.ts`) es la única función de formato: base 1024, KB, MB, GB y TB, un decimal
+  por debajo de 100 y ninguno desde 100, sin ",0"; pasa a la unidad de arriba cuando el número llegaría a 1000
+  (nunca "1000 MB"); algo de menos de 0,1 KB se muestra como 0,1 KB. Acepta el idioma para las pruebas. Las
+  tarjetas de adjuntos y la papelera ahora dicen "3 MB" en vez de "3,0 MB".
+- Selector (`src/ui/ProjectSwitcher.tsx`): "páginas · peso · editado", el peso antes de la fecha (el "…" corta la
+  fecha). Sin peso en cero, ni si los permisos del dispositivo dicen que la persona no ve la papelera de archivos
+  de ese proyecto (un valor guardado viejo no se muestra).
+- Diálogo de Google Drive (`src/ui/DriveDialog.tsx`, solo el dueño): "Espacio en Drive: 34,2 GB en 1203
+  archivos" (suma todas las filas, también la de los proyectos que no ve: es lo que ocupa su Drive), "+ 2 GB en
+  la papelera de Google Drive" al lado, el desglose en una línea (de eso en la papelera de la app, todavía
+  subiendo con cuántos archivos, en proyectos que no ves), la nota de qué cuenta (corrección 8) y "Actualizado
+  14:32 · Volver a calcular"; sin red, "Sin conexión: último cálculo del…". Con una base sin la función la
+  sección no aparece. Los textos van en la parte que se baja con el diálogo (`src/i18n/lazy/drive.ts`).
+- Papelera → Archivos (`src/ui/TrashView.tsx`): "14 archivos · 2,1 GB" arriba (sumado en el cliente, todo lo de
+  la lista) y la confirmación de vaciar suma solo lo que se va a mandar: "2,1 GB pasan a la papelera de Google
+  Drive. El espacio en Drive se libera cuando Google vacía su papelera (a los 30 días), no enseguida."
+
+**Pruebas de la app:** `src/media/projectSizes.test.ts` (el store: 5 minutos, sin red, abrir sin red, versión 6
+no llama, `PGRST202` y sus 10 minutos, un proyecto que deja de venir, la fila sin proyecto, pedidos juntos; el
+remoto de Supabase; `formatSize` en los dos idiomas), `src/ui/projectSizes.test.tsx` (jsdom: el selector, el
+permiso en el dispositivo, el diálogo con el desglose, "Volver a calcular" y sin red, y sin la función) y una más
+en `src/ui/trashView.test.tsx` (el total, la confirmación y el pedido al terminar de vaciar).
+
+**Queda para después:** la lista por proyecto en el diálogo y el orden por peso (con P.8); verificar a mano
+la base 1024 con un archivo conocido en el Drive de Lega y el total de un proyecto contra su carpeta; aplicar la
+migración en Wanka (autorizada por Lega: copia de seguridad antes, `npm run db:migrate`, `npm run db:test`); el
+hueco de la corrección 10, en una tarea aparte.
+

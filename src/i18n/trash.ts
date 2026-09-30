@@ -66,6 +66,14 @@ export const trash = {
     en: "Empty the file trash: send {what}{skip} to the Google Drive trash?",
     es: "Vaciar la papelera de archivos: ¿mandar {what}{skip} a la papelera de Google Drive?",
   },
+  'fileTrash.emptySpace': {
+    en: "{size} go to the Google Drive trash. The space in Drive is freed when Google empties its trash (after 30 days), not right away.",
+    es: "{size} pasan a la papelera de Google Drive. El espacio en Drive se libera cuando Google vacía su papelera (a los 30 días), no enseguida.",
+  },
+  'fileTrash.total': {
+    en: { one: "{count} file · {size}", other: "{count} files · {size}" },
+    es: { one: "{count} archivo · {size}", other: "{count} archivos · {size}" },
+  },
   'fileTrash.someFailed': {
     en: "{failed} of {total} could not be sent. They stay in the list with the reason.",
     es: "{failed} de {total} no se pudieron mandar. Quedan en la lista con el motivo.",

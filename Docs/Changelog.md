@@ -1,5 +1,18 @@
 # Changelog — LGA Shot Docs
 
+v0.050 :
+
+Cuánto ocupa cada proyecto en el Drive (P.7, primera entrega). El selector de proyectos lo muestra en el
+renglón de cada uno ("12 páginas · 3,4 GB · editado hoy") a quien ve su papelera de archivos; el diálogo de
+Google Drive (solo el dueño) da el total de lo que la app subió, lo que está además en la papelera de Drive,
+el desglose (papelera de la app, todavía subiendo, proyectos que no ves), qué cuenta y qué no, y "Volver a
+calcular"; la papelera de archivos muestra su total arriba, y la confirmación de vaciar dice cuánto pasa a la
+papelera de Drive y que el espacio se libera recién cuando Google la vacía (30 días). Lo calcula la base
+(`project_sizes`, migración nueva, versión 7) y queda guardado en el dispositivo: sin red, el último valor.
+Con una base sin migrar no se muestra y nada más cambia. Los pesos se escriben con una sola regla (un decimal
+por debajo de 100, sin ",0", hasta TB).
+[ Peso de los proyectos - primera entrega ]
+
 v0.049 :
 
 Se puede adjuntar cualquier archivo: un PDF, un zip, un rar, un exe, un proyecto de Nuke… Se arrastra o se

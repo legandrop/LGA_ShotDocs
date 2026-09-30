@@ -4,6 +4,7 @@ import { mediaDbName, openMediaDb, type MediaDb } from '../media/mediaDb';
 import { AccessStore, levelValue, parseAccess, Permissions, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import { Portero } from '../media/portero';
 import type { Probe } from '../media/probe';
+import { ProjectSizes } from '../media/projectSizes';
 import { MediaQueue } from '../media/queue';
 import { PageDocs, type PageDocsOptions } from './docs';
 import { SyncEngine } from './engine';
@@ -28,6 +29,7 @@ import {
   type MediaFileRow,
   type TrashedFileRow,
   type NewMediaFile,
+  type ProjectSizeRow,
   type NewPage,
   type NewProject,
   type PagePatch,
@@ -48,6 +50,13 @@ export class FakeServer {
   maxUpdateBytes = 8 * 1024 * 1024;
   /** Hace fallar las subidas de archivos como si se cortara la red. */
   failUploads = false;
+  /**
+   * Lo que responde `project_sizes` (P.7) a cualquier sesión, tal cual; `null`, como una base sin la función.
+   * El servidor en memoria no lo calcula: las reglas están probadas en supabase/tests/peso_proyectos_permisos.sql.
+   */
+  sizes: ProjectSizeRow[] | null = null;
+  /** Cuántas veces se pidió `project_sizes`. */
+  sizesCalls = 0;
   readonly pages = new Map<string, PageRow>();
   readonly updates = new Map<string, { seq: number; clientUpdateId: string; data: Uint8Array }[]>();
   readonly files = new Map<string, { data: ArrayBuffer; mime: string }>();
@@ -147,6 +156,13 @@ export class FakeServer {
   enableTrash(): void {
     this.enableTeam();
     this.settings = { ...this.settings!, schemaVersion: 6, mediaUrl: PORTERO_URL, autoPurgeFiles: false };
+  }
+
+  /** El peso de los proyectos (P.7): base en la versión 7, con la papelera, y `project_sizes` sin filas. */
+  enableSizes(rows: ProjectSizeRow[] = []): void {
+    this.enableTrash();
+    this.settings = { ...this.settings!, schemaVersion: 7 };
+    this.sizes = rows;
   }
 
   /** `private.page_alive`: la página existe y ni ella ni ninguna de arriba está en la papelera de páginas. */
@@ -1248,6 +1264,7 @@ export interface Device {
   access: AccessStore;
   comments: CommentQueue;
   commentsDb: CommentsDb;
+  sizes: ProjectSizes;
 }
 
 /** Un dispositivo con su propia base local. Reusar `dbName` simula cerrar y volver a abrir la app. */
@@ -1289,8 +1306,16 @@ export async function makeDevice(
   const commentsDb = await openCommentsDb(commentsDbName(dbName));
   const comments = new CommentQueue(commentsDb, remote, remote.userId, { now: () => Date.now() + server.clockOffset });
   await comments.load();
-  const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media, access, comments });
-  return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb };
+  const sizes = new ProjectSizes(db, {
+    projectSizes: async () => {
+      server.check();
+      server.sizesCalls++;
+      return server.sizes && server.sizes.map((r) => ({ ...r }));
+    },
+  });
+  await sizes.load();
+  const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media, access, comments, sizes });
+  return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb, sizes };
 }
 
 /** Lo que se corta al matar la app (un dispositivo, o la versión publicada sin motor). */

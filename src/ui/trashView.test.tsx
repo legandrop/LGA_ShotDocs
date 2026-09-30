@@ -54,6 +54,7 @@ function services(d: Device, userId: string): Services {
     mediaDb: d.mediaDb,
     comments: d.comments,
     commentsDb: d.commentsDb,
+    sizes: d.sizes,
     shutdown: async () => undefined,
   };
 }
@@ -201,5 +202,35 @@ describe('papelera: pestaña Archivos', () => {
     await vi.waitFor(() => expect(hostLead.textContent).toContain('IMG_0042.JPG'));
     expect(byText(hostLead, 'Send to Drive trash')).toBeUndefined();
     expect(byText(hostLead, 'Empty')).toBeUndefined();
+  });
+});
+
+describe('papelera: el peso de los archivos (P.7)', () => {
+  it('muestra el total arriba y la confirmación de vaciar dice cuánto pasa a la papelera de Drive, sin prometer que libera', async () => {
+    const { server, owner } = await trashedPhoto();
+    server.enableSizes();
+    await sync(owner);
+    const calls = server.sizesCalls;
+    const host = await mount(services(owner, server.ownerId));
+    await act(async () => byText(host, 'Files')!.click());
+    await vi.waitFor(() => expect(host.textContent).toContain('1 file · 2 KB'));
+
+    const confirm = vi.fn((_message: string) => false);
+    vi.stubGlobal('confirm', confirm);
+    await act(async () => byText(host, 'Empty')!.click());
+    const message = confirm.mock.calls[0]?.[0] ?? '';
+    expect(message).toContain('2 KB go to the Google Drive trash');
+    expect(message).toMatch(/freed when Google empties its trash \(after 30 days\)/);
+    expect(message).not.toMatch(/\bfrees\b/);
+    expect(server.sizesCalls).toBe(calls);
+
+    // Al terminar de vaciar se vuelve a pedir el peso, una sola vez.
+    confirm.mockReturnValue(true);
+    await act(async () => byText(host, 'Empty')!.click());
+    await vi.waitFor(async () => {
+      await settle();
+      expect(host.textContent).toContain('No files in the trash.');
+    });
+    expect(server.sizesCalls).toBe(calls + 1);
   });
 });
