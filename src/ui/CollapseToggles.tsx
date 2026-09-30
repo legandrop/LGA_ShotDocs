@@ -59,7 +59,7 @@ export function CollapseToggles({ editor, host, editable }: { editor: AnyEditor;
     return () => editor.unregisterPortalElement(el);
   }, [editor]);
 
-  // Se vuelve a medir con cada cambio del documento, de lo colapsado o del tamaño, agrupado por cuadro.
+  // Se vuelve a medir con cada cambio del documento, de lo colapsado, del tamaño o del tema, agrupado por cuadro.
   useEffect(() => {
     const view = editor.prosemirrorView;
     const bump = () => {
@@ -77,6 +77,10 @@ export function CollapseToggles({ editor, host, editable }: { editor: AnyEditor;
     if (el) resize?.observe(el);
     window.addEventListener('resize', bump);
     document.fonts?.addEventListener?.('loadingdone', bump);
+    // El tema, la letra o el tamaño del texto cambian el color y las medidas del título sin tocar el documento
+    // (prefs.ts los pone en `<html>`): el color del triángulo con el mouse encima no queda el del tema de antes.
+    const prefsObserver = typeof MutationObserver === 'function' ? new MutationObserver(bump) : null;
+    prefsObserver?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-font', 'data-text-size', 'data-page-width'] });
     bump();
     return () => {
       if (frame.current !== null) {
@@ -89,6 +93,7 @@ export function CollapseToggles({ editor, host, editable }: { editor: AnyEditor;
       resize?.disconnect();
       window.removeEventListener('resize', bump);
       document.fonts?.removeEventListener?.('loadingdone', bump);
+      prefsObserver?.disconnect();
     };
   }, [editor, host]);
 

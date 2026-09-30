@@ -16,7 +16,8 @@ Arrastrar los puntos sigue moviendo el bloque. Arreglado: después de borrar un 
 apretar Ctrl+Z varias veces, y los primeros deshacían otras cosas. El foco quedaba afuera del editor y el
 deshacer propio del navegador cambiaba el texto como si fuera una edición nueva; ahora ese deshacer hace el de la
 página, cada borrado de bloques enteros es un solo Ctrl+Z (aunque se haga enseguida después de escribir) y los
-puntos dejan el foco en el editor.
+puntos dejan el foco en el editor. El triángulo vuelve a tomar el color del título al cambiar el tema en vivo
+(antes, en el oscuro quedaba negro con el mouse encima y no se veía).
 [ Menú del bloque - tres puntos, barra entera y deshacer ]
 
 v0.057 :
