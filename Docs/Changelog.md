@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.048 :
+
+El portero les pone su nombre a las descargas y sirve cualquier archivo de forma segura (primera parte de
+los adjuntos, `Doc_Adjuntos.md`). Un PDF, una foto, un video, un audio o un texto se muestran en el
+navegador; todo lo demás (un zip, un exe, una página web) se baja siempre, nunca se abre como página. El
+pase lleva el nombre del archivo (firmado, sale de la base) y `?download=1` pide la descarga. Si Google Drive
+se llena o marca un archivo como peligroso, el portero lo dice con un código propio. La caché del arranque
+queda solo para los videos. Los pases de antes siguen valiendo.
+[ Portero - nombres y encabezados seguros ]
+
 v0.047 :
 
 En el teléfono, las fotos y videos en fila se ven en fila, como en la computadora, o uno debajo del otro:

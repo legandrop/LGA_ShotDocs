@@ -150,6 +150,8 @@ const OLD_NAMES: Record<string, string> = { [ROOT_FOLDER]: 'LGA Shot Docs', [TES
 const PASS_MS = 8 * 60 * 60 * 1000;
 /** Una parte de subida no puede pasar esto (el plan gratis de Workers acepta hasta 100 MB por pedido). */
 const MAX_CHUNK = 64 * 1024 * 1024;
+/** Tope del nombre de un archivo en un pase, en caracteres (el de casi todos los sistemas). */
+const NAME_MAX = 255;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DRIVE_ID = /^[\w-]{10,200}$/;
 const DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
@@ -175,11 +177,19 @@ export class HttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
-    /** Un código fijo para que la app decida sin leer el texto (por ahora, los de `/trash`). */
+    /** Un código fijo para que la app decida sin leer el texto (los de `/trash`, `abusive`, `drive_full`). */
     readonly code?: string,
   ) {
     super(message);
   }
+}
+
+/**
+ * El Drive del dueño está lleno (`storageQuotaExceeded`): un código fijo para que la app no siga
+ * reintentando sola hasta que el dueño libere espacio.
+ */
+function driveFull(): HttpError {
+  return new HttpError(507, 'The Google Drive of the workspace owner is full: free up space in it and try again.', 'drive_full');
 }
 
 // --- utilidades -------------------------------------------------------------------------------------
@@ -787,6 +797,7 @@ export class Portero {
       body: JSON.stringify(meta),
     });
     const session = res.headers.get('Location');
+    if (res.status === 403 && (await driveReasons(res)).includes('storageQuotaExceeded')) throw driveFull();
     if (!res.ok || !session) throw new HttpError(502, `Google Drive did not start the upload (${res.status}).`);
     const uploadId = randomId();
     const upload: Upload = { session, user: who.userId, size, createdAt: Date.now(), ...(file ? { file } : {}) };
@@ -835,6 +846,8 @@ export class Portero {
       await this.store.delete(`upload:${uploadId}`);
       throw new HttpError(410, 'Google Drive dropped this upload: start it again.');
     }
+    // La subida queda guardada: cuando el dueño libere espacio, la app la retoma desde lo que llegó.
+    if (res.status === 403 && (await driveReasons(res)).includes('storageQuotaExceeded')) throw driveFull();
     throw new HttpError(502, `Google Drive answered ${res.status} to a part of the upload.`);
   }
 
@@ -975,19 +988,24 @@ export class Portero {
     return secret;
   }
 
-  private async makePass(req: Request, who: Who): Promise<{ url: string }> {
+  /**
+   * `named: true` le dice a la app que este portero pone el nombre del archivo al servir (y entiende
+   * `?download=1`): con un portero anterior, la respuesta trae solo `url`.
+   */
+  private async makePass(req: Request, who: Who): Promise<{ url: string; named: true }> {
     const body = await readBody(req);
     if (body.file !== undefined) {
-      // El tipo es siempre el de `files.mime`: el que mande la app no cuenta.
-      const { drive, type, size } = await this.filePass(body.file, who);
-      return { url: await this.passUrl(req, { f: drive, t: type, u: Date.now() + PASS_MS, s: size }) };
+      // El tipo y el nombre son siempre los de `files`: lo que mande la app no cuenta.
+      const { drive, type, size, name } = await this.filePass(body.file, who);
+      const pass: Pass = { f: drive, t: type, u: Date.now() + PASS_MS, s: size, ...(name ? { n: name } : {}) };
+      return { url: await this.passUrl(req, pass), named: true };
     }
     const asked = typeof body.type === 'string' && MIME.test(body.type) ? body.type : '';
     // Con el id de Drive (la prueba de media): solo el dueño.
     if (!who.isOwner) throw new HttpError(403, 'Only the owner of the workspace can do this for now.');
     const fileId = body.fileId;
     if (typeof fileId !== 'string' || !DRIVE_ID.test(fileId)) throw new HttpError(400, 'Missing the file.');
-    return { url: await this.passUrl(req, { f: fileId, t: asked, u: Date.now() + PASS_MS }) };
+    return { url: await this.passUrl(req, { f: fileId, t: asked, u: Date.now() + PASS_MS }), named: true };
   }
 
   /**
@@ -995,7 +1013,7 @@ export class Portero {
    * que llevar `appProperties.sdFile` con este mismo id (se comprueba una vez y queda anotado): así nadie
    * puede apuntar un archivo de la base a otro archivo del Drive del dueño.
    */
-  private async filePass(value: unknown, who: Who): Promise<{ drive: string; type: string; size: number }> {
+  private async filePass(value: unknown, who: Who): Promise<{ drive: string; type: string; size: number; name: string }> {
     const file = typeof value === 'string' ? value.toLowerCase() : '';
     if (!UUID.test(file)) throw new HttpError(400, 'Missing the file.');
     const media = await this.mediaFile(who, file);
@@ -1014,7 +1032,9 @@ export class Portero {
     const mark = await this.checkMark(file, drive, rec);
     if (mark === 'missing') throw new HttpError(404, 'This file is not in Google Drive anymore.');
     if (mark === 'other') throw new HttpError(403, 'This file in Google Drive does not belong to this file of the app.');
-    return { drive, type: MIME.test(media.mime ?? '') ? media.mime : '', size: Number(media.size) || 0 };
+    // El nombre va tal cual (con un tope, para que el pase no crezca de más): se limpia al servir.
+    const name = typeof media.name === 'string' ? keepExtension(Array.from(media.name), NAME_MAX) : '';
+    return { drive, type: MIME.test(media.mime ?? '') ? media.mime : '', size: Number(media.size) || 0, name };
   }
 
   /**
@@ -1033,7 +1053,7 @@ export class Portero {
     return 'ok';
   }
 
-  private async passUrl(req: Request, data: { f: string; t: string; u: number; s?: number }): Promise<string> {
+  private async passUrl(req: Request, data: Pass): Promise<string> {
     const payload = b64url(new TextEncoder().encode(JSON.stringify(data)));
     const pass = `${payload}.${await hmac(await this.secret(), payload)}`;
     return `${new URL(req.url).origin}/m/${pass}`;
@@ -1046,25 +1066,34 @@ export class Portero {
     }
     const data = JSON.parse(new TextDecoder().decode(fromB64url(payload))) as Pass;
     if (data.u < Date.now()) throw new HttpError(403, 'This link expired: open the file again from the app.');
+    // `?download=1` no va firmado: solo puede pedir que se baje, nunca que se muestre.
+    const download = new URL(req.url).searchParams.get('download') === '1';
 
     const range = req.headers.get('Range');
-    const cached = range ? await this.fromCache(req, data, range) : {};
+    // Solo los videos pasan por la caché del arranque: un PDF pedido por partes desplazaría a los videos.
+    const cached = range && isVideo(data.t) ? await this.fromCache(req, data, range, download) : {};
     if (cached.response) return cached.response;
 
     const headers = new Headers();
     if (range) headers.set('Range', range);
     const res = await this.drive(`/files/${encodeURIComponent(data.f)}?alt=media`, { headers });
     if (res.status === 416) return new Response(null, { status: 416, headers: { 'Content-Range': res.headers.get('Content-Range') ?? '' } });
-    if (!res.ok && res.status !== 206) throw new HttpError(res.status === 404 ? 404 : 502, `Google Drive answered ${res.status}.`);
+    if (!res.ok && res.status !== 206) {
+      // Drive lo marcó como malware o spam: no lo deja bajar (no se pide `acknowledgeAbuse`).
+      if (res.status === 403 && (await driveReasons(res)).includes('cannotDownloadAbusiveFile')) {
+        throw new HttpError(403, 'Google Drive flagged this file as malware or spam and does not let it be downloaded.', 'abusive');
+      }
+      throw new HttpError(res.status === 404 ? 404 : 502, `Google Drive answered ${res.status}.`);
+    }
     // Un pase sin el peso del archivo (la prueba de media): se aprende de la respuesta, para la próxima.
     if (cached.learn && res.status === 206) await this.learnSize(data.f, res);
 
-    const out = mediaHeaders();
-    for (const h of ['Content-Length', 'Content-Range', 'Content-Type', 'ETag', 'Last-Modified']) {
+    // El tipo es el del pase; un pase de la prueba de media sin tipo usa el que dice Drive.
+    const out = servedHeaders(data.t || (res.headers.get('Content-Type') ?? ''), passName(data), download);
+    for (const h of ['Content-Length', 'Content-Range', 'ETag', 'Last-Modified']) {
       const v = res.headers.get(h);
       if (v) out.set(h, v);
     }
-    if (data.t) out.set('Content-Type', data.t);
     return new Response(req.method === 'HEAD' ? null : res.body, { status: res.status, headers: out });
   }
 
@@ -1077,7 +1106,7 @@ export class Portero {
    * empieza en una punta que todavía no está guardada, se le pide a Drive la punta entera (una vez), se
    * guarda y se sirve. Lo demás va a Drive como siempre.
    */
-  private async fromCache(req: Request, data: Pass, header: string): Promise<{ response?: Response; learn?: boolean }> {
+  private async fromCache(req: Request, data: Pass, header: string, download: boolean): Promise<{ response?: Response; learn?: boolean }> {
     const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
     if (!m || (!m[1] && !m[2])) return {};
     const id = data.f;
@@ -1088,7 +1117,8 @@ export class Portero {
     ]);
     const mine = slot === id;
     if (mine) {
-      const hit = (await this.readZone(req, data, head, 'h', m[1], m[2])) ?? (await this.readZone(req, data, tail, 't', m[1], m[2]));
+      const hit =
+        (await this.readZone(req, data, download, head, 'h', m[1], m[2])) ?? (await this.readZone(req, data, download, tail, 't', m[1], m[2]));
       if (hit) return { response: hit };
     }
 
@@ -1139,11 +1169,20 @@ export class Portero {
     };
     await this.store.put(`cache:${id}:${kind === 'h' ? 'head' : 'tail'}`, saved);
     const end = Math.min(r.end, to);
-    return { response: cacheResponse(req, data, saved, { start: r.start, end }, bytes.slice(r.start - from, end - from + 1), 'fill') };
+    const body = bytes.slice(r.start - from, end - from + 1);
+    return { response: cacheResponse(req, data, download, saved, { start: r.start, end }, body, 'fill') };
   }
 
   /** Lo pedido desde una punta guardada, si empieza adentro (hasta donde llegue la punta); si no, `null`. */
-  private async readZone(req: Request, data: Pass, zone: CacheZone | undefined, kind: 'h' | 't', a: string, b: string): Promise<Response | null> {
+  private async readZone(
+    req: Request,
+    data: Pass,
+    download: boolean,
+    zone: CacheZone | undefined,
+    kind: 'h' | 't',
+    a: string,
+    b: string,
+  ): Promise<Response | null> {
     if (!zone || !(zone.length > 0) || !(zone.size > 0) || zone.length > zone.size) return null;
     const asked = byteRange(a, b, zone.size);
     if (!asked) return null;
@@ -1170,7 +1209,7 @@ export class Portero {
       pos += to - from + 1;
     }
     if (pos !== out.length) return null;
-    return cacheResponse(req, data, zone, r, out, 'hit');
+    return cacheResponse(req, data, download, zone, r, out, 'hit');
   }
 
   private async learnSize(id: string, res: Response): Promise<void> {
@@ -1199,12 +1238,18 @@ export class Portero {
   }
 }
 
-/** Lo que lleva un pase: el id de Drive, el tipo a devolver, cuándo vence y el peso (si se sabe). */
+/**
+ * Lo que lleva un pase (todo firmado): el id de Drive, el tipo del archivo, cuándo vence, el peso (si se
+ * sabe) y el nombre (de `files.name`; los pases de antes no lo traen y se sirven sin nombre). Si se muestra
+ * o se baja no va en el pase: se decide al servir, a partir de `t`, así los pases viejos también reciben
+ * los encabezados de ahora.
+ */
 interface Pass {
   f: string;
   t: string;
   u: number;
   s?: number;
+  n?: string;
 }
 
 interface ByteRange {
@@ -1247,19 +1292,113 @@ function cacheZones(size: number): { head: number; tail: number } {
   return { head: CACHE_HEAD_PIECES * CACHE_PIECE, tail: CACHE_TAIL_PIECES * CACHE_PIECE };
 }
 
-// Lo que se sirve nunca corre como página en la dirección del portero (un HTML o un SVG subido).
-function mediaHeaders(): Headers {
-  return new Headers({
-    'Accept-Ranges': 'bytes',
-    'Cache-Control': 'private, max-age=3600',
-    'X-Content-Type-Options': 'nosniff',
-    'Content-Security-Policy': 'sandbox',
-  });
+// --- encabezados de lo que se sirve -----------------------------------------------------------------
+
+function isVideo(type: string): boolean {
+  return /^video\//i.test(type);
 }
 
-function cacheResponse(req: Request, data: Pass, meta: CacheZone, r: ByteRange, body: Uint8Array<ArrayBuffer>, how: 'hit' | 'fill'): Response {
-  const out = mediaHeaders();
-  out.set('Content-Type', data.t || meta.type || 'application/octet-stream');
+/**
+ * El tipo con el que un archivo se puede mostrar en el navegador (`inline`), o `null` si se tiene que
+ * bajar. Solo fotos (menos SVG, que puede traer scripts), videos, audio, PDF y texto plano. HTML, XML, JS,
+ * Office, comprimidos, ejecutables y todo lo demás se bajan como `application/octet-stream`.
+ */
+export function inlineType(type: string): string | null {
+  const base = (type.split(';')[0] ?? '').trim().toLowerCase();
+  if (!MIME.test(base)) return null;
+  if (base === 'application/pdf') return base;
+  // El texto, como UTF-8 (sin eso, un navegador puede mostrar mal los acentos).
+  if (base === 'text/plain') return 'text/plain; charset=utf-8';
+  const [top, sub = ''] = base.split('/');
+  // Un subtipo XML (`image/x+xml`, lo puede escribir cualquiera en `files.mime`) el navegador lo muestra como
+  // documento: se baja.
+  if (sub === 'xml' || sub.endsWith('+xml')) return null;
+  if (top === 'image' && !sub.includes('svg')) return base;
+  if (top === 'video' || top === 'audio') return base;
+  return null;
+}
+
+// Controles (C0, DEL, C1), marcas de dirección (bidi: con un U+202E, `gpj.exe` se lee `exe.jpg`), los de ancho
+// cero y los separadores de renglón.
+const HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060\u2066-\u2069]/g;
+// Mitades de un par sustituto sin su pareja: `encodeURIComponent` no las acepta.
+const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+/** El nombre de un archivo listo para `Content-Disposition`: sin controles, bidi ni barras; `''` si no queda nada. */
+export function cleanFileName(name: string): string {
+  const clean = name.replace(LONE_SURROGATE, '').normalize('NFC').replace(HIDDEN_CHARS, '').replace(/[/\\]/g, '_').trim();
+  return keepExtension(Array.from(clean), NAME_MAX);
+}
+
+/** Un nombre de hasta `max` caracteres; si hay que cortar, se corta antes de la extensión (queda `.pdf`). */
+function keepExtension(chars: string[], max: number): string {
+  if (chars.length <= max) return chars.join('');
+  const dot = chars.lastIndexOf('.');
+  const ext = dot > 0 && chars.length - dot <= 16 ? chars.slice(dot) : [];
+  return [...chars.slice(0, max - ext.length), ...ext].join('');
+}
+
+/**
+ * `inline` o `attachment`, con el nombre dos veces: `filename` en ASCII (lo que no es ASCII, las comillas y
+ * las barras pasan a `_`) para los navegadores viejos, y `filename*` (RFC 5987) en UTF-8, que es el que usan
+ * todos los de hoy. Sin nombre (un pase de antes), sin `filename`.
+ */
+export function contentDisposition(kind: 'inline' | 'attachment', name: string | undefined): string {
+  const clean = cleanFileName(name ?? '');
+  if (!clean) return kind;
+  const ascii = Array.from(clean, (c) => (c >= ' ' && c <= '~' && c !== '"' ? c : '_')).join('');
+  const encoded = encodeURIComponent(clean).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `${kind}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+function passName(data: Pass): string | undefined {
+  return typeof data.n === 'string' ? data.n : undefined;
+}
+
+/**
+ * Los encabezados de todo lo que se sirve (de Drive o de la caché del arranque). Lo que no está en la lista
+ * de `inlineType` sale como `application/octet-stream` y `attachment`: nunca corre como página en la
+ * dirección del portero (un HTML o un SVG subido). `download` (`?download=1`) solo puede pasar a
+ * `attachment`. Siempre `nosniff`, `Referrer-Policy: no-referrer` (el pase no se filtra desde los links de
+ * un PDF) y `CSP: sandbox`, salvo el PDF que se muestra: el visor de PDF del navegador no carga en un
+ * documento con `sandbox` (queda con `nosniff` y sin scripts de la página; el visor corre aparte).
+ */
+export function servedHeaders(type: string, name: string | undefined, download: boolean): Headers {
+  const shown = inlineType(type);
+  const inline = shown !== null && !download;
+  const out = new Headers({
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'private, max-age=3600',
+    'Content-Type': shown ?? 'application/octet-stream',
+    'Content-Disposition': contentDisposition(inline ? 'inline' : 'attachment', name),
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+  });
+  if (!(inline && shown === 'application/pdf')) out.set('Content-Security-Policy', 'sandbox');
+  return out;
+}
+
+/** Las razones de un error de Drive (`error.errors[].reason`, `error.details[].reason`); vacío si no se lee. */
+async function driveReasons(res: Response): Promise<string[]> {
+  try {
+    type Reason = { reason?: unknown };
+    const body = (await res.json()) as { error?: { errors?: Reason[]; details?: Reason[] } } | null;
+    const all = [...(body?.error?.errors ?? []), ...(body?.error?.details ?? [])];
+    return all.map((e) => (typeof e?.reason === 'string' ? e.reason : '')).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function cacheResponse(
+  req: Request,
+  data: Pass,
+  download: boolean,
+  meta: CacheZone,
+  r: ByteRange,
+  body: Uint8Array<ArrayBuffer>,
+  how: 'hit' | 'fill',
+): Response {
+  const out = servedHeaders(data.t || meta.type || '', passName(data), download);
   out.set('Content-Length', String(body.length));
   out.set('Content-Range', `bytes ${r.start}-${r.end}/${meta.size}`);
   if (meta.etag) out.set('ETag', meta.etag);
