@@ -1,14 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { t, useT } from '../i18n';
 import { prefs, usePrefs, type Prefs } from '../prefs';
-import { navigate } from '../router';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { pageFormat, sizeLabel } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
   DarkIcon,
   DriveIcon,
-  FilmIcon,
   LightIcon,
   MembersIcon,
   MoveIcon,
@@ -369,16 +367,6 @@ export function AccountMenu({
           Google Drive
         </button>
       )}
-      <button
-        className="menu-row"
-        onClick={() => {
-          onClose();
-          navigate('/media-test');
-        }}
-      >
-        <FilmIcon />
-        {tr('mediaTest.title')}
-      </button>
       <button className="menu-row" onClick={() => void signOut()}>
         <SignOutIcon />
         {tr('common.signOut')}

@@ -705,7 +705,7 @@ página, el comienzo del texto y el motivo) si el servidor no los acepta.
 ## Sin red al abrir
 
 - La app queda en caché con un service worker (PWA), así que abre sin red, en cualquiera de sus
-  direcciones (`/`, `/p/<uuid>`, `/trash`, `/media-test`; ver `index.md`).
+  direcciones (`/`, `/p/<uuid>`, `/trash`; ver `index.md`).
 - El editor, el carrete, el panel de comentarios y los diálogos se bajan aparte (`ui/lazyPart.tsx`), pero el
   service worker precachea todos los `.js` (`globPatterns` en `vite.config.ts`): con la app instalada, el
   editor abre sin red desde la caché. Al publicar una versión nueva, el service worker nuevo borra los

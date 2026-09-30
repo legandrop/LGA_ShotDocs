@@ -39,7 +39,7 @@ crea su workspace (D-18, `Plan_Workspaces.md`).
 | Frontend | App web React instalable como PWA | Un solo código para Mac, Windows y iPhone. Más adelante se empaqueta con Tauri (escritorio) y Capacitor (iOS) sin reescribirla. |
 | Hosting | Cloudflare (Workers con archivos estáticos) | Deploy automático desde GitHub, gratis y con uso comercial (D-05). Antes, Vercel. |
 | Backend | Supabase: Postgres, login, archivos y tiempo real | Un solo servicio. Los permisos se aplican dentro de la base con Row Level Security. Se puede autohostear con Docker (D-02). |
-| Archivos grandes | Drive del dueño del workspace, con un portero (Worker de Cloudflare, `portero/`) | Supabase gratis trae 1 GB de archivos y 5 GB de transferencia al mes; Cloudflare no cobra la transferencia (D-17). Hoy en prueba (*Media test*); en producción en el paso 8 de `Plan_Workspaces.md`. |
+| Archivos grandes | Drive del dueño del workspace, con un portero (Worker de Cloudflare, `portero/`) | Supabase gratis trae 1 GB de archivos y 5 GB de transferencia al mes; Cloudflare no cobra la transferencia (D-17). En producción desde el paso 8 de `Plan_Workspaces.md` (v0.031). |
 | Editor | BlockNote, editor por bloques sobre ProseMirror | Se siente como Notion, soporta Yjs y exporta a Markdown. |
 | Contenido de cada página | Un documento Yjs (CRDT) | Dos ediciones offline se fusionan: nunca gana "el último". |
 | Árbol de páginas | Filas de Postgres | Si el árbol fuera un documento Yjs único, cualquiera con acceso a una página recibiría el árbol entero. |

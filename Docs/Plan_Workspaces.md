@@ -261,7 +261,7 @@ cada `Doc_*`.
 7. ✅ **Carrete** de fotos y videos (v0.032): `Doc_Carrete.md`.
 8. ✅ **Drive y portero en producción** (v0.031): permisos por archivo en el portero, carpetas por
    proyecto y día, el dueño elige dónde va la carpeta `LGA_ShotDocs` (con la clave del selector) y caché
-   del principio y el final para que el video arranque antes (falta medirlo con *Media test*).
+   del principio y el final para que el video arranque antes (falta medirlo abriendo un video en el carrete; *Media test* salió en v0.042).
 9. ✅ **Equipo en Wanka** (v0.033): invitar, roles, permisos por proyecto y página, proyectos privados,
    sacar a alguien. El registro para invitados lo abre Lega (`Doc_Supabase.md`).
 10. ✅ **Invitados (clientes)** (v0.034): compartir con su correo (la app copia el link de invitación),
@@ -380,7 +380,7 @@ con Escape. Mientras carga, la miniatura. Pensado primero para el teléfono.
   principio del id del cliente) y un token de acceso en el navegador: el portero se lo da **solo al
   dueño** (que ya es dueño de ese Drive), de corta duración y solo con `drive.file`. Sin esa variable, la
   app ofrece solo la raíz.
-- **Arranque del video:** medir con *Media test* dónde se van los 5 a 9 segundos. Probar que el portero
+- **Arranque del video:** medir (abriendo un video en el carrete; *Media test* salió en v0.042) dónde se van los 5 a 9 segundos. Probar que el portero
   pida a Drive el principio y el final del archivo de una vez (los videos del iPhone suelen tener el
   índice al final). Guardarlos un rato: la caché de Workers probablemente no ande en `*.workers.dev` (a
   confirmar); si no, en el almacenamiento del propio portero.

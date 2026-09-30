@@ -26,7 +26,9 @@ describe('parseRoute', () => {
     expect(parseRoute('/')).toEqual({ name: 'home' });
     expect(parseRoute(pagePath(ID))).toEqual({ name: 'page', id: ID });
     expect(parseRoute('/trash')).toEqual({ name: 'trash' });
-    expect(parseRoute('/media-test')).toEqual({ name: 'media-test' });
+    // La vieja prueba de media ya no existe: su dirección abre la app (puede quedar en un link guardado o en
+    // la vuelta de Google de un portero viejo, con `?drive=`).
+    expect(parseRoute('/media-test')).toEqual({ name: 'home' });
   });
 });
 

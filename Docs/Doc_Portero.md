@@ -5,9 +5,10 @@ conexión con el Google Drive del dueño, sube los archivos a su Drive y los dev
 más recibe la conexión con Drive: con ella se abre todo lo que la app subió, de todos los proyectos. El
 plan está en `Plan_Workspaces.md`, secciones 5 y 6.
 
-Sirve para los archivos de las páginas (pasos 6 y 8 del plan) y para la **prueba de media** (paso 4, la
-pantalla *Media test*, en el menú de la cuenta). Conectar Drive, elegir dónde va la carpeta de la app y la
-prueba de media los hace solo el dueño; subir y ver un archivo de una página depende del permiso de cada
+Sirve para los archivos de las páginas (pasos 6 y 8 del plan). La **prueba de media** del paso 4 (la
+pantalla *Media test*) salió de la app en v0.042; el portero sigue aceptando su subida sin `file` (solo el
+dueño, a `Media_Test`) por si la usa una versión vieja. Conectar Drive y elegir dónde va la carpeta de la
+app los hace solo el dueño (menú de la cuenta → *Google Drive*); subir y ver un archivo de una página depende del permiso de cada
 persona sobre esa página.
 
 Carpetas en el Drive del dueño, sin espacios (guiones bajos):
@@ -86,7 +87,7 @@ Carpetas en el Drive del dueño, sin espacios (guiones bajos):
     falta o no mide lo que debe, o un archivo que ya no ocupa su lugar, se piden a Drive: nunca se sirven
     bytes equivocados. Si dos archivos se pelean por el mismo lugar al mismo tiempo, lo del que pierde puede
     quedar guardado sin usarse (a lo sumo ~762 KiB) hasta que se lo vuelva a pedir.
-  - **Hay que medir con *Media test*** si el video arranca más rápido: en las herramientas de desarrollo
+  - **Hay que medir** si el video arranca más rápido (abriendo un video de una página en el carrete): en las herramientas de desarrollo
     del navegador (pestaña *Network*), la respuesta que sale de la caché lleva `X-Portero-Cache: hit`, y
     `fill` la vez que se trae de Drive y se guarda; sin ese encabezado, vino de Drive. La primera vez que
     alguien abre un archivo se llena la caché; el arranque rápido se ve desde la segunda (de cualquier
@@ -172,7 +173,8 @@ subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuel
 - `src/media/portero.ts`: el cliente del portero (estado de Drive, conectar, subir por partes retomando lo
   que ya llegó, pedir pases y mandar a la papelera de Drive, `trash`). Lee la dirección de
   `workspace_settings.media_url`.
-- `src/ui/MediaTest.tsx`: la pantalla *Media test*, en la ruta `/media-test` de la app.
+- `src/ui/DriveDialog.tsx`: el diálogo *Google Drive* del menú de la cuenta (conectar, reconectar y
+  dónde va la carpeta).
 - Pruebas (entran en `npm test`): `portero/src/core.test.ts` (el Worker, con Drive y Supabase simulados)
   y `src/media/portero.test.ts` (el cliente). Los tipos del portero se revisan aparte, con
   `npx tsc -p portero --noEmit` (`npm run typecheck` no los cubre).
@@ -257,7 +259,7 @@ update public.workspace_settings set media_url = 'https://shotdocs-portero.<tu-s
 
 ### 4. Conectar Drive
 
-En la app, con la cuenta del dueño: menú de la cuenta → **Media test → Connect Google Drive**. Elegir la
+En la app, con la cuenta del dueño: menú de la cuenta → **Google Drive → Connect Google Drive**. Elegir la
 cuenta de Google cuyo Drive va a usar el workspace. Si Google avisa que la app no está verificada:
 *Advanced → Go to …* (es tu propia app). Al aceptar, vuelve a la app con "Connected".
 
@@ -271,7 +273,7 @@ otra.
 
 - *"The connection with Google Drive stopped working"*: el dueño revocó el acceso, cambió la contraseña,
   pasaron 6 meses sin uso, o la app de Google sigue en modo **Testing**, donde la conexión vence a los 7
-  días. Volver a conectar desde *Media test*. Lo del modo Testing se evita publicando la app en Google
+  días. Volver a conectar desde el menú de la cuenta → *Google Drive*. Lo del modo Testing se evita publicando la app en Google
   (paso 2.5, *In production*; ver `Doc_Roadmap.md`).
 - *"This app address is not allowed"*: la dirección desde la que se abrió la app no está en `APP_ORIGINS`.
 - Google dice `redirect_uri_mismatch`: la dirección del paso 2.6 no coincide con la del portero.

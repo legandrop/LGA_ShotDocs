@@ -6,5 +6,3 @@ import { lazyPart } from './lazyPart';
 export const ShareDialog = lazyPart(() => import('./ShareDialog').then((m) => m.ShareDialog));
 export const MembersDialog = lazyPart(() => import('./MembersDialog').then((m) => m.MembersDialog));
 export const DriveDialogHost = lazyPart(() => import('./DriveDialog').then((m) => m.DriveDialogHost));
-/** La página de prueba de fotos y videos (`/media-test`). */
-export const MediaTest = lazyPart(() => import('./MediaTest').then((m) => m.MediaTest));

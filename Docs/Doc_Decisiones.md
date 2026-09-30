@@ -90,12 +90,12 @@ diga otra cosa.
     papelera, compartir, miembro, invitado, dueño, admin. Los permisos: Ver, Comentar, Editar, Editar y crear
     páginas.
   - **Quedan en inglés:** las páginas legales (`/privacy`, `/terms`: es el texto que revisa Google y el que
-    vale; con la app en castellano muestran una nota que lo dice), la guía para crear un workspace, el
-    informe técnico de *Media test* y los mensajes que manda el portero. Los avisos que la app guarda en el
+    vale; con la app en castellano muestran una nota que lo dice), la guía para crear un workspace y los
+    mensajes que manda el portero (el informe técnico de *Media test* también, hasta que salió en v0.042). Los avisos que la app guarda en el
     dispositivo (el motivo de una subida detenida, de un comentario rechazado) se guardan en inglés y se
     traducen al mostrarlos (`localize`), así una versión vieja los sigue mostrando bien.
   - **Los textos de lo que se baja aparte viajan con esas partes** (`src/i18n/lazy/`: editor, carrete,
-    panel de comentarios, miembros y compartir, Drive, prueba de fotos y videos); la primera carga trae el
+    panel de comentarios, miembros y compartir, Drive); la primera carga trae el
     resto, con los dos idiomas (unos 16 KB comprimidos).
 - **D-17 · Archivos grandes en el Drive del dueño** (2026-09-29). El plan gratis de Supabase trae 1 GB
   de archivos: unas 300 fotos de teléfono o un video de rodaje. Detalle en la sección 5 de

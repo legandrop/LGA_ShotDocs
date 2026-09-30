@@ -22,7 +22,7 @@ import { notify, useNotice } from './notice';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
-import { MediaTest, ShareDialog } from './lazyDialogs';
+import { ShareDialog } from './lazyDialogs';
 import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
@@ -226,7 +226,6 @@ function Shell() {
               </span>
             )}
             {route.name === 'trash' && <span className="crumb current">{tr('trash.title')}</span>}
-            {route.name === 'media-test' && <span className="crumb current">{tr('mediaTest.title')}</span>}
           </nav>
           <span className="only-mobile">
             <SyncIcon onClick={() => setNavOpen(true)} />
@@ -250,10 +249,6 @@ function Shell() {
           <PageView key={route.id} id={route.id} />
         ) : route.name === 'trash' ? (
           <TrashView />
-        ) : route.name === 'media-test' ? (
-          <Part>
-            <MediaTest />
-          </Part>
         ) : (
           <Home />
         )}

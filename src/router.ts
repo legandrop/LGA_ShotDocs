@@ -4,8 +4,6 @@ export type Route =
   | { name: 'home' }
   | { name: 'page'; id: string }
   | { name: 'trash' }
-  // Pantalla de prueba del portero de archivos (subir y ver videos desde el teléfono).
-  | { name: 'media-test' }
   // Política de privacidad y condiciones de uso: públicas, se ven sin sesión y sin workspace (Google las pide
   // para la pantalla de consentimiento).
   | { name: 'privacy' }
@@ -21,7 +19,6 @@ export function parseRoute(pathname: string): Route {
   const page = /^\/p\/([^/]+)\/?$/.exec(pathname)?.[1];
   if (page && UUID.test(page)) return { name: 'page', id: page };
   if (pathname === '/trash') return { name: 'trash' };
-  if (pathname === '/media-test') return { name: 'media-test' };
   if (pathname === PRIVACY_PATH || pathname === PRIVACY_PATH + '/') return { name: 'privacy' };
   if (pathname === TERMS_PATH || pathname === TERMS_PATH + '/') return { name: 'terms' };
   return { name: 'home' };

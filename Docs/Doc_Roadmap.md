@@ -43,8 +43,7 @@ nada, y lo que espera una decisión o una acción de Lega.
    Hechos los pasos 1 a 5: copias de seguridad, guarda contra lo desconocido, hosting en Cloudflare, la
    prueba de media en la computadora y el iPhone, y la preparación (workspace en el código, miembros,
    permisos e invitaciones en la base, restaurar sobre el mismo proyecto). **Los pasos 6 a 13 están
-   hechos en la rama `claude/trusting-mccarthy-470ff3` (v0.031 a v0.041), sin publicar:** falta aplicar
-   las migraciones en Wanka y pasar la rama a `main` (ver el handover). Absorbe la vieja fase 2 (compartir un proyecto, una
+   hechos y publicados** (v0.031 a v0.041, migraciones aplicadas en Wanka el 2026-09-30). Absorbe la vieja fase 2 (compartir un proyecto, una
    página o una subpágina con usuarios y con links legibles, D-13) y los que figuran abajo en "Resueltos
    adentro del plan".
 
@@ -62,13 +61,13 @@ nada, y lo que espera una decisión o una acción de Lega.
    dispositivos que empiezan la misma página siguen compartiendo la raíz. Ver `Doc_Sincronizacion.md`,
    "Contenido de las páginas", punto 5.
 4. **Hecho: tamaño de la app.** El editor (BlockNote con ProseMirror, Tiptap y Mantine), el carrete, el
-   panel de comentarios, los diálogos de miembros, compartir y Drive y la página de prueba de media se
-   bajan aparte (`src/ui/lazyPart.tsx`); la primera pantalla (login, barra lateral, árbol) sale sin
+   panel de comentarios, los diálogos de miembros, compartir y Drive (y la página de prueba de media, hasta
+   que salió en v0.042) se bajan aparte (`src/ui/lazyPart.tsx`); la primera pantalla (login, barra lateral, árbol) sale sin
    esperarlos y el editor se baja apenas el navegador queda libre. Mientras baja, el cuerpo de la página
    muestra un esqueleto (el título ya se ve). Lo que se baja al abrir, comprimido: de 591 KB (JS 542 KB,
    CSS 48 KB, HTML 1 KB) a 276 KB (JS 227 KB, CSS 48 KB, HTML 1 KB); en v0.041, con los dos idiomas, 283 KB
    (JS 235 KB). Aparte: el editor 302 KB, el carrete
-   5 KB, el panel de comentarios 4 KB, la prueba de media 5 KB, cada diálogo 2 KB (y los emojis del editor,
+   5 KB, el panel de comentarios 4 KB, cada diálogo 2 KB (y los emojis del editor,
    110 KB, que ya se bajaban aparte). Los estilos del editor siguen en la primera carga para no cambiar el
    orden en que se aplican; las páginas de privacidad y condiciones también (son chicas y se ven sin
    sesión). El service worker precachea todo, así que sin red el editor abre igual; si después de publicar
@@ -111,8 +110,7 @@ nada, y lo que espera una decisión o una acción de Lega.
    castellano si el navegador está en castellano. El editor usa el diccionario en castellano de BlockNote,
    pasado a vos. Los tipos de texto se llaman Script/Guion y Question/Pregunta en la interfaz; lo guardado en
    los documentos no cambia. Quedan en inglés, a propósito: las páginas legales (con una nota en
-   castellano), la guía para crear un workspace, el informe técnico de *Media test* y los mensajes que
-   manda el portero. **Falta:** el correo con el código (su plantilla está en `supabase/`), la guía en
+   castellano), la guía para crear un workspace y los mensajes que manda el portero. **Falta:** el correo con el código (su plantilla está en `supabase/`), la guía en
    castellano y las plantillas, que todavía no existen (fase 3), con su nombre en cada idioma.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
    datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes.
