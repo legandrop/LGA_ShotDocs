@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { t } from '../i18n';
 import { revealCollapsed } from './collapseControl';
+import { IS_MAC, modPressed } from './findUi';
 
 // Lo que comparten el botón de comentarios de la barra de arriba, el panel (o la hoja en el teléfono), el
 // margen del editor y los botones "Comment" del editor: si el panel está abierto y qué mostrar. Vive en
@@ -190,24 +191,33 @@ export function isPhoneLayout(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
 }
 
-const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 /** El atajo para comentar, como se ve en los tooltips. */
 export const COMMENT_SHORTCUT_LABEL = IS_MAC ? '⌘⌥M' : 'Ctrl+Alt+M';
 /** El atajo de las preguntas (`QUESTION_SHORTCUT` del esquema). */
 export const QUESTION_SHORTCUT_LABEL = IS_MAC ? '⌘⌥P' : 'Ctrl+Alt+P';
 
 /**
- * Ctrl/⌘+Alt+M. Con AltGr (en Windows llega como Ctrl+Alt) no: en algunos teclados escribe un carácter.
+ * Ctrl+Alt+M (⌘⌥M en la Mac: nunca Ctrl en la Mac). Con AltGr (en Windows llega como Ctrl+Alt) no: en algunos
+ * teclados escribe un carácter. `mac` para probar las dos.
  */
-export function isCommentShortcut(e: {
-  ctrlKey: boolean;
-  metaKey: boolean;
-  altKey: boolean;
-  shiftKey: boolean;
-  code: string;
-  key: string;
-  getModifierState?: (key: string) => boolean;
-}): boolean {
+export function isCommentShortcut(
+  e: {
+    ctrlKey: boolean;
+    metaKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    code: string;
+    key: string;
+    getModifierState?: (key: string) => boolean;
+  },
+  mac = IS_MAC,
+): boolean {
   if (e.getModifierState?.('AltGraph')) return false;
-  return (e.ctrlKey || e.metaKey) && e.altKey && !e.shiftKey && (e.code === 'KeyM' || e.key.toLowerCase() === 'm');
+  // Con Alt la tecla escribe otra cosa (en la Mac, ⌥M es "µ"): se mira también la posición.
+  return modPressed(e, mac) && e.altKey && !e.shiftKey && (e.code === 'KeyM' || e.key.toLowerCase() === 'm');
+}
+
+/** Mandar un comentario: Ctrl+Enter (⌘Enter en la Mac). */
+export function isSendShortcut(e: { key: string; ctrlKey: boolean; metaKey: boolean }, mac = IS_MAC): boolean {
+  return e.key === 'Enter' && modPressed(e, mac);
 }

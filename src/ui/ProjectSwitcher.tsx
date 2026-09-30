@@ -8,6 +8,7 @@ import { AccountIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icon
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, useCurrentProject, useSwitchProject } from './project';
+import { SEARCH_SHORTCUT_LABEL, useSearchSession } from './projectSearchUi';
 import { ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
@@ -27,15 +28,14 @@ export function Monogram({ name, size = 26 }: { name: string; size?: number }) {
   );
 }
 
-const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-const SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl+K';
 
 // En pantallas táctiles no se enfoca el buscador al abrir: el teclado taparía la lista.
 const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
  * Arriba de la barra lateral: el proyecto abierto (y, con varios workspaces en el dispositivo, antes el
- * workspace: Workspace › Proyecto). Abre el selector con un clic o con Ctrl+K (⌘K).
+ * workspace: Workspace › Proyecto). Abre el selector con un clic. Ctrl/⌘+K ya no lo abre: abre la búsqueda del
+ * proyecto, que también lista los proyectos (Docs/Doc_Buscar.md, sección 9).
  */
 export function ProjectSwitcher() {
   const tree = useTree();
@@ -56,21 +56,11 @@ export function ProjectSwitcher() {
 
   const toggle = () => setPosition((open) => (open || !button.current ? null : menuBelow(button.current, 340)));
 
+  // Ctrl/⌘+K con el selector abierto abre la búsqueda: el selector se cierra (no queda abajo del panel).
+  const searchOpen = useSearchSession().isOpen();
   useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      // En el editor, Ctrl+K con texto elegido crea un link. Se deja pasar aunque la barra de formato
-      // todavía no haya aparecido (y no lo haya tomado).
-      if (e.defaultPrevented) return;
-      const selection = window.getSelection();
-      if (e.target instanceof Element && e.target.closest('.bn-editor') && selection && !selection.isCollapsed) return;
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        toggle();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, []);
+    if (searchOpen) setPosition(null);
+  }, [searchOpen]);
 
   return (
     <>
@@ -79,7 +69,7 @@ export function ProjectSwitcher() {
         className="project-button"
         aria-haspopup="dialog"
         aria-expanded={!!position}
-        data-tip={tr('project.switchTip', { shortcut: SHORTCUT })}
+        data-tip={tr('project.switchTip', { shortcut: SEARCH_SHORTCUT_LABEL })}
         onClick={toggle}
       >
         <Monogram name={name} />

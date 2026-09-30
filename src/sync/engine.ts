@@ -172,10 +172,11 @@ export class SyncEngine {
         this.status = { ...this.status, warning: t('comments.readOnlyDevice', { reason: options.comments.unavailable }) };
       }
     }
-    docs.onLocalChange = poke;
+    this.cleanups.push(docs.subscribeLocalChange(poke));
     docs.onWriteError = (message) => {
       this.patch({ localError: message });
-      void this.refreshCounts();
+      // Después de `stop()` la base puede estar cerrada: no se cuenta nada más.
+      if (!this.stopped) void this.refreshCounts().catch(() => undefined);
     };
     docs.onWarning = (message) => this.patch({ warning: message });
   }

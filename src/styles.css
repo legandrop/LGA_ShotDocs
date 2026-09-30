@@ -718,6 +718,12 @@ code {
   padding: 0 4px 6px 8px;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .section-title button {
   border: none;
   width: 28px;
@@ -4300,6 +4306,242 @@ button.primary.danger {
 
 @media print {
   .find-anchor {
+    display: none !important;
+  }
+}
+
+/* --- Buscar en el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8) ------------------------------------------ */
+
+/* Solo para lectores de pantalla (la cantidad de resultados). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* En la computadora, una ventana arriba al centro (como la de Notion o Linear). */
+.search-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: start center;
+  padding: 10vh 16px 16px;
+  background: var(--scrim);
+}
+
+.search-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: min(640px, 80vh);
+  overflow: hidden;
+  border: 1px solid var(--menu-border);
+  border-radius: 14px;
+  background: var(--menu-bg);
+  box-shadow: var(--shadow);
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 6px 8px 6px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--muted-2);
+}
+
+.search-field input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  font-size: 16px;
+}
+
+.search-field input:focus,
+.search-field input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.search-results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 8px 10px;
+}
+
+.search-section {
+  display: block;
+  padding: 10px 10px 4px;
+  font-size: 10px;
+}
+
+.search-hint,
+.search-empty,
+.search-notice {
+  margin: 10px 10px 4px;
+  font-size: 13px;
+}
+
+.search-notice {
+  padding: 6px 10px;
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.search-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.search-option.active {
+  background: var(--hover);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.search-project-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.search-result + .search-result {
+  margin-top: 4px;
+}
+
+.search-page svg {
+  flex: none;
+  color: var(--muted-2);
+}
+
+.search-page-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.search-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.search-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
+.search-snippet {
+  min-height: 0;
+  padding: 4px 10px 4px 36px;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.search-snippet-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.search-field-label {
+  color: var(--muted-2);
+}
+
+.search-more-count {
+  margin: 0;
+  padding: 0 10px 2px 36px;
+  font-size: 12px;
+}
+
+.search-show-more {
+  justify-content: center;
+  color: var(--accent-text);
+  font-size: 13px;
+}
+
+mark.search-hit {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--find-hit);
+  color: inherit;
+}
+
+.search-footer {
+  flex: none;
+  margin: 0;
+  padding: 7px 16px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 11px;
+}
+
+.search-close {
+  width: 32px;
+  height: 32px;
+}
+
+@media (hover: none) {
+  .search-footer {
+    display: none;
+  }
+}
+
+/* En el teléfono ocupa toda la pantalla, con filas grandes para el dedo. */
+@media (max-width: 760px) {
+  .search-backdrop {
+    padding: 0;
+    background: var(--menu-bg);
+  }
+
+  .search-panel {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+
+  .search-option {
+    min-height: 44px;
+  }
+
+  .search-snippet {
+    min-height: 36px;
+  }
+}
+
+@media print {
+  .search-backdrop {
     display: none !important;
   }
 }

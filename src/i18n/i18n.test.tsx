@@ -16,11 +16,12 @@ import { carrete } from './lazy/carrete';
 import { commentsPanel } from './lazy/commentsPanel';
 import { drive } from './lazy/drive';
 import { editor } from './lazy/editor';
+import { search } from './lazy/search';
 import { teamDialogs } from './lazy/teamDialogs';
 import { parts, strings } from './strings';
 
 /** Las partes que viajan con lo que se baja aparte (ver `register` en index.ts). */
-const LAZY = { carrete, commentsPanel, drive, editor, teamDialogs };
+const LAZY = { carrete, commentsPanel, drive, editor, search, teamDialogs };
 const ALL_PARTS: Record<string, Record<string, { en: Entry; es: Entry }>> = { ...parts, ...LAZY };
 const ALL = Object.assign({}, ...Object.values(ALL_PARTS)) as Record<Key, { en: Entry; es: Entry }>;
 

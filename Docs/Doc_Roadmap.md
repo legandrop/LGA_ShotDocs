@@ -110,8 +110,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   nueva). **Entrega 1a hecha (v0.053):** colapsar para vos, con toda la seguridad al editar, las marcas de hoja
   contadas con todo abierto y el PDF todo abierto. Faltan la 1b (arrastrar la sección entera,
   Shift+Ctrl/⌘+↑/↓, "Imprimir como se ve") y la 2 (para todos, Shift+clic).
-- **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página**
-  (`Doc_Buscar.md`, "Cómo quedó"). Falta la entrega 2, buscar en el proyecto. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
+- **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página;
+  entrega 2 hecha (v0.054): buscar en el proyecto con Ctrl/⌘+K** (`Doc_Buscar.md`, "Cómo quedó (entrega 1)" y
+  "(entrega 2)"). Queda para después: reemplazar en el proyecto, la papelera, todos los proyectos y los
+  comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y
   contenido) y lleva al lugar. **En la página:** una lupa a la izquierda del ícono de comentarios, que busca en
   la página abierta, también adentro de las secciones colapsadas (P.11: el resultado abre la sección). A pensar

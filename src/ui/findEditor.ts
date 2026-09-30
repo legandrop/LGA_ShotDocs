@@ -8,6 +8,7 @@ import * as Y from 'yjs';
 import { unitsFromPM, unitPos, type PMUnit, type UnitField } from '../search/extract';
 import { normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from '../search/normalize';
 import { FIND_REPLACE_META } from './editorMeta';
+import { recordFindSelection } from './findUi';
 
 // Buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6, con las correcciones de las
 // auditorías). Buscar no cambia el documento: las coincidencias se marcan con decoraciones, como las marcas de
@@ -457,6 +458,25 @@ export function stepFind(view: EditorView, dir: 1 | -1): FindMatch | null {
 }
 
 /**
+ * Elige como actual la `occurrence` de las coincidencias del bloque `blockId` (un resultado de la búsqueda del
+ * proyecto, que las cuenta igual). Si el bloque ya no está o tiene menos, la primera de la página. No la lleva
+ * a la vista (eso es `revealCurrent`).
+ */
+export function goToOccurrence(view: EditorView, blockId: string, occurrence: number): FindMatch | null {
+  if (getFindState(view.state).stale) refreshNow(view);
+  const state = getFindState(view.state);
+  if (state.matches.length === 0) return null;
+  const inBlock: number[] = [];
+  state.matches.forEach((m, i) => {
+    if (m.blockId === blockId) inBlock.push(i);
+  });
+  const index = inBlock[Math.min(Math.max(0, occurrence), inBlock.length - 1)] ?? 0;
+  view.dispatch(view.state.tr.setMeta(findKey, { kind: 'current', index } satisfies FindMeta));
+  rememberCurrent(view);
+  return getFindState(view.state).matches[index] ?? null;
+}
+
+/**
  * Lleva a la vista la coincidencia actual: si está escondida (una lista plegable cerrada, una sección
  * colapsada de P.11) primero la abre; después la centra, y si igual queda debajo de la barra, corre la barra.
  */
@@ -502,14 +522,18 @@ export function closeFind(view: EditorView, { select = true }: { select?: boolea
   const state = getFindState(view.state);
   const match = state.matches[state.current];
   const tr = view.state.tr.setMeta(findKey, { kind: 'clear' } satisfies FindMeta);
+  let selected = false;
   if (select && match?.field === 'text' && !state.stale) {
     try {
       tr.setSelection(TextSelection.create(tr.doc, match.from, match.to));
+      selected = true;
     } catch {
       // La posición ya no es de texto: la selección queda donde estaba.
     }
   }
   view.dispatch(tr);
+  // Ctrl/⌘+K sobre esto abre la búsqueda del proyecto, no "crear un link" (findUi.ts).
+  if (selected) recordFindSelection(view, view.state.selection.from, view.state.selection.to);
 }
 
 // --- Reemplazar --------------------------------------------------------------------------------------------

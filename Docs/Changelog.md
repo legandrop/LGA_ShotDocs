@@ -1,5 +1,25 @@
 # Changelog — LGA Shot Docs
 
+v0.054 :
+
+Buscar en todo el proyecto (P.12, segunda entrega). Una lupa a la izquierda del "+" de "Páginas" en la barra
+lateral (la ve cualquiera, también quien no puede crear páginas), o Ctrl/⌘+K desde cualquier lado, abre un panel
+que busca en los títulos y el texto de todas las páginas del proyecto abierto que la persona ve, también en los
+pies de las fotos y los nombres de los archivos; no en la papelera ni en los comentarios. Sin mayúsculas ni
+tildes (la ñ vale como n) y con partes de palabras; cada palabra tiene que estar en algún lado de la página.
+Los resultados salen por página, con el camino ("Brief › Uruguay") y hasta tres fragmentos con lo encontrado
+resaltado; se recorren con ↑ ↓ y Enter, y Esc cierra. Elegir un resultado abre la página con la barra de
+buscar ya puesta en esa coincidencia (Enter sigue por las demás), también en la misma página; un resultado del
+título abre la página arriba. Busca en el dispositivo: anda sin red, un dispositivo nuevo encuentra páginas que
+nunca abrió, y avisa si faltan páginas por bajar o alguna no se pudo leer entera. El panel lista también los
+otros proyectos que coinciden: Ctrl/⌘+K ahora busca, y cambiar de proyecto sigue a dos teclas (el selector de
+arriba se abre con un clic); si ninguno coincide (y ya no se está buscando), ofrece crear uno con ese nombre: se llega con las flechas y Enter. Una sola letra busca solo en
+los títulos. Un resultado adentro de una sección colapsada la abre para vos al llegar. Con texto elegido en el editor, Ctrl/⌘+K sigue creando un link, salvo que lo elegido sea lo que dejó
+Esc en la barra de buscar. En el teléfono el panel ocupa toda la pantalla y el cajón se cierra al ir al
+resultado. En la Mac los atajos son siempre con ⌘ y nunca con Ctrl (también mandar un comentario, comentar e
+imprimir). Con mil páginas, la primera búsqueda tarda unos milisegundos.
+[ Buscar en el proyecto - segunda entrega ]
+
 v0.053 :
 
 Colapsar secciones por sus títulos (P.11, entrega 1a). Todo título tiene un triángulo a la izquierda (aparece
