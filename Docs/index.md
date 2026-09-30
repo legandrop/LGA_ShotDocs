@@ -17,7 +17,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 | [`Doc_Imagenes.md`](Doc_Imagenes.md) | Fotos en la página: el primer clic elige, tamaños rápidos, fotos en fila, acomodar en filas y la opción del teléfono. |
 | [`Doc_Adjuntos.md`](Doc_Adjuntos.md) | Adjuntar cualquier archivo (PDF, zip…): la tarjeta, abrir y bajar, lo que sirve el portero y la seguridad. |
 | [`Doc_Peso_Proyectos.md`](Doc_Peso_Proyectos.md) | Cuánto ocupa cada proyecto en el Drive (P.7, primera entrega hecha en v0.050) y el diseño de la lista de media por peso (P.8). |
-| [`Doc_Colapsar.md`](Doc_Colapsar.md) | Colapsar secciones por sus títulos (P.11; entrega 1a, para vos, hecha en v0.053): qué esconde cada título, el triángulo, para vos y para todos (Shift+clic), editar con secciones colapsadas, las marcas de hoja y el PDF. |
+| [`Doc_Colapsar.md`](Doc_Colapsar.md) | Colapsar secciones por sus títulos (P.11; entrega 1a, para vos, hecha en v0.053): qué esconde cada título, el triángulo, para vos y para todos (Shift+clic), editar con secciones colapsadas, las marcas de hoja y el PDF; el margen del bloque (tres puntos, [puntos] [triángulo] [texto], la barra al hacer clic, sin "Borrar") y deshacer un borrado en un paso (v0.056). |
 | [`Doc_Buscar.md`](Doc_Buscar.md) | Buscar y reemplazar en la página (Ctrl/⌘+F; entrega 1, v0.051; desde v0.053 abre las secciones colapsadas) y buscar en todo el proyecto (Ctrl/⌘+K; entrega 2, v0.054): en el dispositivo, permisos, qué se busca, el índice, ir al resultado (P.12). |
 | [`Doc_Carrete.md`](Doc_Carrete.md) | El carrete: el visor a pantalla completa de las fotos y los videos de una página (qué entra, gestos, zoom, qué se ve sin red o si el navegador no puede reproducirlo, y cómo convive con la edición). |
 | [`Doc_Colaboracion.md`](Doc_Colaboracion.md) | Editar a la vez: qué puede pasar cuando dos personas cambian el mismo bloque (lo inherente de y-prosemirror), qué se arregló en v0.052, los parches de y-prosemirror y cómo revisarlos al actualizar, la semilla con texto y la reparación de bloques. |
@@ -50,7 +50,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 1085 pruebas (v0.055): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 1104 pruebas (v0.056): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`; las de editar a la vez son `src/ui/collab*.test.ts`, ver
   `Doc_Colaboracion.md`), el cliente del portero (`src/media/`), el portero
   (`portero/src/`), el importador de Coda (`src/import/`) y los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`
