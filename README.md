@@ -69,6 +69,9 @@ In production (v0.049). What works today:
   the guide, and a workspace list in the project menu to switch, join, create or remove one from the device.
 - A file trash per project: photos and videos no page uses anymore show in the *Files* tab of the trash, and
   the owner and admins can send them to the Google Drive trash (recoverable there for 30 days).
+- How much each project takes in the owner's Drive: in the project menu, in the *Google Drive* dialog (owner
+  only, with the Drive trash and what is still uploading) and at the top of the file trash (v0.050; it shows
+  once the workspace database is on version 7).
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
 - Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
@@ -89,7 +92,7 @@ Templates and the assistant come later. The plan, the decisions and the roadmap 
 npm install
 cp .env.example .env.local   # your Supabase project URL and publishable key
 npm run dev                  # http://localhost:5173
-npm test                     # all 678 tests: sync, editor, UI, file gateway client and Worker
+npm test                     # all 695 tests: sync, editor, UI, file gateway client and Worker
 npm run typecheck            # app types
 npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
 npm run build                # production build in dist/

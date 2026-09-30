@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { localize, useT, type Key } from '../i18n';
+import { locale, localize, useT, type Key } from '../i18n';
 import '../i18n/lazy/drive';
+import { formatSize } from '../media/fileTrash';
 import { pickFolder } from '../media/picker';
+import { totalOf } from '../media/projectSizes';
 import { Portero, sessionToken, type DriveStatus } from '../media/portero';
-import { useServices, useSyncStatus } from '../services';
+import { useProjectSizes, useServices, useSyncStatus } from '../services';
 
 // "Google Drive" en el menú de la cuenta (solo el dueño): la conexión con su Drive y dónde va la carpeta
 // `LGA_ShotDocs` (paso 8 del plan). Elegirla usa el selector de carpetas de Google; sin la clave
@@ -136,6 +138,7 @@ export function DriveDialog({ result, onClose }: { result: string | null; onClos
                   <dd>{tr.rich('drive.folderText', { folder: <code>LGA_ShotDocs</code>, place })}</dd>
                 </>
               )}
+              <DriveSpace />
             </dl>
             {status?.connected && status.picker === false && (
               <p className="muted drive-note">{tr.rich('drive.noPicker', { key: <code>GOOGLE_API_KEY</code> })}</p>
@@ -185,6 +188,68 @@ export function DriveDialog({ result, onClose }: { result: string | null; onClos
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * "Espacio en Drive" (P.7): el total de lo que la app subió, lo que está además en la papelera de Drive, el
+ * desglose en una línea y la nota de qué cuenta. Se pide siempre al abrir el diálogo. Con una base sin
+ * `project_sizes` no se muestra.
+ */
+function DriveSpace() {
+  const { sizes: store } = useServices();
+  const sizes = useProjectSizes();
+  const tr = useT();
+  useEffect(() => void store.refresh(), [store]);
+  if (!sizes.rows) {
+    if (!sizes.loading && !sizes.failed) return null;
+    return (
+      <>
+        <dt className="mono-label">{tr('drive.space')}</dt>
+        <dd className="muted">
+          {sizes.loading ? tr('drive.spaceLoading') : tr('drive.spaceFailed', { reason: localize(sizes.error ?? '') })}
+        </dd>
+      </>
+    );
+  }
+  const total = totalOf(sizes.rows);
+  const size = (bytes: number) => formatSize(bytes, tr.lang);
+  const count = (n: number) => new Intl.NumberFormat(locale(tr.lang)).format(n);
+  const details = [
+    total.trashBytes > 0 && tr('drive.spaceInTrash', { size: size(total.trashBytes) }),
+    total.pendingFiles > 0 && tr('drive.spacePending', { size: size(total.pendingBytes), count: total.pendingFiles, files: count(total.pendingFiles) }),
+    total.hiddenBytes > 0 && tr('drive.spaceHidden', { size: size(total.hiddenBytes) }),
+  ].filter(Boolean);
+  const at = sizes.at === null ? null : new Date(sizes.at);
+  return (
+    <>
+      <dt className="mono-label">{tr('drive.space')}</dt>
+      <dd className="drive-space">
+        <span>
+          {total.driveFiles > 0
+            ? tr('drive.spaceTotal', { size: size(total.driveBytes), count: total.driveFiles, files: count(total.driveFiles) })
+            : total.driveTrashBytes > 0
+              ? tr('drive.spaceNothingOutside')
+              : tr('drive.spaceNothing')}
+          {total.driveTrashBytes > 0 && <span className="muted"> {tr('drive.spaceDriveTrash', { size: size(total.driveTrashBytes) })}</span>}
+        </span>
+        {details.length > 0 && <span className="muted small">{details.join(' · ')}</span>}
+        <span className="muted small">{tr('drive.spaceNote')}</span>
+        <span className="muted small">
+          {sizes.loading
+            ? tr('drive.spaceLoading')
+            : sizes.failed === 'offline' && at
+              ? tr('drive.spaceOffline', { date: at.toLocaleString(locale(tr.lang), { dateStyle: 'short', timeStyle: 'short' }) })
+              : sizes.failed
+                ? tr('drive.spaceFailed', { reason: localize(sizes.error ?? '') })
+                : at && tr('drive.spaceUpdated', { time: at.toLocaleTimeString(locale(tr.lang), { hour: 'numeric', minute: '2-digit' }) })}
+          {' · '}
+          <button className="link" disabled={sizes.loading} onClick={() => void store.refresh()}>
+            {tr('drive.spaceRecalc')}
+          </button>
+        </span>
+      </dd>
+    </>
   );
 }
 

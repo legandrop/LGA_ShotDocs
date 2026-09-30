@@ -771,7 +771,7 @@ describe('adjuntos', () => {
     const fetch = vi.spyOn(b.remote, 'fetchMediaFiles');
     const card = cardText(await b.media.resolve(url));
     expect(card).toContain('plano.zip');
-    expect(card).toMatch(/ZIP · 3[.,]0 MB/);
+    expect(card).toMatch(/ZIP · 3 MB/);
     expect(b.media.fileInfo(id)).toEqual({ kind: 'file', mime: 'application/zip', name: 'plano.zip', size: 3 * MB, local: false });
     expect((b.media as unknown as { missing: Set<string> }).missing.size).toBe(0);
     const calls = fetch.mock.calls.length;

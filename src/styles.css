@@ -2469,6 +2469,17 @@ code {
   overflow-wrap: anywhere;
 }
 
+/* Espacio en Drive (P.7): el total y, abajo, en letra chica, el desglose, la nota y cuándo se calculó. */
+.drive-space {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drive-space .small {
+  font-size: 12px;
+}
+
 .media-actions {
   display: flex;
   flex-wrap: wrap;

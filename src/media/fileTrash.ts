@@ -1,4 +1,5 @@
 import { locale, t } from '../i18n';
+import type { Language } from '../prefs';
 import { errorMessage } from '../sync/types';
 import type { MediaRemote } from '../sync/remote';
 import type { TrashedFileRow } from '../sync/types';
@@ -87,14 +88,30 @@ export async function emptyFileTrash(
   return results;
 }
 
-/** El peso para mostrar: `820 KB`, `61.9 MB`, `1.2 GB` (en castellano, `61,9 MB`). */
-export function formatSize(bytes: number): string {
+const SIZE_UNITS = ['KB', 'MB', 'GB', 'TB'] as const;
+
+/** Redondeado como se muestra: un decimal por debajo de 100, entero desde 100. */
+function roundShown(value: number): number {
+  return value < 100 ? Math.round(value * 10) / 10 : Math.round(value);
+}
+
+/**
+ * El peso para mostrar, en base 1024 como cuenta Google: `820 KB`, `61.9 MB`, `3.4 GB`, `30 GB`, `1.2 TB`
+ * (en castellano, `61,9 MB`). Una sola regla: un decimal por debajo de 100 y ninguno desde 100, sin `.0`
+ * (`30 GB`, no `30.0 GB`). Se pasa a la unidad de arriba cuando el número llegaría a 1000 (nunca `1000 MB`).
+ * Algo de menos de 0,1 KB (y más de cero) se muestra como `0.1 KB`.
+ */
+export function formatSize(bytes: number, lang?: Language): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '';
-  const loc = locale();
-  if (bytes < 1024 * 1024) return `${new Intl.NumberFormat(loc).format(Math.max(1, Math.round(bytes / 1024)))} KB`;
-  const oneDecimal = new Intl.NumberFormat(loc, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  if (bytes < 1024 ** 3) return `${oneDecimal.format(bytes / 1024 ** 2)} MB`;
-  return `${oneDecimal.format(bytes / 1024 ** 3)} GB`;
+  let unit = 0;
+  let value = bytes / 1024;
+  while (unit < SIZE_UNITS.length - 1 && roundShown(value) >= 1000) {
+    value /= 1024;
+    unit++;
+  }
+  if (bytes > 0) value = Math.max(0.1, value);
+  const format = new Intl.NumberFormat(locale(lang), { maximumFractionDigits: roundShown(value) < 100 ? 1 : 0 });
+  return `${format.format(roundShown(value))} ${SIZE_UNITS[unit]}`;
 }
 
 /** Cuánto le falta para los 30 días, dicho corto. */

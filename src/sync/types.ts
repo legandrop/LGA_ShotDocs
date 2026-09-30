@@ -159,6 +159,26 @@ export interface TrashedFileRow {
   trashed_page_title?: string | null;
 }
 
+/**
+ * Una fila de `project_sizes` (versión 7 de la base, P.7): cuánto ocupa un proyecto en el Drive, en bytes y
+ * archivos. Cada archivo cuenta en un solo lugar. `drive_*` es el número principal: lo que la app tiene en
+ * Drive fuera de la papelera de Drive (en uso más la papelera de la app, que también viene sola en
+ * `trash_*`). `drive_trash_*`: en la papelera de Drive hace menos de 30 días (ocupa hasta que Google la
+ * vacía). `pending_*`: registrado y todavía sin subir. Con `project_id` nulo (solo al dueño), el total de los
+ * proyectos que no ve.
+ */
+export interface ProjectSizeRow {
+  project_id: string | null;
+  drive_bytes: number;
+  drive_files: number;
+  trash_bytes: number;
+  trash_files: number;
+  drive_trash_bytes: number;
+  drive_trash_files: number;
+  pending_bytes: number;
+  pending_files: number;
+}
+
 /** Una fila de `files_due_for_purge`. */
 export interface DueFileRow {
   id: string;

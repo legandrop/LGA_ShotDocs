@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { t, useT } from '../i18n';
-import { usePermissions, useServices, useTree } from '../services';
+import { formatSize } from '../media/fileTrash';
+import { usePermissions, useProjectSizes, useServices, useTree } from '../services';
 import { displayName } from '../workspaces';
 import { AccountIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
@@ -145,6 +146,8 @@ function ProjectMenu(props: {
 }) {
   const tree = useTree();
   const perms = usePermissions();
+  const { sizes: sizeStore } = useServices();
+  const sizes = useProjectSizes();
   const switchTo = useSwitchProject();
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
@@ -154,6 +157,8 @@ function ProjectMenu(props: {
   const [returned, setReturned] = useState(false);
   const tr = useT();
   useFloating(ref, props.onClose, props.anchor, false, !touch);
+  // El peso de cada proyecto (P.7): se vuelve a pedir al abrir si pasaron 5 minutos; mientras, lo guardado.
+  useEffect(() => void sizeStore.refreshIfStale(), [sizeStore]);
 
   const needle = query.trim().toLowerCase();
   // Antes de la primera sincronización el dispositivo puede no conocer todavía el proyecto abierto.
@@ -240,6 +245,9 @@ function ProjectMenu(props: {
       <div className="project-list" id="project-listbox" role="listbox" aria-label={tr('project.yours')}>
         {projects.map((p, i) => {
           const stats = tree.projectStats(p.id);
+          // Solo a quien ve la papelera de archivos del proyecto (también en el dispositivo: un valor guardado
+          // no se muestra si se perdió el permiso), y nunca en cero.
+          const bytes = perms.canSeeFileTrash(p.id) ? (sizes.rows?.find((r) => r.project_id === p.id)?.drive_bytes ?? 0) : 0;
           return (
             <button
               key={p.id}
@@ -256,7 +264,9 @@ function ProjectMenu(props: {
               <span className="project-label">
                 <strong>{p.name}</strong>
                 <span>
-                  {tr('project.pages', { count: stats.pages })} · {editedLabel(stats.updatedAt, tr)}
+                  {/* El peso antes de la fecha: si no entra, el "…" corta la fecha. */}
+                  {tr('project.pages', { count: stats.pages })} · {bytes > 0 && `${formatSize(bytes, tr.lang)} · `}
+                  {editedLabel(stats.updatedAt, tr)}
                 </span>
               </span>
               {p.id === props.current && <span className="current-mark">{tr('project.open')}</span>}

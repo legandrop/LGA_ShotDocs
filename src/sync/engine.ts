@@ -145,6 +145,8 @@ export class SyncEngine {
       access?: AccessStore;
       /** La cola de comentarios (paso 10): sube y baja al final de cada ciclo. */
       comments?: CommentQueue;
+      /** El peso de los proyectos (P.7): se entera de la versión de la base en cada sincronización. */
+      sizes?: { configure(schemaVersion: number): void };
     } = {},
   ) {
     const poke = () => this.poke();
@@ -401,6 +403,8 @@ export class SyncEngine {
   private async checkWorkspace(): Promise<{ outdated: boolean; removed: boolean }> {
     const settings = await this.remote.fetchWorkspaceSettings();
     this.options.comments?.configure(settings?.schemaVersion ?? null, settings?.generation ?? null);
+    // Sin ajustes, la base es anterior a todo esto: 0.
+    this.options.sizes?.configure(settings?.schemaVersion ?? 0);
     if (!settings) {
       this.patch({ outdated: false });
       return { outdated: false, removed: await this.checkAccess(null) };

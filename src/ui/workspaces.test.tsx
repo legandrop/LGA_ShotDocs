@@ -197,6 +197,7 @@ describe('en la app abierta', () => {
       mediaDb: d.mediaDb,
       comments: d.comments,
       commentsDb: d.commentsDb,
+      sizes: d.sizes,
       shutdown: async () => {
         d.engine.stop();
         d.db.close();
@@ -346,6 +347,7 @@ describe('quitar sin la base de fotos', () => {
       mediaDb: null,
       comments: d.comments,
       commentsDb: d.commentsDb,
+      sizes: d.sizes,
       shutdown: async () => {
         d.engine.stop();
         d.db.close();
