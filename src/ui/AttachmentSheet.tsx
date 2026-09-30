@@ -5,7 +5,7 @@ import { inlineType } from '../media/attachments';
 import { formatSize } from '../media/fileTrash';
 import { MEDIA_SCHEME } from '../media/queue';
 import { useServices } from '../services';
-import { downloadNow, openInNewTab, prepareAttachment, preparedFor } from './attachmentOpen';
+import { downloadNow, openInNewTab, prepareAndGet, preparedFor } from './attachmentOpen';
 import { notify } from './notice';
 
 // La hoja de un adjunto (Docs/Doc_Adjuntos.md): en el teléfono (un toque) y con el mouse cuando la dirección
@@ -24,7 +24,7 @@ export function AttachmentSheet({ fileId, onClose }: { fileId: string; onClose: 
   useEffect(() => {
     let alive = true;
     void media.resolve(MEDIA_SCHEME + fileId).then((src) => alive && setCard(src));
-    void prepareAttachment(media, fileId).then(() => alive && setReady(preparedFor(fileId)));
+    void prepareAndGet(media, fileId).then((r) => alive && setReady(r));
     // Compartir (en el teléfono): solo con el archivo del dispositivo y si el navegador lo acepta.
     void media
       .localOriginal?.(fileId)

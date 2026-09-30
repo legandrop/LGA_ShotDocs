@@ -116,17 +116,24 @@ export function fileKind(mime: string | null | undefined, name?: string | null):
   let type = baseType(mime);
   if (!type || type === 'application/octet-stream') type = mimeFromName(name) ?? '';
   const kind = mediaKind(type);
-  return kind && !NEVER_SHOWN.has(type) ? kind : 'file';
+  // Un subtipo XML (`image/x+xml`) el navegador lo muestra como documento: es un adjunto, como el SVG.
+  const xml = /\/(?:.*\+)?xml$|svg/.test(type);
+  return kind && !NEVER_SHOWN.has(type) && !xml ? kind : 'file';
 }
 
 /**
- * Lo que se puede abrir en una pestaña (la misma lista que usa el portero): imágenes menos SVG, videos, audio,
- * PDF y texto plano. Todo lo demás se baja.
+ * Lo que se abre en una pestaña: lo que el navegador sabe mostrar (fotos y audio comunes, videos, PDF y texto
+ * plano). Más estricto que el portero (que muestra cualquier foto, video o audio menos SVG y XML): un PSD, un
+ * EXR o un AIFF abierto en una pestaña terminaría bajándose con un nombre sin extensión, así que se bajan con
+ * su nombre. Nunca un SVG ni un subtipo XML.
  */
+const INLINE_IMAGE = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/bmp']);
+const INLINE_AUDIO = new Set(['audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav', 'audio/x-wav', 'audio/webm', 'audio/flac']);
 export function inlineType(mime: string): boolean {
   const type = baseType(mime);
-  if (type === 'image/svg+xml') return false;
-  if (/^(image|video|audio)\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(type)) return true;
+  if (/svg|\/(?:.*\+)?xml$/.test(type) || NEVER_SHOWN.has(type)) return false;
+  if (INLINE_IMAGE.has(type) || INLINE_AUDIO.has(type)) return true;
+  if (/^video\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(type)) return true;
   return type === 'application/pdf' || type === 'text/plain';
 }
 
@@ -200,7 +207,9 @@ export function cleanFileName(name: string, max = MAX_NAME): string {
     if (c < 0x20 || (c >= 0x7f && c <= 0x9f)) continue;
     if (c >= 0xd800 && c <= 0xdfff) continue;
     if (c === 0xfffe || c === 0xffff) continue;
-    if (c === 0x200e || c === 0x200f || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)) continue;
+    // Dirección del texto, los de ancho cero y los separadores de renglón (los mismos que saca el portero).
+    if (c === 0x061c || (c >= 0x200b && c <= 0x200f) || c === 0x2028 || c === 0x2029 || (c >= 0x202a && c <= 0x202e)) continue;
+    if (c === 0x2060 || (c >= 0x2066 && c <= 0x2069)) continue;
     kept.push(ch);
   }
   const clean = kept.join('').trim();

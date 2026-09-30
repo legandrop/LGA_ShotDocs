@@ -54,21 +54,26 @@ Lega.
   original a todo el ancho (más altas que en pantalla, con la miniatura). Ver `Doc_Hojas_PDF.md`.
 - **P.2 Hecho (v0.044): el primer clic en una foto la elige, el segundo la abre.** Contorno, tiradores a la
   vista y su barra. Ver `Doc_Imagenes.md`.
-- **P.3 Fotos y videos en fila** (`Doc_Imagenes.md`, entrega 2): tamaños rápidos 1/1, 1/2, 1/3 y 1/4 en la
+- **P.3 Hecho (v0.045): fotos y videos en fila** (`Doc_Imagenes.md`, entrega 2): tamaños rápidos 1/1, 1/2, 1/3 y 1/4 en la
   barra, fotos seguidas que entran quedan en una fila, tiradores que imantan a esos tamaños, flechas y Enter
   en una fila, paginación y PDF con la fila entera. Propiedad nueva `rowWidth` en el bloque `image` (sin
-  tipo de bloque nuevo): después de publicar, subir `min_app_version` (pide autorización de Lega).
-- **P.4 Acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos
+  tipo de bloque nuevo); `min_app_version` quedó en 0.045.
+- **P.4 Hecho (v0.046): acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos
   y videos seguidos en una o más filas de la misma altura, sin cambiar el orden. Se audita antes y después.
-- **P.5 En el teléfono, filas o apiladas:** una opción de la cuenta (solo tiene efecto en pantallas
+- **P.5 Hecho (v0.047): en el teléfono, filas o apiladas:** una opción de la cuenta (solo tiene efecto en pantallas
   angostas) para ver las fotos y videos en fila, como en la computadora, o uno debajo del otro. No cambia lo
   guardado. Por defecto, en fila.
-- **P.6 Hecho (v0.048 portero, v0.049 app; falta la vista previa): adjuntar cualquier archivo:** arrastrar o pegar un PDF, un .zip, un .rar o lo que sea; va al Drive
-  del dueño como las fotos y se ve como una tarjeta con ícono, nombre y tamaño. Al hacer clic: un PDF (o lo
-  que el navegador sepa mostrar) se abre en una pestaña nueva; el resto se descarga. Sin tipo de bloque
-  nuevo (el bloque `file` de BlockNote lo borraría una versión vieja): el mismo bloque `image` con
-  `sdmedia://`, que la app ya muestra según el tipo del archivo. Pensar vista previa (primera página del PDF
-  como miniatura). Diseño y auditoría antes de implementar.
+- **P.6 Hecho (v0.048 portero, v0.049 app): adjuntar cualquier archivo** (`Doc_Adjuntos.md`): arrastrar o
+  pegar un PDF, un .zip o lo que sea; va al Drive del dueño como las fotos y se ve como una tarjeta con ícono,
+  nombre y tamaño (el mismo bloque `image` con `sdmedia://`, sin tipo de bloque nuevo). Un PDF (o lo que el
+  navegador sabe mostrar) se abre en una pestaña nueva; el resto se baja con su nombre; en el teléfono, un
+  toque abre una hoja. Falta: la vista previa (entrega 2), la tarjeta grande en el carrete y probar a mano con
+  el portero real.
+- **P.7 Hecho (v0.050, primera entrega; la migración 7 falta aplicarla en Wanka): cuánto ocupa cada proyecto
+  en el Drive.** El peso en el renglón de cada proyecto del selector, el total con su desglose en el diálogo
+  de Google Drive (solo el dueño) y el total de la papelera de archivos, con la confirmación de vaciar
+  corregida. Sale de sumar `files.size` en la base (`project_sizes`), sin preguntarle a Drive. Ver
+  `Doc_Peso_Proyectos.md`, "Cómo quedó". La lista por proyecto y el orden por peso van con P.8.
 - **P.9 Arrastrar una carpeta** (pedido de Lega, 2026-09-30, al responder las decisiones de P.6): hoy se
   rechaza pidiendo que se comprima. Lo que quiere: subir la carpeta entera, con sus subcarpetas, al Drive del
   dueño, con una ventana que muestre qué se está subiendo ("esta carpeta, con todo esto"); en la página queda
@@ -83,11 +88,6 @@ Lega.
   del navegador después de que el archivo está confirmado en el Drive (por ejemplo, un video grande subido
   desde el iPhone). Pensar cuándo (tamaño, días), qué se pierde (verlo sin red en ese dispositivo) y que la
   miniatura se queda. Diseño antes.
-- **P.7 Hecho (v0.050, primera entrega; la migración 7 falta aplicarla en Wanka): cuánto ocupa cada proyecto
-  en el Drive.** El peso en el renglón de cada proyecto del selector, el total con su desglose en el diálogo
-  de Google Drive (solo el dueño) y el total de la papelera de archivos, con la confirmación de vaciar
-  corregida. Sale de sumar `files.size` en la base (`project_sizes`), sin preguntarle a Drive. Ver
-  `Doc_Peso_Proyectos.md`, "Cómo quedó". La lista por proyecto y el orden por peso van con P.8.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

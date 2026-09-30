@@ -39,7 +39,7 @@ interface Entry {
 
 const ENTRIES: Record<string, Entry> = {
   [PHOTO_A]: { kind: 'image', name: 'IMG_0001.JPG', preview: 'blob:thumb-a', full: { url: 'blob:full-a', local: true } },
-  [VIDEO_B]: { kind: 'video', name: 'IMG_0666.MOV', preview: 'blob:thumb-b', full: { url: 'https://portero.test/m/pass-b', local: false } },
+  [VIDEO_B]: { kind: 'video', name: 'IMG_0666.MOV', preview: 'blob:thumb-b', full: { url: 'https://portero.test/m/pass-b', local: false, portero: true } },
   [PHOTO_C]: { kind: 'image', name: 'c.jpg', preview: PHOTO_C, full: { url: PHOTO_C, local: false } },
 };
 
@@ -276,9 +276,11 @@ describe('carrete: videos', () => {
     expect(video.hasAttribute('controls')).toBe(true);
     expect(video.hasAttribute('playsinline')).toBe(true);
     expect(video.getAttribute('preload')).toBe('metadata');
-    // Un archivo del portero se abre en otra pestaña (no se puede bajar con su nombre desde otro sitio).
+    // Un archivo del portero se baja con `?download=1` (el portero lo manda como descarga, con su nombre), en
+    // otra pestaña (si respondiera un error, no reemplaza la app); el video sigue con el pase sin eso.
     const link = document.querySelector<HTMLAnchorElement>('a[aria-label="Download IMG_0666.MOV"]')!;
     expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('href')).toBe('https://portero.test/m/pass-b?download=1');
   });
 
   const localVideo: Record<string, Entry> = { ...ENTRIES, [VIDEO_B]: { ...ENTRIES[VIDEO_B], full: { url: 'blob:video-b', local: true } } };
@@ -396,17 +398,22 @@ describe('carrete: bajar el original desde la barra de la imagen', () => {
     expect(local.pass).not.toHaveBeenCalled();
 
     const remote = { source: vi.fn(async () => ({ kind: 'video' as const, name: 'IMG_2.MOV', original: null })), pass: vi.fn(async () => 'https://portero.test/m/p') };
-    expect(await originalFor(remote, 'id-2')).toMatchObject({ full: { url: 'https://portero.test/m/p', local: false }, name: 'IMG_2.MOV' });
+    const far = await originalFor(remote, 'id-2');
+    expect(far).toMatchObject({ full: { url: 'https://portero.test/m/p', local: false, portero: true }, name: 'IMG_2.MOV' });
 
     const clicked: HTMLAnchorElement[] = [];
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
       clicked.push(this);
     });
     startDownload(got.full, got.name);
-    startDownload({ url: 'https://portero.test/m/p', local: false }, 'IMG_2.MOV');
+    startDownload(far.full, far.name);
+    startDownload({ url: 'https://example.com/a.jpg', local: false }, 'a.jpg');
     expect(clicked[0].getAttribute('download')).toBe('IMG_1.HEIC');
     expect(clicked[0].target).toBe('');
+    // Del portero: obliga a bajar (un PDF no se abre) en otra pestaña. Una dirección de otro sitio, tal cual.
     expect(clicked[1].target).toBe('_blank');
+    expect(clicked[1].getAttribute('href')).toBe('https://portero.test/m/p?download=1');
+    expect(clicked[2].getAttribute('href')).toBe('https://example.com/a.jpg');
     expect(document.querySelectorAll('a[download]').length).toBe(0);
     click.mockRestore();
     got.release();

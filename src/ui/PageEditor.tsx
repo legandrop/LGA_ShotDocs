@@ -180,7 +180,6 @@ function UnsupportedPage() {
   );
 }
 
-/** Lo que se puede agregar hoy, para el aviso. */
 /** Sin portero solo se guardan imágenes (a Supabase): para cualquier otro archivo hace falta el Drive. */
 function acceptedText(): string {
   return t('editor.attachNeedsDrive');
@@ -216,7 +215,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   // vuelve una tarjeta).
   const storeEmbedded = (blob: Blob): Promise<string> => {
     if (media.enabled && isMediaFile(blob)) return media.add(pageId, blob);
-    if (!isAllowedImage(blob.type)) return Promise.reject(new FileRejected(t('editor.onlyImages')));
+    if (!isAllowedImage(blob.type)) return Promise.reject(new FileRejected(t(media.enabled ? 'editor.embeddedOnlyMedia' : 'editor.onlyImages')));
     return files.add(pageId, blob);
   };
 
@@ -477,7 +476,9 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
     // Un adjunto se abre o se baja (con el mouse, en el acto si ya está preparado; si no, o con el dedo, su hoja).
     const attachment = blockId ? attachmentOf(blockId) : null;
     if (attachment) {
-      if (kind !== 'mouse' || !openAttachmentNow(media, attachment)) setSheet(attachment);
+      // Con el mouse o el teclado (un gesto del usuario), en el acto si ya está preparado.
+      const direct = kind === 'mouse' || kind === 'keyboard';
+      if (!direct || !openAttachmentNow(media, attachment)) setSheet(attachment);
       return true;
     }
     const items = collectCarrete(editor.document as unknown as BlockLike[], (id, name) => isAttachment(media, id, name));
@@ -525,7 +526,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
     if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !editor.isFocused()) return;
     const block = editor.getTextCursorPosition().block;
     if (selectedImageId() !== block.id) return;
-    if (openAt(block.id)) {
+    if (openAt(block.id, 'keyboard')) {
       e.preventDefault();
       e.stopPropagation();
     }

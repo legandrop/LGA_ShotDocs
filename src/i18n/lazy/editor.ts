@@ -106,6 +106,10 @@ export const editor = {
     en: "Only images can be added. To attach other files, the owner has to connect Google Drive.",
     es: "Solo se pueden agregar imágenes. Para adjuntar otros archivos, el dueño tiene que conectar Google Drive.",
   },
+  'editor.embeddedOnlyMedia': {
+    en: "Only photos and videos pasted inside text are kept; attach other files by dropping them.",
+    es: "De lo pegado dentro de un texto solo se guardan fotos y videos; los otros archivos, arrastrándolos.",
+  },
   'editor.foldersNotSupported': {
     en: "Folders can't be added: compress them first (.zip).",
     es: "No se pueden agregar carpetas: primero comprimilas (.zip).",

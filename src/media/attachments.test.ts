@@ -59,6 +59,9 @@ describe('fileKind', () => {
     expect(fileKind('application/pdf', 'notas.pdf')).toBe('file');
     expect(fileKind('audio/mpeg')).toBe('file');
     expect(fileKind('text/html')).toBe('file');
+    // Un subtipo XML se muestra como documento: adjunto.
+    expect(fileKind('image/x-foo+xml')).toBe('file');
+    expect(fileKind('video/x-bar+xml')).toBe('file');
   });
 
   it('sin tipo (o con el genérico), por la extensión del nombre', () => {
@@ -85,8 +88,8 @@ describe('fileKind', () => {
 });
 
 describe('inlineType', () => {
-  it('solo lo que se puede abrir sin riesgo: imágenes menos SVG, video, audio, PDF y texto plano', () => {
-    for (const mime of ['image/png', 'image/heic', 'video/mp4', 'audio/mpeg', 'application/pdf', 'Application/PDF', 'text/plain; charset=utf-8']) {
+  it('solo lo que el navegador sabe mostrar sin riesgo: fotos y audio comunes, video, PDF y texto plano', () => {
+    for (const mime of ['image/png', 'image/webp', 'video/mp4', 'audio/mpeg', 'application/pdf', 'Application/PDF', 'text/plain; charset=utf-8']) {
       expect(inlineType(mime), mime).toBe(true);
     }
     for (const mime of [
@@ -104,6 +107,13 @@ describe('inlineType', () => {
       'application/octet-stream',
       'image/',
       '',
+      // Lo que el navegador no muestra: se baja con su nombre (en una pestaña se bajaría sin extensión).
+      'image/heic',
+      'image/vnd.adobe.photoshop',
+      'image/x-exr',
+      'audio/aiff',
+      // Nunca un subtipo XML, aunque diga imagen.
+      'image/x-foo+xml',
     ]) {
       expect(inlineType(mime), mime).toBe(false);
     }
@@ -151,6 +161,8 @@ describe('cleanFileName', () => {
     expect(cleanFileName('factura‮fdp.exe')).toBe('facturafdp.exe');
     expect(cleanFileName('⁦a⁧b⁨c⁩‎‏.txt')).toBe('abc.txt');
     expect(cleanFileName('‪‫‬‭x.pdf')).toBe('x.pdf');
+    // Los de ancho cero, la marca árabe y los separadores de renglón (los mismos que saca el portero).
+    expect(cleanFileName('a\u200bb\u200cc\u200dd\u2060e\u061cf\u2028g\u2029.pdf')).toBe('abcdefg.pdf');
   });
 
   it('saca los de control y los que XML no admite', () => {

@@ -1,4 +1,4 @@
-import { fileKind } from '../media/attachments';
+import { fileKind, mimeFromName } from '../media/attachments';
 import type { MediaQueue } from '../media/queue';
 import { MEDIA_SCHEME } from '../media/queue';
 
@@ -9,7 +9,9 @@ import { MEDIA_SCHEME } from '../media/queue';
 export function isAttachment(media: Pick<MediaQueue, 'fileInfo'>, id: string, name: string): boolean {
   const info = media.fileInfo(id);
   if (info) return info.kind === 'file';
-  return name !== '' && fileKind(null, name) === 'file';
+  // Sin la info todavía, solo por una extensión conocida que no es de fotos ni videos (un nombre sin extensión
+  // o con una rara puede ser una foto).
+  return mimeFromName(name) !== null && fileKind(null, name) === 'file';
 }
 
 /**

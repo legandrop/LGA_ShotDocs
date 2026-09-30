@@ -96,4 +96,15 @@ describe('insertar archivos', () => {
     expect(editor.document[0].type).toBe('paragraph');
     expect(editor.document[1].type).toBe('image');
   });
+
+  it('un párrafo vacío con bloques adentro no se reemplaza (se llevaría los de adentro)', async () => {
+    const editor = mount();
+    editor.replaceBlocks(editor.document, [{ type: 'paragraph', content: '', children: [{ type: 'paragraph', content: 'Adentro' }] }]);
+    const fe = editor as unknown as FileEditor;
+    fe.uploadFile = async (file: File) => `sdmedia://${file.name}`;
+    await insertFiles(fe, [new File(['x'], 'a.pdf')], { blockId: editor.document[0].id, placement: 'after' });
+    expect(editor.document[0].type).toBe('paragraph');
+    expect(editor.document[0].children).toHaveLength(1);
+    expect(editor.document[1].type).toBe('image');
+  });
 });
