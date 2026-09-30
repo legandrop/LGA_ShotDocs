@@ -18,7 +18,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, typ
 import { t, useT, type Translate } from '../i18n';
 import '../i18n/lazy/editor';
 import { useServices } from '../services';
-import { blockIdOf } from './carrete';
+import { blockIdOf } from './carreteModel';
 import { hiddenInDom } from './collapseDom';
 import { onCollapseChange, removeWithSections } from './collapseEditor';
 import {

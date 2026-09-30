@@ -4,7 +4,7 @@ import { t, useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { mediaIdOf } from '../media/queue';
 import { useServices } from '../services';
-import { carreteSourceOf } from './carrete';
+import { carreteSourceOf } from './carreteModel';
 import { isOffline, originalFor, startDownload } from './carreteLoader';
 import { DownloadIcon } from './icons';
 import { isAttachment } from './attachments';

@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { importJobFor } from '../import/importJob';
 import { copyWhenReady, parseInviteHash } from '../invite';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -209,5 +210,37 @@ describe('pantallas del equipo', () => {
     click([...host.querySelectorAll('button')].find((b) => b.textContent?.includes('keep it on this device')));
     expect(signOut).toHaveBeenCalledTimes(1);
     expect(shutdown).not.toHaveBeenCalled();
+  });
+
+  it('la pantalla de sacado no cierra la sesión ni borra el dispositivo con una importación de Coda en curso', async () => {
+    const { server, device } = await teamDevice('ana');
+    server.removeMember('ana');
+    await device.engine.syncNow();
+    const signOut = vi.fn(async () => ({ error: null }));
+    const value = services(device, 'ana', signOut);
+    const shutdown = vi.fn(async () => undefined);
+    value.shutdown = shutdown;
+    const alert = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const job = importJobFor(device.tree);
+    let finish!: () => void;
+    const running = job.run(
+      () => new Promise((resolve) => (finish = () => resolve({ projectId: 'p', pages: 0, files: 0, problems: [], exportProblems: [], resumable: false }))),
+    );
+    try {
+      const host = await mount(value, <RemovedScreen />);
+      const buttons = [...host.querySelectorAll('button')];
+      click(buttons.find((b) => b.textContent?.includes('keep it on this device')));
+      click(buttons.find((b) => b.textContent?.includes('Remove')));
+      await act(async () => new Promise((r) => setTimeout(r, 20)));
+      expect(signOut).not.toHaveBeenCalled();
+      expect(shutdown).not.toHaveBeenCalled();
+      expect(alert).toHaveBeenCalledWith('An import from Coda is running. Wait until it finishes.');
+    } finally {
+      finish();
+      await running;
+      job.close();
+      vi.restoreAllMocks();
+    }
   });
 });

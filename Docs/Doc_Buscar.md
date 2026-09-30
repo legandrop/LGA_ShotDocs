@@ -815,7 +815,7 @@ todo al desmontarse la barra. Pruebas nuevas en `findBar.test.tsx`: cada entrada
 página a medio bajar que al completarse no vuelve si la persona se fue, y al desmontarse se sueltan escuchas y
 `ResizeObserver`; en `find.mjs`, el color del borde en cada tema y el rojo sin resultados.
 
-**Pruebas (1050 en total en esta rama antes de la auditoría, 1055 después):** `src/ui/findScroll.test.ts` (el contenedor que se desplaza; centrar
+**Pruebas (1050 en total en esta rama antes de la auditoría, 1055 después; 1101 con v0.055 de `main`):** `src/ui/findScroll.test.ts` (el contenedor que se desplaza; centrar
 debajo de la barra de arriba; de costado con una hoja ancha y sin mover si ya se ve; una escondida no mueve;
 volver a centrar con cada cambio de tamaño y con el `load` de una foto; desplazar, un clic o una tecla lo
 cortan; se termina a los 4 s, al ir a otra o al cerrar; con Enter, una sola vez) y en `src/ui/findBar.test.tsx`

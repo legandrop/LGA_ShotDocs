@@ -8,10 +8,31 @@ la parte que se desplaza de la app (y de costado si hace falta) y se sigue centr
 página se acomoda (fotos que bajan, marcas de hoja), hasta que desplazás, tocás o escribís; antes se centraba
 una sola vez y las fotos de arriba la empujaban fuera de la pantalla. El campo de la barra de buscar enfocado
 tiene un solo borde fino (amarillo en el tema oscuro, un amarillo más oscuro en el claro para que se vea), sin el
-marco blanco ni el contorno grueso. Con una hoja más
-ancha que la ventana, la barra de buscar se alinea con los íconos de arriba y ya no queda cortada al borde de la
-hoja.
+marco blanco ni el contorno grueso. Con una hoja más ancha que la ventana, la barra de buscar se alinea con los
+íconos de arriba y ya no queda cortada al borde de la hoja.
 [ Buscar - ir al resultado y la barra en hojas anchas ]
+
+v0.055 :
+
+Importar de Coda con fotos. Antes una página pasaba sin sus imágenes: el Markdown de Coda las descarta, y el
+editor tira una <img> que está adentro de un párrafo o de un ítem de lista, que es como las exporta Coda.
+Ahora `scripts/coda-export.mjs` baja el doc por la API en HTML, con cada foto y video a una carpeta, y
+*Import from Coda…* (selector de proyectos) la importa a un proyecto nuevo: páginas con `tree.create`,
+archivos con `media.add` (se suben al Drive por el portero, como al soltarlos) y cada foto como bloque propio,
+dentro del ítem cuando estaba en una lista. Los colores pasan a los del editor y el guion a texto Script.
+Una importación cortada (se cerró la app, una página que falló, sin espacio) se sigue en el mismo proyecto
+sin repetir páginas ni archivos y sin pisar lo que se editó mientras tanto, y la app pide confirmación antes
+de cerrarse, cerrar la sesión o ceder a otra ventana mientras importa. Los textos del diálogo, los errores
+y la lista del final están en castellano e inglés; sin Drive conectado o en el iPad (no elige carpetas) el diálogo lo
+dice de entrada, y muestra cuánto pesa lo que se va a guardar y cuánto espacio queda. Se revisa el manifest
+(sin páginas, un error claro; páginas sin nombre o en círculo no cortan nada), y quedan anotadas las páginas
+que no son texto, las fotos que no estaban guardadas en Coda (las https quedan enlazadas) y lo que anotó el
+comando. El comando manda el token solo a la API de Coda y tiene `--refresh`.
+Probado con MGTZD (35 páginas, 32 fotos). Ver `Doc_Importar_Coda.md`.
+Además, `src/ui/carrete.ts` pasa a `carreteModel.ts` (y su prueba a `carreteModel.test.ts`): al lado de
+`Carrete.tsx`, en un disco que no distingue mayúsculas (Windows, macOS) un import sin extensión podía
+encontrar el módulo equivocado. Una prueba (`src/fileNames.test.ts`) revisa que no vuelva a pasar.
+[ Importar de Coda con fotos ]
 
 v0.054 :
 

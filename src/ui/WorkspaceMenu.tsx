@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { t, useT } from '../i18n';
 import type { MediaRecord } from '../media/mediaDb';
 import { prefs } from '../prefs';
+import { importJobFor } from '../import/importJob';
 import { useServices, useSyncStatus } from '../services';
 import { errorMessage } from '../sync/types';
 import { unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
@@ -54,7 +55,8 @@ export function useLeaveGuard(): () => boolean {
   const { current } = useCurrentWorkspace();
   const name = current ? displayName(current) : t('noProjects.thisWorkspace');
   return useCallback(() => {
-    if (docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites() || comments.hasUnsavedWrites()) {
+    const importing = importJobFor(tree).get().running;
+    if (importing || docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites() || comments.hasUnsavedWrites()) {
       alert(t('leave.unsaved'));
       return false;
     }
