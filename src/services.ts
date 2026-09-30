@@ -273,11 +273,16 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       let closing: Promise<void> | null = null;
       const shutdown = () => {
         closing ??= (async () => {
-          engine.stop();
+          const stopping = engine.stop();
           docs.dispose();
           media.dispose();
           try {
             await docs.flush();
+            // El ciclo en curso corta en su próximo paso, pero puede estar esperando al servidor: se lo
+            // espera un rato, no más (cerrar la base igual no rompe nada, ver `SyncEngine.cycle`).
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            await Promise.race([stopping, new Promise((r) => (timer = setTimeout(r, 2000)))]);
+            clearTimeout(timer);
           } finally {
             db.close();
             mediaDb?.close();

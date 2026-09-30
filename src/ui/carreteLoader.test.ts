@@ -11,9 +11,9 @@ import { createCarreteLoader, downloadTarget, isOffline, openTarget, originalFor
 const MB = 1024 * 1024;
 const devices: Device[] = [];
 
-afterEach(() => {
+afterEach(async () => {
   for (const d of devices.splice(0)) {
-    d.engine.stop();
+    await d.engine.stop();
     d.db.close();
     d.mediaDb.close();
   }

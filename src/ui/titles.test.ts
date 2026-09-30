@@ -5,9 +5,9 @@ import type { PageRow } from '../sync/types';
 import { headerLevels, headerPages, splitEnabled, splitSiblings, splitTitle } from './titles';
 
 const devices: Device[] = [];
-afterEach(() => {
+afterEach(async () => {
   for (const d of devices.splice(0)) {
-    d.engine.stop();
+    await d.engine.stop();
     d.db.close();
   }
 });
