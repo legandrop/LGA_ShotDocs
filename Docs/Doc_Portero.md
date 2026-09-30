@@ -160,7 +160,7 @@ caché del arranque (también el `206`):
   `attachment`: nunca corre como página en la dirección del portero. Las fotos y los videos nunca pasan a
   `octet-stream` (el `<img>` y el `<video>` de la app usan el mismo pase).
 - `?download=1` pasa a `attachment` (con el tipo de la lista, si es de la lista).
-- **CORS (desde v0.059):** a un pedido con `Origin` de `APP_ORIGINS`, todo lo que sale de `/m/` (`200`, `206`,
+- **CORS (desde v0.058):** a un pedido con `Origin` de `APP_ORIGINS`, todo lo que sale de `/m/` (`200`, `206`,
   también de la caché del arranque, `HEAD`, `416` y los errores) lleva `Access-Control-Allow-Origin` con ese
   origen y `Access-Control-Expose-Headers: Content-Length, Content-Range, Content-Type, Content-Disposition,
   ETag`; `Vary: Origin` siempre (la caché del navegador no le da a `fetch` la respuesta sin CORS que pidió un

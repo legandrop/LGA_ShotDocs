@@ -1,7 +1,7 @@
 # Imágenes en la página: elegir, tamaño y filas
 
 Diseño de lo que pidió Lega el 2026-09-30 (fotos y videos del editor; en la página los dos son un bloque
-`image`, ver `Doc_Carrete.md`). Estado: **hecho: v0.044 (elegir y abrir), v0.045 (anchos y filas), v0.046 (acomodar en filas), v0.047 (en el teléfono, en fila o apiladas) y v0.059 (calidad en la página).** "Correcciones de la auditoría previa" manda sobre lo anterior.
+`image`, ver `Doc_Carrete.md`). Estado: **hecho: v0.044 (elegir y abrir), v0.045 (anchos y filas), v0.046 (acomodar en filas), v0.047 (en el teléfono, en fila o apiladas) y v0.058 (calidad en la página).** "Correcciones de la auditoría previa" manda sobre lo anterior.
 
 ## Lo que se pide
 
@@ -251,7 +251,7 @@ quedan alineadas arriba).
 - Solo en la página (`#root`): la vista de impresión (que mide las marcas de hoja también en el teléfono) y
   el PDF siguen con las filas.
 
-## Calidad en la página (v0.059)
+## Calidad en la página (v0.058)
 
 **El problema** (lo vio Lega con MGTZD importado de Coda): en la página las fotos se veían borrosas y en el
 carrete, nítidas. **Era nuestro, no de la exportación.** `scripts/coda-export.mjs` baja la dirección tal cual
@@ -290,7 +290,7 @@ memoria).
   la versión de IndexedDB: una versión vieja no la lee ni se entera; 2) el original del dispositivo, reducido
   (anda sin red); 3) si no está, el original bajado **una sola vez por dispositivo** con un pase del portero
   (el mismo del carrete) y reducido acá. Nunca se sube nada: ni a Supabase ni a Drive.
-- **Depende del portero de v0.059.** La app baja el original con `fetch`, y el navegador solo la deja leer la
+- **Depende del portero de v0.058.** La app baja el original con `fetch`, y el navegador solo la deja leer la
   respuesta si el portero manda `Access-Control-Allow-Origin` en `/m/` (`Doc_Portero.md`, "Lo que se sirve"),
   que se publica con esta versión. Con un portero anterior la bajada falla y la página sigue con la
   miniatura; después de tres fallas seguidas sin respuesta (con red) la app no baja nada por media hora.

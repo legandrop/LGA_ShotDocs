@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.059 :
+v0.058 :
 
 Fotos nítidas en la página. Las fotos se veían borrosas en la página (y bien en el carrete) porque la página
 mostraba siempre la miniatura de 480 px, estirada al ancho de la foto (hasta ~1100 px, el doble en pantallas
