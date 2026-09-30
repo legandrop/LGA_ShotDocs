@@ -7,6 +7,7 @@ export type Font = 'default' | 'editorial';
 export type TextSize = 'small' | 'normal' | 'large';
 export type PageWidth = 'normal' | 'wide';
 export type Language = 'en' | 'es';
+export type PhoneImages = 'rows' | 'stacked';
 
 /** Preferencias de la cuenta: siguen al usuario en todos sus dispositivos. */
 export interface Prefs {
@@ -21,6 +22,12 @@ export interface Prefs {
    * (ver `read` y `readStored`) y uno nuevo arranca con el del navegador.
    */
   language: Language;
+  /**
+   * En el teléfono (pantallas angostas), las fotos y videos en fila (Docs/Doc_Imagenes.md) se ven en fila,
+   * como en la computadora, o uno debajo del otro. Solo cambia cómo se ven: lo guardado y el PDF, igual.
+   * Una versión anterior no conoce la clave (igual que `language`).
+   */
+  phoneImages: PhoneImages;
 }
 
 /** El idioma de fábrica: castellano si el navegador está en castellano (`es`, `es-AR`…); si no, inglés. */
@@ -36,6 +43,7 @@ export const DEFAULT_PREFS: Prefs = {
   textSize: 'normal',
   pageWidth: 'normal',
   language: detectLanguage(),
+  phoneImages: 'rows',
 };
 
 const CHOICES: { [K in keyof Prefs]: readonly Prefs[K][] } = {
@@ -44,6 +52,7 @@ const CHOICES: { [K in keyof Prefs]: readonly Prefs[K][] } = {
   textSize: ['small', 'normal', 'large'],
   pageWidth: ['normal', 'wide'],
   language: ['en', 'es'],
+  phoneImages: ['rows', 'stacked'],
 };
 
 /**
@@ -391,6 +400,7 @@ function applyToDocument(prefs: Prefs, scheme: 'light' | 'dark'): void {
   root.dataset.textSize = prefs.textSize;
   root.dataset.pageWidth = prefs.pageWidth;
   root.lang = prefs.language;
+  root.dataset.phoneImages = prefs.phoneImages;
   for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
     meta.content = THEME_COLORS[scheme];
     meta.removeAttribute('media');

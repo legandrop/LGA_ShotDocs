@@ -229,3 +229,13 @@ quedan alineadas arriba).
   la misma altura y llenando el ancho, el orden no cambia, un deshacer vuelve atrás.
 - Visto al probar (ya pasaba antes, no es de esto): después de pegar fotos, deshacer y rehacer varias veces
   pasa por un estado intermedio sin las fotos; al rehacer todo, o al recargar, están todas.
+
+## En el teléfono: en fila o apiladas (v0.047)
+
+- Preferencia de la cuenta `phoneImages` (`src/prefs.ts`): `rows` (por defecto) o `stacked`. Se elige en el
+  menú de la cuenta (*Images in a row* / *Fotos en fila*), que la muestra solo en pantallas angostas
+  (`isPhoneLayout`, menos de 760 px).
+- Queda en `<html data-phone-images>`; el CSS, solo en pantallas angostas y solo en el editor, pone cada foto
+  de una fila en su propio renglón. La vista de impresión y el PDF no cambian.
+- Una versión anterior no conoce la clave: la maneja como el idioma (una copia vieja sin la clave no la
+  sube; si la cuenta no la tiene, se completa con la de fábrica). Pruebas en `prefs.test.ts`.

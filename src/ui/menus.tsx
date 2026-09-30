@@ -19,6 +19,7 @@ import {
   SystemIcon,
   TrashIcon,
 } from './icons';
+import { isPhoneLayout } from './commentsUi';
 import { notify } from './notice';
 import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
@@ -333,6 +334,17 @@ export function AccountMenu({
           { value: 'wide', label: tr('account.pageWidth.wide') },
         ]}
       />
+      {/* Solo en el teléfono: las fotos en fila se ven en fila o una debajo de la otra (Doc_Imagenes.md). */}
+      {isPhoneLayout() && (
+        <Segmented
+          label={tr('account.phoneImages')}
+          pref="phoneImages"
+          options={[
+            { value: 'rows', label: tr('account.phoneImages.rows') },
+            { value: 'stacked', label: tr('account.phoneImages.stacked') },
+          ]}
+        />
+      )}
       {/* Cada idioma con su propio nombre, así se encuentra aunque la app esté en el otro. */}
       <Segmented
         label={tr('account.language')}

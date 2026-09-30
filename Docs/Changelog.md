@@ -1,5 +1,13 @@
 # Changelog — LGA Shot Docs
 
+v0.047 :
+
+En el teléfono, las fotos y videos en fila se ven en fila, como en la computadora, o uno debajo del otro:
+lo elige cada cuenta en el menú de la cuenta (*Fotos en fila*: En fila o Apiladas; la opción aparece solo en
+el teléfono). Solo cambia cómo se ven: lo guardado, la computadora y el PDF siguen igual. Por defecto, en
+fila; tocar una foto la abre a pantalla completa.
+[ Fotos - en el teléfono, en fila o apiladas ]
+
 v0.046 :
 
 Acomodar en filas: con una foto o un video elegido, un botón de su barra reparte la tanda de fotos y videos

@@ -47,6 +47,9 @@ export const menus = {
   'account.pageWidth': { en: "Page width", es: "Ancho de la página" },
   'account.pageWidth.normal': { en: "Normal", es: "Normal" },
   'account.pageWidth.wide': { en: "Wide", es: "Ancho" },
+  'account.phoneImages': { en: "Images in a row", es: "Fotos en fila" },
+  'account.phoneImages.rows': { en: "In a row", es: "En fila" },
+  'account.phoneImages.stacked': { en: "Stacked", es: "Apiladas" },
   'account.language': { en: "Language", es: "Idioma" },
   'account.signOutUnsaved': {
     en: "Some of your latest edits are not saved on this device yet. Wait until the red warning goes away, then sign out.",
