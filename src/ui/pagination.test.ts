@@ -452,10 +452,13 @@ describe('las fotos en la vista de impresión', () => {
     const article = photoPage(1122, 'fit-content', 2048);
     const live = article.querySelector<HTMLImageElement>('img.bn-visual-media')!;
     live.dataset.sdSharp = '480';
+    live.dataset.sdSharpH = '300';
     live.style.setProperty('--sd-thumb-w', '480px');
     const view = buildPrintView(article, { size: 'A3', landscape: false }, 'measure');
     expect(wrapperOf(view).style.width).toBe('480px');
     expect(wrapperOf(view).style.maxWidth).toBe('100%');
+    // La proporción de la miniatura (la misma en un dispositivo sin la nítida), no la de la nítida.
+    expect(view.root.querySelector<HTMLImageElement>('img.bn-visual-media')!.style.aspectRatio).toBe('480 / 300');
     view.root.remove();
   });
 

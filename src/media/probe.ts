@@ -65,6 +65,8 @@ type Drawable = CanvasImageSource & { width?: number; height?: number };
  * hoja, o una pantalla de alta densidad). Ver Docs/Doc_Imagenes.md, "Calidad en la página".
  */
 export const VIEW_SIDE = 2048;
+/** La imagen nítida chica, para una foto que se dibuja a 900 px de pantalla o menos (un teléfono). */
+export const VIEW_SIDE_SMALL = 1024;
 /**
  * Calidad de esa imagen (WebP donde el navegador lo hace, si no JPEG): como "Exportar para web", nítida y
  * liviana (ver las medidas en Docs/Doc_Imagenes.md).
@@ -89,6 +91,8 @@ function drawScaled(source: Drawable, width: number, height: number, w: number, 
     sctx.imageSmoothingEnabled = true;
     sctx.imageSmoothingQuality = 'high';
     sctx.drawImage(current, 0, 0, step.width, step.height);
+    // El paso anterior ya no hace falta: se suelta su memoria enseguida (Safari tarda en liberar canvases).
+    if (current !== source && current instanceof HTMLCanvasElement) release(current);
     current = step;
     cw = step.width;
     ch = step.height;
@@ -104,8 +108,21 @@ function drawScaled(source: Drawable, width: number, height: number, w: number, 
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(current, 0, 0, w, h);
+  if (current !== source && current instanceof HTMLCanvasElement) release(current);
   return canvas;
 }
+
+/** Suelta la memoria de un canvas (en Safari un canvas grande queda ocupando hasta que se achica a cero). */
+function release(canvas: HTMLCanvasElement): void {
+  canvas.width = 0;
+  canvas.height = 0;
+}
+
+/**
+ * Si el navegador sabe hacer WebP (`toBlob` con `image/webp`): Safari devuelve un PNG, así que se prueba
+ * una vez y queda anotado.
+ */
+let webpEncodes: boolean | undefined;
 
 /**
  * Dibuja con el lado mayor en `side` como mucho y lo pasa a JPEG (o, con `webp`, a WebP si el navegador sabe
@@ -126,15 +143,20 @@ async function toJpeg(
   const h = Math.max(1, Math.round(height * scale));
   const canvas = drawScaled(source, width, height, w, h);
   if (!canvas) return null;
-  if (webp) {
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
-    if (blob && blob.size <= maxBytes && blob.type === 'image/webp') return blob;
+  try {
+    if (webp && webpEncodes !== false) {
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+      if (blob) webpEncodes = blob.type === 'image/webp';
+      if (blob && blob.size <= maxBytes && blob.type === 'image/webp') return blob;
+    }
+    for (let q = quality; q >= 0.4; q -= 0.2) {
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', q));
+      if (blob && blob.size <= maxBytes && blob.type === 'image/jpeg') return blob;
+    }
+    return null;
+  } finally {
+    release(canvas);
   }
-  for (let q = quality; q >= 0.4; q -= 0.2) {
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', q));
-    if (blob && blob.size <= maxBytes && blob.type === 'image/jpeg') return blob;
-  }
-  return null;
 }
 
 /** Dibuja reducido a `THUMB_SIDE` de lado mayor y lo pasa a JPEG de menos de 512 KB. */
@@ -202,11 +224,13 @@ async function probeImage(file: Blob): Promise<Probe> {
 }
 
 /**
- * La imagen para la página cuando la miniatura queda chica: el lado mayor en `VIEW_SIDE` como mucho, WebP (o
- * JPEG en Safari) a `VIEW_QUALITY`. Solo se guarda en el dispositivo que la hizo (nunca se sube). `null` si el navegador no abre el archivo o si no ganaría nada (la foto no es más grande
+ * La imagen para la página cuando la miniatura queda chica: el lado mayor en `side` como mucho (`VIEW_SIDE` o
+ * `VIEW_SIDE_SMALL`), WebP (o JPEG en Safari) a `VIEW_QUALITY`, sobre blanco como la miniatura (un PNG con
+ * transparencia se ve igual que su miniatura y que en Safari, donde JPEG no tiene transparencia). Solo se
+ * guarda en el dispositivo que la hizo (nunca se sube). `null` si el navegador no abre el archivo o si no ganaría nada (la foto no es más grande
  * que la miniatura). Un JPEG que ya entra en `VIEW_SIDE` y no pesa de más se usa tal cual. Nunca falla.
  */
-export async function viewImage(file: Blob, mime: string): Promise<Blob | null> {
+export async function viewImage(file: Blob, mime: string, side: number = VIEW_SIDE): Promise<Blob | null> {
   if (typeof document === 'undefined' || mediaKind(mime) !== 'image') return null;
   try {
     return await withTimeout(
@@ -215,10 +239,10 @@ export async function viewImage(file: Blob, mime: string): Promise<Blob | null> 
         try {
           const long = Math.max(size.width, size.height);
           if (long <= THUMB_SIDE * VIEW_GAIN) return null;
-          if (long <= VIEW_SIDE && mime === 'image/jpeg' && file.size <= VIEW_KEEP_BYTES) {
+          if (long <= side && mime === 'image/jpeg' && file.size <= VIEW_KEEP_BYTES) {
             return file.type === mime ? file : new Blob([file], { type: mime });
           }
-          return await reduced(file, size, VIEW_SIDE, VIEW_QUALITY, undefined, true);
+          return await reduced(file, size, side, VIEW_QUALITY, undefined, true);
         } finally {
           URL.revokeObjectURL(size.url);
         }

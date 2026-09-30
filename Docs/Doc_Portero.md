@@ -160,6 +160,15 @@ caché del arranque (también el `206`):
   `attachment`: nunca corre como página en la dirección del portero. Las fotos y los videos nunca pasan a
   `octet-stream` (el `<img>` y el `<video>` de la app usan el mismo pase).
 - `?download=1` pasa a `attachment` (con el tipo de la lista, si es de la lista).
+- **CORS (desde v0.059):** a un pedido con `Origin` de `APP_ORIGINS`, todo lo que sale de `/m/` (`200`, `206`,
+  también de la caché del arranque, `HEAD`, `416` y los errores) lleva `Access-Control-Allow-Origin` con ese
+  origen y `Access-Control-Expose-Headers: Content-Length, Content-Range, Content-Type, Content-Disposition,
+  ETag`; `Vary: Origin` siempre (la caché del navegador no le da a `fetch` la respuesta sin CORS que pidió un
+  `<img>`). Otro origen no queda habilitado. El preflight (`OPTIONS`) deja pasar `Range`. Lo necesita la app
+  para bajar el original con `fetch` y hacer la imagen nítida de la página (`Doc_Imagenes.md`, "Calidad en la
+  página"); el `<img>`, el `<video>` y el carrete no mandan `Origin` y salen igual que antes, así que las
+  versiones anteriores de la app no cambian. Con un portero anterior, esa bajada falla (CORS) y la página
+  sigue con la miniatura; la app deja de intentar un rato (ver `Doc_Imagenes.md`).
 - `Content-Disposition`: `inline` o `attachment` con `filename="…"` en ASCII (lo que no es ASCII, las
   comillas y las barras, `_`) y `filename*=UTF-8''…` (RFC 5987, también con `'()*` codificados). Al nombre se
   le sacan los controles y las marcas de dirección (U+202A–U+202E, U+2066–U+2069, U+200E, U+200F, U+061C:

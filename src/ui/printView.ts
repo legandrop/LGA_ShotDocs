@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { thumbSize } from './sharpMarks';
 import type { PageFormat, PrintGeometry } from './pageFormat';
 import { printGeometry } from './pageFormat';
 import { measureUnits, paginate, SHEET_TOLERANCE_PX, type Measured, type Pagination } from './pagination';
@@ -158,8 +159,10 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement): void {
     const source = liveImages[i];
     img.loading = 'eager';
     img.removeAttribute('srcset');
-    if (source && source.naturalWidth > 0 && source.naturalHeight > 0) {
-      img.style.aspectRatio = `${source.naturalWidth} / ${source.naturalHeight}`;
+    // Con la imagen nítida puesta (sharpImages.ts), las medidas de su miniatura: el mismo alto en todos lados.
+    const natural = source ? thumbSize(source) : null;
+    if (natural && natural.width > 0 && natural.height > 0) {
+      img.style.aspectRatio = `${natural.width} / ${natural.height}`;
     }
     // Una foto en fila (con `rowWidth`) ya tiene su ancho: la parte de la fila, igual en cualquier pantalla.
     if (source && img.classList.contains('bn-visual-media') && !img.closest('.img-sized')) fixMediaWidth(img, source);

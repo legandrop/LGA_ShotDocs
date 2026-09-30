@@ -6,14 +6,19 @@ Fotos nítidas en la página. Las fotos se veían borrosas en la página (y bien
 mostraba siempre la miniatura de 480 px, estirada al ancho de la foto (hasta ~1100 px, el doble en pantallas
 Retina); no era la exportación de Coda, que baja los originales (en la base, de 2900 a 3840 px). Pasaba con
 cualquier foto y en cualquier dispositivo. Ahora, cuando una foto se ve más grande que su miniatura, la página
-la cambia por una imagen de hasta 2048 px hecha en el dispositivo ("Exportar para web": reducida con buena
-calidad, WebP 0,8, o JPEG 0,8 en Safari; 130 a 350 KB): del original si está en el dispositivo (también sin
-red) o del original bajado una sola vez por el portero, y queda guardada para las próximas veces. Solo las
-fotos a la vista, de a dos; los videos, HEIC y lo de más de 25 MB siguen con la miniatura, y no se baja nada
-sin red, con ahorro de datos o con conexión lenta. La foto no cambia de tamaño (las marcas de hoja y el PDF
-quedan iguales), el documento no cambia y las versiones anteriores siguen mostrando la miniatura. El carrete
-empieza con la imagen nítida; imprimir desde otro dispositivo sale con ella en vez de la miniatura. Ver
-`Doc_Imagenes.md`, "Calidad en la página".
+la cambia por una imagen de hasta 2048 px (1024 si se ve chica, como en un teléfono) hecha en el dispositivo
+("Exportar para web": reducida con buena calidad, WebP 0,8, o JPEG 0,8 en Safari; 130 a 350 KB): del original
+si está en el dispositivo (también sin red) o del original bajado una sola vez por el portero, y queda
+guardada (hasta 150 MB; si falta lugar, se borra primero). Solo las fotos a la vista o por verse, de a dos, lo
+último que se vio primero; también cuando una foto se agranda. Videos, HEIC y originales de más de 25 MB (8 MB
+en el teléfono) siguen con la miniatura; no se baja nada sin red, con ahorro de datos o con conexión lenta
+(eso solo lo dice Chrome); lo que no se pudo no se repite en la sesión, y una bajada que falla espera cada vez
+más. La foto no cambia de tamaño (las marcas de hoja y el PDF quedan iguales), el documento no cambia y las
+versiones anteriores siguen mostrando la miniatura. El carrete empieza con la imagen nítida; imprimir desde otro
+dispositivo sale con ella. El portero ahora deja leer a la app lo que sirve en `/m/` (CORS, solo para los
+orígenes de la app): hace falta para bajar el original desde otro dispositivo; hasta que se publique, la
+página sigue con la miniatura ahí y la app deja de intentar por media hora. Ver `Doc_Imagenes.md`, "Calidad
+en la página", y `Doc_Portero.md`.
 [ Fotos nítidas en la página ]
 
 v0.057 :

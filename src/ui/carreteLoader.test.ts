@@ -70,7 +70,7 @@ describe('carrete: qué se muestra de cada elemento', () => {
 
   it('si la página ya tiene la imagen nítida, el carrete empieza con esa (no con la miniatura)', async () => {
     const { a, photo } = await setup();
-    const sharp = await a.media.view(mediaIdOf(photo)!);
+    const sharp = (await a.media.view(mediaIdOf(photo)!))?.url;
     expect(sharp).toMatch(/^blob:/);
     const p = await createCarreteLoader(a).preview(itemFor(photo));
     expect(p.preview).toBe(sharp);

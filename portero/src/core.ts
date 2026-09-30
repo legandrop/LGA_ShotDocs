@@ -240,10 +240,27 @@ function cors(req: Request, env: Env): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Content-Range',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Content-Range, Range',
     'Access-Control-Max-Age': '600',
     Vary: 'Origin',
   };
+}
+
+/**
+ * Lo que se sirve con un pase (`/m/…`), leíble desde la app: la app lo baja con `fetch` para la imagen nítida
+ * de la página (v0.059, src/ui/sharpImages.ts). Solo para los orígenes de `APP_ORIGINS`; `Vary: Origin` siempre,
+ * así la caché del navegador no le da a `fetch` la respuesta sin CORS que pidió un `<img>` (sin `Origin`, como
+ * el carrete y las versiones anteriores, que siguen igual).
+ */
+function withMediaCors(res: Response, req: Request, env: Env): Response {
+  const vary = res.headers.get('Vary');
+  if (!vary?.split(/,\s*/).includes('Origin')) res.headers.set('Vary', vary ? `${vary}, Origin` : 'Origin');
+  const origin = req.headers.get('Origin') ?? '';
+  if (origin && origins(env).includes(origin.toLowerCase())) {
+    res.headers.set('Access-Control-Allow-Origin', origin);
+    res.headers.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Content-Type, Content-Disposition, ETag');
+  }
+  return res;
 }
 
 function json(req: Request, env: Env, body: unknown, status = 200): Response {
@@ -308,7 +325,7 @@ export class Portero {
       if (path === '/health') return json(req, this.env, { ok: true });
       if (path === '/drive/callback' && req.method === 'GET') return await this.callback(url);
       const pass = /^\/m\/([^/]+)$/.exec(path)?.[1];
-      if (pass && (req.method === 'GET' || req.method === 'HEAD')) return await this.media(req, pass);
+      if (pass && (req.method === 'GET' || req.method === 'HEAD')) return withMediaCors(await this.media(req, pass), req, this.env);
 
       const who = await this.whoami(req);
       if (path === '/drive/status' && req.method === 'GET') return json(req, this.env, await this.status(who));

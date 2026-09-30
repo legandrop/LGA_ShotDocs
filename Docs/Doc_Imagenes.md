@@ -273,29 +273,53 @@ Pasaba igual con las fotos soltadas o pegadas a mano, en cualquier dispositivo: 
 ni de tener el original.
 
 **Lo que se hizo:** la página muestra primero la miniatura (enseguida, sin red) y, cuando una foto se dibuja más
-grande que su miniatura, la cambia por una **imagen nítida** de hasta **2048 px** de lado mayor hecha en el
-dispositivo.
+grande que su miniatura, la cambia por una **imagen nítida** hecha en el dispositivo: de **2048 px** de lado
+mayor, o de **1024** si la foto se dibuja a 900 px del dispositivo o menos (un teléfono: menos lugar y menos
+memoria).
 
-- **Cuándo** (`src/ui/sharpImages.ts`, `wantsSharper`): el ancho en pantalla por la densidad (como mucho 2x)
-  supera en 20% el ancho de la miniatura. Solo las fotos a la vista o por verse (`IntersectionObserver`), de a
-  dos a la vez. Una foto chica en una fila de cuatro o sin ancho propio en una pantalla común sigue con la
-  miniatura (se ve perfecta).
+- **Cuándo** (`src/ui/sharpImages.ts`): el ancho en pantalla por la densidad (como mucho 2x) supera en 20% el
+  ancho de la miniatura (`wantsSharper`). Solo las fotos a la vista o a menos de 600 px de verse
+  (`IntersectionObserver` sobre `.main`, lo que se desplaza), de a dos a la vez, **lo último que se vio
+  primero**; lo que se pasó de largo mientras esperaba se descarta (se vuelve a pedir si se vuelve a ver). Una
+  foto a la vista que cambia de ancho (tamaños rápidos, tirador, "Acomodar en filas", hoja más ancha, barra
+  lateral: `ResizeObserver`) se vuelve a mirar y puede pasar de la chica a la grande. También se vuelve a
+  mirar lo que está a la vista al volver la red (`online`) y cada 65 segundos. Una foto chica en una fila de
+  cuatro o sin ancho propio en una pantalla común sigue con la miniatura (se ve perfecta).
 - **De dónde** (`MediaQueue.view`): 1) la ya hecha, guardada en el dispositivo en el almacén `thumbs` de la base
-  de archivos con la clave `view:<id>` (sin cambiar la versión de IndexedDB: una versión vieja no la lee ni se
-  entera); 2) el original del dispositivo, reducido (anda sin red); 3) si no está, el original bajado **una sola
-  vez por dispositivo** con un pase del portero (el mismo del carrete) y reducido acá. Nunca se sube nada: ni a
-  Supabase ni a Drive.
+  de archivos (`view:<id>` la de 2048, `view1024:<id>` la chica; una de 2048 sirve para las dos), sin cambiar
+  la versión de IndexedDB: una versión vieja no la lee ni se entera; 2) el original del dispositivo, reducido
+  (anda sin red); 3) si no está, el original bajado **una sola vez por dispositivo** con un pase del portero
+  (el mismo del carrete) y reducido acá. Nunca se sube nada: ni a Supabase ni a Drive.
+- **Depende del portero de v0.059.** La app baja el original con `fetch`, y el navegador solo la deja leer la
+  respuesta si el portero manda `Access-Control-Allow-Origin` en `/m/` (`Doc_Portero.md`, "Lo que se sirve"),
+  que se publica con esta versión. Con un portero anterior la bajada falla y la página sigue con la
+  miniatura; después de tres fallas seguidas sin respuesta (con red) la app no baja nada por media hora.
+  El original del dispositivo no depende del portero.
 - **Qué no se baja para la página:** videos (queda la miniatura con la marca de "play"), fotos que no todos los
   navegadores abren (HEIC, TIFF, RAW: solo del original local, si el navegador puede), las que todavía no
-  llegaron a Drive, las de más de 25 MB, y nada sin red, con *Save-Data* o con una conexión lenta (2g/3g). Una
-  bajada que falla (sin red, el portero) se vuelve a probar al minuto, no en cada dibujo.
+  llegaron a Drive, las de más de 25 MB (**8 MB en un teléfono o una tableta**, puntero grueso: una foto de
+  teléfono pesa 2 a 5 MB), y nada sin red, con *Save-Data* o con una conexión lenta (2g/3g). Ojo: *Save-Data* y
+  la velocidad (`navigator.connection`) solo los dice Chrome (también en Android); **Safari y Firefox no dicen
+  si la conexión es medida**, así que en el iPhone se baja igual (con el tope de 8 MB).
+- **Lo que no se pudo no se repite:** si el navegador no abre lo bajado o el original local, si tarda más de
+  20 segundos, o si lo bajado pesa más que el tope, en esa sesión no se vuelve a bajar ni a decodificar. Nunca
+  hay dos decodificaciones del mismo archivo a la vez. Una bajada que falló (sin red, el portero) se vuelve a
+  probar al minuto, después a los 4, a los 16… hasta una hora.
 - **El mismo tamaño:** una foto sin ancho propio se veía del ancho natural de la miniatura; la nítida es más
-  grande, así que lleva ese ancho de tope (`data-sd-sharp` y `--sd-thumb-w`, regla en `styles.css`). La foto no
-  crece ni cambian las marcas de hoja ni el PDF; la vista de impresión usa ese ancho (`printView.ts`). Con ancho
-  propio (px o fila) manda ese ancho.
+  grande, así que lleva ese ancho de tope (`--sd-thumb-w`, regla en `styles.css`). En la imagen quedan las
+  medidas naturales de la miniatura (`data-sd-sharp` y `data-sd-sharp-h`), de qué archivo (`data-sd-sharp-id`)
+  y de qué lado es la nítida (`data-sd-side`). La vista de impresión (ancho y proporción) y "Acomodar en filas"
+  usan las medidas de la miniatura (`src/ui/sharpMarks.ts`): dan lo mismo en un dispositivo con la nítida que
+  en otro sin ella. La foto no crece ni cambian las marcas de hoja ni el PDF. Con ancho propio (px o fila)
+  manda ese ancho.
 - **Sin tocar el documento:** BlockNote sigue creyendo que muestra la miniatura; si la vuelve a poner (o la pone
-  `subscribeThumbs`), la nítida vuelve en el acto. Si la foto pasa a mostrar otra cosa (borrada, de otro
-  proyecto), pierde el tope. Una foto mandada a la papelera de Drive borra su nítida guardada.
+  `subscribeThumbs`), la nítida vuelve en el acto. Si se reemplaza el archivo del bloque o la foto pasa a
+  mostrar otra cosa (borrada, de otro proyecto), pierde las marcas y el tope. Una foto mandada a la papelera de
+  Drive borra su nítida guardada.
+- **Lugar en el dispositivo:** las nítidas guardadas se anotan en `meta` (`viewIndex`) en el orden en que se
+  usaron; pasado 150 MB (u 800) se borran las más viejas. Si falta lugar para guardar un archivo nuevo, primero
+  se borran todas las nítidas (se vuelven a hacer cuando hagan falta). En memoria quedan como mucho 60
+  direcciones; las más viejas que ninguna imagen muestra se sueltan.
 - **El carrete** empieza con la nítida si ya está (y después el original, como antes). **La impresión** sigue
   usando el original del dispositivo; en otro dispositivo, ahora sale con la nítida en vez de la miniatura.
 - **Versiones viejas:** nada cambia en el documento, en la base ni en el bucket. La miniatura sigue siendo el
@@ -303,11 +327,14 @@ dispositivo.
 
 **Cómo se codifica** ("Exportar para web", `src/media/probe.ts`, `viewImage`): se decodifica ya reducida
 (`createImageBitmap` con `resizeWidth`/`resizeHeight` y `resizeQuality: 'high'`: una foto de 48 MP entera no
-entra en la memoria de un iPhone); sin esas opciones, se achica en el canvas de a mitades con
-`imageSmoothingQuality: 'high'` (un solo salto grande deja dientes o moiré; la miniatura usa lo mismo). Sale en
-**WebP 0,8** donde el navegador lo hace (Chrome, Edge, Firefox) y en **JPEG 0,8** donde no (Safari), con fondo
-blanco como la miniatura. Un JPEG que ya entra en 2048 px y pesa menos de 900 KB se usa tal cual (del
-dispositivo, sin guardar una copia). Medido en Chromium:
+entra en la memoria de un iPhone). Solo si el navegador no tiene esas opciones se dibuja la imagen entera y se
+achica en el canvas de a mitades con `imageSmoothingQuality: 'high'` (un solo salto grande deja dientes o
+moiré); los canvases intermedios se sueltan enseguida. Sale en **WebP 0,8** donde el navegador lo hace
+(Chrome, Edge, Firefox) y en **JPEG 0,8** donde no (Safari devuelve PNG: se prueba una vez y queda anotado).
+Siempre sobre **blanco**, como la miniatura: un PNG con transparencia se ve igual que su miniatura, en los dos
+temas y en Safari (JPEG no tiene transparencia); guardar la transparencia en WebP haría que la misma foto se
+viera distinta según el navegador. Un JPEG que ya entra en el tamaño y pesa menos de 900 KB se usa tal cual
+(del dispositivo, sin guardar una copia). Medido en Chromium (la de 2048):
 
 | Original | Miniatura (JPEG 480) | Nítida WebP 0,8 | Nítida JPEG 0,8 (Safari) |
 |---|---|---|---|
@@ -319,24 +346,27 @@ dispositivo, sin guardar una copia). Medido en Chromium:
 (WebP 0,75 pesa un 10% menos que 0,8; a 2x de zoom no se distingue de JPEG 0,8.) Con la letra chica, la
 miniatura estirada a 1100 px no se lee y la nítida sí.
 
-**Costos:** en el dispositivo, unos 130 a 350 KB por foto vista grande (en IndexedDB, como las miniaturas;
-se borran con los datos del sitio). En la red, la primera vez en cada dispositivo sin el original, el original
-entero por el portero (las de MGTZD, ~1 MB; una de teléfono, 2 a 5 MB); después, nada. Cloudflare: un pedido por
-foto (el plan gratis da 100.000 por día). Supabase: nada (no se guarda ni se baja nada más de ahí). Se descartó
-guardar una versión mediana en Supabase: ~250 KB por foto llenaría el GB del plan gratis con unas 4000 fotos
-del workspace, y hace falta migración y generarla en el dispositivo que tiene el original (las ya subidas
-quedarían sin ella).
+**Costos:** en el dispositivo, unos 130 a 350 KB por foto vista grande (menos la chica), con el tope de 150 MB.
+En la red, la primera vez en cada dispositivo sin el original, el original entero por el portero (las de
+MGTZD, ~1 MB; una de teléfono, 2 a 5 MB); después, nada. Cloudflare: un pedido por foto (el plan gratis da
+100.000 por día). Supabase: nada (no se guarda ni se baja nada más de ahí). Se descartó guardar una versión
+mediana en Supabase: ~250 KB por foto llenaría el GB del plan gratis con unas 4000 fotos del workspace, y hace
+falta migración y generarla en el dispositivo que tiene el original (las ya subidas quedarían sin ella).
 
 **Pendiente / para después:**
 
 - Si en el teléfono con datos pesa, que el dispositivo que sube la foto suba también la nítida a Drive, al lado
   del original (ruta nueva del portero): en otro dispositivo se bajarían ~300 KB en vez del original. Necesita
   el portero publicado y probarlo con el portero real.
-- La nítida guardada no se borra sola (como las miniaturas y los originales del dispositivo).
+- La bajada por el portero no se pudo probar desde la nube (el portero no se alcanza): probar a mano en otro
+  dispositivo, después de publicar el portero, que las fotos importadas se vean nítidas.
 - El importador deja sin ancho propio las fotos que en Coda iban a lo ancho: en la página se ven de 480 px (el
   ancho natural de la miniatura). Si Lega las quiere a todo el ancho, el importador podría ponerles `rowWidth: 1`.
 - Un video a todo el ancho sigue con la miniatura (el póster) de 480 px.
-- Pruebas: `src/media/view.test.ts` (de dónde sale en cada dispositivo, qué no se baja, sin red, una vez por
-  dispositivo), `src/ui/sharpImages.test.ts` (cuándo, el tope, BlockNote que vuelve a poner la miniatura, de a
-  dos, bajar con pase), `pagination.test.ts` (impresión) y `carreteLoader.test.ts`. En Chromium, `sharp.mjs` del
-  repo de pruebas privado: solo el camino del original local (el portero no se alcanza desde la nube).
+- Pruebas: `src/media/view.test.ts` (de dónde sale en cada dispositivo, qué no se baja, sin red y los
+  reintentos, lo que no se pudo no se repite, una decodificación a la vez, la chica y la grande, el tope de lo
+  guardado, hacer lugar), `src/ui/sharpImages.test.ts` (cuándo, el tope, BlockNote que vuelve a poner la
+  miniatura, archivo reemplazado, de a dos y lo último visto primero, agrandar a la vista, volver la red, la
+  pausa con un portero sin CORS), `portero/src/core.test.ts` (CORS en `/m/`), `pagination.test.ts`
+  (impresión) y `carreteLoader.test.ts`. En Chromium, `sharp.mjs` del repo de pruebas privado: solo el camino
+  del original local.

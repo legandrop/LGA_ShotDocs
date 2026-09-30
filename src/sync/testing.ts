@@ -1264,9 +1264,9 @@ export async function fakeProbe(_file: Blob, mime: string): Promise<Probe> {
  * La imagen nítida de prueba (jsdom no dibuja): un JPEG corto que dice de qué tamaño vino el original, o `null`
  * para un HEIC (el navegador no lo abre).
  */
-export async function fakeViewImage(file: Blob, mime: string): Promise<Blob | null> {
+export async function fakeViewImage(file: Blob, mime: string, side = 2048): Promise<Blob | null> {
   if (!mime.startsWith('image/') || mime === 'image/heic') return null;
-  return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 9]), `view:${file.size}`], { type: 'image/jpeg' });
+  return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 9]), `view:${file.size}:${side}`], { type: 'image/jpeg' });
 }
 
 export interface Device {
