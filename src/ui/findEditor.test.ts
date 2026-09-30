@@ -9,11 +9,13 @@ import { unitsFromPM, unitsFromYDoc } from '../search/extract';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { driveLinkInNode } from './driveCard';
 import { DRIVE_CARD_PROP, schema } from './editorSchema';
+import { countsForSheets, isContentMutation } from './SheetBreaks';
 import {
   FIND_REPLACE_META,
   canUndoReplace,
   closeFind,
   findExtension,
+  hiddenCount,
   getFindState,
   isFindReplaceUndo,
   replaceAll,
@@ -21,6 +23,7 @@ import {
   setFind,
   setFindCollapseHooks,
   stepFind,
+  takeFindOnlyChanges,
   undoReplace,
 } from './findEditor';
 
@@ -78,6 +81,7 @@ const RICH = [
     content: { type: 'tableContent', rows: [{ cells: ['celda cámara', ''] }, { cells: ['', 'otra'] }] },
   },
   { type: 'image', props: { url: 'https://example.com/a.jpg', caption: 'Toma de cámara', name: 'camara.jpg' } },
+  { type: 'codeBlock', content: 'const camara = 1;\nlog(camara)' },
   { type: 'paragraph', content: '' },
 ];
 
@@ -98,6 +102,7 @@ describe('extraer el texto de cada bloque', () => {
       ['text', 'otra'],
       ['caption', 'Toma de cámara'],
       ['name', 'camara.jpg'],
+      ['text', 'const camara = 1;\uFFFClog(camara)'],
     ]);
     // El hijo es un bloque propio, no parte del de arriba.
     expect(new Set(fromY.slice(1, 3).map((u) => u.blockId)).size).toBe(2);
@@ -126,9 +131,9 @@ describe('buscar en la página', () => {
     const before = Y.encodeStateVector(doc);
     setFind(view(editor), 'camara', {});
     const state = getFindState(view(editor).state);
-    // Título, párrafo (2), hijo, pregunta, celda, pie y nombre.
-    expect(state.matches.map((m) => m.field)).toEqual(['text', 'text', 'text', 'text', 'text', 'text', 'caption', 'name']);
-    expect(highlighted(editor)).toEqual(['Cámara', 'cámara', 'cámara', 'cámara', 'cámara', 'cámara']);
+    // Título, párrafo (2), hijo, pregunta, celda, pie, nombre y el código (2).
+    expect(state.matches.map((m) => m.field)).toEqual(['text', 'text', 'text', 'text', 'text', 'text', 'caption', 'name', 'text', 'text']);
+    expect(highlighted(editor)).toEqual(['Cámara', 'cámara', 'cámara', 'cámara', 'cámara', 'cámara', 'camara', 'camara']);
     expect(view(editor).dom.querySelectorAll('.sd-find-block').length).toBe(1);
     expect(Y.encodeStateVector(doc)).toEqual(before);
     expect(state.current).toBe(0);
@@ -224,8 +229,13 @@ describe('reemplazar en la página', () => {
     um.redo();
     expect(um.undoStack[um.undoStack.length - 1].meta.get(FIND_REPLACE_META)).toBe(true);
     off();
+    // Mientras se deshace y se rehace, el colapso ve que es un reemplazo; después, ya no.
     expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((x) => x === true)).toBe(true);
     expect(isFindReplaceUndo(v.state)).toBe(false);
+    // Una edición común no está marcada.
+    v.dispatch(v.state.tr.insertText('z', 2));
+    expect(um.undoStack[um.undoStack.length - 1].meta.get(FIND_REPLACE_META)).toBeUndefined();
   });
 
   it('"Reemplazar" cambia la actual y pasa a la siguiente', () => {
@@ -326,5 +336,123 @@ describe('reemplazar en la página', () => {
     vb.dispatch(vb.state.tr.insertText('cero ', 3));
     expect(replaceCurrent(a, 'tres').replaced).toBe(1);
     expect(texts(a)[0]).toBe('cero uno tres');
+  });
+
+  it('"Reemplazar todo" escribe en el Y.Doc en una sola transacción, conserva el formato y se deshace entero', () => {
+    const { doc, editor } = page([
+      { type: 'paragraph', content: [{ type: 'text', text: 'uno ', styles: {} }, { type: 'text', text: 'uno', styles: { bold: true } }, ' dos'] },
+      { type: 'paragraph', content: 'a\nuno' },
+    ]);
+    const v = view(editor);
+    undoManager(editor).stopCapturing();
+    const before = JSON.stringify(v.state.doc.toJSON());
+    let transactions = 0;
+    doc.on('update', () => transactions++);
+    setFind(v, 'uno', {});
+    const result = replaceAll(editor, 'tres');
+    expect(result.replaced).toBe(3);
+    expect(transactions).toBe(1);
+    expect(texts(editor)).toEqual(['tres tres dos', 'a\ntres']);
+    const content = editor.document[0].content as { text: string; styles: { bold?: boolean } }[];
+    expect(content.find((c) => c.styles.bold)?.text).toBe('tres');
+    expect(undoReplace(v, result.undoItem)).toBe(true);
+    expect(JSON.stringify(v.state.doc.toJSON())).toBe(before);
+  });
+
+  it('"Reemplazar todo" en una página grande es rápido', () => {
+    const blocks = Array.from({ length: 300 }, (_, i) => ({ type: 'paragraph', content: i % 3 === 0 ? `plano ${i} y plano, otro plano` : `bloque ${i} sin nada` }));
+    const { editor } = page(blocks);
+    setFind(view(editor), 'plano', {});
+    const start = performance.now();
+    const result = replaceAll(editor, 'toma');
+    const ms = performance.now() - start;
+    expect(result.replaced).toBe(300);
+    // Una transacción por coincidencia tardaba más de un segundo en jsdom; en una sola, decenas de ms.
+    expect(ms).toBeLessThan(600);
+  });
+
+  it('coreano: "하" no encuentra la mitad de "한" y no se escribe nada', () => {
+    const { doc, editor } = page([{ type: 'paragraph', content: '한국' }]);
+    const before = Y.encodeStateVector(doc);
+    setFind(view(editor), '하', {});
+    expect(getFindState(view(editor).state).matches.length).toBe(0);
+    expect(replaceAll(editor, 'X').replaced).toBe(0);
+    expect(Y.encodeStateVector(doc)).toEqual(before);
+    expect(texts(editor)[0]).toBe('한국');
+  });
+
+  it('un emoji con tono de piel se reemplaza entero', () => {
+    const { editor } = page([{ type: 'paragraph', content: 'ok 👍🏽 listo' }]);
+    setFind(view(editor), '👍', {});
+    replaceAll(editor, '✅');
+    expect(texts(editor)[0]).toBe('ok ✅ listo');
+  });
+
+  it('en un bloque de código, un renglón no se une con el siguiente', () => {
+    const { editor } = page([{ type: 'codeBlock', content: 'uno\ndos' }]);
+    setFind(view(editor), 'uno dos', {});
+    expect(getFindState(view(editor).state).matches.length).toBe(0);
+    setFind(view(editor), 'dos', { wholeWord: true });
+    expect(getFindState(view(editor).state).matches.length).toBe(1);
+  });
+});
+
+describe('lo que no se ve', () => {
+  it('los resaltados siguen en su lugar cuando llega un cambio de otro en otra parte', () => {
+    const docA = new Y.Doc();
+    const docB = new Y.Doc();
+    docA.on('update', (u: Uint8Array, origin: unknown) => origin !== 'remote' && Y.applyUpdate(docB, u, 'remote'));
+    docB.on('update', (u: Uint8Array, origin: unknown) => origin !== 'remote' && Y.applyUpdate(docA, u, 'remote'));
+    const a = mount(docA);
+    a.replaceBlocks(a.document, [{ type: 'paragraph', content: 'uno dos' }, { type: 'paragraph', content: 'tres uno' }] as Blocks);
+    const b = mount(docB);
+    setFind(view(a), 'uno', {});
+    expect(highlighted(a)).toEqual(['uno', 'uno']);
+    // Otro dispositivo escribe en el segundo párrafo, antes de "uno".
+    const vb = view(b);
+    let pos = 0;
+    vb.state.doc.descendants((n, p) => {
+      if (n.isText && n.text === 'tres uno') pos = p + 5;
+    });
+    vb.dispatch(vb.state.tr.insertText('X', pos));
+    expect(texts(a)[1]).toBe('tres Xuno');
+    // Antes de volver a buscar, las marcas ya están en su lugar (no se juntaron en un punto).
+    expect(getFindState(view(a).state).stale).toBe(true);
+    expect(highlighted(a)).toEqual(['uno', 'uno']);
+  });
+
+  it('una coincidencia adentro de una lista plegable cerrada se cuenta como escondida, y al ir se abre la lista', () => {
+    localStorage.clear();
+    const { editor } = page([
+      { type: 'paragraph', content: 'uno' },
+      { type: 'toggleListItem', content: 'lista', children: [{ type: 'paragraph', content: 'adentro uno' }] },
+    ]);
+    const v = view(editor);
+    const wrapper = () => v.dom.querySelector('.bn-toggle-wrapper')!;
+    expect(wrapper().getAttribute('data-show-children')).toBe('false');
+    setFind(v, 'uno', {});
+    expect(hiddenCount(getFindState(v.state).matches, v)).toBe(1);
+    stepFind(v, 1);
+    expect(wrapper().getAttribute('data-show-children')).toBe('true');
+    expect(hiddenCount(getFindState(v.state).matches, v)).toBe(0);
+  });
+
+  it('resaltar no cuenta como un cambio del documento para las marcas de hoja; escribir sí', async () => {
+    const { editor } = page([{ type: 'paragraph', content: 'uno dos uno' }]);
+    const v = view(editor);
+    const records: MutationRecord[] = [];
+    const observer = new MutationObserver((r) => records.push(...r));
+    observer.observe(v.dom, { subtree: true, childList: true, characterData: true, attributes: true });
+    takeFindOnlyChanges();
+    setFind(v, 'uno', {});
+    stepFind(v, 1);
+    closeFind(v, { select: false });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(records.some(isContentMutation)).toBe(true);
+    expect(countsForSheets(records.splice(0), takeFindOnlyChanges())).toBe(false);
+    v.dispatch(v.state.tr.insertText('X', 2));
+    await new Promise((r) => setTimeout(r, 0));
+    observer.disconnect();
+    expect(countsForSheets(records, takeFindOnlyChanges())).toBe(true);
   });
 });

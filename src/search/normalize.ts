@@ -55,8 +55,17 @@ export function normalizeQuery(query: string, options: SearchOptions = {}): stri
   return normalize(query.trim(), options).text;
 }
 
-/** Las coincidencias en un texto ya normalizado: `[inicio, fin)` en el texto normalizado. */
-export function findIn(norm: string, query: string, { matchCase = false, wholeWord = false }: SearchOptions = {}): [number, number][] {
+/**
+ * Las coincidencias en un texto ya normalizado: `[inicio, fin)` en el texto normalizado. Con el mapa, una
+ * coincidencia tiene que empezar y terminar en el borde de lo que produjo un carácter del original: NFD separa
+ * una sílaba coreana en letras ("한" → ᄒ ᅡ ᆫ), y "하" no puede encontrar la mitad de "한".
+ */
+export function findIn(
+  norm: string,
+  query: string,
+  { matchCase = false, wholeWord = false }: SearchOptions = {},
+  map?: number[],
+): [number, number][] {
   const out: [number, number][] = [];
   if (!query) return out;
   let from = 0;
@@ -67,7 +76,8 @@ export function findIn(norm: string, query: string, { matchCase = false, wholeWo
     // Con *Aa* las tildes quedan como marcas combinadas: "I" no encuentra la "I" de una "Í" descompuesta.
     const cutsLetter = matchCase && end < norm.length && MARK.test(norm[end]);
     const whole = !wholeWord || (!isWordChar(norm, at - 1) && !isWordChar(norm, end));
-    if (!cutsLetter && whole) {
+    const edges = !map || ((at === 0 || map[at] !== map[at - 1]) && (end === norm.length || map[end] !== map[end - 1]));
+    if (!cutsLetter && whole && edges) {
       out.push([at, end]);
       from = end;
     } else {
@@ -87,16 +97,40 @@ function isWordChar(norm: string, i: number): boolean {
 
 /**
  * Las coincidencias de `query` en `text`, en posiciones del texto original (`[inicio, fin)`). El final se
- * extiende sobre las marcas combinadas que siguen (una tilde descompuesta queda adentro del resaltado).
+ * extiende sobre lo que sigue pegado al último carácter: marcas combinadas (una tilde descompuesta), el
+ * selector de variante, el tono de piel de un emoji y lo que se une con un ZWJ (👩‍💻), así no queda nada suelto.
  */
 export function searchText(text: string, query: string, options: SearchOptions = {}): [number, number][] {
-  const q = normalizeQuery(query, options);
-  if (!q) return [];
-  const norm = normalize(text, options);
-  return findIn(norm.text, q, options).map(([s, e]) => [norm.map[s], extendOverMarks(text, norm.map[e])]);
+  return searchNormalized(text, normalize(text, options), normalizeQuery(query, options), options);
 }
 
-function extendOverMarks(text: string, end: number): number {
-  while (end < text.length && MARK.test(text[end])) end++;
+/** Como `searchText`, con el texto ya normalizado (con las mismas opciones) y lo buscado ya normalizado. */
+export function searchNormalized(text: string, norm: Normalized, query: string, options: SearchOptions = {}): [number, number][] {
+  if (!query) return [];
+  const out: [number, number][] = [];
+  for (const [s, e] of findIn(norm.text, query, options, norm.map)) {
+    const from = norm.map[s];
+    const to = extendEnd(text, norm.map[e]);
+    if (to > from) out.push([from, to]);
+  }
+  return out;
+}
+
+const MODIFIER = /\p{M}|\p{Emoji_Modifier}|\uFE0F/u;
+const ZWJ = '\u200D';
+
+function extendEnd(text: string, end: number): number {
+  while (end < text.length) {
+    const cp = String.fromCodePoint(text.codePointAt(end) ?? 0);
+    if (MODIFIER.test(cp)) {
+      end += cp.length;
+    } else if (cp === ZWJ && end + 1 < text.length) {
+      // El ZWJ y lo que une.
+      const next = String.fromCodePoint(text.codePointAt(end + 1) ?? 0);
+      end += 1 + next.length;
+    } else {
+      break;
+    }
+  }
   return end;
 }

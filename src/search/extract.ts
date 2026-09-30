@@ -10,7 +10,8 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 // - Cada bloque (`blockContainer`, con su id) da una unidad por cada bloque de texto que tiene adentro: un
 //   párrafo, un título o un ítem da una; una tabla, una por celda con texto.
 // - Lo que no es texto adentro de un bloque de texto (un salto de línea, cualquier nodo en línea) cuenta como
-//   un separador (`SEPARATOR`): una búsqueda nunca lo cruza.
+//   un separador (`SEPARATOR`): una búsqueda nunca lo cruza. Lo mismo un "\n" adentro del texto (los
+//   renglones de un bloque de código).
 // - Un bloque con `caption` o `name` (fotos, videos y adjuntos: el bloque `image`) da una unidad por cada uno
 //   que no esté vacío: primero el pie y después el nombre.
 // - Los hijos anidados (`blockGroup`) son bloques propios, después del de arriba.
@@ -33,6 +34,8 @@ export interface PMUnit extends SearchUnit {
   nodeSize: number;
   /** Tramos de texto: dónde empieza cada uno en `text` y en el documento. Vacío para `caption` y `name`. */
   pieces: { at: number; pos: number; length: number }[];
+  /** El bloque de texto de ProseMirror (para `text`): mientras no cambie, su texto es el mismo. */
+  node?: PMNode;
 }
 
 // No es un espacio (`\s`): los espacios seguidos cuentan como uno, y un salto de línea no tiene que unir dos
@@ -40,6 +43,11 @@ export interface PMUnit extends SearchUnit {
 export const SEPARATOR = '\uFFFC';
 const NESTED = 'blockGroup';
 const CONTAINER = 'blockContainer';
+
+/** Un salto de línea adentro del texto (un bloque de código) también separa: nunca se une ni se cruza. */
+function lines(text: string): string {
+  return text.includes('\n') ? text.replaceAll('\n', SEPARATOR) : text;
+}
 
 function keep(text: string): boolean {
   return text.split(SEPARATOR).join('').trim().length > 0;
@@ -90,12 +98,12 @@ function collectText(node: PMNode, pos: number, blockId: string, blockPos: numbe
     node.forEach((child, offset) => {
       if (child.isText) {
         pieces.push({ at: text.length, pos: pos + 1 + offset, length: child.text!.length });
-        text += child.text;
+        text += lines(child.text!);
       } else {
         text += SEPARATOR;
       }
     });
-    if (keep(text)) out.push({ blockId, field: 'text', text, blockPos, nodePos: pos, nodeSize: node.nodeSize, pieces });
+    if (keep(text)) out.push({ blockId, field: 'text', text, blockPos, nodePos: pos, nodeSize: node.nodeSize, pieces, node });
     return;
   }
   node.forEach((child, offset) => {
@@ -165,7 +173,7 @@ function collectYText(el: Y.XmlElement, blockId: string, out: SearchUnit[]): voi
     let text = '';
     for (const child of el.toArray()) {
       if (child instanceof Y.XmlText) {
-        for (const op of child.toDelta() as { insert: unknown }[]) text += typeof op.insert === 'string' ? op.insert : SEPARATOR;
+        for (const op of child.toDelta() as { insert: unknown }[]) text += typeof op.insert === 'string' ? lines(op.insert) : SEPARATOR;
       } else {
         text += SEPARATOR;
       }

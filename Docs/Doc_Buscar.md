@@ -144,7 +144,9 @@ elemento de `sd-find-current` (no sobre el bloque: un bloque largo quedaría con
 Ninguna sección se abre solo por contar sus coincidencias. **Sin P.11 anda igual**: el gancho está vacío. La
 barra dice cuántas están en secciones colapsadas ("3 de 12 · 4 en secciones colapsadas").
 
-**Ctrl/⌘+F** (en `window`, solo con una página abierta, sin un diálogo modal ni el carrete abiertos):
+**Ctrl/⌘+F** (en `window`, solo con el documento de la página abierto, sin un diálogo ni el carrete abiertos:
+`[aria-modal]`, `.modal`, `.modal-backdrop`, `.carrete`, porque no todos los diálogos, como mover, compartir o
+miembros, tienen `aria-modal`):
 
 - La primera vez abre nuestra barra (o, si ya está abierta, la enfoca y elige su texto) y hace
   `preventDefault`, así el navegador no abre la suya.
@@ -158,12 +160,13 @@ barra dice cuántas están en secciones colapsadas ("3 de 12 · 4 en secciones c
 
 - **La flecha** a la izquierda del campo (como VS Code) despliega el segundo renglón: campo de reemplazo,
   *Reemplazar* y *Reemplazar todo*, y la opción *Conservar mayúsculas* más adelante. Sin permiso de edición
-  (o con la página incompleta) la flecha no aparece. Atajo: Ctrl+H (Windows y Linux) / ⌘⌥F (Mac), como VS Code
-  (a confirmar: en Chrome, Ctrl+H es el historial).
+  (o con la página incompleta) la flecha no aparece. ~~Atajo: Ctrl+H / ⌘⌥F~~: sin atajo propio (decisión 8 de
+  Lega); se abre con Ctrl/⌘+F y se despliega desde la barra.
 - **Reemplazar:** cambia la actual y va a la siguiente.
-- **Reemplazar todo (12):** una sola transacción de ProseMirror, recorriendo de atrás para adelante (las
-  posiciones no se corren). y-prosemirror la pasa a una transacción de Yjs: **un solo Ctrl/⌘+Z la deshace**. Al
-  terminar, un aviso "12 reemplazos" con *Deshacer*.
+- **Reemplazar todo (12):** **una sola transacción de Yjs**, escrita directo en el Y.Doc de atrás para adelante
+  (ver "Cómo quedó"); y-prosemirror la pasa al editor de una vez: **un solo Ctrl/⌘+Z la deshace**. El botón
+  reemplaza todas, también las que pasan de las 1000 que se cuentan y se marcan. Al terminar, un aviso "12
+  reemplazos" con *Deshacer*.
 - **Formato:** el texto nuevo toma **las marcas del primer carácter** de la coincidencia (negrita, color,
   link), puesto a mano (`schema.text(nuevo, marcas)` en `replaceWith`). Con `insertText` común se perdería el
   link si la coincidencia empieza justo en él (el link de Tiptap no es "inclusive"), y una tarjeta de Drive
@@ -372,9 +375,10 @@ Cambios:
    (`captureTimeout`): un "Reemplazar todo" rápido después de escribir quedaba en el mismo paso que lo escrito
    (verificado). Se llama `undoManager.stopCapturing()` justo antes y justo después de cada reemplazo. El
    *Deshacer* del aviso solo deshace mientras el último paso de la pila sea ese reemplazo.
-2. **Una transacción por coincidencia**, de atrás para adelante, todas entre los dos `stopCapturing()` (siguen
-   siendo un solo paso). Con una sola transacción por párrafo, `updateYText` borra y vuelve a escribir todo lo
-   que hay entre la primera y la última coincidencia.
+2. ~~**Una transacción por coincidencia**~~ (la segunda auditoría la reemplazó: era lenta, ver "Cómo quedó"):
+   **una sola transacción de Yjs** con un `delete` + `insert` por coincidencia (cambios mínimos, no el tramo
+   entero), entre los dos `stopCapturing()`. Con una sola transacción de ProseMirror por párrafo, `updateYText`
+   borraba y volvía a escribir todo lo que hay entre la primera y la última coincidencia.
 3. **Deshacer y rehacer un reemplazo no abren secciones colapsadas.** El `meta` (`sd-find-replace`) solo marca
    la transacción original; al deshacer, P.11 abriría todo. Se marca también el paso de la pila (en
    `stack-item-added`, `stackItem.meta.set('sd-find-replace', true)`), y P.11 no abre secciones al deshacer o
@@ -425,71 +429,122 @@ Y: sumar los proyectos al panel de Ctrl/⌘+K esperaba la decisión de Lega (res
 
 ## Cómo quedó (entrega 1, v0.052)
 
-Buscar y reemplazar en la página, con las correcciones de la auditoría. Donde esto y lo de arriba no
-coinciden, vale esto.
+Buscar y reemplazar en la página, con las correcciones de las dos auditorías (la del diseño, arriba, y la del
+código, al final). Donde esto y lo de arriba no coinciden, vale esto.
 
 - **`src/search/normalize.ts`:** `normalize` (texto normalizado con el mapa al original), `normalizeQuery`,
-  `findIn` y `searchText`. Sin *Aa*: NFD por punto de código, sin marcas combinadas, `toLowerCase()` (la ñ vale
-  como n, la "İ" como i; "ß" no es "ss"; ligaduras, ø y ł quedan como están). Con *Aa*: NFD sin sacar nada,
-  y una coincidencia que corta una letra con tilde descompuesta no cuenta. Los espacios seguidos (también el de
-  no separar) valen uno; el final de una coincidencia se extiende sobre las marcas que siguen.
+  `findIn`, `searchText` y `searchNormalized` (con el texto ya normalizado). Sin *Aa*: NFD por punto de código,
+  sin marcas combinadas, `toLowerCase()` (la ñ vale como n, la "İ" como i; "ß" no es "ss"; ligaduras, ø y ł
+  quedan como están). Con *Aa*: NFD sin sacar nada, y una coincidencia que corta una letra con tilde
+  descompuesta no cuenta. Una coincidencia tiene que empezar y terminar en el borde de un carácter del original
+  (NFD separa una sílaba coreana en letras: "하" no encuentra la mitad de "한"). Los espacios seguidos (también
+  el de no separar) valen uno. El final se extiende sobre lo que va pegado al último carácter: marcas
+  combinadas, el selector de variante (U+FE0F), el tono de piel y lo que une un ZWJ (👩‍💻), así no queda nada
+  suelto al reemplazar.
 - **`src/search/extract.ts`:** la regla de qué texto tiene cada bloque, con dos entradas que dan lo mismo en el
-  mismo orden (lo fija una prueba): `unitsFromPM` (el editor abierto, con las posiciones de cada tramo) y
-  `unitsFromYDoc` (el Y.Doc guardado, para la entrega 2). Un salto de línea es `\uFFFC` (no un espacio: nunca
-  une dos renglones); los hijos anidados son bloques propios; pie y nombre, unidades aparte.
+  mismo orden (lo fija una prueba): `unitsFromPM` (el editor abierto, con las posiciones de cada tramo y el nodo)
+  y `unitsFromYDoc` (el Y.Doc guardado, para la entrega 2). Un salto de línea, y un "\n" adentro del texto (los
+  renglones de un bloque de código), es `\uFFFC`: no es un espacio, nunca une ni se cruza. Los hijos anidados
+  son bloques propios; pie y nombre, unidades aparte.
+- **`src/ui/editorMeta.ts`:** `FIND_REPLACE_META = 'sd-find-replace'` (y `BACKGROUND_META`), el mismo archivo que
+  en la rama de P.11, igual byte a byte, para que las dos ramas se unan sin choques.
 - **`src/ui/findEditor.ts`:** el plugin (`findExtension`, en la lista `extensions` del editor de
   `PageEditor.tsx`) con las coincidencias (hasta 1000; "de más de 1000"), la actual y las decoraciones
-  (`sd-find-hit`, `sd-find-current`, y para un pie o un nombre `sd-find-block` en el contenido del bloque). Con
-  cada cambio del documento las marcas se corren y se vuelve a buscar a los 150 ms. La actual se guarda también
-  como posición relativa de Yjs: un cambio de otro dispositivo reemplaza el documento entero en ProseMirror (así
-  trabaja y-prosemirror) y las posiciones corridas no sirven.
-  - Reemplazar: `replaceCurrent` y `replaceAll` revisan `editor.isEditable` (sin permiso o con la página
-    incompleta no hacen nada: `blocked: 'readonly'`); una transacción por coincidencia, de atrás para
-    adelante, entre dos `undoManager.stopCapturing()` (un solo paso, separado de lo escrito justo antes); el
-    texto nuevo con las marcas del primer carácter (`replaceWith`); se saltea lo que borraría un link entero
-    (vacío, o una coincidencia que empieza afuera del link y lo cubre); pies y nombres se cuentan y no se tocan.
-    Antes de *Reemplazar* se vuelve a buscar desde la posición relativa de la actual y solo se reemplaza si es
-    exactamente la misma (si no, `blocked: 'changed'` y queda la más cercana).
-  - Marcas para P.11: cada transacción de reemplazo lleva el `meta` `sd-find-replace` (`FIND_REPLACE_META`); su
-    paso de deshacer también (`stack-item-added`), y el paso que sale de deshacerlo o rehacerlo, si el que se
-    aplica estaba marcado. `isFindReplaceUndo(state)` dice si lo que se está aplicando es deshacer o rehacer
-    un reemplazo (para que el colapso no abra secciones por eso).
-  - Gancho para P.11: `setFindCollapseHooks({ isHidden, reveal })`. Sin registrar, no hace nada. Con él, la
-    barra cuenta las coincidencias escondidas y, al ir a una, primero la abre.
+  (`sd-find-hit`, `sd-find-current`, y para un pie o un nombre `sd-find-block` en el contenido del bloque).
+  - **Cambios del documento:** las marcas se corren y se vuelve a buscar cuando se deja de escribir 150 ms (cada
+    cambio corre la espera; nunca en medio de una composición, `view.composing`). El texto normalizado de cada
+    bloque se guarda por nodo de ProseMirror (`WeakMap`): lo que no cambió no se vuelve a normalizar. **Un cambio
+    de otro dispositivo** llega como "reemplazar el documento entero" (así trabaja y-prosemirror) y corrido por
+    esa transacción todo resaltado se juntaba en un punto por 150 ms: se corre solo por el tramo que de verdad
+    cambió (`findDiffStart`/`findDiffEnd`, un `StepMap` angosto). La actual se guarda también como posición
+    relativa de Yjs, que sigue al texto aunque cambie el documento entero.
+  - **Lo escondido:** una coincidencia adentro de una "Lista plegable" cerrada de BlockNote (`toggleListItem`, o
+    un título plegable viejo: `data-show-children="false"` en su `.bn-toggle-wrapper`) cuenta como escondida
+    ("3 escondidas"); al ir a ella se abren las listas de arriba con su propio botón (así BlockNote guarda que
+    quedaron abiertas). Lo mismo con las secciones colapsadas de P.11, con el gancho
+    `setFindCollapseHooks({ isHidden, reveal })` (sin registrar, no hace nada).
+  - **Llevar a la vista:** `scrollIntoView` al centro (con `scroll-margin`), y si igual queda debajo de la barra
+    de buscar (arriba de todo, donde no se puede desplazar más), la barra baja hasta dejarla a la vista.
+  - **Reemplazar:** `replaceCurrent` y `replaceAll` revisan `editor.isEditable` (sin permiso o con la página
+    incompleta no hacen nada: `blocked: 'readonly'`) y nunca escriben una coincidencia vacía. *Reemplazar*
+    (una) va por ProseMirror, con las marcas del primer carácter (`replaceWith`), después de volver a buscar
+    desde la posición relativa de la actual (solo si es exactamente la misma; si no, `blocked: 'changed'`).
+    **"Reemplazar todo" escribe directo en el Y.Doc:** ubica cada coincidencia en su `Y.XmlText`
+    (`absolutePositionToRelativePosition` desde su primer carácter y `createAbsolutePositionFromRelativePosition`),
+    comprueba que ahí esté exactamente el texto encontrado, y en **una sola transacción de Yjs** con el origen
+    del editor (`ySyncPluginKey`), de atrás para adelante, hace `delete` + `insert` con los atributos (las
+    marcas) del primer carácter. y-prosemirror la lleva al editor de una vez, se guarda y se sube como cualquier
+    edición, y queda un solo paso de deshacer (entre dos `stopCapturing()`, separado de lo escrito justo antes);
+    deshacerlo deja el documento igual que antes. Si alguna no se puede ubicar o su texto no coincide, va por
+    ProseMirror (una transacción por coincidencia, igual en un solo paso). **Medido en jsdom:** 1050 reemplazos
+    en una página de 300 bloques, unos 110 ms (antes, una transacción de ProseMirror por coincidencia: 500 en
+    unos 1,1 s, y de 3 a 10 s en un teléfono). Se saltea lo que borraría un link entero (vacío, o una
+    coincidencia que empieza afuera del link y lo cubre: la tarjeta de Drive se quedaría sin `href`); pies y
+    nombres se cuentan y no se tocan.
+  - **Marcas para P.11:** la transacción de *Reemplazar* lleva el `meta` `FIND_REPLACE_META`; la de "Reemplazar
+    todo" la arma y-prosemirror (llega como un cambio del Y.Doc) y la reconoce `isFindReplaceTransaction(tr)`. El
+    paso de deshacer lleva `FIND_REPLACE_META` en `stackItem.meta` (en `stack-item-added`), y también el paso
+    que sale de deshacerlo o rehacerlo, si el que se aplica estaba marcado. Mientras se deshace o se rehace un
+    reemplazo, `undoManager.currStackItem.meta.get(FIND_REPLACE_META)` es `true` (`isFindReplaceUndo(state)`):
+    así lo mira P.11 para no abrir secciones.
+  - **Marcas de hoja:** resaltar parte y vuelve a unir los nodos de texto del DOM y `SheetBreaks` lo tomaba como
+    un cambio del documento (repaginaba con cada tecla). `takeFindOnlyChanges()` dice si en el editor solo
+    cambiaron los resaltados; `countsForSheets` no cuenta entonces lo de adentro del editor (los altos los
+    sigue mirando el `ResizeObserver`).
 - **`src/ui/findUi.ts`:** el estado de la barra (abierta, desplegada, lo buscado, el reemplazo, *Aa*, *Palabra
-  entera*), afuera del editor: al volver a montarse el editor la búsqueda sigue. `isFindShortcut` (Ctrl+F; ⌘F en
-  la Mac) y `takesFindShortcut` (se deja pasar al navegador con el foco en la barra, en un campo fuera del
-  editor, como el título o los comentarios, y con un diálogo o el carrete abiertos).
+  entera* y el aviso del último reemplazo), afuera del editor: al volver a montarse el editor la búsqueda y el
+  aviso siguen. El foco va al campo solo con un pedido nuevo (`takeFocusRequest`): al volver a montarse la barra
+  no le roba el foco al panel de comentarios ni abre el teclado del teléfono. Atajos con la plataforma como
+  parámetro (para probar la Mac): `isFindShortcut` (Ctrl+F; ⌘F en la Mac) e `isStepShortcut` (F3, Ctrl/⌘+G). Se
+  mira la letra que escribe la tecla y la posición (`code`) solo si no es una letra latina: con Dvorak, Ctrl+U o
+  Ctrl+I no son buscar. `takesFindShortcut` (se deja pasar al navegador con el foco en la barra, en un campo
+  fuera del editor, como el título o los comentarios, y con un diálogo o el carrete abiertos) y
+  `takesStepShortcut` (F3 y Ctrl/⌘+G desde la barra o el editor, sin diálogo; si otro ya tomó la tecla, no).
 - **`src/ui/FindBar.tsx`:** la barra, en la parte del editor (textos en `src/i18n/lazy/editor.ts`). Un ancla
   pegajosa sin alto debajo de la barra de arriba; en la computadora flota a la derecha de la página, en el
   teléfono ocupa su lugar a todo el ancho. Campo, "3 de 12", *Aa*, *ab* (palabra entera), ↑ ↓ y ×; la flecha de
   reemplazar solo si se puede editar. Enter / Shift+Enter, F3 y Ctrl/⌘+G (con Shift, la anterior); Esc cierra,
-  saca los resaltados y deja elegida la coincidencia. Al abrir toma lo elegido en el editor (una línea, hasta
-  200 caracteres). Abajo, "en un pie", "en el nombre de un archivo", cuántas están en secciones colapsadas y
-  el resultado de reemplazar ("2 reemplazos · Deshacer", lo que no se tocó); *Deshacer* solo mientras el último
-  paso de la pila sea ese reemplazo.
-- **`PageEditor.tsx`:** Ctrl/⌘+F en `window` (solo con una página abierta); la barra arriba del `BlockEditor`
-  (que avisa su editor con `onEditor`). **`Workspace.tsx`:** la lupa a la izquierda del ícono de comentarios
-  ("Buscar en la página (Ctrl+F)").
+  saca los resaltados y deja elegida la coincidencia. Enter y Esc a medio escribir con un IME son de la
+  composición. Al abrir toma lo elegido en el editor (una línea, hasta 200 caracteres). Abajo, "en un pie", "en
+  el nombre de un archivo", cuántas están escondidas y el resultado de reemplazar ("2 reemplazos · Deshacer", lo
+  que no se tocó); *Deshacer* solo mientras el último paso de la pila sea ese reemplazo.
+- **`PageEditor.tsx`:** Ctrl/⌘+F en `window`, solo con el documento abierto (mientras carga, la del
+  navegador); la barra arriba del `BlockEditor` (que avisa su editor con `onEditor`) y también mientras el
+  editor se vuelve a abrir, en el mismo lugar (no se desmonta). **`Workspace.tsx`:** la lupa a la izquierda del
+  ícono de comentarios ("Buscar en la página (Ctrl+F)").
 - **Impresión:** la barra no entra en la copia y las clases de lo resaltado se sacan (`printView.ts`).
 - Sin atajo para reemplazar (Lega). Sin cambios en la base, en el esquema ni en `min_app_version`.
 
-**Pruebas:** `src/search/normalize.test.ts` (tildes, ñ, Í descompuesta, *Aa*, İ, ß, ø, espacios, palabra
-entera, emojis, el separador); `src/ui/findEditor.test.ts`, con el editor real (el Y.Doc y el editor dan las
-mismas unidades; un tipo desconocido se lee; buscar no cambia el vector de estado; siguiente y anterior dan la
-vuelta; cerrar deja elegida la actual; tilde descompuesta; *Aa* y palabra entera; un cambio vuelve a buscar;
-el gancho de P.11; "Reemplazar todo" un solo deshacer aunque se haya escrito justo antes; el paso marcado al
-deshacer y rehacer; *Reemplazar* y pasar a la siguiente; quien no edita no cambia nada; el link y la tarjeta
-de Drive; pies que no se tocan; un cambio de otro en la coincidencia frena, en otra parte no);
-`src/ui/findBar.test.tsx` (el atajo y cuándo pasa al navegador, la cuenta, Enter y Shift+Enter, Esc, lo
-elegido al abrir, sin flecha para quien no edita, reemplazar todo con *Deshacer*, el editor que se vuelve a
-montar, y Ctrl+F con la página real). De punta a punta: `find.mjs` en el repo de pruebas privado (Chromium,
-usuario temporal que se borra al final): Ctrl+F abre la barra y la segunda vez pasa al navegador, "1 of 2" sin
-tildes, Enter y Shift+Enter, *Aa*, reemplazar todo y un solo deshacer, Esc con la coincidencia elegida, lo
-reemplazado sigue después de recargar, la lupa de arriba y el teléfono.
+**Pruebas (746 en total):** `src/search/normalize.test.ts` (tildes, ñ, Í descompuesta, *Aa*, İ, ß, ø,
+espacios, palabra entera, emojis, coreano, emojis compuestos, el separador); `src/ui/findEditor.test.ts`, con el
+editor real (el Y.Doc y el editor dan las mismas unidades, también con un bloque de código; un tipo desconocido
+se lee; buscar no cambia el vector de estado; siguiente y anterior dan la vuelta; cerrar deja elegida la
+actual; tilde descompuesta; *Aa* y palabra entera; un cambio vuelve a buscar; el gancho de P.11; "Reemplazar
+todo" un solo deshacer aunque se haya escrito justo antes; el paso marcado al deshacer y rehacer, y que
+`isFindReplaceUndo` da `true` mientras se aplican; *Reemplazar* y pasar a la siguiente; quien no edita no
+cambia nada; el link y la tarjeta de Drive; pies que no se tocan; un cambio de otro en la coincidencia frena, en
+otra parte no; una sola actualización de Yjs con el formato conservado y el deshacer que deja el documento
+igual; 300 bloques en menos de 600 ms; coreano; emoji con tono; renglones de código; los resaltados que siguen en
+su lugar con un cambio de otro; la lista plegable cerrada; resaltar que no repagina y escribir que sí);
+`src/ui/findBar.test.tsx` (los atajos en la Mac y en el resto, con Dvorak y con un teclado ruso; cuándo pasa al
+navegador, también con un diálogo sin `aria-modal`; la cuenta, Enter y Shift+Enter, Esc, lo elegido al abrir,
+sin flecha para quien no edita, reemplazar todo con *Deshacer*, el editor que se vuelve a montar, la barra que
+no roba el foco y conserva el aviso, el IME; y con la página real: Ctrl+F, quien solo ve y la página a medio
+bajar). De punta a punta: `find.mjs` en el repo de pruebas privado (Chromium, usuario temporal que se borra al
+final): Ctrl+F abre la barra y la segunda vez pasa al navegador, "1 of 2" sin tildes, Enter y Shift+Enter, *Aa*,
+reemplazar todo y un solo deshacer, Esc con la coincidencia elegida, lo reemplazado sigue después de recargar
+(se subió), la barra que se corre para no tapar una coincidencia arriba de todo, la lupa de arriba y el
+teléfono.
+
+**Auditoría del código (independiente, 2026-09-30).** Nada bloqueante. Arreglado todo lo que encontró: "Reemplazar
+todo" lento (ahora en una transacción de Yjs), los resaltados que se juntaban con cada cambio de otro, las
+listas plegables cerradas, la barra que se desmontaba al reabrirse el editor (perdía el aviso y robaba el foco),
+coreano, bloques de código y emojis compuestos, las marcas de hoja que se recalculaban con cada resaltado, la
+espera al escribir (de verdad, sin IME y con lo normalizado guardado), los diálogos sin `aria-modal`, Ctrl+F
+mientras carga, F3 y Ctrl/⌘+G con otro teclado o en otro campo, Enter y Esc con un IME, y la barra que podía tapar
+la coincidencia.
 
 **Queda para después:** la búsqueda del proyecto (entrega 2, con las correcciones 5 a 8, 11, 12, 15 a 17);
 reemplazar en pies y nombres, *Conservar mayúsculas* y expresiones regulares; que P.11 registre
-`setFindCollapseHooks` y respete `sd-find-replace` e `isFindReplaceUndo`; probar a mano Safari de Mac, iPhone
-y Firefox (Ctrl/⌘+F, el teclado del teléfono). "Reemplazar todo" con cientos de coincidencias hace una
-transacción por cada una (y-prosemirror compara el documento en cada una): a medir en una página grande.
+`setFindCollapseHooks` y respete `FIND_REPLACE_META`, `isFindReplaceTransaction` e `isFindReplaceUndo`; probar
+a mano Safari de Mac, iPhone y Firefox (Ctrl/⌘+F, el teclado del teléfono, los IME).

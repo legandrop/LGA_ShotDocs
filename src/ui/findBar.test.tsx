@@ -13,7 +13,7 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { schema } from './editorSchema';
 import { FindBar } from './FindBar';
 import { findExtension, getFindState } from './findEditor';
-import { closeFindBar, getFindUi, isFindShortcut, openFindBar, takesFindShortcut, updateFindUi } from './findUi';
+import { closeFindBar, getFindUi, isFindShortcut, isStepShortcut, openFindBar, takesFindShortcut, takesStepShortcut, updateFindUi } from './findUi';
 
 // La barra de buscar y reemplazar (Docs/Doc_Buscar.md): el atajo, la cuenta, reemplazar solo si se puede
 // editar, y Ctrl/⌘+F en la página (la segunda vez, al navegador).
@@ -109,6 +109,27 @@ describe('el atajo', () => {
     expect(isFindShortcut({ ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, key: 'f' })).toBe(false);
   });
 
+  it('en la Mac, ⌘F sí y Ctrl+F no; en el resto, al revés', () => {
+    const cmd = { ctrlKey: false, metaKey: true, altKey: false, shiftKey: false, key: 'f' };
+    const ctrl = { ctrlKey: true, metaKey: false, altKey: false, shiftKey: false, key: 'f' };
+    expect(isFindShortcut(cmd, true)).toBe(true);
+    expect(isFindShortcut(ctrl, true)).toBe(false);
+    expect(isFindShortcut(cmd, false)).toBe(false);
+    expect(isFindShortcut(ctrl, false)).toBe(true);
+    expect(isStepShortcut({ ...cmd, key: 'g' }, true)).toBe(true);
+    expect(isStepShortcut({ ...ctrl, key: 'g' }, true)).toBe(false);
+  });
+
+  it('se mira la letra, no la posición: con Dvorak, Ctrl+U (donde está la F) y Ctrl+I (la G) no son buscar', () => {
+    const ctrl = { ctrlKey: true, metaKey: false, altKey: false, shiftKey: false };
+    expect(isFindShortcut({ ...ctrl, key: 'u', code: 'KeyF' }, false)).toBe(false);
+    expect(isFindShortcut({ ...ctrl, key: 'f', code: 'KeyY' }, false)).toBe(true);
+    expect(isStepShortcut({ ...ctrl, key: 'i', code: 'KeyG' }, false)).toBe(false);
+    // Un teclado que no da letras latinas (ruso): la posición.
+    expect(isFindShortcut({ ...ctrl, key: 'а', code: 'KeyF' }, false)).toBe(true);
+    expect(isStepShortcut({ ctrlKey: false, metaKey: false, altKey: false, shiftKey: true, key: 'F3' }, false)).toBe(true);
+  });
+
   it('se deja pasar al navegador en la barra, en otro campo y con un diálogo abierto', () => {
     const editor = document.createElement('div');
     editor.className = 'bn-editor';
@@ -127,6 +148,16 @@ describe('el atajo', () => {
     dialog.setAttribute('aria-modal', 'true');
     document.body.append(dialog);
     expect(takesFindShortcut(editor)).toBe(false);
+    dialog.remove();
+    // Un diálogo sin `aria-modal` (mover, compartir, miembros).
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    document.body.append(modal);
+    expect(takesFindShortcut(editor)).toBe(false);
+    expect(takesStepShortcut(editor)).toBe(false);
+    modal.remove();
+    expect(takesStepShortcut(barInput)).toBe(true);
+    expect(takesStepShortcut(title)).toBe(false);
   });
 });
 
@@ -219,48 +250,92 @@ describe('la barra', () => {
     expect(getFindState(second.prosemirrorView!.state).matches.length).toBe(3);
     expect(host.querySelector('.find-count')?.textContent).toBe('1 of 3');
   });
+
+  it('al volver a montarse no le roba el foco a nadie y conserva el aviso del reemplazo', async () => {
+    const editor = mountEditor(['uno dos uno']);
+    act(() => openFindBar());
+    const host = render(<FindBar editor={editor} editable />);
+    act(() => host.querySelector<HTMLButtonElement>('.find-toggle')!.click());
+    type(host.querySelector<HTMLInputElement>('.find-input')!, 'uno');
+    await wait(150);
+    act(() => [...host.querySelectorAll<HTMLButtonElement>('.find-text-button')].find((b) => b.textContent === 'Replace all')!.click());
+    expect(host.querySelector('.find-status')?.textContent).toContain('2 replaced');
+    // Alguien escribe en el panel de comentarios; el editor se vuelve a abrir (la barra se desmonta un momento).
+    const comment = document.createElement('textarea');
+    document.body.append(comment);
+    comment.focus();
+    act(() => roots[0].render(<></>));
+    act(() => roots[0].render(<FindBar editor={editor} editable />));
+    await wait(150);
+    expect(document.activeElement).toBe(comment);
+    expect(host.querySelector('.find-status')?.textContent).toContain('2 replaced');
+  });
+
+  it('Enter con un IME a medio escribir no va a la siguiente', async () => {
+    const editor = mountEditor(['uno uno']);
+    act(() => openFindBar());
+    const host = render(<FindBar editor={editor} editable />);
+    const input = host.querySelector<HTMLInputElement>('.find-input')!;
+    type(input, 'uno');
+    await wait(150);
+    key(input, { key: 'Enter', isComposing: true });
+    expect(host.querySelector('.find-count')?.textContent).toBe('1 of 2');
+    key(input, { key: 'Escape', isComposing: true });
+    expect(getFindUi().open).toBe(true);
+  });
 });
+
+function pageServices(device: Device, overrides: Partial<Services> = {}): Services {
+  return {
+    workspace: { config: { url: 'https://x.supabase.co', publishableKey: 'k', name: 'W', localKey: WANKA_LOCAL_KEY, storage: legacyStorageNames(WANKA_LOCAL_KEY) }, client: {} },
+    client: { auth: { signOut: vi.fn() } },
+    user: { id: device.remote.userId, email: 'a@test' },
+    db: device.db,
+    tree: device.tree,
+    docs: device.docs,
+    files: device.files,
+    media: device.media,
+    engine: device.engine,
+    access: device.access,
+    remote: device.remote as unknown as SupabaseRemote,
+    dbName: 'test',
+    mediaDb: device.mediaDb,
+    comments: device.comments,
+    commentsDb: device.commentsDb,
+    sizes: device.sizes,
+    shutdown: async () => undefined,
+    ...overrides,
+  } as unknown as Services;
+}
+
+async function openPage(services: (device: Device, page: string) => Services = (d) => pageServices(d)) {
+  const server = new FakeServer();
+  const device = await makeDevice(server);
+  devices.push(device);
+  const page = await device.tree.create(null, 'Escena 64');
+  await device.engine.syncNow();
+  const { PageView } = await import('./PageView');
+  const host = render(
+    <ServicesContext.Provider value={services(device, page)}>
+      <main className="main">
+        <PageView id={page} />
+      </main>
+    </ServicesContext.Provider>,
+  );
+  for (let i = 0; i < 100 && !host.querySelector('.bn-editor'); i++) await wait(50);
+  return { host, device, page };
+}
 
 describe('Ctrl/⌘+F en la página', () => {
   it('abre la barra de la app; con el foco en la barra, pasa al navegador', async () => {
-    const server = new FakeServer();
-    const device = await makeDevice(server);
-    devices.push(device);
-    const page = await device.tree.create(null, 'Escena 64');
-    await device.engine.syncNow();
-    const services = {
-      workspace: { config: { url: 'https://x.supabase.co', publishableKey: 'k', name: 'W', localKey: WANKA_LOCAL_KEY, storage: legacyStorageNames(WANKA_LOCAL_KEY) }, client: {} },
-      client: { auth: { signOut: vi.fn() } },
-      user: { id: device.remote.userId, email: 'a@test' },
-      db: device.db,
-      tree: device.tree,
-      docs: device.docs,
-      files: device.files,
-      media: device.media,
-      engine: device.engine,
-      access: device.access,
-      remote: device.remote as unknown as SupabaseRemote,
-      dbName: 'test',
-      mediaDb: device.mediaDb,
-      comments: device.comments,
-      commentsDb: device.commentsDb,
-      sizes: device.sizes,
-      shutdown: async () => undefined,
-    } as unknown as Services;
-    const { PageView } = await import('./PageView');
-    const host = render(
-      <ServicesContext.Provider value={services}>
-        <main className="main">
-          <PageView id={page} />
-        </main>
-      </ServicesContext.Provider>,
-    );
-    for (let i = 0; i < 100 && !host.querySelector('.bn-editor'); i++) await wait(50);
+    const { host } = await openPage();
     const first = key(host.querySelector('.bn-editor')!, { key: 'f', ctrlKey: true });
     expect(first.defaultPrevented).toBe(true);
     const input = host.querySelector<HTMLInputElement>('.find-bar .find-input')!;
     expect(input).not.toBeNull();
     expect(document.activeElement).toBe(input);
+    // Quien puede editar ve la flecha de reemplazar.
+    expect(host.querySelector('.find-toggle')).not.toBeNull();
     // La segunda vez, con el foco en la barra: la del navegador.
     const second = key(input, { key: 'f', ctrlKey: true });
     expect(second.defaultPrevented).toBe(false);
@@ -269,5 +344,29 @@ describe('Ctrl/⌘+F en la página', () => {
     expect(title.defaultPrevented).toBe(false);
     key(input, { key: 'Escape' });
     expect(host.querySelector('.find-bar')).toBeNull();
+  });
+
+  it('quien solo ve la página busca, pero no tiene la flecha de reemplazar', async () => {
+    const { host } = await openPage((device) => {
+      const snapshot = { member: { role: 'member', removed_at: null }, grants: [{ id: 'g', project_id: device.tree.workspaceId, page_id: null, level: 'view' }], fetchedAt: Date.now() };
+      const access = { get: () => snapshot, subscribe: () => () => undefined, getRevision: () => 1, removed: false, userId: 'viewer' };
+      return pageServices(device, { user: { id: 'viewer', email: 'v@test' }, access } as never);
+    });
+    expect(host.querySelector('.bn-editor')?.getAttribute('contenteditable')).toBe('false');
+    expect(key(host.querySelector('.bn-editor')!, { key: 'f', ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(host.querySelector('.find-bar')).not.toBeNull();
+    expect(host.querySelector('.find-toggle')).toBeNull();
+  });
+
+  it('con la página a medio bajar (solo lectura), sin la flecha de reemplazar', async () => {
+    const { host } = await openPage((device) => {
+      device.engine.prefetchPage = async () => false;
+      device.engine.isMissingContent = async () => true;
+      return pageServices(device);
+    });
+    expect(host.querySelector('.editor-missing')).not.toBeNull();
+    key(host.querySelector('.bn-editor')!, { key: 'f', ctrlKey: true });
+    expect(host.querySelector('.find-bar')).not.toBeNull();
+    expect(host.querySelector('.find-toggle')).toBeNull();
   });
 });

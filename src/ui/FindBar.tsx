@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useReducer, useRef, type KeyboardEvent } from 'react';
 import type { EditorView } from '@tiptap/pm/view';
 import { useT } from '../i18n';
 import '../i18n/lazy/editor';
@@ -17,7 +17,7 @@ import {
   undoReplace,
   type ReplaceResult,
 } from './findEditor';
-import { closeFindBar, modPressed, updateFindUi, useFindUi } from './findUi';
+import { closeFindBar, getFindUi, isStepShortcut, takeFocusRequest, takesStepShortcut, updateFindUi, useFindUi, type FindStatus } from './findUi';
 import { ChevronUpIcon, CloseIcon, CollapseIcon, ExpandIcon } from './icons';
 
 // La barra de buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6). Como la del navegador,
@@ -35,25 +35,22 @@ const TYPE_MS = 100;
 /** Lo elegido en el editor se usa para buscar si es de una línea y no muy largo. */
 const PREFILL_MAX = 200;
 
-interface Status {
-  text: string;
-  undoItem?: unknown;
-}
-
 export function FindBar({ editor, editable }: { editor: FindEditor | null; editable: boolean }) {
   const ui = useFindUi();
   const tr = useT();
   const view = editor?.prosemirrorView;
   const input = useRef<HTMLInputElement>(null);
   const [, redraw] = useReducer((n: number) => n + 1, 0);
-  const [status, setStatus] = useState<Status | null>(null);
+  const status = ui.status;
+  const setStatus = (next: FindStatus | null) => updateFindUi({ status: next });
 
   // Cada cambio de la búsqueda (coincidencias, la actual) redibuja la cuenta.
   useEffect(() => (view ? subscribeFind(view, redraw) : undefined), [view]);
 
-  // Abrir (o Ctrl/⌘+F con la barra abierta): lo elegido en el editor como búsqueda, y el foco al campo.
+  // Abrir (o Ctrl/⌘+F con la barra abierta): lo elegido en el editor como búsqueda, y el foco al campo. Solo
+  // con un pedido nuevo: si la barra se vuelve a montar (el editor se reabrió), no le roba el foco a nadie.
   useEffect(() => {
-    if (!ui.open) return;
+    if (!ui.open || !takeFocusRequest()) return;
     if (view) {
       const { from, to } = view.state.selection;
       const selected = from < to ? view.state.doc.textBetween(from, to, '\n', ' ') : '';
@@ -84,12 +81,12 @@ export function FindBar({ editor, editable }: { editor: FindEditor | null; edita
     return () => clearTimeout(timer);
   }, [view, ui.open, ui.query, ui.matchCase, ui.wholeWord]);
 
-  // Con la barra abierta: F3 y Ctrl/⌘+G van a la siguiente (con Shift, a la anterior).
+  // Con la barra abierta: F3 y Ctrl/⌘+G van a la siguiente (con Shift, a la anterior), desde la barra o el
+  // editor y sin un diálogo abierto.
   useEffect(() => {
     if (!ui.open || !view) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      const g = modPressed(e) && !e.altKey && (e.key.toLowerCase() === 'g' || e.code === 'KeyG');
-      if (e.key !== 'F3' && !g) return;
+      if (e.defaultPrevented || !isStepShortcut(e) || !takesStepShortcut(e.target)) return;
       e.preventDefault();
       stepFind(view, e.shiftKey ? -1 : 1);
     };
@@ -97,8 +94,14 @@ export function FindBar({ editor, editable }: { editor: FindEditor | null; edita
     return () => window.removeEventListener('keydown', onKey);
   }, [ui.open, view]);
 
-  // Un cambio de lo buscado borra el aviso del último reemplazo.
-  useEffect(() => setStatus(null), [ui.query, ui.matchCase, ui.wholeWord, ui.open]);
+  // Un cambio de lo buscado borra el aviso del último reemplazo (solo un cambio, no volver a montarse).
+  const searched = useRef(`${ui.query}\u0000${ui.matchCase}\u0000${ui.wholeWord}`);
+  useEffect(() => {
+    const key = `${ui.query}\u0000${ui.matchCase}\u0000${ui.wholeWord}`;
+    if (key === searched.current) return;
+    searched.current = key;
+    if (getFindUi().status) updateFindUi({ status: null });
+  }, [ui.query, ui.matchCase, ui.wholeWord]);
 
   if (!ui.open) return null;
 
@@ -111,7 +114,7 @@ export function FindBar({ editor, editable }: { editor: FindEditor | null; edita
     else count = tr(state.truncated ? 'find.countMore' : 'find.count', { current: state.current + 1, total });
   }
   const where = current?.field === 'caption' ? tr('find.inCaption') : current?.field === 'name' ? tr('find.inName') : '';
-  const hidden = state ? hiddenCount(state.matches) : 0;
+  const hidden = state ? hiddenCount(state.matches, view) : 0;
 
   const close = () => {
     closeFindBar();
@@ -133,6 +136,8 @@ export function FindBar({ editor, editable }: { editor: FindEditor | null; edita
   };
 
   const onFindKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Escribiendo con un IME (japonés, chino, acentos): Enter y Esc son de la composición.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       step(e.shiftKey ? -1 : 1);
@@ -143,6 +148,7 @@ export function FindBar({ editor, editable }: { editor: FindEditor | null; edita
   };
 
   const onReplaceKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       if (editor) report(replaceCurrent(editor, ui.replacement), false);

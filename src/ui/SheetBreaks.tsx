@@ -5,6 +5,7 @@ import { useServices, useTree } from '../services';
 import { pageFormat } from './pageFormat';
 import { SHEET_TOLERANCE_PX, splitPoints, unitKey, type SheetBreak } from './pagination';
 import { installPrintShortcuts } from './printPage';
+import { takeFindOnlyChanges } from './findEditor';
 import { buildPrintView, paginateView, type Paginated } from './printView';
 
 // Las marcas de hoja en el editor (roadmap B.7, Docs/Doc_Hojas_PDF.md): en una página con tamaño de hoja,
@@ -36,7 +37,22 @@ export function isContentMutation(r: MutationRecord): boolean {
     return nodes.some((n) => n instanceof Element && (n.matches('.bn-editor') || !!n.querySelector('.bn-editor')));
   }
   // Los cursores de otras personas.
-  return !target.closest('.bn-collaboration-cursor__base, .ProseMirror-yjs-cursor');
+  if (target.closest('.bn-collaboration-cursor__base, .ProseMirror-yjs-cursor')) return false;
+  return true;
+}
+
+/**
+ * Si un grupo de cambios del DOM puede mover los cortes. `findOnly`: en el editor solo cambiaron los resaltados
+ * de la búsqueda (Docs/Doc_Buscar.md; ProseMirror parte y vuelve a unir los nodos de texto, pero ningún alto
+ * cambia), así que lo de adentro del editor no cuenta.
+ */
+export function countsForSheets(records: MutationRecord[], findOnly: boolean): boolean {
+  return records.some((r) => {
+    if (!isContentMutation(r)) return false;
+    if (!findOnly) return true;
+    const target = r.target instanceof Element ? r.target : r.target.parentElement;
+    return !target?.closest('.bn-editor');
+  });
 }
 
 /** La pausa al escribir antes de recalcular, y lo máximo que se espera escribiendo sin parar. */
@@ -116,7 +132,7 @@ export function SheetBreaks({ pageId, host }: { pageId: string; host: RefObject<
 
     // Lo que cambia el documento en pantalla (ver `isContentMutation`).
     const mutations = new MutationObserver((records) => {
-      if (records.some(isContentMutation)) schedule();
+      if (countsForSheets(records, takeFindOnlyChanges())) schedule();
     });
     mutations.observe(editorHost, { subtree: true, childList: true, characterData: true, attributes: true });
     const header = article.querySelector('.page-header');

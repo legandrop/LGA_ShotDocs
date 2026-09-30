@@ -97,18 +97,20 @@ export function PageEditor({ pageId }: { pageId: string }) {
   const [findEditor, setFindEditor] = useState<FindEditor | null>(null);
 
   // Ctrl/⌘+F abre la barra de la app; con el foco en la barra, se deja pasar al navegador (la segunda vez).
+  // Solo con el documento abierto: mientras carga (o si no se puede mostrar) queda la del navegador.
+  const ready = opening.state === 'ready';
   useEffect(() => {
+    if (!ready) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.defaultPrevented || !isFindShortcut(e) || !takesFindShortcut(e.target)) return;
       e.preventDefault();
       openFindBar();
     };
     window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      closeFindBar();
-    };
-  }, []);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ready]);
+  // Al salir de la página, la barra se cierra (lo buscado queda para la próxima).
+  useEffect(() => () => closeFindBar(), []);
 
   // Si el servidor tiene contenido de esta página que el dispositivo todavía no bajó, se muestra lo que
   // hay en solo lectura: editar sobre un documento a medio bajar arma una estructura paralela. Cuando
@@ -160,7 +162,16 @@ export function PageEditor({ pageId }: { pageId: string }) {
     };
   }, [engine, pageId, incomplete, status.lastSyncAt]);
 
-  if (opening.state === 'loading') return <div className="editor-placeholder" />;
+  // La barra sigue montada mientras el editor se vuelve a abrir (terminó de bajar, cambió el permiso): no se
+  // pierde el aviso del último reemplazo ni se vuelve a montar.
+  if (opening.state === 'loading') {
+    return (
+      <>
+        <FindBar editor={null} editable={false} />
+        <div className="editor-placeholder" />
+      </>
+    );
+  }
   if (opening.state === 'unsupported') return <UnsupportedPage />;
   return (
     <>

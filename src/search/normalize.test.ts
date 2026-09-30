@@ -61,6 +61,18 @@ describe('normalizar', () => {
     expect(found('toma￼tres', 'tres', { wholeWord: true })).toEqual(['tres']);
   });
 
+  it('coreano: una sílaba no se parte (NFD la separa en letras)', () => {
+    expect(found('한국', '하')).toEqual([]);
+    expect(found('한국', '한')).toEqual(['한']);
+    expect(searchText('한국', '하')).toEqual([]);
+  });
+
+  it('emojis compuestos: el tono de piel, el selector de variante y el ZWJ quedan adentro', () => {
+    expect(found('ok 👍🏽 listo', '👍')).toEqual(['👍🏽']);
+    expect(found('👩\u200D💻 dev', '👩')).toEqual(['👩\u200D💻']);
+    expect(found('te ❤\uFE0F mucho', '❤')).toEqual(['❤\uFE0F']);
+  });
+
   it('no se superponen', () => {
     expect(found('aaaa', 'aa')).toEqual(['aa', 'aa']);
   });

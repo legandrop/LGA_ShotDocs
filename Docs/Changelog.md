@@ -11,8 +11,11 @@ elegida la coincidencia. Quien puede editar la página despliega el reemplazo co
 *Reemplazar* (la actual y pasa a la siguiente) y *Reemplazar todo*, que se deshace con un solo Ctrl/⌘+Z (o con
 *Deshacer* en la barra); conserva el formato y los links, no borra un link entero (una tarjeta de Drive sigue
 andando) y no toca pies ni nombres de archivo. Si otra persona cambió la coincidencia justo antes, no se
-reemplaza y se vuelve a buscar. Lo resaltado no sale al imprimir. Queda listo el enganche con las secciones
-colapsadas (P.11): cuando exista, la búsqueda las abre al llegar a una coincidencia escondida.
+reemplaza y se vuelve a buscar. "Reemplazar todo" escribe todo de una vez (cientos de reemplazos en una
+página grande, en una fracción de segundo). Encuentra también lo que está adentro de una lista plegable cerrada
+y la abre al llegar; los resaltados no se mueven cuando llegan cambios de otra persona. Lo resaltado no sale
+al imprimir y no recalcula las marcas de hoja. Queda listo el enganche con las secciones colapsadas (P.11):
+cuando exista, la búsqueda las abre al llegar a una coincidencia escondida.
 [ Buscar y reemplazar en la página - primera entrega ]
 
 v0.050 :

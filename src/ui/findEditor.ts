@@ -1,19 +1,23 @@
 import { createExtension } from '@blocknote/core';
 import type { Mark, Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
+import { Mapping, StepMap } from '@tiptap/pm/transform';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition, ySyncPluginKey, yUndoPluginKey } from 'y-prosemirror';
-import type * as Y from 'yjs';
-import { unitsFromPM, unitPos, type UnitField } from '../search/extract';
-import { searchText, type SearchOptions } from '../search/normalize';
+import * as Y from 'yjs';
+import { unitsFromPM, unitPos, type PMUnit, type UnitField } from '../search/extract';
+import { normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from '../search/normalize';
+import { FIND_REPLACE_META } from './editorMeta';
 
-// Buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6, con las correcciones de la
-// auditoría). Buscar no cambia el documento: las coincidencias se marcan con decoraciones, como las marcas de
-// guion y las filas de fotos. Reemplazar es una edición común: pasa por el editor, se guarda y se sube como
-// cualquier otra, y se deshace con Ctrl/⌘+Z (un solo paso para "Reemplazar todo").
+// Buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6, con las correcciones de las
+// auditorías). Buscar no cambia el documento: las coincidencias se marcan con decoraciones, como las marcas de
+// guion y las filas de fotos. Reemplazar es una edición común: se guarda y se sube como cualquier otra, y se
+// deshace con Ctrl/⌘+Z (un solo paso para "Reemplazar todo", que escribe directo en el Y.Doc en una sola
+// transacción).
 
-/** Marca de las transacciones de reemplazo, y de su paso en la pila de deshacer (P.11 no abre secciones por ellas). */
-export const FIND_REPLACE_META = 'sd-find-replace';
+// La marca de las transacciones de reemplazo y de su paso en la pila de deshacer (P.11 no abre secciones por
+// ellas): la misma clave que usa el colapso, en `editorMeta.ts`.
+export { FIND_REPLACE_META };
 /** Más que esto no se marca ni se cuenta ("más de 1000"). */
 export const MAX_MATCHES = 1000;
 /** Espera para volver a buscar después de un cambio del documento. */
@@ -75,27 +79,78 @@ export function setFindCollapseHooks(hooks: FindCollapseHooks | null): void {
   collapseHooks = hooks;
 }
 
-/** Cuántas coincidencias están en secciones colapsadas (0 sin P.11). */
-export function hiddenCount(matches: FindMatch[]): number {
-  if (!collapseHooks) return 0;
+// --- Listas plegables de BlockNote ---------------------------------------------------------------------
+//
+// Una "Lista plegable" (`toggleListItem`, o un título plegable viejo) cerrada esconde sus hijos: BlockNote pone
+// `data-show-children="false"` en su `.bn-toggle-wrapper` y guarda el estado en el navegador. Una coincidencia
+// ahí adentro se cuenta como escondida y, al ir a ella, se abren las listas de arriba con su propio botón.
+
+// Ids de BlockNote: uuid, o `initialBlockId` en la semilla.
+const BLOCK_ID = /^[A-Za-z0-9_-]{1,128}$/;
+const CONTAINER = '[data-node-type="blockContainer"]';
+
+function blockElement(view: EditorView, blockId: string): HTMLElement | null {
+  if (!BLOCK_ID.test(blockId)) return null;
+  return view.dom.querySelector<HTMLElement>(`${CONTAINER}[data-id="${blockId}"]`);
+}
+
+/** Las listas plegables cerradas que esconden el bloque, de la de más afuera a la de más adentro. */
+function closedToggles(view: EditorView, blockId: string): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  let parent = blockElement(view, blockId)?.parentElement?.closest<HTMLElement>(CONTAINER) ?? null;
+  while (parent && view.dom.contains(parent)) {
+    const wrapper = parent.querySelector<HTMLElement>(':scope > .bn-block-content .bn-toggle-wrapper');
+    if (wrapper?.getAttribute('data-show-children') === 'false') out.unshift(wrapper);
+    parent = parent.parentElement?.closest<HTMLElement>(CONTAINER) ?? null;
+  }
+  return out;
+}
+
+function isHiddenBlock(view: EditorView | undefined, blockId: string): boolean {
+  if (collapseHooks?.isHidden(blockId)) return true;
+  return !!view && closedToggles(view, blockId).length > 0;
+}
+
+/** Cuántas coincidencias están escondidas: en listas plegables cerradas o en secciones colapsadas (P.11). */
+export function hiddenCount(matches: FindMatch[], view?: EditorView): number {
+  if (!collapseHooks && !view) return 0;
   const seen = new Map<string, boolean>();
   let n = 0;
   for (const m of matches) {
     let hidden = seen.get(m.blockId);
-    if (hidden === undefined) seen.set(m.blockId, (hidden = collapseHooks.isHidden(m.blockId)));
+    if (hidden === undefined) seen.set(m.blockId, (hidden = isHiddenBlock(view, m.blockId)));
     if (hidden) n++;
   }
   return n;
 }
 
+/** Abre lo que esconde el bloque: las listas plegables de arriba y las secciones colapsadas (P.11). */
+function revealBlock(view: EditorView, blockId: string): void {
+  for (const wrapper of closedToggles(view, blockId)) wrapper.querySelector<HTMLElement>(':scope > .bn-toggle-button')?.click();
+  if (collapseHooks?.isHidden(blockId)) collapseHooks.reveal(blockId);
+}
+
 // --- Buscar ------------------------------------------------------------------------------------------------
+
+// El texto normalizado de cada bloque de texto: mientras el nodo de ProseMirror sea el mismo (no cambió), no se
+// vuelve a normalizar al buscar otra vez.
+const normalized = new WeakMap<PMNode, { exact?: Normalized; folded?: Normalized }>();
+
+function normalizedUnit(unit: PMUnit, options: SearchOptions): Normalized {
+  if (!unit.node) return normalize(unit.text, options);
+  let entry = normalized.get(unit.node);
+  if (!entry) normalized.set(unit.node, (entry = {}));
+  if (options.matchCase) return (entry.exact ??= normalize(unit.text, options));
+  return (entry.folded ??= normalize(unit.text, options));
+}
 
 /** Las coincidencias del documento, en orden, hasta `limit`. */
 function collectMatches(doc: PMNode, query: string, options: SearchOptions, limit: number): { matches: FindMatch[]; truncated: boolean } {
   const matches: FindMatch[] = [];
-  if (!query.trim()) return { matches, truncated: false };
+  const q = normalizeQuery(query, options);
+  if (!q) return { matches, truncated: false };
   for (const unit of unitsFromPM(doc)) {
-    for (const [s, e] of searchText(unit.text, query, options)) {
+    for (const [s, e] of searchNormalized(unit.text, normalizedUnit(unit, options), q, options)) {
       if (matches.length >= limit) return { matches, truncated: true };
       if (unit.field === 'text') matches.push({ blockId: unit.blockId, field: 'text', from: unitPos(unit, s), to: unitPos(unit, e) });
       else matches.push({ blockId: unit.blockId, field: unit.field, from: unit.nodePos, to: unit.nodePos + unit.nodeSize });
@@ -192,7 +247,42 @@ function currentPlace(view: EditorView): { from: number; to: number } | null {
   return from === null || to === null ? null : { from, to };
 }
 
+/**
+ * Un cambio de otro dispositivo llega como "reemplazar el documento entero" (y-prosemirror): corrido por esa
+ * transacción, todo resaltado se juntaría en un punto hasta volver a buscar. Se corre solo por lo que de verdad
+ * cambió (desde la primera diferencia hasta la última).
+ */
+function narrowMapping(before: PMNode, after: PMNode): Mapping {
+  const start = before.content.findDiffStart(after.content);
+  if (start === null) return new Mapping();
+  const end = before.content.findDiffEnd(after.content);
+  if (!end) return new Mapping();
+  let { a: endA, b: endB } = end;
+  const overlap = start - Math.min(endA, endB);
+  if (overlap > 0) {
+    endA += overlap;
+    endB += overlap;
+  }
+  return new Mapping([new StepMap([start, endA - start, endB - start])]);
+}
+
 const listeners = new WeakMap<EditorView, Set<() => void>>();
+
+// Lo que cambió en el editor desde la última vez que preguntaron las marcas de hoja (SheetBreaks.tsx):
+// resaltar parte y vuelve a unir los nodos de texto del DOM, pero no cambia ningún alto.
+let docChanges = 0;
+let highlightChanges = 0;
+
+/**
+ * Si, desde la última vez que se preguntó, en el editor solo cambiaron los resaltados de la búsqueda (no el
+ * documento). Lo usan las marcas de hoja para no volver a paginar por eso.
+ */
+export function takeFindOnlyChanges(): boolean {
+  const only = highlightChanges > 0 && docChanges === 0;
+  docChanges = 0;
+  highlightChanges = 0;
+  return only;
+}
 
 /** Avisa cada vez que cambia la búsqueda de ese editor (coincidencias, la actual). */
 export function subscribeFind(view: EditorView, fn: () => void): () => void {
@@ -218,10 +308,12 @@ export const findPlugin = new Plugin<FindState>({
       let state = old;
       if (tr.docChanged) {
         // Se corren las que había (el resaltado sigue en su lugar) y se vuelve a buscar en un momento.
+        const remote = (tr.getMeta(ySyncPluginKey) as { isChangeOrigin?: boolean } | undefined)?.isChangeOrigin;
+        const mapping = remote ? narrowMapping(tr.before, tr.doc) : tr.mapping;
         const matches = old.matches
-          .map((m) => ({ ...m, from: tr.mapping.map(m.from, 1), to: tr.mapping.map(m.to, -1) }))
+          .map((m) => ({ ...m, from: mapping.map(m.from, 1), to: mapping.map(m.to, -1) }))
           .map((m) => ({ ...m, to: Math.max(m.from, m.to) }));
-        state = { ...old, matches, decorations: old.decorations.map(tr.mapping, tr.doc), stale: true };
+        state = { ...old, matches, decorations: old.decorations.map(mapping, tr.doc), stale: true };
       }
       if (meta?.kind === 'current' && state.matches.length > 0) {
         const current = ((meta.index % state.matches.length) + state.matches.length) % state.matches.length;
@@ -235,16 +327,24 @@ export const findPlugin = new Plugin<FindState>({
   },
   view: () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // Se vuelve a buscar cuando se deja de escribir un momento (cada cambio corre la espera), y nunca en medio
+    // de una composición (acentos, IME).
+    const schedule = (view: EditorView) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = undefined;
+        if (view.isDestroyed || !findKey.getState(view.state)?.stale) return;
+        if (view.composing) schedule(view);
+        else refreshNow(view);
+      }, REFRESH_MS);
+    };
     return {
       update: (view, prev) => {
         const state = findKey.getState(view.state);
+        if (view.state.doc !== prev.doc) docChanges++;
+        else if (state?.decorations !== findKey.getState(prev)?.decorations) highlightChanges++;
         if (state !== findKey.getState(prev)) for (const fn of listeners.get(view) ?? []) fn();
-        if (!state?.stale || timer) return;
-        timer = setTimeout(() => {
-          timer = undefined;
-          if (view.isDestroyed) return;
-          if (findKey.getState(view.state)?.stale) refreshNow(view);
-        }, REFRESH_MS);
+        if (state?.stale && view.state.doc !== prev.doc) schedule(view);
       },
       destroy: () => clearTimeout(timer),
     };
@@ -286,19 +386,36 @@ export function stepFind(view: EditorView, dir: 1 | -1): FindMatch | null {
   return revealCurrent(view);
 }
 
-/** Lleva a la vista la coincidencia actual; si está en una sección colapsada, primero la abre (P.11). */
+/**
+ * Lleva a la vista la coincidencia actual: si está escondida (una lista plegable cerrada, una sección
+ * colapsada de P.11) primero la abre; después la centra, y si igual queda debajo de la barra, corre la barra.
+ */
 export function revealCurrent(view: EditorView): FindMatch | null {
   const state = getFindState(view.state);
   const match = state.matches[state.current];
   if (!match) return null;
-  if (collapseHooks?.isHidden(match.blockId)) collapseHooks.reveal(match.blockId);
+  revealBlock(view, match.blockId);
   const scroll = () => {
+    if (view.isDestroyed) return;
     const el = view.dom.querySelector<HTMLElement>('.sd-find-current, .sd-find-block-current');
     el?.scrollIntoView?.({ block: 'center', inline: 'nearest' });
+    if (el) avoidBar(view, el);
   };
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(scroll);
   else scroll();
   return match;
+}
+
+/** Si la barra de buscar tapa la coincidencia (arriba de todo, donde no se puede desplazar más), la baja. */
+function avoidBar(view: EditorView, el: HTMLElement): void {
+  const bar = (view.dom.closest('article') ?? document).querySelector<HTMLElement>('.find-bar');
+  if (!bar) return;
+  bar.style.removeProperty('transform');
+  const r = el.getBoundingClientRect();
+  const b = bar.getBoundingClientRect();
+  if (r.width === 0 && r.height === 0) return;
+  const overlaps = r.bottom > b.top && r.top < b.bottom && r.right > b.left && r.left < b.right;
+  if (overlaps) bar.style.transform = `translateY(${Math.ceil(r.bottom - b.top + 8)}px)`;
 }
 
 /** Saca los resaltados (lo buscado quedó vacío), sin tocar la selección. */
@@ -371,6 +488,15 @@ function ensureTagging(um: UndoManagerLike): void {
  */
 export function isFindReplaceUndo(state: EditorState): boolean {
   return undoManagerOf(state)?.currStackItem?.meta.get(FIND_REPLACE_META) === true;
+}
+
+/**
+ * Si una transacción de ProseMirror es de un reemplazo: la marcada con `FIND_REPLACE_META`, o la que arma
+ * y-prosemirror mientras "Reemplazar todo" escribe en el Y.Doc (llega como un cambio del Y.Doc).
+ */
+export function isFindReplaceTransaction(tr: Transaction): boolean {
+  if (tr.getMeta(FIND_REPLACE_META) === true) return true;
+  return replacing && !!(tr.getMeta(ySyncPluginKey) as { isChangeOrigin?: boolean } | undefined)?.isChangeOrigin;
 }
 
 /** Lo que dispara `fn` es un solo paso de deshacer, separado de lo que se escribió antes y después. */
@@ -447,7 +573,7 @@ export function replaceCurrent(editor: EditorLike, text: string): ReplaceResult 
   refreshNow(view, place?.from);
   const state = getFindState(view.state);
   const match = state.matches[state.current];
-  if (!match || !place || match.from !== place.from || match.to !== place.to) {
+  if (!match || !place || match.from !== place.from || match.to !== place.to || match.from === match.to) {
     revealCurrent(view);
     return { ...result, blocked: 'changed' };
   }
@@ -465,7 +591,13 @@ export function replaceCurrent(editor: EditorLike, text: string): ReplaceResult 
   return { ...result, replaced: 1, undoItem };
 }
 
-/** Reemplaza todas: una transacción por coincidencia, de atrás para adelante, en un solo paso de deshacer. */
+/**
+ * Reemplaza todas. Escribe directo en el Y.Doc, en una sola transacción de Yjs (de atrás para adelante, con el
+ * origen del editor): y-prosemirror arma una sola transacción de ProseMirror, se guarda y se sube como
+ * cualquier edición y queda un solo paso de deshacer. Cada coincidencia se vuelve a comprobar contra el texto
+ * del Y.Doc antes de escribir. Si no se puede ubicar alguna en el Y.Doc, va por ProseMirror (una transacción
+ * por coincidencia, igual en un solo paso).
+ */
 export function replaceAll(editor: EditorLike, text: string): ReplaceResult {
   const result: ReplaceResult = { replaced: 0, skippedFields: 0, skippedLinks: 0 };
   const view = editor.prosemirrorView;
@@ -478,16 +610,74 @@ export function replaceAll(editor: EditorLike, text: string): ReplaceResult {
   const targets: FindMatch[] = [];
   for (const m of all) {
     if (m.field !== 'text') result.skippedFields++;
+    else if (m.from === m.to) continue;
     else if (wouldDropLink(view.state.doc, m, text, firstMarks(view.state.doc, m.from))) result.skippedLinks++;
     else targets.push(m);
   }
   if (targets.length === 0) return result;
-  result.undoItem = asOneStep(view, () => {
-    for (let i = targets.length - 1; i >= 0; i--) view.dispatch(replaceTr(view.state, targets[i], text));
-  });
+  const edits = yjsEdits(view, targets);
+  if (edits) {
+    result.undoItem = asOneStep(view, () =>
+      bindingOf(view.state)!.doc.transact(() => {
+        for (let i = edits.length - 1; i >= 0; i--) {
+          const { ytext, index, length, attrs } = edits[i];
+          ytext.delete(index, length);
+          if (text) ytext.insert(index, text, { ...attrs });
+        }
+      }, ySyncPluginKey),
+    );
+  } else {
+    result.undoItem = asOneStep(view, () => {
+      for (let i = targets.length - 1; i >= 0; i--) view.dispatch(replaceTr(view.state, targets[i], text));
+    });
+  }
   result.replaced = targets.length;
   refreshNow(view, 0);
   return result;
+}
+
+interface YEdit {
+  ytext: Y.XmlText;
+  index: number;
+  length: number;
+  attrs: Record<string, unknown>;
+}
+
+/** Dónde está cada coincidencia en el Y.Doc (el texto, el lugar y el formato de su primer carácter), o `null`. */
+function yjsEdits(view: EditorView, targets: FindMatch[]): YEdit[] | null {
+  const binding = bindingOf(view.state);
+  if (!binding) return null;
+  const deltas = new Map<Y.XmlText, { text: string; ops: { at: number; length: number; attrs: Record<string, unknown> }[] }>();
+  const edits: YEdit[] = [];
+  for (const m of targets) {
+    let abs: Y.AbsolutePosition | null;
+    try {
+      // Desde adentro de la coincidencia (su primer carácter): el borde podría caer al final del texto de antes.
+      const rel = absolutePositionToRelativePosition(m.from + 1, binding.type, binding.mapping as never);
+      abs = Y.createAbsolutePositionFromRelativePosition(rel, binding.doc);
+    } catch {
+      return null;
+    }
+    if (!abs || !(abs.type instanceof Y.XmlText) || abs.index < 1) return null;
+    const ytext = abs.type;
+    const index = abs.index - 1;
+    let delta = deltas.get(ytext);
+    if (!delta) {
+      delta = { text: '', ops: [] };
+      for (const op of ytext.toDelta() as { insert: unknown; attributes?: Record<string, unknown> }[]) {
+        const piece = typeof op.insert === 'string' ? op.insert : '\uFFFC';
+        delta.ops.push({ at: delta.text.length, length: piece.length, attrs: op.attributes ?? {} });
+        delta.text += piece;
+      }
+      deltas.set(ytext, delta);
+    }
+    const length = m.to - m.from;
+    // Lo que hay en el Y.Doc tiene que ser exactamente lo encontrado.
+    if (delta.text.slice(index, index + length) !== view.state.doc.textBetween(m.from, m.to)) return null;
+    const op = delta.ops.find((o) => index >= o.at && index < o.at + o.length);
+    edits.push({ ytext, index, length, attrs: op?.attrs ?? {} });
+  }
+  return edits;
 }
 
 /** Deshace el reemplazo si todavía es lo último en la pila (el *Deshacer* del aviso). */

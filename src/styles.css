@@ -4042,6 +4042,8 @@ button.primary.danger {
 }
 
 .editor .sd-find-current {
+  /* Al llevarla a la vista, que no quede debajo de la barra de arriba ni de la de buscar. */
+  scroll-margin: 140px 0 80px;
   background-color: var(--find-current);
   box-shadow: 0 0 0 1px var(--find-current);
 }
