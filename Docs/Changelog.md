@@ -1,5 +1,14 @@
 # Changelog — LGA Shot Docs
 
+v0.046 :
+
+Acomodar en filas: con una foto o un video elegido, un botón de su barra reparte la tanda de fotos y videos
+seguidos en una o más filas del ancho de la página, con todas las de cada fila a la misma altura y sin
+cambiar el orden. Elige solo cuántas filas y dónde cortar (como una galería de fotos): prefiere unas tres
+por fila, nunca más de cuatro, una panorámica puede tener su fila, y la última fila no se estira de más. Se
+deshace con un solo paso.
+[ Fotos - acomodar en filas ]
+
 v0.045 :
 
 Fotos y videos en fila. La barra de una foto suma cuatro tamaños: todo el ancho, 1/2, 1/3 y 1/4 del ancho

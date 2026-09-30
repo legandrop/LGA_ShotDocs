@@ -7,7 +7,7 @@ import { useServices } from '../services';
 import { carreteSourceOf } from './carrete';
 import { isOffline, originalFor, startDownload } from './carreteLoader';
 import { DownloadIcon } from './icons';
-import { ROW_PRESETS } from './imageRows';
+import { arrangeRows, ROW_PRESETS } from './imageRows';
 import { ROW_WIDTH_PROP } from './imageRowsEditor';
 import { notify } from './notice';
 
@@ -17,6 +17,8 @@ import { notify } from './notice';
 //   - Ver: abre el carrete en esa imagen (también con la barra espaciadora, con la imagen elegida).
 //   - Tamaño: todo el ancho, 1/2, 1/3 o 1/4 del ancho de la página (`rowWidth`, Docs/Doc_Imagenes.md);
 //     fotos seguidas que entran se ponen en fila.
+//   - Acomodar en filas: la tanda de fotos y videos seguidos a la elegida, en orden, en filas de la misma
+//     altura (`arrangeRows`).
 
 /** El bloque `image` elegido (uno solo), o `undefined`. */
 function useSelectedImage(): { id: string; url: string; rowWidth: number } | undefined {
@@ -129,6 +131,27 @@ const SIZE_LABELS: Record<number, { text: string; tip: 'imageSize.full' | 'image
   [1 / 4]: { text: '1/4', tip: 'imageSize.quarter' },
 };
 
+/** El espacio entre fotos de una fila (`--img-gap` en styles.css). */
+const ROW_GAP_PX = 8;
+
+/** Los ids de la tanda de fotos seguidas (hermanas) que incluye a `id`, en orden. */
+function runOf(editor: { getParentBlock: (id: string) => { children: unknown[] } | undefined; document: unknown[] }, id: string): string[] {
+  const siblings = (editor.getParentBlock(id)?.children ?? editor.document) as { id: string; type: string }[];
+  const at = siblings.findIndex((b) => b.id === id);
+  if (at < 0) return [id];
+  let from = at;
+  let to = at;
+  while (from > 0 && siblings[from - 1].type === 'image') from--;
+  while (to < siblings.length - 1 && siblings[to + 1].type === 'image') to++;
+  return siblings.slice(from, to + 1).map((b) => b.id);
+}
+
+/** La proporción (ancho / alto) de lo que se ve de una foto (la miniatura la conserva), o 0 si no cargó. */
+function aspectOf(dom: Element | null | undefined, id: string): number {
+  const img = dom?.querySelector<HTMLImageElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"] img.bn-visual-media`);
+  return img && img.naturalWidth > 0 && img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 0;
+}
+
 /** El ancho del área de texto donde está el bloque (su grupo), en px, o 0. */
 function groupWidth(dom: Element | null | undefined, id: string): number {
   const group = dom?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"]`)?.parentElement?.parentElement;
@@ -153,8 +176,31 @@ export function ImageSizeButtons() {
     if (width > 0) props.previewWidth = Math.round(f * width);
     editor.updateBlock(block.id, { props });
   };
+  const run = runOf(editor as never, block.id);
+  const aspects = run.map((id) => aspectOf(editor.domElement, id));
+  const ready = aspects.every((x) => x > 0);
+  const arrange = () => {
+    const width = groupWidth(editor.domElement, block.id);
+    if (!(width > 0) || !ready) return;
+    const fracs = arrangeRows(aspects, { gapRatio: ROW_GAP_PX / width });
+    // Un solo cambio (un solo deshacer).
+    editor.transact(() => {
+      run.forEach((id, i) => editor.updateBlock(id, { props: { [ROW_WIDTH_PROP]: fracs[i], previewWidth: Math.round(fracs[i] * width) } }));
+    });
+  };
   return (
     <>
+      {run.length > 1 && (
+        <Components.FormattingToolbar.Button
+          className="bn-button"
+          label={tr('imageSize.arrange')}
+          mainTooltip={tr('imageSize.arrange')}
+          secondaryTooltip={ready ? tr('imageSize.arrangeHint') : tr('imageSize.waiting')}
+          icon={<ArrangeIcon />}
+          isDisabled={!ready}
+          onClick={arrange}
+        />
+      )}
       {ROW_PRESETS.map((f) => (
         <Components.FormattingToolbar.Button
           key={f}
@@ -169,5 +215,13 @@ export function ImageSizeButtons() {
         </Components.FormattingToolbar.Button>
       ))}
     </>
+  );
+}
+
+function ArrangeIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 4h5.5v5H3zM10.5 4H17v5h-6.5zM3 11h8v5H3zM13 11h4v5h-4z" />
+    </svg>
   );
 }

@@ -36,6 +36,12 @@ export const editor = {
   'imageSize.third': { en: "A third of the page width", es: "Un tercio del ancho de la página" },
   'imageSize.quarter': { en: "A quarter of the page width", es: "Un cuarto del ancho de la página" },
   'imageSize.rows': { en: "Images next to each other fill a row", es: "Las fotos seguidas llenan una fila" },
+  'imageSize.arrange': { en: "Arrange in rows", es: "Acomodar en filas" },
+  'imageSize.arrangeHint': {
+    en: "The images and videos next to this one, in order, with the same height in each row",
+    es: "Las fotos y videos seguidos a esta, en orden, con la misma altura en cada fila",
+  },
+  'imageSize.waiting': { en: "Waiting for the images to load", es: "Esperando que carguen las fotos" },
   'driveCard.tap': { en: "Tap to use the player", es: "Tocá para usar el reproductor" },
   'driveCard.open': { en: "Open in Drive", es: "Abrir en Drive" },
   'driveCard.showAsLink': { en: "Show as link", es: "Mostrar como link" },
