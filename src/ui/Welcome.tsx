@@ -86,7 +86,23 @@ function WorkspaceChoices({ onJoin, onCreate }: { onJoin: () => void; onCreate: 
   );
 }
 
-/** "Join <nombre> at <host>?": el host dice a qué servidor va lo que se escriba. */
+/**
+ * El nombre que trae un link lo arma quien lo manda: sin comillas, saltos ni caracteres de control, y
+ * recortado, para que no pueda hacerse pasar por el host.
+ */
+export function safeWorkspaceName(name: string): string {
+  const clean = name
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, ' ')
+    .replace(/["'“”‘’«»`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean.length > 40 ? `${clean.slice(0, 39).trimEnd()}…` : clean;
+}
+
+/**
+ * "Join <nombre>?" con el host aparte y destacado: el host dice de verdad a qué servidor va lo que se
+ * escriba; el nombre sale del link.
+ */
 export function JoinQuestion(props: {
   entry: DeviceWorkspace;
   onJoin: () => void;
@@ -95,15 +111,19 @@ export function JoinQuestion(props: {
   modal?: boolean;
 }) {
   const host = hostOf(props.entry.url);
+  const name = safeWorkspaceName(props.entry.name);
   const Heading = props.modal ? 'h2' : 'h1';
   return (
     <>
-      <Heading>
-        Join {props.entry.name ? `“${props.entry.name}”` : 'a workspace'} at {host}?
-      </Heading>
+      <Heading>{name ? `Join ${name}?` : 'Join a workspace?'}</Heading>
+      <div className="join-host">
+        <span className="mono-label">Server</span>
+        <strong>{host}</strong>
+      </div>
       <p className="muted">
-        This workspace runs on its own server, <strong>{host}</strong>. What you write there goes to that server
-        and stays apart from your other workspaces. Join only if you trust the person who invited you.
+        This workspace runs on that server. What you write there goes to it and stays apart from your other
+        workspaces. The name comes from the link; check the server, and join only if you trust the person who
+        invited you.
       </p>
       <div className="welcome-actions">
         <button className="primary" autoFocus onClick={props.onJoin}>

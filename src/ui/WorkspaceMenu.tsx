@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { mediaDbName } from '../media/mediaDb';
+import type { MediaRecord } from '../media/mediaDb';
 import { useServices, useSyncStatus } from '../services';
-import { commentsDbName } from '../sync/comments';
 import { errorMessage } from '../sync/types';
 import { unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
 import {
@@ -17,8 +16,8 @@ import {
 } from '../workspaces';
 import { AccountIcon, PlusIcon, TrashIcon } from './icons';
 import { monogram } from './project';
-import { deleteDatabase, DeleteBlocked, forgetWorkspaceKeys } from './RemovedScreen';
-import { downloadUnsynced } from './unsyncedDownload';
+import { DeleteBlocked, deleteWorkspaceDatabases, forgetWorkspaceKeys, PendingMediaList } from './RemovedScreen';
+import { downloadUnsynced, saveBlob } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import type { WorkspacesMode } from './Welcome';
 
@@ -157,8 +156,9 @@ export function WorkspaceSection(props: {
 }
 
 /**
- * Quitar el workspace abierto del dispositivo: solo sin cambios sin subir, o después de bajarlos con el
- * archivo de siempre, y con confirmación. Borra la base local de esta cuenta (y las de fotos y comentarios),
+ * Quitar el workspace abierto del dispositivo: solo sin cambios sin subir, o después de bajarlos (el archivo
+ * de siempre y, uno por uno, los originales de fotos y videos que nunca subieron: el archivo no los trae), y
+ * con confirmación. Borra la base local de esta cuenta (y las de fotos y comentarios),
  * lo que la app recordaba y la sesión; las bases de otras cuentas de ese workspace en el dispositivo
  * quedan. Después la app recarga en otro workspace o en la bienvenida.
  */
@@ -169,6 +169,8 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
   const status = useSyncStatus();
   const [summary, setSummary] = useState<UnsyncedSummary | null>(null);
   const [downloaded, setDownloaded] = useState(false);
+  const [media, setMedia] = useState<MediaRecord[]>([]);
+  const [mediaDone, setMediaDone] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState<'download' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const name = current ? displayName(current) : 'this workspace';
@@ -177,8 +179,13 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
     let live = true;
     void (async () => {
       await docs.flush().catch(() => undefined);
-      const s = await unsyncedSummary(db, mediaDb, commentsDb);
-      if (live) setSummary(s);
+      const [s, m] = await Promise.all([
+        unsyncedSummary(db, mediaDb, commentsDb),
+        mediaDb ? mediaDb.getAllFromIndex('files', 'pending', 1) : [],
+      ]);
+      if (!live) return;
+      setSummary(s);
+      setMedia(m);
     })().catch((err: unknown) => live && setError(errorMessage(err)));
     return () => {
       live = false;
@@ -192,7 +199,19 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
   }, [onClose, busy]);
 
   const pending = summary?.total ?? 0;
-  const canRemove = summary !== null && (pending === 0 || downloaded) && !!current && !current.legacy;
+  const mediaLeft = media.filter((m) => !mediaDone.has(m.id)).length;
+  // Con algo sin subir, recién después de bajar el archivo y cada original de foto o video.
+  const canRemove = summary !== null && (pending === 0 || (downloaded && mediaLeft === 0)) && !!current && !current.legacy;
+
+  async function downloadMedia(record: MediaRecord) {
+    const blob = await mediaDb?.get('blobs', record.id);
+    if (blob) {
+      saveBlob(blob, record.name);
+      setMediaDone((prev) => new Set(prev).add(record.id));
+    } else {
+      setError(`“${record.name}” is not on this device anymore.`);
+    }
+  }
 
   async function download() {
     setBusy('download');
@@ -211,7 +230,7 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
     if (!current || current.legacy) return;
     const warning =
       pending > 0
-        ? `The ${pending} changes that were never uploaded are only in the file you downloaded. `
+        ? `The ${pending} changes that were never uploaded will only be in what you downloaded${media.length > 0 ? ' (the file and the photos and videos)' : ''}. `
         : '';
     if (!confirm(`Remove “${name}” from this device? ${warning}You can join it again later with an invitation link.`)) return;
     setBusy('remove');
@@ -219,9 +238,7 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
     const projectIds = tree.projects().map((p) => p.id);
     try {
       await services.shutdown();
-      await deleteDatabase(mediaDbName(dbName));
-      await deleteDatabase(commentsDbName(dbName));
-      await deleteDatabase(dbName);
+      await deleteWorkspaceDatabases(dbName);
       forgetWorkspaceKeys(services.workspace.config.storage, user.id, projectIds);
       await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
       forgetWorkspaceStorage(current);
@@ -253,11 +270,13 @@ export function RemoveWorkspaceDialog({ onClose }: { onClose: () => void }) {
                 This device has {pending} {pending === 1 ? 'change' : 'changes'} that {pending === 1 ? 'was' : 'were'} never
                 uploaded.
               </strong>{' '}
-              Open the workspace with internet until they upload, or download them first.
+              Open the workspace with internet until they upload, or download them first
+              {media.length > 0 ? ': the file, and each photo or video below' : ''}.
             </p>
             <button className="secondary" disabled={busy !== null} onClick={() => void download()}>
               {busy === 'download' ? 'Preparing…' : downloaded ? 'Download again' : 'Download my unsynced changes'}
             </button>
+            <PendingMediaList media={media} downloaded={mediaDone} onDownload={(m) => void downloadMedia(m)} />
           </>
         )}
         {summary !== null && pending === 0 && <p className="muted">Everything on this device was already uploaded.</p>}

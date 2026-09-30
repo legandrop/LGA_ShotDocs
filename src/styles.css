@@ -3589,3 +3589,18 @@ button.primary.danger {
     padding: 14px 16px 4px;
   }
 }
+
+.join-host {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.join-host strong {
+  font-family: var(--mono);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}

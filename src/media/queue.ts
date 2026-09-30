@@ -1316,14 +1316,28 @@ export class MediaQueue {
    */
   async trash(id: string): Promise<void> {
     if (!this.url) throw new PorteroError('This workspace has no media server.', 0);
-    await this.porteroFor(this.url).trash(id);
-    // En este dispositivo, desde ya se muestra como borrado si alguna página lo vuelve a tener: se vuelve a
-    // leer de la base (queda guardado) y, si eso falla, se marca lo que había.
+    // Una página de este dispositivo que lo usa y todavía no se sincronizó: se saltea (y se avisa).
+    if (await this.hasUnsentUse(id)) throw new UnsentUseError();
+    try {
+      await this.porteroFor(this.url).trash(id);
+    } catch (err) {
+      // Drive falló después de que la base lo marcó como pedido: en las páginas se ve "pedido".
+      if (err instanceof PorteroError && err.status >= 500 && err.code !== 'drive_not_connected') await this.refreshDeleted(id);
+      throw err;
+    }
+    await this.refreshDeleted(id, true);
+  }
+
+  /**
+   * Vuelve a leer de la base el estado del archivo en la papelera (queda guardado) y avisa al editor para
+   * que lo vuelva a mostrar. `done`: el portero confirmó; si la base no responde, se marca lo que había.
+   */
+  private async refreshDeleted(id: string, done = false): Promise<void> {
     this.deletedChecked.add(id);
     const meta = await this.fetchMeta(id).catch(() => null);
-    if (!meta?.deleted && this.db) {
+    if (!meta && done && this.db) {
       const known = await this.db.get('known', id).catch(() => undefined);
-      if (known) await this.db.put('known', { ...known, deleted: true }).catch(() => undefined);
+      if (known) await this.db.put('known', { ...known, deleted: true, inDriveTrash: true }).catch(() => undefined);
     }
     this.thumbReady(id);
   }

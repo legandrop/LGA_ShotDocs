@@ -322,6 +322,18 @@ export class PageDocs {
     return { ...saved, supported: this.options.supports?.(saved.doc) ?? true };
   }
 
+  /**
+   * Anota que la página tiene en el servidor un update que este dispositivo no puede leer (lo encontró la
+   * comprobación de la papelera de archivos): nunca se usa para decir que la página dejó de usar un archivo.
+   */
+  async markUnreadable(pageId: string): Promise<void> {
+    await this.withLock(pageId, () =>
+      updateDocState(this.db, pageId, (s) => {
+        s.unreadable = true;
+      }),
+    );
+  }
+
   /** Baja lo nuevo de una página y lo guarda. Si está abierta, lo aplica también en el editor. */
   pullPage(pageId: string, remote: Remote): Promise<number> {
     return this.withLock(pageId, async () => {

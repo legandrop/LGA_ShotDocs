@@ -327,7 +327,9 @@ end;
 $$;
 
 -- Los que ya cumplieron 30 días en la papelera y no llegaron a la papelera de Drive, solo si el borrado
--- automático está prendido (hoy no: devuelve nada). Para el dueño y los admins que pueden mandarlos a Drive:
+-- automático está prendido (hoy no: devuelve nada). No incluye los que usa (sin `removed_at`) una página que
+-- está en la papelera de páginas (el `in_trashed_page` de trashed_files): restaurar esa página los tiene que
+-- encontrar; quedan para que una persona los mande a mano. Para el dueño y los admins que pueden mandarlos a Drive:
 -- la app, al abrirse, se los pasaría al portero de a uno.
 create function public.files_due_for_purge(p_project uuid)
 returns table (id uuid, name text, trashed_at timestamptz)
@@ -347,6 +349,9 @@ begin
       and f.trashed_at is not null
       and f.trashed_at <= now() - interval '30 days'
       and f.drive_trashed_at is null
+      and not exists (
+        select 1 from public.page_files pf
+        where pf.file_id = f.id and pf.removed_at is null and not private.page_alive(pf.page_id))
     order by f.trashed_at, f.id;
 end;
 $$;

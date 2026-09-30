@@ -368,6 +368,38 @@ begin
     'files_due_for_purge da uno que entró hoy';
 end;
 $$;
+-- Un vencido que usa una página en la papelera de páginas no se devuelve (restaurarla lo tiene que
+-- encontrar): f3 vive en c y en s; se marca su uso en s, se manda r (con c) a la papelera y se lo hace viejo.
+select pg_temp.as_user('00000000-0000-4000-8000-000000000b04');
+do $$
+begin
+  perform public.unlink_page_file('00000000-0000-4000-8000-000000000d03', '00000000-0000-4000-8000-0000000000f3');
+  update public.pages set deleted_at = now() where id = '00000000-0000-4000-8000-000000000d01';
+  assert pg_temp.t('f3') is not null, 'f3 no entra con c en la papelera de páginas';
+end;
+$$;
+select set_config('role', 'postgres', true);
+update public.files set trashed_at = now() - interval '40 days' where id = '00000000-0000-4000-8000-0000000000f3';
+select pg_temp.as_user('00000000-0000-4000-8000-000000000b01');
+do $$
+begin
+  assert (select bool_or(id = '00000000-0000-4000-8000-0000000000f3' and in_trashed_page)
+          from public.trashed_files('00000000-0000-4000-8000-000000000e01')), 'la papelera no dice que f3 está en una página en la papelera';
+  assert (select array_agg(id) from public.files_due_for_purge('00000000-0000-4000-8000-000000000e01'))
+         = array['00000000-0000-4000-8000-0000000000f1'::uuid],
+    'files_due_for_purge devuelve un vencido que usa una página en la papelera de páginas';
+end;
+$$;
+-- Restaurar r lo saca de la papelera; y el uso en s vuelve, como estaba.
+select pg_temp.as_user('00000000-0000-4000-8000-000000000b04');
+do $$
+begin
+  update public.pages set deleted_at = null where id = '00000000-0000-4000-8000-000000000d01';
+  assert pg_temp.t('f3') is null, 'restaurar r no saca f3';
+  perform public.link_page_file('00000000-0000-4000-8000-000000000d03', '00000000-0000-4000-8000-0000000000f3');
+end;
+$$;
+
 select set_config('role', 'postgres', true);
 update public.workspace_settings set auto_purge_files = false;
 
