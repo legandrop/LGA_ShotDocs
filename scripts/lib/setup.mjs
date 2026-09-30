@@ -584,6 +584,12 @@ export async function runSetup({ client, opts, templates, env = {}, io, migratio
     return { plan, wrote: false };
   }
   if (plan.blockers.length) throw new Error('Nothing was written.');
+  if (plan.owner.action === 'invite' && hookConnected(state.config)) {
+    throw new Error(
+      `The invitation check is on and ${opts.ownerEmail} has no account: create it in Authentication → Users → ` +
+        'Add user → Create new user, then run this again. Nothing was written.',
+    );
+  }
 
   // Todo lo que puede fallar antes de escribir, antes: la contraseña.
   let smtpPass = null;
@@ -613,10 +619,10 @@ export async function runSetup({ client, opts, templates, env = {}, io, migratio
     smtpPass = null;
   }
   const after = sanitizeAuthConfig(await client.get('/config/auth'));
-  const left = diffAuthConfig(after, desiredAuthConfig(opts, after, templates));
-  if (left.length) throw new Error(`These sign-in settings did not stick: ${left.map((c) => c.key).join(', ')}`);
-  if (!after.smtp_pass_saved) throw new Error('The SMTP password did not stick.');
-  io.log('Sign-in settings up to date.');
+  // Si algo no quedó, se sigue con el dueño y la fila (volver a correrlo lo reintenta) y se avisa al final.
+  const problems = diffAuthConfig(after, desiredAuthConfig(opts, after, templates)).map((c) => c.key);
+  if (!after.smtp_pass_saved) problems.push('smtp_pass');
+  io.log(problems.length ? `Some sign-in settings did not stick: ${problems.join(', ')}` : 'Sign-in settings up to date.');
 
   // 3. La cuenta del dueño: la que existe con ese correo, o una invitación (manda el mail de Invite).
   let account = (await readState(client, opts.ownerEmail)).targetAccount;
@@ -645,14 +651,22 @@ export async function runSetup({ client, opts, templates, env = {}, io, migratio
   if (todo.changes.length || todo.ownerRow) {
     await client.query(settingsSql({ userId: account.id, name: opts.name, mediaUrl: opts.mediaUrl, localKey: newLocalKey() }));
   }
-  const final = (await readState(client, opts.ownerEmail)).settings;
-  io.log(`Workspace settings: name "${final.name}", local key ${final.local_key}, owner ${opts.ownerEmail}` +
-    (final.media_url ? `, file gateway ${final.media_url}` : ''));
+  const final = (await readState(client, opts.ownerEmail)).settings ?? {};
+  io.log(
+    `Workspace settings: name "${final.name}", local key ${final.local_key}, owner ${opts.ownerEmail}` +
+      (final.media_url ? `, file gateway ${final.media_url}` : ''),
+  );
 
   io.log('');
   io.log('Done. Write these down for the app and the file gateway:');
   io.log(`  Project URL:     https://${opts.ref}.supabase.co`);
   io.log(`  Publishable key: ${(await publishableKey(client)) ?? '(Project Settings → API Keys)'}`);
+  if (problems.length) {
+    throw new Error(
+      `Finished, but these sign-in settings did not stick: ${problems.join(', ')}. ` +
+        'Run the command again; if they still do not stick, set them in the Supabase dashboard (Authentication).',
+    );
+  }
   return { plan, wrote: true };
 }
 

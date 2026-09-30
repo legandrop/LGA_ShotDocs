@@ -664,8 +664,11 @@ describe('portero: archivos de la app', () => {
     const res = await start();
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toBe('This file is registered with a different Drive file: ask the workspace owner.');
+    // El archivo de Drive ya no existe: el mismo 409, con su propio mensaje.
     world.base.get(FILE_A)!.drive_id = 'noExistexxxxxxxx';
-    expect((await start()).status).toBe(409);
+    const gone = await start();
+    expect(gone.status).toBe(409);
+    expect(((await gone.json()) as { error: string }).error).toBe('The Drive file for this upload is gone: ask the workspace owner.');
     expect(world.calls.filter((c) => c.includes('/upload/drive'))).toHaveLength(0);
   });
 
@@ -1193,6 +1196,35 @@ describe('portero: caché del arranque del video', () => {
     expect(hit.headers.get('Content-Type')).toBe('video/mp4');
     expect(new Uint8Array(await hit.arrayBuffer())).toEqual(data.slice(10, 20));
     expect(world.mediaCalls()).toBe(2);
+  });
+
+  it('si otro archivo toma el lugar mientras se espera a Drive, lo olvida entero (no quedan trozos sin dueño)', async () => {
+    const { world, store, p } = await setup();
+    const video = 'videoxxxxxxxxxxx';
+    let other = '';
+    for (let i = 0; !other; i++) if (cacheSlot(`otro${i}xxxxxxxxxxxx`) === cacheSlot(video)) other = `otro${i}xxxxxxxxxxxx`;
+    const data = bytes(SIZE);
+    world.files.set(video, { name: 'v.mov', mime: 'video/quicktime', data, parents: [], appProperties: { sdFile: FILE_A } });
+    addBaseFile(world, FILE_A, { drive_id: video, size: SIZE });
+    // Mientras Drive contesta el principio, otro pedido guarda otro archivo en el mismo lugar.
+    const racing: typeof fetch = async (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith(`/files/${video}`) && url.searchParams.get('alt') === 'media' && store.data.get(`cacheSlot:${cacheSlot(video)}`) === undefined) {
+        store.data.set(`cacheSlot:${cacheSlot(video)}`, other);
+        store.data.set(`cache:${other}:20:h0`, bytes(20));
+        store.data.set(`cache:${other}:head`, { size: 20, length: 20 });
+      }
+      return world.http(input, init);
+    };
+    const q = new Portero(env, store, racing);
+    const { url } = (await (await filePass(q, 'viewer-jwt', FILE_A)).json()) as { url: string };
+    const res = await q.handle(new Request(url, { headers: { Range: 'bytes=0-1' } }));
+    expect(res.status).toBe(206);
+    expect(store.data.get(`cacheSlot:${cacheSlot(video)}`)).toBe(video);
+    expect(store.data.has(`cache:${other}:head`)).toBe(false);
+    expect(store.data.has(`cache:${other}:20:h0`)).toBe(false);
+    expect(world.mediaCalls()).toBe(1);
+    void p;
   });
 
   it(`guarda como mucho ${CACHE_FILES} archivos: el que llega desplaza al que estaba en su lugar`, async () => {

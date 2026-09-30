@@ -733,9 +733,9 @@ export class Portero {
     const rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
     if (media.drive_id) {
       // La base ya lo tiene en Drive: se comprueba (una vez) que ese archivo de Drive sea de verdad este.
-      if ((await this.checkMark(file, media.drive_id, rec)) !== 'ok') {
-        throw new HttpError(409, 'This file is registered with a different Drive file: ask the workspace owner.');
-      }
+      const mark = await this.checkMark(file, media.drive_id, rec);
+      if (mark === 'missing') throw new HttpError(409, 'The Drive file for this upload is gone: ask the workspace owner.');
+      if (mark === 'other') throw new HttpError(409, 'This file is registered with a different Drive file: ask the workspace owner.');
       return { status: 'done', file: { id: media.drive_id, name: media.name, mimeType: media.mime, size }, linked: true };
     }
     // Ya se subió pero la base no se enteró (se cortó la red al avisarle): se le avisa ahora.
@@ -1039,6 +1039,8 @@ export class Portero {
     // Es poco (hasta ~762 KiB): se puede tener entero en memoria.
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (bytes.length !== to - from + 1) return {};
+    // El lugar se vuelve a leer ahora: mientras se esperaba a Drive, otro archivo pudo haberlo tomado, y
+    // hay que olvidar ese (no el que estaba al principio) para no dejar trozos sin dueño.
     await this.claim(id, slot);
     // Copias (`slice`), no vistas: una vista se guardaría con todo el búfer de atrás.
     const writes: Promise<void>[] = [];
