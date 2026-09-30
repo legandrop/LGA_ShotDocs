@@ -23,6 +23,7 @@ import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carreteModel';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
+import { porteroDownload, sharpenImages } from './sharpImages';
 import { HideForDriveFiles, ImageSizeButtons, MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
@@ -524,6 +525,29 @@ function BlockEditor({
       }),
     [editor, media, pageId],
   );
+
+  // Fotos nítidas (Docs/Doc_Imagenes.md, "Calidad en la página"): una foto que se ve más grande que su
+  // miniatura pasa a una imagen de hasta 2048 px hecha en este dispositivo, del original local o bajado una vez
+  // con un pase del portero. Solo en pantalla: el documento no cambia.
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    const start = () => {
+      stop?.();
+      const root = editor.domElement;
+      stop = root ? sharpenImages(root, media, { download: porteroDownload(media) }) : null;
+    };
+    if (editor.domElement) start();
+    const offMount = editor.onMount(start);
+    const offUnmount = editor.onUnmount(() => {
+      stop?.();
+      stop = null;
+    });
+    return () => {
+      offMount();
+      offUnmount();
+      stop?.();
+    };
+  }, [editor, media]);
 
   // El selector del bloque `image` ofrece videos solo si el workspace tiene portero.
   setVideosAccepted(media.enabled);

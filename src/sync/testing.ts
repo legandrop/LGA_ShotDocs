@@ -524,6 +524,14 @@ export class FakePortero {
       media.drive_trashed_at = new Date().toISOString();
       return json({ status: 'done', file: id, drive });
     }
+    if (method === 'GET' && url.pathname.startsWith('/m/')) {
+      // El archivo entero con un pase (el pase de prueba es el id de Drive).
+      const driveId = decodeURIComponent(url.pathname.slice(3));
+      const stored = this.drive.get(driveId);
+      if (!stored) return json({ error: 'Not found' }, 404);
+      const mime = this.server.mediaFiles.get(stored.file)?.mime ?? 'application/octet-stream';
+      return new Response(new Blob([stored.data as BlobPart], { type: mime }), { status: 200, headers: { 'Content-Type': mime } });
+    }
     if (method === 'POST' && url.pathname === '/pass') {
       const media = this.server.mediaFiles.get(String(body?.file ?? ''));
       if (!media) return json({ error: 'This file does not exist or you cannot see it.' }, 404);
@@ -1252,6 +1260,15 @@ export async function fakeProbe(_file: Blob, mime: string): Promise<Probe> {
   };
 }
 
+/**
+ * La imagen nítida de prueba (jsdom no dibuja): un JPEG corto que dice de qué tamaño vino el original, o `null`
+ * para un HEIC (el navegador no lo abre).
+ */
+export async function fakeViewImage(file: Blob, mime: string, side = 2048): Promise<Blob | null> {
+  if (!mime.startsWith('image/') || mime === 'image/heic') return null;
+  return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 9]), `view:${file.size}:${side}`], { type: 'image/jpeg' });
+}
+
 export interface Device {
   db: LocalDb;
   tree: PageTree;
@@ -1300,6 +1317,7 @@ export async function makeDevice(
     onForeignFile: (name) => server.foreignNotices.push(name),
     probe: fakeProbe,
     playMark: async (thumb) => thumb,
+    viewImage: fakeViewImage,
     now: () => Date.now() + server.clockOffset,
   });
   await media.load();

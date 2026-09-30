@@ -206,7 +206,7 @@ export function isOffline(err: unknown): boolean {
   return err instanceof TypeError && /fetch|network|load failed/i.test(err.message);
 }
 
-type Media = Pick<MediaQueue, 'resolve' | 'thumbnail' | 'source' | 'pass'>;
+type Media = Pick<MediaQueue, 'resolve' | 'thumbnail' | 'source' | 'pass'> & Partial<Pick<MediaQueue, 'viewUrl'>>;
 type Files = Pick<PageFiles, 'resolve'>;
 
 export function createCarreteLoader({ media, files }: { media: Media; files: Files }): CarreteLoader {
@@ -233,8 +233,9 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
     if (item.source === 'media' && item.mediaId) {
       const id = item.mediaId;
       const [source, thumb] = await Promise.all([sourceOf(id), media.thumbnail(id).catch(() => null)]);
-      // Sin miniatura: lo que muestra la página (la foto local entera, o un ícono con el nombre).
-      const preview = thumb ?? (await media.resolve(item.url).catch(() => null));
+      // Si la página ya tiene la imagen nítida (sharpImages.ts), esa; si no, la miniatura. Sin miniatura: lo que
+      // muestra la página (un ícono con el nombre).
+      const preview = media.viewUrl?.(id) ?? thumb ?? (await media.resolve(item.url).catch(() => null));
       return { kind: source.kind, name: source.name || fallbackName(item), preview };
     }
     if (item.source === 'file') {

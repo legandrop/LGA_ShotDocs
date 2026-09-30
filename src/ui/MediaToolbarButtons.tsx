@@ -1,4 +1,5 @@
 import { FileDownloadButton, useBlockNoteEditor, useComponentsContext, useDictionary, useEditorState } from '@blocknote/react';
+import { thumbSize } from './sharpMarks';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/editor';
@@ -190,7 +191,9 @@ function aspectOf(dom: Element | null | undefined, id: string): number | null {
   if (!img || !img.getAttribute('src')) return 0;
   if (!img.complete) return null;
   if (img.src.startsWith('data:image/svg')) return 0;
-  return img.naturalWidth > 0 && img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 0;
+  // Con la imagen nítida puesta, la proporción de la miniatura (la misma en todos los dispositivos).
+  const { width, height } = thumbSize(img);
+  return width > 0 && height > 0 ? width / height : 0;
 }
 
 /** Vuelve a dibujar cuando termina de cargar una imagen del editor (el botón espera a que carguen). */
