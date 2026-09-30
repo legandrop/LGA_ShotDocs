@@ -8,8 +8,11 @@
 
 export type DriveLinkKind = 'file' | 'folder' | 'doc';
 
-/** Los tipos de docs.google.com que se reconocen (documento, planilla, presentación, dibujo, formulario). */
-export type DriveDocType = 'document' | 'spreadsheets' | 'presentation' | 'drawings' | 'forms';
+/**
+ * Los tipos de docs.google.com que se reconocen (documento, planilla, presentación, dibujo). Los
+ * formularios no: una tarjeta con un formulario podría parecer parte de la app; quedan como link común.
+ */
+export type DriveDocType = 'document' | 'spreadsheets' | 'presentation' | 'drawings';
 
 export interface DriveLink {
   kind: DriveLinkKind;
@@ -23,7 +26,7 @@ export interface DriveLink {
 
 const ID = /^[A-Za-z0-9_-]{10,128}$/;
 const RESOURCE_KEY = /^[A-Za-z0-9_-]{1,128}$/;
-const DOC_TYPES: readonly DriveDocType[] = ['document', 'spreadsheets', 'presentation', 'drawings', 'forms'];
+const DOC_TYPES: readonly DriveDocType[] = ['document', 'spreadsheets', 'presentation', 'drawings'];
 
 /** El id si tiene el formato de Drive; si no, `null`. */
 export function validDriveId(id: string | null | undefined): string | null {
@@ -36,7 +39,8 @@ export function validDriveId(id: string | null | undefined): string | null {
  * - `https://drive.google.com/file/d/<id>/…` (también `/file/u/<n>/d/<id>`)
  * - `https://drive.google.com/open?id=<id>` y `https://drive.google.com/uc?id=<id>`
  * - `https://drive.google.com/drive/folders/<id>` (también con `/u/<n>/` y `/mobile/`)
- * - `https://docs.google.com/<document|spreadsheets|presentation|drawings|forms>/d/<id>/…`
+ * - `https://docs.google.com/<document|spreadsheets|presentation|drawings>/d/<id>/…` (un formulario,
+ *   `docs.google.com/forms/…`, no: se pega como link común)
  * - `https://docs.google.com/file/d/<id>/…` y `https://docs.google.com/open?id=<id>` (links viejos)
  */
 export function parseDriveLink(text: string | null | undefined): DriveLink | null {
@@ -80,7 +84,7 @@ export function parseDriveLink(text: string | null | undefined): DriveLink | nul
     return parts[at] === 'folders' ? make('folder', parts[at + 1]) : null;
   }
 
-  // docs.google.com/<tipo>/d/<id>/… (un formulario publicado, /forms/d/e/<id>, no es un id de archivo).
+  // docs.google.com/<tipo>/d/<id>/… (los formularios, /forms/…, no se reconocen).
   const docType = DOC_TYPES.find((t) => t === parts[0]);
   if (!docType) return null;
   const at = skipAccount(1);
@@ -96,10 +100,9 @@ export function drivePreviewUrl(link: DriveLink): string {
     // La vista de una carpeta: la lista de sus archivos.
     return `https://drive.google.com/embeddedfolderview?id=${id}${rk ? `&resourcekey=${rk}` : ''}#grid`;
   }
-  if (link.kind === 'doc' && link.docType && DOC_TYPES.includes(link.docType)) {
-    const tail = link.docType === 'forms' ? 'viewform?embedded=true' : 'preview';
-    const sep = tail.includes('?') ? '&' : '?';
-    return `https://docs.google.com/${link.docType}/d/${id}/${tail}${rk ? `${sep}resourcekey=${rk}` : ''}`;
+  if (link.kind === 'doc') {
+    if (!link.docType || !DOC_TYPES.includes(link.docType)) throw new Error('Unsupported Drive document type');
+    return `https://docs.google.com/${link.docType}/d/${id}/preview${rk ? `?resourcekey=${rk}` : ''}`;
   }
   return `https://drive.google.com/file/d/${id}/preview${rk ? `?resourcekey=${rk}` : ''}`;
 }
@@ -108,9 +111,12 @@ export function drivePreviewUrl(link: DriveLink): string {
 export function driveOpenUrl(link: DriveLink): string {
   const id = validDriveId(link.id);
   if (!id) throw new Error('Invalid Drive id');
-  const rk = link.resourceKey ? `?resourcekey=${link.resourceKey}` : '';
+  const rk = link.resourceKey && RESOURCE_KEY.test(link.resourceKey) ? `?resourcekey=${link.resourceKey}` : '';
   if (link.kind === 'folder') return `https://drive.google.com/drive/folders/${id}${rk}`;
-  if (link.kind === 'doc' && link.docType) return `https://docs.google.com/${link.docType}/d/${id}/edit${rk}`;
+  if (link.kind === 'doc') {
+    if (!link.docType || !DOC_TYPES.includes(link.docType)) throw new Error('Unsupported Drive document type');
+    return `https://docs.google.com/${link.docType}/d/${id}/edit${rk}`;
+  }
   return `https://drive.google.com/file/d/${id}/view${rk}`;
 }
 

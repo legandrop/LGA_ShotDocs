@@ -125,6 +125,11 @@ function newLink(pageId: string, fileId: string, pending: 0 | 1): MediaLink {
   };
 }
 
+/** Un bloque de otro proyecto pegado en la página: se anota, pero no se manda (se ve roto ahí). */
+function foreignLink(pageId: string, fileId: string): MediaLink {
+  return { ...newLink(pageId, fileId, 1), waiting: 'other_project' };
+}
+
 /** La misma fila con lo contrario por mandar (usado o quitado), desde cero y con otra revisión. */
 function flipLink(link: MediaLink, removed: boolean): MediaLink {
   return {
@@ -185,6 +190,25 @@ export interface MediaQueueOptions {
    * pueden agregar) y este es el aviso. El resto de la app sigue.
    */
   unavailable?: string;
+  /**
+   * Se pegó en una página una foto o un video de otro proyecto: se ve roto ahí y no se registra como uso.
+   * Para avisarle a la persona (con el nombre del archivo, si se sabe).
+   */
+  onForeignFile?: (name: string | null) => void;
+}
+
+/** Lo que se avisa al pegar una foto o un video de otro proyecto. */
+export const FOREIGN_FILE_NOTICE = 'This photo belongs to another project: it will show broken here.';
+
+/**
+ * Una página de este dispositivo usa el archivo y todavía no se sincronizó: mandarlo a la papelera de Drive
+ * podría llevarse algo que se sigue viendo. Se saltea.
+ */
+export class UnsentUseError extends Error {
+  constructor() {
+    super('A page on this device uses this file and has not synced yet, so it was skipped.');
+    this.name = 'UnsentUseError';
+  }
 }
 
 export interface MediaStatus {
@@ -227,6 +251,8 @@ export class MediaQueue {
    * mientras no cambie, no se vuelve a leer. Se guarda en la base del dispositivo.
    */
   private usageMarks: Record<string, string> = {};
+  /** Ver `isVerified`. Se guarda en la base del dispositivo. */
+  private verified: Record<string, boolean> = {};
   /** Archivos cuyo estado en la papelera ya se preguntó en esta sesión (para mostrarlos como borrados). */
   private readonly deletedChecked = new Set<string>();
   private running: Promise<void> | null = null;
@@ -281,6 +307,8 @@ export class MediaQueue {
     this.trashReady = (await this.db.get('meta', 'trashReady')) === true;
     const marks = await this.db.get('meta', 'usageMarks');
     this.usageMarks = marks && typeof marks === 'object' ? { ...(marks as Record<string, string>) } : {};
+    const verified = await this.db.get('meta', 'verifiedPages');
+    this.verified = verified && typeof verified === 'object' ? { ...(verified as Record<string, boolean>) } : {};
   }
 
   /**
@@ -468,18 +496,26 @@ export class MediaQueue {
     for (const fileId of new Set(fileIds.map((id) => id.toLowerCase()))) {
       const key = `${pageId}:${fileId}`;
       if (this.seenLinks.has(key) || !UUID.test(fileId)) continue;
-      const tx = this.db.transaction(['links', 'files'], 'readwrite');
-      const [link, own] = await Promise.all([tx.objectStore('links').get(key), tx.objectStore('files').get(fileId)]);
+      const tx = this.db.transaction(['links', 'files', 'known'], 'readwrite');
+      const [link, own, known] = await Promise.all([
+        tx.objectStore('links').get(key),
+        tx.objectStore('files').get(fileId),
+        tx.objectStore('known').get(fileId),
+      ]);
+      let foreign = false;
       if (link?.removed) {
         await tx.objectStore('links').put(flipLink(link, false));
         added = true;
       } else if (!link && own?.pageId !== pageId) {
-        // El archivo que se agregó en esta página se registra con ella (`register_file`).
-        await tx.objectStore('links').put(newLink(pageId, fileId, 1));
-        added = true;
+        // El archivo que se agregó en esta página se registra con ella (`register_file`). Uno de otro
+        // proyecto no se registra: se anota para esperar, sin mandar nada.
+        foreign = this.isForeign(pageId, own?.projectId ?? known?.projectId);
+        await tx.objectStore('links').put(foreign ? foreignLink(pageId, fileId) : newLink(pageId, fileId, 1));
+        added = !foreign;
       }
       await tx.done;
       this.seenLinks.add(key);
+      if (foreign) this.options.onForeignFile?.(own?.name ?? known?.name ?? null);
     }
     if (added) this.onQueued?.();
   }
@@ -496,15 +532,22 @@ export class MediaQueue {
    * que esta versión no puede leer entero) no dice que un archivo se quitó, dice que todavía no llegó:
    * entonces se suman los usos nuevos y nunca se quita ninguno. Devuelve si puso algo por mandar.
    */
-  async reconcilePage(pageId: string, docIds: ReadonlySet<string>, { unlink }: { unlink: boolean }): Promise<boolean> {
+  async reconcilePage(
+    pageId: string,
+    docIds: ReadonlySet<string>,
+    { unlink, seenSeq }: { unlink: boolean; seenSeq?: number },
+  ): Promise<boolean> {
     if (!this.db || !this.schemaReady) return false;
     const allowUnlink = unlink && this.trashReady;
-    const tx = this.db.transaction(['links', 'files'], 'readwrite');
+    const tx = this.db.transaction(['links', 'files', 'known'], 'readwrite');
     const store = tx.objectStore('links');
-    const [links, records] = await Promise.all([
+    const [links, records, known] = await Promise.all([
       store.getAll(IDBKeyRange.bound(`${pageId}:`, `${pageId}:\uffff`)),
       tx.objectStore('files').getAll(),
+      Promise.all([...docIds].map((id) => tx.objectStore('known').get(id))),
     ]);
+    const projectOf = new Map<string, string | null | undefined>(records.map((r) => [r.id, r.projectId]));
+    for (const k of known) if (k && !projectOf.has(k.id)) projectOf.set(k.id, k.projectId);
     const byFile = new Map(links.map((l) => [l.fileId, l]));
     const own = records.filter((r) => r.pageId === pageId);
     const ownIds = new Set(own.map((r) => r.id));
@@ -517,18 +560,21 @@ export class MediaQueue {
         // Lo registra `register_file` con esta página: solo se anota que el documento lo tiene, para saber
         // después si se quitó. No hay nada que mandar.
         writes.push(newLink(pageId, id, 0));
+      } else if (this.isForeign(pageId, projectOf.get(id))) {
+        // De otro proyecto (se pegó el bloque): se ve roto y no se registra como uso.
+        writes.push(foreignLink(pageId, id));
       } else {
         writes.push(newLink(pageId, id, 1));
       }
     }
     if (allowUnlink) {
       for (const link of links) {
-        if (!link.removed && !docIds.has(link.fileId)) writes.push(flipLink(link, true));
+        if (!link.removed && !docIds.has(link.fileId)) writes.push({ ...flipLink(link, true), seenSeq });
       }
       // Agregado acá pero el documento nunca lo tuvo (se borró enseguida): pasado un rato, se quita.
       for (const r of own) {
         if (docIds.has(r.id) || byFile.has(r.id) || this.now() - r.createdAt < OWN_GRACE_MS) continue;
-        writes.push({ ...newLink(pageId, r.id, 1), removed: true, rev: 1 });
+        writes.push({ ...newLink(pageId, r.id, 1), removed: true, rev: 1, seenSeq });
       }
     }
     await Promise.all([...writes.map((w) => store.put(w)), tx.done]);
@@ -536,7 +582,67 @@ export class MediaQueue {
       if (w.removed) this.seenLinks.delete(w.key);
       else this.seenLinks.add(w.key);
     }
-    return writes.some((w) => w.pending === 1);
+    return writes.some((w) => w.pending === 1 && !w.waiting);
+  }
+
+  /** El archivo es de otro proyecto que la página (si se saben los dos). */
+  private isForeign(pageId: string, fileProject: string | null | undefined): boolean {
+    const pageProject = this.options.projectOf?.(pageId);
+    return !!fileProject && !!pageProject && fileProject !== pageProject;
+  }
+
+  /**
+   * Algún uso del archivo en este dispositivo todavía no está confirmado por el servidor (por mandar,
+   * detenido, esperando, sin permiso o de otro proyecto), o es un archivo agregado acá y todavía sin
+   * registrar.
+   */
+  async hasUnsentUse(fileId: string, pending?: MediaLink[]): Promise<boolean> {
+    if (!this.db) return false;
+    const rows = pending ?? (await this.db.getAllFromIndex('links', 'pending', 1));
+    if (rows.some((l) => l.fileId === fileId && !l.removed)) return true;
+    const own = await this.db.get('files', fileId);
+    return !!own && !own.registered;
+  }
+
+  /** Se vuelve a comparar la página con sus archivos en la próxima sincronización. */
+  async forgetUsageMark(pageId: string): Promise<void> {
+    if (!this.db || !(pageId in this.usageMarks)) return;
+    const next = { ...this.usageMarks };
+    delete next[pageId];
+    await this.db.put('meta', next, 'usageMarks');
+    this.usageMarks = next;
+  }
+
+  /**
+   * Páginas cuyo historial entero en el servidor ya se comprobó legible con esta versión (ver
+   * `SyncEngine.reconcileMedia`): una versión anterior pudo descartar un update ilegible sin anotarlo.
+   */
+  isVerified(pageId: string): boolean {
+    return this.verified[pageId] === true;
+  }
+
+  async setVerified(pageId: string): Promise<void> {
+    if (!this.db) return;
+    const next = { ...this.verified, [pageId]: true };
+    await this.db.put('meta', next, 'verifiedPages');
+    this.verified = next;
+  }
+
+  /**
+   * Si comparar la página con estos archivos quitaría alguno (para comprobar antes lo que haga falta). No
+   * cambia nada.
+   */
+  async wouldUnlink(pageId: string, docIds: ReadonlySet<string>): Promise<boolean> {
+    if (!this.db || !this.trashReady) return false;
+    const [links, records] = await Promise.all([
+      this.db.getAll('links', IDBKeyRange.bound(`${pageId}:`, `${pageId}:\uffff`)),
+      this.db.getAll('files'),
+    ]);
+    if (links.some((l) => !l.removed && !docIds.has(l.fileId))) return true;
+    const linked = new Set(links.map((l) => l.fileId));
+    return records.some(
+      (r) => r.pageId === pageId && !docIds.has(r.id) && !linked.has(r.id) && this.now() - r.createdAt >= OWN_GRACE_MS,
+    );
   }
 
   /** Qué versión del documento de la página ya se comparó con sus archivos (`reconcilePage`). */
@@ -603,16 +709,23 @@ export class MediaQueue {
     // Primero los usos nuevos y después los que se quitaron: un archivo que se cortó de una página y se pegó
     // en otra no pasa por la papelera en el medio.
     const links = (await db.getAllFromIndex('links', 'pending', 1)).sort((a, b) => Number(!!a.removed) - Number(!!b.removed));
+    let stillPending: MediaLink[] | null = null;
     for (const link of links) {
       if (this.stopped) return;
-      if (link.blocked || link.waiting === 'denied' || link.retryAt > this.now() || skipPage(link.pageId)) continue;
+      const waits = link.waiting === 'denied' || link.waiting === 'other_project';
+      if (link.blocked || waits || link.retryAt > this.now() || skipPage(link.pageId)) continue;
       if (link.removed) {
         // Sin la papelera en la base no se manda (la función no existe todavía).
         if (!this.trashReady) continue;
-        // Agregado en este dispositivo y todavía sin registrar: `register_file` lo colgaría de nuevo de la
-        // página después de quitarlo. Se espera a que esté registrado.
-        const own = await db.get('files', link.fileId);
-        if (own && own.pageId === link.pageId && !own.registered) continue;
+        // Mientras este dispositivo tenga otro uso del mismo archivo sin confirmar (por mandar, detenido,
+        // esperando, sin permiso o de otro proyecto; también un archivo propio sin registrar, que
+        // `register_file` volvería a colgar de la página), no se quita: lo mandaría a la papelera mientras
+        // se ve en otra página. Se lee después de mandar los usos nuevos de esta vuelta.
+        stillPending ??= await db.getAllFromIndex('links', 'pending', 1);
+        if (await this.hasUnsentUse(link.fileId, stillPending)) {
+          if (link.waiting !== 'held') await this.patchLink(link.key, { waiting: 'held', error: null }, link.rev ?? 0);
+          continue;
+        }
       }
       if ((await this.linkOne(link)) === 'offline') return;
     }
@@ -818,13 +931,36 @@ export class MediaQueue {
   /** Manda un uso (`link_page_file`) o que se dejó de usar (`unlink_page_file`), según la fila. */
   private async linkOne(link: MediaLink): Promise<Outcome | 'done'> {
     try {
-      if (link.removed) await this.remote.unlinkPageFile(link.pageId, link.fileId);
-      else await this.remote.linkPageFile(link.pageId, link.fileId);
+      if (link.removed) {
+        const done = await this.remote.unlinkPageFile(link.pageId, link.fileId, link.seenSeq ?? null);
+        if (!done) {
+          // La página cambió en el servidor después del documento con el que se decidió: la base no hizo nada
+          // (el uso sigue). Se vuelve a comparar con el documento nuevo en la próxima sincronización.
+          await this.patchLink(
+            link.key,
+            { removed: false, rev: (link.rev ?? 0) + 1, pending: 0, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 },
+            link.rev ?? 0,
+          );
+          await this.forgetUsageMark(link.pageId);
+          return 'done';
+        }
+      } else {
+        await this.remote.linkPageFile(link.pageId, link.fileId);
+      }
       await this.patchLink(link.key, { pending: 0, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 }, link.rev ?? 0);
       return 'done';
     } catch (err) {
       const outcome = classify(err);
       if (outcome === 'offline') return outcome;
+      if (!link.removed && errorMessage(err) === 'file_other_project') {
+        // Se pegó un bloque de otro proyecto: se ve roto y no se registra como uso. No es un error por
+        // reintentar; se avisa una vez.
+        await this.patchLink(link.key, { waiting: 'other_project', error: null, blocked: false }, link.rev ?? 0);
+        const name = (await this.store.get('known', link.fileId).catch(() => undefined))?.name ?? null;
+        this.options.onForeignFile?.(name);
+        this.onChange?.();
+        return 'done';
+      }
       const failures = link.failures + 1;
       const denied = errorMessage(err) === 'page_not_found';
       // Un archivo de este dispositivo que figura registrado pero el servidor no tiene (se restauró la base):

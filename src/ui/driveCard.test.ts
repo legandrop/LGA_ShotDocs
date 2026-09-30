@@ -2,10 +2,10 @@
 import { BlockNoteEditor } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
 import { TextSelection } from '@tiptap/pm/state';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { driveFrameSandbox } from './driveCard';
+import { blocksThirdPartyCookies, DRIVE_FRAME_SANDBOX, PLAYER_TIMEOUT_MS } from './driveCard';
 import { applyDrivePaste, createDrivePaste, driveLinkFromClipboard, findPastedDriveLink } from './drivePaste';
 import { DRIVE_CARD_PROP, paragraphProps, QUESTION_PROP, schema, SCRIPT_PROP } from './editorSchema';
 import { schema as mainSchema } from './fixtures/editorSchemaMain';
@@ -128,8 +128,33 @@ describe('tarjetas de Drive con el editor de la versión publicada (main)', () =
     expect(editor.document).toHaveLength(3);
     expect(editor.document[1].id).toBe(cardId);
     expect(editor.document[1].type).toBe('paragraph');
-    expect(texts(editor)[1]).toBe('Plano 12.mov (toma 3)');
-    expect(hrefs(editor)[1]).toContain(URL_FILE);
+    // Se pierde solo la propiedad: el texto y el link quedan, en los dos editores.
+    expect(isCard(editor, 1)).toBe(false);
+    expect(texts(editor)).toEqual(['Plano de referencia:', 'Plano 12.mov (toma 3)', 'Nota.']);
+    expect(hrefs(editor)[1]).toEqual([URL_FILE]);
+    expect(texts(old)[1]).toBe('Plano 12.mov (toma 3)');
+    expect(hrefs(old)[1]).toEqual([URL_FILE]);
+    expect(editor.domElement?.querySelector('.drive-card')).toBeNull();
+  });
+
+  it('pegar una tarjeta copiada (drive-card-line) en la versión publicada deja el párrafo con el link', async () => {
+    const { doc, editor } = newPage();
+    await tick();
+    const { old, updates } = openInMain(doc);
+    await tick();
+    old.setTextCursorPosition(old.document[2], 'end');
+    old.pasteHTML(`<p class="drive-card-line"><a href="${URL_FILE}">Plano 13.mov</a></p>`);
+    await tick();
+    expect(old.document.map((b) => b.type).every((t) => t === 'paragraph')).toBe(true);
+    expect(texts(old).join('|')).toContain('Plano 13.mov');
+    expect(hrefs(old).flat()).toContain(URL_FILE);
+    for (const u of updates) Y.applyUpdate(doc, u);
+    await tick();
+    // Llega como link común (la versión vieja no conoce la propiedad) y nada de lo que había se borró.
+    expect(texts(editor).slice(0, 2)).toEqual(['Plano de referencia:', 'Plano 12.mov']);
+    expect(isCard(editor, 1)).toBe(true);
+    expect(texts(editor).join('|')).toContain('Plano 13.mov');
+    expect(editor.document.filter((b) => (b.props as Record<string, unknown>)[DRIVE_CARD_PROP] === true)).toHaveLength(1);
   });
 
   it('la guarda contra lo desconocido de la versión publicada no la bloquea', async () => {
@@ -154,7 +179,7 @@ describe('la tarjeta en esta versión', () => {
     expect(frames).toHaveLength(1);
     const f = frames[0];
     expect(f.getAttribute('src')).toBe(`https://drive.google.com/file/d/${ID}/preview`);
-    expect(f.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+    expect(f.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin allow-popups allow-storage-access-by-user-activation');
     expect(f.getAttribute('allow')).toBe('fullscreen');
     expect(f.getAttribute('referrerpolicy')).toBe('no-referrer');
     expect(f.hasAttribute('title')).toBe(false);
@@ -243,9 +268,79 @@ describe('la tarjeta en esta versión', () => {
     expect((parsed[0].props as Record<string, unknown>)[DRIVE_CARD_PROP]).toBe(true);
   });
 
-  it('un formulario necesita mandar datos; el resto no', () => {
-    expect(driveFrameSandbox({ kind: 'file', id: ID })).not.toContain('allow-forms');
-    expect(driveFrameSandbox({ kind: 'doc', id: ID, docType: 'forms' })).toContain('allow-forms');
+  it('el sandbox no deja escapar popups ni mandar formularios', () => {
+    expect(DRIVE_FRAME_SANDBOX).not.toContain('allow-popups-to-escape-sandbox');
+    expect(DRIVE_FRAME_SANDBOX).not.toContain('allow-forms');
+    expect(DRIVE_FRAME_SANDBOX).not.toContain('allow-top-navigation');
+  });
+
+  it('un formulario de Google queda como párrafo común (sin iframe)', async () => {
+    const editor = mount(new Y.Doc());
+    editor.replaceBlocks(editor.document, [card('Formulario', `https://docs.google.com/forms/d/${ID}/edit`)]);
+    await tick();
+    expect(editor.domElement!.querySelector('iframe, .drive-card')).toBeNull();
+  });
+
+  it('reconoce los navegadores que bloquean las cookies de terceros', () => {
+    const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+    const iphoneChrome = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0 Mobile/15E148 Safari/604.1';
+    const macSafari = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
+    const macChrome = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+    const android = 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36';
+    const winEdge = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0';
+    expect(blocksThirdPartyCookies(iphone, true)).toBe(true);
+    expect(blocksThirdPartyCookies(iphoneChrome, true)).toBe(true);
+    expect(blocksThirdPartyCookies(macSafari, false)).toBe(true);
+    expect(blocksThirdPartyCookies(macSafari.replace('Version/18.0 ', ''), true)).toBe(true); // iPad
+    expect(blocksThirdPartyCookies(macChrome, false)).toBe(false);
+    expect(blocksThirdPartyCookies(android, true)).toBe(false);
+    expect(blocksThirdPartyCookies(winEdge, false)).toBe(false);
+  });
+
+  it('en Safari o el iPhone avisa que solo andan los compartidos por link, con "Open in Drive"', async () => {
+    const ua = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+    );
+    try {
+      const { editor } = newPage();
+      await tick();
+      const hint = editor.domElement!.querySelector<HTMLElement>('.drive-card-hint')!;
+      expect(hint.hidden).toBe(false);
+      expect(hint.textContent).toMatch(/shared by link/);
+      expect(hint.querySelector('a')?.getAttribute('href')).toBe(`https://drive.google.com/file/d/${ID}/view`);
+    } finally {
+      ua.mockRestore();
+    }
+  });
+
+  it('si el reproductor no carga a tiempo (ya en pantalla), ofrece abrirlo en Drive; al cargar, se va', async () => {
+    const observers: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
+    const g = globalThis as { IntersectionObserver?: unknown };
+    const saved = g.IntersectionObserver;
+    g.IntersectionObserver = class {
+      constructor(cb: (entries: { isIntersecting: boolean }[]) => void) {
+        observers.push(cb);
+      }
+      observe() {}
+      disconnect() {}
+    };
+    try {
+      const { editor } = newPage();
+      await tick();
+      const hint = editor.domElement!.querySelector<HTMLElement>('.drive-card-hint')!;
+      expect(hint.hidden).toBe(true);
+      vi.useFakeTimers();
+      observers.at(-1)!([{ isIntersecting: true }]);
+      vi.advanceTimersByTime(PLAYER_TIMEOUT_MS + 1);
+      expect(hint.hidden).toBe(false);
+      expect(hint.textContent).toMatch(/didn't load/);
+      expect(hint.querySelector('a')?.textContent).toBe('Open in Drive');
+      editor.domElement!.querySelector('iframe')!.dispatchEvent(new Event('load'));
+      expect(hint.hidden).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      g.IntersectionObserver = saved;
+    }
   });
 });
 

@@ -92,15 +92,19 @@ export function workspaceOrigin(raw: string, allowLocalHttp = appOnLocalhost()):
   } catch {
     return null;
   }
-  const localHttp = url.protocol === 'http:' && /^(localhost|127\.0\.0\.1)$/.test(url.hostname);
+  // `abcd.supabase.co.` (con el punto final del DNS) es el mismo host: se guarda sin el punto.
+  const hostname = url.hostname.replace(/\.+$/, '');
+  if (!hostname) return null;
+  const localHttp = url.protocol === 'http:' && /^(localhost|127\.0\.0\.1)$/.test(hostname);
   if (url.protocol !== 'https:' && !(localHttp && allowLocalHttp)) return null;
   if (url.username || url.password || url.search || url.hash) return null;
   if (url.pathname !== '/' && url.pathname !== '') return null;
-  return url.origin;
+  return `${url.protocol}//${hostname}${url.port ? `:${url.port}` : ''}`;
 }
 
-function sameOrigin(a: string, b: string): boolean {
-  const norm = (x: string) => x.trim().replace(/\/+$/, '').toLowerCase();
+/** La misma dirección, con o sin barra, mayúsculas o el punto final del host. */
+export function sameOrigin(a: string, b: string): boolean {
+  const norm = (x: string) => workspaceOrigin(x, true) ?? x.trim().replace(/\/+$/, '').toLowerCase();
   return norm(a) === norm(b);
 }
 
@@ -124,9 +128,14 @@ function cleanEntry(raw: unknown): DeviceWorkspace | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   if (typeof r.id !== 'string' || typeof r.url !== 'string' || typeof r.publishableKey !== 'string') return null;
+  // El de la compilación toma la dirección y la clave de la compilación al abrir la app; los demás tienen que
+  // tener una dirección y una clave publicable que se podrían haber agregado.
+  const url = workspaceOrigin(r.url, r.legacy === true || appOnLocalhost());
+  if (!url) return null;
+  if (r.legacy !== true && !validPublishableKey(r.publishableKey)) return null;
   const entry: DeviceWorkspace = {
     id: r.id,
-    url: r.url,
+    url,
     publishableKey: r.publishableKey,
     localKey: typeof r.localKey === 'string' ? r.localKey : '',
     name: typeof r.name === 'string' ? r.name.slice(0, 200) : '',
@@ -153,8 +162,15 @@ export function readWorkspaces(store: KeyValueStore = browserStore()): Workspace
   const workspaces: DeviceWorkspace[] = [];
   for (const item of Array.isArray(r.workspaces) ? r.workspaces : []) {
     const entry = cleanEntry(item);
-    // Uno solo de la compilación y ningún id repetido.
-    if (!entry || workspaces.some((w) => w.id === entry.id || (entry.legacy && w.legacy))) continue;
+    // Uno solo de la compilación, ningún id repetido y ninguna dirección repetida.
+    if (
+      !entry ||
+      workspaces.some(
+        (w) => w.id === entry.id || (entry.legacy && w.legacy) || (!entry.pending && !w.pending && sameOrigin(w.url, entry.url)),
+      )
+    ) {
+      continue;
+    }
     workspaces.push(entry);
   }
   const active = typeof r.active === 'string' && workspaces.some((w) => w.id === r.active) ? r.active : null;
@@ -195,18 +211,23 @@ export function loadWorkspaces(
 ): WorkspaceList {
   const list = readWorkspaces(store);
   if (build) {
-    const url = build.url.trim().replace(/\/+$/, '');
+    const url = workspaceOrigin(build.url, true) ?? build.url.trim().replace(/\/+$/, '');
+    // Con compilación, SIEMPRE hay una entrada de la compilación con los nombres de siempre. Cualquier otra
+    // con su dirección o con su clave local (una lista tocada a mano o armada a propósito) se descarta:
+    // abriría Wanka con otros nombres, y Lega quedaría deslogueado y sin su base.
     let entry = list.workspaces.find((w) => w.legacy);
-    if (!entry && !list.workspaces.some((w) => sameOrigin(w.url, url))) {
+    const impostors = list.workspaces.filter(
+      (w) => w !== entry && (sameOrigin(w.url, url) || w.id === WANKA_LOCAL_KEY || w.localKey === WANKA_LOCAL_KEY),
+    );
+    list.workspaces = list.workspaces.filter((w) => !impostors.includes(w));
+    if (!entry) {
       entry = { id: WANKA_LOCAL_KEY, url, publishableKey: build.publishableKey, localKey: WANKA_LOCAL_KEY, name: '', legacy: true };
       list.workspaces.unshift(entry);
     }
-    if (entry) {
-      // Si Wanka se restaura en otro proyecto de Supabase, la compilación nueva trae la dirección nueva y
-      // el dispositivo sigue con su base de siempre (la generación hace el resto).
-      Object.assign(entry, { id: WANKA_LOCAL_KEY, url, publishableKey: build.publishableKey, localKey: WANKA_LOCAL_KEY });
-      if (!list.active) list.active = entry.id;
-    }
+    // Si Wanka se restaura en otro proyecto de Supabase, la compilación nueva trae la dirección nueva y el
+    // dispositivo sigue con su base de siempre (la generación hace el resto).
+    Object.assign(entry, { id: WANKA_LOCAL_KEY, url, publishableKey: build.publishableKey, localKey: WANKA_LOCAL_KEY });
+    if (!list.active || !list.workspaces.some((w) => w.id === list.active)) list.active = entry.id;
   }
   if (!list.active && list.workspaces.length) list.active = list.workspaces[0].id;
   writeWorkspaces(list, store);
@@ -258,12 +279,13 @@ export function checkWorkspace(
 ): WorkspaceCheck {
   const url = workspaceOrigin(input.url, allowLocalHttp);
   if (!url) return { kind: 'invalid', reason: 'The workspace address must be an https:// address, like https://abcd.supabase.co.' };
-  const existing = findByUrl(list, url);
-  if (existing) return { kind: 'existing', entry: existing };
   const key = input.publishableKey.trim();
+  // Una clave secreta se avisa siempre, también si el workspace ya está en el dispositivo.
   if (key.startsWith('sb_secret_')) {
     return { kind: 'invalid', reason: 'That is a secret key: never paste it anywhere. Use the publishable key (sb_publishable_…).' };
   }
+  const existing = findByUrl(list, url);
+  if (existing) return { kind: 'existing', entry: existing };
   if (!validPublishableKey(key)) return { kind: 'invalid', reason: 'The publishable key must start with sb_publishable_.' };
   if (input.localKey !== undefined) {
     if (!validLocalKey(input.localKey)) {
@@ -479,6 +501,7 @@ export function forgetWorkspaceStorage(ws: DeviceWorkspace, store: KeyValueStore
     store.removeItem(names.lastUser);
     store.removeItem(names.project);
     store.removeItem(names.lastPages);
+    store.removeItem(names.inviteTarget);
   } catch {
     // Son comodidades y una sesión: si no se pueden borrar, no importa.
   }

@@ -35,8 +35,9 @@ describe('reconocer links de Drive', () => {
     expect(parseDriveLink(`https://docs.google.com/document/d/${ID}/edit?usp=sharing`)).toEqual({ kind: 'doc', id: ID, docType: 'document' });
     expect(parseDriveLink(`https://docs.google.com/spreadsheets/d/${ID}/edit#gid=0`)).toEqual({ kind: 'doc', id: ID, docType: 'spreadsheets' });
     expect(parseDriveLink(`https://docs.google.com/presentation/u/2/d/${ID}/edit`)).toEqual({ kind: 'doc', id: ID, docType: 'presentation' });
-    // Un formulario publicado (/d/e/…) no tiene el id del archivo.
+    // Los formularios no se reconocen: quedan como link común (una tarjeta podría parecer parte de la app).
     expect(parseDriveLink(`https://docs.google.com/forms/d/e/${ID}/viewform`)).toBeNull();
+    expect(parseDriveLink(`https://docs.google.com/forms/d/${ID}/edit`)).toBeNull();
   });
 
   it('guarda la clave de recurso de los links compartidos', () => {
@@ -80,7 +81,6 @@ describe('direcciones del reproductor', () => {
     expect(drivePreviewUrl({ kind: 'file', id: ID, resourceKey: '0-x' })).toBe(`https://drive.google.com/file/d/${ID}/preview?resourcekey=0-x`);
     expect(drivePreviewUrl({ kind: 'folder', id: ID })).toBe(`https://drive.google.com/embeddedfolderview?id=${ID}#grid`);
     expect(drivePreviewUrl({ kind: 'doc', id: ID, docType: 'document' })).toBe(`https://docs.google.com/document/d/${ID}/preview`);
-    expect(drivePreviewUrl({ kind: 'doc', id: ID, docType: 'forms' })).toBe(`https://docs.google.com/forms/d/${ID}/viewform?embedded=true`);
     expect(driveOpenUrl({ kind: 'file', id: ID })).toBe(`https://drive.google.com/file/d/${ID}/view`);
     expect(driveOpenUrl({ kind: 'folder', id: ID })).toBe(`https://drive.google.com/drive/folders/${ID}`);
   });
@@ -89,6 +89,16 @@ describe('direcciones del reproductor', () => {
     expect(() => drivePreviewUrl({ kind: 'file', id: '../../evil' })).toThrow();
     expect(() => drivePreviewUrl({ kind: 'file', id: `${ID}?x=1` })).toThrow();
     expect(() => driveOpenUrl({ kind: 'file', id: 'x"y' })).toThrow();
+    const forms = { kind: 'doc', id: ID, docType: 'forms' } as never;
+    expect(() => drivePreviewUrl(forms)).toThrow();
+    expect(() => driveOpenUrl(forms)).toThrow();
+  });
+
+  it('una clave de recurso rara nunca entra en una dirección', () => {
+    const bad = { kind: 'file' as const, id: ID, resourceKey: 'x"&y=<z>' };
+    expect(drivePreviewUrl(bad)).toBe(`https://drive.google.com/file/d/${ID}/preview`);
+    expect(driveOpenUrl(bad)).toBe(`https://drive.google.com/file/d/${ID}/view`);
+    expect(driveOpenUrl({ kind: 'folder', id: ID, resourceKey: '0-ok' })).toBe(`https://drive.google.com/drive/folders/${ID}?resourcekey=0-ok`);
   });
 
   it('compara links', () => {

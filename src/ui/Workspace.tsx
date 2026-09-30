@@ -113,21 +113,22 @@ function useInviteTarget(): void {
   const tree = useTree();
   const status = useSyncStatus();
   const switchTo = useSwitchProject();
+  const key = useServices().workspace.config.storage.inviteTarget;
   const revision = tree.getRevision();
   useEffect(() => {
-    const target = pendingInviteTarget();
+    const target = pendingInviteTarget(key);
     if (!target) return;
     if (tree.get(target)) {
-      clearInviteTarget();
+      clearInviteTarget(key);
       navigate(pagePath(target));
     } else if (tree.project(target) && status.lastSyncAt !== null) {
-      clearInviteTarget();
+      clearInviteTarget(key);
       switchTo(target);
     } else if (status.lastSyncAt !== null) {
-      clearInviteTarget();
+      clearInviteTarget(key);
       notify('The shared page is not available to this account yet. Ask the person who invited you.');
     }
-  }, [tree, revision, status.lastSyncAt, switchTo]);
+  }, [tree, revision, status.lastSyncAt, switchTo, key]);
 }
 
 function Shell() {

@@ -4,6 +4,7 @@ import { useWorkspace } from '../workspace';
 import {
   addWorkspace,
   adoptPending,
+  configOf,
   checkWorkspace,
   displayName,
   forgetWorkspaceStorage,
@@ -381,9 +382,10 @@ function forgetPending(id: string): void {
 /** Agregar o abrir un workspace desde la app ya abierta: se guarda en la lista y la app recarga en él. */
 export function openAndReload(entry: DeviceWorkspace, invite?: { target: string | null }, isNew = true): void {
   updateWorkspaces((l) => (isNew ? addWorkspace(l, entry) : setActive(l, entry.id)));
-  // La página de un link se abre después de entrar; cambiar a mano no arrastra la de otro link.
-  if (invite?.target) rememberInviteTarget(invite.target);
-  else clearInviteTarget();
+  // La página de un link se abre después de entrar (cada workspace la guarda con su nombre).
+  const key = configOf(entry).storage.inviteTarget;
+  if (invite?.target) rememberInviteTarget(key, invite.target);
+  else if (!isNew) clearInviteTarget(key);
   location.replace('/');
 }
 

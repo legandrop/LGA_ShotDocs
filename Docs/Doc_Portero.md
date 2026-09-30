@@ -139,7 +139,28 @@ Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el arc
 | `PUT /upload/<id>` | El que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. Al terminar: `{ status: 'done', file }`; si es un archivo de una página, además `linked: true\|false` (si la base ya se enteró; la app lo marca subido solo con `true`). |
 | `POST /pass` con `file` | Nivel 1 o más | `{ file: <id> }` → `{ url }` de un pase para `/m/…`, siempre con el tipo de `files.mime` (un `type` que mande la app no cuenta). Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
 | `POST /pass` con `fileId` | Dueño | La prueba de media: un pase para un archivo de Drive por su id. |
-| `POST /trash` | Dueño o admin (lo decide la base) | `{ file: <id> }`: manda un archivo de la papelera de la app a la papelera de Drive (`PATCH files/<id>` con `trashed: true`; nunca lo borra). Con la sesión de la persona: `purge_file` (la base comprueba que sea dueño o admin con permiso sobre el proyecto y que el archivo esté en la papelera, y lo marca), `media_file` tiene que decir que está en la papelera y pedido, recién ahí Drive (solo si el archivo de Drive lleva la marca de este) y al final `media_purged`. Devuelve `{ status: 'done', file, drive }`, con `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba) o `none` (nunca terminó de subirse). Pedirlo de nuevo no hace nada de más (si la base ya tiene la confirmación, no va a Drive). `403` si no es dueño o admin, o si el archivo de Drive no lleva la marca; `404` si no existe o no lo ve; `409` si una página todavía lo usa; `502` si Drive falla (no se confirma: se puede volver a pedir). |
+| `POST /trash` | Dueño o admin (lo decide la base) | `{ file: <id> }`: manda un archivo de la papelera de la app a la papelera de Drive (`PATCH files/<id>` con `trashed: true`; nunca lo borra). Con la sesión de la persona: `media_file`; Drive conectado y, si el archivo está en Drive, que lleve la marca de este (si algo de eso falla, no se le pide nada a la base y el archivo queda como estaba); `purge_file` (la base comprueba que sea dueño o admin con permiso sobre el proyecto y que el archivo esté en la papelera, y lo marca); `media_file` de nuevo (tiene que decir que está en la papelera y pedido); Drive; y al final `media_purged`. Devuelve `{ status: 'done', file, drive }`, con `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba) o `none` (todavía no está en Drive: si la subida seguía en curso, al terminar el portero lo manda solo a la papelera de Drive). Pedirlo de nuevo no hace nada de más. Los errores traen `{ error, code }` (tabla de abajo). |
+
+Códigos de error de `/trash` (el campo `code`, para que la app decida sin leer el texto):
+
+| Status | `code` | Qué pasó | Qué hace la app |
+|---|---|---|---|
+| 400 | `bad_request` | Falta el id o no es un uuid. | Error de la app. |
+| 401 | `session_expired` (o sin `code`, si la sesión falla antes) | La sesión venció. | Volver a entrar. |
+| 403 | `not_allowed` | No es dueño ni admin con permiso sobre el proyecto. | No ofrecer el botón. |
+| 403 | `drive_mismatch` | El archivo de Drive al que apunta la base no lleva la marca de este: no se toca. | Mostrar el error; lo revisa el dueño. |
+| 404 | `not_found` | No existe o la persona no lo ve. | Refrescar la lista. |
+| 409 | `in_use` | Una página lo volvió a usar: ya no está en la papelera. Es el único 409. | Refrescar la lista (el archivo salió). |
+| 503 | `drive_not_connected` | Drive no está conectado (o la conexión venció). No se pidió nada a la base. | Avisar que el dueño conecte Drive. |
+| 502 | `drive_failed` | Drive no contestó bien. Si ya se había pedido, queda pedido sin confirmar. | Reintentar más tarde. |
+| 502 | `db_outdated` | La base no tiene la migración de la papelera de archivos. | Avisar. |
+| 502 | `db_error` | La base no contestó bien. | Reintentar más tarde. |
+
+Si un dueño o admin manda a la papelera un archivo cuya subida sigue en curso (`drive: 'none'`), cuando la
+subida termina el portero manda lo subido a la papelera de Drive y lo confirma con `media_purged`, con la
+sesión de quien subió (la base se lo permite a quien edita el archivo). Si en ese momento Drive falla, la
+subida termina igual y el archivo queda en Drive sin ir a la papelera (no se pierde nada): pedir `/trash` de
+nuevo para ese archivo lo termina (la app ya no lo muestra en la papelera, así que es un caso a mano).
 
 La app manda partes de 8 MiB (`PART_BYTES` en `src/media/portero.ts`); el portero acepta hasta 64 MiB por
 parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida. El permiso para subir se mira al abrir la

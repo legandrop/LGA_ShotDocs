@@ -40,15 +40,33 @@ export function driveLinkInNode(node: PMNode): DriveLink | null {
   return found;
 }
 
-/** Los permisos del iframe: lo justo para que el reproductor de Drive ande con la sesión de Google. */
-export function driveFrameSandbox(link: DriveLink): string {
-  // `allow-scripts` y `allow-same-origin`: el reproductor es una página de Google que necesita sus
-  // scripts y su sesión (el iframe es de otro origen, así que no ve nada de la app). `allow-popups` y
-  // `allow-popups-to-escape-sandbox`: el botón del reproductor para abrirlo en Drive, en una pestaña normal.
-  // Un formulario necesita además `allow-forms` para mandarse.
-  const base = 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox';
-  return link.kind === 'doc' && link.docType === 'forms' ? `${base} allow-forms` : base;
+/**
+ * Los permisos del iframe: lo justo para que el reproductor de Drive ande con la sesión de Google.
+ * - `allow-scripts` y `allow-same-origin`: el reproductor es una página de Google que necesita sus scripts
+ *   y su sesión (el iframe es de otro origen, así que no ve nada de la app).
+ * - `allow-popups`: el botón del reproductor que abre el archivo en Drive. Sin
+ *   `allow-popups-to-escape-sandbox`: esa pestaña queda con las mismas restricciones; para abrirlo en una
+ *   pestaña normal está "Open in Drive" en el pie.
+ * - `allow-storage-access-by-user-activation`: deja que el reproductor, después de un toque, le pida al
+ *   navegador su propia sesión de Google (API Storage Access) donde las cookies de terceros están
+ *   bloqueadas (Safari, iPhone). Solo sirve si Drive la pide; no le da nada de la app.
+ * Sin `allow-forms`: los formularios de Google no se muestran como tarjeta (driveLinks.ts).
+ */
+export const DRIVE_FRAME_SANDBOX = 'allow-scripts allow-same-origin allow-popups allow-storage-access-by-user-activation';
+
+/**
+ * El navegador bloquea las cookies de terceros (Safari en la Mac y cualquier navegador del iPhone o el
+ * iPad, que usan el motor de Safari): el reproductor no tiene la sesión de Google y un archivo privado pide
+ * iniciar sesión; solo suelen andar los compartidos por link.
+ */
+export function blocksThirdPartyCookies(ua: string = navigator.userAgent, touchMac = navigator.maxTouchPoints > 1): boolean {
+  if (/iPhone|iPad|iPod/.test(ua)) return true;
+  if (/Macintosh/.test(ua) && touchMac) return true; // iPad con "sitio de escritorio"
+  return /Safari\//.test(ua) && !/Chrome\/|Chromium\/|CriOS\/|FxiOS\/|EdgiOS\/|Edg\/|OPR\/|Android/.test(ua);
 }
+
+/** Cuánto se espera a que el reproductor cargue (ya en pantalla) antes de ofrecer abrirlo en Drive. */
+export const PLAYER_TIMEOUT_MS = 15_000;
 
 interface CardViewOptions {
   link: DriveLink;
@@ -106,13 +124,68 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
   unembed.textContent = 'Show as link';
   actions.append(open, unembed);
   foot.append(icon, text, actions);
-  card.append(frame, foot);
 
-  const chrome = [frame, icon, actions];
+  // Entre el reproductor y el pie: un aviso discreto con "Open in Drive" si el reproductor puede no andar
+  // (Safari, iPhone) o si no cargó a tiempo.
+  const hint = document.createElement('div');
+  hint.className = 'drive-card-hint';
+  hint.contentEditable = 'false';
+  hint.hidden = true;
+  const hintText = document.createElement('span');
+  const hintOpen = document.createElement('a');
+  hintOpen.className = 'drive-card-hint-open';
+  hintOpen.href = open.href;
+  hintOpen.target = '_blank';
+  hintOpen.rel = 'noopener noreferrer';
+  hintOpen.textContent = 'Open in Drive';
+  hint.append(hintText, hintOpen);
+  const showHint = (message: string, strong = false) => {
+    hintText.textContent = message;
+    hint.classList.toggle('drive-card-hint-strong', strong);
+    hint.hidden = false;
+  };
+  const cookieHint = blocksThirdPartyCookies()
+    ? 'In Safari and on iPhone, only files shared by link may play here.'
+    : null;
+  if (cookieHint) showHint(cookieHint);
+
+  card.append(frame, hint, foot);
+
+  const chrome = [frame, icon, actions, hint];
+
+  // Si el reproductor no carga (ya en pantalla) en PLAYER_TIMEOUT_MS, el aviso se vuelve visible. Un
+  // reproductor que carga pero pide iniciar sesión no se puede detectar (es de otro origen): para eso está
+  // el aviso de Safari y "Open in Drive" en el pie.
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let observer: IntersectionObserver | null = null;
+  const stopWatching = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    observer?.disconnect();
+    observer = null;
+  };
+  const watch = (iframe: HTMLIFrameElement) => {
+    stopWatching();
+    iframe.addEventListener('load', () => {
+      stopWatching();
+      if (cookieHint) showHint(cookieHint);
+      else hint.hidden = true;
+    });
+    if (typeof IntersectionObserver === 'undefined') return;
+    observer = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      observer?.disconnect();
+      observer = null;
+      timer = setTimeout(() => showHint("The Drive player didn't load.", true), PLAYER_TIMEOUT_MS);
+    });
+    observer.observe(frame);
+  };
 
   const showPlayer = () => {
     if (frame.querySelector('iframe')) return;
-    frame.replaceChildren(playerFrame(link), shield);
+    const iframe = playerFrame(link);
+    frame.replaceChildren(iframe, shield);
+    watch(iframe);
   };
   const showOffline = () => {
     const notice = document.createElement('div');
@@ -169,6 +242,7 @@ export function createDriveCardView({ link, node, editor, view, getPos }: CardVi
     // Los toques y clics en el reproductor y los botones los maneja el navegador, no el editor.
     stopEvent: (e: Event) => chrome.some((el) => el.contains(e.target as Node)),
     destroy: () => {
+      stopWatching();
       window.removeEventListener('online', onOnline);
       document.removeEventListener('pointerdown', onOutside, true);
     },
@@ -180,9 +254,11 @@ export function playerFrame(link: DriveLink): HTMLIFrameElement {
   const iframe = document.createElement('iframe');
   iframe.className = 'drive-card-player';
   iframe.src = drivePreviewUrl(link);
-  iframe.setAttribute('sandbox', driveFrameSandbox(link));
+  iframe.setAttribute('sandbox', DRIVE_FRAME_SANDBOX);
   iframe.setAttribute('allow', 'fullscreen');
   iframe.setAttribute('allowfullscreen', '');
+  // Sin referrer: Drive no se entera de qué página de la app lo muestra. Si el reproductor no cargara por
+  // esto (confirmarlo a mano), el cambio es `strict-origin` (manda solo el dominio de la app).
   iframe.setAttribute('referrerpolicy', 'no-referrer');
   iframe.setAttribute('loading', 'lazy');
   iframe.setAttribute('aria-label', 'Google Drive player');

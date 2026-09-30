@@ -23,7 +23,7 @@ const OPTIONS: { choice: DrivePasteChoice; label: string; icon: ReactNode; tip?:
     choice: 'card',
     label: 'Card',
     icon: svg('M3.5 4.5h13v11h-13zM8.5 7.75v4.5l3.75-2.25z'),
-    tip: 'Shows the **Google Drive player** on the page.\nIt plays for people who can open the file in Drive.',
+    tip: 'Shows the **Google Drive player** on the page.\nPlays for people signed in to Google with access to the file.\nIn Safari and on iPhone, only files shared by link may play.',
   },
 ];
 

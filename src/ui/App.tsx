@@ -62,7 +62,7 @@ function computeStart(): Start {
     if (invite.kind === 'open') {
       // Ya está en el dispositivo: se abre ese, con la página del link después de entrar.
       updateWorkspaces((l) => setActive(l, invite.entry.id));
-      markInviteArrival(invite.target);
+      markInviteArrival(invite.target, configOf(invite.entry).storage.inviteTarget);
       return { kind: 'open', entry: invite.entry };
     }
     if (invite.kind === 'confirm') return { kind: 'confirm', entry: invite.entry, target: invite.target, fallback };
@@ -80,7 +80,7 @@ function Screen() {
    */
   const openNew = (entry: DeviceWorkspace, invite?: { target: string | null }) => {
     updateWorkspaces((l) => addWorkspace(l, entry));
-    if (invite) markInviteArrival(invite.target);
+    if (invite) markInviteArrival(invite.target, configOf(entry).storage.inviteTarget);
     setStart({ kind: 'open', entry });
   };
 

@@ -44,7 +44,7 @@ export function forgetWorkspaceKeys(storage: StorageNames, userId: string, proje
   } catch {
     // Son comodidades: si no se pueden limpiar, no importa.
   }
-  clearInviteTarget();
+  clearInviteTarget(storage.inviteTarget);
 }
 
 function sizeLabel(bytes: number): string {

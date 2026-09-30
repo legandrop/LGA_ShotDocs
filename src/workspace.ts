@@ -28,6 +28,8 @@ export interface StorageNames {
   lastUser: string;
   project: string;
   lastPages: string;
+  /** La página o el proyecto de un link de invitación, para abrirlo después de entrar. */
+  inviteTarget: string;
   /** La base local (IndexedDB) de cada usuario. */
   db: (userId: string) => string;
 }
@@ -55,6 +57,7 @@ export function legacyStorageNames(localKey: string): StorageNames {
     lastUser: 'shotdocs-last-user',
     project: 'shotdocs-project',
     lastPages: 'shotdocs-last-pages',
+    inviteTarget: 'shotdocs-invite-target',
     db: (userId) => localDbName(localKey, userId),
   };
 }
@@ -66,6 +69,7 @@ export function storageNamesFor(localKey: string): StorageNames {
     lastUser: `shotdocs-last-user:${localKey}`,
     project: `shotdocs-project:${localKey}`,
     lastPages: `shotdocs-last-pages:${localKey}`,
+    inviteTarget: `shotdocs-invite-target:${localKey}`,
     db: (userId) => localDbName(localKey, userId),
   };
 }

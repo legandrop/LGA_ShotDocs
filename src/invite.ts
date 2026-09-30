@@ -1,5 +1,4 @@
 import { fromBase64, toBase64 } from './lib/base64';
-import type { WorkspaceConfig } from './workspace';
 
 // El link de invitación (paso 9 de Docs/Plan_Workspaces.md): la dirección de la app y, después del `#`
 // (esa parte no llega a ningún servidor), la dirección y la clave publicable del workspace, su clave local
@@ -21,7 +20,6 @@ export interface InvitePayload {
 }
 
 const PREFIX = '#invite=';
-const TARGET_KEY = 'shotdocs-invite-target';
 
 function base64url(text: string): string {
   return toBase64(new TextEncoder().encode(text)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -45,23 +43,13 @@ export function parseInviteHash(hash: string): InvitePayload | null {
   try {
     const data = JSON.parse(fromBase64url(hash.slice(PREFIX.length))) as Partial<InvitePayload>;
     if (typeof data.u !== 'string' || typeof data.k !== 'string' || typeof data.l !== 'string') return null;
-    if (!/^https:\/\//i.test(data.u) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(data.u)) return null;
+    if (!/^https:\/\//i.test(data.u) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(data.u)) return null;
     const p = typeof data.p === 'string' && /^[0-9a-f-]{36}$/i.test(data.p) ? data.p : undefined;
     const n = typeof data.n === 'string' && data.n.trim() ? data.n.trim().slice(0, 80) : undefined;
     return { u: data.u, k: data.k, l: data.l, ...(p ? { p } : {}), ...(n ? { n } : {}) };
   } catch {
     return null;
   }
-}
-
-function sameUrl(a: string, b: string): boolean {
-  const norm = (x: string) => x.trim().replace(/\/+$/, '').toLowerCase();
-  return norm(a) === norm(b);
-}
-
-/** El link es del workspace con el que se compiló la app (misma dirección y misma clave local). */
-export function isThisWorkspace(payload: InvitePayload, ws: WorkspaceConfig): boolean {
-  return sameUrl(payload.u, ws.url) && payload.l === ws.localKey;
 }
 
 export type InviteArrival = { kind: 'this'; target: string | null };
@@ -84,10 +72,13 @@ export function takeInviteHash(): { payload: InvitePayload | null; broken: boole
 
 let arrival: InviteArrival | null = null;
 
-/** Se entró con un link de invitación del workspace que se abre: la página se abre después de entrar. */
-export function markInviteArrival(target: string | null): void {
+/**
+ * Se entró con un link de invitación del workspace que se abre: la página se abre después de entrar.
+ * `targetKey`: dónde la guarda ese workspace (`StorageNames.inviteTarget`).
+ */
+export function markInviteArrival(target: string | null, targetKey: string): void {
   arrival = { kind: 'this', target };
-  if (target) rememberInviteTarget(target);
+  if (target) rememberInviteTarget(targetKey, target);
 }
 
 /** Si esta apertura de la app vino por un link de invitación del workspace abierto. */
@@ -109,26 +100,29 @@ export function takeArrivalNotice(): string | null {
   return text;
 }
 
-/** La página o el proyecto del link, para abrirlo después de entrar (sobrevive al link del correo). */
-export function rememberInviteTarget(id: string): void {
+// La página o el proyecto del link, para abrirlo después de entrar (sobrevive al link del correo). Cada
+// workspace la guarda con su nombre (`StorageNames.inviteTarget`; el de Wanka, `shotdocs-invite-target`, el
+// de siempre), así la de un link nunca se abre en otro workspace.
+
+export function rememberInviteTarget(key: string, id: string): void {
   try {
-    localStorage.setItem(TARGET_KEY, id);
+    localStorage.setItem(key, id);
   } catch {
     // Sin almacenamiento solo se pierde abrir la página sola.
   }
 }
 
-export function pendingInviteTarget(): string | null {
+export function pendingInviteTarget(key: string): string | null {
   try {
-    return localStorage.getItem(TARGET_KEY);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-export function clearInviteTarget(): void {
+export function clearInviteTarget(key: string): void {
   try {
-    localStorage.removeItem(TARGET_KEY);
+    localStorage.removeItem(key);
   } catch {
     // Nada que limpiar.
   }

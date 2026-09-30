@@ -94,7 +94,8 @@ class FakePortero {
     }
     if (call.method === 'POST' && call.path === '/trash') {
       const { file } = call.json as { file: string };
-      if (file === 'in-use') return json({ error: 'A page still uses this file: it is not in the trash.' }, 409);
+      if (file === 'in-use') return json({ error: 'A page still uses this file: it is not in the trash.', code: 'in_use' }, 409);
+      if (file === 'no-drive') return json({ error: 'Google Drive is not connected.', code: 'drive_not_connected' }, 503);
       if (file === 'member') {
         return json({ error: 'Only the owner or an admin of the workspace can send files to the Google Drive trash.' }, 403);
       }
@@ -380,7 +381,13 @@ describe('portero: archivos de la app (pasos 6 y 8)', () => {
 
     const inUse = (await portero.trash('in-use').catch((e: unknown) => e)) as PorteroError;
     expect(inUse).toBeInstanceOf(PorteroError);
-    expect(inUse).toMatchObject({ status: 409, retryable: false, message: 'A page still uses this file: it is not in the trash.' });
+    expect(inUse).toMatchObject({
+      status: 409,
+      code: 'in_use',
+      retryable: false,
+      message: 'A page still uses this file: it is not in the trash.',
+    });
+    expect(await portero.trash('no-drive').catch((e: unknown) => e)).toMatchObject({ status: 503, code: 'drive_not_connected' });
     const member = (await portero.trash('member').catch((e: unknown) => e)) as PorteroError;
     expect(member).toMatchObject({ status: 403, retryable: false });
     expect(member.message).toMatch(/owner or an admin/);

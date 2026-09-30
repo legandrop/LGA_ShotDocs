@@ -98,12 +98,16 @@ export interface PorteroDeps {
   wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
-/** `retryable`: puede andar si se repite (se cortó la red, el portero o Drive fallaron un momento). */
+/**
+ * `retryable`: puede andar si se repite (se cortó la red, el portero o Drive fallaron un momento). `code`: el
+ * código que manda el portero con algunos errores (por ejemplo `in_use` o `drive_not_connected` en `/trash`).
+ */
 export class PorteroError extends Error {
   constructor(
     message: string,
     readonly status = 0,
     readonly retryable = false,
+    readonly code?: string,
   ) {
     super(message);
     this.name = 'PorteroError';
@@ -235,8 +239,9 @@ export class Portero {
    * puede (solo dueño y admins, y solo si está en la papelera) y el portero lo mueve, nunca lo borra (Drive
    * lo guarda 30 días). `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba)
    * o `none` (nunca terminó de subirse). Pedirlo de nuevo no hace nada de más. Errores (`PorteroError` con
-   * el estado): 403 sin permiso o si el archivo de Drive no es ese; 404 si no existe; 409 si una página lo
-   * volvió a usar; 502 si Drive falló (se puede volver a pedir).
+   * el estado y, si lo manda, el código): 403 sin permiso o si el archivo de Drive no es ese; 404 si no
+   * existe; 409 con `code: 'in_use'` si una página lo volvió a usar; 503 con `code: 'drive_not_connected'`;
+   * 502 si Drive falló (se puede volver a pedir).
    */
   async trash(file: string): Promise<TrashResult> {
     return this.request<TrashResult>('POST', '/trash', { json: { file } });
@@ -377,10 +382,10 @@ export class Portero {
       body = JSON.stringify(init.json);
     }
     let res: Response;
-    let data: { error?: string } | null = null;
+    let data: { error?: string; code?: string } | null = null;
     try {
       res = await this.http(`${this.baseUrl}${path}`, { method, headers, body, signal: init.signal });
-      data = (await res.json().catch(() => null)) as { error?: string } | null;
+      data = (await res.json().catch(() => null)) as { error?: string; code?: string } | null;
     } catch (err) {
       if (init.signal?.aborted) throw abortError(init.signal);
       throw new PorteroError(`No connection with the media server (${err instanceof Error ? err.message : err}).`, 0, true);
@@ -389,7 +394,8 @@ export class Portero {
       const status = res.status;
       // Un 5xx, un tiempo agotado (408) o demasiados pedidos (429) pueden andar si se repiten; los demás 4xx no.
       const retryable = status >= 500 || status === 408 || status === 429;
-      throw new PorteroError(data?.error ?? `The media server answered ${status}.`, status, retryable);
+      const code = typeof data?.code === 'string' ? data.code : undefined;
+      throw new PorteroError(data?.error ?? `The media server answered ${status}.`, status, retryable, code);
     }
     if (data === null) throw new PorteroError('The media server gave an answer that could not be read.', res.status, true);
     return data as T;

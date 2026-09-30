@@ -152,6 +152,45 @@ button.drive-card-unembed:hover {
   background: var(--hover);
 }
 
+/* "Open in Drive" del pie, bien visible: es la salida si el reproductor no anda. */
+a.drive-card-open {
+  border-color: var(--primary-bg);
+  background: var(--primary-bg);
+  color: var(--primary-text);
+  font-weight: 600;
+}
+
+a.drive-card-open:hover {
+  background: color-mix(in srgb, var(--primary-bg) 88%, var(--bg));
+}
+
+/* El aviso entre el reproductor y el pie (Safari/iPhone, o el reproductor no cargó). */
+.drive-card-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.drive-card-hint[hidden] {
+  display: none;
+}
+
+.drive-card-hint-strong {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.drive-card-hint-open {
+  color: inherit;
+  font-weight: 600;
+  text-underline-offset: 2px;
+}
+
 /* En solo lectura no se puede volver a link. */
 .bn-editor[contenteditable='false'] .drive-card-unembed {
   display: none;
@@ -170,6 +209,7 @@ button.drive-card-unembed:hover {
 /* Al imprimir queda el link: el reproductor no sirve en papel. */
 @media print {
   .drive-card-frame,
+  .drive-card-hint,
   .drive-card-actions {
     display: none;
   }

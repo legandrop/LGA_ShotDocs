@@ -73,6 +73,8 @@ interface FileRecord {
   linked?: boolean;
   /** El id de Drive cuyo `appProperties.sdFile` ya se comprobó que es este archivo. */
   verified?: string;
+  /** El id de Drive que el portero ya mandó a la papelera de Drive (`/trash` o al terminar una subida). */
+  trashed?: string;
 }
 
 /** `project:<project_id>`: la carpeta del proyecto y el nombre que le puso la app. */
@@ -389,6 +391,7 @@ export class Portero {
       if (!media?.purged_at) return;
       const res = await this.driveTrash(drive.id);
       if (res === 'failed') return;
+      await this.rememberTrashed(file, drive.id);
       await this.rpc(who.auth, 'media_purged', { p_file: file });
     } catch {
       // queda pendiente: `/trash` lo termina
@@ -865,12 +868,14 @@ export class Portero {
 
     let media = await this.trashStep('db_error', () => this.mediaFile(who, file));
     if (!media) throw new HttpError(404, 'This file does not exist or you cannot see it.', 'not_found');
-    if (media.drive_trashed_at) return { status: 'done', file, drive: media.drive_id ? 'trashed' : 'none' };
-
-    await this.driveReady();
     const rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
     // Si la base todavía no sabe su id de Drive pero el portero lo subió, se usa el que subió.
     const drive = media.drive_id ?? rec.drive?.id ?? null;
+    // Ya confirmado y, si hay archivo en Drive, ya mandado por el portero: listo, sin ir a Drive. (Si se
+    // confirmó sin archivo y la subida terminó después sin poder mandarlo, se manda ahora.)
+    if (media.drive_trashed_at && (!drive || rec.trashed === drive)) return { status: 'done', file, drive: drive ? 'trashed' : 'none' };
+
+    await this.driveReady();
     let mark: 'ok' | 'missing' | 'other' | null = null;
     if (drive) {
       // Solo el archivo de Drive que lleva la marca de este: nunca otro archivo del Drive del dueño.
@@ -890,9 +895,15 @@ export class Portero {
     if (drive) {
       result = mark === 'ok' ? await this.driveTrash(drive) : 'missing';
       if (result === 'failed') throw new HttpError(502, 'Could not send the file to the Google Drive trash.', 'drive_failed');
+      await this.rememberTrashed(file, drive);
     }
     await this.trashRpc(who, 'media_purged', file);
     return { status: 'done', file, drive: result as 'trashed' | 'missing' | 'none' };
+  }
+
+  private async rememberTrashed(file: string, drive: string): Promise<void> {
+    const rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
+    await this.store.put(`file:${file}`, { ...rec, trashed: drive } satisfies FileRecord);
   }
 
   /** Hay conexión con Drive y un token vigente; si no, `503 drive_not_connected`. */

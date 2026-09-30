@@ -162,7 +162,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       // Las invitaciones se aplican al entrar, antes de buscar el primer proyecto (lo compartido tiene que
       // estar para encontrarlo). Con proyectos ya guardados no se espera, salvo que se venga de un link.
       let accepted: Promise<number> | null = null;
-      if (!workspaceId || pendingInviteTarget()) await acceptInvitationsQuietly(remote);
+      if (!workspaceId || pendingInviteTarget(workspace.config.storage.inviteTarget)) await acceptInvitationsQuietly(remote);
       else accepted = acceptInvitationsQuietly(remote);
       if (cancelled) return db.close();
       if (!workspaceId) {
