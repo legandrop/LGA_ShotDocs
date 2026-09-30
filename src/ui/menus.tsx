@@ -300,6 +300,8 @@ export function AccountMenu({ position, anchor, onClose }: { position: MenuPosit
         <SignOutIcon />
         Sign out
       </button>
+      {/* La versión de la app: así se ve enseguida si este dispositivo ya tiene la última. */}
+      {__APP_VERSION__ && <p className="mono-label menu-version">v{__APP_VERSION__}</p>}
     </div>
   );
 }

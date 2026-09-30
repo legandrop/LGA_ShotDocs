@@ -2217,3 +2217,8 @@ code {
   line-height: 1.5;
   resize: vertical;
 }
+
+.menu-version {
+  margin: 6px 12px 2px;
+  text-transform: none;
+}

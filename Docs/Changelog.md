@@ -1,5 +1,13 @@
 # Changelog — LGA Shot Docs
 
+v0.023 :
+
+El menú de la cuenta muestra la versión de la app al pie, así se ve enseguida si un dispositivo ya tiene
+la última. Hasta ahora solo se veía en la pantalla de entrada. La app se publica de nuevo en Cloudflare
+después de reconectar el repo: los cambios desde v0.020 no se habían publicado porque la conexión con
+GitHub se había cortado.
+[ Cuenta - versión de la app en el menú ]
+
 v0.022 :
 
 Portero de archivos y pantalla de prueba de media, con auditoría (paso 4 del plan de workspaces). El
