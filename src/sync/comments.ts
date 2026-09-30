@@ -815,7 +815,24 @@ export class CommentQueue {
    * - borrar un comentario que nunca salió lo saca de la cola (salvo que tenga respuestas esperando);
    * - resolver y reabrir sin mandar se queda con lo último.
    */
+  /** Cambios que se están guardando en el dispositivo (todavía solo en memoria). */
+  private writing = 0;
+
+  /** Hay un comentario que todavía no llegó a la base del dispositivo (se perdería al recargar). */
+  hasUnsavedWrites(): boolean {
+    return this.writing > 0;
+  }
+
   private async enqueue(op: CommentOp): Promise<void> {
+    this.writing++;
+    try {
+      await this.enqueueNow(op);
+    } finally {
+      this.writing--;
+    }
+  }
+
+  private async enqueueNow(op: CommentOp): Promise<void> {
     if (!this.db) throw new CommentInvalid(`Comments are off on this device: ${this.unavailable}`);
     const tx = this.db.transaction('outbox', 'readwrite');
     const all = await tx.store.getAll();

@@ -54,6 +54,41 @@ function readStored(): Stored {
   return { userId: null, prefs: { ...DEFAULT_PREFS }, dirty: false };
 }
 
+// La copia de los otros usuarios del dispositivo (otra cuenta, u otro workspace: cada uno tiene su usuario).
+// `shotdocs-prefs` sigue siendo la del usuario actual, con el nombre de siempre; esta es una clave aparte
+// para que cambiar de workspace no pierda un cambio sin subir ni vuelva a lo de fábrica sin red.
+const OTHERS_KEY = 'shotdocs-prefs-others';
+const MAX_OTHERS = 20;
+
+type Others = Record<string, { prefs: Prefs; dirty: boolean }>;
+
+function readOthers(): Others {
+  try {
+    const raw = JSON.parse(localStorage.getItem(OTHERS_KEY) ?? '{}') as Record<string, { prefs?: unknown; dirty?: unknown }>;
+    const out: Others = {};
+    for (const [id, value] of Object.entries(raw && typeof raw === 'object' ? raw : {})) {
+      if (value && typeof value === 'object') out[id] = { prefs: cleanPrefs(value.prefs), dirty: value.dirty === true };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeOthers(others: Others): void {
+  try {
+    // Si hay demasiados, se van primero los más viejos que no tienen nada sin subir.
+    const ids = Object.keys(others);
+    for (const id of ids) {
+      if (Object.keys(others).length <= MAX_OTHERS) break;
+      if (!others[id].dirty) delete others[id];
+    }
+    localStorage.setItem(OTHERS_KEY, JSON.stringify(others));
+  } catch {
+    // Sin almacenamiento, el otro usuario vuelve a lo guardado en su cuenta.
+  }
+}
+
 const darkQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
 
 const RETRY_MIN_MS = 15_000;
@@ -109,13 +144,19 @@ class PrefsStore {
 
   /**
    * Al entrar: si hay cambios de este usuario sin subir, ganan y se suben; si no, manda lo guardado en
-   * la cuenta. Otro usuario en el mismo dispositivo arranca de fábrica: nunca hereda ni sube las
-   * preferencias del anterior. Sin red se sigue con la copia local.
+   * la cuenta. Otro usuario en el mismo dispositivo nunca hereda ni sube las preferencias del anterior:
+   * las del anterior (con lo que tenga sin subir) quedan guardadas aparte, y el nuevo sigue con su propia
+   * copia si ya había entrado en este dispositivo, o de fábrica. Sin red se sigue con la copia local.
    */
   async attach(client: SupabaseClient, userId: string): Promise<void> {
     this.client = client;
     if (this.state.userId !== userId) {
-      this.state = { userId, prefs: { ...DEFAULT_PREFS }, dirty: false };
+      const others = readOthers();
+      if (this.state.userId) others[this.state.userId] = { prefs: this.state.prefs, dirty: this.state.dirty };
+      const mine = others[userId];
+      delete others[userId];
+      writeOthers(others);
+      this.state = { userId, prefs: mine ? mine.prefs : { ...DEFAULT_PREFS }, dirty: mine?.dirty ?? false };
       this.revision++;
       this.emit();
     }
@@ -127,6 +168,11 @@ class PrefsStore {
     this.state = { ...this.state, prefs: cleanPrefs(data.prefs) };
     this.save();
     this.emit();
+  }
+
+  /** Hay un cambio de preferencias del usuario actual que todavía no subió. */
+  hasUnsynced(): boolean {
+    return this.state.dirty;
   }
 
   detach(): void {

@@ -1,5 +1,6 @@
 import type { MediaQueue, MediaStatus } from '../media/queue';
 import { mediaIdsInDoc } from '../media/usage';
+import * as Y from 'yjs';
 import { Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
 import type { CommentQueue } from './comments';
 import type { PageDocs } from './docs';
@@ -511,14 +512,51 @@ export class SyncEngine {
       try {
         const current = snap.state.cursor >= row.update_seq && !snap.state.unreadable && snap.supported;
         const uploaded = !hasUnsyncedContent(snap.state) && !snap.state.rejected;
-        await media.reconcilePage(pageId, mediaIdsInDoc(snap.doc), { unlink: current && uploaded });
-        // Con algo sin subir, se vuelve a mirar cuando suba (para poder quitar lo que haga falta).
-        if (uploaded) marks[pageId] = mark(snap.state);
+        const ids = mediaIdsInDoc(snap.doc);
+        let unlink = current && uploaded;
+        // La primera vez que esta página quitaría un archivo, se comprueba que todo su historial en el
+        // servidor se pueda leer: una versión anterior de la app pudo descartar un update ilegible sin
+        // anotarlo (`unreadable` es de esta versión). Sin red o con algo ilegible, no se quita nada.
+        if (unlink && !media.isVerified(pageId) && (await media.wouldUnlink(pageId, ids))) {
+          unlink = await this.verifyHistory(pageId, snap.state.cursor).catch(() => false);
+        }
+        await media.reconcilePage(pageId, ids, { unlink, seenSeq: snap.state.cursor });
+        // Solo queda "mirada" si se pudo quitar lo que hiciera falta; si no (a medio subir, algo ilegible o
+        // desconocido, sin comprobar), se vuelve a mirar en el próximo ciclo.
+        if (unlink) marks[pageId] = mark(snap.state);
       } finally {
         snap.doc.destroy();
       }
     }
     await media.setUsageMarks(marks);
+  }
+
+  /**
+   * Baja todo el historial de la página en el servidor (hasta `upTo`) y comprueba que esta versión lo pueda
+   * leer entero. Si algo no se puede leer, lo anota en la página (`unreadable`: nunca quita) y devuelve
+   * `false`; si se lee todo, lo anota en la cola de archivos para no volver a hacerlo. Solo lee: no guarda
+   * nada del documento.
+   */
+  private async verifyHistory(pageId: string, upTo: number): Promise<boolean> {
+    const media = this.options.media!;
+    let after = 0;
+    while (after < upTo) {
+      const updates = await this.remote.pullUpdates(pageId, after, 500);
+      if (updates.length === 0) break;
+      for (const u of updates) {
+        if (u.seq > upTo) break;
+        try {
+          Y.decodeUpdate(u.data);
+        } catch {
+          await this.docs.markUnreadable(pageId);
+          return false;
+        }
+      }
+      after = updates[updates.length - 1].seq;
+      if (updates.length < 500) break;
+    }
+    await media.setVerified(pageId);
+    return true;
   }
 
   /**
@@ -535,7 +573,11 @@ export class SyncEngine {
     const perms = new Permissions(this.tree, access.get(), access.userId);
     if (perms.role !== 'owner' && perms.role !== 'admin') return;
     const projects = this.tree.projects().map((p) => p.id).filter((id) => perms.projectLevel(id) >= 1);
-    void media.autoPurge(true, projects).catch(() => undefined);
+    // Primero una vuelta por la cola de usos: lo que este dispositivo tiene por mandar sale antes, y los
+    // archivos con usos que todavía no salieron se saltean (`MediaQueue.trash`).
+    void this.syncMedia()
+      .then(() => media.autoPurge(true, projects))
+      .catch(() => undefined);
   }
 
   private async pushOps(): Promise<void> {

@@ -332,9 +332,22 @@ export function removeWorkspace(list: WorkspaceList, id: string): WorkspaceList 
   return { active, workspaces };
 }
 
+/**
+ * El nombre que trae un link lo arma quien lo manda: sin comillas, saltos ni caracteres de control, y
+ * recortado, para que no pueda hacerse pasar por el host.
+ */
+export function safeWorkspaceName(name: string): string {
+  const clean = name
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, ' ')
+    .replace(/["'“”‘’«»`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean.length > 40 ? `${clean.slice(0, 39).trimEnd()}…` : clean;
+}
+
 /** Uno nuevo desde un link de invitación ya revisado. */
 export function entryFromInvite(payload: InvitePayload, url: string): DeviceWorkspace {
-  return { id: payload.l, url, publishableKey: payload.k.trim(), localKey: payload.l, name: payload.n?.trim().slice(0, 200) ?? '' };
+  return { id: payload.l, url, publishableKey: payload.k.trim(), localKey: payload.l, name: safeWorkspaceName(payload.n ?? '') };
 }
 
 /** Uno agregado con "Create" sin clave local: queda pendiente hasta que su dueño entra. */

@@ -15,6 +15,7 @@ import {
   probeWorkspace,
   removeWorkspace,
   resolveInviteText,
+  safeWorkspaceName,
   setActive,
   switchWorkspace,
   updateWorkspaces,
@@ -84,19 +85,6 @@ function WorkspaceChoices({ onJoin, onCreate }: { onJoin: () => void; onCreate: 
       </button>
     </div>
   );
-}
-
-/**
- * El nombre que trae un link lo arma quien lo manda: sin comillas, saltos ni caracteres de control, y
- * recortado, para que no pueda hacerse pasar por el host.
- */
-export function safeWorkspaceName(name: string): string {
-  const clean = name
-    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, ' ')
-    .replace(/["'“”‘’«»`]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return clean.length > 40 ? `${clean.slice(0, 39).trimEnd()}…` : clean;
 }
 
 /**

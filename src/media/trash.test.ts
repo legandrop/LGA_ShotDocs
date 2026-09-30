@@ -166,9 +166,10 @@ describe('papelera de archivos: qué archivos usa cada página', () => {
     await a.media.reconcilePage(page, new Set(), { unlink: true });
     // Mientras el pedido viaja, el editor vuelve a tener el archivo (deshacer).
     const original = a.remote.unlinkPageFile.bind(a.remote);
-    a.remote.unlinkPageFile = async (p, f) => {
-      await original(p, f);
+    a.remote.unlinkPageFile = async (p, f, seen) => {
+      const done = await original(p, f, seen);
       await a.media.ensureLinks(page, [id]);
+      return done;
     };
     await a.engine.syncMedia();
     expect(server.pageFiles.has(`${page}:${id}`)).toBe(false);
