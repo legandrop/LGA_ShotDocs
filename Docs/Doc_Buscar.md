@@ -515,7 +515,7 @@ código, al final). Donde esto y lo de arriba no coinciden, vale esto.
 - **Impresión:** la barra no entra en la copia y las clases de lo resaltado se sacan (`printView.ts`).
 - Sin atajo para reemplazar (Lega). Sin cambios en la base, en el esquema ni en `min_app_version`.
 
-**Pruebas (746 en total):** `src/search/normalize.test.ts` (tildes, ñ, Í descompuesta, *Aa*, İ, ß, ø,
+**Pruebas (752 en total):** `src/search/normalize.test.ts` (tildes, ñ, Í descompuesta, *Aa*, İ, ß, ø,
 espacios, palabra entera, emojis, coreano, emojis compuestos, el separador); `src/ui/findEditor.test.ts`, con el
 editor real (el Y.Doc y el editor dan las mismas unidades, también con un bloque de código; un tipo desconocido
 se lee; buscar no cambia el vector de estado; siguiente y anterior dan la vuelta; cerrar deja elegida la
@@ -543,6 +543,23 @@ coreano, bloques de código y emojis compuestos, las marcas de hoja que se recal
 espera al escribir (de verdad, sin IME y con lo normalizado guardado), los diálogos sin `aria-modal`, Ctrl+F
 mientras carga, F3 y Ctrl/⌘+G con otro teclado o en otro campo, Enter y Esc con un IME, y la barra que podía tapar
 la coincidencia.
+
+**Verificación de las correcciones (independiente, 2026-09-30).** Nada bloqueante; "Reemplazar todo" directo en
+Yjs aguantó todos los intentos de romperlo. Arreglado además:
+
+- **Contar lo escondido** (la barra lo pide en cada dibujo) buscaba en todo el DOM por cada bloque con
+  coincidencias: 16 s con 1000 en jsdom. Ahora, si no hay ninguna lista plegable cerrada (y P.11 no dice que haya
+  algo colapsado, `anyHidden`), no recorre nada; si hay, una sola pasada junta los ids de lo que esconden, y el
+  resultado se guarda por lista de coincidencias mientras no se abra ni se cierre ninguna lista. Prueba: 1000
+  coincidencias con una lista cerrada, menos de 300 ms la primera vez y casi nada la segunda.
+- **La espera al escribir** tiene un tope: escribiendo sin parar, igual se vuelve a buscar cada segundo (nunca en
+  medio de una composición).
+- **Un cambio de otro que toca varios bloques** en una misma transacción (dos lugares lejanos) vuelve a buscar
+  enseguida: corrido por un solo tramo, lo del medio se juntaba.
+- **Abrir una lista plegable o una sección** para llegar a una coincidencia cuenta como cambio para las marcas de
+  hoja, aunque en el mismo momento cambien los resaltados.
+- **"Reemplazar todo" en Yjs** exige además que el texto ubicado sea del mismo bloque que encontró la búsqueda
+  (si no, va por ProseMirror). Prueba con dos párrafos iguales.
 
 **Queda para después:** la búsqueda del proyecto (entrega 2, con las correcciones 5 a 8, 11, 12, 15 a 17);
 reemplazar en pies y nombres, *Conservar mayúsculas* y expresiones regulares; que P.11 registre

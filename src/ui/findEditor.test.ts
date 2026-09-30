@@ -16,6 +16,7 @@ import {
   closeFind,
   findExtension,
   hiddenCount,
+  MAX_MATCHES,
   getFindState,
   isFindReplaceUndo,
   replaceAll,
@@ -454,5 +455,100 @@ describe('lo que no se ve', () => {
     await new Promise((r) => setTimeout(r, 0));
     observer.disconnect();
     expect(countsForSheets(records, takeFindOnlyChanges())).toBe(true);
+  });
+
+  it('abrir una lista plegable para llegar a una coincidencia cuenta como cambio para las marcas de hoja', () => {
+    localStorage.clear();
+    const { editor } = page([
+      { type: 'paragraph', content: 'uno' },
+      { type: 'toggleListItem', content: 'lista', children: [{ type: 'paragraph', content: 'adentro uno' }] },
+    ]);
+    const v = view(editor);
+    setFind(v, 'uno', {});
+    takeFindOnlyChanges();
+    stepFind(v, 1);
+    expect(takeFindOnlyChanges()).toBe(false);
+  });
+
+  it('contar lo escondido es rápido y se guarda mientras no cambie nada', () => {
+    localStorage.clear();
+    const blocks = [
+      { type: 'toggleListItem', content: 'lista', children: [{ type: 'paragraph', content: 'uno escondido' }] },
+      ...Array.from({ length: 400 }, (_, i) => ({ type: 'paragraph', content: `uno ${i} uno uno` })),
+    ];
+    const { editor } = page(blocks);
+    const v = view(editor);
+    setFind(v, 'uno', {});
+    const matches = getFindState(v.state).matches;
+    expect(matches.length).toBe(MAX_MATCHES);
+    let start = performance.now();
+    expect(hiddenCount(matches, v)).toBe(1);
+    const first = performance.now() - start;
+    start = performance.now();
+    expect(hiddenCount(matches, v)).toBe(1);
+    const again = performance.now() - start;
+    expect(first).toBeLessThan(300);
+    expect(again).toBeLessThan(first + 5);
+    // Al abrir la lista, la cuenta cambia (la memoria no queda vieja).
+    v.dom.querySelector<HTMLElement>('.bn-toggle-button')!.click();
+    expect(hiddenCount(matches, v)).toBe(0);
+  });
+
+  it('sin listas cerradas, contar lo escondido no recorre nada', () => {
+    const { editor } = page(Array.from({ length: 50 }, () => ({ type: 'paragraph', content: 'uno' })));
+    setFind(view(editor), 'uno', {});
+    expect(hiddenCount(getFindState(view(editor).state).matches, view(editor))).toBe(0);
+  });
+
+  it('escribiendo sin parar, igual se vuelve a buscar cada tanto', async () => {
+    const { editor } = page([{ type: 'paragraph', content: 'uno' }]);
+    const v = view(editor);
+    setFind(v, 'uno', {});
+    let refreshed = false;
+    const endAt = Date.now() + 1500;
+    while (Date.now() < endAt) {
+      v.dispatch(v.state.tr.insertText(' uno', v.state.doc.content.size - 3));
+      await new Promise((r) => setTimeout(r, 40));
+      if (!getFindState(v.state).stale) refreshed = true;
+    }
+    expect(refreshed).toBe(true);
+  });
+
+  it('un cambio de otro en dos lugares lejanos vuelve a buscar enseguida (no junta lo del medio)', async () => {
+    const docA = new Y.Doc();
+    const docB = new Y.Doc();
+    docA.on('update', (u: Uint8Array, origin: unknown) => origin !== 'remote' && Y.applyUpdate(docB, u, 'remote'));
+    docB.on('update', (u: Uint8Array, origin: unknown) => origin !== 'remote' && Y.applyUpdate(docA, u, 'remote'));
+    const a = mount(docA);
+    a.replaceBlocks(a.document, [
+      { type: 'paragraph', content: 'primero' },
+      { type: 'paragraph', content: 'medio uno' },
+      { type: 'paragraph', content: 'último' },
+    ] as Blocks);
+    const b = mount(docB);
+    setFind(view(a), 'uno', {});
+    const vb = view(b);
+    const at: number[] = [];
+    vb.state.doc.descendants((n, p) => {
+      if (n.isText && (n.text === 'primero' || n.text === 'último')) at.push(p);
+    });
+    // Una sola transacción que toca el primero y el último.
+    vb.dispatch(vb.state.tr.insertText('X', at[1]).insertText('Y', at[0]));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getFindState(view(a).state).stale).toBe(false);
+    expect(highlighted(a)).toEqual(['uno']);
+  });
+
+  it('dos párrafos iguales: cada reemplazo va a su bloque, en una sola actualización', () => {
+    const { doc, editor } = page([
+      { type: 'paragraph', content: 'toma uno' },
+      { type: 'paragraph', content: 'toma uno' },
+    ]);
+    let updates = 0;
+    doc.on('update', () => updates++);
+    setFind(view(editor), 'uno', {});
+    expect(replaceAll(editor, 'dos').replaced).toBe(2);
+    expect(updates).toBe(1);
+    expect(texts(editor)).toEqual(['toma dos', 'toma dos']);
   });
 });

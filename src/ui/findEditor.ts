@@ -22,6 +22,8 @@ export { FIND_REPLACE_META };
 export const MAX_MATCHES = 1000;
 /** Espera para volver a buscar después de un cambio del documento. */
 const REFRESH_MS = 150;
+/** Escribiendo sin parar, se vuelve a buscar igual cada tanto. */
+const MAX_WAIT_MS = 1000;
 
 export interface FindMatch {
   blockId: string;
@@ -41,6 +43,8 @@ export interface FindState {
   decorations: DecorationSet;
   /** El documento cambió y las coincidencias son las de antes, corridas (se vuelve a buscar enseguida). */
   stale: boolean;
+  /** Un cambio de otro tocó varios bloques: se vuelve a buscar ya, sin esperar. */
+  urgent?: boolean;
 }
 
 type FindMeta =
@@ -70,6 +74,8 @@ const EMPTY: FindState = {
 export interface FindCollapseHooks {
   isHidden(blockId: string): boolean;
   reveal(blockId: string): void;
+  /** Si hay algo colapsado en la página (sin esto, se pregunta bloque por bloque). */
+  anyHidden?(): boolean;
 }
 
 let collapseHooks: FindCollapseHooks | null = null;
@@ -106,28 +112,58 @@ function closedToggles(view: EditorView, blockId: string): HTMLElement[] {
   return out;
 }
 
-function isHiddenBlock(view: EditorView | undefined, blockId: string): boolean {
-  if (collapseHooks?.isHidden(blockId)) return true;
-  return !!view && closedToggles(view, blockId).length > 0;
+/**
+ * Los bloques escondidos por listas plegables cerradas: una sola pasada por el DOM (nada si no hay ninguna
+ * cerrada), y una clave que cambia cuando se abre o se cierra alguna.
+ */
+function closedToggleBlocks(view: EditorView): { ids: Set<string>; key: string } {
+  const ids = new Set<string>();
+  const keys: string[] = [];
+  for (const wrapper of view.dom.querySelectorAll<HTMLElement>('.bn-toggle-wrapper[data-show-children="false"]')) {
+    const container = wrapper.closest<HTMLElement>(CONTAINER);
+    if (!container) continue;
+    keys.push(container.dataset.id ?? '');
+    for (const child of container.querySelectorAll<HTMLElement>(`:scope > .bn-block-group ${CONTAINER}`)) {
+      if (child.dataset.id) ids.add(child.dataset.id);
+    }
+  }
+  return { ids, key: keys.join(',') };
 }
 
-/** Cuántas coincidencias están escondidas: en listas plegables cerradas o en secciones colapsadas (P.11). */
+const hiddenMemo = new WeakMap<FindMatch[], { key: string; hooks: FindCollapseHooks | null; count: number }>();
+
+/**
+ * Cuántas coincidencias están escondidas: en listas plegables cerradas o en secciones colapsadas (P.11). Se
+ * guarda por lista de coincidencias (la barra lo pide en cada dibujo) mientras no se abra ni se cierre nada.
+ */
 export function hiddenCount(matches: FindMatch[], view?: EditorView): number {
-  if (!collapseHooks && !view) return 0;
+  const hooks = collapseHooks && collapseHooks.anyHidden?.() !== false ? collapseHooks : null;
+  if (!hooks && !view) return 0;
+  const toggles = view ? closedToggleBlocks(view) : { ids: new Set<string>(), key: '' };
+  if (!hooks && toggles.ids.size === 0) return 0;
+  const memo = hiddenMemo.get(matches);
+  // Con P.11 lo colapsado puede cambiar sin que cambie el DOM que se mira acá: sin memoria.
+  if (!hooks && memo && memo.key === toggles.key && memo.hooks === null) return memo.count;
   const seen = new Map<string, boolean>();
-  let n = 0;
+  let count = 0;
   for (const m of matches) {
     let hidden = seen.get(m.blockId);
-    if (hidden === undefined) seen.set(m.blockId, (hidden = isHiddenBlock(view, m.blockId)));
-    if (hidden) n++;
+    if (hidden === undefined) seen.set(m.blockId, (hidden = toggles.ids.has(m.blockId) || !!hooks?.isHidden(m.blockId)));
+    if (hidden) count++;
   }
-  return n;
+  hiddenMemo.set(matches, { key: toggles.key, hooks, count });
+  return count;
 }
 
 /** Abre lo que esconde el bloque: las listas plegables de arriba y las secciones colapsadas (P.11). */
 function revealBlock(view: EditorView, blockId: string): void {
-  for (const wrapper of closedToggles(view, blockId)) wrapper.querySelector<HTMLElement>(':scope > .bn-toggle-button')?.click();
-  if (collapseHooks?.isHidden(blockId)) collapseHooks.reveal(blockId);
+  const toggles = closedToggles(view, blockId);
+  const collapsed = !!collapseHooks?.isHidden(blockId);
+  // Abrir cambia los altos: las marcas de hoja tienen que recalcular aunque en el mismo momento cambien los
+  // resaltados (ver `takeFindOnlyChanges`).
+  if (toggles.length > 0 || collapsed) docChanges++;
+  for (const wrapper of toggles) wrapper.querySelector<HTMLElement>(':scope > .bn-toggle-button')?.click();
+  if (collapsed) collapseHooks!.reveal(blockId);
 }
 
 // --- Buscar ------------------------------------------------------------------------------------------------
@@ -247,6 +283,25 @@ function currentPlace(view: EditorView): { from: number; to: number } | null {
   return from === null || to === null ? null : { from, to };
 }
 
+/** El bloque (`blockContainer`) más cercano que contiene una posición, o -1. */
+function containerAt(doc: PMNode, pos: number): number {
+  const $pos = doc.resolve(Math.max(0, Math.min(pos, doc.content.size)));
+  for (let d = $pos.depth; d > 0; d--) if ($pos.node(d).type.name === 'blockContainer') return $pos.before(d);
+  return -1;
+}
+
+/**
+ * Si un cambio de otro dispositivo tocó más de un bloque (dos lugares lejanos en una misma transacción): corrido
+ * por un solo tramo, lo que quedó en el medio se juntaría. Entonces se vuelve a buscar enseguida.
+ */
+function touchesSeveralBlocks(before: PMNode, after: PMNode): boolean {
+  const start = before.content.findDiffStart(after.content);
+  const end = start === null ? null : before.content.findDiffEnd(after.content);
+  if (start === null || !end) return false;
+  const last = Math.max(start, end.a);
+  return containerAt(before, start) !== containerAt(before, last);
+}
+
 /**
  * Un cambio de otro dispositivo llega como "reemplazar el documento entero" (y-prosemirror): corrido por esa
  * transacción, todo resaltado se juntaría en un punto hasta volver a buscar. Se corre solo por lo que de verdad
@@ -313,7 +368,8 @@ export const findPlugin = new Plugin<FindState>({
         const matches = old.matches
           .map((m) => ({ ...m, from: mapping.map(m.from, 1), to: mapping.map(m.to, -1) }))
           .map((m) => ({ ...m, to: Math.max(m.from, m.to) }));
-        state = { ...old, matches, decorations: old.decorations.map(mapping, tr.doc), stale: true };
+        const urgent = !!remote && touchesSeveralBlocks(tr.before, tr.doc);
+        state = { ...old, matches, decorations: old.decorations.map(mapping, tr.doc), stale: true, urgent: old.urgent || urgent };
       }
       if (meta?.kind === 'current' && state.matches.length > 0) {
         const current = ((meta.index % state.matches.length) + state.matches.length) % state.matches.length;
@@ -327,16 +383,18 @@ export const findPlugin = new Plugin<FindState>({
   },
   view: () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    // Se vuelve a buscar cuando se deja de escribir un momento (cada cambio corre la espera), y nunca en medio
-    // de una composición (acentos, IME).
-    const schedule = (view: EditorView) => {
+    /** Desde cuándo están corridas las marcas sin volver a buscar (para no esperar para siempre). */
+    let staleSince = 0;
+    // Se vuelve a buscar cuando se deja de escribir un momento (cada cambio corre la espera), pero nunca más de
+    // `MAX_WAIT_MS` desde el primer cambio; y nunca en medio de una composición (acentos, IME).
+    const schedule = (view: EditorView, delay: number) => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         timer = undefined;
         if (view.isDestroyed || !findKey.getState(view.state)?.stale) return;
-        if (view.composing) schedule(view);
+        if (view.composing) schedule(view, REFRESH_MS);
         else refreshNow(view);
-      }, REFRESH_MS);
+      }, delay);
     };
     return {
       update: (view, prev) => {
@@ -344,7 +402,15 @@ export const findPlugin = new Plugin<FindState>({
         if (view.state.doc !== prev.doc) docChanges++;
         else if (state?.decorations !== findKey.getState(prev)?.decorations) highlightChanges++;
         if (state !== findKey.getState(prev)) for (const fn of listeners.get(view) ?? []) fn();
-        if (state?.stale && view.state.doc !== prev.doc) schedule(view);
+        if (!state?.stale) {
+          staleSince = 0;
+          return;
+        }
+        if (view.state.doc === prev.doc) return;
+        const now = Date.now();
+        if (!staleSince) staleSince = now;
+        if (state.urgent && !view.composing) schedule(view, 0);
+        else schedule(view, Math.max(0, Math.min(REFRESH_MS, staleSince + MAX_WAIT_MS - now)));
       },
       destroy: () => clearTimeout(timer),
     };
@@ -643,6 +709,16 @@ interface YEdit {
   attrs: Record<string, unknown>;
 }
 
+/** El id del bloque (`blockContainer`) que contiene un texto del Y.Doc. */
+function containerIdOf(type: Y.XmlText): string | null {
+  let at: Y.AbstractType<any> | null = type; // eslint-disable-line @typescript-eslint/no-explicit-any
+  while (at) {
+    if (at instanceof Y.XmlElement && at.nodeName === 'blockContainer') return String(at.getAttribute('id') ?? '');
+    at = at.parent as Y.AbstractType<any> | null; // eslint-disable-line @typescript-eslint/no-explicit-any
+  }
+  return null;
+}
+
 /** Dónde está cada coincidencia en el Y.Doc (el texto, el lugar y el formato de su primer carácter), o `null`. */
 function yjsEdits(view: EditorView, targets: FindMatch[]): YEdit[] | null {
   const binding = bindingOf(view.state);
@@ -660,6 +736,8 @@ function yjsEdits(view: EditorView, targets: FindMatch[]): YEdit[] | null {
     }
     if (!abs || !(abs.type instanceof Y.XmlText) || abs.index < 1) return null;
     const ytext = abs.type;
+    // Tiene que ser el texto del mismo bloque que encontró la búsqueda.
+    if (containerIdOf(ytext) !== m.blockId) return null;
     const index = abs.index - 1;
     let delta = deltas.get(ytext);
     if (!delta) {
