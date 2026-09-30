@@ -56,10 +56,17 @@ async function api(path, init = {}) {
   // El token va solo a la API de Coda: una dirección que devuelve la API (`href`, `nextPageLink`) y apunta a
   // otro lado no lo recibe.
   if (!isCodaApi(url)) throw new Error(`No se manda el token a una dirección que no es de la API de Coda: ${url}`)
+  // Sin seguir redirecciones: que el token no viaje a otro sitio no depende de lo que haga el fetch de la
+  // versión de Node con el encabezado al redirigir.
   const res = await request(url, {
     ...init,
+    redirect: 'manual',
     headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', ...init.headers },
   })
+  if (res.status >= 300 && res.status < 400) {
+    await res.body?.cancel()
+    throw new Error(`La API de Coda redirigió ${url} a ${res.headers.get('location') || '(sin dirección)'}: no se sigue con el token`)
+  }
   const body = await res.text()
   if (!res.ok) throw Object.assign(new Error(`${res.status} en ${path}: ${body.slice(0, 300)}`), { status: res.status })
   return body ? JSON.parse(body) : null

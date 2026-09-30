@@ -50,4 +50,13 @@ export const sidebar = {
   'project.editedOn': { en: "edited {date}", es: "editado el {date}" },
   'project.untitled': { en: "Untitled project", es: "Proyecto sin título" },
   'import.menu': { en: "Import from Coda…", es: "Importar de Coda…" },
+  // Con una importación de Coda en curso (importJob.ts): cerrar la sesión o quitar el workspace esperan.
+  'import.running': {
+    en: "An import from Coda is running. Wait until it finishes.",
+    es: "Hay una importación de Coda en curso. Esperá a que termine.",
+  },
+  'import.otherTab': {
+    en: "The other window is importing from Coda. If you take over, the import stops there (it can be resumed later). Take over anyway?",
+    es: "La otra ventana está importando de Coda. Si tomás el control, la importación se corta ahí (después se puede seguir). ¿Tomar el control igual?",
+  },
 } satisfies Dict;

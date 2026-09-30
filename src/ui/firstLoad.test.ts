@@ -38,6 +38,11 @@ const LAZY_FILES = [
   'i18n/lazy/drive.ts',
   'i18n/lazy/editor.ts',
   'i18n/lazy/teamDialogs.ts',
+  'i18n/lazy/importCoda.ts',
+  // Importar de Coda: el diálogo y la importación (la entrada del menú y `importJob.ts` sí van).
+  'ui/ImportCodaDialog.tsx',
+  'import/codaImport.ts',
+  'import/codaHtml.ts',
 ];
 
 const IMPORT = /^\s*import\s+(type\s+)?(?:[\w$]+\s*,?\s*)?(?:\{[^}]*\}|\*\s+as\s+[\w$]+)?\s*from\s*['"]([^'"]+)['"]/gm;

@@ -55,6 +55,10 @@ export const importCoda = {
     en: { one: "coda-export noted {count} thing:", other: "coda-export noted {count} things:" },
     es: { one: "coda-export anotó {count} cosa:", other: "coda-export anotó {count} cosas:" },
   },
+  'import.canResume': {
+    en: "Some of it can be retried: choose the same folder again and use Resume.",
+    es: "Parte se puede reintentar: elegí la misma carpeta de nuevo y usá Seguir.",
+  },
   'import.open': { en: "Open the project", es: "Abrir el proyecto" },
   // Errores y la lista del final (codaImport.ts).
   'import.noManifest': {
@@ -90,6 +94,18 @@ export const importCoda = {
       one: "{count} archivo quedó guardado pero la página no se pudo escribir; seguí la importación para ubicarlo",
       other: "{count} archivos quedaron guardados pero la página no se pudo escribir; seguí la importación para ubicarlos",
     },
+  },
+  'import.embed': {
+    en: "a video or embed from another site stays as a link: {url}",
+    es: "un video o embebido de otro sitio queda como link: {url}",
+  },
+  'import.appended': {
+    en: "was edited after the import stopped: your text stays and the import went below it",
+    es: "se editó después del corte: tu texto queda y lo importado va debajo",
+  },
+  'import.keptEdited': {
+    en: "was edited after the import stopped: it stays as you left it (what failed there was not retried)",
+    es: "se editó después del corte: queda como la dejaste (lo que había fallado ahí no se reintentó)",
   },
   'import.reattached': {
     en: "went to the top level: its parent page is missing or the pages loop",

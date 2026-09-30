@@ -9,6 +9,7 @@ import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { canPickFolders, ImportCodaDialog } from './ImportCodaDialog';
+import { AccountMenu } from './menus';
 
 // El diálogo de "Importar de Coda": avisa de entrada lo que impide importar (sin Drive, sin poder elegir
 // una carpeta en el iPad) y su estado vive afuera, así desmontarlo no pierde la importación ni el resultado.
@@ -108,7 +109,7 @@ describe('diálogo de importar de Coda', () => {
         (onProgress) =>
           new Promise((resolve) => {
             onProgress({ done: 0, total: 3, page: 'Primera' });
-            finish = () => resolve({ projectId: 'p', pages: 3, files: 2, problems: ['A: algo'], exportProblems: ['B: otra cosa'] });
+            finish = () => resolve({ projectId: 'p', pages: 3, files: 2, problems: ['A: algo'], exportProblems: ['B: otra cosa'], resumable: true });
           }),
       );
     });
@@ -125,6 +126,37 @@ describe('diálogo de importar de Coda', () => {
     expect(second.host.textContent).toContain('A: algo');
     expect(second.host.textContent).toContain('coda-export noted 1 thing:');
     expect(second.host.textContent).toContain('B: otra cosa');
+    expect(second.host.textContent).toContain('choose the same folder again');
     act(() => job.close());
+  });
+
+  it('cerrar la sesión espera a que termine una importación en curso', async () => {
+    const { server, d } = await device(true);
+    const value = services(d, server.ownerId);
+    const signOut = vi.fn(async () => ({ error: null }));
+    value.client = { auth: { signOut } } as never;
+    const alert = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+    const job = importJobFor(d.tree);
+    let finish!: () => void;
+    const running = job.run(
+      () => new Promise((resolve) => (finish = () => resolve({ projectId: 'p', pages: 0, files: 0, problems: [], exportProblems: [], resumable: false }))),
+    );
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    roots.push(root);
+    await act(async () =>
+      root.render(
+        <ServicesContext.Provider value={value}>
+          <AccountMenu position={{ top: 0, left: 0 }} anchor={null} onClose={() => undefined} />
+        </ServicesContext.Provider>,
+      ),
+    );
+    await act(async () => button(host, 'Sign out').click());
+    expect(signOut).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith('An import from Coda is running. Wait until it finishes.');
+    finish();
+    await running;
+    job.close();
   });
 });

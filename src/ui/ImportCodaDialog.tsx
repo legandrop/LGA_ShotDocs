@@ -31,7 +31,7 @@ async function freeSpace(): Promise<number | null> {
 }
 
 export function ImportCodaDialog() {
-  const { tree, docs, media, db } = useServices();
+  const { tree, docs, media, db, dbName } = useServices();
   // Se vuelve a dibujar con el estado de la sincronización: así se entera cuando el Drive queda conectado.
   useSyncStatus();
   const [state, job] = useImportJob(tree);
@@ -68,7 +68,9 @@ export function ImportCodaDialog() {
 
   const start = (resume: boolean) => {
     if (!folder || busy) return;
-    void job.run((onProgress) => importCoda(folder, { tree, docs, media, journal }, { projectName: name.trim(), resume, onProgress }));
+    void job.run((onProgress) => importCoda(folder, { tree, docs, media, journal }, { projectName: name.trim(), resume, onProgress }), {
+      beacon: dbName,
+    });
   };
 
   const close = () => job.close();
@@ -129,6 +131,7 @@ export function ImportCodaDialog() {
           <>
             <p>{tr('import.done', { pages: result.pages, files: result.files })}</p>
             <p className="muted">{tr('import.uploading')}</p>
+            {result.resumable && <p>{tr('import.canResume')}</p>}
             {result.problems.length > 0 && (
               <>
                 <p className="error">{tr('import.problems', { count: result.problems.length })}</p>

@@ -23,7 +23,8 @@ import {
   type CodaManifestPage,
   type ImportDeps,
 } from './codaImport';
-import { importJobFor } from './importJob';
+import { importingElsewhere, importJobFor } from './importJob';
+import * as Y from 'yjs';
 
 // jsdom trae su propio File, que la base simulada (fake-indexeddb) no sabe copiar; en el navegador no pasa.
 Object.assign(globalThis, { Blob: NodeBlob, File: NodeFile });
@@ -392,7 +393,7 @@ describe('importar la carpeta', () => {
       (onProgress) =>
         new Promise((resolve) => {
           onProgress({ done: 1, total: 3, page: 'B' });
-          finish = () => resolve({ projectId: 'p', pages: 3, files: 0, problems: [], exportProblems: [] });
+          finish = () => resolve({ projectId: 'p', pages: 3, files: 0, problems: [], exportProblems: [], resumable: false });
         }),
     );
     expect(job.get()).toMatchObject({ running: true, open: true, progress: { done: 1, page: 'B' } });
@@ -468,10 +469,14 @@ describe('importar la carpeta', () => {
     await expect(folderFromFiles([new File(['{no'], 'manifest.json')])).rejects.toThrow(/manifest\.json/);
     const m = checkManifest({ pages: [{ id: 'a' }, { id: 'a', name: 3, media: 'no', order: 'x' }, 7] });
     expect(m.doc.name).toBe('Untitled project');
-    expect(m.pages.map((p) => [p.id, p.name, p.order, p.media.length, p.contentType])).toEqual([
-      ['a', '', 0, 0, 'canvas'],
-      ['a#1', '', 1, 0, 'canvas'],
+    expect(m.pages.map((p) => [p.name, p.order, p.media.length, p.contentType])).toEqual([
+      ['', 0, 0, 'canvas'],
+      ['', 1, 0, 'canvas'],
     ]);
+    // El id repetido: cada una recibe uno propio, derivado de lo que tiene.
+    expect(m.pages[0].id).toMatch(/^a#/);
+    expect(m.pages[1].id).toMatch(/^a#/);
+    expect(m.pages[0].id).not.toBe(m.pages[1].id);
   });
 
   it('una página sin nombre entra como "Untitled"; un padre que falta o un círculo van al primer nivel, anotados', async () => {
@@ -550,6 +555,226 @@ describe('importar la carpeta', () => {
     const folder = makeFolder();
     folder.manifest.pages[0].media.push({ url: 'x', file: 'bl-aaa.png' });
     expect(importSize(folder)).toBe(3000 + 4000 + 5000 + 6000);
+  });
+
+  // --- Segunda verificación -----------------------------------------------------------------------------
+
+  /** Dependencias que cuentan qué archivos se guardan y dejan hacer fallar `docs.open` o `media.add`. */
+  function spyDeps(a: Device, opts: { failOpen?: (n: number) => boolean; failAdd?: (name: string) => boolean } = {}) {
+    const added: string[] = [];
+    let opens = 0;
+    const deps: ImportDeps = {
+      tree: a.tree,
+      docs: {
+        open: (id, o) => (opts.failOpen?.(++opens) ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)),
+        close: (id) => a.docs.close(id),
+        flush: (id) => a.docs.flush(id),
+      },
+      media: {
+        add: async (pageId, file) => {
+          const name = (file as File).name;
+          if (opts.failAdd?.(name)) throw new Error('QuotaExceededError');
+          added.push(name);
+          return a.media.add(pageId, file);
+        },
+        get enabled() {
+          return a.media.enabled;
+        },
+      },
+      journal: metaJournal(a.db),
+    };
+    return { deps, added };
+  }
+
+  function findPage(d: Device, title: string): string {
+    const seen: string[] = [];
+    const walk = (parent: string | null) => {
+      for (const p of d.tree.children(parent)) {
+        if (p.title === title) seen.push(p.id);
+        walk(p.id);
+      }
+    };
+    walk(null);
+    expect(seen, title).toHaveLength(1);
+    return seen[0];
+  }
+
+  /** Lo que escribe la persona en la página (en el primer párrafo, como en el editor). */
+  async function typeInto(d: Device, pageId: string, words: string): Promise<void> {
+    const doc = await d.docs.open(pageId, { seed: true });
+    const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+    const find = (node: Y.XmlFragment | Y.XmlElement): Y.XmlElement | null => {
+      for (const child of node.toArray()) {
+        if (child instanceof Y.XmlElement) {
+          if (child.nodeName === 'paragraph') return child;
+          const inner = find(child);
+          if (inner) return inner;
+        }
+      }
+      return null;
+    };
+    const paragraph = find(fragment)!;
+    doc.transact(() => {
+      const text = paragraph.toArray().find((c): c is Y.XmlText => c instanceof Y.XmlText);
+      if (text) text.insert(0, words);
+      else paragraph.insert(0, [new Y.XmlText(words)]);
+    });
+    await d.docs.flush(pageId);
+    d.docs.close(pageId);
+  }
+
+  async function pageText(d: Device, pageId: string): Promise<string> {
+    const doc = await d.docs.open(pageId);
+    const text = doc.getXmlFragment(CONTENT_FRAGMENT).toString();
+    d.docs.close(pageId);
+    return text;
+  }
+
+  it('si una página falló, la importación se puede seguir: el diario queda y al seguir se ubican sus archivos sin volver a guardarlos', async () => {
+    const { server, a } = await mediaDevice();
+    const first = spyDeps(a, { failOpen: (n) => n === 3 });
+    const folder = makeFolder();
+    const result = await importCoda(folder, first.deps);
+    expect(result.problems[0]).toMatch(/3 files were saved/);
+    expect(result.resumable).toBe(true);
+    const resumable = await findResumable(folder, { tree: a.tree, journal: first.deps.journal });
+    expect(resumable).toMatchObject({ projectId: result.projectId, done: 3, total: 4 });
+
+    const second = spyDeps(a);
+    const again = await importCoda(folder, second.deps, { resume: true });
+    expect(again).toMatchObject({ projectId: result.projectId, problems: [], resumable: false });
+    // Nada se guardó de nuevo: los tres archivos de s1 ya estaban.
+    expect(second.added).toEqual([]);
+    expect(await first.deps.journal!.get('DOC')).toBeUndefined();
+    expect(await imagesOf(a, findPage(a, '001 | Primera | Iglesia'))).toHaveLength(3);
+    await a.media.idle();
+    for (let i = 0; i < 4; i++) {
+      await a.engine.syncNow();
+      await a.engine.syncMedia();
+    }
+    expect(server.portero.drive.size).toBe(4);
+  });
+
+  it('sin espacio a mitad de una página: al seguir se reintenta solo el archivo que faltó y la página queda completa', async () => {
+    const { a } = await mediaDevice();
+    const folder = makeFolder();
+    const first = spyDeps(a, { failAdd: (name) => name === 'foto set.png' });
+    const result = await importCoda(folder, first.deps);
+    expect(result.problems).toEqual(['001 | Primera | Iglesia: foto set.png: QuotaExceededError']);
+    expect(result.resumable).toBe(true);
+    const s1 = findPage(a, '001 | Primera | Iglesia');
+    expect(await imagesOf(a, s1)).toHaveLength(2);
+
+    const second = spyDeps(a);
+    const again = await importCoda(folder, second.deps, { resume: true });
+    expect(again).toMatchObject({ problems: [], resumable: false, files: 4 });
+    expect(second.added).toEqual(['foto set.png']);
+    expect(await imagesOf(a, s1)).toHaveLength(3);
+  });
+
+  it('al seguir, una página a medias que la persona editó no se pisa (escrita antes: queda como la dejó)', async () => {
+    const { a } = await mediaDevice();
+    const folder = makeFolder();
+    await importCoda(folder, spyDeps(a, { failAdd: (name) => name === 'foto set.png' }).deps);
+    const s1 = findPage(a, '001 | Primera | Iglesia');
+    await typeInto(a, s1, 'NOTAS DEL USUARIO');
+
+    const again = await importCoda(folder, spyDeps(a).deps, { resume: true });
+    expect(await pageText(a, s1)).toContain('NOTAS DEL USUARIO');
+    expect(again.problems).toEqual([
+      '001 | Primera | Iglesia: was edited after the import stopped: it stays as you left it (what failed there was not retried)',
+    ]);
+    expect(again.resumable).toBe(false);
+  });
+
+  it('al seguir, una página creada pero sin escribir que la persona editó conserva su texto y lo importado va debajo', async () => {
+    const { a } = await mediaDevice();
+    const folder = makeFolder();
+    await importCoda(folder, spyDeps(a, { failOpen: (n) => n === 3 }).deps);
+    const s1 = findPage(a, '001 | Primera | Iglesia');
+    await typeInto(a, s1, 'NOTAS DEL USUARIO');
+
+    const again = await importCoda(folder, spyDeps(a).deps, { resume: true });
+    const text = await pageText(a, s1);
+    expect(text).toContain('NOTAS DEL USUARIO');
+    expect(text).toContain('Brief Sup');
+    expect(text.indexOf('NOTAS DEL USUARIO')).toBeLessThan(text.indexOf('Brief Sup'));
+    expect(await imagesOf(a, s1)).toHaveLength(3);
+    expect(again.problems).toEqual([
+      '001 | Primera | Iglesia: was edited after the import stopped: your text stays and the import went below it',
+    ]);
+  });
+
+  it('al seguir, una página terminada que la persona mandó a la papelera no vuelve', async () => {
+    const { a } = await mediaDevice();
+    const folder = makeFolder();
+    await importCoda(folder, spyDeps(a, { failOpen: (n) => n === 4 }).deps);
+    await a.tree.trash(findPage(a, '001 | Primera | Iglesia'));
+    await importCoda(folder, spyDeps(a).deps, { resume: true });
+    const titles: string[] = [];
+    const walk = (parent: string | null) => {
+      for (const p of a.tree.children(parent)) {
+        titles.push(p.title);
+        walk(p.id);
+      }
+    };
+    walk(null);
+    expect(titles).not.toContain('001 | Primera | Iglesia');
+    expect(titles).toContain('002 | Segunda | Calle');
+  });
+
+  it('un diario cuyo proyecto ya no está se borra (no se ofrece seguir para siempre)', async () => {
+    const { a } = await mediaDevice();
+    const journal = metaJournal(a.db);
+    await journal.put({ docId: 'DOC', projectId: 'no-existe', projectName: 'X', pages: {}, media: {} });
+    expect(await findResumable(makeFolder(), { tree: a.tree, journal })).toBeNull();
+    expect(await journal.get('DOC')).toBeUndefined();
+  });
+
+  it('un video o un embebido de otro sitio queda como link y se anota', async () => {
+    const { a } = await mediaDevice();
+    const html =
+      `<p>antes</p><div><video controls><source src="https://cdn.example.com/v.mp4" type="video/mp4"></video></div>` +
+      `<iframe src="https://www.youtube.com/embed/abc"></iframe><embed src="https://example.com/x.swf">`;
+    const result = await importCoda(smallFolder([page('p', 'Videos', null, 0)], { p: html }), a);
+    expect(result.problems).toEqual([
+      'Videos: a video or embed from another site stays as a link: https://cdn.example.com/v.mp4',
+      'Videos: a video or embed from another site stays as a link: https://www.youtube.com/embed/abc',
+      'Videos: a video or embed from another site stays as a link: https://example.com/x.swf',
+    ]);
+    const text = await pageText(a, findPage(a, 'Videos'));
+    expect(text).toContain('https://cdn.example.com/v.mp4');
+    expect(text).toContain('https://example.com/x.swf');
+  });
+
+  it('los ids que faltan en el manifest no dependen del orden de las páginas', () => {
+    const one = { name: 'Uno', parentId: null, order: 0, file: '1.html' };
+    const two = { name: 'Dos', parentId: null, order: 1, file: '2.html' };
+    const dupA = { id: 'x', name: 'A', file: 'a.html' };
+    const dupB = { id: 'x', name: 'B', file: 'b.html' };
+    const ids = (pages: object[]) => new Map(checkManifest({ pages }).pages.map((p) => [p.name, p.id]));
+    const forward = ids([one, two, dupA, dupB]);
+    const backward = ids([dupB, dupA, two, one]);
+    expect(forward.get('Uno')).toBe(backward.get('Uno'));
+    expect(forward.get('Dos')).toBe(backward.get('Dos'));
+    expect(forward.get('Uno')).not.toBe(forward.get('Dos'));
+    // Con el id repetido, cada una recibe uno propio, el mismo en cualquier orden.
+    expect(new Set([forward.get('A'), forward.get('B')]).size).toBe(2);
+    expect([backward.get('A'), backward.get('B')].sort()).toEqual([forward.get('A'), forward.get('B')].sort());
+  });
+
+  it('otra pestaña que quiere tomar el control sabe que acá hay una importación en curso', async () => {
+    const job = importJobFor({});
+    let finish!: () => void;
+    const running = job.run(
+      () => new Promise((resolve) => (finish = () => resolve({ projectId: 'p', pages: 0, files: 0, problems: [], exportProblems: [], resumable: false }))),
+      { beacon: 'db-test' },
+    );
+    expect(importingElsewhere('db-test')).toBe(true);
+    expect(importingElsewhere('otra-db')).toBe(false);
+    finish();
+    await running;
+    expect(importingElsewhere('db-test')).toBe(false);
   });
 });
 

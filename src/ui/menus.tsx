@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { t, useT } from '../i18n';
+import { importJobFor } from '../import/importJob';
 import { prefs, usePrefs, type Prefs } from '../prefs';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { pageFormat, sizeLabel } from './pageFormat';
@@ -265,7 +266,7 @@ export function AccountMenu({
   onMembers?: () => void;
 }) {
   const perms = usePermissions();
-  const { user, docs, client } = useServices();
+  const { user, docs, client, tree } = useServices();
   const status = useSyncStatus();
   const pending = usePendingCount();
   const isOwner = !!status.mediaUrl && !!status.ownerId && status.ownerId === user.id;
@@ -274,6 +275,10 @@ export function AccountMenu({
   useFloating(ref, onClose, anchor);
 
   async function signOut() {
+    if (importJobFor(tree).get().running) {
+      alert(t('import.running'));
+      return;
+    }
     if (docs.hasUnsavedEdits()) {
       alert(t('account.signOutUnsaved'));
       return;

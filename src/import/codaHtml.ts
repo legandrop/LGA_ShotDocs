@@ -41,8 +41,11 @@ const MARKERS = /[\uE000\uE001]/g;
 
 const HOSTED = /^https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.com\/blobs)\//;
 
-/** Cambia cada archivo de Coda por una marca y normaliza los colores. Devuelve el HTML y los archivos. */
-export function prepareCodaHtml(html: string): { html: string; media: CodaMedia[] } {
+/**
+ * Cambia cada archivo de Coda por una marca y normaliza los colores. Devuelve el HTML, los archivos y los
+ * videos o embebidos de otros sitios que quedaron como link.
+ */
+export function prepareCodaHtml(html: string): { html: string; media: CodaMedia[]; embeds: string[] } {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   const media: CodaMedia[] = [];
   stripMarkers(doc.body);
@@ -94,15 +97,20 @@ export function prepareCodaHtml(html: string): { html: string; media: CodaMedia[
     const href = a.getAttribute('href') ?? '';
     if (HOSTED.test(href)) mark(a, href, a.textContent?.trim() ?? '');
   }
-  // Un video embebido (YouTube, Vimeo…) queda como link.
-  for (const frame of [...doc.body.querySelectorAll('iframe[src]')]) {
-    const src = frame.getAttribute('src') ?? '';
+  // Un video embebido (YouTube, Vimeo…), un <video> de otro sitio o un <embed> quedan como link (BlockNote
+  // los tiraría) y se anotan en `embeds`: no hay archivo que traer.
+  const embeds: string[] = [];
+  for (const el of [...doc.body.querySelectorAll('iframe, embed, video')]) {
+    if (!el.isConnected) continue;
+    const src = el.getAttribute('src') || el.querySelector('source[src]')?.getAttribute('src') || '';
+    if (!src) continue;
+    embeds.push(src);
     const p = doc.createElement('p');
     const a = doc.createElement('a');
-    a.href = src;
+    a.setAttribute('href', src);
     a.textContent = src;
     p.append(a);
-    frame.replaceWith(p);
+    el.replaceWith(p);
   }
 
   for (const el of [...doc.body.querySelectorAll<HTMLElement>('[style]')]) {
@@ -121,7 +129,7 @@ export function prepareCodaHtml(html: string): { html: string; media: CodaMedia[
     if (italic) el.style.fontStyle = 'italic';
     if (underline || strike) el.style.textDecoration = [underline && 'underline', strike && 'line-through'].filter(Boolean).join(' ');
   }
-  return { html: doc.body.innerHTML, media };
+  return { html: doc.body.innerHTML, media, embeds };
 }
 
 const blobOf = (url: string): string => url.match(/\/blobs\/(bl-[\w-]+)/)?.[1] ?? '';

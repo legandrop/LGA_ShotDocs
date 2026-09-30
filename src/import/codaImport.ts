@@ -1,5 +1,6 @@
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
+import * as Y from 'yjs';
 import type { MediaQueue } from '../media/queue';
 import type { PageDocs } from '../sync/docs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -58,10 +59,20 @@ export interface ImportJournal {
   docId: string;
   projectId: string;
   projectName: string;
-  /** Por página de Coda: la página de la app y si ya se escribió su contenido. */
-  pages: Record<string, { pageId: string; done?: boolean; files?: number }>;
+  /**
+   * Por página de Coda: la página de la app; `written`, la huella de lo que escribió la importación (para
+   * saber al seguir si la persona la editó después); `done`, terminada (no se vuelve a tocar).
+   */
+  pages: Record<string, JournalPage>;
   /** Por página de Coda y archivo (`<página> <blob o dirección>`): la dirección `sdmedia://` y el nombre. */
   media: Record<string, { url: string; name: string }>;
+}
+
+export interface JournalPage {
+  pageId: string;
+  written?: string;
+  done?: boolean;
+  files?: number;
 }
 
 export interface JournalStore {
@@ -107,6 +118,8 @@ export interface ImportResult {
   problems: string[];
   /** Lo que anotó `coda-export` al bajar el doc (`manifest.problems`). */
   exportProblems: string[];
+  /** Quedó algo para reintentar (una página que falló, un archivo que no entró): se puede seguir. */
+  resumable: boolean;
 }
 
 /** Una importación de este doc que quedó cortada y se puede seguir (su proyecto sigue estando). */
@@ -128,13 +141,24 @@ export function checkManifest(raw: unknown): CodaManifest {
   const obj = raw as { doc?: unknown; pages?: unknown; problems?: unknown } | null;
   if (!obj || typeof obj !== 'object' || !Array.isArray(obj.pages)) throw new Error(t('import.badManifest'));
   const doc = (obj.doc && typeof obj.doc === 'object' ? obj.doc : {}) as { id?: unknown; name?: unknown };
+  // Un id que falta o que se repite sale de lo que tiene la página (nombre, padre, orden, archivo), no de su
+  // lugar en la lista: el diario de una importación cortada lo reconoce aunque el manifest cambie de orden.
+  // Solo pasa con un manifest roto (coda-export siempre pone el id de Coda).
+  const counts = new Map<string, number>();
+  for (const item of obj.pages) {
+    const id = item && typeof item === 'object' ? str((item as { id?: unknown }).id) : '';
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
   const seen = new Set<string>();
   const pages: CodaManifestPage[] = [];
   for (const [i, item] of obj.pages.entries()) {
     if (!item || typeof item !== 'object') continue;
     const p = item as Record<string, unknown>;
-    let id = str(p.id) || `page-${i}`;
-    if (seen.has(id)) id = `${id}#${i}`;
+    const own = str(p.id);
+    const shape = [p.name, p.parentId, p.order, p.file, p.subtitle].map((v) => String(v ?? '')).join('\u0000');
+    let id = own && counts.get(own) === 1 ? own : `${own || 'page'}#${stableHash(shape)}`;
+    // Dos páginas idénticas en todo: la segunda, con un número (ahí el orden sí decide).
+    for (let n = 2; seen.has(id); n++) id = `${own || 'page'}#${stableHash(shape)}-${n}`;
     seen.add(id);
     const media = Array.isArray(p.media)
       ? p.media
@@ -154,6 +178,16 @@ export function checkManifest(raw: unknown): CodaManifest {
   }
   const problems = Array.isArray(obj.problems) ? obj.problems.filter((x): x is string => typeof x === 'string') : [];
   return { doc: { id: str(doc.id), name: str(doc.name).trim() || t('project.untitled') }, pages, problems };
+}
+
+/** Un hash corto y estable (FNV-1a de 32 bits), en base 36. */
+function stableHash(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
 }
 
 /** Arma la carpeta a partir de lo que devuelve `<input type="file" webkitdirectory>`. */
@@ -242,7 +276,12 @@ export async function findResumable(folder: CodaFolder, deps: Pick<ImportDeps, '
   const docId = folder.manifest.doc.id;
   if (!docId || !deps.journal) return null;
   const journal = await deps.journal.get(docId);
-  if (!journal || !deps.tree.project(journal.projectId)) return null;
+  if (!journal) return null;
+  if (!deps.tree.project(journal.projectId)) {
+    // El proyecto ya no está (se perdió el acceso, por ejemplo): no hay dónde seguir.
+    await deps.journal.remove(docId).catch(() => undefined);
+    return null;
+  }
   const done = folder.manifest.pages.filter((p) => journal.pages[p.id]?.done).length;
   return { projectId: journal.projectId, projectName: deps.tree.project(journal.projectId)!.name, done, total: folder.manifest.pages.length };
 }
@@ -315,13 +354,14 @@ export async function importCoda(
     // Sin nombre en el manifest (`checkManifest` lo deja en ''), "Untitled": nunca corta la importación.
     const title = pageTitle(page);
     options.onProgress?.({ done: i, total: pages.length, page: title });
-    // Una página que falla queda creada (vacía o a medias) y anotada; las demás siguen.
+    // Ya terminada en una vuelta anterior: no se vuelve a tocar, aunque la persona la haya mandado a la
+    // papelera después (no vuelve).
+    if (entry?.done) {
+      files += entry.files ?? 0;
+      continue;
+    }
+    // Una página que falla queda creada (vacía o a medias) y anotada, sin terminar: al seguir se reintenta.
     try {
-      // Ya terminada en una importación anterior que se cortó después.
-      if (entry?.done && live(entry.pageId)) {
-        files += entry.files ?? 0;
-        continue;
-      }
       let pageId = live(entry?.pageId) ? entry.pageId : null;
       if (!pageId) {
         const parent = page.parentId ? state.pages[page.parentId]?.pageId : undefined;
@@ -329,18 +369,26 @@ export async function importCoda(
         state.pages[page.id] = { pageId };
         await save();
       }
-      const count = await importPage(folder, deps, parser, page, pageId, title, problems, state, save);
-      state.pages[page.id] = { pageId, done: true, files: count };
+      const got = await importPage(folder, deps, parser, page, pageId, title, problems, state, save);
+      state.pages[page.id] = { pageId, files: got.files, written: got.written, done: got.complete || undefined };
       await save();
-      files += count;
+      files += got.files;
     } catch (err) {
       problems.push(`${title}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  // Terminó (con o sin problemas, que quedan en la lista): no hay nada que seguir.
-  await store?.remove(docId).catch(() => undefined);
+  // Todo terminado: no hay nada que seguir. Si algo quedó sin terminar, el diario queda para seguir.
+  const resumable = pages.some((p) => !state.pages[p.id]?.done);
+  if (!resumable) await store?.remove(docId).catch(() => undefined);
   options.onProgress?.({ done: pages.length, total: pages.length, page: '' });
-  return { projectId: state.projectId, pages: pages.length, files, problems, exportProblems: manifest.problems ?? [] };
+  return {
+    projectId: state.projectId,
+    pages: pages.length,
+    files,
+    problems,
+    exportProblems: manifest.problems ?? [],
+    resumable: resumable && !!store,
+  };
 }
 
 async function importPage(
@@ -353,13 +401,17 @@ async function importPage(
   problems: string[],
   journal: ImportJournal,
   save: () => Promise<void>,
-): Promise<number> {
+): Promise<{ files: number; complete: boolean; written?: string }> {
   if (!page.file || !folder.has(`pages/${page.file}`)) {
     problems.push(`${title}: ${page.contentType === 'canvas' ? t('import.notExported') : t('import.notCanvas', { type: page.contentType })}`);
-    return 0;
+    return { files: 0, complete: true };
   }
 
-  const { html, media } = prepareCodaHtml(await folder.text(`pages/${page.file}`));
+  const { html, media, embeds } = prepareCodaHtml(await folder.text(`pages/${page.file}`));
+  for (const url of embeds) problems.push(`${title}: ${t('import.embed', { url: shortUrl(url) })}`);
+  // Un archivo que no se pudo guardar (sin espacio, por ejemplo) deja la página sin terminar: al seguir se
+  // reintenta. Uno que falta en la carpeta no: volver a probar no lo trae.
+  let complete = true;
   // Cada archivo, a la cola de la app (en el dispositivo; se sube solo). El mismo archivo dos veces en la
   // página (el mismo blob) se guarda una vez y los dos bloques usan la misma dirección.
   let files = 0;
@@ -395,6 +447,7 @@ async function importPage(
       names.set(m.index, got.name);
       files++;
     } catch (err) {
+      complete = false;
       problems.push(`${title}: ${fileName(m, stored)}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
@@ -428,14 +481,22 @@ async function importPage(
   if (page.subtitle?.trim()) {
     blocks.unshift({ type: 'paragraph', content: [{ type: 'text', text: page.subtitle.trim(), styles: { italic: true } }], children: [] });
   }
+  const previous = journal.pages[page.id]?.written;
+  let outcome: Awaited<ReturnType<typeof writePage>>;
   try {
-    await writePage(deps.docs, pageId, blocks as PartialBlock<any, any, any>[]);
+    outcome = await writePage(deps.docs, pageId, blocks as PartialBlock<any, any, any>[], previous);
   } catch (err) {
     // Los archivos ya están guardados (y se van a subir); el diario los recuerda para ubicarlos al seguir.
     if (urls.size) problems.push(`${title}: ${t('import.notPlaced', { count: files })}`);
     throw err;
   }
-  return files;
+  // Lo que la persona escribió en la página después del corte nunca se pisa.
+  if (outcome.result === 'appended') problems.push(`${title}: ${t('import.appended')}`);
+  if (outcome.result === 'kept') {
+    problems.push(`${title}: ${t('import.keptEdited')}`);
+    return { files, complete: true };
+  }
+  return { files, complete, written: outcome.fingerprint };
 }
 
 /** El archivo bajado de una foto: por su blob (`bl-….<ext>`), o por la dirección que anotó el manifest. */
@@ -448,13 +509,67 @@ function findStored(folder: CodaFolder, page: CodaManifestPage, m: CodaMedia): s
   return found ? found.slice('media/'.length) : null;
 }
 
-/** Escribe los bloques en el documento de la página, como lo haría el editor de la app. */
-async function writePage(docs: ImportDeps['docs'], pageId: string, blocks: PartialBlock<any, any, any>[]): Promise<void> {
+/**
+ * La huella del contenido de una página: el texto (con su formato) y los elementos, en orden. Sirve para
+ * saber, al seguir una importación cortada, si la página sigue como la dejó la importación.
+ */
+export function contentFingerprint(fragment: Y.XmlFragment): string {
+  const parts: string[] = [];
+  const walk = (node: Y.XmlFragment | Y.XmlElement) => {
+    for (const child of node.toArray()) {
+      if (child instanceof Y.XmlText) parts.push(`t:${child.toString()}`);
+      else if (child instanceof Y.XmlElement) {
+        parts.push(`<${child.nodeName} ${String(child.getAttribute('url') ?? '')}`);
+        walk(child);
+        parts.push('>');
+      }
+    }
+  };
+  walk(fragment);
+  let h = 0x811c9dc5;
+  const text = parts.join('\n');
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${text.length}:${h.toString(36)}`;
+}
+
+// Lo que tiene una página recién creada (la raíz inicial, `buildSeed`): un párrafo vacío.
+const SEED_NODES = new Set(['blockGroup', 'blockContainer', 'paragraph']);
+
+/** La página tiene algo más que la raíz inicial: texto, una foto, un título, una lista… */
+function hasContent(node: Y.XmlFragment | Y.XmlElement): boolean {
+  return node.toArray().some((child) => {
+    if (child instanceof Y.XmlText) return child.length > 0;
+    if (child instanceof Y.XmlElement) return !SEED_NODES.has(child.nodeName) || hasContent(child);
+    return false;
+  });
+}
+
+/**
+ * Escribe los bloques en el documento de la página, como lo haría el editor de la app. Nunca pisa lo que
+ * escribió la persona: si la página está vacía o sigue como la dejó la importación (`previous`, su huella),
+ * la reemplaza; si tiene otra cosa y la importación no la había escrito, agrega lo importado debajo; si la
+ * importación la había escrito y la persona la cambió después, no la toca.
+ */
+async function writePage(
+  docs: ImportDeps['docs'],
+  pageId: string,
+  blocks: PartialBlock<any, any, any>[],
+  previous?: string,
+): Promise<{ result: 'replaced' | 'appended' | 'kept'; fingerprint?: string }> {
   const doc = await docs.open(pageId, { seed: true });
+  const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  const edited = hasContent(fragment) && contentFingerprint(fragment) !== previous;
+  if (edited && previous) {
+    docs.close(pageId);
+    return { result: 'kept' };
+  }
   const editor = BlockNoteEditor.create(
     withCollaboration({
       ...editorSchemaOptions,
-      collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'Import', color: '#888888' } },
+      collaboration: { fragment, user: { name: 'Import', color: '#888888' } },
     }),
   ) as unknown as BlockNoteEditor<any, any, any>;
   // y-prosemirror escribe en el documento compartido desde la vista: el editor necesita estar montado.
@@ -463,8 +578,10 @@ async function writePage(docs: ImportDeps['docs'], pageId: string, blocks: Parti
   document.body.appendChild(host);
   try {
     editor.mount(host);
-    if (blocks.length) editor.replaceBlocks(editor.document, blocks);
+    if (blocks.length && edited) editor.insertBlocks(blocks, editor.document[editor.document.length - 1], 'after');
+    else if (blocks.length) editor.replaceBlocks(editor.document, blocks);
     await docs.flush(pageId);
+    return { result: edited ? 'appended' : 'replaced', fingerprint: contentFingerprint(fragment) };
   } finally {
     editor.unmount();
     host.remove();

@@ -14,7 +14,9 @@ node scripts/coda-export.mjs "MGTZD" [carpeta] [--refresh]
   `~/.coda-token`). Nunca va en el repo (`.coda-token` y `Coda_Export/` están en `.gitignore`). El token va
   solo a direcciones `https://coda.io/apis/…`: las que devuelve la API (el `href` de una exportación, el
   `nextPageLink` de una lista) se revisan antes de mandarlo, y una que apunta a otro lado corta el comando
-  con error. Las bajadas de archivos y del HTML exportado van sin token.
+  con error. Los pedidos con token no siguen redirecciones (una redirección corta el comando), así que no
+  depende de lo que haga Node con el encabezado al redirigir. Las bajadas de archivos y del HTML exportado van
+  sin token.
 - **Qué baja.** Para cada página, `POST /docs/{doc}/pages/{página}/export` en **HTML**: el Markdown de Coda
   descarta las fotos pegadas en la página. Cada foto, video o adjunto (`codahosted.io`) se baja a `media/`
   con el nombre de su blob (`bl-….jpg`); una dirección sin blob, con `url-` y un hash de la dirección entera
@@ -50,13 +52,17 @@ a un **proyecto nuevo**. El código está en `src/import/` y el diálogo en `src
   pesan, con el espacio que el navegador le deja a la app (`navigator.storage.estimate`): los archivos quedan
   en el dispositivo hasta que se suben, y si no entran lo avisa.
 - **Mientras importa**: "Página 3 de 35: <título>", y la app pide confirmación antes de cerrarse o recargarse
-  (el mismo `beforeunload` que cuida lo que no llegó a IndexedDB, en `Workspace.tsx`) y no deja cambiar de
-  workspace. Entre página y página le da un respiro al navegador (`setTimeout(0)`), así el progreso se dibuja.
+  (el mismo `beforeunload` que cuida lo que no llegó a IndexedDB, en `Workspace.tsx`). Cambiar de workspace,
+  cerrar la sesión (menú de la cuenta) y, en la pantalla de "te sacaron del workspace", cerrar la sesión o
+  quitar el workspace del dispositivo esperan a que termine. Otra ventana que quiere tomar el control
+  (`shell.busy`) pregunta antes si esta está importando: una marca en localStorage, renovada en cada página,
+  se lo dice. Entre página y página le da un respiro al navegador (`setTimeout(0)`), así el progreso se dibuja.
 - **El estado vive afuera del diálogo** (`src/import/importJob.ts`, uno por workspace abierto) y el diálogo lo
   dibuja el Shell (`ImportCodaHost`), no el selector de proyectos: si el selector se desmonta (se cierra la
   barra lateral en el celular), la importación y su resultado siguen a la vista.
 - **Al terminar**: cuántas páginas y archivos, la lista de lo que no se pudo traer y, aparte, lo que anotó el
-  comando al bajar el doc (`manifest.problems`).
+  comando al bajar el doc (`manifest.problems`). Si quedó algo para reintentar, lo dice ("elegí la misma
+  carpeta de nuevo y usá Seguir").
 
 Va por los mismos caminos que usa la app al escribir, así que funciona sin red y lo guardado en el
 dispositivo se sube solo. Una página que falla (un archivo que no se puede leer, por ejemplo) queda creada y
@@ -74,24 +80,40 @@ anotada en la lista del final, y las demás siguen:
 ### Si se corta: seguir donde quedó
 
 Mientras importa, la app anota en el dispositivo (`meta` de la base local, clave `codaImport:<id del doc>`;
-la tabla ya existía, la base no cambia) qué página de la app es cada página de Coda, cuáles ya tienen su
-contenido escrito y la dirección `sdmedia://` de cada archivo apenas queda guardado. Si la importación se
-corta (se cerró la app, se cortó la luz), al volver a elegir la misma carpeta el diálogo lo dice ("no
-terminó: 12 de 35 páginas") y ofrece **Seguir**, que continúa en el mismo proyecto: no crea otra vez las
-páginas ya creadas, saltea las terminadas y usa los archivos ya guardados en vez de guardarlos (y subirlos al
-Drive) de nuevo. **Importar a un proyecto nuevo** empieza de cero (el proyecto a medias queda; se puede mandar
-a la papelera). La anotación se borra al terminar.
+la tabla ya existía, la base no cambia) qué página de la app es cada página de Coda, la huella de lo que la
+importación escribió en cada una, cuáles están terminadas y la dirección `sdmedia://` de cada archivo apenas
+queda guardado. Al volver a elegir la misma carpeta el diálogo lo dice ("no terminó: 12 de 35 páginas") y
+ofrece **Seguir**, que continúa en el mismo proyecto: no crea otra vez las páginas ya creadas, saltea las
+terminadas y usa los archivos ya guardados en vez de guardarlos (y subirlos al Drive) de nuevo. **Importar a
+un proyecto nuevo** empieza de cero (el proyecto a medias queda; se puede mandar a la papelera).
 
-Si el contenido de una página no se puede escribir después de guardar sus archivos, queda anotado en la
-lista ("3 archivos quedaron guardados pero la página no se pudo escribir"): se suben igual, y al seguir la
-importación se ubican en la página. Queda un hueco chico: un archivo guardado justo antes del corte, antes de
-anotarlo, se guarda de nuevo al seguir (entra dos veces al Drive).
+- **Qué queda para seguir.** La anotación se borra solo cuando todas las páginas quedaron terminadas. Queda
+  sin terminar una página cuyo contenido no se pudo escribir ("3 archivos quedaron guardados pero la página no
+  se pudo escribir") o a la que le faltó guardar un archivo (sin espacio en el dispositivo, por ejemplo): al
+  seguir se reintenta, con los archivos ya guardados, y solo se guarda lo que faltó. Un archivo que no está en
+  la carpeta no deja la página sin terminar (volver a probar no lo trae). Se corta a mitad (se cerró la app, se
+  cortó la luz) igual: lo que no llegó a terminar se sigue.
+- **Nunca pisa lo que escribió la persona.** Antes de escribir una página sin terminar, se mira qué tiene: si
+  está vacía (la raíz inicial) o sigue igual a lo que dejó la importación (misma huella: texto, formato y
+  elementos en orden), se reemplaza. Si la importación no la había llegado a escribir y la persona escribió
+  algo, lo importado va debajo de su texto. Si la importación la había escrito y la persona la cambió después,
+  queda como la dejó (lo que había fallado ahí no se reintenta). Las dos cosas quedan anotadas.
+- **Una página terminada** no se vuelve a tocar al seguir, aunque la persona la haya mandado a la papelera
+  (no vuelve). Una sin terminar que se mandó a la papelera sí se crea de nuevo.
+- **Si el proyecto ya no está** (se perdió el acceso), la anotación se borra al elegir la carpeta.
+- **Huecos que quedan** (un corte en el instante justo): una página creada y no anotada todavía se crea de
+  nuevo al seguir (queda una vacía de más, con el mismo título), y un archivo guardado y no anotado todavía se
+  guarda de nuevo (entra dos veces al Drive; la copia de más, sin página que la use, va a la papelera de
+  archivos a los pocos minutos, en un workspace que la tiene). `tree.create` y `media.add` eligen su propio id, así que no hay cómo anotar
+  antes de crear.
 
 ### El manifest
 
 Sin `pages` (o si no es JSON) es un error claro antes de mostrar nada. Lo que falta en una página toma un
 valor por defecto: sin nombre entra como "Untitled", sin orden va por orden de llegada, sin `media` sin
-archivos, sin id (o con el id repetido) recibe uno propio. Una página cuyo padre no está en el manifest, o que
+archivos, sin id (o con el id repetido) recibe uno propio, derivado de lo que tiene (nombre, padre, orden,
+archivo) y no de su lugar en la lista, así la anotación para seguir lo reconoce aunque el manifest cambie de
+orden (solo pasa con un manifest roto: coda-export siempre pone el id de Coda). Una página cuyo padre no está en el manifest, o que
 forma un círculo con otras (A dentro de B dentro de A), va al primer nivel y queda anotada: ninguna se pierde.
 
 ### La conversión
@@ -124,7 +146,8 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
 - **Videos de Coda** (`<video><source>`): igual que una foto, un bloque `image` con su `sdmedia://`.
 - **Red de seguridad.** Una foto ya guardada que la conversión no llegó a ubicar va al final de la página y
   queda anotada: nunca se pierde en silencio.
-- **Videos embebidos** (YouTube, Vimeo): quedan como link.
+- **Videos embebidos** (YouTube, Vimeo), un `<video>` de otro sitio o un `<embed>`: quedan como link y se
+  anotan en la lista (no hay archivo que traer).
 - **Subtítulo** de la página de Coda: un párrafo en cursiva arriba de todo.
 
 ### Lo que no pasa
@@ -172,6 +195,27 @@ Sobre la primera entrega, una auditoría pidió (con su numeración):
 11. **Comando**: token solo a la API de Coda, `--refresh`, nombres sin choques para direcciones sin blob,
     `.coda-token` y `Coda_Export/` en `.gitignore`.
 
+### Segunda verificación (2026-09-30)
+
+Una segunda revisión de las correcciones encontró, y quedó corregido:
+
+1. **La anotación se borraba al terminar aunque hubiera páginas fallidas**, así que "seguí la importación"
+   no se podía; volver a importar subía todo de nuevo. Ahora queda mientras falte alguna página, y una página
+   con un archivo que no se pudo guardar (sin espacio) queda sin terminar para reintentarlo.
+2. **Seguir pisaba una página a medias que la persona había editado.** Ahora se compara con la huella de lo
+   que escribió la importación: nunca se reemplaza lo de la persona (va debajo, o la página queda como está).
+3. Las páginas terminadas que se mandaron a la papelera ya no vuelven al seguir.
+4. Los huecos de un corte en el instante justo quedan explicados arriba.
+5. Cerrar la sesión, la pantalla de "te sacaron" y tomar el control desde otra ventana tienen en cuenta una
+   importación en curso.
+6. Videos y embebidos de otros sitios quedan como link y anotados.
+7. Una anotación cuyo proyecto ya no está se borra.
+8. Los ids que faltan en el manifest no dependen del orden.
+9. La prueba de la primera carga (`src/ui/firstLoad.test.ts`) cuenta el diálogo, la importación y sus textos
+   entre lo que se baja aparte.
+
+Además, `coda-export` no sigue redirecciones en los pedidos con token.
+
 ## Prueba
 
 `src/import/codaImport.test.ts`: la conversión con HTML con la forma del de Coda (sin datos de clientes:
@@ -181,6 +225,10 @@ un documento que la app abre (sin contenido desconocido y con una sola raíz); u
 el resto. Y cada corrección de la auditoría: una importación cortada que se sigue sin duplicar nada en el
 Drive, los textos en castellano, las marcas escritas en el texto, fotos de otros sitios, un manifest con
 faltantes y círculos, páginas que no son texto, el mismo archivo dos veces, el respiro entre páginas y el
-progreso. `src/ui/importCodaDialog.test.tsx`: el diálogo sin Drive, en el iPad y con el resultado que sigue
-ahí después de desmontarlo.
+progreso; y de la segunda verificación: seguir después de una página que no se pudo escribir o de un archivo
+sin espacio (sin volver a guardar nada), una página editada después del corte (escrita o no por la
+importación), una terminada en la papelera, un diario sin proyecto, videos de otros sitios, ids estables y la
+marca para otra ventana. `src/ui/importCodaDialog.test.tsx`: el diálogo sin Drive, en el iPad, con el
+resultado que sigue ahí después de desmontarlo, y cerrar la sesión con una importación en curso;
+`src/ui/team.test.tsx`, la pantalla de "te sacaron" con una importación en curso.
 Con MGTZD real (35 páginas, 32 fotos, 28 MB) se probó igual, fuera del repo, el 2026-09-30.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AuthUser } from '../auth';
 import { t, useT } from '../i18n';
-import { importJobFor, useImportJob } from '../import/importJob';
+import { importingElsewhere, importJobFor, useImportJob } from '../import/importJob';
 import { clearInviteTarget, pendingInviteTarget, takeArrivalNotice } from '../invite';
 import { prefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
@@ -55,7 +55,14 @@ export function Workspace({ user }: { user: AuthUser }) {
         <div className="card">
           <h1>{tr('shell.busy.title')}</h1>
           <p className="muted">{tr('shell.busy.text')}</p>
-          <button className="link" onClick={boot.takeOver}>
+          <button
+            className="link"
+            onClick={() => {
+              // Tomar el control corta lo que hace la otra ventana: si está importando de Coda, se pregunta.
+              if (importingElsewhere(workspace.config.storage.db(user.id)) && !confirm(t('import.otherTab'))) return;
+              boot.takeOver();
+            }}
+          >
             {tr('shell.busy.takeOver')}
           </button>
         </div>

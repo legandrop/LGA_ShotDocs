@@ -8,8 +8,9 @@ Ahora `scripts/coda-export.mjs` baja el doc por la API en HTML, con cada foto y 
 *Import from Coda…* (selector de proyectos) la importa a un proyecto nuevo: páginas con `tree.create`,
 archivos con `media.add` (se suben al Drive por el portero, como al soltarlos) y cada foto como bloque propio,
 dentro del ítem cuando estaba en una lista. Los colores pasan a los del editor y el guion a texto Script.
-Una importación cortada (se cerró la app) se sigue en el mismo proyecto sin repetir páginas ni archivos, y
-la app pide confirmación antes de cerrarse mientras importa. Los textos del diálogo, los errores y la lista
+Una importación cortada (se cerró la app, una página que falló, sin espacio) se sigue en el mismo proyecto
+sin repetir páginas ni archivos y sin pisar lo que se editó mientras tanto, y la app pide confirmación antes
+de cerrarse, cerrar la sesión o ceder a otra ventana mientras importa. Los textos del diálogo, los errores y la lista
 del final están en castellano e inglés; sin Drive conectado o en el iPad (no elige carpetas) el diálogo lo
 dice de entrada, y muestra cuánto pesa lo que se va a guardar y cuánto espacio queda. Se revisa el manifest
 (sin páginas, un error claro; páginas sin nombre o en círculo no cortan nada), y quedan anotadas las páginas
