@@ -294,19 +294,52 @@ describe('portero', () => {
     const p = new Portero(env, store, world.http);
     await connect(p);
     world.files.set('oldrootxxxxxxxx', { name: 'LGA Shot Docs', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: [] });
-    world.files.set('oldtestxxxxxxxx', { name: 'Mis pruebas', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: ['oldrootxxxxxxxx'] });
+    world.files.set('oldtestxxxxxxxx', { name: 'Media test', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: ['oldrootxxxxxxxx'] });
     const google = store.data.get('google') as object;
     store.data.set('google', { ...google, rootFolder: 'oldrootxxxxxxxx', testFolder: 'oldtestxxxxxxxx' });
+    const upload = () =>
+      call(p, '/upload', {
+        method: 'POST',
+        jwt: 'owner-jwt',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'IMG_0002.MOV', mime: 'video/quicktime', size: 10 }),
+      });
+    const folders = () => [...world.files.values()].filter((f) => f.mime === 'application/vnd.google-apps.folder').length;
 
-    const start = await call(p, '/upload', {
+    expect((await upload()).status).toBe(200);
+    expect(world.files.get('oldrootxxxxxxxx')!.name).toBe('LGA_ShotDocs');
+    expect(world.files.get('oldtestxxxxxxxx')!.name).toBe('Media_Test');
+    expect(folders()).toBe(2);
+
+    // Un nombre puesto a mano no se toca, y sigue usando las mismas carpetas (no crea otras).
+    world.files.get('oldtestxxxxxxxx')!.name = 'Mis pruebas';
+    expect((await upload()).status).toBe(200);
+    expect(world.files.get('oldtestxxxxxxxx')!.name).toBe('Mis pruebas');
+    expect(folders()).toBe(2);
+    expect(store.data.get('google')).toMatchObject({ rootFolder: 'oldrootxxxxxxxx', testFolder: 'oldtestxxxxxxxx' });
+  });
+
+  it('si Drive falla al revisar una carpeta, no crea otra', async () => {
+    const world = fakeWorld();
+    const store = memoryStore();
+    const p = new Portero(env, store, world.http);
+    await connect(p);
+    world.files.set('oldrootxxxxxxxx', { name: 'LGA_ShotDocs', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: [] });
+    const google = store.data.get('google') as object;
+    store.data.set('google', { ...google, rootFolder: 'oldrootxxxxxxxx' });
+    const flaky: typeof fetch = (input, init) =>
+      String(input).includes('/files/oldrootxxxxxxxx') ? Promise.resolve(new Response('{}', { status: 503 })) : world.http(input, init);
+    const q = new Portero(env, store, flaky);
+
+    const start = await call(q, '/upload', {
       method: 'POST',
       jwt: 'owner-jwt',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'IMG_0002.MOV', mime: 'video/quicktime', size: 10 }),
+      body: JSON.stringify({ name: 'IMG_0003.MOV', mime: 'video/quicktime', size: 10 }),
     });
-    expect(start.status).toBe(200);
-    expect(world.files.get('oldrootxxxxxxxx')!.name).toBe('LGA_ShotDocs');
-    expect(world.files.get('oldtestxxxxxxxx')!.name).toBe('Mis pruebas');
+    expect(start.status).toBe(502);
+    expect([...world.files.values()].filter((f) => f.mime === 'application/vnd.google-apps.folder')).toHaveLength(1);
+    expect(store.data.get('google')).toMatchObject({ rootFolder: 'oldrootxxxxxxxx' });
   });
 
   it('no le pide a Google un token nuevo en cada pedido (cada pedido es un Portero nuevo)', async () => {

@@ -317,10 +317,15 @@ export class Portero {
   private async folder(known: string | undefined, name: string, parent: string | null): Promise<string> {
     if (known) {
       const res = await this.drive(`/files/${known}?fields=id,name,trashed`);
+      // Un error pasajero no es "no existe": crear otra dejaría la carpeta duplicada.
+      if (!res.ok && res.status !== 404) {
+        throw new HttpError(502, `Could not check the folder "${name}" in Google Drive (${res.status}).`);
+      }
       const found = res.ok ? ((await res.json()) as { name?: string; trashed?: boolean }) : null;
       if (found && !found.trashed) {
-        // Solo si conserva el nombre viejo: si el dueño la renombró a mano, se respeta.
-        if (found.name === OLD_NAMES[name]) {
+        // Solo si conserva el nombre viejo: si el dueño la renombró a mano, se respeta. Si falla, se
+        // intenta de nuevo en la próxima subida.
+        if (OLD_NAMES[name] !== undefined && found.name === OLD_NAMES[name]) {
           await this.drive(`/files/${known}?fields=id`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },

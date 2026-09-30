@@ -8,9 +8,9 @@ plan está en `Plan_Workspaces.md`, secciones 5 y 6.
 Hoy sirve para la **prueba de media** (paso 4 del plan): solo el dueño conecta Drive, sube y reproduce, y
 lo subido va a la carpeta `LGA_ShotDocs / Media_Test`, en la raíz de su Drive. Los nombres no llevan
 espacios; las carpetas creadas antes de v0.027 con el nombre viejo (`LGA Shot Docs`, `Media test`) el
-portero las renombra solo la próxima vez que sube algo, salvo que el dueño les haya puesto otro nombre a
-mano. Elegir dónde va la carpeta llega con el paso 8 del plan. La pantalla de prueba está en la app,
-en el menú de la cuenta → *Media test*.
+portero las renombra por su cuenta la próxima vez que sube algo, salvo que el dueño les haya puesto otro
+nombre a mano. Elegir dónde va la carpeta llega con el paso 8 del plan. La pantalla de prueba está en la
+app, en el menú de la cuenta → *Media test*.
 
 ## Cómo funciona
 

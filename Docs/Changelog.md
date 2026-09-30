@@ -1,5 +1,13 @@
 # Changelog — LGA Shot Docs
 
+v0.028 :
+
+Ajustes del portero después de la auditoría: si Drive falla un momento al revisar una carpeta, la subida
+se corta con un error en vez de crear otra carpeta repetida. Pruebas nuevas: renombra también la carpeta
+de prueba y no crea carpetas de más. Docs más claros sobre dónde va la carpeta hasta el paso 8 (la raíz)
+y qué pide el selector de carpetas de Google.
+[ Portero - carpetas, ajustes de la auditoría ]
+
 v0.027 :
 
 Las carpetas de Drive ya no llevan espacios: la de la app se llama `LGA_ShotDocs`, igual que el repo, y

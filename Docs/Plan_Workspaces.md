@@ -123,15 +123,16 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
 - **Dónde:** al conectar Drive, el dueño elige dónde va la carpeta de la app: la raíz de su Drive (*My
   Drive*) u otra carpeta suya, con el selector de carpetas de Google. La app no decide por él. Debería
   alcanzar con el permiso chico que ya usamos (`drive.file`): elegir una carpeta en ese selector le da a
-  la app acceso a esa carpeta, para crear adentro (se confirma al hacerlo). Hace falta activar *Google Picker API* y crear una clave de API
-  en el proyecto de Google Cloud (paso 8).
+  la app acceso a esa carpeta, para crear adentro (falta confirmarlo al hacerlo). Hace falta activar
+  *Google Picker API* y crear una clave de API en el proyecto de Google Cloud, y el selector usa además
+  el número del proyecto (paso 8). Hasta entonces, la carpeta de prueba va a la raíz.
 - **Nombres sin espacios, nunca:** guiones bajos en todas las carpetas. La de la app se llama
   `LGA_ShotDocs`, igual que el repo; la del proyecto, su nombre con guiones bajos en vez de espacios; la
   del día, `AAAA-MM-DD`.
-- Carpetas: `<donde eligió el dueño> / LGA_ShotDocs / <Proyecto> / <día en que se subió> / IMG_1234.HEIC`.
-  Renombrar el proyecto renombra su carpeta (si el dueño no la renombró a mano). Las páginas apuntan al id del
-  archivo, así que moverlo o renombrarlo en Drive no rompe nada. Lo que se agregue a mano en Drive la
-  app no lo ve: el Drive es el respaldo, no una carpeta que la app lea.
+- Carpetas: `<donde eligió el dueño> / LGA_ShotDocs / <Proyecto> / <día> / IMG_1234.HEIC`, con el día en
+  que se subió. Renombrar el proyecto renombra su carpeta (si el dueño no la renombró a mano). Las páginas
+  apuntan al id del archivo, así que moverlo o renombrarlo en Drive no rompe nada. Lo que se agregue a
+  mano en Drive la app no lo ve: el Drive es el respaldo, no una carpeta que la app lea.
 - En la página: una miniatura chica guardada en Supabase. La foto grande y el video vienen del Drive por
   el portero.
 - **Carrete:** clic en una foto o video abre todas las de la página, en orden, con siguiente/anterior,
@@ -230,11 +231,11 @@ cambios de permisos, que son el momento más riesgoso.
      62 MB, 4K, 21 s; no lo convierte a H.264). Subió en 20 s (3,5 MB/s) sin reintentos, con la app
      manteniendo la pantalla encendida. Safari lo reproduce a 3840×2160: datos del video a los 6 s, listo
      a los 8,66 s.
-   - **Conclusiones para la cola (paso 6):** subir por partes anda bien en los dos; el iPhone manda el
+- **Conclusiones para la cola (paso 6):** subir por partes anda bien en los dos; el iPhone manda el
      archivo tal cual (HEVC si la cámara está en Alta eficiencia), así que llega a Drive sin tocar y el
-     carrete tiene que mostrar miniatura y ofrecer bajarlo donde el navegador no lo reproduzca. **El arranque del video es lento** (5 a 9 s):
-     revisar antes del carrete (paso 7 u 8) si es el portero pidiendo a Drive, o el índice del video al
-     final del archivo.
+     carrete tiene que mostrar miniatura y ofrecer bajarlo donde el navegador no lo reproduzca. **El
+     arranque del video es lento** (5 a 9 s): revisar antes del carrete (paso 7 u 8) si es el portero
+     pidiendo a Drive, o el índice del video al final del archivo.
    - Queda para cuando haga falta: subir 1 GB y la app instalada en el iPhone (agregada a la pantalla de
      inicio).
 5. **Preparación sin cambios visibles:** todo por workspace en el código y el dispositivo, tablas
