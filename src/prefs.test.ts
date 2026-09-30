@@ -118,9 +118,28 @@ describe('versiones viejas de la app', () => {
     await flush();
     // Primero se leyó la cuenta; gana el tema cambiado acá, el idioma sale de la cuenta.
     expect(state.reads).toBe(1);
-    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es' }]);
+    // La clave nueva que la cuenta todavía no tenía sube con su valor de fábrica.
+    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es', phoneImages: 'rows' }]);
     expect(prefs.get().language).toBe('es');
     expect(prefs.hasUnsynced()).toBe(false);
+  });
+});
+
+describe('fotos en fila en el teléfono (phoneImages)', () => {
+  it('una copia vieja con cambios sin subir, sin la clave, no pisa "apiladas" de la cuenta', async () => {
+    localStorage.setItem('shotdocs-prefs', JSON.stringify({ userId: USER, prefs: { ...OLD_KEYS, theme: 'dark' }, dirty: true }));
+    const prefs = await store();
+    const { client, state } = fakeClient({ ...OLD_KEYS, theme: 'light', language: 'es', phoneImages: 'stacked' } as Partial<Prefs>);
+    await prefs.attach(client, USER);
+    await flush();
+    expect(prefs.get().phoneImages).toBe('stacked');
+    expect(state.pushed).toEqual([{ ...OLD_KEYS, theme: 'dark', language: 'es', phoneImages: 'stacked' }]);
+  });
+
+  it('un valor desconocido queda en el de fábrica (en fila)', async () => {
+    const { cleanPrefs } = await import('./prefs');
+    expect(cleanPrefs({ phoneImages: 'grid' }).phoneImages).toBe('rows');
+    expect(cleanPrefs({ phoneImages: 'stacked' }).phoneImages).toBe('stacked');
   });
 });
 
@@ -138,8 +157,8 @@ describe('un cambio antes de leer la cuenta', () => {
     fake.open();
     await attaching;
     await flush();
-    expect(prefs.get()).toEqual({ ...account, language: 'es' });
-    expect(fake.state.pushed).toEqual([{ ...account, language: 'es' }]);
+    expect(prefs.get()).toEqual({ ...account, language: 'es', phoneImages: 'rows' });
+    expect(fake.state.pushed).toEqual([{ ...account, language: 'es', phoneImages: 'rows' }]);
     expect(prefs.hasUnsynced()).toBe(false);
   });
 
@@ -157,7 +176,7 @@ describe('un cambio antes de leer la cuenta', () => {
     window.dispatchEvent(new Event('online'));
     await flush();
     await flush();
-    expect(fake.state.pushed).toEqual([{ ...account, theme: 'light' }]);
-    expect(prefs.get()).toEqual({ ...account, theme: 'light' });
+    expect(fake.state.pushed).toEqual([{ ...account, theme: 'light', phoneImages: 'rows' }]);
+    expect(prefs.get()).toEqual({ ...account, theme: 'light', phoneImages: 'rows' });
   });
 });

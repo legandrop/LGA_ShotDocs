@@ -1,5 +1,5 @@
 import { FileDownloadButton, useBlockNoteEditor, useComponentsContext, useDictionary, useEditorState } from '@blocknote/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { mediaIdOf } from '../media/queue';
@@ -7,7 +7,7 @@ import { useServices } from '../services';
 import { carreteSourceOf } from './carrete';
 import { isOffline, originalFor, startDownload } from './carreteLoader';
 import { DownloadIcon } from './icons';
-import { ROW_PRESETS } from './imageRows';
+import { arrangeRows, ROW_PRESETS } from './imageRows';
 import { ROW_WIDTH_PROP } from './imageRowsEditor';
 import { notify } from './notice';
 
@@ -17,6 +17,8 @@ import { notify } from './notice';
 //   - Ver: abre el carrete en esa imagen (también con la barra espaciadora, con la imagen elegida).
 //   - Tamaño: todo el ancho, 1/2, 1/3 o 1/4 del ancho de la página (`rowWidth`, Docs/Doc_Imagenes.md);
 //     fotos seguidas que entran se ponen en fila.
+//   - Acomodar en filas: la tanda de fotos y videos seguidos a la elegida, en orden, en filas de la misma
+//     altura (`arrangeRows`).
 
 /** El bloque `image` elegido (uno solo), o `undefined`. */
 function useSelectedImage(): { id: string; url: string; rowWidth: number } | undefined {
@@ -129,6 +131,50 @@ const SIZE_LABELS: Record<number, { text: string; tip: 'imageSize.full' | 'image
   [1 / 4]: { text: '1/4', tip: 'imageSize.quarter' },
 };
 
+/** El espacio entre fotos de una fila (`--img-gap` en styles.css). */
+const ROW_GAP_PX = 8;
+
+/** Los ids de la tanda de fotos seguidas (hermanas) que incluye a `id`, en orden. */
+function runOf(editor: { getParentBlock: (id: string) => { children: unknown[] } | undefined; document: unknown[] }, id: string): string[] {
+  const siblings = (editor.getParentBlock(id)?.children ?? editor.document) as { id: string; type: string }[];
+  const at = siblings.findIndex((b) => b.id === id);
+  if (at < 0) return [id];
+  let from = at;
+  let to = at;
+  while (from > 0 && siblings[from - 1].type === 'image') from--;
+  while (to < siblings.length - 1 && siblings[to + 1].type === 'image') to++;
+  return siblings.slice(from, to + 1).map((b) => b.id);
+}
+
+/**
+ * La proporción (ancho / alto) de lo que se ve de una foto (la miniatura la conserva). `null` mientras carga;
+ * 0 si no se sabe (sin imagen, rota, o el marcador de "todavía no está": ahí se usa 3:2).
+ */
+function aspectOf(dom: Element | null | undefined, id: string): number | null {
+  const img = dom?.querySelector<HTMLImageElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"] img.bn-visual-media`);
+  if (!img || !img.getAttribute('src')) return 0;
+  if (!img.complete) return null;
+  if (img.src.startsWith('data:image/svg')) return 0;
+  return img.naturalWidth > 0 && img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 0;
+}
+
+/** Vuelve a dibujar cuando termina de cargar una imagen del editor (el botón espera a que carguen). */
+function useImageLoads(dom: Element | null | undefined): void {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!dom) return;
+    const onLoad = (e: Event) => {
+      if ((e.target as Element | null)?.matches?.('img.bn-visual-media')) setTick((n) => n + 1);
+    };
+    dom.addEventListener('load', onLoad, true);
+    dom.addEventListener('error', onLoad, true);
+    return () => {
+      dom.removeEventListener('load', onLoad, true);
+      dom.removeEventListener('error', onLoad, true);
+    };
+  }, [dom]);
+}
+
 /** El ancho del área de texto donde está el bloque (su grupo), en px, o 0. */
 function groupWidth(dom: Element | null | undefined, id: string): number {
   const group = dom?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"]`)?.parentElement?.parentElement;
@@ -146,6 +192,7 @@ export function ImageSizeButtons() {
   const Components = useComponentsContext()!;
   const block = useSelectedImage();
   const tr = useT();
+  useImageLoads(block ? editor.domElement : null);
   if (!block || !editor.isEditable) return null;
   const setSize = (f: number) => {
     const width = groupWidth(editor.domElement, block.id);
@@ -153,8 +200,35 @@ export function ImageSizeButtons() {
     if (width > 0) props.previewWidth = Math.round(f * width);
     editor.updateBlock(block.id, { props });
   };
+  const run = runOf(editor as never, block.id);
+  const ready = run.every((id) => aspectOf(editor.domElement, id) !== null);
+  const arrange = () => {
+    // La tanda y las proporciones al hacer clic: pudo cambiar (otra persona, un deshacer) sin cambiar la foto
+    // elegida.
+    const now = runOf(editor as never, block.id);
+    const aspects = now.map((id) => aspectOf(editor.domElement, id));
+    const width = groupWidth(editor.domElement, block.id);
+    if (!(width > 0) || aspects.some((x) => x === null)) return;
+    // Una proporción desconocida (0: sin foto, rota o todavía el marcador) cuenta como 3:2 en `arrangeRows`.
+    const fracs = arrangeRows(aspects as number[], { gapRatio: ROW_GAP_PX / width });
+    // Un solo cambio (un solo deshacer).
+    editor.transact(() => {
+      now.forEach((id, i) => editor.updateBlock(id, { props: { [ROW_WIDTH_PROP]: fracs[i], previewWidth: Math.round(fracs[i] * width) } }));
+    });
+  };
   return (
     <>
+      {run.length > 1 && (
+        <Components.FormattingToolbar.Button
+          className="bn-button"
+          label={tr('imageSize.arrange')}
+          mainTooltip={tr('imageSize.arrange')}
+          secondaryTooltip={ready ? tr('imageSize.arrangeHint') : tr('imageSize.waiting')}
+          icon={<ArrangeIcon />}
+          isDisabled={!ready}
+          onClick={arrange}
+        />
+      )}
       {ROW_PRESETS.map((f) => (
         <Components.FormattingToolbar.Button
           key={f}
@@ -169,5 +243,13 @@ export function ImageSizeButtons() {
         </Components.FormattingToolbar.Button>
       ))}
     </>
+  );
+}
+
+function ArrangeIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 4h5.5v5H3zM10.5 4H17v5h-6.5zM3 11h8v5H3zM13 11h4v5h-4z" />
+    </svg>
   );
 }

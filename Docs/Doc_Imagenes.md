@@ -1,7 +1,7 @@
 # Imágenes en la página: elegir, tamaño y filas
 
 Diseño de lo que pidió Lega el 2026-09-30 (fotos y videos del editor; en la página los dos son un bloque
-`image`, ver `Doc_Carrete.md`). Estado: **v0.044 (elegir y abrir) y v0.045 (anchos y filas) hechas; "Acomodar en filas", en curso.** "Correcciones de la auditoría previa" manda sobre lo anterior.
+`image`, ver `Doc_Carrete.md`). Estado: **hecho: v0.044 (elegir y abrir), v0.045 (anchos y filas), v0.046 (acomodar en filas) y v0.047 (en el teléfono, en fila o apiladas).** "Correcciones de la auditoría previa" manda sobre lo anterior.
 
 ## Lo que se pide
 
@@ -191,7 +191,7 @@ quedan alineadas arriba).
    elegida; cursor de hueco visible. Sin propiedad nueva.
 2. **v0.045 — Anchos y filas (hecho):** `rowWidth`, filas del plugin, tamaños rápidos en la barra, tiradores que
    imantan, paginación y PDF, flechas, Enter, comentarios. Sube `min_app_version`.
-3. **v0.046 — Acomodar en filas.**
+3. **v0.046 — Acomodar en filas (hecho).**
 
 ## Cómo quedó (v0.045)
 
@@ -220,3 +220,33 @@ quedan alineadas arriba).
   indicador de dónde se suelta al arrastrar un bloque sigue horizontal (se podría dibujar
   vertical entre fotos con `dropCursor.hooks.computeDropPosition`), y el tirador del menú lateral de las
   fotos de una fila queda a la izquierda de la fila.
+
+## Acomodar en filas (v0.046)
+
+- Botón en la barra de una foto elegida (ícono de grilla, *Arrange in rows*), solo si la foto tiene al lado
+  otras fotos o videos seguidos. Actúa sobre esa tanda entera, tomada al hacer clic. Se apaga mientras carga
+  alguna miniatura (la proporción sale de ahí) y se prende solo cuando terminan; una foto sin miniatura,
+  rota o con el marcador de "todavía no está" cuenta como 3:2.
+- `arrangeRows` (`src/ui/imageRows.ts`): partición en orden por programación dinámica, como mucho 4 por fila,
+  costo `ln(h/H)²` con `H` el alto de una 3:2 a un tercio del ancho, límites 0,5·H a 2,2·H. La última fila se
+  calcula llena y, si queda más alta que 2,2·H, se achica a la altura de la anterior (o a 2,2·H si es la
+  única). Dos apaisadas llenan una fila; una sola foto queda a unos dos tercios del ancho.
+- Un solo cambio: todas las fotos de la tanda en una transacción (un solo deshacer). También guarda
+  `previewWidth` para las versiones viejas.
+- Probado en Chromium (`arrange.mjs`, en el repo de pruebas privado): cinco fotos de proporciones distintas quedan en 2 + 3, cada fila con
+  la misma altura y llenando el ancho, el orden no cambia, un deshacer vuelve atrás.
+- Visto al probar (ya pasaba antes, no es de esto): después de pegar fotos, deshacer y rehacer varias veces
+  pasa por un estado intermedio sin las fotos; al rehacer todo, o al recargar, están todas.
+
+## En el teléfono: en fila o apiladas (v0.047)
+
+- Preferencia de la cuenta `phoneImages` (`src/prefs.ts`): `rows` (por defecto) o `stacked`. Se elige en el
+  menú de la cuenta (*Images in a row* / *Fotos en fila*), que la muestra solo en pantallas angostas
+  (`isPhoneLayout`, menos de 760 px).
+- Queda en `<html data-phone-images>`; el CSS, solo en pantallas angostas y solo en el editor, pone cada foto
+  de una fila en su propio renglón. La vista de impresión y el PDF no cambian.
+- Una versión anterior no conoce la clave: la maneja como el idioma (una copia vieja sin la clave no la
+  sube; si la cuenta no la tiene, el dispositivo se queda con la que tenía, o la de fábrica si es nuevo).
+  Pruebas en `prefs.test.ts`.
+- Solo en la página (`#root`): la vista de impresión (que mide las marcas de hoja también en el teléfono) y
+  el PDF siguen con las filas.
