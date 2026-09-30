@@ -69,9 +69,12 @@ export interface MediaLink {
   pending: 0 | 1;
   /**
    * `file_not_found`: el archivo todavía no llegó al servidor (lo registra otro dispositivo); `denied`: la
-   * persona no puede editar esa página. En los dos casos se espera sin contarlo como pendiente.
+   * persona no puede editar esa página; `other_project`: el archivo es de otro proyecto (se pegó el bloque
+   * de otro proyecto: se ve roto y no se registra como uso); `held`: la página dejó de usarlo, pero este
+   * dispositivo tiene otro uso del mismo archivo sin confirmar, y quitarlo lo mandaría a la papelera
+   * mientras se ve en otra página. En todos los casos se espera sin contarlo como pendiente.
    */
-  waiting: 'file_not_found' | 'denied' | null;
+  waiting: 'file_not_found' | 'denied' | 'other_project' | 'held' | null;
   error: string | null;
   blocked: boolean;
   failures: number;
@@ -86,6 +89,12 @@ export interface MediaLink {
    * lo que todavía falta mandar.
    */
   rev?: number;
+  /**
+   * Con `removed`: el `seq` del documento con el que se decidió que la página ya no lo usa. Va con
+   * `unlink_page_file` (`p_seen_seq`): si la página cambió después en el servidor, la base lo ignora y se
+   * vuelve a comparar con el documento nuevo.
+   */
+  seenSeq?: number;
 }
 
 /** Lo que el servidor sabe de un archivo (fila de `files`), guardado para mostrarlo sin red. */
@@ -103,6 +112,10 @@ export interface KnownFile {
    * muestra como borrado. Sin el campo, no se sabe (se guardó antes del paso 11).
    */
   deleted?: boolean;
+  /** El portero confirmó que está en la papelera de Drive (`drive_trashed_at`). */
+  inDriveTrash?: boolean;
+  /** El proyecto del archivo (`project_id`), para no registrarlo como uso de una página de otro proyecto. */
+  projectId?: string | null;
   fetchedAt: number;
 }
 

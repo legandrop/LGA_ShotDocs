@@ -131,6 +131,8 @@ export interface MediaFileRow {
   trashed_at?: string | null;
   purged_at?: string | null;
   drive_trashed_at?: string | null;
+  /** El proyecto del archivo. */
+  project_id?: string | null;
 }
 
 /** Una fila de `trashed_files`: un archivo en la papelera que todavía no llegó a la papelera de Drive. */
@@ -146,6 +148,13 @@ export interface TrashedFileRow {
   days_left: number;
   /** Ya se pidió mandarlo a la papelera de Drive y el portero todavía no lo confirmó (se puede repetir). */
   purged_at: string | null;
+  /**
+   * Lo usa una página que está en la papelera de páginas (ella o una de arriba): restaurarla lo vuelve a
+   * usar, salvo que ya se haya mandado a la papelera de Drive. Falta en una base sin esa columna.
+   */
+  in_trashed_page?: boolean;
+  /** El título de esa página. */
+  trashed_page_title?: string | null;
 }
 
 /** Una fila de `files_due_for_purge`. */

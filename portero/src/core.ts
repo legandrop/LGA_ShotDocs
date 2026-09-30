@@ -173,6 +173,8 @@ export class HttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Un código fijo para que la app decida sin leer el texto (por ahora, los de `/trash`). */
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -314,7 +316,8 @@ export class Portero {
     } catch (err) {
       const status = err instanceof HttpError ? err.status : 500;
       const message = err instanceof Error ? err.message : String(err);
-      return json(req, this.env, { error: message }, status);
+      const code = err instanceof HttpError ? err.code : undefined;
+      return json(req, this.env, code ? { error: message, code } : { error: message }, status);
     }
   }
 
@@ -370,7 +373,26 @@ export class Portero {
     }
     const rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
     await this.store.put(`file:${file}`, { ...rec, drive, linked, verified: rec.verified ?? drive.id } satisfies FileRecord);
+    if (linked) await this.trashIfPurged(who, file, drive);
     return linked;
+  }
+
+  /**
+   * Si un dueño o admin mandó el archivo a la papelera mientras su subida seguía en curso (`/trash` respondió
+   * `drive: 'none'`), lo que acaba de subir el portero va derecho a la papelera de Drive (nunca se borra) y
+   * se confirma con `media_purged`, con la sesión de quien subió (la base lo deja a quien edita el archivo).
+   * Si algo falla no corta la subida: queda pendiente y se termina pidiendo `/trash` de nuevo.
+   */
+  private async trashIfPurged(who: Who, file: string, drive: DriveFile): Promise<void> {
+    try {
+      const media = await this.mediaFile(who, file);
+      if (!media?.purged_at) return;
+      const res = await this.driveTrash(drive.id);
+      if (res === 'failed') return;
+      await this.rpc(who.auth, 'media_purged', { p_file: file });
+    } catch {
+      // queda pendiente: `/trash` lo termina
+    }
   }
 
   private async status(who: Who): Promise<unknown> {
@@ -826,43 +848,89 @@ export class Portero {
 
   /**
    * Manda un archivo de la papelera de la app a la papelera de Drive (nunca lo borra: Drive lo guarda 30
-   * días). Con la sesión de la persona: primero `purge_file` (la base decide si puede, solo dueño y admins,
-   * y si el archivo está en la papelera, y lo marca), después `media_file` tiene que decir que está en la
-   * papelera y pedido; recién ahí se toca Drive, y al final se confirma con `media_purged`. Pedirlo de nuevo
-   * no hace nada de más: si la base ya tiene la confirmación, no vuelve a ir a Drive.
+   * días). Con la sesión de la persona y en este orden:
+   *   1. `media_file`: que exista y la persona lo vea; si la base ya tiene la confirmación, listo.
+   *   2. Drive conectado (un token vigente) y, si el archivo está en Drive, que lleve la marca de este
+   *      (`appProperties.sdFile`). Si algo de esto falla no se pide nada a la base: el archivo queda en la
+   *      papelera de la app como estaba.
+   *   3. `purge_file`: la base decide si puede (solo dueño y admins) y si está en la papelera, y lo marca.
+   *   4. `media_file` de nuevo: tiene que decir que está en la papelera y pedido.
+   *   5. Drive: `trashed: true`. 6. `media_purged`.
+   * Pedirlo de nuevo no hace nada de más. Los errores llevan un `code` fijo (Doc_Portero.md).
    */
   private async trashFile(req: Request, who: Who): Promise<{ status: 'done'; file: string; drive: 'trashed' | 'missing' | 'none' }> {
     const body = await readBody(req);
     const file = typeof body.file === 'string' ? body.file.toLowerCase() : '';
-    if (!UUID.test(file)) throw new HttpError(400, 'Missing the file.');
+    if (!UUID.test(file)) throw new HttpError(400, 'Missing the file.', 'bad_request');
 
-    await this.trashRpc(who, 'purge_file', file);
-    const media = await this.mediaFile(who, file);
-    if (!media) throw new HttpError(404, 'This file does not exist or you cannot see it.');
-    if (!media.trashed_at || !media.purged_at) throw new HttpError(409, 'This file is not in the trash.');
+    let media = await this.trashStep('db_error', () => this.mediaFile(who, file));
+    if (!media) throw new HttpError(404, 'This file does not exist or you cannot see it.', 'not_found');
     if (media.drive_trashed_at) return { status: 'done', file, drive: media.drive_id ? 'trashed' : 'none' };
 
+    await this.driveReady();
     const rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
     // Si la base todavía no sabe su id de Drive pero el portero lo subió, se usa el que subió.
     const drive = media.drive_id ?? rec.drive?.id ?? null;
-    let result: 'trashed' | 'missing' | 'none' = 'none';
+    let mark: 'ok' | 'missing' | 'other' | null = null;
     if (drive) {
       // Solo el archivo de Drive que lleva la marca de este: nunca otro archivo del Drive del dueño.
-      const mark = await this.checkMark(file, drive, rec);
-      if (mark === 'other') throw new HttpError(403, 'This file in Google Drive does not belong to this file of the app.');
-      result = 'missing';
-      if (mark === 'ok') {
-        const res = await this.drive(`/files/${encodeURIComponent(drive)}?fields=id,trashed`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trashed: true }),
-        });
-        if (res.ok) result = 'trashed';
-        else if (res.status !== 404) throw new HttpError(502, `Could not send the file to the Google Drive trash (${res.status}).`);
+      mark = await this.trashStep('drive_failed', () => this.checkMark(file, drive, rec));
+      if (mark === 'other') {
+        throw new HttpError(403, 'This file in Google Drive does not belong to this file of the app.', 'drive_mismatch');
       }
     }
+
+    await this.trashRpc(who, 'purge_file', file);
+    media = await this.trashStep('db_error', () => this.mediaFile(who, file));
+    if (!media?.trashed_at || !media.purged_at) {
+      throw new HttpError(502, 'The workspace did not mark this file for the trash.', 'db_error');
+    }
+
+    let result: 'trashed' | 'missing' | 'none' | 'failed' = 'none';
+    if (drive) {
+      result = mark === 'ok' ? await this.driveTrash(drive) : 'missing';
+      if (result === 'failed') throw new HttpError(502, 'Could not send the file to the Google Drive trash.', 'drive_failed');
+    }
     await this.trashRpc(who, 'media_purged', file);
-    return { status: 'done', file, drive: result };
+    return { status: 'done', file, drive: result as 'trashed' | 'missing' | 'none' };
+  }
+
+  /** Hay conexión con Drive y un token vigente; si no, `503 drive_not_connected`. */
+  private async driveReady(): Promise<void> {
+    const google = await this.store.get<Google>('google');
+    const notConnected = () =>
+      new HttpError(503, 'Google Drive is not connected: the workspace owner has to connect it.', 'drive_not_connected');
+    if (!google || google.broken) throw notConnected();
+    try {
+      await this.token();
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 409) throw notConnected();
+      throw new HttpError(502, err instanceof Error ? err.message : String(err), 'drive_failed');
+    }
+  }
+
+  /** Manda un archivo a la papelera de Drive. `missing` si en Drive ya no está; `failed` si Drive falló. */
+  private async driveTrash(id: string): Promise<'trashed' | 'missing' | 'failed'> {
+    const res = await this.drive(`/files/${encodeURIComponent(id)}?fields=id,trashed`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trashed: true }),
+    });
+    if (res.ok) return 'trashed';
+    return res.status === 404 ? 'missing' : 'failed';
+  }
+
+  /** Un paso de `/trash`: un error sin código (Drive o la base que no contesta) sale con `code`. */
+  private async trashStep<T>(code: 'db_error' | 'drive_failed', work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (err) {
+      if (err instanceof HttpError && !err.code) {
+        const fixed = err.status === 401 ? 'session_expired' : err.message.includes('not up to date') ? 'db_outdated' : code;
+        throw new HttpError(err.status, err.message, fixed);
+      }
+      throw err;
+    }
   }
 
   /** `purge_file` o `media_purged` con la sesión de la persona; sus errores, como respuestas claras. */
@@ -871,16 +939,18 @@ export class Portero {
     if (res.ok) return;
     const error = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
     const message = error?.message ?? '';
-    if (message === 'not_allowed') throw new HttpError(403, 'Only the owner or an admin of the workspace can send files to the Google Drive trash.');
-    if (message === 'file_not_found') throw new HttpError(404, 'This file does not exist or you cannot see it.');
-    if (message === 'file_not_trashed') throw new HttpError(409, 'A page still uses this file: it is not in the trash.');
-    if (message === 'file_not_purged') throw new HttpError(409, 'This file is not in the trash.');
-    if (res.status === 401) throw new HttpError(401, 'Your session expired: sign in again.');
+    if (message === 'not_allowed') {
+      throw new HttpError(403, 'Only the owner or an admin of the workspace can send files to the Google Drive trash.', 'not_allowed');
+    }
+    if (message === 'file_not_found') throw new HttpError(404, 'This file does not exist or you cannot see it.', 'not_found');
+    // El único 409: una página lo volvió a usar (ya no está en la papelera).
+    if (message === 'file_not_trashed') throw new HttpError(409, 'A page uses this file again: it is not in the trash.', 'in_use');
+    if (res.status === 401) throw new HttpError(401, 'Your session expired: sign in again.', 'session_expired');
     // La función no existe todavía (PostgREST: PGRST202, 404): la base no tiene la papelera de archivos.
     if (res.status === 404 || error?.code === 'PGRST202') {
-      throw new HttpError(502, 'The workspace database is not up to date for the file trash yet.');
+      throw new HttpError(502, 'The workspace database is not up to date for the file trash yet.', 'db_outdated');
     }
-    throw new HttpError(502, `The workspace did not answer (${res.status}).`);
+    throw new HttpError(502, `The workspace did not answer (${res.status}).`, 'db_error');
   }
 
   // --- ver (con un pase firmado, por partes) --------------------------------------------------------

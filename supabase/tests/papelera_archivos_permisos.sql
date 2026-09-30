@@ -101,6 +101,7 @@ declare
   f2 constant uuid := '00000000-0000-4000-8000-0000000000f2';
   f3 constant uuid := '00000000-0000-4000-8000-0000000000f3';
   t0 timestamptz;
+  seq bigint;
 begin
   perform public.register_file(f1, c, 'IMG_0001.HEIC', 'image/heic', 3000000, 4032, 3024, null);
   perform public.register_file(f2, s, 'IMG_0002.MOV', 'video/quicktime', 62000000, 3840, 2160, 21);
@@ -138,6 +139,23 @@ begin
   assert pg_temp.t('f1') is null, 'register_file no reactiva el uso';
   perform public.link_page_file(c, f3);
   perform pg_temp.check_nothing_deleted(3, 4, 'volver a usar');
+
+  -- Un "dejó de usarse" viejo (visto con un contenido anterior al del servidor) no gana: otro dispositivo
+  -- pudo volver a poner el bloque. La base no marca nada y devuelve false; con el seq al día, sí.
+  perform public.push_page_update(c, gen_random_uuid(), 'AQAAAA==', '9.999');
+  seq := (select update_seq from public.pages where id = c);
+  assert seq >= 1, 'push_page_update no subió update_seq';
+  assert public.unlink_page_file(c, f1, seq - 1) = false, 'un unlink viejo no devuelve false';
+  assert pg_temp.t('f1') is null and (select removed_at is null from public.page_files where page_id = c and file_id = f1),
+    'un unlink viejo marcó el uso';
+  assert public.unlink_page_file(c, f1, seq) = true, 'un unlink al día no devuelve true';
+  assert pg_temp.t('f1') is not null, 'un unlink al día no manda f1 a la papelera';
+  assert public.unlink_page_file(c, f1, seq) = true, 'repetir un unlink al día no devuelve true';
+  assert public.unlink_page_file(c, f1) = true, 'sin seq no devuelve true';
+  assert public.unlink_page_file(c, f1, seq + 5) = true, 'un seq más nuevo que el servidor no vale';
+  perform public.link_page_file(c, f1);
+  assert pg_temp.t('f1') is null, 'f1 no sale después del unlink con seq';
+  perform pg_temp.check_nothing_deleted(3, 4, 'unlink con seq');
 
   -- Permisos de unlink: pide editar la página.
   perform pg_temp.expect_error(format('select public.unlink_page_file(%L, %L)', q, f1),
@@ -179,10 +197,15 @@ declare
   c  constant uuid := '00000000-0000-4000-8000-000000000d02';
   s  constant uuid := '00000000-0000-4000-8000-000000000d03';
   t1 timestamptz;
+  x  record;
 begin
   -- r a la papelera se lleva a c: f1 (solo en c) entra; f3 (también en s) no.
   update public.pages set deleted_at = now() where id = r;
   assert pg_temp.t('f1') is not null, 'f1 no entra al mandar a la papelera la página de arriba';
+  -- La papelera dice que lo usa una página en la papelera de páginas (c, adentro de r), con su título.
+  select * into strict x from public.trashed_files('00000000-0000-4000-8000-000000000e01');
+  assert x.id = '00000000-0000-4000-8000-0000000000f1' and x.in_trashed_page and x.trashed_page_title = 'c',
+    format('trashed_files no dice que lo usa una página en la papelera: %s', x);
   assert pg_temp.t('f3') is null, 'f3 entra aunque s lo usa';
   assert pg_temp.t('f2') is null, 'f2 entra sin motivo';
 
@@ -212,6 +235,11 @@ begin
   update public.pages set deleted_at = now() where id = r;
   update public.pages set deleted_at = null where id = r;
   assert pg_temp.t('f1') = t1, 'mandar y restaurar la página cambió la fecha de entrada (o sacó f1)';
+  -- Un uso marcado en una página en la papelera no cuenta como "en una página en la papelera".
+  update public.pages set deleted_at = now() where id = r;
+  select * into strict x from public.trashed_files('00000000-0000-4000-8000-000000000e01');
+  assert not x.in_trashed_page and x.trashed_page_title is null, format('un uso marcado cuenta como página en la papelera: %s', x);
+  update public.pages set deleted_at = null where id = r;
   perform pg_temp.check_nothing_deleted(3, 4, 'papelera de páginas');
 end;
 $$;
@@ -229,6 +257,7 @@ begin
   select * into strict r from public.trashed_files('00000000-0000-4000-8000-000000000e01');
   if r.id <> '00000000-0000-4000-8000-0000000000f1' or r.name <> 'IMG_0001.HEIC' or r.mime <> 'image/heic'
      or r.size <> 3000000 or r.thumb_at is not null or r.days_left <> 28 or r.purged_at is not null
+     or r.in_trashed_page or r.trashed_page_title is not null
      or r.trashed_at > now() - interval '47 hours' then
     raise exception 'FALLA: % no ve bien la papelera: %', who, r;
   end if;
@@ -350,8 +379,9 @@ do $$
 begin
   perform pg_temp.expect_error($q$select public.purge_file('00000000-0000-4000-8000-0000000000f1')$q$,
     'not_allowed', 'el miembro con editar y crear manda a Drive');
+  -- Confirmar lo puede quien edita (termina una subida), pero solo lo que un dueño o admin pidió.
   perform pg_temp.expect_error($q$select public.media_purged('00000000-0000-4000-8000-0000000000f1')$q$,
-    'not_allowed', 'el miembro con editar y crear confirma');
+    'file_not_purged', 'el miembro con editar y crear confirma algo que no se pidió');
 end;
 $$;
 select pg_temp.as_user('00000000-0000-4000-8000-000000000b05');
@@ -426,6 +456,13 @@ begin
     'volver a usar un archivo ya pedido lo sacó de la papelera';
   perform public.unlink_page_file(c, f1);
 
+  -- Quien solo ve no confirma; quien edita sí (el portero, al terminar una subida de un archivo ya pedido).
+  perform pg_temp.as_user('00000000-0000-4000-8000-000000000b06');
+  perform pg_temp.expect_error(format('select public.media_purged(%L)', f1), 'not_allowed', 'la invitada (ver) confirma');
+  perform pg_temp.as_user('00000000-0000-4000-8000-000000000b05');
+  perform public.media_purged(f1);
+  perform pg_temp.as_user('00000000-0000-4000-8000-000000000b01');
+
   -- El portero confirma: sale de la lista de la papelera; la fila sigue. Repetir no cambia nada.
   perform public.media_purged(f1);
   assert (select drive_trashed_at is not null from public.files where id = f1), 'media_purged no confirma';
@@ -476,6 +513,8 @@ do $$
 begin
   perform pg_temp.expect_error($q$select public.unlink_page_file('00000000-0000-4000-8000-000000000d02', '00000000-0000-4000-8000-0000000000f3')$q$,
     '42501', 'anon llama a unlink_page_file');
+  perform pg_temp.expect_error($q$select public.unlink_page_file('00000000-0000-4000-8000-000000000d02', '00000000-0000-4000-8000-0000000000f3', 1)$q$,
+    '42501', 'anon llama a unlink_page_file con seq');
   perform pg_temp.expect_error($q$select * from public.trashed_files('00000000-0000-4000-8000-000000000e01')$q$,
     '42501', 'anon ve la papelera');
   perform pg_temp.expect_error($q$select * from public.files_due_for_purge('00000000-0000-4000-8000-000000000e01')$q$,

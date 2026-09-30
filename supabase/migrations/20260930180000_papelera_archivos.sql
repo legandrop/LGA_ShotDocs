@@ -258,16 +258,31 @@ $$;
 -- La página dejó de usar el archivo (el bloque `sdmedia://` desapareció): marca el uso con `removed_at`,
 -- sin borrarlo. Pide editar la página (`page_not_found` si no). Si el uso no existe o ya estaba marcado, no
 -- hace nada (reintentar no cambia nada, tampoco la fecha).
-create function public.unlink_page_file(p_page_id uuid, p_file_id uuid)
-returns void
+--
+-- `p_seen_seq`: el último `seq` del contenido de la página que el dispositivo tenía al ver que el bloque ya
+-- no estaba (`pages.update_seq` de lo que bajó y subió). Si la página tiene contenido más nuevo en el
+-- servidor (`update_seq` mayor), otro dispositivo pudo volver a poner el bloque: la base no marca nada y
+-- devuelve false, y el dispositivo vuelve a comparar después de bajar lo nuevo. Así un "dejó de usarse"
+-- viejo que llega tarde (la cola sin red) no le gana a un uso más nuevo. Sin `p_seen_seq`, como antes.
+-- Devuelve true cuando el pedido vale (marcó el uso, o ya estaba marcado o no existía).
+-- La fila de la página se bloquea como en `push_page_update` (que sube `update_seq`): los dos no se cruzan.
+create function public.unlink_page_file(p_page_id uuid, p_file_id uuid, p_seen_seq bigint default null)
+returns boolean
 language plpgsql security definer set search_path = ''
 as $$
+declare
+  cur bigint;
 begin
   if private.page_level(p_page_id) < 3 then
     raise exception 'page_not_found' using errcode = 'P0002';
   end if;
+  select pg.update_seq into cur from public.pages pg where pg.id = p_page_id for share;
+  if p_seen_seq is not null and cur > p_seen_seq then
+    return false;
+  end if;
   update public.page_files set removed_at = now()
   where page_id = p_page_id and file_id = p_file_id and removed_at is null;
+  return true;
 end;
 $$;
 
@@ -280,10 +295,13 @@ $$;
 
 -- Lo que está en la papelera y todavía no llegó a la papelera de Drive, lo último primero. `days_left`:
 -- cuántos días faltan para los 30 (30 el día que entra, 0 si ya pasaron). `purged_at`: ya se pidió
--- mandarlo a Drive y el portero todavía no lo confirmó (se puede volver a pedir).
+-- mandarlo a Drive y el portero todavía no lo confirmó (se puede volver a pedir). `in_trashed_page`: lo usa
+-- (sin `removed_at`) alguna página que está en la papelera de páginas, o adentro de una; restaurarla lo
+-- saca de acá. `trashed_page_title` es el título de una de esas páginas (la primera por título), para
+-- mostrarlo; la app no los incluye en "vaciar".
 create function public.trashed_files(p_project uuid)
 returns table (id uuid, name text, mime text, size bigint, thumb_at timestamptz, trashed_at timestamptz,
-               days_left int, purged_at timestamptz)
+               days_left int, purged_at timestamptz, in_trashed_page boolean, trashed_page_title text)
 language plpgsql stable security definer set search_path = ''
 as $$
 begin
@@ -293,8 +311,16 @@ begin
   return query
     select f.id, f.name, f.mime, f.size, f.thumb_at, f.trashed_at,
            greatest(0, ceil(extract(epoch from (f.trashed_at + interval '30 days' - now())) / 86400))::int,
-           f.purged_at
+           f.purged_at, tp.title is not null, tp.title
     from public.files f
+    left join lateral (
+      select pg.title
+      from public.page_files pf
+      join public.pages pg on pg.id = pf.page_id
+      where pf.file_id = f.id and pf.removed_at is null and not private.page_alive(pf.page_id)
+      order by pg.title, pg.id
+      limit 1
+    ) tp on true
     where f.project_id = p_project and f.trashed_at is not null and f.drive_trashed_at is null
     order by f.trashed_at desc, f.id;
 end;
@@ -354,8 +380,11 @@ end;
 $$;
 
 -- La llama el portero, con la sesión de quien lo pidió, después de mover el archivo a la papelera de Drive
--- (o de ver que en Drive ya no estaba). Mismos permisos que purge_file; tiene que tener `purged_at`.
--- Repetirla no cambia nada.
+-- (o de ver que en Drive ya no estaba). Tiene que tener `purged_at` (lo pidió un dueño o admin). La puede
+-- confirmar el dueño o un admin (como purge_file) o quien edita el archivo (nivel 3): es quien termina una
+-- subida que seguía en curso cuando se pidió, y el portero manda a la papelera de Drive lo que sube de un
+-- archivo ya pedido. Confirmar no borra ni mueve nada; en el peor caso un archivo queda en Drive sin ir a
+-- su papelera. Repetirla no cambia nada.
 create function public.media_purged(p_file uuid)
 returns void
 language plpgsql security definer set search_path = ''
@@ -367,7 +396,7 @@ begin
   if not found or (private.file_level(p_file) < 1 and not private.can_see_file_trash(f.project_id)) then
     raise exception 'file_not_found' using errcode = 'P0002';
   end if;
-  if not private.can_purge_files(f.project_id) then
+  if not private.can_purge_files(f.project_id) and private.file_level(p_file) < 3 then
     raise exception 'not_allowed' using errcode = '42501';
   end if;
   if f.purged_at is null then
@@ -404,12 +433,12 @@ begin
 end;
 $$;
 
-revoke all on function public.unlink_page_file(uuid, uuid) from public, anon;
+revoke all on function public.unlink_page_file(uuid, uuid, bigint) from public, anon;
 revoke all on function public.trashed_files(uuid) from public, anon;
 revoke all on function public.files_due_for_purge(uuid) from public, anon;
 revoke all on function public.purge_file(uuid) from public, anon;
 revoke all on function public.media_purged(uuid) from public, anon;
-grant execute on function public.unlink_page_file(uuid, uuid) to authenticated;
+grant execute on function public.unlink_page_file(uuid, uuid, bigint) to authenticated;
 grant execute on function public.trashed_files(uuid) to authenticated;
 grant execute on function public.files_due_for_purge(uuid) to authenticated;
 grant execute on function public.purge_file(uuid) to authenticated;

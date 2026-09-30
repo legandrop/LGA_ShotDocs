@@ -132,9 +132,11 @@ export interface MediaRemote {
   fetchMediaFiles(ids: string[]): Promise<MediaFileRow[]>;
   /**
    * La página dejó de usar el archivo (el bloque desapareció): marca el uso, no lo borra. Idempotente.
-   * `page_not_found` si no se puede editar la página. Versión 6 de la base (papelera de archivos).
+   * `seenSeq`: el `seq` del documento con el que se decidió; si la página cambió después en el servidor, la
+   * base no hace nada y esto devuelve `false` (hay que volver a comparar con el documento nuevo). `true` si
+   * quedó hecho. `page_not_found` si no se puede editar la página. Versión 6 de la base.
    */
-  unlinkPageFile(pageId: string, fileId: string): Promise<void>;
+  unlinkPageFile(pageId: string, fileId: string, seenSeq?: number | null): Promise<boolean>;
   /** La papelera de archivos del proyecto (`trashed_files`). `not_allowed` si la sesión no la ve. */
   trashedFiles(projectId: string): Promise<TrashedFileRow[]>;
   /**
@@ -157,6 +159,19 @@ export function parseRemovedMember(data: unknown): RemovedMember {
     transferred: Array.isArray(row.transferred) ? row.transferred.length : 0,
     withoutHeir: Array.isArray(row.without_heir) ? row.without_heir.length : 0,
   };
+}
+
+/**
+ * `unlink_page_file` no hizo nada porque la página cambió después del `seq` con el que se decidió. La
+ * función anterior no devuelve nada (`null`: hecho); se aceptan las formas razonables de decir "ignorado".
+ */
+export function unlinkIgnored(data: unknown): boolean {
+  if (data === false || data === 'ignored' || data === 'stale') return true;
+  if (data && typeof data === 'object') {
+    const row = (Array.isArray(data) ? data[0] : data) as { ignored?: unknown; status?: unknown } | undefined;
+    return row?.ignored === true || row?.status === 'ignored' || row?.status === 'stale';
+  }
+  return false;
 }
 
 export const FILES_BUCKET = 'page-files';
@@ -561,21 +576,35 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       trashed_at: r.trashed_at ?? null,
       purged_at: r.purged_at ?? null,
       drive_trashed_at: r.drive_trashed_at ?? null,
+      project_id: r.project_id ?? null,
     }));
   }
 
-  async unlinkPageFile(pageId: string, fileId: string): Promise<void> {
-    const { error, status } = await this.client.rpc('unlink_page_file', { p_page_id: pageId, p_file_id: fileId });
+  /** Desde cuándo la base no tiene `unlink_page_file` con `p_seen_seq`; se vuelve a probar cada tanto. */
+  private seenSeqMissingAt = 0;
+
+  async unlinkPageFile(pageId: string, fileId: string, seenSeq?: number | null): Promise<boolean> {
+    const args = { p_page_id: pageId, p_file_id: fileId };
+    const withSeq = seenSeq != null && Date.now() - this.seenSeqMissingAt >= 10 * 60_000;
+    const { data, error, status } = await this.client.rpc('unlink_page_file', withSeq ? { ...args, p_seen_seq: seenSeq } : args);
+    // La función anterior no acepta `p_seen_seq`: se sigue sin él.
+    if (error?.code === MISSING_FUNCTION && withSeq) {
+      this.seenSeqMissingAt = Date.now();
+      return this.unlinkPageFile(pageId, fileId, seenSeq);
+    }
     if (error) throw toRemoteError(error, status);
+    return !unlinkIgnored(data);
   }
 
   async trashedFiles(projectId: string): Promise<TrashedFileRow[]> {
     const { data, error, status } = await this.client.rpc('trashed_files', { p_project: projectId });
     if (error) throw toRemoteError(error, status);
-    return ((data ?? []) as TrashedFileRow[]).map((r) => ({
+    return ((data ?? []) as (TrashedFileRow & { page_title?: string | null; trashed_page?: string | null })[]).map((r) => ({
       ...r,
       size: Number(r.size),
       days_left: Number(r.days_left),
+      in_trashed_page: r.in_trashed_page === true,
+      trashed_page_title: r.trashed_page_title ?? r.page_title ?? r.trashed_page ?? null,
     }));
   }
 
