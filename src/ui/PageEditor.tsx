@@ -4,26 +4,21 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import { BlockNoteView } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
 import {
-  blockTypeSelectItems,
-  FormattingToolbar,
   FormattingToolbarController,
   getDefaultReactSlashMenuItems,
-  getFormattingToolbarItems,
   SuggestionMenuController,
   useCreateBlockNote,
-  type BlockTypeSelectItem,
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
-import { t, useT, type Translate } from '../i18n';
+import { t, useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carreteModel';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
-import { HideForDriveFiles, ImageSizeButtons, MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
@@ -35,8 +30,6 @@ import { findUnknownContent } from './unknownContent';
 import { redrawFromYjs } from './editorRecovery';
 import {
   CommentMargin,
-  CommentToolbarButton,
-  paragraphVariantItems,
   questionSlashItem,
   useBlockSourceRegistration,
   withParagraphVariants,
@@ -55,9 +48,10 @@ import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
 import { BlockSideMenuController } from './BlockSideMenu';
+import { PageFormattingToolbar, pageToolbarItems } from './PageToolbar';
 import { undoGuardExtension } from './undoGuard';
 import { BACKGROUND_META } from './editorMeta';
-import { headingItems, notToggleHeading } from './collapseMenus';
+import { notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
 import { findExtension } from './findEditor';
@@ -66,18 +60,6 @@ import { searchSession } from './projectSearchUi';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
-
-// Script es un párrafo con `script: true` (ver editorSchema.ts), y una pregunta, uno con `question: true`
-// (EditorComments.tsx). Cada ítem del selector pide las dos propiedades, así el selector distingue uno de
-// otro y volver a párrafo saca la marca. El nombre ("Script", en castellano "Guion") es solo la etiqueta.
-function scriptTypeItem(tr: Translate): BlockTypeSelectItem {
-  return {
-    name: tr('editor.script'),
-    type: 'paragraph',
-    props: { [SCRIPT_PROP]: true },
-    icon: ScriptIcon as unknown as BlockTypeSelectItem['icon'],
-  };
-}
 
 type Opening =
   | { state: 'loading' }
@@ -569,7 +551,7 @@ function BlockEditor({
   }, [editor, tr]);
 
   const toolbarItems = useMemo(
-    () => paragraphVariantItems(headingItems(blockTypeSelectItems(editor.dictionary)), scriptTypeItem(tr), tr),
+    () => pageToolbarItems(editor.dictionary, tr),
     [editor, tr],
   );
 
@@ -725,24 +707,7 @@ function BlockEditor({
   const openAtRef = useRef(openAt);
   openAtRef.current = openAt;
   const formattingToolbar = useCallback(
-    () => (
-      <FormattingToolbar blockTypeSelectItems={toolbarItems}>
-        {getFormattingToolbarItems(toolbarItems).flatMap((item) =>
-          // Para las fotos y videos del Drive, "Download" baja el original (no la miniatura), y
-          // "View" abre el carrete.
-          item.key === 'fileDownloadButton'
-            ? [
-                <MediaViewButton key="mediaViewButton" onView={(id) => openAtRef.current(id)} />,
-                <MediaDownloadButton key="fileDownloadButton" />,
-                <ImageSizeButtons key="imageSizeButtons" />,
-              ]
-            : item.key === 'fileRenameButton' || item.key === 'filePreviewButton'
-              ? [<HideForDriveFiles key={String(item.key)}>{item}</HideForDriveFiles>]
-              : [item],
-        )}
-        {canComment && <CommentToolbarButton key="comment" />}
-      </FormattingToolbar>
-    ),
+    () => <PageFormattingToolbar items={toolbarItems} canComment={canComment} onView={(id) => openAtRef.current(id)} />,
     [toolbarItems, canComment],
   );
 

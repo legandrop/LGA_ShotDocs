@@ -156,6 +156,17 @@ export function CollapseToggles({ editor, host, editable }: { editor: AnyEditor;
     };
   }, [host]);
 
+  // Al llegar al triángulo, los puntos pasan a su título. Para BlockNote la capa es parte del editor y no mueve
+  // el menú lateral con el mouse encima (se quedaba en el bloque de antes si se llegaba al triángulo sin pasar por
+  // el título): se le avisa un movimiento sobre el principio del título.
+  const handleFollows = (id: string) => {
+    const block = host.current?.querySelector(`.bn-editor [data-node-type="blockContainer"][data-id="${CSS.escape(id)}"]`);
+    const text = block?.querySelector(':scope > .bn-block-content :is(h1, h2, h3, h4, h5, h6)');
+    if (!text) return;
+    const r = text.getBoundingClientRect();
+    text.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: r.left + 1, clientY: r.top + Math.min(r.height, 24) / 2 }));
+  };
+
   const toggle = (id: string) => {
     const view = editor.prosemirrorView;
     if (view) toggleCollapsed(view, id);
@@ -178,6 +189,7 @@ export function CollapseToggles({ editor, host, editable }: { editor: AnyEditor;
             // Con el editor editable, Tab anida bloques: el triángulo no entra en el orden de Tab.
             tabIndex={editable ? -1 : 0}
             // No saca el foco del editor ni extiende la selección (Shift).
+            onPointerEnter={() => handleFollows(t.id)}
             onPointerDown={(e) => e.preventDefault()}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => toggle(t.id)}

@@ -68,24 +68,29 @@ export interface HandlePlace {
   fits: boolean;
 }
 
-/** El texto de un bloque (el título, el renglón) o, si no tiene (una foto), su contenido. */
-function textOf(block: Element): Element | null {
+/** El contenido de un bloque (`.bn-block-content`) y su texto (el título, el renglón) o, si no tiene (una foto), el contenido. */
+function partsOf(block: Element): { content: Element; text: Element } | null {
   const content = block.querySelector(':scope > .bn-block-content');
   if (!content) return null;
-  return content.querySelector('h1, h2, h3, h4, h5, h6') ?? content.querySelector('.bn-inline-content') ?? content;
+  const text = content.querySelector('h1, h2, h3, h4, h5, h6') ?? content.querySelector('.bn-inline-content') ?? content;
+  return { content, text };
 }
 
 /**
- * Los puntos de un bloque: a `GUTTER_GAP` del triángulo (si el bloque tiene uno a la vista) o del texto, y
- * centrados en su primer renglón.
+ * Los puntos de un bloque: a `GUTTER_GAP` del triángulo (si el bloque tiene uno a la vista) o del borde izquierdo
+ * del contenido, y centrados en su primer renglón. Del contenido, no del texto: en las listas el texto va después
+ * de la casilla (lista de tareas), del botón que abre (lista desplegable) o de la viñeta o el número, y los puntos
+ * encima los taparían (un clic en la casilla elegiría el bloque en vez de marcarla).
  */
 export function handlePlace(block: Element, triangle: Element | null): HandlePlace | null {
-  const text = textOf(block);
-  if (!text) return null;
+  const parts = partsOf(block);
+  if (!parts) return null;
+  const { content, text } = parts;
   const r = text.getBoundingClientRect();
+  const left = Math.min(r.left, content.getBoundingClientRect().left);
   const editor = block.closest('.bn-editor');
   const editorLeft = editor ? editor.getBoundingClientRect().left : -Infinity;
-  const glyphRight = (triangle ? triangleVisibleLeft(triangle) : r.left) - GUTTER_GAP;
+  const glyphRight = (triangle ? triangleVisibleLeft(triangle) : left) - GUTTER_GAP;
   const right = glyphRight + DOTS_RIGHT_PAD;
   return { right, centerY: r.top + firstLine(text, r) / 2, fits: right - DOTS_BUTTON.width >= editorLeft - 0.5 };
 }

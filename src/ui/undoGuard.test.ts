@@ -176,6 +176,109 @@ describe('un borrado es un solo Ctrl+Z', () => {
     expect(typing.defaultPrevented).toBe(false);
   });
 
+  it('con el foco en otro campo (el título) que se quedó sin deshacer, el deshacer del navegador no toca la página', async () => {
+    const e = mount();
+    e.replaceBlocks(e.document, [p('a'), p('b')] as never);
+    await pause();
+    typeAtEnd(e, 'a', 'zz');
+    await pause();
+    const title = document.createElement('textarea');
+    document.body.appendChild(title);
+    title.focus();
+    expect(document.activeElement).toBe(title);
+    for (const inputType of ['historyUndo', 'historyRedo', 'historyUndo'] as const) {
+      const event = nativeHistory(e, inputType);
+      // Se cancela (el navegador no edita la página) y no se deshace nada.
+      expect(event.defaultPrevented).toBe(true);
+      await tick();
+      expect(texts(e)).toEqual(['azz', 'b']);
+    }
+    // Con el foco en un botón de la app (no un campo), el Ctrl+Z sí es de la página.
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+    button.focus();
+    nativeHistory(e, 'historyUndo');
+    await tick();
+    expect(texts(e)).toEqual(['a', 'b']);
+  });
+
+  it('un deshacer del navegador que no se puede cancelar lo deja pasar (sin deshacer dos veces)', async () => {
+    const e = mount();
+    e.replaceBlocks(e.document, [p('a'), p('b')] as never);
+    await pause();
+    typeAtEnd(e, 'a', 'zz');
+    await pause();
+    const event = new InputEvent('beforeinput', { inputType: 'historyUndo', bubbles: true, cancelable: false });
+    view(e).dom.dispatchEvent(event);
+    await tick();
+    expect(texts(e)).toEqual(['azz', 'b']);
+  });
+
+  it('en solo lectura, el deshacer del navegador se cancela y no cambia nada', async () => {
+    const e = mount();
+    e.replaceBlocks(e.document, [p('a'), p('b')] as never);
+    await pause();
+    typeAtEnd(e, 'a', 'zz');
+    await pause();
+    e.isEditable = false;
+    const event = nativeHistory(e, 'historyUndo');
+    expect(event.defaultPrevented).toBe(true);
+    await tick();
+    expect(texts(e)).toEqual(['azz', 'b']);
+  });
+
+  it('una selección de texto de un bloque a otro, borrada enseguida después de escribir, es su propio paso', async () => {
+    const e = mount();
+    e.replaceBlocks(e.document, [p('a'), p('bb'), p('cc'), p('d')] as never);
+    await pause();
+    typeAtEnd(e, 'a', 'xyz');
+    // Del medio de "bb" al medio de "cc", sin esperar.
+    const v = view(e);
+    let from = -1;
+    let to = -1;
+    v.state.doc.descendants((node, pos) => {
+      if (node.isText && node.text === 'bb') from = pos + 1;
+      if (node.isText && node.text === 'cc') to = pos + 1;
+      return true;
+    });
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, from, to)));
+    press(e, 'Backspace');
+    expect(texts(e)).toEqual(['axyz', 'bc', 'd']);
+    press(e, 'z', { ctrlKey: true });
+    await tick();
+    expect(texts(e)).toEqual(['axyz', 'bb', 'cc', 'd']);
+    press(e, 'z', { ctrlKey: true });
+    await tick();
+    expect(texts(e)).toEqual(['a', 'bb', 'cc', 'd']);
+  });
+
+  it('escribir sobre un título colapsado elegido con los puntos borra su sección entera (con aviso); un Ctrl+Z la trae', async () => {
+    const seen: string[] = [];
+    const on = (ev: Event) => seen.push((ev as CustomEvent<string>).detail);
+    window.addEventListener('shotdocs:notice', on);
+    try {
+      const e = mount();
+      e.replaceBlocks(e.document, [p('a'), h(2, 'T'), p('t1'), p('t2'), h(2, 'U'), p('c')] as never);
+      await pause();
+      setCollapsed(view(e), [idOf(e, 'T')], true);
+      const before = texts(e);
+      selectWholeBlock(view(e), idOf(e, 'T'));
+      const v = view(e);
+      const { from, to } = v.state.selection;
+      if (!v.someProp('handleTextInput', (f) => f(v, from, to, 'x', () => v.state.tr.insertText('x')))) v.dispatch(v.state.tr.insertText('x'));
+      await tick();
+      expect(texts(e)).not.toContain('t1');
+      expect(texts(e)).not.toContain('t2');
+      expect(texts(e)).toContain('U');
+      expect(seen.at(-1)).toMatch(/colapsado|collapsed/);
+      press(e, 'z', { ctrlKey: true });
+      await tick();
+      expect(texts(e)).toEqual(before);
+    } finally {
+      window.removeEventListener('shotdocs:notice', on);
+    }
+  });
+
   it('elegir el bloque con los puntos deja el foco en el editor (Ctrl+Z llega al editor)', () => {
     const e = mount();
     e.replaceBlocks(e.document, [p('a'), p('b')] as never);
