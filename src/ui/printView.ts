@@ -35,12 +35,24 @@ const REMOVE = [
   '.ProseMirror-yjs-cursor',
   '.ProseMirror-gapcursor',
   '.comment-margin',
+  // La barra de buscar y reemplazar (Docs/Doc_Buscar.md).
+  '.find-anchor',
   // El espacio para tocar y agregar un bloque al final: en la última hoja podría sumar una hoja vacía.
   '.bn-trailing-block',
 ].join(',');
 
 /** Clases de estado del editor que no van en papel. */
-const STATE_CLASSES = ['ProseMirror-selectednode', 'ProseMirror-focused', 'comment-flash', 'ProseMirror-yjs-selection'];
+const STATE_CLASSES = [
+  'ProseMirror-selectednode',
+  'ProseMirror-focused',
+  'comment-flash',
+  'ProseMirror-yjs-selection',
+  // Lo resaltado por la búsqueda en la página (findEditor.ts).
+  'sd-find-hit',
+  'sd-find-current',
+  'sd-find-block',
+  'sd-find-block-current',
+];
 
 export interface PrintView {
   root: HTMLElement;

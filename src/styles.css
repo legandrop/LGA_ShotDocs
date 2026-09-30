@@ -4018,3 +4018,184 @@ button.primary.danger {
   font-size: 14px;
   overflow-wrap: anywhere;
 }
+
+/* --- Buscar y reemplazar en la página (Docs/Doc_Buscar.md) --------------------------------------------- */
+
+:root {
+  --find-hit: rgba(64, 140, 220, 0.22);
+  --find-current: rgba(242, 125, 38, 0.55);
+  --find-block: #408cdc;
+  --find-block-current: #f27d26;
+}
+
+:root[data-theme='dark'] {
+  --find-hit: rgba(96, 160, 235, 0.28);
+  --find-current: rgba(242, 125, 38, 0.6);
+  --find-block: #6aa8ec;
+  --find-block-current: #f59a55;
+}
+
+/* Lo encontrado: decoraciones de ProseMirror, sin tocar el documento. */
+.editor .sd-find-hit {
+  background-color: var(--find-hit);
+  border-radius: 2px;
+}
+
+.editor .sd-find-current {
+  background-color: var(--find-current);
+  box-shadow: 0 0 0 1px var(--find-current);
+}
+
+/* En un pie o en el nombre de un archivo: el bloque con un contorno (la tarjeta de un adjunto es una imagen)
+   y el pie subrayado. */
+.editor .bn-block-content.sd-find-block {
+  outline: 2px dashed var(--find-block);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.editor .bn-block-content.sd-find-block-current {
+  outline: 2px solid var(--find-block-current);
+}
+
+.editor .sd-find-block .bn-file-caption {
+  text-decoration: underline wavy var(--find-block);
+  text-underline-offset: 3px;
+}
+
+.editor .sd-find-block-current .bn-file-caption {
+  text-decoration-color: var(--find-block-current);
+}
+
+/* La barra: un ancla sin alto, pegada debajo de la barra de arriba al desplazarse; la barra, a la derecha. */
+.find-anchor {
+  position: sticky;
+  top: calc(60px + env(safe-area-inset-top));
+  z-index: 4;
+  height: 0;
+}
+
+.find-bar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(460px, 100%);
+  padding: 6px;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+}
+
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.find-bar .find-input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 13px;
+}
+
+.find-bar .find-input[aria-invalid='true'] {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.find-count {
+  flex: none;
+  min-width: 58px;
+  padding: 0 6px;
+  color: var(--muted-2);
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.find-button {
+  flex: none;
+  border: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.find-option.on {
+  background: var(--active);
+  color: var(--text);
+}
+
+.find-word {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.find-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.find-bar.expanded .find-toggle svg {
+  transform: rotate(90deg);
+}
+
+.find-replace-row {
+  padding-left: 30px;
+  gap: 4px;
+}
+
+.find-text-button {
+  flex: none;
+  padding: 4px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.find-status {
+  padding: 0 6px 2px;
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .find-anchor {
+    top: calc(56px + env(safe-area-inset-top));
+  }
+
+  /* En el teléfono la barra ocupa su lugar (no tapa los primeros renglones): la página baja un poco. */
+  .find-anchor {
+    height: auto;
+    margin: 0 0 8px;
+  }
+
+  .find-bar {
+    position: relative;
+    width: 100%;
+  }
+
+  .find-replace-row {
+    padding-left: 0;
+    flex-wrap: wrap;
+  }
+
+  .find-replace-row .find-input {
+    flex-basis: 100%;
+  }
+}
+
+@media print {
+  .find-anchor {
+    display: none !important;
+  }
+}

@@ -1,6 +1,8 @@
 # Buscar en el proyecto y en la página (P.12)
 
-Estado: **diseño, sin implementar**. Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
+Estado: **entrega 1 hecha (v0.052): buscar y reemplazar en la página**; la búsqueda del proyecto (entrega 2),
+pendiente. "Correcciones de la auditoría" manda sobre lo de arriba y "Cómo quedó (entrega 1)", al final, sobre
+todo lo demás. Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
 + de páginas, que busca en todo el proyecto y te lleva al lugar; otra a la izquierda de los comentarios, que
 busca en la página abierta, también adentro de las secciones colapsadas". Después sumó **reemplazar**, como en
 VS Code. Sale de leer el código de `main` (v0.050) y `Doc_Colapsar.md` (rama `lega/colapsar`, en diseño).
@@ -332,21 +334,23 @@ Pruebas:
    ediciones comunes (un solo deshacer para "Reemplazar todo"), también en lo colapsado (abre solo la sección
    de la actual), con *Aa* y *Palabra entera*. En todo el proyecto, más adelante, con la lista de cambios y
    solo en las páginas que se pueden editar (sección 11).
+3. **Ctrl/⌘+K pasa a la búsqueda**, y el panel muestra también los proyectos que coinciden (entrega 2).
+4. **La ñ vale como n** al buscar, salvo con *Aa*.
+5. **La papelera no entra** en la búsqueda del proyecto.
+6. **Comentarios, no en la primera entrega.**
+7. **Pies de foto y nombres de archivo:** se encuentran, pero no se reemplazan en la primera entrega.
+8. **Sin atajo propio para reemplazar** (ni Ctrl+H ni ⌘⇧H): se abre con Ctrl/⌘+F y se despliega el reemplazo
+   desde la barra. Esto manda sobre la sección 6 y la corrección 14.
+9. **Primero la página** (entrega 1, con reemplazar), después el proyecto (entrega 2).
 
 ## Decisiones (a confirmar por Lega)
 
 1. **Buscar en el dispositivo**, sin texto en el servidor (sección 2). Se revisa si un día se deja de bajar
    todo.
-2. **Ctrl/⌘+K deja de abrir el selector de proyectos**; el panel de búsqueda muestra también los proyectos.
-3. **La ñ vale como n** al buscar (como Chrome), salvo con *Aa*.
-4. **La papelera no entra** en la búsqueda del proyecto (más adelante, una casilla).
-5. **Comentarios, no en la primera entrega.**
-6. **Pies de foto y nombres de archivo:** se encuentran, pero no se reemplazan en la primera entrega.
-7. **El título de la página** se busca en el proyecto, no en la barra de la página.
-8. **Esc deja elegida la coincidencia** (como VS Code), en vez de volver a donde estaba el cursor.
-9. **Atajo para abrir con el reemplazo desplegado:** Ctrl+H / ⌘⌥F, como VS Code (en Chrome, Ctrl+H es el
-   historial).
-10. **Primero la página** (entrega 1, con reemplazar), después el proyecto (entrega 2).
+2. **El título de la página** se busca en el proyecto, no en la barra de la página (propuesto; así quedó la
+   entrega 1).
+3. **Esc deja elegida la coincidencia** (como VS Code), en vez de volver a donde estaba el cursor (propuesto;
+   así quedó la entrega 1).
 
 ## Lo que no pude verificar
 
@@ -417,11 +421,75 @@ Cambios:
 18. **Antes de reemplazar** se revisa que el texto de la coincidencia actual siga siendo el buscado (alguien
     pudo cambiarlo).
 
-Y: sumar los proyectos al panel de Ctrl/⌘+K espera la decisión de Lega.
+Y: sumar los proyectos al panel de Ctrl/⌘+K esperaba la decisión de Lega (respondida: sí, en la entrega 2).
 
-### Propuesto, a confirmar (se usa en la entrega 1)
+## Cómo quedó (entrega 1, v0.052)
 
-- La ñ vale como n, salvo con *Aa*.
-- Pies de foto y nombres de archivo: se encuentran, no se reemplazan.
-- Esc deja elegida la coincidencia actual.
-- El título de la página no entra en la barra de la página.
+Buscar y reemplazar en la página, con las correcciones de la auditoría. Donde esto y lo de arriba no
+coinciden, vale esto.
+
+- **`src/search/normalize.ts`:** `normalize` (texto normalizado con el mapa al original), `normalizeQuery`,
+  `findIn` y `searchText`. Sin *Aa*: NFD por punto de código, sin marcas combinadas, `toLowerCase()` (la ñ vale
+  como n, la "İ" como i; "ß" no es "ss"; ligaduras, ø y ł quedan como están). Con *Aa*: NFD sin sacar nada,
+  y una coincidencia que corta una letra con tilde descompuesta no cuenta. Los espacios seguidos (también el de
+  no separar) valen uno; el final de una coincidencia se extiende sobre las marcas que siguen.
+- **`src/search/extract.ts`:** la regla de qué texto tiene cada bloque, con dos entradas que dan lo mismo en el
+  mismo orden (lo fija una prueba): `unitsFromPM` (el editor abierto, con las posiciones de cada tramo) y
+  `unitsFromYDoc` (el Y.Doc guardado, para la entrega 2). Un salto de línea es `\uFFFC` (no un espacio: nunca
+  une dos renglones); los hijos anidados son bloques propios; pie y nombre, unidades aparte.
+- **`src/ui/findEditor.ts`:** el plugin (`findExtension`, en la lista `extensions` del editor de
+  `PageEditor.tsx`) con las coincidencias (hasta 1000; "de más de 1000"), la actual y las decoraciones
+  (`sd-find-hit`, `sd-find-current`, y para un pie o un nombre `sd-find-block` en el contenido del bloque). Con
+  cada cambio del documento las marcas se corren y se vuelve a buscar a los 150 ms. La actual se guarda también
+  como posición relativa de Yjs: un cambio de otro dispositivo reemplaza el documento entero en ProseMirror (así
+  trabaja y-prosemirror) y las posiciones corridas no sirven.
+  - Reemplazar: `replaceCurrent` y `replaceAll` revisan `editor.isEditable` (sin permiso o con la página
+    incompleta no hacen nada: `blocked: 'readonly'`); una transacción por coincidencia, de atrás para
+    adelante, entre dos `undoManager.stopCapturing()` (un solo paso, separado de lo escrito justo antes); el
+    texto nuevo con las marcas del primer carácter (`replaceWith`); se saltea lo que borraría un link entero
+    (vacío, o una coincidencia que empieza afuera del link y lo cubre); pies y nombres se cuentan y no se tocan.
+    Antes de *Reemplazar* se vuelve a buscar desde la posición relativa de la actual y solo se reemplaza si es
+    exactamente la misma (si no, `blocked: 'changed'` y queda la más cercana).
+  - Marcas para P.11: cada transacción de reemplazo lleva el `meta` `sd-find-replace` (`FIND_REPLACE_META`); su
+    paso de deshacer también (`stack-item-added`), y el paso que sale de deshacerlo o rehacerlo, si el que se
+    aplica estaba marcado. `isFindReplaceUndo(state)` dice si lo que se está aplicando es deshacer o rehacer
+    un reemplazo (para que el colapso no abra secciones por eso).
+  - Gancho para P.11: `setFindCollapseHooks({ isHidden, reveal })`. Sin registrar, no hace nada. Con él, la
+    barra cuenta las coincidencias escondidas y, al ir a una, primero la abre.
+- **`src/ui/findUi.ts`:** el estado de la barra (abierta, desplegada, lo buscado, el reemplazo, *Aa*, *Palabra
+  entera*), afuera del editor: al volver a montarse el editor la búsqueda sigue. `isFindShortcut` (Ctrl+F; ⌘F en
+  la Mac) y `takesFindShortcut` (se deja pasar al navegador con el foco en la barra, en un campo fuera del
+  editor, como el título o los comentarios, y con un diálogo o el carrete abiertos).
+- **`src/ui/FindBar.tsx`:** la barra, en la parte del editor (textos en `src/i18n/lazy/editor.ts`). Un ancla
+  pegajosa sin alto debajo de la barra de arriba; en la computadora flota a la derecha de la página, en el
+  teléfono ocupa su lugar a todo el ancho. Campo, "3 de 12", *Aa*, *ab* (palabra entera), ↑ ↓ y ×; la flecha de
+  reemplazar solo si se puede editar. Enter / Shift+Enter, F3 y Ctrl/⌘+G (con Shift, la anterior); Esc cierra,
+  saca los resaltados y deja elegida la coincidencia. Al abrir toma lo elegido en el editor (una línea, hasta
+  200 caracteres). Abajo, "en un pie", "en el nombre de un archivo", cuántas están en secciones colapsadas y
+  el resultado de reemplazar ("2 reemplazos · Deshacer", lo que no se tocó); *Deshacer* solo mientras el último
+  paso de la pila sea ese reemplazo.
+- **`PageEditor.tsx`:** Ctrl/⌘+F en `window` (solo con una página abierta); la barra arriba del `BlockEditor`
+  (que avisa su editor con `onEditor`). **`Workspace.tsx`:** la lupa a la izquierda del ícono de comentarios
+  ("Buscar en la página (Ctrl+F)").
+- **Impresión:** la barra no entra en la copia y las clases de lo resaltado se sacan (`printView.ts`).
+- Sin atajo para reemplazar (Lega). Sin cambios en la base, en el esquema ni en `min_app_version`.
+
+**Pruebas:** `src/search/normalize.test.ts` (tildes, ñ, Í descompuesta, *Aa*, İ, ß, ø, espacios, palabra
+entera, emojis, el separador); `src/ui/findEditor.test.ts`, con el editor real (el Y.Doc y el editor dan las
+mismas unidades; un tipo desconocido se lee; buscar no cambia el vector de estado; siguiente y anterior dan la
+vuelta; cerrar deja elegida la actual; tilde descompuesta; *Aa* y palabra entera; un cambio vuelve a buscar;
+el gancho de P.11; "Reemplazar todo" un solo deshacer aunque se haya escrito justo antes; el paso marcado al
+deshacer y rehacer; *Reemplazar* y pasar a la siguiente; quien no edita no cambia nada; el link y la tarjeta
+de Drive; pies que no se tocan; un cambio de otro en la coincidencia frena, en otra parte no);
+`src/ui/findBar.test.tsx` (el atajo y cuándo pasa al navegador, la cuenta, Enter y Shift+Enter, Esc, lo
+elegido al abrir, sin flecha para quien no edita, reemplazar todo con *Deshacer*, el editor que se vuelve a
+montar, y Ctrl+F con la página real). De punta a punta: `find.mjs` en el repo de pruebas privado (Chromium,
+usuario temporal que se borra al final): Ctrl+F abre la barra y la segunda vez pasa al navegador, "1 of 2" sin
+tildes, Enter y Shift+Enter, *Aa*, reemplazar todo y un solo deshacer, Esc con la coincidencia elegida, lo
+reemplazado sigue después de recargar, la lupa de arriba y el teléfono.
+
+**Queda para después:** la búsqueda del proyecto (entrega 2, con las correcciones 5 a 8, 11, 12, 15 a 17);
+reemplazar en pies y nombres, *Conservar mayúsculas* y expresiones regulares; que P.11 registre
+`setFindCollapseHooks` y respete `sd-find-replace` e `isFindReplaceUndo`; probar a mano Safari de Mac, iPhone
+y Firefox (Ctrl/⌘+F, el teclado del teléfono). "Reemplazar todo" con cientos de coincidencias hace una
+transacción por cada una (y-prosemirror compara el documento en cada una): a medir en una página grande.

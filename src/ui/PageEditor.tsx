@@ -50,6 +50,9 @@ import { DrivePasteMenu } from './DrivePasteMenu';
 import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
 import { SheetBreaks } from './SheetBreaks';
 import { clickOpens, mousePressOpens } from './carreteClick';
+import { FindBar, type FindEditor } from './FindBar';
+import { findExtension } from './findEditor';
+import { closeFindBar, isFindShortcut, openFindBar, takesFindShortcut } from './findUi';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -88,6 +91,24 @@ export function PageEditor({ pageId }: { pageId: string }) {
   const [attempt, setAttempt] = useState(0);
   const incomplete = opening.state === 'ready' && !opening.complete;
   const tr = useT();
+  // El editor que usa la barra de buscar (Docs/Doc_Buscar.md). La barra y lo buscado viven acá, arriba del
+  // editor: el editor se vuelve a montar (al terminar de bajar, al cambiar el permiso o el idioma) y la
+  // búsqueda sigue.
+  const [findEditor, setFindEditor] = useState<FindEditor | null>(null);
+
+  // Ctrl/⌘+F abre la barra de la app; con el foco en la barra, se deja pasar al navegador (la segunda vez).
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.defaultPrevented || !isFindShortcut(e) || !takesFindShortcut(e.target)) return;
+      e.preventDefault();
+      openFindBar();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      closeFindBar();
+    };
+  }, []);
 
   // Si el servidor tiene contenido de esta página que el dispositivo todavía no bajó, se muestra lo que
   // hay en solo lectura: editar sobre un documento a medio bajar arma una estructura paralela. Cuando
@@ -143,6 +164,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   if (opening.state === 'unsupported') return <UnsupportedPage />;
   return (
     <>
+      <FindBar editor={findEditor} editable={opening.complete && canEdit} />
       {!opening.complete && (
         <p className="muted editor-missing">
           {status.online ? tr('editor.missingOnline') : tr('editor.missingOffline')}
@@ -160,6 +182,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
         pageId={pageId}
         editable={opening.complete && canEdit}
         canComment={canComment}
+        onEditor={setFindEditor}
       />
     </>
   );
@@ -185,7 +208,19 @@ function acceptedText(): string {
   return t('editor.attachNeedsDrive');
 }
 
-function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId: string; editable: boolean; canComment: boolean }) {
+function BlockEditor({
+  doc,
+  pageId,
+  editable,
+  canComment,
+  onEditor,
+}: {
+  doc: Y.Doc;
+  pageId: string;
+  editable: boolean;
+  canComment: boolean;
+  onEditor?: (editor: FindEditor | null) => void;
+}) {
   const { files, media, user } = useServices();
   const scheme = useScheme();
   const tr = useT();
@@ -228,6 +263,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   const editor = useCreateBlockNote(
     withCollaboration({
       ...editorSchemaOptions,
+      // Buscar y reemplazar en la página (findEditor.ts): decoraciones, sin tocar el documento.
+      extensions: [findExtension],
       dictionary: editorDictionary(tr.lang),
       // Pegar archivos (con portero, cualquier archivo): un bloque por archivo, en orden (fileDrop.ts).
       pasteHandler: (ctx) => {
@@ -273,6 +310,12 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   );
 
   editorRef.current = editor as unknown as { removeBlocks: (ids: string[]) => unknown };
+
+  // La barra de buscar (arriba, en PageEditor) usa este editor mientras esté montado.
+  useEffect(() => {
+    onEditor?.(editor as unknown as FindEditor);
+    return () => onEditor?.(null);
+  }, [editor, onEditor]);
 
   useEffect(() => {
     const focus = () => editor.focus();

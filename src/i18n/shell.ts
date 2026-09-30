@@ -21,6 +21,7 @@ export const shell = {
   'shell.lost.reload': { en: "Reload", es: "Recargar" },
   'shell.error.title': { en: "Could not open your workspace", es: "No se pudo abrir tu workspace" },
   'shell.openPages': { en: "Open pages", es: "Abrir páginas" },
+  'shell.findInPage': { en: "Find in page ({shortcut})", es: "Buscar en la página ({shortcut})" },
   'shell.location': { en: "Location", es: "Ubicación" },
   'home.thisProject': { en: "This project", es: "Este proyecto" },
   'home.empty': { en: "{name} is empty", es: "{name} está vacío" },

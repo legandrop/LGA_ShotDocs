@@ -1,0 +1,275 @@
+import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react';
+import type { EditorView } from '@tiptap/pm/view';
+import { useT } from '../i18n';
+import '../i18n/lazy/editor';
+import {
+  canUndoReplace,
+  clearFind,
+  closeFind,
+  getFindState,
+  hiddenCount,
+  replaceAll,
+  replaceCurrent,
+  revealCurrent,
+  setFind,
+  stepFind,
+  subscribeFind,
+  undoReplace,
+  type ReplaceResult,
+} from './findEditor';
+import { closeFindBar, modPressed, updateFindUi, useFindUi } from './findUi';
+import { ChevronUpIcon, CloseIcon, CollapseIcon, ExpandIcon } from './icons';
+
+// La barra de buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6). Como la del navegador,
+// pero busca en el documento: también en lo que está en secciones colapsadas, en los pies de las fotos y en
+// los nombres de los archivos. Se despliega para reemplazar (como VS Code) solo si se puede editar la página.
+
+export interface FindEditor {
+  prosemirrorView?: EditorView;
+  isEditable: boolean;
+  focus(): void;
+}
+
+/** Espera al escribir antes de buscar. */
+const TYPE_MS = 100;
+/** Lo elegido en el editor se usa para buscar si es de una línea y no muy largo. */
+const PREFILL_MAX = 200;
+
+interface Status {
+  text: string;
+  undoItem?: unknown;
+}
+
+export function FindBar({ editor, editable }: { editor: FindEditor | null; editable: boolean }) {
+  const ui = useFindUi();
+  const tr = useT();
+  const view = editor?.prosemirrorView;
+  const input = useRef<HTMLInputElement>(null);
+  const [, redraw] = useReducer((n: number) => n + 1, 0);
+  const [status, setStatus] = useState<Status | null>(null);
+
+  // Cada cambio de la búsqueda (coincidencias, la actual) redibuja la cuenta.
+  useEffect(() => (view ? subscribeFind(view, redraw) : undefined), [view]);
+
+  // Abrir (o Ctrl/⌘+F con la barra abierta): lo elegido en el editor como búsqueda, y el foco al campo.
+  useEffect(() => {
+    if (!ui.open) return;
+    if (view) {
+      const { from, to } = view.state.selection;
+      const selected = from < to ? view.state.doc.textBetween(from, to, '\n', ' ') : '';
+      if (selected.trim() && !selected.includes('\n') && selected.length <= PREFILL_MAX) updateFindUi({ query: selected });
+    }
+    input.current?.focus();
+    input.current?.select();
+    // Solo al abrir o al pedir el foco.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ui.open, ui.focus]);
+
+  // Buscar mientras se escribe; también al volver a montarse el editor (el estado vive en `findUi`).
+  useEffect(() => {
+    if (!view) return;
+    if (!ui.open) {
+      clearFind(view);
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (view.isDestroyed) return;
+      if (ui.query.trim()) {
+        setFind(view, ui.query, { matchCase: ui.matchCase, wholeWord: ui.wholeWord });
+        revealCurrent(view);
+      } else {
+        clearFind(view);
+      }
+    }, TYPE_MS);
+    return () => clearTimeout(timer);
+  }, [view, ui.open, ui.query, ui.matchCase, ui.wholeWord]);
+
+  // Con la barra abierta: F3 y Ctrl/⌘+G van a la siguiente (con Shift, a la anterior).
+  useEffect(() => {
+    if (!ui.open || !view) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const g = modPressed(e) && !e.altKey && (e.key.toLowerCase() === 'g' || e.code === 'KeyG');
+      if (e.key !== 'F3' && !g) return;
+      e.preventDefault();
+      stepFind(view, e.shiftKey ? -1 : 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ui.open, view]);
+
+  // Un cambio de lo buscado borra el aviso del último reemplazo.
+  useEffect(() => setStatus(null), [ui.query, ui.matchCase, ui.wholeWord, ui.open]);
+
+  if (!ui.open) return null;
+
+  const state = view ? getFindState(view.state) : null;
+  const total = state?.matches.length ?? 0;
+  const current = state && state.current >= 0 ? state.matches[state.current] : null;
+  let count = '';
+  if (state?.query.trim()) {
+    if (total === 0) count = tr('find.none');
+    else count = tr(state.truncated ? 'find.countMore' : 'find.count', { current: state.current + 1, total });
+  }
+  const where = current?.field === 'caption' ? tr('find.inCaption') : current?.field === 'name' ? tr('find.inName') : '';
+  const hidden = state ? hiddenCount(state.matches) : 0;
+
+  const close = () => {
+    closeFindBar();
+    if (view && !view.isDestroyed) closeFind(view, { select: true });
+    editor?.focus();
+  };
+
+  const step = (dir: 1 | -1) => {
+    if (view) stepFind(view, dir);
+  };
+
+  const report = (result: ReplaceResult, all: boolean) => {
+    const parts: string[] = [];
+    if (result.blocked === 'changed') parts.push(tr('find.changed'));
+    if (all && result.replaced > 0) parts.push(tr('find.replaced', { count: result.replaced }));
+    if (result.skippedFields > 0) parts.push(all ? tr('find.skippedFields', { count: result.skippedFields }) : tr('find.fieldNotReplaced'));
+    if (result.skippedLinks > 0) parts.push(tr('find.skippedLinks', { count: result.skippedLinks }));
+    setStatus(parts.length ? { text: parts.join(' · '), undoItem: all ? result.undoItem : undefined } : null);
+  };
+
+  const onFindKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      step(e.shiftKey ? -1 : 1);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    }
+  };
+
+  const onReplaceKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (editor) report(replaceCurrent(editor, ui.replacement), false);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    }
+  };
+
+  // Los botones no le sacan el foco al campo (así Enter sigue andando).
+  const keepFocus = (e: React.MouseEvent) => e.preventDefault();
+
+  return (
+    <div className="find-anchor">
+      <div className={`find-bar${editable && ui.expanded ? ' expanded' : ''}`} role="search" aria-label={tr('find.label')}>
+        <div className="find-row">
+          {editable && (
+            <button
+              className="find-button find-toggle"
+              aria-expanded={ui.expanded}
+              aria-label={ui.expanded ? tr('find.hideReplace') : tr('find.showReplace')}
+              data-tip={ui.expanded ? tr('find.hideReplace') : tr('find.showReplace')}
+              onMouseDown={keepFocus}
+              onClick={() => updateFindUi({ expanded: !ui.expanded })}
+            >
+              <ExpandIcon size={14} />
+            </button>
+          )}
+          <input
+            ref={input}
+            className="find-input"
+            type="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={tr('find.placeholder')}
+            aria-label={tr('find.placeholder')}
+            value={ui.query}
+            onChange={(e) => updateFindUi({ query: e.target.value })}
+            onKeyDown={onFindKey}
+            aria-invalid={!!state?.query.trim() && total === 0}
+          />
+          <span className="find-count" aria-live="polite">
+            {count}
+          </span>
+          <button
+            className={`find-button find-option${ui.matchCase ? ' on' : ''}`}
+            aria-pressed={ui.matchCase}
+            aria-label={tr('find.matchCase')}
+            data-tip={tr('find.matchCase')}
+            onMouseDown={keepFocus}
+            onClick={() => updateFindUi({ matchCase: !ui.matchCase })}
+          >
+            Aa
+          </button>
+          <button
+            className={`find-button find-option find-word${ui.wholeWord ? ' on' : ''}`}
+            aria-pressed={ui.wholeWord}
+            aria-label={tr('find.wholeWord')}
+            data-tip={tr('find.wholeWord')}
+            onMouseDown={keepFocus}
+            onClick={() => updateFindUi({ wholeWord: !ui.wholeWord })}
+          >
+            ab
+          </button>
+          <button className="find-button" aria-label={tr('find.previous')} data-tip={tr('find.previous')} disabled={total === 0} onMouseDown={keepFocus} onClick={() => step(-1)}>
+            <ChevronUpIcon size={16} />
+          </button>
+          <button className="find-button" aria-label={tr('find.next')} data-tip={tr('find.next')} disabled={total === 0} onMouseDown={keepFocus} onClick={() => step(1)}>
+            <CollapseIcon size={16} />
+          </button>
+          <button className="find-button" aria-label={tr('find.close')} data-tip={tr('find.close')} onClick={close}>
+            <CloseIcon size={15} />
+          </button>
+        </div>
+        {editable && ui.expanded && (
+          <div className="find-row find-replace-row">
+            <input
+              className="find-input"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={tr('find.replacePlaceholder')}
+              aria-label={tr('find.replacePlaceholder')}
+              value={ui.replacement}
+              onChange={(e) => updateFindUi({ replacement: e.target.value })}
+              onKeyDown={onReplaceKey}
+            />
+            <button
+              className="find-text-button"
+              disabled={total === 0}
+              data-tip={tr('find.replaceTip')}
+              onMouseDown={keepFocus}
+              onClick={() => editor && report(replaceCurrent(editor, ui.replacement), false)}
+            >
+              {tr('find.replace')}
+            </button>
+            <button
+              className="find-text-button"
+              disabled={total === 0}
+              onMouseDown={keepFocus}
+              onClick={() => editor && report(replaceAll(editor, ui.replacement), true)}
+            >
+              {tr('find.replaceAll')}
+            </button>
+          </div>
+        )}
+        {(where || hidden > 0 || status) && (
+          <div className="find-status" role="status">
+            {[where, hidden > 0 ? tr('find.hidden', { count: hidden }) : '', status?.text ?? ''].filter(Boolean).join(' · ')}
+            {status?.undoItem !== undefined && canUndoReplace(view, status.undoItem) && (
+              <>
+                {' '}
+                <button
+                  className="link"
+                  onClick={() => {
+                    undoReplace(view, status.undoItem);
+                    setStatus(null);
+                  }}
+                >
+                  {tr('find.undo')}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

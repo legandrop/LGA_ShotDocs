@@ -4,6 +4,49 @@ import type { Dict } from '../types';
 // Lo que suma la app al editor: Script y Question, comentar un bloque, pegar links de Drive, la tarjeta de Drive y los botones de fotos (se carga aparte, con el editor).
 
 export const editor = {
+  'find.label': { en: "Find in page", es: "Buscar en la página" },
+  'find.placeholder': { en: "Find", es: "Buscar" },
+  'find.replacePlaceholder': { en: "Replace", es: "Reemplazar" },
+  'find.showReplace': { en: "Show replace", es: "Mostrar reemplazar" },
+  'find.hideReplace': { en: "Hide replace", es: "Ocultar reemplazar" },
+  'find.matchCase': { en: "Match case and accents", es: "Mayúsculas y tildes exactas" },
+  'find.wholeWord': { en: "Whole word", es: "Palabra entera" },
+  'find.previous': { en: "Previous (Shift+Enter)", es: "Anterior (Shift+Enter)" },
+  'find.next': { en: "Next (Enter)", es: "Siguiente (Enter)" },
+  'find.close': { en: "Close (Esc)", es: "Cerrar (Esc)" },
+  'find.count': { en: "{current} of {total}", es: "{current} de {total}" },
+  'find.countMore': { en: "{current} of {total}+", es: "{current} de más de {total}" },
+  'find.none': { en: "No results", es: "Sin resultados" },
+  'find.inCaption': { en: "in a caption", es: "en un pie" },
+  'find.inName': { en: "in a file name", es: "en el nombre de un archivo" },
+  'find.hidden': {
+    en: { one: "{count} in collapsed sections", other: "{count} in collapsed sections" },
+    es: { one: "{count} en secciones colapsadas", other: "{count} en secciones colapsadas" },
+  },
+  'find.replace': { en: "Replace", es: "Reemplazar" },
+  'find.replaceAll': { en: "Replace all", es: "Reemplazar todo" },
+  'find.replaceTip': { en: "Replace this one and go to the next (Enter)", es: "Reemplazar esta y pasar a la siguiente (Enter)" },
+  'find.replaced': {
+    en: { one: "{count} replaced", other: "{count} replaced" },
+    es: { one: "{count} reemplazo", other: "{count} reemplazos" },
+  },
+  'find.undo': { en: "Undo", es: "Deshacer" },
+  'find.skippedFields': {
+    en: { one: "{count} in captions or file names was left as is", other: "{count} in captions or file names were left as is" },
+    es: { one: "{count} en pies o nombres de archivo no se tocó", other: "{count} en pies o nombres de archivo no se tocaron" },
+  },
+  'find.skippedLinks': {
+    en: { one: "{count} was skipped: it would remove a whole link", other: "{count} were skipped: they would remove a whole link" },
+    es: { one: "{count} se salteó: borraría un link entero", other: "{count} se saltearon: borrarían un link entero" },
+  },
+  'find.fieldNotReplaced': {
+    en: "Captions and file names are not replaced (yet).",
+    es: "Los pies y los nombres de archivo no se reemplazan (todavía).",
+  },
+  'find.changed': {
+    en: "That match changed in the meantime; searched again.",
+    es: "Esa coincidencia cambió mientras tanto; se volvió a buscar.",
+  },
   'comments.margin': { en: "Comments in the margin", es: "Comentarios en el margen" },
   'comments.openOnBlock': {
     en: { one: "{count} open comment on this block", other: "{count} open comments on this block" },
