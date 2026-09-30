@@ -17,6 +17,7 @@ beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   // jsdom no reproduce videos.
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+  vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => undefined);
 });
 
 const PHOTO_A = 'sdmedia://6f1c2a4e-0b7d-4c8e-9f10-112233445566';
@@ -51,6 +52,7 @@ function fakeLoader(entries: Record<string, Entry> = ENTRIES) {
   const loader: CarreteLoader = {
     preview: async (item) => ({ kind: entries[item.url].kind, name: entries[item.url].name, preview: entries[item.url].preview }),
     full,
+    retry: vi.fn(),
     dispose: vi.fn(),
   };
   return { loader, full };

@@ -2,7 +2,7 @@ import { FileRejected } from '../sync/files';
 import type { MediaRemote } from '../sync/remote';
 import { errorMessage, RemoteError } from '../sync/types';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
-import { PorteroError, UploadError, localDay, type Portero, type UploadProgress } from './portero';
+import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress } from './portero';
 import { dimension, mediaKind, placeholderUrl, probeMedia, seconds, withPlayMark, type MediaKind, type Probe } from './probe';
 
 // La cola de fotos y videos (paso 6 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Archivos
@@ -102,6 +102,8 @@ function classify(err: unknown): Outcome {
     if (err.status === 0) return 'offline';
     // 400: datos que no coinciden; 403: sin permiso; 404: el archivo no existe para el portero.
     if (err.status === 400 || err.status === 403 || err.status === 404) return 'blocked';
+    // La base apunta a otro archivo de Drive: no se arregla solo, lo tiene que ver el dueño.
+    if (err.status === 409 && /different Drive file/i.test(err.message)) return 'blocked';
     // 401 (la sesión se está renovando), 409 (Drive sin conectar), 410, 429 y 5xx: se arreglan solos o
     // los arregla el dueño.
     return 'retry';
@@ -518,6 +520,31 @@ export class MediaQueue {
         return 'blocked';
       }
       const file = new File([blob], record.name, { type: record.mime });
+
+      // Ya llegó a Drive en un intento anterior y solo falta que la base se entere: nunca se vuelve a
+      // mandar. Se le pregunta al portero (que le avisa a la base) sin abrir una subida nueva.
+      if (record.driveId) {
+        if (!(await this.confirmed(record.id))) {
+          try {
+            await portero.upload(file, { appFile: { id: record.id, day: record.day }, onlyIfSent: true });
+          } catch (err) {
+            if (!(err instanceof AlreadySentError)) throw err;
+            // El portero no sabe que llegó: se detiene. Recién con "Retry" se vuelve a subir entero.
+            await this.patch(record.id, {
+              driveId: null,
+              uploadId: null,
+              sent: 0,
+              blocked: true,
+              error: 'The media server does not know this file reached Google Drive. Retry uploads it again.',
+            });
+            this.onChange?.();
+            return 'blocked';
+          }
+          if (!(await this.confirmed(record.id))) return this.waitForDatabase(record);
+        }
+        return this.markUploaded(record, record.driveId);
+      }
+
       const controller = new AbortController();
       this.controller = controller;
       let savedId = record.uploadId;
@@ -543,37 +570,25 @@ export class MediaQueue {
         await saving;
       }
       // Ya está en Drive. Se da por subido recién cuando la base lo confirma (`files.drive_id`), no por lo
-      // que diga el portero: si la base no se enteró (`linked: false`), el portero le vuelve a avisar cuando
-      // se le pregunta de nuevo por el archivo, sin volver a subirlo. Un portero anterior al paso 6 no manda
-      // `linked` (ni le avisa a la base): el archivo queda pendiente hasta que se actualice.
-      record = await this.patch(record.id, { driveId: result.id, uploadId: null, sent: record.size });
-      const rows = await this.remote.fetchMediaFiles([record.id]);
-      if (!rows.find((r) => r.id === record.id)?.drive_id) {
-        const failures = record.failures + 1;
+      // que diga el portero. Si la base no se enteró (`linked: false`), el portero le vuelve a avisar cuando
+      // se le pregunta de nuevo por el archivo (arriba, sin volver a subirlo).
+      if (await this.confirmed(record.id)) return this.markUploaded(record, result.id);
+      if (result.linked === undefined) {
+        // Un portero anterior al paso 6: no manda `linked`, no le avisa a la base y lo que subió no sirve
+        // (va a `Media_Test`, sin la marca del archivo). Se detiene: cada reintento lo subiría entero otra
+        // vez. Con "Retry", después de actualizar el portero, se sube bien.
         await this.patch(record.id, {
-          error:
-            result.linked === undefined
-              ? 'The media server needs an update: the file reached Google Drive but the workspace was not told.'
-              : 'Uploaded to Google Drive; waiting for the database to confirm it.',
-          failures,
-          retryAt: this.now() + backoff(failures),
+          driveId: null,
+          uploadId: null,
+          sent: 0,
+          blocked: true,
+          error: 'The media server needs an update: the file reached Google Drive but the workspace was not told.',
         });
         this.onChange?.();
-        return 'retry';
+        return 'blocked';
       }
-      await this.patch(record.id, {
-        pending: 0,
-        lost: 0,
-        driveId: result.id,
-        uploadId: null,
-        sent: record.size,
-        error: null,
-        blocked: false,
-        failures: 0,
-        retryAt: 0,
-      });
-      this.onChange?.();
-      return 'done';
+      record = await this.patch(record.id, { driveId: result.id, uploadId: null, sent: record.size });
+      return this.waitForDatabase(record);
     } catch (err) {
       let outcome = classify(err);
       if (outcome === 'cancelled') return outcome;
@@ -602,6 +617,40 @@ export class MediaQueue {
       this.onChange?.();
       return outcome === 'waiting' ? 'retry' : outcome;
     }
+  }
+
+  /** La base ya tiene el id de Drive del archivo. */
+  private async confirmed(id: string): Promise<boolean> {
+    const rows = await this.remote.fetchMediaFiles([id]);
+    return !!rows.find((r) => r.id === id)?.drive_id;
+  }
+
+  /** En Drive, pero la base todavía no se enteró: se vuelve a preguntar más tarde. */
+  private async waitForDatabase(record: MediaRecord): Promise<Outcome> {
+    const failures = record.failures + 1;
+    await this.patch(record.id, {
+      error: 'Uploaded to Google Drive; waiting for the database to confirm it.',
+      failures,
+      retryAt: this.now() + backoff(failures),
+    });
+    this.onChange?.();
+    return 'retry';
+  }
+
+  private async markUploaded(record: MediaRecord, driveId: string): Promise<'done'> {
+    await this.patch(record.id, {
+      pending: 0,
+      lost: 0,
+      driveId,
+      uploadId: null,
+      sent: record.size,
+      error: null,
+      blocked: false,
+      failures: 0,
+      retryAt: 0,
+    });
+    this.onChange?.();
+    return 'done';
   }
 
   private async linkOne(link: MediaLink): Promise<Outcome | 'done'> {
@@ -731,6 +780,21 @@ export class MediaQueue {
   }
 
   /**
+   * La generación del workspace (sube al restaurar una copia de seguridad). La cola guarda la última que vio
+   * en su propia base: si cambió, hace su parte (`resetForRestore`) y recién después guarda la nueva. Así,
+   * si su base falla o está cerrada, lo hace en la próxima sincronización o al abrirse, sin frenar el texto.
+   * Sin generación guardada vale 1, como en el árbol. Devuelve cuántas cosas volvieron a la cola.
+   */
+  async syncGeneration(generation: number): Promise<number> {
+    if (!this.db) return 0;
+    const known = ((await this.db.get('meta', 'generation')) as number | undefined) ?? 1;
+    if (known === generation) return 0;
+    const count = await this.resetForRestore();
+    await this.db.put('meta', generation, 'generation');
+    return count;
+  }
+
+  /**
    * La base se restauró desde una copia de seguridad: lo registrado después de la copia ya no figura.
    * Todo lo de este dispositivo vuelve a la cola (los pasos son idempotentes; el portero recuerda lo que ya
    * subió a Drive y no lo vuelve a subir). Devuelve cuántas cosas volvieron.
@@ -752,13 +816,15 @@ export class MediaQueue {
         driveId: null,
         blocked: false,
         failures: 0,
+        lost: 0,
+        error: null,
         retryAt: 0,
       });
       count++;
     }
     const links = tx.objectStore('links');
     for (let cursor = await links.openCursor(); cursor; cursor = await cursor.continue()) {
-      await cursor.update({ ...cursor.value, pending: 1, waiting: null, blocked: false, failures: 0, retryAt: 0 });
+      await cursor.update({ ...cursor.value, pending: 1, waiting: null, blocked: false, error: null, failures: 0, retryAt: 0 });
       count++;
     }
     await tx.objectStore('known').clear();

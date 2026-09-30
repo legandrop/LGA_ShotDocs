@@ -45,6 +45,8 @@ export interface SyncStatus {
   localError: string | null;
   /** Algo que no se pudo leer del servidor. Queda a la vista hasta reabrir la app. */
   warning: string | null;
+  /** La cola de fotos y videos está apagada en este dispositivo (su base no se pudo abrir), y por qué. */
+  mediaWarning: string | null;
   /** Algo que pasó y conviene saber, sin que sea un problema (por ejemplo, que se restauró una copia). */
   notice: string | null;
   /**
@@ -98,6 +100,7 @@ export class SyncEngine {
     rejectedPages: 0,
     localError: null,
     warning: null,
+    mediaWarning: null,
     notice: null,
     outdated: false,
     schemaBehind: null,
@@ -134,7 +137,7 @@ export class SyncEngine {
       options.media.onQueued = poke;
       // La base de archivos del dispositivo no se pudo abrir: el texto sigue, las fotos y videos no.
       if (options.media.unavailable) {
-        this.status = { ...this.status, warning: `Photos and videos are off on this device: ${options.media.unavailable}` };
+        this.status = { ...this.status, mediaWarning: `Photos and videos are off on this device: ${options.media.unavailable}` };
       }
       // Después de `stop()` la base puede estar cerrándose: no se cuenta nada más.
       options.media.onChange = () => {
@@ -383,11 +386,22 @@ export class SyncEngine {
     await this.options.media?.configure(settings.mediaUrl, settings.schemaVersion).catch(() => undefined);
     // Antes de recuperar nada tras una restauración: a alguien que sacaron no se le arma ninguna cola.
     if (await this.checkAccess(settings)) return { outdated, removed: true };
+    // La cola de fotos y videos lleva su propia generación (en su base): si falla, lo hace en la próxima
+    // sincronización, sin frenar el texto.
+    const mediaRecovered = (await this.options.media?.syncGeneration(settings.generation).catch(() => 0)) ?? 0;
 
     // Sin generación guardada vale 1, la que crea la migración: un dispositivo que todavía tenía una versión
     // anterior cuando se restauró la base igual se recupera al actualizar (uno vacío no tiene nada que hacer).
     const known = (await this.tree.knownGeneration()) ?? 1;
-    if (known === settings.generation) return { outdated, removed: false };
+    if (known === settings.generation) {
+      if (mediaRecovered > 0 && !this.status.notice) {
+        this.patch({
+          notice:
+            'The workspace was restored from a backup. This device is uploading again the photos and videos it had, so nothing made after the backup is lost.',
+        });
+      }
+      return { outdated, removed: false };
+    }
     {
       const projects = await this.remote.fetchProjects();
       const rows = await this.remote.fetchTree(projects.map((p) => p.id));
@@ -402,7 +416,7 @@ export class SyncEngine {
         (await this.tree.recoverAfterRestore(rows, projects, allow, report)) +
         (await this.docs.resetForRestore()) +
         (await this.files.resetForRestore()) +
-        ((await this.options.media?.resetForRestore().catch(() => 0)) ?? 0);
+        mediaRecovered;
       // Un dispositivo que no tenía nada (recién entra a un workspace ya restaurado) no avisa nada.
       const notices: string[] = [];
       if (recovered > 0) {

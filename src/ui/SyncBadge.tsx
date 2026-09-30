@@ -52,7 +52,7 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
     text = 'Syncing…';
   }
   // La base vieja no frena la subida: el texto sigue diciendo el estado real y el aviso va en el detalle.
-  if ((rejected > 0 || status.warning || status.schemaBehind) && tone !== 'error') tone = 'warn';
+  if ((rejected > 0 || status.warning || status.mediaWarning || status.schemaBehind) && tone !== 'error') tone = 'warn';
   return { tone, text, rejected };
 }
 
@@ -87,6 +87,7 @@ export function SyncBadge() {
     !!status.lastError ||
     !!mediaError ||
     !!status.warning ||
+    !!status.mediaWarning ||
     !!status.notice ||
     status.outdated ||
     !!status.schemaBehind;
@@ -158,6 +159,8 @@ export function SyncBadge() {
             </p>
           )}
           {status.notice && <p>{status.notice}</p>}
+          {/* Ya dice qué hacer (reabrir la app): va solo, sin el texto de los otros avisos. */}
+          {status.mediaWarning && <p>{status.mediaWarning}</p>}
           {status.warning && (
             <p>
               <code>{status.warning}</code> Reopening the app tries again; updating the app may be needed.

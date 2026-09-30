@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import { createPortal } from 'react-dom';
 import type { MediaKind } from '../media/probe';
 import {
+  clampZoom,
   classifyDrag,
   counterText,
   dismissResult,
@@ -24,7 +25,7 @@ import {
   type Size,
   type Zoom,
 } from './carrete';
-import { isOffline, type CarreteLoader, type Full } from './carreteLoader';
+import { downloadProps, isOffline, type CarreteLoader, type Full } from './carreteLoader';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon } from './icons';
 
 // El carrete (paso 7 de Docs/Plan_Workspaces.md; Docs/Doc_Carrete.md): todas las fotos y videos de la
@@ -38,7 +39,12 @@ const GAP = 24;
 /** Abajo del video están sus controles: arrastrar ahí no cambia de elemento. */
 const VIDEO_CONTROLS = 72;
 
-type FullState = 'idle' | 'loading' | 'ready' | 'offline' | 'failed' | 'unsupported';
+/**
+ * `unsupported`: el original del dispositivo no se puede mostrar (el navegador no abre el formato);
+ * `unplayable`: lo que vino del portero no se pudo mostrar, y no se sabe si fue la red o el formato (se
+ * puede reintentar con un pase nuevo); `failed`: no se pudo pedir (error del portero).
+ */
+type FullState = 'idle' | 'loading' | 'ready' | 'offline' | 'failed' | 'unsupported' | 'unplayable';
 
 interface View {
   kind: MediaKind | null;
@@ -90,6 +96,8 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
   const [track, setTrack] = useState<{ x: number; anim: boolean }>({ x: 0, anim: false });
   const [dismissY, setDismissY] = useState(0);
   const [stage, setStage] = useState<Size>({ width: 0, height: 0 });
+  /** Sube con "Retry": vuelve a pedir lo grande del elemento actual. */
+  const [attempt, setAttempt] = useState(0);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -103,6 +111,9 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
   const lastPointerType = useRef<string>(typeof matchMedia === 'function' && matchMedia('(hover: none)').matches ? 'touch' : 'mouse');
   const preloaded = useRef(new Set<string>());
   const mounted = useRef(true);
+  /** Marca de la entrada del historial que abre el carrete ("atrás" lo cierra). */
+  const historyToken = useRef(`carrete-${Math.random().toString(36).slice(2)}`);
+  const closing = useRef(false);
 
   const item = items[index];
   const view = settled((item && views[item.url]) ?? EMPTY_VIEW);
@@ -126,10 +137,17 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     const root = document.documentElement;
     const overflow = root.style.overflow;
     root.style.overflow = 'hidden';
-    dialogRef.current?.focus({ preventScroll: true });
+    // Lo de atrás (la app) queda inerte: ni el foco ni los lectores de pantalla llegan ahí.
+    const dialog = dialogRef.current;
+    const inerted = [...document.body.children].filter(
+      (el): el is HTMLElement => el instanceof HTMLElement && el !== dialog && !el.inert && !el.contains(dialog),
+    );
+    for (const el of inerted) el.inert = true;
+    dialog?.focus({ preventScroll: true });
     return () => {
       mounted.current = false;
       root.style.overflow = overflow;
+      for (const el of inerted) el.inert = false;
       // Vuelve el foco a donde estaba. Con el dedo, no al editor: abriría el teclado.
       if (previous?.isConnected && !(lastPointerType.current !== 'mouse' && previous.isContentEditable)) {
         previous.focus({ preventScroll: true });
@@ -149,6 +167,38 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
+  }, []);
+
+  // Al girar el teléfono (o cambiar la ventana) la foto ampliada se vuelve a encuadrar.
+  useEffect(() => {
+    if (fit) setZoom((z) => clampZoom(z, fit, stage));
+    // Solo cuando cambia el escenario.
+  }, [stage.width, stage.height]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // "Atrás" (Android, el navegador) cierra el carrete: al abrir se suma una entrada al historial, con la
+  // misma dirección. Cerrar con la X, Escape o deslizando la saca (`history.back()`), sin salir de la
+  // página. Si el navegador no avisa la vuelta, se cierra igual al rato.
+  useEffect(() => {
+    const token = historyToken.current;
+    const state = history.state as { carrete?: string } | null;
+    if (state?.carrete !== token) history.pushState({ ...(state ?? {}), carrete: token }, '');
+    const onPop = () => {
+      if ((history.state as { carrete?: string } | null)?.carrete !== token) onCloseRef.current();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const requestClose = useCallback(() => {
+    if (closing.current) return;
+    closing.current = true;
+    if ((history.state as { carrete?: string } | null)?.carrete === historyToken.current) {
+      history.back();
+      setTimeout(() => mounted.current && onCloseRef.current(), 400);
+    } else onCloseRef.current();
   }, []);
 
   // --- navegación ---------------------------------------------------------------------------------
@@ -182,7 +232,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
       const dialog = dialogRef.current;
       if (!dialog) return;
       let handled = true;
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') requestClose();
       else if (e.key === 'ArrowRight') go(1);
       else if (e.key === 'ArrowLeft') go(-1);
       else if (e.key === 'Home') goTo(0);
@@ -216,7 +266,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
       document.removeEventListener('focusin', onFocus);
       document.removeEventListener('gesturestart', noPageZoom);
     };
-  }, [go, goTo, onClose]);
+  }, [go, goTo, requestClose]);
 
   // --- cargar lo que se ve ------------------------------------------------------------------------
 
@@ -235,7 +285,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     const it = items[index];
     if (!it) return;
     const known = viewsRef.current[it.url];
-    if (known && (known.state === 'loading' || known.state === 'ready' || known.state === 'unsupported')) return;
+    if (known && (known.state === 'loading' || known.state === 'ready' || known.state === 'unsupported' || known.state === 'unplayable')) return;
     if (known?.full && known.state !== 'failed' && known.state !== 'offline') return;
     patch(it.url, { state: 'loading', error: null });
     loader.full(it).then(
@@ -243,7 +293,16 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
       (full) => patch(it.url, { full, state: 'loading' }),
       (err: unknown) => patch(it.url, { state: isOffline(err) ? 'offline' : 'failed', error: err instanceof Error ? err.message : String(err) }),
     );
-  }, [index, items, loader, patch, online]);
+  }, [index, items, loader, patch, online, attempt]);
+
+  /** Otra vez, con un pase nuevo: lo que vino del portero no se pudo mostrar. */
+  const retry = () => {
+    const it = items[index];
+    if (!it) return;
+    loader.retry(it);
+    patch(it.url, { state: 'idle', full: null, fullShown: false, error: null });
+    setAttempt((n) => n + 1);
+  };
 
   // Con el actual listo, se precargan las fotos de al lado (nunca videos). Sin gastar de más: solo los
   // dos vecinos, y nada si el navegador pide ahorrar datos.
@@ -255,7 +314,8 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
       void loader
         .preview(it)
         .then(async (p) => {
-          if (p.kind !== 'image') return;
+          // Ni videos ni formatos que muchos navegadores no abren (HEIC, DNG, TIFF): serían megas para nada.
+          if (p.kind !== 'image' || RARE_PHOTO.test(p.name)) return;
           const full = await loader.full(it);
           if (preloaded.current.has(full.url)) return;
           preloaded.current.add(full.url);
@@ -285,24 +345,35 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     });
   };
 
-  const onFullError = (it: CarreteItem, v: View) => () => {
-    if (!v.full?.local && typeof navigator !== 'undefined' && navigator.onLine === false) patch(it.url, { state: 'offline' });
-    else patch(it.url, { state: 'unsupported' });
+  // Lo del dispositivo que no se muestra es el formato; lo del portero puede ser el formato, la red o un
+  // pase vencido: no se sabe, y se ofrece reintentar.
+  const brokenState = (v: View): FullState => {
+    if (!v.full?.local && typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
+    return v.full?.local ? 'unsupported' : 'unplayable';
   };
 
-  const onVideoError = (url: string) => (e: SyntheticEvent<HTMLVideoElement>) => {
-    const code = e.currentTarget.error?.code;
-    if (code === 2 /* MEDIA_ERR_NETWORK */) {
-      patch(url, { state: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'failed', error: null });
-    } else patch(url, { state: 'unsupported' });
-  };
+  const onFullError = (it: CarreteItem, v: View) => () => patch(it.url, { state: brokenState(v) });
+
+  const onVideoError = (it: CarreteItem, v: View) => () => patch(it.url, { state: brokenState(v), error: null });
 
   // Un video que el navegador abre pero no sabe decodificar (HEVC en algunos) queda sin imagen: sin
   // ancho ni alto. Se trata como no reproducible.
-  const onVideoMeta = (url: string) => (e: SyntheticEvent<HTMLVideoElement>) => {
-    const v = e.currentTarget;
-    if (v.videoWidth === 0 && v.videoHeight === 0) patch(url, { state: 'unsupported' });
+  const onVideoMeta = (it: CarreteItem, v: View) => (e: SyntheticEvent<HTMLVideoElement>) => {
+    const el = e.currentTarget;
+    if (el.videoWidth === 0 && el.videoHeight === 0) patch(it.url, { state: brokenState(v) });
   };
+
+  // Al desmontar o cambiar el video se suelta del todo (pausar no corta la descarga).
+  const videoRefCb = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    if (!el) return;
+    return () => {
+      if (videoRef.current === el) videoRef.current = null;
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    };
+  }, []);
 
   // --- gestos -------------------------------------------------------------------------------------
 
@@ -418,7 +489,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
       if (r) go(r, resistEdges(dx, at, total));
       else setTrack({ x: 0, anim: true });
     } else if (d.gesture === 'dismiss') {
-      if (e.type !== 'pointercancel' && dismissResult(dy, v.y, size.height)) onClose();
+      if (e.type !== 'pointercancel' && dismissResult(dy, v.y, size.height)) requestClose();
       else setDismissY(0);
     } else if (d.gesture === 'pending' && e.type === 'pointerup') {
       // Un toque. Dos seguidos (o doble clic) sobre una foto: amplía ahí, o vuelve a la foto entera.
@@ -480,14 +551,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
 
   const downloadLink = (className: string, label: boolean) =>
     download ? (
-      <a
-        className={className}
-        href={download.url}
-        download={name}
-        // Un archivo de otro sitio (el portero) no se baja con su nombre: se abre en otra pestaña.
-        {...(download.local ? {} : { target: '_blank', rel: 'noreferrer' })}
-        aria-label={`Download ${name}`}
-      >
+      <a className={className} {...downloadProps(download, name)} aria-label={`Download ${name}`}>
         <DownloadIcon size={20} />
         {label && <span className="carrete-btn-label">Download</span>}
       </a>
@@ -510,11 +574,11 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     };
     const alt = it.caption || v.name || it.name;
     let body;
-    if (current && v.kind === 'video' && v.full && v.state !== 'unsupported' && v.state !== 'offline') {
+    if (current && v.kind === 'video' && v.full && v.state !== 'unsupported' && v.state !== 'unplayable' && v.state !== 'offline') {
       body = (
         <video
           key={v.full.url}
-          ref={videoRef}
+          ref={videoRefCb}
           className="carrete-video"
           src={v.full.url}
           poster={v.preview ?? undefined}
@@ -522,12 +586,13 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
           playsInline
           preload="metadata"
           aria-label={alt}
-          onError={onVideoError(it.url)}
-          onLoadedMetadata={onVideoMeta(it.url)}
+          onError={onVideoError(it, v)}
+          onLoadedMetadata={onVideoMeta(it, v)}
         />
       );
     } else {
-      const showFull = current && v.kind !== 'video' && v.full && v.state !== 'unsupported' && v.state !== 'offline';
+      const showFull =
+        current && v.kind !== 'video' && v.full && v.state !== 'unsupported' && v.state !== 'unplayable' && v.state !== 'offline';
       body = (
         <div
           className="carrete-media"
@@ -584,7 +649,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
           {name}
         </span>
         {downloadLink('carrete-btn', true)}
-        <button className="carrete-btn" aria-label="Close" data-tip="**Keyboard:** Esc" onClick={onClose}>
+        <button className="carrete-btn" aria-label="Close" data-tip="**Keyboard:** Esc" onClick={requestClose}>
           <CloseIcon size={22} />
         </button>
       </div>
@@ -609,7 +674,14 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
         {notice && (
           <div className="carrete-notice" role="status">
             <p>{notice}</p>
-            {(view.state === 'unsupported' || view.state === 'failed') && download && downloadLink('carrete-notice-btn', true)}
+            {(view.state === 'unplayable' || view.state === 'failed') && (
+              <button className="carrete-notice-btn" onClick={retry}>
+                Retry
+              </button>
+            )}
+            {(view.state === 'unsupported' || view.state === 'unplayable' || view.state === 'failed') &&
+              download &&
+              downloadLink('carrete-notice-btn', true)}
           </div>
         )}
 
@@ -651,6 +723,10 @@ export function noticeFor(view: Pick<View, 'kind' | 'state' | 'preview' | 'error
       return video
         ? "You're offline. The video plays when you're back online."
         : "You're offline: this is the thumbnail. The full photo loads when you're back online.";
+    case 'unplayable':
+      return video
+        ? "The video couldn't be loaded or played in this browser."
+        : "The photo couldn't be loaded or shown in this browser.";
     case 'unsupported':
       if (video) return "This video can't be played in this browser.";
       return RARE_PHOTO.test(name) ? "This browser can't show this photo's format." : "The full photo couldn't be shown.";
