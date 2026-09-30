@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Portero, type Env, type Store } from './core';
+import { CACHE_FILES, CACHE_HEAD_PIECES, CACHE_PIECE, CACHE_TAIL_PIECES, folderName, Portero, type Env, type Store } from './core';
 
 const env: Env = {
   SUPABASE_URL: 'https://ws.example',
@@ -21,18 +21,47 @@ function memoryStore(): Store & { data: Map<string, unknown> } {
   };
 }
 
+type FakeFile = {
+  name: string;
+  mime: string;
+  data: Uint8Array;
+  parents: string[];
+  appProperties?: Record<string, string>;
+  trashed?: boolean;
+};
+type BaseFile = {
+  project_id: string;
+  project_name: string;
+  name: string;
+  mime: string;
+  size: number;
+  drive_id: string | null;
+  levels: Record<string, number>;
+};
+
 /** Google y Supabase de mentira: sesiones, tokens, carpetas, subida por partes y bajada con Range. */
 function fakeWorld() {
   const sessions = new Map<string, { user: string; owner: boolean }>([
     ['owner-jwt', { user: 'u-owner', owner: true }],
     ['member-jwt', { user: 'u-member', owner: false }],
+    ['editor-jwt', { user: 'u-editor', owner: false }],
+    ['viewer-jwt', { user: 'u-viewer', owner: false }],
+    ['stranger-jwt', { user: 'u-stranger', owner: false }],
   ]);
-  const files = new Map<string, { name: string; mime: string; data: Uint8Array; parents: string[] }>();
-  const uploads = new Map<string, { name: string; mime: string; size: number; parents: string[]; data: Uint8Array; got: number }>();
+  const files = new Map<string, FakeFile>();
+  const base = new Map<string, BaseFile>();
+  const uploads = new Map<
+    string,
+    { name: string; mime: string; size: number; parents: string[]; appProperties?: Record<string, string>; data: Uint8Array; got: number }
+  >();
   let refreshValid = true;
   let tokenRefreshes = 0;
+  let refreshScopes: (string | null)[] = [];
+  let linkFailures = 0;
   let grantedScope = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email openid';
   let n = 0;
+  let mediaGets = 0;
+  let metaGets = 0;
   const calls: string[] = [];
 
   const http = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -45,6 +74,24 @@ function fakeWorld() {
     if (url.host === 'ws.example') {
       const s = sessions.get((headers.get('Authorization') ?? '').replace('Bearer ', ''));
       if (!s) return jsonRes({ message: 'JWT expired' }, 401);
+      const args = JSON.parse(String(init.body ?? '{}')) as { p_file_id?: string; p_drive_id?: string };
+      if (url.pathname === '/rest/v1/rpc/media_file') {
+        const f = base.get(args.p_file_id ?? '');
+        const level = f?.levels[s.user] ?? 0;
+        if (!f || level === 0) return jsonRes(null);
+        return jsonRes({ id: args.p_file_id, ...f, levels: undefined, created_at: '2026-09-30T10:00:00Z', level });
+      }
+      if (url.pathname === '/rest/v1/rpc/set_file_drive') {
+        if (linkFailures > 0) {
+          linkFailures--;
+          throw new TypeError('fetch failed');
+        }
+        const f = base.get(args.p_file_id ?? '');
+        if (!f || (f.levels[s.user] ?? 0) < 3) return jsonRes({ code: 'P0002', message: 'file_not_found' }, 404);
+        if (f.drive_id && f.drive_id !== args.p_drive_id) return jsonRes({ code: 'P0001', message: 'file_already_uploaded' }, 400);
+        f.drive_id = args.p_drive_id!;
+        return new Response(null, { status: 204 });
+      }
       return jsonRes({ user_id: s.user, is_owner: s.owner });
     }
     if (url.href === 'https://oauth2.googleapis.com/token') {
@@ -54,6 +101,7 @@ function fakeWorld() {
         return jsonRes({ access_token: 'at-1', refresh_token: 'rt-1', expires_in: 3600, id_token: idToken, scope: grantedScope });
       }
       tokenRefreshes++;
+      refreshScopes.push(form.get('scope'));
       if (!refreshValid) return jsonRes({ error: 'invalid_grant' }, 400);
       return jsonRes({ access_token: `at-${++n}`, expires_in: 3600 });
     }
@@ -61,42 +109,54 @@ function fakeWorld() {
       return jsonRes({ error: 'unauthorized' }, 401);
     }
     if (url.host === 'www.googleapis.com' && url.pathname === '/drive/v3/files' && init.method === 'POST') {
-      const meta = JSON.parse(String(init.body)) as { name: string; parents?: string[] };
+      const meta = JSON.parse(String(init.body)) as { name: string; parents?: string[]; appProperties?: Record<string, string> };
+      if (meta.parents?.some((p) => p !== 'root' && !files.has(p))) return jsonRes({ error: 'parent not found' }, 404);
       const id = `folder${++n}xxxxxxxx`;
-      files.set(id, { name: meta.name, mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: meta.parents ?? [] });
+      files.set(id, { name: meta.name, mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: meta.parents ?? ['root'], appProperties: meta.appProperties });
       return jsonRes({ id });
     }
     const one = /^\/drive\/v3\/files\/([^/]+)$/.exec(url.pathname)?.[1];
     if (one && url.searchParams.get('alt') === 'media') {
+      mediaGets++;
       const f = files.get(one);
       if (!f) return jsonRes({ error: 'not found' }, 404);
-      const range = /bytes=(\d+)-(\d*)/.exec(headers.get('Range') ?? '');
-      if (!range) return new Response(f.data, { status: 200, headers: { 'Content-Type': f.mime, 'Content-Length': String(f.data.length) } });
-      const start = Number(range[1]);
-      const end = range[2] ? Number(range[2]) : f.data.length - 1;
+      const range = /bytes=(\d*)-(\d*)/.exec(headers.get('Range') ?? '');
+      if (!range) return new Response(f.data, { status: 200, headers: { 'Content-Type': f.mime, 'Content-Length': String(f.data.length), ETag: '"v1"' } });
+      let start = Number(range[1]);
+      let end = range[2] ? Math.min(Number(range[2]), f.data.length - 1) : f.data.length - 1;
+      if (range[1] === '') [start, end] = [Math.max(0, f.data.length - Number(range[2])), f.data.length - 1];
+      if (start >= f.data.length) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${f.data.length}` } });
       return new Response(f.data.slice(start, end + 1), {
         status: 206,
-        headers: { 'Content-Type': f.mime, 'Content-Range': `bytes ${start}-${end}/${f.data.length}`, 'Content-Length': String(end - start + 1) },
+        headers: { 'Content-Type': f.mime, 'Content-Range': `bytes ${start}-${end}/${f.data.length}`, 'Content-Length': String(end - start + 1), ETag: '"v1"' },
       });
     }
     if (one && init.method === 'PATCH') {
       const f = files.get(one);
       if (!f) return jsonRes({ error: 'not found' }, 404);
-      f.name = (JSON.parse(String(init.body)) as { name: string }).name;
-      return jsonRes({ id: one });
+      const body = JSON.parse(String(init.body ?? '{}')) as { name?: string };
+      if (body.name) f.name = body.name;
+      const add = url.searchParams.get('addParents');
+      const remove = (url.searchParams.get('removeParents') ?? '').split(',').filter(Boolean);
+      if (add) f.parents = [...f.parents.filter((p) => !remove.includes(p)), add];
+      return jsonRes({ id: one, parents: f.parents });
     }
     if (one) {
+      metaGets++;
       const f = files.get(one);
-      return f ? jsonRes({ id: one, name: f.name, trashed: false }) : jsonRes({ error: 'not found' }, 404);
+      return f
+        ? jsonRes({ id: one, name: f.name, mimeType: f.mime, trashed: !!f.trashed, parents: f.parents, appProperties: f.appProperties })
+        : jsonRes({ error: 'not found' }, 404);
     }
     if (url.host === 'www.googleapis.com' && url.pathname === '/upload/drive/v3/files') {
-      const meta = JSON.parse(String(init.body)) as { name: string; parents: string[] };
+      const meta = JSON.parse(String(init.body)) as { name: string; parents: string[]; appProperties?: Record<string, string> };
       const id = `session${++n}`;
       uploads.set(id, {
         name: meta.name,
         mime: headers.get('X-Upload-Content-Type') ?? '',
         size: Number(headers.get('X-Upload-Content-Length')),
         parents: meta.parents,
+        appProperties: meta.appProperties,
         data: new Uint8Array(Number(headers.get('X-Upload-Content-Length'))),
         got: 0,
       });
@@ -115,7 +175,7 @@ function fakeWorld() {
       }
       if (up.got >= up.size) {
         const id = `file${++n}xxxxxxxxxx`;
-        files.set(id, { name: up.name, mime: up.mime, data: up.data, parents: up.parents });
+        files.set(id, { name: up.name, mime: up.mime, data: up.data, parents: up.parents, appProperties: up.appProperties });
         return jsonRes({ id, name: up.name, mimeType: up.mime, size: String(up.size) }, 200);
       }
       return new Response(null, { status: 308, headers: up.got > 0 ? { Range: `bytes=0-${up.got - 1}` } : {} });
@@ -126,10 +186,18 @@ function fakeWorld() {
   return {
     http,
     files,
+    base,
     calls,
     breakRefresh: () => (refreshValid = false),
     refreshes: () => tokenRefreshes,
+    refreshScopes: () => refreshScopes,
+    failLinks: (times: number) => (linkFailures = times),
     grantOnly: (scope: string) => (grantedScope = scope),
+    folders: () => [...files.entries()].filter(([, f]) => f.mime === 'application/vnd.google-apps.folder'),
+    /** Cuántas veces se le pidió a Drive el contenido de un archivo. */
+    mediaCalls: () => mediaGets,
+    /** Cuántas veces se le preguntó a Drive por los datos de un archivo o carpeta. */
+    metaCalls: () => metaGets,
   };
 }
 
@@ -381,5 +449,577 @@ describe('portero', () => {
     } finally {
       globalThis.fetch = real;
     }
+  });
+});
+
+// --- archivos de la app (pasos 6 y 8) -----------------------------------------------------------------
+
+const FILE_A = '11111111-2222-4333-8444-555555555555';
+const FILE_B = '22222222-3333-4444-8555-666666666666';
+const FILE_C = '33333333-4444-4555-8666-777777777777';
+
+type World = ReturnType<typeof fakeWorld>;
+
+function addBaseFile(world: World, id: string, over: Partial<BaseFile> = {}): BaseFile {
+  const f: BaseFile = {
+    project_id: 'p-1',
+    project_name: 'Spot Coca-Cola / 2026',
+    name: 'IMG_0100.MOV',
+    mime: 'video/quicktime',
+    size: 1000,
+    drive_id: null,
+    levels: { 'u-owner': 4, 'u-editor': 3, 'u-viewer': 1, 'u-member': 2 },
+    ...over,
+  };
+  world.base.set(id, f);
+  return f;
+}
+
+/** Compara bytes sin el diff de vitest, que con megas tarda segundos. */
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && Buffer.compare(Buffer.from(a.buffer, a.byteOffset, a.length), Buffer.from(b.buffer, b.byteOffset, b.length)) === 0;
+}
+
+function bytes(length: number): Uint8Array {
+  return Uint8Array.from({ length }, (_, i) => (i * 7 + (i >> 8)) % 256);
+}
+
+function startFile(p: Portero, jwt: string, body: Record<string, unknown>): Promise<Response> {
+  return call(p, '/upload', { method: 'POST', jwt, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+
+/** Sube un archivo de la app entero (una sola parte) y devuelve la última respuesta del portero. */
+async function uploadFile(p: Portero, jwt: string, file: string, data: Uint8Array, day = '2026-09-30'): Promise<Record<string, unknown>> {
+  const res = await startFile(p, jwt, { file, name: 'IMG_0100.MOV', mime: 'video/quicktime', size: data.length, day });
+  const started = (await res.json()) as Record<string, unknown>;
+  if (!res.ok) throw new Error(`${res.status} ${JSON.stringify(started)}`);
+  if (started.status === 'done') return started;
+  const part = await call(p, `/upload/${started.uploadId as string}`, {
+    method: 'PUT',
+    jwt,
+    headers: { 'Content-Range': `bytes 0-${data.length - 1}/${data.length}` },
+    body: data,
+  });
+  return (await part.json()) as Record<string, unknown>;
+}
+
+async function filePass(p: Portero, jwt: string, file: string): Promise<Response> {
+  return call(p, '/pass', { method: 'POST', jwt, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file }) });
+}
+
+/** La cadena de carpetas de un archivo en Drive, desde la raíz. */
+function pathOf(world: World, id: string): string[] {
+  const out: string[] = [];
+  let parent = world.files.get(id)?.parents[0];
+  while (parent && parent !== 'root') {
+    const f = world.files.get(parent);
+    if (!f) break;
+    out.unshift(f.name);
+    parent = f.parents[0];
+  }
+  return out;
+}
+
+async function setup(): Promise<{ world: World; store: ReturnType<typeof memoryStore>; p: Portero }> {
+  const world = fakeWorld();
+  const store = memoryStore();
+  const p = new Portero(env, store, world.http);
+  await connect(p);
+  return { world, store, p };
+}
+
+describe('folderName', () => {
+  it('guiones bajos en vez de espacios y sin caracteres raros; conserva acentos', () => {
+    expect(folderName('Spot Coca-Cola / 2026')).toBe('Spot_Coca-Cola_2026');
+    expect(folderName('  Café   Martínez: rodaje \\ día 1 ')).toBe('Café_Martínez_rodaje_día_1');
+    expect(folderName('MGTZD')).toBe('MGTZD');
+    expect(folderName('Video 🎬 "final" <v2>?')).toBe('Video_final_v2');
+    expect(folderName('///')).toBe('Project');
+    expect(folderName('x'.repeat(300))).toHaveLength(100);
+  });
+});
+
+describe('portero: archivos de la app', () => {
+  it('quien puede editar sube a LGA_ShotDocs/<Proyecto>/<día>, con appProperties, y la base se entera', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A);
+    const data = bytes(1000);
+    // Lo sube alguien que no es el dueño pero puede editar la página (nivel 3).
+    const done = (await uploadFile(p, 'editor-jwt', FILE_A, data)) as { status: string; file: { id: string; size: number }; linked: boolean };
+    expect(done.status).toBe('done');
+    expect(done.linked).toBe(true);
+    const saved = world.files.get(done.file.id)!;
+    expect(saved.data).toEqual(data);
+    expect(saved.appProperties).toEqual({ sdFile: FILE_A });
+    expect(saved.mime).toBe('video/quicktime');
+    expect(pathOf(world, done.file.id)).toEqual(['LGA_ShotDocs', 'Spot_Coca-Cola_2026', '2026-09-30']);
+    expect(world.base.get(FILE_A)!.drive_id).toBe(done.file.id);
+    expect(world.calls).toContain('POST ws.example/rest/v1/rpc/set_file_drive');
+
+    // Otro archivo del mismo proyecto y día: reusa las carpetas.
+    const folders = world.folders().length;
+    addBaseFile(world, FILE_B, { size: 10 });
+    const second = (await uploadFile(p, 'owner-jwt', FILE_B, bytes(10))) as { file: { id: string } };
+    expect(world.folders()).toHaveLength(folders);
+    expect(world.files.get(second.file.id)!.parents).toEqual(saved.parents);
+
+    // Otro día: solo una carpeta nueva, adentro de la del proyecto.
+    addBaseFile(world, FILE_C, { size: 10 });
+    const third = (await uploadFile(p, 'owner-jwt', FILE_C, bytes(10), '2026-10-01')) as { file: { id: string } };
+    expect(world.folders()).toHaveLength(folders + 1);
+    expect(pathOf(world, third.file.id)).toEqual(['LGA_ShotDocs', 'Spot_Coca-Cola_2026', '2026-10-01']);
+    const project = world.files.get(world.files.get(saved.parents[0])!.parents[0])!;
+    expect(project.appProperties).toEqual({ sdProject: 'p-1' });
+  });
+
+  it('permisos por archivo: subir pide nivel 3, ver pide nivel 1; sin nivel, nada', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A);
+    const body = { file: FILE_A, name: 'a.mov', mime: 'video/quicktime', size: 1000, day: '2026-09-30' };
+    expect((await startFile(p, 'viewer-jwt', body)).status).toBe(403);
+    expect((await startFile(p, 'member-jwt', body)).status).toBe(403); // comentar (2) no alcanza
+    expect((await startFile(p, 'stranger-jwt', body)).status).toBe(404);
+    expect((await startFile(p, 'editor-jwt', { ...body, file: 'no-es-un-uuid' })).status).toBe(400);
+    expect((await startFile(p, 'editor-jwt', { ...body, day: '30/09/2026' })).status).toBe(400);
+    expect((await startFile(p, 'editor-jwt', { ...body, size: 999 })).status).toBe(400);
+    expect((await call(p, '/upload', { method: 'POST', body: JSON.stringify(body) })).status).toBe(401);
+    expect(world.folders()).toHaveLength(0);
+
+    // Todavía no está en Drive: no hay pase.
+    expect((await filePass(p, 'viewer-jwt', FILE_A)).status).toBe(409);
+    await uploadFile(p, 'editor-jwt', FILE_A, bytes(1000));
+    expect((await filePass(p, 'viewer-jwt', FILE_A)).status).toBe(200);
+    expect((await filePass(p, 'stranger-jwt', FILE_A)).status).toBe(404);
+    expect((await filePass(p, 'stranger-jwt', FILE_B)).status).toBe(404);
+
+    // Lo de la prueba de media sigue siendo solo del dueño.
+    const driveId = world.base.get(FILE_A)!.drive_id!;
+    const legacy = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: driveId }) };
+    expect((await call(p, '/pass', { ...legacy, jwt: 'editor-jwt' })).status).toBe(403);
+    expect((await call(p, '/pass', { ...legacy, jwt: 'owner-jwt' })).status).toBe(200);
+    expect((await call(p, '/upload', { method: 'POST', jwt: 'editor-jwt', body: JSON.stringify({ name: 'a', size: 1 }) })).status).toBe(403);
+    // Conectar y elegir carpeta, solo el dueño.
+    expect((await call(p, '/drive/connect', { method: 'POST', jwt: 'editor-jwt', body: '{}' })).status).toBe(403);
+    expect((await call(p, '/drive/folder', { method: 'POST', jwt: 'editor-jwt', body: '{"parentId":null}' })).status).toBe(403);
+    expect((await call(p, '/drive/picker', { method: 'POST', jwt: 'editor-jwt', body: '{}' })).status).toBe(403);
+  });
+
+  it('una subida con file solo la sigue quien la empezó', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A);
+    const res = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' });
+    const { uploadId } = (await res.json()) as { uploadId: string };
+    const ask = (jwt: string) => call(p, `/upload/${uploadId}`, { method: 'PUT', jwt, headers: { 'Content-Range': 'bytes */1000' } });
+    expect((await ask('owner-jwt')).status).toBe(404);
+    expect(await (await ask('editor-jwt')).json()).toEqual({ status: 'incomplete', received: 0 });
+  });
+
+  it('si el archivo ya está en Drive según la base, responde done sin subir de nuevo', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A, { drive_id: 'yaSubidoxxxxxxxx', size: 1234, name: 'X.MOV' });
+    const res = await startFile(p, 'editor-jwt', { file: FILE_A, name: 'X.MOV', mime: 'video/quicktime', size: 1234, day: '2026-09-30' });
+    expect(await res.json()).toEqual({ status: 'done', file: { id: 'yaSubidoxxxxxxxx', name: 'X.MOV', mimeType: 'video/quicktime', size: 1234 } });
+    expect(world.calls.filter((c) => c.includes('/upload/drive'))).toHaveLength(0);
+  });
+
+  it('si avisarle a la base falla por la red, done llega igual y se reintenta cuando la app pregunta', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A);
+    world.failLinks(1);
+    const data = bytes(1000);
+    const res = await startFile(p, 'editor-jwt', { file: FILE_A, size: data.length, day: '2026-09-30' });
+    const { uploadId } = (await res.json()) as { uploadId: string };
+    const put = (range: string, body?: Uint8Array) =>
+      call(p, `/upload/${uploadId}`, { method: 'PUT', jwt: 'editor-jwt', headers: { 'Content-Range': range }, body });
+    const done = (await (await put('bytes 0-999/1000', data)).json()) as { status: string; file: { id: string }; linked: boolean };
+    expect(done).toMatchObject({ status: 'done', linked: false });
+    expect(world.base.get(FILE_A)!.drive_id).toBeNull();
+
+    // La app pregunta cuánto llegó: el portero vuelve a avisarle a la base.
+    const again = (await (await put('bytes */1000')).json()) as { linked: boolean; file: { id: string } };
+    expect(again).toMatchObject({ status: 'done', linked: true, file: done.file });
+    expect(world.base.get(FILE_A)!.drive_id).toBe(done.file.id);
+    const links = world.calls.filter((c) => c.endsWith('set_file_drive')).length;
+    await put('bytes */1000');
+    expect(world.calls.filter((c) => c.endsWith('set_file_drive'))).toHaveLength(links);
+  });
+
+  it('si la app pierde la subida y la vuelve a pedir, no sube dos veces: avisa a la base y responde done', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A);
+    world.failLinks(1);
+    const first = (await uploadFile(p, 'editor-jwt', FILE_A, bytes(1000))) as { file: { id: string }; linked: boolean };
+    expect(first.linked).toBe(false);
+    const uploadsBefore = world.calls.filter((c) => c.includes('/upload/drive')).length;
+    const res = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30' });
+    expect(await res.json()).toMatchObject({ status: 'done', linked: true, file: first.file });
+    expect(world.calls.filter((c) => c.includes('/upload/drive'))).toHaveLength(uploadsBefore);
+    expect(world.base.get(FILE_A)!.drive_id).toBe(first.file.id);
+  });
+
+  it('un pase sirve el archivo aunque la base todavía no sepa su id de Drive', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A);
+    world.failLinks(1); // al subir
+    const data = bytes(1000);
+    await uploadFile(p, 'editor-jwt', FILE_A, data);
+    const res = await filePass(p, 'viewer-jwt', FILE_A); // el que mira no puede avisarle a la base (nivel 1)
+    expect(res.status).toBe(200);
+    const media = await p.handle(new Request(((await res.json()) as { url: string }).url));
+    expect(new Uint8Array(await media.arrayBuffer())).toEqual(data);
+    expect(world.base.get(FILE_A)!.drive_id).toBeNull();
+    // Quien puede editar, al pedir un pase, termina de avisarle.
+    await filePass(p, 'editor-jwt', FILE_A);
+    expect(world.base.get(FILE_A)!.drive_id).not.toBeNull();
+  });
+
+  it('otro dispositivo ya lo subió (file_already_uploaded): la copia de más queda, sin error', async () => {
+    const { world, store, p } = await setup();
+    addBaseFile(world, FILE_A, { size: 10 });
+    const res = await startFile(p, 'editor-jwt', { file: FILE_A, size: 10, day: '2026-09-30' });
+    const { uploadId } = (await res.json()) as { uploadId: string };
+    world.base.get(FILE_A)!.drive_id = 'delOtroxxxxxxxxx';
+    const part = await call(p, `/upload/${uploadId}`, { method: 'PUT', jwt: 'editor-jwt', headers: { 'Content-Range': 'bytes 0-9/10' }, body: bytes(10) });
+    expect(await part.json()).toMatchObject({ status: 'done', linked: true });
+    expect(world.base.get(FILE_A)!.drive_id).toBe('delOtroxxxxxxxxx');
+    expect(store.data.get(`file:${FILE_A}`)).toMatchObject({ linked: true });
+  });
+
+  it('el pase con file comprueba appProperties.sdFile una vez; si no coincide, lo rechaza', async () => {
+    const { world, p } = await setup();
+    // Alguien apuntó el archivo de la base a otro archivo del Drive del dueño.
+    world.files.set('otroArchivoxxxxx', { name: 'contrato.pdf', mime: 'application/pdf', data: bytes(10), parents: [], appProperties: { sdFile: FILE_B } });
+    world.files.set('sinPropsxxxxxxxx', { name: 'x.pdf', mime: 'application/pdf', data: bytes(10), parents: [] });
+    addBaseFile(world, FILE_A, { drive_id: 'otroArchivoxxxxx' });
+    expect((await filePass(p, 'viewer-jwt', FILE_A)).status).toBe(403);
+    world.base.get(FILE_A)!.drive_id = 'sinPropsxxxxxxxx';
+    expect((await filePass(p, 'viewer-jwt', FILE_A)).status).toBe(403);
+    world.base.get(FILE_A)!.drive_id = 'noExistexxxxxxxx';
+    expect((await filePass(p, 'viewer-jwt', FILE_A)).status).toBe(404);
+
+    // El bueno: se comprueba la primera vez y después queda anotado.
+    world.files.set('elBuenoxxxxxxxxx', { name: 'a.mov', mime: 'video/quicktime', data: bytes(10), parents: [], appProperties: { sdFile: FILE_A } });
+    world.base.get(FILE_A)!.drive_id = 'elBuenoxxxxxxxxx';
+    const before = world.metaCalls();
+    const res = await filePass(p, 'viewer-jwt', FILE_A);
+    expect(res.status).toBe(200);
+    expect(world.metaCalls()).toBe(before + 1);
+    await filePass(p, 'viewer-jwt', FILE_A);
+    expect(world.metaCalls()).toBe(before + 1);
+    // Sirve con el tipo de files.mime.
+    const media = await p.handle(new Request(((await res.json()) as { url: string }).url, { headers: { Range: 'bytes=0-3' } }));
+    expect(media.headers.get('Content-Type')).toBe('video/quicktime');
+  });
+
+  it('renombrar el proyecto renombra su carpeta, salvo que el dueño le haya puesto otro nombre a mano', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A, { project_name: 'Rodaje uno', size: 10 });
+    const first = (await uploadFile(p, 'editor-jwt', FILE_A, bytes(10))) as { file: { id: string } };
+    const projectId = world.files.get(world.files.get(first.file.id)!.parents[0])!.parents[0];
+    expect(world.files.get(projectId)!.name).toBe('Rodaje_uno');
+
+    addBaseFile(world, FILE_B, { project_name: 'Rodaje dos: final', size: 10 });
+    const second = (await uploadFile(p, 'editor-jwt', FILE_B, bytes(10))) as { file: { id: string } };
+    expect(world.files.get(projectId)!.name).toBe('Rodaje_dos_final');
+    expect(pathOf(world, second.file.id)).toEqual(['LGA_ShotDocs', 'Rodaje_dos_final', '2026-09-30']);
+
+    // El dueño la renombra a mano: la app ya no la toca, y sigue subiendo ahí.
+    world.files.get(projectId)!.name = 'Cliente X - rodaje';
+    addBaseFile(world, FILE_C, { project_name: 'Rodaje tres', size: 10 });
+    const third = (await uploadFile(p, 'editor-jwt', FILE_C, bytes(10))) as { file: { id: string } };
+    expect(world.files.get(projectId)!.name).toBe('Cliente X - rodaje');
+    expect(pathOf(world, third.file.id)).toEqual(['LGA_ShotDocs', 'Cliente X - rodaje', '2026-09-30']);
+  });
+
+  it('una carpeta del día que se mandó a la papelera se vuelve a crear; nada se borra', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A, { size: 10 });
+    const first = (await uploadFile(p, 'editor-jwt', FILE_A, bytes(10))) as { file: { id: string } };
+    const day = world.files.get(first.file.id)!.parents[0];
+    world.files.get(day)!.trashed = true;
+    addBaseFile(world, FILE_B, { size: 10 });
+    const second = (await uploadFile(p, 'editor-jwt', FILE_B, bytes(10))) as { file: { id: string } };
+    expect(world.files.get(second.file.id)!.parents[0]).not.toBe(day);
+    expect(world.files.has(day)).toBe(true);
+    expect(pathOf(world, second.file.id)).toEqual(['LGA_ShotDocs', 'Spot_Coca-Cola_2026', '2026-09-30']);
+  });
+
+  it('dos subidas a la vez a un proyecto y un día nuevos crean una sola carpeta de cada una', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A);
+    addBaseFile(world, FILE_B);
+    addBaseFile(world, FILE_C);
+    const results = await Promise.all(
+      [FILE_A, FILE_B, FILE_C].map((f) => startFile(p, 'editor-jwt', { file: f, size: 1000, day: '2026-09-30' })),
+    );
+    expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
+    expect(world.folders().map(([, f]) => f.name).sort()).toEqual(['2026-09-30', 'LGA_ShotDocs', 'Spot_Coca-Cola_2026']);
+  });
+});
+
+describe('portero: dónde va la carpeta de la app', () => {
+  it('status dice la carpeta elegida y si hay selector', async () => {
+    const { p } = await setup();
+    const status = (await (await call(p, '/drive/status', { jwt: 'owner-jwt' })).json()) as Record<string, unknown>;
+    expect(status).toMatchObject({ connected: true, folder: null, picker: false });
+    const withKey = new Portero({ ...env, GOOGLE_API_KEY: 'AIza-test' }, memoryStore(), fakeWorld().http);
+    const member = (await (await call(withKey, '/drive/status', { jwt: 'member-jwt' })).json()) as Record<string, unknown>;
+    expect(member).toMatchObject({ picker: true, folder: null, email: null, isOwner: false });
+  });
+
+  it('/drive/picker: 404 sin GOOGLE_API_KEY; con ella, clave, número del proyecto y un token solo de drive.file', async () => {
+    const world = fakeWorld();
+    const store = memoryStore();
+    await connect(new Portero(env, store, world.http));
+    expect((await call(new Portero(env, store, world.http), '/drive/picker', { method: 'POST', jwt: 'owner-jwt', body: '{}' })).status).toBe(404);
+
+    const p = new Portero({ ...env, GOOGLE_API_KEY: 'AIza-test', GOOGLE_CLIENT_ID: '123456789012-abc.apps.googleusercontent.com' }, store, world.http);
+    const res = await call(p, '/drive/picker', { method: 'POST', jwt: 'owner-jwt', body: '{}' });
+    const body = (await res.json()) as { apiKey: string; appId: string; token: string };
+    expect(body.apiKey).toBe('AIza-test');
+    expect(body.appId).toBe('123456789012');
+    expect(body.token).toMatch(/^at-/);
+    expect(world.refreshScopes().at(-1)).toBe('https://www.googleapis.com/auth/drive.file');
+    // No reemplaza el token que usa el portero.
+    expect((store.data.get('accessToken') as { token: string }).token).toBe('at-1');
+  });
+
+  it('/drive/folder: la carpeta de la app se crea o se mueve a la elegida, y vuelve a la raíz con null', async () => {
+    const { world, store, p } = await setup();
+    world.files.set('elegidaxxxxxxxxx', { name: 'Trabajo', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: ['root'] });
+    world.files.set('unArchivoxxxxxxx', { name: 'a.pdf', mime: 'application/pdf', data: new Uint8Array(), parents: ['root'] });
+    const choose = (parentId: unknown) =>
+      call(p, '/drive/folder', { method: 'POST', jwt: 'owner-jwt', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parentId }) });
+
+    // Todavía no existe LGA_ShotDocs: se guarda y se crea ahí con la primera subida.
+    expect(await (await choose('elegidaxxxxxxxxx')).json()).toEqual({ folder: { id: 'elegidaxxxxxxxxx', name: 'Trabajo' } });
+    addBaseFile(world, FILE_A, { size: 10 });
+    const up = (await uploadFile(p, 'editor-jwt', FILE_A, bytes(10))) as { file: { id: string } };
+    expect(pathOf(world, up.file.id)).toEqual(['Trabajo', 'LGA_ShotDocs', 'Spot_Coca-Cola_2026', '2026-09-30']);
+    const status = (await (await call(p, '/drive/status', { jwt: 'owner-jwt' })).json()) as Record<string, unknown>;
+    expect(status.folder).toEqual({ id: 'elegidaxxxxxxxxx', name: 'Trabajo' });
+
+    // A la raíz: se mueve (con todo lo de adentro), no se crea otra.
+    const folders = world.folders().length;
+    expect(await (await choose(null)).json()).toEqual({ folder: null });
+    const root = (store.data.get('google') as { rootFolder: string }).rootFolder;
+    expect(world.files.get(root)!.parents).toEqual(['root']);
+    expect(pathOf(world, up.file.id)).toEqual(['LGA_ShotDocs', 'Spot_Coca-Cola_2026', '2026-09-30']);
+    expect(world.folders()).toHaveLength(folders);
+    expect(store.data.has('drivePlace')).toBe(false);
+
+    // Y de nuevo a la elegida.
+    await choose('elegidaxxxxxxxxx');
+    expect(world.files.get(root)!.parents).toEqual(['elegidaxxxxxxxxx']);
+
+    expect((await choose('unArchivoxxxxxxx')).status).toBe(400);
+    expect((await choose('noExistexxxxxxxx')).status).toBe(400);
+    expect((await choose('')).status).toBe(400);
+    expect((await choose(undefined)).status).toBe(400);
+  });
+
+  it('si la carpeta elegida ya no existe, avisa que hay que elegir otra (no la crea en otro lado)', async () => {
+    const { world, store, p } = await setup();
+    store.data.set('drivePlace', { id: 'borradaxxxxxxxxx', name: 'Vieja' });
+    addBaseFile(world, FILE_A, { size: 10 });
+    const res = await startFile(p, 'editor-jwt', { file: FILE_A, size: 10, day: '2026-09-30' });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toMatch(/choose another/);
+    expect(world.folders()).toHaveLength(0);
+  });
+
+  it('la vuelta de Google va a la ruta que pidió la app; si no es una ruta de la app, a /media-test', async () => {
+    const p = new Portero(env, memoryStore(), fakeWorld().http);
+    const back = async (ret: unknown) => {
+      const res = await call(p, '/drive/connect', { method: 'POST', jwt: 'owner-jwt', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ return: ret }) });
+      const state = new URL(((await res.json()) as { url: string }).url).searchParams.get('state');
+      return (await p.handle(new Request(`${SELF}/drive/callback?code=abc&state=${state}`))).headers.get('Location');
+    };
+    expect(await back('/settings/drive?tab=1')).toBe(`${APP}/settings/drive?tab=1&drive=connected`);
+    expect(await back('/')).toBe(`${APP}/?drive=connected`);
+    expect(await back('https://evil.example/x')).toBe(`${APP}/media-test?drive=connected`);
+    expect(await back('//evil.example/x')).toBe(`${APP}/media-test?drive=connected`);
+    expect(await back('/\\evil.example')).toBe(`${APP}/media-test?drive=connected`);
+    expect(await back(undefined)).toBe(`${APP}/media-test?drive=connected`);
+  });
+});
+
+describe('portero: caché del arranque del video', () => {
+  const SIZE = 2 * 1024 * 1024 + 12345;
+  const HEAD = CACHE_HEAD_PIECES * CACHE_PIECE;
+  const TAIL = CACHE_TAIL_PIECES * CACHE_PIECE;
+
+  async function videoPass(size = SIZE) {
+    const { world, store, p } = await setup();
+    const data = bytes(size);
+    world.files.set('videoxxxxxxxxxxx', { name: 'v.mov', mime: 'video/quicktime', data, parents: [], appProperties: { sdFile: FILE_A } });
+    addBaseFile(world, FILE_A, { drive_id: 'videoxxxxxxxxxxx', size, mime: 'video/quicktime' });
+    const { url } = (await (await filePass(p, 'viewer-jwt', FILE_A)).json()) as { url: string };
+    const get = (range?: string, method = 'GET') => p.handle(new Request(url, { method, headers: range ? { Range: range } : {} }));
+    return { world, store, p, data, get };
+  }
+
+  async function expectPart(res: Response, data: Uint8Array, start: number, end: number) {
+    expect(res.status).toBe(206);
+    expect(res.headers.get('Content-Range')).toBe(`bytes ${start}-${end}/${data.length}`);
+    expect(res.headers.get('Content-Length')).toBe(String(end - start + 1));
+    expect(res.headers.get('Accept-Ranges')).toBe('bytes');
+    expect(res.headers.get('Content-Type')).toBe('video/quicktime');
+    expect(res.headers.get('Content-Security-Policy')).toBe('sandbox');
+    const body = new Uint8Array(await res.arrayBuffer());
+    expect(body.length).toBe(end - start + 1);
+    expect(sameBytes(body, data.subarray(start, end + 1))).toBe(true);
+  }
+
+  it('guarda el principio y el final y sirve desde ahí los pedidos que caen adentro', async () => {
+    const { world, store, data, get } = await videoPass();
+    const drive = () => world.mediaCalls();
+
+    // Safari pregunta por los dos primeros bytes: se trae de Drive el principio entero (una vez).
+    await expectPart(await get('bytes=0-1'), data, 0, 1);
+    expect(drive()).toBe(1);
+    // Adentro del principio, cruzando de un trozo a otro: sin Drive.
+    const hit = await get(`bytes=1000-${CACHE_PIECE + 5000}`);
+    expect(hit.headers.get('X-Portero-Cache')).toBe('hit');
+    await expectPart(hit, data, 1000, CACHE_PIECE + 5000);
+    await expectPart(await get(`bytes=0-${HEAD - 1}`), data, 0, HEAD - 1);
+    expect(drive()).toBe(1);
+
+    // El final (el índice del video): se trae una vez y después sale de la caché, con las tres formas.
+    await expectPart(await get(`bytes=${SIZE - 100}-`), data, SIZE - 100, SIZE - 1);
+    expect(drive()).toBe(2);
+    await expectPart(await get(`bytes=${SIZE - TAIL}-${SIZE - 1}`), data, SIZE - TAIL, SIZE - 1);
+    await expectPart(await get('bytes=-5000'), data, SIZE - 5000, SIZE - 1);
+    await expectPart(await get(`bytes=${SIZE - 300000}-${SIZE - 200000}`), data, SIZE - 300000, SIZE - 200000);
+    await expectPart(await get(`bytes=${SIZE - 10}-${SIZE + 500}`), data, SIZE - 10, SIZE - 1); // pasa del final: se recorta
+    expect(drive()).toBe(2);
+
+    // Lo que no cae adentro va a Drive como siempre.
+    await expectPart(await get('bytes=0-'), data, 0, SIZE - 1);
+    await expectPart(await get(`bytes=${HEAD - 10}-${HEAD + 10}`), data, HEAD - 10, HEAD + 10);
+    await expectPart(await get('bytes=1000000-1000999'), data, 1000000, 1000999);
+    expect(drive()).toBe(5);
+    const all = await get();
+    expect(all.status).toBe(200);
+    expect(sameBytes(new Uint8Array(await all.arrayBuffer()), data)).toBe(true);
+    expect((await get(`bytes=${SIZE + 10}-`)).status).toBe(416);
+    expect((await get('bytes=0-1,5-9')).status).toBe(206); // varias partes: Drive decide
+    expect(drive()).toBe(8);
+
+    // HEAD: los mismos encabezados, sin cuerpo.
+    const head = await get('bytes=0-99', 'HEAD');
+    expect(head.status).toBe(206);
+    expect(head.headers.get('Content-Length')).toBe('100');
+    expect(head.headers.get('Content-Range')).toBe(`bytes 0-99/${SIZE}`);
+    expect(await head.text()).toBe('');
+
+    // Cada valor guardado pesa menos de 128 KiB.
+    for (const [k, v] of store.data) if (k.startsWith('cache:') && v instanceof Uint8Array) expect(v.byteLength).toBeLessThan(128 * 1024);
+    expect(store.data.get('cacheIndex')).toEqual(['videoxxxxxxxxxxx']);
+  });
+
+  it('otro Portero (otro pedido) usa lo guardado; un archivo chico se guarda entero', async () => {
+    const { world, store, data, get } = await videoPass(50_000);
+    await expectPart(await get('bytes=0-1'), data, 0, 1);
+    expect(world.mediaCalls()).toBe(1);
+    await expectPart(await get('bytes=0-'), data, 0, 49_999);
+    await expectPart(await get('bytes=40000-'), data, 40000, 49_999);
+    expect(world.mediaCalls()).toBe(1);
+    // Un pedido nuevo (cada pedido es un Portero nuevo) con otro pase del mismo archivo.
+    const q = new Portero(env, store, world.http);
+    const { url } = (await (await filePass(q, 'owner-jwt', FILE_A)).json()) as { url: string };
+    await expectPart(await q.handle(new Request(url, { headers: { Range: 'bytes=100-200' } })), data, 100, 200);
+    expect(world.mediaCalls()).toBe(1);
+  });
+
+  it('un pase de la prueba de media (sin el peso) aprende el peso y después guarda', async () => {
+    const { world, p } = await setup();
+    const data = bytes(SIZE);
+    world.files.set('pruebaxxxxxxxxxx', { name: 'v.mp4', mime: 'video/mp4', data, parents: [] });
+    const pass = await call(p, '/pass', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ fileId: 'pruebaxxxxxxxxxx', type: 'video/mp4' }) });
+    const { url } = (await pass.json()) as { url: string };
+    const get = (range: string) => p.handle(new Request(url, { headers: { Range: range } }));
+    const first = await get('bytes=0-1');
+    expect(first.headers.get('Content-Range')).toBe(`bytes 0-1/${SIZE}`);
+    expect(first.headers.get('Content-Type')).toBe('video/mp4');
+    expect(world.mediaCalls()).toBe(1);
+    await get('bytes=0-1'); // ahora sabe el peso: trae el principio entero
+    expect(world.mediaCalls()).toBe(2);
+    const hit = await get('bytes=10-19');
+    expect(hit.headers.get('Content-Type')).toBe('video/mp4');
+    expect(new Uint8Array(await hit.arrayBuffer())).toEqual(data.slice(10, 20));
+    expect(world.mediaCalls()).toBe(2);
+  });
+
+  it(`guarda como mucho ${CACHE_FILES} archivos: olvida el más viejo`, async () => {
+    const { world, store, p } = await setup();
+    const ids: string[] = [];
+    for (let i = 0; i <= CACHE_FILES; i++) {
+      const id = `chico${String(i).padStart(4, '0')}xxxxxx`;
+      ids.push(id);
+      world.files.set(id, { name: 'a', mime: 'image/jpeg', data: bytes(20), parents: [] });
+      store.data.set(`cache:${id}`, { size: 20, head: 0, tail: 0 });
+    }
+    // Se anotan de a uno, como al pedirlos.
+    for (const id of ids) {
+      store.data.delete(`cache:${id}`);
+      const pass = await call(p, '/pass', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ fileId: id }) });
+      const { url } = (await pass.json()) as { url: string };
+      await p.handle(new Request(url, { headers: { Range: 'bytes=0-1' } })); // aprende el peso
+      await p.handle(new Request(url, { headers: { Range: 'bytes=0-1' } })); // guarda
+    }
+    const index = store.data.get('cacheIndex') as string[];
+    expect(index).toHaveLength(CACHE_FILES);
+    expect(index[0]).toBe(ids[1]);
+    expect(store.data.has(`cache:${ids[0]}`)).toBe(false);
+    expect(store.data.has(`cache:${ids[0]}:h0`)).toBe(false);
+    expect(store.data.has(`cache:${ids[1]}:h0`)).toBe(true);
+  });
+});
+
+describe('portero: compatibilidad con lo guardado y la app de hoy', () => {
+  it('lo guardado antes (google con carpetas, una subida a medias sin file, un pase viejo) sigue andando', async () => {
+    const world = fakeWorld();
+    const store = memoryStore();
+    const p = new Portero(env, store, world.http);
+    await connect(p);
+    world.files.set('rootviejoxxxxxxx', { name: 'LGA_ShotDocs', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: ['root'] });
+    world.files.set('testviejoxxxxxxx', { name: 'Media_Test', mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: ['rootviejoxxxxxxx'] });
+    store.data.set('google', { ...(store.data.get('google') as object), rootFolder: 'rootviejoxxxxxxx', testFolder: 'testviejoxxxxxxx' });
+
+    // Una subida de la prueba de media empezada con la versión anterior (sin `file`).
+    const start = await call(p, '/upload', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ name: 'IMG.MOV', mime: 'video/quicktime', size: 10 }) });
+    const { uploadId } = (await start.json()) as { uploadId: string };
+    const saved = store.data.get(`upload:${uploadId}`) as Record<string, unknown>;
+    expect(saved.file).toBeUndefined();
+    const done = await call(p, `/upload/${uploadId}`, { method: 'PUT', jwt: 'owner-jwt', headers: { 'Content-Range': 'bytes 0-9/10' }, body: bytes(10) });
+    const answer = (await done.json()) as { status: string; file: { id: string } };
+    expect(Object.keys(answer).sort()).toEqual(['file', 'status']); // igual que antes: sin `linked`
+    expect(world.files.get(answer.file.id)!.parents).toEqual(['testviejoxxxxxxx']);
+    expect(world.folders()).toHaveLength(2);
+    expect(world.calls.some((c) => c.endsWith('set_file_drive'))).toBe(false);
+
+    // Un pase firmado por la versión anterior ({ f, t, u }, sin el peso) se sigue sirviendo.
+    const pass = await call(p, '/pass', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ fileId: answer.file.id }) });
+    const { url } = (await pass.json()) as { url: string };
+    const media = await p.handle(new Request(url, { headers: { Range: 'bytes=2-5' } }));
+    expect(media.status).toBe(206);
+    expect(new Uint8Array(await media.arrayBuffer())).toEqual(bytes(10).slice(2, 6));
+
+    // El estado tiene lo de antes, más lo nuevo.
+    const status = (await (await call(p, '/drive/status', { jwt: 'owner-jwt' })).json()) as Record<string, unknown>;
+    expect(status).toEqual({ connected: true, broken: null, email: 'lega@example.com', isOwner: true, folder: null, picker: false });
+  });
+
+  it('reconectar Drive conserva las carpetas; con otra cuenta de Google olvida la carpeta elegida', async () => {
+    const { store, p } = await setup();
+    store.data.set('google', { ...(store.data.get('google') as object), rootFolder: 'r1xxxxxxxxxxxxxx', testFolder: 't1xxxxxxxxxxxxxx' });
+    store.data.set('drivePlace', { id: 'placexxxxxxxxxxx', name: 'Trabajo' });
+    await connect(p);
+    expect(store.data.get('google')).toMatchObject({ rootFolder: 'r1xxxxxxxxxxxxxx', testFolder: 't1xxxxxxxxxxxxxx' });
+    expect(store.data.get('drivePlace')).toEqual({ id: 'placexxxxxxxxxxx', name: 'Trabajo' });
+    store.data.set('google', { ...(store.data.get('google') as object), email: 'otra@example.com' });
+    await connect(p);
+    expect(store.data.has('drivePlace')).toBe(false);
   });
 });
