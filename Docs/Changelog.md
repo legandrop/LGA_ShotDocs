@@ -13,7 +13,7 @@ buscar ya puesta en esa coincidencia (Enter sigue por las demás), también en l
 título abre la página arriba. Busca en el dispositivo: anda sin red, un dispositivo nuevo encuentra páginas que
 nunca abrió, y avisa si faltan páginas por bajar o alguna no se pudo leer entera. El panel lista también los
 otros proyectos que coinciden: Ctrl/⌘+K ahora busca, y cambiar de proyecto sigue a dos teclas (el selector de
-arriba se abre con un clic); si ninguno coincide, ofrece crear uno con ese nombre. Una sola letra busca solo en
+arriba se abre con un clic); si ninguno coincide (y ya no se está buscando), ofrece crear uno con ese nombre: se llega con las flechas y Enter. Una sola letra busca solo en
 los títulos. Con texto elegido en el editor, Ctrl/⌘+K sigue creando un link, salvo que lo elegido sea lo que dejó
 Esc en la barra de buscar. En el teléfono el panel ocupa toda la pantalla y el cajón se cierra al ir al
 resultado. En la Mac los atajos son siempre con ⌘ y nunca con Ctrl (también mandar un comentario, comentar e

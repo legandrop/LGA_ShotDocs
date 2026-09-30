@@ -26,6 +26,8 @@ export const SEARCHING_NOTICE_MS = 300;
 const PAGE_LIMIT = 50;
 /** Proyectos que se muestran con algo escrito. */
 const PROJECT_LIMIT = 5;
+/** El largo máximo del nombre de un proyecto (la base: `workspaces_name_length`; el selector usa lo mismo). */
+export const PROJECT_NAME_MAX = 200;
 
 type Item =
   | { kind: 'project'; id: string; project: ProjectRow }
@@ -70,6 +72,8 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
   const [searched, setSearched] = useState('');
   const [limit, setLimit] = useState(PAGE_LIMIT);
   const [active, setActive] = useState(0);
+  /** La persona se movió con las flechas desde la última búsqueda (Enter crea un proyecto solo así). */
+  const [arrowed, setArrowed] = useState(false);
   const [slow, setSlow] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -98,6 +102,7 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
 
   useEffect(() => {
     setActive(0);
+    setArrowed(false);
     setLimit(PAGE_LIMIT);
   }, [searched]);
 
@@ -137,10 +142,18 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
     ? allProjects.filter((p) => p.id !== projectId && nameMatches(p.name, words)).slice(0, PROJECT_LIMIT)
     : allProjects;
   const projectName = tree.project(projectId)?.name ?? tr('project.defaultName');
-  // Crear un proyecto con lo escrito, como en el selector: solo si no coincide ninguno y la persona puede.
-  const newName = query.trim();
+  // Crear un proyecto con lo escrito, como en el selector: solo si la persona puede, si no coincide ningún
+  // proyecto, y con los resultados al día (lo escrito ya se buscó, el índice no está leyendo y no faltan páginas
+  // por bajar): un proyecto no se puede borrar, así que no se ofrece mientras podría haber páginas que coinciden.
+  const newName = [...query.trim()].slice(0, PROJECT_NAME_MAX).join('');
   const offerCreate =
-    typed && perms.canCreateProject && newName.length > 0 && !allProjects.some((p) => nameMatches(p.name, words));
+    typed &&
+    perms.canCreateProject &&
+    newName.length > 0 &&
+    query === searched &&
+    !info.building &&
+    info.missing === 0 &&
+    !allProjects.some((p) => nameMatches(p.name, words));
 
   const items: Item[] = [];
   for (const p of projects) items.push({ kind: 'project', id: `search-project-${p.id}`, project: p });
@@ -208,8 +221,12 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
       if (items.length === 0) return;
       const from = Math.min(active, items.length - 1);
       setActive((from + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length);
+      setArrowed(true);
     } else if (e.key === 'Enter') {
       e.preventDefault();
+      // Crear un proyecto es para siempre: con Enter, solo si la persona llegó a esa opción con las flechas
+      // (nunca por ser la primera, ni con el mouse encima). Con un clic, sí.
+      if (current?.kind === 'create' && !arrowed) return;
       activate(current);
     }
   };

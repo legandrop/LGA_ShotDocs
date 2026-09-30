@@ -128,7 +128,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
       const request = search.takeRequest(pageId);
       if (!request) return;
       if (request.term) {
-        const target = request.blockId ? { blockId: request.blockId, occurrence: request.occurrence ?? 0 } : null;
+        const target = request.blockId ? { pageId, blockId: request.blockId, occurrence: request.occurrence ?? 0 } : null;
         openFindBarAt(request.term, target, { focus: !coarsePointer() });
       } else {
         closeFindBar();
@@ -194,7 +194,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   if (opening.state === 'loading') {
     return (
       <>
-        <FindBar editor={null} editable={false} />
+        <FindBar editor={null} editable={false} pageId={pageId} />
         <div className="editor-placeholder" />
       </>
     );
@@ -202,7 +202,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   if (opening.state === 'unsupported') return <UnsupportedPage />;
   return (
     <>
-      <FindBar editor={findEditor} editable={opening.complete && canEdit} complete={opening.complete} />
+      <FindBar editor={findEditor} editable={opening.complete && canEdit} complete={opening.complete} pageId={pageId} />
       {!opening.complete && (
         <p className="muted editor-missing">
           {status.online ? tr('editor.missingOnline') : tr('editor.missingOffline')}

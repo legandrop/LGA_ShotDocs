@@ -9,7 +9,7 @@ import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
-import { closeFindBar, getFindUi, updateFindUi } from './findUi';
+import { closeFindBar, getFindUi, hasFindTarget, openFindBarAt, updateFindUi } from './findUi';
 import { isSearchShortcut, searchSession, takesSearchShortcut } from './projectSearchUi';
 import { Sidebar } from './Sidebar';
 import { Shell } from './Workspace';
@@ -19,6 +19,8 @@ import { Shell } from './Workspace';
 // e ir a un resultado en otra página y en la misma, con la app de verdad (el árbol, la base local y el editor).
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+// Con la máquina cargada (varias pruebas a la vez), el editor en jsdom tarda: topes holgados.
+vi.setConfig({ testTimeout: 60_000 });
 
 beforeAll(() => {
   window.matchMedia ??= ((query: string) => ({
@@ -62,7 +64,7 @@ afterEach(() => {
 
 const wait = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
 
-async function until(check: () => unknown, what: string, tries = 100): Promise<void> {
+async function until(check: () => unknown, what: string, tries = 250): Promise<void> {
   for (let i = 0; i < tries; i++) {
     if (check()) return;
     await wait(40);
@@ -415,9 +417,15 @@ describe('el panel (después de la auditoría)', () => {
     await until(() => panel()!.querySelector('.search-create'), 'crear');
     expect(active()!.classList.contains('search-page')).toBe(true);
     expect(options().at(-1)!.textContent).toBe('New project “camara”');
-    // Sin nada más, Enter lo crea y lo abre.
+    // Sin nada más: Enter solo no lo crea (es para siempre); con la flecha hasta la opción, sí.
     type(input(), 'Bosque Negro');
     await until(() => options().length === 1, 'solo crear');
+    expect(active()!.classList.contains('search-create')).toBe(true);
+    key(input(), { key: 'Enter' });
+    await wait(50);
+    expect(panel()).not.toBeNull();
+    expect(d.tree.projects().map((p) => p.name)).not.toContain('Bosque Negro');
+    key(input(), { key: 'ArrowDown' });
     key(input(), { key: 'Enter' });
     expect(panel()).toBeNull();
     await until(() => host.querySelector('.project-button')?.textContent?.includes('Bosque Negro'), 'el proyecto nuevo');
@@ -476,6 +484,8 @@ describe('el panel (después de la auditoría)', () => {
     await until(() => host.querySelector('.sd-find-current'), 'la coincidencia');
     key(find, { key: 'Escape' });
     expect(host.querySelector('.find-bar')).toBeNull();
+    // Primero la tecla Ctrl sola (como en un teclado de verdad): no lo olvida.
+    key(editor.querySelector('p')!, { key: 'Control', ctrlKey: true });
     const e = key(editor.querySelector('p')!, { key: 'k', ctrlKey: true });
     expect(e.defaultPrevented).toBe(true);
     await until(panel, 'el panel');
@@ -544,6 +554,132 @@ describe('el panel (después de la auditoría)', () => {
     await wait(300);
     expect(host.querySelector('.find-count')!.textContent).toBe('3 of 3');
   }, 20_000);
+});
+
+describe('crear un proyecto desde el panel (verificación)', () => {
+  it('no se ofrece mientras el índice lee ni con páginas por bajar: una página podría coincidir', async () => {
+    const { d } = await app();
+    await openWithKeys();
+    await search('camara');
+    // Una página nueva que tarda en leerse y tiene lo que se busca.
+    const slow = await act(async () => {
+      const id = await d.tree.create(null, 'Lenta');
+      await edit(d, id, [{ id: 'l1', text: 'palabrarara' }]);
+      return id;
+    });
+    const real = d.docs.indexSnapshot.bind(d.docs);
+    vi.spyOn(d.docs, 'indexSnapshot').mockImplementation(async (pageId) => {
+      if (pageId === slow) await new Promise((r) => setTimeout(r, 1200));
+      return real(pageId);
+    });
+    type(input(), 'palabrarara');
+    await wait(500);
+    expect(panel()!.querySelector('.search-create')).toBeNull();
+    key(input(), { key: 'ArrowDown' });
+    key(input(), { key: 'Enter' });
+    expect(d.tree.projects().map((p) => p.name)).not.toContain('palabrarara');
+    await until(() => panel()?.querySelector('.search-page'), 'la página lenta');
+    expect(panel()!.querySelector('.search-create')).not.toBeNull();
+  });
+
+  it('no se ofrece con páginas que faltan bajar', async () => {
+    await app((device) => {
+      const info = device.docs.states.bind(device.docs);
+      // El servidor tiene más de una página que lo que bajó el dispositivo.
+      vi.spyOn(device.docs, 'states').mockImplementation(async () => {
+        const states = await info();
+        for (const st of states.values()) st.cursor = -1;
+        return states;
+      });
+      return {};
+    });
+    await openWithKeys();
+    type(input(), 'nombrenuevo');
+    await until(() => panel()!.textContent!.includes('Still downloading'), 'el aviso de páginas por bajar');
+    expect(panel()!.querySelector('.search-create')).toBeNull();
+  });
+
+  it('con lo escrito todavía sin buscar no se ofrece (no se crea un nombre viejo ni uno a medio corregir)', async () => {
+    const { d } = await app();
+    await openWithKeys();
+    type(input(), 'Bosquex');
+    await until(() => panel()!.querySelector('.search-create'), 'crear');
+    type(input(), 'Bosque');
+    // Antes de que se busque lo corregido: sin la opción.
+    expect(panel()!.querySelector('.search-create')).toBeNull();
+    key(input(), { key: 'ArrowDown' });
+    key(input(), { key: 'Enter' });
+    await wait(50);
+    expect(d.tree.projects().map((p) => p.name).filter((n) => n.startsWith('Bosque'))).toEqual([]);
+    await until(() => panel()!.querySelector('.search-create')?.textContent === 'New project “Bosque”', 'crear "Bosque"');
+  });
+
+  it('el nombre se corta en 200 caracteres (como el selector y la base)', async () => {
+    const { d, host } = await app();
+    await openWithKeys();
+    const long = 'x'.repeat(250);
+    type(input(), long);
+    await until(() => panel()!.querySelector('.search-create'), 'crear');
+    act(() => panel()!.querySelector<HTMLElement>('.search-create')!.click());
+    await until(() => d.tree.projects().some((p) => p.name.startsWith('xxx')), 'el proyecto');
+    expect(d.tree.projects().find((p) => p.name.startsWith('xxx'))!.name).toHaveLength(200);
+    expect(host.querySelector('.shell')).not.toBeNull();
+  });
+});
+
+describe('lo que dejó Esc en la barra (verificación)', () => {
+  async function escSelection(host: HTMLElement) {
+    const editor = host.querySelector<HTMLElement>('.bn-editor')!;
+    key(editor, { key: 'f', ctrlKey: true });
+    const find = host.querySelector<HTMLInputElement>('.find-bar .find-input')!;
+    type(find, 'otra');
+    await until(() => host.querySelector('.sd-find-current'), 'la coincidencia');
+    key(find, { key: 'Escape' });
+    return editor;
+  }
+
+  it('un clic o una tecla en el editor lo olvida: elegir lo mismo después es de la persona (Ctrl+K = link)', async () => {
+    const { host } = await app();
+    const editor = await escSelection(host);
+    const p = editor.querySelector('p')!;
+    act(() => {
+      p.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+    const e = key(p, { key: 'k', ctrlKey: true });
+    await wait(50);
+    expect(panel()).toBeNull();
+    expect(e.defaultPrevented).toBe(false);
+    // Una tecla también.
+    await escSelection(host);
+    key(p, { key: 'ArrowLeft', shiftKey: true });
+    key(p, { key: 'k', ctrlKey: true });
+    await wait(50);
+    expect(panel()).toBeNull();
+  });
+
+  it('con un diálogo abierto no abre la búsqueda', async () => {
+    const { host } = await app();
+    const editor = await escSelection(host);
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    document.body.append(modal);
+    key(editor.querySelector('p')!, { key: 'k', ctrlKey: true });
+    await wait(50);
+    expect(panel()).toBeNull();
+  });
+});
+
+describe('la coincidencia pedida (verificación)', () => {
+  it('es de una página: otra no la usa; cambiar lo buscado o cerrar la barra la descarta', () => {
+    act(() => openFindBarAt('camara', { pageId: 'A', blockId: 'b', occurrence: 1 }, { focus: false }));
+    expect(hasFindTarget('B')).toBe(false);
+    expect(hasFindTarget('A')).toBe(true);
+    act(() => updateFindUi({ query: 'otra cosa' }));
+    expect(hasFindTarget('A')).toBe(false);
+    act(() => openFindBarAt('camara', { pageId: 'A', blockId: 'b', occurrence: 1 }, { focus: false }));
+    act(() => closeFindBar());
+    expect(hasFindTarget('A')).toBe(false);
+  });
 });
 
 describe('el pedido de ir a un resultado', () => {

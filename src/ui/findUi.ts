@@ -27,6 +27,8 @@ export interface FindUiState {
 }
 
 export interface FindTarget {
+  /** La página del pedido: solo la barra de esa página lo usa. */
+  pageId: string;
   blockId: string;
   occurrence: number;
   /** Cambia en cada pedido, así el mismo resultado dos veces vuelve a ir. */
@@ -101,17 +103,18 @@ export function openFindBarAt(query: string, target: Omit<FindTarget, 'nonce'> |
 /** El último pedido de ir a una coincidencia ya atendido (queda en el estado: borrarlo volvería a buscar). */
 let targetHandled = 0;
 
-/** Si hay una coincidencia pedida sin atender. */
-export function hasFindTarget(): boolean {
-  return !!state.target && state.target.nonce > targetHandled;
+/** Si hay una coincidencia pedida sin atender para esa página. */
+export function hasFindTarget(pageId: string | undefined): boolean {
+  return !!state.target && state.target.pageId === pageId && state.target.nonce > targetHandled;
 }
 
 /**
- * La coincidencia pedida sin atender, si hay. Se marca como atendida salvo con `keep`: una página que todavía
- * está bajando se vuelve a abrir al completarse, y ahí se vuelve a ir a la coincidencia pedida.
+ * La coincidencia pedida sin atender para esa página, si hay. Se marca como atendida salvo con `keep`: una
+ * página que todavía está bajando se vuelve a abrir al completarse, y ahí se vuelve a ir a la coincidencia
+ * pedida (mientras tanto, cambiar lo buscado o salir de la página la descarta).
  */
-export function takeFindTarget({ keep = false }: { keep?: boolean } = {}): FindTarget | null {
-  if (!hasFindTarget()) return null;
+export function takeFindTarget(pageId: string | undefined, { keep = false }: { keep?: boolean } = {}): FindTarget | null {
+  if (!hasFindTarget(pageId)) return null;
   if (!keep) targetHandled = state.target!.nonce;
   return state.target;
 }
@@ -129,23 +132,56 @@ interface ViewLike {
   state: { doc: unknown; selection: { from: number; to: number } };
 }
 
-let findSelection: { view: ViewLike; doc: unknown; from: number; to: number } | null = null;
+let findSelection: { view: ViewLike; doc: unknown; from: number; to: number; stop: () => void } | null = null;
 
-/** La barra se cerró dejando elegida esa coincidencia (`closeFind`). */
+/** Se olvida lo que dejó Esc (y se dejan de escuchar el clic y las teclas del editor). */
+export function clearFindSelection(): void {
+  findSelection?.stop();
+  findSelection = null;
+}
+
+/**
+ * La barra se cerró dejando elegida esa coincidencia (`closeFind`). Cualquier clic o tecla en el editor lo
+ * olvida: si después la persona elige lo mismo (un doble clic en la palabra para hacerle un link), lo eligió
+ * ella. Ctrl/⌘+K no llega hasta acá cuando abre la búsqueda (la captura de `Workspace.tsx` lo frena antes).
+ */
 export function recordFindSelection(view: ViewLike, from: number, to: number): void {
-  findSelection = { view, doc: view.state.doc, from, to };
+  clearFindSelection();
+  // Apretar solo ⌘, Ctrl, Shift o Alt (el principio de Ctrl/⌘+K) no cuenta.
+  const forget = (e: Event) => {
+    if (e instanceof KeyboardEvent && ['Control', 'Meta', 'Shift', 'Alt', 'AltGraph', 'OS'].includes(e.key)) return;
+    clearFindSelection();
+  };
+  const events = ['pointerdown', 'mousedown', 'keydown'] as const;
+  for (const type of events) view.dom.addEventListener(type, forget, true);
+  findSelection = {
+    view,
+    doc: view.state.doc,
+    from,
+    to,
+    stop: () => {
+      for (const type of events) view.dom.removeEventListener(type, forget, true);
+    },
+  };
 }
 
 /** Si el evento es en el editor y lo elegido ahí sigue siendo exactamente lo que dejó la barra al cerrarse. */
 export function isFindSelectionTarget(target: EventTarget | null): boolean {
   const record = findSelection;
-  if (!record || record.view.isDestroyed || !(target instanceof Node) || !record.view.dom.contains(target)) return false;
+  if (!record) return false;
+  if (record.view.isDestroyed) {
+    // El editor ya no está: no se retiene.
+    clearFindSelection();
+    return false;
+  }
+  if (!(target instanceof Node) || !record.view.dom.contains(target)) return false;
   const { doc, selection } = record.view.state;
   return doc === record.doc && selection.from === record.from && selection.to === record.to;
 }
 
+/** Cierra la barra; un pedido de ir a una coincidencia que quedaba se descarta (al salir de la página, también). */
 export function closeFindBar(): void {
-  if (state.open) set({ open: false, status: null });
+  if (state.open || state.target) set({ open: false, status: null, target: null });
 }
 
 /** Si hay un pedido de foco sin atender (y lo marca como atendido). */
@@ -156,7 +192,9 @@ export function takeFocusRequest(): boolean {
 }
 
 export function updateFindUi(patch: Partial<Omit<FindUiState, 'open' | 'focus' | 'target' | 'prefill'>>): void {
-  set(patch);
+  // Cambiar lo buscado descarta la coincidencia pedida: ya es otra búsqueda.
+  if (patch.query !== undefined && patch.query !== state.query && state.target) set({ ...patch, target: null });
+  else set(patch);
 }
 
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);

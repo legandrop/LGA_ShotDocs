@@ -36,7 +36,18 @@ const TYPE_MS = 100;
 /** Lo elegido en el editor se usa para buscar si es de una línea y no muy largo. */
 const PREFILL_MAX = 200;
 
-export function FindBar({ editor, editable, complete = true }: { editor: FindEditor | null; editable: boolean; complete?: boolean }) {
+export function FindBar({
+  editor,
+  editable,
+  complete = true,
+  pageId,
+}: {
+  editor: FindEditor | null;
+  editable: boolean;
+  complete?: boolean;
+  /** La página: solo se va a una coincidencia pedida para ella (un resultado de la búsqueda del proyecto). */
+  pageId?: string;
+}) {
   const ui = useFindUi();
   const tr = useT();
   const view = editor?.prosemirrorView;
@@ -78,17 +89,17 @@ export function FindBar({ editor, editable, complete = true }: { editor: FindEdi
         if (ui.query.trim()) {
           setFind(view, ui.query, { matchCase: ui.matchCase, wholeWord: ui.wholeWord });
           // Con la página a medio bajar el pedido se guarda: al completarse el editor se vuelve a montar.
-          const target = takeFindTarget({ keep: !complete });
+          const target = takeFindTarget(pageId, { keep: !complete });
           if (target) goToOccurrence(view, target.blockId, target.occurrence);
           revealCurrent(view);
         } else {
           clearFind(view);
         }
       },
-      hasFindTarget() ? 0 : TYPE_MS,
+      hasFindTarget(pageId) ? 0 : TYPE_MS,
     );
     return () => clearTimeout(timer);
-  }, [view, ui.open, ui.query, ui.matchCase, ui.wholeWord, ui.target, complete]);
+  }, [view, ui.open, ui.query, ui.matchCase, ui.wholeWord, ui.target, complete, pageId]);
 
   // Con la barra abierta: F3 y Ctrl/⌘+G van a la siguiente (con Shift, a la anterior), desde la barra o el
   // editor y sin un diálogo abierto.

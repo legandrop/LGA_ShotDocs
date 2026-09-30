@@ -36,6 +36,8 @@ export interface IndexDocs {
   subscribeLocalChange(fn: (pageId: string) => void): () => void;
   /** Hay ediciones sin guardar todavía: la lectura espera un momento (no les demora el guardado). */
   hasUnsavedEdits?(): boolean;
+  /** El error de escritura local (sin espacio, por ejemplo): esperar no sirve, se lee sin esperar. */
+  getWriteError?(): string | null;
 }
 
 interface IndexedUnit {
@@ -172,9 +174,15 @@ function countIn(hay: string, needle: string): number {
   return n;
 }
 
-/** Una letra sola (un punto de código) busca solo en los títulos: en el texto coincide con casi todo. */
+// Escrituras donde un carácter es una palabra (chino, japonés): ahí una sola letra sí se busca en el texto.
+const IDEOGRAPHIC = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Bopomofo}\p{Script=Yi}]/u;
+
+/**
+ * Una letra sola (un punto de código, salvo en las escrituras de arriba) busca solo en los títulos: en el texto
+ * coincide con casi todo.
+ */
 export function titlesOnly(words: SearchWord[]): boolean {
-  return words.length > 0 && words.every((w) => [...w.norm].length < 2);
+  return words.length > 0 && words.every((w) => [...w.norm].length < 2 && !IDEOGRAPHIC.test(w.norm));
 }
 
 function indexUnits(doc: Y.Doc): IndexedUnit[] {
@@ -210,7 +218,7 @@ export class ProjectIndex {
   constructor(
     private readonly tree: IndexTree,
     private readonly docs: IndexDocs,
-    private readonly options: { yieldMs?: number; publishMs?: number } = {},
+    private readonly options: { yieldMs?: number; publishMs?: number; writeWaitMs?: number } = {},
   ) {
     this.unsubscribe = docs.subscribeLocalChange((pageId) => {
       this.stale.add(pageId);
@@ -314,6 +322,8 @@ export class ProjectIndex {
   private async run(projectId: string): Promise<void> {
     const yieldMs = this.options.yieldMs ?? 12;
     const publishMs = this.options.publishMs ?? 250;
+    // Lo que esta pasada puede esperar, en total, a que se guarden las ediciones (no por página).
+    const budget = { ms: this.options.writeWaitMs ?? 2000 };
     let changed = false;
     try {
       this.states = await this.docs.states();
@@ -329,7 +339,7 @@ export class ProjectIndex {
           published = Date.now();
         }
         try {
-          await this.waitForWrites();
+          await this.waitForWrites(budget);
           if (this.disposed || this.cancelled) return;
           await this.readPage(page.id);
           changed = true;
@@ -356,9 +366,16 @@ export class ProjectIndex {
     }
   }
 
-  /** Mientras haya ediciones sin guardar, espera un poco: leer (y fusionar) no les demora el guardado. */
-  private async waitForWrites(): Promise<void> {
-    for (let i = 0; i < 40 && this.docs.hasUnsavedEdits?.(); i++) await new Promise((resolve) => setTimeout(resolve, 25));
+  /**
+   * Mientras haya ediciones sin guardar, espera un poco: leer (y fusionar) no les demora el guardado. Con un
+   * tope para toda la pasada, y sin esperar si guardar está fallando (sin espacio: no se va a arreglar solo).
+   */
+  private async waitForWrites(budget: { ms: number }): Promise<void> {
+    while (budget.ms > 0 && this.docs.hasUnsavedEdits?.() && !this.docs.getWriteError?.()) {
+      const start = Date.now();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      budget.ms -= Math.max(1, Date.now() - start);
+    }
   }
 
   /** Si la página cambió desde que se leyó (o nunca se leyó). */

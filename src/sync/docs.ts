@@ -721,8 +721,10 @@ export class PageDocs {
         for (const fn of this.localChangeListeners) {
           try {
             fn(pageId);
-          } catch {
-            // Lo que hace cada escucha es suyo (la sincronización, el índice de la búsqueda).
+          } catch (err) {
+            // Lo que hace cada escucha es suyo (la sincronización, el índice de la búsqueda): se avisa en la
+            // consola y los demás siguen.
+            console.error('local change listener failed', err);
           }
         }
         // Aparte y después: lo escrito ya está a salvo con su marca.

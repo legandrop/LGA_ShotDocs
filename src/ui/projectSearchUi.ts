@@ -135,5 +135,10 @@ export function takesSearchShortcut(target: EventTarget | null, doc: Document = 
   const el = target instanceof Element ? target : null;
   const selection = doc.getSelection?.();
   if (el?.closest('.bn-editor') && selection && !selection.isCollapsed) return false;
-  return !doc.querySelector(OTHER_MODAL);
+  return !otherModalOpen(doc);
+}
+
+/** Un diálogo o el carrete abiertos (sin contar el panel de buscar). */
+export function otherModalOpen(doc: Document = document): boolean {
+  return !!doc.querySelector(OTHER_MODAL);
 }

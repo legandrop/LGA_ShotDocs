@@ -15,7 +15,7 @@ import {
 } from '../services';
 import { useWorkspace } from '../workspace';
 import { FIND_SHORTCUT_LABEL, isFindSelectionTarget, openFindBar } from './findUi';
-import { disposeSearchSession, isSearchShortcut, takesSearchShortcut, useSearchSession } from './projectSearchUi';
+import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
 import { MenuIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
@@ -170,7 +170,7 @@ export function Shell() {
     // BlockNote lo tome como "crear un link", en la fase de captura, se abre la búsqueda.
     const onCapture = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || !isSearchShortcut(e)) return;
-      if (search.isOpen() || !isFindSelectionTarget(e.target)) return;
+      if (search.isOpen() || otherModalOpen() || !isFindSelectionTarget(e.target)) return;
       e.preventDefault();
       e.stopPropagation();
       search.setOpen(true);

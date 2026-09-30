@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
-import { parseWords, ProjectIndex, SNIPPETS_PER_PAGE, type IndexTree } from './projectIndex';
+import { parseWords, ProjectIndex, SNIPPETS_PER_PAGE, titlesOnly, type IndexTree } from './projectIndex';
 
 // La búsqueda en todo el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8, y "Cómo quedó (entrega 2)"): el índice
 // en memoria, con la base local de verdad (fake-indexeddb) y el árbol de verdad.
@@ -376,6 +376,38 @@ describe('el índice del proyecto', () => {
     expect(index.query(d.tree.workspaceId, 'b').hits[0].snippets).toEqual([]);
     // Con dos letras, también el texto.
     expect(titles(index, d, 'ze')).toEqual(['Brief']);
+    // En chino o japonés un carácter es una palabra: se busca también en el texto.
+    expect(titlesOnly(parseWords('猫'))).toBe(false);
+    expect(titlesOnly(parseWords('の'))).toBe(false);
+    expect(titlesOnly(parseWords('a'))).toBe(true);
+    await page(d, 'Gatos', [{ text: '黒い猫' }]);
+    await index.refresh(d.tree.workspaceId);
+    expect(titles(index, d, '猫')).toEqual(['Gatos']);
+  });
+
+  it('esperar a que se guarden las ediciones tiene un tope por pasada, y no se espera si guardar falla', async () => {
+    const d = await device();
+    for (let i = 0; i < 10; i++) await page(d, `P${i}`, [{ text: `texto ${i}` }]);
+    vi.spyOn(d.docs, 'hasUnsavedEdits').mockReturnValue(true);
+    let start = Date.now();
+    await new ProjectIndex(d.tree, d.docs, { writeWaitMs: 200 }).refresh(d.tree.workspaceId);
+    // Antes: hasta 1 s por página (10 s acá).
+    expect(Date.now() - start).toBeLessThan(2000);
+    vi.spyOn(d.docs, 'getWriteError').mockReturnValue('QuotaExceededError');
+    start = Date.now();
+    const index = new ProjectIndex(d.tree, d.docs);
+    await index.refresh(d.tree.workspaceId);
+    expect(Date.now() - start).toBeLessThan(1500);
+    expect(titles(index, d, 'texto')).toHaveLength(10);
+  });
+
+  it('un error de escritura después de parar la sincronización no deja un error sin atrapar', async () => {
+    const d = await device();
+    d.engine.stop();
+    d.db.close();
+    d.docs.onWriteError?.('se cerró la base');
+    await new Promise((r) => setTimeout(r, 30));
+    expect(d.engine.getStatus().localError).toBe('se cerró la base');
   });
 
   it('dispose deja de escuchar y de leer; un escucha que falla no deja sin aviso a los demás ni frena la versión', async () => {
@@ -529,13 +561,15 @@ describe('el índice del proyecto', () => {
     );
     expect(results.total).toBe(1000);
     expect(results.hits).toHaveLength(50);
-    // Medido en esta máquina: índice ~1,1 s, "de la" ~20 ms, "a" ~2 ms, "camara grua" ~8 ms, releer ~6 ms (antes
-    // de la auditoría, la primera búsqueda amplia tardaba ~650 ms). Los topes dejan margen para una máquina lenta.
-    expect(build).toBeLessThan(5000);
-    expect(broad).toBeLessThan(150);
-    expect(broadAgain).toBeLessThan(150);
-    expect(letter).toBeLessThan(30);
-    expect(narrow).toBeLessThan(100);
-    expect(noChange).toBeLessThan(500);
+    // Medido en esta máquina, sola: índice ~1,1 s, "de la" ~20 ms, "a" ~2 ms, "camara grua" ~8 ms, releer ~6 ms
+    // (antes de la auditoría, la primera búsqueda amplia tardaba ~650 ms). Con SHOTDOCS_STRICT_PERF=1, estos
+    // topes; si no, cinco veces más, para que la máquina cargada por otras pruebas no la haga fallar por el reloj.
+    const slack = process.env.SHOTDOCS_STRICT_PERF === '1' ? 1 : 5;
+    expect(build).toBeLessThan(5000 * slack);
+    expect(broad).toBeLessThan(150 * slack);
+    expect(broadAgain).toBeLessThan(150 * slack);
+    expect(letter).toBeLessThan(30 * slack);
+    expect(narrow).toBeLessThan(100 * slack);
+    expect(noChange).toBeLessThan(500 * slack);
   }, 120_000);
 });

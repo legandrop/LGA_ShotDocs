@@ -576,7 +576,7 @@ Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo qu
   por primera vez encuentra el texto de una página que nunca abrió.
 - **`src/sync/docs.ts`:** `onLocalChange` pasó a ser un conjunto de escuchas (`subscribeLocalChange`, corrección
   8); cada escucha va en su `try/catch` (uno que falla no deja sin aviso a los demás ni frena la suma de la
-  versión), y la sincronización suelta el suyo en `engine.stop()`. `peek(pageId)` da el Y.Doc vivo de una página
+  versión; el error va a la consola), y la sincronización suelta el suyo en `engine.stop()`. `peek(pageId)` da el Y.Doc vivo de una página
   abierta (ya cargado y sin `stale`), sin abrirla. `indexSnapshot(pageId)` lee lo guardado con el candado de la
   página, **primero el estado y después el contenido** (si algo cambia en el medio, el contenido es más nuevo
   que la marca y se vuelve a leer; nunca al revés), y con más de 64 updates sueltos los fusiona (`loadInto`,
@@ -597,8 +597,9 @@ Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo qu
     en cada búsqueda, al terminar cada sincronización y con cada cambio del árbol; solo lo que cambió de marca.
     Cede el hilo cada ~12 ms; **avisa lo leído a lo sumo cada 250 ms** (cada aviso vuelve a buscar) y al
     terminar. `building` ("Buscando…") se prende **solo si alguna página cambió de marca**: una búsqueda o una
-    sincronización sin cambios no lo prende. Antes de cada página espera si hay ediciones sin guardar (hasta 1 s:
-    fusionar no les demora el guardado), y **cerrar el panel corta la pasada** (`cancel`; lo leído queda). Un
+    sincronización sin cambios no lo prende. Antes de cada página espera si hay ediciones sin guardar (fusionar no les
+    demora el guardado), con un tope de 2 s para toda la pasada y sin esperar si guardar está fallando (sin
+    espacio: no se arregla solo; antes eran hasta 1 s por página, unos 17 minutos con mil páginas), y **cerrar el panel corta la pasada** (`cancel`; lo leído queda). Un
     error de la base (se está cerrando) no rompe nada: se intenta la próxima vez.
   - **Buscar:** cada palabra por separado (`parseWords`: sin repetir, sin las que quedan vacías), sin
     mayúsculas ni tildes, la ñ como n, con partes de palabras; una página entra si tiene todas, en el título o
@@ -606,7 +607,10 @@ Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo qu
     mapas y los fragmentos se arman solo para las páginas que se muestran (y no se guardan). Orden: todas las
     palabras en el título, alguna en el título, el resto; después por cantidad de coincidencias y, a igualdad,
     el orden de la barra lateral. Hasta 50 páginas, con "Mostrar más". **Una sola letra busca solo en los
-    títulos** (en el texto coincide con casi todo); el panel lo dice.
+    títulos** (en el texto coincide con casi todo); el panel lo dice. No en chino, japonés y otras escrituras
+    donde un carácter es una palabra: ahí se busca también en el texto. `total` (la cantidad de páginas) puede
+    contar de más una página que queda fuera de las que se muestran y cuyas únicas coincidencias no se confirman
+    con el mapa (solo con medias sílabas coreanas): se deja así.
   - **Fragmentos:** hasta 3 por página, **el mejor primero** (el bloque con más palabras distintas; a igualdad,
     el orden del documento), unos 110 caracteres desde un poco antes de la primera coincidencia, sin partir
     palabras, con "…", todo lo encontrado resaltado y "y N más en esta página". Un pie dice "Pie de foto:" y un
@@ -621,7 +625,8 @@ Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo qu
   - **Medido** (fake-indexeddb en Node, 1000 páginas de 10 párrafos): el índice la primera vez, ~1,1 s; la
     primera búsqueda amplia ("de la", en todas), ~20 ms (antes de la auditoría, ~650 ms: armaba mapas y
     fragmentos de todas las páginas); una letra, ~2 ms; dos palabras poco comunes, ~8 ms; releer sin cambios,
-    ~6 ms. La prueba tiene topes (5 s, 150 ms, 30 ms, 100 ms, 500 ms).
+    ~6 ms. La prueba tiene esos topes con `SHOTDOCS_STRICT_PERF=1` (5 s, 150 ms, 30 ms, 100 ms, 500 ms) y cinco
+    veces más sin él, para no fallar por el reloj con la máquina cargada.
   - **No se guarda nada en `meta`** (desvío aceptado de la corrección 7): el índice es en memoria, por sesión.
     La contra: **en cada apertura de la app, el primer Ctrl/⌘+K vuelve a leer todas las páginas del proyecto**
     (en un teléfono, con muchas páginas, "Buscando…" un rato y resultados que van apareciendo). Se revisa si en
@@ -640,8 +645,11 @@ Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo qu
     12). Con algo escrito: **los otros proyectos** cuyo nombre tiene todas las palabras (hasta 5, arriba; el
     abierto no, porque elegirlo solo cerraría el panel) y las páginas; la opción activa es siempre la primera.
     **Si ningún proyecto coincide y la persona puede crear proyectos** (las mismas reglas que el selector), al
-    final de la lista "Proyecto nuevo «…»": Enter (o clic) lo crea y lo abre, sin otro paso. Al final, para que
-    Enter no cree un proyecto cuando hay páginas que coinciden.
+    final de la lista "Proyecto nuevo «…»" (el nombre, hasta 200 caracteres, como la base y el selector). Como un
+    proyecto no se puede borrar, se ofrece **solo con los resultados al día**: lo escrito ya se buscó (no un nombre
+    a medio corregir), el índice no está leyendo y no faltan páginas por bajar. Y **Enter lo crea solo si la
+    persona llegó a esa opción con las flechas** (nunca por ser la primera o la única, ni con el mouse encima); un
+    clic lo crea.
   - **Teclado:** ↑ ↓ por todas las opciones (dan la vuelta), Enter; Esc cierra con el foco en cualquier lado del
     panel; Tab no sale del panel. Al cerrar sin ir a ningún lado (Esc, la cruz, afuera o Ctrl/⌘+K otra vez) el
     foco vuelve adonde estaba. Sin Ctrl/⌘+Enter (corrección 11).
@@ -657,7 +665,8 @@ Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo qu
   tomar lo elegido en el editor, y la barra elige esa coincidencia (`goToOccurrence` en `findEditor.ts`; si el
   bloque ya no está, la primera de la página) y la lleva a la vista **una sola vez** (`takeFindTarget`). **Con
   la página a medio bajar** (el editor en solo lectura) el pedido se guarda: cuando termina de bajar y el
-  editor se vuelve a montar, va otra vez a esa coincidencia. Enter sigue por las demás. El foco va al campo de
+  editor se vuelve a montar, va otra vez a esa coincidencia. El pedido lleva su página (la barra de otra página
+  no lo usa) y se descarta al cambiar lo buscado, al cerrar la barra o al salir de la página. Enter sigue por las demás. El foco va al campo de
   la barra, salvo en pantallas táctiles. **La página** (su renglón): si lo encontrado está en el título, se abre
   arriba y sin barra; si no, va a su mejor fragmento. Lo escondido en una lista plegable (y, con P.11, en una
   sección colapsada) se abre con los ganchos de la entrega 1.
@@ -666,7 +675,9 @@ Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo qu
   deja elegida la coincidencia** (entrega 1), y con texto elegido Ctrl/⌘+K sería "link": si lo elegido es
   exactamente lo que dejó Esc (`closeFind` lo anota con `recordFindSelection` en `findUi.ts`: el editor, el
   documento y el tramo) y nadie lo tocó, un escucha en `window` en la fase de captura abre la búsqueda antes que
-  BlockNote (`preventDefault` y `stopPropagation`). Si la persona elige otra cosa, vuelve a ser "link". **El
+  BlockNote (`preventDefault` y `stopPropagation`), salvo con un diálogo abierto. **Cualquier clic o tecla en el
+  editor lo olvida** (menos ⌘, Ctrl, Shift o Alt solos: el principio del atajo), y también si el editor ya no
+  está: si la persona vuelve a elegir lo mismo (un doble clic en la palabra para hacerle un link), es "link". **El
   selector de proyectos se quedó sin atajo** (su tooltip dice ahora "⌘K busca páginas y proyectos"); crear un
   proyecto desde el teclado sigue andando desde el panel.
 - **La lupa** en `Sidebar.tsx`, a la izquierda del "+" de "Páginas", también para quien no puede crear páginas
@@ -680,7 +691,7 @@ Buscar en todo el proyecto, con las correcciones 5 a 8, 11, 12 y 15 a 17 y lo qu
   exclusiones, no atajos.
 - Sin cambios en la base, en el esquema ni en `min_app_version`. Los comentarios y la papelera no entran.
 
-**Pruebas (796 en total):** `src/search/projectIndex.test.ts` (las palabras; títulos y texto, cada palabra en
+**Pruebas (805 en total):** `src/search/projectIndex.test.ts` (las palabras; títulos y texto, cada palabra en
 algún lado, la ñ; grupos, camino, 3 fragmentos y "más"; hijos anidados, pies y nombres con cuál de su bloque;
 la papelera y lo de adentro sin volver a leer; una página que sale del árbol y un árbol que la esconde al buscar;
 solo el proyecto abierto; solo relee lo que cambió, local o bajado de otro dispositivo; el aviso de edición
@@ -714,6 +725,17 @@ documentos cerrados retenidos), un cálculo que no se usaba (`supported`), el fo
 Esc en el panel, la accesibilidad de la lista, el IME en Ctrl/⌘+K, el selector que quedaba abierto abajo, la
 lectura que seguía con el panel cerrado, y la coincidencia pedida que se perdía con la página a medio bajar. De paso: un ciclo de sincronización cortado por
 `stop()` con la base ya cerrada dejaba un error sin atrapar al contar lo pendiente (`engine.ts`); ahora se ignora.
+
+**Verificación de los arreglos (independiente, 2026-09-30).** Un bloqueante, arreglado: "Proyecto nuevo «…»" se
+creaba con Enter aunque hubiera páginas que coincidían (con el índice leyendo, con páginas por bajar, o con lo
+escrito todavía sin buscar: un nombre viejo o a medio corregir), y un proyecto no se puede borrar. Ahora se
+ofrece solo con los resultados al día y Enter lo crea solo después de llegar con las flechas (pruebas: una
+lectura lenta, páginas por bajar, "Bosquex" corregido a "Bosque", Enter sin flechas). Además: el nombre hasta 200
+caracteres; lo que dejó Esc se olvida con un clic o una tecla en el editor (lo encontró la prueba de punta a
+punta: Ctrl sola no cuenta) o con un diálogo abierto; la coincidencia pedida lleva su página y se descarta al
+cambiar lo buscado o cerrar la barra; esperar a que se guarde tiene un tope por pasada y no espera si guardar
+falla; `onWriteError` después de `stop()`; los topes de tiempo de las pruebas, holgados; una letra en chino o
+japonés busca en el texto; y el error de un escucha a la consola.
 
 **Queda para después:** lo de la sección "Entregas" (reemplazar en el proyecto, la papelera, todos los proyectos,
 comentarios); *Aa* y palabra entera en el panel; guardar el índice en `meta` si en un teléfono tarda.
