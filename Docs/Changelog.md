@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.052 :
+v0.053 :
 
 Colapsar secciones por sus títulos (P.11, entrega 1a). Todo título tiene un triángulo a la izquierda (aparece
 al pasar el mouse; colapsado se ve siempre; en pantallas táctiles, siempre y tenue): colapsar un título
@@ -33,6 +33,26 @@ que está en secciones colapsadas y, al ir a una coincidencia escondida, abre pa
 escondía, y sus hijos quedan como con un párrafo); justo después de escribir "## ", Retroceso lo deshace como
 siempre, y funciona igual en un navegador sin colapsar.
 [ Colapsar secciones - entrega 1a ]
+
+v0.052 :
+
+Editar a la vez sin perder texto (`Doc_Colaboracion.md`). Una investigación con el editor real encontró
+pérdidas que no tenían por qué pasar, y quedan arregladas: con un bloque elegido entero (una foto tocada), un
+cambio de otro dispositivo sobre ese bloque dejaba el editor mostrando lo de antes, y la próxima tecla
+deshacía el cambio del otro para todos (también hacía que deshacer pareciera no andar); dos personas
+escribiendo en el mismo párrafo vacío perdían texto, y eso pasaba en la primera línea de toda página nueva
+abierta en dos dispositivos; y si los dos le cambiaban el tipo o la sangría al mismo renglón, el editor lo
+borraba entero con sus hijos. Son dos parches a y-prosemirror (`patches/`, los aplica `patch-package` al
+instalar; sin ellos la app no se construye), la semilla de las páginas nuevas con un texto vacío (la raíz es la
+de siempre, así una versión vieja y una nueva siguen compartiéndola), una reparación de bloques en la misma
+transacción que aplica lo que llega, y, si igual el editor no puede mostrar un cambio, se vuelve a dibujar
+desde el documento antes de la próxima tecla. La prueba al azar por el camino de la app perdía texto en 26 de
+cada 100 corridas; ahora en 0 de 500. Lo que sigue pudiendo pasar (si uno le cambia el tipo, la sangría o la
+posición a un renglón mientras otro escribe en ese mismo renglón, lo del segundo se puede perder) es como
+funciona la librería y está explicado en el documento. `min_app_version` sube a 0.052: las versiones
+anteriores no tienen estos arreglos. Además, al cerrar la app se espera a que termine la sincronización en curso
+(hasta 2 segundos) antes de cerrar la base, y las pruebas ya no dejan errores sueltos al cerrarla.
+[ Sync - editar a la vez sin perder texto ]
 
 v0.051 :
 

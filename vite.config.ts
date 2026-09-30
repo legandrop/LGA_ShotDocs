@@ -36,7 +36,32 @@ function appVersion(): string {
   }
 }
 
+// y-prosemirror lleva dos arreglos propios (patches/y-prosemirror+1.3.7.patch, Docs/Doc_Colaboracion.md) que
+// aplica `patch-package` al instalar (postinstall). Sin ellos, editar a la vez pierde texto: el build y las
+// pruebas se niegan a correr (por ejemplo, si se instaló con --ignore-scripts o si se actualizó la librería
+// y el parche no se volvió a hacer).
+function assertYProsemirrorPatched(): void {
+  const files = ['src/plugins/sync-plugin.js', 'dist/y-prosemirror.cjs'];
+  const marks = ['LGA-SHOTDOCS-PATCH', 'relativeItemDeleted', 'sameSelectedNode', 'pnode.isTextblock && c.length === 0'];
+  for (const file of files) {
+    let source = '';
+    try {
+      source = readFileSync(new URL(`./node_modules/y-prosemirror/${file}`, import.meta.url), 'utf8');
+    } catch {
+      // Sin el archivo tampoco se sabe si está el parche (la librería cambió de forma): se corta igual.
+    }
+    const missing = marks.filter((mark) => !source.includes(mark));
+    if (missing.length > 0) {
+      throw new Error(
+        `y-prosemirror sin el parche de la app (node_modules/y-prosemirror/${file}: falta ${missing.join(', ')}). ` +
+          'Correr "npx patch-package" (o "npm install"). Ver Docs/Doc_Colaboracion.md.',
+      );
+    }
+  }
+}
+
 export default defineConfig(({ mode }) => {
+  assertYProsemirrorPatched();
   const supabase = supabaseConfig(mode);
   return {
     define: {

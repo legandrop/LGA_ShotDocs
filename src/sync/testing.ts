@@ -21,7 +21,7 @@ import {
   type CommentsDb,
   type NewComment,
 } from './comments';
-import { mergeRootGroups, seedIfEmpty } from './structure';
+import { normalizeStructure, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
 import {
   RemoteError,
@@ -1285,7 +1285,7 @@ export async function makeDevice(
   await tree.load();
   // Como la app: sin "Edit", las reparaciones quedan en memoria.
   const docs = new PageDocs(db, {
-    normalize: mergeRootGroups,
+    normalize: normalizeStructure,
     seed: seedIfEmpty,
     canWrite: (pageId) => new Permissions(tree, access.get(), remote.userId).canEditPage(pageId),
     ...docsOptions,

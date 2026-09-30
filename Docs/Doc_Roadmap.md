@@ -107,7 +107,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pantalla se marcan como si todo estuviera abierto (si una sección colapsada ocupa las páginas 2 a 4, el
   corte siguiente dice página 5); arrastrar un título colapsado mueve toda su sección; se saca "Encabezado
   plegable" del menú `/`. **Diseño en [`Doc_Colapsar.md`](Doc_Colapsar.md)** (sin tipo de bloque ni propiedad
-  nueva). **Entrega 1a hecha (v0.052):** colapsar para vos, con toda la seguridad al editar, las marcas de hoja
+  nueva). **Entrega 1a hecha (v0.053):** colapsar para vos, con toda la seguridad al editar, las marcas de hoja
   contadas con todo abierto y el PDF todo abierto. Faltan la 1b (arrastrar la sección entera,
   Shift+Ctrl/⌘+↑/↓, "Imprimir como se ve") y la 2 (para todos, Shift+clic).
 - **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página**
@@ -119,6 +119,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   texto derivado; buscar en el dispositivo solo ve las páginas que ya bajó; atajos (Ctrl/Cmd+F para la página,
   Ctrl/Cmd+K para el proyecto) y permisos (nunca mostrar algo que la persona no ve). Lega sumó reemplazar, como
   VS Code (sin atajo propio: se despliega desde la barra de Ctrl/⌘+F).
+- **P.13 Tutorial animado y ayuda (Lega, 2026-09-30; "sí o sí lo tenemos que tener"):** la primera vez que
+  alguien entra, un documento de ejemplo ya armado y una recorrida con globitos ("acá hacés esto", "acá
+  aquello") que se avanza con *Siguiente*, como en tantas apps. Una **ayuda** fija (desde el menú o un "?") que
+  explica cada función y **todos los atajos** (Ctrl/⌘+F, Ctrl/⌘+K, Ctrl/⌘+Alt+Enter, filas de fotos, etc.) y
+  desde donde se puede **volver a ver el tutorial**. A pensar en el diseño: el documento de ejemplo no debería
+  ensuciar el workspace ni sincronizarse (una página de práctica local, o una plantilla que se crea y se puede
+  borrar), los dos idiomas, el teléfono, y que la ayuda se mantenga al día con cada función nueva (una regla:
+  cada feature nueva suma su línea en la ayuda). Diseño y auditoría antes de implementar.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -190,6 +198,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    castellano y las plantillas, que todavía no existen (fase 3), con su nombre en cada idioma.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
    datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes.
+
+10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
+   que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la
+   semilla con un texto vacío, la reparación de bloques con dos contenidos o dos grupos de hijos, y volver a
+   dibujar el editor si igual falla. La prueba al azar por el camino de la app pasó de 26 de cada 100 corridas
+   con pérdidas a 0 de 500. Ver `Doc_Colaboracion.md`. `min_app_version` subió a 0.052 al publicar. **Falta:** **evaluar `@blocknote/core/y`** (la integración nueva de BlockNote sobre y-prosemirror 2 y Yjs 14),
+   que compara bloques por identidad y podría resolver parte de lo que sigue pasando cuando uno cambia el
+   tipo, la sangría o la posición de un renglón mientras otro escribe en él; cambia el formato de lo guardado,
+   así que pide un plan de migración y convivencia de versiones.
 
 ### C. Esperan a Lega
 
