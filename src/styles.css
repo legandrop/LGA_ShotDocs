@@ -532,6 +532,8 @@ code {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
+  /* Lo que se lleva a la vista (la coincidencia de la búsqueda) no queda debajo de la barra de arriba. */
+  scroll-padding-top: calc(52px + env(safe-area-inset-top));
   display: flex;
   flex-direction: column;
 }
@@ -4150,8 +4152,6 @@ button.primary.danger {
 }
 
 .editor .sd-find-current {
-  /* Al llevarla a la vista, que no quede debajo de la barra de arriba ni de la de buscar. */
-  scroll-margin: 140px 0 80px;
   background-color: var(--find-current);
   box-shadow: 0 0 0 1px var(--find-current);
 }
@@ -4177,11 +4177,16 @@ button.primary.danger {
   text-decoration-color: var(--find-block-current);
 }
 
-/* La barra: un ancla sin alto, pegada debajo de la barra de arriba al desplazarse; la barra, a la derecha. */
+/* La barra: un ancla sin alto, pegada debajo de la barra de arriba al desplazarse; la barra, a su derecha.
+   Con una hoja más ancha que lo que se ve (A3 en una ventana angosta), el ancla no pasa del ancho visible de
+   `.main` (`--find-visible-width`, lo mide FindBar.tsx) y se queda en lo que se ve al desplazarse de costado,
+   como los íconos de la barra de arriba: la barra nunca queda cortada. */
 .find-anchor {
   position: sticky;
   top: calc(60px + env(safe-area-inset-top));
+  left: 0;
   z-index: 4;
+  width: min(100%, calc(var(--find-visible-width, 100vw) - 12px));
   height: 0;
 }
 
@@ -4212,6 +4217,15 @@ button.primary.danger {
   min-width: 0;
   padding: 5px 8px;
   font-size: 13px;
+}
+
+/* El campo enfocado: un solo borde fino del color de acento (sin el anillo ni el contorno de los demás campos,
+   que con el borde de la barra se veían como un marco doble y grueso). */
+.find-bar .find-input:focus,
+.find-bar .find-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: none;
 }
 
 .find-bar .find-input[aria-invalid='true'] {
@@ -4285,6 +4299,7 @@ button.primary.danger {
 
   /* En el teléfono la barra ocupa su lugar (no tapa los primeros renglones): la página baja un poco. */
   .find-anchor {
+    width: auto;
     height: auto;
     margin: 0 0 8px;
   }

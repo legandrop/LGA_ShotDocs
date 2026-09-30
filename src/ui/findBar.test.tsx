@@ -12,7 +12,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { schema } from './editorSchema';
 import { FindBar } from './FindBar';
-import { findExtension, getFindState } from './findEditor';
+import { findExtension, getFindState, landOnOccurrence, setFind } from './findEditor';
 import { closeFindBar, getFindUi, isFindShortcut, isStepShortcut, openFindBar, takesFindShortcut, takesStepShortcut, updateFindUi } from './findUi';
 
 // La barra de buscar y reemplazar (Docs/Doc_Buscar.md): el atajo, la cuenta, reemplazar solo si se puede
@@ -325,6 +325,63 @@ async function openPage(services: (device: Device, page: string) => Services = (
   for (let i = 0; i < 100 && !host.querySelector('.bn-editor'); i++) await wait(50);
   return { host, device, page };
 }
+
+describe('ir a un resultado del proyecto (v0.057)', () => {
+  it('si el documento todavía no tiene la coincidencia (se está dibujando), espera a que aparezca y va a la pedida', async () => {
+    const editor = mountEditor(['nada por ahora']);
+    const view = editor.prosemirrorView!;
+    act(() => setFind(view, 'zanahoria', {}));
+    expect(getFindState(view.state).matches).toHaveLength(0);
+    act(() => landOnOccurrence(view, { blockId: 'b2', occurrence: 1 }));
+    act(() => {
+      editor.replaceBlocks(editor.document, [
+        { id: 'b1', type: 'paragraph', content: 'una zanahoria' },
+        { id: 'b2', type: 'paragraph', content: 'zanahoria y otra zanahoria' },
+      ]);
+    });
+    await wait(400);
+    const state = getFindState(view.state);
+    expect(state.matches).toHaveLength(3);
+    // La segunda del bloque b2: la tercera de la página.
+    expect(state.current).toBe(2);
+  });
+
+  it('si mientras espera se busca otra cosa, no salta a la pedida', async () => {
+    const editor = mountEditor(['nada']);
+    const view = editor.prosemirrorView!;
+    act(() => setFind(view, 'zanahoria', {}));
+    act(() => landOnOccurrence(view, { blockId: 'b2', occurrence: 0 }));
+    act(() => setFind(view, 'nada', {}));
+    act(() => {
+      editor.replaceBlocks(editor.document, [
+        { id: 'b1', type: 'paragraph', content: 'nada zanahoria' },
+        { id: 'b2', type: 'paragraph', content: 'zanahoria nada' },
+      ]);
+    });
+    await wait(400);
+    const state = getFindState(view.state);
+    expect(state.query).toBe('nada');
+    expect(state.current).toBe(0);
+  });
+
+  it('la barra no pasa del ancho que se ve de la página que se desplaza (una hoja A3 en una ventana angosta)', async () => {
+    const main = document.createElement('main');
+    main.style.overflowY = 'auto';
+    main.style.paddingRight = '40px';
+    Object.defineProperty(main, 'clientWidth', { value: 700 });
+    const article = document.createElement('article');
+    main.append(article);
+    document.body.append(main);
+    const editor = mountEditor(['uno']);
+    act(() => openFindBar());
+    const root = createRoot(article);
+    roots.push(root);
+    act(() => root.render(<FindBar editor={editor} editable />));
+    const anchorEl = article.querySelector<HTMLElement>('.find-anchor')!;
+    // 700 de ancho visible menos los 40 que tapa el panel de comentarios.
+    expect(anchorEl.style.getPropertyValue('--find-visible-width')).toBe('660px');
+  });
+});
 
 describe('Ctrl/⌘+F en la página', () => {
   it('abre la barra de la app; con el foco en la barra, pasa al navegador', async () => {

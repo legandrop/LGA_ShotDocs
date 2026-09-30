@@ -143,7 +143,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
         openFindBarAt(request.term, target, { focus: !coarsePointer() });
       } else {
         closeFindBar();
-        findEditor.prosemirrorView?.dom.closest('.main')?.scrollTo?.({ top: 0 });
+        findEditor.prosemirrorView?.dom.closest('.main')?.scrollTo?.({ top: 0, left: 0 });
       }
     };
     take();

@@ -1,8 +1,9 @@
 # Buscar en el proyecto y en la página (P.12)
 
 Estado: **entrega 1 hecha (v0.051): buscar y reemplazar en la página; entrega 2 hecha (v0.054): buscar en el
-proyecto (Ctrl/⌘+K)**. "Correcciones de la auditoría" manda sobre lo de arriba, y "Cómo quedó (entrega 1)" y
-"Cómo quedó (entrega 2)", al final, sobre todo lo demás. Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
+proyecto (Ctrl/⌘+K); ajustes de v0.057 (lo que encontró Lega probando)**. "Correcciones de la auditoría" manda
+sobre lo de arriba, y "Cómo quedó (entrega 1)", "Cómo quedó (entrega 2)" y "Ajustes de v0.057", al final, sobre
+todo lo demás (el último, sobre los otros dos). Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
 + de páginas, que busca en todo el proyecto y te lleva al lugar; otra a la izquierda de los comentarios, que
 busca en la página abierta, también adentro de las secciones colapsadas". Después sumó **reemplazar**, como en
 VS Code. Sale de leer el código de `main` (v0.050) y `Doc_Colapsar.md` (rama `lega/colapsar`, en diseño).
@@ -747,3 +748,59 @@ japonés busca en el texto; y el error de un escucha a la consola.
 **Queda para después:** lo de la sección "Entregas" (reemplazar en el proyecto, la papelera, todos los proyectos,
 comentarios); *Aa* y palabra entera en el panel; guardar el índice en `meta` si en un teléfono tarda.
 **Decidido por Lega:** los proyectos que coinciden van arriba de las páginas; en la Mac, solo ⌘K (nunca Ctrl).
+
+## Ajustes de v0.057 (lo que encontró Lega probando)
+
+Lega probó v0.054 en Chrome, en la computadora, y encontró tres cosas. Donde esto y lo de arriba no coinciden,
+vale esto.
+
+1. **Ir a un resultado abría la página pero no la llevaba a la coincidencia.** La prueba de punta a punta pasaba
+   porque sus páginas eran cortas. Con una página larga con fotos se ve la causa: la coincidencia se centraba
+   **una vez**, en el cuadro siguiente, y después la página seguía cambiando de alto por encima (fotos que
+   bajan o que todavía no están y dejan su recuadro "Not available yet", marcas de hoja, lo que se abre de una
+   sección colapsada). Medido en Chromium, en otro dispositivo con la página A3: el alto del contenido pasó de
+   2231 a 3401 px en los primeros 2 s y la coincidencia se corrió de 420 a 690 px, y con más fotos queda afuera.
+   Además `scrollIntoView` mueve todos los antepasados (también la ventana) y no sabe de la barra de arriba.
+   Ahora (`src/ui/findScroll.ts`, sin ProseMirror):
+   - **El contenedor que se desplaza** (`scrollParent`: el primer antepasado con `overflow` auto o scroll; en la
+     app, `.main`, no la ventana) y **la coincidencia centrada a mano ahí** (`centerInScroller`): de arriba
+     abajo, en lo que se ve debajo de la barra de arriba (`.main` tiene `scroll-padding-top` con su alto); de
+     costado, con una hoja más ancha que la ventana (A3), si queda afuera se trae con 24 px de margen. Una
+     coincidencia escondida (sin tamaño) no mueve nada.
+   - **Al llegar desde la búsqueda del proyecto** (`landOnOccurrence` en `findEditor.ts`, que usa `FindBar.tsx`
+     cuando hay una coincidencia pedida), la coincidencia **se sigue centrando mientras la página se acomoda**
+     (`keepInView`): con cada cambio de tamaño del editor o de la página (`ResizeObserver`) y con cada foto que
+     termina de bajar (`load`), a lo sumo una vez por cuadro, **hasta 4 s o hasta que la persona desplaza
+     (rueda o trackpad), toca, hace clic o aprieta una tecla**: nunca se pelea con ella. Ir a otra coincidencia,
+     cerrar la barra o borrar lo buscado corta lo anterior. Ir con Enter a la siguiente la centra una sola vez.
+   - **Si el documento todavía no tiene la coincidencia** cuando se busca (se está dibujando o terminando de
+     bajar), espera hasta 3 s a que aparezca y recién ahí va a la pedida; si mientras tanto se busca otra cosa,
+     no salta.
+   - Un resultado del título vuelve arriba **y al borde izquierdo** de la hoja.
+2. **El campo enfocado tenía un marco doble y grueso**: el `:focus-visible` global (contorno de 2 px de acento),
+   el anillo de `input:focus` (3 px) y su borde del color del texto (blanco en el tema oscuro). Ahora el campo
+   de la barra enfocado tiene **un solo borde de 1 px del color de acento**, sin contorno ni anillo, en los dos
+   temas; sin resultados sigue el borde rojo. El foco se sigue viendo: el borde pasa del gris de siempre al
+   amarillo, y el campo tiene el cursor de texto. Los botones de la barra mantienen su contorno de teclado.
+3. **Con una hoja más ancha que la ventana (A3), la barra quedaba al borde derecho de la hoja** y se cortaba.
+   Ahora el ancla de la barra (`.find-anchor`, pegada arriba al desplazarse) también se pega a la izquierda de
+   lo que se ve (`position: sticky; left: 0`, como la barra de arriba) y no pasa del ancho visible de `.main`
+   menos 12 px (`--find-visible-width`, lo mide `FindBar.tsx` con un `ResizeObserver`: la ventana, la barra
+   lateral, la barra de desplazamiento y el panel de comentarios, que con lugar ocupa el `padding-right` de
+   `.main`). Así, con la hoja entera a la vista la barra sigue al borde derecho de la página, como antes; con
+   la hoja más ancha, queda **alineada con los íconos de arriba** (comentarios y "⋯") y los sigue al achicar la
+   ventana o al desplazarse de costado. En el teléfono, igual que antes: a todo el ancho y sin scroll de
+   costado (la hoja no pasa del ancho de la pantalla).
+
+**Pruebas (1050 en total en esta rama):** `src/ui/findScroll.test.ts` (el contenedor que se desplaza; centrar
+debajo de la barra de arriba; de costado con una hoja ancha y sin mover si ya se ve; una escondida no mueve;
+volver a centrar con cada cambio de tamaño y con el `load` de una foto; desplazar, un clic o una tecla lo
+cortan; se termina a los 4 s, al ir a otra o al cerrar; con Enter, una sola vez) y en `src/ui/findBar.test.tsx`
+(esperar a que aparezca la coincidencia pedida y no saltar si se busca otra cosa; el ancho visible del ancla,
+sin el panel de comentarios). De punta a punta, en el repo de pruebas privado: `search.mjs` (una página larga
+con cuatro fotos grandes y hoja A3 en una ventana de 1000 px: ir al resultado deja la coincidencia entera a la
+vista, también de costado, a los 300 ms, 1,5 s y 3 s, con la barra entera; lo mismo en otro dispositivo, donde
+las fotos todavía no bajaron y la página crece después de llegar; y si la persona desplaza, no se la vuelve a
+centrar) y `find.mjs` (el campo enfocado con un solo borde de 1 px de acento, sin contorno ni anillo, en claro y
+oscuro; con A3 a 1000 px y a 820 px, desplazada al principio, al medio y al final, la barra entera y alineada con
+los íconos; en el teléfono, entera y sin scroll de costado).
