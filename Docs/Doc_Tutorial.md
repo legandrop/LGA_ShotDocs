@@ -1,6 +1,7 @@
 # Tutorial animado y ayuda (P.13)
 
-Estado: **diseño, sin implementar.** Falta la auditoría previa y que Lega confirme las decisiones del final. Lo
+Estado: **diseño, sin implementar; auditoría previa hecha.** "Correcciones de la auditoría" (al final) manda
+sobre lo anterior; lo simple ya está corregido en su lugar. Falta que Lega confirme las decisiones. Lo
 pidió Lega el 2026-09-30 ("sí o sí lo tenemos que tener"). Sale de leer el código de `main` (v0.051) y el
 diseño de colapsar (`Doc_Colapsar.md`, rama `lega/colapsar`).
 
@@ -20,8 +21,8 @@ diseño de colapsar (`Doc_Colapsar.md`, rama `lega/colapsar`).
   base local de páginas, no sube a Supabase ni al Drive, no cuenta en "cambios sin subir" ni frena el cierre
   de sesión, y no lo ve nadie más. Cada workspace sigue siendo una isla: el ejemplo viene con la app, no de un
   workspace, y no pasa de un workspace a otro.
-- **Sin migración ni tablas nuevas.** Lo único que puede ir a la cuenta es una clave más en
-  `user_settings.prefs` (ya es `jsonb`, tope 4000 caracteres).
+- **Sin migración ni tablas nuevas.** Lo único que puede ir a la cuenta es una marca en los metadatos del
+  usuario de Supabase Auth del workspace (`user_metadata`, corrección 12), nada en `user_settings.prefs`.
 - **Nada de tipos de bloque nuevos** (la regla del editor): el ejemplo usa solo lo que ya existe (párrafo,
   títulos, Script y pregunta como propiedades, `image`, listas, tabla).
 - **Sin servicios de afuera:** la recorrida y la ayuda salen del bundle; nada de estadísticas ni de pedir
@@ -67,7 +68,7 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | Esc | Cerrar la barra (queda elegida la coincidencia) | Barra de buscar | App |
 | Mod+K | **Hoy:** abrir el selector de proyectos. **Con P.12 entrega 2:** buscar en el proyecto (el panel muestra también los proyectos). Con texto elegido en el editor, crea un link | Toda la app | App (`ProjectSwitcher.tsx`) y BlockNote |
 | Mod+P | Exportar PDF / imprimir la página abierta (con los cortes de hoja) | Página abierta | App (`printPage.ts`) |
-| Mod+Alt+M | Comentar el bloque del cursor (o el señalado) | Editor | App (`commentsUi.ts`) |
+| Mod+Alt+M | Comentar el bloque del cursor (o el señalado) | Editor | App (`isCommentShortcut` en `commentsUi.ts`, el manejador en `EditorComments.tsx`) |
 | Mod+Enter | Mandar el comentario | Campo del panel de comentarios | App (`CommentsPanel.tsx`) |
 | Esc | Cancelar / cerrar el panel (en el teléfono, la hoja) | Panel de comentarios | App |
 | Mod+Alt+P | Pregunta | Editor | App (`editorSchema.ts`, `QUESTION_SHORTCUT`) |
@@ -82,8 +83,9 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | Tab / Shift+Tab | Meter o sacar un nivel el bloque (en una tabla, la celda siguiente o anterior) | Editor | BlockNote |
 | Mod+Shift+↑ / ↓ | Mover el bloque arriba o abajo | Editor | BlockNote |
 | Shift+Enter | Salto de renglón dentro del bloque (a verificar con el registro, sección 6) | Editor | BlockNote |
-| "/" | Menú de bloques | Editor | BlockNote |
-| "# ", "## "…, "- ", "1. ", "[] ", "> ", "---", "```" | Título, viñeta, numerada, casilla, cita, divisor, código | Editor, al principio del renglón | BlockNote |
+| "/" | Menú de bloques (↑ / ↓, Enter elige, Esc cierra; seguir escribiendo filtra) | Editor | BlockNote |
+| "# ", "## "…, "- ", "1. ", "[] ", "> " o `" `, "---", "```" | Título, viñeta, numerada, casilla, cita, divisor, código | Editor, al principio del renglón | BlockNote |
+| Esc | Cerrar la hoja de un adjunto | Hoja del adjunto (teléfono) | App (`AttachmentSheet.tsx`) |
 | Clic en una foto elegida, doble clic, barra espaciadora | Abrir el carrete (en un adjunto: abrir o bajar) | Editor | App (`PageEditor.tsx`) |
 | ← / → | De una foto a otra en una fila | Foto de una fila elegida | App (`imageRowsEditor.ts`) |
 | ↑ / ↓ | Salir de la fila | Foto de una fila elegida | App |
@@ -143,10 +145,11 @@ choca con los permisos; la estática no deja probar, que es lo que más enseña.
   debajo (para colapsar, cuando exista P.11). Ni tarjeta de Drive (cargaría un reproductor de Google) ni
   adjunto (la tarjeta sale de un archivo registrado en el Drive): los explican la recorrida y la ayuda.
 - **Fotos del ejemplo:** tres WebP chicas (unos 1200 px de ancho, 30 a 60 KB cada una) en `public/tutorial/`,
-  con la dirección de la app (`https://<app>/tutorial/terraza-1.webp`). El carrete ya las acepta (fuente
-  `web` de `carreteSourceOf`), y los tamaños rápidos y "Acomodar en filas" andan igual. Para que la práctica
-  ande sin red se suman a la caché del service worker (`globPatterns` hoy no incluye `.webp`: unos 150 KB más
-  en la instalación). Tienen que ser fotos propias o con licencia libre, anotada al lado.
+  con la dirección **absoluta** de la app (`https://<app>/tutorial/terraza-1.webp`; una relativa no la acepta
+  `carreteSourceOf`). El carrete ya las acepta (fuente `web`), sin pasar por la cola, y los tamaños rápidos y
+  "Acomodar en filas" andan igual. Para que la práctica ande sin red, una regla de caché del service worker
+  para `/tutorial/` que las guarda la primera vez (no en la instalación; corrección 18). Tienen que ser fotos
+  propias o con licencia libre, anotada al lado.
 - **Fotos o archivos propios en la práctica:** en la entrega 2, soltar o pegar un archivo avisa "En la práctica
   no se suben archivos: probá con las fotos de ejemplo" y no hace nada. Si Lega lo quiere, más adelante: se
   guardan como `data:` achicados (hasta 1600 px) solo en memoria; pegados después en una página real pasan
@@ -163,13 +166,12 @@ versiones en memoria:
 - `PracticeView` (nuevo) arma el `Y.Doc` y monta `BlockEditor` adentro de un `ServicesContext.Provider` con
   los servicios del workspace **pisados**: `media` y `files` de práctica (`enabled: false`, `resolve` devuelve
   la misma dirección, `add` rechaza con el aviso de arriba), `comments` en memoria (`MemoryComments`, con el
-  hilo de ejemplo), y `docs`, `engine`, `tree`, `remote`, `client` reemplazados por objetos que **tiran un
-  error** si alguien los llama: si un componente de abajo intenta guardar algo real, falla en las pruebas en
-  vez de escribir.
+  hilo de ejemplo), y `docs`, `engine`, `tree`, `remote`, `client` envueltos para que **solo las escrituras
+  tiren un error** (las lecturas que usa la pantalla siguen andando; corrección 1): si un componente de abajo
+  intenta guardar algo real, falla en las pruebas en vez de escribir.
 - Para eso `CommentQueue` y `MediaQueue` se describen con una interfaz (lo que usan los componentes: leer hilos,
-  suscribirse, agregar, resolver una dirección, `fileInfo`, `display`), y la práctica implementa solo eso. Lo
-  que hoy usa `useServices()` debajo del editor: `EditorComments`, `CommentsPanel`, `CommentsToggle`,
-  `MediaToolbarButtons`, `SheetBreaks`, `AttachmentSheet`. La lista se revisa en la auditoría.
+  suscribirse, agregar, resolver una dirección, `fileInfo`, `display`), y la práctica implementa solo eso. La
+  lista completa de lo que usa `useServices()` (y los ganchos que lo llaman) está en la corrección 1.
 - La barra de arriba en `/practice` muestra la lupa, el ícono de comentarios (dentro del mismo `Provider`) y
   un "⋯" con lo que no toca nada real: tamaño de hoja (solo en memoria), Exportar PDF / Imprimir, *Empezar de
   nuevo* y *Salir de la práctica*.
@@ -249,7 +251,7 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 | 2 | `pages` (árbol y su "+") | Tus páginas / Your pages | Acá están las páginas del proyecto, unas adentro de otras. Con + creás una; arrastrándolas las ordenás. | Your project's pages live here, nested. + creates one; drag to reorder. |
 | 3 | `project-switcher` | Proyectos / Projects | Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno ({Mod+K}). | A workspace has several projects. Switch or create one here ({Mod+K}). |
 | 4 | `practice-empty-line` (interactivo) | El menú / / The / menu | Escribí / en un renglón vacío: títulos, listas, tablas, guion, preguntas y fotos. Con ⋮⋮, al costado, arrastrás un bloque. | Type / on an empty line: headings, lists, tables, script, questions and images. Drag a block by its ⋮⋮ handle. |
-| 5 | `practice-photos` | Fotos / Images | Un clic elige una foto y otro la abre en grande. En su barra elegís el tamaño o las acomodás en filas. Soltá cualquier archivo (PDF, zip) y queda como tarjeta. | One click selects an image, another opens it full screen. Its toolbar sets the size or arranges a row. Drop any file (PDF, zip) to attach it. |
+| 5 | `practice-photos` | Fotos / Images | Un clic elige una foto y otro la abre en grande. En su barra elegís el tamaño o las acomodás en filas. Con Google Drive conectado, soltá cualquier archivo (PDF, zip) y queda como tarjeta. | One click selects an image, another opens it full screen. Its toolbar sets the size or arranges a row. With Google Drive connected, drop any file (PDF, zip) to attach it. |
 | 6 | `comments` (ícono de arriba) | Comentarios y preguntas / Comments and questions | Comentá cualquier bloque ({Mod+Alt+M}) y acá ves todos los hilos. Una pregunta, como la del ejemplo, la puede contestar quien solo comenta. | Comment on any block ({Mod+Alt+M}); all threads are here. A question, like the one above, can be answered by anyone who can comment. |
 | 7 | `find` (lupa) | Buscar / Find | Buscá y reemplazá en la página ({Mod+F}). | Find and replace in the page ({Mod+F}). |
 | 8 | `page-menu` ("⋯") | La página / The page | Compartir, mover, tamaño de hoja y Exportar PDF ({Mod+P}). | Share, move, page size and Export PDF ({Mod+P}). |
@@ -258,8 +260,9 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 
 - `{Mod+K}` y los demás se reemplazan con el rótulo del registro para esa plataforma (⌘K o Ctrl+K). Cuando
   P.12 entrega 2 cambie Mod+K, el paso 3 cambia solo con el registro (y su texto, en la misma tanda).
-- **Teléfono:** sin el paso 7 como atajo (la lupa sigue, texto sin atajo); el 2, el 3 y el 9 abren el cajón;
-  el 5 dice "Tocá una foto para verla en grande"; el 10 señala la ayuda en el cajón.
+- **Teléfono:** sin el paso 7 como atajo (la lupa sigue, texto sin atajo); el 2 y el 3 abren el cajón; el 9
+  señala el ícono de sincronización de la barra de arriba; el 5 dice "Tocá una foto para verla en grande"; el
+  10 señala la ayuda en el cajón.
 - El menú de la cuenta (preferencias, idioma, miembros, Drive) no tiene paso propio: lo nombra el 9 si hace
   falta y lo explica la ayuda. Diez pasos es el tope; más cansa.
 
@@ -268,14 +271,14 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 - **Estado en el dispositivo** (`localStorage`, clave `shotdocs-tour`, una por dispositivo, no por workspace:
   es lo que la persona sabe de la app, no un dato del workspace): `{ v, state: 'running' | 'done' |
   'skipped', step }`. `v` es la versión de la recorrida (sube solo si cambia mucho).
-- **Estado en la cuenta** (por workspace, porque cada workspace es una isla): una clave `tour` en
-  `user_settings.prefs` con la versión vista. Sigue a la persona en sus dispositivos dentro de ese workspace.
-  `cleanPrefs` la valida aparte (un entero chico) y **no cuenta** para el aviso de preferencias sin subir al
-  salir. Una versión vieja de la app la borra de la cuenta si sube sus preferencias (sube el objeto entero),
-  igual que pasó con el idioma: el dispositivo se queda con su copia y la vuelve a subir.
-- **Arranca sola** cuando la persona entra a la pantalla de siempre (con un proyecto) y **ni el dispositivo ni
-  la cuenta** dicen que ya la vio. Se espera la lectura de la cuenta (o su falla, sin red) para no mostrarla de
-  más. Va a `/practice` y muestra el paso 1.
+- **Estado en la cuenta** (por workspace, porque cada workspace es una isla): `shotdocs_tour: 1` en los
+  metadatos del usuario de Supabase Auth (`client.auth.updateUser({ data })`). Llega con la sesión, sin
+  migración, y ninguna versión vieja lo pisa (corrección 12; **no** va en `user_settings.prefs`).
+- **Arranca sola** solo para alguien nuevo y solo en el inicio (corrección 5): la primera carga de este
+  workspace en este dispositivo (`useBootServices` todavía no tenía `workspaceId`), en la dirección `/`, y
+  **ni el dispositivo ni la cuenta** dicen que ya la vio. Va a `/practice` y muestra el paso 1. A quien ya
+  usaba la app cuando se publique, o entra por un link a una página, no se le arranca: ve el punto en el "?" o
+  la tarjeta.
   - En otro dispositivo (la cuenta dice vista) o en otro workspace (el dispositivo dice vista): no arranca;
     el "?" lleva un punto hasta que se abre la ayuda.
   - **Con un link de invitación a una página** (`inviteTarget`): primero se abre esa página, y la recorrida se
@@ -293,9 +296,10 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 - **Un botón "?"** en el pie de la barra lateral, al lado de Papelera (en el teléfono, en el cajón), con
   `data-tip` "Ayuda y atajos (?)".
 - **En el menú de la cuenta**, "Ayuda y atajos".
-- **Teclado:** "?" (Shift+/ o la tecla que escriba "?") con el foco fuera de un lugar donde se escribe, como en
-  Gmail o GitHub, y **Mod+/** desde cualquier lado (en Safari de la Mac, ⌘/ muestra la barra de estado: se
-  toma solo con el foco en la app). Los dos van al registro.
+- **Teclado:** "?" (la tecla que escriba "?", mirando `e.key`) con el foco fuera de un lugar donde se escribe,
+  como en Gmail o GitHub; no con un diálogo o el carrete abiertos ni durante una composición (IME). **Sin
+  Mod+/**: en un teclado en castellano "/" es Shift+7 y chocaría con la lista numerada (corrección 6). Va al
+  registro.
 - **Cómo se ve:** un diálogo grande (720 px, con el índice a la izquierda) en la computadora; pantalla completa
   en el teléfono. Es una parte que se baja aparte (`lazyPart`), con sus textos en `src/i18n/lazy/help.ts`. Se
   abre en la sección que corresponde si se llama desde un lugar (por ejemplo, "Atajos").
@@ -400,10 +404,10 @@ Y pruebas que lo sostienen sin depender de acordarse:
    que citan atajos por id.
 6. **Mod+K cambia de dueño con P.12 entrega 2** y Mod+Alt+Enter llega con P.11: si la ayuda sale antes, esas
    entradas se marcan `soon` y se prenden con su tanda.
-7. **Mod+/ en Safari** muestra la barra de estado y "?" puede escribir otra tecla en algunos teclados. Se toman
-   solo con el foco en la app, y "?" se mira por lo que escribe (`e.key`), no por la posición.
-8. **Una versión vieja borra la clave `tour` de la cuenta** al subir sus preferencias. El dispositivo conserva su
-   copia; en el peor caso, un dispositivo nuevo muestra la recorrida una vez más.
+7. **"?" en teclados distintos:** se mira por lo que escribe (`e.key`), no por la posición. Mod+/ se descartó
+   (corrección 6).
+8. **Sin red al terminar la recorrida,** la marca de la cuenta no se escribe: queda la del dispositivo y se
+   reintenta al volver la red.
 9. **Mostrar la recorrida de más o de menos:** una persona nueva en un dispositivo donde otra ya la vio no la ve
    sola (le queda el punto en el "?"). Aceptable; a confirmar.
 10. **Lectores de pantalla:** el foco de luz es solo visual; el orden del foco y la región `aria-live` tienen que
@@ -413,15 +417,15 @@ Y pruebas que lo sostienen sin depender de acordarse:
 
 1. **Entrega 1, ayuda y registro de atajos.** `shortcuts.ts` y `shortcutLabel`, los tooltips pasan a usarlo, el
    esquema importa sus atajos, `HelpDialog` con las 15 secciones, la búsqueda, el botón "?", la entrada del menú
-   de la cuenta, "?" y Mod+/; la regla en `Docs/index.md`. Sin práctica ni recorrida ("Ver la recorrida" y
+   de la cuenta y "?"; la regla en `Docs/index.md`. Sin práctica ni recorrida ("Ver la recorrida" y
    "Mostrame" no aparecen todavía). README y changelog.
    - Pruebas: unidad del registro (ids, textos, rótulos, choques), el editor real contra el registro (jsdom), las
      funciones `is…Shortcut` contra sus entradas, la búsqueda de la ayuda ("ctrl f", "carrete", tildes), la ayuda
-     en jsdom (abre con "?" fuera del texto y no al escribir "?" en el editor ni en un campo; abre con Mod+/; Esc
+     en jsdom (abre con "?" fuera del texto y no al escribir "?" en el editor ni en un campo; no abre con un diálogo abierto ni durante una composición; Esc
      cierra y devuelve el foco), textos en los dos idiomas.
 2. **Entrega 2, práctica y recorrida.** Ruta `/practice`, `PracticeView` con los servicios en memoria y los que
    tiran error, plantillas es/en, las tres fotos, `floating.ts` común con `Tooltip.tsx`, `TourLayer` y los diez
-   pasos, `data-tour` en los componentes, `navOpen` como almacén, la clave `tour` en las preferencias, el
+   pasos, `data-tour` en los componentes, `navOpen` como almacén, la marca `shotdocs_tour` de la cuenta, el
    arranque la primera vez, retomar, "Ver la recorrida" en la ayuda. `Docs/index.md` suma `/practice` a
    "Direcciones de la app".
    - Pruebas:
@@ -435,8 +439,8 @@ Y pruebas que lo sostienen sin depender de acordarse:
        dispositivo y en la cuenta; retomar.
      - **Cuándo arranca:** nueva en todo → arranca; cuenta vista → no; dispositivo visto y cuenta no → no, con el
        punto; con link de invitación → la tarjeta; sin red la primera vez → arranca con el dispositivo.
-     - **Preferencias (`prefs.test.ts`):** `tour` se valida, sobrevive a una cuenta que no la tiene y no cuenta
-       como "sin subir" para el aviso.
+     - **Marca de la cuenta:** se escribe al terminar o saltar, sin red queda para después, y las preferencias
+       (`user_settings.prefs`) no cambian.
      - **Anclas:** cada `data-tour` de los pasos existe en `src/ui/`.
      - **De punta a punta** (`tour.mjs`, en el repo de pruebas privado, como `attach.mjs`): usuario nuevo con el
        almacenamiento vacío → práctica y "1/10"; recorrer todo en computadora y en un teléfono de 390×844
@@ -454,16 +458,123 @@ Y pruebas que lo sostienen sin depender de acordarse:
    dispositivo.
 2. **Sin fotos ni archivos propios en la práctica** en la entrega 2 (aviso); más adelante, fotos propias solo en
    memoria.
-3. **Arranca sola la primera vez**, salvo si se entra con un link de invitación a una página: ahí se abre la
-   página y se ofrece la recorrida con una tarjeta.
-4. **"Ya la vi" en la cuenta (por workspace) y en el dispositivo;** no se repite en otro dispositivo ni en otro
-   workspace (queda el punto en el "?").
+3. **Arranca sola la primera vez** (alguien nuevo, en el inicio). Con un link a una página, o si ya usaba la app,
+   se abre lo de siempre y se ofrece la recorrida con una tarjeta o el punto en el "?".
+4. **"Ya la vi" en la cuenta (metadatos del usuario, por workspace) y en el dispositivo;** no se repite en otro
+   dispositivo ni en otro workspace (queda el punto en el "?").
 5. **Motor propio**, sin librerías (las buenas son AGPL o pesan más que lo que hacen).
 6. **Diez pasos** con los textos de la tabla de la sección 4 (nueve en el teléfono).
 7. **"Animado" = el foco de luz que se desliza y un pulso suave**, sin videos ni GIF. Si Lega quiere
    animaciones dentro de los globitos (por ejemplo, alguien escribiendo "/"), van en una entrega aparte, chicas.
-8. **La ayuda: botón "?" al lado de Papelera, "Ayuda y atajos" en el menú de la cuenta, "?" y Mod+/**, en un
-   diálogo grande (pantalla completa en el teléfono).
+8. **La ayuda: botón "?" al lado de Papelera, "Ayuda y atajos" en el menú de la cuenta y la tecla "?"** (sin
+   Mod+/), en un diálogo grande (pantalla completa en el teléfono).
 9. **Las tres fotos del ejemplo:** ¿las pone Lega (fotos propias de VFX) o se usan unas con licencia libre? ¿Se
-   suman a la caché para que la práctica ande sin red (unos 150 KB)?
+   guardan en la caché la primera vez que se abre la práctica (corrección 18) para que después ande sin red?
 10. **La regla de la ayuda** en `Docs/index.md` y en las reglas de trabajo, revisada en cada auditoría.
+
+## Correcciones de la auditoría (mandan sobre lo de arriba)
+
+Una auditoría independiente contrastó el diseño con el código de `main` y de `lega/colapsar`. Lo de fondo (práctica
+en memoria, motor propio, registro de atajos, la regla) se mantiene. Lo simple ya se corrigió arriba; esto manda
+sobre lo que quede.
+
+### Práctica
+
+1. **(Bloqueante) Solo las escrituras tiran error.** Con `tree` y `engine` que tiran en cualquier llamada, la
+   práctica se rompe al primer dibujo: `SheetBreaks` usa `useTree` y el formato de hoja (`tree.resolveSetting`),
+   `CarreteHost` y el panel de comentarios usan `useSyncStatus`, `useCommentAccess` llama a `usePermissions`, y
+   `Rejected` usa `engine.retryRejected`. Se envuelven con un `Proxy` que deja pasar una lista de lecturas
+   (suscribirse, estado, revisión, `resolveSetting`, permisos) y tira solo en lo que escribe; o esos datos
+   entran por props o por un contexto de la práctica. Todo lo que usa `useServices()` ahí: `BlockEditor`
+   (`files`, `media`, `user`), `CarreteHost`, `useCommentAccess`, `CommentsPanel` (el panel y `Rejected`),
+   `SheetBreaks` (`tree` y `media`), `CommentMargin`, `MediaToolbarButtons`, `AttachmentSheet` y
+   `CommentsToggle`. La práctica pasa `canComment` y el permiso de editar como `true` sin preguntarle al árbol.
+2. **Las bases del dispositivo, una por una.** En `lega/colapsar`, lo colapsado se guarda en la base local real
+   (`meta`, `collapse:<pageId>`). La práctica pasa `db: null` (el almacén de colapsar lo acepta) y un `Map`
+   nuevo; `mediaDb`, `commentsDb`, `access`, `sizes`, `shutdown` y `dbName` se listan explícitamente (nulos o
+   que tiran al escribir). La prueba de aislamiento compara `meta` y el `localStorage` antes y después.
+3. **`PracticeView` copia lo que hacen `PageView` y `PageEditor`,** porque la práctica no pasa por ellos: el Mod+F
+   y la `FindBar` viven en `PageEditor`; `BlockEditor` no se exporta (se exporta); la impresión necesita
+   `article.page[data-page-id]` y `.page-header` (si no, `printPage` va a `openPage`, navega y espera 20 s);
+   el editor se vuelve a montar al cambiar el idioma. La barra de arriba muestra lupa, comentarios y "⋯" solo
+   con `pageId && current` (`Workspace.tsx`), y `CommentsToggle` queda afuera de cualquier `Provider` de la
+   práctica: el `Provider` va en el nivel de `Shell`, alrededor de los botones de la barra y del `article`.
+4. **Dónde vive el `Y.Doc`.** Salir de la sesión no recarga la página (`menus.tsx`): un documento guardado a nivel
+   de módulo pasaría a la sesión de la persona siguiente. Va en un `WeakMap<Services, Y.Doc>` (muere con los
+   servicios del workspace) o se borra al desmontar `Workspace`.
+5. **Arrancar sola, solo a alguien nuevo y solo en el inicio.** Con el diseño anterior, al publicar le arrancaría a
+   todos los que ya usan la app y cortaría los links a páginas. Arranca en `/` y solo si `useBootServices` no
+   tenía `workspaceId` (primera carga de ese workspace en ese dispositivo); los demás ven el punto o la tarjeta.
+13. **Soltar o pegar en la práctica:** hoy un archivo que no es imagen muestra `editor.attachNeedsDrive`
+   (`PageEditor.tsx`), no el aviso de la práctica; igual las imágenes `data:` pegadas (`storeEmbedded`). La
+   práctica pasa su propio `store` y `storeEmbedded` con su aviso.
+18. **Fotos:** tienen que ir con dirección absoluta. `/tutorial/*.webp` pasa a ser un contrato público (una foto
+   pegada en una página real apunta ahí para siempre): no se renombran ni se borran. En vez de sumarlas a la
+   instalación, una regla de Workbox `runtimeCaching` `CacheFirst` para `/tutorial/`.
+
+### Teclado y registro
+
+6. **Sin Mod+/.** En un teclado en castellano "/" es Shift+7: ProseMirror cae al código de la tecla y Mod+/
+   termina en Mod+Shift+7 (lista numerada). Quedan la tecla "?", el botón y la entrada del menú (si algún día se
+   quiere un atajo, solo `e.code === 'Slash'` sin Shift, probado en Safari).
+7. **Mod+K y Mod+P no miran la distribución del teclado** (`ProjectSwitcher.tsx`, `printPage.ts`): antes de la
+   prueba del registro se sacan `isProjectShortcut` e `isPrintShortcut` con `modPressed` e `isLetter`
+   (`findUi.ts`). Mod+K pasa a la búsqueda del proyecto en la rama de P.12 entrega 2.
+8. **La prueba del editor contra el registro cubre menos de lo dicho.** Se puede leer
+   `getExtensionField(..., 'addKeyboardShortcuts')` y los atajos del administrador de extensiones (privado), pero
+   no ve el Mod+K de `CreateLinkButton` (React), las teclas del menú "/", las reglas de entrada ni los `keymap()`
+   sueltos. Depende de una API privada; tiene que armar el editor con las mismas extensiones que la app (una sola
+   función `editorExtensions()` para los dos) y la lista de lo que no se documenta es más larga. Lo que no ve va
+   al registro a mano, con su prueba de unidad.
+9. **El menú "/" muestra "Mod-Alt-c" en Bloque de código,** aunque 0.55 no tiene ese atajo: se saca el rótulo en
+   los ítems del menú y no va a la ayuda.
+11. **Textos:** la prueba exige cada clave escrita literal en el código, así que `steps.ts` y `entries.ts` las
+   escriben enteras (nada de `tour.${id}.title`); `translate` solo reemplaza `{\w+}`, así que los atajos van como
+   `{modK}` (no `{Mod+K}`); las claves de una parte aparte solo en archivos que la importan, así que los textos de
+   los atajos (que usan los tooltips) van en el diccionario de la primera carga (entra en los 3 KB), y
+   `help.ts` y `tour.ts` se suman a la lista `LAZY` de la prueba.
+14. **Más copias de rótulos e `IS_MAC`:** `CommentsPanel.tsx` ('⌘↩'), `carrete.keyboard`, `find.close` ("Esc"),
+   `mediaButton.space`, `COLLAPSE_SHORTCUT_LABEL` (colapsar). Todas pasan al registro.
+
+### Recorrida
+
+10. **Capas y toques.** BlockNote usa `z-index` 20 (menú lateral), 50 (barra), 80 (menú "/"), 90 (panel de
+    archivos); la app 50 (menús), 60 (diálogos), 70 (avisos), 95 (carrete), 100 (tooltips). Se fija un orden
+    preciso para el foco de luz y el globito. En los pasos interactivos no se oscurece nada; en los demás, el
+    foco de luz **no deja tocar lo señalado** (un clic en el "+" real o un arrastre crearía o movería una página
+    real). Las teclas se escuchan solo en el globito, no en `window`. En un diálogo no modal no se atrapa Tab (o
+    se hace modal de verdad, con `aria-modal` e `inert` en el resto).
+15. **Lo que no se puede reusar tal cual:** `Tooltip.tsx` solo pone arriba o abajo y se esconde al desplazar o
+    cambiar el tamaño; `trapTab` es privado de `Carrete.tsx`; `useFloating` cierra al tocar afuera (no sirve para
+    el globito). Se saca lo común a `floating.ts` y el resto se escribe para la recorrida.
+16. **Anclas dentro de BlockNote:** `practice-empty-line` y `practice-photos` no pueden ser atributos puestos a
+    mano en el DOM del editor: se buscan por el id del bloque de la plantilla (`[data-id="..."]`). El menú "/"
+    abierto se detecta con el estado de la extensión `SuggestionMenu`, no buscando su clase.
+17. El paso 5 habla de adjuntos solo si hay Drive conectado; en el teléfono el ícono del paso 9 está en la barra
+    de arriba (corregido arriba).
+19. `TourLayer` se monta adentro de `Shell` (necesita los servicios y el almacén del cajón).
+20. **Qué aviso se cuida:** `useLeaveGuard` es el del cambio de workspace; el de salir de la sesión es
+    `AccountMenu.signOut` (`menus.tsx`). La prueba de aislamiento mira los dos.
+21. **"?"** no abre la ayuda con un diálogo o el carrete abiertos (`modalOpen` de `findUi.ts`) ni durante una
+    composición (IME).
+22. **Más simple en la primera versión:** el estado del dispositivo queda en `{ v, done, step }` (sin `skipped`
+    aparte); `MemoryComments` se tipa como `Pick<CommentQueue, …>` con lo que se usa. La prueba de punta a punta
+    suma la red (ningún pedido a Supabase ni al portero) y la diferencia de `localStorage` y de `meta` en
+    IndexedDB.
+
+### Dónde se guarda "ya la vi"
+
+12. **No en `user_settings.prefs`.** `cleanPrefs` guarda solo las claves de `CHOICES` y `push` sube el objeto
+    entero: todas las versiones publicadas borrarían `tour`, `KEYS`/`dirtyKeys` nunca subirían una clave que no
+    es de una lista, "el dispositivo la vuelve a subir" es falso y no hay aviso de "terminó de leer la cuenta".
+    Va en los metadatos del usuario de Supabase Auth del workspace: `client.auth.updateUser({ data: {
+    shotdocs_tour: 1 } })`. Es por workspace (cada uno tiene su Supabase), sin migración, ninguna versión vieja
+    lo reescribe y llega con la sesión (no hay que esperar otra lectura).
+
+### A confirmar por Lega (lo que quedó de estas correcciones)
+
+- ¿Está bien que la práctica **se pierda al recargar**?
+- ¿**Arranca sola la primera vez** (solo alguien nuevo, en el inicio)?
+- **Las fotos del ejemplo:** ¿suyas o con licencia libre?
+- **"Animado"** = el foco de luz que se desliza y un pulso suave, **sin videos**: ¿alcanza?
+- **La ayuda con la tecla "?"** (sin Mod+/), el botón "?" y la entrada del menú de la cuenta: ¿de acuerdo?
