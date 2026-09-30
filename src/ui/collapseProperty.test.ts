@@ -2,31 +2,37 @@
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
 import type { Node as PMNode } from '@tiptap/pm/model';
-import { EditorState, NodeSelection, TextSelection, type Transaction } from '@tiptap/pm/state';
+import { AllSelection, EditorState, NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { collapseExtension, collapseState, setCollapsed } from './collapseEditor';
+import { collapseExtension, collapseState, removeWithSections, setCollapsed } from './collapseEditor';
 import { schema } from './editorSchema';
 import { findExtension, replaceAll, setFind, clearFind, stepFind } from './findEditor';
 
 // Colapsar (Docs/Doc_Colapsar.md): prueba de propiedades al azar, traída de la verificación independiente de la
 // entrega 1a. Dos editores sobre el mismo Y.Doc (A con colapsar y la búsqueda, B sin nada), con pasos al azar:
-// colapsar y abrir, Enter después de un título colapsado, teclas con el cursor, selecciones borradas, cortadas,
-// escritas o pegadas encima, bloques elegidos enteros, "Borrar", deshacer y rehacer, cambios de tipo, ids
-// repetidos, "Reemplazar todo", sin red y de vuelta, y cambios de B. Después de cada paso se verifica:
-//   (1) lo que borra la pasada de colapsar estaba escondido por un título que la edición sacó;
-//   (2) no se pierde texto que se veía fuera de lo elegido, ni texto escondido salvo con su título;
+// colapsar y abrir, Enter después de un título colapsado, teclas con la selección vacía, selecciones borradas,
+// cortadas, escritas o pegadas encima (al azar, las que cruzan una sección entera, Shift+→ o Shift+↓ desde un
+// título colapsado, el texto exacto de un título con varios bloques pegados, toda la página), bloques elegidos
+// enteros, "Borrar", mover bloques (Shift+Ctrl+flechas y arrastrar), deshacer y rehacer, cambios de tipo, ids
+// repetidos, "Reemplazar todo", sin red y de vuelta, y cambios de B. Cada paso anota a propósito qué se puede
+// borrar de lo escondido: (A) lo del título elegido entero (o todo), (B) lo de las secciones que la selección de
+// texto cruza enteras (empieza arriba del título y termina después de lo escondido). Después se verifica:
+//   (1) lo que borra la pasada de colapsar estaba escondido por un título que la edición sacó a propósito (A);
+//   (2) no se pierde texto que se veía fuera de lo elegido, ni texto escondido salvo por (A) o (B);
 //   (3) un cambio propio en algo escondido lo abre;  (4) nada que se veía queda escondido (salvo colapsar);
-//   (5) "Reemplazar todo" no abre nada;  (6) la selección no queda en algo escondido;  (7) A y B coinciden.
+//   (5) "Reemplazar todo" no abre nada;  (6) la selección no queda en algo escondido;  (7) A y B coinciden;
+//   (8) lo que escondía un título colapsado que se ve no pasa a esconderlo otro (mover un título);
+//   (9) una edición que no se hizo (Shift+→ y borrar, por ejemplo) abre la sección.
 // En CI corren unas pocas semillas; con COLLAPSE_SEEDS=1-70 (y ROUNDS, STEPS) corre la prueba grande.
 //
 // Lo que pasa igual sin nada colapsado (problemas de BlockNote y y-prosemirror, Doc_Colapsar.md, "Riesgos") se
 // cuenta aparte y no es una falla de colapsar: `restoreRelativeSelection` que tira un error al deshacer, rehacer
 // o juntar cambios; A y B que divergen después de deshacer, rehacer o volver a tener red; y texto que se pierde
-// en los dos al juntar cambios hechos sin red. Se verificó corriendo la prueba grande sin colapsar nada
-// (NOTOGGLE=1): aparecen los mismos.
+// en los dos al juntar cambios hechos sin red; y el Enter de BlockNote con una selección que tira un error y no
+// hace nada. Se verificó corriendo la prueba grande sin colapsar nada (NOTOGGLE=1): aparecen los mismos.
 
 // Se anota cada applyTransaction del editor con colapsar (para mirar lo que agregan los plugins).
 type Rec = { old: EditorState; trs: readonly Transaction[]; state: EditorState };
@@ -133,10 +139,11 @@ describe('colapsar, al azar', () => {
     const kindsCount: Record<string, number> = {};
     // Un error adentro de un manejador de teclas (BlockNote) no llega a la prueba: se anota acá.
     let where = '';
+    let kindNow = () => '';
     const thrown: string[] = [];
     const onError = (e: ErrorEvent) => {
       e.preventDefault();
-      thrown.push(`${where}: ${String(e.error?.stack ?? e.message).split('\n').slice(0, 8).join(' | ')}`);
+      thrown.push(`${where} [${kindNow()}]: ${String(e.error?.stack ?? e.message).split('\n').slice(0, 8).join(' | ')}`);
     };
     window.addEventListener('error', onError);
     for (const seedArg of seedsFromEnv()) for (let round = 0; round < rounds; round++) {
@@ -199,13 +206,58 @@ describe('colapsar, al azar', () => {
         let from = -1;
         let to = -1;
         const intent = new Set<string>(); // blocks removed on purpose (with descendants)
+        // Los títulos cuyo contenido escondido se puede borrar en este paso: (A) elegidos enteros, (B) cruzados.
+        const allowed = new Set<string>();
+        let mode = '';
+        const hidersNow = () => [...new Set(hidden.values())];
+        const hiddenEndOf = (hider: string) => {
+          const hb = bl.get(hider)!;
+          let end = hb.pos + hb.node.nodeSize;
+          for (const [id, h] of hidden) if (h === hider && bl.has(id)) end = Math.max(end, bl.get(id)!.pos + bl.get(id)!.node.nodeSize);
+          return end;
+        };
+        /** (B): las secciones que la selección de texto cruza enteras. */
+        const crossed = (a: number, b: number) => {
+          for (const hd of hidersNow()) if (bl.has(hd) && a < bl.get(hd)!.pos && b > hiddenEndOf(hd)) allowed.add(hd);
+          if (allowed.size) mode += ' B';
+        };
+        /** (A): una selección de texto de toda la página (del primer renglón al último) es como Ctrl+A. */
+        const wholePage = () => {
+          if (from > Selection.atStart(st.doc).from || to < Selection.atEnd(st.doc).to) return;
+          for (const hd of hidersNow()) allowed.add(hd);
+          mode += ' A';
+        };
+        /** (A): los títulos que esconden algo adentro de un bloque elegido entero. */
+        const whole = (b: Blk) => {
+          for (const hd of hidersNow()) {
+            const hb = bl.get(hd);
+            if (hb && hb.pos >= b.pos && hb.pos + hb.node.nodeSize <= b.pos + b.node.nodeSize) allowed.add(hd);
+          }
+          if (allowed.size) mode += ' A';
+        };
+        /** Una edición con la selección: teclas, cortar, escribir, pegar. */
+        const act = (k: string) => {
+          const v = view(A);
+          if (k === 'cut') v.dom.dispatchEvent(clipboardEvent('cut'));
+          else if (k === 'type') {
+            const t = tok();
+            if (!v.someProp('handleTextInput', (f) => f(v, v.state.selection.from, v.state.selection.to, t, () => v.state.tr.insertText(t)))) {
+              v.dispatch(v.state.tr.insertText(t));
+            }
+          } else if (k === 'paste') v.pasteText(tok());
+          else if (k === 'pasteHTML') v.pasteHTML(`<p>${tok()}</p><h2>${tok()}</h2><p>${tok()}</p>`);
+          else press(A, k);
+        };
+        let revealOf: string | null = null;
         let kind = '';
         let checkTokens = true;
+        kindNow = () => kind;
         let allowHide = false;
         let remote = false;
         let findReplace = false;
         const r = rand();
         where = `seed ${seedArg} round ${round} step ${step}`;
+
         const dump = (d: PMNode, an: typeof cs) => {
           const lines: string[] = [];
           d.descendants((node, pos) => {
@@ -278,7 +330,7 @@ describe('colapsar, al azar', () => {
               A.insertInlineContent(tok());
             }
             kind += ` ${b.text}`;
-          } else if (r < 0.36) {
+          } else if (r < 0.3) {
             kind = 'caret';
             if (!textVisible.length) continue;
             const id = pick(textVisible);
@@ -292,7 +344,7 @@ describe('colapsar, al azar', () => {
             else if (k === 'ShiftTab') press(A, 'Tab', { shiftKey: true });
             else press(A, k);
             if (k === 'Enter' && rand() < 0.5) A.insertInlineContent(tok());
-          } else if (r < 0.58) {
+          } else if (r < 0.44) {
             kind = 'range';
             if (textVisible.length < 1) continue;
             const a = posIn(pick(textVisible));
@@ -305,18 +357,99 @@ describe('colapsar, al azar', () => {
             const sel = view(A).state.selection;
             from = sel.from;
             to = sel.to;
+            crossed(from, to);
+            wholePage();
             const k = pick(['Backspace', 'Delete', 'cut', 'type', 'paste', 'pasteHTML', 'Enter']);
             kind += ` ${k} ${from}-${to}`;
-            if (k === 'cut') view(A).dom.dispatchEvent(clipboardEvent('cut'));
-            else if (k === 'type') {
+            act(k);
+          } else if (r < 0.49) {
+            // (B) Una selección de texto que cruza una sección colapsada entera.
+            kind = 'cross';
+            const hd = pick(hidersNow().filter((x) => bl.has(x)));
+            if (!hd) continue;
+            const end = hiddenEndOf(hd);
+            const before = textVisible.filter((id) => bl.get(id)!.textEnd < bl.get(hd)!.pos);
+            const afterIds = textVisible.filter((id) => bl.get(id)!.textStart > end);
+            if (!before.length || !afterIds.length) continue;
+            from = posIn(pick(before));
+            to = posIn(pick(afterIds));
+            view(A).dispatch(st.tr.setSelection(rand() < 0.5 ? TextSelection.create(st.doc, from, to) : TextSelection.create(st.doc, to, from)));
+            crossed(from, to);
+            wholePage();
+            const k = pick(['Backspace', 'Delete', 'cut', 'type', 'paste', 'pasteHTML']);
+            kind += ` ${k} ${bl.get(hd)!.text} ${from}-${to}`;
+            act(k);
+          } else if (r < 0.53) {
+            // Shift+→ o Shift+↓ al final de un título colapsado (la selección salta lo escondido) y una edición: no
+            // se hace, se abre la sección (verificación de cbed5dc, punto 4).
+            kind = 'shift-skip';
+            const hd = pick(hidersNow().filter((x) => bl.has(x) && bl.get(x)!.node.firstChild!.type.name === 'heading'));
+            if (!hd) continue;
+            const b = bl.get(hd)!;
+            view(A).dispatch(st.tr.setSelection(TextSelection.create(st.doc, b.textEnd)));
+            press(A, rand() < 0.5 ? 'ArrowRight' : 'ArrowDown', { shiftKey: true });
+            const sel = view(A).state.selection;
+            from = sel.from;
+            to = sel.to;
+            // Sin nada visible después, la selección no se extiende: la edición es la de siempre.
+            if (from !== to) revealOf = hd;
+            const k = pick(['Backspace', 'Delete', 'cut', 'type', 'paste']);
+            kind += ` ${k} ${b.text} ${from}-${to}`;
+            act(k);
+          } else if (r < 0.56) {
+            // El texto exacto de un título colapsado (triple clic) y pegar varios bloques: la sección no se borra.
+            kind = 'exact-paste';
+            const hd = pick(hidersNow().filter((x) => bl.has(x) && bl.get(x)!.node.firstChild!.type.name === 'heading' && bl.get(x)!.text));
+            if (!hd) continue;
+            const b = bl.get(hd)!;
+            from = b.textStart;
+            to = b.textEnd;
+            view(A).dispatch(st.tr.setSelection(TextSelection.create(st.doc, from, to)));
+            const w = rand();
+            kind += ` ${b.text} ${w.toFixed(2)}`;
+            if (w < 0.4) view(A).pasteHTML(`<p>${tok()}</p><p>${tok()}</p>`);
+            else if (w < 0.7) view(A).pasteHTML(`<ul><li>${tok()}</li><li>${tok()}</li></ul>`);
+            else view(A).pasteText(`${tok()}\n\n${tok()}`);
+          } else if (r < 0.58) {
+            // Toda la página (Ctrl+A: el navegador la elige como texto; o AllSelection) y borrar o cortar.
+            kind = 'all';
+            const d = st.doc;
+            view(A).dispatch(st.tr.setSelection(rand() < 0.5 ? new AllSelection(d) : TextSelection.create(d, Selection.atStart(d).from, Selection.atEnd(d).to)));
+            for (const id of bl.keys()) intent.add(id);
+            for (const hd of hidersNow()) allowed.add(hd);
+            mode += ' A';
+            const k = pick(['Backspace', 'Delete', 'cut']);
+            kind += ` ${k}`;
+            act(k);
+          } else if (r < 0.62) {
+            // Mover un bloque: Shift+Ctrl+↑/↓ (BlockNote) o arrastrarlo (el tirador elige el bloque entero).
+            kind = 'move';
+            if (!visibleIds.length) continue;
+            const id = pick(visibleIds);
+            const b = bl.get(id)!;
+            if (rand() < 0.5) {
+              if (!b.node.firstChild!.isTextblock) continue;
+              view(A).dispatch(st.tr.setSelection(TextSelection.create(st.doc, b.textEnd)));
+              const up = rand() < 0.5;
+              kind += ` ${up ? 'up' : 'down'} ${b.text}`;
+              press(A, up ? 'ArrowUp' : 'ArrowDown', { shiftKey: true, ctrlKey: true });
+            } else {
+              const inside = new Set(descendantsIds(b.node));
+              const targets = visibleIds.filter((x) => x !== id && !inside.has(x));
+              if (!targets.length) continue;
+              const target = bl.get(pick(targets))!;
+              const at = rand() < 0.5 ? target.pos : target.pos + target.node.nodeSize;
+              kind += ` drag ${b.text} to ${at === target.pos ? 'before' : 'after'} ${target.text}`;
+              view(A).dispatch(st.tr.setSelection(NodeSelection.create(st.doc, b.pos)));
               const v = view(A);
-              const t = tok();
-              if (!v.someProp('handleTextInput', (f) => f(v, v.state.selection.from, v.state.selection.to, t, () => v.state.tr.insertText(t)))) {
-                v.dispatch(v.state.tr.insertText(t));
-              }
-            } else if (k === 'paste') view(A).pasteText(tok());
-            else if (k === 'pasteHTML') view(A).pasteHTML(`<p>${tok()}</p><h2>${tok()}</h2><p>${tok()}</p>`);
-            else press(A, k);
+              const node = (v.state.selection as NodeSelection).node;
+              const tr = v.state.tr.deleteSelection();
+              const mapped = tr.mapping.mapResult(at);
+              if (mapped.deleted) continue;
+              tr.insert(mapped.pos, node);
+              tr.setSelection(NodeSelection.create(tr.doc, mapped.pos));
+              v.dispatch(tr.setMeta('uiEvent', 'drop'));
+            }
           } else if (r < 0.66) {
             kind = 'node';
             if (!visibleIds.length) continue;
@@ -327,18 +460,30 @@ describe('colapsar, al azar', () => {
             if (!(sel instanceof NodeSelection)) continue;
             intent.add(id);
             for (const d of descendantsIds(b.node)) intent.add(d);
-            const k = pick(['Backspace', 'Delete', 'cut']);
+            whole(b);
+            const k = pick(['Backspace', 'Delete', 'cut', 'type', 'paste']);
             kind += ` ${k} ${b.text}`;
-            if (k === 'cut') view(A).dom.dispatchEvent(clipboardEvent('cut'));
-            else press(A, k);
+            act(k);
           } else if (r < 0.7) {
-            kind = 'removeBlocks';
+            // "Borrar" (el menú del bloque, con la sección) o `removeBlocks` de BlockNote (sin ella).
+            const menu = rand() < 0.5;
+            kind = menu ? 'remove-menu' : 'removeBlocks';
             if (!visibleIds.length) continue;
             const id = pick(visibleIds);
             intent.add(id);
             for (const d of descendantsIds(bl.get(id)!.node)) intent.add(d);
+            // Con ids repetidos, BlockNote saca el primer bloque con ese id (no es de colapsar).
+            st.doc.descendants((node) => {
+              if (node.type.name === 'blockContainer' && node.attrs.id === id && node !== bl.get(id)!.node) {
+                for (const d of [id, ...descendantsIds(node)]) intent.add(d);
+                known('ids repetidos: se saca otro bloque con el mismo id');
+              }
+              return true;
+            });
+            if (menu) whole(bl.get(id)!);
             kind += ` ${bl.get(id)!.text}`;
-            A.removeBlocks([id]);
+            if (menu) removeWithSections(view(A), [id]);
+            else A.removeBlocks([id]);
           } else if (r < 0.77) {
             kind = rand() < 0.6 ? 'undo' : 'redo';
             checkTokens = false;
@@ -435,6 +580,9 @@ describe('colapsar, al azar', () => {
           failures.push(`seed ${seedArg} round ${round} step ${step} ${kind}: EXCEPTION ${(err as Error).stack?.split("\n").slice(0, 14).join(' | ')}`);
           break;
         }
+        // Lo que la pasada de colapsar deja para después: abrir la sección de una edición que no se hizo.
+        await Promise.resolve();
+        kind += mode;
         history.push(kind);
         kindsCount[kind.split(' ')[0]] = (kindsCount[kind.split(' ')[0]] ?? 0) + 1;
         (globalThis as any).__dumpAfter();
@@ -444,21 +592,25 @@ describe('colapsar, al azar', () => {
         const afterText = after.doc.textBetween(0, after.doc.content.size, ' ');
         const fail = (msg: string) => failures.push(`seed ${seedArg} round ${round} step ${step} [${kind}] ${msg}\n   history: ${history.slice(-8).join(' ; ')}`);
 
-        // (1) appended transactions: only delete blocks hidden before by a heading the root removed
+        // (1) appended transactions: only delete blocks hidden before by a heading the root removed on purpose (A).
+        // Con ids repetidos también: un bloque al que un plugin solo le cambió el id (UniqueID) sigue en su lugar.
         for (const rec of log) {
           const [root, ...app] = rec.trs;
           if (!app.length) continue;
           const oldHidden = collapseState(rec.old)!.analysis.hidden;
-          const rootIds = new Set(blocksOf(root.doc).keys());
+          const rootBlocks = blocksOf(root.doc);
           const finalIds = new Set(blocksOf(rec.state.doc).keys());
-          for (const id of rootIds) {
+          for (const [id, rb] of rootBlocks) {
             if (finalIds.has(id) || id === 'null' || !id) continue;
-            const t = blocksOf(root.doc).get(id)!.text;
-            const finalText = rec.state.doc.textBetween(0, rec.state.doc.content.size, ' ');
-            if (t && tokensIn(t).length && tokensIn(t).every((x) => finalText.includes(x))) continue; // renamed
-            if (dup) continue;
-            if (!oldHidden.has(id)) fail(`appended deleted non-hidden block ${id} "${t}"`);
-            else if (rootIds.has(oldHidden.get(id)!)) fail(`appended deleted ${t} but its hider still there`);
+            let at = rb.pos;
+            for (const t of app) at = t.mapping.map(at, -1);
+            const now = rec.state.doc.nodeAt(at);
+            if (now?.type.name === 'blockContainer' && now.firstChild!.eq(rb.node.firstChild!)) continue; // renamed
+            const t = rb.text;
+            const hider = oldHidden.get(id);
+            if (!hider) fail(`appended deleted non-hidden block ${id} "${t}"`);
+            else if (rootBlocks.has(hider)) fail(`appended deleted ${t} but its hider still there`);
+            else if (!allowed.has(hider)) fail(`appended deleted ${t} but its hider was not removed on purpose (A)`);
           }
         }
         // (2) tokens
@@ -471,11 +623,9 @@ describe('colapsar, al azar', () => {
               if (!hidden.has(id)) {
                 if (!inRange) fail(`visible token ${tk} lost (range ${from}-${to}, block ${b.textStart}-${b.textEnd})`);
               } else {
-                const fully = from >= 0 && b.pos >= from - 2 && b.pos + b.node.nodeSize <= to + 2;
+                // Lo escondido se borra solo a propósito: (A) o (B), anotado en el paso.
                 const hider = hidden.get(id)!;
-                const hb = bl.get(hider);
-                const hiderGone = !abl.has(hider) && (!hb || tokensIn(hb.text).every((x) => !afterText.includes(x)));
-                if (!fully && !hiderGone && !intent.has(hider)) fail(`HIDDEN token ${tk} lost (hider ${hb?.text}, range ${from}-${to}, block ${b.pos}-${b.pos + b.node.nodeSize})`);
+                if (!allowed.has(hider)) fail(`HIDDEN token ${tk} lost (hider ${bl.get(hider)?.text}, range ${from}-${to}, block ${b.pos}-${b.pos + b.node.nodeSize})`);
               }
             }
           }
@@ -506,7 +656,13 @@ describe('colapsar, al azar', () => {
         }
         // (5) find replace: never opens anything
         if (findReplace) {
-          for (const [id] of hidden) if (abl.has(id) && !acs.analysis.hidden.has(id)) fail(`replaceAll revealed ${bl.get(id)!.text}`);
+          for (const [id, hider] of hidden) {
+            if (!abl.has(id) || acs.analysis.hidden.has(id)) continue;
+            // Con ids repetidos, UniqueID le cambia el id a los dos bloques y el título pierde lo colapsado (no se
+            // sabe cuál era): pasa con cualquier cambio que llegue en ese momento.
+            if (dup && !abl.has(hider)) known('un título con id repetido pierde lo colapsado al arreglarse');
+            else fail(`replaceAll revealed ${bl.get(id)!.text}`);
+          }
         }
         // (6) selection not in hidden after local edit
         const sel = after.selection;
@@ -514,11 +670,27 @@ describe('colapsar, al azar', () => {
           for (let d = $p.depth; d > 0; d--) {
             const nd = $p.node(d);
             if (nd.type.name === 'blockContainer' && acs.analysis.hidden.has(String(nd.attrs.id))) {
-              if (!(sel.toJSON() as { type: string }).type.startsWith('sd-')) fail(`selection inside hidden ${String(nd.attrs.id)}`);
+              // Con ids repetidos todavía sin arreglar (un título se esconde a sí mismo), no se puede saber dónde.
+              const ids = descendantsIds(after.doc);
+              if (new Set(ids).size !== ids.length) known('ids repetidos sin arreglar');
+              else if (!(sel.toJSON() as { type: string }).type.startsWith('sd-')) fail(`selection inside hidden ${String(nd.attrs.id)}`);
               break;
             }
           }
         }
+        // (8) lo que escondía un título colapsado que se ve no pasa a esconderlo otro que ya se veía (mover un
+        // título; hasta 1b).
+        if (!kind.startsWith('toggle') && !kind.startsWith('stepFind') && !findReplace) {
+          for (const [id, was] of hidden) {
+            const now = acs.analysis.hidden.get(id);
+            // Un título de adentro que queda a la vista (estaba escondido) conserva lo suyo.
+            if (now && now !== was && !hidden.has(now) && acs.analysis.collapsed.has(was) && !acs.analysis.hidden.has(was)) {
+              fail(`hidden block ${bl.get(id)!.text} moved from ${bl.get(was)?.text} to ${abl.get(now)?.text}`);
+            }
+          }
+        }
+        // (9) una edición que no se hizo abre la sección.
+        if (revealOf && after.doc.eq(st.doc) && [...acs.analysis.hidden.values()].includes(revealOf)) fail('an edit was swallowed but the section stayed collapsed');
         // (7) convergence
         if (online && !dup) {
           const ja = JSON.stringify(A.document);
@@ -539,8 +711,10 @@ describe('colapsar, al azar', () => {
     }
     window.removeEventListener('error', onError);
     for (const t of thrown) {
-      // El Enter de BlockNote (partir el bloque) a veces tira un error de ProseMirror: pasa igual sin colapsar.
-      if (/TransformError|RangeError: Position \d+ out of range/.test(t) && /blocks-[\w-]+\.js/.test(t)) known('Enter de BlockNote tira un error');
+      // El Enter de BlockNote con una selección (partir el bloque) a veces tira uno de estos errores y no hace nada:
+      // pasa igual sin Yjs y sin colapsar (Doc_Colapsar.md, "Riesgos").
+      const enter = /\[(range|caret)[^\]]* Enter\b/.test(t);
+      if (enter && /Cannot join blockGroup onto|Position \d+ out of range|Inserted content deeper than insertion position/.test(t)) known('Enter de BlockNote tira un error');
       else failures.push(`EXCEPTION en un evento: ${t}`);
     }
     if (big) console.log('KINDS ' + JSON.stringify(kindsCount) + '\nFUERA DE COLAPSAR ' + JSON.stringify(baseline));

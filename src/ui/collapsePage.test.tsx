@@ -3,14 +3,14 @@ import { BlockNoteEditor } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { collapseControlFor } from './collapseControl';
-import { loadCollapse } from './collapseStore';
+import { loadCollapse, saveCollapse } from './collapseStore';
 import { closeComments, revealBlock } from './commentsUi';
 import { paragraphProps, schema } from './editorSchema';
 import { PageEditor } from './PageEditor';
@@ -38,6 +38,18 @@ beforeAll(() => {
     disconnect() {}
   } as never;
 });
+
+// jsdom dice que no sabe `:has()` (el CSS no se aplica igual): se hace de cuenta que sí, salvo en la prueba de
+// un navegador viejo.
+const realCSS = globalThis.CSS;
+function hasSupport(on: boolean) {
+  vi.stubGlobal('CSS', {
+    escape: (v: string) => realCSS.escape(v),
+    supports: (q: string, v?: string) => (q.includes(':has(') ? on : v === undefined ? realCSS.supports(q) : realCSS.supports(q, v)),
+  });
+}
+beforeEach(() => hasSupport(true));
+afterAll(() => vi.unstubAllGlobals());
 
 const roots: Root[] = [];
 const devices: Device[] = [];
@@ -200,5 +212,19 @@ describe('colapsar en la página', () => {
     // Nada se sube: colapsar no escribe la página.
     await act(async () => guest.engine.syncNow());
     expect(await guest.docs.unsyncedPages()).toEqual([]);
+  });
+
+  it('un navegador sin :has() no colapsa: sin triángulos, nada escondido y lo guardado no se usa', async () => {
+    const { owner, page, ids } = await scenesPage();
+    await saveCollapse(owner.db, page, new Map([[ids[0], { c: true, g: null }]]));
+    hasSupport(false);
+    const { host } = await mount(services(owner, 'owner'), page);
+    await until(() => host.querySelector('.bn-block-content') !== null);
+    await wait(150);
+    expect(host.querySelector('.bn-block-content')).not.toBeNull();
+    expect(toggles(host)).toHaveLength(0);
+    expect(hiddenCount(host)).toBe(0);
+    expect(host.querySelectorAll('.sd-collapsed')).toHaveLength(0);
+    expect(collapseControlFor(page)).toBeNull();
   });
 });

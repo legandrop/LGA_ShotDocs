@@ -197,7 +197,13 @@ y-prosemirror con `isChangeOrigin` y sin `isUndoRedoOperation` es de otro; desha
 - **Si quedó ahí solo por moverse** (clic, flechas, algo que pone la selección), **pasa al final del título
   colapsado**, sin abrir nada.
 - **Si una edición local cambió bloques escondidos** sin que la selección quede adentro, también se abre la
-  sección, salvo que la selección cubriera la sección entera con su título (borrar una sección colapsada).
+  sección.
+- **Lo escondido se borra solo a propósito** (verificación de `cbed5dc`, lo que manda): (A) "Borrar" del menú;
+  el título elegido entero (el bloque, la sección, varios bloques) o toda la página (Ctrl+A) y borrar, cortar,
+  pegar o escribir encima; (B) una selección de texto que cruza la sección entera: empieza antes del texto del
+  título (en un bloque de arriba) y termina en un bloque después de todo lo escondido. **Cualquier otra edición
+  que borraría algo escondido no se hace**: la sección se abre y la tecla no hace nada (así la persona ve lo
+  que iba a borrar).
 
 Los casos, uno por uno:
 
@@ -215,13 +221,14 @@ Los casos, uno por uno:
 | "Borrar" del menú del bloque en un título colapsado | Borra solo el título; su contenido pasa a la sección de arriba y se ve (salvo que esa también esté colapsada). |
 | Arrastrar un título colapsado | **Se mueve la sección entera.** BlockNote arrastra todo lo elegido si el bloque está en la selección (`dragStart` de `SideMenu/dragging.ts`): en la captura del `dragstart` del tirador se elige del título al último bloque escondido (`MultipleNodeSelection`) y BlockNote hace el resto. El estado viaja con el id. (Decidido por Lega: siempre la sección entera.) |
 | "+" del menú lateral, o soltar algo justo debajo de un título colapsado | El bloque nuevo queda adentro de la sección: se abre. |
-| Una selección que cruza una sección colapsada, y se borra o se escribe encima | Se borra también lo escondido (está en la selección), con un aviso: "Se borraron también 12 bloques escondidos" (Ctrl+Z lo trae). |
-| Copiar o cortar | Lleva lo escondido (está en el documento). Al pegar, BlockNote da ids nuevos: lo pegado aparece abierto. |
+| Una selección que cruza una sección colapsada, y se borra o se escribe encima | Si empieza arriba del título y termina después de lo escondido (B), se borra también lo escondido, con un aviso (Ctrl+Z lo trae). Si no (empieza en el título, por ejemplo con Shift+→ o Shift+↓ desde su final), no se hace: la sección se abre. |
+| Una selección que toma el texto del título (o parte), sin pasar lo escondido | Se borra ese texto (el título puede juntarse con el renglón de arriba); lo escondido queda y se abre. Pegar varios bloques sobre el texto exacto del título (triple clic) tampoco borra la sección. |
+| Copiar o cortar | Lleva lo escondido (está en el documento); cortar lleva justo lo que se borra (el título elegido entero corta la sección entera; Ctrl+A, todo, también lo escondido del final). Un corte que no se puede hacer no lleva nada y abre la sección. Al pegar, BlockNote da ids nuevos: lo pegado aparece abierto. |
 | Tab / Shift+Tab sobre un título colapsado | Cambia de grupo y su sección se recalcula (los que eran sus hermanos pueden quedar a la vista). |
 | Deshacer | Colapsar no se deshace. Si deshacer cambia algo escondido o deja la selección ahí, se abre. |
 | Cambios de otros adentro de una sección escondida | Siguen escondidos. Si alguien agrega un título de igual o mayor nivel adentro, la sección se corta ahí y lo de abajo se ve; si pasa el título a párrafo, se ve todo. |
 | Cursores de otros adentro de lo escondido | No se ven. |
-| Ctrl+A | Elige todo, también lo escondido. |
+| Ctrl+A | Elige todo, también lo escondido del final de la página (la selección no se achica al título). Borrar o cortar se lleva todo. |
 | Buscar | La búsqueda en la página de la app (P.12) **busca también en lo escondido y abre la sección** del resultado (sección 6). El Ctrl+F del navegador no encuentra lo escondido; si P.12 no toma Ctrl/⌘+F, se puede sumar `hidden="until-found"` (Chrome y Edge lo encuentran y avisan con `beforematch` para abrir; en Safari y Firefox, a verificar). |
 
 Los atajos van con prioridad sobre los de BlockNote (`KeyboardShortcutsExtension`, prioridad 50): lo mismo que
@@ -326,8 +333,21 @@ recalcula (hoy igual). A verificar en Safari del iPhone, que puede demorar las i
     nada colapsado, y la prueba al azar no los cuenta como fallas de colapsar): dos documentos que divergen
     después de ids repetidos o de juntar cambios hechos sin red; `restoreRelativeSelection` que tira un error
     en algunos deshacer o rehacer; cambios concurrentes sin red que pierden texto al juntarse; y un aviso de
-    ProseMirror ("TextSelection endpoint not pointing into a node with inline content") al cortar. Quedan
-    anotados para mirarlos aparte.
+    ProseMirror ("TextSelection endpoint not pointing into a node with inline content") al cortar. Con ids
+    repetidos, UniqueID le da un id nuevo a cada copia y un título colapsado pierde lo colapsado (no se sabe
+    cuál era), y `removeBlocks` de BlockNote saca el primer bloque con ese id. Quedan anotados para mirarlos aparte.
+11. **El Enter de BlockNote con una selección** a veces tira un error de ProseMirror ("Cannot join blockGroup
+    onto …", "Position N out of range", "Inserted content deeper than insertion position"): pasa igual en
+    BlockNote solo, sin Yjs y sin colapsar. Enter no hace nada, queda el error en la consola y no se pierde
+    nada.
+12. **Navegadores:** colapsar necesita `:has()` en el CSS (Chrome 105, Safari e iOS 15.4, Firefox 121). En uno
+    más viejo no se colapsa nada (no hay triángulos y lo guardado no se usa).
+13. **Una edición que no se hace** (lo escondido no se borra sin querer, sección 5) se rechaza en
+    `filterTransaction`. Con teclado de computadora, ProseMirror maneja la tecla y no cambia nada; en medio de
+    una composición (teclado del teléfono, IME) la pantalla podría quedar distinta del documento hasta el
+    próximo cambio: a probar a mano en el iPhone.
+14. **Rapidez:** con miles de bloques colapsados, lo que tarda un Enter es sobre todo ProseMirror dibujando las
+    decoraciones (unos 25 ms con 4.000 bloques en jsdom, contra 10 sin colapsar).
 
 ## 9. Entregas y pruebas
 
@@ -545,10 +565,11 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
     se llama a sí misma sin fin (la clase no define su `fromJSON`). Para arrastrar (1b) sirve otro camino:
     `dragStart` de BlockNote trata como varios bloques una selección de texto que va de un bloque a otro, así
     que alcanza con elegir del texto del título al del último bloque escondido antes del `dragstart`.
-  - Borrar la sección entera es por intención (ver "Verificación", abajo): "Borrar" del menú usa
-    `removeWithSections` (reemplaza el ítem de BlockNote en `EditorComments.tsx`), el bloque elegido entero, o
-    una selección que cubría todo el texto del título. Un `removeBlocks` común, juntar el título con otro
-    bloque o tomar solo parte de su texto no borran lo escondido: lo abren.
+  - Lo escondido se borra solo a propósito (ver "Verificación de `cbed5dc`", abajo): (A) "Borrar" del menú
+    (`removeWithSections`, que reemplaza el ítem de BlockNote en `EditorComments.tsx`), el título elegido entero
+    o toda la página; (B) una selección de texto que cruza la sección entera. Cualquier otra edición que lo
+    borraría no se hace (`filterTransaction`) y la sección se abre. Juntar el título con otro bloque o borrar
+    solo su texto no borran lo escondido: lo abren.
   - Retroceso al principio de un título (colapsado o no) "sube la línea" (decisión 18), con prioridad sobre
     BlockNote y solo en títulos (`headingBackspace`), igual que BlockNote con un párrafo: anidado, sale un nivel;
     en el primer bloque, nada; vacío, se borra y la selección va arriba; si arriba hay un renglón con texto (el
@@ -601,7 +622,8 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
      sección es por intención:** solo cuando la persona borró el título a propósito, con su texto: "Borrar"
      del menú (`removeWithSections`, que marca la transacción con `SECTION_DELETE_META`), el bloque elegido
      entero con Retroceso, Supr o Cortar, o una selección de texto que cubría todo su texto (borrada, cortada,
-     escrita o pegada encima). En cualquier otro caso (juntar, partes, un `removeBlocks` de otro lado) lo
+     escrita o pegada encima; esto último cambió en la verificación de `cbed5dc`: una selección de texto borra lo
+     escondido solo si cruza la sección entera). En cualquier otro caso (juntar, partes, un `removeBlocks` de otro lado) lo
      escondido **nunca** se borra: se abre. Además, Supr al final de un renglón cuando lo que sigue (el primer
      hijo o el bloque de abajo) es un título colapsado que esconde algo: un renglón vacío se borra y la
      selección va al principio del título; uno con texto no hace nada.
@@ -620,6 +642,44 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
     `COLLAPSE_SEEDS=1-70` corre la grande: **pasa con las 70 semillas** (30 rondas de 40 pasos cada una,
     84.000 pasos). Lo que pasa igual sin nada colapsado (ver "Riesgos", punto 10) se cuenta aparte; se comprobó
     corriendo la grande con `NOTOGGLE=1`, donde aparece lo mismo.
+- **Verificación de `cbed5dc`** (independiente; sin bloqueantes). Cada punto tiene su prueba, que fallaba antes
+  (`collapseEditor.test.ts`, "verificación de cbed5dc"; el 7 en `collapsePage.test.tsx`). La regla que manda
+  quedó en la sección 5: lo escondido se borra solo por (A) o (B).
+  1. **Lo que se corta es lo que se borra.** El título elegido entero, o varios bloques con un título colapsado,
+     eligen antes la sección entera (`widenForClipboard`). Una selección de texto nunca borra más que lo suyo:
+     con (B) lo escondido ya está adentro. Ctrl+A en el navegador elige todo como texto y la selección ya no se
+     achica al título si la página termina en una sección colapsada (`selectsAll`): cortar lleva lo escondido
+     del final. Un corte que no se puede hacer no lleva nada (`preventDefault`) y abre la sección.
+  2. El texto exacto de un título (triple clic) y pegar varios bloques borraba la sección (la regla vieja
+     contaba "todo su texto elegido" como borrar el título): ahora lo escondido queda y se abre.
+  3. Del final del renglón de arriba al final del texto del título (Shift+Inicio, Shift+←) y Retroceso: igual,
+     se borra el texto y lo escondido queda y se ve.
+  4. Shift+→ o Shift+↓ al final de un título colapsado eligen hasta el renglón que se ve después; borrar,
+     escribir, pegar o cortar eso borraba lo escondido. Ahora no se hace nada y la sección se abre. Lo hace un
+     `filterTransaction` del plugin (`hiddenLost`): una transacción propia que sacaría bloques escondidos sin
+     (A) ni (B) se rechaza y, después del despacho, se abre lo que los escondía. No cuentan Yjs (de otro,
+     deshacer), la búsqueda, lo que hace la app sola, lo que agregan otros plugins ni mover bloques (el id
+     queda).
+  5. Hasta la 1b (que mueve la sección entera): mover un título colapsado con el tirador o con
+     Shift+Ctrl/⌘+↑/↓ dejaba lo que escondía debajo de otro título colapsado. Ahora, si un bloque escondido
+     pasa a esconderlo otro título que ya se veía mientras el de antes sigue colapsado a la vista, se abre lo
+     que lo esconde ahora. Un título de adentro que queda a la vista (estaba escondido) conserva lo suyo.
+     También: lo que otro plugin agrega (UniqueID que arregla ids) cuenta como lo que lo causó (de Yjs, de la
+     búsqueda).
+  6. Rapidez: las decoraciones ya no se rearman todas en cada cambio de estructura: se corren y se saca o
+     agrega solo lo que cambió (`redecorate`, con una clave por bloque). Enter con todo colapsado, en jsdom:
+     20 ms con 2.000 bloques (antes 32–38) y 37 ms con 4.000 (antes 83–108); el estado del plugin pasó de 50–68
+     ms a 9. Lo que queda es de ProseMirror al dibujar miles de decoraciones (sin colapsar: 10 y 15 ms).
+  7. Un navegador sin `:has()` (`CSS.supports('selector(:has(*))')`) no colapsa: sin triángulos, sin nada
+     escondido, sin "Colapsar todo", y lo guardado no se usa (`collapseSupported` en `PageEditor`). Mínimos:
+     Chrome 105, Safari e iOS 15.4, Firefox 121.
+  8. La prueba al azar anota en cada paso qué se puede borrar de lo escondido, (A) o (B), y falla si se borra
+     otra cosa (también lo que agrega la pasada de colapsar, con ids repetidos o no: un bloque al que un plugin
+     solo le cambió el id sigue en su lugar). Pasos nuevos: selecciones que cruzan una sección entera, Shift+→
+     y Shift+↓ desde un título colapsado y una edición (verifica que la sección se abra), el texto exacto de
+     un título con varios bloques pegados, toda la página, "Borrar" del menú, mover bloques (Shift+Ctrl+flechas
+     y arrastrar). Verifica además que lo escondido no pase a otro título que ya se veía. Los errores del Enter
+     de BlockNote se reconocen por su mensaje y solo en un Enter. **Pasa con las 70 semillas.**
 - **Para la 1b (riesgo):** la auditoría vio que dos personas moviendo el mismo título a la vez con
   Shift+Ctrl/⌘+↑/↓ pierden bloques aun sin colapsar (un problema de BlockNote con y-prosemirror: cada mover es
   borrar e insertar, y dos borrados más dos inserciones se cruzan). Mover una sección entera no tiene que
@@ -630,17 +690,18 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
   para vos lo que la esconde. "Reemplazar todo" escribe en el Y.Doc (llega como de Yjs): se reconoce con
   `isFindReplaceTransaction`, y su deshacer y rehacer por la marca de la pila; ninguno abre nada.
   `collapseFind.test.ts` lo prueba con el editor real y las dos extensiones.
-- **Pruebas** (82 nuevas, 834 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
+- **Pruebas** (125 nuevas, 877 en total): `collapse.test.ts` (qué esconde cada título), `collapseEditor.test.ts`
   (el editor real: cada caso de la sección 5 y de las correcciones, borrar la sección entera con el último título
   y la página vacía, deshacer con los mismos ids, dos documentos para lo de otro, el deshacer marcado por la
-  búsqueda, y la auditoría), `collapseMenus.test.ts`, `collapseFind.test.ts`, `collapseStore.test.ts`,
+  búsqueda, la auditoría y las verificaciones), `collapseProperty.test.ts` (al azar), `collapseMenus.test.ts`, `collapseFind.test.ts`, `collapseStore.test.ts`,
   `collapsePagination.test.ts` (los cortes iguales con y sin colapsar, la
   etiqueta en el título, la copia abierta) y `collapsePage.test.tsx` (la página montada: triángulos, guardar y
   volver a abrir colapsada, el menú, "Ir al bloque", solo lectura sin subir nada, el margen sin la pregunta
-  escondida).
+  escondida, un navegador sin `:has()`).
 - **De punta a punta:** `collapse.mjs` (repo de pruebas privado) en Chromium: el triángulo al pasar el mouse y
   a la izquierda del texto, el menú lateral que no lo tapa, colapsar con las marcas "Page 5" y "Pages 2–4 inside", los de adentro con su
-  estado, Enter después del título colapsado, el PDF todo abierto, recargar, borrar el último título colapsado
+  estado, Enter después del título colapsado, el PDF todo abierto, recargar, Shift+→ y Retroceso (no borra:
+  abre), Ctrl+A y copiar (lleva lo escondido del final), borrar el último título colapsado
   (sección entera, aviso, Ctrl+Z la trae colapsada), "Colapsar todo" y borrar todo hasta la página vacía.
 - **Pendiente:**
   - 1b: arrastrar la sección entera (corrección 7), Shift+Ctrl/⌘+↑/↓ (corrección 4), "Imprimir como se ve"

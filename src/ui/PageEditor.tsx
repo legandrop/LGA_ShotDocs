@@ -50,7 +50,7 @@ import { DrivePasteMenu } from './DrivePasteMenu';
 import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
 import { SheetBreaks } from './SheetBreaks';
 import type { HeadingRecord } from './collapse';
-import { collapseExtension, headingCounts, revealBlock, setAllCollapsed } from './collapseEditor';
+import { collapseExtension, collapseSupported, headingCounts, revealBlock, setAllCollapsed } from './collapseEditor';
 import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
@@ -286,6 +286,8 @@ function BlockEditor({
   // Lo colapsado para vos (P.11, Docs/Doc_Colapsar.md): se guarda en la base local con una pausa, y lo que
   // falte se escribe al cerrar la página.
   const collapseSave = useMemo(() => collapseSaver(db, pageId), [db, pageId]);
+  // Un navegador sin `:has()` no puede esconder: sin colapsar (collapseEditor.ts, `collapseSupported`).
+  const canCollapse = useMemo(collapseSupported, []);
   useEffect(() => {
     // Lo pendiente se escribe al cerrar la página, y también si se va la pestaña o la app queda de fondo (el
     // teléfono puede cerrarla sin avisar).
@@ -350,39 +352,42 @@ function BlockEditor({
         user: { name: user.email, color: '#2383e2' },
       },
       // Buscar y reemplazar en la página (findEditor.ts) y colapsar secciones (collapseEditor.ts): las dos con
-      // decoraciones, sin tocar el documento.
+      // decoraciones, sin tocar el documento. Colapsar, solo si el navegador puede esconder (`:has()`).
       extensions: [
         findExtension,
-        collapseExtension({
-          initial: collapse,
-          save: (records: ReadonlyMap<string, HeadingRecord>) => {
-            collapse.clear();
-            for (const [id, r] of records) collapse.set(id, r);
-            collapseSave.save(records);
-          },
-        }),
+        ...(canCollapse
+          ? [
+              collapseExtension({
+                initial: collapse,
+                save: (records: ReadonlyMap<string, HeadingRecord>) => {
+                  collapse.clear();
+                  for (const [id, r] of records) collapse.set(id, r);
+                  collapseSave.save(records);
+                },
+              }),
+            ]
+          : []),
       ],
     }),
     [doc],
   );
 
   // El menú de la página ("Colapsar todo / Abrir todo") y "Ir al bloque" de los comentarios llegan acá.
-  useEffect(
-    () =>
-      setCollapseControl({
-        pageId,
-        counts: () => headingCounts(editor.prosemirrorState),
-        setAll: (collapsed) => {
-          const view = editor.prosemirrorView;
-          if (view) setAllCollapsed(view, collapsed);
-        },
-        reveal: (blockId) => {
-          const view = editor.prosemirrorView;
-          return view ? revealBlock(view, blockId) : false;
-        },
-      }),
-    [editor, pageId],
-  );
+  useEffect(() => {
+    if (!canCollapse) return;
+    return setCollapseControl({
+      pageId,
+      counts: () => headingCounts(editor.prosemirrorState),
+      setAll: (collapsed) => {
+        const view = editor.prosemirrorView;
+        if (view) setAllCollapsed(view, collapsed);
+      },
+      reveal: (blockId) => {
+        const view = editor.prosemirrorView;
+        return view ? revealBlock(view, blockId) : false;
+      },
+    });
+  }, [editor, pageId, canCollapse]);
 
   editorRef.current = editor as unknown as NonNullable<typeof editorRef.current>;
 
@@ -715,7 +720,7 @@ function BlockEditor({
       </BlockNoteView>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
       {/* El triángulo de cada título (P.11): una capa encima, como el margen. */}
-      <CollapseToggles editor={editor} host={host} editable={editable} />
+      {canCollapse && <CollapseToggles editor={editor} host={host} editable={editable} />}
       {/* Dónde empieza cada hoja (solo una capa encima; roadmap B.7). */}
       <SheetBreaks pageId={pageId} host={host} />
       {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}

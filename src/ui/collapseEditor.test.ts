@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
-import { NodeSelection, TextSelection } from '@tiptap/pm/state';
+import { AllSelection, NodeSelection, TextSelection } from '@tiptap/pm/state';
+import { DecorationSet } from '@tiptap/pm/view';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
@@ -41,6 +42,12 @@ function mount(doc = new Y.Doc(), initial?: Saved): { editor: BlockNoteEditor; d
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 30));
+/** Lo que la pasada de colapsar deja para después (abrir la sección cuando una edición no se hizo). */
+const settle = () => new Promise((r) => setTimeout(r, 0));
+// jsdom no tiene `ClipboardEvent` (pegar de ProseMirror lo usa).
+(globalThis as { ClipboardEvent?: unknown }).ClipboardEvent ??= class extends Event {
+  clipboardData: unknown = null;
+};
 const h = (level: number, text: string, children: PartialBlock[] = []) =>
   ({ type: 'heading', props: { level }, content: text, children }) as PartialBlock;
 const p = (text: string, children: PartialBlock[] = []) => ({ type: 'paragraph', content: text, children }) as PartialBlock;
@@ -629,7 +636,7 @@ function idsIn(doc: import('@tiptap/pm/model').Node): Set<string> {
 }
 
 describe('auditoría 1a', () => {
-  it('1. borrar un título colapsado con un colapsado adentro y un fin no borra lo que se ve después', () => {
+  it('1. borrar un título colapsado con un colapsado adentro y un fin no borra lo que se ve después', async () => {
     const { editor } = page([p('P0'), h(1, 'A'), h(2, 'B'), p('P1'), h(1, 'C')]);
     collapse(editor, 'B');
     collapse(editor, 'A');
@@ -642,7 +649,11 @@ describe('auditoría 1a', () => {
     const v = view(editor);
     v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, textPos(editor, 'A', 'start'), textPos(editor, 'X'))));
     press(editor, 'Backspace');
-    expect(texts(editor)).toEqual(['P0', '', 'P2', 'C']);
+    // La selección empieza en el título (no arriba): no cruza la sección entera, así que no se borra nada y la
+    // sección se abre (verificación de cbed5dc). Nunca se borró lo que se ve después.
+    await settle();
+    expect(texts(editor)).toEqual(['P0', 'A', 'B', 'P1', 'X', 'P2', 'C']);
+    expect(visible(editor)).toEqual(['P0', 'A', 'B', 'P1', 'X', 'P2', 'C']);
   });
 
   it('1. lo mismo con Cortar: lo que se ve después queda', () => {
@@ -971,13 +982,14 @@ describe('verificación: borrar la sección solo a propósito', () => {
     expect(visible(editor)).toEqual(['antes', 'a', 'U']);
   });
 
-  it('elegir todo el texto del título (y más) y borrarlo sí borra su sección', () => {
+  it('elegir todo el texto del título (y más, desde arriba) y borrarlo no borra su sección: se ve (verificación de cbed5dc, punto 3)', () => {
     const { editor } = page([p('antes'), h(1, 'T'), p('a'), h(1, 'U')]);
     collapse(editor, 'T');
     const v = view(editor);
     v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, textPos(editor, 'antes'), textPos(editor, 'T'))));
     press(editor, 'Backspace');
-    expect(texts(editor)).toEqual(['antes', 'U']);
+    expect(texts(editor)).toEqual(['antes', 'a', 'U']);
+    expect(visible(editor)).toEqual(['antes', 'a', 'U']);
   });
 
   it('2. Retroceso después de un bloque cuyo último descendiente está escondido va al título, sin unir', () => {
@@ -1093,5 +1105,217 @@ describe('Retroceso al principio de un título', () => {
     expect(texts(editor)).toEqual(['AB', 'escondido', 'b', 'C']);
     // Lo que era de B pasa a la sección de A y se veía: A se abre.
     expect(visible(editor)).toEqual(['AB', 'escondido', 'b', 'C']);
+  });
+});
+
+// --- Verificación de cbed5dc: lo escondido se borra solo a propósito ----------------------------------------
+// (A) a propósito: "Borrar", el título elegido entero (o la sección, o varios bloques) y borrar, cortar, pegar o
+// escribir encima; Ctrl+A. (B) una selección de texto que cruza la sección entera: empieza antes del título (en
+// un bloque de arriba) y termina en un bloque después de lo escondido. Cualquier otra cosa que borraría algo
+// escondido no hace nada: se abre la sección.
+
+const clipOf = (event: Event, type = 'text/html') =>
+  (event as unknown as { clipboardData: { getData: (k: string) => string } }).clipboardData.getData(type);
+
+function selectText(editor: BlockNoteEditor, anchor: number, head: number) {
+  const v = view(editor);
+  v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, anchor, head)));
+}
+
+/** Lo que hace la persona con la selección: teclas, cortar (devuelve el evento), escribir o pegar. */
+function act(editor: BlockNoteEditor, op: string): Event | null {
+  const v = view(editor);
+  if (op === 'cut') {
+    const event = clipboardEvent('cut');
+    v.dom.dispatchEvent(event);
+    return event;
+  }
+  if (op === 'type') {
+    const text = 'Q';
+    const deflt = () => v.state.tr.insertText(text);
+    if (!v.someProp('handleTextInput', (f) => f(v, v.state.selection.from, v.state.selection.to, text, deflt))) v.dispatch(deflt());
+  } else if (op === 'paste') v.pasteText('PEGADO');
+  else press(editor, op);
+  return null;
+}
+
+const SECTION = () => [p('Before'), h(1, 'Heading'), p('x1'), p('x2'), h(1, 'Zeta')];
+
+describe('verificación de cbed5dc: lo escondido se borra solo a propósito', () => {
+  for (const op of ['Backspace', 'Delete', 'cut', 'type', 'paste']) {
+    it(`3. del final del renglón de arriba al final del texto del título + ${op}: lo escondido queda y se ve`, async () => {
+      const { editor } = page(SECTION());
+      collapse(editor, 'Heading');
+      selectText(editor, textPos(editor, 'Before'), textPos(editor, 'Heading'));
+      act(editor, op);
+      await settle();
+      expect(texts(editor)).toEqual(expect.arrayContaining(['x1', 'x2', 'Zeta']));
+      expect(visible(editor)).toEqual(expect.arrayContaining(['x1', 'x2']));
+    });
+  }
+
+  const pastes: [string, (e: BlockNoteEditor) => void][] = [
+    ['dos párrafos', (e) => view(e).pasteHTML('<p>a</p><p>b</p>')],
+    ['una lista', (e) => view(e).pasteHTML('<ul><li>a</li><li>b</li></ul>')],
+    ['un título', (e) => view(e).pasteHTML('<h2>Nuevo</h2>')],
+    ['texto de dos renglones', (e) => view(e).pasteText('Uno\n\nDos')],
+  ];
+  for (const [name, paste] of pastes) {
+    it(`2. el texto exacto del título (triple clic) y pegar ${name}: la sección no se borra`, async () => {
+      const { editor } = page(SECTION());
+      collapse(editor, 'Heading');
+      selectText(editor, textPos(editor, 'Heading', 'start'), textPos(editor, 'Heading'));
+      paste(editor);
+      await settle();
+      expect(texts(editor)).toEqual(expect.arrayContaining(['Before', 'x1', 'x2', 'Zeta']));
+    });
+  }
+
+  for (const key of ['ArrowRight', 'ArrowDown']) {
+    for (const op of ['Backspace', 'Delete', 'type', 'paste', 'cut']) {
+      it(`4. Shift+${key} al final de un título colapsado y ${op}: no se borra nada y la sección se abre`, async () => {
+        const { editor } = page(SECTION());
+        collapse(editor, 'Heading');
+        putCaret(editor, 'Heading');
+        press(editor, key, { shiftKey: true });
+        expect(view(editor).state.selection.to).toBeGreaterThan(textPos(editor, 'x2'));
+        const before = texts(editor);
+        const event = act(editor, op);
+        await settle();
+        expect(texts(editor)).toEqual(before);
+        expect(visible(editor)).toEqual(['Before', 'Heading', 'x1', 'x2', 'Zeta']);
+        // Cortar tampoco lleva nada: la tecla no hizo nada.
+        if (event) expect(clipOf(event)).toBe('');
+      });
+    }
+  }
+
+  it('4. Shift+→ desde un título vacío arriba de todo hasta el renglón vacío del final no es Ctrl+A', async () => {
+    const { editor } = page([h(1, ''), p('x1'), p('x2'), p('')]);
+    setCollapsed(view(editor), [editor.document[0].id], true);
+    editor.setTextCursorPosition(editor.document[0].id, 'end');
+    press(editor, 'ArrowRight', { shiftKey: true });
+    press(editor, 'Backspace');
+    await settle();
+    expect(texts(editor)).toEqual(['', 'x1', 'x2', '']);
+    expect(visible(editor)).toEqual(['', 'x1', 'x2', '']);
+  });
+
+  it('4. de la mitad del título a la mitad del de abajo + Retroceso: no se borra nada y la sección se abre', async () => {
+    const { editor } = page(SECTION());
+    collapse(editor, 'Heading');
+    selectText(editor, textPos(editor, 'Heading', 'start') + 3, textPos(editor, 'Zeta', 'start') + 2);
+    press(editor, 'Backspace');
+    await settle();
+    expect(texts(editor)).toEqual(['Before', 'Heading', 'x1', 'x2', 'Zeta']);
+    expect(visible(editor)).toEqual(['Before', 'Heading', 'x1', 'x2', 'Zeta']);
+  });
+
+  for (const op of ['Backspace', 'Delete', 'type', 'paste', 'cut']) {
+    it(`B. una selección que empieza arriba del título y termina después de la sección + ${op}: se borra lo escondido, con el aviso`, async () => {
+      const seen = notices();
+      const { editor } = page(SECTION());
+      collapse(editor, 'Heading');
+      selectText(editor, textPos(editor, 'Before', 'start') + 3, textPos(editor, 'Zeta', 'start') + 2);
+      const event = act(editor, op);
+      await settle();
+      const rest = { Backspace: 'Befta', Delete: 'Befta', type: 'BefQta', paste: 'BefPEGADOta', cut: 'Befta' }[op];
+      expect(texts(editor)).toEqual([rest]);
+      expect(seen).toHaveLength(1);
+      // Lo que se corta es lo que se borra: el portapapeles lleva lo escondido.
+      if (event) {
+        const html = clipOf(event);
+        expect(html).toContain('x1');
+        expect(html).toContain('x2');
+        expect(html).toContain('Heading');
+      }
+    });
+  }
+
+  it('1. todo elegido (AllSelection) y cortar, con la página terminando en una sección colapsada: el portapapeles lleva todo', async () => {
+    const { editor } = page([p('Before'), h(1, 'Heading'), p('x1'), h(1, 'Z'), p('z1')]);
+    collapse(editor, 'Heading', 'Z');
+    const v = view(editor);
+    v.dispatch(v.state.tr.setSelection(new AllSelection(v.state.doc)));
+    expect(v.state.selection).toBeInstanceOf(AllSelection);
+    const event = act(editor, 'cut')!;
+    await settle();
+    expect(clipOf(event)).toContain('x1');
+    expect(clipOf(event)).toContain('z1');
+    expect(texts(editor)).toEqual(['']);
+  });
+
+  // Ctrl+A en el navegador: BlockNote no tiene el atajo; el navegador elige todo y ProseMirror lo toma como texto.
+  it('1. una selección de texto de toda la página (Ctrl+A) no se achica al final de lo escondido, y cortar lleva todo', async () => {
+    const { editor } = page([p('Before'), h(1, 'Heading'), p('x1'), h(1, 'Z'), p('z1')]);
+    collapse(editor, 'Heading', 'Z');
+    selectText(editor, textPos(editor, 'Before', 'start'), textPos(editor, 'z1'));
+    expect(view(editor).state.selection.head).toBe(textPos(editor, 'z1'));
+    const event = act(editor, 'cut')!;
+    await settle();
+    expect(clipOf(event)).toContain('x1');
+    expect(clipOf(event)).toContain('z1');
+    expect(texts(editor)).toEqual(['']);
+  });
+
+  it('A. el título elegido entero y pegar o escribir encima se lleva la sección', async () => {
+    for (const op of ['type', 'paste']) {
+      const { editor } = page(SECTION());
+      collapse(editor, 'Heading');
+      selectBlock(editor, 'Heading');
+      act(editor, op);
+      await settle();
+      expect(texts(editor)).not.toContain('x1');
+      expect(texts(editor)).not.toContain('x2');
+      expect(texts(editor)).toEqual(expect.arrayContaining(['Before', 'Zeta']));
+    }
+  });
+
+  it('5. arrastrar un título colapsado lejos deja lo que escondía bajo otro título colapsado: se ve', async () => {
+    const { editor } = page([h(1, 'W'), p('w1'), h(1, 'X'), p('x1'), p('x2'), h(1, 'T'), p('t1'), h(1, 'U'), p('u1')]);
+    collapse(editor, 'X', 'W');
+    const v = view(editor);
+    v.dispatch(v.state.tr.setSelection(NodeSelection.create(v.state.doc, textPos(editor, 'X', 'start') - 2)));
+    const node = (v.state.selection as NodeSelection).node;
+    const tr = v.state.tr;
+    const insertAt = textPos(editor, 'U', 'start') - 2;
+    tr.deleteSelection();
+    const pos = tr.mapping.map(insertAt);
+    tr.replaceRangeWith(pos, pos, node);
+    tr.setSelection(NodeSelection.create(tr.doc, pos));
+    v.dispatch(tr.setMeta('uiEvent', 'drop'));
+    await settle();
+    expect(texts(editor)).toEqual(['W', 'w1', 'x1', 'x2', 'T', 't1', 'X', 'U', 'u1']);
+    expect(visible(editor)).toEqual(expect.arrayContaining(['x1', 'x2']));
+  });
+
+  it('5. Shift+Ctrl+↑ en un título colapsado: lo que pasa a esconder otro título se ve', async () => {
+    const { editor } = page([h(1, 'W'), p('w1'), h(1, 'X'), p('x1'), h(1, 'T'), p('t1')]);
+    collapse(editor, 'X', 'W');
+    putCaret(editor, 'X');
+    press(editor, 'ArrowUp', { shiftKey: true, ctrlKey: true });
+    await settle();
+    expect(texts(editor)).toEqual(['W', 'X', 'w1', 'x1', 'T', 't1']);
+    expect(visible(editor)).toContain('w1');
+  });
+
+  it('6. Enter en una página grande con todo colapsado no rearma todas las decoraciones', () => {
+    const blocks: PartialBlock[] = [];
+    for (let i = 0; i < 2000; i++) blocks.push(h(2, `T${i}`), p(`p${i}`));
+    blocks.push(p('fin'));
+    const { editor } = page(blocks);
+    setAllCollapsed(view(editor), true);
+    const create = vi.spyOn(DecorationSet, 'create');
+    for (let i = 0; i < 6; i++) {
+      putCaret(editor, `T${10 + i * 7}`);
+      press(editor, 'Enter');
+    }
+    // Las de colapsar (miles); otros plugins arman las suyas, chicas.
+    const calls = create.mock.calls.filter((c) => (c[1] as unknown[]).length > 100).length;
+    create.mockRestore();
+    expect(calls).toBe(0);
+    expect(collapseState(view(editor).state)!.analysis.hidden.size).toBe(2001);
+    // 4.000 bloques: unos 37 ms por Enter en jsdom (antes, 83 a 108). Lo que queda es de ProseMirror al dibujar
+    // miles de decoraciones (sin colapsar, unos 15). No se mide acá: con otras pruebas a la vez, varía mucho.
   });
 });
