@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MEDIA_SCHEME, mediaIdOf } from '../media/queue';
+import { MEDIA_SCHEME, MediaQueue, mediaIdOf } from '../media/queue';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { collectCarrete, type CarreteItem } from './carrete';
 import { createCarreteLoader, isOffline, passFor, PASS_REUSE_MS } from './carreteLoader';
@@ -141,13 +141,12 @@ describe('carrete: qué se muestra de cada elemento', () => {
     expect(media.pass).not.toHaveBeenCalled();
   });
 
-  it('reusa el pase mientras le falte más de una hora (también en otro carrete); "Retry" pide uno nuevo', async () => {
+  it('reusa el pase mientras le falte más de una hora, también en otro carrete', async () => {
     const media = { pass: vi.fn(async (id: string) => `https://portero.test/m/${id}-${media.pass.mock.calls.length}`) };
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
     const first = await passFor(media, 'f1');
     now.mockReturnValue(1_000_000 + PASS_REUSE_MS - 1);
     expect(await passFor(media, 'f1')).toBe(first);
-    const loader = createCarreteLoader({ media: { ...media, resolve: vi.fn(), thumbnail: vi.fn(), source: vi.fn() }, files: { resolve: vi.fn() } } as never);
     expect(media.pass).toHaveBeenCalledTimes(1);
     now.mockReturnValue(1_000_000 + PASS_REUSE_MS + 1);
     expect(await passFor(media, 'f1')).not.toBe(first);
@@ -155,7 +154,6 @@ describe('carrete: qué se muestra de cada elemento', () => {
     // Otra cola (otra sesión) no reusa el pase.
     await passFor({ pass: media.pass }, 'f1');
     expect(media.pass).toHaveBeenCalledTimes(3);
-    loader.dispose();
   });
 
   it('"Retry" olvida lo grande y el pase: se pide otro', async () => {
@@ -171,6 +169,17 @@ describe('carrete: qué se muestra de cada elemento', () => {
     loader.retry(itemFor(video));
     await loader.full(itemFor(video));
     expect(pass).toHaveBeenCalledTimes(2);
+  });
+
+  it('sin base de archivos en el dispositivo, el tipo y el nombre salen del servidor', async () => {
+    const id = '0a1b2c3d-4e5f-4a6b-8c7d-8e9f00112233';
+    const remote = {
+      fetchMediaFiles: vi.fn(async () => [
+        { id, name: 'IMG_0666.MOV', mime: 'video/quicktime', width: null, height: null, duration: null, thumb_at: null, drive_id: 'd1' },
+      ]),
+    };
+    const queue = new MediaQueue(null, remote as never, { portero: () => ({}) as never });
+    expect(await queue.source(id)).toEqual({ kind: 'video', name: 'IMG_0666.MOV', original: null });
   });
 
   it('al cerrar suelta los originales que puso en memoria', async () => {

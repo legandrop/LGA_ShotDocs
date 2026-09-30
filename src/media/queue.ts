@@ -908,7 +908,8 @@ export class MediaQueue {
             fetchedAt: this.now(),
           };
           found.set(row.id, known);
-          await this.store.put('known', known);
+          // Sin base de archivos en el dispositivo se usa igual, sin guardarlo.
+          if (this.db) await this.db.put('known', known);
         }
         return found;
       });
@@ -920,7 +921,12 @@ export class MediaQueue {
 
   /** El original (si está en el dispositivo), el tipo y el nombre, para el visor. */
   async source(id: string): Promise<MediaSource> {
-    const db = this.store;
+    if (!this.db) {
+      // Sin base de archivos: el tipo y el nombre salen del servidor (no hay original en el dispositivo).
+      const meta = await this.fetchMeta(id).catch(() => null);
+      return { kind: meta ? mediaKind(meta.mime) : null, name: meta?.name ?? '', original: null };
+    }
+    const db = this.db;
     const own = await db.get('files', id);
     if (own) return { kind: mediaKind(own.mime), name: own.name, original: (await db.get('blobs', id)) ?? null };
     const meta = (await db.get('known', id)) ?? (await this.fetchMeta(id).catch(() => null));
