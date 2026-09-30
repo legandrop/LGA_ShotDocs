@@ -4,8 +4,9 @@ v0.043 :
 
 El PDF corta las hojas donde las marca la pantalla. Al imprimir, las fotos del Drive se cambian por el
 original si está en el dispositivo, y el original llenaba el ancho de la hoja: la foto salía más alta que
-en pantalla (donde se ve con su miniatura) y la hoja se cortaba antes. Ahora cada foto conserva en el PDF
-el ancho que ocupa en pantalla, llevado a la hoja; el original solo la hace más nítida.
+en pantalla (donde se ve con su miniatura) y la hoja se cortaba antes. Ahora cada foto va en el PDF con
+el ancho que le puso la persona o, si no tiene, el de su miniatura, igual desde el teléfono o la
+computadora; el original solo la hace más nítida.
 [ PDF - los cortes de la pantalla ]
 
 v0.042 :

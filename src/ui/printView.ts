@@ -112,7 +112,7 @@ export function buildPrintView(
     shell.setAttribute('data-color-scheme', 'light');
     shell.setAttribute('data-mantine-color-scheme', 'light');
     const copy = live.cloneNode(true) as HTMLElement;
-    cleanCopy(copy, live, geometry.contentWidth / contentWidthOf(live));
+    cleanCopy(copy, live);
     shell.append(copy);
     host.append(shell);
     page.append(host);
@@ -128,23 +128,13 @@ export function buildPrintView(
   return { root, geometry, page };
 }
 
-/** El ancho del área de texto del editor en pantalla (sin su margen interno), o 0 si no se sabe. */
-function contentWidthOf(live: HTMLElement): number {
-  const style = getComputedStyle(live);
-  return live.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
-}
-
 /**
  * Saca de la copia lo que no va en papel, antes de agregarla al documento (así un iframe no carga).
- * `scale`: el ancho del área de texto de la hoja sobre el del editor en pantalla.
  */
-function cleanCopy(copy: HTMLElement, live: HTMLElement, scale: number): void {
+function cleanCopy(copy: HTMLElement, live: HTMLElement): void {
   // Las imágenes con la proporción que ya tienen en pantalla (emparejadas antes de sacar nada): la copia
-  // mide bien aunque no haya terminado de cargar. Y las fotos y videos del editor con el ancho que ocupan
-  // en pantalla, llevado a la hoja: sin eso, una foto que en pantalla se ve con su miniatura (480 px) y en
-  // el PDF con el original (que llena el ancho) salía más alta que en pantalla y los cortes no coincidían.
+  // mide bien aunque no haya terminado de cargar.
   const liveImages = live.querySelectorAll('img');
-  const lockWidth = Number.isFinite(scale) && scale > 0;
   copy.querySelectorAll('img').forEach((img, i) => {
     const source = liveImages[i];
     img.loading = 'eager';
@@ -152,14 +142,7 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement, scale: number): void {
     if (source && source.naturalWidth > 0 && source.naturalHeight > 0) {
       img.style.aspectRatio = `${source.naturalWidth} / ${source.naturalHeight}`;
     }
-    const shown = source?.getBoundingClientRect().width ?? 0;
-    if (lockWidth && shown > 0 && img.classList.contains('bn-visual-media')) {
-      img.style.width = `${shown * scale}px`;
-      img.style.height = 'auto';
-      // El ancho que BlockNote le pone al contenedor (el de pantalla, en px) no lo achica.
-      const wrapper = img.closest<HTMLElement>('.bn-file-block-content-wrapper');
-      if (wrapper) wrapper.style.width = 'fit-content';
-    }
+    if (source && img.classList.contains('bn-visual-media')) fixMediaWidth(img, source);
   });
   for (const el of copy.querySelectorAll(REMOVE)) el.remove();
   for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('[contenteditable]')]) el.removeAttribute('contenteditable');
@@ -183,6 +166,24 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement, scale: number): void {
     img.alt = '';
     video.replaceWith(img);
   }
+}
+
+/**
+ * Las fotos y videos del editor con un ancho fijo, el mismo en cualquier pantalla: el que le puso la persona
+ * (`previewWidth`, en px) o, si no tiene, el natural de lo que se ve (la miniatura de una foto del Drive, 480
+ * px de lado). Sin esto, al imprimir la miniatura se cambia por el original, que llenaba el ancho de la
+ * hoja: la foto salía más alta que en pantalla y los cortes no coincidían con las marcas. El ancho no sale
+ * del de la pantalla (así las marcas del teléfono y de la computadora son las mismas) y nunca pasa del ancho
+ * del área de texto (`max-width`).
+ */
+function fixMediaWidth(img: HTMLImageElement, source: HTMLImageElement): void {
+  const wrapper = img.closest<HTMLElement>('.bn-file-block-content-wrapper');
+  if (!wrapper) return;
+  const set = /^(\d+(?:\.\d+)?)px$/.exec(wrapper.style.width)?.[1];
+  const width = set ? Number(set) : source.naturalWidth;
+  if (!(width > 0)) return;
+  wrapper.style.width = `${width}px`;
+  wrapper.style.maxWidth = '100%';
 }
 
 /** Una tabla más ancha que el área de texto se ajusta al ancho (si no, el navegador achica toda la hoja). */
