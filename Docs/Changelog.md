@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.059 :
+
+"Importar de Coda…" (selector de proyectos) queda solo para la cuenta de Lega: es una herramienta suya, no
+una función de la app. Nadie más ve la entrada ni puede abrir el diálogo, que para los demás ni se monta.
+Como el repositorio es público, el correo no está escrito en ningún lado: `src/import/codaOwner.ts` compara
+el SHA-256 del correo del usuario que inició sesión (sin espacios alrededor y en minúsculas, con Web Crypto,
+una vez por usuario) con una constante; la entrada aparece cuando el hash se resolvió. Las pruebas usan el
+hash de un correo de prueba. Ver `Doc_Importar_Coda.md`.
+[ Importar de Coda, solo para Lega ]
+
 v0.055 :
 
 Importar de Coda con fotos. Antes una página pasaba sin sus imágenes: el Markdown de Coda las descarta, y el

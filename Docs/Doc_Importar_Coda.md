@@ -42,8 +42,17 @@ node scripts/coda-export.mjs "MGTZD" [carpeta] [--refresh]
 
 ## 2. Importar la carpeta (la app)
 
-Selector de proyectos → **Import from Coda…** (quien puede crear proyectos). Se elige la carpeta y todo entra
-a un **proyecto nuevo**. El código está en `src/import/` y el diálogo en `src/ui/ImportCodaDialog.tsx`.
+Selector de proyectos → **Import from Coda…**. Se elige la carpeta y todo entra a un **proyecto nuevo**. El
+código está en `src/import/` y el diálogo en `src/ui/ImportCodaDialog.tsx`.
+
+- **Quién lo ve: solo la cuenta de Lega** (y solo donde puede crear proyectos). Es una herramienta suya, no una
+  función de la app: nadie más ve la entrada del menú ni puede abrir el diálogo, que para los demás ni se
+  monta (`ImportCodaHost` en `Workspace.tsx`). Como el repositorio es público, el correo no está escrito en
+  ningún lado: `src/import/codaOwner.ts` compara el SHA-256 (hex) del correo del usuario que inició sesión,
+  sin espacios alrededor y en minúsculas, con una constante (`CODA_OWNER_HASH`). El hash se calcula con Web
+  Crypto (`crypto.subtle.digest`), una vez por usuario, y la entrada aparece cuando se resolvió (un instante).
+  Sin Web Crypto (una página servida sin HTTPS) no la ve nadie. Para cambiar de cuenta, el comentario de
+  `codaOwner.ts` dice cómo calcular el hash nuevo. Desde v0.059.
 
 - **De entrada** el diálogo dice lo que impide importar, antes de elegir nada: con el Drive sin conectar (sin
   portero) las fotos no tendrían adónde ir; en el iPad y el iPhone Safari no elige carpetas enteras (hay que
@@ -170,6 +179,7 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   afuera del diálogo (primera carga, sin lo que pesa).
 - `src/ui/ImportCodaDialog.tsx` (se baja aparte, con sus textos en `src/i18n/lazy/importCoda.ts`); la entrada
   del menú (`import.menu`, con su ícono propio) está en la primera carga.
+- `src/import/codaOwner.ts`: quién ve "Importar de Coda" (solo la cuenta de Lega, por el hash de su correo).
 
 ### Correcciones de la auditoría (2026-09-30)
 
@@ -229,6 +239,9 @@ progreso; y de la segunda verificación: seguir después de una página que no s
 sin espacio (sin volver a guardar nada), una página editada después del corte (escrita o no por la
 importación), una terminada en la papelera, un diario sin proyecto, videos de otros sitios, ids estables y la
 marca para otra ventana. `src/ui/importCodaDialog.test.tsx`: el diálogo sin Drive, en el iPad, con el
-resultado que sigue ahí después de desmontarlo, y cerrar la sesión con una importación en curso;
-`src/ui/team.test.tsx`, la pantalla de "te sacaron" con una importación en curso.
+resultado que sigue ahí después de desmontarlo, cerrar la sesión con una importación en curso, y la entrada
+del selector de proyectos: escondida para otro correo, visible (y abre el diálogo) para uno cuyo hash es el
+permitido, con el hash permitido de un correo de prueba (el real no aparece en las pruebas);
+`src/import/codaOwner.test.ts`, el hash (sin espacios, en minúsculas), sin correo o sin Web Crypto nadie, y
+una sola vez por usuario; `src/ui/team.test.tsx`, la pantalla de "te sacaron" con una importación en curso.
 Con MGTZD real (35 páginas, 32 fotos, 28 MB) se probó igual, fuera del repo, el 2026-09-30.
