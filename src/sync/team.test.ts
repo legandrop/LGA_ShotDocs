@@ -498,11 +498,13 @@ describe('correcciones de la auditoría', () => {
     expect(await owner2.docs.unsyncedPages()).toEqual([pages.a]);
   });
 
-  it('no se siembra mientras los permisos no se conozcan ni sin "Edit"', async () => {
+  it('se siembra siempre que el editor quede editable (también sin datos de permisos), nunca sin "Edit"', async () => {
     const { server, owner, pages } = await teamWorkspace();
+    // Sin datos (base sin la versión del equipo, o la primera apertura sin red) el editor queda editable:
+    // sin semilla crearía su propia raíz. La semilla queda en memoria hasta que se escriba.
     const unknown = new Permissions(owner.tree, null, server.ownerId);
     expect(unknown.canEditPage(pages.a)).toBe(true);
-    expect(unknown.canSeed(pages.a)).toBe(false);
+    expect(unknown.canSeed(pages.a)).toBe(true);
     expect(perms(owner).canSeed(pages.a)).toBe(true);
     server.addMember('ana', 'member');
     server.grant('ana', { pageId: pages.a }, 'view');

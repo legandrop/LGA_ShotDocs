@@ -4,6 +4,7 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import { afterEach, expect, it } from 'vitest';
 import type * as Y from 'yjs';
 import { schema } from '../ui/editorSchema';
+import { Permissions } from './access';
 import { CONTENT_FRAGMENT } from './structure';
 import { FakeServer, makeDevice, type Device } from './testing';
 
@@ -228,4 +229,63 @@ it('con el editor real, abrir una página vacía sin escribir no crea un cambio,
   const editorB = mountEditor(await b.docs.open(pageId, { seed: true }));
   await tick(100);
   expect(texts(editorB)).toEqual(['Primera línea']);
+});
+
+// En un workspace sin la versión del equipo (sin datos de permisos) el editor queda editable, así que
+// también se siembra: si no, cada dispositivo crearía su propia raíz. Como la semilla queda en memoria,
+// abrir no genera cambios hasta que se escribe.
+it('sin datos de permisos (workspace sin equipo) se siembra, abrir no crea cambios y dos dispositivos comparten la raíz', async () => {
+  const server = new FakeServer();
+  const a = await device(server);
+  const b = await device(server);
+  const pageId = await a.tree.create(null, 'P');
+  await a.engine.syncNow();
+  await b.engine.syncNow();
+
+  const editors: BlockNoteEditor[] = [];
+  for (const d of [a, b]) {
+    expect(d.access.get()).toBeNull();
+    const perms = new Permissions(d.tree, d.access.get(), d.remote.userId);
+    expect(perms.canEditPage(pageId)).toBe(true);
+    // Como PageEditor: con todo bajado y editable, se siembra.
+    const complete = await d.engine.prefetchPage(pageId);
+    const doc = await d.docs.open(pageId, { seed: complete && perms.canSeed(pageId) });
+    expect(doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
+    editors.push(mountEditor(doc));
+  }
+  await tick(100);
+  for (const d of [a, b]) {
+    await d.docs.flush(pageId);
+    expect(await d.db.countFromIndex('docUpdates', 'pageId', pageId)).toBe(0);
+    expect(await d.docs.unsyncedPages()).toEqual([]);
+    await d.engine.syncNow();
+  }
+  expect(server.updates.get(pageId) ?? []).toHaveLength(0);
+
+  // Los dos escriben sin red y después sincronizan: una sola raíz, con las dos líneas.
+  server.online = false;
+  const [editorA, editorB] = editors;
+  editorA.setTextCursorPosition(editorA.document[0], 'end');
+  editorA.insertInlineContent('Línea de A');
+  editorB.setTextCursorPosition(editorB.document[0], 'end');
+  editorB.insertInlineContent('Línea de B');
+  await tick();
+  await a.docs.flush(pageId);
+  await b.docs.flush(pageId);
+  expect(await a.docs.unsyncedPages()).toEqual([pageId]);
+  server.online = true;
+  for (let i = 0; i < 3; i++) {
+    await a.engine.syncNow();
+    await b.engine.syncNow();
+    await tick(60);
+  }
+  for (const editor of editors) {
+    const all = texts(editor).join(' ');
+    expect(all).toContain('Línea de A');
+    expect(all).toContain('Línea de B');
+  }
+  const c = await device(server);
+  await c.engine.syncNow();
+  const docC = await c.docs.open(pageId);
+  expect(docC.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
 });
