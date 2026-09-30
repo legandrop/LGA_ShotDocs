@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MEDIA_SCHEME, MediaQueue, mediaIdOf } from '../media/queue';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
-import { collectCarrete, type CarreteItem } from './carrete';
+import { collectCarrete, type CarreteItem } from './carreteModel';
 import { resolveObjectURL } from 'node:buffer';
 import { createCarreteLoader, downloadTarget, isOffline, openTarget, originalFor, passFor, PASS_REUSE_MS } from './carreteLoader';
 

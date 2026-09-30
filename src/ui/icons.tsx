@@ -27,6 +27,8 @@ export const CollapseIcon = icon('M5.5 8l4.5 4.5L14.5 8', { strokeWidth: 1.8 });
 export const ChevronUpIcon = icon('M5.5 12l4.5-4.5 4.5 4.5', { strokeWidth: 1.8 });
 export const RenameIcon = icon('M12.5 4.5l3 3L8 15H5v-3z');
 export const MoveIcon = icon('M3.75 6.25h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1zM8.5 12h5M11.5 10l2 2-2 2');
+// Importar: una carpeta con una flecha que entra.
+export const ImportIcon = icon('M3.75 6.25h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1zM10 9.5v4.5M8 12l2 2 2-2');
 export const TrashIcon = icon(
   'M3.75 5.5h12.5M8 5.5V3.75h4V5.5M5.5 5.5l.7 10.5a1 1 0 0 0 1 .95h5.6a1 1 0 0 0 1-.95l.7-10.5',
 );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { t, useT, type Translate } from '../i18n';
+import { importJobFor } from '../import/importJob';
 import { clearInviteTarget } from '../invite';
 import { formatSize } from '../media/fileTrash';
 import type { MediaRecord } from '../media/mediaDb';
@@ -159,7 +160,15 @@ export function RemovedScreen() {
     } else setError(t('removed.mediaGone', { name: record.name }));
   }
 
+  /** Con una importación de Coda en curso, cerrar la sesión o borrar las bases la cortaría: se espera. */
+  function importing(): boolean {
+    if (!importJobFor(tree).get().running) return false;
+    alert(t('import.running'));
+    return true;
+  }
+
   async function removeFromDevice() {
+    if (importing()) return;
     const mediaLeft = media.filter((m) => !mediaDone.has(m.id)).length;
     if (
       !blocked &&
@@ -225,7 +234,7 @@ export function RemovedScreen() {
         <button className={pending > 0 ? 'secondary' : 'primary'} disabled={busy !== null || summary === null} onClick={() => void removeFromDevice()}>
           {busy === 'remove' ? tr('removed.removing') : tr('removed.remove')}
         </button>
-        <button className="link" disabled={busy !== null} onClick={() => void client.auth.signOut({ scope: 'local' })}>
+        <button className="link" disabled={busy !== null} onClick={() => !importing() && void client.auth.signOut({ scope: 'local' })}>
           {tr('removed.signOutKeep')}
         </button>
       </div>

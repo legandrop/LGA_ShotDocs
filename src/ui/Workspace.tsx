@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AuthUser } from '../auth';
 import { t, useT } from '../i18n';
+import { importingElsewhere, importJobFor, useImportJob } from '../import/importJob';
 import { clearInviteTarget, pendingInviteTarget, takeArrivalNotice } from '../invite';
 import { prefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
@@ -24,7 +25,7 @@ import { notify, useNotice } from './notice';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
-import { ProjectSearch, ShareDialog } from './lazyDialogs';
+import { ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
 import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
@@ -60,7 +61,14 @@ export function Workspace({ user }: { user: AuthUser }) {
         <div className="card">
           <h1>{tr('shell.busy.title')}</h1>
           <p className="muted">{tr('shell.busy.text')}</p>
-          <button className="link" onClick={boot.takeOver}>
+          <button
+            className="link"
+            onClick={() => {
+              // Tomar el control corta lo que hace la otra ventana: si está importando de Coda, se pregunta.
+              if (importingElsewhere(workspace.config.storage.db(user.id)) && !confirm(t('import.otherTab'))) return;
+              boot.takeOver();
+            }}
+          >
             {tr('shell.busy.takeOver')}
           </button>
         </div>
@@ -190,10 +198,16 @@ export function Shell() {
   }, []);
 
   // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación. Lo mismo
-  // espera la recarga que sigue a publicar una versión nueva (lazyPart.tsx).
+  // espera la recarga que sigue a publicar una versión nueva (lazyPart.tsx). Una importación de Coda en
+  // curso cuenta igual: cortada, deja el proyecto a medias (se puede seguir, pero mejor no cortarla).
   useEffect(() => {
+    const importing = importJobFor(tree);
     const unsaved = () =>
-      docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites() || comments.hasUnsavedWrites();
+      docs.hasUnsavedEdits() ||
+      tree.hasUnsavedWrites() ||
+      media.hasUnsavedWrites() ||
+      comments.hasUnsavedWrites() ||
+      importing.get().running;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!unsaved()) return;
       e.preventDefault();
@@ -334,6 +348,7 @@ export function Shell() {
           <ProjectSearch onClose={() => search.setOpen(false)} onGo={() => setNavOpen(false)} />
         </Part>
       )}
+      <ImportCodaHost />
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
@@ -343,6 +358,21 @@ export function Shell() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * El diálogo de "Importar de Coda" (lo abre el selector de proyectos): se dibuja acá, en el Shell, para que
+ * la importación y su resultado sigan a la vista aunque el selector se desmonte.
+ */
+function ImportCodaHost() {
+  const { tree } = useServices();
+  const [state, job] = useImportJob(tree);
+  if (!state.open) return null;
+  return (
+    <Part onClose={() => job.close()}>
+      <ImportCodaDialog />
+    </Part>
   );
 }
 

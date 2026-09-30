@@ -21,7 +21,7 @@ import '../i18n/lazy/editor';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
-import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carrete';
+import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carreteModel';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { HideForDriveFiles, ImageSizeButtons, MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
 import { CONTENT_FRAGMENT } from '../sync/structure';

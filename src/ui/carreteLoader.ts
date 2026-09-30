@@ -4,7 +4,7 @@ import type { MediaKind } from '../media/probe';
 import { normalizeMime, type MediaQueue, type MediaSource } from '../media/queue';
 import type { PageFiles } from '../sync/files';
 import { isNetworkError } from '../sync/types';
-import { fallbackName, type CarreteItem } from './carrete';
+import { fallbackName, type CarreteItem } from './carreteModel';
 
 // De dónde saca el carrete lo que muestra (Docs/Doc_Carrete.md). Primero lo que ya está a mano (la
 // miniatura, guardada en el dispositivo), después lo grande: la copia local si el archivo está en el

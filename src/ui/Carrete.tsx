@@ -26,7 +26,7 @@ import {
   type Point,
   type Size,
   type Zoom,
-} from './carrete';
+} from './carreteModel';
 import { downloadProps, isOffline, type CarreteLoader, type Full } from './carreteLoader';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon } from './icons';
 
@@ -34,7 +34,7 @@ import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon } from './ic
 // página a pantalla completa, en orden, empezando por la que se tocó. Anterior/siguiente con las flechas,
 // los botones o deslizando; cerrar con Escape, el botón o deslizando hacia abajo; zoom con pellizco,
 // rueda y doble toque. Primero se ve la miniatura y después lo grande (la copia del dispositivo o el
-// archivo con un pase del portero). La lógica (orden, límites, zoom, gestos) está en `carrete.ts`.
+// archivo con un pase del portero). La lógica (orden, límites, zoom, gestos) está en `carreteModel.ts`.
 
 /** Separación entre un elemento y el siguiente mientras se desliza. */
 const GAP = 24;

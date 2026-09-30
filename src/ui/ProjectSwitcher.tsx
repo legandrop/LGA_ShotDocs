@@ -4,7 +4,8 @@ import { t, useT } from '../i18n';
 import { formatSize } from '../media/fileTrash';
 import { usePermissions, useProjectSizes, useServices, useTree } from '../services';
 import { displayName } from '../workspaces';
-import { AccountIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
+import { importJobFor } from '../import/importJob';
+import { AccountIcon, ImportIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, useCurrentProject, useSwitchProject } from './project';
@@ -97,6 +98,7 @@ export function ProjectSwitcher() {
               onShare={(id) => setSharing(id)}
               onWorkspaces={(mode) => setWorkspaces(mode)}
               onRemoveWorkspace={() => setRemoving(true)}
+              onImport={() => importJobFor(tree).show()}
             />
           </>,
           document.body,
@@ -133,6 +135,7 @@ function ProjectMenu(props: {
   onShare: (projectId: string) => void;
   onWorkspaces: (mode: WorkspacesMode) => void;
   onRemoveWorkspace: () => void;
+  onImport: () => void;
 }) {
   const tree = useTree();
   const perms = usePermissions();
@@ -281,6 +284,17 @@ function ProjectMenu(props: {
         <button onClick={() => setMode({ name: 'new' })}>
           <PlusIcon size={16} />
           {needle && projects.length === 0 ? tr('project.newNamed', { name: query.trim() }) : tr('project.new')}
+        </button>
+      )}
+      {perms.canCreateProject && (
+        <button
+          onClick={() => {
+            props.onClose();
+            props.onImport();
+          }}
+        >
+          <ImportIcon size={16} />
+          {tr('import.menu')}
         </button>
       )}
       {perms.canRenameProject(props.current) && (
