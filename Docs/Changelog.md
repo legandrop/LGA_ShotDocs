@@ -29,7 +29,7 @@ caso intermitente encontró que recargar o cerrar la página a milisegundos de e
 el acto, con una marca de "falta subir" que solo se borra si el servidor confirmó eso mismo, y una versión
 vieja que abra la misma base igual ve lo pendiente. Cada consulta al servidor tiene un tope según su
 tamaño y una página lenta no frena a las demás; los menús de la barra del editor ya no se cierran solos. El
-editor, el carrete y los diálogos se cargan aparte: la primera carga baja de 591 KB a 278 KB.
+editor, el carrete y los diálogos se cargan aparte: la primera carga baja de 591 KB a 276 KB (283 KB en v0.041, con los idiomas).
 [ Sincronización - sin perder las últimas teclas; carga más liviana ]
 
 v0.038 :

@@ -53,15 +53,15 @@ In production (v0.029). What works today:
   work after a backup is restored (v0.021).
 - The file gateway with Google Drive: resumable uploads, and a test screen that uploads a video and plays
   it back inside the app, on desktop and iPhone (v0.022 to v0.028).
+
+In this branch, not published yet (v0.041):
+
 - Photos and videos in pages go to the owner's Google Drive: saved on the device first, uploaded in parts
   that resume after closing the app or losing the connection, with a small thumbnail on the page. The
   owner chooses where the folder goes (account menu → *Google Drive*).
 - The media carousel: tap a photo or video on a page to see all of the page's photos and videos full
   screen, in order, with swipe, pinch and wheel zoom, video playback, download of the original and the
   thumbnail when offline or when the browser can't play a file.
-
-In this branch, not published yet:
-
 - The team: the owner and admins manage people from the account menu (*Members*: invite with a link to
   send, change roles, remove), and projects and pages are shared from their menu (*Share…*) with view,
   comment, edit, or edit and create pages. What you cannot change shows read-only, also offline.
@@ -77,9 +77,7 @@ In this branch, not published yet:
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
-Next in the workspace plan: files in the owner's Drive with an offline upload queue, client guests with
-comments and questions, a file trash, and several workspaces in one app. Templates and the assistant come
-later. The plan, the decisions and the roadmap are in
+Templates and the assistant come later. The plan, the decisions and the roadmap are in
 [`Docs/`](Docs/index.md) (in Spanish).
 
 ## Development
@@ -88,7 +86,7 @@ later. The plan, the decisions and the roadmap are in
 npm install
 cp .env.example .env.local   # your Supabase project URL and publishable key
 npm run dev                  # http://localhost:5173
-npm test                     # all 82 tests: sync, editor, UI, file gateway client and Worker
+npm test                     # all 566 tests: sync, editor, UI, file gateway client and Worker
 npm run typecheck            # app types
 npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
 npm run build                # production build in dist/

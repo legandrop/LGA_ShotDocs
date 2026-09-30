@@ -42,7 +42,9 @@ nada, y lo que espera una decisión o una acción de Lega.
 1. **Los pasos 5 a 13 de `Plan_Workspaces.md`** (sección 10, y sección 11 para cómo se hace cada uno).
    Hechos los pasos 1 a 5: copias de seguridad, guarda contra lo desconocido, hosting en Cloudflare, la
    prueba de media en la computadora y el iPhone, y la preparación (workspace en el código, miembros,
-   permisos e invitaciones en la base, restaurar sobre el mismo proyecto). Absorbe la vieja fase 2 (compartir un proyecto, una
+   permisos e invitaciones en la base, restaurar sobre el mismo proyecto). **Los pasos 6 a 13 están
+   hechos en la rama `claude/trusting-mccarthy-470ff3` (v0.031 a v0.041), sin publicar:** falta aplicar
+   las migraciones en Wanka y pasar la rama a `main` (ver el handover). Absorbe la vieja fase 2 (compartir un proyecto, una
    página o una subpágina con usuarios y con links legibles, D-13) y los que figuran abajo en "Resueltos
    adentro del plan".
 
@@ -64,7 +66,8 @@ nada, y lo que espera una decisión o una acción de Lega.
    bajan aparte (`src/ui/lazyPart.tsx`); la primera pantalla (login, barra lateral, árbol) sale sin
    esperarlos y el editor se baja apenas el navegador queda libre. Mientras baja, el cuerpo de la página
    muestra un esqueleto (el título ya se ve). Lo que se baja al abrir, comprimido: de 591 KB (JS 542 KB,
-   CSS 48 KB, HTML 1 KB) a 276 KB (JS 227 KB, CSS 48 KB, HTML 1 KB). Aparte: el editor 302 KB, el carrete
+   CSS 48 KB, HTML 1 KB) a 276 KB (JS 227 KB, CSS 48 KB, HTML 1 KB); en v0.041, con los dos idiomas, 283 KB
+   (JS 235 KB). Aparte: el editor 302 KB, el carrete
    5 KB, el panel de comentarios 4 KB, la prueba de media 5 KB, cada diálogo 2 KB (y los emojis del editor,
    110 KB, que ya se bajaban aparte). Los estilos del editor siguen en la primera carga para no cambiar el
    orden en que se aplican; las páginas de privacidad y condiciones también (son chicas y se ven sin

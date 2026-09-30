@@ -6,9 +6,12 @@ dos dicen "All synced". También los dos cortes por tiempo sueltos de la noche d
 la aserción "sin red, lo escrito offline sigue ahí después de recargar" de `e2e.mjs` y un `TimeoutError`
 de `features.mjs`.
 
-**Las cuatro correcciones de la app ya están aplicadas** (F2, el tope de 30 s, la barra de formato estable y
-la revisión cada segundo en solo lectura; ver `Doc_Sincronizacion.md`). Las de las pruebas de punta a
-punta (`e2e.mjs`, `features.mjs`) siguen como parche aparte. El resto de este documento cuenta la
+**Las cuatro correcciones de la app ya están aplicadas** (F2, el tope por consulta, la barra de formato
+estable y la revisión cada segundo en solo lectura; ver `Doc_Sincronizacion.md`). El tope empezó en 30 s
+fijos y ahora depende del tamaño de lo que se manda: 30 s más lo que tardaría a 16 KB/s, con un máximo de
+unos 12 minutos (`timeoutFor` en `src/sync/remote.ts`). Las pruebas de punta a punta (`e2e.mjs`,
+`features.mjs`) no están en este repo: son scripts de `lga_repotools`
+(`RepoRules_Shared/repos/LGA_ShotDocs/e2e/`), y sus correcciones ya están aplicadas ahí. El resto de este documento cuenta la
 investigación tal como se hizo.
 
 ## Resumen
@@ -129,7 +132,7 @@ abierto no hubo ningún cambio de estado; las otras, la barra se desmontó enseg
 como función estable, 0 de 10, con los mismos cambios de estado. A una persona le pasa lo mismo: un menú de
 la barra abierto se cierra solo en el próximo ciclo (1,2 s después de escribir, o cada 10 s).
 
-## Correcciones propuestas (sin aplicar)
+## Correcciones propuestas (ya aplicadas)
 
 ### En las pruebas (`e2e.mjs`, `features.mjs`)
 
@@ -176,7 +179,7 @@ contra la rama); los originales, en las mismas compilaciones, fallaron 6 de 12.
 - F2 está hecho sobre `main`. La rama en desarrollo cambió `docs.ts` (la semilla solo en memoria, que se
   guarda en el mismo lote que la primera edición, y `syncedSV` que avanza al bajar): hay que pasarlo a mano.
   La semilla y la primera edición ya van en la misma tanda, así que siguen yendo en la misma transacción.
-- El tope de 30 s no cubre una espera dentro del cliente de sesión de Supabase (la renovación del token);
+- El tope por consulta no cubre una espera dentro del cliente de sesión de Supabase (la renovación del token);
   si se viera, haría falta un vigilante del ciclo en `engine.ts`.
 - Aun con F2 queda una ventana de milisegundos: una recarga o un cierre justo después de escribir todavía
   puede perder la última tecla.
