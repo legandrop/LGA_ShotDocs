@@ -95,8 +95,8 @@ Lega.
   colapsado se ve siempre. Nada que activar: todos los títulos lo tienen. **Por defecto es de cada persona**
   (un filtro suyo, no cambia lo que ven los demás). **Shift+clic lo colapsa o lo abre para todos** los que
   miran la página; solo quien puede editar la página, y el tooltip lo dice (a quien solo ve, el tooltip no
-  menciona Shift y Shift+clic hace lo mismo que el clic). Diseño y auditoría antes de implementar, sin tipo
-  de bloque nuevo; ver las preguntas y propuestas en la respuesta a Lega (se pasan al diseño).
+  menciona Shift y Shift+clic hace lo mismo que el clic). **Diseño en [`Doc_Colapsar.md`](Doc_Colapsar.md)**
+  (sin tipo de bloque ni propiedad nueva; decisiones a confirmar por Lega); auditoría antes de implementar.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
