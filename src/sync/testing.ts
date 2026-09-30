@@ -1071,7 +1071,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     return ids.flatMap((id) => {
       const f = this.server.mediaFiles.get(id);
       if (!f) return [];
-      const { size: _s, created_by: _c, ...row } = f;
+      const { created_by: _c, ...row } = f;
       return [{ ...row }];
     });
   }

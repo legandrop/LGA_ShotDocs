@@ -124,6 +124,8 @@ export interface MediaFileRow {
   duration: number | null;
   thumb_at: string | null;
   drive_id: string | null;
+  /** El peso en bytes (`files.size`). Opcional: lo que se guardó antes no lo tiene. */
+  size?: number | null;
   /**
    * La papelera de archivos (versión 6 de la base; en una anterior faltan): desde cuándo ninguna página lo
    * usa, cuándo un dueño o admin pidió mandarlo a la papelera de Drive y cuándo el portero lo confirmó.

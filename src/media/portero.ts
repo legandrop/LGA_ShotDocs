@@ -223,6 +223,15 @@ export class Portero {
     return (await this.request<{ url: string }>('POST', '/pass', { json: type ? { ...ref, type } : ref })).url;
   }
 
+  /**
+   * Un pase y si el portero le pone el nombre del archivo a las descargas (`named`: un portero actualizado para
+   * los adjuntos, Docs/Doc_Adjuntos.md; uno viejo no lo dice y baja con un nombre feo).
+   */
+  async passInfo(target: { file: string }): Promise<{ url: string; named: boolean }> {
+    const body = await this.request<{ url: string; named?: unknown }>('POST', '/pass', { json: target });
+    return { url: body.url, named: body.named === true };
+  }
+
   /** Lo que necesita el selector de carpetas de Google (solo el dueño; 404 si el portero no tiene la clave). */
   picker(): Promise<PickerConfig> {
     return this.request<PickerConfig>('POST', '/drive/picker', { json: {} });

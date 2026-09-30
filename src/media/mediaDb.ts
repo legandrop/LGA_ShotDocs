@@ -108,6 +108,8 @@ export interface KnownFile {
   id: string;
   name: string;
   mime: string;
+  /** El peso en bytes. Sin el campo (guardado antes de los adjuntos), no se sabe. */
+  size?: number | null;
   width: number | null;
   height: number | null;
   duration: number | null;

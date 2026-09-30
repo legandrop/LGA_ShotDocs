@@ -108,7 +108,8 @@ describe('sdmedia:// con el editor de la versión publicada (main)', () => {
     const accept = () => (schema.blockSpecs.image.implementation.meta as { fileBlockAccept?: string[] }).fileBlockAccept;
     expect(accept()).toEqual(['image/*']);
     setVideosAccepted(true);
-    expect(accept()).toEqual(['image/*', 'video/*']);
+    // Con portero, el selector ofrece también cualquier archivo (adjuntos, Docs/Doc_Adjuntos.md).
+    expect(accept()).toEqual(['image/*', 'video/*', '*/*']);
     setVideosAccepted(false);
     expect(accept()).toEqual(['image/*']);
     expect('video' in schema.blockSpecs).toBe(false);

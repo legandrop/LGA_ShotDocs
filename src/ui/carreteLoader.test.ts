@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MEDIA_SCHEME, MediaQueue, mediaIdOf } from '../media/queue';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { collectCarrete, type CarreteItem } from './carrete';
-import { createCarreteLoader, isOffline, passFor, PASS_REUSE_MS } from './carreteLoader';
+import { resolveObjectURL } from 'node:buffer';
+import { createCarreteLoader, downloadTarget, isOffline, openTarget, originalFor, passFor, PASS_REUSE_MS } from './carreteLoader';
 
 // De dónde saca el carrete lo que muestra: primero la miniatura, después lo grande (la copia del
 // dispositivo o un pase del portero), con una cola de verdad y un servidor en memoria.
@@ -179,7 +180,7 @@ describe('carrete: qué se muestra de cada elemento', () => {
       ]),
     };
     const queue = new MediaQueue(null, remote as never, { portero: () => ({}) as never });
-    expect(await queue.source(id)).toEqual({ kind: 'video', name: 'IMG_0666.MOV', original: null });
+    expect(await queue.source(id)).toEqual({ kind: 'video', name: 'IMG_0666.MOV', original: null, mime: 'video/quicktime' });
   });
 
   it('al cerrar suelta los originales que puso en memoria', async () => {
@@ -189,5 +190,107 @@ describe('carrete: qué se muestra de cada elemento', () => {
     const full = await loader.full(itemFor(photo));
     loader.dispose();
     expect(revoke).toHaveBeenCalledWith(full.url);
+  });
+});
+
+/** El tipo y el contenido de una dirección `blob:` de este proceso. */
+async function blobAt(url: string): Promise<{ type: string; text: string }> {
+  const blob = resolveObjectURL(url);
+  expect(blob).toBeTruthy();
+  return { type: blob!.type, text: await blob!.text() };
+}
+
+describe('originales envueltos: ningún blob: con un tipo que corra en la app', () => {
+  async function withFiles() {
+    const server = new FakeServer();
+    server.enableMedia();
+    const a = await device(server);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    const html = mediaIdOf(await a.media.add(page, new File(['<script>alert(1)</script>'], 'pagina.html', { type: 'text/html' })))!;
+    const pdf = mediaIdOf(await a.media.add(page, new File(['%PDF-1.7'], 'notas.pdf', { type: 'application/pdf' })))!;
+    const photo = mediaIdOf(await a.media.add(page, file(MB, 'IMG_0007.JPG', 'image/jpeg')))!;
+    const video = mediaIdOf(await a.media.add(page, file(MB, 'IMG_0008.MOV', '')))!;
+    return { server, a, html, pdf, photo, video };
+  }
+
+  it('bajar desde la barra: el original local siempre como application/octet-stream', async () => {
+    const { a, html, photo } = await withFiles();
+    for (const id of [html, photo]) {
+      const r = await originalFor(a.media, id);
+      expect(r.full.local).toBe(true);
+      expect((await blobAt(r.full.url)).type).toBe('application/octet-stream');
+      r.release();
+    }
+    const r = await originalFor(a.media, html);
+    expect(await blobAt(r.full.url)).toEqual({ type: 'application/octet-stream', text: '<script>alert(1)</script>' });
+  });
+
+  it('el carrete muestra fotos y videos con su tipo (también un .mov que llegó sin tipo); lo demás, para bajar', async () => {
+    const { a, html, photo, video } = await withFiles();
+    const loader = createCarreteLoader(a);
+    expect((await blobAt((await loader.full(itemFor(MEDIA_SCHEME + photo))).url)).type).toBe('image/jpeg');
+    expect((await blobAt((await loader.full(itemFor(MEDIA_SCHEME + video))).url)).type).toBe('video/quicktime');
+    expect((await blobAt((await loader.full(itemFor(MEDIA_SCHEME + html))).url)).type).toBe('application/octet-stream');
+    loader.dispose();
+  });
+
+  it('abrir un adjunto del dispositivo: con su tipo solo si se puede abrir', async () => {
+    const { a, html, pdf } = await withFiles();
+    const opened = (await openTarget(a.media, pdf))!;
+    expect(opened.inline).toBe(true);
+    expect(await blobAt(opened.url)).toEqual({ type: 'application/pdf', text: '%PDF-1.7' });
+    const risky = (await openTarget(a.media, html))!;
+    expect(risky.inline).toBe(false);
+    expect((await blobAt(risky.url)).type).toBe('application/octet-stream');
+    const revoke = vi.spyOn(URL, 'revokeObjectURL');
+    risky.release();
+    expect(revoke).toHaveBeenCalledWith(risky.url);
+  });
+
+  it('bajar un adjunto del dispositivo: application/octet-stream con su nombre', async () => {
+    const { a, pdf } = await withFiles();
+    const down = (await downloadTarget(a.media, pdf))!;
+    expect(down).toMatchObject({ name: 'notas.pdf', named: true });
+    expect(await blobAt(down.url)).toEqual({ type: 'application/octet-stream', text: '%PDF-1.7' });
+  });
+
+  it('en otro dispositivo: un pase para abrir y el mismo con ?download=1 para bajar; un portero viejo no da nombre', async () => {
+    const { server, a, pdf, html } = await withFiles();
+    await sync(a);
+    const b = await device(server);
+    await sync(b);
+    const opened = (await openTarget(b.media, pdf))!;
+    expect(opened.url).toMatch(/\/m\/drive-/);
+    expect(opened.inline).toBe(true);
+    expect((await openTarget(b.media, html))!.inline).toBe(false);
+    const down = (await downloadTarget(b.media, pdf))!;
+    expect(down.url).toBe(`${opened.url}?download=1`);
+    expect(down).toMatchObject({ name: 'notas.pdf', named: false });
+  });
+
+  it('con un portero que pone el nombre, el pase se reusa; uno sin nombre no se reusa para bajar', async () => {
+    const source = vi.fn(async () => ({ kind: null, name: 'plano.zip', original: null, mime: 'application/zip' }));
+    const named = { source, pass: vi.fn(), passInfo: vi.fn(async () => ({ url: 'https://portero.test/m/abc', named: true })), mediaUrl: 'https://portero.test' };
+    expect(await downloadTarget(named, 'f1')).toMatchObject({ url: 'https://portero.test/m/abc?download=1', name: 'plano.zip', named: true });
+    await downloadTarget(named, 'f1');
+    expect(named.passInfo).toHaveBeenCalledTimes(1);
+
+    const old = { source, pass: vi.fn(), passInfo: vi.fn(async () => ({ url: 'https://portero.test/m/x?v=1', named: false })), mediaUrl: 'https://portero.test' };
+    expect((await downloadTarget(old, 'f1'))!.url).toBe('https://portero.test/m/x?v=1&download=1');
+    await downloadTarget(old, 'f1');
+    expect(old.passInfo).toHaveBeenCalledTimes(2);
+  });
+
+  it('sin portero y sin el original en el dispositivo: nada que abrir ni bajar', async () => {
+    const media = {
+      source: vi.fn(async () => ({ kind: null, name: 'a.zip', original: null })),
+      pass: vi.fn(),
+      passInfo: vi.fn(),
+      mediaUrl: null,
+    };
+    expect(await openTarget(media, 'f1')).toBeNull();
+    expect(await downloadTarget(media, 'f1')).toBeNull();
+    expect(media.pass).not.toHaveBeenCalled();
   });
 });

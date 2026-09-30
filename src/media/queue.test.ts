@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { t } from '../i18n';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { resolveObjectURL } from 'node:buffer';
 import { FileRejected } from '../sync/files';
 import { PART_BYTES, localDay } from './portero';
+import { fileKind } from './attachments';
+import { deletedLabel, mediaKind } from './probe';
 import { MEDIA_SCHEME, mediaIdOf, normalizeMime } from './queue';
 
 const MB = 1024 * 1024;
@@ -109,12 +112,13 @@ describe('cola de archivos: guardar primero en el dispositivo', () => {
     expect(await a.media.resolve(MEDIA_SCHEME + id)).toMatch(/^data:image\/svg\+xml/);
   });
 
-  it('rechaza lo que no es foto ni video, y los archivos vacíos', async () => {
+  it('con portero acepta cualquier archivo; solo rechaza los vacíos', async () => {
     const server = new FakeServer();
     const { a, page } = await withPage(server);
-    await expect(a.media.add(page, makeFile(10, 'notas.pdf', 'application/pdf'))).rejects.toThrow(/photos and videos/);
-    await expect(a.media.add(page, makeFile(10, 'x.svg', 'image/svg+xml'))).rejects.toThrow(/photos and videos/);
+    expect(mediaIdOf(await a.media.add(page, makeFile(10, 'notas.pdf', 'application/pdf')))).toBeTruthy();
+    expect(mediaIdOf(await a.media.add(page, makeFile(10, 'x.svg', 'image/svg+xml')))).toBeTruthy();
     await expect(a.media.add(page, makeFile(0, 'vacio.jpg', 'image/jpeg'))).rejects.toThrow(/empty/);
+    await expect(a.media.add(page, makeFile(0, 'vacio.zip', ''))).rejects.toThrow(/empty/);
   });
 });
 
@@ -441,6 +445,31 @@ describe('tipos', () => {
     expect(normalizeMime('application/octet-stream', 'clip.MOV')).toBe('video/quicktime');
     expect(normalizeMime('', 'sin-extension')).toBe('application/octet-stream');
   });
+
+  it('conoce las extensiones de los adjuntos sin cambiar qué es foto o video', () => {
+    expect(normalizeMime('', 'notas.PDF')).toBe('application/pdf');
+    expect(normalizeMime(undefined, 'fotos.rar')).toBe('application/vnd.rar');
+    expect(normalizeMime('application/octet-stream', 'backup.7z')).toBe('application/x-7z-compressed');
+    expect(normalizeMime('', 'comp_v012.nk')).toBe('application/x-nuke');
+    expect(normalizeMime('', 'instalar.exe')).toBe('application/vnd.microsoft.portable-executable');
+    expect(normalizeMime('', 'arte.psd')).toBe('image/vnd.adobe.photoshop');
+    // El tipo que da el navegador gana sobre la extensión.
+    expect(normalizeMime('text/plain', 'guion.pdf')).toBe('text/plain');
+    const attachments = [
+      'pdf', 'zip', 'rar', '7z', 'tar', 'gz', 'txt', 'csv', 'json', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pages',
+      'numbers', 'key', 'mp3', 'wav', 'aif', 'aiff', 'm4a', 'flac', 'ogg', 'psd', 'exr', 'svg', 'exe', 'dmg', 'nk',
+      'blend', 'fbx', 'abc', 'usd',
+    ];
+    for (const ext of attachments) {
+      const mime = normalizeMime('', `archivo.${ext}`);
+      expect(mime, ext).not.toBe('application/octet-stream');
+      expect(fileKind(mime, `archivo.${ext}`), ext).toBe('file');
+      // `mediaKind` sigue mirando solo el tipo: un PSD, un EXR o un SVG son `image/*`, lo demás nada.
+      expect(mediaKind(mime), ext).toBe(['psd', 'exr', 'svg'].includes(ext) ? 'image' : null);
+    }
+    const media: Record<string, string> = { jpg: 'image', heic: 'image', dng: 'image', tif: 'image', mov: 'video', mp4: 'video', mkv: 'video' };
+    for (const [ext, kind] of Object.entries(media)) expect(fileKind(normalizeMime('', `a.${ext}`), `a.${ext}`), ext).toBe(kind);
+  });
 });
 
 describe('cola de archivos: correcciones de la auditoría', () => {
@@ -678,5 +707,181 @@ describe('cola de archivos: correcciones de la auditoría', () => {
     expect(await a.media.resolve(MEDIA_SCHEME + crypto.randomUUID())).toMatch(/^data:image\/svg\+xml/);
     await a.engine.retryRejected();
     expect(a.engine.getStatus().lastError).toBeNull();
+  });
+});
+
+/** Lo que dice la tarjeta (el SVG de la dirección `data:`). */
+function cardText(url: string): string {
+  expect(url).toMatch(/^data:image\/svg\+xml/);
+  return decodeURIComponent(url.slice(url.indexOf(',') + 1));
+}
+
+describe('adjuntos', () => {
+  it('un PDF se guarda, se sube y se registra con su tipo, y en la página se ve la tarjeta', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const id = mediaIdOf(await a.media.add(page, makeFile(2048, 'notas.pdf', 'application/pdf')))!;
+    await a.media.idle();
+    // Sin medidas ni miniatura: no se le pregunta al navegador.
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ mime: 'application/pdf', name: 'notas.pdf', probed: true, thumb: 'none' });
+    expect(await a.mediaDb.get('thumbs', id)).toBeUndefined();
+    expect(a.media.fileInfo(id)).toEqual({ kind: 'file', mime: 'application/pdf', name: 'notas.pdf', size: 2048, local: true });
+
+    await sync(a);
+    expect(server.mediaFiles.get(id)).toMatchObject({ mime: 'application/pdf', name: 'notas.pdf', size: 2048, thumb_at: null });
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(server.thumbs.has(id)).toBe(false);
+    expect(server.pageFiles.has(`${page}:${id}`)).toBe(true);
+
+    const card = cardText(await a.media.resolve(MEDIA_SCHEME + id));
+    expect(card).toContain('notas.pdf');
+    expect(card).toMatch(/PDF · 2 KB/);
+    // La impresión no lo toma por una foto.
+    expect(await a.media.localImage(id)).toBeNull();
+    expect((await a.media.localOriginal(id))?.size).toBe(2048);
+  });
+
+  it('un SVG o un PSD son adjuntos: sin miniatura, con tarjeta; un archivo sin tipo sale de la extensión', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const svg = mediaIdOf(await a.media.add(page, makeFile(10, 'x.svg', 'image/svg+xml')))!;
+    const psd = mediaIdOf(await a.media.add(page, makeFile(10, 'arte.psd', '')))!;
+    const rar = mediaIdOf(await a.media.add(page, makeFile(10, 'fotos.rar', '')))!;
+    await a.media.idle();
+    expect(await a.mediaDb.get('files', svg)).toMatchObject({ mime: 'image/svg+xml', thumb: 'none', width: null });
+    expect(await a.mediaDb.get('files', psd)).toMatchObject({ mime: 'image/vnd.adobe.photoshop', thumb: 'none', width: null });
+    expect(await a.mediaDb.get('files', rar)).toMatchObject({ mime: 'application/vnd.rar' });
+    expect(a.media.fileInfo(svg)?.kind).toBe('file');
+    expect(a.media.fileInfo(psd)?.kind).toBe('file');
+    expect(cardText(await a.media.resolve(MEDIA_SCHEME + svg))).toContain('>SVG<');
+    expect(cardText(await a.media.resolve(MEDIA_SCHEME + rar))).toContain('>RAR<');
+    expect(await a.media.localImage(psd)).toBeNull();
+  });
+
+  it('en otro dispositivo: la tarjeta con el peso sale de la base, una sola vez, sin esperar miniatura', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(3 * MB, 'plano.zip', 'application/zip'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    const b = await device(server);
+    await sync(b);
+    expect(b.media.fileInfo(id)).toBeNull();
+
+    const fetch = vi.spyOn(b.remote, 'fetchMediaFiles');
+    const card = cardText(await b.media.resolve(url));
+    expect(card).toContain('plano.zip');
+    expect(card).toMatch(/ZIP · 3[.,]0 MB/);
+    expect(b.media.fileInfo(id)).toEqual({ kind: 'file', mime: 'application/zip', name: 'plano.zip', size: 3 * MB, local: false });
+    expect((b.media as unknown as { missing: Set<string> }).missing.size).toBe(0);
+    const calls = fetch.mock.calls.length;
+    // Se vuelve a dibujar: la misma tarjeta, sin preguntar de nuevo.
+    expect(await b.media.resolve(url)).toBe(await b.media.resolve(url));
+    expect(fetch.mock.calls.length).toBe(calls);
+    expect(await b.mediaDb.get('known', id)).toMatchObject({ size: 3 * MB, mime: 'application/zip' });
+  });
+
+  it('un adjunto que todavía no estaba en la base: cuando aparece, avisa y deja de esperar miniatura', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const b = await device(server);
+    await sync(b);
+    server.online = false;
+    const url = await a.media.add(page, makeFile(10, 'guion.txt', 'text/plain'));
+    const id = mediaIdOf(url)!;
+    server.online = true;
+    // El otro dispositivo lo ve antes de que llegue: "todavía no".
+    expect(cardText(await b.media.resolve(url))).toContain(t('queue.notYet'));
+    const missing = (b.media as unknown as { missing: Set<string> }).missing;
+    expect(missing.has(id)).toBe(true);
+
+    await sync(a);
+    const heard: string[] = [];
+    b.media.subscribeThumbs((x) => heard.push(x));
+    server.clockOffset += 61_000;
+    await b.engine.syncMedia();
+    expect(heard).toEqual([id]);
+    expect(missing.size).toBe(0);
+    expect(await b.mediaDb.get('known', id)).toMatchObject({ mime: 'text/plain', name: 'guion.txt' });
+    const card = cardText(await b.media.resolve(url));
+    expect(card).toContain('guion.txt');
+    expect(card).not.toContain(t('queue.notYet'));
+  });
+
+  it('en una página de otro proyecto se ve la tarjeta de otro proyecto, con la misma forma', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(10, 'notas.pdf', 'application/pdf'));
+    await sync(a);
+    const other = await a.tree.createProject('Otro rodaje');
+    const foreign = await a.tree.create(null, 'Día 1 (otro)', other);
+    const card = cardText(await a.media.resolve(url, foreign));
+    expect(card).toContain(t('attachment.foreign'));
+    expect(card).toContain('notas.pdf');
+    expect(card).toContain('width="360" height="96"');
+    expect(cardText(await a.media.resolve(url, page))).not.toContain(t('attachment.foreign'));
+  });
+
+  it('un adjunto mandado a la papelera de Drive se ve tachado', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(10, 'notas.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    server.mediaFiles.get(id)!.drive_trashed_at = new Date().toISOString();
+    const b = await device(server);
+    await sync(b);
+    const card = cardText(await b.media.resolve(url));
+    expect(card).toContain('line-through');
+    expect(card).toContain(deletedLabel());
+    expect(card).toContain('width="360" height="96"');
+  });
+
+  it('sin portero, un adjunto se rechaza con el aviso de conectar Google Drive (las fotos siguen)', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    expect(a.media.enabled).toBe(false);
+    await expect(a.media.add(page, makeFile(10, 'notas.pdf', 'application/pdf'))).rejects.toThrow(/Google Drive/);
+    expect(mediaIdOf(await a.media.add(page, makeFile(10, 'IMG_1.JPG', 'image/jpeg')))).toBeTruthy();
+  });
+});
+
+describe('espacio en el dispositivo', () => {
+  function mockStorage(usage: number, quota: number) {
+    const storage = { estimate: vi.fn(async () => ({ usage, quota })), persist: vi.fn(async () => true) };
+    Object.defineProperty(navigator, 'storage', { value: storage, configurable: true });
+    return storage;
+  }
+  afterEach(() => {
+    delete (navigator as { storage?: unknown }).storage;
+  });
+
+  it('algo grande que no entra con el margen no se guarda, y se avisa', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const storage = mockStorage(100 * MB, 400 * MB);
+    const big = new File([new Uint8Array(120 * MB)], 'render.mov', { type: 'video/quicktime' });
+    await expect(a.media.add(page, big)).rejects.toThrow(/no room/);
+    expect(await a.mediaDb.count('files')).toBe(0);
+    expect(await a.mediaDb.count('blobs')).toBe(0);
+    expect(storage.estimate).toHaveBeenCalledTimes(1);
+
+    // Lo chico no pregunta; y el pedido de que no se borre lo guardado va una sola vez.
+    await a.media.add(page, makeFile(10, 'IMG_1.JPG', 'image/jpeg'));
+    await a.media.add(page, makeFile(10, 'IMG_2.JPG', 'image/jpeg'));
+    expect(storage.estimate).toHaveBeenCalledTimes(1);
+    expect(storage.persist).toHaveBeenCalledTimes(1);
+  });
+
+  it('con lugar de sobra se guarda; sin `navigator.storage`, también', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    mockStorage(100 * MB, 50 * 1024 * MB);
+    const big = new File([new Uint8Array(60 * MB)], 'render.zip', { type: 'application/zip' });
+    expect(mediaIdOf(await a.media.add(page, big))).toBeTruthy();
+    delete (navigator as { storage?: unknown }).storage;
+    expect(mediaIdOf(await a.media.add(page, big))).toBeTruthy();
   });
 });

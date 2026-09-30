@@ -641,6 +641,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       duration: r.duration === null ? null : Number(r.duration),
       thumb_at: r.thumb_at,
       drive_id: r.drive_id,
+      // `bigint`: puede llegar como texto.
+      size: r.size === null || r.size === undefined ? null : Number(r.size),
       trashed_at: r.trashed_at ?? null,
       purged_at: r.purged_at ?? null,
       drive_trashed_at: r.drive_trashed_at ?? null,

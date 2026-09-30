@@ -1,12 +1,8 @@
 import type { Dict } from './types';
 
-// Fotos y videos: el carrete, Google Drive, las tarjetas de Drive, la cola de subida.
+// Fotos, videos y adjuntos: el carrete, Google Drive, las tarjetas de Drive, la cola de subida.
 
 export const media = {
-  'media.onlyPhotosVideos': {
-    en: "Only photos and videos can be added.",
-    es: "Solo se pueden agregar fotos y videos.",
-  },
   'drive.connected': { en: "Google Drive connected.", es: "Google Drive conectado." },
   'drive.permissionMissing': {
     en: "Google Drive was not connected: the Drive permission was left unchecked. Connect again and keep it checked.",
@@ -57,6 +53,15 @@ export const media = {
     en: "There is not enough free storage on this device for this file.",
     es: "No hay espacio libre suficiente en este dispositivo para este archivo.",
   },
+  'queue.noRoom': {
+    en: "There is no room on this device for this file.",
+    es: "No hay lugar en este dispositivo para este archivo.",
+  },
+  'queue.needsDrive': {
+    en: "Only photos can be added here: to attach other files, the workspace owner has to connect Google Drive.",
+    es: "Acá solo se pueden agregar fotos: para adjuntar otros archivos, el dueño del workspace tiene que conectar Google Drive.",
+  },
+  'attachment.foreign': { en: "File from another project", es: "Archivo de otro proyecto" },
   'queue.originalMissing': {
     en: "The original file is missing on this device.",
     es: "El archivo original ya no está en este dispositivo.",

@@ -48,7 +48,11 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
  * Todas las fotos y videos de la página, en el orden en que aparecen (de arriba abajo, también los que
  * están adentro de otro bloque). Solo bloques `image` con una dirección que se pueda mostrar.
  */
-export function collectCarrete(blocks: readonly BlockLike[]): CarreteItem[] {
+/**
+ * Las fotos y videos de la página, en orden. `skip`: los que no van (los adjuntos, Docs/Doc_Adjuntos.md: un PDF
+ * o un zip no se ven en el carrete).
+ */
+export function collectCarrete(blocks: readonly BlockLike[], skip?: (mediaId: string, name: string) => boolean): CarreteItem[] {
   const out: CarreteItem[] = [];
   const walk = (list: readonly BlockLike[]) => {
     for (const block of list) {
@@ -56,12 +60,13 @@ export function collectCarrete(blocks: readonly BlockLike[]): CarreteItem[] {
         const props = (block.props ?? {}) as Record<string, unknown>;
         const url = text(props.url);
         const source = carreteSourceOf(url);
-        if (source) {
+        const mediaId = source === 'media' ? mediaIdOf(url) : null;
+        if (source && !(mediaId && skip?.(mediaId, text(props.name)))) {
           out.push({
             blockId: block.id,
             url,
             source,
-            mediaId: source === 'media' ? mediaIdOf(url) : null,
+            mediaId,
             name: text(props.name),
             caption: text(props.caption),
           });

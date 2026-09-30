@@ -23,9 +23,13 @@ import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carrete';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
-import { ImageSizeButtons, MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
+import { HideForDriveFiles, ImageSizeButtons, MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
+import { dropTarget, insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
+import { isAttachment, markAttachments } from './attachments';
+import { openAttachmentNow, prepareAttachment } from './attachmentOpen';
+import { AttachmentSheet } from './AttachmentSheet';
 import { editorDictionary } from './editorLocale';
 import { findUnknownContent } from './unknownContent';
 import {
@@ -177,8 +181,9 @@ function UnsupportedPage() {
 }
 
 /** Lo que se puede agregar hoy, para el aviso. */
-function acceptedText(withMedia: boolean): string {
-  return withMedia ? t('media.onlyPhotosVideos') : t('editor.onlyImages');
+/** Sin portero solo se guardan imágenes (a Supabase): para cualquier otro archivo hace falta el Drive. */
+function acceptedText(): string {
+  return t('editor.attachNeedsDrive');
 }
 
 function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId: string; editable: boolean; canComment: boolean }) {
@@ -187,6 +192,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   const tr = useT();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown } | null>(null);
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
+  /** El adjunto con su hoja abierta (Docs/Doc_Adjuntos.md). */
+  const [sheet, setSheet] = useState<string | null>(null);
   // Con el editor ya abierto, el carrete se baja cuando el navegador está libre: tocar una foto no espera.
   useEffect(() => preloadWhenIdle(Carrete), []);
   /** El toque empezó sobre una foto que ya estaba elegida (ver `openCarrete`). */
@@ -198,13 +205,23 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   /** El bloque de la última foto tocada (`null` si el último toque fue en otro lado; ver `notePress`). */
   const lastPress = useRef<string | null>(null);
 
-  // Con portero, las fotos y los videos van al Drive del dueño (`sdmedia://`, primero en el dispositivo);
-  // sin portero, las imágenes a Supabase como siempre (`sdfile://`).
+  // Con portero, cualquier archivo va al Drive del dueño (`sdmedia://`, primero en el dispositivo): fotos,
+  // videos y adjuntos (Docs/Doc_Adjuntos.md). Sin portero, las imágenes a Supabase como siempre (`sdfile://`).
   const store = (file: Blob & { name?: string }): Promise<string> => {
-    if (media.enabled && isMediaFile(file)) return media.add(pageId, file);
-    if (!isAllowedImage(file.type)) return Promise.reject(new FileRejected(acceptedText(media.enabled)));
+    if (media.enabled) return media.add(pageId, file);
+    if (!isAllowedImage(file.type)) return Promise.reject(new FileRejected(acceptedText()));
     return files.add(pageId, file);
   };
+  // Una imagen embebida en HTML pegado (`data:`): solo fotos y videos, nunca un adjunto (un SVG pegado no se
+  // vuelve una tarjeta).
+  const storeEmbedded = (blob: Blob): Promise<string> => {
+    if (media.enabled && isMediaFile(blob)) return media.add(pageId, blob);
+    if (!isAllowedImage(blob.type)) return Promise.reject(new FileRejected(t('editor.onlyImages')));
+    return files.add(pageId, blob);
+  };
+
+  // Los eventos de soltar ya procesados (el menú lateral del editor reenvía el mismo al soltar cerca).
+  const handledDrops = useMemo(() => new WeakSet<DataTransfer>(), []);
 
   // Pegar un link de Drive ofrece dejarlo como link, como texto o como tarjeta (paso 13, drivePaste.ts).
   const drivePaste = useMemo(() => createDrivePaste(), []);
@@ -213,7 +230,15 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
     withCollaboration({
       ...editorSchemaOptions,
       dictionary: editorDictionary(tr.lang),
-      pasteHandler: drivePaste.pasteHandler,
+      // Pegar archivos (con portero, cualquier archivo): un bloque por archivo, en orden (fileDrop.ts).
+      pasteHandler: (ctx) => {
+        const dt = ctx.event.clipboardData;
+        if (!media.enabled || !isFilesTransfer(dt)) return drivePaste.pasteHandler(ctx);
+        const { files: taken, folders } = takeFiles(dt!);
+        if (folders > 0) notify(t('editor.foldersNotSupported'));
+        void insertFiles(ctx.editor as unknown as FileEditor, taken, null);
+        return true;
+      },
       uploadFile: (file: File, blockId?: string) =>
         store(file).catch((err: unknown) => {
           notify(err instanceof FileRejected ? err.message : t('editor.fileNotSaved'));
@@ -230,7 +255,16 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
           throw err;
         }),
       // Con la página: una foto de otro proyecto se ve con su marcador (papelera de archivos, paso 11).
-      resolveFileUrl: (url: string) => (mediaIdOf(url) ? media.resolve(url, pageId) : files.resolve(url)),
+      // Un adjunto (Docs/Doc_Adjuntos.md) se ve como tarjeta: su imagen lleva la clase `sd-attachment` (el CSS
+      // le da tamaño fijo). Se pone en la imagen, adentro de la vista de BlockNote, que ProseMirror no mira.
+      resolveFileUrl: (url: string) => {
+        const id = mediaIdOf(url);
+        if (!id) return files.resolve(url);
+        return media.resolve(url, pageId).then((src) => {
+          setTimeout(() => markAttachments(editorRef.current as never, id, media));
+          return src;
+        });
+      },
       collaboration: {
         fragment: doc.getXmlFragment(CONTENT_FRAGMENT),
         user: { name: user.email, color: '#2383e2' },
@@ -262,7 +296,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
           converting.add(block.id);
           void fetch(url)
             .then((r) => r.blob())
-            .then((blob) => store(blob))
+            .then((blob) => storeEmbedded(blob))
             .then((stored) => {
               if (editor.getBlock(block.id)) editor.updateBlock(block.id, { props: { url: stored } } as never);
             })
@@ -308,6 +342,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
             const img = el.querySelector<HTMLImageElement>('img.bn-visual-media');
             if (img) img.src = src;
           }
+          // Llegó lo que faltaba saber de un archivo: si es un adjunto, su tarjeta con tamaño fijo.
+          markAttachments(editor as never, id, media);
         });
       }),
     [editor, media, pageId],
@@ -359,16 +395,43 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   useBlockSourceRegistration(editor, pageId);
   const host = useRef<HTMLDivElement>(null);
 
-  // Pegar o soltar un archivo que no se puede guardar haría que el editor intente crear un bloque que no
-  // existe en el esquema: se corta antes, con un aviso.
+  // Sin portero, pegar o soltar un archivo que no es una imagen haría que el editor intente crear un bloque
+  // que no existe en el esquema: se corta antes, con un aviso.
   const rejectOtherFiles = (e: ClipboardEvent | DragEvent, data: DataTransfer | null) => {
-    const files = Array.from(data?.files ?? []);
-    const ok = (f: File) => isAllowedImage(f.type) || (media.enabled && isMediaFile(f));
-    if (files.length === 0 || files.every(ok)) return;
+    if (media.enabled) return;
+    const list = Array.from(data?.files ?? []);
+    if (list.length === 0 || list.every((f) => isAllowedImage(f.type))) return;
     e.preventDefault();
     e.stopPropagation();
-    notify(acceptedText(media.enabled));
+    notify(acceptedText());
   };
+
+  // Con portero, soltar archivos en la página: un bloque por archivo, en orden, donde se soltó (fileDrop.ts).
+  const dropFiles = (e: React.DragEvent) => {
+    const dt = e.nativeEvent.dataTransfer;
+    if (!media.enabled) return rejectOtherFiles(e.nativeEvent, dt);
+    const root = editor.domElement;
+    if (!editable || !dt || !isFilesTransfer(dt) || handledDrops.has(dt) || !root?.contains(e.target as Node)) return;
+    handledDrops.add(dt);
+    e.preventDefault();
+    e.stopPropagation();
+    const { files: taken, folders } = takeFiles(dt);
+    if (folders > 0) notify(t('editor.foldersNotSupported'));
+    void insertFiles(editor as unknown as FileEditor, taken, dropTarget(root, e.clientX, e.clientY));
+  };
+
+  // Un archivo soltado afuera del editor (o en solo lectura) no abre el archivo en la pestaña en lugar de la app.
+  useEffect(() => {
+    const guard = (e: DragEvent) => {
+      if (Array.from(e.dataTransfer?.types ?? []).includes('Files')) e.preventDefault();
+    };
+    window.addEventListener('dragover', guard);
+    window.addEventListener('drop', guard);
+    return () => {
+      window.removeEventListener('dragover', guard);
+      window.removeEventListener('drop', guard);
+    };
+  }, []);
 
   // El carrete (paso 7): abre todas las fotos y videos de la página, empezando por el tocado
   // (Docs/Doc_Carrete.md, Docs/Doc_Imagenes.md). Con el mouse, el primer clic en una foto solo la elige (el
@@ -393,6 +456,10 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
 
   const notePress = (e: PointerEvent) => {
     const target = e.target as HTMLElement;
+    // Sobre un adjunto, se prepara ya la dirección para abrirlo o bajarlo (el clic la usa en el acto).
+    const pressed = target.closest?.('img.bn-visual-media') ? blockIdOf(target) : null;
+    const attachment = pressed ? attachmentOf(pressed) : null;
+    if (attachment) void prepareAttachment(media, attachment);
     pressKind.current = e.pointerType;
     mouseOpens.current =
       e.pointerType === 'mouse' &&
@@ -407,11 +474,25 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   };
 
   const openAt = (blockId: string | null) => {
-    const items = collectCarrete(editor.document as unknown as BlockLike[]);
+    // Un adjunto se abre o se baja (con el mouse, en el acto si ya está preparado; si no, o con el dedo, su hoja).
+    const attachment = blockId ? attachmentOf(blockId) : null;
+    if (attachment) {
+      if (pressKind.current !== 'mouse' || !openAttachmentNow(media, attachment)) setSheet(attachment);
+      return true;
+    }
+    const items = collectCarrete(editor.document as unknown as BlockLike[], (id, name) => isAttachment(media, id, name));
     const start = startIndex(items, blockId);
     if (start < 0) return false;
     setCarrete({ items, start, loader: createCarreteLoader({ media, files }) });
     return true;
+  };
+
+  /** El archivo de un bloque si es un adjunto (no una foto ni un video), o `null`. */
+  const attachmentOf = (blockId: string): string | null => {
+    const block = editor.getBlock(blockId);
+    const props = (block?.props ?? {}) as { url?: string; name?: string };
+    const id = block?.type === 'image' ? mediaIdOf(props.url) : null;
+    return id && isAttachment(media, id, props.name ?? '') ? id : null;
   };
 
   /** La foto elegida en el editor (selección del bloque entero, no un texto), o `null`. */
@@ -470,7 +551,9 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
                 <MediaDownloadButton key="fileDownloadButton" />,
                 <ImageSizeButtons key="imageSizeButtons" />,
               ]
-            : [item],
+            : item.key === 'fileRenameButton' || item.key === 'filePreviewButton'
+              ? [<HideForDriveFiles key={String(item.key)}>{item}</HideForDriveFiles>]
+              : [item],
         )}
         {canComment && <CommentToolbarButton key="comment" />}
       </FormattingToolbar>
@@ -483,7 +566,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
       ref={host}
       className="editor-host"
       onPasteCapture={(e) => rejectOtherFiles(e.nativeEvent, e.clipboardData)}
-      onDropCapture={(e) => rejectOtherFiles(e.nativeEvent, e.dataTransfer)}
+      onDropCapture={dropFiles}
       onPointerDownCapture={notePress}
       onKeyDownCapture={openWithKeyboard}
       onClick={openCarrete}
@@ -506,6 +589,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
       <SheetBreaks pageId={pageId} host={host} />
       {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}
       {carrete && <CarreteHost {...carrete} onClose={() => setCarrete(null)} />}
+      {sheet && <AttachmentSheet fileId={sheet} onClose={() => setSheet(null)} />}
     </div>
   );
 }
