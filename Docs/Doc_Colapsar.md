@@ -1,8 +1,9 @@
 # Colapsar secciones por sus títulos (P.11)
 
-Estado: **diseño, sin implementar**. Lega contestó la mayoría de las decisiones el 2026-09-30 (al final,
-"Decisiones respondidas"); las que faltan siguen "a confirmar". Su respuesta cambió cómo se marcan las hojas
-(sección 7). Sale de leer el código de `main` (v0.050) y el de BlockNote 0.55. Lo pidió Lega: "como en Coda:
+Estado: **diseño, sin implementar**. Lega contestó casi todas las decisiones el 2026-09-30 (al final,
+"Decisiones"); las que faltan siguen "a confirmar". Hubo una auditoría independiente: **"Correcciones de la
+auditoría", al final, manda sobre lo de arriba** (incluye lo que cambió con las respuestas: borrar un título
+colapsado borra su sección, y Enter crea un renglón después sin abrirla). Sale de leer el código de `main` (v0.050) y el de BlockNote 0.55. Lo pidió Lega: "como en Coda:
 cada título se puede colapsar y abrir con un triángulo a su izquierda".
 
 ## Qué se pide
@@ -369,7 +370,7 @@ Pruebas:
 3. **Teléfono:** triángulo siempre visible y tenue, un toque solo para vos; para todos, solo desde la
    computadora.
 4. **"Colapsar todo" / "Abrir todo" en el menú de la página, y un atajo:** sí. Ctrl+←/→ y Ctrl+Alt+flechas
-   están ocupados. Propuesta que queda: Ctrl/⌘+Alt+Enter (con Shift, para todos); ver la alternativa abajo.
+   están ocupados. Queda Ctrl/⌘+Alt+Enter (punto 10).
 5. **Arrastrar un título colapsado mueve la sección entera:** sí, siempre.
 6. **El tooltip dice si está colapsado para todos o solo para vos:** sí (se ven igual; cambia el tooltip).
 7. **PDF todo abierto por defecto**, con una casilla para imprimirlo como se ve. La casilla va en el menú de la
@@ -379,19 +380,118 @@ Pruebas:
    adentro. Con eso el PDF de siempre coincide con las marcas.
 9. (Del roadmap, P.12) **La búsqueda en la página encuentra lo que está en secciones colapsadas y las abre.**
 
+10. **Atajo: Ctrl/⌘+Alt+Enter** (con Shift, para todos).
+11. **Enter al final de un título colapsado crea un renglón nuevo después de toda la sección, sin abrirla.**
+12. **Borrar un título colapsado borra su sección entera** (el título y todo lo que esconde, con los hijos y
+    las secciones colapsadas de adentro). Lega pide que ande perfecto: en Coda falla, y hasta se cuelga al
+    borrar el último título colapsado de la página.
+13. **Borrar una selección que cruza lo escondido lo borra también**, con un aviso ("Se borró también lo que
+    estaba colapsado", y cómo deshacerlo).
+14. **El carrete muestra todas las fotos**, también las escondidas.
+15. **Sin pista de lo escondido** (a lo sumo en el tooltip; no hace falta).
+16. **Un invitado con Editar sobre la página puede usar Shift+clic.**
+
 ### A confirmar por Lega
 
-1. **El atajo:** Ctrl/⌘+Alt+Enter (propuesta) o Ctrl/⌘+Enter, como en Notion (también libre; con Shift, para
-   todos).
-2. **Para todos, en el documento de la página** (un `Y.Map` aparte del contenido): sin propiedad nueva, sin
+1. **Para todos, en el documento de la página** (un `Y.Map` aparte del contenido): sin propiedad nueva, sin
    migración, sin subir `min_app_version`. Las versiones viejas ven todo abierto.
-3. **Cuando alguien colapsa o abre para todos, lo tuyo de ese título deja de contar.**
-4. **Enter al final de un título colapsado crea un título del mismo nivel después de la sección** (o abre la
-   sección).
-5. **"Borrar" en un título colapsado borra solo el título** y su contenido se ve.
-6. **Borrar una selección que cruza lo escondido lo borra también**, con un aviso.
-7. **El carrete muestra todas las fotos**, también las escondidas.
-8. **Sin pista de lo escondido** en la primera entrega ("…" o "12 bloques", más adelante si gusta).
-9. **Un invitado con Editar sobre la página puede usar Shift+clic**, como puede editarla.
-10. **La marca de las hojas escondidas:** "Hojas 3–4 adentro" en el margen del título colapsado (el texto y el
-    lugar, con una maqueta).
+2. **Cuando alguien colapsa o abre para todos, lo tuyo de ese título deja de contar** (con la marca única de
+   la corrección 8).
+3. **La marca de las hojas escondidas:** "Hojas 3–4 adentro" en el margen del título colapsado.
+4. **Retroceso al principio de un título colapsado** (vacío o no) lo pasa a párrafo, como hoy: deja de ser
+   título, su sección desaparece y lo que escondía se ve (corrección 2 si queda debajo de otro colapsado).
+
+## Correcciones de la auditoría (mandan sobre lo de arriba)
+
+Una auditoría independiente contrastó el diseño con el código de BlockNote 0.55, y-prosemirror y la app. El
+modelo (secciones, decoraciones, sin tipo de bloque ni propiedad nueva) se mantiene. Cambios, con la numeración
+de la auditoría; lo que decidió Lega después (borrar la sección entera, Enter sin abrir) ya va incluido.
+
+1. **Borrar un título colapsado borra su sección entera, siempre de una vez** (decisión de Lega). Vale para
+   "Borrar" del menú del bloque (`removeBlocks`), el bloque elegido entero (clic en el tirador, Ctrl/⌘+clic) con
+   Retroceso, Supr o Cortar, y cualquier otra edición local que saque el bloque del título entero. Cómo: después
+   de cada transacción local de la app (no de Yjs: ni de otro ni deshacer), si un paso borró el
+   `blockContainer` entero de un título colapsado, en la misma pasada (`appendTransaction`, un solo Ctrl+Z) se
+   borra lo que escondía y todavía está: los hermanos escondidos, sus hijos y las secciones colapsadas de
+   adentro. **Nunca queda una parte.** Si la página queda sin bloques, queda un párrafo vacío (BlockNote
+   necesita al menos uno). Aviso: "Se borró también lo que estaba colapsado" con Ctrl/⌘+Z. Cortar y Copiar con
+   el título elegido entero llevan la sección entera al portapapeles: antes, la selección pasa a ser del título
+   al último bloque escondido (`Selection.fromJSON(doc, {type: 'multiple-node', anchor, head})`, la selección de
+   varios bloques de BlockNote). Deshacer trae todo, con los mismos ids, y el título vuelve colapsado (su estado
+   no se borra al borrarlo). Si otro edita adentro mientras tanto, Yjs junta los dos: lo que escribió en un
+   bloque borrado se pierde con él (como con cualquier borrado) y un bloque nuevo suyo queda, a la vista.
+   Juntar un título con el bloque de arriba (Retroceso con parte del texto) **no** es borrarlo: su contenido
+   queda y se reacomoda (corrección 2).
+2. **Nada se esconde sin querer.** Después de cada transacción que cambia el documento (propia **o de otro**),
+   se comparan los bloques escondidos antes y después: todo bloque que se veía y ahora queda escondido abre,
+   para vos, los títulos que lo esconden. Excepciones: los bloques nuevos (no se veían), las transacciones de
+   reemplazo de la búsqueda (`sd-find-replace`, ver `Doc_Buscar.md` en `lega/buscar`) y su deshacer (punto 18).
+   Cubre: soltar algo en medio de una sección colapsada, pasar un título a párrafo, cambiar el nivel (un H2 que
+   pasa a H1), Tab, mover con el teclado, lo que llega de otro.
+3. **Qué cambió se mira por bloque, no por pasos:** deshacer en y-prosemirror (`_typeChanged`) es un solo
+   `ReplaceStep` de todo el documento. Un bloque escondido "cambió" si su nodo no es el mismo (`node.eq` por id).
+   Un cambio local (también deshacer) en un bloque escondido abre sus títulos; uno de otro, no.
+4. **Shift+Ctrl/⌘+↑/↓** (`moveBlocksUp/Down` de BlockNote): un título colapsado se mueve con su sección, y los
+   demás bloques saltan una sección colapsada como si fuera uno. Con prioridad sobre BlockNote (sus atajos van
+   con prioridad 50; los nuestros, por encima de 100). Entrega 1b; mientras tanto, la corrección 2 evita que algo
+   quede escondido sin querer.
+5. **Para todos, de otro:** si un Shift+clic de otro escondería tu selección, esa sección queda abierta para
+   vos (se guarda lo tuyo contra el `G` nuevo), con un aviso chico. Entrega 2.
+6. **Lo tuyo va en la base local del dispositivo (IndexedDB), no en `localStorage`:** en `meta`, clave
+   `collapse:<página>` (sin cambiar la versión de la base, como las marcas `docDirty:`). Se lee junto con
+   `docs.open`, antes de crear el editor, así no hay parpadeo; se borra con la base local cuando se saca el
+   workspace del dispositivo (`RemovedScreen.tsx`). Por título: `{c: colapsado, g: marca de "para todos" vista
+   (null en 1a), e?: fin}` (ver 19).
+7. **Arrastrar la sección entera:** en la captura del `dragstart` del tirador, la selección pasa a ser del
+   título al último bloque escondido (`multiple-node`) y BlockNote arrastra todo. Soltar en medio de una sección
+   colapsada: corrección 2. Entrega 1b.
+8. **ABA en "para todos":** el valor del mapa es una marca única (no `true`), y lo tuyo guarda la marca que
+   viste; colapsar, abrir y volver a colapsar da otra marca. Entrega 2.
+9. **Shift solo con los permisos conocidos** (`perms.known`), además de editable. Si a alguien le sacan el
+   permiso sin red, su escritura del mapa se rechaza como cualquier edición y queda en los rechazados; está
+   documentado. Entrega 2.
+10. **Las transacciones de la app en segundo plano no abren nada:** pasar una imagen `data:` a archivo, sacar
+    el bloque de una subida que falló y `convertResize` de las filas de fotos llevan el `meta` `sd-background`.
+11. **Shift+flechas** mantienen el ancla (extienden la selección saltando lo escondido); probado también desde
+    una foto elegida.
+12. **El final de la página:** el último bloque, si es un párrafo vacío, nunca se esconde (es el lugar para
+    seguir escribiendo; el renglón de BlockNote para agregar al final solo aparece si la página no termina en
+    uno). Si la última sección está colapsada y no termina en uno, el renglón de BlockNote agrega el párrafo
+    vacío y ese ya no se esconde.
+13. **"Imprimir como se ve"** (1b) saca de la copia de salida los `.bn-block-outer` escondidos (no alcanza con
+    las clases). "Colapsar todo / Abrir todo" y la casilla valen solo para la página abierta.
+14. **El triángulo** toma el color del estilo calculado del título (`getComputedStyle`). En el teléfono el
+    margen es de 20 px: la zona del toque queda entera en el margen, sin tapar el texto, así un toque para
+    poner el cursor al principio del título nunca colapsa.
+15. **Solo lectura:** los triángulos entran en el orden de Tab (con el editor editable no, porque Tab anida),
+    con `aria-expanded` y `aria-label` que dice la acción y el título.
+16. **Detalles:** un reproductor de Drive que queda escondido se para (se recarga el iframe); el CSS que
+    neutraliza los encabezados plegables viejos le gana a `Block.css` de BlockNote (líneas 310–321) y el de
+    colapsar usa `!important` para ganarles a los dos; pegar `<details><summary><hN>` crea títulos plegables:
+    al pegar se les pone `isToggleable: false`; el selector de tipo compara solo el nivel (así un plegable viejo
+    aparece como su título) y no ofrece los plegables.
+17. **Entregas** (reemplaza la sección 9):
+    - **1a:** colapsar para vos, el triángulo, el atajo, "Colapsar todo / Abrir todo", toda la seguridad al
+      editar (correcciones 1–3, borrar la sección entera, Enter, flechas, fin de página), las marcas de hoja
+      contadas con todo abierto con "Hojas N adentro" en el título, el PDF todo abierto, los plegables fuera de
+      los menús, abrir desde "Ir al bloque" y el margen de comentarios sin marcas escondidas.
+    - **1b:** arrastrar la sección entera, Shift+Ctrl/⌘+↑/↓, la casilla "Imprimir como se ve".
+    - **2:** para todos (Shift).
+    - **3:** lo demás (lo tuyo en todos tus dispositivos, toque largo, `hidden="until-found"`).
+18. **Buscar y reemplazar (P.12) no abre secciones, ni al deshacer.** La búsqueda (rama `lega/buscar`) marca
+    sus transacciones con el `meta` `sd-find-replace` y la entrada de la pila de deshacer con la misma clave
+    (`stackItem.meta`, en `stack-item-added` del `UndoManager`). El plugin saltea las dos cosas: la transacción
+    marcada y el deshacer o rehacer de una entrada marcada (durante ese deshacer, `undoManager.currStackItem`
+    es la entrada que se está aplicando). Las claves están en un archivo común, `src/ui/editorMeta.ts`
+    (`FIND_REPLACE_META`, `BACKGROUND_META`), que importan las dos ramas.
+19. **Enter al final de un título colapsado** (decisión de Lega): el renglón nuevo va después de lo escondido y
+    **se ve sin abrir la sección**. Como por la regla de las secciones ese renglón sería parte de la sección
+    (no hay un título de su nivel antes), lo tuyo guarda un **fin** (`e`): el id del primer bloque que se ve
+    después de lo escondido. Lo que sigue desde ahí se ve mientras el título siga colapsado; si se abre y se
+    vuelve a colapsar, el fin se borra y se esconde toda la sección. Si el bloque del fin se borra, el fin pasa
+    al bloque que quedó en su lugar. Si justo después de lo escondido ya hay un párrafo vacío que se ve, Enter
+    va ahí en vez de crear otro.
+
+## Cómo quedó (1a)
+
+(Se completa con la implementación.)
