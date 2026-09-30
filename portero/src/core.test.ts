@@ -37,6 +37,10 @@ type BaseFile = {
   size: number;
   drive_id: string | null;
   levels: Record<string, number>;
+  /** Papelera de archivos: como en la base (`purge_file` marca `purged_at`, `media_purged` lo confirma). */
+  trashed_at?: string | null;
+  purged_at?: string | null;
+  drive_trashed_at?: string | null;
 };
 
 /** Google y Supabase de mentira: sesiones, tokens, carpetas, subida por partes y bajada con Range. */
@@ -44,6 +48,7 @@ function fakeWorld() {
   const sessions = new Map<string, { user: string; owner: boolean }>([
     ['owner-jwt', { user: 'u-owner', owner: true }],
     ['member-jwt', { user: 'u-member', owner: false }],
+    ['admin-jwt', { user: 'u-admin', owner: false }],
     ['editor-jwt', { user: 'u-editor', owner: false }],
     ['viewer-jwt', { user: 'u-viewer', owner: false }],
     ['stranger-jwt', { user: 'u-stranger', owner: false }],
@@ -58,6 +63,9 @@ function fakeWorld() {
   let tokenRefreshes = 0;
   let refreshScopes: (string | null)[] = [];
   let linkFailures = 0;
+  /** Quiénes pueden mandar a la papelera de Drive (en la base: dueño y admins con permiso sobre el proyecto). */
+  const purgers = new Set(['u-owner', 'u-admin']);
+  let trashReady = true;
   let grantedScope = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email openid';
   let n = 0;
   let mediaGets = 0;
@@ -74,12 +82,27 @@ function fakeWorld() {
     if (url.host === 'ws.example') {
       const s = sessions.get((headers.get('Authorization') ?? '').replace('Bearer ', ''));
       if (!s) return jsonRes({ message: 'JWT expired' }, 401);
-      const args = JSON.parse(String(init.body ?? '{}')) as { p_file_id?: string; p_drive_id?: string };
+      const args = JSON.parse(String(init.body ?? '{}')) as { p_file_id?: string; p_drive_id?: string; p_file?: string };
       if (url.pathname === '/rest/v1/rpc/media_file') {
         const f = base.get(args.p_file_id ?? '');
         const level = f?.levels[s.user] ?? 0;
         if (!f || level === 0) return jsonRes(null);
         return jsonRes({ id: args.p_file_id, ...f, levels: undefined, created_at: '2026-09-30T10:00:00Z', level });
+      }
+      if (url.pathname === '/rest/v1/rpc/purge_file' || url.pathname === '/rest/v1/rpc/media_purged') {
+        // Los errores como los da PostgREST: 42501 → 403, P0001 → 400, y P0002 con otro estado.
+        if (!trashReady) return jsonRes({ code: 'PGRST202', message: 'Could not find the function' }, 404);
+        const f = base.get(args.p_file ?? '');
+        if (!f || (f.levels[s.user] ?? 0) === 0) return jsonRes({ code: 'P0002', message: 'file_not_found' }, 500);
+        if (!purgers.has(s.user)) return jsonRes({ code: '42501', message: 'not_allowed' }, 403);
+        if (url.pathname.endsWith('/purge_file')) {
+          if (!f.trashed_at) return jsonRes({ code: 'P0001', message: 'file_not_trashed' }, 400);
+          f.purged_at ??= '2026-10-30T10:00:00Z';
+        } else {
+          if (!f.purged_at) return jsonRes({ code: 'P0001', message: 'file_not_purged' }, 400);
+          f.drive_trashed_at ??= '2026-10-30T10:00:01Z';
+        }
+        return new Response(null, { status: 204 });
       }
       if (url.pathname === '/rest/v1/rpc/set_file_drive') {
         if (linkFailures > 0) {
@@ -134,8 +157,9 @@ function fakeWorld() {
     if (one && init.method === 'PATCH') {
       const f = files.get(one);
       if (!f) return jsonRes({ error: 'not found' }, 404);
-      const body = JSON.parse(String(init.body ?? '{}')) as { name?: string };
+      const body = JSON.parse(String(init.body ?? '{}')) as { name?: string; trashed?: boolean };
       if (body.name) f.name = body.name;
+      if (body.trashed !== undefined) f.trashed = body.trashed;
       const add = url.searchParams.get('addParents');
       const remove = (url.searchParams.get('removeParents') ?? '').split(',').filter(Boolean);
       if (add) f.parents = [...f.parents.filter((p) => !remove.includes(p)), add];
@@ -192,6 +216,8 @@ function fakeWorld() {
     refreshes: () => tokenRefreshes,
     refreshScopes: () => refreshScopes,
     failLinks: (times: number) => (linkFailures = times),
+    /** La base todavía sin la migración de la papelera de archivos. */
+    noTrashYet: () => (trashReady = false),
     grantOnly: (scope: string) => (grantedScope = scope),
     folders: () => [...files.entries()].filter(([, f]) => f.mime === 'application/vnd.google-apps.folder'),
     /** Cuántas veces se le pidió a Drive el contenido de un archivo. */
@@ -468,7 +494,7 @@ function addBaseFile(world: World, id: string, over: Partial<BaseFile> = {}): Ba
     mime: 'video/quicktime',
     size: 1000,
     drive_id: null,
-    levels: { 'u-owner': 4, 'u-editor': 3, 'u-viewer': 1, 'u-member': 2 },
+    levels: { 'u-owner': 4, 'u-editor': 3, 'u-viewer': 1, 'u-member': 2, 'u-admin': 1 },
     ...over,
   };
   world.base.set(id, f);
@@ -778,6 +804,148 @@ describe('portero: archivos de la app', () => {
     );
     expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
     expect(world.folders().map(([, f]) => f.name).sort()).toEqual(['2026-09-30', 'LGA_ShotDocs', 'Spot_Coca-Cola_2026']);
+  });
+});
+
+// --- papelera de archivos (paso 11) --------------------------------------------------------------------
+
+function trash(p: Portero, jwt: string | undefined, file: string): Promise<Response> {
+  return call(p, '/trash', { method: 'POST', jwt, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file }) });
+}
+
+/** Un archivo subido de verdad al Drive de mentira y que ya está en la papelera de la app. */
+async function trashedFile(world: World, p: Portero, id: string): Promise<string> {
+  addBaseFile(world, id, { size: 10 });
+  await uploadFile(p, 'editor-jwt', id, bytes(10));
+  world.base.get(id)!.trashed_at = '2026-09-30T12:00:00Z';
+  return world.base.get(id)!.drive_id!;
+}
+
+describe('portero: papelera de archivos', () => {
+  it('manda el archivo a la papelera de Drive (nunca lo borra), después de que la base lo marca, y lo confirma', async () => {
+    const { world, p } = await setup();
+    const driveId = await trashedFile(world, p, FILE_A);
+    const before = world.calls.length;
+
+    const res = await trash(p, 'owner-jwt', FILE_A);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'done', file: FILE_A, drive: 'trashed' });
+    // Sigue en Drive, en su papelera.
+    expect(world.files.get(driveId)).toMatchObject({ trashed: true });
+    expect(world.files.get(driveId)!.data).toEqual(bytes(10));
+    expect(world.base.get(FILE_A)).toMatchObject({ purged_at: expect.any(String), drive_trashed_at: expect.any(String) });
+
+    // El orden: la base marca (con la sesión de la persona) y confirma el estado antes de tocar Drive; al
+    // final, la confirmación. Nunca un DELETE.
+    const calls = world.calls.slice(before);
+    const at = (c: string) => calls.findIndex((x) => x === c);
+    expect(at('POST ws.example/rest/v1/rpc/purge_file')).toBeGreaterThanOrEqual(0);
+    expect(at('POST ws.example/rest/v1/rpc/purge_file')).toBeLessThan(at('POST ws.example/rest/v1/rpc/media_file'));
+    expect(at('POST ws.example/rest/v1/rpc/media_file')).toBeLessThan(at(`PATCH www.googleapis.com/drive/v3/files/${driveId}`));
+    expect(at(`PATCH www.googleapis.com/drive/v3/files/${driveId}`)).toBeLessThan(at('POST ws.example/rest/v1/rpc/media_purged'));
+    expect(world.calls.some((c) => c.startsWith('DELETE'))).toBe(false);
+
+    // Pedirlo de nuevo: listo, sin volver a ir a Drive.
+    const patches = world.calls.filter((c) => c.startsWith('PATCH')).length;
+    const again = await trash(p, 'owner-jwt', FILE_A);
+    expect(again.status).toBe(200);
+    expect(await again.json()).toMatchObject({ status: 'done', file: FILE_A });
+    expect(world.calls.filter((c) => c.startsWith('PATCH'))).toHaveLength(patches);
+  });
+
+  it('solo el dueño y los admins; lo que una página usa, no; sin sesión, nada', async () => {
+    const { world, p } = await setup();
+    const driveId = await trashedFile(world, p, FILE_A);
+    const patches = () => world.calls.filter((c) => c.startsWith('PATCH')).length;
+    const before = patches();
+
+    expect((await trash(p, 'editor-jwt', FILE_A)).status).toBe(403);
+    expect((await trash(p, 'member-jwt', FILE_A)).status).toBe(403);
+    expect((await trash(p, 'viewer-jwt', FILE_A)).status).toBe(403);
+    const forbidden = await trash(p, 'viewer-jwt', FILE_A);
+    expect(((await forbidden.json()) as { error: string }).error).toMatch(/owner or an admin/);
+    expect((await trash(p, 'stranger-jwt', FILE_A)).status).toBe(404);
+    expect((await trash(p, undefined, FILE_A)).status).toBe(401);
+    expect((await trash(p, 'expired', FILE_A)).status).toBe(401);
+    expect((await trash(p, 'owner-jwt', 'no-es-un-uuid')).status).toBe(400);
+    expect(patches()).toBe(before);
+    expect(world.files.get(driveId)!.trashed).toBeFalsy();
+    expect(world.base.get(FILE_A)!.purged_at).toBeUndefined();
+
+    // En uso (no está en la papelera): 409 y Drive no se toca.
+    addBaseFile(world, FILE_B, { size: 10 });
+    await uploadFile(p, 'editor-jwt', FILE_B, bytes(10));
+    const used = await trash(p, 'owner-jwt', FILE_B);
+    expect(used.status).toBe(409);
+    expect(((await used.json()) as { error: string }).error).toBe('A page still uses this file: it is not in the trash.');
+    expect(patches()).toBe(before);
+
+    // Una admin (no es la dueña) sí.
+    const res = await trash(p, 'admin-jwt', FILE_A);
+    expect(res.status).toBe(200);
+    expect(world.files.get(driveId)!.trashed).toBe(true);
+  });
+
+  it('nunca manda otro archivo del Drive del dueño; si en Drive ya no está, o nunca llegó, solo lo confirma', async () => {
+    const { world, p } = await setup();
+    // La base apunta a un archivo de Drive que no lleva la marca de este: no se toca ni se confirma.
+    world.files.set('deOtroxxxxxxxxxx', { name: 'contrato.pdf', mime: 'application/pdf', data: bytes(10), parents: [], appProperties: { sdFile: FILE_B } });
+    addBaseFile(world, FILE_A, { drive_id: 'deOtroxxxxxxxxxx', trashed_at: '2026-09-30T12:00:00Z' });
+    const other = await trash(p, 'owner-jwt', FILE_A);
+    expect(other.status).toBe(403);
+    expect(world.files.get('deOtroxxxxxxxxxx')!.trashed).toBeFalsy();
+    expect(world.base.get(FILE_A)!.drive_trashed_at).toBeUndefined();
+
+    // Ya no está en Drive (el dueño lo borró a mano): se confirma, sin error.
+    addBaseFile(world, FILE_B, { drive_id: 'noExistexxxxxxxx', trashed_at: '2026-09-30T12:00:00Z' });
+    const missing = await trash(p, 'owner-jwt', FILE_B);
+    expect(await missing.json()).toEqual({ status: 'done', file: FILE_B, drive: 'missing' });
+    expect(world.base.get(FILE_B)!.drive_trashed_at).toBeTruthy();
+
+    // Nunca terminó de subirse: no hay nada en Drive; se confirma.
+    addBaseFile(world, FILE_C, { trashed_at: '2026-09-30T12:00:00Z' });
+    const none = await trash(p, 'owner-jwt', FILE_C);
+    expect(await none.json()).toEqual({ status: 'done', file: FILE_C, drive: 'none' });
+    expect(world.calls.some((c) => c.startsWith('PATCH'))).toBe(false);
+  });
+
+  it('si la base no se enteró de la subida, usa el archivo que subió el portero (con su marca)', async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A, { size: 10 });
+    world.failLinks(1);
+    const done = (await uploadFile(p, 'editor-jwt', FILE_A, bytes(10))) as { file: { id: string }; linked: boolean };
+    expect(done.linked).toBe(false);
+    world.base.get(FILE_A)!.trashed_at = '2026-09-30T12:00:00Z';
+    const res = await trash(p, 'owner-jwt', FILE_A);
+    expect(await res.json()).toEqual({ status: 'done', file: FILE_A, drive: 'trashed' });
+    expect(world.files.get(done.file.id)!.trashed).toBe(true);
+  });
+
+  it('si Drive falla, no confirma; pedirlo de nuevo termina', async () => {
+    const { world, store, p } = await setup();
+    const driveId = await trashedFile(world, p, FILE_A);
+    let fail = true;
+    const flaky: typeof fetch = (input, init) =>
+      fail && init?.method === 'PATCH' ? Promise.resolve(new Response('{}', { status: 503 })) : world.http(input, init);
+    const q = new Portero(env, store, flaky);
+    const res = await trash(q, 'owner-jwt', FILE_A);
+    expect(res.status).toBe(502);
+    expect(world.base.get(FILE_A)).toMatchObject({ purged_at: expect.any(String) });
+    expect(world.base.get(FILE_A)!.drive_trashed_at).toBeUndefined();
+    fail = false;
+    expect((await trash(q, 'owner-jwt', FILE_A)).status).toBe(200);
+    expect(world.files.get(driveId)!.trashed).toBe(true);
+    expect(world.base.get(FILE_A)!.drive_trashed_at).toBeTruthy();
+  });
+
+  it('con una base sin la papelera de archivos, lo dice claro y no toca Drive', async () => {
+    const { world, p } = await setup();
+    await trashedFile(world, p, FILE_A);
+    world.noTrashYet();
+    const res = await trash(p, 'owner-jwt', FILE_A);
+    expect(res.status).toBe(502);
+    expect(((await res.json()) as { error: string }).error).toBe('The workspace database is not up to date for the file trash yet.');
+    expect(world.calls.some((c) => c.startsWith('PATCH'))).toBe(false);
   });
 });
 

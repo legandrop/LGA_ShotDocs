@@ -3,12 +3,15 @@
 // streaming, con pedidos por partes (Range), para que un video se reproduzca sin bajarlo entero.
 //
 // Quién pide algo lo decide el Supabase del workspace: el portero le pregunta con la sesión de la persona
-// (`media_whoami`, `media_file`, `set_file_drive`), así que no necesita ninguna clave de la base. Para los
-// videos, que el navegador pide sin sesión, el portero entrega un pase firmado que vence.
+// (`media_whoami`, `media_file`, `set_file_drive`, `purge_file`, `media_purged`), así que no necesita
+// ninguna clave de la base. Para los videos, que el navegador pide sin sesión, el portero entrega un pase
+// firmado que vence.
 //
 // Permisos: conectar Drive, elegir la carpeta y lo de la prueba de media (`/upload` sin `file`, `/pass`
 // con `fileId`) solo el dueño. Subir y ver un archivo de la app (`file`) depende del nivel de la persona
 // sobre ese archivo, según las páginas que lo usan (`media_file`): subir pide 3 (editar), ver pide 1.
+// Mandar un archivo de la papelera de la app a la papelera de Drive (`/trash`) lo decide la base
+// (`purge_file`): solo el dueño y los admins. Nunca se borra nada en Drive: solo se manda a su papelera.
 
 export interface Env {
   /** Dirección y clave publicable del Supabase del workspace (las dos son públicas). */
@@ -111,6 +114,10 @@ interface MediaFile {
   drive_id: string | null;
   created_at: string;
   level: number;
+  /** Papelera de archivos (desde la migración del paso 11; antes no vienen). */
+  trashed_at?: string | null;
+  purged_at?: string | null;
+  drive_trashed_at?: string | null;
 }
 
 export interface DriveFile {
@@ -296,6 +303,8 @@ export class Portero {
       const upload = /^\/upload\/([^/]+)$/.exec(path)?.[1];
       if (upload && req.method === 'PUT') return json(req, this.env, await this.uploadChunk(req, upload, who));
       if (path === '/pass' && req.method === 'POST') return json(req, this.env, await this.makePass(req, who));
+      // A la papelera de Drive: lo decide la base con la sesión de la persona (dueño y admins).
+      if (path === '/trash' && req.method === 'POST') return json(req, this.env, await this.trashFile(req, who));
 
       if (!who.isOwner) throw new HttpError(403, 'Only the owner of the workspace can do this for now.');
       if (path === '/drive/connect' && req.method === 'POST') return json(req, this.env, await this.connect(req));
@@ -811,6 +820,67 @@ export class Portero {
     const linked = await this.linkFile(who, upload.file, done);
     if (linked) await this.store.put(`upload:${uploadId}`, { ...upload, done, linked } satisfies Upload);
     return { status: 'done', file: done, linked };
+  }
+
+  // --- mandar a la papelera de Drive (papelera de archivos, paso 11) ---------------------------------
+
+  /**
+   * Manda un archivo de la papelera de la app a la papelera de Drive (nunca lo borra: Drive lo guarda 30
+   * días). Con la sesión de la persona: primero `purge_file` (la base decide si puede, solo dueño y admins,
+   * y si el archivo está en la papelera, y lo marca), después `media_file` tiene que decir que está en la
+   * papelera y pedido; recién ahí se toca Drive, y al final se confirma con `media_purged`. Pedirlo de nuevo
+   * no hace nada de más: si la base ya tiene la confirmación, no vuelve a ir a Drive.
+   */
+  private async trashFile(req: Request, who: Who): Promise<{ status: 'done'; file: string; drive: 'trashed' | 'missing' | 'none' }> {
+    const body = await readBody(req);
+    const file = typeof body.file === 'string' ? body.file.toLowerCase() : '';
+    if (!UUID.test(file)) throw new HttpError(400, 'Missing the file.');
+
+    await this.trashRpc(who, 'purge_file', file);
+    const media = await this.mediaFile(who, file);
+    if (!media) throw new HttpError(404, 'This file does not exist or you cannot see it.');
+    if (!media.trashed_at || !media.purged_at) throw new HttpError(409, 'This file is not in the trash.');
+    if (media.drive_trashed_at) return { status: 'done', file, drive: media.drive_id ? 'trashed' : 'none' };
+
+    const rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
+    // Si la base todavía no sabe su id de Drive pero el portero lo subió, se usa el que subió.
+    const drive = media.drive_id ?? rec.drive?.id ?? null;
+    let result: 'trashed' | 'missing' | 'none' = 'none';
+    if (drive) {
+      // Solo el archivo de Drive que lleva la marca de este: nunca otro archivo del Drive del dueño.
+      const mark = await this.checkMark(file, drive, rec);
+      if (mark === 'other') throw new HttpError(403, 'This file in Google Drive does not belong to this file of the app.');
+      result = 'missing';
+      if (mark === 'ok') {
+        const res = await this.drive(`/files/${encodeURIComponent(drive)}?fields=id,trashed`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trashed: true }),
+        });
+        if (res.ok) result = 'trashed';
+        else if (res.status !== 404) throw new HttpError(502, `Could not send the file to the Google Drive trash (${res.status}).`);
+      }
+    }
+    await this.trashRpc(who, 'media_purged', file);
+    return { status: 'done', file, drive: result };
+  }
+
+  /** `purge_file` o `media_purged` con la sesión de la persona; sus errores, como respuestas claras. */
+  private async trashRpc(who: Who, fn: 'purge_file' | 'media_purged', file: string): Promise<void> {
+    const res = await this.rpc(who.auth, fn, { p_file: file });
+    if (res.ok) return;
+    const error = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
+    const message = error?.message ?? '';
+    if (message === 'not_allowed') throw new HttpError(403, 'Only the owner or an admin of the workspace can send files to the Google Drive trash.');
+    if (message === 'file_not_found') throw new HttpError(404, 'This file does not exist or you cannot see it.');
+    if (message === 'file_not_trashed') throw new HttpError(409, 'A page still uses this file: it is not in the trash.');
+    if (message === 'file_not_purged') throw new HttpError(409, 'This file is not in the trash.');
+    if (res.status === 401) throw new HttpError(401, 'Your session expired: sign in again.');
+    // La función no existe todavía (PostgREST: PGRST202, 404): la base no tiene la papelera de archivos.
+    if (res.status === 404 || error?.code === 'PGRST202') {
+      throw new HttpError(502, 'The workspace database is not up to date for the file trash yet.');
+    }
+    throw new HttpError(502, `The workspace did not answer (${res.status}).`);
   }
 
   // --- ver (con un pase firmado, por partes) --------------------------------------------------------

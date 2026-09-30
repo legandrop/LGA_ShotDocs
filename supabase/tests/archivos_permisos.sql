@@ -153,7 +153,9 @@ begin
 
   -- media_file: el json para el portero.
   j := public.media_file(f1)::jsonb;
-  assert (select count(*) from jsonb_object_keys(j)) = 9, 'media_file no trae exactamente sus 9 campos';
+  -- Sus 9 campos; la papelera de archivos (paso 11) suma otros sin sacar ninguno.
+  assert j ?& array['id', 'project_id', 'project_name', 'name', 'mime', 'size', 'drive_id', 'created_at', 'level'],
+    'media_file no trae sus 9 campos';
   assert j ->> 'id' = f1::text and j ->> 'project_id' = e1::text and j ->> 'project_name' = 'Proyecto A'
      and j ->> 'name' = 'IMG_0666.MOV' and j ->> 'mime' = 'video/quicktime'
      and (j ->> 'size')::bigint = 62000000 and j -> 'drive_id' = 'null'::jsonb

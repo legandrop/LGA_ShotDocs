@@ -28,7 +28,10 @@ Carpetas en el Drive del dueño, sin espacios (guiones bajos):
   la carpeta todavía tiene el nombre que le puso la app (el portero lo recuerda). Si el dueño la renombró a
   mano, se respeta y se sigue subiendo ahí.
 - **Nada se borra en Drive.** Una carpeta que el dueño mandó a la papelera se vuelve a crear (la vieja queda
-  en la papelera). Mover o renombrar a mano un archivo o una carpeta no rompe nada: todo se busca por id.
+  en la papelera). Mover o renombrar a mano un archivo o una carpeta no rompe nada: todo se busca por id. Lo
+  único que el portero hace con un archivo subido es mandarlo a la **papelera de Drive** (`POST /trash`),
+  cuando un dueño o admin lo pide desde la papelera de archivos de la app: Drive lo guarda 30 días más y se
+  recupera desde ahí.
 - Cada archivo lleva en Drive una marca oculta (`appProperties.sdFile` = el id del archivo en la app), y la
   carpeta de cada proyecto otra (`sdProject`). Con la primera el portero comprueba, antes de dar un pase, que
   el archivo de Drive es de verdad ese archivo de la app.
@@ -136,6 +139,7 @@ Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el arc
 | `PUT /upload/<id>` | El que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. Al terminar: `{ status: 'done', file }`; si es un archivo de una página, además `linked: true\|false` (si la base ya se enteró; la app lo marca subido solo con `true`). |
 | `POST /pass` con `file` | Nivel 1 o más | `{ file: <id> }` → `{ url }` de un pase para `/m/…`, siempre con el tipo de `files.mime` (un `type` que mande la app no cuenta). Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
 | `POST /pass` con `fileId` | Dueño | La prueba de media: un pase para un archivo de Drive por su id. |
+| `POST /trash` | Dueño o admin (lo decide la base) | `{ file: <id> }`: manda un archivo de la papelera de la app a la papelera de Drive (`PATCH files/<id>` con `trashed: true`; nunca lo borra). Con la sesión de la persona: `purge_file` (la base comprueba que sea dueño o admin con permiso sobre el proyecto y que el archivo esté en la papelera, y lo marca), `media_file` tiene que decir que está en la papelera y pedido, recién ahí Drive (solo si el archivo de Drive lleva la marca de este) y al final `media_purged`. Devuelve `{ status: 'done', file, drive }`, con `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba) o `none` (nunca terminó de subirse). Pedirlo de nuevo no hace nada de más (si la base ya tiene la confirmación, no va a Drive). `403` si no es dueño o admin, o si el archivo de Drive no lleva la marca; `404` si no existe o no lo ve; `409` si una página todavía lo usa; `502` si Drive falla (no se confirma: se puede volver a pedir). |
 
 La app manda partes de 8 MiB (`PART_BYTES` en `src/media/portero.ts`); el portero acepta hasta 64 MiB por
 parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida. El permiso para subir se mira al abrir la
@@ -156,7 +160,9 @@ subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuel
 Hace falta la app ya publicada y la migración `20260930120000_portero.sql` aplicada. Para los archivos de
 las páginas, además, la migración de archivos (`20260930150000_archivos.sql`, con `media_file` y
 `set_file_drive`); sin ella, lo de la prueba de media sigue andando y lo de los archivos responde
-*"The workspace database is not up to date for files yet."*
+*"The workspace database is not up to date for files yet."* Para la papelera de archivos, la migración
+`20260930180000_papelera_archivos.sql` (`purge_file` y `media_purged`); sin ella, `/trash` responde *"The
+workspace database is not up to date for the file trash yet."* y no toca Drive.
 
 ### 1. Publicar el portero en Cloudflare
 
