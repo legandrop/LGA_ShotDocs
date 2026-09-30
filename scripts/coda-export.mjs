@@ -2,10 +2,13 @@
 // videos bajados a media/, y manifest.json con el árbol (padre, orden, título, subtítulo, ícono). La app la
 // importa desde el selector de proyectos (Import from Coda…). Ver Docs/Doc_Importar_Coda.md.
 //
-// Uso:  node scripts/coda-export.mjs "<nombre del doc o id>" [carpeta de salida]
+// Uso:  node scripts/coda-export.mjs "<nombre del doc o id>" [carpeta de salida] [--refresh]
 // Sale por defecto en %USERPROFILE%\Coda_Export\<doc> (en Mac, ~/Coda_Export/<doc>).
 // Token: variable CODA_API_TOKEN o archivo %USERPROFILE%\.coda-token (nunca en el repo).
-// Se puede cortar y volver a correr: lo ya bajado (páginas y archivos) no se vuelve a pedir.
+// Se puede cortar y volver a correr: lo ya bajado (páginas y archivos) no se vuelve a pedir. Por eso una
+// página que cambió en Coda después de bajarla queda como estaba: `--refresh` vuelve a pedir el HTML de
+// todas las páginas (los archivos no: cada blob de Coda es siempre el mismo archivo). Borrar la carpeta
+// también sirve.
 
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { createWriteStream, existsSync } from 'node:fs'
@@ -13,8 +16,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { homedir } from 'node:os'
 import { join, extname } from 'node:path'
-
-const API = 'https://coda.io/apis/v1'
+import { API, isCodaApi, mediaBaseName, parseExportArgs } from './lib/codaExport.mjs'
 
 async function token() {
   if (process.env.CODA_API_TOKEN) return process.env.CODA_API_TOKEN.trim()
@@ -50,7 +52,11 @@ async function request(url, init = {}) {
 }
 
 async function api(path, init = {}) {
-  const res = await request(path.startsWith('http') ? path : API + path, {
+  const url = path.startsWith('http') ? path : API + path
+  // El token va solo a la API de Coda: una dirección que devuelve la API (`href`, `nextPageLink`) y apunta a
+  // otro lado no lo recibe.
+  if (!isCodaApi(url)) throw new Error(`No se manda el token a una dirección que no es de la API de Coda: ${url}`)
+  const res = await request(url, {
     ...init,
     headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', ...init.headers },
   })
@@ -123,8 +129,8 @@ const EXT = {
 const HOSTED = /https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.com\/blobs)\/[^"'\s)<>]+/g
 
 async function download(url, dir) {
-  // El nombre sale del blob id de la URL (bl-XXXX), estable entre corridas.
-  const blob = url.match(/\/blobs\/(bl-[A-Za-z0-9_-]+)/)?.[1] || Buffer.from(url).toString('base64url').slice(-24)
+  // El nombre sale del blob id de la URL (bl-XXXX), estable entre corridas; sin blob, un hash de la URL.
+  const blob = mediaBaseName(url)
   const done = (await readdir(dir)).find((f) => f.startsWith(blob + '.') && !f.endsWith('.part'))
   if (done && (await stat(join(dir, done))).size > 0) return { file: done, reused: true }
   const res = await request(url)
@@ -150,8 +156,8 @@ async function download(url, dir) {
 }
 
 async function main() {
-  const [, , nameOrId, outArg] = process.argv
-  if (!nameOrId) throw new Error('Uso: node coda-export.mjs "<nombre del doc>" [carpeta]')
+  const { nameOrId, out: outArg, refresh } = parseExportArgs(process.argv.slice(2))
+  if (!nameOrId) throw new Error('Uso: node coda-export.mjs "<nombre del doc>" [carpeta] [--refresh]')
   TOKEN = await token()
   const doc = await findDoc(nameOrId)
   const safe = doc.name.replace(/[\\/:*?"<>|]+/g, '_').trim() || doc.id
@@ -180,7 +186,7 @@ async function main() {
     manifest.pages.push(entry)
     const htmlPath = join(pagesDir, htmlFile)
     let html
-    if (existsSync(htmlPath)) {
+    if (existsSync(htmlPath) && !refresh) {
       html = await readFile(htmlPath, 'utf8')
     } else if (p.contentType !== 'canvas') {
       problems.push(`${p.name}: página de tipo "${p.contentType}", no se exporta`)

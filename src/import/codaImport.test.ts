@@ -2,13 +2,28 @@
 import { BlockNoteEditor } from '@blocknote/core';
 import { yXmlFragmentToBlocks } from '@blocknote/core/yjs';
 import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
-import { afterEach, describe, expect, it } from 'vitest';
+import { act } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { prefs } from '../prefs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { findUnknownContent } from '../ui/unknownContent';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { schema } from '../ui/editorSchema';
-import { finishBlocks, namedColor, prepareCodaHtml, type LooseBlock } from './codaHtml';
-import { importCoda, treeOrder, type CodaFolder, type CodaManifestPage } from './codaImport';
+import { checkForeignImages, finishBlocks, namedColor, prepareCodaHtml, type LooseBlock } from './codaHtml';
+import {
+  checkManifest,
+  findResumable,
+  folderFromFiles,
+  importCoda,
+  importSize,
+  metaJournal,
+  treeOrder,
+  treePlan,
+  type CodaFolder,
+  type CodaManifestPage,
+  type ImportDeps,
+} from './codaImport';
+import { importJobFor } from './importJob';
 
 // jsdom trae su propio File, que la base simulada (fake-indexeddb) no sabe copiar; en el navegador no pasa.
 Object.assign(globalThis, { Blob: NodeBlob, File: NodeFile });
@@ -164,6 +179,7 @@ describe('importar la carpeta', () => {
       paths: () => [...files.keys()],
       text: async (p) => String(files.get(p)),
       file: async (p) => new Blob([files.get(p) as Uint8Array<ArrayBuffer>]),
+      size: (p) => (files.get(p) as { length?: number } | undefined)?.length ?? 0,
     };
   }
 
@@ -248,5 +264,317 @@ describe('importar la carpeta', () => {
     devices.push(a);
     await expect(importCoda(makeFolder(), a)).rejects.toThrow(/Google Drive/);
     expect(server.projects.size).toBe(1);
+  });
+
+  // --- Correcciones de la auditoría ---------------------------------------------------------------------
+
+  async function mediaDevice(): Promise<{ server: FakeServer; a: Device }> {
+    const server = new FakeServer();
+    server.enableMedia();
+    const a = await makeDevice(server);
+    devices.push(a);
+    await a.engine.syncNow();
+    return { server, a };
+  }
+
+  /** Una carpeta chica a mano: páginas (id → HTML) y archivos de media. */
+  function smallFolder(pages: CodaManifestPage[], html: Record<string, string>, media: string[] = [], extra: { problems?: string[] } = {}): CodaFolder {
+    const files = new Map<string, string | Uint8Array<ArrayBuffer>>();
+    for (const [id, h] of Object.entries(html)) files.set(`pages/${id}.html`, h);
+    for (const [i, b] of media.entries()) files.set(`media/${b}.png`, new Uint8Array(1000 + i).map((_, j) => j % 251));
+    return {
+      manifest: { doc: { id: 'DOC2', name: 'Chico' }, pages, ...extra },
+      has: (p) => files.has(p),
+      paths: () => [...files.keys()],
+      text: async (p) => String(files.get(p)),
+      file: async (p) => new Blob([files.get(p) as Uint8Array<ArrayBuffer>]),
+      size: (p) => (files.get(p) as { length?: number } | undefined)?.length ?? 0,
+    };
+  }
+
+  /** Los bloques `image` de una página, como los ve la app. */
+  async function imagesOf(d: Device, pageId: string): Promise<LooseBlock[]> {
+    const doc = await d.docs.open(pageId);
+    const editor = BlockNoteEditor.create({ schema }) as unknown as BlockNoteEditor;
+    const blocks = yXmlFragmentToBlocks(editor, doc.getXmlFragment(CONTENT_FRAGMENT)) as unknown as LooseBlock[];
+    d.docs.close(pageId);
+    const out: LooseBlock[] = [];
+    const walk = (list: LooseBlock[]) =>
+      list.forEach((x) => {
+        if (x.type === 'image') out.push(x);
+        walk(x.children ?? []);
+      });
+    walk(blocks);
+    return out;
+  }
+
+  it('cortada a mitad, se sigue en el mismo proyecto sin repetir páginas ni archivos (nada duplicado en el Drive)', async () => {
+    const { server, a } = await mediaDevice();
+    const journal = metaJournal(a.db);
+    const added: string[] = [];
+    let opens = 0;
+    let crashAt = 's2';
+    const deps: ImportDeps = {
+      tree: a.tree,
+      docs: {
+        // La tercera página (s1) no se puede escribir en la primera vuelta: sus fotos ya quedaron guardadas.
+        open: (id, o) => (++opens === 3 && crashAt ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)),
+        close: (id) => a.docs.close(id),
+        flush: (id) => a.docs.flush(id),
+      },
+      media: {
+        add: async (pageId, file) => {
+          added.push((file as File).name);
+          return a.media.add(pageId, file);
+        },
+        get enabled() {
+          return a.media.enabled;
+        },
+      },
+      journal,
+    };
+    const folder = makeFolder();
+    // Y la app se cierra al empezar la página siguiente (s2).
+    const first = importCoda(folder, deps, {
+      projectName: 'Cortado',
+      onProgress: (p) => {
+        if (p.page.startsWith('002') && crashAt) throw new Error('se cerró la app');
+      },
+    });
+    await expect(first).rejects.toThrow('se cerró la app');
+    expect(added.sort()).toEqual(['bl-bbb.png', 'foto set.png', 'image.png']);
+    const resumable = await findResumable(folder, { tree: a.tree, journal });
+    expect(resumable).toMatchObject({ projectName: 'Cortado', done: 2, total: 4 });
+    const projects = a.tree.projects().length;
+
+    crashAt = '';
+    const result = await importCoda(folder, deps, { projectName: 'otro nombre', resume: true });
+    expect(result.projectId).toBe(resumable!.projectId);
+    expect(result).toMatchObject({ pages: 4, files: 4, problems: [] });
+    // Solo el archivo de s2 se guardó en la segunda vuelta; los de s1 se reusaron.
+    expect(added.sort()).toEqual(['bl-bbb.png', 'foto set.png', 'image.png', 'otra.png']);
+    expect(await journal.get('DOC')).toBeUndefined();
+
+    await a.media.idle();
+    for (let i = 0; i < 4; i++) {
+      await a.engine.syncNow();
+      await a.engine.syncMedia();
+    }
+    expect(a.tree.projects().length).toBe(projects);
+    expect(server.projects.size).toBe(projects);
+    expect([...server.pages.values()].filter((p) => p.workspace_id === result.projectId)).toHaveLength(4);
+    expect(server.portero.drive.size).toBe(4);
+    const s1 = [...server.pages.values()].find((p) => p.title === '001 | Primera | Iglesia')!;
+    expect(await imagesOf(a, s1.id)).toHaveLength(3);
+  });
+
+  it('una página que no se pudo escribir anota que sus archivos quedaron guardados sin ubicar', async () => {
+    const { a } = await mediaDevice();
+    let opens = 0;
+    const deps: ImportDeps = {
+      ...a,
+      docs: { open: (id, o) => (++opens === 3 ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)), close: a.docs.close.bind(a.docs), flush: a.docs.flush.bind(a.docs) },
+    };
+    const result = await importCoda(makeFolder(), deps);
+    expect(result.problems).toEqual([
+      '001 | Primera | Iglesia: 3 files were saved but the page could not be written; resume the import to place them',
+      '001 | Primera | Iglesia: sin espacio',
+    ]);
+  });
+
+  it('una importación en curso cuenta como algo sin guardar (beforeunload) y su estado no depende del diálogo', async () => {
+    const key = {};
+    const job = importJobFor(key);
+    expect(importJobFor(key)).toBe(job);
+    job.show();
+    let finish!: () => void;
+    const running = job.run(
+      (onProgress) =>
+        new Promise((resolve) => {
+          onProgress({ done: 1, total: 3, page: 'B' });
+          finish = () => resolve({ projectId: 'p', pages: 3, files: 0, problems: [], exportProblems: [] });
+        }),
+    );
+    expect(job.get()).toMatchObject({ running: true, open: true, progress: { done: 1, page: 'B' } });
+    // Mientras corre no se cierra.
+    job.close();
+    expect(job.get().open).toBe(true);
+    finish();
+    await running;
+    expect(job.get()).toMatchObject({ running: false, result: { projectId: 'p' } });
+    job.close();
+    expect(job.get()).toMatchObject({ open: false, result: null });
+  });
+
+  it('los textos salen en el idioma de la app (en castellano, los errores y la lista del final)', async () => {
+    act(() => prefs.set({ language: 'es' }));
+    try {
+      const server = new FakeServer();
+      const off = await makeDevice(server);
+      devices.push(off);
+      await expect(importCoda(makeFolder(), off)).rejects.toThrow('Primero conectá Google Drive');
+      const { a } = await mediaDevice();
+      const folder = makeFolder();
+      const has = folder.has;
+      folder.has = (p) => p !== 'media/bl-ddd.png' && has(p);
+      folder.paths = () => ['pages/s2.html'];
+      const result = await importCoda(folder, a);
+      expect(result.problems).toEqual(['002 | Segunda | Calle: falta el archivo bl-ddd']);
+      await expect(folderFromFiles([new File(['{}'], 'x.txt')])).rejects.toThrow('no tiene manifest.json');
+    } finally {
+      act(() => prefs.set({ language: 'en' }));
+    }
+  });
+
+  it('una foto que no está en Coda: https queda enlazada y anotada; http o data: se saca y se anota', async () => {
+    const { a } = await mediaDevice();
+    const html =
+      `<div>arriba <img src="https://example.com/a.png" width="300"> abajo</div>` +
+      `<div><img src="http://example.com/b.png"></div>` +
+      `<img src="data:image/png;base64,AAAA">` +
+      `<div>${img('bl-k', 'k.png')}</div>`;
+    const result = await importCoda(smallFolder([page('p', 'Fotos', null, 0, ['bl-k'])], { p: html }, ['bl-k']), a);
+    expect(result.problems).toEqual([
+      'Fotos: an image not stored in Coda stays linked to its site: https://example.com/a.png',
+      'Fotos: an image not stored in Coda was left out: http://example.com/b.png',
+      'Fotos: an image not stored in Coda was left out: data:image/png;base64,AAAA',
+    ]);
+    const pageId = [...a.tree.children(null)].find((p) => p.title === 'Fotos')!.id;
+    const urls = (await imagesOf(a, pageId)).map((b) => String(b.props?.url));
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toBe('https://example.com/a.png');
+    expect(urls[1]).toMatch(/^sdmedia:\/\//);
+  });
+
+  it('checkForeignImages: deja las sdmedia y las https, saca el resto (también adentro de un ítem)', () => {
+    const notes: [string, boolean][] = [];
+    const out = checkForeignImages(
+      [
+        { type: 'image', props: { url: 'sdmedia://1' } },
+        { type: 'bulletListItem', children: [{ type: 'image', props: { url: 'ftp://x/y.png' } }, { type: 'image', props: { url: 'https://x/z.png' } }] },
+      ],
+      (url, kept) => notes.push([url, kept]),
+    );
+    expect(notes).toEqual([
+      ['ftp://x/y.png', false],
+      ['https://x/z.png', true],
+    ]);
+    expect(out[1].children?.map((c) => c.props?.url)).toEqual(['https://x/z.png']);
+  });
+
+  it('el manifest se revisa: sin páginas es un error claro; lo que falta toma valores por defecto', async () => {
+    expect(() => checkManifest({ doc: { id: 'x' } })).toThrow(/manifest\.json/);
+    expect(() => checkManifest(null)).toThrow(/manifest\.json/);
+    await expect(folderFromFiles([new File(['{no'], 'manifest.json')])).rejects.toThrow(/manifest\.json/);
+    const m = checkManifest({ pages: [{ id: 'a' }, { id: 'a', name: 3, media: 'no', order: 'x' }, 7] });
+    expect(m.doc.name).toBe('Untitled project');
+    expect(m.pages.map((p) => [p.id, p.name, p.order, p.media.length, p.contentType])).toEqual([
+      ['a', '', 0, 0, 'canvas'],
+      ['a#1', '', 1, 0, 'canvas'],
+    ]);
+  });
+
+  it('una página sin nombre entra como "Untitled"; un padre que falta o un círculo van al primer nivel, anotados', async () => {
+    const pages = [page('a', 'A', 'b', 0), page('b', 'B', 'a', 1), page('c', 'C', 'nadie', 2), page('d', '', 'c', 0)];
+    const plan = treePlan(pages);
+    expect(plan.pages.map((p) => [p.id, p.parentId])).toEqual([
+      ['c', null],
+      ['d', 'c'],
+      ['a', null],
+      ['b', 'a'],
+    ]);
+    expect(plan.reattached.map((p) => p.id)).toEqual(['c', 'a']);
+
+    const { server, a } = await mediaDevice();
+    const result = await importCoda(smallFolder(pages, { a: '<p>a</p>', b: '<p>b</p>', c: '<p>c</p>', d: '<p>d</p>' }), a);
+    expect(result.problems).toEqual([
+      'C: went to the top level: its parent page is missing or the pages loop',
+      'A: went to the top level: its parent page is missing or the pages loop',
+    ]);
+    await a.engine.syncNow();
+    const rows = [...server.pages.values()].filter((p) => p.workspace_id === result.projectId);
+    const byTitle = new Map(rows.map((p) => [p.title, p]));
+    expect(rows).toHaveLength(4);
+    expect(byTitle.get('Untitled')?.parent_id).toBe(byTitle.get('C')?.id);
+    expect(byTitle.get('B')?.parent_id).toBe(byTitle.get('A')?.id);
+    expect(byTitle.get('A')?.parent_id).toBeNull();
+  });
+
+  it('una página que no es texto queda anotada, y lo que anotó coda-export se muestra al final', async () => {
+    const { a } = await mediaDevice();
+    const table = { ...page('t', 'Tabla', null, 1), contentType: 'embed', file: 't.html' };
+    const result = await importCoda(
+      smallFolder([page('p', 'Texto', null, 0), table], { p: '<p>hola</p>' }, [], { problems: ['Tabla: página de tipo "embed", no se exporta'] }),
+      a,
+    );
+    expect(result.problems).toEqual(['Tabla: a “embed” page (not text): it comes in empty']);
+    expect(result.exportProblems).toEqual(['Tabla: página de tipo "embed", no se exporta']);
+  });
+
+  it('el mismo archivo dos veces en una página se guarda una vez', async () => {
+    const { a } = await mediaDevice();
+    const add = vi.spyOn(a.media, 'add');
+    const html = `<div>${img('bl-d', 'd.png')}</div><p>medio</p><div>${img('bl-d', 'd.png')}</div>`;
+    const result = await importCoda(smallFolder([page('p', 'Dos', null, 0, ['bl-d'])], { p: html }, ['bl-d']), a);
+    expect(result).toMatchObject({ files: 1, problems: [] });
+    expect(add).toHaveBeenCalledTimes(1);
+    const pageId = [...a.tree.children(null)].find((p) => p.title === 'Dos')!.id;
+    const urls = (await imagesOf(a, pageId)).map((b) => b.props?.url);
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toBe(urls[1]);
+  });
+
+  it('entre página y página el navegador respira, y el progreso dice qué página va (de 0 a N terminadas)', async () => {
+    const { a } = await mediaDevice();
+    const seen: [number, string, boolean][] = [];
+    let ticked = false;
+    await importCoda(makeFolder(), a, {
+      onProgress: (p) => {
+        seen.push([p.done, p.page, ticked]);
+        ticked = false;
+        setTimeout(() => (ticked = true), 0);
+      },
+    });
+    expect(seen.map(([d, p]) => [d, p])).toEqual([
+      [0, 'MGTZD | Planning'],
+      [1, 'Uruguay'],
+      [2, '001 | Primera | Iglesia'],
+      [3, '002 | Segunda | Calle'],
+      [4, ''],
+    ]);
+    // Antes de cada página después de la primera corrió una tarea del navegador.
+    expect(seen.slice(1, 4).every(([, , t]) => t)).toBe(true);
+  });
+
+  it('el peso de lo que se va a importar cuenta cada archivo una vez', () => {
+    const folder = makeFolder();
+    folder.manifest.pages[0].media.push({ url: 'x', file: 'bl-aaa.png' });
+    expect(importSize(folder)).toBe(3000 + 4000 + 5000 + 6000);
+  });
+});
+
+describe('HTML de Coda: correcciones de la auditoría', () => {
+  it('las marcas no chocan con texto que ya traía esos caracteres', async () => {
+    // El texto de Coda trae la marca de la foto 0 escrita a mano (y sueltos los dos caracteres).
+    const blocks = await convert(`<div>antes 0 medio   fin</div><div>${img('bl-z', 'z.png')}</div>`);
+    expect(blocks.filter((b) => b.type === 'image').map((b) => b.props?.url)).toEqual(['sdmedia://bl-z']);
+    expect(text(blocks[0])).toBe('antes 0 medio fin');
+    expect(JSON.stringify(blocks)).not.toMatch(/[]/);
+  });
+
+  it('un link de Coda que envuelve la misma foto no la trae dos veces: queda el texto, sin link', () => {
+    const src = 'https://codahosted.io/docs/DOC/blobs/bl-e/abc';
+    const { html, media } = prepareCodaHtml(`<div><a href="${src}">ver ${img('bl-e', 'e.png')}</a></div>`);
+    expect(media.map((m) => m.blobId)).toEqual(['bl-e']);
+    expect(html).not.toContain('<a');
+    expect(html).toContain('ver ');
+    // Un link a otro archivo de Coda (un PDF) sigue siendo un adjunto aparte.
+    const other = prepareCodaHtml(`<div><a href="https://codahosted.io/docs/DOC/blobs/bl-pdf/x">plano ${img('bl-e', 'e.png')}</a></div>`);
+    expect(other.media.map((m) => m.blobId)).toEqual(['bl-e', 'bl-pdf']);
+  });
+
+  it('una foto de otro sitio adentro de un párrafo no se pierde en silencio: queda marcada como externa', () => {
+    const { media } = prepareCodaHtml(`<div>x <img src="https://example.com/a.png"></div>`);
+    expect(media).toMatchObject([{ src: 'https://example.com/a.png', external: true, blobId: '' }]);
   });
 });

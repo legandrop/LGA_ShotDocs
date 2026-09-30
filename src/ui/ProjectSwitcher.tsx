@@ -4,11 +4,12 @@ import { t, useT } from '../i18n';
 import { formatSize } from '../media/fileTrash';
 import { usePermissions, useProjectSizes, useServices, useTree } from '../services';
 import { displayName } from '../workspaces';
-import { AccountIcon, MoveIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
+import { importJobFor } from '../import/importJob';
+import { AccountIcon, ImportIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, useCurrentProject, useSwitchProject } from './project';
-import { ImportCodaDialog, ShareDialog } from './lazyDialogs';
+import { ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
 import {
@@ -48,7 +49,6 @@ export function ProjectSwitcher() {
   const [sharing, setSharing] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspacesMode | null>(null);
   const [removing, setRemoving] = useState(false);
-  const [importing, setImporting] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const project = tree.project(current);
   const stats = tree.projectStats(current);
@@ -108,7 +108,7 @@ export function ProjectSwitcher() {
               onShare={(id) => setSharing(id)}
               onWorkspaces={(mode) => setWorkspaces(mode)}
               onRemoveWorkspace={() => setRemoving(true)}
-              onImport={() => setImporting(true)}
+              onImport={() => importJobFor(tree).show()}
             />
           </>,
           document.body,
@@ -128,13 +128,6 @@ export function ProjectSwitcher() {
             beforeLeave={leave}
             onClose={() => setWorkspaces(null)}
           />,
-          document.body,
-        )}
-      {importing &&
-        createPortal(
-          <Part onClose={() => setImporting(false)}>
-            <ImportCodaDialog onClose={() => setImporting(false)} />
-          </Part>,
           document.body,
         )}
       {removing && createPortal(<RemoveWorkspaceDialog onClose={() => setRemoving(false)} />, document.body)}
@@ -310,7 +303,7 @@ function ProjectMenu(props: {
             props.onImport();
           }}
         >
-          <MoveIcon size={16} />
+          <ImportIcon size={16} />
           {tr('import.menu')}
         </button>
       )}

@@ -9,3 +9,7 @@ dev-dist/
 test-results/
 .wrangler/
 *.tsbuildinfo
+
+# Importar de Coda (scripts/coda-export.mjs): el token y lo exportado nunca van al repo.
+.coda-token
+Coda_Export/

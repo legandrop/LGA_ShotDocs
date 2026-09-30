@@ -25,12 +25,19 @@ export interface CodaMedia {
   name: string;
   /** El ancho con que se veía en Coda, en px (0: el ancho natural). */
   width: number;
+  /**
+   * Una foto que no está guardada en Coda (una dirección de otro sitio): no hay archivo que subir. Si es
+   * `https` queda enlazada a su sitio (anotada); si no, no se trae (anotada).
+   */
+  external?: boolean;
 }
 
-// Caracteres de uso privado: no aparecen en texto real y BlockNote los deja pasar tal cual.
+// Caracteres de uso privado: BlockNote los deja pasar tal cual. Antes de marcar se sacan del texto de
+// Coda (ver `stripMarkers`), así una marca nunca se confunde con algo que ya estaba escrito.
 const OPEN = '\uE000';
 const CLOSE = '\uE001';
 const TOKEN = /\uE000(\d+)\uE001/g;
+const MARKERS = /[\uE000\uE001]/g;
 
 const HOSTED = /^https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.com\/blobs)\//;
 
@@ -38,9 +45,10 @@ const HOSTED = /^https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.c
 export function prepareCodaHtml(html: string): { html: string; media: CodaMedia[] } {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   const media: CodaMedia[] = [];
+  stripMarkers(doc.body);
 
-  const mark = (el: Element, src: string, fallbackName: string) => {
-    const blobId = el.getAttribute('data-coda-blob-id') ?? src.match(/\/blobs\/(bl-[\w-]+)/)?.[1] ?? '';
+  const mark = (el: Element, src: string, fallbackName: string, external = false) => {
+    const blobId = external ? '' : (el.getAttribute('data-coda-blob-id') ?? blobOf(src));
     const index = media.length;
     media.push({
       index,
@@ -49,6 +57,7 @@ export function prepareCodaHtml(html: string): { html: string; media: CodaMedia[
       mime: el.getAttribute('data-coda-mime-type') ?? '',
       name: el.getAttribute('alt') ?? fallbackName,
       width: Number(el.getAttribute('width')) || 0,
+      ...(external ? { external } : {}),
     });
     // Un <source> se va con su <video> (si no, BlockNote tira el video con la marca adentro). El
     // envoltorio `display: inline-block` que Coda pone alrededor de cada archivo se va con él.
@@ -62,16 +71,23 @@ export function prepareCodaHtml(html: string): { html: string; media: CodaMedia[
     if (!el.isConnected) continue;
     const src = el.getAttribute('src') ?? '';
     if (HOSTED.test(src) || src.startsWith('../media/')) mark(el, src, '');
+    // Una foto de otro sitio: BlockNote la tiraría sin avisar si está en un párrafo. Con la marca, quien
+    // importa decide (enlazada si es https, si no afuera) y la anota.
+    else if (el.tagName === 'IMG' && src) mark(el, src, '', true);
   }
   // Una foto adentro de un link: la marca sale del link y va justo después (adentro, el link se la
-  // llevaría). Si el link queda sin texto, se va.
+  // llevaría). Si el link queda sin texto, se va. Un link a la misma foto de Coda (Coda envuelve así la
+  // foto para abrirla grande) queda como texto: si no, la foto entraría dos veces.
   for (const a of [...doc.body.querySelectorAll('a')]) {
-    const tokens = [...a.textContent!.matchAll(TOKEN)].map((m) => m[0]);
-    if (!tokens.length) continue;
+    const found = [...a.textContent!.matchAll(TOKEN)];
+    if (!found.length) continue;
     const walker = doc.createTreeWalker(a, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) n.textContent = n.textContent!.replace(TOKEN, '');
-    a.after(doc.createTextNode(tokens.join('')));
+    a.after(doc.createTextNode(found.map((m) => m[0]).join('')));
+    const href = a.getAttribute('href') ?? '';
+    const sameFile = HOSTED.test(href) && found.some((m) => sameMedia(media[Number(m[1])], href));
     if (!a.textContent!.trim()) a.remove();
+    else if (sameFile) a.replaceWith(...a.childNodes);
   }
   // Un adjunto (PDF, zip…) llega como link a codahosted.
   for (const a of [...doc.body.querySelectorAll('a[href]')]) {
@@ -106,6 +122,29 @@ export function prepareCodaHtml(html: string): { html: string; media: CodaMedia[
     if (underline || strike) el.style.textDecoration = [underline && 'underline', strike && 'line-through'].filter(Boolean).join(' ');
   }
   return { html: doc.body.innerHTML, media };
+}
+
+const blobOf = (url: string): string => url.match(/\/blobs\/(bl-[\w-]+)/)?.[1] ?? '';
+
+/** El link apunta al mismo archivo de Coda que la foto (por su blob, o por la misma dirección). */
+function sameMedia(m: CodaMedia | undefined, href: string): boolean {
+  if (!m) return false;
+  const blob = blobOf(href);
+  return blob ? blob === m.blobId : href === m.src;
+}
+
+/** Saca los caracteres que se usan de marca del texto y de los atributos que trae Coda. */
+function stripMarkers(root: Element): void {
+  const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const text = n.textContent!;
+    if (text.includes(OPEN) || text.includes(CLOSE)) n.textContent = text.replace(MARKERS, '');
+  }
+  for (const el of root.querySelectorAll('*')) {
+    for (const attr of [...el.attributes]) {
+      if (attr.value.includes(OPEN) || attr.value.includes(CLOSE)) el.setAttribute(attr.name, attr.value.replace(MARKERS, ''));
+    }
+  }
 }
 
 // Los colores del editor (los de BlockNote), por su tono. El gris y el marrón se eligen por la saturación.
@@ -331,5 +370,31 @@ function collapseEmpty(blocks: LooseBlock[]): LooseBlock[] {
   const out = blocks.filter((b, i) => !(isEmpty(b) && i > 0 && isEmpty(blocks[i - 1])));
   while (out.length > 1 && isEmpty(out.at(-1)!)) out.pop();
   while (out.length > 1 && isEmpty(out[0])) out.shift();
+  return out;
+}
+
+/**
+ * Las fotos que no quedaron guardadas en la app (su dirección no es `sdmedia://`): una de otro sitio que
+ * BlockNote convirtió por su cuenta, por ejemplo. Una `https` queda enlazada a su sitio; cualquier otra
+ * (`http`, `data:`, una ruta suelta) se saca. Cada una se avisa con `note`.
+ */
+export function checkForeignImages(blocks: LooseBlock[], note: (url: string, kept: boolean) => void): LooseBlock[] {
+  const out: LooseBlock[] = [];
+  for (const block of blocks) {
+    const children = block.children?.length ? checkForeignImages(block.children, note) : block.children;
+    if (block.type === 'image') {
+      const url = String(block.props?.url ?? '');
+      if (!url.startsWith('sdmedia://')) {
+        const kept = /^https:\/\//i.test(url);
+        note(url, kept);
+        if (!kept) {
+          // Lo que tenía adentro (no debería tener nada) no se pierde con ella.
+          if (children?.length) out.push(...children);
+          continue;
+        }
+      }
+    }
+    out.push(children === block.children ? block : { ...block, children });
+  }
   return out;
 }

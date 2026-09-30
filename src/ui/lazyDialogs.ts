@@ -6,4 +6,4 @@ import { lazyPart } from './lazyPart';
 export const ShareDialog = lazyPart(() => import('./ShareDialog').then((m) => m.ShareDialog));
 export const MembersDialog = lazyPart(() => import('./MembersDialog').then((m) => m.MembersDialog));
 export const ImportCodaDialog = lazyPart(() => import('./ImportCodaDialog').then((m) => m.ImportCodaDialog));
-export const DriveDialogHost =lazyPart(() => import('./DriveDialog').then((m) => m.DriveDialogHost));
+export const DriveDialogHost = lazyPart(() => import('./DriveDialog').then((m) => m.DriveDialogHost));

@@ -4,15 +4,19 @@ import type { MediaQueue } from '../media/queue';
 import type { PageDocs } from '../sync/docs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { PageTree } from '../sync/tree';
+import { t } from '../i18n';
+import '../i18n/lazy/importCoda';
+import type { LocalDb } from '../sync/localDb';
 import { editorSchemaOptions } from '../ui/editorSchema';
-import { finishBlocks, prepareCodaHtml, type CodaMedia, type LooseBlock } from './codaHtml';
+import { checkForeignImages, finishBlocks, prepareCodaHtml, type CodaMedia, type LooseBlock } from './codaHtml';
 
 // Importa a un proyecto nuevo la carpeta que arma `scripts/coda-export.mjs` (Docs/Doc_Importar_Coda.md):
 // `manifest.json` con el árbol de páginas, `pages/<n>_<id>.html` con el HTML de Coda y `media/bl-….<ext>`.
 // Todo va por los mismos caminos que usa la app al escribir: `tree.create` para cada página, `media.add`
 // para cada archivo (queda en el dispositivo y la sincronización lo sube al Drive por el portero) y el
-// documento de la página con un editor sin pantalla. Por eso funciona sin red y no se pierde nada si se
-// corta: lo que ya se guardó en el dispositivo se sube solo.
+// documento de la página con un editor sin pantalla. Por eso funciona sin red y lo que ya se guardó en el
+// dispositivo se sube solo. Si se corta a mitad, el diario (`ImportJournal`) deja seguir en el mismo
+// proyecto sin repetir páginas ni archivos (y sin duplicarlos en el Drive).
 
 export interface CodaManifestPage {
   id: string;
@@ -28,6 +32,8 @@ export interface CodaManifestPage {
 export interface CodaManifest {
   doc: { id: string; name: string };
   pages: CodaManifestPage[];
+  /** Lo que anotó `coda-export` (páginas que no pudo exportar, archivos que no pudo bajar). */
+  problems?: string[];
 }
 
 /** La carpeta exportada. Las rutas son relativas a ella (`pages/…`, `media/…`). */
@@ -38,17 +44,58 @@ export interface CodaFolder {
   paths(): string[];
   text(path: string): Promise<string>;
   file(path: string): Promise<Blob>;
+  /** Cuánto pesa un archivo de la carpeta, en bytes (0 si no está). */
+  size(path: string): number;
+}
+
+/**
+ * Lo que va quedando de una importación, en el dispositivo (`meta` de la base local, clave
+ * `codaImport:<doc>`): si se corta (se cerró la app, se cortó la luz), la próxima vez sigue en el mismo
+ * proyecto sin crear de nuevo las páginas ya creadas ni volver a guardar (y subir al Drive) los archivos ya
+ * guardados. Se borra al terminar.
+ */
+export interface ImportJournal {
+  docId: string;
+  projectId: string;
+  projectName: string;
+  /** Por página de Coda: la página de la app y si ya se escribió su contenido. */
+  pages: Record<string, { pageId: string; done?: boolean; files?: number }>;
+  /** Por página de Coda y archivo (`<página> <blob o dirección>`): la dirección `sdmedia://` y el nombre. */
+  media: Record<string, { url: string; name: string }>;
+}
+
+export interface JournalStore {
+  get(docId: string): Promise<ImportJournal | undefined>;
+  put(journal: ImportJournal): Promise<void>;
+  remove(docId: string): Promise<void>;
+}
+
+const JOURNAL_PREFIX = 'codaImport:';
+
+/** El diario de la importación en `meta` de la base local (la tabla ya existe: la base no cambia). */
+export function metaJournal(db: Pick<LocalDb, 'get' | 'put' | 'delete'>): JournalStore {
+  return {
+    get: async (docId) => (await db.get('meta', JOURNAL_PREFIX + docId)) as ImportJournal | undefined,
+    put: async (journal) => {
+      await db.put('meta', journal, JOURNAL_PREFIX + journal.docId);
+    },
+    remove: (docId) => db.delete('meta', JOURNAL_PREFIX + docId),
+  };
 }
 
 export interface ImportDeps {
-  tree: Pick<PageTree, 'create' | 'createProject'>;
+  tree: Pick<PageTree, 'create' | 'createProject' | 'project' | 'get' | 'isTrashed'>;
   docs: Pick<PageDocs, 'open' | 'close' | 'flush'>;
   media: Pick<MediaQueue, 'add' | 'enabled'>;
+  /** Sin diario, una importación cortada no se puede seguir (las pruebas lo omiten a veces). */
+  journal?: JournalStore;
 }
 
 export interface ImportProgress {
+  /** Páginas terminadas. */
   done: number;
   total: number;
+  /** La página que se está importando ('' al terminar). */
   page: string;
 }
 
@@ -58,6 +105,55 @@ export interface ImportResult {
   files: number;
   /** Lo que no se pudo traer, por página. */
   problems: string[];
+  /** Lo que anotó `coda-export` al bajar el doc (`manifest.problems`). */
+  exportProblems: string[];
+}
+
+/** Una importación de este doc que quedó cortada y se puede seguir (su proyecto sigue estando). */
+export interface Resumable {
+  projectId: string;
+  projectName: string;
+  done: number;
+  total: number;
+}
+
+const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : fallback);
+
+/**
+ * Revisa el manifest y lo deja con la forma que espera la importación: sin `pages` (o sin un objeto) es un
+ * error claro; una página con campos que faltan o de otro tipo queda con valores por defecto (sin nombre,
+ * sin archivos, en su lugar por orden de llegada). Una página sin id o con el id repetido recibe uno propio.
+ */
+export function checkManifest(raw: unknown): CodaManifest {
+  const obj = raw as { doc?: unknown; pages?: unknown; problems?: unknown } | null;
+  if (!obj || typeof obj !== 'object' || !Array.isArray(obj.pages)) throw new Error(t('import.badManifest'));
+  const doc = (obj.doc && typeof obj.doc === 'object' ? obj.doc : {}) as { id?: unknown; name?: unknown };
+  const seen = new Set<string>();
+  const pages: CodaManifestPage[] = [];
+  for (const [i, item] of obj.pages.entries()) {
+    if (!item || typeof item !== 'object') continue;
+    const p = item as Record<string, unknown>;
+    let id = str(p.id) || `page-${i}`;
+    if (seen.has(id)) id = `${id}#${i}`;
+    seen.add(id);
+    const media = Array.isArray(p.media)
+      ? p.media
+          .filter((m): m is { url: string; file: string } => !!m && typeof m === 'object' && typeof m.url === 'string' && typeof m.file === 'string')
+          .map((m) => ({ url: m.url, file: m.file }))
+      : [];
+    pages.push({
+      id,
+      name: str(p.name),
+      subtitle: str(p.subtitle),
+      parentId: str(p.parentId) || null,
+      order: typeof p.order === 'number' && Number.isFinite(p.order) ? p.order : i,
+      contentType: str(p.contentType, 'canvas'),
+      file: str(p.file),
+      media,
+    });
+  }
+  const problems = Array.isArray(obj.problems) ? obj.problems.filter((x): x is string => typeof x === 'string') : [];
+  return { doc: { id: str(doc.id), name: str(doc.name).trim() || t('project.untitled') }, pages, problems };
 }
 
 /** Arma la carpeta a partir de lo que devuelve `<input type="file" webkitdirectory>`. */
@@ -69,34 +165,86 @@ export async function folderFromFiles(files: Iterable<File>): Promise<CodaFolder
     byPath.set(rel, f);
   }
   const manifestFile = byPath.get('manifest.json');
-  if (!manifestFile) throw new Error('This folder has no manifest.json. Choose the folder made by coda-export.');
-  const manifest = JSON.parse(await manifestFile.text()) as CodaManifest;
+  if (!manifestFile) throw new Error(t('import.noManifest'));
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await manifestFile.text());
+  } catch {
+    throw new Error(t('import.badManifest'));
+  }
+  const manifest = checkManifest(raw);
   const get = (path: string) => {
     const f = byPath.get(path);
-    if (!f) throw new Error(`Missing in the folder: ${path}`);
+    if (!f) throw new Error(t('import.missingFile', { path }));
     return f;
   };
-  return { manifest, has: (p) => byPath.has(p), paths: () => [...byPath.keys()], text: (p) => get(p).text(), file: async (p) => get(p) };
+  return {
+    manifest,
+    has: (p) => byPath.has(p),
+    paths: () => [...byPath.keys()],
+    text: (p) => get(p).text(),
+    file: async (p) => get(p),
+    size: (p) => byPath.get(p)?.size ?? 0,
+  };
 }
 
-/** Las páginas en el orden del árbol: cada padre antes que sus hijas, las hermanas en su orden. */
-export function treeOrder(pages: CodaManifestPage[]): CodaManifestPage[] {
+/** Cuánto pesan los archivos que se van a importar (cada uno una vez), en bytes. */
+export function importSize(folder: CodaFolder): number {
+  const files = new Set<string>();
+  for (const p of folder.manifest.pages) for (const m of p.media) files.add(`media/${m.file}`);
+  let total = 0;
+  for (const path of files) total += folder.size(path);
+  return total;
+}
+
+/**
+ * Las páginas en el orden del árbol: cada padre antes que sus hijas, las hermanas en su orden. Una página
+ * cuyo padre no está en el manifest, o que forma un círculo con otras (A dentro de B dentro de A), va al
+ * primer nivel (con `parentId: null`) y queda en `reattached`: ninguna se pierde.
+ */
+export function treePlan(pages: CodaManifestPage[]): { pages: CodaManifestPage[]; reattached: CodaManifestPage[] } {
   const ids = new Set(pages.map((p) => p.id));
   const children = new Map<string | null, CodaManifestPage[]>();
+  const reattached: CodaManifestPage[] = [];
+  const moved = new Set<string>();
   for (const p of pages) {
-    const parent = p.parentId && ids.has(p.parentId) ? p.parentId : null;
+    const known = !!p.parentId && ids.has(p.parentId) && p.parentId !== p.id;
+    if (p.parentId && !known) moved.add(p.id);
+    const parent = known ? p.parentId : null;
     children.set(parent, [...(children.get(parent) ?? []), p]);
   }
   for (const list of children.values()) list.sort((a, b) => a.order - b.order);
   const out: CodaManifestPage[] = [];
-  const walk = (parent: string | null) => {
-    for (const p of children.get(parent) ?? []) {
+  const visited = new Set<string>();
+  const add = (p: CodaManifestPage, root: boolean) => {
+    visited.add(p.id);
+    if (root && p.parentId) {
+      moved.add(p.id);
+      out.push({ ...p, parentId: null });
+    } else {
       out.push(p);
-      walk(p.id);
     }
+    for (const c of children.get(p.id) ?? []) if (!visited.has(c.id)) add(c, false);
   };
-  walk(null);
-  return out;
+  for (const p of children.get(null) ?? []) add(p, true);
+  // Lo que no se alcanzó desde el primer nivel está en un círculo: la primera de cada uno va arriba.
+  for (const p of [...pages].sort((a, b) => a.order - b.order)) if (!visited.has(p.id)) add(p, true);
+  for (const p of out) if (moved.has(p.id)) reattached.push(p);
+  return { pages: out, reattached };
+}
+
+export function treeOrder(pages: CodaManifestPage[]): CodaManifestPage[] {
+  return treePlan(pages).pages;
+}
+
+/** Si hay una importación cortada de este doc cuyo proyecto sigue estando, cuánto llegó a hacer. */
+export async function findResumable(folder: CodaFolder, deps: Pick<ImportDeps, 'tree' | 'journal'>): Promise<Resumable | null> {
+  const docId = folder.manifest.doc.id;
+  if (!docId || !deps.journal) return null;
+  const journal = await deps.journal.get(docId);
+  if (!journal || !deps.tree.project(journal.projectId)) return null;
+  const done = folder.manifest.pages.filter((p) => journal.pages[p.id]?.done).length;
+  return { projectId: journal.projectId, projectName: deps.tree.project(journal.projectId)!.name, done, total: folder.manifest.pages.length };
 }
 
 const EXT: Record<string, string> = {
@@ -120,34 +268,79 @@ function fileName(m: CodaMedia, stored: string): string {
 // Más ancho que esto en Coda es "a lo ancho de la página": el bloque va sin ancho propio.
 const FULL_WIDTH = 700;
 
+/** Le da un respiro al navegador entre página y página (dibujar el progreso, atender clics). */
+const breathe = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+const pageTitle = (page: CodaManifestPage) => page.name.replace(/\s+/g, ' ').trim() || t('common.untitled');
+
+/** Una dirección larga (un `data:`) no ocupa media pantalla en la lista del final. */
+const shortUrl = (url: string) => (url.length > 80 ? `${url.slice(0, 77)}…` : url) || '—';
+
 export async function importCoda(
   folder: CodaFolder,
   deps: ImportDeps,
-  options: { projectName?: string; onProgress?: (p: ImportProgress) => void } = {},
+  options: { projectName?: string; resume?: boolean; onProgress?: (p: ImportProgress) => void } = {},
 ): Promise<ImportResult> {
-  if (!deps.media.enabled) throw new Error('Connect Google Drive first: imported photos go to your Drive.');
+  if (!deps.media.enabled) throw new Error(t('import.needsDrive'));
   const { manifest } = folder;
-  const pages = treeOrder(manifest.pages);
-  const projectId = await deps.tree.createProject(options.projectName ?? manifest.doc.name);
-  const parser = BlockNoteEditor.create(editorSchemaOptions) as unknown as BlockNoteEditor<any, any, any>;
-  const idOf = new Map<string, string>();
+  const plan = treePlan(manifest.pages);
+  const pages = plan.pages;
   const problems: string[] = [];
+  for (const p of plan.reattached) problems.push(`${pageTitle(p)}: ${t('import.reattached')}`);
+
+  const docId = manifest.doc.id;
+  const store = docId ? deps.journal : undefined;
+  let journal = options.resume && store ? await store.get(docId) : undefined;
+  if (journal && !deps.tree.project(journal.projectId)) journal = undefined;
+  if (!journal) {
+    const projectName = options.projectName || manifest.doc.name;
+    const projectId = await deps.tree.createProject(projectName);
+    journal = { docId, projectId, projectName, pages: {}, media: {} };
+  }
+  const state = journal;
+  // Cada paso se anota apenas queda guardado en el dispositivo. Si anotarlo falla, la importación sigue
+  // igual: solo se pierde poder seguirla después de un corte.
+  const save = async () => {
+    await store?.put(state).catch(() => undefined);
+  };
+  await save();
+
+  const live = (pageId: string | undefined): pageId is string => !!pageId && !!deps.tree.get(pageId) && !deps.tree.isTrashed(pageId);
+  const parser = BlockNoteEditor.create(editorSchemaOptions) as unknown as BlockNoteEditor<any, any, any>;
   let files = 0;
 
   for (const [i, page] of pages.entries()) {
-    options.onProgress?.({ done: i, total: pages.length, page: page.name });
-    const title = page.name.replace(/\s+/g, ' ').trim();
-    const pageId = await deps.tree.create(idOf.get(page.parentId ?? '') ?? null, title, projectId);
-    idOf.set(page.id, pageId);
+    if (i > 0) await breathe();
+    const entry = state.pages[page.id];
+    // Sin nombre en el manifest (`checkManifest` lo deja en ''), "Untitled": nunca corta la importación.
+    const title = pageTitle(page);
+    options.onProgress?.({ done: i, total: pages.length, page: title });
     // Una página que falla queda creada (vacía o a medias) y anotada; las demás siguen.
     try {
-      files += await importPage(folder, deps, parser, page, pageId, title, problems);
+      // Ya terminada en una importación anterior que se cortó después.
+      if (entry?.done && live(entry.pageId)) {
+        files += entry.files ?? 0;
+        continue;
+      }
+      let pageId = live(entry?.pageId) ? entry.pageId : null;
+      if (!pageId) {
+        const parent = page.parentId ? state.pages[page.parentId]?.pageId : undefined;
+        pageId = await deps.tree.create(live(parent) ? parent : null, title, state.projectId);
+        state.pages[page.id] = { pageId };
+        await save();
+      }
+      const count = await importPage(folder, deps, parser, page, pageId, title, problems, state, save);
+      state.pages[page.id] = { pageId, done: true, files: count };
+      await save();
+      files += count;
     } catch (err) {
       problems.push(`${title}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+  // Terminó (con o sin problemas, que quedan en la lista): no hay nada que seguir.
+  await store?.remove(docId).catch(() => undefined);
   options.onProgress?.({ done: pages.length, total: pages.length, page: '' });
-  return { projectId, pages: pages.length, files, problems };
+  return { projectId: state.projectId, pages: pages.length, files, problems, exportProblems: manifest.problems ?? [] };
 }
 
 async function importPage(
@@ -158,29 +351,48 @@ async function importPage(
   pageId: string,
   title: string,
   problems: string[],
+  journal: ImportJournal,
+  save: () => Promise<void>,
 ): Promise<number> {
-  if (!folder.has(`pages/${page.file}`)) {
-    if (page.contentType === 'canvas') problems.push(`${title}: the page was not exported`);
+  if (!page.file || !folder.has(`pages/${page.file}`)) {
+    problems.push(`${title}: ${page.contentType === 'canvas' ? t('import.notExported') : t('import.notCanvas', { type: page.contentType })}`);
     return 0;
   }
 
   const { html, media } = prepareCodaHtml(await folder.text(`pages/${page.file}`));
-  // Cada archivo, a la cola de la app (en el dispositivo; se sube solo).
+  // Cada archivo, a la cola de la app (en el dispositivo; se sube solo). El mismo archivo dos veces en la
+  // página (el mismo blob) se guarda una vez y los dos bloques usan la misma dirección.
   let files = 0;
   const urls = new Map<number, string>();
   const names = new Map<number, string>();
+  const byKey = new Map<string, { url: string; name: string }>();
   for (const m of media) {
+    if (m.external) continue;
+    const key = m.blobId || m.src;
+    const saved = byKey.get(key) ?? journal.media[`${page.id} ${key}`];
+    if (saved) {
+      urls.set(m.index, saved.url);
+      names.set(m.index, saved.name);
+      if (!byKey.has(key)) files++;
+      byKey.set(key, saved);
+      continue;
+    }
     const stored = findStored(folder, page, m);
     if (!stored) {
-      problems.push(`${title}: missing file ${m.blobId || m.src}`);
+      problems.push(`${title}: ${t('import.missingMedia', { file: m.blobId || shortUrl(m.src) })}`);
       continue;
     }
     try {
       const blob = await folder.file(`media/${stored}`);
       const type = m.mime || blob.type;
       const file = new File([blob], fileName(m, stored), { type });
-      urls.set(m.index, await deps.media.add(pageId, file));
-      names.set(m.index, file.name);
+      const got = { url: await deps.media.add(pageId, file), name: file.name };
+      // Anotado apenas quedó guardado: si la importación se corta, al seguirla no se guarda (ni sube) otra vez.
+      journal.media[`${page.id} ${key}`] = got;
+      await save();
+      byKey.set(key, got);
+      urls.set(m.index, got.url);
+      names.set(m.index, got.name);
       files++;
     } catch (err) {
       problems.push(`${title}: ${fileName(m, stored)}: ${err instanceof Error ? err.message : String(err)}`);
@@ -188,15 +400,18 @@ async function importPage(
   }
 
   const imageOf = (index: number): LooseBlock | null => {
-    const url = urls.get(index);
-    if (!url) return null;
     const m = media[index];
     const width = m.width > 0 && m.width < FULL_WIDTH ? m.width : undefined;
-    return { type: 'image', props: { url, name: names.get(index) ?? '', ...(width ? { previewWidth: width } : {}) }, children: [] };
+    const size = width ? { previewWidth: width } : {};
+    // Una foto de otro sitio va con su dirección; `checkForeignImages` decide si queda y la anota.
+    if (m.external) return { type: 'image', props: { url: m.src, name: m.name, ...size }, children: [] };
+    const url = urls.get(index);
+    if (!url) return null;
+    return { type: 'image', props: { url, name: names.get(index) ?? '', ...size }, children: [] };
   };
   const placed = new Set<number>();
   const parsed = (await parser.tryParseHTMLToBlocks(html)) as unknown as LooseBlock[];
-  const blocks = finishBlocks(parsed, (index) => {
+  let blocks = finishBlocks(parsed, (index) => {
     placed.add(index);
     return imageOf(index);
   });
@@ -204,12 +419,22 @@ async function importPage(
   for (const index of urls.keys()) {
     if (placed.has(index)) continue;
     blocks.push(imageOf(index)!);
-    problems.push(`${title}: ${names.get(index)} went to the end of the page`);
+    problems.push(`${title}: ${t('import.movedToEnd', { file: names.get(index) ?? '' })}`);
   }
+  // Las fotos que no quedaron guardadas en la app: las https quedan enlazadas, las demás se sacan.
+  blocks = checkForeignImages(blocks, (url, kept) => {
+    problems.push(`${title}: ${kept ? t('import.linked', { url: shortUrl(url) }) : t('import.dropped', { url: shortUrl(url) })}`);
+  });
   if (page.subtitle?.trim()) {
     blocks.unshift({ type: 'paragraph', content: [{ type: 'text', text: page.subtitle.trim(), styles: { italic: true } }], children: [] });
   }
-  await writePage(deps.docs, pageId, blocks as PartialBlock<any, any, any>[]);
+  try {
+    await writePage(deps.docs, pageId, blocks as PartialBlock<any, any, any>[]);
+  } catch (err) {
+    // Los archivos ya están guardados (y se van a subir); el diario los recuerda para ubicarlos al seguir.
+    if (urls.size) problems.push(`${title}: ${t('import.notPlaced', { count: files })}`);
+    throw err;
+  }
   return files;
 }
 
