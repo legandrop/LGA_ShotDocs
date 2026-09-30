@@ -63,3 +63,9 @@ los de Lega). Se hace por partes (ver pendientes), pero **nada de lo que se haga
 14. **Una imagen copiada a otra página sigue apuntando a la primera** (`sdfile://<página A>/...`). Hoy no
     molesta, pero al compartir (fase 2) quien ve solo la página B no la vería. Al pegar en otra página hay
     que registrar el archivo también para la página nueva.
+15. **Que la pantalla de Google diga "LGA Shot Docs"** (pedido de Lega). Hoy, al conectar Drive, Google
+    muestra `cold-salad-d599.workers.dev` porque la app no tiene la marca verificada. Hace falta: una
+    dirección propia para el portero (por ejemplo `media.lega.com.ar`, con su dirección de vuelta en el
+    cliente de Google), completar **Branding** en Google Cloud (nombre, logo, página de inicio, política de
+    privacidad y dominio autorizado `lega.com.ar`), publicar la app (**In production**, así la conexión
+    tampoco vence a los 7 días) y pedir la verificación de marca.

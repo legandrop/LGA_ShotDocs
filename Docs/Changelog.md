@@ -1,5 +1,13 @@
 # Changelog — LGA Shot Docs
 
+v0.025 :
+
+Primera prueba de media en la computadora: Drive conectado y un video de 25,7 MB subido en 9 segundos.
+El roadmap anota el pedido de Lega de que la pantalla de Google diga "LGA Shot Docs" en vez de la
+dirección del portero: dirección propia para el portero, Branding completo en Google Cloud, publicar la
+app y verificar la marca.
+[ Docs - nombre en la pantalla de Google ]
+
 v0.024 :
 
 Corrección del portero: en Cloudflare cortaba cada pedido con "Illegal invocation", porque llamaba a la
