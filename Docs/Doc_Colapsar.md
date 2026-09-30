@@ -177,12 +177,15 @@ a la persona en todos sus dispositivos, como las preferencias.
 
 **La regla entre los dos** (en `collapse.ts`, con prueba):
 
-- `G` = colapsado para todos (el mapa). `P` = lo tuyo, si hay: `{colapsado, G que viste}`.
-- **Lo que ves:** `P.colapsado` si `P` existe **y** se hizo contra el `G` de ahora; si no, `G`.
-- **Clic:** lo contrario de lo que ves. Si coincide con `G`, se borra `P`; si no, se guarda con el `G` de ahora.
-- **Shift+clic (quien edita):** `G` pasa a lo contrario de lo que ves y se borra tu `P`.
-- Cuando alguien cambia `G`, los `P` de ese título hechos contra el valor anterior dejan de contar: todos
-  vuelven a ver lo que decidió quien hizo Shift+clic. Se limpian al leerlos.
+~~Lo tuyo deja de contar cuando alguien cambia `G`~~ (Lega, 2026-09-30: no). La regla que queda:
+
+- `G` = colapsado para todos (el mapa). `P` = lo tuyo, si hay: `{colapsado}`.
+- **Lo que ves:** `P.colapsado` si `P` existe; si no, `G`.
+- **Clic:** lo contrario de lo que ves, guardado como `P` (si coincide con `G`, igual queda: lo tuyo se mantiene
+  aunque después cambie `G`).
+- **Shift+clic (quien edita):** `G` pasa a lo contrario de lo que ves y se borra tu `P` (ves lo de todos).
+- **Un Shift+clic de otro nunca cambia lo que ve alguien que tiene lo suyo en ese título.** Quien no tiene nada
+  propio ve el `G` nuevo. "Abrir todo" y "Colapsar todo" del menú guardan lo tuyo en todos los títulos.
 
 ## 5. Editar con secciones colapsadas
 
@@ -204,8 +207,8 @@ Los casos, uno por uno:
 | ↓ o → al final de un título colapsado | Salta al principio del primer bloque visible después de la sección (manejado a mano: no se confía en cómo mueve el navegador el cursor alrededor de `display: none`). |
 | ↑ o ← al principio del bloque que sigue a una sección colapsada | Al final del título colapsado. |
 | Supr al final de un título colapsado | **No hace nada**: BlockNote uniría el primer bloque escondido al título. |
-| Retroceso al principio del título que sigue a una sección colapsada | BlockNote lo pasa a párrafo, entonces se suma a la sección de arriba: la sección se abre (regla general) y queda a la vista. |
-| Retroceso al principio de un título colapsado | BlockNote lo pasa a párrafo: deja de ser título y lo que escondía se ve. |
+| Retroceso al principio del título que sigue a una sección colapsada | (Decisión 18) Se une al título colapsado de arriba (el renglón que se ve); lo que era suyo pasa a esa sección y se veía, así que la sección se abre. |
+| Retroceso al principio de un título colapsado | (Decisión 18) "Sube la línea": se une al renglón de arriba, deja de ser título y lo que escondía se ve. |
 | Enter al final de un título colapsado | **Un título nuevo del mismo nivel después de la sección**, con la selección ahí (un párrafo ahí quedaría adentro de la sección, escondido). Alternativa: abrir la sección y seguir como siempre. |
 | Enter en el medio o al principio de un título colapsado | Abre la sección y sigue como siempre. |
 | Cambiar el nivel o el tipo de un título colapsado (barra, Ctrl/⌘+Alt+1…6, "## ") | Se abre para vos; y para todos si estaba colapsado para todos (quien lo cambia puede editar). Si no, un H2 que pasa a H1 escondería de golpe las secciones de al lado. |
@@ -396,16 +399,19 @@ Pruebas:
 14. **El carrete muestra todas las fotos**, también las escondidas.
 15. **Sin pista de lo escondido** (a lo sumo en el tooltip; no hace falta).
 16. **Un invitado con Editar sobre la página puede usar Shift+clic.**
+17. **Lo tuyo se mantiene aunque alguien cambie "para todos"** (2026-09-30): lo que ves es lo tuyo si lo hay, y
+    si no, lo de todos. Un Shift+clic de otro nunca cambia lo que ve quien tiene lo suyo (sección 4).
+18. **Retroceso al principio de un título "sube la línea"** como cualquier renglón (2026-09-30): no lo pasa a
+    párrafo; su texto se une al renglón de arriba. Un título colapsado que se une deja de existir y lo que
+    escondía se ve (nunca se borra). En el primer bloque de la página no hace nada. (Las listas, a confirmar.)
+19. **Orden de lo que sigue** (2026-09-30): después de 1a, la búsqueda en el proyecto (P.12, entrega 2), colapsar
+    1b, colapsar para todos (entrega 2), P.9 carpetas, P.10 copias locales, la segunda entrega de adjuntos y P.8.
 
 ### A confirmar por Lega
 
 1. **Para todos, en el documento de la página** (un `Y.Map` aparte del contenido): sin propiedad nueva, sin
    migración, sin subir `min_app_version`. Las versiones viejas ven todo abierto.
-2. **Cuando alguien colapsa o abre para todos, lo tuyo de ese título deja de contar** (con la marca única de
-   la corrección 8).
-3. **La marca de las hojas escondidas:** "Hojas 3–4 adentro" en el margen del título colapsado.
-4. **Retroceso al principio de un título colapsado** (vacío o no) lo pasa a párrafo, como hoy: deja de ser
-   título, su sección desaparece y lo que escondía se ve (corrección 2 si queda debajo de otro colapsado).
+2. **La marca de las hojas escondidas:** "Hojas 3–4 adentro" en el margen del título colapsado.
 
 ## Correcciones de la auditoría (mandan sobre lo de arriba)
 
@@ -441,8 +447,8 @@ de la auditoría; lo que decidió Lega después (borrar la sección entera, Ente
    demás bloques saltan una sección colapsada como si fuera uno. Con prioridad sobre BlockNote (sus atajos van
    con prioridad 50; los nuestros, por encima de 100). Entrega 1b; mientras tanto, la corrección 2 evita que algo
    quede escondido sin querer.
-5. **Para todos, de otro:** si un Shift+clic de otro escondería tu selección, esa sección queda abierta para
-   vos (se guarda lo tuyo contra el `G` nuevo), con un aviso chico. Entrega 2.
+5. **Para todos, de otro:** si un Shift+clic de otro escondería tu selección (y no tenés nada propio en ese
+   título), esa sección queda abierta para vos (se guarda como tuya), con un aviso chico. Entrega 2.
 6. **Lo tuyo va en la base local del dispositivo (IndexedDB), no en `localStorage`:** en `meta`, clave
    `collapse:<página>` (sin cambiar la versión de la base, como las marcas `docDirty:`). Se lee junto con
    `docs.open`, antes de crear el editor, así no hay parpadeo; se borra con la base local cuando se saca el
@@ -451,8 +457,9 @@ de la auditoría; lo que decidió Lega después (borrar la sección entera, Ente
 7. **Arrastrar la sección entera:** en la captura del `dragstart` del tirador, la selección pasa a ser del
    título al último bloque escondido (`multiple-node`) y BlockNote arrastra todo. Soltar en medio de una sección
    colapsada: corrección 2. Entrega 1b.
-8. **ABA en "para todos":** el valor del mapa es una marca única (no `true`), y lo tuyo guarda la marca que
-   viste; colapsar, abrir y volver a colapsar da otra marca. Entrega 2.
+8. ~~**ABA en "para todos":** una marca única en el mapa y lo tuyo guarda la que viste~~. Ya no hace falta:
+   Lega decidió que lo tuyo no deja de contar cuando cambia "para todos" (decisión 17), así que no hay que
+   saber contra qué valor se hizo. El campo `g` de lo guardado queda en `null` (compatible).
 9. **Shift solo con los permisos conocidos** (`perms.known`), además de editable. Si a alguien le sacan el
    permiso sin red, su escritura del mapa se rechaza como cualquier edición y queda en los rechazados; está
    documentado. Entrega 2.
@@ -542,6 +549,13 @@ Entrega 1a, v0.052. Sin tipo de bloque ni propiedad nueva, sin migración ni cam
     `removeWithSections` (reemplaza el ítem de BlockNote en `EditorComments.tsx`), el bloque elegido entero, o
     una selección que cubría todo el texto del título. Un `removeBlocks` común, juntar el título con otro
     bloque o tomar solo parte de su texto no borran lo escondido: lo abren.
+  - Retroceso al principio de un título (colapsado o no) "sube la línea" (decisión 18), con prioridad sobre
+    BlockNote y solo en títulos (`headingBackspace`), igual que BlockNote con un párrafo: anidado, sale un nivel;
+    en el primer bloque, nada; vacío, se borra y la selección va arriba; si arriba hay un renglón con texto (el
+    último descendiente del bloque de arriba), se le une con sus hijos; si ese renglón está escondido, se une al
+    título colapsado que lo esconde; si arriba hay una foto o un renglón vacío, ese bloque se borra y el título
+    queda (así lo hace BlockNote con un párrafo); después de una tabla, nada. Un título colapsado que se une
+    deja ver lo que escondía, y un Ctrl+Z trae todo.
   - Enter al principio de un título colapsado (con texto) deja un renglón arriba y el título sigue colapsado;
     en el medio, BlockNote lo parte y la sección se abre (el pedazo nuevo cae adentro).
   - El fin (`e`) se conserva aunque su bloque falte (deshacer y rehacer); si una edición propia lo borra, pasa al

@@ -21,7 +21,9 @@ todo abierto y el título colapsado dice qué hojas tiene adentro ("Hojas 2–4 
 abierto. Los "Encabezados plegables" de BlockNote salen del menú "/" y del selector de tipo; los que ya
 existían se ven como títulos comunes. Sin tipo de bloque ni propiedad nueva, sin migración. La búsqueda en la
 página (v0.051) encuentra lo que está en secciones colapsadas y, al ir a una coincidencia escondida, abre para
-vos lo que la esconde; "Reemplazar todo" y su deshacer no abren nada.
+vos lo que la esconde; "Reemplazar todo" y su deshacer no abren nada. Retroceso al principio de un título ya
+no lo pasa a párrafo: "sube la línea" como cualquier renglón (se une al de arriba; un título colapsado que se
+une deja ver lo que escondía).
 [ Colapsar secciones - entrega 1a ]
 
 v0.051 :

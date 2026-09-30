@@ -14,7 +14,10 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 export interface HeadingRecord {
   /** Colapsado para vos. */
   c: boolean;
-  /** La marca de "para todos" que valía cuando se guardó (entrega 2; `null` hasta entonces). */
+  /**
+   * Sin uso (siempre `null`): era la marca de "para todos" que valía al guardar, para dejar de contar lo tuyo si
+   * cambiaba. Lega decidió que lo tuyo se mantiene (Doc_Colapsar.md, sección 4); queda por compatibilidad.
+   */
   g: string | null;
   /** El fin: el id del primer bloque que se ve después de lo escondido. */
   e?: string;
@@ -22,7 +25,7 @@ export interface HeadingRecord {
 
 export type Records = ReadonlyMap<string, HeadingRecord>;
 
-/** Lo que se ve: colapsado para vos. (En la entrega 2 entra "para todos", con la regla de Doc_Colapsar.md §4.) */
+/** Lo que se ve: colapsado para vos. (En la entrega 2: lo tuyo si lo hay; si no, "para todos"; Doc_Colapsar.md §4.) */
 export function isCollapsed(record: HeadingRecord | undefined): boolean {
   return record?.c === true;
 }

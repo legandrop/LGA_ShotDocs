@@ -665,6 +665,93 @@ function headingOfSelection(state: EditorState): string | null {
 }
 
 /**
+ * Retroceso al principio de un título "sube la línea", como un párrafo (Lega, 2026-09-30): BlockNote lo pasaría
+ * a párrafo. Lo mismo que BlockNote hace con un párrafo:
+ * - anidado, sale un nivel;
+ * - sin nada arriba (el primer bloque de la página), no hace nada;
+ * - un título vacío se borra y la selección va al final del renglón de arriba;
+ * - si arriba (el último descendiente del bloque de arriba) hay un renglón con texto, el título se le une (sus
+ *   hijos quedan); si ese renglón está escondido, se une al título colapsado que lo esconde, que es el renglón
+ *   que se ve;
+ * - si arriba hay un bloque sin texto (una foto, un renglón vacío), ese bloque se borra y el título queda;
+ * - después de una tabla, no hace nada.
+ * Un título colapsado que se une deja de existir: lo que escondía se ve (nunca se borra; verificación, punto 1).
+ */
+function headingBackspace(view: EditorView, editor: BlockNoteEditor<any, any, any>): boolean {
+  const state = view.state;
+  const sel = state.selection;
+  if (!(sel instanceof TextSelection) || !sel.empty) return false;
+  const $head = sel.$head;
+  if ($head.parentOffset !== 0 || $head.parent.type.name !== 'heading' || $head.depth < 2) return false;
+  const containerDepth = $head.depth - 1;
+  const container = $head.node(containerDepth);
+  const pos = $head.before(containerDepth);
+  const groupDepth = containerDepth - 1;
+  const index = $head.index(groupDepth);
+  // Anidado: sale un nivel (lo primero que hace BlockNote con un párrafo).
+  if (groupDepth > 1 && index === 0) {
+    if (editor.canUnnestBlock()) editor.unnestBlock();
+    return true;
+  }
+  if (index === 0) return true;
+  const s = collapseKey.getState(state);
+  const text = $head.parent;
+  const tr = state.tr;
+  // El último descendiente del bloque de arriba (con qué lo uniría BlockNote).
+  let prev = $head.node(groupDepth).child(index - 1);
+  let prevPos = pos - prev.nodeSize;
+  while (prev.childCount > 1 && prev.lastChild?.type.name === 'blockGroup' && prev.lastChild.lastChild) {
+    const group = prev.lastChild;
+    prevPos = prevPos + prev.nodeSize - 2 - group.lastChild!.nodeSize;
+    prev = group.lastChild!;
+  }
+  const prevId = String(prev.attrs.id ?? '');
+  const hider = s?.analysis.hidden.get(prevId);
+  let target: BlockAt = { node: prev, pos: prevPos };
+  if (hider) {
+    const at = s!.analysis.blocks.get(hider);
+    if (!at) return true;
+    target = at;
+  }
+  const targetContent = target.node.firstChild!;
+  const inline = targetContent.type.spec.content === 'inline*';
+  // Un título vacío: se borra (sus hijos quedan en su lugar) y la selección va al final de arriba.
+  if (text.content.size === 0 && (inline || hider)) {
+    const kids = container.childCount > 1 ? container.lastChild!.content : null;
+    if (kids) tr.replaceWith(pos, pos + container.nodeSize, kids);
+    else tr.delete(pos, pos + container.nodeSize);
+    tr.setSelection(TextSelection.create(tr.doc, headingTextEnd({ node: tr.doc.nodeAt(tr.mapping.map(target.pos))!, pos: tr.mapping.map(target.pos) })));
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+  if (inline && (targetContent.content.size > 0 || hider)) {
+    const joinAt = headingTextEnd(target);
+    if (!hider && target.pos === prevPos) {
+      // Como BlockNote: se borra el borde entre los dos renglones.
+      tr.delete(joinAt, pos + 2);
+    } else {
+      // El de arriba está escondido: el texto va al final del título colapsado que se ve, y el bloque del título
+      // se reemplaza por sus hijos.
+      const kids = container.childCount > 1 ? container.lastChild!.content : null;
+      if (kids) tr.replaceWith(pos, pos + container.nodeSize, kids);
+      else tr.delete(pos, pos + container.nodeSize);
+      tr.insert(joinAt, text.content);
+    }
+    tr.setSelection(TextSelection.create(tr.doc, joinAt));
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+  // Arriba, un bloque sin texto (una foto, un renglón vacío): se borra y el título queda.
+  if (targetContent.type.spec.content === '' || (inline && targetContent.content.size === 0)) {
+    deleteBlocks(tr, new Set([prevId]));
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+  // Después de una tabla: nada.
+  return true;
+}
+
+/**
  * Retroceso al principio de un párrafo que viene justo después de lo escondido (auditoría, punto 6): BlockNote
  * lo uniría al último bloque escondido y la sección se abriría. Si está vacío, se borra y la selección vuelve
  * al final del título; si tiene texto, la selección pasa al final del título sin unir nada.
@@ -947,7 +1034,10 @@ export const collapseExtension = createExtension(({ options }: ExtensionOptions<
     'Shift-Mod-Alt-Enter': withView(toggleAtSelection),
     Enter: withView(enterAfter),
     Delete: withView(deleteAtEnd),
-    Backspace: withView(backspaceAfter),
+    Backspace: ({ editor }: KeyContext) => {
+      const view = editor.prosemirrorView;
+      return !!view && (backspaceAfter(view) || headingBackspace(view, editor));
+    },
     ArrowDown: withView((view) => skipForward(view, 'down', false)),
     'Shift-ArrowDown': withView((view) => skipForward(view, 'down', true)),
     ArrowRight: withView((view) => skipForward(view, 'right', false)),

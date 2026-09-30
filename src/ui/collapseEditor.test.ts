@@ -374,14 +374,14 @@ describe('editar al lado de lo escondido', () => {
     expect(visible(editor)).toContain('Uno');
   });
 
-  it('Retroceso en el título que sigue a una sección colapsada: pasa a párrafo y la sección se abre', () => {
+  it('Retroceso en el título que sigue a una sección colapsada: se une al título colapsado y la sección se abre', () => {
     const { editor } = page(SCENES());
     collapse(editor, 'Escena 1');
     putCaret(editor, 'Escena 2', 'start');
     press(editor, 'Backspace');
-    expect(visible(editor)).toContain('Escena 2');
+    expect(texts(editor)).toContain('Escena 1Escena 2');
+    expect(visible(editor)).toContain('Dos');
     expect(visible(editor)).toContain('Uno');
-    expect(caretBlock(editor)).toBe('Escena 2');
   });
 
   it('pasar un título colapsado a un nivel mayor no esconde de golpe las secciones de al lado', () => {
@@ -392,14 +392,14 @@ describe('editar al lado de lo escondido', () => {
     expect(visible(editor)).toContain('Dos');
   });
 
-  it('Retroceso al principio de un título colapsado vacío lo pasa a párrafo y lo escondido se ve; no se borra nada', () => {
+  it('Retroceso al principio de un título colapsado vacío lo borra y lo escondido se ve; no se borra nada más', () => {
     const { editor } = page([p('antes'), h(2, ''), p('a'), p('b'), h(2, 'Otra')]);
     const empty = editor.document[1].id;
     setCollapsed(view(editor), [empty], true);
     editor.setTextCursorPosition(empty, 'start');
     press(editor, 'Backspace');
-    expect(texts(editor)).toEqual(['antes', '', 'a', 'b', 'Otra']);
-    expect(visible(editor)).toEqual(['antes', '', 'a', 'b', 'Otra']);
+    expect(texts(editor)).toEqual(['antes', 'a', 'b', 'Otra']);
+    expect(visible(editor)).toEqual(['antes', 'a', 'b', 'Otra']);
   });
 
   it('deshacer un cambio en algo escondido lo abre; deshacer un reemplazo de la búsqueda, no', async () => {
@@ -988,5 +988,110 @@ describe('verificación: borrar la sección solo a propósito', () => {
     expect(texts(editor)).toEqual(['Q', 'H', 'x', 'R']);
     expect(visible(editor)).toEqual(['Q', 'H', 'R']);
     expect(caretBlock(editor)).toBe('H');
+  });
+});
+
+// --- Retroceso al principio de un título: "sube la línea" (Lega, 2026-09-30) ---------------------------------
+
+const types = (editor: BlockNoteEditor): string[] => {
+  const out: string[] = [];
+  const walk = (blocks: typeof editor.document) => {
+    for (const b of blocks) {
+      out.push(b.type);
+      walk(b.children);
+    }
+  };
+  walk(editor.document);
+  return out;
+};
+
+describe('Retroceso al principio de un título', () => {
+  it('une el título al renglón de arriba (no lo pasa a párrafo)', () => {
+    const { editor } = page([p('Uno'), h(2, 'Dos'), p('Tres')]);
+    putCaret(editor, 'Dos', 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['UnoDos', 'Tres']);
+    expect(types(editor)).toEqual(['paragraph', 'paragraph']);
+    expect(view(editor).state.selection.head).toBe(textPos(editor, 'UnoDos', 'start') + 3);
+  });
+
+  it('se une al último descendiente del bloque de arriba', () => {
+    const { editor } = page([p('Q', [p('kid')]), h(2, 'T')]);
+    putCaret(editor, 'T', 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['Q', 'kidT']);
+  });
+
+  it('con los hijos del título, como BlockNote con un párrafo', () => {
+    const { editor } = page([p('Uno'), h(2, 'Dos', [p('hijo')])]);
+    putCaret(editor, 'Dos', 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['UnoDos', 'hijo']);
+  });
+
+  it('un título colapsado se une y lo que escondía se ve (nada se borra); un Ctrl+Z lo trae', async () => {
+    const { editor } = page([p('Uno'), h(2, 'T'), p('a'), p('b'), h(2, 'U')]);
+    await tick();
+    collapse(editor, 'T');
+    undoPoint(editor);
+    putCaret(editor, 'T', 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['UnoT', 'a', 'b', 'U']);
+    expect(visible(editor)).toEqual(['UnoT', 'a', 'b', 'U']);
+    await tick();
+    editor.undo();
+    await tick();
+    expect(texts(editor)).toEqual(['Uno', 'T', 'a', 'b', 'U']);
+    expect(types(editor)[1]).toBe('heading');
+  });
+
+  it('en el primer bloque de la página no hace nada', () => {
+    const { editor } = page([h(1, 'Primero'), p('x')]);
+    putCaret(editor, 'Primero', 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['Primero', 'x']);
+    expect(types(editor)).toEqual(['heading', 'paragraph']);
+  });
+
+  it('después de un renglón vacío, se borra el renglón y el título queda (como BlockNote con un párrafo)', () => {
+    const { editor } = page([p('antes'), p(''), h(2, 'T')]);
+    editor.setTextCursorPosition(editor.document[2].id, 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['antes', 'T']);
+    expect(types(editor)).toEqual(['paragraph', 'heading']);
+  });
+
+  it('después de una foto, se borra la foto y el título queda (como BlockNote con un párrafo)', () => {
+    const { editor } = page([p('antes'), { type: 'image', props: { url: 'https://example.com/a.jpg' } } as PartialBlock, h(2, 'T')]);
+    editor.setTextCursorPosition(editor.document[2].id, 'start');
+    press(editor, 'Backspace');
+    expect(types(editor)).toEqual(['paragraph', 'heading']);
+    expect(texts(editor)).toEqual(['antes', 'T']);
+  });
+
+  it('un título vacío se borra y la selección va al final del renglón de arriba', () => {
+    const { editor } = page([p('antes'), h(2, ''), p('x')]);
+    editor.setTextCursorPosition(editor.document[1].id, 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['antes', 'x']);
+    expect(caretBlock(editor)).toBe('antes');
+  });
+
+  it('un título anidado sale un nivel, como un párrafo', () => {
+    const { editor } = page([p('Q', [h(2, 'N')])]);
+    putCaret(editor, 'N', 'start');
+    press(editor, 'Backspace');
+    expect(editor.document.map((b) => b.type)).toEqual(['paragraph', 'heading']);
+    expect(texts(editor)).toEqual(['Q', 'N']);
+  });
+
+  it('justo después de una sección colapsada se une al título que se ve; lo escondido no se borra', () => {
+    const { editor } = page([h(2, 'A'), p('escondido'), h(2, 'B'), p('b'), h(2, 'C')]);
+    collapse(editor, 'A');
+    putCaret(editor, 'B', 'start');
+    press(editor, 'Backspace');
+    expect(texts(editor)).toEqual(['AB', 'escondido', 'b', 'C']);
+    // Lo que era de B pasa a la sección de A y se veía: A se abre.
+    expect(visible(editor)).toEqual(['AB', 'escondido', 'b', 'C']);
   });
 });

@@ -50,6 +50,10 @@ Lega.
 
 ### P. Pedidos de Lega (2026-09-30), en este orden
 
+**Orden acordado con Lega (2026-09-30) para lo que falta:** después de colapsar 1a (P.11), la búsqueda en el
+proyecto (P.12, entrega 2), colapsar 1b, colapsar para todos (P.11, entrega 2), P.9 carpetas, P.10 copias
+locales, la segunda entrega de adjuntos (vista previa) y P.8.
+
 - **P.1 Hecho (v0.043): el PDF corta donde marca la pantalla.** Las fotos del Drive salían en el PDF con el
   original a todo el ancho (más altas que en pantalla, con la miniatura). Ver `Doc_Hojas_PDF.md`.
 - **P.2 Hecho (v0.044): el primer clic en una foto la elige, el segundo la abre.** Contorno, tiradores a la
