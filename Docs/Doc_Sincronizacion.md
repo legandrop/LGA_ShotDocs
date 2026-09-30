@@ -90,9 +90,17 @@ pierde mientras tanto.
      respuesta se perdió) sí cuenta, porque el servidor lo tiene.
    - **Nunca más de lo que el documento del dispositivo integró.** Si lo bajado depende de algo que
      todavía no llegó, Yjs lo deja pendiente y el vector no avanza por eso (en la próxima subida viaja de
-     más, sin daño).
+     más, sin daño). Para saberlo hay que armar el documento de la página: se hace antes y fuera de la
+     transacción que escribe (una lectura aparte), para no frenar el guardado de ninguna página. Adentro
+     se comprueba que la cantidad de filas guardadas de la página no cambió; si cambió (una edición local,
+     una compactación), el vector no avanza en esa vuelta: se sube de más, nunca de menos.
    Si la app se cierra antes de terminar la transacción, no cambia nada (ni lo guardado, ni el cursor, ni
-   el vector). Restaurar una copia borra el vector y el cursor (ver "Restaurar una copia de seguridad"), y
+   el vector). **Un caso que no se cubre:** los autores de Yjs son números al azar de 32 bits, uno por cada
+   vez que se abre una página. Si dos sesiones que editan la misma página sacaran el mismo número (una
+   probabilidad de 2⁻³² por par de sesiones), Yjs no podría distinguir lo de una y lo de otra y la fusión ya
+   fallaría antes de este cambio (no es una regresión de la fusión); además, desde este cambio, lo que el
+   dispositivo tenía sin subir de esa sesión repetida y se superpone con lo bajado de la otra queda tapado
+   por el vector y no sale del dispositivo (sigue guardado ahí). Restaurar una copia borra el vector y el cursor (ver "Restaurar una copia de seguridad"), y
    lo que se baja después cuenta solo lo que tiene el servidor restaurado. Las pruebas están en
    `src/sync/docs.test.ts`: en cada paso revisan contra el servidor que el vector no diga de más, con
    ediciones sin subir mezcladas con lo bajado, updates que dependen de algo que falta, lo propio que
@@ -459,8 +467,10 @@ páginas). La base decide; la app hace la misma cuenta para no ofrecer lo que el
 - **En la interfaz:** con menos de 3, el editor y el título quedan de solo lectura (y no se ponen la
   estructura inicial ni los ajustes de la rama). La reparación de dos raíces (`mergeRootGroups`) se hace
   solo en memoria, con un origen que no se guarda (opción `canWrite` de `PageDocs`, al abrir y al recibir
-  cambios): el servidor la rechazaría en cada apertura. La estructura inicial (`seedIfEmpty`) se pone solo
-  con los permisos ya conocidos y "Edit"; con menos de 4 no se ofrece crear páginas adentro, mover
+  cambios): el servidor la rechazaría en cada apertura. La estructura inicial (`seedIfEmpty`) se pone
+  siempre que el editor quede editable, también sin datos de permisos (una base sin la versión del equipo,
+  o la primera apertura sin red): sin ella el editor crearía su propia raíz. Queda solo en memoria hasta la
+  primera edición (ver "Contenido de las páginas", punto 5); con menos de 4 no se ofrece crear páginas adentro, mover
   (tampoco arrastrar), mandar a la papelera ni restaurar; mover pide 4 en la página y en el destino.
   Crear proyectos, solo el dueño y los admins; renombrarlos, quien tiene 4 sobre el proyecto. "Members"
   (menú de la cuenta) lo ven el dueño y los admins, y "Share…" quien puede compartir (`private.can_share`).

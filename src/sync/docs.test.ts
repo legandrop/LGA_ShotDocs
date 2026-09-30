@@ -656,3 +656,58 @@ describe('B.3: abrir una página vacía no crea un cambio', () => {
     await expectNothingMissing(again, server, pageId);
   });
 });
+
+describe('B.2: el tope se calcula fuera de la transacción que escribe', () => {
+  it('si lo guardado cambia entre la lectura y la escritura, el vector no avanza en esa vuelta y nada se pierde', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const b = await device(server);
+    const pageId = await sharedPage(a, b);
+    await write(b, pageId, (t) => t.insert(t.length, ' B1'));
+    await b.engine.syncNow();
+
+    // Entre la lectura del tope y la transacción que guarda lo bajado, A guarda una edición propia.
+    const docs = a.docs as unknown as { integratedCap: (...args: unknown[]) => Promise<unknown> };
+    const original = docs.integratedCap.bind(a.docs);
+    let calls = 0;
+    docs.integratedCap = async (...args: unknown[]) => {
+      const cap = await original(...args);
+      calls++;
+      const doc = await a.docs.open(pageId);
+      doc.getText('t').insert(0, 'A1 ');
+      await a.docs.flush(pageId);
+      a.docs.close(pageId);
+      return cap;
+    };
+    const before = await syncedOf(a, pageId);
+    await a.docs.pullPage(pageId, a.remote);
+    docs.integratedCap = original;
+    expect(calls).toBe(1);
+    expect(await syncedOf(a, pageId)).toEqual(before);
+    await expectSound(a, server, pageId);
+    expect(await a.docs.unsyncedPages()).toEqual([pageId]);
+
+    // La subida lleva de más (lo de B que ya estaba), nunca de menos.
+    await a.engine.syncNow();
+    await expectSound(a, server, pageId);
+    await expectNothingMissing(a, server, pageId);
+    const c = await device(server);
+    await c.engine.syncNow();
+    expect(await read(c, pageId)).toBe('A1 Base. B1');
+  });
+
+  it('sin cambios en el medio, el vector avanza igual y la subida lleva solo lo propio', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const b = await device(server);
+    const pageId = await sharedPage(a, b);
+    await write(b, pageId, (t) => t.insert(t.length, ' B1'));
+    await b.engine.syncNow();
+    await a.docs.pullPage(pageId, a.remote);
+    // Lo bajado avanzó el vector con lo de B: la próxima subida de A lleva solo lo suyo.
+    await write(a, pageId, (t) => t.insert(0, 'A1 '));
+    await a.engine.syncNow();
+    expect(resentInLast(server, pageId)).toBe(0);
+    await expectNothingMissing(a, server, pageId);
+  });
+});
