@@ -39,6 +39,14 @@ export const search = {
   'search.showMore': { en: "Show more ({count})", es: "Mostrar más ({count})" },
   'search.inCaption': { en: "Caption:", es: "Pie de foto:" },
   'search.inName': { en: "File name:", es: "Nombre del archivo:" },
+  'search.titlesOnly': {
+    en: "One letter searches page titles only: type another to search the text too.",
+    es: "Con una sola letra se buscan solo los títulos: escribí otra para buscar también en el texto.",
+  },
+  'search.count': {
+    en: { one: "{count} page found", other: "{count} pages found" },
+    es: { one: "{count} página encontrada", other: "{count} páginas encontradas" },
+  },
   'search.keys': { en: "↑ ↓ to move · Enter to open · Esc to close", es: "↑ ↓ para moverte · Enter abre · Esc cierra" },
 } satisfies Dict;
 

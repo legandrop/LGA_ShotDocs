@@ -12,9 +12,12 @@ resaltado; se recorren con ↑ ↓ y Enter, y Esc cierra. Elegir un resultado ab
 buscar ya puesta en esa coincidencia (Enter sigue por las demás), también en la misma página; un resultado del
 título abre la página arriba. Busca en el dispositivo: anda sin red, un dispositivo nuevo encuentra páginas que
 nunca abrió, y avisa si faltan páginas por bajar o alguna no se pudo leer entera. El panel lista también los
-proyectos que coinciden: Ctrl/⌘+K ahora busca, y cambiar de proyecto sigue a dos teclas (el selector de
-arriba se abre con un clic). Con texto elegido en el editor, Ctrl/⌘+K sigue creando un link. En el teléfono el
-panel ocupa toda la pantalla y el cajón se cierra al ir al resultado.
+otros proyectos que coinciden: Ctrl/⌘+K ahora busca, y cambiar de proyecto sigue a dos teclas (el selector de
+arriba se abre con un clic); si ninguno coincide, ofrece crear uno con ese nombre. Una sola letra busca solo en
+los títulos. Con texto elegido en el editor, Ctrl/⌘+K sigue creando un link, salvo que lo elegido sea lo que dejó
+Esc en la barra de buscar. En el teléfono el panel ocupa toda la pantalla y el cajón se cierra al ir al
+resultado. En la Mac los atajos son siempre con ⌘ y nunca con Ctrl (también mandar un comentario, comentar e
+imprimir). Con mil páginas, la primera búsqueda tarda unos milisegundos.
 [ Buscar en el proyecto - segunda entrega ]
 
 v0.051 :

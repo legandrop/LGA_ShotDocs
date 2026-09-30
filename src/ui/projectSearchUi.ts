@@ -38,6 +38,15 @@ export class SearchSession {
     return this.indexInstance;
   }
 
+  /** Suelta el índice y los avisos (al cerrar los servicios). */
+  dispose(): void {
+    this.indexInstance?.dispose();
+    this.indexInstance = null;
+    this.pending = null;
+    this.open = false;
+    this.listeners.clear();
+  }
+
   subscribe = (fn: () => void): (() => void) => {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -89,6 +98,12 @@ export function searchSession(services: { tree: IndexTree; docs: IndexDocs }): S
   let session = sessions.get(services.docs);
   if (!session) sessions.set(services.docs, (session = new SearchSession(services.tree, services.docs)));
   return session;
+}
+
+/** Suelta la búsqueda de una instancia de servicios (cerrar sesión, cambiar de workspace). */
+export function disposeSearchSession(services: { docs: IndexDocs }): void {
+  sessions.get(services.docs)?.dispose();
+  sessions.delete(services.docs);
 }
 
 export function useSearchSession(): SearchSession {

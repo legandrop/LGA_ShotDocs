@@ -315,43 +315,227 @@ describe('el índice del proyecto', () => {
     expect(titles(index, a, 'dos')).toEqual(['Compartida']);
   });
 
-  it('cede el hilo entre páginas y avisa lo que va leyendo', async () => {
+  it('cede el hilo entre páginas y avisa lo que va leyendo (a lo sumo cada publishMs)', async () => {
     const d = await device();
     for (let i = 0; i < 6; i++) await page(d, `P${i}`, [{ text: `texto ${i}` }]);
-    const index = new ProjectIndex(d.tree, d.docs, { yieldMs: 0 });
-    const revisions: number[] = [];
-    index.subscribe(() => revisions.push(index.getRevision()));
-    const done = index.refresh(d.tree.workspaceId);
-    expect(index.info(d.tree.workspaceId).building).toBe(true);
-    await done;
+    const index = new ProjectIndex(d.tree, d.docs, { yieldMs: 0, publishMs: 0 });
+    const building: boolean[] = [];
+    index.subscribe(() => building.push(index.info(d.tree.workspaceId).building));
+    await index.refresh(d.tree.workspaceId);
     expect(index.info(d.tree.workspaceId).building).toBe(false);
-    expect(revisions.length).toBeGreaterThan(3);
+    expect(building[0]).toBe(true);
+    expect(building.length).toBeGreaterThan(3);
     expect(titles(index, d, 'texto')).toHaveLength(6);
+    // Con la espera de siempre (250 ms), una lectura corta avisa al empezar y al terminar.
+    const other = new ProjectIndex(d.tree, d.docs);
+    let count = 0;
+    other.subscribe(() => count++);
+    await other.refresh(d.tree.workspaceId);
+    expect(count).toBe(2);
   });
 
-  it('300 páginas se leen en poco tiempo, y buscar después es inmediato', async () => {
+  it('sin cambios, una lectura no prende "leyendo" (no parpadea "Buscando…"); con un cambio, sí', async () => {
     const d = await device();
+    const id = await page(d, 'Uno', [{ text: 'hola' }]);
+    await page(d, 'Dos', [{ text: 'chau' }]);
+    const index = new ProjectIndex(d.tree, d.docs);
+    await index.refresh(d.tree.workspaceId);
+    const building: boolean[] = [];
+    index.subscribe(() => building.push(index.info(d.tree.workspaceId).building));
+    await index.refresh(d.tree.workspaceId);
+    await index.refresh(d.tree.workspaceId);
+    expect(building).not.toContain(true);
+    await edit(d, id, [{ text: 'nuevo' }]);
+    await index.refresh(d.tree.workspaceId);
+    expect(building).toContain(true);
+  });
+
+  it('cerrar el panel corta la lectura; la próxima sigue donde quedó', async () => {
+    const d = await device();
+    const ids: string[] = [];
+    for (let i = 0; i < 20; i++) ids.push(await page(d, `P${i}`, [{ text: `texto ${i}` }]));
+    const index = new ProjectIndex(d.tree, d.docs, { yieldMs: 0 });
+    const done = index.refresh(d.tree.workspaceId);
+    await new Promise((r) => setTimeout(r, 5));
+    index.cancel();
+    await done;
+    const read = ids.filter((id) => index.has(id)).length;
+    expect(read).toBeLessThan(20);
+    await index.refresh(d.tree.workspaceId);
+    expect(ids.every((id) => index.has(id))).toBe(true);
+  });
+
+  it('una letra sola busca solo en los títulos', async () => {
+    const d = await device();
+    await page(d, 'Brief', [{ text: 'zeta' }]);
+    await page(d, 'Otra', [{ text: 'z en el texto' }]);
+    const index = new ProjectIndex(d.tree, d.docs);
+    await index.refresh(d.tree.workspaceId);
+    expect(titles(index, d, 'z')).toEqual([]);
+    expect(titles(index, d, 'b')).toEqual(['Brief']);
+    expect(index.query(d.tree.workspaceId, 'b').hits[0].snippets).toEqual([]);
+    // Con dos letras, también el texto.
+    expect(titles(index, d, 'ze')).toEqual(['Brief']);
+  });
+
+  it('dispose deja de escuchar y de leer; un escucha que falla no deja sin aviso a los demás ni frena la versión', async () => {
+    const d = await device();
+    const id = await page(d, 'Uno', [{ text: 'hola' }]);
+    const index = new ProjectIndex(d.tree, d.docs);
+    await index.refresh(d.tree.workspaceId);
+    index.dispose();
+    expect(index.has(id)).toBe(false);
+    await index.refresh(d.tree.workspaceId);
+    expect(index.has(id)).toBe(false);
+    const seen: string[] = [];
+    d.docs.subscribeLocalChange(() => {
+      throw new Error('falla');
+    });
+    d.docs.subscribeLocalChange((p) => seen.push(p));
+    const before = (await d.docs.states()).get(id)!.version;
+    await edit(d, id, [{ text: 'otra' }]);
+    await d.docs.flush();
+    expect(seen).toContain(id);
+    expect((await d.docs.states()).get(id)!.version).toBeGreaterThan(before);
+  });
+
+  it('leer para buscar (fusionando más de 64 updates) mientras se escribe, se sube y se baja no pierde nada: 80 cruces', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const b = await device(server);
+    const id = await a.tree.create(null, 'Carrera');
+    await a.engine.syncNow();
+    await b.engine.syncNow();
+    const live = await a.docs.open(id);
+    write(live, [{ id: 'bloque', text: '' }]);
+    await a.docs.flush();
+    await a.engine.syncNow();
+    await b.engine.syncNow();
+    const textOf = (doc: Y.Doc) => {
+      const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+      return group
+        .toArray()
+        .map((c) => (((c as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText).toString())
+        .join('|');
+    };
+    const insert = (doc: Y.Doc, token: string) => {
+      const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+      const ytext = ((group.get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText;
+      ytext.insert(ytext.length, ` ${token}`);
+    };
+    const rows = async () => (await a.db.getAllFromIndex('docUpdates', 'pageId', id)).length;
+    const tokens: string[] = [];
+    let seed = 7;
+    const random = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    const later = (fn: () => Promise<unknown>) => new Promise((r) => setTimeout(r, Math.floor(random() * 3))).then(fn);
+    let n = 0;
+    let compacted = 0;
+    for (let round = 0; round < 80; round++) {
+      // Más de 64 updates sueltos: leer para buscar los fusiona.
+      while ((await rows()) <= 64) {
+        const token = `a${n++}`;
+        tokens.push(token);
+        insert(live, token);
+        await a.docs.flush();
+      }
+      const typing = async () => {
+        for (let i = 0; i < 3; i++) {
+          const token = `t${n++}`;
+          tokens.push(token);
+          insert(live, token);
+          await new Promise((r) => setTimeout(r, Math.floor(random() * 2)));
+        }
+      };
+      const other = async () => {
+        const doc = await b.docs.open(id);
+        const token = `b${n++}`;
+        tokens.push(token);
+        insert(doc, token);
+        b.docs.close(id);
+        await b.docs.flush();
+        await b.engine.syncNow();
+      };
+      const snapshot = async () => {
+        const before = await rows();
+        const snap = await a.docs.indexSnapshot(id);
+        snap.doc.destroy();
+        if (before > 64) compacted++;
+      };
+      const ops = [snapshot, typing, () => a.engine.syncNow(), other];
+      await Promise.all(ops.map((op) => later(op)));
+    }
+    expect(compacted).toBeGreaterThan(40);
+    await a.docs.flush();
+    for (let i = 0; i < 3; i++) {
+      await a.engine.syncNow();
+      await b.engine.syncNow();
+    }
+    const text = textOf(live);
+    for (const token of tokens) expect(text).toContain(` ${token}`);
+    // Lo guardado es lo que se ve, todo subió, y otro dispositivo (y uno nuevo) ve lo mismo.
+    const stored = await a.docs.indexSnapshot(id);
+    expect(textOf(stored.doc)).toBe(text);
+    stored.doc.destroy();
+    expect(await a.docs.unsyncedPages()).toEqual([]);
+    const bDoc = await b.docs.open(id);
+    expect(textOf(bDoc)).toBe(text);
+    b.docs.close(id);
+    const c = await device(server);
+    await c.engine.syncNow();
+    const cDoc = await c.docs.open(id);
+    expect(textOf(cDoc)).toBe(text);
+    c.docs.close(id);
+    a.docs.close(id);
+    // Lo que las ediciones pidieron sincronizar termina antes de cerrar las bases.
+    await new Promise((r) => setTimeout(r, 50));
+    for (const d of [a, b, c]) await d.engine.syncNow();
+  }, 120_000);
+
+  it('1000 páginas: el índice se arma rápido y la primera búsqueda amplia no traba', async () => {
+    const d = await device();
+    // Sin sincronizar mil páginas en el medio (cada página nueva la pide).
+    d.engine.stop();
     const words = ['cámara', 'lente', 'luz', 'grúa', 'plano', 'toma', 'escena', 'actor', 'set', 'rodaje'];
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 1000; i++) {
       const id = await d.tree.create(null, `Escena ${i}`);
       const doc = await d.docs.open(id);
       write(
         doc,
-        Array.from({ length: 20 }, (_, k) => ({ text: `${words[(i + k) % 10]} ${words[(i * k) % 10]} renglón ${k} de la página ${i}` })),
+        Array.from({ length: 10 }, (_, k) => ({ text: `${words[(i + k) % 10]} de la ${words[(i * k) % 10]}, renglón ${k} de la página ${i}` })),
       );
       d.docs.close(id);
     }
     await d.docs.flush();
     const index = new ProjectIndex(d.tree, d.docs);
+    const time = (fn: () => unknown) => {
+      const start = performance.now();
+      fn();
+      return performance.now() - start;
+    };
     let start = performance.now();
     await index.refresh(d.tree.workspaceId);
     const build = performance.now() - start;
+    let results = index.query(d.tree.workspaceId, '');
+    // La primera búsqueda amplia (sin nada calculado de antes: ni los títulos normalizados).
+    const broad = time(() => (results = index.query(d.tree.workspaceId, 'de la')));
+    const broadAgain = time(() => index.query(d.tree.workspaceId, 'de la'));
+    const letter = time(() => index.query(d.tree.workspaceId, 'a'));
+    const narrow = time(() => index.query(d.tree.workspaceId, 'camara grua'));
     start = performance.now();
-    const results = index.query(d.tree.workspaceId, 'camara grua');
-    const query = performance.now() - start;
-    console.log(`índice: 300 páginas en ${build.toFixed(0)} ms; buscar, ${query.toFixed(1)} ms`);
-    expect(results.total).toBeGreaterThan(0);
-    expect(build).toBeLessThan(15_000);
-    expect(query).toBeLessThan(200);
-  }, 60_000);
+    await index.refresh(d.tree.workspaceId);
+    const noChange = performance.now() - start;
+    console.log(
+      `1000 páginas: índice ${build.toFixed(0)} ms; "de la" ${broad.toFixed(0)} ms (otra vez ${broadAgain.toFixed(0)}), "a" ${letter.toFixed(1)} ms, "camara grua" ${narrow.toFixed(0)} ms; releer sin cambios ${noChange.toFixed(0)} ms`,
+    );
+    expect(results.total).toBe(1000);
+    expect(results.hits).toHaveLength(50);
+    // Medido en esta máquina: índice ~1,1 s, "de la" ~20 ms, "a" ~2 ms, "camara grua" ~8 ms, releer ~6 ms (antes
+    // de la auditoría, la primera búsqueda amplia tardaba ~650 ms). Los topes dejan margen para una máquina lenta.
+    expect(build).toBeLessThan(5000);
+    expect(broad).toBeLessThan(150);
+    expect(broadAgain).toBeLessThan(150);
+    expect(letter).toBeLessThan(30);
+    expect(narrow).toBeLessThan(100);
+    expect(noChange).toBeLessThan(500);
+  }, 120_000);
 });

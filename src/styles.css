@@ -4210,6 +4210,16 @@ button.primary.danger {
 
 /* --- Buscar en el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8) ------------------------------------------ */
 
+/* Solo para lectores de pantalla (la cantidad de resultados). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 /* En la computadora, una ventana arriba al centro (como la de Notion o Linear). */
 .search-backdrop {
   position: fixed;

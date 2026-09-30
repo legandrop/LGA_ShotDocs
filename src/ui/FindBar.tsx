@@ -36,7 +36,7 @@ const TYPE_MS = 100;
 /** Lo elegido en el editor se usa para buscar si es de una línea y no muy largo. */
 const PREFILL_MAX = 200;
 
-export function FindBar({ editor, editable }: { editor: FindEditor | null; editable: boolean }) {
+export function FindBar({ editor, editable, complete = true }: { editor: FindEditor | null; editable: boolean; complete?: boolean }) {
   const ui = useFindUi();
   const tr = useT();
   const view = editor?.prosemirrorView;
@@ -77,7 +77,8 @@ export function FindBar({ editor, editable }: { editor: FindEditor | null; edita
         if (view.isDestroyed) return;
         if (ui.query.trim()) {
           setFind(view, ui.query, { matchCase: ui.matchCase, wholeWord: ui.wholeWord });
-          const target = takeFindTarget();
+          // Con la página a medio bajar el pedido se guarda: al completarse el editor se vuelve a montar.
+          const target = takeFindTarget({ keep: !complete });
           if (target) goToOccurrence(view, target.blockId, target.occurrence);
           revealCurrent(view);
         } else {
@@ -87,7 +88,7 @@ export function FindBar({ editor, editable }: { editor: FindEditor | null; edita
       hasFindTarget() ? 0 : TYPE_MS,
     );
     return () => clearTimeout(timer);
-  }, [view, ui.open, ui.query, ui.matchCase, ui.wholeWord, ui.target]);
+  }, [view, ui.open, ui.query, ui.matchCase, ui.wholeWord, ui.target, complete]);
 
   // Con la barra abierta: F3 y Ctrl/⌘+G van a la siguiente (con Shift, a la anterior), desde la barra o el
   // editor y sin un diálogo abierto.

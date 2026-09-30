@@ -172,7 +172,7 @@ export class SyncEngine {
         this.status = { ...this.status, warning: t('comments.readOnlyDevice', { reason: options.comments.unavailable }) };
       }
     }
-    docs.subscribeLocalChange(poke);
+    this.cleanups.push(docs.subscribeLocalChange(poke));
     docs.onWriteError = (message) => {
       this.patch({ localError: message });
       void this.refreshCounts();
@@ -390,7 +390,11 @@ export class SyncEngine {
       if (this.stopped) return;
       this.patch({ online: !isNetworkError(err), lastError: errorMessage(err) });
     } finally {
-      await this.refreshCounts();
+      // Después de `stop()` la base puede estar cerrada (se cierra sesión con un ciclo en curso): contar ya no
+      // importa y no tiene que quedar un error sin atrapar.
+      await this.refreshCounts().catch((err) => {
+        if (!this.stopped) throw err;
+      });
       this.patch({ syncing: false });
     }
   }

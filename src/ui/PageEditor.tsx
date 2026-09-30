@@ -202,7 +202,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
   if (opening.state === 'unsupported') return <UnsupportedPage />;
   return (
     <>
-      <FindBar editor={findEditor} editable={opening.complete && canEdit} />
+      <FindBar editor={findEditor} editable={opening.complete && canEdit} complete={opening.complete} />
       {!opening.complete && (
         <p className="muted editor-missing">
           {status.online ? tr('editor.missingOnline') : tr('editor.missingOffline')}

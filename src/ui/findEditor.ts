@@ -8,6 +8,7 @@ import * as Y from 'yjs';
 import { unitsFromPM, unitPos, type PMUnit, type UnitField } from '../search/extract';
 import { normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from '../search/normalize';
 import { FIND_REPLACE_META } from './editorMeta';
+import { recordFindSelection } from './findUi';
 
 // Buscar y reemplazar en la página (Docs/Doc_Buscar.md, secciones 5 y 6, con las correcciones de las
 // auditorías). Buscar no cambia el documento: las coincidencias se marcan con decoraciones, como las marcas de
@@ -517,14 +518,18 @@ export function closeFind(view: EditorView, { select = true }: { select?: boolea
   const state = getFindState(view.state);
   const match = state.matches[state.current];
   const tr = view.state.tr.setMeta(findKey, { kind: 'clear' } satisfies FindMeta);
+  let selected = false;
   if (select && match?.field === 'text' && !state.stale) {
     try {
       tr.setSelection(TextSelection.create(tr.doc, match.from, match.to));
+      selected = true;
     } catch {
       // La posición ya no es de texto: la selección queda donde estaba.
     }
   }
   view.dispatch(tr);
+  // Ctrl/⌘+K sobre esto abre la búsqueda del proyecto, no "crear un link" (findUi.ts).
+  if (selected) recordFindSelection(view, view.state.selection.from, view.state.selection.to);
 }
 
 // --- Reemplazar --------------------------------------------------------------------------------------------

@@ -209,7 +209,7 @@ export class PageDocs {
    * revés). Con el candado de la página (como bajar y subir), y si hay muchos updates sueltos se fusionan
    * (`loadInto`, lo mismo que al abrirla): la próxima lectura es rápida.
    */
-  indexSnapshot(pageId: string): Promise<{ doc: Y.Doc; state: DocState | undefined; supported: boolean }> {
+  indexSnapshot(pageId: string): Promise<{ doc: Y.Doc; state: DocState | undefined }> {
     return this.withLock(pageId, async () => {
       await this.flush(pageId);
       const tx = this.db.transaction(['docState', 'docUpdates'], 'readonly');
@@ -225,7 +225,8 @@ export class PageDocs {
         const data = await this.db.getAllFromIndex('docUpdates', 'pageId', pageId);
         if (data.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(data.map((r) => r.data)), ORIGIN_LOAD);
       }
-      return { doc, state, supported: this.options.supports?.(doc) ?? true };
+      // Sin mirar si esta versión lo puede mostrar: la búsqueda lee el texto sin depender del esquema.
+      return { doc, state };
     });
   }
 
@@ -716,7 +717,14 @@ export class PageDocs {
       () => {
         for (const update of batch) flying.delete(update);
         this.setWriteError(null);
-        for (const fn of this.localChangeListeners) fn(pageId);
+        // Un escucha que falla no deja sin aviso a los demás ni frena la suma de la versión.
+        for (const fn of this.localChangeListeners) {
+          try {
+            fn(pageId);
+          } catch {
+            // Lo que hace cada escucha es suyo (la sincronización, el índice de la búsqueda).
+          }
+        }
         // Aparte y después: lo escrito ya está a salvo con su marca.
         this.track(pageId, this.bumpVersion(pageId));
       },

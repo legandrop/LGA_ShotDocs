@@ -34,22 +34,25 @@ export interface IndexDocs {
   indexSnapshot(pageId: string): Promise<{ doc: Y.Doc; state: DocState | undefined }>;
   states(): Promise<Map<string, DocState>>;
   subscribeLocalChange(fn: (pageId: string) => void): () => void;
+  /** Hay ediciones sin guardar todavía: la lectura espera un momento (no les demora el guardado). */
+  hasUnsavedEdits?(): boolean;
 }
 
 interface IndexedUnit {
   blockId: string;
   field: UnitField;
   text: string;
-  /** El texto normalizado (sin el mapa: se arma solo para los bloques que coinciden). */
+  /** El texto normalizado (sin el mapa: se arma solo para los fragmentos que se muestran). */
   folded: string;
-  norm?: Normalized;
 }
 
 interface Entry {
+  /**
+   * `version:cursor` si salió de lo guardado; `live:<documento>:<cambios>` si salió del documento vivo (la
+   * página abierta). No se guarda el documento: uno cerrado y destruido no queda retenido por el índice.
+   */
   mark: string;
   units: IndexedUnit[];
-  /** El documento vivo del que salió (la página abierta), si salió de uno. */
-  live?: Y.Doc;
 }
 
 export interface SearchWord {
@@ -147,22 +150,46 @@ function mergeRanges(ranges: [number, number][]): [number, number][] {
 
 const markOf = (state: DocState | undefined): string => (state ? `${state.version}:${state.cursor}` : 'none');
 
-/** Cuántos cambios tuvo un documento vivo desde que el índice lo vio por primera vez. */
-const liveCounters = new WeakMap<Y.Doc, { n: number }>();
+/** Cada documento vivo que vio el índice: un número propio y cuántos cambios tuvo desde entonces. */
+const liveCounters = new WeakMap<Y.Doc, { id: number; n: number }>();
+let liveIds = 0;
 
 function liveMark(doc: Y.Doc): string {
   let counter = liveCounters.get(doc);
   if (!counter) {
-    const c = { n: 0 };
+    const c = { id: ++liveIds, n: 0 };
     liveCounters.set(doc, (counter = c));
     // Cualquier cambio (también un borrado, que no mueve el vector de estado).
     doc.on('update', () => c.n++);
   }
-  return `live:${counter.n}`;
+  return `live:${counter.id}:${counter.n}`;
+}
+
+/** Cuántas veces está `needle` en `hay` (sin encimarse), sin armar el mapa al original. */
+function countIn(hay: string, needle: string): number {
+  let n = 0;
+  for (let at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + needle.length)) n++;
+  return n;
+}
+
+/** Una letra sola (un punto de código) busca solo en los títulos: en el texto coincide con casi todo. */
+export function titlesOnly(words: SearchWord[]): boolean {
+  return words.length > 0 && words.every((w) => [...w.norm].length < 2);
 }
 
 function indexUnits(doc: Y.Doc): IndexedUnit[] {
   return unitsFromYDoc(doc).map((u) => ({ ...u, folded: normalize(u.text).text }));
+}
+
+interface Ranked {
+  page: PageRow;
+  order: number;
+  group: number;
+  count: number;
+  inTitle: boolean[];
+  /** Los bloques con alguna palabra y cuántas veces está cada una (en el texto normalizado). */
+  matched: { unit: IndexedUnit; index: number; counts: number[] }[];
+  units: IndexedUnit[];
 }
 
 export class ProjectIndex {
@@ -175,6 +202,7 @@ export class ProjectIndex {
   private running: Promise<void> | null = null;
   private again: string | null = null;
   private building = false;
+  private cancelled = false;
   private disposed = false;
   private readonly unsubscribe: () => void;
   private readonly titles = new Map<string, Normalized>();
@@ -182,7 +210,7 @@ export class ProjectIndex {
   constructor(
     private readonly tree: IndexTree,
     private readonly docs: IndexDocs,
-    private readonly options: { yieldMs?: number } = {},
+    private readonly options: { yieldMs?: number; publishMs?: number } = {},
   ) {
     this.unsubscribe = docs.subscribeLocalChange((pageId) => {
       this.stale.add(pageId);
@@ -194,13 +222,20 @@ export class ProjectIndex {
     return () => this.listeners.delete(fn);
   };
 
-  /** Cambia cada vez que el índice lee algo o termina de leer (para volver a buscar). */
+  /** Cambia cuando el índice leyó algo (a lo sumo cada ~250 ms mientras lee) y al terminar cada lectura. */
   getRevision = (): number => this.revision;
 
-  /** Deja de escuchar las ediciones (al cerrar los servicios). */
+  /** Deja de escuchar las ediciones y de leer (al cerrar los servicios: cerrar sesión, cambiar de workspace). */
   dispose(): void {
     this.disposed = true;
     this.unsubscribe();
+    this.entries.clear();
+    this.listeners.clear();
+  }
+
+  /** Corta la lectura en curso (se cerró el panel): lo ya leído queda, lo demás se lee la próxima vez. */
+  cancel(): void {
+    if (this.running) this.cancelled = true;
   }
 
   /** Si la página está leída en el índice (para las pruebas). */
@@ -214,13 +249,14 @@ export class ProjectIndex {
    */
   refresh(projectId: string): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    this.cancelled = false;
     if (this.running) {
       this.again = projectId;
       return this.running;
     }
     this.running = (async () => {
       let next: string | null = projectId;
-      while (next && !this.disposed) {
+      while (next && !this.disposed && !this.cancelled) {
         this.again = null;
         // Un error de la base (se está cerrando, al cambiar de workspace) no rompe nada: se intenta la próxima vez.
         await this.run(next).catch(() => undefined);
@@ -228,6 +264,7 @@ export class ProjectIndex {
       }
     })().finally(() => {
       this.running = null;
+      this.cancelled = false;
     });
     return this.running;
   }
@@ -269,53 +306,77 @@ export class ProjectIndex {
     for (const fn of this.listeners) fn();
   }
 
+  /**
+   * Una pasada por las páginas del proyecto. `building` se prende recién cuando alguna página cambió de marca
+   * (una búsqueda o una sincronización sin cambios no muestra "Buscando…"), y mientras lee se avisa a lo sumo
+   * cada `publishMs` (cada aviso vuelve a buscar).
+   */
   private async run(projectId: string): Promise<void> {
-    this.building = true;
-    this.publish();
     const yieldMs = this.options.yieldMs ?? 12;
+    const publishMs = this.options.publishMs ?? 250;
+    let changed = false;
     try {
       this.states = await this.docs.states();
       let since = Date.now();
-      let changed = false;
+      let published = Date.now();
       for (const page of this.pagesOf(projectId)) {
-        if (this.disposed) return;
+        if (this.disposed || this.cancelled) return;
         // El árbol pudo cambiar mientras se leía: lo que ya no se ve no se lee.
-        if (!this.visible(page.id, projectId)) continue;
+        if (!this.visible(page.id, projectId) || !this.needsRead(page.id)) continue;
+        if (!this.building) {
+          this.building = true;
+          this.publish();
+          published = Date.now();
+        }
         try {
-          if (await this.readPage(page.id)) changed = true;
+          await this.waitForWrites();
+          if (this.disposed || this.cancelled) return;
+          await this.readPage(page.id);
+          changed = true;
         } catch {
           // Esta página no se pudo leer ahora: queda como estaba (o sin leer) y se intenta la próxima vez.
           this.stale.add(page.id);
         }
         if (Date.now() - since >= yieldMs) {
-          if (changed) this.publish();
-          changed = false;
           await new Promise((resolve) => setTimeout(resolve, 0));
           since = Date.now();
+        }
+        if (changed && Date.now() - published >= publishMs) {
+          this.publish();
+          published = Date.now();
+          changed = false;
         }
       }
       // Lo que ya no está en el árbol no se guarda más (igual se filtra al buscar).
       for (const id of this.entries.keys()) if (!this.tree.get(id)) this.entries.delete(id);
     } finally {
       this.building = false;
-      this.publish();
+      // Uno al final siempre: también cambian los avisos (páginas por bajar, ilegibles).
+      if (!this.disposed) this.publish();
     }
   }
 
-  /** Lee una página si cambió. Devuelve si la leyó. */
-  private async readPage(pageId: string): Promise<boolean> {
+  /** Mientras haya ediciones sin guardar, espera un poco: leer (y fusionar) no les demora el guardado. */
+  private async waitForWrites(): Promise<void> {
+    for (let i = 0; i < 40 && this.docs.hasUnsavedEdits?.(); i++) await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  /** Si la página cambió desde que se leyó (o nunca se leyó). */
+  private needsRead(pageId: string): boolean {
     const entry = this.entries.get(pageId);
     const live = this.docs.peek(pageId);
-    if (live) {
-      const mark = liveMark(live);
-      if (entry && entry.live === live && entry.mark === mark) return false;
-      this.stale.delete(pageId);
-      this.entries.set(pageId, { mark, units: indexUnits(live), live });
-      return true;
-    }
-    if (entry && !entry.live && entry.mark === markOf(this.states.get(pageId)) && !this.stale.has(pageId)) return false;
+    if (live) return entry?.mark !== liveMark(live);
+    return !entry || entry.mark !== markOf(this.states.get(pageId)) || this.stale.has(pageId);
+  }
+
+  private async readPage(pageId: string): Promise<void> {
+    const live = this.docs.peek(pageId);
     // Antes de leer: una edición que se guarde mientras tanto la vuelve a marcar.
     this.stale.delete(pageId);
+    if (live) {
+      this.entries.set(pageId, { mark: liveMark(live), units: indexUnits(live) });
+      return;
+    }
     const snap = await this.docs.indexSnapshot(pageId);
     try {
       this.entries.set(pageId, { mark: markOf(snap.state), units: indexUnits(snap.doc) });
@@ -323,7 +384,6 @@ export class ProjectIndex {
     } finally {
       snap.doc.destroy();
     }
-    return true;
   }
 
   private titleNorm(title: string): Normalized {
@@ -338,64 +398,85 @@ export class ProjectIndex {
   /**
    * Busca en lo que ya está leído. Primero las páginas con todas las palabras en el título, después las que
    * tienen alguna en el título, y después por cantidad de coincidencias; a igualdad, el orden de la barra
-   * lateral.
+   * lateral. Para ordenar se cuenta sobre el texto normalizado (sin mapas); los fragmentos, con sus mapas, se
+   * arman solo para las `limit` páginas que se muestran. Una sola letra busca solo en los títulos.
    */
   query(projectId: string, query: string, { limit = 50 }: { limit?: number } = {}): SearchResults {
     const words = parseWords(query);
     if (words.length === 0) return { hits: [], total: 0 };
-    const scored: { hit: PageHit; group: number; count: number; order: number }[] = [];
+    const onlyTitles = titlesOnly(words);
+    const ranked: Ranked[] = [];
     this.pagesOf(projectId).forEach((page, order) => {
-      if (!this.visible(page.id, projectId)) return;
-      const found = this.matchPage(page, words);
-      if (found) scored.push({ ...found, order });
+      const r = this.rank(page, order, words, onlyTitles);
+      if (r) ranked.push(r);
     });
-    scored.sort((a, b) => a.group - b.group || b.count - a.count || a.order - b.order);
-    return { hits: scored.slice(0, limit).map((s) => s.hit), total: scored.length };
+    ranked.sort((a, b) => a.group - b.group || b.count - a.count || a.order - b.order);
+    const hits: PageHit[] = [];
+    let dropped = 0;
+    for (const r of ranked) {
+      if (hits.length >= limit) break;
+      const hit = this.detail(r, words);
+      if (hit) hits.push(hit);
+      else dropped++;
+    }
+    return { hits, total: ranked.length - dropped };
   }
 
-  private matchPage(page: PageRow, words: SearchWord[]): { hit: PageHit; group: number; count: number } | null {
-    const title = page.title ?? '';
-    const titleNorm = this.titleNorm(title);
+  private rank(page: PageRow, order: number, words: SearchWord[], onlyTitles: boolean): Ranked | null {
+    const titleNorm = this.titleNorm(page.title ?? '');
     const inTitle = words.map((w) => findIn(titleNorm.text, w.norm, {}, titleNorm.map).length > 0);
-    const units = this.entries.get(page.id)?.units ?? [];
-    // Primero lo barato: qué bloques tienen el texto normalizado de cada palabra.
-    const candidates = units.filter((u) => words.some((w) => u.folded.includes(w.norm)));
-    const perUnit = new Map<IndexedUnit, [number, number][][]>();
+    const units = onlyTitles ? [] : (this.entries.get(page.id)?.units ?? []);
     const inBody = words.map(() => false);
-    for (const u of candidates) {
-      u.norm ??= normalize(u.text);
-      const lists = words.map((w) => (u.folded.includes(w.norm) ? searchNormalized(u.text, u.norm!, w.norm) : []));
-      if (lists.every((l) => l.length === 0)) continue;
-      lists.forEach((l, i) => {
-        if (l.length > 0) inBody[i] = true;
-      });
-      perUnit.set(u, lists);
-    }
-    if (!words.every((_, i) => inTitle[i] || inBody[i])) return null;
-
-    const matched = units.filter((u) => perUnit.has(u));
+    const matched: Ranked['matched'] = [];
     let count = inTitle.filter(Boolean).length;
-    for (const lists of perUnit.values()) for (const l of lists) count += l.length;
+    units.forEach((unit, index) => {
+      let counts: number[] | null = null;
+      for (let i = 0; i < words.length; i++) {
+        const n = countIn(unit.folded, words[i].norm);
+        if (n === 0) continue;
+        counts ??= words.map(() => 0);
+        counts[i] = n;
+        inBody[i] = true;
+        count += n;
+      }
+      if (counts) matched.push({ unit, index, counts });
+    });
+    if (!words.every((_, i) => inTitle[i] || inBody[i])) return null;
+    const group = inTitle.every(Boolean) ? 0 : inTitle.some(Boolean) ? 1 : 2;
+    return { page, order, group, count, inTitle, matched, units };
+  }
+
+  /**
+   * El resultado de una página, con los fragmentos. Los tramos se confirman con el mapa (una coincidencia que
+   * corta un carácter del original, como la mitad de una sílaba coreana, no cuenta): si al final no queda nada,
+   * la página no se muestra.
+   */
+  private detail(r: Ranked, words: SearchWord[]): PageHit | null {
+    const title = r.page.title ?? '';
+    const titleRanges = r.inTitle.some(Boolean) ? rangesOf(title, this.titleNorm(title), words) : [];
     // Los bloques con más palabras distintas primero (el mejor fragmento arriba: es adonde va la página); a
     // igualdad, en el orden del documento.
-    const distinct = (u: IndexedUnit) => perUnit.get(u)!.filter((l) => l.length > 0).length;
-    const shown = matched
-      .map((u, i) => ({ u, i }))
-      .sort((a, b) => distinct(b.u) - distinct(a.u) || a.i - b.i)
-      .slice(0, SNIPPETS_PER_PAGE)
-      .map(({ u }) => u);
-    const snippets = shown.map((u) => this.snippet(u, perUnit.get(u)!, words, units));
-    const group = inTitle.every(Boolean) ? 0 : inTitle.some(Boolean) ? 1 : 2;
+    const distinct = (m: Ranked['matched'][number]) => m.counts.filter((n) => n > 0).length;
+    const order = [...r.matched].sort((a, b) => distinct(b) - distinct(a) || a.index - b.index);
+    const snippets: Snippet[] = [];
+    // Los bloques que se miraron (los que se muestran y los que resultaron no coincidir de verdad).
+    let examined = 0;
+    for (const m of order) {
+      if (snippets.length >= SNIPPETS_PER_PAGE) break;
+      examined++;
+      const norm = normalize(m.unit.text);
+      const lists = words.map((w, i) => (m.counts[i] > 0 ? searchNormalized(m.unit.text, norm, w.norm) : []));
+      if (lists.every((l) => l.length === 0)) continue;
+      snippets.push(this.snippet(m.unit, lists, words, r.units));
+    }
+    if (snippets.length === 0 && titleRanges.length === 0) return null;
     return {
-      hit: {
-        page,
-        path: this.tree.ancestors(page.id),
-        titleRanges: inTitle.some(Boolean) ? rangesOf(title, titleNorm, words) : [],
-        snippets,
-        more: matched.length - shown.length,
-      },
-      group,
-      count,
+      page: r.page,
+      path: this.tree.ancestors(r.page.id),
+      titleRanges,
+      snippets,
+      // "y N más en esta página": los que no se miraron.
+      more: r.matched.length - examined,
     };
   }
 
@@ -417,8 +498,7 @@ export class ProjectIndex {
     for (const u of units) {
       if (u === unit) break;
       if (u.blockId !== unit.blockId || !u.folded.includes(term.norm)) continue;
-      u.norm ??= normalize(u.text);
-      occurrence += searchNormalized(u.text, u.norm, term.norm).length;
+      occurrence += searchNormalized(u.text, normalize(u.text), term.norm).length;
     }
     const text = unit.text;
     const [from, to] = first;

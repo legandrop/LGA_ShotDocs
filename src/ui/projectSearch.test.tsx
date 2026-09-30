@@ -31,6 +31,10 @@ beforeAll(() => {
     removeListener: () => undefined,
     dispatchEvent: () => false,
   })) as never;
+  // Con texto elegido, la barra de formato de BlockNote mide el rango (jsdom no lo hace).
+  const empty = () => ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) });
+  Range.prototype.getClientRects ??= (() => []) as never;
+  Range.prototype.getBoundingClientRect ??= empty as never;
   globalThis.ResizeObserver ??= class {
     observe() {}
     unobserve() {}
@@ -194,6 +198,8 @@ describe('el atajo', () => {
     expect(isSearchShortcut({ ...k, ctrlKey: true, metaKey: false }, false)).toBe(true);
     expect(isSearchShortcut({ ...k, ctrlKey: false, metaKey: true }, true)).toBe(true);
     expect(isSearchShortcut({ ...k, ctrlKey: false, metaKey: true }, false)).toBe(false);
+    // En la Mac, Ctrl+K pasa de largo (nunca Ctrl en la Mac).
+    expect(isSearchShortcut({ ...k, ctrlKey: true, metaKey: false }, true)).toBe(false);
     expect(isSearchShortcut({ ...k, ctrlKey: true, metaKey: false, shiftKey: true }, false)).toBe(false);
     // Un teclado ruso: la tecla de la K.
     expect(isSearchShortcut({ ...k, key: 'л', code: 'KeyK', ctrlKey: true, metaKey: false }, false)).toBe(true);
@@ -247,16 +253,17 @@ describe('el panel', () => {
     await app();
     await openWithKeys();
     await search('fondo');
-    // La página y su fragmento.
-    expect(options()).toHaveLength(2);
+    // La página, su fragmento y, al final (ningún proyecto se llama así), crear uno.
+    expect(options().map((o) => o.className.match(/search-(page|snippet|create)/)?.[1])).toEqual(['page', 'snippet', 'create']);
     expect(active()).toBe(options()[0]);
     key(input(), { key: 'ArrowDown' });
     expect(active()).toBe(options()[1]);
+    key(input(), { key: 'ArrowDown' });
     key(input(), { key: 'ArrowDown' });
     expect(active()).toBe(options()[0]);
     key(input(), { key: 'ArrowUp' });
-    expect(active()).toBe(options()[1]);
-    expect(input().getAttribute('aria-activedescendant')).toBe(options()[1].id);
+    expect(active()).toBe(options()[2]);
+    expect(input().getAttribute('aria-activedescendant')).toBe(options()[2].id);
   });
 
   it('lista los proyectos que coinciden y elegir uno cambia de proyecto', async () => {
@@ -316,7 +323,7 @@ describe('ir a un resultado', () => {
     const { host, b } = await app();
     await openWithKeys();
     await search('camaras');
-    expect(options()).toHaveLength(2);
+    expect(options().filter((o) => !o.classList.contains('search-create'))).toHaveLength(2);
     key(input(), { key: 'ArrowDown' });
     key(input(), { key: 'Enter' });
     expect(panel()).toBeNull();
@@ -385,6 +392,158 @@ describe('ir a un resultado', () => {
     expect(session.peekRequest()).toBeNull();
     expect(host.querySelector('.find-bar')).toBeNull();
   });
+});
+
+describe('el panel (después de la auditoría)', () => {
+  it('con algo escrito no lista el proyecto abierto; la primera opción es la activa; sin proyectos que coincidan, ofrece crear uno', async () => {
+    const { d, host } = await app();
+    await act(async () => {
+      await d.tree.createProject('Escenas extra');
+    });
+    await openWithKeys();
+    // "My project" coincide con "my", pero es el abierto: no aparece.
+    type(input(), 'my');
+    await until(() => !panel()!.querySelector('.search-hint'), 'la búsqueda');
+    await wait(80);
+    expect(panel()!.querySelector('.search-project')).toBeNull();
+    // Otro proyecto que coincide: arriba y activo (Enter cambia de proyecto).
+    type(input(), 'escena');
+    await until(() => panel()!.querySelector('.search-project'), 'el otro proyecto');
+    expect(active()!.textContent).toContain('Escenas extra');
+    // Ninguno coincide: al final, "Proyecto nuevo «…»"; con páginas que coinciden, la activa es la primera página.
+    type(input(), 'camara');
+    await until(() => panel()!.querySelector('.search-create'), 'crear');
+    expect(active()!.classList.contains('search-page')).toBe(true);
+    expect(options().at(-1)!.textContent).toBe('New project “camara”');
+    // Sin nada más, Enter lo crea y lo abre.
+    type(input(), 'Bosque Negro');
+    await until(() => options().length === 1, 'solo crear');
+    key(input(), { key: 'Enter' });
+    expect(panel()).toBeNull();
+    await until(() => host.querySelector('.project-button')?.textContent?.includes('Bosque Negro'), 'el proyecto nuevo');
+    expect(d.tree.projects().map((p) => p.name)).toContain('Bosque Negro');
+  });
+
+  it('quien no puede crear proyectos no ve la opción', async () => {
+    await app((device) => {
+      const snapshot = { member: { role: 'member', removed_at: null }, grants: [{ id: 'g', project_id: device.tree.workspaceId, page_id: null, level: 'edit' }], fetchedAt: Date.now() };
+      const access = { get: () => snapshot, subscribe: () => () => undefined, getRevision: () => 1, removed: false, userId: 'member' };
+      return { user: { id: 'member', email: 'm@test' }, access } as never;
+    });
+    await openWithKeys();
+    type(input(), 'nada parecido');
+    await until(() => panel()!.textContent!.includes('No results'), 'sin resultados');
+    expect(panel()!.querySelector('.search-create')).toBeNull();
+  });
+
+  it('"Buscando…" no parpadea: sin cambios no aparece, y con una lectura lenta aparece recién después de un rato', async () => {
+    const { d } = await app();
+    await openWithKeys();
+    await search('camara');
+    const seen: boolean[] = [];
+    const observer = new MutationObserver(() => seen.push(panel()?.textContent?.includes('Searching') ?? false));
+    observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+    type(input(), 'camara escena');
+    await wait(400);
+    type(input(), 'camara');
+    await wait(400);
+    expect(seen).not.toContain(true);
+    // Una página nueva que tarda en leerse.
+    const slow = await act(async () => {
+      const id = await d.tree.create(null, 'Lenta');
+      await edit(d, id, [{ id: 'l1', text: 'cámara lenta' }]);
+      return id;
+    });
+    const real = d.docs.indexSnapshot.bind(d.docs);
+    vi.spyOn(d.docs, 'indexSnapshot').mockImplementation(async (pageId) => {
+      if (pageId === slow) await new Promise((r) => setTimeout(r, 900));
+      return real(pageId);
+    });
+    type(input(), 'camara lenta');
+    await wait(200);
+    expect(panel()!.textContent).not.toContain('Searching');
+    await until(() => panel()!.textContent!.includes('Searching'), '"Buscando…" después de un rato');
+    await until(() => panel()!.querySelector('.search-page'), 'la página lenta');
+    observer.disconnect();
+  });
+
+  it('Esc en la barra de buscar deja elegida la coincidencia, y Ctrl+K sobre eso abre la búsqueda (no "link")', async () => {
+    const { host } = await app();
+    const editor = host.querySelector<HTMLElement>('.bn-editor')!;
+    key(editor, { key: 'f', ctrlKey: true });
+    const find = host.querySelector<HTMLInputElement>('.find-bar .find-input')!;
+    type(find, 'otra');
+    await until(() => host.querySelector('.sd-find-current'), 'la coincidencia');
+    key(find, { key: 'Escape' });
+    expect(host.querySelector('.find-bar')).toBeNull();
+    const e = key(editor.querySelector('p')!, { key: 'k', ctrlKey: true });
+    expect(e.defaultPrevented).toBe(true);
+    await until(panel, 'el panel');
+    // Ctrl+K otra vez lo cierra y el foco vuelve al editor.
+    key(input(), { key: 'k', ctrlKey: true });
+    expect(panel()).toBeNull();
+    expect(editor.contains(document.activeElement) || document.activeElement === editor).toBe(true);
+  });
+
+  it('el panel es modal: Tab no sale, Esc cierra con el foco en cualquier lado y el foco vuelve adonde estaba', async () => {
+    const { host } = await app();
+    const title = host.querySelector<HTMLTextAreaElement>('.page-title')!;
+    act(() => title.focus());
+    await openWithKeys(title);
+    const close = panel()!.querySelector<HTMLButtonElement>('.search-close')!;
+    key(input(), { key: 'Tab' });
+    expect(document.activeElement).toBe(close);
+    key(close, { key: 'Tab' });
+    expect(document.activeElement).toBe(input());
+    key(input(), { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(close);
+    key(close, { key: 'Escape' });
+    expect(panel()).toBeNull();
+    expect(document.activeElement).toBe(title);
+  });
+
+  it('solo opciones y grupos adentro de la lista; la cantidad se anuncia', async () => {
+    await app();
+    await openWithKeys();
+    await search('camara');
+    const listbox = panel()!.querySelector('[role="listbox"]')!;
+    const inside = [...listbox.querySelectorAll(':scope > *, [role="group"] > *')];
+    for (const el of inside) {
+      const ok = ['option', 'group'].includes(el.getAttribute('role') ?? '') || el.getAttribute('aria-hidden') === 'true';
+      expect(ok, el.outerHTML.slice(0, 80)).toBe(true);
+    }
+    expect(listbox.querySelector('.search-hint, .search-notice')).toBeNull();
+    expect(panel()!.querySelector('[aria-live="polite"]')!.textContent).toBe('2 pages found');
+  });
+
+  it('Ctrl+K con el selector de proyectos abierto lo cierra y abre la búsqueda', async () => {
+    const { host } = await app();
+    act(() => host.querySelector<HTMLButtonElement>('.project-button')!.click());
+    expect(document.querySelector('.project-menu')).not.toBeNull();
+    await openWithKeys();
+    expect(document.querySelector('.project-menu')).toBeNull();
+  });
+
+  it('una página que todavía está bajando no pierde la coincidencia pedida al completarse', async () => {
+    let missing = false;
+    const { host, b } = await app((device) => {
+      device.engine.prefetchPage = async () => !missing;
+      device.engine.isMissingContent = async () => missing;
+      return {};
+    });
+    missing = true;
+    await openWithKeys();
+    await search('jpg camara');
+    key(input(), { key: 'Enter' });
+    expect(location.pathname).toBe(pagePath(b));
+    await until(() => host.querySelector('.find-count')?.textContent === '3 of 3', 'la coincidencia, a medio bajar');
+    expect(host.querySelector('.editor-missing')).not.toBeNull();
+    missing = false;
+    await until(() => !host.querySelector('.editor-missing'), 'la página completa', 150);
+    await until(() => host.querySelector('.find-count')?.textContent?.includes('of'), 'la cuenta otra vez');
+    await wait(300);
+    expect(host.querySelector('.find-count')!.textContent).toBe('3 of 3');
+  }, 20_000);
 });
 
 describe('el pedido de ir a un resultado', () => {

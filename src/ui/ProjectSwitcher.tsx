@@ -8,7 +8,7 @@ import { AccountIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icon
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, useCurrentProject, useSwitchProject } from './project';
-import { SEARCH_SHORTCUT_LABEL } from './projectSearchUi';
+import { SEARCH_SHORTCUT_LABEL, useSearchSession } from './projectSearchUi';
 import { ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
@@ -55,6 +55,12 @@ export function ProjectSwitcher() {
   const name = project?.name ?? tr('project.defaultName');
 
   const toggle = () => setPosition((open) => (open || !button.current ? null : menuBelow(button.current, 340)));
+
+  // Ctrl/⌘+K con el selector abierto abre la búsqueda: el selector se cierra (no queda abajo del panel).
+  const searchOpen = useSearchSession().isOpen();
+  useEffect(() => {
+    if (searchOpen) setPosition(null);
+  }, [searchOpen]);
 
   return (
     <>

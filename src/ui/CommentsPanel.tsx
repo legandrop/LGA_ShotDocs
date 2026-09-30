@@ -10,6 +10,7 @@ import {
   copyText,
   hasDrafts,
   isPhoneLayout,
+  isSendShortcut,
   requestCloseComments,
   setDraft,
   revealBlock,
@@ -594,7 +595,7 @@ function Composer({
         aria-label={placeholder}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          if (isSendShortcut(e)) {
             e.preventDefault();
             void submit();
           } else if (e.key === 'Escape') {

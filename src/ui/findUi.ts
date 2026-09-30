@@ -106,11 +106,42 @@ export function hasFindTarget(): boolean {
   return !!state.target && state.target.nonce > targetHandled;
 }
 
-/** La coincidencia pedida sin atender, si hay (y la marca como atendida). */
-export function takeFindTarget(): FindTarget | null {
+/**
+ * La coincidencia pedida sin atender, si hay. Se marca como atendida salvo con `keep`: una página que todavía
+ * está bajando se vuelve a abrir al completarse, y ahí se vuelve a ir a la coincidencia pedida.
+ */
+export function takeFindTarget({ keep = false }: { keep?: boolean } = {}): FindTarget | null {
   if (!hasFindTarget()) return null;
-  targetHandled = state.target!.nonce;
+  if (!keep) targetHandled = state.target!.nonce;
   return state.target;
+}
+
+// --- Lo que Esc dejó elegido -------------------------------------------------------------------------------
+//
+// Esc en la barra deja elegida la coincidencia (como VS Code). Con texto elegido en el editor, Ctrl/⌘+K es
+// "crear un link" de BlockNote; pero si lo elegido es justo lo que dejó la barra (nadie lo tocó después), la
+// persona no eligió nada: Ctrl/⌘+K abre la búsqueda del proyecto. Sin tipos de ProseMirror: esto va en la
+// primera carga y el editor se baja aparte.
+
+interface ViewLike {
+  isDestroyed: boolean;
+  dom: Element;
+  state: { doc: unknown; selection: { from: number; to: number } };
+}
+
+let findSelection: { view: ViewLike; doc: unknown; from: number; to: number } | null = null;
+
+/** La barra se cerró dejando elegida esa coincidencia (`closeFind`). */
+export function recordFindSelection(view: ViewLike, from: number, to: number): void {
+  findSelection = { view, doc: view.state.doc, from, to };
+}
+
+/** Si el evento es en el editor y lo elegido ahí sigue siendo exactamente lo que dejó la barra al cerrarse. */
+export function isFindSelectionTarget(target: EventTarget | null): boolean {
+  const record = findSelection;
+  if (!record || record.view.isDestroyed || !(target instanceof Node) || !record.view.dom.contains(target)) return false;
+  const { doc, selection } = record.view.state;
+  return doc === record.doc && selection.from === record.from && selection.to === record.to;
 }
 
 export function closeFindBar(): void {

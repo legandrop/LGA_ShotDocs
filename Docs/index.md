@@ -39,12 +39,15 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
   ningún paso de `Plan_Workspaces.md` (sección 10) se da por cerrado sin una auditoría independiente
   contra lo que pide el plan: funcionalidad, permisos y Row Level Security, la regla de no perder datos
   al sincronizar y la documentación. Lo que encuentre se corrige antes de cerrarlo.
+- **Atajos de teclado.** En la Mac, siempre ⌘ y nunca Ctrl; en Windows y Linux, Ctrl (regla de Lega). Se
+  comparan con `modPressed` e `isLetter` de `src/ui/findUi.ts`, con la plataforma como parámetro para probar las
+  dos (`src/ui/macShortcuts.test.ts`).
 - **Claves.** Nunca se versionan. La app solo lee `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` (o sus
   variantes `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`), nunca una clave secreta.
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 779 pruebas (v0.053): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 796 pruebas (v0.053): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`), el cliente del portero (`src/media/`), el portero
   (`portero/src/`) y el comando que prepara un workspace (`scripts/*.test.mjs`, sin red). `npm run typecheck`
   revisa los tipos de la app pero no los del portero: esos van con `npx tsc -p portero --noEmit`.
