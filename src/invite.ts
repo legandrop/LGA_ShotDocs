@@ -3,7 +3,9 @@ import type { WorkspaceConfig } from './workspace';
 
 // El link de invitación (paso 9 de Docs/Plan_Workspaces.md): la dirección de la app y, después del `#`
 // (esa parte no llega a ningún servidor), la dirección y la clave publicable del workspace, su clave local
-// y la página o el proyecto al que va:  https://<app>/#invite=<base64url de {"u","k","l","p"}>.
+// y la página o el proyecto al que va:  https://<app>/#invite=<base64url de {"u","k","l","p","n"}>.
+// `n` (el nombre del workspace) es opcional y solo sirve para preguntar "Join <nombre> at <host>?": las
+// versiones anteriores lo ignoran.
 
 export interface InvitePayload {
   /** Dirección del Supabase del workspace. */
@@ -14,6 +16,8 @@ export interface InvitePayload {
   l: string;
   /** La página o el proyecto que se comparte; puede faltar (invitación sin permisos). */
   p?: string;
+  /** Nombre del workspace (`workspace_settings.name`), para mostrarlo antes de unirse; puede faltar. */
+  n?: string;
 }
 
 const PREFIX = '#invite=';
@@ -31,6 +35,7 @@ function fromBase64url(text: string): string {
 export function inviteLink(appOrigin: string, payload: InvitePayload): string {
   const clean: InvitePayload = { u: payload.u, k: payload.k, l: payload.l };
   if (payload.p) clean.p = payload.p;
+  if (payload.n?.trim()) clean.n = payload.n.trim().slice(0, 80);
   return `${appOrigin.replace(/\/+$/, '')}/${PREFIX}${base64url(JSON.stringify(clean))}`;
 }
 
@@ -42,7 +47,8 @@ export function parseInviteHash(hash: string): InvitePayload | null {
     if (typeof data.u !== 'string' || typeof data.k !== 'string' || typeof data.l !== 'string') return null;
     if (!/^https:\/\//i.test(data.u) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(data.u)) return null;
     const p = typeof data.p === 'string' && /^[0-9a-f-]{36}$/i.test(data.p) ? data.p : undefined;
-    return { u: data.u, k: data.k, l: data.l, ...(p ? { p } : {}) };
+    const n = typeof data.n === 'string' && data.n.trim() ? data.n.trim().slice(0, 80) : undefined;
+    return { u: data.u, k: data.k, l: data.l, ...(p ? { p } : {}), ...(n ? { n } : {}) };
   } catch {
     return null;
   }
@@ -58,39 +64,49 @@ export function isThisWorkspace(payload: InvitePayload, ws: WorkspaceConfig): bo
   return sameUrl(payload.u, ws.url) && payload.l === ws.localKey;
 }
 
-export type InviteArrival = { kind: 'this'; target: string | null } | { kind: 'other' };
+export type InviteArrival = { kind: 'this'; target: string | null };
 
-let arrival: InviteArrival | null | undefined;
+let hashRead = false;
 
 /**
- * Se fija una sola vez, al abrir la app, si vino por un link de invitación. Si es de este workspace,
- * guarda la página para abrirla después de entrar; en los dos casos saca el link de la dirección.
+ * Lee una sola vez, al abrir la app, el link de invitación de la dirección, y lo saca de ahí. `broken` si
+ * la dirección traía `#invite=` pero no se pudo leer. Qué hacer con él lo decide la lista de workspaces
+ * (`resolveInvite` en `src/workspaces.ts`).
  */
-export function consumeInviteArrival(ws: WorkspaceConfig): InviteArrival | null {
-  if (arrival !== undefined) return arrival;
-  arrival = null;
-  if (typeof location === 'undefined') return arrival;
+export function takeInviteHash(): { payload: InvitePayload | null; broken: boolean } {
+  if (hashRead || typeof location === 'undefined') return { payload: null, broken: false };
+  hashRead = true;
+  if (!location.hash.startsWith(PREFIX)) return { payload: null, broken: false };
   const payload = parseInviteHash(location.hash);
-  if (!payload) return arrival;
   history.replaceState(history.state, '', location.pathname + location.search);
-  if (isThisWorkspace(payload, ws)) {
-    arrival = { kind: 'this', target: payload.p ?? null };
-    if (payload.p) rememberInviteTarget(payload.p);
-  } else {
-    arrival = { kind: 'other' };
-  }
+  return { payload, broken: !payload };
+}
+
+let arrival: InviteArrival | null = null;
+
+/** Se entró con un link de invitación del workspace que se abre: la página se abre después de entrar. */
+export function markInviteArrival(target: string | null): void {
+  arrival = { kind: 'this', target };
+  if (target) rememberInviteTarget(target);
+}
+
+/** Si esta apertura de la app vino por un link de invitación del workspace abierto. */
+export function inviteArrival(): InviteArrival | null {
   return arrival;
 }
 
-export const OTHER_WORKSPACE_NOTICE = 'Joining other workspaces is coming soon.';
+let notice: string | null = null;
 
-let noticeShown = false;
+/** Un aviso sobre el link con que se abrió la app (roto, o de un workspace que no se pudo agregar). */
+export function setArrivalNotice(text: string): void {
+  notice = text;
+}
 
-/** El aviso de un link de otro workspace (llega en el paso 12), una sola vez. */
+/** El aviso del link, una sola vez (lo muestra el login o, con la sesión ya iniciada, la app). */
 export function takeArrivalNotice(): string | null {
-  if (noticeShown || arrival?.kind !== 'other') return null;
-  noticeShown = true;
-  return OTHER_WORKSPACE_NOTICE;
+  const text = notice;
+  notice = null;
+  return text;
 }
 
 /** La página o el proyecto del link, para abrirlo después de entrar (sobrevive al link del correo). */

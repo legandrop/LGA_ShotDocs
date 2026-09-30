@@ -289,6 +289,17 @@ export class PageDocs {
     }
   }
 
+  /**
+   * Lo guardado de una página, armado en un documento aparte (hay que destruirlo después), con su estado
+   * leído en la misma transacción y si esta versión puede leer todo lo que trae. Para mirar qué archivos
+   * usa la página (papelera de archivos) sin tocar el documento abierto en el editor.
+   */
+  async snapshot(pageId: string): Promise<{ doc: Y.Doc; state: DocState; supported: boolean }> {
+    await this.flush(pageId);
+    const saved = await this.readSaved(pageId);
+    return { ...saved, supported: this.options.supports?.(saved.doc) ?? true };
+  }
+
   /** Baja lo nuevo de una página y lo guarda. Si está abierta, lo aplica también en el editor. */
   pullPage(pageId: string, remote: Remote): Promise<number> {
     return this.withLock(pageId, async () => {
@@ -328,6 +339,7 @@ export class PageDocs {
     }
     if (merged) await tx.objectStore('docUpdates').add({ pageId, data: merged });
     state.cursor = maxSeq;
+    if (valid.length < updates.length) state.unreadable = true;
     await tx.objectStore('docState').put(state);
     await tx.done;
 

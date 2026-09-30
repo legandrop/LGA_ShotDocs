@@ -3,7 +3,18 @@ import type { MediaRemote } from '../sync/remote';
 import { errorMessage, RemoteError } from '../sync/types';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
 import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress } from './portero';
-import { dimension, mediaKind, placeholderUrl, probeMedia, seconds, withPlayMark, type MediaKind, type Probe } from './probe';
+import {
+  deletedUrl,
+  dimension,
+  mediaKind,
+  placeholderUrl,
+  probeMedia,
+  seconds,
+  withPlayMark,
+  type MediaKind,
+  type Probe,
+} from './probe';
+import type { DueFileRow, MediaFileRow } from '../sync/types';
 
 // La cola de fotos y videos (paso 6 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Archivos
 // grandes"). El archivo se guarda primero en el dispositivo (base `<base local>:media`) y en la página queda
@@ -17,6 +28,14 @@ import { dimension, mediaKind, placeholderUrl, probeMedia, seconds, withPlayMark
 export const MEDIA_SCHEME = 'sdmedia://';
 /** La versión de la base con `files`, `register_file` y el bucket `thumbs`. */
 export const MEDIA_SCHEMA_VERSION = 3;
+/** La versión de la base con la papelera de archivos (`unlink_page_file`, `trashed_files`, paso 11). */
+export const TRASH_SCHEMA_VERSION = 6;
+/**
+ * Un archivo agregado en este dispositivo que el documento de su página nunca mostró (se agregó y se borró
+ * enseguida, o el editor no llegó a poner el bloque) se da por quitado recién pasado este tiempo: entre
+ * guardar el archivo y que el bloque aparezca en el documento pasa un instante.
+ */
+const OWN_GRACE_MS = 5 * 60_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // La misma forma que pide la base (`files.mime`).
@@ -89,6 +108,26 @@ function backoff(failures: number): number {
 
 type Outcome = 'offline' | 'retry' | 'blocked' | 'waiting' | 'cancelled';
 
+/** Una fila nueva de usos: la página usa el archivo (`pending` 1: falta mandarlo). */
+function newLink(pageId: string, fileId: string, pending: 0 | 1): MediaLink {
+  return { key: `${pageId}:${fileId}`, pageId, fileId, pending, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 };
+}
+
+/** La misma fila con lo contrario por mandar (usado o quitado), desde cero y con otra revisión. */
+function flipLink(link: MediaLink, removed: boolean): MediaLink {
+  return {
+    ...link,
+    removed,
+    rev: (link.rev ?? 0) + 1,
+    pending: 1,
+    waiting: null,
+    error: null,
+    blocked: false,
+    failures: 0,
+    retryAt: 0,
+  };
+}
+
 /** Qué hacer con un error: esperar la red, reintentar más tarde, o dejarlo a la vista hasta "Retry". */
 function classify(err: unknown): Outcome {
   if (err instanceof UploadError && err.cancelled) return 'cancelled';
@@ -119,7 +158,7 @@ function friendly(err: unknown): string {
 }
 
 /** Lo mínimo del portero que usa la cola (las pruebas usan uno en memoria). */
-export type MediaPortero = Pick<Portero, 'upload' | 'pass'>;
+export type MediaPortero = Pick<Portero, 'upload' | 'pass' | 'trash'>;
 
 export interface MediaQueueOptions {
   /** El cliente del portero para una dirección (`workspace_settings.media_url`). */
@@ -169,6 +208,15 @@ export class MediaQueue {
 
   private url: string | null = null;
   private schemaReady = false;
+  /** La base tiene la papelera de archivos (versión 6): se puede mandar `unlink_page_file`. */
+  private trashReady = false;
+  /**
+   * Por página, qué versión del documento ya se comparó con sus archivos (`<ediciones>:<cursor>:<quitar>`):
+   * mientras no cambie, no se vuelve a leer. Se guarda en la base del dispositivo.
+   */
+  private usageMarks: Record<string, string> = {};
+  /** Archivos cuyo estado en la papelera ya se preguntó en esta sesión (para mostrarlos como borrados). */
+  private readonly deletedChecked = new Set<string>();
   private running: Promise<void> | null = null;
   private again = false;
   private stopped = false;
@@ -218,6 +266,9 @@ export class MediaQueue {
     if (!this.db) return;
     this.url = ((await this.db.get('meta', 'mediaUrl')) as string | null | undefined) ?? null;
     this.schemaReady = (await this.db.get('meta', 'schemaReady')) === true;
+    this.trashReady = (await this.db.get('meta', 'trashReady')) === true;
+    const marks = await this.db.get('meta', 'usageMarks');
+    this.usageMarks = marks && typeof marks === 'object' ? { ...(marks as Record<string, string>) } : {};
   }
 
   /**
@@ -227,11 +278,18 @@ export class MediaQueue {
   async configure(mediaUrl: string | null, schemaVersion: number): Promise<void> {
     const url = mediaUrl ? mediaUrl.replace(/\/+$/, '') : null;
     const ready = schemaVersion >= MEDIA_SCHEMA_VERSION;
-    if (!this.db || (url === this.url && ready === this.schemaReady)) return;
+    const trash = schemaVersion >= TRASH_SCHEMA_VERSION;
+    if (!this.db || (url === this.url && ready === this.schemaReady && trash === this.trashReady)) return;
     this.url = url;
     this.schemaReady = ready;
+    this.trashReady = trash;
     const tx = this.db.transaction('meta', 'readwrite');
-    await Promise.all([tx.store.put(url, 'mediaUrl'), tx.store.put(ready, 'schemaReady'), tx.done]);
+    await Promise.all([
+      tx.store.put(url, 'mediaUrl'),
+      tx.store.put(ready, 'schemaReady'),
+      tx.store.put(trash, 'trashReady'),
+      tx.done,
+    ]);
     this.onChange?.();
   }
 
@@ -242,6 +300,11 @@ export class MediaQueue {
 
   get mediaUrl(): string | null {
     return this.url;
+  }
+
+  /** La base tiene la papelera de archivos (versión 6). */
+  get trashEnabled(): boolean {
+    return !!this.db && this.schemaReady && this.trashReady;
   }
 
   // --- agregar --------------------------------------------------------------------------------------
@@ -378,7 +441,9 @@ export class MediaQueue {
 
   /**
    * La página usa estos archivos. Los que todavía no están registrados para ella (se copió o se pegó el
-   * bloque de otra página) entran a la cola de `link_page_file`. Lo ya visto no se vuelve a pedir.
+   * bloque de otra página) entran a la cola de `link_page_file`, y uno que la página había dejado de usar
+   * (se deshizo el borrado, se volvió a pegar) vuelve a la cola para reactivarlo. Lo ya visto no se vuelve
+   * a pedir.
    */
   async ensureLinks(pageId: string, fileIds: string[]): Promise<void> {
     if (!this.db) return;
@@ -388,16 +453,86 @@ export class MediaQueue {
       if (this.seenLinks.has(key) || !UUID.test(fileId)) continue;
       const tx = this.db.transaction(['links', 'files'], 'readwrite');
       const [link, own] = await Promise.all([tx.objectStore('links').get(key), tx.objectStore('files').get(fileId)]);
-      // El archivo que se agregó en esta página se registra con ella (`register_file`).
-      if (!link && own?.pageId !== pageId) {
-        const fresh: MediaLink = { key, pageId, fileId, pending: 1, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 };
-        await tx.objectStore('links').put(fresh);
+      if (link?.removed) {
+        await tx.objectStore('links').put(flipLink(link, false));
+        added = true;
+      } else if (!link && own?.pageId !== pageId) {
+        // El archivo que se agregó en esta página se registra con ella (`register_file`).
+        await tx.objectStore('links').put(newLink(pageId, fileId, 1));
         added = true;
       }
       await tx.done;
       this.seenLinks.add(key);
     }
     if (added) this.onQueued?.();
+  }
+
+  // --- qué archivos usa cada página (papelera de archivos) ------------------------------------------
+
+  /**
+   * Compara los archivos del documento de una página (`docIds`, ver `usage.ts`) con lo que este dispositivo
+   * sabe que el servidor tiene, y pone en la cola la diferencia: lo nuevo, `link_page_file`; lo que ya no
+   * está, `unlink_page_file`. Una sola fila por par, así que si el documento vuelve a tener el archivo antes
+   * de mandar nada (deshacer), la fila vuelve a "usado" y nada se pisa.
+   *
+   * `unlink`: SOLO si el documento está completo y al día con el servidor. Un documento a medio bajar (o
+   * que esta versión no puede leer entero) no dice que un archivo se quitó, dice que todavía no llegó:
+   * entonces se suman los usos nuevos y nunca se quita ninguno. Devuelve si puso algo por mandar.
+   */
+  async reconcilePage(pageId: string, docIds: ReadonlySet<string>, { unlink }: { unlink: boolean }): Promise<boolean> {
+    if (!this.db || !this.schemaReady) return false;
+    const allowUnlink = unlink && this.trashReady;
+    const tx = this.db.transaction(['links', 'files'], 'readwrite');
+    const store = tx.objectStore('links');
+    const [links, records] = await Promise.all([
+      store.getAll(IDBKeyRange.bound(`${pageId}:`, `${pageId}:\uffff`)),
+      tx.objectStore('files').getAll(),
+    ]);
+    const byFile = new Map(links.map((l) => [l.fileId, l]));
+    const own = records.filter((r) => r.pageId === pageId);
+    const ownIds = new Set(own.map((r) => r.id));
+    const writes: MediaLink[] = [];
+    for (const id of docIds) {
+      const link = byFile.get(id);
+      if (link) {
+        if (link.removed) writes.push(flipLink(link, false));
+      } else if (ownIds.has(id)) {
+        // Lo registra `register_file` con esta página: solo se anota que el documento lo tiene, para saber
+        // después si se quitó. No hay nada que mandar.
+        writes.push(newLink(pageId, id, 0));
+      } else {
+        writes.push(newLink(pageId, id, 1));
+      }
+    }
+    if (allowUnlink) {
+      for (const link of links) {
+        if (!link.removed && !docIds.has(link.fileId)) writes.push(flipLink(link, true));
+      }
+      // Agregado acá pero el documento nunca lo tuvo (se borró enseguida): pasado un rato, se quita.
+      for (const r of own) {
+        if (docIds.has(r.id) || byFile.has(r.id) || this.now() - r.createdAt < OWN_GRACE_MS) continue;
+        writes.push({ ...newLink(pageId, r.id, 1), removed: true, rev: 1 });
+      }
+    }
+    await Promise.all([...writes.map((w) => store.put(w)), tx.done]);
+    for (const w of writes) {
+      if (w.removed) this.seenLinks.delete(w.key);
+      else this.seenLinks.add(w.key);
+    }
+    return writes.some((w) => w.pending === 1);
+  }
+
+  /** Qué versión del documento de la página ya se comparó con sus archivos (`reconcilePage`). */
+  usageMark(pageId: string): string | undefined {
+    return this.usageMarks[pageId];
+  }
+
+  /** Anota las versiones ya comparadas, todas juntas. */
+  async setUsageMarks(marks: Record<string, string>): Promise<void> {
+    if (!this.db || Object.keys(marks).length === 0) return;
+    const next = { ...this.usageMarks, ...marks };
+    await this.db.put('meta', next, 'usageMarks');
+    this.usageMarks = next;
   }
 
   // --- subir ----------------------------------------------------------------------------------------
@@ -448,10 +583,20 @@ export class MediaQueue {
       const outcome = await this.process(record, portero);
       if (outcome === 'offline' || outcome === 'cancelled') return;
     }
-    const links = await db.getAllFromIndex('links', 'pending', 1);
+    // Primero los usos nuevos y después los que se quitaron: un archivo que se cortó de una página y se pegó
+    // en otra no pasa por la papelera en el medio.
+    const links = (await db.getAllFromIndex('links', 'pending', 1)).sort((a, b) => Number(!!a.removed) - Number(!!b.removed));
     for (const link of links) {
       if (this.stopped) return;
       if (link.blocked || link.waiting === 'denied' || link.retryAt > this.now() || skipPage(link.pageId)) continue;
+      if (link.removed) {
+        // Sin la papelera en la base no se manda (la función no existe todavía).
+        if (!this.trashReady) continue;
+        // Agregado en este dispositivo y todavía sin registrar: `register_file` lo colgaría de nuevo de la
+        // página después de quitarlo. Se espera a que esté registrado.
+        const own = await db.get('files', link.fileId);
+        if (own && own.pageId === link.pageId && !own.registered) continue;
+      }
       if ((await this.linkOne(link)) === 'offline') return;
     }
     await this.refreshMissing().catch(() => undefined);
@@ -653,10 +798,12 @@ export class MediaQueue {
     return 'done';
   }
 
+  /** Manda un uso (`link_page_file`) o que se dejó de usar (`unlink_page_file`), según la fila. */
   private async linkOne(link: MediaLink): Promise<Outcome | 'done'> {
     try {
-      await this.remote.linkPageFile(link.pageId, link.fileId);
-      await this.patchLink(link.key, { pending: 0, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 });
+      if (link.removed) await this.remote.unlinkPageFile(link.pageId, link.fileId);
+      else await this.remote.linkPageFile(link.pageId, link.fileId);
+      await this.patchLink(link.key, { pending: 0, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 }, link.rev ?? 0);
       return 'done';
     } catch (err) {
       const outcome = classify(err);
@@ -666,15 +813,19 @@ export class MediaQueue {
       // Un archivo de este dispositivo que figura registrado pero el servidor no tiene (se restauró la base):
       // vuelve a la cola para registrarlo de nuevo.
       if (outcome === 'waiting') await this.requeueOwn(link.fileId);
-      await this.patchLink(link.key, {
-        // Que el archivo todavía no llegó (lo registra otro dispositivo) o que no se puede editar la página
-        // no es un error de esta persona: se espera, sin contarlo como pendiente.
-        waiting: outcome === 'waiting' ? 'file_not_found' : denied ? 'denied' : null,
-        error: outcome === 'waiting' || denied ? null : friendly(err),
-        blocked: outcome === 'blocked' && !denied,
-        failures,
-        retryAt: outcome === 'blocked' ? 0 : this.now() + backoff(failures),
-      });
+      await this.patchLink(
+        link.key,
+        {
+          // Que el archivo todavía no llegó (lo registra otro dispositivo) o que no se puede editar la página
+          // no es un error de esta persona: se espera, sin contarlo como pendiente.
+          waiting: outcome === 'waiting' ? 'file_not_found' : denied ? 'denied' : null,
+          error: outcome === 'waiting' || denied ? null : friendly(err),
+          blocked: outcome === 'blocked' && !denied,
+          failures,
+          retryAt: outcome === 'blocked' ? 0 : this.now() + backoff(failures),
+        },
+        link.rev ?? 0,
+      );
       this.onChange?.();
       return outcome;
     }
@@ -704,10 +855,14 @@ export class MediaQueue {
     return next;
   }
 
-  private async patchLink(key: string, changes: Partial<MediaLink>): Promise<void> {
+  /**
+   * Cambia una fila de usos. Con `rev`, solo si la fila no cambió mientras tanto (el documento volvió a
+   * tener o dejó de tener el archivo mientras viajaba el pedido): lo nuevo sigue pendiente.
+   */
+  private async patchLink(key: string, changes: Partial<MediaLink>, rev?: number): Promise<void> {
     const tx = this.store.transaction('links', 'readwrite');
     const current = await tx.store.get(key);
-    if (current) await tx.store.put({ ...current, ...changes });
+    if (current && (rev === undefined || (current.rev ?? 0) === rev)) await tx.store.put({ ...current, ...changes });
     await tx.done;
   }
 
@@ -755,7 +910,8 @@ export class MediaQueue {
       .map((r) => ({ id: r.id, name: r.name, error: r.error ?? 'Unknown error' }));
     for (const l of links.filter((x) => x.blocked)) {
       const name = (await this.db.get('files', l.fileId))?.name ?? (await this.db.get('known', l.fileId))?.name ?? l.fileId;
-      out.push({ id: l.key, name: `${name} (copied to another page)`, error: l.error ?? 'Unknown error' });
+      const what = l.removed ? 'removed from a page' : 'copied to another page';
+      out.push({ id: l.key, name: `${name} (${what})`, error: l.error ?? 'Unknown error' });
     }
     return out;
   }
@@ -830,6 +986,9 @@ export class MediaQueue {
     await tx.objectStore('known').clear();
     await tx.done;
     this.seenLinks.clear();
+    // Cada página se vuelve a comparar con sus archivos.
+    this.usageMarks = {};
+    await this.db.delete('meta', 'usageMarks');
     return count;
   }
 
@@ -862,6 +1021,13 @@ export class MediaQueue {
   private async display(id: string): Promise<string> {
     try {
       const db = this.store;
+      // Mandado a la papelera de Drive (papelera de archivos): ni roto ni pendiente, borrado, con la
+      // miniatura si la hay.
+      const cached = await db.get('known', id);
+      if (cached?.deleted) return await this.deletedDisplay(id, cached.name, mediaKind(cached.mime));
+      // Lo que se sabía puede ser de antes: se pregunta una vez por sesión y, si resulta borrado, el editor
+      // cambia la imagen (como cuando llega una miniatura).
+      void this.checkDeleted(id);
       const own = await db.get('files', id);
       if (own) {
         const kind = mediaKind(own.mime);
@@ -887,6 +1053,28 @@ export class MediaQueue {
     }
   }
 
+  /** La foto o el video que un dueño o admin mandó a la papelera de Drive. */
+  private async deletedDisplay(id: string, name: string, kind: MediaKind | null): Promise<string> {
+    const thumb = this.db ? await this.db.get('thumbs', id).catch(() => undefined) : undefined;
+    return deletedUrl(kind, name, thumb ?? null);
+  }
+
+  /**
+   * Pregunta a la base (una vez por sesión y por archivo, junto con los demás de la misma pasada) si el
+   * archivo se mandó a la papelera de Drive; si sí, avisa al editor para que lo vuelva a mostrar.
+   */
+  private async checkDeleted(id: string): Promise<void> {
+    if (this.deletedChecked.has(id)) return;
+    this.deletedChecked.add(id);
+    try {
+      const meta = await this.fetchMeta(id);
+      if (meta?.deleted) this.thumbReady(id);
+    } catch {
+      // Sin red: se vuelve a preguntar la próxima vez que se muestre.
+      this.deletedChecked.delete(id);
+    }
+  }
+
   /** Lo que la base sabe del archivo; los pedidos de una misma pasada van juntos. */
   private fetchMeta(id: string): Promise<KnownFile | null> {
     if (!this.metaBatch) {
@@ -905,6 +1093,7 @@ export class MediaQueue {
             duration: row.duration,
             thumbAt: row.thumb_at,
             driveId: row.drive_id,
+            deleted: isDeletedRow(row),
             fetchedAt: this.now(),
           };
           found.set(row.id, known);
@@ -951,4 +1140,73 @@ export class MediaQueue {
     if (!this.url) throw new Error('This workspace has no media server.');
     return this.porteroFor(this.url).pass({ file: id });
   }
+
+  // --- papelera de archivos -------------------------------------------------------------------------
+
+  /**
+   * Pide al portero que mande un archivo de la papelera a la papelera de Drive (`POST /trash`; solo dueño y
+   * admins, lo decide la base). Nunca lo borra: Drive lo guarda 30 días. Tira `PorteroError` con el estado
+   * del portero (409: una página lo volvió a usar).
+   */
+  async trash(id: string): Promise<void> {
+    if (!this.url) throw new PorteroError('This workspace has no media server.', 0);
+    await this.porteroFor(this.url).trash(id);
+    // En este dispositivo, desde ya se muestra como borrado si alguna página lo vuelve a tener.
+    if (this.db) {
+      const known = await this.db.get('known', id).catch(() => undefined);
+      if (known) await this.db.put('known', { ...known, deleted: true }).catch(() => undefined);
+    }
+    this.thumbReady(id);
+  }
+
+  /**
+   * El borrado automático a los 30 días (paso 11), armado y APAGADO: con `enabled` en `false`
+   * (`workspace_settings.auto_purge_files`, hoy siempre) no pregunta ni manda nada. Prendido, pide a la
+   * base los vencidos de cada proyecto (`files_due_for_purge`, solo dueño y admins) y se los pasa al
+   * portero de a uno; un error no corta los demás. Devuelve cuántos mandó.
+   */
+  async autoPurge(enabled: boolean, projectIds: string[]): Promise<number> {
+    if (!this.url) return 0;
+    return autoPurgeFiles({
+      enabled,
+      projectIds,
+      due: (projectId) => this.remote.filesDueForPurge(projectId),
+      trash: (id) => this.trash(id),
+    });
+  }
+}
+
+/** Un dueño o admin lo mandó a la papelera de Drive (pedido o ya confirmado por el portero). */
+export function isDeletedRow(row: Pick<MediaFileRow, 'purged_at' | 'drive_trashed_at'>): boolean {
+  return !!(row.purged_at || row.drive_trashed_at);
+}
+
+export interface AutoPurgeOptions {
+  /** `workspace_settings.auto_purge_files`. Apagado, no se llama a nada. */
+  enabled: boolean;
+  projectIds: string[];
+  due: (projectId: string) => Promise<DueFileRow[]>;
+  trash: (fileId: string) => Promise<unknown>;
+}
+
+/**
+ * Manda a la papelera de Drive los archivos que cumplieron 30 días en la papelera, de a uno. Detrás del
+ * interruptor: si está apagado vuelve sin llamar a nada. Un proyecto que la base no deja (`not_allowed`) o
+ * un archivo que falla no cortan el resto. Devuelve cuántos mandó.
+ */
+export async function autoPurgeFiles({ enabled, projectIds, due, trash }: AutoPurgeOptions): Promise<number> {
+  if (enabled !== true) return 0;
+  let sent = 0;
+  for (const projectId of projectIds) {
+    const rows = await due(projectId).catch(() => [] as DueFileRow[]);
+    for (const row of rows) {
+      try {
+        await trash(row.id);
+        sent++;
+      } catch {
+        // Queda para la próxima vez que se abra la app.
+      }
+    }
+  }
+  return sent;
 }

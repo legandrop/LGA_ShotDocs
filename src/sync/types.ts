@@ -95,6 +95,11 @@ export interface WorkspaceSettings {
   name?: string | null;
   /** Clave local del workspace (`local_key`), la que viaja en los links de invitación. */
   localKey?: string | null;
+  /**
+   * El borrado automático de la papelera de archivos a los 30 días (`auto_purge_files`, paso 11). Apagado
+   * hasta que Lega lo confirme; `false` también si la base todavía no tiene la columna.
+   */
+  autoPurgeFiles?: boolean;
 }
 
 /** Un archivo nuevo para `register_file` (el proyecto sale de la página). */
@@ -119,6 +124,35 @@ export interface MediaFileRow {
   duration: number | null;
   thumb_at: string | null;
   drive_id: string | null;
+  /**
+   * La papelera de archivos (versión 6 de la base; en una anterior faltan): desde cuándo ninguna página lo
+   * usa, cuándo un dueño o admin pidió mandarlo a la papelera de Drive y cuándo el portero lo confirmó.
+   */
+  trashed_at?: string | null;
+  purged_at?: string | null;
+  drive_trashed_at?: string | null;
+}
+
+/** Una fila de `trashed_files`: un archivo en la papelera que todavía no llegó a la papelera de Drive. */
+export interface TrashedFileRow {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  thumb_at: string | null;
+  /** Cuándo entró a la papelera. */
+  trashed_at: string;
+  /** Cuántos días faltan para los 30 (30 el día que entra, 0 si ya pasaron). */
+  days_left: number;
+  /** Ya se pidió mandarlo a la papelera de Drive y el portero todavía no lo confirmó (se puede repetir). */
+  purged_at: string | null;
+}
+
+/** Una fila de `files_due_for_purge`. */
+export interface DueFileRow {
+  id: string;
+  name: string;
+  trashed_at: string;
 }
 
 export interface RemoteUpdate {

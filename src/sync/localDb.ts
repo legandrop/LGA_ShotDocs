@@ -17,6 +17,12 @@ export interface DocState {
   lastError?: string;
   /** El servidor rechazó el contenido para siempre (por ejemplo, por tamaño). Se reintenta al abrir la app. */
   rejected?: string;
+  /**
+   * Llegó del servidor un update que este dispositivo no pudo leer (quedó intacto en el servidor): al
+   * documento local le puede faltar contenido, así que nunca se usa para decir que la página dejó de usar
+   * un archivo (papelera de archivos). No se borra.
+   */
+  unreadable?: boolean;
 }
 
 /** Imagen pegada en una página. Se guarda acá primero y se sube cuando hay red. */

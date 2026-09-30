@@ -55,8 +55,10 @@ export interface MediaRecord {
 }
 
 /**
- * Un archivo que una página usa (`page_files`). El dispositivo que registra el archivo ya lo cuelga de su
- * página; esto es para los que llegan a otra página (se copió o se pegó el bloque).
+ * Un archivo que una página usa (`page_files`), o que dejó de usar. El dispositivo que registra el archivo
+ * ya lo cuelga de su página; esto es para los que llegan a otra página (se copió o se pegó el bloque) y,
+ * desde la papelera de archivos (paso 11), para lo que la página dejó de usar (`removed`). Una sola fila por
+ * par: lo último que se vio en el documento gana, así un deshacer rápido no se pisa con el borrado.
  */
 export interface MediaLink {
   /** `<página>:<archivo>` */
@@ -74,6 +76,16 @@ export interface MediaLink {
   blocked: boolean;
   failures: number;
   retryAt: number;
+  /**
+   * Lo que tiene que quedar en el servidor: `true`, la página ya no lo usa (`unlink_page_file`); sin el
+   * campo o `false`, lo usa (`link_page_file`). Las filas anteriores al paso 11 no lo tienen.
+   */
+  removed?: boolean;
+  /**
+   * Sube cada vez que cambia `removed`: una respuesta que llega después de un cambio no marca como hecho
+   * lo que todavía falta mandar.
+   */
+  rev?: number;
 }
 
 /** Lo que el servidor sabe de un archivo (fila de `files`), guardado para mostrarlo sin red. */
@@ -86,6 +98,11 @@ export interface KnownFile {
   duration: number | null;
   thumbAt: string | null;
   driveId: string | null;
+  /**
+   * Un dueño o admin lo mandó a la papelera de Drive (`purged_at` o `drive_trashed_at`): en la página se
+   * muestra como borrado. Sin el campo, no se sabe (se guardó antes del paso 11).
+   */
+  deleted?: boolean;
   fetchedAt: number;
 }
 

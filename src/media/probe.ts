@@ -2,6 +2,8 @@
 // navegador no puede abrir el archivo (HEIC en Chrome de Windows, un video que no decodifica), no hay
 // miniatura ni medidas: el archivo se guarda y se sube igual, y en la página queda un ícono.
 
+import { toBase64 } from '../lib/base64';
+
 /** Lado mayor de la miniatura. */
 export const THUMB_SIDE = 480;
 /** Tope del bucket `thumbs`. */
@@ -208,6 +210,36 @@ export async function withPlayMark(thumb: Blob): Promise<Blob> {
 
 function escapeXml(text: string): string {
   return text.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+/** Lo que dice un archivo que un dueño o admin mandó a la papelera de Drive. */
+export const DELETED_LABEL = 'File deleted (in the Drive trash)';
+
+/**
+ * Un archivo que un dueño o admin mandó a la papelera de Drive (papelera de archivos): la miniatura
+ * oscurecida, si la hay, con el aviso y el nombre; sin miniatura, el ícono. Es un SVG sin scripts, como
+ * dirección `data:`, con la miniatura adentro (un `<img>` no carga nada de afuera de un SVG).
+ */
+export async function deletedUrl(kind: MediaKind | null, name: string, thumb: Blob | null): Promise<string> {
+  const label = escapeXml(name.length > 46 ? `${name.slice(0, 45)}…` : name);
+  let picture = '';
+  if (thumb) {
+    const bytes = new Uint8Array(await thumb.arrayBuffer());
+    const type = thumb.type === 'image/webp' ? 'image/webp' : 'image/jpeg';
+    picture =
+      `<image href="data:${type};base64,${toBase64(bytes)}" width="480" height="270" preserveAspectRatio="xMidYMid slice"/>` +
+      '<rect width="480" height="270" fill="#000000" fill-opacity="0.55"/>';
+  }
+  const ink = thumb ? '#ffffff' : '#5c5853';
+  const glyph = kind === 'video' ? '▶' : '';
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270">' +
+    '<rect width="480" height="270" rx="8" fill="#ebe8e4"/>' +
+    picture +
+    `<text x="240" y="130" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="600" fill="${ink}">${escapeXml(DELETED_LABEL)}</text>` +
+    `<text x="240" y="162" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" fill="${ink}">${glyph ? `${glyph} ` : ''}${label}</text>` +
+    '</svg>';
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 /**

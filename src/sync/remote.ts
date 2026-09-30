@@ -8,8 +8,10 @@ import {
   type PagePatch,
   type PageRow,
   type ProjectRow,
+  type DueFileRow,
   type MediaFileRow,
   type NewMediaFile,
+  type TrashedFileRow,
   type RemoteUpdate,
   type WorkspaceSettings,
 } from './types';
@@ -128,6 +130,18 @@ export interface MediaRemote {
   downloadThumb(fileId: string): Promise<Blob>;
   /** Las filas de `files` que la sesión puede ver (las demás no vuelven). */
   fetchMediaFiles(ids: string[]): Promise<MediaFileRow[]>;
+  /**
+   * La página dejó de usar el archivo (el bloque desapareció): marca el uso, no lo borra. Idempotente.
+   * `page_not_found` si no se puede editar la página. Versión 6 de la base (papelera de archivos).
+   */
+  unlinkPageFile(pageId: string, fileId: string): Promise<void>;
+  /** La papelera de archivos del proyecto (`trashed_files`). `not_allowed` si la sesión no la ve. */
+  trashedFiles(projectId: string): Promise<TrashedFileRow[]>;
+  /**
+   * Los que cumplieron 30 días en la papelera, solo con el borrado automático prendido (si no, ninguno).
+   * `not_allowed` si la sesión no es dueño o admin con permiso sobre el proyecto.
+   */
+  filesDueForPurge(projectId: string): Promise<DueFileRow[]>;
 }
 
 export interface RemovedMember {
@@ -147,7 +161,6 @@ export function parseRemovedMember(data: unknown): RemovedMember {
 
 export const FILES_BUCKET = 'page-files';
 export const THUMBS_BUCKET = 'thumbs';
-const MEDIA_COLUMNS = 'id, name, mime, width, height, duration, thumb_at, drive_id';
 
 /** El nombre de la miniatura de un archivo en el bucket `thumbs`: `<uuid en minúsculas>.jpg`. */
 export function thumbPath(fileId: string): string {
@@ -225,7 +238,12 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       schema_version: number;
       media_url?: string | null;
     };
-    const extra = row as { owner_id?: string | null; name?: string | null; local_key?: string | null };
+    const extra = row as {
+      owner_id?: string | null;
+      name?: string | null;
+      local_key?: string | null;
+      auto_purge_files?: boolean | null;
+    };
     return {
       generation: Number(row.generation),
       minAppVersion: row.min_app_version === null ? null : Number(row.min_app_version),
@@ -234,6 +252,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
       ownerId: extra.owner_id ?? null,
       name: extra.name || null,
       localKey: extra.local_key || null,
+      // Solo `true` lo prende: sin la columna (base anterior a la versión 6) queda apagado.
+      autoPurgeFiles: extra.auto_purge_files === true,
     };
   }
 
@@ -523,10 +543,45 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote {
   async fetchMediaFiles(ids: string[]): Promise<MediaFileRow[]> {
     const rows: MediaFileRow[] = [];
     for (let i = 0; i < ids.length; i += 100) {
-      const { data, error, status } = await this.client.from('files').select(MEDIA_COLUMNS).in('id', ids.slice(i, i + 100));
+      // Todas las columnas: una base anterior a la papelera de archivos (versión 6) no tiene `purged_at` ni
+      // `drive_trashed_at`, y pedirlas por nombre fallaría.
+      const { data, error, status } = await this.client.from('files').select('*').in('id', ids.slice(i, i + 100));
       if (error) throw toRemoteError(error, status);
       rows.push(...(data as unknown as MediaFileRow[]));
     }
-    return rows.map((r) => ({ ...r, duration: r.duration === null ? null : Number(r.duration) }));
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      mime: r.mime,
+      width: r.width,
+      height: r.height,
+      duration: r.duration === null ? null : Number(r.duration),
+      thumb_at: r.thumb_at,
+      drive_id: r.drive_id,
+      trashed_at: r.trashed_at ?? null,
+      purged_at: r.purged_at ?? null,
+      drive_trashed_at: r.drive_trashed_at ?? null,
+    }));
+  }
+
+  async unlinkPageFile(pageId: string, fileId: string): Promise<void> {
+    const { error, status } = await this.client.rpc('unlink_page_file', { p_page_id: pageId, p_file_id: fileId });
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async trashedFiles(projectId: string): Promise<TrashedFileRow[]> {
+    const { data, error, status } = await this.client.rpc('trashed_files', { p_project: projectId });
+    if (error) throw toRemoteError(error, status);
+    return ((data ?? []) as TrashedFileRow[]).map((r) => ({
+      ...r,
+      size: Number(r.size),
+      days_left: Number(r.days_left),
+    }));
+  }
+
+  async filesDueForPurge(projectId: string): Promise<DueFileRow[]> {
+    const { data, error, status } = await this.client.rpc('files_due_for_purge', { p_project: projectId });
+    if (error) throw toRemoteError(error, status);
+    return (data ?? []) as DueFileRow[];
   }
 }
