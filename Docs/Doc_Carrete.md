@@ -1,7 +1,7 @@
 # Carrete de fotos y videos
 
 El carrete es el visor a pantalla completa de las fotos y los videos de una página (paso 7 de
-`Plan_Workspaces.md`, sección 5 y D-17). Un clic o un toque en una foto o un video de la página abre
+`Plan_Workspaces.md`, sección 5 y D-17). Un toque (o, con el mouse, un segundo clic) en una foto o un video de la página abre
 **todas** las de esa página, en el orden en que aparecen, empezando por la tocada. Pensado primero para
 el teléfono.
 
@@ -29,7 +29,7 @@ cambia nada de lo que se guarda en el documento**: el carrete solo lee la págin
 
 | | Teléfono | Computadora |
 |---|---|---|
-| Abrir | Tocar la foto o el video | Clic en la foto o el video; con la foto elegida, la barra espaciadora o *View* en su barra |
+| Abrir | Tocar la foto o el video | Un clic la elige y otro la abre (o doble clic); con la foto elegida, la barra espaciadora o *View* en su barra |
 | Anterior / siguiente | Deslizar de costado, o los botones ‹ › | Flechas ← →, los botones, o arrastrar con el mouse |
 | Primero / último | | Inicio / Fin |
 | Zoom (fotos) | Pellizco; doble toque para ampliar ahí o volver | Rueda del mouse o pellizco del trackpad (con o sin Ctrl); doble clic |
@@ -113,11 +113,14 @@ navegador pide ahorrar datos (`Save-Data`), no se precarga nada.
 
 ## En el editor
 
-- **Un clic o un toque en la foto abre el carrete.** El editor igual elige el bloque debajo (el evento no
-  se corta), así que la edición sigue como siempre:
-  - **Computadora:** al cerrar (Escape o la X) el foco vuelve al editor y la foto queda elegida con su
-    barra (ver, reemplazar, leyenda, nombre, bajar, borrar). Los tiradores para cambiar el tamaño y el de
-    arrastrar el bloque son otros elementos: nunca abren el carrete.
+- **Computadora (mouse), desde v0.044:** el **primer clic elige** la foto (contorno del color de acento,
+  los tiradores a la vista y su barra: ver, reemplazar, leyenda, nombre, bajar, borrar) y **el segundo
+  clic, o un doble clic, abre** el carrete. Con ⌘/Ctrl no abre. En solo lectura, un clic abre. La lupa
+  del cursor aparece solo sobre la foto elegida. Al cerrar (Escape o la X) el foco vuelve al editor y la
+  foto queda elegida. Los tiradores y el de arrastrar el bloque nunca abren el carrete. La decisión es
+  `src/ui/carreteClick.ts` (con pruebas). Ver `Doc_Imagenes.md`.
+- **Un toque en la foto abre el carrete** (teléfono y tableta). El editor igual elige el bloque debajo (el
+  evento no se corta), así que la edición sigue como siempre:
   - **Teléfono:** al cerrar el foco **no** vuelve al editor (abriría el teclado). La foto queda elegida,
     y **otro toque sobre ella no abre el carrete**: la edita (aparece la barra). Vale si el editor tiene
     el foco o si el toque anterior fue en esa misma foto (lo que se toca adentro del carrete no cuenta).
@@ -127,7 +130,7 @@ navegador pide ahorrar datos (`Save-Data`), no se precarga nada.
     Mac; con una foto elegida la barra no escribe nada). Enter sigue creando un párrafo debajo. En la
     barra de la imagen está también *View*.
 - Funciona igual en una página de solo lectura (ahí no hay barra).
-- La foto muestra el cursor de lupa (*zoom-in*) con el mouse.
+- Con el mouse, la lupa (*zoom-in*) aparece sobre la foto elegida (con el editor con foco) o en solo lectura.
 
 ## Pantalla
 

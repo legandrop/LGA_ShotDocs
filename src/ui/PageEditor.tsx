@@ -45,6 +45,7 @@ import { createDrivePaste } from './drivePaste';
 import { DrivePasteMenu } from './DrivePasteMenu';
 import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
 import { SheetBreaks } from './SheetBreaks';
+import { clickOpens, mousePressOpens } from './carreteClick';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -190,6 +191,10 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   useEffect(() => preloadWhenIdle(Carrete), []);
   /** El toque empezó sobre una foto que ya estaba elegida (ver `openCarrete`). */
   const pressedSelected = useRef(false);
+  /** Con el mouse: el clic empezó sobre la foto ya elegida (o en solo lectura), así que la abre. */
+  const mouseOpens = useRef(false);
+  /** Con qué empezó el último clic o toque (`mouse`, `touch`, `pen`). */
+  const pressKind = useRef('');
   /** El bloque de la última foto tocada (`null` si el último toque fue en otro lado; ver `notePress`). */
   const lastPress = useRef<string | null>(null);
 
@@ -365,12 +370,14 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
     notify(acceptedText(media.enabled));
   };
 
-  // El carrete (paso 7): un clic o un toque en una foto o un video abre todas las de la página, empezando
-  // por esa (Docs/Doc_Carrete.md). El editor igual elige el bloque debajo (el evento no se corta): al
-  // cerrar con Escape o el mouse, el foco vuelve al editor y la foto queda elegida con su barra (ver,
-  // reemplazar, leyenda, nombre, bajar, borrar). Los tiradores para cambiar el tamaño y el de arrastrar el
-  // bloque son otros elementos: nunca abren el carrete. Con el dedo, al cerrar el foco no vuelve al editor
-  // (abriría el teclado); para editar, se toca otra vez la foto: si está elegida y el editor tiene el foco,
+  // El carrete (paso 7): abre todas las fotos y videos de la página, empezando por el tocado
+  // (Docs/Doc_Carrete.md, Docs/Doc_Imagenes.md). Con el mouse, el primer clic en una foto solo la elige (el
+  // borde, los tiradores y su barra: ver, reemplazar, leyenda, nombre, bajar, borrar) y el segundo clic, o
+  // un doble clic, la abre; con ⌘/Ctrl no abre (ese clic elige el bloque de afuera). En solo lectura, un
+  // clic abre. Se decide al apretar (`notePress`), antes de que el editor elija la foto al soltar. Al
+  // cerrar con Escape o el mouse, el foco vuelve al editor y la foto queda elegida. Los tiradores para
+  // cambiar el tamaño y el de arrastrar el bloque son otros elementos: nunca abren el carrete. Con el dedo,
+  // al cerrar el foco no vuelve al editor (abriría el teclado); para editar, se toca otra vez la foto: si está elegida y el editor tiene el foco,
   // o el toque anterior fue en esa misma foto (sin tocar otra cosa en el medio), ese toque muestra la barra
   // en vez de abrir el carrete. Con el teclado: la barra espaciadora sobre la foto elegida, o "View".
   useEffect(() => {
@@ -386,6 +393,11 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
 
   const notePress = (e: PointerEvent) => {
     const target = e.target as HTMLElement;
+    pressKind.current = e.pointerType;
+    mouseOpens.current =
+      e.pointerType === 'mouse' &&
+      !!target.closest?.('img.bn-visual-media') &&
+      mousePressOpens({ editable, focused: editor.isFocused(), selectedId: selectedImageId(), targetId: blockIdOf(target) });
     pressedSelected.current =
       editable &&
       e.pointerType !== 'mouse' &&
@@ -402,19 +414,35 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
     return true;
   };
 
+  /** La foto elegida en el editor (selección del bloque entero, no un texto), o `null`. */
+  const selectedImageId = (): string | null => {
+    // La foto misma (no el bloque de afuera, que se elige con ⌘/Ctrl+clic o al arrastrar el bloque).
+    const imageSelected = editor.transact((tr) => (tr.selection as { node?: { type: { name: string } } }).node?.type.name === 'image');
+    const block = editor.getTextCursorPosition().block;
+    return imageSelected && block.type === 'image' ? block.id : null;
+  };
+
   const openCarrete = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (!target.matches('img.bn-visual-media') || pressedSelected.current) return;
-    openAt(blockIdOf(target));
+    if (!target.matches('img.bn-visual-media')) return;
+    const opens = clickOpens({
+      kind: pressKind.current,
+      mouseOpens: mouseOpens.current,
+      pressedSelected: pressedSelected.current,
+      detail: e.detail,
+      modifier: e.metaKey || e.ctrlKey,
+    });
+    // El próximo clic sin `pointerdown` (uno sintético) no usa lo de este.
+    pressKind.current = '';
+    if (opens) openAt(blockIdOf(target));
   };
 
   // La barra espaciadora con una foto elegida la abre (como la vista rápida de la Mac). Con una foto
   // elegida la barra no escribe nada, y Enter sigue creando un párrafo debajo.
   const openWithKeyboard = (e: KeyboardEvent) => {
     if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !editor.isFocused()) return;
-    const nodeSelected = editor.transact((tr) => 'node' in tr.selection);
     const block = editor.getTextCursorPosition().block;
-    if (!nodeSelected || block.type !== 'image') return;
+    if (selectedImageId() !== block.id) return;
     if (openAt(block.id)) {
       e.preventDefault();
       e.stopPropagation();

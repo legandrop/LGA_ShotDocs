@@ -2488,9 +2488,49 @@ code {
 
 /* --- Fotos y videos del Drive (sdmedia://) ------------------------------------------------------- */
 
-/* En la página, un clic en una foto o un video abre el carrete. */
-.editor [data-content-type='image'] img.bn-visual-media {
+/* Con el mouse, el primer clic elige la foto y el segundo la abre en el carrete (Docs/Doc_Imagenes.md): la
+   lupa, solo sobre la foto elegida con el editor con foco (ahí un clic abre) o en solo lectura. */
+.editor .bn-editor.ProseMirror-focused .ProseMirror-selectednode[data-content-type='image'] img.bn-visual-media,
+.editor .bn-editor[contenteditable='false'] [data-content-type='image'] img.bn-visual-media {
   cursor: zoom-in;
+}
+
+/* La foto elegida se ve elegida (también llegando con las flechas): un contorno del color de acento, en vez
+   del recuadro azul de BlockNote. Con `outline`, que no cambia el tamaño de la foto. Solo si se puede editar
+   y el editor tiene el foco (sin foco, el próximo clic la elige de nuevo). */
+.editor .bn-editor.ProseMirror-focused[contenteditable='true'] .ProseMirror-selectednode[data-content-type='image'] .bn-visual-media-wrapper {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.editor .bn-block-content.ProseMirror-selectednode[data-content-type='image'] > *::after {
+  content: none;
+}
+
+/* Y con el mouse, sus tiradores para cambiar el tamaño a la vista sin tener que pasar por encima (BlockNote
+   los muestra solo al pasar el mouse). En pantallas táctiles, como antes. */
+@media (hover: hover) {
+  .editor .bn-editor.ProseMirror-focused[contenteditable='true'] .ProseMirror-selectednode[data-content-type='image'] .bn-resize-handle {
+    display: initial !important;
+  }
+}
+
+/* El cursor entre dos bloques sin texto (dos fotos seguidas): una línea visible del ancho del bloque, en
+   vez de la raya negra de 20 px que no se veía (y nada en el tema oscuro). El cursor es un elemento sin
+   ancho: se estira sobre el bloque que lo contiene. */
+.editor .bn-block:has(> .ProseMirror-gapcursor) {
+  position: relative;
+}
+
+.editor .bn-block > .ProseMirror-gapcursor {
+  left: 0;
+  right: 0;
+}
+
+.editor .ProseMirror-gapcursor::after {
+  width: 100%;
+  border-top: 2px solid var(--text);
 }
 
 /* --- Carrete (Carrete.tsx): fotos y videos de la página a pantalla completa --------------------------
