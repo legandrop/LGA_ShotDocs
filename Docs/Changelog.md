@@ -1,5 +1,35 @@
 # Changelog — LGA Shot Docs
 
+v0.041 :
+
+La app en castellano e inglés (roadmap B.8, D-16). Toda la interfaz pasa por un diccionario con los dos
+idiomas: pantallas, menús, avisos, errores, el editor (con el diccionario de BlockNote), el carrete, los
+comentarios, la papelera, miembros y compartir. El idioma se elige en el menú de la cuenta y sigue a la
+cuenta en todos los dispositivos; por defecto, el del navegador. Script se llama Guion y Question,
+Pregunta; lo guardado en las páginas no cambia. Una versión vieja que sube sus preferencias no borra el
+idioma de los dispositivos nuevos. Las páginas legales quedan en inglés, con una nota.
+[ Interfaz - castellano e inglés ]
+
+v0.040 :
+
+Hojas y PDF (roadmap B.7, fase 4). En una página con tamaño de hoja, el editor marca dónde empieza cada
+hoja, y *Export PDF / Print* (o Ctrl/⌘+P) imprime exactamente esas hojas: el mismo cálculo sirve para la
+pantalla y para el PDF, sobre una copia de la página. Un bloque que entra en una hoja no se parte; uno más
+alto se parte entre renglones o filas; un título pasa a la hoja siguiente con su bloque. El PDF sale sin
+barra lateral ni controles, con las fotos del dispositivo reducidas y en tema claro. Nada de esto toca el
+documento.
+[ Páginas - cortes de hoja y PDF ]
+
+v0.039 :
+
+Las últimas teclas ya no se pierden y la app abre más rápido (roadmap B.4 y B.5). La investigación del
+caso intermitente encontró que recargar o cerrar la página a milisegundos de escribir podía perder lo
+último: el guardado local ahora escribe en una transacción que no espera ninguna lectura y se confirma en
+el acto, con una marca de "falta subir" que solo se borra si el servidor confirmó eso mismo. Cada consulta
+al servidor tiene un tope de 30 segundos, y los menús de la barra del editor ya no se cierran solos. El
+editor, el carrete y los diálogos se cargan aparte: la primera carga baja de 591 KB a 278 KB.
+[ Sincronización - sin perder las últimas teclas; carga más liviana ]
+
 v0.038 :
 
 Sincronización más liviana y páginas legales (roadmap B.2, B.3 y B.6). Después de bajar cambios de otro
