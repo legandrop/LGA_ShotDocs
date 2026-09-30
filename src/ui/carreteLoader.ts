@@ -70,6 +70,22 @@ export function downloadProps(full: Full, name: string): { href: string; downloa
   return full.local ? { href: full.url, download: name } : { href: full.url, download: name, target: '_blank', rel: 'noreferrer' };
 }
 
+/**
+ * El original de un `sdmedia://` para bajarlo desde la barra de la imagen: el del dispositivo (con su
+ * nombre) o un pase del portero. `release` suelta la dirección en memoria del original local.
+ */
+export async function originalFor(
+  media: Pick<MediaQueue, 'source' | 'pass'>,
+  id: string,
+): Promise<{ full: Full; name: string; release: () => void }> {
+  const source = await media.source(id);
+  if (source.original) {
+    const url = URL.createObjectURL(source.original);
+    return { full: { url, local: true }, name: source.name, release: () => URL.revokeObjectURL(url) };
+  }
+  return { full: { url: await passFor(media, id), local: false }, name: source.name, release: () => undefined };
+}
+
 /** Baja el original desde código (la barra de la imagen en el editor). */
 export function startDownload(full: Full, name: string): void {
   const a = document.createElement('a');

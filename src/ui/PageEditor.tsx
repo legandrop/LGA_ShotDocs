@@ -14,7 +14,7 @@ import {
   type BlockTypeSelectItem,
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
@@ -22,6 +22,7 @@ import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { Carrete } from './Carrete';
 import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carrete';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
+import { MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { findUnknownContent } from './unknownContent';
@@ -172,6 +173,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
   /** El toque empezó sobre una foto que ya estaba elegida (ver `openCarrete`). */
   const pressedSelected = useRef(false);
+  /** El bloque de la última foto tocada (`null` si el último toque fue en otro lado; ver `notePress`). */
+  const lastPress = useRef<string | null>(null);
 
   // Con portero, las fotos y los videos van al Drive del dueño (`sdmedia://`, primero en el dispositivo);
   // sin portero, las imágenes a Supabase como siempre (`sdfile://`).
@@ -336,26 +339,58 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
 
   // El carrete (paso 7): un clic o un toque en una foto o un video abre todas las de la página, empezando
   // por esa (Docs/Doc_Carrete.md). El editor igual elige el bloque debajo (el evento no se corta): al
-  // cerrar con Escape o el mouse, el foco vuelve al editor y la foto queda elegida con su barra (reemplazar,
-  // leyenda, nombre, bajar, borrar). Los tiradores para cambiar el tamaño y el de arrastrar el bloque son
-  // otros elementos: nunca abren el carrete. Con el dedo, al cerrar el foco no vuelve al editor (abriría
-  // el teclado); para editar, se toca otra vez la foto, que quedó elegida: ese toque no abre el carrete.
+  // cerrar con Escape o el mouse, el foco vuelve al editor y la foto queda elegida con su barra (ver,
+  // reemplazar, leyenda, nombre, bajar, borrar). Los tiradores para cambiar el tamaño y el de arrastrar el
+  // bloque son otros elementos: nunca abren el carrete. Con el dedo, al cerrar el foco no vuelve al editor
+  // (abriría el teclado); para editar, se toca otra vez la foto: si está elegida y el editor tiene el foco,
+  // o el toque anterior fue en esa misma foto (sin tocar otra cosa en el medio), ese toque muestra la barra
+  // en vez de abrir el carrete. Con el teclado: la barra espaciadora sobre la foto elegida, o "View".
+  useEffect(() => {
+    // En burbuja: corre después de `notePress`. Lo que se toca adentro del carrete no cuenta.
+    const onDown = (e: globalThis.PointerEvent) => {
+      const target = e.target as Element | null;
+      if (target?.closest?.('.carrete')) return;
+      lastPress.current = target?.closest?.('img.bn-visual-media') ? blockIdOf(target) : null;
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, []);
+
   const notePress = (e: PointerEvent) => {
     const target = e.target as HTMLElement;
     pressedSelected.current =
       editable &&
       e.pointerType !== 'mouse' &&
       !!target.closest?.('img.bn-visual-media') &&
-      !!target.closest('.ProseMirror-selectednode');
+      !!target.closest('.ProseMirror-selectednode') &&
+      (editor.isFocused() || lastPress.current === blockIdOf(target));
+  };
+
+  const openAt = (blockId: string | null) => {
+    const items = collectCarrete(editor.document as unknown as BlockLike[]);
+    const start = startIndex(items, blockId);
+    if (start < 0) return false;
+    setCarrete({ items, start, loader: createCarreteLoader({ media, files }) });
+    return true;
   };
 
   const openCarrete = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
     if (!target.matches('img.bn-visual-media') || pressedSelected.current) return;
-    const items = collectCarrete(editor.document as unknown as BlockLike[]);
-    const start = startIndex(items, blockIdOf(target));
-    if (start < 0) return;
-    setCarrete({ items, start, loader: createCarreteLoader({ media, files }) });
+    openAt(blockIdOf(target));
+  };
+
+  // La barra espaciadora con una foto elegida la abre (como la vista rápida de la Mac). Con una foto
+  // elegida la barra no escribe nada, y Enter sigue creando un párrafo debajo.
+  const openWithKeyboard = (e: KeyboardEvent) => {
+    if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !editor.isFocused()) return;
+    const nodeSelected = editor.transact((tr) => 'node' in tr.selection);
+    const block = editor.getTextCursorPosition().block;
+    if (!nodeSelected || block.type !== 'image') return;
+    if (openAt(block.id)) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
   };
 
   // Lo creado para el carrete (los originales en memoria) se suelta al cerrarlo o al salir de la página.
@@ -368,6 +403,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
       onPasteCapture={(e) => rejectOtherFiles(e.nativeEvent, e.clipboardData)}
       onDropCapture={(e) => rejectOtherFiles(e.nativeEvent, e.dataTransfer)}
       onPointerDownCapture={notePress}
+      onKeyDownCapture={openWithKeyboard}
       onClick={openCarrete}
     >
       <BlockNoteView
@@ -383,7 +419,13 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
         <FormattingToolbarController
           formattingToolbar={() => (
             <FormattingToolbar blockTypeSelectItems={toolbarItems}>
-              {getFormattingToolbarItems(toolbarItems)}
+              {getFormattingToolbarItems(toolbarItems).flatMap((item) =>
+                // Para las fotos y videos del Drive, "Download" baja el original (no la miniatura), y
+                // "View" abre el carrete.
+                item.key === 'fileDownloadButton'
+                  ? [<MediaViewButton key="mediaViewButton" onView={openAt} />, <MediaDownloadButton key="fileDownloadButton" />]
+                  : [item],
+              )}
               {canComment && <CommentToolbarButton key="comment" />}
             </FormattingToolbar>
           )}

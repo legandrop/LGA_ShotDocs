@@ -7,7 +7,7 @@ import { PorteroError } from '../media/portero';
 import type { MediaKind } from '../media/probe';
 import { Carrete } from './Carrete';
 import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carrete';
-import type { CarreteLoader, Full } from './carreteLoader';
+import { originalFor, startDownload, type CarreteLoader, type Full } from './carreteLoader';
 import { schema } from './editorSchema';
 
 // La pantalla del carrete (paso 7), en jsdom: contador, teclado, botones, límites, foco, fotos que
@@ -379,5 +379,38 @@ describe('carrete: desde el editor', () => {
     expect(startIndex(list, blockIdOf(imgs[1]))).toBe(1);
     expect(startIndex(list, blockIdOf(imgs[2]))).toBe(2);
     editor.unmount();
+  });
+});
+
+describe('carrete: bajar el original desde la barra de la imagen', () => {
+  it('el del dispositivo con su nombre; si no, con un pase del portero en otra pestaña', async () => {
+    const { createObjectURL, revokeObjectURL } = URL;
+    URL.createObjectURL = vi.fn(() => 'blob:local-original');
+    URL.revokeObjectURL = vi.fn();
+    const original = new Blob([new Uint8Array(10)], { type: 'image/heic' });
+    const local = { source: vi.fn(async () => ({ kind: 'image' as const, name: 'IMG_1.HEIC', original })), pass: vi.fn() };
+    const got = await originalFor(local, 'id-1');
+    expect(got.full.local).toBe(true);
+    expect(got.full.url).toMatch(/^blob:/);
+    expect(got.name).toBe('IMG_1.HEIC');
+    expect(local.pass).not.toHaveBeenCalled();
+
+    const remote = { source: vi.fn(async () => ({ kind: 'video' as const, name: 'IMG_2.MOV', original: null })), pass: vi.fn(async () => 'https://portero.test/m/p') };
+    expect(await originalFor(remote, 'id-2')).toMatchObject({ full: { url: 'https://portero.test/m/p', local: false }, name: 'IMG_2.MOV' });
+
+    const clicked: HTMLAnchorElement[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      clicked.push(this);
+    });
+    startDownload(got.full, got.name);
+    startDownload({ url: 'https://portero.test/m/p', local: false }, 'IMG_2.MOV');
+    expect(clicked[0].getAttribute('download')).toBe('IMG_1.HEIC');
+    expect(clicked[0].target).toBe('');
+    expect(clicked[1].target).toBe('_blank');
+    expect(document.querySelectorAll('a[download]').length).toBe(0);
+    click.mockRestore();
+    got.release();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:local-original');
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
   });
 });
