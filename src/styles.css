@@ -2545,6 +2545,16 @@ code {
   flex-basis: calc(var(--img-f) * (100% - (var(--row-n) - 1) * var(--img-gap)) - 1px);
 }
 
+/* Una foto sola que no llena el renglón, centrada o a la derecha según su alineación. */
+.bn-block-group.img-rows > .bn-block-outer.img-sized.img-align-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.bn-block-group.img-rows > .bn-block-outer.img-sized.img-align-right {
+  margin-left: auto;
+}
+
 /* La foto llena su lugar en la fila (le gana al ancho en px que BlockNote pone en línea). Mientras se arrastra
    un tirador, no: se ve el ancho que va quedando. */
 .img-sized:not(.img-resizing) > .bn-block > .bn-block-content .bn-file-block-content-wrapper {

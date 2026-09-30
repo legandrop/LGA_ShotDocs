@@ -56,7 +56,9 @@ function siblingsOf(group: PMNode, groupPos: number): Sibling[] {
 function decorate(doc: PMNode, resizingId: string | null): DecorationSet {
   const decorations: Decoration[] = [];
   doc.descendants((node, pos) => {
-    if (node.type.name !== 'blockGroup') return true;
+    // Solo la estructura (grupos y bloques): el contenido de cada bloque no tiene filas adentro.
+    if (node.type.name === 'blockContainer') return true;
+    if (node.type.name !== 'blockGroup') return false;
     const kids = siblingsOf(node, pos);
     const fracs = kids.map((k) => fractionOf(k.node));
     const rows = groupRows(fracs);
@@ -71,6 +73,9 @@ function decorate(doc: PMNode, resizingId: string | null): DecorationSet {
         if (k === 0) classes.push('img-row-first');
         if (k === row.length - 1 && full) classes.push('img-row-last');
         if (resizingId !== null && container.attrs.id === resizingId) classes.push('img-resizing');
+        // Una foto sola que no llena el renglón respeta su alineación (centrada o a la derecha).
+        const align = row.length === 1 && !full ? String(container.firstChild?.attrs.textAlignment ?? '') : '';
+        if (align === 'center' || align === 'right') classes.push(`img-align-${align}`);
         decorations.push(
           Decoration.node(at, at + container.nodeSize, {
             class: classes.join(' '),
@@ -119,13 +124,17 @@ function convertResize(trs: readonly Transaction[], oldState: EditorState, newSt
   return newState.tr.setNodeMarkup(now.pos + 1, undefined, { ...content.attrs, [ROW_WIDTH_PROP]: f });
 }
 
+/** Lo que hay que mover el tirador para que cuente como arrastre. */
+const MOVE_THRESHOLD_PX = 3;
+
 /** Mira el arrastre de un tirador: al apretar, fija el ancho real y avisa; al soltar, cierra. */
 function watchResize(view: EditorView): { destroy: () => void } {
   const send = (meta: RowsMeta) => view.dispatch(view.state.tr.setMeta(rowsKey, meta));
   let stop: (() => void) | null = null;
   const onDown = (e: PointerEvent) => {
     const handle = (e.target as Element | null)?.closest?.('.bn-resize-handle');
-    if (!handle || !view.editable) return;
+    // Solo el botón principal: un clic derecho (en la Mac el `mouseup` puede no llegar) no abre un arrastre.
+    if (!handle || !view.editable || e.button !== 0) return;
     const container = handle.closest<HTMLElement>('[data-node-type="blockContainer"][data-id]');
     const outer = handle.closest<HTMLElement>('.bn-block-outer');
     const group = outer?.parentElement;
@@ -136,12 +145,16 @@ function watchResize(view: EditorView): { destroy: () => void } {
     const gap = parseFloat(style.columnGap) || 0;
     const n = Number(outer.style.getPropertyValue('--row-n')) || 1;
     // El ancho que se ve, fijo en px: al sacar el ancho de la fila (`img-resizing`) la foto no salta.
+    const before = wrapper.style.width;
     wrapper.style.width = `${wrapper.getBoundingClientRect().width}px`;
     send({ start: { id: container.dataset.id!, width, gap, n, moved: false } });
     stop?.();
     let moved = false;
-    const onMove = () => {
-      if (moved) return;
+    const startX = e.clientX;
+    // Un temblor de la mano no cuenta: hace falta moverse unos píxeles (si no, un ancho que dejó "Acomodar
+    // en filas" cambiaría apenas y la última foto de la fila bajaría al renglón siguiente).
+    const onMove = (m: PointerEvent) => {
+      if (moved || Math.abs(m.clientX - startX) < MOVE_THRESHOLD_PX) return;
       moved = true;
       send({ moved: true });
     };
@@ -149,6 +162,7 @@ function watchResize(view: EditorView): { destroy: () => void } {
     // su `previewWidth` ya está guardado (y convertido) cuando se cierra el arrastre.
     const onUp = () => {
       stop?.();
+      if (!moved) wrapper.style.width = before;
       send({ end: true });
     };
     window.addEventListener('pointermove', onMove);
@@ -218,25 +232,33 @@ function rowOfSelection(state: EditorState): RowAt | null {
   return row ? { kids, row, k: row.indexOf(index) } : null;
 }
 
-/** Elige el bloque: la foto entera, o el cursor al principio (o al final) de su texto. */
-function selectBlock(state: EditorState, at: Sibling, end: boolean): Transaction {
+/**
+ * Elige un bloque: una foto de la fila entera; saliendo de la fila, lo primero que se puede elegir después
+ * (hacia abajo) o antes (hacia arriba), sea texto, una foto o un separador, y hacia arriba el último hijo
+ * del bloque de arriba si tiene.
+ */
+function selectBlock(state: EditorState, at: Sibling, end: boolean, leaving: boolean): Transaction {
   const content = at.node.firstChild;
   const tr = state.tr;
-  if (content && content.type.name === 'image') return tr.setSelection(NodeSelection.create(state.doc, at.pos + 1));
-  const inside = end ? at.pos + 1 + (content?.nodeSize ?? 0) - 1 : at.pos + 2;
-  return tr.setSelection(Selection.near(state.doc.resolve(inside), end ? -1 : 1));
+  if (!leaving && content && content.type.name === 'image') return tr.setSelection(NodeSelection.create(state.doc, at.pos + 1));
+  const from = end ? at.pos + at.node.nodeSize : at.pos;
+  const found = Selection.findFrom(state.doc.resolve(from), end ? -1 : 1);
+  return found ? tr.setSelection(found) : tr;
 }
 
 type KeyContext = { editor: BlockNoteEditor<any, any, any> };
 
-function move(editor: BlockNoteEditor<any, any, any>, pick: (at: RowAt) => { to: Sibling; end: boolean } | null): boolean {
+function move(
+  editor: BlockNoteEditor<any, any, any>,
+  pick: (at: RowAt) => { to: Sibling; end: boolean; leaving?: boolean } | null,
+): boolean {
   const view = editor.prosemirrorView;
   if (!view) return false;
   const at = rowOfSelection(view.state);
   if (!at || at.row.length < 2) return false;
   const target = pick(at);
   if (!target) return false;
-  view.dispatch(selectBlock(view.state, target.to, target.end).scrollIntoView());
+  view.dispatch(selectBlock(view.state, target.to, target.end, !!target.leaving).scrollIntoView());
   return true;
 }
 
@@ -253,8 +275,10 @@ export const imageRowsExtension = createExtension({
     ArrowLeft: ({ editor }: KeyContext) =>
       move(editor, (at) => (at.k > 0 ? { to: at.kids[at.row[at.k - 1]], end: true } : null)),
     // Arriba y abajo salen de la fila entera.
-    ArrowDown: ({ editor }: KeyContext) => move(editor, (at) => (at.kids[last(at) + 1] ? { to: at.kids[last(at) + 1], end: false } : null)),
-    ArrowUp: ({ editor }: KeyContext) => move(editor, (at) => (at.kids[first(at) - 1] ? { to: at.kids[first(at) - 1], end: true } : null)),
+    ArrowDown: ({ editor }: KeyContext) =>
+      move(editor, (at) => (at.kids[last(at) + 1] ? { to: at.kids[last(at) + 1], end: false, leaving: true } : null)),
+    ArrowUp: ({ editor }: KeyContext) =>
+      move(editor, (at) => (at.kids[first(at) - 1] ? { to: at.kids[first(at) - 1], end: true, leaving: true } : null)),
     // Enter con una foto de una fila elegida: el párrafo nuevo va después de la fila, no en el medio.
     Enter: ({ editor }: KeyContext) => {
       const view = editor.prosemirrorView;

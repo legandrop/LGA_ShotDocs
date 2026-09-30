@@ -135,7 +135,7 @@ se reordenan: el orden de la página lo decide Lega).
 
 ## Correcciones de la auditoría previa (mandan sobre lo de arriba)
 
-Un subagente auditó este diseño contra el código real de BlockNote 0.55 antes de implementar. Cambios:
+Una auditoría independiente revisó este diseño contra el código real de BlockNote 0.55 antes de implementar. Cambios:
 
 1. **La propiedad se llama `rowWidth`** (no `width`: BlockNote podría agregar un `width` en px). Se agrega
    extendiendo el `propSchema` de la spec `image` (el render de BlockNote la lee sola; queda como
@@ -169,16 +169,16 @@ Un subagente auditó este diseño contra el código real de BlockNote 0.55 antes
    (`detail >= 2`); con ⌘/Ctrl no abre. Sin escuchar `dblclick` (abriría dos veces). Teléfono y solo
    lectura, como hoy. `cursor: zoom-in` solo en la elegida o en solo lectura.
 8. **Acomodar en filas:** en orden, programación dinámica con como mucho 4 por fila, costo `ln(h/H)²` con
-   límites 0,5·H a 1,6·H, `H` = el alto de una foto 3:2 a un tercio del ancho (descontando espacios). La
-   última fila se calcula llena y recién después, si queda más alta que 1,5·H, se achica sin llenar (como
+   límites 0,5·H a 2,2·H (al principio se pensó 1,6·H: con eso dos apaisadas no llenaban una fila), `H` = el alto de una foto 3:2 a un tercio del ancho (descontando espacios). La
+   última fila se calcula llena y recién después, si queda más alta que 2,2·H, se achica sin llenar (como
    la tanda termina en un bloque que no es foto, nada sube a esa fila). Toda fila que no es la última
    llena. Las panorámicas pueden tener fila propia. Redondeo a 4 decimales; la última de la fila = 1 − la
    suma de las otras. El botón espera a que carguen las miniaturas (la proporción sale de ahí).
 9. **Paginación:** las fotos de una fila son una sola unidad (función pura `mergeRowUnits`, por la marca de
    fila del plugin). `cleanCopy` no fija px en las fotos con `rowWidth` (su ancho ya sale de la fila).
-10. **Cursor:** entre fotos de una fila, izquierda y derecha van de foto a foto; arriba y abajo, a la fila
-    de arriba o de abajo. El cursor de hueco que igual aparece se dibuja visible (barra de 2 px, vertical
-    en una fila). Enter con una foto de una fila elegida crea el párrafo después de toda la fila.
+10. **Cursor:** entre fotos de una fila, izquierda y derecha van de foto a foto; arriba y abajo, a lo que
+    hay antes o después de la fila. El cursor de hueco que igual aparece se dibuja visible (línea de 2 px
+    del ancho de la foto; en una fila queda horizontal sobre la foto: dibujarlo vertical queda pendiente). Enter con una foto de una fila elegida crea el párrafo después de toda la fila.
 11. **Comentarios al margen:** dos fotos comentadas en la misma fila no se tapan (se agrupan).
 
 Decisiones (a confirmar por Lega): sin tiradores en el teléfono; el tirador del menú lateral de las fotos de
@@ -210,7 +210,14 @@ quedan alineadas arriba).
 - Probado en Chromium de punta a punta (repo de pruebas privado, `rows.mjs`): dos fotos de 1/2 en una fila
   que llena el ancho, el tirador imanta a 1/4, flecha derecha y Enter en una fila, la vista de impresión
   con la fila y el PDF en una hoja.
-- Pendiente: el indicador de dónde se suelta al arrastrar un bloque sigue horizontal (se podría dibujar
+- Una foto sola con ancho propio que no llena el renglón respeta su alineación (centrada o a la derecha);
+  en una fila de varias, la alineación no cuenta.
+- El tirador solo cuenta con el botón principal y si se movió al menos 3 px (un temblor no cambia un
+  ancho que dejó "Acomodar en filas").
+- Pendiente: el cursor de hueco vertical entre fotos de una fila; el botón de comentar que aparece al pasar
+  el mouse por la segunda foto de una fila puede quedar sobre el contador de la primera; revisar a mano la
+  impresión de filas en Safari y el iPhone (en Chromium los saltos de hoja sobre las filas andan). El
+  indicador de dónde se suelta al arrastrar un bloque sigue horizontal (se podría dibujar
   vertical entre fotos con `dropCursor.hooks.computeDropPosition`), y el tirador del menú lateral de las
   fotos de una fila queda a la izquierda de la fila.
 
