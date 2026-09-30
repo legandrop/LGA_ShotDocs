@@ -64,21 +64,28 @@ Carpetas en el Drive del dueño, sin espacios (guiones bajos):
   marca de este y responde "listo" sin volver a subirlo; si no la lleva o ya no existe, responde `409`
   (*"This file is registered with a different Drive file: ask the workspace owner."*) y la app lo deja
   pendiente y a la vista.
-- **Ver**: la app pide un pase (`POST /pass`) y lo usa como dirección del video o la foto
+- **Ver**: la app pide un pase (`POST /pass`) y lo usa como dirección del video, la foto o el adjunto
   (`/m/<pase>`). El pase está firmado por el portero con una clave que genera él mismo la primera vez y
-  que no sale de ahí, y vence a las 8 horas. El portero pide a Drive solo la parte que pide el navegador
-  (Range), así un video se reproduce sin bajarlo entero.
-- **Arranque del video (caché).** Para empezar a reproducir, el navegador pide primero el principio del
-  archivo y, en los videos del iPhone, el final (ahí va el índice). El portero guarda esas dos puntas en su
-  almacenamiento la primera vez que alguien las pide, y desde entonces las sirve sin ir a Drive:
+  que no sale de ahí, y vence a las 8 horas. Lleva, todo firmado, `{ f, t, u, s, n }`: el id de Drive, el
+  tipo (`files.mime`), cuándo vence, el peso y el nombre (`files.name`); tipo y nombre salen de
+  `media_file`, nunca de lo que mande la app. Los pases de antes (sin `n`) siguen valiendo y se sirven sin
+  nombre. Si se muestra o se baja **no va en el pase**: se decide al servir a partir de `t`, así los pases
+  viejos también reciben los encabezados de ahora (ver *Lo que se sirve*). `/m/<pase>?download=1` (fuera
+  de la firma) **solo puede forzar la descarga**, nunca que se muestre. El portero pide a Drive solo la
+  parte que pide el navegador (Range), así un video se reproduce sin bajarlo entero.
+- **Arranque del video (caché).** Solo para videos (`t` del pase `video/*`): un PDF o una foto pedidos
+  por partes van siempre a Drive, para no desplazar a los videos. Para empezar a reproducir, el navegador
+  pide primero el principio del archivo y, en los videos del iPhone, el final (ahí va el índice). El
+  portero guarda esas dos puntas en su almacenamiento la primera vez que alguien las pide, y desde
+  entonces las sirve sin ir a Drive:
   - Principio: ~254 KiB. Final: ~508 KiB. En trozos de 127 KiB (cada valor del almacenamiento puede pesar
     hasta 128 KiB). Un archivo de hasta ~762 KiB se guarda entero.
   - Tope: **256 archivos** (unos 190 MiB como mucho). Cada archivo tiene un lugar fijo entre los 256 (sale
     de su id) y el que llega desplaza al que estaba en ese lugar. Es solo una copia de las puntas:
     olvidarla no borra nada.
   - Se sirve desde ahí todo pedido por partes que **empieza** adentro de una punta guardada, con `206`,
-    `Content-Range`, `Content-Length`, `Accept-Ranges` y el tipo del archivo. Si sigue después de la punta
-    (Chrome pide `bytes=0-` para empezar), se devuelve solo lo guardado: un `206` más corto que lo pedido
+    `Content-Range`, `Content-Length` y los mismos encabezados que lo que viene de Drive. Si sigue después
+    de la punta (Chrome pide `bytes=0-` para empezar), se devuelve solo lo guardado: un `206` más corto que lo pedido
     es válido y el navegador pide lo que sigue, que va a Drive. Lo que empieza afuera de las puntas (el
     medio, lo que sigue al principio), el archivo entero sin Range y varias partes en un pedido van a Drive
     como siempre.
@@ -130,17 +137,47 @@ Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el arc
 |---|---|---|
 | `GET /health` | Cualquiera | Responde `{ ok: true }`: sirve para ver que el portero está publicado. |
 | `GET /drive/callback` | Google | Vuelta de Google al conectar Drive. Guarda la conexión y vuelve a la ruta de la app que pidió `/drive/connect` (por defecto `/media-test`) con `?drive=<resultado>`. |
-| `GET` o `HEAD /m/<pase>` | Quien tenga el pase | Devuelve el archivo desde Drive o desde la caché del arranque, por partes (Range). El pase firmado es la única credencial y vence a las 8 horas. |
+| `GET` o `HEAD /m/<pase>` | Quien tenga el pase | Devuelve el archivo desde Drive o desde la caché del arranque, por partes (Range). El pase firmado es la única credencial y vence a las 8 horas. `?download=1`: se baja (`attachment`). `403 abusive` si Drive lo marcó como malware. |
 | `GET /drive/status` | Cualquier sesión | `{ connected, broken, email, isOwner, folder, picker }`. `email` y `folder` (la carpeta elegida para `LGA_ShotDocs`, `{ id, name }`, o `null` si va en la raíz) solo se le muestran al dueño. `picker`: si está `GOOGLE_API_KEY`. |
 | `POST /drive/connect` | Dueño | `{ return?: "/ruta" }` → la dirección de Google para conectar Drive. `return` es la ruta de la app a la que se vuelve (tiene que empezar con `/`). Solo desde una dirección de `APP_ORIGINS`. |
 | `POST /drive/picker` | Dueño | `{ apiKey, appId, token }` para el selector de carpetas de Google: la clave de API, el número del proyecto de Google (el principio de `GOOGLE_CLIENT_ID`, antes del primer `-`) y un token de acceso nuevo, de una hora, solo con `drive.file`. `404` si no está `GOOGLE_API_KEY`. |
 | `POST /drive/folder` | Dueño | `{ parentId: "<id>" \| null }`: guarda dónde va `LGA_ShotDocs` (`null` = la raíz) y, si la carpeta ya existe, la mueve ahí con todo lo que tiene adentro. Devuelve `{ folder }`. |
-| `POST /upload` con `file` | Nivel 3 o más | `{ file: <id>, name, mime, size, day: "AAAA-MM-DD" }`. Abre una subida reanudable en `LGA_ShotDocs/<Proyecto>/<día>` y devuelve `{ uploadId }`; si ya está en Drive, `{ status: 'done', file, linked }`. `404` si no existe o no lo puede ver; `403` si lo ve pero no puede editar; `409` si la base lo tiene en un archivo de Drive sin su marca. |
+| `POST /upload` con `file` | Nivel 3 o más | `{ file: <id>, name, mime, size, day: "AAAA-MM-DD" }`. Abre una subida reanudable en `LGA_ShotDocs/<Proyecto>/<día>` y devuelve `{ uploadId }`; si ya está en Drive, `{ status: 'done', file, linked }`. `404` si no existe o no lo puede ver; `403` si lo ve pero no puede editar; `409` si la base lo tiene en un archivo de Drive sin su marca; `507 drive_full` si el Drive del dueño está lleno. |
 | `POST /upload` sin `file` | Dueño | La prueba de media: abre una subida en `LGA_ShotDocs/Media_Test`. |
-| `PUT /upload/<id>` | El que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. Al terminar: `{ status: 'done', file }`; si es un archivo de una página, además `linked: true\|false` (si la base ya se enteró; la app lo marca subido solo con `true`). |
-| `POST /pass` con `file` | Nivel 1 o más | `{ file: <id> }` → `{ url }` de un pase para `/m/…`, siempre con el tipo de `files.mime` (un `type` que mande la app no cuenta). Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
+| `PUT /upload/<id>` | El que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. Al terminar: `{ status: 'done', file }`; si es un archivo de una página, además `linked: true\|false` (si la base ya se enteró; la app lo marca subido solo con `true`). `507 drive_full` si el Drive se llenó (la subida queda y se retoma después). |
+| `POST /pass` con `file` | Nivel 1 o más | `{ file: <id> }` → `{ url, named: true }`: un pase para `/m/…`, siempre con el tipo y el nombre de `files` (un `type` o un `name` que mande la app no cuentan). `named: true` le dice a la app que este portero pone el nombre y entiende `?download=1` (un portero anterior responde solo `{ url }`). Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
 | `POST /pass` con `fileId` | Dueño | La prueba de media: un pase para un archivo de Drive por su id. |
 | `POST /trash` | Dueño o admin (lo decide la base) | `{ file: <id> }`: manda un archivo de la papelera de la app a la papelera de Drive (`PATCH files/<id>` con `trashed: true`; nunca lo borra). Con la sesión de la persona: `media_file`; Drive conectado y, si el archivo está en Drive, que lleve la marca de este (si algo de eso falla, no se le pide nada a la base y el archivo queda como estaba); `purge_file` (la base comprueba que sea dueño o admin con permiso sobre el proyecto y que el archivo esté en la papelera, y lo marca); `media_file` de nuevo (tiene que decir que está en la papelera y pedido); Drive; y al final `media_purged`. Devuelve `{ status: 'done', file, drive }`, con `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba) o `none` (todavía no está en Drive: si la subida seguía en curso, al terminar el portero lo manda solo a la papelera de Drive). Pedirlo de nuevo no hace nada de más. Los errores traen `{ error, code }` (tabla de abajo). |
+
+### Lo que se sirve (`/m/<pase>`)
+
+Una sola función (`servedHeaders`) arma los encabezados de lo que viene de Drive y de lo que sale de la
+caché del arranque (también el `206`):
+
+- **Se muestra (`inline`) con su tipo** solo lo de esta lista: `image/*` menos SVG, `video/*`, `audio/*`,
+  `application/pdf` y `text/plain`. **Todo lo demás** (HTML, XHTML, SVG, XML, JS, JSON, CSV, Office,
+  comprimidos, ejecutables, `octet-stream`) sale como `Content-Type: application/octet-stream` y
+  `attachment`: nunca corre como página en la dirección del portero. Las fotos y los videos nunca pasan a
+  `octet-stream` (el `<img>` y el `<video>` de la app usan el mismo pase).
+- `?download=1` pasa a `attachment` (con el tipo de la lista, si es de la lista).
+- `Content-Disposition`: `inline` o `attachment` con `filename="…"` en ASCII (lo que no es ASCII, las
+  comillas y las barras, `_`) y `filename*=UTF-8''…` (RFC 5987, también con `'()*` codificados). Al nombre se
+  le sacan los controles y las marcas de dirección (U+202A–U+202E, U+2066–U+2069, U+200E, U+200F, U+061C:
+  con U+202E, `gpj.exe` se lee `exe.jpg`). Un pase viejo, sin nombre: `inline` o `attachment` solos.
+- Siempre `X-Content-Type-Options: nosniff` y `Referrer-Policy: no-referrer` (el pase no se filtra desde
+  los links de un PDF), y `Content-Security-Policy: sandbox` **menos en el PDF que se muestra**: el visor de
+  PDF del navegador no carga en un documento con `sandbox`. Ese va sin CSP, con `nosniff`. No lleva
+  `frame-ancestors 'none'` hasta probar a mano que el visor de Chrome, que ahora abre el PDF adentro de un
+  marco propio, carga con él.
+
+Códigos de error al ver y al subir (mismo formato `{ error, code }`):
+
+| Status | `code` | Dónde | Qué pasó |
+|---|---|---|---|
+| 403 | `abusive` | `/m/<pase>` | Drive marcó el archivo como malware o spam (`cannotDownloadAbusiveFile`) y no lo deja bajar. No se pide `acknowledgeAbuse`. |
+| 507 | `drive_full` | `POST /upload`, `PUT /upload/<id>` | El Drive del dueño está lleno (`storageQuotaExceeded`). La subida en curso queda guardada y se retoma cuando haya espacio. La app publicada lo reintenta como cualquier 5xx; la entrega 1b de adjuntos deja de reintentar con este código. |
+
+Cualquier otro error de Drive sigue como siempre (`404` si no está, `502` lo demás).
 
 Códigos de error de `/trash` (el campo `code`, para que la app decida sin leer el texto):
 
@@ -287,6 +324,10 @@ otra.
   Drive API** en *API restrictions* de la clave.
 - *"This file has not finished uploading yet."*: el archivo está registrado pero todavía no terminó de
   subir desde el dispositivo que lo agregó.
+- *"Google Drive flagged this file as malware or spam…"* (`abusive`): Drive no deja bajarlo. Lo ve el
+  dueño en su Drive.
+- *"The Google Drive of the workspace owner is full…"* (`drive_full`): liberar espacio en ese Drive; las
+  subidas pendientes siguen desde donde quedaron.
 - *"This file in Google Drive does not belong to this file of the app."*: la base apunta a un archivo de
   Drive que no tiene la marca de ese archivo; el portero no lo sirve.
 - Otro workspace (otro dueño) publica su portero importando su propia copia del repo (un fork).

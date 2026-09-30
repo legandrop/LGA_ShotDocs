@@ -101,10 +101,9 @@ navegador pide ahorrar datos (`Save-Data`), no se precarga nada.
 *Download* baja el archivo tal como se subió, con su nombre (el de `files`, o el del bloque):
 
 - Si está en el dispositivo (o es `sdfile://` o `data:`), se baja con su nombre.
-- Si viene del portero, **se abre en otra pestaña**: el navegador no deja ponerle nombre a un archivo de
-  otro sitio (el portero no manda `Content-Disposition` ni CORS en `/m/`), así que se guarda desde ahí.
-  Mejora pendiente para el paso 8: que el pase pueda pedir `Content-Disposition: attachment` con el
-  nombre.
+- Si viene del portero, **se abre en otra pestaña**. Desde v0.048 el portero pone el nombre del archivo
+  (`Content-Disposition` con el nombre de `files`) y `?download=1` lo manda como descarga (ver
+  `Doc_Portero.md`, "Lo que se sirve"); con un portero sin actualizar, se guarda desde esa pestaña.
 - Sin red y sin copia en el dispositivo, el botón queda deshabilitado.
 - **En la barra de la imagen del editor**, *Download* de una foto o un video del Drive baja lo mismo (el
   original, nunca la miniatura que muestra la página). Se prepara apenas se elige la imagen, así el clic
