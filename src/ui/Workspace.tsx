@@ -135,7 +135,7 @@ function useInviteTarget(): void {
 function Shell() {
   const route = useRoute();
   const tree = useTree();
-  const { docs, media, user, workspace } = useServices();
+  const { comments, docs, media, user, workspace } = useServices();
   const keys = workspace.config.storage;
   const [navOpen, setNavOpen] = useState(false);
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
@@ -155,9 +155,13 @@ function Shell() {
   // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación. Lo mismo
   // espera la recarga que sigue a publicar una versión nueva (lazyPart.tsx).
   useEffect(() => {
-    const unsaved = () => docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites();
+    const unsaved = () =>
+      docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites() || comments.hasUnsavedWrites();
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (unsaved()) e.preventDefault();
+      if (!unsaved()) return;
+      e.preventDefault();
+      // Safari y los Chrome viejos preguntan solo con `returnValue`.
+      e.returnValue = '';
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     const unwatch = watchPendingWrites({ unsaved, flush: () => docs.flush() });
@@ -165,7 +169,7 @@ function Shell() {
       window.removeEventListener('beforeunload', onBeforeUnload);
       unwatch();
     };
-  }, [docs, tree, media]);
+  }, [comments, docs, tree, media]);
 
   // Con la barra lateral ya dibujada, el editor se baja cuando el navegador está libre: abrir una página
   // después no espera, y una versión nueva publicada mientras tanto no deja al editor sin sus archivos.
@@ -278,7 +282,7 @@ function Shell() {
       {moving && <MoveDialog pageId={moving} onClose={() => setMoving(null)} />}
       {formatting && <PageFormatDialog pageId={formatting} onClose={() => setFormatting(null)} />}
       {sharing && (
-        <Part>
+        <Part onClose={() => setSharing(null)}>
           <ShareDialog target={sharing} onClose={() => setSharing(null)} />
         </Part>
       )}

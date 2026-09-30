@@ -12,6 +12,7 @@ import {
   MembersIcon,
   MoveIcon,
   PlusIcon,
+  PrintIcon,
   RenameIcon,
   SheetIcon,
   ShareIcon,
@@ -19,6 +20,7 @@ import {
   SystemIcon,
   TrashIcon,
 } from './icons';
+import { notify } from './notice';
 import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
 
@@ -125,6 +127,7 @@ export function PageMenu(props: {
   const canEdit = perms.canEditPage(props.pageId);
   const canManage = perms.canManagePage(props.pageId);
   const format = pageFormat(tree, props.pageId);
+  const { media } = useServices();
   const ref = useRef<HTMLDivElement>(null);
   useFloating(ref, props.onClose, props.anchor, true);
   const split = splitEnabled(tree, props.pageId);
@@ -164,6 +167,21 @@ export function PageMenu(props: {
         <span className="check">
           {format.size === 'free' ? 'Free' : `${PAGE_SIZES[format.size].label}${format.landscape ? ' ↔' : ''}`}
         </span>
+      </button>
+      {/* La impresión del navegador con la vista de impresión (se baja aparte; Docs/Doc_Hojas_PDF.md). */}
+      <button
+        role="menuitem"
+        data-tip={'Opens the print dialog with this page size.\nChoose **Save as PDF** to export.'}
+        onClick={() => {
+          props.onClose();
+          const page = { format: { size: format.size, landscape: format.landscape }, media: media.enabled ? media : null };
+          void import('./printPage')
+            .then((m) => m.printPage(props.pageId, page))
+            .catch(() => notify('Printing could not start. Try again.'));
+        }}
+      >
+        <PrintIcon />
+        Export PDF / Print
       </button>
       <hr />
       <button

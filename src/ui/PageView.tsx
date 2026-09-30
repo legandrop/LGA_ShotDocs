@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useSyncStatus, useTree } from '../services';
-import { clearCommentsTarget, useCommentsUi } from './commentsUi';
+import { clearCommentsTarget, closeComments, useCommentsUi } from './commentsUi';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { lazyPart, Part } from './lazyPart';
 import { useFloating } from './menus';
@@ -64,6 +64,7 @@ export function PageView({ id }: { id: string }) {
           : undefined
       }
       data-format={format.size}
+      data-page-id={id}
     >
       {trashedAt && (
         <div className="banner">
@@ -107,7 +108,7 @@ function CommentsSlot({ pageId }: { pageId: string }) {
   useEffect(() => () => clearCommentsTarget(), [pageId]);
   if (!open) return null;
   return (
-    <Part>
+    <Part onClose={closeComments}>
       <CommentsPanel pageId={pageId} />
     </Part>
   );

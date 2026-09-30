@@ -306,21 +306,21 @@ export function Sidebar() {
       )}
       {members &&
         createPortal(
-          <Part>
+          <Part onClose={() => setMembers(false)}>
             <MembersDialog onClose={() => setMembers(false)} />
           </Part>,
           document.body,
         )}
       {sharing &&
         createPortal(
-          <Part>
+          <Part onClose={() => setSharing(null)}>
             <ShareDialog target={{ pageId: sharing }} onClose={() => setSharing(null)} />
           </Part>,
           document.body,
         )}
       {drive &&
         createPortal(
-          <Part>
+          <Part onClose={() => setDrive(null)}>
             <DriveDialogHost result={drive.result} onClose={() => setDrive(null)} />
           </Part>,
           document.body,

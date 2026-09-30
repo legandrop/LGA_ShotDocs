@@ -252,3 +252,12 @@ export function setVideosAccepted(on: boolean): void {
 export const schema = BlockNoteSchema.create({
   blockSpecs: { ...blockSpecs, image, paragraph: createParagraph() },
 });
+
+/**
+ * Las opciones del editor que cambian qué nodos y marcas tiene su esquema: las usa el editor de la app
+ * (PageEditor.tsx) y la prueba que compara los nombres de `unknownContent.ts` con el esquema real.
+ */
+export const editorSchemaOptions = {
+  schema,
+  tables: { splitCells: true, cellBackgroundColor: true, cellTextColor: true, headers: true },
+};

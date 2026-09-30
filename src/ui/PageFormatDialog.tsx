@@ -91,7 +91,7 @@ export function PageFormatDialog({ pageId, onClose }: { pageId: string; onClose:
           {format.from
             ? `Set on ${format.from.id === pageId ? 'this page' : `“${format.from.title || 'Untitled'}”`}; pages inside can set their own.`
             : 'Free: the page follows the width of the window.'}{' '}
-          Export to PDF with this size comes later.
+          Export PDF / Print is in the page menu (free pages print on A4).
         </p>
         <div className="modal-actions">
           {ownFormat(tree, pageId) && (

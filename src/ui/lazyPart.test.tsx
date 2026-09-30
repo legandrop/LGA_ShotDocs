@@ -119,18 +119,26 @@ describe('una parte que se carga aparte', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  /** Tiempos cortos para no esperar de verdad; `leaves`: la recarga dispara `pagehide` (la página se va). */
+  async function reloadSetup({ leaves = true } = {}) {
+    const mod = await lazyModule();
+    Object.assign(mod.reloadTimings, { noticeMs: 100, saveWaitMs: 300, pagehideMs: 150 });
+    const reload = vi.spyOn(mod.pageReload, 'now').mockImplementation(() => {
+      if (leaves) window.dispatchEvent(new Event('pagehide'));
+    });
+    return { ...mod, reload, seen: notices() };
+  }
+  const failing = () => Promise.reject(new TypeError('Failed to fetch dynamically imported module'));
+
   it('si no baja (versión nueva): avisa, espera lo que falta guardar y recarga una sola vez', async () => {
-    const { lazyPart, Part, pageReload, watchPendingWrites, NEW_VERSION_NOTICE } = await lazyModule();
-    const reload = vi.spyOn(pageReload, 'now').mockImplementation(() => undefined);
-    const seen = notices();
+    const { lazyPart, Part, watchPendingWrites, NEW_VERSION_NOTICE, reload, seen } = await reloadSetup();
     // Hay una edición a medio guardar: la recarga espera a que termine.
     let unsaved = true;
     const flush = vi.fn(async () => {
-      await sleep(200);
+      await sleep(150);
       unsaved = false;
     });
     const unwatch = watchPendingWrites({ unsaved: () => unsaved, flush });
-    const failing = () => Promise.reject(new TypeError('Failed to fetch dynamically imported module'));
     const Editor = lazyPart<{ name: string }>(failing);
     const Dialog = lazyPart<{ name: string }>(failing);
 
@@ -139,28 +147,31 @@ describe('una parte que se carga aparte', () => {
         <Part fallback={<span className="skeleton" />}>
           <Editor name="Ana" />
         </Part>
-        <Part>
+        <Part onClose={() => undefined}>
           <Dialog name="Beto" />
         </Part>
       </>,
     );
-    await wait(50);
+    await wait(30);
     expect(seen).toEqual([NEW_VERSION_NOTICE]);
     expect(reload).not.toHaveBeenCalled();
-    // Mientras tanto sigue el esqueleto (nada de cajas de error).
+    // Mientras tanto sigue el esqueleto (nada de avisos de error).
     expect(host.querySelector('.skeleton')).not.toBeNull();
-    expect(host.querySelector('.part-error')).toBeNull();
+    expect(host.querySelector('.part-error, .part-error-dialog')).toBeNull();
 
-    await wait(1500);
+    await wait(100);
     expect(flush).toHaveBeenCalled();
     expect(reload).not.toHaveBeenCalled();
-    await wait(400);
+    await wait(300);
     expect(unsaved).toBe(false);
     expect(reload).toHaveBeenCalledTimes(1);
     expect(seen).toEqual([NEW_VERSION_NOTICE]);
+    // La página se va: sigue el esqueleto hasta el final.
+    await wait(300);
+    expect(host.querySelector('.skeleton')).not.toBeNull();
     unwatch();
 
-    // Después de recargar sigue sin bajar: no se recarga en bucle, queda una caja con el botón.
+    // Después de recargar sigue sin bajar: no se recarga en bucle, queda el aviso con el botón.
     vi.resetModules();
     const fresh = await lazyModule();
     const reloadAgain = vi.spyOn(fresh.pageReload, 'now').mockImplementation(() => undefined);
@@ -177,11 +188,70 @@ describe('una parte que se carga aparte', () => {
     expect(reloadAgain).toHaveBeenCalledTimes(1);
   });
 
-  it('sin red y sin service worker no recarga (dejaría la pantalla sin conexión del navegador)', async () => {
-    const { lazyPart, Part, pageReload } = await lazyModule();
-    const reload = vi.spyOn(pageReload, 'now').mockImplementation(() => undefined);
-    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-    const Lazy = lazyPart<{ name: string }>(() => Promise.reject(new TypeError('Failed to fetch')));
+  it('si la persona elige quedarse en el aviso del navegador, la parte muestra el aviso (no queda colgada)', async () => {
+    const { lazyPart, Part, reload } = await reloadSetup({ leaves: false });
+    const Lazy = lazyPart<{ name: string }>(failing);
+    const host = render(
+      <Part fallback={<span className="skeleton" />}>
+        <Lazy name="Ana" />
+      </Part>,
+    );
+    await wait(150);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.skeleton')).not.toBeNull();
+    await wait(250);
+    expect(host.querySelector('.skeleton')).toBeNull();
+    expect(host.querySelector('.part-error button')?.textContent).toBe('Reload');
+  });
+
+  it('con un comentario escrito sin mandar no recarga sola; "Reload" pregunta antes', async () => {
+    const { lazyPart, Part, reload, seen } = await reloadSetup();
+    const { setDraft } = await import('./commentsUi');
+    const draft = Symbol('borrador');
+    setDraft(draft, true);
+    const Lazy = lazyPart<{ name: string }>(failing);
+    const host = render(
+      <Part>
+        <Lazy name="Ana" />
+      </Part>,
+    );
+    await wait(400);
+    expect(seen).toEqual([]);
+    expect(reload).not.toHaveBeenCalled();
+    expect(host.querySelector('.part-error')?.textContent).toContain('not sent');
+
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await act(async () => host.querySelector<HTMLButtonElement>('.part-error button')!.click());
+    expect(ask).toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    ask.mockReturnValue(true);
+    await act(async () => host.querySelector<HTMLButtonElement>('.part-error button')!.click());
+    expect(reload).toHaveBeenCalledTimes(1);
+    setDraft(draft, false);
+  });
+
+  it('si lo escrito no termina de guardarse en el tope, no recarga sola', async () => {
+    const { lazyPart, Part, watchPendingWrites, reload } = await reloadSetup();
+    const unwatch = watchPendingWrites({ unsaved: () => true, flush: async () => undefined });
+    const Lazy = lazyPart<{ name: string }>(failing);
+    const host = render(
+      <Part>
+        <Lazy name="Ana" />
+      </Part>,
+    );
+    await wait(250);
+    expect(host.querySelector('.part-error')).toBeNull();
+    await wait(500);
+    expect(reload).not.toHaveBeenCalled();
+    expect(host.querySelector('.part-error')?.textContent).toContain('not saved yet');
+    unwatch();
+  });
+
+  it('sin red y sin service worker no recarga; cuando vuelve la red lo intenta de nuevo', async () => {
+    const { lazyPart, Part, reload } = await reloadSetup();
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const loader = vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValue(Hello);
+    const Lazy = lazyPart<{ name: string }>(loader);
     const host = render(
       <Part>
         <Lazy name="Ana" />
@@ -190,6 +260,60 @@ describe('una parte que se carga aparte', () => {
     await wait(50);
     expect(host.querySelector('.part-error')?.textContent).toContain('Connect to the internet');
     expect(reload).not.toHaveBeenCalled();
+
+    online.mockReturnValue(true);
+    await act(async () => window.dispatchEvent(new Event('online')));
+    await wait(400);
+    expect(host.querySelector('.hello')?.textContent).toBe('Hola Ana');
+    expect(loader).toHaveBeenCalledTimes(2);
+  });
+
+  it('un diálogo que no baja avisa como diálogo; cerrarlo y volver a abrirlo lo intenta de nuevo', async () => {
+    const { lazyPart, Part, reload } = await reloadSetup();
+    sessionStorage.setItem('shotdocs-part-reload', String(Date.now())); // ya recargó: no recarga otra vez
+    const loader = vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValue(Hello);
+    const Dialog = lazyPart<{ name: string }>(loader);
+    const onClose = vi.fn();
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    roots.push(root);
+    const show = (open: boolean) =>
+      act(() =>
+        root.render(
+          open ? (
+            <Part onClose={onClose}>
+              <Dialog name="Ana" />
+            </Part>
+          ) : null,
+        ),
+      );
+    show(true);
+    await wait(50);
+    const dialog = host.querySelector('.part-error-dialog');
+    expect(dialog?.getAttribute('role')).toBe('alertdialog');
+    const buttons = [...dialog!.querySelectorAll('button')].map((b) => b.textContent);
+    expect(buttons).toEqual(['Close', 'Reload']);
+    await act(async () => dialog!.querySelector<HTMLButtonElement>('button')!.click());
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    show(false);
+    show(true);
+    await wait(400);
+    expect(host.querySelector('.hello')?.textContent).toBe('Hola Ana');
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('vite:preloadError (un archivo del import que ya no está) también recarga una vez con el aviso', async () => {
+    const { listenForMissingFiles, NEW_VERSION_NOTICE, reload, seen } = await reloadSetup();
+    const stop = listenForMissingFiles();
+    const event = Object.assign(new Event('vite:preloadError', { cancelable: true }), { payload: new Error('x') });
+    window.dispatchEvent(event);
+    window.dispatchEvent(event);
+    await wait(250);
+    expect(seen).toEqual([NEW_VERSION_NOTICE]);
+    expect(reload).toHaveBeenCalledTimes(1);
+    stop();
   });
 
   it('otros errores siguen de largo como antes (la caja es solo para lo que no bajó)', async () => {

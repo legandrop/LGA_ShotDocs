@@ -632,7 +632,10 @@ página, el comienzo del texto y el motivo) si el servidor no los acepta.
   service worker precachea todos los `.js` (`globPatterns` en `vite.config.ts`): con la app instalada, el
   editor abre sin red desde la caché. Al publicar una versión nueva, el service worker nuevo borra los
   archivos viejos; si una pestaña vieja pide uno, la app avisa ("A new version is available — reloading"),
-  espera a que lo escrito esté guardado en el dispositivo y recarga una sola vez.
+  espera a que lo escrito esté guardado en el dispositivo y recarga una sola vez. Si queda algo sin guardar
+  después de 8 segundos, o un comentario escrito sin mandar, no recarga sola: la parte muestra un aviso
+  con "Reload" (en un diálogo, si es un diálogo o el carrete). Lo mismo si la persona se queda en el aviso
+  del navegador. Volver a abrir la parte, o que vuelva la red, lo intenta de nuevo.
 - Si la sesión venció y no hay red para renovarla, se sigue con el último usuario conocido y se renueva sola
   cuando vuelve la red.
 - La app pide almacenamiento persistente (`navigator.storage.persist()`) para que el navegador no borre los
@@ -658,7 +661,8 @@ Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nu
   se cierra. Los atributos desconocidos de un bloque no cuentan: se ignoran sin borrar nada. Los nombres
   del esquema están escritos en el archivo (la sincronización revisa sin cargar el editor, que se baja
   aparte); una prueba los compara con el esquema real, así que un cambio de esquema o de BlockNote la hace
-  fallar hasta actualizarlos.
+  fallar hasta actualizarlos. Un elemento llamado `doc` o `text` nunca pasa (y-prosemirror no los guarda
+  así, y el editor lo borraría).
 - **La versión mínima del workspace** (`workspace_settings.min_app_version`). Cada subida de contenido
   lleva la versión de la app, y el servidor rechaza las de una versión menor (también las de versiones
   anteriores a v0.021, que no mandan versión). La app vieja lo ve, deja de subir contenido (queda en el

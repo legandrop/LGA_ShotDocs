@@ -109,7 +109,7 @@ describe('preguntas con el editor de la versión publicada (main)', () => {
     expect(findUnknownContent(doc, mainNames)).toBeNull();
     expect(findUnknownContent(doc)).toBeNull();
     // Ningún bloque ni marca nuevos: los mismos nombres que la versión publicada.
-    expect([...knownContent().nodes].sort()).toEqual([...mainNames.nodes].sort());
+    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...mainNames.nodes].sort());
     expect([...knownContent().marks].sort()).toEqual([...mainNames.marks].sort());
     expect(Object.keys(schema.blockSpecs).sort()).toEqual(Object.keys(mainSchema.blockSpecs).sort());
   });

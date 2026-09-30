@@ -23,7 +23,7 @@ import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { schema, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
+import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { findUnknownContent } from './unknownContent';
 import {
   CommentMargin,
@@ -41,6 +41,7 @@ import { useScheme } from '../prefs';
 import { createDrivePaste } from './drivePaste';
 import { DrivePasteMenu } from './DrivePasteMenu';
 import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
+import { SheetBreaks } from './SheetBreaks';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -197,7 +198,7 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
 
   const editor = useCreateBlockNote(
     withCollaboration({
-      schema,
+      ...editorSchemaOptions,
       pasteHandler: drivePaste.pasteHandler,
       uploadFile: (file: File, blockId?: string) =>
         store(file).catch((err: unknown) => {
@@ -216,7 +217,6 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
         }),
       // Con la página: una foto de otro proyecto se ve con su marcador (papelera de archivos, paso 11).
       resolveFileUrl: (url: string) => (mediaIdOf(url) ? media.resolve(url, pageId) : files.resolve(url)),
-      tables: { splitCells: true, cellBackgroundColor: true, cellTextColor: true, headers: true },
       collaboration: {
         fragment: doc.getXmlFragment(CONTENT_FRAGMENT),
         user: { name: user.email, color: '#2383e2' },
@@ -446,6 +446,8 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
         <CommentSideMenuController canComment={canComment} />
       </BlockNoteView>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
+      {/* Dónde empieza cada hoja (solo una capa encima; roadmap B.7). */}
+      <SheetBreaks pageId={pageId} host={host} />
       {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}
       {carrete && <CarreteHost {...carrete} onClose={() => setCarrete(null)} />}
     </div>
@@ -462,7 +464,7 @@ interface OpenCarrete {
 function CarreteHost(props: OpenCarrete & { onClose: () => void }) {
   const { online } = useSyncStatus();
   return (
-    <Part>
+    <Part onClose={props.onClose}>
       <Carrete {...props} online={online} />
     </Part>
   );

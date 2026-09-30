@@ -109,7 +109,7 @@ export function ProjectSwitcher() {
         )}
       {sharing &&
         createPortal(
-          <Part>
+          <Part onClose={() => setSharing(null)}>
             <ShareDialog target={{ projectId: sharing }} onClose={() => setSharing(null)} />
           </Part>,
           document.body,

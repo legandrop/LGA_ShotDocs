@@ -100,7 +100,7 @@ describe('sdmedia:// con el editor de la versión publicada (main)', () => {
     expect(findUnknownContent(doc, mainNames)).toBeNull();
     expect(findUnknownContent(doc)).toBeNull();
     // El esquema de esta versión tiene los mismos bloques y marcas que el publicado.
-    expect([...knownContent().nodes].sort()).toEqual([...mainNames.nodes].sort());
+    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...mainNames.nodes].sort());
     expect([...knownContent().marks].sort()).toEqual([...mainNames.marks].sort());
   });
 
