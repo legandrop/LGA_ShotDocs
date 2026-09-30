@@ -1,6 +1,7 @@
 # Liberar la copia de la app en el dispositivo (P.10)
 
-Estado: **diseño, sin implementar**. Falta la auditoría previa y que Lega responda las decisiones del final.
+Estado: **diseño, sin implementar**. Auditoría previa hecha: "Correcciones de la auditoría", al final, manda
+sobre lo de arriba. Faltan las respuestas de Lega a las decisiones del final.
 Lo pidió Lega el 2026-09-30, al responder las decisiones de P.6 (`Doc_Adjuntos.md`): el archivo que el usuario
 eligió **nunca se toca** (queda en su disco o en su carrete de fotos); lo que se puede liberar es **la copia que
 la app guarda en el almacenamiento del navegador** después de que el archivo está confirmado en el Drive. El caso
@@ -29,8 +30,8 @@ leer `src/media/queue.ts`, `src/media/mediaDb.ts`, `src/ui/carreteLoader.ts`, `s
 
 - **Qué:** `blobs[id]` de un archivo agregado en este dispositivo, con `pending: 0`, `driveId` y la base
   diciendo que está en Drive; además, justo antes, el portero sirve un pedacito del archivo con el peso correcto.
-- **Cuándo, sola:** copias de 100 MB o más, subidas hace 3 días o más y sin abrir en este dispositivo hace 14
-  días; si el navegador se está quedando sin lugar, reglas más amplias, empezando por lo menos usado.
+- **Cuándo:** **a mano por defecto**; lo automático es opcional y se prende en el diálogo (corrección 5): copias de
+  100 MB o más, subidas hace 3 días o más y sin abrir en este dispositivo hace 14 días.
 - **A mano:** "Espacio en este dispositivo" (menú de la cuenta) con los números y *Liberar*; por archivo, desde
   su hoja o su barra. Y "Mantener en este dispositivo" para lo que no se quiere liberar nunca.
 - **Después:** abrir o bajar usa el pase del portero (ya es el camino de todo archivo que no está en el
@@ -66,10 +67,12 @@ cualquier paso falla o no contesta, **no se libera** (se vuelve a probar otro d�
    que se esté subiendo (P.9).
 2. **La base** (`fetchMediaFiles`, de a muchos): `drive_id` igual al `driveId` del registro, y sin `purged_at` ni
    `drive_trashed_at` (lo pedido para la papelera de Drive se libera solo a mano: decisión 4).
-3. **El portero:** un pase (`/pass`, que ya comprueba la marca `sdFile` del archivo en Drive) y un pedido de **un
-   byte del medio del archivo** (`Range: bytes=N-N`): tiene que responder `206` con `Content-Range: …/<peso>` igual
-   al del registro y **sin** `X-Portero-Cache` (la caché del arranque guarda las puntas de los videos; el medio
-   siempre va a Drive). Así se sabe que Drive tiene hoy ese archivo, de ese peso. Un pedido por archivo.
+3. **El portero:** ~~un pase y un pedido de un byte del medio del archivo~~ (la app no puede leer esa respuesta:
+   `/m/` no tiene CORS; y Drive sigue sirviendo un archivo que el dueño mandó a su papelera). Una ruta nueva,
+   **`POST /verify` con `{ file }`** (nivel 1, como un pase): el portero pide a Drive `files.get` con
+   `fields=size,trashed,appProperties` **sin caché** y responde el peso, si está en la papelera de Drive y si lleva la
+   marca `sdFile` de ese archivo. Se libera solo con el mismo peso, `trashed: false` y la marca. Un pedido por
+   archivo (corrección 1).
 
 El paso 1 se repite adentro de la transacción de borrado porque entre la comprobación y el borrado pudo pasar algo
 (una restauración de la base vuelve todo a `pending: 1`).
@@ -90,8 +93,8 @@ El paso 1 se repite adentro de la transacción de borrado porque entre la compro
 Un repaso **una vez por apertura** (después de la primera sincronización, con red, sin apuro, en la pestaña que
 tiene la cola) y otro **cuando falta lugar**:
 
-- **Reglas de siempre** (con el interruptor prendido, decisión 1): 100 MB o más, confirmado hace 3 días o más, y
-  sin abrir en este dispositivo hace 14 días o más.
+- **Reglas de siempre** (solo con el interruptor prendido, que **viene apagado**: decisión 1 y corrección 5): 100 MB
+  o más, confirmado hace 3 días o más, y sin abrir en este dispositivo hace 14 días o más.
 - **Con el navegador apretado** (`navigator.storage.estimate()`: quedan menos de 2 GB o menos del 20 % de la cuota):
   20 MB o más y confirmado hace 1 día o más, **del que hace más que no se abre al más reciente**, hasta volver a
   tener el 30 % libre. Si el interruptor está apagado, en vez de liberar se muestra un aviso con el botón.
@@ -107,8 +110,8 @@ tiene la cola) y otro **cuando falta lugar**:
 ## 5. A mano
 
 - **"Espacio en este dispositivo"** (menú de la cuenta, en todos los dispositivos):
-  - Arriba, lo del navegador: "La app usa 12,4 GB de 58 GB disponibles en este navegador" (`estimate()`; sin el
-    dato, no se muestra).
+  - Arriba, lo del navegador: "La app usa 12,4 GB de 58 GB disponibles en este navegador" (`estimate()`, de todo el
+    origen: todas las bases y la caché del service worker; sin el dato, no se muestra).
   - Este workspace: **"Copias de archivos ya subidos: 9,8 GB (23 archivos) · Liberar"**, "Esperando subir: 1,1 GB (5
     archivos) · no se pueden liberar todavía" y "Miniaturas: 180 MB". Los números salen de sumar `size` de los
     registros con `blobs` presente (no del `estimate()`, que en Safari y Firefox tarda en bajar después de borrar).
@@ -146,7 +149,8 @@ tiene la cola) y otro **cuando falta lugar**:
   registro).
 - **`resetForRestore` y `clearBlocked`** conservan `freedAt`.
 - **`remember(id, …, local)`** hoy pone `local: true` para todo archivo propio: pasa a mirar si el original está.
-  `fileInfo().local` es lo que usan la hoja y la barra para decidir.
+  (Hoy ni la hoja ni la barra leen `fileInfo().local`: solo el carrete usa `full.local`. Lo usarían las opciones
+  nuevas "Liberar" y "Guardar en este dispositivo".)
 - **`source()`** suma `freed: true` al `MediaSource`; `carreteLoader.ts` y `attachmentOpen.ts` lo usan solo para el
   texto del aviso sin red. `openTarget`, `downloadTarget`, `originalFor` y `localImage` no cambian: ya caen al pase
   cuando no hay original.
@@ -160,17 +164,19 @@ tiene la cola) y otro **cuando falta lugar**:
   workspace tiene su `…:media`. El `estimate()` es de todas juntas.
 - **Solo se libera lo del workspace y la cuenta abiertos**: comprobar que algo está en Drive pide la sesión y el
   portero de ese workspace.
-- El diálogo muestra "Otros workspaces o cuentas en este dispositivo: unos 4,1 GB" (la diferencia con el
-  `estimate()`, aproximada) con "abrilos para liberar lo suyo". Si el apuro viene de otro workspace, el aviso lo
-  dice en vez de liberar de más en este.
+- El diálogo muestra "Otros datos de la app en este dispositivo: unos 4,1 GB" (la diferencia entre el `estimate()` y
+  las copias de este workspace; **no** son solo otros workspaces: incluye las páginas y los comentarios de este, las
+  miniaturas y la caché del service worker) con "si usás otros workspaces o cuentas acá, abrilos para liberar lo
+  suyo".
 - Sacar un workspace del dispositivo (`WorkspaceMenu.tsx`) sigue igual: borra sus bases enteras, con el aviso si
   queda algo sin subir.
 
 ## 9. Base de datos, portero y versión mínima
 
 - **Base:** sin migración. Se usa `files.drive_id`, `purged_at` y `drive_trashed_at` que ya existen.
-- **Portero:** alcanza con el publicado para liberar y volver a ver. La búsqueda por la marca (sección 7) es una
-  mejora aparte, que conviene publicar antes de prender lo automático.
+- **Portero:** ~~alcanza con el publicado~~. **Hace falta un cambio publicado antes de la entrega 1:** `POST
+  /verify` (corrección 1) y, para "Guardar en este dispositivo", CORS en `/m/`. La búsqueda por la marca (sección 7)
+  es una mejora aparte, que conviene publicar antes de prender lo automático.
 - **Sin subir `min_app_version`:** una versión vieja con un registro liberado muestra la miniatura y abre por el
   portero; si una restauración lo vuelve a la cola, lo detiene con "falta el original" a la vista (no pierde nada:
   está en Drive).
@@ -213,14 +219,84 @@ ver la miniatura con el aviso; lo mismo en Chrome de computadora y en Safari de 
 
 ## Decisiones (a confirmar por Lega)
 
-1. Liberar sola, **prendido por defecto**, con reglas conservadoras: 100 MB o más, subido hace 3 días o más, sin
-   abrir acá hace 14 días o más. (La alternativa: apagado por defecto, solo a mano y con el aviso cuando falta lugar.)
-2. Con el navegador apretado (menos de 2 GB o del 20 % libre), reglas más amplias (20 MB, 1 día), del menos usado al
-   más.
+1. **A mano por defecto, con lo automático opcional** (un interruptor en "Espacio en este dispositivo", que viene
+   apagado), por la corrección 5. Reglas del automático: 100 MB o más, subido hace 3 días o más, sin abrir acá hace
+   14 días o más.
+2. Con el navegador apretado: con el automático apagado, solo un aviso con el botón; prendido, reglas más amplias
+   (20 MB, 1 día), del menos usado al más, midiendo con las sumas propias.
 3. Las fotos de menos de 20 MB no se liberan solas (imprimir y ver sin red).
-4. Lo que está en la papelera de Drive no se libera solo (puede ser la última copia fuera de esa papelera); a mano
-   sí, con aviso.
+4. Lo que está en la papelera de la app o en la de Drive no se libera solo (puede ser la última copia); a mano sí, con
+   aviso.
 5. "Mantener en este dispositivo" por archivo.
-6. Comprobar con el portero (un pedido de un byte por archivo) antes de liberar.
+6. Comprobar con el portero antes de liberar, con la ruta nueva `POST /verify` (peso, papelera de Drive y marca; un
+   pedido por archivo), que se publica antes de la entrega 1.
 7. Al agregar algo que no entra, ofrecer liberar en el mismo aviso.
 8. "Guardar en este dispositivo" para archivos de otros dispositivos, más adelante.
+
+## Correcciones de la auditoría (mandan sobre lo de arriba)
+
+Una auditoría independiente contrastó el diseño (commit `47bbbf4`) con el código. Lo central (solo se borra
+`blobs[id]`, nunca algo sin confirmar, la página se ve igual) se mantiene. Lo simple ya se corrigió arriba; esto
+manda sobre todo lo demás.
+
+1. **Bloqueante: la app no puede leer las respuestas de `/m/`.** No llevan `Access-Control-Allow-Origin` (los
+   encabezados salen de `servedHeaders` y `cacheResponse`; `cors()` solo va en las respuestas JSON) y
+   `Content-Range` y `X-Portero-Cache` no están expuestos. Hoy todo pasa por `<img>`, `<video>` y `<a>`. Entonces el
+   "byte del medio" no sirve. **Antes de la entrega 1 se publica un cambio del portero:**
+   - `POST /verify` con `{ file }` (nivel 1): `media_file`, y a Drive `files.get` con `fields=size,trashed,
+     appProperties`, **sin usar** lo anotado en `rec.verified`. Responde `{ size, trashed, marked }`. Es lo que usa el
+     paso 3 de la sección 2.
+   - CORS en `/m/` (`Access-Control-Allow-Origin` con el origen si está en `APP_ORIGINS`, `Vary: Origin`,
+     `Access-Control-Expose-Headers: Content-Length, Content-Range, Content-Disposition`), para "Guardar en este
+     dispositivo" (sección 6), que baja el archivo con `fetch()`. Lo mismo pide el zip de P.9.
+   - La app lo detecta por `/drive/status` (`features: ['verify']`); con un portero sin actualizar, liberar no se ofrece.
+2. **Un archivo que el dueño mandó a la papelera de Drive a mano se sigue sirviendo** (`alt=media` lo baja igual) y
+   `checkMark` guarda lo comprobado (`rec.verified`): ni un pase ni un pedido de bytes lo detectan. `/verify` exige
+   `trashed: false` mirando Drive cada vez. Si algún pedido a `/m/` se usa para comprobar algo, con `cache:
+   'no-store'` (`/m/` responde `Cache-Control: private, max-age=3600`).
+3. **Límites diarios de Cloudflare (plan gratis: 100.000 pedidos al Worker y 100.000 al Durable Object por día, para
+   toda la cuenta):** un `/verify` por archivo está bien para decenas o cientos de copias; para los miles de archivos
+   de una carpeta de P.9, no. Para una carpeta: confiar en la base (`drive_id` de cada archivo, sin papelera) y
+   verificar con `/verify` la carpeta y una muestra (por ejemplo 20 archivos al azar y todos los de más de 100 MB). Y
+   liberar a mano o sola nunca gasta más de un cupo por día (a medir con la entrega 0 de P.9).
+4. **La papelera de la app también frena lo automático:** lo que está en la papelera de la app (`trashed_at`) no se
+   libera solo (decisión 4): si alguien vacía la papelera, la copia del dispositivo puede ser la última fuera de la
+   papelera de Drive.
+5. **Lo automático por defecto era riesgoso:** sin `lastUsedAt` (todo lo guardado antes de esta versión) valía
+   `createdAt`, y la primera apertura liberaría de golpe todo lo viejo; el bucle "hasta volver al 30 % libre" mide con
+   `estimate()`, que en Safari y Firefox tarda en bajar, y liberaría de más; y en un rodaje sin red, un video de hace 3
+   semanas sin abrir ya no estaría. Además, en Firefox la cuota "de mejor esfuerzo" es chica y "menos de 2 GB libres"
+   se cumpliría casi siempre. Entonces:
+   - **A mano por defecto**; lo automático, un interruptor apagado (decisión 1).
+   - Al estrenar la versión, `lastUsedAt = ahora` para todo lo que no lo tenga: nada se libera solo por viejo en las
+     primeras dos semanas.
+   - El apuro y el "cuánto falta liberar" se miden con **las sumas propias** (los `size` de lo liberado), no con
+     `estimate()` antes y después. El umbral de apuro es relativo a la cuota y con un piso (a medir en Firefox).
+6. **`fileInfo().local` no lo leen hoy la hoja ni la barra** (solo el carrete, con `full.local`): corregido en la
+   sección 7.
+7. **El `relink` es código nuevo, no algo que ya está.** `onlyIfSent` existe (`portero.ts`) pero `process()` mira si
+   falta el original y detiene con `originalMissing` **antes** de la rama de `driveId`, y `upload()` necesita un
+   `Blob`. Hace falta: en `process()`, con `freedAt`, saltar esa comprobación; un método `relink` del cliente que
+   manda `POST /upload` con id, peso, nombre, tipo y día sin bytes. Además, con un portero que no recuerda la subida,
+   ese `POST /upload` crea la carpeta del día (quizás vacía) y abre una sesión de Drive que después se abandona: mejor
+   un parámetro `only: 'known'` que el portero respete sin abrir nada (y que un portero viejo ignora: por eso se usa
+   solo con `features` que lo anuncie).
+8. **Versiones viejas y "Quitar del dispositivo":** si una restauración vuelve a la cola un registro liberado, una
+   versión vieja lo ve pendiente y sin original, y la opción de sacar el workspace del dispositivo queda bloqueada
+   (pide el original: `WorkspaceMenu.tsx` y `RemovedScreen.tsx`). La versión nueva lo resuelve con el `relink`; la
+   vieja, no: se acepta, porque solo pasa con restauración más vuelta atrás de versión.
+9. **La búsqueda por la marca lista el Drive** (`files.list` con `appProperties`), y P.9 decía que el portero nunca lo
+   lista. Se precisa en `Doc_Carpetas.md` (corrección 2): el portero nunca **muestra** lo que sale de listar el Drive;
+   esta búsqueda es interna, por un id que la base ya conoce, y solo responde "está" o "no está".
+10. **"Otros workspaces" estaba mal nombrado:** `estimate()` incluye las bases de páginas y comentarios de este
+    workspace, las miniaturas y la caché del service worker. Corregido en la sección 8 ("Otros datos de la app").
+
+### Orden de entregas, con las correcciones
+
+1. **Entrega 0, portero** (publicado antes que la app): `POST /verify`, CORS en `/m/`, `only: 'known'` en
+   `POST /upload` y `features`; con pruebas en `portero/src/core.test.ts` (archivo en la papelera de Drive, sin la
+   marca, peso distinto, sin caché).
+2. **Entrega 1, app:** liberar **a mano** (diálogo y por archivo), la comprobación de tres pasos con `/verify`,
+   `relink`, `lastUsedAt` (con "ahora" para lo anterior), avisos sin red y ofrecer liberar cuando algo no entra.
+3. **Entrega 2:** el interruptor de lo automático (apagado), "Guardar en este dispositivo", compartir sin copia local y
+   la búsqueda por la marca.
