@@ -100,7 +100,6 @@ describe('cola sin red', () => {
     const stop = again.comments.watch(brief);
     await new Promise((r) => setTimeout(r, 20));
     expect(texts(again.comments.threads(brief))).toEqual([['Comentario de la página']]);
-    expect(again.comments.emailOf(server.ownerId)).toBe('owner@test');
     stop();
   });
 
@@ -358,5 +357,223 @@ describe('niveles', () => {
     expect([...server.comments.values()]).toEqual([expect.objectContaining({ block_id: question, author_id: 'cli' })]);
     expect(cli.comments.openCounts(brief).get(question)).toBe(1);
     stop();
+  });
+});
+
+describe('rechazos que no traban nada (auditoría)', () => {
+  /** El dueño y un invitado con Comentar en Brief. */
+  async function withGuest() {
+    const base = await workspace();
+    base.server.addMember('cli', 'guest', 'cliente@test');
+    base.server.grant('cli', { pageId: base.brief }, 'comment');
+    const cli = await device(base.server, { id: 'cli', email: 'cliente@test' });
+    await cli.engine.syncNow();
+    return { ...base, cli };
+  }
+
+  it('una edición sin red de un comentario que otro borró: se ve borrado, con el motivo y el texto para copiar', async () => {
+    const { server, owner, brief, cli } = await withGuest();
+    const stopCli = cli.comments.watch(brief);
+    const id = await cli.comments.add(brief, BLOCK, 'Original');
+    await cli.engine.syncNow();
+    const stopOwner = owner.comments.watch(brief);
+    await owner.engine.syncNow();
+    await owner.comments.remove(brief, id);
+    await owner.engine.syncNow();
+
+    server.online = false;
+    await cli.comments.edit(brief, id, 'Corregido sin red');
+    server.online = true;
+    server.clockOffset += 11_000;
+    await cli.engine.syncNow();
+    expect(cli.engine.getStatus().failedComments).toBe(1);
+    const [thread] = cli.comments.threads(brief);
+    expect(thread.root).toMatchObject({ deleted: true, error: 'The comment was deleted.', rejectedText: 'Corregido sin red' });
+    expect(cli.comments.describeDiscard(thread.root.failedSeqs)).toEqual({
+      message: 'Discarding the edit: the comment comes back as it is on the server.',
+      text: 'Corregido sin red',
+    });
+    await cli.comments.discard(thread.root.failedSeqs[0]);
+    expect(cli.comments.status().failed).toBe(0);
+    expect(cli.comments.threads(brief)).toEqual([]);
+    stopCli();
+    stopOwner();
+  });
+
+  it('un borrado rechazado (not_allowed) no esconde el comentario: se ve con el motivo y se puede descartar', async () => {
+    const { owner, brief, cli } = await withGuest();
+    const id = await owner.comments.add(brief, BLOCK, 'Del dueño');
+    await owner.engine.syncNow();
+    const stop = cli.comments.watch(brief);
+    await cli.engine.syncNow();
+    await cli.comments.remove(brief, id);
+    await cli.engine.syncNow();
+
+    const [thread] = cli.comments.threads(brief);
+    expect(thread.root).toMatchObject({
+      deleted: false,
+      body: 'Del dueño',
+      error: 'Only the author, or someone who can edit and create pages here, can delete this comment.',
+    });
+    expect(thread.count).toBe(1);
+    expect(cli.comments.describeDiscard(thread.root.failedSeqs).message).toBe('Discarding the delete: the comment comes back.');
+    await cli.comments.discard(thread.root.failedSeqs[0]);
+    expect(cli.comments.threads(brief)[0].root).toMatchObject({ deleted: false, error: null, pending: false });
+    stop();
+  });
+
+  it('borrar un comentario propio cuya alta fue rechazada lo saca de la cola sin mandar nada', async () => {
+    const { server, notes, cli } = await withGuest().then(async (w) => {
+      w.server.grant('cli', { pageId: w.notes }, 'view');
+      await w.cli.engine.syncNow();
+      return w;
+    });
+    const stop = cli.comments.watch(notes);
+    const root = await cli.comments.add(notes, null, 'No puedo comentar acá');
+    await cli.comments.add(notes, null, 'Ni responder', root);
+    await cli.engine.syncNow();
+    expect(cli.comments.status().failed).toBe(2);
+    expect(cli.comments.describeDiscard(cli.comments.failures().map((f) => f.seq).slice(0, 1)).message).toBe(
+      'This comment was never uploaded: discarding removes it from this device, and also discards 1 reply to it.',
+    );
+    const calls = server.commentCalls.length;
+    await cli.comments.remove(notes, root);
+    await cli.engine.syncNow();
+    expect(cli.comments.status()).toMatchObject({ pending: 0, failed: 0 });
+    expect(cli.comments.threads(notes)).toEqual([]);
+    expect(server.commentCalls.slice(calls).filter((c) => c.startsWith('delete'))).toEqual([]);
+    stop();
+  });
+
+  it('una página que dejó de estar compartida: el rechazo queda, se puede bajar y descartar, y no corta las demás', async () => {
+    const { server, owner, brief, notes, cli } = await withGuest().then(async (w) => {
+      w.server.grant('cli', { pageId: w.notes }, 'comment');
+      await w.cli.engine.syncNow();
+      return w;
+    });
+    server.listCommentsEnabled = true;
+    const stopNotes = cli.comments.watch(notes);
+    const stopBrief = cli.comments.watch(brief);
+    await cli.engine.syncNow();
+    server.online = false;
+    await cli.comments.add(notes, null, 'Escrito sin red');
+    // Mientras tanto, a la persona le sacan Notes.
+    server.grants.splice(server.grants.findIndex((g) => g.user_id === 'cli' && g.page_id === notes), 1);
+    server.online = true;
+    server.clockOffset += 11_000;
+    await cli.engine.syncNow();
+
+    expect(cli.engine.getStatus()).toMatchObject({ failedComments: 1, commentError: null });
+    const [failure] = cli.comments.failures();
+    expect(failure).toMatchObject({ pageId: notes, body: 'Escrito sin red', error: 'The page is not on the server, or you can no longer see it.' });
+    // Se puede bajar (va en el archivo de lo no subido)...
+    const { exportComments } = await import('./comments');
+    expect(await exportComments(cli.commentsDb)).toEqual([expect.objectContaining({ body: 'Escrito sin red', rejected: failure.error })]);
+    // ...y la otra página abierta se sigue bajando.
+    await owner.comments.add(brief, null, 'Nuevo en Brief');
+    await owner.engine.syncNow();
+    server.clockOffset += 11_000;
+    await cli.engine.syncNow();
+    expect(texts(cli.comments.threads(brief))).toEqual([['Nuevo en Brief']]);
+
+    expect(cli.comments.describeDiscard([failure.seq]).text).toBe('Escrito sin red');
+    await cli.comments.discard(failure.seq);
+    expect(cli.comments.status().failed).toBe(0);
+    stopNotes();
+    stopBrief();
+  });
+});
+
+describe('bajar sin de más (auditoría)', () => {
+  it('la página abierta se baja como mucho cada 10 s, solo lo cambiado, y los correos solo si hay alguien nuevo', async () => {
+    const { server, owner, brief } = await workspace();
+    server.listCommentsEnabled = true;
+    server.addMember('ana', 'member', 'ana@test');
+    server.grant('ana', { pageId: brief }, 'comment');
+    const ana = await device(server, { id: 'ana' });
+    await ana.engine.syncNow();
+    await ana.comments.add(brief, null, 'De Ana');
+    await ana.engine.syncNow();
+
+    const stop = owner.comments.watch(brief);
+    await owner.engine.syncNow();
+    const first = server.commentCalls.filter((c) => c.startsWith('list') || c === 'authors');
+    expect(first).toEqual(['list all', 'authors']);
+    expect(owner.comments.emailOf('ana')).toBe('ana@test');
+
+    // Otro ciclo enseguida: no se vuelve a bajar.
+    await owner.engine.syncNow();
+    await owner.engine.syncNow();
+    expect(server.commentCalls.filter((c) => c.startsWith('list')).length).toBe(1);
+
+    // Pasados 10 s, solo lo cambiado desde la última vez; sin autores nuevos, no se piden correos.
+    server.clockOffset += 11_000;
+    await owner.engine.syncNow();
+    const lists = server.commentCalls.filter((c) => c.startsWith('list'));
+    expect(lists).toHaveLength(2);
+    expect(lists[1]).not.toBe('list all');
+    expect(server.commentCalls.filter((c) => c === 'authors')).toHaveLength(1);
+
+    // Si se subió algo de la página, se baja en la misma vuelta.
+    await owner.comments.add(brief, null, 'Del dueño');
+    await owner.engine.syncNow();
+    expect(server.commentCalls.filter((c) => c.startsWith('list'))).toHaveLength(3);
+    expect(texts(owner.comments.threads(brief))).toEqual([['De Ana'], ['Del dueño']]);
+    stop();
+  });
+
+  it('sin list_comments en la base, sigue con la vista entera', async () => {
+    const { server, owner, brief } = await workspace();
+    await owner.comments.add(brief, null, 'Hola');
+    await owner.engine.syncNow();
+    const stop = owner.comments.watch(brief);
+    await owner.engine.syncNow();
+    expect(server.commentCalls.some((c) => c.startsWith('list'))).toBe(false);
+    expect(texts(owner.comments.threads(brief))).toEqual([['Hola']]);
+    stop();
+  });
+});
+
+describe('restaurar una copia (auditoría)', () => {
+  it('vuelve a subir lo propio comentado después de la copia, con sus ediciones, borrados y resoluciones', async () => {
+    const { server, owner, brief } = await workspace();
+    server.addMember('ana', 'member', 'ana@test');
+    server.grant('ana', { pageId: brief }, 'comment');
+    const ana = await device(server, { id: 'ana' });
+    await ana.engine.syncNow();
+    const anaOld = await ana.comments.add(brief, null, 'De Ana, antes de la copia');
+    const before = await owner.comments.add(brief, BLOCK, 'Antes de la copia');
+    await ana.engine.syncNow();
+    await owner.engine.syncNow();
+    const restore = server.backup();
+
+    const stop = owner.comments.watch(brief);
+    await owner.engine.syncNow();
+    const root = await owner.comments.add(brief, BLOCK, 'Después de la copia');
+    const reply = await owner.comments.add(brief, null, 'Respuesta después', root);
+    await owner.comments.edit(brief, before, 'Antes, editado después');
+    await owner.comments.resolve(brief, root, true);
+    await owner.comments.remove(brief, anaOld);
+    const anaNew = await ana.comments.add(brief, null, 'De Ana, después');
+    await owner.engine.syncNow();
+    await ana.engine.syncNow();
+    expect(server.comments.size).toBe(5);
+    stop();
+
+    restore();
+    expect(server.comments.size).toBe(2);
+    const again = owner.comments.watch(brief);
+    await owner.engine.syncNow();
+    expect(owner.engine.getStatus().notice).toMatch(/restored from a backup/);
+    expect(server.comments.get(root)).toMatchObject({ body: 'Después de la copia', resolved_by: server.ownerId });
+    expect(server.comments.get(reply)).toMatchObject({ thread_id: root, block_id: BLOCK });
+    expect(server.comments.get(before)?.body).toBe('Antes, editado después');
+    expect(server.comments.get(anaOld)?.deleted_by).toBe(server.ownerId);
+    // Lo de Ana lo recupera su dispositivo, no el del dueño.
+    expect(server.comments.has(anaNew)).toBe(false);
+    expect(owner.engine.getStatus()).toMatchObject({ pendingComments: 0, failedComments: 0 });
+    await ana.engine.syncNow();
+    expect(server.comments.get(anaNew)?.author_id).toBe('ana');
+    again();
   });
 });

@@ -18,9 +18,11 @@ export function useInviteLink(): (target?: string) => string {
   const status = useSyncStatus();
   const { url, publishableKey, localKey } = workspace.config;
   const key = status.workspaceLocalKey ?? localKey;
+  // El nombre va para que quien lo abre vea "Join <nombre> at <host>?" (paso 12).
+  const name = status.workspaceName ?? workspace.config.name;
   return useCallback(
-    (target?: string) => inviteLink(location.origin, { u: url, k: publishableKey, l: key, p: target }),
-    [url, publishableKey, key],
+    (target?: string) => inviteLink(location.origin, { u: url, k: publishableKey, l: key, p: target, n: name || undefined }),
+    [url, publishableKey, key, name],
   );
 }
 

@@ -5,7 +5,9 @@ Cómo funciona hoy la regla de no perder nunca información. El código está en
 `editor.test.ts` (con el editor real, en jsdom), `projects.test.ts` (proyectos en la cola, también sin
 red y rechazados), `restore.test.ts` (la generación al restaurar una copia y la versión mínima del
 workspace, y el aviso de base vieja), `src/workspace.test.ts` (los nombres de lo guardado en el
-dispositivo), `src/ui/unknownContent.test.ts` (la guarda del editor contra lo desconocido),
+dispositivo), `src/workspaces.test.ts` (la lista de workspaces del dispositivo, los nombres de Wanka, los
+links de invitación, cambiar y quitar) con sus pantallas montadas en `src/ui/workspaces.test.tsx`,
+`src/ui/unknownContent.test.ts` (la guarda del editor contra lo desconocido),
 `src/media/queue.test.ts` (la cola de fotos y videos), `src/ui/media.test.ts` (`sdmedia://` con el
 editor de la versión publicada) y `team.test.ts` (permisos en el dispositivo, solo lectura, rechazos,
 invitaciones, la señal de que sacaron a alguien y el archivo con lo que no se subió), con las pantallas
@@ -40,8 +42,7 @@ workspace en `workspace_settings.local_key`, para los links de invitación y par
 en otro proyecto de Supabase la conserve.
 
 El cliente de Supabase sale del workspace abierto (`WorkspaceContext` y `Services.client`); no hay un
-cliente global. Hasta que exista la lista de workspaces del dispositivo (paso 12), el único es el de la
-compilación (`SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`).
+cliente global. Qué workspace se abre lo dice la lista del dispositivo (ver "Varios workspaces").
 
 **Sin proyectos.** El servidor ya no crea "My project" para una cuenta nueva: `ensure_workspace()` devuelve
 el primer proyecto propio de la persona, o nada (lo compartido se suma en el paso 9, cuando las políticas
@@ -336,7 +337,72 @@ páginas). La base decide; la app hace la misma cuenta para no ofrecer lo que el
   clave publicable del workspace, su clave local (`workspace_settings.local_key`) y la página o el
   proyecto. Lo que va después del `#` no llega a ningún servidor. Si es el workspace de la compilación
   (misma dirección y clave local), la app lo saca de la dirección, lleva al login y, después de entrar,
-  abre la página (`src/invite.ts`). De otro workspace, por ahora avisa que llega más adelante (paso 12).
+  abre la página (`src/invite.ts`). De otro workspace, pregunta antes de agregarlo (ver "Varios
+  workspaces"). El link lleva además, opcional, el nombre del workspace (`n`), solo para mostrarlo en esa
+  pregunta; las versiones anteriores lo ignoran.
+
+## Varios workspaces
+
+Paso 12 de `Plan_Workspaces.md`. El código está en `src/workspaces.ts` (la lista y todo lo que no es
+pantalla), `src/ui/App.tsx` (qué se abre al arrancar), `src/ui/Welcome.tsx` (bienvenida, unirse, crear y
+el diálogo de workspaces) y `src/ui/WorkspaceMenu.tsx` (el selector y quitar del dispositivo).
+
+- **La lista del dispositivo** vive en `localStorage`, en `shotdocs-workspaces` (una clave nueva: ninguna de
+  las de siempre cambia): de cada workspace la dirección, la clave publicable, la clave local, el nombre
+  (`workspace_settings.name`, que se guarda al sincronizar) y cuál fue el último abierto. Hace falta antes
+  de entrar y sin red. Una entrada rota o repetida se descarta al leerla.
+- **El de la compilación** (`SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`; en la dirección de Lega, Wanka)
+  entra siempre a la lista al abrir la app, marcado como `legacy`: usa `legacyStorageNames` con la clave
+  local fija `znlvpuddswymxpffgvbz`, así que su base local, su sesión y lo que recuerda la app se siguen
+  llamando igual que siempre (pruebas en `src/workspaces.test.ts`). Su dirección y su clave salen siempre
+  de la compilación: si Wanka se restaura en otro proyecto de Supabase y la app se publica con la dirección
+  nueva, el dispositivo sigue con la base de siempre (y la generación hace el resto). No se puede quitar del
+  dispositivo: volvería a entrar solo al abrir la app.
+- **Los demás** usan `storageNamesFor(<clave local>)`: `shotdocs-auth:<clave>`, `shotdocs-last-user:<clave>`,
+  `shotdocs-project:<clave>`, `shotdocs-last-pages:<clave>` y la base `shotdocs:<clave>:<usuario>` (con sus
+  `:media` y `:comments`). Nada se renombra nunca.
+- **Sesión separada:** cada workspace tiene su cliente de Supabase y su sesión (`storage.auth`). **Cambiar
+  de workspace guarda el elegido como el último abierto y recarga la app en el inicio** (`switchWorkspace`):
+  así nunca hay dos clientes ni dos sincronizaciones andando a la vez en la misma pestaña, y no queda nada
+  en memoria del anterior. Antes de irse, si algo no llegó todavía al dispositivo, espera; si hay cambios
+  guardados sin subir, lo avisa: quedan en el dispositivo y suben la próxima vez que se abra ese workspace.
+  Otra pestaña puede seguir en otro workspace (cada base tiene su propio lock de pestaña).
+- **Al abrir la app**, antes de crear ningún cliente: se arma la lista, se lee el link de invitación de la
+  dirección (una sola vez, y se saca de ahí) y se abre el último workspace abierto. Sin ninguno (una
+  publicación sin `SUPABASE_URL`, o después de quitar el último), la **pantalla de bienvenida**: *Join a
+  workspace* o *Create my workspace*.
+- **Unirse con un link:** se revisa que la dirección sea `https://` (solo la dirección, sin camino ni
+  usuario; `http://localhost` solo con la app corriendo en la computadora), la clave publicable
+  (`sb_publishable_…`; una `sb_secret_` se rechaza con un aviso) y la clave local (la forma de
+  `workspace_settings.local_key`). Si la dirección es la de un workspace que ya está, se abre ese sin tocar
+  nada. Si la clave local es la de otro workspace del dispositivo (también la de Wanka) con otra dirección,
+  se rechaza: compartirían la base local, y un link armado a propósito mandaría lo sin subir de uno al
+  servidor de otro. Si todo está bien, pregunta **"Join <nombre> at <host>?"** con el host del Supabase;
+  al aceptar, lo agrega, lo abre y sigue al login, con la página del link pendiente para después de entrar.
+  El link se puede abrir o pegar en *Join a workspace* (en la bienvenida o en el selector).
+- **Crear:** la bienvenida (o *Create a workspace…* en el selector) enlaza la guía en el repo público
+  (`Guide_Create_Workspace.md` en GitHub) y pide la dirección y la clave publicable que imprime el comando.
+  La app lee `workspace_settings` (`name`, `local_key`, `schema_version`) con la clave publicable: sin la
+  tabla o sin clave local, avisa que falta correr el comando; con una clave que no es de esa dirección, lo
+  dice. **Hoy la base solo deja leer `workspace_settings` con sesión** (la política es para
+  `authenticated`), así que la respuesta normal es "permiso denegado": entonces el workspace entra
+  **pendiente** (id `pending.<azar>`, con la sesión en `shotdocs-auth:pending.<azar>`), el login pide el
+  correo del dueño y, después de entrar, la app lee los ajustes con la sesión, pasa la sesión a los nombres
+  de la clave local y recarga. Un pendiente nunca abre una base local, así que no hay nada más que mover.
+  Si falta la clave local, lo avisa y ofrece quitarlo.
+- **El selector Workspace › Proyecto:** con un solo workspace se ve igual que antes, más una línea al pie
+  del selector de proyectos (*Join or create a workspace…*). Con varios, arriba de la barra lateral el
+  nombre del workspace va antes del proyecto, y el selector tiene la sección *Workspaces* (cambiar, *Join a
+  workspace…*, *Create a workspace…*). En el login, con más de un workspace (o uno que no es Wanka), se ve
+  en cuál se entra y *Change* abre la lista.
+- **Quitar un workspace del dispositivo** (*Remove “…” from this device…* en el selector, solo el abierto y
+  nunca el de la compilación): cuenta lo sin subir como la pantalla de "sacado"; con cambios pendientes, el
+  botón queda apagado hasta bajarlos con *Download my unsynced changes* (o hasta que suban). Con
+  confirmación, borra la base local de esa cuenta (y las de `:media` y `:comments`), lo que la app recordaba
+  y la sesión, lo saca de la lista y recarga en otro workspace o en la bienvenida. Las bases de otras
+  cuentas de ese workspace en el mismo dispositivo quedan (vuelven si se une de nuevo con esa cuenta). Sin
+  sesión (desde el login) solo se ofrece quitar uno que no tiene ninguna base en el dispositivo (un
+  pendiente, o uno al que nunca se entró). La pantalla de "sacado", al borrar, también lo saca de la lista.
 
 ## Si sacan a alguien del workspace
 

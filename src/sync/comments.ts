@@ -71,7 +71,19 @@ export interface CommentRemote {
   deleteComment(id: string): Promise<void>;
   /** Resolver uno resuelto (o abrir uno abierto) no cambia nada. */
   resolveThread(threadId: string, resolved: boolean): Promise<void>;
+  /**
+   * `list_comments(p_page_id, p_since)`, si la base la tiene: lo mismo que `comments_view` más
+   * `updated_at`, y con `since` solo lo que cambió desde entonces. `null` si la base no tiene la función
+   * (se sigue con la vista entera).
+   */
+  listComments?(pageId: string, since: string | null): Promise<ListedComment[] | null>;
 }
+
+/** Una fila de `list_comments`: la de la vista más cuándo cambió por última vez. */
+export type ListedComment = CommentRow & { updated_at?: string | null };
+
+/** Cada cuánto, como mucho, se vuelve a bajar una página abierta (en el acto si se subió algo de ella). */
+export const PULL_EVERY_MS = 10_000;
 
 /** Un cambio hecho en el dispositivo, en la cola hasta que el servidor lo confirma. */
 export type CommentOp =
@@ -141,6 +153,10 @@ export interface CommentView {
   error: string | null;
   /** Los cambios rechazados (para reintentar o descartar a mano). */
   failedSeqs: number[];
+  /** Qué eran los cambios rechazados (para explicar qué pasa al descartarlos). */
+  failedKinds: CommentOp['kind'][];
+  /** El texto de un alta o una edición rechazadas (para copiarlo antes de descartar). */
+  rejectedText: string | null;
 }
 
 export interface CommentThread {
@@ -149,7 +165,7 @@ export interface CommentThread {
   pageId: string;
   blockId: string | null;
   root: CommentView;
-  /** Las respuestas que no se borraron, en orden. */
+  /** Las respuestas, en orden: las que no se borraron y las borradas con un cambio rechazado. */
   replies: CommentView[];
   resolved: boolean;
   resolvedAt: string | null;
@@ -223,6 +239,12 @@ export interface CommentFailure {
   error: string;
 }
 
+/** Qué pasa al descartar un cambio rechazado, en palabras, y el texto que se pierde (para copiarlo). */
+export interface DiscardInfo {
+  message: string;
+  text: string | null;
+}
+
 function isRow(value: unknown): value is CommentRow {
   const r = value as Partial<CommentRow> | null;
   return (
@@ -258,6 +280,14 @@ export class CommentQueue {
   private readonly listeners = new Set<() => void>();
   private revision = 0;
   private schemaVersion: number | null = null;
+  /** La generación del workspace (sube al restaurar una copia) y la última que vio este dispositivo. */
+  private generation: number | null = null;
+  private knownGeneration: number | null = null;
+  /** Cuándo se bajó cada página por última vez, y las que hay que bajar ya (se subió algo de ellas). */
+  private readonly lastPull = new Map<string, number>();
+  private readonly dirty = new Set<string>();
+  /** Por qué no se pudo bajar una página (a la vista en el panel). */
+  private readonly pullErrors = new Map<string, string>();
   private lastError: string | null = null;
   private chain: Promise<unknown> = Promise.resolve();
   private stopped = false;
@@ -298,11 +328,26 @@ export class CommentQueue {
     this.changed();
   }
 
-  /** La versión de la base del workspace (`workspace_settings.schema_version`); `null` si no se sabe. */
-  configure(schemaVersion: number | null): void {
+  /**
+   * La versión de la base del workspace (`workspace_settings.schema_version`) y su generación; `null` si no
+   * se sabe. Con una generación nueva, nada se baja antes de recuperar lo propio (ver `syncGeneration`).
+   */
+  configure(schemaVersion: number | null, generation: number | null = null): void {
     const before = this.ready;
     this.schemaVersion = schemaVersion;
+    if (generation !== null) this.generation = generation;
     if (before !== this.ready) this.changed();
+  }
+
+  /**
+   * La base se restauró desde una copia de seguridad (cambió la generación): lo comentado después de la
+   * copia ya no está en el servidor. Antes de la primera bajada (que pisaría lo guardado), vuelve a poner en
+   * la cola, con el mismo id (el alta es idempotente), los comentarios propios que el servidor ya no tiene,
+   * sus ediciones, y los borrados y resoluciones hechos por esta persona. Devuelve cuántos cambios volvieron.
+   */
+  syncGeneration(generation: number): Promise<number> {
+    this.generation = generation;
+    return this.serial(() => this.recoverIfNeeded());
   }
 
   stop(): void {
@@ -318,7 +363,8 @@ export class CommentQueue {
 
   /**
    * La página está abierta: se cargan sus comentarios guardados, se bajan los del servidor y se vuelven a
-   * bajar en cada sincronización mientras siga abierta. Devuelve la función para dejar de mirarla.
+   * bajar mientras siga abierta (como mucho cada `PULL_EVERY_MS`, o en el acto si se subió algo de ella).
+   * Devuelve la función para dejar de mirarla.
    */
   watch(pageId: string): () => void {
     this.watched.set(pageId, (this.watched.get(pageId) ?? 0) + 1);
@@ -339,6 +385,11 @@ export class CommentQueue {
   /** Los comentarios de la página ya se bajaron del servidor en esta sesión. */
   isFresh(pageId: string): boolean {
     return this.pulled.has(pageId);
+  }
+
+  /** Por qué no se pudieron bajar los comentarios de la página (o `null`). */
+  pullError(pageId: string): string | null {
+    return this.pullErrors.get(pageId) ?? null;
   }
 
   // --- Cambios (la interfaz) ------------------------------------------------------------------------------
@@ -409,6 +460,33 @@ export class CommentQueue {
     await this.reloadOps();
   }
 
+  /** Qué pasa al descartar estos cambios rechazados (para la confirmación). */
+  describeDiscard(seqs: number[]): DiscardInfo {
+    const entries = this.ops.filter((o) => o.failed && seqs.includes(o.seq!));
+    const parts: string[] = [];
+    let text: string | null = null;
+    for (const e of entries) {
+      const op = e.op;
+      if (op.kind === 'add') {
+        text ??= op.body;
+        const replies = this.ops.filter((o) => o.op.kind === 'add' && o.op.threadId === op.id).length;
+        parts.push(
+          `This comment was never uploaded: discarding removes it from this device${
+            replies > 0 ? `, and also discards ${replies} ${replies === 1 ? 'reply' : 'replies'} to it` : ''
+          }.`,
+        );
+      } else if (op.kind === 'edit') {
+        text ??= op.body;
+        parts.push('Discarding the edit: the comment comes back as it is on the server.');
+      } else if (op.kind === 'delete') {
+        parts.push('Discarding the delete: the comment comes back.');
+      } else {
+        parts.push(op.resolved ? 'Discarding: the thread reopens.' : 'Discarding: the thread stays resolved.');
+      }
+    }
+    return { message: [...new Set(parts)].join(' ') || 'Discard this change?', text };
+  }
+
   // --- Lectura (la interfaz) ------------------------------------------------------------------------------
 
   /** Los hilos de la página: primero los abiertos y después los resueltos, cada grupo por fecha. */
@@ -437,7 +515,7 @@ export class CommentQueue {
       if (o.failed) failed++;
       else pending++;
     }
-    return { pending, failed, error: pending > 0 ? this.lastError : null };
+    return { pending, failed, error: this.lastError };
   }
 
   failures(): CommentFailure[] {
@@ -462,18 +540,25 @@ export class CommentQueue {
   run(isPageUnsent: (pageId: string) => boolean = () => false): Promise<void> {
     return this.serial(async () => {
       if (!this.ready || this.stopped) return;
+      let error: string | null = null;
       try {
+        await this.recoverIfNeeded();
         await this.push(isPageUnsent);
+        const now = this.now();
         for (const pageId of [...this.watched.keys()]) {
           if (this.stopped) return;
           if (isPageUnsent(pageId)) continue;
-          await this.pull(pageId);
+          const due = this.dirty.has(pageId) || !this.pulled.has(pageId) || now - (this.lastPull.get(pageId) ?? 0) >= PULL_EVERY_MS;
+          if (!due) continue;
+          // Una página que ya no se ve (o que falla) no corta la bajada de las demás.
+          const pageError = await this.pullSafely(pageId);
+          if (pageError) error ??= pageError;
         }
-        this.setError(null);
       } catch (err) {
         // Sin red no hay nada que mostrar acá: el estado ya dice "Offline".
-        this.setError(isNetworkError(err) ? null : errorMessage(err));
+        error = isNetworkError(err) ? null : commentErrorText(errorMessage(err));
       }
+      this.setError(error);
     });
   }
 
@@ -481,8 +566,31 @@ export class CommentQueue {
   refresh(pageId: string): Promise<void> {
     return this.serial(async () => {
       if (!this.ready || this.stopped) return;
-      await this.pull(pageId);
+      await this.recoverIfNeeded();
+      const error = await this.pullSafely(pageId);
+      if (error) this.setError(error);
     });
+  }
+
+  /**
+   * Baja una página y devuelve el error en palabras si falló de un modo que se arregla solo. Sin red, tira
+   * (no tiene sentido seguir con las demás). Si la página ya no se ve, no es un error del estado.
+   */
+  private async pullSafely(pageId: string): Promise<string | null> {
+    try {
+      await this.pull(pageId);
+      if (this.pullErrors.delete(pageId)) this.changed();
+      return null;
+    } catch (err) {
+      if (isNetworkError(err)) throw err;
+      const message = errorMessage(err);
+      this.pullErrors.set(pageId, commentErrorText(message));
+      // Se vuelve a probar a la próxima vuelta que toque (no en cada ciclo).
+      this.lastPull.set(pageId, this.now());
+      this.changed();
+      if (isPermanent(err) && message === 'page_not_found') return null;
+      return commentErrorText(message);
+    }
   }
 
   private async push(isPageUnsent: (pageId: string) => boolean): Promise<void> {
@@ -499,6 +607,8 @@ export class CommentQueue {
         continue;
       }
       await this.ack(entry);
+      // Se subió algo de esta página: se baja en esta misma vuelta (fechas y autor de verdad).
+      this.dirty.add(entry.op.pageId);
     }
   }
 
@@ -568,28 +678,132 @@ export class CommentQueue {
     this.changed();
   }
 
+  /**
+   * Baja los comentarios de una página. Con `list_comments` en la base, solo lo que cambió desde la última
+   * vez (el cursor, `updated_at`, se guarda con lo bajado); sin la función, la vista entera. Los correos
+   * (`comment_authors`) se piden solo si aparece alguien que el dispositivo no conoce.
+   */
   private async pull(pageId: string): Promise<void> {
-    const [rows, authors] = await Promise.all([
-      this.remote.fetchComments(pageId),
-      this.remote.fetchCommentAuthors(pageId),
-    ]);
+    this.dirty.delete(pageId);
+    const sinceKey = `since:${pageId}`;
+    const since = this.db ? (((await this.db.get('meta', sinceKey)) as string | undefined) ?? null) : null;
+    const listed = this.remote.listComments ? await this.remote.listComments(pageId, since) : null;
+    const incremental = listed !== null && since !== null;
+    const rows = listed ?? (await this.remote.fetchComments(pageId));
     const valid = rows.filter(isRow).filter((r) => r.page_id === pageId);
+    let cursor: string | null = listed ? since : null;
+    for (const r of listed ?? []) {
+      const at = (r as ListedComment).updated_at;
+      if (typeof at === 'string' && (cursor === null || at > cursor)) cursor = at;
+    }
+    const clean = valid.map((r) => {
+      const { updated_at: _u, ...row } = r as ListedComment;
+      return row as CommentRow;
+    });
     if (this.db) {
-      const tx = this.db.transaction(['comments', 'authors'], 'readwrite');
+      const tx = this.db.transaction(['comments', 'meta'], 'readwrite');
       const store = tx.objectStore('comments');
-      for (const key of await store.index('page').getAllKeys(pageId)) await store.delete(key);
-      for (const r of valid) await store.put(r);
-      for (const a of authors) {
-        if (typeof a?.user_id === 'string' && typeof a.email === 'string') {
-          await tx.objectStore('authors').put({ userId: a.user_id, email: a.email });
-        }
-      }
+      if (!incremental) for (const key of await store.index('page').getAllKeys(pageId)) await store.delete(key);
+      for (const r of clean) await store.put(r);
+      if (cursor) await tx.objectStore('meta').put(cursor, sinceKey);
+      else await tx.objectStore('meta').delete(sinceKey);
       await tx.done;
     }
-    this.rows.set(pageId, new Map(valid.map((r) => [r.id, r])));
-    for (const a of authors) if (typeof a?.user_id === 'string' && typeof a.email === 'string') this.authors.set(a.user_id, a.email);
+    const map = incremental ? new Map(this.rows.get(pageId) ?? []) : new Map<string, CommentRow>();
+    for (const r of clean) map.set(r.id, r);
+    this.rows.set(pageId, map);
     this.pulled.add(pageId);
+    this.lastPull.set(pageId, this.now());
     this.changed();
+
+    const unknown = new Set<string>();
+    for (const r of map.values()) {
+      for (const id of [r.author_id, r.resolved_by, r.deleted_by]) if (id && id !== this.userId && !this.authors.has(id)) unknown.add(id);
+    }
+    if (unknown.size > 0) await this.pullAuthors(pageId);
+  }
+
+  private async pullAuthors(pageId: string): Promise<void> {
+    const authors = (await this.remote.fetchCommentAuthors(pageId)).filter(
+      (a) => typeof a?.user_id === 'string' && typeof a.email === 'string',
+    );
+    if (authors.length === 0) return;
+    if (this.db) {
+      const tx = this.db.transaction('authors', 'readwrite');
+      for (const a of authors) await tx.store.put({ userId: a.user_id, email: a.email });
+      await tx.done;
+    }
+    for (const a of authors) this.authors.set(a.user_id, a.email);
+    this.changed();
+  }
+
+  /** Si cambió la generación (se restauró una copia), recupera lo propio antes de bajar nada. */
+  private async recoverIfNeeded(): Promise<number> {
+    if (!this.db || !this.ready || this.generation === null) return 0;
+    this.knownGeneration ??= ((await this.db.get('meta', 'generation')) as number | undefined) ?? 1;
+    if (this.knownGeneration === this.generation) return 0;
+    const count = await this.recoverAfterRestore();
+    await this.db.put('meta', this.generation, 'generation');
+    this.knownGeneration = this.generation;
+    return count;
+  }
+
+  private async recoverAfterRestore(): Promise<number> {
+    const db = this.db!;
+    const me = this.userId;
+    const saved = await db.getAll('comments');
+    const pages = new Set(saved.filter((r) => r.author_id === me || r.resolved_by === me || r.deleted_by === me).map((r) => r.page_id));
+    const recovered: CommentOp[] = [];
+    for (const pageId of pages) {
+      let server: Map<string, CommentRow>;
+      try {
+        server = new Map((await this.remote.fetchComments(pageId)).map((r) => [r.id, r]));
+      } catch (err) {
+        // Una página que ya no se ve: lo de ella no se puede recuperar (queda en lo guardado).
+        if (isPermanent(err)) continue;
+        throw err;
+      }
+      // Primero los hilos y después las respuestas, cada grupo por fecha.
+      const local = saved
+        .filter((r) => r.page_id === pageId)
+        .sort((a, b) => (a.thread_id === null) !== (b.thread_id === null) ? (a.thread_id === null ? -1 : 1) : a.created_at < b.created_at ? -1 : 1);
+      for (const r of local) {
+        const s = server.get(r.id);
+        if (r.author_id === me && !r.deleted_at && r.body) {
+          if (!s) {
+            recovered.push({ kind: 'add', id: r.id, pageId, blockId: r.block_id, threadId: r.thread_id, body: r.body, at: r.created_at });
+          } else if (!s.deleted_at && s.body !== r.body && r.edited_at && (!s.edited_at || r.edited_at > s.edited_at)) {
+            recovered.push({ kind: 'edit', id: r.id, pageId, body: r.body, at: r.edited_at });
+          }
+        }
+        if (r.deleted_by === me && r.deleted_at && s && !s.deleted_at) {
+          recovered.push({ kind: 'delete', id: r.id, pageId, at: r.deleted_at });
+        }
+        const reAdded = !s && r.author_id === me && !r.deleted_at && !!r.body;
+        if (r.thread_id === null && r.resolved_at && r.resolved_by === me && (s ? !s.resolved_at : reAdded)) {
+          recovered.push({ kind: 'resolve', id: r.id, pageId, resolved: true, at: r.resolved_at });
+        }
+      }
+    }
+    // Lo bajado antes de la copia ya no vale como punto de partida: la próxima bajada es entera.
+    const tx = db.transaction(['outbox', 'meta'], 'readwrite');
+    const meta = tx.objectStore('meta');
+    for (const key of await meta.getAllKeys()) if (typeof key === 'string' && key.startsWith('since:')) await meta.delete(key);
+    if (recovered.length > 0) {
+      // Lo recuperado es más viejo que lo que ya estaba en la cola: va antes.
+      const outbox = tx.objectStore('outbox');
+      const existing = await outbox.getAll();
+      const already = new Set(existing.map((e) => `${e.op.kind}:${e.op.id}`));
+      await outbox.clear();
+      for (const op of recovered) {
+        if (already.has(`${op.kind}:${op.id}`)) continue;
+        await outbox.add({ op, attempted: true, failed: false, error: null, queuedAt: this.now() });
+      }
+      for (const { seq: _s, ...e } of existing) await outbox.add(e);
+    }
+    await tx.done;
+    await this.reloadOps();
+    return recovered.length;
   }
 
   // --- La cola en el dispositivo --------------------------------------------------------------------------
@@ -620,7 +834,14 @@ export class CommentQueue {
     } else if (op.kind === 'delete') {
       const add = all.find((e) => open(e) && e.op.kind === 'add');
       const replies = all.some((e) => e.op.kind === 'add' && e.op.threadId === op.id);
-      if (add && !replies) {
+      // Un alta rechazada nunca llegó al servidor: borrarla es sacarla de la cola, con lo que depende de ella.
+      const rejected = all.find((e) => e.failed && e.op.kind === 'add' && e.op.id === op.id);
+      if (rejected) {
+        const gone = new Set([op.id]);
+        for (const e of all) if (e.op.kind === 'add' && e.op.threadId === op.id) gone.add(e.op.id);
+        for (const e of all) if (gone.has(e.op.id)) await tx.store.delete(e.seq!);
+        done = true;
+      } else if (add && !replies) {
         for (const e of all) if (e.op.id === op.id && !e.attempted && !e.failed) await tx.store.delete(e.seq!);
         done = true;
       } else {
@@ -707,6 +928,16 @@ export class CommentQueue {
         out.set(op.id, c);
       }
       if (!c) continue;
+      c.pending = true;
+      if (entry.failed) {
+        // Un cambio rechazado no se aplica: se ve el comentario como está, con el motivo (el alta, que solo
+        // existe acá, sí se ve).
+        c.error = entry.error ?? 'Rejected by the server.';
+        c.failedSeqs.push(entry.seq!);
+        c.failedKinds.push(op.kind);
+        if (op.kind === 'add' || op.kind === 'edit') c.rejectedText ??= op.body;
+        if (op.kind !== 'add') continue;
+      }
       if (op.kind === 'edit' && !c.deleted) {
         c.body = op.body;
         c.editedAt = op.at;
@@ -715,11 +946,6 @@ export class CommentQueue {
         c.body = '';
       } else if (op.kind === 'resolve') {
         resolutions.set(op.id, op.resolved ? { at: op.at, by: this.userId } : { at: null, by: null });
-      }
-      c.pending = true;
-      if (entry.failed) {
-        c.error = entry.error ?? 'Rejected by the server.';
-        c.failedSeqs.push(entry.seq!);
       }
     }
     for (const [id, r] of resolutions) {
@@ -769,6 +995,8 @@ function fromRow(r: CommentRow): ViewWithResolution {
     local: false,
     error: null,
     failedSeqs: [],
+    failedKinds: [],
+    rejectedText: null,
     resolvedAt: r.resolved_at,
     resolvedBy: r.resolved_by,
   };
@@ -832,7 +1060,7 @@ function buildThreads(pageId: string, view: Map<string, ViewWithResolution>): Co
       pageId,
       blockId: root.blockId,
       root,
-      replies: live.filter((r) => !r.deleted),
+      replies: live.filter((r) => !r.deleted || r.error),
       resolved: !!root.resolvedAt,
       resolvedAt: root.resolvedAt ?? null,
       resolvedBy: root.resolvedBy ?? null,

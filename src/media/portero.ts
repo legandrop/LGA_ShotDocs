@@ -58,6 +58,13 @@ export interface AppFile {
   day: string;
 }
 
+/** La respuesta de `POST /trash`. */
+export interface TrashResult {
+  status: 'done';
+  file: string;
+  drive: 'trashed' | 'missing' | 'none';
+}
+
 export interface UploadProgress {
   /** El pedido del portero para esta subida: con él se puede retomar (`resume`). */
   uploadId: string;
@@ -221,6 +228,18 @@ export class Portero {
   async setFolder(parentId: string | null): Promise<{ id: string; name: string } | null> {
     return (await this.request<{ folder: { id: string; name: string } | null }>('POST', '/drive/folder', { json: { parentId } }))
       .folder;
+  }
+
+  /**
+   * Manda un archivo de la papelera de la app a la papelera de Drive (`POST /trash`): la base decide si se
+   * puede (solo dueño y admins, y solo si está en la papelera) y el portero lo mueve, nunca lo borra (Drive
+   * lo guarda 30 días). `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba)
+   * o `none` (nunca terminó de subirse). Pedirlo de nuevo no hace nada de más. Errores (`PorteroError` con
+   * el estado): 403 sin permiso o si el archivo de Drive no es ese; 404 si no existe; 409 si una página lo
+   * volvió a usar; 502 si Drive falló (se puede volver a pedir).
+   */
+  async trash(file: string): Promise<TrashResult> {
+    return this.request<TrashResult>('POST', '/trash', { json: { file } });
   }
 
   /**

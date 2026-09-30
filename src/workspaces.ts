@@ -501,8 +501,12 @@ export async function hasLocalData(ws: DeviceWorkspace): Promise<boolean | null>
 }
 
 /** Abre otro workspace: lo guarda como el último abierto y recarga la app en el inicio. */
-export function switchWorkspace(id: string, reload: () => void = () => location.replace('/')): void {
-  updateWorkspaces((list) => setActive(list, id));
+export function switchWorkspace(
+  id: string,
+  reload: () => void = () => location.replace('/'),
+  store: KeyValueStore = browserStore(),
+): void {
+  updateWorkspaces((list) => setActive(list, id), store);
   reload();
 }
 

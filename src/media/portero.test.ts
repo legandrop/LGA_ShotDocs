@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AlreadySentError, localDay, MAX_RETRIES, PART_BYTES, Portero, retryDelay, UploadError } from './portero';
+import { AlreadySentError, localDay, MAX_RETRIES, PART_BYTES, Portero, PorteroError, retryDelay, UploadError } from './portero';
 
 const MB = 1024 * 1024;
 const BASE = 'https://media.example.com';
@@ -91,6 +91,14 @@ class FakePortero {
     if (call.method === 'POST' && call.path === '/pass') {
       const { fileId, file, type } = JSON.parse(String(init.body)) as { fileId?: string; file?: string; type?: string };
       return json({ url: `${BASE}/m/${file ? `app-${file}` : fileId}${type ? `-${type}` : ''}` });
+    }
+    if (call.method === 'POST' && call.path === '/trash') {
+      const { file } = call.json as { file: string };
+      if (file === 'in-use') return json({ error: 'A page still uses this file: it is not in the trash.' }, 409);
+      if (file === 'member') {
+        return json({ error: 'Only the owner or an admin of the workspace can send files to the Google Drive trash.' }, 403);
+      }
+      return json({ status: 'done', file, drive: 'trashed' });
     }
     if (call.method === 'GET' && call.path === '/drive/status') {
       return json({ connected: true, broken: null, email: 'lega@example.com', isOwner: true, folder: this.folder, picker: true });
@@ -362,6 +370,26 @@ describe('portero: archivos de la app (pasos 6 y 8)', () => {
     expect(error).toBeInstanceOf(UploadError);
     expect(error.status).toBe(502);
     expect(error.message).toMatch(/did not start the upload/);
+  });
+
+  it('manda un archivo a la papelera de Drive con la sesión, y los errores traen el estado y el texto', async () => {
+    const server = new FakePortero();
+    const portero = server.portero();
+    expect(await portero.trash('f-1')).toEqual({ status: 'done', file: 'f-1', drive: 'trashed' });
+    expect(server.calls[0]).toMatchObject({ method: 'POST', path: '/trash', json: { file: 'f-1' } });
+
+    const inUse = (await portero.trash('in-use').catch((e: unknown) => e)) as PorteroError;
+    expect(inUse).toBeInstanceOf(PorteroError);
+    expect(inUse).toMatchObject({ status: 409, retryable: false, message: 'A page still uses this file: it is not in the trash.' });
+    const member = (await portero.trash('member').catch((e: unknown) => e)) as PorteroError;
+    expect(member).toMatchObject({ status: 403, retryable: false });
+    expect(member.message).toMatch(/owner or an admin/);
+
+    server.fail = (call) => (call.path === '/trash' ? 502 : undefined);
+    const drive = (await portero.trash('f-2').catch((e: unknown) => e)) as PorteroError;
+    expect(drive).toMatchObject({ status: 502, retryable: true });
+    // Una sola vez: mandar a la papelera no se reintenta solo.
+    expect(server.calls.filter((c) => c.json?.file === 'f-2')).toHaveLength(1);
   });
 
   it('con onlyIfSent nunca abre una subida nueva', async () => {

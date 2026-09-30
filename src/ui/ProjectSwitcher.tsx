@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { usePermissions, useTree } from '../services';
+import { usePermissions, useServices, useTree } from '../services';
+import { displayName } from '../workspaces';
 import { AccountIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, useCurrentProject, useSwitchProject } from './project';
 import { ShareDialog } from './ShareDialog';
+import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
+import {
+  RemoveWorkspaceDialog,
+  useCurrentWorkspace,
+  useLeaveGuard,
+  useRememberWorkspaceName,
+  WorkspaceSection,
+} from './WorkspaceMenu';
 
 export function Monogram({ name, size = 26 }: { name: string; size?: number }) {
   return (
@@ -21,12 +30,21 @@ const SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl+K';
 // En pantallas táctiles no se enfoca el buscador al abrir: el teclado taparía la lista.
 const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
-/** Arriba de la barra lateral: el proyecto abierto. Abre el selector con un clic o con Ctrl+K (⌘K). */
+/**
+ * Arriba de la barra lateral: el proyecto abierto (y, con varios workspaces en el dispositivo, antes el
+ * workspace: Workspace › Proyecto). Abre el selector con un clic o con Ctrl+K (⌘K).
+ */
 export function ProjectSwitcher() {
   const tree = useTree();
   const current = useCurrentProject();
+  const { workspace } = useServices();
+  const { current: ws, all } = useCurrentWorkspace();
+  const leave = useLeaveGuard();
+  useRememberWorkspaceName();
   const [position, setPosition] = useState<MenuPosition | null>(null);
   const [sharing, setSharing] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspacesMode | null>(null);
+  const [removing, setRemoving] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const project = tree.project(current);
   const stats = tree.projectStats(current);
@@ -64,7 +82,8 @@ export function ProjectSwitcher() {
         <span className="project-label">
           <strong>{name}</strong>
           <span>
-            Project · {stats.pages} {stats.pages === 1 ? 'page' : 'pages'}
+            {/* Con un solo workspace, igual que siempre. */}
+            {all.length > 1 && ws ? `${displayName(ws)} › ` : ''}Project · {stats.pages} {stats.pages === 1 ? 'page' : 'pages'}
           </span>
         </span>
         <AccountIcon size={16} />
@@ -81,12 +100,25 @@ export function ProjectSwitcher() {
               anchor={button.current}
               onClose={() => setPosition(null)}
               onShare={(id) => setSharing(id)}
+              onWorkspaces={(mode) => setWorkspaces(mode)}
+              onRemoveWorkspace={() => setRemoving(true)}
             />
           </>,
           document.body,
         )}
       {sharing &&
         createPortal(<ShareDialog target={{ projectId: sharing }} onClose={() => setSharing(null)} />, document.body)}
+      {workspaces &&
+        createPortal(
+          <WorkspacesDialog
+            initial={workspaces}
+            currentId={workspace.config.localKey}
+            beforeLeave={leave}
+            onClose={() => setWorkspaces(null)}
+          />,
+          document.body,
+        )}
+      {removing && createPortal(<RemoveWorkspaceDialog onClose={() => setRemoving(false)} />, document.body)}
     </>
   );
 }
@@ -99,6 +131,8 @@ function ProjectMenu(props: {
   anchor: HTMLElement | null;
   onClose: () => void;
   onShare: (projectId: string) => void;
+  onWorkspaces: (mode: WorkspacesMode) => void;
+  onRemoveWorkspace: () => void;
 }) {
   const tree = useTree();
   const perms = usePermissions();
@@ -245,6 +279,7 @@ function ProjectMenu(props: {
           Rename “{currentName}”
         </button>
       )}
+      <WorkspaceSection onClose={props.onClose} onDialog={props.onWorkspaces} onRemove={props.onRemoveWorkspace} />
     </div>
   );
 }

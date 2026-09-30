@@ -3187,3 +3187,141 @@ button.thread-anchor:hover:not(:disabled) {
     right: -4px;
   }
 }
+
+/* --- Workspaces: bienvenida, unirse, crear, selector (paso 12) ----------------------------------- */
+
+.welcome-card {
+  width: min(460px, 100%);
+}
+
+.welcome-card .brand-row {
+  margin-bottom: 4px;
+}
+
+.welcome-choices {
+  display: grid;
+  gap: 8px;
+}
+
+.welcome-choice {
+  width: 100%;
+  padding: 12px 14px;
+  gap: 12px;
+  align-items: flex-start;
+  text-align: left;
+  border-radius: 10px;
+}
+
+.welcome-choice > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted-2);
+}
+
+.welcome-choice > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.welcome-choice .muted {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.welcome-form {
+  display: grid;
+  gap: 12px;
+}
+
+.welcome-form h1,
+.welcome-form h2 {
+  margin: 0;
+}
+
+.welcome-form input {
+  font-size: 14px;
+}
+
+.welcome-guide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.workspaces-dialog {
+  overflow-y: auto;
+}
+
+.workspaces-dialog .muted {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.workspace-list {
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-row {
+  width: 100%;
+  min-height: 48px;
+  border: none;
+  gap: 10px;
+  text-align: left;
+}
+
+.workspace-row .monogram {
+  width: 26px;
+  height: 26px;
+  font-size: 10px;
+}
+
+.workspace-row[aria-current='true'] .project-label strong {
+  font-weight: 700;
+}
+
+.menu .workspace-more {
+  color: var(--muted);
+}
+
+button.primary.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.login-workspace {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.login-workspace strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .workspace-row {
+    min-height: 60px;
+  }
+
+  .welcome-form input {
+    font-size: 16px; /* sin zoom automático en el iPhone */
+  }
+}

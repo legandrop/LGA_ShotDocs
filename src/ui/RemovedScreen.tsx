@@ -7,6 +7,7 @@ import { useServices, useSyncStatus } from '../services';
 import { unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
 import { errorMessage } from '../sync/types';
 import type { StorageNames } from '../workspace';
+import { forgetWorkspaceStorage, readWorkspaces, removeWorkspace, updateWorkspaces } from '../workspaces';
 import { downloadUnsynced, saveBlob } from './unsyncedDownload';
 
 // Sacaron a la persona del workspace (sección 8 de Docs/Plan_Workspaces.md). Aparece SOLO con la señal
@@ -119,6 +120,14 @@ export function RemovedScreen() {
       await deleteDatabase(dbName);
       forgetWorkspaceKeys(workspace.config.storage, user.id, projectIds);
       await client.auth.signOut({ scope: 'local' });
+      // Un workspace que no es el de la compilación sale también de la lista del dispositivo (paso 12), y la
+      // app vuelve a otro workspace o a la bienvenida.
+      const entry = readWorkspaces().workspaces.find((w) => w.id === workspace.config.localKey);
+      if (entry && !entry.legacy) {
+        forgetWorkspaceStorage(entry);
+        updateWorkspaces((l) => removeWorkspace(l, entry.id));
+        location.replace('/');
+      }
     } catch (err) {
       setBusy(null);
       if (err instanceof DeleteBlocked) {

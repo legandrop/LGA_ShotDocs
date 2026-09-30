@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
-import { consumeInviteArrival, takeArrivalNotice } from '../invite';
+import { inviteArrival, takeArrivalNotice } from '../invite';
 import { useWorkspace } from '../workspace';
 import { AppIcon, ArrowLeftIcon, ArrowRightIcon, MailIcon, SlateBand } from './icons';
+import { LoginWorkspaceBar } from './Welcome';
 
 type Step = { name: 'email' } | { name: 'sent'; email: string };
 
@@ -25,12 +26,12 @@ function explain(error: { message: string; code?: string; status?: number }): st
 
 export function Login() {
   const { client, config } = useWorkspace();
-  // Si se llegó con un link de invitación: de este workspace, se explica qué hacer; de otro, que todavía no.
+  // Si se llegó con un link de invitación del workspace que se abre, se explica qué hacer; si el link no
+  // servía (roto, o de un workspace que no se pudo agregar), el aviso.
   const [invite] = useState(() => {
-    const arrival = consumeInviteArrival(config);
-    if (arrival?.kind === 'other') return takeArrivalNotice();
-    if (arrival?.kind === 'this') return arrival.target ? 'this-page' : 'this';
-    return null;
+    const arrival = inviteArrival();
+    if (arrival) return arrival.target ? 'this-page' : 'this';
+    return takeArrivalNotice();
   });
   const [step, setStep] = useState<Step>({ name: 'email' });
   const [email, setEmail] = useState('');
@@ -112,6 +113,7 @@ export function Login() {
                 <h2>Sign in</h2>
                 <p className="lead">Enter your email and we will send you a sign-in link. No password to remember.</p>
               </div>
+              <LoginWorkspaceBar />
               {(invite === 'this' || invite === 'this-page') && (
                 <p className="login-invite">
                   You were invited to {config.name || 'this workspace'}. Use the email the invitation was sent to.

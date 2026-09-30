@@ -11,7 +11,8 @@ import {
 } from '@blocknote/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from './driveCard';
 
 // --- Script (guion) ----------------------------------------------------------------------------------
 //
@@ -38,6 +39,14 @@ export const SCRIPT_PROP = 'script';
 // queda, y los comentarios siguen anclados al id del bloque). Script y pregunta no van juntos.
 
 export const QUESTION_PROP = 'question';
+
+// --- Tarjetas de Drive -------------------------------------------------------------------------------
+//
+// Un link de Drive que se ve como tarjeta con el reproductor (paso 13): un párrafo con el link y
+// `driveCard: true` (ver driveCard.ts). Si se pierde la propiedad, queda el párrafo con el link. No va
+// junto con Script ni con pregunta.
+
+export { DRIVE_CARD_PROP };
 /** El atajo de las preguntas (en el formato de ProseMirror): Ctrl/⌘+Alt+P. */
 export const QUESTION_SHORTCUT = 'Mod-Alt-p';
 
@@ -111,7 +120,12 @@ const scriptMarksPlugin = new Plugin<DecorationSet>({
 const createParagraph = createBlockSpec(
   {
     type: 'paragraph',
-    propSchema: { ...defaultProps, [SCRIPT_PROP]: { default: false }, [QUESTION_PROP]: { default: false } },
+    propSchema: {
+      ...defaultProps,
+      [SCRIPT_PROP]: { default: false },
+      [QUESTION_PROP]: { default: false },
+      [DRIVE_CARD_PROP]: { default: false },
+    },
     content: 'inline',
   },
   {
@@ -119,13 +133,21 @@ const createParagraph = createBlockSpec(
     parse: (element) => {
       if (element.tagName !== 'P' || !element.textContent?.trim()) return undefined;
       const question = element.classList.contains('question-line');
+      const script = !question && element.classList.contains('script-line');
       return {
         ...parseDefaultProps(element),
-        [SCRIPT_PROP]: !question && element.classList.contains('script-line'),
+        [SCRIPT_PROP]: script,
         [QUESTION_PROP]: question,
+        [DRIVE_CARD_PROP]: !question && !script && element.classList.contains('drive-card-line'),
       };
     },
-    render: (block) => {
+    render: function (block, editor) {
+      // La tarjeta de Drive, solo en el editor y con un link de Drive válido; si no, un párrafo común.
+      const ctx = this as { renderType?: string; props?: { node: PMNode; view: EditorView; getPos: () => number | undefined } };
+      const link = isDriveCard(block.props) ? driveLinkInContent(block.content) : null;
+      if (link && ctx.renderType === 'nodeView' && ctx.props) {
+        return createDriveCardView({ link, node: ctx.props.node, editor, view: ctx.props.view, getPos: ctx.props.getPos });
+      }
       const dom = document.createElement('p');
       if (block.props[QUESTION_PROP]) dom.className = 'question-line';
       else if (block.props[SCRIPT_PROP]) dom.className = 'script-line';
@@ -139,6 +161,9 @@ const createParagraph = createBlockSpec(
       } else if (block.props[SCRIPT_PROP]) {
         dom.className = 'script-line';
         dom.style.fontFamily = "'Courier Prime', 'Courier New', Courier, monospace";
+      } else if (isDriveCard(block.props)) {
+        // Afuera de la app (copiar a otro programa) va el link; la clase la reconoce al pegar en la app.
+        dom.className = 'drive-card-line';
       }
       return { dom, contentDOM: dom };
     },
@@ -182,9 +207,17 @@ const createParagraph = createBlockSpec(
   ],
 );
 
-/** Las propiedades de cada variante del párrafo: común, Script o pregunta (nunca Script y pregunta juntos). */
-export function paragraphProps(kind: 'paragraph' | 'script' | 'question'): Record<string, boolean> {
-  return { [SCRIPT_PROP]: kind === 'script', [QUESTION_PROP]: kind === 'question' };
+/** Un párrafo que se ve como tarjeta de Drive (nunca Script ni pregunta a la vez). */
+function isDriveCard(props: Record<string, unknown>): boolean {
+  return props[DRIVE_CARD_PROP] === true && props[QUESTION_PROP] !== true && props[SCRIPT_PROP] !== true;
+}
+
+/**
+ * Las propiedades de cada variante del párrafo: común, Script, pregunta o tarjeta de Drive (nunca dos a la
+ * vez). Pasar una tarjeta a párrafo, Script o pregunta le saca la tarjeta (queda el link).
+ */
+export function paragraphProps(kind: 'paragraph' | 'script' | 'question' | 'driveCard'): Record<string, boolean> {
+  return { [SCRIPT_PROP]: kind === 'script', [QUESTION_PROP]: kind === 'question', [DRIVE_CARD_PROP]: kind === 'driveCard' };
 }
 
 function setParagraph(editor: BlockNoteEditor<any, any, any>, kind: 'paragraph' | 'script' | 'question'): boolean {

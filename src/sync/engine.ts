@@ -1,9 +1,10 @@
 import type { MediaQueue, MediaStatus } from '../media/queue';
+import { mediaIdsInDoc } from '../media/usage';
 import { Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
 import type { CommentQueue } from './comments';
 import type { PageDocs } from './docs';
 import type { PageFiles } from './files';
-import { hasUnsyncedContent } from './localDb';
+import { hasUnsyncedContent, type DocState } from './localDb';
 import { APP_OUTDATED, type Remote } from './remote';
 import type { PageTree } from './tree';
 import { errorMessage, isNetworkError, isPermanent, type QueuedOp, type WorkspaceSettings } from './types';
@@ -37,6 +38,11 @@ export interface SyncStatus {
   /** Nombre y clave local del workspace (`workspace_settings`), si se saben: van en los links de invitación. */
   workspaceName: string | null;
   workspaceLocalKey: string | null;
+  /**
+   * El borrado automático de la papelera de archivos a los 30 días (`workspace_settings.auto_purge_files`).
+   * Apagado hasta que Lega lo confirme (paso 11).
+   */
+  autoPurgeFiles: boolean;
   /** Cambios del árbol que el servidor rechazó para siempre. */
   failedOps: number;
   /** Páginas cuyo contenido el servidor rechazó para siempre (por ejemplo, por tamaño). */
@@ -96,6 +102,7 @@ export class SyncEngine {
     ownerId: null,
     workspaceName: null,
     workspaceLocalKey: null,
+    autoPurgeFiles: false,
     failedOps: 0,
     rejectedPages: 0,
     localError: null,
@@ -114,6 +121,8 @@ export class SyncEngine {
   private interval: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
   private readonly cleanups: (() => void)[] = [];
+  /** El borrado automático de la papelera de archivos ya se miró en esta apertura de la app. */
+  private autoPurgeChecked = false;
 
   constructor(
     private readonly remote: Remote,
@@ -338,6 +347,11 @@ export class SyncEngine {
       );
 
       halt();
+      // Qué fotos y videos usa cada página (papelera de archivos): después de subir y bajar el contenido,
+      // así se compara con documentos al día. Un error acá no corta la sincronización del texto.
+      await this.reconcileMedia().catch(() => undefined);
+
+      halt();
       const fileError = await this.files.pushPending((pageId) => this.tree.hasUnsentCreate(pageId));
 
       halt();
@@ -348,6 +362,7 @@ export class SyncEngine {
       this.patch({ online: true, lastError: contentError ?? fileError, lastSyncAt: Date.now() });
       // Sin esperarla: tiene su propio ciclo y sus propios errores.
       void this.syncMedia();
+      this.startAutoPurge();
     } catch (err) {
       if (this.stopped) return;
       this.patch({ online: !isNetworkError(err), lastError: errorMessage(err) });
@@ -364,7 +379,7 @@ export class SyncEngine {
    */
   private async checkWorkspace(): Promise<{ outdated: boolean; removed: boolean }> {
     const settings = await this.remote.fetchWorkspaceSettings();
-    this.options.comments?.configure(settings?.schemaVersion ?? null);
+    this.options.comments?.configure(settings?.schemaVersion ?? null, settings?.generation ?? null);
     if (!settings) {
       this.patch({ outdated: false });
       return { outdated: false, removed: await this.checkAccess(null) };
@@ -381,6 +396,7 @@ export class SyncEngine {
       ownerId: settings.ownerId ?? null,
       workspaceName: settings.name ?? null,
       workspaceLocalKey: settings.localKey ?? null,
+      autoPurgeFiles: settings.autoPurgeFiles === true,
     });
     // Un error de la base de archivos del dispositivo no corta la subida del texto.
     await this.options.media?.configure(settings.mediaUrl, settings.schemaVersion).catch(() => undefined);
@@ -389,15 +405,20 @@ export class SyncEngine {
     // La cola de fotos y videos lleva su propia generación (en su base): si falla, lo hace en la próxima
     // sincronización, sin frenar el texto.
     const mediaRecovered = (await this.options.media?.syncGeneration(settings.generation).catch(() => 0)) ?? 0;
+    // Los comentarios también (en su base): lo propio que el servidor ya no tiene vuelve a la cola antes de
+    // la primera bajada. Un error se reintenta en la próxima vuelta (la cola no baja nada hasta lograrlo).
+    const commentsRecovered = (await this.options.comments?.syncGeneration(settings.generation).catch(() => 0)) ?? 0;
 
     // Sin generación guardada vale 1, la que crea la migración: un dispositivo que todavía tenía una versión
     // anterior cuando se restauró la base igual se recupera al actualizar (uno vacío no tiene nada que hacer).
     const known = (await this.tree.knownGeneration()) ?? 1;
     if (known === settings.generation) {
-      if (mediaRecovered > 0 && !this.status.notice) {
+      if ((mediaRecovered > 0 || commentsRecovered > 0) && !this.status.notice) {
+        const what = [mediaRecovered > 0 ? 'the photos and videos' : null, commentsRecovered > 0 ? 'the comments' : null]
+          .filter(Boolean)
+          .join(' and ');
         this.patch({
-          notice:
-            'The workspace was restored from a backup. This device is uploading again the photos and videos it had, so nothing made after the backup is lost.',
+          notice: `The workspace was restored from a backup. This device is uploading again ${what} it had, so nothing made after the backup is lost.`,
         });
       }
       return { outdated, removed: false };
@@ -416,7 +437,8 @@ export class SyncEngine {
         (await this.tree.recoverAfterRestore(rows, projects, allow, report)) +
         (await this.docs.resetForRestore()) +
         (await this.files.resetForRestore()) +
-        mediaRecovered;
+        mediaRecovered +
+        commentsRecovered;
       // Un dispositivo que no tenía nada (recién entra a un workspace ya restaurado) no avisa nada.
       const notices: string[] = [];
       if (recovered > 0) {
@@ -453,6 +475,67 @@ export class SyncEngine {
     if (this.stopped) return false;
     await access.set(snapshot);
     return access.removed;
+  }
+
+  /**
+   * Papelera de archivos (paso 11): cada página cuyo documento cambió desde la última vez (acá o en otro
+   * dispositivo) se compara con sus fotos y videos, y la diferencia va a la cola de archivos (lo nuevo,
+   * `link_page_file`; lo que ya no está, `unlink_page_file`; ver `MediaQueue.reconcilePage`).
+   *
+   * Dar un archivo por quitado pide mucho, porque es lo que lo manda a la papelera: el documento tiene que
+   * tener todo lo que el servidor tenía al bajar el árbol en este ciclo, esta versión tiene que poder leerlo
+   * entero y lo de este dispositivo tiene que estar subido (si no, el servidor todavía muestra el bloque).
+   * Si falta algo, solo se suman usos, y la página se vuelve a mirar en el próximo ciclo.
+   */
+  private async reconcileMedia(): Promise<void> {
+    const media = this.options.media;
+    if (!media?.tracksUsage) return;
+    // Hay ediciones que no se pudieron guardar en el dispositivo: lo guardado no es lo que se ve.
+    if (this.docs.getWriteError()) return;
+    const access = this.options.access;
+    const snapshot = access?.get() ?? null;
+    const perms = access && snapshot ? new Permissions(this.tree, snapshot, access.userId) : null;
+    const trash = media.trashEnabled ? 1 : 0;
+    const mark = (state: DocState) => `${state.version}:${state.cursor}:${trash}`;
+    const marks: Record<string, string> = {};
+    for (const [pageId, state] of await this.docs.states()) {
+      if (this.stopped) break;
+      const row = this.tree.get(pageId);
+      // Una página que el servidor todavía no tiene, o que la persona no puede editar (el servidor
+      // rechazaría los dos pedidos), no se mira.
+      if (!row || this.tree.hasUnsentCreate(pageId) || (perms && !perms.canEditPage(pageId))) continue;
+      // A medio bajar: no se mira, ni siquiera para sumar (se hace cuando llegue lo que falta).
+      if (row.update_seq > state.cursor) continue;
+      if (media.usageMark(pageId) === mark(state)) continue;
+      const snap = await this.docs.snapshot(pageId);
+      try {
+        const current = snap.state.cursor >= row.update_seq && !snap.state.unreadable && snap.supported;
+        const uploaded = !hasUnsyncedContent(snap.state) && !snap.state.rejected;
+        await media.reconcilePage(pageId, mediaIdsInDoc(snap.doc), { unlink: current && uploaded });
+        // Con algo sin subir, se vuelve a mirar cuando suba (para poder quitar lo que haga falta).
+        if (uploaded) marks[pageId] = mark(snap.state);
+      } finally {
+        snap.doc.destroy();
+      }
+    }
+    await media.setUsageMarks(marks);
+  }
+
+  /**
+   * El borrado automático de la papelera de archivos (paso 11), una vez por apertura de la app y solo para
+   * el dueño y los admins. Queda armado y apagado: con `auto_purge_files` en `false` (hoy siempre) no se
+   * pregunta ni se manda nada (`MediaQueue.autoPurge`).
+   */
+  private startAutoPurge(): void {
+    const media = this.options.media;
+    const access = this.options.access;
+    if (this.autoPurgeChecked || !media || !access?.get() || !media.trashEnabled) return;
+    this.autoPurgeChecked = true;
+    if (!this.status.autoPurgeFiles) return;
+    const perms = new Permissions(this.tree, access.get(), access.userId);
+    if (perms.role !== 'owner' && perms.role !== 'admin') return;
+    const projects = this.tree.projects().map((p) => p.id).filter((id) => perms.projectLevel(id) >= 1);
+    void media.autoPurge(true, projects).catch(() => undefined);
   }
 
   private async pushOps(): Promise<void> {

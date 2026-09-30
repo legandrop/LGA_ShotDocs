@@ -143,7 +143,8 @@ function Shell() {
   const [notice, dismissNotice] = useNotice();
   const perms = usePermissions();
   useInviteTarget();
-  // Un link de otro workspace abierto con la sesión ya iniciada: el aviso va acá.
+  // Un link de invitación que no sirvió (roto, o de un workspace que no se pudo agregar), abierto con la
+  // sesión ya iniciada: el aviso va acá.
   useEffect(() => {
     const message = takeArrivalNotice();
     if (message) notify(message);

@@ -110,7 +110,19 @@ type Outcome = 'offline' | 'retry' | 'blocked' | 'waiting' | 'cancelled';
 
 /** Una fila nueva de usos: la página usa el archivo (`pending` 1: falta mandarlo). */
 function newLink(pageId: string, fileId: string, pending: 0 | 1): MediaLink {
-  return { key: `${pageId}:${fileId}`, pageId, fileId, pending, waiting: null, error: null, blocked: false, failures: 0, retryAt: 0 };
+  return {
+    key: `${pageId}:${fileId}`,
+    pageId,
+    fileId,
+    pending,
+    waiting: null,
+    error: null,
+    blocked: false,
+    failures: 0,
+    retryAt: 0,
+    removed: false,
+    rev: 0,
+  };
 }
 
 /** La misma fila con lo contrario por mandar (usado o quitado), desde cero y con otra revisión. */
@@ -300,6 +312,11 @@ export class MediaQueue {
 
   get mediaUrl(): string | null {
     return this.url;
+  }
+
+  /** Se lleva la cuenta de qué archivos usa cada página (hay base de archivos y la base tiene `files`). */
+  get tracksUsage(): boolean {
+    return !!this.db && this.schemaReady;
   }
 
   /** La base tiene la papelera de archivos (versión 6). */
@@ -1044,6 +1061,7 @@ export class MediaQueue {
         if (thumb) await db.put('thumbs', thumb, id);
       }
       const kind = meta ? mediaKind(meta.mime) : null;
+      if (meta?.deleted) return await this.deletedDisplay(id, meta.name, kind);
       if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
       // Sin miniatura todavía (otro dispositivo la está subiendo, o no hay red): se vuelve a preguntar.
       this.missing.add(id);
@@ -1068,7 +1086,10 @@ export class MediaQueue {
     this.deletedChecked.add(id);
     try {
       const meta = await this.fetchMeta(id);
-      if (meta?.deleted) this.thumbReady(id);
+      if (!meta?.deleted) return;
+      // Si se está mostrando justo ahora, se espera a que termine para que no quede la imagen de antes.
+      await this.resolving.get(id)?.catch(() => undefined);
+      this.thumbReady(id);
     } catch {
       // Sin red: se vuelve a preguntar la próxima vez que se muestre.
       this.deletedChecked.delete(id);
@@ -1151,8 +1172,11 @@ export class MediaQueue {
   async trash(id: string): Promise<void> {
     if (!this.url) throw new PorteroError('This workspace has no media server.', 0);
     await this.porteroFor(this.url).trash(id);
-    // En este dispositivo, desde ya se muestra como borrado si alguna página lo vuelve a tener.
-    if (this.db) {
+    // En este dispositivo, desde ya se muestra como borrado si alguna página lo vuelve a tener: se vuelve a
+    // leer de la base (queda guardado) y, si eso falla, se marca lo que había.
+    this.deletedChecked.add(id);
+    const meta = await this.fetchMeta(id).catch(() => null);
+    if (!meta?.deleted && this.db) {
       const known = await this.db.get('known', id).catch(() => undefined);
       if (known) await this.db.put('known', { ...known, deleted: true }).catch(() => undefined);
     }

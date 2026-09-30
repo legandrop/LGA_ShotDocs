@@ -23,7 +23,9 @@ import { mergeRootGroups, seedIfEmpty } from './structure';
 import { PageTree } from './tree';
 import {
   RemoteError,
+  type DueFileRow,
   type MediaFileRow,
+  type TrashedFileRow,
   type NewMediaFile,
   type NewPage,
   type NewProject,
@@ -80,10 +82,12 @@ export class FakeServer {
   static generations = 100;
   /** `workspace_settings`; `null` simula una base sin esa migración. */
   settings: WorkspaceSettings | null = { generation: 1, minAppVersion: null, schemaVersion: 1, mediaUrl: null };
-  /** `files`, con el proyecto (sale de la página) y el tamaño. */
-  readonly mediaFiles = new Map<string, MediaFileRow & { project_id: string; size: number }>();
-  /** `page_files`: `<página>:<archivo>`. */
+  /** `files`, con el proyecto (sale de la página), el tamaño y quién lo registró. */
+  readonly mediaFiles = new Map<string, MediaFileRow & { project_id: string; size: number; created_by?: string }>();
+  /** `page_files` en uso (sin `removed_at`): `<página>:<archivo>`. */
   readonly pageFiles = new Set<string>();
+  /** `page_files` con `removed_at` (la página dejó de usar el archivo; la fila queda). */
+  readonly removedPageFiles = new Set<string>();
   /** El bucket `thumbs`. */
   readonly thumbs = new Map<string, Blob>();
   /** Cuántas veces se llamó cada función de archivos (para ver que no se llama de más). */
@@ -99,7 +103,9 @@ export class FakeServer {
   /** La base de archivos del dispositivo no se puede abrir (los dispositivos nuevos arrancan sin ella). */
   mediaDbFails = false;
   /** `comments`, con el texto aunque se haya borrado (como la tabla; la vista lo devuelve vacío). */
-  readonly comments = new Map<string, CommentRow & { body: string }>();
+  readonly comments = new Map<string, CommentRow & { body: string; updated_at?: string }>();
+  /** La base tiene `list_comments` (bajar solo lo cambiado); apagado, la app lee la vista entera. */
+  listCommentsEnabled = false;
   /** Las funciones de comentarios que se llamaron, en orden (`add <id>`, `edit <id>`...). */
   readonly commentCalls: string[] = [];
   /** Funciones de comentarios que hacen su trabajo y después pierden la respuesta, una vez cada una. */
@@ -124,6 +130,67 @@ export class FakeServer {
     if (this.loseMediaResponse.delete(name)) throw new RemoteError('Failed to fetch', false, undefined, true);
   }
 
+  /**
+   * Prende la papelera de archivos: portero, reglas del equipo y la base en la versión 6
+   * (supabase/migrations/20260930180000_papelera_archivos.sql), con el borrado automático apagado.
+   */
+  enableTrash(): void {
+    this.enableTeam();
+    this.settings = { ...this.settings!, schemaVersion: 6, mediaUrl: PORTERO_URL, autoPurgeFiles: false };
+  }
+
+  /** `private.page_alive`: la página existe y ni ella ni ninguna de arriba está en la papelera de páginas. */
+  pageAlive(pageId: string): boolean {
+    const seen = new Set<string>();
+    for (let cur: string | null = pageId; cur && !seen.has(cur); ) {
+      seen.add(cur);
+      const page = this.pages.get(cur);
+      if (!page || page.deleted_at) return false;
+      cur = page.parent_id;
+    }
+    return true;
+  }
+
+  /**
+   * `private.refresh_file_trash`: entra a la papelera (con la hora de ahora) si ninguna página viva lo usa y
+   * sale si alguna lo usa. Uno con `purged_at` no cambia más.
+   */
+  refreshFileTrash(fileId: string): void {
+    const f = this.mediaFiles.get(fileId);
+    if (!f || f.purged_at) return;
+    const used = [...this.pageFiles].some((k) => k.endsWith(`:${fileId}`) && this.pageAlive(k.slice(0, k.indexOf(':'))));
+    if (used) f.trashed_at = null;
+    else if (!f.trashed_at) f.trashed_at = new Date().toISOString();
+  }
+
+  /** Los triggers de `pages`: una página entra, sale o se mueve de la papelera de páginas. */
+  refreshAllFileTrash(): void {
+    for (const id of this.mediaFiles.keys()) this.refreshFileTrash(id);
+  }
+
+  /** `private.can_see_file_trash`. Sin las reglas del equipo, solo el dueño. */
+  canSeeFileTrash(uid: string, projectId: string): boolean {
+    if (!this.team) return uid === this.ownerId;
+    const role = this.role(uid);
+    return this.projectLevel(uid, projectId) >= 4 || ((role === 'owner' || role === 'admin') && this.projectLevel(uid, projectId) >= 1);
+  }
+
+  /** `private.can_purge_files`. Sin las reglas del equipo, solo el dueño. */
+  canPurgeFiles(uid: string, projectId: string): boolean {
+    if (!this.team) return uid === this.ownerId;
+    const role = this.role(uid);
+    return (role === 'owner' || role === 'admin') && this.projectLevel(uid, projectId) >= 1;
+  }
+
+  /** `purge_file`, como lo llama el portero con la sesión de la persona. */
+  purgeFile(uid: string, fileId: string): void {
+    const f = this.mediaFiles.get(fileId);
+    if (!f) throw fileNotFound();
+    if (!this.canPurgeFiles(uid, f.project_id)) throw new RemoteError('not_allowed', true, '42501');
+    if (!f.trashed_at) throw new RemoteError('file_not_trashed', true, 'P0001');
+    f.purged_at ??= new Date().toISOString();
+  }
+
   /** Prende el portero y la base con archivos (versión 3). */
   enableMedia(): void {
     this.settings = { ...(this.settings ?? { generation: 1, minAppVersion: null, schemaVersion: 1, mediaUrl: null }), schemaVersion: 3, mediaUrl: PORTERO_URL };
@@ -138,8 +205,11 @@ export class FakeServer {
     const mediaFiles = new Map([...this.mediaFiles].map(([id, f]) => [id, { ...f }]));
     const pageFiles = new Set(this.pageFiles);
     const thumbs = new Map(this.thumbs);
+    const comments = new Map([...this.comments].map(([id, c]) => [id, { ...c }]));
     /** Restaura la copia y sube la generación, como scripts/restore.sh del repo de copias. */
     return () => {
+      this.comments.clear();
+      for (const [id, c] of comments) this.comments.set(id, { ...c });
       this.pages.clear();
       for (const [id, p] of pages) this.pages.set(id, { ...p });
       this.updates.clear();
@@ -264,6 +334,11 @@ export class FakeServer {
 
 export const PORTERO_URL = 'https://portero.test';
 
+/** El usuario de un pedido al portero en memoria (`Bearer token:<usuario>`; si no, el dueño). */
+function porteroUser(server: FakeServer, headers: Headers): string {
+  return /^Bearer token:(.+)$/.exec(headers.get('Authorization') ?? '')?.[1] ?? server.ownerId;
+}
+
 interface FakeUpload {
   file: string;
   size: number;
@@ -299,6 +374,10 @@ export class FakePortero {
   legacy = false;
   /** Responde `linked: true` pero la base no quedó con el id de Drive. */
   lieLinked = false;
+  /** Los archivos de Drive que `/trash` mandó a la papelera de Drive (nunca se borra nada). */
+  readonly driveTrash = new Set<string>();
+  /** Archivos de la app para los que Drive falla al mandarlos a la papelera (502, sin confirmar). */
+  readonly failTrash = new Set<string>();
   private parts = 0;
   private next = 1;
 
@@ -371,6 +450,32 @@ export class FakePortero {
         return json({ status: 'done', file: up.done, linked: this.link(up.file, driveId) });
       }
       return json({ status: 'incomplete', received: up.received });
+    }
+    if (method === 'POST' && url.pathname === '/trash') {
+      // Como portero/src/core.ts (`trashFile`): `purge_file` con la sesión, recién ahí Drive, y al final
+      // `media_purged`.
+      const id = String(body?.file ?? '').toLowerCase();
+      const uid = porteroUser(this.server, headers);
+      try {
+        this.server.purgeFile(uid, id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '';
+        if (message === 'not_allowed') {
+          return json({ error: 'Only the owner or an admin of the workspace can send files to the Google Drive trash.' }, 403);
+        }
+        if (message === 'file_not_trashed') return json({ error: 'A page still uses this file: it is not in the trash.' }, 409);
+        return json({ error: 'This file does not exist or you cannot see it.' }, 404);
+      }
+      const media = this.server.mediaFiles.get(id)!;
+      if (media.drive_trashed_at) return json({ status: 'done', file: id, drive: media.drive_id ? 'trashed' : 'none' });
+      if (this.failTrash.has(id)) return json({ error: 'Could not send the file to the Google Drive trash (500).' }, 502);
+      let drive: 'trashed' | 'missing' | 'none' = 'none';
+      if (media.drive_id) {
+        drive = this.drive.has(media.drive_id) ? 'trashed' : 'missing';
+        if (drive === 'trashed') this.driveTrash.add(media.drive_id);
+      }
+      media.drive_trashed_at = new Date().toISOString();
+      return json({ status: 'done', file: id, drive });
     }
     if (method === 'POST' && url.pathname === '/pass') {
       const media = this.server.mediaFiles.get(String(body?.file ?? ''));
@@ -538,6 +643,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       }
     }
     this.server.pages.set(id, { ...page, ...patch, updated_at: new Date().toISOString() });
+    // Los triggers de la papelera de archivos: la página entró, salió o se movió de la papelera de páginas.
+    if (patch.deleted_at !== undefined || patch.parent_id !== undefined) this.server.refreshAllFileTrash();
   }
 
   async pushUpdate(pageId: string, clientUpdateId: string, update: Uint8Array): Promise<number> {
@@ -805,9 +912,15 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
         duration: file.duration,
         thumb_at: null,
         drive_id: null,
+        trashed_at: null,
+        purged_at: null,
+        drive_trashed_at: null,
+        created_by: this.userId,
       });
     }
     this.server.pageFiles.add(`${file.pageId}:${file.id}`);
+    this.server.removedPageFiles.delete(`${file.pageId}:${file.id}`);
+    this.server.refreshFileTrash(file.id);
     this.server.lostMediaResponse('register_file');
   }
 
@@ -820,7 +933,56 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (!file) throw fileNotFound();
     if (file.project_id !== page.workspace_id) throw new RemoteError('file_other_project', true, 'P0001');
     this.server.pageFiles.add(`${pageId}:${fileId}`);
+    this.server.removedPageFiles.delete(`${pageId}:${fileId}`);
+    this.server.refreshFileTrash(fileId);
     this.server.lostMediaResponse('link_page_file');
+  }
+
+  // --- papelera de archivos (supabase/migrations/20260930180000_papelera_archivos.sql) ---
+
+  async unlinkPageFile(pageId: string, fileId: string): Promise<void> {
+    this.server.check();
+    this.server.mediaCalls.push(`unlink_page_file ${pageId} ${fileId}`);
+    if (!this.server.pages.has(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) throw pageNotFound();
+    const key = `${pageId}:${fileId}`;
+    // La fila queda, marcada; si no existe o ya estaba marcada, no hace nada.
+    if (this.server.pageFiles.delete(key)) {
+      this.server.removedPageFiles.add(key);
+      this.server.refreshFileTrash(fileId);
+    }
+    this.server.lostMediaResponse('unlink_page_file');
+  }
+
+  async trashedFiles(projectId: string): Promise<TrashedFileRow[]> {
+    this.server.check();
+    this.server.mediaCalls.push(`trashed_files ${projectId}`);
+    if (!this.server.canSeeFileTrash(this.userId, projectId)) throw this.denied('not_allowed');
+    const day = 86_400_000;
+    return [...this.server.mediaFiles.values()]
+      .filter((f) => f.project_id === projectId && f.trashed_at && !f.drive_trashed_at)
+      .sort((a, b) => (a.trashed_at! < b.trashed_at! ? 1 : a.trashed_at! > b.trashed_at! ? -1 : a.id < b.id ? -1 : 1))
+      .map((f) => ({
+        id: f.id,
+        name: f.name,
+        mime: f.mime,
+        size: f.size,
+        thumb_at: f.thumb_at,
+        trashed_at: f.trashed_at!,
+        days_left: Math.max(0, Math.ceil((Date.parse(f.trashed_at!) + 30 * day - Date.now()) / day)),
+        purged_at: f.purged_at ?? null,
+      }));
+  }
+
+  async filesDueForPurge(projectId: string): Promise<DueFileRow[]> {
+    this.server.check();
+    this.server.mediaCalls.push(`files_due_for_purge ${projectId}`);
+    if (!this.server.canPurgeFiles(this.userId, projectId)) throw this.denied('not_allowed');
+    if (this.server.settings?.autoPurgeFiles !== true) return [];
+    const limit = Date.now() - 30 * 86_400_000;
+    return [...this.server.mediaFiles.values()]
+      .filter((f) => f.project_id === projectId && f.trashed_at && Date.parse(f.trashed_at) <= limit && !f.drive_trashed_at)
+      .sort((a, b) => (a.trashed_at! < b.trashed_at! ? -1 : 1))
+      .map((f) => ({ id: f.id, name: f.name, trashed_at: f.trashed_at! }));
   }
 
   async uploadThumb(fileId: string, data: Blob): Promise<void> {
@@ -854,7 +1016,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     return ids.flatMap((id) => {
       const f = this.server.mediaFiles.get(id);
       if (!f) return [];
-      const { project_id: _p, size: _s, ...row } = f;
+      const { project_id: _p, size: _s, created_by: _c, ...row } = f;
       return [{ ...row }];
     });
   }
@@ -884,11 +1046,22 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     return [...this.server.comments.values()]
       .filter((c) => c.page_id === pageId)
       .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1))
-      .map((c) => ({ ...c, body: c.deleted_at ? null : c.body }));
+      .map(({ updated_at: _u, ...c }) => ({ ...c, body: c.deleted_at ? null : c.body }));
+  }
+
+  async listComments(pageId: string, since: string | null): Promise<(CommentRow & { updated_at?: string })[] | null> {
+    this.server.check();
+    if (!this.server.listCommentsEnabled) return null;
+    this.server.commentCalls.push(`list ${since ?? 'all'}`);
+    if (this.commentLevel(pageId) < 1) throw new RemoteError('page_not_found', true, 'P0002');
+    return [...this.server.comments.values()]
+      .filter((c) => c.page_id === pageId && (since === null || (c.updated_at ?? c.created_at) > since))
+      .map((c) => ({ ...c, body: c.deleted_at ? null : c.body, updated_at: c.updated_at ?? c.created_at }));
   }
 
   async fetchCommentAuthors(pageId: string): Promise<CommentAuthor[]> {
     this.server.check();
+    this.server.commentCalls.push('authors');
     if (this.commentLevel(pageId) < 1) throw new RemoteError('page_not_found', true, 'P0002');
     const ids = new Set<string>();
     for (const c of this.server.comments.values()) {
@@ -929,6 +1102,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
         body: c.body,
         author_id: this.userId,
         created_at: this.server.commentNow(),
+        updated_at: this.server.commentNow(),
         edited_at: null,
         resolved_at: null,
         resolved_by: null,
@@ -951,6 +1125,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       if (!/\S/.test(body) || body.length > 10000) throw new RemoteError('check constraint', true, '23514');
       cur.body = body;
       cur.edited_at = this.server.commentNow();
+      cur.updated_at = cur.edited_at;
     }
     this.lostCommentResponse('edit');
   }
@@ -964,6 +1139,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (!cur.deleted_at) {
       cur.deleted_at = this.server.commentNow();
       cur.deleted_by = this.userId;
+      cur.updated_at = cur.deleted_at;
     }
     this.lostCommentResponse('delete');
   }
@@ -978,9 +1154,11 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (resolved && !root.resolved_at) {
       root.resolved_at = this.server.commentNow();
       root.resolved_by = this.userId;
+      root.updated_at = root.resolved_at;
     } else if (!resolved && root.resolved_at) {
       root.resolved_at = null;
       root.resolved_by = null;
+      root.updated_at = this.server.commentNow();
     }
     this.lostCommentResponse('resolve');
   }
@@ -1043,7 +1221,9 @@ export async function makeDevice(
   const files = new PageFiles(db, remote);
   const mediaDb = await openMediaDb(mediaDbName(dbName));
   const media = new MediaQueue(server.mediaDbFails ? null : mediaDb, remote, {
-    portero: (url) => new Portero(url, { fetch: server.portero.fetch, token: async () => 'token-1', wait: async () => undefined }),
+    // El portero en memoria sabe quién pide por el token (`token:<usuario>`).
+    portero: (url) =>
+      new Portero(url, { fetch: server.portero.fetch, token: async () => `token:${remote.userId}`, wait: async () => undefined }),
     projectOf: (pageId) => tree.get(pageId)?.workspace_id,
     probe: fakeProbe,
     playMark: async (thumb) => thumb,
@@ -1051,7 +1231,7 @@ export async function makeDevice(
   });
   await media.load();
   const commentsDb = await openCommentsDb(commentsDbName(dbName));
-  const comments = new CommentQueue(commentsDb, remote, remote.userId);
+  const comments = new CommentQueue(commentsDb, remote, remote.userId, { now: () => Date.now() + server.clockOffset });
   await comments.load();
   const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media, access, comments });
   return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb };

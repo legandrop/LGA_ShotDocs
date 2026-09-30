@@ -261,8 +261,8 @@ cambios de permisos, que son el momento más riesgoso.
 10. **Invitados (clientes):** compartir con su correo (la app copia el link de invitación), comentarios
     en tabla propia y preguntas.
 11. **Papelera de archivos.**
-12. **Varios workspaces:** pantalla de bienvenida, selector, guía y comando para crear uno (el comando y la
-    guía, hechos; falta la app).
+12. **Varios workspaces:** pantalla de bienvenida, selector, guía y comando para crear uno (el comando, la
+    guía y la app, hechos; falta auditar y probar a mano).
 13. Pegar links de Drive; copia liviana de video si hace falta.
 
 ## 11. Cómo se hace cada paso
@@ -419,11 +419,27 @@ comando (`scripts/`) que prepara un Supabase nuevo con el token personal de su d
 dos veces sin romper nada y tiene un modo que solo muestra lo que haría. **Contra Wanka, solo ese modo**:
 correrlo de verdad pisaría el SMTP, las plantillas, el registro cerrado y la Site URL. No se crean
 proyectos de Supabase para probarlo: a Lega le queda uno solo gratis.
-Hecho, sin la app: el comando (`scripts/setup-workspace.mjs`, con `--dry-run` y el paso aparte
-`--open-invite-signup`; `Doc_Supabase.md`, "Preparar un workspace nuevo") y la guía
-(`Guide_Create_Workspace.md`, en inglés). La guía nombra la pantalla de bienvenida (**Create my workspace**)
-como la planea esta sección: al hacer la app, revisar que los nombres coincidan. Falta la app (lista de
-workspaces, bienvenida, selector, sesión por workspace); el paso sigue abierto.
+Hecho: el comando (`scripts/setup-workspace.mjs`, con `--dry-run` y el paso aparte
+`--open-invite-signup`; `Doc_Supabase.md`, "Preparar un workspace nuevo"), la guía
+(`Guide_Create_Workspace.md`, en inglés; los nombres de la app coinciden: **Create my workspace**,
+*Project URL*, *Publishable key*) y la app, que falta auditar y probar a mano. Detalle en
+`Doc_Sincronizacion.md`, "Varios workspaces":
+- Lista del dispositivo en `localStorage` (`shotdocs-workspaces`, `src/workspaces.ts`) con el último abierto.
+  Wanka entra marcada como la de la compilación, con sus nombres de siempre (prueba en
+  `src/workspaces.test.ts`), sigue la dirección de la compilación y no se puede quitar. Los nuevos usan
+  `storageNamesFor(<clave local>)`.
+- **Cambiar de workspace recarga la app** con el elegido: nunca hay dos clientes escribiendo a la vez.
+- Bienvenida sin ningún workspace (*Join a workspace* / *Create my workspace*); unirse con un link de otro
+  workspace revisa la dirección, la clave publicable y la clave local, rechaza una clave local que ya usa
+  otro workspace del dispositivo con otra dirección, y pregunta "Join <nombre> at <host>?" (el link lleva
+  ahora el nombre, opcional).
+- Crear: enlaza la guía y lee `workspace_settings` con la clave publicable. **La base de hoy solo la deja
+  leer con sesión**, así que en la práctica el workspace entra pendiente y se completa después de que el
+  dueño entra (la sesión pasa a los nombres de su clave local). Si se quiere avisar antes de entrar que falta
+  correr el comando, hace falta una migración que deje leer a `anon` solo `name`, `local_key` y
+  `schema_version` (no está hecha: a decidir).
+- Selector **Workspace › Proyecto** (con un solo workspace, igual que antes más una línea discreta) y quitar
+  del dispositivo el workspace abierto, solo sin cambios sin subir o después de bajarlos, con confirmación.
 
 **Paso 13 — Links de Drive.** Al pegar un link de Drive: dejarlo como link, como texto o como tarjeta
 reproducible (el reproductor de Drive). La tarjeta es un párrafo con el link y una propiedad: si se pierde
