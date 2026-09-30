@@ -1,6 +1,6 @@
 # Cuánto ocupa cada proyecto en el Drive (P.7), y la lista por peso (P.8)
 
-Estado: **diseño, antes de implementar** (2026-09-30; se audita antes y después). Pedido de Lega: "sería
+Estado: **auditado antes de implementar** (2026-09-30). "Correcciones de la auditoría previa" manda sobre lo anterior. Pedido de Lega: "sería
 bueno tener el peso en Drive de cada proyecto, de alguna forma que esté visible, tal vez al momento de elegir
 proyectos… para que el usuario vea 'este proyecto me está ocupando 30 gigas en el Drive'. Más adelante (no
 urgente) ver toda la media ordenada por peso, cliquear e ir a la página donde está, y decidir si la deja, la
@@ -113,3 +113,41 @@ en Drive.
 3. Ven el peso quienes ven la papelera de archivos del proyecto.
 4. Se muestra en el selector, en el diálogo de Drive y en la papelera; no en el botón de la barra lateral.
 5. Base 1024, como Google.
+
+## Correcciones de la auditoría previa (mandan sobre lo de arriba)
+
+1. **Estados excluyentes, en este orden:** (a) `drive_trashed_at` puesto: si está subido y
+   `greatest(drive_trashed_at, uploaded_at)` es de hace menos de 30 días, "en la papelera de Drive" (solo en el
+   detalle); si no, no cuenta. (b) `trashed_at` puesto: "en la papelera de la app" (el mismo conjunto que
+   `trashed_files`, así coincide con el total de la papelera). (c) `drive_id` nulo: "sin subir (esperando a un
+   dispositivo)". (d) El resto: en uso. **Número principal = (b) + (d).** Se suma solo `files` agrupado por
+   `files.project_id` (sin unir con `page_files`: un uso de otro proyecto no cuenta dos veces).
+2. **No se sube `DB_SCHEMA_VERSION`** (en un workspace sin migrar pondría el aviso amarillo para siempre y el
+   panel de comentarios diría, en falso, que no se suben). Como la papelera: una constante
+   `SIZES_SCHEMA_VERSION = 7` en el store, con la versión de la base expuesta por la sincronización. La migración
+   igual pone `schema_version = 7`.
+3. **La fila sin proyecto** solo con `private.workspace_role() = 'owner'` (una sesión con contraseña no la
+   recibe). La puerta se calcula una vez por proyecto (CTE materializado), nunca por fila de `files`.
+4. **SQL:** `language sql`, sumas `::bigint`, `notify pgrst, 'reload schema'`, `revoke` a `public` y `anon`.
+5. **Papelera:** la confirmación de vaciar no dice "libera": "pasan a la papelera de Drive; el espacio se libera
+   cuando Google la vacía (30 días)", con la suma de lo que se puede vaciar. El orden por peso, con P.8.
+6. **Una sola función de formato:** `formatSize` con TB y una regla escrita (un decimal por debajo de 100, sin
+   ",0").
+7. **Primera entrega más chica:** migración, store, subtítulo del selector (filtrado también por el permiso en el
+   dispositivo, para no mostrar un valor guardado viejo) y total de la papelera; en el diálogo de Drive solo el
+   total, el desglose en una línea, "proyectos que no ves" y "Actualizado · Volver a calcular". La lista por
+   proyecto, con P.8. Pedidos: al abrir el selector si pasaron 5 minutos, siempre al abrir el diálogo de Drive, al
+   tocar "Volver a calcular" y una vez al terminar un vaciado (no "una vez por apertura").
+8. **La nota de qué no cuenta** suma: copias de una subida duplicada, lo restaurado a mano desde la papelera de
+   Drive, y que con otra cuenta de Google o una unidad compartida el número deja de ser la cuota del dueño ("lo
+   que la app subió").
+9. **Prueba SQL:** sumar la sesión con contraseña de la dueña, un admin sin permiso sobre el proyecto, la dueña
+   con permiso solo por página (va a la fila oculta), un archivo purgado sin subir, `drive_trashed_at` sin
+   `drive_id`, el uso de otro proyecto y que llamarla no cambia filas.
+10. **Aparte:** si el portero no logra mandar a la papelera de Drive un archivo cuya purga se pidió durante la
+    subida, queda vivo en Drive con `drive_trashed_at` puesto y ya no aparece en la papelera: un hueco que ya
+    existe, para una tarea aparte.
+
+Preguntas para Lega: si el número principal muestra además "+ X en la papelera de Drive"; si el peso lo ven
+admins y "Editar y crear páginas" o solo la dueña; si va la fila de "proyectos que no ves"; y verificar la base
+1024 con un archivo conocido en su Drive.
