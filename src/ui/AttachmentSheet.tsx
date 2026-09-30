@@ -53,9 +53,12 @@ export function AttachmentSheet({ fileId, onClose }: { fileId: string; onClose: 
   return (
     <div className="modal-backdrop attachment-backdrop" onClick={onClose}>
       <div className="modal attachment-sheet" role="dialog" aria-modal="true" aria-label={info?.name ?? tr('attachment.title')} onClick={(e) => e.stopPropagation()}>
-        {card && <img className="attachment-card" src={card} alt="" />}
-        <p className="attachment-name">{info?.name ?? tr('attachment.title')}</p>
-        {meta && <p className="muted small">{meta}</p>}
+        {/* La tarjeta ya dice el nombre y el tamaño; sin ella (todavía no se sabe nada), el nombre. */}
+        {card ? (
+          <img className="attachment-card" src={card} alt={[info?.name, meta].filter(Boolean).join(' · ')} />
+        ) : (
+          <p className="attachment-name">{info?.name ?? tr('attachment.title')}</p>
+        )}
         <div className="modal-actions attachment-actions">
           {canOpen && (
             <button

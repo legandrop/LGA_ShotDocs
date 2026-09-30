@@ -220,7 +220,8 @@ describe('la tarjeta', () => {
     expect(doc.getElementsByTagName('clipPath')).toHaveLength(1);
     const all = texts(doc);
     expect(all).toContain('PDF');
-    expect(all.join('\n')).toContain('<script>alert("x")</script>&.pdf');
+    // El nombre puede ocupar dos renglones: se compara el texto de los dos juntos.
+    expect(lines(doc).join('')).toContain('<script>alert("x")</script>&.pdf');
     expect(all.some((x) => /^PDF · 2[.,]4 MB$/.test(x))).toBe(true);
     expect(svg.getAttribute('font-family') ?? doc.querySelector('g')?.getAttribute('font-family')).toContain('system-ui');
   });

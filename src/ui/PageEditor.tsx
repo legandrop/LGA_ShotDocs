@@ -473,11 +473,11 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
       (editor.isFocused() || lastPress.current === blockIdOf(target));
   };
 
-  const openAt = (blockId: string | null) => {
+  const openAt = (blockId: string | null, kind = pressKind.current) => {
     // Un adjunto se abre o se baja (con el mouse, en el acto si ya está preparado; si no, o con el dedo, su hoja).
     const attachment = blockId ? attachmentOf(blockId) : null;
     if (attachment) {
-      if (pressKind.current !== 'mouse' || !openAttachmentNow(media, attachment)) setSheet(attachment);
+      if (kind !== 'mouse' || !openAttachmentNow(media, attachment)) setSheet(attachment);
       return true;
     }
     const items = collectCarrete(editor.document as unknown as BlockLike[], (id, name) => isAttachment(media, id, name));
@@ -514,8 +514,9 @@ function BlockEditor({ doc, pageId, editable, canComment }: { doc: Y.Doc; pageId
       modifier: e.metaKey || e.ctrlKey,
     });
     // El próximo clic sin `pointerdown` (uno sintético) no usa lo de este.
+    const kind = pressKind.current;
     pressKind.current = '';
-    if (opens) openAt(blockIdOf(target));
+    if (opens) openAt(blockIdOf(target), kind);
   };
 
   // La barra espaciadora con una foto elegida la abre (como la vista rápida de la Mac). Con una foto

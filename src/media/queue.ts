@@ -135,7 +135,7 @@ function flipLink(link: MediaLink, removed: boolean): MediaLink {
 }
 
 /** Qué hacer con un error: esperar la red, reintentar más tarde, o dejarlo a la vista hasta "Retry". */
-function classify(err: unknown): Outcome {
+export function classify(err: unknown): Outcome {
   if (err instanceof UploadError && err.cancelled) return 'cancelled';
   if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled';
   if (err instanceof RemoteError) {
@@ -147,6 +147,9 @@ function classify(err: unknown): Outcome {
     if (err.status === 0) return 'offline';
     // 400: datos que no coinciden; 403: sin permiso; 404: el archivo no existe para el portero.
     if (err.status === 400 || err.status === 403 || err.status === 404) return 'blocked';
+    // 507: el Drive del dueño está lleno (portero desde v0.048). Mandar otra vez 8 MiB cada tanto no lo
+    // arregla: queda a la vista con el aviso hasta que el dueño haga lugar y se toque "Retry".
+    if (err.status === 507) return 'blocked';
     // La base apunta a otro archivo de Drive: no se arregla solo, lo tiene que ver el dueño.
     if (err.status === 409 && /different Drive file/i.test(err.message)) return 'blocked';
     // 401 (la sesión se está renovando), 409 (Drive sin conectar), 410, 429 y 5xx: se arreglan solos o

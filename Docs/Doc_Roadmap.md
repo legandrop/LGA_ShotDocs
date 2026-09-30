@@ -63,7 +63,7 @@ Lega.
 - **P.5 En el teléfono, filas o apiladas:** una opción de la cuenta (solo tiene efecto en pantallas
   angostas) para ver las fotos y videos en fila, como en la computadora, o uno debajo del otro. No cambia lo
   guardado. Por defecto, en fila.
-- **P.6 Adjuntar cualquier archivo:** arrastrar o pegar un PDF, un .zip, un .rar o lo que sea; va al Drive
+- **P.6 Hecho (v0.048 portero, v0.049 app; falta la vista previa): adjuntar cualquier archivo:** arrastrar o pegar un PDF, un .zip, un .rar o lo que sea; va al Drive
   del dueño como las fotos y se ve como una tarjeta con ícono, nombre y tamaño. Al hacer clic: un PDF (o lo
   que el navegador sepa mostrar) se abre en una pestaña nueva; el resto se descarga. Sin tipo de bloque
   nuevo (el bloque `file` de BlockNote lo borraría una versión vieja): el mismo bloque `image` con

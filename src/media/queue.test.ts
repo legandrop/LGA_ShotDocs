@@ -885,3 +885,12 @@ describe('espacio en el dispositivo', () => {
     expect(mediaIdOf(await a.media.add(page, big))).toBeTruthy();
   });
 });
+
+describe('qué hace la cola con cada error del portero', () => {
+  it('Drive lleno (507, portero desde v0.048) queda detenido con el aviso; un 502 se reintenta', async () => {
+    const { classify } = await import('./queue');
+    const { PorteroError } = await import('./portero');
+    expect(classify(new PorteroError('Google Drive is full.', 507, false))).toBe('blocked');
+    expect(classify(new PorteroError('Google Drive answered 500', 502, false))).toBe('retry');
+  });
+});
