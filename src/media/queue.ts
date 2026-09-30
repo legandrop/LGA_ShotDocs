@@ -510,7 +510,7 @@ export class MediaQueue {
         // El archivo que se agregó en esta página se registra con ella (`register_file`). Uno de otro
         // proyecto también se manda (la base lo guarda como uso ajeno); acá solo se avisa.
         foreign = this.isForeign(pageId, own?.projectId ?? known?.projectId);
-        await tx.objectStore('links').put(newLink(pageId, fileId, 1));
+        await tx.objectStore('links').put({ ...newLink(pageId, fileId, 1), ...(foreign ? { foreign: true } : {}) });
         added = true;
       }
       await tx.done;
@@ -957,7 +957,8 @@ export class MediaQueue {
         // Lo que la base sabe del archivo (el nombre, y su proyecto para la próxima vez).
         const meta = await this.fetchMeta(link.fileId).catch(() => null);
         const name = meta?.name ?? (await this.store.get('known', link.fileId).catch(() => undefined))?.name ?? null;
-        this.options.onForeignFile?.(name);
+        // Si ya se sabía al pegarlo, ya se avisó.
+        if (!link.foreign) this.options.onForeignFile?.(name);
         this.onChange?.();
         return 'done';
       }

@@ -97,7 +97,8 @@ export interface MediaLink {
   /**
    * El archivo es de otro proyecto (se pegó el bloque desde otro proyecto): la base guardó el uso como ajeno
    * (cuenta para la papelera, así el archivo no se va mientras se ve acá) y respondió `file_other_project`.
-   * Confirmado: no hay nada más que mandar. En la página se ve el marcador de otro proyecto.
+   * Confirmado: no hay nada más que mandar. En la página se ve el marcador de otro proyecto. También se
+   * pone al pegarlo, si ya se sabe que es de otro proyecto (ya se avisó; la fila sigue por mandar).
    */
   foreign?: boolean;
 }
