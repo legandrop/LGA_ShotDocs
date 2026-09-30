@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { prefs, usePrefs, type Prefs } from '../prefs';
 import { navigate } from '../router';
-import { useServices, useSyncStatus, useTree } from '../services';
+import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { PAGE_SIZES, pageFormat } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
@@ -9,10 +9,12 @@ import {
   DriveIcon,
   FilmIcon,
   LightIcon,
+  MembersIcon,
   MoveIcon,
   PlusIcon,
   RenameIcon,
   SheetIcon,
+  ShareIcon,
   SignOutIcon,
   SystemIcon,
   TrashIcon,
@@ -113,17 +115,24 @@ export function PageMenu(props: {
   onMove: () => void;
   onFormat: () => void;
   onTrash: () => void;
+  /** "Share…": solo si la persona puede compartir esta página. */
+  onShare?: () => void;
 }) {
   const tree = useTree();
+  const perms = usePermissions();
+  // Lo que el servidor rechazaría no se ofrece: editar pide 3; crear, mover y la papelera, 4.
+  const canEdit = perms.canEditPage(props.pageId);
+  const canManage = perms.canManagePage(props.pageId);
   const format = pageFormat(tree, props.pageId);
   const ref = useRef<HTMLDivElement>(null);
   useFloating(ref, props.onClose, props.anchor, true);
   const split = splitEnabled(tree, props.pageId);
   const own = ownSplit(tree, props.pageId);
 
-  const item = (label: string, icon: ReactNode, action: () => void, danger = false) => (
+  const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
       role="menuitem"
+      disabled={!enabled}
       className={danger ? 'danger' : undefined}
       onClick={() => {
         props.onClose();
@@ -137,11 +146,13 @@ export function PageMenu(props: {
 
   return (
     <div ref={ref} className="menu" role="menu" aria-label="Page actions" style={props.position}>
-      {item('New page inside', <PlusIcon />, props.onNewChild)}
-      {item('Rename', <RenameIcon />, props.onRename)}
-      {item('Move to…', <MoveIcon />, props.onMove)}
+      {props.onShare && item('Share…', <ShareIcon />, props.onShare)}
+      {item('New page inside', <PlusIcon />, props.onNewChild, false, canManage)}
+      {item('Rename', <RenameIcon />, props.onRename, false, canEdit)}
+      {item('Move to…', <MoveIcon />, props.onMove, false, canManage)}
       <button
         role="menuitem"
+        disabled={!canEdit}
         onClick={() => {
           props.onClose();
           props.onFormat();
@@ -157,6 +168,7 @@ export function PageMenu(props: {
       <button
         role="menuitemcheckbox"
         aria-checked={split}
+        disabled={!canEdit}
         data-tip={'Pages inside show **064 | Name | Place**\nas a short code and a name'}
         onClick={() => void tree.setSetting(props.pageId, 'split', !split)}
       >
@@ -166,7 +178,7 @@ export function PageMenu(props: {
         Short titles inside
         <span className="check">{split ? 'On' : 'Off'}</span>
       </button>
-      {own && (
+      {own && canEdit && (
         <button
           role="menuitem"
           onClick={() => {
@@ -179,7 +191,8 @@ export function PageMenu(props: {
         </button>
       )}
       <hr />
-      {item('Move to trash', <TrashIcon />, props.onTrash, true)}
+      {item('Move to trash', <TrashIcon />, props.onTrash, true, canManage)}
+      {!canEdit && perms.known && <p className="menu-note">You can view this page. Ask for edit access to change it.</p>}
     </div>
   );
 }
@@ -221,13 +234,17 @@ export function AccountMenu({
   anchor,
   onClose,
   onDrive,
+  onMembers,
 }: {
   position: MenuPosition;
   anchor: HTMLElement | null;
   onClose: () => void;
   /** Abre "Google Drive" (la conexión y la carpeta); solo se ofrece al dueño de un workspace con portero. */
   onDrive?: () => void;
+  /** Abre "Members"; solo se ofrece al dueño y a los admins. */
+  onMembers?: () => void;
 }) {
+  const perms = usePermissions();
   const { user, docs, client } = useServices();
   const status = useSyncStatus();
   const pending = usePendingCount();
@@ -299,6 +316,18 @@ export function AccountMenu({
         ]}
       />
       <div className="pref-divider" />
+      {perms.canManageMembers && onMembers && (
+        <button
+          className="menu-row"
+          onClick={() => {
+            onClose();
+            onMembers();
+          }}
+        >
+          <MembersIcon />
+          Members
+        </button>
+      )}
       {isOwner && onDrive && (
         <button
           className="menu-row"

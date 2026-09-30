@@ -99,12 +99,13 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
   const drag = useRef<DragState | null>(null);
   const pointers = useRef(new Map<number, Point>());
   const lastTap = useRef<{ at: number; x: number; y: number } | null>(null);
-  const lastPointerType = useRef<string>('mouse');
+  /** Con qué se usó el carrete por última vez (al cerrar con el dedo, el foco no vuelve al editor). */
+  const lastPointerType = useRef<string>(typeof matchMedia === 'function' && matchMedia('(hover: none)').matches ? 'touch' : 'mouse');
   const preloaded = useRef(new Set<string>());
   const mounted = useRef(true);
 
   const item = items[index];
-  const view = (item && views[item.url]) ?? EMPTY_VIEW;
+  const view = settled((item && views[item.url]) ?? EMPTY_VIEW);
   const fit = view.natural ? fitSize(view.natural, stage) : null;
   const zoomable = view.kind === 'image' && !!view.preview;
 
@@ -129,8 +130,8 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     return () => {
       mounted.current = false;
       root.style.overflow = overflow;
-      // Vuelve el foco a donde estaba. En el teléfono, no al editor: abriría el teclado.
-      if (previous?.isConnected && !(lastPointerType.current === 'touch' && previous.isContentEditable)) {
+      // Vuelve el foco a donde estaba. Con el dedo, no al editor: abriría el teclado.
+      if (previous?.isConnected && !(lastPointerType.current !== 'mouse' && previous.isContentEditable)) {
         previous.focus({ preventScroll: true });
       }
     };
@@ -238,12 +239,8 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     if (known?.full && known.state !== 'failed' && known.state !== 'offline') return;
     patch(it.url, { state: 'loading', error: null });
     loader.full(it).then(
-      (full) => {
-        const kind = viewsRef.current[it.url]?.kind;
-        // Un video queda listo al tener dirección (el reproductor muestra su propia carga); una foto, al
-        // dibujarse.
-        patch(it.url, { full, state: kind === 'video' ? 'ready' : 'loading' });
-      },
+      // Una foto queda lista al dibujarse (`onFullLoad`); un video, ya con la dirección (ver `settled`).
+      (full) => patch(it.url, { full, state: 'loading' }),
       (err: unknown) => patch(it.url, { state: isOffline(err) ? 'offline' : 'failed', error: err instanceof Error ? err.message : String(err) }),
     );
   }, [index, items, loader, patch, online]);
@@ -316,7 +313,6 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    lastPointerType.current = e.pointerType;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (target.closest('button, a, .carrete-notice')) return;
@@ -502,7 +498,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     const it = items[i];
     const offset = i - index;
     const current = offset === 0;
-    const v = views[it.url] ?? EMPTY_VIEW;
+    const v = settled(views[it.url] ?? EMPTY_VIEW);
     const f = v.natural ? fitSize(v.natural, stage) : null;
     const sized = f && f.width > 0 ? { width: f.width, height: f.height } : undefined;
     const style = {
@@ -572,6 +568,9 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
       aria-label="Photos and videos"
       tabIndex={-1}
       style={{ ['--carrete-fade' as string]: String(fade) }}
+      onPointerDownCapture={(e) => {
+        lastPointerType.current = e.pointerType;
+      }}
     >
       <div className="carrete-bar">
         <span className="carrete-count" aria-live="polite" aria-atomic="true">
@@ -632,6 +631,11 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     </div>,
     document.body,
   );
+}
+
+/** Un video está listo apenas tiene dirección: el reproductor muestra su propia carga. */
+function settled(v: View): View {
+  return v.kind === 'video' && v.full && v.state === 'loading' ? { ...v, state: 'ready' } : v;
 }
 
 /** El aviso bajo la foto o el video, si hace falta uno. */

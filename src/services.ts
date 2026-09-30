@@ -4,16 +4,16 @@ import { pendingInviteTarget } from './invite';
 import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
 import { MediaQueue } from './media/queue';
-import { AccessStore, Permissions } from './sync/access';
+import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/access';
 import { PageDocs } from './sync/docs';
 import { SyncEngine, type SyncStatus } from './sync/engine';
 import { PageFiles } from './sync/files';
 import { openLocalDb, type LocalDb } from './sync/localDb';
 import { supportsContent } from './ui/unknownContent';
-import { SupabaseRemote, type Remote } from './sync/remote';
+import { SupabaseRemote } from './sync/remote';
 import { mergeRootGroups, seedIfEmpty } from './sync/structure';
 import { PageTree } from './sync/tree';
-import { errorMessage, isNetworkError } from './sync/types';
+import { errorMessage } from './sync/types';
 import { DB_SCHEMA_VERSION, type ActiveWorkspace } from './workspace';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -75,19 +75,6 @@ export function useRemoved(): boolean {
   return access.removed;
 }
 
-/**
- * Aplica las invitaciones del correo de la sesión (`accept_invitations`). Nunca corta la entrada: sin red,
- * con una base que todavía no tiene la función o con cualquier error, sigue como si no hubiera ninguna.
- * Devuelve cuántas aplicó.
- */
-export async function acceptInvitationsQuietly(remote: Pick<Remote, 'acceptInvitations'>): Promise<number> {
-  try {
-    return (await remote.acceptInvitations()) ?? 0;
-  } catch (err) {
-    if (!isNetworkError(err)) console.warn('accept_invitations:', errorMessage(err));
-    return 0;
-  }
-}
 
 type Boot =
   | { state: 'loading' }

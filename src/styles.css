@@ -2544,3 +2544,161 @@ code {
 .drive-dialog .modal-actions {
   gap: 16px;
 }
+
+/* --- Equipo: miembros, compartir y acceso (paso 9) -------------------------------------------------- */
+
+.team-dialog {
+  width: min(560px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.team-dialog select {
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  max-width: 100%;
+}
+
+.team-lead {
+  margin: -4px 0 0;
+  font-size: 13px;
+}
+
+.team-invite {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.team-invite-row {
+  display: flex;
+  gap: 8px;
+}
+
+.team-invite-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-check {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.team-check input[type='checkbox'] {
+  width: auto;
+}
+
+.team-invite-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.team-link {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.team-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.team-list li.removed .team-email {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.team-who {
+  display: grid;
+  min-width: 0;
+}
+
+.team-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.team-role {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.team-spacer {
+  width: 52px;
+}
+
+button.link.danger {
+  color: var(--danger);
+}
+
+.menu-note {
+  margin: 4px 8px 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.login-invite {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--warn-border);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.removed-card {
+  width: min(480px, 100%);
+}
+
+.removed-media ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+@media (max-width: 520px) {
+  .team-invite-row,
+  .team-invite-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .team-list li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .team-list li .team-spacer {
+    display: none;
+  }
+}

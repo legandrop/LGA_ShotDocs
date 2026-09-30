@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { MediaFailure } from '../media/queue';
 import { useServices, useSyncStatus, useTree } from '../services';
 import { ErrorIcon, OfflineIcon, SyncedIcon, UploadingIcon, WarningIcon } from './icons';
+import { rejectionText } from './teamText';
 import { usePendingCount } from './usePendingCount';
 
 type Tone = 'ok' | 'busy' | 'offline' | 'warn' | 'error';
@@ -163,7 +164,7 @@ export function SyncBadge() {
                         : f.op.kind === 'renameProject'
                           ? `Rename a project to “${f.op.name}”`
                           : `Change “${tree.get(f.op.id)?.title || 'Untitled'}”`}
-                    : <code>{f.error}</code>
+                    : <code>{rejectionText(f.error)}</code>
                   </li>
                 ))}
                 {status.rejectedPages > 0 && (

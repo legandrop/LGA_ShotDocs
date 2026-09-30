@@ -30,6 +30,13 @@ export interface MediaRecord {
    * falta subirla, `done` si ya está en el bucket `thumbs` y marcada con `set_file_thumb`.
    */
   thumb: 'none' | 'local' | 'done';
+  /**
+   * `false` mientras falta sacar medidas y miniatura (se hace después de guardar el archivo, y otra vez al
+   * abrir la app si se cerró en el medio). Sin el campo (registros anteriores), ya se sacaron.
+   */
+  probed?: boolean;
+  /** Por qué no se pudo subir la miniatura (se siguió con el original sin ella). */
+  thumbError?: string | null;
   /** La subida al portero que quedó a medias: con esto se retoma después de cerrar la app. */
   uploadId: string | null;
   /** Hasta dónde confirmó el portero (bytes). */

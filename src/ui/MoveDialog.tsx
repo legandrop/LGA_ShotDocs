@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useTree } from '../services';
+import { usePermissions, useTree } from '../services';
 import type { PageRow } from '../sync/types';
 
 export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () => void }) {
   const tree = useTree();
+  const perms = usePermissions();
   const [filter, setFilter] = useState('');
   const page = tree.get(pageId);
 
@@ -28,7 +29,9 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
   }, [onClose]);
 
   const needle = filter.trim().toLowerCase();
-  const visible = needle ? options.filter((o) => o.page.title.toLowerCase().includes(needle)) : options;
+  // Mover pide "Edit & create pages" en la página y en el destino: los demás destinos no se ofrecen.
+  const allowed = options.filter((o) => perms.canMove(pageId, o.page.id));
+  const visible = needle ? allowed.filter((o) => o.page.title.toLowerCase().includes(needle)) : allowed;
 
   const moveTo = async (parentId: string | null) => {
     await tree.move(pageId, parentId);
@@ -41,7 +44,7 @@ export function MoveDialog({ pageId, onClose }: { pageId: string; onClose: () =>
         <h2>Move “{page?.title || 'Untitled'}”</h2>
         <input autoFocus placeholder="Search pages…" value={filter} onChange={(e) => setFilter(e.target.value)} />
         <ul className="move-list">
-          {!needle && page?.parent_id && (
+          {!needle && page?.parent_id && perms.canMove(pageId, null) && (
             <li>
               <button onClick={() => void moveTo(null)}>Top level</button>
             </li>

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { useTree } from '../services';
-import { AccountIcon, PlusIcon, RenameIcon, SearchIcon } from './icons';
+import { usePermissions, useTree } from '../services';
+import { AccountIcon, PlusIcon, RenameIcon, SearchIcon, ShareIcon } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, useCurrentProject, useSwitchProject } from './project';
+import { ShareDialog } from './ShareDialog';
 
 export function Monogram({ name, size = 26 }: { name: string; size?: number }) {
   return (
@@ -25,6 +26,7 @@ export function ProjectSwitcher() {
   const tree = useTree();
   const current = useCurrentProject();
   const [position, setPosition] = useState<MenuPosition | null>(null);
+  const [sharing, setSharing] = useState<string | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const project = tree.project(current);
   const stats = tree.projectStats(current);
@@ -73,18 +75,33 @@ export function ProjectSwitcher() {
         createPortal(
           <>
             <div className="sheet-scrim" aria-hidden="true" />
-            <ProjectMenu current={current} position={position} anchor={button.current} onClose={() => setPosition(null)} />
+            <ProjectMenu
+              current={current}
+              position={position}
+              anchor={button.current}
+              onClose={() => setPosition(null)}
+              onShare={(id) => setSharing(id)}
+            />
           </>,
           document.body,
         )}
+      {sharing &&
+        createPortal(<ShareDialog target={{ projectId: sharing }} onClose={() => setSharing(null)} />, document.body)}
     </>
   );
 }
 
 type Mode = { name: 'list' } | { name: 'new' } | { name: 'rename'; id: string };
 
-function ProjectMenu(props: { current: string; position: MenuPosition; anchor: HTMLElement | null; onClose: () => void }) {
+function ProjectMenu(props: {
+  current: string;
+  position: MenuPosition;
+  anchor: HTMLElement | null;
+  onClose: () => void;
+  onShare: (projectId: string) => void;
+}) {
   const tree = useTree();
+  const perms = usePermissions();
   const switchTo = useSwitchProject();
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
@@ -117,7 +134,7 @@ function ProjectMenu(props: { current: string; position: MenuPosition; anchor: H
       e.preventDefault();
       const target = projects[Math.min(active, projects.length - 1)];
       if (target) pick(target.id);
-      else if (needle) setMode({ name: 'new' });
+      else if (needle && perms.canCreateProject) setMode({ name: 'new' });
     }
   };
 
@@ -204,15 +221,30 @@ function ProjectMenu(props: { current: string; position: MenuPosition; anchor: H
         })}
         {projects.length === 0 && <p className="muted project-empty">No project with that name.</p>}
       </div>
-      <hr />
-      <button onClick={() => setMode({ name: 'new' })}>
-        <PlusIcon size={16} />
-        {needle && projects.length === 0 ? `New project “${query.trim()}”` : 'New project'}
-      </button>
-      <button onClick={() => setMode({ name: 'rename', id: props.current })}>
-        <RenameIcon size={16} />
-        Rename “{currentName}”
-      </button>
+      {(perms.canCreateProject || perms.canRenameProject(props.current) || perms.canShareProject(props.current)) && <hr />}
+      {perms.canShareProject(props.current) && (
+        <button
+          onClick={() => {
+            props.onClose();
+            props.onShare(props.current);
+          }}
+        >
+          <ShareIcon size={16} />
+          Share “{currentName}”…
+        </button>
+      )}
+      {perms.canCreateProject && (
+        <button onClick={() => setMode({ name: 'new' })}>
+          <PlusIcon size={16} />
+          {needle && projects.length === 0 ? `New project “${query.trim()}”` : 'New project'}
+        </button>
+      )}
+      {perms.canRenameProject(props.current) && (
+        <button onClick={() => setMode({ name: 'rename', id: props.current })}>
+          <RenameIcon size={16} />
+          Rename “{currentName}”
+        </button>
+      )}
     </div>
   );
 }

@@ -120,6 +120,10 @@ export class SyncEngine {
     files.onQueued = poke;
     if (options.media) {
       options.media.onQueued = poke;
+      // La base de archivos del dispositivo no se pudo abrir: el texto sigue, las fotos y videos no.
+      if (options.media.unavailable) {
+        this.status = { ...this.status, warning: `Photos and videos are off on this device: ${options.media.unavailable}` };
+      }
       // Después de `stop()` la base puede estar cerrándose: no se cuenta nada más.
       options.media.onChange = () => {
         if (!this.stopped) void this.refreshCounts().catch(() => undefined);
@@ -159,7 +163,11 @@ export class SyncEngine {
     }
     this.interval = setInterval(onWake, INTERVAL_MS);
     // Lo que el servidor rechazó se vuelve a intentar una vez por apertura: puede que ya se haya arreglado.
-    void Promise.all([this.docs.clearRejected(), this.options.media?.clearBlocked()]).then(() => this.syncNow());
+    // Un error de la base de archivos nunca saltea la sincronización del texto.
+    void Promise.all([this.docs.clearRejected(), this.clearMediaBlocked()]).then(
+      () => this.syncNow(),
+      () => this.syncNow(),
+    );
   }
 
   stop(): void {
@@ -174,8 +182,17 @@ export class SyncEngine {
   async retryRejected(): Promise<void> {
     await this.tree.retryFailed();
     await this.docs.clearRejected();
-    await this.options.media?.clearBlocked();
+    await this.clearMediaBlocked();
     await this.syncNow();
+  }
+
+  /** Lo detenido de la cola de fotos y videos se vuelve a intentar; un error de su base no corta nada. */
+  private async clearMediaBlocked(): Promise<void> {
+    try {
+      await this.options.media?.clearBlocked();
+    } catch {
+      // La base de archivos del dispositivo falló: el texto sigue igual.
+    }
   }
 
   /**
@@ -329,7 +346,8 @@ export class SyncEngine {
       workspaceName: settings.name ?? null,
       workspaceLocalKey: settings.localKey ?? null,
     });
-    await this.options.media?.configure(settings.mediaUrl, settings.schemaVersion);
+    // Un error de la base de archivos del dispositivo no corta la subida del texto.
+    await this.options.media?.configure(settings.mediaUrl, settings.schemaVersion).catch(() => undefined);
     // Antes de recuperar nada tras una restauración: a alguien que sacaron no se le arma ninguna cola.
     if (await this.checkAccess(settings)) return { outdated, removed: true };
 
@@ -344,7 +362,7 @@ export class SyncEngine {
         (await this.tree.recoverAfterRestore(rows, projects)) +
         (await this.docs.resetForRestore()) +
         (await this.files.resetForRestore()) +
-        ((await this.options.media?.resetForRestore()) ?? 0);
+        ((await this.options.media?.resetForRestore().catch(() => 0)) ?? 0);
       // Un dispositivo que no tenía nada (recién entra a un workspace ya restaurado) no avisa nada.
       if (recovered > 0) {
         this.patch({

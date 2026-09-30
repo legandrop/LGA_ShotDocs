@@ -127,6 +127,11 @@ export interface MediaQueueOptions {
   probe?: (file: Blob, mime: string) => Promise<Probe>;
   playMark?: (thumb: Blob) => Promise<Blob>;
   now?: () => number;
+  /**
+   * La base de archivos del dispositivo no se pudo abrir: la cola queda apagada (las fotos y videos no se
+   * pueden agregar) y este es el aviso. El resto de la app sigue.
+   */
+  unavailable?: string;
 }
 
 export interface MediaStatus {
@@ -175,12 +180,19 @@ export class MediaQueue {
   /** Pares página:archivo ya vistos en esta sesión (en la cola o confirmados). */
   private readonly seenLinks = new Set<string>();
   private metaBatch: { ids: Set<string>; result: Promise<Map<string, KnownFile>> } | null = null;
+  /** Medidas y miniatura que se están sacando (una sola vez por archivo). */
+  private readonly probing = new Map<string, Promise<void>>();
+  /** Archivos de otros dispositivos que se mostraron sin miniatura: se vuelve a preguntar cada tanto. */
+  private readonly missing = new Set<string>();
+  private missingCheckedAt = 0;
+  private readonly thumbListeners = new Set<(id: string) => void>();
   private readonly probe: (file: Blob, mime: string) => Promise<Probe>;
   private readonly playMark: (thumb: Blob) => Promise<Blob>;
   private readonly now: () => number;
 
+  /** `db` en `null`: la base de archivos no se pudo abrir y la cola queda apagada (ver `unavailable`). */
   constructor(
-    private readonly db: MediaDb,
+    private readonly db: MediaDb | null,
     private readonly remote: MediaRemote,
     private readonly options: MediaQueueOptions,
   ) {
@@ -189,8 +201,19 @@ export class MediaQueue {
     this.now = options.now ?? Date.now;
   }
 
+  /** Por qué la cola está apagada en este dispositivo, o `null` si anda. */
+  get unavailable(): string | null {
+    return this.db ? null : (this.options.unavailable ?? 'The storage for photos and videos could not be opened.');
+  }
+
+  private get store(): MediaDb {
+    if (!this.db) throw new Error(this.unavailable ?? 'unavailable');
+    return this.db;
+  }
+
   /** Lee lo que se sabía del workspace la última vez (para agregar archivos sin red). */
   async load(): Promise<void> {
+    if (!this.db) return;
     this.url = ((await this.db.get('meta', 'mediaUrl')) as string | null | undefined) ?? null;
     this.schemaReady = (await this.db.get('meta', 'schemaReady')) === true;
   }
@@ -202,7 +225,7 @@ export class MediaQueue {
   async configure(mediaUrl: string | null, schemaVersion: number): Promise<void> {
     const url = mediaUrl ? mediaUrl.replace(/\/+$/, '') : null;
     const ready = schemaVersion >= MEDIA_SCHEMA_VERSION;
-    if (url === this.url && ready === this.schemaReady) return;
+    if (!this.db || (url === this.url && ready === this.schemaReady)) return;
     this.url = url;
     this.schemaReady = ready;
     const tx = this.db.transaction('meta', 'readwrite');
@@ -212,7 +235,7 @@ export class MediaQueue {
 
   /** El workspace tiene portero y la base tiene la tabla de archivos: las fotos y videos van por acá. */
   get enabled(): boolean {
-    return !!this.url && this.schemaReady;
+    return !!this.db && !!this.url && this.schemaReady;
   }
 
   get mediaUrl(): string | null {
@@ -222,13 +245,14 @@ export class MediaQueue {
   // --- agregar --------------------------------------------------------------------------------------
 
   /**
-   * Guarda la foto o el video en el dispositivo (con medidas y miniatura) y lo pone en la cola. Devuelve
-   * la dirección para el bloque `image`. Recién cuando esto termina el archivo está a salvo.
+   * Guarda la foto o el video en el dispositivo y lo pone en la cola. Devuelve la dirección para el bloque
+   * `image`; recién cuando esto termina el archivo está a salvo. Medidas y miniatura se sacan después, del
+   * archivo ya guardado (ver `ensureProbed`).
    */
   async add(pageId: string, file: Blob & { name?: string }): Promise<string> {
     this.adding++;
     try {
-      return await this.store(pageId, file);
+      return await this.save(pageId, file);
     } finally {
       this.adding--;
     }
@@ -239,12 +263,12 @@ export class MediaQueue {
     return this.adding > 0;
   }
 
-  private async store(pageId: string, file: Blob & { name?: string }): Promise<string> {
+  private async save(pageId: string, file: Blob & { name?: string }): Promise<string> {
+    if (!this.db) throw new FileRejected(`Photos and videos cannot be added on this device right now: ${this.unavailable}`);
     const mime = normalizeMime(file.type, file.name);
     const kind = mediaKind(mime);
     if (!kind || mime === 'image/svg+xml') throw new FileRejected('Only photos and videos can be added.');
     if (file.size <= 0) throw new FileRejected('This file is empty.');
-    const probe = await this.probe(file, mime).catch((): Probe => ({ width: null, height: null, duration: null, thumb: null }));
     const id = crypto.randomUUID();
     const record: MediaRecord = {
       id,
@@ -253,14 +277,16 @@ export class MediaQueue {
       name: cleanName(file.name, mime),
       mime,
       size: file.size,
-      width: dimension(probe.width),
-      height: dimension(probe.height),
-      duration: kind === 'video' ? seconds(probe.duration) : null,
+      width: null,
+      height: null,
+      duration: null,
       day: localDay(new Date(this.now())),
       createdAt: this.now(),
       pending: 1,
       registered: false,
-      thumb: probe.thumb ? 'local' : 'none',
+      thumb: 'none',
+      probed: false,
+      thumbError: null,
       uploadId: null,
       sent: 0,
       driveId: null,
@@ -271,13 +297,8 @@ export class MediaQueue {
     };
     // Todo junto: o queda el archivo con su registro, o no queda nada.
     try {
-      const tx = this.db.transaction(['files', 'blobs', 'thumbs'], 'readwrite');
-      await Promise.all([
-        tx.objectStore('blobs').put(file, id),
-        probe.thumb ? tx.objectStore('thumbs').put(probe.thumb, id) : undefined,
-        tx.objectStore('files').put(record),
-        tx.done,
-      ]);
+      const tx = this.db.transaction(['files', 'blobs'], 'readwrite');
+      await Promise.all([tx.objectStore('blobs').put(file, id), tx.objectStore('files').put(record), tx.done]);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'QuotaExceededError') {
         throw new FileRejected('There is not enough free storage on this device for this file.');
@@ -286,7 +307,71 @@ export class MediaQueue {
     }
     this.seenLinks.add(`${pageId}:${id}`);
     this.onQueued?.();
+    // Medidas y miniatura, sin esperarlas: el archivo ya está a salvo. La cola no lo registra antes.
+    void this.ensureProbed(id);
     return MEDIA_SCHEME + id;
+  }
+
+  /**
+   * Saca medidas, duración y miniatura del archivo guardado, una sola vez (también si la app se cerró en
+   * el medio: la cola lo hace antes de registrarlo). Nunca falla: lo que no se pudo sacar queda en `null`.
+   */
+  ensureProbed(id: string): Promise<void> {
+    let running = this.probing.get(id);
+    if (!running) {
+      running = this.probeNow(id)
+        .catch(() => undefined)
+        .finally(() => this.probing.delete(id));
+      this.probing.set(id, running);
+    }
+    return running;
+  }
+
+  /** Espera a que terminen las medidas y miniaturas en curso. */
+  async idle(): Promise<void> {
+    await Promise.all([...this.probing.values()]);
+  }
+
+  private async probeNow(id: string): Promise<void> {
+    const db = this.store;
+    const record = await db.get('files', id);
+    if (!record || record.probed !== false) return;
+    const blob = await db.get('blobs', id);
+    const kind = mediaKind(record.mime);
+    const none: Probe = { width: null, height: null, duration: null, thumb: null };
+    const probe = blob ? await this.probe(blob, record.mime).catch(() => none) : none;
+    const tx = db.transaction(['files', 'thumbs'], 'readwrite');
+    const current = await tx.objectStore('files').get(id);
+    if (current) {
+      if (probe.thumb) await tx.objectStore('thumbs').put(probe.thumb, id);
+      await tx.objectStore('files').put({
+        ...current,
+        width: dimension(probe.width),
+        height: dimension(probe.height),
+        duration: kind === 'video' ? seconds(probe.duration) : null,
+        thumb: probe.thumb ? 'local' : 'none',
+        probed: true,
+      });
+    }
+    await tx.done;
+    if (probe.thumb) this.thumbReady(id);
+  }
+
+  /**
+   * Avisa cuando llega la miniatura de un archivo que ya se mostró sin ella (BlockNote resuelve la dirección
+   * una sola vez: el editor cambia la imagen a mano). Devuelve la función para dejar de escuchar.
+   */
+  subscribeThumbs(fn: (id: string) => void): () => void {
+    this.thumbListeners.add(fn);
+    return () => this.thumbListeners.delete(fn);
+  }
+
+  private thumbReady(id: string): void {
+    const old = this.objectUrls.get(id);
+    if (old) URL.revokeObjectURL(old);
+    this.objectUrls.delete(id);
+    this.missing.delete(id);
+    for (const fn of this.thumbListeners) fn(id);
   }
 
   /**
@@ -294,6 +379,7 @@ export class MediaQueue {
    * bloque de otra página) entran a la cola de `link_page_file`. Lo ya visto no se vuelve a pedir.
    */
   async ensureLinks(pageId: string, fileIds: string[]): Promise<void> {
+    if (!this.db) return;
     let added = false;
     for (const fileId of new Set(fileIds.map((id) => id.toLowerCase()))) {
       const key = `${pageId}:${fileId}`;
@@ -352,18 +438,39 @@ export class MediaQueue {
   private async round(skipPage: (pageId: string) => boolean): Promise<void> {
     if (!this.enabled) return;
     const portero = this.porteroFor(this.url!);
-    const records = (await this.db.getAllFromIndex('files', 'pending', 1)).sort((a, b) => a.createdAt - b.createdAt);
+    const db = this.store;
+    const records = (await db.getAllFromIndex('files', 'pending', 1)).sort((a, b) => a.createdAt - b.createdAt);
     for (const record of records) {
       if (this.stopped) return;
       if (record.blocked || record.retryAt > this.now() || skipPage(record.pageId)) continue;
       const outcome = await this.process(record, portero);
       if (outcome === 'offline' || outcome === 'cancelled') return;
     }
-    const links = await this.db.getAllFromIndex('links', 'pending', 1);
+    const links = await db.getAllFromIndex('links', 'pending', 1);
     for (const link of links) {
       if (this.stopped) return;
       if (link.blocked || link.waiting === 'denied' || link.retryAt > this.now() || skipPage(link.pageId)) continue;
       if ((await this.linkOne(link)) === 'offline') return;
+    }
+    await this.refreshMissing().catch(() => undefined);
+  }
+
+  /**
+   * Los archivos de otros dispositivos que se mostraron con un ícono porque todavía no tenían miniatura:
+   * cada tanto se pregunta si ya la tienen, y si llegó, se baja y se avisa al editor.
+   */
+  private async refreshMissing(): Promise<void> {
+    if (this.missing.size === 0 || this.now() - this.missingCheckedAt < 60_000) return;
+    this.missingCheckedAt = this.now();
+    const rows = await this.remote.fetchMediaFiles([...this.missing]);
+    for (const row of rows) {
+      if (!row.thumb_at) continue;
+      const thumb = await this.remote.downloadThumb(row.id).catch(() => undefined);
+      if (!thumb) continue;
+      await this.store.put('thumbs', thumb, row.id);
+      const known = await this.store.get('known', row.id);
+      if (known) await this.store.put('known', { ...known, thumbAt: row.thumb_at, fetchedAt: this.now() });
+      this.thumbReady(row.id);
     }
   }
 
@@ -372,6 +479,10 @@ export class MediaQueue {
     // Lo que el progreso guarda (la subida para retomar) va en orden, antes del resultado final.
     let saving: Promise<unknown> = Promise.resolve();
     try {
+      if (record.probed === false) {
+        await this.ensureProbed(record.id);
+        record = (await this.store.get('files', record.id)) ?? record;
+      }
       if (!record.registered) {
         await this.remote.registerFile({
           id: record.id,
@@ -386,15 +497,22 @@ export class MediaQueue {
         record = await this.patch(record.id, { registered: true });
       }
       if (record.thumb === 'local') {
-        const thumb = await this.db.get('thumbs', record.id);
-        if (thumb) {
-          await this.remote.uploadThumb(record.id, thumb);
-          await this.remote.setFileThumb(record.id);
+        const thumb = await this.store.get('thumbs', record.id);
+        try {
+          if (thumb) {
+            await this.remote.uploadThumb(record.id, thumb);
+            await this.remote.setFileThumb(record.id);
+          }
+          record = await this.patch(record.id, { thumb: thumb ? 'done' : 'none' });
+        } catch (err) {
+          // Si la miniatura no se puede subir nunca (por ejemplo, el bucket la rechaza), se sigue con el
+          // original sin ella: queda anotado y en la página se ve la del dispositivo.
+          if (classify(err) !== 'blocked') throw err;
+          record = await this.patch(record.id, { thumb: 'none', thumbError: friendly(err) });
         }
-        record = await this.patch(record.id, { thumb: thumb ? 'done' : 'none' });
       }
 
-      const blob = await this.db.get('blobs', record.id);
+      const blob = await this.store.get('blobs', record.id);
       if (!blob) {
         await this.patch(record.id, { error: 'The original file is missing on this device.', blocked: true });
         return 'blocked';
@@ -424,18 +542,23 @@ export class MediaQueue {
         if (this.controller === controller) this.controller = null;
         await saving;
       }
-      if (result.linked === false) {
-        // Ya está en Drive, pero la base todavía no se enteró: el portero le vuelve a avisar cuando se le
-        // pregunta de nuevo por el archivo.
+      // Ya está en Drive. Se da por subido recién cuando la base lo confirma (`files.drive_id`), no por lo
+      // que diga el portero: si la base no se enteró (`linked: false`), el portero le vuelve a avisar cuando
+      // se le pregunta de nuevo por el archivo, sin volver a subirlo. Un portero anterior al paso 6 no manda
+      // `linked` (ni le avisa a la base): el archivo queda pendiente hasta que se actualice.
+      record = await this.patch(record.id, { driveId: result.id, uploadId: null, sent: record.size });
+      const rows = await this.remote.fetchMediaFiles([record.id]);
+      if (!rows.find((r) => r.id === record.id)?.drive_id) {
         const failures = record.failures + 1;
         await this.patch(record.id, {
-          driveId: result.id,
-          uploadId: null,
-          sent: record.size,
-          error: 'Uploaded to Google Drive; waiting for the database to confirm it.',
+          error:
+            result.linked === undefined
+              ? 'The media server needs an update: the file reached Google Drive but the workspace was not told.'
+              : 'Uploaded to Google Drive; waiting for the database to confirm it.',
           failures,
           retryAt: this.now() + backoff(failures),
         });
+        this.onChange?.();
         return 'retry';
       }
       await this.patch(record.id, {
@@ -451,15 +574,22 @@ export class MediaQueue {
       this.onChange?.();
       return 'done';
     } catch (err) {
-      const outcome = classify(err);
+      let outcome = classify(err);
       if (outcome === 'cancelled') return outcome;
       const failures = record.failures + 1;
+      // El servidor dice que el archivo no existe aunque acá figura registrado (por ejemplo, se restauró la
+      // base): se vuelve a registrar en vez de detenerlo. Si sigue igual después de varias veces, se detiene.
+      const notThere =
+        record.registered &&
+        ((err instanceof PorteroError && err.status === 404) || errorMessage(err) === 'file_not_found');
+      if (notThere) outcome = failures >= 4 ? 'blocked' : 'retry';
       const changes: Partial<MediaRecord> = {
         error: friendly(err),
         blocked: outcome === 'blocked',
         failures,
         // Sin red no se espera: se vuelve a probar en la próxima sincronización (al volver la red).
         retryAt: outcome === 'offline' || outcome === 'blocked' ? 0 : this.now() + backoff(failures),
+        ...(notThere ? { registered: false } : {}),
       };
       // Una subida que el portero ya no tiene se empieza de nuevo.
       if (err instanceof UploadError) Object.assign(changes, { uploadId: err.uploadId, sent: err.uploadId ? err.sent : 0 });
@@ -479,6 +609,9 @@ export class MediaQueue {
       if (outcome === 'offline') return outcome;
       const failures = link.failures + 1;
       const denied = errorMessage(err) === 'page_not_found';
+      // Un archivo de este dispositivo que figura registrado pero el servidor no tiene (se restauró la base):
+      // vuelve a la cola para registrarlo de nuevo.
+      if (outcome === 'waiting') await this.requeueOwn(link.fileId);
       await this.patchLink(link.key, {
         // Que el archivo todavía no llegó (lo registra otro dispositivo) o que no se puede editar la página
         // no es un error de esta persona: se espera, sin contarlo como pendiente.
@@ -493,8 +626,22 @@ export class MediaQueue {
     }
   }
 
+  private async requeueOwn(fileId: string): Promise<void> {
+    const own = await this.store.get('files', fileId);
+    if (!own?.registered) return;
+    const hasThumb = (await this.store.count('thumbs', fileId)) > 0;
+    await this.patch(fileId, {
+      pending: 1,
+      registered: false,
+      thumb: hasThumb ? 'local' : 'none',
+      driveId: null,
+      blocked: false,
+      retryAt: 0,
+    });
+  }
+
   private async patch(id: string, changes: Partial<MediaRecord>): Promise<MediaRecord> {
-    const tx = this.db.transaction('files', 'readwrite');
+    const tx = this.store.transaction('files', 'readwrite');
     const current = await tx.store.get(id);
     if (!current) throw new Error('The file is not in the queue anymore.');
     const next = { ...current, ...changes };
@@ -504,7 +651,7 @@ export class MediaQueue {
   }
 
   private async patchLink(key: string, changes: Partial<MediaLink>): Promise<void> {
-    const tx = this.db.transaction('links', 'readwrite');
+    const tx = this.store.transaction('links', 'readwrite');
     const current = await tx.store.get(key);
     if (current) await tx.store.put({ ...current, ...changes });
     await tx.done;
@@ -527,6 +674,7 @@ export class MediaQueue {
   // --- estado ---------------------------------------------------------------------------------------
 
   async status(): Promise<MediaStatus> {
+    if (!this.db) return { pending: 0, failed: 0, error: null, uploading: null };
     const [records, links] = await Promise.all([
       this.db.getAllFromIndex('files', 'pending', 1),
       this.db.getAllFromIndex('links', 'pending', 1),
@@ -543,6 +691,7 @@ export class MediaQueue {
 
   /** Lo que quedó detenido por un error, para mostrarlo. */
   async failures(): Promise<MediaFailure[]> {
+    if (!this.db) return [];
     const [records, links] = await Promise.all([
       this.db.getAllFromIndex('files', 'pending', 1),
       this.db.getAllFromIndex('links', 'pending', 1),
@@ -559,10 +708,14 @@ export class MediaQueue {
 
   /** Lo detenido por un error se vuelve a intentar (al abrir la app y con "Retry"). */
   async clearBlocked(): Promise<void> {
+    if (!this.db) return;
     const tx = this.db.transaction(['files', 'links'], 'readwrite');
     const files = tx.objectStore('files');
     for (const r of await files.index('pending').getAll(1)) {
-      if (r.blocked || r.retryAt > 0) await files.put({ ...r, blocked: false, retryAt: 0 });
+      // Lo detenido se vuelve a registrar (`register_file` es idempotente): puede que el servidor lo haya
+      // perdido (una copia restaurada).
+      if (r.blocked) await files.put({ ...r, blocked: false, retryAt: 0, registered: false, failures: 0 });
+      else if (r.retryAt > 0) await files.put({ ...r, retryAt: 0 });
     }
     const links = tx.objectStore('links');
     for (const l of await links.index('pending').getAll(1)) {
@@ -578,18 +731,29 @@ export class MediaQueue {
    * subió a Drive y no lo vuelve a subir). Devuelve cuántas cosas volvieron.
    */
   async resetForRestore(): Promise<number> {
+    if (!this.db) return 0;
     let count = 0;
     const tx = this.db.transaction(['files', 'links', 'thumbs', 'known'], 'readwrite');
+    // Todos, también los que estaban a medio subir: lo que ya habían registrado puede no estar más.
     const files = tx.objectStore('files');
-    for (let cursor = await files.index('pending').openCursor(0); cursor; cursor = await cursor.continue()) {
+    for (let cursor = await files.openCursor(); cursor; cursor = await cursor.continue()) {
       const r = cursor.value;
-      const hasThumb = r.thumb !== 'none' && (await tx.objectStore('thumbs').count(r.id)) > 0;
-      await cursor.update({ ...r, pending: 1, registered: false, thumb: hasThumb ? 'local' : 'none', driveId: null, retryAt: 0 });
+      const hasThumb = (await tx.objectStore('thumbs').count(r.id)) > 0;
+      await cursor.update({
+        ...r,
+        pending: 1,
+        registered: false,
+        thumb: hasThumb ? 'local' : 'none',
+        driveId: null,
+        blocked: false,
+        failures: 0,
+        retryAt: 0,
+      });
       count++;
     }
     const links = tx.objectStore('links');
-    for (let cursor = await links.index('pending').openCursor(0); cursor; cursor = await cursor.continue()) {
-      await cursor.update({ ...cursor.value, pending: 1, waiting: null, retryAt: 0 });
+    for (let cursor = await links.openCursor(); cursor; cursor = await cursor.continue()) {
+      await cursor.update({ ...cursor.value, pending: 1, waiting: null, blocked: false, failures: 0, retryAt: 0 });
       count++;
     }
     await tx.objectStore('known').clear();
@@ -601,9 +765,9 @@ export class MediaQueue {
   // --- mostrar --------------------------------------------------------------------------------------
 
   /**
-   * Convierte `sdmedia://<id>` en algo que un `<img>` pueda mostrar: una foto de este dispositivo, la
-   * miniatura (guardada acá o bajada del bucket `thumbs`; en un video, con una marca de "play") o, si no
-   * hay, un ícono. Nunca falla. Otra dirección vuelve tal cual.
+   * Convierte `sdmedia://<id>` en algo que un `<img>` pueda mostrar en la página: la miniatura (la hecha
+   * acá o la bajada del bucket `thumbs`; en un video, con una marca de "play") o, si no hay, un ícono con el
+   * nombre. El original solo lo muestra el carrete. Nunca falla. Otra dirección vuelve tal cual.
    */
   resolve(url: string): Promise<string> {
     const id = mediaIdOf(url);
@@ -626,27 +790,26 @@ export class MediaQueue {
 
   private async display(id: string): Promise<string> {
     try {
-      const own = await this.db.get('files', id);
+      const db = this.store;
+      const own = await db.get('files', id);
       if (own) {
         const kind = mediaKind(own.mime);
-        // Una foto que el navegador pudo abrir se muestra entera, desde el dispositivo.
-        if (kind === 'image' && own.thumb !== 'none') {
-          const original = await this.db.get('blobs', id);
-          if (original) return this.keep(id, original);
-        }
-        const thumb = await this.db.get('thumbs', id);
+        const thumb = await db.get('thumbs', id);
         if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
+        // Si todavía se está sacando, `subscribeThumbs` avisa cuando llega.
         return placeholderUrl(kind, own.name);
       }
-      let thumb = await this.db.get('thumbs', id);
-      let meta = await this.db.get('known', id);
+      let thumb = await db.get('thumbs', id);
+      let meta = await db.get('known', id);
       if (!meta || (!thumb && !meta.thumbAt)) meta = (await this.fetchMeta(id).catch(() => null)) ?? meta;
       if (!thumb && meta?.thumbAt) {
         thumb = await this.remote.downloadThumb(id).catch(() => undefined);
-        if (thumb) await this.db.put('thumbs', thumb, id);
+        if (thumb) await db.put('thumbs', thumb, id);
       }
       const kind = meta ? mediaKind(meta.mime) : null;
       if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
+      // Sin miniatura todavía (otro dispositivo la está subiendo, o no hay red): se vuelve a preguntar.
+      this.missing.add(id);
       return placeholderUrl(kind, meta?.name ?? 'Not available yet');
     } catch {
       return placeholderUrl(null, 'Not available on this device');
@@ -674,7 +837,7 @@ export class MediaQueue {
             fetchedAt: this.now(),
           };
           found.set(row.id, known);
-          await this.db.put('known', known);
+          await this.store.put('known', known);
         }
         return found;
       });
@@ -686,9 +849,10 @@ export class MediaQueue {
 
   /** El original (si está en el dispositivo), el tipo y el nombre, para el visor. */
   async source(id: string): Promise<MediaSource> {
-    const own = await this.db.get('files', id);
-    if (own) return { kind: mediaKind(own.mime), name: own.name, original: (await this.db.get('blobs', id)) ?? null };
-    const meta = (await this.db.get('known', id)) ?? (await this.fetchMeta(id).catch(() => null));
+    const db = this.store;
+    const own = await db.get('files', id);
+    if (own) return { kind: mediaKind(own.mime), name: own.name, original: (await db.get('blobs', id)) ?? null };
+    const meta = (await db.get('known', id)) ?? (await this.fetchMeta(id).catch(() => null));
     return { kind: meta ? mediaKind(meta.mime) : null, name: meta?.name ?? '', original: null };
   }
 
@@ -701,7 +865,7 @@ export class MediaQueue {
     const key = `thumb:${id}`;
     const cached = this.objectUrls.get(key);
     if (cached) return cached;
-    const thumb = await this.db.get('thumbs', id).catch(() => undefined);
+    const thumb = this.db ? await this.db.get('thumbs', id).catch(() => undefined) : undefined;
     return thumb ? this.keep(key, thumb) : null;
   }
 

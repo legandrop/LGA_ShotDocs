@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useAuth } from '../auth';
+import { consumeInviteArrival } from '../invite';
 import { buildWorkspace, createWorkspaceClient, WorkspaceContext, type ActiveWorkspace } from '../workspace';
 import { Login } from './Login';
 import { TooltipLayer } from './Tooltip';
@@ -20,6 +21,8 @@ function Screen() {
     const config = buildWorkspace();
     return config ? { config, client: createWorkspaceClient(config) } : null;
   }, []);
+  // Un link de invitación (`#invite=…`) se lee una vez, antes de entrar: guarda la página y sale de la dirección.
+  if (active) consumeInviteArrival(active.config);
 
   if (!active) {
     return (

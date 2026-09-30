@@ -163,7 +163,8 @@ export function clampZoom(z: Zoom, fit: Size, stage: Size): Zoom {
   if (scale <= 1.001) return NO_ZOOM;
   const maxX = Math.max(0, (fit.width * scale - stage.width) / 2);
   const maxY = Math.max(0, (fit.height * scale - stage.height) / 2);
-  return { scale, x: Math.min(maxX, Math.max(-maxX, z.x)), y: Math.min(maxY, Math.max(-maxY, z.y)) };
+  // `|| 0`: sin -0 (da lo mismo en pantalla, pero se compara más fácil).
+  return { scale, x: Math.min(maxX, Math.max(-maxX, z.x)) || 0, y: Math.min(maxY, Math.max(-maxY, z.y)) || 0 };
 }
 
 /** Cambia la escala dejando quieto el punto `at` (bajo el cursor o entre los dedos). */

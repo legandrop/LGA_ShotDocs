@@ -1,15 +1,26 @@
 import { useEffect, useState } from 'react';
 import type { AuthUser } from '../auth';
+import { clearInviteTarget, pendingInviteTarget, takeArrivalNotice } from '../invite';
 import { prefs } from '../prefs';
 import { navigate, pagePath, useRoute } from '../router';
-import { ServicesContext, useBootServices, useServices, useTree } from '../services';
+import {
+  ServicesContext,
+  useBootServices,
+  usePermissions,
+  useRemoved,
+  useServices,
+  useSyncStatus,
+  useTree,
+} from '../services';
 import { useWorkspace } from '../workspace';
 import { MenuIcon, MoreIcon, PlusIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
-import { useNotice } from './notice';
-import { lastPageOf, rememberPage, useCurrentProject } from './project';
+import { notify, useNotice } from './notice';
+import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
+import { RemovedScreen } from './RemovedScreen';
+import { ShareDialog, type ShareTarget } from './ShareDialog';
 import { MediaTest } from './MediaTest';
 import { focusTitle, PageView } from './PageView';
 import { Sidebar } from './Sidebar';
@@ -83,9 +94,39 @@ export function Workspace({ user }: { user: AuthUser }) {
   if (boot.state === 'empty') return <NoProjects user={user} onRetry={boot.retry} />;
   return (
     <ServicesContext.Provider value={boot.services}>
-      <Shell />
+      <Gate />
     </ServicesContext.Provider>
   );
+}
+
+/** Si la base dijo que sacaron a la persona del workspace, en vez de la app va la pantalla que lo explica. */
+function Gate() {
+  return useRemoved() ? <RemovedScreen /> : <Shell />;
+}
+
+/**
+ * Después de entrar con un link de invitación, abre la página o el proyecto del link apenas el árbol lo
+ * tiene. Si después de sincronizar no está (la invitación no daba acceso a eso), avisa y lo olvida.
+ */
+function useInviteTarget(): void {
+  const tree = useTree();
+  const status = useSyncStatus();
+  const switchTo = useSwitchProject();
+  const revision = tree.getRevision();
+  useEffect(() => {
+    const target = pendingInviteTarget();
+    if (!target) return;
+    if (tree.get(target)) {
+      clearInviteTarget();
+      navigate(pagePath(target));
+    } else if (tree.project(target) && status.lastSyncAt !== null) {
+      clearInviteTarget();
+      switchTo(target);
+    } else if (status.lastSyncAt !== null) {
+      clearInviteTarget();
+      notify('The shared page is not available to this account yet. Ask the person who invited you.');
+    }
+  }, [tree, revision, status.lastSyncAt, switchTo]);
 }
 
 function Shell() {
@@ -97,7 +138,15 @@ function Shell() {
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [formatting, setFormatting] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<ShareTarget | null>(null);
   const [notice, dismissNotice] = useNotice();
+  const perms = usePermissions();
+  useInviteTarget();
+  // Un link de otro workspace abierto con la sesión ya iniciada: el aviso va acá.
+  useEffect(() => {
+    const message = takeArrivalNotice();
+    if (message) notify(message);
+  }, []);
 
   // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación.
   useEffect(() => {
@@ -201,6 +250,7 @@ function Shell() {
           onRename={focusTitle}
           onMove={() => setMoving(pageId)}
           onFormat={() => setFormatting(pageId)}
+          onShare={perms.canSharePage(pageId) ? () => setSharing({ pageId }) : undefined}
           onTrash={async () => {
             // Primero se manda a la papelera y después se sale: si no, el inicio vuelve a la última página.
             await tree.trash(pageId);
@@ -210,6 +260,7 @@ function Shell() {
       )}
       {moving && <MoveDialog pageId={moving} onClose={() => setMoving(null)} />}
       {formatting && <PageFormatDialog pageId={formatting} onClose={() => setFormatting(null)} />}
+      {sharing && <ShareDialog target={sharing} onClose={() => setSharing(null)} />}
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
@@ -224,17 +275,24 @@ function Shell() {
 
 function Home() {
   const tree = useTree();
+  const perms = usePermissions();
   const projectId = useCurrentProject();
   const name = tree.project(projectId)?.name ?? 'This project';
   const empty = tree.roots(projectId).length === 0;
+  const canCreate = perms.canCreateIn(null, projectId);
   return (
     <article className="page narrow home">
       <h1 className="page-heading">{empty ? `${name} is empty` : name}</h1>
       <p className="muted">
-        {empty
-          ? 'Create your first page: a show, a scene or a shoot day. Every page can hold other pages.'
-          : 'Open a page from the sidebar or create a new one.'}
+        {!canCreate
+          ? empty
+            ? 'Nothing here is shared with you yet.'
+            : 'Open a page from the sidebar.'
+          : empty
+            ? 'Create your first page: a show, a scene or a shoot day. Every page can hold other pages.'
+            : 'Open a page from the sidebar or create a new one.'}
       </p>
+      {canCreate && (
       <button
         className="primary"
         onClick={async () => {
@@ -244,6 +302,7 @@ function Home() {
       >
         <PlusIcon size={16} /> New page
       </button>
+      )}
     </article>
   );
 }

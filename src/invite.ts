@@ -82,6 +82,17 @@ export function consumeInviteArrival(ws: WorkspaceConfig): InviteArrival | null 
   return arrival;
 }
 
+export const OTHER_WORKSPACE_NOTICE = 'Joining other workspaces is coming soon.';
+
+let noticeShown = false;
+
+/** El aviso de un link de otro workspace (llega en el paso 12), una sola vez. */
+export function takeArrivalNotice(): string | null {
+  if (noticeShown || arrival?.kind !== 'other') return null;
+  noticeShown = true;
+  return OTHER_WORKSPACE_NOTICE;
+}
+
 /** La página o el proyecto del link, para abrirlo después de entrar (sobrevive al link del correo). */
 export function rememberInviteTarget(id: string): void {
   try {

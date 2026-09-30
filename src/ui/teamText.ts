@@ -17,6 +17,8 @@ const MESSAGES: Record<string, string> = {
   page_move_denied: 'You cannot move this page there: it needs “Edit & create pages” on the page and on where it goes.',
   page_trash_denied: 'You cannot move this page to the trash or back: it needs “Edit & create pages”.',
   page_edit_denied: 'You cannot edit this page: it needs “Edit”.',
+  page_not_found: 'The page is not there anymore, or you cannot edit it (it needs “Edit”).',
+  project_not_found: 'The project is not there anymore, or you cannot rename it (it needs “Edit & create pages”).',
 };
 
 /** El error de una función del equipo, para mostrarlo en el diálogo. */

@@ -134,7 +134,9 @@ describe('carrete: zoom', () => {
 
   it('la foto entra entera en el escenario', () => {
     expect(fit).toEqual({ width: 400, height: 300 });
-    expect(fitSize({ width: 1080, height: 1920 }, stage)).toEqual({ width: 450 * (400 / 450), height: 800 });
+    const vertical = fitSize({ width: 1080, height: 1920 }, stage);
+    expect(vertical.width).toBe(400);
+    expect(vertical.height).toBeCloseTo(711.11);
     expect(fitSize({ width: 0, height: 0 }, stage)).toEqual({ width: 0, height: 0 });
   });
 
@@ -144,7 +146,8 @@ describe('carrete: zoom', () => {
     expect(z.scale).toBe(2);
     // El punto de la foto que estaba en `at` (100, 50 desde el centro) sigue ahí: x + s·c = at.
     expect(z.x + 2 * 100).toBeCloseTo(100);
-    expect(z.y + 2 * 50).toBeCloseTo(50);
+    // De alto, ampliada (600) todavía entra en el escenario (800): queda centrada.
+    expect(z.y).toBe(0);
     expect(isZoomed(z)).toBe(true);
   });
 

@@ -74,6 +74,10 @@ export class FakeServer {
   readonly loseMediaResponse = new Set<string>();
   /** Cuánto adelantar el reloj de la cola de archivos (para no esperar de verdad entre reintentos). */
   clockOffset = 0;
+  /** El bucket `thumbs` rechaza las miniaturas para siempre (por ejemplo, por tamaño). */
+  rejectThumbs = false;
+  /** La base de archivos del dispositivo no se puede abrir (los dispositivos nuevos arrancan sin ella). */
+  mediaDbFails = false;
 
   /** Pierde la respuesta de una función de archivos si se pidió. */
   lostMediaResponse(name: string): void {
@@ -220,6 +224,8 @@ interface FakeUpload {
   data: Uint8Array;
   received: number;
   done?: { id: string; name: string; mimeType: string; size: number };
+  /** Subida de un portero anterior al paso 6 (ver `FakePortero.legacy`). */
+  legacy?: boolean;
 }
 
 /**
@@ -238,6 +244,13 @@ export class FakePortero {
   failLink = false;
   /** Responde 403 a las subidas, como si la persona no pudiera editar la página. */
   forbid = false;
+  /**
+   * Un portero anterior al paso 6: ignora `file`, sube igual, responde `done` sin `linked` y no le avisa a
+   * la base.
+   */
+  legacy = false;
+  /** Responde `linked: true` pero la base no quedó con el id de Drive. */
+  lieLinked = false;
   private parts = 0;
   private next = 1;
 
@@ -252,6 +265,12 @@ export class FakePortero {
     this.calls.push({ method, path: url.pathname, range, body });
     if (!this.server.online) throw new TypeError('Failed to fetch');
 
+    if (method === 'POST' && url.pathname === '/upload' && this.legacy) {
+      const uploadId = `up-${this.next++}`;
+      const size = Number(body?.size);
+      this.uploads.set(uploadId, { file: String(body?.file ?? ''), size, data: new Uint8Array(size), received: 0, legacy: true });
+      return json({ uploadId });
+    }
     if (method === 'POST' && url.pathname === '/upload') {
       const id = String(body?.file ?? '');
       const media = this.server.mediaFiles.get(id);
@@ -276,6 +295,7 @@ export class FakePortero {
     if (method === 'PUT' && uploadId) {
       const up = this.uploads.get(uploadId);
       if (!up) return json({ error: 'This upload does not exist anymore: start it again.' }, 404);
+      if (up.done && up.legacy) return json({ status: 'done', file: up.done });
       if (up.done) return json({ status: 'done', file: up.done, linked: this.link(up.file, up.done.id) });
       const part = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(range ?? '');
       if (part && init.body instanceof Blob) {
@@ -291,6 +311,11 @@ export class FakePortero {
         const media = this.server.mediaFiles.get(up.file)!;
         const driveId = `drive-${up.file.slice(0, 8)}-${this.drive.size + 1}`;
         up.done = { id: driveId, name: media.name, mimeType: media.mime, size: up.size };
+        if (up.legacy) {
+          // A `Media_Test`, sin la marca del archivo ni aviso a la base.
+          this.drive.set(driveId, { file: '', data: up.data, folder: 'LGA_ShotDocs/Media_Test', name: media.name });
+          return json({ status: 'done', file: up.done });
+        }
         this.drive.set(driveId, { file: up.file, data: up.data, folder: `LGA_ShotDocs/${this.server.projects.get(media.project_id)?.name}`, name: media.name });
         return json({ status: 'done', file: up.done, linked: this.link(up.file, driveId) });
       }
@@ -308,6 +333,7 @@ export class FakePortero {
   /** `set_file_drive`, como lo llama el portero. */
   private link(file: string, driveId: string): boolean {
     if (this.failLink) return false;
+    if (this.lieLinked) return true;
     const media = this.server.mediaFiles.get(file);
     if (media && !media.drive_id) media.drive_id = driveId;
     return true;
@@ -719,6 +745,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote {
     this.server.check();
     this.server.mediaCalls.push(`thumb ${fileId}`);
     if (!this.server.mediaFiles.has(fileId)) throw new RemoteError('new row violates row-level security policy', true, '42501');
+    if (this.server.rejectThumbs) throw new RemoteError('The object exceeded the maximum allowed size', true);
     // Sin upsert: si ya existe, está hecho.
     if (!this.server.thumbs.has(fileId)) this.server.thumbs.set(fileId, data);
     this.server.lostMediaResponse('thumb');
@@ -799,7 +826,7 @@ export async function makeDevice(
   const docs = new PageDocs(db, { normalize: mergeRootGroups, seed: seedIfEmpty, ...docsOptions });
   const files = new PageFiles(db, remote);
   const mediaDb = await openMediaDb(mediaDbName(dbName));
-  const media = new MediaQueue(mediaDb, remote, {
+  const media = new MediaQueue(server.mediaDbFails ? null : mediaDb, remote, {
     portero: (url) => new Portero(url, { fetch: server.portero.fetch, token: async () => 'token-1', wait: async () => undefined }),
     projectOf: (pageId) => tree.get(pageId)?.workspace_id,
     probe: fakeProbe,

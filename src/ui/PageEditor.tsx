@@ -15,7 +15,7 @@ import {
 } from '@blocknote/react';
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
-import { useServices, useSyncStatus } from '../services';
+import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, mediaIdOf } from '../media/queue';
 import { Carrete } from './Carrete';
@@ -46,6 +46,11 @@ type Opening =
 export function PageEditor({ pageId }: { pageId: string }) {
   const { docs, engine } = useServices();
   const status = useSyncStatus();
+  // Sin "Edit" (nivel 3) la página se abre en solo lectura (paso 9): el servidor rechazaría lo escrito.
+  const perms = usePermissions();
+  const canEdit = perms.canEditPage(pageId);
+  const canEditRef = useRef(canEdit);
+  canEditRef.current = canEdit;
   const [opening, setOpening] = useState<Opening>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const incomplete = opening.state === 'ready' && !opening.complete;
@@ -58,7 +63,8 @@ export function PageEditor({ pageId }: { pageId: string }) {
     let opened = false;
     void engine.prefetchPage(pageId).then(async (complete) => {
       if (cancelled) return;
-      const doc = await docs.open(pageId, { seed: complete });
+      // La estructura inicial es un cambio: en solo lectura no se pone.
+      const doc = await docs.open(pageId, { seed: complete && canEditRef.current });
       opened = true;
       if (cancelled) return docs.close(pageId);
       const unknown = findUnknownContent(doc);
@@ -105,7 +111,15 @@ export function PageEditor({ pageId }: { pageId: string }) {
             : 'Part of this page has not been downloaded to this device yet. You can read what is here; connect to the internet to edit it.'}
         </p>
       )}
-      <BlockEditor key={`${pageId}:${opening.complete}`} doc={opening.doc} pageId={pageId} editable={opening.complete} />
+      {!canEdit && perms.known && (
+        <p className="muted editor-missing">You can view this page. Ask for edit access to change it.</p>
+      )}
+      <BlockEditor
+        key={`${pageId}:${opening.complete}:${canEdit}`}
+        doc={opening.doc}
+        pageId={pageId}
+        editable={opening.complete && canEdit}
+      />
     </>
   );
 }
@@ -280,14 +294,18 @@ function BlockEditor({ doc, pageId, editable }: { doc: Y.Doc; pageId: string; ed
   };
 
   // El carrete (paso 7): un clic o un toque en una foto o un video abre todas las de la página, empezando
-  // por esa. El editor igual elige el bloque debajo (no se corta el evento), así que al cerrar la foto
-  // queda elegida con su barra (reemplazar, leyenda, nombre, bajar, borrar). Los tiradores para cambiar el
-  // tamaño y el de arrastrar el bloque son otros elementos: nunca abren el carrete. En una página que se
-  // puede editar, tocar una foto que ya estaba elegida no abre el carrete: es para editarla (en el
-  // teléfono, al cerrar el carrete el foco no vuelve al editor, para que no se abra el teclado).
+  // por esa (Docs/Doc_Carrete.md). El editor igual elige el bloque debajo (el evento no se corta): al
+  // cerrar con Escape o el mouse, el foco vuelve al editor y la foto queda elegida con su barra (reemplazar,
+  // leyenda, nombre, bajar, borrar). Los tiradores para cambiar el tamaño y el de arrastrar el bloque son
+  // otros elementos: nunca abren el carrete. Con el dedo, al cerrar el foco no vuelve al editor (abriría
+  // el teclado); para editar, se toca otra vez la foto, que quedó elegida: ese toque no abre el carrete.
   const notePress = (e: PointerEvent) => {
     const target = e.target as HTMLElement;
-    pressedSelected.current = editable && !!target.closest?.('img.bn-visual-media') && !!target.closest('.ProseMirror-selectednode');
+    pressedSelected.current =
+      editable &&
+      e.pointerType !== 'mouse' &&
+      !!target.closest?.('img.bn-visual-media') &&
+      !!target.closest('.ProseMirror-selectednode');
   };
 
   const openCarrete = (e: MouseEvent) => {

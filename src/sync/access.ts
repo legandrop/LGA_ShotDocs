@@ -1,5 +1,7 @@
 import type { LocalDb } from './localDb';
+import type { Remote } from './remote';
 import type { PageTree } from './tree';
+import { errorMessage, isNetworkError } from './types';
 
 // Permisos en el dispositivo (paso 9 de Docs/Plan_Workspaces.md). La base decide de verdad (políticas y
 // trigger `pages_permissions` de supabase/migrations/20260930160000_equipo.sql); la app hace la misma
@@ -296,5 +298,19 @@ export class Permissions {
   /** Invitar gente nueva (con `create_invitation`): dueño y admins. */
   get canInvite(): boolean {
     return this.role === 'owner' || this.role === 'admin';
+  }
+}
+
+/**
+ * Aplica las invitaciones del correo de la sesión (`accept_invitations`). Nunca corta la entrada: sin red,
+ * con una base que todavía no tiene la función o con cualquier error, sigue como si no hubiera ninguna.
+ * Devuelve cuántas aplicó.
+ */
+export async function acceptInvitationsQuietly(remote: Pick<Remote, 'acceptInvitations'>): Promise<number> {
+  try {
+    return (await remote.acceptInvitations()) ?? 0;
+  } catch (err) {
+    if (!isNetworkError(err)) console.warn('accept_invitations:', errorMessage(err));
+    return 0;
   }
 }

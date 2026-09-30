@@ -1,10 +1,11 @@
 import { navigate, pagePath } from '../router';
-import { useTree } from '../services';
+import { usePermissions, useTree } from '../services';
 import { RestoreIcon } from './icons';
 import { useCurrentProject } from './project';
 
 export function TrashView() {
   const tree = useTree();
+  const perms = usePermissions();
   const items = tree.trashed(useCurrentProject());
   return (
     <article className="page narrow">
@@ -23,9 +24,11 @@ export function TrashView() {
                 {p.title || 'Untitled'}
               </button>
               <span className="when">{new Date(p.deleted_at!).toLocaleString()}</span>
-              <button onClick={() => void tree.restore(p.id)}>
-                <RestoreIcon size={16} /> Restore
-              </button>
+              {perms.canManagePage(p.id) && (
+                <button onClick={() => void tree.restore(p.id)}>
+                  <RestoreIcon size={16} /> Restore
+                </button>
+              )}
             </li>
           ))}
         </ul>

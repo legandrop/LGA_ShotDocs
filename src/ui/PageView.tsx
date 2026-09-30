@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
-import { useSyncStatus, useTree } from '../services';
+import { usePermissions, useSyncStatus, useTree } from '../services';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { PageEditor } from './PageEditor';
 import { useFloating } from './menus';
@@ -18,6 +18,7 @@ export function focusTitle(): void {
 export function PageView({ id }: { id: string }) {
   const tree = useTree();
   const status = useSyncStatus();
+  const perms = usePermissions();
   const page = tree.get(id);
 
   useEffect(() => {
@@ -56,19 +57,21 @@ export function PageView({ id }: { id: string }) {
           {trashedAt.id === id
             ? 'This page is in the trash.'
             : `This page is inside “${trashedAt.title || 'Untitled'}”, which is in the trash.`}
-          <button className="link" onClick={() => void tree.restore(trashedAt.id)}>
-            {trashedAt.id === id ? 'Restore' : `Restore “${trashedAt.title || 'Untitled'}”`}
-          </button>
+          {perms.canManagePage(trashedAt.id) && (
+            <button className="link" onClick={() => void tree.restore(trashedAt.id)}>
+              {trashedAt.id === id ? 'Restore' : `Restore “${trashedAt.title || 'Untitled'}”`}
+            </button>
+          )}
         </div>
       )}
-      <PageHeader id={id} />
-      <TitleInput id={id} title={page.title} />
+      <PageHeader id={id} editable={perms.canEditPage(id)} />
+      <TitleInput id={id} title={page.title} readOnly={!perms.canEditPage(id)} />
       <PageEditor pageId={id} />
     </article>
   );
 }
 
-function TitleInput({ id, title }: { id: string; title: string }) {
+function TitleInput({ id, title, readOnly }: { id: string; title: string; readOnly: boolean }) {
   const tree = useTree();
   const [value, setValue] = useState(title);
   const focused = useRef(false);
@@ -149,10 +152,11 @@ function TitleInput({ id, title }: { id: string; title: string }) {
       value={value}
       placeholder="Untitled"
       aria-label="Title"
+      readOnly={readOnly}
       onFocus={() => (focused.current = true)}
       onBlur={() => {
         focused.current = false;
-        commit(value);
+        if (!readOnly) commit(value);
       }}
       onChange={(e) => {
         setValue(e.target.value);
@@ -163,6 +167,7 @@ function TitleInput({ id, title }: { id: string; title: string }) {
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
+          if (readOnly) return;
           commit(value);
           window.dispatchEvent(new Event('shotdocs:focus-editor'));
         }
@@ -182,7 +187,7 @@ const LEVEL_CHOICES: { value: number | null; label: string }[] = [
  * Encabezado arriba del título con las páginas que contienen a esta ("MGTZD | Brief · Uruguay"). Cuántos
  * niveles muestra, o si se oculta, se guarda en una página y vale para todas las de adentro.
  */
-function PageHeader({ id }: { id: string }) {
+function PageHeader({ id, editable }: { id: string; editable: boolean }) {
   const tree = useTree();
   const [open, setOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
@@ -209,6 +214,7 @@ function PageHeader({ id }: { id: string }) {
           </button>
         </span>
       ))}
+      {editable && (
       <button
         ref={toggle}
         className={`header-toggle${pages.length ? '' : ' labelled'}`}
@@ -225,7 +231,8 @@ function PageHeader({ id }: { id: string }) {
           </>
         )}
       </button>
-      {open && <HeaderOptions id={id} anchor={toggle.current} onClose={() => setOpen(false)} />}
+      )}
+      {open && editable && <HeaderOptions id={id} anchor={toggle.current} onClose={() => setOpen(false)} />}
     </div>
   );
 }
