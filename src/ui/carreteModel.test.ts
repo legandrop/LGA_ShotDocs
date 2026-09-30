@@ -24,7 +24,7 @@ import {
   zoomAt,
   type BlockLike,
   type Zoom,
-} from './carrete';
+} from './carreteModel';
 import { noticeFor } from './Carrete';
 
 // La lógica del carrete (paso 7): qué fotos y videos tiene la página y en qué orden, la navegación, el

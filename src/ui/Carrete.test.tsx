@@ -6,7 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PorteroError } from '../media/portero';
 import type { MediaKind } from '../media/probe';
 import { Carrete } from './Carrete';
-import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carrete';
+import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carreteModel';
 import { originalFor, startDownload, type CarreteLoader, type Full } from './carreteLoader';
 import { schema } from './editorSchema';
 

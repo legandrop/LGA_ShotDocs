@@ -2,7 +2,7 @@ import type { BlockNoteEditor } from '@blocknote/core';
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/editor';
-import { blockIdOf } from './carrete';
+import { blockIdOf } from './carreteModel';
 import { hiddenInDom } from './collapseDom';
 import { COLLAPSE_SHORTCUT_LABEL, collapseState, onCollapseChange, toggleCollapsed } from './collapseEditor';
 

@@ -5,10 +5,10 @@ El carrete es el visor a pantalla completa de las fotos y los videos de una pág
 **todas** las de esa página, en el orden en que aparecen, empezando por la tocada. Pensado primero para
 el teléfono.
 
-El código está en `src/ui/`: `carrete.ts` (la lógica, sin pantalla: qué elementos hay y en qué orden, la
+El código está en `src/ui/`: `carreteModel.ts` (la lógica, sin pantalla: qué elementos hay y en qué orden, la
 navegación, el zoom y los gestos), `carreteLoader.ts` (de dónde sale cada foto o video) y `Carrete.tsx`
 (la pantalla); en el editor, `PageEditor.tsx` (cómo se abre) y `MediaToolbarButtons.tsx` (*View* y
-*Download* en la barra de la imagen). Las pruebas: `carrete.test.ts`, `carreteLoader.test.ts` (con la
+*Download* en la barra de la imagen). Las pruebas: `carreteModel.test.ts`, `carreteLoader.test.ts` (con la
 cola de archivos de verdad y el servidor en memoria) y `Carrete.test.tsx` (la pantalla en jsdom, más la
 foto tocada en un editor real).
 
