@@ -44,6 +44,11 @@ describe('buscar en la ayuda', () => {
     expect(ids('shift clic', 'es')).toContain('photosInline');
     expect(ids('ctrl v')[0]).toBe('photosAdd');
     expect(ids('look for its files again')).toContain('projectsDrive');
+    // Colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2).
+    expect(ids('shift')).toContain('collapseEveryone');
+    expect(ids('para todos', 'es')).toContain('collapseEveryone');
+    expect(ids('ctrl alt shift enter')[0]).toBe('collapseEveryone');
+    expect(ids('mover sección', 'es')).toContain('collapseMove');
   });
 
   it('nada escrito, nada; algo que no está, ninguna', () => {
@@ -167,8 +172,9 @@ describe('el diálogo de la ayuda', () => {
     expect(d.querySelector('[data-help-id="tour"] .help-action')?.textContent).toBe('Take the tour');
     expect(d.querySelector('[data-help-id="practice"] .help-action')?.textContent).toBe('Practice');
     expect(d.querySelector('[data-shortcut="find"] kbd')?.textContent).toBe('Ctrl+F');
-    // Lo que hoy hace lo mismo que otro atajo no se muestra (Shift+Ctrl+Alt+Enter).
-    expect(d.querySelector('[data-shortcut="collapseEveryone"]')).toBeNull();
+    // Colapsar para todos (Doc_Colapsar.md, entrega 2): en la tabla, con su atajo.
+    expect(d.querySelector('[data-shortcut="collapseEveryone"] kbd')?.textContent).toBe('Ctrl+Alt+Shift+Enter');
+    expect(d.querySelector('[data-help-id="collapseEveryone"]')).not.toBeNull();
     // El foco entró al campo de buscar.
     expect(document.activeElement).toBe(d.querySelector('input[type="search"]'));
     press({ key: 'Escape' }, document.activeElement!);

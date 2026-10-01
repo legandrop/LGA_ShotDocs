@@ -59,6 +59,7 @@ describe('el registro', () => {
     expect(both('comment')).toEqual(['⌘⌥M', 'Ctrl+Alt+M']);
     expect(both('question')).toEqual(['⌘⌥P', 'Ctrl+Alt+P']);
     expect(both('collapse')).toEqual(['⌘⌥↩', 'Ctrl+Alt+Enter']);
+    expect(both('collapseEveryone')).toEqual(['⌘⌥⇧↩', 'Ctrl+Alt+Shift+Enter']);
     expect(both('commentsSend')).toEqual(['⌘↩', 'Ctrl+Enter']);
     expect(both('heading')).toEqual(['⌘⌥1…6', 'Ctrl+Alt+1…6']);
     expect(both('redo')).toEqual(['⌘⇧Z / ⌘Y', 'Ctrl+Shift+Z / Ctrl+Y']);

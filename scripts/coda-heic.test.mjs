@@ -463,6 +463,34 @@ describe('fotos HEIC: el perfil de color pasa al JPEG', () => {
     expect(heicColorProfile(Buffer.concat([gray, box('colr', Buffer.concat([Buffer.from('prof'), icc]))]))).toEqual(icc)
   })
 
+  it('el de la imagen principal (pitm → ipma → ipco), no el primero que aparece; solo nclx Display P3, uno estándar', () => {
+    const fullBox = (type, body) => box(type, Buffer.concat([Buffer.alloc(4), body]))
+    const u16 = (n) => Buffer.from([(n >> 8) & 0xff, n & 0xff])
+    // `assoc`: qué propiedades (números desde 1, en el orden de `props`) tiene cada imagen.
+    const heif = (primary, props, assoc) => {
+      const entries = Object.entries(assoc).map(([item, list]) => Buffer.concat([u16(Number(item)), Buffer.from([list.length, ...list.map((i) => i | 0x80)])]))
+      const count = Buffer.alloc(4)
+      count.writeUInt32BE(entries.length)
+      const iprp = box('iprp', Buffer.concat([box('ipco', Buffer.concat(props)), fullBox('ipma', Buffer.concat([count, ...entries]))]))
+      return Buffer.concat([box('ftyp', Buffer.from('heic')), fullBox('meta', Buffer.concat([fullBox('pitm', u16(primary)), iprp])), box('mdat', Buffer.from('datos'))])
+    }
+    const prof = (icc) => box('colr', Buffer.concat([Buffer.from('prof'), icc]))
+    const aux = profile(200)
+    aux[100] = 1
+    const photo = profile(300)
+    // La imagen 2 (un mapa) tiene su perfil primero; la foto es la 1.
+    const got = heicColorProfile(heif(1, [prof(aux), prof(photo)], { 2: [1], 1: [2] }))
+    expect(Buffer.isBuffer(got)).toBe(true)
+    expect(got).toEqual(photo)
+    // Solo nclx Display P3 (12, curva sRGB): un perfil Display P3 de verdad (ICC v4, de pantalla).
+    const nclx = box('colr', Buffer.concat([Buffer.from('nclx'), Buffer.from([0, 12, 0, 13, 0, 6, 0x80])]))
+    const p3 = heicColorProfile(heif(1, [nclx], { 1: [1] }))
+    expect(p3.readUInt32BE(0)).toBe(p3.length)
+    expect([p3.toString('latin1', 12, 16), p3.toString('latin1', 36, 40)]).toEqual(['mntr', 'acsp'])
+    // Se llama así (en UTF-16 de orden grande, como pide el ICC).
+    expect(p3.includes(Buffer.from('Display P3', 'utf16le').swap16())).toBe(true)
+  })
+
   it('va en un segmento APP2 después de la cabecera JFIF; uno grande, en varios numerados', () => {
     const icc = profile(200)
     const out = jpegWithProfile(jfif, icc)

@@ -253,8 +253,18 @@ export const help = {
   // --- Colapsar ---
   'help.collapse.title': { en: "Collapse a section", es: "Colapsar una sección" },
   'help.collapse.text': {
-    en: "Every heading has a triangle: click it to hide what's under it, just for you (saved on this device). {collapse} does it from the keyboard; the ⋯ menu collapses or expands them all.",
-    es: "Cada título tiene un triángulo: un clic esconde lo que tiene abajo, solo para vos (queda guardado en este dispositivo). {collapse} lo hace con el teclado; el menú ⋯ colapsa o abre todos.",
+    en: "Every heading has a triangle: click it to hide what's under it, up to the next heading of its level, just for you (saved on this device). {collapse} does it from the keyboard; the ⋯ menu collapses or expands them all. The triangle's tooltip says whether it's collapsed for everyone or just for you.",
+    es: "Cada título tiene un triángulo: un clic esconde lo que tiene abajo, hasta el próximo título de su nivel, solo para vos (queda guardado en este dispositivo). {collapse} lo hace con el teclado; el menú ⋯ colapsa o abre todos. El tooltip del triángulo dice si está colapsado para todos o solo para vos.",
+  },
+  'help.collapseEveryone.title': { en: "Collapse for everyone", es: "Colapsar para todos" },
+  'help.collapseEveryone.text': {
+    en: "Shift+click on the triangle (or {everyone}) collapses or expands the section for everyone who views the page, if you can edit it. A plain click still changes it just for you, and what you set for yourself stays even if someone changes it for everyone. On the phone, a tap is always just for you.",
+    es: "Shift+clic en el triángulo (o {everyone}) colapsa o abre la sección para todos los que miran la página, si podés editarla. Un clic sin Shift la sigue cambiando solo para vos, y lo tuyo se mantiene aunque otro la cambie para todos. En el teléfono, un toque es siempre solo para vos.",
+  },
+  'help.collapseMove.title': { en: "Move a collapsed section", es: "Mover una sección colapsada" },
+  'help.collapseMove.text': {
+    en: "Dragging the dots of a collapsed heading, or {up} / {down}, moves its whole section, and what was hidden stays hidden. With {up} / {down}, any other block jumps over a collapsed section as if it were a single block. Undo puts it back in one step.",
+    es: "Arrastrar los puntos de un título colapsado, o {up} / {down}, mueve su sección entera, y lo escondido sigue escondido. Con {up} / {down}, cualquier otro bloque salta una sección colapsada como si fuera uno solo. Deshacer la vuelve en un solo paso.",
   },
   'help.collapsePrint.title': { en: "Print as shown", es: "Imprimir como se ve" },
   'help.collapsePrint.text': {
@@ -348,6 +358,10 @@ export const help = {
   },
   'shortcut.paragraph': { en: "Normal text", es: "Texto común" },
   'shortcut.collapse': { en: "Collapse or expand the heading's section", es: "Colapsar o abrir la sección del título" },
+  'shortcut.collapseEveryone': {
+    en: "Collapse or expand the heading's section for everyone (if you can edit the page; Shift+click on the triangle too)",
+    es: "Colapsar o abrir la sección del título para todos (si podés editar la página; también Shift+clic en el triángulo)",
+  },
   'shortcut.selectAll': {
     en: "Select the whole page (collapsed sections too)",
     es: "Elegir la página entera (también lo colapsado)",
@@ -362,8 +376,8 @@ export const help = {
   'shortcut.redo': { en: "Redo", es: "Rehacer" },
   'shortcut.indent': { en: "Nest the block (in a table, next cell)", es: "Meter el bloque un nivel (en una tabla, la celda siguiente)" },
   'shortcut.outdent': { en: "Un-nest the block (in a table, previous cell)", es: "Sacar el bloque un nivel (en una tabla, la celda anterior)" },
-  'shortcut.moveUp': { en: "Move the block up", es: "Subir el bloque" },
-  'shortcut.moveDown': { en: "Move the block down", es: "Bajar el bloque" },
+  'shortcut.moveUp': { en: "Move the block up (a collapsed heading takes its whole section)", es: "Subir el bloque (un título colapsado lleva su sección entera)" },
+  'shortcut.moveDown': { en: "Move the block down (a collapsed heading takes its whole section)", es: "Bajar el bloque (un título colapsado lleva su sección entera)" },
   'shortcut.lineBreak': { en: "Line break inside the block", es: "Salto de renglón dentro del bloque" },
   'shortcut.link': { en: "With text selected: link", es: "Con texto elegido: link" },
   'shortcut.bold': { en: "Bold", es: "Negrita" },

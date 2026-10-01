@@ -200,4 +200,38 @@ describe('la misma base con la versión publicada', () => {
     expect(await a.docs.unsyncedPages()).toEqual([pageId]);
     a.docs.close(pageId);
   });
+
+  it('lo colapsado para todos (un mapa aparte en el documento de la página) pasa intacto por la versión publicada', async () => {
+    // Colapsar para todos (Docs/Doc_Colapsar.md §4): la versión publicada no conoce el mapa, pero lo baja, lo
+    // conserva al editar y lo vuelve a subir con el estado entero; un dispositivo nuevo lo ve.
+    const server = new FakeServer();
+    const dbName = crypto.randomUUID();
+    const a = await device(server, dbName);
+    const pageId = await a.tree.create(null, 'P');
+    await a.engine.syncNow();
+    const doc = await a.docs.open(pageId);
+    doc.getText('t').insert(0, 'texto');
+    doc.transact(() => doc.getMap('collapsedHeadings').set('h1', true), Symbol('shared-collapse'));
+    await a.docs.flush(pageId);
+    await a.engine.syncNow();
+    a.docs.close(pageId);
+    a.engine.stop();
+    a.db.close();
+
+    const old = await openPublished(server, crypto.randomUUID());
+    await publishedSync(old, [pageId]);
+    const oldDoc = await old.docs.open(pageId);
+    oldDoc.getText('t').insert(oldDoc.getText('t').length, ' viejo');
+    await old.docs.flush(pageId);
+    old.docs.close(pageId);
+    await publishedSync(old, [pageId]);
+    old.db.close();
+
+    const b = await device(server);
+    await b.engine.syncNow();
+    const fresh = await b.docs.open(pageId);
+    expect(fresh.getText('t').toString()).toBe('texto viejo');
+    expect(fresh.getMap('collapsedHeadings').toJSON()).toEqual({ h1: true });
+    b.docs.close(pageId);
+  });
 });

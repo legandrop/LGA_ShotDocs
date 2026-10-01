@@ -194,6 +194,17 @@ export interface MediaFileRow {
   project_id?: string | null;
 }
 
+/**
+ * Un uso de un archivo que el servidor ya tiene (una fila de `page_files` que la sesión ve). `removed_at` e
+ * `is_foreign` son de la versión 6 de la base; en una anterior faltan (todo uso está activo y es propio).
+ */
+export interface PageUseRow {
+  page_id: string;
+  file_id: string;
+  removed_at?: string | null;
+  is_foreign?: boolean;
+}
+
 /** Una fila de `trashed_files`: un archivo en la papelera que todavía no llegó a la papelera de Drive. */
 export interface TrashedFileRow {
   id: string;
