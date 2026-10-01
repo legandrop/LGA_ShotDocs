@@ -202,7 +202,7 @@ y no sube `DB_SCHEMA_VERSION`: con la base sin migrar, eso no se muestra y no ha
    azar con cierres de golpe en cualquier microtarea, subidas en vuelo, compactación, restauraciones y la
    versión publicada sobre la misma base; `LOCAL_SAVE_SEEDS` y `LOCAL_SAVE_STEPS` para correr más).
 8. **Compactación local.** Con más de 64 updates guardados, al abrir la página se fusionan en uno solo, en la
-   misma transacción. En el servidor no se compacta todavía.
+   misma transacción. En el servidor no se compacta todavía (diseño en `Doc_Compactar.md`).
 
 ## Árbol de páginas
 

@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.082 :
+
+Diseño de compactar el contenido en el servidor, sin código (roadmap B.9). Un dispositivo nuevo baja todas las
+filas de `page_updates` de cada página, y cada subida repite todos los borrados: medido en una simulación, a las
+5000 subidas una página pesa 15 MB y tarda 86 s en bajar en un teléfono. `Doc_Compactar.md` propone un snapshot
+por página (`Y.mergeUpdates` de las filas, sin perder nada) que arma y comprueba un dispositivo con permiso de
+edición, que la base sirve solo confirmado y válido, y que nunca reemplaza a `page_updates`: las versiones viejas
+siguen bajando filas. Incluye la migración en borrador, las pruebas, tres entregas y las preguntas para Lega.
+[ Docs - diseño de compactar el contenido en el servidor ]
+
 v0.081 :
 
 Soltar una carpeta en la página se rechazaba pidiendo comprimirla. Ahora una ventana muestra qué se sube

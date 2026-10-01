@@ -297,7 +297,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    castellano), la guía para crear un workspace y los mensajes que manda el portero. **Falta:** el correo con el código (su plantilla está en `supabase/`), la guía en
    castellano y las plantillas, que todavía no existen (fase 3), con su nombre en cada idioma.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
-   datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes.
+   datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes. **Diseño en
+   `Doc_Compactar.md`** (sin implementar): snapshot = `Y.mergeUpdates` de las filas, lo arma y lo comprueba un
+   dispositivo con permiso de edición, la base lo sirve solo confirmado y válido, `page_updates` no pierde nunca una
+   fila y las versiones viejas bajan filas como hoy. Hoy ninguna página lo necesita (la que más tiene: 63 updates);
+   medido en una simulación, a las 5000 subidas baja de 86 s a 1,3 s en un teléfono. Tres entregas y tres preguntas
+   para Lega. **Encontrado al medir:** cada subida repite todos los borrados de la página (el 96 % de los bytes de
+   `page_updates` en la simulación); arreglarlo es un ítem aparte (pregunta 3 del diseño).
 
 10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la
