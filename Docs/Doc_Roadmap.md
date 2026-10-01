@@ -62,8 +62,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   barra, fotos seguidas que entran quedan en una fila, tiradores que imantan a esos tamaños, flechas y Enter
   en una fila, paginación y PDF con la fila entera. Propiedad nueva `rowWidth` en el bloque `image` (sin
   tipo de bloque nuevo); `min_app_version` quedó en 0.045.
-- **P.4 Hecho (v0.046): acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos
+- **P.15 🔴 Fotos en línea: la foto como un carácter del renglón** (Lega, 2026-10-01; **lo primero: sin esto no
+  se importa ningún doc de Coda de forma definitiva**). Hoy la foto es un bloque: no se puede poner el cursor a
+  su lado, ni escribir o pegar otra foto en su renglón, ni subirla al renglón de arriba con Backspace, ni
+  elegir varias con Shift+flechas o Shift+clic. Lo pedido: que fluya en el texto como en Coda (lo que no
+  entra baja de renglón), elegir varias fotos seguidas como se eligen letras, y acomodar las elegidas.
+  **Diseño en [`Doc_Fotos_En_Linea.md`](Doc_Fotos_En_Linea.md)** (sin implementar; con la prueba técnica hecha
+  y preguntas para Lega). Por entregas: el nodo y su dibujo (y subir `min_app_version`); crear y dar tamaño;
+  hojas, PDF y lo demás; importar de Coda con los renglones como estaban.
+- **P.4 Hecho a medias (v0.046): acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos
   y videos seguidos en una o más filas de la misma altura, sin cambiar el orden. Se audita antes y después.
+  **No es lo que pidió Lega** (confirmado el 2026-10-01): pidió elegir varias fotos seguidas (Shift+clic,
+  Shift+flechas) y acomodar **las elegidas**; hoy no se puede elegir más de una y el botón reparte toda la
+  tanda. Se resuelve con P.15.
 - **P.5 Hecho (v0.047): en el teléfono, filas o apiladas:** una opción de la cuenta (solo tiene efecto en pantallas
   angostas) para ver las fotos y videos en fila, como en la computadora, o uno debajo del otro. No cambia lo
   guardado. Por defecto, en fila.
@@ -260,9 +271,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     de Coda deja un JPEG de cada foto HEIC, así que lo importado se ve. **Falta:**
     - **Que la app misma sepa mostrar un HEIC** que llega por otra vía (soltado en el editor desde Chrome o
       desde Windows): hoy lo acepta y lo sube, y la página no lo muestra porque el navegador no lo decodifica.
-      **Decisión de Lega**, entre dos caminos: decodificarlo en el dispositivo para armar la miniatura y la
-      imagen de la página (el mismo decodificador del comando, libheif, pesa alrededor de 1,4 MB y tendría que
-      bajarse aparte, solo cuando hace falta), o convertirlo a JPEG al agregarlo y guardar el original aparte.
+      **Decidido por Lega (2026-10-01): sí, la app tiene que mostrarlo.** Cómo: convertirlo a JPEG en el
+      dispositivo al agregarlo (el mismo decodificador del comando, libheif, alrededor de 1,4 MB, que se baja
+      aparte y solo cuando hace falta) y guardar el original; sin implementar.
     - **Verlo en la app con el doc entero.** Probado con una importación real de cuatro páginas (46 fotos
       convertidas: en el Drive, con miniatura y a la vista); falta la de un doc completo.
     - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.
