@@ -197,9 +197,10 @@ de cortes").
   cursor en un párrafo nuevo, en la hoja siguiente. **Ctrl+Enter** (⌘↩ en la Mac), como en Word y Google Docs:
   en un párrafo vacío, ese párrafo pasa a ser el salto; al principio de un bloque, el salto va antes; en el medio
   de un párrafo, lo parte y queda entre las dos partes (la segunda conserva sus propiedades: Script sigue Script);
-  al final, va después con un párrafo nuevo. En una tabla o una imagen no hace nada; en un bloque de código hace lo
-  de antes (sale del bloque).
-  Ctrl+Enter no lo usaba nadie en el editor (el de mandar un comentario es en su campo, otro lugar del registro).
+  al final, va después con un párrafo nuevo. En una tabla o una imagen no hace nada, y en un bloque de código no lo
+  toma: queda lo que ya hacía el editor (medido en Chromium: nada, el cursor sigue en el código y el código no
+  cambia). Ctrl+Enter no lo usaba nadie en el editor (el de mandar un comentario es en su campo, otro lugar del
+  registro).
 - **Cómo se saca.** Retroceso al principio del bloque que sigue: vacío se borra, con texto queda como párrafo
   común. Sin esto, BlockNote juntaba el bloque con el salto y el texto subía arriba de la línea; por eso el teclado
   va en una extensión que corre antes que la de BlockNote (`pageBreakExtension`). También se borra como cualquier
@@ -236,13 +237,13 @@ de cortes").
   (esconde el vacío, el Y.Doc no cambia) y la **versión anterior** (`fixtures/editorSchemaV088.ts`, copia del
   esquema publicado): abre la página, ve los párrafos con su texto, no borra ni desmarca nada al editar otro bloque
   y, si escribe en el salto, conserva texto e id.
-- En Chromium, con la página real sobre el servidor en memoria (sin login), 28 de 28: la línea; las marcas
+- En Chromium, con la página real sobre el servidor en memoria (sin login), 29 de 29: la línea; las marcas
   "Page 2" y "Page 3" antes de los bloques que siguen a cada salto; el PDF (`page.pdf`) con 3 hojas que empiezan
   donde marca la pantalla y sin el rótulo; Ctrl+Enter en el medio de un párrafo (4 hojas) y un solo Ctrl+Z; "/page
   br" + Enter; Retroceso; escribir en el salto (el texto sale al pie de la hoja 1); copiar y pegar; el teléfono
   (las mismas marcas y el mismo PDF); la página libre (sin marcas, línea tenue, PDF A4 con los saltos); una sección
-  colapsada ("Page 3 inside", el PDF con todo abierto da 3 hojas, "como se ve" 2). Y el rótulo en castellano, en
-  oscuro.
+  colapsada ("Page 3 inside", el PDF con todo abierto da 3 hojas, "como se ve" 2). Ctrl+Enter en un bloque de código
+  (no pone salto ni toca el código). Y el rótulo en castellano, en oscuro.
 
 ## Pendiente
 

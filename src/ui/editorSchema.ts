@@ -302,7 +302,7 @@ const isEmptyContent = (block: AnyBlock) => Array.isArray(block.content) && bloc
  * principio de un bloque con texto, el salto va antes; en el medio de un párrafo, lo parte y el salto queda entre
  * las dos partes; al final (o en otro bloque de texto), va después. Si el cursor no queda en un bloque que sigue,
  * se agrega un párrafo vacío para seguir escribiendo en la hoja nueva. Todo en un solo paso de deshacer. En una
- * tabla o una imagen no hace nada, y en un bloque de código deja lo que hace el editor (sale del bloque).
+ * tabla o una imagen no hace nada, y en un bloque de código no lo toma (queda lo que ya hacía el editor).
  */
 export function insertPageBreak(editor: BlockNoteEditor<any, any, any>): boolean {
   const { block } = editor.getTextCursorPosition() as unknown as { block: AnyBlock };
