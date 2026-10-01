@@ -583,6 +583,9 @@ function ProjectMenu(props: {
                 setActive(0);
                 setReturned(true);
                 setMode({ name: 'archived' });
+                // El buscador no se vuelve a montar al cambiar de lista: `autoFocus` no alcanza (sin esto, el foco
+                // queda en el fondo de la página y Escape cierra todo el selector).
+                if (!touch) requestAnimationFrame(() => search.current?.focus());
               }}
             >
               <ArchiveIcon size={16} />
