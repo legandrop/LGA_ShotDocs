@@ -376,6 +376,50 @@ describe('fotos HEIC: comprobar el JPEG', () => {
     await expect(checkJpeg(good, source)).rejects.toMatchObject({ reason: 'failed' });
   });
 
+  /** Una foto de `width` × `height` pintada por `color(x, y)` (RGB). */
+  const paint = (width: number, height: number, color: (x: number, y: number) => number[]) => {
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) data.set([...color(x, y), 255], (y * width + x) * 4);
+    return { width, height, data };
+  };
+  /**
+   * Un documento: papel casi blanco y renglones de texto negro que esquivan la grilla pareja de 4 × 4 (sus
+   * cuadraditos caen en y = 17, 53, 88 y 124, de 8 de alto).
+   */
+  const paper = () => paint(200, 150, (x, y) => ([35, 65, 100, 135].some((top) => y >= top && y < top + 4) && x > 20 && x < 180 && x % 7 < 5 ? [15, 15, 20] : [247, 246, 242]));
+
+  it('una foto casi toda blanca (un documento, un cielo): un canvas en blanco no pasa; el JPEG bueno, sí', async () => {
+    stubBrowser();
+    const doc = paper();
+    await expect(checkJpeg(await encodeJpegOffscreen(doc, 0.92), doc)).resolves.toBeUndefined();
+    FakeOffscreenCanvas.mode = 'white';
+    await expect(checkJpeg(await encodeJpegOffscreen(doc, 0.92), doc)).rejects.toMatchObject({ reason: 'failed' });
+    // Un cielo claro con el horizonte oscuro abajo (un sexto de la foto).
+    FakeOffscreenCanvas.mode = 'ok';
+    const sky = paint(120, 90, (x, y) => (y > 75 ? [40, 50, 30] : [225 + (x % 5), 235, 250]));
+    await expect(checkJpeg(await encodeJpegOffscreen(sky, 0.92), sky)).resolves.toBeUndefined();
+    FakeOffscreenCanvas.mode = 'white';
+    await expect(checkJpeg(await encodeJpegOffscreen(sky, 0.92), sky)).rejects.toMatchObject({ reason: 'failed' });
+    // Una noche: casi toda negra con unas luces; un canvas negro no pasa.
+    FakeOffscreenCanvas.mode = 'blank';
+    const night = paint(120, 90, (x, y) => (x % 30 < 3 && y % 25 < 3 ? [250, 240, 200] : [8, 8, 12]));
+    await expect(checkJpeg(await encodeJpegOffscreen(night, 0.92), night)).rejects.toMatchObject({ reason: 'failed' });
+  });
+
+  it('lo que cambia un JPEG de verdad (unos niveles de más o de menos) no la hace fallar; una foto lisa no tiene qué comparar', async () => {
+    stubBrowser();
+    const doc = paper();
+    const jpeg = await encodeJpegOffscreen(doc, 0.92);
+    // Los píxeles del JPEG de mentira van al final: se les suma un ruido de ±4.
+    const start = jpeg.length - doc.width * doc.height * 4;
+    for (let i = start; i < jpeg.length; i++) if ((i - start) % 4 !== 3) jpeg[i] = Math.max(0, Math.min(255, jpeg[i] + ((i * 7) % 9) - 4));
+    await expect(checkJpeg(jpeg, doc)).resolves.toBeUndefined();
+    // Toda blanca: un canvas en blanco es lo mismo que la foto.
+    const white = paint(64, 48, () => [250, 250, 250]);
+    FakeOffscreenCanvas.mode = 'white';
+    await expect(checkJpeg(await encodeJpegOffscreen(white, 0.92), white)).resolves.toBeUndefined();
+  });
+
   it('una foto más grande que el tope (50 MP) no se intenta', async () => {
     expect(MAX_PIXELS).toBe(50_000_000);
     const huge = { get_width: () => 10_000, get_height: () => 6_000, is_primary: () => true, display: vi.fn(), free: () => undefined };
