@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.074 :
+v0.075 :
 
 Las fotos HEIC agregadas desde el navegador no se veían. Una foto del iPhone soltada, pegada o elegida en el
 editor desde Chrome se guardaba y se subía al Drive, pero Chrome no sabe decodificar HEIC: quedaba sin
@@ -10,6 +10,17 @@ la página y en el Drive. El decodificador (libheif en WebAssembly, LGPL-3.0) co
 aparte, solo cuando llega un HEIC. Si no se puede convertir, se guarda el HEIC con un aviso en su lugar; sin
 red, se vuelve a probar antes de subirlo. Se suma `THIRD_PARTY_NOTICES.md` con las licencias de terceros.
 [ Fotos HEIC - se guardan como JPEG al agregarlas ]
+
+v0.074 :
+
+El árbol de páginas con el teclado y plegar una madre de la página abierta. Las flechas solo abrían y cerraban
+ramas; ahora, con el foco en una fila, ↑ y ↓ abren la página anterior o siguiente (con la tecla apretada se
+abre la última al frenar), → despliega o baja a la primera subpágina, ← pliega o sube a la madre, e Inicio y
+Fin van a las puntas. Además, plegar con el triángulo una madre de la página abierta no dejaba: el efecto que
+abre las madres de la abierta corría con cada cambio de lo desplegado y la volvía a abrir. Ahora corre solo
+cuando cambia la página abierta o el árbol, y plegar esa madre la deja como página abierta (en el teléfono el
+cajón sigue abierto).
+[ Árbol de páginas - teclado y plegar una madre de la abierta ]
 
 v0.073 :
 
