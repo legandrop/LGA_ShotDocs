@@ -73,11 +73,13 @@ export function kindLabel(kind: MediaKind, image: string, video: string, file: s
 
 // --- Botones -----------------------------------------------------------------------------------------------
 
-export function ViewButton({ url, label, onView }: { url: string | null; label?: string; onView: () => void }) {
+export function ViewButton({ url, attachment = false, onView }: { url: string | null; attachment?: boolean; onView: () => void }) {
   const tr = useT();
   if (!url || !carreteSourceOf(url)) return null;
-  const name = label ?? tr('mediaButton.view');
-  return <BarButton label={name} tip={`**${name}**\n${tr('mediaButton.space')}`} icon={<ViewIcon />} test="mediaView" onClick={onView} />;
+  // Un adjunto (Docs/Doc_Adjuntos.md) no va al carrete: *Open* lo abre en otra pestaña o lo baja.
+  const name = attachment ? tr('attachment.open') : tr('mediaButton.view');
+  const tip = `**${name}**\n${attachment ? tr('attachment.openTip') : tr('mediaButton.space')}`;
+  return <BarButton label={name} tip={tip} icon={<ViewIcon />} test="mediaView" onClick={onView} />;
 }
 
 /**
@@ -222,7 +224,6 @@ export function ImageBlockBar() {
   const Components = useComponentsContext()!;
   const actions = useMediaActions();
   const { media } = useServices();
-  const tr = useT();
   const block = useChosenImageBlock();
   const kind = useMediaKind(block?.url ?? null, block?.name ?? '');
   if (!block) return null;
@@ -244,7 +245,7 @@ export function ImageBlockBar() {
         {[
           (carreteSourceOf(block.url) || block.url) && (
             <>
-              <ViewButton url={block.url} label={attachment ? tr('attachment.open') : undefined} onView={() => actions?.onView(block.id)} />
+              <ViewButton url={block.url} attachment={attachment} onView={() => actions?.onView(block.id)} />
               <DownloadButton url={block.url} name={block.name} />
             </>
           ),
