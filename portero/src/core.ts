@@ -125,6 +125,8 @@ interface MediaFile {
   trashed_at?: string | null;
   purged_at?: string | null;
   drive_trashed_at?: string | null;
+  /** Quién agregó el archivo (`files.created_by`; desde la migración de carpetas, P.9; antes no viene). */
+  created_by?: string | null;
 }
 
 export interface DriveFile {
@@ -1151,10 +1153,10 @@ export class Portero {
     if (media.mime !== APP_FOLDER_MIME) throw new HttpError(400, 'This file is not a folder.', 'not_folder');
     if (media.level < min) throw new HttpError(403, 'You cannot add files to this page.', 'not_allowed');
     const rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
-    // Crear y subir: solo quien creó la carpeta (ver `FileRecord.creator`). Una carpeta ya creada sin ese dato no
+    // Crear y subir: solo quien agregó la carpeta. Lo dice la base (`created_by`, desde la migración de carpetas);
+    // con una base anterior, quien la creó en Drive (`FileRecord.creator`), y una carpeta ya creada sin ese dato no
     // acepta subidas de nadie.
-    const created = !!(media.drive_id || rec.drive);
-    if (min >= 3 && created && rec.creator !== who.userId) {
+    if (min >= 3 && !isCreator(who, media, rec)) {
       throw new HttpError(403, 'Only the person who added this folder can upload into it.', 'not_creator');
     }
     return { file, media, rec };
@@ -1299,7 +1301,7 @@ export class Portero {
       root = await this.once(`folder:${file}`, async () => {
         const again = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
         if (again.drive) {
-          if (again.creator !== who.userId) throw new HttpError(403, 'Only the person who added this folder can upload into it.', 'not_creator');
+          if (!isCreator(who, media, again)) throw new HttpError(403, 'Only the person who added this folder can upload into it.', 'not_creator');
           return again.drive.id;
         }
         // Otra instancia del portero puede haberla creado recién (dos pedidos a la vez): se busca por su marca.
@@ -1873,6 +1875,17 @@ interface Pass {
   n?: string;
   /** La fecha de cambio en Drive (los archivos de una carpeta, P.9): la miniatura se guarda por archivo y fecha. */
   m?: string;
+}
+
+/**
+ * Si la persona puede crear y subir adentro de una carpeta (P.9): la que la agregó según la base (`created_by`);
+ * con una base sin ese dato, la que la creó en Drive (`FileRecord.creator`), o cualquiera con nivel 3 mientras
+ * todavía no se creó (esa pasa a ser la creadora).
+ */
+function isCreator(who: Who, media: MediaFile, rec: FileRecord): boolean {
+  if (media.created_by !== undefined) return !!media.created_by && media.created_by === who.userId;
+  if (!(media.drive_id || rec.drive)) return true;
+  return rec.creator === who.userId;
 }
 
 /** Los encabezados de una miniatura (`/t/`): una foto chica que el navegador guarda un día, sin nada que corra. */

@@ -49,7 +49,7 @@ function fakeWorld() {
     ['stranger-jwt', 'u-stranger'],
   ]);
   const drive = new Map<string, DriveItem>();
-  const base = new Map<string, { name: string; mime: string; size: number; drive_id: string | null; levels: Record<string, number> }>();
+  const base = new Map<string, { name: string; mime: string; size: number; drive_id: string | null; levels: Record<string, number>; created_by?: string | null }>();
   const uploads = new Map<string, { meta: DriveItem; size: number; data: Uint8Array<ArrayBuffer>; got: number }>();
   let n = 0;
   let rateAfter = Infinity;
@@ -87,7 +87,7 @@ function fakeWorld() {
         const f = base.get(args.p_file_id ?? '');
         const level = f?.levels[user] ?? 0;
         if (!f || level === 0) return json(null);
-        return json({ id: args.p_file_id, project_id: PROJECT, project_name: 'Spot Coca', name: f.name, mime: f.mime, size: f.size, drive_id: f.drive_id, created_at: '2026-10-01T10:00:00Z', level });
+        return json({ id: args.p_file_id, project_id: PROJECT, project_name: 'Spot Coca', name: f.name, mime: f.mime, size: f.size, drive_id: f.drive_id, created_at: '2026-10-01T10:00:00Z', level, ...(f.created_by !== undefined ? { created_by: f.created_by } : {}) });
       }
       if (url.pathname === '/rest/v1/rpc/set_file_drive') {
         const f = base.get(args.p_file_id ?? '');
@@ -446,6 +446,22 @@ describe('carpetas: quién sube', () => {
     // Ver, sí.
     expect((await call(p, '/folder/list', 'viewer-jwt', { file: F1 })).status).toBe(200);
     expect([...world.drive.values()].some((f) => f.name === 'x' || f.name === 'x.bin')).toBe(false);
+  });
+
+  it('con la base que dice quién la agregó, nadie más la crea ni sube, ni siquiera primero', async () => {
+    const { world, p } = await setup();
+    world.base.get(F1)!.created_by = 'u-editor';
+    world.base.get(F1)!.levels['u-viewer'] = 3;
+    // El de "Ver" (con nivel 3 por pegarla en su página) se adelanta: no la crea.
+    const first = await call(p, '/folder/prepare', 'viewer-jwt', { file: F1, name: 'x' });
+    expect(first.status).toBe(403);
+    expect([...world.drive.values()].some((f) => f.appProperties?.sdFile === F1)).toBe(false);
+    // Quien la agregó, sí; y después tampoco sube el otro.
+    const tree = await prepare(p, { dirs: ['Fotos'] });
+    expect((await call(p, '/folder/sessions', 'viewer-jwt', { file: F1, items: [{ dir: tree.dirs.Fotos, name: 'x.bin', size: 1 }] })).status).toBe(403);
+    // Una cuenta borrada (created_by vacío): nadie sube.
+    world.base.get(F1)!.created_by = null;
+    expect((await call(p, '/folder/sessions', 'editor-jwt', { file: F1, items: [{ dir: null, name: 'x.bin', size: 1 }] })).status).toBe(403);
   });
 
   it('si otra instancia ya la creó (dos pedidos a la vez), se encuentra por su marca y no se crea otra', async () => {

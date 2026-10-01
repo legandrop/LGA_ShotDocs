@@ -234,7 +234,8 @@ export function RemovedScreen() {
             {foldersLeft > 0 && <p className="muted">{tr('removed.foldersLeft', { count: foldersLeft })}</p>}
           </>
         )}
-        {summary !== null && pending === 0 && <p className="muted">{tr('removed.allUploaded')}</p>}
+        {summary !== null && pending === 0 && foldersLeft === 0 && <p className="muted">{tr('removed.allUploaded')}</p>}
+        {summary !== null && pending === 0 && foldersLeft > 0 && <p>{tr('removed.foldersLeft', { count: foldersLeft })}</p>}
         {mediaDb === null && <p className="muted">{tr('removed.mediaKept')}</p>}
         {error && <p className="error">{error}</p>}
         <button className={pending > 0 ? 'secondary' : 'primary'} disabled={busy !== null || summary === null} onClick={() => void removeFromDevice()}>

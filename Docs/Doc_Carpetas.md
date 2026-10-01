@@ -36,7 +36,9 @@ la carpeta, cierra. Los accesos directos y los documentos de Google se muestran 
   `mime = 'inode/directory'` y el peso de lo que se subió (1 si estaba vacía). `MediaQueue.addFolder` la registra
   en el acto con `register_file` (hace falta red: sin copia no hay nada que guardar para después) y la anota en el
   dispositivo como propia, ya registrada y sin original; si vuelve a la cola (una copia restaurada), se registra
-  de nuevo y queda lista sin buscar un original. **Sin migración.**
+  de nuevo y queda lista sin buscar un original. La carpeta no necesita migración; una chica
+  (`20261001150000_carpetas_creador.sql`: `media_file` suma `created_by`, probada en una transacción deshecha
+  contra la base) cierra quién sube adentro.
 - **Leer la carpeta** (`src/media/folderRead.ts`): `webkitGetAsEntry` en el acto, `readEntries` en bucle,
   subcarpetas vacías incluidas; se saltean lo que empieza con punto, `Thumbs.db`, `ehthumbs.db`, `desktop.ini`,
   `Icon\r`, `__MACOSX` y `~$…` (con la casilla, entran); lo ilegible queda afuera con su motivo. La lista de un
@@ -59,7 +61,9 @@ la carpeta, cierra. Los accesos directos y los documentos de Google se muestran 
   subcarpetas creadas llevan `sdFolder` y `sdPath` (la ruta resumida): repetir un pedido no crea nada dos veces.
   `/pass` de una carpeta responde `409 is_folder`.
 - **Permisos:** listar y bajar, nivel 1 sobre la carpeta (quien ve la página). Crear y subir: nivel 3 **y ser
-  quien creó la carpeta** (el portero lo anota en `file:<uuid>`, `creator`, al crearla en Drive; corrección de la
+  quien agregó la carpeta**: lo dice la base (`files.created_by`, que `media_file` devuelve desde la migración
+  `20261001150000_carpetas_creador.sql`); con una base sin esa migración, quien la creó en Drive (el portero lo
+  anota en `file:<uuid>`, `creator`), que deja una ventana de segundos para que otro se adelante. Corrección de la
   auditoría: el nivel de `media_file` es el más alto entre las páginas que usan la carpeta, y alguien con "Ver" en
   la página A y "Editar" en otra B podía pegar el bloque en B y subir adentro de la carpeta que ven todos los de
   A). Sin acceso a la página, 404 como si no existiera; pedir otra carpeta del Drive, 404 al listar y 403 al
