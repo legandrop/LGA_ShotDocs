@@ -4,6 +4,7 @@ import { stored, t } from './i18n';
 import { pendingInviteTarget } from './invite';
 import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
+import { OfflineManager, type OfflineSnapshot } from './media/offline';
 import { ProjectSizes, type SizesView } from './media/projectSizes';
 import { foreignFileNotice, MediaQueue } from './media/queue';
 import { FolderUploads, foldersDbName, openFoldersDb, type FolderPortero, type FoldersDb } from './media/folderUpload';
@@ -52,6 +53,8 @@ export interface Services {
   commentsDb: CommentsDb | null;
   /** Cuánto ocupa cada proyecto en el Drive (P.7), con la última respuesta guardada en el dispositivo. */
   sizes: ProjectSizes;
+  /** "Available offline" y el espacio de la app en este dispositivo (P.10, Docs/Doc_Copias_Locales.md). */
+  offline: OfflineManager;
   /**
    * El portero para la carpeta de un proyecto borrado (P.14, entrega 2). Sin él, se arma con la dirección del portero
    * del workspace (`useProjectDrive`); las pruebas ponen uno propio.
@@ -59,6 +62,11 @@ export interface Services {
   projectDrive?: ProjectDrive;
   /** Para la sincronización y cierra las bases del dispositivo (antes de borrarlas). */
   shutdown: () => Promise<void>;
+  /**
+   * La primera carga de este workspace en este dispositivo (la base local todavía no tenía proyecto): la
+   * recorrida arranca sola solo ahí (Docs/Doc_Tutorial.md, corrección 5).
+   */
+  firstLoad?: boolean;
 }
 
 export const ServicesContext = createContext<Services | null>(null);
@@ -93,6 +101,50 @@ export function usePermissions(): Permissions {
 export function useProjectSizes(): SizesView {
   const { sizes } = useServices();
   return useSyncExternalStore(sizes.subscribe, sizes.getSnapshot);
+}
+
+/** "Available offline" y el espacio en el dispositivo; re-renderiza con cada cambio. */
+export function useOffline(): OfflineSnapshot {
+  // Sin el administrador (algunas pruebas arman los servicios a mano), nada marcado.
+  const { offline } = useServices() as Partial<Services>;
+  return useSyncExternalStore(offline?.subscribe ?? noSubscribe, offline?.getSnapshot ?? emptyOffline);
+}
+
+const EMPTY_OFFLINE: OfflineSnapshot = { loaded: false, marks: [], limit: null, usage: null, prompt: null, active: null, unsaved: [] };
+const emptyOffline = () => EMPTY_OFFLINE;
+const noSubscribe = () => () => undefined;
+
+/** El navegador del dispositivo, para lo que depende de él en "Available offline" (sección 9 del diseño). */
+export function deviceTraits(): { ios: boolean; safari: boolean; phone: boolean } {
+  if (typeof navigator === 'undefined') return { ios: false, safari: false, phone: false };
+  const ua = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const safari = /^((?!chrome|chromium|crios|fxios|android|edg).)*safari/i.test(ua);
+  const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  return { ios, safari, phone };
+}
+
+/** La base de la página de medición del espacio (src/ui/StorageTest.tsx). */
+export const STORAGE_TEST_DB = 'shotdocs-storage-test';
+/** Lo que falta subir de cada workspace de este dispositivo, para la página de medición. */
+export const PENDING_PREFIX = 'sd:pending:';
+
+function savePendingForStorageTest(dbName: string, s: SyncStatus): void {
+  const n = s.pendingOps + s.pendingPages + s.pendingFiles + s.pendingMedia + s.failedMedia + s.pendingComments + s.failedOps;
+  try {
+    localStorage.setItem(PENDING_PREFIX + dbName, String(n));
+  } catch {
+    // Sin `localStorage`: la página de medición lo dice.
+  }
+}
+
+/** Borra los datos de prueba de la medición, si quedaron. */
+export function dropStorageTest(): void {
+  try {
+    indexedDB.deleteDatabase(STORAGE_TEST_DB);
+  } catch {
+    // Sin IndexedDB no hay nada que borrar.
+  }
 }
 
 /** La base dijo que sacaron a la persona del workspace. */
@@ -179,6 +231,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       if (cancelled) return db.close();
       const remote = new SupabaseRemote(workspace.client, __APP_VERSION__);
       let workspaceId = (await db.get('meta', 'workspaceId')) as string | undefined;
+      const firstLoad = !workspaceId;
       // Las invitaciones se aplican al entrar, antes de buscar el primer proyecto (lo compartido tiene que
       // estar para encontrarlo). Con proyectos ya guardados no se espera, salvo que se venga de un link.
       let accepted: Promise<number> | null = null;
@@ -238,12 +291,17 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         mediaDb?.close();
         return db.close();
       }
+      // "Available offline" se arma después (necesita la cola): la cola le avisa por acá qué se usó y qué no entró.
+      let offline: OfflineManager | null = null;
       const media = new MediaQueue(mediaDb, remote, {
         portero: (url) => new Portero(url, { token: sessionToken(workspace.client) }),
         projectOf: (pageId) => tree.get(pageId)?.workspace_id,
         unavailable: mediaProblem,
         // Se pegó una foto o un video de otro proyecto (papelera de archivos, paso 11).
         onForeignFile: (name) => notify(foreignFileNotice(name)),
+        onUse: (id, how) => offline?.used(id, how),
+        makeRoom: async (bytes) => (offline ? offline.makeRoom(bytes) : 0),
+        onRejected: (file) => offline?.rejected(file),
       });
       await media.load().catch(() => undefined);
       // Las carpetas (P.9): solo la lista de trabajo, sin bytes, en otra base. Si no se abre, se suben igual
@@ -282,6 +340,23 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         comments,
         sizes,
       });
+      const traits = deviceTraits();
+      offline = new OfflineManager({
+        db: mediaDb,
+        media,
+        tree,
+        docs,
+        remote,
+        comments,
+        older: files,
+        online: () => (typeof navigator === 'undefined' ? true : navigator.onLine !== false) && engine.getStatus().online,
+        uploadsBusy: () => folders.busy(),
+        storage: () => (typeof navigator === 'undefined' ? undefined : navigator.storage),
+        ...traits,
+        dbName,
+        local: typeof localStorage === 'undefined' ? null : localStorage,
+      });
+      await offline.load().catch(() => undefined);
       if (cancelled) {
         mediaDb?.close();
         commentsDb?.close();
@@ -289,6 +364,30 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         return db.close();
       }
       engine.start();
+      // Después de cada sincronización (y al volver la red), "Available offline" mira si algo cambió y baja lo que falte.
+      const offlineManager = offline;
+      let lastSync = engine.getStatus().lastSyncAt;
+      let wasOnline = engine.getStatus().online;
+      const unwatch = engine.subscribe(() => {
+        const status = engine.getStatus();
+        if (status.lastSyncAt !== lastSync || (status.online && !wasOnline)) offlineManager.maintainSoon();
+        lastSync = status.lastSyncAt;
+        wasOnline = status.online;
+        // Lo que falta subir en este workspace, para la página de medición (no llena el disco con algo sin subir).
+        savePendingForStorageTest(dbName, status);
+      });
+      // Una carpeta que terminó de subir (P.9) deja seguir a las bajadas que esperaban.
+      let foldersBusy = folders.busy();
+      const unwatchFolders = folders.subscribe(() => {
+        const busy = folders.busy();
+        // Empezó a subir una carpeta: la bajada en curso le deja la red. Terminó: las bajadas siguen.
+        if (!foldersBusy && busy) offlineManager.yieldToUploads();
+        if (foldersBusy && !busy) offlineManager.maintainSoon();
+        foldersBusy = busy;
+      });
+      // Datos de una medición que quedaron (la app se cortó en el medio): se borran al abrir.
+      dropStorageTest();
+      offlineManager.start();
       // Si una invitación nueva sumó permisos, se sincroniza de nuevo para traer lo compartido.
       void accepted?.then((n) => {
         if (n > 0) void engine.syncNow();
@@ -298,6 +397,9 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       const shutdown = () => {
         closing ??= (async () => {
           const stopping = engine.stop();
+          unwatch();
+          unwatchFolders();
+          offlineManager.stop();
           docs.dispose();
           media.dispose();
           folders.stop();
@@ -339,7 +441,9 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           comments,
           commentsDb,
           sizes,
+          offline: offlineManager,
           shutdown,
+          firstLoad,
         },
       });
     })().catch((err) => {

@@ -152,7 +152,7 @@ paso 2 deja de ser previo: se publica la v0.078 (paso 1 y 3 juntos) y **después
 ## Entregas
 
 Cada una con sus pruebas (incluida la de dos editores a la vez donde toca el documento), auditoría
-independiente y su entrada en la ayuda cuando exista (P.13).
+independiente y su entrada en la ayuda (P.13; existe desde v0.082).
 
 1. **El nodo y su dibujo.** `photo` en el esquema, en `unknownContent.ts` y en `usage.ts` (prueba); se ve con
    miniatura, nitidez y subida; cursor, flechas, Backspace, Enter, selección, copiar y pegar dentro de la app;

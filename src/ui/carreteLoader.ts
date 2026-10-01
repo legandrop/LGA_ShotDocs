@@ -23,6 +23,8 @@ export interface Preview {
   name: string;
   /** Lo primero que se ve: la miniatura, un ícono o, si ya está a mano, la foto entera. */
   preview: string | null;
+  /** La vista previa es una versión grande guardada en el dispositivo (la nítida), no la miniatura. */
+  large?: boolean;
 }
 
 export interface Full {
@@ -206,7 +208,7 @@ export function isOffline(err: unknown): boolean {
   return err instanceof TypeError && /fetch|network|load failed/i.test(err.message);
 }
 
-type Media = Pick<MediaQueue, 'resolve' | 'thumbnail' | 'source' | 'pass'> & Partial<Pick<MediaQueue, 'viewUrl'>>;
+type Media = Pick<MediaQueue, 'resolve' | 'thumbnail' | 'source' | 'pass'> & Partial<Pick<MediaQueue, 'viewUrl' | 'view'>>;
 type Files = Pick<PageFiles, 'resolve'>;
 
 export function createCarreteLoader({ media, files }: { media: Media; files: Files }): CarreteLoader {
@@ -235,8 +237,12 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
       const [source, thumb] = await Promise.all([sourceOf(id), media.thumbnail(id).catch(() => null)]);
       // Si la página ya tiene la imagen nítida (sharpImages.ts), esa; si no, la miniatura. Sin miniatura: lo que
       // muestra la página (un ícono con el nombre).
-      const preview = media.viewUrl?.(id) ?? thumb ?? (await media.resolve(item.url).catch(() => null));
-      return { kind: source.kind, name: source.name || fallbackName(item), preview };
+      // Sin el original en el dispositivo, la de 2048 guardada (la de "Available offline" o una ya hecha), sin bajar
+      // nada: así sin red el carrete muestra en grande también las fotos que la página no llegó a procesar.
+      const saved = source.kind === 'image' && !source.original ? ((await media.view?.(id).catch(() => null))?.url ?? null) : null;
+      const sharp = media.viewUrl?.(id) ?? saved;
+      const preview = sharp ?? thumb ?? (await media.resolve(item.url).catch(() => null));
+      return { kind: source.kind, name: source.name || fallbackName(item), preview, large: !!sharp };
     }
     if (item.source === 'file') {
       // La imagen entera, guardada en el dispositivo o bajada de Supabase.

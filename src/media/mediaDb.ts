@@ -54,6 +54,11 @@ export interface MediaRecord {
    * convertirla), no hay nada pendiente.
    */
   heic?: 'pending' | 'sent' | 'failed';
+  /**
+   * Cuándo se confirmó la subida (`markUploaded`). Opcional: lo subido antes de esta versión no lo tiene. Un
+   * original propio no se libera antes de 14 días desde acá (Docs/Doc_Copias_Locales.md, sección 5.2).
+   */
+  uploadedAt?: number;
   /** La subida al portero que quedó a medias: con esto se retoma después de cerrar la app. */
   uploadId: string | null;
   /** Hasta dónde confirmó el portero (bytes). */
@@ -137,6 +142,11 @@ export interface KnownFile {
   deleted?: boolean;
   /** El portero confirmó que está en la papelera de Drive (`drive_trashed_at`). */
   inDriveTrash?: boolean;
+  /**
+   * Está en la papelera de la app (`trashed_at`). Sin el campo (guardado antes de v0.083), no se sabe: sin red, su
+   * copia bajada no se libera (Doc_Copias_Locales.md, sección 5.2).
+   */
+  inAppTrash?: boolean;
   /** El proyecto del archivo (`project_id`), para no registrarlo como uso de una página de otro proyecto. */
   projectId?: string | null;
   fetchedAt: number;

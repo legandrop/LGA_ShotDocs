@@ -20,6 +20,7 @@ import {
   type CommentsTarget,
 } from './commentsUi';
 import { CommentsToggle, useCommentAccess } from './CommentsToggle';
+import { shortcutLabel } from './shortcuts';
 import { CloseIcon, CollapseIcon, ExpandIcon, QuestionIcon } from './icons';
 
 // El panel de comentarios de la página (paso 10): a la derecha en la computadora y como hoja desde abajo en
@@ -630,7 +631,7 @@ function Composer({
         <p className="comment-error">{tooLong ? tr('comments.tooLong', { max: MAX_COMMENT_LENGTH, now: text.length }) : error}</p>
       )}
       <div className="row">
-        <button type="submit" className="primary" disabled={busy || !text.trim() || tooLong} data-tip={IS_MAC ? '⌘↩' : 'Ctrl+Enter'}>
+        <button type="submit" className="primary" disabled={busy || !text.trim() || tooLong} data-tip={shortcutLabel('commentsSend')}>
           {submitLabel}
         </button>
         <button type="button" className="link" onClick={onCancel}>
@@ -640,8 +641,6 @@ function Composer({
     </form>
   );
 }
-
-const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 const formats = new Map<string, { time: Intl.DateTimeFormat; day: Intl.DateTimeFormat; year: Intl.DateTimeFormat }>();
 function formatsFor(lang: Translate['lang']) {

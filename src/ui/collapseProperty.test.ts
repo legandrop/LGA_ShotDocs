@@ -8,7 +8,7 @@ import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { selectWholeBlock } from './blockHandle';
-import { collapseExtension, collapseState, headingBackspaceExtension, setCollapsed } from './collapseEditor';
+import { collapseExtension, collapseState, dropSection, headingBackspaceExtension, setCollapsed, startSectionDrag } from './collapseEditor';
 import { schema } from './editorSchema';
 import { findExtension, replaceAll, setFind, clearFind, stepFind } from './findEditor';
 import { connect, sameDocs } from './collabHarness';
@@ -436,13 +436,19 @@ describe('colapsar, al azar', () => {
               kind += ` drag ${b.text} to ${at === target.pos ? 'before' : 'after'} ${target.text}`;
               view(A).dispatch(st.tr.setSelection(NodeSelection.create(st.doc, b.pos)));
               const v = view(A);
-              const node = (v.state.selection as NodeSelection).node;
-              const tr = v.state.tr.deleteSelection();
-              const mapped = tr.mapping.mapResult(at);
-              if (mapped.deleted) continue;
-              tr.insert(mapped.pos, node);
-              tr.setSelection(NodeSelection.create(tr.doc, mapped.pos));
-              v.dispatch(tr.setMeta('uiEvent', 'drop'));
+              // Un título colapsado se arrastra con su sección entera (1b): lo que hace el tirador.
+              if (startSectionDrag(v, null)) {
+                kind += ' (sección)';
+                dropSection(v, at);
+              } else {
+                const node = (v.state.selection as NodeSelection).node;
+                const tr = v.state.tr.deleteSelection();
+                const mapped = tr.mapping.mapResult(at);
+                if (mapped.deleted) continue;
+                tr.insert(mapped.pos, node);
+                tr.setSelection(NodeSelection.create(tr.doc, mapped.pos));
+                v.dispatch(tr.setMeta('uiEvent', 'drop'));
+              }
             }
           } else if (r < 0.66) {
             kind = 'node';
