@@ -2,14 +2,14 @@
 
 v0.077 :
 
-Fotos en línea, entrega 2: pegar, soltar y "/Image" ponen fotos y videos en el renglón, donde está el cursor (una
-con su tamaño, varias a un tercio, juntas y con un solo deshacer); los adjuntos siguen como tarjeta. La foto elegida
-tiene su barra: ver, bajar, tamaños para todas las elegidas y *Arrange in rows* de las elegidas; un párrafo de fotos
-se parte entre hojas por filas enteras. Antes de crear, se midió con la librería publicada que una versión vieja
-que abría un renglón al que le borraron las fotos perdía texto (28 de 49): ahora el renglón lleva una marca que esas
-versiones no conocen, y no lo abren (0 de 49). También: emojis y dictado con una foto elegida, arrastrar soltando
-sobre una foto y la barra de texto que tapaba la foto vecina.
-[ Fotos en línea - entrega 2: crear, tamaños, acomodar las elegidas y hojas ]
+Fotos en línea, entrega 2: pegar, soltar, "/Image" y "Copy image" de una web ponen fotos y videos en el renglón,
+donde está el cursor (una con su tamaño, varias a un tercio, con un solo deshacer). Lega pidió que hicieran todo
+lo de la foto-bloque (D-24): tiradores que imantan, y la misma barra para las dos, por sectores y con botones
+parejos: ver, bajar | tamaños y *Arrange in rows* de las elegidas | alinear | comentar | reemplazar, renombrar,
+borrar; sin leyenda. Un párrafo de fotos se parte entre hojas por filas. Una versión vieja que abría un renglón al
+que le borraron las fotos perdía texto (28 de 49): ahora el renglón lleva una marca que esas versiones no conocen, y
+deshacer ya no la saca. Con varias fotos elegidas, una letra o Enter las borraban: ahora escriben después.
+[ Fotos en línea - entrega 2: crear, paridad con la foto-bloque y hojas ]
 
 v0.076 :
 

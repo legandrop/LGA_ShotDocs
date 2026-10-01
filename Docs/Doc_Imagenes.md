@@ -9,6 +9,12 @@ tarjeta). Lo de este documento sigue valiendo para las fotos-bloque que ya exist
 rows* sobre la tanda) y para las que todavía crea pegar HTML con un `<img>`, hasta convertirlas (entrega 3 de las
 fotos en línea).
 
+**La barra de la foto-bloque cambió en v0.077 (D-24):** es la misma que la de la foto en línea (`MediaBar.tsx`), por
+sectores: [ver, bajar] | [1/1, 1/2, 1/3, 1/4, *Arrange in rows*] | [alinear] | [comentar] | [*Replace image*, *Rename
+image*, *Delete image*], todos los botones de 30 × 30 px y con `data-tip`. Sin *Edit caption* (una leyenda que ya
+existe se sigue viendo) ni *Toggle preview*; *Replace image* abre el selector de archivos (sin *Embed*). Ver
+`Doc_Fotos_En_Linea.md`, "Paridad con la foto-bloque".
+
 ## Lo que se pide
 
 1. **El primer clic elige, el segundo abre.** Hoy, con el mouse, un clic en una foto abre el carrete. El

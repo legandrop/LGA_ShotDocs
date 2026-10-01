@@ -553,32 +553,117 @@ borraban a la vez: descartada. Detalle en `Doc_Colaboracion.md`, "Versiones viej
   Ctrl+Z las saca. Un archivo que no se pudo guardar avisa y no corta los demás.
 - Las fotos HEIC pasan a `.jpg` en el nombre cuando se convierten, también las en línea (`heicNames.ts`).
 
-### La barra de la foto (`PhotoToolbar.tsx`) y el tamaño (`inlinePhotoSize.ts`)
+### La barra de la foto (`MediaBar.tsx`, `PhotoToolbar.tsx`) y el tamaño (`inlinePhotoSize.ts`)
 
-- Con una foto en línea elegida, o una selección de solo fotos, la barra propia: ver (el carrete), bajar el original
-  (las del Drive), *Arrange in rows*, los cuatro tamaños y comentar. Va arriba de la foto más alta de su renglón
-  (abajo, si arriba no entra) y adentro de la pantalla; no se muestra mientras se aprieta el mouse. La barra de texto
-  de BlockNote no se abre (su contenedor vacío igual aparecía un instante al soltar el clic y se quedaba con el clic en
-  la foto vecina: medido).
-- Con texto y fotos elegidos, la barra de texto de BlockNote suma los tamaños y *Arrange in rows*.
-- **Los tamaños** valen para todas las fotos elegidas, en un solo cambio (un atributo del nodo: editar a la vez no
-  pierde nada, medido en la entrega 1).
-- ***Arrange in rows*** acomoda **las elegidas** (pedido de Lega) con el `arrangeRows` de siempre; con una sola
-  elegida, las seguidas de su renglón. Si hay texto entre las elegidas, el botón queda apagado y dice *Select images
-  that are next to each other, with no text between them*. **Propuesta:** para que queden en filas propias dentro de
-  una tanda más larga (las filas las arma `groupRows` desde el principio de la tanda), si la fila de antes de la
-  primera elegida no está llena, entran también las fotos de esa fila (las que se ven en el mismo renglón), y si
-  después de la última sigue otra foto y la última fila no llena el renglón, esa fila se llena.
+Lega probó la entrega 2 y la rechazó como estaba: la foto en línea tenía menos que la foto-bloque. Decidió la
+**D-24** (`Doc_Decisiones.md`): paridad completa, sin leyenda, y la misma barra para las dos, por sectores.
+
+- **La barra, igual para la foto-bloque y la en línea:** [ver, bajar] | [1/1, 1/2, 1/3, 1/4 y *Arrange in rows*] |
+  [alinear a la izquierda, al centro, a la derecha] | [comentar] | [*Replace image*, *Rename image*, *Delete image*].
+  Un separador fino entre sectores. Todos los botones miden lo mismo, **30 × 30 px, sin relleno** (medido en
+  Chromium: los 17 de cada barra; antes los de tamaño medían 49,6 × 30, por el relleno de un botón de texto). Los
+  tooltips son `data-tip`: el nombre (un ícono no lo dice) y, si lo hay, el atajo (ver: Espacio; comentar: ⌘⌥M o
+  Ctrl+Alt+M; borrar: Supr o Retroceso) o lo que agrega (los tamaños, "las fotos seguidas llenan una fila"; con varias
+  elegidas, "para todas las fotos elegidas"). Con un video, los botones dicen *video*; con un adjunto, *file*. En el
+  teléfono la barra pasa a dos renglones, adentro de la pantalla.
+- **Sin leyenda** (D-24): no hay *Edit caption* en ninguna de las dos. Una leyenda que ya existe en una foto-bloque se
+  sigue mostrando: no se borra ni se esconde; solo no hay botón para crearla. Tampoco va *Toggle preview* (no está en
+  la barra que pidió Lega; una foto-bloque que ya la tiene apagada se sigue viendo así). **A aprobar por Lega.**
+- **Ver** abre el carrete en esa foto; **bajar** baja el original (del Drive) o la dirección, con su nombre.
+- **Tamaños** para todas las fotos elegidas, en un solo cambio (un atributo del nodo: editar a la vez no pierde nada,
+  medido en la entrega 1).
+- ***Arrange in rows*** acomoda **solo las elegidas** (pedido de Lega; la auditoría de la entrega 2 sacó la propuesta
+  de sumar la fila de antes): con una sola elegida, las seguidas de su renglón. Si hay texto entre las elegidas, el
+  botón queda apagado y dice *Select images that are next to each other, with no text between them*. Para que queden
+  en filas propias dentro de una tanda más larga, la primera elegida y la foto que sigue a la última llevan una marca
+  nueva del nodo, `rowStart` ("empieza fila": las filas se cortan ahí; solo `true` o nada, así una foto sin la marca
+  se guarda igual que antes); ningún ancho de las otras cambia. La última fila no se estira: queda con la altura que le
+  da `arrangeRows` (como mucho la de la fila anterior o 2,2 veces el alto ideal), como en la foto-bloque. Dos
+  verticales elegidas quedaban de 533 px de alto; ahora, 344 px en un renglón de 720.
+- **Alinear** (izquierda, centro, derecha): en la foto en línea alinea su renglón (la alineación del bloque, la misma
+  propiedad que el texto); con varias elegidas, los bloques de todas. Marca la que tiene.
+- **Comentar** comenta el bloque, como hoy.
+- **Reemplazar** abre el selector de archivos (uno); el archivo se guarda (al Drive, como al pegar) y la foto pasa a
+  ser ese archivo, en su lugar y con su ancho. **Renombrar** abre un campo, como el de BlockNote; no aparece en un
+  archivo del Drive (la descarga y la papelera usan el nombre del archivo), igual que en la foto-bloque. **Borrar**
+  saca la foto (con varias elegidas, *Delete images*, todas). Con varias elegidas no van ver, bajar, reemplazar ni
+  renombrar.
+- **Los tiradores** (`inlinePhoto.ts`): dos barritas a los costados, como los de la foto-bloque, con la foto elegida
+  o al pasar el mouse. Arrastrar cambia el ancho en vivo y al soltar se guarda, imantado a 1, 1/2, 1/3 y 1/4 si queda a
+  menos de 2 %. Como la foto-bloque: solo con el botón principal y si se movió al menos 3 px; un solo deshacer.
+- **Dónde va:** arriba de la foto más alta de su renglón, alineada a la izquierda de las fotos, a 10 px: la misma
+  ubicación que la barra de la foto-bloque (arriba del bloque, a 10 px). Abajo, si arriba no entra. No se muestra
+  mientras se aprieta el mouse. Como la de la foto-bloque, puede quedar sobre el renglón de arriba (la auditoría lo
+  marcó, O5): un clic pensado para ese renglón puede caer en un botón. No se movió a otro lado porque Lega pidió la
+  misma ubicación que la de la foto-bloque; ningún botón borra sin poder deshacerse.
+- La barra de texto de BlockNote no se abre con fotos elegidas (su contenedor vacío aparecía un instante al soltar el
+  clic y se quedaba con el clic en la foto vecina: medido). Con texto y fotos elegidos, la de texto suma los tamaños y
+  *Arrange in rows*.
 - **Una fila llena después de un texto** del mismo renglón empieza en un renglón nuevo (una marca que no es parte del
   documento, `sd-photo-row-start`, puesta después del cursor para que lo que se escribe al final del texto quede en
-  el texto). Sin ella, las primeras fotos de la fila quedaban al lado del texto y la última bajaba sola. Una fila que
-  no llena sigue al lado del texto, como una palabra.
+  el texto). Una fila que no llena sigue al lado del texto, como una palabra: si no entra entera, se parte en dos
+  renglones (la auditoría lo anotó, O8; es "fluir como palabras", lo pedido).
 
-### Hojas y PDF
+### Paridad con la foto-bloque
 
-Un párrafo con fotos en línea se parte entre renglones (cada renglón, una fila) aunque entre entero en una hoja, como
-se partían las filas de fotos-bloque (`breakable` en `pagination.ts`; la copia de impresión no le pone "no
-partir"). Una fila nunca se corta.
+Inventario de lo que hace hoy la foto-bloque (el código de `src/ui/`: `MediaBar.tsx`, `MediaToolbarButtons.tsx`,
+`imageRowsEditor.ts`, `PageEditor.tsx`, `carreteClick.ts`, `heicNames.ts`, `printView.ts`, `pagination.ts`;
+`Doc_Imagenes.md`, `Doc_Carrete.md`, `Doc_Adjuntos.md`; y la app en Chromium) contra la foto en línea.
+
+| La foto-bloque hoy | En línea | Dónde, o por qué no |
+|---|---|---|
+| Primer clic elige (borde), segundo clic o doble clic abre el carrete | hecho | 1b (`carreteClick.ts`) |
+| Barra espaciadora con la foto elegida abre el carrete | hecho | 1b; con varias elegidas, en la primera |
+| En solo lectura, un clic abre el carrete | hecho | 1b |
+| En el teléfono, un toque abre; tocar la elegida muestra la barra | hecho | 1b y auditoría 2b |
+| Tiradores a los costados (elegida o al pasar el mouse), imantan a 1/1, 1/2, 1/3, 1/4, 3 px de umbral | hecho | `inlinePhoto.ts` |
+| Barra: ver | hecho | `MediaBar.tsx` |
+| Barra: bajar el original (Drive) o la dirección | hecho | `MediaBar.tsx` |
+| Barra: tamaños 1/1, 1/2, 1/3, 1/4 (marca el actual) | hecho | para todas las elegidas |
+| Barra: *Arrange in rows* | hecho | de las elegidas (en la foto-bloque, la tanda) |
+| Barra: alinear izquierda, centro, derecha | hecho | alinea el renglón |
+| Barra: comentar (y el atajo) | hecho | |
+| Barra: *Replace image* | hecho | selector de archivos (en las dos; antes la foto-bloque abría el panel de BlockNote, con *Embed*) |
+| Barra: *Rename image* (no en un archivo del Drive) | hecho | la misma regla |
+| Barra: *Delete image* | hecho | |
+| Barra: *Edit caption* | — | se sacó de las dos (D-24); la leyenda que existe se sigue viendo |
+| Barra: *Toggle preview* (no en un archivo del Drive) | — | se sacó de las dos: no está en la barra de D-24. **A aprobar por Lega** |
+| Fotos en fila con su ancho; "apiladas" en el teléfono | hecho | 1b |
+| Flechas entre las fotos de una fila; Enter después de la fila | hecho | como letras (1b): ← → de a una, Enter parte el renglón |
+| Borrar con Supr o Retroceso | hecho | 1b |
+| Arrastrar para mover | hecho | 1b (arrastrar la foto) |
+| Copiar y pegar dentro de la app (con su ancho) | hecho | 1b; con la marca de fila |
+| Carrete: todas las fotos de la página, en orden | hecho | 1b |
+| Miniatura, nitidez, marcador de subida, sin red, de otro proyecto | hecho | 1b (`resolveFileUrl`) |
+| Videos: cuadro con la marca de reproducir; el carrete los reproduce | hecho | 1b; los botones dicen *video* |
+| Adjuntos (PDF, zip): tarjeta, *Open* | — | siguen siendo un bloque (tarjeta), como dice el diseño ("adjuntos como hoy") |
+| HEIC: el nombre pasa a `.jpg` al convertirse | hecho | `heicNames.ts` |
+| Subida fallida: saca la foto | — | no hace falta: la foto entra cuando el archivo ya está guardado en el dispositivo; si se sale de la página antes, avisa |
+| Imprimir y PDF: una fila no se corta; originales del dispositivo | hecho | 1b y entrega 2 |
+| Comentarios anclados al bloque | hecho | 1b (el párrafo) |
+| Buscar y reemplazar la saltea | hecho | 1b |
+| *Rename* y *Toggle preview* escondidos en un archivo del Drive | hecho | *Rename*, igual; *Toggle preview* ya no está |
+
+### Lo que dejaron las auditorías de la entrega 2
+
+- **Datos, B1:** deshacer la primera foto sacaba la marca del renglón (`Doc_Colaboracion.md`, "Versiones viejas").
+  Arreglado en el parche (el filtro del deshacer), con su prueba (`stableGapsUndo.test.ts`: 70 casos, 0 renglones sin
+  marca).
+- **Navegador, B1:** con varias fotos elegidas, una letra, la barra espaciadora o Enter las borraban. Ahora, como con
+  una: la tecla sigue después de la última, Espacio abre el carrete en la primera, Supr y Retroceso borran.
+- **O1:** "Copy image" de una web (el archivo y un HTML que es solo esa imagen) entraba como foto-bloque con la
+  dirección de la web; ahora es un archivo: entra en el renglón y va al Drive (`fileDrop.ts`).
+- **O2 y O3:** *Arrange in rows* acomoda solo las elegidas, con `rowStart`, y no estira la última fila (arriba).
+- **O4:** los tiradores (arriba). **O5:** la ubicación de la barra (arriba). **O6:** *Download video* y los demás
+  nombres. **O7:** si se sale de la página mientras un archivo grande se guarda, avisa (*The page closed before…*):
+  nunca un archivo guardado que no aparece sin aviso. **O8:** documentado (arriba).
+- **Datos, observaciones:** deshacer una foto puesta en el medio de un texto mientras otro escribe a la derecha, y
+  poner una foto en el medio de un texto mientras otro borra o aprieta Enter a la derecha: en la tabla de
+  `Doc_Colaboracion.md`. El lugar de las fotos mientras se guardan, si el otro aprieta Enter antes o une o borra el
+  renglón, puede quedar al final de la parte izquierda o en un renglón nuevo después del bloque siguiente (nunca se
+  pierde nada). Pegar HTML de la app con una foto adentro de una celda crea una foto en línea en la celda (los datos
+  están bien; la impresión de celdas con fotos no está probada: entrega 5). Buscar y la importación de comentarios de
+  Coda le ponen un espacio al principio a un renglón con la marca (no escriben nada).
 
 ### Lo medido
 
@@ -588,37 +673,40 @@ partir"). Una fila nunca se corta.
 | Pegar tres al final de un texto | Juntas, en orden, a 1/3; una fila propia debajo del texto; un Ctrl+Z las saca, Ctrl+Y las vuelve |
 | Soltar dos entre dos palabras / sobre una foto-bloque / pegar en una celda | Entre las palabras / renglón nuevo después de la foto-bloque / renglón nuevo después de la tabla |
 | "/Image" | Abre el selector (varios archivos); entran donde estaba el cursor |
+| "Copy image" de una web | En el renglón, al Drive, sin partir el párrafo |
 | Mientras se guardan, el otro escribe en el renglón (dos editores con Yjs) | Lo escrito queda, las fotos en su lugar, el renglón con su forma |
+| Las dos barras | Los mismos 17 botones en el mismo orden, 5 sectores; todos 30 × 30 px, relleno 0; `data-tip` y ningún `title`; sin leyenda |
+| Tirador de una foto de 1/4 arrastrado a casi la mitad | En vivo, de 180 a 269 px; al soltar, 1/2; un temblor de 1 px no cambia nada; Ctrl+Z vuelve a 1/4 |
+| Alinear al centro, borrar, renombrar, reemplazar (Chromium) | El renglón centrado (la foto en el medio); la foto se va; el nombre cambia; la foto pasa a ser el archivo nuevo del Drive, con su ancho |
+| Varias elegidas + una letra, Espacio, Enter | Ninguna se borra (Espacio abre el carrete) |
+| Acomodar 3 de 6 fotos a 1/3 | Las otras tres no cambian de ancho; las tres en una fila propia de la misma altura (diferencia ≤ 0,02 px) |
+| Dos verticales elegidas con otra después | 229 × 344 px en un renglón de 720 (antes 533 de alto) |
+| Un video elegido | *Download video*, *Replace video*, *Delete video* |
+| Teléfono (375 px) | La barra en dos renglones, adentro de la pantalla |
 | Clic en una foto | La elige; la barra propia arriba (no tapa la foto ni la vecina más alta); la de texto no aparece |
-| Shift+clic sobre tres y 1/4, *Arrange in rows* | Las tres a 1/4; acomodadas llenan el renglón con la misma altura (diferencia < 0,05 px); la no elegida no cambia; un Ctrl+Z |
 | Emoji (`insertText`) con una foto elegida | `[F5]😀[F6]` |
-| Arrastrar para elegir y soltar en la mitad derecha / izquierda de una foto | Termina después / antes de ella (las cuatro posiciones de la auditoría de la 1b, bien al soltar) |
+| Arrastrar para elegir y soltar en la mitad derecha / izquierda de una foto | Termina después / antes de ella |
 | Escribir delante de una fila llena que pasa a empezar renglón | `abc[F3][F4][F5]`; tres Backspace borran las letras |
-| Teléfono (375 px): pegar tres, en fila y apiladas; la barra | Una fila de tres / cada una al ancho; la barra adentro de la pantalla |
-| Imprimir A4 con un párrafo de tres filas de fotos que cruza el corte | El cálculo corta entre la 2.ª y la 3.ª fila, y el PDF de Chromium (`page.pdf`) también: las fotos 1 a 6 en la hoja 1, 7 a 9 en la 2 |
+| Imprimir A4 con un párrafo de tres filas de fotos que cruza el corte | El cálculo corta entre la 2.ª y la 3.ª fila, y el PDF de Chromium (`page.pdf`) también |
 | Los scripts de la 1b (teclado, composición, carrete, el resto) | Iguales a la 1b, salvo lo cambiado a propósito (las barras) |
 | Anchos: 831 anchos × 2 densidades (1 y 1,75) | 0 renglones distintos de su fila; diferencia de alto ≤ 0,08 px (como la 1b) |
 
-Pruebas en el repo: `inlinePhotoCreate.test.ts`, `inlinePhotoSize.test.ts`, `stableGapsMarker.test.ts`,
-`collabPhotosVersions.published.test.ts`, y casos nuevos en `inlinePhotoEditor.test.ts`, `pagination.test.ts` y
-`heicNames.test.ts`.
+Pruebas en el repo: `inlinePhotoCreate.test.ts`, `inlinePhotoSize.test.ts`, `mediaBar.test.tsx`,
+`stableGapsMarker.test.ts`, `stableGapsUndo.test.ts`, `collabPhotosVersions.published.test.ts`, y casos nuevos en
+`inlinePhotoEditor.test.ts`, `pagination.test.ts`, `fileDrop.test.ts` y `heicNames.test.ts`.
 
 ### Límites que quedan
 
-- **Sin probar en Safari ni en el iPhone** (pegar, soltar, el selector de "/Image" con la cámara, la barra con el
-  dedo, la composición).
-- Pegar HTML con un `<img>` (de una web, de otro programa) sigue creando una foto-bloque: llevarlo al renglón es de la
-  entrega 3, con la conversión de imágenes `data:`.
-- "/Image" ya no ofrece pegar una dirección (*Embed*) para una foto de otro sitio: abre el selector de archivos.
+- **Sin probar en Safari ni en el iPhone** (pegar, soltar, el selector de "/Image" con la cámara, la barra y los
+  tiradores con el dedo, la composición).
+- Pegar HTML con texto y un `<img>` (de una web, de otro programa) sigue creando una foto-bloque: llevarlo al renglón
+  es de la entrega 3, con la conversión de imágenes `data:`.
+- "/Image" y *Replace image* ya no ofrecen pegar una dirección (*Embed*) para una foto de otro sitio: abren el
+  selector de archivos.
 - Las fotos en las celdas de una tabla siguen afuera (van en un renglón después de la tabla; entrega 5).
-- Llenar la última fila al acomodar puede dejarla muy alta (dos verticales a todo el ancho).
-- Sin tiradores para cambiar el ancho de una foto en línea con el mouse: el tamaño se da con la barra (los cuatro
-  tamaños y *Arrange in rows*).
-- Los videos entran en línea como las fotos (con su cuadro y la marca de reproducir, 1b), probado con un archivo
-  de video en las pruebas del repo, no con un video de verdad en Chromium.
 - La marca de espera solo se ve en el renglón; si las fotos van a un renglón nuevo, no hay marca mientras se guardan.
-- Lo que sigue de editar a la vez junto a fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está en
-  `Doc_Colaboracion.md`, igual que en la entrega 1.
+- Lo que sigue de editar a la vez junto a fotos (unir renglones, cambiar el tipo, dos Enter a la vez, deshacer una
+  foto mientras otro escribe al lado) está en `Doc_Colaboracion.md`.
 
 ### `min_app_version`
 

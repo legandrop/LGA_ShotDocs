@@ -81,9 +81,11 @@ In production (v0.049). What works today:
 - Photos in the line of text (v0.077): pasted, dropped or picked photos and videos go into the line, where the
   text cursor is (or where you drop them), like characters: text can sit next to them, they flow to the next line
   when they don't fit, and you select several with Shift+click, Shift+arrows or by dragging. A single one comes
-  in at its own size, several at a third of the line each. Their toolbar has the quick sizes (for every selected
-  photo) and *Arrange in rows* for the selected ones. Other files still come in as a card below. The PDF splits a
-  paragraph of photos between sheets only between rows.
+  in at its own size, several at a third of the line each. They do everything the older block photos do: resize
+  handles that snap to 1/1, 1/2, 1/3 and 1/4, and the same toolbar for both, in groups: view and download | sizes
+  (for every selected photo) and *Arrange in rows* for the selected ones | align | comment | replace, rename and
+  delete. There is no caption button anymore (existing captions still show). Other files still come in as a card
+  below. The PDF splits a paragraph of photos between sheets only between rows.
 - Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the

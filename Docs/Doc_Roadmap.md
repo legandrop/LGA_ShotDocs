@@ -76,9 +76,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   parche de los huecos y los huecos estables (0 letras perdidas en 300 agendas por caso; los párrafos sin fotos
   guardan lo mismo que antes, byte a byte), y lo que se ve y se toca medido en Chromium (filas, teclado, mouse,
   Shift+flechas y Shift+clic, carrete, imprimir, `[Image]` en comentarios; D-22).
-  **Entrega 2 hecha (v0.077, falta la auditoría):** pegar, soltar y "/Image" crean fotos y videos en el renglón
-  (una con su ancho natural, varias a 1/3), la barra propia (ver, bajar, tamaños para las elegidas, *Arrange in
-  rows* sobre las elegidas) y un párrafo de fotos que se parte entre hojas por filas enteras. Antes de crear: la
+  **Entrega 2 hecha (v0.077):** pegar, soltar y "/Image" crean fotos y videos en el renglón (una con su ancho
+  natural, varias a 1/3); **paridad con la foto-bloque (D-24):** tiradores que imantan, la misma barra para las dos
+  por sectores (ver, bajar | tamaños y *Arrange in rows* de las elegidas | alinear | comentar | reemplazar, renombrar,
+  borrar), sin leyenda; un párrafo de fotos se parte entre hojas por filas enteras. Corregido lo de las dos
+  auditorías de la entrega 2 (deshacer sacaba la marca del renglón; varias fotos elegidas y una tecla las borraba;
+  "Copy image" de una web; acomodar solo las elegidas). Inventario en `Doc_Fotos_En_Linea.md`, "Paridad con la
+  foto-bloque". Antes de crear: la
   **marca del renglón** (`lgaStableGaps`, propuesta; cambia la forma guardada) hace que ninguna versión anterior abra
   un renglón que tuvo fotos (versiones mezcladas: de 28 de 49 perdidas a 0, medido con la librería publicada, que
   ahora tiene su prueba en el repo), y los tres pendientes de la auditoría de la 1b (emojis y dictado, arrastrar
@@ -94,7 +98,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   - Pegar HTML con un `<img>` de afuera sigue creando una foto-bloque (entrega 3, con la conversión `data:`); "/Image"
     ya no ofrece *Embed* (dirección de otro sitio).
   - Las respuestas de Lega a las preguntas del diseño (leyenda, videos, ancho al pegar varias): hoy va la propuesta.
-  - Tiradores para cambiar el ancho de una foto en línea con el mouse (hoy, los tamaños de la barra).
+  - Que Lega apruebe sacar *Toggle preview* de la barra (no está en la de D-24).
   - Entregas 3 (convertir las fotos-bloque) y 4 (importar de Coda en línea). Lo que queda de editar a la vez junto a
     fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está medido en `Doc_Colaboracion.md`.
   **A futuro (Lega, 2026-10-01, después de ver el prototipo):** que se puedan escribir varias líneas de texto a
