@@ -68,6 +68,55 @@ export const shell = {
     en: "Archived: out of your everyday list. Unarchive it from Archived projects in the project menu.",
     es: "Archivado: fuera de tu lista de todos los días. Se desarchiva desde Proyectos archivados, en el selector.",
   },
+  // Restaurado sin su carpeta de Drive (P.14, entrega 2): las fotos y archivos subidos antes no se ven.
+  'home.driveMissing': {
+    en: "Its files were not in Google Drive when it was restored, so its photos and files do not show. If its folder turns up in Google Drive, look for them again.",
+    es: "Sus archivos no estaban en Google Drive cuando se restauró, así que sus fotos y archivos no se ven. Si su carpeta vuelve a aparecer en Google Drive, buscalos de nuevo.",
+  },
+  'project.lookForFiles': { en: "Look for its files again", es: "Buscar sus archivos de nuevo" },
+  'project.lookingForFiles': { en: "Looking…", es: "Buscando…" },
+  'project.filesBack': {
+    en: "Its files are back from the Google Drive trash.",
+    es: "Sus archivos volvieron de la papelera de Google Drive.",
+  },
+  'project.filesStillMissing': {
+    en: "Google Drive still does not have the folder of this project.",
+    es: "Google Drive sigue sin tener la carpeta de este proyecto.",
+  },
+  // Los errores del portero con la carpeta de un proyecto (src/media/projectDrive.ts).
+  'projectDrive.notConnected': {
+    en: "Google Drive is not connected: the workspace owner has to connect it.",
+    es: "Google Drive no está conectado: el dueño del workspace tiene que conectarlo.",
+  },
+  'projectDrive.otherAccount': {
+    en: "Google Drive is connected to another account: connect the one this project used to restore its files.",
+    es: "Google Drive está conectado a otra cuenta: conectá la que usaba este proyecto para restaurar sus archivos.",
+  },
+  'projectDrive.mismatch': {
+    en: "The folder in Google Drive does not belong to this project: nothing was touched. Ask the workspace owner.",
+    es: "La carpeta de Google Drive no es de este proyecto: no se tocó nada. Preguntale al dueño del workspace.",
+  },
+  'projectDrive.driveFailed': {
+    en: "Google Drive did not answer. Try again: nothing is lost.",
+    es: "Google Drive no respondió. Probá de nuevo: no se pierde nada.",
+  },
+  'projectDrive.notAllowed': {
+    en: "Only the workspace owner or an admin who manages this project can do this.",
+    es: "Solo el dueño del workspace o un admin que maneja este proyecto puede hacerlo.",
+  },
+  'projectDrive.outdated': {
+    en: "This workspace's database needs an update for this.",
+    es: "Para esto hay que actualizar la base de este workspace.",
+  },
+  'projectDrive.restoredMeanwhile': {
+    en: "Someone restored the project meanwhile: its folder stays in Google Drive.",
+    es: "Alguien restauró el proyecto mientras tanto: su carpeta queda en Google Drive.",
+  },
+  'projectDrive.noPortero': {
+    en: "This workspace has no file server.",
+    es: "Este workspace no tiene servidor de archivos.",
+  },
+  'projectDrive.unreachable': { en: "Could not reach the file server.", es: "No se pudo llegar al servidor de archivos." },
   'invite.incomplete': {
     en: "This invitation link is incomplete. Copy the whole link again, or ask for a new one.",
     es: "Este link de invitación está incompleto. Copiá el link entero otra vez, o pedí uno nuevo.",

@@ -1,8 +1,10 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { locale, t as current, type Translate } from '../i18n';
 import { errorMessage } from '../sync/types';
 import { navigate, pagePath, useRoute } from '../router';
-import { useServices, useTree } from '../services';
+import { projectDriveAt, type ProjectDrive } from '../media/projectDrive';
+import { useServices, useSyncStatus, useTree } from '../services';
+import { PROJECT_DRIVE_SCHEMA_VERSION } from '../sync/remote';
 import type { PageTree } from '../sync/tree';
 import type { StorageNames } from '../workspace';
 
@@ -79,6 +81,7 @@ export function useCurrentProject(): string {
 export function projectStateError(err: unknown, t: Translate = current): string {
   const code = errorMessage(err);
   if (code === 'not_allowed') return t('project.errorNotAllowed');
+  if (code === 'drive_untrash_first') return t('project.errorDriveFirst');
   if (code === 'project_not_found') return t('project.errorNotFound');
   if (code === 'project_deleted') return t('project.errorDeleted');
   return t('project.stateFailed', { reason: code });
@@ -121,4 +124,17 @@ export function editedLabel(iso: string | null, t: Translate = current): string 
   const sameYear = date.getFullYear() === today.getFullYear();
   const day = date.toLocaleDateString(locale(t.lang), { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
   return t('project.editedOn', { date: day });
+}
+
+/**
+ * El cliente de la carpeta del proyecto en Drive (P.14, entrega 2), con la dirección del portero que ya conoce la
+ * sincronización. `null` si el workspace no tiene portero o la base todavía no tiene la migración 10.
+ */
+export function useProjectDrive(): ProjectDrive | null {
+  const { client, projectDrive } = useServices();
+  const { mediaUrl, schemaVersion } = useSyncStatus();
+  return useMemo(() => {
+    if (!mediaUrl || (schemaVersion ?? 0) < PROJECT_DRIVE_SCHEMA_VERSION) return null;
+    return projectDrive ?? projectDriveAt(mediaUrl, client);
+  }, [mediaUrl, schemaVersion, client, projectDrive]);
 }

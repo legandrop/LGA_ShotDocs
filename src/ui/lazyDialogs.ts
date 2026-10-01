@@ -11,3 +11,4 @@ export const ProjectSearch = lazyPart(() => import('./ProjectSearch').then((m) =
 // Borrar un proyecto y la papelera de proyectos (P.14).
 export const DeleteProjectDialog = lazyPart(() => import('./ProjectStatesPart').then((m) => m.DeleteProjectDialog));
 export const DeletedProjectsList = lazyPart(() => import('./ProjectStatesPart').then((m) => m.DeletedProjectsList));
+export const LookForFilesButton = lazyPart(() => import('./ProjectStatesPart').then((m) => m.LookForFilesButton));

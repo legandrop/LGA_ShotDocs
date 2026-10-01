@@ -104,6 +104,18 @@ export interface TrashResult {
   drive: 'trashed' | 'missing' | 'none';
 }
 
+/**
+ * La respuesta de `POST /project/trash` y `POST /project/untrash` (P.14, entrega 2): `trashed` (la carpeta del
+ * proyecto quedó en la papelera de Drive), `untrashed` (volvió), `missing` (Drive no la tiene: al mandar, se confirma
+ * igual; al traer, la base no se tocó) o `none` (el proyecto nunca tuvo carpeta).
+ */
+export interface ProjectDriveResult {
+  status: 'done';
+  project: string;
+  drive: 'trashed' | 'untrashed' | 'missing' | 'none';
+  folders: number;
+}
+
 export interface UploadProgress {
   /** El pedido del portero para esta subida: con él se puede retomar (`resume`). */
   uploadId: string;
@@ -416,6 +428,20 @@ export class Portero {
    */
   async trash(file: string): Promise<TrashResult> {
     return this.request<TrashResult>('POST', '/trash', { json: { file } });
+  }
+
+  /**
+   * Manda a la papelera de Drive la carpeta entera de un proyecto borrado (`POST /project/trash`). Solo dueño y
+   * admins que lo manejan (lo decide la base). Errores con `code`: `project_not_deleted`, `drive_not_connected`,
+   * `drive_other_account`, `drive_mismatch`, `drive_failed` (repetirlo termina), `db_outdated`, `not_found`.
+   */
+  projectTrash(project: string): Promise<ProjectDriveResult> {
+    return this.request<ProjectDriveResult>('POST', '/project/trash', { json: { project }, stallMs: CONTROL_TIMEOUT_MS });
+  }
+
+  /** La trae de la papelera de Drive (`POST /project/untrash`). Además: `nothing_to_untrash`. */
+  projectUntrash(project: string): Promise<ProjectDriveResult> {
+    return this.request<ProjectDriveResult>('POST', '/project/untrash', { json: { project }, stallMs: CONTROL_TIMEOUT_MS });
   }
 
   /**

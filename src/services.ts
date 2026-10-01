@@ -6,6 +6,7 @@ import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
 import { ProjectSizes, type SizesView } from './media/projectSizes';
 import { foreignFileNotice, MediaQueue } from './media/queue';
+import type { ProjectDrive } from './media/projectDrive';
 import { notify } from './ui/notice';
 import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/access';
 import { CommentQueue, commentsDbName, openCommentsDb, type CommentsDb } from './sync/comments';
@@ -48,6 +49,11 @@ export interface Services {
   commentsDb: CommentsDb | null;
   /** Cuánto ocupa cada proyecto en el Drive (P.7), con la última respuesta guardada en el dispositivo. */
   sizes: ProjectSizes;
+  /**
+   * El portero para la carpeta de un proyecto borrado (P.14, entrega 2). Sin él, se arma con la dirección del portero
+   * del workspace (`useProjectDrive`); las pruebas ponen uno propio.
+   */
+  projectDrive?: ProjectDrive;
   /** Para la sincronización y cierra las bases del dispositivo (antes de borrarlas). */
   shutdown: () => Promise<void>;
 }
