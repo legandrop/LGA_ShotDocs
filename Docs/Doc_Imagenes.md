@@ -479,3 +479,20 @@ el conversor que falla o no contesta, sin red, la respuesta perdida de `register
 mientras se convertía, la medición en curso), `heicNames.test.ts`, `lazyPart.test.tsx` (el oyente de verdad con
 un import opcional) y `scripts/licenses.test.mjs`. En Chromium, fuera del repo, el camino entero con el build de
 producción: en el Worker, sin Worker, sin el `.wasm` y sin el decodificador, y las cuatro fotos reales.
+
+**Correcciones de la auditoría: estado al pausar (2026-10-01).** Los diez puntos están aplicados y pusheados en
+`lega/heic-app`, con `origin/main` (v0.074) ya unido; suite completa 1410 pasan, `tsc` y build limpios.
+
+- Hechos, con su prueba: (1) pregunta a la base antes de convertir y marca `sent`; (2) imports opcionales, sin
+  recarga falsa; (3) tope en la cola y en el respaldo sin Worker; (4) guardar primero y convertir después, con el
+  aviso "convirtiendo" y el nombre del bloque a `.jpg`; (5) la medición en curso no pisa al JPEG; (6) el JPEG se
+  comprueba al abrirlo y el tope baja a 50 MP; (7) las secuencias HEIF no se convierten; (8) la bajada del
+  `.wasm` colgada cuenta como "no está", el aviso depende de `registered`, y el caso `nclx` está en pendientes;
+  (9) avisos y textos de licencia en `public/licenses/`, con el comentario en los archivos de libheif; (10) las
+  pruebas del conversor, del Worker y del decodificador por la misma entrada que la app.
+- A medias o sin empezar: ninguno.
+- Sin verificar: la app real con sesión (Chrome en Windows y Mac, Safari, iPhone); el renombrado del bloque solo
+  se probó con el editor en jsdom, no en un navegador; después de estas correcciones no se repitió la prueba del
+  service worker (la caché `heic-decoder` y que `/licenses/` no caiga en la app).
+- Por dónde seguir: una segunda auditoría de `convertNow` en `src/media/queue.ts` (el caso de dos pestañas
+  anotado arriba queda abierto) y la prueba a mano en la app antes de publicar.
