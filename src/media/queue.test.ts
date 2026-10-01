@@ -8,7 +8,7 @@ import { FileRejected } from '../sync/files';
 import { CONTROL_TIMEOUT_MS, PART_BYTES, STALL_CHECK_MS, STALL_MS, answerLimit, localDay } from './portero';
 import { fileKind } from './attachments';
 import { deletedLabel, mediaKind } from './probe';
-import { MEDIA_SCHEME, STALLS_BEFORE_RENEW, heicNotice, mediaIdOf, normalizeMime } from './queue';
+import { HEIC_ONLINE_TRIES, HEIC_RETRY_MS, MEDIA_SCHEME, STALLS_BEFORE_RENEW, heicNotice, mediaIdOf, normalizeMime } from './queue';
 import { HEIC_SAMPLE } from './fixtures/heicSample';
 import { HeicError } from './heic';
 
@@ -1800,10 +1800,10 @@ describe('fotos HEIC: se guardan en el acto y pasan a JPEG después (Docs/Doc_Im
     await a.media.idle();
     expect(await a.mediaDb.get('files', id)).toMatchObject({ name: 'IMG_0001.HEIC', mime: 'image/heic', heic: 'pending' });
     expect(svgText(await a.media.resolve(url))).toContain(heicNotice('waiting'));
-    // Sin red no se registra nada; el HEIC sigue esperando (anotado como mandado a registrar).
+    // Sin red no se registra nada ni se manda a registrar: el HEIC sigue esperando el decodificador.
     await sync(a);
     expect(server.mediaFiles.size).toBe(0);
-    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'sent', registered: false });
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'pending', registered: false });
     expect(svgText(await a.media.resolve(url))).toContain(heicNotice('waiting'));
 
     // Vuelve la red (y con ella el decodificador): se pregunta a la base, se convierte y se sube el JPEG.
@@ -1832,18 +1832,122 @@ describe('fotos HEIC: se guardan en el acto y pasan a JPEG después (Docs/Doc_Im
     expect(await a.mediaDb.get('files', id)).toMatchObject({ name: 'IMG_0001.jpg', mime: 'image/jpeg', thumb: 'local' });
   });
 
-  it('si con red el decodificador sigue sin cargar, sube el HEIC tal cual (subir manda) y deja de esperar', async () => {
+  it('si con red el decodificador sigue sin cargar, se vuelve a probar dos veces con espera y después sube el HEIC tal cual (subir manda)', async () => {
     const server = new FakeServer();
-    server.convertHeic = unavailable;
+    let tries = 0;
+    server.convertHeic = async () => {
+      tries++;
+      return unavailable();
+    };
     const { a, page } = await withPage(server);
     const original = heicFile();
     const url = await a.media.add(page, original);
     const id = mediaIdOf(url)!;
     await sync(a);
+    // Primer intento (al agregarla): no se registra; espera 30 s para el segundo.
+    expect(tries).toBe(1);
+    expect(server.mediaFiles.size).toBe(0);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'pending', heicMisses: 1, registered: false, pending: 1 });
+    expect(svgText(await a.media.resolve(url))).toContain(heicNotice('waiting'));
+    // Antes de la espera no se prueba de nuevo.
+    server.clockOffset += 10_000;
+    await sync(a);
+    expect(tries).toBe(1);
+    server.clockOffset += HEIC_RETRY_MS[0];
+    await sync(a);
+    expect(tries).toBe(2);
+    expect(server.mediaFiles.size).toBe(0);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'pending', heicMisses: 2 });
+    server.clockOffset += HEIC_RETRY_MS[1] + 1000;
+    await sync(a);
+    // Tercer intento, el último: se sube tal cual.
+    expect(tries).toBe(HEIC_ONLINE_TRIES);
     expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'failed', registered: true, pending: 0, mime: 'image/heic' });
     const row = server.mediaFiles.get(id)!;
     expect(await same(original, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
     expect(svgText(await a.media.resolve(url))).toContain(heicNotice('failed'));
+  });
+
+  it('con red, si el decodificador no baja una vez (una red mala de rodaje), el reintento lo convierte y se sube el JPEG', async () => {
+    const server = new FakeServer();
+    const real = server.convertHeic;
+    let tries = 0;
+    server.convertHeic = async (file) => (++tries === 1 ? unavailable() : real(file));
+    const { a, page } = await withPage(server);
+    const id = mediaIdOf(await a.media.add(page, heicFile()))!;
+    await sync(a);
+    expect(server.mediaFiles.size).toBe(0);
+    server.clockOffset += HEIC_RETRY_MS[0] + 1000;
+    await sync(a);
+    const record = await a.mediaDb.get('files', id);
+    expect(record).toMatchObject({ name: 'IMG_0001.jpg', mime: 'image/jpeg', pending: 0 });
+    expect(record?.heic).toBeUndefined();
+    expect(record?.heicMisses).toBeUndefined();
+    expect(server.mediaFiles.get(id)).toMatchObject({ name: 'IMG_0001.jpg', mime: 'image/jpeg' });
+  });
+
+  it('sin red, los intentos no cuentan: la foto espera la red y no se sube como HEIC por eso', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.online = false;
+    let available = false;
+    const real = server.convertHeic;
+    server.convertHeic = async (file) => (available ? real(file) : unavailable());
+    const id = mediaIdOf(await a.media.add(page, heicFile()))!;
+    for (let i = 0; i < 5; i++) {
+      server.clockOffset += 5 * 60_000;
+      await sync(a);
+    }
+    expect((await a.mediaDb.get('files', id))?.heicMisses).toBeUndefined();
+    server.online = true;
+    available = true;
+    await sync(a);
+    expect(server.mediaFiles.get(id)).toMatchObject({ mime: 'image/jpeg' });
+  });
+
+  it('sin red, la conversión arranca enseguida: no pregunta a la base (tardaría en fallar)', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.online = false;
+    const asked = vi.spyOn(a.remote, 'fetchMediaFiles');
+    const id = mediaIdOf(await a.media.add(page, heicFile()))!;
+    await a.media.idle();
+    expect(asked).not.toHaveBeenCalled();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ name: 'IMG_0001.jpg', mime: 'image/jpeg' });
+  });
+
+  it('con la pregunta a la base lenta, se convierte mientras tanto y se guarda con la respuesta; si la base ya tiene la fila, queda el HEIC', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const answer = gate<boolean>();
+    const real = a.remote.fetchMediaFiles.bind(a.remote);
+    vi.spyOn(a.remote, 'fetchMediaFiles').mockImplementation(async (ids) => ((await answer.done) ? ids.map((i) => ({ id: i }) as never) : real(ids)));
+    let converted = 0;
+    const convert = server.convertHeic;
+    server.convertHeic = async (file) => {
+      converted++;
+      return convert(file);
+    };
+    const id = mediaIdOf(await a.media.add(page, heicFile()))!;
+    await new Promise((r) => setTimeout(r, 50));
+    // Ya convirtió, sin esperar la respuesta; todavía no guardó el JPEG.
+    expect(converted).toBe(1);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ mime: 'image/heic', heic: 'pending' });
+    answer.open(false);
+    await a.media.idle();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ mime: 'image/jpeg', name: 'IMG_0001.jpg' });
+
+    // Si la base contesta que ya tiene la fila (la registró una versión anterior), el JPEG no se guarda.
+    const late = gate<boolean>();
+    vi.spyOn(a.remote, 'fetchMediaFiles').mockImplementation(async (ids) => ((await late.done) ? ids.map((i) => ({ id: i }) as never) : real(ids)));
+    const original = heicFile('b.heic');
+    const other = mediaIdOf(await a.media.add(page, original))!;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(converted).toBe(2);
+    late.open(true);
+    await a.media.idle();
+    expect(await a.mediaDb.get('files', other)).toMatchObject({ mime: 'image/heic', heic: 'failed' });
+    expect(await same(original, await bytes(await a.mediaDb.get('blobs', other)))).toBe(true);
   });
 
   it('si se perdió la respuesta de register_file, no se convierte: la base ya tiene el HEIC y se sube ese (nada queda detenido)', async () => {
@@ -1863,9 +1967,11 @@ describe('fotos HEIC: se guardan en el acto y pasan a JPEG después (Docs/Doc_Im
     await a.media.idle();
     // Se registra como HEIC (el decodificador no estaba), la respuesta no llega y, en el reintento, el
     // decodificador ya está: igual no se convierte (el portero compararía el peso con la fila del HEIC).
-    await sync(a);
-    server.clockOffset += 60 * 60_000;
-    await sync(a);
+    // (Antes de registrarlo sin convertir se prueba `HEIC_ONLINE_TRIES` veces, con espera.)
+    for (let i = 0; i < HEIC_ONLINE_TRIES + 1; i++) {
+      await sync(a);
+      server.clockOffset += 60 * 60_000;
+    }
     expect(server.loseMediaResponse.has('register_file')).toBe(false);
     expect(conversions).toBe(0);
     const record = await a.mediaDb.get('files', id);

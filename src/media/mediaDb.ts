@@ -54,6 +54,11 @@ export interface MediaRecord {
    * convertirla), no hay nada pendiente.
    */
   heic?: 'pending' | 'sent' | 'failed';
+  /**
+   * Veces que, con red (la base contestó), el decodificador de HEIC no cargó. Hasta `HEIC_ONLINE_TRIES` se vuelve
+   * a probar antes de subir el HEIC tal cual (queue.ts). Opcional: una versión anterior no lo escribe ni lo lee.
+   */
+  heicMisses?: number;
   /** La subida al portero que quedó a medias: con esto se retoma después de cerrar la app. */
   uploadId: string | null;
   /** Hasta dónde confirmó el portero (bytes). */

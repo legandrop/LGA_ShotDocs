@@ -250,7 +250,29 @@ export interface MediaQueueOptions {
   convertHeic?: (file: Blob) => Promise<Blob>;
   /** Lo más que se espera una conversión antes de darla por fallida (por defecto `HEIC_LIMIT_MS`; las pruebas). */
   heicTimeoutMs?: number;
+  /**
+   * El dispositivo sabe que no tiene red (por defecto, `navigator.onLine` en `false`): no se pregunta nada que
+   * tardaría en fallar (ver `convertNow`). En `false` no asegura que haya red.
+   */
+  offline?: () => boolean;
 }
+
+/**
+ * Con red, cuántas veces se prueba cargar el decodificador de HEIC antes de subir la foto tal cual, y cuánto se
+ * espera entre un intento y el siguiente (`MediaRecord.heicMisses`). Una red mala de rodaje puede cortar la
+ * bajada una vez; tres intentos en unos dos minutos y medio no demoran mucho la subida, y después se sube igual
+ * (subir manda: la foto nunca queda esperando para siempre). Sin red no cuenta: no se podría subir de todos modos.
+ */
+export const HEIC_ONLINE_TRIES = 3;
+export const HEIC_RETRY_MS = [30_000, 120_000];
+
+const browserOffline = (): boolean => {
+  try {
+    return (globalThis as { navigator?: Navigator }).navigator?.onLine === false;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Lo más que la cola espera una conversión, pase lo que pase adentro del conversor: el tope del conversor
@@ -399,6 +421,7 @@ export class MediaQueue {
   private readonly makeView: (file: Blob, mime: string, side: number) => Promise<Blob | null>;
   private readonly heic: (file: Blob) => Promise<Blob>;
   private readonly heicTimeoutMs: number;
+  private readonly offline: () => boolean;
   /** Las conversiones de HEIC en curso (una sola por archivo; ver `ensureConverted`). */
   private readonly converting = new Map<string, Promise<void>>();
   /** HEIC cuyo último intento no encontró el decodificador (sin red): el aviso de la página lo dice. */
@@ -423,6 +446,7 @@ export class MediaQueue {
     this.makeView = options.viewImage ?? viewImage;
     this.heic = options.convertHeic ?? loadAndConvertHeic;
     this.heicTimeoutMs = options.heicTimeoutMs ?? HEIC_LIMIT_MS;
+    this.offline = options.offline ?? browserOffline;
     this.now = options.now ?? Date.now;
   }
 
@@ -1076,6 +1100,11 @@ export class MediaQueue {
       if (isConvertible(record)) {
         await this.ensureConverted(record.id);
         record = (await this.store.get('files', record.id)) ?? record;
+        // El decodificador no cargó: antes de subir el HEIC tal cual se vuelve a probar, con red hasta
+        // `HEIC_ONLINE_TRIES` veces (la espera la puso `convertNow` en `retryAt`); sin red, en la próxima vuelta.
+        if (record.heic === 'pending' && this.heicWaiting.has(record.id) && (record.heicMisses ?? 0) < HEIC_ONLINE_TRIES) {
+          return 'retry';
+        }
       }
       if (record.probed === false) {
         await this.ensureProbed(record.id);
@@ -1298,16 +1327,24 @@ export class MediaQueue {
       if (record?.registered && record.heic && record.heic !== 'failed') await this.keepHeic(id);
       return;
     }
+    const blob = await db.get('blobs', id);
+    if (!blob) return;
     // ¿La base ya tiene la fila? Pasa si se mandó a registrar como HEIC y la respuesta se perdió (`sent`), o si
     // la registró una pestaña con una versión anterior. Entonces no se convierte: el portero compara el peso
     // con la fila y el JPEG quedaría detenido, sin el HEIC. Sin respuesta (sin red), un `pending` se convierte
     // igual (esta versión nunca lo mandó) y un `sent` espera a poder preguntar.
-    let exists: boolean | null;
-    try {
-      exists = (await this.remote.fetchMediaFiles([id])).some((row) => row.id === id);
-    } catch {
-      exists = null;
-    }
+    const asking = this.askExists(id);
+    // Un `pending` se convierte ya, mientras se pregunta: sin red la pregunta tarda segundos en fallar, y la foto
+    // no tiene por qué esperarla. Lo convertido se guarda recién con la respuesta. Un `sent` espera la respuesta
+    // antes de convertir.
+    type Converted = { jpeg: Blob } | { error: unknown };
+    const convert = (): Promise<Converted> =>
+      this.convertWithLimit(blob).then(
+        (jpeg) => ({ jpeg }),
+        (error: unknown) => ({ error }),
+      );
+    const early = record.heic === 'pending' ? convert() : null;
+    const exists = await asking;
     if (exists) return this.keepHeic(id);
     if (exists === null && record.heic === 'sent') {
       // Se espera a la red: el aviso lo dice.
@@ -1317,15 +1354,20 @@ export class MediaQueue {
       }
       return;
     }
-    const blob = await db.get('blobs', id);
-    if (!blob) return;
-    let jpeg: Blob;
-    try {
-      jpeg = await this.convertWithLimit(blob);
-      if (!(jpeg.size > 0)) throw new HeicError('failed', 'The HEIC converter returned an empty file.');
-    } catch (err) {
-      if (heicFailure(err) === 'unavailable') {
-        // Sin el decodificador (sin red): se vuelve a probar en la próxima vuelta de la cola.
+    const result = await (early ?? convert());
+    const jpeg = 'jpeg' in result ? result.jpeg : null;
+    if (!jpeg || !(jpeg.size > 0)) {
+      const error = 'error' in result ? result.error : new HeicError('failed', 'The HEIC converter returned an empty file.');
+      if (heicFailure(error) === 'unavailable') {
+        // Sin el decodificador: se vuelve a probar. Con red (la base contestó, o el dispositivo no sabe que
+        // está sin red) el intento cuenta (`HEIC_ONLINE_TRIES`), con su espera; sin red, se prueba en la próxima
+        // vuelta de la cola. Que cuente de más no pierde nada: un HEIC mandado a registrar sin red (`sent`)
+        // todavía se convierte si la base no tiene su fila.
+        if (exists !== null || !this.offline()) {
+          const misses = (record.heicMisses ?? 0) + 1;
+          const wait = HEIC_RETRY_MS[Math.min(misses, HEIC_RETRY_MS.length) - 1];
+          await this.patch(id, { heicMisses: misses, retryAt: misses < HEIC_ONLINE_TRIES ? this.now() + wait : 0 }).catch(() => undefined);
+        }
         this.heicWaiting.add(id);
         this.thumbReady(id);
         return;
@@ -1354,6 +1396,7 @@ export class MediaQueue {
           thumbError: null,
         };
         delete next.heic;
+        delete next.heicMisses;
         await Promise.all([
           tx.objectStore('blobs').put(new File([jpeg], name, { type: JPEG_TYPE }), id),
           tx.objectStore('files').put(next),
@@ -1374,6 +1417,19 @@ export class MediaQueue {
     await this.ensureProbed(id);
     // La página deja el aviso y muestra la foto (con o sin miniatura), sin recargar.
     this.thumbReady(id);
+  }
+
+  /**
+   * Si la base ya tiene la fila de este archivo; `null` si no se sabe (sin red, o no contestó). Si el dispositivo
+   * sabe que no tiene red, no se pregunta: la consulta tardaría segundos en fallar. Nunca falla.
+   */
+  private async askExists(id: string): Promise<boolean | null> {
+    if (this.offline()) return null;
+    try {
+      return (await this.remote.fetchMediaFiles([id])).some((row) => row.id === id);
+    } catch {
+      return null;
+    }
   }
 
   /** La conversión con tope: un conversor que no contesta nunca no deja la cola esperando. */
