@@ -31,9 +31,10 @@ node scripts/coda-export.mjs "MGTZD" [carpeta] [--refresh]
 node scripts/coda-export.mjs --convert-only "<carpeta exportada o nombre del doc>"
 ```
 
-Si el doc tiene tablas, además las baja y las convierte en páginas (ver "Tablas", abajo). `--convert-only`
-repite solo esa conversión, sin token (solo baja, si faltan, archivos guardados en Coda): para probar
-`tables.config.json` sin volver a bajar el doc.
+Si el doc tiene tablas, además las baja y las convierte en páginas (ver "Tablas", abajo), y si tiene fotos
+HEIC las pasa a JPEG (ver "Fotos HEIC"). `--convert-only` repite solo esas conversiones, sin token (solo baja,
+si faltan, archivos guardados en Coda): para probar `tables.config.json` sin volver a bajar el doc, o para
+convertir las fotos que faltaban.
 
 - **Token.** Usa la API de Coda con un token personal (*Account settings → API settings*, conviene de solo
   lectura). Se lee de la variable `CODA_API_TOKEN` o del archivo `%USERPROFILE%\.coda-token` (en Mac,
@@ -52,7 +53,8 @@ repite solo esa conversión, sin token (solo baja, si faltan, archivos guardados
     dirección de Coda.
   - `pages/<n>_<id>.html`: el HTML tal cual lo da Coda; `pages/<n>_<id>.local.html`, el mismo con las fotos
     apuntando a `media/` (para mirarlo en el navegador).
-  - `media/`: los archivos.
+  - `media/`: los archivos. Una foto HEIC queda como JPEG, y su original en `media-originals/` (ver "Fotos
+    HEIC").
 - **Se puede cortar y volver a correr**: lo que ya está en la carpeta no se vuelve a pedir. Cada archivo se
   escribe primero como `.part` y se renombra al terminar (y se compara con el tamaño que dijo el servidor),
   así un corte nunca deja uno a medias que la corrida siguiente dé por bueno. Los archivos se bajan en
@@ -285,7 +287,7 @@ probada en `scripts/coda-tables.test.mjs` con datos inventados).
   convertido: cada página apunta a su `.import.html` y las nuevas llevan `generated: 'row' | 'group'`. Las notas
   de la conversión (qué modo tuvo cada tabla, cuántas notas salieron de la API, cuántos links quedaron) van al
   resumen del comando y a `tableNotes` del manifest; no son problemas y no cortan con error. Un doc **sin
-  tablas** deja el mismo `manifest.json` de siempre.
+  tablas** (y sin fotos HEIC) deja el mismo `manifest.json` de siempre.
 - **`tables.config.json`** (opcional, en la carpeta exportada): `{ "tables": { "<tabla o id>": "fichas|unwrap|
   table|text|skip" }, "index": { "<tabla>": ["<columna>", …] }, "skipColumns": { "<tabla>": ["<columna>", …] } }`.
   Se revisa antes de bajar nada y un error dice qué está mal; una tabla que nombra y no existe queda en las notas.
@@ -301,6 +303,59 @@ probada en `scripts/coda-tables.test.mjs` con datos inventados).
 - **Lo que no pasa:** las relaciones vivas, los filtros (queda el resultado), los botones (queda su texto), las
   fórmulas (queda su valor), las reglas de color (queda el color de cada celda, no la regla), las vistas como
   vistas (calendario, línea de tiempo) y las fotos adentro de las celdas de una tabla que queda como tabla.
+
+### Fotos HEIC (desde v0.071)
+
+Las fotos del iPhone son HEIC. La app las acepta y las sube, pero Chrome no sabe decodificarlas: no les arma
+miniatura y la página no las muestra. En Coda se veían porque Coda las convierte al mostrarlas. Ningún conteo
+lo delata (los archivos están): se ve recién al mirar la página. Por eso el **comando** deja un JPEG de cada
+una, que es lo que se importa. El código es `scripts/lib/codaHeic.mjs`.
+
+- **Qué hace.** Después de bajar (y también con `--convert-only`, sin red), cada `media/*.heic` o `*.heif` pasa
+  a `media/<blob>.jpg`: calidad 0,92, a tamaño completo y **con la orientación aplicada** (una foto vertical
+  sale vertical; el JPEG no lleva ninguna marca de rotación que un programa pueda ignorar). El **perfil de
+  color** del HEIC (las fotos del iPhone están en Display P3) se copia al JPEG: sin él se leería como sRGB y se
+  vería menos saturado.
+- **Dónde queda cada cosa.** El JPEG, en `media/` con el mismo nombre de blob: así lo encuentran los dos
+  lugares que buscan un archivo por ese prefijo (`bl-….`), la bajada, que no lo pide de nuevo, y la
+  importación. El original, en **`media-originals/<blob>.heic`**, al lado de `media/`: se conserva, pero la
+  importación solo mira adentro de `media/` y la bajada también, así que no lo importa ni lo confunde con el
+  JPEG. Se mueve, no se copia (no ocupa el doble).
+- **Lo que se importa queda coherente.** En el manifest, la entrada de esa foto apunta al JPEG, con
+  `type: "image/jpeg"` y sus `bytes`. En el HTML, la etiqueta de la foto pasa a
+  `data-coda-mime-type="image/jpeg"` y su nombre (`alt`, o el texto de un link al archivo) a `.jpg`: la app
+  toma de ahí el tipo y el nombre, y con `image/heic` o `IMG_1234.HEIC` guardaría un JPEG como si fuera un
+  HEIC. El HTML de Coda no se toca: lo cambiado va al `.import.html` de la página (el mismo que escriben las
+  tablas, o uno nuevo si la página no tenía). Vale para cualquier página: con o sin tablas, fichas, grupos y
+  embebidas. `pages/*.local.html` también pasa a apuntar al JPEG.
+- **Un doc sin tablas pero con fotos HEIC** ahora también deja `manifest.coda.json` (el de Coda, tal cual) y
+  un `manifest.json` convertido, con `heic: { converted, pending }`. Un doc **sin fotos HEIC** da exactamente
+  lo mismo que antes.
+- **Se puede repetir y cortar.** Qué está convertido se sabe mirando la carpeta (el original en
+  `media-originals/` y su JPEG en `media/`), no por lo que hizo una corrida: lo convertido no se convierte de
+  nuevo, tampoco con `--refresh`, y repetir el comando deja los mismos archivos. El JPEG se escribe como
+  `.part` y se renombra: un corte no deja uno a medias. Si el corte cae entre escribir el JPEG y mover el
+  original, la corrida siguiente solo lo mueve. Si alguien borra un JPEG, se rehace desde el original.
+- **La librería.** La conversión usa [`heic-convert`](https://www.npmjs.com/package/heic-convert) (JavaScript
+  puro, sobre libheif). **No está en `package.json`**: solo la necesita quien exporta un doc con fotos HEIC, y
+  el build de la app instala lo que dice `package-lock.json`. Se instala una vez, en el clon:
+
+  ```
+  npm i --no-save heic-convert
+  ```
+
+  (`--no-save` no toca `package.json` ni `package-lock.json`; un `npm ci` posterior la saca y hay que
+  instalarla de nuevo.) **Sin la librería** el comando sigue, no convierte, lo anota como problema ("N fotos
+  HEIC sin convertir: la app no las va a mostrar", con la forma de instalarla) y sale con error: se instala y
+  se corre `--convert-only`.
+- **Si una falla** (un archivo roto): queda como estaba, en `media/`, anotada en `problems`; las demás se
+  convierten. La app la importa igual, como HEIC (no se va a ver).
+- **El resumen** del comando: `Fotos HEIC: 618 convertidas a JPEG, 0 ya estaban, 0 fallaron`.
+- **Lo que no pasa al JPEG:** los metadatos (fecha, lugar, cámara: siguen en el original). El JPEG pesa más
+  que el HEIC, alrededor de una vez y media.
+- **Medido** con un doc real de 618 fotos HEIC de 12 y 24 megapíxeles (1,2 GB), fuera del repo: ver "Prueba".
+- **La app todavía no muestra un HEIC que llega por otra vía** (soltado en el editor desde Chrome, por
+  ejemplo): lo acepta y lo sube, y la página no lo muestra. Está en el roadmap (B.13).
 
 ### Lo que no pasa
 
@@ -442,6 +497,8 @@ cambiaron): la importación no se entera de los cambios posteriores. Para migrar
 
 - `scripts/coda-export.mjs` y `scripts/lib/codaExport.mjs` (lo que decide sin red: a qué dirección va el
   token, el nombre de cada archivo, las opciones), probado en `scripts/coda-export.test.mjs`.
+  `scripts/lib/codaTables.mjs`, las tablas (`scripts/coda-tables.test.mjs`); `scripts/lib/codaHeic.mjs`, las
+  fotos HEIC (`scripts/coda-heic.test.mjs`).
 - `src/import/codaHtml.ts`: la conversión del HTML. `src/import/codaImport.ts`: el manifest, el orden del
   árbol, la importación y su anotación para seguirla. `src/import/importJob.ts`: el estado de la importación
   afuera del diálogo (primera carga, sin lo que pesa).
@@ -531,3 +588,26 @@ doc o sin cola). `src/sync/commentsImport.test.ts`: la cola
 `import_comment`, pedir editar y crear, quién edita y borra, restaurar una copia, una versión vieja que los saca
 de la cola, borrar antes de subir). `supabase/tests/comentarios_importados_permisos.sql`: la
 función en la base.
+
+Fotos HEIC: `scripts/coda-heic.test.mjs`, con blobs y fotos inventados y un conversor de mentira: qué se
+convierte (HEIC y HEIF, sin tocar lo demás ni los `.part`), lo ya convertido reconocido por la carpeta, un
+corte entre escribir el JPEG y mover el original, un JPEG borrado que se rehace desde el original, la bajada que
+no pide de nuevo una foto convertida, un HEIC roto que queda como estaba sin frenar a las demás, un conversor
+que no devuelve un JPEG, sin la librería (anotado, con la forma de instalarla, sin tocar nada) y un doc sin
+HEIC (no cambia nada ni se carga la librería); el HTML (tipo y nombre de la foto, un link al archivo, nombres
+raros, lo que no se convirtió queda igual) y el manifest (una página sin tablas, una que ya tenía su
+`.import.html`, una embebida y las fichas de una tabla, con `convertTables`); el perfil de color; lo mismo
+sobre una carpeta temporal; y, **solo si `heic-convert` está instalado**, un HEIC de verdad hecho para la
+prueba (96×64, cuatro colores planos, guardado girado): sale derecho, a su tamaño y con su perfil.
+
+Fuera del repo (2026-10-01), con un doc real de 618 fotos HEIC (404 de 12 megapíxeles, 205 de 24 y 9 de 9; 11
+con rotación guardada, 9 de ellas verticales; 1,24 GB): las 618 convertidas, ninguna falló; alrededor de un
+segundo por foto (de 0,5 a 2,1), unos 10 minutos en total; los JPEG pesan 1,91 GB (1,55 veces); cada JPEG
+tiene el tamaño de su HEIC ya orientado, el mismo que da otro decodificador, y su mismo perfil de color
+(Display P3); se miraron cinco, las giradas incluidas: derechas. Repetir el comando no convierte ninguna y
+deja el mismo manifest. Con algunas de esas fotos: sin la librería (queda anotado y no toca nada), con dos
+archivos rotos (quedan como estaban, las demás se convierten) y después de un corte simulado (un original sin
+mover y un JPEG a medias). Además, el comando entero contra una API de Coda simulada, sin red (primera corrida,
+repetir, `--refresh`, sin la librería, y un doc sin HEIC comparado con el comando anterior: mismos pedidos y
+mismos archivos), y la carpeta que dejó, importada con el código de la app: llega el JPEG, con nombre y tipo
+de JPEG, y el original no se sube. **No se probó** en la app real (navegador, Drive) con una importación.

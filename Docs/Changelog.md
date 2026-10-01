@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.071 :
+
+Las fotos HEIC de un doc de Coda no se veían. Un doc con fotos del iPhone (HEIC) se importaba completo, pero sus
+páginas quedaban sin esas fotos: la app las acepta y las sube, y Chrome no sabe decodificarlas, así que no hay
+miniatura ni imagen. En Coda se veían porque Coda las convierte al mostrarlas. Ahora el comando que baja el doc
+deja un JPEG de cada una (calidad alta, tamaño completo, con la orientación aplicada y su perfil de color), y eso
+es lo que se importa: el manifest y el HTML que lee la app nombran el JPEG, en páginas con y sin tablas, fichas
+y embebidas. El HEIC original queda en `media-originals/`. Se puede cortar y repetir sin convertir dos veces,
+también con `--convert-only`. La librería que convierte se instala aparte; sin ella el comando sigue y lo anota
+como problema.
+[ Exportar de Coda - fotos HEIC a JPEG ]
+
 v0.070 :
 
 La miniatura todavía podía clavar la cola de archivos. Desde v0.068 los pedidos al servidor de archivos tienen

@@ -257,6 +257,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       dirección con un punto final lo lleva adentro del link; un salto de línea puede quedar adentro del
       link al final del párrafo o alrededor de una tarjeta.
     - **Verlo en la app** con una importación real: una página con muchas tarjetas de Drive.
+13. **Fotos HEIC: lo que quedó de v0.071** (`Doc_Importar_Coda.md`, "Fotos HEIC"). El comando que baja un doc
+    de Coda deja un JPEG de cada foto HEIC, así que lo importado se ve. **Falta:**
+    - **Que la app misma sepa mostrar un HEIC** que llega por otra vía (soltado en el editor desde Chrome o
+      desde Windows): hoy lo acepta y lo sube, y la página no lo muestra porque el navegador no lo decodifica.
+      **Decisión de Lega**, entre dos caminos: decodificarlo en el dispositivo para armar la miniatura y la
+      imagen de la página (el mismo decodificador del comando, libheif, pesa alrededor de 1,4 MB y tendría que
+      bajarse aparte, solo cuando hace falta), o convertirlo a JPEG al agregarlo y guardar el original aparte.
+    - **Verlo en la app** con una importación real de un doc con fotos HEIC convertidas (probado hasta la
+      carpeta exportada: archivos, manifest y HTML).
+    - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.
+    - **De a una.** La conversión tarda alrededor de un segundo por foto; con miles, convendría en paralelo.
 
 ### C. Esperan a Lega
 
