@@ -249,15 +249,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
      siempre a los 10 s en vez de espaciarse (comparar contra el máximo confirmado del intento).
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
-    - **Comprobar el anclaje de un comentario** pegado a un renglón con direcciones embebidas: si Coda da el
-      texto marcado con todo pegado, el hilo queda en la página entera en vez de en su bloque (no se
-      pierde). Arreglo posible: un último intento comparando sin espacios y, para un párrafo partido en
-      tarjetas, contra los bloques seguidos juntos.
+    - **Hecho (v0.071): el anclaje de un comentario** pegado a un renglón con direcciones: un último intento
+      compara sin espacios (12 caracteres o más; adentro de un bloque, solo si es uno solo). Queda sin probar con un comentario real de ese tipo, y un párrafo
+      partido en tarjetas todavía no se compara contra los bloques seguidos juntos.
     - **Prolijidad:** una dirección partida en dos por un cambio de formato queda como un link cortado; una
       dirección con un punto final lo lleva adentro del link; un salto de línea puede quedar adentro del
       link al final del párrafo o alrededor de una tarjeta.
     - **Verlo en la app** con una importación real: una página con muchas tarjetas de Drive.
-13. **Fotos HEIC: lo que quedó de v0.071** (`Doc_Importar_Coda.md`, "Fotos HEIC"). El comando que baja un doc
+13. **Fotos HEIC: lo que quedó de v0.072** (`Doc_Importar_Coda.md`, "Fotos HEIC"). El comando que baja un doc
     de Coda deja un JPEG de cada foto HEIC, así que lo importado se ve. **Falta:**
     - **Que la app misma sepa mostrar un HEIC** que llega por otra vía (soltado en el editor desde Chrome o
       desde Windows): hoy lo acepta y lo sube, y la página no lo muestra porque el navegador no lo decodifica.
@@ -268,6 +267,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       carpeta exportada: archivos, manifest y HTML).
     - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.
     - **De a una.** La conversión tarda alrededor de un segundo por foto; con miles, convendría en paralelo.
+    - **El perfil de color se toma por orden** en el archivo (el primero de color que aparece), que en las
+      fotos del iPhone es el de la foto. Un HEIC de otro origen con una imagen auxiliar de color antes de la
+      principal llevaría el perfil equivocado, y uno que lo declara sin perfil (`nclx`) sale sin él. Lo
+      correcto es seguir la imagen principal (`pitm` → `ipma` → `ipco`).
+    - **Pruebas del comando entero** (`convertFolder`, la bajada con una foto ya convertida, el código de
+      salida): hoy se probó a mano contra una API de Coda simulada; en el repo solo está probada la librería.
 
 ### C. Esperan a Lega
 

@@ -46,6 +46,7 @@ function fakeDisk(media, originals = {}) {
       disk.media.delete(file)
     },
     size: async (file) => disk.media.get(file).length,
+    head: async (file) => disk.media.get(file).subarray(0, 2),
   }
   disk.run = (convert, extra = {}) => {
     const calls = { load: 0, convert: [] }
@@ -124,6 +125,30 @@ describe('fotos HEIC: la conversión, con un conversor de mentira', () => {
     expect(again.stats).toEqual({ total: 1, converted: 0, already: 1, failed: 0, pending: 0 })
     // Lo convertido vale igual para el manifest y el HTML.
     expect(again.converted.get('bl-a')).toEqual({ file: 'bl-a.jpg', bytes: disk.media.get('bl-a.jpg').length })
+  })
+
+  it('un JPEG vacío o que no es un JPEG no cuenta como convertido: se rehace desde su HEIC', async () => {
+    // Lo que deja un corte de luz: el archivo con su nombre y sin contenido (o con basura).
+    const disk = fakeDisk(
+      { 'bl-a.jpg': Buffer.alloc(0), 'bl-b.jpg': Buffer.from('basura'), 'bl-c.jpg': JPEG('bueno'), 'bl-d.jpg': Buffer.alloc(0), 'bl-d.heic': Buffer.from('D') },
+      { 'bl-a.heic': Buffer.from('A'), 'bl-b.heic': Buffer.from('B'), 'bl-c.heic': Buffer.from('C') },
+    )
+    const r = await disk.run(ok)
+    expect(r.calls.convert.sort()).toEqual(['A', 'B', 'D'])
+    expect(disk.media.get('bl-a.jpg').toString()).toContain('jpeg de A')
+    expect(disk.media.get('bl-b.jpg').toString()).toContain('jpeg de B')
+    expect(disk.media.get('bl-c.jpg').toString()).toContain('bueno')
+    expect(disk.media.get('bl-d.jpg').toString()).toContain('jpeg de D')
+    // Los originales siguen todos, y el que estaba en media/ se movió.
+    expect([...disk.originals.keys()].sort()).toEqual(['bl-a.heic', 'bl-b.heic', 'bl-c.heic', 'bl-d.heic'])
+    expect(disk.media.has('bl-d.heic')).toBe(false)
+    expect(r.stats).toEqual({ total: 4, converted: 3, already: 1, failed: 0, pending: 0 })
+    expect(r.converted.get('bl-a').bytes).toBe(disk.media.get('bl-a.jpg').length)
+    // Sin la librería, el vacío no se da por bueno: queda anotado como sin convertir.
+    const empty = fakeDisk({ 'bl-a.jpg': Buffer.alloc(0) }, { 'bl-a.heic': Buffer.from('A') })
+    const none = await empty.run(null)
+    expect(none.stats).toEqual({ total: 1, converted: 0, already: 0, failed: 0, pending: 1 })
+    expect(none.converted.size).toBe(0)
   })
 
   it('una foto nueva entre las ya convertidas: solo esa', async () => {

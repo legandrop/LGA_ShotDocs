@@ -304,7 +304,7 @@ probada en `scripts/coda-tables.test.mjs` con datos inventados).
   fórmulas (queda su valor), las reglas de color (queda el color de cada celda, no la regla), las vistas como
   vistas (calendario, línea de tiempo) y las fotos adentro de las celdas de una tabla que queda como tabla.
 
-### Fotos HEIC (desde v0.071)
+### Fotos HEIC (desde v0.072)
 
 Las fotos del iPhone son HEIC. La app las acepta y las sube, pero Chrome no sabe decodificarlas: no les arma
 miniatura y la página no las muestra. En Coda se veían porque Coda las convierte al mostrarlas. Ningún conteo
@@ -335,7 +335,12 @@ una, que es lo que se importa. El código es `scripts/lib/codaHeic.mjs`.
   `media-originals/` y su JPEG en `media/`), no por lo que hizo una corrida: lo convertido no se convierte de
   nuevo, tampoco con `--refresh`, y repetir el comando deja los mismos archivos. El JPEG se escribe como
   `.part` y se renombra: un corte no deja uno a medias. Si el corte cae entre escribir el JPEG y mover el
-  original, la corrida siguiente solo lo mueve. Si alguien borra un JPEG, se rehace desde el original.
+  original, la corrida siguiente solo lo mueve. Si alguien borra un JPEG, se rehace desde el original; lo mismo
+  si quedó vacío o no empieza como un JPEG (un corte de luz antes de que el disco lo guardara). **Después de un
+  corte, volver a correr el comando antes de importar:** el manifest y los `.import.html` se escriben al final,
+  y con la carpeta a medias la app tomaría el JPEG con el nombre y el tipo del HEIC. Lo mismo si la conversión
+  de tablas falla (el comando lo dice y sale con error). Y una importación cortada en la app **antes** de
+  convertir no se sigue con la carpeta ya convertida: lo que guardó como HEIC queda así; se importa de nuevo.
 - **La librería.** La conversión usa [`heic-convert`](https://www.npmjs.com/package/heic-convert) (JavaScript
   puro, sobre libheif). **No está en `package.json`**: solo la necesita quien exporta un doc con fotos HEIC, y
   el build de la app instala lo que dice `package-lock.json`. Se instala una vez, en el clon:
@@ -440,7 +445,9 @@ transformarla, en `comments.json` en la raíz de la carpeta exportada:
   queda en el bloque de la tabla, aunque el texto sea corto; así entran los comentarios de las filas de una
   tabla de Coda que se importa como tabla, pegados al texto de su primera celda; con el mismo texto en varias
   tablas, gana la primera); si no hay, el primero que lo contiene, de la línea más larga a la más corta y solo con
-  textos de 8 letras o más, o de dos palabras ("ok" no se busca adentro de "Plano 12: ok"). Si no se encuentra
+  textos de 8 letras o más, o de dos palabras ("ok" no se busca adentro de "Plano 12: ok"); y por último lo
+  mismo **sin espacios** (desde v0.071, con 12 caracteres o más y, adentro de un bloque, solo si es uno solo: Coda puede dar pegado el texto de un renglón con
+  direcciones que la importación separó en links o tarjetas, o al revés). Si no se encuentra
   (se borró en Coda, por ejemplo), el hilo va a la página entera y queda anotado en la lista del final. Sin
   `reference`, o con un texto que queda vacío al limpiarlo, va a la página entera sin anotarlo.
 - **Autor:** un comentario con el correo de quien importa queda a su nombre (es suyo: lo edita y lo borra
@@ -591,7 +598,7 @@ función en la base.
 
 Fotos HEIC: `scripts/coda-heic.test.mjs`, con blobs y fotos inventados y un conversor de mentira: qué se
 convierte (HEIC y HEIF, sin tocar lo demás ni los `.part`), lo ya convertido reconocido por la carpeta, un
-corte entre escribir el JPEG y mover el original, un JPEG borrado que se rehace desde el original, la bajada que
+corte entre escribir el JPEG y mover el original, un JPEG borrado, vacío o roto que se rehace desde el original, la bajada que
 no pide de nuevo una foto convertida, un HEIC roto que queda como estaba sin frenar a las demás, un conversor
 que no devuelve un JPEG, sin la librería (anotado, con la forma de instalarla, sin tocar nada) y un doc sin
 HEIC (no cambia nada ni se carga la librería); el HTML (tipo y nombre de la foto, un link al archivo, nombres

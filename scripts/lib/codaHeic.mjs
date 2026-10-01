@@ -14,7 +14,7 @@
 // La librería (`heic-convert`: libheif en wasm, JavaScript puro) NO está en package.json: se carga con
 // `import()` y, si no está instalada, el comando sigue sin convertir y lo anota como problema.
 
-import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { mkdir, open, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { mediaBaseName } from './codaExport.mjs'
@@ -32,6 +32,8 @@ const JPEG_FILE = /\.jpe?g$/i
 const HOSTED = /^https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.com\/blobs)\//
 
 export const isHeic = (file) => HEIC_FILE.test(file)
+/** Si esos bytes empiezan como un JPEG (`FF D8`). */
+const isJpegStart = (bytes) => !!bytes && bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8
 const baseOf = (file) => String(file).replace(/\.[^.]+$/, '')
 
 /**
@@ -69,7 +71,8 @@ export function heicPlan(media, originals) {
 
 /**
  * Convierte lo que falta. `io` toca el disco (`read(dir, file)`, `write(file, datos)` entero o nada en
- * `media/`, `move(file)` de `media/` a los originales, `size(file)` en `media/`) y `load` trae el conversor
+ * `media/`, `move(file)` de `media/` a los originales, `size(file)` y `head(file)`, los primeros bytes, en
+ * `media/`) y `load` trae el conversor
  * (`{ convert }`, o `{ convert: null, error }` si la librería no está). Un HEIC que falla queda como estaba y
  * anotado; los demás siguen.
  *
@@ -77,6 +80,13 @@ export function heicPlan(media, originals) {
  */
 export async function convertHeic({ media, originals, io, load, log = () => {} }) {
   const plan = heicPlan(media, originals)
+  // Un JPEG vacío o que no empieza como un JPEG (un corte de luz antes de que el disco lo guardara, algo que lo
+  // truncó) no cuenta como convertido: se rehace desde su HEIC.
+  for (const key of ['done', 'move']) {
+    const good = []
+    for (const item of plan[key]) (isJpegStart(await io.head(item.jpeg)) ? good : plan.convert).push(item)
+    plan[key] = good
+  }
   const converted = new Map()
   const problems = []
   const stats = { total: plan.convert.length + plan.move.length + plan.done.length, converted: 0, already: 0, failed: 0, pending: 0 }
@@ -117,7 +127,7 @@ export async function convertHeic({ media, originals, io, load, log = () => {} }
       input = await io.read(item.dir, item.file)
       output = await convert(input)
       // Lo que no empieza como un JPEG no se guarda con nombre de JPEG.
-      if (!output || output.length < 4 || output[0] !== 0xff || output[1] !== 0xd8) throw new Error('el conversor no devolvió un JPEG')
+      if (!output || output.length < 4 || !isJpegStart(output)) throw new Error('el conversor no devolvió un JPEG')
       await io.write(item.jpeg, output)
     } catch (e) {
       stats.failed++
@@ -296,14 +306,30 @@ export async function convertHeicFolder(out, { load = loadHeicConverter, log } =
   const io = {
     read: (dir, file) => readFile(join(out, dir, file)),
     write: async (file, data) => {
-      await writeFile(join(mediaDir, file + '.part'), data)
-      await rename(join(mediaDir, file + '.part'), join(mediaDir, file))
+      const part = join(mediaDir, file + '.part')
+      try {
+        await writeFile(part, data)
+        await rename(part, join(mediaDir, file))
+      } catch (e) {
+        // Sin lugar en el disco, por ejemplo: no queda un pedazo suelto.
+        await rm(part, { force: true })
+        throw e
+      }
     },
     move: async (file) => {
       await mkdir(originalsDir, { recursive: true })
       await rename(join(mediaDir, file), join(originalsDir, file))
     },
     size: async (file) => (await stat(join(mediaDir, file))).size,
+    head: async (file) => {
+      const handle = await open(join(mediaDir, file), 'r')
+      try {
+        const { buffer, bytesRead } = await handle.read(Buffer.alloc(2), 0, 2, 0)
+        return buffer.subarray(0, bytesRead)
+      } finally {
+        await handle.close()
+      }
+    },
   }
   return convertHeic({ media: await listDir(mediaDir), originals: await listDir(originalsDir), io, load, log })
 }
