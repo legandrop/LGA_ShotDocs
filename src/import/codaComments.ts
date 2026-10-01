@@ -177,6 +177,20 @@ export function anchorBlock(thread: CodaThread, blocks: PageBlock[]): { blockId:
     const hit = normalized.find((b) => b.text.includes(line));
     if (hit) return { blockId: hit.id, lost: false };
   }
+  // Último intento, sin espacios: Coda puede dar el texto marcado con todo pegado (un renglón con direcciones
+  // que la importación separa en links o tarjetas), o al revés. Solo con textos que alcanzan para no
+  // confundirse: sin espacios, "ot ra" sería "otra"; acá hacen falta 12 caracteres o más.
+  const bare = (s: string) => s.replace(/\s+/g, '');
+  const squashed = normalized.map((b) => ({ id: b.id, text: bare(b.text) }));
+  for (const line of [...lines].sort((a, b) => b.length - a.length)) {
+    const want = bare(line);
+    if (want.length < 12) continue;
+    const exact = squashed.find((b) => b.text === want);
+    if (exact) return { blockId: exact.id, lost: false };
+    // Adentro de otro bloque, solo si es uno solo: sin espacios, dos renglones parecidos se confunden más.
+    const inside = squashed.filter((b) => b.text.includes(want));
+    if (inside.length === 1) return { blockId: inside[0].id, lost: false };
+  }
   return { blockId: null, lost: true };
 }
 
