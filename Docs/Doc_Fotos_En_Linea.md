@@ -481,7 +481,7 @@ distingue la letra de la tecla misma).
   es de la entrega 2.
 - Copiar fotos a otro programa deja en el texto plano `![nombre](dirección)` (con `sdmedia://` para las del
   Drive): es la exportación de la entrega 3.
-- El panel de comentarios muestra el texto del bloque sin las fotos (`Texto antes  gato  perro`).
+- El panel de comentarios muestra cada foto en línea como `[Image]` en el texto del bloque (decidido por Lega, D-22).
 - Un párrafo con fotos se imprime como una sola unidad (partirlo entre renglones es la entrega 2); la conversión
   de imágenes `data:` sigue mirando solo bloques.
 - Sin probar: Safari, iPhone, dos editores a la vez en un navegador (los cubren las pruebas de Yjs de la 1a).

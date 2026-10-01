@@ -145,6 +145,11 @@ diga otra cosa.
   esto no se importa ningún doc de Coda de forma definitiva. Diseño: `Doc_Fotos_En_Linea.md` (roadmap P.15).
 - **D-20 · La app muestra las fotos HEIC** (2026-10-01). Las que se sueltan en el editor, además de las que
   convierte el comando de Coda (v0.072). Roadmap B.13.
+- **D-22 · Fotos en línea: cuatro detalles de la entrega 1b** (2026-10-01, Lega: "sí" a las propuestas). Espacio
+  con una foto en línea elegida abre el carrete, como con la foto-bloque; la barra propia de la foto (ver,
+  tamaños, acomodar) llega con la entrega 2 y hasta entonces sale la de texto; el texto plano al copiar a otro
+  programa (`![nombre](sdmedia://…)`) se resuelve con la exportación de la entrega 3; el panel de comentarios
+  muestra cada foto en línea como `[Image]`. `Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 1b)".
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
