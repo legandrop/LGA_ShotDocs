@@ -118,6 +118,20 @@ export const media = {
     es: "Google Drive no empezó la subida.",
   },
   'folder.card': { en: "Google Drive folder", es: "Carpeta de Google Drive" },
+  'folder.cardStopped': { en: "Stopped: {done} of {total} (open it to retry)", es: "Detenida: {done} de {total} (abrila para reintentar)" },
+  'folder.rate': { en: "Google Drive asked to slow down.", es: "Google Drive pidió ir más despacio." },
+  'folder.notCreator': {
+    en: "Only the person who added this folder can upload into it.",
+    es: "Solo quien agregó esta carpeta puede subir adentro.",
+  },
+  'folder.full': {
+    en: "The Google Drive of the workspace owner is full: free up space in it and press Retry.",
+    es: "El Google Drive del dueño del workspace está lleno: liberá espacio y tocá Reintentar.",
+  },
+  'folder.gone': {
+    en: "This folder is not in Google Drive anymore.",
+    es: "Esta carpeta ya no está en Google Drive.",
+  },
   'folder.cardUploading': { en: "Uploading {done} of {total}", es: "Subiendo {done} de {total}" },
   'folder.cardPaused': { en: "Paused: {done} of {total}", es: "En pausa: {done} de {total}" },
   'folder.cardMissing': {

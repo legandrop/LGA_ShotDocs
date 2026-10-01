@@ -117,6 +117,8 @@ interface Running {
   bytesAtStart: number;
   noteAt: number;
   wake: (() => void) | null;
+  /** Ya se volvió a armar el árbol en esta vuelta (el portero dijo que una subcarpeta no era de esta carpeta). */
+  rebuilt: boolean;
 }
 
 export interface FolderUploadsOptions {
@@ -322,6 +324,7 @@ export class FolderUploads {
       bytesAtStart: 0,
       noteAt: 0,
       wake: null,
+      rebuilt: false,
     };
   }
 
@@ -347,7 +350,7 @@ export class FolderUploads {
     if (finished && r.loop === null) state = 'done';
     else if (r.job.paused) state = 'paused';
     else if (r.loop === null && missing > 0) state = 'missing';
-    else if (r.loop === null && errors.length > 0) state = 'failed';
+    else if (r.loop === null && (errors.length > 0 || r.problem)) state = 'failed';
     else if (r.waitingUntil > this.now()) state = 'waiting';
     else if (Object.keys(r.job.dirIds).length === 0 || r.job.dirs.some((d) => !(d in r.job.dirIds))) state = 'preparing';
     else state = 'uploading';
@@ -387,7 +390,9 @@ export class FolderUploads {
     let text: string | null;
     if (p.state === 'done') text = null;
     else if (p.state === 'missing') text = t('folder.cardMissing', { count: p.files - p.doneFiles - p.errors.length });
-    else if (p.state === 'failed') text = t('folder.cardErrors', { count: p.errors.length });
+    else if (p.state === 'failed') {
+      text = p.errors.length > 0 ? t('folder.cardErrors', { count: p.errors.length }) : t('folder.cardStopped', { done: p.doneFiles, total: p.files });
+    }
     else if (p.state === 'paused') text = t('folder.cardPaused', { done: p.doneFiles, total: p.files });
     else text = t('folder.cardUploading', { done: p.doneFiles, total: p.files });
     this.options.note(id, text);
@@ -399,6 +404,7 @@ export class FolderUploads {
       this.emit();
       return;
     }
+    r.rebuilt = false;
     r.startedAt = this.now();
     r.bytesAtStart = this.progressOf(r).doneBytes;
     r.loop = this.drain(r)
@@ -446,6 +452,8 @@ export class FolderUploads {
       }
       try {
         const res = await portero.folderPrepare(r.job.id, r.job.name, batch, parents);
+        // Otra carpeta en Drive (se creó dos veces a la vez y ganó la otra): lo de antes no sirve, se vuelve a armar.
+        if (r.job.dirIds[''] && r.job.dirIds[''] !== res.root.id) r.job.dirIds = {};
         r.job.dirIds = { ...r.job.dirIds, '': res.root.id, ...res.dirs };
         r.problem = null;
         waits = 0;
@@ -472,6 +480,15 @@ export class FolderUploads {
           await this.openSessions(r, portero, batch);
           waits = 0;
         } catch (err) {
+          // Las subcarpetas que se conocían no son de esta carpeta en Drive: se vuelven a pedir (una vez por vuelta).
+          if (err instanceof PorteroError && err.code === 'outside' && !r.rebuilt) {
+            r.rebuilt = true;
+            r.job.dirIds = {};
+            for (const i of r.items) i.uploadId = null;
+            await this.saveJob(r.job);
+            await Promise.all(running);
+            return this.drain(r);
+          }
           if (!(await this.waitIfPassing(r, err, ++waits))) {
             r.problem = describe(err);
             break;
@@ -596,6 +613,13 @@ function nameOf(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1);
 }
 
+/** El error para mostrar, guardado en inglés (se traduce al mostrarlo); los códigos del portero, con su texto. */
 function describe(err: unknown): string {
+  if (err instanceof PorteroError) {
+    if (err.code === 'rate') return stored('folder.rate');
+    if (err.code === 'not_creator') return stored('folder.notCreator');
+    if (err.code === 'drive_full') return stored('folder.full');
+    if (err.code === 'folder_gone') return stored('folder.gone');
+  }
   return err instanceof Error ? err.message : String(err);
 }

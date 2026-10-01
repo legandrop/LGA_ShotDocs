@@ -48,8 +48,8 @@ export const folders = {
     es: { one: "{count} archivo pesa más de 1 GB.", other: "{count} archivos pesan más de 1 GB." },
   },
   'folders.where': {
-    en: "It goes to the workspace owner's Drive. Whoever sees this page sees and downloads what is in it, also what is added later in Drive.",
-    es: "Va al Drive del dueño del workspace. Quien ve esta página ve y baja lo que tiene, también lo que se agregue después en Drive.",
+    en: "It goes to the workspace owner's Drive. Whoever sees this page sees and downloads what is in it.",
+    es: "Va al Drive del dueño del workspace. Quien ve esta página ve y baja lo que tiene.",
   },
   'folders.keepOpen': {
     en: "Keep this tab open until it finishes: the files are read from your disk.",
@@ -109,6 +109,14 @@ export const folders = {
   'folders.notReady': {
     en: "This folder is still being created in Google Drive: try again in a moment.",
     es: "Esta carpeta todavía se está creando en Google Drive: probá de nuevo en un momento.",
+  },
+  'folders.notFound': {
+    en: "This folder does not exist or you cannot see it.",
+    es: "Esta carpeta no existe o no la podés ver.",
+  },
+  'folders.slowDown': {
+    en: "Google Drive asked to slow down: try again in a moment.",
+    es: "Google Drive pidió ir más despacio: probá de nuevo en un momento.",
   },
   'folders.listFailed': { en: "Could not open the folder: {reason}", es: "No se pudo abrir la carpeta: {reason}" },
   'folders.offlineList': {

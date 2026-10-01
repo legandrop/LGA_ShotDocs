@@ -27,7 +27,7 @@ se abre. Migas que empiezan en la carpeta, primero las subcarpetas y después lo
 la miniatura de Drive (por `/t/`) o un ícono, el peso y *Download*. Una foto o un video abre el carrete con las
 fotos y videos de esa subcarpeta (un `CarreteLoader` propio: la miniatura mientras carga y el archivo por su
 pase); un PDF o un texto se abre en otra pestaña; lo demás se baja con `?download=1`. Escape sube un nivel y, en
-la carpeta, cierra. Los accesos directos y los documentos de Google se muestran sin abrirse. Más de 1000 cosas:
+la carpeta, cierra. Los accesos directos y los documentos de Google se muestran sin abrirse. Más de 300 cosas:
 *Show more*. En el teléfono ocupa la pantalla.
 
 **Cómo está hecho:**
@@ -58,8 +58,17 @@ la carpeta, cierra. Los accesos directos y los documentos de Google se muestran 
   la raíz del Drive, un ciclo, algo que no es una carpeta, algo en la papelera o 30 niveles dicen que no. Las
   subcarpetas creadas llevan `sdFolder` y `sdPath` (la ruta resumida): repetir un pedido no crea nada dos veces.
   `/pass` de una carpeta responde `409 is_folder`.
-- **Permisos:** listar y bajar, nivel 1 sobre la carpeta (quien ve la página); crear y subir, nivel 3. Sin acceso
-  a la página, 404 como si no existiera; pedir otra carpeta del Drive, 404 al listar y 403 al subir.
+- **Permisos:** listar y bajar, nivel 1 sobre la carpeta (quien ve la página). Crear y subir: nivel 3 **y ser
+  quien creó la carpeta** (el portero lo anota en `file:<uuid>`, `creator`, al crearla en Drive; corrección de la
+  auditoría: el nivel de `media_file` es el más alto entre las páginas que usan la carpeta, y alguien con "Ver" en
+  la página A y "Editar" en otra B podía pegar el bloque en B y subir adentro de la carpeta que ven todos los de
+  A). Sin acceso a la página, 404 como si no existiera; pedir otra carpeta del Drive, 404 al listar y 403 al
+  subir. "Agregar a esta carpeta" (de otros) pide una regla nueva que decide Lega.
+- **Plan gratis:** cada pedido de carpetas le pide a Drive a lo sumo 36 cosas (`DRIVE_CALL_BUDGET`): lo que no
+  entra vuelve sin crear o como `later` y la app lo pide en el siguiente. Listar trae 300 por pedido (cada
+  archivo lleva su pase firmado: 10 ms de CPU). Dos pedidos que crean la misma carpeta a la vez en dos instancias:
+  el segundo la encuentra en Drive por su marca `sdFile` y no crea otra; si igual quedaran dos, la app rearma el
+  árbol cuando el portero dice que una subcarpeta no es de esta carpeta.
 
 **Lo que falta, con su nivel:**
 

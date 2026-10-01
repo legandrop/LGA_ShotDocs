@@ -312,6 +312,52 @@ describe('la cola de las carpetas', () => {
     db.close();
   });
 
+  it('lo que no entró en un pedido del portero (later) va en el siguiente; si una subcarpeta no es de esta carpeta, se rearma el árbol', async () => {
+    const fake = fakeFolderPortero();
+    let laterOnce = true;
+    let outsideOnce = true;
+    const base = fake.portero;
+    const portero: FolderPortero = {
+      ...base,
+      folderSessions: async (file, items) => {
+        if (outsideOnce && items.some((i) => i.dir)) {
+          outsideOnce = false;
+          throw new PorteroError('That folder is not inside this folder.', 403, false, 'outside');
+        }
+        const out = await base.folderSessions(file, items);
+        if (laterOnce) {
+          laterOnce = false;
+          return out.map((o, i) => (i === 0 ? o : { error: 'later' }));
+        }
+        return out;
+      },
+    };
+    const f = new FolderUploads(null, { portero: () => portero, wait: noWait });
+    await f.start('id-5', 'page', sourceOf('Ref', { 'a.bin': 1, 'Sub/b.bin': 1, 'Sub/c.bin': 1 }));
+    await settle(f, 'id-5');
+    expect(f.progress('id-5')!.state).toBe('done');
+    expect(fake.uploaded.size).toBe(3);
+    // El árbol se pidió de nuevo después del "outside".
+    expect(fake.prepares.filter((x) => x.dirs.includes('Sub')).length).toBe(2);
+  });
+
+  it('un error que no se arregla solo (no es quien la creó) la deja detenida, con el motivo, y la tarjeta lo dice', async () => {
+    const notes: (string | null)[] = [];
+    const portero: FolderPortero = {
+      ...fakeFolderPortero().portero,
+      folderPrepare: async () => {
+        throw new PorteroError('Only the person who added this folder can upload into it.', 403, false, 'not_creator');
+      },
+    };
+    const f = new FolderUploads(null, { portero: () => portero, wait: noWait, note: (_, text) => notes.push(text) });
+    await f.start('id-6', 'page', sourceOf('Ref', { 'a.bin': 1 }));
+    await settle(f, 'id-6');
+    const p = f.progress('id-6')!;
+    expect(p.state).toBe('failed');
+    expect(p.problem).toBe('Only the person who added this folder can upload into it.');
+    expect(notes.at(-1)).toBe('Stopped: 0 of 1 (open it to retry)');
+  });
+
   it('pausar corta lo que sube y no pierde lo hecho; seguir continúa', async () => {
     const fake = fakeFolderPortero();
     const f = new FolderUploads(null, { portero: () => fake.portero, wait: noWait });

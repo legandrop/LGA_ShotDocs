@@ -402,8 +402,9 @@ traducción). `when`: solo con portero; subir, solo quien puede editar la págin
   rest downloads. Esc goes up one level." Palabras: ver, visor, migas, bajar, download. Atajos: Space (abrir la
   elegida, el mismo de las fotos), Escape (subir un nivel; ya está en el registro como "cerrar").
 - **Who sees a folder** (*Quién ve una carpeta*). "Whoever sees the page sees and downloads what is in the
-  folder, also what is added later in Drive, but never the folders above it or next to it. Uploading needs edit
-  access." Palabras: permisos, compartir, invitado.
+  folder, but never the folders above it or next to it. Only the person who added the folder uploads into it."
+  Palabras: permisos, compartir, invitado. (Si Lega suma `drive.readonly`, agregar: "also what is added later in
+  Drive".)
 
 En la recorrida no hace falta un paso nuevo (no cambia nada de lo que ya señala).
 

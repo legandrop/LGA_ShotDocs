@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { localize, useT } from '../i18n';
 import '../i18n/lazy/folders';
 import { fileKind, inlineType } from '../media/attachments';
@@ -40,6 +40,8 @@ export function FolderViewer({ fileId, name, onClose, onShowUpload }: { fileId: 
   const here = path[path.length - 1]!;
 
   const lister = media.porteroClient() as unknown as FolderLister | null;
+  /** El último pedido: una respuesta de una subcarpeta anterior (se cambió rápido) no pisa a la de ahora. */
+  const latest = useRef(0);
 
   const load = useCallback(
     async (dir: string | null, token: string | null) => {
@@ -47,20 +49,25 @@ export function FolderViewer({ fileId, name, onClose, onShowUpload }: { fileId: 
         setError(tr('folders.oldServer'));
         return;
       }
+      const ticket = ++latest.current;
       setLoading(true);
       setError(null);
       try {
         const page = await lister.folderList(fileId, dir, token);
+        if (ticket !== latest.current) return;
         setEntries((prev) => (token && prev ? [...prev, ...page.entries] : page.entries));
         setNext(page.nextPageToken);
       } catch (err) {
+        if (ticket !== latest.current) return;
         if (!token) setEntries(null);
         if (err instanceof PorteroError && err.code === 'not_ready') setError(tr('folders.notReady'));
+        else if (err instanceof PorteroError && (err.code === 'not_found' || err.code === 'folder_gone')) setError(tr('folders.notFound'));
+        else if (err instanceof PorteroError && err.code === 'rate') setError(tr('folders.slowDown'));
         else if (err instanceof PorteroError && err.status === 404 && !err.code) setError(tr('folders.oldServer'));
         else if (err instanceof PorteroError && err.status === 0) setError(tr('folders.offlineList'));
         else setError(tr('folders.listFailed', { reason: localize(err instanceof Error ? err.message : String(err)) }));
       } finally {
-        setLoading(false);
+        if (ticket === latest.current) setLoading(false);
       }
     },
     [lister, fileId, tr],

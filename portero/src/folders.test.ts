@@ -122,11 +122,13 @@ function fakeWorld() {
       const parent = /'([^']+)' in parents/.exec(q)?.[1];
       const mime = /mimeType = '([^']+)'/.exec(q)?.[1];
       const sdFolder = /key='sdFolder' and value='([^']+)'/.exec(q)?.[1];
+      const sdFile = /key='sdFile' and value='([^']+)'/.exec(q)?.[1];
       const sdPaths = [...q.matchAll(/key='sdPath' and value='([^']+)'/g)].map((m) => m[1]);
       let list = [...drive.entries()].filter(([, f]) => !f.trashed);
       if (parent) list = list.filter(([, f]) => f.parents.includes(parent));
       if (mime) list = list.filter(([, f]) => f.mimeType === mime);
       if (sdFolder) list = list.filter(([, f]) => f.appProperties?.sdFolder === sdFolder);
+      if (sdFile) list = list.filter(([, f]) => f.appProperties?.sdFile === sdFile);
       if (sdPaths.length) list = list.filter(([, f]) => sdPaths.includes(f.appProperties?.sdPath ?? ''));
       list.sort(([, a], [, b]) => Number(b.mimeType === FOLDER) - Number(a.mimeType === FOLDER) || a.name.localeCompare(b.name, undefined, { numeric: true }));
       return json({ files: list.map(([k, f]) => metaOf(k, f)) });
@@ -425,6 +427,71 @@ describe('carpetas: subir', () => {
     const items = Array.from({ length: 4 }, (_, i) => ({ dir: null, name: `f${i}.bin`, size: 2 }));
     const out = (await (await call(p, '/folder/sessions', 'editor-jwt', { file: F1, items })).json()) as { items: { uploadId?: string; error?: string }[] };
     expect(out.items.map((i) => (i.uploadId ? 'ok' : i.error))).toEqual(['ok', 'ok', 'rate', 'rate']);
+  });
+});
+
+describe('carpetas: quién sube', () => {
+  it('solo quien la creó sube adentro, aunque otro llegue a editarla pegando su bloque en una página propia', async () => {
+    const { world, p } = await setup();
+    const tree = await prepare(p, { dirs: ['Fotos'] });
+    // El de "Ver" pega la carpeta en una página donde edita: la base le da nivel 3 sobre la carpeta.
+    world.base.get(F1)!.levels['u-viewer'] = 3;
+    for (const jwt of ['viewer-jwt', 'owner-jwt']) {
+      const prep = await call(p, '/folder/prepare', jwt, { file: F1, dirs: ['x'] });
+      expect(prep.status).toBe(403);
+      expect(((await prep.json()) as { code: string }).code).toBe('not_creator');
+      const sess = await call(p, '/folder/sessions', jwt, { file: F1, items: [{ dir: tree.dirs.Fotos, name: 'x.bin', size: 1 }] });
+      expect(sess.status).toBe(403);
+    }
+    // Ver, sí.
+    expect((await call(p, '/folder/list', 'viewer-jwt', { file: F1 })).status).toBe(200);
+    expect([...world.drive.values()].some((f) => f.name === 'x' || f.name === 'x.bin')).toBe(false);
+  });
+
+  it('si otra instancia ya la creó (dos pedidos a la vez), se encuentra por su marca y no se crea otra', async () => {
+    const { world, store, p } = await setup();
+    // Otra instancia creó la carpeta en Drive y todavía no anotó nada (ni acá ni en la base).
+    const first = await prepare(p, {});
+    store.data.delete(`file:${F1}`);
+    world.base.get(F1)!.drive_id = null;
+    const again = await prepare(p, {});
+    expect(again.root.id).toBe(first.root.id);
+    expect([...world.drive.values()].filter((f) => f.appProperties?.sdFile === F1)).toHaveLength(1);
+  });
+
+  it('una carpeta no se sube como un archivo (/upload) ni da un pase', async () => {
+    const { p } = await setup();
+    await prepare(p, {});
+    const up = await call(p, '/upload', 'editor-jwt', { file: F1, name: 'x', mime: 'inode/directory', size: 10 });
+    expect(up.status).toBe(409);
+    expect(((await up.json()) as { code: string }).code).toBe('is_folder');
+  });
+
+  it('como subcarpeta no sirve un archivo, una carpeta en la papelera, una con dos padres ni una de otra carpeta de la app', async () => {
+    const { world, p } = await setup();
+    const tree = await prepare(p, { dirs: ['Fotos', 'Viejas', 'Dos'] });
+    const file = 'afilexxxxxxxxxxxx';
+    world.drive.set(file, { name: 'a.jpg', mimeType: 'image/jpeg', parents: [tree.root.id], data: new Uint8Array([1]) });
+    world.drive.get(tree.dirs.Viejas!)!.trashed = true;
+    world.drive.get(tree.dirs.Dos!)!.parents = [tree.root.id, 'otherparentxxxx'];
+    const other = (await (await call(p, '/folder/prepare', 'editor-jwt', { file: F2, name: 'Otra', dirs: ['Sub'] })).json()) as Prepared;
+    vi.useFakeTimers({ now: Date.now() + TREE_TTL_MS + 1000, toFake: ['Date'] });
+    for (const dir of [file, tree.dirs.Viejas, tree.dirs.Dos, other.dirs.Sub]) {
+      expect((await call(p, '/folder/list', 'viewer-jwt', { file: F1, dir })).status).toBe(404);
+      const sess = await call(p, '/folder/sessions', 'editor-jwt', { file: F1, items: [{ dir, name: 'x.bin', size: 1 }] });
+      expect(sess.status).toBe(403);
+    }
+  });
+
+  it('un pase vencido no da la miniatura', async () => {
+    const { world, p } = await setup();
+    const tree = await prepare(p, {});
+    world.drive.set('photoxxxxxxxxxxx', { name: 'f.jpg', mimeType: 'image/jpeg', parents: [tree.root.id], data: new Uint8Array([1, 2]), thumb: true });
+    const listed = (await (await call(p, '/folder/list', 'viewer-jwt', { file: F1 })).json()) as Listed;
+    const thumb = listed.entries.find((e) => e.name === 'f.jpg')!.thumb!;
+    expect((await p.handle(new Request(thumb))).status).toBe(200);
+    vi.useFakeTimers({ now: Date.now() + 9 * 3600_000, toFake: ['Date'] });
+    expect((await p.handle(new Request(thumb))).status).toBe(403);
   });
 });
 

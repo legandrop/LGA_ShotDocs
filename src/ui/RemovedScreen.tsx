@@ -140,6 +140,8 @@ export function RemovedScreen() {
   }, [db, mediaDb, commentsDb, docs, status.pendingOps, status.pendingPages, status.pendingMedia, status.pendingComments]);
 
   const pending = summary?.total ?? 0;
+  // Lo que falta subir de las carpetas (P.9): sigue en el disco de quien las soltó, pero conviene decirlo.
+  const foldersLeft = (services.folders?.all() ?? []).reduce((n, p) => n + (p.files - p.doneFiles), 0);
   const name = status.workspaceName || workspace.config.name || tr('noProjects.thisWorkspace');
 
   async function download() {
@@ -229,6 +231,7 @@ export function RemovedScreen() {
               {busy === 'download' ? tr('common.preparing') : downloaded ? tr('removed.downloadAgain') : tr('sync.downloadUnsynced')}
             </button>
             <PendingMediaList media={media} downloaded={mediaDone} onDownload={(m) => void downloadMedia(m)} />
+            {foldersLeft > 0 && <p className="muted">{tr('removed.foldersLeft', { count: foldersLeft })}</p>}
           </>
         )}
         {summary !== null && pending === 0 && <p className="muted">{tr('removed.allUploaded')}</p>}
