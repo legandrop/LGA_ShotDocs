@@ -64,7 +64,7 @@ export function plainValue(v, column) {
   if (typeof v === 'object') return squash(v.name ?? v.url ?? '')
   if (v === true) return '✓'
   // Un texto con un link viene en Markdown (`[texto](dirección)`): queda el texto.
-  const text = stripTicks(String(v)).replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '$1')
+  const text = stripTicks(String(v)).replace(/\[([^\]]+)\]\(([a-z][a-z0-9+.-]*:[^)\s]+)\)/gi, '$1')
   if (column && /^(date|dateTime|dp)$/i.test(column.type) && /^\d{4}-\d{2}-\d{2}T/.test(text)) return `${text.slice(8, 10)}/${text.slice(5, 7)}/${text.slice(0, 4)}`
   return text
 }
@@ -173,42 +173,50 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
     // Una fila se reconoce por sus columnas de texto de una línea (lo demás se escribe distinto en cada
     // fuente: fechas, listas, notas): solo letras y números, para que no importen espacios ni signos.
     const key = (s) => norm(s).replace(/[^\p{L}\p{N}]+/gu, '')
-    const keys = colIds.map((id, i) => ({ id, i })).filter(({ id }) => cols.get(id)?.type === 'text')
-    const score = (tr, rowId) => {
-      const row = d.rows.get(rowId)
-      if (!row) return -1
+    // Columnas comparables entre las dos fuentes: texto, opciones, relaciones y números. Las fechas se
+    // escriben distinto en cada una, y las notas (canvas) tienen fotos y links que la API no trae.
+    const COMPARABLE = new Set(['text', 'select', 'lookup', 'number', 'person', 'email'])
+    const keys = colIds.map((id, i) => ({ id, i })).filter(({ id }) => COMPARABLE.has(cols.get(id)?.type))
+    const web = entry.trs.map((tr) => {
       const tds = tr.querySelectorAll(':scope > td')
-      let equal = 0
-      for (const { id, i } of keys) {
-        const api = key(plainValue(row.values?.[id], cols.get(id)))
-        const web = key(tds[i]?.textContent ?? '')
-        if (api.length > 200 || /\n/.test(String(row.values?.[id] ?? '').trim())) continue
-        if (api === web) equal++
-        else if (id === base.displayColumnId) return -1
-        else equal -= 1
+      return keys.map(({ i }) => key(tds[i]?.textContent ?? ''))
+    })
+    const apiCache = new Map()
+    const api = (rowId) => {
+      if (!apiCache.has(rowId)) {
+        const row = d.rows.get(rowId)
+        apiCache.set(rowId, row ? keys.map(({ id }) => key(plainValue(row.values?.[id], cols.get(id)))) : null)
       }
-      return equal
+      return apiCache.get(rowId)
     }
-    const same = (tr, rowId) => score(tr, rowId) >= Math.min(1, keys.length)
-    const best = (tr, ids) => {
-      let top = null
-      let topScore = 0
-      for (const x of ids) {
-        if (used.has(x)) continue
-        const s = score(tr, x)
-        if (s > topScore) [top, topScore] = [x, s]
-      }
-      return top
+    /** En cuántas columnas difieren la fila n del HTML y esa fila de la API (0: es la misma). */
+    const diff = (n, rowId) => {
+      const values = api(rowId)
+      if (!values) return Infinity
+      let bad = 0
+      for (let k = 0; k < keys.length; k++) if (values[k] !== web[n][k]) bad++
+      return bad
     }
     const used = new Set()
     const out = []
+    let loose = 0
     entry.trs.forEach((tr, i) => {
-      let id = order[i]
-      // La posición manda (la vista ya viene en su orden); si esa fila no se parece, se busca la que más.
-      if (!id || used.has(id) || (keys.length && !same(tr, id))) id = keys.length ? (best(tr, order) ?? best(tr, d.all)) : null
+      // La posición manda (la vista ya viene en su orden), pero solo si la fila es EXACTAMENTE esa: con dos
+      // filas parecidas (el mismo nombre), cruzarlas mezclaría los datos de una en la ficha de la otra.
+      let id = order[i] && !used.has(order[i]) && (!keys.length || diff(i, order[i]) === 0) ? order[i] : null
+      if (!id && keys.length) id = order.find((x) => !used.has(x) && diff(i, x) === 0) ?? d.all.find((x) => !used.has(x) && diff(i, x) === 0) ?? null
+      let exact = !!id
+      if (!id && keys.length) {
+        // Ninguna coincide en todo (un texto que cada fuente escribe distinto): la más parecida sirve para
+        // ubicarla en la lista, pero de esa fila del HTML no se toma el contenido de las celdas.
+        const ranked = order.filter((x) => !used.has(x)).map((x) => [diff(i, x), x]).sort((p, q) => p[0] - q[0])
+        if (ranked.length && ranked[0][0] <= Math.max(1, Math.floor(keys.length / 3)) && (ranked.length === 1 || ranked[1][0] > ranked[0][0])) id = ranked[0][1]
+        exact = false
+        if (id) loose++
+      }
       if (id) used.add(id)
       out.push(id)
-      if (!id) return
+      if (!id || !exact) return
       const tds = tr.querySelectorAll(':scope > td')
       colIds.forEach((columnId, c) => {
         const td = tds[c]
@@ -222,6 +230,7 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
         if (bg || fg) paints.set(key, [bg && `background-color: ${bg.trim()}`, fg && `color: ${fg.trim()}`].filter(Boolean).join('; '))
       })
     })
+    if (loose) notes.push(`${table.name}: ${loose} de ${out.length} filas no coincidían en todo con los datos de la API: se ubicaron por parecido y su contenido sale de la API`)
     const lost = out.filter((x) => !x).length
     if (lost) notes.push(`${table.name}: ${lost} de ${out.length} filas del HTML no se reconocieron en los datos de la API (quedan sin ficha propia)`)
     return out
