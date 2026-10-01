@@ -424,7 +424,7 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
           {typed && results.total === 0 && !info.building && <p className="search-empty muted">{tr('search.none')}</p>}
         </div>
         )}
-        <p className="search-footer muted">{tr('search.keys')}</p>
+        {!replacing && <p className="search-footer muted">{tr('search.keys')}</p>}
       </div>
     </div>
   );

@@ -59,7 +59,7 @@ function preview(match: PhraseMatch): {
 export function reportRun(session: ReplaceSession, result: RunResult): void {
   const parts: string[] = [];
   if (result.unsaved) parts.push(t('replace.unsaved'));
-  parts.push(t('replace.done', { count: result.replaced, pages: result.pages }));
+  parts.push(t('replace.done', { count: result.replaced, pages: t('replace.pages', { count: result.pages }) }));
   if (result.stopped) parts.push(t('replace.stopped'));
   const notTouched = Object.values(result.blocked).reduce((n, v) => n + (v ?? 0), 0);
   if (notTouched > 0) parts.push(t('replace.pagesSkipped', { count: notTouched }));
@@ -284,6 +284,12 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
     if (confirm) cancelRef.current?.focus();
   }, [confirm]);
 
+  /** Cierra la confirmación y deja el foco en el campo del reemplazo (si no, quedaría en la página y Esc no cerraría el panel). */
+  const closeConfirm = () => {
+    setConfirm(null);
+    document.querySelector<HTMLInputElement>('.search-panel .replace-input')?.focus();
+  };
+
   const latest = recent[0];
   const older = recent.slice(1);
   const recentLine = (op: OpHeader) => (
@@ -293,7 +299,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
           query: op.query,
           replacement: op.replacement,
           count: op.replaced,
-          pages: op.pages.length,
+          pages: tr('replace.pages', { count: op.pages.length }),
         })}
         {op.status === 'stopped' && ` · ${tr('replace.recentStopped', { done: op.pages.length, total: op.planned })}`}
         {op.status === 'partial' && ` · ${tr('replace.recentPartial')}`}
@@ -353,7 +359,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
           <p className="replace-summary muted" role="status">
             {tr('replace.summary', {
               count: total,
-              pages: hits.filter((h) => replaceable(h).length > 0).length,
+              pages: tr('replace.pages', { count: hits.filter((h) => replaceable(h).length > 0).length }),
             })}
           </p>
         )}
@@ -480,7 +486,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
         <div
           className="replace-confirm-backdrop"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setConfirm(null);
+            if (e.target === e.currentTarget) closeConfirm();
           }}
         >
           <div
@@ -492,7 +498,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
               if (e.key === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
-                setConfirm(null);
+                closeConfirm();
               }
             }}
           >
@@ -506,7 +512,7 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
                   <h2 id="replace-confirm-title">
                     {count === 0
                       ? tr('replace.confirmNone')
-                      : tr(deleting ? 'replace.confirmDelete' : 'replace.confirmTitle', { count, pages: summary.pageCount })}
+                      : tr(deleting ? 'replace.confirmDelete' : 'replace.confirmTitle', { count, pages: tr('replace.pages', { count: summary.pageCount }) })}
                   </h2>
                   <p className="replace-confirm-what">
                     “{request.query}” → {deleting ? tr('replace.nothing') : `“${request.replacement}”`}
@@ -522,14 +528,14 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
                   {summary.offline && <p className="muted">{tr('replace.offline')}</p>}
                   <p className="muted">{tr('replace.canUndo')}</p>
                   <div className="modal-actions">
-                    <button ref={cancelRef} onClick={() => setConfirm(null)}>
+                    <button ref={cancelRef} onClick={() => closeConfirm()}>
                       {tr('common.cancel')}
                     </button>
                     <button
                       className={`primary${deleting ? ' danger' : ''}`}
                       disabled={count === 0}
                       onClick={() => {
-                        setConfirm(null);
+                        closeConfirm();
                         void run({
                           ...request,
                           deleteHidden: deleting && deleteHidden,

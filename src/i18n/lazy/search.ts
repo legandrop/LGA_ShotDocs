@@ -50,6 +50,7 @@ export const search = {
   'search.keys': { en: "↑ ↓ to move · Enter to open · Esc to close", es: "↑ ↓ para moverte · Enter abre · Esc cierra" },
 
   // Reemplazar en todo el proyecto (Docs/Doc_Buscar.md, "Reemplazar en el proyecto").
+  "replace.pages": { en: { one: "{count} page", other: "{count} pages" }, es: { one: "{count} página", other: "{count} páginas" } },
   'replace.show': { en: "Replace in this project", es: "Reemplazar en el proyecto" },
   'replace.hide': { en: "Hide replace", es: "Ocultar reemplazar" },
   'replace.placeholder': { en: "Replace", es: "Reemplazar" },
@@ -63,8 +64,8 @@ export const search = {
   'replace.leaveOut': { en: "Leave out of this replacement", es: "Dejar afuera de este reemplazo" },
   'replace.leaveOutPage': { en: "Leave this page out", es: "Dejar esta página afuera" },
   'replace.summary': {
-    en: { one: "{count} match in {pages} pages", other: "{count} matches in {pages} pages" },
-    es: { one: "{count} coincidencia en {pages} páginas", other: "{count} coincidencias en {pages} páginas" },
+    en: { one: "{count} match in {pages}", other: "{count} matches in {pages}" },
+    es: { one: "{count} coincidencia en {pages}", other: "{count} coincidencias en {pages}" },
   },
   'replace.moreInPage': {
     en: { one: "and {count} more: it changes with the page", other: "and {count} more: they change with the page" },
@@ -83,12 +84,12 @@ export const search = {
   'replace.block.error': { en: "Couldn't be changed", es: "No se pudo cambiar" },
   'replace.checking': { en: "Checking for changes…", es: "Buscando cambios…" },
   'replace.confirmTitle': {
-    en: { one: "Replace {count} match in {pages} pages?", other: "Replace {count} matches in {pages} pages?" },
-    es: { one: "¿Reemplazar {count} coincidencia en {pages} páginas?", other: "¿Reemplazar {count} coincidencias en {pages} páginas?" },
+    en: { one: "Replace {count} match in {pages}?", other: "Replace {count} matches in {pages}?" },
+    es: { one: "¿Reemplazar {count} coincidencia en {pages}?", other: "¿Reemplazar {count} coincidencias en {pages}?" },
   },
   'replace.confirmDelete': {
-    en: { one: "Delete {count} match in {pages} pages?", other: "Delete {count} matches in {pages} pages?" },
-    es: { one: "¿Borrar {count} coincidencia en {pages} páginas?", other: "¿Borrar {count} coincidencias en {pages} páginas?" },
+    en: { one: "Delete {count} match in {pages}?", other: "Delete {count} matches in {pages}?" },
+    es: { one: "¿Borrar {count} coincidencia en {pages}?", other: "¿Borrar {count} coincidencias en {pages}?" },
   },
   'replace.confirmNone': { en: "Nothing to change", es: "No hay nada que cambiar" },
   'replace.nothing': { en: "nothing (deleted)", es: "nada (se borra)" },
@@ -128,8 +129,8 @@ export const search = {
   'replace.undoing': { en: "Undoing… {done} of {total} pages", es: "Deshaciendo… {done} de {total} páginas" },
   'replace.stop': { en: "Stop", es: "Parar" },
   'replace.done': {
-    en: { one: "{count} replacement in {pages} pages", other: "{count} replacements in {pages} pages" },
-    es: { one: "{count} reemplazo en {pages} páginas", other: "{count} reemplazos en {pages} páginas" },
+    en: { one: "{count} replacement in {pages}", other: "{count} replacements in {pages}" },
+    es: { one: "{count} reemplazo en {pages}", other: "{count} reemplazos en {pages}" },
   },
   'replace.stopped': { en: "stopped", es: "se paró" },
   'replace.pagesSkipped': {
@@ -156,8 +157,8 @@ export const search = {
     es: { one: "{count} página no se pudo deshacer ahora", other: "{count} páginas no se pudieron deshacer ahora" },
   },
   'replace.recent': {
-    en: "Last: “{query}” → “{replacement}”, {count} in {pages} pages",
-    es: "Último: “{query}” → “{replacement}”, {count} en {pages} páginas",
+    en: "Last: “{query}” → “{replacement}”, {count} in {pages}",
+    es: "Último: “{query}” → “{replacement}”, {count} en {pages}",
   },
   'replace.recentStopped': { en: "stopped after {done} of {total} pages", es: "se paró después de {done} de {total} páginas" },
   'replace.recentPartial': { en: "partly undone", es: "deshecho en parte" },

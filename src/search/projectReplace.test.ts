@@ -381,6 +381,34 @@ describe('sin red', () => {
   });
 });
 
+describe('rendimiento', () => {
+  it('300 páginas de 50 párrafos: reemplazar y deshacer, con tope de tiempo', async () => {
+    const d = await device();
+    const PAGES = Number(process.env.REPLACE_PAGES ?? 300);
+    const filler = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore ';
+    const ids: string[] = [];
+    for (let i = 0; i < PAGES; i++) {
+      const id = await d.tree.create(null, `P${i}`);
+      await write(d, id, Array.from({ length: 50 }, (_, j) => (j % 17 === 0 ? `${filler}la cámara ${j}` : filler + filler)));
+      ids.push(id);
+    }
+    const engine = engineOf(d);
+    const t0 = performance.now();
+    const result = await engine.run(request(d, ids));
+    const replaceMs = performance.now() - t0;
+    expect(result.replaced).toBe(PAGES * 3);
+    const [op] = await engine.list(d.tree.workspaceId);
+    const t1 = performance.now();
+    expect((await engine.undo(op.id)).undone).toBe(PAGES * 3);
+    const undoMs = performance.now() - t1;
+    console.log(`reemplazar ${PAGES} páginas: ${replaceMs.toFixed(0)} ms; deshacer: ${undoMs.toFixed(0)} ms`);
+    // Con la máquina cargada (varias pruebas a la vez) tarda más: el tope estricto solo con SHOTDOCS_STRICT_PERF.
+    const cap = process.env.SHOTDOCS_STRICT_PERF ? 5000 : 25000;
+    expect(replaceMs).toBeLessThan(cap);
+    expect(undoMs).toBeLessThan(cap);
+  }, 120_000);
+});
+
 describe('al azar con dos dispositivos', () => {
   it('lo que escribe el otro nunca se pierde, todos terminan iguales, y sin cambios del otro deshacer deja todo igual', async () => {
     const RUNS = Number(process.env.REPLACE_RANDOM ?? 8);
