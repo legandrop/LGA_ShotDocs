@@ -186,6 +186,12 @@ const FOLDERS_DIR = 'Carpetas';
  * pedido ya usa unos pocos (la sesión, la base, el token, el árbol).
  */
 export const FOLDER_BATCH = 30;
+/**
+ * Lo más que un pedido de carpetas le pide a Drive: con la sesión, la base, el token y el almacenamiento queda
+ * debajo de los 50 llamados afuera del plan gratis. Lo que no entra vuelve como `later` (o sin crear) y la app lo
+ * pide en el pedido siguiente; cada pedido avanza al menos una cosa.
+ */
+export const DRIVE_CALL_BUDGET = 36;
 /** Una subcarpeta comprobada adentro del árbol se vuelve a comprobar pasado esto (el dueño puede moverla afuera). */
 export const TREE_TTL_MS = 10 * 60_000;
 /** Lo más hondo que se sube por los `parents` buscando la carpeta de la app. */
@@ -403,6 +409,8 @@ function today(): string {
 export class Portero {
   private accessToken: { token: string; until: number } | null = null;
   private passSecret: string | null = null;
+  /** Llamados a Drive en este pedido (cada pedido crea un Portero nuevo): ver `DRIVE_CALL_BUDGET`. */
+  private driveCalls = 0;
 
   constructor(
     private readonly env: Env,
@@ -668,6 +676,7 @@ export class Portero {
   }
 
   private async drive(path: string, init: RequestInit = {}): Promise<Response> {
+    this.driveCalls++;
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${await this.token()}`);
     return this.http(path.startsWith('https://') ? path : `${DRIVE}${path}`, { ...init, headers });
@@ -1318,6 +1327,8 @@ export class Portero {
         let id: string;
         if (was && was.parent === parent) id = was.id;
         else {
+          // Lo que no entra en este pedido queda para el siguiente (la app pide las que faltan).
+          if (this.driveCalls >= DRIVE_CALL_BUDGET && Object.keys(out).length > 0) break;
           const name = driveFolderName(path.slice(up ? up.length + 1 : 0));
           id = await this.createChecked(name, parent, { sdFolder: file, sdPath: (await pathMark(path)) });
         }
@@ -1372,17 +1383,28 @@ export class Portero {
       const mime = typeof item.mime === 'string' && MIME.test(item.mime) ? item.mime.toLowerCase() : 'application/octet-stream';
       return { dir, name, mime, size };
     });
+    // Cada subcarpeta, adentro del árbol. Las que no se llegan a comprobar en este pedido (el tope de llamados)
+    // vuelven como `later`; una de afuera corta todo el pedido.
+    const checked = new Set<string>();
     for (const dir of new Set(wanted.map((w) => w.dir))) {
+      if (checked.size > 0 && this.driveCalls >= DRIVE_CALL_BUDGET) break;
       if (!(await this.inTree(root, dir))) throw new HttpError(403, 'That folder is not inside this folder.', 'outside');
+      checked.add(dir);
     }
     const secret = await this.secret();
     const out: unknown[] = [];
     let slowDown = false;
+    let opened = 0;
     for (const w of wanted) {
       if (slowDown) {
         out.push({ error: 'rate' });
         continue;
       }
+      if (!checked.has(w.dir) || (opened > 0 && this.driveCalls >= DRIVE_CALL_BUDGET)) {
+        out.push({ error: 'later' });
+        continue;
+      }
+      opened++;
       const meta = { name: w.name, parents: [w.dir], appProperties: { sdFolder: file } };
       const res =
         w.size === 0

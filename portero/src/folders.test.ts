@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { driveFolderName, FOLDER_BATCH, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
+import { DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
 
 // Carpetas (P.9, Docs/Doc_Carpetas.md): crear el árbol, abrir las subidas, listar en vivo y, sobre todo, que
 // nadie pueda listar, subir ni bajar nada de afuera del árbol de la carpeta.
@@ -383,6 +383,39 @@ describe('carpetas: subir', () => {
       expect(res.status).toBe(403);
     }
     expect([...world.drive.values()].some((f) => f.name === 'a')).toBe(false);
+  });
+
+  it('ningún pedido pasa el tope de llamados a Drive del plan gratis: lo que no entra vuelve para después', async () => {
+    const { world, store } = await setup();
+    // 30 subcarpetas de 3 niveles, en una instancia nueva (sin nada comprobado en memoria).
+    const dirs = Array.from({ length: 10 }, (_, i) => [`a${i}`, `a${i}/b`, `a${i}/b/c`]).flat();
+    let done: Record<string, string> = {};
+    let requests = 0;
+    let maxUsed = 0;
+    const counted = async (path: string, body: unknown) => {
+      const before = world.calls.filter((c) => c.includes('googleapis')).length;
+      // Lo guardado es el mismo, la memoria de la instancia no (otro objeto `Store`).
+      const res = await call(new Portero(env, { ...store }, world.http), path, 'editor-jwt', body);
+      const used = world.calls.filter((c) => c.includes('googleapis')).length - before;
+      maxUsed = Math.max(maxUsed, used);
+      expect(used).toBeLessThanOrEqual(DRIVE_CALL_BUDGET + 4);
+      requests++;
+      return res;
+    };
+    while (Object.keys(done).length < dirs.length && requests < 20) {
+      const batch = dirs.filter((d) => !(d in done)).slice(0, FOLDER_BATCH);
+      const parents = Object.fromEntries(Object.entries(done));
+      const res = await counted('/folder/prepare', { file: F1, name: 'Referencias', dirs: batch, parents });
+      expect(res.status).toBe(200);
+      done = { ...done, ...((await res.json()) as Prepared).dirs };
+    }
+    expect(Object.keys(done).length).toBe(30);
+    // Una tanda de 30 archivos en 30 subcarpetas distintas, en otra instancia nueva.
+    const items = dirs.map((d) => ({ dir: done[d], name: 'x.bin', size: 1 }));
+    const res = await counted('/folder/sessions', { file: F1, items });
+    const out = ((await res.json()) as { items: { uploadId?: string; error?: string }[] }).items;
+    expect(out.some((i) => i.uploadId)).toBe(true);
+    expect(out.every((i) => i.uploadId || i.error === 'later')).toBe(true);
   });
 
   it('si Drive pide ir más despacio, los que faltan vuelven para pedirlos después', async () => {

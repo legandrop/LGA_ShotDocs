@@ -512,6 +512,8 @@ export class FolderUploads {
       if ('uploadId' in s) item.uploadId = s.uploadId;
       else if ('done' in s) item.done = true;
       else if (s.error === 'rate') slowDown = true;
+      // No entró en ese pedido (el portero tiene un tope de llamados a Drive): va en la tanda siguiente.
+      else if (s.error === 'later') return;
       else {
         item.tries++;
         item.error = s.error === 'gone' ? stored('folder.dirGone') : stored('folder.driveFailed');
