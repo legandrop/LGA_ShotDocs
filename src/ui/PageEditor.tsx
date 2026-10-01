@@ -28,6 +28,7 @@ import { openAttachmentNow, prepareAttachment } from './attachmentOpen';
 import { AttachmentSheet } from './AttachmentSheet';
 import { editorDictionary } from './editorLocale';
 import { findUnknownContent } from './unknownContent';
+import { editorLinkClick, followInternalLink } from './internalLinks';
 import { redrawFromYjs } from './editorRecovery';
 import {
   CommentMargin,
@@ -327,6 +328,8 @@ function BlockEditor({
     withCollaboration({
       ...editorSchemaOptions,
       dictionary: editorDictionary(tr.lang),
+      // Un link a otra página de la app la abre en esta pestaña (internalLinks.ts).
+      links: { onClick: (event) => editorLinkClick(event) },
       // Pegar archivos (con portero, cualquier archivo): un bloque por archivo, en orden (fileDrop.ts).
       pasteHandler: (ctx) => {
         const dt = ctx.event.clipboardData;
@@ -743,6 +746,7 @@ function BlockEditor({
       onDropCapture={dropFiles}
       onPointerDownCapture={notePress}
       onKeyDownCapture={openWithKeyboard}
+      onClickCapture={(e) => !editable && followInternalLink(e.nativeEvent)}
       onClick={openCarrete}
     >
       <BlockNoteView

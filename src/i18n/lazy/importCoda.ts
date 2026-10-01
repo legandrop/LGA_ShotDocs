@@ -120,6 +120,10 @@ export const importCoda = {
       other: "{count} archivos quedaron guardados pero la página no se pudo escribir; seguí la importación para ubicarlos",
     },
   },
+  'import.brokenPageLink': {
+    en: "a link to a page that is not in the export stays as text ({id})",
+    es: "un link a una página que no está en la exportación queda como texto ({id})",
+  },
   'import.embed': {
     en: "a video or embed from another site stays as a link: {url}",
     es: "un video o embebido de otro sitio queda como link: {url}",
