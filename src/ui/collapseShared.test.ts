@@ -63,6 +63,13 @@ const PAGE = [p('top', 'top'), h('S', 'Section'), p('s1', 'one'), h('T', 'Other'
 const view = (e: BlockNoteEditor) => e.prosemirrorView!;
 const hidden = (e: BlockNoteEditor) => [...collapseState(e.prosemirrorState)!.analysis.hidden.keys()].sort();
 const map = (d: Y.Doc) => d.getMap(SHARED_COLLAPSE_MAP);
+/** Lo que avisa el mapa al otro editor se aplica después de que Yjs termina de avisar (un microtask). */
+const settle = () => new Promise((r) => setTimeout(r, 0));
+async function share(e: BlockNoteEditor, id: string): Promise<boolean> {
+  const done = toggleShared(view(e), id);
+  await settle();
+  return done;
+}
 
 /** Dos personas con la misma página, conectadas (cada cambio llega al otro enseguida). */
 function two(options: { canShareB?: boolean } = {}) {
@@ -76,10 +83,10 @@ function two(options: { canShareB?: boolean } = {}) {
 }
 
 describe('Shift+clic: para todos', () => {
-  it('colapsa para todos: el otro lo ve colapsado; el contenido no cambia; Ctrl+Z no lo deshace', () => {
+  it('colapsa para todos: el otro lo ve colapsado; el contenido no cambia; Ctrl+Z no lo deshace', async () => {
     const { docA, docB, A, B } = two();
     const text = yText(docA);
-    expect(toggleShared(view(A), 'S')).toBe(true);
+    expect((await share(A, 'S'))).toBe(true);
     expect(map(docB).get('S')).toBe(true);
     expect(hidden(A)).toEqual(['s1']);
     expect(hidden(B)).toEqual(['s1']);
@@ -90,51 +97,51 @@ describe('Shift+clic: para todos', () => {
     A.undo();
     expect(map(docA).get('S')).toBe(true);
     // Abrir para todos borra la clave (no se juntan valores `false`).
-    expect(toggleShared(view(B), 'S')).toBe(true);
+    expect((await share(B, 'S'))).toBe(true);
     expect(map(docA).has('S')).toBe(false);
     expect(hidden(A)).toEqual([]);
   });
 
-  it('lo tuyo manda: un Shift+clic de otro no cambia lo que ve quien tiene lo suyo (decisión 17)', () => {
+  it('lo tuyo manda: un Shift+clic de otro no cambia lo que ve quien tiene lo suyo (decisión 17)', async () => {
     const { A, B } = two();
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
     // B lo abre solo para B (un clic): queda guardado como suyo.
     toggleCollapsed(view(B), 'S');
     expect(hidden(B)).toEqual([]);
     expect(headingCollapse(B.prosemirrorState, 'S')).toEqual({ collapsed: false, forAll: true, onlyYou: true });
     // A lo abre y lo vuelve a colapsar para todos: B sigue viéndolo abierto.
-    toggleShared(view(A), 'S');
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
+    (await share(A, 'S'));
     expect(hidden(A)).toEqual(['s1']);
     expect(hidden(B)).toEqual([]);
   });
 
-  it('si lo que ves es solo tuyo, Shift+clic lo pasa a todos; si no, lo cambia para todos (la tabla del §3)', () => {
+  it('si lo que ves es solo tuyo, Shift+clic lo pasa a todos; si no, lo cambia para todos (la tabla del §3)', async () => {
     const { docA, A, B } = two();
     // Colapsado solo para vos → Shift+clic: colapsar para todos.
     toggleCollapsed(view(A), 'S');
     expect(headingCollapse(A.prosemirrorState, 'S')).toEqual({ collapsed: true, forAll: false, onlyYou: true });
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
     expect(map(docA).get('S')).toBe(true);
     expect(headingCollapse(A.prosemirrorState, 'S')).toEqual({ collapsed: true, forAll: true, onlyYou: false });
     expect(hidden(B)).toEqual(['s1']);
     // Abierto solo para vos (para los demás colapsado) → Shift+clic: abrir para todos.
     toggleCollapsed(view(A), 'S');
     expect(headingCollapse(A.prosemirrorState, 'S')).toEqual({ collapsed: false, forAll: true, onlyYou: true });
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
     expect(map(docA).has('S')).toBe(false);
     expect(hidden(A)).toEqual([]);
     expect(hidden(B)).toEqual([]);
     // Abierto para todos → Shift+clic: colapsar para todos; colapsado para todos → abrir para todos.
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
     expect(hidden(B)).toEqual(['s1']);
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
     expect(hidden(B)).toEqual([]);
   });
 
-  it('sin permiso de editar no escribe el mapa, y el atajo con Shift colapsa solo para vos', () => {
+  it('sin permiso de editar no escribe el mapa, y el atajo con Shift colapsa solo para vos', async () => {
     const { docA, docB, B } = two({ canShareB: false });
-    expect(toggleShared(view(B), 'S')).toBe(false);
+    expect((await share(B, 'S'))).toBe(false);
     expect(map(docA).size).toBe(0);
     const v = view(B);
     let at = -1;
@@ -149,14 +156,14 @@ describe('Shift+clic: para todos', () => {
     expect(collapseState(B.prosemirrorState)!.records.get('S')?.c).toBe(true);
   });
 
-  it('en solo lectura (el editor no editable) tampoco', () => {
+  it('en solo lectura (el editor no editable) tampoco', async () => {
     const { docA, B } = two();
     B.isEditable = false;
-    expect(toggleShared(view(B), 'S')).toBe(false);
+    expect((await share(B, 'S'))).toBe(false);
     expect(map(docA).size).toBe(0);
   });
 
-  it('lo que otro colapsa para todos y escondería tu selección queda abierto para vos, con un aviso (corrección 5)', () => {
+  it('lo que otro colapsa para todos y escondería tu selección queda abierto para vos, con un aviso (corrección 5)', async () => {
     const { A, B } = two();
     const notices: string[] = [];
     const listen = (e: Event) => notices.push((e as CustomEvent<string>).detail);
@@ -169,13 +176,13 @@ describe('Shift+clic: para todos', () => {
         return at < 0;
       });
       v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, at)));
-      toggleShared(view(A), 'S');
+      (await share(A, 'S'));
       expect(hidden(A)).toEqual(['s1']);
       expect(hidden(B)).toEqual([]);
       expect(collapseState(B.prosemirrorState)!.records.get('S')).toEqual({ c: false, g: null });
       expect(notices).toEqual([t('collapse.keptOpen')]);
       // Otro que colapsa para todos un título donde no estás: lo ves colapsado, sin aviso.
-      toggleShared(view(A), 'T');
+      (await share(A, 'T'));
       expect(hidden(B)).toEqual(['t1']);
       expect(notices).toHaveLength(1);
     } finally {
@@ -183,30 +190,30 @@ describe('Shift+clic: para todos', () => {
     }
   });
 
-  it('"Colapsar todo" y "Abrir todo" guardan lo tuyo en todos los títulos: lo de todos ya no los cambia', () => {
+  it('"Colapsar todo" y "Abrir todo" guardan lo tuyo en todos los títulos: lo de todos ya no los cambia', async () => {
     const { A, B } = two();
     setAllCollapsed(view(B), false);
     expect([...collapseState(B.prosemirrorState)!.records.values()].map((r) => r.c)).toEqual([false, false]);
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
     expect(hidden(B)).toEqual([]);
     setAllCollapsed(view(B), true);
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
     expect(hidden(A)).toEqual([]);
     expect(hidden(B)).toEqual(['s1', 't1']);
   });
 
-  it('un clic abre para vos lo colapsado para todos (y queda guardado); colapsar para vos sigue igual', () => {
+  it('un clic abre para vos lo colapsado para todos (y queda guardado); colapsar para vos sigue igual', async () => {
     const { A, B } = two();
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
     setCollapsed(view(B), ['S'], false);
     expect(collapseState(B.prosemirrorState)!.records.get('S')).toEqual({ c: false, g: null });
     expect(hidden(B)).toEqual([]);
     expect(hidden(A)).toEqual(['s1']);
   });
 
-  it('Enter al final de un título colapsado para todos: el renglón nuevo se ve (el fin pasa a ser tuyo)', () => {
+  it('Enter al final de un título colapsado para todos: el renglón nuevo se ve (el fin pasa a ser tuyo)', async () => {
     const { A, B } = two();
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
     const v = view(B);
     let at = -1;
     v.state.doc.descendants((n, pos) => {
@@ -222,15 +229,41 @@ describe('Shift+clic: para todos', () => {
   });
 });
 
+describe('un cambio que trae el mapa y contenido juntos', () => {
+  it('el editor del otro dibuja el contenido y no lo pisa con lo de antes', async () => {
+    const { docA, docB, B } = two();
+    // Un mismo cambio de Yjs: el mapa y un texto nuevo en "one" (como lo que baja junto de otro dispositivo).
+    const findText = (el: Y.XmlElement | Y.XmlFragment): Y.XmlText | null => {
+      for (const c of el.toArray()) {
+        if (c instanceof Y.XmlText && c.toString() === 'one') return c;
+        if (c instanceof Y.XmlElement) {
+          const found = findText(c);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    docA.transact(() => {
+      map(docA).set('T', true);
+      findText(docA.getXmlFragment(CONTENT_FRAGMENT))!.insert(3, ' more');
+    });
+    await settle();
+    expect(yText(docB)).toContain('one more');
+    expect(yText(docA)).toBe(yText(docB));
+    expect(hidden(B)).toEqual(['t1']);
+    expect(B.prosemirrorState.doc.textContent).toContain('one more');
+  });
+});
+
 describe('el tooltip del triángulo (Doc_Colapsar.md §3)', () => {
   const tip = (collapsed: boolean, forAll: boolean, canShare: boolean) => toggleTip(t as never, { collapsed, forAll }, canShare).split('\n').slice(0, 2);
-  it('quien puede editar: los cuatro estados', () => {
+  it('quien puede editar: los cuatro estados', async () => {
     expect(tip(false, false, true)).toEqual([`**${t('collapse.collapseJustYou')}**`, t('collapse.shiftForAll')]);
     expect(tip(true, false, true)).toEqual([`**${t('collapse.collapsedJustYou')}**`, t('collapse.clickOpenShiftCollapseAll')]);
     expect(tip(true, true, true)).toEqual([`**${t('collapse.collapsedForAll')}**`, t('collapse.clickOpenYouShiftOpenAll')]);
     expect(tip(false, true, true)).toEqual([`**${t('collapse.openJustYou')}**`, t('collapse.clickCollapseShiftOpenAll')]);
   });
-  it('quien solo ve o comenta: sin Shift', () => {
+  it('quien solo ve o comenta: sin Shift', async () => {
     for (const [c, f] of [
       [false, false],
       [true, false],
@@ -247,7 +280,7 @@ describe('versiones', () => {
     const docA = new Y.Doc();
     const A = mount(docA).editor;
     A.replaceBlocks(A.document, PAGE as never);
-    toggleShared(view(A), 'S');
+    (await share(A, 'S'));
     // La versión publicada: su esquema, sin colapsar ni el mapa (un Y.Doc que nunca lo pide).
     const old = new Y.Doc();
     Y.applyUpdate(old, Y.encodeStateAsUpdate(docA));
@@ -268,7 +301,7 @@ describe('versiones', () => {
     expect(hidden(fresh)).toEqual(['s1']);
   });
 
-  it('el mapa no es contenido: abrir la página no lo crea ni escribe nada', () => {
+  it('el mapa no es contenido: abrir la página no lo crea ni escribe nada', async () => {
     const doc = new Y.Doc();
     const writes: unknown[] = [];
     const A = mount(doc).editor;

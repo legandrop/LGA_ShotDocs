@@ -780,13 +780,21 @@ export function toggleShared(view: EditorView, id: string): boolean {
  * selección queda abierto para vos (guardado como tuyo), con un aviso (corrección 5); lo tuyo nunca cambia.
  */
 function sharedChanged(view: EditorView, map: Y.Map<unknown>, event: Y.YMapEvent<unknown>): void {
+  const changed = [...event.keysChanged];
+  const remote = !event.transaction.local;
+  // Después de que Yjs termine de avisar: si el mismo cambio trae contenido, y-prosemirror lo dibuja en su propio
+  // aviso; despachar antes haría que el editor, todavía con lo de antes, lo escribiera encima en Yjs.
+  queueMicrotask(() => applyShared(view, map, changed, remote));
+}
+
+function applyShared(view: EditorView, map: Y.Map<unknown>, changed: readonly string[], remote: boolean): void {
   const s = collapseKey.getState(view.state);
   if (!s || view.isDestroyed) return;
   const shared = readShared(map);
   const records = new Map(s.records);
   let kept = false;
-  if (!event.transaction.local) {
-    for (const id of event.keysChanged) {
+  if (remote) {
+    for (const id of changed) {
       if (!shared.has(id) || s.shared.has(id) || records.has(id)) continue;
       const alone = new Set(s.shared).add(id);
       const inside = hiddenInSelection(analyze(view.state.doc, effective(records, alone)), view.state.selection);

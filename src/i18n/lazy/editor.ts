@@ -197,7 +197,6 @@ export const editor = {
     en: "Click: collapse · Shift+click: expand for everyone",
     es: "Clic: colapsar · Shift+clic: abrir para todos",
   },
-  'collapse.justYouNote': { en: "Just for you", es: "Solo para vos" },
   'collapse.keptOpen': {
     en: "Someone collapsed this section for everyone. It stays expanded for you while you work in it.",
     es: "Alguien colapsó esta sección para todos. Queda abierta para vos mientras trabajás en ella.",
