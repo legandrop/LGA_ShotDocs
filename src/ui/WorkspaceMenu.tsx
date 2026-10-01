@@ -3,6 +3,7 @@ import { t, useT } from '../i18n';
 import type { MediaRecord } from '../media/mediaDb';
 import { prefs } from '../prefs';
 import { importJobFor } from '../import/importJob';
+import { replaceRunning } from './replaceUi';
 import { useServices, useSyncStatus } from '../services';
 import { errorMessage } from '../sync/types';
 import { unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
@@ -55,7 +56,8 @@ export function useLeaveGuard(): () => boolean {
   const { current } = useCurrentWorkspace();
   const name = current ? displayName(current) : t('noProjects.thisWorkspace');
   return useCallback(() => {
-    const importing = importJobFor(tree).get().running;
+    // Una importación de Coda o un reemplazo en todo el proyecto en curso: cortados, quedan a medias.
+    const importing = importJobFor(tree).get().running || replaceRunning({ docs });
     if (importing || docs.hasUnsavedEdits() || tree.hasUnsavedWrites() || media.hasUnsavedWrites() || comments.hasUnsavedWrites()) {
       alert(t('leave.unsaved'));
       return false;

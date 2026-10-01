@@ -78,6 +78,8 @@ const HELP = '0.082';
 const OFFLINE = '0.083';
 /** La que trajo colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2). */
 const COLLAPSE_2 = '0.084';
+/** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
+const REPLACE_PROJECT = '0.090';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -288,6 +290,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { search: 'search' },
     more: ['listPick', 'listClose'],
     since: BEFORE_HELP,
+  },
+  {
+    id: 'replaceProject',
+    section: 'find',
+    title: 'help.replaceProject.title',
+    text: 'help.replaceProject.text',
+    keys: { search: 'search', undo: 'undo' },
+    words: ['replace all', 'reemplazar todo', 'find and replace', 'buscar y reemplazar'],
+    since: REPLACE_PROJECT,
   },
 
   // --- Colapsar ---

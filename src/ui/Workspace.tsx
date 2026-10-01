@@ -26,6 +26,7 @@ import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { notify, useNotice } from './notice';
+import { replaceRunning } from './replaceUi';
 import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
@@ -176,7 +177,7 @@ export function Shell() {
   const [moving, setMoving] = useState<string | null>(null);
   const [formatting, setFormatting] = useState<string | null>(null);
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
-  const [notice, dismissNotice] = useNotice();
+  const [notice, dismissNotice, noticeAction] = useNotice();
   const perms = usePermissions();
   // "Importar de Coda" es solo de la cuenta de Lega (codaOwner.ts): para los demás el diálogo ni se monta.
   const codaOwner = useCodaOwner();
@@ -234,7 +235,8 @@ export function Shell() {
       media.hasUnsavedWrites() ||
       comments.hasUnsavedWrites() ||
       !!folders?.busy() ||
-      importing.get().running;
+      importing.get().running ||
+      replaceRunning({ docs });
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!unsaved()) return;
       e.preventDefault();
@@ -404,6 +406,17 @@ export function Shell() {
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
+          {noticeAction && (
+            <button
+              className="link"
+              onClick={() => {
+                dismissNotice();
+                noticeAction.run();
+              }}
+            >
+              {noticeAction.label}
+            </button>
+          )}
           <button className="link" onClick={dismissNotice}>
             {tr('common.ok')}
           </button>

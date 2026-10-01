@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.090 :
 
 Diseño de reemplazar en todo el proyecto, sin código. Faltaba: la búsqueda de Ctrl/⌘+K encontraba, pero cambiar un
 nombre en cincuenta páginas era abrirlas de a una. `Doc_Buscar.md` suma la sección: se despliega como en VS Code,

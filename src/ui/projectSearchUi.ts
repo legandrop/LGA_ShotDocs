@@ -15,6 +15,8 @@ export interface ResultRequest {
   term: string | null;
   blockId?: string;
   occurrence?: number;
+  /** *Aa* y palabra entera (desde reemplazar en el proyecto, que busca la frase con esas opciones). */
+  options?: { matchCase?: boolean; wholeWord?: boolean };
 }
 
 /** Un pedido de ir a un resultado vale este rato: si la página nunca llega a abrirse, no queda colgado. */

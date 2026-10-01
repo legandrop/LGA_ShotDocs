@@ -308,6 +308,21 @@ describe('deshacer con otro dispositivo', () => {
     expect(yt.toString()).toBe('');
   });
 
+  it('un borrado: si el otro borró solo el vecino de la izquierda, tampoco se resucita', () => {
+    const a = pageDoc([{ parts: ['ab cámara cd'] }]);
+    const b = new Y.Doc();
+    sync(a, b);
+    const { records } = replace(a, 'camara', '');
+    sync(a, b);
+    const yt = (((b.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText;
+    expect(yt.toString()).toBe('ab  cd');
+    // B borra "b " (el espacio era el vecino de la izquierda): las anclas igual dan el mismo lugar.
+    yt.delete(1, 2);
+    sync(a, b);
+    expect(undo(a, records)).toEqual({ undone: 0, changed: 1, notApplied: 0 });
+    expect(yt.toString()).toBe('a cd');
+  });
+
   it('el bloque rehecho (cambio de tipo): las anclas quedan en el viejo, no se toca nada', () => {
     const a = pageDoc([{ id: 'x', parts: ['la cámara'] }]);
     const { records } = replace(a, 'camara', 'Z');

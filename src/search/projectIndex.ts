@@ -2,7 +2,7 @@ import * as Y from 'yjs';
 import type { DocState } from '../sync/localDb';
 import type { PageRow } from '../sync/types';
 import { SEPARATOR, unitsFromYDoc, type UnitField } from './extract';
-import { findIn, normalize, normalizeQuery, searchNormalized, type Normalized } from './normalize';
+import { findIn, normalize, normalizeQuery, searchNormalized, type Normalized, type SearchOptions } from './normalize';
 
 // La búsqueda en todo el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8, con las correcciones 5, 7, 8 y 15 a
 // 17). Sin React, como `projectSizes.ts`: una instancia por instancia de servicios, en memoria.
@@ -93,6 +93,24 @@ export interface SearchResults {
   hits: PageHit[];
   /** Cuántas páginas coinciden en total (se muestran hasta `limit`). */
   total: number;
+}
+
+/** Una coincidencia de la frase (reemplazar en el proyecto): la cuenta de su bloque es la de la barra de la página. */
+export interface PhraseMatch {
+  blockId: string;
+  field: UnitField;
+  /** Cuál de las coincidencias de su bloque es (pies y nombres incluidos, en el orden del documento). */
+  occurrence: number;
+  /** El texto del bloque (de esa unidad) y dónde está lo encontrado. */
+  text: string;
+  start: number;
+  end: number;
+}
+
+export interface PhraseHit {
+  page: PageRow;
+  path: PageRow[];
+  matches: PhraseMatch[];
 }
 
 export interface IndexInfo {
@@ -437,6 +455,32 @@ export class ProjectIndex {
       else dropped++;
     }
     return { hits, total: ranked.length - dropped };
+  }
+
+  /**
+   * La frase tal cual (con *Aa* y palabra entera), en el texto de todas las páginas del proyecto que la persona ve,
+   * en el orden de la barra lateral: lo que lista reemplazar en el proyecto. Los títulos no (pregunta 1).
+   */
+  phrase(projectId: string, query: string, options: SearchOptions = {}): PhraseHit[] {
+    const q = normalizeQuery(query, options);
+    if (!q) return [];
+    const out: PhraseHit[] = [];
+    for (const page of this.pagesOf(projectId)) {
+      const units = this.entries.get(page.id)?.units ?? [];
+      // Sin *Aa*, un descarte rápido con el texto ya normalizado.
+      if (!options.matchCase && !units.some((u) => u.folded.includes(q))) continue;
+      const matches: PhraseMatch[] = [];
+      const perBlock = new Map<string, number>();
+      for (const unit of units) {
+        for (const [start, end] of searchNormalized(unit.text, normalize(unit.text, options), q, options)) {
+          const occurrence = perBlock.get(unit.blockId) ?? 0;
+          perBlock.set(unit.blockId, occurrence + 1);
+          matches.push({ blockId: unit.blockId, field: unit.field, occurrence, text: unit.text, start, end });
+        }
+      }
+      if (matches.length > 0) out.push({ page, path: this.tree.ancestors(page.id), matches });
+    }
+    return out;
   }
 
   private rank(page: PageRow, order: number, words: SearchWord[], onlyTitles: boolean): Ranked | null {
