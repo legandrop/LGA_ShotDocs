@@ -2,7 +2,8 @@
 
 Estado: **entrega 1a hecha (v0.053)**: colapsar para vos, con toda la seguridad al editar, las marcas de hoja
 contadas con todo abierto y el PDF todo abierto (ver "Cómo quedó (1a)", al final). De la 1b, **"Imprimir como se
-ve" hecho (v0.067)**; faltan arrastrar la sección entera, Shift+⌘/Ctrl+↑/↓ y la 2. Lega
+ve" hecho (v0.067)**; **arrastrar la sección entera, Shift+⌘/Ctrl+↑/↓ y la entrega 2 (para todos), en v0.080**
+("Mover la sección entera" y "Cómo quedó (1b, mover, y 2)", al final). Lega
 contestó casi todas las decisiones el 2026-09-30 (al final, "Decisiones"); las que faltan siguen "a
 confirmar". **"Correcciones de la auditoría", al final, manda sobre lo de arriba**, y "Cómo quedó" sobre las
 dos. **"El margen del bloque y deshacer (v0.059)", lo último, manda sobre todo lo anterior** en lo que toca: los
@@ -966,3 +967,77 @@ tiempo real (D-04), "a la vez" es todo lo que pasa entre dos sincronizaciones.
 sección colapsada); el resto de los movimientos siguen siendo los de BlockNote. Pasar todos los movimientos por este
 camino sería mejor para el texto que nadie tocó, pero cambia lo que pasa al mover un bloque suelto: **a decidir
 por Lega**.
+
+## Cómo quedó (1b, mover, y 2), v0.080
+
+Sin tipo de bloque ni propiedad nueva, sin migración, sin cambios en el portero ni en `min_app_version`.
+
+**Mover la sección entera** (correcciones 4 y 7, con la propuesta de arriba):
+
+- **`src/ui/blockMove.ts`**: el mover en dos pasadas en Yjs (`dispatchMove`, `recreatedRange`). Adentro del `mux`
+  de y-prosemirror se despacha la transacción del editor (los mismos nodos, sacados e insertados) y después, en una
+  sola transacción de Yjs, el documento sin el lado que se recrea y el final. Sin Yjs (o si el documento del medio
+  no se puede armar), un despacho común. Antes y después corta la pila de deshacer: es su propio paso.
+- **`src/ui/sectionMove.ts`**: qué se mueve y adónde. Teclado (`planKeyboardMove`): lo elegido se agranda hasta el
+  final de la sección de cada título colapsado que tiene; lo de al lado, si es una sección colapsada, se salta
+  entera (también un párrafo salta una sección colapsada como si fuera un bloque); el resto como BlockNote (entra
+  en los hijos del de al lado; al principio o al final de un grupo sale al de afuera; arriba o abajo de todo, nada).
+  Sin nada colapsado en juego, mueve BlockNote como siempre. Arrastrar (`planSectionDrag`): el bloque que eligió
+  BlockNote, agrandado hasta el final de su sección.
+- **Se esconde lo mismo que antes** (`preserveHidden` en `collapse.ts`): después de mover, el fin (`e`) de cada
+  título colapsado que se ve se ajusta para que esconda exactamente lo mismo (por ejemplo, una sección colapsada que
+  baja un bloque y queda arriba de párrafos que se veían: siguen a la vista). Si no se puede (haría falta alargar
+  una sección), manda la corrección 2: se abre lo que quedó escondido. Deshacer y rehacer un mover hacen lo mismo
+  (el paso de la pila va marcado con `SECTION_MOVE_META`).
+- **Arrastrar** (`startSectionDrag`, `dropSection`, `handleDrop` del plugin; los puntos en `BlockSideMenu.tsx`): al
+  empezar, si lo elegido tiene un título colapsado, lo que se suelta (`view.dragging` y el portapapeles del
+  arrastre) es la sección entera; al soltar en la misma página, el mover en dos pasadas, al lugar entre bloques más
+  cercano (`dropPoint`, como ProseMirror). Soltarla en su mismo lugar no hace nada. **La selección no cambia al
+  empezar**: cambiarla en medio del `dragstart` hacía que Chromium cancelara el arrastre (lo encontró el recorrido
+  de punta a punta). Soltar adentro de otra sección colapsada: se abre (corrección 2), como antes.
+- **Solo lectura:** Shift+⌘/Ctrl+↑/↓ no mueve nada (BlockNote movía igual y la subida se rechazaba).
+
+**Para todos** (entrega 2, sección 4, correcciones 5 y 9):
+
+- **El mapa** `collapsedHeadings` en el mismo Y.Doc de la página (`SHARED_COLLAPSE_MAP`): clave, el id del título;
+  `true`. Abrir para todos borra la clave. Se escribe con su propio origen (`ORIGIN_SHARED_COLLAPSE`), así se guarda
+  y se sube como cualquier edición; el deshacer no lo toca (mira solo el contenido).
+- **Lo que vale** (`effective` en `collapse.ts`): lo tuyo si lo hay; si no, lo de todos. El plugin guarda los dos
+  (`records`, `shared`) y lo que vale (`merged`). Un clic guarda lo tuyo (también abrir: `{c: false}`), y "Colapsar
+  todo" / "Abrir todo" lo guardan en todos los títulos: un cambio de otro para todos ya no los mueve (decisión 17).
+  Lo que se abre solo (una edición, "Ir al bloque", la búsqueda) borra lo tuyo, salvo que esté colapsado para
+  todos. Enter al final de un título colapsado para todos le pone un fin: pasa a ser tuyo.
+- **Shift+clic** (`toggleShared`) y **Ctrl/⌘+Alt+Shift+Enter**: si lo que ves es solo tuyo, pasa a ser de todos; si
+  no, colapsa o abre para todos. Lo tuyo en ese título se borra. Solo con el editor editable y los permisos
+  conocidos (`canShare` = `editable && perms.known` en `PageEditor`); si no, no escribe el mapa y hace lo del clic.
+  En pantallas táctiles, solo para vos.
+- **Lo que llega de otro** (`sharedChanged`): se aplica después de que Yjs termina de avisar (un microtask): si el
+  mismo cambio trae contenido, y-prosemirror lo dibuja primero; despachar antes haría que el editor, con lo de antes,
+  lo escribiera encima. Si otro colapsa para todos y eso escondería tu selección (y no tenés nada tuyo ahí), queda
+  abierto para vos con un aviso (`collapse.keptOpen`, corrección 5).
+- **Tooltips** (`toggleTip` en `CollapseToggles.tsx`), como la tabla de la sección 3: quien puede editar ve
+  "Colapsar solo para vos / Shift+clic: para todos", "Colapsado solo para vos / Clic: abrir · Shift+clic: colapsar
+  para todos", "Colapsado para todos / Clic: abrir solo para vos · Shift+clic: abrir para todos" y "Abierto solo para
+  vos / Clic: colapsar · Shift+clic: abrir para todos"; quien solo ve o comenta, la acción sin Shift. **Diferencia
+  con la sección 4:** la regla de ahí ("Shift+clic: lo de todos pasa a lo contrario de lo que ves") y la tabla no
+  coinciden cuando lo que ves es solo tuyo; se siguió la tabla (lo tuyo pasa a ser de todos). A confirmar por Lega.
+- **Versiones viejas:** no ven el mapa (ven todo abierto, como lo de cada uno) y lo conservan: no toca el fragmento
+  ni ninguna propiedad. Lo prueban `collapseShared.test.ts` (el editor publicado edita y el mapa sigue) y
+  `publishedCompat.test.ts` (la versión publicada de la sincronización lo baja, lo conserva y lo vuelve a subir).
+
+**Pruebas:** `collapseMove.test.ts` (el teclado y el arrastre con el editor real: secciones que bajan y suben
+enteras, un párrafo que salta una sección, sin nada colapsado mueve BlockNote, arriba de todo, varios bloques, solo
+lectura, anidados, Yjs igual al editor, deshacer en un paso), `collabMove.test.ts` (dos editores, 40 agendas por
+caso: el texto que nadie tocó, lo que no se recrea, iguales; y el atajo con otro editor que escribe adentro de lo
+escondido), `collapseShared.test.ts` (para todos), el caso 5 de `collapseEditor.test.ts` (ahora sube con su sección)
+y `collapseProperty.test.ts` con el arrastre de secciones: **pasa con las 70 semillas**.
+
+**De punta a punta** (Chromium sin ventana, un arnés con dos personas lado a lado sobre el servidor de prueba, sin
+login; fuera del repo): los tooltips de quien edita y de quien solo comenta, colapsar para vos y para todos, que el
+otro lo vea al sincronizar, abrir solo para vos, Ctrl+Shift+↓ con dos secciones colapsadas y Ctrl+Z, arrastrar los
+puntos de un título colapsado con el mouse (la sección entera, lo escondido sigue escondido, el otro lo recibe),
+Shift+clic de quien solo comenta (solo para él, el mapa vacío) y Ctrl+Shift+↓ en solo lectura: 26 de 26.
+
+**Pendiente:** probar a mano en Safari, Firefox y el iPhone (el arrastre y el teclado); la diferencia de la tabla
+con la regla del §4 y el costo del lado recreado (a confirmar por Lega); pasar todos los movimientos de bloques por
+el mover en dos pasadas (a decidir).

@@ -144,7 +144,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   plegable" del menú `/`. **Diseño en [`Doc_Colapsar.md`](Doc_Colapsar.md)** (sin tipo de bloque ni propiedad
   nueva). **Entrega 1a hecha (v0.053):** colapsar para vos, con toda la seguridad al editar, las marcas de hoja
   contadas con todo abierto y el PDF todo abierto. **"Imprimir como se ve" hecho
-  (v0.067).** Faltan de la 1b arrastrar la sección entera y Shift+Ctrl/⌘+↑/↓, y la 2 (para todos, Shift+clic).
+  (v0.067).** **Arrastrar la sección entera, Shift+Ctrl/⌘+↑/↓ y la 2 (para todos, Shift+clic) hechos (v0.080)**;
+  el mover se escribe en Yjs en dos pasadas y recrea solo el lado más chico (medido con dos editores: el texto que
+  nadie tocó no se pierde nunca; lo que otro escribe a la vez en el lado recreado, sí). A confirmar por Lega: ese
+  costo, la tabla de tooltips contra la regla del §4 y si todos los movimientos de bloques pasan por el mover nuevo.
 - **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página;
   entrega 2 hecha (v0.054): buscar en el proyecto con Ctrl/⌘+K** (`Doc_Buscar.md`, "Cómo quedó (entrega 1)" y
   "(entrega 2)"). Queda para después: reemplazar en el proyecto, la papelera, todos los proyectos y los
