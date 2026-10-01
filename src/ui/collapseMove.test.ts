@@ -250,7 +250,9 @@ describe('arrastrar un título colapsado', () => {
     // "x" está en la sección de S (hasta el próximo H2): S esconde s1, s2 y x.
     expect(visible(editor)).toEqual(['S', 'T', 't1', 'y']);
     expect(drag(editor, 'S')).toBe(true);
-    expect(view(editor).state.selection.toJSON().type).toBe('sd-section');
+    // La selección no cambia (cambiarla en el `dragstart` cancela el arrastre en Chromium); se suelta lo arrastrado.
+    expect(view(editor).state.selection).toBeInstanceOf(NodeSelection);
+    expect((view(editor) as unknown as { dragging: { slice: { content: { childCount: number } } } }).dragging.slice.content.childCount).toBe(4);
     expect(dropSection(view(editor), posBefore(editor, 'y'))).toBe(true);
     await settle();
     expect(outline(editor)).toBe('T t1 S s1 s2 x y');

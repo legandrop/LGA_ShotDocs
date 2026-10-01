@@ -82,7 +82,7 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | Mod+B, Mod+I, Mod+U, Mod+Shift+S, Mod+E | Negrita, cursiva, subrayado, tachado, código | Editor | Tiptap |
 | Mod+Z, Mod+Shift+Z / Mod+Y | Deshacer, rehacer | Editor | BlockNote |
 | Tab / Shift+Tab | Meter o sacar un nivel el bloque (en una tabla, la celda siguiente o anterior) | Editor | BlockNote |
-| Mod+Shift+↑ / ↓ | Mover el bloque arriba o abajo | Editor | BlockNote |
+| Mod+Shift+↑ / ↓ | Mover el bloque arriba o abajo. Un título colapsado se mueve con su sección entera, y un bloque salta una sección colapsada como si fuera uno; en solo lectura no mueve nada | Editor | BlockNote; con algo colapsado en juego, app (`sectionMove.ts`, v0.080) |
 | Shift+Enter | Salto de renglón dentro del bloque (a verificar con el registro, sección 6) | Editor | BlockNote |
 | "/" | Menú de bloques (↑ / ↓, Enter elige, Esc cierra; seguir escribiendo filtra) | Editor | BlockNote |
 | "# ", "## "…, "- ", "1. ", "[] ", "> " o `" `, "---", "```" | Título, viñeta, numerada, casilla, cita, divisor, código | Editor, al principio del renglón | BlockNote |
@@ -101,7 +101,9 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | ↑ / ↓, Enter | Elegir un proyecto | Selector de proyectos | App |
 | ↑ / ↓, Inicio / Fin, Esc | Recorrer y cerrar menús; Esc cierra diálogos | Menús y diálogos | App (`menus.tsx`) |
 | Enter | Pasar al texto | Título de la página | App (`PageView.tsx`) |
-| Mod+Alt+Enter (con Shift: para todos) | Colapsar o abrir la sección del título | Editor | App, **cuando llegue P.11** (`Doc_Colapsar.md`) |
+| Mod+Alt+Enter (con Shift: para todos) | Colapsar o abrir la sección del título; con Shift, para todos (solo quien puede editar; si no, para vos) | Editor | App (`collapseEditor.ts`; v0.053, para todos v0.080) |
+| Clic / Shift+clic en el triángulo de un título | Colapsar o abrir para vos / para todos (Shift solo quien puede editar, y no en pantallas táctiles) | Editor | App (`CollapseToggles.tsx`, v0.080) |
+| Arrastrar los puntos de un título colapsado | Mueve su sección entera | Editor | App (`startSectionDrag`, v0.080) |
 
 Dos observaciones del relevamiento:
 
@@ -320,7 +322,7 @@ Arriba, un campo de búsqueda; abajo, las secciones:
 6. **Links de Drive:** pegar un link y elegir link, texto o tarjeta.
 7. **Comentarios y preguntas.**
 8. **Buscar y reemplazar** (y, con P.12 entrega 2, buscar en el proyecto).
-9. **Colapsar secciones** (cuando llegue P.11).
+9. **Colapsar secciones** (P.11; el texto de la entrada, abajo en "Entrada de ayuda: colapsar").
 10. **Compartir y miembros:** permisos, invitados.
 11. **Papelera:** páginas y archivos, qué se recupera.
 12. **Sin red y sincronización:** qué quiere decir cada estado, por qué no se pierde nada.
@@ -603,3 +605,23 @@ sobre lo que quede.
 ### Preguntas de estas correcciones
 
 Respondidas por Lega el 2026-09-30: ver "Decisiones".
+
+## Entrada de ayuda: colapsar (P.11, v0.080)
+
+Texto para la sección 9 de la ayuda (lo suma la rama de la ayuda al registro de entradas). Atajos: Mod+Alt+Enter
+(con Shift, para todos) y Mod+Shift+↑ / ↓ (tabla de la sección 2).
+
+- **Título:** Colapsar secciones / *Collapse sections*.
+- **Texto (es):** El triángulo a la izquierda de un título esconde todo lo que sigue hasta el próximo título de su
+  nivel. Un clic colapsa o abre solo para vos; con Shift+clic, para todos los que miran la página (solo si podés
+  editarla). El tooltip dice si está colapsado para todos o solo para vos. Arrastrar los puntos de un título
+  colapsado, o {Mod+Shift+↑/↓}, mueve la sección entera.
+- **Text (en):** The triangle to the left of a heading hides everything up to the next heading of its level. A
+  click collapses or expands it just for you; Shift+click does it for everyone who views the page (only if you can
+  edit it). The tooltip says whether it is collapsed for everyone or just for you. Dragging the dots of a
+  collapsed heading, or {Mod+Shift+↑/↓}, moves the whole section.
+- **Palabras para buscar:** colapsar, plegar, abrir, sección, título, para todos, mover sección / collapse, fold,
+  expand, section, heading, everyone, move section.
+- **Cuándo:** "para todos" solo para quien puede editar (para el resto la entrada lo muestra apagado, con el
+  porqué); en el teléfono, solo para vos.
+

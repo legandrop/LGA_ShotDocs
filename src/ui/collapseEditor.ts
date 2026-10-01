@@ -887,7 +887,8 @@ export function startSectionDrag(view: EditorView, dataTransfer: DataTransfer | 
   const sel = SectionSelection.create(view.state.doc, range.from, range.to);
   const nodes = sel.nodes;
   if (nodes.length === 0) return false;
-  view.dispatch(view.state.tr.setSelection(sel));
+  // La selección no se toca (queda el bloque que eligió BlockNote): cambiarla en medio del `dragstart` hace que
+  // Chromium cancele el arrastre (lo encontró el recorrido de punta a punta). Lo que se suelta es `view.dragging`.
   const slice = sel.content();
   // Lo que ProseMirror va a soltar (BlockNote lo arma desde el HTML solo si no está puesto).
   (view as unknown as { dragging: unknown }).dragging = { slice, move: true };
