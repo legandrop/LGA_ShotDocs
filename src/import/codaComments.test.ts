@@ -2,7 +2,7 @@
 import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
-import { anchorBlock, buildComments, codaCommentId, normalizeText, parseCodaComments, type CodaThread } from './codaComments';
+import { acrossBlocks, anchorBlock, buildComments, codaCommentId, normalizeText, parseCodaComments, type CodaThread } from './codaComments';
 import { COMMENTS_FILE, countComments, importCoda, type CodaFolder, type CodaManifestPage } from './codaImport';
 
 // Los comentarios de Coda al importar (Doc_Importar_Coda.md, "3. Comentarios"): `comments.json` con la forma
@@ -98,6 +98,78 @@ describe('comentarios de Coda: lectura y anclaje', () => {
       { id: 'd2', text: 'Ver https://x.com/abc' },
     ];
     expect(anchorBlock(thread('Ver https://x.com/a b'), twice)).toEqual({ blockId: null, lost: true });
+  });
+
+  it('un párrafo que la importación partió en tarjetas se compara contra sus bloques seguidos juntos', () => {
+    const A = 'https://drive.google.com/file/d/1AAA/view';
+    const B = 'https://drive.google.com/file/d/1BBB/view';
+    const blocks = [
+      { id: 'b0', text: 'Otra cosa' },
+      { id: 'b1', text: 'Referencia:' },
+      { id: 'b2', text: A },
+      { id: 'b3', text: B },
+      { id: 'b4', text: 'Sigue el texto.' },
+    ];
+    const thread = (ref: string) => ({ reference: { type: 'text', text: ref } }) as unknown as CodaThread;
+    // El párrafo entero, pegado o con el Markdown de Coda: va al primero de sus bloques.
+    expect(anchorBlock(thread(`Referencia:${A}${B}`), blocks)).toEqual({ blockId: 'b1', lost: false });
+    expect(anchorBlock(thread(`Referencia: [${A}](${A}) [${B}](${B})`), blocks)).toEqual({ blockId: 'b1', lost: false });
+    // Una parte que cruza de un bloque al siguiente: al bloque donde empieza.
+    expect(anchorBlock(thread(`${B}Sigue el texto`), blocks)).toEqual({ blockId: 'b3', lost: false });
+    // El mismo párrafo partido dos veces en la página: no se adivina, va a la página entera.
+    const twice = [...blocks, { id: 'c1', text: 'Referencia:' }, { id: 'c2', text: A }, { id: 'c3', text: B }];
+    expect(anchorBlock(thread(`Referencia:${A}${B}`), twice)).toEqual({ blockId: null, lost: true });
+    // Corto (menos de 12 caracteres sin espacios): tampoco se busca así.
+    expect(anchorBlock(thread('cosa Refer'), blocks)).toEqual({ blockId: null, lost: true });
+  });
+
+  it('los bloques seguidos juntos: lo mismo que juntar de a uno (comparado al azar), y lineal en una página grande', () => {
+    // La cuenta de antes, bloque por bloque: de cada uno, la menor tira de hasta 20 bloques que contiene el texto y
+    // que no lo contiene sin el primero.
+    const reference = (blocks: { id: string; text: string }[], want: string) => {
+      const starts: string[] = [];
+      for (let i = 0; i < blocks.length; i++) {
+        let joined = blocks[i].text;
+        for (let j = i + 1; j < Math.min(blocks.length, i + 20); j++) {
+          joined += blocks[j].text;
+          if (!joined.includes(want)) continue;
+          if (!joined.slice(blocks[i].text.length).includes(want)) starts.push(blocks[i].id);
+          break;
+        }
+      }
+      return starts;
+    };
+    let seed = 11;
+    const rnd = (n: number) => ((seed = (seed * 1103515245 + 12345) % 2 ** 31), Math.floor((seed / 2 ** 31) * n));
+    // Pocas letras y bloques cortos (también vacíos): muchas coincidencias, que cruzan muchos bloques.
+    const word = (n: number) => Array.from({ length: n }, () => 'ab'[rnd(2)]).join('');
+    let found = 0;
+    let ambiguous = 0;
+    for (let round = 0; round < 2000; round++) {
+      const blocks = Array.from({ length: 1 + rnd(40) }, (_, i) => ({ id: `b${i}`, text: word(rnd(4)) }));
+      const all = blocks.map((b) => b.text).join('');
+      const from = rnd(Math.max(1, all.length));
+      const want = rnd(4) === 0 ? word(1 + rnd(12)) : all.slice(from, from + 1 + rnd(14));
+      if (!want) continue;
+      // Como en anchorBlock: solo se busca así lo que ningún bloque tiene entero.
+      if (blocks.some((b) => b.text.includes(want))) continue;
+      const expected = reference(blocks, want);
+      expect(acrossBlocks(blocks, want), `ronda ${round}`).toEqual(expected);
+      if (expected.length === 1) found++;
+      if (expected.length > 1) ambiguous++;
+    }
+    // Que la comparación tenga casos de los dos tipos, no solo listas vacías.
+    expect(found).toBeGreaterThan(50);
+    expect(ambiguous).toBeGreaterThan(50);
+    // 3000 bloques y 200 hilos que no se encuentran: antes, unos 19 s; ahora tiene que ser poco.
+    const words = 'plano general camara chroma rodaje set luz toma escena actor mesa'.split(' ');
+    const big = Array.from({ length: 3000 }, (_, i) => ({ id: `p${i}`, text: Array.from({ length: 25 }, () => words[rnd(words.length)]).join(' ') }));
+    const thread = (ref: string) => ({ reference: { type: 'text', text: ref } }) as unknown as CodaThread;
+    const t0 = performance.now();
+    for (let i = 0; i < 200; i++) {
+      expect(anchorBlock(thread(`zzz ${i} texto borrado\notro renglon ${i}\ny un tercero ${i}`), big).lost).toBe(true);
+    }
+    expect(performance.now() - t0).toBeLessThan(10_000);
   });
 
   it('datos raros de Coda: sin texto, nombre largo, correo inválido, fecha imposible', async () => {

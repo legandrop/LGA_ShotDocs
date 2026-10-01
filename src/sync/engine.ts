@@ -134,6 +134,8 @@ export class SyncEngine {
    * el historial hasta `until`, esperando cada vez más (1 minuto, 2, 4… hasta 1 hora).
    */
   private readonly verifyWait = new Map<string, { failures: number; until: number }>();
+  /** Páginas cuyos usos en el servidor ya se leyeron en esta apertura (ver `reconcileMedia`). */
+  private readonly usesAsked = new Set<string>();
 
   constructor(
     private readonly remote: Remote,
@@ -538,8 +540,8 @@ export class SyncEngine {
     const trash = media.trashEnabled ? 1 : 0;
     const mark = (state: DocState) => `${state.version}:${state.cursor}:${trash}`;
     const marks: Record<string, string> = {};
+    const pages: string[] = [];
     for (const [pageId, state] of await this.docs.states()) {
-      if (this.stopped) break;
       const row = this.tree.get(pageId);
       // Una página que el servidor todavía no tiene, o que la persona no puede editar (el servidor
       // rechazaría los dos pedidos), no se mira.
@@ -547,6 +549,17 @@ export class SyncEngine {
       // A medio bajar: no se mira, ni siquiera para sumar (se hace cuando llegue lo que falta).
       if (row.update_seq > state.cursor) continue;
       if (media.usageMark(pageId) === mark(state)) continue;
+      pages.push(pageId);
+    }
+    // Las páginas que este dispositivo nunca comparó (un dispositivo nuevo, una página que recién llegó):
+    // sus fotos y videos llegaron con el documento y casi siempre el servidor ya los tiene registrados. Se
+    // pregunta una vez cuáles (una lectura por cada 100 páginas) para no mandarlos de a uno ni contarlos como
+    // cambios sin subir (B.14). Sin respuesta, se sigue como siempre: se mandan todos.
+    const unseen = pages.filter((id) => media.usageMark(id) === undefined && !this.usesAsked.has(id));
+    const onServer = unseen.length > 0 ? await media.serverUses(unseen).catch(() => null) : null;
+    if (onServer) for (const id of unseen) this.usesAsked.add(id);
+    for (const pageId of pages) {
+      if (this.stopped) break;
       const snap = await this.docs.snapshot(pageId);
       try {
         // Completo ya se miró arriba (el cursor solo avanza); acá, que todo se haya podido leer.
@@ -573,7 +586,9 @@ export class SyncEngine {
             }
           }
         }
-        await media.reconcilePage(pageId, ids, { unlink, seenSeq: snap.state.cursor });
+        // Lo que el servidor ya tiene solo se cree si la página no tiene nada propio por subir: con algo propio en
+        // camino (una copia que entró sin pasar por el editor), la lectura puede ser vieja y se manda todo.
+        await media.reconcilePage(pageId, ids, { unlink, seenSeq: snap.state.cursor, onServer: uploaded ? onServer?.get(pageId) : undefined });
         // Solo queda "mirada" si se pudo quitar lo que hiciera falta; si no (a medio subir, algo ilegible o
         // desconocido, sin comprobar), se vuelve a mirar en el próximo ciclo.
         if (unlink) marks[pageId] = mark(snap.state);
