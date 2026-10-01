@@ -159,6 +159,10 @@ export class SyncEngine {
     files.onQueued = poke;
     if (options.media) {
       options.media.onQueued = poke;
+      // La base rechazó un pedido de archivos por la versión mínima: se ve el aviso de actualizar.
+      options.media.onOutdated = () => {
+        if (!this.stopped) this.patch({ outdated: true });
+      };
       // La base de archivos del dispositivo no se pudo abrir: el texto sigue, las fotos y videos no.
       if (options.media.unavailable) {
         this.status = { ...this.status, mediaWarning: t('engine.mediaOff', { reason: options.media.unavailable }) };
@@ -361,6 +365,7 @@ export class SyncEngine {
           if (errorMessage(err) === APP_OUTDATED) {
             // El workspace subió la versión mínima entre la consulta y la subida.
             this.patch({ outdated: true });
+            this.options.media?.setOutdated(true);
             break;
           }
           contentError = errorMessage(err);
@@ -388,7 +393,8 @@ export class SyncEngine {
       await this.reconcileMedia().catch(() => undefined);
 
       halt();
-      const fileError = await this.files.pushPending((pageId) => this.tree.hasUnsentCreate(pageId));
+      // Las imágenes sin portero (`sdfile://`) tampoco salen con la app vieja para este workspace.
+      const fileError = this.status.outdated ? null : await this.files.pushPending((pageId) => this.tree.hasUnsentCreate(pageId));
 
       halt();
       // Los comentarios de páginas que todavía no están en el servidor esperan. Sus errores no cortan el
@@ -426,11 +432,16 @@ export class SyncEngine {
     if ((settings?.schemaVersion ?? 0) !== this.status.schemaVersion) this.patch({ schemaVersion: settings?.schemaVersion ?? 0 });
     if (!settings) {
       this.patch({ outdated: false });
+      this.options.media?.setOutdated(false);
       return { outdated: false, removed: await this.checkAccess(null) };
     }
     const version = Number(this.options.appVersion);
     const outdated =
       settings.minAppVersion !== null && !(Number.isFinite(version) && version >= settings.minAppVersion);
+    // La cola de archivos se frena sola con la misma cuenta: no registra, no sube y no manda usos (todo queda en
+    // el dispositivo y sale al actualizar). Las versiones anteriores a esta no lo hacían: a esas las frena la base
+    // (Docs/Doc_Sincronizacion.md, "La versión mínima y los archivos").
+    this.options.media?.setOutdated(outdated);
     const needed = this.options.schemaVersion ?? 0;
     const schemaBehind: [number, number] | null = settings.schemaVersion < needed ? [settings.schemaVersion, needed] : null;
     if (schemaBehind?.join() !== this.status.schemaBehind?.join()) this.patch({ schemaBehind });

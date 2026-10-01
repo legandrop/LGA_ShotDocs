@@ -28,7 +28,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 | [`Doc_Carrete.md`](Doc_Carrete.md) | El carrete: el visor a pantalla completa de las fotos y los videos de una página (qué entra, gestos, zoom, qué se ve sin red o si el navegador no puede reproducirlo, y cómo convive con la edición). |
 | [`Doc_Colaboracion.md`](Doc_Colaboracion.md) | Editar a la vez: qué puede pasar cuando dos personas cambian el mismo bloque (lo inherente de y-prosemirror), qué se arregló en v0.052, los parches de y-prosemirror y cómo revisarlos al actualizar, la semilla con texto y la reparación de bloques; desde v0.074, el texto de los huecos y los huecos estables de las fotos en línea, con su tabla medida. |
 | [`Doc_Importar_Coda.md`](Doc_Importar_Coda.md) | Importar un doc de Coda con sus fotos: el comando que lo baja a una carpeta (`scripts/coda-export.mjs`, API de Coda en HTML) y la importación en la app (*Import from Coda…*, solo para la cuenta de Lega), el paso a paso, cómo se convierte el HTML, lo que todavía no pasa, los comentarios (la API no los da: se capturan con el servidor MCP de Coda a `comments.json` y entran con la importación, también los de personas sin cuenta), los links entre páginas del doc y el mismo archivo en varias páginas (v0.061), las tablas de Coda como páginas (v0.063), las fotos HEIC como JPEG (v0.072) y la migración definitiva. |
-| [`Doc_Sincronizacion.md`](Doc_Sincronizacion.md) | Cómo funciona la sincronización offline sin pérdidas: contenido, árbol, imágenes y estado visible. |
+| [`Doc_Sincronizacion.md`](Doc_Sincronizacion.md) | Cómo funciona la sincronización offline sin pérdidas: contenido, árbol, imágenes, estado visible y la versión mínima de la app (también para la cola de archivos, v0.090). |
 | [`Doc_Investigacion_Intermitente.md`](Doc_Investigacion_Intermitente.md) | Investigación del caso intermitente de la prueba de punta a punta (roadmap B.5) y de los dos cortes de `e2e.mjs` y `features.mjs`: qué se probó, tiempos, causas y correcciones propuestas sin aplicar. |
 | [`Guide_Create_Workspace.md`](Guide_Create_Workspace.md) | **En inglés** (es para usuarios): la guía paso a paso para crear un workspace propio (dominio, Supabase y el comando `scripts/setup-workspace.mjs`, Resend, Google Cloud, Cloudflare, copias en GitHub, conectar la app y probar) y lo que las copias no cubren. |
 | [`Changelog.md`](Changelog.md) | El historial de cambios. Cada entrada sube `+0.001`. |
@@ -64,7 +64,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 1994 pruebas (v0.089): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 2002 pruebas (v0.090): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`; las de editar a la vez son `src/ui/collab*.test.ts`, ver
   `Doc_Colaboracion.md`; las de fotos en línea corren 300 agendas al azar por caso y suman alrededor de un
   minuto y medio), el cliente del portero (`src/media/`), el portero

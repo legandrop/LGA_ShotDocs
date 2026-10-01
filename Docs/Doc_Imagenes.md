@@ -511,13 +511,11 @@ veces el HEIC (3,3 a 6,5 MB) y lleva el perfil Display P3 entero.
   grilla pareja da justo la mitad distinta (no "más de la mitad") y los puntos que se apartan del fondo caen
   repartidos. Un canvas entero vacío (blanco o negro) sí se rechaza, y es lo que se conoce del tope de iOS. Se
   cerraría rechazando también cuando una mitad entera, la de arriba o la de abajo, es distinta.
-- **`min_app_version` no frena la cola de archivos** (revisado en v0.086): solo la usan `push_page_update` en la
-  base y el ciclo de páginas de `sync/engine.ts`. `register_file` no recibe la versión, el portero tampoco, y la
-  cola de archivos no mira `status.outdated`: una pestaña de v0.074 o anterior sigue registrando y subiendo
-  HEIC sin convertir aunque se suba la mínima. Para frenarla haría falta una migración que haga con
-  `register_file` lo mismo que con `push_page_update`: una versión nueva con `p_app_version`, y la de siempre (la
-  que llaman las versiones viejas) sin versión, que deja de andar en cuanto el workspace pide una mínima. La
-  versión vieja quedaría con el archivo detenido en el dispositivo (sin perderlo) hasta actualizar.
+- **`min_app_version` frena la cola de archivos desde v0.090** (antes, revisado en v0.086, solo frenaba el
+  contenido). La app nueva se frena sola, y la migración `20261006120000_version_minima_archivos.sql` frena a las versiones publicadas cuando la mínima es 0.090 o más: una pestaña de v0.074 queda con el
+  HEIC detenido en el dispositivo, sin perderlo, hasta actualizar. Ojo: al actualizar, un HEIC que esa versión
+  guardó sin la marca de convertir se registra tal cual (el freno lo demora, no lo convierte). Detalle en
+  `Doc_Sincronizacion.md`, "La versión mínima y los archivos".
 
 **Archivos:** `src/media/heic.ts` (reconocer, nombre, meter el perfil en el JPEG), `heifColor.mjs` y
 `heifColor.d.mts` (cuál es el perfil: la imagen principal y `nclx`; compartido con el comando de Coda), `heicDecode.ts` (decodificar, codificar
