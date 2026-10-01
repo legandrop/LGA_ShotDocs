@@ -264,10 +264,121 @@ export function handlePhotoShiftClick(view: EditorView, event: MouseEvent): bool
   return true;
 }
 
+/**
+ * Texto que entra SIN tecla con una foto elegida: el selector de emojis (Win+. en Windows, Ctrl+⌘+Espacio en la
+ * Mac), el dictado o algunos teclados de terceros. El navegador lo escribe sobre la selección y ProseMirror
+ * reemplazaría la foto (lo encontró la auditoría de v0.076). Va después de la foto, como una letra, con el cursor
+ * a su derecha. Si lo que cambia no es la foto elegida (o un borde suyo), sigue lo de siempre.
+ */
+export function handlePhotoTextInput(view: EditorView, from: number, to: number, text: string): boolean {
+  if (!view.editable) return false;
+  const sel = selectedPhoto(view.state);
+  if (!sel) return false;
+  const overPhoto = from === sel.from && to === sel.to;
+  const atEdge = from === to && (from === sel.from || from === sel.to);
+  if (!overPhoto && !atEdge) return false;
+  const tr = view.state.tr.insertText(text, sel.to);
+  tr.setSelection(TextSelection.create(tr.doc, sel.to + text.length));
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+// --- Arrastrar para elegir, soltando sobre una foto ---------------------------------------------------------
+//
+// Al arrastrar para elegir texto, el navegador ubica el final de la selección DENTRO de una foto (que no se
+// edita) como se le ocurre: soltar en el centro de una foto podía dejar la selección antes de la foto anterior,
+// o achicarla a un carácter (auditoría de v0.076). Mientras se arrastra, el final va al borde de la foto más
+// cercano al puntero: mitad izquierda, antes de la foto; mitad derecha, después.
+
+/** El final de la selección sobre la foto que empieza en `pos`: antes o después, según la mitad del puntero. */
+export function photoDragHead(pos: number, rect: { left: number; width: number }, clientX: number): number {
+  return clientX >= rect.left + rect.width / 2 ? pos + 1 : pos;
+}
+
+interface PhotoDrag {
+  /** La foto que está debajo del puntero (o `null`) y dónde está el puntero. */
+  over: HTMLElement | null;
+  x: number;
+}
+
+const dragKey = new PluginKey('shotdocs-photo-drag');
+
+/** El final que corresponde a la foto que está debajo del puntero, o `null`. */
+function headOverPhoto(view: EditorView, drag: PhotoDrag): number | null {
+  const el = drag.over;
+  if (!el || !el.isConnected || !view.dom.contains(el)) return null;
+  const pos = view.posAtDOM(el, 0);
+  if (view.state.doc.nodeAt(pos)?.type.name !== PHOTO) return null;
+  return photoDragHead(pos, el.getBoundingClientRect(), drag.x);
+}
+
+const dragPlugin = new Plugin<null>({
+  key: dragKey,
+  view(view) {
+    let drag: PhotoDrag | null = null;
+    const doc = view.dom.ownerDocument;
+    const onDown = (e: PointerEvent) => {
+      // Solo un arrastre que empieza en el texto (en una foto, el clic la elige o la arrastra para moverla).
+      const onPhoto = !!(e.target as Element | null)?.closest?.('.sd-photo');
+      drag = e.button === 0 && !e.shiftKey && !onPhoto && view.editable ? { over: null, x: e.clientX } : null;
+      dragOf.set(view, drag);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!drag) return;
+      if (!(e.buttons & 1)) {
+        drag = null;
+        dragOf.set(view, null);
+        return;
+      }
+      drag.over = (e.target as Element | null)?.closest?.<HTMLElement>('.sd-photo') ?? null;
+      drag.x = e.clientX;
+    };
+    const onUp = () => {
+      const last = drag;
+      drag = null;
+      dragOf.set(view, null);
+      // Al soltar sobre una foto: el final, en su borde (por si el navegador no avisó del último cambio).
+      if (!last) return;
+      const head = headOverPhoto(view, last);
+      const sel = view.state.selection;
+      if (head === null || !(sel instanceof TextSelection) || sel.head === head || sel.anchor === head) return;
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, sel.anchor, head)));
+    };
+    view.dom.addEventListener('pointerdown', onDown);
+    doc.addEventListener('pointermove', onMove);
+    doc.addEventListener('pointerup', onUp);
+    doc.addEventListener('pointercancel', onUp);
+    return {
+      destroy() {
+        view.dom.removeEventListener('pointerdown', onDown);
+        doc.removeEventListener('pointermove', onMove);
+        doc.removeEventListener('pointerup', onUp);
+        doc.removeEventListener('pointercancel', onUp);
+        dragOf.delete(view);
+      },
+    };
+  },
+  props: {
+    // La selección que lee ProseMirror del navegador mientras se arrastra: con el puntero sobre una foto, el
+    // final va a su borde más cercano.
+    createSelectionBetween(view, $anchor, $head) {
+      const drag = dragOf.get(view);
+      if (!drag) return null;
+      const head = headOverPhoto(view, drag);
+      if (head === null || head === $head.pos || head === $anchor.pos) return null;
+      return TextSelection.create(view.state.doc, $anchor.pos, head);
+    },
+  },
+});
+
+/** El arrastre en curso de cada editor (lo escribe la vista del plugin y lo lee `createSelectionBetween`). */
+const dragOf = new WeakMap<EditorView, PhotoDrag | null>();
+
 const keysPlugin = new Plugin({
   key: new PluginKey('shotdocs-photo-keys'),
   props: {
     handleKeyDown: handlePhotoKey,
+    handleTextInput: handlePhotoTextInput,
     handleDOMEvents: {
       mousedown: handlePhotoShiftClick,
       // Una composición que empieza sin la tecla de antes (algunos teclados del teléfono): igual, el cursor pasa a
@@ -291,7 +402,7 @@ export const inlinePhotoRowsExtension = createExtension({
 export const inlinePhotoKeysExtension = createExtension({
   key: 'shotdocs-photo-keys',
   runsBefore: ['nodeSelectionKeyboard'],
-  prosemirrorPlugins: [keysPlugin],
+  prosemirrorPlugins: [keysPlugin, dragPlugin],
 });
 
 export const inlinePhotoExtensions = [inlinePhotoRowsExtension, inlinePhotoKeysExtension];
