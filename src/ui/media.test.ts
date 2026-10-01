@@ -99,8 +99,9 @@ describe('sdmedia:// con el editor de la versión publicada (main)', () => {
     const mainNames = { nodes: new Set(Object.keys(probe.pmSchema.nodes)), marks: new Set(Object.keys(probe.pmSchema.marks)) };
     expect(findUnknownContent(doc, mainNames)).toBeNull();
     expect(findUnknownContent(doc)).toBeNull();
-    // El esquema de esta versión tiene los mismos bloques y marcas que el publicado.
-    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...mainNames.nodes].sort());
+    // El esquema de esta versión tiene los mismos bloques y marcas que el publicado, más la foto en línea (el
+    // único nodo nuevo, inlinePhoto.ts: la versión publicada no abre una página que la tenga, unknownContent.ts).
+    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...mainNames.nodes, 'photo'].sort());
     expect([...knownContent().marks].sort()).toEqual([...mainNames.marks].sort());
   });
 

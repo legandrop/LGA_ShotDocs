@@ -164,8 +164,9 @@ describe('tarjetas de Drive con el editor de la versión publicada (main)', () =
     const mainNames = { nodes: new Set(Object.keys(probe.pmSchema.nodes)), marks: new Set(Object.keys(probe.pmSchema.marks)) };
     expect(findUnknownContent(doc, mainNames)).toBeNull();
     expect(findUnknownContent(doc)).toBeNull();
-    // Ningún bloque ni marca nuevos: los mismos nombres que la versión publicada.
-    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...mainNames.nodes].sort());
+    // Ningún bloque ni marca nuevos: los mismos nombres que la versión publicada, más la foto en línea (el único
+    // nodo nuevo, inlinePhoto.ts: la versión publicada no abre una página que la tenga, unknownContent.ts).
+    expect([...knownContent().nodes, 'doc', 'text'].sort()).toEqual([...mainNames.nodes, 'photo'].sort());
     expect([...knownContent().marks].sort()).toEqual([...mainNames.marks].sort());
     expect(Object.keys(schema.blockSpecs).sort()).toEqual(Object.keys(mainSchema.blockSpecs).sort());
   });

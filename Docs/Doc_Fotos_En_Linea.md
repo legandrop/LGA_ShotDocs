@@ -1,7 +1,9 @@
 # Fotos en línea: la foto como un carácter del renglón (P.15)
 
-Estado: **diseño auditado, sin implementar** (2026-10-01; las "Correcciones de la auditoría", más abajo,
-mandan sobre el resto). Pedido de Lega del 2026-10-01, con sus palabras: las
+Estado: **entrega 0 (prototipo) y entrega 1a (el nodo y el parche de huecos) hechas; falta la 1b y el resto**
+(2026-10-01; ver "Prototipo (entrega 0)" y "Cómo quedó (entrega 1a)"; las "Correcciones de la auditoría", más
+abajo, mandan sobre el diseño de arriba). Nada en la app crea todavía una foto en línea. Pedido de Lega del
+2026-10-01, con sus palabras: las
 imágenes tienen que ser "como en Coda o en cualquier lado, un carácter más de un texto". Reemplaza el modelo de
 `Doc_Imagenes.md` (la foto como bloque y las filas como arreglo entre bloques), que queda para las fotos que
 ya existen hasta que se conviertan (ver "Lo que ya existe").
@@ -268,7 +270,128 @@ imprimir.
 fila" evita todo el punto 1 y no toca versiones viejas, pero no da texto en el mismo renglón que una foto,
 que es el 28 % de los renglones con fotos del doc medido (249 de 890).
 
+## Prototipo (entrega 0)
+
+Una página de prueba con el editor de la app más el nodo `photo`, sin sincronización ni login, medida en
+Chromium con scripts (fuera de este repo). **Lega lo vio el 2026-10-01 y lo aprobó** ("me encanta el prototipo
+de fotos en línea"). Conclusiones:
+
+- **Andan tal cual** con un nodo atómico elegible: el cursor a cada lado de la foto, Backspace, Supr, Enter,
+  pegar y cambiar el ancho.
+- **Con la foto elegida hace falta manejo propio** de: una letra, la barra espaciadora, Enter y la tecla que
+  abre una composición (el cursor pasa a la derecha de la foto y la tecla sigue su camino); Shift+flechas
+  (pasar a una selección de texto); y Shift+clic.
+- **Una selección de solo fotos no se ve** sin una decoración que las marque.
+- **El modelo de ancho que sirve:** `w · (100% − (n−1)·espacio − 1px)`, con una decoración que le dice a cada
+  foto cuántas hay en su fila (`n`). Medido: 0 filas rotas en 831 anchos × 5 densidades, y alturas parejas
+  (diferencia ≤ 0,08 px), contra hasta 7,5 px de diferencia sin la decoración.
+- Una fila que no llena el renglón, seguida de otra, necesita un margen que complete el renglón.
+- **Falta probar Safari e iPhone.**
+
+**A futuro (Lega, 2026-10-01, después de ver el prototipo):** que se puedan escribir varias líneas de texto a
+los costados de una foto (el texto rodea la foto), no solo un renglón alineado abajo.
+
+## Cómo quedó (entrega 1a: el nodo y el parche de huecos)
+
+La parte del modelo de datos de la entrega 1 (v0.074). La 1b es lo que se ve y se toca: la imagen resuelta
+(`sdmedia://`, miniatura, nitidez), el CSS y la decoración de las filas, el teclado y el mouse propios, la
+selección de varias, la barra, el carrete y los selectores por bloque más posición.
+
+**El nodo** (`src/ui/inlinePhoto.ts`). Un nodo propio de Tiptap registrado en BlockNote con
+`createInlineContentSpecFromTipTapNode`: `photo`, en línea, atómico, elegible y arrastrable, con `url`, `name` y
+`w` (la parte del ancho del renglón, 0 a 1, como `rowWidth`; 0 = ancho natural). En el HTML del portapapeles
+va como `<span data-inline-content-type="photo" data-url data-name data-w>`, y solo eso se lee al pegar: sin
+regla para un `<img>` de afuera. La vista es mínima (`<span class="sd-photo" contenteditable="false"><img
+class="bn-visual-media" draggable="false"></span>`): cambiar el ancho no vuelve a cargar la imagen, y la
+dirección va tal cual (`showSource` es donde la 1b engancha `resolveFileUrl`, la miniatura y la nitidez). **Nada
+en la app crea una foto en línea:** solo se inserta por la API del editor (las pruebas). `@tiptap/core`, que ya
+venía con BlockNote, pasó a ser una dependencia declarada.
+
+**El resguardo.** `unknownContent.ts` conoce `photo` (la versión anterior no, y por eso no abre una página que
+la tenga: probado adentro de un párrafo, un título, un ítem de lista y una celda de tabla; si la montara, las
+fotos se borrarían del documento compartido y quedaría el texto). `media/usage.ts` ya cuenta su archivo como
+usado. La importación de Coda (`writePage`) ahora revisa lo mismo antes de montar su editor: una página con
+algo que esta versión no conoce no se toca, queda anotada y sin terminar (se escribe al seguir la importación
+con la app al día).
+
+**El parche de los huecos** (`patches/y-prosemirror+1.3.7.patch`, `normalizePNodeContent`; detalle en
+`Doc_Colaboracion.md`, "El texto de los huecos"). Un renglón con fotos se guarda con un texto, aunque esté
+vacío, a cada lado de cada foto: `"" [foto] "" [foto] ""`. Decisiones:
+
+- **Solo alrededor de `photo`.** El nodo lleva una marca en su esquema (`lgaGapText`) y el parche mira esa
+  marca. Ningún otro elemento cambia: un salto de línea (Shift+Enter) se guarda como siempre, también al lado
+  de una foto (`[salto] "" [foto] ""`). Probado: los párrafos con saltos (uno, varios seguidos, al principio y
+  al final) se guardan igual que con la versión anterior, agregarles una foto no vuelve a crear su texto ni
+  sus saltos, y abrir una página (con saltos, con fotos, o con las dos cosas) no escribe nada.
+- **Versiones mezcladas.** La versión anterior nunca edita un renglón con fotos (no abre la página), y todo lo
+  demás las dos lo escriben igual: las mismas 300 agendas con saltos de línea dan lo mismo con dos editores
+  de esta versión, dos de la anterior, o uno de cada una. Las dos formas de guardar un renglón con fotos (con
+  y sin el texto de los huecos) no llegan a mezclarse; si se mezclaran no habría un ida y vuelta de arreglos,
+  pero se perdería texto en 173 de 300 agendas: por eso la marca y el parche van juntos (`vite.config.ts` no
+  construye sin esa parte del parche).
+- **Sacarlo es una línea** (`extendNodeSchema` en `inlinePhoto.ts`), mientras nada cree fotos en línea.
+
+**Lo medido** (dos editores sobre dos documentos de Yjs que se cruzan los cambios en cualquier orden; 300
+agendas al azar por caso, con semilla; cada número es la cantidad de agendas con algo perdido o duplicado; son
+agendas hechas para chocar: todos los pasos caen en el mismo renglón):
+
+| Qué hacen dos personas a la vez en el mismo renglón | Con el texto de los huecos | Sin él |
+|---|---|---|
+| Solo texto, sin fotos (control) | 0 | 0 |
+| Escriben en los huecos de `[foto][foto]` | **0** | 21 perdido, 52 duplicado |
+| Escriben en los huecos de `"abc"[foto]"def"[foto]` | **0** | 20 duplicado |
+| Uno escribe y el otro cambia el ancho o agrega fotos en los huecos | 0 | 0 |
+| Los dos escriben, cambian anchos y agregan fotos en los huecos | **0** | 2 duplicado |
+| Uno escribe justo a la derecha de una foto y el otro borra fotos (`[foto][foto][foto]`) | **205 perdido** | 40 perdido, 3 duplicado |
+| Uno escribe pegado a una foto y el otro borra fotos (`"abc"[foto]"def"[foto]`) | 206 perdido | 167 perdido |
+| Uno escribe a la derecha de una foto y el otro mueve fotos (fila de tres) | 74 perdido | 87 perdido, 1 duplicado |
+| Uno escribe pegado a una foto y el otro mueve fotos (texto y fotos) | 29 perdido | 166 perdido, 5 duplicado; una foto perdida en 3 y duplicada en 3 |
+| Uno escribe pegado a una foto y el otro aprieta Enter pegado a una foto | 172 perdido | 139 perdido |
+| Uno escribe al final y el otro pone fotos en el medio del texto | 0 (lo escrito queda antes de la foto) | 0 |
+| Los dos borran fotos de un renglón con texto entre ellas | texto que ya estaba: perdido en 53, duplicado en 139 | igual |
+| Uno une el renglón con el de arriba o le cambia el tipo y el otro pega fotos en él | las fotos pegadas se pierden (227 y 261) | igual |
+| Uno une el renglón con el de arriba y el otro escribe pegado a sus fotos | 231 perdido | igual |
+| De todo un poco, los dos | 103 perdido, 19 duplicado; fotos: 25 perdidas, 25 duplicadas | 101 perdido, 18 duplicado; fotos: 19 y 33 |
+
+🔴 **Lo que encontró la medición, y queda para decidir.** El texto de los huecos arregla lo que se buscaba
+(escribir los dos en el mismo hueco: de 73 agendas con problemas a 0) y mejora mover una foto, pero **empeora
+borrar una foto o apretar Enter mientras el otro escribe en un hueco vacío pegado a ella**: de 40 a 205 en la
+fila de tres fotos. La causa: sin el parche, quien escribe en un hueco vacío crea su propio texto, que sobrevive
+si el otro borra la foto de al lado; con el parche los dos comparten el texto del hueco, y al borrar la foto
+y-prosemirror borra también ese texto (une los dos de los costados en uno), con lo que el otro escribió
+adentro. En el conjunto ("de todo un poco") las dos formas pierden parecido. La auditoría del diseño midió los
+huecos, no esto. Se dejó el parche como estaba decidido, medido y con sus pruebas; se puede sacar con una
+línea mientras nada cree fotos. **Propuesta para antes de publicar la versión que las crea:** que borrar una
+foto no borre el texto vacío de al lado (queda como texto de más, que la comparación saltea del lado de Yjs) y
+que al dibujar no se junten dos textos seguidos; es un cambio más grande en el mismo parche y necesita su
+diseño y su auditoría. Es compatible con lo guardado por esta entrega.
+
+**Deshacer.** Insertar, borrar y cambiar el ancho de una foto se deshacen de un paso, y los dos editores
+terminan iguales.
+
+**Pruebas.** `src/ui/inlinePhoto.test.ts` (el nodo, cómo se guarda, abrir no escribe, la versión anterior,
+deshacer), `collabPhotos.test.ts` (los casos que tienen que dar 0), `collabPhotosLimits.test.ts` (los límites,
+con su número), `collabPhotosNoGaps.test.ts` (lo mismo sin el texto de los huecos y las dos formas mezcladas),
+`collabPhotosVersions.test.ts` (saltos de línea con las dos versiones) y la de `writePage` en
+`src/import/codaImport.test.ts`. Las ayudas están en `src/ui/photoHarness.ts`.
+
+**Anotado, sin hacer:**
+
+- Dos personas que escriben a la vez en el hueco entre dos saltos de línea (o después del último) pierden o
+  duplican texto, por lo mismo que los huecos de las fotos: 2 perdido y 1 duplicado de 300 con saltos en el
+  medio, 4 y 12 con saltos al principio y al final. Ya pasaba antes de esta versión; arreglarlo cambia cómo se
+  guardan párrafos que las versiones de hoy sí abren, así que necesita su propio paso (una versión que
+  entienda las dos formas, subir `min_app_version`, y recién después escribir la nueva).
+- El texto de un bloque que usa la importación para ubicar los comentarios de Coda (`pageBlocks`) junta los
+  textos de un párrafo con un espacio: con fotos en línea, los textos vacíos de los huecos suman espacios.
+  Se revisa en la entrega 4 (importar en línea).
+- El `README.md` dice que el parche de y-prosemirror son dos arreglos chicos; ahora tiene una parte más. No se
+  tocó (nada visible para el usuario cambió).
+
 ## Preguntas para Lega
+
+Lega vio el prototipo el 2026-10-01 y lo aprobó ("me encanta el prototipo de fotos en línea"). Pidió, a futuro,
+texto de varias líneas a los costados de una foto (ver "Prototipo (entrega 0)"). Siguen abiertas:
 
 1. **Leyenda:** la foto en línea no tiene leyenda propia. ¿Está bien (el texto de al lado o de abajo la
    reemplaza), o hace falta?

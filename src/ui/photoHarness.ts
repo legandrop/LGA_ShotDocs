@@ -39,20 +39,20 @@ export const photo = (name: string, w = 0): Inline => ({ type: 'photo', props: {
 export const para = (id: string, content: Inline[]): PartialBlock =>
   ({ id, type: 'paragraph', content: content.map((c) => (typeof c === 'string' ? { type: 'text', text: c, styles: {} } : c)) }) as never;
 
-/** Las fotos en línea que muestra el editor, en orden. */
-export function photosIn(E: BlockNoteEditor): { pos: number; name: string; w: number }[] {
+/** Las fotos en línea que muestra el editor, en orden (o los nodos en línea de otro tipo, como `hardBreak`). */
+export function photosIn(E: BlockNoteEditor, type = PHOTO): { pos: number; name: string; w: number }[] {
   const out: { pos: number; name: string; w: number }[] = [];
   view(E).state.doc.descendants((n, pos) => {
-    if (n.type.name === PHOTO) out.push({ pos, name: String(n.attrs.name), w: Number(n.attrs.w) });
+    if (n.type.name === type) out.push({ pos, name: String(n.attrs.name), w: Number(n.attrs.w) });
     return true;
   });
   return out;
 }
 
 /** Las posiciones pegadas a una foto (justo antes y justo después de cada una), sin repetir. */
-export function gapsIn(E: BlockNoteEditor): number[] {
+export function gapsIn(E: BlockNoteEditor, type = PHOTO): number[] {
   const out = new Set<number>();
-  for (const p of photosIn(E)) {
+  for (const p of photosIn(E, type)) {
     out.add(p.pos);
     out.add(p.pos + 1);
   }
@@ -174,8 +174,12 @@ export interface ScheduleResult {
   photosLost: string[];
   /** Fotos que quedaron más de una vez. */
   photosTwice: string[];
+  /** Saltos de línea de más (positivo) o de menos (negativo) que los del principio más los agregados. */
+  breaks: number;
   /** Los dos documentos terminan iguales y cada editor muestra el suyo. */
   same: boolean;
+  /** Después de entregar todo, nadie vuelve a escribir (no hay un ida y vuelta de arreglos entre los dos). */
+  settled: boolean;
   /** Bloques con fotos que no quedaron con la forma de los huecos. */
   broken: string[];
   final: string;
@@ -191,13 +195,16 @@ export interface ScheduleResult {
  * - `I` agrega una foto en el medio de un texto; `X` borra una foto; `M` mueve una foto a otro hueco;
  * - `N` Enter pegado a una foto; `J` une el último bloque con el de arriba (Backspace al principio);
  * - `H` le cambia el tipo al último bloque (párrafo ↔ título);
+ * - `K` Shift+Enter (un salto de línea) pegado a una foto o a otro salto, o en un borde de un bloque;
  * - `d` entrega al otro lo pendiente de ese lado (como la app: con la reparación de estructura).
+ *
+ * Con `around: 'hardBreak'`, "pegado a una foto" pasa a ser "pegado a un salto de línea".
  */
 export function runSchedule(
   ops: string[],
   initial: PartialBlock[],
   rand: () => number,
-  { schemaA = schema as unknown, schemaB = schema as unknown, widths = [0.25, 1 / 3, 0.5, 1] } = {},
+  { schemaA = schema as unknown, schemaB = schema as unknown, widths = [0.25, 1 / 3, 0.5, 1], around = PHOTO } = {},
 ): ScheduleResult {
   const docA = new Y.Doc();
   const docB = new Y.Doc();
@@ -219,6 +226,8 @@ export function runSchedule(
   out.B.length = 0;
 
   const typed: string[] = [];
+  const countBreaks = (doc: Y.Doc) => storedInline(doc).join(' ').split('<hardBreak>').length - 1;
+  let breaks = countBreaks(docA);
   // Las palabras del contenido inicial (cada una distinta, en minúsculas): ningún paso de la agenda las borra.
   const base = yText(docA).split(' | ').flatMap((t) => t.match(/[a-z]{3,}/g) ?? []);
   const expected = new Set(photosIn(A).map((p) => p.name));
@@ -243,9 +252,10 @@ export function runSchedule(
     };
     const photos = photosIn(E);
     const ends = textEnds(E);
+    const near = gapsIn(E, around);
     switch (op[0]) {
       case 'T':
-        return write(pick(photos.length ? gapsIn(E) : ends));
+        return write(pick(near.length ? near : ends));
       case 'R': {
         const p = pick(photos);
         return write(p ? p.pos + 1 : undefined);
@@ -288,6 +298,13 @@ export function runSchedule(
         const block = lastBlock(E);
         return void E.updateBlock(block, { type: block.type === 'heading' ? 'paragraph' : 'heading' } as never);
       }
+      case 'K': {
+        const pos = pick([...near, ...ends]);
+        if (pos === undefined) return;
+        const v = view(E);
+        breaks++;
+        return v.dispatch(v.state.tr.insert(pos, v.state.schema.nodes.hardBreak.create()));
+      }
       default:
         throw new Error(`Paso desconocido: ${op}`);
     }
@@ -296,18 +313,23 @@ export function runSchedule(
     deliver('A');
     deliver('B');
   }
+  const settled = out.A.length === 0 && out.B.length === 0;
   // Todo el texto seguido, sin separar por texto ni por bloque: una marca que quedó partida por una foto o por
   // un Enter de otro (el texto está, en dos pedazos) no cuenta como perdida.
   const final = yText(docA).split(' | ').join('');
   const stored = storedPhotos(docA);
+  // El texto inicial, sin las marcas: una marca que quedó en el medio de una palabra no la cuenta como perdida.
+  const plain = final.replace(/\{[AB]\d+\}/g, '');
   const result: ScheduleResult = {
     lost: typed.filter((t) => !final.includes(t)),
     twice: typed.filter((t) => final.split(t).length > 2),
-    baseLost: base.filter((w) => !final.includes(w)),
-    baseTwice: base.filter((w) => final.split(w).length > 2),
+    baseLost: base.filter((w) => !plain.includes(w)),
+    baseTwice: base.filter((w) => plain.split(w).length > 2),
     photosLost: [...expected].filter((name) => !stored.includes(name)),
     photosTwice: [...new Set(stored.filter((name, i) => stored.indexOf(name) !== i))],
+    breaks: countBreaks(docA) - breaks,
     same: sameDocs(docA, docB) && showsDoc(A, docA) && showsDoc(B, docB),
+    settled,
     broken: brokenGaps(docA),
     final: storedInline(docA).join(' | ') || final,
   };
@@ -327,8 +349,11 @@ export interface Tally {
   baseTwice: number;
   photosLost: number;
   photosTwice: number;
-  /** Agendas que no terminan iguales, o con un bloque sin la forma de los huecos. */
+  /** Agendas en las que se perdió o se duplicó un salto de línea. */
+  breaks: number;
+  /** Agendas que no terminan iguales, que no se aquietan, o con un bloque sin la forma de los huecos. */
   different: number;
+  unsettled: number;
   broken: number;
   /** Las primeras agendas con algún problema, para verlas. */
   examples: string[];
@@ -343,7 +368,7 @@ export async function tally(
   options: Parameters<typeof runSchedule>[3] = {},
 ): Promise<Tally> {
   const rand = seeded(seed);
-  const t: Tally = { schedules: count, lost: 0, twice: 0, baseLost: 0, baseTwice: 0, photosLost: 0, photosTwice: 0, different: 0, broken: 0, examples: [] };
+  const t: Tally = { schedules: count, lost: 0, twice: 0, baseLost: 0, baseTwice: 0, photosLost: 0, photosTwice: 0, breaks: 0, different: 0, unsettled: 0, broken: 0, examples: [] };
   for (let i = 0; i < count; i++) {
     const len = 6 + Math.floor(rand() * 14);
     const sch = Array.from({ length: len }, () => alphabet[Math.floor(rand() * alphabet.length)]);
@@ -356,10 +381,131 @@ export async function tally(
     if (r.baseTwice.length) t.baseTwice++;
     if (r.photosLost.length) t.photosLost++;
     if (r.photosTwice.length) t.photosTwice++;
+    if (r.breaks !== 0) t.breaks++;
     if (!r.same) t.different++;
+    if (!r.settled) t.unsettled++;
     if (r.broken.length) t.broken++;
     if ((r.lost.length || r.twice.length || r.baseLost.length || r.baseTwice.length || r.photosLost.length || r.photosTwice.length || !r.same) && t.examples.length < 3)
       t.examples.push(`${sch.join(' ')} => perdió ${r.lost} ${r.baseLost} dos veces ${r.twice} ${r.baseTwice} fotos ${r.photosLost}/${r.photosTwice} iguales ${r.same}: ${r.final}`);
   }
   return t;
 }
+
+// --- Los límites conocidos (collabPhotosLimits.test.ts y collabPhotosNoGaps.test.ts) ----------------------
+//
+// Lo que SÍ puede perder editar a la vez un renglón con fotos en línea, con el número medido en 300 agendas al
+// azar por caso (semilla 9000 + el número del caso): con el texto de los huecos (lo que guarda la app) y sin
+// él. Cada número es la cantidad de agendas con algo de eso: `lost`/`twice`, alguna marca escrita perdida o dos
+// veces; `baseLost`/`baseTwice`, texto que ya estaba; `photosLost`/`photosTwice`, una foto que nadie borró y no
+// está, o que quedó dos veces. La tabla está en Docs/Doc_Colaboracion.md.
+
+const top = para('p0', ['top']);
+const row3 = () => [top, para('p1', [photo('F1'), photo('F2'), photo('F3')])];
+const mixed = () => [top, para('p1', ['abc', photo('F1'), 'def', photo('F2')])];
+
+export type Counts = Pick<Tally, 'lost' | 'twice' | 'baseLost' | 'baseTwice' | 'photosLost' | 'photosTwice'>;
+export const losses = (t: Tally): Counts => ({
+  lost: t.lost,
+  twice: t.twice,
+  baseLost: t.baseLost,
+  baseTwice: t.baseTwice,
+  photosLost: t.photosLost,
+  photosTwice: t.photosTwice,
+});
+const c = (lost: number, twice = 0, baseLost = 0, baseTwice = 0, photosLost = 0, photosTwice = 0): Counts => ({
+  lost,
+  twice,
+  baseLost,
+  baseTwice,
+  photosLost,
+  photosTwice,
+});
+
+export interface Limit {
+  name: string;
+  alphabet: string[];
+  initial: () => ReturnType<typeof para>[];
+  /** Con el texto de los huecos (lo que guarda la app) y sin él. */
+  gaps: Counts;
+  noGaps: Counts;
+}
+
+export const limits: Limit[] = [
+  {
+    name: 'A escribe justo a la derecha de una foto, B borra fotos ([foto][foto][foto])',
+    alphabet: ['RA', 'RA', 'XB', 'dA', 'dB'],
+    initial: row3,
+    gaps: c(205),
+    noGaps: c(40, 3),
+  },
+  {
+    name: 'A escribe pegado a una foto, B borra fotos ("abc"[foto]"def"[foto])',
+    alphabet: ['TA', 'TA', 'XB', 'dA', 'dB'],
+    initial: mixed,
+    gaps: c(206),
+    noGaps: c(167),
+  },
+  {
+    name: 'A escribe justo a la derecha de una foto, B mueve fotos ([foto][foto][foto])',
+    alphabet: ['RA', 'RA', 'MB', 'dA', 'dB'],
+    initial: row3,
+    gaps: c(74),
+    noGaps: c(87, 1),
+  },
+  {
+    name: 'A escribe pegado a una foto, B mueve fotos ("abc"[foto]"def"[foto])',
+    alphabet: ['TA', 'TA', 'MB', 'dA', 'dB'],
+    initial: mixed,
+    gaps: c(29),
+    noGaps: c(166, 5, 2, 0, 3, 3),
+  },
+  {
+    name: 'A escribe pegado a una foto, B aprieta Enter pegado a una foto',
+    alphabet: ['TA', 'TA', 'NB', 'dA', 'dB'],
+    initial: mixed,
+    gaps: c(172),
+    noGaps: c(139),
+  },
+  {
+    name: 'A escribe al final, B pone fotos en el medio del texto',
+    alphabet: ['ZA', 'ZA', 'IB', 'dA', 'dB'],
+    initial: () => [top, para('p1', ['abcdefghijkl'])],
+    gaps: c(0),
+    noGaps: c(0),
+  },
+  {
+    name: 'los dos borran fotos de "abc"[foto]"def"[foto]"ghi"[foto]"jkl"',
+    alphabet: ['XA', 'XB', 'dA', 'dB'],
+    initial: () => [top, para('p1', ['abc', photo('F1'), 'def', photo('F2'), 'ghi', photo('F3'), 'jkl'])],
+    gaps: c(0, 0, 53, 139),
+    noGaps: c(0, 0, 53, 139),
+  },
+  {
+    name: 'A une el renglón con el de arriba (Backspace), B pega fotos en él',
+    alphabet: ['JA', 'PB', 'PB', 'dA', 'dB'],
+    initial: () => [top, para('p1', ['abc', photo('F1')])],
+    gaps: c(0, 0, 0, 0, 227),
+    noGaps: c(0, 0, 0, 0, 227),
+  },
+  {
+    name: 'A le cambia el tipo al renglón, B pega fotos en él',
+    alphabet: ['HA', 'PB', 'PB', 'dA', 'dB'],
+    initial: () => [top, para('p1', ['abc', photo('F1')])],
+    gaps: c(0, 0, 0, 0, 261),
+    noGaps: c(0, 0, 0, 0, 261),
+  },
+  {
+    name: 'A une el renglón con el de arriba, B escribe pegado a sus fotos',
+    alphabet: ['JA', 'TB', 'TB', 'dA', 'dB'],
+    initial: mixed,
+    gaps: c(231),
+    noGaps: c(231),
+  },
+  {
+    name: 'de todo un poco: escribir, agregar, cambiar el ancho, borrar, mover y Enter, los dos',
+    alphabet: ['TA', 'TB', 'TA', 'TB', 'TA', 'TB', 'TA', 'TB', 'PA', 'PB', 'WA', 'WB', 'XA', 'XB', 'MA', 'MB', 'NA', 'NB', 'dA', 'dB', 'dA', 'dB', 'dA', 'dB'],
+    initial: mixed,
+    gaps: c(103, 19, 7, 61, 25, 25),
+    noGaps: c(101, 18, 0, 72, 19, 33),
+  },
+];

@@ -210,6 +210,29 @@ describe('cómo se guarda: un texto (aunque esté vacío) a cada lado de cada fo
     expect(storedInline(now)).toEqual(['"ab" <hardBreak> "X" <hardBreak> "Ycd"', '<hardBreak> <hardBreak>']);
   });
 
+  it('editar un párrafo que ya existía con saltos (al principio, seguidos y al final) solo agrega lo escrito', () => {
+    // El documento lo dejó guardado la versión anterior.
+    const saved = docWith([para('p1', ['\n\nab\n\n'])], previousSchema);
+    const run = (withSchema: unknown) => {
+      const { doc } = copyOf(saved);
+      const paragraph = ((doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlElement;
+      const before = paragraph.toArray();
+      const E = mountEditor(doc, 'x', withSchema);
+      // Una letra en cada lugar donde entra el cursor: antes, entre y después de cada salto.
+      for (let i = 0; ; i++) {
+        const [start, end] = textEnds(E);
+        if (start + 2 * i > end) break;
+        typeAtPos(E, start + 2 * i, String(i));
+      }
+      // Los saltos y el texto de antes son los mismos elementos, en el mismo orden: nada se volvió a crear.
+      expect(paragraph.toArray().filter((c) => before.includes(c))).toEqual(before);
+      return storedInline(doc);
+    };
+    const now = run(schema);
+    expect(now).toEqual(['"0" <hardBreak> "1" <hardBreak> "2a3b4" <hardBreak> "5" <hardBreak> "6"']);
+    expect(now).toEqual(run(previousSchema));
+  });
+
   it('agregar una foto a un renglón no vuelve a crear su texto ni sus saltos (se agrega al lado)', () => {
     const doc = docWith([para('p1', ['\nabc']), para('p2', ['abc\n'])]);
     const children = (i: number) => ((doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).get(i) as Y.XmlElement).get(0) as Y.XmlElement;
