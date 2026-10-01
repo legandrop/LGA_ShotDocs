@@ -139,6 +139,8 @@ const EXT = {
   'image/svg+xml': '.svg', 'image/heic': '.heic', 'image/heif': '.heif', 'video/mp4': '.mp4', 'video/quicktime': '.mov',
   'video/webm': '.webm', 'application/pdf': '.pdf',
 }
+/** El tipo de un archivo ya bajado, por su extensión (la inversa de `EXT`). */
+const TYPE_OF = Object.fromEntries(Object.entries(EXT).map(([type, ext]) => [ext, type]))
 
 // Archivos de Coda: src/href que apuntan a codahosted.io (o a coda.io/blobs). El resto (YouTube, Drive,
 // Vimeo, etc.) queda como link externo y se anota en el manifest.
@@ -149,7 +151,9 @@ async function download(url, dir) {
   // Una foto HEIC ya convertida está como `<blob>.jpg` (su original se fue a media-originals/): no se pide de nuevo.
   const blob = mediaBaseName(url)
   const done = storedMedia(await readdir(dir), blob)
-  if (done && (await stat(join(dir, done))).size > 0) return { file: done, reused: true }
+  const size = done ? (await stat(join(dir, done))).size : 0
+  // Con su tipo (por la extensión) y su peso, como la primera vez: repetir el comando deja el mismo manifest.
+  if (done && size > 0) return { file: done, reused: true, type: TYPE_OF[extname(done).toLowerCase()], bytes: size }
   const res = await request(url)
   if (!res.ok) throw new Error(`${res.status} al bajar ${url}`)
   const type = (res.headers.get('content-type') || '').split(';')[0].trim()
