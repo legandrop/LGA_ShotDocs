@@ -103,6 +103,10 @@ export const editor = {
     en: "Screenplay text: INT/EXT, DAY, NIGHT marked",
     es: "Texto de guion: INT/EXT, DÍA y NOCHE marcados",
   },
+  'editor.imageHint': {
+    en: "Photos and videos go in the line, at the cursor",
+    es: "Las fotos y los videos van en el renglón, donde está el cursor",
+  },
   'editor.question': { en: "Question", es: "Pregunta" },
   'editor.questionHint': {
     en: "A question for the team or the client, answered in comments",
