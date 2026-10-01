@@ -358,28 +358,33 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     - **Probarlo en Safari, en la Mac y en el iPhone** (un HEIC que llega como archivo): la auditoría de v0.075
       lo recorrió en la app real en Chromium de Windows (soltar, pegar, varias juntas, sin red, recargar en
       plena conversión). En el iPhone falta medir la memoria con una foto de 48 MP.
-    - **Con red, la primera vez que el decodificador no baja ya se sube el HEIC** sin convertir: con una red
-      mala de rodaje queda así para siempre. Volver a probar una o dos veces antes de rendirse.
-    - **Sin red, la conversión arranca unos 7 s después de soltar la foto** (espera que falle la consulta a la
-      base antes de convertir).
-    - **La comprobación del JPEG** dejaría pasar un canvas en blanco si la foto es casi toda blanca
-      (documentos, cielos).
+    - **Hecho (v0.086): con red, si el decodificador no baja** se vuelve a probar a los 30 s y a los 2 min antes
+      de subir el HEIC tal cual; sin red los intentos no cuentan. **Sin red, la conversión arranca enseguida**
+      (no espera la consulta a la base, que tardaba unos 7 s en fallar). **La comprobación del JPEG** mira además
+      los puntos que se apartan del fondo: un canvas en blanco ya no pasa con una foto casi toda blanca.
     - **Subir `min_app_version` a 0.075** cuando Lega tenga la versión en sus dispositivos: una pestaña de
       v0.074 o anterior puede registrar un HEIC mientras esta lo convierte (sospecha de la auditoría, sin
-      reproducir). Antes, verificar si `min_app_version` frena también la cola de archivos (en
-      `sync/engine.ts` solo frena las páginas).
-    - **Un HEIC sin perfil ICC** (color solo `nclx`) sale sin perfil.
+      reproducir). **Verificado (v0.086): no la frena.** Solo la usan `push_page_update` y el ciclo de páginas;
+      `register_file`, el portero y la cola de archivos no miran la versión. Frenarla pide una migración que haga
+      con `register_file` lo mismo que con `push_page_update` (`Doc_Imagenes.md`, "Pendiente").
+    - **Hecho (v0.086): el perfil de color** es el de la imagen principal (`pitm` → `ipma` → `ipco`), en la app y
+      en el comando de Coda (el mismo código, `src/media/heifColor.mjs`), y un HEIC con solo `nclx` lleva un
+      Display P3 o BT.2020 estándar. HDR (`nclx` PQ o HLG) sigue sin perfil.
     - **Sin portero** (fotos a Supabase) no se convierte.
     - **Verlo en la app con el doc entero.** Probado con una importación real de cuatro páginas (46 fotos
       convertidas: en el Drive, con miniatura y a la vista); falta la de un doc completo.
     - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.
-    - **De a una.** La conversión tarda alrededor de un segundo por foto; con miles, convendría en paralelo.
-    - **El perfil de color se toma por orden** en el archivo (el primero de color que aparece), que en las
-      fotos del iPhone es el de la foto. Un HEIC de otro origen con una imagen auxiliar de color antes de la
-      principal llevaría el perfil equivocado, y uno que lo declara sin perfil (`nclx`) sale sin él. Lo
-      correcto es seguir la imagen principal (`pitm` → `ipma` → `ipco`).
-    - **Pruebas del comando entero** (`convertFolder`, la bajada con una foto ya convertida, el código de
-      salida): hoy se probó a mano contra una API de Coda simulada; en el repo solo está probada la librería.
+    - **Hecho (v0.086): de a dos.** Varias HEIC soltadas juntas se convertían todas a la vez (cientos de MB
+      cada una); ahora de a dos (`HEIC_PARALLEL`).
+    - **El comando de Coda convierte de a una.** Tarda alrededor de un segundo por foto (unos 10 minutos con 618);
+      con miles, convendría en paralelo.
+    - **La comprobación del JPEG acepta uno con la mitad en blanco**, y una carrera de microsegundos entre dos
+      pestañas al tercer intento deja el aviso de HEIC sobre un JPEG: anotados en `Doc_Imagenes.md`, "Pendiente".
+    - **Hecho (v0.086): pruebas del comando entero** (`scripts/coda-export-run.test.mjs`, contra una API de Coda
+      de mentira): bajar, convertir, repetir, `--refresh`, sin la librería, `--convert-only`, un HEIC roto y un doc
+      sin HEIC, con el código de salida.
+    - **Probar en la app real con sesión** lo de v0.086 (con red mala y sin red): se probó en Chromium sin sesión,
+      con un banco de prueba fuera del repo.
 14. **Hecho: un dispositivo nuevo ya no muestra "Subiendo ~2750 cambios".** Era lo bajado contado como
     pendiente: cada foto o video de las páginas bajadas entraba a la cola de usos y salía un `link_page_file`
     por uso (2757 en el workspace de Lega, sumando todos sus proyectos), que no cambiaba nada en la base. Ahora,

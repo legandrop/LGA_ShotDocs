@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.086 :
+
+Fotos HEIC: con red, si el decodificador no bajaba una vez, la foto se subía como HEIC para siempre; sin red,
+la conversión esperaba unos 7 s a que fallara la consulta a la base; un canvas en blanco pasaba la comprobación
+con una foto casi toda blanca; el perfil de color era el primero del archivo, o ninguno con solo `nclx`; y
+varias juntas se convertían todas a la vez. Ahora con red se reintenta a los 30 s y a los 2 min (con su aviso)
+antes de subir el HEIC; se convierte sin esperar la consulta; la comprobación mira también los puntos que se
+apartan del fondo; el perfil es el de la imagen principal, con un Display P3 o BT.2020 estándar para `nclx`; y
+se convierten de a dos. Pruebas del comando de Coda entero, que al repetirse ya deja el mismo manifest.
+[ Fotos HEIC - reintentar el decodificador, convertir sin esperar la base, comprobar mejor y el perfil de la imagen principal ]
+
 v0.085 :
 
 Un dispositivo nuevo mostraba "Subiendo ~2750 cambios" unos minutos al abrir el workspace, sin escribir nada

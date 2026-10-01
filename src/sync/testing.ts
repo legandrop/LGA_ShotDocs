@@ -1761,6 +1761,8 @@ export async function makeDevice(
     viewImage: fakeViewImage,
     convertHeic: (file) => server.convertHeic(file),
     heicTimeoutMs: server.heicTimeoutMs,
+    // Sin red, el dispositivo lo sabe (como `navigator.onLine` en false).
+    offline: () => !server.online,
     now: () => Date.now() + server.clockOffset,
   });
   await media.load();
