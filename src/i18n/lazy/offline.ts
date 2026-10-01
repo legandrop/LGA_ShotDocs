@@ -104,6 +104,10 @@ export const offline = {
   'offlineDialog.ready': { en: "Ready to use offline", es: "Listo para usar sin conexión" },
   'offlineDialog.readyAt': { en: "Ready · updated {when}", es: "Listo · actualizado {when}" },
   'offlineDialog.waiting': { en: "Waiting to download", es: "Esperando para bajar" },
+  'offlineDialog.waitingPages': {
+    en: { one: "Waiting for {count} page to download", other: "Waiting for {count} pages to download" },
+    es: { one: "Esperando que se baje {count} página", other: "Esperando que se bajen {count} páginas" },
+  },
   'offlineDialog.offlineState': { en: "Waiting for a connection", es: "Esperando conexión" },
   'offlineDialog.unavailable': {
     en: { one: "{count} file is not available", other: "{count} files are not available" },

@@ -4918,7 +4918,19 @@ mark.search-hit {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   cursor: pointer;
+}
+
+.offline-row input[type='checkbox'],
+.offline-remove input[type='checkbox'] {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+
+.offline-row-label {
+  text-align: left;
 }
 
 .offline-row.extras {
@@ -5043,6 +5055,8 @@ mark.search-hit {
 }
 
 .space-notice {
+  /* Arriba de los avisos cortos (`.notice`), que salen en el mismo lugar. */
+  bottom: calc(76px + env(safe-area-inset-bottom));
   flex-wrap: wrap;
   max-width: min(560px, calc(100vw - 32px));
   font-size: 13px;

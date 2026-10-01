@@ -61,6 +61,9 @@ export function markStatus(mark: MarkView, tr: Translate): string {
   if (mark.state === 'offline') return tr('offlineDialog.offlineState');
   if (mark.state === 'ready' && mark.readyAt) return tr('offlineDialog.readyAt', { when: ago(mark.readyAt, tr.lang) });
   if (mark.error) return localize(mark.error);
+  if (mark.waitingPages > 0) return tr('offlineDialog.waitingPages', { count: mark.waitingPages });
+  if (mark.needsUpdate > 0) return tr('offlineDialog.needsUpdate', { count: mark.needsUpdate });
+  if (mark.waitingFiles > 0) return tr('offlineDialog.stillUploading', { count: mark.waitingFiles });
   return tr('offlineDialog.waiting');
 }
 

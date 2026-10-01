@@ -26,7 +26,7 @@ import {
   type OfflineMark,
   type OfflineOptions,
 } from './offlineStore';
-import { branchPages, olderUrlsInDoc, wanted, weigh, type FileFacts, type Weights } from './offlinePlan';
+import { branchPages, estimateSharp, olderUrlsInDoc, wanted, weigh, type FileFacts, type Weights } from './offlinePlan';
 import { PorteroError, type VerifyResult } from './portero';
 import type { MediaQueue } from './queue';
 import { mediaIdsInDoc } from './usage';
@@ -720,7 +720,8 @@ export class OfflineManager {
       const row = tree.get(pageId);
       if (!row) continue;
       const state = states.get(pageId);
-      const complete = !!state && state.cursor >= row.update_seq && !state.unreadable;
+      // Una página sin contenido en el servidor (`update_seq` 0) que nunca se abrió no tiene nada que bajar.
+      const complete = (state ? state.cursor >= row.update_seq : row.update_seq === 0) && !state?.unreadable;
       const local = tree.hasUnsentCreate(pageId);
       if (mark && (complete || local) && mark.pages[pageId] === row.update_seq) {
         // Ya leída con este contenido: queda lo que había.
@@ -958,7 +959,7 @@ export class OfflineManager {
         continue;
       }
       if (want.orig && !f.ownBlob && !f.copy) items.push({ id: f.id, what: 'orig', bytes: f.size ?? 0, mime: f.mime, size: f.size ?? 0 });
-      if (want.view && !f.offview) items.push({ id: f.id, what: 'view', bytes: 400 * 1024, mime: f.mime, size: f.size ?? 0 });
+      if (want.view && !f.offview) items.push({ id: f.id, what: 'view', bytes: estimateSharp(f, !!this.deps.safari), mime: f.mime, size: f.size ?? 0 });
     }
     for (const url of mark.older ?? []) {
       if (this.deps.older && !(await this.deps.older.isStored(url).catch(() => true))) items.push({ id: url, what: 'older', bytes: MB, mime: '', size: 0 });
