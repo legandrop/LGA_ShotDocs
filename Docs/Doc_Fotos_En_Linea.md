@@ -512,7 +512,7 @@ renglón dos veces**. Subir `min_app_version` no alcanzaba: una versión vieja s
 editando en el dispositivo, y al actualizarse sube su cola (para Yjs el orden no cambia nada: las mismas pérdidas).
 
 Ahora el renglón lleva, primero, un elemento vacío `lgaStableGaps` que el parche pone con la primera foto, nunca
-borra y nunca dibuja; las versiones de la v0.052 a la v0.076 no lo conocen y no abren la página. Con la marca:
+borra (tampoco el deshacer: ver "Lo que dejaron las auditorías") y nunca dibuja; las versiones de la v0.052 a la v0.076 no lo conocen y no abren la página. Con la marca:
 **0 de 49** en todas las combinaciones (viejo y nuevo, dos viejos, dos nuevos, renglón con fotos), y un dispositivo
 viejo sin red que editó el renglón *antes* de que tuviera fotos y sube su cola después: **0 letras perdidas en 104
 combinaciones** (en 9, lo que el viejo borró vuelve, porque el nuevo partió ese texto con una foto). Un párrafo sin
