@@ -170,6 +170,13 @@ function flipLink(link: MediaLink, removed: boolean): MediaLink {
   };
 }
 
+/**
+ * Cada tantas trabadas seguidas sin que la subida avance (`MediaRecord.stalls`), al retomarla se abre otra si
+ * la que hay todavía no recibió nada (`renewIfEmpty` del portero). Dos y no una: la primera puede ser un
+ * corte de la red, y retomar la misma no cuesta nada.
+ */
+export const STALLS_BEFORE_RENEW = 2;
+
 /** Qué hacer con un error: esperar la red, reintentar más tarde, o dejarlo a la vista hasta "Retry". */
 export function classify(err: unknown): Outcome {
   if (err instanceof UploadError && err.cancelled) return 'cancelled';
@@ -887,6 +894,13 @@ export class MediaQueue {
     let record = start;
     // Lo que el progreso guarda (la subida para retomar) va en orden, antes del resultado final.
     let saving: Promise<unknown> = Promise.resolve();
+    // Trabadas seguidas sin que la subida avance (un registro de una versión anterior no lo trae).
+    let stalls = start.stalls ?? 0;
+    // Fallas seguidas, también sin avance: de esto sale cuánto se espera para volver a intentar.
+    let failed = start.failures;
+    // La subida del portero que se está usando y hasta dónde confirmó: para saber cuándo avanza de verdad.
+    let savedId = start.uploadId;
+    let confirmed = start.sent;
     try {
       if (record.probed === false) {
         await this.ensureProbed(record.id);
@@ -954,21 +968,39 @@ export class MediaQueue {
 
       const controller = new AbortController();
       this.controller = controller;
-      let savedId = record.uploadId;
+      savedId = record.uploadId;
+      confirmed = record.sent;
       this.setUploading({ name: record.name, sent: record.sent, total: record.size });
       const onProgress = (p: UploadProgress) => {
         this.setUploading({ name: record.name, sent: p.sent, total: p.total });
-        if (p.uploadId !== savedId || p.sent !== record.sent) {
-          savedId = p.uploadId;
-          const changes = { uploadId: p.uploadId, sent: p.sent };
-          saving = saving.then(() => this.patch(record.id, changes)).catch(() => undefined);
+        const other = p.uploadId !== savedId;
+        // Otra subida empieza de cero: lo que tenía la anterior no cuenta.
+        if (other) confirmed = 0;
+        if (!other && p.sent === confirmed) return;
+        const changes: Partial<MediaRecord> = { uploadId: p.uploadId, sent: p.sent };
+        // Las trabadas y las fallas se cuentan seguidas y sin avance: vuelven a cero recién cuando el portero
+        // confirma más bytes (abrir otra subida no es avanzar). Si no, un video largo al que le llega una
+        // parte más en cada vuelta esperaría cada vez más para seguir, aunque esté avanzando.
+        if (p.sent > confirmed) {
+          if (stalls > 0) changes.stalls = stalls = 0;
+          if (failed > 0) changes.failures = failed = 0;
         }
+        savedId = p.uploadId;
+        confirmed = p.sent;
+        saving = saving.then(() => this.patch(record.id, changes)).catch(() => undefined);
       };
       let result;
       try {
+        // El portero corta un pedido que deja de moverse (`STALL_MS`, `CONTROL_TIMEOUT_MS`): la subida
+        // termina con un error para reintentar y la cola sigue con los demás archivos. Sin eso, un pedido
+        // que nunca contestaba (sin error de red) dejaba la cola entera clavada, porque se sube de a uno.
         result = await portero.upload(file, {
           appFile: { id: record.id, day: record.day },
           resume: record.uploadId,
+          // Cada `STALLS_BEFORE_RENEW` trabadas seguidas, y solo si la que hay no recibió nada.
+          renewIfEmpty: stalls > 0 && stalls % STALLS_BEFORE_RENEW === 0,
+          // Cada trabada seguida le da más plazo a la respuesta de la parte: lento termina pasando.
+          stalledBefore: stalls,
           signal: controller.signal,
           onProgress,
         });
@@ -999,7 +1031,7 @@ export class MediaQueue {
     } catch (err) {
       let outcome = classify(err);
       if (outcome === 'cancelled') return outcome;
-      const failures = record.failures + 1;
+      const failures = failed + 1;
       // El servidor dice que el archivo no existe aunque acá figura registrado (por ejemplo, se restauró la
       // base): se vuelve a registrar en vez de detenerlo. Si sigue igual después de varias veces, se detiene.
       const notThere =
@@ -1019,7 +1051,14 @@ export class MediaQueue {
         ...(notThere ? { registered: false, thumb: hasThumb ? 'local' : 'none' } : {}),
       };
       // Una subida que el portero ya no tiene se empieza de nuevo.
-      if (err instanceof UploadError) Object.assign(changes, { uploadId: err.uploadId, sent: err.uploadId ? err.sent : 0 });
+      if (err instanceof UploadError) {
+        // Si se cortó al preguntarle cuánto llegó, el error no lo sabe (dice 0): lo que esa misma subida
+        // ya había confirmado sigue ahí. Bajarlo haría pasar por avance la próxima pregunta que conteste.
+        const sent = err.uploadId && err.uploadId === savedId ? Math.max(err.sent, confirmed) : err.sent;
+        Object.assign(changes, { uploadId: err.uploadId, sent: err.uploadId ? sent : 0 });
+        // Una trabada más (si la subida avanzó en este intento, la cuenta ya volvió a cero y esta es la primera).
+        if (err.stalled) changes.stalls = stalls + 1;
+      }
       await this.patch(record.id, changes).catch(() => undefined);
       this.onChange?.();
       return outcome === 'waiting' ? 'retry' : outcome;
@@ -1048,6 +1087,7 @@ export class MediaQueue {
     await this.patch(record.id, {
       pending: 0,
       lost: 0,
+      stalls: 0,
       driveId,
       uploadId: null,
       sent: record.size,

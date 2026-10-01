@@ -1,5 +1,20 @@
-import { describe, expect, it } from 'vitest';
-import { AlreadySentError, localDay, MAX_RETRIES, PART_BYTES, Portero, PorteroError, retryDelay, UploadError } from './portero';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  AlreadySentError,
+  answerLimit,
+  CONTROL_TIMEOUT_MS,
+  localDay,
+  MAX_RETRIES,
+  PART_BYTES,
+  Portero,
+  PorteroError,
+  retryDelay,
+  STALL_CHECK_MS,
+  STALL_MS,
+  UploadError,
+  xhrSend,
+  type PartSender,
+} from './portero';
 
 const MB = 1024 * 1024;
 const BASE = 'https://media.example.com';
@@ -410,5 +425,504 @@ describe('portero: archivos de la app (pasos 6 y 8)', () => {
     server.alreadyInDrive = true;
     const done = await server.portero().upload(makeFile(MB), { appFile: { id: 'x', day: '2026-09-30' }, onlyIfSent: true });
     expect(done).toMatchObject({ id: 'drive-file-9', linked: true });
+  });
+});
+
+// Ningún pedido de una subida puede quedar esperando para siempre (Docs/Doc_Portero.md, "Subidas que se
+// traban"). El tiempo no pasa de verdad: el reloj es de la prueba y el vigilante mira cuando se lo adelanta.
+describe('portero: pedidos que dejan de moverse', () => {
+  let clock = 0;
+
+  beforeEach(() => {
+    clock = 1_000_000;
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Pasa el tiempo, de a una mirada del vigilante por vez, como cuando pasa de verdad. */
+  function elapse(ms: number): void {
+    for (let left = ms; left > 0; left -= STALL_CHECK_MS) {
+      const step = Math.min(left, STALL_CHECK_MS);
+      clock += step;
+      vi.advanceTimersByTime(step);
+    }
+  }
+  /** El reloj salta `ms` entre dos miradas seguidas del vigilante (no pudo mirar en el medio). */
+  function jump(ms: number): void {
+    clock += ms;
+    vi.advanceTimersByTime(STALL_CHECK_MS);
+  }
+  /** Deja correr lo que esté listo (unos milisegundos de verdad). */
+  const settle = () => new Promise((r) => setTimeout(r, 15));
+  /** Un pedido que no contesta nunca: solo termina si lo abortan. */
+  const hang = (signal?: AbortSignal | null) =>
+    new Promise<never>((_, reject) => signal?.addEventListener('abort', () => reject(signal.reason), { once: true }));
+
+  /** La subida, y si ya terminó (bien o mal). */
+  function track<T>(work: Promise<T>): { result: Promise<T | UploadError>; settled: () => boolean } {
+    let settled = false;
+    const result = work.catch((e: unknown) => e as UploadError).finally(() => (settled = true));
+    return { result, settled: () => settled };
+  }
+
+  function portero(server: FakePortero, deps: { fetch?: typeof fetch; send?: PartSender } = {}): Portero {
+    return new Portero(BASE, {
+      fetch: deps.fetch ?? server.fetch,
+      send: deps.send,
+      token: async () => 'token-1',
+      wait: async (ms) => void server.waits.push(ms),
+      now: () => clock,
+    });
+  }
+
+  interface SlowPart {
+    size: number;
+    /** Salieron estos bytes (el total de la parte hasta ahí). */
+    sent: (bytes: number) => void;
+    /** La parte le llega al portero. */
+    arrive: () => void;
+  }
+
+  /** Las partes como las manda la app, con lo que sale y cuándo llega en manos de la prueba. */
+  function slowSend(server: FakePortero): { send: PartSender; part: () => SlowPart } {
+    const parts: SlowPart[] = [];
+    const send: PartSender = async (url, init) => {
+      await Promise.race([
+        new Promise<void>((arrive) => parts.push({ size: init.body.size, sent: init.onSent, arrive })),
+        hang(init.signal),
+      ]);
+      return server.fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: init.signal });
+    };
+    return {
+      send,
+      part: () => {
+        expect(parts.length).toBeGreaterThan(0);
+        return parts[parts.length - 1];
+      },
+    };
+  }
+
+  it('si abrir la subida no contesta, se corta al minuto, sin reintentar', async () => {
+    const server = new FakePortero();
+    const calls: string[] = [];
+    const { result, settled } = track(
+      portero(server, {
+        fetch: (input, init) => {
+          calls.push(`${init?.method} ${new URL(String(input)).pathname}`);
+          return hang(init?.signal);
+        },
+      }).upload(makeFile(MB)),
+    );
+    await settle();
+    elapse(CONTROL_TIMEOUT_MS - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(settled()).toBe(false);
+    elapse(3 * STALL_CHECK_MS);
+
+    const error = await result;
+    expect(error).toBeInstanceOf(UploadError);
+    expect(error).toMatchObject({ stalled: true, cancelled: false, status: 408, uploadId: null, sent: 0 });
+    expect((error as UploadError).message).toMatch(/stopped moving/);
+    expect(calls).toEqual(['POST /upload']);
+    expect(server.waits).toEqual([]);
+  });
+
+  it('si la pregunta de cuánto llegó no contesta, se corta y la subida queda para retomar', async () => {
+    const server = new FakePortero();
+    const { result } = track(portero(server, { fetch: (_input, init) => hang(init?.signal) }).upload(makeFile(MB), { resume: 'up-7' }));
+    await settle();
+    elapse(CONTROL_TIMEOUT_MS + STALL_CHECK_MS);
+    expect(await result).toMatchObject({ stalled: true, status: 408, uploadId: 'up-7' });
+  });
+
+  it('si lo que no contesta es el token de la sesión, también se corta', async () => {
+    const server = new FakePortero();
+    const stuck = new Portero(BASE, { fetch: server.fetch, token: () => new Promise<string | null>(() => undefined), now: () => clock });
+    const { result, settled } = track(stuck.upload(makeFile(MB)));
+    await settle();
+    elapse(CONTROL_TIMEOUT_MS - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(settled()).toBe(false);
+    elapse(3 * STALL_CHECK_MS);
+    expect(await result).toMatchObject({ stalled: true, status: 408, uploadId: null });
+    // No llegó a pedirle nada al portero.
+    expect(server.calls).toEqual([]);
+  });
+
+  it('el tiempo que el equipo estuvo suspendido no cuenta: al despertar, una parte sana no se corta', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const file = makeFile(MB);
+    const { result, settled } = track(portero(server, { send: slow.send }).upload(file));
+    await settle();
+    slow.part().sent(1000);
+    elapse(30_000);
+    // Diez minutos con la tapa cerrada: el vigilante no pudo mirar y el pedido tampoco pudo moverse.
+    jump(600_000);
+    await settle();
+    expect(settled()).toBe(false);
+    // Despierta y sigue subiendo: termina bien.
+    elapse(STALL_MS - 30_000 - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(settled()).toBe(false);
+    slow.part().sent(MB);
+    slow.part().arrive();
+    expect(await result).toMatchObject({ id: 'drive-file-1' });
+    expect(await same(file, server.stored())).toBe(true);
+
+    // Si después de despertar el pedido quedó muerto, se corta: el plazo siguió desde donde estaba.
+    const dead = new FakePortero();
+    const frozen = slowSend(dead);
+    const second = track(portero(dead, { send: frozen.send }).upload(makeFile(MB)));
+    await settle();
+    frozen.part().sent(1000);
+    elapse(30_000);
+    jump(600_000);
+    elapse(STALL_MS - 30_000 - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(second.settled()).toBe(false);
+    elapse(3 * STALL_CHECK_MS);
+    expect(await second.result).toMatchObject({ stalled: true, uploadId: 'up-1' });
+  });
+
+  it('con la pestaña en segundo plano (el navegador deja mirar una vez por minuto) sigue cortando', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const { result, settled } = track(portero(server, { send: slow.send }).upload(makeFile(MB)));
+    await settle();
+    slow.part().sent(1000);
+    jump(60_000);
+    await settle();
+    expect(settled()).toBe(false);
+    jump(60_000);
+    expect(await result).toMatchObject({ stalled: true, uploadId: 'up-1' });
+  });
+
+  it('una parte por la que no sale ni un byte se corta a los dos minutos, con la subida para retomar', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const { result, settled } = track(portero(server, { send: slow.send }).upload(makeFile(MB)));
+    await settle();
+    // Sale algo y después nada más. Que vuelva a avisar la misma cantidad no cuenta como movimiento.
+    slow.part().sent(1000);
+    elapse(STALL_MS - 2 * STALL_CHECK_MS);
+    slow.part().sent(1000);
+    await settle();
+    expect(settled()).toBe(false);
+    elapse(3 * STALL_CHECK_MS);
+
+    expect(await result).toMatchObject({ stalled: true, status: 408, uploadId: 'up-1', sent: 0 });
+    // La parte no llegó al portero, y no se reintentó.
+    expect(server.parts()).toEqual([]);
+    expect(server.waits).toEqual([]);
+  });
+
+  it('una parte lenta no se corta mientras sigan saliendo bytes, tarde lo que tarde', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const file = makeFile(MB);
+    const { result, settled } = track(portero(server, { send: slow.send }).upload(file));
+    await settle();
+    // 30 tramos de casi dos minutos: la parte tarda 55 minutos, 27 veces el tiempo del vigilante.
+    const steps = 30;
+    for (let i = 1; i < steps; i++) {
+      elapse(STALL_MS - 2 * STALL_CHECK_MS);
+      slow.part().sent(Math.floor((MB * i) / steps));
+    }
+    await settle();
+    expect(settled()).toBe(false);
+    slow.part().sent(MB);
+    slow.part().arrive();
+
+    expect(await result).toMatchObject({ id: 'drive-file-1' });
+    expect(server.parts()).toEqual([`bytes 0-${MB - 1}/${MB}`]);
+    expect(await same(file, server.stored())).toBe(true);
+  });
+
+  it('con el cuerpo entero afuera, a la respuesta se le da el plazo más lo que tardó el cuerpo (hasta el doble)', async () => {
+    // El cuerpo tardó un minuto: la respuesta puede tardar tres.
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const { result, settled } = track(portero(server, { send: slow.send }).upload(makeFile(MB)));
+    await settle();
+    elapse(60_000);
+    slow.part().sent(MB);
+    elapse(STALL_MS + 60_000 - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(settled()).toBe(false);
+    elapse(3 * STALL_CHECK_MS);
+    expect(await result).toMatchObject({ stalled: true, uploadId: 'up-1' });
+
+    // El cuerpo tardó diez minutos (yendo de a poco): la respuesta puede tardar cuatro, no doce.
+    const other = new FakePortero();
+    const slower = slowSend(other);
+    const second = track(portero(other, { send: slower.send }).upload(makeFile(MB)));
+    await settle();
+    for (let i = 1; i <= 10; i++) {
+      elapse(60_000);
+      slower.part().sent((MB * i) / 10);
+    }
+    elapse(2 * STALL_MS - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(second.settled()).toBe(false);
+    elapse(3 * STALL_CHECK_MS);
+    expect(await second.result).toMatchObject({ stalled: true });
+  });
+
+  it('cada trabada seguida le da más plazo a la respuesta de la parte, hasta lo que tardaría con una red lenta', async () => {
+    expect(answerLimit(PART_BYTES)).toBe(STALL_MS);
+    expect(answerLimit(PART_BYTES, 1)).toBe(2 * STALL_MS);
+    expect(answerLimit(PART_BYTES, 2)).toBe(3 * STALL_MS);
+    // El techo: el plazo más la parte entera a 16 KiB/s. 8 MiB son 512 s más; 1 MiB, 64 s más.
+    expect(answerLimit(PART_BYTES, 50)).toBe(STALL_MS + 512_000);
+    expect(answerLimit(MB, 50)).toBe(STALL_MS + 64_000);
+
+    // El cuerpo sale de golpe y la respuesta tarda dos minutos y medio: la primera vez se corta...
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const first = track(portero(server, { send: slow.send }).upload(makeFile(MB)));
+    await settle();
+    slow.part().sent(MB);
+    elapse(STALL_MS + 3 * STALL_CHECK_MS);
+    expect(await first.result).toMatchObject({ stalled: true, uploadId: 'up-1' });
+
+    // ...y al retomarla sabiendo que ya se trabó una vez, la misma espera no la corta.
+    const second = track(portero(server, { send: slow.send }).upload(makeFile(MB), { resume: 'up-1', stalledBefore: 1 }));
+    await settle();
+    slow.part().sent(MB);
+    elapse(STALL_MS + 30_000);
+    await settle();
+    expect(second.settled()).toBe(false);
+    slow.part().arrive();
+    expect(await second.result).toMatchObject({ id: 'drive-file-1' });
+  });
+
+  it('sin saber cuántos bytes salen (solo fetch), una parte no se corta por tiempo', async () => {
+    const server = new FakePortero();
+    let arrive!: () => void;
+    const gate = new Promise<void>((resolve) => (arrive = resolve));
+    const { result, settled } = track(
+      portero(server, {
+        fetch: async (input, init) => {
+          if (init?.body instanceof Blob) await gate;
+          return server.fetch(input, init);
+        },
+      }).upload(makeFile(MB)),
+    );
+    await settle();
+    elapse(10 * STALL_MS);
+    await settle();
+    expect(settled()).toBe(false);
+    arrive();
+    expect(await result).toMatchObject({ id: 'drive-file-1' });
+  });
+
+  it('cancelar un pedido vigilado sigue siendo cancelar, no una trabada', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const controller = new AbortController();
+    const { result } = track(portero(server, { send: slow.send }).upload(makeFile(MB), { signal: controller.signal }));
+    await settle();
+    controller.abort();
+    expect(await result).toMatchObject({ cancelled: true, stalled: false, uploadId: 'up-1' });
+  });
+
+  it('con renewIfEmpty abre otra subida solo si la que hay contesta que no recibió nada', async () => {
+    // No recibió nada: pregunta, abre otra y manda.
+    const empty = new FakePortero();
+    empty.fail = (call) => (call.bytes ? 403 : undefined);
+    const first = (await portero(empty).upload(makeFile(MB)).catch((e: unknown) => e)) as UploadError;
+    expect(first).toMatchObject({ uploadId: 'up-1', sent: 0 });
+    empty.fail = undefined;
+    empty.calls.length = 0;
+    await portero(empty).upload(makeFile(MB), { resume: 'up-1', renewIfEmpty: true });
+    expect(empty.calls.map((c) => `${c.method} ${c.path} ${c.range ?? ''}`.trim())).toEqual([
+      `PUT /upload/up-1 bytes */${MB}`,
+      'POST /upload',
+      `PUT /upload/up-1 bytes 0-${MB - 1}/${MB}`,
+    ]);
+
+    // Ya recibió la primera parte: se sigue con ella.
+    const half = new FakePortero();
+    const size = PART_BYTES + MB;
+    const file = makeFile(size);
+    half.fail = (call) => (call.range?.startsWith(`bytes ${PART_BYTES}-`) ? 403 : undefined);
+    await portero(half).upload(file).catch(() => undefined);
+    half.fail = undefined;
+    half.calls.length = 0;
+    await portero(half).upload(file, { resume: 'up-1', renewIfEmpty: true });
+    expect(half.calls.map((c) => `${c.method} ${c.range}`)).toEqual([`PUT bytes */${size}`, `PUT bytes ${PART_BYTES}-${size - 1}/${size}`]);
+    expect(await same(file, half.stored())).toBe(true);
+
+    // Ya terminó (la respuesta de la última parte se había perdido): no abre otra ni manda nada.
+    const done = new FakePortero();
+    await portero(done).upload(makeFile(MB));
+    done.calls.length = 0;
+    const result = await portero(done).upload(makeFile(MB), { resume: 'up-1', renewIfEmpty: true });
+    expect(result.id).toBe('drive-file-1');
+    expect(done.calls.map((c) => `${c.method} ${c.range}`)).toEqual([`PUT bytes */${MB}`]);
+  });
+});
+
+/** Un `XMLHttpRequest` de mentira: guarda lo que le piden y la prueba decide qué pasa. */
+class FakeXhr {
+  static made: FakeXhr[] = [];
+  /** Si está, cada pedido se pasa a este `fetch` y se contesta con lo que devuelva. */
+  static forward: typeof fetch | null = null;
+  upload: { onprogress: ((event: { loaded: number }) => void) | null; onload: (() => void) | null } = { onprogress: null, onload: null };
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  responseType = '';
+  status = 0;
+  responseText = '';
+  method = '';
+  url = '';
+  headers: Record<string, string> = {};
+  body: Blob | null = null;
+  aborted = false;
+
+  constructor() {
+    FakeXhr.made.push(this);
+  }
+  open(method: string, url: string): void {
+    this.method = method;
+    this.url = url;
+  }
+  setRequestHeader(name: string, value: string): void {
+    this.headers[name] = value;
+  }
+  getResponseHeader(): string | null {
+    return 'application/json';
+  }
+  send(body: Blob): void {
+    this.body = body;
+    const forward = FakeXhr.forward;
+    if (!forward) return;
+    void forward(this.url, { method: this.method, headers: this.headers, body }).then(async (res) => {
+      this.upload.onprogress?.({ loaded: body.size });
+      this.upload.onload?.();
+      this.answer(res.status, await res.text());
+    });
+  }
+  abort(): void {
+    this.aborted = true;
+    this.onabort?.();
+  }
+  answer(status: number, text: string): void {
+    this.status = status;
+    this.responseText = text;
+    this.onload?.();
+  }
+}
+
+// El `XMLHttpRequest` de estas pruebas es de mentira: comprueban que la app lo usa bien (qué le pide, qué
+// hace con sus avisos), no lo que hace el del navegador.
+describe('portero: las partes por XMLHttpRequest', () => {
+  beforeEach(() => {
+    FakeXhr.made = [];
+    FakeXhr.forward = null;
+    vi.stubGlobal('XMLHttpRequest', FakeXhr);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const init = (extra: { signal?: AbortSignal; onSent?: (bytes: number) => void } = {}) => ({
+    method: 'PUT',
+    headers: { Authorization: 'Bearer token-1', 'Content-Range': 'bytes 0-999/1000' },
+    body: new Blob([new Uint8Array(1000)]),
+    onSent: extra.onSent ?? (() => undefined),
+    signal: extra.signal,
+  });
+
+  it('manda el pedido, avisa los bytes que salen y devuelve la respuesta', async () => {
+    const sent: number[] = [];
+    const answer = xhrSend(`${BASE}/upload/up-1`, init({ onSent: (bytes) => sent.push(bytes) }));
+    const xhr = FakeXhr.made[0];
+    expect(xhr).toMatchObject({ method: 'PUT', url: `${BASE}/upload/up-1` });
+    expect(xhr.headers).toEqual({ Authorization: 'Bearer token-1', 'Content-Range': 'bytes 0-999/1000' });
+    expect(xhr.body?.size).toBe(1000);
+
+    xhr.upload.onprogress?.({ loaded: 400 });
+    xhr.upload.onprogress?.({ loaded: 900 });
+    xhr.upload.onload?.();
+    expect(sent).toEqual([400, 900, 1000]);
+
+    xhr.answer(200, JSON.stringify({ status: 'incomplete', received: 1000 }));
+    const res = await answer;
+    expect(res.ok).toBe(true);
+    expect(await res.json()).toEqual({ status: 'incomplete', received: 1000 });
+  });
+
+  it('un error del portero llega con su estado y su texto', async () => {
+    const answer = xhrSend(`${BASE}/upload/up-1`, init());
+    FakeXhr.made[0].answer(507, JSON.stringify({ error: 'The Drive is full.' }));
+    const res = await answer;
+    expect(res.status).toBe(507);
+    expect(await res.json()).toEqual({ error: 'The Drive is full.' });
+  });
+
+  it('una respuesta sin cuerpo (204) llega como tal', async () => {
+    const answer = xhrSend(`${BASE}/upload/up-1`, init());
+    FakeXhr.made[0].answer(204, '');
+    const res = await answer;
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe('');
+  });
+
+  it('si se corta la red, falla como fetch; si se aborta, corta el pedido', async () => {
+    const cut = xhrSend(`${BASE}/upload/up-1`, init());
+    FakeXhr.made[0].onerror?.();
+    await expect(cut).rejects.toBeInstanceOf(TypeError);
+
+    const controller = new AbortController();
+    const aborted = xhrSend(`${BASE}/upload/up-1`, init({ signal: controller.signal }));
+    controller.abort();
+    await expect(aborted).rejects.toMatchObject({ name: 'AbortError' });
+    expect(FakeXhr.made[1].aborted).toBe(true);
+
+    // Ya abortado antes de empezar: ni se manda.
+    await expect(xhrSend(`${BASE}/upload/up-1`, init({ signal: controller.signal }))).rejects.toMatchObject({ name: 'AbortError' });
+    expect(FakeXhr.made).toHaveLength(2);
+  });
+
+  it('en la app (sin fetch propio) las partes van por XMLHttpRequest y lo demás por fetch', async () => {
+    const server = new FakePortero();
+    vi.stubGlobal('fetch', server.fetch);
+    FakeXhr.forward = server.fetch;
+    const size = PART_BYTES + MB;
+    const file = makeFile(size);
+
+    const result = await new Portero(BASE, { token: async () => 'token-1' }).upload(file);
+
+    expect(result.id).toBe('drive-file-1');
+    expect(FakeXhr.made.map((x) => x.headers['Content-Range'])).toEqual([
+      `bytes 0-${PART_BYTES - 1}/${size}`,
+      `bytes ${PART_BYTES}-${size - 1}/${size}`,
+    ]);
+    expect(server.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /upload', 'PUT /upload/up-1', 'PUT /upload/up-1']);
+    expect(await same(file, server.stored())).toBe(true);
+  });
+
+  it('una parte que no termina de salir se corta, se aborta el pedido y la subida queda para retomar', async () => {
+    const server = new FakePortero();
+    vi.stubGlobal('fetch', server.fetch);
+    let clock = 0;
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const upload = new Portero(BASE, { token: async () => 'token-1', now: () => clock })
+      .upload(makeFile(MB))
+      .catch((e: unknown) => e as UploadError);
+    for (let i = 0; i < 100 && FakeXhr.made.length === 0; i++) await new Promise((r) => setTimeout(r, 5));
+    for (let passed = 0; passed <= STALL_MS; passed += STALL_CHECK_MS) {
+      clock += STALL_CHECK_MS;
+      vi.advanceTimersByTime(STALL_CHECK_MS);
+    }
+
+    expect(await upload).toMatchObject({ stalled: true, uploadId: 'up-1', sent: 0 });
+    expect(FakeXhr.made[0].aborted).toBe(true);
   });
 });

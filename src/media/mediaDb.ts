@@ -39,6 +39,13 @@ export interface MediaRecord {
   thumbError?: string | null;
   /** Veces seguidas que el servidor dijo que el archivo no existe aunque figuraba registrado. */
   lost?: number;
+  /**
+   * Veces seguidas que la subida se cortó por dejar de moverse sin haber avanzado (ver `STALL_MS` en
+   * portero.ts). Vuelve a 0 cuando el portero confirma más bytes y al terminar. Cada trabada le da más plazo
+   * al intento siguiente (`answerLimit`) y, cada `STALLS_BEFORE_RENEW`, al retomar se abre otra subida si la
+   * que hay no recibió nada. Opcional: los registros guardados por una versión anterior no lo tienen y valen 0.
+   */
+  stalls?: number;
   /** La subida al portero que quedó a medias: con esto se retoma después de cerrar la app. */
   uploadId: string | null;
   /** Hasta dónde confirmó el portero (bytes). */

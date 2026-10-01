@@ -225,6 +225,23 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    tipo, la sangría o la posición de un renglón mientras otro escribe en él; cambia el formato de lo guardado,
    así que pide un plan de migración y convivencia de versiones.
 
+11. **Subidas que se traban: lo que quedó de v0.068** (`Doc_Portero.md`, "Subidas que se traban"). La app
+   corta los pedidos al portero que dejan de moverse y sigue con los demás archivos. **Falta:**
+   - **Probarlo en Safari de iPhone y con una red lenta de verdad.** Está probado a mano en Chromium contra
+     un servidor local; el aviso de bytes que salen (`XMLHttpRequest`) puede portarse distinto en Safari,
+     con HTTP/2 y a través de Cloudflare.
+   - **Tope para los pedidos de la miniatura a Supabase Storage** (subirla y bajarla, `uploadThumb` y
+     `downloadThumb` en `src/sync/remote.ts`): hoy no tienen, y uno colgado clava la cola igual que antes.
+   - **Cerrar la vuelta de la cola como sin conexión** después de 2 o 3 trabadas seguidas de archivos
+     distintos: hoy, con el portero colgado para todos, gasta un minuto por archivo.
+   - **Recordar el plazo que funcionó.** Detrás de un antivirus o un proxy que recibe el cuerpo de golpe,
+     cada archivo vuelve a empezar con el plazo corto y se traba una o más veces antes de pasar.
+   - **Casos raros en que espera o reintenta de más** (no pierden ni duplican): una pestaña tan frenada
+     que el vigilante mira menos de una vez cada 90 s no corta nunca mientras dure (descontar a lo sumo uno
+     o dos huecos seguidos sin movimiento); si el equipo se suspende mientras sale el cuerpo, la espera de
+     la respuesta queda hasta 120 s más larga; y una subida que el portero pierde en cada vuelta reintenta
+     siempre a los 10 s en vez de espaciarse (comparar contra el máximo confirmado del intento).
+
 ### C. Esperan a Lega
 
 10. **Fase 3.** Plantillas: definir con Lega los campos de *Pre-production Notes*, *On-Set Report* y

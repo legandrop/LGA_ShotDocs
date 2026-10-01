@@ -302,6 +302,9 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   al abrir la app (lo detenido se vuelve a registrar: `register_file` es idempotente). Si el servidor dice
   que no existe un archivo que acá figura registrado (un 404 del portero, `file_not_found`), se vuelve a
   registrar en vez de detenerlo; recién si sigue igual tres veces seguidas, se detiene.
+- **Subidas que se traban:** un pedido al portero que deja de moverse (sin error de red) se corta y el
+  archivo vuelve a la cola para más tarde, sin frenar a los demás; una subida lenta no se corta mientras
+  sigan saliendo bytes. Los topes y el detalle están en `Doc_Portero.md`, "Subidas que se traban".
 - **Si la base de archivos del dispositivo no se abre,** la app arranca igual: la cola de fotos y videos
   queda apagada (no se pueden agregar), el estado lo avisa con un aviso propio (`mediaWarning`, que no
   pisa ni es pisado por los demás) y el texto sincroniza como siempre. Un error de esa base nunca corta la

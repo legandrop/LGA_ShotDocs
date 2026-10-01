@@ -100,6 +100,10 @@ export const media = {
     es: "El servidor de archivos no empezó la subida.",
   },
   'portero.partLost': { en: "The part did not arrive.", es: "La parte no llegó." },
+  'portero.stalled': {
+    en: "The upload stopped moving; it will try again.",
+    es: "La subida dejó de avanzar; se vuelve a intentar.",
+  },
   'portero.retries': {
     en: "The upload stopped after {max} failed retries in a row: {reason}",
     es: "La subida se frenó después de {max} reintentos fallidos seguidos: {reason}",
