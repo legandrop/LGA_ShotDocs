@@ -152,4 +152,22 @@ export const shell = {
   'lazy.couldNotOpen': { en: "Could not open", es: "No se pudo abrir" },
   'lazy.couldNotOpenTitle': { en: "Could not open this", es: "No se pudo abrir esto" },
   'legal.openApp': { en: "Open the app", es: "Abrir la app" },
+  // Instalar la app (Docs/Doc_Instalar.md): la entrada del menú de la cuenta y de la pantalla de entrar, y el aviso
+  // del teléfono. Los pasos están en lazy/install.ts.
+  'install.menu': { en: "Install app", es: "Instalar la app" },
+  'install.menuTip': {
+    en: "Opens in its own window, from the home screen or the Dock.\nSteps for iPhone, Android and computer",
+    es: "Se abre en su propia ventana, desde la pantalla de inicio o el Dock.\nPasos para iPhone, Android y computadora",
+  },
+  'install.banner.title': { en: "Install the app", es: "Instalá la app" },
+  'install.banner.text': {
+    en: "Open Shot Docs from your home screen, full screen, and keep your offline copy safer.",
+    es: "Abrí Shot Docs desde la pantalla de inicio, en pantalla completa, y cuidá mejor tu copia sin red.",
+  },
+  'install.banner.install': { en: "Install", es: "Instalar" },
+  'install.banner.notNow': { en: "Not now", es: "Ahora no" },
+  'install.installed': {
+    en: "Installed. Open Shot Docs from your home screen or app list.",
+    es: "Instalada. Abrí Shot Docs desde la pantalla de inicio o la lista de apps.",
+  },
 } satisfies Dict;

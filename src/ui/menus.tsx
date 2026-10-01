@@ -11,6 +11,7 @@ import {
   DarkIcon,
   ExpandAllIcon,
   DriveIcon,
+  InstallIcon,
   LightIcon,
   MembersIcon,
   MoveIcon,
@@ -28,6 +29,7 @@ import { collapseControlFor } from './collapseControl';
 import { notify } from './notice';
 import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
+import { openInstallDialog, useInstallState } from './install';
 
 /**
  * Comportamiento común de menús y paneles flotantes: se cierran con Escape o tocando afuera (tocar el
@@ -298,6 +300,7 @@ export function AccountMenu({
   const status = useSyncStatus();
   const pending = usePendingCount();
   const isOwner = !!status.mediaUrl && !!status.ownerId && status.ownerId === user.id;
+  const { installed } = useInstallState();
   const ref = useRef<HTMLDivElement>(null);
   const tr = useT();
   useFloating(ref, onClose, anchor);
@@ -410,6 +413,20 @@ export function AccountMenu({
         >
           <DriveIcon />
           Google Drive
+        </button>
+      )}
+      {/* Instalar la app: solo mientras esta pestaña no es la app instalada (Doc_Instalar.md). */}
+      {!installed && (
+        <button
+          className="menu-row"
+          data-tip={tr('install.menuTip')}
+          onClick={() => {
+            onClose();
+            openInstallDialog();
+          }}
+        >
+          <InstallIcon />
+          {tr('install.menu')}
         </button>
       )}
       <button className="menu-row" onClick={() => void signOut()}>

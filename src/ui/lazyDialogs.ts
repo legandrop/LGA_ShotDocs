@@ -12,3 +12,5 @@ export const ProjectSearch = lazyPart(() => import('./ProjectSearch').then((m) =
 export const DeleteProjectDialog = lazyPart(() => import('./ProjectStatesPart').then((m) => m.DeleteProjectDialog));
 export const DeletedProjectsList = lazyPart(() => import('./ProjectStatesPart').then((m) => m.DeletedProjectsList));
 export const LookForFilesButton = lazyPart(() => import('./ProjectStatesPart').then((m) => m.LookForFilesButton));
+// Los pasos para instalar la app (Doc_Instalar.md).
+export const InstallDialog = lazyPart(() => import('./InstallDialog').then((m) => m.InstallDialog));

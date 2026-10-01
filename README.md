@@ -45,7 +45,10 @@ In production (v0.049). What works today:
 - Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
   open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
 - The page tree, the block editor with autosave and pasted images, light and dark themes and
-  per-account appearance settings. The app can be installed (PWA).
+  per-account appearance settings. The app can be installed (PWA): *Install app* in the account menu (and a
+  dismissible banner on phones) shows the exact steps for iPhone, Android and desktop, with a direct *Install*
+  button where the browser offers one. On iPhone the installed app keeps its own storage, which Safari does not
+  clear.
 - Offline first: every edit is saved on the device first and synced when a connection is available;
   edits made offline on several devices are merged.
 - Projects, each with its own page tree (v0.013).
@@ -78,10 +81,18 @@ In production (v0.049). What works today:
   once the workspace database is on version 7).
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
 - Links to other pages: a link to a page of the app opens it in the same tab (Ctrl/⌘+click, in a new one).
+- Photos in the line of text (v0.078): pasted, dropped or picked photos and videos go into the line, where the
+  text cursor is (or where you drop them), like characters: text can sit next to them, they flow to the next line
+  when they don't fit, and you select several with Shift+click, Shift+arrows or by dragging. A single one comes
+  in at its own size, several at a third of the line each. They do everything the older block photos do: resize
+  handles that snap to 1/1, 1/2, 1/3 and 1/4, and the same toolbar for both, in groups: view and download | sizes
+  (for every selected photo) and *Arrange in rows* for the selected ones | align | comment | replace, rename and
+  delete. There is no caption button anymore (existing captions still show). Other files still come in as a card
+  below. The PDF splits a paragraph of photos between sheets only between rows.
 - Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the
-  rows and breaks sheets where the page shows them.
+  rows and breaks sheets where the page shows them. Photos added before v0.078 keep working this way.
 - iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
   shows them; the converter is downloaded only the first time it is needed.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;
@@ -115,8 +126,9 @@ npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
 npm run build                # production build in dist/
 ```
 
-`npm install` also applies two small fixes to y-prosemirror (`patches/`, via `patch-package`); the build and
-the tests refuse to run without them. Why and how to redo them on an upgrade: `Docs/Doc_Colaboracion.md`.
+`npm install` also applies the app's fixes to y-prosemirror (`patches/`, via `patch-package`): two small ones
+for editing at the same time, and how a line with inline photos is stored; the build and the tests refuse to
+run without them. Why and how to redo them on an upgrade: `Docs/Doc_Colaboracion.md`.
 
 The database migrations are in `supabase/migrations/`. See [`Docs/Doc_Supabase.md`](Docs/Doc_Supabase.md)
 to apply them and run the permission tests. Apply new migrations before deploying a new version of the

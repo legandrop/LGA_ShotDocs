@@ -25,6 +25,7 @@ import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { notify, useNotice } from './notice';
+import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
@@ -330,6 +331,8 @@ export function Shell() {
             </button>
           )}
         </header>
+        {/* En el teléfono, mientras no está instalada: el aviso para instalarla (se puede cerrar). */}
+        <InstallBanner />
         {route.name === 'page' ? (
           <PageView key={route.id} id={route.id} />
         ) : route.name === 'trash' ? (
@@ -370,6 +373,7 @@ export function Shell() {
         </Part>
       )}
       {codaOwner && <ImportCodaHost />}
+      <InstallHost />
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>

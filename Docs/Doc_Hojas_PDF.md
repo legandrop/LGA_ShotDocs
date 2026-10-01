@@ -75,6 +75,10 @@ del papel menos los dos márgenes.
   enorme, que igual se achica al alto de la hoja) empieza en una hoja nueva.
 - **Una fila de fotos** (Doc_Imagenes.md) es una sola unidad (`mergeRowUnits`): desde la foto que empieza más
   arriba hasta la que termina más abajo. Una hoja nunca la corta, y el salto de hoja va en todas sus fotos.
+- **Un párrafo con fotos en línea** (Doc_Fotos_En_Linea.md, v0.078) se parte entre renglones aunque entre en una
+  hoja (`breakable`): cada renglón es una fila de fotos, que nunca se corta. Si no entra ni el primer renglón, pasa
+  entero. La copia de impresión no le pone `break-inside: avoid`, así corta el navegador en el mismo renglón
+  (medido con el PDF de Chromium: las fotos de cada hoja son las del cálculo).
 - Un **título de sección** no queda solo al pie de una hoja: pasa a la siguiente con el bloque que sigue,
   si los dos entran juntos en una hoja (si no, el título queda y pasa el bloque).
 - **Tolerancia de 4 px** (`SHEET_TOLERANCE_PX`): para decidir si un bloque entero entra se le descuentan 4 px

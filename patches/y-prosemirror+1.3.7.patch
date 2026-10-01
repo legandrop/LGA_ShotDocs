@@ -1,5 +1,5 @@
 diff --git a/node_modules/y-prosemirror/dist/y-prosemirror.cjs b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
-index de4d1e6..8ca3dd0 100644
+index de4d1e6..05d80ef 100644
 --- a/node_modules/y-prosemirror/dist/y-prosemirror.cjs
 +++ b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
 @@ -322,37 +322,104 @@ const ySyncPlugin = (yXmlFragment, {
@@ -48,7 +48,7 @@ index de4d1e6..8ca3dd0 100644
 +        if (sel) tr.setSelection(sel);
 +      } catch (_err) {
 +        // Keep whatever selection the transaction has.
-       }
++      }
 +    };
 +    try {
 +      if (relSel.type === 'all') {
@@ -89,7 +89,7 @@ index de4d1e6..8ca3dd0 100644
 +        } else if (anchor !== null || head !== null) {
 +          textCursor(inDoc(head) ? head : null);
 +        }
-+      }
+       }
 +    } catch (_err) {
 +      textCursor(null);
      }
@@ -133,7 +133,7 @@ index de4d1e6..8ca3dd0 100644
  /**
   * @param {ProsemirrorBinding} pmbinding
   * @param {import('prosemirror-state').EditorState} state
-@@ -805,6 +872,10 @@ const createNodeFromYElement = (
+@@ -805,10 +872,16 @@ const createNodeFromYElement = (
    computeYChange
  ) => {
    const children = [];
@@ -144,7 +144,13 @@ index de4d1e6..8ca3dd0 100644
    /**
     * @param {Y.XmlElement | Y.XmlText} type
     */
-@@ -826,7 +897,7 @@ const createNodeFromYElement = (
+   const createChildren = (type) => {
++    // LGA-SHOTDOCS-PATCH (stable gaps): the block marker is never rendered.
++    if (isStableGapsMarker(type)) return
+     if (type instanceof Y__namespace.XmlElement) {
+       const n = createNodeIfNotExists(
+         type,
+@@ -826,7 +899,7 @@ const createNodeFromYElement = (
        // This is a fix for #160 -- duplication of characters when two Y.Text exist next to each
        // other.
        const nextytext = /** @type {Y.ContentType} */ (type._item.right?.content)?.type;
@@ -153,7 +159,7 @@ index de4d1e6..8ca3dd0 100644
          type.applyDelta([
            { retain: type.length },
            ...nextytext.toDelta()
-@@ -953,12 +1024,17 @@ const createTypeFromElementNode = (node, meta) => {
+@@ -953,12 +1026,19 @@ const createTypeFromElementNode = (node, meta) => {
        type.setAttribute(key, val);
      }
    }
@@ -168,16 +174,18 @@ index de4d1e6..8ca3dd0 100644
 +  )
 +  // LGA-SHOTDOCS-PATCH (stable gaps): the texts of a block with inline nodes that ask for gap text carry
 +  // the stable-gaps mark, so the block keeps its stable gaps after its last such node is removed.
++  // The block also gets its marker (see STABLE_GAPS_MARKER).
 +  if (hasGapTextChild(node)) {
 +    children.forEach((c) => {
 +      if (c instanceof Y__namespace.XmlText) c.setAttribute(STABLE_GAP_TEXT, true)
 +    })
++    children.unshift(new Y__namespace.XmlElement(STABLE_GAPS_MARKER))
 +  }
 +  type.insert(0, children)
    meta.mapping.set(type, node);
    return type
  };
-@@ -1002,6 +1078,16 @@ const equalAttrs = (pattrs, yattrs) => {
+@@ -1002,6 +1082,16 @@ const equalAttrs = (pattrs, yattrs) => {
   * @typedef {Array<Array<PModel.Node>|PModel.Node>} NormalizedPNodeContent
   */
  
@@ -194,7 +202,7 @@ index de4d1e6..8ca3dd0 100644
  /**
   * @param {any} pnode
   * @return {NormalizedPNodeContent}
-@@ -1009,6 +1095,11 @@ const equalAttrs = (pattrs, yattrs) => {
+@@ -1009,6 +1099,11 @@ const equalAttrs = (pattrs, yattrs) => {
  const normalizePNodeContent = (pnode) => {
    const c = pnode.content.content;
    const res = [];
@@ -206,7 +214,7 @@ index de4d1e6..8ca3dd0 100644
    for (let i = 0; i < c.length; i++) {
      const n = c[i];
      if (n.isText) {
-@@ -1019,9 +1110,20 @@ const normalizePNodeContent = (pnode) => {
+@@ -1019,9 +1114,20 @@ const normalizePNodeContent = (pnode) => {
        i--;
        res.push(textNodes);
      } else {
@@ -227,7 +235,7 @@ index de4d1e6..8ca3dd0 100644
    return res
  };
  
-@@ -1052,6 +1154,10 @@ const equalYTypePNode = (ytype, pnode) => {
+@@ -1052,6 +1158,10 @@ const equalYTypePNode = (ytype, pnode) => {
      ytype instanceof Y__namespace.XmlElement && !(pnode instanceof Array) &&
      matchNodeName(ytype, pnode)
    ) {
@@ -238,7 +246,7 @@ index de4d1e6..8ca3dd0 100644
      const normalizedContent = normalizePNodeContent(pnode);
      return ytype._length === normalizedContent.length &&
        equalAttrs(ytype.getAttributes(), pnode.attrs) &&
-@@ -1203,6 +1309,614 @@ const marksToAttributes = (marks, meta) => {
+@@ -1203,6 +1313,638 @@ const marksToAttributes = (marks, meta) => {
    return pattrs
  };
  
@@ -265,6 +273,20 @@ index de4d1e6..8ca3dd0 100644
 +// photos, hardBreak included) take the original code, unchanged.
 +
 +const STABLE_GAP_TEXT = 'lgaGapText'
++
++/**
++ * The marker of a block with stable gaps: an empty Y.XmlElement with this name, added (first) when the block
++ * gets its first such node and never removed by this binding (nor by undo: undo-plugin.js), which never renders it. A version of the
++ * app from before stable gaps does not know this node name, so it does not open the page (its guard refuses
++ * unknown content), even after every inline node of the block was removed. If it opened it, it would rewrite
++ * the block's consecutive texts into one and delete the others, with what someone else typed into them.
++ */
++const STABLE_GAPS_MARKER = 'lgaStableGaps'
++
++/**
++ * @param {any} t
++ */
++const isStableGapsMarker = (t) => t instanceof Y__namespace.XmlElement && t.nodeName === STABLE_GAPS_MARKER
 +
 +/**
 + * Longest edit script searched for when a change mixes text and inline nodes; past it, the changed range
@@ -299,7 +321,7 @@ index de4d1e6..8ca3dd0 100644
 +    if (c instanceof Y__namespace.XmlText) {
 +      if (c.getAttribute(STABLE_GAP_TEXT) === true) return true
 +    } else if (c instanceof Y__namespace.XmlElement) {
-+      if (isGapTextNodeType(schema.nodes[c.nodeName])) return true
++      if (c.nodeName === STABLE_GAPS_MARKER || isGapTextNodeType(schema.nodes[c.nodeName])) return true
 +    }
 +  }
 +  return false
@@ -363,7 +385,7 @@ index de4d1e6..8ca3dd0 100644
 + * @param {any} pnode
 + */
 +const equalStableContent = (ytype, pnode) => {
-+  const ych = ytype.toArray()
++  const ych = ytype.toArray().filter((c) => !isStableGapsMarker(c))
 +  const pc = pnode.content.content
 +  let i = 0
 +  let j = 0
@@ -407,7 +429,7 @@ index de4d1e6..8ca3dd0 100644
 +          }
 +        }
 +      }
-+    } else {
++    } else if (!isStableGapsMarker(child)) {
 +      toks.push({ c, el: child })
 +    }
 +  }
@@ -820,7 +842,16 @@ index de4d1e6..8ca3dd0 100644
 +    /** @type {Map<number, Array<any>>} */
 +    const inserts = new Map()
 +    const placed = new Set()
++    // The block marker stays where it is (first), and keeps being the block's marker.
 +    let anchor = -1
++    while (anchor + 1 < yChildren.length && isStableGapsMarker(yChildren[anchor + 1])) anchor++
++    let hasMarker = false
++    for (let c = 0; c < yChildren.length; c++) {
++      if (isStableGapsMarker(yChildren[c])) {
++        placed.add(c)
++        hasMarker = true
++      }
++    }
 +    for (let i = 0; i < final.length; i++) {
 +      const e = final[i]
 +      if (e.y !== null) {
@@ -847,13 +878,14 @@ index de4d1e6..8ca3dd0 100644
 +        yel.delete(c, 1)
 +      }
 +    }
++    if (!hasMarker) yel.insert(0, [new Y__namespace.XmlElement(STABLE_GAPS_MARKER)])
 +  }, ySyncPluginKey)
 +}
 +
  /**
   * Update a yDom node by syncing the current content of the prosemirror node.
   *
-@@ -1244,6 +1958,12 @@ const updateYFragment = (y, yDomFragment, pNode, meta) => {
+@@ -1244,6 +1986,12 @@ const updateYFragment = (y, yDomFragment, pNode, meta) => {
        }
      }
    }
@@ -866,8 +898,67 @@ index de4d1e6..8ca3dd0 100644
    // update children
    const pChildren = normalizePNodeContent(pNode);
    const pChildCnt = pChildren.length;
+@@ -1528,7 +2276,8 @@ const relativePositionToAbsolutePosition = (y, documentType, relPos, mapping) =>
+         i++;
+         if (t instanceof Y__namespace.XmlText) {
+           pos += t._length;
+-        } else {
++        } else if (t.nodeName !== 'lgaStableGaps') {
++          // LGA-SHOTDOCS-PATCH (stable gaps): the block marker is never rendered (no size).
+           pos += /** @type {any} */ (mapping.get(t)).nodeSize;
+         }
+       }
+@@ -1552,7 +2301,8 @@ const relativePositionToAbsolutePosition = (y, documentType, relPos, mapping) =>
+         if (!n.deleted) {
+           if (contentType instanceof Y__namespace.XmlText) {
+             pos += contentType._length;
+-          } else {
++          } else if (contentType.nodeName !== 'lgaStableGaps') {
++            // LGA-SHOTDOCS-PATCH (stable gaps): the block marker is never rendered (no size).
+             pos += /** @type {any} */ (mapping.get(contentType)).nodeSize;
+           }
+         }
+@@ -2109,7 +2859,13 @@ const defaultProtectedNodes = new Set(['paragraph']);
+  * @param {Set<string>} protectedNodes
+  * @returns {boolean}
+  */
+-const defaultDeleteFilter = (item, protectedNodes) => !(item instanceof Y.Item) ||
++// LGA-SHOTDOCS-PATCH (stable gaps): undo never removes the marker of a block with stable gaps (an empty
++// Y.XmlElement named 'lgaStableGaps', see sync-plugin.js). Undoing the first inline node of a block took the marker
++// with it, and a block with several texts and no marker is rewritten by older versions of the app.
++const isStableGapsMarkerItem = (item) => item instanceof Y.Item && item.content instanceof Y.ContentType &&
++  item.content.type instanceof Y.XmlElement && item.content.type.nodeName === 'lgaStableGaps';
++
++const defaultDeleteFilter = (item, protectedNodes) => isStableGapsMarkerItem(item) ? false : !(item instanceof Y.Item) ||
+   !(item.content instanceof Y.ContentType) ||
+   !(item.content.type instanceof Y.Text ||
+   (item.content.type instanceof Y.XmlElement && protectedNodes.has(item.content.type.nodeName))) ||
+diff --git a/node_modules/y-prosemirror/src/lib.js b/node_modules/y-prosemirror/src/lib.js
+index 3f48497..285a6f9 100644
+--- a/node_modules/y-prosemirror/src/lib.js
++++ b/node_modules/y-prosemirror/src/lib.js
+@@ -156,7 +156,8 @@ export const relativePositionToAbsolutePosition = (y, documentType, relPos, mapp
+         i++
+         if (t instanceof Y.XmlText) {
+           pos += t._length
+-        } else {
++        } else if (t.nodeName !== 'lgaStableGaps') {
++          // LGA-SHOTDOCS-PATCH (stable gaps): the block marker is never rendered (no size).
+           pos += /** @type {any} */ (mapping.get(t)).nodeSize
+         }
+       }
+@@ -180,7 +181,8 @@ export const relativePositionToAbsolutePosition = (y, documentType, relPos, mapp
+         if (!n.deleted) {
+           if (contentType instanceof Y.XmlText) {
+             pos += contentType._length
+-          } else {
++          } else if (contentType.nodeName !== 'lgaStableGaps') {
++            // LGA-SHOTDOCS-PATCH (stable gaps): the block marker is never rendered (no size).
+             pos += /** @type {any} */ (mapping.get(contentType)).nodeSize
+           }
+         }
 diff --git a/node_modules/y-prosemirror/src/plugins/sync-plugin.js b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
-index dccfb76..59d3240 100644
+index dccfb76..4d58750 100644
 --- a/node_modules/y-prosemirror/src/plugins/sync-plugin.js
 +++ b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
 @@ -248,37 +248,104 @@ export const ySyncPlugin = (yXmlFragment, {
@@ -1001,7 +1092,7 @@ index dccfb76..59d3240 100644
  /**
   * @param {ProsemirrorBinding} pmbinding
   * @param {import('prosemirror-state').EditorState} state
-@@ -731,6 +798,10 @@ export const createNodeFromYElement = (
+@@ -731,10 +798,16 @@ export const createNodeFromYElement = (
    computeYChange
  ) => {
    const children = []
@@ -1012,7 +1103,13 @@ index dccfb76..59d3240 100644
    /**
     * @param {Y.XmlElement | Y.XmlText} type
     */
-@@ -752,7 +823,7 @@ export const createNodeFromYElement = (
+   const createChildren = (type) => {
++    // LGA-SHOTDOCS-PATCH (stable gaps): the block marker is never rendered.
++    if (isStableGapsMarker(type)) return
+     if (type instanceof Y.XmlElement) {
+       const n = createNodeIfNotExists(
+         type,
+@@ -752,7 +825,7 @@ export const createNodeFromYElement = (
        // This is a fix for #160 -- duplication of characters when two Y.Text exist next to each
        // other.
        const nextytext = /** @type {Y.ContentType} */ (type._item.right?.content)?.type
@@ -1021,7 +1118,7 @@ index dccfb76..59d3240 100644
          type.applyDelta([
            { retain: type.length },
            ...nextytext.toDelta()
-@@ -879,12 +950,17 @@ const createTypeFromElementNode = (node, meta) => {
+@@ -879,12 +952,19 @@ const createTypeFromElementNode = (node, meta) => {
        type.setAttribute(key, val)
      }
    }
@@ -1035,16 +1132,18 @@ index dccfb76..59d3240 100644
    )
 +  // LGA-SHOTDOCS-PATCH (stable gaps): the texts of a block with inline nodes that ask for gap text carry
 +  // the stable-gaps mark, so the block keeps its stable gaps after its last such node is removed.
++  // The block also gets its marker (see STABLE_GAPS_MARKER).
 +  if (hasGapTextChild(node)) {
 +    children.forEach((c) => {
 +      if (c instanceof Y.XmlText) c.setAttribute(STABLE_GAP_TEXT, true)
 +    })
++    children.unshift(new Y.XmlElement(STABLE_GAPS_MARKER))
 +  }
 +  type.insert(0, children)
    meta.mapping.set(type, node)
    return type
  }
-@@ -928,6 +1004,16 @@ const equalAttrs = (pattrs, yattrs) => {
+@@ -928,6 +1008,16 @@ const equalAttrs = (pattrs, yattrs) => {
   * @typedef {Array<Array<PModel.Node>|PModel.Node>} NormalizedPNodeContent
   */
  
@@ -1061,7 +1160,7 @@ index dccfb76..59d3240 100644
  /**
   * @param {any} pnode
   * @return {NormalizedPNodeContent}
-@@ -935,6 +1021,11 @@ const equalAttrs = (pattrs, yattrs) => {
+@@ -935,6 +1025,11 @@ const equalAttrs = (pattrs, yattrs) => {
  const normalizePNodeContent = (pnode) => {
    const c = pnode.content.content
    const res = []
@@ -1073,7 +1172,7 @@ index dccfb76..59d3240 100644
    for (let i = 0; i < c.length; i++) {
      const n = c[i]
      if (n.isText) {
-@@ -945,9 +1036,20 @@ const normalizePNodeContent = (pnode) => {
+@@ -945,9 +1040,20 @@ const normalizePNodeContent = (pnode) => {
        i--
        res.push(textNodes)
      } else {
@@ -1094,7 +1193,7 @@ index dccfb76..59d3240 100644
    return res
  }
  
-@@ -978,6 +1080,10 @@ const equalYTypePNode = (ytype, pnode) => {
+@@ -978,6 +1084,10 @@ const equalYTypePNode = (ytype, pnode) => {
      ytype instanceof Y.XmlElement && !(pnode instanceof Array) &&
      matchNodeName(ytype, pnode)
    ) {
@@ -1105,7 +1204,7 @@ index dccfb76..59d3240 100644
      const normalizedContent = normalizePNodeContent(pnode)
      return ytype._length === normalizedContent.length &&
        equalAttrs(ytype.getAttributes(), pnode.attrs) &&
-@@ -1129,6 +1235,614 @@ const marksToAttributes = (marks, meta) => {
+@@ -1129,6 +1239,638 @@ const marksToAttributes = (marks, meta) => {
    return pattrs
  }
  
@@ -1132,6 +1231,20 @@ index dccfb76..59d3240 100644
 +// photos, hardBreak included) take the original code, unchanged.
 +
 +const STABLE_GAP_TEXT = 'lgaGapText'
++
++/**
++ * The marker of a block with stable gaps: an empty Y.XmlElement with this name, added (first) when the block
++ * gets its first such node and never removed by this binding (nor by undo: undo-plugin.js), which never renders it. A version of the
++ * app from before stable gaps does not know this node name, so it does not open the page (its guard refuses
++ * unknown content), even after every inline node of the block was removed. If it opened it, it would rewrite
++ * the block's consecutive texts into one and delete the others, with what someone else typed into them.
++ */
++const STABLE_GAPS_MARKER = 'lgaStableGaps'
++
++/**
++ * @param {any} t
++ */
++const isStableGapsMarker = (t) => t instanceof Y.XmlElement && t.nodeName === STABLE_GAPS_MARKER
 +
 +/**
 + * Longest edit script searched for when a change mixes text and inline nodes; past it, the changed range
@@ -1166,7 +1279,7 @@ index dccfb76..59d3240 100644
 +    if (c instanceof Y.XmlText) {
 +      if (c.getAttribute(STABLE_GAP_TEXT) === true) return true
 +    } else if (c instanceof Y.XmlElement) {
-+      if (isGapTextNodeType(schema.nodes[c.nodeName])) return true
++      if (c.nodeName === STABLE_GAPS_MARKER || isGapTextNodeType(schema.nodes[c.nodeName])) return true
 +    }
 +  }
 +  return false
@@ -1230,7 +1343,7 @@ index dccfb76..59d3240 100644
 + * @param {any} pnode
 + */
 +const equalStableContent = (ytype, pnode) => {
-+  const ych = ytype.toArray()
++  const ych = ytype.toArray().filter((c) => !isStableGapsMarker(c))
 +  const pc = pnode.content.content
 +  let i = 0
 +  let j = 0
@@ -1274,7 +1387,7 @@ index dccfb76..59d3240 100644
 +          }
 +        }
 +      }
-+    } else {
++    } else if (!isStableGapsMarker(child)) {
 +      toks.push({ c, el: child })
 +    }
 +  }
@@ -1687,7 +1800,16 @@ index dccfb76..59d3240 100644
 +    /** @type {Map<number, Array<any>>} */
 +    const inserts = new Map()
 +    const placed = new Set()
++    // The block marker stays where it is (first), and keeps being the block's marker.
 +    let anchor = -1
++    while (anchor + 1 < yChildren.length && isStableGapsMarker(yChildren[anchor + 1])) anchor++
++    let hasMarker = false
++    for (let c = 0; c < yChildren.length; c++) {
++      if (isStableGapsMarker(yChildren[c])) {
++        placed.add(c)
++        hasMarker = true
++      }
++    }
 +    for (let i = 0; i < final.length; i++) {
 +      const e = final[i]
 +      if (e.y !== null) {
@@ -1714,13 +1836,14 @@ index dccfb76..59d3240 100644
 +        yel.delete(c, 1)
 +      }
 +    }
++    if (!hasMarker) yel.insert(0, [new Y.XmlElement(STABLE_GAPS_MARKER)])
 +  }, ySyncPluginKey)
 +}
 +
  /**
   * Update a yDom node by syncing the current content of the prosemirror node.
   *
-@@ -1170,6 +1884,12 @@ export const updateYFragment = (y, yDomFragment, pNode, meta) => {
+@@ -1170,6 +1912,12 @@ export const updateYFragment = (y, yDomFragment, pNode, meta) => {
        }
      }
    }
@@ -1733,3 +1856,22 @@ index dccfb76..59d3240 100644
    // update children
    const pChildren = normalizePNodeContent(pNode)
    const pChildCnt = pChildren.length
+diff --git a/node_modules/y-prosemirror/src/plugins/undo-plugin.js b/node_modules/y-prosemirror/src/plugins/undo-plugin.js
+index 7c9448b..2d5c67b 100644
+--- a/node_modules/y-prosemirror/src/plugins/undo-plugin.js
++++ b/node_modules/y-prosemirror/src/plugins/undo-plugin.js
+@@ -47,7 +47,13 @@ export const defaultProtectedNodes = new Set(['paragraph'])
+  * @param {Set<string>} protectedNodes
+  * @returns {boolean}
+  */
+-export const defaultDeleteFilter = (item, protectedNodes) => !(item instanceof Item) ||
++// LGA-SHOTDOCS-PATCH (stable gaps): undo never removes the marker of a block with stable gaps (an empty
++// Y.XmlElement named 'lgaStableGaps', see sync-plugin.js). Undoing the first inline node of a block took the marker
++// with it, and a block with several texts and no marker is rewritten by older versions of the app.
++const isStableGapsMarkerItem = (item) => item instanceof Item && item.content instanceof ContentType &&
++  item.content.type instanceof XmlElement && item.content.type.nodeName === 'lgaStableGaps'
++
++export const defaultDeleteFilter = (item, protectedNodes) => isStableGapsMarkerItem(item) ? false : !(item instanceof Item) ||
+   !(item.content instanceof ContentType) ||
+   !(item.content.type instanceof Text ||
+   (item.content.type instanceof XmlElement && protectedNodes.has(item.content.type.nodeName))) ||

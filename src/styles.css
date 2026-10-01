@@ -2878,6 +2878,22 @@ code {
   margin-left: var(--img-gap, 8px);
 }
 
+/* El renglón con fotos ocupa todo el ancho del bloque. `.bn-block-content` es flex y el renglón, sin esto, mide lo que
+   su contenido: en un renglón de solo fotos que no lo llenan, la suma de los anchos naturales de las miniaturas (480 px
+   o menos), y el ancho de cada foto (una parte del renglón) salía de esa medida (medido con fotos de ERSO: una a 1/1
+   medía 479 px en vez de 720). */
+.bn-block-content > .bn-inline-content:has(.sd-photo) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Una fila llena justo después de un texto del mismo renglón empieza en un renglón nuevo (la marca la pone la
+   decoración de las filas; no es parte del documento). */
+.sd-photo-row-start {
+  display: block;
+  height: 0;
+}
+
 /* La última de una fila que no llena el renglón, seguida de otra foto: completa el renglón, así el navegador
    corta donde corta `groupRows`. */
 .sd-photo.sd-photo-sized.sd-photo-row-break {
@@ -2922,6 +2938,83 @@ code {
   border-radius: 2px;
   background: rgba(35, 131, 226, 0.28);
   pointer-events: none;
+}
+
+/* Los tiradores de la foto en línea (inlinePhoto.ts, D-24): los de la foto-bloque, a los costados; se ven con la
+   foto elegida (y el editor con el foco) o al pasar el mouse, solo si se puede editar. Mientras se arrastra, la foto
+   toma el ancho del arrastre (también una de ancho natural). */
+.sd-photo-handle {
+  display: none;
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 30px;
+  margin-top: -15px;
+  background-color: black;
+  border: 1px solid white;
+  border-radius: 4px;
+  cursor: ew-resize;
+  z-index: 1;
+  touch-action: none;
+}
+
+.sd-photo-handle-left {
+  left: 4px;
+}
+
+.sd-photo-handle-right {
+  right: 4px;
+}
+
+.editor .bn-editor.ProseMirror-focused[contenteditable='true'] .sd-photo.ProseMirror-selectednode > .sd-photo-handle,
+.editor .bn-editor[contenteditable='true'] .sd-photo.sd-photo-resizing > .sd-photo-handle {
+  display: block;
+}
+
+@media (hover: hover) {
+  .editor .bn-editor[contenteditable='true'] .sd-photo:hover > .sd-photo-handle {
+    display: block;
+  }
+}
+
+.sd-photo.sd-photo-resizing > img.bn-visual-media {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.print-view .sd-photo-handle {
+  display: none !important;
+}
+
+/* Mientras se guardan las fotos que se pegaron, soltaron o eligieron (inlinePhotoCreate.ts): una marca en el lugar
+   donde van a entrar. No es parte del documento (una decoración) ni sale en el PDF. */
+.sd-photo-pending {
+  display: inline-block;
+  width: 56px;
+  height: 40px;
+  margin-block: calc(var(--img-gap, 8px) / 2);
+  vertical-align: bottom;
+  border-radius: 2px;
+  background: var(--hover);
+  outline: 1px dashed var(--faint-2);
+  outline-offset: -1px;
+  animation: sd-photo-pending 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes sd-photo-pending {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-photo-pending {
+    animation: none;
+  }
+}
+
+.print-view .sd-photo-pending {
+  display: none;
 }
 
 /* En el teléfono, si la cuenta lo pide (Fotos en fila → Apiladas), cada foto con ancho propio ocupa el renglón
@@ -3007,6 +3100,60 @@ code {
   font-family: var(--mono);
   font-size: 12px;
   min-width: 30px;
+}
+
+/* La barra de una foto (MediaBar.tsx, D-24): todos los botones del mismo tamaño (30 × 30, como los íconos de
+   BlockNote) y el mismo relleno; los de texto (1/1, 1/2…) sin el relleno de un botón de texto, que los dejaba de
+   casi 50 px. Un separador fino entre sectores. */
+.bn-formatting-toolbar .sd-bar-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  flex: 0 0 30px;
+}
+
+.bn-formatting-toolbar .sd-bar-button .mantine-Button-inner,
+.bn-formatting-toolbar .sd-bar-button .mantine-Button-label {
+  justify-content: center;
+  overflow: visible;
+}
+
+.bn-formatting-toolbar .sd-bar-sector {
+  display: contents;
+}
+
+/* En el teléfono cada sector baja de renglón entero y sin separador: un separador al final o al principio de un
+   renglón queda colgando. Entre sectores, el espacio alcanza. */
+@media (max-width: 600px) {
+  .bn-formatting-toolbar .sd-bar-sector {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    margin-right: 8px;
+  }
+
+  .bn-formatting-toolbar .sd-bar-sector:last-child {
+    margin-right: 0;
+  }
+
+  .bn-formatting-toolbar .sd-bar-sep {
+    display: none;
+  }
+}
+
+/* En una pantalla angosta (el teléfono) la barra entera no entra: pasa a dos renglones, adentro de la pantalla. */
+.bn-formatting-toolbar.sd-media-bar {
+  flex-wrap: wrap;
+  max-width: calc(100vw - 16px);
+}
+
+.bn-formatting-toolbar .sd-bar-sep {
+  flex: 0 0 1px;
+  align-self: stretch;
+  margin: 5px 4px;
+  background: var(--border);
 }
 
 .bn-formatting-toolbar .image-size-button[data-selected] {
@@ -4946,4 +5093,62 @@ mark.search-hit {
   display: grid;
   gap: 8px;
   justify-items: start;
+}
+
+/* --- Instalar la app (Docs/Doc_Instalar.md) ---------------------------------------------------------- */
+
+/* El aviso del teléfono: abajo de la barra de arriba, se va con el resto al desplazar. */
+.install-banner {
+  position: sticky;
+  left: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 12px;
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.install-banner-text {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.install-banner-text strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.install-banner-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.install-banner-actions .primary {
+  height: 36px;
+  padding: 0 14px;
+}
+
+.login-footer .login-install {
+  border: none;
+  padding: 2px 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
+.login-footer .login-install:hover {
+  background: none;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
