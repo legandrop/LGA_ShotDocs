@@ -47,11 +47,13 @@ export interface MediaRecord {
    */
   stalls?: number;
   /**
-   * Una foto HEIC que no se pudo pasar a JPEG al agregarla (Docs/Doc_Imagenes.md, "Fotos HEIC"): se guardó tal
-   * cual. `retry`: el decodificador no estaba (sin red); se vuelve a probar antes de registrarla. `failed`: no
-   * se pudo convertir, o ya se registró como HEIC; queda así. Sin el campo, no hay nada pendiente.
+   * Una foto HEIC guardada tal cual, por pasar a JPEG (Docs/Doc_Imagenes.md, "Fotos HEIC"). `pending`: por
+   * convertir (al agregarla, y otra vez antes de registrarla si el decodificador no estaba). `sent`: igual, pero
+   * ya se mandó a registrar como HEIC sin saber si llegó: antes de convertirla se le pregunta a la base.
+   * `failed`: no se pudo convertir, o ya se registró como HEIC; queda así. Sin el campo (también después de
+   * convertirla), no hay nada pendiente.
    */
-  heic?: 'retry' | 'failed';
+  heic?: 'pending' | 'sent' | 'failed';
   /** La subida al portero que quedó a medias: con esto se retoma después de cerrar la app. */
   uploadId: string | null;
   /** Hasta dónde confirmó el portero (bytes). */

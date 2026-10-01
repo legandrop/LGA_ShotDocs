@@ -53,6 +53,7 @@ async function setup() {
     throw new HeicError('failed', 'no se pudo');
   };
   const heic = mediaIdOf(await a.media.add(page, file(MB, 'IMG_0009.HEIC', 'image/heic')))!;
+  await a.media.idle();
   server.convertHeic = convert;
   await a.media.idle();
   return { server, a, page, photo, video, heic };

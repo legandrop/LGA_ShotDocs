@@ -127,6 +127,10 @@ export class FakeServer {
   mediaDbFails = false;
   /** Cómo convierten los dispositivos un HEIC a JPEG (por defecto `fakeConvertHeic`; las pruebas lo cambian). */
   convertHeic: (file: Blob) => Promise<Blob> = fakeConvertHeic;
+  /** Lo más que la cola espera una conversión (por defecto, el de la app). */
+  heicTimeoutMs?: number;
+  /** Lo que el navegador saca de un archivo (por defecto `fakeProbe`; las pruebas lo cambian). */
+  probe: (file: Blob, mime: string) => Promise<Probe> = fakeProbe;
   /** `comments`, con el texto aunque se haya borrado (como la tabla; la vista lo devuelve vacío). */
   readonly comments = new Map<string, StoredComment>();
   /** La base tiene `import_comment` (versión 8); apagado, la función no existe (PGRST202). */
@@ -1457,10 +1461,11 @@ export async function makeDevice(
       }),
     projectOf: (pageId) => tree.get(pageId)?.workspace_id,
     onForeignFile: (name) => server.foreignNotices.push(name),
-    probe: fakeProbe,
+    probe: (file, mime) => server.probe(file, mime),
     playMark: async (thumb) => thumb,
     viewImage: fakeViewImage,
     convertHeic: (file) => server.convertHeic(file),
+    heicTimeoutMs: server.heicTimeoutMs,
     now: () => Date.now() + server.clockOffset,
   });
   await media.load();

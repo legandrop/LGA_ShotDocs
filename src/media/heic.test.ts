@@ -1,10 +1,10 @@
-import { createRequire } from 'node:module';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HEIC_SAMPLE } from './fixtures/heicSample';
 import {
   HeicError,
   heicColorProfile,
   heicFailure,
+  heicSignature,
   isHeicFile,
   isHeicSignature,
   isHeicType,
@@ -12,7 +12,9 @@ import {
   jpegName,
   jpegWithProfile,
 } from './heic';
-import { decodeHeic, heicToJpeg, pixelsToJpeg, type JpegEncoder, type Libheif } from './heicDecode';
+import { checkJpeg, decodeHeic, encodeJpegOffscreen, heicToJpeg, MAX_PIXELS, pixelsToJpeg, type JpegEncoder, type Libheif } from './heicDecode';
+import { loadLibheif } from './heicLib';
+import { FakeOffscreenCanvas, fakeCreateImageBitmap, stubBrowser } from './fixtures/fakeCanvas';
 
 const bytesOf = (text: string) => new Uint8Array([...text].map((c) => c.charCodeAt(0)));
 const u32 = (n: number) => new Uint8Array([(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]);
@@ -40,16 +42,25 @@ function profile(size: number, space = 'RGB '): Uint8Array {
 
 describe('fotos HEIC: reconocerlas', () => {
   it('por el tipo que informa el navegador', () => {
-    for (const type of ['image/heic', 'image/HEIF', 'image/heic-sequence', 'image/heif; x=1']) expect(isHeicType(type)).toBe(true);
-    for (const type of ['image/jpeg', 'image/avif', '', undefined, null, 'application/octet-stream']) expect(isHeicType(type)).toBe(false);
+    for (const type of ['image/heic', 'image/HEIF', 'image/heif; x=1']) expect(isHeicType(type)).toBe(true);
+    // Las secuencias no se convierten (un JPEG de la primera imagen perdería el resto).
+    for (const type of ['image/heic-sequence', 'image/heif-sequence', 'image/jpeg', 'image/avif', '', undefined, null, 'application/octet-stream']) {
+      expect(isHeicType(type)).toBe(false);
+    }
   });
 
   it('por la firma: ftyp con marca de HEIC, o la genérica de HEIF si no es un AVIF', () => {
-    for (const major of ['heic', 'heix', 'hevc', 'heim', 'heis']) expect(isHeicSignature(ftyp(major, 'mif1'))).toBe(true);
-    // La genérica (`mif1`, `msf1`): HEIC salvo que diga AVIF (que Chrome sí muestra).
+    for (const major of ['heic', 'heix', 'heim', 'heis']) expect(heicSignature(ftyp(major, 'mif1'))).toBe('image');
+    // La genérica (`mif1`): HEIC salvo que diga AVIF (que Chrome sí muestra).
     expect(isHeicSignature(ftyp('mif1', 'heic'))).toBe(true);
-    expect(isHeicSignature(ftyp('msf1', 'hevc'))).toBe(true);
     expect(isHeicSignature(ftyp('mif1', 'miaf'))).toBe(true);
+    // Secuencias (`hevc`, `hevx`, `hevm`, `hevs`, `msf1`): no se convierten.
+    for (const major of ['hevc', 'hevx', 'hevm', 'hevs', 'msf1']) {
+      expect(heicSignature(ftyp(major, 'mif1', 'heic'))).toBe('sequence');
+      expect(isHeicSignature(ftyp(major, 'heic'))).toBe(false);
+    }
+    expect(heicSignature(ftyp('avif', 'mif1'))).toBe('other');
+    expect(heicSignature(bytesOf('sin caja ftyp, ni de cerca'))).toBeNull();
     expect(isHeicSignature(ftyp('mif1', 'avif', 'miaf'))).toBe(false);
     expect(isHeicSignature(ftyp('avif', 'mif1', 'miaf'))).toBe(false);
     // Videos (también son ISO BMFF) y otros formatos.
@@ -69,6 +80,12 @@ describe('fotos HEIC: reconocerlas', () => {
     expect(await isHeicFile(new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2])], 'foto.jpg', { type: 'image/jpeg' }))).toBe(false);
     // El nombre solo no alcanza: bytes que no son un HEIC no se mandan al decodificador.
     expect(await isHeicFile(new File([new Uint8Array(100)], 'IMG_1234.HEIC', { type: '' }))).toBe(false);
+    // Una secuencia, aunque el tipo diga HEIC: la firma manda.
+    const sequence = sample();
+    sequence.set(bytesOf('msf1'), 8);
+    expect(await isHeicFile(new File([sequence], 'rafaga.heic', { type: 'image/heic' }))).toBe(false);
+    // Un AVIF que el navegador informa como HEIF: tampoco.
+    expect(await isHeicFile(new File([ftyp('avif', 'mif1')], 'x.heif', { type: 'image/heif' }))).toBe(false);
   });
 
   it('el nombre del JPEG', () => {
@@ -154,12 +171,16 @@ describe('fotos HEIC: el perfil de color', () => {
   });
 });
 
-describe('fotos HEIC: el decodificador de verdad (libheif en wasm)', () => {
-  const require = createRequire(import.meta.url);
-  const lib = () => require('libheif-js/wasm-bundle') as Libheif;
+describe('fotos HEIC: el decodificador de verdad, por la misma entrada que la app (heicLib.ts)', () => {
+  afterEach(() => vi.unstubAllGlobals());
 
   it('el HEIC de prueba sale derecho (64×96, no acostado) y con sus colores', async () => {
-    const pixels = await decodeHeic(lib(), sample());
+    const { wasmFetches } = stubBrowser();
+    const lib = await loadLibheif();
+    // La librería se baja una sola vez.
+    expect(await loadLibheif()).toBe(lib);
+    expect(wasmFetches()).toBeLessThanOrEqual(1);
+    const pixels = await decodeHeic(lib, sample());
     // Guardado 96×64 (acostado); con la rotación aplicada, 64×96.
     expect([pixels.width, pixels.height]).toEqual([64, 96]);
     expect(pixels.data.length).toBe(64 * 96 * 4);
@@ -172,30 +193,72 @@ describe('fotos HEIC: el decodificador de verdad (libheif en wasm)', () => {
     expect(near(at(58, 90), [30, 200, 30])).toBe(true);
   });
 
-  it('el JPEG lleva el perfil de color del HEIC, entero', async () => {
-    // node no tiene canvas: un codificador que devuelve un JPEG mínimo con las medidas (el de verdad se prueba en
-    // el navegador).
-    const seen: number[][] = [];
-    const encode: JpegEncoder = async (pixels, quality) => {
-      seen.push([pixels.width, pixels.height, quality]);
-      return new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x4a, 0x46, 0xff, 0xd9]);
-    };
+  it('el JPEG lleva el perfil de color del HEIC, entero, y se comprueba que sea la foto', async () => {
+    stubBrowser();
     const heic = sample();
-    const jpeg = await heicToJpeg(lib(), heic, encode);
-    expect(seen).toEqual([[64, 96, 0.92]]);
+    // El codificador de canvas de la app, sobre un canvas de mentira (node no tiene canvas).
+    const jpeg = await heicToJpeg(await loadLibheif(), heic, encodeJpegOffscreen);
+    expect([...jpeg.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
     const icc = heicColorProfile(heic)!;
-    expect(jpeg).toEqual(jpegWithProfile(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x4a, 0x46, 0xff, 0xd9]), icc));
     const mark = [...jpeg].findIndex((_, i) => String.fromCharCode(...jpeg.subarray(i, i + 12)) === 'ICC_PROFILE\0');
     expect(jpeg.subarray(mark + 14, mark + 14 + 588)).toEqual(icc);
+    const back = await fakeCreateImageBitmap(new Blob([jpeg as Uint8Array<ArrayBuffer>]));
+    expect([back.width, back.height]).toEqual([64, 96]);
   });
 
   it('lo que no es un HEIC, o un codificador que no devuelve un JPEG: error de conversión (failed)', async () => {
-    await expect(decodeHeic(lib(), bytesOf('esto no es una foto'))).rejects.toMatchObject({ reason: 'failed' });
+    stubBrowser();
+    const lib = await loadLibheif();
+    await expect(decodeHeic(lib, bytesOf('esto no es una foto'))).rejects.toMatchObject({ reason: 'failed' });
     // Un HEIC cortado a la mitad.
-    await expect(decodeHeic(lib(), sample().subarray(0, 600))).rejects.toBeInstanceOf(Error);
+    await expect(decodeHeic(lib, sample().subarray(0, 600))).rejects.toBeInstanceOf(Error);
     const notJpeg: JpegEncoder = async () => bytesOf('PNG?');
     await expect(pixelsToJpeg({ width: 1, height: 1, data: new Uint8ClampedArray(4) }, sample(), notJpeg)).rejects.toMatchObject({
       reason: 'failed',
     });
+  });
+
+  it('sin el .wasm (sin red): el decodificador no está (unavailable), y se puede volver a probar', async () => {
+    vi.resetModules();
+    stubBrowser({ wasm: false });
+    const fresh = await import('./heicLib');
+    await expect(fresh.loadLibheif()).rejects.toMatchObject({ reason: 'unavailable' });
+    stubBrowser();
+    expect(typeof (await fresh.loadLibheif()).HeifDecoder).toBe('function');
+  });
+});
+
+describe('fotos HEIC: comprobar el JPEG', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const pixels = () => {
+    const data = new Uint8ClampedArray(40 * 30 * 4);
+    for (let i = 0; i < data.length; i += 4) data.set([(i / 4) % 40 * 6, 120, 200 - ((i / 4 / 40) | 0) * 5, 255], i);
+    return { width: 40, height: 30, data };
+  };
+
+  it('el JPEG que da el canvas tiene que abrir, medir lo mismo y parecerse a la foto', async () => {
+    stubBrowser();
+    const source = pixels();
+    const good = await encodeJpegOffscreen(source, 0.92);
+    await expect(checkJpeg(good, source)).resolves.toBeUndefined();
+    // Un canvas pasado de su tope de área (iOS) que devuelve una imagen vacía de las mismas medidas.
+    FakeOffscreenCanvas.mode = 'blank';
+    const blank = await encodeJpegOffscreen(source, 0.92);
+    await expect(checkJpeg(blank, source)).rejects.toMatchObject({ reason: 'failed' });
+    // Otras medidas, o algo que no abre.
+    FakeOffscreenCanvas.mode = 'ok';
+    await expect(checkJpeg(good, { ...source, width: 30, height: 40 })).rejects.toMatchObject({ reason: 'failed' });
+    await expect(checkJpeg(new Uint8Array([0xff, 0xd8, 0xff, 1, 2]), source)).rejects.toMatchObject({ reason: 'failed' });
+    // Sin `createImageBitmap` no se puede comprobar: tampoco se da por bueno.
+    vi.stubGlobal('createImageBitmap', undefined);
+    await expect(checkJpeg(good, source)).rejects.toMatchObject({ reason: 'failed' });
+  });
+
+  it('una foto más grande que el tope (50 MP) no se intenta', async () => {
+    expect(MAX_PIXELS).toBe(50_000_000);
+    const huge = { get_width: () => 10_000, get_height: () => 6_000, is_primary: () => true, display: vi.fn(), free: () => undefined };
+    const lib = { HeifDecoder: class { decoder = null; decode = () => [huge]; } } as unknown as Libheif;
+    await expect(decodeHeic(lib, sample())).rejects.toMatchObject({ reason: 'failed' });
+    expect(huge.display).not.toHaveBeenCalled();
   });
 });

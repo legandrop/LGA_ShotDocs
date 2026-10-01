@@ -30,8 +30,13 @@ interface HeifImageLike {
   free(): void;
 }
 
-/** Lo más grande que se intenta decodificar (una foto de 100 MP; más que eso no entra en memoria). */
-const MAX_PIXELS = 100_000_000;
+/**
+ * Lo más grande que se convierte: 50 megapíxeles. Entra la foto más grande de un iPhone (48 MP, 8064 × 6048) y
+ * el pico de memoria queda cerca de 800 MB (por píxel: 4 bytes de la foto decodificada, otros tantos adentro de
+ * la librería y en el canvas, y otra vez al comprobar el JPEG). Con 100 MP serían 1,6 GB. Una foto más grande
+ * queda como HEIC, con su aviso.
+ */
+export const MAX_PIXELS = 50_000_000;
 
 /**
  * Decodifica la imagen principal del HEIC. libheif aplica la orientación (las cajas `irot`/`imir`): una foto
@@ -121,15 +126,98 @@ export function pickEncoder(): JpegEncoder | null {
   return null;
 }
 
-/** Los píxeles a JPEG, con el perfil de color del HEIC adentro. */
-export async function pixelsToJpeg(pixels: Pixels, heic: Uint8Array, encode: JpegEncoder): Promise<Uint8Array> {
-  const jpeg = await encode(pixels, JPEG_QUALITY);
+/** Comprueba que el JPEG sea la foto; tira `HeicError('failed')` si no. */
+export type JpegCheck = (jpeg: Uint8Array, pixels: Pixels) => Promise<void>;
+
+/** Cuántos puntos de la foto se comparan (una grilla de 4 × 4) y de qué lado es cada cuadradito. */
+const CHECK_GRID = 4;
+const CHECK_BLOCK = 8;
+/** Cuánto puede diferir el promedio de un cuadradito (de 0 a 255): mucho más que lo que cambia un JPEG de 0,92. */
+const CHECK_TOLERANCE = 64;
+
+function blankCanvas(width: number, height: number): OffscreenCanvas | HTMLCanvasElement | null {
+  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(width, height);
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
+}
+
+/**
+ * El JPEG se vuelve a abrir y se compara con lo decodificado: tiene que decodificar, medir lo mismo que el HEIC
+ * y, en una grilla de puntos, parecerse (el promedio de un cuadradito de 8 × 8). Lo que devuelve un canvas no
+ * es de fiar a ciegas: pasado su tope de área (16,7 MP en iOS) puede salir vacío o negro, y hay navegadores que
+ * alteran lo que se lee de un canvas. Si no coincide, la conversión cuenta como fallida y queda el HEIC.
+ */
+export const checkJpeg: JpegCheck = async (jpeg, pixels) => {
+  if (typeof createImageBitmap !== 'function') throw new HeicError('failed', 'This browser cannot check the JPEG.');
+  let bitmap: ImageBitmap;
+  try {
+    // Sin aplicar el perfil de color: se comparan los valores tal cual están guardados.
+    bitmap = await createImageBitmap(new Blob([jpeg as Uint8Array<ArrayBuffer>], { type: JPEG_TYPE }), { colorSpaceConversion: 'none' });
+  } catch {
+    throw new HeicError('failed', 'The JPEG does not decode.');
+  }
+  try {
+    if (bitmap.width !== pixels.width || bitmap.height !== pixels.height) {
+      throw new HeicError('failed', `The JPEG is ${bitmap.width}×${bitmap.height}, not ${pixels.width}×${pixels.height}.`);
+    }
+    const block = Math.min(CHECK_BLOCK, pixels.width, pixels.height);
+    const points: [number, number][] = [];
+    for (let row = 0; row < CHECK_GRID; row++) {
+      for (let col = 0; col < CHECK_GRID; col++) {
+        points.push([
+          Math.floor(((col + 0.5) / CHECK_GRID) * (pixels.width - block)),
+          Math.floor(((row + 0.5) / CHECK_GRID) * (pixels.height - block)),
+        ]);
+      }
+    }
+    const strip = blankCanvas(block * points.length, block);
+    const ctx = strip?.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+    if (!ctx) throw new HeicError('failed', 'No canvas to check the JPEG.');
+    points.forEach(([x, y], i) => ctx.drawImage(bitmap, x, y, block, block, i * block, 0, block, block));
+    const read = ctx.getImageData(0, 0, block * points.length, block).data;
+    let different = 0;
+    points.forEach(([x, y], i) => {
+      for (let channel = 0; channel < 3; channel++) {
+        let want = 0;
+        let got = 0;
+        for (let dy = 0; dy < block; dy++) {
+          for (let dx = 0; dx < block; dx++) {
+            want += pixels.data[((y + dy) * pixels.width + x + dx) * 4 + channel];
+            got += read[(dy * block * points.length + i * block + dx) * 4 + channel];
+          }
+        }
+        if (Math.abs(want - got) / (block * block) > CHECK_TOLERANCE) {
+          different++;
+          return;
+        }
+      }
+    });
+    // Más de la mitad de los puntos distintos: no es la foto (vacío, negro, ruido).
+    if (different * 2 > points.length) throw new HeicError('failed', 'The JPEG does not look like the photo.');
+  } finally {
+    bitmap.close();
+  }
+};
+
+/** Los píxeles a JPEG, con el perfil de color del HEIC adentro, y comprobado (`checkJpeg`). */
+export async function pixelsToJpeg(
+  pixels: Pixels,
+  heic: Uint8Array,
+  encode: JpegEncoder,
+  check: JpegCheck = checkJpeg,
+): Promise<Uint8Array> {
+  const encoded = await encode(pixels, JPEG_QUALITY);
   // Lo que no empieza como un JPEG no se guarda con nombre de JPEG.
-  if (!isJpegStart(jpeg)) throw new HeicError('failed', 'The encoder did not return a JPEG.');
-  return jpegWithProfile(jpeg, heicColorProfile(heic));
+  if (!isJpegStart(encoded)) throw new HeicError('failed', 'The encoder did not return a JPEG.');
+  const jpeg = jpegWithProfile(encoded, heicColorProfile(heic));
+  await check(jpeg, pixels);
+  return jpeg;
 }
 
 /** Un HEIC entero a JPEG: tamaño completo, calidad 0,92, derecho y con su perfil de color. */
-export async function heicToJpeg(lib: Libheif, heic: Uint8Array, encode: JpegEncoder): Promise<Uint8Array> {
-  return pixelsToJpeg(await decodeHeic(lib, heic), heic, encode);
+export async function heicToJpeg(lib: Libheif, heic: Uint8Array, encode: JpegEncoder, check: JpegCheck = checkJpeg): Promise<Uint8Array> {
+  return pixelsToJpeg(await decodeHeic(lib, heic), heic, encode, check);
 }

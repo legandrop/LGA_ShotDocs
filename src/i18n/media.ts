@@ -83,6 +83,7 @@ export const media = {
   'queue.copiedToPage': { en: "copied to another page", es: "copiado a otra página" },
   'queue.notYet': { en: "Not available yet", es: "Todavía no está disponible" },
   'queue.notOnDevice': { en: "Not available on this device", es: "No está disponible en este dispositivo" },
+  'queue.heicConverting': { en: "HEIC photo: turning it into a JPEG…", es: "Foto HEIC: pasándola a JPEG…" },
   'queue.heicPending': { en: "HEIC photo: turns into a JPEG once online", es: "Foto HEIC: pasa a JPEG cuando haya conexión" },
   'queue.heicFailed': { en: "HEIC photo: could not turn it into a JPEG", es: "Foto HEIC: no se pudo pasar a JPEG" },
   'queue.heicNoPreview': { en: "HEIC photo: this browser cannot show it", es: "Foto HEIC: este navegador no la muestra" },

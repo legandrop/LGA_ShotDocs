@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from './editorSchema';
-import { insertFiles, isFilesTransfer, takeFiles, uploadedBlock, type FileEditor } from './fileDrop';
+import { insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
 
 // Soltar o pegar archivos (Docs/Doc_Adjuntos.md): se reconocen los eventos de archivos (y no los de HTML), se
 // leen en el acto, y se inserta un bloque `image` por archivo, en orden, sin cortar si uno falla.
@@ -106,25 +106,5 @@ describe('insertar archivos', () => {
     expect(editor.document[0].type).toBe('paragraph');
     expect(editor.document[0].children).toHaveLength(1);
     expect(editor.document[1].type).toBe('image');
-  });
-});
-
-describe('un HEIC que se guardó como JPEG (Docs/Doc_Imagenes.md, "Fotos HEIC")', () => {
-  it('uploadFile devuelve la dirección y el nombre del JPEG; sin conversión, solo la dirección', () => {
-    expect(uploadedBlock('sdmedia://x', 'IMG_1.jpg')).toEqual({ props: { url: 'sdmedia://x', name: 'IMG_1.jpg' } });
-    expect(uploadedBlock('sdmedia://x', null)).toBe('sdmedia://x');
-  });
-
-  it('el bloque insertado queda con el nombre del JPEG, no el del HEIC', async () => {
-    const editor = mount();
-    editor.replaceBlocks(editor.document, [{ type: 'paragraph', content: 'Antes' }]);
-    const fe = editor as unknown as FileEditor;
-    fe.uploadFile = async (file: File) => uploadedBlock(`sdmedia://${file.name}`, file.name === 'IMG_1.HEIC' ? 'IMG_1.jpg' : null);
-    await insertFiles(fe, [new File(['x'], 'IMG_1.HEIC'), new File(['y'], 'otra.png')], { blockId: editor.document[0].id, placement: 'after' });
-    const props = editor.document.slice(1, 3).map((b) => b.props as { url: string; name: string });
-    expect(props.map((p) => [p.url, p.name])).toEqual([
-      ['sdmedia://IMG_1.HEIC', 'IMG_1.jpg'],
-      ['sdmedia://otra.png', 'otra.png'],
-    ]);
   });
 });

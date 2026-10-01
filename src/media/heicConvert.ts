@@ -3,14 +3,13 @@
 //
 // La conversión corre en un Web Worker (`heic.worker.ts`), uno por foto, que se cierra al terminar. Si el
 // navegador no deja crear el Worker (o su script no arranca), se hace en la página: tarda lo mismo pero traba
-// la pantalla mientras dura. Sin red y sin el decodificador guardado, falla con `unavailable` (la cola guarda
-// el HEIC tal cual y vuelve a probar antes de subirlo).
+// la pantalla mientras dura. Sin red y sin el decodificador guardado, falla con `unavailable` (el HEIC ya está
+// guardado en el dispositivo; la cola vuelve a probar antes de registrarlo). Siempre termina: con el JPEG o con
+// un `HeicError`, a más tardar a los `HEIC_TIMEOUT_MS`.
 
-import { HeicError, JPEG_TYPE, type HeicFailure } from './heic';
+import { optionalImport } from '../lib/optionalImport';
+import { HEIC_TIMEOUT_MS, HeicError, JPEG_TYPE, type HeicFailure } from './heic';
 import { decodeHeic, pickEncoder, pixelsToJpeg, type Pixels } from './heicDecode';
-
-/** Lo más que se espera una conversión (una foto enorme en una computadora lenta). */
-export const HEIC_TIMEOUT_MS = 120_000;
 
 type WorkerReply =
   | { type: 'ready' }
@@ -40,15 +39,18 @@ function convertBytes(bytes: Uint8Array): Promise<Uint8Array> {
       settled = true;
       clearTimeout(timer);
       worker.terminate();
-      Promise.resolve()
-        .then(work)
-        .then(resolve, reject);
+      Promise.resolve().then(work).then(resolve, reject);
     };
     const fail = (reason: HeicFailure, text: string) =>
       finish(() => {
         throw new HeicError(reason, text);
       });
-    const timer = setTimeout(() => fail('failed', 'The HEIC conversion took too long.'), HEIC_TIMEOUT_MS);
+    // Si el Worker ni arrancó (su script no terminó de bajar), es que el decodificador no está: se prueba más
+    // tarde. Si arrancó y no terminó, la foto no se pudo convertir.
+    const timer = setTimeout(
+      () => (ready ? fail('failed', 'The HEIC conversion took too long.') : fail('unavailable', 'The HEIC decoder did not start.')),
+      HEIC_TIMEOUT_MS,
+    );
     worker.onmessage = (event: MessageEvent<WorkerReply>) => {
       const reply = event.data;
       if (reply.type === 'ready') ready = true;
@@ -75,15 +77,26 @@ async function encodeHere(pixels: Pixels, heic: Uint8Array): Promise<Uint8Array>
   return pixelsToJpeg(pixels, heic, encode);
 }
 
-/** El respaldo sin Worker: todo en la página. */
-async function onMainThread(bytes: Uint8Array): Promise<Uint8Array> {
-  let loadLibheif: typeof import('./heicLib').loadLibheif;
-  try {
-    ({ loadLibheif } = await import('./heicLib'));
-  } catch (err) {
-    throw new HeicError('unavailable', `The HEIC decoder could not be loaded (${err instanceof Error ? err.message : String(err)}).`);
-  }
-  const lib = await loadLibheif();
-  const pixels = await decodeHeic(lib, bytes);
-  return encodeHere(pixels, bytes);
+/**
+ * El respaldo sin Worker: todo en la página, también con tope (si la librería se cae adentro de un `setTimeout`
+ * suyo no avisa a nadie, y esto no terminaría nunca).
+ */
+function onMainThread(bytes: Uint8Array): Promise<Uint8Array> {
+  const work = async () => {
+    let loadLibheif: typeof import('./heicLib').loadLibheif;
+    try {
+      // Opcional: si no baja (sin red), no es una versión nueva de la app (lib/optionalImport.ts).
+      ({ loadLibheif } = await optionalImport(() => import('./heicLib')));
+    } catch (err) {
+      throw new HeicError('unavailable', `The HEIC decoder could not be loaded (${err instanceof Error ? err.message : String(err)}).`);
+    }
+    const lib = await loadLibheif();
+    return encodeHere(await decodeHeic(lib, bytes), bytes);
+  };
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new HeicError('failed', 'The HEIC conversion took too long.')), HEIC_TIMEOUT_MS);
+    work()
+      .then(resolve, reject)
+      .finally(() => clearTimeout(timer));
+  });
 }

@@ -26,6 +26,12 @@ function decodeJwtPayload(token: string): string {
   }
 }
 
+// El aviso de licencia de libheif (LGPL-3.0, Docs/Doc_Decisiones.md, D-21) al principio de los archivos que la
+// llevan: el Worker que convierte las fotos HEIC y su respaldo en la página. `/*!`: el minificador lo conserva.
+const LIBHEIF_BANNER =
+  '/*! Includes libheif and libde265 (LGPL-3.0-or-later, (c) struktur AG, Dirk Farin and contributors) via libheif-js, ' +
+  'unmodified. Source and license texts: /licenses/THIRD_PARTY_NOTICES.md */';
+
 // La versión que se muestra en la app es la última entrada del changelog.
 function appVersion(): string {
   try {
@@ -116,6 +122,8 @@ export default defineConfig(({ mode }) => {
             },
           ],
           navigateFallback: '/index.html',
+          // Los avisos y los textos de las licencias (`public/licenses/`) son archivos, no pantallas de la app.
+          navigateFallbackDenylist: [/^\/licenses\//],
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         },
       }),
@@ -123,6 +131,12 @@ export default defineConfig(({ mode }) => {
     build: {
       // El editor se baja aparte (roadmap B.4) y pesa alrededor de 1 MB sin comprimir (300 KB comprimido).
       chunkSizeWarningLimit: 1200,
+      rolldownOptions: {
+        output: { postBanner: (chunk: { name: string }) => (chunk.name === 'heicLib' ? LIBHEIF_BANNER : '') },
+      },
+    },
+    worker: {
+      rolldownOptions: { output: { postBanner: LIBHEIF_BANNER } },
     },
     test: {
       environment: 'node',

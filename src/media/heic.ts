@@ -1,7 +1,8 @@
 // Fotos HEIC/HEIF (las del iPhone) al agregarlas a una página (Docs/Doc_Imagenes.md, "Fotos HEIC").
 //
 // Chrome no sabe decodificar HEIC: sin conversión, la foto se guarda y se sube pero no tiene miniatura y la
-// página no la muestra. Por eso la cola (`MediaQueue.add`) la pasa a JPEG en el dispositivo antes de guardarla:
+// página no la muestra. Por eso la cola la guarda tal cual, como cualquier archivo (`MediaQueue.add`: a salvo
+// en el dispositivo en el acto), y enseguida la pasa a JPEG, antes de registrarla (`MediaQueue.ensureConverted`):
 // lo que queda en la página, en el dispositivo y en el Drive es el JPEG. El archivo de la persona no se toca.
 //
 // Acá va lo que no necesita el decodificador: reconocer un HEIC (por el tipo o por la firma), el nombre del
@@ -9,12 +10,18 @@
 // carga aparte y solo cuando llega un HEIC (`heicConvert.ts`). Es el mismo trabajo que hace el comando que baja
 // un doc de Coda (`scripts/lib/codaHeic.mjs`), con `Uint8Array` en vez de `Buffer`.
 
-/** Los tipos que el navegador informa para un HEIC (cuando informa alguno). */
-const HEIC_TYPES = new Set(['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence']);
-/** Marcas de la caja `ftyp` de una imagen HEVC (HEIC). */
-const HEVC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs']);
-/** Marcas genéricas de HEIF: valen como HEIC salvo que el archivo diga que es AVIF (que Chrome sí muestra). */
-const HEIF_BRANDS = new Set(['mif1', 'msf1']);
+/**
+ * Los tipos que el navegador informa para una foto HEIC (cuando informa alguno). Las secuencias
+ * (`image/heic-sequence`, `image/heif-sequence`: varias imágenes, como un video corto) no se convierten: un
+ * JPEG de su primera imagen perdería el resto. Se guardan tal cual.
+ */
+const HEIC_TYPES = new Set(['image/heic', 'image/heif']);
+/** Marcas de la caja `ftyp` de una foto HEVC (HEIC). */
+const IMAGE_BRANDS = new Set(['heic', 'heix', 'heim', 'heis']);
+/** Marcas de una secuencia de imágenes HEVC, y la genérica de las secuencias HEIF: no se convierten. */
+const SEQUENCE_BRANDS = new Set(['hevc', 'hevx', 'hevm', 'hevs', 'msf1']);
+/** La marca genérica de una imagen HEIF: vale como HEIC salvo que el archivo diga que es AVIF (que Chrome sí muestra). */
+const HEIF_BRAND = 'mif1';
 const AVIF_BRANDS = new Set(['avif', 'avis']);
 /** Cuántos bytes del principio alcanzan para leer la caja `ftyp`. */
 export const HEIC_HEAD_BYTES = 64;
@@ -22,6 +29,8 @@ export const HEIC_HEAD_BYTES = 64;
 /** El tipo de JPEG y la calidad de la conversión (alta, sin que el archivo se dispare; igual que el comando). */
 export const JPEG_TYPE = 'image/jpeg';
 export const JPEG_QUALITY = 0.92;
+/** Lo más que se espera una conversión (una foto enorme en una computadora lenta). */
+export const HEIC_TIMEOUT_MS = 120_000;
 
 /** Lo que el navegador dice del tipo es de un HEIC. */
 export function isHeicType(type: string | undefined | null): boolean {
@@ -37,30 +46,37 @@ const readUint32 = (bytes: Uint8Array, at: number): number =>
 const readUint16 = (bytes: Uint8Array, at: number): number => (bytes[at] << 8) | bytes[at + 1];
 
 /**
- * Si esos bytes (el principio del archivo) son de un HEIC: una caja `ftyp` con marca principal de HEVC (`heic`,
- * `heix`, `hevc`, `heim`, `heis`…), o con la genérica de HEIF (`mif1`, `msf1`) y sin ser un AVIF.
+ * Qué dice la firma (el principio del archivo): `image`, una foto HEIC (caja `ftyp` con marca principal
+ * `heic`, `heix`, `heim` o `heis`, o la genérica `mif1` sin ser un AVIF); `sequence`, una secuencia de imágenes
+ * (`hevc`, `hevx`, `hevm`, `hevs`, `msf1`); `other`, otro formato de la misma familia (un AVIF, un video MP4 o
+ * MOV); `null`, no tiene caja `ftyp`.
  */
-export function isHeicSignature(head: Uint8Array): boolean {
-  if (head.length < 12 || ascii(head, 4) !== 'ftyp') return false;
+export function heicSignature(head: Uint8Array): 'image' | 'sequence' | 'other' | null {
+  if (head.length < 12 || ascii(head, 4) !== 'ftyp') return null;
   const major = ascii(head, 8);
-  if (HEVC_BRANDS.has(major)) return true;
-  if (!HEIF_BRANDS.has(major)) return false;
+  if (IMAGE_BRANDS.has(major)) return 'image';
+  if (SEQUENCE_BRANDS.has(major)) return 'sequence';
+  if (major !== HEIF_BRAND) return 'other';
   // Las marcas compatibles van de a cuatro bytes después de la versión, hasta el final de la caja.
   const end = Math.min(readUint32(head, 0), head.length);
-  const brands: string[] = [];
-  for (let at = 16; at + 4 <= end; at += 4) brands.push(ascii(head, at));
-  if (brands.some((b) => HEVC_BRANDS.has(b))) return true;
-  return !brands.some((b) => AVIF_BRANDS.has(b));
+  for (let at = 16; at + 4 <= end; at += 4) if (AVIF_BRANDS.has(ascii(head, at))) return 'other';
+  return 'image';
+}
+
+/** Si esos bytes son de una foto HEIC que se convierte (no una secuencia, no un AVIF). */
+export function isHeicSignature(head: Uint8Array): boolean {
+  return heicSignature(head) === 'image';
 }
 
 /**
- * Si el archivo es un HEIC: por la firma (muchas veces el navegador no informa el tipo, o dice
- * `application/octet-stream`) o, si no se puede leer, por el tipo. Lee solo los primeros bytes; nunca falla.
+ * Si el archivo es una foto HEIC para convertir: por la firma (muchas veces el navegador no informa el tipo, o
+ * dice `application/octet-stream`); si no tiene firma o no se puede leer, por el tipo. Una secuencia no. Lee
+ * solo los primeros bytes; nunca falla.
  */
 export async function isHeicFile(file: Blob): Promise<boolean> {
   try {
-    const head = new Uint8Array(await file.slice(0, HEIC_HEAD_BYTES).arrayBuffer());
-    if (isHeicSignature(head)) return true;
+    const kind = heicSignature(new Uint8Array(await file.slice(0, HEIC_HEAD_BYTES).arrayBuffer()));
+    if (kind) return kind === 'image';
   } catch {
     // Sin poder leerlo, decide el tipo.
   }

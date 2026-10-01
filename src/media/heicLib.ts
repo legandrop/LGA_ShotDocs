@@ -9,6 +9,9 @@ import type { Libheif } from './heicDecode';
 
 let loading: Promise<Libheif> | null = null;
 
+/** Lo más que se espera la bajada del `.wasm`: pasado esto cuenta como que no está (se prueba más tarde). */
+export const WASM_FETCH_TIMEOUT_MS = 45_000;
+
 /**
  * La librería lista (una sola vez). El `.wasm` se baja con `fetch` (pasa por el service worker, que lo guarda
  * después de la primera vez) y se le da ya bajado: así la librería lo compila en el acto, en el Worker o en la
@@ -16,9 +19,18 @@ let loading: Promise<Libheif> | null = null;
  */
 export function loadLibheif(): Promise<Libheif> {
   loading ??= (async () => {
-    const response = await fetch(wasmUrl, { credentials: 'same-origin' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const wasmBinary = new Uint8Array(await response.arrayBuffer());
+    // Una bajada que se cuelga (una red que no contesta) se corta: es "el decodificador no está", no una foto
+    // que no se pudo convertir.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), WASM_FETCH_TIMEOUT_MS);
+    let wasmBinary: Uint8Array;
+    try {
+      const response = await fetch(wasmUrl, { credentials: 'same-origin', signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      wasmBinary = new Uint8Array(await response.arrayBuffer());
+    } finally {
+      clearTimeout(timer);
+    }
     const lib = (await createLibheif({ wasmBinary })) as unknown as Libheif;
     if (!lib || typeof lib.HeifDecoder !== 'function') throw new Error('libheif without HeifDecoder');
     return lib;
