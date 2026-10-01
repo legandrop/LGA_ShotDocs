@@ -142,6 +142,11 @@ export interface KnownFile {
   deleted?: boolean;
   /** El portero confirmó que está en la papelera de Drive (`drive_trashed_at`). */
   inDriveTrash?: boolean;
+  /**
+   * Está en la papelera de la app (`trashed_at`). Sin el campo (guardado antes de v0.083), no se sabe: sin red, su
+   * copia bajada no se libera (Doc_Copias_Locales.md, sección 5.2).
+   */
+  inAppTrash?: boolean;
   /** El proyecto del archivo (`project_id`), para no registrarlo como uso de una página de otro proyecto. */
   projectId?: string | null;
   fetchedAt: number;

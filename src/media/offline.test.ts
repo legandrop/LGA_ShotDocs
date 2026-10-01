@@ -603,12 +603,117 @@ describe('después de la auditoría de la implementación', { timeout: 60_000 },
     await b.offline.makeRoom(10 * 1024 * MB);
     expect(await readCopy(b.mediaDb, photo2)).not.toBeNull();
     expect(await readCopy(b.mediaDb, video)).not.toBeNull();
+    expect(await readCopy(b.mediaDb, pdf)).not.toBeNull();
     expect(await b.mediaDb.get('blobs', unsent)).toBeInstanceOf(Blob);
     server.online = true;
 
     // En el dispositivo que los agregó (ya subidos): los originales propios nunca se liberan para hacer lugar.
     await a.offline.makeRoom(10 * 1024 * MB);
     for (const id of [photo, video, pdf, photo2]) expect(await a.mediaDb.get('blobs', id)).toBeInstanceOf(Blob);
+  });
+
+  it('AUD1 sin red: una copia de algo en la papelera de la app no se libera para hacer lugar', async () => {
+    const { server, b, page, pdf } = await setup();
+    const mark = await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, originals: true, videos: true });
+    await b.offline.unmark(mark, false);
+    expect(await readCopy(b.mediaDb, pdf)).not.toBeNull();
+    // Otro dispositivo lo manda a la papelera de la app; este se entera (como al mirar la base) y queda sin red.
+    server.mediaFiles.get(pdf)!.trashed_at = new Date().toISOString();
+    await b.media.learn([server.mediaFiles.get(pdf)!]);
+    server.online = false;
+    await b.offline.makeRoom(10 * 1024 * MB);
+    server.online = true;
+    expect(await readCopy(b.mediaDb, pdf)).not.toBeNull();
+  });
+
+  it('AUD2 una nítida de marca (sin copia entera) se libera solo si el original sigue en Drive', async () => {
+    const { server, b, page, photo, photo2 } = await setup();
+    const mark = await markAndWait(b, 'page', page);
+    await b.offline.unmark(mark, false);
+    for (const id of [photo, photo2]) {
+      const entry = await getCopy(b.mediaDb, id);
+      expect(entry?.view).toBeTruthy();
+      expect(entry?.orig).toBeFalsy();
+    }
+    // El original de una ya no está en Drive (purgado): su 2048 puede ser lo mejor que queda de la foto.
+    server.mediaFiles.get(photo)!.purged_at = new Date().toISOString();
+    await b.offline.makeRoom(10 * 1024 * MB);
+    expect((await getCopy(b.mediaDb, photo))?.view).toBeTruthy();
+    expect(await b.mediaDb.get('thumbs', offviewKey(photo))).toBeInstanceOf(Blob);
+    // La otra sigue en Drive: se rehace sola, se libera.
+    expect((await getCopy(b.mediaDb, photo2))?.view ?? null).toBeNull();
+  });
+
+  it('AUD3 mientras una carpeta sube, no se baja nada; al terminar, si', async () => {
+    const { b, page, photo } = await setup();
+    let busy = true;
+    (b.offline as unknown as { deps: { uploadsBusy: () => boolean } }).deps.uploadsBusy = () => busy;
+    await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, originals: true });
+    expect(await readCopy(b.mediaDb, photo)).toBeNull();
+    busy = false;
+    const [m] = await listMarks(b.mediaDb);
+    await b.offline.update(m.id);
+    await b.offline.idle();
+    expect(await readCopy(b.mediaDb, photo)).not.toBeNull();
+  });
+
+  it('una carpeta que empieza a subir a mitad de una marca corta la bajada; al terminar, sigue', async () => {
+    const { b, page, photo, video, pdf } = await setup();
+    let busy = false;
+    let fetched = 0;
+    const deps = (b.offline as unknown as { deps: { uploadsBusy: () => boolean; fetch: (u: string, i?: RequestInit) => Promise<Response> } }).deps;
+    deps.uploadsBusy = () => busy;
+    const real = deps.fetch;
+    deps.fetch = async (url, init) => {
+      // La primera bajada termina y en ese momento empieza a subir una carpeta.
+      if (url.includes('/m/') && ++fetched === 1) busy = true;
+      return real(url, init);
+    };
+    await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, originals: true, videos: true });
+    const got = async () => (await Promise.all([photo, video, pdf].map((id) => readCopy(b.mediaDb, id)))).filter(Boolean).length;
+    expect(await got()).toBeLessThan(3);
+    expect((await listMarks(b.mediaDb))[0].state).not.toBe('ready');
+    busy = false;
+    const [m] = await listMarks(b.mediaDb);
+    await b.offline.update(m.id);
+    await b.offline.idle();
+    expect(await got()).toBe(3);
+  });
+
+  it('el tope del iPhone: lo bajado mientras se cuenta no se pierde de vista', async () => {
+    const { b } = await setup();
+    const manager = b.offline as unknown as { written: number; usage: () => Promise<unknown> };
+    manager.written = 5 * MB;
+    const real = manager.usage.bind(b.offline);
+    vi.spyOn(manager, 'usage').mockImplementation(async () => {
+      const usage = await real();
+      // Un archivo terminó de bajarse mientras se contaba (no está en `usage`).
+      manager.written += 2 * MB;
+      return usage;
+    });
+    await b.offline.refresh();
+    expect(manager.written).toBe(2 * MB);
+  });
+
+  it('AUD4 Drive lo tiene en su papelera (la base no se entero): no se libera para hacer lugar', async () => {
+    const { server, b, page, video } = await setup();
+    const mark = await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, videos: true });
+    await b.offline.unmark(mark, false);
+    server.portero.driveTrash.add(server.mediaFiles.get(video)!.drive_id!);
+    await b.offline.makeRoom(10 * 1024 * MB);
+    expect(await readCopy(b.mediaDb, video)).not.toBeNull();
+  });
+
+  it('AUD5 sin red: lo que la base dijo que esta en la papelera de Drive no se libera', async () => {
+    const { server, b, page, pdf } = await setup();
+    const mark = await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, originals: true });
+    await b.offline.unmark(mark, false);
+    server.mediaFiles.get(pdf)!.drive_trashed_at = new Date().toISOString();
+    await b.media.learn([server.mediaFiles.get(pdf)!]);
+    server.online = false;
+    await b.offline.makeRoom(10 * 1024 * MB);
+    server.online = true;
+    expect(await readCopy(b.mediaDb, pdf)).not.toBeNull();
   });
 
   it('una carpeta de Drive (P.9) en la página no se baja ni pesa: la marca llega a "listo"', async () => {
@@ -637,6 +742,8 @@ describe('después de la auditoría de la implementación', { timeout: 60_000 },
     const item = collectCarrete([{ id: 'x', type: 'image', props: { url: MEDIA_SCHEME + photo, name: '' } }])[0];
     const preview = await createCarreteLoader({ media: b.media, files: b.files }).preview(item);
     expect(preview.preview).toBe(b.media.viewUrl(photo));
+    // El aviso sin red dice "versión grande", no "miniatura".
+    expect(preview.large).toBe(true);
     expect(b.media.viewOf(photo)?.side).toBe(2048);
   });
 

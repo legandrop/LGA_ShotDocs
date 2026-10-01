@@ -932,7 +932,10 @@ aviso, *Not now* y *Free up*.
   no pasa `IOS_OFFLINE_TOTAL_MAX` (5 GB, en `src/media/offline.ts`), y la ventana mira ese mismo total.
 - **Una foto nueva que no entra no se pierde** (auditoría de la implementación): antes de rechazarla, la cola libera
   sin preguntar lo que se rehace o ya está en Drive (las nítidas de la página y las copias bajadas que ninguna marca
-  pide; nunca lo marcado, lo `gone`, lo abierto ni un original propio) y vuelve a probar. Es la única excepción a
+  pide; nunca lo marcado, lo `gone`, lo abierto ni un original propio) y vuelve a probar una vez. Una copia entera,
+  solo si la base dice que sigue en Drive fuera de las dos papeleras (sin red, lo último anotado: sin el dato de la
+  papelera de la app, no se libera) y, si el portero tiene `/verify`, Drive lo confirma; una nítida sola, solo si el
+  original sigue en Drive (si no, puede ser lo mejor que queda de la foto). Es la única excepción a
   "nada se libera sin el sí": una foto de "Tomar foto" del iPhone no queda en la fototeca. Si igual no entra, un aviso
   ofrece guardarla (*Save…*: la hoja de compartir, con "Guardar imagen" en el iPhone, o una descarga); queda en
   memoria hasta guardarla o descartarla.
@@ -945,7 +948,6 @@ aviso, *Not now* y *Free up*.
   las páginas incompletas protege).
 - Una página abierta no se vuelve nítida en el acto cuando termina la marca: lo hace al cambiar de ancho, al volver la
   red o al minuto (lo que ya hacía la página).
-- Al liberar para un archivo nuevo que no entró, no se vuelve a probar solo: la persona lo agrega de nuevo.
 - *Show what* (en el aviso y en *Storage on this device*) muestra la lista de lo que se liberaría primero: nombre,
   peso y "abierto hace…", con las nítidas de la página en una línea.
 - Sin Web Locks (Safari anterior a 15.4) *Available offline* y *Storage on this device* no aparecen.
@@ -954,8 +956,9 @@ aviso, *Not now* y *Free up*.
 - El carrete sin red muestra la de 2048 guardada aunque la página no la haya procesado.
 - "Offline · N" en el teléfono sale según la conexión, también con algo rechazado.
 - Las tarjetas de carpeta de P.9 (una fila `inode/directory`) no se bajan ni pesan en ninguna fila: lo de adentro
-  llega con la casilla *Drive folders* (entrega 3). Mientras una carpeta se sube, las bajadas esperan, como con la cola
-  de fotos y videos.
+  llega con la casilla *Drive folders* (entrega 3). Mientras una carpeta se sube, las bajadas esperan y la parte en
+  vuelo se corta, como con la cola de fotos y videos.
+- Sin red, el carrete dice si lo que muestra es la versión grande guardada en el dispositivo o la miniatura.
 
 **La medición del iPhone (sección 9.1), para Lega:** en *Storage on this device*, abajo, *Measure storage on this
 device…* abre la página de prueba (también en `/storage-test`). La página no deja llenar si algún workspace de este

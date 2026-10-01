@@ -23,6 +23,8 @@ export interface Preview {
   name: string;
   /** Lo primero que se ve: la miniatura, un ícono o, si ya está a mano, la foto entera. */
   preview: string | null;
+  /** La vista previa es una versión grande guardada en el dispositivo (la nítida), no la miniatura. */
+  large?: boolean;
 }
 
 export interface Full {
@@ -238,8 +240,9 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
       // Sin el original en el dispositivo, la de 2048 guardada (la de "Available offline" o una ya hecha), sin bajar
       // nada: así sin red el carrete muestra en grande también las fotos que la página no llegó a procesar.
       const saved = source.kind === 'image' && !source.original ? ((await media.view?.(id).catch(() => null))?.url ?? null) : null;
-      const preview = media.viewUrl?.(id) ?? saved ?? thumb ?? (await media.resolve(item.url).catch(() => null));
-      return { kind: source.kind, name: source.name || fallbackName(item), preview };
+      const sharp = media.viewUrl?.(id) ?? saved;
+      const preview = sharp ?? thumb ?? (await media.resolve(item.url).catch(() => null));
+      return { kind: source.kind, name: source.name || fallbackName(item), preview, large: !!sharp };
     }
     if (item.source === 'file') {
       // La imagen entera, guardada en el dispositivo o bajada de Supabase.

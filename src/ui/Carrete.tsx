@@ -59,9 +59,11 @@ interface View {
   natural: Size | null;
   /** La foto grande ya se dibujó: la miniatura queda tapada. */
   fullShown: boolean;
+  /** La vista previa es la versión grande guardada en el dispositivo (para el aviso sin red). */
+  large: boolean;
 }
 
-const EMPTY_VIEW: View = { kind: null, name: '', preview: null, full: null, state: 'idle', error: null, natural: null, fullShown: false };
+const EMPTY_VIEW: View = { kind: null, name: '', preview: null, full: null, state: 'idle', error: null, natural: null, fullShown: false, large: false };
 
 /** Formatos de foto que muchos navegadores no abren. */
 const RARE_PHOTO = /\.(heic|heif|dng|tiff?|raw|cr2|cr3|nef|arw)$/i;
@@ -277,7 +279,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
       const it = items[i];
       const known = viewsRef.current[it.url];
       if (known?.preview && known.kind) continue;
-      void loader.preview(it).then((p) => patch(it.url, { kind: p.kind, name: p.name, preview: p.preview }));
+      void loader.preview(it).then((p) => patch(it.url, { kind: p.kind, name: p.name, preview: p.preview, large: !!p.large }));
     }
   }, [index, count, items, loader, patch, online]);
 
@@ -721,7 +723,7 @@ function settled(v: View): View {
 
 /** El aviso bajo la foto o el video, si hace falta uno. */
 export function noticeFor(
-  view: Pick<View, 'kind' | 'state' | 'preview' | 'error'>,
+  view: Pick<View, 'kind' | 'state' | 'preview' | 'error'> & { large?: boolean },
   name: string,
   tr: Translate = current,
 ): string | null {
@@ -729,7 +731,9 @@ export function noticeFor(
   switch (view.state) {
     case 'offline':
       if (!view.kind && !view.preview) return tr('carrete.offlineMissing');
-      return video ? tr('carrete.offlineVideo') : tr('carrete.offlinePhoto');
+      if (video) return tr('carrete.offlineVideo');
+      // Sin red se ve lo que hay en el dispositivo: la versión grande (la nítida guardada) o la miniatura.
+      return tr(view.large ? 'carrete.offlinePhotoLarge' : 'carrete.offlinePhoto');
     case 'unplayable':
       return video ? tr('carrete.unplayableVideo') : tr('carrete.unplayablePhoto');
     case 'unsupported':

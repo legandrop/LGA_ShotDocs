@@ -2043,6 +2043,8 @@ export class MediaQueue {
       driveId: row.drive_id,
       deleted: isDeletedRow(row),
       inDriveTrash: !!row.drive_trashed_at,
+      // La papelera de la app (`trashed_at`): sin el dato en la fila, no se sabe.
+      ...(row.trashed_at === undefined ? {} : { inAppTrash: !!row.trashed_at }),
       projectId: row.project_id ?? null,
       fetchedAt: this.now(),
     };

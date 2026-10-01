@@ -147,8 +147,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   en Chrome y Edge, el botón "Carpeta…" del menú `/` y *Bajar todo* (entrega 2). Detalle en `Doc_Carpetas.md`,
   "Cómo quedó".
 - **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
-  automático de 2 GB por dispositivo (se liberan las copias ya confirmadas en el Drive que hace más que no se
-  abren; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
+  elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
+  confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
   pesos), y "Espacio en este dispositivo" en el menú de la cuenta. **Diseño en `Doc_Copias_Locales.md`**
   (rehecho con D-25; auditado y aprobado). **Entregas 0 y 1 implementadas** (v0.083, rama `lega/espacio-offline`);
   falta la entrega 2 (liberar los originales agregados en el dispositivo, con su auditoría) y la medición del iPhone

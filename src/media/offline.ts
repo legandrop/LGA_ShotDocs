@@ -290,6 +290,11 @@ export class OfflineManager {
     this.maintainSoon(2000);
   }
 
+  /** Otra cola empezó a subir (las carpetas): se corta la parte en vuelo y se sigue cuando termine. */
+  yieldToUploads(): void {
+    this.controller?.abort();
+  }
+
   stop(): void {
     this.stopped = true;
     this.controller?.abort();
@@ -438,6 +443,9 @@ export class OfflineManager {
   async refresh(): Promise<void> {
     const db = this.deps.db;
     if (!db) return;
+    // Lo bajado mientras se cuenta puede no estar en `usage`: se descuenta solo lo de antes (si se equivoca, cuenta de
+    // más, nunca de menos, para el tope del iPhone).
+    const writtenBefore = this.written;
     const [usage, limit, marks] = await Promise.all([this.usage(), this.limit(), listMarks(db)]);
     let prompt: SpacePrompt | null = null;
     const snoozed = ((await db.get('meta', SNOOZE_KEY)) as number | undefined) ?? 0;
@@ -451,8 +459,8 @@ export class OfflineManager {
       prompt = { reason: 'mark', kept: usage.kept, limit, free: usage.freeable, count: 0, needed: 0, first };
     }
     if (prompt && first) await db.put('meta', this.now(), 'space:prompted');
-    // Lo bajado en esta vuelta ya está en `usage.offline`.
-    this.written = 0;
+    // Lo bajado antes de contar ya está en `usage.offline`.
+    this.written = Math.max(0, this.written - writtenBefore);
     this.saveDeviceTotal(usage.offline);
     this.set({ usage, limit, prompt, marks: marks.map((m) => this.view(m, usage)) });
   }
@@ -555,13 +563,16 @@ export class OfflineManager {
       for (const entry of copies) {
         if (goal <= 0) break;
         if (entry.orig && (!inDrive.has(entry.id) || (drive && !drive.has(entry.id)))) {
-          // Sin la copia entera, igual se puede liberar su nítida (se rehace del original de Drive).
+          // La copia entera se queda; su nítida sí se puede liberar (se rehace de esa copia).
           if (!entry.view) continue;
           const bytes = await dropCopy(db, entry.id, { rev, what: 'view' });
           freed += bytes;
           goal -= bytes;
           continue;
         }
+        // Una nítida sola se rehace del original: solo si sigue en Drive (o está el original propio). Si no, esa
+        // 2048 puede ser lo mejor que queda de la foto.
+        if (!entry.orig && !inDrive.has(entry.id) && !(await db.getKey('blobs', entry.id))) continue;
         const bytes = await dropCopy(db, entry.id, { rev });
         freed += bytes;
         goal -= bytes;
@@ -581,7 +592,8 @@ export class OfflineManager {
     } catch {
       for (const id of ids) {
         const known = await this.deps.db!.get('known', id);
-        if (known?.driveId && !known.deleted) out.add(id);
+        // Sin red, solo lo anotado como fuera de las dos papeleras (sin el dato de la de la app, no se sabe).
+        if (known?.driveId && !known.deleted && known.inAppTrash === false) out.add(id);
       }
     }
     return out;
@@ -1097,6 +1109,8 @@ export class OfflineManager {
       for (const item of items) {
         if (this.stopped || controller.signal.aborted) throw new StoppedError();
         if (!this.deps.online()) throw new StoppedError();
+        // Empezó a subir otra cola (una carpeta, P.9): se sigue después, desde lo guardado.
+        if (this.deps.uploadsBusy?.()) throw new StoppedError();
         await this.ensureRoom(item.bytes);
         try {
           await this.fetchItem(item, controller.signal);

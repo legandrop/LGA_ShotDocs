@@ -374,6 +374,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       let foldersBusy = folders.busy();
       const unwatchFolders = folders.subscribe(() => {
         const busy = folders.busy();
+        // Empezó a subir una carpeta: la bajada en curso le deja la red. Terminó: las bajadas siguen.
+        if (!foldersBusy && busy) offlineManager.yieldToUploads();
         if (foldersBusy && !busy) offlineManager.maintainSoon();
         foldersBusy = busy;
       });
