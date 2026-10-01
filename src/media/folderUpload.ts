@@ -45,6 +45,8 @@ export interface FolderItem {
   tries: number;
   /** El último error, a la vista; con `FOLDER_TRIES` intentos queda detenido hasta "Retry". */
   error: string | null;
+  /** Su carpeta no se pudo crear en Drive (el portero no aceptó la ruta): no se sube, ni con "Retry". */
+  skipped?: boolean;
 }
 
 /** Una carpeta que se sube desde este dispositivo. */
@@ -61,6 +63,8 @@ export interface FolderJob {
   paused: boolean;
   /** Cuántos se saltearon al leerla (ocultos, del sistema, ilegibles). */
   skipped: number;
+  /** Subcarpetas que el portero no aceptó (con todo lo de adentro): no se piden más. */
+  badDirs?: string[];
 }
 
 interface FoldersSchema extends DBSchema {
@@ -100,6 +104,8 @@ export interface FolderProgress {
   errors: { path: string; error: string }[];
   /** Archivos que faltan subir y no están en el dispositivo (se cerró la pestaña): hay que volver a soltarla. */
   missing: number;
+  /** Archivos que no se suben porque su carpeta no se pudo crear en Drive. */
+  invalid: number;
   skipped: number;
   /** Lo que frena a toda la carpeta (sin red, el portero no deja), o `null`. */
   problem: string | null;
@@ -180,6 +186,11 @@ export class FolderUploads {
     return this.running.has(id);
   }
 
+  /** La carpeta que se sube tiene algún archivo con una de esas rutas (para reconocer la misma carpeta soltada otra vez). */
+  hasAnyPath(id: string, paths: ReadonlySet<string>): boolean {
+    return !!this.running.get(id)?.items.some((i) => paths.has(i.path));
+  }
+
   /**
    * Empieza a subir una carpeta ya registrada (`MediaQueue.addFolder`): anota la lista de trabajo y sigue sola.
    */
@@ -224,7 +235,7 @@ export class FolderUploads {
     const byPath = new Map<string, FolderFile>(source.files.map((f) => [f.path, f]));
     let found = 0;
     for (const item of r.items) {
-      if (item.done) continue;
+      if (item.done || item.skipped) continue;
       const f = byPath.get(item.path);
       if (f && f.file.size === item.size) {
         r.files.set(item.path, f.file);
@@ -264,7 +275,7 @@ export class FolderUploads {
     const r = this.running.get(id);
     if (!r) return;
     for (const item of r.items) {
-      if (!item.done && item.tries >= FOLDER_TRIES) {
+      if (!item.done && !item.skipped && item.tries >= FOLDER_TRIES) {
         item.tries = 0;
         item.error = null;
         void this.saveItem(item);
@@ -334,7 +345,12 @@ export class FolderUploads {
     let bytes = 0;
     let missing = 0;
     const errors: { path: string; error: string }[] = [];
+    let invalid = 0;
     for (const item of r.items) {
+      if (item.skipped) {
+        invalid++;
+        continue;
+      }
       bytes += item.size;
       if (item.done) {
         doneFiles++;
@@ -345,14 +361,14 @@ export class FolderUploads {
       if (item.tries >= FOLDER_TRIES) errors.push({ path: item.path, error: item.error ?? t('queue.unknownError') });
       else if (!r.files.has(item.path)) missing++;
     }
-    const finished = doneFiles === r.items.length;
+    const finished = doneFiles === r.items.length - invalid;
     let state: FolderProgress['state'];
     if (finished && r.loop === null) state = 'done';
     else if (r.job.paused) state = 'paused';
     else if (r.loop === null && missing > 0) state = 'missing';
     else if (r.loop === null && (errors.length > 0 || r.problem)) state = 'failed';
     else if (r.waitingUntil > this.now()) state = 'waiting';
-    else if (Object.keys(r.job.dirIds).length === 0 || r.job.dirs.some((d) => !(d in r.job.dirIds))) state = 'preparing';
+    else if (Object.keys(r.job.dirIds).length === 0 || pendingDirs(r.job).length > 0) state = 'preparing';
     else state = 'uploading';
     let eta: number | null = null;
     const seconds = r.startedAt ? (this.now() - r.startedAt) / 1000 : 0;
@@ -363,13 +379,14 @@ export class FolderUploads {
       pageId: r.job.pageId,
       name: r.job.name,
       state,
-      files: r.items.length,
+      files: r.items.length - invalid,
       doneFiles,
       bytes,
       doneBytes,
       eta,
       errors,
       missing,
+      invalid,
       skipped: r.job.skipped,
       problem: r.problem,
     };
@@ -422,8 +439,8 @@ export class FolderUploads {
   }
 
   private async finishIfDone(r: Running): Promise<void> {
-    if (r.items.length > 0 && !r.items.every((i) => i.done)) return;
-    if (!r.job.dirs.every((d) => d in r.job.dirIds)) return;
+    if (r.items.length > 0 && !r.items.every((i) => i.done || i.skipped)) return;
+    if (pendingDirs(r.job).length > 0) return;
     // Terminada: la lista de trabajo ya no hace falta. La ventana la muestra como lista hasta que se cierre.
     await this.drop(r.job.id);
   }
@@ -443,8 +460,8 @@ export class FolderUploads {
     if (!portero) throw new PorteroError(stored('queue.needsDrive'), 0);
     let waits = 0;
     // 1. La carpeta y sus subcarpetas, en orden.
-    while (!r.job.paused && !this.stopped && (!('' in r.job.dirIds) || r.job.dirs.some((d) => !(d in r.job.dirIds)))) {
-      const batch = r.job.dirs.filter((d) => !(d in r.job.dirIds)).slice(0, FOLDER_BATCH);
+    while (!r.job.paused && !this.stopped && (!('' in r.job.dirIds) || pendingDirs(r.job).length > 0)) {
+      const batch = pendingDirs(r.job).slice(0, FOLDER_BATCH);
       const parents: Record<string, string> = {};
       for (const d of batch) {
         const up = parentOf(d);
@@ -460,6 +477,12 @@ export class FolderUploads {
         await this.saveJob(r.job);
         this.emit();
       } catch (err) {
+        // El portero no aceptó una ruta de la tanda: se prueban de a una y la que no pasa se saltea con lo de adentro
+        // (una subcarpeta rara no frena a la carpeta entera; "Retry" no la vuelve a pedir).
+        if (err instanceof PorteroError && err.status === 400 && batch.length > 0) {
+          await this.isolateBadDirs(r, portero, batch);
+          continue;
+        }
         if (!(await this.waitIfPassing(r, err, ++waits))) throw err;
       }
     }
@@ -467,7 +490,7 @@ export class FolderUploads {
     const running = new Set<Promise<void>>();
     for (;;) {
       if (r.job.paused || this.stopped) break;
-      const ready = r.items.filter((i) => !i.done && i.tries < FOLDER_TRIES && r.files.has(i.path) && !r.active.has(i.path));
+      const ready = r.items.filter((i) => !i.done && !i.skipped && i.tries < FOLDER_TRIES && r.files.has(i.path) && !r.active.has(i.path));
       if (ready.length === 0 && running.size === 0) break;
       if (ready.length === 0 || r.active.size >= FOLDER_CONCURRENCY) {
         await Promise.race(running);
@@ -512,6 +535,30 @@ export class FolderUploads {
     r.problem = describe(err);
     await this.pauseFor(r, Math.min(5000 * 2 ** Math.min(waits - 1, 5), 120_000));
     return true;
+  }
+
+  /** De a una, las subcarpetas de una tanda que el portero rechazó: la que no pasa queda afuera con lo de adentro. */
+  private async isolateBadDirs(r: Running, portero: FolderPortero, batch: string[]): Promise<void> {
+    for (const d of batch) {
+      if (d in r.job.dirIds || isUnder(d, r.job.badDirs ?? [])) continue;
+      const up = parentOf(d);
+      try {
+        const res = await portero.folderPrepare(r.job.id, r.job.name, [d], up && r.job.dirIds[up] ? { [up]: r.job.dirIds[up]! } : {});
+        r.job.dirIds = { ...r.job.dirIds, '': res.root.id, ...res.dirs };
+      } catch (err) {
+        if (!(err instanceof PorteroError && err.status === 400)) throw err;
+        r.job.badDirs = [...(r.job.badDirs ?? []), d];
+        for (const item of r.items) {
+          if (!item.done && isUnder(item.path, [d])) {
+            item.skipped = true;
+            item.error = stored('folder.badPath');
+            void this.saveItem(item);
+          }
+        }
+      }
+    }
+    await this.saveJob(r.job);
+    this.emit();
   }
 
   private async openSessions(r: Running, portero: FolderPortero, batch: FolderItem[]): Promise<void> {
@@ -602,6 +649,17 @@ export class FolderUploads {
 
 function itemKey(job: string, path: string): string {
   return `${job}\u0000${path}`;
+}
+
+/** Las subcarpetas que faltan crear (sin las que el portero no aceptó ni lo que está adentro de ellas). */
+function pendingDirs(job: FolderJob): string[] {
+  const bad = job.badDirs ?? [];
+  return job.dirs.filter((d) => !(d in job.dirIds) && !isUnder(d, bad));
+}
+
+/** La ruta es una de esas carpetas o está adentro de alguna. */
+function isUnder(path: string, dirs: readonly string[]): boolean {
+  return dirs.some((d) => path === d || path.startsWith(`${d}/`));
 }
 
 export function parentOf(path: string): string {

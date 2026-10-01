@@ -4,7 +4,8 @@ import * as Y from 'yjs';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FOLDER_MIME, folderCardUrl } from './attachments';
-import { foldersFromList, readFolder, summarize, takeDrop, withHidden, type EntryLike, type FolderSource } from './folderRead';
+import { folderPathOk, foldersFromList, readFolder, summarize, takeDrop, withHidden, type EntryLike, type FolderSource } from './folderRead';
+import { validFolderPath } from '../../portero/src/core';
 import { FOLDER_BATCH, FOLDER_CONCURRENCY, FOLDER_TRIES, FolderUploads, openFoldersDb, type FolderPortero } from './folderUpload';
 import { Portero, PorteroError, UploadError, type FolderSessionItem } from './portero';
 import { MEDIA_SCHEME } from './queue';
@@ -81,6 +82,23 @@ describe('leer una carpeta', () => {
     expect(all.skipped.map((s) => s.path)).toEqual(['Notas/roto.mov']);
     const sum = summarize(source);
     expect(sum).toMatchObject({ files: 251, dirs: 3, bytes: 2600, byKind: { image: 250, pdf: 1 } });
+  });
+
+  it('una subcarpeta con barra invertida sube; una de más de 30 niveles se saltea con lo de adentro y el resto sube', async () => {
+    let deep: Tree = { 'hondo.txt': 1 };
+    for (let i = 0; i < 31; i++) deep = { [`n${i}`]: deep };
+    const source = await readFolder(entry('Raras', { 'a\\b': { 'x.txt': 1 }, 'normal.txt': 1, ...deep }));
+    expect(source.files.map((f) => f.path).sort()).toEqual(['a\\b/x.txt', 'normal.txt']);
+    expect(source.skipped.filter((k) => k.reason === 'invalid' && !k.dir).map((k) => k.path.split('/').pop())).toEqual(['hondo.txt']);
+    expect(source.dirs).toContain('a\\b');
+    expect(source.dirs.every((d) => d.split('/').length <= 30)).toBe(true);
+  });
+
+  it('la app y el portero aceptan las mismas rutas', () => {
+    const long = Array.from({ length: 30 }, () => 'x').join('/');
+    for (const path of ['Fotos', 'Fotos/Dia 2', 'a\\b', '..', 'a/./b', 'a//b', '', long, `${long}/y`, 'a\u0001b', 'z'.repeat(2001)]) {
+      expect(folderPathOk(path), path).toBe(validFolderPath(path));
+    }
   });
 
   it('al soltar, separa los archivos sueltos de las carpetas, en el acto', () => {
@@ -356,6 +374,52 @@ describe('la cola de las carpetas', () => {
     expect(p.state).toBe('failed');
     expect(p.problem).toBe('Only the person who added this folder can upload into it.');
     expect(notes.at(-1)).toBe('Stopped: 0 of 1 (open it to retry)');
+  });
+
+  it('una subcarpeta que el portero no acepta se saltea con lo de adentro; el resto sube y "Retry" no la repite', async () => {
+    const fake = fakeFolderPortero();
+    const base = fake.portero;
+    let rejected = 0;
+    const portero: FolderPortero = {
+      ...base,
+      folderPrepare: async (file, name, dirs = [], parents = {}) => {
+        if (dirs.includes('Mala')) {
+          rejected++;
+          throw new PorteroError('Send up to 30 folder paths at a time.', 400, false, 'bad_request');
+        }
+        return base.folderPrepare(file, name, dirs, parents);
+      },
+    };
+    const f = new FolderUploads(null, { portero: () => portero, wait: noWait });
+    await f.start('id-7', 'page', sourceOf('Ref', { 'Mala/x.bin': 1, 'Mala/sub/y.bin': 1, 'Buena/z.bin': 1, 'r.bin': 1 }));
+    await settle(f, 'id-7');
+    const p = f.progress('id-7')!;
+    expect(p.state).toBe('done');
+    expect(p.invalid).toBe(2);
+    expect(p.files).toBe(2);
+    expect([...fake.uploaded.keys()].some((k) => k.endsWith('/x.bin') || k.endsWith('/y.bin'))).toBe(false);
+    const before = rejected;
+    f.retry('id-7');
+    await settle(f, 'id-7');
+    expect(rejected).toBe(before);
+  });
+
+  it('dejar de subir olvida la carpeta en este dispositivo; la misma carpeta soltada otra vez se reconoce', async () => {
+    const fake = fakeFolderPortero();
+    const db = await openFoldersDb(`folders-${++dbCount}`);
+    const notes: (string | null)[] = [];
+    const f = new FolderUploads(db, { portero: () => fake.portero, wait: noWait, note: (_, text) => notes.push(text) });
+    fake.failAlways('b.bin');
+    await f.start('id-8', 'page', sourceOf('Ref', { 'a.bin': 1, 'b.bin': 1 }));
+    await settle(f, 'id-8');
+    expect(f.hasAnyPath('id-8', new Set(['b.bin']))).toBe(true);
+    expect(f.hasAnyPath('id-8', new Set(['otra.bin']))).toBe(false);
+    await f.forget('id-8');
+    expect(f.progress('id-8')).toBeNull();
+    expect(await db.getAll('jobs')).toEqual([]);
+    expect(await db.getAll('items')).toEqual([]);
+    expect(notes.at(-1)).toBeNull();
+    db.close();
   });
 
   it('pausar corta lo que sube y no pierde lo hecho; seguir continúa', async () => {

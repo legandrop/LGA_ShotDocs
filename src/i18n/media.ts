@@ -135,8 +135,12 @@ export const media = {
   'folder.cardUploading': { en: "Uploading {done} of {total}", es: "Subiendo {done} de {total}" },
   'folder.cardPaused': { en: "Paused: {done} of {total}", es: "En pausa: {done} de {total}" },
   'folder.cardMissing': {
-    en: { one: "{count} file left: drop the folder here again", other: "{count} files left: drop the folder here again" },
-    es: { one: "Falta {count} archivo: soltá la carpeta acá de nuevo", other: "Faltan {count} archivos: soltá la carpeta acá de nuevo" },
+    en: { one: "{count} left: drop the folder again", other: "{count} left: drop the folder again" },
+    es: { one: "Falta {count}: soltá la carpeta otra vez", other: "Faltan {count}: soltá la carpeta otra vez" },
+  },
+  'folder.badPath': {
+    en: "Its folder cannot be created in Google Drive (too deep, or a name that does not work there).",
+    es: "Su carpeta no se puede crear en Google Drive (demasiado honda, o un nombre que no va ahí).",
   },
   'folder.cardErrors': {
     en: { one: "{count} file could not be uploaded", other: "{count} files could not be uploaded" },

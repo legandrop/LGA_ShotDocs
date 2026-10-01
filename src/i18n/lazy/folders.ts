@@ -21,10 +21,44 @@ export const folders = {
     en: { one: "{count} folder", other: "{count} folders" },
     es: { one: "{count} carpeta", other: "{count} carpetas" },
   },
-  'folders.kinds': {
-    en: "{images} photos · {videos} videos · {pdfs} PDF · {other} other",
-    es: "{images} fotos · {videos} videos · {pdfs} PDF · {other} otros",
+  'folders.kindImages': {
+    en: { one: "{count} photo", other: "{count} photos" },
+    es: { one: "{count} foto", other: "{count} fotos" },
   },
+  'folders.kindVideos': {
+    en: { one: "{count} video", other: "{count} videos" },
+    es: { one: "{count} video", other: "{count} videos" },
+  },
+  'folders.kindPdfs': {
+    en: { one: "{count} PDF", other: "{count} PDFs" },
+    es: { one: "{count} PDF", other: "{count} PDF" },
+  },
+  'folders.kindOther': {
+    en: { one: "{count} other file", other: "{count} other files" },
+    es: { one: "{count} archivo más", other: "{count} archivos más" },
+  },
+  'folders.invalid': {
+    en: {
+      one: "{count} file is skipped: its folder is too deep (more than 30 levels) or its name does not work in Google Drive.",
+      other: "{count} files are skipped: their folders are too deep (more than 30 levels) or their names do not work in Google Drive.",
+    },
+    es: {
+      one: "Se saltea {count} archivo: su carpeta está demasiado honda (más de 30 niveles) o su nombre no va en Google Drive.",
+      other: "Se saltean {count} archivos: sus carpetas están demasiado hondas (más de 30 niveles) o sus nombres no van en Google Drive.",
+    },
+  },
+  'folders.again': {
+    en: "Part of this folder is already uploading on this page: it can continue with what is missing.",
+    es: "Una parte de esta carpeta ya se está subiendo en esta página: puede seguir con lo que falta.",
+  },
+  'folders.continue': { en: "Continue the upload", es: "Seguir la subida" },
+  'folders.uploadNew': { en: "Upload as a new folder", es: "Subir como carpeta nueva" },
+  'folders.stop': { en: "Stop uploading", es: "Dejar de subir" },
+  'folders.stopAsk': {
+    en: "Stop uploading this folder? What is already in Google Drive stays there; the rest is not uploaded.",
+    es: "¿Dejar de subir esta carpeta? Lo que ya está en Google Drive queda ahí; lo demás no se sube.",
+  },
+  'folders.stopYes': { en: "Stop", es: "Dejar de subir" },
   'folders.showTree': { en: "Show what is inside", es: "Ver lo que tiene adentro" },
   'folders.treeMore': {
     en: { one: "…and {count} more", other: "…and {count} more" },
@@ -124,7 +158,7 @@ export const folders = {
     es: "Sin conexión: lo que tiene la carpeta está en Google Drive.",
   },
   'folders.shortcut': { en: "Shortcut (not opened from the app)", es: "Acceso directo (no se abre desde la app)" },
-  'folders.googleDoc': { en: "Google document (open it in Drive)", es: "Documento de Google (se abre en Drive)" },
+  'folders.googleDoc': { en: "Google document (not downloadable here)", es: "Documento de Google (no se baja desde acá)" },
   'folders.download': { en: "Download", es: "Bajar" },
   'folders.uploadHere': { en: "Upload in progress", es: "Subida en curso" },
   'folders.showUpload': { en: "Show the upload", es: "Ver la subida" },

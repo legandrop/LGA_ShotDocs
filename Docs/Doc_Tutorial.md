@@ -417,7 +417,9 @@ traducción). `when`: solo con portero; subir, solo quien puede editar la págin
   soltar, drive. Sin atajos.
 - **While it uploads** (*Mientras sube*). "The card says how it is going; click it to see the upload: *Pause*,
   *Resume*, *Retry* for the files that failed. If you close the tab, drop the same folder on its card again (or
-  *Choose the folder…*): only what is missing goes up." Palabras: pausar, retomar, faltan, error.
+  *Choose the folder…*): only what is missing goes up. Dropping the same folder elsewhere in the page offers to
+  continue it. *Stop uploading* forgets it on this device (what reached Drive stays)." Palabras: pausar, retomar,
+  faltan, error, dejar de subir.
 - **Open a folder** (*Abrir una carpeta*). "Click the card twice (once on the phone or without edit access), or
   press Space with it selected, or *Open* in its bar. You see what is in the Drive folder right now: subfolders
   first, then files with their thumbnail. A photo or a video opens in the viewer; a PDF opens in a new tab; the

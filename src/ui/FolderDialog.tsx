@@ -16,11 +16,15 @@ const TREE_MAX = 300;
 /** Antes de subir: las carpetas soltadas y la casilla de los ocultos. */
 export function FolderAskDialog({
   sources,
+  resumes = [],
   onConfirm,
   onCancel,
 }: {
   sources: FolderSource[];
-  onConfirm: (sources: FolderSource[]) => void;
+  /** Por carpeta, la subida a medias de esta página que parece la misma (O4), o `null`. */
+  resumes?: (string | null)[];
+  /** `resume`: seguir con las que ya se estaban subiendo; si no, todas como carpetas nuevas. */
+  onConfirm: (sources: FolderSource[], resume: boolean) => void;
   onCancel: () => void;
 }) {
   const tr = useT();
@@ -46,7 +50,8 @@ export function FolderAskDialog({
   useEscape(onCancel);
 
   const shown = useMemo(() => (hidden ? sources.map(withHidden) : sources), [sources, hidden]);
-  const hasHidden = sources.some((s) => s.skipped.some((k) => k.reason !== 'unreadable'));
+  const hasHidden = sources.some((s) => s.skipped.some((k) => k.reason === 'hidden' || k.reason === 'system'));
+  const again = resumes.some(Boolean);
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>
@@ -65,13 +70,19 @@ export function FolderAskDialog({
           <p className="muted small">{tr('folders.keepOpen')}</p>
           {server === 'old' && <p className="error">{tr('folders.oldServer')}</p>}
           {server === 'offline' && <p className="error">{tr('folders.offline')}</p>}
+          {again && <p className="warn small">{tr('folders.again')}</p>}
         </div>
         <div className="modal-actions folder-actions">
           <button className="button" onClick={onCancel}>
             {tr('common.cancel')}
           </button>
-          <button className="button primary" disabled={server !== 'ok'} onClick={() => onConfirm(shown)}>
-            {server === 'checking' ? tr('folders.checking') : tr('folders.upload')}
+          {again && (
+            <button className="button" disabled={server !== 'ok'} onClick={() => onConfirm(shown, false)}>
+              {tr('folders.uploadNew')}
+            </button>
+          )}
+          <button className="button primary" disabled={server !== 'ok'} onClick={() => onConfirm(shown, again)}>
+            {server === 'checking' ? tr('folders.checking') : again ? tr('folders.continue') : tr('folders.upload')}
           </button>
         </div>
       </div>
@@ -82,8 +93,11 @@ export function FolderAskDialog({
 function FolderSummaryRow({ source }: { source: FolderSource }) {
   const tr = useT();
   const sum = summarize(source);
-  const skipped = source.skipped.filter((s) => s.reason !== 'unreadable').length;
-  const unreadable = source.skipped.length - skipped;
+  // Lo oculto y del sistema: solo los archivos (las carpetas ocultas no suman a la cuenta).
+  const hidden = source.skipped.filter((s) => (s.reason === 'hidden' || s.reason === 'system') && !s.dir);
+  const skipped = hidden.length;
+  const unreadable = source.skipped.filter((s) => s.reason === 'unreadable' && !s.dir).length;
+  const invalid = source.skipped.filter((s) => s.reason === 'invalid' && !s.dir).length;
   return (
     <section className="folder-summary">
       <div className="folder-summary-name">
@@ -97,7 +111,12 @@ function FolderSummaryRow({ source }: { source: FolderSource }) {
         })}
       </p>
       <p className="muted small">
-        {tr('folders.kinds', { images: sum.byKind.image, videos: sum.byKind.video, pdfs: sum.byKind.pdf, other: sum.byKind.other })}
+        {[
+          tr('folders.kindImages', { count: sum.byKind.image }),
+          tr('folders.kindVideos', { count: sum.byKind.video }),
+          tr('folders.kindPdfs', { count: sum.byKind.pdf }),
+          tr('folders.kindOther', { count: sum.byKind.other }),
+        ].join(' · ')}
       </p>
       {sum.files > 1000 && <p className="warn small">{tr('folders.manyFiles')}</p>}
       {sum.big > 0 && <p className="warn small">{tr('folders.bigFiles', { count: sum.big })}</p>}
@@ -105,8 +124,7 @@ function FolderSummaryRow({ source }: { source: FolderSource }) {
         <details className="folder-skipped">
           <summary className="muted small">{tr('folders.skipped', { count: skipped })}</summary>
           <ul>
-            {source.skipped
-              .filter((s) => s.reason !== 'unreadable')
+            {hidden
               .slice(0, TREE_MAX)
               .map((s) => (
                 <li key={s.path}>{s.path}</li>
@@ -115,6 +133,7 @@ function FolderSummaryRow({ source }: { source: FolderSource }) {
         </details>
       )}
       {unreadable > 0 && <p className="warn small">{tr('folders.unreadable', { count: unreadable })}</p>}
+      {invalid > 0 && <p className="warn small">{tr('folders.invalid', { count: invalid })}</p>}
       <details className="folder-tree">
         <summary className="small">{tr('folders.showTree')}</summary>
         <FolderTree source={source} />
@@ -196,6 +215,8 @@ export function FolderProgressDialog({ id, onClose, onOpen }: { id: string; onCl
   const progress = useFolderProgress(folders, id);
   const picker = useRef<HTMLInputElement>(null);
   const [matched, setMatched] = useState<string | null>(null);
+  /** Pidió dejar de subir: falta confirmar. */
+  const [stopping, setStopping] = useState(false);
   useEscape(onClose);
   if (!folders || !progress) return null;
   const p = progress;
@@ -232,6 +253,8 @@ export function FolderProgressDialog({ id, onClose, onOpen }: { id: string; onCl
         {status && <p className={p.state === 'missing' ? 'warn small' : 'muted small'}>{status}</p>}
         {p.problem && p.state !== 'waiting' && <p className="error small">{localize(p.problem)}</p>}
         {matched && <p className="muted small">{matched}</p>}
+        {p.invalid > 0 && <p className="warn small">{tr('folders.invalid', { count: p.invalid })}</p>}
+        {stopping && <p className="warn small">{tr('folders.stopAsk')}</p>}
         {p.errors.length > 0 && (
           <details className="folder-errors" open={p.errors.length <= 5}>
             <summary className="error small">{tr('folders.errors', { count: p.errors.length })}</summary>
@@ -255,7 +278,28 @@ export function FolderProgressDialog({ id, onClose, onOpen }: { id: string; onCl
             e.target.value = '';
           }}
         />
+        {stopping ? (
+          <div className="modal-actions folder-actions">
+            <button className="button" onClick={() => setStopping(false)}>
+              {tr('common.cancel')}
+            </button>
+            <button
+              className="button primary"
+              onClick={() => {
+                void folders.forget(id);
+                onClose();
+              }}
+            >
+              {tr('folders.stopYes')}
+            </button>
+          </div>
+        ) : (
         <div className="modal-actions folder-actions">
+          {p.state !== 'done' && (
+            <button className="button" onClick={() => setStopping(true)}>
+              {tr('folders.stop')}
+            </button>
+          )}
           {p.state === 'missing' && (
             <button className="button" onClick={() => picker.current?.click()}>
               {tr('folders.chooseAgain')}
@@ -266,7 +310,7 @@ export function FolderProgressDialog({ id, onClose, onOpen }: { id: string; onCl
               {tr('folders.retry')}
             </button>
           )}
-          {p.state !== 'done' && p.state !== 'missing' && (
+          {p.state !== 'done' && p.state !== 'missing' && p.state !== 'failed' && (
             p.state === 'paused' ? (
               <button className="button" onClick={() => folders.resume(id)}>
                 {tr('folders.resume')}
@@ -284,6 +328,7 @@ export function FolderProgressDialog({ id, onClose, onOpen }: { id: string; onCl
             {tr('common.close')}
           </button>
         </div>
+        )}
       </div>
     </div>
   );

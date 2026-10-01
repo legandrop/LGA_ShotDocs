@@ -11,10 +11,13 @@ export interface FolderFile {
   file: File;
 }
 
-/** Lo que se saltea, con el motivo: oculto (empieza con punto), del sistema (`Thumbs.db`…) o que no se pudo leer. */
+/**
+ * Lo que se saltea, con el motivo: oculto (empieza con punto), del sistema (`Thumbs.db`…), que no se pudo leer, o
+ * `invalid`: adentro de una carpeta que no se puede crear en Drive (más de 30 niveles o un nombre que no va).
+ */
 export interface Skipped {
   path: string;
-  reason: 'hidden' | 'system' | 'unreadable';
+  reason: 'hidden' | 'system' | 'unreadable' | 'invalid';
   /** El archivo, si se pudo leer (los ocultos y del sistema se pueden incluir con la casilla). */
   file?: File;
   /** Es una carpeta (oculta o del sistema): con la casilla, se crea con lo de adentro. */
@@ -45,6 +48,45 @@ export function skipReason(name: string): 'hidden' | 'system' | null {
   if (name.startsWith('.')) return 'hidden';
   if (SYSTEM_NAMES.has(name.toLowerCase()) || name.startsWith('~$')) return 'system';
   return null;
+}
+
+/** Lo más hondo que acepta el portero (`TREE_DEPTH` en portero/src/core.ts). */
+export const FOLDER_DEPTH = 30;
+
+/**
+ * Si el portero acepta la ruta de una subcarpeta (las mismas reglas que `validFolderPath` de portero/src/core.ts):
+ * partes no vacías, sin `.` ni `..`, sin controles, hasta `FOLDER_DEPTH` niveles y 2000 caracteres. Una barra
+ * invertida es parte del nombre (Mac, Linux): en Drive va `_`.
+ */
+export function folderPathOk(path: string): boolean {
+  if (!path || path.length > 2000) return false;
+  const parts = path.split('/');
+  return parts.length <= FOLDER_DEPTH && parts.every((p) => p !== '' && p !== '.' && p !== '..' && !/[\u0000-\u001f]/.test(p));
+}
+
+/**
+ * Lo que no se puede crear en Drive (una subcarpeta demasiado honda o con un nombre que no va) se saltea con todo lo
+ * de adentro, con su motivo (`invalid`), y el resto sube: una subcarpeta rara no frena a la carpeta entera.
+ */
+export function limitPaths(source: FolderSource): FolderSource {
+  const bad = (path: string) => {
+    const parts = path.split('/');
+    for (let i = 1; i <= parts.length; i++) if (!folderPathOk(parts.slice(0, i).join('/'))) return true;
+    return false;
+  };
+  const skipped = [...source.skipped];
+  const dirs: string[] = [];
+  for (const d of source.dirs) {
+    if (bad(d)) skipped.push({ path: d, reason: 'invalid', dir: true });
+    else dirs.push(d);
+  }
+  const files: FolderFile[] = [];
+  for (const f of source.files) {
+    const at = f.path.lastIndexOf('/');
+    if (at > 0 && bad(f.path.slice(0, at))) skipped.push({ path: f.path, reason: 'invalid', file: f.file });
+    else files.push(f);
+  }
+  return { ...source, files, dirs, skipped };
 }
 
 /**
@@ -124,7 +166,7 @@ export async function readFolder(root: EntryLike): Promise<FolderSource> {
     }
   };
   await walk(root, '', null);
-  return source;
+  return limitPaths(source);
 }
 
 /**
@@ -156,7 +198,7 @@ export function foldersFromList(list: ArrayLike<File>): FolderSource[] {
     if (reason) source.skipped.push({ path, reason, file });
     else source.files.push({ path, file });
   }
-  return [...byRoot.values()];
+  return [...byRoot.values()].map(limitPaths);
 }
 
 /**
@@ -168,11 +210,11 @@ export function withHidden(source: FolderSource): FolderSource {
   const dirs = [...source.dirs];
   const skipped: Skipped[] = [];
   for (const s of source.skipped) {
-    if (s.reason === 'unreadable') skipped.push(s);
+    if (s.reason === 'unreadable' || s.reason === 'invalid') skipped.push(s);
     else if (s.dir) dirs.push(s.path);
     else if (s.file) files.push({ path: s.path, file: s.file });
   }
-  return { ...source, files, dirs: sortDirs(dirs), skipped };
+  return limitPaths({ ...source, files, dirs: sortDirs(dirs), skipped });
 }
 
 /** Las subcarpetas con las de arriba primero (cada una después de la que la contiene). */

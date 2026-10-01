@@ -27,7 +27,7 @@ se abre. Migas que empiezan en la carpeta, primero las subcarpetas y después lo
 la miniatura de Drive (por `/t/`) o un ícono, el peso y *Download*. Una foto o un video abre el carrete con las
 fotos y videos de esa subcarpeta (un `CarreteLoader` propio: la miniatura mientras carga y el archivo por su
 pase); un PDF o un texto se abre en otra pestaña; lo demás se baja con `?download=1`. Escape sube un nivel y, en
-la carpeta, cierra. Los accesos directos y los documentos de Google se muestran sin abrirse. Más de 300 cosas:
+la carpeta, cierra. Los accesos directos y los documentos de Google se muestran sin abrirse. Más de 100 cosas:
 *Show more*. En el teléfono ocupa la pantalla.
 
 **Cómo está hecho:**
@@ -69,10 +69,28 @@ la carpeta, cierra. Los accesos directos y los documentos de Google se muestran 
   A). Sin acceso a la página, 404 como si no existiera; pedir otra carpeta del Drive, 404 al listar y 403 al
   subir. "Agregar a esta carpeta" (de otros) pide una regla nueva que decide Lega.
 - **Plan gratis:** cada pedido de carpetas le pide a Drive a lo sumo 36 cosas (`DRIVE_CALL_BUDGET`): lo que no
-  entra vuelve sin crear o como `later` y la app lo pide en el siguiente. Listar trae 300 por pedido (cada
-  archivo lleva su pase firmado: 10 ms de CPU). Dos pedidos que crean la misma carpeta a la vez en dos instancias:
+  entra vuelve sin crear o como `later` y la app lo pide en el siguiente. Listar trae 100 por pedido (cada
+  archivo lleva su pase firmado; 300 se midieron en ~9,5 ms de CPU, al límite de los 10 ms: falta medirlo en
+  Cloudflare, ver `Doc_Portero.md`, "Antes de publicar"). Dos pedidos que crean la misma carpeta a la vez en dos instancias:
   el segundo la encuentra en Drive por su marca `sdFile` y no crea otra; si igual quedaran dos, la app rearma el
   árbol cuando el portero dice que una subcarpeta no es de esta carpeta.
+
+**Correcciones de la segunda auditoría (2026-10-01):**
+
+- **El portero se rompía desde el segundo pedido de cada instancia** (guardaba el stub del Durable Object entre
+  pedidos): ahora un stub por pedido y la memoria de subcarpetas con una llave fija. Lo prueba
+  `scripts/portero-smoke.mjs` en `workerd` (`Doc_Portero.md`, "Antes de publicar").
+- **Una subcarpeta rara ya no frena a la carpeta entera:** una barra invertida en el nombre (válida en Mac y Linux)
+  sube como `_`; una carpeta de más de 30 niveles (o con un nombre que no va) se saltea con lo de adentro, se avisa
+  en la ventana, y el resto sube. Si el portero igual rechaza una tanda, la cola prueba de a una, saltea la que no
+  pasa y "Retry" no la repite.
+- **Dejar de subir** (*Stop uploading*, con confirmación): olvida la subida en este dispositivo; lo que llegó queda
+  en Drive.
+- **Volver a soltar la misma carpeta en otro lugar de la página** (mismo nombre y algún archivo con la misma ruta):
+  la ventana ofrece *Continue the upload* (sube solo lo que falta) o *Upload as a new folder*.
+- Perder el acceso deja la subida sin terminar (la última parte vuelve a mirar el permiso); una subcarpeta en la
+  papelera deja de listarse en el acto; los tipos de Google no se crean por las subidas; textos (plurales, ocultos
+  sin contar carpetas, la tarjeta sin cortar, documentos de Google, sin *Pause* en una detenida).
 
 **Lo que falta, con su nivel:**
 

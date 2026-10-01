@@ -282,7 +282,7 @@ function BlockEditor({
   /** El adjunto con su hoja abierta (Docs/Doc_Adjuntos.md). */
   const [sheet, setSheet] = useState<string | null>(null);
   /** Carpetas soltadas que esperan "Subir" (P.9, Docs/Doc_Carpetas.md), dónde se soltaron. */
-  const [folderAsk, setFolderAsk] = useState<{ sources: FolderSource[]; at: InsertAt | null } | null>(null);
+  const [folderAsk, setFolderAsk] = useState<{ sources: FolderSource[]; at: InsertAt | null; resumes: (string | null)[] } | null>(null);
   /** La carpeta abierta en el visor, y la que muestra cómo va su subida. */
   const [folderView, setFolderView] = useState<{ id: string; name: string } | null>(null);
   const [folderUpload, setFolderUpload] = useState<string | null>(null);
@@ -697,17 +697,35 @@ function BlockEditor({
           notify(found > 0 ? t('folders.matched', { count: found }) : t('folders.noMatch'));
           return;
         }
-        setFolderAsk({ sources, at });
+        // La misma carpeta a medio subir en esta página (mismo nombre, algún archivo en común): se ofrece seguir.
+        const resumes = sources.map((s) => sameUpload(s));
+        setFolderAsk({ sources, at, resumes });
       })
       .catch(() => notify(t('editor.fileNotSaved')));
   };
 
+  /** Una subida a medias de esta página que parece la misma carpeta: mismo nombre y algún archivo con la misma ruta. */
+  const sameUpload = (source: FolderSource): string | null => {
+    const paths = new Set(source.files.map((f) => f.path));
+    const match = (folders?.all() ?? []).find(
+      (p) => p.pageId === pageId && p.name === source.name && p.state !== 'done' && folders!.hasAnyPath(p.id, paths),
+    );
+    return match?.id ?? null;
+  };
+
   /** Sube las carpetas confirmadas: registra cada una, pone su bloque donde se soltó y empieza a subir. */
-  const uploadFolders = async (sources: FolderSource[], at: InsertAt | null) => {
+  const uploadFolders = async (sources: FolderSource[], at: InsertAt | null, resumes: (string | null)[] = []) => {
     setFolderAsk(null);
     // Si el bloque donde se soltó ya no está (otro dispositivo lo borró mientras se confirmaba), después del cursor.
     let ref = at && editor.getBlock(at.blockId) ? at : { blockId: editor.getTextCursorPosition().block.id, placement: 'after' as const };
-    for (const source of sources) {
+    for (const [n, source] of sources.entries()) {
+      const again = resumes[n];
+      if (again && folders) {
+        const found = folders.resumeWith(again, source);
+        notify(found > 0 ? t('folders.matched', { count: found }) : t('folders.noMatch'));
+        if (sources.length === 1) setFolderUpload(again);
+        continue;
+      }
       try {
         const { id, url } = await media.addFolder(pageId, source.name, summarize(source).bytes);
         const refBlock = editor.getBlock(ref.blockId);
@@ -940,7 +958,12 @@ function BlockEditor({
       {carrete && <CarreteHost {...carrete} onClose={() => setCarrete(null)} />}
       {sheet && <AttachmentSheet fileId={sheet} onClose={() => setSheet(null)} />}
       {folderAsk && (
-        <FolderAskDialog sources={folderAsk.sources} onCancel={() => setFolderAsk(null)} onConfirm={(sources) => void uploadFolders(sources, folderAsk.at)} />
+        <FolderAskDialog
+          sources={folderAsk.sources}
+          resumes={folderAsk.resumes}
+          onCancel={() => setFolderAsk(null)}
+          onConfirm={(sources, resume) => void uploadFolders(sources, folderAsk.at, resume ? folderAsk.resumes : [])}
+        />
       )}
       {folderUpload && (
         <FolderProgressDialog
