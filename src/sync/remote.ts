@@ -428,10 +428,12 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
   /** Desde cuándo la base no tiene `workspace_settings` (o la subida con versión); se reintenta cada tanto. */
   private settingsTableMissingAt = 0;
   private versionedPushMissingAt = 0;
+  /** Desde cuándo la base no tiene las funciones de archivos con la versión de la app; se reintenta cada tanto. */
+  private versionedFilesMissingAt = 0;
 
   /**
-   * `appVersion` viaja con cada subida de contenido: el servidor rechaza las de una versión más vieja que
-   * la mínima del workspace.
+   * `appVersion` viaja con cada subida de contenido y con cada pedido de la cola de archivos (registrar, usar y
+   * dejar de usar): el servidor rechaza los de una versión más vieja que la mínima del workspace.
    */
   constructor(
     private readonly client: SupabaseClient,
@@ -763,8 +765,26 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
     return (data ?? []) as AccessRow[];
   }
 
+  /**
+   * Un pedido de la cola de archivos con la versión de la app (`p_app_version`), que la base compara con la
+   * mínima del workspace (`app_outdated`). Una base sin esa migración no tiene la función con ese parámetro:
+   * se usa la de siempre por 10 minutos y se vuelve a probar.
+   */
+  private async fileRpc(name: string, args: Record<string, unknown>): Promise<unknown> {
+    const versioned = Date.now() - this.versionedFilesMissingAt >= 10 * 60_000;
+    const { data, error, status } = await timed(
+      this.client.rpc(name, versioned ? { ...args, p_app_version: this.appVersion || null } : args),
+    );
+    if (error?.code === MISSING_FUNCTION && versioned) {
+      this.versionedFilesMissingAt = Date.now();
+      return this.fileRpc(name, args);
+    }
+    if (error) throw toRemoteError(error, status);
+    return data;
+  }
+
   async registerFile(file: NewMediaFile): Promise<LinkResult> {
-    const { data, error, status } = await timed(this.client.rpc('register_file', {
+    const data = await this.fileRpc('register_file', {
       p_id: file.id,
       p_page_id: file.pageId,
       p_name: file.name,
@@ -773,17 +793,12 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
       p_width: file.width,
       p_height: file.height,
       p_duration: file.duration,
-    }));
-    if (error) throw toRemoteError(error, status);
+    });
     return linkResult(data);
   }
 
   async linkPageFile(pageId: string, fileId: string): Promise<LinkResult> {
-    const { data, error, status } = await timed(
-      this.client.rpc('link_page_file', { p_page_id: pageId, p_file_id: fileId }),
-    );
-    if (error) throw toRemoteError(error, status);
-    return linkResult(data);
+    return linkResult(await this.fileRpc('link_page_file', { p_page_id: pageId, p_file_id: fileId }));
   }
 
   async uploadThumb(fileId: string, data: Blob): Promise<void> {
@@ -896,12 +911,11 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
   }
 
   async unlinkPageFile(pageId: string, fileId: string, seenSeq?: number | null): Promise<boolean> {
-    const { data, error, status } = await timed(this.client.rpc('unlink_page_file', {
+    const data = await this.fileRpc('unlink_page_file', {
       p_page_id: pageId,
       p_file_id: fileId,
       p_seen_seq: seenSeq ?? null,
-    }));
-    if (error) throw toRemoteError(error, status);
+    });
     return !unlinkIgnored(data);
   }
 

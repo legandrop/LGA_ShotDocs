@@ -61,6 +61,10 @@ export const media = {
     en: "Only photos can be added here: to attach other files, the workspace owner has to connect Google Drive.",
     es: "Acá solo se pueden agregar fotos: para adjuntar otros archivos, el dueño del workspace tiene que conectar Google Drive.",
   },
+  'queue.outdated': {
+    en: "This workspace needs a newer version of the app. Reload the app to update it and try again.",
+    es: "Este workspace necesita una versión más nueva de la app. Recargá la app para actualizarla y probá de nuevo.",
+  },
   'attachment.foreign': { en: "File from another project", es: "Archivo de otro proyecto" },
   'queue.originalMissing': {
     en: "The original file is missing on this device.",
