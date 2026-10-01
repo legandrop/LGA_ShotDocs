@@ -56,13 +56,13 @@ const table = (cell: unknown[]): PartialBlock =>
   ({ id: 't1', type: 'table', content: { type: 'tableContent', rows: [{ cells: [cell, ['b']] }] } }) as never;
 
 describe('el nodo', () => {
-  it('es un nodo en línea, atómico, elegible y arrastrable, con url, name y w', () => {
+  it('es un nodo en línea, atómico, elegible y arrastrable, con url, name, w y rowStart (empieza fila)', () => {
     const E = mountEditor(new Y.Doc());
     const type = view(E).state.schema.nodes[PHOTO];
     expect(type.isInline && type.isAtom && type.isLeaf).toBe(true);
     expect(type.spec.selectable).toBe(true);
     expect(type.spec.draggable).toBe(true);
-    expect(Object.keys(type.spec.attrs ?? {}).sort()).toEqual(['name', 'url', 'w']);
+    expect(Object.keys(type.spec.attrs ?? {}).sort()).toEqual(['name', 'rowStart', 'url', 'w']);
     expect(schema.inlineContentSchema.photo).toMatchObject({ type: 'photo', content: 'none' });
   });
 
