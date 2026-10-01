@@ -347,7 +347,7 @@ export function isFolderMime(mime: string | null | undefined): boolean {
  */
 export function folderCardUrl(info: { name: string; size?: number | null; note?: string | null; state?: 'ok' | 'foreign' | 'deleted' }): string {
   const state = info.state ?? 'ok';
-  const name = (info.name ?? '').trim() ? cleanFileName(info.name) : t('folder.card');
+  const name = (info.name ?? '').trim() ? cleanFileName(info.name, undefined, 'Folder') : t('folder.card');
   const size = typeof info.size === 'number' && info.size > 1 ? formatSize(info.size) : '';
   const meta =
     state === 'foreign'

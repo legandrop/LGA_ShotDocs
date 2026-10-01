@@ -291,7 +291,8 @@ const TREE_MEMORY_MAX = 20_000;
 /**
  * El nombre en el Drive del dueño de una carpeta que soltó el usuario y de sus subcarpetas: el suyo, tal cual
  * (D3, 2026-10-01: `Día 2 - Puerto` queda así, con espacios, tildes y emojis). Solo se saca lo que saca
- * `cleanFileName` (controles y marcas de dirección; las barras van como `_`), se corta en 200 caracteres por
+ * `cleanFileName`, igual que la app: controles, marcas de dirección y los de ancho cero (también U+200C y U+200D,
+ * así que un emoji compuesto, como el de una familia, queda en sus partes); las barras van como `_`. Se corta en 200 caracteres por
  * puntos de código y sin espacios en los bordes. Vacío, `Folder`. Las carpetas que crea la app (la de la app, la
  * de cada proyecto, `Carpetas`) siguen sin espacios (`folderName`). Las de antes, con guiones bajos (`Dia_2`),
  * no se renombran: cada una se encuentra por su marca (`sdFile`, `sdPath`), nunca por el nombre.

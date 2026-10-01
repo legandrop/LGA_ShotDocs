@@ -236,20 +236,23 @@ afterEach(() => {
 });
 
 describe('carpetas: nombres y rutas', () => {
-  it('las carpetas que suelta el usuario conservan su nombre (D3): solo se sacan controles y marcas de dirección', () => {
+  it('las carpetas que suelta el usuario conservan su nombre (D3): solo se sacan controles, marcas de dirección y ancho cero', () => {
     // Espacios (también dobles), tildes, eñes, guiones y emojis: tal cual.
     for (const same of ['Día 2 - Puerto', 'Fotos  día 2', 'Ñandú áéíóú ÁÉÍÓÚ ü', '🎬 Rodaje 🌊 toma 1', "Spot (v2) & co, 'final'.", 'Dia_2']) {
       expect(driveFolderName(same)).toBe(same);
     }
     // Lo invisible o que engaña se saca; los bordes, sin espacios.
     expect(driveFolderName('a\tb\nc')).toBe('abc');
-    expect(driveFolderName('factura‮fdp')).toBe('facturafdp');
+    expect(driveFolderName('factura\u202Efdp')).toBe('facturafdp');
+    // Como en los archivos (y en la app): sin los de ancho cero, un emoji compuesto queda en sus partes; una bandera
+    // o un tono de piel, no.
+    expect(driveFolderName('👨\u200D👩\u200D👧 Familia 🇦🇷 👍🏽')).toBe('👨👩👧 Familia 🇦🇷 👍🏽');
     expect(driveFolderName('  Fotos  ')).toBe('Fotos');
     // Una letra con su tilde aparte (como las da la Mac) queda en una sola.
-    expect(driveFolderName('Día 2')).toBe('Día 2');
+    expect(driveFolderName('Di\u0301a 2')).toBe('Día 2');
     // Vacío, solo espacios o solo marcas: "Folder".
-    for (const empty of ['', '   ', ' ‮ ', '​⁦']) expect(driveFolderName(empty)).toBe('Folder');
-    expect(driveFolderName(' ‮ ')).toBe('Folder');
+    for (const empty of ['', '   ', ' \u202E ', '\u200B\u2066']) expect(driveFolderName(empty)).toBe('Folder');
+    expect(driveFolderName(' \u202E ')).toBe('Folder');
     expect(driveFolderName('a\u0000b')).toBe('ab');
   });
 

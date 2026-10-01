@@ -324,8 +324,8 @@ no puede ir nunca al navegador de un miembro.
   `Thumbs.db`, `ehthumbs.db`, `desktop.ini`, `Icon\r`, `__MACOSX` y los bloqueos de Office (`~$…`). Una casilla
   "Incluir archivos ocultos". Las carpetas vacías sí se crean (salvo con `webkitdirectory`, que no las ve).
 - Un archivo que no se puede leer queda afuera y figura como salteado.
-- **Nombres:** Drive acepta cualquier nombre; se limpian solo los controles y las marcas de dirección
-  (`cleanFileName`). Dos nombres que solo difieren en mayúsculas se suben tal cual (el zip los desambigua).
+- **Nombres:** Drive acepta cualquier nombre; se limpian solo los controles, las marcas de dirección y los
+  caracteres de ancho cero (`cleanFileName`). Dos nombres que solo difieren en mayúsculas se suben tal cual (el zip los desambigua).
   Las carpetas también conservan su nombre (D3, punto 6 de "Respondidas por Lega").
 
 ## 7. La ventana: "esta carpeta, con todo esto"
@@ -531,7 +531,9 @@ un acceso directo que no se sigue, una subcarpeta movida afuera que deja de vers
 5. **iPhone sin forma de elegir una carpeta → pedir que se comprima:** de acuerdo.
 6. **Nombres de las carpetas (D3, 2026-10-01):** Lega delegó; quedó respetar el nombre en las carpetas que suelta
    el usuario. «Día 2 - Puerto» queda así en el Drive, y sus subcarpetas también (`driveFolderName` en
-   `portero/src/core.ts`): solo se sacan controles y marcas de dirección (como `cleanFileName`), las barras van como
+   `portero/src/core.ts`): solo se sacan, como en los archivos (`cleanFileName`, igual en la app y en el portero),
+   controles, marcas de dirección y caracteres de ancho cero, también U+200C y U+200D (un emoji compuesto, como el
+   de una familia, queda en sus partes, y una bandera o un emoji con tono se mantiene), las barras van como
    `_`, se corta en 200 caracteres y, vacío, `Folder`. Las que crea la app (`LGA_ShotDocs`, la del proyecto,
    `Carpetas`) siguen sin espacios (`folderName`). Una segunda carpeta con el mismo nombre en el proyecto, sin
    distinguir mayúsculas, sigue llevando `_2` (`Día 2 - Puerto_2`). **Lo ya subido** con guiones bajos (`Dia_2`) no
