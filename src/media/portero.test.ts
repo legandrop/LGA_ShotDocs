@@ -441,8 +441,16 @@ describe('portero: pedidos que dejan de moverse', () => {
     vi.useRealTimers();
   });
 
-  /** Pasa el tiempo: se adelanta el reloj y el vigilante vuelve a mirar. */
+  /** Pasa el tiempo, de a una mirada del vigilante por vez, como cuando pasa de verdad. */
   function elapse(ms: number): void {
+    for (let left = ms; left > 0; left -= STALL_CHECK_MS) {
+      const step = Math.min(left, STALL_CHECK_MS);
+      clock += step;
+      vi.advanceTimersByTime(step);
+    }
+  }
+  /** El reloj salta `ms` entre dos miradas seguidas del vigilante (no pudo mirar en el medio). */
+  function jump(ms: number): void {
     clock += ms;
     vi.advanceTimersByTime(STALL_CHECK_MS);
   }
@@ -527,6 +535,69 @@ describe('portero: pedidos que dejan de moverse', () => {
     await settle();
     elapse(CONTROL_TIMEOUT_MS + STALL_CHECK_MS);
     expect(await result).toMatchObject({ stalled: true, status: 408, uploadId: 'up-7' });
+  });
+
+  it('si lo que no contesta es el token de la sesión, también se corta', async () => {
+    const server = new FakePortero();
+    const stuck = new Portero(BASE, { fetch: server.fetch, token: () => new Promise<string | null>(() => undefined), now: () => clock });
+    const { result, settled } = track(stuck.upload(makeFile(MB)));
+    await settle();
+    elapse(CONTROL_TIMEOUT_MS - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(settled()).toBe(false);
+    elapse(3 * STALL_CHECK_MS);
+    expect(await result).toMatchObject({ stalled: true, status: 408, uploadId: null });
+    // No llegó a pedirle nada al portero.
+    expect(server.calls).toEqual([]);
+  });
+
+  it('el tiempo que el equipo estuvo suspendido no cuenta: al despertar, una parte sana no se corta', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const file = makeFile(MB);
+    const { result, settled } = track(portero(server, { send: slow.send }).upload(file));
+    await settle();
+    slow.part().sent(1000);
+    elapse(30_000);
+    // Diez minutos con la tapa cerrada: el vigilante no pudo mirar y el pedido tampoco pudo moverse.
+    jump(600_000);
+    await settle();
+    expect(settled()).toBe(false);
+    // Despierta y sigue subiendo: termina bien.
+    elapse(STALL_MS - 30_000 - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(settled()).toBe(false);
+    slow.part().sent(MB);
+    slow.part().arrive();
+    expect(await result).toMatchObject({ id: 'drive-file-1' });
+    expect(await same(file, server.stored())).toBe(true);
+
+    // Si después de despertar el pedido quedó muerto, se corta: el plazo siguió desde donde estaba.
+    const dead = new FakePortero();
+    const frozen = slowSend(dead);
+    const second = track(portero(dead, { send: frozen.send }).upload(makeFile(MB)));
+    await settle();
+    frozen.part().sent(1000);
+    elapse(30_000);
+    jump(600_000);
+    elapse(STALL_MS - 30_000 - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(second.settled()).toBe(false);
+    elapse(3 * STALL_CHECK_MS);
+    expect(await second.result).toMatchObject({ stalled: true, uploadId: 'up-1' });
+  });
+
+  it('con la pestaña en segundo plano (el navegador deja mirar una vez por minuto) sigue cortando', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const { result, settled } = track(portero(server, { send: slow.send }).upload(makeFile(MB)));
+    await settle();
+    slow.part().sent(1000);
+    jump(60_000);
+    await settle();
+    expect(settled()).toBe(false);
+    jump(60_000);
+    expect(await result).toMatchObject({ stalled: true, uploadId: 'up-1' });
   });
 
   it('una parte por la que no sale ni un byte se corta a los dos minutos, con la subida para retomar', async () => {
@@ -846,8 +917,10 @@ describe('portero: las partes por XMLHttpRequest', () => {
       .upload(makeFile(MB))
       .catch((e: unknown) => e as UploadError);
     for (let i = 0; i < 100 && FakeXhr.made.length === 0; i++) await new Promise((r) => setTimeout(r, 5));
-    clock += STALL_MS + 1;
-    vi.advanceTimersByTime(STALL_CHECK_MS);
+    for (let passed = 0; passed <= STALL_MS; passed += STALL_CHECK_MS) {
+      clock += STALL_CHECK_MS;
+      vi.advanceTimersByTime(STALL_CHECK_MS);
+    }
 
     expect(await upload).toMatchObject({ stalled: true, uploadId: 'up-1', sent: 0 });
     expect(FakeXhr.made[0].aborted).toBe(true);

@@ -8,7 +8,7 @@ pedido al servidor de archivos tenía tiempo límite: uno que nunca contestaba d
 Ahora el pedido que deja de moverse se corta y el archivo vuelve a la cola para más tarde, sin frenar a los demás.
 Abrir la subida y preguntar cuánto llegó tienen un minuto; una parte se corta recién a los dos minutos sin que
 salga ni un byte, así que una red lenta no se confunde con una subida colgada. Al retomar siempre se pregunta
-primero qué llegó: nunca se sube dos veces. El original sigue guardado en el dispositivo.
+primero qué llegó, para no subirlo dos veces. El original sigue guardado en el dispositivo.
 [ Subida de archivos - cortar los pedidos que se traban ]
 
 v0.067 :

@@ -267,6 +267,11 @@ corta, se manda entera otra vez y se vuelve a cortar.
   Los pedidos de control sí tienen su tope.
 - El vigilante mira cada 5 segundos (`STALL_CHECK_MS`). Solo cubre los pedidos de una subida: `pass`,
   `trash` y los del diálogo de Drive siguen sin tope.
+- **Equipo suspendido.** Si entre dos miradas pasa más de un minuto y medio (`FROZEN_GAP_MS`), el equipo
+  estuvo suspendido o la pestaña congelada: ese tiempo no se cuenta, y al despertar una parte sana no se
+  corta. El umbral no puede ser más chico: con la pestaña en segundo plano el navegador deja correr los
+  temporizadores una vez por minuto, y ahí el vigilante tiene que seguir cortando (tarda hasta un minuto
+  más en darse cuenta).
 
 **Qué pasa al cortarse.** El pedido cortado no se reintenta en el momento (cada intento podría tardar lo
 mismo): la subida termina con un `UploadError` con `stalled`, el archivo queda con el aviso *The upload
@@ -285,19 +290,31 @@ sigue en el dispositivo y lo que Drive ya recibió sigue en la subida.
 - La pregunta tampoco contesta: no se abre otra (no se sabe si la que hay terminó). El archivo sigue
   pendiente con el aviso y se vuelve a preguntar más tarde.
 
+Preguntar primero evita la copia de más en casi todos los casos, no en todos. Si algo en el medio (un
+proxy, un antivirus) recibió el cuerpo entero y lo sigue mandando después de que la app cortó el pedido,
+la subida vieja contesta que no recibió nada, se abre otra y la vieja termina más tarde: queda **una copia
+de más en el Drive**. No se pierde nada, la base apunta a una sola y el portero lo tolera; la copia de más
+la ve el dueño en la carpeta del día.
+
 `MediaRecord.stalls` cuenta las trabadas **seguidas y sin avance**: vuelve a 0 cuando el portero confirma
 más bytes y cuando el archivo termina de subir (abrir otra subida no es avanzar). Es un campo nuevo y
-opcional: lo guardado por una versión anterior no lo tiene y vale 0.
+opcional: lo guardado por una versión anterior no lo tiene y vale 0. Con el mismo avance vuelve a 0
+`failures`, de donde sale la espera para reintentar: un video largo al que le llega una parte más en cada
+vuelta vuelve a intentar a los 10 segundos, no cada vez más tarde.
 
 **Probado a mano en Chromium 152** contra un portero de mentira en otro origen (con el mismo CORS): tres partes
 por `XMLHttpRequest` llegan intactas; una parte leída a 256 KB/s (que tarda ocho veces el plazo) no se
 corta; un servidor que no lee el cuerpo, que deja de leerlo a la mitad, que no contesta la parte o que no
-contesta al abrir la subida se cortan y el navegador aborta el pedido; al retomar no se manda nada dos
-veces. Falta verlo en Safari de iPhone y con una red lenta de verdad.
+contesta al abrir la subida se cortan y el navegador aborta el pedido (con la pestaña en segundo plano: a
+los 60 segundos al abrir y a los 125 la parte); al retomar no se manda nada dos veces. Falta verlo en
+Safari de iPhone y con una red lenta de verdad.
 
-**Lo que queda afuera.** La miniatura va a Supabase Storage antes del original, y Storage no tiene tope
-(`Doc_Sincronizacion.md`, "cada consulta a la base tiene un tope de tiempo"): si lo que se cuelga es ese
-pedido, la cola espera igual que antes.
+**Lo que queda afuera** (anotado en `Doc_Roadmap.md`, B.11). Los pedidos de la miniatura a Supabase
+Storage no tienen tope (`Doc_Sincronizacion.md`, "cada consulta a la base tiene un tope de tiempo"), ni al
+subirla antes del original (`uploadThumb`) ni al bajar, al final de cada vuelta, las de otros dispositivos
+(`downloadThumb`): si lo que se cuelga es uno de esos, la cola espera igual que antes. Con el portero
+colgado para todos los archivos, la vuelta gasta un minuto en cada uno en vez de cortarse. Y el plazo que
+le sirvió a un archivo detrás de un proxy lento no se recuerda para el siguiente.
 
 ## Publicarlo y conectarlo (una vez por workspace)
 

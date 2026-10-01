@@ -896,6 +896,8 @@ export class MediaQueue {
     let saving: Promise<unknown> = Promise.resolve();
     // Trabadas seguidas sin que la subida avance (un registro de una versión anterior no lo trae).
     let stalls = start.stalls ?? 0;
+    // Fallas seguidas, también sin avance: de esto sale cuánto se espera para volver a intentar.
+    let failed = start.failures;
     // La subida del portero que se está usando y hasta dónde confirmó: para saber cuándo avanza de verdad.
     let savedId = start.uploadId;
     let confirmed = start.sent;
@@ -976,9 +978,13 @@ export class MediaQueue {
         if (other) confirmed = 0;
         if (!other && p.sent === confirmed) return;
         const changes: Partial<MediaRecord> = { uploadId: p.uploadId, sent: p.sent };
-        // Las trabadas se cuentan seguidas y sin avance: la cuenta vuelve a cero recién cuando el portero
-        // confirma más bytes (abrir otra subida no es avanzar).
-        if (stalls > 0 && p.sent > confirmed) changes.stalls = stalls = 0;
+        // Las trabadas y las fallas se cuentan seguidas y sin avance: vuelven a cero recién cuando el portero
+        // confirma más bytes (abrir otra subida no es avanzar). Si no, un video largo al que le llega una
+        // parte más en cada vuelta esperaría cada vez más para seguir, aunque esté avanzando.
+        if (p.sent > confirmed) {
+          if (stalls > 0) changes.stalls = stalls = 0;
+          if (failed > 0) changes.failures = failed = 0;
+        }
         savedId = p.uploadId;
         confirmed = p.sent;
         saving = saving.then(() => this.patch(record.id, changes)).catch(() => undefined);
@@ -1025,7 +1031,7 @@ export class MediaQueue {
     } catch (err) {
       let outcome = classify(err);
       if (outcome === 'cancelled') return outcome;
-      const failures = record.failures + 1;
+      const failures = failed + 1;
       // El servidor dice que el archivo no existe aunque acá figura registrado (por ejemplo, se restauró la
       // base): se vuelve a registrar en vez de detenerlo. Si sigue igual después de varias veces, se detiene.
       const notThere =

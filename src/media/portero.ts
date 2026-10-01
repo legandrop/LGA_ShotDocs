@@ -30,6 +30,12 @@ export const CONTROL_TIMEOUT_MS = 60_000;
 export const STALL_MS = 120_000;
 /** Cada cuánto mira el vigilante si el pedido se sigue moviendo. */
 export const STALL_CHECK_MS = 5_000;
+/**
+ * Si entre dos miradas del vigilante pasa más que esto, el equipo estuvo suspendido (o la pestaña congelada)
+ * y ese tiempo no se cuenta. No puede ser mucho más chico: con la pestaña en segundo plano el navegador deja
+ * correr los temporizadores una vez por minuto, y ahí el vigilante tiene que seguir cortando.
+ */
+export const FROZEN_GAP_MS = 90_000;
 /** Una red lenta: la misma con la que se calculan los topes de las consultas a la base (`remote.ts`). */
 const SLOW_BYTES_PER_SECOND = 16 * 1024;
 
@@ -123,9 +129,11 @@ export interface UploadOptions {
   onlyIfSent?: boolean;
   /**
    * Al retomar (`resume`): si esa subida contesta que todavía no recibió nada, se abre otra en vez de seguir
-   * con ella (para una que se trabó varias veces sin avanzar). No se pierde nada y no puede duplicar el
-   * archivo en Drive: se le pregunta primero, y una subida que ya terminó o que ya recibió algo se sigue
-   * usando siempre.
+   * con ella (para una que se trabó varias veces sin avanzar). No se pierde nada, y una subida que ya terminó
+   * o que ya recibió algo se sigue usando siempre: por eso se le pregunta primero. Queda un caso que la
+   * pregunta no ve: si algo en el medio (un proxy) recibió el cuerpo entero y lo sigue mandando después de
+   * cortado el pedido, la subida vieja contesta 0, se abre otra y la vieja termina más tarde. Deja una copia
+   * de más en el Drive; no se pierde nada y la base apunta a una sola.
    */
   renewIfEmpty?: boolean;
   /**
@@ -574,8 +582,15 @@ export class Portero {
     const cancel = () => controller.abort(outer ? abortError(outer) : undefined);
     if (outer?.aborted) cancel();
     else outer?.addEventListener('abort', cancel, { once: true });
+    let lastLook = startedAt;
     const timer = setInterval(() => {
-      if (this.now() - lastMove < patience) return;
+      const now = this.now();
+      // El vigilante estuvo sin mirar mucho más de lo que tarda entre dos miradas: el equipo estuvo
+      // suspendido o la pestaña congelada. Ese tiempo no dice nada del pedido (tampoco él pudo moverse), así
+      // que no cuenta: si quedó muerto, se corta cuando pase el plazo desde ahora.
+      if (now - lastLook > FROZEN_GAP_MS) lastMove = Math.min(now, lastMove + (now - lastLook));
+      lastLook = now;
+      if (now - lastMove < patience) return;
       stalled = true;
       controller.abort();
     }, STALL_CHECK_MS);

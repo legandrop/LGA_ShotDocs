@@ -324,10 +324,16 @@ describe('cola de archivos: subidas que se traban', () => {
     expect(check()).toBe(true);
   }
 
-  /** Pasa el tiempo: se adelanta el reloj y el vigilante vuelve a mirar. */
+  /**
+   * Pasa el tiempo, de a una mirada del vigilante por vez, como cuando pasa de verdad (un salto grande del
+   * reloj entre dos miradas es un equipo suspendido, y ese tiempo no cuenta).
+   */
   function elapse(server: FakeServer, ms: number): void {
-    server.clockOffset += ms;
-    vi.advanceTimersByTime(STALL_CHECK_MS);
+    for (let left = ms; left > 0; left -= STALL_CHECK_MS) {
+      const step = Math.min(left, STALL_CHECK_MS);
+      server.clockOffset += step;
+      vi.advanceTimersByTime(step);
+    }
   }
 
   /** Una vuelta de la cola, y si terminó. */
@@ -423,6 +429,70 @@ describe('cola de archivos: subidas que se traban', () => {
     const row = server.mediaFiles.get(id)!;
     expect(await same(file, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
     expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0, uploadId: null, error: null });
+  });
+
+  it('abrir otra subida no es avanzar, y se abre cada dos trabadas, no en cada una desde la segunda', async () => {
+    const { server, a, id } = await withFile(MB);
+    let hung = 0;
+    server.portero.partDelay = () => {
+      hung++;
+      return never();
+    };
+    const again = async (times: number) => {
+      server.clockOffset += 10 * LATER;
+      await stalledRound(a, server, () => hung === times);
+      return (await a.mediaDb.get('files', id))!;
+    };
+
+    await stalledRound(a, server, () => hung === 1);
+    expect(await again(2)).toMatchObject({ stalls: 2 });
+    expect(server.portero.uploads.size).toBe(1);
+    // Tercera: van dos, así que abre otra subida... que también se traba. Sigue la cuenta: son tres.
+    expect(await again(3)).toMatchObject({ stalls: 3, sent: 0 });
+    expect(server.portero.uploads.size).toBe(2);
+    // Cuarta: con tres no toca abrir otra; se retoma la segunda.
+    expect(await again(4)).toMatchObject({ stalls: 4 });
+    expect(server.portero.uploads.size).toBe(2);
+
+    // Quinta: van cuatro, toca otra, y esta vez pasa. En Drive queda una sola copia.
+    server.portero.partDelay = null;
+    server.clockOffset += 10 * LATER;
+    await a.engine.syncMedia();
+    expect(server.portero.uploads.size).toBe(3);
+    expect(server.portero.drive.size).toBe(1);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0, uploadId: null });
+  });
+
+  it('un video al que le llega una parte más en cada vuelta no espera cada vez más para seguir', async () => {
+    const size = 3 * PART_BYTES + MB;
+    const { server, a, file, id } = await withFile(size, 'IMG_0800.JPG');
+    let pass = 0;
+    let hung = 0;
+    // En cada vuelta pasa una parte y la siguiente se traba.
+    server.portero.partDelay = () => {
+      if (pass-- > 0) return Promise.resolve();
+      hung++;
+      return never();
+    };
+    for (let lap = 1; lap <= 3; lap++) {
+      pass = 1;
+      server.clockOffset += LATER;
+      await stalledRound(a, server, () => hung === lap);
+      const record = (await a.mediaDb.get('files', id))!;
+      // Avanzó: es la primera trabada y la primera falla, y la espera es la más corta (10 s), no 10, 20, 40...
+      expect(record).toMatchObject({ stalls: 1, failures: 1, sent: lap * PART_BYTES, blocked: false });
+      const wait = record.retryAt - (Date.now() + server.clockOffset);
+      expect(wait).toBeGreaterThan(0);
+      expect(wait).toBeLessThanOrEqual(10_000);
+    }
+
+    server.portero.partDelay = null;
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    expect(server.portero.uploads.size).toBe(1);
+    const row = server.mediaFiles.get(id)!;
+    expect(await same(file, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0, failures: 0 });
   });
 
   it('una subida lenta pero sana no se corta: mientras salgan bytes, la parte tarda lo que tarde', async () => {
