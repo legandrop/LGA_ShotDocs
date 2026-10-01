@@ -75,10 +75,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `photo` en el esquema (nada lo crea todavía), el resguardo de versiones anteriores también en la importación
   de Coda, el parche de los huecos de y-prosemirror (solo alrededor de las fotos; los saltos de línea se
   guardan igual que antes), los huecos estables (en un renglón con fotos ningún texto se borra ni se vuelve a
-  crear) y las pruebas al azar con dos editores (0 pérdidas al escribir en los huecos, borrar o mover fotos). **Falta de la entrega 1 (1b):** la imagen resuelta con miniatura y nitidez, el CSS y la decoración
-  de las filas, el teclado y el mouse propios, elegir varias, la barra, el carrete y los selectores por bloque
-  más posición; después, publicar y subir `min_app_version`. Lo que queda de editar a la vez junto a fotos
-  (unir renglones, cambiar el tipo, dos Enter a la vez) está medido en `Doc_Colaboracion.md`.
+  crear) y las pruebas al azar con dos editores (0 pérdidas al escribir en los huecos, borrar o mover fotos).
+  **Hecha la 1b** (lo que se ve y se toca, medido en Chromium: `Doc_Fotos_En_Linea.md`, "Cómo quedó
+  (entrega 1b)"): la imagen con miniatura y nitidez, las filas (0 renglones rotos en 831 anchos por 5
+  densidades), el teclado y el mouse con la foto elegida, Shift+flechas y Shift+clic, el carrete con bloques y
+  fotos en línea en orden, e imprimir con las fotos en línea. **Falta de la entrega 1:** la auditoría, probar en
+  Safari y en el iPhone (la composición sin tecla previa entre dos fotos duplica el primer carácter en
+  Chromium), publicar y subir `min_app_version`. Quedan para la entrega 2 la barra propia de la foto (hoy, con
+  una foto elegida, sale la de texto) y partir un párrafo con fotos entre hojas. Lo que queda de editar a la vez
+  junto a fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está medido en `Doc_Colaboracion.md`.
   **A futuro (Lega, 2026-10-01, después de ver el prototipo):** que se puedan escribir varias líneas de texto a
   los costados de una foto (el texto rodea la foto), no solo un renglón alineado abajo.
 - **P.4 Hecho a medias (v0.046): acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos

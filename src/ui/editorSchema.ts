@@ -268,6 +268,8 @@ export const appBlockSpecs = { ...blockSpecs, image, paragraph: createParagraph(
 
 // El contenido en línea: el de BlockNote (texto y link) más la foto en línea (inlinePhoto.ts), el único tipo
 // de nodo que se sumó después de la regla "nada de tipos nuevos". Lo cubre el resguardo de `unknownContent.ts`.
+// Sus filas, la marca de la selección y su teclado (inlinePhotoEditor.ts) los suma el editor de la página
+// (PageEditor.tsx): BlockNote no registra las extensiones de un contenido en línea.
 export const schema = BlockNoteSchema.create({
   blockSpecs: appBlockSpecs,
   inlineContentSpecs: { ...defaultInlineContentSpecs, photo: photoSpec },
