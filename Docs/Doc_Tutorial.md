@@ -603,3 +603,24 @@ sobre lo que quede.
 ### Preguntas de estas correcciones
 
 Respondidas por Lega el 2026-09-30: ver "Decisiones".
+
+## Entradas esperando la ayuda
+
+La ayuda todavía no existe en el código. Lo que cada función ya hecha tiene que sumar cuando exista (inglés para la
+interfaz, castellano para la traducción):
+
+- **Archivar o borrar un proyecto (P.14, entregas 1 y 2; `Doc_Proyectos_Borrar.md`).** La entrada de la entrega 1
+  está en "Cómo quedó (entrega 1)". La entrega 2 le suma:
+
+  > **Its files in Google Drive.** When the workspace owner or an admin deletes a project, *Also send its files to the
+  > Google Drive trash* sends its whole folder to the Drive trash; it starts unticked. Google deletes it for good after
+  > 30 days; *Restore* before that brings the folder back with everything in it. From *Deleted projects* you can also
+  > send it later. If Google Drive no longer has the folder, the app asks before restoring the pages without their
+  > files, and *Look for its files again*, on the project's start page, brings them back if the folder turns up.
+  >
+  > **Sus archivos en Google Drive.** Cuando el dueño del workspace o un admin borra un proyecto, *Mandar también sus
+  > archivos a la papelera de Google Drive* manda su carpeta entera a la papelera de Drive; arranca destildada. Google
+  > la borra para siempre a los 30 días; *Restaurar* antes la trae de vuelta con todo lo de adentro. Desde *Proyectos
+  > borrados* también se puede mandar después. Si Google Drive ya no tiene la carpeta, la app pregunta antes de
+  > restaurar las páginas sin sus archivos, y *Buscar sus archivos de nuevo*, en el inicio del proyecto, los trae si la
+  > carpeta aparece.

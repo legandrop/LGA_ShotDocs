@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.082 :
+
+Borrar un proyecto dejaba sus archivos en Google Drive: la casilla de la ventana todavía no existía, y la
+importación de prueba de ERSO iba a dejar 5,6 GB huérfanos. Ahora, con la casilla tildada (arranca destildada; solo
+dueño y admins), después de borrar el proyecto el portero manda su carpeta entera a la papelera de Drive, y
+*Restore* la trae antes de restaurarlo. El portero anota cada carpeta antes de mandarla y la busca por su marca, así
+una respuesta perdida o una falla a mitad se terminan sin perder ninguna. Si Drive, con la misma cuenta, ya no la
+tiene, la app pregunta antes de restaurar sin los archivos, con una marca reversible (*Look for its files again*).
+Migración 10, sin aplicar.
+[ Proyectos - mandar su carpeta a la papelera de Drive al borrarlos ]
+
 v0.077 :
 
 No había forma de sacar un proyecto de la lista: la base no dejaba borrar proyectos y la app no tenía nada para

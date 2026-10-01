@@ -148,6 +148,9 @@ Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el arc
 | `POST /pass` con `file` | Nivel 1 o más | `{ file: <id> }` → `{ url, named: true }`: un pase para `/m/…`, siempre con el tipo y el nombre de `files` (un `type` o un `name` que mande la app no cuentan). `named: true` le dice a la app que este portero pone el nombre y entiende `?download=1` (un portero anterior responde solo `{ url }`). Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
 | `POST /pass` con `fileId` | Dueño | La prueba de media: un pase para un archivo de Drive por su id. |
 | `POST /trash` | Dueño o admin (lo decide la base) | `{ file: <id> }`: manda un archivo de la papelera de la app a la papelera de Drive (`PATCH files/<id>` con `trashed: true`; nunca lo borra). Con la sesión de la persona: `media_file`; Drive conectado y, si el archivo está en Drive, que lleve la marca de este (si algo de eso falla, no se le pide nada a la base y el archivo queda como estaba); `purge_file` (la base comprueba que sea dueño o admin con permiso sobre el proyecto y que el archivo esté en la papelera, y lo marca); `media_file` de nuevo (tiene que decir que está en la papelera y pedido); Drive; y al final `media_purged`. Devuelve `{ status: 'done', file, drive }`, con `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba) o `none` (todavía no está en Drive: si la subida seguía en curso, al terminar el portero lo manda solo a la papelera de Drive). Pedirlo de nuevo no hace nada de más. Los errores traen `{ error, code }` (tabla de abajo). |
+| `POST /project/trash` | Dueño o admin que maneja el proyecto (lo decide la base) | `{ project: <id> }`: manda a la papelera de Drive la carpeta entera de un proyecto **borrado** (`LGA_ShotDocs/<Proyecto>`, con todo lo de adentro). P.14, entrega 2: sección de abajo. Devuelve `{ status: 'done', project, drive, folders }`, con `drive`: `trashed`, `missing` (Drive ya no la tenía) o `none` (nunca tuvo carpeta). |
+| `POST /project/untrash` | Igual | `{ project: <id> }`: la trae de la papelera de Drive (para restaurar el proyecto, o *Look for its files again*). `drive`: `untrashed`, `none`, o `missing` (Drive, con la misma cuenta, no tiene ninguna: **la base no se toca**). |
+| `GET /project/inspect?project=<id>` | Dueño | Solo mirar (la prueba técnica): las carpetas del proyecto en Drive con su estado en la papelera, las carpetas del día y sus archivos (`parents`, `explicitlyTrashed`, `appProperties.sdFile`) y el registro del portero. No cambia nada. |
 
 ### Lo que se sirve (`/m/<pase>`)
 
@@ -209,6 +212,59 @@ subida termina el portero manda lo subido a la papelera de Drive y lo confirma c
 sesión de quien subió (la base se lo permite a quien edita el archivo). Si en ese momento Drive falla, la
 subida termina igual y el archivo queda en Drive sin ir a la papelera (no se pierde nada): pedir `/trash` de
 nuevo para ese archivo lo termina (la app ya no lo muestra en la papelera, así que es un caso a mano).
+
+### La carpeta de un proyecto borrado (P.14, entrega 2)
+
+Diseño completo: `Doc_Proyectos_Borrar.md`, secciones 3.3 a 3.9. Con la casilla de la ventana de borrar, después de
+que la base lo borra, la app pide `POST /project/trash`; para restaurarlo, primero `POST /project/untrash` (la base lo
+exige: `restore_project` da `drive_untrash_first`). Con la sesión de la persona y la migración 10
+(`20261005120000_proyectos_drive.sql`):
+
+- **Quién y cuándo** lo decide la base: `media_project` (nulo si la sesión no es dueño o admin que maneja el proyecto:
+  `404 not_found`, sin decir si existe), `request_project_drive_trash` (solo con el proyecto borrado),
+  `project_drive_trashed` y `project_drive_untrashed`. La base guarda el estado en el proyecto, no en cada archivo.
+- **Cuáles son sus carpetas:** la que recuerda el portero (`project:<id>`), las de su registro y las que encuentra Drive
+  con `appProperties has { key='sdProject' and value='<id>' }` (con `drive.file`, Drive solo devuelve lo que creó la
+  app). Una carpeta se toca solo si lleva la marca del proyecto; si la recordada no la lleva, al mandar: `403
+  drive_mismatch` **antes** de pedirle nada a la base (el proyecto se sigue pudiendo restaurar); al traer, se la deja
+  afuera.
+- **El registro `projectTrash:<id>`** (`{ email, requestedAt, folders, result }`): se escribe **antes** de cada `PATCH`
+  y se acumula. Así, si Drive cumple y la respuesta se pierde, el reintento la cuenta como ya mandada y traer la
+  trae. `email` es la cuenta de Google conectada al mandar: con otra cuenta conectada, las dos rutas responden `409
+  drive_other_account` sin tocar nada (y la app no ofrece restaurar sin los archivos). Se borra cuando la carpeta
+  vuelve.
+- **Ya mandadas:** al mandar, una carpeta con la marca que ya está en la papelera cuenta como mandada por este pedido
+  si está en el registro o si su `trashedTime` es posterior al pedido menos 5 minutos (`CLOCK_MARGIN_MS`: los relojes
+  de Google y de la base pueden no coincidir). **Al traer**, se trae la unión del registro y de las de la búsqueda que
+  fueron a la papelera desde el pedido (no una vieja que ya estaba ahí). Google documenta `trashedTime` solo para las
+  unidades compartidas: si no viene, la carpeta cuenta como del pedido (traer de más nunca pierde nada; lo mide la
+  prueba técnica).
+- **Mandar y traer de un mismo proyecto van de a uno** en el Worker. Si lo restauraron mientras se mandaba (la base
+  responde `project_drive_not_requested` al confirmar), lo que se mandó en ese pedido vuelve y la respuesta es `409
+  project_restored`.
+
+Códigos de error de `/project/trash` y `/project/untrash`:
+
+| Status | `code` | Qué pasó | Qué hace la app |
+|---|---|---|---|
+| 400 | `bad_request` | Falta el proyecto o no es un uuid; o un modo de prueba que no existe o que no pidió el dueño. | Error de la app. |
+| 401 | `session_expired` | La sesión venció. | Volver a entrar. |
+| 403 | `not_allowed` | La base no lo deja (no es dueño ni admin que lo maneja). | "Solo el dueño o un admin…". |
+| 403 | `drive_mismatch` | La carpeta recordada no lleva la marca del proyecto: no se tocó nada. | Mostrar el error; lo revisa el dueño. |
+| 404 | `not_found` | No existe, o la sesión no puede mandar ni traer su carpeta. | Como `not_allowed`. |
+| 409 | `project_not_deleted` | Mandar la carpeta de un proyecto que no está borrado. | No debería pasar (la app borra antes). |
+| 409 | `nothing_to_untrash` | Traer la de un proyecto que nunca la mandó. | Restaurar directo. |
+| 409 | `drive_other_account` | Drive está conectado a otra cuenta de Google que la que se usó para mandarla. Nada se tocó. | Pedir que se conecte la de antes; **no** ofrecer restaurar sin los archivos. |
+| 409 | `project_restored` | Lo restauraron mientras se mandaba: lo mandado volvió. | Avisar. |
+| 503 | `drive_not_connected` | Drive no está conectado (o venció la conexión). No se pidió nada a la base. | Avisar que el dueño conecte Drive. |
+| 502 | `drive_failed` | Drive no contestó bien (o la red). El pedido queda sin confirmar y el registro con lo intentado. | Repetir: termina sin perder ninguna. |
+| 502 | `db_outdated` | La base no tiene la migración 10. | Avisar. |
+| 502 | `db_error` | La base no contestó bien. | Reintentar más tarde. |
+
+**Modos de prueba (solo el dueño, para la prueba técnica, sección 3.9):** `POST /project/trash { project, test:
+'lost_response' }` manda la primera carpeta y responde `502 drive_failed` sin confirmar en la base (el estado exacto de
+una respuesta perdida); `test: 'lost_registry'` (en las dos rutas) hace el pedido sin el registro ni la carpeta
+recordada, solo con la búsqueda por la marca. Ninguno hace algo que un corte de red no pudiera hacer.
 
 La app manda partes de 8 MiB (`PART_BYTES` en `src/media/portero.ts`); el portero acepta hasta 64 MiB por
 parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida. El permiso para subir se mira al abrir la
