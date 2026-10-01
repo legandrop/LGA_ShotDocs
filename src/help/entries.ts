@@ -79,7 +79,7 @@ const OFFLINE = '0.083';
 /** La que trajo colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2). */
 const COLLAPSE_2 = '0.084';
 /** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
-const REPLACE_PROJECT = '0.090';
+const REPLACE_PROJECT = '0.091';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---

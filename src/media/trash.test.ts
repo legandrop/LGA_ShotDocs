@@ -699,7 +699,7 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     const rpc = vi.fn(async (_fn: string, _args: Record<string, unknown>) => ({ data: null, error: null, status: 200 }));
     const remote = new SupabaseRemote({ rpc } as never);
     expect(await remote.unlinkPageFile('p', 'f', 7)).toBe(true);
-    expect(rpc.mock.calls[0][1]).toEqual({ p_page_id: 'p', p_file_id: 'f', p_seen_seq: 7 });
+    expect(rpc.mock.calls[0][1]).toEqual({ p_page_id: 'p', p_file_id: 'f', p_seen_seq: 7, p_app_version: null });
     rpc.mockResolvedValueOnce({ data: false as never, error: null, status: 200 });
     expect(await remote.unlinkPageFile('p', 'f', 8)).toBe(false);
     expect(unlinkIgnored(null)).toBe(false);

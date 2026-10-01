@@ -1,7 +1,7 @@
 # Buscar en el proyecto y en la página (P.12)
 
 Estado: **entrega 1 hecha (v0.051): buscar y reemplazar en la página; entrega 2 hecha (v0.054): buscar en el
-proyecto (Ctrl/⌘+K); ajustes de v0.057 (lo que encontró Lega probando); entrega 3 hecha (v0.090): reemplazar en
+proyecto (Ctrl/⌘+K); ajustes de v0.057 (lo que encontró Lega probando); entrega 3 hecha (v0.091): reemplazar en
 todo el proyecto**. "Correcciones de la auditoría" manda
 sobre lo de arriba, y "Cómo quedó (entrega 1)", "Cómo quedó (entrega 2)" y "Ajustes de v0.057", al final, sobre
 todo lo demás (el último, sobre los otros dos). "Reemplazar en el proyecto (diseño)", lo último, manda sobre la
@@ -834,7 +834,7 @@ los íconos; en el teléfono, entera y sin scroll de costado).
 
 ## Reemplazar en el proyecto (diseño)
 
-Estado: **implementado en v0.090** ("Cómo quedó (entrega 3)", al final, manda sobre esto). Diseño del 2026-10-01, sobre `main` en v0.088. Manda sobre la sección 11. Sale de leer el
+Estado: **implementado en v0.091** ("Cómo quedó (entrega 3)", al final, manda sobre esto). Diseño del 2026-10-01, sobre `main` en v0.088. Manda sobre la sección 11. Sale de leer el
 código de la búsqueda (`findEditor.ts`, `projectIndex.ts`, `extract.ts`, `ProjectSearch.tsx`), de `PageDocs`
 (`src/sync/docs.ts`), `Doc_Sincronizacion.md`, `Doc_Colaboracion.md` y `Doc_Colapsar.md`, y de un prototipo en una
 prueba de Node (no versionado) que escribe directo en el Y.Doc, guarda el registro para deshacer y deshace, con la
@@ -1230,7 +1230,7 @@ frase "ningún carácter del otro" (se contaba por id). La auditoría además re
 corridas al azar sin pérdidas; 300 páginas en 1,4 s en su máquina) y revisó `main` hasta v0.087: el reemplazo no toca
 el mapa de "colapsado para todos", y una página reemplazada queda "kept" al volver a importar de Coda.
 
-## Cómo quedó (entrega 3, v0.090): reemplazar en todo el proyecto
+## Cómo quedó (entrega 3, v0.091): reemplazar en todo el proyecto
 
 Implementa "Reemplazar en el proyecto (diseño)" con lo que pidió su auditoría y las cuatro decisiones del 2026-10-01.
 Donde esto y el diseño no coinciden, vale esto. Va todo junto (el núcleo y la pantalla), no en dos entregas.
@@ -1275,7 +1275,7 @@ Donde esto y el diseño no coinciden, vale esto. Va todo junto (el núcleo y la 
   es `listClose` (sumado `ProjectReplace.tsx` en `shortcutSources.ts`).
 - Sin tipo de bloque ni propiedad, sin migración, sin subir `min_app_version`.
 
-**Pruebas (2032 en total, 2029 que corren):**
+**Pruebas (2040 en total con `main` hasta v0.090, 2037 que corren):**
 
 - `src/search/replaceDoc.test.ts` (15): formato partido, link, salto de línea, celdas de tabla, código, la cuenta igual a
   la del índice, lo que se saltea, fotos en línea, pegadas, *Aa* y *ab*, "solo esta" por sus ids aunque otro agregue una
