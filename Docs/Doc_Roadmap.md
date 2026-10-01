@@ -131,6 +131,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   borrar), los dos idiomas, el teléfono, y que la ayuda se mantenga al día con cada función nueva (una regla:
   cada feature nueva suma su línea en la ayuda). Diseño y auditoría antes de implementar. **Diseño en
   `Doc_Tutorial.md`** (sin implementar; auditado; Lega ya respondió sus preguntas).
+- **P.14 Borrar un proyecto (Lega, 2026-09-30: "¿cómo borro los proyectos viejos? No encontré de dónde"):** hoy
+  un proyecto se crea, se renombra y se comparte, pero no se puede sacar: no hay papelera de proyectos ni en la
+  app ni en la base (`workspaces` no se borra desde la API). Hace falta mandar un proyecto entero a la papelera
+  (con sus páginas y sus archivos, que pasan a la papelera de archivos) y poder restaurarlo, sin borrado duro
+  (las reglas de "nunca perder datos"). Pide una migración (una marca en `workspaces`, quién puede: editar y
+  crear páginas sobre el proyecto entero, o dueño y admins) y decidir qué pasa con lo compartido. Diseño y
+  auditoría antes. Mientras tanto: renombrarlo y mandar sus páginas a la papelera.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

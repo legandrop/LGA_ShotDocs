@@ -115,7 +115,8 @@ importación escribió en cada una, cuáles están terminadas y la dirección `s
 queda guardado. Al volver a elegir la misma carpeta el diálogo lo dice ("no terminó: 12 de 35 páginas") y
 ofrece **Seguir**, que continúa en el mismo proyecto: no crea otra vez las páginas ya creadas, saltea las
 terminadas y usa los archivos ya guardados en vez de guardarlos (y subirlos al Drive) de nuevo. **Importar a
-un proyecto nuevo** empieza de cero (el proyecto a medias queda; se puede mandar a la papelera).
+un proyecto nuevo** empieza de cero (el proyecto a medias queda: la app todavía no borra proyectos, ver P.14
+del roadmap; se le puede cambiar el nombre y mandar sus páginas a la papelera).
 
 - **Qué queda para seguir.** La anotación se borra solo cuando todas las páginas quedaron terminadas. Queda
   sin terminar una página cuyo contenido no se pudo escribir ("3 archivos quedaron guardados pero la página no
@@ -309,7 +310,8 @@ cambiaron): la importación no se entera de los cambios posteriores. Para migrar
 1. Dejar de editarlo en Coda.
 2. Bajarlo de nuevo con `--refresh` (o a una carpeta nueva) y capturar de nuevo sus comentarios.
 3. Importarlo a un proyecto nuevo y comprobarlo.
-4. Mandar a la papelera el proyecto de prueba.
+4. El proyecto de prueba queda: la app todavía no borra proyectos (P.14 del roadmap). Mientras tanto se le
+   cambia el nombre y se mandan sus páginas a la papelera.
 
 ## Cómo quedó
 
@@ -388,7 +390,9 @@ del selector de proyectos: escondida para otro correo, visible (y abre el diálo
 permitido, con el hash permitido de un correo de prueba (el real no aparece en las pruebas);
 `src/import/codaOwner.test.ts`, el hash (sin espacios, en minúsculas), sin correo o sin Web Crypto nadie, y
 una sola vez por usuario; `src/ui/team.test.tsx`, la pantalla de "te sacaron" con una importación en curso.
-Con MGTZD real (35 páginas, 32 fotos, 28 MB) se probó igual, fuera del repo, el 2026-09-30.
+Con MGTZD real (35 páginas, 32 fotos, 28 MB) se probó igual, fuera del repo, el 2026-09-30, primero sin
+comentarios y después con ellos (12 hilos y 13 comentarios en 6 páginas, 7 resueltos, 6 sin texto marcado):
+entraron todos, cada uno en su lugar.
 
 Comentarios: `src/import/codaComments.test.ts`, con `comments.json` inventado con la forma del MCP de Coda: el
 Markdown de Coda normalizado, el anclaje (texto exacto antes que contenido, textos cortos, cursivas, varias
