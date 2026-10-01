@@ -29,6 +29,7 @@ import {
 } from './carreteModel';
 import { downloadProps, isOffline, type CarreteLoader, type Full } from './carreteLoader';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon } from './icons';
+import { shortcutLabel } from './shortcuts';
 
 // El carrete (paso 7 de Docs/Plan_Workspaces.md; Docs/Doc_Carrete.md): todas las fotos y videos de la
 // página a pantalla completa, en orden, empezando por la que se tocó. Anterior/siguiente con las flechas,
@@ -650,7 +651,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
           {name}
         </span>
         {downloadLink('carrete-btn', true)}
-        <button className="carrete-btn" aria-label={tr('common.close')} data-tip={tr('carrete.keyboard', { key: 'Esc' })} onClick={requestClose}>
+        <button className="carrete-btn" aria-label={tr('common.close')} data-tip={tr('carrete.keyboard', { key: shortcutLabel('carreteClose') })} onClick={requestClose}>
           <CloseIcon size={22} />
         </button>
       </div>
@@ -691,14 +692,14 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
             <button
               className="carrete-nav carrete-prev"
               aria-label={tr('carrete.previous')}
-              data-tip={tr('carrete.keyboard', { key: '←' })}
+              data-tip={tr('carrete.keyboard', { key: shortcutLabel('carretePrev') })}
               disabled={index === 0} onClick={() => go(-1)}>
               <ChevronLeftIcon size={26} />
             </button>
             <button
               className="carrete-nav carrete-next"
               aria-label={tr('carrete.next')}
-              data-tip={tr('carrete.keyboard', { key: '→' })}
+              data-tip={tr('carrete.keyboard', { key: shortcutLabel('carreteNext') })}
               disabled={index === count - 1}
               onClick={() => go(1)}
             >

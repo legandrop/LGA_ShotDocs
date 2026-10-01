@@ -4,7 +4,9 @@ import { useT } from '../i18n';
 import { navigate, pagePath, useRoute } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
-import { AccountIcon, CollapseIcon, ExpandIcon, MoreIcon, PlusIcon, SearchIcon, TrashIcon } from './icons';
+import { openHelp } from '../help/helpUi';
+import { useHelpDot } from '../tutorial/tourState';
+import { AccountIcon, CollapseIcon, ExpandIcon, HelpIcon, MoreIcon, PlusIcon, SearchIcon, TrashIcon } from './icons';
 import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
 import { DriveDialogHost, MembersDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
@@ -12,7 +14,8 @@ import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { useCurrentProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
-import { SEARCH_SHORTCUT_LABEL, useSearchSession } from './projectSearchUi';
+import { useSearchSession } from './projectSearchUi';
+import { shortcutLabel } from './shortcuts';
 import { SyncBadge } from './SyncBadge';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
 import { createOpenScheduler, isPlainKey, isTreeKey, treeKeyAction, visibleRows } from './treeNav';
@@ -43,6 +46,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const projectId = useCurrentProject();
   const search = useSearchSession();
   const tr = useT();
+  // Un punto en el "?" mientras haya una recorrida para ver y la ayuda nunca se haya abierto acá.
+  const helpDot = useHelpDot();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -198,6 +203,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     return (
       <ul
         className={role === 'tree' ? 'tree' : undefined}
+        data-tour={role === 'tree' ? 'pages' : undefined}
         role={role}
         aria-label={role === 'tree' ? tr('sidebar.tree') : undefined}
         style={style}
@@ -371,17 +377,17 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       <ProjectSwitcher />
       <SyncBadge />
 
-      <div className="section-title">
+      <div className="section-title" data-tour="pages">
         <span className="mono-label">{tr('sidebar.pages')}</span>
         <span className="section-actions">
           {/* Buscar en el proyecto (Docs/Doc_Buscar.md, sección 7): a la izquierda del "+", también para quien
               no puede crear páginas. */}
           <button
             className="search-button"
-            aria-label={tr('sidebar.search', { shortcut: SEARCH_SHORTCUT_LABEL })}
+            aria-label={tr('sidebar.search', { shortcut: shortcutLabel('search') })}
             aria-haspopup="dialog"
             aria-expanded={search.isOpen()}
-            data-tip={tr('sidebar.search', { shortcut: SEARCH_SHORTCUT_LABEL })}
+            data-tip={tr('sidebar.search', { shortcut: shortcutLabel('search') })}
             onClick={() => search.setOpen(true)}
           >
             <SearchIcon size={16} />
@@ -402,13 +408,24 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
 
       <div className="sidebar-spacer" />
       <div className="sidebar-footer">
-        <button
-          className={`footer-item${route.name === 'trash' ? ' active' : ''}`}
-          onClick={() => navigate('/trash')}
-        >
-          <TrashIcon size={17} /> {tr('trash.title')}
-          {trashCount > 0 ? ` (${trashCount})` : ''}
-        </button>
+        <div className="footer-row">
+          <button
+            className={`footer-item${route.name === 'trash' ? ' active' : ''}`}
+            onClick={() => navigate('/trash')}
+          >
+            <TrashIcon size={17} /> {tr('trash.title')}
+            {trashCount > 0 ? ` (${trashCount})` : ''}
+          </button>
+          {/* La ayuda (Docs/Doc_Tutorial.md, sección 5): sin tooltip, el ícono ya lo dice (D-15). */}
+          <button
+            className={`help-button${helpDot ? ' has-dot' : ''}`}
+            data-tour="help"
+            aria-label={tr('help.open')}
+            onClick={(e) => openHelp(null, e.currentTarget)}
+          >
+            <HelpIcon size={18} />
+          </button>
+        </div>
         <button
           ref={accountButton}
           className="account-button"

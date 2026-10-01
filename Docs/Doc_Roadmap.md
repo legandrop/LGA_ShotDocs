@@ -187,8 +187,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   desde donde se puede **volver a ver el tutorial**. A pensar en el diseño: el documento de ejemplo no debería
   ensuciar el workspace ni sincronizarse (una página de práctica local, o una plantilla que se crea y se puede
   borrar), los dos idiomas, el teléfono, y que la ayuda se mantenga al día con cada función nueva (una regla:
-  cada feature nueva suma su línea en la ayuda). Diseño y auditoría antes de implementar. **Diseño en
-  `Doc_Tutorial.md`** (sin implementar; auditado; Lega ya respondió sus preguntas).
+  cada feature nueva suma su línea en la ayuda). **Entregas 1 y 2 hechas (v0.082, `Doc_Tutorial.md`, "Cómo
+  quedó"):** la ayuda con el "?" y el menú de la cuenta, el registro único de atajos con sus pruebas, la página de
+  práctica en `/practice` y la recorrida de diez pasos (nueve en el teléfono). Falta la entrega 3 ("Mostrame" en
+  cada entrada y el punto de novedades), elegir con Lega las fotos del ejemplo y probar a mano en Safari, el iPhone
+  y con VoiceOver.
 - **P.14 Borrar y archivar proyectos (Lega, 2026-09-30: "¿cómo borro los proyectos viejos? No encontré de
   dónde"):** hoy un proyecto se crea, se renombra y se comparte, pero no se puede sacar de la lista: no hay nada
   para eso ni en la app ni en la base (`workspaces` no se borra desde la API). Faltan dos opciones distintas:
@@ -220,12 +223,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   primera subpágina, ← pliega o va a la página madre, Inicio / Fin a la primera o la última, Enter / Espacio
   abren. Solo con el foco en el árbol y sin Ctrl, ⌘, Alt ni Shift. Y el defecto: plegar con el triángulo (o
   con ←) una madre de la página abierta no dejaba; ahora pliega y la abierta pasa a ser esa madre (en el
-  teléfono el cajón sigue abierto). Lógica en `src/ui/treeNav.ts`. Falta su entrada en la ayuda (P.13).
+  teléfono el cajón sigue abierto). Lógica en `src/ui/treeNav.ts`. Su entrada en la ayuda está desde v0.082 (P.13).
 - **P.17 Hecho (v0.079): instalar la app** (Lega, 2026-10-01). La app reconoce si está instalada; si no, ofrece
   *Install app* en el menú de la cuenta y en la pantalla de entrar, y en el teléfono un aviso que se cierra por 30
   días. La ventana muestra los pasos con dibujos para iPhone, Android y computadora, con *Install* directo donde
-  el navegador lo ofrece. Ver `Doc_Instalar.md`. Falta: probarlo en un iPhone y un Android reales, su entrada en
-  la ayuda (P.13, ya escrita en `Doc_Tutorial.md`), y a futuro las capturas del manifiesto (`screenshots`) y la
+  el navegador lo ofrece. Ver `Doc_Instalar.md`. Su entrada en la ayuda está desde v0.082 (P.13). Falta: probarlo en un iPhone y un Android reales, y a futuro las capturas del manifiesto (`screenshots`) y la
   pantalla de arranque del iPhone.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para

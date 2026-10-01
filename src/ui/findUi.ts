@@ -205,7 +205,9 @@ export function updateFindUi(patch: Partial<Omit<FindUiState, 'open' | 'focus' |
   else set(patch);
 }
 
-export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+// La plataforma sale del registro de atajos (una sola copia para toda la app).
+import { IS_MAC } from './shortcuts';
+export { IS_MAC };
 
 interface KeyLike {
   ctrlKey: boolean;
@@ -240,9 +242,6 @@ export function isStepShortcut(e: KeyLike, mac = IS_MAC): boolean {
   if (e.key === 'F3' && !e.ctrlKey && !e.metaKey && !e.altKey) return true;
   return modPressed(e, mac) && !e.altKey && isLetter(e, 'g');
 }
-
-/** El atajo como se ve en los tooltips. */
-export const FIND_SHORTCUT_LABEL = IS_MAC ? '⌘F' : 'Ctrl+F';
 
 /** Un diálogo o el carrete abiertos (no todos los diálogos tienen `aria-modal`). */
 const MODAL = '[aria-modal="true"], .modal, .modal-backdrop, .carrete, dialog[open]';

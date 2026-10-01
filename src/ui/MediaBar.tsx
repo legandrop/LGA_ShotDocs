@@ -8,7 +8,8 @@ import { useServices } from '../services';
 import { isAttachment } from './attachments';
 import { carreteSourceOf } from './carreteModel';
 import { isOffline, startDownload } from './carreteLoader';
-import { COMMENT_SHORTCUT_LABEL, commentOnBlock } from './commentsUi';
+import { commentOnBlock } from './commentsUi';
+import { shortcutLabel } from './shortcuts';
 import { AlignCenterIcon, AlignLeftIcon, AlignRightIcon, CommentIcon, DownloadIcon, RenameIcon, ReplaceIcon, TrashIcon } from './icons';
 import { ImageSizeButtons, OriginalDownloadButton, ViewIcon } from './MediaToolbarButtons';
 import { notify } from './notice';
@@ -131,7 +132,7 @@ export function AlignButtons({ current, inline = false, onAlign }: { current: Al
 export function CommentButton({ blockId }: { blockId: string | null }) {
   const tr = useT();
   const label = tr('comments.comment');
-  return <BarButton label={label} tip={`**${label}**\n${tr('photoTip.comment')}\n${COMMENT_SHORTCUT_LABEL}`} icon={<CommentIcon size={18} />} test="mediaComment" onClick={() => commentOnBlock(blockId)} />;
+  return <BarButton label={label} tip={`**${label}**\n${tr('photoTip.comment')}\n${shortcutLabel('comment')}`} icon={<CommentIcon size={18} />} test="mediaComment" onClick={() => commentOnBlock(blockId)} />;
 }
 
 /** Reemplazar: el selector de archivos del sistema (uno); lo elegido se guarda y pasa a ser la foto. */
