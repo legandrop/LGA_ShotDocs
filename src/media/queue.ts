@@ -627,11 +627,12 @@ export class MediaQueue {
     if (typeof quota === 'number' && quota > 0 && (estimate.usage ?? 0) + size + ROOM_MARGIN > quota) {
       // Primero se hace lugar con las imágenes nítidas (se vuelven a hacer cuando hagan falta) y las copias bajadas
       // que ninguna marca pide.
-      const freed = (await this.clearViews().catch(() => 0)) + (await this.makeRoom(size));
-      if (freed > 0) {
+      const fits = async () => {
         const again = await storage.estimate().catch(() => estimate);
-        if (!((again.usage ?? 0) + size + ROOM_MARGIN > (again.quota ?? quota))) return;
-      }
+        return !((again.usage ?? 0) + size + ROOM_MARGIN > (again.quota ?? quota));
+      };
+      if ((await this.clearViews().catch(() => 0)) > 0 && (await fits())) return;
+      if ((await this.makeRoom(size)) > 0 && (await fits())) return;
       throw new FileRejected(t('queue.noRoom'));
     }
   }

@@ -1004,8 +1004,8 @@ El diseño de arriba ya las sigue.
    restaurar el proyecto o devolver el permiso, vuelve como online: no se baja nada solo; se vuelve a marcar si se
    quiere.
 
-**Pendiente de Lega:** en el iPhone, hasta medir con el disco casi lleno (sección 9.1), un tope fijo para el **total**
-de lo marcado en todo el dispositivo; propuesta **5 GB** (constante `IOS_OFFLINE_TOTAL_MAX`).
+**Decidido por Lega (2026-10-01):** en el iPhone, hasta medir con el disco casi lleno (sección 9.1), el **total** de lo
+marcado en todo el dispositivo no pasa **5 GB** (constante `IOS_OFFLINE_TOTAL_MAX`).
 
 **Re-verificación (2026-10-01):** B1, B2 y B3 resueltos; dos bloqueantes nuevos corregidos: N1 (decidir por el `code`
 del portero: secciones 3.5, 4, 6 y 10) y N2 (el iPhone casi lleno: secciones 3.5 y 9.1). También `uploadedAt`,
@@ -1048,3 +1048,19 @@ cambios". Todas quedaron en el cuerpo:
 | 23: *Share* sin copia | 5.4 y Riesgos |
 | 24: adjunto propio de más de 50 MB | 3.2 |
 | Las 9 preguntas | "Respuestas de Lega a las propuestas" |
+
+## En curso (pausado, 2026-10-01)
+
+Lega reinició la computadora. Estado de las correcciones de la auditoría de la implementación (`6a26d1f`):
+
+- **Hecho** (commits `30902ee` y el siguiente): I1 (el tope del iPhone suma lo bajado en la vuelta y la ventana usa el
+  total del dispositivo); altas 1 ("Offline · N" según la conexión), 2 (el carrete usa la de 2048 guardada), 3
+  (`cleanOrphans` en una transacción y la copia sin una parte se vuelve a bajar), 4 (una foto nueva que no entra libera
+  y reintenta; si igual no, se ofrece guardarla) y 5 (`/storage-test` no llena con algo por subir y borra lo que quedó);
+  medias (una marca lista no se consulta entera en cada vuelta, *Show what* con la lista, sin Web Locks no aparece);
+  bajas 10, 11 y 12. Pruebas: 1596 de la suite, 24 de `offline.test.ts`, 7 de `offlineUi.test.tsx`; `tsc` de la app y
+  del portero sin errores. Tope del iPhone: 5 GB en total (Lega).
+- **Falta:** unir `origin/main` (v0.081; 14 archivos en conflicto, entre ellos `portero/src/core.ts` y
+  `src/services.ts`, conservando las dos partes), `npm ci` (cambió el parche de y-prosemirror), `scripts/portero-smoke.mjs`,
+  las pruebas del portero, la suite, `tsc` (app y portero), el build y el recorrido en Chromium después de unir; el
+  changelog ya está como v0.083.

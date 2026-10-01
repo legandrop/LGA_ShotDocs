@@ -266,8 +266,7 @@ describe('selector en el teléfono', () => {
     await act(async () => more.click());
     const sheet = document.querySelector('.project-row.opened .project-sheet')!;
     expect([...sheet.querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual([
-      // "Available offline" (P.10), para cualquiera que vea el proyecto.
-      'Available offline…',
+      // "Available offline" (P.10) no aparece: jsdom no tiene Web Locks (sin ellos, la opción no se ofrece).
       'Rename',
       'Share “Bosque Negro”…',
       'Archive',
