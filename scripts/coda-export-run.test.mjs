@@ -23,7 +23,7 @@ const JPEG = b64('\xff\xd8\xff\xe0 una foto comun')
 const PNG = b64('\x89PNG\r\n\x1a\n una captura')
 const img = (id, type, alt) => `<img src="${blobUrl(id)}" data-coda-blob-id="${id}" data-coda-mime-type="${type}" alt="${alt}" width="350">`
 
-/** Un doc con dos páginas: la primera con una foto HEIC y un JPEG, la segunda (hija) con un PNG. */
+/** Un doc con dos páginas: la primera con una foto HEIC y un JPEG, la segunda (hija) con un PNG y un adjunto. */
 function docWithHeic({ broken = false } = {}) {
   return {
     doc: DOC,
@@ -44,13 +44,15 @@ function docWithHeic({ broken = false } = {}) {
         isHidden: false,
         parent: { id: 'canvas-1' },
         browserLink: 'https://coda.io/d/_ddocPrueba1/Notas_su2',
-        html: `<div>${img('bl-png1', 'image/png', 'captura.png')}</div>`,
+        // Y un adjunto de un tipo que el comando no conoce (se guarda como .bin).
+        html: `<div>${img('bl-png1', 'image/png', 'captura.png')}<a href="${blobUrl('bl-raw1')}">datos.xyz</a></div>`,
       },
     ],
     media: {
       [blobUrl('bl-heic1')]: { type: 'image/heic', base64: HEIC },
       [blobUrl('bl-jpg1')]: { type: 'image/jpeg', base64: JPEG },
       [blobUrl('bl-png1')]: { type: 'image/png', base64: PNG },
+      [blobUrl('bl-raw1')]: { type: 'application/x-prueba', base64: b64('datos crudos') },
       ...(broken ? { [blobUrl('bl-heic2')]: { type: 'image/heic', base64: b64('ftypheic ROTO') } } : {}),
     },
   }
@@ -114,7 +116,7 @@ describe('el comando entero, contra una API de Coda de mentira', () => {
     expect(first.requests.filter((r) => r.includes('codahosted.io/docs/')).every((r) => !r.includes('(token)'))).toBe(true)
 
     // En la carpeta: el JPEG en media/ con el nombre del blob, el original aparte, lo demás tal cual.
-    expect((await readdir(join(ctx.out, 'media'))).sort()).toEqual(['bl-heic1.jpg', 'bl-jpg1.jpg', 'bl-png1.png'])
+    expect((await readdir(join(ctx.out, 'media'))).sort()).toEqual(['bl-heic1.jpg', 'bl-jpg1.jpg', 'bl-png1.png', 'bl-raw1.bin'])
     expect(await readdir(join(ctx.out, 'media-originals'))).toEqual(['bl-heic1.heic'])
     expect((await readFile(join(ctx.out, 'media-originals', 'bl-heic1.heic'))).toString('base64')).toBe(HEIC)
     const jpeg = await readFile(join(ctx.out, 'media', 'bl-heic1.jpg'))
@@ -129,6 +131,7 @@ describe('el comando entero, contra una API de Coda de mentira', () => {
     expect(rodaje.media.find((m) => m.url === blobUrl('bl-heic1'))).toMatchObject({ file: 'bl-heic1.jpg', type: 'image/jpeg', bytes: jpeg.length })
     expect(coda.pages[0].media.find((m) => m.url === blobUrl('bl-heic1'))).toMatchObject({ file: 'bl-heic1.heic', type: 'image/heic' })
     expect(notas).toMatchObject({ parentId: 'canvas-1', file: coda.pages[1].file })
+    expect(notas.media.find((m) => m.url === blobUrl('bl-raw1'))).toMatchObject({ file: 'bl-raw1.bin', type: 'application/x-prueba' })
     // El HTML de Coda no se toca; lo que se importa dice JPEG.
     expect(rodaje.file).toMatch(/\.import\.html$/)
     const imported = await readFile(join(ctx.out, 'pages', rodaje.file), 'utf8')
@@ -138,7 +141,7 @@ describe('el comando entero, contra una API de Coda de mentira', () => {
     expect(await readFile(join(ctx.out, 'pages', coda.pages[0].file.replace(/\.html$/, '.local.html')), 'utf8')).toContain('../media/bl-heic1.jpg')
 
     // Otra vez: el HTML no se vuelve a pedir, los archivos tampoco (la foto convertida está como .jpg), no se
-    // convierte nada y el manifest queda igual.
+    // convierte nada y el manifest queda igual (también el tipo del adjunto que no se deduce por la extensión).
     const second = await run(ctx, [DOC.id, ctx.out])
     expect(second.code, second.output).toBe(0)
     expect(second.converts).toEqual([])
@@ -183,7 +186,7 @@ describe('el comando entero, contra una API de Coda de mentira', () => {
     const done = await run(ctx, [DOC.id, ctx.out])
     expect(done.code).toBe(1)
     expect(done.converts).toHaveLength(2)
-    expect((await readdir(join(ctx.out, 'media'))).sort()).toEqual(['bl-heic1.jpg', 'bl-heic2.heic', 'bl-jpg1.jpg', 'bl-png1.png'])
+    expect((await readdir(join(ctx.out, 'media'))).sort()).toEqual(['bl-heic1.jpg', 'bl-heic2.heic', 'bl-jpg1.jpg', 'bl-png1.png', 'bl-raw1.bin'])
     const manifest = await readJson(join(ctx.out, 'manifest.json'))
     expect(manifest.heic).toEqual({ converted: 1, pending: 1 })
     expect(manifest.problems.some((p) => /HEIC/.test(p) && p.includes('bl-heic2'))).toBe(true)

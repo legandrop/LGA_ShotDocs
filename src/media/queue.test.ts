@@ -8,7 +8,7 @@ import { FileRejected } from '../sync/files';
 import { CONTROL_TIMEOUT_MS, PART_BYTES, STALL_CHECK_MS, STALL_MS, answerLimit, localDay } from './portero';
 import { fileKind } from './attachments';
 import { deletedLabel, mediaKind } from './probe';
-import { HEIC_ONLINE_TRIES, HEIC_RETRY_MS, MEDIA_SCHEME, STALLS_BEFORE_RENEW, heicNotice, mediaIdOf, normalizeMime } from './queue';
+import { HEIC_ONLINE_TRIES, HEIC_PARALLEL, HEIC_RETRY_MS, MEDIA_SCHEME, STALLS_BEFORE_RENEW, heicNotice, mediaIdOf, normalizeMime } from './queue';
 import { HEIC_SAMPLE } from './fixtures/heicSample';
 import { HeicError } from './heic';
 
@@ -1800,10 +1800,10 @@ describe('fotos HEIC: se guardan en el acto y pasan a JPEG después (Docs/Doc_Im
     await a.media.idle();
     expect(await a.mediaDb.get('files', id)).toMatchObject({ name: 'IMG_0001.HEIC', mime: 'image/heic', heic: 'pending' });
     expect(svgText(await a.media.resolve(url))).toContain(heicNotice('waiting'));
-    // Sin red no se registra nada ni se manda a registrar: el HEIC sigue esperando el decodificador.
+    // Sin red no se registra nada; el HEIC sigue esperando (anotado como mandado a registrar).
     await sync(a);
     expect(server.mediaFiles.size).toBe(0);
-    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'pending', registered: false });
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'sent', registered: false });
     expect(svgText(await a.media.resolve(url))).toContain(heicNotice('waiting'));
 
     // Vuelve la red (y con ella el decodificador): se pregunta a la base, se convierte y se sube el JPEG.
@@ -1848,7 +1848,7 @@ describe('fotos HEIC: se guardan en el acto y pasan a JPEG después (Docs/Doc_Im
     expect(tries).toBe(1);
     expect(server.mediaFiles.size).toBe(0);
     expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'pending', heicMisses: 1, registered: false, pending: 1 });
-    expect(svgText(await a.media.resolve(url))).toContain(heicNotice('waiting'));
+    expect(svgText(await a.media.resolve(url))).toContain(heicNotice('retrying'));
     // Antes de la espera no se prueba de nuevo.
     server.clockOffset += 10_000;
     await sync(a);
@@ -1898,11 +1898,80 @@ describe('fotos HEIC: se guardan en el acto y pasan a JPEG después (Docs/Doc_Im
       server.clockOffset += 5 * 60_000;
       await sync(a);
     }
+    // Sin red sigue el camino de siempre: mandada a registrar (falla sin red), sin contar intentos.
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'sent', registered: false });
     expect((await a.mediaDb.get('files', id))?.heicMisses).toBeUndefined();
     server.online = true;
     available = true;
     await sync(a);
     expect(server.mediaFiles.get(id)).toMatchObject({ mime: 'image/jpeg' });
+  });
+
+  it('si el navegador cree que no hay red pero sí hay, y el decodificador no carga, la foto se sube igual (no queda esperando para siempre)', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    // `navigator.onLine` en false con red de verdad (algunos adaptadores virtuales o VPN).
+    (a.media as unknown as { offline: () => boolean }).offline = () => true;
+    server.convertHeic = unavailable;
+    const original = heicFile();
+    const id = mediaIdOf(await a.media.add(page, original))!;
+    for (let i = 0; i < 20 && !server.mediaFiles.get(id)?.drive_id; i++) {
+      server.clockOffset += 60 * 60_000;
+      await sync(a);
+    }
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'failed', registered: true, pending: 0, mime: 'image/heic' });
+    const row = server.mediaFiles.get(id)!;
+    expect(await same(original, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
+  });
+
+  it('mientras reintenta con red, el aviso lo dice; también después de recargar, mientras espera el próximo intento', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const dbName = crypto.randomUUID();
+    const a = await device(server, dbName);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    server.convertHeic = unavailable;
+    const url = await a.media.add(page, heicFile());
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'pending', heicMisses: 1 });
+    expect(svgText(await a.media.resolve(url))).toContain(heicNotice('retrying'));
+    expect(heicNotice('retrying')).not.toBe(heicNotice('converting'));
+    // Recargar: la lista en memoria se pierde, pero el registro sabe que ya hubo un intento con red.
+    await close(a);
+    const b = await device(server, dbName);
+    expect(svgText(await b.media.resolve(url))).toContain(heicNotice('retrying'));
+    // Sin red, el aviso de siempre.
+    server.online = false;
+    server.clockOffset += HEIC_RETRY_MS[0] + 1000;
+    await sync(b);
+    expect(svgText(await b.media.resolve(url))).toContain(heicNotice('waiting'));
+  });
+
+  it('varias HEIC soltadas juntas se convierten de a dos, y esperar el turno no cuenta para el tope', async () => {
+    const server = new FakeServer();
+    server.heicTimeoutMs = 300;
+    const real = server.convertHeic;
+    let running = 0;
+    let most = 0;
+    server.convertHeic = async (file) => {
+      running++;
+      most = Math.max(most, running);
+      try {
+        // Cada una tarda 120 ms: cinco juntas, sin turno, serían cinco a la vez; con turno, la última empieza
+        // pasados los 300 ms del tope y no falla por eso.
+        await new Promise((r) => setTimeout(r, 120));
+        return await real(file);
+      } finally {
+        running--;
+      }
+    };
+    const { a, page } = await withPage(server);
+    const ids = await Promise.all([1, 2, 3, 4, 5].map(async (n) => mediaIdOf(await a.media.add(page, heicFile(`IMG_000${n}.HEIC`)))!));
+    await a.media.idle();
+    expect(most).toBe(HEIC_PARALLEL);
+    for (const id of ids) expect(await a.mediaDb.get('files', id)).toMatchObject({ mime: 'image/jpeg' });
   });
 
   it('sin red, la conversión arranca enseguida: no pregunta a la base (tardaría en fallar)', async () => {

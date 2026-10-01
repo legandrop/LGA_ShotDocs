@@ -366,7 +366,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     - **Verlo en la app con el doc entero.** Probado con una importación real de cuatro páginas (46 fotos
       convertidas: en el Drive, con miniatura y a la vista); falta la de un doc completo.
     - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.
-    - **De a una.** La conversión tarda alrededor de un segundo por foto; con miles, convendría en paralelo.
+    - **Hecho (v0.0XX): de a dos.** Varias HEIC soltadas juntas se convertían todas a la vez (cientos de MB
+      cada una); ahora de a dos (`HEIC_PARALLEL`). Cada una tarda alrededor de un segundo.
+    - **La comprobación del JPEG acepta uno con la mitad en blanco**, y una carrera de microsegundos entre dos
+      pestañas al tercer intento deja el aviso de HEIC sobre un JPEG: anotados en `Doc_Imagenes.md`, "Pendiente".
     - **Hecho (v0.0XX): pruebas del comando entero** (`scripts/coda-export-run.test.mjs`, contra una API de Coda
       de mentira): bajar, convertir, repetir, `--refresh`, sin la librería, `--convert-only`, un HEIC roto y un doc
       sin HEIC, con el código de salida.

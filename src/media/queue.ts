@@ -265,6 +265,11 @@ export interface MediaQueueOptions {
  */
 export const HEIC_ONLINE_TRIES = 3;
 export const HEIC_RETRY_MS = [30_000, 120_000];
+/**
+ * Cuántas conversiones de HEIC a la vez. Cada una pide cientos de MB (cerca de 800 con una foto de 48 MP): sin
+ * turno, soltar muchas juntas las abría todas a la vez. Dos aprovechan una computadora sin pasarse en un teléfono.
+ */
+export const HEIC_PARALLEL = 2;
 
 const browserOffline = (): boolean => {
   try {
@@ -291,15 +296,17 @@ const loadAndConvertHeic = convertHeicNow;
 
 /**
  * En qué anda una foto HEIC que todavía no se ve (`MediaQueue.heicState`): `converting`, guardada y por pasar a
- * JPEG; `waiting`, el decodificador no estaba (sin red) y se vuelve a probar; `failed`, no se pudo convertir y
+ * JPEG; `waiting`, el decodificador no estaba (sin red) y se vuelve a probar con red; `retrying`, con red el
+ * decodificador no cargó y se vuelve a probar en un rato (`HEIC_ONLINE_TRIES`); `failed`, no se pudo convertir y
  * queda como HEIC; `none`, un HEIC que llegó así (de otro dispositivo o de una versión anterior).
  */
-export type HeicState = 'converting' | 'waiting' | 'failed' | 'none';
+export type HeicState = 'converting' | 'waiting' | 'retrying' | 'failed' | 'none';
 
 /** Lo que dice en la página, en el lugar de una foto HEIC que no se ve. */
 export function heicNotice(state: HeicState): string {
   if (state === 'converting') return t('queue.heicConverting');
   if (state === 'waiting') return t('queue.heicPending');
+  if (state === 'retrying') return t('queue.heicRetrying');
   if (state === 'failed') return t('queue.heicFailed');
   return t('queue.heicNoPreview');
 }
@@ -424,6 +431,9 @@ export class MediaQueue {
   private readonly offline: () => boolean;
   /** Las conversiones de HEIC en curso (una sola por archivo; ver `ensureConverted`). */
   private readonly converting = new Map<string, Promise<void>>();
+  /** Conversiones de HEIC corriendo y las que esperan su turno (ver `HEIC_PARALLEL`). */
+  private heicRunning = 0;
+  private readonly heicTurns: (() => void)[] = [];
   /** HEIC cuyo último intento no encontró el decodificador (sin red): el aviso de la página lo dice. */
   private readonly heicWaiting = new Set<string>();
   private readonly now: () => number;
@@ -1102,7 +1112,15 @@ export class MediaQueue {
         record = (await this.store.get('files', record.id)) ?? record;
         // El decodificador no cargó: antes de subir el HEIC tal cual se vuelve a probar, con red hasta
         // `HEIC_ONLINE_TRIES` veces (la espera la puso `convertNow` en `retryAt`); sin red, en la próxima vuelta.
-        if (record.heic === 'pending' && this.heicWaiting.has(record.id) && (record.heicMisses ?? 0) < HEIC_ONLINE_TRIES) {
+        // Solo con red: si el dispositivo cree que no la tiene, sigue el camino de siempre (se manda a registrar,
+        // falla sin red y al volver se pregunta a la base y se convierte). Así, si `navigator.onLine` dice "sin
+        // red" y no es cierto, la foto se sube igual en vez de quedar esperando para siempre.
+        if (
+          record.heic === 'pending' &&
+          this.heicWaiting.has(record.id) &&
+          !this.offline() &&
+          (record.heicMisses ?? 0) < HEIC_ONLINE_TRIES
+        ) {
           return 'retry';
         }
       }
@@ -1317,7 +1335,11 @@ export class MediaQueue {
     if (record.heic === 'failed') return 'failed';
     // Registrado sin convertir (una pestaña de una versión anterior, por ejemplo): queda como HEIC.
     if (!record.heic || record.registered) return record.heic ? 'failed' : 'none';
-    return this.heicWaiting.has(record.id) ? 'waiting' : 'converting';
+    const retried = record.heic === 'pending' && (record.heicMisses ?? 0) > 0;
+    if (this.heicWaiting.has(record.id)) return retried && !this.offline() ? 'retrying' : 'waiting';
+    // Después de recargar la lista de espera está vacía: si ya hubo intentos con red y no hay uno en curso, está
+    // esperando el próximo (no "convirtiendo").
+    return retried && !this.converting.has(record.id) ? 'retrying' : 'converting';
   }
 
   private async convertNow(id: string): Promise<void> {
@@ -1433,13 +1455,22 @@ export class MediaQueue {
   }
 
   /** La conversión con tope: un conversor que no contesta nunca no deja la cola esperando. */
-  private convertWithLimit(blob: Blob): Promise<Blob> {
-    return new Promise<Blob>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new HeicError('failed', 'The HEIC conversion took too long.')), this.heicTimeoutMs);
-      this.heic(blob)
-        .then(resolve, reject)
-        .finally(() => clearTimeout(timer));
-    });
+  private async convertWithLimit(blob: Blob): Promise<Blob> {
+    // De a `HEIC_PARALLEL`: soltar veinte fotos no abre veinte decodificaciones a la vez (cientos de MB cada una).
+    // El tope corre desde que le toca: esperar el turno no cuenta.
+    while (this.heicRunning >= HEIC_PARALLEL) await new Promise<void>((resume) => this.heicTurns.push(resume));
+    this.heicRunning++;
+    try {
+      return await new Promise<Blob>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new HeicError('failed', 'The HEIC conversion took too long.')), this.heicTimeoutMs);
+        this.heic(blob)
+          .then(resolve, reject)
+          .finally(() => clearTimeout(timer));
+      });
+    } finally {
+      this.heicRunning--;
+      this.heicTurns.shift()?.();
+    }
   }
 
   /** La foto queda como HEIC (no se pudo convertir, o ya está registrada así): se sube tal cual, con su aviso. */

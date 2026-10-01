@@ -639,7 +639,8 @@ mismo manifest) y `--refresh`; sin la librería (sale con error y la forma de in
 después; un HEIC roto (anotado, sale con error, las demás se convierten); y un doc sin HEIC (sin
 `manifest.coda.json` ni cargar la librería). Encontró que repetir el comando dejaba sin `type` ni `bytes` las
 entradas de los archivos ya bajados (la importación no los usa): ahora la bajada que reutiliza un archivo los
-completa por la extensión y el disco.
+completa por la extensión y el disco; un tipo que la extensión no dice (un `.bin`) sale del manifest de la
+corrida anterior.
 
 Fuera del repo (2026-10-01), con un doc real de 618 fotos HEIC (404 de 12 megapíxeles, 205 de 24 y 9 de 9; 11
 con rotación guardada, 9 de ellas verticales; 1,24 GB): las 618 convertidas, ninguna falló; alrededor de un

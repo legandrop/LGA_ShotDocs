@@ -141,6 +141,23 @@ const EXT = {
 }
 /** El tipo de un archivo ya bajado, por su extensión (la inversa de `EXT`). */
 const TYPE_OF = Object.fromEntries(Object.entries(EXT).map(([type, ext]) => [ext, type]))
+/**
+ * El tipo con que llegó cada archivo en una corrida anterior (de los manifest que ya están en la carpeta), para
+ * los que no se deducen por la extensión (`.bin`, la de la dirección): repetir el comando no les saca el tipo.
+ */
+const knownTypes = new Map()
+
+async function rememberTypes(out) {
+  for (const name of ['manifest.coda.json', 'manifest.json']) {
+    const path = join(out, name)
+    if (!existsSync(path)) continue
+    try {
+      for (const p of (await readJson(path)).pages ?? []) for (const m of p.media ?? []) if (m?.url && m.type && !knownTypes.has(m.url)) knownTypes.set(m.url, m.type)
+    } catch {
+      // Un manifest roto no frena la corrida: esos archivos quedan con el tipo que dé la extensión.
+    }
+  }
+}
 
 // Archivos de Coda: src/href que apuntan a codahosted.io (o a coda.io/blobs). El resto (YouTube, Drive,
 // Vimeo, etc.) queda como link externo y se anota en el manifest.
@@ -153,7 +170,7 @@ async function download(url, dir) {
   const done = storedMedia(await readdir(dir), blob)
   const size = done ? (await stat(join(dir, done))).size : 0
   // Con su tipo (por la extensión) y su peso, como la primera vez: repetir el comando deja el mismo manifest.
-  if (done && size > 0) return { file: done, reused: true, type: TYPE_OF[extname(done).toLowerCase()], bytes: size }
+  if (done && size > 0) return { file: done, reused: true, type: TYPE_OF[extname(done).toLowerCase()] ?? knownTypes.get(url), bytes: size }
   const res = await request(url)
   if (!res.ok) throw new Error(`${res.status} al bajar ${url}`)
   const type = (res.headers.get('content-type') || '').split(';')[0].trim()
@@ -404,6 +421,7 @@ async function main() {
   // Lo que puede frenar la conversión de tablas se revisa antes de bajar nada.
   const early = outArg || join(homedir(), 'Coda_Export', doc.name.replace(/[\\/:*?"<>|]+/g, '_').trim() || doc.id)
   await readTablesConfig(early)
+  await rememberTypes(early)
   if (refresh) await rm(join(early, 'manifest.coda.json'), { force: true })
   const safe = doc.name.replace(/[\\/:*?"<>|]+/g, '_').trim() || doc.id
   const out = outArg || join(homedir(), 'Coda_Export', safe)

@@ -438,7 +438,8 @@ lenta" son el mismo camino: el HEIC ya está guardado y se convierte cuando se p
 | Estado | Marca | Aviso | Qué pasa |
 |---|---|---|---|
 | Recién agregada | `pending` | *HEIC photo: turning it into a JPEG…* | Se convierte en segundo plano; apenas está el JPEG la página lo muestra, sin recargar. |
-| El decodificador no está (sin red, y este dispositivo nunca lo bajó; o una red mala cortó la bajada) | `pending` | *HEIC photo: turns into a JPEG once online* | La cola vuelve a probar antes de registrarla: sin red, en cada vuelta; con red (la base contesta, o `navigator.onLine` no dice que no hay), hasta 3 intentos, a los 30 s y a los 2 min (`HEIC_ONLINE_TRIES`, `MediaRecord.heicMisses`). Si con red el tercero tampoco carga, se registra y se sube el HEIC (subir manda: nunca espera para siempre). |
+| El decodificador no está, sin red (y este dispositivo nunca lo bajó) | `pending` | *HEIC photo: turns into a JPEG once online* | La cola vuelve a probar en cada vuelta, antes de registrarla. Si el dispositivo cree que no tiene red (`navigator.onLine` en `false`), sigue el camino de siempre: la manda a registrar (falla sin red, queda `sent`) y al volver la red pregunta a la base y la convierte. Si en realidad había red, se registra y se sube el HEIC: nunca espera para siempre. |
+| El decodificador no cargó con red (una red mala cortó la bajada) | `pending` | *HEIC photo: trying again to turn it into a JPEG…* (desde v0.0XX) | Hasta 3 intentos, a los 30 s y a los 2 min (`HEIC_ONLINE_TRIES`, `MediaRecord.heicMisses`), sin registrarla. Si el tercero tampoco carga, se registra y se sube el HEIC (subir manda). Después de recargar, el aviso sale de `heicMisses`: dice esto mientras espera el próximo intento, no "convirtiendo". |
 | Se mandó a registrar como HEIC sin saber si llegó | `sent` | el mismo | Antes de convertirla se le pregunta a la base (`fetchMediaFiles`): si ya tiene la fila, queda como HEIC; sin respuesta, se espera. |
 | No se pudo convertir (archivo roto, falta de memoria, más de 50 MP, el JPEG no pasó la comprobación, más de 2 minutos) o ya se registró como HEIC | `failed` | *HEIC photo: could not turn it into a JPEG* | Se sube como HEIC. No se reintenta. |
 | Un HEIC subido sin convertir (otro dispositivo, una versión anterior) | — | *HEIC photo: this browser cannot show it* | Queda así (ver pendientes). |
@@ -468,7 +469,9 @@ se traba. Si el navegador no deja crear el Worker, o su script no arranca, se ha
 mismo, trabando mientras dura); si el Worker no tiene `OffscreenCanvas`, decodifica él y el JPEG lo codifica
 la página. **Siempre termina:** el Worker y el respaldo en la página tienen tope (2 minutos; un Worker que ni
 arrancó cuenta como "no está"), la bajada del `.wasm` se corta a los 45 s ("no está") y la cola pone su propio
-tope por encima de todo (`HEIC_LIMIT_MS`).
+tope por encima de todo (`HEIC_LIMIT_MS`). **De a dos** (`HEIC_PARALLEL`, desde v0.0XX): cada conversión pide
+cientos de MB (cerca de 800 con 48 MP) y antes, al soltar muchas juntas, se abrían todas a la vez. Las demás
+esperan su turno, y la espera no cuenta para el tope.
 
 **Que no pese ni recargue.** Nada del decodificador está en el paquete principal: se carga recién cuando llega
 un HEIC. `heicConvert.ts` (4,6 KB) sí va en el paquete de la cola: si se cargaba con `import()`, en la primera
@@ -500,7 +503,14 @@ veces el HEIC (3,3 a 6,5 MB) y lleva el perfil Display P3 entero.
   conversión falla queda el HEIC, que Safari sí muestra.
 - **Dos pestañas a la vez:** si una pestaña con una versión anterior registra el HEIC, la respuesta se pierde y
   justo entonces esta versión lo convierte sin red (sin poder preguntar), el JPEG quedaría detenido. Necesita
-  las tres cosas juntas; con red, la pregunta a la base lo evita.
+  las tres cosas juntas; con red, la pregunta a la base lo evita. Otra, de la misma pestaña líder (anterior a
+  v0.0XX, ventana de microsegundos): si al tercer intento marca `sent` justo después de que otra pestaña guardó
+  el JPEG, el JPEG se sube bien pero en este dispositivo queda con el aviso de HEIC. Se cerraría haciendo ese
+  `patch` condicional a que la marca siga en `pending`.
+- **La comprobación del JPEG acepta uno con la mitad en blanco** (límite conocido, anterior a v0.0XX): en la
+  grilla pareja da justo la mitad distinta (no "más de la mitad") y los puntos que se apartan del fondo caen
+  repartidos. Un canvas entero vacío (blanco o negro) sí se rechaza, y es lo que se conoce del tope de iOS. Se
+  cerraría rechazando también cuando una mitad entera, la de arriba o la de abajo, es distinta.
 - **`min_app_version` no frena la cola de archivos** (revisado en v0.0XX): solo la usan `push_page_update` en la
   base y el ciclo de páginas de `sync/engine.ts`. `register_file` no recibe la versión, el portero tampoco, y la
   cola de archivos no mira `status.outdated`: una pestaña de v0.074 o anterior sigue registrando y subiendo
@@ -522,8 +532,9 @@ de prueba de 96 × 64 girado sale de 64 × 96 con sus colores), `heicConvert.tes
 verdad con un Worker de mentira, el respaldo sin Worker, el Worker que no arranca o se cae, los topes, sin el
 `.wasm`), `queue.test.ts` ("fotos HEIC": guardar primero, el JPEG que se sube, lo que no pasa por el conversor,
 el conversor que falla o no contesta, sin red, los tres intentos con red y sus esperas, un decodificador que no
-baja una vez y el reintento que sube el JPEG, sin red sin contar intentos ni preguntar a la base, la conversión
-mientras la pregunta tarda, la respuesta perdida de `register_file`, la fila registrada
+baja una vez y el reintento que sube el JPEG, sin red sin contar intentos ni preguntar a la base, un navegador
+que cree que no hay red y sí hay (se sube igual), el aviso al reintentar (también después de recargar), de a dos,
+la conversión mientras la pregunta tarda, la respuesta perdida de `register_file`, la fila registrada
 mientras se convertía, la medición en curso), `heicNames.test.ts`, `lazyPart.test.tsx` (el oyente de verdad con
 un import opcional) y `scripts/licenses.test.mjs`. En Chromium, fuera del repo, el camino entero con el build de
 producción: en el Worker, sin Worker, sin el `.wasm` y sin el decodificador, y las cuatro fotos reales. Para
