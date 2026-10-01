@@ -26,9 +26,10 @@ borrador.
   página editada por dos o tres personas todo el día llega a miles de updates, y como cada subida lleva **todos**
   los borrados de la página, el peso crece con el cuadrado del uso (10 000 subidas simuladas: 61 MB en la base
   contra un snapshot de 390 KB).
-- **Lo que el snapshot no arregla** (y conviene hacer aparte): que cada subida repita todos los borrados (el 96 %
-  de los bytes de `page_updates` en la simulación) y que un dispositivo nuevo haga un pedido por página (hoy
-  1022 páginas con contenido, 1,1 updates cada una).
+- **Lo que el snapshot no arregla:** que un dispositivo nuevo haga un pedido por página (hoy 1022 páginas con
+  contenido, 1,1 updates cada una). Que cada subida repita todos los borrados (el 96 % de los bytes de
+  `page_updates` en la simulación) **ya está resuelto aparte**, en la subida (roadmap B.15: `syncedDS`, ver
+  `Doc_Sincronizacion.md`, "Subir solo los borrados nuevos"). Los números de la sección 1 son de antes de B.15.
 
 ## Reglas que no se rompen
 
@@ -38,8 +39,9 @@ borrador.
    "Validez").
 3. **Lo que no sabe de snapshots sigue andando igual**: versiones viejas de la app, la papelera de archivos, la
    copia de seguridad, el script de restaurar.
-4. **`syncedSV` nunca dice que el servidor tiene algo que no tiene** (`Doc_Sincronizacion.md`, punto 2 de
-   "Contenido de las páginas"). Bajar un snapshot avanza el vector igual que bajar sus filas.
+4. **`syncedSV` y `syncedDS` nunca dicen que el servidor tiene algo que no tiene** (`Doc_Sincronizacion.md`,
+   punto 2 de "Contenido de las páginas" y "Subir solo los borrados nuevos"). Bajar un snapshot avanza el vector y
+   la cuenta de borrados igual que bajar sus filas: por eso el snapshot conserva los borrados (sin recolectar).
 5. **Nada de editor en el camino.** Compactar es Yjs puro (`mergeUpdates`): no pasa por BlockNote, ni por
    y-prosemirror, ni por la reparación de estructura, así que no puede borrar un bloque que no conoce.
 
@@ -47,8 +49,9 @@ borrador.
 
 ### Cómo se guarda hoy
 
-Cada subida de contenido es `Y.encodeStateAsUpdate(doc, syncedSV)`: lo nuevo desde lo confirmado **más el delete
-set entero de la página** (Yjs no sabe cuáles borrados ya tiene el servidor). Sale una subida por pausa al escribir
+Hasta B.15, cada subida de contenido era `Y.encodeStateAsUpdate(doc, syncedSV)`: lo nuevo desde lo confirmado **más
+el delete set entero de la página** (Yjs no sabe cuáles borrados ya tiene el servidor). Desde B.15 lleva solo los
+borrados que el servidor no tiene (`syncedDS`); las filas ya subidas siguen como están, con los borrados repetidos. Sale una subida por pausa al escribir
 (1,2 s después del último cambio, o en el ciclo de cada 10 s), y cada vez que se abre una página es un autor de Yjs
 nuevo. Un dispositivo que baja una página pide las filas posteriores a su cursor, de a 500 por pedido.
 
@@ -110,8 +113,8 @@ subidas; un reporte de rodaje que escriben dos o tres personas durante el día p
 **En términos simples:** hoy no hay ningún problema que resolver; la base es chica y las páginas tienen pocos
 cambios. El problema aparece con el uso real en rodaje: una página muy editada se vuelve lenta de abrir en un
 dispositivo que no la tenía (un minuto y medio en un teléfono a las 5000 subidas), y la base se llena mucho más
-rápido de lo que pesa el texto. El snapshot arregla lo primero. Lo segundo lo arregla mejor dejar de repetir los
-borrados en cada subida, que es otro cambio.
+rápido de lo que pesa el texto. El snapshot arregla lo primero. Lo segundo lo arregló dejar de repetir los borrados
+en cada subida (B.15), que es otro cambio.
 
 ## 2. Quién compacta
 
@@ -210,8 +213,8 @@ Cada fila se decodifica; **si una no se puede leer** (la escribió una versión 
    que esas filas pesen 16 MB o menos (si no, se salta y se anota). Si no da igual, se invalida la cadena entera
    (sección 12). Cada paso ya se comprueba contra lo que juntó, así que esto es una segunda red, contra un error de
    la propia comprobación o del dispositivo. Para las páginas más pesadas la segunda red no corre: es un riesgo que
-   queda (sección 16) y que se achica mucho si las subidas dejan de repetir los borrados (sección 18), porque las
-   mismas filas pasarían a pesar unas 25 veces menos.
+   queda (sección 16) y que se achica mucho desde que las subidas no repiten los borrados (B.15), porque las filas
+   nuevas pesan unas 25 veces menos (las viejas siguen igual).
 
 ```js
 // El núcleo (lo probado en el prototipo).
@@ -296,8 +299,8 @@ versiones viejas). Devuelve filas `(seq, update, snapshot_id, content_epoch)`:
 - **Con los snapshots apagados**, siempre las filas: es el interruptor para volver atrás sin publicar nada.
 
 Para el dispositivo, el snapshot es **un update más**: `applyRemote` lo junta con el resto, lo guarda en la misma
-transacción que el cursor (que pasa a `up_to_seq`) y avanza `syncedSV` con `serverReach` y su tope, como con
-cualquier fila. Casos:
+transacción que el cursor (que pasa a `up_to_seq`), avanza `syncedSV` con `serverReach` y su tope, y suma sus
+borrados a `syncedDS` (B.15), como con cualquier fila. Casos:
 
 - **Dispositivo nuevo** (cursor 0): el snapshot y la cola. Medido arriba: de 86 s a 1,3 s en un teléfono a las 5000
   subidas.
@@ -403,8 +406,8 @@ anteriores, que leen y vuelven a escribir el mismo objeto, conservan esos campos
 
 **Propuesta: ninguna fila de `page_updates`, nunca.** Solo se deja de bajarlas. Razones: son el historial con autor
 y hora (fase 6), lo que restauran las copias, y la red de seguridad si un snapshot sale mal; y ocupan poco
-comparado con el límite (7,5 MB de 500 MB hoy). Lo que hace crecer la tabla de verdad son los borrados repetidos
-en cada subida, y eso se arregla en la subida (ver "Fuera de este diseño"), no borrando.
+comparado con el límite (7,5 MB de 500 MB hoy). Lo que hacía crecer la tabla de verdad eran los borrados repetidos
+en cada subida, y eso se arregló en la subida (B.15), no borrando.
 
 **Lo que sí se borra, porque se puede volver a armar desde `page_updates`:**
 
@@ -430,9 +433,12 @@ propone.
 - **Los dispositivos que lo usaron:** el árbol trae `content_epoch`. Si es **distinto** del que el dispositivo anotó
   (no "mayor": después de restaurar puede haber cambiado de cualquier forma) y el dispositivo aplicó algún snapshot de
   esa página (`DocState.snapshotId`), pone el cursor de esa página en 0 y la baja de nuevo (filas, porque la cadena ya
-  no se sirve; Yjs no duplica lo que ya tiene). **No toca `syncedSV`**: un snapshot al que le faltaba algo no pudo
-  hacer avanzar el vector de más (`serverReach` solo cuenta lo que llegó), así que no hace falta volver a subir
-  todo. Lo propio sin subir nunca se toca.
+  no se sirve; Yjs no duplica lo que ya tiene). **Borra también `syncedSV` y `syncedDS` de esa página** (desde
+  B.15): un snapshot al que solo le faltaba algo no pudo hacer avanzar ninguna de las dos cuentas de más, pero uno
+  malo de otra forma (con un borrado o un elemento que las filas no tienen) suma a las dos al bajarlo, y con eso
+  el dispositivo dejaría de subir un borrado propio igual al del snapshot, que después de invalidarlo el servidor
+  no tiene. Sin las cuentas, la página vuelve a subir entera una vez (Yjs no duplica lo que el servidor ya tiene).
+  Lo propio sin subir nunca se toca.
 - **Apagar todo:** `snapshot_min_version = null` en `workspace_settings`. Desde el próximo pedido, todos bajan filas.
 
 ## 13. Migración (borrador, sin aplicar)
@@ -558,7 +564,7 @@ La migración no toca `page_updates`, `push_page_update` ni `pull_page_updates`,
 |---|---|
 | `src/sync/remote.ts` | `pullContent` (con vuelta a `pullUpdates` si falta la función), `claimCompaction`, `pushSnapshot`, `pullSnapshot`, `confirmSnapshot`, `skipCompaction`, `invalidateSnapshot`; el árbol pide `snapshot_seq` y `content_epoch` según `schema_version`, con reintento sin ellas |
 | `src/sync/types.ts` | `RemoteUpdate.snapshotId?` y `contentEpoch?`, `PageRow.snapshot_seq?`, `PageRow.content_epoch?` |
-| `src/sync/docs.ts` | `pullPage` usa `pullContent`; `applyRemote` anota `snapshotId` y `contentEpoch`, y si el snapshot no se puede leer no guarda el lote ni mueve el cursor (vuelve a filas); el reinicio de una página por `content_epoch` (solo el cursor); `resetForRestore` borra también `snapshotId` y `contentEpoch` |
+| `src/sync/docs.ts` | `pullPage` usa `pullContent`; `applyRemote` anota `snapshotId` y `contentEpoch`, y si el snapshot no se puede leer no guarda el lote ni mueve el cursor (vuelve a filas); el reinicio de una página por `content_epoch` (el cursor, `syncedSV` y `syncedDS`); `resetForRestore` borra también `snapshotId` y `contentEpoch` |
 | `src/sync/compact.ts` (nuevo) | `compact`, `verify`, `same`, `pendingKey` y el que compacta una página (reservar, bajar, armar, comprobar, subir, confirmar, saltear) |
 | `src/sync/engine.ts` | Al final del ciclo, una página por vuelta; sus errores no cortan el ciclo |
 | `src/sync/localDb.ts` | `DocState.snapshotId?`, `DocState.contentEpoch?` |
@@ -581,7 +587,8 @@ Antes de escribir en la base, en este orden:
    cursor viejo con ediciones sin subir, subida en vuelo mientras llega un snapshot, cerrar la app en cada punto de
    `applyRemote`, un snapshot ilegible (el cursor no se mueve), una invalidación con la época leída en la misma
    respuesta, una base sin la migración (el árbol sigue llegando); en cada paso, la revisión que ya existe de que
-   `syncedSV` no diga de más.
+   `syncedSV` no diga de más, y la de B.15 de que `syncedDS` tampoco (`uploadDeletes.test.ts`); una invalidación
+   borra las dos cuentas de la página.
 3. **Al azar con varios dispositivos y versiones** (`localSaveRandom.test.ts` y las corridas de tres dispositivos de
    `docs.test.ts`): compactaciones en momentos al azar, reservas que vencen, confirmaciones que no llegan, una
    invalidación, una restauración, y **la versión publicada** (`fixtures/publishedDocs.ts`, que solo conoce
@@ -637,10 +644,11 @@ Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos 
 
 ## 18. Fuera de este diseño (y por qué importa)
 
-- **No repetir los borrados en cada subida.** Es lo que más pesa (96 % de los bytes en la simulación) y lo que
-  hace crecer la base y cada subida. Hace falta guardar en el dispositivo qué borrados confirmó el servidor (un
-  "`syncedDS`" junto a `syncedSV`) y mandar solo los nuevos; si se equivoca, un borrado no llega (el texto
-  "revive"), nunca se pierde texto escrito. Merece su propio diseño y sus pruebas al azar.
+- **No repetir los borrados en cada subida: hecho aparte (B.15).** Era lo que más pesaba (96 % de los bytes en la
+  simulación). El dispositivo guarda qué borrados tiene el servidor (`syncedDS`, junto a `syncedSV`) y sube solo los
+  nuevos; ver `Doc_Sincronizacion.md`, "Subir solo los borrados nuevos". Lo que toca a este diseño: el snapshot
+  tiene que conservar los borrados (sin recolectar), y al invalidarse uno que el dispositivo usó se borran las dos
+  cuentas de la página (sección 12).
 - **Bajar varias páginas por pedido.** Un dispositivo nuevo hace hoy 1022 pedidos; con uno cada 50 páginas serían
   21. No depende de los snapshots.
 
@@ -687,5 +695,5 @@ problemas menores. Todo quedó corregido en el texto:
 | `snapshot_seq` podía quedar viejo | Las funciones deciden con `current_snapshot()` (4.1, 13) |
 | Una página que no se puede compactar se reintentaba en cada ciclo | `compaction_skip_until` con el motivo (4.2) |
 | Versiones como texto, función auxiliar ejecutable por todos, tabla legible con lo no confirmado | `numeric(8,3)`, `revoke`, sin permisos directos sobre la tabla (10, 13) |
-| El reinicio por época volvía a subir todo | Solo el cursor: un snapshot incompleto no pudo inflar `syncedSV` (12) |
+| El reinicio por época volvía a subir todo | Solo el cursor: un snapshot incompleto no pudo inflar `syncedSV` (12). **Revisado con B.15:** uno malo con algo de más sí infla `syncedSV` y `syncedDS`, así que el reinicio borra las dos cuentas y la página sube entera una vez (12) |
 | Otra versión de Yjs puede dar otros bytes para lo mismo | Huellas distintas invalidan solo entre la misma versión de la app (4.5) |
