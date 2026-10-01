@@ -179,7 +179,8 @@ export function anchorBlock(thread: CodaThread, blocks: PageBlock[]): { blockId:
   }
   // Último intento, sin espacios: Coda puede dar el texto marcado con todo pegado (un renglón con direcciones
   // que la importación separa en links o tarjetas), o al revés. Solo con textos que alcanzan para no
-  // confundirse: sin espacios, "ot ra" sería "otra"; acá hacen falta 12 caracteres o más.
+  // confundirse: sin espacios, "ot ra" sería "otra"; acá hacen falta 12 caracteres o más. Si ningún bloque lo
+  // tiene, se prueba con varios bloques seguidos juntos.
   const bare = (s: string) => s.replace(/\s+/g, '');
   const squashed = normalized.map((b) => ({ id: b.id, text: bare(b.text) }));
   for (const line of [...lines].sort((a, b) => b.length - a.length)) {
@@ -190,8 +191,34 @@ export function anchorBlock(thread: CodaThread, blocks: PageBlock[]): { blockId:
     // Adentro de otro bloque, solo si es uno solo: sin espacios, dos renglones parecidos se confunden más.
     const inside = squashed.filter((b) => b.text.includes(want));
     if (inside.length === 1) return { blockId: inside[0].id, lost: false };
+    if (inside.length > 1) continue;
+    // Un párrafo que la importación partió (el texto, cada tarjeta de Drive en su bloque): el texto marcado
+    // cruza bloques seguidos. Va al bloque donde empieza, solo si pasa una sola vez en la página.
+    const across = acrossBlocks(squashed, want);
+    if (across.length === 1) return { blockId: across[0], lost: false };
   }
   return { blockId: null, lost: true };
+}
+
+/** Hasta cuántos bloques seguidos se juntan: un renglón con varias direcciones, partido en tarjetas. */
+const MAX_JOINED_BLOCKS = 20;
+
+/**
+ * Los bloques donde empieza `want` cuando cruza de un bloque a los siguientes (sin espacios): de cada uno, la
+ * menor tira de bloques seguidos que lo contiene y que no lo contiene sin el primero.
+ */
+function acrossBlocks(blocks: { id: string; text: string }[], want: string): string[] {
+  const starts: string[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    let joined = blocks[i].text;
+    for (let j = i + 1; j < Math.min(blocks.length, i + MAX_JOINED_BLOCKS); j++) {
+      joined += blocks[j].text;
+      if (!joined.includes(want)) continue;
+      if (!joined.slice(blocks[i].text.length).includes(want)) starts.push(blocks[i].id);
+      break;
+    }
+  }
+  return starts;
 }
 
 /** Un id de comentario estable (uuid) para un comentario de Coda en un proyecto: reintentar no duplica. */

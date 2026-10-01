@@ -1187,4 +1187,89 @@ describe('HTML de Coda: direcciones sueltas', () => {
     expect(got.html).toBe(html);
     expect(got.media).toEqual([]);
   });
+
+  // Prolijidad (lo que quedó de v0.069). Nada de esto puede perder texto: se compara sin espacios ni saltos.
+  const textOnly = (blocks: LooseBlock[]) =>
+    blocks.map((b) => ((b.content as Piece[]) ?? []).map((c) => (c.type === 'link' ? c.content!.map((x) => x.text).join('') : (c.text ?? ''))).join('')).join('');
+  const squash = (s: string) => s.replace(/\s+/g, '');
+  const sourceText = (html: string) => new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body.textContent ?? '';
+
+  it('una dirección partida en dos o tres por un cambio de formato queda entera en un solo link (y sigue siendo tarjeta)', async () => {
+    // 'https://drive.google.com/file/d/' tiene 32 caracteres: el corte cae justo antes del id, o adentro.
+    const [a1, a2] = [DRIVE_A.slice(0, 32), DRIVE_A.slice(32)];
+    const [b1, b2, b3] = [DRIVE_B.slice(0, 40), DRIVE_B.slice(40, 60), DRIVE_B.slice(60)];
+    const html =
+      `<div><span>Ver </span><span>${a1}</span><span style="font-weight: bold;">${a2}</span><span> y avisar.</span></div>` +
+      `<div><span>${b1}</span><span style="color: rgb(200, 30, 30);">${b2}</span><b>${b3}</b></div>` +
+      `<ul><li><span>Ref:</span><span>${a1}</span><i>${a2}</i></li></ul>`;
+    const blocks = await convert(html);
+    expect(shape(blocks)).toEqual([
+      ['paragraph', `Ver [${DRIVE_A}](${DRIVE_A}) y avisar.`],
+      ['card', `[${DRIVE_B}](${DRIVE_B})`],
+      ['bulletListItem', `Ref:\n[${DRIVE_A}](${DRIVE_A})`],
+    ]);
+    expect(squash(textOnly(blocks))).toBe(squash(sourceText(html)));
+  });
+
+  it('lo pegado después de una dirección que no la sigue (una palabra, otra dirección) no se junta con ella', async () => {
+    const html =
+      `<div><span>Ver:</span><span>${SITE_B}</span><span>Sigue.</span></div>` +
+      `<div><span>${SITE_B}</span><span>Después</span></div>` +
+      `<div><span>${DRIVE_A.slice(0, 32)}</span><span>${SITE_B}</span></div>`;
+    const blocks = await convert(html);
+    expect(shape(blocks)).toEqual([
+      ['paragraph', `Ver:\n[${SITE_B}\n](${SITE_B})Sigue.`],
+      ['paragraph', `[${SITE_B}\n](${SITE_B})Después`],
+      ['paragraph', `[${DRIVE_A.slice(0, 32)}\n](${DRIVE_A.slice(0, 32)})[${SITE_B}](${SITE_B})`],
+    ]);
+    expect(squash(textOnly(blocks))).toBe(squash(sourceText(html)));
+  });
+
+  it('el punto final, la coma o el paréntesis que cierra quedan afuera del link y en su renglón', async () => {
+    const wiki = 'https://en.wikipedia.org/wiki/Foo_(bar)';
+    const html =
+      `<div><span>${SITE_B}.</span></div>` +
+      `<ul><li><span>Ver:</span><span>${DRIVE_A},</span></li></ul>` +
+      `<div><span>Ver (</span><span>${SITE_B}</span><span>).</span></div>` +
+      `<div><span>${wiki}</span></div><div><span>${SITE_B})</span></div>` +
+      `<div><span>${DRIVE_A}.</span></div>`;
+    const blocks = await convert(html);
+    expect(shape(blocks)).toEqual([
+      ['paragraph', `[${SITE_B}](${SITE_B}).`],
+      ['bulletListItem', `Ver:\n[${DRIVE_A}](${DRIVE_A}),`],
+      ['paragraph', `Ver ([${SITE_B}](${SITE_B})).`],
+      ['paragraph', `[${wiki}](${wiki})`],
+      ['paragraph', `[${SITE_B}](${SITE_B}))`],
+      // Con un punto al lado ya no está sola en su renglón: queda el link, no la tarjeta.
+      ['paragraph', `[${DRIVE_A}](${DRIVE_A}).`],
+    ]);
+    expect(squash(textOnly(blocks))).toBe(squash(sourceText(html)));
+  });
+
+  it('ningún salto de línea sobra al final del párrafo ni alrededor de una tarjeta', async () => {
+    const pdf = '<a href="https://codahosted.io/docs/DOC/blobs/bl-pdf/x">plano.pdf</a>';
+    const blocks = await convert(
+      // Una dirección pegada a un adjunto o a una foto que van como bloque: el salto que la separaba no queda.
+      `<div><span>Ver:</span><span>${SITE_A}</span>${pdf}</div>` +
+        `<div><span>${SITE_B}</span>${img('bl-u', 'u.png')}</div>` +
+        // Renglones en blanco alrededor de una tarjeta: la tarjeta ya es su propio bloque.
+        `<div>Antes<br><br>${DRIVE_A}<br><br>Después</div>` +
+        `<div><span>Ref:</span><br><br><span>${DRIVE_B}</span><br></div>` +
+        // El espacio de ancho cero que Coda deja al lado no la pega a nada.
+        `<div><span>Ver:</span><span>${SITE_B}</span>\u200B</div>`,
+    );
+    expect(shape(blocks)).toEqual([
+      ['paragraph', `Ver:\n[${SITE_A}](${SITE_A})`],
+      ['image', ''],
+      ['paragraph', `[${SITE_B}](${SITE_B})`],
+      ['image', ''],
+      ['paragraph', 'Antes'],
+      ['card', `[${DRIVE_A}](${DRIVE_A})`],
+      ['paragraph', 'Después'],
+      ['paragraph', 'Ref:'],
+      ['card', `[${DRIVE_B}](${DRIVE_B})`],
+      ['paragraph', `Ver:\n[${SITE_B}](${SITE_B})\u200B`],
+    ]);
+    expect(blocks.filter((b) => b.type === 'image').map((b) => b.props?.url)).toEqual(['sdmedia://bl-pdf', 'sdmedia://bl-u']);
+  });
 });

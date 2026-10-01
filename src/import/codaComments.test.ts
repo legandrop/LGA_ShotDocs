@@ -100,6 +100,29 @@ describe('comentarios de Coda: lectura y anclaje', () => {
     expect(anchorBlock(thread('Ver https://x.com/a b'), twice)).toEqual({ blockId: null, lost: true });
   });
 
+  it('un párrafo que la importación partió en tarjetas se compara contra sus bloques seguidos juntos', () => {
+    const A = 'https://drive.google.com/file/d/1AAA/view';
+    const B = 'https://drive.google.com/file/d/1BBB/view';
+    const blocks = [
+      { id: 'b0', text: 'Otra cosa' },
+      { id: 'b1', text: 'Referencia:' },
+      { id: 'b2', text: A },
+      { id: 'b3', text: B },
+      { id: 'b4', text: 'Sigue el texto.' },
+    ];
+    const thread = (ref: string) => ({ reference: { type: 'text', text: ref } }) as unknown as CodaThread;
+    // El párrafo entero, pegado o con el Markdown de Coda: va al primero de sus bloques.
+    expect(anchorBlock(thread(`Referencia:${A}${B}`), blocks)).toEqual({ blockId: 'b1', lost: false });
+    expect(anchorBlock(thread(`Referencia: [${A}](${A}) [${B}](${B})`), blocks)).toEqual({ blockId: 'b1', lost: false });
+    // Una parte que cruza de un bloque al siguiente: al bloque donde empieza.
+    expect(anchorBlock(thread(`${B}Sigue el texto`), blocks)).toEqual({ blockId: 'b3', lost: false });
+    // El mismo párrafo partido dos veces en la página: no se adivina, va a la página entera.
+    const twice = [...blocks, { id: 'c1', text: 'Referencia:' }, { id: 'c2', text: A }, { id: 'c3', text: B }];
+    expect(anchorBlock(thread(`Referencia:${A}${B}`), twice)).toEqual({ blockId: null, lost: true });
+    // Corto (menos de 12 caracteres sin espacios): tampoco se busca así.
+    expect(anchorBlock(thread('cosa Refer'), blocks)).toEqual({ blockId: null, lost: true });
+  });
+
   it('datos raros de Coda: sin texto, nombre largo, correo inválido, fecha imposible', async () => {
     const threads = parseCodaComments({
       pages: {

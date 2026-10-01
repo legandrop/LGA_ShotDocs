@@ -194,17 +194,103 @@ const INLINE = new Set(['SPAN', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'A', 'CODE',
 // `ui/editorSchema.ts`): el mismo camino que pegar una tarjeta copiada.
 const DRIVE_CARD_CLASS = 'drive-card-line';
 
-/** La dirección, si `text` es una sola dirección suelta que no es un archivo de Coda. */
+/**
+ * La dirección, si `text` es una sola dirección suelta que no es un archivo de Coda. Sin la puntuación del final
+ * (un punto, una coma, un paréntesis que cierra uno que no abrió adentro): esa queda como texto, después del link.
+ */
 function bareUrl(text: string): string | null {
-  const url = text.trim();
-  if (!BARE_URL.test(url) || HOSTED.test(url)) return null;
+  const whole = text.trim();
+  if (!BARE_URL.test(whole) || HOSTED.test(whole)) return null;
   // Dos direcciones pegadas en un mismo texto, o una que lleva otra adentro (un redireccionador): no se
   // sabe dónde cortar, y un link a las dos juntas no iría a ningún lado. Queda como texto.
-  if (/https?:\/\//i.test(url.slice(4))) return null;
+  if (/https?:\/\//i.test(whole.slice(4))) return null;
+  const url = withoutTrailingPunctuation(whole);
   try {
     return new URL(url).hostname ? url : null;
   } catch {
     return null;
+  }
+}
+
+// La puntuación que cierra una frase. Un `)` o un `]` solo si no cierra uno que se abrió en la dirección
+// (`https://es.wikipedia.org/wiki/Foo_(bar)` lo lleva).
+const TRAILING = /[.,;:!?'"\u201D\u2019\u00BB\u2026]$/;
+function withoutTrailingPunctuation(url: string): string {
+  const count = (s: string, c: string) => s.split(c).length - 1;
+  let out = url;
+  for (;;) {
+    const last = out.at(-1)!;
+    const open = last === ')' ? '(' : last === ']' ? '[' : '';
+    if (TRAILING.test(out) || (open && count(out, open) < count(out, last))) out = out.slice(0, -1);
+    else return out;
+  }
+}
+
+// Lo que puede llevar una dirección (sin espacios ni letras con tilde), lo que deja una dirección sin terminar
+// y lo que solo aparece en el medio de una.
+const URL_CHARS = /^[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/;
+const OPEN_END = /[/?=&#%\-_~+:@]$/;
+const URL_STRUCTURE = /[/?=&#%]/;
+
+/**
+ * Una dirección partida en dos o más textos por un cambio de formato (parte en negrita, parte de otro color):
+ * `<span>https://drive.google.com/file/d/</span><b>1AbC/view</b>`. El primero solo ya parece una dirección y
+ * quedaba como un link cortado, con el resto en otro renglón. Si lo que sigue pegado (sin espacio, en la misma
+ * línea) la continúa, pasa al primer texto: la dirección queda entera, con el formato de su primera parte. Lo
+ * pegado que no la continúa (una palabra, otra dirección, un link, código) no se toca. No se pierde texto: se
+ * mueve.
+ */
+function joinSplitUrl(node: Text): void {
+  const token = node.textContent!.trimStart();
+  if (!/^https?:\/\/\S+$/i.test(token)) return;
+  const pieces: { node: Text; length: number }[] = [];
+  let tail = '';
+  for (let next = nextTextInLine(node); next; next = nextTextInLine(next)) {
+    if (next.parentElement?.closest('a, code, pre')) break;
+    const piece = next.textContent!.match(/^\S*/)![0];
+    if (!piece || /^https?:\/\//i.test(piece) || !URL_CHARS.test(piece)) break;
+    pieces.push({ node: next, length: piece.length });
+    tail += piece;
+    // Con un espacio adentro, la palabra termina ahí.
+    if (piece.length < next.textContent!.length) break;
+  }
+  if (!tail) return;
+  // Que la continúa: la primera parte quedó abierta (`/d/`, `?id=`), lo que sigue tiene forma de dirección
+  // (`1AbC/view?usp=sharing`) o, después de un punto, de dominio (`google.com`). "Sigue." o "Después" no.
+  const continues = OPEN_END.test(token) || URL_STRUCTURE.test(tail) || (token.endsWith('.') && /^[a-z0-9-]+\.[a-z]{2,}/i.test(tail));
+  if (!continues || !bareUrl(token + tail)) return;
+  node.textContent += tail;
+  for (const p of pieces) {
+    p.node.textContent = p.node.textContent!.slice(p.length);
+    if (p.node.textContent) continue;
+    // El envoltorio que quedó vacío se va (si no, una tarjeta no vería sola a la dirección).
+    let gone: Node = p.node;
+    while (gone.parentElement && INLINE.has(gone.parentElement.tagName) && gone.parentElement.childNodes.length === 1) gone = gone.parentElement;
+    gone.parentNode?.removeChild(gone);
+  }
+}
+
+/** El texto siguiente en la misma línea (sin pasar un <br>, un bloque ni una celda), o `null`. */
+function nextTextInLine(from: Node): Text | null {
+  let node: Node = from;
+  for (;;) {
+    while (!node.nextSibling) {
+      const parent = node.parentElement;
+      if (!parent || !INLINE.has(parent.tagName)) return null;
+      node = parent;
+    }
+    node = node.nextSibling;
+    // Hacia adentro, hasta el primer texto con algo (un envoltorio vacío se saltea).
+    for (;;) {
+      if (node.nodeType === 3) {
+        if (node.textContent) return node as Text;
+        break;
+      }
+      if (node.nodeType !== 1) break;
+      if (!INLINE.has(node.nodeName)) return null;
+      if (!node.firstChild) break;
+      node = node.firstChild;
+    }
   }
 }
 
@@ -218,8 +304,10 @@ function linkBareUrls(body: HTMLElement): void {
   const found: { node: Node; url: string }[] = [];
   const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n.parentElement?.closest('a, code, pre')) continue;
+    joinSplitUrl(n as Text);
     const url = bareUrl(n.textContent ?? '');
-    if (url && !n.parentElement?.closest('a, code, pre')) found.push({ node: n, url });
+    if (url) found.push({ node: n, url });
   }
   // En el orden de la página: el salto que se pone después de una dirección es el "antes" de la siguiente.
   for (const { node, url } of found) {
@@ -238,7 +326,14 @@ function linkBareUrls(body: HTMLElement): void {
   }
 }
 
-/** Lo que hay de ese lado en la misma línea es texto (u otra dirección) sin un espacio de por medio. */
+const CLOSING = /^[.,;:!?)\]}'"\u201D\u2019\u00BB\u2026]+(?:\s|$)/;
+const OPENING = /[([{\u00BF\u00A1\u00AB\u201C\u2018"']$/;
+
+/**
+ * Lo que hay de ese lado en la misma línea es texto (u otra dirección) sin un espacio de por medio. La
+ * puntuación que cierra (`.`, `,`, `)`…) después y la que abre (`(`, `«`…) antes no la pegan: va con ella en su
+ * renglón. El espacio de ancho cero que Coda deja al lado de una foto cuenta como espacio.
+ */
 function isStuck(unit: Node, side: 'previousSibling' | 'nextSibling'): boolean {
   for (let node: Node = unit; ; ) {
     let next = node[side];
@@ -249,8 +344,10 @@ function isStuck(unit: Node, side: 'previousSibling' | 'nextSibling'): boolean {
       let leaf: Node = next;
       while (side === 'previousSibling' ? leaf.lastChild : leaf.firstChild) leaf = (side === 'previousSibling' ? leaf.lastChild : leaf.firstChild)!;
       if (leaf.nodeName === 'BR') return false;
-      const edge = side === 'previousSibling' ? next.textContent!.slice(-1) : next.textContent![0];
-      return !/\s/.test(edge);
+      const text = next.textContent!;
+      if (side === 'nextSibling' ? CLOSING.test(text) : OPENING.test(text)) return false;
+      const edge = side === 'previousSibling' ? text.slice(-1) : text[0];
+      return !/[\s\u200B\uFEFF]/.test(edge);
     }
     // Nada de ese lado adentro del envoltorio: se mira afuera, mientras siga siendo la misma línea.
     const parent = node.parentElement;
@@ -263,7 +360,8 @@ function isStuck(unit: Node, side: 'previousSibling' | 'nextSibling'): boolean {
  * Una dirección de Drive sola en su renglón de un párrafo de primer nivel sale a su propio párrafo, que el
  * editor convierte en tarjeta de Drive: lo que en Coda se veía con reproductor se sigue viendo así. El
  * texto de antes y el de después quedan en sus párrafos; nada se borra salvo los saltos de línea que la
- * separaban. Adentro de un ítem de lista, de una tabla o de un título no hay tarjeta: queda el link.
+ * separaban (también los renglones en blanco: la tarjeta ya es su propio bloque). Adentro de un ítem de lista,
+ * de una tabla o de un título no hay tarjeta: queda el link.
  */
 function driveCardParagraph(unit: Element, body: HTMLElement): void {
   const host = unit.parentElement!;
@@ -281,8 +379,13 @@ function driveCardParagraph(unit: Element, body: HTMLElement): void {
   if ((before && before.nodeName !== 'BR') || (after && after.nodeName !== 'BR')) return;
   const empty = (el: Element) => [...el.childNodes].every((n) => n.nodeName === 'BR' || blank(n));
 
-  before?.remove();
-  after?.remove();
+  for (const side of ['previousSibling', 'nextSibling'] as const) {
+    for (let n = unit[side]; n && (n.nodeName === 'BR' || blank(n)); ) {
+      const next: ChildNode | null = n[side];
+      n.remove();
+      n = next;
+    }
+  }
   const rest = host.cloneNode(false) as Element;
   while (unit.nextSibling) rest.append(unit.nextSibling);
   const card = body.ownerDocument.createElement('p');
@@ -604,6 +707,15 @@ function splitInline(content: Inline[]): (Inline[] | number)[] {
 function trimBreaks(items: Inline[]): Inline[] {
   const out = items.map((i) => ({ ...i }));
   const edge = (i: Inline | undefined, side: 'start' | 'end') => {
+    // El editor guarda el salto que sigue a un link adentro del link (`https://…\n`): también se saca, pero
+    // nunca el link ni su texto.
+    if (i?.type === 'link' && i.content?.length) {
+      const k = side === 'start' ? 0 : i.content.length - 1;
+      const inner = i.content[k];
+      const text = inner.type === 'text' && inner.text ? (side === 'start' ? inner.text.replace(/^\s*\n\s*/, '') : inner.text.replace(/\s*\n\s*$/, '')) : '';
+      if (text) i.content = i.content.map((c, j) => (j === k ? { ...c, text } : c));
+      return false;
+    }
     if (!i || i.type !== 'text' || i.text === undefined) return false;
     i.text = side === 'start' ? i.text.replace(/^\s*\n\s*/, '') : i.text.replace(/\s*\n\s*$/, '');
     return i.text === '';

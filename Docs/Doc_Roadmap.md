@@ -332,13 +332,21 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
      siempre a los 10 s en vez de espaciarse (comparar contra el máximo confirmado del intento).
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
-    - **Hecho (v0.071): el anclaje de un comentario** pegado a un renglón con direcciones: un último intento
-      compara sin espacios (12 caracteres o más; adentro de un bloque, solo si es uno solo). Queda sin probar con un comentario real de ese tipo, y un párrafo
-      partido en tarjetas todavía no se compara contra los bloques seguidos juntos.
-    - **Prolijidad:** una dirección partida en dos por un cambio de formato queda como un link cortado; una
-      dirección con un punto final lo lleva adentro del link; un salto de línea puede quedar adentro del
-      link al final del párrafo o alrededor de una tarjeta.
+    - **Hecho (v0.071 y v0.0XX): el anclaje de un comentario** pegado a un renglón con direcciones: un último
+      intento compara sin espacios (12 caracteres o más; adentro de un bloque, solo si es uno solo) y, desde
+      v0.0XX, contra hasta 20 bloques seguidos juntos (un párrafo partido en tarjetas). Queda sin probar con un
+      comentario real de ese tipo (ERSO no trae comentarios de páginas con direcciones sueltas).
+    - **Hecho (v0.0XX): prolijidad.** Una dirección partida por un cambio de formato queda entera en un link;
+      la puntuación del final queda afuera; sin saltos de línea de más al final del párrafo ni alrededor de una
+      tarjeta. ERSO no tiene ninguno de esos casos (sale igual: 4492 links, 22 tarjetas); con ERSO alterado en
+      memoria, una dirección partida en tres se junta siempre (407 de 407) y partida a la mitad, 217 de 407.
+      **Falta:** un corte en el medio del final de la dirección (un id sin `/` ni `?`) no se reconoce (no se
+      adivina: podría ser una palabra pegada).
     - **Verlo en la app** con una importación real: una página con muchas tarjetas de Drive.
+    - **Para mirar (no es de las direcciones):** un renglón en blanco de Coda (`<div><br></div>`) entra como
+      un párrafo con un salto de línea adentro (en ERSO, 7594), que probablemente se ve de dos renglones de alto,
+      y el salto que Coda trae al final de un renglón queda como un renglón vacío (121 bloques en ERSO).
+      Verlo en la app contra Coda antes de tocarlo.
 13. **Fotos HEIC: lo que quedó de v0.072 y v0.075** (`Doc_Importar_Coda.md` y `Doc_Imagenes.md`, "Fotos
     HEIC"). El comando que baja un doc de Coda deja un JPEG de cada foto HEIC, y **desde v0.075 la app pasa a
     JPEG en el dispositivo cualquier HEIC que se agrega a una página** (D-20): lo guarda tal cual en el acto y

@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Importar de Coda, direcciones sueltas: lo que quedó de v0.069. Una dirección partida por un cambio de formato
+quedaba como un link cortado y el resto en otro renglón, porque cada texto se miraba por separado; ahora lo
+pegado que la continúa se junta y queda un solo link. Un punto o una coma final entraban en el link: quedan
+afuera, en el mismo renglón. El salto que separa una dirección de un adjunto quedaba al final del párrafo,
+porque el editor lo guarda adentro del link y no se recortaba; y alrededor de una tarjeta de Drive se sacan
+también los renglones en blanco. Un comentario pegado a un párrafo partido en tarjetas se busca contra los
+bloques seguidos juntos. Con ERSO no cambia nada: 4492 links y 22 tarjetas, el mismo texto.
+[ Importar de Coda - direcciones partidas, puntuación y saltos de línea ]
+
 v0.081 :
 
 Soltar una carpeta en la página se rechazaba pidiendo comprimirla. Ahora una ventana muestra qué se sube
