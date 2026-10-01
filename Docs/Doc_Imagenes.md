@@ -439,7 +439,7 @@ lenta" son el mismo camino: el HEIC ya está guardado y se convierte cuando se p
 |---|---|---|---|
 | Recién agregada | `pending` | *HEIC photo: turning it into a JPEG…* | Se convierte en segundo plano; apenas está el JPEG la página lo muestra, sin recargar. |
 | El decodificador no está, sin red (y este dispositivo nunca lo bajó) | `pending` | *HEIC photo: turns into a JPEG once online* | La cola vuelve a probar en cada vuelta, antes de registrarla. Si el dispositivo cree que no tiene red (`navigator.onLine` en `false`), sigue el camino de siempre: la manda a registrar (falla sin red, queda `sent`) y al volver la red pregunta a la base y la convierte. Si en realidad había red, se registra y se sube el HEIC: nunca espera para siempre. |
-| El decodificador no cargó con red (una red mala cortó la bajada) | `pending` | *HEIC photo: trying again to turn it into a JPEG…* (desde v0.0XX) | Hasta 3 intentos, a los 30 s y a los 2 min (`HEIC_ONLINE_TRIES`, `MediaRecord.heicMisses`), sin registrarla. Si el tercero tampoco carga, se registra y se sube el HEIC (subir manda). Después de recargar, el aviso sale de `heicMisses`: dice esto mientras espera el próximo intento, no "convirtiendo". |
+| El decodificador no cargó con red (una red mala cortó la bajada) | `pending` | *HEIC photo: trying again to turn it into a JPEG…* (desde v0.0XX) | Hasta 3 intentos, a los 30 s y a los 2 min (`HEIC_ONLINE_TRIES`, `MediaRecord.heicMisses`), sin registrarla. Si el tercero tampoco carga, se registra y se sube el HEIC (subir manda). Después de recargar, el aviso sale de `heicMisses`: dice esto mientras espera el próximo intento, no "convirtiendo" (sin red, el aviso de sin red). |
 | Se mandó a registrar como HEIC sin saber si llegó | `sent` | el mismo | Antes de convertirla se le pregunta a la base (`fetchMediaFiles`): si ya tiene la fila, queda como HEIC; sin respuesta, se espera. |
 | No se pudo convertir (archivo roto, falta de memoria, más de 50 MP, el JPEG no pasó la comprobación, más de 2 minutos) o ya se registró como HEIC | `failed` | *HEIC photo: could not turn it into a JPEG* | Se sube como HEIC. No se reintenta. |
 | Un HEIC subido sin convertir (otro dispositivo, una versión anterior) | — | *HEIC photo: this browser cannot show it* | Queda así (ver pendientes). |
@@ -533,7 +533,9 @@ verdad con un Worker de mentira, el respaldo sin Worker, el Worker que no arranc
 `.wasm`), `queue.test.ts` ("fotos HEIC": guardar primero, el JPEG que se sube, lo que no pasa por el conversor,
 el conversor que falla o no contesta, sin red, los tres intentos con red y sus esperas, un decodificador que no
 baja una vez y el reintento que sube el JPEG, sin red sin contar intentos ni preguntar a la base, un navegador
-que cree que no hay red y sí hay (se sube igual), el aviso al reintentar (también después de recargar), de a dos,
+que cree que no hay red y sí hay (se sube igual), el aviso al reintentar (también después de recargar), de a dos
+(conversiones colgadas o que fallan en el acto largan el turno, cerrar la app con fotos esperando turno, doce al
+azar con la cola corriendo),
 la conversión mientras la pregunta tarda, la respuesta perdida de `register_file`, la fila registrada
 mientras se convertía, la medición en curso), `heicNames.test.ts`, `lazyPart.test.tsx` (el oyente de verdad con
 un import opcional) y `scripts/licenses.test.mjs`. En Chromium, fuera del repo, el camino entero con el build de

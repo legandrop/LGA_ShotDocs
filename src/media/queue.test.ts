@@ -1924,7 +1924,7 @@ describe('fotos HEIC: se guardan en el acto y pasan a JPEG después (Docs/Doc_Im
     expect(await same(original, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
   });
 
-  it('mientras reintenta con red, el aviso lo dice; también después de recargar, mientras espera el próximo intento', async () => {
+  it('mientras reintenta con red, el aviso lo dice; también después de recargar, mientras espera el próximo intento (sin red, el de siempre)', async () => {
     const server = new FakeServer();
     server.enableMedia();
     const dbName = crypto.randomUUID();
@@ -1942,8 +1942,9 @@ describe('fotos HEIC: se guardan en el acto y pasan a JPEG después (Docs/Doc_Im
     await close(a);
     const b = await device(server, dbName);
     expect(svgText(await b.media.resolve(url))).toContain(heicNotice('retrying'));
-    // Sin red, el aviso de siempre.
+    // Recién recargada y sin red, antes de que pase la cola: el aviso de sin red.
     server.online = false;
+    expect(svgText(await b.media.resolve(url))).toContain(heicNotice('waiting'));
     server.clockOffset += HEIC_RETRY_MS[0] + 1000;
     await sync(b);
     expect(svgText(await b.media.resolve(url))).toContain(heicNotice('waiting'));
@@ -1971,6 +1972,98 @@ describe('fotos HEIC: se guardan en el acto y pasan a JPEG después (Docs/Doc_Im
     const ids = await Promise.all([1, 2, 3, 4, 5].map(async (n) => mediaIdOf(await a.media.add(page, heicFile(`IMG_000${n}.HEIC`)))!));
     await a.media.idle();
     expect(most).toBe(HEIC_PARALLEL);
+    for (const id of ids) expect(await a.mediaDb.get('files', id)).toMatchObject({ mime: 'image/jpeg' });
+  });
+
+  it('dos conversiones que se cuelgan para siempre largan su turno al llegar al tope: las demás convierten y se suben todas', async () => {
+    const server = new FakeServer();
+    server.heicTimeoutMs = 300;
+    const real = server.convertHeic;
+    let calls = 0;
+    server.convertHeic = (file) => (++calls <= 2 ? new Promise<Blob>(() => undefined) : real(file));
+    const { a, page } = await withPage(server);
+    const ids: string[] = [];
+    for (let n = 1; n <= 4; n++) ids.push(mediaIdOf(await a.media.add(page, heicFile(`IMG_${n}.HEIC`)))!);
+    await a.media.idle();
+    const records = await Promise.all(ids.map((id) => a.mediaDb.get('files', id)));
+    expect(records.filter((r) => r?.mime === 'image/jpeg')).toHaveLength(2);
+    expect(records.filter((r) => r?.heic === 'failed')).toHaveLength(2);
+    await sync(a);
+    for (const id of ids) expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+  });
+
+  it('cerrar la app con fotos esperando turno (y dos a medio convertir): al reabrir pasan todas a JPEG y se suben', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const real = server.convertHeic;
+    let started = 0;
+    server.convertHeic = () => {
+      started++;
+      // Se cuelga hasta que se cierra la app.
+      return new Promise<Blob>(() => undefined);
+    };
+    const dbName = crypto.randomUUID();
+    const a = await device(server, dbName);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    const ids: string[] = [];
+    for (let n = 1; n <= 5; n++) ids.push(mediaIdOf(await a.media.add(page, heicFile(`IMG_${n}.HEIC`)))!);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(started).toBe(HEIC_PARALLEL);
+    // Cerrar sin esperar a nada, como cerrar la pestaña.
+    a.engine.stop();
+    a.db.close();
+    a.mediaDb.close();
+    devices.splice(devices.indexOf(a), 1);
+    server.convertHeic = real;
+    const b = await device(server, dbName);
+    for (let i = 0; i < 3; i++) await sync(b);
+    for (const id of ids) {
+      expect(await b.mediaDb.get('files', id)).toMatchObject({ mime: 'image/jpeg', pending: 0 });
+      expect(server.mediaFiles.get(id)).toMatchObject({ mime: 'image/jpeg' });
+    }
+  });
+
+  it('un conversor que falla en el acto (sin devolver una promesa) no se queda con el turno', async () => {
+    const server = new FakeServer();
+    const real = server.convertHeic;
+    let calls = 0;
+    server.convertHeic = ((file: Blob) => {
+      if (++calls <= 3) throw new Error('se cayó en el acto');
+      return real(file);
+    }) as typeof server.convertHeic;
+    const { a, page } = await withPage(server);
+    const ids: string[] = [];
+    for (let n = 1; n <= 5; n++) ids.push(mediaIdOf(await a.media.add(page, heicFile(`IMG_${n}.HEIC`)))!);
+    await a.media.idle();
+    const records = await Promise.all(ids.map((id) => a.mediaDb.get('files', id)));
+    expect(records.filter((r) => r?.mime === 'image/jpeg')).toHaveLength(2);
+    await sync(a);
+    for (const id of ids) expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+  });
+
+  it('doce fotos con tiempos al azar y la cola corriendo a la vez: nunca más de dos juntas, ninguna se queda sin turno', async () => {
+    const server = new FakeServer();
+    server.heicTimeoutMs = 5000;
+    const real = server.convertHeic;
+    let running = 0;
+    let most = 0;
+    server.convertHeic = async (file) => {
+      running++;
+      most = Math.max(most, running);
+      try {
+        await new Promise((r) => setTimeout(r, Math.random() * 40));
+        return await real(file);
+      } finally {
+        running--;
+      }
+    };
+    const { a, page } = await withPage(server);
+    const ids = await Promise.all(Array.from({ length: 12 }, async (_, n) => mediaIdOf(await a.media.add(page, heicFile(`IMG_${n}.HEIC`)))!));
+    // La cola también pide turno al procesar cada foto.
+    await Promise.all([a.media.idle(), sync(a)]);
+    await a.media.idle();
+    expect(most).toBeLessThanOrEqual(HEIC_PARALLEL);
     for (const id of ids) expect(await a.mediaDb.get('files', id)).toMatchObject({ mime: 'image/jpeg' });
   });
 

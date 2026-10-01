@@ -1338,8 +1338,9 @@ export class MediaQueue {
     const retried = record.heic === 'pending' && (record.heicMisses ?? 0) > 0;
     if (this.heicWaiting.has(record.id)) return retried && !this.offline() ? 'retrying' : 'waiting';
     // Después de recargar la lista de espera está vacía: si ya hubo intentos con red y no hay uno en curso, está
-    // esperando el próximo (no "convirtiendo").
-    return retried && !this.converting.has(record.id) ? 'retrying' : 'converting';
+    // esperando el próximo (no "convirtiendo"); sin red, el aviso de siempre.
+    if (retried && !this.converting.has(record.id)) return this.offline() ? 'waiting' : 'retrying';
+    return 'converting';
   }
 
   private async convertNow(id: string): Promise<void> {

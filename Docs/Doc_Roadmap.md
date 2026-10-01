@@ -367,7 +367,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       convertidas: en el Drive, con miniatura y a la vista); falta la de un doc completo.
     - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.
     - **Hecho (v0.0XX): de a dos.** Varias HEIC soltadas juntas se convertían todas a la vez (cientos de MB
-      cada una); ahora de a dos (`HEIC_PARALLEL`). Cada una tarda alrededor de un segundo.
+      cada una); ahora de a dos (`HEIC_PARALLEL`).
+    - **El comando de Coda convierte de a una.** Tarda alrededor de un segundo por foto (unos 10 minutos con 618);
+      con miles, convendría en paralelo.
     - **La comprobación del JPEG acepta uno con la mitad en blanco**, y una carrera de microsegundos entre dos
       pestañas al tercer intento deja el aviso de HEIC sobre un JPEG: anotados en `Doc_Imagenes.md`, "Pendiente".
     - **Hecho (v0.0XX): pruebas del comando entero** (`scripts/coda-export-run.test.mjs`, contra una API de Coda
