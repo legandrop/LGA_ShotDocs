@@ -890,3 +890,72 @@ Pedido de Lega sobre v0.053/v0.054. **Manda sobre lo de arriba.**
 - **Pruebas:** `src/ui/collapsePagination.test.ts` ("imprimir como se ve").
 - **Falta de la 1b:** arrastrar la sección entera y Shift+⌘/Ctrl+↑/↓ como una unidad (tocan el documento: ver
   "Para la 1b (riesgo)").
+
+## 1b, segundo paso: en curso (pausado)
+
+Mover la sección entera (correcciones 4 y 7). **Pausado en el análisis: no hay código ni pruebas nuevas.** Todo lo
+de abajo sale de leer el código (BlockNote 0.55, y-prosemirror 1.3.7 con el parche, ProseMirror); **nada está
+medido todavía** con dos editores. Rama `lega/colapsar-mover`.
+
+**Cómo mueve BlockNote hoy** (`moveBlocks.ts`, atajos `Shift-Mod-ArrowUp/Down` en `KeyboardShortcutsExtension`):
+
+- Mueve los bloques de la selección (`getSelection().blocks`) o el del cursor. Arriba: antes del hermano anterior;
+  si ese tiene hijos, después de su último hijo; sin hermano anterior y anidado, antes del padre. Abajo, al revés.
+  No sabe nada de lo escondido: se mete adentro.
+- Es una sola transacción: saca los bloques y los vuelve a insertar (pasando por su JSON, con los mismos ids).
+- Arrastrar: `dragStart` elige el bloque (`NodeSelection`) o varios (`MultipleNodeSelection`, que no se exporta);
+  un manejador en el documento arma `view.dragging` desde el HTML (`blocknote/html`) **solo si no está ya
+  puesto**; al soltar, ProseMirror hace `deleteSelection` e inserta ese contenido, en una transacción.
+
+**Lo que costó descubrir: en Yjs un mover no es borrar e insertar.** y-prosemirror compara por posición
+(`updateYFragment`): deja el principio y el final que coinciden y **reescribe en su lugar** cada elemento del
+medio (todos son `blockContainer`): le cambia el id y el contenido. Mover dentro de un grupo reescribe **todos
+los bloques entre el origen y el destino**. De ahí sale (deducido, a medir):
+
+- Si otro escribe a la vez en uno de esos bloques, su texto aparece en el bloque vecino (mismo tipo) o se pierde
+  (título contra párrafo: se reemplaza el contenido). Si otro borra uno, se pierde **otro** bloque.
+- "Un solo borrado + inserción en una transacción de ProseMirror" **no alcanza**: da la misma reescritura. Una
+  sección de k bloques que salta m expone k+1+m bloques en vez de 2, y lo que se corre de lugar está escondido.
+- Arrastrar lejos ya reescribe hoy todo lo que hay entre el origen y el destino.
+
+**Lo que se iba a decidir para el riesgo** (sin implementar, sin medir):
+
+- Una sola transacción de ProseMirror (con lo colapsado en su `meta` y la selección puesta a mano) y, en Yjs,
+  **dos pasadas dentro de una sola transacción**: adentro de `binding.mux` se despacha la de ProseMirror y después
+  `updateYFragment` con el documento sin el lado que se recrea y `binding._prosemirrorChanged` con el final. En
+  Yjs queda un borrado y una inserción limpios **solo del lado más chico** (la sección o lo que salta; empate: lo
+  que salta); el otro lado no se toca. Un solo update, un solo paso de deshacer.
+- Depende de piezas internas de y-prosemirror (`mux`, `_prosemirrorChanged`; `updateYFragment` se exporta como
+  inestable): lleva una prueba que lo fije y, sin `binding`, despacho común. Si la transacción no se aplica, no se
+  escribe nada en Yjs; si algo falla en el medio, se vuelve a igualar con `_prosemirrorChanged`.
+- Costo esperado: lo que otro escriba a la vez en el lado recreado se pierde (como hoy al cambiar el tipo).
+- Descartado: dos despachos (un estado intermedio sin los bloques, que ven los plugins y los demás; saltaría el
+  aviso "Se borró también lo que estaba colapsado") y escribir directo en el Y.Doc copiando elementos (llega como
+  de Yjs, sin `meta`; no se verificó que la copia conserve todos los atributos).
+
+**El teclado, como se iba a hacer:**
+
+- Solo toma el atajo si hay algo colapsado y el movimiento lo toca (la selección incluye un título colapsado, o
+  lo que salta es una sección colapsada); si no, devuelve `false` y sigue BlockNote. Sin permiso de editar, no
+  mueve nada.
+- Unidades: un título colapsado a la vista con lo que esconde es un bloque. La selección (bloques hermanos) se
+  agranda hasta el final de la sección del último; el vecino escondido se salta hasta su título.
+- **Nada cambia de escondido a visible ni al revés:** después de mover se ajusta el fin (`e`) de cada título
+  colapsado a la vista para que esconda lo mismo que antes, se verifica contra lo calculado antes, y recién
+  entonces va en el `meta`. Si no se puede, va sin `meta` y manda la corrección 2 (abre).
+- **Deshacer:** un mover no saca ids, así que `undoGuard` no corta el paso: hay que cortar antes y después. Si el
+  fin pasó de un bloque a otro, deshacer escondería el primero: el paso de la pila se marca (como
+  `FIND_REPLACE_META`) y al deshacer o rehacer se ajusta el fin igual.
+
+**Arrastrar, como se iba a hacer:**
+
+- Después de `blockDragStart` (no antes: `dragStart` de BlockNote no toma una `SectionSelection` como varios
+  bloques, y elegir de texto a texto falla si el último bloque escondido es una foto), la selección pasa a la
+  sección entera y `view.dragging` se arma con esos mismos nodos.
+- Al soltar, un `handleDrop` solo para ese caso, con `dropPoint`, por el mismo camino de dos pasadas.
+- **A decidir por Lega:** soltar justo debajo de un título colapsado hoy cae adentro y lo abre (sección 5). La
+  otra opción es que caiga después de la sección. Se dejaba como está.
+
+**Falta todo lo demás:** el código, las pruebas con dos editores (el caso base sin colapsar, la sección
+colapsada, otro que escribe adentro, otro que la borra o le agrega un bloque), los pasos nuevos de la prueba al
+azar, deshacer, solo lectura (a verificar: si BlockNote mueve hoy con el editor en solo lectura) y los docs.
