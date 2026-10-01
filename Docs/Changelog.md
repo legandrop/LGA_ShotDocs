@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.065 :
+
+Colores al importar de Coda. Al comparar un doc importado con Coda, un fondo verde muy claro (como el que Coda
+pone en las celdas) quedaba amarillo en la app: el importador elige el color con nombre más cercano por tono, y
+ese verde está a mitad de camino entre el amarillo y el verde del editor. Ahora todo tono entre 70° y 165° es
+verde, como se ve en Coda, y un color escrito en hexadecimal también se reconoce. Además, al convertir una tabla,
+el color de una celda es el que tiene en la tabla de su propia página; el de otra vista vale solo si ahí la
+celda no tenía color (antes ganaba la última vista que se leía).
+[ Importar de Coda - verdes claros y color de las celdas ]
+
 v0.064 :
 
 Tablas de Coda: fichas con datos de otra fila. Al convertir una tabla en fichas, el comando junta cada fila del

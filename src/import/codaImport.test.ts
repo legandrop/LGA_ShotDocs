@@ -107,6 +107,11 @@ describe('HTML de Coda', () => {
     expect(namedColor('rgb(221, 237, 253)', 'background')).toBe('blue');
     expect(namedColor('rgb(255, 255, 255)', 'background')).toBeNull();
     expect(namedColor('rgb(220, 30, 30)', 'text')).toBe('red');
+    // El verde muy claro de Coda (~88°) es verde, no amarillo; también escrito en hexadecimal.
+    expect(namedColor('rgb(241, 248, 233)', 'background')).toBe('green');
+    expect(namedColor('#f1f8e9', 'background')).toBe('green');
+    expect(namedColor('#fff', 'background')).toBeNull();
+    expect(namedColor('rgb(255, 245, 200)', 'background')).toBe('yellow');
   });
 
   it('un párrafo con solo un link no es un párrafo vacío (al principio, seguidos y al final)', async () => {
