@@ -80,6 +80,22 @@ export const sidebar = {
     es: "Es tu único proyecto: primero creá otro",
   },
   'project.stateFailed': { en: "Could not do it: {reason}", es: "No se pudo: {reason}" },
+  'project.onlyActive': {
+    en: "This is your only active project: create or unarchive another one first",
+    es: "Es tu único proyecto activo: primero creá o desarchivá otro",
+  },
+  'project.errorNotAllowed': {
+    en: "You can't do that in this project anymore: your access changed.",
+    es: "Ya no podés hacer eso en este proyecto: cambió tu acceso.",
+  },
+  'project.errorNotFound': {
+    en: "This project no longer exists, or you can't see it anymore.",
+    es: "Este proyecto ya no existe, o ya no lo ves.",
+  },
+  'project.errorDeleted': {
+    en: "This project was deleted in the meantime: it is in Deleted projects.",
+    es: "Este proyecto se borró mientras tanto: está en Proyectos borrados.",
+  },
   'import.menu': { en: "Import from Coda…", es: "Importar de Coda…" },
   // Con una importación de Coda en curso (importJob.ts): cerrar la sesión o quitar el workspace esperan.
   'import.running': {

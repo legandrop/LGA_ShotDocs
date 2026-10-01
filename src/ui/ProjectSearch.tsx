@@ -134,8 +134,9 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
 
   // Los proyectos: vacío, todos (el abierto marcado); con algo escrito, los otros que coinciden (el abierto no:
   // elegirlo solo cerraría el panel). Antes de la primera sincronización puede faltar el abierto. Los archivados
-  // no (P.14): salen de la lista de todos los días; el abierto, aunque esté archivado, sí.
-  const known = tree.projects().filter((p) => !p.archived_at || p.id === projectId);
+  // (P.14) salen de la lista de todos los días, pero se encuentran escribiendo su nombre (marcados), también sin red:
+  // salen de la copia del dispositivo. El abierto, aunque esté archivado, siempre.
+  const known = tree.projects().filter((p) => typed || !p.archived_at || p.id === projectId);
   const allProjects = known.some((p) => p.id === projectId)
     ? known
     : [{ id: projectId, name: tr('project.defaultName'), created_at: '' }, ...known];
@@ -330,7 +331,11 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
                       <span className="search-project-name">
                         <Highlight text={p.name} ranges={typed ? rangesIn(p.name, words) : []} />
                       </span>
-                      {p.id === projectId && <span className="current-mark">{tr('project.open')}</span>}
+                      {p.id === projectId ? (
+                        <span className="current-mark">{tr('project.open')}</span>
+                      ) : (
+                        p.archived_at && <span className="current-mark">{tr('project.archivedMark')}</span>
+                      )}
                     </>,
                   ),
                 )}

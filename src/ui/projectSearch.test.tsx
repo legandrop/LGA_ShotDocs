@@ -286,6 +286,24 @@ describe('el panel', () => {
     expect(location.pathname).toBe('/');
   });
 
+  it('un archivado (P.14) no está en la lista vacía, pero se encuentra escribiendo, marcado, también sin saber la versión de la base', async () => {
+    const { d } = await app();
+    let old = '';
+    await act(async () => {
+      old = await d.tree.createProject('Wanka viejo');
+      await d.engine.syncNow();
+      // Lo que guarda la copia del dispositivo después de archivar (la base de esta prueba ni tiene la versión 9).
+      await d.tree.markArchived(old, new Date().toISOString());
+    });
+    await openWithKeys();
+    expect(options().map((o) => o.textContent).join('|')).not.toContain('Wanka viejo');
+    type(input(), 'viejo');
+    await until(() => options().some((o) => o.textContent?.includes('Wanka viejo')), 'el archivado que coincide');
+    expect(options()[0].textContent).toContain('Wanka viejo');
+    expect(options()[0].textContent).toContain('Archived');
+    void old;
+  });
+
   it('la lupa de la barra lateral lo abre, también para quien no puede crear páginas', async () => {
     const server = new FakeServer();
     const d = await makeDevice(server);

@@ -45,6 +45,29 @@ export const shell = {
     es: "Entraste a {workspace} como {email}, pero todavía no te compartieron nada. Pedile acceso al dueño del workspace; esta pantalla abre tus proyectos apenas te comparta uno.",
   },
   'noProjects.thisWorkspace': { en: "this workspace", es: "este workspace" },
+  // Con proyectos borrados que la persona puede restaurar (P.14).
+  'noProjects.restoreOrCreate': {
+    en: "You are signed in to {workspace} as {email}. Restore a deleted project below, or create a new one.",
+    es: "Entraste a {workspace} como {email}. Restaurá un proyecto borrado de abajo, o creá uno nuevo.",
+  },
+  'noProjects.restore': {
+    en: "You are signed in to {workspace} as {email}. Restore a deleted project below.",
+    es: "Entraste a {workspace} como {email}. Restaurá un proyecto borrado de abajo.",
+  },
+  'noProjects.pending': {
+    en: {
+      one: "This device has {count} change that is not uploaded yet. It is kept here and uploads if its project is restored.",
+      other: "This device has {count} changes that are not uploaded yet. They are kept here and upload if their project is restored.",
+    },
+    es: {
+      one: "Este dispositivo tiene {count} cambio sin subir. Queda guardado acá y sube si restauran su proyecto.",
+      other: "Este dispositivo tiene {count} cambios sin subir. Quedan guardados acá y suben si restauran su proyecto.",
+    },
+  },
+  'home.archived': {
+    en: "Archived: out of your everyday list. Unarchive it from Archived projects in the project menu.",
+    es: "Archivado: fuera de tu lista de todos los días. Se desarchiva desde Proyectos archivados, en el selector.",
+  },
   'invite.incomplete': {
     en: "This invitation link is incomplete. Copy the whole link again, or ask for a new one.",
     es: "Este link de invitación está incompleto. Copiá el link entero otra vez, o pedí uno nuevo.",

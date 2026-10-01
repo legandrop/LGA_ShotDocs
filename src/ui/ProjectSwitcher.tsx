@@ -5,7 +5,6 @@ import { formatSize } from '../media/fileTrash';
 import { usePermissions, useProjectSizes, useServices, useSyncStatus, useTree } from '../services';
 import { isOnlyActiveProject, nextProjectAfter } from '../sync/projectStates';
 import { PROJECT_STATES_SCHEMA_VERSION } from '../sync/remote';
-import { errorMessage } from '../sync/types';
 import { displayName } from '../workspaces';
 import { useCodaOwner } from '../import/codaOwner';
 import { importJobFor } from '../import/importJob';
@@ -24,7 +23,7 @@ import {
 } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
-import { editedLabel, monogram, useCurrentProject, useSwitchProject } from './project';
+import { editedLabel, monogram, projectStateError, useCurrentProject, useSwitchProject } from './project';
 import { SEARCH_SHORTCUT_LABEL, useSearchSession } from './projectSearchUi';
 import { DeletedProjectsList, DeleteProjectDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
@@ -101,6 +100,8 @@ export function ProjectSwitcher() {
             {/* Con un solo workspace, igual que siempre. */}
             {all.length > 1 && ws ? `${displayName(ws)} › ` : ''}
             {tr('project.summary', { count: stats.pages })}
+            {/* Un archivado se abre y se edita, con la marca a la vista (decisión de Lega, P.14). */}
+            {project?.archived_at ? ` · ${tr('project.archivedMark')}` : ''}
           </span>
         </span>
         <AccountIcon size={16} />
@@ -145,6 +146,7 @@ export function ProjectSwitcher() {
                 setDeleting(null);
                 await tree.forgetProject(id);
                 if (id === current) switchTo(next ?? tree.workspaceId);
+                button.current?.focus();
                 void engine.syncNow();
               }}
             />
@@ -197,6 +199,7 @@ function ProjectMenu(props: {
   const [mode, setMode] = useState<Mode>({ name: 'list' });
   const [touch] = useState(coarsePointer);
   const [returned, setReturned] = useState(false);
+  const search = useRef<HTMLInputElement>(null);
   // Archivar pregunta en el mismo renglón (P.14); en el teléfono, "⋯" despliega las acciones del renglón.
   const [confirming, setConfirming] = useState<string | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
@@ -240,6 +243,7 @@ function ProjectMenu(props: {
       else if (needle && perms.canCreateProject && !archivedMode) setMode({ name: 'new' });
     } else if (e.key === 'Escape' && mode.name !== 'list') {
       e.preventDefault();
+      e.stopPropagation();
       backToList();
     }
   };
@@ -256,7 +260,9 @@ function ProjectMenu(props: {
   /** Por qué no se puede archivar o borrar este proyecto ahora; `null` si se puede (o si no le toca a la persona). */
   const blockedReason = (id: string, archived: boolean): string | null => {
     if (offline) return tr('fileTrash.needsInternet');
-    if (!archived && isOnlyActiveProject(tree, id)) return tr('project.onlyOne');
+    if (!archived && isOnlyActiveProject(tree, id)) {
+      return tr(tree.archivedProjects().length > 0 ? 'project.onlyActive' : 'project.onlyOne');
+    }
     return null;
   };
 
@@ -275,11 +281,13 @@ function ProjectMenu(props: {
         switchTo(next);
       }
     } catch (err) {
-      notify(t('project.stateFailed', { reason: errorMessage(err) }));
+      notify(projectStateError(err, t));
     } finally {
       setBusy(null);
       setConfirming(null);
       setOpened(null);
+      // El renglón confirmado desaparece: el foco vuelve al buscador (si el selector sigue abierto).
+      requestAnimationFrame(() => search.current?.focus());
     }
   }
 
@@ -399,6 +407,7 @@ function ProjectMenu(props: {
           aria-controls="project-listbox"
           aria-autocomplete="list"
           aria-activedescendant={projects[active] ? `project-option-${projects[active].id}` : undefined}
+          ref={search}
           autoFocus={returned && !touch}
           aria-label={tr('project.find')}
           placeholder={tr(archivedMode ? 'project.findArchived' : 'project.findPlaceholder')}
@@ -421,7 +430,18 @@ function ProjectMenu(props: {
           const actions = rowActions(p.id, p.name, archived);
           if (confirming === p.id) {
             return (
-              <div key={p.id} className="project-row confirming" role="presentation">
+              <div
+                key={p.id}
+                className="project-row confirming"
+                role="presentation"
+                onKeyDown={(e) => {
+                  if (e.key !== 'Escape') return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setConfirming(null);
+                  search.current?.focus();
+                }}
+              >
                 <Monogram name={p.name} />
                 <span className="project-confirm-text">{tr('project.archiveConfirm', { name: p.name })}</span>
                 <button className="primary small" disabled={busy !== null} autoFocus onClick={() => void setArchived(p.id, true)}>
@@ -554,11 +574,14 @@ function ProjectMenu(props: {
               {tr('import.menu')}
             </button>
           )}
-          {statesReady && archivedCount > 0 && (
+          {/* De la copia del dispositivo: anda sin red y sin saber todavía la versión de la base (sección 7.2).
+              Desarchivar y borrar, adentro, sí piden red y la versión 9. */}
+          {archivedCount > 0 && (
             <button
               onClick={() => {
                 setQuery('');
                 setActive(0);
+                setReturned(true);
                 setMode({ name: 'archived' });
               }}
             >

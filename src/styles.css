@@ -4852,3 +4852,19 @@ mark.search-hit {
     display: none !important;
   }
 }
+
+/* Un proyecto archivado abierto (P.14): la marca en su inicio. */
+.archived-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* La pantalla "sin proyectos" con cambios sin subir en el dispositivo (P.14). */
+.no-projects-pending {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}

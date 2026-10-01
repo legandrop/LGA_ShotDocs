@@ -3464,7 +3464,7 @@ base real, con las once pruebas que ya existían y los casos negativos de la aud
   dispositivo ya abierto; suma *Deleted projects* si hay alguno que la persona puede restaurar.
 - **Papelera de archivos** (`TrashView.tsx`): un archivo con `in_deleted_project` dice "Lo usa una página de un
   proyecto borrado…" y no tiene el botón; *Empty* lo deja afuera.
-- **Búsqueda** (Ctrl/⌘+K): sin los archivados (el abierto, sí).
+- **Búsqueda** (Ctrl/⌘+K): sin los archivados en la lista vacía (el abierto, sí); escribiendo su nombre, aparecen marcados.
 - **Portero:** `purge_file` con `file_in_deleted_project` responde `409 in_deleted_project` (antes, `502 db_error`):
   la app publicada antes, que todavía ofrece el botón, recibe un motivo claro. `Doc_Portero.md`.
 - **Importación de Coda:** el diario de una importación cortada ya no se borra si su proyecto no está en el árbol:
@@ -3510,9 +3510,26 @@ lista para sumarla, en inglés (la interfaz) y en castellano:
 
 No hay atajos de teclado nuevos (Enter confirma y Escape cierra, como en las otras ventanas).
 
+### Correcciones de la auditoría del código (2026-10-01)
+
+Veredicto: "se puede publicar corrigiendo". Lo corregido, cada punto con su prueba:
+
+| Punto | Qué era | Cómo quedó |
+|---|---|---|
+| **B1** | Si la app arrancaba sin red (sin saber todavía la versión de la base), los archivados no aparecían en ningún lado. | *Archived projects (N)* sale de la copia del dispositivo, sin mirar la versión ni la red; desarchivar y borrar, adentro, siguen pidiendo las dos. En Ctrl/⌘+K los archivados no están en la lista vacía, pero se encuentran escribiendo su nombre, marcados *Archived*. |
+| **B2** | La marca *Archived* solo se veía con el selector abierto. | También en el botón del selector ("Project · 12 pages · Archived") y en el inicio del proyecto, con una línea que dice cómo desarchivarlo. |
+| Obs. 1 | La pantalla "sin proyectos" en un dispositivo ya abierto tapaba lo que tenía sin subir. | Lo cuenta, ofrece *Download my unsynced changes*, y *Sign out* pregunta como el menú de la cuenta. |
+| Obs. 2 | Escape cerraba todo el selector. | En la confirmación del renglón vuelve al renglón; en la lista de archivados (con el foco en su buscador), a la principal. |
+| Obs. 3 | Después de archivar con el teclado el foco caía en la página. | Vuelve al buscador del selector; después de borrar, al botón del selector. |
+| Obs. 4 | Errores en crudo ("Could not do it: not_allowed"). | `project_not_found`, `not_allowed` y `project_deleted` con su frase, en los dos idiomas (`projectStateError`). |
+| Obs. 5 | "Es tu único proyecto" aunque hubiera archivados. | Con archivados: "Es tu único proyecto activo: primero creá o desarchivá otro". |
+| Obs. 6 | `useCurrentProject` podía caer en un archivado. | Sin uno elegido, si el primero del dispositivo está archivado, abre el primero activo. |
+| Obs. 7 | "Create the first project" a quien tenía borrados para restaurar; "· Quedan 30 días" con mayúscula. | Texto propio ("Restaurá un proyecto borrado de abajo, o creá uno nuevo"); el plazo en minúscula después del "·" y con mayúscula si abre el renglón. |
+| Obs. 8 | Una prueba de `pageView` pasa el tope de 5 s con la suite entera, 1 de cada 4 veces. | Viene de antes (falla igual en `main`); no se toca. |
+
 ## Pendiente
 
-- **Entrega 1:** auditoría del código; copia de seguridad y `db:migrate` de la migración 9; publicar; subir
+- **Entrega 1:** auditoría del código hecha y corregida; copia de seguridad y `db:migrate` de la migración 9; publicar; subir
   `min_app_version`; probar en la app real (Wanka, la computadora y el iPhone).
 - **La prueba técnica de Drive** (sección 3.9), antes de construir la entrega 2.
 - Las entregas 2 y 3: sus pruebas SQL van a `supabase/tests/` como archivos separados, cada una con la preparación de

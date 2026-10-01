@@ -28,6 +28,8 @@ afterEach(async () => {
   document.body.innerHTML = '';
   vi.unstubAllGlobals();
   act(() => prefs.set({ language: 'en' }));
+  // El proyecto elegido en el dispositivo (project.ts) no pasa de una prueba a otra.
+  localStorage.clear();
 });
 
 function services(d: Device, userId: string): Services {
@@ -139,7 +141,8 @@ describe('selector: archivar', () => {
     await open$(owner, server.ownerId);
     const archive = label('Archive “My project”')!;
     expect(archive.disabled).toBe(true);
-    expect(archive.getAttribute('data-tip')).toBe('This is your only project: create another one first');
+    // Con archivados, el motivo dice que se puede desarchivar otro.
+    expect(archive.getAttribute('data-tip')).toBe('This is your only active project: create or unarchive another one first');
     expect(label('Delete “My project”…')!.disabled).toBe(true);
     void p;
   });
@@ -334,6 +337,166 @@ describe('pantalla "sin proyectos"', () => {
     await settle();
     expect(host.textContent).toContain('No projects yet');
     expect(host.textContent).not.toContain('Deleted projects');
+  });
+});
+
+describe('correcciones de la auditoría del código', () => {
+  it('B1: la app arrancó sin red (sin saber la versión de la base): los archivados guardados se ven y se abren', async () => {
+    const { server, owner, q } = await workspace();
+    await owner.remote.setProjectArchived(q, true);
+    await owner.engine.syncNow();
+    const db = owner.db.name;
+    await owner.engine.stop();
+    // La misma app vuelve a abrir, sin red: el motor nunca leyó los ajustes del servidor.
+    server.online = false;
+    const again = await makeDevice(server, db);
+    devices.push(again);
+    expect(again.engine.getStatus().schemaVersion).toBeNull();
+    await open$(again, server.ownerId);
+    const line = byText('Archived projects (1)')!;
+    expect(line).toBeDefined();
+    await act(async () => line.click());
+    expect(rowIds()).toEqual([q]);
+    // Se abre; desarchivar y borrar piden red y la versión: no se ofrecen.
+    expect(label('Unarchive “Old spot”')).toBeNull();
+    expect(label('Delete “Old spot”…')).toBeNull();
+  });
+
+  it('B2: abierto un archivado, la marca está en el botón del selector y en el inicio del proyecto', async () => {
+    const { server, owner, q } = await workspace();
+    await owner.remote.setProjectArchived(q, true);
+    await owner.engine.syncNow();
+    const { Home } = await import('./Workspace');
+    const { storageProjectKey } = { storageProjectKey: legacyStorageNames(WANKA_LOCAL_KEY).project };
+    localStorage.setItem(storageProjectKey, JSON.stringify({ [server.ownerId]: q }));
+    const host = await mount(services(owner, server.ownerId));
+    expect(host.querySelector('.project-button')?.textContent).toContain('Project · 0 pages · Archived');
+    const home = document.createElement('div');
+    document.body.append(home);
+    const root = createRoot(home);
+    roots.push(root);
+    await act(async () => root.render(<ServicesContext.Provider value={services(owner, server.ownerId)}>{<Home />}</ServicesContext.Provider>));
+    expect(home.querySelector('.archived-note')?.textContent).toContain('Archived: out of your everyday list');
+  });
+
+  it('obs. 2 y 3: Escape vuelve al renglón o a la lista sin cerrar el selector; después de archivar, el foco está en el buscador', async () => {
+    const { server, owner, o } = await workspace();
+    await open$(owner, server.ownerId);
+    await act(async () => label('Archive “Bosque Negro”')!.click());
+    const archiveButton = byText('Archive')!;
+    archiveButton.focus();
+    await act(async () => {
+      archiveButton.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(document.querySelector('.project-menu')).not.toBeNull();
+    expect(document.querySelector('.project-row.confirming')).toBeNull();
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Find a project');
+
+    await act(async () => label('Archive “Bosque Negro”')!.click());
+    await act(async () => byText('Archive')!.click());
+    await settle();
+    expect(server.projects.get(o)?.archived_at).toBeTruthy();
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Find a project');
+
+    // En la lista de archivados, Escape vuelve a la principal (el selector sigue abierto).
+    await act(async () => byText('Archived projects (1)')!.click());
+    const search = document.querySelector<HTMLInputElement>('.project-search input')!;
+    expect(document.activeElement).toBe(search);
+    await act(async () => {
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(document.querySelector('.project-menu')).not.toBeNull();
+    expect(byText('Archived projects (1)')).toBeDefined();
+  });
+
+  it('obs. 4: los errores de archivar, borrar y restaurar en palabras y en los dos idiomas', async () => {
+    const { projectStateError } = await import('./project');
+    const { RemoteError } = await import('../sync/types');
+    const { translate } = await import('../i18n');
+    const tr = Object.assign((key: never, params?: never) => translate('es', key, params), { lang: 'es' }) as never;
+    expect(projectStateError(new RemoteError('not_allowed', true, '42501'))).toBe("You can't do that in this project anymore: your access changed.");
+    expect(projectStateError(new RemoteError('project_deleted', true, 'P0001'), tr)).toBe('Este proyecto se borró mientras tanto: está en Proyectos borrados.');
+    expect(projectStateError(new RemoteError('project_not_found', true, 'P0002'))).toBe("This project no longer exists, or you can't see it anymore.");
+    expect(projectStateError(new RemoteError('boom', false))).toBe('Could not do it: boom');
+  });
+
+  it('obs. 5: con archivados, el último activo dice que se puede crear o desarchivar otro', async () => {
+    const { server, owner, o, q } = await workspace();
+    await owner.remote.setProjectArchived(o, true);
+    await owner.remote.setProjectArchived(q, true);
+    await owner.engine.syncNow();
+    await open$(owner, server.ownerId);
+    expect(label('Archive “My project”')!.getAttribute('data-tip')).toBe(
+      'This is your only active project: create or unarchive another one first',
+    );
+  });
+
+  it('obs. 6: sin uno elegido, si el primero del dispositivo está archivado, la app abre el primero activo', async () => {
+    const { server, owner, p, o } = await workspace();
+    await owner.remote.setProjectArchived(p, true);
+    await owner.engine.syncNow();
+    expect(owner.tree.workspaceId).toBe(p);
+    const host = await mount(services(owner, server.ownerId));
+    expect(host.querySelector('.project-button strong')?.textContent).toBe(owner.tree.activeProjects()[0].name);
+    expect(owner.tree.activeProjects()[0].id).not.toBe(p);
+    void o;
+  });
+
+  it('obs. 1 y 7: "sin proyectos" con cambios sin subir los muestra, deja bajarlos y salir pregunta; el texto ofrece restaurar', async () => {
+    const { WorkspaceContext } = await import('../workspace');
+    const { NoProjects } = await import('./Workspace');
+    const signOut = vi.fn(async () => undefined);
+    const client = {
+      auth: { signOut },
+      from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: 'admin', removed_at: null }, error: null }) }) }) }),
+      rpc: async (fn: string) =>
+        fn === 'trashed_projects'
+          ? { data: [{ id: 'm1', name: 'Mi spot', archived_at: null, deleted_at: new Date().toISOString(), deleted_by: null, deleted_by_email: null, days_left: 30, can_restore: true, pages: null, files: null }], error: null, status: 200 }
+          : { data: null, error: null, status: 204 },
+    };
+    const value = {
+      config: { url: 'https://x.supabase.co', publishableKey: 'k', name: 'Wanka', localKey: WANKA_LOCAL_KEY, storage: legacyStorageNames(WANKA_LOCAL_KEY) },
+      client,
+    } as never;
+    const download = vi.fn(async () => undefined);
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    roots.push(root);
+    act(() => prefs.set({ language: 'es' }));
+    await act(async () =>
+      root.render(
+        <WorkspaceContext.Provider value={value}>
+          <NoProjects user={{ id: 'u1', email: 'u1@test' }} onRetry={() => undefined} pending={2} onDownload={download} />
+        </WorkspaceContext.Provider>,
+      ),
+    );
+    await settle();
+    await vi.waitFor(() => expect(host.textContent).toContain('Mi spot'));
+    expect(host.textContent).toContain('Restaurá un proyecto borrado de abajo, o creá uno nuevo.');
+    expect(host.textContent).not.toContain('Creá el primer proyecto');
+    // Sin números (no lo maneja), el plazo abre el renglón con mayúscula.
+    expect(host.querySelector('.deleted-project-row')?.textContent).toContain('Quedan 30 días');
+    expect(host.textContent).toContain('Este dispositivo tiene 2 cambios sin subir.');
+    await act(async () => byText('Descargar mis cambios sin sincronizar')!.click());
+    expect(download).toHaveBeenCalled();
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    await act(async () => byText('Cerrar sesión')!.click());
+    expect(signOut).not.toHaveBeenCalled();
+  });
+});
+
+describe('obs. 7: el plazo en minúscula después del "·"', () => {
+  it('en castellano, "3 páginas · quedan 30 días"', async () => {
+    const { server, owner, o } = await workspace();
+    await owner.tree.create(null, 'Escena', o);
+    await owner.engine.syncNow();
+    await owner.remote.deleteProject(o);
+    await owner.tree.forgetProject(o);
+    act(() => prefs.set({ language: 'es' }));
+    await open$(owner, server.ownerId);
+    await act(async () => byText('Proyectos borrados')!.click());
+    await vi.waitFor(() => expect(document.querySelector('.deleted-project-row')?.textContent).toContain('1 página · quedan 30 días'));
   });
 });
 

@@ -9,6 +9,7 @@ import type { ProjectStatesRemote } from '../sync/remote';
 import { errorMessage, type ProjectDeleteInfo, type TrashedProjectRow } from '../sync/types';
 import { RestoreIcon } from './icons';
 import { notify } from './notice';
+import { projectStateError } from './project';
 import { Monogram } from './ProjectSwitcher';
 import { downloadUnsynced } from './unsyncedDownload';
 
@@ -85,7 +86,7 @@ export function DeleteProjectDialog(props: {
       await remote.deleteProject(props.projectId);
     } catch (err) {
       setBusy(null);
-      setError(tr('project.stateFailed', { reason: errorMessage(err) }));
+      setError(projectStateError(err, tr));
       return;
     }
     await props.onDeleted(props.projectId);
@@ -189,6 +190,16 @@ export function DeleteProjectDialog(props: {
   );
 }
 
+/** "3 páginas · 1,1 GB · quedan 30 días"; si el plazo abre el renglón (sin números), con mayúscula. */
+function rowStats(r: TrashedProjectRow, bytes: number | null, tr: ReturnType<typeof useT>): string {
+  const parts: string[] = [];
+  if (r.pages !== null) parts.push(tr('project.pages', { count: r.pages }));
+  if (bytes !== null && bytes > 0) parts.push(formatSize(bytes, tr.lang));
+  const days = r.days_left > 0 ? tr('deletedList.daysLeft', { count: r.days_left }) : tr('deletedList.passed');
+  parts.push(parts.length === 0 ? days.charAt(0).toUpperCase() + days.slice(1) : days);
+  return parts.join(' · ');
+}
+
 /** "hace 2 días", "hoy" (con la fecha del idioma de la app). */
 function whenText(iso: string, lang: 'en' | 'es'): string {
   const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
@@ -231,7 +242,7 @@ export function DeletedProjectsList(props: {
       await props.onRestored(row);
       setRows((list) => (Array.isArray(list) ? list.filter((r) => r.id !== row.id) : list));
     } catch (err) {
-      setError(t('project.stateFailed', { reason: errorMessage(err) }));
+      setError(projectStateError(err, t));
     } finally {
       setBusy(null);
     }
@@ -256,11 +267,7 @@ export function DeletedProjectsList(props: {
                     ? tr('deletedList.by', { email: r.deleted_by_email, when: whenText(r.deleted_at, tr.lang) })
                     : tr('deletedList.on', { when: whenText(r.deleted_at, tr.lang) })}
                 </span>
-                <span>
-                  {r.pages !== null && `${tr('project.pages', { count: r.pages })} · `}
-                  {bytes !== null && bytes > 0 && `${formatSize(bytes, tr.lang)} · `}
-                  {r.days_left > 0 ? tr('deletedList.daysLeft', { count: r.days_left }) : tr('deletedList.passed')}
-                </span>
+                <span>{rowStats(r, bytes, tr)}</span>
               </span>
               {r.can_restore && (
                 <button className="secondary" disabled={busy !== null} onClick={() => void restore(r)}>

@@ -75,9 +75,9 @@ export const projectStates = {
   'deletedList.on': { en: "Deleted {when}", es: "Borrado {when}" },
   'deletedList.daysLeft': {
     en: { one: "{count} day left", other: "{count} days left" },
-    es: { one: "Queda {count} día", other: "Quedan {count} días" },
+    es: { one: "queda {count} día", other: "quedan {count} días" },
   },
-  'deletedList.passed': { en: "30 days passed", es: "Pasaron los 30 días" },
+  'deletedList.passed': { en: "30 days passed", es: "pasaron los 30 días" },
   'deletedList.restore': { en: "Restore", es: "Restaurar" },
   'deletedList.restoring': { en: "Restoring…", es: "Restaurando…" },
   'deletedList.restored': {
