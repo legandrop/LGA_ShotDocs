@@ -3,10 +3,13 @@
 // importa desde el selector de proyectos (Import from Coda…). Ver Docs/Doc_Importar_Coda.md.
 // Si el doc tiene tablas, las baja a tables/ y las convierte en páginas (fichas, índices, tarjetas: ver
 // scripts/lib/codaTables.mjs); el HTML de Coda queda intacto y lo convertido va a pages/*.import.html.
+// Las fotos HEIC (iPhone) pasan a JPEG, que es lo que se importa; el original queda en media-originals/
+// (ver scripts/lib/codaHeic.mjs).
 //
 // Uso:  node scripts/coda-export.mjs "<nombre del doc o id>" [carpeta de salida] [--refresh]
 //       node scripts/coda-export.mjs --convert-only "<carpeta exportada o nombre del doc>"
-//         (convierte otra vez las tablas, sin red ni token: para probar tables.config.json)
+//         (convierte otra vez las tablas y las fotos HEIC que falten, sin red ni token: para probar
+//         tables.config.json)
 // Sale por defecto en %USERPROFILE%\Coda_Export\<doc> (en Mac, ~/Coda_Export/<doc>).
 // Token: variable CODA_API_TOKEN o archivo %USERPROFILE%\.coda-token (nunca en el repo).
 // Se puede cortar y volver a correr: lo ya bajado (páginas y archivos) no se vuelve a pedir. Por eso una
@@ -22,6 +25,7 @@ import { homedir } from 'node:os'
 import { join, extname } from 'node:path'
 import { API, checkEmbeds, checkTablesConfig, codaPageSlug, isCodaApi, isCodaHosted, mediaBaseName, parseEmbedUrl, parseExportArgs } from './lib/codaExport.mjs'
 import { convertTables } from './lib/codaTables.mjs'
+import { applyHeic, convertHeicFolder, folderHasHeic, heicSummary, isHeicProblem, rewriteLocalHtml, storedMedia } from './lib/codaHeic.mjs'
 
 async function token() {
   if (process.env.CODA_API_TOKEN) return process.env.CODA_API_TOKEN.trim()
@@ -132,7 +136,7 @@ async function exportHtml(docId, pageId) {
 
 const EXT = {
   'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp',
-  'image/svg+xml': '.svg', 'image/heic': '.heic', 'video/mp4': '.mp4', 'video/quicktime': '.mov',
+  'image/svg+xml': '.svg', 'image/heic': '.heic', 'image/heif': '.heif', 'video/mp4': '.mp4', 'video/quicktime': '.mov',
   'video/webm': '.webm', 'application/pdf': '.pdf',
 }
 
@@ -142,8 +146,9 @@ const HOSTED = /https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.co
 
 async function download(url, dir) {
   // El nombre sale del blob id de la URL (bl-XXXX), estable entre corridas; sin blob, un hash de la URL.
+  // Una foto HEIC ya convertida está como `<blob>.jpg` (su original se fue a media-originals/): no se pide de nuevo.
   const blob = mediaBaseName(url)
-  const done = (await readdir(dir)).find((f) => f.startsWith(blob + '.') && !f.endsWith('.part'))
+  const done = storedMedia(await readdir(dir), blob)
   if (done && (await stat(join(dir, done))).size > 0) return { file: done, reused: true }
   const res = await request(url)
   if (!res.ok) throw new Error(`${res.status} al bajar ${url}`)
@@ -258,19 +263,59 @@ async function readTablesConfig(out) {
   return checkTablesConfig(raw)
 }
 
+/** Una línea por foto convertida (son segundos cada una: que se vea que avanza). */
+function logHeic({ file, index, total, error, heicBytes, jpegBytes, ms }) {
+  const mb = (n) => (n / 1048576).toFixed(1).replace('.', ',') + ' MB'
+  const step = `  foto HEIC [${index + 1}/${total}] ${file}`
+  console.log(error ? `${step} ... ERROR` : `${step} ... ${mb(heicBytes)} → ${mb(jpegBytes)} en ${(ms / 1000).toFixed(1).replace('.', ',')} s`)
+}
+
 /**
- * Convierte las tablas de una carpeta exportada (sin red, salvo para bajar archivos que solo están en los
- * datos de una tabla, sin token). Parte de `manifest.coda.json` (el manifest de las páginas de Coda, tal cual)
- * y escribe `manifest.json` con las páginas convertidas y las nuevas. Se puede repetir: no toca el HTML de Coda.
+ * Convierte una carpeta exportada: las tablas (sin red, salvo para bajar archivos que solo están en los datos
+ * de una tabla, sin token) y las fotos HEIC que falten. Parte de `manifest.coda.json` (el manifest de las
+ * páginas de Coda, tal cual) y escribe `manifest.json` con las páginas convertidas y las nuevas. Se puede
+ * repetir: no toca el HTML de Coda. `tables: false` deja las tablas afuera (no se pudieron listar en esta
+ * corrida). Devuelve `null` si no hay nada que convertir.
  */
-async function convertFolder(out) {
+async function convertFolder(out, { tables: withTables = true } = {}) {
   const basePath = join(out, 'manifest.coda.json')
   const indexPath = join(out, 'tables', 'index.json')
-  if (!existsSync(basePath) || !existsSync(indexPath)) return null
+  if (!existsSync(basePath)) return null
   const manifest = await readJson(basePath)
-  const index = await readJson(indexPath)
-  if (!index.tables?.length) return null
-  const configPath = join(out, 'tables.config.json')
+  const index = withTables && existsSync(indexPath) ? await readJson(indexPath) : null
+  const hasTables = !!index?.tables?.length
+  if (!hasTables && !(await folderHasHeic(out))) return null
+  const pages = new Map()
+  for (const p of manifest.pages) if (p.file && existsSync(join(out, 'pages', p.file))) pages.set(p.file, await readFile(join(out, 'pages', p.file), 'utf8'))
+  const html = (file) => pages.get(file) ?? null
+  let result = { manifest, files: new Map(), notes: null }
+  if (hasTables) result = await convertFolderTables(out, manifest, index, html)
+  // Las fotos HEIC, después de las tablas: una tabla puede haber bajado alguna más.
+  const heic = await convertHeicFolder(out, { log: logHeic })
+  const applied = applyHeic({ manifest: result.manifest, files: result.files, html, converted: heic.converted })
+  for (const [path, text] of applied.files) await writeAtomic(join(out, path), text)
+  // La vista local de cada página (para mirarla en el navegador) apunta al JPEG.
+  if (heic.converted.size) {
+    for (const p of manifest.pages) {
+      const localPath = p.file ? join(out, 'pages', p.file.replace(/\.html$/, '.local.html')) : null
+      if (!localPath || !existsSync(localPath)) continue
+      const local = await readFile(localPath, 'utf8')
+      const fixed = rewriteLocalHtml(local, heic.converted)
+      if (fixed !== local) await writeAtomic(localPath, fixed)
+    }
+  }
+  const converted = { ...applied.manifest }
+  if (result.notes) converted.tableNotes = result.notes
+  // En el manifest, lo que vale para cualquier corrida (cuántas quedaron como JPEG y cuántas no); cuántas se
+  // convirtieron en ESTA corrida va solo al resumen, así repetir el comando deja el mismo manifest.
+  if (heic.stats.total) converted.heic = { converted: heic.converted.size, pending: heic.stats.failed + heic.stats.pending }
+  if (heic.problems.length) converted.problems = [...(converted.problems ?? []), ...heic.problems]
+  await writeAtomic(join(out, 'manifest.json'), JSON.stringify(converted, null, 2))
+  return { manifest: converted, heic: heic.stats }
+}
+
+/** Las tablas de `convertFolder`: lo convertido (`manifest`, `files`, `notes`), sin escribir todavía. */
+async function convertFolderTables(out, manifest, index, html) {
   const config = await readTablesConfig(out)
   // jsdom solo hace falta acá (y pide Node 22): se carga solo con un doc con tablas.
   const { JSDOM } = await import('jsdom')
@@ -283,9 +328,6 @@ async function convertFolder(out) {
     }
     return rowsCache.get(id)
   }
-  const pages = new Map()
-  for (const p of manifest.pages) if (p.file && existsSync(join(out, 'pages', p.file))) pages.set(p.file, await readFile(join(out, 'pages', p.file), 'utf8'))
-  const html = (file) => pages.get(file) ?? null
   const extraPath = join(out, 'tables', 'extra-media.json')
   const extraMedia = existsSync(extraPath) ? await readJson(extraPath) : []
   let result = convertTables({ manifest, index, rows, html, parse, config, extraMedia })
@@ -307,10 +349,12 @@ async function convertFolder(out) {
     await writeAtomic(extraPath, JSON.stringify(extraMedia, null, 1))
     result = convertTables({ manifest, index, rows, html, parse, config, extraMedia })
   }
-  for (const [path, text] of result.files) await writeAtomic(join(out, path), text)
-  const converted = { ...result.manifest, tableNotes: result.notes }
-  await writeAtomic(join(out, 'manifest.json'), JSON.stringify(converted, null, 2))
-  return converted
+  return result
+}
+
+function printHeic(stats) {
+  const line = heicSummary(stats)
+  if (line) console.log(line)
 }
 
 function printTableNotes(manifest) {
@@ -324,15 +368,24 @@ async function convertOnly(arg) {
   const looksLikePath = /[\\/]/.test(arg)
   if (looksLikePath && !existsSync(arg)) throw new Error(`No existe la carpeta ${arg}`)
   const out = looksLikePath || existsSync(join(arg, 'manifest.json')) ? arg : join(homedir(), 'Coda_Export', arg)
-  if (!existsSync(join(out, 'tables', 'index.json'))) throw new Error(`${out} no tiene tables/index.json: corré primero la exportación completa`)
-  if (!existsSync(join(out, 'manifest.coda.json'))) throw new Error(`${out} no tiene manifest.coda.json: corré primero la exportación completa con esta versión del comando`)
-  const converted = await convertFolder(out)
-  if (!converted) {
-    console.log('El doc no tiene tablas: no hay nada que convertir.')
+  // Sin el manifest de Coda no hay de dónde partir. Un doc sin tablas ni fotos HEIC no lo tiene (no hay nada
+  // que convertir); uno bajado con una versión anterior del comando, tampoco.
+  if (!existsSync(join(out, 'manifest.coda.json'))) {
+    throw new Error(`${out} no tiene manifest.coda.json: corré primero la exportación completa con esta versión del comando`)
+  }
+  const done = await convertFolder(out)
+  if (!done) {
+    console.log('El doc no tiene tablas ni fotos HEIC: no hay nada que convertir.')
     return
   }
+  const converted = done.manifest
   console.log(`Listo: ${converted.pages.length} páginas en ${out}`)
   printTableNotes(converted)
+  printHeic(done.heic)
+  // Una foto que quedó sin convertir es un problema: se dice y el comando sale con error.
+  const heicProblems = (converted.problems ?? []).filter(isHeicProblem)
+  for (const pr of heicProblems) console.log('  - ' + pr)
+  if (heicProblems.length) process.exitCode = 1
 }
 
 async function main() {
@@ -474,15 +527,20 @@ async function main() {
     problems.push(`tablas: ${e.message} (volvé a correr el comando)`)
   }
   let final = manifest
-  if (tableCount) {
+  let heicStats = null
+  // Con fotos HEIC también hay algo que convertir, aunque el doc no tenga tablas.
+  const hasHeic = await folderHasHeic(out)
+  if (tableCount || hasHeic) {
     await writeAtomic(join(out, 'manifest.coda.json'), JSON.stringify(manifest, null, 2))
     try {
-      final = (await convertFolder(out)) ?? manifest
+      const done = await convertFolder(out, { tables: tableCount > 0 })
+      final = done?.manifest ?? manifest
+      heicStats = done?.heic ?? null
     } catch (e) {
-      problems.push(`conversión de tablas: ${e.message} (corregilo y corré --convert-only; el manifest.json queda sin convertir)`)
+      problems.push(`conversión de ${tableCount ? 'tablas' : 'fotos HEIC'}: ${e.message} (corregilo y corré --convert-only; el manifest.json queda sin convertir)`)
     }
   } else if (listed) {
-    // El doc ya no tiene tablas: nada que convertir de nuevo.
+    // El doc ya no tiene tablas (ni fotos HEIC): nada que convertir de nuevo.
     await rm(join(out, 'manifest.coda.json'), { force: true })
   }
   if (final === manifest) await writeAtomic(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2))
@@ -490,6 +548,7 @@ async function main() {
   console.log(`\nListo: ${final.pages.length} páginas, ${files} archivos. Problemas: ${final.problems.length}`)
   for (const pr of final.problems) console.log('  - ' + pr)
   printTableNotes(final)
+  printHeic(heicStats)
   // Con problemas, sale con error: se vuelve a correr y trae solo lo que falta.
   if (final.problems.length) process.exitCode = 1
 }

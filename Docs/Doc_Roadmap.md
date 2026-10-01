@@ -256,6 +256,23 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       dirección con un punto final lo lleva adentro del link; un salto de línea puede quedar adentro del
       link al final del párrafo o alrededor de una tarjeta.
     - **Verlo en la app** con una importación real: una página con muchas tarjetas de Drive.
+13. **Fotos HEIC: lo que quedó de v0.072** (`Doc_Importar_Coda.md`, "Fotos HEIC"). El comando que baja un doc
+    de Coda deja un JPEG de cada foto HEIC, así que lo importado se ve. **Falta:**
+    - **Que la app misma sepa mostrar un HEIC** que llega por otra vía (soltado en el editor desde Chrome o
+      desde Windows): hoy lo acepta y lo sube, y la página no lo muestra porque el navegador no lo decodifica.
+      **Decisión de Lega**, entre dos caminos: decodificarlo en el dispositivo para armar la miniatura y la
+      imagen de la página (el mismo decodificador del comando, libheif, pesa alrededor de 1,4 MB y tendría que
+      bajarse aparte, solo cuando hace falta), o convertirlo a JPEG al agregarlo y guardar el original aparte.
+    - **Verlo en la app con el doc entero.** Probado con una importación real de cuatro páginas (46 fotos
+      convertidas: en el Drive, con miniatura y a la vista); falta la de un doc completo.
+    - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.
+    - **De a una.** La conversión tarda alrededor de un segundo por foto; con miles, convendría en paralelo.
+    - **El perfil de color se toma por orden** en el archivo (el primero de color que aparece), que en las
+      fotos del iPhone es el de la foto. Un HEIC de otro origen con una imagen auxiliar de color antes de la
+      principal llevaría el perfil equivocado, y uno que lo declara sin perfil (`nclx`) sale sin él. Lo
+      correcto es seguir la imagen principal (`pitm` → `ipma` → `ipco`).
+    - **Pruebas del comando entero** (`convertFolder`, la bajada con una foto ya convertida, el código de
+      salida): hoy se probó a mano contra una API de Coda simulada; en el repo solo está probada la librería.
 
 ### C. Esperan a Lega
 
