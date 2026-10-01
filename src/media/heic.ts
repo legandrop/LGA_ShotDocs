@@ -6,9 +6,9 @@
 // lo que queda en la página, en el dispositivo y en el Drive es el JPEG. El archivo de la persona no se toca.
 //
 // Acá va lo que no necesita el decodificador: reconocer un HEIC (por el tipo o por la firma), el nombre del
-// JPEG, y el perfil de color (sacarlo del HEIC y meterlo en el JPEG). El decodificador (libheif en wasm) se
-// carga aparte y solo cuando llega un HEIC (`heicConvert.ts`). Es el mismo trabajo que hace el comando que baja
-// un doc de Coda (`scripts/lib/codaHeic.mjs`), con `Uint8Array` en vez de `Buffer`.
+// JPEG, y meter el perfil de color en el JPEG (cuál es el perfil lo dice `heifColor.mjs`, compartido con el
+// comando que baja un doc de Coda, `scripts/lib/codaHeic.mjs`). El decodificador (libheif en wasm) se carga
+// aparte y solo cuando llega un HEIC (`heicConvert.ts`).
 
 /**
  * Los tipos que el navegador informa para una foto HEIC (cuando informa alguno). Las secuencias
@@ -91,37 +91,10 @@ export function jpegName(name: string | undefined): string {
 }
 
 /**
- * El perfil de color (ICC) de un HEIC: el contenido de su caja `colr` de tipo `prof` (o `rICC`), o `null`. Las
- * fotos del iPhone están en Display P3: el decodificador entrega los píxeles tal cual, sin el perfil, y sin él
- * el JPEG se leería como sRGB y se vería menos saturado.
+ * El perfil de color (ICC) que lleva el JPEG de un HEIC, o `null`: el de su imagen principal, o uno estándar si
+ * solo declara `nclx` (`heifColor.mjs`, compartido con el comando de Coda).
  */
-export function heicColorProfile(heic: Uint8Array): Uint8Array | null {
-  for (const type of ['prof', 'rICC']) {
-    const mark = `colr${type}`;
-    for (let at = indexOfAscii(heic, mark, 0); at >= 0; at = indexOfAscii(heic, mark, at + 1)) {
-      if (at < 4) continue;
-      const end = at - 4 + readUint32(heic, at - 4);
-      if (end > heic.length || end < at + 8) continue;
-      const icc = heic.subarray(at + 8, end);
-      // Un perfil ICC lleva la firma `acsp` en el byte 36: lo que no la tiene no se copia. Y tiene que ser de
-      // color (`RGB ` en el byte 16): el de una imagen auxiliar en grises (profundidad, por ejemplo) no es el de
-      // la foto, y se sigue buscando.
-      if (icc.length >= 128 && ascii(icc, 36) === 'acsp' && ascii(icc, 16) === 'RGB ') return icc;
-    }
-  }
-  return null;
-}
-
-function indexOfAscii(bytes: Uint8Array, text: string, from: number): number {
-  const first = text.charCodeAt(0);
-  const last = bytes.length - text.length;
-  outer: for (let i = Math.max(0, from); i <= last; i++) {
-    if (bytes[i] !== first) continue;
-    for (let j = 1; j < text.length; j++) if (bytes[i + j] !== text.charCodeAt(j)) continue outer;
-    return i;
-  }
-  return -1;
-}
+export { heicColorProfile } from './heifColor.mjs';
 
 const ICC_MARK = 'ICC_PROFILE\0';
 /** Cada segmento APP2 lleva hasta 65.519 bytes del perfil (64 KB menos su largo, la firma y dos contadores). */

@@ -15,6 +15,7 @@ import {
 import { checkJpeg, decodeHeic, encodeJpegOffscreen, heicToJpeg, MAX_PIXELS, pixelsToJpeg, type JpegEncoder, type Libheif } from './heicDecode';
 import { loadLibheif } from './heicLib';
 import { FakeOffscreenCanvas, fakeCreateImageBitmap, stubBrowser } from './fixtures/fakeCanvas';
+import { primaryColor, profileFromNclx, profileMatrices } from './heifColor.mjs';
 
 const bytesOf = (text: string) => new Uint8Array([...text].map((c) => c.charCodeAt(0)));
 const u32 = (n: number) => new Uint8Array([(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]);
@@ -168,6 +169,127 @@ describe('fotos HEIC: el perfil de color', () => {
     expect(isJpegStart(new Uint8Array([0xff, 0xd8, 0xff]))).toBe(true);
     expect(isJpegStart(new Uint8Array([0xff, 0xd8]))).toBe(false);
     expect(isJpegStart(bytesOf('GIF89a'))).toBe(false);
+  });
+});
+
+describe('fotos HEIC: el color es el de la imagen principal (pitm → ipma → ipco)', () => {
+  const u16 = (n: number) => new Uint8Array([(n >> 8) & 0xff, n & 0xff]);
+  /** Una caja completa (versión y banderas). */
+  const fullBox = (type: string, version: number, flags: number, body: Uint8Array) =>
+    box(type, join(new Uint8Array([version, (flags >> 16) & 0xff, (flags >> 8) & 0xff, flags & 0xff]), body));
+  const colrProf = (icc: Uint8Array) => box('colr', join(bytesOf('prof'), icc));
+  const colrNclx = (primaries: number, transfer: number) =>
+    box('colr', join(bytesOf('nclx'), u16(primaries), u16(transfer), u16(6), new Uint8Array([0x80])));
+  const ispe = box('ispe', new Uint8Array(12));
+  /**
+   * Un HEIF con su cabecera: `primary` es la imagen principal, `props` las propiedades (en orden) y `assoc` qué
+   * propiedades tiene cada imagen (números desde 1). `wide`: `ipma` versión 1 con números de 16 bits.
+   */
+  function heif(
+    primary: number,
+    props: Uint8Array[],
+    assoc: Record<number, number[]>,
+    { wide = false, dimg }: { wide?: boolean; dimg?: [number, number[]] } = {},
+  ) {
+    const entries = Object.entries(assoc).map(([item, list]) =>
+      join(
+        wide ? u32(Number(item)) : u16(Number(item)),
+        new Uint8Array([list.length]),
+        ...list.map((i) => (wide ? u16(i | 0x8000) : new Uint8Array([i | 0x80]))),
+      ),
+    );
+    const ipma = fullBox('ipma', wide ? 1 : 0, wide ? 1 : 0, join(u32(entries.length), ...entries));
+    const iref = dimg ? [fullBox('iref', 0, 0, box('dimg', join(u16(dimg[0]), u16(dimg[1].length), ...dimg[1].map(u16))))] : [];
+    const meta = fullBox(
+      'meta',
+      0,
+      0,
+      join(fullBox('hdlr', 0, 0, new Uint8Array(20)), fullBox('pitm', 0, 0, u16(primary)), ...iref, box('iprp', join(box('ipco', join(...props)), ipma))),
+    );
+    return join(ftyp('heic', 'mif1', 'heic'), meta, box('mdat', bytesOf('datos')));
+  }
+  const p3 = profile(300);
+  const other = profile(200);
+  other[100] = 1;
+
+  it('un perfil de otra imagen (un mapa, la miniatura) antes que el de la foto: vale el de la foto', () => {
+    // La imagen 2 (auxiliar) tiene su perfil primero; la principal es la 1, con el segundo.
+    expect(heicColorProfile(heif(1, [colrProf(other), ispe, colrProf(p3)], { 2: [1, 2], 1: [2, 3] }))).toEqual(p3);
+    // ipma versión 1, ids de 32 bits y números de propiedad de 16 bits.
+    expect(heicColorProfile(heif(7, [colrProf(other), colrProf(p3)], { 7: [2], 9: [1] }, { wide: true }))).toEqual(p3);
+  });
+
+  it('una grilla sin color propio (las fotos del iPhone, en cuadros) toma el de su primer cuadro', () => {
+    const file = heif(10, [ispe, colrProf(other), colrProf(p3)], { 10: [1], 3: [3], 4: [3], 99: [2] }, { dimg: [10, [3, 4]] });
+    expect(heicColorProfile(file)).toEqual(p3);
+  });
+
+  it('si la foto no declara color, sin perfil (sRGB), aunque otra imagen del archivo tenga uno', () => {
+    expect(heicColorProfile(heif(1, [ispe, colrProf(other)], { 1: [1], 2: [2] }))).toBeNull();
+    expect(primaryColor(heif(1, [ispe, colrProf(other)], { 1: [1], 2: [2] }))).toEqual({});
+  });
+
+  it('con perfil y nclx, manda el perfil; con perfil en grises (no es de color), vale nclx', () => {
+    expect(heicColorProfile(heif(1, [colrNclx(12, 13), colrProf(p3)], { 1: [1, 2] }))).toEqual(p3);
+    const gray = profile(200, 'GRAY');
+    expect(primaryColor(heif(1, [colrProf(gray), colrNclx(12, 13)], { 1: [1, 2] }))?.nclx).toMatchObject({ primaries: 12, transfer: 13 });
+  });
+
+  it('solo nclx Display P3: lleva un perfil Display P3 estándar (los mismos números que el de un iPhone)', () => {
+    const icc = heicColorProfile(heif(1, [ispe, colrNclx(12, 13)], { 1: [1, 2] }))!;
+    expect(icc).not.toBeNull();
+    expect(icc).toEqual(profileFromNclx({ primaries: 12, transfer: 13 }));
+    const view = new DataView(icc.buffer, icc.byteOffset, icc.byteLength);
+    const text = (at: number) => String.fromCharCode(...icc.subarray(at, at + 4));
+    expect(view.getUint32(0)).toBe(icc.length);
+    expect([text(12), text(16), text(20), text(36)]).toEqual(['mntr', 'RGB ', 'XYZ ', 'acsp']);
+    expect(icc[8]).toBe(4);
+    // La tabla de etiquetas: cada una adentro del perfil y alineada a 4 bytes.
+    const tags = new Map<string, number>();
+    for (let i = 0; i < view.getUint32(128); i++) {
+      const at = 132 + i * 12;
+      const offset = view.getUint32(at + 4);
+      expect(offset % 4).toBe(0);
+      expect(offset + view.getUint32(at + 8)).toBeLessThanOrEqual(icc.length);
+      tags.set(text(at), offset);
+    }
+    expect([...tags.keys()].sort()).toEqual(['bTRC', 'bXYZ', 'chad', 'cprt', 'desc', 'gTRC', 'gXYZ', 'rTRC', 'rXYZ', 'wtpt']);
+    const xyz = (tag: string) => [0, 1, 2].map((k) => view.getInt32(tags.get(tag)! + 8 + k * 4) / 65536);
+    // Los del perfil Display P3 de un iPhone (rXYZ, gXYZ, bXYZ, adaptados al blanco D50).
+    const iphone: Record<string, number[]> = {
+      rXYZ: [0.51512, 0.2412, -0.00105],
+      gXYZ: [0.29198, 0.69225, 0.04189],
+      bXYZ: [0.1571, 0.06657, 0.78407],
+    };
+    for (const [tag, want] of Object.entries(iphone)) xyz(tag).forEach((v, k) => expect(v).toBeCloseTo(want[k], 4));
+    // La curva de sRGB (paramétrica de tipo 3), la misma en los tres canales.
+    expect(text(tags.get('rTRC')!)).toBe('para');
+    expect(tags.get('gTRC')).toBe(tags.get('rTRC'));
+    expect(view.getInt32(tags.get('rTRC')! + 12) / 65536).toBeCloseTo(2.4, 4);
+  });
+
+  it('nclx que no necesita perfil o que no se sabe armar: sin perfil', () => {
+    // sRGB/BT.709: lo que se supone sin perfil.
+    expect(profileFromNclx({ primaries: 1, transfer: 13 })).toBeNull();
+    // HDR (PQ, HLG): un JPEG de 8 bits no lo puede llevar.
+    expect(profileFromNclx({ primaries: 9, transfer: 16 })).toBeNull();
+    expect(profileFromNclx({ primaries: 12, transfer: 18 })).toBeNull();
+    expect(profileFromNclx({ primaries: 2, transfer: 2 })).toBeNull();
+    expect(profileFromNclx(null)).toBeNull();
+    // BT.2020 en SDR sí: sus primarios, con el blanco D50.
+    expect(profileFromNclx({ primaries: 9, transfer: 1 })).not.toBeNull();
+    const { toXYZ } = profileMatrices([0.708, 0.292, 0.17, 0.797, 0.131, 0.046]);
+    // Blanco (1, 1, 1) → D50.
+    toXYZ.map((row) => row[0] + row[1] + row[2]).forEach((v, k) => expect(v).toBeCloseTo([0.9642, 1, 0.8249][k], 3));
+  });
+
+  it('un archivo que no se puede leer así (cortado, o sin cabecera) se busca por orden, como antes', () => {
+    const file = heif(1, [colrProf(other), colrProf(p3)], { 1: [2] });
+    // Cortado adentro de la cabecera: no se lee por la cadena.
+    expect(primaryColor(file.subarray(0, 120))).toBeUndefined();
+    expect(heicColorProfile(box('colr', join(bytesOf('prof'), p3)))).toEqual(p3);
+    // El HEIC de prueba se lee por la cadena: su principal tiene el perfil de 588 bytes.
+    expect(primaryColor(sample())?.icc?.length).toBe(588);
   });
 });
 
