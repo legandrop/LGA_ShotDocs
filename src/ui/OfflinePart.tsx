@@ -108,7 +108,25 @@ export function OfflineDialog(props: { kind: 'page' | 'project'; target: string;
     return () => document.removeEventListener('keydown', onKey);
   }, [props]);
 
-  // El aviso de "listo" cuando la ventana se cerró con la bajada en curso lo da `OfflineWatcher` (siempre montado).
+  // En el teléfono, mientras la ventana muestra la bajada, que la pantalla no se apague (sin la app abierta no baja
+  // nada). `navigator.wakeLock` no existe en todos lados (en la app instalada del iPhone, desde iOS 18.4).
+  const downloading = own?.state === 'downloading';
+  useEffect(() => {
+    if (!traits.phone || !downloading) return;
+    const nav = navigator as Navigator & { wakeLock?: { request(type: 'screen'): Promise<{ release(): Promise<void> }> } };
+    let lock: { release(): Promise<void> } | null = null;
+    let live = true;
+    void nav.wakeLock
+      ?.request('screen')
+      .then((l) => (live ? (lock = l) : void l.release()))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+      void lock?.release().catch(() => undefined);
+    };
+  }, [traits.phone, downloading]);
+
+  // El aviso de "listo" cuando la ventana se cerró con la bajada en curso lo da `SpaceHost` (siempre montado).
   const total = plan ? selectedTotal(plan.weights, options) : null;
   const quota = estimate?.quota ?? 0;
   const available = quota > 0 ? quota - (estimate?.usage ?? 0) : null;

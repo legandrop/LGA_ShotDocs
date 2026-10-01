@@ -1,6 +1,8 @@
 # Espacio en el dispositivo y "Available offline" (P.10)
 
-Estado: **diseño, sin implementar. Auditado ("aprobado con cambios", 3 bloqueantes y 21 observaciones) y
+Estado: **entregas 0 (portero) y 1 (Available offline, el tope con aviso y el espacio en el dispositivo)
+implementadas en la rama `lega/espacio-offline`, sin publicar** (ver "Cómo quedó (entregas 0 y 1)", al final). La
+entrega 2 (liberar originales propios) sigue en diseño. Lo que sigue es el diseño: auditado ("aprobado con cambios", 3 bloqueantes y 21 observaciones) y
 corregido**: lo que cambió por la auditoría está en el cuerpo y se lista en "Correcciones de la auditoría", al
 final; la re-verificación dejó dos bloqueantes nuevos, N1 y N2, también corregidos. Después llegaron las respuestas
 de Lega a las propuestas (tope elegible, avisar antes de liberar, permiso quitado): están en "Qué se pide" y en el
@@ -883,6 +885,87 @@ red y abrir el carrete, un adjunto y la página con las fotos en grande.
 **A mano, Lega:** en el iPhone con la app instalada, marcar un proyecto, poner el modo avión y recorrerlo (fotos en
 grande, PDF, un video de 1 GB); en Chrome de computadora y en Safari de Mac lo mismo; bajar el tope a 1 GB y ver el
 aviso, *Not now* y *Free up*.
+
+## Cómo quedó (entregas 0 y 1)
+
+**Entrega 0, portero** (`portero/src/core.ts`, pruebas en `portero/src/core.test.ts`):
+
+- Los errores de `POST /pass`, `GET /m/`, `POST /upload` (archivo de la app) y `POST /verify` traen un `code` fijo:
+  `not_found`, `not_uploaded`, `drive_missing`, `drive_mismatch`, `drive_not_connected`, `pass_expired`,
+  `pass_invalid` (y los de siempre: `abusive`, `drive_full`). Los números no cambiaron.
+- `POST /verify` con `{ files }`, hasta 15: `{ driveId, size, trashed, marked, md5 }` por archivo, preguntándole a Drive
+  cada vez, o `{ error, code }` sin cortar a los demás.
+- `only: 'known'` en `POST /upload`: `{ status: 'unknown' }` sin crear carpetas ni abrir una subida.
+- `?offline=1` en `/m/`: saltea la caché del arranque de los videos.
+- `/drive/status` dice `features: ['verify', 'known', 'offline', 'codes']`.
+
+**Entrega 1, app:**
+
+- **Código:** `src/media/offlineStore.ts` (las claves `off:`, `offview:`, `copy:`, `offline:` y `marksRev`, el filtro
+  por casillas `protects` y el único borrado de copias, `dropCopy`, que solo arma claves con prefijo),
+  `src/media/offlinePlan.ts` (la rama, los pesos y la nítida estimada), `src/media/offline.ts` (`OfflineManager`:
+  marcar, leer la rama, bajar, mantener al día, el tope y el aviso), `src/ui/OfflinePart.tsx` (las dos ventanas, que
+  se bajan aparte), `src/ui/SpaceHost.tsx` (el aviso, la línea de la bajada en la barra lateral y el ícono) y
+  `src/ui/StorageTest.tsx` (la medición de la sección 9.1). En `src/media/queue.ts`: leer las copias bajadas y las
+  nítidas de las marcas (`source`, `localOriginal`, `localImage`, `makeViewFor`), `forgetView` que borra también
+  `offview:`, `hasUploadableNow`, `uploadedAt` al confirmar una subida (para la entrega 2) y los avisos de uso y de
+  falta de lugar.
+- **Dónde se ve:** *Available offline…* en el menú de la página y en el de cada proyecto (ícono al pasar el mouse,
+  "⋯" en el teléfono); *Storage on this device* en el menú de la cuenta; un ícono en la página o el proyecto
+  marcado; "Downloading for offline: 3 of 11" debajo del estado; el aviso del tope abajo, al centro; y sin red,
+  "Offline · 700 to upload" en la barra lateral y "Offline · 700" al lado del ícono en la barra de arriba del
+  teléfono.
+- **Las casillas** de fábrica son las de D-25; la opción A (sección 3.2) decide qué protege cada una. *Drive folders*
+  no aparece (llega con P.9).
+- **La bajada:** en la pestaña de la cola, después de cada sincronización y cada 10 minutos, solo si no hay nada que se
+  pueda subir; algo nuevo para subir corta la parte en vuelo. Partes de 16 MiB por el `Content-Range` real, cada una
+  con su entrada en la misma transacción. Errores por el `code`. En el teléfono, la nítida de a una y la pantalla
+  prendida mientras la ventana muestra la bajada.
+- **El tope:** se elige en *Storage on this device* (1, 2, 5, 10 o 20 GB, o sin tope; de fábrica `min(2 GB, la mitad
+  de la cuota)`). Pasado, el aviso pregunta; *Not now* lo calla un día. Con el sí se liberan solo las nítidas de la
+  página y las copias bajadas que ninguna marca pide, de la que hace más que no se abre a la más reciente, nunca lo
+  abierto en la sesión ni lo `gone`, y antes de borrar una copia entera se le pregunta a la base y, si el portero lo
+  sabe, a Drive (`/verify`): si Drive ya no la tiene, queda como "única copia". **Los originales agregados en este
+  dispositivo no se liberan** (cuentan para el tope y el diálogo lo dice).
+- **Sin lugar:** las bajadas dejan la reserva de `max(1 GB, 5 %)`; si no entra, la marca se detiene y el aviso ofrece
+  liberar. Al agregar una foto que no entra, el aviso ofrece liberar y la persona la vuelve a agregar. En el iPhone,
+  el total marcado del dispositivo no pasa `IOS_OFFLINE_TOTAL_MAX` (5 GB, en `src/media/offline.ts`).
+- **Comentarios:** de a una página (`CommentQueue.refresh`), al marcar y cada 6 horas. La función por proyecto de la
+  sección 3.6 no se hizo (no hace falta migración en esta entrega).
+
+**Lo que quedó distinto o afuera del diseño:**
+
+- No se suman los usos de `page_files` de la base: el conjunto sale del contenido del dispositivo (que la regla de
+  las páginas incompletas protege).
+- Una página abierta no se vuelve nítida en el acto cuando termina la marca: lo hace al cambiar de ancho, al volver la
+  red o al minuto (lo que ya hacía la página).
+- Al liberar para un archivo nuevo que no entró, no se vuelve a probar solo: la persona lo agrega de nuevo.
+- *Storage on this device* no tiene la lista de las copias más grandes (del diseño anterior).
+
+**La medición del iPhone (sección 9.1), para Lega:** en *Storage on this device*, abajo, *Measure storage on this
+device…* abre la página de prueba (también en `/storage-test`). Pasos:
+
+1. En el iPhone, mirar el lugar libre en *Ajustes → General → Almacenamiento del iPhone* y anotarlo.
+2. Abrir la app instalada → menú de la cuenta → *Storage on this device* → *Measure storage on this device…*. Anotar
+   *Quota*, *In use*, *Persistent storage* e *Installed app*.
+3. Escribir `fill` y tocar *Fill*. Esperar a que se corte solo y anotar *Test data written* y el error de *Stopped
+   with*. Volver a mirar el lugar libre en Ajustes.
+4. Con el disco así, abrir la cámara y probar filmar 10 segundos.
+5. Volver a la página y tocar *Clean up*; comprobar en Ajustes que el lugar volvió.
+6. Repetir en Safari (sin instalar), con `https://shotdocs.lega.com.ar/storage-test`.
+
+Si el iPhone tiene mucho lugar libre, *Fill* tarda (escribe todo lo que el navegador deje): conviene hacerlo con
+poco lugar libre, como pide la sección 9.1. Con los números, se cambia el tope fijo del iPhone por una regla.
+
+**Pruebas:** `src/media/offline.test.ts` (los pesos y la nítida estimada; las nítidas y miniaturas de la rama y verlas
+sin red; las copias enteras y abrirlas sin red; el portero viejo que corta las partes; la página a medio bajar que solo
+suma; desmarcar; las claves que nunca alcanzan un original propio; el tope que avisa y no borra; lo abierto en la
+sesión; Drive que ya no lo tiene; permiso quitado con las dos señales; subir antes que bajar; sin lugar por la reserva
+y al escribir; el tope del iPhone; la nítida de la página que pasa a la marca), `src/ui/offlineUi.test.tsx` (las dos
+ventanas, el aviso y "Offline · N"), `portero/src/core.test.ts` (los códigos, `/verify`, `only: 'known'` y
+`?offline=1` con la caché del arranque de verdad) y un recorrido en Chromium con el servidor de mentira (marcar,
+pesos, progreso, listo, sin red, teléfono, el diálogo de espacio, el aviso del tope y liberar; la página de
+medición, con *Fill*, *Stop* y *Clean up*).
 
 ## Respuestas de Lega a las propuestas (2026-10-01)
 
