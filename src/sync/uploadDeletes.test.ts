@@ -309,6 +309,62 @@ describe('B.15: cada subida lleva solo los borrados nuevos', () => {
     expect(await read(c, pageId)).toBe(await read(a, pageId));
   });
 
+  it('el mismo guion con la versión publicada y con esta: el peso de page_updates de la página', async () => {
+    // Sesiones de 60 subidas (cada sesión, un autor de Yjs nuevo, como abrir la página), con borrados en casi
+    // todas. La versión publicada (fixtures/publishedDocs.ts) sube todos los borrados en cada subida.
+    // Más ediciones: DELETES_MEASURE_EDITS=2000 npx vitest run src/sync/uploadDeletes.test.ts -t guion
+    const EDITS = Number(process.env.DELETES_MEASURE_EDITS ?? 300);
+    const totals: Record<string, { total: number; last20: number; first20: number; text: string }> = {};
+    for (const kind of ['publicada', 'esta'] as const) {
+      const server = new FakeServer();
+      const dbName = crypto.randomUUID();
+      const a = await device(server, dbName);
+      const pageId = await a.tree.create(null, 'P');
+      await a.engine.syncNow();
+      a.engine.stop();
+      a.db.close();
+      const docs = kind === 'esta' ? (await device(server, dbName)).docs : (await openPublished(server, dbName)).docs;
+      const remote = kind === 'esta' ? devices[devices.length - 1].remote : published[published.length - 1].remote;
+      const rnd = random(99);
+      let doc = await docs.open(pageId);
+      doc.getText('t').insert(0, 'Plano general de la calle, de noche, con lluvia. Cámara A en grúa, B en mano. ');
+      await docs.flush(pageId);
+      await docs.pushPage(pageId, remote);
+      for (let i = 0; i < EDITS; i++) {
+        if (i % 60 === 0) {
+          docs.close(pageId);
+          await docs.flush(pageId);
+          await new Promise((r) => setTimeout(r, 0));
+          doc = await docs.open(pageId);
+        }
+        const t = doc.getText('t');
+        t.insert(Math.floor(rnd() * (t.length + 1)), ` toma ${i}`);
+        if (rnd() < 0.85 && t.length > 20) t.delete(Math.floor(rnd() * (t.length - 6)), 1 + Math.floor(rnd() * 4));
+        await docs.flush(pageId);
+        await docs.pushPage(pageId, remote);
+      }
+      docs.close(pageId);
+      const sizes = uploadSizes(server, pageId);
+      const srv = serverDoc(server, pageId);
+      totals[kind] = {
+        total: sizes.reduce((x, y) => x + y, 0),
+        first20: average(sizes.slice(1, 21)),
+        last20: average(sizes.slice(-20)),
+        text: srv.getText('t').toString(),
+      };
+      srv.destroy();
+    }
+    const kb = (n: number) => `${(n / 1024).toFixed(1)} KB`;
+    console.log(
+      `B.15 guion de ${EDITS} subidas: publicada ${kb(totals.publicada.total)} (últimas 20: ${totals.publicada.last20.toFixed(0)} B), ` +
+        `esta ${kb(totals.esta.total)} (últimas 20: ${totals.esta.last20.toFixed(0)} B)`,
+    );
+    // Las dos versiones escriben lo mismo (mismas semillas): el servidor arma el mismo texto.
+    expect(totals.esta.text).toBe(totals.publicada.text);
+    expect(totals.esta.total).toBeLessThan(totals.publicada.total / 3);
+    expect(totals.esta.last20).toBeLessThan(totals.esta.first20 * 2);
+  }, 120_000);
+
   it('lo bajado de otro no se vuelve a subir: los borrados de B no viajan en la subida de A', async () => {
     const server = new FakeServer();
     const a = await device(server);

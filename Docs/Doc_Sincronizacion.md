@@ -272,13 +272,16 @@ del peso de `page_updates` de una página muy editada (2,4 MB contra 92 KB en 20
 - **"Download my unsynced changes"** (`unsynced.ts`) sigue llevando todos los borrados, a propósito: ese
   archivo tiene que servir solo, sin saber qué tiene el servidor.
 - **Peso en el dispositivo:** `syncedDS` pesa lo que antes viajaba en cada subida (de bytes a pocos KB en una
-  página muy editada), una vez por página.
+  página muy editada), una vez por página. **Tiempo:** armar una subida con 2000 tramos borrados conocidos tarda
+  unos 9 ms, y con 20 000 de un solo autor (un caso extremo) unos 36 ms; la resta de tramos es lineal.
 - **Lo mismo que el vector no cubre:** dos sesiones con el mismo autor de Yjs al azar (2⁻³², punto 4).
 
 **Pruebas** (`src/sync/uploadDeletes.test.ts`): el delete set escrito igual que Yjs byte a byte; restar, sumar y
 contener contra conjuntos de relojes; lo armado más lo del servidor es todo el documento (200 casos al azar,
 también con cosas pendientes de Yjs); el tamaño tras 200 ediciones (fallaba antes: 929 B por subida al final,
-ahora 53 B, y 9,2 KB en total contra 112 KB); los borrados de otro no se vuelven a subir; restaurar; la versión
+ahora 53 B, y 9,2 KB en total contra 112 KB); el mismo guion con la versión publicada y con esta (sesiones de 60
+subidas, borrados en casi todas: con 300 subidas, 105 KB contra 12,8 KB; con 2000, 4,2 MB contra 86,5 KB, y las
+últimas subidas de 4289 B a 44 B; `DELETES_MEASURE_EDITS` para otra cantidad); los borrados de otro no se vuelven a subir; restaurar; la versión
 anterior que restaura y se cierra; los envíos cruzados entre versiones; dos instancias sobre la misma base; y
 corridas al azar con tres dispositivos (escriben y borran, también lo de otros, pierden respuestas, se quedan
 sin red, se cierran de golpe con una subida en vuelo, vuelven con la versión publicada, que a veces restaura y
