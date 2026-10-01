@@ -236,10 +236,33 @@ afterEach(() => {
 });
 
 describe('carpetas: nombres y rutas', () => {
-  it('las carpetas van sin espacios ni caracteres de control', () => {
-    expect(driveFolderName('Fotos  día 2')).toBe('Fotos_día_2');
-    expect(driveFolderName(' ‮ ')).toBe('Folder');
+  it('las carpetas que suelta el usuario conservan su nombre (D3): solo se sacan controles, marcas de dirección y ancho cero', () => {
+    // Espacios (también dobles), tildes, eñes, guiones y emojis: tal cual.
+    for (const same of ['Día 2 - Puerto', 'Fotos  día 2', 'Ñandú áéíóú ÁÉÍÓÚ ü', '🎬 Rodaje 🌊 toma 1', "Spot (v2) & co, 'final'.", 'Dia_2']) {
+      expect(driveFolderName(same)).toBe(same);
+    }
+    // Lo invisible o que engaña se saca; los bordes, sin espacios.
+    expect(driveFolderName('a\tb\nc')).toBe('abc');
+    expect(driveFolderName('factura\u202Efdp')).toBe('facturafdp');
+    // Como en los archivos (y en la app): sin los de ancho cero, un emoji compuesto queda en sus partes; una bandera
+    // o un tono de piel, no.
+    expect(driveFolderName('👨\u200D👩\u200D👧 Familia 🇦🇷 👍🏽')).toBe('👨👩👧 Familia 🇦🇷 👍🏽');
+    expect(driveFolderName('  Fotos  ')).toBe('Fotos');
+    // Una letra con su tilde aparte (como las da la Mac) queda en una sola.
+    expect(driveFolderName('Di\u0301a 2')).toBe('Día 2');
+    // Vacío, solo espacios o solo marcas: "Folder".
+    for (const empty of ['', '   ', ' \u202E ', '\u200B\u2066']) expect(driveFolderName(empty)).toBe('Folder');
+    expect(driveFolderName(' \u202E ')).toBe('Folder');
     expect(driveFolderName('a\u0000b')).toBe('ab');
+  });
+
+  it('las barras van como "_" y el nombre se corta en 200 caracteres sin partir un emoji ni dejar un espacio al final', () => {
+    expect(driveFolderName('a/b')).toBe('a_b');
+    expect(driveFolderName('Fotos \\ día 2')).toBe('Fotos _ día 2');
+    expect(driveFolderName('x'.repeat(300))).toBe('x'.repeat(200));
+    expect(driveFolderName('x'.repeat(290) + '.final')).toBe('x'.repeat(200));
+    expect(driveFolderName('🎬'.repeat(300))).toBe('🎬'.repeat(200));
+    expect(driveFolderName('x'.repeat(199) + ' yyy')).toBe('x'.repeat(199));
   });
 
   it('una ruta no puede subir ni empezar con barra', () => {
@@ -263,7 +286,7 @@ describe('carpetas: crear el árbol', () => {
     expect(world.drive.get(carpetas.parents[0]!)!.name).toBe('Spot_Coca');
     expect(world.base.get(F1)!.drive_id).toBe(first.root.id);
 
-    expect(world.drive.get(first.dirs['Fotos/Dia 2']!)).toMatchObject({ name: 'Dia_2', parents: [first.dirs.Fotos] });
+    expect(world.drive.get(first.dirs['Fotos/Dia 2']!)).toMatchObject({ name: 'Dia 2', parents: [first.dirs.Fotos] });
     expect(world.drive.get(first.dirs.Notas!)!.parents).toEqual([first.root.id]);
 
     // Repetir el mismo pedido (la respuesta se perdió) no crea nada de más.
@@ -286,6 +309,70 @@ describe('carpetas: crear el árbol', () => {
     expect(world.drive.get(a.root.id)!.name).toBe('Referencias');
     expect(world.drive.get(b.root.id)!.name).toBe('Referencias_2');
     expect(b.root.name).toBe('Referencias_2');
+  });
+
+  it('una carpeta soltada queda con su nombre, y sus subcarpetas también; las que crea la app siguen sin espacios', async () => {
+    const { world, p } = await setup();
+    world.base.get(F1)!.name = 'Día 2 - Puerto';
+    const dirs = ['Fotos de set', 'Fotos de set/Día 2', 'Fotos de set/Día 2/🎬 Toma 1', 'Notas  (borrador)'];
+    const tree = await prepare(p, { name: 'Día 2 - Puerto', dirs });
+    expect(world.drive.get(tree.root.id)!.name).toBe('Día 2 - Puerto');
+    expect(tree.root.name).toBe('Día 2 - Puerto');
+    expect(dirs.map((d) => world.drive.get(tree.dirs[d]!)!.name)).toEqual(['Fotos de set', 'Día 2', '🎬 Toma 1', 'Notas  (borrador)']);
+    const carpetas = world.drive.get(world.drive.get(tree.root.id)!.parents[0]!)!;
+    expect(carpetas.name).toBe('Carpetas');
+    // La del proyecto ("Spot Coca") y la de la app, como siempre.
+    const project = world.drive.get(carpetas.parents[0]!)!;
+    expect(project.name).toBe('Spot_Coca');
+    expect(world.drive.get(project.parents[0]!)!.name).toBe('LGA_ShotDocs');
+  });
+
+  it('con espacios, otra con el mismo nombre (sin distinguir mayúsculas) va con _2; una vieja con guiones bajos no choca', async () => {
+    const { world, p } = await setup();
+    const a = await prepare(p, { name: 'Día 2 - Puerto' });
+    const b = (await (await call(p, '/folder/prepare', 'editor-jwt', { file: F2, name: 'día 2 - PUERTO' })).json()) as Prepared;
+    expect(world.drive.get(a.root.id)!.name).toBe('Día 2 - Puerto');
+    expect(b.root.name).toBe('día 2 - PUERTO_2');
+    // Una subida de antes quedó como "Fotos_rodaje": "Fotos rodaje" es otro nombre y no lleva _2.
+    const carpetas = world.drive.get(a.root.id)!.parents[0]!;
+    world.drive.set('oldfolderxxxxxxx', { name: 'Fotos_rodaje', mimeType: FOLDER, parents: [carpetas], appProperties: { sdFile: 'otra' } });
+    world.base.set(PHOTO, { name: 'Fotos rodaje', mime: 'inode/directory', size: 10, drive_id: null, levels: { 'u-editor': 3 } });
+    const c = (await (await call(p, '/folder/prepare', 'editor-jwt', { file: PHOTO, name: 'Fotos rodaje' })).json()) as Prepared;
+    expect(c.root.name).toBe('Fotos rodaje');
+  });
+
+  it('una subida de antes, con guiones bajos, se retoma sin renombrar nada ni crear carpetas de más', async () => {
+    const { world, store, p } = await setup();
+    const dirs = ['Fotos', 'Fotos/Dia 2', 'Fotos/Dia 2/Toma 1'];
+    const first = await prepare(p, { name: 'Dia 2 - Puerto', dirs });
+    // Lo que dejó una versión anterior del portero: los mismos ids y marcas (la marca sale de la ruta, no del
+    // nombre), con los nombres de entonces.
+    const old: Record<string, string> = { '': 'Dia_2_-_Puerto', Fotos: 'Fotos', 'Fotos/Dia 2': 'Dia_2', 'Fotos/Dia 2/Toma 1': 'Toma_1' };
+    world.drive.get(first.root.id)!.name = old['']!;
+    for (const d of dirs) world.drive.get(first.dirs[d]!)!.name = old[d]!;
+    const rec = store.data.get(`file:${F1}`) as { drive: { name: string } };
+    rec.drive.name = old['']!;
+    const folders = () => [...world.drive.values()].filter((f) => f.mimeType === FOLDER).length;
+    const before = folders();
+
+    // Se vuelve a soltar la carpeta: la app manda las mismas rutas (perdió los ids) y una subcarpeta nueva.
+    const again = await prepare(p, { name: 'Dia 2 - Puerto', dirs: [...dirs, 'Fotos/Dia 2/Toma 2'] });
+    expect(again.root).toEqual({ id: first.root.id, name: 'Dia_2_-_Puerto' });
+    for (const d of dirs) expect(again.dirs[d]).toBe(first.dirs[d]);
+    expect(folders()).toBe(before + 1);
+    // Nada se renombró; la nueva va adentro de la vieja, con su nombre.
+    expect(world.drive.get(first.root.id)!.name).toBe('Dia_2_-_Puerto');
+    for (const d of dirs) expect(world.drive.get(first.dirs[d]!)!.name).toBe(old[d]);
+    expect(world.drive.get(again.dirs['Fotos/Dia 2/Toma 2']!)).toMatchObject({ name: 'Toma 2', parents: [first.dirs['Fotos/Dia 2']] });
+
+    // Con los ids que la app guardó, una tanda que sigue abajo de una vieja también va adentro de la vieja.
+    const next = await prepare(p, { dirs: ['Fotos/Dia 2/Toma 1/Raw'], parents: { 'Fotos/Dia 2/Toma 1': first.dirs['Fotos/Dia 2/Toma 1'] } });
+    expect(world.drive.get(next.dirs['Fotos/Dia 2/Toma 1/Raw']!)!.parents).toEqual([first.dirs['Fotos/Dia 2/Toma 1']]);
+    // Y los archivos que faltaban suben a la subcarpeta vieja.
+    const res = await call(p, '/folder/sessions', 'editor-jwt', { file: F1, items: [{ dir: first.dirs['Fotos/Dia 2'], name: 'b 2.jpg', mime: 'image/jpeg', size: 0 }] });
+    expect(res.status).toBe(200);
+    const { items } = (await res.json()) as { items: { done?: { id: string } }[] };
+    expect(world.drive.get(items[0]!.done!.id)).toMatchObject({ name: 'b 2.jpg', parents: [first.dirs['Fotos/Dia 2']] });
   });
 
   it('crear pide editar; ver no alcanza; sin acceso a la página es como si no existiera; un archivo no es una carpeta', async () => {
