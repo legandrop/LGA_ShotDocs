@@ -222,7 +222,7 @@ export function FolderProgressDialog({ id, onClose, onOpen }: { id: string; onCl
         <h2>
           <FolderGlyph /> {p.name}
         </h2>
-        <p className="muted small">{tr('folders.uploadingTitle')}</p>
+        {p.state !== 'done' && <p className="muted small">{tr('folders.uploadingTitle')}</p>}
         <div className="folder-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
           <div style={{ width: `${pct}%` }} />
         </div>

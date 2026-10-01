@@ -631,8 +631,15 @@ function BlockEditor({
     e.preventDefault();
     e.stopPropagation();
     const { files: taken, folders: dirs, supported } = takeDrop(dt);
-    const at = dropTarget(root, e.clientX, e.clientY);
-    if (taken.length > 0) void insertFiles(editor as unknown as FileEditor, taken, at);
+    let at = dropTarget(root, e.clientX, e.clientY);
+    // Los archivos sueltos van primero; las carpetas del mismo soltar, después de ellos (el párrafo vacío donde se
+    // soltó ya no está).
+    if (taken.length > 0) {
+      void insertFiles(editor as unknown as FileEditor, taken, at, (ids) => {
+        const last = ids[ids.length - 1];
+        if (last) at = { blockId: last, placement: 'after' };
+      });
+    }
     if (dirs.length === 0) return;
     // Sin forma de leer carpetas (P.9): se sigue pidiendo comprimirlas.
     if (!supported || !folders) return notify(t('editor.foldersNotSupported'));
@@ -653,7 +660,8 @@ function BlockEditor({
   /** Sube las carpetas confirmadas: registra cada una, pone su bloque donde se soltó y empieza a subir. */
   const uploadFolders = async (sources: FolderSource[], at: InsertAt | null) => {
     setFolderAsk(null);
-    let ref = at ?? { blockId: editor.getTextCursorPosition().block.id, placement: 'after' as const };
+    // Si el bloque donde se soltó ya no está (otro dispositivo lo borró mientras se confirmaba), después del cursor.
+    let ref = at && editor.getBlock(at.blockId) ? at : { blockId: editor.getTextCursorPosition().block.id, placement: 'after' as const };
     for (const source of sources) {
       try {
         const { id, url } = await media.addFolder(pageId, source.name, summarize(source).bytes);

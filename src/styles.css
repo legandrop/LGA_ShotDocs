@@ -4958,8 +4958,15 @@ mark.search-hit {
 .folder-check {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   font-size: 13px;
+}
+
+.folder-check input {
+  width: auto;
+  margin: 0;
+  flex: none;
 }
 
 .folder-actions {
