@@ -1742,6 +1742,27 @@ describe('adjuntos: vista previa (Docs/Doc_Adjuntos.md, entrega 2)', () => {
     await vi.waitFor(() => expect(heard).toContain(id));
     expect(previewIn(cardText(await b2.media.resolve(url)))).toContain('preview:viejo.pdf');
   });
+
+  it('si la vista previa no se pudo bajar (sin red), se baja sola cuando vuelve la red y la tarjeta se redibuja', async () => {
+    const server = new FakeServer();
+    server.preview = fakePreview;
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(2048, 'tarde.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    const b = await device(server);
+    await sync(b);
+    // La fila llega, pero Storage no contesta cuando se dibuja la tarjeta.
+    const download = vi.spyOn(b.remote, 'downloadThumb').mockRejectedValueOnce(new Error('Failed to fetch'));
+    expect(cardText(await b.media.resolve(url))).toContain('height="96"');
+    expect(download).toHaveBeenCalledTimes(1);
+    const heard: string[] = [];
+    b.media.subscribeThumbs((x) => heard.push(x));
+    server.clockOffset += 61_000;
+    await b.engine.syncMedia();
+    expect(heard).toContain(id);
+    expect(previewIn(cardText(await b.media.resolve(url)))).toContain('preview:tarde.pdf');
+  });
 });
 
 describe('espacio en el dispositivo', () => {

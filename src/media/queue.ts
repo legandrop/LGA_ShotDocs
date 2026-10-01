@@ -2061,6 +2061,8 @@ export class MediaQueue {
         if (!thumb && meta.thumbAt) {
           thumb = await this.remote.downloadThumb(id).catch(() => undefined);
           if (thumb) await db.put('thumbs', thumb, id);
+          // Sin red: se vuelve a probar con los que esperan miniatura (`refreshMissing`), y la tarjeta se redibuja.
+          else this.missing.add(id);
         }
         return this.card(id, { name: meta.name, mime: meta.mime, size: meta.size, state: meta.driveId ? 'ok' : 'pending', preview: await this.previewOf(thumb) });
       }

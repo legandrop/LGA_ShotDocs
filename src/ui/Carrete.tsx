@@ -315,7 +315,7 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
       .open(it)
       .catch(() => null)
       .then((url) => patch(it.url, { openUrl: url }));
-  }, [index, items, loader, patch, online, canOpenNow]);
+  }, [index, items, loader, patch, online, canOpenNow, attempt]);
 
   // Lo grande del elemento actual; si no se pudo por la red, se vuelve a pedir cuando vuelve.
   useEffect(() => {
@@ -689,7 +689,16 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
             {downloadLink('carrete-notice-btn', true)}
           </div>
         )}
-        {inline && <p className="carrete-file-note" role="status">{inline}</p>}
+        {inline && (
+          <p className="carrete-file-note" role="status">
+            {inline}
+          </p>
+        )}
+        {inline && v.state === 'failed' && (
+          <button className="carrete-notice-btn" onClick={retry}>
+            {tr('common.retry')}
+          </button>
+        )}
       </div>
     );
   };
