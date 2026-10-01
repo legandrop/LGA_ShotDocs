@@ -434,6 +434,7 @@ describe('el menú de la cuenta', () => {
       comments: d.comments,
       commentsDb: d.commentsDb,
       sizes: d.sizes,
+      offline: d.offline,
       shutdown: async () => undefined,
     };
     return mount(

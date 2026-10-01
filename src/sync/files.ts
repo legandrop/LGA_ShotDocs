@@ -97,6 +97,25 @@ export class PageFiles {
   }
 
   /**
+   * Que la imagen quede en el dispositivo sin mostrarla (para "Available offline", Docs/Doc_Copias_Locales.md):
+   * si ya está, no baja nada. Devuelve si quedó.
+   */
+  async ensureStored(url: string): Promise<boolean> {
+    if (!url.startsWith(FILE_SCHEME)) return false;
+    const path = url.slice(FILE_SCHEME.length);
+    if (await this.db.get('files', path)) return true;
+    const blob = await this.remote.downloadFile(path);
+    if (await this.db.get('files', path)) return true;
+    await this.db.put('files', { path, pageId: path.split('/')[0], mime: blob.type, data: await blob.arrayBuffer(), uploaded: 1, createdAt: Date.now() });
+    return true;
+  }
+
+  /** La imagen vieja ya está en el dispositivo. */
+  async isStored(url: string): Promise<boolean> {
+    return url.startsWith(FILE_SCHEME) && !!(await this.db.get('files', url.slice(FILE_SCHEME.length)));
+  }
+
+  /**
    * La base se restauró desde una copia de seguridad: las imágenes subidas después de esa copia ya no
    * figuran en el servidor. Todas las que están en el dispositivo vuelven a la cola; las que el servidor
    * todavía tiene se dan por subidas sin volver a mandarlas.

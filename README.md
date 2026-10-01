@@ -112,6 +112,11 @@ In production (v0.049). What works today:
 - Keyboard in the page tree: ↑ and ↓ open the previous or next page, → and ← expand and collapse (← on a page with nothing to collapse goes to its parent page).
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets.
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).
+- Available offline: mark a page (with its subpages) or a whole project from its menu, choose what to keep (large
+  photos, original photos, attachments, videos) with the size of each, and it downloads everything needed to use it
+  without a connection and keeps it up to date. *Storage on this device* (account menu) shows what the app keeps,
+  with a limit you choose (2 GB by default): past it, the app asks before removing copies of files already in Drive.
+  Without a connection the app says *Offline* with what is waiting to upload.
 - Help and a guided tour: the "?" at the bottom of the sidebar (or *Help and shortcuts* in the account menu)
   explains every feature and lists every keyboard shortcut, with a search box. The first time someone signs in,
   a two-minute tour with Next walks through the app on a practice page that is never saved or synced; it can be

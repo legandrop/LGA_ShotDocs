@@ -84,6 +84,11 @@ const TREE_READS = [
 const ENGINE_READS = ['subscribe', 'getStatus'];
 const DOCS_READS = ['subscribeRenderFailed', 'subscribeUnsupported', 'hasUnsavedEdits'];
 const SIZES_READS = ['subscribe', 'getSnapshot'];
+/**
+ * "Available offline" (P.10): la práctica solo lo lee (el ícono de lo marcado); sin `mediaDb` no ofrece marcar ni
+ * *Storage on this device*, y nada de la práctica se baja ni se libera.
+ */
+const OFFLINE_READS = ['subscribe', 'getSnapshot', 'markFor'];
 
 // --- Comentarios en memoria ---------------------------------------------------------------------------------
 
@@ -358,6 +363,7 @@ function practiceServices(real: Services, session: PracticeSession): Services {
     comments: session.comments as never,
     commentsDb: null,
     sizes: readOnly(real.sizes, 'sizes', SIZES_READS),
+    offline: real.offline ? readOnly(real.offline, 'offline', OFFLINE_READS) : (undefined as never),
     shutdown: async () => {
       throw new PracticeWriteError('shutdown');
     },

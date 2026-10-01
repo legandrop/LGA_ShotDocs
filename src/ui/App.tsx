@@ -15,10 +15,14 @@ import {
   type DeviceWorkspace,
 } from '../workspaces';
 import { LegalPage } from './Legal';
+import { lazyPart, Part } from './lazyPart';
 import { Login } from './Login';
 import { TooltipLayer } from './Tooltip';
 import { FinishPending, JoinConfirm, Welcome } from './Welcome';
 import { Workspace } from './Workspace';
+
+// La medición del espacio del dispositivo (P.10, sección 9.1): se baja solo si se abre.
+const StorageTest = lazyPart(() => import('./StorageTest').then((m) => m.StorageTest));
 
 export function App() {
   // La política de privacidad y las condiciones se ven antes de todo lo demás: sin sesión, sin workspace y sin
@@ -26,7 +30,15 @@ export function App() {
   const route = useRoute();
   return (
     <>
-      {isPublicRoute(route) ? <LegalPage page={route.name} /> : <Screen />}
+      {route.name === 'storageTest' ? (
+        <Part>
+          <StorageTest />
+        </Part>
+      ) : isPublicRoute(route) ? (
+        <LegalPage page={route.name} />
+      ) : (
+        <Screen />
+      )}
       <TooltipLayer />
     </>
   );

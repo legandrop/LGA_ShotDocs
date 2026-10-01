@@ -287,6 +287,16 @@ export const help = {
     en: "Under the project name (on a phone, the icon at the top): All synced, changes not uploaded yet, offline, or a new version of the app to load.",
     es: "Debajo del nombre del proyecto (en el teléfono, el ícono de arriba): todo sincronizado, cambios sin subir, sin conexión, o una versión nueva de la app para cargar.",
   },
+  'help.availableOffline.title': { en: "Use pages without a connection", es: "Usar páginas sin conexión" },
+  'help.availableOffline.text': {
+    en: "Available offline… in a page's ⋯ menu (or next to a project in the project list) downloads what the page and its subpages, or the whole project, need without a connection: large photos, attachments up to 50 MB and, if you tick them, original photos and videos. Each option shows its size first. It stays up to date while there's a connection; keep the app open until it says Ready to use offline.",
+    es: "Disponible sin conexión…, en el menú ⋯ de una página (o al lado de un proyecto en la lista de proyectos), baja lo que la página y sus subpáginas, o el proyecto entero, necesitan sin red: fotos en grande, adjuntos de hasta 50 MB y, si los tildás, las fotos originales y los videos. Cada casilla muestra antes su peso. Se mantiene al día mientras haya conexión; dejá la app abierta hasta que diga Listo para usar sin conexión.",
+  },
+  'help.storageDevice.title': { en: "Storage on this device", es: "Espacio en este dispositivo" },
+  'help.storageDevice.text': {
+    en: "Storage on this device, in the account menu, shows how much Shot Docs keeps here and what is available offline. Copies of files already in Drive are kept up to a limit you choose (2 GB by default); past it, the app asks before removing the ones opened least recently. Pages marked offline, photos added on this device and anything not uploaded yet are never removed to make room.",
+    es: "Espacio en este dispositivo, en el menú de la cuenta, muestra cuánto guarda Shot Docs acá y qué está disponible sin conexión. Las copias de archivos que ya están en Drive se guardan hasta un tope que elegís (2 GB de fábrica); pasado el tope, la app pregunta antes de sacar las que hace más que no se abren. Lo marcado sin conexión, las fotos agregadas en este dispositivo y lo que todavía no se subió nunca se sacan para hacer lugar.",
+  },
   'help.syncSafe.title': { en: "Nothing gets lost", es: "No se pierde nada" },
   'help.syncSafe.text': {
     en: "Every change is saved on this device first and uploads by itself, offline too. Edits made on two devices at the same time are merged, never overwritten. Signing out with changes not uploaded asks first.",

@@ -9,10 +9,13 @@ export type Route =
   // Política de privacidad y condiciones de uso: públicas, se ven sin sesión y sin workspace (Google las pide
   // para la pantalla de consentimiento).
   | { name: 'privacy' }
-  | { name: 'terms' };
+  | { name: 'terms' }
+  // La medición del espacio del dispositivo (Docs/Doc_Copias_Locales.md, sección 9.1): sin sesión ni workspace.
+  | { name: 'storageTest' };
 
 export const PRIVACY_PATH = '/privacy';
 export const TERMS_PATH = '/terms';
+export const STORAGE_TEST_PATH = '/storage-test';
 export const PRACTICE_PATH = '/practice';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,6 +28,7 @@ export function parseRoute(pathname: string): Route {
   if (pathname === PRACTICE_PATH || pathname === PRACTICE_PATH + '/') return { name: 'practice' };
   if (pathname === PRIVACY_PATH || pathname === PRIVACY_PATH + '/') return { name: 'privacy' };
   if (pathname === TERMS_PATH || pathname === TERMS_PATH + '/') return { name: 'terms' };
+  if (pathname === STORAGE_TEST_PATH) return { name: 'storageTest' };
   return { name: 'home' };
 }
 

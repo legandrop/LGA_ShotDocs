@@ -26,6 +26,10 @@ export const carrete = {
     en: "You're offline: this is the thumbnail. The full photo loads when you're back online.",
     es: "Estás sin conexión: esta es la miniatura. La foto completa se carga cuando vuelva la conexión.",
   },
+  'carrete.offlinePhotoLarge': {
+    en: "You're offline: this is the large version saved on this device. The original loads when you're back online.",
+    es: "Estás sin conexión: esta es la versión grande guardada en este dispositivo. El original se carga cuando vuelva la conexión.",
+  },
   'carrete.unplayableVideo': {
     en: "The video couldn't be loaded or played in this browser.",
     es: "El video no se pudo cargar ni reproducir en este navegador.",
