@@ -144,6 +144,24 @@ describe('tablas de Coda → páginas', () => {
     expect(r.modes.get('T2')).toBe('table')
   })
 
+  it('una tabla que queda como tabla no pierde las filas que escondía el filtro: van debajo, en otra tabla', () => {
+    const p6 = file('p6')
+    expect(r.manifest.pages.find((p) => p.id === 'p6').file).toBe('p6.import.html')
+    // El HTML trae solo la tarea 1 (la vista filtrada); la API dice que se ven t1, t2 y t3, así que ninguna está
+    // escondida acá. Con un filtro que esconde la tarea 3, entra debajo con su texto.
+    const rows = structuredClone(ROWS)
+    rows.T2.visible = ['t1', 't2']
+    const got = convertTables({ manifest: MANIFEST, index: INDEX, rows: (id) => rows[id] ?? null, html: (f) => HTML[f] ?? null, parse })
+    const page6 = got.files.get('pages/p6.import.html')
+    expect(page6).toMatch(/Filas ocultas[^<]*\(1\)/)
+    expect(page6).toContain('<td>Tarea 3</td><td>Ana</td>')
+    expect(page6).not.toMatch(/Filas ocultas[\s\S]*Tarea 2/)
+    // Un comentario de esa fila ancla a su texto, en esa página.
+    const out = rowCommentsByPage([{ tableId: 'T2', rows: [{ rowId: 't3', commentThreads: [{ n: 3 }] }] }], { index: INDEX, rows: (id) => rows[id] ?? null, modes: got.modes, rowPages: got.rowPages })
+    expect(out.get('p6')).toEqual([{ n: 3, reference: { type: 'text', text: 'Tarea 3' } }])
+    expect(p6).toBeDefined()
+  })
+
   it('modos forzados: text saca las fotos y deja la tabla; skip la cambia por una nota; un modo desconocido es un error', () => {
     const text = convert({ tables: { Planos: 'text' } })
     const p1 = text.files.get('pages/p1.import.html')
@@ -151,7 +169,7 @@ describe('tablas de Coda → páginas', () => {
     expect(p1).not.toContain('<img')
     expect(text.manifest.pages.some((p) => p.generated)).toBe(false)
     const skip = convert({ tables: { T1: 'skip' } })
-    expect(skip.files.get('pages/p1.import.html')).toContain('Planos')
+    expect(skip.files.get('pages/p1.import.html')).toContain('La tabla «Planos» de Coda no se importó')
     expect(skip.files.get('pages/p1.import.html')).not.toContain('<table')
     expect(() => convert({ tables: { Planos: 'nada' } })).toThrow(/modo desconocido/)
   })
@@ -182,7 +200,21 @@ describe('tablas de Coda → páginas', () => {
   })
 })
 
-describe('tables.config.json y --convert-only', () => {
+describe('tables.config.json, --convert-only y archivos de Coda', () => {
+  it('solo se bajan archivos guardados en Coda', async () => {
+    const { isCodaHosted } = await import('./lib/codaExport.mjs')
+    expect(isCodaHosted('https://codahosted.io/docs/D/blobs/bl-1/x')).toBe(true)
+    expect(isCodaHosted('https://coda.io/blobs/bl-1')).toBe(true)
+    expect(isCodaHosted('https://docs.superhuman.com/blobs/bl-1')).toBe(true)
+    for (const bad of ['https://codahosted.io.evil.com/x', 'https://codahosted.io@evil.com/x', 'https://u:p@codahosted.io/x', 'http://codahosted.io/x', 'https://coda.io/apis/v1/docs', 'https://evil.com/blobs/x', 'no es una dirección']) {
+      expect(isCodaHosted(bad)).toBe(false)
+    }
+  })
+
+  it('tables.config.json que nombra una tabla que no existe: se avisa en las notas', () => {
+    expect(convert({ tables: { 'No Existe': 'skip' } }).notes.some((n) => n.includes('"No Existe"'))).toBe(true)
+  })
+
   it('se revisa con errores claros', () => {
     expect(checkTablesConfig(null)).toEqual({})
     const ok = { tables: { Planos: 'fichas', T2: 'skip' }, index: { Planos: ['Lugar'] }, skipColumns: { Planos: ['Día'] } }

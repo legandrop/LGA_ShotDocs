@@ -20,7 +20,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { homedir } from 'node:os'
 import { join, extname } from 'node:path'
-import { API, checkTablesConfig, isCodaApi, mediaBaseName, parseExportArgs } from './lib/codaExport.mjs'
+import { API, checkTablesConfig, isCodaApi, isCodaHosted, mediaBaseName, parseExportArgs } from './lib/codaExport.mjs'
 import { convertTables } from './lib/codaTables.mjs'
 
 async function token() {
@@ -175,58 +175,88 @@ async function download(url, dir) {
  * filtro, en orden; en una vista, solo los ids que muestra, en su orden). Solo GET. Lo ya bajado no se vuelve
  * a pedir, salvo con --refresh. Devuelve cuántas hay.
  */
-async function exportTables(docId, out, refresh) {
+async function exportTables(docId, out, refresh, problems) {
   const dir = join(out, 'tables')
   await mkdir(dir, { recursive: true })
+  // Con --refresh, el índice viejo se va primero: si la corrida se corta, --convert-only no convierte con
+  // filas nuevas y columnas viejas mezcladas (pide terminar la exportación).
+  if (refresh) await rm(join(dir, 'index.json'), { force: true })
   const list = await listAll(`/docs/${docId}/tables?tableTypes=table,view`)
   const tables = []
   for (const [i, t] of list.entries()) {
-    const d = await api(`/docs/${docId}/tables/${t.id}`)
-    const columns = await listAll(`/docs/${docId}/tables/${t.id}/columns`)
-    const visible = await listAll(`/docs/${docId}/tables/${t.id}/columns?visibleOnly=true`)
-    tables.push({
-      id: d.id,
-      name: d.name,
-      type: d.tableType,
-      layout: d.layout,
-      rowCount: d.rowCount,
-      pageId: d.parent?.id ?? null,
-      baseTableId: d.parentTable?.id ?? null,
-      displayColumnId: d.displayColumn?.id ?? null,
-      sorts: (d.sorts ?? []).map((s) => ({ columnId: s.column?.id, direction: s.direction })),
-      browserLink: d.browserLink,
-      // Las columnas que se ven en la tabla o vista (las demás están ocultas).
-      visibleColumnIds: visible.map((c) => c.id),
-      columns: columns.map((c) => ({
-        id: c.id,
-        name: c.name,
-        type: c.format?.type ?? 'text',
-        isArray: !!c.format?.isArray,
-        calculated: !!c.calculated,
-        formula: c.formula ?? null,
-        display: !!c.display,
-        lookupTableId: c.format?.table?.id ?? null,
-      })),
-    })
-    const file = join(dir, `${d.id}.rows.json`)
-    if (existsSync(file) && !refresh) continue
-    process.stdout.write(`  tabla [${i + 1}/${list.length}] ${d.name} ... `)
-    // Sin sortBy, 'natural' trae solo lo que deja ver el filtro: es el orden y lo visible. En una tabla base,
-    // además, todas las filas con sus valores ricos.
-    const natural = await listAll(`/docs/${docId}/tables/${t.id}/rows?sortBy=natural`)
-    const data = { visible: natural.map((r) => r.id) }
-    if (d.tableType === 'table') {
-      const rows = await listAll(`/docs/${docId}/tables/${t.id}/rows?valueFormat=rich&visibleOnly=false`)
-      data.rows = rows.map((r) => ({ id: r.id, index: r.index, name: r.name, browserLink: r.browserLink, createdAt: r.createdAt, updatedAt: r.updatedAt, values: r.values }))
+    // Una tabla que falla (un 403, por ejemplo) queda anotada y fuera del índice; las demás se convierten igual.
+    try {
+      await exportTable(docId, dir, refresh, t, tables, `[${i + 1}/${list.length}]`)
+    } catch (e) {
+      problems.push(`tabla «${t.name}» (${t.id}): ${e.message}`)
     }
-    await writeAtomic(file, JSON.stringify(data))
-    console.log(`${(data.rows ?? natural).length} filas`)
   }
   await writeAtomic(join(dir, 'index.json'), JSON.stringify({ docId, fetchedAt: new Date().toISOString(), tables }, null, 1))
   return tables.length
 }
 
+async function exportTable(docId, dir, refresh, t, tables, step) {
+  const d = await api(`/docs/${docId}/tables/${t.id}`)
+  const columns = await listAll(`/docs/${docId}/tables/${t.id}/columns`)
+  const visible = await listAll(`/docs/${docId}/tables/${t.id}/columns?visibleOnly=true`)
+  const entry = {
+    id: d.id,
+    name: d.name,
+    type: d.tableType,
+    layout: d.layout,
+    rowCount: d.rowCount,
+    pageId: d.parent?.id ?? null,
+    baseTableId: d.parentTable?.id ?? null,
+    displayColumnId: d.displayColumn?.id ?? null,
+    sorts: (d.sorts ?? []).map((s) => ({ columnId: s.column?.id, direction: s.direction })),
+    browserLink: d.browserLink,
+    // Las columnas que se ven en la tabla o vista (las demás están ocultas).
+    visibleColumnIds: visible.map((c) => c.id),
+    columns: columns.map((c) => ({
+      id: c.id,
+      name: c.name,
+      type: c.format?.type ?? 'text',
+      isArray: !!c.format?.isArray,
+      calculated: !!c.calculated,
+      formula: c.formula ?? null,
+      display: !!c.display,
+      lookupTableId: c.format?.table?.id ?? null,
+    })),
+  }
+  const file = join(dir, `${d.id}.rows.json`)
+  // Va al índice solo con sus filas bajadas: una tabla que falla a mitad no queda a medias.
+  if (existsSync(file) && !refresh) {
+    tables.push(entry)
+    return
+  }
+  process.stdout.write(`  tabla ${step} ${d.name} ... `)
+  // Sin sortBy, 'natural' trae solo lo que deja ver el filtro: es el orden y lo visible. En una tabla base,
+  // además, todas las filas con sus valores ricos.
+  const natural = await listAll(`/docs/${docId}/tables/${t.id}/rows?sortBy=natural`)
+  const data = { visible: natural.map((r) => r.id) }
+  if (d.tableType === 'table') {
+    const rows = await listAll(`/docs/${docId}/tables/${t.id}/rows?valueFormat=rich&visibleOnly=false`)
+    data.rows = rows.map((r) => ({ id: r.id, index: r.index, name: r.name, browserLink: r.browserLink, createdAt: r.createdAt, updatedAt: r.updatedAt, values: r.values }))
+  }
+  await writeAtomic(file, JSON.stringify(data))
+  console.log(`${(data.rows ?? natural).length} filas`)
+  tables.push(entry)
+}
+
 const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'))
+
+/** `tables.config.json` de la carpeta, revisado (un JSON roto dice qué archivo es). */
+async function readTablesConfig(out) {
+  const path = join(out, 'tables.config.json')
+  if (!existsSync(path)) return {}
+  let raw
+  try {
+    raw = await readJson(path)
+  } catch (e) {
+    throw new Error(`tables.config.json no es JSON válido: ${e.message}`)
+  }
+  return checkTablesConfig(raw)
+}
 
 /**
  * Convierte las tablas de una carpeta exportada (sin red, salvo para bajar archivos que solo están en los
@@ -241,7 +271,7 @@ async function convertFolder(out) {
   const index = await readJson(indexPath)
   if (!index.tables?.length) return null
   const configPath = join(out, 'tables.config.json')
-  const config = checkTablesConfig(existsSync(configPath) ? await readJson(configPath) : null)
+  const config = await readTablesConfig(out)
   // jsdom solo hace falta acá (y pide Node 22): se carga solo con un doc con tablas.
   const { JSDOM } = await import('jsdom')
   const parse = (html) => new JSDOM(html).window.document
@@ -263,7 +293,10 @@ async function convertFolder(out) {
     console.log(`  bajando ${result.missingMedia.length} archivos que solo están en los datos de las tablas…`)
     for (const url of result.missingMedia) {
       // Solo archivos de Coda, sin token (como los de las páginas).
-      if (!/^https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.com\/blobs)\//.test(url)) continue
+      if (!isCodaHosted(url)) {
+        manifest.problems = [...(manifest.problems ?? []), `archivo de una tabla fuera de Coda, no se baja: ${url}`]
+        continue
+      }
       try {
         const got = await download(url, join(out, 'media'))
         extraMedia.push({ url, file: got.file, type: got.type })
@@ -276,7 +309,6 @@ async function convertFolder(out) {
   }
   for (const [path, text] of result.files) await writeAtomic(join(out, path), text)
   const converted = { ...result.manifest, tableNotes: result.notes }
-  if (result.missingMedia.length) converted.problems = [...(converted.problems ?? []), `${result.missingMedia.length} archivos de tablas no se pudieron bajar`]
   await writeAtomic(join(out, 'manifest.json'), JSON.stringify(converted, null, 2))
   return converted
 }
@@ -289,7 +321,9 @@ function printTableNotes(manifest) {
 }
 
 async function convertOnly(arg) {
-  const out = existsSync(join(arg, 'manifest.coda.json')) || existsSync(join(arg, 'manifest.json')) ? arg : join(homedir(), 'Coda_Export', arg)
+  const looksLikePath = /[\\/]/.test(arg)
+  if (looksLikePath && !existsSync(arg)) throw new Error(`No existe la carpeta ${arg}`)
+  const out = looksLikePath || existsSync(join(arg, 'manifest.json')) ? arg : join(homedir(), 'Coda_Export', arg)
   if (!existsSync(join(out, 'tables', 'index.json'))) throw new Error(`${out} no tiene tables/index.json: corré primero la exportación completa`)
   if (!existsSync(join(out, 'manifest.coda.json'))) throw new Error(`${out} no tiene manifest.coda.json: corré primero la exportación completa con esta versión del comando`)
   const converted = await convertFolder(out)
@@ -310,6 +344,10 @@ async function main() {
   if (!nameOrId) throw new Error('Uso: node coda-export.mjs "<nombre del doc>" [carpeta] [--refresh]')
   TOKEN = await token()
   const doc = await findDoc(nameOrId)
+  // Lo que puede frenar la conversión de tablas se revisa antes de bajar nada.
+  const early = outArg || join(homedir(), 'Coda_Export', doc.name.replace(/[\\/:*?"<>|]+/g, '_').trim() || doc.id)
+  await readTablesConfig(early)
+  if (refresh) await rm(join(early, 'manifest.coda.json'), { force: true })
   const safe = doc.name.replace(/[\\/:*?"<>|]+/g, '_').trim() || doc.id
   const out = outArg || join(homedir(), 'Coda_Export', safe)
   const pagesDir = join(out, 'pages')
@@ -375,16 +413,23 @@ async function main() {
   // Las tablas: si el doc tiene, se bajan y se convierten; el manifest de Coda queda aparte (manifest.coda.json)
   // para poder convertir de nuevo sin bajar nada. Un doc sin tablas da el mismo manifest.json de siempre.
   let tableCount = 0
+  let listed = false
   try {
-    tableCount = await exportTables(doc.id, out, refresh)
+    tableCount = await exportTables(doc.id, out, refresh, problems)
+    listed = true
   } catch (e) {
-    problems.push(`tablas: ${e.message}`)
+    problems.push(`tablas: ${e.message} (volvé a correr el comando)`)
   }
   let final = manifest
   if (tableCount) {
     await writeAtomic(join(out, 'manifest.coda.json'), JSON.stringify(manifest, null, 2))
-    final = (await convertFolder(out)) ?? manifest
-  } else {
+    try {
+      final = (await convertFolder(out)) ?? manifest
+    } catch (e) {
+      problems.push(`conversión de tablas: ${e.message} (corregilo y corré --convert-only; el manifest.json queda sin convertir)`)
+    }
+  } else if (listed) {
+    // El doc ya no tiene tablas: nada que convertir de nuevo.
     await rm(join(out, 'manifest.coda.json'), { force: true })
   }
   if (final === manifest) await writeAtomic(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2))

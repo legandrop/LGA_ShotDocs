@@ -32,7 +32,8 @@ node scripts/coda-export.mjs --convert-only "<carpeta exportada o nombre del doc
 ```
 
 Si el doc tiene tablas, además las baja y las convierte en páginas (ver "Tablas", abajo). `--convert-only`
-repite solo esa conversión, sin red ni token: para probar `tables.config.json` sin volver a bajar el doc.
+repite solo esa conversión, sin token (solo baja, si faltan, archivos guardados en Coda): para probar
+`tables.config.json` sin volver a bajar el doc.
 
 - **Token.** Usa la API de Coda con un token personal (*Account settings → API settings*, conviene de solo
   lectura). Se lee de la variable `CODA_API_TOKEN` o del archivo `%USERPROFILE%\.coda-token` (en Mac,
@@ -231,6 +232,8 @@ probada en `scripts/coda-tables.test.mjs` con datos inventados).
     foto queda junto a su texto.
   - `table` (una tabla chica de solo texto): queda como tabla.
   - `text` (forzado): queda como tabla, sin fotos. `skip` (forzado): queda una nota en su lugar.
+  - En `table` y `text`, **las filas que escondía el filtro** (el HTML trae solo las visibles) van debajo, en otra
+    tabla con las mismas columnas y el texto de la API: en un doc bakeado no se pierde ninguna fila.
 - **Las filas.** El HTML trae la vista con su filtro y su contenido rico pero sin id de fila; la API trae todas
   las filas con su id. Se juntan por posición (la vista viene en su orden) y, si no coincide, por el texto de
   sus columnas de texto; las que no se reconocen quedan anotadas.
@@ -247,11 +250,16 @@ probada en `scripts/coda-tables.test.mjs` con datos inventados).
   tablas** deja el mismo `manifest.json` de siempre.
 - **`tables.config.json`** (opcional, en la carpeta exportada): `{ "tables": { "<tabla o id>": "fichas|unwrap|
   table|text|skip" }, "index": { "<tabla>": ["<columna>", …] }, "skipColumns": { "<tabla>": ["<columna>", …] } }`.
-  Se revisa antes de convertir y un error dice qué está mal.
+  Se revisa antes de bajar nada y un error dice qué está mal; una tabla que nombra y no existe queda en las notas.
+- **Si algo falla.** Una tabla que no se puede bajar (un 403, por ejemplo) queda en `problems` y fuera de la
+  conversión; las demás se convierten. Si falla la conversión entera, queda en `problems`, el `manifest.json`
+  queda sin convertir (las páginas de Coda tal cual) y se corrige y se corre `--convert-only`. Con problemas el
+  comando sale con error, como siempre. `--refresh` vuelve a pedir también las filas de las tablas; si se corta,
+  `--convert-only` no convierte hasta terminar la exportación (no mezcla datos viejos y nuevos).
 - **Comentarios de filas.** Los da el servidor MCP de Coda (`table_rows_read` con `includeComments`), no la API.
   `rowCommentsByPage` (en `codaTables.mjs`) los pasa a la ficha de su fila (a la página entera) o, si la tabla
   quedó como tabla, a su página anclados al texto de la fila (desde v0.062 el anclaje encuentra el texto de una
-  celda). Juntarlos en `comments.json` es parte del paso de los comentarios (la skill), no del comando.
+  celda). Juntarlos en `comments.json` es parte del paso de los comentarios, no del comando.
 - **Lo que no pasa:** las relaciones vivas, los filtros (queda el resultado), los botones (queda su texto), las
   fórmulas (queda su valor), las reglas de color (queda el color de cada celda, no la regla), las vistas como
   vistas (calendario, línea de tiempo) y las fotos adentro de las celdas de una tabla que queda como tabla.

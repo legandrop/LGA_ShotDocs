@@ -33,6 +33,9 @@ const LONG_TEXT = 140
 
 export const rowPageId = (tableId, rowId) => `row-${tableId}-${rowId}`
 
+/** Un valor propio de la configuración (una tabla llamada "constructor" no lee del prototipo). */
+const own = (obj, key) => (obj && Object.hasOwn(obj, key) ? obj[key] : undefined)
+
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const squash = (s) => String(s ?? '').replace(/\s+/g, ' ').trim()
 /** Para comparar textos de dos fuentes (HTML y API): sin mayúsculas, espacios ni signos de formato. */
@@ -227,7 +230,7 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
   // --- 2. Qué se hace con cada tabla base ---------------------------------------------------------------------
   const modes = new Map()
   for (const b of bases) {
-    const forced = config.tables?.[b.name] ?? config.tables?.[b.id]
+    const forced = own(config.tables, b.name) ?? own(config.tables, b.id)
     if (forced) {
       if (!MODES.includes(forced)) throw new Error(`tables.config.json: modo desconocido "${forced}" para ${b.name}`)
       modes.set(b.id, forced)
@@ -380,7 +383,7 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
     const out = []
     const short = []
     const long = []
-    const skip = config.skipColumns?.[base.name] ?? config.skipColumns?.[base.id] ?? []
+    const skip = own(config.skipColumns, base.name) ?? own(config.skipColumns, base.id) ?? []
     for (const column of columns) {
       if (column.id === base.displayColumnId || skip.includes(column.name) || skip.includes(column.id)) continue
       if (IMAGE_TYPES.has(column.type)) {
@@ -414,7 +417,7 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
 
   /** Las columnas del índice de una tabla: las de `tables.config.json`, o todas las de texto que se ven. */
   function indexColumns(base, shownIds) {
-    const wanted = config.index?.[base.name] ?? config.index?.[base.id]
+    const wanted = own(config.index, base.name) ?? own(config.index, base.id)
     if (wanted) {
       const found = wanted.map((name) => base.columns.find((c) => c.name === name || c.id === name)).filter(Boolean)
       if (found.length !== wanted.length) notes.push(`${base.name}: tables.config.json nombra columnas que no existen`)
@@ -484,6 +487,31 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
     return out.join('') || `<div><i>${LABELS.empty}</i></div>`
   }
 
+  /**
+   * Las filas que el filtro de la tabla escondía en Coda (el HTML trae solo las visibles), para una tabla que
+   * queda como tabla: van debajo, en otra tabla con las mismas columnas, con el texto de la API.
+   */
+  function hiddenRows(entry) {
+    const { table, base, ths } = entry
+    if (!table || !base || table.id !== base.id) return ''
+    const d = data.get(base.id)
+    const seen = new Set([...d.visible, ...entry.rowIds.filter(Boolean)])
+    const hidden = d.all.filter((id) => !seen.has(id))
+    if (!hidden.length) return ''
+    const columns = ths.map((th) => base.columns.find((c) => c.id === th.getAttribute('data-coda-column-id'))).filter(Boolean)
+    if (!columns.length) return ''
+    const cell = (row, c) => {
+      if (IMAGE_TYPES.has(c.type)) return ''
+      const vs = list(row.values?.[c.id])
+      if (vs.length && vs.every(isRowValue)) return vs.map((x) => linkTo(x.tableId, x.rowId, squash(x.name))).join(', ')
+      return esc(plainValue(row.values?.[c.id], c)).replace(/\n+/g, '<br>')
+    }
+    const head = columns.map((c) => `<th>${esc(c.name)}</th>`).join('')
+    const body = hidden.map((id) => `<tr>${columns.map((c) => `<td>${cell(d.rows.get(id), c)}</td>`).join('')}</tr>`).join('')
+    stats.hiddenRows += hidden.length
+    return `<h3>${LABELS.hidden} (${hidden.length})</h3><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
+  }
+
   /** Una tabla de maquetado: su contenido, fila por fila, fuera de la tabla. */
   function unwrap(entry) {
     const out = []
@@ -504,7 +532,7 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
     const slug = String(p.browserLink ?? '').match(/_su([A-Za-z0-9_-]+)/)?.[1]
     if (slug) pageBySlug.set(slug, p.id)
   }
-  const stats = { pageLinks: 0, rowLinks: 0, rowLinksLeft: 0, richNotes: 0, apiNotes: 0 }
+  const stats = { pageLinks: 0, rowLinks: 0, rowLinksLeft: 0, richNotes: 0, apiNotes: 0, hiddenRows: 0 }
   const missing = new Set()
   function rewriteLinks(root) {
     for (const a of root.querySelectorAll('a[href]')) {
@@ -559,14 +587,22 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
     for (const entry of read.found) {
       const mode = entry.base ? modes.get(entry.base.id) : entry.headerless && entry.el.querySelector('img') ? 'unwrap' : 'table'
       if (!entry.base && mode === 'unwrap') seenWithImages.add(page.id)
-      if (mode === 'table') continue
+      if (mode === 'table' || mode === 'text') {
+        // Queda como tabla (en `text`, sin sus fotos); las filas que el filtro escondía van debajo.
+        if (mode === 'text') for (const img of entry.el.querySelectorAll('img, video')) img.remove()
+        const extra = hiddenRows(entry)
+        if (extra) {
+          const holder = read.doc.createElement('div')
+          holder.innerHTML = extra
+          entry.el.after(...holder.childNodes)
+        }
+        if (extra || mode === 'text') changed = true
+        continue
+      }
       let next = ''
       if (mode === 'fichas') next = replacement(entry)
       else if (mode === 'unwrap') next = unwrap(entry)
-      else if (mode === 'text') {
-        for (const img of entry.el.querySelectorAll('img, video')) img.remove()
-        continue
-      } else if (mode === 'skip') next = `<div><i>${esc(LABELS.skipped(entry.table?.name ?? ''))}</i></div>`
+      else if (mode === 'skip') next = `<div><i>${esc(LABELS.skipped(entry.table?.name ?? ''))}</i></div>`
       const holder = read.doc.createElement('div')
       holder.innerHTML = next
       entry.el.replaceWith(...holder.childNodes)
@@ -600,10 +636,16 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
     return pages.find((p) => p.id === id)
   }
 
+  // Lo que nombra tables.config.json y no existe: se avisa (si no, se ignora en silencio).
+  const named = new Set(bases.flatMap((b) => [b.name, b.id]))
+  for (const key of ['tables', 'index', 'skipColumns']) {
+    for (const name of Object.keys(config[key] ?? {})) if (!named.has(name)) notes.push(`tables.config.json: "${name}" (en ${key}) no es ninguna tabla base del doc`)
+  }
   for (const [id, mode] of modes) notes.push(`tabla «${tables.get(id).name}» (${data.get(id).all.length} filas, ${tables.get(id).columns.length} columnas): ${mode}`)
   if (seenWithImages.size) notes.push(`${seenWithImages.size} páginas con tablas de maquetado con fotos: se desarmaron por filas`)
   if (stats.apiNotes) notes.push(`notas (columnas de texto libre): ${stats.richNotes} con su formato y fotos; ${stats.apiNotes} solo con el texto de la API (esa fila no aparecía en ninguna vista con esa columna: revisar si tenían fotos)`)
   else notes.push(`notas (columnas de texto libre): ${stats.richNotes}, todas con su formato y fotos`)
+  if (stats.hiddenRows) notes.push(`${stats.hiddenRows} filas que el filtro de su tabla escondía en Coda entraron en una tabla aparte, debajo de la suya`)
   notes.push(`links entre páginas: ${stats.pageLinks}; links a fichas: ${stats.rowLinks}; links a filas que quedaron apuntando a Coda: ${stats.rowLinksLeft}`)
   return { manifest: { ...manifest, pages }, files, notes, modes, rowPages, missingMedia: [...missing] }
 }

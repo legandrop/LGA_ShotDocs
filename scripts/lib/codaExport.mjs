@@ -1,6 +1,7 @@
 // Lo que scripts/coda-export.mjs necesita decidir sin red (probado en scripts/coda-export.test.mjs).
 
 import { createHash } from 'node:crypto'
+import { MODES as TABLE_MODES } from './codaTables.mjs'
 
 export const API = 'https://coda.io/apis/v1'
 
@@ -12,6 +13,18 @@ export function isCodaApi(url) {
   try {
     const u = new URL(url)
     return u.protocol === 'https:' && u.host === 'coda.io' && u.pathname.startsWith('/apis/') && !u.username && !u.password
+  } catch {
+    return false
+  }
+}
+
+/** Un archivo guardado en Coda (las fotos y adjuntos de las páginas y de las tablas): solo esos se bajan. */
+export function isCodaHosted(url) {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== 'https:' || u.username || u.password || u.port) return false
+    if (u.host === 'codahosted.io') return true
+    return (u.host === 'coda.io' || u.host === 'docs.superhuman.com') && u.pathname.startsWith('/blobs/') && !u.pathname.includes('/../')
   } catch {
     return false
   }
@@ -42,7 +55,6 @@ export function parseExportArgs(argv) {
   return { nameOrId: rest[0], out: rest[1], refresh: flags.includes('--refresh'), convertOnly }
 }
 
-const TABLE_MODES = ['fichas', 'unwrap', 'table', 'text', 'skip']
 
 /**
  * Revisa `tables.config.json` (opcional, en la carpeta exportada) y lo devuelve; un error dice qué está mal.

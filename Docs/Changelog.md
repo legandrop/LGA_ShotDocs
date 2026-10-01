@@ -8,7 +8,7 @@ el doc tiene tablas, el comando las baja por la API (columnas y todas las filas,
 filtro) y las convierte en páginas, como acordó Lega para docs cerrados: una ficha por fila con sus fotos, campos
 y notas, un índice con links a las fichas donde estaba la tabla, una tarjeta por fila en las vistas de tarjetas
 y los links entre filas como links entre páginas. Las tablas de maquetado se desarman y las chicas de texto
-quedan igual. `--convert-only` repite la conversión sin red y `tables.config.json` elige el modo de cada tabla.
+quedan igual, con las filas que escondía el filtro debajo. `--convert-only` repite la conversión sin red y `tables.config.json` elige el modo de cada tabla.
 [ Exportar de Coda - tablas como páginas ]
 
 v0.062 :
