@@ -123,6 +123,10 @@ function StepView({ step, index, total, phone }: { step: TourStep; index: number
   const modal = useModalOpen();
   const rect = useAnchorRect(step.anchor, phone && !!step.drawer);
   const [size, setSize] = useState({ width: 320, height: 160 });
+  // En el teléfono, la altura de la hoja cuando va abajo, la que decide si tapa lo señalado. Arriba mide otra cosa
+  // (otro relleno, el notch): decidir con la medida de la hoja donde está la hacía saltar de abajo a arriba sin parar
+  // cuando lo señalado quedaba justo en el borde (pasaba en inglés, en el paso del menú "/").
+  const sheetBelow = useRef<{ step: string; height: number } | null>(null);
   const interactive = !!step.interactive;
   const [, redraw] = useState(0);
 
@@ -171,12 +175,6 @@ function StepView({ step, index, total, phone }: { step: TourStep; index: number
         off();
       };
     }
-    if (step.interactive === 'slash') {
-      practiceHooks.focusEmptyLine?.();
-      return onTourSignal((s) => {
-        if (s === 'slash') go(index + 1, total);
-      });
-    }
     // El foco va al globito (la app quedó `inert`: lo que tenía el foco, como el editor, lo pierde).
     next.current?.focus({ preventScroll: true });
     return () => cancelAnimationFrame(frame);
@@ -186,6 +184,7 @@ function StepView({ step, index, total, phone }: { step: TourStep; index: number
     const el = bubble.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    if (phone && !el.classList.contains('top')) sheetBelow.current = { step: step.id, height: r.height };
     if (r.width !== size.width || r.height !== size.height) setSize({ width: r.width, height: r.height });
   });
 
@@ -215,7 +214,8 @@ function StepView({ step, index, total, phone }: { step: TourStep; index: number
   const spot = rect ? { left: rect.left - PAD, top: rect.top - PAD, width: rect.width + 2 * PAD, height: rect.height + 2 * PAD } : null;
   let bubbleStyle: CSSProperties;
   // En el teléfono, la hoja va abajo; si taparía lo señalado (el "?" del pie del cajón), arriba.
-  const sheetOnTop = phone && !!spot && spot.top + spot.height > viewport.height - keyboardInset() - size.height - 12;
+  const belowHeight = sheetBelow.current?.step === step.id ? sheetBelow.current.height : size.height;
+  const sheetOnTop = phone && !!spot && spot.top + spot.height > viewport.height - keyboardInset() - belowHeight - 12;
   if (phone) bubbleStyle = sheetOnTop ? { left: 0, right: 0, top: 0 } : { left: 0, right: 0, bottom: keyboardInset() };
   else if (spot) {
     const place = placeNear(spot, size, viewport, { sides: step.sides ?? ['below', 'above', 'right', 'left'], gap: 14, edge: 12 });
