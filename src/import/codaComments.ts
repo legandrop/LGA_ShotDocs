@@ -81,6 +81,8 @@ export function parseCodaComments(raw: unknown): CodaComments {
 export interface PageBlock {
   id: string;
   text: string;
+  /** En una tabla, el texto de cada celda (un hilo pegado a una celda se encuentra aunque el texto sea corto). */
+  cells?: string[];
 }
 
 /** Los bloques del documento de una página, en orden (cada uno antes que sus hijos). */
@@ -102,7 +104,18 @@ export function pageBlocks(fragment: Y.XmlFragment): PageBlock[] {
       if (!(child instanceof Y.XmlElement)) continue;
       if (child.nodeName === 'blockContainer') {
         const id = child.getAttribute('id');
-        if (typeof id === 'string' && id) out.push({ id, text: textOf(child) });
+        if (typeof id === 'string' && id) {
+          const cells: string[] = [];
+          const collect = (n: Y.XmlElement) => {
+            for (const c of n.toArray()) {
+              if (!(c instanceof Y.XmlElement) || c.nodeName === 'blockGroup') continue;
+              if (c.nodeName === 'tableCell' || c.nodeName === 'tableHeader') cells.push(textOf(c));
+              else collect(c);
+            }
+          };
+          collect(child);
+          out.push(cells.length ? { id, text: textOf(child), cells } : { id, text: textOf(child) });
+        }
       }
       walk(child);
     }
@@ -147,10 +160,11 @@ export function anchorBlock(thread: CodaThread, blocks: PageBlock[]): { blockId:
   const ref = thread.reference?.text;
   const whole = ref ? normalizeText(ref) : '';
   if (!whole) return { blockId: null, lost: false };
-  const normalized = blocks.map((b) => ({ id: b.id, text: normalizeText(b.text) }));
+  const normalized = blocks.map((b) => ({ id: b.id, text: normalizeText(b.text), cells: b.cells?.map(normalizeText) }));
   const lines = [...new Set([whole, ...ref!.split('\n').map(normalizeText).filter(Boolean)])];
+  // Exacto: el texto entero de un bloque o de una celda de una tabla (el hilo queda en el bloque de la tabla).
   for (const line of lines) {
-    const hit = normalized.find((b) => b.text === line);
+    const hit = normalized.find((b) => b.text === line || b.cells?.includes(line));
     if (hit) return { blockId: hit.id, lost: false };
   }
   for (const line of [...lines].sort((a, b) => b.length - a.length)) {
