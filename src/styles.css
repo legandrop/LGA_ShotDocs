@@ -1991,6 +1991,11 @@ code {
   padding: 6px 4px;
 }
 
+/* Quién lo borró y cuándo pueden ocupar dos renglones: no se cortan con "…". */
+.deleted-project-row .project-label span {
+  white-space: normal;
+}
+
 .deleted-project-row .secondary,
 .menu .deleted-project-row button {
   flex: none;
@@ -2073,10 +2078,14 @@ code {
     height: 60px;
   }
 
+  /* En el teléfono la ventana de borrar ocupa la pantalla, con los botones abajo (al alcance del dedo). */
   .delete-project-dialog {
     max-height: none;
     height: 100%;
-    border-radius: 0;
+  }
+
+  .delete-project-dialog .welcome-actions {
+    margin-top: auto;
   }
 
   .sheet-scrim {
