@@ -166,8 +166,9 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
 - **Ancho.** El ancho con que se veía en Coda pasa a `previewWidth` si es menor que 700 px; más ancho, la foto
   va sin ancho propio (a lo ancho de la página).
 - **Nombre.** El de Coda si es un nombre de archivo; si Coda solo sabe el blob, `bl-….<ext>`.
-- **Colores.** Coda escribe `rgb(...)`; se pasa al color con nombre más parecido del editor (por tono). El
-  gris del texto de cuerpo de Coda se saca.
+- **Colores.** Coda escribe `rgb(...)` (también se entiende `#rrggbb`); se pasa al color con nombre más
+  parecido del editor (por tono), salvo que de 70° a 165° siempre es verde, como se ve en Coda (desde v0.065).
+  El gris del texto de cuerpo de Coda se saca.
 - **Guion.** Los párrafos debajo de un título "Guion" (o "Script") pasan a texto Script; los fondos que en
   Coda se ponían a mano en INT/EXT y DÍA/NOCHE se sacan, porque Script ya los marca.
 - **Una foto adentro de un link** sale del link y queda como foto; el link sigue si tenía texto. Si el link

@@ -215,9 +215,13 @@ const HUES: [string, number][] = [
 
 /** El color con nombre más parecido, o `null` si es negro, blanco o el gris del texto de cuerpo. */
 export function namedColor(css: string, kind: 'text' | 'background'): string | null {
+  // `rgb(...)` (lo que escribe Coda) o `#rrggbb` / `#rgb`.
   const m = css.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
-  if (!m) return null;
-  const [r, g, b] = [m[1], m[2], m[3]].map((v) => Number(v) / 255);
+  const hex = m ? null : css.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)?.[1];
+  if (!m && !hex) return null;
+  const full = hex && hex.length === 3 ? [...hex].map((c) => c + c).join('') : hex;
+  const channels = m ? [m[1], m[2], m[3]].map(Number) : [0, 2, 4].map((i) => parseInt(full!.slice(i, i + 2), 16));
+  const [r, g, b] = channels.map((v) => v / 255);
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const light = (max + min) / 2;
@@ -233,6 +237,9 @@ export function namedColor(css: string, kind: 'text' | 'background'): string | n
   else hue = (r - g) / (max - min) + 4;
   hue *= 60;
   if (hue < 45 && sat < 0.4 && light < 0.5) return 'brown';
+  // En Coda toda la gama de 70° a 165° se ve verde (un verde muy claro, como #f1f8e9, está a ~88°: por cercanía
+  // quedaba amarillo).
+  if (hue >= 70 && hue <= 165) return 'green';
   let best = HUES[0];
   for (const h of HUES) {
     const d = Math.min(Math.abs(h[1] - hue), 360 - Math.abs(h[1] - hue));
