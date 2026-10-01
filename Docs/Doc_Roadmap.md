@@ -268,13 +268,20 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       dirección con un punto final lo lleva adentro del link; un salto de línea puede quedar adentro del
       link al final del párrafo o alrededor de una tarjeta.
     - **Verlo en la app** con una importación real: una página con muchas tarjetas de Drive.
-13. **Fotos HEIC: lo que quedó de v0.072** (`Doc_Importar_Coda.md`, "Fotos HEIC"). El comando que baja un doc
-    de Coda deja un JPEG de cada foto HEIC, así que lo importado se ve. **Falta:**
-    - **Que la app misma sepa mostrar un HEIC** que llega por otra vía (soltado en el editor desde Chrome o
-      desde Windows): hoy lo acepta y lo sube, y la página no lo muestra porque el navegador no lo decodifica.
-      **Decidido por Lega (2026-10-01): sí, la app tiene que mostrarlo.** Cómo: convertirlo a JPEG en el
-      dispositivo al agregarlo (el mismo decodificador del comando, libheif, alrededor de 1,4 MB, que se baja
-      aparte y solo cuando hace falta) y guardar el original; sin implementar.
+13. **Fotos HEIC: lo que quedó de v0.072 y v0.074** (`Doc_Importar_Coda.md` y `Doc_Imagenes.md`, "Fotos
+    HEIC"). El comando que baja un doc de Coda deja un JPEG de cada foto HEIC, y **desde v0.074 la app pasa a
+    JPEG en el dispositivo cualquier HEIC que se agrega a una página** (soltar, pegar, elegir, reemplazar;
+    D-20): tamaño completo, derecho, con su perfil de color, en un Web Worker, con el decodificador (libheif,
+    1,4 MB) bajado aparte y solo cuando hace falta. Si no se puede convertir se guarda el HEIC con un aviso, y
+    sin red se vuelve a probar antes de subirlo. **Falta:**
+    - **Los HEIC ya subidos sin convertir** (antes de v0.074, o cuando la conversión falló) siguen sin verse,
+      con un aviso en su lugar. Convertirlos pide bajar el original, subir un archivo nuevo y cambiar su fila.
+    - **Probarlo en la app real** (Chrome en Windows y Mac, y un HEIC que llega como archivo al iPhone): se
+      probó la conversión entera en Chromium con el build de producción, fuera de la app. En el iPhone falta
+      medir la memoria con una foto de 48 MP.
+    - **El nombre del bloque después de un reintento sin red** (y el de un HEIC suelto en una carpeta de Coda)
+      sigue diciendo `.HEIC`, aunque el archivo es el JPEG.
+    - **Sin portero** (fotos a Supabase) no se convierte.
     - **Verlo en la app con el doc entero.** Probado con una importación real de cuatro páginas (46 fotos
       convertidas: en el Drive, con miniatura y a la vista); falta la de un doc completo.
     - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.

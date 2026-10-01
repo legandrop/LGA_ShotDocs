@@ -359,8 +359,9 @@ una, que es lo que se importa. El código es `scripts/lib/codaHeic.mjs`.
 - **Lo que no pasa al JPEG:** los metadatos (fecha, lugar, cámara: siguen en el original). El JPEG pesa más
   que el HEIC, alrededor de una vez y media.
 - **Medido** con un doc real de 618 fotos HEIC de 12 y 24 megapíxeles (1,2 GB), fuera del repo: ver "Prueba".
-- **La app todavía no muestra un HEIC que llega por otra vía** (soltado en el editor desde Chrome, por
-  ejemplo): lo acepta y lo sube, y la página no lo muestra. Está en el roadmap (B.13).
+- **Un HEIC que llega a la app por otra vía** (soltado en el editor desde Chrome, por ejemplo) se pasa a JPEG
+  en el dispositivo desde v0.074 (`Doc_Imagenes.md`, "Fotos HEIC"). También uno que quedó sin convertir en la
+  carpeta: la app lo convierte al importarlo, aunque su bloque conserva el nombre `.HEIC`.
 
 ### Lo que no pasa
 

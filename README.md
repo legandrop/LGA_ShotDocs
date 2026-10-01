@@ -82,6 +82,8 @@ In production (v0.049). What works today:
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the
   rows and breaks sheets where the page shows them.
+- iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
+  shows them; the converter is downloaded only the first time it is needed.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;
   a PDF opens in a new tab and everything else downloads with its name.
 - Collapse sections by their headings: a triangle next to any heading hides everything up to the next heading
@@ -101,7 +103,7 @@ Templates and the assistant come later. The plan, the decisions and the roadmap 
 npm install
 cp .env.example .env.local   # your Supabase project URL and publishable key
 npm run dev                  # http://localhost:5173
-npm test                     # all 1190 tests: sync, editor, UI, file gateway client and Worker
+npm test                     # all 1350 tests: sync, editor, UI, file gateway client and Worker
 npm run typecheck            # app types
 npx tsc -p portero --noEmit  # file gateway types (not covered by typecheck)
 npm run build                # production build in dist/
@@ -133,5 +135,9 @@ To create your own workspace (your own Supabase, Resend, Google Drive, file gate
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The app uses libheif
+([`libheif-js`](https://www.npmjs.com/package/libheif-js), LGPL-3.0), loaded on demand as a separate file to
+convert HEIC photos; the BlockNote editor (MPL-2.0); and fonts under the SIL Open Font License.
 
 Lega Pugliese · [github.com/legandrop](https://github.com/legandrop)

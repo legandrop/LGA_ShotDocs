@@ -274,7 +274,8 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   mayor, `createImageBitmap` con `resizeWidth`/`resizeHeight`, para no abrir una foto de 48 MP entera en el
   iPhone; si el navegador no lo soporta, se dibuja la imagen cargada), JPEG de calidad 0.8 (baja la
   calidad si pasa de 512 KB). Video: un cuadro cerca del primer segundo. Si el navegador no puede abrir el
-  archivo (HEIC en Chrome de Windows, un video que no decodifica), no hay miniatura ni medidas: se
+  archivo (un video que no decodifica; un HEIC que no se pudo pasar a JPEG, ver `Doc_Imagenes.md`, "Fotos
+  HEIC": desde v0.074 se convierten al agregarlos), no hay miniatura ni medidas: se
   registra y se sube igual, y en la página queda un ícono con el nombre. La primera miniatura que se sube
   a `thumbs` queda: el bucket no deja reemplazarla. **Queda para después:** que otro dispositivo que sí
   pueda abrir el archivo genere la miniatura que falta (`thumb_at` en null).
@@ -754,7 +755,8 @@ página, el comienzo del texto y el motivo) si el servidor no los acepta.
 - La app queda en caché con un service worker (PWA), así que abre sin red, en cualquiera de sus
   direcciones (`/`, `/p/<uuid>`, `/trash`; ver `index.md`).
 - El editor, el carrete, el panel de comentarios y los diálogos se bajan aparte (`ui/lazyPart.tsx`), pero el
-  service worker precachea todos los `.js` (`globPatterns` en `vite.config.ts`): con la app instalada, el
+  service worker precachea todos los `.js` (`globPatterns` en `vite.config.ts`; menos el decodificador de
+  fotos HEIC, que se guarda la primera vez que se usa: `Doc_Imagenes.md`, "Fotos HEIC"): con la app instalada, el
   editor abre sin red desde la caché. Al publicar una versión nueva, el service worker nuevo borra los
   archivos viejos; si una pestaña vieja pide uno, la app avisa ("A new version is available — reloading"),
   espera a que lo escrito esté guardado en el dispositivo y recarga una sola vez. Si queda algo sin guardar

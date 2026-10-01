@@ -144,7 +144,18 @@ diga otra cosa.
   eligen como letras y se acomodan de una. Reemplaza el modelo de la foto como bloque (`Doc_Imagenes.md`). Sin
   esto no se importa ningún doc de Coda de forma definitiva. Diseño: `Doc_Fotos_En_Linea.md` (roadmap P.15).
 - **D-20 · La app muestra las fotos HEIC** (2026-10-01). Las que se sueltan en el editor, además de las que
-  convierte el comando de Coda (v0.072). Roadmap B.13.
+  convierte el comando de Coda (v0.072). Hecho en v0.074: al agregarlas se pasan a JPEG en el dispositivo
+  (`Doc_Imagenes.md`, "Fotos HEIC"). Lo que falta, en el roadmap B.13.
+- **D-21 · Licencias de terceros: libheif (LGPL-3.0)** (2026-10-01). Lega: la app "nunca será comercial, será
+  open source, aunque yo la use para mi trabajo". La app es MIT y, para convertir las fotos HEIC, usa
+  `libheif-js` (libheif con el decodificador libde265, las dos LGPL-3.0). Se usa sin modificar, cargada como
+  archivos aparte (el `.wasm` y su cargador, fuera del paquete de la app) y reemplazable: cualquiera instala
+  otra versión y vuelve a armar la app. El aviso de licencia va en `THIRD_PARTY_NOTICES.md` (raíz del repo, en
+  inglés), con link desde la sección *License* del README. Ese archivo lista también lo demás que pide aviso:
+  BlockNote (MPL-2.0) y las tipografías (SIL OFL 1.1); el resto de las dependencias de producción es MIT, ISC,
+  BSD, Apache-2.0, 0BSD o CC0. Una dependencia nueva con otra licencia se suma ahí en la misma tanda.
+  Patentes de HEVC: riesgo bajo para un proyecto open source no comercial; se vuelve a mirar solo si cambia
+  el carácter del proyecto.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

@@ -370,3 +370,85 @@ falta migración y generarla en el dispositivo que tiene el original (las ya sub
   pausa con un portero sin CORS), `portero/src/core.test.ts` (CORS en `/m/`), `pagination.test.ts`
   (impresión) y `carreteLoader.test.ts`. En Chromium, `sharp.mjs` del repo de pruebas privado: solo el camino
   del original local.
+
+## Fotos HEIC (v0.074)
+
+Decisión D-20 (`Doc_Decisiones.md`): la app muestra las fotos HEIC, las del iPhone. Chrome (Windows y Mac) no
+sabe decodificar HEIC: antes, una foto HEIC soltada en el editor se guardaba y se subía, pero quedaba sin
+miniatura y la página mostraba un ícono. Desde el iPhone casi no pasa (Safari entrega JPEG al elegir de la
+fototeca), pero un HEIC que llega como archivo sí.
+
+**Qué hace.** Al agregar una foto HEIC, la app la **pasa a JPEG en el dispositivo antes de guardarla**. Lo que
+queda en la página, en el dispositivo y en el Drive es el JPEG: nombre con `.jpg` (`IMG_1234.HEIC` →
+`IMG_1234.jpg`, también en el bloque), tipo `image/jpeg`, tamaño completo, calidad 0,92. El archivo de la
+persona no se toca: sigue en su disco. De ahí en más es una foto como cualquiera: miniatura, medidas, imagen
+nítida, carrete y PDF salen del JPEG, sin cambios en `probe.ts` ni en `sharpImages.ts`. Es lo mismo que hace
+desde v0.072 el comando que baja un doc de Coda (`Doc_Importar_Coda.md`, "Fotos HEIC").
+
+- **Orientación:** la aplica el decodificador (las cajas `irot`/`imir` del HEIC): una foto vertical sale
+  vertical.
+- **Perfil de color:** las fotos del iPhone están en Display P3. Los píxeles se decodifican tal cual, se
+  codifica el JPEG y se le mete el perfil ICC del HEIC (segmentos APP2). Sin eso el JPEG se leería como sRGB y
+  se vería menos saturado. Si el navegador le puso un perfil propio al codificar, se saca: queda uno solo.
+- **Cómo se reconoce un HEIC:** por la firma del archivo (caja `ftyp` con marca `heic`, `heix`, `hevc`,
+  `heim`, `heis` y parecidas; o la genérica `mif1`/`msf1` si no es un AVIF, que Chrome sí muestra) y, si la
+  firma no dice nada, por el tipo (`image/heic`, `image/heif`). Se leen solo los primeros 64 bytes. El nombre
+  solo no alcanza.
+
+**Dónde se engancha.** En `MediaQueue.add` (`src/media/queue.ts`), el único camino por el que un archivo entra
+a la cola: vale para soltar, pegar, elegir con el selector, reemplazar el archivo de un bloque, una imagen
+embebida en HTML pegado y la importación de Coda (que ya trae JPEG; un HEIC suelto en la carpeta también se
+convierte). Un JPEG, un PNG o un video no pasan por nada de esto.
+
+**El decodificador.** [`libheif-js`](https://www.npmjs.com/package/libheif-js) (libheif en WebAssembly, con el
+decodificador de HEVC libde265; LGPL-3.0, ver D-21 y `THIRD_PARTY_NOTICES.md`). Corre en un **Web Worker**
+(`heic.worker.ts`), uno por foto, que se cierra al terminar (así su memoria se suelta entera): la pantalla no
+se traba. Si el navegador no deja crear el Worker, se hace en la página (tarda lo mismo, trabando mientras
+dura); si el Worker no tiene `OffscreenCanvas`, decodifica él y el JPEG lo codifica la página.
+
+**Que no pese.** Nada del decodificador está en el paquete principal: se carga con `import()` recién cuando
+llega un HEIC. Son tres archivos aparte: `libheif-*.wasm` (1,42 MB; 477 KB comprimido), `heic.worker-*.js`
+(93 KB) y `heicLib-*.js` (89 KB, el respaldo sin Worker). Tampoco están en lo que el service worker guarda al
+instalar la app (`globIgnores` en `vite.config.ts`): se guardan la primera vez que se usan (caché
+`heic-decoder`), y desde ahí la conversión anda sin red.
+
+**Si no se puede convertir, la foto no se pierde.** Se guarda el HEIC tal cual, como antes, y el ícono de la
+página dice por qué no se ve (en inglés o castellano):
+
+| Caso | Marca (`MediaRecord.heic`) | Aviso | Después |
+|---|---|---|---|
+| El decodificador no se pudo cargar (sin red, y este dispositivo nunca lo bajó) | `retry` | *HEIC photo: turns into a JPEG once online* | La cola vuelve a probar justo antes de registrar el archivo, que es cuando hay red: si anda, el JPEG reemplaza al HEIC en el dispositivo (una sola transacción) y la página lo muestra. Si con red sigue sin cargar, sube el HEIC (subir manda) y queda `failed`. |
+| La foto no se pudo convertir (archivo roto, falta de memoria, tardó más de 2 minutos) | `failed` | *HEIC photo: could not turn it into a JPEG* | Se sube como HEIC. No se reintenta. |
+| Un HEIC ya subido sin convertir (versión anterior, u otro dispositivo) | — | *HEIC photo: this browser cannot show it* | Queda así (ver pendientes). |
+
+Una vez registrado en la base como HEIC ya no se convierte: el archivo existe con ese nombre y tipo en la base
+y en el Drive.
+
+**Medido** (Chromium sin ventana, build de producción, fuera del repo): cuatro fotos reales de iPhone de 24 MP
+(5712 × 4284, 2,5 a 5,1 MB) tardan entre 1,2 y 1,9 s cada una, contando la carga del decodificador; el hueco
+más largo de la página mientras tanto fue de 12 ms. El JPEG pesa alrededor de 1,3 a 1,5 veces el HEIC (3,3 a
+6,5 MB) y lleva el perfil Display P3 entero.
+
+**Pendiente / para después:**
+
+- **Los HEIC ya subidos** sin convertir siguen sin verse (con su aviso). Convertirlos pide bajar el original,
+  subir un archivo nuevo y cambiar la fila: no está hecho.
+- **Los metadatos** (fecha, lugar, cámara) no pasan al JPEG: quedan en el archivo de la persona.
+- **El reintento sin red** cambia el archivo y la miniatura, pero el nombre que guarda el bloque de la página
+  sigue diciendo `.HEIC` (la cola no toca el documento). El archivo se baja con `.jpg`.
+- **La importación de Coda** anota el nombre que traía la carpeta: un HEIC suelto ahí se convierte igual, y su
+  bloque queda con el nombre `.HEIC`.
+- **Sin portero** (workspace sin Drive) las fotos van a Supabase por otro camino, que no convierte.
+- **HDR y 10 bits:** el JPEG es de 8 bits; el mapa de ganancia HDR del iPhone no pasa.
+- **En el iPhone** no se midió la memoria con una foto de 48 MP (192 MB de píxeles más la librería). Safari
+  casi nunca entrega un HEIC, y si la conversión falla queda el HEIC, que Safari sí muestra.
+- **El perfil de color se toma por orden** en el archivo, como en el comando de Coda (roadmap B.13).
+
+**Archivos:** `src/media/heic.ts` (reconocer, nombre, perfil de color), `heicDecode.ts` (decodificar y
+codificar), `heicLib.ts` (cargar la librería), `heic.worker.ts`, `heicConvert.ts` (el Worker y el respaldo) y
+`queue.ts` (`add`, `toJpeg`, `retryHeic`, `heicNotice`). **Pruebas:** `heic.test.ts` (firma y tipo, nombre,
+perfil, y el decodificador de verdad en node con un HEIC de 96 × 64 girado: sale de 64 × 96 con sus colores),
+`queue.test.ts` ("fotos HEIC": se guarda y se sube el JPEG, un JPEG o PNG no pasa por el conversor, el
+conversor que falla, sin red y el reintento, un HEIC ajeno) y `fileDrop.test.ts` (el nombre del bloque). En
+Chromium, fuera del repo, el camino entero con el build de producción: en el Worker, sin Worker, sin el
+`.wasm` y sin el decodificador.
