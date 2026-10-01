@@ -297,3 +297,33 @@ para no perder datos con la versión nueva; es para cerrar la puerta a las vieja
 una versión anterior no abre (`unknownContent.ts`, desde v0.021). Nada crea fotos en línea hasta que
 `min_app_version` suba a la versión que las conoce (el orden está en `Doc_Fotos_En_Linea.md`, "Versiones
 viejas"); esta entrega no lo sube.
+
+## Huecos estables: en curso (pausado)
+
+Trabajo a medias en la rama `lega/fotos-en-linea-1` (commit `feaf66f`), para que borrar, mover o partir junto a
+una foto no pierda lo que otro escribe pegado a ella. **Sin medir, sin auditar y con pruebas que hoy fallan.**
+
+- **Qué se analizó.** La pérdida viene de que y-prosemirror borra un `Y.XmlText` entero al juntar los dos textos
+  vecinos de una foto borrada. Reescribir letras adentro de un texto no pierde lo que otro escribe; borrar el
+  texto sí. Además, al dibujar, la librería junta dos textos seguidos si el segundo lo creó ese dispositivo (#160).
+- **Enfoque elegido.** En un bloque con fotos, ningún texto se borra ni se recrea: borrar una foto saca solo su
+  elemento y deja los textos seguidos. El contenido del renglón se compara como una secuencia de letras y fotos
+  (prefijo y sufijo comunes; en el medio, la secuencia de cambios más corta, con tope de 512) y cada cambio va
+  al texto que tiene esa posición. **Regla del borde:** lo que se escribe donde se tocan dos textos va al final
+  del de la izquierda. Una foto puesta en el medio de un texto deja la parte izquierda donde está y crea un
+  texto nuevo a la derecha. Un cambio de ancho actualiza la foto sin recrearla.
+- **La marca.** Los textos de un bloque con fotos llevan el atributo `lgaGapText` (en el `Y.XmlText`), para que
+  el bloque siga así cuando se borra su última foto. Sin foto y sin texto marcado, el bloque sigue el código de
+  siempre: por eso dos textos seguidos junto a un salto de línea se siguen juntando como hoy.
+- **Hecho.** En `src/plugins/sync-plugin.js` (está en el parche): la lectura sin juntar textos, la igualdad por
+  contenido (`equalStableContent`), la escritura (`updateStableGapsChildren`) y la marca al crear un bloque.
+  Con 60 agendas, `collabPhotos.test.ts` e `inlinePhoto.test.ts` pasan.
+- **Falta.** Llevar lo mismo a `dist/y-prosemirror.cjs` y regenerar el parche; la guarda de `vite.config.ts`;
+  medir las 300 agendas de cada caso y volver a fijar `limits` en `photoHarness.ts` (`collabPhotosLimits` y
+  `collabPhotosNoGaps` hoy fallan, y `brokenGaps` todavía exige que no haya dos textos seguidos); las pruebas
+  nuevas (ida y vuelta, un solo editor al azar contra lo reconstruido desde Yjs, los dos archivos de la
+  librería dando lo mismo); confirmar que el control de texto y los saltos de línea dan lo de hoy; la suite,
+  `tsc` y el build; actualizar las tablas de este documento y de `Doc_Fotos_En_Linea.md`, y el changelog.
+- **Para revisar.** La reparación (`structure.ts`) copia con `clone()`, que no lleva la marca: un bloque
+  reparado sin fotos vuelve al código de siempre. Y los comentarios nuevos del parche están en inglés, como el
+  resto de ese archivo.
