@@ -360,6 +360,17 @@ pestaña en `src/ui/TrashView.tsx` y `src/media/fileTrash.ts`.
   mientras no cambie, no se vuelve a leer. Solo queda anotada si se pudo quitar lo que hiciera falta: una
   página a medio subir, con algo ilegible o desconocido, o sin comprobar (ver abajo), se vuelve a mirar en
   cada ciclo.
+- **Dispositivo nuevo: lo bajado no cuenta como pendiente** (B.14). Un dispositivo que nunca comparó una
+  página (recién instalado, recién entrado, o una página que acaba de llegar) no tiene anotado ningún uso, y
+  antes ponía en la cola un `link_page_file` por cada foto o video de lo que bajaba: miles de cambios "sin
+  subir" que salían de a uno durante minutos y no escribían nada (la base ya tenía cada fila). Ahora, antes
+  de comparar esas páginas, se lee una vez qué usos activos tiene el servidor (`page_files`, de a 100 páginas;
+  `MediaQueue.serverUses`) y lo que ya está queda anotado como confirmado, igual que después de mandarlo (si es
+  ajeno, como ajeno, sin avisar). Lo que el servidor no tiene, o tiene quitado, se manda como siempre, y si la
+  lectura falla (sin red, un error), todo se manda como antes: nunca se deja de mandar un uso sin ver que el
+  servidor lo tiene. Cada página se lee una vez por apertura de la app. La lectura solo se usa si la página no
+  tiene nada propio por subir: si no, entre la lectura y la comparación otro dispositivo pudo quitar un uso que
+  esta página volvió a tener (lo encontró la auditoría; prueba A2 de `trash.test.ts`).
 - **Una sola fila por página y archivo** (store `links`, con `removed` y una revisión `rev`): gana lo último
   que se vio en el documento. Borrar y deshacer antes de sincronizar no manda nada; si el deshacer llega
   mientras viaja el `unlink`, la respuesta no marca la fila como hecha (cambió la revisión) y después sale el

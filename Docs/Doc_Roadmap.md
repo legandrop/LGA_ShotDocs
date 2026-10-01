@@ -380,9 +380,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       correcto es seguir la imagen principal (`pitm` → `ipma` → `ipco`).
     - **Pruebas del comando entero** (`convertFolder`, la bajada con una foto ya convertida, el código de
       salida): hoy se probó a mano contra una API de Coda simulada; en el repo solo está probada la librería.
-14. **Un dispositivo nuevo muestra "Subiendo ~2750 cambios" unos 4 minutos** al abrir un proyecto grande
-    ("HEIC (prueba)"), sin escrituras visibles en la base (lo vio la auditoría de v0.075). Averiguar qué
-    cuenta ese número: si son cambios que de verdad suben, o lo bajado contado como pendiente.
+14. **Hecho: un dispositivo nuevo ya no muestra "Subiendo ~2750 cambios".** Era lo bajado contado como
+    pendiente: cada foto o video de las páginas bajadas entraba a la cola de usos y salía un `link_page_file`
+    por uso (2757 en el workspace de Lega, sumando todos sus proyectos), que no cambiaba nada en la base. Ahora,
+    para las páginas que el dispositivo nunca comparó, se lee primero qué usos tiene el servidor y solo se manda
+    lo que falta (`Doc_Sincronizacion.md`, "Dispositivo nuevo"). Medido con 302 páginas y 2704 fotos: de unos 3 min
+    con el número y 2704 pedidos a 0 pedidos, 4 lecturas y sin número.
 
 ### C. Esperan a Lega
 

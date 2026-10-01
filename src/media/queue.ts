@@ -855,11 +855,17 @@ export class MediaQueue {
    * `unlink`: SOLO si el documento está completo y al día con el servidor. Un documento a medio bajar (o
    * que esta versión no puede leer entero) no dice que un archivo se quitó, dice que todavía no llegó:
    * entonces se suman los usos nuevos y nunca se quita ninguno. Devuelve si puso algo por mandar.
+   *
+   * `onServer`: los usos que el servidor ya tiene activos en esta página, recién leídos (`serverUses`). Un
+   * archivo del documento que este dispositivo no tenía anotado y que está ahí no se manda: `link_page_file`
+   * no cambiaría nada. Queda anotado como confirmado, igual que después de mandarlo (B.14: un dispositivo
+   * nuevo contaba como "sin subir" cada foto de lo que bajaba y las mandaba de a una, minutos, sin escribir
+   * nada en la base). Lo que no está (o está quitado) se manda como siempre.
    */
   async reconcilePage(
     pageId: string,
     docIds: ReadonlySet<string>,
-    { unlink, seenSeq }: { unlink: boolean; seenSeq?: number },
+    { unlink, seenSeq, onServer }: { unlink: boolean; seenSeq?: number; onServer?: ReadonlyMap<string, { foreign: boolean }> },
   ): Promise<boolean> {
     if (!this.db || !this.schemaReady) return false;
     const allowUnlink = unlink && this.trashReady;
@@ -881,6 +887,10 @@ export class MediaQueue {
         // Lo registra `register_file` con esta página: solo se anota que el documento lo tiene, para saber
         // después si se quitó. No hay nada que mandar.
         writes.push(newLink(pageId, id, 0));
+      } else if (onServer?.has(id)) {
+        // Bajado con la página y ya registrado en el servidor: nada que mandar ni que contar. Si es ajeno, se
+        // anota como lo dejaría `linkOne`, sin avisar (no lo pegó esta persona).
+        writes.push({ ...newLink(pageId, id, 0), ...(onServer.get(id)!.foreign ? { foreign: true } : {}) });
       } else {
         // También uno de otro proyecto: la base lo guarda como uso ajeno (ver `linkOne`).
         writes.push(newLink(pageId, id, 1));
@@ -902,6 +912,23 @@ export class MediaQueue {
       else this.seenLinks.add(w.key);
     }
     return writes.some((w) => w.pending === 1 && !w.waiting);
+  }
+
+  /**
+   * Los usos que el servidor tiene activos en estas páginas (`page_files` sin `removed_at`, los que la sesión
+   * ve): por página, cada archivo y si es ajeno. Para `reconcilePage`. Solo lee; tira si no se pudo leer, y
+   * entonces quien llama sigue sin esto (todo se manda como siempre).
+   */
+  async serverUses(pageIds: string[]): Promise<Map<string, Map<string, { foreign: boolean }>>> {
+    const out = new Map<string, Map<string, { foreign: boolean }>>();
+    if (!this.db || !this.schemaReady || pageIds.length === 0) return out;
+    for (const row of await this.remote.fetchPageUses(pageIds)) {
+      if (row.removed_at) continue;
+      let uses = out.get(row.page_id);
+      if (!uses) out.set(row.page_id, (uses = new Map()));
+      uses.set(row.file_id.toLowerCase(), { foreign: row.is_foreign === true });
+    }
+    return out;
   }
 
   /** El archivo es de otro proyecto que la página (si se saben los dos). */

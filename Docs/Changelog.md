@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.085 :
+
+Un dispositivo nuevo mostraba "Subiendo ~2750 cambios" unos minutos al abrir el workspace, sin escribir nada
+en la base. Era lo bajado contado como pendiente: al comparar cada página con sus fotos y videos (papelera de
+archivos), el dispositivo no tenía anotado ningún uso y ponía en la cola un `link_page_file` por cada uno, que
+salían de a uno y no cambiaban nada. Ahora, para las páginas que nunca comparó, lee primero qué usos tiene el
+servidor (una lectura por cada 100 páginas) y solo manda los que faltan; si la lectura falla, manda todo como
+antes. Medido con 302 páginas y 2704 fotos: de unos 3 minutos con el número y 2704 pedidos, a ninguno.
+[ Sincronización - un dispositivo nuevo no cuenta como pendientes los usos de fotos que ya están en el servidor ]
+
 v0.084 :
 
 Colapsar, lo que faltaba: mover una sección colapsada entera y colapsar para todos. Arrastrar o mover con
