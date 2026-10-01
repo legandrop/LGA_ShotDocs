@@ -182,11 +182,20 @@ export const startsComposition = (e: Pick<KeyboardEvent, 'key' | 'keyCode'>): bo
   e.key === 'Dead' || e.key === 'Process' || e.keyCode === 229;
 
 /**
- * La tecla escribe un carácter: una sola letra, sin ⌘ y sin Ctrl (Ctrl+letra es un atajo; Ctrl+Alt es AltGr en
- * Windows, que escribe "@" o "€").
+ * La tecla escribe un carácter: una sola letra, sin ⌘ y sin Ctrl (Ctrl+letra es un atajo). Ctrl+Alt es AltGr en
+ * Windows, que escribe "@" o "€" (otro carácter que el de la tecla), o un atajo de la página como Ctrl+Alt+M
+ * (comentar) o Ctrl+Alt+1 (título), que da la letra o el número de la tecla misma: ese no mueve el cursor (la foto
+ * sigue elegida, medido en Chromium).
  */
-export const typesCharacter = (e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'>): boolean =>
-  e.key.length === 1 && !e.metaKey && (!e.ctrlKey || e.altKey);
+export const typesCharacter = (e: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey'>): boolean => {
+  if (e.key.length !== 1 || e.metaKey) return false;
+  if (!e.ctrlKey) return true;
+  return e.altKey && !keyOfItsOwn(e.key, e.code ?? '');
+};
+
+/** La tecla da su propia letra o número (`m` en `KeyM`, `1` en `Digit1`): con Ctrl+Alt, es un atajo, no AltGr. */
+const keyOfItsOwn = (key: string, code: string): boolean =>
+  (/^Key[A-Z]$/.test(code) && key.toLowerCase() === code.slice(3).toLowerCase()) || (/^Digit\d$/.test(code) && key === code.slice(5));
 
 /** El cursor a la derecha de la foto elegida. */
 function caretAfter(view: EditorView, sel: NodeSelection): void {

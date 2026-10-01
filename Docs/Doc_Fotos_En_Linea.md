@@ -1,7 +1,8 @@
 # Fotos en línea: la foto como un carácter del renglón (P.15)
 
-Estado: **entrega 0 (prototipo) y entrega 1a (el nodo y el parche de huecos) hechas; falta la 1b y el resto**
-(2026-10-01; ver "Prototipo (entrega 0)" y "Cómo quedó (entrega 1a)"; las "Correcciones de la auditoría", más
+Estado: **entrega 0 (prototipo), 1a (el nodo y el parche de huecos) y 1b (lo que se ve y se toca) hechas; falta
+publicar la entrega 1 y el resto** (2026-10-01; ver "Prototipo (entrega 0)", "Cómo quedó (entrega 1a)" y "Cómo
+quedó (entrega 1b)"; las "Correcciones de la auditoría", más
 abajo, mandan sobre el diseño de arriba). Nada en la app crea todavía una foto en línea. Pedido de Lega del
 2026-10-01, con sus palabras: las
 imágenes tienen que ser "como en Coda o en cualquier lado, un carácter más de un texto". Reemplaza el modelo de
@@ -400,37 +401,73 @@ texto de varias líneas a los costados de una foto (ver "Prototipo (entrega 0)")
    rows* las deja de la misma altura. ¿Al pegar varias juntas, se acomodan solas o entran con su tamaño y se
    acomodan a pedido? (Propuesta: entran a 1/3 del ancho cada una, y se acomodan a pedido.)
 
-## Entrega 1b: en curso (pausada)
 
-Lo que se ve y se toca de la foto en línea. **El código y sus pruebas con jsdom están hechos** (suite: 1426 pasan,
-`tsc` limpio); **falta medirlo en un navegador real** y cerrar los docs. Nada en la app crea fotos en línea todavía.
+## Cómo quedó (entrega 1b: lo que se ve y se toca)
 
-**Hecho, archivo por archivo:**
+Lo que se ve y se toca de la foto en línea, sobre la 1a. Nada en la app crea fotos en línea todavía: se probaron
+puestas por la API del editor, con la página real de la app (el editor, sus extensiones, su CSS, el carrete, buscar,
+colapsar, comentarios e imprimir) en Chromium sin ventana, con scripts fuera de este repo.
+
+**Archivo por archivo:**
 
 - `src/ui/inlinePhoto.ts`: la imagen pasa por `resolveFileUrl` del editor, como el bloque `image` (miniatura,
   cuadro de video con la marca de reproducir, marcador de subida, sin red o de otro proyecto); una respuesta
   vieja no pisa la nueva; `--ph-w` con el ancho.
-- `src/ui/inlinePhotoEditor.ts` (nuevo; lo suma `PageEditor.tsx`, porque BlockNote no registra extensiones de un
-  contenido en línea): filas con `groupRows` (`sd-photo-sized`, `--row-n`, `sd-photo-row-first`,
-  `sd-photo-row-break` con `--row-rest`), la marca `sd-photo-in-range`, y el teclado y el mouse antes de
-  `nodeSelectionKeyboard`: letra, Enter y composición pasan el cursor a la derecha de la foto y siguen;
-  Shift+flechas y Shift+clic dan una selección de texto. La barra espaciadora abre el carrete, como en el bloque.
+- `src/ui/inlinePhotoEditor.ts` (lo suma `PageEditor.tsx`: BlockNote no registra las extensiones de un contenido
+  en línea): las filas con `groupRows` (la decoración `sd-photo-sized`, `--row-n`, `sd-photo-row-first`,
+  `sd-photo-row-break` con `--row-rest`), la marca `sd-photo-in-range` de las fotos dentro de una selección de
+  texto, y el teclado y el mouse antes de `nodeSelectionKeyboard`.
 - `src/styles.css` ("Fotos en línea"): el modelo de ancho del prototipo, `w = 0`, listas, el contorno de la
   elegida, la marca de la selección y "apiladas" en el teléfono.
-- `src/ui/carreteModel.ts` y `PageEditor.tsx`: cada foto tiene una clave (el id del bloque `image`, o
-  `<bloque>#<n>` para la n-ésima foto en línea): el carrete junta las dos clases en el orden del documento
-  (listas, hijos y celdas), y el clic, el segundo clic, el dedo y `ensureLinks` usan la clave.
+- `src/ui/carreteModel.ts`, `carreteClick.ts` y `PageEditor.tsx`: cada foto tiene una clave (el id del bloque
+  `image`, o `<bloque>#<n>` para la n-ésima foto en línea): el carrete junta las dos clases en el orden del
+  documento (listas, hijos y celdas), y el clic, el segundo clic, el dedo y `ensureLinks` usan la clave.
 - `sharpImages.ts`, `attachments.ts`, `printPage.ts`, `printView.ts`: encuentran la foto en línea por
-  `.sd-photo[data-url] > img` (nunca el `<img>` separador de ProseMirror); la impresión espera sus imágenes, usa
-  los originales y fija el ancho natural de las de `w = 0`.
-- Pruebas: `inlinePhotoEditor.test.ts` (22) y casos nuevos en `carreteModel`, `sharpImages`, `attachments` y
-  `pagination`.
+  `.sd-photo[data-url] > img` (nunca el `<img>` separador de ProseMirror).
 
-**Falta:** la página de prueba con los módulos reales (Vite en el puerto 4182) y las mediciones en Chromium
-(cursor, letra, Enter y composición con la foto elegida, Shift+flechas, Shift+clic, la selección visible, filas de
-2, 3 y 4 en varios anchos, `w = 0`, clic y segundo clic); arrastrar una foto dentro del renglón y deshacer en el
-navegador; reescribir esta sección como "Cómo quedó (entrega 1b)"; `Doc_Roadmap.md` (P.15); la auditoría.
+**Lo medido en Chromium:**
 
-**Anotado, sin hacer:** la conversión de imágenes `data:` sigue mirando solo bloques; un párrafo con fotos se
-imprime como una sola unidad (partirlo entre renglones es la entrega 2); Shift+clic en una foto en línea no abre
-el carrete (en una foto-bloque sigue como antes).
+| Caso | Resultado |
+|---|---|
+| Anchos: 831 anchos (320 a 1150 px) × 5 densidades (1 a 3), filas de 2, 3, 4, 8, siete acomodadas, una fila que no llena seguida de otra, y una lista | **0 renglones distintos de su fila**; alturas de una fila: diferencia ≤ **0,08 px** (lo mismo que el prototipo) |
+| `w = 0` | Ancho natural con tope en el renglón (300 px; la de 2400 px queda en el ancho del renglón) |
+| Texto al lado de una foto | El texto queda abajo, 2 px por debajo del borde de la foto (su margen) |
+| Lista con fotos | La viñeta y el número quedan en el renglón del texto |
+| Teléfono, "apiladas" | Cada foto con ancho propio ocupa el renglón (334 px de 335); "en fila", las filas como en la computadora |
+| Clic en una foto | La elige (contorno de 2 px), sin abrir el carrete; el segundo clic lo abre **en esa foto** (las 15 fotos de la página de prueba, en orden); doble clic y la barra espaciadora, también |
+| Carrete | Junta bloques y fotos en línea en el orden de la página: bloque, fotos del texto, hijo, viñeta, número, tarea, bloque, celdas, cita, fotos del Drive (`sdmedia://`, con la miniatura del dispositivo) |
+| Una letra, Shift+letra, Enter, con la foto elegida | El cursor pasa a la derecha de la foto y la tecla sigue: `[F1]a`; Enter parte el renglón ahí (sin bloque hijo); con la foto sola, Enter abre un renglón debajo |
+| AltGr (`@` con Ctrl+Alt+Q en Windows), con la foto elegida | Escribe `@` después de la foto |
+| Composición (tilde muerta e IME) con la foto elegida, entre dos fotos, al principio y al final | Lo compuesto queda después de la foto; pantalla y documento iguales; Ctrl+Z vuelve todo |
+| Shift+flechas | Selección de texto; la marca muestra las fotos que abarca (F3, F3 y F4, las tres) |
+| Shift+clic (desde un cursor, desde una foto elegida, para atrás, a otro párrafo) | Selección de texto que abarca las fotos; no abre el carrete |
+| Arrastrar para elegir texto que pasa por fotos | Las abarca y las marca |
+| Arrastrar una foto dentro del renglón, al final del texto y a otro renglón | Se mueve; un Ctrl+Z la devuelve |
+| Deshacer y rehacer (escribir, borrar una foto, Enter, Backspace, cambiar el ancho) | Cada paso con un Ctrl+Z; Ctrl+Y y Ctrl+Shift+Z rehacen; las imágenes siguen cargadas |
+| Copiar y pegar dentro de la app (tres fotos, texto con una foto, cortar una foto) | Llegan con su ancho y sus filas |
+| Pegar el HTML de otro programa con un `<img>` | Entra el texto, sin foto (nada crea fotos en línea todavía) |
+| Buscar y reemplazar | `gato` encuentra las 3; una búsqueda no cruza una foto (`antes gato`: nada); reemplazar todos deja las 13 fotos |
+| Colapsar | El párrafo con fotos se esconde con su título |
+| Comentar (Ctrl+Alt+M con la foto elegida) | Comenta el bloque; la foto sigue elegida y el documento no cambia |
+| Imprimir (A4) | Espera las fotos en línea (13 de 13 cargadas), usa los originales del dispositivo (1200 × 800, no la miniatura) y la marca de la selección no va |
+| Solo lectura | Un clic abre el carrete en esa foto; las teclas no cambian nada |
+
+**Corregido en esta pasada (con su prueba):** en solo lectura, Shift+clic en una foto en línea no abría el carrete
+(`shiftSelects` en `carreteClick.ts`: Shift solo elige texto si se puede editar); Ctrl+Alt+M (comentar) o
+Ctrl+Alt+1 (título) con la foto elegida movían el cursor fuera de ella como si fueran AltGr (`typesCharacter`
+distingue la letra de la tecla misma).
+
+**Límites que quedan:**
+
+- Una composición que empieza **sin** la tecla de antes (solo `compositionstart`, algunos teclados de teléfono)
+  con una foto elegida entre dos fotos duplica el primer carácter (`´á`, `ｎ日本`). Igual que en el prototipo;
+  con la tecla de antes (tilde muerta de la Mac, IME de Windows) anda. Probar en Safari del iPhone.
+- Con una foto en línea elegida aparece la barra de formato de texto (negrita, tipo de bloque…): no hace nada
+  sobre la foto. Con una selección de solo fotos no aparece barra. La barra propia (tamaños, *Arrange in rows*)
+  es de la entrega 2.
+- Copiar fotos a otro programa deja en el texto plano `![nombre](dirección)` (con `sdmedia://` para las del
+  Drive): es la exportación de la entrega 3.
+- El panel de comentarios muestra el texto del bloque sin las fotos (`Texto antes  gato  perro`).
+- Un párrafo con fotos se imprime como una sola unidad (partirlo entre renglones es la entrega 2); la conversión
+  de imágenes `data:` sigue mirando solo bloques.
+- Sin probar: Safari, iPhone, dos editores a la vez en un navegador (los cubren las pruebas de Yjs de la 1a).

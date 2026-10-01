@@ -75,9 +75,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `photo` en el esquema (nada lo crea todavía), el resguardo de versiones anteriores también en la importación
   de Coda, el parche de los huecos de y-prosemirror (solo alrededor de las fotos; los saltos de línea se
   guardan igual que antes) y las pruebas al azar con dos editores (0 pérdidas al escribir los dos en los
-  huecos). **Falta de la entrega 1 (1b):** la imagen resuelta con miniatura y nitidez, el CSS y la decoración
-  de las filas, el teclado y el mouse propios, elegir varias, la barra, el carrete y los selectores por bloque
-  más posición; después, publicar y subir `min_app_version`. 🔴 **Para decidir antes de la versión que crea
+  huecos). **Hecha la 1b** (lo que se ve y se toca, medido en Chromium: `Doc_Fotos_En_Linea.md`, "Cómo quedó
+  (entrega 1b)"): la imagen con miniatura y nitidez, las filas (0 renglones rotos en 831 anchos por 5
+  densidades), el teclado y el mouse con la foto elegida, Shift+flechas y Shift+clic, el carrete con bloques y
+  fotos en línea en orden, e imprimir con las fotos en línea. **Falta de la entrega 1:** la auditoría de la 1b,
+  unirla sobre la 1a, probar en Safari y en el iPhone (la composición sin tecla previa entre dos fotos duplica el
+  primer carácter en Chromium), publicar y subir `min_app_version`. Quedan para la entrega 2 la barra propia de
+  la foto (hoy, con una foto elegida, sale la de texto) y partir un párrafo con fotos entre hojas. 🔴 **Para decidir antes de la versión que crea
   fotos:** el texto de los huecos empeora borrar una foto mientras otro escribe pegado a ella (medido, con una
   propuesta, en `Doc_Fotos_En_Linea.md`, "Cómo quedó").
   **A futuro (Lega, 2026-10-01, después de ver el prototipo):** que se puedan escribir varias líneas de texto a

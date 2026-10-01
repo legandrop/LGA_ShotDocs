@@ -224,7 +224,7 @@ describe('el teclado con una foto elegida', () => {
 
   it('la barra espaciadora (sin la página, que abre el carrete), AltGr y Option escriben después; Ctrl o ⌘ + letra no', () => {
     const E = mount(doc());
-    for (const init of [{ key: ' ' }, { key: '@', ctrlKey: true, altKey: true }, { key: '™', altKey: true }]) {
+    for (const init of [{ key: ' ' }, { key: '@', code: 'KeyQ', ctrlKey: true, altKey: true }, { key: '™', altKey: true }]) {
       choose(E, 'F1');
       const e = key(E, init.key, init);
       expect(e.defaultPrevented).toBe(false);
@@ -234,6 +234,13 @@ describe('el teclado con una foto elegida', () => {
     for (const init of [{ ctrlKey: true }, { metaKey: true }]) {
       choose(E, 'F1');
       key(E, 'b', init);
+      expect(sel(E).kind).toBe('node');
+    }
+    // Ctrl+Alt con la letra o el número de la tecla misma es un atajo de la página (comentar, título), no AltGr:
+    // la foto sigue elegida.
+    for (const [k, code] of [['m', 'KeyM'], ['M', 'KeyM'], ['1', 'Digit1']]) {
+      choose(E, 'F1');
+      key(E, k, { code, ctrlKey: true, altKey: true });
       expect(sel(E).kind).toBe('node');
     }
     expect(line(E, 'a')).toBe('Antes [F1] después');

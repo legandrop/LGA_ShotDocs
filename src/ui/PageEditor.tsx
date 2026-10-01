@@ -54,7 +54,7 @@ import { PageFormattingToolbar, pageToolbarItems } from './PageToolbar';
 import { undoGuardExtension } from './undoGuard';
 import { BACKGROUND_META } from './editorMeta';
 import { notToggleHeading } from './collapseMenus';
-import { clickOpens, mousePressOpens } from './carreteClick';
+import { clickOpens, mousePressOpens, shiftSelects } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
 import { findExtension } from './findEditor';
 import { inlinePhotoExtensions, selectedPhotoKey } from './inlinePhotoEditor';
@@ -662,8 +662,8 @@ function BlockEditor({
     mouseOpens.current =
       e.pointerType === 'mouse' &&
       !!target.closest?.('img.bn-visual-media') &&
-      // Shift+clic en una foto en línea elige texto hasta ella (inlinePhotoEditor.ts): nunca abre.
-      !(e.shiftKey && target.closest?.('.sd-photo')) &&
+      // Shift+clic en una foto en línea elige texto hasta ella (inlinePhotoEditor.ts): no abre.
+      !shiftSelects({ editable, shiftKey: e.shiftKey, inlinePhoto: !!target.closest?.('.sd-photo') }) &&
       mousePressOpens({ editable, focused: editor.isFocused(), selectedId: selectedKey(), targetId: photoKeyOf(target) });
     pressedSelected.current =
       editable &&
@@ -714,7 +714,7 @@ function BlockEditor({
       mouseOpens: mouseOpens.current,
       pressedSelected: pressedSelected.current,
       detail: e.detail,
-      modifier: e.metaKey || e.ctrlKey || (e.shiftKey && !!target.closest('.sd-photo')),
+      modifier: e.metaKey || e.ctrlKey || shiftSelects({ editable, shiftKey: e.shiftKey, inlinePhoto: !!target.closest('.sd-photo') }),
     });
     // El próximo clic sin `pointerdown` (uno sintético) no usa lo de este.
     const kind = pressKind.current;
