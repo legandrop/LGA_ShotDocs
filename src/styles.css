@@ -2730,6 +2730,52 @@ code {
   pointer-events: none;
 }
 
+/* Los tiradores de la foto en línea (inlinePhoto.ts, D-24): los de la foto-bloque, a los costados; se ven con la
+   foto elegida (y el editor con el foco) o al pasar el mouse, solo si se puede editar. Mientras se arrastra, la foto
+   toma el ancho del arrastre (también una de ancho natural). */
+.sd-photo-handle {
+  display: none;
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 30px;
+  margin-top: -15px;
+  background-color: black;
+  border: 1px solid white;
+  border-radius: 4px;
+  cursor: ew-resize;
+  z-index: 1;
+  touch-action: none;
+}
+
+.sd-photo-handle-left {
+  left: 4px;
+}
+
+.sd-photo-handle-right {
+  right: 4px;
+}
+
+.editor .bn-editor.ProseMirror-focused[contenteditable='true'] .sd-photo.ProseMirror-selectednode > .sd-photo-handle,
+.editor .bn-editor[contenteditable='true'] .sd-photo.sd-photo-resizing > .sd-photo-handle {
+  display: block;
+}
+
+@media (hover: hover) {
+  .editor .bn-editor[contenteditable='true'] .sd-photo:hover > .sd-photo-handle {
+    display: block;
+  }
+}
+
+.sd-photo.sd-photo-resizing > img.bn-visual-media {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.print-view .sd-photo-handle {
+  display: none !important;
+}
+
 /* Mientras se guardan las fotos que se pegaron, soltaron o eligieron (inlinePhotoCreate.ts): una marca en el lugar
    donde van a entrar. No es parte del documento (una decoración) ni sale en el PDF. */
 .sd-photo-pending {
@@ -2844,6 +2890,35 @@ code {
   font-family: var(--mono);
   font-size: 12px;
   min-width: 30px;
+}
+
+/* La barra de una foto (MediaBar.tsx, D-24): todos los botones del mismo tamaño (30 × 30, como los íconos de
+   BlockNote) y el mismo relleno; los de texto (1/1, 1/2…) sin el relleno de un botón de texto, que los dejaba de
+   casi 50 px. Un separador fino entre sectores. */
+.bn-formatting-toolbar .sd-bar-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  flex: 0 0 30px;
+}
+
+.bn-formatting-toolbar .sd-bar-button .mantine-Button-inner,
+.bn-formatting-toolbar .sd-bar-button .mantine-Button-label {
+  justify-content: center;
+  overflow: visible;
+}
+
+.bn-formatting-toolbar .sd-bar-sector {
+  display: contents;
+}
+
+.bn-formatting-toolbar .sd-bar-sep {
+  flex: 0 0 1px;
+  align-self: stretch;
+  margin: 5px 4px;
+  background: var(--border);
 }
 
 .bn-formatting-toolbar .image-size-button[data-selected] {

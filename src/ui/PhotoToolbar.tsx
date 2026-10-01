@@ -1,17 +1,30 @@
 import { useBlockNoteEditor, useComponentsContext, useEditorState, usePortalElement } from '@blocknote/react';
 import type { EditorState } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { mediaIdOf } from '../media/queue';
-import { carreteSourceOf } from './carreteModel';
-import { CommentToolbarButton } from './EditorComments';
+import { BarButton } from './BarButton';
 import { ROW_PRESETS } from './imageRows';
 import { PHOTO, photoWidth } from './inlinePhoto';
+import { trackSpot, takeSpot } from './inlinePhotoCreate';
 import { photoKeyAtPos } from './inlinePhotoEditor';
 import { arrangeSelected, arrangeTarget, aspectAt, onlyPhotosSelected, selectedPhotos, setPhotoWidths } from './inlinePhotoSize';
-import { ArrangeIcon, OriginalDownloadButton, SIZE_LABELS, ViewIcon } from './MediaToolbarButtons';
+import {
+  AlignButtons,
+  CommentButton,
+  DeleteButton,
+  DownloadButton,
+  RenameButton,
+  ReplaceButton,
+  Sectors,
+  useMediaActions,
+  ViewButton,
+  type Alignment,
+} from './MediaBar';
+import { ArrangeIcon, SIZE_LABELS } from './MediaToolbarButtons';
 
 // La barra de la foto en línea (Docs/Doc_Fotos_En_Linea.md, entrega 2): ver (el carrete), bajar el original, los
 // tamaños rápidos (para todas las fotos elegidas) y "Arrange in rows" (las elegidas, o las seguidas a la elegida).
@@ -29,8 +42,24 @@ interface PhotoChoice {
   widths: number[];
   /** La única elegida: su dirección (ver, bajar) y su clave del carrete. */
   url: string | null;
+  name: string;
   key: string | null;
   arrange: { positions: number[]; adjacent: boolean } | null;
+  /** Los bloques de las fotos (sin repetir) y su alineación, si es la misma en todos. */
+  blocks: string[];
+  align: Alignment | null;
+}
+
+/** El bloque de la foto en `pos` y la alineación de su texto. */
+function blockOf(state: EditorState, pos: number): { id: string; align: Alignment } | null {
+  const $pos = state.doc.resolve(pos);
+  for (let d = $pos.depth; d > 0; d--) {
+    const node = $pos.node(d);
+    if (node.type.name !== 'blockContainer') continue;
+    const a = $pos.node(d + 1)?.attrs.textAlignment;
+    return { id: String(node.attrs.id ?? ''), align: a === 'center' || a === 'right' ? a : 'left' };
+  }
+  return null;
 }
 
 function choiceOf(state: EditorState): PhotoChoice | null {
@@ -38,12 +67,18 @@ function choiceOf(state: EditorState): PhotoChoice | null {
   if (positions.length === 0) return null;
   const widths = positions.map((p) => photoWidth(state.doc.nodeAt(p)?.attrs.w));
   const single = positions.length === 1 ? state.doc.nodeAt(positions[0]) : null;
+  const owners = positions.map((p) => blockOf(state, p)).filter((b): b is { id: string; align: Alignment } => !!b);
+  const blocks = [...new Set(owners.map((b) => b.id))];
+  const aligns = new Set(owners.map((b) => b.align));
   return {
     positions,
     widths,
     url: single?.type.name === PHOTO ? String(single.attrs.url ?? '') : null,
+    name: single?.type.name === PHOTO ? String(single.attrs.name ?? '') : '',
     key: single ? photoKeyAtPos(state.doc, positions[0]) : null,
     arrange: arrangeTarget(state),
+    blocks,
+    align: aligns.size === 1 ? [...aligns][0] : null,
   };
 }
 
@@ -54,7 +89,10 @@ const sameChoice = (a: PhotoChoice | null, b: PhotoChoice | null) =>
     a.positions.join() === b.positions.join() &&
     a.widths.join() === b.widths.join() &&
     a.url === b.url &&
+    a.name === b.name &&
     a.key === b.key &&
+    a.blocks.join() === b.blocks.join() &&
+    a.align === b.align &&
     a.arrange?.positions.join() === b.arrange?.positions.join() &&
     a.arrange?.adjacent === b.arrange?.adjacent);
 
@@ -85,10 +123,9 @@ function useImageLoads(dom: Element | null | undefined): void {
   }, [dom]);
 }
 
-/** Los tamaños rápidos y "Arrange in rows" para las fotos en línea de la selección. */
+/** Los tamaños rápidos y "Arrange in rows" para las fotos en línea de la selección (D-24: los tamaños primero). */
 export function PhotoSizeButtons() {
   const editor = useBlockNoteEditor();
-  const Components = useComponentsContext()!;
   const tr = useT();
   const choice = usePhotoChoice();
   useImageLoads(choice?.arrange ? editor.domElement : null);
@@ -106,66 +143,129 @@ export function PhotoSizeButtons() {
         : tr('imageSize.arrangeHint');
   return (
     <>
-      {arrange && (
-        <Components.FormattingToolbar.Button
-          className="bn-button"
-          data-test="photoArrange"
-          label={tr('imageSize.arrange')}
-          mainTooltip={tr('imageSize.arrange')}
-          secondaryTooltip={arrangeTip}
-          icon={<ArrangeIcon />}
-          isDisabled={!arrange.adjacent || !ready}
-          onClick={() => {
-            arrangeSelected(view);
-            view.focus();
-          }}
-        />
-      )}
       {ROW_PRESETS.map((f) => (
-        <Components.FormattingToolbar.Button
+        <BarButton
           key={f}
-          className="bn-button image-size-button"
-          data-test={`photoSize-${SIZE_LABELS[f].text}`}
+          className="image-size-button"
+          test={`photoSize-${SIZE_LABELS[f].text}`}
           label={tr(SIZE_LABELS[f].tip)}
-          mainTooltip={tr(SIZE_LABELS[f].tip)}
-          secondaryTooltip={many ? tr('photoSize.allSelected') : f < 1 ? tr('imageSize.rows') : undefined}
-          isSelected={choice.widths.every((w) => Math.abs(w - f) < 1e-4)}
+          tip={`**${tr(SIZE_LABELS[f].tip)}**${many ? `\n${tr('photoSize.allSelected')}` : f < 1 ? `\n${tr('imageSize.rows')}` : ''}`}
+          selected={choice.widths.every((w) => Math.abs(w - f) < 1e-4)}
           onClick={() => {
             setPhotoWidths(view, choice.positions, f);
             view.focus();
           }}
         >
           {SIZE_LABELS[f].text}
-        </Components.FormattingToolbar.Button>
+        </BarButton>
       ))}
+      {arrange && (
+        <BarButton
+          test="photoArrange"
+          label={tr('imageSize.arrange')}
+          tip={`**${tr('imageSize.arrange')}**\n${arrangeTip}`}
+          icon={<ArrangeIcon />}
+          disabled={!arrange.adjacent || !ready}
+          onClick={() => {
+            arrangeSelected(view);
+            view.focus();
+          }}
+        />
+      )}
     </>
   );
 }
 
-/** La barra propia: con una foto en línea elegida, o con una selección de solo fotos. */
-export function PhotoToolbar({ canComment, onView }: { canComment: boolean; onView: (key: string) => void }) {
+/**
+ * La barra de la foto en línea (D-24: la misma de la foto-bloque, por sectores): con una foto en línea elegida, o
+ * con una selección de solo fotos. Ver, bajar, reemplazar y renombrar valen para una sola; los tamaños, alinear
+ * (el renglón: la alineación del bloque) y borrar, para todas las elegidas.
+ */
+export function PhotoToolbar() {
+  const editor = useBlockNoteEditor() as AnyEditor;
   const Components = useComponentsContext()!;
-  const tr = useT();
+  const actions = useMediaActions();
   const choice = usePhotoChoice();
-  if (!choice) return null;
-  const viewable = choice.key && carreteSourceOf(choice.url);
+  const view = editor.prosemirrorView;
+  if (!choice || !view) return null;
+  const single = choice.positions.length === 1;
   const fileId = mediaIdOf(choice.url);
   return (
-    <Components.FormattingToolbar.Root className="bn-toolbar bn-formatting-toolbar sd-photo-toolbar">
-      {viewable && (
-        <Components.FormattingToolbar.Button
-          className="bn-button"
-          label={tr('mediaButton.view')}
-          mainTooltip={tr('mediaButton.view')}
-          secondaryTooltip={tr('mediaButton.space')}
-          icon={<ViewIcon />}
-          onClick={() => onView(choice.key!)}
-        />
-      )}
-      {fileId && <OriginalDownloadButton key={fileId} fileId={fileId} />}
-      <PhotoSizeButtons />
-      {canComment && <CommentToolbarButton />}
+    <Components.FormattingToolbar.Root className="bn-toolbar bn-formatting-toolbar sd-photo-toolbar sd-media-bar">
+      <Sectors>
+        {[
+          single && choice.url && (
+            <>
+              <ViewButton url={choice.url} onView={() => choice.key && actions?.onView(choice.key)} />
+              <DownloadButton url={choice.url} name={choice.name} />
+            </>
+          ),
+          <PhotoSizeButtons />,
+          <AlignButtons current={choice.align} onAlign={(a) => alignBlocks(editor, choice.blocks, a)} />,
+          actions?.canComment && <CommentButton blockId={choice.blocks[0] ?? null} />,
+          <>
+            {single && actions && <ReplaceButton accept={actions.accept.inline} onFile={(file) => replacePhoto(editor, choice.positions[0], choice.url ?? '', file, actions.store)} />}
+            {/* Un archivo del Drive no se renombra (la descarga y la papelera usan el nombre del archivo), como la foto-bloque. */}
+            {single && !fileId && <RenameButton name={choice.name} onRename={(name) => renamePhoto(view, name)} />}
+            <DeleteButton many={!single} onDelete={() => deletePhotos(view, choice.positions)} />
+          </>,
+        ]}
+      </Sectors>
     </Components.FormattingToolbar.Root>
+  );
+}
+
+/** Alinea los bloques de esas fotos (en la foto en línea, alinear es alinear su renglón), en un solo cambio. */
+function alignBlocks(editor: AnyEditor, ids: readonly string[], a: Alignment): void {
+  editor.transact(() => {
+    for (const id of ids) {
+      try {
+        editor.updateBlock(id, { props: { textAlignment: a } } as never);
+      } catch {
+        // El bloque ya no está, o no se alinea.
+      }
+    }
+  });
+}
+
+/** Renombra la foto elegida (la que está elegida al escribir: el globo no cambia la selección del editor). */
+function renamePhoto(view: EditorView, name: string): void {
+  const sel = view.state.selection;
+  const pos = selectedPhotos(view.state)[0];
+  if (pos === undefined || sel.empty) return;
+  view.dispatch(view.state.tr.setNodeAttribute(pos, 'name', name));
+}
+
+/** Borra las fotos elegidas (de atrás para adelante), en un solo cambio. */
+function deletePhotos(view: EditorView, positions: readonly number[]): void {
+  const tr = view.state.tr;
+  for (const pos of [...positions].sort((x, y) => y - x)) {
+    if (tr.doc.nodeAt(pos)?.type.name === PHOTO) tr.delete(pos, pos + 1);
+  }
+  if (tr.docChanged) view.dispatch(tr);
+  view.focus();
+}
+
+/**
+ * Reemplaza el archivo de la foto en `pos`: se guarda el nuevo y, cuando está (en el dispositivo), la foto pasa a
+ * ese archivo, con su nombre. El lugar se sigue mientras tanto (inlinePhotoCreate.ts); si la foto ya no está ahí
+ * (la borraron o la movieron), no se toca nada.
+ */
+function replacePhoto(editor: AnyEditor, pos: number, oldUrl: string, file: File, store: (f: File) => Promise<string>): void {
+  const view = editor.prosemirrorView;
+  if (!view) return;
+  const spot = trackSpot(view, pos, false);
+  store(file).then(
+    (url) => {
+      if (view.isDestroyed) return;
+      const at = takeSpot(view, spot);
+      const node = at === null ? null : view.state.doc.nodeAt(at);
+      if (at === null || node?.type.name !== PHOTO || node.attrs.url !== oldUrl) return;
+      view.dispatch(view.state.tr.setNodeMarkup(at, undefined, { ...node.attrs, url, name: file.name || 'image' }));
+    },
+    () => {
+      if (!view.isDestroyed) takeSpot(view, spot);
+    },
   );
 }
 
@@ -217,7 +317,7 @@ export function toolbarSpot(rect: { top: number; bottom: number; left: number },
  * Muestra `PhotoToolbar` cuando corresponde: la página se puede editar, el editor (o la barra) tiene el foco, no se
  * está apretando el mouse (eligiendo con un arrastre) y hay una foto en línea elegida o una selección de solo fotos.
  */
-export function PhotoToolbarController({ canComment, onView }: { canComment: boolean; onView: (key: string) => void }) {
+export function PhotoToolbarController() {
   const editor = useBlockNoteEditor() as AnyEditor;
   const portal = usePortalElement();
   const box = useRef<HTMLDivElement>(null);
@@ -281,7 +381,7 @@ export function PhotoToolbarController({ canComment, onView }: { canComment: boo
   if (!show || !portal) return null;
   return createPortal(
     <div ref={box} className="sd-photo-toolbar-box" style={{ position: 'fixed', zIndex: 40, top: -9999, left: -9999 }}>
-      <PhotoToolbar canComment={canComment} onView={onView} />
+      <PhotoToolbar />
     </div>,
     portal,
   );

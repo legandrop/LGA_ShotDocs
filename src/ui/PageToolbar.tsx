@@ -20,7 +20,9 @@ import { headingItems } from './collapseMenus';
 import { CommentToolbarButton, paragraphVariantItems } from './EditorComments';
 import { SCRIPT_PROP } from './editorSchema';
 import { ScriptIcon } from './icons';
-import { HideForDriveFiles, ImageSizeButtons, MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
+import { ImageBlockBar, useChosenImageBlock } from './MediaBar';
+
+const FILE_ITEMS = new Set(['fileCaptionButton', 'replaceFileButton', 'fileRenameButton', 'fileDeleteButton', 'fileDownloadButton', 'filePreviewButton']);
 import { onlyPhotosSelected, selectedPhotos } from './inlinePhotoSize';
 import { PhotoSizeButtons } from './PhotoToolbar';
 
@@ -181,24 +183,20 @@ export function PageFormattingToolbarController({ formattingToolbar }: { formatt
   return <FormattingToolbarController formattingToolbar={formattingToolbar} floatingUIOptions={photos === 'only' ? closed : undefined} />;
 }
 
-/** La barra de formato de la página. */
-export function PageFormattingToolbar({ items, canComment, onView }: { items: BlockTypeSelectItem[]; canComment: boolean; onView: (id: string) => void }) {
+/** La barra de formato de la página. Con una foto-bloque elegida, la barra de la foto (MediaBar.tsx, D-24). */
+export function PageFormattingToolbar({ items, canComment }: { items: BlockTypeSelectItem[]; canComment: boolean }) {
   const photos = usePhotoSelection();
+  const imageBlock = useChosenImageBlock();
   if (photos === 'only') return null;
+  if (imageBlock) return <ImageBlockBar />;
   return (
     <FormattingToolbar blockTypeSelectItems={items}>
       {getFormattingToolbarItems(items).flatMap((item) =>
-        // Para las fotos y videos del Drive, "Download" baja el original (no la miniatura), y "View" abre el
-        // carrete.
-        item.key === 'fileDownloadButton'
-          ? [
-              <MediaViewButton key="mediaViewButton" onView={onView} />,
-              <MediaDownloadButton key="fileDownloadButton" />,
-              <ImageSizeButtons key="imageSizeButtons" />,
-            ]
-          : item.key === 'fileRenameButton' || item.key === 'filePreviewButton'
-            ? [<HideForDriveFiles key={String(item.key)}>{item}</HideForDriveFiles>]
-            : item.key === 'createLinkButton'
+        // Los botones de archivo (leyenda, reemplazar, renombrar, borrar, bajar, vista previa) son de la barra de la
+        // foto; acá no van (D-24: sin leyenda).
+        FILE_ITEMS.has(String(item.key))
+          ? []
+          : item.key === 'createLinkButton'
               ? [<HideOnBlockSelection key="createLinkButton">{item}</HideOnBlockSelection>]
               : item.key === 'colorStyleButton'
                 ? [item, <BlockColorButton key="blockColorButton" />]

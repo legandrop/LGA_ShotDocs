@@ -48,7 +48,7 @@ afterEach(() => {
 
 // La barra de la página (PageToolbar.tsx), la misma que usa PageEditor.tsx.
 function Toolbar() {
-  return <PageFormattingToolbar items={pageToolbarItems(editors[0].dictionary, t)} canComment={false} onView={() => undefined} />;
+  return <PageFormattingToolbar items={pageToolbarItems(editors[0].dictionary, t)} canComment={false} />;
 }
 
 async function mount() {

@@ -1,6 +1,9 @@
 import { createInlineContentSpecFromTipTapNode } from '@blocknote/core';
 import { mergeAttributes, Node } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
+import { t } from '../i18n';
+import '../i18n/lazy/editor';
+import { pxToRowWidth, snapRowWidth } from './imageRows';
 
 // --- Fotos en línea (Docs/Doc_Fotos_En_Linea.md, entrega 1a) -------------------------------------------
 //
@@ -118,7 +121,7 @@ export const PhotoNode = Node.create({
   },
 
   addNodeView() {
-    return ({ node }) => {
+    return ({ node, getPos, editor }) => {
       const { dom, img } = photoElement();
       // El navegador no edita adentro de la foto ni la arrastra por su cuenta (la mueve el editor).
       dom.contentEditable = 'false';
@@ -141,9 +144,15 @@ export const PhotoNode = Node.create({
         shown = props;
       };
       paint(node);
+      // Los tiradores, como los de la foto-bloque (D-24): arrastrar cambia `w`, imantado a 1, 1/2, 1/3 y 1/4.
+      const stopHandles = addResizeHandles(dom, img, () => {
+        const pos = typeof getPos === 'function' ? getPos() : undefined;
+        return typeof pos === 'number' && editor.isEditable ? { view: editor.view, pos } : null;
+      });
 
       return {
         dom,
+        destroy: stopHandles,
         // Un cambio de propiedades reusa esta vista y su `<img>` (sin `update`, el editor la tira y arma otra).
         update(n: PMNode) {
           if (n.type.name !== PHOTO) return false;
@@ -214,3 +223,92 @@ export const photoSpec = createInlineContentSpecFromTipTapNode(
     },
   },
 );
+
+// --- Tiradores (D-24, paridad con la foto-bloque) ----------------------------------------------------------
+//
+// Dos tiradores, a los costados de la foto (los de BlockNote: una barrita negra con borde blanco), que se ven con la
+// foto elegida o al pasar el mouse (styles.css). Arrastrar cambia el ancho en vivo (solo en pantalla) y, al soltar, lo
+// guarda como `w`: la inversa del CSS de las filas (`pxToRowWidth`, con cuántas hay en la fila) imantada a 1, 1/2,
+// 1/3 o 1/4 si queda a menos de 2 % (`snapRowWidth`), en un solo cambio. Como la foto-bloque: cuenta solo con el
+// botón principal y si se movió al menos 3 px (un temblor no cambia un ancho que dejó "Arrange in rows").
+
+/** Lo más angosta que puede quedar una foto al arrastrar (px). */
+const MIN_PX = 24;
+
+interface Target {
+  view: import('@tiptap/pm/view').EditorView;
+  pos: number;
+}
+
+/** El ancho en px que da el CSS al renglón de la foto (sin relleno), el espacio entre fotos y cuántas hay en su fila. */
+export function lineMetrics(dom: HTMLElement): { W: number; g: number; n: number } {
+  const line = dom.closest<HTMLElement>('.bn-inline-content') ?? dom.parentElement;
+  const cs = line ? getComputedStyle(line) : null;
+  const W = line && cs ? line.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) : 0;
+  const g = parseFloat(getComputedStyle(dom).getPropertyValue('--img-gap')) || 8;
+  const n = Number(dom.style.getPropertyValue('--row-n') || getComputedStyle(dom).getPropertyValue('--row-n')) || 1;
+  return { W, g, n };
+}
+
+/** El `w` que corresponde a un ancho en px (imantado). */
+export function widthFromPx(px: number, m: { W: number; g: number; n: number }): number {
+  return snapRowWidth(pxToRowWidth(px, m.W, m.g, m.n));
+}
+
+function addResizeHandles(dom: HTMLElement, img: HTMLImageElement, target: () => Target | null): () => void {
+  const cleanups: (() => void)[] = [];
+  for (const side of ['left', 'right'] as const) {
+    const handle = document.createElement('span');
+    handle.className = `sd-photo-handle sd-photo-handle-${side}`;
+    handle.setAttribute('aria-hidden', 'true');
+    handle.dataset.tip = t('photoBar.resize');
+    dom.append(handle);
+    let drag: { id: number; startX: number; startW: number; px: number; moved: boolean } | null = null;
+    // Que el editor no lo tome como un clic en la foto (elegirla, arrastrarla para moverla).
+    const swallow = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const down = (e: PointerEvent) => {
+      if (e.button !== 0 || !target()) return;
+      swallow(e);
+      const w = dom.getBoundingClientRect().width;
+      drag = { id: e.pointerId, startX: e.clientX, startW: w, px: w, moved: false };
+      handle.setPointerCapture?.(e.pointerId);
+      dom.classList.add('sd-photo-resizing');
+    };
+    const move = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.startX;
+      if (Math.abs(dx) >= 3) drag.moved = true;
+      const { W } = lineMetrics(dom);
+      drag.px = Math.max(MIN_PX, Math.min(W > 0 ? W : Infinity, drag.startW + (side === 'right' ? dx : -dx)));
+      dom.style.width = `${drag.px}px`;
+    };
+    const up = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const done = drag;
+      drag = null;
+      handle.releasePointerCapture?.(e.pointerId);
+      const m = lineMetrics(dom);
+      dom.style.width = '';
+      dom.classList.remove('sd-photo-resizing');
+      const at = target();
+      if (!done.moved || !at || !(m.W > 0)) return;
+      const node = at.view.state.doc.nodeAt(at.pos);
+      if (node?.type.name !== PHOTO) return;
+      const w = widthFromPx(done.px, m);
+      if (Math.abs(photoWidth(node.attrs.w) - w) > 1e-6) at.view.dispatch(at.view.state.tr.setNodeAttribute(at.pos, 'w', w));
+    };
+    handle.addEventListener('pointerdown', down);
+    handle.addEventListener('mousedown', swallow);
+    handle.addEventListener('click', swallow);
+    handle.addEventListener('dragstart', swallow);
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+    cleanups.push(() => handle.remove());
+  }
+  void img;
+  return () => cleanups.forEach((c) => c());
+}

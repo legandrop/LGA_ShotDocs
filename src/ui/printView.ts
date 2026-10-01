@@ -30,6 +30,8 @@ const REMOVE = [
   '.bn-side-menu',
   '.bn-drag-handle-menu',
   '.bn-resize-handle',
+  // Los tiradores de la foto en línea (inlinePhoto.ts).
+  '.sd-photo-handle',
   '.bn-add-file-button',
   '.bn-file-loading-preview',
   '.bn-collaboration-cursor__base',

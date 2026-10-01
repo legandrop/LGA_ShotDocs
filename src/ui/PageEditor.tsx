@@ -53,6 +53,7 @@ import { CollapseToggles } from './CollapseToggles';
 import { BlockSideMenuController } from './BlockSideMenu';
 import { PageFormattingToolbar, PageFormattingToolbarController, pageToolbarItems } from './PageToolbar';
 import { PhotoToolbarController } from './PhotoToolbar';
+import { MediaActionsContext, type MediaActions } from './MediaBar';
 import { undoGuardExtension } from './undoGuard';
 import { BACKGROUND_META } from './editorMeta';
 import { notToggleHeading } from './collapseMenus';
@@ -795,8 +796,22 @@ function BlockEditor({
   const openAtRef = useRef(openAt);
   openAtRef.current = openAt;
   const formattingToolbar = useCallback(
-    () => <PageFormattingToolbar items={toolbarItems} canComment={canComment} onView={(id) => openAtRef.current(id)} />,
+    () => <PageFormattingToolbar items={toolbarItems} canComment={canComment} />,
     [toolbarItems, canComment],
+  );
+  // Lo que usan las barras de las fotos (MediaBar.tsx, PhotoToolbar.tsx): guardar al reemplazar, qué acepta el
+  // selector, comentar y abrir el carrete (siempre con el último `openAt`).
+  const mediaActions = useMemo<MediaActions>(
+    () => ({
+      store: (file) => fileOptions(editor as unknown as FileEditor).store(file),
+      accept: {
+        inline: media.enabled ? 'image/*,video/*' : 'image/*',
+        block: media.enabled ? 'image/*,video/*,*/*' : 'image/*',
+      },
+      canComment,
+      onView: (key) => void openAtRef.current(key),
+    }),
+    [editor, media, canComment],
   );
 
   return (
@@ -810,6 +825,7 @@ function BlockEditor({
       onClickCapture={(e) => !editable && followInternalLink(e.nativeEvent)}
       onClick={openCarrete}
     >
+      <MediaActionsContext.Provider value={mediaActions}>
       <BlockNoteView
         editor={editor}
         editable={editable}
@@ -822,10 +838,11 @@ function BlockEditor({
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
         <PageFormattingToolbarController formattingToolbar={formattingToolbar} />
         {/* La barra de la foto en línea elegida (PhotoToolbar.tsx). */}
-        {editable && <PhotoToolbarController canComment={canComment} onView={(key) => openAtRef.current(key)} />}
+        {editable && <PhotoToolbarController />}
         {/* Los tres puntos de cada bloque: arrastrar lo mueve, un clic lo elige y abre la barra de formato. */}
         <BlockSideMenuController />
       </BlockNoteView>
+      </MediaActionsContext.Provider>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
       {/* El triángulo de cada título (P.11): una capa encima, como el margen. */}
       {canCollapse && <CollapseToggles editor={editor} host={host} editable={editable} />}

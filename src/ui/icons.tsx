@@ -152,3 +152,8 @@ export function BlockDotsIcon() {
     </svg>
   );
 }
+// La barra de las fotos (MediaBar.tsx): alinear el renglón y reemplazar el archivo.
+export const AlignLeftIcon = icon('M4 5.5h12M4 9h8M4 12.5h12M4 16h8', { strokeWidth: 1.6 });
+export const AlignCenterIcon = icon('M4 5.5h12M6 9h8M4 12.5h12M6 16h8', { strokeWidth: 1.6 });
+export const AlignRightIcon = icon('M4 5.5h12M8 9h8M4 12.5h12M8 16h8', { strokeWidth: 1.6 });
+export const ReplaceIcon = icon('M4.5 8.5a5.5 5.5 0 0 1 10-2.5M15.5 3.5v3h-3M15.5 11.5a5.5 5.5 0 0 1-10 2.5M4.5 16.5v-3h3');
