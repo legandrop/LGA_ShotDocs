@@ -67,9 +67,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   su lado, ni escribir o pegar otra foto en su renglón, ni subirla al renglón de arriba con Backspace, ni
   elegir varias con Shift+flechas o Shift+clic. Lo pedido: que fluya en el texto como en Coda (lo que no
   entra baja de renglón), elegir varias fotos seguidas como se eligen letras, y acomodar las elegidas.
-  **Diseño en [`Doc_Fotos_En_Linea.md`](Doc_Fotos_En_Linea.md)** (sin implementar; con la prueba técnica hecha
-  y preguntas para Lega). Por entregas: el nodo y su dibujo (y subir `min_app_version`); crear y dar tamaño;
-  hojas, PDF y lo demás; importar de Coda con los renglones como estaban.
+  **Diseño en [`Doc_Fotos_En_Linea.md`](Doc_Fotos_En_Linea.md)** (auditado, sin implementar; con la prueba
+  técnica y preguntas para Lega). Por entregas: un prototipo en navegador; el nodo propio, el parche de
+  huecos de y-prosemirror y el teclado (y subir `min_app_version`); crear, dar tamaño, acomodar las elegidas,
+  hojas y PDF; convertir las fotos que ya existen; importar de Coda con los renglones como estaban.
 - **P.4 Hecho a medias (v0.046): acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos
   y videos seguidos en una o más filas de la misma altura, sin cambiar el orden. Se audita antes y después.
   **No es lo que pidió Lega** (confirmado el 2026-10-01): pidió elegir varias fotos seguidas (Shift+clic,

@@ -1,6 +1,7 @@
 # Fotos en línea: la foto como un carácter del renglón (P.15)
 
-Estado: **diseño, sin implementar** (2026-10-01). Pedido de Lega del 2026-10-01, con sus palabras: las
+Estado: **diseño auditado, sin implementar** (2026-10-01; las "Correcciones de la auditoría", más abajo,
+mandan sobre el resto). Pedido de Lega del 2026-10-01, con sus palabras: las
 imágenes tienen que ser "como en Coda o en cualquier lado, un carácter más de un texto". Reemplaza el modelo de
 `Doc_Imagenes.md` (la foto como bloque y las filas como arreglo entre bloques), que queda para las fotos que
 ya existen hasta que se conviertan (ver "Lo que ya existe").
@@ -167,6 +168,105 @@ independiente y su entrada en la ayuda cuando exista (P.13).
   prueba con las dos.
 - **Tamaño del cambio.** Es el más grande que tuvo el editor: va por entregas, y la importación definitiva de
   los docs de Coda espera a la 4.
+
+## Correcciones de la auditoría (mandan sobre lo de arriba)
+
+Una auditoría independiente contrastó el diseño con el código de la app, BlockNote 0.55 e y-prosemirror, con
+pruebas descartables de dos editores. Veredicto: **viable con cambios**. El nodo en línea funciona y el
+resguardo de versiones viejas lo cubre (también adentro de un título, una lista y una celda; también una
+pestaña vieja sin red que se reconecta). Cuatro cosas del diseño de arriba estaban mal y se corrigen así:
+
+1. **Editar a la vez sí puede perder o duplicar texto, y una parte se arregla en la entrega 1.** Un párrafo
+   con fotos se guarda como `texto, foto, texto` (elementos hermanos). Medido con 300 agendas al azar por caso:
+
+   | Qué hacen dos personas a la vez en el mismo renglón | Resultado |
+   |---|---|
+   | Solo texto, sin fotos (control) | 0 pérdidas, 0 duplicados |
+   | Escriben en los huecos de `[foto][foto]` | 7 con texto perdido, 15 con texto duplicado |
+   | Escriben en los huecos de `"abc"[foto]"def"[foto]` | 5 con texto duplicado |
+   | Uno escribe y el otro borra fotos | 77 con texto perdido, 11 duplicado |
+   | Uno escribe y el otro cambia el ancho, o agrega fotos en los huecos | 0 pérdidas |
+
+   - **Los huecos** (antes, entre y después de fotos, donde no hay texto: cada persona crea su propio tramo y
+     después se juntan mal) se arreglan extendiendo el parche de `normalizePNodeContent` de y-prosemirror para
+     que siempre haya un texto vacío en cada hueco. Probado: con el cambio, 0 de 300. **Cambia la forma
+     guardada: va en la entrega 1, antes de subir `min_app_version`.**
+   - **Borrar o mover una foto** mientras otro escribe a su derecha, **insertar una foto en medio de un texto**
+     mientras otro escribe después, y **unir renglones o cambiar el tipo del bloque** mientras otro pega una
+     foto ahí: se pierde lo del otro. Es de y-prosemirror 1.x (insertar o sacar un elemento parte o une los
+     tramos de texto y recrea el de la derecha). Queda como límite conocido, en la tabla de
+     `Doc_Colaboracion.md`. La regla de arriba pasa a ser: **editar a la vez un renglón con fotos no pierde más
+     que lo que ya se pierde hoy al cambiar el tipo de un bloque mientras otro escribe en él, y está medido.**
+   - Cambiar el ancho, agregar fotos al final o entre fotos y Enter no pierden nada.
+2. **El clic, la barra y parte del teclado no vienen gratis.** El contenido en línea que arma BlockNote con
+   contenido `none` no se puede elegir (`selectable: false`) y la barra de formato no aparece con una selección
+   de solo fotos. Hace falta un **nodo propio de Tiptap** (`createInlineContentSpecFromTipTapNode`, elegible,
+   con `update` para que cambiar el ancho no redibuje la imagen), manejo propio de **Enter, una letra y la barra
+   espaciadora con una foto elegida** (hoy la letra queda bloqueada y Enter crea un bloque hijo con sangría), y
+   un disparador propio para la barra. Alcanza el de core: el de React arma un portal por foto.
+3. **El ancho.** `inline-block` con el corte del navegador no da filas parejas: el CSS de hoy necesita saber
+   cuántas fotos hay en la fila y que la última absorba el redondeo; sin eso, tres fotos de 1/3 no entran o
+   medio píxel manda la última abajo. Se decide antes de guardar nada: **`w` significa lo mismo que
+   `rowWidth`** (así convertir no pierde nada y `arrangeRows` sirve igual), las filas se calculan con
+   `groupRows` sobre las fotos seguidas de un párrafo, y una decoración le pone a cada foto cuántas hay en su
+   fila, con 1 px de holgura. Razonado, no medido: necesita un prototipo en un navegador real.
+4. **Convertir las fotos que ya existen, por tanda o por página, nunca de a una al editar.** Convertir una foto
+   de una fila de tres deja foto, párrafo, foto (el párrafo corta la fila). Backspace al principio de un
+   párrafo con una foto-bloque arriba hoy **borra esa foto con su leyenda** (es de BlockNote): hay que
+   interceptarlo. Un bloque `image` no tiene "principio" donde poner el cursor. Y si el ancho saliera de una
+   medida de la pantalla, dos dispositivos convertirían distinto (medido: la foto quedó tres veces): el cálculo
+   tiene que ser determinista, con un ancho de referencia fijo, y llevar la alineación. Convertir a la vez que
+   otro le agrega una leyenda o le reemplaza el archivo pierde eso del otro: se documenta. Deshacer la conversión
+   devuelve el bloque con su leyenda y su `rowWidth`.
+
+Además:
+
+5. **Hojas y PDF van junto con "crear", no después.** Los selectores de impresión no ven una foto en línea (no
+   espera las imágenes ni usa los originales), y la paginación solo parte una unidad más alta que la hoja: un
+   párrafo de tres filas de fotos pasaría entero a la hoja siguiente. En la copia de impresión, el párrafo se
+   parte en un bloque por renglón visual y se tratan como las filas de hoy.
+6. **Todo lo que busca la foto por su bloque** hay que llevarlo a "bloque más posición": `sharpImages.ts`
+   (resuelve el archivo por el ancestro `[data-content-type="image"][data-url]`), `PageEditor.tsx` (clic y
+   carrete: dos fotos de un párrafo comparten id, y el primer clic en la segunda abriría el carrete en la
+   primera), `attachments.ts`, `printView.ts`, `carreteModel.ts`.
+7. **La subida.** Hoy se inserta un bloque vacío y después se le pone la dirección por id; un nodo en línea no
+   tiene id. La foto se inserta cuando `media.add` terminó (ya está guardada en el dispositivo): sin marcador y
+   sin "la subida fallida saca el nodo". Falta definir cómo se sigue la posición durante esa espera.
+8. **Tablas: entra sola.** La celda acepta contenido en línea, y no se puede excluir por esquema. O se filtra
+   al pegar y soltar, o el carrete y la impresión contemplan celdas desde la entrega 1.
+9. **La importación monta un editor sin el resguardo** (`writePage` en `codaImport.ts`): una versión vieja
+   que retoma una importación sobre una página con fotos en línea las borraría. Con contenido desconocido, no
+   se toca la página. Va en la entrega 1.
+10. **El paso 1 no lleva regla para leer `<img>` de afuera** (si la tuviera, pegar de una web crearía fotos en
+    línea antes de subir `min_app_version`). La conversión de imágenes `data:` y `ensureLinks` solo miran
+    bloques: revisar.
+11. Una negrita o un link aplicados sobre un tramo con una foto no se guardan en la foto (no pierde nada).
+
+**Casos que faltaban:** arrastrar una foto dentro del renglón (es borrar e insertar: la misma pérdida del punto
+1); fotos en títulos, listas, citas y párrafos Script, pregunta o tarjeta de Drive; un workspace sin portero (el
+camino de BlockNote sigue creando bloques); el tope de ancho con `w = 0`; el video en línea (marca de
+reproducir, cuadro en el PDF); varias fotos pegadas juntas (orden, posición, un solo deshacer); copiar a otro
+navegador (el lector de hoy descarta un `<img>` adentro de un `<p>`); Backspace que une renglones deja sueltos
+los comentarios del bloque que desaparece; convertir por tanda borra ids de bloque y dispara la protección de
+lo escondido de colapsar.
+
+**Sin poder probar en la auditoría (necesita un navegador real):** el cursor junto a la foto, Shift+clic,
+arrastrar, la composición con tildes, el iPhone, Backspace junto a una foto, el modelo de ancho y el corte al
+imprimir.
+
+**Entregas, corregidas (reemplazan la lista de arriba):**
+
+0. **Prototipo en navegador** (Chrome, Safari, iPhone): cursor, Shift+clic, composición y el modelo de ancho.
+1. **El nodo propio**, el parche de huecos, el teclado propio, el resguardo en la importación, los selectores
+   por bloque más posición, el carrete; pruebas al azar con dos editores con 0 pérdidas en los huecos. Publicar
+   y subir `min_app_version`.
+2. **Crear, dar tamaño, acomodar las elegidas, hojas y PDF**, juntas.
+3. **Convertir las fotos que ya existen**, por tanda o por página.
+4. **Importar de Coda** con los renglones como estaban (`codaHtml.ts` ya marca dónde iba cada foto).
+
+**La alternativa que se descarta:** mantener los bloques y sumarles selección de varias fotos y un "cursor de
+fila" evita todo el punto 1 y no toca versiones viejas, pero no da texto en el mismo renglón que una foto,
+que es el 28 % de los renglones con fotos del doc medido (249 de 890).
 
 ## Preguntas para Lega
 
