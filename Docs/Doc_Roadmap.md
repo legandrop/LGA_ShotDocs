@@ -70,34 +70,52 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Diseño en [`Doc_Fotos_En_Linea.md`](Doc_Fotos_En_Linea.md)** (auditado). Por entregas: un prototipo en
   navegador; el nodo propio, el parche de huecos de y-prosemirror y el teclado; crear, dar tamaño, acomodar las
   elegidas, hojas y PDF; convertir las fotos que ya existen; importar de Coda con los renglones como estaban.
-  **Hechos el prototipo (entrega 0; Lega lo aprobó el 2026-10-01) y la entrega 1 (v0.076, auditada):** el nodo
+  **Hechos el prototipo (entrega 0; Lega lo aprobó el 2026-10-01), la entrega 1 (v0.076, auditada) y la 2
+  (v0.078, abajo).** La entrega 1: el nodo
   `photo` (nada lo crea todavía), el resguardo de versiones anteriores también en la importación de Coda, el
   parche de los huecos y los huecos estables (0 letras perdidas en 300 agendas por caso; los párrafos sin fotos
   guardan lo mismo que antes, byte a byte), y lo que se ve y se toca medido en Chromium (filas, teclado, mouse,
   Shift+flechas y Shift+clic, carrete, imprimir, `[Image]` en comentarios; D-22).
-  **Antes de la entrega 2 (la que crea fotos), de las auditorías de v0.076:**
-  - **Versiones mezcladas pierden texto** en un renglón al que le borraron todas las fotos (`Doc_Colaboracion.md`,
-    "Versiones viejas"): subir `min_app_version` antes, resolver el dispositivo viejo sin red que sube su cola
-    después de actualizarse, y sumar una prueba con la librería publicada (las de hoy usan la nueva).
-  - Con una foto elegida, el texto que entra sin tecla (emojis con Win+. o Ctrl+⌘+Espacio, dictado) la
-    reemplaza (`handleTextInput` en `inlinePhotoEditor.ts`); arrastrar para elegir y soltar sobre una foto deja
-    la selección corrida; la barra de texto sale encima de la foto vecina y puede tapar el clic (no mostrarla con
-    una foto elegida hasta su barra propia).
-  - Decidir: pegar con una foto elegida la reemplaza (una letra va después); el primer Shift+flecha con una foto
-    elegida no agranda; las fotos duplicadas cuando dos mueven la misma (39 de 300); pegar HTML con una foto
-    (`data-inline-content-type="photo"`) ya crea una.
-  - Probar en Safari y en el iPhone (la composición sin tecla previa entre dos fotos duplica el primer carácter
-    en Chromium). Medir la decoración de filas con un doc grande (recorre el documento en cada cambio).
-  Quedan para la entrega 2 la barra propia de la foto y partir un párrafo con fotos entre hojas. Lo que queda de
-  editar a la vez junto a fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está medido en
-  `Doc_Colaboracion.md`.
+  **Entrega 2 hecha (v0.078):** pegar, soltar y "/Image" crean fotos y videos en el renglón (una con su ancho
+  natural, varias a 1/3); **paridad con la foto-bloque (D-24):** tiradores que imantan, la misma barra para las dos
+  por sectores (ver, bajar | tamaños y *Arrange in rows* de las elegidas | alinear | comentar | reemplazar, renombrar,
+  borrar), sin leyenda; un párrafo de fotos se parte entre hojas por filas enteras. Corregido lo de las dos
+  auditorías de la entrega 2 (deshacer sacaba la marca del renglón; varias fotos elegidas y una tecla las borraba;
+  "Copy image" de una web; acomodar solo las elegidas). Inventario en `Doc_Fotos_En_Linea.md`, "Paridad con la
+  foto-bloque". Antes de crear: la
+  **marca del renglón** (`lgaStableGaps`, propuesta; cambia la forma guardada) hace que ninguna versión anterior abra
+  un renglón que tuvo fotos (versiones mezcladas: de 28 de 49 perdidas a 0, medido con la librería publicada, que
+  ahora tiene su prueba en el repo), y los tres pendientes de la auditoría de la 1b (emojis y dictado, arrastrar
+  soltando sobre una foto, la barra de texto). Ver `Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 2)".
+  **Después de publicar la v0.078:** subir `min_app_version` a 0.078 (no hace falta antes, por la marca).
+  **Entrega 3 hecha (v0.078), escondida (D-26):** la conversión de las fotos-bloque de una página a fotos en línea
+  (cada fila a un renglón con los mismos anchos, un solo deshacer, los comentarios siguen anclados; medido en una
+  página tipo ERSO: 61 fotos, 25 filas iguales, ±0,55 px) queda en el código y sus pruebas, sin entrada en la
+  interfaz: no va a haber fotos viejas para convertir. `Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 3)".
+  **Entrega 4 hecha (v0.078):** importar de Coda deja cada foto en su renglón, como foto en línea, con la parte del
+  renglón que ocupaba en Coda (624 px = todo el renglón); las fotos de una ficha, juntas. Medido con una copia
+  parcial de ERSO contra el HTML de Coda: las mismas filas, ±1 % de ancho. Sin el recorte de Coda (101 fotos de
+  ERSO). Para la importación definitiva de ERSO hay que volver a correr `--convert-only`.
+  **Queda:**
+  - Probar en Safari y en el iPhone: pegar, soltar, "/Image" con la cámara, la barra con el dedo, la composición
+    (sin tecla previa entre dos fotos duplica el primer carácter en Chromium). Medir la decoración de filas con un doc
+    grande (recorre el documento en cada cambio).
+  - Decidir: pegar HTML con una foto (`data-inline-content-type="photo"`) crea una; el primer Shift+flecha con una
+    foto elegida no agranda; las fotos duplicadas cuando dos mueven la misma (39 de 300). Pegar archivos con una foto
+    elegida ya no la reemplaza (va después, como una letra); pegar HTML sí.
+  - Pegar HTML con un `<img>` de afuera sigue creando una foto-bloque (entrega 3, con la conversión `data:`); "/Image"
+    ya no ofrece *Embed* (dirección de otro sitio).
+  - Las respuestas de Lega a las preguntas del diseño (leyenda, videos, ancho al pegar varias): hoy va la propuesta.
+  - Entregas 3 (convertir las fotos-bloque) y 4 (importar de Coda en línea). Lo que queda de editar a la vez junto a
+    fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está medido en `Doc_Colaboracion.md`.
   **A futuro (Lega, 2026-10-01, después de ver el prototipo):** que se puedan escribir varias líneas de texto a
   los costados de una foto (el texto rodea la foto), no solo un renglón alineado abajo.
 - **P.4 Hecho a medias (v0.046): acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos
   y videos seguidos en una o más filas de la misma altura, sin cambiar el orden. Se audita antes y después.
   **No es lo que pidió Lega** (confirmado el 2026-10-01): pidió elegir varias fotos seguidas (Shift+clic,
   Shift+flechas) y acomodar **las elegidas**; hoy no se puede elegir más de una y el botón reparte toda la
-  tanda. Se resuelve con P.15.
+  tanda. **Resuelto para las fotos en línea en P.15 (v0.078):** *Arrange in rows* acomoda las elegidas. Las
+  fotos-bloque siguen con la tanda hasta convertirse (P.15, entrega 3).
 - **P.5 Hecho (v0.047): en el teléfono, filas o apiladas:** una opción de la cuenta (solo tiene efecto en pantallas
   angostas) para ver las fotos y videos en fila, como en la computadora, o uno debajo del otro. No cambia lo
   guardado. Por defecto, en fila.
@@ -194,7 +212,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   abren. Solo con el foco en el árbol y sin Ctrl, ⌘, Alt ni Shift. Y el defecto: plegar con el triángulo (o
   con ←) una madre de la página abierta no dejaba; ahora pliega y la abierta pasa a ser esa madre (en el
   teléfono el cajón sigue abierto). Lógica en `src/ui/treeNav.ts`. Falta su entrada en la ayuda (P.13).
-- **P.17 Hecho (v0.083): instalar la app** (Lega, 2026-10-01). La app reconoce si está instalada; si no, ofrece
+- **P.17 Hecho (v0.079): instalar la app** (Lega, 2026-10-01). La app reconoce si está instalada; si no, ofrece
   *Install app* en el menú de la cuenta y en la pantalla de entrar, y en el teléfono un aviso que se cierra por 30
   días. La ventana muestra los pasos con dibujos para iPhone, Android y computadora, con *Install* directo donde
   el navegador lo ofrece. Ver `Doc_Instalar.md`. Falta: probarlo en un iPhone y un Android reales, su entrada en

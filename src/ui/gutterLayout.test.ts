@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { GUTTER_GAP, DOTS_BUTTON, handlePlace, triangleBox, triangleVisibleLeft } from './gutterLayout';
+import { GUTTER_GAP, DOTS_BUTTON, firstLineCenter, handlePlace, triangleBox, triangleVisibleLeft } from './gutterLayout';
 
 // El margen de cada bloque (Docs/Doc_Colapsar.md, "El margen del bloque y deshacer"): el triángulo crece con el
 // título, [puntos] [triángulo] [texto] con el mismo espacio a la vista, todo centrado en el primer renglón, y en el
@@ -122,5 +122,34 @@ describe('los puntos', () => {
     const place = handlePlace(para.container, null)!;
     expect(place.fits).toBe(true);
     expect(place.right - DOTS_BUTTON.width).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('con fotos en línea altas', () => {
+  it('los puntos y el triángulo van al texto del primer renglón (abajo, con el borde de las fotos), no arriba', () => {
+    const text = document.createElement('p');
+    text.className = 'bn-inline-content';
+    text.style.lineHeight = '24px';
+    text.style.fontSize = '16px';
+    text.innerHTML = 'Antes <span class="sd-photo"><img></span> después<span class="sd-photo"><img></span>';
+    document.body.append(text);
+    rect(text, 100, 0, 600, 500);
+    const original = Range.prototype.getClientRects;
+    // Primer renglón: una foto de 200 px de alto y el texto abajo (176 a 200); segundo renglón: otra foto.
+    Range.prototype.getClientRects = () =>
+      [new DOMRect(100, 176, 40, 24), new DOMRect(140, 0, 300, 200), new DOMRect(440, 176, 60, 24), new DOMRect(100, 210, 300, 280)] as unknown as DOMRectList;
+    try {
+      const centerY = firstLineCenter(text, text.getBoundingClientRect());
+      expect(centerY).toBe(200 - 12);
+      // Sin fotos, como siempre: la mitad del primer renglón.
+      const plain = document.createElement('p');
+      plain.style.lineHeight = '24px';
+      plain.textContent = 'solo texto';
+      document.body.append(plain);
+      rect(plain, 100, 0, 600, 48);
+      expect(firstLineCenter(plain, plain.getBoundingClientRect())).toBe(12);
+    } finally {
+      Range.prototype.getClientRects = original;
+    }
   });
 });

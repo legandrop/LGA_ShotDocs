@@ -7,7 +7,16 @@ import { collapseExtension, setCollapsed } from './collapseEditor';
 import { editorSchemaOptions, SCRIPT_PROP } from './editorSchema';
 import { computeMatches } from './findEditor';
 import { PHOTO } from './inlinePhoto';
-import { decorateRows, handlePhotoShiftClick, inlinePhotoExtensions, IN_RANGE_CLASS, photoKeyAtPos, rowsOfTextblock, selectedPhotoKey } from './inlinePhotoEditor';
+import {
+  decorateRows,
+  handlePhotoShiftClick,
+  inlinePhotoExtensions,
+  IN_RANGE_CLASS,
+  photoDragHead,
+  photoKeyAtPos,
+  rowsOfTextblock,
+  selectedPhotoKey,
+} from './inlinePhotoEditor';
 
 // La foto en línea en el editor (Docs/Doc_Fotos_En_Linea.md, entrega 1b): las filas, la marca de las fotos de una
 // selección de texto, el teclado y el mouse con una foto elegida, qué foto es (bloque más lugar), y que buscar,
@@ -153,7 +162,11 @@ describe('las filas', () => {
     });
     expect(rows.map((r) => r.fracs)).toEqual([[0.5, 0.5], [0.5], [0.3]]);
     expect(rows[0].positions).toEqual([at(E, 'A'), at(E, 'B')]);
-    expect(decorateRows(doc).find().length).toBe(4);
+    // Las cuatro fotos con ancho, más la marca que hace empezar en un renglón nuevo la fila llena (A, B) que viene
+    // justo después de un texto. La fila de C (no llena) y la de D (después de texto, no llena) siguen al lado.
+    const decos = decorateRows(doc).find();
+    expect(decos.length).toBe(5);
+    expect(decos.filter((d) => d.from === d.to).map((d) => d.from)).toEqual([at(E, 'A')]);
   });
 });
 
@@ -315,6 +328,145 @@ describe('el teclado con una foto elegida', () => {
     E.isEditable = false;
     key(E, 'a');
     expect(sel(E).kind).toBe('node');
+  });
+
+  // Lo que encontró la auditoría de v0.076: el selector de emojis o el dictado reemplazaban la foto.
+  it('texto que entra sin tecla (emojis, dictado): va después de la foto, que sigue', () => {
+    const E = mount(doc());
+    const input = (from: number, to: number, text: string) =>
+      view(E).someProp('handleTextInput', (f) => f(view(E), from, to, text, () => view(E).state.tr.insertText(text, from, to)));
+    // Sobre la foto elegida (lo que lee ProseMirror cuando el navegador la reemplaza).
+    choose(E, 'F4');
+    expect(input(at(E, 'F4'), at(E, 'F4') + 1, '😀')).toBe(true);
+    expect(line(E, 'b')).toBe('[F3][F4]😀[F5]');
+    expect(sel(E)).toEqual({ kind: 'text', anchor: at(E, 'F4') + 3, head: at(E, 'F4') + 3 });
+    // En un borde de la foto elegida (el navegador la dejó y escribió al lado): también después.
+    choose(E, 'F1');
+    expect(input(at(E, 'F1'), at(E, 'F1'), 'ok')).toBe(true);
+    expect(line(E, 'a')).toBe('Antes [F1]ok después');
+    // Sin foto elegida, o en otro lugar: lo de siempre (no lo toma).
+    view(E).dispatch(view(E).state.tr.setSelection(TextSelection.create(view(E).state.doc, at(E, 'F3'))));
+    expect(input(at(E, 'F3'), at(E, 'F3'), 'x')).toBeFalsy();
+    choose(E, 'F5');
+    expect(input(at(E, 'F3'), at(E, 'F3'), 'x')).toBeFalsy();
+    E.isEditable = false;
+    expect(input(at(E, 'F5'), at(E, 'F5') + 1, 'x')).toBeFalsy();
+    expect(line(E, 'b')).toBe('[F3][F4]😀[F5]');
+  });
+});
+
+describe('con varias fotos elegidas (solo fotos)', () => {
+  // Lo que encontró la auditoría de la entrega 2: después de "Arrange in rows" o de un tamaño quedan elegidas, y una
+  // letra, Enter o la barra espaciadora las borraban. Ahora, como con una: la tecla sigue después de la última.
+  const doc = () => [p('b', 'x', ph('F3', 1 / 3), ph('F4', 1 / 3), ph('F5', 1 / 3), 'y')];
+  const chooseRange = (E: BlockNoteEditor) =>
+    view(E).dispatch(view(E).state.tr.setSelection(TextSelection.create(view(E).state.doc, at(E, 'F3'), at(E, 'F5') + 1)));
+
+  it('una letra, Shift+letra, AltGr, la barra espaciadora (sin la página) y Enter: el cursor pasa después de la última', () => {
+    const E = mount(doc());
+    for (const init of [{ key: 'a' }, { key: 'A', shiftKey: true }, { key: '@', code: 'KeyQ', ctrlKey: true, altKey: true }, { key: ' ' }]) {
+      chooseRange(E);
+      const e = key(E, init.key, init);
+      expect(e.defaultPrevented).toBe(false);
+      expect(sel(E)).toEqual({ kind: 'text', anchor: at(E, 'F5') + 1, head: at(E, 'F5') + 1 });
+    }
+    expect(line(E, 'b')).toBe('x[F3][F4][F5]y');
+    // Enter parte el renglón después de la última (las fotos quedan).
+    chooseRange(E);
+    key(E, 'Enter');
+    expect(E.document.map((b) => line(E, b.id))).toEqual(['x[F3][F4][F5]', 'y']);
+  });
+
+  it('una composición, y el texto que entra sin tecla (emojis, dictado): después de la última', () => {
+    const E = mount(doc());
+    chooseRange(E);
+    key(E, 'Dead');
+    expect(sel(E).head).toBe(at(E, 'F5') + 1);
+    chooseRange(E);
+    view(E).dom.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    expect(sel(E).head).toBe(at(E, 'F5') + 1);
+    chooseRange(E);
+    const from = at(E, 'F3');
+    const to = at(E, 'F5') + 1;
+    expect(view(E).someProp('handleTextInput', (f) => f(view(E), from, to, '😀', () => view(E).state.tr))).toBe(true);
+    expect(line(E, 'b')).toBe('x[F3][F4][F5]😀y');
+  });
+
+  it('Backspace, Supr, Ctrl o ⌘ + letra y Shift+flechas: los de siempre (no los toma)', () => {
+    const E = mount(doc());
+    const plugin = view(E).state.plugins.find((pl) => (pl as unknown as { key: string }).key.startsWith('shotdocs-photo-keys'))!;
+    for (const init of [{ key: 'Backspace' }, { key: 'Delete' }, { key: 'c', ctrlKey: true }, { key: 'c', metaKey: true }, { key: 'ArrowRight', shiftKey: true }]) {
+      chooseRange(E);
+      const before = view(E).state;
+      expect(plugin.props.handleKeyDown!.call(plugin, view(E), new KeyboardEvent('keydown', init))).toBe(false);
+      expect(view(E).state).toBe(before);
+    }
+  });
+
+  it('con texto en la selección no hace nada distinto (es una selección de texto)', () => {
+    const E = mount(doc());
+    view(E).dispatch(view(E).state.tr.setSelection(TextSelection.create(view(E).state.doc, at(E, 'F3') - 1, at(E, 'F5') + 1)));
+    const before = view(E).state.selection;
+    key(E, 'a');
+    expect(view(E).state.selection.eq(before)).toBe(true);
+  });
+});
+
+describe('arrastrar para elegir y soltar sobre una foto', () => {
+  // jsdom no ubica nada: cada foto mide 100 px y está una al lado de la otra.
+  const place = (E: BlockNoteEditor, names: string[]) =>
+    names.forEach((n, i) => {
+      el(E, n).getBoundingClientRect = () => new DOMRect(100 * i, 0, 100, 80);
+    });
+  const pointer = (type: string, target: EventTarget, init: PointerEventInit) =>
+    target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, buttons: 1, ...init }));
+
+  it('el final de la selección va al borde de la foto más cercano al puntero', () => {
+    expect(photoDragHead(10, { left: 100, width: 100 }, 120)).toBe(10);
+    expect(photoDragHead(10, { left: 100, width: 100 }, 149)).toBe(10);
+    expect(photoDragHead(10, { left: 100, width: 100 }, 150)).toBe(11);
+    expect(photoDragHead(10, { left: 100, width: 100 }, 199)).toBe(11);
+  });
+
+  it('mientras se arrastra (la selección que lee del navegador) y al soltar', () => {
+    const E = mount([p('a', 'entre medio'), p('b', ph('F2', 0.25), ph('F3', 0.25), ph('F4', 0.25), ph('F5', 0.25)), p('c', 'Fin')]);
+    place(E, ['F2', 'F3', 'F4', 'F5']);
+    const v = view(E);
+    const anchor = 3;
+    const between = (head: number) =>
+      v.someProp('createSelectionBetween', (f) => f(v, v.state.doc.resolve(anchor), v.state.doc.resolve(head)));
+    // Sin arrastre: no lo toca.
+    expect(between(at(E, 'F3'))).toBeFalsy();
+    pointer('pointerdown', v.dom.querySelector('p, [data-content-type="paragraph"]')!, { clientX: 5 });
+    // Sobre el centro-derecha de F5: después de F5 (el navegador decía otra cosa).
+    pointer('pointermove', el(E, 'F5').querySelector('img')!, { clientX: 360 });
+    expect(between(at(E, 'F3'))!.head).toBe(at(E, 'F5') + 1);
+    // Sobre la mitad izquierda de F4: antes de F4.
+    pointer('pointermove', el(E, 'F4').querySelector('img')!, { clientX: 210 });
+    expect(between(at(E, 'F2') + 1)!.head).toBe(at(E, 'F4'));
+    // Ya donde corresponde: no la cambia.
+    expect(between(at(E, 'F4'))).toBeFalsy();
+    // Al soltar sobre la mitad derecha de F4 con la selección corrida: queda después de F4.
+    pointer('pointermove', el(E, 'F4').querySelector('img')!, { clientX: 280 });
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, anchor, anchor + 1)));
+    pointer('pointerup', el(E, 'F4').querySelector('img')!, { clientX: 280, buttons: 0 });
+    expect(sel(E)).toEqual({ kind: 'text', anchor, head: at(E, 'F4') + 1 });
+    // Terminado el arrastre, no lo toca.
+    expect(between(at(E, 'F3'))).toBeFalsy();
+  });
+
+  it('un arrastre que empieza en una foto (moverla) o con Shift no lo toca', () => {
+    const E = mount([p('b', 'x', ph('F2', 0.5), ph('F3', 0.5))]);
+    place(E, ['F2', 'F3']);
+    const v = view(E);
+    const between = (head: number) => v.someProp('createSelectionBetween', (f) => f(v, v.state.doc.resolve(1), v.state.doc.resolve(head)));
+    pointer('pointerdown', el(E, 'F2').querySelector('img')!, { clientX: 10 });
+    pointer('pointermove', el(E, 'F3').querySelector('img')!, { clientX: 190 });
+    expect(between(at(E, 'F2'))).toBeFalsy();
+    pointer('pointerup', document, {});
+    pointer('pointerdown', v.dom.firstElementChild!, { clientX: 5, shiftKey: true });
+    pointer('pointermove', el(E, 'F3').querySelector('img')!, { clientX: 190 });
+    expect(between(at(E, 'F2'))).toBeFalsy();
   });
 });
 

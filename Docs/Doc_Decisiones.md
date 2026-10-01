@@ -163,6 +163,23 @@ diga otra cosa.
   tamaños, acomodar) llega con la entrega 2 y hasta entonces sale la de texto; el texto plano al copiar a otro
   programa (`![nombre](sdmedia://…)`) se resuelve con la exportación de la entrega 3; el panel de comentarios
   muestra cada foto en línea como `[Image]`. `Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 1b)".
+- **D-24 · Fotos en línea: paridad con la foto-bloque, sin leyenda, la barra por sectores** (2026-10-01, Lega, al
+  probar la entrega 2 y rechazarla como estaba). (1) La foto en línea hace **todo** lo que hace la foto-bloque
+  (tiradores que imantan a 1/1, 1/2, 1/3 y 1/4; la barra entera: ver, bajar, tamaños, alinear, que en la foto en
+  línea alinea su renglón, *Arrange in rows*, comentar, *Replace image*, *Rename image*, *Delete image*; el carrete;
+  primer clic elige y segundo abre; videos y adjuntos como hoy) más lo propio de en línea. El inventario, con lo
+  hecho y lo que falta, en `Doc_Fotos_En_Linea.md`, "Paridad con la foto-bloque". (2) **Sin leyenda:** se saca
+  *Edit caption* de la barra, también de la foto-bloque; una leyenda que ya existe se sigue mostrando (no se borra
+  ni se esconde), solo no hay botón para crearla. (3) **La barra, por sectores con separador**, igual en las dos:
+  [ver, bajar] | [tamaños y *Arrange in rows*] | [alinear izquierda, centro, derecha] | [comentar] y, a la derecha,
+  [*Replace*, *Rename*, *Delete*]; todos los botones del mismo tamaño y el mismo relleno. (4) **Sin *Toggle preview*** en
+  ninguna de las dos (Lega: "afuera, el nombre del archivo no importa").
+- **D-26 · Convertir las fotos-bloque: función escondida, sin entrada en la interfaz** (2026-10-01, Lega). La app no
+  tiene usuarios, las únicas fotos-bloque son de proyectos de prueba (que Lega va a borrar) y ERSO se reimporta con
+  las fotos en línea (entrega 4): nunca va a haber fotos viejas para convertir. *Convert photos to inline* sale del
+  menú de la página (con sus textos y su entrada de ayuda); el código (`convertPhotos.ts`) y sus pruebas quedan,
+  sin nada que lo llame, por si alguna vez entra algo con fotos sueltas. `Doc_Fotos_En_Linea.md`, "Cómo quedó
+  (entrega 3)".
 
 - **D-23 · Archivar y borrar proyectos** (2026-10-01, Lega: "sí a todo" a las once propuestas del diseño,
   `Doc_Proyectos_Borrar.md`, sección "Decisiones de Lega"). (1) Archivan, borran y restauran quienes pueden

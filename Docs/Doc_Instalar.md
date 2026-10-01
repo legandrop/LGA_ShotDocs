@@ -1,4 +1,4 @@
-# Instalar la app (v0.083)
+# Instalar la app (v0.079)
 
 Pedido de Lega (2026-10-01): reconocer si la app está instalada y, si no, ofrecer instalarla (sin obligar a
 nadie), con los pasos exactos para el iPhone y para Android.
