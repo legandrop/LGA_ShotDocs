@@ -1,5 +1,6 @@
 import { Component, createElement, lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { t } from '../i18n';
+import { optionalImportPending } from '../lib/optionalImport';
 import { hasDrafts } from './commentsUi';
 import { notify } from './notice';
 
@@ -157,10 +158,13 @@ export function reloadForNewVersion(cause: unknown): Promise<never> {
 /**
  * Vite avisa con `vite:preloadError` cuando no puede bajar un archivo que necesita un `import()` (también
  * los de adentro del editor). Se trata igual: recargar una vez, con las mismas protecciones. El error sigue
- * su camino (la parte que lo pidió muestra su aviso si no se recarga).
+ * su camino (la parte que lo pidió muestra su aviso si no se recarga). Menos el de un import opcional.
  */
 export function listenForMissingFiles(): () => void {
   const onPreloadError = (e: Event) => {
+    // Un import opcional (el decodificador de fotos HEIC, sin red y sin haberlo bajado nunca) no es una versión
+    // nueva: quien lo pidió se arregla con el error, sin recargar (lib/optionalImport.ts).
+    if (optionalImportPending()) return;
     void reloadForNewVersion((e as Event & { payload?: unknown }).payload ?? e).catch(() => undefined);
   };
   window.addEventListener('vite:preloadError', onPreloadError);

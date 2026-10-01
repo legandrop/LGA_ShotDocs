@@ -2,13 +2,15 @@ import { createClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n';
 import { SupabaseRemote, THUMB_DOWNLOAD_TIMEOUT_MS, timeoutFor } from '../sync/remote';
-import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { FakeServer, fakeProbe, makeDevice, type Device } from '../sync/testing';
 import { resolveObjectURL } from 'node:buffer';
 import { FileRejected } from '../sync/files';
 import { CONTROL_TIMEOUT_MS, PART_BYTES, STALL_CHECK_MS, STALL_MS, answerLimit, localDay } from './portero';
 import { fileKind } from './attachments';
 import { deletedLabel, mediaKind } from './probe';
-import { MEDIA_SCHEME, STALLS_BEFORE_RENEW, mediaIdOf, normalizeMime } from './queue';
+import { MEDIA_SCHEME, STALLS_BEFORE_RENEW, heicNotice, mediaIdOf, normalizeMime } from './queue';
+import { HEIC_SAMPLE } from './fixtures/heicSample';
+import { HeicError } from './heic';
 
 const MB = 1024 * 1024;
 const devices: Device[] = [];
@@ -1653,5 +1655,289 @@ describe('qué hace la cola con cada error del portero', () => {
     const { PorteroError } = await import('./portero');
     expect(classify(new PorteroError('Google Drive is full.', 507, false))).toBe('blocked');
     expect(classify(new PorteroError('Google Drive answered 500', 502, false))).toBe('retry');
+  });
+});
+
+describe('fotos HEIC: se guardan en el acto y pasan a JPEG después (Docs/Doc_Imagenes.md, "Fotos HEIC")', () => {
+  const heicBytes = () => Uint8Array.from(atob(HEIC_SAMPLE), (c) => c.charCodeAt(0));
+  /** Un HEIC de verdad (la firma es lo que cuenta), con el nombre y el tipo que dé el navegador. */
+  const heicFile = (name = 'IMG_0001.HEIC', type = '') => new File([heicBytes()], name, { type });
+  const svgText = (url: string) => decodeURIComponent(url.slice(url.indexOf(',') + 1));
+  const bytes = async (blob: Blob | undefined) => new Uint8Array(await blob!.arrayBuffer());
+  /** Una promesa que se resuelve desde afuera. */
+  function gate<T = void>() {
+    let open!: (value: T) => void;
+    const done = new Promise<T>((resolve) => (open = resolve));
+    return { done, open };
+  }
+  const unavailable = async (): Promise<Blob> => {
+    throw new HeicError('unavailable', 'sin el decodificador');
+  };
+
+  it('el HEIC queda guardado tal cual en el acto; enseguida pasa a JPEG, la página lo muestra y se sube el JPEG', async () => {
+    const server = new FakeServer();
+    const calls: number[] = [];
+    const converter = gate();
+    const real = server.convertHeic;
+    server.convertHeic = async (file) => {
+      calls.push(file.size);
+      await converter.done;
+      return real(file);
+    };
+    const { a, page } = await withPage(server);
+    const refreshed: string[] = [];
+    a.media.subscribeThumbs((x) => refreshed.push(x));
+    // Sin tipo (Chrome en Windows suele no darlo): lo reconoce la firma.
+    const original = heicFile();
+    const url = await a.media.add(page, original);
+    const id = mediaIdOf(url)!;
+    // `add` termina con el HEIC ya a salvo en el dispositivo, sin esperar la conversión.
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ name: 'IMG_0001.HEIC', mime: 'image/heic', heic: 'pending', size: original.size });
+    expect(await same(original, await bytes(await a.mediaDb.get('blobs', id)))).toBe(true);
+    expect(svgText(await a.media.resolve(url))).toContain(heicNotice('converting'));
+
+    converter.open();
+    await a.media.idle();
+    expect(calls).toEqual([original.size]);
+    const record = await a.mediaDb.get('files', id);
+    expect(record).toMatchObject({ name: 'IMG_0001.jpg', mime: 'image/jpeg', thumb: 'local', width: 4032 });
+    expect(record?.heic).toBeUndefined();
+    const stored = await bytes(await a.mediaDb.get('blobs', id));
+    expect([...stored.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
+    expect(record?.size).toBe(stored.length);
+    // La página se entera y muestra la foto, sin recargar.
+    expect(refreshed).toContain(id);
+    expect(await a.media.resolve(url)).toMatch(/^blob:/);
+    expect(a.media.fileInfo(id)).toMatchObject({ name: 'IMG_0001.jpg', mime: 'image/jpeg' });
+
+    await sync(a);
+    const row = server.mediaFiles.get(id)!;
+    expect(row).toMatchObject({ name: 'IMG_0001.jpg', mime: 'image/jpeg', size: stored.length });
+    expect(row.thumb_at).toBeTruthy();
+    expect(server.portero.drive.get(row.drive_id!)!.data).toEqual(stored);
+    // Con el tipo que dice HEIC, igual.
+    const typed = mediaIdOf(await a.media.add(page, heicFile('foto.heif', 'image/heif')))!;
+    await a.media.idle();
+    expect(await a.mediaDb.get('files', typed)).toMatchObject({ name: 'foto.jpg', mime: 'image/jpeg' });
+  });
+
+  it('un JPEG, un PNG, un video o una secuencia HEIF no pasan por el conversor ni cambian', async () => {
+    const server = new FakeServer();
+    let calls = 0;
+    server.convertHeic = async () => {
+      calls++;
+      throw new Error('no se debería llamar');
+    };
+    const { a, page } = await withPage(server);
+    const jpeg = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0007.JPG', 'image/jpeg')))!;
+    const png = mediaIdOf(await a.media.add(page, makeFile(1000, 'captura.png', 'image/png')))!;
+    const mov = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0008.MOV', 'video/quicktime')))!;
+    // Una secuencia (varias imágenes): un JPEG de la primera perdería el resto. Se guarda tal cual.
+    const sequence = heicBytes();
+    sequence.set([...'msf1'].map((c) => c.charCodeAt(0)), 8);
+    const seq = mediaIdOf(await a.media.add(page, new File([sequence], 'rafaga.heics', { type: 'image/heif-sequence' })))!;
+    await a.media.idle();
+    expect(calls).toBe(0);
+    expect(await a.mediaDb.get('files', jpeg)).toMatchObject({ name: 'IMG_0007.JPG', mime: 'image/jpeg', size: MB });
+    expect(await a.mediaDb.get('files', png)).toMatchObject({ name: 'captura.png', mime: 'image/png', size: 1000 });
+    expect(await a.mediaDb.get('files', mov)).toMatchObject({ name: 'IMG_0008.MOV', mime: 'video/quicktime' });
+    const seqRecord = await a.mediaDb.get('files', seq);
+    expect(seqRecord).toMatchObject({ name: 'rafaga.heics', mime: 'image/heif-sequence' });
+    expect(seqRecord?.heic).toBeUndefined();
+  });
+
+  it('si la foto no se puede convertir, queda el HEIC tal cual con su aviso y se sube igual, sin perder nada', async () => {
+    const server = new FakeServer();
+    server.convertHeic = async () => {
+      throw new HeicError('failed', 'archivo roto');
+    };
+    const { a, page } = await withPage(server);
+    const original = heicFile();
+    const url = await a.media.add(page, original);
+    const id = mediaIdOf(url)!;
+    await a.media.idle();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ name: 'IMG_0001.HEIC', mime: 'image/heic', heic: 'failed', size: original.size, probed: true });
+    expect(await same(original, await bytes(await a.mediaDb.get('blobs', id)))).toBe(true);
+    const shown = await a.media.resolve(url);
+    expect(shown).toMatch(/^data:image\/svg\+xml/);
+    expect(svgText(shown)).toContain(heicNotice('failed'));
+    expect(svgText(shown)).toContain('IMG_0001.HEIC');
+
+    await sync(a);
+    const row = server.mediaFiles.get(id)!;
+    expect(row).toMatchObject({ name: 'IMG_0001.HEIC', mime: 'image/heic', thumb_at: null });
+    expect(await same(original, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
+    // Cualquier otro error del conversor (falta de memoria, por ejemplo) es lo mismo.
+    server.convertHeic = async () => {
+      throw new RangeError('Out of memory');
+    };
+    const other = mediaIdOf(await a.media.add(page, heicFile('b.heic')))!;
+    await a.media.idle();
+    expect(await a.mediaDb.get('files', other)).toMatchObject({ heic: 'failed', mime: 'image/heic' });
+  });
+
+  it('un conversor que no contesta nunca no deja la cola esperando: pasado el tope queda el HEIC y se sube', async () => {
+    const server = new FakeServer();
+    server.heicTimeoutMs = 40;
+    server.convertHeic = () => new Promise<Blob>(() => undefined);
+    const { a, page } = await withPage(server);
+    const original = heicFile();
+    const id = mediaIdOf(await a.media.add(page, original))!;
+    await sync(a);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'failed', pending: 0, mime: 'image/heic' });
+    expect(await same(original, server.portero.drive.get(server.mediaFiles.get(id)!.drive_id!)!.data)).toBe(true);
+  });
+
+  it('sin red y sin el decodificador: queda el HEIC con su aviso y, cuando vuelve la red, se convierte antes de subirlo', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.online = false;
+    let available = false;
+    const real = server.convertHeic;
+    server.convertHeic = async (file) => (available ? real(file) : unavailable());
+    const url = await a.media.add(page, heicFile());
+    const id = mediaIdOf(url)!;
+    await a.media.idle();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ name: 'IMG_0001.HEIC', mime: 'image/heic', heic: 'pending' });
+    expect(svgText(await a.media.resolve(url))).toContain(heicNotice('waiting'));
+    // Sin red no se registra nada; el HEIC sigue esperando (anotado como mandado a registrar).
+    await sync(a);
+    expect(server.mediaFiles.size).toBe(0);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'sent', registered: false });
+    expect(svgText(await a.media.resolve(url))).toContain(heicNotice('waiting'));
+
+    // Vuelve la red (y con ella el decodificador): se pregunta a la base, se convierte y se sube el JPEG.
+    const refreshed: string[] = [];
+    a.media.subscribeThumbs((x) => refreshed.push(x));
+    server.online = true;
+    available = true;
+    await sync(a);
+    const record = await a.mediaDb.get('files', id);
+    expect(record).toMatchObject({ name: 'IMG_0001.jpg', mime: 'image/jpeg', thumb: 'done', pending: 0 });
+    expect(record?.heic).toBeUndefined();
+    const stored = await bytes(await a.mediaDb.get('blobs', id));
+    const row = server.mediaFiles.get(id)!;
+    expect(row).toMatchObject({ name: 'IMG_0001.jpg', mime: 'image/jpeg', size: stored.length });
+    expect(server.portero.drive.get(row.drive_id!)!.data).toEqual(stored);
+    expect(refreshed).toContain(id);
+    expect(await a.media.resolve(url)).toMatch(/^blob:/);
+  });
+
+  it('sin red pero con el decodificador ya guardado: se convierte en el acto, sin esperar la red', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    server.online = false;
+    const id = mediaIdOf(await a.media.add(page, heicFile()))!;
+    await a.media.idle();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ name: 'IMG_0001.jpg', mime: 'image/jpeg', thumb: 'local' });
+  });
+
+  it('si con red el decodificador sigue sin cargar, sube el HEIC tal cual (subir manda) y deja de esperar', async () => {
+    const server = new FakeServer();
+    server.convertHeic = unavailable;
+    const { a, page } = await withPage(server);
+    const original = heicFile();
+    const url = await a.media.add(page, original);
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'failed', registered: true, pending: 0, mime: 'image/heic' });
+    const row = server.mediaFiles.get(id)!;
+    expect(await same(original, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
+    expect(svgText(await a.media.resolve(url))).toContain(heicNotice('failed'));
+  });
+
+  it('si se perdió la respuesta de register_file, no se convierte: la base ya tiene el HEIC y se sube ese (nada queda detenido)', async () => {
+    const server = new FakeServer();
+    // El decodificador no está hasta que se pierde la respuesta; desde ahí, sí.
+    server.loseMediaResponse.add('register_file');
+    const real = server.convertHeic;
+    let conversions = 0;
+    server.convertHeic = async (file) => {
+      if (server.loseMediaResponse.has('register_file')) return unavailable();
+      conversions++;
+      return real(file);
+    };
+    const { a, page } = await withPage(server);
+    const original = heicFile();
+    const id = mediaIdOf(await a.media.add(page, original))!;
+    await a.media.idle();
+    // Se registra como HEIC (el decodificador no estaba), la respuesta no llega y, en el reintento, el
+    // decodificador ya está: igual no se convierte (el portero compararía el peso con la fila del HEIC).
+    await sync(a);
+    server.clockOffset += 60 * 60_000;
+    await sync(a);
+    expect(server.loseMediaResponse.has('register_file')).toBe(false);
+    expect(conversions).toBe(0);
+    const record = await a.mediaDb.get('files', id);
+    expect(record).toMatchObject({ heic: 'failed', mime: 'image/heic', registered: true, pending: 0, blocked: false, error: null });
+    expect(await same(original, await bytes(await a.mediaDb.get('blobs', id)))).toBe(true);
+    const row = server.mediaFiles.get(id)!;
+    expect(row).toMatchObject({ mime: 'image/heic', size: original.size });
+    expect(await same(original, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
+  });
+
+  it('una fila registrada mientras se convertía (otra pestaña) no se toca: queda el HEIC', async () => {
+    const server = new FakeServer();
+    const converter = gate();
+    const real = server.convertHeic;
+    server.convertHeic = async (file) => {
+      await converter.done;
+      return real(file);
+    };
+    const { a, page } = await withPage(server);
+    const original = heicFile();
+    const url = await a.media.add(page, original);
+    const id = mediaIdOf(url)!;
+    // Mientras convierte, otra pestaña (de una versión anterior) lo registra como HEIC.
+    const current = (await a.mediaDb.get('files', id))!;
+    await a.mediaDb.put('files', { ...current, registered: true });
+    converter.open();
+    await a.media.idle();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ mime: 'image/heic', name: 'IMG_0001.HEIC', registered: true });
+    expect(await same(original, await bytes(await a.mediaDb.get('blobs', id)))).toBe(true);
+    // El aviso no promete una conversión que ya no va a pasar.
+    expect(svgText(await a.media.resolve(url))).toContain(heicNotice('failed'));
+    await a.media.ensureConverted(id);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ heic: 'failed' });
+  });
+
+  it('una medición del HEIC en curso no pisa las medidas ni la miniatura del JPEG', async () => {
+    const server = new FakeServer();
+    const probing = gate();
+    server.probe = async (file, mime) => {
+      if (mime === 'image/heic') await probing.done;
+      return fakeProbe(file, mime);
+    };
+    let available = false;
+    const real = server.convertHeic;
+    server.convertHeic = async (file) => (available ? real(file) : unavailable());
+    const { a, page } = await withPage(server);
+    const id = mediaIdOf(await a.media.add(page, heicFile()))!;
+    await a.media.idle();
+    // Algo empieza a medir el HEIC (lento) y, mientras tanto, la conversión termina.
+    const probe = a.media.ensureProbed(id);
+    available = true;
+    const converted = a.media.ensureConverted(id);
+    await new Promise((r) => setTimeout(r, 20));
+    probing.open();
+    await Promise.all([probe, converted]);
+    await a.media.idle();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ mime: 'image/jpeg', width: 4032, height: 3024, thumb: 'local', probed: true });
+    expect((await a.mediaDb.get('thumbs', id))?.type).toBe('image/jpeg');
+  });
+
+  it('un HEIC subido sin convertir (otro dispositivo, una versión anterior) dice por qué no se ve', async () => {
+    const server = new FakeServer();
+    server.convertHeic = async () => {
+      throw new HeicError('failed', 'roto');
+    };
+    const { a, page } = await withPage(server);
+    const id = mediaIdOf(await a.media.add(page, heicFile()))!;
+    await sync(a);
+    const b = await device(server);
+    await sync(b);
+    const shown = await b.media.resolve(MEDIA_SCHEME + id);
+    expect(svgText(shown)).toContain(heicNotice('none'));
+    expect(svgText(shown)).toContain('IMG_0001.HEIC');
   });
 });

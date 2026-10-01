@@ -23,6 +23,8 @@ import {
   type Probe,
 } from './probe';
 import type { DueFileRow, MediaFileRow } from '../sync/types';
+import { HEIC_TIMEOUT_MS, HeicError, heicFailure, isHeicFile, isHeicType, jpegName, JPEG_TYPE } from './heic';
+import { convertHeic as convertHeicNow } from './heicConvert';
 
 // La cola de fotos y videos (paso 6 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Archivos
 // grandes"). El archivo se guarda primero en el dispositivo (base `<base local>:media`) y en la página queda
@@ -241,6 +243,43 @@ export interface MediaQueueOptions {
    * Para avisarle a la persona (con el nombre del archivo, si se sabe).
    */
   onForeignFile?: (name: string | null) => void;
+  /**
+   * Pasa un HEIC a JPEG (por defecto, `heicConvert.ts`; el decodificador se carga recién cuando llega un HEIC). Tira un
+   * `HeicError` si no se pudo. Las pruebas ponen uno propio.
+   */
+  convertHeic?: (file: Blob) => Promise<Blob>;
+  /** Lo más que se espera una conversión antes de darla por fallida (por defecto `HEIC_LIMIT_MS`; las pruebas). */
+  heicTimeoutMs?: number;
+}
+
+/**
+ * Lo más que la cola espera una conversión, pase lo que pase adentro del conversor: el tope del conversor
+ * (`HEIC_TIMEOUT_MS`) más un margen. Pasado esto, la foto queda como HEIC y la cola sigue.
+ */
+export const HEIC_LIMIT_MS = HEIC_TIMEOUT_MS + 15_000;
+
+/**
+ * El conversor de verdad. Se importa en forma estática (4,6 KB; lo pesado, el Worker y el decodificador, sigue
+ * aparte): con un `import()`, en la primera sesión de un dispositivo (el service worker todavía no controla la
+ * página) y sin red, el import falla y el navegador guarda ese fallo para siempre en esa pestaña, así que un HEIC
+ * agregado sin red se subía como HEIC al volver la red, sin pasar a JPEG. El Worker se crea de nuevo en cada
+ * foto y no tiene ese problema.
+ */
+const loadAndConvertHeic = convertHeicNow;
+
+/**
+ * En qué anda una foto HEIC que todavía no se ve (`MediaQueue.heicState`): `converting`, guardada y por pasar a
+ * JPEG; `waiting`, el decodificador no estaba (sin red) y se vuelve a probar; `failed`, no se pudo convertir y
+ * queda como HEIC; `none`, un HEIC que llegó así (de otro dispositivo o de una versión anterior).
+ */
+export type HeicState = 'converting' | 'waiting' | 'failed' | 'none';
+
+/** Lo que dice en la página, en el lugar de una foto HEIC que no se ve. */
+export function heicNotice(state: HeicState): string {
+  if (state === 'converting') return t('queue.heicConverting');
+  if (state === 'waiting') return t('queue.heicPending');
+  if (state === 'failed') return t('queue.heicFailed');
+  return t('queue.heicNoPreview');
 }
 
 /** Lo que se ve en una página en lugar de una foto o un video de otro proyecto. */
@@ -356,6 +395,12 @@ export class MediaQueue {
   private readonly probe: (file: Blob, mime: string) => Promise<Probe>;
   private readonly playMark: (thumb: Blob) => Promise<Blob>;
   private readonly makeView: (file: Blob, mime: string, side: number) => Promise<Blob | null>;
+  private readonly heic: (file: Blob) => Promise<Blob>;
+  private readonly heicTimeoutMs: number;
+  /** Las conversiones de HEIC en curso (una sola por archivo; ver `ensureConverted`). */
+  private readonly converting = new Map<string, Promise<void>>();
+  /** HEIC cuyo último intento no encontró el decodificador (sin red): el aviso de la página lo dice. */
+  private readonly heicWaiting = new Set<string>();
   private readonly now: () => number;
   /** Las imágenes nítidas de la página ya listas en esta sesión (ver `view`): `<lado>:<id>` → dirección. */
   private readonly views = new Map<string, string>();
@@ -374,6 +419,8 @@ export class MediaQueue {
     this.probe = options.probe ?? probeMedia;
     this.playMark = options.playMark ?? withPlayMark;
     this.makeView = options.viewImage ?? viewImage;
+    this.heic = options.convertHeic ?? loadAndConvertHeic;
+    this.heicTimeoutMs = options.heicTimeoutMs ?? HEIC_LIMIT_MS;
     this.now = options.now ?? Date.now;
   }
 
@@ -446,11 +493,16 @@ export class MediaQueue {
    * Guarda el archivo (foto, video o, con portero, cualquier otro) en el dispositivo y lo pone en la cola.
    * Devuelve la dirección para el bloque `image`; recién cuando esto termina el archivo está a salvo. Medidas
    * y miniatura se sacan después, del archivo ya guardado (ver `ensureProbed`).
+   *
+   * Una foto HEIC (las del iPhone; Chrome no las muestra) se guarda igual, tal cual y en el acto, marcada
+   * `heic: 'pending'`, y enseguida se pasa a JPEG en el dispositivo (`ensureConverted`, Docs/Doc_Imagenes.md,
+   * "Fotos HEIC"): lo que se registra y se sube es el JPEG. Para saber si es un HEIC se leen sus primeros bytes.
    */
   async add(pageId: string, file: Blob & { name?: string }): Promise<string> {
     this.adding++;
     try {
-      return await this.save(pageId, file);
+      const heic = !!this.db && file.size > 0 && (await isHeicFile(file));
+      return await this.save(pageId, file, heic);
     } finally {
       this.adding--;
     }
@@ -461,7 +513,7 @@ export class MediaQueue {
     return this.adding > 0;
   }
 
-  private async save(pageId: string, file: Blob & { name?: string }): Promise<string> {
+  private async save(pageId: string, file: Blob & { name?: string }, heic = false): Promise<string> {
     if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
     if (file.size <= 0) throw new FileRejected(t('queue.empty'));
     const mime = normalizeMime(file.type, file.name);
@@ -495,6 +547,7 @@ export class MediaQueue {
       blocked: false,
       failures: 0,
       retryAt: 0,
+      ...(heic ? { heic: 'pending' as const } : {}),
     };
     // Todo junto: o queda el archivo con su registro, o no queda nada.
     try {
@@ -509,8 +562,10 @@ export class MediaQueue {
     this.seenLinks.add(`${pageId}:${id}`);
     this.remember(id, record, true);
     this.onQueued?.();
-    // Medidas y miniatura, sin esperarlas: el archivo ya está a salvo. La cola no lo registra antes.
-    void this.ensureProbed(id);
+    // Medidas y miniatura, sin esperarlas: el archivo ya está a salvo. La cola no lo registra antes. Un HEIC
+    // primero se convierte (las medidas y la miniatura salen del JPEG, al terminar).
+    if (heic) void this.ensureConverted(id);
+    else void this.ensureProbed(id);
     return MEDIA_SCHEME + id;
   }
 
@@ -565,8 +620,9 @@ export class MediaQueue {
     return running;
   }
 
-  /** Espera a que terminen las medidas y miniaturas en curso. */
+  /** Espera a que terminen las conversiones de HEIC y las medidas y miniaturas en curso. */
   async idle(): Promise<void> {
+    await Promise.all([...this.converting.values()]);
     await Promise.all([...this.probing.values()]);
   }
 
@@ -581,7 +637,8 @@ export class MediaQueue {
     const probe = blob && kind !== 'file' ? await this.probe(blob, record.mime).catch(() => none) : none;
     const tx = db.transaction(['files', 'thumbs'], 'readwrite');
     const current = await tx.objectStore('files').get(id);
-    if (current) {
+    // Mientras se medía, el archivo cambió (un HEIC que pasó a JPEG): estas medidas no son las suyas.
+    if (current && current.mime === record.mime && current.size === record.size && current.probed === false) {
       if (probe.thumb) await tx.objectStore('thumbs').put(probe.thumb, id);
       await tx.objectStore('files').put({
         ...current,
@@ -920,11 +977,21 @@ export class MediaQueue {
     // Storage no contestó a tiempo al subir la miniatura (el tope de `uploadThumb`).
     let thumbStalled = false;
     try {
+      // Un HEIC todavía sin convertir: antes de registrarlo se termina (o se prueba otra vez) la conversión. Una
+      // vez registrado como HEIC ya no se convierte: el archivo existe así en la base y en Drive.
+      if (isConvertible(record)) {
+        await this.ensureConverted(record.id);
+        record = (await this.store.get('files', record.id)) ?? record;
+      }
       if (record.probed === false) {
         await this.ensureProbed(record.id);
         record = (await this.store.get('files', record.id)) ?? record;
       }
       if (!record.registered) {
+        // Un HEIC que se registra sin convertir (el decodificador no estaba): se anota antes de mandarlo. Si la
+        // respuesta se pierde, la base puede tener la fila como HEIC; desde ahí, antes de convertir hay que
+        // preguntarle (ver `convertNow`).
+        if (record.heic === 'pending') record = await this.patch(record.id, { heic: 'sent' });
         await this.remote.registerFile({
           id: record.id,
           pageId: record.pageId,
@@ -935,7 +1002,14 @@ export class MediaQueue {
           height: record.height,
           duration: record.duration,
         });
-        record = await this.patch(record.id, { registered: true });
+        if (record.heic === 'sent') {
+          // Se registró como HEIC: ya no se convierte. El aviso de la página cambia.
+          record = await this.patch(record.id, { registered: true, heic: 'failed' });
+          this.heicWaiting.delete(record.id);
+          this.thumbReady(record.id);
+        } else {
+          record = await this.patch(record.id, { registered: true });
+        }
       }
       if (record.thumb === 'local') {
         const thumb = await this.store.get('thumbs', record.id);
@@ -1090,6 +1164,134 @@ export class MediaQueue {
       this.onChange?.();
       return outcome === 'waiting' ? 'retry' : outcome;
     }
+  }
+
+  /**
+   * Pasa a JPEG un HEIC guardado tal cual (`heic: 'pending'` o `'sent'`), todavía sin registrar: al agregarlo,
+   * y otra vez antes de registrarlo si no se pudo. Una sola conversión por archivo a la vez; la segunda llamada
+   * espera la primera. Nunca falla y siempre termina (ver `HEIC_LIMIT_MS`).
+   */
+  ensureConverted(id: string): Promise<void> {
+    let running = this.converting.get(id);
+    if (!running) {
+      running = this.convertNow(id)
+        .catch(() => undefined)
+        .finally(() => this.converting.delete(id));
+      this.converting.set(id, running);
+    }
+    return running;
+  }
+
+  /** En qué anda una foto HEIC que no se ve, para el aviso de la página (ver `HeicState`). */
+  private heicState(record: MediaRecord): HeicState {
+    if (record.heic === 'failed') return 'failed';
+    // Registrado sin convertir (una pestaña de una versión anterior, por ejemplo): queda como HEIC.
+    if (!record.heic || record.registered) return record.heic ? 'failed' : 'none';
+    return this.heicWaiting.has(record.id) ? 'waiting' : 'converting';
+  }
+
+  private async convertNow(id: string): Promise<void> {
+    const db = this.store;
+    const record = await db.get('files', id);
+    if (!record || !isConvertible(record)) {
+      if (record?.registered && record.heic && record.heic !== 'failed') await this.keepHeic(id);
+      return;
+    }
+    // ¿La base ya tiene la fila? Pasa si se mandó a registrar como HEIC y la respuesta se perdió (`sent`), o si
+    // la registró una pestaña con una versión anterior. Entonces no se convierte: el portero compara el peso
+    // con la fila y el JPEG quedaría detenido, sin el HEIC. Sin respuesta (sin red), un `pending` se convierte
+    // igual (esta versión nunca lo mandó) y un `sent` espera a poder preguntar.
+    let exists: boolean | null;
+    try {
+      exists = (await this.remote.fetchMediaFiles([id])).some((row) => row.id === id);
+    } catch {
+      exists = null;
+    }
+    if (exists) return this.keepHeic(id);
+    if (exists === null && record.heic === 'sent') {
+      // Se espera a la red: el aviso lo dice.
+      if (!this.heicWaiting.has(id)) {
+        this.heicWaiting.add(id);
+        this.thumbReady(id);
+      }
+      return;
+    }
+    const blob = await db.get('blobs', id);
+    if (!blob) return;
+    let jpeg: Blob;
+    try {
+      jpeg = await this.convertWithLimit(blob);
+      if (!(jpeg.size > 0)) throw new HeicError('failed', 'The HEIC converter returned an empty file.');
+    } catch (err) {
+      if (heicFailure(err) === 'unavailable') {
+        // Sin el decodificador (sin red): se vuelve a probar en la próxima vuelta de la cola.
+        this.heicWaiting.add(id);
+        this.thumbReady(id);
+        return;
+      }
+      return this.keepHeic(id);
+    }
+    // Una medición del HEIC en curso escribiría sus medidas (ninguna, en Chrome) sobre el registro del JPEG:
+    // se espera a que termine, y el JPEG se mide después.
+    await this.probing.get(id);
+    const name = jpegName(record.name);
+    let next: MediaRecord | null = null;
+    try {
+      const tx = db.transaction(['files', 'blobs', 'thumbs'], 'readwrite');
+      const current = await tx.objectStore('files').get(id);
+      // Mientras tanto se registró, cambió la marca o ya no está: no se toca.
+      if (current && !current.registered && current.heic === record.heic) {
+        next = {
+          ...current,
+          name,
+          mime: JPEG_TYPE,
+          size: jpeg.size,
+          width: null,
+          height: null,
+          thumb: 'none',
+          probed: false,
+          thumbError: null,
+        };
+        delete next.heic;
+        await Promise.all([
+          tx.objectStore('blobs').put(new File([jpeg], name, { type: JPEG_TYPE }), id),
+          tx.objectStore('files').put(next),
+          // Una miniatura hecha del HEIC (Safari lo abre) se rehace del JPEG.
+          tx.objectStore('thumbs').delete(id),
+        ]);
+      }
+      await tx.done;
+    } catch (err) {
+      // Sin lugar para el JPEG: queda el HEIC (que ya estaba guardado). No se reintenta en cada vuelta.
+      if (err instanceof DOMException && err.name === 'QuotaExceededError') return this.keepHeic(id);
+      throw err;
+    }
+    if (!next) return;
+    this.heicWaiting.delete(id);
+    this.remember(id, next, true);
+    this.noView.delete(id);
+    await this.ensureProbed(id);
+    // La página deja el aviso y muestra la foto (con o sin miniatura), sin recargar.
+    this.thumbReady(id);
+  }
+
+  /** La conversión con tope: un conversor que no contesta nunca no deja la cola esperando. */
+  private convertWithLimit(blob: Blob): Promise<Blob> {
+    return new Promise<Blob>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new HeicError('failed', 'The HEIC conversion took too long.')), this.heicTimeoutMs);
+      this.heic(blob)
+        .then(resolve, reject)
+        .finally(() => clearTimeout(timer));
+    });
+  }
+
+  /** La foto queda como HEIC (no se pudo convertir, o ya está registrada así): se sube tal cual, con su aviso. */
+  private async keepHeic(id: string): Promise<void> {
+    await this.patch(id, { heic: 'failed' }).catch(() => undefined);
+    this.heicWaiting.delete(id);
+    // Medidas y miniatura del HEIC (Safari lo abre; Chrome no): las del archivo que se va a subir.
+    await this.ensureProbed(id);
+    this.thumbReady(id);
   }
 
   /** La base ya tiene el id de Drive del archivo. */
@@ -1448,6 +1650,8 @@ export class MediaQueue {
         if (!kind) return this.card(id, { name: own.name, mime: own.mime, size: own.size });
         const thumb = await db.get('thumbs', id);
         if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
+        // Una foto HEIC que no se pudo pasar a JPEG: el ícono dice por qué no se ve.
+        if (kind === 'image' && (own.heic || isHeicType(own.mime))) return placeholderUrl(kind, own.name, heicNotice(this.heicState(own)));
         // Si todavía se está sacando, `subscribeThumbs` avisa cuando llega.
         return placeholderUrl(kind, own.name);
       }
@@ -1475,6 +1679,8 @@ export class MediaQueue {
       if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
       // Sin miniatura todavía (otro dispositivo la está subiendo, o no hay red): se vuelve a preguntar.
       this.missing.add(id);
+      // Un HEIC subido sin convertir (otro dispositivo, o una versión anterior de la app) no tiene miniatura.
+      if (meta && kind === 'image' && isHeicType(meta.mime)) return placeholderUrl(kind, meta.name, heicNotice('none'));
       return placeholderUrl(kind, meta?.name ?? t('queue.notYet'));
     } catch {
       return placeholderUrl(null, t('queue.notOnDevice'));
@@ -1938,6 +2144,11 @@ export class MediaQueue {
       trash: (id) => this.trash(id),
     });
   }
+}
+
+/** Un HEIC guardado sin convertir que todavía se puede pasar a JPEG (marcado y sin registrar). */
+function isConvertible(record: MediaRecord): boolean {
+  return (record.heic === 'pending' || record.heic === 'sent') && !record.registered;
 }
 
 /** Un dueño o admin lo mandó a la papelera de Drive (pedido o ya confirmado por el portero). */
