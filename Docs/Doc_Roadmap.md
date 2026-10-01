@@ -131,13 +131,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   borrar), los dos idiomas, el teléfono, y que la ayuda se mantenga al día con cada función nueva (una regla:
   cada feature nueva suma su línea en la ayuda). Diseño y auditoría antes de implementar. **Diseño en
   `Doc_Tutorial.md`** (sin implementar; auditado; Lega ya respondió sus preguntas).
-- **P.14 Borrar un proyecto (Lega, 2026-09-30: "¿cómo borro los proyectos viejos? No encontré de dónde"):** hoy
-  un proyecto se crea, se renombra y se comparte, pero no se puede sacar: no hay papelera de proyectos ni en la
-  app ni en la base (`workspaces` no se borra desde la API). Hace falta mandar un proyecto entero a la papelera
-  (con sus páginas y sus archivos, que pasan a la papelera de archivos) y poder restaurarlo, sin borrado duro
-  (las reglas de "nunca perder datos"). Pide una migración (una marca en `workspaces`, quién puede: editar y
-  crear páginas sobre el proyecto entero, o dueño y admins) y decidir qué pasa con lo compartido. Diseño y
-  auditoría antes. Mientras tanto: renombrarlo y mandar sus páginas a la papelera.
+- **P.14 Borrar y archivar proyectos (Lega, 2026-09-30: "¿cómo borro los proyectos viejos? No encontré de
+  dónde"):** hoy un proyecto se crea, se renombra y se comparte, pero no se puede sacar de la lista: no hay nada
+  para eso ni en la app ni en la base (`workspaces` no se borra desde la API). Faltan dos opciones distintas:
+  - **Borrar un proyecto:** mandarlo entero a la papelera (con sus páginas y sus archivos, que pasan a la
+    papelera de archivos) y poder restaurarlo. Sin borrado duro desde la app (las reglas de "nunca perder
+    datos"); el borrado definitivo, como el de los archivos: a pedido y con su plazo.
+  - **Archivar un proyecto sin borrarlo:** sale de la lista de proyectos de todos los días y de la búsqueda,
+    pero queda entero (páginas, archivos en el Drive, comentarios, permisos) y se puede abrir y desarchivar
+    desde una lista de archivados. Para los proyectos terminados.
+  Las dos piden una migración (marcas en `workspaces`), decidir quién puede (editar y crear páginas sobre el
+  proyecto entero, o dueño y admins), qué ven los que lo tenían compartido y qué pasa con lo que está sin
+  sincronizar en otros dispositivos. Diseño y auditoría antes. Mientras tanto: renombrarlo y mandar sus páginas
+  a la papelera.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

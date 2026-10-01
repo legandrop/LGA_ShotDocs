@@ -115,8 +115,8 @@ importación escribió en cada una, cuáles están terminadas y la dirección `s
 queda guardado. Al volver a elegir la misma carpeta el diálogo lo dice ("no terminó: 12 de 35 páginas") y
 ofrece **Seguir**, que continúa en el mismo proyecto: no crea otra vez las páginas ya creadas, saltea las
 terminadas y usa los archivos ya guardados en vez de guardarlos (y subirlos al Drive) de nuevo. **Importar a
-un proyecto nuevo** empieza de cero (el proyecto a medias queda: la app todavía no borra proyectos, ver P.14
-del roadmap; se le puede cambiar el nombre y mandar sus páginas a la papelera).
+un proyecto nuevo** empieza de cero (el proyecto a medias queda: la app todavía no borra ni archiva proyectos, ver
+P.14 del roadmap; se le puede cambiar el nombre y mandar sus páginas a la papelera).
 
 - **Qué queda para seguir.** La anotación se borra solo cuando todas las páginas quedaron terminadas. Queda
   sin terminar una página cuyo contenido no se pudo escribir ("3 archivos quedaron guardados pero la página no
@@ -310,7 +310,7 @@ cambiaron): la importación no se entera de los cambios posteriores. Para migrar
 1. Dejar de editarlo en Coda.
 2. Bajarlo de nuevo con `--refresh` (o a una carpeta nueva) y capturar de nuevo sus comentarios.
 3. Importarlo a un proyecto nuevo y comprobarlo.
-4. El proyecto de prueba queda: la app todavía no borra proyectos (P.14 del roadmap). Mientras tanto se le
+4. El proyecto de prueba queda: la app todavía no borra ni archiva proyectos (P.14 del roadmap). Mientras tanto se le
    cambia el nombre y se mandan sus páginas a la papelera.
 
 ## Cómo quedó
