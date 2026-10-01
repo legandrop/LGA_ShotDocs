@@ -889,4 +889,80 @@ Pedido de Lega sobre v0.053/v0.054. **Manda sobre lo de arriba.**
   imprime desde el menú de la barra lateral (donde no se ve la casilla, porque esa página no está abierta).
 - **Pruebas:** `src/ui/collapsePagination.test.ts` ("imprimir como se ve").
 - **Falta de la 1b:** arrastrar la sección entera y Shift+⌘/Ctrl+↑/↓ como una unidad (tocan el documento: ver
-  "Para la 1b (riesgo)").
+  "Mover la sección entera", abajo).
+
+## Mover la sección entera (1b, segundo paso): lo medido y la propuesta
+
+Pedido: arrastrar un título colapsado mueve toda su sección, y Shift+⌘/Ctrl+↑/↓ la mueve como una unidad
+(correcciones 4 y 7). El riesgo: mover toca el documento compartido, y otro puede estar editando a la vez.
+
+**Lo que costó descubrir (leído en el código y ahora medido).** En Yjs 13 no existe mover. y-prosemirror traduce
+cada cambio del editor comparando por posición (`updateYFragment`): deja el principio y el final que coinciden y
+**reescribe en su lugar** cada bloque del medio (le cambia el id y el contenido). Mover k bloques por encima de m
+reescribe los k + m. Si otro escribe a la vez en uno de ellos, su texto aparece en otro bloque (el que quedó en ese
+lugar) o se pierde (si el tipo no coincide: un título contra un párrafo). Si otro borra uno, **se pierde otro
+bloque, que nadie tocó**, y el borrado vuelve. Una sola transacción de ProseMirror no lo cambia: es lo mismo.
+
+**Cómo se midió.** `src/ui/moveHarness.ts` y `src/ui/collabMoveMeasure.test.ts` (con `MOVE_MEASURE=<archivo>`):
+dos editores reales con Yjs, como `photoHarness.ts`; 300 agendas al azar por caso (semillas fijas). A mueve; B, sin
+haber visto el mover (y A sin haber visto lo de B), escribe una marca en un bloque de una región, borra un bloque,
+agrega uno, o mueve lo mismo; después se entregan los cambios en orden, con la reparación de la app. Páginas: un
+párrafo arriba, la sección (k bloques, empieza con un H2), lo que salta (m bloques) y el destino (H2 + párrafo).
+Tres caminos: **hoy al arrastrar** (BlockNote: sacar e insertar, una transacción), **hoy con el teclado**
+(Shift+Ctrl+↓ de BlockNote, un bloque por vez) y **la propuesta** (abajo). El número es la cantidad de agendas
+(de 300) con algo de eso. "Perdido": la marca no está; "en otro bloque": está, en un bloque que no es el suyo.
+
+| Caso | B, a la vez | Hoy, arrastrar | Hoy, teclado | Propuesta |
+|---|---|---|---|---|
+| Un bloque suelto salta uno (k=1, m=1) | escribe en el que se mueve | 25 perdido, 196 en otro | igual | **0** |
+| | escribe en el que salta | 32 perdido, 186 en otro | igual | 250 perdido |
+| | borra un bloque | **85 con texto de nadie perdido**, 70 borrados que vuelven | igual | 0 perdido, 144 vuelven |
+| | mueve lo mismo | 14 perdido, 115 en otro | igual | 62 perdido, 6 en otro |
+| Sección de 3 salta un título (k=3, m=1) | escribe en la sección | 161 perdido, 173 en otro | igual | **0** |
+| | escribe en el título que salta | 246 perdido, 21 en otro | igual | 254 perdido |
+| | borra un bloque | **137 con texto de nadie perdido** | igual | **0** |
+| | mueve lo mismo | 87 perdido, 99 en otro | igual | 74 perdido, 7 en otro |
+| Sección de 3 salta una sección de 3 (k=3, m=3) | escribe en la sección | 12 perdido, 212 en otro | 220 perdido, 142 en otro | **0** |
+| | escribe en lo que salta | 14 perdido, 200 en otro | 153 perdido, 170 en otro | 248 perdido |
+| | borra un bloque | **172 con texto de nadie perdido** | igual | 0 perdido, 177 vuelven |
+| Sección de 2 arrastrada lejos (k=2, m=6) | escribe en la sección | 31 perdido, 207 en otro | 187 perdido, 158 en otro | 258 perdido |
+| | escribe en lo que salta | 138 perdido, 177 en otro | 241 perdido, 70 en otro | **0** |
+| | borra un bloque | **192 con texto de nadie perdido** | igual | 0 perdido, 145 vuelven |
+| Todos | escribe en el destino o arriba | 0 | 0 | 0 |
+| Todos | agrega un bloque | 0 perdido | 0 | 0 perdido |
+
+En todos los casos y caminos los dos documentos terminan iguales y nadie queda escribiendo de más. Con la
+propuesta, "mueve lo mismo" deja la sección **dos veces** (como hoy: 120 a 146 de 300 con algo dos veces; se
+prefiere duplicar a perder) y los bloques duplicados tienen el mismo id (el editor le cambia el id a uno al
+dibujarlo, como ya pasa con los ids repetidos de `Doc_Colaboracion.md`).
+
+**La propuesta: dos pasadas en Yjs, recreando el lado más chico** (`src/ui/blockMove.ts`). En el editor, el mover
+es una transacción común (los mismos nodos, sacados e insertados; los plugins la ven como cualquier otra). En Yjs
+se escribe en una sola transacción (un solo cambio que se sube, un solo paso de deshacer) en dos pasadas: primero
+el documento sin el lado que se recrea (un borrado limpio) y después el final (una inserción limpia). Se recrea el
+lado más chico, contado en bloques: lo que se mueve o lo que salta (empate: lo que salta); si el destino es de otro
+grupo (sale de un bloque o entra en otro), lo que se mueve. El otro lado **no se toca**.
+
+**Por qué esta y no la de BlockNote:**
+
+- **Texto que nadie tocó: 0 en todos los casos** (hoy, 85 a 192 de 300 cuando B borra un bloque, también moviendo
+  un bloque suelto). Es la vara que la de BlockNote no cumple con ningún tamaño.
+- **Nada aparece en otro bloque**, nunca (hoy, casi siempre que B escribe en algo que se reescribe).
+- Lo que B escribe en el lado que no se recrea (casi siempre el más grande) queda donde lo escribió: 0.
+- **El costo:** lo que B escribe a la vez en el lado recreado (el más chico) **se pierde** en vez de aparecer en
+  otro bloque: 248 a 258 de 300, contra 25 a 32 perdidos (y 186 a 196 en otro bloque) al mover hoy un bloque
+  suelto. Sumando perdido y en otro bloque, la propuesta nunca es peor que hoy en ningún caso; contando solo lo
+  perdido, el lado recreado sí. No hay un camino que conserve las dos cosas: para que un lado no se toque, el otro
+  tiene que borrarse y crearse de nuevo (Yjs no mueve), o reescribirse entero en su lugar (lo de hoy).
+- Un bloque que B borró en el lado recreado vuelve (144 a 177 de 300): la copia lo trae. Se prefiere a perder.
+
+**La vara del encargo** ("no peor que mover un bloque suelto hoy, y 0 en el texto que nadie tocó"): lo segundo se
+cumple siempre; lo primero se cumple contando el daño (perdido o en otro bloque) y no contando solo lo perdido en
+el lado recreado. **A confirmar por Lega:** que perder lo que otro escribe a la vez en el lado más chico es mejor
+que lo de hoy (que lo reparte en otros bloques y borra bloques que nadie tocó). Mientras no haya colaboración en
+tiempo real (D-04), "a la vez" es todo lo que pasa entre dos sincronizaciones.
+
+**Cuándo se usa.** Solo cuando hay algo colapsado en juego (lo que se mueve tiene un título colapsado, o salta una
+sección colapsada); el resto de los movimientos siguen siendo los de BlockNote. Pasar todos los movimientos por este
+camino sería mejor para el texto que nadie tocó, pero cambia lo que pasa al mover un bloque suelto: **a decidir
+por Lega**.
