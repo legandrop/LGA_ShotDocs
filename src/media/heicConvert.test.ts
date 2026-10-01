@@ -167,3 +167,15 @@ describe('conversión de HEIC en el navegador (heicConvert.ts)', () => {
     await expect(convertHeic(heic())).rejects.toMatchObject({ reason: 'unavailable' });
   });
 });
+
+describe('la cola carga el conversor sin import()', () => {
+  // Un `import()` que falla sin red queda fallando en esa pestaña (el navegador guarda el fallo y no vuelve a
+  // pedir el archivo): en la primera sesión de un dispositivo, un HEIC agregado sin red se subía sin convertir.
+  // En node no se puede reproducir ese caché del navegador, así que se mira el código de la cola.
+  it('queue.ts importa heicConvert en forma estática', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('./queue.ts', import.meta.url), 'utf8');
+    expect(source).toMatch(/^import \{[^}]*\bconvertHeic\b[^}]*\} from '\.\/heicConvert';$/m);
+    expect(source).not.toMatch(/import\(\s*['"]\.\/heicConvert['"]\s*\)/);
+  });
+});

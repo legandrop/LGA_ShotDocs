@@ -1,5 +1,5 @@
-// Convierte un HEIC a JPEG en el dispositivo (Docs/Doc_Imagenes.md, "Fotos HEIC"). Lo carga la cola con
-// `import()` recién cuando llega un HEIC: ni este archivo ni el decodificador están en el paquete principal.
+// Convierte un HEIC a JPEG en el dispositivo (Docs/Doc_Imagenes.md, "Fotos HEIC"). La cola lo importa en forma
+// estática (es chico); el decodificador (el Worker y `heicLib.ts`) se baja recién cuando llega un HEIC.
 //
 // La conversión corre en un Web Worker (`heic.worker.ts`), uno por foto, que se cierra al terminar. Si el
 // navegador no deja crear el Worker (o su script no arranca), se hace en la página: tarda lo mismo pero traba

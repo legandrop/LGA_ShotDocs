@@ -437,8 +437,12 @@ la página. **Siempre termina:** el Worker y el respaldo en la página tienen to
 arrancó cuenta como "no está"), la bajada del `.wasm` se corta a los 45 s ("no está") y la cola pone su propio
 tope por encima de todo (`HEIC_LIMIT_MS`).
 
-**Que no pese ni recargue.** Nada del decodificador está en el paquete principal: se carga con `import()` recién
-cuando llega un HEIC. Son tres archivos aparte: `libheif-*.wasm` (1,42 MB; 477 KB comprimido),
+**Que no pese ni recargue.** Nada del decodificador está en el paquete principal: se carga recién cuando llega
+un HEIC. `heicConvert.ts` (4,6 KB) sí va en el paquete de la cola: si se cargaba con `import()`, en la primera
+sesión de un dispositivo y sin red el import fallaba y el navegador guardaba ese fallo en la pestaña, así que
+el HEIC se subía sin convertir al volver la red (lo encontró la auditoría de v0.075). El Worker se crea de
+nuevo en cada foto y no guarda fallos; el respaldo sin Worker (`heicLib.ts`) sí, pero solo se usa si el
+navegador no puede crear el Worker. Son tres archivos aparte: `libheif-*.wasm` (1,42 MB; 477 KB comprimido),
 `heic.worker-*.js` (94 KB) y `heicLib-*.js` (89 KB, el respaldo sin Worker); los dos `.js` empiezan con el
 aviso de licencia. Tampoco están en lo que el service worker guarda al instalar la app (`globIgnores` en
 `vite.config.ts`): se guardan la primera vez que se usan (caché `heic-decoder`), y desde ahí la conversión anda

@@ -23,8 +23,8 @@ import {
   type Probe,
 } from './probe';
 import type { DueFileRow, MediaFileRow } from '../sync/types';
-import { optionalImport } from '../lib/optionalImport';
 import { HEIC_TIMEOUT_MS, HeicError, heicFailure, isHeicFile, isHeicType, jpegName, JPEG_TYPE } from './heic';
+import { convertHeic as convertHeicNow } from './heicConvert';
 
 // La cola de fotos y videos (paso 6 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Archivos
 // grandes"). El archivo se guarda primero en el dispositivo (base `<base local>:media`) y en la página queda
@@ -244,7 +244,7 @@ export interface MediaQueueOptions {
    */
   onForeignFile?: (name: string | null) => void;
   /**
-   * Pasa un HEIC a JPEG (por defecto, `heicConvert.ts`, que se carga recién cuando llega un HEIC). Tira un
+   * Pasa un HEIC a JPEG (por defecto, `heicConvert.ts`; el decodificador se carga recién cuando llega un HEIC). Tira un
    * `HeicError` si no se pudo. Las pruebas ponen uno propio.
    */
   convertHeic?: (file: Blob) => Promise<Blob>;
@@ -258,17 +258,14 @@ export interface MediaQueueOptions {
  */
 export const HEIC_LIMIT_MS = HEIC_TIMEOUT_MS + 15_000;
 
-/** El conversor de verdad, cargado con `import()` la primera vez que llega un HEIC. */
-async function loadAndConvertHeic(file: Blob): Promise<Blob> {
-  let mod: typeof import('./heicConvert');
-  try {
-    // Opcional: si no baja (sin red), no es una versión nueva de la app (lib/optionalImport.ts).
-    mod = await optionalImport(() => import('./heicConvert'));
-  } catch (err) {
-    throw new HeicError('unavailable', `The HEIC converter could not be loaded (${errorMessage(err)}).`);
-  }
-  return mod.convertHeic(file);
-}
+/**
+ * El conversor de verdad. Se importa en forma estática (4,6 KB; lo pesado, el Worker y el decodificador, sigue
+ * aparte): con un `import()`, en la primera sesión de un dispositivo (el service worker todavía no controla la
+ * página) y sin red, el import falla y el navegador guarda ese fallo para siempre en esa pestaña, así que un HEIC
+ * agregado sin red se subía como HEIC al volver la red, sin pasar a JPEG. El Worker se crea de nuevo en cada
+ * foto y no tiene ese problema.
+ */
+const loadAndConvertHeic = convertHeicNow;
 
 /**
  * En qué anda una foto HEIC que todavía no se ve (`MediaQueue.heicState`): `converting`, guardada y por pasar a
