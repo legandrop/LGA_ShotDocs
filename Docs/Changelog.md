@@ -4,11 +4,11 @@ v0.075 :
 
 Las fotos HEIC agregadas desde el navegador no se veían. Una foto del iPhone soltada, pegada o elegida en el
 editor desde Chrome se guardaba y se subía al Drive, pero Chrome no sabe decodificar HEIC: quedaba sin
-miniatura y la página mostraba un ícono. Ahora la cola de archivos la pasa a JPEG en el dispositivo antes de
-guardarla (tamaño completo, calidad 0,92, derecha y con el perfil de color del HEIC), y eso es lo que queda en
-la página y en el Drive. El decodificador (libheif en WebAssembly, LGPL-3.0) corre en un Web Worker y se baja
-aparte, solo cuando llega un HEIC. Si no se puede convertir, se guarda el HEIC con un aviso en su lugar; sin
-red, se vuelve a probar antes de subirlo. Se suma `THIRD_PARTY_NOTICES.md` con las licencias de terceros.
+miniatura y la página mostraba un ícono. Ahora la cola la guarda tal cual en el acto y enseguida la pasa a JPEG
+en el dispositivo, antes de registrarla (tamaño completo, derecha, con el perfil de color del HEIC y
+comprobada); eso queda en la página y en el Drive. Mientras tanto, o si no se puede, un aviso en su lugar; sin
+red se vuelve a probar. El decodificador (libheif en WebAssembly, LGPL-3.0) corre en un Web Worker y se baja
+aparte, solo cuando llega un HEIC. Los avisos de licencia van en `THIRD_PARTY_NOTICES.md` y en `/licenses/`.
 [ Fotos HEIC - se guardan como JPEG al agregarlas ]
 
 v0.074 :

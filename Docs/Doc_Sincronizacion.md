@@ -275,7 +275,7 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   iPhone; si el navegador no lo soporta, se dibuja la imagen cargada), JPEG de calidad 0.8 (baja la
   calidad si pasa de 512 KB). Video: un cuadro cerca del primer segundo. Si el navegador no puede abrir el
   archivo (un video que no decodifica; un HEIC que no se pudo pasar a JPEG, ver `Doc_Imagenes.md`, "Fotos
-  HEIC": desde v0.074 se convierten al agregarlos), no hay miniatura ni medidas: se
+  HEIC": desde v0.075 se convierten al agregarlos), no hay miniatura ni medidas: se
   registra y se sube igual, y en la página queda un ícono con el nombre. La primera miniatura que se sube
   a `thumbs` queda: el bucket no deja reemplazarla. **Queda para después:** que otro dispositivo que sí
   pueda abrir el archivo genere la miniatura que falta (`thumb_at` en null).
