@@ -421,6 +421,14 @@ contesta al abrir la subida se cortan y el navegador aborta el pedido (con la pe
 los 60 segundos al abrir y a los 125 la parte); al retomar no se manda nada dos veces. Falta verlo en
 Safari de iPhone y con una red lenta de verdad.
 
+**"Colgado para todos", probado en Chromium (v0.090)** con la cola real, las partes por `XMLHttpRequest` y las
+miniaturas por el cliente de Supabase real, contra un portero y un Storage locales que reciben el pedido y no
+contestan nunca: con el portero colgado y 4 fotos, la vuelta terminó a los 120 s con 2 subidas abiertas (no 4) y
+los 2 pedidos cortados por el navegador; una vuelta enseguida no volvió a probar; al volver el portero subieron las
+4, una subida por archivo. Con Storage colgado y 3 fotos, la vuelta terminó a los 67 s con 2 miniaturas pedidas
+(no 3) y las 2 subidas cortadas por el navegador (no quedan sueltas); al volver, las 7 miniaturas quedaron una vez
+cada una en el bucket.
+
 **La miniatura (v0.070).** Los dos pedidos de la miniatura a Supabase Storage (subirla antes del original
 y bajar, al final de cada vuelta, las de otros dispositivos) no pasan por el portero y no tenían tope: si
 el que se colgaba era uno de esos, la cola esperaba igual que antes. Ahora tienen uno proporcional al
