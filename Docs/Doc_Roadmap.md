@@ -406,6 +406,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     para las páginas que el dispositivo nunca comparó, se lee primero qué usos tiene el servidor y solo se manda
     lo que falta (`Doc_Sincronizacion.md`, "Dispositivo nuevo"). Medido con 302 páginas y 2704 fotos: de unos 3 min
     con el número y 2704 pedidos a 0 pedidos, 4 lecturas y sin número.
+15. **Hecho (v0.088): cada subida lleva solo los borrados nuevos.** Cada subida de contenido repetía todos los
+    borrados de la página (el *delete set* de Yjs), el 96 % del peso de `page_updates` en una página muy editada
+    (lo midió el diseño de B.9). Ahora el dispositivo anota los que el servidor ya tiene (`syncedDS`, con la misma
+    regla que `syncedSV`: nunca dice de más) y sube solo los demás; si algo no cierra, sube todos. Sin migración.
+    Ver `Doc_Sincronizacion.md`, "Subir solo los borrados nuevos".
 
 ### C. Esperan a Lega
 

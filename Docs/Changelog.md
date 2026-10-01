@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.089 :
 
 Una carpeta soltada en la página llegaba al Drive con otro nombre: «Día 2 - Puerto» quedaba `Día_2_-_Puerto`, y
 sus subcarpetas igual, porque el portero les aplicaba la regla de las carpetas de la app (sin espacios). Decisión D3
@@ -11,6 +11,17 @@ familia, queda en sus partes), las barras van como `_` y se corta en 200 caracte
 duplica nada: cada subcarpeta se encuentra por su marca, no por el nombre. Además, una carpeta sin nada visible en
 el nombre se llamaba `file.bin`: ahora, `Folder`.
 [ Carpetas - las que suelta el usuario conservan su nombre en el Drive ]
+
+v0.088 :
+
+Cada subida de contenido repetía todos los borrados de la historia de la página (el *delete set* de Yjs):
+`encodeStateAsUpdate` corta los elementos con el vector de estado, pero un borrado no avanza ningún reloj y
+viajaban enteros. En una página muy editada era el 96 % del peso de `page_updates`. Ahora el dispositivo anota
+qué borrados ya tiene el servidor (`syncedDS`, que como `syncedSV` crece solo con lo confirmado al subir y lo
+bajado) y cada subida lleva solo los nuevos; si el armado no se comprueba, sube todo como antes. La cuenta lleva
+la generación del workspace: una versión anterior que restaura una copia no la conoce. Con 2000 subidas de una
+página, de 4,2 MB a 87 KB en `page_updates`. Sin migración.
+[ Sincronización - subir solo los borrados nuevos de cada página ]
 
 v0.087 :
 

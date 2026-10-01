@@ -1,6 +1,6 @@
 import { generateKeyBetween } from 'fractional-indexing';
 import { t } from '../i18n';
-import type { LocalDb } from './localDb';
+import { GENERATION_KEY, type LocalDb } from './localDb';
 import type { FailedOp, PagePatch, PageRow, PageSettings, ProjectRow, QueuedOp, TreeOp } from './types';
 
 export function compareSiblings(a: PageRow, b: PageRow): number {
@@ -11,8 +11,6 @@ export function compareSiblings(a: PageRow, b: PageRow): number {
 const PROJECTS_KEY = 'projects';
 /** El primer proyecto del dispositivo (`services.ts`): se reemplaza si el servidor deja de mandarlo (P.14). */
 const PRIMARY_KEY = 'workspaceId';
-/** La generación de la base que este dispositivo vio por última vez (ver `recoverAfterRestore`). */
-const GENERATION_KEY = 'generation';
 
 /** Clave entre dos vecinos. Si dos dispositivos generaron la misma clave, igual devuelve una válida. */
 export function keyBetween(before: string | null, after: string | null): string {
