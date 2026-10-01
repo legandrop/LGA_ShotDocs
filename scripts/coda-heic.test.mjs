@@ -407,8 +407,9 @@ describe('fotos HEIC: en el disco (carpeta temporal, conversor de mentira)', () 
 
 describe('fotos HEIC: el perfil de color pasa al JPEG', () => {
   // Un perfil ICC de mentira: 128 bytes de cabecera con la firma `acsp` en el byte 36, y algo más.
-  const profile = (size) => {
+  const profile = (size, space = 'RGB ') => {
     const icc = Buffer.alloc(size, 7)
+    icc.write(space, 16, 'latin1')
     icc.write('acsp', 36, 'latin1')
     return icc
   }
@@ -430,6 +431,10 @@ describe('fotos HEIC: el perfil de color pasa al JPEG', () => {
     // Una caja que dice ser más larga que el archivo (cortado).
     expect(heicColorProfile(box('colr', Buffer.concat([Buffer.from('prof'), icc])).subarray(0, 150))).toBeNull()
     expect(heicColorProfile(Buffer.from('A'))).toBeNull()
+    // El perfil en grises de una imagen auxiliar no es el de la foto: se saltea y vale el de color que sigue.
+    const gray = box('colr', Buffer.concat([Buffer.from('prof'), profile(200, 'GRAY')]))
+    expect(heicColorProfile(gray)).toBeNull()
+    expect(heicColorProfile(Buffer.concat([gray, box('colr', Buffer.concat([Buffer.from('prof'), icc]))]))).toEqual(icc)
   })
 
   it('va en un segmento APP2 después de la cabecera JFIF; uno grande, en varios numerados', () => {
