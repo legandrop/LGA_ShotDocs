@@ -42,6 +42,7 @@ import { CommentsToggle } from './CommentsToggle';
 import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
+import { SpaceHost } from './SpaceHost';
 import { TrashView } from './TrashView';
 import { downloadUnsynced } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
@@ -395,6 +396,8 @@ export function Shell() {
         </Part>
       )}
       {codaOwner && <ImportCodaHost />}
+      {/* "Available offline", "Storage on this device" y el aviso del tope (P.10). */}
+      <SpaceHost />
       <HelpHost />
       <TourHost />
       <InstallHost />

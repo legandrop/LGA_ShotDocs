@@ -126,6 +126,7 @@ async function app({ route = '/', firstLoad = false, accountSeen = false } = {})
     comments: d.comments,
     commentsDb: d.commentsDb,
     sizes: d.sizes,
+    offline: d.offline,
     shutdown: async () => undefined,
     firstLoad,
   } as unknown as Services;
@@ -256,6 +257,10 @@ describe('la página de práctica no toca nada real', () => {
     expect(() => session.services.tree.create(null, 'x')).toThrow(PracticeWriteError);
     expect(() => session.services.docs.open(PRACTICE_ID)).toThrow(PracticeWriteError);
     expect(() => session.services.engine.syncNow()).toThrow(PracticeWriteError);
+    // "Available offline": la práctica solo lee lo marcado; ni marca, ni baja, ni libera.
+    expect(() => session.services.offline.mark('page', PRACTICE_ID)).toThrow(PracticeWriteError);
+    expect(() => session.services.offline.freeUp('all')).toThrow(PracticeWriteError);
+    expect(session.services.offline.getSnapshot()).toBeTruthy();
     expect(() => session.services.remote.ensureWorkspace()).toThrow(PracticeWriteError);
     expect(() => session.services.client.auth.signOut()).toThrow(PracticeWriteError);
 

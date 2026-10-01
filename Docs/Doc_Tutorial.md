@@ -438,6 +438,14 @@ Y pruebas que lo sostienen sin depender de acordarse:
 
 En la recorrida no hace falta un paso nuevo (no cambia nada de lo que ya señala).
 
+### Entradas que suma P.10: Available offline (v0.083)
+
+`availableOffline` y `storageDevice` de `src/help/entries.ts`, en la sección "Offline and syncing" ("Sin red y sincronización") (textos en
+`src/i18n/lazy/help.ts`, en los dos idiomas), sin `when` ni atajos; las ventanas de `OfflinePart.tsx` cierran con Esc
+(`menusClose` en `shortcutSources.ts`). La recorrida y la práctica no suman nada: el paso del estado de la
+sincronización ya existe, y la práctica no tiene archivos ni base de archivos (solo lee lo marcado, no marca ni libera).
+Cuando llegue la entrega 2 (liberar originales propios), el texto de `storageDevice` tiene que decirlo.
+
 ## 8. Tamaño y carga
 
 - En la parte que se baja siempre: el registro, la decisión de si arrancar la recorrida y el botón "?". Menos

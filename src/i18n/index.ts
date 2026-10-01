@@ -8,6 +8,7 @@ import type { help } from './lazy/help';
 import type { folders } from './lazy/folders';
 import type { importCoda } from './lazy/importCoda';
 import type { installDialog } from './lazy/install';
+import type { offline } from './lazy/offline';
 import type { projectStates } from './lazy/projectStates';
 import type { search } from './lazy/search';
 import type { teamDialogs } from './lazy/teamDialogs';
@@ -39,6 +40,7 @@ type LazyStrings = typeof carrete &
   typeof folders &
   typeof importCoda &
   typeof installDialog &
+  typeof offline &
   typeof projectStates &
   typeof search &
   typeof teamDialogs &

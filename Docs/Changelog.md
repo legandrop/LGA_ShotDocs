@@ -11,6 +11,17 @@ pierde (salvo un bloque anidado a la vez, menos que antes). Shift+clic colapsa o
 editar), en un mapa aparte que las versiones viejas conservan. La ayuda suma las dos funciones.
 [ Colapsar 1b y 2 - mover la sección entera y colapsar para todos ]
 
+v0.083 :
+
+No había forma de tener una página o un proyecto para usar sin red, ni de saber cuánto ocupa la app en el
+dispositivo. *Available offline…* (menú de la página o del proyecto) muestra el peso de cada casilla y baja lo elegido
+por partes, sin frenar las subidas, hasta "listo"; después lo mantiene al día. *Storage on this device* (menú de la
+cuenta) tiene un tope elegible (2 GB de fábrica): pasado, un aviso pregunta antes de liberar copias bajadas y
+nítidas, nunca lo marcado ni lo agregado en el dispositivo. Una foto nueva que no entra libera copias que siguen en
+Drive o se ofrece guardarla. Sin red se lee "Offline · N to upload", también en el teléfono. El portero suma códigos
+de error fijos, `POST /verify`, `only: 'known'` y `?offline=1`. Medición en `/storage-test`. Ayuda: dos entradas en *Offline and syncing*.
+[ Available offline - marcar, bajar, tope con aviso y espacio en el dispositivo ]
+
 v0.082 :
 
 Faltaban una ayuda y una forma de aprender la app. Ahora el "?" al lado de Papelera (o *Help and shortcuts* en el

@@ -74,6 +74,8 @@ export interface HelpEntry {
 const BEFORE_HELP = '0.081';
 /** La versión que trajo la ayuda. */
 const HELP = '0.082';
+/** "Available offline" y el espacio en el dispositivo (P.10, Docs/Doc_Copias_Locales.md). */
+const OFFLINE = '0.083';
 /** La que trajo colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2). */
 const COLLAPSE_2 = '0.084';
 
@@ -320,6 +322,22 @@ export const HELP_ENTRIES: HelpEntry[] = [
   // --- Sin red ---
   { id: 'syncStatus', section: 'sync', title: 'help.syncStatus.title', text: 'help.syncStatus.text', showMe: 'sync', since: BEFORE_HELP },
   { id: 'syncSafe', section: 'sync', title: 'help.syncSafe.title', text: 'help.syncSafe.text', since: BEFORE_HELP },
+  {
+    id: 'availableOffline',
+    section: 'sync',
+    title: 'help.availableOffline.title',
+    text: 'help.availableOffline.text',
+    words: ['offline', 'sin red', 'sin conexión', 'modo avión', 'rodaje', 'descargar', 'bajar', 'download'],
+    since: OFFLINE,
+  },
+  {
+    id: 'storageDevice',
+    section: 'sync',
+    title: 'help.storageDevice.title',
+    text: 'help.storageDevice.text',
+    words: ['espacio', 'almacenamiento', 'storage', 'tope', 'límite', 'liberar', 'free up', 'lleno', 'disco'],
+    since: OFFLINE,
+  },
 
   // --- Hojas y PDF ---
   { id: 'sheets', section: 'print', title: 'help.sheets.title', text: 'help.sheets.text', since: BEFORE_HELP },

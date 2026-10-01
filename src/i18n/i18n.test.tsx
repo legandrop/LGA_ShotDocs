@@ -20,6 +20,7 @@ import { help } from './lazy/help';
 import { folders } from './lazy/folders';
 import { importCoda } from './lazy/importCoda';
 import { installDialog } from './lazy/install';
+import { offline } from './lazy/offline';
 import { projectStates } from './lazy/projectStates';
 import { search } from './lazy/search';
 import { teamDialogs } from './lazy/teamDialogs';
@@ -27,7 +28,7 @@ import { tutorial } from './lazy/tutorial';
 import { parts, strings } from './strings';
 
 /** Las partes que viajan con lo que se baja aparte (ver `register` en index.ts). */
-const LAZY = { carrete, commentsPanel, drive, editor, folders, help, importCoda, install: installDialog, projectStates, search, teamDialogs, tutorial };
+const LAZY = { carrete, commentsPanel, drive, editor, folders, help, importCoda, install: installDialog, offline, projectStates, search, teamDialogs, tutorial };
 const ALL_PARTS: Record<string, Record<string, { en: Entry; es: Entry }>> = { ...parts, ...LAZY };
 const ALL = Object.assign({}, ...Object.values(ALL_PARTS)) as Record<Key, { en: Entry; es: Entry }>;
 
@@ -265,6 +266,7 @@ describe('cambio de idioma', () => {
       comments: d.comments,
       commentsDb: d.commentsDb,
       sizes: d.sizes,
+      offline: d.offline,
       shutdown: async () => undefined,
     };
     const host = await mount(

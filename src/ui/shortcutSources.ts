@@ -47,6 +47,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'HelpDialog.tsx',
     'FolderDialog.tsx',
     'InstallDialog.tsx',
+    'OfflinePart.tsx',
   ],
   listPick: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'],
   listClose: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'],

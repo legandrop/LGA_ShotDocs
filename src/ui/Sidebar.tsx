@@ -17,6 +17,7 @@ import { ProjectSwitcher } from './ProjectSwitcher';
 import { useSearchSession } from './projectSearchUi';
 import { shortcutLabel } from './shortcuts';
 import { SyncBadge } from './SyncBadge';
+import { OfflineBadge, OfflineLine } from './SpaceHost';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
 import { createOpenScheduler, isPlainKey, isTreeKey, treeKeyAction, visibleRows } from './treeNav';
 
@@ -313,6 +314,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
               </span>
             </span>
           )}
+          <OfflineBadge kind="page" id={page.id} />
           <span className="row-actions">
             <button
               aria-label={tr('sidebar.moreActions')}
@@ -376,6 +378,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     <nav className="sidebar" aria-label={tr('sidebar.pages')}>
       <ProjectSwitcher />
       <SyncBadge />
+      <OfflineLine />
 
       <div className="section-title" data-tour="pages">
         <span className="mono-label">{tr('sidebar.pages')}</span>

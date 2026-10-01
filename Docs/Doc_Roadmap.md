@@ -146,11 +146,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   la subida directa a Google con el Drive real, "Agregar a esta carpeta", la cuadrícula, la lista sin red, "Seguir"
   en Chrome y Edge, el botón "Carpeta…" del menú `/` y *Bajar todo* (entrega 2). Detalle en `Doc_Carpetas.md`,
   "Cómo quedó".
-- **P.10 Liberar la copia de la app en el dispositivo** (Lega, 2026-09-30): el archivo que el usuario eligió
-  nunca se toca (queda en su disco); lo que se puede liberar es la copia que la app guarda en el almacenamiento
-  del navegador después de que el archivo está confirmado en el Drive (por ejemplo, un video grande subido
-  desde el iPhone). Pensar cuándo (tamaño, días), qué se pierde (verlo sin red en ese dispositivo) y que la
-  miniatura se queda. **Diseño en `Doc_Copias_Locales.md`** (auditado; a mano por defecto, esperando la respuesta de Lega).
+- **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
+  elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
+  confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
+  pesos), y "Espacio en este dispositivo" en el menú de la cuenta. **Diseño en `Doc_Copias_Locales.md`**
+  (rehecho con D-25; auditado y aprobado). **Entregas 0 y 1 implementadas** (v0.083, rama `lega/espacio-offline`);
+  falta la entrega 2 (liberar los originales agregados en el dispositivo, con su auditoría) y la medición del iPhone
+  casi lleno (sección 9.1).
 - **P.11 Colapsar secciones por sus títulos, como en Coda** (Lega, 2026-09-30): cualquier título (H1, H2, H3…)
   se colapsa con un triángulo lleno a su izquierda (apunta a la derecha colapsado, abajo abierto). Colapsar un
   título esconde todo lo que sigue hasta el próximo título de su nivel o mayor (un H1 esconde sus H2 y H3, que
