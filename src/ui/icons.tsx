@@ -36,6 +36,10 @@ export const RestoreIcon = icon('M4 10a6 6 0 1 0 1.8-4.3M4 3.5v3h3');
 // Archivar y desarchivar un proyecto (P.14): una caja con su tapa; desarchivar, con una flecha que sale.
 export const ArchiveIcon = icon('M3.25 4.25h13.5v3H3.25zM4.5 7.25v8a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-8M8.25 10.5h3.5');
 export const UnarchiveIcon = icon('M3.25 4.25h13.5v3H3.25zM4.5 7.25v8a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-8M10 14V9.75M8 11.5l2-2 2 2');
+// "Available offline" (P.10): un círculo con una flecha que baja al dispositivo.
+export const OfflineMarkIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM10 6.75v6M7.5 10.5l2.5 2.5 2.5-2.5');
+// "Storage on this device": un disco.
+export const StorageIcon = icon('M3.25 11.5h13.5v3.75a1 1 0 0 1-1 1H4.25a1 1 0 0 1-1-1zM3.25 11.5l2-6.75h9.5l2 6.75M13.25 14h.5');
 export const SyncedIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM7.25 10.25l1.9 1.9 3.6-4', {
   strokeWidth: 1.7,
 });

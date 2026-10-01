@@ -14,6 +14,7 @@ import {
   ChevronLeftIcon,
   ImportIcon,
   MoreIcon,
+  OfflineMarkIcon,
   PlusIcon,
   RenameIcon,
   SearchIcon,
@@ -27,6 +28,7 @@ import { editedLabel, monogram, projectStateError, useCurrentProject, useSwitchP
 import { SEARCH_SHORTCUT_LABEL, useSearchSession } from './projectSearchUi';
 import { DeletedProjectsList, DeleteProjectDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
+import { OfflineBadge, openOffline } from './SpaceHost';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
 import {
   RemoveWorkspaceDialog,
@@ -189,7 +191,7 @@ function ProjectMenu(props: {
 }) {
   const tree = useTree();
   const perms = usePermissions();
-  const { sizes: sizeStore, remote, engine } = useServices();
+  const { sizes: sizeStore, remote, engine, mediaDb } = useServices();
   const status = useSyncStatus();
   const sizes = useProjectSizes();
   const switchTo = useSwitchProject();
@@ -347,11 +349,26 @@ function ProjectMenu(props: {
   const rowActions = (id: string, name: string, archived: boolean) => {
     const canRename = !archived && perms.canRenameProject(id);
     const canManage = statesReady && perms.canManageProject(id);
-    if (!canRename && !canManage) return null;
+    // "Available offline" (P.10): cualquiera que vea el proyecto, si hay base de archivos en el dispositivo.
+    const canOffline = !!mediaDb;
+    if (!canRename && !canManage && !canOffline) return null;
     const reason = blockedReason(id, archived);
     const deleteReason = offline ? tr('fileTrash.needsInternet') : archived ? null : reason;
     return (
       <span className="project-actions">
+        {canOffline && (
+          <button
+            className="icon-button"
+            aria-label={tr('project.offline')}
+            data-tip={tr('project.offline')}
+            onClick={() => {
+              props.onClose();
+              openOffline('project', id);
+            }}
+          >
+            <OfflineMarkIcon size={16} />
+          </button>
+        )}
         {canRename && (
           <button
             className="icon-button"
@@ -471,7 +488,10 @@ function ProjectMenu(props: {
               >
                 <Monogram name={p.name} />
                 <span className="project-label">
-                  <strong>{p.name}</strong>
+                  <strong>
+                    {p.name}
+                    <OfflineBadge kind="project" id={p.id} />
+                  </strong>
                   <span>
                     {/* El peso antes de la fecha: si no entra, el "…" corta la fecha. */}
                     {tr('project.pages', { count: stats.pages })} · {bytes > 0 && `${formatSize(bytes, tr.lang)} · `}
@@ -497,6 +517,16 @@ function ProjectMenu(props: {
               {actions && !touch && actions}
               {actions && touch && opened === p.id && (
                 <span className="project-sheet">
+                  {mediaDb && (
+                    <button
+                      onClick={() => {
+                        props.onClose();
+                        openOffline('project', p.id);
+                      }}
+                    >
+                      <OfflineMarkIcon size={16} /> {tr('project.offline')}
+                    </button>
+                  )}
                   {perms.canRenameProject(p.id) && !archived && (
                     <button onClick={() => setMode({ name: 'rename', id: p.id })}>
                       <RenameIcon size={16} /> {tr('common.rename')}

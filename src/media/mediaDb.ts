@@ -54,6 +54,11 @@ export interface MediaRecord {
    * convertirla), no hay nada pendiente.
    */
   heic?: 'pending' | 'sent' | 'failed';
+  /**
+   * Cuándo se confirmó la subida (`markUploaded`). Opcional: lo subido antes de esta versión no lo tiene. Un
+   * original propio no se libera antes de 14 días desde acá (Docs/Doc_Copias_Locales.md, sección 5.2).
+   */
+  uploadedAt?: number;
   /** La subida al portero que quedó a medias: con esto se retoma después de cerrar la app. */
   uploadId: string | null;
   /** Hasta dónde confirmó el portero (bytes). */

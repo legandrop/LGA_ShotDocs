@@ -4,7 +4,7 @@ import type { MediaRemote } from '../sync/remote';
 import { errorMessage, isNetworkError, isTimeout, RemoteError } from '../sync/types';
 import { attachmentCardUrl, cleanFileName, EXTENSION_MIME, fileKind, mimeFromName, type FileKind } from './attachments';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
-import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress } from './portero';
+import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress, type VerifyResult } from './portero';
 import {
   deletedLabel,
   deletedUrl,
@@ -25,6 +25,7 @@ import {
 import type { DueFileRow, MediaFileRow } from '../sync/types';
 import { HEIC_TIMEOUT_MS, HeicError, heicFailure, isHeicFile, isHeicType, jpegName, JPEG_TYPE } from './heic';
 import { convertHeic as convertHeicNow } from './heicConvert';
+import { dropCopy, readCopy, readOfflineView } from './offlineStore';
 
 // La cola de fotos y videos (paso 6 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Archivos
 // grandes"). El archivo se guarda primero en el dispositivo (base `<base local>:media`) y en la página queda
@@ -217,6 +218,8 @@ function friendly(err: unknown): string {
  */
 export type MediaPortero = Pick<Portero, 'upload' | 'pass' | 'trash'> & {
   passInfo?: (target: { file: string }) => Promise<{ url: string; named: boolean }>;
+  status?: Portero['status'];
+  verify?: Portero['verify'];
 };
 
 export interface MediaQueueOptions {
@@ -250,6 +253,13 @@ export interface MediaQueueOptions {
   convertHeic?: (file: Blob) => Promise<Blob>;
   /** Lo más que se espera una conversión antes de darla por fallida (por defecto `HEIC_LIMIT_MS`; las pruebas). */
   heicTimeoutMs?: number;
+  /**
+   * Se mostró (`show`: la página que lo usa) o se abrió (`open`: carrete, adjunto, impresión) un archivo: para
+   * saber qué hace más que no se abre (Docs/Doc_Copias_Locales.md, sección 5.5) y qué no liberar en esta sesión.
+   */
+  onUse?: (id: string, how: 'show' | 'open') => void;
+  /** No entró un archivo nuevo en el dispositivo: para ofrecer liberar copias (sección 5.7), con su peso. */
+  onNoRoom?: (bytes: number) => void;
 }
 
 /**
@@ -350,6 +360,10 @@ function viewKind(mime: string, name: string): MediaKind | null {
 export class MediaQueue {
   /** Se agregó algo a la cola: conviene sincronizar pronto. */
   onQueued?: () => void;
+  /** Además de `onQueued` (que usa el motor): lo que quiere saber que llegó algo para subir (las bajadas). */
+  private readonly queuedListeners = new Set<() => void>();
+  /** Lo que dice el portero que entiende (`/drive/status`, `features`), una vez por sesión. */
+  private featuresAsked: Promise<string[]> | null = null;
   /** Cambió lo que muestra el estado (pendientes, errores, progreso). */
   onChange?: () => void;
 
@@ -555,6 +569,7 @@ export class MediaQueue {
       await Promise.all([tx.objectStore('blobs').put(file, id), tx.objectStore('files').put(record), tx.done]);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+        this.options.onNoRoom?.(file.size);
         throw new FileRejected(t('queue.noSpace'));
       }
       throw err;
@@ -562,6 +577,7 @@ export class MediaQueue {
     this.seenLinks.add(`${pageId}:${id}`);
     this.remember(id, record, true);
     this.onQueued?.();
+    for (const fn of this.queuedListeners) fn();
     // Medidas y miniatura, sin esperarlas: el archivo ya está a salvo. La cola no lo registra antes. Un HEIC
     // primero se convierte (las medidas y la miniatura salen del JPEG, al terminar).
     if (heic) void this.ensureConverted(id);
@@ -590,6 +606,7 @@ export class MediaQueue {
         const again = await storage.estimate().catch(() => estimate);
         if (!((again.usage ?? 0) + size + ROOM_MARGIN > (again.quota ?? quota))) return;
       }
+      this.options.onNoRoom?.(size);
       throw new FileRejected(t('queue.noRoom'));
     }
   }
@@ -1314,6 +1331,8 @@ export class MediaQueue {
 
   private async markUploaded(record: MediaRecord, driveId: string): Promise<'done'> {
     await this.patch(record.id, {
+      // Cuándo se confirmó la subida: un original propio no se libera antes de 14 días desde acá (entrega 2).
+      uploadedAt: this.now(),
       pending: 0,
       lost: 0,
       stalls: 0,
@@ -1458,6 +1477,126 @@ export class MediaQueue {
   }
 
   /**
+   * Hay algo que se puede subir ahora: un archivo o un uso pendiente que no está detenido, ni esperando un
+   * reintento, ni esperando a otro dispositivo o a la base. Las bajadas de "Available offline" esperan a que no
+   * haya (Docs/Doc_Copias_Locales.md, sección 3.5); un archivo detenido no las frena.
+   */
+  async hasUploadableNow(): Promise<boolean> {
+    if (!this.db || !this.enabled) return false;
+    const now = this.now();
+    const [records, links] = await Promise.all([
+      this.db.getAllFromIndex('files', 'pending', 1),
+      this.db.getAllFromIndex('links', 'pending', 1),
+    ]);
+    return (
+      records.some((r) => !r.blocked && (r.retryAt ?? 0) <= now) ||
+      links.some((l) => !l.blocked && !l.waiting && (l.retryAt ?? 0) <= now)
+    );
+  }
+
+  /** Avisa cada vez que se agrega algo para subir. */
+  subscribeQueued(fn: () => void): () => void {
+    this.queuedListeners.add(fn);
+    return () => this.queuedListeners.delete(fn);
+  }
+
+  /**
+   * Lo que el portero dice que entiende (`features` de `/drive/status`), una vez por sesión: vacío con un portero
+   * anterior, sin portero o sin red (se vuelve a preguntar la próxima vez).
+   */
+  features(): Promise<string[]> {
+    if (!this.url) return Promise.resolve([]);
+    if (!this.featuresAsked) {
+      const portero = this.porteroFor(this.url);
+      const asked = (portero.status ? portero.status() : Promise.resolve({ features: [] as unknown }))
+        .then((s: { features?: unknown }) => (Array.isArray(s.features) ? s.features.filter((f): f is string => typeof f === 'string') : []))
+        .catch((err: unknown) => {
+          this.featuresAsked = null;
+          throw err;
+        });
+      this.featuresAsked = asked;
+    }
+    return this.featuresAsked;
+  }
+
+  /** `POST /verify` del portero (solo uno que anuncia `verify`): qué dice Drive hoy de cada archivo, de a 15. */
+  async verify(ids: string[]): Promise<Record<string, VerifyResult>> {
+    if (!this.url) throw new PorteroError(t('queue.noServer'), 0);
+    const portero = this.porteroFor(this.url);
+    if (!portero.verify) return {};
+    const out: Record<string, VerifyResult> = {};
+    for (let i = 0; i < ids.length; i += 15) Object.assign(out, await portero.verify(ids.slice(i, i + 15)));
+    return out;
+  }
+
+  /** Guarda lo que la base dice de unos archivos (como `fetchMeta`), para mostrarlos y bajarlos sin red. */
+  async learn(rows: MediaFileRow[]): Promise<void> {
+    for (const row of rows) {
+      const known = this.knownFrom(row);
+      if (this.db && !(await this.db.get('files', row.id))) await this.db.put('known', known).catch(() => undefined);
+    }
+  }
+
+  /** La nítida de 2048 de un archivo, hecha acá (para una marca, sin guardarla en `viewIndex`). */
+  async makeOfflineView(file: Blob, mime: string): Promise<Blob | null> {
+    return this.makeView(file, mime, VIEW_SIDE).catch(() => null);
+  }
+
+  /**
+   * La miniatura en el dispositivo: si falta y la base dice que hay, se baja y se guarda (como al mostrarla).
+   * Devuelve si quedó. Para "Available offline".
+   */
+  async ensureThumb(id: string): Promise<boolean> {
+    if (!this.db) return false;
+    if (await this.db.get('thumbs', id)) return true;
+    const own = await this.db.get('files', id);
+    if (own) return false;
+    let meta = await this.db.get('known', id);
+    if (!meta?.thumbAt) meta = (await this.fetchMeta(id).catch(() => null)) ?? meta;
+    if (!meta?.thumbAt) return false;
+    const thumb = await this.remote.downloadThumb(id);
+    if (!thumb) return false;
+    await this.db.put('thumbs', thumb, id);
+    return true;
+  }
+
+  /** Lo que ocupan las nítidas de la página guardadas (`viewIndex`). */
+  async viewBytes(): Promise<number> {
+    if (!this.db) return 0;
+    return (await this.loadViewIndex()).reduce((n, e) => n + e.bytes, 0);
+  }
+
+  /**
+   * Borra las nítidas de la página guardadas, de la más vieja a la más nueva, hasta liberar `bytes` (todas con
+   * `Infinity`). Se vuelven a hacer cuando hagan falta. Devuelve lo liberado.
+   */
+  async trimViews(bytes: number): Promise<number> {
+    if (!this.db) return 0;
+    const index = await this.loadViewIndex();
+    let freed = 0;
+    while (index.length > 0 && freed < bytes) {
+      const gone = index.shift()!;
+      freed += gone.bytes;
+      await this.db.delete('thumbs', gone.key).catch(() => undefined);
+    }
+    await this.db.put('meta', index, VIEW_INDEX_KEY).catch(() => undefined);
+    return freed;
+  }
+
+  /**
+   * La nítida de 2048 de la página (`view:<id>`), si está: para pasarla a una marca sin bajar nada. La saca del
+   * índice (y de `thumbs`) solo si quien llama ya la guardó como `offview:`.
+   */
+  async savedView(id: string): Promise<Blob | null> {
+    if (!this.db) return null;
+    return (await this.db.get('thumbs', viewKey(id, VIEW_SIDE)).catch(() => undefined)) ?? null;
+  }
+
+  async forgetSavedView(id: string): Promise<void> {
+    await this.dropView(viewKey(id, VIEW_SIDE));
+  }
+
+  /**
    * Las páginas con fotos, videos o usos sin confirmar (también los detenidos y los que esperan), una vez cada
    * una. Para no borrar un proyecto con algo suyo sin subir en este dispositivo (P.14).
    */
@@ -1580,6 +1719,7 @@ export class MediaQueue {
   resolve(url: string, pageId?: string): Promise<string> {
     const id = mediaIdOf(url);
     if (!id) return Promise.resolve(url);
+    this.options.onUse?.(id, 'show');
     if (pageId) {
       return this.foreignTo(id, pageId).then((kind) => {
         if (kind === false) return this.resolveOwn(id);
@@ -1802,15 +1942,19 @@ export class MediaQueue {
       return { kind: viewKind(meta.mime, meta.name), name: meta.name, original: null, mime: meta.mime };
     }
     const db = this.db;
+    this.options.onUse?.(id, 'open');
     const own = await db.get('files', id);
     if (own) {
-      this.remember(id, own, true);
-      return { kind: viewKind(own.mime, own.name), name: own.name, original: (await db.get('blobs', id)) ?? null, mime: own.mime };
+      const original = (await db.get('blobs', id)) ?? (await readCopy(db, id).catch(() => null));
+      this.remember(id, own, !!original);
+      return { kind: viewKind(own.mime, own.name), name: own.name, original, mime: own.mime };
     }
     const meta = (await db.get('known', id)) ?? (await this.fetchMeta(id).catch(() => null));
     if (!meta) return { kind: null, name: '', original: null };
-    this.remember(id, meta, false);
-    return { kind: viewKind(meta.mime, meta.name), name: meta.name, original: null, mime: meta.mime };
+    // Una copia bajada para "Available offline" (Docs/Doc_Copias_Locales.md): se abre sin red.
+    const copy = await readCopy(db, id).catch(() => null);
+    this.remember(id, meta, !!copy);
+    return { kind: viewKind(meta.mime, meta.name), name: meta.name, original: copy, mime: meta.mime };
   }
 
   /**
@@ -1820,9 +1964,11 @@ export class MediaQueue {
   async localImage(id: string): Promise<Blob | null> {
     if (!this.db) return null;
     try {
+      this.options.onUse?.(id, 'open');
       const own = await this.db.get('files', id);
-      if (!own || fileKind(own.mime, own.name) !== 'image') return null;
-      return (await this.db.get('blobs', id)) ?? null;
+      const meta = own ?? (await this.db.get('known', id));
+      if (!meta || fileKind(meta.mime, meta.name) !== 'image') return null;
+      return (own ? await this.db.get('blobs', id) : undefined) ?? (await readCopy(this.db, id));
     } catch {
       return null;
     }
@@ -1835,7 +1981,8 @@ export class MediaQueue {
   async localOriginal(id: string): Promise<Blob | null> {
     if (!this.db) return null;
     try {
-      return (await this.db.get('blobs', id.toLowerCase())) ?? null;
+      this.options.onUse?.(id.toLowerCase(), 'open');
+      return (await this.db.get('blobs', id.toLowerCase())) ?? (await readCopy(this.db, id));
     } catch {
       return null;
     }
@@ -1942,6 +2089,9 @@ export class MediaQueue {
       if ('deleted' in meta && meta.deleted) return null;
       const long = Math.max(meta.width ?? 0, meta.height ?? 0);
       if (long > 0 && long <= THUMB_SIDE * VIEW_GAIN) return this.noSharp(id);
+      // La de una marca "Available offline" (Docs/Doc_Copias_Locales.md): es de 2048, fuera del tope de las nítidas.
+      const offline = await readOfflineView(db, id).catch(() => null);
+      if (offline) return this.keepView(id, VIEW_SIDE, offline);
       for (const s of VIEW_SIDES) {
         if (s < side) continue;
         const saved = await db.get('thumbs', viewKey(id, s));
@@ -1950,7 +2100,7 @@ export class MediaQueue {
           return this.keepView(id, s, saved);
         }
       }
-      const original = await db.get('blobs', id);
+      const original = (await db.get('blobs', id)) ?? (await readCopy(db, id).catch(() => null));
       if (original) {
         const view = await this.makeView(original, meta.mime, side).catch(() => null);
         if (!view) return this.noSharp(id);
@@ -2084,6 +2234,8 @@ export class MediaQueue {
       this.views.delete(`${side}:${id}`);
       void this.dropView(viewKey(id, side));
     }
+    // La de una marca también: el archivo se ve como borrado (Docs/Doc_Copias_Locales.md, sección 3.6).
+    if (this.db) void dropCopy(this.db, id, { what: 'view', ignoreMarks: true }).catch(() => undefined);
   }
 
   /** Un pase del portero para ver el archivo entero (vence a las 8 horas). */

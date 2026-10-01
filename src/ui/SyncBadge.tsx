@@ -38,7 +38,7 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
     text = tr('sync.localError');
   } else if (!status.online) {
     tone = 'offline';
-    text = pending > 0 ? tr('sync.offlinePending', { changes }) : tr('sync.offline');
+    text = pending > 0 ? tr('sync.offlinePending', { count: pending }) : tr('sync.offline');
   } else if ((status.lastError && !status.syncing) || (mediaError && !status.uploading) || (commentError && !status.syncing)) {
     tone = 'warn';
     text = pending > 0 ? tr('sync.notUploadedRetrying', { changes }) : tr('sync.problem');
@@ -66,10 +66,21 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
 /** Versión chica para la barra de arriba en el teléfono: solo el ícono, con el texto como etiqueta. */
 export function SyncIcon({ onClick }: { onClick: () => void }) {
   const { tone, text } = useSyncTone();
+  const pending = usePendingCount();
+  const tr = useT();
   const Icon = TONE_ICONS[tone];
+  // Sin conexión se dice con palabras, también en el teléfono (D-25): "Offline · 700" al lado del ícono. El
+  // `data-tip` no repite lo que ya se lee.
+  const offline = tone === 'offline';
   return (
-    <button className={`icon-button sync-icon ${tone}`} aria-label={text} data-tip={text} onClick={onClick}>
+    <button
+      className={`icon-button sync-icon ${tone}${offline ? ' with-label' : ''}`}
+      aria-label={text}
+      data-tip={offline ? undefined : text}
+      onClick={onClick}
+    >
       <Icon size={20} />
+      {offline && <span className="sync-icon-label">{pending > 0 ? tr('sync.offlineShort', { count: pending }) : tr('sync.offline')}</span>}
     </button>
   );
 }

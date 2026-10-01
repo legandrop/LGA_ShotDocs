@@ -3,7 +3,7 @@ import { printAsSeen, setPrintAsSeen } from './printAsSeen';
 import { t, useT } from '../i18n';
 import { importJobFor } from '../import/importJob';
 import { prefs, usePrefs, type Prefs } from '../prefs';
-import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
+import { useOffline, usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import { pageFormat, sizeLabel } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
@@ -14,15 +14,18 @@ import {
   LightIcon,
   MembersIcon,
   MoveIcon,
+  OfflineMarkIcon,
   PlusIcon,
   PrintIcon,
   RenameIcon,
   SheetIcon,
   ShareIcon,
   SignOutIcon,
+  StorageIcon,
   SystemIcon,
   TrashIcon,
 } from './icons';
+import { openOffline, openStorage } from './SpaceHost';
 import { isPhoneLayout } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
 import { notify } from './notice';
@@ -132,7 +135,10 @@ export function PageMenu(props: {
   const canEdit = perms.canEditPage(props.pageId);
   const canManage = perms.canManagePage(props.pageId);
   const format = pageFormat(tree, props.pageId);
-  const { media } = useServices();
+  const { media, mediaDb, offline } = useServices();
+  // "Available offline" (P.10): marcada ella o una de arriba.
+  useOffline();
+  const offlineMark = mediaDb && offline ? offline.markFor('page', props.pageId) : null;
   const ref = useRef<HTMLDivElement>(null);
   useFloating(ref, props.onClose, props.anchor, true);
   const split = splitEnabled(tree, props.pageId);
@@ -206,6 +212,20 @@ export function PageMenu(props: {
           <CollapseAllIcon />
           {tr('pageMenu.printAsSeen')}
           <span className="check">{asSeen ? tr('common.on') : tr('common.off')}</span>
+        </button>
+      )}
+      {/* Bajar la página con sus subpáginas para usarla sin conexión (P.10, Docs/Doc_Copias_Locales.md). */}
+      {mediaDb && (
+        <button
+          role="menuitem"
+          onClick={() => {
+            props.onClose();
+            openOffline('page', props.pageId);
+          }}
+        >
+          <OfflineMarkIcon />
+          {tr('pageMenu.offline')}
+          {offlineMark && <span className="check">{tr('common.on')}</span>}
         </button>
       )}
       {/* Colapsar todos los títulos, o abrirlos, para vos: solo la página abierta (P.11, Doc_Colapsar.md). */}
@@ -294,7 +314,7 @@ export function AccountMenu({
   onMembers?: () => void;
 }) {
   const perms = usePermissions();
-  const { user, docs, client, tree } = useServices();
+  const { user, docs, client, tree, mediaDb } = useServices();
   const status = useSyncStatus();
   const pending = usePendingCount();
   const isOwner = !!status.mediaUrl && !!status.ownerId && status.ownerId === user.id;
@@ -410,6 +430,18 @@ export function AccountMenu({
         >
           <DriveIcon />
           Google Drive
+        </button>
+      )}
+      {mediaDb && (
+        <button
+          className="menu-row"
+          onClick={() => {
+            onClose();
+            openStorage();
+          }}
+        >
+          <StorageIcon />
+          {tr('account.storage')}
         </button>
       )}
       <button className="menu-row" onClick={() => void signOut()}>

@@ -198,6 +198,7 @@ describe('en la app abierta', () => {
       comments: d.comments,
       commentsDb: d.commentsDb,
       sizes: d.sizes,
+      offline: d.offline,
       shutdown: async () => {
         await d.engine.stop();
         d.db.close();
@@ -350,6 +351,7 @@ describe('quitar sin la base de fotos', () => {
       comments: d.comments,
       commentsDb: d.commentsDb,
       sizes: d.sizes,
+      offline: d.offline,
       shutdown: async () => {
         await d.engine.stop();
         d.db.close();

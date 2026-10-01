@@ -11,3 +11,6 @@ export const ProjectSearch = lazyPart(() => import('./ProjectSearch').then((m) =
 // Borrar un proyecto y la papelera de proyectos (P.14).
 export const DeleteProjectDialog = lazyPart(() => import('./ProjectStatesPart').then((m) => m.DeleteProjectDialog));
 export const DeletedProjectsList = lazyPart(() => import('./ProjectStatesPart').then((m) => m.DeletedProjectsList));
+// "Available offline" y "Storage on this device" (P.10).
+export const OfflineDialog = lazyPart(() => import('./OfflinePart').then((m) => m.OfflineDialog));
+export const StorageDialog = lazyPart(() => import('./OfflinePart').then((m) => m.StorageDialog));

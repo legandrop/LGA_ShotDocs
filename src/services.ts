@@ -4,6 +4,7 @@ import { stored, t } from './i18n';
 import { pendingInviteTarget } from './invite';
 import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
+import { OfflineManager, type OfflineSnapshot } from './media/offline';
 import { ProjectSizes, type SizesView } from './media/projectSizes';
 import { foreignFileNotice, MediaQueue } from './media/queue';
 import { notify } from './ui/notice';
@@ -48,6 +49,8 @@ export interface Services {
   commentsDb: CommentsDb | null;
   /** Cuánto ocupa cada proyecto en el Drive (P.7), con la última respuesta guardada en el dispositivo. */
   sizes: ProjectSizes;
+  /** "Available offline" y el espacio de la app en este dispositivo (P.10, Docs/Doc_Copias_Locales.md). */
+  offline: OfflineManager;
   /** Para la sincronización y cierra las bases del dispositivo (antes de borrarlas). */
   shutdown: () => Promise<void>;
 }
@@ -84,6 +87,27 @@ export function usePermissions(): Permissions {
 export function useProjectSizes(): SizesView {
   const { sizes } = useServices();
   return useSyncExternalStore(sizes.subscribe, sizes.getSnapshot);
+}
+
+/** "Available offline" y el espacio en el dispositivo; re-renderiza con cada cambio. */
+export function useOffline(): OfflineSnapshot {
+  // Sin el administrador (algunas pruebas arman los servicios a mano), nada marcado.
+  const { offline } = useServices() as Partial<Services>;
+  return useSyncExternalStore(offline?.subscribe ?? noSubscribe, offline?.getSnapshot ?? emptyOffline);
+}
+
+const EMPTY_OFFLINE: OfflineSnapshot = { loaded: false, marks: [], limit: null, usage: null, prompt: null, active: null };
+const emptyOffline = () => EMPTY_OFFLINE;
+const noSubscribe = () => () => undefined;
+
+/** El navegador del dispositivo, para lo que depende de él en "Available offline" (sección 9 del diseño). */
+export function deviceTraits(): { ios: boolean; safari: boolean; phone: boolean } {
+  if (typeof navigator === 'undefined') return { ios: false, safari: false, phone: false };
+  const ua = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const safari = /^((?!chrome|chromium|crios|fxios|android|edg).)*safari/i.test(ua);
+  const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  return { ios, safari, phone };
 }
 
 /** La base dijo que sacaron a la persona del workspace. */
@@ -229,12 +253,16 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         mediaDb?.close();
         return db.close();
       }
+      // "Available offline" se arma después (necesita la cola): la cola le avisa por acá qué se usó y qué no entró.
+      let offline: OfflineManager | null = null;
       const media = new MediaQueue(mediaDb, remote, {
         portero: (url) => new Portero(url, { token: sessionToken(workspace.client) }),
         projectOf: (pageId) => tree.get(pageId)?.workspace_id,
         unavailable: mediaProblem,
         // Se pegó una foto o un video de otro proyecto (papelera de archivos, paso 11).
         onForeignFile: (name) => notify(foreignFileNotice(name)),
+        onUse: (id, how) => offline?.used(id, how),
+        onNoRoom: (bytes) => offline?.noRoom(bytes),
       });
       await media.load().catch(() => undefined);
       // Los comentarios, también en una base aparte. Si no se abre, se leen con red pero no se escriben.
@@ -251,6 +279,22 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       await comments.load().catch(() => undefined);
       const sizes = new ProjectSizes(db, remote);
       await sizes.load().catch(() => undefined);
+      const traits = deviceTraits();
+      offline = new OfflineManager({
+        db: mediaDb,
+        media,
+        tree,
+        docs,
+        remote,
+        comments,
+        older: files,
+        online: () => (typeof navigator === 'undefined' ? true : navigator.onLine !== false) && engine.getStatus().online,
+        storage: () => (typeof navigator === 'undefined' ? undefined : navigator.storage),
+        ...traits,
+        dbName,
+        local: typeof localStorage === 'undefined' ? null : localStorage,
+      });
+      await offline.load().catch(() => undefined);
       const engine = new SyncEngine(remote, tree, docs, files, {
         appVersion: __APP_VERSION__,
         schemaVersion: DB_SCHEMA_VERSION,
@@ -265,6 +309,17 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         return db.close();
       }
       engine.start();
+      // Después de cada sincronización (y al volver la red), "Available offline" mira si algo cambió y baja lo que falte.
+      const offlineManager = offline;
+      let lastSync = engine.getStatus().lastSyncAt;
+      let wasOnline = engine.getStatus().online;
+      const unwatch = engine.subscribe(() => {
+        const status = engine.getStatus();
+        if (status.lastSyncAt !== lastSync || (status.online && !wasOnline)) offlineManager.maintainSoon();
+        lastSync = status.lastSyncAt;
+        wasOnline = status.online;
+      });
+      offlineManager.start();
       // Si una invitación nueva sumó permisos, se sincroniza de nuevo para traer lo compartido.
       void accepted?.then((n) => {
         if (n > 0) void engine.syncNow();
@@ -274,6 +329,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       const shutdown = () => {
         closing ??= (async () => {
           const stopping = engine.stop();
+          unwatch();
+          offlineManager.stop();
           docs.dispose();
           media.dispose();
           try {
@@ -312,6 +369,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           comments,
           commentsDb,
           sizes,
+          offline: offlineManager,
           shutdown,
         },
       });

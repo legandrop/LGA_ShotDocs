@@ -58,6 +58,7 @@ function services(d: Device, userId: string): Services {
     comments: d.comments,
     commentsDb: d.commentsDb,
     sizes: d.sizes,
+    offline: d.offline,
     shutdown: async () => undefined,
   };
 }
@@ -265,6 +266,8 @@ describe('selector en el teléfono', () => {
     await act(async () => more.click());
     const sheet = document.querySelector('.project-row.opened .project-sheet')!;
     expect([...sheet.querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual([
+      // "Available offline" (P.10), para cualquiera que vea el proyecto.
+      'Available offline…',
       'Rename',
       'Share “Bosque Negro”…',
       'Archive',

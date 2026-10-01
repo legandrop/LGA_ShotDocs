@@ -61,6 +61,7 @@ function services(d: Device, userId: string): Services {
     comments: d.comments,
     commentsDb: d.commentsDb,
     sizes: d.sizes,
+    offline: d.offline,
     shutdown: async () => undefined,
   };
 }
