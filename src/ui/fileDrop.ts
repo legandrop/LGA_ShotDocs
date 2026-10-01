@@ -92,6 +92,30 @@ function isEmptyParagraph(block: BlockLike | undefined): boolean {
   return !Array.isArray(block.content) || block.content.length === 0;
 }
 
+/** Lo que puede devolver `uploadFile` además de la dirección: las propiedades nuevas del bloque. */
+export interface UploadedBlock {
+  props: { url: string; name: string };
+}
+
+/**
+ * Lo que devuelve `uploadFile` al editor: la dirección, o, si el archivo se guardó con otro nombre (un HEIC que
+ * se guardó como JPEG, Docs/Doc_Imagenes.md), la dirección y ese nombre, para que el bloque no diga `.HEIC`.
+ * BlockNote acepta las dos formas.
+ */
+export function uploadedBlock(url: string, storedName: string | null): string | UploadedBlock {
+  return storedName ? { props: { url, name: storedName } } : url;
+}
+
+/** Las propiedades a poner en el bloque con lo que devolvió `uploadFile`, o `null` si no sirve. */
+function uploadedProps(result: unknown): { url: string; name?: string } | null {
+  if (typeof result === 'string') return { url: result };
+  const props = (result as Partial<UploadedBlock> | null)?.props;
+  if (props && typeof props.url === 'string') {
+    return typeof props.name === 'string' ? { url: props.url, name: props.name } : { url: props.url };
+  }
+  return null;
+}
+
 /**
  * Inserta un bloque `image` por archivo, todos juntos y en orden, y después guarda cada uno con
  * `uploadFile` (que muestra "Loading…" y, si falla, saca el bloque y avisa). Un archivo que falla no corta los
@@ -115,10 +139,10 @@ export async function insertFiles(editor: FileEditor, files: readonly File[], at
     const id = ids[i];
     if (!id) continue;
     try {
-      const url = await editor.uploadFile?.(files[i], id);
-      if (typeof url === 'string' && editor.getBlock(id)) {
+      const props = uploadedProps(await editor.uploadFile?.(files[i], id));
+      if (props && editor.getBlock(id)) {
         // Lo hace la app al terminar de guardar: no abre una sección colapsada (Docs/Doc_Colapsar.md).
-        const update = () => editor.updateBlock(id, { props: { url } });
+        const update = () => editor.updateBlock(id, { props });
         if (editor.transact) {
           editor.transact((tr) => {
             tr.setMeta(BACKGROUND_META, true);

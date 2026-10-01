@@ -102,6 +102,19 @@ export default defineConfig(({ mode }) => {
           // afuera de la caché y el build NO falla (workbox solo escribe una advertencia en la salida del
           // build); sin red, esa parte no abriría. Revisar que `dist/sw.js` liste todos los .js.
           globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+          // Menos el decodificador de fotos HEIC (Docs/Doc_Imagenes.md, "Fotos HEIC"): el Worker, la librería y
+          // su `.wasm` (que tampoco entra por la extensión) pesan ~1,6 MB y solo hacen falta cuando alguien
+          // agrega un HEIC. Se guardan en la caché `heic-decoder` la primera vez que se usan (abajo): desde ahí
+          // la conversión anda sin red. Un HEIC agregado sin red en un dispositivo que nunca lo bajó se guarda
+          // tal cual y se convierte antes de subirlo, cuando vuelve la red.
+          globIgnores: ['**/heic.worker-*.js', '**/heicLib-*.js'],
+          runtimeCaching: [
+            {
+              urlPattern: /\/assets\/(?:heic\.worker|heicLib|libheif)-[^/]+\.(?:js|wasm)$/,
+              handler: 'CacheFirst',
+              options: { cacheName: 'heic-decoder', expiration: { maxEntries: 6 } },
+            },
+          ],
           navigateFallback: '/index.html',
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         },

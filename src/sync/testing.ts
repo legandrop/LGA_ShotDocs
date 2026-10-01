@@ -125,6 +125,8 @@ export class FakeServer {
   rejectThumbs = false;
   /** La base de archivos del dispositivo no se puede abrir (los dispositivos nuevos arrancan sin ella). */
   mediaDbFails = false;
+  /** Cómo convierten los dispositivos un HEIC a JPEG (por defecto `fakeConvertHeic`; las pruebas lo cambian). */
+  convertHeic: (file: Blob) => Promise<Blob> = fakeConvertHeic;
   /** `comments`, con el texto aunque se haya borrado (como la tabla; la vista lo devuelve vacío). */
   readonly comments = new Map<string, StoredComment>();
   /** La base tiene `import_comment` (versión 8); apagado, la función no existe (PGRST202). */
@@ -1387,6 +1389,14 @@ export async function fakeProbe(_file: Blob, mime: string): Promise<Probe> {
 }
 
 /**
+ * La conversión de un HEIC a JPEG, simulada (node no tiene Worker ni canvas): un JPEG corto que dice cuánto
+ * pesaba el HEIC.
+ */
+export async function fakeConvertHeic(file: Blob): Promise<Blob> {
+  return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), `jpeg-of:${file.size}`], { type: 'image/jpeg' });
+}
+
+/**
  * La imagen nítida de prueba (jsdom no dibuja): un JPEG corto que dice de qué tamaño vino el original, o `null`
  * para un HEIC (el navegador no lo abre).
  */
@@ -1450,6 +1460,7 @@ export async function makeDevice(
     probe: fakeProbe,
     playMark: async (thumb) => thumb,
     viewImage: fakeViewImage,
+    convertHeic: (file) => server.convertHeic(file),
     now: () => Date.now() + server.clockOffset,
   });
   await media.load();

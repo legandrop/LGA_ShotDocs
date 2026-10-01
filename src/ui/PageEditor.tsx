@@ -22,7 +22,7 @@ import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
-import { dropTarget, insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
+import { dropTarget, insertFiles, isFilesTransfer, takeFiles, uploadedBlock, type FileEditor, type UploadedBlock } from './fileDrop';
 import { isAttachment, markAttachments } from './attachments';
 import { openAttachmentNow, prepareAttachment } from './attachmentOpen';
 import { AttachmentSheet } from './AttachmentSheet';
@@ -339,25 +339,29 @@ function BlockEditor({
         void insertFiles(ctx.editor as unknown as FileEditor, taken, null);
         return true;
       },
+      // Un HEIC se guarda como JPEG (Docs/Doc_Imagenes.md, "Fotos HEIC"): el bloque lleva el nombre del JPEG
+      // (BlockNote acepta, además de la dirección, las propiedades del bloque).
       uploadFile: (file: File, blockId?: string) =>
-        store(file).catch((err: unknown) => {
-          notify(err instanceof FileRejected ? err.message : t('editor.fileNotSaved'));
-          // El editor ya insertó el bloque de la imagen: se quita para que no quede vacío.
-          if (blockId) {
-            setTimeout(() => {
-              try {
-                const current = editorRef.current;
-                current?.transact((tr) => {
-                  tr.setMeta(BACKGROUND_META, true);
-                  current.removeBlocks([blockId]);
-                });
-              } catch {
-                // El bloque ya no está.
-              }
-            });
-          }
-          throw err;
-        }),
+        store(file)
+          .then((url): string | UploadedBlock => uploadedBlock(url, media.convertedName(url)))
+          .catch((err: unknown) => {
+            notify(err instanceof FileRejected ? err.message : t('editor.fileNotSaved'));
+            // El editor ya insertó el bloque de la imagen: se quita para que no quede vacío.
+            if (blockId) {
+              setTimeout(() => {
+                try {
+                  const current = editorRef.current;
+                  current?.transact((tr) => {
+                    tr.setMeta(BACKGROUND_META, true);
+                    current.removeBlocks([blockId]);
+                  });
+                } catch {
+                  // El bloque ya no está.
+                }
+              });
+            }
+            throw err;
+          }),
       // Con la página: una foto de otro proyecto se ve con su marcador (papelera de archivos, paso 11).
       // Un adjunto (Docs/Doc_Adjuntos.md) se ve como tarjeta: su imagen lleva la clase `sd-attachment` (el CSS
       // le da tamaño fijo). Se pone en la imagen, adentro de la vista de BlockNote, que ProseMirror no mira.
