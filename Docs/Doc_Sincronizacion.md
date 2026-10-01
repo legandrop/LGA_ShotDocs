@@ -368,7 +368,9 @@ pestaña en `src/ui/TrashView.tsx` y `src/media/fileTrash.ts`.
   `MediaQueue.serverUses`) y lo que ya está queda anotado como confirmado, igual que después de mandarlo (si es
   ajeno, como ajeno, sin avisar). Lo que el servidor no tiene, o tiene quitado, se manda como siempre, y si la
   lectura falla (sin red, un error), todo se manda como antes: nunca se deja de mandar un uso sin ver que el
-  servidor lo tiene. Cada página se lee una vez por apertura de la app.
+  servidor lo tiene. Cada página se lee una vez por apertura de la app. La lectura solo se usa si la página no
+  tiene nada propio por subir: si no, entre la lectura y la comparación otro dispositivo pudo quitar un uso que
+  esta página volvió a tener (lo encontró la auditoría; prueba A2 de `trash.test.ts`).
 - **Una sola fila por página y archivo** (store `links`, con `removed` y una revisión `rev`): gana lo último
   que se vio en el documento. Borrar y deshacer antes de sincronizar no manda nada; si el deshacer llega
   mientras viaja el `unlink`, la respuesta no marca la fila como hecha (cambió la revisión) y después sale el

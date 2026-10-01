@@ -1050,3 +1050,95 @@ describe('dispositivo nuevo: los usos que el servidor ya tiene (B.14)', () => {
     expect(server.foreignNotices).toHaveLength(notices);
   });
 });
+
+describe('dispositivo nuevo: carreras entre la lectura de usos y el ciclo (auditoría de B.14)', () => {
+  it('A1: A borra la foto (y manda el unlink) justo después de que B leyó los usos', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const b = await device(server);
+    const orig = b.docs.snapshot.bind(b.docs);
+    let fired = false;
+    b.docs.snapshot = (async (pid: string) => {
+      if (!fired && pid === page) {
+        fired = true;
+        await edit(a, page, (doc) => removeImage(doc, id));
+        await sync(a);
+        expect(server.removedPageFiles.has(`${page}:${id}`)).toBe(true);
+      }
+      return orig(pid);
+    }) as typeof b.docs.snapshot;
+    const linksBefore = calls(server, 'link_page_file').length;
+    await sync(b);
+    await sync(b);
+    // B no reactiva el uso que A quitó, y el archivo queda en la papelera.
+    expect(calls(server, 'link_page_file').length - linksBefore).toBe(0);
+    expect(server.pageFiles.has(`${page}:${id}`)).toBe(false);
+    expect(server.removedPageFiles.has(`${page}:${id}`)).toBe(true);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
+    expect(await b.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ removed: true, pending: 0 });
+  });
+
+  it('A2: B (nuevo) tiene una copia local de la foto sin pasar por el editor mientras A la borra', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const b = await device(server);
+    const orig = b.docs.snapshot.bind(b.docs);
+    let fired = false;
+    b.docs.snapshot = (async (pid: string) => {
+      if (!fired && pid === page) {
+        fired = true;
+        // B pega una copia del mismo bloque (sin ensureLinks: import, plantilla, restaurar…)
+        await edit(b, page, (doc) => insertImage(doc, id));
+        await edit(a, page, (doc) => removeImage(doc, id));
+        await sync(a);
+      }
+      return orig(pid);
+    }) as typeof b.docs.snapshot;
+    await sync(b);
+    await sync(b);
+    // El documento combinado tiene la copia de B.
+    const merged = mediaIdsInDoc(await b.docs.open(page));
+    b.docs.close(page);
+    expect(merged.has(id)).toBe(true);
+    // Antes de que A vuelva a sincronizar, el uso de B ya está activo: B no le creyó a la lectura vieja.
+    expect(server.pageFiles.has(`${page}:${id}`)).toBe(true);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeFalsy();
+    await sync(a);
+    expect(server.pageFiles.has(`${page}:${id}`)).toBe(true);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeFalsy();
+  });
+
+  it('A3: B nuevo borra una foto y deshace: entra y sale de la papelera', async () => {
+    const server = new FakeServer();
+    const { page, id } = await withPhoto(server);
+    const b = await device(server);
+    await sync(b);
+    const doc = await b.docs.open(page);
+    const undo = new Y.UndoManager(doc.getXmlFragment(CONTENT_FRAGMENT));
+    removeImage(doc, id);
+    await b.docs.flush();
+    await sync(b);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
+    undo.undo();
+    await b.docs.flush();
+    await sync(b);
+    b.docs.close(page);
+    expect(server.pageFiles.has(`${page}:${id}`)).toBe(true);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeFalsy();
+  });
+
+  it('A4: 250 páginas nuevas: lecturas de usos y ningún link', async () => {
+    const server = new FakeServer();
+    const { a } = await withPhoto(server);
+    for (let i = 0; i < 250; i++) {
+      const p = await a.tree.create(null, `P${i}`);
+      void p;
+    }
+    await sync(a);
+    const b = await device(server);
+    const before = calls(server, 'link_page_file').length;
+    await sync(b);
+    await sync(b);
+    expect(calls(server, 'link_page_file').length).toBe(before);
+  });
+});

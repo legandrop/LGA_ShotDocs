@@ -586,7 +586,9 @@ export class SyncEngine {
             }
           }
         }
-        await media.reconcilePage(pageId, ids, { unlink, seenSeq: snap.state.cursor, onServer: onServer?.get(pageId) });
+        // Lo que el servidor ya tiene solo se cree si la página no tiene nada propio por subir: con algo propio en
+        // camino (una copia que entró sin pasar por el editor), la lectura puede ser vieja y se manda todo.
+        await media.reconcilePage(pageId, ids, { unlink, seenSeq: snap.state.cursor, onServer: uploaded ? onServer?.get(pageId) : undefined });
         // Solo queda "mirada" si se pudo quitar lo que hiciera falta; si no (a medio subir, algo ilegible o
         // desconocido, sin comprobar), se vuelve a mirar en el próximo ciclo.
         if (unlink) marks[pageId] = mark(snap.state);
