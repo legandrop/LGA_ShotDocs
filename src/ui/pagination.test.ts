@@ -53,6 +53,18 @@ describe('paginate', () => {
     for (const b of r.breaks) expect(b.offset % 30).toBe(0);
   });
 
+  it('un párrafo con fotos en línea se parte entre renglones aunque entre en una hoja (nunca por el medio de una fila)', () => {
+    // Tres filas de fotos de 300 px; empieza a los 500: entra la primera fila (hasta 800) y la segunda no.
+    const photos: Unit = { key: 'b:ph', top: 500, height: 900, splits: [300, 600], breakable: true };
+    const r = paginate([block('b:1', 0, 500), photos, block('b:2', 1400, 50)], H);
+    expect(r.breaks).toEqual([{ index: 1, key: 'b:ph', offset: 300, sheet: 2 }]);
+    // Si no entra ni la primera fila, pasa entero; si entra todo, no se parte.
+    expect(paginate([block('b:1', 0, 750), { ...photos, top: 750 }], H).breaks).toEqual([{ index: 1, key: 'b:ph', offset: 0, sheet: 2 }]);
+    expect(paginate([block('b:1', 0, 50), { ...photos, top: 50 }], H).breaks).toEqual([]);
+    // Sin `breakable` (un párrafo de texto que entra en una hoja), pasa entero, como siempre.
+    expect(paginate([block('b:1', 0, 500), { ...photos, breakable: undefined }], H).breaks).toEqual([{ index: 1, key: 'b:ph', offset: 0, sheet: 2 }]);
+  });
+
   it('una tabla más alta que una hoja se parte entre filas', () => {
     const rows = [100, 400, 700, 1000, 1300];
     const r = paginate([block('b:1', 0, 500), { key: 'b:table', top: 500, height: 1500, splits: rows }], H);
