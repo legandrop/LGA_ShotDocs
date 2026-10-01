@@ -180,6 +180,26 @@ describe('papelera: pestaña Archivos', () => {
     expect(confirm.mock.calls[0]?.[0]).toMatch(/a page in the trash\. Restoring that page will not bring it back/);
   });
 
+  it('un archivo que usa una página de un proyecto borrado (P.14) lo dice y no se manda, ni de a uno ni con "Empty"', async () => {
+    const { server, owner, id } = await trashedPhoto();
+    server.enableProjectStates();
+    // La foto también está pegada en una página de otro proyecto, que después se borra.
+    const other = await owner.tree.createProject('Otro');
+    const page = await owner.tree.create(null, 'Escena', other);
+    await sync(owner);
+    server.foreignPageFiles.add(`${page}:${id}`);
+    server.refreshFileTrash(id);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeNull();
+    await owner.remote.deleteProject(other);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
+
+    const host = await mount(services(owner, server.ownerId));
+    await act(async () => byText(host, 'Files')!.click());
+    await vi.waitFor(() => expect(host.textContent).toContain('Used by a page of a deleted project. It comes back if that project is restored.'));
+    expect(byText(host, 'Send to Drive trash')).toBeUndefined();
+    expect(byText(host, 'Empty')!.disabled).toBe(true);
+  });
+
   it('quien no puede verla no tiene la pestaña; quien la ve sin ser dueño ni admin no puede mandar nada', async () => {
     const { server } = await trashedPhoto();
     server.addMember('editor-1', 'member');

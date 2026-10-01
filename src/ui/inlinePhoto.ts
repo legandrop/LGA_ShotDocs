@@ -14,7 +14,7 @@ import { pxToRowWidth, snapRowWidth } from './imageRows';
 // versión que no lo conoce lo borraría del documento compartido al abrir la página. Lo que la cubre es el
 // resguardo de `unknownContent.ts` (toda versión que puede entrar lo tiene, desde v0.021), que no abre en el
 // editor una página con algo que no conoce: la foto (v0.052 a v0.075) o la marca del renglón `lgaStableGaps`
-// (también v0.076), que queda aunque al renglón le borren todas las fotos. Desde v0.077 la crean pegar, soltar y
+// (también v0.076), que queda aunque al renglón le borren todas las fotos. Desde v0.078 la crean pegar, soltar y
 // el menú "/" (inlinePhotoCreate.ts); importar de Coda, todavía no (entrega 4).
 //
 // Propiedades:

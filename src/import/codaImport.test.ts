@@ -943,12 +943,12 @@ describe('importar la carpeta', () => {
     expect(titles).toContain('002 | Segunda | Calle');
   });
 
-  it('un diario cuyo proyecto ya no está se borra (no se ofrece seguir para siempre)', async () => {
+  it('un diario cuyo proyecto no está no se ofrece, pero se conserva (el proyecto puede volver de la papelera, P.14)', async () => {
     const { a } = await mediaDevice();
     const journal = metaJournal(a.db);
     await journal.put({ docId: 'DOC', projectId: 'no-existe', projectName: 'X', pages: {}, media: {} });
     expect(await findResumable(makeFolder(), { tree: a.tree, journal })).toBeNull();
-    expect(await journal.get('DOC')).toBeUndefined();
+    expect(await journal.get('DOC')).toMatchObject({ projectId: 'no-existe' });
   });
 
   it('un video o un embebido de otro sitio queda como link y se anota', async () => {

@@ -125,8 +125,8 @@ importación escribió en cada una, cuáles están terminadas y la dirección `s
 queda guardado. Al volver a elegir la misma carpeta el diálogo lo dice ("no terminó: 12 de 35 páginas") y
 ofrece **Seguir**, que continúa en el mismo proyecto: no crea otra vez las páginas ya creadas, saltea las
 terminadas y usa los archivos ya guardados en vez de guardarlos (y subirlos al Drive) de nuevo. **Importar a
-un proyecto nuevo** empieza de cero (el proyecto a medias queda: la app todavía no borra ni archiva proyectos, ver
-P.14 del roadmap; se le puede cambiar el nombre y mandar sus páginas a la papelera).
+un proyecto nuevo** empieza de cero (el proyecto a medias queda; desde P.14 se puede borrar desde el selector, y
+va a la papelera de proyectos: `Doc_Proyectos_Borrar.md`).
 
 - **Qué queda para seguir.** La anotación se borra solo cuando todas las páginas quedaron terminadas. Queda
   sin terminar una página cuyo contenido no se pudo escribir ("3 archivos quedaron guardados pero la página no
@@ -141,7 +141,9 @@ P.14 del roadmap; se le puede cambiar el nombre y mandar sus páginas a la papel
   queda como la dejó (lo que había fallado ahí no se reintenta). Las dos cosas quedan anotadas.
 - **Una página terminada** no se vuelve a tocar al seguir, aunque la persona la haya mandado a la papelera
   (no vuelve). Una sin terminar que se mandó a la papelera sí se crea de nuevo.
-- **Si el proyecto ya no está** (se perdió el acceso), la anotación se borra al elegir la carpeta.
+- **Si el proyecto ya no está** (se perdió el acceso, o está en la papelera de proyectos), no se ofrece seguir, pero
+  la anotación se conserva (desde P.14): si el proyecto se restaura, se puede seguir. Una importación nueva del mismo
+  doc la reemplaza.
 - **Huecos que quedan** (un corte en el instante justo): una página creada y no anotada todavía se crea de
   nuevo al seguir (queda una vacía de más, con el mismo título), y un archivo guardado y no anotado todavía se
   guarda de nuevo (entra dos veces al Drive; la copia de más, sin página que la use, va a la papelera de
@@ -162,7 +164,7 @@ forma un círculo con otras (A dentro de B dentro de A), va al primer nivel y qu
 BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código. Lo demás lo resuelve
 `codaHtml.ts`:
 
-- **Fotos (desde v0.079, en el renglón).** BlockNote descarta una `<img>` adentro de un párrafo o de un ítem de
+- **Fotos (desde v0.078, en el renglón).** BlockNote descarta una `<img>` adentro de un párrafo o de un ítem de
   lista (Coda las pone siempre así: cada una en un `<span style="display: inline-block">` dentro del renglón) y
   todo `<video>`. Antes de convertir, cada archivo se cambia por una marca de texto y después cada marca pasa a
   ser una **foto en línea** (`photo`, `Doc_Fotos_En_Linea.md`) en el mismo lugar del renglón, con su
@@ -173,7 +175,7 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   debajo de la tabla, juntas en un renglón (las fotos en celdas son la entrega 5). Se sacan el espacio de ancho
   cero y el carácter de objeto (U+FFFC) que Coda deja al lado de una foto, y los espacios sueltos entre fotos.
   **Una foto recortada en Coda se ve entera**: el recorte (`data-docx-crop`) no se trae (101 de 6129 fotos en ERSO;
-  ver "Lo que no pasa"). Antes de v0.079 cada foto era un bloque aparte.
+  ver "Lo que no pasa"). Antes de v0.078 cada foto era un bloque aparte.
 - **Ancho.** `w` = el ancho con que se veía en Coda sobre **su renglón de Coda**: 624 px (el ancho del texto de una
   página de Coda, `CODA_TEXT_WIDTH`) menos 24 px por cada nivel de lista (`CODA_LIST_INDENT`, medido en una
   captura de Coda), porque `w` es una parte del renglón donde está la foto. Así dos fotos de 312 px van juntas a la
@@ -270,7 +272,7 @@ probada en `scripts/coda-tables.test.mjs` con datos inventados).
   vista, solo los ids que muestra). Lo ya bajado no se vuelve a pedir, salvo con `--refresh`.
 - **Qué hace con cada tabla** (el modo; `tables.config.json` lo puede forzar):
   - `fichas` (una tabla con fotos o con más de 8 columnas): **una página por fila** ("ficha") con las fotos
-    arriba (desde v0.079 juntas en un renglón: una sola con su ancho, varias a un tercio cada una, como al pegar
+    arriba (desde v0.078 juntas en un renglón: una sola con su ancho, varias a un tercio cada una, como al pegar
     varias en la app), los campos cortos en una tabla de dos columnas (con el color que la celda tenía en Coda) y los textos
     largos debajo, cada uno con su título; las notas salen del HTML de la página (con formato y fotos) y, si esa
     celda no se veía en ninguna vista, del texto de la API. Las fichas van debajo de la página donde estaba la

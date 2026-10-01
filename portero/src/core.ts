@@ -986,6 +986,11 @@ export class Portero {
     if (message === 'file_not_found') throw new HttpError(404, 'This file does not exist or you cannot see it.', 'not_found');
     // El único 409: una página lo volvió a usar (ya no está en la papelera).
     if (message === 'file_not_trashed') throw new HttpError(409, 'A page uses this file again: it is not in the trash.', 'in_use');
+    // Lo usa una página de un proyecto borrado (P.14): vuelve si se restaura ese proyecto. La app nueva no ofrece
+    // el botón; la publicada antes sí, y así recibe un motivo claro en vez de "la base no contestó".
+    if (message === 'file_in_deleted_project') {
+      throw new HttpError(409, 'A page of a deleted project uses this file: it comes back if that project is restored.', 'in_deleted_project');
+    }
     if (res.status === 401) throw new HttpError(401, 'Your session expired: sign in again.', 'session_expired');
     // La función no existe todavía (PostgREST: PGRST202, 404): la base no tiene la papelera de archivos.
     if (res.status === 404 || error?.code === 'PGRST202') {

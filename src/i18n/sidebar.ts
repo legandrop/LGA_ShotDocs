@@ -51,6 +51,51 @@ export const sidebar = {
   'project.editedYesterday': { en: "edited yesterday", es: "editado ayer" },
   'project.editedOn': { en: "edited {date}", es: "editado el {date}" },
   'project.untitled': { en: "Untitled project", es: "Proyecto sin título" },
+  // Archivar y borrar proyectos (P.14): los íconos de cada renglón del selector y las listas.
+  'project.archiveNamed': { en: "Archive “{name}”", es: "Archivar “{name}”" },
+  'project.unarchiveNamed': { en: "Unarchive “{name}”", es: "Desarchivar “{name}”" },
+  'project.deleteNamed': { en: "Delete “{name}”…", es: "Borrar “{name}”…" },
+  'project.moreNamed': { en: "Actions for “{name}”", es: "Acciones de “{name}”" },
+  'project.archiveTip': { en: "Archive", es: "Archivar" },
+  'project.unarchiveTip': { en: "Unarchive", es: "Desarchivar" },
+  'project.deleteTip': { en: "Delete…", es: "Borrar…" },
+  'project.archive': { en: "Archive", es: "Archivar" },
+  'project.unarchive': { en: "Unarchive", es: "Desarchivar" },
+  'project.delete': { en: "Delete…", es: "Borrar…" },
+  'project.archiveConfirm': { en: "Archive “{name}”?", es: "¿Archivar “{name}”?" },
+  'project.archived': {
+    en: "“{name}” archived. It is in Archived projects.",
+    es: "“{name}” archivado. Está en Proyectos archivados.",
+  },
+  'project.unarchived': { en: "“{name}” is back in your projects.", es: "“{name}” volvió a tus proyectos." },
+  'project.archivedMark': { en: "Archived", es: "Archivado" },
+  'project.archivedOn': { en: "archived {date}", es: "archivado el {date}" },
+  'project.archivedList': { en: "Archived projects ({count})", es: "Proyectos archivados ({count})" },
+  'project.archivedTitle': { en: "Archived projects", es: "Proyectos archivados" },
+  'project.findArchived': { en: "Find an archived project…", es: "Buscar un proyecto archivado…" },
+  'project.noArchived': { en: "No archived project with that name.", es: "No hay ningún proyecto archivado con ese nombre." },
+  'project.deletedList': { en: "Deleted projects", es: "Proyectos borrados" },
+  'project.onlyOne': {
+    en: "This is your only project: create another one first",
+    es: "Es tu único proyecto: primero creá otro",
+  },
+  'project.stateFailed': { en: "Could not do it: {reason}", es: "No se pudo: {reason}" },
+  'project.onlyActive': {
+    en: "This is your only active project: create or unarchive another one first",
+    es: "Es tu único proyecto activo: primero creá o desarchivá otro",
+  },
+  'project.errorNotAllowed': {
+    en: "You can't do that in this project anymore: your access changed.",
+    es: "Ya no podés hacer eso en este proyecto: cambió tu acceso.",
+  },
+  'project.errorNotFound': {
+    en: "This project no longer exists, or you can't see it anymore.",
+    es: "Este proyecto ya no existe, o ya no lo ves.",
+  },
+  'project.errorDeleted': {
+    en: "This project was deleted in the meantime: it is in Deleted projects.",
+    es: "Este proyecto se borró mientras tanto: está en Proyectos borrados.",
+  },
   'import.menu': { en: "Import from Coda…", es: "Importar de Coda…" },
   // Con una importación de Coda en curso (importJob.ts): cerrar la sesión o quitar el workspace esperan.
   'import.running': {

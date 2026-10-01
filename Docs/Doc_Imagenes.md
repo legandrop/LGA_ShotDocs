@@ -3,13 +3,13 @@
 Diseño de lo que pidió Lega el 2026-09-30 (fotos y videos del editor; en la página los dos son un bloque
 `image`, ver `Doc_Carrete.md`). Estado: **hecho: v0.044 (elegir y abrir), v0.045 (anchos y filas), v0.046 (acomodar en filas), v0.047 (en el teléfono, en fila o apiladas) y v0.058 (calidad en la página).** "Correcciones de la auditoría previa" manda sobre lo anterior.
 
-**Desde v0.077, nada crea fotos-bloque nuevas** con un archivo: pegar, soltar y "/Image" ponen las fotos y los videos
+**Desde v0.078, nada crea fotos-bloque nuevas** con un archivo: pegar, soltar y "/Image" ponen las fotos y los videos
 en el renglón (`Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 2)"); los adjuntos siguen siendo un bloque `image` (la
 tarjeta). Lo de este documento sigue valiendo para las fotos-bloque que ya existen (sus filas, tamaños y *Arrange in
 rows* sobre la tanda) y para las que todavía crea pegar HTML con un `<img>`, hasta convertirlas (la conversión
 existe desde v0.078 pero no tiene entrada en la interfaz, D-26; `Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 3)").
 
-**La barra de la foto-bloque cambió en v0.077 (D-24):** es la misma que la de la foto en línea (`MediaBar.tsx`), por
+**La barra de la foto-bloque cambió en v0.078 (D-24):** es la misma que la de la foto en línea (`MediaBar.tsx`), por
 sectores: [ver, bajar] | [1/1, 1/2, 1/3, 1/4, *Arrange in rows*] | [alinear] | [comentar] | [*Replace image*, *Rename
 image*, *Delete image*], todos los botones de 30 × 30 px y con `data-tip`. Sin *Edit caption* (una leyenda que ya
 existe se sigue viendo) ni *Toggle preview*; *Replace image* abre el selector de archivos (sin *Embed*). Ver

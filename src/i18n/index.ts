@@ -5,6 +5,7 @@ import type { commentsPanel } from './lazy/commentsPanel';
 import type { drive } from './lazy/drive';
 import type { editor } from './lazy/editor';
 import type { importCoda } from './lazy/importCoda';
+import type { projectStates } from './lazy/projectStates';
 import type { search } from './lazy/search';
 import type { teamDialogs } from './lazy/teamDialogs';
 import { strings } from './strings';
@@ -31,6 +32,7 @@ type LazyStrings = typeof carrete &
   typeof drive &
   typeof editor &
   typeof importCoda &
+  typeof projectStates &
   typeof search &
   typeof teamDialogs;
 export type Key = keyof typeof strings | keyof LazyStrings;

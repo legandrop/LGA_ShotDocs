@@ -16,7 +16,7 @@ dos dispositivos de la misma persona) editan la misma página a la vez. Compleme
   un bloque, lo sangra, lo mueve o lo junta con otro, y **al mismo tiempo** otra escribe en ESE bloque, lo que
   escribió la segunda se puede perder (ver la tabla). Es raro (tiene que ser el mismo bloque, en los mismos
   segundos, o con uno de los dos sin red) y se ve enseguida.
-- **Desde v0.074, los renglones con fotos en línea** (desde v0.077 las crean pegar, soltar y "/Image") tienen su parte del parche ("El
+- **Desde v0.074, los renglones con fotos en línea** (desde v0.078 las crean pegar, soltar y "/Image") tienen su parte del parche ("El
   texto de los huecos" y "Huecos estables") y su tabla, medida: escribir los dos en el mismo hueco, y borrar,
   mover o agregar una foto mientras el otro escribe pegado a ella, no pierden nada. Lo que queda es lo de los
   cambios de estructura (unir, cambiar el tipo; Enter deja algunas marcas con las letras desordenadas).
@@ -48,7 +48,7 @@ Qué pasa, en palabras de usuario (A y B cambian la misma página a la vez, sin 
 | Le cambia el tipo a un renglón | Le cambia el tipo al mismo renglón | Queda uno de los dos tipos, con su texto (antes se borraba el renglón entero). |
 | Sangra un renglón | Sangra el mismo renglón | Queda sangrado una vez (si el de arriba ya tenía hijos, puede quedar dos veces; nunca se pierde). |
 
-**En un renglón con fotos en línea** (desde v0.074; desde v0.077 las crean pegar, soltar y "/Image", ver `Doc_Fotos_En_Linea.md`). Las
+**En un renglón con fotos en línea** (desde v0.074; desde v0.078 las crean pegar, soltar y "/Image", ver `Doc_Fotos_En_Linea.md`). Las
 fotos son elementos entre los textos del renglón. Con los huecos estables (ver "Huecos estables") ningún texto
 de un renglón con fotos se borra ni se vuelve a crear: sacar, mover o insertar una foto toca solo la foto.
 Medido con 300 agendas al azar por caso (`src/ui/collabPhotos*.test.ts`; el número es la cantidad de agendas
@@ -160,7 +160,7 @@ Están en `patches/y-prosemirror+1.3.7.patch` y los aplica `patch-package` al in
   con `updateStableGapsChildren` (nunca borra ni reemplaza un texto), `equalYTypePNode` compara con
   `equalStableContent` (varios textos seguidos valen como uno) y `createNodeFromYElement` no junta textos
   seguidos (el arreglo #160 de la librería). Ver "Huecos estables".
-- **La marca del renglón (v0.077)**: el elemento vacío `lgaStableGaps` que lleva un renglón con fotos (o que las
+- **La marca del renglón (v0.078)**: el elemento vacío `lgaStableGaps` que lleva un renglón con fotos (o que las
   tuvo). `createTypeFromElementNode` y `updateStableGapsChildren` lo ponen, nadie lo borra, `createNodeFromYElement`
   no lo dibuja y `relativePositionToAbsolutePosition` (`src/lib.js`, la única parte del parche en ese archivo) no le
   cuenta tamaño. Ver "Versiones viejas y `min_app_version`".
@@ -324,9 +324,9 @@ para no perder datos con la versión nueva; es para cerrar la puerta a las vieja
 
 **El texto de los huecos y los huecos estables (v0.076) sí cambian lo guardado**, pero solo en los renglones con
 fotos en línea (o que las tuvieron), que una versión anterior no abre (`unknownContent.ts`, desde v0.021): desde
-v0.077, por la foto o por la marca del renglón (abajo).
+v0.078, por la foto o por la marca del renglón (abajo).
 
-**El renglón al que le borraron todas las fotos (v0.077, propuesta para la auditoría: la marca del renglón).**
+**El renglón al que le borraron todas las fotos (v0.078, propuesta para la auditoría: la marca del renglón).**
 Con la v0.076, ese renglón quedaba con sus textos seguidos y marcados, sin nada que una versión anterior
 desconociera, así que esas versiones lo abrían, y al editarlo lo reescribían en un solo texto (copiaban los otros
 en el primero y los borraban). Medido con la librería publicada de verdad (`collabPhotosVersions.published.test.ts`,
@@ -361,7 +361,7 @@ borran la última foto a la vez, el texto queda dos veces. Con la marca, eso sig
 
 **Orden de publicación.** Con la marca, ninguna versión anterior abre una página con fotos en línea (ni con un
 renglón que las tuvo), así que no hace falta subir `min_app_version` antes de publicar la que las crea. Después de
-publicarla, conviene subirlo a esa versión (0.077): las versiones viejas dejan de subir cambios de las demás páginas
+publicarla, conviene subirlo a esa versión (0.078): las versiones viejas dejan de subir cambios de las demás páginas
 y avisan que hay que actualizar.
 
 ## Huecos estables
@@ -386,7 +386,7 @@ y-prosemirror (`updateStableGapsChildren` y lo que la rodea, en los dos archivos
   dos. Un cambio de ancho actualiza la foto sin volver a crearla.
 - **La marca.** Los textos de un renglón con fotos llevan el atributo `lgaGapText: true` (en el `Y.XmlText`, el
   mismo nombre que la marca del nodo), que se pone al crear el bloque y al escribir en él. Así el renglón sigue
-  así cuando se le borra la última foto. Desde v0.077 el renglón lleva además, primero, el elemento vacío
+  así cuando se le borra la última foto. Desde v0.078 el renglón lleva además, primero, el elemento vacío
   `lgaStableGaps` (la marca del renglón), que las versiones anteriores no conocen (ver "Versiones viejas"). Sin fotos y sin textos marcados, el renglón va por el código de
   siempre: todo párrafo de hoy, también con saltos de línea.
 - **La forma.** Cada foto tiene un texto (aunque sea vacío) a cada lado, y todos los textos del renglón llevan

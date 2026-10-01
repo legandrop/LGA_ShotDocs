@@ -306,6 +306,14 @@ export class Permissions {
     );
   }
 
+  /**
+   * Archivar, borrar y restaurar un proyecto (P.14, `private.can_manage_project`): la misma regla que
+   * compartirlo entero. Sin datos, no se ofrece.
+   */
+  canManageProject(projectId: string): boolean {
+    return this.canShareProject(projectId);
+  }
+
   canSharePage(pageId: string): boolean {
     if (!this.access || !this.active) return false;
     const page = this.tree.get(pageId);

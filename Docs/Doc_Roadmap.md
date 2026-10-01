@@ -71,12 +71,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   navegador; el nodo propio, el parche de huecos de y-prosemirror y el teclado; crear, dar tamaño, acomodar las
   elegidas, hojas y PDF; convertir las fotos que ya existen; importar de Coda con los renglones como estaban.
   **Hechos el prototipo (entrega 0; Lega lo aprobó el 2026-10-01), la entrega 1 (v0.076, auditada) y la 2
-  (v0.077, abajo).** La entrega 1: el nodo
+  (v0.078, abajo).** La entrega 1: el nodo
   `photo` (nada lo crea todavía), el resguardo de versiones anteriores también en la importación de Coda, el
   parche de los huecos y los huecos estables (0 letras perdidas en 300 agendas por caso; los párrafos sin fotos
   guardan lo mismo que antes, byte a byte), y lo que se ve y se toca medido en Chromium (filas, teclado, mouse,
   Shift+flechas y Shift+clic, carrete, imprimir, `[Image]` en comentarios; D-22).
-  **Entrega 2 hecha (v0.077):** pegar, soltar y "/Image" crean fotos y videos en el renglón (una con su ancho
+  **Entrega 2 hecha (v0.078):** pegar, soltar y "/Image" crean fotos y videos en el renglón (una con su ancho
   natural, varias a 1/3); **paridad con la foto-bloque (D-24):** tiradores que imantan, la misma barra para las dos
   por sectores (ver, bajar | tamaños y *Arrange in rows* de las elegidas | alinear | comentar | reemplazar, renombrar,
   borrar), sin leyenda; un párrafo de fotos se parte entre hojas por filas enteras. Corregido lo de las dos
@@ -87,12 +87,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   un renglón que tuvo fotos (versiones mezcladas: de 28 de 49 perdidas a 0, medido con la librería publicada, que
   ahora tiene su prueba en el repo), y los tres pendientes de la auditoría de la 1b (emojis y dictado, arrastrar
   soltando sobre una foto, la barra de texto). Ver `Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 2)".
-  **Después de publicar la v0.077:** subir `min_app_version` a 0.077 (no hace falta antes, por la marca).
+  **Después de publicar la v0.078:** subir `min_app_version` a 0.078 (no hace falta antes, por la marca).
   **Entrega 3 hecha (v0.078), escondida (D-26):** la conversión de las fotos-bloque de una página a fotos en línea
   (cada fila a un renglón con los mismos anchos, un solo deshacer, los comentarios siguen anclados; medido en una
   página tipo ERSO: 61 fotos, 25 filas iguales, ±0,55 px) queda en el código y sus pruebas, sin entrada en la
   interfaz: no va a haber fotos viejas para convertir. `Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 3)".
-  **Entrega 4 hecha (v0.079):** importar de Coda deja cada foto en su renglón, como foto en línea, con la parte del
+  **Entrega 4 hecha (v0.078):** importar de Coda deja cada foto en su renglón, como foto en línea, con la parte del
   renglón que ocupaba en Coda (624 px = todo el renglón); las fotos de una ficha, juntas. Medido con una copia
   parcial de ERSO contra el HTML de Coda: las mismas filas, ±1 % de ancho. Sin el recorte de Coda (101 fotos de
   ERSO). Para la importación definitiva de ERSO hay que volver a correr `--convert-only`.
@@ -114,7 +114,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   y videos seguidos en una o más filas de la misma altura, sin cambiar el orden. Se audita antes y después.
   **No es lo que pidió Lega** (confirmado el 2026-10-01): pidió elegir varias fotos seguidas (Shift+clic,
   Shift+flechas) y acomodar **las elegidas**; hoy no se puede elegir más de una y el botón reparte toda la
-  tanda. **Resuelto para las fotos en línea en P.15 (v0.077):** *Arrange in rows* acomoda las elegidas. Las
+  tanda. **Resuelto para las fotos en línea en P.15 (v0.078):** *Arrange in rows* acomoda las elegidas. Las
   fotos-bloque siguen con la tanda hasta convertirse (P.15, entrega 3).
 - **P.5 Hecho (v0.047): en el teléfono, filas o apiladas:** una opción de la cuenta (solo tiene efecto en pantallas
   angostas) para ver las fotos y videos en fila, como en la computadora, o uno debajo del otro. No cambia lo
@@ -196,6 +196,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   proyecto entero, o dueño y admins), qué ven los que lo tenían compartido y qué pasa con lo que está sin
   sincronizar en otros dispositivos. Diseño y auditoría antes. Mientras tanto: renombrarlo y mandar sus páginas
   a la papelera.
+  **Diseño aprobado por Lega ("sí a todo") y auditado, sin implementar: `Doc_Proyectos_Borrar.md`** (Lega, 2026-10-01: un ícono de archivar y uno de
+  borrar al lado de cada proyecto; borrar con una ventana que muestra páginas, archivos y GB en el Drive, con una
+  casilla para mandar también lo del Drive y la palabra `delete` / `borrar`). Papelera de proyectos con 30 días
+  para restaurar, sin borrar filas; tres entregas (archivar y borrar; la carpeta del Drive; *Delete forever*) con
+  sus migraciones probadas en `begin; … rollback;` contra la base. **Entrega 1 implementada (v0.077, rama
+  `lega/proyectos-borrar`):** íconos de archivar y borrar en el selector, la ventana con la palabra, las listas de
+  archivados y de borrados con *Restore*, el primer proyecto de cada dispositivo y la pantalla sin proyectos; falta
+  aplicar la migración 9 (después de la auditoría del código y la copia de seguridad) y subir `min_app_version`.
+  Sigue: la prueba técnica de Drive y la entrega 2 (la casilla); después, la 3 (*Delete forever*).
 - **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
   (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
   instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthUser } from '../auth';
 import { t, useT } from '../i18n';
 import { useCodaOwner } from '../import/codaOwner';
@@ -15,10 +15,11 @@ import {
   useSyncStatus,
   useTree,
 } from '../services';
+import { SupabaseRemote } from '../sync/remote';
 import { useWorkspace } from '../workspace';
 import { FIND_SHORTCUT_LABEL, isFindSelectionTarget, openFindBar } from './findUi';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
-import { MenuIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
+import { ArchiveIcon, DownloadIcon, MenuIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
@@ -26,7 +27,7 @@ import { notify, useNotice } from './notice';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
-import { ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
+import { DeletedProjectsList, ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
 import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
@@ -34,6 +35,9 @@ import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
 import { TrashView } from './TrashView';
+import { downloadUnsynced } from './unsyncedDownload';
+import { usePendingCount } from './usePendingCount';
+import { errorMessage } from '../sync/types';
 
 // Versiones anteriores recordaban una sola última página; se sigue leyendo como respaldo.
 const LEGACY_LAST_PAGE_KEY = 'shotdocs-last-page';
@@ -115,7 +119,13 @@ export function Workspace({ user }: { user: AuthUser }) {
 
 /** Si la base dijo que sacaron a la persona del workspace, en vez de la app va la pantalla que lo explica. */
 function Gate() {
-  return useRemoved() ? <RemovedScreen /> : <Shell />;
+  const removed = useRemoved();
+  const tree = useTree();
+  if (removed) return <RemovedScreen />;
+  // El servidor ya no manda ningún proyecto (P.14: se los borraron todos, desde otro dispositivo u otra persona):
+  // la misma pantalla que al entrar sin proyectos, con los borrados que se pueden restaurar.
+  if (tree.hasNoProjects()) return <NoProjectsOpen />;
+  return <Shell />;
 }
 
 /**
@@ -387,7 +397,7 @@ function ImportCodaHost() {
   );
 }
 
-function Home() {
+export function Home() {
   const tree = useTree();
   const perms = usePermissions();
   const projectId = useCurrentProject();
@@ -398,6 +408,12 @@ function Home() {
   return (
     <article className="page narrow home">
       <h1 className="page-heading">{empty ? tr('home.empty', { name }) : name}</h1>
+      {/* Un archivado se edita igual, con la marca a la vista (decisión de Lega, P.14). */}
+      {tree.project(projectId)?.archived_at && (
+        <p className="archived-note">
+          <ArchiveIcon size={16} /> {tr('home.archived')}
+        </p>
+      )}
       <p className="muted">
         {!canCreate
           ? empty
@@ -423,18 +439,64 @@ function Home() {
 }
 
 /**
+ * "Sin proyectos" en un dispositivo ya abierto (le borraron o dejaron de compartir todos los proyectos): lo que el
+ * dispositivo tiene sin subir o rechazado sigue a la vista, se puede bajar como archivo, y salir avisa (P.14).
+ */
+function NoProjectsOpen() {
+  const services = useServices();
+  const { engine, user, workspace } = services;
+  const status = useSyncStatus();
+  const pending =
+    usePendingCount() + status.failedOps + status.failedMedia + status.failedComments;
+  return (
+    <NoProjects
+      user={user}
+      onRetry={() => void engine.syncNow()}
+      pending={pending}
+      onDownload={() => downloadUnsynced(services, workspace.config.name || t('noProjects.thisWorkspace'))}
+    />
+  );
+}
+
+/**
  * El usuario todavía no tiene ningún proyecto en este workspace. El dueño y los admins pueden crear el
  * primero (con red: es la puesta en marcha); los demás esperan a que les compartan uno, y la app vuelve a
  * preguntar sola.
  */
-function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) {
+export function NoProjects({
+  user,
+  onRetry,
+  pending = 0,
+  onDownload,
+}: {
+  user: AuthUser;
+  onRetry: () => void;
+  /** Lo que el dispositivo tiene sin subir (con los servicios abiertos); sin servicios, 0. */
+  pending?: number;
+  onDownload?: () => Promise<void>;
+}) {
   const { client, config } = useWorkspace();
   const [canCreate, setCanCreate] = useState(false);
   // Un id por pantalla: si la respuesta se pierde y se reintenta, no se crea un segundo proyecto.
   const [projectId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Los proyectos borrados que la persona puede restaurar (P.14): si hay alguno, la pantalla los ofrece.
+  const remote = useMemo(() => new SupabaseRemote(client), [client]);
+  const [restorable, setRestorable] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const tr = useT();
+
+  useEffect(() => {
+    let live = true;
+    remote.trashedProjects().then(
+      (rows) => live && setRestorable(!!rows?.some((r) => r.can_restore)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [remote]);
 
   useEffect(() => {
     let live = true;
@@ -468,7 +530,7 @@ function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) 
       <div className="card">
         <h1>{tr('noProjects.title')}</h1>
         <p className="muted">
-          {tr(canCreate ? 'noProjects.canCreate' : 'noProjects.wait', {
+          {tr(restorable ? (canCreate ? 'noProjects.restoreOrCreate' : 'noProjects.restore') : canCreate ? 'noProjects.canCreate' : 'noProjects.wait', {
             workspace: config.name || tr('noProjects.thisWorkspace'),
             email: user.email,
           })}
@@ -479,7 +541,45 @@ function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) 
           </button>
         )}
         {error && <p className="error">{error}</p>}
-        <button className="link" onClick={() => void client.auth.signOut({ scope: 'local' })}>
+        {restorable && (
+          <>
+            <h2 className="mono-label">{tr('project.deletedList')}</h2>
+            <Part>
+              <DeletedProjectsList remote={remote} onRestored={onRetry} />
+            </Part>
+          </>
+        )}
+        {pending > 0 && (
+          <div className="no-projects-pending">
+            <p>{tr('noProjects.pending', { count: pending })}</p>
+            {onDownload && (
+              <button
+                className="secondary"
+                disabled={downloading}
+                onClick={async () => {
+                  setDownloading(true);
+                  try {
+                    await onDownload();
+                  } catch (err) {
+                    setError(errorMessage(err));
+                  } finally {
+                    setDownloading(false);
+                  }
+                }}
+              >
+                <DownloadIcon size={16} /> {downloading ? tr('common.preparing') : tr('sync.downloadUnsynced')}
+              </button>
+            )}
+          </div>
+        )}
+        <button
+          className="link"
+          onClick={() => {
+            // Como el menú de la cuenta: con algo sin subir, salir pregunta (no se borra nada del dispositivo).
+            if (pending > 0 && !confirm(t('account.signOutPending', { count: pending }))) return;
+            void client.auth.signOut({ scope: 'local' });
+          }}
+        >
           {tr('common.signOut')}
         </button>
       </div>

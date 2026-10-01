@@ -78,7 +78,7 @@ In production (v0.049). What works today:
   once the workspace database is on version 7).
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
 - Links to other pages: a link to a page of the app opens it in the same tab (Ctrl/⌘+click, in a new one).
-- Photos in the line of text (v0.077): pasted, dropped or picked photos and videos go into the line, where the
+- Photos in the line of text (v0.078): pasted, dropped or picked photos and videos go into the line, where the
   text cursor is (or where you drop them), like characters: text can sit next to them, they flow to the next line
   when they don't fit, and you select several with Shift+click, Shift+arrows or by dragging. A single one comes
   in at its own size, several at a third of the line each. They do everything the older block photos do: resize
@@ -89,7 +89,7 @@ In production (v0.049). What works today:
 - Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the
-  rows and breaks sheets where the page shows them. Photos added before v0.077 keep working this way.
+  rows and breaks sheets where the page shows them. Photos added before v0.078 keep working this way.
 - iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
   shows them; the converter is downloaded only the first time it is needed.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;
@@ -98,6 +98,9 @@ In production (v0.049). What works today:
   of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
   Deleting a collapsed heading deletes its whole section; sheet marks still count everything and the PDF
   prints it all open (or as shown, with *Print as shown* in the page menu).
+- Archive and delete projects: icons next to each project in the project menu (a "⋯" on the phone). Archiving keeps
+  the project as it is, out of the everyday list; deleting asks you to type *delete* and moves it to *Deleted
+  projects*, from where it can be restored exactly as it was. Nothing is erased, and its files stay in Google Drive.
 - Keyboard in the page tree: ↑ and ↓ open the previous or next page, → and ← expand and collapse (← on a page with nothing to collapse goes to its parent page).
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets.
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).

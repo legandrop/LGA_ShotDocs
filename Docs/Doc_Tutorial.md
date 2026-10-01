@@ -48,7 +48,7 @@ Relevado del código de `main`. Son los lugares a los que puede apuntar un globi
 | Menú "⋯" de la página | `PageMenu` en `menus.tsx` | Compartir, página nueva adentro, renombrar, mover, tamaño de hoja, **Exportar PDF / Imprimir**, títulos cortos, mandar a la papelera. Con P.11: colapsar todo / abrir todo. |
 | Título de la página | `PageView.tsx` | Enter pasa al texto. |
 | Editor | `PageEditor.tsx` (BlockNote 0.55) | Menú "/" (títulos, listas, tabla, cita, código, divisor, foto, Script, pregunta), tirador "⋮⋮" y "+" al costado de cada bloque, barra de formato al elegir texto, atajos de Markdown ("# ", "- ", "1. ", "[] ", "> "). |
-| Fotos y videos | `inlinePhotoCreate.ts`, `PhotoToolbar.tsx`, `inlinePhotoEditor.ts`; las fotos-bloque viejas, `imageRowsEditor.ts`, `MediaToolbarButtons.tsx` | Desde v0.077 entran en el renglón (pegar, soltar, "/Image"), como letras: texto al lado, Shift+clic o Shift+flechas para elegir varias. Primer clic elige, segundo abre el carrete; tiradores que imantan a 1/1, 1/2, 1/3 y 1/4; la barra de la foto (la misma para la foto-bloque, por sectores, D-24): ver, bajar, tamaños rápidos (para todas las elegidas) y "Acomodar en filas" de las elegidas, alinear el renglón, comentar, reemplazar, renombrar y borrar. |
+| Fotos y videos | `inlinePhotoCreate.ts`, `PhotoToolbar.tsx`, `inlinePhotoEditor.ts`; las fotos-bloque viejas, `imageRowsEditor.ts`, `MediaToolbarButtons.tsx` | Desde v0.078 entran en el renglón (pegar, soltar, "/Image"), como letras: texto al lado, Shift+clic o Shift+flechas para elegir varias. Primer clic elige, segundo abre el carrete; tiradores que imantan a 1/1, 1/2, 1/3 y 1/4; la barra de la foto (la misma para la foto-bloque, por sectores, D-24): ver, bajar, tamaños rápidos (para todas las elegidas) y "Acomodar en filas" de las elegidas, alinear el renglón, comentar, reemplazar, renombrar y borrar. |
 | Adjuntos | `attachments.ts`, `AttachmentSheet.tsx` | Soltar o pegar cualquier archivo: tarjeta con ícono; segundo clic abre o baja; en el teléfono, la hoja con *Open*, *Download*, *Share*. |
 | Carrete | `Carrete.tsx` | Pantalla completa, flechas, zoom, bajar el original. |
 | Links de Drive | `DrivePasteMenu.tsx`, `driveCard.ts` | Pegar un link de Drive ofrece link, texto o tarjeta con reproductor. |
@@ -88,11 +88,11 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | "# ", "## "…, "- ", "1. ", "[] ", "> " o `" `, "---", "```" | Título, viñeta, numerada, casilla, cita, divisor, código | Editor, al principio del renglón | BlockNote |
 | Esc | Cerrar la hoja de un adjunto | Hoja del adjunto (teléfono) | App (`AttachmentSheet.tsx`) |
 | Clic en una foto elegida, doble clic, barra espaciadora | Abrir el carrete (en un adjunto: abrir o bajar) | Editor | App (`PageEditor.tsx`) |
-| Una letra, Enter, un emoji o el dictado con una foto en línea elegida | Escribe después de la foto (no la reemplaza); Enter parte el renglón ahí | Editor | App (`inlinePhotoEditor.ts`; v0.076, emojis y dictado v0.077) |
+| Una letra, Enter, un emoji o el dictado con una foto en línea elegida | Escribe después de la foto (no la reemplaza); Enter parte el renglón ahí | Editor | App (`inlinePhotoEditor.ts`; v0.076, emojis y dictado v0.078) |
 | Shift+← / →, Shift+clic, arrastrar | Elegir varias fotos en línea (y texto), como letras | Editor | ProseMirror y app (`inlinePhotoEditor.ts`) |
-| Una letra, Enter, Espacio con varias fotos en línea elegidas | Escribe después de la última / parte el renglón ahí / abre el carrete en la primera (no las borra) | Editor | App (v0.077) |
+| Una letra, Enter, Espacio con varias fotos en línea elegidas | Escribe después de la última / parte el renglón ahí / abre el carrete en la primera (no las borra) | Editor | App (v0.078) |
 | Supr o Retroceso con fotos elegidas | Borrarlas (también *Delete image* en su barra) | Editor | ProseMirror |
-| Mod+V con archivos, soltar archivos | Fotos y videos en el renglón, donde está el cursor o donde se sueltan; otros archivos, como tarjeta debajo | Editor | App (`inlinePhotoCreate.ts`; v0.077) |
+| Mod+V con archivos, soltar archivos | Fotos y videos en el renglón, donde está el cursor o donde se sueltan; otros archivos, como tarjeta debajo | Editor | App (`inlinePhotoCreate.ts`; v0.078) |
 | ← / → | De una foto a otra en una fila | Foto de una fila elegida | App (`imageRowsEditor.ts`) |
 | ↑ / ↓ | Salir de la fila | Foto de una fila elegida | App |
 | Enter | Párrafo nuevo después de toda la fila | Foto de una fila elegida | App |

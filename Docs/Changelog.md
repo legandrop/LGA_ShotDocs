@@ -1,37 +1,26 @@
 # Changelog — LGA Shot Docs
 
-v0.079 :
-
-Fotos en línea, entrega 4: importar de Coda partía cada renglón con fotos en bloques sueltos, una foto debajo de
-otra, aunque en Coda fueran juntas o al lado del texto. Ahora cada foto o video entra en su renglón como foto en
-línea, con la parte del renglón que ocupaba en Coda (sobre sus 624 px, menos la sangría de las listas), también en ítems, títulos y citas; los
-adjuntos siguen como tarjeta y las fotos de una ficha van juntas. Con fotos reales apareció un defecto de la
-entrega 2: un renglón de solo fotos que no lo llenaban medía lo que sus miniaturas y las fotos salían más chicas
-(una a 1/1, 479 px en vez de 720); ahora el renglón ocupa todo el bloque. Medido con una copia parcial de ERSO
-contra Coda: las mismas filas y ±1 % de ancho.
-[ Fotos en línea - entrega 4: importar de Coda con los renglones como estaban ]
-
 v0.078 :
 
-Fotos en línea, entrega 3: las fotos-bloque que ya existen no tenían cómo pasar al renglón. Ahora una función
-convierte la página entera: cada fila pasa a ser un renglón con las mismas fotos y los mismos anchos, una foto sola
-toma su ancho (o 1/2, 1/3, 1/4 de su ancho en píxeles), y quedan como bloque las de leyenda y los adjuntos. Los
-comentarios siguen anclados y un solo Ctrl/⌘+Z lo deshace. Queda sin entrada en la interfaz (D-26): no va a haber
-fotos viejas que convertir. Reemplazar el bloque en un solo cambio perdía la fila al deshacer o al convertir dos
-dispositivos a la vez (y-prosemirror metía el párrafo dentro del bloque viejo): ahora se sacan los bloques y
-después se pone el renglón. Medido en una página tipo ERSO: 61 fotos, 25 filas iguales.
-[ Fotos en línea - entrega 3: convertir las fotos-bloque de una página ]
+Fotos en línea, entregas 2 a 4: hasta ahora nada creaba fotos en el renglón y lo importado de Coda quedaba apilado.
+Pegar, soltar, "/Image" y "Copy image" de una web ponen fotos y videos donde está el cursor. Lega pidió que hagan
+todo lo de la foto-bloque (D-24): tiradores que imantan y la misma barra para las dos, por sectores y con tooltips
+que explican cada botón; sin leyenda. *Arrange in rows* acomoda solo las elegidas y un párrafo de fotos se parte
+entre hojas por filas. Una versión vieja que abría un renglón sin fotos perdía texto: el renglón lleva una marca que
+esas versiones no conocen y que deshacer no saca. Importar de Coda pone cada foto en su renglón con su ancho
+(859 páginas de ERSO: las 14.316 fotos y el texto, iguales). Convertir fotos-bloque existe sin entrada (D-26).
+[ Fotos en línea - crear, paridad con la foto-bloque e importar de Coda en el renglón ]
 
 v0.077 :
 
-Fotos en línea, entrega 2: pegar, soltar, "/Image" y "Copy image" de una web ponen fotos y videos en el renglón,
-donde está el cursor (una con su tamaño, varias a un tercio, con un solo deshacer). Lega pidió que hicieran todo
-lo de la foto-bloque (D-24): tiradores que imantan, y la misma barra para las dos, por sectores y con botones
-parejos: ver, bajar | tamaños y *Arrange in rows* de las elegidas | alinear | comentar | reemplazar, renombrar,
-borrar; sin leyenda. Un párrafo de fotos se parte entre hojas por filas. Una versión vieja que abría un renglón al
-que le borraron las fotos perdía texto (28 de 49): ahora el renglón lleva una marca que esas versiones no conocen, y
-deshacer ya no la saca. Con varias fotos elegidas, una letra o Enter las borraban: ahora escriben después.
-[ Fotos en línea - entrega 2: crear, paridad con la foto-bloque y hojas ]
+No había forma de sacar un proyecto de la lista: la base no dejaba borrar proyectos y la app no tenía nada para
+eso. Ahora, al pasar el mouse por un proyecto del selector (o con "⋯" en el teléfono), renombrar, archivar y
+borrar. Archivar pregunta en el mismo renglón y lo pasa a *Archived projects*, editable y con los mismos permisos.
+Borrar abre una ventana con páginas, archivos y peso en Drive, y pide escribir `delete` o `borrar` según el idioma;
+el proyecto va a *Deleted projects*: nadie lo ve, ninguna fila se borra y *Restore* lo deja como estaba. Lo decide
+la base (migración 9: los permisos dan cero con el proyecto borrado). Un dispositivo cuyo primer proyecto se borró
+pasa al siguiente, y con una base sin migrar todo sigue como antes.
+[ Proyectos - archivar, borrar y restaurar ]
 
 v0.076 :
 

@@ -1,8 +1,8 @@
 # Fotos en línea: la foto como un carácter del renglón (P.15)
 
-Estado: **entregas 0 (prototipo), 1 (v0.076: el nodo, los huecos estables, lo que se ve y se toca), 2 (v0.077:
+Estado: **entregas 0 (prototipo), 1 (v0.076: el nodo, los huecos estables, lo que se ve y se toca), 2 (v0.078:
 crear, dar tamaño, acomodar las elegidas, hojas y PDF), 3 (v0.078: convertir las fotos-bloque de una página, escondida por D-26) y 4
-(v0.079: importar de Coda con los renglones) hechas; queda aparte la 5 (fotos en las celdas de una tabla)**
+(v0.078: importar de Coda con los renglones) hechas; queda aparte la 5 (fotos en las celdas de una tabla)**
 (2026-10-01; ver "Cómo quedó" de cada una; las "Correcciones de la auditoría", más abajo,
 mandan sobre el diseño de arriba, y la entrega 2 trae propuestas nuevas, marcadas). Pedido de Lega del
 2026-10-01, con sus palabras: las
@@ -88,8 +88,8 @@ Así nunca hay una página con fotos en línea que una versión permitida no sep
 
 **Cómo quedó (entrega 2):** el renglón con fotos lleva además una marca propia (`lgaStableGaps`) que ninguna versión
 anterior conoce, así que ninguna abre una página con fotos en línea ni con un renglón que las tuvo. Con eso el
-paso 2 deja de ser previo: se publica la v0.077 (paso 1 y 3 juntos) y **después** se sube `min_app_version` a
-0.077. Ver "Cómo quedó (entrega 2)".
+paso 2 deja de ser previo: se publica la v0.078 (paso 1 y 3 juntos) y **después** se sube `min_app_version` a
+0.078. Ver "Cómo quedó (entrega 2)".
 
 ## Cómo se ve y se comporta
 
@@ -498,7 +498,7 @@ distingue la letra de la tecla misma).
 
 ## Cómo quedó (entrega 2: crear, dar tamaño, acomodar las elegidas, hojas y PDF)
 
-v0.077. Es la primera versión que **crea** fotos en línea. Antes de crear se cerró lo que dejaron las auditorías de
+v0.078. Es la primera versión que **crea** fotos en línea. Antes de crear se cerró lo que dejaron las auditorías de
 v0.076 (fase A); después, lo de crear (fase B). Todo medido con pruebas en el repo y en Chromium sin ventana, con la
 página real de la app sobre el servidor en memoria (scripts fuera de este repo).
 
@@ -712,7 +712,7 @@ Pruebas en el repo: `inlinePhotoCreate.test.ts`, `inlinePhotoSize.test.ts`, `med
 ### `min_app_version`
 
 Con la marca del renglón, ninguna versión anterior abre una página con fotos en línea (ni con un renglón que las
-tuvo), así que no hace falta subirlo antes. Orden: **publicar la v0.077 y después subir `min_app_version` a 0.077**
+tuvo), así que no hace falta subirlo antes. Orden: **publicar la v0.078 y después subir `min_app_version` a 0.078**
 (una fila de la base; la cambia Lega), cuando la tenga en sus dispositivos. Así las versiones viejas dejan de subir
 cambios y avisan que hay que actualizar.
 
@@ -784,7 +784,7 @@ escribe en un bloque hijo de una foto. Y de la foto-bloque no pasan al renglón 
 - Pegar HTML con texto y un `<img>` (de una web) sigue creando una foto-bloque, y las imágenes `data:` de una página
   vieja quedan como están: no entraron en esta entrega.
 - El ícono de comentario del margen de un renglón con fotos altas sigue arriba del renglón (los puntos ya bajan al
-  texto, v0.077).
+  texto, v0.078).
 
 ## Cómo quedó (entrega 4: importar de Coda con los renglones como estaban)
 
