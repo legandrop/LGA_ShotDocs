@@ -418,6 +418,8 @@ export class Portero {
       if (path === '/project/untrash' && req.method === 'POST') return json(req, this.env, await this.untrashProject(req, who));
 
       if (!who.isOwner) throw new HttpError(403, 'Only the owner of the workspace can do this for now.');
+      // Solo mirar (la prueba técnica de P.14, Doc_Proyectos_Borrar.md, sección 3.9): la carpeta de un proyecto en Drive.
+      if (path === '/project/inspect' && req.method === 'GET') return json(req, this.env, await this.inspectProject(url));
       if (path === '/drive/connect' && req.method === 'POST') return json(req, this.env, await this.connect(req));
       if (path === '/drive/picker' && req.method === 'POST') return json(req, this.env, await this.picker());
       if (path === '/drive/folder' && req.method === 'POST') return json(req, this.env, await this.chooseFolder(req));
@@ -1095,9 +1097,17 @@ export class Portero {
    *   5. `project_drive_trashed`.
    * Repetirlo no hace nada de más; si Drive falla en el medio, repetirlo termina sin perder ninguna.
    */
-  private trashProject(req: Request, who: Who): Promise<ProjectDriveResult> {
-    return this.projectBody(req).then((project) =>
-      this.oneAtATime(project, () => this.sendProjectFolder(project, who).catch(withProjectCode)),
+  private async trashProject(req: Request, who: Who): Promise<ProjectDriveResult> {
+    const body = await readBody(req);
+    const project = this.projectId(body);
+    // Para la prueba técnica (sección 3.9), solo el dueño: dejar el estado exacto de una respuesta perdida (Drive la
+    // mandó, la base no se enteró) o de un registro perdido. Nunca hace nada que un corte de red no pudiera hacer.
+    const test = body.test === undefined ? null : body.test;
+    if (test !== null && (!who.isOwner || (test !== 'lost_response' && test !== 'lost_registry'))) {
+      throw new HttpError(400, 'Unknown test mode.', 'bad_request');
+    }
+    return this.oneAtATime(project, () =>
+      this.sendProjectFolder(project, who, test as 'lost_response' | 'lost_registry' | null).catch(withProjectCode),
     );
   }
 
@@ -1108,14 +1118,16 @@ export class Portero {
    * `untrashed`. Si no existe ninguna, con Drive conectado a la misma cuenta: `missing`, sin tocar la base (la app
    * pregunta si restaurar sin los archivos).
    */
-  private untrashProject(req: Request, who: Who): Promise<ProjectDriveResult> {
-    return this.projectBody(req).then((project) =>
-      this.oneAtATime(project, () => this.bringProjectFolder(project, who).catch(withProjectCode)),
-    );
+  private async untrashProject(req: Request, who: Who): Promise<ProjectDriveResult> {
+    const body = await readBody(req);
+    const project = this.projectId(body);
+    // Prueba técnica (solo el dueño): traer sin mirar el registro ni la carpeta recordada, solo con la búsqueda.
+    const test = body.test === undefined ? null : body.test;
+    if (test !== null && (!who.isOwner || test !== 'lost_registry')) throw new HttpError(400, 'Unknown test mode.', 'bad_request');
+    return this.oneAtATime(project, () => this.bringProjectFolder(project, who, test === 'lost_registry').catch(withProjectCode));
   }
 
-  private async projectBody(req: Request): Promise<string> {
-    const body = await readBody(req);
+  private projectId(body: Record<string, unknown>): string {
     const project = typeof body.project === 'string' ? body.project.toLowerCase() : '';
     if (!UUID.test(project)) throw new HttpError(400, 'Missing the project.', 'bad_request');
     return project;
@@ -1134,7 +1146,11 @@ export class Portero {
     return run;
   }
 
-  private async sendProjectFolder(project: string, who: Who): Promise<ProjectDriveResult> {
+  private async sendProjectFolder(
+    project: string,
+    who: Who,
+    test: 'lost_response' | 'lost_registry' | null = null,
+  ): Promise<ProjectDriveResult> {
     let media = await this.mediaProject(who, project);
     if (!media) throw new HttpError(404, 'This project does not exist or you cannot send its files to the Google Drive trash.', 'not_found');
     if (!media.deleted_at) throw new HttpError(409, 'Only the folder of a deleted project goes to the Google Drive trash.', 'project_not_deleted');
@@ -1151,11 +1167,17 @@ export class Portero {
     // El registro de este mismo pedido (no el de uno anterior que se cerró al restaurar sin la carpeta).
     const sameRequest = (r: ProjectTrash | undefined, m: MediaProject) =>
       !!r && !!m.drive_trash_requested_at && !m.drive_missing_at && r.requestedAt === m.drive_trash_requested_at;
-    const current = saved && sameRequest(saved, media) ? saved : null;
+    let current = saved && sameRequest(saved, media) ? saved : null;
     if (current && !sameAccount(current.email, email)) throw otherAccount();
+    if (test === 'lost_registry') {
+      // Como si el portero hubiera perdido su registro (y no recordara la carpeta): queda la búsqueda por la marca. La
+      // carpeta recordada no se olvida (la usan las subidas): solo no se mira en este pedido.
+      await this.store.delete(`projectTrash:${project}`);
+      current = null;
+    }
     // Las carpetas, antes de pedirle nada a la base: si la recordada no lleva la marca (`drive_mismatch`), el
     // proyecto queda como estaba y se puede restaurar sin traer nada.
-    const { remembered, folders } = await this.projectFolders(project, current?.folders ?? [], true);
+    const { remembered, folders } = await this.projectFolders(project, current?.folders ?? [], true, test === 'lost_registry');
 
     await this.projectRpc(who, 'request_project_drive_trash', project);
     media = await this.mediaProject(who, project);
@@ -1193,6 +1215,8 @@ export class Portero {
       if (res.status === 404) continue;
       if (!res.ok) throw new HttpError(502, `Could not send the project folder to the Google Drive trash (${res.status}).`, 'drive_failed');
       sentNow.push(f.id);
+      // Prueba técnica: Drive cumplió y "la respuesta no llegó" (ni a la base).
+      if (test === 'lost_response') throw new HttpError(502, 'Test: the answer from Google Drive was lost.', 'drive_failed');
     }
 
     const result: 'trashed' | 'missing' | 'none' = folders.length > 0 ? 'trashed' : remembered ? 'missing' : 'none';
@@ -1211,7 +1235,7 @@ export class Portero {
     return { status: 'done', project, drive: result, folders: folders.filter((f) => f.trashed || sentNow.includes(f.id)).length };
   }
 
-  private async bringProjectFolder(project: string, who: Who): Promise<ProjectDriveResult> {
+  private async bringProjectFolder(project: string, who: Who, onlySearch = false): Promise<ProjectDriveResult> {
     const media = await this.mediaProject(who, project);
     if (!media) throw new HttpError(404, 'This project does not exist or you cannot bring its files back.', 'not_found');
     const requestedAt = media.drive_trash_requested_at;
@@ -1223,11 +1247,14 @@ export class Portero {
     const reg = saved && saved.requestedAt === requestedAt ? saved : null;
     if (reg && !sameAccount(reg.email, email)) throw otherAccount();
 
-    const { folders } = await this.projectFolders(project, reg?.folders ?? [], false);
+    const { folders } = onlySearch
+      ? await this.projectFolders(project, [], false, true)
+      : await this.projectFolders(project, reg?.folders ?? [], false);
     const cutoff = Date.parse(requestedAt) - CLOCK_MARGIN_MS;
     // La unión: las del registro y las que fueron a la papelera desde el pedido (no una vieja que ya estaba ahí).
     const toBring = folders.filter(
-      (f) => f.trashed && (reg?.folders.includes(f.id) || !f.trashedTime || Date.parse(f.trashedTime) >= cutoff),
+      (f) =>
+        f.trashed && ((!onlySearch && reg?.folders.includes(f.id)) || !f.trashedTime || Date.parse(f.trashedTime) >= cutoff),
     );
     let brought = 0;
     for (const f of toBring) {
@@ -1255,8 +1282,9 @@ export class Portero {
     project: string,
     known: string[],
     strict: boolean,
+    ignoreRemembered = false,
   ): Promise<{ remembered: boolean; folders: DriveFolder[] }> {
-    const saved = await this.store.get<ProjectFolder>(`project:${project}`);
+    const saved = ignoreRemembered ? undefined : await this.store.get<ProjectFolder>(`project:${project}`);
     const byId = new Map<string, DriveFolder>();
     for (const id of new Set([...(saved ? [saved.id] : []), ...known])) {
       const found = await this.lookFolder(id);
@@ -1273,6 +1301,54 @@ export class Portero {
       if (f.appProperties?.sdProject === project && !byId.has(f.id)) byId.set(f.id, f);
     }
     return { remembered: !!saved, folders: [...byId.values()] };
+  }
+
+  /**
+   * Solo mirar, solo el dueño (la prueba técnica, Doc_Proyectos_Borrar.md, sección 3.9): las carpetas del proyecto en
+   * Drive (la recordada, las del registro y las que encuentra la búsqueda por la marca) con su estado en la papelera,
+   * y lo que hay adentro (las carpetas del día y sus archivos, con `parents`, `explicitlyTrashed` y la marca
+   * `sdFile`). No cambia nada: ni en Drive ni en lo guardado.
+   */
+  private async inspectProject(url: URL): Promise<unknown> {
+    const project = (url.searchParams.get('project') ?? '').toLowerCase();
+    if (!UUID.test(project)) throw new HttpError(400, 'Missing the project.', 'bad_request');
+    const saved = await this.store.get<ProjectFolder>(`project:${project}`);
+    const registry = (await this.store.get<ProjectTrash>(`projectTrash:${project}`)) ?? null;
+    const folders = new Map<string, DriveFolder & { explicitlyTrashed?: boolean; parents?: string[] }>();
+    const fields = 'id,name,mimeType,trashed,explicitlyTrashed,trashedTime,parents,appProperties';
+    for (const id of new Set([...(saved ? [saved.id] : []), ...(registry?.folders ?? [])])) {
+      const res = await this.drive(`/files/${encodeURIComponent(id)}?fields=${fields}`);
+      if (res.status === 404) continue;
+      if (!res.ok) throw new HttpError(502, `Google Drive answered ${res.status}.`, 'drive_failed');
+      folders.set(id, (await res.json()) as DriveFolder);
+    }
+    for (const f of await this.searchFolders(project)) if (!folders.has(f.id)) folders.set(f.id, f);
+    // Lo de adentro, dos niveles (`<Proyecto>/<día>/<archivo>`), con un tope para no pasar el límite del Worker.
+    const children = async (parent: string) => {
+      const out: Record<string, unknown>[] = [];
+      let pageToken = '';
+      for (let page = 0; page < 20; page++) {
+        const params = new URLSearchParams({ q: `'${parent}' in parents`, fields: `nextPageToken,files(${fields})`, pageSize: '1000', spaces: 'drive' });
+        if (pageToken) params.set('pageToken', pageToken);
+        const res = await this.drive(`/files?${params}`);
+        if (!res.ok) throw new HttpError(502, `Google Drive answered ${res.status}.`, 'drive_failed');
+        const body = (await res.json()) as { files?: Record<string, unknown>[]; nextPageToken?: string };
+        out.push(...(body.files ?? []));
+        if (!body.nextPageToken) break;
+        pageToken = body.nextPageToken;
+      }
+      return out;
+    };
+    const tree = [];
+    for (const folder of folders.values()) {
+      const days = await children(folder.id);
+      const inside = [];
+      for (const day of days) {
+        inside.push({ ...day, files: day.mimeType === FOLDER_MIME ? await children(String(day.id)) : [] });
+      }
+      tree.push({ ...folder, remembered: saved?.id === folder.id, inRegistry: !!registry?.folders.includes(folder.id), children: inside });
+    }
+    return { project, remembered: saved?.id ?? null, registry, folders: tree };
   }
 
   /** Una carpeta por su id, con lo que hace falta para decidir; `null` si ya no existe. */

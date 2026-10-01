@@ -223,8 +223,10 @@ function fakeWorld() {
       return jsonRes({ id });
     }
     if (url.host === 'www.googleapis.com' && url.pathname === '/drive/v3/files' && (init.method ?? 'GET') === 'GET') {
-      // Solo la búsqueda de la carpeta de un proyecto por su marca (lo único que lista el portero).
+      // La búsqueda de la carpeta de un proyecto por su marca, y lo que hay adentro de una carpeta (`/project/inspect`).
       const q = url.searchParams.get('q') ?? '';
+      const parent = /^'([^']+)' in parents$/.exec(q)?.[1];
+      if (parent) return jsonRes({ files: [...files.entries()].filter(([, f]) => f.parents.includes(parent)).map(([id, f]) => describe(id, f)) });
       const mark = /^mimeType = 'application\/vnd\.google-apps\.folder' and appProperties has \{ key='sdProject' and value='([0-9a-f-]{36})' \}$/.exec(q)?.[1];
       if (!mark) return jsonRes({ error: `unexpected q ${q}` }, 400);
       return jsonRes({
@@ -2190,5 +2192,67 @@ describe('portero: la carpeta de un proyecto borrado en la papelera de Drive', (
     const pre = await p.handle(new Request(`${SELF}/project/untrash`, { method: 'OPTIONS', headers: { Origin: APP } }));
     expect(pre.status).toBe(204);
     expect(pre.headers.get('Access-Control-Allow-Methods')).toContain('POST');
+  });
+});
+
+describe('portero: lo de la prueba técnica de la carpeta de un proyecto (solo el dueño)', () => {
+  it('/project/inspect muestra la carpeta, lo de adentro y el registro, sin cambiar nada; solo el dueño', async () => {
+    const { world, p, folder, driveFiles } = await deletedProject();
+    expect((await projectCall(p, 'trash', 'owner-jwt')).status).toBe(200);
+    const before = world.calls.length;
+    const res = await call(p, `/project/inspect?project=${PROJ}`, { jwt: 'owner-jwt' });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      remembered: string;
+      registry: { folders: string[] };
+      folders: { id: string; trashed: boolean; trashedTime?: string; remembered: boolean; inRegistry: boolean; children: { files: { id: string; trashed: boolean; explicitlyTrashed: boolean; appProperties?: Record<string, string> }[] }[] }[];
+    };
+    expect(body.remembered).toBe(folder);
+    expect(body.registry.folders).toEqual([folder]);
+    expect(body.folders).toHaveLength(1);
+    expect(body.folders[0]).toMatchObject({ id: folder, trashed: true, trashedTime: expect.any(String), remembered: true, inRegistry: true });
+    const inside = body.folders[0].children.flatMap((d) => d.files);
+    expect(inside.map((f) => f.id).sort()).toEqual([...driveFiles].sort());
+    for (const f of inside) expect(f).toMatchObject({ trashed: true, explicitlyTrashed: false });
+    expect(inside.map((f) => f.appProperties?.sdFile).sort()).toEqual([FILE_A, FILE_B].sort());
+    expect(changes(world, before)).toEqual([]);
+    for (const jwt of ['admin-jwt', 'member-jwt']) {
+      expect((await call(p, `/project/inspect?project=${PROJ}`, { jwt })).status).toBe(403);
+    }
+  });
+
+  it('modo de prueba lost_response: deja el estado de una respuesta perdida; repetir sin él termina', async () => {
+    const { world, store, p, folder } = await deletedProject();
+    const res = await call(p, '/project/trash', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ project: PROJ, test: 'lost_response' }) });
+    expect(res.status).toBe(502);
+    expect(world.files.get(folder)!.trashed).toBe(true);
+    expect(world.projects.get(PROJ)).toMatchObject({ requested_at: expect.any(String), trashed_at: null });
+    expect(await store.get(`projectTrash:${PROJ}`)).toMatchObject({ folders: [folder] });
+    expect(await (await projectCall(p, 'trash', 'owner-jwt')).json()).toMatchObject({ drive: 'trashed', folders: 1 });
+  });
+
+  it('modo de prueba lost_registry: sin registro ni carpeta recordada, la búsqueda la cuenta al mandar y la trae', async () => {
+    const { world, store, p, folder } = await deletedProject();
+    await call(p, '/project/trash', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ project: PROJ, test: 'lost_response' }) });
+    const before = world.calls.length;
+    const retry = await call(p, '/project/trash', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ project: PROJ, test: 'lost_registry' }) });
+    expect(await retry.json()).toMatchObject({ drive: 'trashed', folders: 1 });
+    expect(changes(world, before).filter((c) => c.startsWith('PATCH'))).toEqual([]);
+    // La carpeta recordada sigue anotada (la usan las subidas).
+    expect(await store.get(`project:${PROJ}`)).toMatchObject({ id: folder });
+    const back = await call(p, '/project/untrash', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ project: PROJ, test: 'lost_registry' }) });
+    expect(await back.json()).toMatchObject({ drive: 'untrashed', folders: 1 });
+    expect(world.files.get(folder)!.trashed).toBe(false);
+  });
+
+  it('los modos de prueba son solo del dueño y solo los conocidos', async () => {
+    const { world, p, folder } = await deletedProject();
+    for (const [jwt, test] of [['admin-jwt', 'lost_response'], ['owner-jwt', 'otra'], ['owner-jwt', 1]] as const) {
+      const res = await call(p, '/project/trash', { method: 'POST', jwt, body: JSON.stringify({ project: PROJ, test }) });
+      expect(res.status).toBe(400);
+    }
+    expect((await call(p, '/project/untrash', { method: 'POST', jwt: 'admin-jwt', body: JSON.stringify({ project: PROJ, test: 'lost_registry' }) })).status).toBe(400);
+    expect(world.files.get(folder)!.trashed).toBeFalsy();
+    expect(world.projects.get(PROJ)!.requested_at).toBeNull();
   });
 });
