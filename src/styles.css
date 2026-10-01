@@ -2914,6 +2914,12 @@ code {
   display: contents;
 }
 
+/* En una pantalla angosta (el teléfono) la barra entera no entra: pasa a dos renglones, adentro de la pantalla. */
+.bn-formatting-toolbar.sd-media-bar {
+  flex-wrap: wrap;
+  max-width: calc(100vw - 16px);
+}
+
 .bn-formatting-toolbar .sd-bar-sep {
   flex: 0 0 1px;
   align-self: stretch;
