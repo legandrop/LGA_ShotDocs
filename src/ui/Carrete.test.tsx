@@ -421,3 +421,79 @@ describe('carrete: bajar el original desde la barra de la imagen', () => {
     Object.assign(URL, { createObjectURL, revokeObjectURL });
   });
 });
+
+describe('carrete: un adjunto en grande (Docs/Doc_Adjuntos.md, entrega 2)', () => {
+  const PDF = 'sdmedia://11111111-2222-4333-8444-555555555555';
+  const ZIP = 'sdmedia://66666666-7777-4888-9999-000000000000';
+  const withFiles = collectCarrete([
+    { id: 'a', type: 'image', props: { url: PHOTO_A, name: 'IMG_0001.JPG' } },
+    { id: 'p', type: 'image', props: { url: PDF, name: 'guion.pdf' } },
+    { id: 'z', type: 'image', props: { url: ZIP, name: 'todo.zip' } },
+  ]);
+
+  function filesLoader(opts: { offline?: boolean } = {}) {
+    const open = vi.fn(async () => (opts.offline ? null : 'blob:open-pdf'));
+    const loader: CarreteLoader = {
+      preview: async (item) => {
+        if (item.url === PHOTO_A) return { kind: 'image', name: 'IMG_0001.JPG', preview: 'blob:thumb-a' };
+        if (item.url === PDF)
+          return { kind: null, name: 'guion.pdf', preview: 'blob:page-1', file: { mime: 'application/pdf', size: 2.4 * 1024 * 1024, canOpen: true, card: false } };
+        return { kind: null, name: 'todo.zip', preview: 'data:image/svg+xml,card', file: { mime: 'application/zip', size: 1024, canOpen: false, card: true } };
+      },
+      full: async (item) => {
+        if (opts.offline && item.url !== PHOTO_A) throw new PorteroError('Failed to fetch', 0);
+        return item.url === PHOTO_A ? { url: 'blob:full-a', local: true } : { url: 'https://portero.test/m/pass', local: false, portero: true };
+      },
+      open,
+      retry: vi.fn(),
+      dispose: vi.fn(),
+    };
+    return { loader, open };
+  }
+
+  it('el PDF: su primera página, el tipo y el peso, Open (pestaña nueva) y Download con ?download=1; sin zoom', async () => {
+    const { loader, open: prepare } = filesLoader();
+    const opened = vi.spyOn(window, 'open').mockImplementation(() => null);
+    await open({ items: withFiles, start: 1, loader });
+    expect(counter()).toBe('2 / 3');
+    const slot = current();
+    expect(slot.querySelector('.carrete-file-preview')?.getAttribute('src')).toBe('blob:page-1');
+    expect(slot.querySelector('.carrete-file-meta')?.textContent).toMatch(/^PDF · 2[.,]4 MB$/);
+    expect(document.querySelector('.carrete-stage')?.hasAttribute('data-zoomable')).toBe(false);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    const openBtn = slot.querySelector<HTMLButtonElement>('.carrete-file-open')!;
+    expect(openBtn.disabled).toBe(false);
+    expect(openBtn.textContent).toBe('Open');
+    await act(async () => openBtn.click());
+    expect(opened).toHaveBeenCalledWith('blob:open-pdf', '_blank', 'noopener');
+    const download = slot.querySelector<HTMLAnchorElement>('.carrete-file-actions a')!;
+    expect(download.getAttribute('href')).toBe('https://portero.test/m/pass?download=1');
+    expect(download.getAttribute('download')).toBe('guion.pdf');
+    // Ningún aviso encima: el adjunto dice lo suyo en su tarjeta.
+    expect(document.querySelector('.carrete-notice')).toBeNull();
+    opened.mockRestore();
+  });
+
+  it('un zip: la tarjeta y solo Download; se llega pasando desde una foto', async () => {
+    const { loader } = filesLoader();
+    await open({ items: withFiles, start: 0, loader });
+    await key('ArrowRight');
+    await key('ArrowRight');
+    expect(counter()).toBe('3 / 3');
+    const slot = current();
+    expect(slot.querySelector('.carrete-file[data-card]')).toBeTruthy();
+    expect(slot.querySelector('.carrete-file-open')).toBeNull();
+    expect(slot.querySelector('.carrete-file-meta')).toBeNull();
+    expect(slot.querySelector('.carrete-file-actions a')?.getAttribute('download')).toBe('todo.zip');
+  });
+
+  it('sin red y sin el archivo en el dispositivo: se ve la vista previa, con el aviso y los botones apagados', async () => {
+    const { loader } = filesLoader({ offline: true });
+    await open({ items: withFiles, start: 1, loader, online: false });
+    const slot = current();
+    expect(slot.querySelector('.carrete-file-preview')?.getAttribute('src')).toBe('blob:page-1');
+    expect(slot.querySelector('.carrete-file-note')?.textContent).toMatch(/offline/i);
+    expect(slot.querySelector<HTMLButtonElement>('.carrete-file-open')!.disabled).toBe(true);
+    expect(slot.querySelector('.carrete-file-actions a')).toBeNull();
+  });
+});

@@ -1041,6 +1041,7 @@ export class OfflineManager {
         unavailable++;
         continue;
       }
+      // La miniatura de una foto o un video, y también la vista previa de un adjunto (Doc_Adjuntos.md, entrega 2).
       if (f.thumbAt && !f.thumb) items.push({ id: f.id, what: 'thumb', bytes: 40 * 1024, mime: f.mime, size: 0 });
       const want = wanted(f, mark.options);
       if (!want.orig && !want.view) continue;

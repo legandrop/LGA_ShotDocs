@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import {
   attachmentCardUrl,
   attachmentFamily,
+  blobToDataUrl,
   cleanFileName,
   extensionLabel,
   fileKind,
@@ -274,5 +275,70 @@ describe('la tarjeta', () => {
     }
     // Sin nombre todavía: el aviso va en lugar del nombre.
     expect(texts(parseCard(attachmentCardUrl({ name: '', mime: '', state: 'pending' })))).toContain(t('queue.notYet'));
+  });
+});
+
+describe('la tarjeta con vista previa (entrega 2)', () => {
+  const JPEG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
+
+  it('es más alta (360×268): la vista previa arriba, adentro del SVG, y el nombre escapado y el peso abajo', () => {
+    const url = attachmentCardUrl({ name: '<script>x</script>&.pdf', mime: 'application/pdf', size: 2.4 * 1024 * 1024, preview: JPEG });
+    const doc = parseCard(url);
+    const svg = doc.documentElement;
+    expect(svg.getAttribute('width')).toBe('360');
+    expect(svg.getAttribute('height')).toBe('268');
+    expect(doc.getElementsByTagName('script')).toHaveLength(0);
+    expect(doc.getElementsByTagName('foreignObject')).toHaveLength(0);
+    const images = doc.getElementsByTagName('image');
+    expect(images).toHaveLength(1);
+    expect(images[0].getAttribute('href')).toBe(JPEG);
+    expect(images[0].getAttribute('preserveAspectRatio')).toBe('xMidYMin slice');
+    // Lo único con dirección es la vista previa, y no hay nada de afuera.
+    expect(doc.querySelectorAll('[href]')).toHaveLength(1);
+    expect(decodeURIComponent(url)).not.toMatch(/https?:\/\/(?!www\.w3\.org\/2000\/svg)/);
+    const all = texts(doc);
+    expect(all).toContain('<script>x</script>&.pdf');
+    expect(all).toContain('PDF');
+    expect(all.some((x) => /^2[.,]4 MB$/.test(x))).toBe(true);
+  });
+
+  it('un nombre largo va en un renglón, cortado con "…"', () => {
+    const name = `Storyboard_${'secuencia_'.repeat(12)}final.pdf`;
+    const doc = parseCard(attachmentCardUrl({ name, mime: 'application/pdf', preview: JPEG }));
+    const title = texts(doc).find((x) => x.startsWith('Storyboard_'))!;
+    expect(title.endsWith('…')).toBe(true);
+    expect(name.startsWith(title.slice(0, -1))).toBe(true);
+  });
+
+  it('solo una foto en base64: cualquier otra cosa se ignora y queda la tarjeta de siempre', () => {
+    for (const preview of [
+      'data:image/svg+xml;base64,PHN2Zz4=',
+      'https://example.com/x.jpg',
+      'data:image/jpeg;base64,abc" onload="x',
+      'javascript:alert(1)',
+    ]) {
+      const doc = parseCard(attachmentCardUrl({ name: 'a.pdf', mime: 'application/pdf', preview }));
+      expect(doc.documentElement.getAttribute('height')).toBe('96');
+      expect(doc.getElementsByTagName('image')).toHaveLength(0);
+    }
+  });
+
+  it('de otro proyecto o borrado: sin vista previa, con la forma de siempre', () => {
+    for (const state of ['foreign', 'deleted'] as const) {
+      const doc = parseCard(attachmentCardUrl({ name: 'a.pdf', mime: 'application/pdf', preview: JPEG, state }));
+      expect(doc.documentElement.getAttribute('height')).toBe('96');
+      expect(doc.getElementsByTagName('image')).toHaveLength(0);
+    }
+    // Todavía sin llegar a Drive: con la vista previa y el aviso.
+    const pending = parseCard(attachmentCardUrl({ name: 'a.pdf', mime: 'application/pdf', preview: JPEG, state: 'pending' }));
+    expect(pending.documentElement.getAttribute('height')).toBe('268');
+    expect(texts(pending)).toContain(t('queue.notYet'));
+  });
+
+  it('blobToDataUrl: la foto guardada como `data:` en base64, con su tipo', async () => {
+    const blob = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0x00, 0x10])], { type: 'image/jpeg' });
+    expect(await blobToDataUrl(blob)).toBe('data:image/jpeg;base64,/9j/ABA=');
+    // Un tipo raro se toma como JPEG (lo que guarda la app siempre es una foto).
+    expect(await blobToDataUrl(new Blob([new Uint8Array([1])], { type: 'text/html' }))).toBe('data:image/jpeg;base64,AQ==');
   });
 });

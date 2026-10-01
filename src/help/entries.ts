@@ -207,7 +207,16 @@ export const HELP_ENTRIES: HelpEntry[] = [
   { id: 'photosOffline', section: 'photos', title: 'help.photosOffline.title', text: 'help.photosOffline.text', since: BEFORE_HELP },
 
   // --- Adjuntos y links de Drive ---
-  { id: 'attach', section: 'attachments', title: 'help.attach.title', text: 'help.attach.text', when: 'portero', since: BEFORE_HELP },
+  {
+    id: 'attach',
+    section: 'attachments',
+    title: 'help.attach.title',
+    text: 'help.attach.text',
+    when: 'portero',
+    // La vista previa del PDF y la tarjeta grande en el carrete llegaron después (Doc_Adjuntos.md, entrega 2).
+    words: ['pdf', 'vista previa', 'preview', 'miniatura', 'thumbnail', 'primera página', 'first page', 'carrete', 'viewer'],
+    since: BEFORE_HELP,
+  },
   {
     id: 'folderDrop',
     section: 'attachments',

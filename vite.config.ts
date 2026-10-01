@@ -39,6 +39,10 @@ const LIBHEIF_BANNER =
   '/*! Includes libheif and libde265 (LGPL-3.0-or-later, (c) struktur AG, Dirk Farin and contributors) via libheif-js, ' +
   'unmodified. Source and license texts: /licenses/THIRD_PARTY_NOTICES.md */';
 
+// El aviso de PDF.js (Apache-2.0) al principio de su parte (la vista previa de los PDF adjuntos); su Worker ya trae el
+// suyo.
+const PDFJS_BANNER = '/*! Includes PDF.js (Copyright Mozilla Foundation, Apache-2.0): https://github.com/mozilla/pdf.js */';
+
 // La versión que se muestra en la app es la última entrada del changelog.
 function appVersion(): string {
   try {
@@ -191,7 +195,9 @@ export default defineConfig(({ mode }) => {
       // El editor se baja aparte (roadmap B.4) y pesa alrededor de 1 MB sin comprimir (300 KB comprimido).
       chunkSizeWarningLimit: 1200,
       rolldownOptions: {
-        output: { postBanner: (chunk: { name: string }) => (chunk.name === 'heicLib' ? LIBHEIF_BANNER : '') },
+        output: {
+          postBanner: (chunk: { name: string }) => (chunk.name === 'heicLib' ? LIBHEIF_BANNER : chunk.name === 'pdfLib' ? PDFJS_BANNER : ''),
+        },
       },
     },
     worker: {

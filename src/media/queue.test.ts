@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n';
 import { SupabaseRemote, THUMB_DOWNLOAD_TIMEOUT_MS, timeoutFor } from '../sync/remote';
-import { FakeServer, fakeProbe, makeDevice, type Device } from '../sync/testing';
+import { FakeServer, fakePreview, fakeProbe, makeDevice, type Device } from '../sync/testing';
+import { PreviewUnavailable } from './pdfPreview';
 import { resolveObjectURL } from 'node:buffer';
 import { FileRejected } from '../sync/files';
 import { CONTROL_TIMEOUT_MS, PART_BYTES, STALL_CHECK_MS, STALL_MS, answerLimit, localDay } from './portero';
@@ -1608,6 +1609,138 @@ describe('adjuntos', () => {
     expect(a.media.enabled).toBe(false);
     await expect(a.media.add(page, makeFile(10, 'notas.pdf', 'application/pdf'))).rejects.toThrow(/Google Drive/);
     expect(mediaIdOf(await a.media.add(page, makeFile(10, 'IMG_1.JPG', 'image/jpeg')))).toBeTruthy();
+  });
+});
+
+describe('adjuntos: vista previa (Docs/Doc_Adjuntos.md, entrega 2)', () => {
+  /** La vista previa que trae una tarjeta (`data:image/jpeg;base64,…`), decodificada, o `null`. */
+  function previewIn(card: string): string | null {
+    const m = /href="data:image\/jpeg;base64,([A-Za-z0-9+/=]+)"/.exec(card);
+    return m ? Buffer.from(m[1], 'base64').toString('latin1') : null;
+  }
+
+  it('un PDF: la primera página se hace al agregarlo, va al bucket antes que el original y la tarjeta la muestra', async () => {
+    const server = new FakeServer();
+    server.preview = vi.fn(fakePreview);
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(2048, 'guion.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await a.media.idle();
+    expect(server.preview).toHaveBeenCalledTimes(1);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ thumb: 'local', previewTried: true, probed: true, width: null });
+    const card = cardText(await a.media.resolve(url));
+    expect(card).toContain('width="360" height="268"');
+    expect(previewIn(card)).toContain('preview:guion.pdf');
+    expect(card).toContain('guion.pdf');
+    expect(card).toContain('>PDF<');
+
+    await sync(a);
+    expect(server.thumbs.has(id)).toBe(true);
+    expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ thumb: 'done', pending: 0 });
+    // La impresión sigue sin tomarlo por una foto.
+    expect(await a.media.localImage(id)).toBeNull();
+  });
+
+  it('otro dispositivo baja la vista previa del bucket una vez y después la muestra sin red', async () => {
+    const server = new FakeServer();
+    server.preview = fakePreview;
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(2048, 'plano.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+
+    const name = crypto.randomUUID();
+    const b = await device(server, name);
+    await sync(b);
+    expect(previewIn(cardText(await b.media.resolve(url)))).toContain('preview:plano.pdf');
+    expect(await b.mediaDb.get('thumbs', id)).toBeTruthy();
+
+    // La app se cierra y se vuelve a abrir sin red: la vista previa sigue.
+    await close(b);
+    server.online = false;
+    const again = await device(server, name);
+    expect(previewIn(cardText(await again.media.resolve(url)))).toContain('preview:plano.pdf');
+  });
+
+  it('un zip o un PDF dañado: tarjeta con ícono, sin volver a probar', async () => {
+    const server = new FakeServer();
+    server.preview = vi.fn(async () => null);
+    const { a, page } = await withPage(server);
+    const zip = await a.media.add(page, makeFile(10, 'todo.zip', 'application/zip'));
+    const pdf = await a.media.add(page, makeFile(10, 'roto.pdf', 'application/pdf'));
+    await a.media.idle();
+    // Al zip ni se le pregunta.
+    expect(server.preview).toHaveBeenCalledTimes(1);
+    expect(await a.mediaDb.get('files', mediaIdOf(pdf)!)).toMatchObject({ thumb: 'none', previewTried: true });
+    for (const url of [zip, pdf]) expect(cardText(await a.media.resolve(url))).toContain('width="360" height="96"');
+    await sync(a);
+    expect(server.preview).toHaveBeenCalledTimes(1);
+    expect(server.thumbs.size).toBe(0);
+  });
+
+  it('si pdf.js no se pudo bajar, se sube igual y la vista previa se hace después, al mostrarlo, y se sube', async () => {
+    const server = new FakeServer();
+    server.preview = async () => {
+      throw new PreviewUnavailable('sin red');
+    };
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(2048, 'notas.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await a.media.idle();
+    const record = await a.mediaDb.get('files', id);
+    expect(record).toMatchObject({ thumb: 'none', probed: true });
+    expect(record?.previewTried).toBeUndefined();
+    await sync(a);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, thumb: 'none' });
+
+    server.preview = fakePreview;
+    const heard: string[] = [];
+    a.media.subscribeThumbs((x) => heard.push(x));
+    expect(cardText(await a.media.resolve(url))).toContain('height="96"');
+    await vi.waitFor(async () => expect(await a.mediaDb.get('files', id)).toMatchObject({ thumb: 'done', previewTried: true }));
+    expect(heard).toContain(id);
+    expect(server.thumbs.has(id)).toBe(true);
+    expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
+    expect(previewIn(cardText(await a.media.resolve(url)))).toContain('preview:notas.pdf');
+  });
+
+  it('un PDF agregado antes de la vista previa: la hace el dispositivo que tiene el original, y el otro la ve en la sesión siguiente', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const nameA = crypto.randomUUID();
+    const a = await device(server, nameA);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    const url = await a.media.add(page, makeFile(2048, 'viejo.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    // Como lo dejó una versión anterior: medido y subido, sin vista previa y sin la marca de que se probó.
+    const old = (await a.mediaDb.get('files', id))!;
+    delete old.previewTried;
+    await a.mediaDb.put('files', old);
+    await close(a);
+
+    const nameB = crypto.randomUUID();
+    const b = await device(server, nameB);
+    await sync(b);
+    expect(cardText(await b.media.resolve(url))).toContain('height="96"');
+
+    // Se abre la página en el dispositivo que lo agregó: la hace y la sube.
+    server.preview = fakePreview;
+    const a2 = await device(server, nameA);
+    await a2.media.resolve(url);
+    await vi.waitFor(() => expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy());
+
+    // El otro dispositivo, en su sesión siguiente, se entera al preguntar por el archivo y la vuelve a dibujar.
+    await close(b);
+    const b2 = await device(server, nameB);
+    const heard: string[] = [];
+    b2.media.subscribeThumbs((x) => heard.push(x));
+    await b2.media.resolve(url);
+    await vi.waitFor(() => expect(heard).toContain(id));
+    expect(previewIn(cardText(await b2.media.resolve(url)))).toContain('preview:viejo.pdf');
   });
 });
 

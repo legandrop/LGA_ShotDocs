@@ -152,6 +152,11 @@ export class FakeServer {
   heicTimeoutMs?: number;
   /** Lo que el navegador saca de un archivo (por defecto `fakeProbe`; las pruebas lo cambian). */
   probe: (file: Blob, mime: string) => Promise<Probe> = fakeProbe;
+  /**
+   * La vista previa de un adjunto (Docs/Doc_Adjuntos.md, entrega 2). Por defecto ninguna (node no tiene canvas);
+   * las pruebas ponen `fakePreview` o una que tira `PreviewUnavailable`.
+   */
+  preview: (file: Blob, mime: string, name: string) => Promise<Blob | null> = async () => null;
   /** `comments`, con el texto aunque se haya borrado (como la tabla; la vista lo devuelve vacío). */
   readonly comments = new Map<string, StoredComment>();
   /** La base tiene `import_comment` (versión 8); apagado, la función no existe (PGRST202). */
@@ -1647,6 +1652,12 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
  * Lo que el navegador saca de un archivo, simulado: una foto o un video tienen medidas y miniatura; un HEIC
  * no (como en Chrome de Windows).
  */
+/** Una vista previa de mentira para un PDF (un JPEG corto que dice de qué archivo es); nada para lo demás. */
+export async function fakePreview(_file: Blob, mime: string, name: string): Promise<Blob | null> {
+  if (mime !== 'application/pdf') return null;
+  return new Blob([new Uint8Array([0xff, 0xd8, 0xff]), new TextEncoder().encode(`preview:${name}`)], { type: 'image/jpeg' });
+}
+
 export async function fakeProbe(_file: Blob, mime: string): Promise<Probe> {
   if (mime === 'image/heic') return { width: null, height: null, duration: null, thumb: null };
   const video = mime.startsWith('video/');
@@ -1734,6 +1745,7 @@ export async function makeDevice(
     projectOf: (pageId) => tree.get(pageId)?.workspace_id,
     onForeignFile: (name) => server.foreignNotices.push(name),
     probe: (file, mime) => server.probe(file, mime),
+    preview: (file, mime, name) => server.preview(file, mime, name),
     playMark: async (thumb) => thumb,
     viewImage: fakeViewImage,
     convertHeic: (file) => server.convertHeic(file),
