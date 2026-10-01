@@ -5,6 +5,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { photoKey } from './carreteModel';
 import { groupRows } from './imageRows';
 import { PHOTO, photoWidth } from './inlinePhoto';
+import { onlyPhotosSelected, selectedPhotos } from './inlinePhotoSize';
 
 // Lo que acompaña a la foto en línea en el editor (Docs/Doc_Fotos_En_Linea.md, entrega 1b): las filas, la marca
 // de las fotos que abarca una selección de texto, y el teclado y el mouse con una foto elegida. Lo midió el
@@ -23,6 +24,10 @@ import { PHOTO, photoWidth } from './inlinePhoto';
 //     `groupRows` (sin él, la primera de la fila siguiente entra arriba: medido, en todos los anchos).
 // El navegador hace el corte de renglón; con estas medidas coincide con las filas (0 filas rotas en 831 anchos
 // por 5 densidades de pantalla, en el prototipo).
+//   - `sd-photo-row-start` (entrega 2): una fila LLENA que viene justo después de un texto del mismo renglón empieza
+//     en un renglón nuevo (una marca que no es parte del documento). Sin ella, las primeras fotos de la fila
+//     quedaban al lado del texto y la última bajaba sola (medido en Chromium al pegar tres al final de un texto, y
+//     al acomodar fotos que siguen a un texto). Una fila que no llena sigue fluyendo al lado del texto.
 
 /** La parte del ancho de una foto en línea (0: sin ancho propio, o no es una foto). */
 function fractionOf(node: PMNode): number {
@@ -47,14 +52,30 @@ export function rowsOfTextblock(block: PMNode, pos: number): PhotoRow[] {
     run = [];
   };
   block.forEach((child, offset) => {
-    if (child.type.name === PHOTO) run.push({ pos: pos + 1 + offset, f: fractionOf(child) });
-    else flush();
+    if (child.type.name === PHOTO) {
+      // Una foto que empieza fila (`rowStart`, "Arrange in rows" de las elegidas) corta la tanda.
+      if (child.attrs.rowStart === true) flush();
+      run.push({ pos: pos + 1 + offset, f: fractionOf(child) });
+    } else flush();
   });
   flush();
   return out;
 }
 
 const round4 = (x: number) => Math.round(x * 1e4) / 1e4;
+
+/** Lo que hay justo antes de la foto en `pos` es texto (o un contenido en línea que no es un salto de renglón). */
+function afterText(doc: PMNode, pos: number): boolean {
+  const before = doc.resolve(pos).nodeBefore;
+  return !!before && before.type.name !== PHOTO && before.type.name !== 'hardBreak';
+}
+
+/** La marca que hace empezar una fila llena en un renglón nuevo (styles.css, `.sd-photo-row-start`). */
+function rowStart(): HTMLElement {
+  const el = document.createElement('span');
+  el.className = 'sd-photo-row-start';
+  return el;
+}
 
 /** Las decoraciones de las filas de todo el documento. */
 export function decorateRows(doc: PMNode): DecorationSet {
@@ -65,6 +86,11 @@ export function decorateRows(doc: PMNode): DecorationSet {
       const n = row.positions.length;
       const sum = row.fracs.reduce((s, f) => s + f, 0);
       const full = sum > 1 - 1e-3;
+      // Después del cursor (`side: 1`): con el cursor al final del texto, lo que se escribe va al texto (antes de la
+      // marca, el navegador lo ponía después de la primera foto: medido en Chromium).
+      if (full && afterText(doc, row.positions[0])) {
+        decorations.push(Decoration.widget(row.positions[0], rowStart, { side: 1, key: 'sd-photo-row-start', marks: [] }));
+      }
       row.positions.forEach((at, k) => {
         const classes = ['sd-photo-sized'];
         let style = `--row-n: ${n}`;
@@ -151,6 +177,17 @@ export function photoKeyAtPos(doc: PMNode, pos: number): string | null {
   return null;
 }
 
+/**
+ * La foto que abre la barra espaciadora: la elegida (`selectedPhotoKey`) o, con varias fotos en línea elegidas, la
+ * primera.
+ */
+export function spacePhotoKey(state: EditorState): string | null {
+  const key = selectedPhotoKey(state);
+  if (key) return key;
+  const range = photosRange(state);
+  return range ? (selectedPhotos(state).map((p) => photoKeyAtPos(state.doc, p)).find((k) => k !== null) ?? null) : null;
+}
+
 /** La foto elegida (selección de nodo): la clave de un bloque `image` (su id) o de una foto en línea; o `null`. */
 export function selectedPhotoKey(state: EditorState): string | null {
   const sel = state.selection;
@@ -204,6 +241,8 @@ function caretAfter(view: EditorView, sel: NodeSelection): void {
 
 export function handlePhotoKey(view: EditorView, event: KeyboardEvent): boolean {
   if (!view.editable) return false;
+  const range = photosRange(view.state);
+  if (range) return handlePhotosRangeKey(view, range, event);
   const sel = selectedPhoto(view.state);
   if (!sel) return false;
   // La composición empieza con el cursor ya a la derecha (hacerlo recién en `compositionstart` corta la
@@ -264,17 +303,170 @@ export function handlePhotoShiftClick(view: EditorView, event: MouseEvent): bool
   return true;
 }
 
+/**
+ * Varias fotos elegidas (una selección de texto de solo fotos: Shift+clic, Shift+flechas, arrastrar, o después de
+ * "Arrange in rows" o de un tamaño): `null` si no. La barra de la foto las trata como fotos elegidas, y el teclado
+ * también (auditoría de la entrega 2: una letra, Enter o la barra espaciadora las borraban).
+ */
+export function photosRange(state: EditorState): TextSelection | null {
+  const sel = state.selection;
+  return sel instanceof TextSelection && onlyPhotosSelected(state) ? sel : null;
+}
+
+/** El cursor después de la última foto elegida. */
+function caretAfterRange(view: EditorView, sel: TextSelection): void {
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, sel.to)));
+}
+
+/**
+ * Con varias fotos elegidas, como con una: una letra, Enter, una composición siguen después de la última (no las
+ * reemplazan). Backspace, Supr y Shift+flechas, los de ProseMirror (borran, extienden).
+ */
+function handlePhotosRangeKey(view: EditorView, sel: TextSelection, event: KeyboardEvent): boolean {
+  if (startsComposition(event)) {
+    caretAfterRange(view, sel);
+    return false;
+  }
+  if (event.isComposing) return false;
+  const enter = event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+  if (!enter && !typesCharacter(event)) return false;
+  caretAfterRange(view, sel);
+  return false;
+}
+
+/**
+ * Texto que entra SIN tecla con una foto elegida: el selector de emojis (Win+. en Windows, Ctrl+⌘+Espacio en la
+ * Mac), el dictado o algunos teclados de terceros. El navegador lo escribe sobre la selección y ProseMirror
+ * reemplazaría la foto (lo encontró la auditoría de v0.076). Va después de la foto, como una letra, con el cursor
+ * a su derecha. Si lo que cambia no es la foto elegida (o un borde suyo), sigue lo de siempre.
+ */
+export function handlePhotoTextInput(view: EditorView, from: number, to: number, text: string): boolean {
+  if (!view.editable) return false;
+  const sel = selectedPhoto(view.state) ?? photosRange(view.state);
+  if (!sel) return false;
+  const overPhoto = from === sel.from && to === sel.to;
+  const atEdge = from === to && (from === sel.from || from === sel.to);
+  if (!overPhoto && !atEdge) return false;
+  const tr = view.state.tr.insertText(text, sel.to);
+  tr.setSelection(TextSelection.create(tr.doc, sel.to + text.length));
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+// --- Arrastrar para elegir, soltando sobre una foto ---------------------------------------------------------
+//
+// Al arrastrar para elegir texto, el navegador ubica el final de la selección DENTRO de una foto (que no se
+// edita) como se le ocurre: soltar en el centro de una foto podía dejar la selección antes de la foto anterior,
+// o achicarla a un carácter (auditoría de v0.076). Mientras se arrastra, el final va al borde de la foto más
+// cercano al puntero: mitad izquierda, antes de la foto; mitad derecha, después.
+
+/** El final de la selección sobre la foto que empieza en `pos`: antes o después, según la mitad del puntero. */
+export function photoDragHead(pos: number, rect: { left: number; width: number }, clientX: number): number {
+  return clientX >= rect.left + rect.width / 2 ? pos + 1 : pos;
+}
+
+interface PhotoDrag {
+  /** La foto que está debajo del puntero (o `null`) y dónde está el puntero. */
+  over: HTMLElement | null;
+  x: number;
+}
+
+const dragKey = new PluginKey('shotdocs-photo-drag');
+
+/** El final que corresponde a la foto que está debajo del puntero, o `null`. */
+function headOverPhoto(view: EditorView, drag: PhotoDrag): number | null {
+  const el = drag.over;
+  if (!el || !el.isConnected || !view.dom.contains(el)) return null;
+  const pos = view.posAtDOM(el, 0);
+  if (view.state.doc.nodeAt(pos)?.type.name !== PHOTO) return null;
+  return photoDragHead(pos, el.getBoundingClientRect(), drag.x);
+}
+
+const dragPlugin = new Plugin<null>({
+  key: dragKey,
+  view(view) {
+    let drag: PhotoDrag | null = null;
+    const doc = view.dom.ownerDocument;
+    const onDown = (e: PointerEvent) => {
+      // Solo un arrastre que empieza en el texto (en una foto, el clic la elige o la arrastra para moverla).
+      const onPhoto = !!(e.target as Element | null)?.closest?.('.sd-photo');
+      drag = e.button === 0 && !e.shiftKey && !onPhoto && view.editable ? { over: null, x: e.clientX } : null;
+      dragOf.set(view, drag);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!drag) return;
+      if (!(e.buttons & 1)) {
+        drag = null;
+        dragOf.set(view, null);
+        return;
+      }
+      drag.over = (e.target as Element | null)?.closest?.<HTMLElement>('.sd-photo') ?? null;
+      drag.x = e.clientX;
+      // No se corrige acá, mientras se arrastra: cambiar la selección en el medio de un arrastre del navegador le
+      // corre el ancla (medido en Chromium). Se corrige al leerla (`createSelectionBetween`) y al soltar.
+    };
+    const onUp = () => {
+      const last = drag;
+      drag = null;
+      dragOf.set(view, null);
+      // Al soltar sobre una foto: el final, en su borde (por si el navegador no avisó del último cambio).
+      if (!last) return;
+      const head = headOverPhoto(view, last);
+      const sel = view.state.selection;
+      if (head === null || !(sel instanceof TextSelection) || sel.head === head || sel.anchor === head) return;
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, sel.anchor, head)));
+    };
+    // Apretar sobre texto elegido y mover lo arrastra (no elige): el navegador cancela el puntero y empieza a
+    // arrastrar. Ahí no se corrige nada.
+    const onCancel = () => {
+      drag = null;
+      dragOf.set(view, null);
+    };
+    view.dom.addEventListener('pointerdown', onDown);
+    view.dom.addEventListener('dragstart', onCancel);
+    doc.addEventListener('pointermove', onMove);
+    doc.addEventListener('pointerup', onUp);
+    doc.addEventListener('pointercancel', onCancel);
+    return {
+      destroy() {
+        view.dom.removeEventListener('pointerdown', onDown);
+        view.dom.removeEventListener('dragstart', onCancel);
+        doc.removeEventListener('pointermove', onMove);
+        doc.removeEventListener('pointerup', onUp);
+        doc.removeEventListener('pointercancel', onCancel);
+        dragOf.delete(view);
+      },
+    };
+  },
+  props: {
+    // La selección que lee ProseMirror del navegador mientras se arrastra: con el puntero sobre una foto, el
+    // final va a su borde más cercano.
+    createSelectionBetween(view, $anchor, $head) {
+      const drag = dragOf.get(view);
+      if (!drag) return null;
+      const head = headOverPhoto(view, drag);
+      if (head === null || head === $head.pos || head === $anchor.pos) return null;
+      return TextSelection.create(view.state.doc, $anchor.pos, head);
+    },
+  },
+});
+
+/** El arrastre en curso de cada editor (lo escribe la vista del plugin y lo lee `createSelectionBetween`). */
+const dragOf = new WeakMap<EditorView, PhotoDrag | null>();
+
 const keysPlugin = new Plugin({
   key: new PluginKey('shotdocs-photo-keys'),
   props: {
     handleKeyDown: handlePhotoKey,
+    handleTextInput: handlePhotoTextInput,
     handleDOMEvents: {
       mousedown: handlePhotoShiftClick,
       // Una composición que empieza sin la tecla de antes (algunos teclados del teléfono): igual, el cursor pasa a
       // la derecha de la foto antes, así lo que se compone no la reemplaza.
       compositionstart(view) {
-        const sel = view.editable ? selectedPhoto(view.state) : null;
-        if (sel) caretAfter(view, sel);
+        const sel = view.editable ? (selectedPhoto(view.state) ?? photosRange(view.state)) : null;
+        if (sel instanceof NodeSelection) caretAfter(view, sel);
+        else if (sel) caretAfterRange(view, sel);
         return false;
       },
     },
@@ -291,7 +483,7 @@ export const inlinePhotoRowsExtension = createExtension({
 export const inlinePhotoKeysExtension = createExtension({
   key: 'shotdocs-photo-keys',
   runsBefore: ['nodeSelectionKeyboard'],
-  prosemirrorPlugins: [keysPlugin],
+  prosemirrorPlugins: [keysPlugin, dragPlugin],
 });
 
 export const inlinePhotoExtensions = [inlinePhotoRowsExtension, inlinePhotoKeysExtension];

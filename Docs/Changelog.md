@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.078 :
+
+Fotos en línea, entregas 2 a 4: hasta ahora nada creaba fotos en el renglón y lo importado de Coda quedaba apilado.
+Pegar, soltar, "/Image" y "Copy image" de una web ponen fotos y videos donde está el cursor. Lega pidió que hagan
+todo lo de la foto-bloque (D-24): tiradores que imantan y la misma barra para las dos, por sectores y con tooltips
+que explican cada botón; sin leyenda. *Arrange in rows* acomoda solo las elegidas y un párrafo de fotos se parte
+entre hojas por filas. Una versión vieja que abría un renglón sin fotos perdía texto: el renglón lleva una marca que
+esas versiones no conocen y que deshacer no saca. Importar de Coda pone cada foto en su renglón con su ancho
+(859 páginas de ERSO: las 14.316 fotos y el texto, iguales). Convertir fotos-bloque existe sin entrada (D-26).
+[ Fotos en línea - crear, paridad con la foto-bloque e importar de Coda en el renglón ]
+
 v0.077 :
 
 No había forma de sacar un proyecto de la lista: la base no dejaba borrar proyectos y la app no tenía nada para

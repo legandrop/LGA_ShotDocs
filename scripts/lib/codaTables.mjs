@@ -30,6 +30,9 @@ const LABELS = {
 
 const IMAGE_TYPES = new Set(['image', 'attachments', 'imageAttachments'])
 const LONG_TEXT = 140
+// Un tercio del renglón de texto de Coda (624 px, `CODA_TEXT_WIDTH` en src/import/codaHtml.ts): el ancho de cada
+// foto de una ficha que tiene varias.
+const THIRD_OF_LINE = 208
 
 export const rowPageId = (tableId, rowId) => `row-${tableId}-${rowId}`
 
@@ -339,16 +342,20 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
     const target = rowPages.get(`${baseId} ${rowId}`)
     return target ? `<a href="coda-page:${target}">${esc(text)}</a>` : esc(text)
   }
-  const imgTag = (url, name, width) => `<div><img src="${esc(url)}" alt="${esc(name ?? '')}"${width ? ` width="${width}"` : ''}></div>`
+  const imgTag = (url, name, width) => `<img src="${esc(url)}" alt="${esc(name ?? '')}"${width ? ` width="${width}"` : ''}>`
 
-  /** Las fotos de una columna de fotos, sin el tamaño de miniatura que tenían en la celda. */
+  /**
+   * Las fotos de una columna de fotos, sin el tamaño de miniatura que tenían en la celda, juntas en un renglón (la app
+   * las pone como fotos en línea, entrega 4 de Doc_Fotos_En_Linea.md): una sola, con `width` o su ancho natural;
+   * varias, a un tercio del renglón de Coda cada una (como cuando se pegan varias en la app), en filas de a tres.
+   */
   function imagesOf(base, row, column, width) {
     const fromCell = cellOf(base.id, row.id, column.id)
-    if (fromCell) {
-      const imgs = [...fragment(fromCell).querySelectorAll('img')]
-      if (imgs.length) return imgs.map((i) => imgTag(i.getAttribute('src'), i.getAttribute('alt'), width)).join('')
-    }
-    return list(row.values?.[column.id]).filter(isImageValue).map((v) => imgTag(v.url, v.name, width)).join('')
+    const found = fromCell ? [...fragment(fromCell).querySelectorAll('img')].map((i) => [i.getAttribute('src'), i.getAttribute('alt')]) : []
+    const photos = found.length ? found : list(row.values?.[column.id]).filter(isImageValue).map((v) => [v.url, v.name])
+    if (!photos.length) return ''
+    const each = photos.length > 1 ? Math.min(width || THIRD_OF_LINE, THIRD_OF_LINE) : width
+    return `<div>${photos.map(([url, name]) => imgTag(url, name, each)).join('')}</div>`
   }
 
   /** El valor de un campo, como HTML: `{ html, long }` (largo: va con su título, fuera de la tabla de campos). */
