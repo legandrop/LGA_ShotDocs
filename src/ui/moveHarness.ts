@@ -151,7 +151,7 @@ export function moveSection(E: BlockNoteEditor, way: MoveWay): void {
  * - `T` escribe una marca al principio o al final de un bloque de la región (`TBs`: en la sección; `g`, en lo que
  *   salta; `d`, en el destino; `o`, arriba);
  * - `X` borra un bloque (que no sea título) de la región; `N` agrega un párrafo con una marca después de un bloque
- *   de la región;
+ *   de la región; `I` anida un bloque de la región debajo del de arriba (Tab);
  * - `d` entrega al otro lo pendiente de ese lado (como la app: con la reparación de estructura).
  */
 export function runMoveSchedule(
@@ -210,6 +210,14 @@ export function runMoveSchedule(
         if (!b) return;
         deleted.add(b.id);
         return void E.removeBlocks([b.id]);
+      }
+      case 'I': {
+        // Tab: anida el bloque debajo del de arriba (el primero de la página no se puede).
+        const b = pick(inRegion.filter((x) => x.pos > 1));
+        if (!b) return;
+        E.setTextCursorPosition(b.id, 'start');
+        if (E.canNestBlock()) E.nestBlock();
+        return;
       }
       case 'N': {
         const b = pick(inRegion);

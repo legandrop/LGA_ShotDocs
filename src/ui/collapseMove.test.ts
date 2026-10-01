@@ -284,3 +284,51 @@ describe('arrastrar un título colapsado', () => {
     expect(view(editor).state.selection).toBeInstanceOf(NodeSelection);
   });
 });
+
+describe('auditoría de la 1b', () => {
+  const posAfter = (editor: BlockNoteEditor, text: string) => {
+    const id = idOf(editor, text);
+    let at = -1;
+    view(editor).state.doc.descendants((n, pos) => {
+      if (at < 0 && n.type.name === 'blockContainer' && n.attrs.id === id) at = pos + n.nodeSize;
+      return at < 0;
+    });
+    return at;
+  };
+
+  it('I-1. soltar una sección justo debajo de otro título colapsado la deja después de toda su sección', async () => {
+    const { editor, doc } = page([h(2, 'S'), p('s1'), h(2, 'H'), p('h1'), p('h2'), h(2, 'Z'), p('z1')]);
+    collapse(editor, 'S', 'H');
+    selectWholeBlock(view(editor), idOf(editor, 'S'));
+    expect(startSectionDrag(view(editor), null)).toBe(true);
+    expect(dropSection(view(editor), posAfter(editor, 'H'))).toBe(true);
+    await settle();
+    expect(outline(editor)).toBe('H h1 h2 S s1 Z z1');
+    expect(visible(editor)).toEqual(['H', 'S', 'Z', 'z1']);
+    expect(inSync(editor, doc)).toBe(true);
+  });
+
+  it('M-1. un título colapsado que es el único hijo sale de su bloque sin dejar un renglón vacío', async () => {
+    for (const dir of ['up', 'down'] as const) {
+      const { editor, doc } = page([p('padre', [h(3, 'S', [p('s-hijo')])]), p('después')]);
+      collapse(editor, 'S');
+      caret(editor, 'S');
+      moveKey(editor, dir);
+      await settle();
+      expect(outline(editor)).toBe(dir === 'up' ? 'S[s-hijo] padre después' : 'padre S[s-hijo] después');
+      expect(inSync(editor, doc)).toBe(true);
+      editor.undo();
+      await settle();
+      expect(outline(editor)).toBe('padre[S[s-hijo]] después');
+    }
+  });
+
+  it('M-3. un arrastre que empieza en el texto olvida la sección que se había empezado a arrastrar', () => {
+    const { editor } = page([h(2, 'S'), p('s1'), p('x')]);
+    collapse(editor, 'S');
+    selectWholeBlock(view(editor), idOf(editor, 'S'));
+    expect(startSectionDrag(view(editor), null)).toBe(true);
+    view(editor).dom.dispatchEvent(new Event('dragstart', { bubbles: true }));
+    expect(dropSection(view(editor), 1)).toBe(false);
+  });
+});

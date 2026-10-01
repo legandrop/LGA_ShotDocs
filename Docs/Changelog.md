@@ -6,8 +6,8 @@ Colapsar, lo que faltaba: mover una sección colapsada entera y colapsar para to
 Shift+Ctrl/⌘+↑/↓ un título colapsado movía solo el título y abría lo escondido. Mover reescribía cada bloque
 entre el origen y el destino: con otro editando a la vez, su texto caía en otro bloque o se perdía, y un bloque
 que nadie tocó podía desaparecer (medido: hasta 192 de 300). Ahora la sección se mueve entera, los demás bloques
-la saltan como uno, se esconde lo mismo que antes, deshacer es un paso y Yjs recrea solo el lado más chico: nada
-que nadie tocó se pierde. Shift+clic colapsa o abre para todos (solo quien puede editar), en un mapa aparte del
+la saltan como uno, se esconde lo mismo que antes, deshacer es un paso y Yjs recrea solo el lado más chico: lo
+que nadie tocó ya no se pierde (salvo un bloque anidado a la vez, menos que hoy). Shift+clic colapsa o abre para todos (solo quien puede editar), en un mapa aparte del
 documento que las versiones viejas conservan; el tooltip dice si es para todos o solo para vos.
 [ Colapsar 1b y 2 - mover la sección entera y colapsar para todos ]
 

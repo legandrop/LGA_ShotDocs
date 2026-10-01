@@ -34,10 +34,23 @@ export function moveTransaction(state: EditorState, move: BlockMove): Transactio
   return buildMove(state, move).tr;
 }
 
+/**
+ * Lo que se borra para sacar los bloques: ellos, o su grupo entero si son todos sus hijos (un grupo de hijos no
+ * puede quedar vacío: ProseMirror lo rellenaría con un párrafo nuevo; auditoría de la 1b, M-1).
+ */
+export function deletionRange(doc: PMNode, move: BlockMove): { from: number; to: number } {
+  const $from = doc.resolve(move.from);
+  if ($from.depth > 1 && $from.parent.type.name === 'blockGroup' && move.from === $from.start() && move.to === $from.end()) {
+    return { from: move.from - 1, to: move.to + 1 };
+  }
+  return { from: move.from, to: move.to };
+}
+
 /** Lo mismo, con dónde quedó lo movido (el principio, en el documento de después). */
 export function buildMove(state: EditorState, move: BlockMove): { tr: Transaction; at: number } {
   const content = state.doc.slice(move.from, move.to).content;
-  const tr = state.tr.delete(move.from, move.to);
+  const del = deletionRange(state.doc, move);
+  const tr = state.tr.delete(del.from, del.to);
   const at = tr.mapping.map(move.insertAt);
   tr.insert(at, content);
   return { tr, at };
@@ -59,7 +72,7 @@ function countBlocks(doc: PMNode, from: number, to: number): number {
  * que se mueve.
  */
 export function recreatedRange(doc: PMNode, move: BlockMove, recreate: Recreate = 'smaller'): { from: number; to: number } {
-  const moved = { from: move.from, to: move.to };
+  const moved = deletionRange(doc, move);
   if (recreate === 'moved') return moved;
   const $from = doc.resolve(move.from);
   const $at = doc.resolve(move.insertAt);
@@ -117,8 +130,12 @@ export function dispatchMove(view: EditorView, tr: Transaction, removed: { from:
       binding.doc.transact(() => {
         try {
           updateYFragment(binding.doc, binding.type, middle as never, binding as never);
-        } finally {
-          // Si la primera pasada falla en el medio, esta deja Yjs igual al editor (como un despacho común).
+          binding._prosemirrorChanged(after);
+        } catch (err) {
+          // Si algo falla en el medio, Yjs no queda con el lado recreado borrado: vuelve a "antes" y se escribe el
+          // final como un despacho común (auditoría de la 1b, M-2).
+          console.error('mover bloques: las dos pasadas fallaron; se escribe como un despacho común', err);
+          updateYFragment(binding.doc, binding.type, before as never, binding as never);
           binding._prosemirrorChanged(after);
         }
       }, ySyncPluginKey);

@@ -312,3 +312,40 @@ describe('versiones', () => {
     expect(writes).toEqual([]);
   });
 });
+
+describe('auditoría de la 1b y la 2', () => {
+  it('I-2. pasar a todos un título colapsado con un renglón agregado después (el fin) no esconde ese renglón', async () => {
+    const { A } = two();
+    toggleCollapsed(view(A), 'S');
+    const v = view(A);
+    let at = -1;
+    v.state.doc.descendants((n, pos) => {
+      if (at < 0 && n.type.name === 'blockContainer' && n.attrs.id === 'S') at = pos + 2 + n.firstChild!.content.size;
+      return at < 0;
+    });
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, at)));
+    v.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    A.insertInlineContent('nuevo');
+    await settle();
+    const before = hidden(A);
+    expect(await share(A, 'S')).toBe(true);
+    expect(hidden(A)).toEqual(before);
+    expect(collapseState(A.prosemirrorState)!.shared.has('S')).toBe(true);
+  });
+
+  it('M-4. un cambio del mapa que no escribió este editor cuenta como de otro (corrección 5), aunque Yjs lo marque local', async () => {
+    const { docB, B } = two();
+    const v = view(B);
+    let at = -1;
+    v.state.doc.descendants((n, pos) => {
+      if (at < 0 && n.type.name === 'blockContainer' && n.attrs.id === 's1') at = pos + 3;
+      return at < 0;
+    });
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, at)));
+    // Como lo que baja por el camino de la reparación (docs.ts): una transacción local con otro origen.
+    docB.transact(() => map(docB).set('S', true), Symbol('load'));
+    await settle();
+    expect(hidden(B)).toEqual([]);
+    expect(collapseState(B.prosemirrorState)!.records.get('S')).toEqual({ c: false, g: null });
+  });
+});

@@ -138,6 +138,30 @@ export function planSectionDrag(doc: PMNode, sel: Selection, analysis: Analysis,
 }
 
 /**
+ * Dónde cae lo que se suelta en `insertAt` (un lugar entre bloques): si es adentro de lo que esconde un título
+ * colapsado que se ve (justo debajo del título, o entre sus bloques escondidos), después de toda su sección, que es
+ * lo que se ve debajo del título (auditoría de la 1b, I-1). Si no, el mismo lugar.
+ */
+export function dropTarget(doc: PMNode, insertAt: number, analysis: Analysis, merged: Records): number {
+  if (analysis.collapsed.size === 0) return insertAt;
+  const $at = doc.resolve(insertAt);
+  const depth = $at.depth;
+  const group = $at.parent;
+  const index = $at.index();
+  if (group.type.name !== 'blockGroup' || index === 0) return insertAt;
+  const run: Run = { group, $in: $at, depth, first: index, last: index };
+  const prevId = String(group.child(index - 1).attrs.id ?? '');
+  const hider = analysis.hidden.get(prevId) ?? (analysis.collapsed.has(prevId) ? prevId : null);
+  if (!hider) return insertAt;
+  for (let i = index - 1; i >= 0; i--) {
+    if (String(group.child(i).attrs.id ?? '') !== hider) continue;
+    const end = sectionEnd(doc, run, i, analysis, merged);
+    return end !== null && end > index ? childPos($at, depth, end) : insertAt;
+  }
+  return insertAt;
+}
+
+/**
  * La selección de antes, en el documento de después: lo de adentro de lo que se movió, corrido con él; lo de
  * afuera, como lo corre la transacción.
  */

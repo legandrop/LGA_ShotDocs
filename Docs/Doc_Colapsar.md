@@ -931,6 +931,7 @@ Tres caminos: **hoy al arrastrar** (BlockNote: sacar e insertar, una transacció
 | | borra un bloque | **192 con texto de nadie perdido** | igual | 0 perdido, 145 vuelven |
 | Todos | escribe en el destino o arriba | 0 | 0 | 0 |
 | Todos | agrega un bloque | 0 perdido | 0 | 0 perdido |
+| Un bloque suelto / sección de 3 que salta 1 / de 3 que salta 3 / de 2 lejos | anida bloques con Tab (de la auditoría) | **106 / 172 / 185 / 202 con un bloque perdido** | — | 39 / 43 / 115 / 40 |
 
 En todos los casos y caminos los dos documentos terminan iguales y nadie queda escribiendo de más. Con la
 propuesta, "mueve lo mismo" deja la sección **dos veces** (como hoy: 120 a 146 de 300 con algo dos veces; se
@@ -946,8 +947,11 @@ grupo (sale de un bloque o entra en otro), lo que se mueve. El otro lado **no se
 
 **Por qué esta y no la de BlockNote:**
 
-- **Texto que nadie tocó: 0 en todos los casos** (hoy, 85 a 192 de 300 cuando B borra un bloque, también moviendo
-  un bloque suelto). Es la vara que la de BlockNote no cumple con ningún tamaño.
+- **Texto que nadie tocó: 0 en todos los casos, salvo uno** (hoy, 85 a 192 de 300 cuando B borra un bloque,
+  también moviendo un bloque suelto). Es la vara que la de BlockNote no cumple con ningún tamaño. **La excepción**
+  (la encontró la auditoría): si B anida a la vez con Tab un bloque debajo de uno del lado recreado, ese bloque se
+  pierde (Yjs lo pone adentro de un bloque borrado): 39 a 115 de 300; hoy, sin colapsar, se pierde un bloque en el
+  mismo caso más seguido (106 a 202). Anidar es borrar e insertar en y-prosemirror (`Doc_Colaboracion.md`).
 - **Nada aparece en otro bloque**, nunca (hoy, casi siempre que B escribe en algo que se reescribe).
 - Lo que B escribe en el lado que no se recrea (casi siempre el más grande) queda donde lo escribió: 0.
 - **El costo:** lo que B escribe a la vez en el lado recreado (el más chico) **se pierde** en vez de aparecer en
@@ -958,7 +962,7 @@ grupo (sale de un bloque o entra en otro), lo que se mueve. El otro lado **no se
 - Un bloque que B borró en el lado recreado vuelve (144 a 177 de 300): la copia lo trae. Se prefiere a perder.
 
 **La vara del encargo** ("no peor que mover un bloque suelto hoy, y 0 en el texto que nadie tocó"): lo segundo se
-cumple siempre; lo primero se cumple contando el daño (perdido o en otro bloque) y no contando solo lo perdido en
+cumple siempre salvo con Tab a la vez (y ahí, menos que hoy); lo primero se cumple contando el daño (perdido o en otro bloque) y no contando solo lo perdido en
 el lado recreado. **A confirmar por Lega:** que perder lo que otro escribe a la vez en el lado más chico es mejor
 que lo de hoy (que lo reparte en otros bloques y borra bloques que nadie tocó). Mientras no haya colaboración en
 tiempo real (D-04), "a la vez" es todo lo que pasa entre dos sincronizaciones.
@@ -1037,6 +1041,25 @@ login; fuera del repo): los tooltips de quien edita y de quien solo comenta, col
 otro lo vea al sincronizar, abrir solo para vos, Ctrl+Shift+↓ con dos secciones colapsadas y Ctrl+Z, arrastrar los
 puntos de un título colapsado con el mouse (la sección entera, lo escondido sigue escondido, el otro lo recibe),
 Shift+clic de quien solo comenta (solo para él, el mapa vacío) y Ctrl+Shift+↓ en solo lectura: 26 de 26.
+
+**Auditoría de la 1b y la 2** (independiente; sin bloqueantes). Cada punto con su prueba, que fallaba antes
+(`collapseMove.test.ts` y `collapseShared.test.ts`, "auditoría de la 1b"):
+
+- **I-1.** Soltar una sección justo debajo de otro título colapsado la metía entre el título y lo que esconde (se
+  abría y le robaba la sección). Ahora cae después de toda la sección de ese título (`dropTarget`), como el teclado.
+- **I-2.** Shift+clic en un título colapsado solo para vos con un fin (un renglón agregado con Enter) escondía ese
+  renglón: el fin queda tuyo al pasarlo a todos.
+- **I-3.** "Texto que nadie tocó: 0" tenía una excepción, anidar a la vez con Tab (medido y escrito arriba; la
+  agenda tiene el paso `I`).
+- **M-1.** Sacar de su bloque un título colapsado que era el único hijo dejaba un renglón vacío nuevo: ahora se saca
+  el grupo de hijos entero (`deletionRange`).
+- **M-2.** Si las dos pasadas fallaran en el medio, Yjs vuelve a "antes" y el final se escribe como un despacho común
+  (nunca queda el lado recreado borrado).
+- **M-3.** Un arrastre de texto que empieza en el editor olvida la sección que se había empezado a arrastrar.
+- **M-4.** Un cambio del mapa que baja por el camino de la reparación (Yjs lo marca local) cuenta como de otro para
+  la corrección 5.
+- **Quedó como está:** el tooltip de quien solo ve o comenta tiene una segunda línea ("Colapsado para todos." o "Solo
+  para vos…") que la tabla del §3 no pone; dice si es para todos o solo para vos (decisión 6).
 
 **Pendiente:** probar a mano en Safari, Firefox y el iPhone (el arrastre y el teclado); la diferencia de la tabla
 con la regla del §4 y el costo del lado recreado (a confirmar por Lega); pasar todos los movimientos de bloques por

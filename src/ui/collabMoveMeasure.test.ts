@@ -23,7 +23,9 @@ const scenarios = [
   { name: 'B borra un bloque', alphabet: ['VA', 'XBs', 'XBg', 'XBd', 'dA', 'dB'] },
   { name: 'B agrega un bloque', alphabet: ['VA', 'NBs', 'NBg', 'NBd', 'dA', 'dB'] },
   { name: 'los dos mueven', alphabet: ['VA', 'VB', 'TBs', 'TBg', 'dA', 'dB'] },
+  { name: 'B anida bloques (Tab)', alphabet: ['VA', 'IBs', 'IBg', 'IBd', 'dA', 'dB'] },
 ];
+const only = process.env.MOVE_ONLY;
 const ways = (process.env.MOVE_WAYS ?? 'blocknote,keyboard,smaller').split(',') as MoveWay[];
 
 it.skipIf(!OUT)('medir', async () => {
@@ -32,6 +34,7 @@ it.skipIf(!OUT)('medir', async () => {
   for (const c of configs) {
     for (const s of scenarios) {
       seed++;
+      if (only && !s.name.includes(only)) continue;
       for (const way of ways) {
         if (way === 'keyboard' && c.m > 1 && process.env.MOVE_KB_ALL !== '1') continue;
         const t = await tallyMoves(seed, N, s.alphabet, () => movePage(c.k, c.m, c.headings), { way });

@@ -30,7 +30,7 @@ import { BACKGROUND_META, FIND_REPLACE_META } from './editorMeta';
 import { isFindReplaceTransaction, setFindCollapseHooks, type FindCollapseHooks } from './findEditor';
 import { isLetter, modPressed } from './findUi';
 import { notify } from './notice';
-import { movedSelection, planKeyboardMove, planSectionDrag } from './sectionMove';
+import { dropTarget, movedSelection, planKeyboardMove, planSectionDrag } from './sectionMove';
 
 // Colapsar secciones por sus títulos (P.11, Docs/Doc_Colapsar.md), en el editor. Como las filas de fotos
 // (imageRowsEditor.ts): un plugin de ProseMirror que calcula qué se esconde (collapse.ts) y lo dibuja con
@@ -762,7 +762,11 @@ export function toggleShared(view: EditorView, id: string): boolean {
   else shared.delete(id);
   // Abrir para todos lo que tenía un fin tuyo: los de adentro lo heredan, como al abrir para vos.
   if (!next) openRecord(view.state.doc, records, s.analysis, id, shared);
-  records.delete(id);
+  const mine = records.get(id);
+  // Pasar a todos lo que tenía un fin tuyo (Enter después del título): el fin queda tuyo, así no se esconde el
+  // renglón que se veía (auditoría de la 1b, I-2). Los demás ven la sección entera colapsada.
+  if (next && mine?.c && mine.e) records.set(id, { c: true, g: null, e: mine.e });
+  else records.delete(id);
   writing.add(map);
   try {
     const write = () => (next ? map.set(id, true) : map.delete(id));
@@ -781,7 +785,9 @@ export function toggleShared(view: EditorView, id: string): boolean {
  */
 function sharedChanged(view: EditorView, map: Y.Map<unknown>, event: Y.YMapEvent<unknown>): void {
   const changed = [...event.keysChanged];
-  const remote = !event.transaction.local;
+  // Lo que escribe este editor no llega acá (`writing`): todo lo demás es de otro, también lo que baja por el camino
+  // de la reparación (que Yjs marca como local; auditoría de la 1b, M-4).
+  const remote = event.transaction.origin !== ORIGIN_SHARED_COLLAPSE;
   // Después de que Yjs termine de avisar: si el mismo cambio trae contenido, y-prosemirror lo dibuja en su propio
   // aviso; despachar antes haría que el editor, todavía con lo de antes, lo escribiera encima en Yjs.
   queueMicrotask(() => applyShared(view, map, changed, remote));
@@ -925,8 +931,12 @@ export function dropSection(view: EditorView, pos: number): boolean {
   if (first < 0 || last < first || doc.resolve(first).parent !== doc.resolve(last).parent) return true;
   const to = last + doc.nodeAt(last)!.nodeSize;
   const slice = doc.slice(first, to);
-  const insertAt = dropPoint(doc, Math.max(0, Math.min(pos, doc.content.size)), slice);
-  if (insertAt === null || insertAt === undefined || (insertAt >= first && insertAt <= to)) return true;
+  const point = dropPoint(doc, Math.max(0, Math.min(pos, doc.content.size)), slice);
+  if (point === null || point === undefined) return true;
+  // Justo debajo de un título colapsado (o entre lo que esconde): después de su sección entera.
+  const s = collapseKey.getState(view.state);
+  const insertAt = s ? dropTarget(doc, point, s.analysis, s.merged) : point;
+  if (insertAt >= first && insertAt <= to) return true;
   if (doc.resolve(insertAt).parent.type.name !== 'blockGroup') return true;
   dispatchSectionMove(view, { from: first, to, insertAt }, 'first');
   return true;
@@ -1467,6 +1477,11 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
       handleDOMEvents: {
         // Empezar a componer (una tecla muerta, el teclado del teléfono) o escribir encima de una selección que
         // borraría algo escondido: se abre y la selección queda vacía antes de que el navegador toque la pantalla.
+        // Un arrastre que empieza en el texto del editor no es el de una sección (auditoría de la 1b, M-3).
+        dragstart: (view) => {
+          drags.delete(view);
+          return false;
+        },
         compositionstart: (view) => {
           refuseAhead(view);
           return false;
