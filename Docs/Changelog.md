@@ -8,8 +8,19 @@ por partes, sin frenar las subidas, hasta "listo"; después lo mantiene al día.
 cuenta) tiene un tope elegible (2 GB de fábrica): pasado, un aviso pregunta antes de liberar copias bajadas y
 nítidas, nunca lo marcado ni lo agregado en el dispositivo. Una foto nueva que no entra libera copias que siguen en
 Drive o se ofrece guardarla. Sin red se lee "Offline · N to upload", también en el teléfono. El portero suma códigos
-de error fijos, `POST /verify`, `only: 'known'` y `?offline=1`. Medición en `/storage-test`.
+de error fijos, `POST /verify`, `only: 'known'` y `?offline=1`. Medición en `/storage-test`. Ayuda: dos entradas en *Offline and syncing*.
 [ Available offline - marcar, bajar, tope con aviso y espacio en el dispositivo ]
+
+v0.082 :
+
+Faltaban una ayuda y una forma de aprender la app. Ahora el "?" al lado de Papelera (o *Help and shortcuts* en el
+menú de la cuenta) abre la ayuda: cada función explicada, todos los atajos de teclado por lugar y una búsqueda
+("ctrl f", "carrete"). La primera vez, una recorrida de diez pasos (nueve en el teléfono) que se avanza con *Next*
+muestra lo principal sobre una página de práctica en `/practice`: el editor de verdad, pero no se guarda, no se
+sincroniza y no la ve nadie; sus fotos van en el renglón, como las crea hoy la app. Las dos se vuelven a abrir desde
+la ayuda. "Ya la vi" queda en el dispositivo y en la cuenta. Los atajos salen de un solo registro
+(`src/ui/shortcuts.ts`) y una prueba falla si uno del código no está ahí, así la ayuda no queda vieja.
+[ Ayuda, recorrida y página de práctica (P.13, entregas 1 y 2) ]
 
 v0.081 :
 

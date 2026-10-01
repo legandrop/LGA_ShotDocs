@@ -11,6 +11,7 @@ import {
   DarkIcon,
   ExpandAllIcon,
   DriveIcon,
+  HelpIcon,
   InstallIcon,
   LightIcon,
   MembersIcon,
@@ -27,6 +28,7 @@ import {
   TrashIcon,
 } from './icons';
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
+import { openHelp } from '../help/helpUi';
 import { isPhoneLayout } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
 import { notify } from './notice';
@@ -448,6 +450,17 @@ export function AccountMenu({
           {tr('account.storage')}
         </button>
       )}
+      {/* La ayuda (Docs/Doc_Tutorial.md, sección 5): el foco vuelve al botón de la cuenta al cerrarla. */}
+      <button
+        className="menu-row"
+        onClick={() => {
+          onClose();
+          openHelp(null, anchor);
+        }}
+      >
+        <HelpIcon />
+        {tr('help.open')}
+      </button>
       {/* Instalar la app: solo mientras esta pestaña no es la app instalada (Doc_Instalar.md). */}
       {!installed && (
         <button

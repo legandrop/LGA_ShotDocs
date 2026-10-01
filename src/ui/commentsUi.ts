@@ -191,11 +191,6 @@ export function isPhoneLayout(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
 }
 
-/** El atajo para comentar, como se ve en los tooltips. */
-export const COMMENT_SHORTCUT_LABEL = IS_MAC ? '⌘⌥M' : 'Ctrl+Alt+M';
-/** El atajo de las preguntas (`QUESTION_SHORTCUT` del esquema). */
-export const QUESTION_SHORTCUT_LABEL = IS_MAC ? '⌘⌥P' : 'Ctrl+Alt+P';
-
 /**
  * Ctrl+Alt+M (⌘⌥M en la Mac: nunca Ctrl en la Mac). Con AltGr (en Windows llega como Ctrl+Alt) no: en algunos
  * teclados escribe un carácter. `mac` para probar las dos.

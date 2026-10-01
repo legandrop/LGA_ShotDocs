@@ -667,8 +667,8 @@ Other app data              0.4 GB   (texto, comentarios, miniaturas, otros work
 - Avisos sin red del carrete y de los adjuntos (sección 5.4) y el aviso del estreno (sección 5.6).
 - "Offline" a la vista con lo pendiente (sección 8.1).
 - Textos en `src/i18n/` (inglés y castellano), sin atajos nuevos.
-- **Ayuda:** una entrada "Available offline" y una "Storage on this device" en la ayuda de P.13 (si P.13 llega
-  antes; si no, se suman con P.13: `Doc_Tutorial.md`).
+- **Ayuda:** las entradas `availableOffline` y `storageDevice` en la sección "Offline and syncing" de la ayuda
+  (v0.083; `Doc_Tutorial.md`, "Entradas que suma P.10").
 
 ### 8.1 "Offline" a la vista
 

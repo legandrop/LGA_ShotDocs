@@ -117,6 +117,10 @@ In production (v0.049). What works today:
   without a connection and keeps it up to date. *Storage on this device* (account menu) shows what the app keeps,
   with a limit you choose (2 GB by default): past it, the app asks before removing copies of files already in Drive.
   Without a connection the app says *Offline* with what is waiting to upload.
+- Help and a guided tour: the "?" at the bottom of the sidebar (or *Help and shortcuts* in the account menu)
+  explains every feature and lists every keyboard shortcut, with a search box. The first time someone signs in,
+  a two-minute tour with Next walks through the app on a practice page that is never saved or synced; it can be
+  replayed, and the practice page reopened, from the help.
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
 Templates and the assistant come later. The plan, the decisions and the roadmap are in

@@ -18,6 +18,7 @@ import {
   type BlockAt,
   type HeadingRecord,
 } from './collapse';
+import { IS_MAC, shortcutKeys, shortcutLabel } from './shortcuts';
 import { hiddenInDom } from './collapseDom';
 import { BACKGROUND_META, FIND_REPLACE_META } from './editorMeta';
 import { isFindReplaceTransaction, setFindCollapseHooks, type FindCollapseHooks } from './findEditor';
@@ -54,8 +55,6 @@ interface CollapseMeta {
   /** Lo guardado de cada título, entero (lo arma quien despacha). */
   records: ReadonlyMap<string, HeadingRecord>;
 }
-
-const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export const collapseKey = new PluginKey<CollapseState>('shotdocs-collapse');
 
@@ -524,7 +523,7 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   // Lo escondido que se borró con una edición propia: un aviso (se deshace con Ctrl+Z).
   if (structural) {
     const gone = [...before.analysis.hidden.keys()].some((id) => !analysis.blocks.has(id));
-    if (gone) notify(t('collapse.deletedHidden', { shortcut: IS_MAC ? '⌘Z' : 'Ctrl+Z' }));
+    if (gone) notify(t('collapse.deletedHidden', { shortcut: shortcutLabel('undo') }));
   }
 
   for (const id of reveal) {
@@ -1279,9 +1278,10 @@ export const collapseExtension = createExtension(({ options }: ExtensionOptions<
   runsBefore: ['default'],
   prosemirrorPlugins: [createCollapsePlugin(options ?? {})],
   keyboardShortcuts: {
-    'Mod-Alt-Enter': withView(toggleAtSelection),
+    // Las teclas salen del registro de atajos (shortcuts.ts).
+    [shortcutKeys('collapse')[0]]: withView(toggleAtSelection),
     // Para todos (entrega 2); por ahora, igual que sin Shift.
-    'Shift-Mod-Alt-Enter': withView(toggleAtSelection),
+    [shortcutKeys('collapseEveryone')[0]]: withView(toggleAtSelection),
     Enter: withView(enterAfter),
     Delete: withView(deleteAtEnd),
     Backspace: withView(backspaceAfter),
@@ -1329,5 +1329,5 @@ export function isSelectAllKey(event: KeyboardEvent, mac = IS_MAC): boolean {
   return modPressed(event, mac) && !event.altKey && !event.shiftKey && isLetter(event, 'a');
 }
 
-/** El atajo, como se ve en los tooltips. */
-export const COLLAPSE_SHORTCUT_LABEL = IS_MAC ? '⌘⌥↩' : 'Ctrl+Alt+Enter';
+/** El atajo, como se ve en los tooltips (del registro de atajos). */
+export const COLLAPSE_SHORTCUT_LABEL = shortcutLabel('collapse');

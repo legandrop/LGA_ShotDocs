@@ -1163,9 +1163,9 @@ export class CommentQueue {
   }
 }
 
-type ViewWithResolution = CommentView & { resolvedAt?: string | null; resolvedBy?: string | null };
+export type ViewWithResolution = CommentView & { resolvedAt?: string | null; resolvedBy?: string | null };
 
-function fromRow(r: CommentRow): ViewWithResolution {
+export function fromRow(r: CommentRow): ViewWithResolution {
   return {
     id: r.id,
     pageId: r.page_id,
@@ -1241,7 +1241,7 @@ function byDate(a: { createdAt: string; id: string }, b: { createdAt: string; id
   return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1;
 }
 
-function buildThreads(pageId: string, view: Map<string, ViewWithResolution>): CommentThread[] {
+export function buildThreads(pageId: string, view: Map<string, ViewWithResolution>): CommentThread[] {
   const replies = new Map<string, CommentView[]>();
   for (const c of view.values()) {
     if (!c.threadId) continue;
