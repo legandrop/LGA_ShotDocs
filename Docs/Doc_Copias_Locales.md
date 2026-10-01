@@ -2,7 +2,9 @@
 
 Estado: **diseño, sin implementar. Auditado ("aprobado con cambios", 3 bloqueantes y 21 observaciones) y
 corregido**: lo que cambió por la auditoría está en el cuerpo y se lista en "Correcciones de la auditoría", al
-final. Esta versión sale de las decisiones de Lega del 2026-10-01 (**D-25**, `Doc_Decisiones.md`) y reemplaza al
+final; la re-verificación dejó dos bloqueantes nuevos, N1 y N2, también corregidos. Después llegaron las respuestas
+de Lega a las propuestas (tope elegible, avisar antes de liberar, permiso quitado): están en "Qué se pide" y en el
+cuerpo. Falta una: el tope por marca del iPhone (sección 9.1). Esta versión sale de las decisiones de Lega del 2026-10-01 (**D-25**, `Doc_Decisiones.md`) y reemplaza al
 diseño anterior ("liberar a mano por defecto", commits `47bbbf4` y `cd6cb98`). De aquel diseño y de su auditoría
 sigue valiendo, y quedó adentro de este, todo lo que asegura que nunca se borra un original sin confirmar: la
 comprobación en tres pasos con `POST /verify`, el `relink` sin bytes después de una restauración, la fecha de uso con
@@ -14,8 +16,9 @@ comprobación en tres pasos con `POST /verify`, el `relink` sin bytes después d
 
 ## Qué se pide (D-25)
 
-1. **Tope automático:** la app usa hasta **2 GB por dispositivo**. Al pasarlo, borra las copias **ya confirmadas
-   en el Drive** que hace más tiempo no se abren. La miniatura queda siempre. **Nunca** se borra algo que no está
+1. **Tope automático:** la app usa hasta **2 GB por dispositivo** (después, por la respuesta 8: **por workspace**, y
+   elegible). Al pasarlo, borra las copias **ya confirmadas en el Drive** que hace más tiempo no se abren (después,
+   por la respuesta 2: **avisando antes**). La miniatura queda siempre. **Nunca** se borra algo que no está
    confirmado en el Drive.
 2. **Available offline** para una **página** (con sus subpáginas) o un **proyecto entero**: baja todo lo que falta
    para usarlo sin red (un rodaje en una locación sin señal) y lo mantiene al día mientras haya red. Lo marcado
@@ -29,11 +32,32 @@ comprobación en tres pasos con `POST /verify`, el `relink` sin bytes después d
 4. **A mano:** "Espacio en este dispositivo" en el menú de la cuenta: cuánto ocupa, lo marcado, *Free up space* y
    desmarcar.
 
+**Respuestas de Lega a las propuestas (2026-10-01), que mandan sobre lo anterior:**
+
+- **El tope lo pone la persona.** La ventana de "Available offline" y "Storage on this device" muestran el tope y
+  cuánto se está ocupando, para decidir antes de activar; el tope se puede cambiar. De fábrica, **2 GB por
+  workspace**.
+- **Esperar y avisar antes de liberar.** Nada se libera solo sin un aviso previo ("this is taking X, free up
+  space?"). Lo marcado offline no se libera nunca solo; lo no marcado sí, con ese aviso. O sea: el tope **detecta y
+  pregunta**; recién con el sí de la persona se libera (sección 5.2).
+- **Lo marcado se mantiene en la versión tildada** (de fábrica, las fotos en 2048): la marca protege solo lo
+  tildado (opción A de la sección 3.2). Los originales propios ya confirmados en el Drive son liberables, **siempre con
+  aviso previo**. Lo no subido nunca se toca, con o sin red.
+- **Sin internet, la app dice claramente "Offline"** junto con lo pendiente ("Offline · 700 to upload"), también en
+  el teléfono (sección 8.1).
+- Sin "Keep on this device" por archivo: offline es por página, página con subpáginas, o proyecto.
+- Mostrar cuánto se baja por la red: sí. Comentarios, desmarcar y 2 GB por workspace: de acuerdo.
+- **Permiso quitado:** se borran las copias. Al restaurar un proyecto o devolver el permiso, **vuelve como online**:
+  no se vuelve a bajar solo; se vuelve a marcar si se quiere (sección 4).
+
 ## Reglas que no se rompen
 
+- **Nada se libera sin que la persona diga que sí** a un aviso que dice cuánto y qué (sección 5.2). La única
+  excepción es la que ya existe: las nítidas de la página (`view:`) con su tope propio de 150 MB, que no son copias
+  de un archivo sino imágenes hechas en el dispositivo y se rehacen solas.
 - **Un original propio** (el que se agregó en este dispositivo, `blobs[<id>]`) se borra solo si pasa la
   comprobación de tres pasos de la sección 5.3, repetida adentro de la transacción que lo borra, y si se subió hace
-  14 días o más. **Sin red, nunca.**
+  14 días o más (`uploadedAt`). **Sin red, nunca.**
 - **Dos espacios de claves que no se tocan:** lo que se baja para "Available offline" vive en claves con prefijo
   (`off:`, `offview:`, sección 2). El código que borra copias bajadas solo puede borrar claves con esos prefijos;
   la **única** función que borra `blobs[<id>]` sin prefijo es la que libera un original propio (`freeOwn`). Un
@@ -41,12 +65,15 @@ comprobación en tres pasos con `POST /verify`, el `relink` sin bytes después d
 - **Lo que pide una marca no se libera solo**, ni por el tope ni por falta de lugar. "Lo que pide" es el
   **conjunto guardado** de la marca (sección 3.1), no lo que dé la última lectura del contenido, y se comprueba
   adentro de la transacción que borra (`marksRev`, sección 2).
-- **Una copia que puede ser la única no se borra sola:** un archivo para el que el portero respondió 404 ("ya no
-  está en Google Drive") queda marcado `gone` y su copia bajada no la borra nada automático; a mano, con el aviso
-  "This device has the only copy".
+- **Una copia que puede ser la única no se borra sola:** un archivo que Google Drive ya no tiene (el portero responde
+  el código `drive_missing` y `/verify` lo confirma) queda marcado `gone` y su copia bajada no la borra nada
+  automático; a mano, con el aviso "This device has the only copy".
+- **La app decide por el `code` del portero, nunca por el número HTTP** (sección 10): el mismo 404 hoy quiere decir
+  "sin permiso" o "Drive no lo tiene", y el mismo 403 "pase vencido" o "Drive tiene otro archivo".
 - **Nunca se borra:** el registro (`files`), la miniatura, lo que se sabe del archivo (`known`), los usos
   (`links`), el texto de las páginas ni los comentarios. La página se ve igual.
-- **Lo nuevo tiene lugar:** las bajadas nunca usan la reserva para fotos y videos nuevos (sección 5.7).
+- **Lo nuevo tiene lugar:** las bajadas nunca usan la reserva para fotos y videos nuevos (sección 5.7). En el iPhone
+  la cuota puede pasar lo libre del disco, así que además hay un tope fijo por marca hasta medirlo (sección 9.1).
 - **Sin versión nueva de IndexedDB ni almacenes nuevos:** claves nuevas en los almacenes que ya existen y campos
   opcionales. Una versión vieja las ignora (sección 11).
 - **Sin cambios en el documento ni en las tablas.** La base suma, como mucho, una función de solo lectura para los
@@ -64,7 +91,7 @@ comprobación en tres pasos con `POST /verify`, el `relink` sin bytes después d
 | Lo protegido | Un conjunto de archivos guardado en cada marca, que una página a medio bajar solo puede agrandar. |
 | Pesos | `files.size` de la base para lo que se baja entero; la nítida, estimada por sus píxeles (sección 3.3). |
 | Al día | En su propio ciclo, que nunca demora una subida: después de cada sincronización que cambió algo de la rama. |
-| Tope | **2 GB por workspace** (por cuenta, en este dispositivo) de copias no marcadas; pasado eso, se liberan las confirmadas que hace más que no se abren. |
+| Tope | Lo elige la persona; de fábrica **2 GB por workspace** (por cuenta, en este dispositivo) de copias no marcadas. Pasado eso, un aviso ofrece liberar las confirmadas que hace más que no se abren; sin el sí, no se libera nada. |
 | A mano | *Storage on this device*, en el menú de la cuenta. |
 | Portero | Entrega 0: `POST /verify` en lote (peso, papelera, marca, `md5Checksum`, id de Drive), `only: 'known'`, saltear la caché de arranque para bajar y `features`. Entrega 2: buscar por la marca `sdFile`. |
 
@@ -101,10 +128,11 @@ que no se abrieron.
 | `meta` | `offline:<marca>` | Una marca, con su conjunto de archivos protegidos (sección 3.1). |
 | `meta` | `marksRev` | Un número que sube con cada cambio de una marca o de su conjunto. |
 | `meta` | `space:rollout` | Cuándo estrenó este dispositivo el tope (sección 5.6). |
-| `files` | `freedAt` (opcional) | En el `MediaRecord`: cuándo se liberó el original propio. |
+| `files` | `freedAt`, `uploadedAt`, `md5` (opcionales) | En el `MediaRecord`: cuándo se liberó el original propio, cuándo se confirmó la subida (sección 5.2) y su MD5 (sección 5.3). |
 
-Todas las claves nuevas empiezan con una letra mayor que `f`: ningún rango de claves que recorra uuids (que empiezan
-con `0-9a-f`) las alcanza, y ninguna versión publicada recorre estos almacenes (solo lee y escribe por clave).
+Las claves nuevas de `blobs` y `thumbs` (`off:`, `offview:`) empiezan con una letra mayor que `f`: ningún rango de
+claves que recorra uuids (que empiezan con `0-9a-f`) las alcanza. Las de `meta` (`copy:`, `offline:`…) no conviven con
+uuids. Ninguna versión publicada recorre estos almacenes (solo lee y escribe por clave).
 
 ### 2.1 La entrada `copy:<id>`
 
@@ -162,13 +190,21 @@ anterior) y la última termina en `total`, que es `files.size`.
   - `options = { sharp, originals, attachments, videos, folders }`;
   - `pages`: por cada página de la rama, el `seq` con el que se leyó su contenido **completo** (o nada, si todavía
     no se pudo);
-  - `files`: **el conjunto protegido**, por archivo las páginas de la rama que lo usan (`{ [fileId]: pageId[] }`).
+  - `files`: **el conjunto de la rama**, por archivo las páginas de la rama que lo usan y su tipo
+    (`{ [fileId]: { pages: pageId[], kind, size, own } }`). Tiene **todos** los archivos de la rama, sin filtrar por
+    casillas.
+- **Qué protege:** un archivo del conjunto está protegido si lo pide una casilla de la marca: la copia bajada o la
+  nítida que corresponde a su tipo, y un original propio según la opción A o B de la sección 3.2. **El filtro se
+  aplica adentro de la transacción que borra**, con las `options` de la marca, que están en la misma entrada de
+  `meta`; cambiar una casilla sube `marksRev`. Así "kept only if checked" es cierto en los dos sentidos.
 - **Cómo cambia el conjunto** (las mismas condiciones que ya usa la papelera de archivos, `engine.ts:546-553`): una
   página se lee "completa" solo si el dispositivo tiene todo su contenido (`cursor >= update_seq` en su
   `DocState`) y se pudo leer (`!unreadable`, `supported`). Una página **incompleta, sin `DocState` o ilegible solo
   suma** al conjunto lo que se ve; **quitar** un archivo de una página se hace recién con esa página completa.
   Una página que salió de la rama se quita del conjunto entera (salvo lo que siga usando otra página de la rama).
-  Cada cambio del conjunto sube `marksRev` en la misma transacción.
+  Cada cambio del conjunto sube `marksRev` en la misma transacción. Una página ilegible o que pide una versión más
+  nueva de la app (`unreadable`, `!supported`) nunca queda completa: la marca lo dice ("1 page needs an app
+  update"), no "Waiting for 1 page to download".
 - Dos marcas pueden cruzarse (un proyecto y una página suya): lo protegido es la **unión** de sus conjuntos.
   Marcar una página que ya está adentro de una rama marcada lo dice ("Already offline with *Proyecto*") y deja
   sumar casillas.
@@ -188,13 +224,24 @@ Siempre, sin casilla: **las miniaturas** que falten de todos los archivos de la 
 no cuentan para el tope ni se liberan) y **los comentarios** de todas sus páginas. Una línea del total los suma
 ("Thumbnails, older images and comments · 12 MB"; las `sdfile://` se estiman en 1 MB cada una, con "≈").
 
-**Los originales propios** (agregados en este dispositivo y todavía en `blobs`) ya cubren su fila sin bajar nada, y
-quedan protegidos **solo si su casilla está tildada**: una foto propia con *Original photos*, un video propio con
-*Videos*, un adjunto propio con *Attachments up to 50 MB* si pesa 50 MB o menos (uno más grande no queda protegido
-por esa casilla, como no se bajaría el de otro). Con solo *Large photos*, se hace su nítida de 2048 desde el original
-(sin red, sin bajar nada) y el original sigue con el tope como cualquier otro. **Cada fila lo dice** cuando hay
-originales propios que no quedan protegidos: "380 originals already on this device (1.4 GB) · kept only if
-checked".
+**Los originales propios** (agregados en este dispositivo y todavía en `blobs`) ya cubren su fila sin bajar nada.
+**Decidido por Lega (2026-10-01): opción A.** "Lo marcado offline se mantiene siempre en la versión tildada"; los
+originales propios ya confirmados en el Drive son liberables, siempre con aviso previo; lo no subido nunca se toca.
+La opción B queda escrita abajo como descartada (en el código es una sola regla, la del filtro de la sección 3.1).
+
+- **Opción A (decidida): solo lo tildado.** Una foto propia queda protegida con *Original photos*, un video propio
+  con *Videos*, un adjunto propio con *Attachments up to 50 MB* si pesa 50 MB o menos (uno más grande no queda
+  protegido por esa casilla, como no se bajaría el de otro). Con solo *Large photos*, se hace su nítida de 2048
+  desde el original (sin red, sin bajar nada) y el original sigue con el tope como cualquier otro (y nunca se
+  libera sin el aviso de la sección 5.2). **Cada fila lo dice** cuando hay originales propios que no quedan
+  protegidos: "380 originals already on this device (1.4 GB) · kept only if checked". Por qué: la marca hace lo
+  que dicen sus casillas, en todos los dispositivos igual, y una marca de 400 fotos de teléfono ocupa ~140 MB y no
+  ~1,5 GB que no entran en el tope.
+- **Opción B (descartada): también los originales propios que ya están.** Todo original propio de la rama entra al conjunto
+  protegido, tildado o no (un adjunto propio de más de 50 MB también). La fila lo dice al revés: "380 originals
+  already on this device (1.4 GB) · kept too". Esos bytes pasan de "Kept automatically" a "Available offline"
+  (no cuentan para el tope). Por qué no la propongo: el mismo proyecto marcado ocupa distinto según en qué
+  dispositivo se filmó, y en el teléfono que filmó la marca protege justo lo más pesado.
 
 No se baja: lo que la base no devuelve (sin permiso), lo que está en la papelera de Drive (se ve como borrado), lo
 que todavía no llegó a Drive (otro dispositivo lo está subiendo: se espera y se baja cuando llegue), los links de
@@ -250,16 +297,24 @@ Available offline · Escena 12 (and 14 pages inside)
 
     Selected: ≈216 MB · downloads ≈1.7 GB
     Available to Shot Docs on this device: 41 GB
+    Offline in this workspace: 1.2 GB → 1.4 GB
+    Kept automatically: 1.6 GB of 2 GB                              [Change limit]
 
     [Cancel]                                [Make available offline]
 ```
 
+- **El tope y lo ocupado, antes de activar** (respuesta de Lega): cuánto ocupa ya lo marcado offline en este
+  workspace y cuánto va a ocupar con esta marca, y lo que se guarda automáticamente con su tope. *Change limit*
+  abre el mismo selector que el diálogo de espacio (sección 6).
+
 - **El lugar:** "Available to Shot Docs on this device" es `quota − usage` de `navigator.storage.estimate()` (lo que
   el navegador le deja a la app; en Safari puede pasar lo libre del disco: no se llama "free"). Para arrancar, lo
-  elegido tiene que entrar en ese lugar **más lo que se puede liberar** (copias no marcadas, sección 5.2, que la
-  descarga libera antes de cada archivo), **menos la reserva para lo nuevo** (sección 5.7). Si no entra, el botón
-  queda apagado con el motivo ("Needs 3.4 GB; 2.1 GB available, keeping 1 GB for new photos and videos"). Si el
-  navegador no da el dato, arranca y lo frena el primer archivo que no entre.
+  elegido tiene que entrar en ese lugar **menos la reserva para lo nuevo** (sección 5.7) y, en el iPhone, en el tope
+  por marca (sección 9.1). Si entra solo liberando copias no marcadas (sección 5.2; en la entrega 1 solo cuentan las
+  copias bajadas y las nítidas, que se liberan sin red ni espera), la ventana lo dice y el botón lo nombra: "Free up 0.6 GB and make available
+  offline" (con *Show what* para ver la lista); tocarlo es el sí del aviso. Si ni así entra, el botón queda apagado
+  con el motivo ("Needs 3.4 GB; 2.1 GB available, keeping 1 GB for new photos and videos"). Si el navegador no da
+  el dato, arranca y lo frena el primer archivo que no entre.
 - **Sin red:** las filas que no se pueden calcular quedan en "—" y el botón, apagado ("Connect to download").
 - **Sin almacenamiento persistente** (`navigator.storage.persisted()` en `false`), una línea de aviso. En el
   iPhone, fuera de la app instalada: "Safari may erase this if you don't open the app for 7 days. Add Shot Docs
@@ -275,7 +330,9 @@ Available offline · Escena 12 (and 14 pages inside)
 
 - **Su propio ciclo, que nunca demora una subida.** No va en la vuelta de la cola de fotos y videos (`MediaQueue.run`
   hace una vuelta a la vez, y una foto agregada mientras corre esperaría). Las bajadas corren aparte, en la pestaña
-  que tiene la cola, **solo mientras no haya nada por subir**; cuando la cola recibe algo nuevo (`onQueued`), se
+  que tiene la cola, **solo mientras no haya nada que se pueda subir ahora**: no cuentan lo detenido (`blocked`), lo
+  que espera un reintento (`retryAt` en el futuro), lo que espera a la base ni los usos en espera (`waiting`); si no,
+  un archivo detenido congelaría las bajadas sin explicación. Cuando la cola recibe algo nuevo (`onQueued`), se
   corta la parte en vuelo (`AbortController`) y se sigue después desde la última parte guardada. De a **dos
   archivos** a la vez en una computadora; en un teléfono, la reducción a 2048 de **uno a la vez** (memoria).
 - **Orden:** miniaturas, imágenes `sdfile://` y comentarios primero (son lo que más se ve), después nítidas,
@@ -289,20 +346,35 @@ Available offline · Escena 12 (and 14 pages inside)
   guarda lo que diga el `Content-Range` de la respuesta (inicio, fin, total), nunca una posición fija: la parte
   siguiente empieza donde terminó la recibida. Un `Content-Range` que no empieza donde se pidió, o un total distinto
   de `files.size`, descarta la copia (se reintenta una vez; después queda con el error a la vista). Un 200 sin
-  partes (un portero que no hizo caso) se guarda igual si su largo es `files.size`. Cada parte se guarda apenas
+  partes (un portero que no hizo caso) se guarda igual si su largo es `files.size` y es de 16 MiB o menos; si es más
+  grande, **no se lee** (`res.blob()` de un video de 1 GB cierra la app en el iPhone): se corta y queda con el error. Cada parte se guarda apenas
   llega, con su entrada (sección 2.1): si la app se cierra, se sigue desde la última.
 - **La nítida:** se baja el original (en memoria, sin guardarlo), se reduce con `viewImage` (`probe.ts`) a 2048 y
   se guarda en `offview:`. Si ya hay una `view:<id>` de 2048, **se mueve** a `offview:` (se borra `view:` y se saca
   de `viewIndex`), sin bajar nada.
-- **Errores:** sin red o con el portero sin contestar, se espera a la próxima vuelta (1, 4, 16 minutos… hasta una
-  hora, como las nítidas). Un 403 del portero o `abusive`: ese archivo no se baja y la marca lo cuenta ("2 files are
-  not available"). Un 404 ("no está en Google Drive"): no se baja, y si ya había una copia completa, se marca `gone`
-  (sección 5.2). El Drive del dueño desconectado: la marca queda en "Waiting for the owner's Drive". Ninguno corta a
-  los demás.
-- **Lugar:** antes de cada archivo, si con él se pasa lo disponible menos la reserva, primero se liberan copias no
-  marcadas (sección 5.2); si igual no entra, la marca se detiene en "Not enough space: needs 300 MB more" y nunca
-  libera lo marcado. Escribir una parte trata `QuotaExceededError` (y el `UnknownError` de Safari con el disco
-  lleno) como falta de lugar, no como un error de red.
+- **Errores, por el `code` del portero** (sección 10), nunca por el número:
+  - sin red o el portero sin contestar: se espera a la próxima vuelta (1, 4, 16 minutos… hasta una hora, como las
+    nítidas);
+  - `/m/` con el pase vencido o inválido: se pide otro pase una vez (como `porteroDownload`, `sharpImages.ts`) y
+    recién si vuelve a fallar cuenta como error;
+  - `not_found` (sin fila o sin permiso): no se baja y la marca lo cuenta ("2 files are not available"). No borra
+    nada por sí solo (sección 4);
+  - `drive_missing`: no se baja; si ya había una copia completa, se pide `/verify` y recién si Drive confirma que no
+    está, se marca `gone` (sección 5.2);
+  - `drive_mismatch` (Drive tiene ahí otro archivo): no se baja, **no se borra nada** y se muestra el error;
+  - `abusive`: no se baja;
+  - `drive_not_connected`: la marca queda en "Waiting for the owner's Drive";
+  - un portero sin códigos (anterior a la entrega 0): todo error es "no disponible por ahora" y nunca borra ni marca
+    `gone`.
+  Ninguno corta a los demás.
+- **Lugar:** antes de cada archivo, si con él se pasa lo disponible menos la reserva, la marca se detiene en "Not
+  enough space: needs 300 MB more". **No libera nada sola:** si liberando copias no marcadas entraría, el aviso lo
+  ofrece ("Free up 0.4 GB to keep *Escena 12* up to date?", sección 5.2) y sigue con el sí. Lo marcado no se libera
+  nunca. (Lo único que se libera sin otra pregunta es lo que la persona ya aceptó al tocar "Free up … and make
+  available offline" en la ventana.) Escribir una parte trata `QuotaExceededError` (y el `UnknownError` de Safari con
+  el disco lleno) como falta de lugar, no como un error de red: **al primer error así, la marca se detiene y se borran
+  las partes del archivo en curso** (con `dropCopy`), para que el disco no quede en cero; no se reintenta sola hasta
+  que la persona toque *Try again* o cambie algo (desmarcar, liberar).
 - **Con la app cerrada o en segundo plano no baja nada** (el navegador no lo deja sin una API que Safari no tiene):
   sigue al volver. En el teléfono, mientras la ventana de progreso está abierta, se pide que la pantalla no se
   apague (`navigator.wakeLock`, donde exista: en la app instalada del iPhone, desde iOS 18.4).
@@ -322,12 +394,21 @@ Available offline · Escena 12 (and 14 pages inside)
   acto: un deshacer lo devolvería.
 - **Un archivo que pasó a la papelera de Drive** se muestra como borrado (como hoy): sale del conjunto y su nítida
   se borra. `forgetView` hoy borra solo `view:` y `view1024:`; suma `offview:`.
-- **Comentarios:** hoy se baja de a una página (`list_comments(p_page_id, p_since)`); un proyecto de 640 páginas
-  serían 640 pedidos por vuelta. Por eso: (a) **una función nueva de solo lectura** en la base,
-  `list_project_comments(p_project_id, p_since)`, con los mismos permisos que `comments_view` (una migración sin
-  tablas nuevas; `schema_version` sube), que trae lo nuevo de todo un proyecto con un solo cursor, una vez por hora
-  y al abrir; (b) con una base sin la función, de a una página **al marcar** y después **cada 6 horas**, de a 4
-  pedidos a la vez. Lo bajado se guarda como hoy en `<base local>:comments`.
+- **Comentarios:** hoy se baja de a una página (`list_comments(p_page_id, p_since)`, con un cursor por página,
+  `since:<página>`); un proyecto de 640 páginas serían 640 pedidos por vuelta. Por eso:
+  - (a) **una función nueva de solo lectura** en la base, `list_project_comments(p_project_id, p_since)`, con los
+    mismos permisos que `comments_view`, que calcula **una vez** las páginas que la persona ve (no `page_level` por
+    fila) y trae lo cambiado desde `p_since` en todas. Una vez por hora y al abrir.
+  - **El cursor sigue siendo por página.** Una página que entra a la rama (nueva, movida adentro, restaurada, vuelta a
+    compartir) se baja **sola, con su propio cursor** (entera si no tiene), porque sus comentarios pueden tener un
+    `updated_at` anterior al de la función por proyecto y esta no los traería nunca. Recién después la sigue la
+    función por proyecto, que se llama con el menor de los cursores de las páginas que ya están y adelanta el cursor
+    de cada página con lo que trae.
+  - **Versión de la base:** P.14 ya reservó la 10 (Drive) y la 11 (*Delete forever*) (`Doc_Proyectos_Borrar.md`).
+    Esta va **después**: la 12, o la siguiente libre cuando se implemente, coordinada con esas dos tandas.
+  - (b) con una base sin la función, de a una página **al marcar** y después **cada 6 horas**, de a 4 pedidos a la
+    vez.
+  - Lo bajado se guarda como hoy en `<base local>:comments`.
 - El estado de cada marca se ve en el diálogo (sección 6) y en el ícono del árbol (sección 3.8).
 
 ### 3.7 Desmarcar
@@ -337,8 +418,8 @@ Available offline · Escena 12 (and 14 pages inside)
   una casilla, tildada: "Remove the copies now". Destildada, las copias quedan y pasan a contar para el tope.
 - **Lo que sigue pedido por otra marca** se saca del conjunto guardado de las otras marcas (sección 3.1), nunca de
   una lectura del momento, y no se borra.
-- **Lo `gone`** (404 de Drive: puede ser la única copia) no se borra: queda en el dispositivo, fuera de toda marca,
-  y el diálogo de espacio lo muestra aparte (sección 6).
+- **Lo `gone`** (`drive_missing` confirmado por `/verify`: puede ser la única copia) no se borra: queda en el
+  dispositivo, fuera de toda marca, y el diálogo de espacio lo muestra aparte (sección 6).
 - Una descarga en curso se corta y sus partes se borran.
 - **Nunca toca un original propio** (no tiene prefijo): solo deja de protegerlo.
 
@@ -357,25 +438,32 @@ Available offline · Escena 12 (and 14 pages inside)
 - **Marcar** puede cualquiera que vea la página (nivel 1, Ver). Bajar usa los mismos caminos que ver: la base con
   su Row Level Security y el pase del portero, que pide permiso con la sesión. Nada se baja de lo que la persona no
   puede ver.
-- **Permiso quitado:** las copias bajadas se borran **solo con una señal explícita**: el portero responde 403 al
-  pedir el pase, o la página salió del árbol porque los permisos propios (`meta.access`) dejaron de darla. Que la
-  base deje de devolver la fila de un archivo **no** alcanza (pasa también después de restaurar una copia de la
-  base): esa copia se deja como está y se vuelve a mirar en la vuelta siguiente. Los originales propios no se tocan
+- **Permiso quitado:** las copias bajadas se borran **solo con una señal explícita**: la página salió del árbol
+  porque los permisos propios (`meta.access`) dejaron de darla, **y** el portero responde `not_found` al pedir el
+  pase de ese archivo. Ninguna de las dos sola alcanza: un `not_found` también sale después de restaurar una copia de
+  la base (sin fila), y que la base deje de devolver la fila tampoco alcanza. En esos casos la copia se deja como
+  está y se vuelve a mirar en la vuelta siguiente. Nunca se ofrece *Save a copy* de algo que se borra por permiso. Los originales propios no se tocan
   nunca por esto (son de esta persona y pueden estar sin subir).
 - **Proyecto archivado** (D-23): archivar es solo orden; la marca sigue igual.
-- **Proyecto borrado** (P.14, `deleted_at`): la marca queda **en pausa** ("Project deleted") y sus copias bajadas
-  **dejan de estar protegidas** (cuentan para el tope y se liberan cuando toque), sin borrarlas en el acto:
-  restaurar un proyecto borrado por error es lo común y volver a bajar gigas cuesta. Si se restaura, la marca
-  sigue y baja solo lo que falte.
+- **Proyecto borrado** (P.14, `deleted_at`): para todos es un permiso quitado (nivel 0), así que va igual: con la
+  señal explícita (el proyecto vuelve de la base con `deleted_at`, o sale de la lista de proyectos visibles **y** el
+  portero responde `not_found`), **se sacan sus marcas y se borran sus copias bajadas**. Los originales propios no se tocan.
+- **Al restaurar el proyecto o devolver el permiso** (respuesta de Lega): **vuelve como online**. No se vuelve a
+  bajar nada solo; si se quiere sin red, se vuelve a marcar. Por eso las marcas se borran (no quedan en pausa).
 - **Sacado del workspace:** el ciclo se detiene y `RemovedScreen` hace lo de siempre; *Remove from this device*
   borra la base entera, con las copias.
 
-## 5. El tope de 2 GB
+## 5. El tope (2 GB de fábrica)
 
 ### 5.1 Qué cuenta
 
-**2 GB por workspace** (por cuenta, en este dispositivo): cada `<base local>:media` cuenta y libera lo suyo. Es más
-simple y predecible que una suma de todo el dispositivo, que dependería de workspaces que no se abren hace meses.
+**El tope lo elige la persona; de fábrica, 2 GB por workspace** (por cuenta, en este dispositivo), y cada
+`<base local>:media` cuenta y libera lo suyo. Es más simple y predecible que una suma de todo el dispositivo, que
+dependería de workspaces que no se abren hace meses. Se guarda en `meta` (`space:limit`, del dispositivo y la
+cuenta: no viaja a otros dispositivos). Se cambia en *Storage on this device* y desde la ventana de "Available
+offline" (*Change limit*): 1, 2, 5, 10 o 20 GB, o *No limit* (nunca avisa). Si lo elegido pasa la mitad de lo que el
+navegador le da a la app, se avisa al lado ("More than half of what this browser gives Shot Docs") pero se respeta.
+De fábrica es `min(2 GB, la mitad de la cuota)`, por Firefox sin almacenamiento persistente.
 Cuentan las **copias enteras** que no están en el conjunto de ninguna marca:
 
 - los originales propios en `blobs[<id>]` (subidos o no),
@@ -397,14 +485,23 @@ entre en la cuota del navegador (sección 5.7).
   subidas, después de cada tanda de descargas de una marca y cuando algo no entra (sección 5.7). Solo en la pestaña
   de la cola.
 - **Qué:** si el total pasa el tope, los candidatos se ordenan **del que hace más que no se abre** (`usedAt`) al más
-  reciente, y se liberan hasta bajar al 90 % del tope (1,8 GB: el margen evita liberar de a uno cada vez que se
-  agrega algo).
+  reciente, y se arma la lista de lo que haría falta liberar para bajar al 90 % del tope (1,8 GB: el margen evita
+  preguntar de a poco cada vez que se agrega algo).
+- **Esperar y avisar** (respuesta de Lega): **no se libera nada sin un sí.** Se muestra un aviso (en la barra
+  lateral, junto al estado de la sincronización, sin tapar nada): "Shot Docs is keeping 2.4 GB of files on this
+  device (limit 2 GB). Free up 0.6 GB? Files stay in Drive; without a connection you'll see their thumbnails",
+  con *Free up*, *Show what* (la lista, con el nombre, el peso y "opened 3 weeks ago"), *Change limit* y *Not now*.
+  *Not now* lo calla por un día. *Free up* corre la comprobación de cada candidato (la de abajo y la sección 5.3) y
+  libera lo que la pase; lo que no, se dice con el motivo. Mientras no se conteste, todo queda como está.
 - **Candidatos, por tipo:**
   - nítida de la página (`view:`): siempre (se rehace sola);
   - copia bajada (`off:`): si no es `gone` y la base dice que el archivo sigue en Drive (`drive_id`, sin
     `purged_at` ni `drive_trashed_at`; un pedido de `fetchMediaFiles` para muchos);
   - original propio: solo con los tres pasos de la sección 5.3 y **subido hace 14 días o más** (siempre, no solo al
-    estrenar: cubre la semana del rodaje y un error del dueño en Drive en los primeros días).
+    estrenar: cubre la semana del rodaje y un error del dueño en Drive en los primeros días). "Subido" es
+    `uploadedAt`, que `markUploaded` pone al confirmar la subida; para lo subido antes de esta versión, la fecha de
+    `space:rollout`. No `createdAt`: un teléfono que estuvo tres semanas sin señal sube todo al volver, y eso tiene
+    que quedar 14 días.
 - **Nunca solos:** lo que está en algún conjunto, lo que espera subir, lo que tiene `uploadId` o `heic` pendiente,
   lo detenido (`blocked`), lo que está en la papelera de la app o en la de Drive (puede ser la última copia fuera de
   una papelera), lo `gone`, **lo abierto en esta sesión** (un video que se está reproduciendo desde un `blob:`: en
@@ -413,10 +510,8 @@ entre en la cuota del navegador (sección 5.7).
   `marksRev` del momento; `freeOwn` y `dropCopy` lo vuelven a leer en su transacción (con `meta` adentro) y, si
   cambió, no borran en esa vuelta. Así "ninguna marca lo pide" se comprueba de verdad, aunque la rama salga del
   árbol y del contenido, que están en otra base.
-- **Sin red no se libera ningún original propio.** Si con todo lo liberable no alcanza, no se hace nada más (no hay
-  aviso: el tope es una meta).
-- **El tope efectivo** es `min(2 GB, la mitad de la cuota del navegador)`: en Firefox sin almacenamiento persistente
-  la cuota puede ser chica.
+- **Sin red no se libera ningún original propio** (el aviso los muestra como "need a connection"). Si no hay nada
+  liberable, no hay aviso: el tope es una meta.
 
 ### 5.3 La comprobación antes de liberar un original propio
 
@@ -433,7 +528,7 @@ Si cualquier paso falla o no contesta, **no se libera** y se vuelve a probar en 
    de ese archivo y su `md5Checksum` es igual al MD5 del original del dispositivo. El MD5 se calcula acá, por tramos
    de 8 MiB y una sola vez por archivo (se guarda en el registro: `md5`), justo antes de liberar: peso igual con
    bytes distintos es improbable con las subidas reanudables, pero es justo el caso que no se ve hasta que hace
-   falta el archivo.
+   falta el archivo. **Sin `md5Checksum` en la respuesta** (Drive no lo da para algunos archivos), no se libera.
 
 Liberar = borrar `blobs[<id>]` y poner `freedAt` en el registro, en esa transacción. Nada más.
 
@@ -459,26 +554,30 @@ Liberar = borrar `blobs[<id>]` y poner `freedAt` en el registro, en esa transacc
 ### 5.6 Al estrenar la versión
 
 La primera vez, `space:rollout` guarda la fecha y todo lo que no tiene `usedAt` toma "ahora" (el orden sale de lo
-que se use de ahí en adelante, y a igualdad, del más viejo al más nuevo por `createdAt`). Los originales propios se
-empiezan a liberar recién **7 días después** del estreno (además de los 14 días desde la subida de la sección 5.2).
-Mientras tanto, un aviso en el diálogo de espacio y una vez al abrir:
-
-> Shot Docs now keeps up to 2 GB of files on this device. Mark what you need offline before *8 Oct*. Original
-> photos and videos are kept only if you check them when marking.
-
-Las copias bajadas y las nítidas, desde el primer día.
+que se use de ahí en adelante, y a igualdad, del más viejo al más nuevo por `createdAt`). Como nada se libera sin el
+sí de la persona, ya no hace falta la gracia de 7 días del diseño auditado: el primer aviso del tope (sección 5.2) es
+el que lo presenta, con una línea más la primera vez: "New: Shot Docs keeps up to 2 GB of files on this device. Mark
+pages *Available offline* to keep them. Original photos and videos are kept only if you check them when marking".
+Los 14 días desde la subida siguen.
 
 ### 5.7 Reserva para lo nuevo, y cuando algo no entra
 
 - **Reserva:** las bajadas nunca usan los últimos `max(1 GB, 5 % de la cuota)`: un teléfono con casi todo marcado
-  tiene que poder seguir filmando.
+  tiene que poder seguir filmando. **En el iPhone esto no alcanza** (la cuota puede pasar lo libre del disco): ver el
+  tope por marca y la medición de la sección 9.1.
 - **`save()`** (agregar una foto o un video): hoy, ante `QuotaExceededError`, rechaza con `queue.noSpace`, y
   `checkRoom` solo mira archivos de más de 50 MB. Ahora, ante `QuotaExceededError` (o el `UnknownError` de Safari),
   libera y reintenta **una vez**; y `checkRoom` mira todos los tamaños.
-- **Qué libera para que entre** (sin mirar el tope, del menos usado al más, hasta que entre):
-  - **con o sin red:** las nítidas (como hoy) y **las copias bajadas que no están en ningún conjunto ni son `gone`**:
-    son copias de algo que estaba en Drive al bajarlo, y lo único irrecuperable en un rodaje es la foto nueva;
-  - **solo con red:** los originales propios, con la sección 5.3.
+- **Qué ofrece liberar para que entre** (sin mirar el tope, del menos usado al más, hasta que entre). Las nítidas de
+  la página se borran sin preguntar, como hoy. Lo demás, **con el aviso**: el archivo no se rechaza en el acto sino
+  que queda la pregunta "Not enough space for *IMG_0412.MOV* (1.2 GB). Free up 1.3 GB of copies already in Drive
+  and add it?" con *Free up and add* y *Cancel*; con el sí, se libera y se vuelve a probar:
+  - **con o sin red:** **las copias bajadas que no están en ningún conjunto ni son `gone`**: son copias de algo que
+    estaba en Drive al bajarlo, y lo único irrecuperable en un rodaje es la foto nueva;
+  - **solo con red, y nunca en el acto:** los originales propios. Su comprobación (MD5 de varios archivos y
+    `/verify`) puede tardar minutos mientras la persona espera agregar una foto y `hasUnsavedWrites` frena el cierre.
+    En `save()` se liberan en el acto solo las copias bajadas y las nítidas; los originales propios se ofrecen
+    después, en segundo plano, con el aviso de siempre (sección 5.2).
 - Si igual no entra, el aviso de hoy dice además cuánto ocupa lo marcado ("Offline pages use 6.3 GB: remove some
   in *Storage on this device*"). Nunca se libera lo marcado para que entre.
 
@@ -492,9 +591,9 @@ Storage on this device
 Shot Docs uses 3.1 GB · 41 GB available to it on this device     (estimate(); sin el dato, no va)
 Protected from being erased by the browser                         (o el aviso de la sección 9)
 
-Kept automatically          1.6 GB of 2 GB  ▓▓▓▓▓▓▓░░
-  Copies of files already in Drive. Past 2 GB, the ones opened least recently are removed;
-  the thumbnails stay.
+Kept automatically          1.6 GB of 2 GB  ▓▓▓▓▓▓▓░░          Limit [2 GB ▾]
+  Copies of files already in Drive. Past the limit, Shot Docs asks before removing the
+  ones opened least recently; the thumbnails stay.
   Waiting to upload: 1.1 GB (5 files) · can't be removed yet
                                                      [Free up space]
 
@@ -515,8 +614,9 @@ Other app data              0.4 GB   (texto, comentarios, miniaturas, otros work
   connection", "uploaded less than 14 days ago", "the media server needs an update"). A mano también se puede liberar
   lo que está en la papelera de la app o la de Drive, con una segunda línea de aviso ("4 files are in the trash:
   this device may have the last copy outside it"), destildado por defecto.
-- **Only copy on this device:** las copias `gone`. Su "⋯" ofrece bajarlas a la computadora (*Save a copy*) y, con
-  confirmación aparte, *Remove from this device* ("This is the only copy we know of").
+- **Only copy on this device:** las copias `gone` (solo `drive_missing` confirmado por `/verify`; nunca algo sin
+  permiso). Su "⋯" ofrece bajarlas a la computadora (*Save a copy*) y, con confirmación aparte, *Remove from this
+  device* ("This is the only copy we know of").
 - Los números salen de las sumas propias; el de arriba, de `estimate()`.
 - "Other app data" es la diferencia entre `estimate()` y lo contado (el texto y los comentarios de este workspace,
   las miniaturas, la caché del service worker y los otros workspaces). Si sale negativa (`estimate()` atrasado),
@@ -524,7 +624,7 @@ Other app data              0.4 GB   (texto, comentarios, miniaturas, otros work
 
 ## 7. Cambios en la cola y en los caminos de abrir y bajar
 
-- **`MediaRecord`** suma `freedAt` y `md5` (opcionales). Una versión vieja los conserva (todo se escribe con
+- **`MediaRecord`** suma `freedAt`, `uploadedAt` (puesto por `markUploaded`) y `md5` (opcionales). Una versión vieja los conserva (todo se escribe con
   `{ ...registro, ...cambios }`). Del diseño anterior, `keep` ya no hace falta (lo reemplazan las marcas) y
   `lastUsedAt` pasa a `copy:<id>.usedAt` (vale también para los archivos de otros dispositivos, que no tienen
   `MediaRecord`, y `known` se reescribe entero con cada `fetchMeta`).
@@ -559,9 +659,26 @@ Other app data              0.4 GB   (texto, comentarios, miniaturas, otros work
   obvio).
 - El estado de la sincronización: la línea de descarga.
 - Avisos sin red del carrete y de los adjuntos (sección 5.4) y el aviso del estreno (sección 5.6).
+- "Offline" a la vista con lo pendiente (sección 8.1).
 - Textos en `src/i18n/` (inglés y castellano), sin atajos nuevos.
 - **Ayuda:** una entrada "Available offline" y una "Storage on this device" en la ayuda de P.13 (si P.13 llega
   antes; si no, se suman con P.13: `Doc_Tutorial.md`).
+
+### 8.1 "Offline" a la vista
+
+Hoy (`src/ui/SyncBadge.tsx`, `src/i18n/sync.ts`): sin conexión (`status.online` en `false`, por el evento `offline` o
+por un error de red del ciclo), la barra lateral dice "Offline · 700 changes saved on this device"; en el teléfono,
+con la barra lateral cerrada, la barra de arriba muestra **solo el ícono** (`SyncIcon`), con el texto como etiqueta
+para lectores de pantalla y `data-tip`, que en un teléfono no se ve. O sea: en el teléfono, el dispositivo del
+rodaje, no queda claro. Cambio chico, en la entrega 1:
+
+- **El texto:** "Offline · 700 to upload" ("Sin conexión · 700 por subir"); sin nada pendiente, "Offline". El número
+  es el mismo de hoy (`usePendingCount`: cambios, fotos y videos, comentarios).
+- **En el teléfono:** sin conexión, la barra de arriba muestra al lado del ícono la palabra y el número ("Offline ·
+  700"), no solo el ícono. Con conexión sigue como hoy.
+- **Con una marca descargando**, sin conexión dice además que la descarga espera ("Offline · 700 to upload · offline
+  download paused") en el detalle, no en la línea.
+- Pruebas: jsdom de `SyncBadge` y `SyncIcon` sin conexión, con y sin pendientes, en los dos idiomas.
 
 ## 9. Safari y el iPhone, Firefox y Chrome
 
@@ -583,9 +700,39 @@ Lo que dicen los navegadores (**a medir en el iPhone de Lega** durante la implem
   probado; se mide en el iPhone antes de cerrar la entrega 1. Si no anda, la casilla *Videos* dice en el iPhone
   hasta qué peso se probó.
 
+### 9.1 El iPhone casi lleno: la reserva no se cumple sola
+
+En Safari la cuota de la app puede pasar lo libre del disco (hasta ~60 % del disco **total**): un iPhone de 128 GB con
+10 GB libres le daría a la app unos 76 GB "disponibles" y una reserva de 3,8 GB. Una marca de 15 GB pasaría el control y
+bajaría hasta llenar el disco, y **la cámara del teléfono tampoco podría filmar**. Por eso:
+
+- **Medición pendiente, para Lega** (sin ella la entrega 1 no se cierra en el iPhone). En un iPhone con poco lugar
+  libre (menos de 3 GB, mirando *Ajustes → General → Almacenamiento del iPhone*), en la app instalada y después en
+  Safari suelto:
+  1. abrir la página de prueba que deja la implementación (muestra `estimate()` y `persisted()`) y anotar
+     `quota`, `usage` y lo libre según Ajustes;
+  2. tocar *Fill test* (escribe partes de 16 MiB de prueba en una base aparte, mostrando cuánto lleva) y anotar en
+     qué número se corta, con qué error (`QuotaExceededError`, `UnknownError` u otro) y cuánto queda libre según
+     Ajustes;
+  3. con el disco así, abrir la cámara y probar filmar 10 segundos;
+  4. tocar *Clean up* (borra todo lo de prueba) y comprobar en Ajustes que el lugar volvió.
+- **Mientras no se mida, en el iPhone (y el iPad) una marca no puede pasar un tope fijo** que no depende de la cuota,
+  con el aviso "Check free space in iPhone Settings before marking large projects". **Propuesta: 5 GB por marca**
+  (pregunta para Lega). Con la medición, se cambia por una regla basada en lo medido.
+- **Al primer error de escritura por falta de lugar**, la marca se detiene y se borran las partes del archivo en curso
+  (sección 3.5).
+
 ## 10. Portero y límites de Cloudflare
 
 **Entrega 0** (antes que la app la use):
+
+- **Códigos fijos en `POST /pass` y en lo que use la bajada**, como ya hace `/trash`: hoy `filePass` responde 404 tanto
+  sin permiso o sin fila ("does not exist or you cannot see it", `core.ts:1042`) como cuando Drive no lo tiene
+  (`:1055`), y 403 cuando Drive tiene un archivo con la marca de otro (`:1056`); y `/m/` responde 403 con el pase
+  vencido o inválido (`:1087`, `:1090`). Pasa a responder además `code`: `not_found` (sin fila o sin permiso),
+  `drive_missing` (Drive no lo tiene), `drive_mismatch` (Drive tiene otro), `drive_not_connected`, `abusive`,
+  `pass_expired` y `pass_invalid`. Los números no cambian (una versión vieja de la app sigue igual). `/verify` usa
+  los mismos códigos por archivo. La app los detecta por `features` (`codes`) y decide **solo** por el `code`.
 
 - **`?offline=1` en `GET /m/<pase>`:** no va firmado y **solo saltea** la caché de arranque de los videos
   (`fromCache`): el pedido va directo a Drive con el `Range` pedido. No abre nada ni cambia lo que el pase deja ver.
@@ -598,7 +745,7 @@ Lo que dicen los navegadores (**a medir en el iPhone de Lega** durante la implem
   `{ results: { [id]: { driveId, size, trashed, marked, md5 } | { error } } }`.
 - **`only: 'known'`** en `POST /upload`: si el portero no recuerda la subida, responde `{ status: 'unknown' }` sin
   crear la carpeta del día ni abrir una sesión de Drive.
-- **`features: ['verify', 'known', 'offline']`** en `/drive/status`. Con un portero sin `verify`, la app no libera
+- **`features: ['verify', 'known', 'offline', 'codes']`** en `/drive/status`. Con un portero sin `verify`, la app no libera
   originales propios (ni solos ni a mano: el diálogo lo dice) y sí todo lo demás; sin `known`, no hay `relink`.
 
 **Entrega 2:** **buscar por la marca** antes de abrir una subida y en `only: 'known'`: `files.list` con
@@ -633,11 +780,15 @@ Cloudflare no cobra el tráfico de un Worker.
 - **Liberar un original que no estaba bien en Drive.** Lo evitan los tres pasos de la sección 5.3 (con MD5 e id de
   Drive), los 14 días y la separación de claves. Queda que el dueño borre a mano el archivo en su Drive después (se
   perdería para todos, no solo acá).
-- **El tope automático y un rodaje sin red:** alguien cuenta con ver un video sin red y se liberó. Por eso las marcas,
-  los 7 días de gracia, los 14 días desde la subida y el aviso que dice qué casillas guardan los originales.
+- **El tope y un rodaje sin red:** alguien cuenta con ver un video sin red y lo liberó con el aviso sin leerlo. Por
+  eso las marcas, el aviso que dice qué se libera y que sin red solo se ve la miniatura, los 14 días desde la subida
+  y la línea que dice qué casillas guardan los originales.
 - **Descargas grandes en el teléfono:** sin la app abierta no bajan; con datos móviles gastan. La ventana lo dice
   ("downloads ≈3.4 GB") y la pantalla queda prendida mientras baja con la ventana abierta.
-- **Safari:** la app instalada y Safari no comparten almacenamiento; videos grandes desde partes, a medir.
+- **Safari:** la app instalada y Safari no comparten almacenamiento; videos grandes desde partes y el iPhone casi
+  lleno (sección 9.1), a medir.
+- **Imágenes `sdfile://` de un workspace sin portero:** se bajan de Supabase Storage (plan gratis: 5 GB de tráfico por
+  mes) y desmarcar no las borra (viven en la base local de siempre, como hoy).
 - **El estimado de la nítida** puede errarle un 30 %: la reserva y el freno por archivo (sección 3.5) lo cubren.
 - **Restauración de la base con originales liberados:** depende de que el portero recuerde la subida o, desde la
   entrega 2, de la búsqueda por la marca.
@@ -649,19 +800,20 @@ Cloudflare no cobra el tráfico de un Worker.
 
 ## Entregas y pruebas
 
-1. **Entrega 0, portero:** `?offline=1`, `POST /verify` en lote (con `md5Checksum` e id), `only: 'known'`,
-   `features`, con pruebas en `portero/src/core.test.ts`: archivo en la papelera de Drive, sin la marca, otro peso,
-   otro MD5, sin caché, lote de 15, uno sin permiso en el lote, `only: 'known'` sin abrir nada, y un video de 40 MB
+1. **Entrega 0, portero:** los códigos fijos, `?offline=1`, `POST /verify` en lote (con `md5Checksum` e id),
+   `only: 'known'`, `features`, con pruebas en `portero/src/core.test.ts`: `not_found`, `drive_missing`,
+   `drive_mismatch`, `pass_expired`; archivo en la papelera de Drive, sin la marca, otro peso, otro MD5, sin
+   `md5Checksum`, sin caché, lote de 15, uno sin permiso en el lote, `only: 'known'` sin abrir nada, y un video de 40 MB
    por `/m/` **con la caché del portero de verdad**, con y sin `offline=1`. Se publica con el push a `main`, antes
    que la app que la usa.
 2. **Entrega 1, Available offline:** marcas con su conjunto, la ventana con los pesos, la descarga por partes en su
    ciclo, mantener al día, comentarios (con la función nueva de la base y su migración, o el camino sin ella),
    desmarcar, el ícono, los caminos de lectura de la sección 7, la reserva y `save()` que libera copias bajadas, el
    diálogo de espacio **sin** liberar originales propios, y el tope solo para copias bajadas y nítidas. Lo único que
-   borra son claves con prefijo.
+   borra son claves con prefijo. **No se cierra en el iPhone sin la medición de la sección 9.1.**
 3. **Entrega 2, liberar originales propios:** `freeOwn` con los tres pasos, el MD5 y los 14 días, el tope y *Free up
-   space* para los propios, el `relink`, la búsqueda del portero por la marca, `usedAt` con los 7 días de gracia y
-   `save()` que libera originales con red. Riesgo alto: auditoría propia antes de publicar.
+   space* para los propios, el `relink`, la búsqueda del portero por la marca, `uploadedAt`, `usedAt` con el aviso
+   del estreno y los originales propios ofrecidos en segundo plano cuando algo no entra. Riesgo alto: auditoría propia antes de publicar.
 4. **Entrega 3:** *Drive folders* (con P.9) y compartir un archivo sin copia (bajarlo al vuelo).
 
 **Pruebas de unidad** (`queue.test.ts` y una nueva `offline.test.ts`, con el servidor y el portero en memoria de
@@ -678,20 +830,34 @@ Cloudflare no cobra el tráfico de un Worker.
 - **El conjunto protegido:** una página a medio bajar (`cursor < update_seq`), sin `DocState`, ilegible o no
   soportada solo suma; con la página completa, quita; una sincronización a medias con señal mala no libera nada
   marcado (el escenario del rodaje); "listo" espera a todas las páginas.
-- **El tope:** por workspace; del menos usado al más, hasta el 90 %, con las sumas propias; lo marcado no cuenta ni
-  se libera; lo que espera subir cuenta y no se libera; lo abierto en la sesión no se libera; `gone` nunca; la gracia
-  de 7 días; `min(2 GB, cuota / 2)`.
-- **Lugar:** la reserva; `save()` con `QuotaExceededError` libera y reintenta una vez; sin red libera nítidas y
-  copias bajadas no marcadas, nunca originales propios; `UnknownError` de Safari como falta de lugar.
+- **El tope:** por workspace; el que elige la persona (y `min(2 GB, cuota / 2)` de fábrica); **pasado el tope no se
+  borra nada hasta el sí**; *Not now* calla un día; del menos usado al más, hasta el 90 %, con las sumas propias; lo
+  marcado no cuenta ni se ofrece; lo que espera subir cuenta y no se ofrece; lo abierto en la sesión no se libera;
+  `gone` nunca; *No limit* nunca avisa.
+- **Lugar:** la reserva; `save()` con `QuotaExceededError` pregunta y, con el sí, libera y reintenta una vez; sin red
+  ofrece copias bajadas no marcadas, nunca originales propios; `UnknownError` de Safari como falta de lugar; una
+  marca sin lugar se detiene y pregunta.
 - **Marcas:** la rama sigue al árbol (crear, mover adentro y afuera, papelera, restaurar, permisos); dos marcas
   cruzadas; los pesos de todas las filas (también destildadas), la nítida estimada, lo que ya está, la línea de los
   originales propios no protegidos; no arranca si no entra, contando lo liberable y la reserva; la descarga avanza
   por el `Content-Range` real (un 206 más corto que lo pedido no deja huecos); se retoma después de cerrar; un total
-  distinto se descarta; 403 se saltea; 404 marca `gone`; mantener al día solo relee las páginas que cambiaron;
+  distinto se descarta; un 200 de más de 16 MiB no se lee; se decide por el `code` y nunca por el número
+  (`not_found` no borra solo ni ofrece *Save a copy*; `drive_missing` marca `gone` solo con `/verify`; `drive_mismatch`
+  no borra nada; pase vencido pide otro); un portero sin códigos nunca borra ni marca `gone`; mantener al día solo
+  relee las páginas que cambiaron;
   desmarcar borra solo lo suyo, no lo `gone` y nunca un original propio; permiso quitado (403, fuera del árbol por
-  permisos) borra y "la base no devuelve la fila" no; proyecto borrado pausa y libera, restaurado sigue.
+  permisos) borra y "la base no devuelve la fila" no; proyecto borrado saca la marca y borra sus copias; restaurado
+  vuelve como online, sin bajar nada.
+- **Opción A** de la sección 3.2: un original propio de la rama con su casilla destildada no está protegido y se
+  ofrece con el aviso; con la casilla tildada, nunca.
 - **Bajar no demora subir:** con una bajada de 16 MiB en vuelo, agregar una foto corta la bajada y la foto sube
-  primero.
+  primero; un archivo detenido o esperando un reintento no frena las bajadas.
+- **Sin lugar al escribir:** el primer `QuotaExceededError` o `UnknownError` detiene la marca y borra las partes del
+  archivo en curso; el tope fijo por marca en el iPhone.
+- **Comentarios:** una página que entra a la rama se baja con su propio cursor aunque sus comentarios sean más viejos
+  que el cursor del proyecto.
+- **`uploadedAt`:** lo pone `markUploaded`; sin el campo vale `space:rollout`; subido hace menos de 14 días no se
+  ofrece.
 - **Lectura:** `source()`, `localOriginal()`, `localImage()` y `makeViewFor()` con copia bajada y con `offview:`;
   `forgetView` borra `offview:`; mover `view:` a `offview:`; sin red, el carrete y un adjunto abren desde la copia;
   una imagen `sdfile://` de una página marcada se ve sin red.
@@ -707,29 +873,39 @@ el diálogo de espacio (números, *Free up space* con confirmación, desmarcar, 
 red y abrir el carrete, un adjunto y la página con las fotos en grande.
 
 **A mano, Lega:** en el iPhone con la app instalada, marcar un proyecto, poner el modo avión y recorrerlo (fotos en
-grande, PDF, un video de 1 GB); en Chrome de computadora y en Safari de Mac lo mismo; y ver el tope liberar algo
-después de los 7 días.
+grande, PDF, un video de 1 GB); en Chrome de computadora y en Safari de Mac lo mismo; bajar el tope a 1 GB y ver el
+aviso, *Not now* y *Free up*.
 
-## Propuestas finales para Lega
+## Respuestas de Lega a las propuestas (2026-10-01)
 
-Ajustadas con la auditoría; el diseño de arriba ya las sigue. Si Lega dice otra cosa, se cambia antes de implementar.
+El diseño de arriba ya las sigue.
 
-1. **Tope en dispositivos chicos:** `min(2 GB, la mitad de lo que el navegador le da a la app)`.
-2. **Gracia:** los originales propios se empiezan a liberar 7 días después de la actualización, con un aviso que dice
-   que, con las casillas de fábrica, las fotos originales y los videos no quedan. Y **siempre**, un original propio
-   no se libera antes de **14 días desde que se subió**.
-3. **Fotos propias con solo *Large photos*:** se guarda la de 2048 y el original sigue con el tope; la fila dice
-   cuántos originales hay en el dispositivo y que quedan solo si se tilda.
-4. **Sin "Keep on this device" por archivo:** alcanza con marcar la página.
-5. **Mostrar lo que se baja por la red** además de lo que ocupa.
-6. **Comentarios:** siempre los de la rama marcada, sin casilla, cada una hora con una función nueva de la base que
-   trae los de un proyecto entero (sin ella, al marcar y cada 6 horas, de a una página).
+1. **Tope:** lo pone la persona; de fábrica 2 GB por workspace (`min(2 GB, la mitad de la cuota)` en un navegador
+   con poco lugar). Se ve, con lo ocupado, en la ventana de marcar y en *Storage on this device*.
+2. **Esperar y avisar:** nunca se libera sin un aviso previo y un sí; lo marcado, nunca. Reemplaza la gracia de 7
+   días. Los 14 días desde la subida antes de ofrecer liberar un original propio siguen.
+3. **Opción A** (2026-10-01): lo marcado se mantiene en la versión tildada; los originales propios ya confirmados
+   en el Drive son liberables, siempre con aviso previo; lo no subido nunca se toca, con o sin red. Sección 3.2.
+10. **"Offline" claro** junto con lo pendiente ("Offline · 700 to upload"), también en el teléfono. Sección 8.1.
+4. **Sin "Keep on this device" por archivo:** offline es por página, página con subpáginas, o proyecto.
+5. **Mostrar lo que se baja por la red:** sí.
+6. **Comentarios:** siempre los de la rama marcada, sin casilla, cada una hora con una función nueva de la base (sin
+   ella, al marcar y cada 6 horas, de a una página).
 7. **Desmarcar** borra las copias bajadas en el acto (con una casilla para dejarlas), salvo lo que pide otra marca
    (según su conjunto guardado) y lo que Drive ya no tiene (404: puede ser la única copia).
-8. **2 GB por workspace** (por cuenta, en este dispositivo), en vez de por dispositivo.
-9. **Permiso quitado:** se borran las copias bajadas solo con una señal explícita (403 del portero o la página fuera
-   del árbol por permisos). **Proyecto borrado:** la marca queda en pausa y sus copias pasan a ser liberables por el
-   tope; si se restaura, sigue.
+8. **2 GB por workspace** (por cuenta, en este dispositivo).
+9. **Permiso quitado** (también un proyecto borrado): se borran las copias bajadas, con una señal explícita. Al
+   restaurar el proyecto o devolver el permiso, vuelve como online: no se baja nada solo; se vuelve a marcar si se
+   quiere.
+
+**Pregunta nueva (de la re-verificación):** en el iPhone, hasta medir con el disco casi lleno (sección 9.1), ¿un tope
+fijo de **5 GB por marca** (propuesta)?
+
+**Re-verificación (2026-10-01):** B1, B2 y B3 resueltos; dos bloqueantes nuevos corregidos: N1 (decidir por el `code`
+del portero: secciones 3.5, 4, 6 y 10) y N2 (el iPhone casi lleno: secciones 3.5 y 9.1). También `uploadedAt`,
+"nada que se pueda subir ahora", el cursor de comentarios por página, la versión de la base después de P.14, el filtro
+por casillas adentro de la transacción, `save()` sin originales propios en el acto, sin MD5 no se libera, lo liberable
+de la entrega 1, la frase de las claves, el 200 de más de 16 MiB, "needs an app update" y las `sdfile://` sin portero.
 
 ## Correcciones de la auditoría (2026-10-01)
 
@@ -765,4 +941,4 @@ cambios". Todas quedaron en el cuerpo:
 | 22: el dueño cambia de cuenta de Google | Riesgos (fuera de esta tanda) |
 | 23: *Share* sin copia | 5.4 y Riesgos |
 | 24: adjunto propio de más de 50 MB | 3.2 |
-| Las 9 preguntas | "Propuestas finales para Lega" |
+| Las 9 preguntas | "Respuestas de Lega a las propuestas" |

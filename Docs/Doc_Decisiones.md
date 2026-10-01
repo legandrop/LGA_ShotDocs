@@ -185,6 +185,18 @@ diga otra cosa.
   calcula; el espacio libre del dispositivo y no arranca si no entra; barra de progreso y aviso de listo.
   (4) **A mano**, "Espacio en este dispositivo" en el menú de la cuenta: cuánto ocupa, lo marcado, *Free up
   space* y desmarcar. Diseño: `Doc_Copias_Locales.md`.
+  **Respuestas de Lega a las propuestas del diseño (2026-10-01), que ajustan lo anterior:** (a) **el tope lo pone la
+  persona**: la ventana de "Available offline" y "Espacio en este dispositivo" muestran el tope y cuánto se está
+  ocupando, "para decidir antes de activar"; se puede cambiar; de fábrica, **2 GB por workspace**. (b) **Esperar y
+  avisar antes de liberar**: nunca se libera solo sin aviso previo ("this is taking X, free up space?"); lo marcado
+  offline no se libera nunca solo; lo no marcado sí, con ese aviso. (c) "Lo marcado offline se mantiene siempre en la
+  versión tildada" (de fábrica, fotos en 2048); los originales propios ya confirmados en el Drive son liberables,
+  **siempre con aviso previo**; lo no subido nunca se toca, con o sin red. (d) Sin "Keep on this device" por archivo:
+  offline es por página, página con subpáginas, o proyecto. (e) Se muestra cuánto se baja por la red. (f) Los
+  comentarios de la rama marcada se bajan siempre; desmarcar borra las copias bajadas (con una casilla para dejarlas).
+  (g) Con permiso quitado se borran las copias; al restaurar un proyecto o devolver el permiso "vuelve como online":
+  no se vuelve a bajar solo, se vuelve a marcar si se quiere. (h) Sin internet la app dice claramente "Offline" junto
+  con lo pendiente ("Offline · 700 to upload").
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
