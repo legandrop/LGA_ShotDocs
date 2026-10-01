@@ -568,7 +568,7 @@ Lega probó la entrega 2 y la rechazó como estaba: la foto en línea tenía men
   teléfono la barra pasa a dos renglones, adentro de la pantalla.
 - **Sin leyenda** (D-24): no hay *Edit caption* en ninguna de las dos. Una leyenda que ya existe en una foto-bloque se
   sigue mostrando: no se borra ni se esconde; solo no hay botón para crearla. Tampoco va *Toggle preview* (no está en
-  la barra que pidió Lega; una foto-bloque que ya la tiene apagada se sigue viendo así). **A aprobar por Lega.**
+  la barra que pidió Lega; una foto-bloque que ya la tiene apagada se sigue viendo así). Aprobado por Lega (D-24).
 - **Ver** abre el carrete en esa foto; **bajar** baja el original (del Drive) o la dirección, con su nombre.
 - **Tamaños** para todas las fotos elegidas, en un solo cambio (un atributo del nodo: editar a la vez no pierde nada,
   medido en la entrega 1).
@@ -627,7 +627,7 @@ Inventario de lo que hace hoy la foto-bloque (el código de `src/ui/`: `MediaBar
 | Barra: *Rename image* (no en un archivo del Drive) | hecho | la misma regla |
 | Barra: *Delete image* | hecho | |
 | Barra: *Edit caption* | — | se sacó de las dos (D-24); la leyenda que existe se sigue viendo |
-| Barra: *Toggle preview* (no en un archivo del Drive) | — | se sacó de las dos: no está en la barra de D-24. **A aprobar por Lega** |
+| Barra: *Toggle preview* (no en un archivo del Drive) | — | se sacó de las dos (D-24, aprobado por Lega) |
 | Fotos en fila con su ancho; "apiladas" en el teléfono | hecho | 1b |
 | Flechas entre las fotos de una fila; Enter después de la fila | hecho | como letras (1b): ← → de a una, Enter parte el renglón |
 | Borrar con Supr o Retroceso | hecho | 1b |

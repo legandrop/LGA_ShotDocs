@@ -98,7 +98,6 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   - Pegar HTML con un `<img>` de afuera sigue creando una foto-bloque (entrega 3, con la conversión `data:`); "/Image"
     ya no ofrece *Embed* (dirección de otro sitio).
   - Las respuestas de Lega a las preguntas del diseño (leyenda, videos, ancho al pegar varias): hoy va la propuesta.
-  - Que Lega apruebe sacar *Toggle preview* de la barra (no está en la de D-24).
   - Entregas 3 (convertir las fotos-bloque) y 4 (importar de Coda en línea). Lo que queda de editar a la vez junto a
     fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está medido en `Doc_Colaboracion.md`.
   **A futuro (Lega, 2026-10-01, después de ver el prototipo):** que se puedan escribir varias líneas de texto a

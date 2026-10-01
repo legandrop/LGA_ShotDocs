@@ -172,7 +172,8 @@ diga otra cosa.
   *Edit caption* de la barra, también de la foto-bloque; una leyenda que ya existe se sigue mostrando (no se borra
   ni se esconde), solo no hay botón para crearla. (3) **La barra, por sectores con separador**, igual en las dos:
   [ver, bajar] | [tamaños y *Arrange in rows*] | [alinear izquierda, centro, derecha] | [comentar] y, a la derecha,
-  [*Replace*, *Rename*, *Delete*]; todos los botones del mismo tamaño y el mismo relleno.
+  [*Replace*, *Rename*, *Delete*]; todos los botones del mismo tamaño y el mismo relleno. (4) **Sin *Toggle preview*** en
+  ninguna de las dos (Lega: "afuera, el nombre del archivo no importa").
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
