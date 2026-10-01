@@ -1,8 +1,8 @@
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { NodeSelection, TextSelection, type EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { arrangeRows, groupRows } from './imageRows';
-import { PHOTO, photoWidth } from './inlinePhoto';
+import { arrangeRows } from './imageRows';
+import { PHOTO } from './inlinePhoto';
 import { thumbSize } from './sharpMarks';
 
 // El tamaño de las fotos en línea elegidas y "Arrange in rows" sobre ellas (Docs/Doc_Fotos_En_Linea.md, entrega 2).
@@ -78,65 +78,39 @@ export function setPhotoWidths(view: EditorView, positions: readonly number[], w
   if (tr.docChanged) view.dispatch(tr);
 }
 
-const round4 = (x: number) => Math.round(x * 1e4) / 1e4;
+/** Lo que cambia "Arrange in rows" en una foto: su ancho y si empieza fila. */
+export interface Arranged {
+  w?: number;
+  rowStart: true | null;
+}
 
 /**
- * Los anchos para acomodar `positions` (seguidas, parte de la tanda `run`) en filas: `arrangeRows` con sus
- * proporciones, y que queden en filas propias dentro de la tanda (las filas las arma `groupRows` desde el principio
- * de la tanda, de a una y mientras entren). Por eso:
- * - si la fila de antes de la primera no está llena, la primera subiría a esa fila: entran en el acomodo también
- *   las fotos de esa fila (las que se ven en el mismo renglón), y así hasta una fila llena o el principio;
- * - si después de la última sigue otra foto y la última fila no llena el renglón, esa foto subiría: la última fila
- *   se llena.
- * Devuelve los anchos nuevos por posición (las que no están, quedan como estaban).
+ * "Arrange in rows" de las fotos `positions` (seguidas, parte de la tanda `run` de su renglón): SOLO las elegidas
+ * (pedido de Lega; auditoría de la entrega 2). Los anchos salen de `arrangeRows` con sus proporciones. Para que
+ * queden en filas propias dentro de una tanda más larga (las filas las arma `groupRows` de a una, mientras entren),
+ * la primera elegida empieza fila (`rowStart`), y también la foto que sigue a la última, si la hay (solo esa marca:
+ * su ancho no cambia). Las de antes quedan como estaban (si su fila no llena el renglón, el margen de la fila lo
+ * completa). La última fila no se estira: con la altura que le da `arrangeRows` (como mucho la de la anterior, o
+ * MAX), como en la foto-bloque.
  */
 export function arrangeWidths(
   doc: PMNode,
   positions: readonly number[],
   aspectOf: (pos: number) => number,
   gapRatio: number,
-): Map<number, number> {
+): Map<number, Arranged> {
   const run = runAround(doc, positions[0]);
-  const widthAt = (p: number) => photoWidth(doc.nodeAt(p)?.attrs.w);
   // Una proporción desconocida cuenta como 3:2, como en `arrangeRows`.
   const aspect = (p: number) => {
     const a = aspectOf(p);
     return Number.isFinite(a) && a > 0 ? a : 1.5;
   };
-  const before = run.map(widthAt);
-  let first = run.indexOf(positions[0]);
-  const last = run.indexOf(positions[positions.length - 1]);
-  const result = new Map<number, number>();
-  for (let guard = 0; guard <= run.length; guard++) {
-    const chosen = run.slice(first, last + 1);
-    const fracs = arrangeRows(chosen.map(aspect), { gapRatio });
-    const next = before.slice();
-    chosen.forEach((_, i) => (next[first + i] = fracs[i]));
-    const rows = groupRows(next);
-    const startsRow = rows.some((r) => r[0] === first);
-    if (!startsRow && first > 0) {
-      // La primera no empieza fila: suma la fila (de antes del cambio) de la foto anterior.
-      const prevRow = groupRows(before).find((r) => r.includes(first - 1));
-      first = prevRow ? prevRow[0] : first - 1;
-      continue;
-    }
-    // La última fila, llena si después sigue una foto que entraría en ella.
-    const lastRow = rows.find((r) => r.includes(last));
-    if (lastRow && last + 1 < run.length && lastRow[lastRow.length - 1] !== last) {
-      const inRow = lastRow.filter((k) => k >= first && k <= last);
-      const sum = inRow.reduce((s, k) => s + aspect(run[k]), 0);
-      let others = 0;
-      inRow.forEach((k, i) => {
-        if (i < inRow.length - 1) {
-          next[k] = Math.max(1e-4, round4(aspect(run[k]) / sum));
-          others += next[k];
-        } else next[k] = round4(1 - others);
-      });
-    }
-    for (let k = first; k <= last; k++) result.set(run[k], next[k]);
-    return result;
-  }
-  return result;
+  const fracs = arrangeRows(positions.map(aspect), { gapRatio });
+  const out = new Map<number, Arranged>();
+  positions.forEach((p, i) => out.set(p, { w: fracs[i], rowStart: i === 0 ? true : null }));
+  const after = run[run.indexOf(positions[positions.length - 1]) + 1];
+  if (after !== undefined) out.set(after, { rowStart: true });
+  return out;
 }
 
 /**
@@ -175,7 +149,10 @@ export function arrangeSelected(view: EditorView): boolean {
   if (gap === null || target.positions.some((p) => aspects.get(p) === null)) return false;
   const widths = arrangeWidths(view.state.doc, target.positions, (p) => aspects.get(p) ?? 0, gap);
   const tr = view.state.tr;
-  for (const [pos, w] of widths) tr.setNodeAttribute(pos, 'w', w);
+  for (const [pos, change] of widths) {
+    if (change.w !== undefined) tr.setNodeAttribute(pos, 'w', change.w);
+    if ((tr.doc.nodeAt(pos)?.attrs.rowStart ?? null) !== change.rowStart) tr.setNodeAttribute(pos, 'rowStart', change.rowStart);
+  }
   if (tr.docChanged) view.dispatch(tr);
   return tr.docChanged;
 }

@@ -96,6 +96,13 @@ export const PhotoNode = Node.create({
         parseHTML: (el: HTMLElement) => photoWidth(attr(el, 'data-w')),
         renderHTML: (a: Record<string, unknown>) => ({ 'data-w': String(photoWidth(a.w)) }),
       },
+      // La foto empieza una fila ("Arrange in rows" de las elegidas, D-24 y auditoría de la entrega 2): las filas se
+      // arman desde acá aunque la foto de antes deje lugar. Solo `true` o nada (sin valor no se guarda nada).
+      rowStart: {
+        default: null,
+        parseHTML: (el: HTMLElement) => (el.getAttribute('data-row-start') === 'true' ? true : null),
+        renderHTML: (a: Record<string, unknown>) => (a.rowStart === true ? { 'data-row-start': 'true' } : {}),
+      },
     };
   },
 

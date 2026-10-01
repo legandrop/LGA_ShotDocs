@@ -52,8 +52,11 @@ export function rowsOfTextblock(block: PMNode, pos: number): PhotoRow[] {
     run = [];
   };
   block.forEach((child, offset) => {
-    if (child.type.name === PHOTO) run.push({ pos: pos + 1 + offset, f: fractionOf(child) });
-    else flush();
+    if (child.type.name === PHOTO) {
+      // Una foto que empieza fila (`rowStart`, "Arrange in rows" de las elegidas) corta la tanda.
+      if (child.attrs.rowStart === true) flush();
+      run.push({ pos: pos + 1 + offset, f: fractionOf(child) });
+    } else flush();
   });
   flush();
   return out;

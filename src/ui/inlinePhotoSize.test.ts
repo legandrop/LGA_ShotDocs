@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 // El tamaño de las fotos en línea elegidas y "Arrange in rows" sobre ellas (Docs/Doc_Fotos_En_Linea.md, entrega 2).
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
+import { DOMParser, DOMSerializer } from '@tiptap/pm/model';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { afterEach, describe, expect, it } from 'vitest';
 import { editorSchemaOptions } from './editorSchema';
-import { arrangeRows, groupRows } from './imageRows';
+import { arrangeRows } from './imageRows';
+import { rowsOfTextblock } from './inlinePhotoEditor';
 import { PHOTO } from './inlinePhoto';
 import { toolbarSpot } from './PhotoToolbar';
 import {
@@ -100,51 +102,69 @@ describe('los tamaños rápidos', () => {
 describe('acomodar las elegidas', () => {
   const run = (names: string[], ws: number[]) => p('a', ...names.map((n, i) => ph(n, ws[i])));
   const aspects = (map: Record<string, number>) => (e: BlockNoteEditor) => (at: number) => map[String(view(e).state.doc.nodeAt(at)!.attrs.name)] ?? 1.5;
+  const rowsOf = (e: BlockNoteEditor) => {
+    const doc = view(e).state.doc;
+    let rows: string[][] = [];
+    doc.descendants((n, at) => {
+      if (n.isTextblock && rows.length === 0) rows = rowsOfTextblock(n, at).map((r) => r.positions.map((x) => String(doc.nodeAt(x)!.attrs.name)));
+      return !n.isTextblock;
+    });
+    return rows;
+  };
 
-  it('toda la tanda: lo mismo que arrangeRows', () => {
+  it('toda la tanda: lo mismo que arrangeRows, y la primera empieza fila', () => {
     const names = ['A', 'B', 'C', 'D', 'E'];
     const E = mount([run(names, [0, 0, 0, 0, 0])]);
     const a = { A: 1.5, B: 0.67, C: 1.5, D: 1, E: 1.78 };
     const got = arrangeWidths(view(E).state.doc, names.map((n) => pos(E, n)), aspects(a)(E), 8 / 700);
-    expect(names.map((n) => got.get(pos(E, n)))).toEqual(arrangeRows(Object.values(a), { gapRatio: 8 / 700 }));
+    expect(names.map((n) => got.get(pos(E, n))!.w)).toEqual(arrangeRows(Object.values(a), { gapRatio: 8 / 700 }));
+    expect(names.map((n) => got.get(pos(E, n))!.rowStart)).toEqual([true, null, null, null, null]);
   });
 
-  it('una parte, con filas llenas antes y después: quedan en filas propias; las demás no cambian', () => {
-    const names = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-    const third = 1 / 3;
-    const E = mount([run(names, names.map(() => third))]);
-    const chosen = ['D', 'E', 'F'];
-    const got = arrangeWidths(view(E).state.doc, chosen.map((n) => pos(E, n)), aspects({ D: 0.67, E: 1.5, F: 1.5 })(E), 8 / 700);
-    expect([...got.keys()]).toEqual(chosen.map((n) => pos(E, n)));
-    const after = names.map((n) => got.get(pos(E, n)) ?? third);
-    const rows = groupRows(after);
-    // A B C | D E F (lo que diga arrangeRows) | G H I
-    expect(rows[0]).toEqual([0, 1, 2]);
-    expect(rows.flat()).toEqual(names.map((_, i) => i));
-    expect(rows[rows.length - 1]).toEqual([6, 7, 8]);
-    expect(rows.some((r) => r[0] === 3)).toBe(true);
+  it('SOLO las elegidas: las de antes y la de después no cambian de ancho; las elegidas quedan en filas propias', () => {
+    // Cinco a 1/3 (filas 21 22 23 / 24 25); se eligen 23, 24 y 25 (el caso de la auditoría).
+    const names = ['F21', 'F22', 'F23', 'F24', 'F25', 'F26'];
+    const E = mount([run(names, [1 / 3, 1 / 3, 1 / 3, 1 / 3, 1 / 3, 1 / 3])]);
+    range(E, pos(E, 'F23'), pos(E, 'F25') + 1);
+    // En jsdom no hay imágenes: se acomoda con la cuenta (las proporciones, 3:2).
+    const chosen = ['F23', 'F24', 'F25'];
+    const got = arrangeWidths(view(E).state.doc, chosen.map((n) => pos(E, n)), aspects({})(E), 8 / 700);
+    const v = view(E);
+    const tr = v.state.tr;
+    for (const [at, c] of got) {
+      if (c.w !== undefined) tr.setNodeAttribute(at, 'w', c.w);
+      tr.setNodeAttribute(at, 'rowStart', c.rowStart);
+    }
+    v.dispatch(tr);
+    expect(widths(E, ['F21', 'F22', 'F26'])).toEqual([0.3333, 0.3333, 0.3333]);
+    expect(got.get(pos(E, 'F26'))).toEqual({ rowStart: true });
+    // Filas: 21 22 (no llena: el margen completa el renglón) | 23 24 25 (lo de arrangeRows) | 26.
+    expect(rowsOf(E)).toEqual([['F21', 'F22'], ['F23', 'F24', 'F25'], ['F26']]);
   });
 
-  it('si la fila de antes no está llena, entra en el acomodo (si no, la primera elegida subiría a ella)', () => {
-    // A a 1/2 sola (no llena), después B C D elegidas.
-    const E = mount([run(['A', 'B', 'C', 'D'], [0.5, 0.25, 0.25, 0.5])]);
-    const got = arrangeWidths(view(E).state.doc, ['B', 'C', 'D'].map((n) => pos(E, n)), aspects({})(E), 8 / 700);
-    expect(got.has(pos(E, 'A'))).toBe(true);
-    const rows = groupRows(['A', 'B', 'C', 'D'].map((n) => got.get(pos(E, n))!));
-    expect(rows.flat()).toEqual([0, 1, 2, 3]);
-  });
-
-  it('si después sigue otra foto, la última fila elegida se llena (si no, esa foto subiría)', () => {
-    const E = mount([run(['A', 'B', 'C', 'D', 'E'], [0.25, 0.25, 0.25, 0.25, 0.25])]);
-    // A y B elegidas, dos verticales: arrangeRows achica la última fila (no llena) y C subiría a ella.
-    const alone = arrangeRows([0.67, 0.67], { gapRatio: 8 / 700 });
-    expect(alone[0] + alone[1]).toBeLessThan(0.75);
+  it('dos verticales elegidas con otra foto después: no se estiran (la última fila con su altura, como la foto-bloque)', () => {
+    const E = mount([run(['A', 'B', 'C'], [0.25, 0.25, 0.25])]);
     const got = arrangeWidths(view(E).state.doc, ['A', 'B'].map((n) => pos(E, n)), aspects({ A: 0.67, B: 0.67 })(E), 8 / 700);
-    const ws = ['A', 'B'].map((n) => got.get(pos(E, n))!);
-    const rows = groupRows([...ws, 0.25, 0.25, 0.25]);
-    expect(rows[0]).toEqual([0, 1]);
-    const sum = ws.reduce((s, w) => s + w, 0);
-    expect(Math.abs(sum - 1)).toBeLessThan(1e-3);
+    const ws = ['A', 'B'].map((n) => got.get(pos(E, n))!.w!);
+    expect(ws).toEqual(arrangeRows([0.67, 0.67], { gapRatio: 8 / 700 }));
+    expect(ws[0] + ws[1]).toBeLessThan(0.75);
+    expect(got.get(pos(E, 'C'))).toEqual({ rowStart: true });
+  });
+
+  it('las filas se cortan donde una foto empieza fila (y en un párrafo sin marcas, como siempre)', () => {
+    const E = mount([p('a', ph('A', 0.25), ph('B', 0.25), { type: 'photo', props: { url: 'https://example.invalid/C.jpg', name: 'C', w: 0.25 } })]);
+    expect(rowsOf(E)).toEqual([['A', 'B', 'C']]);
+    view(E).dispatch(view(E).state.tr.setNodeAttribute(pos(E, 'B'), 'rowStart', true));
+    expect(rowsOf(E)).toEqual([['A'], ['B', 'C']]);
+    // Va y vuelve por el HTML de la app (copiar y pegar).
+    const schemaOf = view(E).state.schema;
+    const node = view(E).state.doc.nodeAt(pos(E, 'B'))!;
+    const dom = DOMSerializer.fromSchema(schemaOf).serializeNode(node) as HTMLElement;
+    expect(dom.getAttribute('data-row-start')).toBe('true');
+    const wrap = document.createElement('p');
+    wrap.append(dom);
+    const back = DOMParser.fromSchema(schemaOf).parseSlice(wrap).content.firstChild!.firstChild ?? DOMParser.fromSchema(schemaOf).parseSlice(wrap).content.firstChild!;
+    expect(back.type.name === 'photo' ? back.attrs.rowStart : back.firstChild?.attrs.rowStart).toBe(true);
   });
 });
 
