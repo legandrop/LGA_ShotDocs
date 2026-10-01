@@ -8,3 +8,6 @@ export const MembersDialog = lazyPart(() => import('./MembersDialog').then((m) =
 export const ImportCodaDialog = lazyPart(() => import('./ImportCodaDialog').then((m) => m.ImportCodaDialog));
 export const DriveDialogHost = lazyPart(() => import('./DriveDialog').then((m) => m.DriveDialogHost));
 export const ProjectSearch = lazyPart(() => import('./ProjectSearch').then((m) => m.ProjectSearch));
+// Borrar un proyecto y la papelera de proyectos (P.14).
+export const DeleteProjectDialog = lazyPart(() => import('./ProjectStatesPart').then((m) => m.DeleteProjectDialog));
+export const DeletedProjectsList = lazyPart(() => import('./ProjectStatesPart').then((m) => m.DeletedProjectsList));

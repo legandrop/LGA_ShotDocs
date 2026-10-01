@@ -33,6 +33,9 @@ export const TrashIcon = icon(
   'M3.75 5.5h12.5M8 5.5V3.75h4V5.5M5.5 5.5l.7 10.5a1 1 0 0 0 1 .95h5.6a1 1 0 0 0 1-.95l.7-10.5',
 );
 export const RestoreIcon = icon('M4 10a6 6 0 1 0 1.8-4.3M4 3.5v3h3');
+// Archivar y desarchivar un proyecto (P.14): una caja con su tapa; desarchivar, con una flecha que sale.
+export const ArchiveIcon = icon('M3.25 4.25h13.5v3H3.25zM4.5 7.25v8a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-8M8.25 10.5h3.5');
+export const UnarchiveIcon = icon('M3.25 4.25h13.5v3H3.25zM4.5 7.25v8a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-8M10 14V9.75M8 11.5l2-2 2 2');
 export const SyncedIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM7.25 10.25l1.9 1.9 3.6-4', {
   strokeWidth: 1.7,
 });

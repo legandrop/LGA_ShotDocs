@@ -54,6 +54,8 @@ type BaseFile = {
   trashed_at?: string | null;
   purged_at?: string | null;
   drive_trashed_at?: string | null;
+  /** Lo usa una página de un proyecto borrado (P.14): `purge_file` da `file_in_deleted_project`. */
+  in_deleted_project?: boolean;
 };
 
 /** Google y Supabase de mentira: sesiones, tokens, carpetas, subida por partes y bajada con Range. */
@@ -112,6 +114,7 @@ function fakeWorld() {
         if (!purgers.has(s.user) && !confirmByEditor) return jsonRes({ code: '42501', message: 'not_allowed' }, 403);
         if (url.pathname.endsWith('/purge_file')) {
           if (!f.trashed_at) return jsonRes({ code: 'P0001', message: 'file_not_trashed' }, 400);
+          if (!f.purged_at && f.in_deleted_project) return jsonRes({ code: 'P0001', message: 'file_in_deleted_project' }, 400);
           f.purged_at ??= '2026-10-30T10:00:00Z';
         } else {
           if (!f.purged_at) return jsonRes({ code: 'P0001', message: 'file_not_purged' }, 400);
@@ -902,6 +905,15 @@ describe('portero: papelera de archivos', () => {
     expect(used.status).toBe(409);
     expect(await used.json()).toEqual({ error: 'A page uses this file again: it is not in the trash.', code: 'in_use' });
     expect(patches()).toBe(before);
+
+    // Lo usa una página de un proyecto borrado (P.14): 409 con su propio código y Drive no se toca.
+    world.base.get(FILE_B)!.trashed_at = '2026-10-01T10:00:00Z';
+    world.base.get(FILE_B)!.in_deleted_project = true;
+    const deleted = await trash(p, 'owner-jwt', FILE_B);
+    expect(deleted.status).toBe(409);
+    expect(await deleted.json()).toMatchObject({ code: 'in_deleted_project' });
+    expect(patches()).toBe(before);
+    expect(world.base.get(FILE_B)!.purged_at).toBeUndefined();
 
     // Una admin (no es la dueña) sí.
     const res = await trash(p, 'admin-jwt', FILE_A);

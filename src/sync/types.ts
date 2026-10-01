@@ -47,6 +47,47 @@ export interface ProjectRow {
    * las copias guardadas por versiones anteriores de la app.
    */
   owner_id?: string | null;
+  /**
+   * Cuándo se archivó (`workspaces.archived_at`, versión 9 de la base, P.14); `null` o ausente: no está
+   * archivado. Archivar es solo orden: sale de la lista de todos los días, con los mismos permisos.
+   */
+  archived_at?: string | null;
+}
+
+/** Una fila de `trashed_projects` (P.14): un proyecto en la papelera de proyectos que la sesión veía. */
+export interface TrashedProjectRow {
+  id: string;
+  name: string;
+  archived_at: string | null;
+  deleted_at: string;
+  /** Quién lo borró: solo a quien lo maneja y al dueño y los admins (si no, `null`). */
+  deleted_by: string | null;
+  deleted_by_email: string | null;
+  /** Días que faltan para los 30 (30 el día que entra, 0 después; se sigue pudiendo restaurar). */
+  days_left: number;
+  /** La sesión lo puede restaurar (`private.can_manage_project`). */
+  can_restore: boolean;
+  /** Solo a quien lo maneja; si no, `null`. */
+  pages: number | null;
+  files: number | null;
+}
+
+/** Lo que muestra la ventana de borrar (`project_delete_info`, P.14). */
+export interface ProjectDeleteInfo {
+  /** Páginas fuera de la papelera de páginas y en ella. */
+  pages: number;
+  trashed_pages: number;
+  /** Archivos subidos fuera de la papelera de Drive, y su peso. */
+  files: number;
+  drive_bytes: number;
+  /** Archivos todavía sin subir que usa alguna página. */
+  pending_files: number;
+  /** Archivos del proyecto que usan páginas vivas de otros proyectos: dejan de verse ahí mientras esté borrado. */
+  used_elsewhere: number;
+  /** Archivos de otros proyectos que solo usa este: quedan en la papelera de su proyecto mientras esté borrado. */
+  foreign_only_here: number;
+  /** Con cuántas personas activas está compartido (sin contar a quien pregunta). */
+  shared_with: number;
 }
 
 export interface NewProject {
@@ -157,6 +198,11 @@ export interface TrashedFileRow {
   in_trashed_page?: boolean;
   /** El título de esa página. */
   trashed_page_title?: string | null;
+  /**
+   * Lo usa una página de un proyecto borrado (versión 9, P.14): no se puede mandar a la papelera de Drive
+   * hasta que ese proyecto se restaure (`purge_file` da `file_in_deleted_project`). Falta en una base anterior.
+   */
+  in_deleted_project?: boolean;
 }
 
 /**

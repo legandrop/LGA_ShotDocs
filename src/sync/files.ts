@@ -113,6 +113,11 @@ export class PageFiles {
     return count;
   }
 
+  /** Las páginas de las imágenes todavía sin subir, una por imagen (P.14). */
+  async pendingPageIds(): Promise<string[]> {
+    return (await this.db.getAllFromIndex('files', 'uploaded', 0)).map((f) => f.pageId);
+  }
+
   async pendingCount(): Promise<number> {
     return this.db.countFromIndex('files', 'uploaded', 0);
   }

@@ -183,7 +183,8 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
 
   // "Empty" deja afuera los que usa una página que está en la papelera de páginas: se mandan de a uno, con su
   // propia confirmación.
-  const emptiable = files.filter((f) => !f.in_trashed_page);
+  // Tampoco los que usa una página de un proyecto borrado (P.14): esos no se mandan ni de a uno.
+  const emptiable = files.filter((f) => !f.in_trashed_page && !f.in_deleted_project);
 
   const emptyAll = async () => {
     const list = emptiable;
@@ -280,13 +281,18 @@ function FilesTrash({ projectId, onNotAllowed }: { projectId: string; onNotAllow
                   <span className="when">
                     {formatSize(f.size)} · {new Date(f.trashed_at).toLocaleDateString(locale(tr.lang))} · {daysLeftText(f.days_left)}
                   </span>
-                  {f.in_trashed_page && (
-                    <span className="muted small">{tr('fileTrash.usedBy', { page: f.trashed_page_title || tr('common.untitled') })}</span>
+                  {f.in_deleted_project ? (
+                    <span className="muted small">{tr('fileTrash.inDeletedProject')}</span>
+                  ) : (
+                    f.in_trashed_page && (
+                      <span className="muted small">{tr('fileTrash.usedBy', { page: f.trashed_page_title || tr('common.untitled') })}</span>
+                    )
                   )}
                   {f.purged_at && !errors[f.id] && <span className="muted small">{tr('fileTrash.notConfirmed')}</span>}
                   {errors[f.id] && <span className="trash-error small">{errors[f.id]}</span>}
                 </div>
-                {canPurge && (
+                {/* Un archivo que usa una página de un proyecto borrado no se manda: vuelve si lo restauran (P.14). */}
+                {canPurge && !f.in_deleted_project && (
                   <button
                     disabled={working || offline}
                     data-tip={offline ? tr('fileTrash.needsInternet') : tr('fileTrash.sendTip')}

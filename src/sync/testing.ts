@@ -10,7 +10,18 @@ import { PageDocs, type PageDocsOptions } from './docs';
 import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
-import type { AccessRow, InvitationGrant, InvitationRow, LinkResult, MediaRemote, MemberRow, Remote, TeamRemote } from './remote';
+import {
+  PROJECT_STATES_SCHEMA_VERSION,
+  type AccessRow,
+  type InvitationGrant,
+  type InvitationRow,
+  type LinkResult,
+  type MediaRemote,
+  type MemberRow,
+  type ProjectStatesRemote,
+  type Remote,
+  type TeamRemote,
+} from './remote';
 import {
   CommentQueue,
   commentsDbName,
@@ -36,7 +47,9 @@ import {
   type PagePatch,
   type PageRow,
   type ProjectRow,
+  type ProjectDeleteInfo,
   type RemoteUpdate,
+  type TrashedProjectRow,
   type WorkspaceSettings,
 } from './types';
 
@@ -145,6 +158,45 @@ export class FakeServer {
   commentsServerError = false;
   private commentClock = 0;
 
+  /**
+   * La papelera de proyectos (P.14): id → cuándo y quién lo borró. Con el proyecto acá, todos los niveles dan 0
+   * y no se ve por ningún camino, como en la base (`user_page_level`, `workspaces_select`).
+   */
+  readonly deletedProjects = new Map<string, { at: string; by: string }>();
+
+  /** Prende archivar y borrar proyectos: la base en la versión 9. */
+  enableProjectStates(): void {
+    this.settings = {
+      ...(this.settings ?? { generation: 1, minAppVersion: null, schemaVersion: 1, mediaUrl: null }),
+      schemaVersion: Math.max(this.settings?.schemaVersion ?? 1, PROJECT_STATES_SCHEMA_VERSION),
+    };
+  }
+
+  projectDeleted(projectId: string | undefined): boolean {
+    return !!projectId && this.deletedProjects.has(projectId);
+  }
+
+  /** La página es de un proyecto borrado. */
+  pageInDeletedProject(pageId: string): boolean {
+    return this.projectDeleted(this.pages.get(pageId)?.workspace_id);
+  }
+
+  /** `private.can_manage_project` (sin mirar el borrado). Sin las reglas del equipo, solo el dueño. */
+  canManageProject(uid: string, projectId: string): boolean {
+    if (!this.team) return uid === this.ownerId;
+    const role = this.role(uid);
+    return (
+      this.projectLevel(uid, projectId, true) >= 4 &&
+      (role === 'owner' || role === 'admin' || this.projects.get(projectId)?.owner_id === uid)
+    );
+  }
+
+  /** Lo veía (sin mirar el borrado). Sin las reglas del equipo, todos. */
+  couldViewProject(uid: string, projectId: string): boolean {
+    if (!this.projects.has(projectId)) return false;
+    return !this.team || this.canViewProject(uid, projectId, true);
+  }
+
   /** Prende los comentarios: la base en la versión 5 (y las reglas del equipo, que la versión 5 incluye). */
   enableComments(): void {
     this.enableTeam();
@@ -186,6 +238,8 @@ export class FakeServer {
 
   /** `private.page_alive`: la página existe y ni ella ni ninguna de arriba está en la papelera de páginas. */
   pageAlive(pageId: string): boolean {
+    // Una página de un proyecto borrado no está viva (P.14): sus archivos entran a la papelera.
+    if (this.pageInDeletedProject(pageId)) return false;
     const seen = new Set<string>();
     for (let cur: string | null = pageId; cur && !seen.has(cur); ) {
       seen.add(cur);
@@ -247,7 +301,15 @@ export class FakeServer {
     if (!f) throw fileNotFound();
     if (!this.canPurgeFiles(uid, f.project_id)) throw new RemoteError('not_allowed', true, '42501');
     if (!f.trashed_at) throw new RemoteError('file_not_trashed', true, 'P0001');
+    if (!f.purged_at && this.fileInDeletedProject(fileId)) throw new RemoteError('file_in_deleted_project', true, 'P0001');
     f.purged_at ??= new Date().toISOString();
+  }
+
+  /** `private.file_in_deleted_project` (P.14): lo usa una página de un proyecto borrado. */
+  fileInDeletedProject(fileId: string): boolean {
+    return [...this.pageFiles, ...this.foreignPageFiles].some(
+      (k) => k.endsWith(`:${fileId}`) && this.pageInDeletedProject(k.slice(0, k.indexOf(':'))),
+    );
   }
 
   /** Prende el portero y la base con archivos (versión 3). */
@@ -325,10 +387,11 @@ export class FakeServer {
   }
 
   /** `private.page_level`. */
-  pageLevel(uid: string, pageId: string): number {
+  pageLevel(uid: string, pageId: string, ignoreDeleted = false): number {
     if (!this.role(uid)) return 0;
     const page = this.pages.get(pageId);
     if (!page) return 0;
+    if (!ignoreDeleted && this.projectDeleted(page.workspace_id)) return 0;
     const chain = new Set<string>();
     for (let cur: string | null = pageId; cur && !chain.has(cur); cur = this.pages.get(cur)?.parent_id ?? null) chain.add(cur);
     let level = this.projects.get(page.workspace_id)?.owner_id === uid ? 4 : 0;
@@ -340,8 +403,9 @@ export class FakeServer {
   }
 
   /** `private.project_level`. */
-  projectLevel(uid: string, projectId: string): number {
+  projectLevel(uid: string, projectId: string, ignoreDeleted = false): number {
     if (!this.role(uid)) return 0;
+    if (!ignoreDeleted && this.projectDeleted(projectId)) return 0;
     let level = this.projects.get(projectId)?.owner_id === uid ? 4 : 0;
     for (const g of this.grants) {
       if (g.user_id === uid && g.project_id === projectId) level = Math.max(level, levelValue(g.level));
@@ -356,9 +420,10 @@ export class FakeServer {
   }
 
   /** `private.can_view_project_row`. */
-  canViewProject(uid: string, projectId: string): boolean {
+  canViewProject(uid: string, projectId: string, ignoreDeleted = false): boolean {
     if (!this.role(uid)) return false;
-    if (this.projects.get(projectId)?.owner_id === uid || this.projectLevel(uid, projectId) >= 1) return true;
+    if (!ignoreDeleted && this.projectDeleted(projectId)) return false;
+    if (this.projects.get(projectId)?.owner_id === uid || this.projectLevel(uid, projectId, ignoreDeleted) >= 1) return true;
     return this.grants.some((g) => g.user_id === uid && g.page_id && this.pages.get(g.page_id)?.workspace_id === projectId);
   }
 
@@ -624,7 +689,7 @@ const ROLE_RANK: Record<Role, number> = { guest: 1, member: 2, admin: 3, owner: 
 const pageNotFound = () => new RemoteError('page_not_found', true, 'P0002');
 const fileNotFound = () => new RemoteError('file_not_found', true, 'P0002');
 
-export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemote {
+export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemote, ProjectStatesRemote {
   /** La sesión: por defecto, el dueño del workspace. */
   readonly userId: string;
   readonly email: string;
@@ -670,16 +735,112 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.server.check();
     const ids = new Set(projectIds);
     return [...this.server.pages.values()]
-      .filter((p) => ids.has(p.workspace_id))
+      .filter((p) => ids.has(p.workspace_id) && !this.server.projectDeleted(p.workspace_id))
       .filter((p) => !this.team || this.server.projectLevel(this.userId, p.workspace_id) >= 1 || this.server.pageLevel(this.userId, p.id) >= 1)
       .map((p) => ({ ...p }));
   }
 
-  async fetchProjects(): Promise<ProjectRow[]> {
+  /** Las versiones de la base que pasó la app a `fetchProjects`, en orden. */
+  readonly fetchProjectsVersions: (number | null | undefined)[] = [];
+
+  async fetchProjects(schemaVersion?: number | null): Promise<ProjectRow[]> {
     this.server.check();
+    this.fetchProjectsVersions.push(schemaVersion);
+    // Como pide las columnas la app: `archived_at` solo con la versión 9 o más.
+    const withArchived = (schemaVersion ?? 0) >= PROJECT_STATES_SCHEMA_VERSION;
     return [...this.server.projects.values()]
+      .filter((p) => !this.server.projectDeleted(p.id))
       .filter((p) => !this.team || this.server.canViewProject(this.userId, p.id))
-      .map((p) => ({ ...p }));
+      .map(({ archived_at, ...p }) => (withArchived ? { ...p, archived_at: archived_at ?? null } : { ...p }));
+  }
+
+  // --- archivar, borrar y restaurar proyectos (P.14) ---------------------------------------------------
+
+  private projectStatesCheck(projectId: string): ProjectRow {
+    this.server.check();
+    if ((this.server.settings?.schemaVersion ?? 0) < PROJECT_STATES_SCHEMA_VERSION) {
+      throw new RemoteError('Could not find the function', true, 'PGRST202');
+    }
+    const project = this.server.projects.get(projectId);
+    if (!project || !this.server.couldViewProject(this.userId, projectId)) {
+      throw new RemoteError('project_not_found', true, 'P0002');
+    }
+    if (!this.server.canManageProject(this.userId, projectId)) throw this.denied('not_allowed');
+    return project;
+  }
+
+  async setProjectArchived(projectId: string, archived: boolean): Promise<void> {
+    const project = this.projectStatesCheck(projectId);
+    if (this.server.projectDeleted(projectId)) throw new RemoteError('project_deleted', true, 'P0001');
+    if (archived && !project.archived_at) project.archived_at = new Date().toISOString();
+    else if (!archived) project.archived_at = null;
+  }
+
+  async deleteProject(projectId: string): Promise<string> {
+    this.projectStatesCheck(projectId);
+    const existing = this.server.deletedProjects.get(projectId);
+    if (existing) return existing.at;
+    const at = new Date().toISOString();
+    this.server.deletedProjects.set(projectId, { at, by: this.userId });
+    this.server.refreshAllFileTrash();
+    return at;
+  }
+
+  async restoreProject(projectId: string): Promise<void> {
+    this.projectStatesCheck(projectId);
+    if (!this.server.deletedProjects.delete(projectId)) return;
+    this.server.refreshAllFileTrash();
+  }
+
+  async trashedProjects(): Promise<TrashedProjectRow[] | null> {
+    this.server.check();
+    if ((this.server.settings?.schemaVersion ?? 0) < PROJECT_STATES_SCHEMA_VERSION) return null;
+    const day = 86_400_000;
+    const role = this.server.role(this.userId);
+    const staff = !this.team || role === 'owner' || role === 'admin';
+    return [...this.server.deletedProjects.entries()]
+      .filter(([id]) => this.server.couldViewProject(this.userId, id))
+      .sort((a, b) => (a[1].at < b[1].at ? 1 : -1))
+      .map(([id, d]) => {
+        const p = this.server.projects.get(id)!;
+        const can = this.server.canManageProject(this.userId, id);
+        const email = this.server.members.get(d.by)?.email ?? d.by + '@test';
+        return {
+          id,
+          name: p.name,
+          archived_at: p.archived_at ?? null,
+          deleted_at: d.at,
+          deleted_by: can || staff ? d.by : null,
+          deleted_by_email: can || staff ? email : null,
+          days_left: Math.max(0, Math.ceil((Date.parse(d.at) + 30 * day - Date.now()) / day)),
+          can_restore: can,
+          pages: can ? [...this.server.pages.values()].filter((pg) => pg.workspace_id === id && !pg.deleted_at).length : null,
+          files: can
+            ? [...this.server.mediaFiles.values()].filter((f) => f.project_id === id && f.drive_id && !f.drive_trashed_at).length
+            : null,
+        };
+      });
+  }
+
+  async projectDeleteInfo(projectId: string): Promise<ProjectDeleteInfo> {
+    this.projectStatesCheck(projectId);
+    const pages = [...this.server.pages.values()].filter((p) => p.workspace_id === projectId);
+    const files = [...this.server.mediaFiles.values()].filter((f) => f.project_id === projectId && f.drive_id && !f.drive_trashed_at);
+    return {
+      pages: pages.filter((p) => !p.deleted_at).length,
+      trashed_pages: pages.filter((p) => !!p.deleted_at).length,
+      files: files.length,
+      drive_bytes: files.reduce((n, f) => n + f.size, 0),
+      pending_files: [...this.server.mediaFiles.values()].filter((f) => f.project_id === projectId && !f.drive_id).length,
+      used_elsewhere: 0,
+      foreign_only_here: 0,
+      shared_with: new Set(
+        this.server.grants
+          .filter((g) => g.project_id === projectId || (g.page_id && this.server.pages.get(g.page_id)?.workspace_id === projectId))
+          .map((g) => g.user_id)
+          .filter((u) => u !== this.userId),
+      ).size,
+    };
   }
 
   async createProject(project: NewProject): Promise<void> {
@@ -707,7 +868,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (this.server.rejectCreates) {
       throw new RemoteError('new row violates row-level security policy for table "pages"', true, '42501');
     }
-    if (!this.server.projects.has(page.workspace_id)) {
+    if (!this.server.projects.has(page.workspace_id) || this.server.projectDeleted(page.workspace_id)) {
       throw new RemoteError('new row violates row-level security policy for table "pages"', true, '42501');
     }
     const parent = page.parent_id ? this.server.pages.get(page.parent_id) : undefined;
@@ -732,7 +893,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
   async updatePage(id: string, patch: PagePatch): Promise<void> {
     this.server.check();
     const page = this.server.pages.get(id);
-    if (!page) throw new RemoteError('page_not_found', true, 'P0002');
+    if (!page || this.server.pageInDeletedProject(id)) throw new RemoteError('page_not_found', true, 'P0002');
     if (this.team) {
       const uid = this.userId;
       // La política de update pide 3: sin eso, la fila no se ve y el update no toca nada.
@@ -762,7 +923,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
   async pushUpdate(pageId: string, clientUpdateId: string, update: Uint8Array): Promise<number> {
     this.server.check();
     const page = this.server.pages.get(pageId);
-    if (!page || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) {
+    if (!page || this.server.pageInDeletedProject(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) {
       throw new RemoteError('page_not_found', true, 'P0002');
     }
     const min = this.server.settings?.minAppVersion;
@@ -787,7 +948,11 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
 
   async pullUpdates(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]> {
     this.server.check();
-    if (!this.server.pages.has(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 1)) {
+    if (
+      !this.server.pages.has(pageId) ||
+      this.server.pageInDeletedProject(pageId) ||
+      (this.team && this.server.pageLevel(this.userId, pageId) < 1)
+    ) {
       throw new RemoteError('page_not_found', true, 'P0002');
     }
     return (this.server.updates.get(pageId) ?? [])
@@ -1106,6 +1271,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
         days_left: Math.max(0, Math.ceil((Date.parse(f.trashed_at!) + 30 * day - Date.now()) / day)),
         purged_at: f.purged_at ?? null,
         ...this.server.trashedPageUse(f.id),
+        in_deleted_project: this.server.fileInDeletedProject(f.id),
       }));
   }
 
@@ -1161,7 +1327,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
 
   /** `private.page_level`; sin las reglas del equipo, quien ve la página la puede todo (como antes). */
   private commentLevel(pageId: string): number {
-    if (!this.server.pages.has(pageId)) return 0;
+    if (!this.server.pages.has(pageId) || this.server.pageInDeletedProject(pageId)) return 0;
     return this.team ? this.server.pageLevel(this.userId, pageId) : 4;
   }
 

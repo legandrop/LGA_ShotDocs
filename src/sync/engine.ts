@@ -68,6 +68,8 @@ export interface SyncStatus {
    * hace falta]`. Lo arregla el dueño aplicando las migraciones; mientras tanto, lo nuevo puede no andar.
    */
   schemaBehind: [number, number] | null;
+  /** La versión de la base del workspace (`workspace_settings.schema_version`); `null` hasta saberla. */
+  schemaVersion: number | null;
   lastError: string | null;
   lastSyncAt: number | null;
 }
@@ -114,6 +116,7 @@ export class SyncEngine {
     notice: null,
     outdated: false,
     schemaBehind: null,
+    schemaVersion: null,
     lastError: null,
     lastSyncAt: null,
   };
@@ -331,7 +334,7 @@ export class SyncEngine {
       await this.pushOps();
       halt();
       // Primero los proyectos y después sus páginas: nunca llega una página de un proyecto desconocido.
-      const projects = await this.remote.fetchProjects();
+      const projects = await this.remote.fetchProjects(this.status.schemaVersion);
       halt();
       const rows = await this.remote.fetchTree(projects.map((p) => p.id));
       halt();
@@ -417,6 +420,8 @@ export class SyncEngine {
     this.options.comments?.configure(settings?.schemaVersion ?? null, settings?.generation ?? null);
     // Sin ajustes, la base es anterior a todo esto: 0.
     this.options.sizes?.configure(settings?.schemaVersion ?? 0);
+    // La usan `fetchProjects` (las columnas que pide) y la interfaz (archivar y borrar, P.14).
+    if ((settings?.schemaVersion ?? 0) !== this.status.schemaVersion) this.patch({ schemaVersion: settings?.schemaVersion ?? 0 });
     if (!settings) {
       this.patch({ outdated: false });
       return { outdated: false, removed: await this.checkAccess(null) };
@@ -462,7 +467,7 @@ export class SyncEngine {
       return { outdated, removed: false };
     }
     {
-      const projects = await this.remote.fetchProjects();
+      const projects = await this.remote.fetchProjects(settings.schemaVersion);
       const rows = await this.remote.fetchTree(projects.map((p) => p.id));
       // Con permisos conocidos, lo que la persona ya no puede crear no vuelve a la cola (se avisa abajo).
       const access = this.options.access;

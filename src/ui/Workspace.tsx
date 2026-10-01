@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthUser } from '../auth';
 import { t, useT } from '../i18n';
 import { useCodaOwner } from '../import/codaOwner';
@@ -15,6 +15,7 @@ import {
   useSyncStatus,
   useTree,
 } from '../services';
+import { SupabaseRemote } from '../sync/remote';
 import { useWorkspace } from '../workspace';
 import { FIND_SHORTCUT_LABEL, isFindSelectionTarget, openFindBar } from './findUi';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
@@ -26,7 +27,7 @@ import { notify, useNotice } from './notice';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
-import { ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
+import { DeletedProjectsList, ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
 import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
@@ -115,7 +116,14 @@ export function Workspace({ user }: { user: AuthUser }) {
 
 /** Si la base dijo que sacaron a la persona del workspace, en vez de la app va la pantalla que lo explica. */
 function Gate() {
-  return useRemoved() ? <RemovedScreen /> : <Shell />;
+  const removed = useRemoved();
+  const tree = useTree();
+  const { engine, user } = useServices();
+  if (removed) return <RemovedScreen />;
+  // El servidor ya no manda ningún proyecto (P.14: se los borraron todos, desde otro dispositivo u otra persona):
+  // la misma pantalla que al entrar sin proyectos, con los borrados que se pueden restaurar.
+  if (tree.hasNoProjects()) return <NoProjects user={user} onRetry={() => void engine.syncNow()} />;
+  return <Shell />;
 }
 
 /**
@@ -434,7 +442,21 @@ function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) 
   const [projectId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Los proyectos borrados que la persona puede restaurar (P.14): si hay alguno, la pantalla los ofrece.
+  const remote = useMemo(() => new SupabaseRemote(client), [client]);
+  const [restorable, setRestorable] = useState(false);
   const tr = useT();
+
+  useEffect(() => {
+    let live = true;
+    remote.trashedProjects().then(
+      (rows) => live && setRestorable(!!rows?.some((r) => r.can_restore)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [remote]);
 
   useEffect(() => {
     let live = true;
@@ -479,6 +501,14 @@ function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) 
           </button>
         )}
         {error && <p className="error">{error}</p>}
+        {restorable && (
+          <>
+            <h2 className="mono-label">{tr('project.deletedList')}</h2>
+            <Part>
+              <DeletedProjectsList remote={remote} onRestored={onRetry} />
+            </Part>
+          </>
+        )}
         <button className="link" onClick={() => void client.auth.signOut({ scope: 'local' })}>
           {tr('common.signOut')}
         </button>

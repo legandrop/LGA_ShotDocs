@@ -9,6 +9,8 @@ export function compareSiblings(a: PageRow, b: PageRow): number {
 }
 
 const PROJECTS_KEY = 'projects';
+/** El primer proyecto del dispositivo (`services.ts`): se reemplaza si el servidor deja de mandarlo (P.14). */
+const PRIMARY_KEY = 'workspaceId';
 /** La generación de la base que este dispositivo vio por última vez (ver `recoverAfterRestore`). */
 const GENERATION_KEY = 'generation';
 
@@ -83,6 +85,9 @@ export class PageTree {
   private childrenIndex = new Map<string | null, PageRow[]>();
   private listeners = new Set<() => void>();
   private revision = 0;
+  /** El dispositivo ya bajó alguna vez la lista de proyectos (guardada en `meta`). */
+  private projectsKnown = false;
+  private primary: string;
 
   /** Se llama cuando entra un cambio local a la cola. */
   onQueued?: () => void;
@@ -90,8 +95,19 @@ export class PageTree {
   constructor(
     private readonly db: LocalDb,
     /** El primer proyecto del usuario: ahí va una página nueva sin padre si no se indica otro. */
-    readonly workspaceId: string,
-  ) {}
+    workspaceId: string,
+  ) {
+    this.primary = workspaceId;
+  }
+
+  /**
+   * El primer proyecto del dispositivo: ahí va una página nueva sin padre si no se indica otro, y es al que
+   * cae la app sin otro elegido. Si la lista del servidor deja de traerlo (lo borraron o dejaron de
+   * compartirlo, P.14), pasa a ser el primero activo de la lista (`adoptPrimary`).
+   */
+  get workspaceId(): string {
+    return this.primary;
+  }
 
   async load(): Promise<void> {
     const [rows, ops, failed, projects] = await Promise.all([
@@ -102,9 +118,11 @@ export class PageTree {
     ]);
     this.snapshot = new Map(rows.map((r) => [r.id, r]));
     this.projectSnapshot = new Map((projects ?? []).map((p) => [p.id, p]));
+    this.projectsKnown = projects !== undefined;
     this.ops = ops;
     this.failed = failed;
     this.recompute();
+    await this.adoptPrimary();
   }
 
   // --- lectura -------------------------------------------------------------------------------------
@@ -129,6 +147,26 @@ export class PageTree {
 
   project(id: string): ProjectRow | undefined {
     return this.projectView.get(id);
+  }
+
+  /** Los proyectos de todos los días: sin los archivados (P.14). */
+  activeProjects(): ProjectRow[] {
+    return this.projects().filter((p) => !p.archived_at);
+  }
+
+  /** Los archivados, el último archivado primero. */
+  archivedProjects(): ProjectRow[] {
+    return this.projects()
+      .filter((p) => !!p.archived_at)
+      .sort((a, b) => (a.archived_at! < b.archived_at! ? 1 : a.archived_at! > b.archived_at! ? -1 : 0));
+  }
+
+  /**
+   * El servidor ya mandó la lista y no hay ningún proyecto (ni uno creado en el dispositivo sin subir): la
+   * app muestra la pantalla "sin proyectos" (P.14: a alguien le pueden borrar todos).
+   */
+  hasNoProjects(): boolean {
+    return this.projectsKnown && this.projectView.size === 0;
   }
 
   /** Las páginas de primer nivel de un proyecto, ordenadas. Sin las que están en la papelera. */
@@ -540,7 +578,49 @@ export class PageTree {
     if (projects) await tx.objectStore('meta').put(projects, PROJECTS_KEY);
     await tx.done;
     this.snapshot = new Map(rows.map((r) => [r.id, r]));
-    if (projects) this.projectSnapshot = new Map(projects.map((p) => [p.id, p]));
+    if (projects) {
+      this.projectSnapshot = new Map(projects.map((p) => [p.id, p]));
+      this.projectsKnown = true;
+    }
+    this.recompute();
+    if (projects) await this.adoptPrimary();
+  }
+
+  /**
+   * Lo que acaba de confirmar la base al archivar o desarchivar (P.14), sin esperar a la próxima
+   * sincronización: la lista cambia enseguida. La sincronización lo confirma igual.
+   */
+  async markArchived(projectId: string, archivedAt: string | null): Promise<void> {
+    const current = this.projectSnapshot.get(projectId);
+    if (!current) return;
+    this.projectSnapshot.set(projectId, { ...current, archived_at: archivedAt });
+    await this.db.put('meta', [...this.projectSnapshot.values()], PROJECTS_KEY);
+    this.recompute();
+  }
+
+  /**
+   * El proyecto se mandó a la papelera de proyectos (P.14): sale de la lista enseguida. Sus páginas siguen en
+   * la copia del dispositivo hasta la próxima sincronización (que ya no las trae) y su contenido, en la base
+   * local: nada se borra del dispositivo.
+   */
+  async forgetProject(projectId: string): Promise<void> {
+    if (!this.projectSnapshot.delete(projectId)) return;
+    await this.db.put('meta', [...this.projectSnapshot.values()], PROJECTS_KEY);
+    this.recompute();
+    await this.adoptPrimary();
+  }
+
+  /**
+   * Si la lista conocida no trae el primer proyecto (y no es uno creado en el dispositivo sin subir), lo
+   * reemplaza por el primero activo (o, si todos están archivados, el primero) y lo guarda. Sin ninguno,
+   * queda como estaba: la app muestra "sin proyectos" (`hasNoProjects`).
+   */
+  private async adoptPrimary(): Promise<void> {
+    if (!this.projectsKnown || this.projectView.has(this.primary)) return;
+    const next = this.activeProjects()[0] ?? this.projects()[0];
+    if (!next) return;
+    this.primary = next.id;
+    await this.db.put('meta', next.id, PRIMARY_KEY);
     this.recompute();
   }
 
@@ -562,9 +642,9 @@ export class PageTree {
       ...this.failed.filter(visible).map((f) => ({ seq: f.opSeq ?? 0, op: f.op })),
     ].sort((a, b) => a.seq - b.seq);
     for (const change of changes) applyOp(view, projects, change.op, now);
-    // El primer proyecto siempre está, aunque el dispositivo todavía no haya bajado la lista (por ejemplo,
-    // con datos de una versión anterior y sin red).
-    if (!projects.has(this.workspaceId)) {
+    // El primer proyecto está aunque el dispositivo todavía no haya bajado nunca la lista (la primera vez sin
+    // red). Con la lista conocida, no: si el servidor no lo trae (lo borraron, P.14), se reemplaza.
+    if (!this.projectsKnown && !projects.has(this.workspaceId)) {
       projects.set(this.workspaceId, { id: this.workspaceId, name: t('project.defaultName'), created_at: '' });
     }
     this.projectView = projects;
