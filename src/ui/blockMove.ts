@@ -31,10 +31,16 @@ export type Recreate = 'smaller' | 'moved' | 'skipped';
 
 /** La transacción del editor: borra los bloques y los inserta en su lugar nuevo, los mismos nodos. */
 export function moveTransaction(state: EditorState, move: BlockMove): Transaction {
+  return buildMove(state, move).tr;
+}
+
+/** Lo mismo, con dónde quedó lo movido (el principio, en el documento de después). */
+export function buildMove(state: EditorState, move: BlockMove): { tr: Transaction; at: number } {
   const content = state.doc.slice(move.from, move.to).content;
   const tr = state.tr.delete(move.from, move.to);
-  tr.insert(tr.mapping.map(move.insertAt), content);
-  return tr;
+  const at = tr.mapping.map(move.insertAt);
+  tr.insert(at, content);
+  return { tr, at };
 }
 
 /** Cuántos bloques hay en un tramo (con los anidados). */
@@ -64,6 +70,10 @@ export function recreatedRange(doc: PMNode, move: BlockMove, recreate: Recreate 
   // Empate: lo que se salta.
   return countBlocks(doc, moved.from, moved.to) < countBlocks(doc, skipped.from, skipped.to) ? moved : skipped;
 }
+
+/** Mientras se escribe un mover en Yjs (para marcar su paso de deshacer). */
+let moving = false;
+export const movingBlocks = (): boolean => moving;
 
 interface Binding {
   mux: (fn: () => void) => void;
@@ -102,14 +112,19 @@ export function dispatchMove(view: EditorView, tr: Transaction, removed: { from:
     view.dispatch(tr);
     const after = view.state.doc;
     if (after === before) return;
-    binding.doc.transact(() => {
-      try {
-        updateYFragment(binding.doc, binding.type, middle as never, binding as never);
-      } finally {
-        // Si la primera pasada falla en el medio, esta deja Yjs igual al editor (como un despacho común).
-        binding._prosemirrorChanged(after);
-      }
-    }, ySyncPluginKey);
+    moving = true;
+    try {
+      binding.doc.transact(() => {
+        try {
+          updateYFragment(binding.doc, binding.type, middle as never, binding as never);
+        } finally {
+          // Si la primera pasada falla en el medio, esta deja Yjs igual al editor (como un despacho común).
+          binding._prosemirrorChanged(after);
+        }
+      }, ySyncPluginKey);
+    } finally {
+      moving = false;
+    }
   });
   stopCapturing(view.state);
 }

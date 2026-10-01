@@ -4,7 +4,7 @@ import { useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { blockIdOf } from './carreteModel';
 import { hiddenInDom } from './collapseDom';
-import { COLLAPSE_SHORTCUT_LABEL, collapseState, onCollapseChange, toggleCollapsed } from './collapseEditor';
+import { COLLAPSE_SHORTCUT_LABEL, collapseState, headingCollapse, onCollapseChange, toggleCollapsed, toggleShared } from './collapseEditor';
 import { triangleBox } from './gutterLayout';
 
 // El triángulo de cada título (P.11, Docs/Doc_Colapsar.md, sección 3). Una capa encima del editor, como el
@@ -13,6 +13,9 @@ import { triangleBox } from './gutterLayout';
 // los puntos, así se llega del título al triángulo sin que desaparezca); colapsado, se ve siempre. En pantallas
 // táctiles se ve siempre, tenue. Gris; con el mouse encima, del color del título. La zona del clic queda entera en
 // el margen izquierdo, sin tapar el texto (corrección 14); las medidas, en gutterLayout.ts.
+//
+// Para todos (entrega 2, Doc_Colapsar.md §3 y §4): quien puede editar colapsa o abre para todos con Shift+clic, y
+// el tooltip dice si lo que se ve es de todos o solo tuyo (se ven igual). En pantallas táctiles, solo para vos.
 
 type AnyEditor = BlockNoteEditor<any, any, any>;
 
@@ -25,6 +28,8 @@ interface Toggle {
   box: number;
   color: string;
   collapsed: boolean;
+  /** Colapsado para todos (el mapa de la página). */
+  forAll: boolean;
   title: string;
 }
 
@@ -41,7 +46,34 @@ function coarsePointer(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 }
 
-export function CollapseToggles({ editor, host, editable }: { editor: AnyEditor; host: RefObject<HTMLDivElement | null>; editable: boolean }) {
+type Translate = (key: Parameters<ReturnType<typeof useT>>[0]) => string;
+
+/** El tooltip del triángulo: la acción (o el estado) en negrita y qué hace cada clic (Doc_Colapsar.md §3). */
+export function toggleTip(tr: Translate, t: { collapsed: boolean; forAll: boolean }, canShare: boolean): string {
+  let head: string;
+  let line: string;
+  if (canShare) {
+    if (!t.collapsed && !t.forAll) [head, line] = [tr('collapse.collapseJustYou'), tr('collapse.shiftForAll')];
+    else if (t.collapsed && !t.forAll) [head, line] = [tr('collapse.collapsedJustYou'), tr('collapse.clickOpenShiftCollapseAll')];
+    else if (t.collapsed) [head, line] = [tr('collapse.collapsedForAll'), tr('collapse.clickOpenYouShiftOpenAll')];
+    else [head, line] = [tr('collapse.openJustYou'), tr('collapse.clickCollapseShiftOpenAll')];
+  } else if (!t.collapsed) [head, line] = [tr('collapse.collapse'), t.forAll ? tr('collapse.openJustYou') : tr('collapse.onlyYou')];
+  else [head, line] = [tr('collapse.expand'), t.forAll ? tr('collapse.collapsedForAll') : tr('collapse.collapsedForYou')];
+  return `**${head}**\n${line}\n${COLLAPSE_SHORTCUT_LABEL}`;
+}
+
+export function CollapseToggles({
+  editor,
+  host,
+  editable,
+  canShare = false,
+}: {
+  editor: AnyEditor;
+  host: RefObject<HTMLDivElement | null>;
+  editable: boolean;
+  /** Puede colapsar o abrir para todos (Shift+clic): permiso de editar, conocido. */
+  canShare?: boolean;
+}) {
   const tr = useT();
   const [toggles, setToggles] = useState<Toggle[]>([]);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -121,6 +153,7 @@ export function CollapseToggles({ editor, host, editable }: { editor: AnyEditor;
         box: g.box,
         color: getComputedStyle(text).color,
         collapsed: state.analysis.collapsed.has(id),
+        forAll: headingCollapse(editor.prosemirrorState, id).forAll,
         title: (text.textContent ?? '').trim(),
       });
       nextBands.push({ id, top: r.top - base.top, bottom: r.bottom - base.top, left: editorLeft - base.left, right: r.right - base.left });
@@ -167,9 +200,13 @@ export function CollapseToggles({ editor, host, editable }: { editor: AnyEditor;
     text.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: r.left + 1, clientY: r.top + Math.min(r.height, 24) / 2 }));
   };
 
-  const toggle = (id: string) => {
+  // Shift+clic, para todos (si se puede editar y no es una pantalla táctil); si no, para vos.
+  const shareable = canShare && !touch;
+  const toggle = (id: string, shift: boolean) => {
     const view = editor.prosemirrorView;
-    if (view) toggleCollapsed(view, id);
+    if (!view) return;
+    if (shift && shareable && toggleShared(view, id)) return;
+    toggleCollapsed(view, id);
   };
 
   return (
@@ -185,14 +222,14 @@ export function CollapseToggles({ editor, host, editable }: { editor: AnyEditor;
             style={{ top: t.top, left: t.left, width: t.box, height: t.box, ['--sd-heading-color' as string]: t.color }}
             aria-expanded={!t.collapsed}
             aria-label={tr('collapse.label', { action, title: t.title })}
-            data-tip={`**${action}**\n${t.collapsed ? tr('collapse.collapsedForYou') : tr('collapse.onlyYou')}\n${COLLAPSE_SHORTCUT_LABEL}`}
+            data-tip={toggleTip(tr, t, shareable)}
             // Con el editor editable, Tab anida bloques: el triángulo no entra en el orden de Tab.
             tabIndex={editable ? -1 : 0}
             // No saca el foco del editor ni extiende la selección (Shift).
             onPointerEnter={() => handleFollows(t.id)}
             onPointerDown={(e) => e.preventDefault()}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => toggle(t.id)}
+            onClick={(e) => toggle(t.id, e.shiftKey)}
           >
             <svg viewBox="0 0 10 10" width={t.size} height={t.size} aria-hidden="true">
               <path d="M2 1 L8.5 5 L2 9 Z" fill="currentColor" />

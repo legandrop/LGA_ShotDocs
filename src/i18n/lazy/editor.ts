@@ -179,6 +179,29 @@ export const editor = {
   'collapse.onlyYou': { en: "Just for you: others still see it as it was.", es: "Solo para vos: los demás lo siguen viendo como estaba." },
   'collapse.collapsedForYou': { en: "Collapsed just for you.", es: "Colapsado solo para vos." },
   'collapse.label': { en: "{action} section “{title}”", es: "{action} la sección «{title}»" },
+  // Para todos (entrega 2): el tooltip del triángulo dice si lo que se ve es de todos o solo tuyo.
+  'collapse.collapseJustYou': { en: "Collapse just for you", es: "Colapsar solo para vos" },
+  'collapse.collapsedJustYou': { en: "Collapsed just for you", es: "Colapsado solo para vos" },
+  'collapse.collapsedForAll': { en: "Collapsed for everyone", es: "Colapsado para todos" },
+  'collapse.openJustYou': { en: "Expanded just for you", es: "Abierto solo para vos" },
+  'collapse.shiftForAll': { en: "Shift+click: for everyone", es: "Shift+clic: para todos" },
+  'collapse.clickOpenShiftCollapseAll': {
+    en: "Click: expand · Shift+click: collapse for everyone",
+    es: "Clic: abrir · Shift+clic: colapsar para todos",
+  },
+  'collapse.clickOpenYouShiftOpenAll': {
+    en: "Click: expand just for you · Shift+click: expand for everyone",
+    es: "Clic: abrir solo para vos · Shift+clic: abrir para todos",
+  },
+  'collapse.clickCollapseShiftOpenAll': {
+    en: "Click: collapse · Shift+click: expand for everyone",
+    es: "Clic: colapsar · Shift+clic: abrir para todos",
+  },
+  'collapse.justYouNote': { en: "Just for you", es: "Solo para vos" },
+  'collapse.keptOpen': {
+    en: "Someone collapsed this section for everyone. It stays expanded for you while you work in it.",
+    es: "Alguien colapsó esta sección para todos. Queda abierta para vos mientras trabajás en ella.",
+  },
   // Los tres puntos de cada bloque (BlockSideMenu.tsx).
   'block.handleLabel': { en: "Select block (drag to move)", es: "Elegir el bloque (arrastrar para moverlo)" },
   'block.handleClick': { en: "Click: select the block", es: "Clic: elegir el bloque" },

@@ -46,7 +46,7 @@ import { DrivePasteMenu } from './DrivePasteMenu';
 import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
 import { SheetBreaks } from './SheetBreaks';
 import type { HeadingRecord } from './collapse';
-import { collapseExtension, collapseSupported, headingBackspaceExtension, headingCounts, revealBlock, setAllCollapsed } from './collapseEditor';
+import { collapseExtension, collapseSupported, headingBackspaceExtension, headingCounts, revealBlock, setAllCollapsed, SHARED_COLLAPSE_MAP } from './collapseEditor';
 import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
@@ -219,6 +219,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
         collapse={opening.collapse}
         pageId={pageId}
         editable={opening.complete && canEdit}
+        permsKnown={perms.known}
         canComment={canComment}
         onEditor={setFindEditor}
         onBroken={remount}
@@ -252,6 +253,7 @@ function BlockEditor({
   collapse,
   pageId,
   editable,
+  permsKnown,
   canComment,
   onEditor,
   onBroken,
@@ -261,6 +263,8 @@ function BlockEditor({
   collapse: Map<string, HeadingRecord>;
   pageId: string;
   editable: boolean;
+  /** Los permisos se conocen (colapsar para todos solo con ellos; Doc_Colapsar.md, corrección 9). */
+  permsKnown: boolean;
   canComment: boolean;
   onEditor?: (editor: FindEditor | null) => void;
   /** El editor no se pudo volver a dibujar después de un error: hay que montarlo de nuevo. */
@@ -272,6 +276,9 @@ function BlockEditor({
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
   /** Si la página se puede editar ahora (lo leen las funciones que el editor guarda al crearse). */
   const editableRef = useRef(editable);
+  /** Si se puede colapsar o abrir para todos (Shift+clic): con permiso de editar, conocido. */
+  const canShare = editable && permsKnown;
+  const canShareRef = useRef(canShare);
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
   /** El adjunto con su hoja abierta (Docs/Doc_Adjuntos.md). */
   const [sheet, setSheet] = useState<string | null>(null);
@@ -395,6 +402,9 @@ function BlockEditor({
           ? [
               collapseExtension({
                 initial: collapse,
+                // Lo colapsado para todos, en el mismo documento que el contenido (entrega 2).
+                shared: doc.getMap(SHARED_COLLAPSE_MAP),
+                canShare: () => canShareRef.current,
                 save: (records: ReadonlyMap<string, HeadingRecord>) => {
                   collapse.clear();
                   for (const [id, r] of records) collapse.set(id, r);
@@ -427,6 +437,7 @@ function BlockEditor({
 
   editorRef.current = editor as unknown as NonNullable<typeof editorRef.current>;
   editableRef.current = editable;
+  canShareRef.current = canShare;
 
   // Un cambio de otro dispositivo que el editor no pudo dibujar (docs.ts, `subscribeRenderFailed`): se vuelve
   // a dibujar todo desde el documento en el momento, antes de la próxima tecla. Si ni eso anda, el editor
@@ -786,7 +797,7 @@ function BlockEditor({
       </BlockNoteView>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
       {/* El triángulo de cada título (P.11): una capa encima, como el margen. */}
-      {canCollapse && <CollapseToggles editor={editor} host={host} editable={editable} />}
+      {canCollapse && <CollapseToggles editor={editor} host={host} editable={editable} canShare={canShare} />}
       {/* Dónde empieza cada hoja (solo una capa encima; roadmap B.7). */}
       <SheetBreaks pageId={pageId} host={host} />
       {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}
