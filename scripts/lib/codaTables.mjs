@@ -227,7 +227,8 @@ export function convertTables({ manifest, index, rows, html, parse, config = {},
         const style = td.getAttribute('style') ?? ''
         const bg = style.match(/background-color:\s*([^;]+)/i)?.[1]
         const fg = style.match(/(?:^|;)\s*color:\s*([^;]+)/i)?.[1]
-        if (bg || fg) paints.set(key, [bg && `background-color: ${bg.trim()}`, fg && `color: ${fg.trim()}`].filter(Boolean).join('; '))
+        // El color de una celda es el de la tabla en su propia página; el de otra vista vale solo si no hay otro.
+        if ((bg || fg) && (table.id === base.id || !paints.has(key))) paints.set(key, [bg && `background-color: ${bg.trim()}`, fg && `color: ${fg.trim()}`].filter(Boolean).join('; '))
       })
     })
     if (loose) notes.push(`${table.name}: ${loose} de ${out.length} filas no coincidían en todo con los datos de la API: se ubicaron por parecido y su contenido sale de la API`)
