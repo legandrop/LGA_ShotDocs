@@ -20,7 +20,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { homedir } from 'node:os'
 import { join, extname } from 'node:path'
-import { API, checkTablesConfig, isCodaApi, isCodaHosted, mediaBaseName, parseExportArgs } from './lib/codaExport.mjs'
+import { API, checkEmbeds, checkTablesConfig, codaPageSlug, isCodaApi, isCodaHosted, mediaBaseName, parseEmbedUrl, parseExportArgs } from './lib/codaExport.mjs'
 import { convertTables } from './lib/codaTables.mjs'
 
 async function token() {
@@ -362,6 +362,35 @@ async function main() {
   const manifest = { exportedAt: new Date().toISOString(), doc: { id: doc.id, name: doc.name, browserLink: doc.browserLink }, pages: [] }
   const problems = []
 
+  // Páginas embebidas: qué muestra cada una (`embeds.json`, capturado con el servidor MCP de Coda; la API no lo
+  // dice). Sin el archivo, quedan como siempre: vacías y anotadas.
+  const embedsPath = join(out, 'embeds.json')
+  let embedsRaw = null
+  if (existsSync(embedsPath)) {
+    try {
+      embedsRaw = await readJson(embedsPath)
+    } catch (e) {
+      throw new Error(`embeds.json no es JSON válido: ${e.message}`)
+    }
+  }
+  const embeds = embedsRaw ? checkEmbeds(embedsRaw, doc.id) : new Map()
+  const otherDocs = new Map() // id de doc → la promesa de sus páginas (se piden una vez, también si fallan)
+
+  /** El HTML de lo que muestra una página embebida, y de dónde sale (`embedOf`). */
+  async function embedHtml(p, url) {
+    const target = parseEmbedUrl(url)
+    if (!target) throw new Error(`dirección no válida en embeds.json: ${url}`)
+    if (target.kind === 'link') {
+      const safe = target.url.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+      // `url`, tal cual está en embeds.json: es con lo que se compara al volver a correr.
+      return { html: `<div><a href="${safe}">${safe}</a></div>`, embedOf: { url } }
+    }
+    if (!otherDocs.has(target.docId)) otherDocs.set(target.docId, listAll(`/docs/${target.docId}/pages`))
+    const found = (await otherDocs.get(target.docId)).find((x) => codaPageSlug(x.browserLink ?? '') === target.slug)
+    if (!found) throw new Error(`no se encontró la página _su${target.slug} en el doc ${target.docId}`)
+    return { html: await exportHtml(target.docId, found.id), embedOf: { docId: target.docId, pageId: found.id, url } }
+  }
+
   for (const [i, p] of pages.entries()) {
     const siblings = p.parent ? byId.get(p.parent.id)?.children || [] : pages.filter((x) => !x.parent)
     const order = siblings.findIndex((c) => c.id === p.id)
@@ -373,9 +402,33 @@ async function main() {
     }
     manifest.pages.push(entry)
     const htmlPath = join(pagesDir, htmlFile)
+    const embedPath = htmlPath.replace(/\.html$/, '.embed.json')
+    const embedUrl = p.contentType === 'embed' ? embeds.get(p.id) : undefined
+    // Lo que se bajó de una página embebida vale solo si sigue siendo lo que dice embeds.json (se corrigió una
+    // dirección, o se quitó: entonces lo viejo se borra, para que la importación no lo tome).
+    let savedEmbed = null
+    if (p.contentType === 'embed' && existsSync(embedPath)) savedEmbed = await readJson(embedPath).catch(() => null)
+    const staleEmbed = p.contentType === 'embed' && existsSync(htmlPath) && (!embedUrl || savedEmbed?.url !== embedUrl)
+    if (staleEmbed) {
+      for (const f of [htmlPath, htmlPath.replace(/\.html$/, '.local.html'), embedPath]) await rm(f, { force: true })
+    }
     let html
     if (existsSync(htmlPath) && !refresh) {
       html = await readFile(htmlPath, 'utf8')
+      if (savedEmbed) entry.embedOf = savedEmbed
+    } else if (embedUrl) {
+      process.stdout.write(`  [${i + 1}/${pages.length}] ${p.name} (embebida) ... `)
+      try {
+        const got = await embedHtml(p, embedUrl)
+        html = got.html
+        entry.embedOf = got.embedOf
+        await writeAtomic(embedPath, JSON.stringify(got.embedOf))
+      } catch (e) {
+        problems.push(`${p.name}: página embebida, no se trajo: ${e.message}`)
+        console.log('ERROR')
+        continue
+      }
+      console.log('ok')
     } else if (p.contentType !== 'canvas') {
       problems.push(`${p.name}: página de tipo "${p.contentType}", no se exporta`)
       console.log(`  [${i + 1}/${pages.length}] ${p.name} (tipo ${p.contentType}, salteada)`)
