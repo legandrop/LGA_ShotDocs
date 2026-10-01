@@ -156,9 +156,10 @@ describe('el diálogo de la ayuda', () => {
     await until(() => dialog(), 'el diálogo');
     const d = dialog()!;
     expect(d.getAttribute('aria-modal')).toBe('true');
-    // Sin la recorrida (no se pasan sus botones), "Primeros pasos" no aparece: quedan 14 secciones.
-    expect(d.querySelectorAll('[data-help-section]').length).toBe(14);
-    expect(d.querySelector('[data-help-id="tour"]')).toBeNull();
+    expect(d.querySelectorAll('[data-help-section]').length).toBe(15);
+    // "Primeros pasos": ver la recorrida y practicar, con sus botones.
+    expect(d.querySelector('[data-help-id="tour"] .help-action')?.textContent).toBe('Take the tour');
+    expect(d.querySelector('[data-help-id="practice"] .help-action')?.textContent).toBe('Practice');
     expect(d.querySelector('[data-shortcut="find"] kbd')?.textContent).toBe('Ctrl+F');
     // Lo que hoy hace lo mismo que otro atajo no se muestra (Shift+Ctrl+Alt+Enter).
     expect(d.querySelector('[data-shortcut="collapseEveryone"]')).toBeNull();

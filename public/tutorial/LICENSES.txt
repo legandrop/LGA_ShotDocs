@@ -1,0 +1,11 @@
+Practice page images (LGA Shot Docs)
+
+terraza-1.webp  1200 x 800
+terraza-2.webp  800 x 1200
+terraza-3.webp  1200 x 675
+
+Drawn for LGA Shot Docs (night rooftop scenes made with a canvas drawing script).
+No third-party photos or artwork: nothing to attribute.
+
+These files are referenced by absolute URL from pages (a sample image copied from
+the practice page into a real page keeps pointing here): do not rename or remove them.

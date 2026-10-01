@@ -5167,3 +5167,210 @@ mark.search-hit {
     width: 46%;
   }
 }
+
+/* --- Página de práctica (P.13) ------------------------------------------------------------------- */
+
+.banner.practice-banner {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+  justify-content: space-between;
+}
+
+.practice-banner-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.menu .menu-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 8px 6px;
+}
+
+.menu .practice-sizes {
+  margin: 0 8px 4px;
+}
+
+.menu .practice-sizes button {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 12.5px;
+}
+
+/* --- La recorrida (P.13): foco de luz, globito y tarjetas ---------------------------------------- */
+/* Capas: arriba de BlockNote (20, 50, 80, 90) y de los menús y diálogos de la app (50, 60, 70); abajo del
+   carrete (95) y de los tooltips (100), que igual se apagan mientras dura. */
+
+:root {
+  --tour-scrim: rgba(20, 18, 14, 0.55);
+}
+
+:root[data-theme='dark'] {
+  --tour-scrim: rgba(0, 0, 0, 0.62);
+}
+
+:root[data-tour-running] .tooltip {
+  display: none;
+}
+
+.tour-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 86;
+}
+
+.tour-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 87;
+  background: var(--tour-scrim);
+  pointer-events: none;
+}
+
+.tour-spot {
+  position: fixed;
+  z-index: 87;
+  border-radius: 10px;
+  box-shadow: 0 0 0 100vmax var(--tour-scrim);
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  pointer-events: none;
+  transition: left 250ms ease, top 250ms ease, width 250ms ease, height 250ms ease;
+  animation: tour-pulse 1.8s ease-in-out infinite;
+}
+
+/* En un paso interactivo no se oscurece nada: solo el borde. */
+.tour-spot.interactive {
+  box-shadow: none;
+}
+
+@keyframes tour-pulse {
+  0%,
+  100% {
+    outline-color: var(--accent);
+    outline-offset: 0;
+  }
+  50% {
+    outline-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    outline-offset: 3px;
+  }
+}
+
+.tour-bubble {
+  position: fixed;
+  z-index: 92;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  padding: 14px 16px 12px;
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+  background: var(--menu-bg);
+  box-shadow: var(--shadow);
+  transition: left 250ms ease, top 250ms ease;
+}
+
+.tour-bubble h3 {
+  margin: 4px 0 4px;
+  font-size: 15px;
+}
+
+.tour-bubble p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.tour-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tour-head .tour-skip {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tour-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.tour-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* En el teléfono, el globito es una hoja abajo, de todo el ancho, arriba del teclado. */
+.tour-bubble.sheet {
+  width: auto;
+  max-width: none;
+  border-radius: 14px 14px 0 0;
+  border-bottom: none;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  transition: none;
+}
+
+.tour-bubble.sheet.top {
+  border-radius: 0 0 14px 14px;
+  border-bottom: 1px solid var(--menu-border);
+  border-top: none;
+  padding-top: calc(12px + env(safe-area-inset-top));
+  padding-bottom: 12px;
+}
+
+.tour-card {
+  position: fixed;
+  z-index: 72;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: calc(100vw - 40px);
+  padding: 12px 14px 12px 16px;
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+  background: var(--menu-bg);
+  box-shadow: var(--shadow);
+}
+
+.tour-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.tour-card-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .tour-card {
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot,
+  .tour-bubble {
+    transition: none;
+    animation: none;
+  }
+}

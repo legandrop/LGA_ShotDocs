@@ -20,7 +20,23 @@ function set(next: HelpUiState): void {
   for (const fn of listeners) fn();
 }
 
+/** En el dispositivo: la ayuda ya se abrió alguna vez (el punto del "?" se va; Docs/Doc_Tutorial.md, sección 4). */
+const SEEN_KEY = 'shotdocs-help-seen';
+
+export function helpSeen(): boolean {
+  try {
+    return localStorage.getItem(SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function openHelp(section: string | null = null, from: Element | null = null): void {
+  try {
+    localStorage.setItem(SEEN_KEY, '1');
+  } catch {
+    // Sin almacenamiento, el punto vuelve a aparecer al recargar: nada más.
+  }
   const active = from ?? (typeof document !== 'undefined' ? document.activeElement : null);
   opener = active instanceof HTMLElement && active !== document.body ? active : null;
   set({ open: true, section });

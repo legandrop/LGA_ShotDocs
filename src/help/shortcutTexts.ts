@@ -71,6 +71,9 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   'menusClose': 'shortcut.menusClose',
   'listPick': 'shortcut.listPick',
   'listClose': 'shortcut.listClose',
+  tourNext: 'shortcut.tourNext',
+  tourBack: 'shortcut.tourBack',
+  tourExit: 'shortcut.tourExit',
 };
 
 export const PLACE_TEXTS: Record<ShortcutPlace, Key> = {
@@ -83,4 +86,5 @@ export const PLACE_TEXTS: Record<ShortcutPlace, Key> = {
   comments: 'help.place.comments',
   tree: 'help.place.tree',
   menus: 'help.place.menus',
+  tour: 'help.place.tour',
 };

@@ -89,6 +89,7 @@ export function ProjectSwitcher() {
       <button
         ref={button}
         className="project-button"
+        data-tour="project-switcher"
         aria-haspopup="dialog"
         aria-expanded={!!position}
         data-tip={tr('project.switchTip', { shortcut: shortcutLabel('search') })}

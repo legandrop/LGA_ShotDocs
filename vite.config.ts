@@ -139,6 +139,13 @@ export default defineConfig(({ mode }) => {
               handler: 'CacheFirst',
               options: { cacheName: 'heic-decoder', expiration: { maxEntries: 6 } },
             },
+            // Las fotos de la página de práctica (Docs/Doc_Tutorial.md, corrección 18): no van en la instalación; se
+            // guardan la primera vez que se ven, así la práctica anda sin red después.
+            {
+              urlPattern: /\/tutorial\/[^/]+\.webp$/,
+              handler: 'CacheFirst',
+              options: { cacheName: 'tutorial-images', expiration: { maxEntries: 10 } },
+            },
           ],
           navigateFallback: '/index.html',
           // Los avisos y los textos de las licencias (`public/licenses/`) son archivos, no pantallas de la app.

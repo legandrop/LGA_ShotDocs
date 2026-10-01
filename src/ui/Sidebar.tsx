@@ -5,6 +5,7 @@ import { navigate, pagePath, useRoute } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import type { PageRow } from '../sync/types';
 import { openHelp } from '../help/helpUi';
+import { useHelpDot } from '../tutorial/tourState';
 import { AccountIcon, CollapseIcon, ExpandIcon, HelpIcon, MoreIcon, PlusIcon, SearchIcon, TrashIcon } from './icons';
 import { AccountMenu, menuBelow, PageMenu, type MenuPosition } from './menus';
 import { DriveDialogHost, MembersDialog, ShareDialog } from './lazyDialogs';
@@ -45,6 +46,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
   const projectId = useCurrentProject();
   const search = useSearchSession();
   const tr = useT();
+  // Un punto en el "?" mientras haya una recorrida para ver y la ayuda nunca se haya abierto acá.
+  const helpDot = useHelpDot();
 
   const [expanded, setExpanded] = useState<Set<string>>(readExpanded);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -373,7 +376,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       <ProjectSwitcher />
       <SyncBadge />
 
-      <div className="section-title">
+      <div className="section-title" data-tour="pages">
         <span className="mono-label">{tr('sidebar.pages')}</span>
         <span className="section-actions">
           {/* Buscar en el proyecto (Docs/Doc_Buscar.md, sección 7): a la izquierda del "+", también para quien
@@ -413,7 +416,12 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             {trashCount > 0 ? ` (${trashCount})` : ''}
           </button>
           {/* La ayuda (Docs/Doc_Tutorial.md, sección 5): sin tooltip, el ícono ya lo dice (D-15). */}
-          <button className="help-button" data-tour="help" aria-label={tr('help.open')} onClick={(e) => openHelp(null, e.currentTarget)}>
+          <button
+            className={`help-button${helpDot ? ' has-dot' : ''}`}
+            data-tour="help"
+            aria-label={tr('help.open')}
+            onClick={(e) => openHelp(null, e.currentTarget)}
+          >
             <HelpIcon size={18} />
           </button>
         </div>

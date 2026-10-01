@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { placeNear } from './floating';
 
 // Tooltips propios, con el mismo estilo que las apps LGA en Qt: fondo oscuro, borde fino, una flecha que
 // apunta al control y se da vuelta si no entra, y la misma espera de 600 ms. Cualquier elemento con
@@ -155,14 +156,10 @@ function TooltipBubble({ target, text, plain }: { target: HTMLElement; text: str
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const t = target.getBoundingClientRect();
     const b = el.getBoundingClientRect();
-    const below = t.bottom + GAP + b.height <= window.innerHeight - EDGE || t.top - GAP - b.height < EDGE;
-    const center = t.left + t.width / 2;
-    const left = Math.min(Math.max(EDGE, center - b.width / 2), window.innerWidth - EDGE - b.width);
-    const top = below ? t.bottom + GAP : t.top - GAP - b.height;
-    const arrow = Math.min(Math.max(14, center - left), b.width - 14);
-    setPlace({ left, top, arrow, below });
+    // Abajo si entra; si no, arriba (la misma cuenta que los globitos de la recorrida, floating.ts).
+    const place = placeNear(target.getBoundingClientRect(), b, { width: window.innerWidth, height: window.innerHeight }, { gap: GAP, edge: EDGE });
+    setPlace({ left: place.left, top: place.top, arrow: place.arrow, below: place.side === 'below' });
   }, [target, text]);
 
   useEffect(() => {

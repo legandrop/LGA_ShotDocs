@@ -50,6 +50,11 @@ export interface Services {
   sizes: ProjectSizes;
   /** Para la sincronización y cierra las bases del dispositivo (antes de borrarlas). */
   shutdown: () => Promise<void>;
+  /**
+   * La primera carga de este workspace en este dispositivo (la base local todavía no tenía proyecto): la
+   * recorrida arranca sola solo ahí (Docs/Doc_Tutorial.md, corrección 5).
+   */
+  firstLoad?: boolean;
 }
 
 export const ServicesContext = createContext<Services | null>(null);
@@ -170,6 +175,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       if (cancelled) return db.close();
       const remote = new SupabaseRemote(workspace.client, __APP_VERSION__);
       let workspaceId = (await db.get('meta', 'workspaceId')) as string | undefined;
+      const firstLoad = !workspaceId;
       // Las invitaciones se aplican al entrar, antes de buscar el primer proyecto (lo compartido tiene que
       // estar para encontrarlo). Con proyectos ya guardados no se espera, salvo que se venga de un link.
       let accepted: Promise<number> | null = null;
@@ -313,6 +319,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           commentsDb,
           sizes,
           shutdown,
+          firstLoad,
         },
       });
     })().catch((err) => {

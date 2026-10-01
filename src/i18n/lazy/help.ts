@@ -50,6 +50,7 @@ export const help = {
   'help.place.comments': { en: "Comments", es: "Comentarios" },
   'help.place.tree': { en: "Page tree and sidebar", es: "Árbol de páginas y barra lateral" },
   'help.place.menus': { en: "Menus, lists and dialogs", es: "Menús, listas y diálogos" },
+  'help.place.tour': { en: "During the tour", es: "En la recorrida" },
 
   // --- Primeros pasos ---
   'help.tour.title': { en: "The tour", es: "La recorrida" },
@@ -362,6 +363,9 @@ export const help = {
     es: "En la lista de proyectos, el panel de buscar y el menú de pegar Drive: moverse y elegir",
   },
   'shortcut.listClose': { en: "Close that list", es: "Cerrar esa lista" },
+  'shortcut.tourNext': { en: "Next step", es: "Paso siguiente" },
+  'shortcut.tourBack': { en: "Previous step", es: "Paso anterior" },
+  'shortcut.tourExit': { en: "Leave the tour (it can be replayed from the help)", es: "Salir de la recorrida (se vuelve a ver desde la ayuda)" },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

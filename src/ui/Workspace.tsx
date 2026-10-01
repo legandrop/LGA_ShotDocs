@@ -30,7 +30,11 @@ import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
 import { DeletedProjectsList, HelpDialog, ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
 import { closeHelp, useHelpUi } from '../help/helpUi';
-import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
+import { openPractice } from '../tutorial/practiceUi';
+import { TourHost } from '../tutorial/TourHost';
+import { startTour } from '../tutorial/tourState';
+import { setNavOpen, useNavOpen } from './navStore';
+import { lazyPart, Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
 import { Sidebar } from './Sidebar';
@@ -40,6 +44,9 @@ import { TrashView } from './TrashView';
 import { downloadUnsynced } from './unsyncedDownload';
 import { usePendingCount } from './usePendingCount';
 import { errorMessage } from '../sync/types';
+
+// La página de práctica (P.13, Docs/Doc_Tutorial.md): se baja aparte, con sus plantillas y sus textos.
+const PracticeView = lazyPart(() => import('../tutorial/PracticeView').then((m) => m.PracticeView));
 
 // Versiones anteriores recordaban una sola última página; se sigue leyendo como respaldo.
 const LEGACY_LAST_PAGE_KEY = 'shotdocs-last-page';
@@ -161,7 +168,7 @@ export function Shell() {
   const tree = useTree();
   const { comments, docs, media, user, workspace } = useServices();
   const keys = workspace.config.storage;
-  const [navOpen, setNavOpen] = useState(false);
+  const navOpen = useNavOpen();
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [formatting, setFormatting] = useState<string | null>(null);
@@ -281,6 +288,13 @@ export function Shell() {
       <SidebarResizer />
       <div className="scrim" onClick={() => setNavOpen(false)} />
       <main className="main">
+        {route.name === 'practice' ? (
+          // La práctica arma su propia barra de arriba con sus servicios en memoria (tutorial/PracticeView.tsx).
+          <Part fallback={<header className="topbar" />}>
+            <PracticeView />
+          </Part>
+        ) : (
+          <>
         <header className="topbar">
           <button className="icon-button only-mobile" aria-label={tr('shell.openPages')} onClick={() => setNavOpen(true)}>
             <MenuIcon />
@@ -309,6 +323,7 @@ export function Shell() {
           {pageId && current && (
             <button
               className="icon-button"
+              data-tour="find"
               aria-label={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
               data-tip={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
               onClick={() => openFindBar()}
@@ -320,6 +335,7 @@ export function Shell() {
           {pageId && (
             <button
               className="icon-button"
+              data-tour="page-menu"
               aria-label={tr('pageMenu.label')}
               aria-expanded={!!pageMenu}
               onClick={(e) => {
@@ -337,6 +353,8 @@ export function Shell() {
           <TrashView />
         ) : (
           <Home />
+        )}
+          </>
         )}
       </main>
       {pageMenu && pageId && (
@@ -372,6 +390,7 @@ export function Shell() {
       )}
       {codaOwner && <ImportCodaHost />}
       <HelpHost />
+      <TourHost />
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
@@ -390,7 +409,18 @@ function HelpHost() {
   if (!help.open) return null;
   return (
     <Part onClose={closeHelp}>
-      <HelpDialog section={help.section} onClose={closeHelp} />
+      <HelpDialog
+        section={help.section}
+        onClose={closeHelp}
+        onTour={() => {
+          closeHelp();
+          startTour();
+        }}
+        onPractice={() => {
+          closeHelp();
+          openPractice();
+        }}
+      />
     </Part>
   );
 }

@@ -11,9 +11,9 @@
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** Dónde vale un atajo (las secciones de la tabla de la ayuda). */
-export type ShortcutPlace = 'global' | 'editor' | 'markdown' | 'photos' | 'carrete' | 'find' | 'comments' | 'tree' | 'menus';
+export type ShortcutPlace = 'global' | 'editor' | 'markdown' | 'photos' | 'carrete' | 'find' | 'comments' | 'tree' | 'menus' | 'tour';
 
-export const SHORTCUT_PLACES: ShortcutPlace[] = ['global', 'editor', 'markdown', 'photos', 'carrete', 'find', 'comments', 'tree', 'menus'];
+export const SHORTCUT_PLACES: ShortcutPlace[] = ['global', 'editor', 'markdown', 'photos', 'carrete', 'find', 'comments', 'tree', 'menus', 'tour'];
 
 export interface Shortcut {
   id: string;
@@ -55,7 +55,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'search', keys: ['Mod-k'], place: 'global', owner: 'app', source: 'window', files: ['Workspace.tsx', 'projectSearchUi.ts'] },
   { id: 'find', keys: ['Mod-f'], place: 'global', owner: 'app', source: 'window', files: ['PageEditor.tsx', 'findUi.ts'] },
   { id: 'print', keys: ['Mod-p'], place: 'global', owner: 'app', source: 'window', files: ['printPage.ts'] },
-  { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom', files: ['PageView.tsx'] },
+  { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom', files: ['PageView.tsx', 'PracticeView.tsx'] },
 
   // --- Editor: lo de la app ---
   { id: 'comment', keys: ['Mod-Alt-m'], place: 'editor', owner: 'app', source: 'window', files: ['EditorComments.tsx', 'commentsUi.ts'] },
@@ -171,6 +171,11 @@ export const SHORTCUTS: Shortcut[] = [
   },
   { id: 'listPick', keys: ['ArrowUp', 'ArrowDown', 'Enter'], place: 'menus', context: 'list', owner: 'app', source: 'dom', files: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'] },
   { id: 'listClose', keys: ['Escape'], place: 'menus', context: 'list', owner: 'app', source: 'dom', files: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'] },
+
+  // --- La recorrida (con el foco en el globito) ---
+  { id: 'tourNext', keys: ['ArrowRight', 'Enter'], place: 'tour', owner: 'app', source: 'dom', files: ['TourLayer.tsx'] },
+  { id: 'tourBack', keys: ['ArrowLeft'], place: 'tour', owner: 'app', source: 'dom', files: ['TourLayer.tsx'] },
+  { id: 'tourExit', keys: ['Escape'], place: 'tour', owner: 'app', source: 'dom', files: ['TourLayer.tsx'] },
 ];
 
 const byId = new Map(SHORTCUTS.map((s) => [s.id, s]));
@@ -242,4 +247,30 @@ export function shortcutLabel(id: string, mac = IS_MAC, lang: 'en' | 'es' = 'en'
     return keyLabel(first, mac, lang) + rest.join('');
   }
   return s.keys.map((k) => keyLabel(k, mac, lang)).join(' / ');
+}
+
+/** El atajo de cada ítem del menú "/" de BlockNote (por su `key`), del registro. */
+const SLASH_SHORTCUTS: Record<string, [string, number]> = {
+  heading: ['heading', 0],
+  heading_2: ['heading', 1],
+  heading_3: ['heading', 2],
+  heading_4: ['heading', 3],
+  heading_5: ['heading', 4],
+  heading_6: ['heading', 5],
+  quote: ['quote', 0],
+  toggle_list: ['toggle', 0],
+  numbered_list: ['numbered', 0],
+  bullet_list: ['bullet', 0],
+  check_list: ['checklist', 0],
+  paragraph: ['paragraph', 0],
+};
+
+/**
+ * El rótulo del atajo de un ítem del menú "/" (por su `key` de BlockNote), con el mismo formato que el resto de la
+ * app; `undefined` si no tiene. BlockNote 0.55 rotula "Bloque de código" con ⌘⌥C, que no existe (corrección 9):
+ * ese y cualquier otro que no esté en el registro se quedan sin rótulo.
+ */
+export function slashBadge(key: string | undefined, mac = IS_MAC): string | undefined {
+  const found = key ? SLASH_SHORTCUTS[key] : undefined;
+  return found ? keyLabel(shortcut(found[0]).keys[found[1]], mac) : undefined;
 }

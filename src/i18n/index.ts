@@ -9,6 +9,7 @@ import type { importCoda } from './lazy/importCoda';
 import type { projectStates } from './lazy/projectStates';
 import type { search } from './lazy/search';
 import type { teamDialogs } from './lazy/teamDialogs';
+import type { tutorial } from './lazy/tutorial';
 import { strings } from './strings';
 import type { Dict, Entry } from './types';
 
@@ -36,7 +37,8 @@ type LazyStrings = typeof carrete &
   typeof importCoda &
   typeof projectStates &
   typeof search &
-  typeof teamDialogs;
+  typeof teamDialogs &
+  typeof tutorial;
 export type Key = keyof typeof strings | keyof LazyStrings;
 
 /** Todas las claves cargadas hasta ahora: las de la primera carga y las de las partes ya bajadas. */

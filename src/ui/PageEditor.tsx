@@ -58,6 +58,7 @@ import { notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens, shiftSelects } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
 import { selectedPhotoKey } from './inlinePhotoEditor';
+import { shortcutLabel, slashBadge } from './shortcuts';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession } from './projectSearchUi';
 
@@ -246,7 +247,11 @@ function acceptedText(): string {
   return t('editor.attachNeedsDrive');
 }
 
-function BlockEditor({
+/**
+ * El editor de una página. Lo usan la página (arriba) y la página de práctica (tutorial/PracticeView.tsx), que lo
+ * monta con sus servicios en memoria.
+ */
+export function BlockEditor({
   doc,
   collapse,
   pageId,
@@ -254,6 +259,7 @@ function BlockEditor({
   canComment,
   onEditor,
   onBroken,
+  filesNotice,
 }: {
   doc: Y.Doc;
   /** Lo colapsado para vos (P.11): se actualiza en el lugar, así un editor que se vuelve a crear lo conserva. */
@@ -264,6 +270,11 @@ function BlockEditor({
   onEditor?: (editor: FindEditor | null) => void;
   /** El editor no se pudo volver a dibujar después de un error: hay que montarlo de nuevo. */
   onBroken?: () => void;
+  /**
+   * La página de práctica: soltar o pegar cualquier archivo avisa esto y no hace nada (Docs/Doc_Tutorial.md,
+   * corrección 13).
+   */
+  filesNotice?: string;
 }) {
   const { docs, files, media, user, db } = useServices();
   const scheme = useScheme();
@@ -288,6 +299,7 @@ function BlockEditor({
   // Con portero, cualquier archivo va al Drive del dueño (`sdmedia://`, primero en el dispositivo): fotos,
   // videos y adjuntos (Docs/Doc_Adjuntos.md). Sin portero, las imágenes a Supabase como siempre (`sdfile://`).
   const store = (file: Blob & { name?: string }): Promise<string> => {
+    if (filesNotice) return Promise.reject(new FileRejected(filesNotice));
     if (media.enabled) return media.add(pageId, file);
     if (!isAllowedImage(file.type)) return Promise.reject(new FileRejected(acceptedText()));
     return files.add(pageId, file);
@@ -295,6 +307,7 @@ function BlockEditor({
   // Una imagen embebida en HTML pegado (`data:`): solo fotos y videos, nunca un adjunto (un SVG pegado no se
   // vuelve una tarjeta).
   const storeEmbedded = (blob: Blob): Promise<string> => {
+    if (filesNotice) return Promise.reject(new FileRejected(filesNotice));
     if (media.enabled && isMediaFile(blob)) return media.add(pageId, blob);
     if (!isAllowedImage(blob.type)) return Promise.reject(new FileRejected(t(media.enabled ? 'editor.embeddedOnlyMedia' : 'editor.onlyImages')));
     return files.add(pageId, blob);
@@ -553,6 +566,7 @@ function BlockEditor({
       subtext: tr('editor.scriptHint'),
       aliases: ['guion', 'guión', 'screenplay', 'script', 'escena', 'scene'],
       group: basic,
+      badge: shortcutLabel('script'),
       icon: <ScriptIcon size={18} />,
       onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: { [SCRIPT_PROP]: true } }),
     };
@@ -560,6 +574,9 @@ function BlockEditor({
     // Sin los "encabezados plegables" de BlockNote: todos los títulos se colapsan (P.11, Doc_Colapsar.md).
     const items = getDefaultReactSlashMenuItems(editor)
       .filter(notToggleHeading)
+      // Los rótulos de los atajos, del registro (shortcuts.ts): el mismo formato que el resto de la app, y sin el
+      // ⌘⌥C de "Bloque de código", que en esta versión de BlockNote no existe.
+      .map((item) => ({ ...item, badge: slashBadge((item as { key?: string }).key) }))
       .map((item) =>
       (item as { key?: string }).key === 'paragraph' || item.title === editor.dictionary.slash_menu.paragraph.title
         ? {
@@ -593,6 +610,14 @@ function BlockEditor({
   // Sin portero, pegar o soltar un archivo que no es una imagen haría que el editor intente crear un bloque
   // que no existe en el esquema: se corta antes, con un aviso.
   const rejectOtherFiles = (e: ClipboardEvent | DragEvent, data: DataTransfer | null) => {
+    if (filesNotice) {
+      // La práctica no guarda archivos: ni fotos.
+      if (!data?.files.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      notify(filesNotice);
+      return;
+    }
     if (media.enabled) return;
     const list = Array.from(data?.files ?? []);
     if (list.length === 0 || list.every((f) => isAllowedImage(f.type))) return;

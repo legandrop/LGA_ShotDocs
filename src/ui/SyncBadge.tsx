@@ -68,7 +68,7 @@ export function SyncIcon({ onClick }: { onClick: () => void }) {
   const { tone, text } = useSyncTone();
   const Icon = TONE_ICONS[tone];
   return (
-    <button className={`icon-button sync-icon ${tone}`} aria-label={text} data-tip={text} onClick={onClick}>
+    <button className={`icon-button sync-icon ${tone}`} data-tour="sync" aria-label={text} data-tip={text} onClick={onClick}>
       <Icon size={20} />
     </button>
   );
@@ -111,7 +111,7 @@ export function SyncBadge() {
   }, [details, media, status.failedMedia]);
 
   return (
-    <div className="sync">
+    <div className="sync" data-tour="sync">
       <button
         className={`sync-pill ${tone}`}
         data-tip={localize(status.localError ?? status.lastError ?? mediaError ?? commentError ?? '') || undefined}
