@@ -612,6 +612,10 @@ Pruebas en el repo: `inlinePhotoCreate.test.ts`, `inlinePhotoSize.test.ts`, `sta
 - "/Image" ya no ofrece pegar una dirección (*Embed*) para una foto de otro sitio: abre el selector de archivos.
 - Las fotos en las celdas de una tabla siguen afuera (van en un renglón después de la tabla; entrega 5).
 - Llenar la última fila al acomodar puede dejarla muy alta (dos verticales a todo el ancho).
+- Sin tiradores para cambiar el ancho de una foto en línea con el mouse: el tamaño se da con la barra (los cuatro
+  tamaños y *Arrange in rows*).
+- Los videos entran en línea como las fotos (con su cuadro y la marca de reproducir, 1b), probado con un archivo
+  de video en las pruebas del repo, no con un video de verdad en Chromium.
 - La marca de espera solo se ve en el renglón; si las fotos van a un renglón nuevo, no hay marca mientras se guardan.
 - Lo que sigue de editar a la vez junto a fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está en
   `Doc_Colaboracion.md`, igual que en la entrega 1.
