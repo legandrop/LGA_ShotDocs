@@ -48,8 +48,6 @@ import { SheetBreaks } from './SheetBreaks';
 import type { HeadingRecord } from './collapse';
 import { collapseExtension, collapseSupported, headingBackspaceExtension, headingCounts, revealBlock, setAllCollapsed } from './collapseEditor';
 import { setCollapseControl } from './collapseControl';
-import { setConvertControl } from './convertControl';
-import { convertPhotos, planConversion, type BlockLike as ConvertBlock } from './convertPhotos';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
 import { BlockSideMenuController } from './BlockSideMenu';
@@ -270,7 +268,7 @@ function BlockEditor({
   /** El editor no se pudo volver a dibujar después de un error: hay que montarlo de nuevo. */
   onBroken?: () => void;
 }) {
-  const { docs, files, media, user, db, comments } = useServices();
+  const { docs, files, media, user, db } = useServices();
   const scheme = useScheme();
   const tr = useT();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
@@ -444,34 +442,6 @@ function BlockEditor({
       },
     });
   }, [editor, pageId, canCollapse]);
-
-  // "Convert photos to inline" del menú de la página (Doc_Fotos_En_Linea.md, entrega 3): las fotos-bloque de la
-  // página pasan a ser fotos en línea, de una vez y con un solo deshacer.
-  useEffect(() => {
-    if (!editable) return;
-    const attachment = (url: string, name: string) => {
-      const id = mediaIdOf(url);
-      return !!id && isAttachment(media, id, name);
-    };
-    const blocks = () => editor.document as unknown as ConvertBlock[];
-    return setConvertControl({
-      pageId,
-      count: () => planConversion(blocks(), { isAttachment: attachment, hasComments: () => false }).photos,
-      convert: () => {
-        // Los comentarios se anclan al id del bloque: sin saber cuáles tienen (todavía no se bajaron), no se
-        // convierte (una foto con comentarios en el medio de una fila perdería su bloque).
-        if (!comments.isFresh(pageId)) return notify(t('convertPhotos.waitComments'));
-        const commented = new Set(comments.threads(pageId).flatMap((th) => (th.blockId ? [th.blockId] : [])));
-        const plan = convertPhotos(editor as never, { isAttachment: attachment, hasComments: (id) => commented.has(id) });
-        const kept = plan.kept.caption + plan.kept.attachment + plan.kept.uploading;
-        notify(
-          kept > 0
-            ? t('convertPhotos.doneKept', { count: plan.photos, kept })
-            : t('convertPhotos.done', { count: plan.photos }),
-        );
-      },
-    });
-  }, [editor, pageId, editable, media, comments]);
 
   editorRef.current = editor as unknown as NonNullable<typeof editorRef.current>;
   editableRef.current = editable;

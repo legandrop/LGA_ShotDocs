@@ -72,8 +72,6 @@ export const PrintIcon = icon(
 );
 // Colapsar / abrir todos los títulos (P.11): renglones con un triángulo a la izquierda.
 export const CollapseAllIcon = icon('M4 5.5l2.5 1.75L4 9M9 7.25h7M4 12.25l2.5 1.75L4 15.75M9 14h7');
-// Convertir fotos en fotos en línea (entrega 3): un bloque de foto que pasa a un renglón.
-export const ConvertPhotosIcon = icon('M3.5 3.5h7v5h-7zM13 6h3.5M14.75 4.25L16.5 6l-1.75 1.75M3.5 12h4v4h-4zM9.5 12h4v4h-4zM15.5 14h1');
 export const ExpandAllIcon = icon('M3.75 5.75h5L6.25 8.5zM11 7h5M3.75 12.25h5l-2.5 2.75zM11 13.5h5');
 export const CloseIcon = icon('M5 5l10 10M15 5L5 15', { strokeWidth: 1.7 });
 export const ChevronLeftIcon = icon('M12 4.5L6.5 10l5.5 5.5', { strokeWidth: 1.8 });

@@ -16,35 +16,6 @@ export const menus = {
   },
   'pageMenu.collapseAll': { en: "Collapse all", es: "Colapsar todo" },
   'pageMenu.expandAll': { en: "Expand all", es: "Abrir todo" },
-  'pageMenu.convertPhotos': { en: "Convert photos to inline", es: "Convertir en fotos en línea" },
-  'pageMenu.convertPhotosTip': {
-    en: {
-      one: "Turns the photo of this page into an inline photo, with the same width.\nPhotos with a caption and attachments stay as they are. Ctrl/⌘+Z undoes it.",
-      other: "Turns the {count} photos of this page into inline photos: each row stays a row, with the same widths.\nPhotos with a caption and attachments stay as they are. Ctrl/⌘+Z undoes it.",
-    },
-    es: {
-      one: "Pasa la foto de esta página a foto en línea, con el mismo ancho.\nLas fotos con leyenda y los adjuntos quedan como están. Ctrl/⌘+Z lo deshace.",
-      other: "Pasa las {count} fotos de esta página a fotos en línea: cada fila sigue siendo una fila, con los mismos anchos.\nLas fotos con leyenda y los adjuntos quedan como están. Ctrl/⌘+Z lo deshace.",
-    },
-  },
-  'convertPhotos.done': {
-    en: { one: "Converted 1 photo to inline. Ctrl/⌘+Z undoes it.", other: "Converted {count} photos to inline. Ctrl/⌘+Z undoes it." },
-    es: { one: "Se convirtió 1 foto en foto en línea. Ctrl/⌘+Z lo deshace.", other: "Se convirtieron {count} fotos en fotos en línea. Ctrl/⌘+Z lo deshace." },
-  },
-  'convertPhotos.doneKept': {
-    en: {
-      one: "Converted 1 photo to inline; {kept} (with a caption, or attachments) stayed as they were. Ctrl/⌘+Z undoes it.",
-      other: "Converted {count} photos to inline; {kept} (with a caption, or attachments) stayed as they were. Ctrl/⌘+Z undoes it.",
-    },
-    es: {
-      one: "Se convirtió 1 foto en foto en línea; {kept} (con leyenda, o adjuntos) quedaron como estaban. Ctrl/⌘+Z lo deshace.",
-      other: "Se convirtieron {count} fotos en fotos en línea; {kept} (con leyenda, o adjuntos) quedaron como estaban. Ctrl/⌘+Z lo deshace.",
-    },
-  },
-  'convertPhotos.waitComments': {
-    en: "This page's comments haven't loaded yet. Try again in a moment (you need to be online).",
-    es: "Los comentarios de esta página todavía no se bajaron. Probá de nuevo en un momento (hace falta conexión).",
-  },
   'pageMenu.printTip': {
     en: "Opens the print dialog with this page size.\nChoose **Save as PDF** to export.",
     es: "Abre la impresión con este tamaño de hoja.\nElegí **Guardar como PDF** para exportar.",

@@ -89,10 +89,7 @@ In production (v0.049). What works today:
 - Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the
-  rows and breaks sheets where the page shows them. Photos added before v0.077 keep working this way, until
-  *Convert photos to inline* in the page menu (v0.078) turns them into photos in the line: each row stays a row
-  with the same widths, comments stay, photos with a caption and attachments stay as they are, and one Ctrl/⌘+Z
-  undoes it.
+  rows and breaks sheets where the page shows them. Photos added before v0.077 keep working this way.
 - iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
   shows them; the converter is downloaded only the first time it is needed.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;

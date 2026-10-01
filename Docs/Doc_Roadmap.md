@@ -88,11 +88,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   ahora tiene su prueba en el repo), y los tres pendientes de la auditoría de la 1b (emojis y dictado, arrastrar
   soltando sobre una foto, la barra de texto). Ver `Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 2)".
   **Después de publicar la v0.077:** subir `min_app_version` a 0.077 (no hace falta antes, por la marca).
-  **Entrega 3 hecha (v0.078):** *Convert photos to inline* en el menú de la página pasa las fotos-bloque de la página
-  a fotos en línea, cada fila a un renglón con los mismos anchos, con un solo deshacer; quedan como bloque las de
-  leyenda y los adjuntos, y los comentarios siguen anclados. Medido en una página tipo ERSO (61 fotos, 25 filas
-  iguales, ±0,55 px). **Para Lega:** ¿convertir sola al abrir? Propuesta y riesgos en `Doc_Fotos_En_Linea.md`,
-  "Cómo quedó (entrega 3)".
+  **Entrega 3 hecha (v0.078), escondida (D-26):** la conversión de las fotos-bloque de una página a fotos en línea
+  (cada fila a un renglón con los mismos anchos, un solo deshacer, los comentarios siguen anclados; medido en una
+  página tipo ERSO: 61 fotos, 25 filas iguales, ±0,55 px) queda en el código y sus pruebas, sin entrada en la
+  interfaz: no va a haber fotos viejas para convertir. `Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 3)".
   **Entrega 4 hecha (v0.079):** importar de Coda deja cada foto en su renglón, como foto en línea, con la parte del
   renglón que ocupaba en Coda (624 px = todo el renglón); las fotos de una ficha, juntas. Medido con una copia
   parcial de ERSO contra el HTML de Coda: las mismas filas, ±1 % de ancho. Sin el recorte de Coda (101 fotos de

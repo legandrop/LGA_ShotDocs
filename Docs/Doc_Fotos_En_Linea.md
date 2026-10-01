@@ -1,7 +1,7 @@
 # Fotos en línea: la foto como un carácter del renglón (P.15)
 
 Estado: **entregas 0 (prototipo), 1 (v0.076: el nodo, los huecos estables, lo que se ve y se toca), 2 (v0.077:
-crear, dar tamaño, acomodar las elegidas, hojas y PDF), 3 (v0.078: convertir las fotos-bloque de una página) y 4
+crear, dar tamaño, acomodar las elegidas, hojas y PDF), 3 (v0.078: convertir las fotos-bloque de una página, escondida por D-26) y 4
 (v0.079: importar de Coda con los renglones) hechas; queda aparte la 5 (fotos en las celdas de una tabla)**
 (2026-10-01; ver "Cómo quedó" de cada una; las "Correcciones de la auditoría", más abajo,
 mandan sobre el diseño de arriba, y la entrega 2 trae propuestas nuevas, marcadas). Pedido de Lega del
@@ -145,8 +145,8 @@ paso 2 deja de ser previo: se publica la v0.077 (paso 1 y 3 juntos) y **después
   estando elegida. En ese momento el bloque pasa a ser un párrafo con esa foto en línea (misma `url`, mismo
   nombre, `w` = su `rowWidth` o el equivalente de su `previewWidth`), en una sola transacción y un solo
   deshacer. Una foto-bloque **con leyenda** queda como bloque (convertirla perdería la leyenda): se avisa.
-- **Convertir la página entera**, a pedido: una entrada en el menú de la página (*Convert photos to inline*, hecha
-  en la entrega 3), para no depender del caso por caso. Con un solo deshacer.
+- **Convertir la página entera**, a pedido: hecho en la entrega 3 (`convertPhotos.ts`), con un solo deshacer, pero
+  **sin entrada en la interfaz** (D-26: no va a haber fotos viejas para convertir).
 - Lo nuevo (pegar, soltar, importar) entra siempre en línea, desde el paso 3 de la publicación.
 
 ## Entregas
@@ -718,21 +718,16 @@ cambios y avisan que hay que actualizar.
 
 ## Cómo quedó (entrega 3: convertir las fotos-bloque que ya existen)
 
-### Cómo se dispara
+### Función escondida, sin entrada en la interfaz (D-26)
 
-- **Hecho: una acción por página**, *Convert photos to inline* en el menú de la página (los tres puntos del árbol o
-  del título). Aparece solo si la página está abierta, se puede editar y tiene fotos-bloque para convertir; su
-  tooltip dice cuántas y qué pasa. Convierte toda la página de una vez, con **un solo Ctrl/⌘+Z**, y avisa cuántas
-  convirtió y cuántas quedaron como bloque. Sin los comentarios de la página bajados (sin conexión) no convierte y
-  lo dice: sin saber qué foto tiene comentarios podría dejarlos sin bloque.
-- **Propuesta para Lega (no hecha): convertir sola al abrir.** Es lo que haría que sus páginas actuales "funcionen"
-  sin pensar, pero tiene dos riesgos medidos: dos dispositivos que abren la misma página sin verse convierten los
-  dos y **las fotos quedan dos veces** (nada se pierde, pero hay que borrar la copia; ver abajo), y una página se
-  cambiaría sin que nadie la toque (también la de un invitado que solo mira, que no puede editar: quedaría sin
-  convertir). Si Lega la quiere, la forma segura es que convierta **solo el dueño o un admin, una vez por página**,
-  con una marca en la página (`converted`) que se escribe en la misma pasada, y con aviso y Ctrl+Z. Para sus
-  páginas actuales alcanza hoy con la acción del menú, página por página.
-- No se convierte nada al editar (la corrección 4): una foto-bloque sigue andando como hoy si nadie la convierte.
+La entrega 3 se hizo con una acción en el menú de la página (*Convert photos to inline*); Lega la sacó (D-26): la app
+no tiene usuarios, las fotos-bloque que existen son de proyectos de prueba que se van a borrar y ERSO se reimporta
+con las fotos en línea. Queda el código, `convertPhotos(editor, check)` en `convertPhotos.ts`, con sus pruebas y
+sin nada que lo llame, por si alguna vez entra algo con fotos sueltas. Para volver a ofrecerlo: un registro como el
+de colapsar (`collapseControl.ts`) que el editor abierto llena y el menú consulta, con `check.hasComments` de los
+hilos de la página y sin convertir hasta que los comentarios estén bajados (`comments.isFresh`), como estaba en
+`d02c1aa`. Convertir sola al abrir sigue descartado: dos dispositivos que convierten a la vez dejan cada renglón
+dos veces (medido, ver abajo).
 
 ### Qué hace (`convertPhotos.ts`)
 
@@ -822,4 +817,4 @@ cambios y avisan que hay que actualizar.
 - Una página cuya tabla pasó a tarjetas o fichas (v0.063) no se compara foto a foto con Coda: sus miniaturas de
   celda pasan a ser las fotos de la tarjeta.
 - La importación de prueba de ERSO ("ERSO (prueba)") se hizo antes: tiene fotos-bloque. La definitiva, con esta
-  versión, entra con los renglones; para las páginas ya importadas está *Convert photos to inline* (entrega 3).
+  versión, entra con los renglones; la de prueba se borra (D-26).

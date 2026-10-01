@@ -4,7 +4,8 @@ import { PHOTO, photoWidth } from './inlinePhoto';
 import { asOneUndoStep } from './undoGuard';
 import type { EditorState } from '@tiptap/pm/state';
 
-// Convertir las fotos-bloque de una página en fotos en línea (Docs/Doc_Fotos_En_Linea.md, entrega 3). Por página y
+// Convertir las fotos-bloque de una página en fotos en línea (Docs/Doc_Fotos_En_Linea.md, entrega 3). Función
+// escondida, sin entrada en la interfaz (D-26): queda por si alguna vez entra algo con fotos sueltas. Por página y
 // de una vez (nunca de a una al editar: la corrección 4 del diseño), con un solo deshacer.
 //
 // - Cada fila de fotos-bloque de hoy (fotos seguidas con `rowWidth`, como las arma `groupRows`) pasa a ser UN
@@ -76,7 +77,7 @@ function whyNot(b: BlockLike, check: ConvertCheck): Why {
   return 'ok';
 }
 
-/** Lo que haría "Convert photos to inline" en estos bloques (sin tocar nada). */
+/** Lo que haría la conversión en estos bloques (sin tocar nada). */
 export function planConversion(blocks: readonly BlockLike[], check: ConvertCheck): ConvertPlan {
   const plan: ConvertPlan = { segments: [], photos: 0, kept: { caption: 0, attachment: 0, uploading: 0 } };
   const walk = (list: readonly BlockLike[]) => {
