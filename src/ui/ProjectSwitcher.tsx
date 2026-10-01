@@ -23,7 +23,7 @@ import {
 } from './icons';
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
-import { editedLabel, monogram, projectStateError, useCurrentProject, useSwitchProject } from './project';
+import { editedLabel, monogram, projectStateError, useCurrentProject, useProjectDrive, useSwitchProject } from './project';
 import { SEARCH_SHORTCUT_LABEL, useSearchSession } from './projectSearchUi';
 import { DeletedProjectsList, DeleteProjectDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
@@ -192,6 +192,7 @@ function ProjectMenu(props: {
   const { sizes: sizeStore, remote, engine } = useServices();
   const status = useSyncStatus();
   const sizes = useProjectSizes();
+  const drive = useProjectDrive();
   const switchTo = useSwitchProject();
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
@@ -331,6 +332,7 @@ function ProjectMenu(props: {
         <Part>
           <DeletedProjectsList
             remote={remote}
+            drive={drive}
             sizeOf={(id) => sizes.rows?.find((r) => r.project_id === id)?.drive_bytes ?? null}
             onRestored={async () => {
               // Vuelve a la lista en la próxima sincronización, con los mismos permisos (no se tocaron).

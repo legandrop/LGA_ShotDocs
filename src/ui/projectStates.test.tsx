@@ -2,6 +2,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PorteroError } from '../media/portero';
+import type { ProjectDrive } from '../media/projectDrive';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -506,3 +508,255 @@ async function open$(d: Device, userId: string): Promise<HTMLElement> {
   await open(host);
   return host;
 }
+
+// --- entrega 2: la carpeta de Drive (Docs/Doc_Proyectos_Borrar.md, sección 3) -------------------------------------
+
+/**
+ * Un portero de mentira para la carpeta de un proyecto: hace en el servidor en memoria lo que haría el de verdad con
+ * la base (pide y confirma al mandar; borra las marcas al traer) y anota en qué orden se llamó.
+ */
+function fakeDrive(
+  server: FakeServer,
+  opts: { connected?: boolean; trash?: Error; untrash?: 'untrashed' | 'missing' | Error } = {},
+): { drive: ProjectDrive; calls: string[] } {
+  const calls: string[] = [];
+  const drive: ProjectDrive = {
+    status: async () => ({ connected: opts.connected ?? true, broken: null, email: null, isOwner: true }),
+    trash: async (id) => {
+      calls.push(`trash ${id} ${server.deletedProjects.has(id) ? 'borrado' : 'ACTIVO'}`);
+      if (opts.trash) throw opts.trash;
+      const now = new Date().toISOString();
+      server.projectDrive.set(id, { requested_at: now, trashed_at: now, missing_at: null });
+      return { status: 'done', project: id, drive: 'trashed', folders: 1 };
+    },
+    untrash: async (id) => {
+      calls.push(`untrash ${id}`);
+      if (opts.untrash instanceof Error) throw opts.untrash;
+      if (opts.untrash === 'missing') return { status: 'done', project: id, drive: 'missing', folders: 0 };
+      server.projectDrive.delete(id);
+      return { status: 'done', project: id, drive: 'untrashed', folders: 1 };
+    },
+  };
+  return { drive, calls };
+}
+
+/** El workspace en la versión 10, con portero, y un archivo subido en "Bosque Negro". */
+async function driveWorkspace() {
+  const ws = await workspace();
+  ws.server.enableProjectDrive();
+  ws.server.settings = { ...ws.server.settings!, mediaUrl: 'https://portero.test' };
+  ws.server.mediaFiles.set('f1', {
+    id: 'f1', name: 'f1.jpg', mime: 'image/jpeg', width: null, height: null, duration: null, thumb_at: null,
+    drive_id: 'd1', size: 1_572_864, trashed_at: null, purged_at: null, drive_trashed_at: null, project_id: ws.o,
+  });
+  await ws.owner.engine.syncNow();
+  return ws;
+}
+
+async function openWith(d: Device, userId: string, drive: ProjectDrive): Promise<HTMLElement> {
+  const host = await mount({ ...services(d, userId), projectDrive: drive });
+  await open(host);
+  return host;
+}
+
+async function typeWord(value: string) {
+  const input = document.querySelector<HTMLInputElement>('.delete-project-dialog input#delete-project-word')!;
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  await act(async () => {
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+const driveBox = () => document.querySelector<HTMLInputElement>('.delete-project-drive input[type="checkbox"]');
+
+describe('entrega 2: la casilla de Drive en la ventana de borrar', () => {
+  it('arranca destildada; tildada, después de borrar el proyecto el portero manda su carpeta', async () => {
+    const { server, owner, o } = await driveWorkspace();
+    const { drive, calls } = fakeDrive(server);
+    const notices: string[] = [];
+    window.addEventListener('shotdocs:notice', (e) => notices.push((e as CustomEvent<string>).detail));
+    await openWith(owner, server.ownerId, drive);
+    await act(async () => label('Delete “Bosque Negro”…')!.click());
+    await vi.waitFor(() => expect(driveBox()?.disabled).toBe(false));
+    const dialog = document.querySelector('.delete-project-dialog')!;
+    expect(driveBox()!.checked).toBe(false);
+    expect(dialog.textContent).toContain('Also send its files to the Google Drive trash (1.5 MB)');
+    expect(dialog.textContent).toContain('Its files stay in Google Drive (1.5 MB).');
+
+    await act(async () => driveBox()!.click());
+    expect(driveBox()!.checked).toBe(true);
+    expect(dialog.textContent).toContain('The folder LGA_ShotDocs/Bosque_Negro goes to the Drive trash with everything in it');
+    await vi.waitFor(() => expect(document.querySelector('.delete-project-dialog input#delete-project-word')).not.toBeNull());
+    await typeWord('delete');
+    await act(async () => byText('Delete project')!.click());
+    await settle();
+    // Primero la base (el proyecto borrado), después la carpeta.
+    expect(calls).toEqual([`trash ${o} borrado`]);
+    expect(server.deletedProjects.has(o)).toBe(true);
+    expect(server.projectDrive.get(o)?.trashed_at).toBeTruthy();
+    await vi.waitFor(() => expect(notices.join(' ')).toContain('Its folder is in the Google Drive trash.'));
+  });
+
+  it('sin tildar, la carpeta no se toca', async () => {
+    const { server, owner, o } = await driveWorkspace();
+    const { drive, calls } = fakeDrive(server);
+    await openWith(owner, server.ownerId, drive);
+    await act(async () => label('Delete “Bosque Negro”…')!.click());
+    await vi.waitFor(() => expect(driveBox()?.disabled).toBe(false));
+    await vi.waitFor(() => expect(document.querySelector('.delete-project-dialog input#delete-project-word')).not.toBeNull());
+    await typeWord('delete');
+    await act(async () => byText('Delete project')!.click());
+    await settle();
+    expect(server.deletedProjects.has(o)).toBe(true);
+    expect(calls).toEqual([]);
+  });
+
+  it('si Drive falla, el proyecto queda borrado y el aviso dice que se manda desde Deleted projects', async () => {
+    const { server, owner, o } = await driveWorkspace();
+    const { drive } = fakeDrive(server, { trash: new PorteroError('x', 503, true, 'drive_not_connected') });
+    const notices: string[] = [];
+    window.addEventListener('shotdocs:notice', (e) => notices.push((e as CustomEvent<string>).detail));
+    await openWith(owner, server.ownerId, drive);
+    await act(async () => label('Delete “Bosque Negro”…')!.click());
+    await vi.waitFor(() => expect(driveBox()?.disabled).toBe(false));
+    await act(async () => driveBox()!.click());
+    await vi.waitFor(() => expect(document.querySelector('.delete-project-dialog input#delete-project-word')).not.toBeNull());
+    await typeWord('delete');
+    await act(async () => byText('Delete project')!.click());
+    await settle();
+    expect(server.deletedProjects.has(o)).toBe(true);
+    await vi.waitFor(() =>
+      expect(notices.join(' ')).toContain('Its files did not go to the Google Drive trash (Google Drive is not connected: the workspace owner has to connect it.): send them from Deleted projects.'),
+    );
+  });
+
+  it('apagada con el motivo: Drive sin conectar, o quien borra no es dueño ni admin', async () => {
+    const { server, owner } = await driveWorkspace();
+    await openWith(owner, server.ownerId, fakeDrive(server, { connected: false }).drive);
+    await act(async () => label('Delete “Bosque Negro”…')!.click());
+    await vi.waitFor(() => expect(document.querySelector('.delete-project-drive')?.textContent).toContain('Google Drive is not connected'));
+    expect(driveBox()!.disabled).toBe(true);
+    expect(driveBox()!.checked).toBe(false);
+  });
+
+  it('con una base sin la migración 10, la línea de siempre y sin casilla', async () => {
+    const { server, owner } = await workspace();
+    server.settings = { ...server.settings!, mediaUrl: 'https://portero.test' };
+    server.mediaFiles.set('f1', {
+      id: 'f1', name: 'f1.jpg', mime: 'image/jpeg', width: null, height: null, duration: null, thumb_at: null,
+      drive_id: 'd1', size: 1_572_864, trashed_at: null, purged_at: null, drive_trashed_at: null, project_id: [...server.projects.values()].find((p) => p.name === 'Bosque Negro')!.id,
+    });
+    await owner.engine.syncNow();
+    await openWith(owner, server.ownerId, fakeDrive(server).drive);
+    await act(async () => label('Delete “Bosque Negro”…')!.click());
+    await vi.waitFor(() => expect(document.querySelector('.delete-project-dialog')?.textContent).toContain('Its files stay in Google Drive (1.5 MB).'));
+    expect(driveBox()).toBeNull();
+  });
+});
+
+describe('entrega 2: la lista de borrados con la carpeta en la papelera de Drive', () => {
+  async function deletedWithFolder(opts: Parameters<typeof fakeDrive>[1] = {}) {
+    const ws = await driveWorkspace();
+    await ws.owner.remote.deleteProject(ws.o);
+    await ws.owner.tree.forgetProject(ws.o);
+    const now = new Date().toISOString();
+    ws.server.projectDrive.set(ws.o, { requested_at: now, trashed_at: now, missing_at: null });
+    const fake = fakeDrive(ws.server, opts);
+    await openWith(ws.owner, ws.server.ownerId, fake.drive);
+    await act(async () => byText('Deleted projects')!.click());
+    await vi.waitFor(() => expect(document.querySelector('.deleted-projects')?.textContent).toContain('Bosque Negro'));
+    return { ...ws, ...fake };
+  }
+
+  it('dice hasta cuándo están en la papelera de Drive; Restore primero trae la carpeta y después restaura', async () => {
+    const { server, owner, o, calls } = await deletedWithFolder();
+    expect(document.querySelector('.deleted-projects')?.textContent).toMatch(/Files in the Google Drive trash until \w+ \d+/);
+    await act(async () => byText('Restore')!.click());
+    await vi.waitFor(() => expect(server.deletedProjects.has(o)).toBe(false));
+    expect(calls).toEqual([`untrash ${o}`]);
+    expect(server.projectDrive.has(o)).toBe(false);
+    await vi.waitFor(() => expect(owner.tree.project(o)?.name).toBe('Bosque Negro'));
+  });
+
+  it('si Drive ya no tiene la carpeta, pregunta; "Restore without its files" lo restaura con la marca', async () => {
+    const { server, owner, o } = await deletedWithFolder({ untrash: 'missing' });
+    await act(async () => byText('Restore')!.click());
+    await vi.waitFor(() => expect(document.querySelector('.deleted-project-ask')?.textContent).toContain('Google Drive no longer has the folder of this project'));
+    expect(server.deletedProjects.has(o)).toBe(true);
+    // Cancelar no cambia nada.
+    await act(async () => byText('Cancel')!.click());
+    expect(document.querySelector('.deleted-project-ask')).toBeNull();
+    await act(async () => byText('Restore')!.click());
+    await vi.waitFor(() => expect(byText('Restore without its files')).toBeDefined());
+    await act(async () => byText('Restore without its files')!.click());
+    await vi.waitFor(() => expect(server.deletedProjects.has(o)).toBe(false));
+    expect(server.projectDrive.get(o)?.missing_at).toBeTruthy();
+    await vi.waitFor(() => expect(owner.tree.project(o)?.drive_missing_at).toBeTruthy());
+  });
+
+  it('con Drive conectado a otra cuenta (o sin conectar) no ofrece restaurar sin los archivos', async () => {
+    const { server, o } = await deletedWithFolder({ untrash: new PorteroError('x', 409, false, 'drive_other_account') });
+    await act(async () => byText('Restore')!.click());
+    await vi.waitFor(() => expect(document.querySelector('.deleted-projects .error')?.textContent).toContain('Google Drive is connected to another account'));
+    expect(byText('Restore without its files')).toBeUndefined();
+    expect(server.deletedProjects.has(o)).toBe(true);
+  });
+
+  it('un borrado sin la carpeta enviada ofrece mandarla (pregunta antes); a medias, la termina', async () => {
+    const ws = await driveWorkspace();
+    await ws.owner.remote.deleteProject(ws.o);
+    await ws.owner.tree.forgetProject(ws.o);
+    const { drive, calls } = fakeDrive(ws.server);
+    await openWith(ws.owner, ws.server.ownerId, drive);
+    await act(async () => byText('Deleted projects')!.click());
+    await vi.waitFor(() => expect(byText('Send files to the Drive trash')).toBeDefined());
+    await act(async () => byText('Send files to the Drive trash')!.click());
+    expect(document.querySelector('.deleted-project-ask')?.textContent).toContain('Send the folder LGA_ShotDocs/Bosque_Negro to the Google Drive trash');
+    expect(calls).toEqual([]);
+    await act(async () => byText('Send to the Drive trash')!.click());
+    await settle();
+    expect(calls).toEqual([`trash ${ws.o} borrado`]);
+    await vi.waitFor(() => expect(document.querySelector('.deleted-projects')?.textContent).toMatch(/Files in the Google Drive trash until/));
+    expect(byText('Send files to the Drive trash')).toBeUndefined();
+  });
+});
+
+describe('entrega 2: restaurado sin su carpeta, "Look for its files again" en el inicio', () => {
+  async function homeOf(untrash: 'untrashed' | 'missing') {
+    const ws = await driveWorkspace();
+    ws.server.projectDrive.set(ws.o, { requested_at: '2026-10-01T10:00:00Z', trashed_at: '2026-10-01T10:00:01Z', missing_at: '2026-10-02T10:00:00Z' });
+    await ws.owner.engine.syncNow();
+    const fake = fakeDrive(ws.server, { untrash });
+    const { Home } = await import('./Workspace');
+    localStorage.setItem(legacyStorageNames(WANKA_LOCAL_KEY).project, JSON.stringify({ [ws.server.ownerId]: ws.o }));
+    const home = document.createElement('div');
+    document.body.append(home);
+    const root = createRoot(home);
+    roots.push(root);
+    const value = { ...services(ws.owner, ws.server.ownerId), projectDrive: fake.drive };
+    await act(async () => root.render(<ServicesContext.Provider value={value}>{<Home />}</ServicesContext.Provider>));
+    await settle();
+    return { ...ws, ...fake, home };
+  }
+
+  it('lo dice en el inicio; buscarlos de nuevo la trae y la marca sale', async () => {
+    const { owner, o, calls, home } = await homeOf('untrashed');
+    expect(home.querySelector('.drive-missing-note')?.textContent).toContain('Its files were not in Google Drive when it was restored');
+    await vi.waitFor(() => expect(byText('Look for its files again')).toBeDefined());
+    await act(async () => byText('Look for its files again')!.click());
+    await settle();
+    expect(calls).toEqual([`untrash ${o}`]);
+    await vi.waitFor(() => expect(owner.tree.project(o)?.drive_missing_at).toBeNull());
+    await vi.waitFor(() => expect(home.querySelector('.drive-missing-note')).toBeNull());
+  });
+
+  it('si Drive sigue sin tenerla, lo dice y la marca queda', async () => {
+    const { owner, o, home } = await homeOf('missing');
+    await vi.waitFor(() => expect(byText('Look for its files again')).toBeDefined());
+    await act(async () => byText('Look for its files again')!.click());
+    await settle();
+    expect(home.querySelector('.drive-missing-note')?.textContent).toContain('Google Drive still does not have the folder of this project.');
+    expect(owner.tree.project(o)?.drive_missing_at).toBeTruthy();
+  });
+});

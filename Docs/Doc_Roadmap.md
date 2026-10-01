@@ -204,7 +204,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `lega/proyectos-borrar`):** íconos de archivar y borrar en el selector, la ventana con la palabra, las listas de
   archivados y de borrados con *Restore*, el primer proyecto de cada dispositivo y la pantalla sin proyectos; falta
   aplicar la migración 9 (después de la auditoría del código y la copia de seguridad) y subir `min_app_version`.
-  Sigue: la prueba técnica de Drive y la entrega 2 (la casilla); después, la 3 (*Delete forever*).
+  **Entrega 2 implementada (rama `lega/proyectos-borrar-drive`):** la casilla de Drive en la ventana de borrar
+  (destildada; dueño y admins), las rutas `/project/trash` y `/project/untrash` del portero, restaurar trayendo la
+  carpeta, *Restore without its files* solo con `missing` de verdad y *Look for its files again*; falta la auditoría,
+  aplicar la migración 10, publicar y correr la prueba técnica. Después, la 3 (*Delete forever*).
 - **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
   (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
   instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la

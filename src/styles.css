@@ -2005,6 +2005,73 @@ code {
   border: 1px solid var(--border);
 }
 
+/* La carpeta de Drive de cada borrado (P.14, entrega 2): la nota, *Send files…* y las preguntas en el renglón. */
+.deleted-project-item {
+  display: grid;
+  gap: 4px;
+}
+
+.deleted-project-note,
+.deleted-project-actions,
+.deleted-project-ask {
+  margin: 0;
+  padding-left: 46px;
+}
+
+.deleted-project-ask p {
+  margin: 0 0 6px;
+}
+
+.deleted-project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.deleted-project-ask .deleted-project-actions {
+  padding-left: 0;
+}
+
+/* Adentro del selector (`.menu button` ocupa todo el ancho): el link de *Send files…* va a la izquierda y entero. */
+.deleted-project-actions button.link {
+  width: auto;
+  height: auto;
+  min-height: 28px;
+  padding: 0;
+  text-align: left;
+  white-space: normal;
+}
+
+.deleted-project-actions button.primary {
+  width: auto;
+  height: 32px;
+  padding: 0 12px;
+}
+
+.delete-project-drive {
+  display: grid;
+  gap: 4px;
+}
+
+.delete-project-drive p {
+  margin: 0 0 0 24px;
+}
+
+.delete-project-check {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: start;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.delete-project-check input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+}
+
 .delete-project-stats {
   display: flex;
   align-items: center;
@@ -5007,6 +5074,18 @@ mark.search-hit {
   gap: 8px;
   color: var(--muted);
   font-size: 13px;
+}
+
+/* Restaurado sin su carpeta de Drive (P.14, entrega 2): el texto arriba y *Look for its files again* abajo. */
+.drive-missing-note {
+  display: grid;
+  align-items: start;
+  justify-items: start;
+  gap: 6px;
+}
+
+.drive-missing-note p {
+  margin: 0;
 }
 
 /* La pantalla "sin proyectos" con cambios sin subir en el dispositivo (P.14). */
