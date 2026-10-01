@@ -174,6 +174,17 @@ diga otra cosa.
   (8) La palabra es la del idioma de la app (`delete` / `borrar`). (9) En *Deleted projects* lo ven todos los que lo
   veían; quién lo borró, dueño, admins y quien lo maneja; los números, solo quien lo maneja. (10) El último
   proyecto activo no se archiva ni se borra. (11) Se sube `min_app_version` antes del primer borrado.
+- **D-25 · Espacio en el dispositivo y "Available offline"** (2026-10-01, P.10). Reemplaza la propuesta anterior
+  de liberar solo a mano. (1) **Tope automático de 2 GB por dispositivo:** pasado eso, la app borra las copias
+  ya confirmadas en el Drive que hace más que no se abren; la miniatura queda siempre; nunca se borra algo no
+  confirmado en el Drive. (2) **Available offline** para una página (con sus subpáginas) o un proyecto entero:
+  baja lo que falta para usarlo sin red y lo mantiene al día mientras haya red; lo marcado no cuenta para el tope
+  y nunca se libera solo. (3) **Una ventana al marcar** con casillas y su peso: fotos en grande (2048 px) tildada,
+  fotos originales destildada, adjuntos de hasta 50 MB tildada, videos destildada, carpetas del Drive destildada
+  (P.9); pesos de todo, también de lo destildado, y el total de lo elegido, con un indicador circular mientras
+  calcula; el espacio libre del dispositivo y no arranca si no entra; barra de progreso y aviso de listo.
+  (4) **A mano**, "Espacio en este dispositivo" en el menú de la cuenta: cuánto ocupa, lo marcado, *Free up
+  space* y desmarcar. Diseño: `Doc_Copias_Locales.md`.
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 
