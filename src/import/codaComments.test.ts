@@ -80,6 +80,17 @@ describe('comentarios de Coda: lectura y anclaje', () => {
     expect(normalizeText('snake_case_name y 2*3*4')).toBe('snake_case_name y 2*3*4');
   });
 
+  it('último intento sin espacios: un texto que Coda da pegado (o la importación separó) encuentra su bloque', () => {
+    const blocks = [
+      { id: 'b1', text: 'Otra cosa' },
+      { id: 'b2', text: 'Videos: https://drive.google.com/a https://drive.google.com/b' },
+    ];
+    const thread = (ref: string) => ({ reference: { type: 'text', text: ref } }) as unknown as CodaThread;
+    expect(anchorBlock(thread('Videos:https://drive.google.com/ahttps://drive.google.com/b'), blocks)).toEqual({ blockId: 'b2', lost: false });
+    // Corto: no se busca sin espacios adentro de otro bloque.
+    expect(anchorBlock(thread('ot ra'), blocks)).toEqual({ blockId: null, lost: true });
+  });
+
   it('datos raros de Coda: sin texto, nombre largo, correo inválido, fecha imposible', async () => {
     const threads = parseCodaComments({
       pages: {

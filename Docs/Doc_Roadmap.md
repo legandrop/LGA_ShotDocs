@@ -249,10 +249,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
      siempre a los 10 s en vez de espaciarse (comparar contra el máximo confirmado del intento).
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
-    - **Comprobar el anclaje de un comentario** pegado a un renglón con direcciones embebidas: si Coda da el
-      texto marcado con todo pegado, el hilo queda en la página entera en vez de en su bloque (no se
-      pierde). Arreglo posible: un último intento comparando sin espacios y, para un párrafo partido en
-      tarjetas, contra los bloques seguidos juntos.
+    - **Hecho (v0.071): el anclaje de un comentario** pegado a un renglón con direcciones: un último intento
+      compara sin espacios (12 letras o más). Queda sin probar con un comentario real de ese tipo, y un párrafo
+      partido en tarjetas todavía no se compara contra los bloques seguidos juntos.
     - **Prolijidad:** una dirección partida en dos por un cambio de formato queda como un link cortado; una
       dirección con un punto final lo lleva adentro del link; un salto de línea puede quedar adentro del
       link al final del párrafo o alrededor de una tarjeta.

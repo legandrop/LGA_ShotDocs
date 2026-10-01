@@ -385,7 +385,9 @@ transformarla, en `comments.json` en la raíz de la carpeta exportada:
   queda en el bloque de la tabla, aunque el texto sea corto; así entran los comentarios de las filas de una
   tabla de Coda que se importa como tabla, pegados al texto de su primera celda; con el mismo texto en varias
   tablas, gana la primera); si no hay, el primero que lo contiene, de la línea más larga a la más corta y solo con
-  textos de 8 letras o más, o de dos palabras ("ok" no se busca adentro de "Plano 12: ok"). Si no se encuentra
+  textos de 8 letras o más, o de dos palabras ("ok" no se busca adentro de "Plano 12: ok"); y por último lo
+  mismo **sin espacios** (desde v0.071, con 12 letras o más: Coda puede dar pegado el texto de un renglón con
+  direcciones que la importación separó en links o tarjetas, o al revés). Si no se encuentra
   (se borró en Coda, por ejemplo), el hilo va a la página entera y queda anotado en la lista del final. Sin
   `reference`, o con un texto que queda vacío al limpiarlo, va a la página entera sin anotarlo.
 - **Autor:** un comentario con el correo de quien importa queda a su nombre (es suyo: lo edita y lo borra
