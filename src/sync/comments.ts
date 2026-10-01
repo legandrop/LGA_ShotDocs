@@ -653,6 +653,11 @@ export class CommentQueue {
     return counts;
   }
 
+  /** Las páginas de los cambios de comentarios sin subir o rechazados, una por cambio (P.14). */
+  pendingPageIds(): string[] {
+    return this.ops.map((o) => o.op.pageId);
+  }
+
   status(): CommentStatus {
     let pending = 0;
     let failed = 0;

@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { locale, t as current, type Translate } from '../i18n';
+import { errorMessage } from '../sync/types';
 import { navigate, pagePath, useRoute } from '../router';
 import { useServices, useTree } from '../services';
 import type { PageTree } from '../sync/tree';
@@ -66,7 +67,21 @@ export function useCurrentProject(): string {
   const page = route.name === 'page' ? tree.get(route.id) : undefined;
   if (page) return page.workspace_id;
   if (stored && tree.project(stored)) return stored;
+  // Sin uno elegido, el primero del dispositivo; si está archivado, el primero activo (P.14, sección 8).
+  if (tree.project(tree.workspaceId)?.archived_at) return tree.activeProjects()[0]?.id ?? tree.workspaceId;
   return tree.workspaceId;
+}
+
+/**
+ * El error de archivar, borrar o restaurar un proyecto, en palabras (P.14). Los que pasan de verdad (otra persona
+ * lo borró o cambió los permisos mientras tanto) tienen su frase; los demás, el motivo tal cual.
+ */
+export function projectStateError(err: unknown, t: Translate = current): string {
+  const code = errorMessage(err);
+  if (code === 'not_allowed') return t('project.errorNotAllowed');
+  if (code === 'project_not_found') return t('project.errorNotFound');
+  if (code === 'project_deleted') return t('project.errorDeleted');
+  return t('project.stateFailed', { reason: code });
 }
 
 /** Abre un proyecto: su última página abierta, o su inicio. */

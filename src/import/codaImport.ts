@@ -335,8 +335,9 @@ export async function findResumable(folder: CodaFolder, deps: Pick<ImportDeps, '
   const journal = await deps.journal.get(docId);
   if (!journal) return null;
   if (!deps.tree.project(journal.projectId)) {
-    // El proyecto ya no está (se perdió el acceso, por ejemplo): no hay dónde seguir.
-    await deps.journal.remove(docId).catch(() => undefined);
+    // El proyecto no está en el árbol: no hay dónde seguir ahora. El diario se conserva (P.14): el proyecto puede
+    // estar en la papelera de proyectos y volver al restaurarlo, o faltar solo porque no hay red. Una importación
+    // nueva del mismo doc lo reemplaza.
     return null;
   }
   const done = folder.manifest.pages.filter((p) => journal.pages[p.id]?.done).length;

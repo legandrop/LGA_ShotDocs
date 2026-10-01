@@ -1457,6 +1457,19 @@ export class MediaQueue {
     };
   }
 
+  /**
+   * Las páginas con fotos, videos o usos sin confirmar (también los detenidos y los que esperan), una vez cada
+   * una. Para no borrar un proyecto con algo suyo sin subir en este dispositivo (P.14).
+   */
+  async pendingPageIds(): Promise<string[]> {
+    if (!this.db) return [];
+    const [records, links] = await Promise.all([
+      this.db.getAllFromIndex('files', 'pending', 1),
+      this.db.getAllFromIndex('links', 'pending', 1),
+    ]);
+    return [...new Set([...records.map((r) => r.pageId), ...links.map((l) => l.pageId)])];
+  }
+
   /** Lo que quedó detenido por un error, para mostrarlo. */
   async failures(): Promise<MediaFailure[]> {
     if (!this.db) return [];

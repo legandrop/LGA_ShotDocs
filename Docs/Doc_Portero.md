@@ -197,7 +197,8 @@ Códigos de error de `/trash` (el campo `code`, para que la app decida sin leer 
 | 403 | `not_allowed` | No es dueño ni admin con permiso sobre el proyecto. | No ofrecer el botón. |
 | 403 | `drive_mismatch` | El archivo de Drive al que apunta la base no lleva la marca de este: no se toca. | Mostrar el error; lo revisa el dueño. |
 | 404 | `not_found` | No existe o la persona no lo ve. | Refrescar la lista. |
-| 409 | `in_use` | Una página lo volvió a usar: ya no está en la papelera. Es el único 409. | Refrescar la lista (el archivo salió). |
+| 409 | `in_use` | Una página lo volvió a usar: ya no está en la papelera. | Refrescar la lista (el archivo salió). |
+| 409 | `in_deleted_project` | Lo usa una página de un proyecto borrado (P.14, `purge_file` da `file_in_deleted_project`): vuelve si se restaura ese proyecto. | No ofrecer el botón (la app desde P.14 no lo ofrece; la anterior recibe este motivo en vez de `db_error`). |
 | 503 | `drive_not_connected` | Drive no está conectado (o la conexión venció). No se pidió nada a la base. | Avisar que el dueño conecte Drive. |
 | 502 | `drive_failed` | Drive no contestó bien. Si ya se había pedido, queda pedido sin confirmar. | Reintentar más tarde. |
 | 502 | `db_outdated` | La base no tiene la migración de la papelera de archivos. | Avisar. |

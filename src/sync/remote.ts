@@ -15,7 +15,9 @@ import {
   type MediaFileRow,
   type NewMediaFile,
   type ProjectSizeRow,
+  type ProjectDeleteInfo,
   type TrashedFileRow,
+  type TrashedProjectRow,
   type RemoteUpdate,
   type WorkspaceSettings,
 } from './types';
@@ -32,7 +34,11 @@ export interface Remote {
    * para que, cuando se pueda compartir, lo compartido llegue por su propio camino.
    */
   fetchTree(projectIds: string[]): Promise<PageRow[]>;
-  fetchProjects(): Promise<ProjectRow[]>;
+  /**
+   * Los proyectos que ve la sesión. `schemaVersion`: la versión de la base, si se sabe; desde la 9 (P.14) se
+   * pide también `archived_at`. Una base sin esa columna nunca corta la sincronización (ver la implementación).
+   */
+  fetchProjects(schemaVersion?: number | null): Promise<ProjectRow[]>;
   /** Idempotente: si el proyecto ya existe no hace nada. */
   createProject(project: NewProject): Promise<void>;
   renameProject(id: string, name: string): Promise<void>;
@@ -168,6 +174,58 @@ export interface SizesRemote {
    * `null` si la base todavía no tiene la función (`PGRST202`).
    */
   projectSizes(): Promise<ProjectSizeRow[] | null>;
+}
+
+/** La versión de la base con archivar y borrar proyectos (P.14, Docs/Doc_Proyectos_Borrar.md). */
+export const PROJECT_STATES_SCHEMA_VERSION = 9;
+
+/**
+ * Archivar, borrar y restaurar proyectos (P.14, supabase/migrations/20261001120000_proyectos_archivar_borrar.sql).
+ * Solo con red: son funciones de la base que se llaman en el momento, no cambios en la cola. Todas son
+ * idempotentes. Errores: `project_not_found` (no existe o la sesión no lo veía), `not_allowed`,
+ * `project_deleted` (archivar uno borrado).
+ */
+export interface ProjectStatesRemote {
+  setProjectArchived(projectId: string, archived: boolean): Promise<void>;
+  /** Lo manda a la papelera de proyectos y devuelve cuándo (si ya estaba, la fecha de entonces). */
+  deleteProject(projectId: string): Promise<string>;
+  restoreProject(projectId: string): Promise<void>;
+  /** La papelera de proyectos de la sesión. `null` si la base todavía no tiene la función. */
+  trashedProjects(): Promise<TrashedProjectRow[] | null>;
+  projectDeleteInfo(projectId: string): Promise<ProjectDeleteInfo>;
+}
+
+/** Una fila de `trashed_projects` como llega (los números pueden venir como texto). */
+export function parseTrashedProject(row: Record<string, unknown>): TrashedProjectRow {
+  const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ''),
+    archived_at: (row.archived_at as string | null) ?? null,
+    deleted_at: String(row.deleted_at),
+    deleted_by: (row.deleted_by as string | null) ?? null,
+    deleted_by_email: (row.deleted_by_email as string | null) ?? null,
+    days_left: Number(row.days_left) || 0,
+    can_restore: row.can_restore === true,
+    pages: num(row.pages),
+    files: num(row.files),
+  };
+}
+
+/** Lo que devuelve `project_delete_info`. */
+export function parseDeleteInfo(data: unknown): ProjectDeleteInfo {
+  const row = (data ?? {}) as Record<string, unknown>;
+  const n = (v: unknown) => Number(v) || 0;
+  return {
+    pages: n(row.pages),
+    trashed_pages: n(row.trashed_pages),
+    files: n(row.files),
+    drive_bytes: n(row.drive_bytes),
+    pending_files: n(row.pending_files),
+    used_elsewhere: n(row.used_elsewhere),
+    foreign_only_here: n(row.foreign_only_here),
+    shared_with: n(row.shared_with),
+  };
 }
 
 /**
@@ -337,13 +395,16 @@ export function parseProjectSize(row: Record<string, unknown>): ProjectSizeRow {
   };
 }
 
-export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRemote {
+export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRemote, ProjectStatesRemote {
   /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
   private settingsMissingAt = 0;
 
   private get settingsMissing(): boolean {
     return Date.now() - this.settingsMissingAt < 10 * 60_000;
   }
+
+  /** Desde cuándo la base no tiene `workspaces.archived_at` (aunque diga la versión 9); se reintenta cada tanto. */
+  private archivedMissingAt = 0;
 
   /** Desde cuándo la base no tiene `workspace_settings` (o la subida con versión); se reintenta cada tanto. */
   private settingsTableMissingAt = 0;
@@ -430,14 +491,55 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
     }
   }
 
-  async fetchProjects(): Promise<ProjectRow[]> {
+  async fetchProjects(schemaVersion?: number | null): Promise<ProjectRow[]> {
+    // `archived_at` solo con la versión 9 o más (P.14). Cada workspace tiene su propia base y esta consulta
+    // está en el ciclo de sincronización: si la columna falta igual (la versión dice 9 pero la migración no
+    // está), se sigue sin ella un rato en vez de cortar toda la sincronización, como `fetchTreeOf` con
+    // `settings`.
+    const archived =
+      (schemaVersion ?? 0) >= PROJECT_STATES_SCHEMA_VERSION && Date.now() - this.archivedMissingAt >= 10 * 60_000;
     const { data, error, status } = await timed(this.client
       .from('workspaces')
-      .select('id, name, created_at, owner_id')
+      .select(archived ? 'id, name, created_at, owner_id, archived_at' : 'id, name, created_at, owner_id')
       .order('created_at')
       .limit(1000));
+    if (archived && error?.code === UNDEFINED_COLUMN) {
+      this.archivedMissingAt = Date.now();
+      return this.fetchProjects(schemaVersion);
+    }
     if (error) throw toRemoteError(error, status);
-    return data as ProjectRow[];
+    return data as unknown as ProjectRow[];
+  }
+
+  // --- archivar, borrar y restaurar proyectos (P.14) ---------------------------------------------------
+
+  async setProjectArchived(projectId: string, archived: boolean): Promise<void> {
+    const { error, status } = await timed(this.client.rpc('set_project_archived', { p_project: projectId, p_archived: archived }));
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async deleteProject(projectId: string): Promise<string> {
+    const { data, error, status } = await timed(this.client.rpc('delete_project', { p_project: projectId }));
+    if (error) throw toRemoteError(error, status);
+    return String(data);
+  }
+
+  async restoreProject(projectId: string): Promise<void> {
+    const { error, status } = await timed(this.client.rpc('restore_project', { p_project: projectId }));
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async trashedProjects(): Promise<TrashedProjectRow[] | null> {
+    const { data, error, status } = await timed(this.client.rpc('trashed_projects'));
+    if (error?.code === MISSING_FUNCTION) return null;
+    if (error) throw toRemoteError(error, status);
+    return ((data ?? []) as Record<string, unknown>[]).map(parseTrashedProject);
+  }
+
+  async projectDeleteInfo(projectId: string): Promise<ProjectDeleteInfo> {
+    const { data, error, status } = await timed(this.client.rpc('project_delete_info', { p_project: projectId }));
+    if (error) throw toRemoteError(error, status);
+    return parseDeleteInfo(data);
   }
 
   async createProject(project: NewProject): Promise<void> {
@@ -749,6 +851,7 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
       days_left: Number(r.days_left),
       in_trashed_page: r.in_trashed_page === true,
       trashed_page_title: r.trashed_page_title ?? r.page_title ?? r.trashed_page ?? null,
+      in_deleted_project: r.in_deleted_project === true,
     }));
   }
 

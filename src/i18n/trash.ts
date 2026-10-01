@@ -97,6 +97,11 @@ export const trash = {
   },
   'fileTrash.none': { en: "No files in the trash.", es: "No hay archivos en la papelera." },
   'fileTrash.needsInternet': { en: "Needs an internet connection", es: "Hace falta conexión a internet" },
+  // Un archivo que usa una página de un proyecto borrado (P.14): no se manda a Drive hasta que lo restauren.
+  'fileTrash.inDeletedProject': {
+    en: "Used by a page of a deleted project. It comes back if that project is restored.",
+    es: "Lo usa una página de un proyecto borrado. Vuelve si restauran ese proyecto.",
+  },
   'fileTrash.emptyTip': {
     en: "Send every file in this list to the Google Drive trash, except those used by pages in the trash",
     es: "Manda todos los archivos de esta lista a la papelera de Google Drive, menos los que usan páginas de la papelera",

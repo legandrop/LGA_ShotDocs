@@ -1887,18 +1887,142 @@ code {
   gap: 2px;
 }
 
+/* Cada renglón (P.14): la zona que abre el proyecto (la opción de la lista) y, al lado, sus íconos. */
 .menu .project-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  border-radius: var(--radius);
+}
+
+.menu .project-open {
+  flex: 1;
+  min-width: 0;
   height: 48px;
   gap: 10px;
   text-align: left;
+}
+
+.menu .project-open:hover:not(:disabled) {
+  background: transparent;
 }
 
 .menu .project-row.active {
   background: var(--hover);
 }
 
-.menu .project-row[aria-current='true'] .project-label strong {
+.menu .project-open[aria-current='true'] .project-label strong {
   font-weight: 700;
+}
+
+/* Renombrar, archivar y borrar: al pasar el mouse, con el foco y en el renglón activo de las flechas. */
+.menu .project-actions {
+  display: flex;
+  flex: none;
+  gap: 0;
+  padding-right: 2px;
+  visibility: hidden;
+}
+
+.menu .project-row:hover .project-actions,
+.menu .project-row:focus-within .project-actions,
+.menu .project-row.active .project-actions {
+  visibility: visible;
+}
+
+.menu .project-actions .icon-button,
+.menu .project-more {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.menu .icon-button.danger:not(:disabled):hover svg {
+  color: var(--danger);
+}
+
+/* En el teléfono: un "⋯" siempre visible que despliega las acciones del renglón debajo. */
+.menu .project-sheet {
+  flex-basis: 100%;
+  display: grid;
+  gap: 2px;
+  padding: 0 0 6px 46px;
+}
+
+.menu .project-row.confirming {
+  gap: 8px;
+  min-height: 48px;
+  padding: 4px 6px 4px 10px;
+  background: var(--hover);
+}
+
+.project-confirm-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.menu .project-row.confirming .primary {
+  height: 30px;
+  padding: 0 12px;
+}
+
+.menu .project-row.confirming .link {
+  width: auto;
+  height: 30px;
+}
+
+.menu .project-back {
+  font-weight: 600;
+}
+
+.deleted-projects {
+  display: grid;
+  gap: 6px;
+  padding: 0 6px 6px;
+}
+
+.deleted-project-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+}
+
+/* Quién lo borró y cuándo pueden ocupar dos renglones: no se cortan con "…". */
+.deleted-project-row .project-label span {
+  white-space: normal;
+}
+
+.deleted-project-row .secondary,
+.menu .deleted-project-row button {
+  flex: none;
+  width: auto;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+}
+
+.delete-project-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.delete-project-warning {
+  color: var(--danger);
+}
+
+.delete-project-word {
+  display: grid;
+  gap: 6px;
+}
+
+.delete-project-word input {
+  height: 40px;
 }
 
 .current-mark {
@@ -1950,8 +2074,18 @@ code {
     border-radius: 18px 18px 0 0;
   }
 
-  .menu .project-row {
+  .menu .project-open {
     height: 60px;
+  }
+
+  /* En el teléfono la ventana de borrar ocupa la pantalla, con los botones abajo (al alcance del dedo). */
+  .delete-project-dialog {
+    max-height: none;
+    height: 100%;
+  }
+
+  .delete-project-dialog .welcome-actions {
+    margin-top: auto;
   }
 
   .sheet-scrim {
@@ -4717,4 +4851,20 @@ mark.search-hit {
   .search-backdrop {
     display: none !important;
   }
+}
+
+/* Un proyecto archivado abierto (P.14): la marca en su inicio. */
+.archived-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* La pantalla "sin proyectos" con cambios sin subir en el dispositivo (P.14). */
+.no-projects-pending {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
 }
