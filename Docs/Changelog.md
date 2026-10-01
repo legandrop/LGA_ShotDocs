@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Cada subida de contenido repetía todos los borrados de la historia de la página (el *delete set* de Yjs):
+`encodeStateAsUpdate` corta los elementos con el vector de estado, pero un borrado no avanza ningún reloj y
+viajaban enteros. En una página muy editada era el 96 % del peso de `page_updates`. Ahora el dispositivo anota
+qué borrados ya tiene el servidor (`syncedDS`, que como `syncedSV` crece solo con lo confirmado al subir y lo
+bajado) y cada subida lleva solo los nuevos; si el armado no se comprueba, sube todo como antes. La cuenta lleva
+la generación del workspace: una versión anterior que restaura una copia no la conoce. Con 200 ediciones, de
+929 B a 53 B por subida al final (de 112 KB a 9 KB en total). Sin migración.
+[ Sincronización - subir solo los borrados nuevos de cada página ]
+
 v0.084 :
 
 Colapsar, lo que faltaba: mover una sección colapsada entera y colapsar para todos. Arrastrar o mover con

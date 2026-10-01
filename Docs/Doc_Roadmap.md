@@ -383,6 +383,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 14. **Un dispositivo nuevo muestra "Subiendo ~2750 cambios" unos 4 minutos** al abrir un proyecto grande
     ("HEIC (prueba)"), sin escrituras visibles en la base (lo vio la auditoría de v0.075). Averiguar qué
     cuenta ese número: si son cambios que de verdad suben, o lo bajado contado como pendiente.
+15. **Hecho: cada subida lleva solo los borrados nuevos (v0.082).** Cada subida de contenido repetía todos los
+    borrados de la página (el *delete set* de Yjs), el 96 % del peso de `page_updates` en una página muy editada
+    (lo midió el diseño de B.9). Ahora el dispositivo anota los que el servidor ya tiene (`syncedDS`, con la misma
+    regla que `syncedSV`: nunca dice de más) y sube solo los demás; si algo no cierra, sube todos. Sin migración.
+    Ver `Doc_Sincronizacion.md`, "Subir solo los borrados nuevos".
 
 ### C. Esperan a Lega
 
