@@ -67,10 +67,32 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   su lado, ni escribir o pegar otra foto en su renglón, ni subirla al renglón de arriba con Backspace, ni
   elegir varias con Shift+flechas o Shift+clic. Lo pedido: que fluya en el texto como en Coda (lo que no
   entra baja de renglón), elegir varias fotos seguidas como se eligen letras, y acomodar las elegidas.
-  **Diseño en [`Doc_Fotos_En_Linea.md`](Doc_Fotos_En_Linea.md)** (auditado, sin implementar; con la prueba
-  técnica y preguntas para Lega). Por entregas: un prototipo en navegador; el nodo propio, el parche de
-  huecos de y-prosemirror y el teclado (y subir `min_app_version`); crear, dar tamaño, acomodar las elegidas,
-  hojas y PDF; convertir las fotos que ya existen; importar de Coda con los renglones como estaban.
+  **Diseño en [`Doc_Fotos_En_Linea.md`](Doc_Fotos_En_Linea.md)** (auditado). Por entregas: un prototipo en
+  navegador; el nodo propio, el parche de huecos de y-prosemirror y el teclado; crear, dar tamaño, acomodar las
+  elegidas, hojas y PDF; convertir las fotos que ya existen; importar de Coda con los renglones como estaban.
+  **Hechos el prototipo (entrega 0; Lega lo aprobó el 2026-10-01) y la entrega 1 (v0.076, auditada):** el nodo
+  `photo` (nada lo crea todavía), el resguardo de versiones anteriores también en la importación de Coda, el
+  parche de los huecos y los huecos estables (0 letras perdidas en 300 agendas por caso; los párrafos sin fotos
+  guardan lo mismo que antes, byte a byte), y lo que se ve y se toca medido en Chromium (filas, teclado, mouse,
+  Shift+flechas y Shift+clic, carrete, imprimir, `[Image]` en comentarios; D-22).
+  **Antes de la entrega 2 (la que crea fotos), de las auditorías de v0.076:**
+  - **Versiones mezcladas pierden texto** en un renglón al que le borraron todas las fotos (`Doc_Colaboracion.md`,
+    "Versiones viejas"): subir `min_app_version` antes, resolver el dispositivo viejo sin red que sube su cola
+    después de actualizarse, y sumar una prueba con la librería publicada (las de hoy usan la nueva).
+  - Con una foto elegida, el texto que entra sin tecla (emojis con Win+. o Ctrl+⌘+Espacio, dictado) la
+    reemplaza (`handleTextInput` en `inlinePhotoEditor.ts`); arrastrar para elegir y soltar sobre una foto deja
+    la selección corrida; la barra de texto sale encima de la foto vecina y puede tapar el clic (no mostrarla con
+    una foto elegida hasta su barra propia).
+  - Decidir: pegar con una foto elegida la reemplaza (una letra va después); el primer Shift+flecha con una foto
+    elegida no agranda; las fotos duplicadas cuando dos mueven la misma (39 de 300); pegar HTML con una foto
+    (`data-inline-content-type="photo"`) ya crea una.
+  - Probar en Safari y en el iPhone (la composición sin tecla previa entre dos fotos duplica el primer carácter
+    en Chromium). Medir la decoración de filas con un doc grande (recorre el documento en cada cambio).
+  Quedan para la entrega 2 la barra propia de la foto y partir un párrafo con fotos entre hojas. Lo que queda de
+  editar a la vez junto a fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está medido en
+  `Doc_Colaboracion.md`.
+  **A futuro (Lega, 2026-10-01, después de ver el prototipo):** que se puedan escribir varias líneas de texto a
+  los costados de una foto (el texto rodea la foto), no solo un renglón alineado abajo.
 - **P.4 Hecho a medias (v0.046): acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos
   y videos seguidos en una o más filas de la misma altura, sin cambiar el orden. Se audita antes y después.
   **No es lo que pidió Lega** (confirmado el 2026-10-01): pidió elegir varias fotos seguidas (Shift+clic,

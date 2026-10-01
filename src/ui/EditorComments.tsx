@@ -26,6 +26,7 @@ import {
 } from './commentsUi';
 import { paragraphProps, QUESTION_PROP } from './editorSchema';
 import { CommentIcon, QuestionIcon } from './icons';
+import { PHOTO } from './inlinePhoto';
 
 /** Lo que se corre un contador de comentarios que caería encima de otro (el alto del botón y un poco). */
 const MARK_STACK_PX = 26;
@@ -54,11 +55,18 @@ function isQuestion(b: BlockLike): boolean {
   return b.type === 'paragraph' && b.props?.[QUESTION_PROP] === true;
 }
 
-function plainText(content: unknown): string {
+/** El texto de un bloque para el panel. Una foto en línea se ve como "[Image]" en su lugar. */
+export function plainText(content: unknown): string {
   if (!Array.isArray(content)) return '';
   return content
     .map((c: { type?: string; text?: string; content?: unknown }) =>
-      typeof c.text === 'string' ? c.text : c.type === 'link' ? plainText(c.content) : '',
+      typeof c.text === 'string'
+        ? c.text
+        : c.type === 'link'
+          ? plainText(c.content)
+          : c.type === PHOTO
+            ? `[${t('editor.image')}]`
+            : '',
     )
     .join('');
 }

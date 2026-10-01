@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.076 :
+
+Fotos en línea, entrega 1: la foto como un carácter del renglón, todavía sin nada que la cree. Faltaba que el
+editor la conociera y la dibujara antes de poder crearla. Nodo `photo` en el esquema y en el resguardo de
+versiones anteriores, que ahora también corre en la importación de Coda. Editar a la vez junto a una foto perdía
+texto: y-prosemirror borraba el texto vecino al borrar o mover una foto. El parche guarda un texto en cada hueco
+y, en un renglón con fotos, nunca borra ni recrea un texto; con 300 agendas por caso, 0 letras perdidas (antes
+hasta 206), y los párrafos sin fotos guardan lo mismo que antes, byte a byte. Lo que se ve y se toca, medido en
+Chromium: filas sin cortes en 831 anchos, teclado y selección con la foto elegida, carrete en orden, imprimir;
+el panel de comentarios muestra `[Image]`.
+[ Fotos en línea - entrega 1: el nodo, los huecos estables y lo que se ve ]
+
 v0.075 :
 
 Las fotos HEIC agregadas desde el navegador no se veían. Una foto del iPhone soltada, pegada o elegida en el

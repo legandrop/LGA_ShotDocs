@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SharpView } from '../media/queue';
-import { downloadsAllowed, porteroDownload, SHARP_CONCURRENCY, sharpenImages, sharpSide, wantsSharper, type SharpMedia } from './sharpImages';
+import { downloadsAllowed, photoUrlOf, porteroDownload, SHARP_CONCURRENCY, sharpenImages, sharpSide, wantsSharper, type SharpMedia } from './sharpImages';
 
 // Fotos nítidas en la página (Docs/Doc_Imagenes.md, "Calidad en la página"): cuándo se pide la imagen
 // nítida, cómo reemplaza a la miniatura sin cambiar el tamaño de la foto, y que no se pierde cuando BlockNote
@@ -27,6 +27,22 @@ function block(id: string, wrapperWidth = 'fit-content', natural = 480): HTMLIma
     <div class="bn-file-block-content-wrapper" style="width: ${wrapperWidth};"><div class="bn-visual-media-wrapper">
     <img class="bn-visual-media" src="blob:thumb-${id}"></div></div></div></div>`;
   const img = outer.querySelector('img')!;
+  Object.defineProperty(img, 'complete', { value: true, configurable: true });
+  Object.defineProperty(img, 'naturalWidth', { value: natural, configurable: true });
+  Object.defineProperty(img, 'naturalHeight', { value: Math.round((natural * 2) / 3), configurable: true });
+  return img;
+}
+
+/**
+ * Un párrafo con una foto en línea como la dibuja inlinePhoto.ts (con la miniatura ya cargada), y al lado el
+ * `<img>` de ancho 0 que pone ProseMirror junto a un nodo en línea (no es una foto: no se toca).
+ */
+function inlinePhoto(id: string, natural = 480): HTMLImageElement {
+  const outer = document.createElement('div');
+  outer.className = 'bn-block-outer';
+  outer.innerHTML = `<div class="bn-block"><div class="bn-block-content" data-content-type="paragraph"><p class="bn-inline-content">texto
+    <span class="sd-photo" contenteditable="false" data-inline-content-type="photo" data-url="sdmedia://${uid(id)}" data-name="${id}.jpg" data-w="0"><img class="bn-visual-media" src="blob:thumb-${id}"></span><img class="ProseMirror-separator"><br class="ProseMirror-trailingBreak"></p></div></div>`;
+  const img = outer.querySelector<HTMLImageElement>('.sd-photo > img')!;
   Object.defineProperty(img, 'complete', { value: true, configurable: true });
   Object.defineProperty(img, 'naturalWidth', { value: natural, configurable: true });
   Object.defineProperty(img, 'naturalHeight', { value: Math.round((natural * 2) / 3), configurable: true });
@@ -165,6 +181,36 @@ describe('cambiar la miniatura por la imagen nítida', () => {
     img.src = 'data:image/svg+xml,deleted';
     await vi.waitFor(() => expect(img.dataset.sdSharp).toBeUndefined());
     expect(img.style.getPropertyValue('--sd-thumb-w')).toBe('');
+  });
+
+  it('una foto en línea (Docs/Doc_Fotos_En_Linea.md): la misma nítida, con el tope de su miniatura; el separador de ProseMirror no se toca', async () => {
+    const img = inlinePhoto('a');
+    const media = fakeMedia();
+    const root = page(img);
+    start(root, media, 480, 2);
+    await vi.waitFor(() => expect(img.getAttribute('src')).toBe('blob:view-a'));
+    expect(img.dataset.sdSharp).toBe('480');
+    expect(img.style.getPropertyValue('--sd-thumb-w')).toBe('480px');
+    const separator = root.querySelector<HTMLImageElement>('img.ProseMirror-separator')!;
+    expect(separator.getAttribute('src')).toBeNull();
+    expect(photoUrlOf(img)).toBe(`sdmedia://${uid('a')}`);
+    expect(photoUrlOf(separator)).toBeNull();
+    // La foto-bloque y la en línea del mismo archivo: una sola nítida para las dos.
+    const other = block('a', '1040px');
+    root.append(other.closest('.bn-block-outer')!);
+    await vi.waitFor(() => expect(other.getAttribute('src')).toBe('blob:view-a'));
+    expect(media.view).toHaveBeenCalledTimes(1);
+  });
+
+  it('una foto en línea a la que le cambian la dirección (se reemplazó el archivo): pierde las marcas de la otra', async () => {
+    const img = inlinePhoto('a');
+    const media = fakeMedia();
+    start(page(img), media, 480, 2);
+    await vi.waitFor(() => expect(img.dataset.sdSharpId).toBe(uid('a')));
+    img.parentElement!.setAttribute('data-url', `sdmedia://${uid('b')}`);
+    img.src = 'blob:thumb-b';
+    await vi.waitFor(() => expect(img.getAttribute('src')).toBe('blob:view-b'));
+    expect(img.dataset.sdSharpId).toBe(uid('b'));
   });
 
   it('una foto que llega después (pegada, o de otro dispositivo) también', async () => {

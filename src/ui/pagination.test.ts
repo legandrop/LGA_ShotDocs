@@ -7,7 +7,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from './editorSchema';
 import { printGeometry } from './pageFormat';
 import { mergeRowUnits, paginate, UNIT_SELECTOR, type Unit } from './pagination';
-import { downscale, finishPrint, ORIGINAL_MAX_SIDE, printPage } from './printPage';
+import { downscale, finishPrint, imagesPending, ORIGINAL_MAX_SIDE, printPage } from './printPage';
 import { buildPrintView, paginateView } from './printView';
 import { isContentMutation, placeMarks } from './SheetBreaks';
 
@@ -388,6 +388,26 @@ describe('la vista de impresión y el diálogo', () => {
     expect(document.querySelector('.print-output img')).not.toBeNull();
   });
 
+  it('también espera las fotos en línea (Docs/Doc_Fotos_En_Linea.md), y la vista las lleva', async () => {
+    const { article } = mountPage([
+      { type: 'paragraph', content: ['Plano ', { type: 'photo', props: { url: 'https://example.com/a.jpg', name: 'a.jpg', w: 0.5 } }] },
+    ]);
+    fakeLayout();
+    let loaded = false;
+    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockImplementation(() => loaded);
+    expect(imagesPending(article)).toBe(true);
+    setTimeout(() => (loaded = true), 250);
+    let printedAt = 0;
+    const start = Date.now();
+    vi.spyOn(window, 'print').mockImplementation(() => {
+      printedAt = Date.now();
+    });
+    await printPage('p1', { format: { size: 'A4', landscape: false } });
+    expect(printedAt - start).toBeGreaterThanOrEqual(200);
+    expect(imagesPending(article)).toBe(false);
+    expect(document.querySelector('.print-output .sd-photo > img.bn-visual-media')?.getAttribute('src')).toBe('https://example.com/a.jpg');
+  });
+
   it('achica una foto grande a 2400 px de lado mayor', async () => {
     const drawn = vi.fn();
     (globalThis as { createImageBitmap?: unknown }).createImageBitmap = vi.fn(async () => ({ width: 6000, height: 4000, close: vi.fn() }));
@@ -466,6 +486,36 @@ describe('las fotos en la vista de impresión', () => {
     const view = buildPrintView(photoPage(390, '600px'), { size: 'A4', landscape: false }, 'output');
     expect(wrapperOf(view).style.width).toBe('600px');
     expect(wrapperOf(view).style.maxWidth).toBe('100%');
+    view.root.remove();
+  });
+
+  it('una foto en línea sin ancho propio (w = 0): el ancho natural de su miniatura; con ancho, su parte del renglón', () => {
+    const article = document.createElement('article');
+    article.className = 'page sheet';
+    article.innerHTML = `<div class="editor-host"><div class="bn-container"><div class="bn-editor">
+      <div class="bn-block-outer"><div class="bn-block-content" data-content-type="paragraph"><p class="bn-inline-content">a
+        <span class="sd-photo sd-photo-in-range" data-url="sdmedia://x" data-w="0"><img class="bn-visual-media" src="blob:thumb"></span><img class="ProseMirror-separator">
+        <span class="sd-photo sd-photo-sized sd-photo-row-first" data-url="sdmedia://y" data-w="0.5" style="--ph-w: 0.5; --row-n: 1"><img class="bn-visual-media" src="blob:thumb-y"></span>
+      </p></div></div></div></div></div>`;
+    document.body.append(article);
+    cleanups.push(() => article.remove());
+    const live = [...article.querySelectorAll<HTMLImageElement>('.sd-photo > img')];
+    for (const img of live) {
+      Object.defineProperty(img, 'naturalWidth', { value: 480 });
+      Object.defineProperty(img, 'naturalHeight', { value: 320 });
+    }
+    // La primera ya muestra la nítida: mide lo que su miniatura.
+    live[0].dataset.sdSharp = '480';
+    live[0].dataset.sdSharpH = '300';
+    const view = buildPrintView(article, { size: 'A4', landscape: false }, 'output');
+    const [natural, sized] = [...view.root.querySelectorAll<HTMLImageElement>('.sd-photo > img')];
+    expect(natural.style.width).toBe('480px');
+    expect(natural.style.aspectRatio).toBe('480 / 300');
+    expect(sized.style.width).toBe('');
+    expect(sized.closest<HTMLElement>('.sd-photo')!.style.getPropertyValue('--row-n')).toBe('1');
+    // La marca de la selección no va al papel; el separador de ProseMirror no se toca.
+    expect(view.root.querySelectorAll('.sd-photo-in-range')).toHaveLength(0);
+    expect(view.root.querySelector<HTMLImageElement>('img.ProseMirror-separator')!.style.width).toBe('');
     view.root.remove();
   });
 

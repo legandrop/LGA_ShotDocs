@@ -5,6 +5,7 @@ import {
   type BlockNoteEditor,
   createExtension,
   defaultBlockSpecs,
+  defaultInlineContentSpecs,
   defaultProps,
   getBlockInfoFromSelection,
   parseDefaultProps,
@@ -14,6 +15,7 @@ import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from './driveCard';
 import { imageRowsExtension, ROW_WIDTH_PROP } from './imageRowsEditor';
+import { photoSpec } from './inlinePhoto';
 
 // --- Script (guion) ----------------------------------------------------------------------------------
 //
@@ -261,8 +263,16 @@ export function setVideosAccepted(on: boolean): void {
   imageAccept.splice(0, imageAccept.length, ...(on ? ['image/*', 'video/*', '*/*'] : ['image/*']));
 }
 
+/** Los bloques de la app (sin el contenido en línea: una prueba arma con ellos el esquema de la versión anterior). */
+export const appBlockSpecs = { ...blockSpecs, image, paragraph: createParagraph() };
+
+// El contenido en línea: el de BlockNote (texto y link) más la foto en línea (inlinePhoto.ts), el único tipo
+// de nodo que se sumó después de la regla "nada de tipos nuevos". Lo cubre el resguardo de `unknownContent.ts`.
+// Sus filas, la marca de la selección y su teclado (inlinePhotoEditor.ts) los suma el editor de la página
+// (PageEditor.tsx): BlockNote no registra las extensiones de un contenido en línea.
 export const schema = BlockNoteSchema.create({
-  blockSpecs: { ...blockSpecs, image, paragraph: createParagraph() },
+  blockSpecs: appBlockSpecs,
+  inlineContentSpecs: { ...defaultInlineContentSpecs, photo: photoSpec },
 });
 
 /**

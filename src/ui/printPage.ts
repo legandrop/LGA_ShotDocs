@@ -230,17 +230,30 @@ function fontsLoaded(): boolean {
   return !document.fonts || document.fonts.status === 'loaded';
 }
 
+/**
+ * Lo que lleva la dirección de una foto: el bloque `image` o la foto en línea (`.sd-photo`,
+ * Docs/Doc_Fotos_En_Linea.md), con su `<img class="bn-visual-media">` adentro.
+ */
+const PHOTO_HOLDERS = '[data-content-type="image"][data-url], .sd-photo[data-url]';
+
+/** La imagen de una foto: en una foto en línea, su hija directa (no el `<img>` de ancho 0 de ProseMirror). */
+const photoImg = (holder: HTMLElement): HTMLImageElement | null =>
+  holder.querySelector<HTMLImageElement>(holder.classList.contains('sd-photo') ? ':scope > img.bn-visual-media' : 'img.bn-visual-media');
+
 /** La página tiene fotos o videos del Drive (se buscan sus originales en el dispositivo). */
 function hasDriveImages(article: HTMLElement): boolean {
-  return !!article.querySelector(`.editor-host [data-content-type="image"][data-url^="${MEDIA_SCHEME}"]`);
+  return !!article.querySelector(
+    `.editor-host [data-content-type="image"][data-url^="${MEDIA_SCHEME}"], .editor-host .sd-photo[data-url^="${MEDIA_SCHEME}"]`,
+  );
 }
 
 /** Alguna imagen del editor en pantalla todavía está buscando su dirección o cargando. */
 export function imagesPending(article: HTMLElement): boolean {
-  for (const block of article.querySelectorAll<HTMLElement>('.editor-host .bn-editor [data-content-type="image"][data-url]')) {
+  const live = '.editor-host .bn-editor';
+  for (const block of article.querySelectorAll<HTMLElement>(`${live} [data-content-type="image"][data-url], ${live} .sd-photo[data-url]`)) {
     if (!block.getAttribute('data-url')) continue;
     if (block.querySelector('.bn-file-loading-preview')) return true;
-    const img = block.querySelector<HTMLImageElement>('img.bn-visual-media');
+    const img = photoImg(block);
     // Una imagen rota (cargó y no tiene tamaño) no se espera.
     if (img && (!img.getAttribute('src') || !img.complete)) return true;
   }
@@ -289,10 +302,10 @@ async function useOriginals(job: Job, media: PrintMedia): Promise<void> {
   const limit = isTouch() ? ORIGINALS_TOUCH : ORIGINALS;
   let count = 0;
   let bytes = 0;
-  for (const block of job.view.root.querySelectorAll<HTMLElement>('[data-content-type="image"][data-url]')) {
+  for (const block of job.view.root.querySelectorAll<HTMLElement>(PHOTO_HOLDERS)) {
     if (active !== job || count >= limit.count) return;
     const id = mediaIdOf(block.getAttribute('data-url'));
-    const img = block.querySelector<HTMLImageElement>('img.bn-visual-media');
+    const img = photoImg(block);
     if (!id || !img) continue;
     const original = await media.localImage(id).catch(() => null);
     if (!original || bytes + original.size > limit.bytes) continue;
