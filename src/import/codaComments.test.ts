@@ -87,8 +87,17 @@ describe('comentarios de Coda: lectura y anclaje', () => {
     ];
     const thread = (ref: string) => ({ reference: { type: 'text', text: ref } }) as unknown as CodaThread;
     expect(anchorBlock(thread('Videos:https://drive.google.com/ahttps://drive.google.com/b'), blocks)).toEqual({ blockId: 'b2', lost: false });
-    // Corto: no se busca sin espacios adentro de otro bloque.
+    // Corto: no se busca sin espacios adentro de otro bloque (11 caracteres no; 12 sí).
     expect(anchorBlock(thread('ot ra'), blocks)).toEqual({ blockId: null, lost: true });
+    const near = [{ id: 'c1', text: 'xx abcdefghijkl yy' }];
+    expect(anchorBlock(thread('abcde fghijk'), near)).toEqual({ blockId: null, lost: true });
+    expect(anchorBlock(thread('abcde fghijkl'), near)).toEqual({ blockId: 'c1', lost: false });
+    // Contenido en dos bloques: no se adivina, va a la página entera.
+    const twice = [
+      { id: 'd1', text: 'Ver https://x.com/ab y más' },
+      { id: 'd2', text: 'Ver https://x.com/abc' },
+    ];
+    expect(anchorBlock(thread('Ver https://x.com/a b'), twice)).toEqual({ blockId: null, lost: true });
   });
 
   it('datos raros de Coda: sin texto, nombre largo, correo inválido, fecha imposible', async () => {

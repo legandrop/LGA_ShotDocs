@@ -250,7 +250,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071): el anclaje de un comentario** pegado a un renglón con direcciones: un último intento
-      compara sin espacios (12 letras o más). Queda sin probar con un comentario real de ese tipo, y un párrafo
+      compara sin espacios (12 caracteres o más; adentro de un bloque, solo si es uno solo). Queda sin probar con un comentario real de ese tipo, y un párrafo
       partido en tarjetas todavía no se compara contra los bloques seguidos juntos.
     - **Prolijidad:** una dirección partida en dos por un cambio de formato queda como un link cortado; una
       dirección con un punto final lo lleva adentro del link; un salto de línea puede quedar adentro del

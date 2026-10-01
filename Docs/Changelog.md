@@ -6,7 +6,7 @@ Comentarios de Coda en renglones con direcciones. Desde v0.069 la importación s
 un renglón (links y tarjetas de Drive), así que el texto del bloque ya no es el que Coda da como texto marcado de
 un comentario, que puede venir con todo pegado o con otros espacios. Ese hilo no se encontraba y quedaba en la
 página entera, con una nota. Ahora, si nada coincide, el anclaje hace un último intento comparando sin espacios,
-solo con textos de 12 letras o más para no confundir uno corto con otro bloque. Lo demás del anclaje no cambia
+solo con textos de 12 caracteres o más y, si lo encuentra adentro de un bloque, solo si es uno solo. Lo demás del anclaje no cambia
 y nada se pierde: lo que no se encuentra sigue yendo a la página entera.
 [ Importar de Coda - comentarios en renglones con direcciones ]
 
