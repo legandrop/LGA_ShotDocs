@@ -18,7 +18,8 @@ export function isAttachment(media: Pick<MediaQueue, 'fileInfo'>, id: string, na
  * Marca con `sd-attachment` las imágenes de los bloques de ese archivo si es un adjunto (la tarjeta tiene
  * tamaño fijo, sin tiradores ni lupa: styles.css). La clase va en la imagen, adentro de la vista de BlockNote,
  * que ProseMirror no vigila; si BlockNote vuelve a dibujar la imagen, vuelve a pasar por `resolveFileUrl` y se
- * marca de nuevo.
+ * marca de nuevo. También la de una foto en línea (`.sd-photo`, Docs/Doc_Fotos_En_Linea.md) que apunte a un
+ * adjunto (nada la crea: los adjuntos van como bloque), con la misma `data-url` y `data-name`.
  */
 export function markAttachments(
   editor: { domElement?: HTMLElement | null } | null,
@@ -27,8 +28,10 @@ export function markAttachments(
 ): void {
   const root = editor?.domElement;
   if (!root) return;
-  for (const block of root.querySelectorAll<HTMLElement>(`[data-content-type="image"][data-url="${MEDIA_SCHEME}${id}"]`)) {
-    const img = block.querySelector<HTMLImageElement>('img.bn-visual-media');
+  const url = `${MEDIA_SCHEME}${id}`;
+  for (const block of root.querySelectorAll<HTMLElement>(`[data-content-type="image"][data-url="${url}"], .sd-photo[data-url="${url}"]`)) {
+    // En una foto en línea, su propia imagen (no el `<img>` de ancho 0 que ProseMirror pone junto a ella).
+    const img = block.querySelector<HTMLImageElement>(block.classList.contains('sd-photo') ? ':scope > img.bn-visual-media' : 'img.bn-visual-media');
     if (!img) continue;
     const name = block.getAttribute('data-name') ?? '';
     img.classList.toggle('sd-attachment', isAttachment(media, id, name));

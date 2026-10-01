@@ -2629,6 +2629,110 @@ code {
   max-width: var(--sd-thumb-w, 100%);
 }
 
+/* Fotos en línea (inlinePhoto.ts, inlinePhotoEditor.ts; Docs/Doc_Fotos_En_Linea.md): la foto es un carácter del
+   renglón. Un elemento en línea alineado abajo con el texto; el navegador hace el corte de renglón. Su ancho
+   (`--ph-w`, la propiedad `w`) significa lo mismo que `rowWidth` de las filas de bloques: la parte del renglón
+   que queda después de los espacios entre las `n` fotos de su fila (`--row-n`, la pone la decoración), menos 1
+   px repartido entre todas, así ningún redondeo manda la última al renglón de abajo y todas quedan a la misma
+   altura. Valen igual en el editor, en la vista de impresión y en el PDF. Los selectores van a la imagen hija
+   de `.sd-photo`: ProseMirror pone al lado de un nodo en línea un `<img class="ProseMirror-separator">` de ancho 0. */
+.bn-editor {
+  --img-gap: 8px;
+}
+
+.sd-photo {
+  display: inline-block;
+  position: relative;
+  max-width: 100%;
+  line-height: 0;
+  vertical-align: bottom;
+  margin-block: calc(var(--img-gap, 8px) / 2);
+  border-radius: 2px;
+}
+
+.sd-photo > img.bn-visual-media {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 2px;
+  user-select: none;
+}
+
+/* `w = 0`: el ancho natural de lo que se ve (la miniatura), con tope en el renglón. Con la imagen nítida puesta
+   (sharpImages.ts, más grande), el de la miniatura sigue de tope: la foto no crece, solo se ve mejor. */
+.sd-photo[data-w='0'] > img.bn-visual-media {
+  width: auto;
+  max-width: 100%;
+}
+
+.sd-photo[data-w='0'] > img.bn-visual-media[data-sd-sharp] {
+  max-width: min(100%, var(--sd-thumb-w, 100%));
+}
+
+.sd-photo.sd-photo-sized {
+  width: calc(var(--ph-w) * (100% - (var(--row-n) - 1) * var(--img-gap, 8px) - 1px));
+}
+
+.sd-photo.sd-photo-sized:not(.sd-photo-row-first) {
+  margin-left: var(--img-gap, 8px);
+}
+
+/* La última de una fila que no llena el renglón, seguida de otra foto: completa el renglón, así el navegador
+   corta donde corta `groupRows`. */
+.sd-photo.sd-photo-sized.sd-photo-row-break {
+  margin-right: calc(var(--row-rest) * (100% - (var(--row-n) - 1) * var(--img-gap, 8px) - 1px));
+}
+
+/* En un ítem de lista con fotos, la viñeta o el número quedan en el renglón del texto, no arriba de la foto. */
+.bn-block-content[data-content-type='bulletListItem']:has(.sd-photo),
+.bn-block-content[data-content-type='numberedListItem']:has(.sd-photo),
+.bn-block-content[data-content-type='checkListItem']:has(.sd-photo) {
+  align-items: baseline;
+}
+
+/* Elegida (un clic o las flechas): el mismo contorno que la foto-bloque, en vez del recuadro azul de BlockNote,
+   solo si se puede editar y el editor tiene el foco. La lupa: sobre la elegida (un clic la abre) o en solo
+   lectura. */
+.editor .bn-block-content .sd-photo.ProseMirror-selectednode::after {
+  content: none;
+}
+
+.editor .bn-editor.ProseMirror-focused[contenteditable='true'] .sd-photo.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.editor .bn-editor.ProseMirror-focused .sd-photo.ProseMirror-selectednode > img.bn-visual-media,
+.editor .bn-editor[contenteditable='false'] .sd-photo > img.bn-visual-media {
+  cursor: zoom-in;
+}
+
+/* Adentro de una selección de texto (Shift+flechas, Shift+clic, arrastrar): sin esta marca, una selección de
+   solo fotos no se ve (el navegador pinta el fondo del texto, no las imágenes). */
+.editor .sd-photo.sd-photo-in-range {
+  outline: 2px solid #2383e2;
+  outline-offset: 1px;
+}
+
+.editor .sd-photo.sd-photo-in-range::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: rgba(35, 131, 226, 0.28);
+  pointer-events: none;
+}
+
+/* En el teléfono, si la cuenta lo pide (Fotos en fila → Apiladas), cada foto con ancho propio ocupa el renglón
+   entero, como las fotos-bloque en fila. Solo en la página: la vista de impresión dibuja las filas. */
+@media (max-width: 760px) {
+  html[data-phone-images='stacked'] #root .editor .sd-photo.sd-photo-sized {
+    width: calc(100% - 1px);
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
 /* Adjuntos (Docs/Doc_Adjuntos.md): la tarjeta de un PDF, un zip… tiene tamaño fijo (su texto no se estira como
    una foto), sin tiradores; el cursor es una mano (un segundo clic la abre o la baja). La clase `sd-attachment`
    la pone la app en la imagen (attachments.ts). Si una versión vieja le puso un ancho o la puso en fila, no

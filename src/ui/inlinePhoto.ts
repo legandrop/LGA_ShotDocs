@@ -126,12 +126,17 @@ export const PhotoNode = Node.create({
       img.draggable = false;
 
       let shown: PhotoProps | null = null;
+      /** Cuántas veces se pidió la imagen: una respuesta vieja (la dirección cambió mientras tanto) no se pone. */
+      const asked = { count: 0 };
       const paint = (n: PMNode) => {
         const props = propsOf(n);
         // La imagen se toca SOLO si cambió la dirección: cambiar el ancho no la vuelve a cargar ni a dibujar.
-        if (!shown || shown.url !== props.url) showSource(img, props.url);
+        if (!shown || shown.url !== props.url) showSource(img, props.url, resolverOf(n), asked);
         if (!shown || shown.name !== props.name) img.alt = props.name;
         setData(dom, props);
+        // El ancho, para el CSS de las filas (styles.css, "Fotos en línea"); cuántas hay en la fila lo pone
+        // la decoración de inlinePhotoEditor.ts.
+        dom.style.setProperty('--ph-w', String(props.w));
         shown = props;
       };
       paint(node);
@@ -151,15 +156,42 @@ export const PhotoNode = Node.create({
   },
 });
 
+type Resolver = (url: string) => Promise<string>;
+
 /**
- * Pone la imagen en su `<img>`. PUNTO DE ENGANCHE de la entrega 1b: acá entran la resolución de
- * `sdmedia://<id>` (`resolveFileUrl`), la miniatura y la mejora de nitidez, como en la foto-bloque. Por ahora
- * va la dirección tal cual: una `https` se ve; una `sdmedia://` queda sin imagen hasta la 1b (nada en la app
- * crea fotos en línea todavía).
+ * El `resolveFileUrl` del editor de BlockNote que dibuja la foto (el de la página: PageEditor.tsx), o `null`
+ * (un editor sin él, como el de las pruebas). BlockNote deja el editor en el esquema de ProseMirror.
  */
-function showSource(img: HTMLImageElement, url: string): void {
-  if (url) img.src = url;
-  else img.removeAttribute('src');
+function resolverOf(node: PMNode): Resolver | null {
+  const editor = (node.type.schema.cached as { blockNoteEditor?: { resolveFileUrl?: Resolver } }).blockNoteEditor;
+  return editor?.resolveFileUrl ?? null;
+}
+
+/**
+ * Pone la imagen en su `<img>`, como el bloque `image` de BlockNote: la dirección pasa por `resolveFileUrl`, que
+ * en la app da la miniatura de `sdmedia://<id>` (del dispositivo o bajada), el cuadro con la marca de reproducir
+ * de un video, el marcador de un archivo que se está subiendo, sin red o de otro proyecto, o la dirección tal
+ * cual (`https`). Cuando llega una miniatura después, o una imagen nítida, las cambian `subscribeThumbs`
+ * (PageEditor.tsx) y sharpImages.ts, que encuentran esta foto por su `.sd-photo[data-url]`.
+ */
+function showSource(img: HTMLImageElement, url: string, resolve: Resolver | null, asked: { count: number }): void {
+  const ask = ++asked.count;
+  if (!url) {
+    img.removeAttribute('src');
+    return;
+  }
+  if (!resolve) {
+    img.src = url;
+    return;
+  }
+  // Mientras se busca, sin imagen (una `sdmedia://` el navegador no la sabe abrir).
+  img.removeAttribute('src');
+  void resolve(url).then(
+    (src) => {
+      if (ask === asked.count) img.src = src;
+    },
+    () => undefined,
+  );
 }
 
 export const photoSpec = createInlineContentSpecFromTipTapNode(

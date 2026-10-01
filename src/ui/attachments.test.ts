@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { forgetAttachment, prepareAndGet, preparedFor, prepareAttachment } from './attachmentOpen';
-import { isAttachment } from './attachments';
+import { isAttachment, markAttachments } from './attachments';
 
 // Adjuntos en el editor (Docs/Doc_Adjuntos.md): cuándo un bloque es un adjunto y cómo se prepara la dirección
 // para abrirlo o bajarlo.
@@ -23,6 +23,21 @@ describe('qué bloque es un adjunto', () => {
     expect(isAttachment(none, 'id', '')).toBe(false);
     expect(isAttachment(none, 'id', 'foto')).toBe(false);
     expect(isAttachment(none, 'id', 'algo.desconocida')).toBe(false);
+  });
+});
+
+describe('la marca de los adjuntos en la página', () => {
+  it('en el bloque image y en una foto en línea con ese archivo; nunca en el separador de ProseMirror', () => {
+    const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
+    const root = document.createElement('div');
+    root.innerHTML = `<div data-content-type="image" data-url="sdmedia://${id}" data-name="plano.pdf"><img class="bn-visual-media"></div>
+      <p class="bn-inline-content"><span class="sd-photo" data-url="sdmedia://${id}" data-name="plano.pdf"><img class="bn-visual-media"></span><img class="ProseMirror-separator"></p>
+      <p class="bn-inline-content"><span class="sd-photo" data-url="sdmedia://otro" data-name="otro.pdf"><img class="bn-visual-media"></span></p>`;
+    markAttachments({ domElement: root }, id, { fileInfo: () => null });
+    expect([...root.querySelectorAll('img')].map((img) => img.classList.contains('sd-attachment'))).toEqual([true, true, false, false]);
+    markAttachments({ domElement: root }, id, { fileInfo: () => ({ kind: 'image', mime: 'image/jpeg', name: 'x', size: 1, local: false }) });
+    expect(root.querySelectorAll('img.sd-attachment')).toHaveLength(0);
+    document.body.innerHTML = '';
   });
 });
 

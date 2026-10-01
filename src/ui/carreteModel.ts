@@ -11,8 +11,16 @@ import { FILE_SCHEME } from '../sync/files';
 export type CarreteSource = 'media' | 'file' | 'web';
 
 export interface CarreteItem {
-  /** El bloque `image` de la página (para empezar por el que se tocó). */
+  /**
+   * Qué foto es, para empezar por la que se tocó: el id del bloque `image`, o `<bloque>#<n>` para la n-ésima
+   * foto en línea (desde 0) del texto de un bloque (Docs/Doc_Fotos_En_Linea.md). Dos fotos en línea de un mismo
+   * párrafo comparten el id del bloque: lo que las distingue es su lugar.
+   */
+  key: string;
+  /** El bloque de la página: el `image`, o el que tiene la foto en línea en su texto. */
   blockId: string;
+  /** El lugar de la foto en línea entre las de su bloque (desde 0); `null` en un bloque `image`. */
+  at: number | null;
   /** La dirección guardada en el bloque, tal cual. */
   url: string;
   source: CarreteSource;
@@ -29,7 +37,51 @@ export interface BlockLike {
   id: string;
   type: string;
   props?: unknown;
+  /** El texto del bloque (BlockNote): textos, links y fotos en línea; o el de una tabla (`tableContent`). */
+  content?: unknown;
   children?: BlockLike[];
+}
+
+/** El tipo de la foto en línea (inlinePhoto.ts; acá sin importarlo, para no traer el editor). */
+const INLINE_PHOTO = 'photo';
+
+/** La clave de una foto: la de un bloque `image` es su id; la de una foto en línea, `<bloque>#<n>`. */
+export const photoKey = (blockId: string, at: number | null): string => (at === null ? blockId : `${blockId}#${at}`);
+
+/** Lo contrario de `photoKey`. */
+export function parsePhotoKey(key: string): { blockId: string; at: number | null } {
+  const m = /^(.*)#(\d+)$/.exec(key);
+  return m ? { blockId: m[1], at: Number(m[2]) } : { blockId: key, at: null };
+}
+
+/** Las propiedades (`url`, `name`…) de la foto con esa clave en un bloque: la del bloque `image` o una en línea. */
+export function photoPropsIn(block: BlockLike | undefined | null, key: string): Record<string, unknown> | null {
+  const { blockId, at } = parsePhotoKey(key);
+  if (!block || block.id !== blockId) return null;
+  if (at === null) return block.type === 'image' ? ((block.props ?? {}) as Record<string, unknown>) : null;
+  return inlinePhotosOf(block.content)[at] ?? null;
+}
+
+/**
+ * Las fotos en línea del texto de un bloque, en orden (las de una tabla, celda por celda, fila por fila): sus
+ * propiedades tal cual. Todas, también las que el carrete no muestra, así el lugar de cada una coincide con el
+ * de la pantalla (`photoKeyOf`).
+ */
+export function inlinePhotosOf(content: unknown): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  const inline = (list: unknown) => {
+    if (!Array.isArray(list)) return;
+    for (const item of list as ({ type?: string; props?: unknown } | null)[]) {
+      if (item?.type === INLINE_PHOTO) out.push((item.props ?? {}) as Record<string, unknown>);
+    }
+  };
+  if (Array.isArray(content)) inline(content);
+  else if ((content as { type?: string } | null)?.type === 'tableContent') {
+    for (const row of (content as { rows?: { cells?: unknown[] }[] }).rows ?? []) {
+      for (const cell of row.cells ?? []) inline(Array.isArray(cell) ? cell : (cell as { content?: unknown } | null)?.content);
+    }
+  }
+  return out;
 }
 
 /** De dónde sale una dirección, o `null` si el carrete no la muestra (vacía, a medio subir, otro esquema). */
@@ -46,32 +98,34 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 
 /**
  * Todas las fotos y videos de la página, en el orden en que aparecen (de arriba abajo, también los que
- * están adentro de otro bloque). Solo bloques `image` con una dirección que se pueda mostrar.
- */
-/**
- * Las fotos y videos de la página, en orden. `skip`: los que no van (los adjuntos, Docs/Doc_Adjuntos.md: un PDF
- * o un zip no se ven en el carrete).
+ * están adentro de otro bloque): los bloques `image` y las fotos en línea del texto de cada bloque (también en
+ * listas y en celdas de tabla; las de un bloque, antes que sus hijos). Solo las que tienen una dirección que se
+ * pueda mostrar. `skip`: las que no van (los adjuntos, Docs/Doc_Adjuntos.md: un PDF o un zip no se ven en el
+ * carrete).
  */
 export function collectCarrete(blocks: readonly BlockLike[], skip?: (mediaId: string, name: string) => boolean): CarreteItem[] {
   const out: CarreteItem[] = [];
+  const add = (blockId: string, at: number | null, props: Record<string, unknown>) => {
+    const url = text(props.url);
+    const source = carreteSourceOf(url);
+    const mediaId = source === 'media' ? mediaIdOf(url) : null;
+    if (!source || (mediaId && skip?.(mediaId, text(props.name)))) return;
+    out.push({
+      key: photoKey(blockId, at),
+      blockId,
+      at,
+      url,
+      source,
+      mediaId,
+      name: text(props.name),
+      // La foto en línea no tiene leyenda (el texto de al lado cumple esa función).
+      caption: at === null ? text(props.caption) : '',
+    });
+  };
   const walk = (list: readonly BlockLike[]) => {
     for (const block of list) {
-      if (block.type === 'image') {
-        const props = (block.props ?? {}) as Record<string, unknown>;
-        const url = text(props.url);
-        const source = carreteSourceOf(url);
-        const mediaId = source === 'media' ? mediaIdOf(url) : null;
-        if (source && !(mediaId && skip?.(mediaId, text(props.name)))) {
-          out.push({
-            blockId: block.id,
-            url,
-            source,
-            mediaId,
-            name: text(props.name),
-            caption: text(props.caption),
-          });
-        }
-      }
+      if (block.type === 'image') add(block.id, null, (block.props ?? {}) as Record<string, unknown>);
+      else inlinePhotosOf(block.content).forEach((props, at) => add(block.id, at, props));
       if (block.children?.length) walk(block.children);
     }
   };
@@ -85,9 +139,23 @@ export function blockIdOf(el: Element | null): string | null {
   return block?.getAttribute('data-id') ?? null;
 }
 
-/** Por cuál empezar: el bloque que se tocó; `-1` si ese bloque no está en el carrete. */
-export function startIndex(items: readonly CarreteItem[], blockId: string | null): number {
-  return blockId ? items.findIndex((i) => i.blockId === blockId) : -1;
+/**
+ * La clave (`CarreteItem.key`) de la foto que se tocó: el id de su bloque `image` o, si es una foto en línea
+ * (`.sd-photo`), el de su bloque más su lugar entre las fotos en línea del texto de ese bloque. Las de los
+ * bloques hijos no cuentan: van en su propio `.bn-block-content`. `null` si no está en un bloque.
+ */
+export function photoKeyOf(el: Element | null): string | null {
+  const blockId = blockIdOf(el);
+  const photo = el?.closest('.sd-photo');
+  const content = photo?.closest('.bn-block-content');
+  if (!blockId || !photo || !content) return blockId;
+  const at = [...content.querySelectorAll('.sd-photo')].indexOf(photo);
+  return at < 0 ? blockId : photoKey(blockId, at);
+}
+
+/** Por cuál empezar: la foto que se tocó (su clave, `photoKeyOf`); `-1` si no está en el carrete. */
+export function startIndex(items: readonly CarreteItem[], key: string | null): number {
+  return key ? items.findIndex((i) => i.key === key) : -1;
 }
 
 /** Un nombre para bajar el archivo cuando el bloque no trae uno. */

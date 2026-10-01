@@ -129,7 +129,20 @@ export interface SharpOptions {
 }
 
 const IMAGE_BLOCK = '[data-content-type="image"][data-url]';
+/** La foto en línea (inlinePhoto.ts, Docs/Doc_Fotos_En_Linea.md): su `<span>` lleva la dirección. */
+const INLINE_PHOTO = '.sd-photo[data-url]';
 const MEDIA_IMG = 'img.bn-visual-media';
+/**
+ * Las imágenes de foto de la página: la de cada bloque `image` y la de cada foto en línea (su hija directa: nunca
+ * el `<img class="ProseMirror-separator">` de ancho 0 que ProseMirror pone junto a un nodo en línea).
+ */
+const PHOTO_IMGS = `${IMAGE_BLOCK} ${MEDIA_IMG}, ${INLINE_PHOTO} > ${MEDIA_IMG}`;
+
+/** La dirección guardada de la foto de esa imagen: la de su foto en línea o la de su bloque `image`. */
+export function photoUrlOf(img: HTMLImageElement): string | null {
+  const inline = img.parentElement?.matches(INLINE_PHOTO) ? img.parentElement : null;
+  return (inline ?? img.closest(IMAGE_BLOCK))?.getAttribute('data-url') ?? null;
+}
 
 function decodeImage(url: string): Promise<void> {
   if (typeof Image === 'undefined') return Promise.resolve();
@@ -158,7 +171,7 @@ export function sharpenImages(root: HTMLElement, media: SharpMedia, options: Sha
   let active = 0;
   let stopped = false;
 
-  const idOf = (img: HTMLImageElement): string | null => mediaIdOf(img.closest(IMAGE_BLOCK)?.getAttribute('data-url'));
+  const idOf = (img: HTMLImageElement): string | null => mediaIdOf(photoUrlOf(img));
 
   const unmark = (img: HTMLImageElement) => {
     if (img.dataset.sdSharp === undefined && img.dataset.sdSharpId === undefined) return;
@@ -193,7 +206,7 @@ export function sharpenImages(root: HTMLElement, media: SharpMedia, options: Sha
   };
 
   const imagesOf = (id: string): HTMLImageElement[] =>
-    [...root.querySelectorAll<HTMLImageElement>(`${IMAGE_BLOCK} ${MEDIA_IMG}`)].filter((img) => idOf(img) === id);
+    [...root.querySelectorAll<HTMLImageElement>(PHOTO_IMGS)].filter((img) => idOf(img) === id);
 
   /** Pone la imagen nítida en las fotos de ese archivo que muestran la miniatura o una nítida más chica. */
   const apply = (id: string, view: SharpView) => {

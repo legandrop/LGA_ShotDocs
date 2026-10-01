@@ -17,7 +17,7 @@ import '../i18n/lazy/editor';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
-import { blockIdOf, collectCarrete, startIndex, type BlockLike, type CarreteItem } from './carreteModel';
+import { collectCarrete, inlinePhotosOf, parsePhotoKey, photoKeyOf, photoPropsIn, startIndex, type BlockLike, type CarreteItem } from './carreteModel';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -57,6 +57,7 @@ import { notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
 import { findExtension } from './findEditor';
+import { inlinePhotoExtensions, selectedPhotoKey } from './inlinePhotoEditor';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession } from './projectSearchUi';
 
@@ -376,6 +377,8 @@ function BlockEditor({
       // Buscar y reemplazar en la página (findEditor.ts) y colapsar secciones (collapseEditor.ts): las dos con
       // decoraciones, sin tocar el documento. Colapsar, solo si el navegador puede esconder (`:has()`).
       extensions: [
+        // Las fotos en línea (Docs/Doc_Fotos_En_Linea.md): sus filas, la marca de la selección y su teclado.
+        ...inlinePhotoExtensions,
         findExtension,
         // Cada borrado es un solo Ctrl+Z, y el deshacer del navegador nunca edita la página (undoGuard.ts).
         undoGuardExtension(),
@@ -482,10 +485,11 @@ function BlockEditor({
   // otra) se registra para ella. Al abrir y con cada cambio hecho acá; lo ya visto no se vuelve a pedir.
   useEffect(() => {
     if (!editable) return;
+    // Los bloques `image` y las fotos en línea del texto de cada bloque.
     const collect = (blocks: Block[]) =>
       flatten(blocks).flatMap((b) => {
-        const id = b.type === 'image' ? mediaIdOf((b.props as { url?: string }).url) : null;
-        return id ? [id] : [];
+        const urls = b.type === 'image' ? [(b.props as { url?: string }).url] : inlinePhotosOf(b.content).map((p) => p.url as string);
+        return urls.flatMap((url) => mediaIdOf(url) ?? []);
       });
     const link = (ids: string[]) => {
       if (ids.length > 0) void media.ensureLinks(pageId, ids).catch(() => undefined);
@@ -502,9 +506,10 @@ function BlockEditor({
     () =>
       media.subscribeThumbs((id) => {
         void media.resolve(MEDIA_SCHEME + id, pageId).then((src) => {
-          for (const el of editor.domElement?.querySelectorAll<HTMLElement>('[data-content-type="image"]') ?? []) {
+          // Los bloques `image` y las fotos en línea (`.sd-photo`, con la misma `data-url`).
+          for (const el of editor.domElement?.querySelectorAll<HTMLElement>('[data-content-type="image"], .sd-photo[data-url]') ?? []) {
             if (mediaIdOf(el.getAttribute('data-url')) !== id) continue;
-            const img = el.querySelector<HTMLImageElement>('img.bn-visual-media');
+            const img = el.querySelector<HTMLImageElement>(el.classList.contains('sd-photo') ? ':scope > img.bn-visual-media' : 'img.bn-visual-media');
             if (img) img.src = src;
           }
           // Llegó lo que faltaba saber de un archivo: si es un adjunto, su tarjeta con tamaño fijo.
@@ -634,12 +639,14 @@ function BlockEditor({
   // al cerrar el foco no vuelve al editor (abriría el teclado); para editar, se toca otra vez la foto: si está elegida y el editor tiene el foco,
   // o el toque anterior fue en esa misma foto (sin tocar otra cosa en el medio), ese toque muestra la barra
   // en vez de abrir el carrete. Con el teclado: la barra espaciadora sobre la foto elegida, o "View".
+  // Una foto en línea (Docs/Doc_Fotos_En_Linea.md) se comporta igual; como dos de un mismo párrafo comparten el
+  // id del bloque, cada foto se identifica por su clave (`photoKeyOf`: el bloque más su lugar).
   useEffect(() => {
     // En burbuja: corre después de `notePress`. Lo que se toca adentro del carrete no cuenta.
     const onDown = (e: globalThis.PointerEvent) => {
       const target = e.target as Element | null;
       if (target?.closest?.('.carrete')) return;
-      lastPress.current = target?.closest?.('img.bn-visual-media') ? blockIdOf(target) : null;
+      lastPress.current = target?.closest?.('img.bn-visual-media') ? photoKeyOf(target) : null;
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
@@ -648,25 +655,28 @@ function BlockEditor({
   const notePress = (e: PointerEvent) => {
     const target = e.target as HTMLElement;
     // Sobre un adjunto, se prepara ya la dirección para abrirlo o bajarlo (el clic la usa en el acto).
-    const pressed = target.closest?.('img.bn-visual-media') ? blockIdOf(target) : null;
+    const pressed = target.closest?.('img.bn-visual-media') ? photoKeyOf(target) : null;
     const attachment = pressed ? attachmentOf(pressed) : null;
     if (attachment) void prepareAttachment(media, attachment);
     pressKind.current = e.pointerType;
     mouseOpens.current =
       e.pointerType === 'mouse' &&
       !!target.closest?.('img.bn-visual-media') &&
-      mousePressOpens({ editable, focused: editor.isFocused(), selectedId: selectedImageId(), targetId: blockIdOf(target) });
+      // Shift+clic en una foto en línea elige texto hasta ella (inlinePhotoEditor.ts): nunca abre.
+      !(e.shiftKey && target.closest?.('.sd-photo')) &&
+      mousePressOpens({ editable, focused: editor.isFocused(), selectedId: selectedKey(), targetId: photoKeyOf(target) });
     pressedSelected.current =
       editable &&
       e.pointerType !== 'mouse' &&
       !!target.closest?.('img.bn-visual-media') &&
       !!target.closest('.ProseMirror-selectednode') &&
-      (editor.isFocused() || lastPress.current === blockIdOf(target));
+      (editor.isFocused() || lastPress.current === photoKeyOf(target));
   };
 
-  const openAt = (blockId: string | null, kind = pressKind.current) => {
+  /** `key`: la foto (`photoKeyOf`), o el id de un bloque `image` (la barra de la foto: "View"). */
+  const openAt = (key: string | null, kind = pressKind.current) => {
     // Un adjunto se abre o se baja (con el mouse, en el acto si ya está preparado; si no, o con el dedo, su hoja).
-    const attachment = blockId ? attachmentOf(blockId) : null;
+    const attachment = key ? attachmentOf(key) : null;
     if (attachment) {
       // Con el mouse o el teclado (un gesto del usuario), en el acto si ya está preparado.
       const direct = kind === 'mouse' || kind === 'keyboard';
@@ -674,26 +684,26 @@ function BlockEditor({
       return true;
     }
     const items = collectCarrete(editor.document as unknown as BlockLike[], (id, name) => isAttachment(media, id, name));
-    const start = startIndex(items, blockId);
+    const start = startIndex(items, key);
     if (start < 0) return false;
     setCarrete({ items, start, loader: createCarreteLoader({ media, files }) });
     return true;
   };
 
-  /** El archivo de un bloque si es un adjunto (no una foto ni un video), o `null`. */
-  const attachmentOf = (blockId: string): string | null => {
-    const block = editor.getBlock(blockId);
-    const props = (block?.props ?? {}) as { url?: string; name?: string };
-    const id = block?.type === 'image' ? mediaIdOf(props.url) : null;
-    return id && isAttachment(media, id, props.name ?? '') ? id : null;
+  /** El archivo de una foto (su clave) si es un adjunto (no una foto ni un video), o `null`. */
+  const attachmentOf = (key: string): string | null => {
+    const props = photoPropsIn(editor.getBlock(parsePhotoKey(key).blockId) as BlockLike | undefined, key);
+    const id = props ? mediaIdOf(props.url as string | undefined) : null;
+    return id && isAttachment(media, id, typeof props?.name === 'string' ? props.name : '') ? id : null;
   };
 
-  /** La foto elegida en el editor (selección del bloque entero, no un texto), o `null`. */
-  const selectedImageId = (): string | null => {
-    // La foto misma (no el bloque de afuera, que se elige con ⌘/Ctrl+clic o al arrastrar el bloque).
-    const imageSelected = editor.transact((tr) => (tr.selection as { node?: { type: { name: string } } }).node?.type.name === 'image');
-    const block = editor.getTextCursorPosition().block;
-    return imageSelected && block.type === 'image' ? block.id : null;
+  /**
+   * La foto elegida en el editor (selección de la foto misma, no un texto), o `null`: su clave. No el bloque de
+   * afuera, que se elige con ⌘/Ctrl+clic o al arrastrar el bloque.
+   */
+  const selectedKey = (): string | null => {
+    const view = editor.prosemirrorView;
+    return view ? selectedPhotoKey(view.state) : null;
   };
 
   const openCarrete = (e: MouseEvent) => {
@@ -704,21 +714,22 @@ function BlockEditor({
       mouseOpens: mouseOpens.current,
       pressedSelected: pressedSelected.current,
       detail: e.detail,
-      modifier: e.metaKey || e.ctrlKey,
+      modifier: e.metaKey || e.ctrlKey || (e.shiftKey && !!target.closest('.sd-photo')),
     });
     // El próximo clic sin `pointerdown` (uno sintético) no usa lo de este.
     const kind = pressKind.current;
     pressKind.current = '';
-    if (opens) openAt(blockIdOf(target), kind);
+    if (opens) openAt(photoKeyOf(target), kind);
   };
 
-  // La barra espaciadora con una foto elegida la abre (como la vista rápida de la Mac). Con una foto
-  // elegida la barra no escribe nada, y Enter sigue creando un párrafo debajo.
+  // La barra espaciadora con una foto elegida la abre (como la vista rápida de la Mac). Con una foto-bloque
+  // elegida la barra no escribe nada, y Enter sigue creando un párrafo debajo. Con una foto en línea elegida,
+  // también abre; Enter y las letras pasan el cursor a la derecha de la foto y siguen (inlinePhotoEditor.ts).
   const openWithKeyboard = (e: KeyboardEvent) => {
     if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !editor.isFocused()) return;
-    const block = editor.getTextCursorPosition().block;
-    if (selectedImageId() !== block.id) return;
-    if (openAt(block.id, 'keyboard')) {
+    const key = selectedKey();
+    if (!key) return;
+    if (openAt(key, 'keyboard')) {
       e.preventDefault();
       e.stopPropagation();
     }
