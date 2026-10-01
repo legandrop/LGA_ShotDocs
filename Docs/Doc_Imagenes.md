@@ -6,8 +6,8 @@ Diseño de lo que pidió Lega el 2026-09-30 (fotos y videos del editor; en la p�
 **Desde v0.077, nada crea fotos-bloque nuevas** con un archivo: pegar, soltar y "/Image" ponen las fotos y los videos
 en el renglón (`Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 2)"); los adjuntos siguen siendo un bloque `image` (la
 tarjeta). Lo de este documento sigue valiendo para las fotos-bloque que ya existen (sus filas, tamaños y *Arrange in
-rows* sobre la tanda) y para las que todavía crea pegar HTML con un `<img>`, hasta convertirlas (entrega 3 de las
-fotos en línea).
+rows* sobre la tanda) y para las que todavía crea pegar HTML con un `<img>`, hasta convertirlas: desde v0.078, *Convert
+photos to inline* en el menú de la página (`Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 3)").
 
 **La barra de la foto-bloque cambió en v0.077 (D-24):** es la misma que la de la foto en línea (`MediaBar.tsx`), por
 sectores: [ver, bajar] | [1/1, 1/2, 1/3, 1/4, *Arrange in rows*] | [alinear] | [comentar] | [*Replace image*, *Rename

@@ -88,6 +88,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   ahora tiene su prueba en el repo), y los tres pendientes de la auditoría de la 1b (emojis y dictado, arrastrar
   soltando sobre una foto, la barra de texto). Ver `Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 2)".
   **Después de publicar la v0.077:** subir `min_app_version` a 0.077 (no hace falta antes, por la marca).
+  **Entrega 3 hecha (v0.078):** *Convert photos to inline* en el menú de la página pasa las fotos-bloque de la página
+  a fotos en línea, cada fila a un renglón con los mismos anchos, con un solo deshacer; quedan como bloque las de
+  leyenda y los adjuntos, y los comentarios siguen anclados. Medido en una página tipo ERSO (61 fotos, 25 filas
+  iguales, ±0,55 px). **Para Lega:** ¿convertir sola al abrir? Propuesta y riesgos en `Doc_Fotos_En_Linea.md`,
+  "Cómo quedó (entrega 3)".
   **Queda:**
   - Probar en Safari y en el iPhone: pegar, soltar, "/Image" con la cámara, la barra con el dedo, la composición
     (sin tecla previa entre dos fotos duplica el primer carácter en Chromium). Medir la decoración de filas con un doc

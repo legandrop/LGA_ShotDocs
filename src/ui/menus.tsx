@@ -8,6 +8,7 @@ import { pageFormat, sizeLabel } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
   CollapseAllIcon,
+  ConvertPhotosIcon,
   DarkIcon,
   ExpandAllIcon,
   DriveIcon,
@@ -25,6 +26,7 @@ import {
 } from './icons';
 import { isPhoneLayout } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
+import { convertControlFor } from './convertControl';
 import { notify } from './notice';
 import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
@@ -141,6 +143,8 @@ export function PageMenu(props: {
   const collapse = collapseControlFor(props.pageId);
   const counts = collapse?.counts() ?? { headings: 0, collapsed: 0 };
   const [asSeen, setAsSeen] = useState(printAsSeen);
+  const convert = canEdit ? convertControlFor(props.pageId) : null;
+  const toConvert = convert?.count() ?? 0;
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -213,6 +217,20 @@ export function PageMenu(props: {
       {collapse &&
         counts.headings > 0 &&
         item(tr('pageMenu.expandAll'), <ExpandAllIcon />, () => collapse.setAll(false), false, counts.collapsed > 0)}
+      {/* Las fotos-bloque de la página pasan a ser fotos en línea (entrega 3, Doc_Fotos_En_Linea.md): solo si hay. */}
+      {convert && toConvert > 0 && (
+        <button
+          role="menuitem"
+          data-tip={tr('pageMenu.convertPhotosTip', { count: toConvert })}
+          onClick={() => {
+            props.onClose();
+            convert.convert();
+          }}
+        >
+          <ConvertPhotosIcon />
+          {tr('pageMenu.convertPhotos')}
+        </button>
+      )}
       <hr />
       <button
         role="menuitemcheckbox"

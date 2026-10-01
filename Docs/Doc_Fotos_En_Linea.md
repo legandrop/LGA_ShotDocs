@@ -1,8 +1,8 @@
 # Fotos en línea: la foto como un carácter del renglón (P.15)
 
 Estado: **entregas 0 (prototipo), 1 (v0.076: el nodo, los huecos estables, lo que se ve y se toca) y 2 (v0.077:
-crear, dar tamaño, acomodar las elegidas, hojas y PDF) hechas; faltan la 3 (convertir las fotos-bloque) y la 4
-(importar de Coda)** (2026-10-01; ver "Cómo quedó" de cada una; las "Correcciones de la auditoría", más abajo,
+crear, dar tamaño, acomodar las elegidas, hojas y PDF) y 3 (v0.078: convertir las fotos-bloque de una página)
+hechas; falta la 4 (importar de Coda)** (2026-10-01; ver "Cómo quedó" de cada una; las "Correcciones de la auditoría", más abajo,
 mandan sobre el diseño de arriba, y la entrega 2 trae propuestas nuevas, marcadas). Pedido de Lega del
 2026-10-01, con sus palabras: las
 imágenes tienen que ser "como en Coda o en cualquier lado, un carácter más de un texto". Reemplaza el modelo de
@@ -144,8 +144,8 @@ paso 2 deja de ser previo: se publica la v0.077 (paso 1 y 3 juntos) y **después
   estando elegida. En ese momento el bloque pasa a ser un párrafo con esa foto en línea (misma `url`, mismo
   nombre, `w` = su `rowWidth` o el equivalente de su `previewWidth`), en una sola transacción y un solo
   deshacer. Una foto-bloque **con leyenda** queda como bloque (convertirla perdería la leyenda): se avisa.
-- **Convertir la página entera**, a pedido: una entrada en el menú de la página (*Make images inline*), para
-  no depender del caso por caso. Con un solo deshacer.
+- **Convertir la página entera**, a pedido: una entrada en el menú de la página (*Convert photos to inline*, hecha
+  en la entrega 3), para no depender del caso por caso. Con un solo deshacer.
 - Lo nuevo (pegar, soltar, importar) entra siempre en línea, desde el paso 3 de la publicación.
 
 ## Entregas
@@ -714,3 +714,72 @@ Con la marca del renglón, ninguna versión anterior abre una página con fotos 
 tuvo), así que no hace falta subirlo antes. Orden: **publicar la v0.077 y después subir `min_app_version` a 0.077**
 (una fila de la base; la cambia Lega), cuando la tenga en sus dispositivos. Así las versiones viejas dejan de subir
 cambios y avisan que hay que actualizar.
+
+## Cómo quedó (entrega 3: convertir las fotos-bloque que ya existen)
+
+### Cómo se dispara
+
+- **Hecho: una acción por página**, *Convert photos to inline* en el menú de la página (los tres puntos del árbol o
+  del título). Aparece solo si la página está abierta, se puede editar y tiene fotos-bloque para convertir; su
+  tooltip dice cuántas y qué pasa. Convierte toda la página de una vez, con **un solo Ctrl/⌘+Z**, y avisa cuántas
+  convirtió y cuántas quedaron como bloque. Sin los comentarios de la página bajados (sin conexión) no convierte y
+  lo dice: sin saber qué foto tiene comentarios podría dejarlos sin bloque.
+- **Propuesta para Lega (no hecha): convertir sola al abrir.** Es lo que haría que sus páginas actuales "funcionen"
+  sin pensar, pero tiene dos riesgos medidos: dos dispositivos que abren la misma página sin verse convierten los
+  dos y **las fotos quedan dos veces** (nada se pierde, pero hay que borrar la copia; ver abajo), y una página se
+  cambiaría sin que nadie la toque (también la de un invitado que solo mira, que no puede editar: quedaría sin
+  convertir). Si Lega la quiere, la forma segura es que convierta **solo el dueño o un admin, una vez por página**,
+  con una marca en la página (`converted`) que se escribe en la misma pasada, y con aviso y Ctrl+Z. Para sus
+  páginas actuales alcanza hoy con la acción del menú, página por página.
+- No se convierte nada al editar (la corrección 4): una foto-bloque sigue andando como hoy si nadie la convierte.
+
+### Qué hace (`convertPhotos.ts`)
+
+- **Cada fila de fotos-bloque** (las seguidas con `rowWidth`, las mismas que arma `groupRows`) pasa a ser **un
+  renglón** con sus fotos en línea, con el mismo ancho (`w` = `rowWidth`). Una foto-bloque sola pasa a ser un
+  renglón con esa foto: su `rowWidth` o, si solo tiene `previewWidth` (de antes de los tamaños), esa parte de un
+  ancho de referencia **fijo de 720 px** imantada a 1, 1/2, 1/3 y 1/4 (dos dispositivos convierten igual); sin
+  ninguno, su ancho natural. Una foto sola centrada o a la derecha conserva la alineación (la del renglón).
+- **Queda como bloque**: una foto con leyenda (se perdería; D-24), un adjunto (su tarjeta) y una foto a medio
+  subir. Los videos y las fotos del Drive se convierten (misma dirección `sdmedia://`).
+- **Nada se pierde**: nombre, dirección y ancho de cada foto; los hijos de una foto pasan a su renglón (una foto con
+  hijos termina su renglón); y los **comentarios**, que están anclados al id del bloque: el renglón toma el id de su
+  foto con comentarios (o el de la primera). Solo si dos fotos de una misma fila tienen comentarios la fila se
+  parte en dos renglones (cada parte se ve hasta 5 px más grande: reparte el lugar entre menos fotos).
+- **Versiones viejas**: el renglón nuevo lleva la marca (`lgaStableGaps`); ninguna versión anterior abre la página.
+
+### Lo que costó descubrir
+
+- **"Reemplazar" en un solo cambio perdía fotos.** y-prosemirror reusa el contenedor del bloque (mismo id) y mete el
+  párrafo adentro en lugar de la imagen. Deshacer no saca un párrafo con contenido (`protectedNodes`): quedaban
+  imagen y párrafo en el mismo bloque y el editor tiraba el bloque entero (la fila desaparecía). Y dos dispositivos
+  que convertían a la vez metían dos párrafos en el mismo bloque: la fila desaparecía de los dos. Ahora cada renglón
+  **saca** sus bloques y **después pone** el renglón (dos cambios, y cada renglón por separado para que y-prosemirror
+  no toque los bloques de al lado), y todo junto es un solo paso de deshacer (`asOneUndoStep` en `undoGuard.ts`:
+  sacar bloques ya no corta el deshacer en el medio).
+- **Dos conversiones a la vez** (sin verse): cada renglón queda dos veces, ninguna foto se pierde, y los dos renglones
+  con el mismo id reciben ids nuevos en cada editor (BlockNote no deja dos iguales), así que los comentarios de esa
+  fila quedan sin bloque (se ven en el panel). Es el motivo de no convertir sola al abrir.
+- Convertir mientras otro le cambia algo a una foto-bloque (el tamaño, el nombre, una leyenda) pierde ese cambio del
+  otro; si el otro la borra, la foto vuelve en el renglón. Se prefiere eso a perder una foto.
+
+### Lo medido
+
+- Pruebas (`convertPhotos.test.ts`, 10): filas, solas, leyenda, adjunto, comentarios, hijos, videos y Drive, foto
+  única hija de un ítem, página que es solo una fila; un Ctrl+Z vuelve todo como estaba (ids, anchos, leyenda) y
+  Ctrl+Shift+Z lo rehace, también con las extensiones de la página; las versiones anteriores no abren el resultado;
+  dos editores: el otro escribe mientras se convierte (no se pierde nada) y los dos convierten a la vez (todo dos
+  veces, nada perdido).
+- Chromium, página tipo ERSO (6 escenas, 61 fotos-bloque: filas de 3, 4 y 2 como las deja *Arrange in rows*, solas
+  de 360 px, una con leyenda y un comentario en la tercera foto de una fila): 12 de 12. Convierte 60 en ~0,1 s; la
+  de leyenda queda; **las 25 filas quedan iguales** (las mismas fotos, en el mismo orden) y cada foto de una fila
+  mide lo mismo (diferencia máxima 0,55 px de ancho y 0,31 px de alto); las solas de 360 px pasan a 1/2 (360 px); el
+  comentario sigue en el margen de su renglón; un Ctrl+Z vuelve las 61 fotos-bloque a su lugar y tamaño exactos.
+  La página queda 185 px más alta en 5966 (3 %): unos 7 px más entre renglones de fotos que entre filas de bloques.
+
+### Límites
+
+- Pegar HTML con texto y un `<img>` (de una web) sigue creando una foto-bloque, y las imágenes `data:` de una página
+  vieja quedan como están: no entraron en esta entrega.
+- El ícono de comentario del margen de un renglón con fotos altas sigue arriba del renglón (los puntos ya bajan al
+  texto, v0.077).

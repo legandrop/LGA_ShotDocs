@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.078 :
+
+Fotos en línea, entrega 3: las fotos-bloque que ya existen no tenían cómo pasar al renglón. Ahora *Convert photos
+to inline*, en el menú de la página, convierte la página entera: cada fila pasa a ser un renglón con las mismas
+fotos y los mismos anchos, una foto sola toma su ancho (o 1/2, 1/3, 1/4 de su ancho en píxeles), y quedan como
+bloque las de leyenda y los adjuntos. Los comentarios siguen anclados: el renglón toma el id de la foto comentada.
+Un solo Ctrl/⌘+Z lo deshace. Reemplazar el bloque en un solo cambio perdía la fila al deshacer o al convertir dos
+dispositivos a la vez (y-prosemirror metía el párrafo dentro del bloque viejo): ahora se sacan los bloques y
+después se pone el renglón. Medido en una página tipo ERSO: 61 fotos, 25 filas iguales.
+[ Fotos en línea - entrega 3: convertir las fotos-bloque de una página ]
+
 v0.077 :
 
 Fotos en línea, entrega 2: pegar, soltar, "/Image" y "Copy image" de una web ponen fotos y videos en el renglón,

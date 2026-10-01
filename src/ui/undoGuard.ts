@@ -41,13 +41,36 @@ function blockIds(doc: EditorState['doc']): Set<string> {
   return ids;
 }
 
+let oneStep = 0;
+
+/**
+ * Hace `fn` (varios cambios seguidos del editor) como UN solo paso de deshacer: corta antes y después, y en el medio
+ * ni el tiempo (`captureTimeout`) ni sacar bloques lo parten. Lo usa "Convert photos to inline" (convertPhotos.ts).
+ */
+export function asOneUndoStep<T>(state: EditorState, fn: () => T): T {
+  const um = (yUndoPluginKey.getState(state as never) as { undoManager?: Y.UndoManager } | undefined)?.undoManager ?? null;
+  const timeout = um?.captureTimeout ?? 0;
+  um?.stopCapturing();
+  if (um) um.captureTimeout = Number.MAX_SAFE_INTEGER;
+  oneStep++;
+  try {
+    return fn();
+  } finally {
+    oneStep--;
+    if (um) {
+      um.captureTimeout = timeout;
+      um.stopCapturing();
+    }
+  }
+}
+
 /**
  * Si una transacción propia saca bloques (borrar bloques elegidos, cortar, escribir encima, una selección de texto
  * de un bloque a otro, juntar dos renglones): cada una es su propio paso de deshacer. No cuentan los cambios de
  * Yjs (de otro, deshacer y rehacer) ni lo que agregan los plugins en la misma pasada.
  */
 export function removesBlocks(tr: Transaction, state: EditorState): boolean {
-  if (!tr.docChanged || tr.getMeta(ySyncPluginKey as never) || tr.getMeta('appendedTransaction')) return false;
+  if (oneStep > 0 || !tr.docChanged || tr.getMeta(ySyncPluginKey as never) || tr.getMeta('appendedTransaction')) return false;
   const after = blockIds(tr.doc);
   for (const id of blockIds(state.doc)) if (!after.has(id)) return true;
   return false;
