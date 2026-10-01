@@ -162,7 +162,11 @@ describe('las filas', () => {
     });
     expect(rows.map((r) => r.fracs)).toEqual([[0.5, 0.5], [0.5], [0.3]]);
     expect(rows[0].positions).toEqual([at(E, 'A'), at(E, 'B')]);
-    expect(decorateRows(doc).find().length).toBe(4);
+    // Las cuatro fotos con ancho, más la marca que hace empezar en un renglón nuevo la fila llena (A, B) que viene
+    // justo después de un texto. La fila de C (no llena) y la de D (después de texto, no llena) siguen al lado.
+    const decos = decorateRows(doc).find();
+    expect(decos.length).toBe(5);
+    expect(decos.filter((d) => d.from === d.to).map((d) => d.from)).toEqual([at(E, 'A')]);
   });
 });
 

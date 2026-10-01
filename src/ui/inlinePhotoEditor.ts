@@ -23,6 +23,10 @@ import { PHOTO, photoWidth } from './inlinePhoto';
 //     `groupRows` (sin él, la primera de la fila siguiente entra arriba: medido, en todos los anchos).
 // El navegador hace el corte de renglón; con estas medidas coincide con las filas (0 filas rotas en 831 anchos
 // por 5 densidades de pantalla, en el prototipo).
+//   - `sd-photo-row-start` (entrega 2): una fila LLENA que viene justo después de un texto del mismo renglón empieza
+//     en un renglón nuevo (una marca que no es parte del documento). Sin ella, las primeras fotos de la fila
+//     quedaban al lado del texto y la última bajaba sola (medido en Chromium al pegar tres al final de un texto, y
+//     al acomodar fotos que siguen a un texto). Una fila que no llena sigue fluyendo al lado del texto.
 
 /** La parte del ancho de una foto en línea (0: sin ancho propio, o no es una foto). */
 function fractionOf(node: PMNode): number {
@@ -56,6 +60,19 @@ export function rowsOfTextblock(block: PMNode, pos: number): PhotoRow[] {
 
 const round4 = (x: number) => Math.round(x * 1e4) / 1e4;
 
+/** Lo que hay justo antes de la foto en `pos` es texto (o un contenido en línea que no es un salto de renglón). */
+function afterText(doc: PMNode, pos: number): boolean {
+  const before = doc.resolve(pos).nodeBefore;
+  return !!before && before.type.name !== PHOTO && before.type.name !== 'hardBreak';
+}
+
+/** La marca que hace empezar una fila llena en un renglón nuevo (styles.css, `.sd-photo-row-start`). */
+function rowStart(): HTMLElement {
+  const el = document.createElement('span');
+  el.className = 'sd-photo-row-start';
+  return el;
+}
+
 /** Las decoraciones de las filas de todo el documento. */
 export function decorateRows(doc: PMNode): DecorationSet {
   const decorations: Decoration[] = [];
@@ -65,6 +82,9 @@ export function decorateRows(doc: PMNode): DecorationSet {
       const n = row.positions.length;
       const sum = row.fracs.reduce((s, f) => s + f, 0);
       const full = sum > 1 - 1e-3;
+      if (full && afterText(doc, row.positions[0])) {
+        decorations.push(Decoration.widget(row.positions[0], rowStart, { side: -1, key: 'sd-photo-row-start', marks: [] }));
+      }
       row.positions.forEach((at, k) => {
         const classes = ['sd-photo-sized'];
         let style = `--row-n: ${n}`;
@@ -332,6 +352,8 @@ const dragPlugin = new Plugin<null>({
       }
       drag.over = (e.target as Element | null)?.closest?.<HTMLElement>('.sd-photo') ?? null;
       drag.x = e.clientX;
+      // No se corrige acá, mientras se arrastra: cambiar la selección en el medio de un arrastre del navegador le
+      // corre el ancla (medido en Chromium). Se corrige al leerla (`createSelectionBetween`) y al soltar.
     };
     const onUp = () => {
       const last = drag;
@@ -344,16 +366,24 @@ const dragPlugin = new Plugin<null>({
       if (head === null || !(sel instanceof TextSelection) || sel.head === head || sel.anchor === head) return;
       view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, sel.anchor, head)));
     };
+    // Apretar sobre texto elegido y mover lo arrastra (no elige): el navegador cancela el puntero y empieza a
+    // arrastrar. Ahí no se corrige nada.
+    const onCancel = () => {
+      drag = null;
+      dragOf.set(view, null);
+    };
     view.dom.addEventListener('pointerdown', onDown);
+    view.dom.addEventListener('dragstart', onCancel);
     doc.addEventListener('pointermove', onMove);
     doc.addEventListener('pointerup', onUp);
-    doc.addEventListener('pointercancel', onUp);
+    doc.addEventListener('pointercancel', onCancel);
     return {
       destroy() {
         view.dom.removeEventListener('pointerdown', onDown);
+        view.dom.removeEventListener('dragstart', onCancel);
         doc.removeEventListener('pointermove', onMove);
         doc.removeEventListener('pointerup', onUp);
-        doc.removeEventListener('pointercancel', onUp);
+        doc.removeEventListener('pointercancel', onCancel);
         dragOf.delete(view);
       },
     };

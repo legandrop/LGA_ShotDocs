@@ -23,7 +23,7 @@ import { porteroDownload, sharpenImages } from './sharpImages';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
-import { addFiles, inlinePhotoSpotsExtension, pickFiles, type AddFilesOptions, type PhotoEditor } from './inlinePhotoCreate';
+import { addFiles, dropPos, inlinePhotoSpotsExtension, pickFiles, type AddFilesOptions, type PhotoEditor } from './inlinePhotoCreate';
 import { renameConvertedHeic } from './heicNames';
 import { isAttachment, markAttachments } from './attachments';
 import { openAttachmentNow, prepareAttachment } from './attachmentOpen';
@@ -659,11 +659,10 @@ function BlockEditor({
     e.stopPropagation();
     const { files: taken, folders } = takeFiles(dt);
     if (folders > 0) notify(t('editor.foldersNotSupported'));
-    const at = editor.prosemirrorView?.posAtCoords({ left: e.clientX, top: e.clientY });
     void addFiles(
       editor as unknown as PhotoEditor,
       taken,
-      { pos: at ? at.pos : null, block: dropTarget(root, e.clientX, e.clientY) },
+      { pos: dropPos(editor.prosemirrorView, e.clientX, e.clientY), block: dropTarget(root, e.clientX, e.clientY) },
       fileOptions(editor as unknown as FileEditor),
     );
   };

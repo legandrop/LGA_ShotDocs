@@ -271,7 +271,9 @@ describe('soltar fotos', () => {
     await s.finish();
     await done;
     expect(lines(E)).toEqual(['ab[A.jpg@0]cd', '<image>']);
-    // Sobre la foto-bloque (no es un renglón): antes de ella, como dijo `dropTarget`.
+    // Sobre la foto-bloque (no es un renglón): antes de ella, como dijo `dropTarget`, aunque el cursor esté en un
+    // renglón (no va donde está el cursor).
+    caret(E, at(E, 'a', 1));
     s = storage();
     done = addFiles(E as unknown as PhotoEditor, [file('B.jpg')], { pos: at(E, 'i', -1), block: { blockId: 'i', placement: 'before' } }, options(s));
     await s.finish();

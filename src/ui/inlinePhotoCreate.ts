@@ -261,13 +261,13 @@ function blockExists(doc: PMNode, id: string): boolean {
 
 /**
  * Guarda los archivos (`store`, con el aviso de error que corresponda) y pone los que se guardaron en el lugar
- * `spot` (seguido desde que se pegaron o soltaron). Los que fallan no cortan los demás. Devuelve las direcciones
+ * `spot` (seguido desde que se pegaron o soltaron), o, sin lugar (`null`), en un renglón nuevo junto a `fallback`. Los que fallan no cortan los demás. Devuelve las direcciones
  * puestas.
  */
 export async function storeAndPlace(
   editor: PhotoEditor,
   files: readonly File[],
-  spot: number,
+  spot: number | null,
   fallback: { blockId: string; placement: 'before' | 'after' } | null,
   store: (file: File) => Promise<string>,
 ): Promise<string[]> {
@@ -278,7 +278,7 @@ export async function storeAndPlace(
   });
   const view = editor.prosemirrorView;
   if (!view || view.isDestroyed) return [];
-  const pos = takeSpot(view, spot);
+  const pos = spot === null ? null : takeSpot(view, spot);
   if (photos.length === 0) return [];
   return placePhotos(editor, photos, pos, fallback) ? photos.map((p) => p.url) : [];
 }
@@ -324,7 +324,8 @@ export function addFiles(
   const $at = pos !== null ? view.state.doc.resolve(pos) : view.state.selection.$to;
   const blockId = blockIdAt($at) ?? editor.getTextCursorPosition().block.id;
   const fallback = pos === null ? (where?.block ?? { blockId, placement: 'after' as const }) : null;
-  const spot = trackSpot(view, pos ?? $at.pos);
+  // Sin lugar en un renglón, no hay nada que seguir: van en un renglón nuevo junto al bloque.
+  const spot = pos === null ? null : trackSpot(view, pos);
   // Los adjuntos, como hasta ahora: un bloque cada uno, después del bloque del lugar.
   if (attachments.length) opts.insertAttachments(attachments, where?.block ?? { blockId, placement: 'after' });
   return storeAndPlace(editor, inline, spot, fallback, opts.store);
@@ -341,7 +342,7 @@ export function pickFiles(editor: PhotoEditor, accept: string, opts: AddFilesOpt
   const $at = pos !== null ? view.state.doc.resolve(pos) : view.state.selection.$to;
   const blockId = blockIdAt($at) ?? editor.getTextCursorPosition().block.id;
   // Mientras el selector está abierto, el lugar se sigue sin marca de espera.
-  const spot = trackSpot(view, pos ?? $at.pos, false);
+  const spot = pos === null ? null : trackSpot(view, pos, false);
   const input = document.createElement('input');
   input.type = 'file';
   input.multiple = true;
@@ -356,10 +357,10 @@ export function pickFiles(editor: PhotoEditor, accept: string, opts: AddFilesOpt
     const attachments = files.filter((f) => !opts.isInline(f));
     if (attachments.length) opts.insertAttachments(attachments, { blockId, placement: 'after' });
     if (inline.length === 0) {
-      takeSpot(view, spot);
+      if (spot !== null) takeSpot(view, spot);
       return;
     }
-    showSpot(view, spot);
+    if (spot !== null) showSpot(view, spot);
     void storeAndPlace(editor, inline, spot, pos === null ? { blockId, placement: 'after' } : null, opts.store);
   };
   input.addEventListener('change', () => finish(Array.from(input.files ?? [])));
@@ -367,4 +368,18 @@ export function pickFiles(editor: PhotoEditor, accept: string, opts: AddFilesOpt
   input.style.display = 'none';
   document.body.append(input);
   input.click();
+}
+
+/**
+ * La posición entre letras donde se soltó, o `null` si se soltó sobre algo que no es un renglón (una foto-bloque, una
+ * tarjeta, una tabla): ProseMirror da igual la posición de texto más cercana, que puede ser la de otro bloque.
+ */
+export function dropPos(view: EditorView | undefined, x: number, y: number): number | null {
+  const at = view?.posAtCoords({ left: x, top: y });
+  if (!view || !at) return null;
+  if (at.inside >= 0) {
+    const node = view.state.doc.nodeAt(at.inside);
+    if (node && !node.isTextblock && !node.isInline && node.type.name !== 'blockContainer') return null;
+  }
+  return at.pos;
 }

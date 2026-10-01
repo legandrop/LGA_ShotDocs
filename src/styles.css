@@ -2677,6 +2677,13 @@ code {
   margin-left: var(--img-gap, 8px);
 }
 
+/* Una fila llena justo después de un texto del mismo renglón empieza en un renglón nuevo (la marca la pone la
+   decoración de las filas; no es parte del documento). */
+.sd-photo-row-start {
+  display: block;
+  height: 0;
+}
+
 /* La última de una fila que no llena el renglón, seguida de otra foto: completa el renglón, así el navegador
    corta donde corta `groupRows`. */
 .sd-photo.sd-photo-sized.sd-photo-row-break {

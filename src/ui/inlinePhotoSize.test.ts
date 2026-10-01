@@ -93,7 +93,7 @@ describe('los tamaños rápidos', () => {
     range(E, pos(E, 'F1') - 1, pos(E, 'F3') + 1);
     setPhotoWidths(view(E), selectedPhotos(view(E).state), 1 / 3);
     expect(widths(E, ['F1', 'F2', 'F3'])).toEqual([0.3333, 0.3333, 0.3333]);
-    expect(E.getBlock('a')!.content!.map((c) => (c as { text?: string }).text ?? '•').join('')).toBe('x••y•');
+    expect((E.getBlock('a')!.content as unknown[]).map((c) => (c as { text?: string }).text ?? '•').join('')).toBe('x••y•');
   });
 });
 
