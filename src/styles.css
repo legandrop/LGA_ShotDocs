@@ -2005,6 +2005,73 @@ code {
   border: 1px solid var(--border);
 }
 
+/* La carpeta de Drive de cada borrado (P.14, entrega 2): la nota, *Send files…* y las preguntas en el renglón. */
+.deleted-project-item {
+  display: grid;
+  gap: 4px;
+}
+
+.deleted-project-note,
+.deleted-project-actions,
+.deleted-project-ask {
+  margin: 0;
+  padding-left: 46px;
+}
+
+.deleted-project-ask p {
+  margin: 0 0 6px;
+}
+
+.deleted-project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.deleted-project-ask .deleted-project-actions {
+  padding-left: 0;
+}
+
+/* Adentro del selector (`.menu button` ocupa todo el ancho): el link de *Send files…* va a la izquierda y entero. */
+.deleted-project-actions button.link {
+  width: auto;
+  height: auto;
+  min-height: 28px;
+  padding: 0;
+  text-align: left;
+  white-space: normal;
+}
+
+.deleted-project-actions button.primary {
+  width: auto;
+  height: 32px;
+  padding: 0 12px;
+}
+
+.delete-project-drive {
+  display: grid;
+  gap: 4px;
+}
+
+.delete-project-drive p {
+  margin: 0 0 0 24px;
+}
+
+.delete-project-check {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: start;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.delete-project-check input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+}
+
 .delete-project-stats {
   display: flex;
   align-items: center;
@@ -2811,6 +2878,22 @@ code {
   margin-left: var(--img-gap, 8px);
 }
 
+/* El renglón con fotos ocupa todo el ancho del bloque. `.bn-block-content` es flex y el renglón, sin esto, mide lo que
+   su contenido: en un renglón de solo fotos que no lo llenan, la suma de los anchos naturales de las miniaturas (480 px
+   o menos), y el ancho de cada foto (una parte del renglón) salía de esa medida (medido con fotos de ERSO: una a 1/1
+   medía 479 px en vez de 720). */
+.bn-block-content > .bn-inline-content:has(.sd-photo) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Una fila llena justo después de un texto del mismo renglón empieza en un renglón nuevo (la marca la pone la
+   decoración de las filas; no es parte del documento). */
+.sd-photo-row-start {
+  display: block;
+  height: 0;
+}
+
 /* La última de una fila que no llena el renglón, seguida de otra foto: completa el renglón, así el navegador
    corta donde corta `groupRows`. */
 .sd-photo.sd-photo-sized.sd-photo-row-break {
@@ -2855,6 +2938,83 @@ code {
   border-radius: 2px;
   background: rgba(35, 131, 226, 0.28);
   pointer-events: none;
+}
+
+/* Los tiradores de la foto en línea (inlinePhoto.ts, D-24): los de la foto-bloque, a los costados; se ven con la
+   foto elegida (y el editor con el foco) o al pasar el mouse, solo si se puede editar. Mientras se arrastra, la foto
+   toma el ancho del arrastre (también una de ancho natural). */
+.sd-photo-handle {
+  display: none;
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 30px;
+  margin-top: -15px;
+  background-color: black;
+  border: 1px solid white;
+  border-radius: 4px;
+  cursor: ew-resize;
+  z-index: 1;
+  touch-action: none;
+}
+
+.sd-photo-handle-left {
+  left: 4px;
+}
+
+.sd-photo-handle-right {
+  right: 4px;
+}
+
+.editor .bn-editor.ProseMirror-focused[contenteditable='true'] .sd-photo.ProseMirror-selectednode > .sd-photo-handle,
+.editor .bn-editor[contenteditable='true'] .sd-photo.sd-photo-resizing > .sd-photo-handle {
+  display: block;
+}
+
+@media (hover: hover) {
+  .editor .bn-editor[contenteditable='true'] .sd-photo:hover > .sd-photo-handle {
+    display: block;
+  }
+}
+
+.sd-photo.sd-photo-resizing > img.bn-visual-media {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.print-view .sd-photo-handle {
+  display: none !important;
+}
+
+/* Mientras se guardan las fotos que se pegaron, soltaron o eligieron (inlinePhotoCreate.ts): una marca en el lugar
+   donde van a entrar. No es parte del documento (una decoración) ni sale en el PDF. */
+.sd-photo-pending {
+  display: inline-block;
+  width: 56px;
+  height: 40px;
+  margin-block: calc(var(--img-gap, 8px) / 2);
+  vertical-align: bottom;
+  border-radius: 2px;
+  background: var(--hover);
+  outline: 1px dashed var(--faint-2);
+  outline-offset: -1px;
+  animation: sd-photo-pending 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes sd-photo-pending {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-photo-pending {
+    animation: none;
+  }
+}
+
+.print-view .sd-photo-pending {
+  display: none;
 }
 
 /* En el teléfono, si la cuenta lo pide (Fotos en fila → Apiladas), cada foto con ancho propio ocupa el renglón
@@ -2940,6 +3100,60 @@ code {
   font-family: var(--mono);
   font-size: 12px;
   min-width: 30px;
+}
+
+/* La barra de una foto (MediaBar.tsx, D-24): todos los botones del mismo tamaño (30 × 30, como los íconos de
+   BlockNote) y el mismo relleno; los de texto (1/1, 1/2…) sin el relleno de un botón de texto, que los dejaba de
+   casi 50 px. Un separador fino entre sectores. */
+.bn-formatting-toolbar .sd-bar-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  flex: 0 0 30px;
+}
+
+.bn-formatting-toolbar .sd-bar-button .mantine-Button-inner,
+.bn-formatting-toolbar .sd-bar-button .mantine-Button-label {
+  justify-content: center;
+  overflow: visible;
+}
+
+.bn-formatting-toolbar .sd-bar-sector {
+  display: contents;
+}
+
+/* En el teléfono cada sector baja de renglón entero y sin separador: un separador al final o al principio de un
+   renglón queda colgando. Entre sectores, el espacio alcanza. */
+@media (max-width: 600px) {
+  .bn-formatting-toolbar .sd-bar-sector {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    margin-right: 8px;
+  }
+
+  .bn-formatting-toolbar .sd-bar-sector:last-child {
+    margin-right: 0;
+  }
+
+  .bn-formatting-toolbar .sd-bar-sep {
+    display: none;
+  }
+}
+
+/* En una pantalla angosta (el teléfono) la barra entera no entra: pasa a dos renglones, adentro de la pantalla. */
+.bn-formatting-toolbar.sd-media-bar {
+  flex-wrap: wrap;
+  max-width: calc(100vw - 16px);
+}
+
+.bn-formatting-toolbar .sd-bar-sep {
+  flex: 0 0 1px;
+  align-self: stretch;
+  margin: 5px 4px;
+  background: var(--border);
 }
 
 .bn-formatting-toolbar .image-size-button[data-selected] {
@@ -4862,9 +5076,338 @@ mark.search-hit {
   font-size: 13px;
 }
 
+/* Restaurado sin su carpeta de Drive (P.14, entrega 2): el texto arriba y *Look for its files again* abajo. */
+.drive-missing-note {
+  display: grid;
+  align-items: start;
+  justify-items: start;
+  gap: 6px;
+}
+
+.drive-missing-note p {
+  margin: 0;
+}
+
 /* La pantalla "sin proyectos" con cambios sin subir en el dispositivo (P.14). */
 .no-projects-pending {
   display: grid;
   gap: 8px;
   justify-items: start;
+}
+
+/* --- Carpetas (P.9, Docs/Doc_Carpetas.md) ------------------------------------------------------------ */
+
+.folder-dialog {
+  width: min(560px, 100%);
+  max-height: 80vh;
+}
+
+.folder-dialog h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.folder-dialog p {
+  margin: 0;
+}
+
+.folder-dialog .small,
+.folder-viewer .small {
+  font-size: 13px;
+}
+
+.folder-dialog .warn {
+  color: var(--warn);
+}
+
+.folder-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.folder-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.folder-summary-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.folder-summary-counts {
+  font-weight: 500;
+}
+
+.folder-tree-list,
+.folder-tree-list ul,
+.folder-skipped ul,
+.folder-errors ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding-left: 14px;
+  font-size: 13px;
+}
+
+.folder-tree-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding-left: 0;
+}
+
+.folder-tree-list summary {
+  cursor: pointer;
+}
+
+.folder-tree-file {
+  padding-left: 14px;
+  overflow-wrap: anywhere;
+}
+
+.folder-skipped summary,
+.folder-tree summary,
+.folder-errors summary {
+  cursor: pointer;
+}
+
+.folder-check {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.folder-check input {
+  width: auto;
+  margin: 0;
+  flex: none;
+}
+
+.folder-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.folder-glyph {
+  flex: none;
+  vertical-align: -3px;
+}
+
+.folder-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.folder-bar > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.folder-viewer {
+  width: min(760px, 100%);
+  max-height: 80vh;
+  padding: 16px;
+}
+
+.folder-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.folder-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.folder-crumbs button.link,
+.folder-crumbs strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.folder-crumb-sep {
+  margin: 0 4px;
+  color: var(--faint);
+}
+
+.folder-upload-strip {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  color: var(--muted);
+}
+
+.folder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.folder-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.folder-row-main:hover {
+  background: var(--hover);
+}
+
+.folder-row-off {
+  cursor: default;
+  color: var(--muted);
+}
+
+.folder-row-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--border-soft);
+}
+
+.folder-row-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.folder-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-row-size {
+  flex: none;
+  font-size: 13px;
+}
+
+.folder-row-download {
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  /* En el teléfono, el visor ocupa la pantalla. */
+  .folder-viewer-backdrop {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .folder-viewer {
+    width: 100%;
+    max-height: none;
+    height: 100%;
+    border-radius: 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .folder-row-size {
+    display: none;
+  }
+}
+
+/* --- Instalar la app (Docs/Doc_Instalar.md) ---------------------------------------------------------- */
+
+/* El aviso del teléfono: abajo de la barra de arriba, se va con el resto al desplazar. */
+.install-banner {
+  position: sticky;
+  left: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 12px;
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.install-banner-text {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.install-banner-text strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.install-banner-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.install-banner-actions .primary {
+  height: 36px;
+  padding: 0 14px;
+}
+
+.login-footer .login-install {
+  border: none;
+  padding: 2px 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
+.login-footer .login-install:hover {
+  background: none;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

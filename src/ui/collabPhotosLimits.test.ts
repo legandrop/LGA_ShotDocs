@@ -45,6 +45,6 @@ describe('dónde queda lo que se escribe mientras el otro pone una foto en el me
     expect(sameDocs(docA, docB) && showsDoc(A, docA) && showsDoc(B, docB)).toBe(true);
     // A escribió al final ("abcdefXYZ"); B partió el texto en "abc" y "def": "def" se volvió a crear al otro
     // lado de la foto, y lo de A quedó en el texto original, a la izquierda.
-    expect(storedInline(docA)).toEqual(['"abcXYZ" <photo> "def"']);
+    expect(storedInline(docA)).toEqual(['<lgaStableGaps> "abcXYZ" <photo> "def"']);
   });
 });

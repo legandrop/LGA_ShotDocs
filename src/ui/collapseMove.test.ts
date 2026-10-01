@@ -7,6 +7,7 @@ import { yUndoPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { selectWholeBlock } from './blockHandle';
+import { dispatchMove } from './blockMove';
 import type { HeadingRecord } from './collapse';
 import { pmFromY } from './collabHarness';
 import { collapseExtension, collapseState, dropSection, endSectionDrag, headingBackspaceExtension, setCollapsed, startSectionDrag } from './collapseEditor';
@@ -16,6 +17,14 @@ import { schema } from './editorSchema';
 // Shift+Ctrl+↑/↓ y arrastrar los puntos de un título colapsado mueven su sección, los demás bloques saltan una
 // sección colapsada como si fuera uno, se esconde lo mismo que antes, deshacer es un solo paso, y Yjs queda igual
 // al editor. Lo que pasa con dos editores a la vez está en collabMove.test.ts.
+
+// El mover en dos pasadas (blockMove.ts), espiado sin cambiarlo: la decisión 1A (Doc_Colapsar.md, "Decisiones") dice
+// que se usa solo con algo colapsado en juego.
+vi.mock('./blockMove', async (original) => {
+  const m = await original<typeof import('./blockMove')>();
+  return { ...m, dispatchMove: vi.fn(m.dispatchMove) };
+});
+const twoPass = vi.mocked(dispatchMove);
 
 Range.prototype.getClientRects ??= (() => []) as never;
 Range.prototype.getBoundingClientRect ??= (() => ({ top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0 })) as never;
@@ -330,5 +339,101 @@ describe('auditoría de la 1b', () => {
     expect(startSectionDrag(view(editor), null)).toBe(true);
     view(editor).dom.dispatchEvent(new Event('dragstart', { bubbles: true }));
     expect(dropSection(view(editor), 1)).toBe(false);
+  });
+});
+
+describe('decisión 1A: el mover en dos pasadas, solo con algo colapsado en juego', () => {
+  /** Mueve con el teclado y dice si pasó por el mover en dos pasadas (y cómo quedó). */
+  async function keyMove(blocks: PartialBlock[], collapsed: string[], at: string, dir: 'up' | 'down') {
+    const { editor, doc } = page(blocks);
+    if (collapsed.length) collapse(editor, ...collapsed);
+    caret(editor, at);
+    twoPass.mockClear();
+    moveKey(editor, dir);
+    await settle();
+    return { twoPass: twoPass.mock.calls.length, outline: outline(editor), inSync: inSync(editor, doc) };
+  }
+
+  it('sin nada colapsado en juego, mueve BlockNote (un renglón suelto, un título abierto, colapsado lejos)', async () => {
+    // Nada colapsado en la página.
+    expect(await keyMove([p('a'), p('b'), p('c')], [], 'a', 'down')).toEqual({ twoPass: 0, outline: 'b a c', inSync: true });
+    expect(await keyMove([h(2, 'S'), p('s1'), p('x')], [], 'S', 'down')).toEqual({ twoPass: 0, outline: 's1 S x', inSync: true });
+    // Una sección colapsada en la página, pero ni se mueve ni se salta.
+    expect(await keyMove([p('a'), p('b'), h(2, 'S'), p('s1')], ['S'], 'a', 'down')).toEqual({ twoPass: 0, outline: 'b a S s1', inSync: true });
+    expect(await keyMove([h(2, 'S'), p('s1'), h(1, 'U'), p('a'), p('b')], ['S'], 'b', 'up')).toEqual({ twoPass: 0, outline: 'S s1 U b a', inSync: true });
+    // Un título colapsado que no esconde nada (el próximo es de su nivel) no está en juego.
+    expect(await keyMove([p('a'), h(2, 'S'), h(2, 'T'), p('t1')], ['S'], 'a', 'down')).toEqual({ twoPass: 0, outline: 'S a T t1', inSync: true });
+  });
+
+  it('con algo colapsado en juego, el mover en dos pasadas (una sola vez)', async () => {
+    // Lo que se mueve tiene un título colapsado.
+    expect(await keyMove([h(2, 'S'), p('s1'), h(2, 'G'), p('g1')], ['S'], 'S', 'down')).toEqual({ twoPass: 1, outline: 'G S s1 g1', inSync: true });
+    // Un renglón suelto (o un título abierto) que salta una sección colapsada, de bajada y de subida.
+    expect(await keyMove([p('x'), h(2, 'S'), p('s1'), h(2, 'T')], ['S'], 'x', 'down')).toEqual({ twoPass: 1, outline: 'S s1 x T', inSync: true });
+    expect(await keyMove([h(2, 'S'), p('s1'), p('s2'), h(1, 'T'), p('x')], ['S'], 'T', 'up')).toEqual({ twoPass: 1, outline: 'T S s1 s2 x', inSync: true });
+  });
+
+  it('arrastrar: un bloque sin título colapsado lo arrastra BlockNote; un título colapsado, el mover en dos pasadas', async () => {
+    const { editor, doc } = page([p('a'), h(2, 'S'), p('s1'), h(2, 'Z')]);
+    collapse(editor, 'S');
+    twoPass.mockClear();
+    selectWholeBlock(view(editor), idOf(editor, 'a'));
+    expect(startSectionDrag(view(editor), null)).toBe(false);
+    expect(dropSection(view(editor), 1)).toBe(false);
+    expect(twoPass).not.toHaveBeenCalled();
+    selectWholeBlock(view(editor), idOf(editor, 'S'));
+    expect(startSectionDrag(view(editor), null)).toBe(true);
+    caret(editor, 'a');
+    expect(dropSection(view(editor), view(editor).state.selection.from - 2)).toBe(true);
+    await settle();
+    expect(twoPass).toHaveBeenCalledTimes(1);
+    expect(outline(editor)).toBe('S s1 a Z');
+    expect(inSync(editor, doc)).toBe(true);
+  });
+});
+
+describe('fotos en línea adentro de una sección colapsada que se mueve', () => {
+  const ph = (name: string) => ({ type: 'photo', props: { url: `sdmedia://${name}`, name: `${name}.jpg`, w: 0.3 } });
+  const withPhotos = (text: string, ...names: string[]) =>
+    ({ type: 'paragraph', content: [{ type: 'text', text, styles: {} }, ...names.map(ph)] }) as unknown as PartialBlock;
+  type Walkable = { descendants: (f: (n: { type: { name: string }; attrs: Record<string, unknown> }) => boolean | void) => void };
+  const collect = (root: Walkable) => {
+    const out: string[] = [];
+    root.descendants((n) => {
+      if (n.type.name === 'photo') out.push(String(n.attrs.url));
+    });
+    return out;
+  };
+  /** Las fotos en línea del documento, en orden: lo que muestra el editor y lo que tiene Yjs. */
+  const photos = (editor: BlockNoteEditor, doc: Y.Doc) => ({
+    pm: collect(view(editor).state.doc as unknown as Walkable),
+    y: collect(pmFromY(editor as never, doc) as unknown as Walkable),
+  });
+
+  it('el teclado y el arrastre las llevan con la sección, sin perder ni duplicar ninguna (también del lado recreado)', async () => {
+    const { editor, doc } = page([p('top'), h(2, 'S'), withPhotos('s1', 'f1', 'f2'), p('s2'), withPhotos('s3', 'f3'), h(2, 'T'), withPhotos('t1', 'f4'), h(1, 'End')]);
+    collapse(editor, 'S', 'T');
+    const all = ['sdmedia://f1', 'sdmedia://f2', 'sdmedia://f3', 'sdmedia://f4'];
+    expect(photos(editor, doc)).toEqual({ pm: all, y: all });
+    // S (4 bloques) salta la sección colapsada T (2): Yjs recrea T, con su foto.
+    caret(editor, 'S');
+    moveKey(editor, 'down');
+    await settle();
+    expect(outline(editor)).toBe('top T t1 S s1 s2 s3 End');
+    const moved = ['sdmedia://f4', 'sdmedia://f1', 'sdmedia://f2', 'sdmedia://f3'];
+    expect(photos(editor, doc)).toEqual({ pm: moved, y: moved });
+    editor.undo();
+    await settle();
+    expect(outline(editor)).toBe('top S s1 s2 s3 T t1 End');
+    expect(photos(editor, doc)).toEqual({ pm: all, y: all });
+    // Arrastrar S arriba de todo: S (4) salta "top" (1), que se recrea.
+    selectWholeBlock(view(editor), idOf(editor, 'S'));
+    expect(startSectionDrag(view(editor), null)).toBe(true);
+    caret(editor, 'top');
+    expect(dropSection(view(editor), view(editor).state.selection.from - 2)).toBe(true);
+    await settle();
+    expect(outline(editor)).toBe('S s1 s2 s3 top T t1 End');
+    expect(photos(editor, doc)).toEqual({ pm: all, y: all });
+    expect(inSync(editor, doc)).toBe(true);
   });
 });

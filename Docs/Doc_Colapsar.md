@@ -2,7 +2,7 @@
 
 Estado: **entrega 1a hecha (v0.053)**: colapsar para vos, con toda la seguridad al editar, las marcas de hoja
 contadas con todo abierto y el PDF todo abierto (ver "Cómo quedó (1a)", al final). De la 1b, **"Imprimir como se
-ve" hecho (v0.067)**; **arrastrar la sección entera, Shift+⌘/Ctrl+↑/↓ y la entrega 2 (para todos), en v0.080**
+ve" hecho (v0.067)**; **arrastrar la sección entera, Shift+⌘/Ctrl+↑/↓ y la entrega 2 (para todos), en v0.0XX**
 ("Mover la sección entera" y "Cómo quedó (1b, mover, y 2)", al final). Lega
 contestó casi todas las decisiones el 2026-09-30 (al final, "Decisiones"); las que faltan siguen "a
 confirmar". **"Correcciones de la auditoría", al final, manda sobre lo de arriba**, y "Cómo quedó" sobre las
@@ -188,7 +188,8 @@ a la persona en todos sus dispositivos, como las preferencias.
 - **Lo que ves:** `P.colapsado` si `P` existe; si no, `G`.
 - **Clic:** lo contrario de lo que ves, guardado como `P` (si coincide con `G`, igual queda: lo tuyo se mantiene
   aunque después cambie `G`).
-- **Shift+clic (quien edita):** `G` pasa a lo contrario de lo que ves y se borra tu `P` (ves lo de todos).
+- **Shift+clic (quien edita):** `G` pasa a lo contrario de lo que ves y se borra tu `P` (ves lo de todos). Si lo
+  que ves es solo tuyo, lo tuyo pasa a todos, como la tabla del §3 (decisión 21).
 - **Un Shift+clic de otro nunca cambia lo que ve alguien que tiene lo suyo en ese título.** Quien no tiene nada
   propio ve el `G` nuevo. "Abrir todo" y "Colapsar todo" del menú guardan lo tuyo en todos los títulos.
 
@@ -437,6 +438,18 @@ Pruebas:
     Colapsar no se deshace: Ctrl+Z trae el título, abierto.
 19. **Orden de lo que sigue** (2026-09-30): después de 1a, la búsqueda en el proyecto (P.12, entrega 2), colapsar
     1b, colapsar para todos (entrega 2), P.9 carpetas, P.10 copias locales, la segunda entrega de adjuntos y P.8.
+
+### Decididas el 2026-10-01 (1b y 2)
+
+20. **El mover en dos pasadas (`blockMove.ts`) se usa solo con secciones colapsadas en juego** (1A): cuando lo que
+    se mueve tiene un título colapsado o salta una sección colapsada. Mover un renglón suelto sin nada colapsado
+    sigue siendo el de BlockNote. Lega delegó la decisión el 2026-10-01; quedó 1A: solo con secciones
+    colapsadas, porque con un teléfono sin red "a la vez" es todo lo que pasa entre dos sincronizaciones y perder
+    lo escrito en el lado recreado no se extiende a los movimientos comunes. Lo fija `collapseMove.test.ts`
+    ("decisión 1A"). El costo del lado recreado (sección "Mover la sección entera") queda aceptado para estos
+    movimientos.
+21. **Tooltips y Shift+clic: se sigue la tabla del §3.** Donde la regla del §4 y la tabla no coinciden (lo que
+    ves es solo tuyo), Shift+clic pasa lo tuyo a todos, como dice la tabla. Queda como está.
 
 ### A confirmar por Lega
 
@@ -963,16 +976,16 @@ grupo (sale de un bloque o entra en otro), lo que se mueve. El otro lado **no se
 
 **La vara del encargo** ("no peor que mover un bloque suelto hoy, y 0 en el texto que nadie tocó"): lo segundo se
 cumple siempre salvo con Tab a la vez (y ahí, menos que hoy); lo primero se cumple contando el daño (perdido o en otro bloque) y no contando solo lo perdido en
-el lado recreado. **A confirmar por Lega:** que perder lo que otro escribe a la vez en el lado más chico es mejor
-que lo de hoy (que lo reparte en otros bloques y borra bloques que nadie tocó). Mientras no haya colaboración en
-tiempo real (D-04), "a la vez" es todo lo que pasa entre dos sincronizaciones.
+el lado recreado. **Decidido (decisión 20):** perder lo que otro escribe a la vez en el lado más chico se acepta
+solo para los movimientos con secciones colapsadas. Mientras no haya colaboración en tiempo real (D-04), "a la vez"
+es todo lo que pasa entre dos sincronizaciones.
 
 **Cuándo se usa.** Solo cuando hay algo colapsado en juego (lo que se mueve tiene un título colapsado, o salta una
 sección colapsada); el resto de los movimientos siguen siendo los de BlockNote. Pasar todos los movimientos por este
-camino sería mejor para el texto que nadie tocó, pero cambia lo que pasa al mover un bloque suelto: **a decidir
-por Lega**.
+camino sería mejor para el texto que nadie tocó, pero cambia lo que pasa al mover un bloque suelto: **decidido que
+no (decisión 20, 1A)**.
 
-## Cómo quedó (1b, mover, y 2), v0.080
+## Cómo quedó (1b, mover, y 2), v0.0XX
 
 Sin tipo de bloque ni propiedad nueva, sin migración, sin cambios en el portero ni en `min_app_version`.
 
@@ -1024,7 +1037,8 @@ Sin tipo de bloque ni propiedad nueva, sin migración, sin cambios en el portero
   para todos", "Colapsado para todos / Clic: abrir solo para vos · Shift+clic: abrir para todos" y "Abierto solo para
   vos / Clic: colapsar · Shift+clic: abrir para todos"; quien solo ve o comenta, la acción sin Shift. **Diferencia
   con la sección 4:** la regla de ahí ("Shift+clic: lo de todos pasa a lo contrario de lo que ves") y la tabla no
-  coinciden cuando lo que ves es solo tuyo; se siguió la tabla (lo tuyo pasa a ser de todos). A confirmar por Lega.
+  coinciden cuando lo que ves es solo tuyo; se siguió la tabla (lo tuyo pasa a ser de todos). Decidido: queda así
+  (decisión 21).
 - **Versiones viejas:** no ven el mapa (ven todo abierto, como lo de cada uno) y lo conservan: no toca el fragmento
   ni ninguna propiedad. Lo prueban `collapseShared.test.ts` (el editor publicado edita y el mapa sigue) y
   `publishedCompat.test.ts` (la versión publicada de la sincronización lo baja, lo conserva y lo vuelve a subir).
@@ -1034,13 +1048,18 @@ enteras, un párrafo que salta una sección, sin nada colapsado mueve BlockNote,
 lectura, anidados, Yjs igual al editor, deshacer en un paso), `collabMove.test.ts` (dos editores, 40 agendas por
 caso: el texto que nadie tocó, lo que no se recrea, iguales; y el atajo con otro editor que escribe adentro de lo
 escondido), `collapseShared.test.ts` (para todos), el caso 5 de `collapseEditor.test.ts` (ahora sube con su sección)
-y `collapseProperty.test.ts` con el arrastre de secciones: **pasa con las 70 semillas**.
+y `collapseProperty.test.ts` con el arrastre de secciones: **pasa con las 70 semillas**. `collapseMove.test.ts`
+fija además la decisión 20 (el mover en dos pasadas solo con algo colapsado en juego; sin nada colapsado, ni una
+llamada) y las fotos en línea de una sección que se mueve.
 
 **De punta a punta** (Chromium sin ventana, un arnés con dos personas lado a lado sobre el servidor de prueba, sin
 login; fuera del repo): los tooltips de quien edita y de quien solo comenta, colapsar para vos y para todos, que el
 otro lo vea al sincronizar, abrir solo para vos, Ctrl+Shift+↓ con dos secciones colapsadas y Ctrl+Z, arrastrar los
 puntos de un título colapsado con el mouse (la sección entera, lo escondido sigue escondido, el otro lo recibe),
-Shift+clic de quien solo comenta (solo para él, el mapa vacío) y Ctrl+Shift+↓ en solo lectura: 26 de 26.
+Shift+clic de quien solo comenta (solo para él, el mapa vacío) y Ctrl+Shift+↓ en solo lectura: 26 de 26. Unido
+con `main` v0.081 suma las fotos en línea (una sección colapsada con dos fotos salta otra con una, que Yjs recrea;
+el otro escribe a la vez en el renglón de las fotos; deshacer; arrastrar): 37 de 37, las tres fotos siempre una
+vez, en su bloque, en los dos.
 
 **Auditoría de la 1b y la 2** (independiente; sin bloqueantes). Cada punto con su prueba, que fallaba antes
 (`collapseMove.test.ts` y `collapseShared.test.ts`, "auditoría de la 1b"):
@@ -1061,6 +1080,8 @@ Shift+clic de quien solo comenta (solo para él, el mapa vacío) y Ctrl+Shift+�
 - **Quedó como está:** el tooltip de quien solo ve o comenta tiene una segunda línea ("Colapsado para todos." o "Solo
   para vos…") que la tabla del §3 no pone; dice si es para todos o solo para vos (decisión 6).
 
-**Pendiente:** probar a mano en Safari, Firefox y el iPhone (el arrastre y el teclado); la diferencia de la tabla
-con la regla del §4 y el costo del lado recreado (a confirmar por Lega); pasar todos los movimientos de bloques por
-el mover en dos pasadas (a decidir).
+**Unido con `main` v0.081** (con las fotos en línea): una sección colapsada con fotos en línea, movida con el teclado,
+con deshacer y arrastrada, las lleva todas, sin perder ni duplicar ninguna, también del lado que Yjs recrea
+(`collapseMove.test.ts` y el recorrido de punta a punta).
+
+**Pendiente:** probar a mano en Safari, Firefox y el iPhone (el arrastre y el teclado).

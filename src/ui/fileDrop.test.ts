@@ -10,10 +10,11 @@ import { insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './file
 // Soltar o pegar archivos (Docs/Doc_Adjuntos.md): se reconocen los eventos de archivos (y no los de HTML), se
 // leen en el acto, y se inserta un bloque `image` por archivo, en orden, sin cortar si uno falla.
 
-const fakeTransfer = (types: string[], files: File[] = [], folders = 0): DataTransfer =>
+const fakeTransfer = (types: string[], files: File[] = [], folders = 0, html = '<p>Hola</p>'): DataTransfer =>
   ({
     types,
     files,
+    getData: (type: string) => (type === 'text/html' ? html : ''),
     items: [
       ...files.map((f) => ({ kind: 'file', getAsFile: () => f, webkitGetAsEntry: () => ({ isDirectory: false }) })),
       ...Array.from({ length: folders }, () => ({ kind: 'file', getAsFile: () => null, webkitGetAsEntry: () => ({ isDirectory: true }) })),
@@ -26,11 +27,21 @@ describe('qué eventos son de archivos', () => {
     expect(isFilesTransfer(fakeTransfer(['Files', 'text/plain']))).toBe(true);
   });
 
-  it('con HTML no (pegar desde Excel o Word, copiar imagen, arrastrar desde otra pestaña, un bloque del editor)', () => {
+  it('con HTML no (pegar desde Excel o Word, arrastrar texto desde otra pestaña, un bloque del editor)', () => {
     expect(isFilesTransfer(fakeTransfer(['text/html', 'Files']))).toBe(false);
+    expect(isFilesTransfer(fakeTransfer(['text/html', 'Files'], [], 0, '<p>Texto <img src="x.png"></p>'))).toBe(false);
+    expect(isFilesTransfer(fakeTransfer(['text/html', 'Files', 'blocknote/html'], [], 0, '<img src="x.png">'))).toBe(false);
     expect(isFilesTransfer(fakeTransfer(['blocknote/html', 'text/html']))).toBe(false);
     expect(isFilesTransfer(fakeTransfer(['text/plain']))).toBe(false);
     expect(isFilesTransfer(null)).toBe(false);
+  });
+
+  it('"Copiar imagen" de una web (el archivo y un HTML que es solo esa imagen): son archivos', () => {
+    const chrome = '<html><body><!--StartFragment--><img src="https://example.invalid/a.jpg" alt=""/><!--EndFragment--></body></html>';
+    expect(isFilesTransfer(fakeTransfer(['text/html', 'Files'], [], 0, chrome))).toBe(true);
+    expect(isFilesTransfer(fakeTransfer(['text/html', 'Files'], [], 0, '<meta charset="utf-8"><a href="x"><img src="a.png"></a>'))).toBe(true);
+    // Sin el archivo (solo el HTML con la imagen), no: eso no se puede guardar.
+    expect(isFilesTransfer(fakeTransfer(['text/html'], [], 0, '<img src="a.png">'))).toBe(false);
   });
 
   it('lee todos los archivos y cuenta las carpetas aparte', () => {

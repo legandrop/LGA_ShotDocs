@@ -16,6 +16,7 @@ import {
   useTree,
 } from '../services';
 import { SupabaseRemote } from '../sync/remote';
+import { lazyProjectDrive } from '../media/projectDrive';
 import { useWorkspace } from '../workspace';
 import { FIND_SHORTCUT_LABEL, isFindSelectionTarget, openFindBar } from './findUi';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
@@ -24,10 +25,11 @@ import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { notify, useNotice } from './notice';
+import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
-import { DeletedProjectsList, ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
+import { DeletedProjectsList, ImportCodaDialog, LookForFilesButton, ProjectSearch, ShareDialog } from './lazyDialogs';
 import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
@@ -157,7 +159,7 @@ function useInviteTarget(): void {
 export function Shell() {
   const route = useRoute();
   const tree = useTree();
-  const { comments, docs, media, user, workspace } = useServices();
+  const { comments, docs, media, folders, user, workspace } = useServices();
   const keys = workspace.config.storage;
   const [navOpen, setNavOpen] = useState(false);
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
@@ -212,7 +214,8 @@ export function Shell() {
 
   // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación. Lo mismo
   // espera la recarga que sigue a publicar una versión nueva (lazyPart.tsx). Una importación de Coda en
-  // curso cuenta igual: cortada, deja el proyecto a medias (se puede seguir, pero mejor no cortarla).
+  // curso cuenta igual: cortada, deja el proyecto a medias (se puede seguir, pero mejor no cortarla). Y una carpeta
+  // que se está subiendo (P.9): cortada, hay que volver a soltarla para terminar.
   useEffect(() => {
     const importing = importJobFor(tree);
     const unsaved = () =>
@@ -220,6 +223,7 @@ export function Shell() {
       tree.hasUnsavedWrites() ||
       media.hasUnsavedWrites() ||
       comments.hasUnsavedWrites() ||
+      !!folders?.busy() ||
       importing.get().running;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!unsaved()) return;
@@ -233,7 +237,7 @@ export function Shell() {
       window.removeEventListener('beforeunload', onBeforeUnload);
       unwatch();
     };
-  }, [comments, docs, tree, media]);
+  }, [comments, docs, tree, media, folders]);
 
   // Con la barra lateral ya dibujada, el editor se baja cuando el navegador está libre: abrir una página
   // después no espera, y una versión nueva publicada mientras tanto no deja al editor sin sus archivos.
@@ -329,6 +333,8 @@ export function Shell() {
             </button>
           )}
         </header>
+        {/* En el teléfono, mientras no está instalada: el aviso para instalarla (se puede cerrar). */}
+        <InstallBanner />
         {route.name === 'page' ? (
           <PageView key={route.id} id={route.id} />
         ) : route.name === 'trash' ? (
@@ -369,6 +375,7 @@ export function Shell() {
         </Part>
       )}
       {codaOwner && <ImportCodaHost />}
+      <InstallHost />
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
@@ -413,6 +420,17 @@ export function Home() {
         <p className="archived-note">
           <ArchiveIcon size={16} /> {tr('home.archived')}
         </p>
+      )}
+      {/* Restaurado sin su carpeta de Drive (P.14, entrega 2): lo dice, y quien puede la busca de nuevo. */}
+      {tree.project(projectId)?.drive_missing_at && (
+        <div className="archived-note drive-missing-note">
+          <p>{tr('home.driveMissing')}</p>
+          {(perms.role === 'owner' || perms.role === 'admin') && perms.canManageProject(projectId) && (
+            <Part>
+              <LookForFilesButton projectId={projectId} />
+            </Part>
+          )}
+        </div>
       )}
       <p className="muted">
         {!canCreate
@@ -483,6 +501,9 @@ export function NoProjects({
   const [error, setError] = useState<string | null>(null);
   // Los proyectos borrados que la persona puede restaurar (P.14): si hay alguno, la pantalla los ofrece.
   const remote = useMemo(() => new SupabaseRemote(client), [client]);
+  // Sin la sincronización abierta, la dirección del portero se busca recién si hace falta (restaurar con la carpeta
+  // en la papelera de Drive).
+  const drive = useMemo(() => lazyProjectDrive(client), [client]);
   const [restorable, setRestorable] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const tr = useT();
@@ -545,7 +566,7 @@ export function NoProjects({
           <>
             <h2 className="mono-label">{tr('project.deletedList')}</h2>
             <Part>
-              <DeletedProjectsList remote={remote} onRestored={onRetry} />
+              <DeletedProjectsList remote={remote} drive={drive} onRestored={onRetry} />
             </Part>
           </>
         )}

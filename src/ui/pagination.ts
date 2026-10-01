@@ -13,6 +13,8 @@
 //   puede partir (una imagen enorme) empieza en una hoja nueva y se corta en el borde.
 // - Un título de sección (heading) no queda solo al pie de una hoja: pasa con el bloque que sigue, si
 //   entran juntos en una hoja.
+// - Un párrafo con fotos en línea se parte entre renglones (cada renglón es una fila de fotos) aunque entre en una
+//   hoja: como las filas de fotos-bloque, que eran una unidad cada una.
 
 export interface Unit {
   /** `header`, `title` o `b:<id del bloque>`. */
@@ -24,6 +26,12 @@ export interface Unit {
   splits?: number[];
   /** Va a la hoja siguiente junto con la unidad que sigue (títulos de sección). */
   keepWithNext?: boolean;
+  /**
+   * Se parte entre renglones aunque entre en una hoja: un renglón con fotos en línea (Docs/Doc_Fotos_En_Linea.md).
+   * Cada renglón (una fila de fotos) no se parte; el párrafo sí, como se partían las filas de fotos-bloque (cada
+   * una, una unidad). Sin esto, un párrafo de tres filas de fotos que no entra en lo que queda pasaría entero.
+   */
+  breakable?: boolean;
 }
 
 export interface SheetBreak {
@@ -69,8 +77,8 @@ export function paginate(units: readonly Unit[], sheetHeight: number, tolerance 
     const u = units[i];
     if (!(u.height > 0)) continue;
     const splits = (u.splits ?? []).filter((s) => s > EPS && s < u.height - EPS);
-    // Más alta que una hoja y con dónde partirla (renglones, filas): se parte.
-    const tall = u.height > keepHeight + EPS && splits.length > 0;
+    // Más alta que una hoja (o un párrafo con fotos en línea) y con dónde partirla (renglones, filas): se parte.
+    const tall = (u.height > keepHeight + EPS || u.breakable === true) && splits.length > 0;
     const room = tall ? sheetHeight : keepHeight;
     // Cada vuelta empieza una hoja nueva, así que termina (el tope es por si llega algo raro).
     for (let guard = 0; u.top + u.height > start + room + EPS && guard < 10_000; guard++) {
@@ -141,7 +149,9 @@ export function measureUnits(root: HTMLElement, sheetHeight: number): Measured {
     const marginTop = parseFloat(getComputedStyle(el).marginTop) || 0;
     const unit: Unit = { key, top: r.top - origin - marginTop, height: r.height + marginTop };
     if (el.matches('[data-content-type="heading"]')) unit.keepWithNext = true;
-    if (unit.height > sheetHeight) unit.splits = splitPoints(el, r.top - marginTop);
+    // Con fotos en línea, se parte entre renglones aunque entre en una hoja (`breakable`).
+    if (!el.querySelector('table') && el.querySelector('.bn-inline-content .sd-photo')) unit.breakable = true;
+    if (unit.height > sheetHeight || unit.breakable) unit.splits = splitPoints(el, r.top - marginTop);
     units.push(unit);
     elements.push(el);
   }

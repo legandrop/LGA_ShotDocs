@@ -178,6 +178,8 @@ export interface SizesRemote {
 
 /** La versión de la base con archivar y borrar proyectos (P.14, Docs/Doc_Proyectos_Borrar.md). */
 export const PROJECT_STATES_SCHEMA_VERSION = 9;
+/** La versión con la carpeta de un proyecto borrado en la papelera de Drive (P.14, entrega 2, migración 10). */
+export const PROJECT_DRIVE_SCHEMA_VERSION = 10;
 
 /**
  * Archivar, borrar y restaurar proyectos (P.14, supabase/migrations/20261001120000_proyectos_archivar_borrar.sql).
@@ -189,7 +191,12 @@ export interface ProjectStatesRemote {
   setProjectArchived(projectId: string, archived: boolean): Promise<void>;
   /** Lo manda a la papelera de proyectos y devuelve cuándo (si ya estaba, la fecha de entonces). */
   deleteProject(projectId: string): Promise<string>;
-  restoreProject(projectId: string): Promise<void>;
+  /**
+   * Lo saca de la papelera de proyectos. Con la carpeta pedida para la papelera de Drive, la base exige traerla
+   * antes (`drive_untrash_first`), salvo `withoutDrive` (versión 10): solo cuando el portero, con Drive conectado
+   * a la misma cuenta, respondió que no la tiene. Vuelve con la marca `drive_missing_at`, que se deshace si aparece.
+   */
+  restoreProject(projectId: string, withoutDrive?: boolean): Promise<void>;
   /** La papelera de proyectos de la sesión. `null` si la base todavía no tiene la función. */
   trashedProjects(): Promise<TrashedProjectRow[] | null>;
   projectDeleteInfo(projectId: string): Promise<ProjectDeleteInfo>;
@@ -209,6 +216,10 @@ export function parseTrashedProject(row: Record<string, unknown>): TrashedProjec
     can_restore: row.can_restore === true,
     pages: num(row.pages),
     files: num(row.files),
+    drive_trash_requested_at: (row.drive_trash_requested_at as string | null) ?? null,
+    drive_trashed_at: (row.drive_trashed_at as string | null) ?? null,
+    drive_missing_at: (row.drive_missing_at as string | null) ?? null,
+    can_purge: row.can_purge === true,
   };
 }
 
@@ -405,6 +416,8 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
 
   /** Desde cuándo la base no tiene `workspaces.archived_at` (aunque diga la versión 9); se reintenta cada tanto. */
   private archivedMissingAt = 0;
+  /** Lo mismo con las columnas de la carpeta en la papelera de Drive (versión 10). */
+  private driveColumnsMissingAt = 0;
 
   /** Desde cuándo la base no tiene `workspace_settings` (o la subida con versión); se reintenta cada tanto. */
   private settingsTableMissingAt = 0;
@@ -498,11 +511,21 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
     // `settings`.
     const archived =
       (schemaVersion ?? 0) >= PROJECT_STATES_SCHEMA_VERSION && Date.now() - this.archivedMissingAt >= 10 * 60_000;
+    // Lo mismo con las de Drive (versión 10): primero se dejan ellas; si sigue faltando algo, también `archived_at`.
+    const drive =
+      archived &&
+      (schemaVersion ?? 0) >= PROJECT_DRIVE_SCHEMA_VERSION &&
+      Date.now() - this.driveColumnsMissingAt >= 10 * 60_000;
+    const columns = ['id, name, created_at, owner_id', ...(archived ? ['archived_at'] : []), ...(drive ? ['drive_trash_requested_at, drive_missing_at'] : [])];
     const { data, error, status } = await timed(this.client
       .from('workspaces')
-      .select(archived ? 'id, name, created_at, owner_id, archived_at' : 'id, name, created_at, owner_id')
+      .select(columns.join(', '))
       .order('created_at')
       .limit(1000));
+    if (drive && error?.code === UNDEFINED_COLUMN) {
+      this.driveColumnsMissingAt = Date.now();
+      return this.fetchProjects(schemaVersion);
+    }
     if (archived && error?.code === UNDEFINED_COLUMN) {
       this.archivedMissingAt = Date.now();
       return this.fetchProjects(schemaVersion);
@@ -524,8 +547,10 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
     return String(data);
   }
 
-  async restoreProject(projectId: string): Promise<void> {
-    const { error, status } = await timed(this.client.rpc('restore_project', { p_project: projectId }));
+  async restoreProject(projectId: string, withoutDrive = false): Promise<void> {
+    // El segundo parámetro solo si hace falta: una base de la versión 9 tiene la función con uno solo.
+    const args = withoutDrive ? { p_project: projectId, p_without_drive: true } : { p_project: projectId };
+    const { error, status } = await timed(this.client.rpc('restore_project', args));
     if (error) throw toRemoteError(error, status);
   }
 

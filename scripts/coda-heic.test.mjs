@@ -379,7 +379,8 @@ describe('fotos HEIC: manifest y páginas', () => {
     expect(one).toContain('data-coda-mime-type="image/heic"')
     expect(ficha('r2').media.map((m) => [m.file, m.type, m.bytes])).toEqual([['bl-b.jpg', 'image/jpeg', 22], ['bl-p.png', 'image/png', undefined]])
     const two = r.files.get('pages/row-T1-r2.import.html')
-    expect(two).toContain(`<img src="${blob('bl-b')}" alt="IMG_2.jpg">`)
+    // Dos fotos en la columna: juntas en un renglón, a un tercio cada una (entrega 4 de las fotos en línea).
+    expect(two).toContain(`<img src="${blob('bl-b')}" alt="IMG_2.jpg" width="208">`)
     expect(two).toContain('alt="plano.png"')
     // Ninguna foto convertida quedó con nombre o tipo de HEIC en lo que se importa.
     for (const [path, text] of r.files) {

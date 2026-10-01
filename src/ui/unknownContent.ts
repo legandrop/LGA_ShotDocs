@@ -10,7 +10,18 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 export interface KnownContent {
   nodes: ReadonlySet<string>;
   marks: ReadonlySet<string>;
+  /** Elementos que solo existen en Yjs: el editor no los dibuja (ver `STABLE_GAPS_MARKER`). */
+  yjsOnly?: ReadonlySet<string>;
 }
+
+/**
+ * La marca de un renglón con fotos en línea (o que las tuvo): un elemento vacío, primero en el renglón, que
+ * escribe el parche de y-prosemirror (`lgaStableGaps`, patches/) y que el editor no dibuja. Está para que las
+ * versiones anteriores a la que crea fotos en línea no abran la página aunque al renglón le hayan borrado todas
+ * las fotos: lo verían como algo que no conocen. Si la abrieran, juntarían los textos del renglón en uno y
+ * borrarían los demás, con lo que otro haya escrito en ellos (Docs/Doc_Colaboracion.md, "Versiones viejas").
+ */
+export const STABLE_GAPS_MARKER = 'lgaStableGaps';
 
 // Los nombres de bloques, contenidos en línea y marcas del esquema de esta versión del editor
 // (`editorSchema.ts`), escritos acá para que la sincronización pueda revisar sin cargar el editor, que se
@@ -43,7 +54,7 @@ const KNOWN_NODES = [
 ];
 const KNOWN_MARKS = ['backgroundColor', 'bold', 'code', 'italic', 'link', 'strike', 'textColor', 'underline'];
 
-const known: KnownContent = { nodes: new Set(KNOWN_NODES), marks: new Set(KNOWN_MARKS) };
+const known: KnownContent = { nodes: new Set(KNOWN_NODES), marks: new Set(KNOWN_MARKS), yjsOnly: new Set([STABLE_GAPS_MARKER]) };
 
 /** Los nombres de elementos (bloques, contenidos en línea) y de marcas que esta versión del editor conoce. */
 export function knownContent(): KnownContent {
@@ -59,6 +70,7 @@ export function findUnknownContent(doc: Y.Doc, schemaNames: KnownContent = known
   while (stack.length > 0) {
     const item = stack.pop();
     if (item instanceof Y.XmlElement) {
+      if (schemaNames.yjsOnly?.has(item.nodeName)) continue;
       if (NEVER_ELEMENTS.has(item.nodeName) || !schemaNames.nodes.has(item.nodeName)) return `"${item.nodeName}"`;
       stack.push(...item.toArray());
     } else if (item instanceof Y.XmlText) {
