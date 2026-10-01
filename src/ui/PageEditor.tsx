@@ -23,6 +23,7 @@ import { porteroDownload, sharpenImages } from './sharpImages';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
+import { renameConvertedHeic } from './heicNames';
 import { isAttachment, markAttachments } from './attachments';
 import { openAttachmentNow, prepareAttachment } from './attachmentOpen';
 import { AttachmentSheet } from './AttachmentSheet';
@@ -269,6 +270,8 @@ function BlockEditor({
   const scheme = useScheme();
   const tr = useT();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
+  /** Si la página se puede editar ahora (lo leen las funciones que el editor guarda al crearse). */
+  const editableRef = useRef(editable);
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
   /** El adjunto con su hoja abierta (Docs/Doc_Adjuntos.md). */
   const [sheet, setSheet] = useState<string | null>(null);
@@ -366,7 +369,11 @@ function BlockEditor({
         const id = mediaIdOf(url);
         if (!id) return files.resolve(url);
         return media.resolve(url, pageId).then((src) => {
-          setTimeout(() => markAttachments(editorRef.current as never, id, media));
+          setTimeout(() => {
+            markAttachments(editorRef.current as never, id, media);
+            // Una foto que se agregó como HEIC y ya es un JPEG: el bloque pasa a decir `.jpg` (heicNames.ts).
+            if (editableRef.current) renameConvertedHeic(editorRef.current as never, media, id);
+          });
           return src;
         });
       },
@@ -419,6 +426,7 @@ function BlockEditor({
   }, [editor, pageId, canCollapse]);
 
   editorRef.current = editor as unknown as NonNullable<typeof editorRef.current>;
+  editableRef.current = editable;
 
   // Un cambio de otro dispositivo que el editor no pudo dibujar (docs.ts, `subscribeRenderFailed`): se vuelve
   // a dibujar todo desde el documento en el momento, antes de la próxima tecla. Si ni eso anda, el editor
@@ -514,6 +522,8 @@ function BlockEditor({
           }
           // Llegó lo que faltaba saber de un archivo: si es un adjunto, su tarjeta con tamaño fijo.
           markAttachments(editor as never, id, media);
+          // Un HEIC que se acaba de pasar a JPEG: el bloque pasa a decir `.jpg`.
+          if (editableRef.current) renameConvertedHeic(editor as never, media, id);
         });
       }),
     [editor, media, pageId],

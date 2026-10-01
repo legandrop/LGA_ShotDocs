@@ -322,9 +322,14 @@ Un caso que queda abierto mientras convivan versiones: un renglón al que le **b
 con sus textos seguidos y con la marca, y la página ya no tiene nada que la versión anterior desconozca, así
 que esa versión la abre. Probado a mano con la librería de `main` (sin los huecos estables): abre sin escribir
 nada y muestra el texto bien; al editar ese renglón lo reescribe en un solo texto (copia los otros en el primero
-y los borra), y si dos dispositivos con la versión anterior escriben a la vez en él, **el texto de los otros
-queda dos veces**. No se pierde nada, y no puede pasar mientras nada cree fotos; por eso `min_app_version` sube
-antes de la versión que las crea.
+y los borra). **Eso pierde texto si otro dispositivo escribe a la vez** (lo midió la auditoría de v0.076, 7
+posiciones por lado): con uno viejo y uno nuevo, 28 de 49 combinaciones pierden lo que escribió el nuevo en el
+segundo o el tercer texto; con dos viejos, las 49 dejan **el renglón entero dos veces**. No puede pasar mientras
+nada cree fotos. Antes de la versión que las crea: subir `min_app_version` y resolver el resquicio que queda aun
+así (un dispositivo viejo sin red que se actualiza después sube su cola, hecha con la librería vieja). Las
+pruebas de versiones (`collabPhotosVersions.test.ts`, "versión anterior" de `stableGaps.test.ts`) usan el
+esquema viejo con la librería nueva: no prueban la librería publicada. Hace falta sumar una prueba con la
+librería de `main` (alias de Vite; la auditoría dejó cómo) antes de la entrega 2.
 
 ## Huecos estables
 

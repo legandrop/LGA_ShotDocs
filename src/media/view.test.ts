@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { resolveObjectURL } from 'node:buffer';
 import { porteroDownload } from '../ui/sharpImages';
+import { HeicError } from './heic';
 import { MEDIA_SCHEME, mediaIdOf, VIEW_FETCH_MAX_BYTES, VIEW_PREFIX, VIEW_RETRY_MS, VIEW_SMALL_PREFIX } from './queue';
 
 // La imagen nítida de la página (Docs/Doc_Imagenes.md, "Calidad en la página"): de dónde sale en cada
@@ -46,7 +47,14 @@ async function setup() {
   await sync(a);
   const photo = mediaIdOf(await a.media.add(page, file(2 * MB, 'bl-InUT6dyjKb.jpg', 'image/jpeg')))!;
   const video = mediaIdOf(await a.media.add(page, file(MB, 'IMG_0008.MOV', 'video/quicktime')))!;
+  // Un HEIC que quedó sin convertir (subido por una versión anterior, o que no se pudo pasar a JPEG).
+  const convert = server.convertHeic;
+  server.convertHeic = async () => {
+    throw new HeicError('failed', 'no se pudo');
+  };
   const heic = mediaIdOf(await a.media.add(page, file(MB, 'IMG_0009.HEIC', 'image/heic')))!;
+  await a.media.idle();
+  server.convertHeic = convert;
   await a.media.idle();
   return { server, a, page, photo, video, heic };
 }

@@ -370,3 +370,133 @@ falta migración y generarla en el dispositivo que tiene el original (las ya sub
   pausa con un portero sin CORS), `portero/src/core.test.ts` (CORS en `/m/`), `pagination.test.ts`
   (impresión) y `carreteLoader.test.ts`. En Chromium, `sharp.mjs` del repo de pruebas privado: solo el camino
   del original local.
+
+## Fotos HEIC (v0.075)
+
+Decisión D-20 (`Doc_Decisiones.md`): la app muestra las fotos HEIC, las del iPhone. Chrome (Windows y Mac) no
+sabe decodificar HEIC: antes, una foto HEIC soltada en el editor se guardaba y se subía, pero quedaba sin
+miniatura y la página mostraba un ícono. Desde el iPhone casi no pasa (Safari entrega JPEG al elegir de la
+fototeca), pero un HEIC que llega como archivo sí.
+
+**Qué hace: guardar primero, convertir después.** Al agregar una foto HEIC (soltar, pegar, elegir con el
+selector, reemplazar el archivo de un bloque, una imagen embebida en HTML pegado, la importación de Coda), la
+cola la **guarda tal cual en el acto**, como cualquier archivo: a salvo en el dispositivo en milisegundos,
+marcada "por convertir". Enseguida, en segundo plano, la **pasa a JPEG en el dispositivo** y reemplaza el HEIC
+por el JPEG en una sola transacción, siempre antes de registrarla en la base. Lo que queda en el dispositivo y
+en el Drive es el JPEG: nombre con `.jpg` (`IMG_1234.HEIC` → `IMG_1234.jpg`), tipo `image/jpeg`, tamaño
+completo, calidad 0,92. El archivo de la persona no se toca. De ahí en más es una foto como cualquiera:
+miniatura, medidas, imagen nítida, carrete y PDF salen del JPEG, sin cambios en `probe.ts` ni en
+`sharpImages.ts`. Es lo mismo que hace desde v0.072 el comando que baja un doc de Coda (`Doc_Importar_Coda.md`,
+"Fotos HEIC"). Así, "sin red", "decodificador no disponible", "la pestaña se cerró a mitad" y "conversión
+lenta" son el mismo camino: el HEIC ya está guardado y se convierte cuando se puede.
+
+- **Orientación:** la aplica el decodificador (las cajas `irot`/`imir` del HEIC): una foto vertical sale
+  vertical.
+- **Perfil de color:** las fotos del iPhone están en Display P3. Los píxeles se decodifican tal cual, se
+  codifica el JPEG y se le mete el perfil ICC del HEIC (segmentos APP2). Sin eso el JPEG se leería como sRGB y
+  se vería menos saturado. Si el navegador le puso un perfil propio al codificar, se saca: queda uno solo.
+- **Se comprueba:** el JPEG se vuelve a abrir (`createImageBitmap`, sin aplicar el perfil) y tiene que medir lo
+  mismo que el HEIC y parecerse en una grilla de 16 puntos (el promedio de cuadraditos de 8 × 8, con tolerancia
+  amplia). Lo que devuelve un canvas no es de fiar a ciegas: pasado su tope de área (16,7 MP en iOS) puede salir
+  vacío, y hay navegadores que alteran lo que se lee. Si no coincide, cuenta como fallida y queda el HEIC.
+- **Tope de 50 megapíxeles:** entra la foto más grande de un iPhone (48 MP) y el pico de memoria queda cerca de
+  800 MB (con 100 MP serían 1,6 GB). Una más grande queda como HEIC.
+- **Cómo se reconoce un HEIC:** por la firma del archivo (caja `ftyp` con marca `heic`, `heix`, `heim` o
+  `heis`; o la genérica `mif1` si no es un AVIF, que Chrome sí muestra) y, si no tiene firma, por el tipo
+  (`image/heic`, `image/heif`). Se leen solo los primeros 64 bytes. El nombre solo no alcanza. **Las secuencias**
+  (marcas `hevc`, `hevx`, `hevm`, `hevs`, `msf1`, tipos `*-sequence`: varias imágenes, como un video corto) no
+  se convierten: un JPEG de la primera perdería el resto. Se guardan tal cual.
+
+**Estados y avisos** (en el lugar de la foto, en inglés o castellano; `MediaRecord.heic` en el dispositivo):
+
+| Estado | Marca | Aviso | Qué pasa |
+|---|---|---|---|
+| Recién agregada | `pending` | *HEIC photo: turning it into a JPEG…* | Se convierte en segundo plano; apenas está el JPEG la página lo muestra, sin recargar. |
+| El decodificador no está (sin red, y este dispositivo nunca lo bajó) | `pending` | *HEIC photo: turns into a JPEG once online* | La cola vuelve a probar en cada vuelta, antes de registrarla. Si hay red y el decodificador sigue sin cargar, se registra y se sube el HEIC (subir manda). |
+| Se mandó a registrar como HEIC sin saber si llegó | `sent` | el mismo | Antes de convertirla se le pregunta a la base (`fetchMediaFiles`): si ya tiene la fila, queda como HEIC; sin respuesta, se espera. |
+| No se pudo convertir (archivo roto, falta de memoria, más de 50 MP, el JPEG no pasó la comprobación, más de 2 minutos) o ya se registró como HEIC | `failed` | *HEIC photo: could not turn it into a JPEG* | Se sube como HEIC. No se reintenta. |
+| Un HEIC subido sin convertir (otro dispositivo, una versión anterior) | — | *HEIC photo: this browser cannot show it* | Queda así (ver pendientes). |
+
+Por qué se pregunta a la base: `register_file` no cambia una fila que ya existe y el portero compara el peso del
+archivo con el de la fila. Si la respuesta del registro como HEIC se pierde y después se convierte, el JPEG
+quedaría detenido ("The size does not match the file") y el HEIC ya no estaría en el dispositivo. Una vez
+registrada como HEIC, la foto no se convierte más.
+
+**El nombre del bloque.** El bloque nace con el nombre del archivo de la persona (`IMG_1234.HEIC`), porque
+cuando la foto entra a la página todavía no está convertida. Cuando el archivo ya es un JPEG, el bloque pasa a
+`IMG_1234.jpg` (`src/ui/heicNames.ts`): al terminar la conversión si la página está abierta, o la próxima vez
+que la foto se muestra en un editor que puede editar (otra sesión, otro dispositivo, una página importada de
+Coda). Es un cambio de la app (no abre secciones colapsadas). Un HEIC que quedó sin convertir conserva `.HEIC`.
+
+**El decodificador.** [`libheif-js`](https://www.npmjs.com/package/libheif-js) (libheif en WebAssembly, con el
+decodificador de HEVC libde265; LGPL-3.0, ver D-21 y `THIRD_PARTY_NOTICES.md`). Corre en un **Web Worker**
+(`heic.worker.ts`), uno por foto, que se cierra al terminar (así su memoria se suelta entera): la pantalla no
+se traba. Si el navegador no deja crear el Worker, o su script no arranca, se hace en la página (tarda lo
+mismo, trabando mientras dura); si el Worker no tiene `OffscreenCanvas`, decodifica él y el JPEG lo codifica
+la página. **Siempre termina:** el Worker y el respaldo en la página tienen tope (2 minutos; un Worker que ni
+arrancó cuenta como "no está"), la bajada del `.wasm` se corta a los 45 s ("no está") y la cola pone su propio
+tope por encima de todo (`HEIC_LIMIT_MS`).
+
+**Que no pese ni recargue.** Nada del decodificador está en el paquete principal: se carga recién cuando llega
+un HEIC. `heicConvert.ts` (4,6 KB) sí va en el paquete de la cola: si se cargaba con `import()`, en la primera
+sesión de un dispositivo y sin red el import fallaba y el navegador guardaba ese fallo en la pestaña, así que
+el HEIC se subía sin convertir al volver la red (lo encontró la auditoría de v0.075). El Worker se crea de
+nuevo en cada foto y no guarda fallos; el respaldo sin Worker (`heicLib.ts`) sí, pero solo se usa si el
+navegador no puede crear el Worker. Son tres archivos aparte: `libheif-*.wasm` (1,42 MB; 477 KB comprimido),
+`heic.worker-*.js` (94 KB) y `heicLib-*.js` (89 KB, el respaldo sin Worker); los dos `.js` empiezan con el
+aviso de licencia. Tampoco están en lo que el service worker guarda al instalar la app (`globIgnores` en
+`vite.config.ts`): se guardan la primera vez que se usan (caché `heic-decoder`), y desde ahí la conversión anda
+sin red. Esos `import()` son **opcionales** (`src/lib/optionalImport.ts`): si fallan sin red, el oyente de
+`vite:preloadError` (`lazyPart.tsx`) no lo toma como una versión nueva y no recarga la app con el aviso *A new
+version is available*; la foto queda esperando.
+
+**Medido** (Chromium sin ventana, build de producción, fuera del repo): cuatro fotos reales de iPhone de 24 MP
+(5712 × 4284, 2,5 a 5,1 MB) tardan entre 1,0 y 1,4 s cada una, contando la carga del decodificador y la
+comprobación; el hueco más largo de la página mientras tanto fue de 12 ms. El JPEG pesa alrededor de 1,3 a 1,5
+veces el HEIC (3,3 a 6,5 MB) y lleva el perfil Display P3 entero.
+
+**Pendiente / para después:**
+
+- **Los HEIC ya subidos** sin convertir siguen sin verse (con su aviso). Convertirlos pide bajar el original,
+  subir un archivo nuevo y cambiar la fila: no está hecho.
+- **Los metadatos** (fecha, lugar, cámara) no pasan al JPEG: quedan en el archivo de la persona.
+- **Sin perfil ICC:** un HEIC que declara su color solo con `nclx` (sin perfil) sale sin perfil, y el JPEG se lee
+  como sRGB. Las fotos del iPhone traen perfil.
+- **El perfil de color se toma por orden** en el archivo, como en el comando de Coda (roadmap B.13).
+- **Sin portero** (workspace sin Drive) las fotos van a Supabase por otro camino, que no convierte.
+- **HDR y 10 bits:** el JPEG es de 8 bits; el mapa de ganancia HDR del iPhone no pasa.
+- **En el iPhone** no se midió la memoria con una foto de 48 MP. Safari casi nunca entrega un HEIC, y si la
+  conversión falla queda el HEIC, que Safari sí muestra.
+- **Dos pestañas a la vez:** si una pestaña con una versión anterior registra el HEIC, la respuesta se pierde y
+  justo entonces esta versión lo convierte sin red (sin poder preguntar), el JPEG quedaría detenido. Necesita
+  las tres cosas juntas; con red, la pregunta a la base lo evita.
+
+**Archivos:** `src/media/heic.ts` (reconocer, nombre, perfil de color), `heicDecode.ts` (decodificar, codificar
+y comprobar), `heicLib.ts` (cargar la librería), `heic.worker.ts`, `heicConvert.ts` (el Worker y el respaldo),
+`queue.ts` (`add`, `ensureConverted`, `heicState`), `src/ui/heicNames.ts` (el nombre del bloque) y
+`src/lib/optionalImport.ts`. **Pruebas:** `heic.test.ts` (firma, tipo y secuencias, nombre, perfil, la
+comprobación del JPEG, el tope de 50 MP, y el decodificador de verdad por la misma entrada que la app: el HEIC
+de prueba de 96 × 64 girado sale de 64 × 96 con sus colores), `heicConvert.test.ts` (el archivo del Worker de
+verdad con un Worker de mentira, el respaldo sin Worker, el Worker que no arranca o se cae, los topes, sin el
+`.wasm`), `queue.test.ts` ("fotos HEIC": guardar primero, el JPEG que se sube, lo que no pasa por el conversor,
+el conversor que falla o no contesta, sin red, la respuesta perdida de `register_file`, la fila registrada
+mientras se convertía, la medición en curso), `heicNames.test.ts`, `lazyPart.test.tsx` (el oyente de verdad con
+un import opcional) y `scripts/licenses.test.mjs`. En Chromium, fuera del repo, el camino entero con el build de
+producción: en el Worker, sin Worker, sin el `.wasm` y sin el decodificador, y las cuatro fotos reales.
+
+**Correcciones de la auditoría: estado al pausar (2026-10-01).** Los diez puntos están aplicados y pusheados en
+`lega/heic-app`, con `origin/main` (v0.074) ya unido; suite completa 1410 pasan, `tsc` y build limpios.
+
+- Hechos, con su prueba: (1) pregunta a la base antes de convertir y marca `sent`; (2) imports opcionales, sin
+  recarga falsa; (3) tope en la cola y en el respaldo sin Worker; (4) guardar primero y convertir después, con el
+  aviso "convirtiendo" y el nombre del bloque a `.jpg`; (5) la medición en curso no pisa al JPEG; (6) el JPEG se
+  comprueba al abrirlo y el tope baja a 50 MP; (7) las secuencias HEIF no se convierten; (8) la bajada del
+  `.wasm` colgada cuenta como "no está", el aviso depende de `registered`, y el caso `nclx` está en pendientes;
+  (9) avisos y textos de licencia en `public/licenses/`, con el comentario en los archivos de libheif; (10) las
+  pruebas del conversor, del Worker y del decodificador por la misma entrada que la app.
+- A medias o sin empezar: ninguno.
+- Sin verificar: la app real con sesión (Chrome en Windows y Mac, Safari, iPhone); el renombrado del bloque solo
+  se probó con el editor en jsdom, no en un navegador; después de estas correcciones no se repitió la prueba del
+  service worker (la caché `heic-decoder` y que `/licenses/` no caiga en la app).
+- Por dónde seguir: una segunda auditoría de `convertNow` en `src/media/queue.ts` (el caso de dos pestañas
+  anotado arriba queda abierto) y la prueba a mano en la app antes de publicar.

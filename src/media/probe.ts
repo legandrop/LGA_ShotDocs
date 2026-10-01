@@ -393,10 +393,14 @@ export async function deletedUrl(
 
 /**
  * Un ícono para el archivo que todavía no tiene miniatura (o que el navegador no puede mostrar), con su
- * nombre. Es un SVG sin scripts, como dirección `data:`.
+ * nombre y, si hace falta, un aviso abajo (una foto HEIC que no se pudo pasar a JPEG). Es un SVG sin scripts,
+ * como dirección `data:`.
  */
-export function placeholderUrl(kind: MediaKind | null, label: string): string {
+export function placeholderUrl(kind: MediaKind | null, label: string, notice?: string): string {
   const text = escapeXml(label.length > 46 ? `${label.slice(0, 45)}…` : label);
+  const note = notice
+    ? `<text x="240" y="226" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#8a5a2b">${escapeXml(notice.length > 56 ? `${notice.slice(0, 55)}…` : notice)}</text>`
+    : '';
   const glyph =
     kind === 'video'
       ? '<circle cx="240" cy="112" r="34" fill="#00000066"/><path d="M229 94 L260 112 L229 130 Z" fill="#fff"/>'
@@ -406,6 +410,7 @@ export function placeholderUrl(kind: MediaKind | null, label: string): string {
     '<rect width="480" height="270" rx="8" fill="#ebe8e4"/>' +
     glyph +
     `<text x="240" y="196" text-anchor="middle" font-family="system-ui, sans-serif" font-size="17" fill="#5c5853">${text}</text>` +
+    note +
     '</svg>';
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }

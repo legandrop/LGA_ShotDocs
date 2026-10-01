@@ -1,16 +1,38 @@
 # Changelog — LGA Shot Docs
 
+v0.076 :
+
+Fotos en línea, entrega 1: la foto como un carácter del renglón, todavía sin nada que la cree. Faltaba que el
+editor la conociera y la dibujara antes de poder crearla. Nodo `photo` en el esquema y en el resguardo de
+versiones anteriores, que ahora también corre en la importación de Coda. Editar a la vez junto a una foto perdía
+texto: y-prosemirror borraba el texto vecino al borrar o mover una foto. El parche guarda un texto en cada hueco
+y, en un renglón con fotos, nunca borra ni recrea un texto; con 300 agendas por caso, 0 letras perdidas (antes
+hasta 206), y los párrafos sin fotos guardan lo mismo que antes, byte a byte. Lo que se ve y se toca, medido en
+Chromium: filas sin cortes en 831 anchos, teclado y selección con la foto elegida, carrete en orden, imprimir;
+el panel de comentarios muestra `[Image]`.
+[ Fotos en línea - entrega 1: el nodo, los huecos estables y lo que se ve ]
+
+v0.075 :
+
+Las fotos HEIC agregadas desde el navegador no se veían. Una foto del iPhone soltada, pegada o elegida en el
+editor desde Chrome se guardaba y se subía al Drive, pero Chrome no sabe decodificar HEIC: quedaba sin
+miniatura y la página mostraba un ícono. Ahora la cola la guarda tal cual en el acto y enseguida la pasa a JPEG
+en el dispositivo, antes de registrarla (tamaño completo, derecha, con el perfil de color del HEIC y
+comprobada); eso queda en la página y en el Drive. Mientras tanto, o si no se puede, un aviso en su lugar; sin
+red se vuelve a probar. El decodificador (libheif en WebAssembly, LGPL-3.0) corre en un Web Worker y se baja
+aparte, solo cuando llega un HEIC. Los avisos de licencia van en `THIRD_PARTY_NOTICES.md` y en `/licenses/`.
+[ Fotos HEIC - se guardan como JPEG al agregarlas ]
+
 v0.074 :
 
-Fotos en línea, entrega 1a: el modelo de datos, sin nada visible todavía. Faltaba que el editor conociera la
-foto como elemento del renglón antes de poder crearla. Se suma el nodo `photo` al esquema (nada lo crea aún) y
-al resguardo de versiones anteriores, que ahora también corre en la importación de Coda: una página con algo
-que esta versión no conoce no se toca. Editar a la vez junto a una foto perdía texto: cada uno creaba su
-propio tramo en un hueco, y al borrar o mover una foto y-prosemirror borraba el texto vecino. El parche ahora
-guarda un texto vacío en cada hueco y, en un renglón con fotos, nunca borra ni recrea un texto (borrar una
-foto saca solo la foto). Los párrafos sin fotos siguen igual. Medido con 300 agendas por caso: 0 pérdidas al
-escribir en los huecos, borrar o mover fotos (antes hasta 206); Enter, 0 letras perdidas (`Doc_Colaboracion.md`).
-[ Fotos en línea 1a - el nodo photo, el parche de los huecos y los huecos estables ]
+El árbol de páginas con el teclado y plegar una madre de la página abierta. Las flechas solo abrían y cerraban
+ramas; ahora, con el foco en una fila, ↑ y ↓ abren la página anterior o siguiente (con la tecla apretada se
+abre la última al frenar), → despliega o baja a la primera subpágina, ← pliega o sube a la madre, e Inicio y
+Fin van a las puntas. Además, plegar con el triángulo una madre de la página abierta no dejaba: el efecto que
+abre las madres de la abierta corría con cada cambio de lo desplegado y la volvía a abrir. Ahora corre solo
+cuando cambia la página abierta o el árbol, y plegar esa madre la deja como página abierta (en el teléfono el
+cajón sigue abierto).
+[ Árbol de páginas - teclado y plegar una madre de la abierta ]
 
 v0.073 :
 

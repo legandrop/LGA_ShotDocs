@@ -67,23 +67,30 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   su lado, ni escribir o pegar otra foto en su renglón, ni subirla al renglón de arriba con Backspace, ni
   elegir varias con Shift+flechas o Shift+clic. Lo pedido: que fluya en el texto como en Coda (lo que no
   entra baja de renglón), elegir varias fotos seguidas como se eligen letras, y acomodar las elegidas.
-  **Diseño en [`Doc_Fotos_En_Linea.md`](Doc_Fotos_En_Linea.md)** (auditado, sin implementar; con la prueba
-  técnica y preguntas para Lega). Por entregas: un prototipo en navegador; el nodo propio, el parche de
-  huecos de y-prosemirror y el teclado (y subir `min_app_version`); crear, dar tamaño, acomodar las elegidas,
-  hojas y PDF; convertir las fotos que ya existen; importar de Coda con los renglones como estaban.
-  **Hecho: el prototipo (entrega 0; Lega lo vio y lo aprobó el 2026-10-01) y la entrega 1a (v0.074):** el nodo
-  `photo` en el esquema (nada lo crea todavía), el resguardo de versiones anteriores también en la importación
-  de Coda, el parche de los huecos de y-prosemirror (solo alrededor de las fotos; los saltos de línea se
-  guardan igual que antes), los huecos estables (en un renglón con fotos ningún texto se borra ni se vuelve a
-  crear) y las pruebas al azar con dos editores (0 pérdidas al escribir en los huecos, borrar o mover fotos).
-  **Hecha la 1b** (lo que se ve y se toca, medido en Chromium: `Doc_Fotos_En_Linea.md`, "Cómo quedó
-  (entrega 1b)"): la imagen con miniatura y nitidez, las filas (0 renglones rotos en 831 anchos por 5
-  densidades), el teclado y el mouse con la foto elegida, Shift+flechas y Shift+clic, el carrete con bloques y
-  fotos en línea en orden, e imprimir con las fotos en línea. **Falta de la entrega 1:** la auditoría, probar en
-  Safari y en el iPhone (la composición sin tecla previa entre dos fotos duplica el primer carácter en
-  Chromium), publicar y subir `min_app_version`. Quedan para la entrega 2 la barra propia de la foto (hoy, con
-  una foto elegida, sale la de texto) y partir un párrafo con fotos entre hojas. Lo que queda de editar a la vez
-  junto a fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está medido en `Doc_Colaboracion.md`.
+  **Diseño en [`Doc_Fotos_En_Linea.md`](Doc_Fotos_En_Linea.md)** (auditado). Por entregas: un prototipo en
+  navegador; el nodo propio, el parche de huecos de y-prosemirror y el teclado; crear, dar tamaño, acomodar las
+  elegidas, hojas y PDF; convertir las fotos que ya existen; importar de Coda con los renglones como estaban.
+  **Hechos el prototipo (entrega 0; Lega lo aprobó el 2026-10-01) y la entrega 1 (v0.076, auditada):** el nodo
+  `photo` (nada lo crea todavía), el resguardo de versiones anteriores también en la importación de Coda, el
+  parche de los huecos y los huecos estables (0 letras perdidas en 300 agendas por caso; los párrafos sin fotos
+  guardan lo mismo que antes, byte a byte), y lo que se ve y se toca medido en Chromium (filas, teclado, mouse,
+  Shift+flechas y Shift+clic, carrete, imprimir, `[Image]` en comentarios; D-22).
+  **Antes de la entrega 2 (la que crea fotos), de las auditorías de v0.076:**
+  - **Versiones mezcladas pierden texto** en un renglón al que le borraron todas las fotos (`Doc_Colaboracion.md`,
+    "Versiones viejas"): subir `min_app_version` antes, resolver el dispositivo viejo sin red que sube su cola
+    después de actualizarse, y sumar una prueba con la librería publicada (las de hoy usan la nueva).
+  - Con una foto elegida, el texto que entra sin tecla (emojis con Win+. o Ctrl+⌘+Espacio, dictado) la
+    reemplaza (`handleTextInput` en `inlinePhotoEditor.ts`); arrastrar para elegir y soltar sobre una foto deja
+    la selección corrida; la barra de texto sale encima de la foto vecina y puede tapar el clic (no mostrarla con
+    una foto elegida hasta su barra propia).
+  - Decidir: pegar con una foto elegida la reemplaza (una letra va después); el primer Shift+flecha con una foto
+    elegida no agranda; las fotos duplicadas cuando dos mueven la misma (39 de 300); pegar HTML con una foto
+    (`data-inline-content-type="photo"`) ya crea una.
+  - Probar en Safari y en el iPhone (la composición sin tecla previa entre dos fotos duplica el primer carácter
+    en Chromium). Medir la decoración de filas con un doc grande (recorre el documento en cada cambio).
+  Quedan para la entrega 2 la barra propia de la foto y partir un párrafo con fotos entre hojas. Lo que queda de
+  editar a la vez junto a fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está medido en
+  `Doc_Colaboracion.md`.
   **A futuro (Lega, 2026-10-01, después de ver el prototipo):** que se puedan escribir varias líneas de texto a
   los costados de una foto (el texto rodea la foto), no solo un renglón alineado abajo.
 - **P.4 Hecho a medias (v0.046): acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos
@@ -171,6 +178,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   proyecto entero, o dueño y admins), qué ven los que lo tenían compartido y qué pasa con lo que está sin
   sincronizar en otros dispositivos. Diseño y auditoría antes. Mientras tanto: renombrarlo y mandar sus páginas
   a la papelera.
+- **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
+  (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
+  instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la
+  primera subpágina, ← pliega o va a la página madre, Inicio / Fin a la primera o la última, Enter / Espacio
+  abren. Solo con el foco en el árbol y sin Ctrl, ⌘, Alt ni Shift. Y el defecto: plegar con el triángulo (o
+  con ←) una madre de la página abierta no dejaba; ahora pliega y la abierta pasa a ser esa madre (en el
+  teléfono el cajón sigue abierto). Lógica en `src/ui/treeNav.ts`. Falta su entrada en la ayuda (P.13).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -283,13 +297,29 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       dirección con un punto final lo lleva adentro del link; un salto de línea puede quedar adentro del
       link al final del párrafo o alrededor de una tarjeta.
     - **Verlo en la app** con una importación real: una página con muchas tarjetas de Drive.
-13. **Fotos HEIC: lo que quedó de v0.072** (`Doc_Importar_Coda.md`, "Fotos HEIC"). El comando que baja un doc
-    de Coda deja un JPEG de cada foto HEIC, así que lo importado se ve. **Falta:**
-    - **Que la app misma sepa mostrar un HEIC** que llega por otra vía (soltado en el editor desde Chrome o
-      desde Windows): hoy lo acepta y lo sube, y la página no lo muestra porque el navegador no lo decodifica.
-      **Decidido por Lega (2026-10-01): sí, la app tiene que mostrarlo.** Cómo: convertirlo a JPEG en el
-      dispositivo al agregarlo (el mismo decodificador del comando, libheif, alrededor de 1,4 MB, que se baja
-      aparte y solo cuando hace falta) y guardar el original; sin implementar.
+13. **Fotos HEIC: lo que quedó de v0.072 y v0.075** (`Doc_Importar_Coda.md` y `Doc_Imagenes.md`, "Fotos
+    HEIC"). El comando que baja un doc de Coda deja un JPEG de cada foto HEIC, y **desde v0.075 la app pasa a
+    JPEG en el dispositivo cualquier HEIC que se agrega a una página** (D-20): lo guarda tal cual en el acto y
+    lo convierte enseguida, antes de registrarlo (tamaño completo, derecho, con su perfil de color, comprobado),
+    en un Web Worker, con el decodificador (libheif, 1,4 MB) bajado aparte y solo cuando hace falta. Mientras
+    tanto, o si no se puede, un aviso en el lugar de la foto; sin red se vuelve a probar. **Falta:**
+    - **Los HEIC ya subidos sin convertir** (antes de v0.075, o cuando la conversión falló) siguen sin verse,
+      con un aviso en su lugar. Convertirlos pide bajar el original, subir un archivo nuevo y cambiar su fila.
+    - **Probarlo en Safari, en la Mac y en el iPhone** (un HEIC que llega como archivo): la auditoría de v0.075
+      lo recorrió en la app real en Chromium de Windows (soltar, pegar, varias juntas, sin red, recargar en
+      plena conversión). En el iPhone falta medir la memoria con una foto de 48 MP.
+    - **Con red, la primera vez que el decodificador no baja ya se sube el HEIC** sin convertir: con una red
+      mala de rodaje queda así para siempre. Volver a probar una o dos veces antes de rendirse.
+    - **Sin red, la conversión arranca unos 7 s después de soltar la foto** (espera que falle la consulta a la
+      base antes de convertir).
+    - **La comprobación del JPEG** dejaría pasar un canvas en blanco si la foto es casi toda blanca
+      (documentos, cielos).
+    - **Subir `min_app_version` a 0.075** cuando Lega tenga la versión en sus dispositivos: una pestaña de
+      v0.074 o anterior puede registrar un HEIC mientras esta lo convierte (sospecha de la auditoría, sin
+      reproducir). Antes, verificar si `min_app_version` frena también la cola de archivos (en
+      `sync/engine.ts` solo frena las páginas).
+    - **Un HEIC sin perfil ICC** (color solo `nclx`) sale sin perfil.
+    - **Sin portero** (fotos a Supabase) no se convierte.
     - **Verlo en la app con el doc entero.** Probado con una importación real de cuatro páginas (46 fotos
       convertidas: en el Drive, con miniatura y a la vista); falta la de un doc completo.
     - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.
@@ -300,6 +330,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       correcto es seguir la imagen principal (`pitm` → `ipma` → `ipco`).
     - **Pruebas del comando entero** (`convertFolder`, la bajada con una foto ya convertida, el código de
       salida): hoy se probó a mano contra una API de Coda simulada; en el repo solo está probada la librería.
+14. **Un dispositivo nuevo muestra "Subiendo ~2750 cambios" unos 4 minutos** al abrir un proyecto grande
+    ("HEIC (prueba)"), sin escrituras visibles en la base (lo vio la auditoría de v0.075). Averiguar qué
+    cuenta ese número: si son cambios que de verdad suben, o lo bajado contado como pendiente.
 
 ### C. Esperan a Lega
 

@@ -330,8 +330,9 @@ vacío, a cada lado de cada foto: `"" [foto] "" [foto] ""`. Decisiones:
   y sin el texto de los huecos) no llegan a mezclarse; si se mezclaran no habría un ida y vuelta de arreglos
   (con los huecos estables, tampoco pérdidas en 300 agendas; antes, 173). La marca y el parche van juntos
   (`vite.config.ts` no construye sin esa parte del parche). Un renglón al que le borraron todas las fotos sí lo
-  abre la versión anterior: lo muestra bien y no se pierde nada, pero si dos lo editan a la vez con esa versión
-  el texto puede quedar dos veces (`Doc_Colaboracion.md`, "Versiones viejas"); no pasa mientras nada cree fotos.
+  abre la versión anterior y lo muestra bien, pero si otro escribe a la vez en ese renglón **se pierde texto**
+  (con dos versiones anteriores, el renglón queda dos veces; medido en `Doc_Colaboracion.md`, "Versiones
+  viejas"). No pasa mientras nada cree fotos; la entrega 2 lo tiene que resolver antes de crearlas.
 - **Sacarlo es una línea** (`extendNodeSchema` en `inlinePhoto.ts`), mientras nada cree fotos en línea.
 
 **Los huecos estables** (el resto del parche; detalle en `Doc_Colaboracion.md`, "Huecos estables"). En un
@@ -485,3 +486,6 @@ distingue la letra de la tecla misma).
 - Un párrafo con fotos se imprime como una sola unidad (partirlo entre renglones es la entrega 2); la conversión
   de imágenes `data:` sigue mirando solo bloques.
 - Sin probar: Safari, iPhone, dos editores a la vez en un navegador (los cubren las pruebas de Yjs de la 1a).
+- La auditoría de v0.076 dejó tres cosas para antes de la entrega 2 y algunas para decidir (roadmap P.15):
+  emojis y dictado con una foto elegida la reemplazan, arrastrar para elegir y soltar sobre una foto, la barra
+  de texto encima de la foto vecina; pegar HTML con una foto (`data-inline-content-type="photo"`) ya crea una.

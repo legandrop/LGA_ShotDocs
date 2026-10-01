@@ -93,7 +93,9 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | Enter | Párrafo nuevo después de toda la fila | Foto de una fila elegida | App |
 | ← / →, Inicio / Fin, Esc, rueda o doble clic | Anterior / siguiente, primera / última, cerrar, zoom | Carrete | App (`Carrete.tsx`) |
 | ↑ / ↓, Enter, Esc | Elegir cómo pegar un link de Drive | Menú de pegar Drive | App (`DrivePasteMenu.tsx`) |
-| Enter, → / ← | Abrir la página, abrir o cerrar sus páginas de adentro | Árbol | App (`Sidebar.tsx`) |
+| ↑ / ↓, Inicio / Fin | Abrir la página visible anterior o siguiente, la primera o la última (con la tecla apretada, al frenar) | Árbol | App (`Sidebar.tsx`, `treeNav.ts`; v0.074) |
+| → / ← | Desplegar o pasar a la primera subpágina; plegar o ir a la página madre | Árbol | App |
+| Enter, Espacio | Abrir la página | Árbol | App |
 | Enter / Esc | Guardar o cancelar el nombre | Renombrar en el árbol | App |
 | ← / →, Inicio / Fin | Achicar o agrandar la barra lateral, mínimo o máximo | Tirador de la barra lateral | App (`SidebarResizer.tsx`) |
 | ↑ / ↓, Enter | Elegir un proyecto | Selector de proyectos | App |
