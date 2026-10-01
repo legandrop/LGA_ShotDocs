@@ -171,6 +171,10 @@ function flipLink(link: MediaLink, removed: boolean): MediaLink {
 }
 
 /** Qué hacer con un error: esperar la red, reintentar más tarde, o dejarlo a la vista hasta "Retry". */
+/** Sin ningún avance en este tiempo, una subida se da por trabada (vigilante de `upload`). */
+export const STALL_MS = 180_000;
+const STALL_CHECK_MS = 15_000;
+
 export function classify(err: unknown): Outcome {
   if (err instanceof UploadError && err.cancelled) return 'cancelled';
   if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled';
@@ -954,9 +958,21 @@ export class MediaQueue {
 
       const controller = new AbortController();
       this.controller = controller;
+      // Una subida que ya se trabó más de una vez abre otra sesión (la anterior puede ser la que se cuelga).
+      if ((record.stalls ?? 0) >= 2 && record.uploadId) record = await this.patch(record.id, { uploadId: null, sent: 0 });
       let savedId = record.uploadId;
       this.setUploading({ name: record.name, sent: record.sent, total: record.size });
+      // Vigilante: un pedido al portero que nunca contesta (sin error de red) dejaba la cola entera clavada,
+      // porque se sube de a uno. Sin avance en STALL_MS, se aborta y el archivo vuelve a la cola para más tarde.
+      let lastMove = this.now();
+      let stalled = false;
+      const watchdog = setInterval(() => {
+        if (this.now() - lastMove < STALL_MS) return;
+        stalled = true;
+        controller.abort();
+      }, STALL_CHECK_MS);
       const onProgress = (p: UploadProgress) => {
+        lastMove = this.now();
         this.setUploading({ name: record.name, sent: p.sent, total: p.total });
         if (p.uploadId !== savedId || p.sent !== record.sent) {
           savedId = p.uploadId;
@@ -972,7 +988,17 @@ export class MediaQueue {
           signal: controller.signal,
           onProgress,
         });
+      } catch (err) {
+        // Abortada por el vigilante (y no porque se cierra la app): un error para reintentar, con lo enviado.
+        if (stalled && !this.stopped) {
+          const sent = err instanceof UploadError ? err.sent : record.sent;
+          const uploadId = err instanceof UploadError ? err.uploadId : record.uploadId;
+          record = await this.patch(record.id, { stalls: (record.stalls ?? 0) + 1 });
+          throw new UploadError(stored('queue.stalled'), 408, uploadId, sent);
+        }
+        throw err;
       } finally {
+        clearInterval(watchdog);
         if (this.controller === controller) this.controller = null;
         await saving;
       }

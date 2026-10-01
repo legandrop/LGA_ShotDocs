@@ -418,6 +418,8 @@ export class FakePortero {
   failLink = false;
   /** Responde 403 a las subidas, como si la persona no pudiera editar la página. */
   forbid = false;
+  /** Los pedidos de subida nunca contestan (sin error de red) hasta que se abortan. */
+  hang = false;
   /** La base apunta a otro archivo de Drive (409 que no se arregla solo). */
   conflict = false;
   /**
@@ -446,6 +448,11 @@ export class FakePortero {
     const body = typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined;
     this.calls.push({ method, path: url.pathname, range, body });
     if (!this.server.online) throw new TypeError('Failed to fetch');
+    if (this.hang && url.pathname.startsWith('/upload')) {
+      return new Promise<Response>((_, reject) =>
+        init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true }),
+      );
+    }
 
     if (method === 'POST' && url.pathname === '/upload' && this.legacy) {
       const uploadId = `up-${this.next++}`;

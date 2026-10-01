@@ -6,7 +6,7 @@ import { FileRejected } from '../sync/files';
 import { PART_BYTES, localDay } from './portero';
 import { fileKind } from './attachments';
 import { deletedLabel, mediaKind } from './probe';
-import { MEDIA_SCHEME, mediaIdOf, normalizeMime } from './queue';
+import { MEDIA_SCHEME, STALL_MS, mediaIdOf, normalizeMime } from './queue';
 
 const MB = 1024 * 1024;
 const devices: Device[] = [];
@@ -168,6 +168,33 @@ describe('cola de archivos: subir', () => {
     await sync(a);
     expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
     expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 0, failedMedia: 0 });
+  });
+
+  it('una subida que no avanza (el portero no contesta, sin error) se aborta y la cola sigue; después sube', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      server.portero.hang = true;
+      const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0002.JPG', 'image/jpeg')))!;
+      await a.engine.syncNow();
+      const running = a.engine.syncMedia();
+      // Sin avance: pasado el tiempo del vigilante, la subida se aborta (antes quedaba colgada para siempre).
+      for (let i = 0; i < 50 && !server.portero.calls.some((c) => c.path === '/upload'); i++) await new Promise((r) => setTimeout(r, 5));
+      server.clockOffset += STALL_MS + 1;
+      vi.advanceTimersByTime(STALL_MS);
+      await running;
+      expect(server.mediaFiles.get(id)?.drive_id).toBeFalsy();
+      const status = a.engine.getStatus();
+      expect(status.pendingMedia).toBe(1);
+      // Vuelve a la cola para más tarde (no queda detenido) y, cuando el portero contesta, sube.
+      server.portero.hang = false;
+      server.clockOffset += 3_600_000;
+      await sync(a);
+      expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('espera a que la página exista en el servidor', async () => {

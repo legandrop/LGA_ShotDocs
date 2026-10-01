@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.068 :
+
+La subida de archivos se quedaba clavada. Al importar un doc grande (unos 2300 archivos), la app subía bien y de
+golpe dejaba de subir del todo durante 5 a 10 minutos, sin ningún error y con la barra en 0 %. Los archivos se
+suben de a uno, y un pedido al servidor de archivos que nunca contestaba (sin cortarse la red) dejaba la cola
+entera esperando. Ahora un vigilante mira que la subida avance: sin avance en 3 minutos, la aborta y el archivo
+vuelve a la cola para más tarde, sin frenar a los demás. La primera vez retoma la misma subida desde lo enviado;
+si se vuelve a trabar, empieza otra. No se pierde nada: el archivo sigue guardado en el dispositivo.
+[ Subida de archivos - vigilante contra subidas clavadas ]
+
 v0.067 :
 
 Imprimir como se ve (colapsar, entrega 1b, primer paso). El PDF de una página con secciones colapsadas sale

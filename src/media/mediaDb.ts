@@ -39,6 +39,8 @@ export interface MediaRecord {
   thumbError?: string | null;
   /** Veces seguidas que el servidor dijo que el archivo no existe aunque figuraba registrado. */
   lost?: number;
+  /** Subidas abortadas por no avanzar (vigilante de `MediaQueue`): con más de una, se abre otra sesión. */
+  stalls?: number;
   /** La subida al portero que quedó a medias: con esto se retoma después de cerrar la app. */
   uploadId: string | null;
   /** Hasta dónde confirmó el portero (bytes). */

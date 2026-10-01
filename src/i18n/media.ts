@@ -62,6 +62,10 @@ export const media = {
     es: "Acá solo se pueden agregar fotos: para adjuntar otros archivos, el dueño del workspace tiene que conectar Google Drive.",
   },
   'attachment.foreign': { en: "File from another project", es: "Archivo de otro proyecto" },
+  'queue.stalled': {
+    en: "The upload stopped moving; it will try again.",
+    es: "La subida dejó de avanzar; se vuelve a intentar.",
+  },
   'queue.originalMissing': {
     en: "The original file is missing on this device.",
     es: "El archivo original ya no está en este dispositivo.",

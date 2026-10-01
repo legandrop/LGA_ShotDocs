@@ -219,6 +219,13 @@ subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuel
 - `src/media/portero.ts`: el cliente del portero (estado de Drive, conectar, subir por partes retomando lo
   que ya llegó, pedir pases y mandar a la papelera de Drive, `trash`). Lee la dirección de
   `workspace_settings.media_url`.
+- `src/media/queue.ts` (`MediaQueue`): sube los archivos de a uno. **Vigilante (v0.068):** un pedido al portero
+  que nunca contesta (sin error de red) dejaba la cola entera clavada; sin ningún avance en `STALL_MS` (3 min),
+  la subida se aborta y el archivo vuelve a la cola con espera (error "La subida dejó de avanzar"), sin frenar a
+  los demás. La primera vez retoma la misma subida desde lo enviado; desde la segunda (`stalls` del registro),
+  abre otra. Visto al importar un doc de unos 2300 archivos: 5 a 10 minutos sin subir nada, la barra en 0 %, y
+  en la base un archivo registrado sin `drive_id`. La causa del cuelgue (Drive, el Worker o la red) no se
+  encontró; el vigilante evita que frene todo.
 - `src/ui/DriveDialog.tsx`: el diálogo *Google Drive* del menú de la cuenta (conectar, reconectar y
   dónde va la carpeta).
 - Pruebas (entran en `npm test`): `portero/src/core.test.ts` (el Worker, con Drive y Supabase simulados)
