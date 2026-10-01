@@ -1,8 +1,15 @@
 /// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+// La librería de las versiones publicadas para las pruebas *.published.test.ts: la arma
+// src/test/publishedYProsemirror.ts (`PUBLISHED_ENTRY`, la misma ruta; una prueba lo comprueba).
+const PUBLISHED_Y_PROSEMIRROR = fileURLToPath(
+  new URL('./node_modules/.cache/lga-y-prosemirror-v0.052/src/y-prosemirror.js', import.meta.url),
+).replace(/\\/g, '/');
 
 // La app solo recibe la URL del proyecto y la clave pública. Se leen por nombre, sin exponer prefijos
 // enteros, para que una clave secreta cargada en el mismo entorno nunca termine en el bundle.
@@ -158,8 +165,31 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: { output: { postBanner: LIBHEIF_BANNER } },
     },
     test: {
-      environment: 'node',
-      include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'portero/src/**/*.test.ts', 'scripts/**/*.test.mjs'],
+      projects: [
+        {
+          extends: true,
+          test: {
+            name: 'app',
+            environment: 'node',
+            include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'portero/src/**/*.test.ts', 'scripts/**/*.test.mjs'],
+            exclude: ['**/node_modules/**', 'src/**/*.published.test.ts'],
+          },
+        },
+        {
+          // Versiones mezcladas con la librería de verdad de las versiones publicadas (src/test/
+          // publishedYProsemirror.ts): en estas pruebas `y-prosemirror` es esa, también adentro de BlockNote
+          // (por eso BlockNote pasa por Vite: `inline`). La de hoy se importa por su ruta.
+          extends: true,
+          resolve: { alias: [{ find: /^y-prosemirror$/, replacement: PUBLISHED_Y_PROSEMIRROR }] },
+          test: {
+            name: 'published',
+            environment: 'node',
+            include: ['src/**/*.published.test.ts'],
+            globalSetup: ['src/test/publishedYProsemirror.setup.ts'],
+            server: { deps: { inline: [/@blocknote\/core/] } },
+          },
+        },
+      ],
     },
   };
 });
