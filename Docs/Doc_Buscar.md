@@ -1,11 +1,11 @@
 # Buscar en el proyecto y en la página (P.12)
 
 Estado: **entrega 1 hecha (v0.051): buscar y reemplazar en la página; entrega 2 hecha (v0.054): buscar en el
-proyecto (Ctrl/⌘+K); ajustes de v0.057 (lo que encontró Lega probando); reemplazar en el proyecto, en diseño
-(v0.089, sin código)**. "Correcciones de la auditoría" manda
+proyecto (Ctrl/⌘+K); ajustes de v0.057 (lo que encontró Lega probando); entrega 3 hecha (v0.090): reemplazar en
+todo el proyecto**. "Correcciones de la auditoría" manda
 sobre lo de arriba, y "Cómo quedó (entrega 1)", "Cómo quedó (entrega 2)" y "Ajustes de v0.057", al final, sobre
 todo lo demás (el último, sobre los otros dos). "Reemplazar en el proyecto (diseño)", lo último, manda sobre la
-sección 11. Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
+sección 11, y su "Cómo quedó (entrega 3)", al final de todo, sobre su diseño. Lo pidió Lega (urgente, 2026-09-30): "dos lupas: una a la izquierda del
 + de páginas, que busca en todo el proyecto y te lleva al lugar; otra a la izquierda de los comentarios, que
 busca en la página abierta, también adentro de las secciones colapsadas". Después sumó **reemplazar**, como en
 VS Code. Sale de leer el código de `main` (v0.050) y `Doc_Colapsar.md` (rama `lega/colapsar`, en diseño).
@@ -834,7 +834,7 @@ los íconos; en el teléfono, entera y sin scroll de costado).
 
 ## Reemplazar en el proyecto (diseño)
 
-Estado: **diseño, sin código** (2026-10-01, sobre `main` en v0.088). Manda sobre la sección 11. Sale de leer el
+Estado: **implementado en v0.090** ("Cómo quedó (entrega 3)", al final, manda sobre esto). Diseño del 2026-10-01, sobre `main` en v0.088. Manda sobre la sección 11. Sale de leer el
 código de la búsqueda (`findEditor.ts`, `projectIndex.ts`, `extract.ts`, `ProjectSearch.tsx`), de `PageDocs`
 (`src/sync/docs.ts`), `Doc_Sincronizacion.md`, `Doc_Colaboracion.md` y `Doc_Colapsar.md`, y de un prototipo en una
 prueba de Node (no versionado) que escribe directo en el Y.Doc, guarda el registro para deshacer y deshace, con la
@@ -1179,7 +1179,11 @@ sin subir `min_app_version`. Lo fija una prueba con el esquema publicado (`ui/fi
 3. **Después:** reemplazar en los títulos (si Lega dice que sí), en pies y nombres, *Conservar mayúsculas*, el borde
    de una foto borrada.
 
-### 9. Preguntas para Lega
+### 9. Preguntas para Lega (decididas el 2026-10-01, con la recomendación)
+
+Lega delegó la decisión: quedaron las cuatro como se recomendó. Títulos, no en esta entrega; sin red, sí, con el aviso;
+⌘Z (Ctrl+Z) no deshace el reemplazo del proyecto; lo escondido se reemplaza con la cuenta en la confirmación, y borrarlo
+solo con la casilla.
 
 1. **¿Los títulos de las páginas también se reemplazan?** Recomendación: **no en la primera entrega.** El título va
    por otro camino (la cola del árbol, "gana el último"), no por el documento, y no entraría en el mismo deshacer.
@@ -1225,3 +1229,83 @@ reemplazo, o tomar como propio un texto idéntico que el otro escribió: texto d
 frase "ningún carácter del otro" (se contaba por id). La auditoría además reprodujo las mediciones del prototipo (300
 corridas al azar sin pérdidas; 300 páginas en 1,4 s en su máquina) y revisó `main` hasta v0.087: el reemplazo no toca
 el mapa de "colapsado para todos", y una página reemplazada queda "kept" al volver a importar de Coda.
+
+## Cómo quedó (entrega 3, v0.090): reemplazar en todo el proyecto
+
+Implementa "Reemplazar en el proyecto (diseño)" con lo que pidió su auditoría y las cuatro decisiones del 2026-10-01.
+Donde esto y el diseño no coinciden, vale esto. Va todo junto (el núcleo y la pantalla), no en dos entregas.
+
+- **`src/search/replaceDoc.ts`** (puro, sin editor): `planReplace` recorre los bloques con la regla de `unitsFromYDoc`
+  y da todas las coincidencias en orden (con su número en el bloque, los ids de su primer y último carácter, si está
+  escondida y, si no se cambia, por qué: pie, nombre, link entero, borde de una foto borrada, "ya es igual",
+  escondida al borrar, sacada de la lista) y los cambios (las pegadas juntas). `applyPlan` escribe `delete` + `insert`
+  de atrás para adelante. `planUndo` mira cada cambio del registro entre sus anclas (`undone`, `changed` o
+  `notApplied`: el registro dice algo que nunca se escribió) y lo escribe. `hiddenBlocks` calcula lo escondido como
+  `analyze` de collapse.ts pero sobre el Y.Doc: lo tuyo (`collapse:<página>` en `meta`, leído sin tocarlo) y, si no,
+  el mapa de "colapsado para todos".
+- **`src/search/projectReplace.ts`** (`ProjectReplace`, uno por instancia de servicios): `blockOf` (lo que se revisa
+  antes de abrir: árbol y proyecto, papelera, `perms.known`, edición, completa, `unreadable`, `rejected`), `prepare`
+  (las cuentas de la confirmación; con red, antes sincroniza hasta 10 s), `run` (de a una página: `docs.edit` con el
+  candado, la página que esta versión no puede mostrar o con el documento viejo se saltea, el registro guardado antes,
+  el plan otra vez sin esperar nada y comparado por anclas, la transacción por `docs.applyLocal`, y `flush` +
+  `isSaved`: si no quedó en el dispositivo se corta todo), `undo`, `list` (los últimos del proyecto; uno que quedó
+  "corriendo" sale como cortado) y `stop`. El registro: `replace:<op>` y `replace:<op>:<página>` en `meta`, los últimos
+  5 por proyecto; deshecho del todo, se borra.
+- **`src/sync/docs.ts`:** `ORIGIN_REPLACE`, `edit(pageId, fn)` (abre, corre `fn` con el candado de la página, cierra),
+  `applyLocal` (una edición local por `applyRendering`: si el editor abierto falla al dibujarla, cuenta como escrita y
+  se avisa para volver a dibujarlo), `isSaved(pageId)` y `stateOf(pageId)`.
+- **`src/search/projectIndex.ts`:** `phrase(proyecto, frase, opciones)`, la lista de cambios: cada coincidencia con su
+  bloque, su número en el bloque (pies y nombres incluidos, como la barra) y el texto alrededor. Los títulos no.
+- **La pantalla** (`src/ui/ProjectReplace.tsx`, en la parte del panel; `src/ui/replaceUi.ts`, siempre cargado, con el
+  motor y lo que recuerda el panel en la sesión): la flecha a la izquierda del campo de Ctrl/⌘+K solo con
+  `perms.known` y alguna página que se pueda editar; desplegada, el renglón (campo *Replace*, *Aa*, *ab*, *Replace all
+  (N)*), la lista por página (título, camino, cantidad, el motivo si no se toca, *Replace in page*, ×) y cada
+  coincidencia (lo de antes tachado y lo nuevo al lado; *Replace* y × al pasar el mouse o con el foco, siempre en
+  pantallas táctiles; tocarla va a la coincidencia con *Aa* y *ab*). Una y la página, sin confirmación; *Replace all*
+  sincroniza, muestra la confirmación (*Cancel* elegido de entrada; Esc la cierra sin cerrar el panel; cuántas en
+  cuántas páginas, cuántas escondidas, lo que no cambia, sin red, y con el reemplazo vacío la casilla *Also delete the
+  N in collapsed sections*), el avance con *Stop* y el aviso con *Undo* (`notify` suma un botón opcional; queda 15 s).
+  Abajo del renglón, los últimos reemplazos con *Undo* (y *Undo the rest* si quedó algo). Enter en el campo del
+  reemplazo no hace nada. Sacar una coincidencia de la lista la identifica por sus caracteres en el documento de ese
+  momento, y una página sacada sale entera; las dos valen hasta cambiar lo buscado o las opciones.
+- **Cerrar la app o cambiar de workspace con un reemplazo corriendo** pide confirmación (`beforeunload` en
+  Workspace.tsx y `useLeaveGuard`, como la importación de Coda).
+- **Ayuda:** la entrada `replaceProject` (sección *Find*, en los dos idiomas, con `{search}` y `{undo}` del registro:
+  ⌘ en la Mac); `findProject` suma la línea de la flecha. Sin atajos nuevos (decisión 8): la confirmación usa Esc, que ya
+  es `listClose` (sumado `ProjectReplace.tsx` en `shortcutSources.ts`).
+- Sin tipo de bloque ni propiedad, sin migración, sin subir `min_app_version`.
+
+**Pruebas (2032 en total, 2029 que corren):**
+
+- `src/search/replaceDoc.test.ts` (15): formato partido, link, salto de línea, celdas de tabla, código, la cuenta igual a
+  la del índice, lo que se saltea, fotos en línea, pegadas, *Aa* y *ab*, "solo esta" por sus ids aunque otro agregue una
+  antes, lo escondido (lo tuyo, para todos, el corte por nivel, la casilla al borrar), deshacer con otro (adentro,
+  pegado, el vecino borrado de un borrado, el bloque rehecho) y **al azar** (`REPLACE_SEEDS`, 300 por defecto; medido
+  con 2000: ningún carácter del otro borrado y, sin cambios del otro, idéntico).
+- `src/search/projectReplace.test.ts` (17), con `PageDocs`, IndexedDB y el servidor de prueba: reemplazar, subir y
+  deshacer; el registro después de cerrar la app; lo cortado; los últimos 5; otro dispositivo que cambió una; permisos
+  desconocidos (la página no recibe ninguna escritura, ni la guardia); cada motivo para saltear una página; *Stop*; el
+  guardado que falla corta todo; el registro que no se puede guardar; el editor que escribe mientras se guarda el
+  registro; el editor que falla al dibujar (cuenta como escrito, no se repite, se vuelve a dibujar); la pila de
+  deshacer de la página que no lo ve; lo escondido; sin red; **300 páginas** (2,2 s reemplazar y 1,1 s deshacer en esta
+  PC; topes con `SHOTDOCS_STRICT_PERF`); y **al azar con dos dispositivos** (`REPLACE_RANDOM`, 8 por defecto; 40 sin
+  fallas): lo que escribe el otro siempre está, los dos y un dispositivo nuevo terminan iguales, y sin cambios del otro
+  todo queda como antes.
+- `src/ui/projectReplace.test.tsx` (5, la app de verdad en jsdom): sin permisos conocidos no hay flecha; la vista previa,
+  la confirmación con *Cancel* elegido y Esc, la página abierta que recibe el cambio con su sección colapsada cerrada,
+  *Undo* en el aviso; una y dejar otra afuera; borrar con la casilla; los últimos con *Undo*.
+- `src/ui/replaceCompat.test.ts`: la versión publicada (el esquema de `main`) abre la página reemplazada y la deshecha
+  sin bloquearla, la muestra bien y abrirla no escribe nada.
+- **Cada protección falla sin ella** (probado sacándola, una por una): `applyLocal`, `isSaved`, volver a planear,
+  `perms.known`, lo desconocido, juntar las pegadas, los vecinos de un borrado, el link entero, las escondidas al
+  borrar y "entre las anclas está lo que se puso".
+- **Recorrido en Chromium** (un arnés local sin login: la app de verdad sobre el servidor en memoria; tres páginas, una
+  abierta con una sección colapsada; en la computadora y a 390 px): 40 de 40. La flecha, la vista previa, la
+  confirmación (cuántas, las escondidas, *Cancel* elegido), el aviso con *Undo*, lo escondido y el formato partido
+  reemplazados, el link conservado, la sección que sigue colapsada, el editor abierto al día, Ctrl+Z que no lo deshace,
+  un dispositivo nuevo que baja lo reemplazado, *Undo* desde los últimos (todo como antes, con el formato partido), sin
+  red (el aviso en la confirmación, pendiente, y sube al volver), sin scroll de costado y sin errores en la consola.
+
+**Queda para después:** reemplazar en los títulos, en pies y nombres, *Conservar mayúsculas* y el borde de una foto
+borrada; la lista como `tree` para lectores de pantalla (hoy son botones); probar a mano en Safari de Mac, el iPhone y
+Firefox, y con la base real.

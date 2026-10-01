@@ -2,14 +2,15 @@
 
 v0.090 :
 
-Diseño de reemplazar en todo el proyecto, sin código. Faltaba: la búsqueda de Ctrl/⌘+K encontraba, pero cambiar un
-nombre en cincuenta páginas era abrirlas de a una. `Doc_Buscar.md` suma la sección: se despliega como en VS Code,
-con vista previa y confirmación; se escribe en el Y.Doc de cada página que se puede editar y está completa (como
-"Reemplazar todo" de la página), así se guarda y se sube como cualquier edición; y un registro guardado antes de
-escribir deja deshacer todo, solo donde sigue igual. Un prototipo midió 3000 corridas al azar con otro dispositivo
-escribiendo a la vez, sin borrar nada suyo, y 300 páginas en 1,1 s. Una auditoría sumó lo que faltaba (pasar por la
-protección del editor abierto, comprobar lo guardado, permisos conocidos, lo escondido). Cuatro preguntas para Lega.
-[ Docs - diseño de reemplazar en el proyecto ]
+Faltaba reemplazar en todo el proyecto: cambiar un nombre en cincuenta páginas era abrirlas de a una. Ahora la
+flecha del panel de Ctrl/⌘+K despliega el reemplazo: lista cada coincidencia con lo de antes tachado y lo nuevo
+al lado, y reemplaza una, una página o todas, con una confirmación que dice cuántos cambios, en cuántas páginas y
+cuántos escondidos en secciones colapsadas (borrarlos pide su casilla). Escribe en el Y.Doc de cada página que se
+puede editar y está completa, sin editor, por el mismo camino que cualquier edición; antes guarda un registro, y
+*Undo* vuelve a poner lo que nadie cambió después, también sin red o tras cerrar la app. Diseño auditado (la
+protección del editor abierto, el guardado comprobado, los permisos conocidos). Pruebas al azar con dos
+dispositivos: nada del otro se pierde. Ayuda nueva.
+[ Reemplazar en el proyecto - vista previa, confirmación y deshacer en todas las páginas ]
 
 v0.089 :
 
