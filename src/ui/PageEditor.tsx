@@ -4,7 +4,6 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import { BlockNoteView } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
 import {
-  FormattingToolbarController,
   getDefaultReactSlashMenuItems,
   SuggestionMenuController,
   useCreateBlockNote,
@@ -24,6 +23,7 @@ import { porteroDownload, sharpenImages } from './sharpImages';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
+import { addFiles, dropPos, inlinePhotoSpotsExtension, pickFiles, type AddFilesOptions, type PhotoEditor } from './inlinePhotoCreate';
 import { readFolder, summarize, takeDrop, type FolderSource } from '../media/folderRead';
 import { FolderAskDialog, FolderProgressDialog } from './FolderDialog';
 import { FolderViewer } from './FolderViewer';
@@ -55,14 +55,16 @@ import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
 import { BlockSideMenuController } from './BlockSideMenu';
-import { PageFormattingToolbar, pageToolbarItems } from './PageToolbar';
+import { PageFormattingToolbar, PageFormattingToolbarController, pageToolbarItems } from './PageToolbar';
+import { PhotoToolbarController } from './PhotoToolbar';
+import { MediaActionsContext, type MediaActions } from './MediaBar';
 import { undoGuardExtension } from './undoGuard';
 import { BACKGROUND_META } from './editorMeta';
 import { notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens, shiftSelects } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
 import { findExtension } from './findEditor';
-import { inlinePhotoExtensions, selectedPhotoKey } from './inlinePhotoEditor';
+import { inlinePhotoExtensions, selectedPhotoKey, spacePhotoKey } from './inlinePhotoEditor';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession } from './projectSearchUi';
 
@@ -310,6 +312,19 @@ function BlockEditor({
     return files.add(pageId, blob);
   };
 
+  // Pegar, soltar o elegir archivos (inlinePhotoCreate.ts): qué va en el renglón, cómo se guarda y dónde van los
+  // adjuntos. Sin portero, solo imágenes (a Supabase); con portero, fotos y videos en el renglón y lo demás como
+  // tarjeta.
+  const fileOptions = (target: FileEditor): AddFilesOptions => ({
+    isInline: (file) => (media.enabled ? isMediaFile(file) : isAllowedImage(file.type)),
+    store: (file) =>
+      store(file).catch((err: unknown) => {
+        notify(err instanceof FileRejected ? err.message : t('editor.fileNotSaved'));
+        throw err;
+      }),
+    insertAttachments: (list, at) => void insertFiles(target, list, at),
+  });
+
   // Los eventos de soltar ya procesados (el menú lateral del editor reenvía el mismo al soltar cerca).
   const handledDrops = useMemo(() => new WeakSet<DataTransfer>(), []);
 
@@ -343,13 +358,14 @@ function BlockEditor({
       dictionary: editorDictionary(tr.lang),
       // Un link a otra página de la app la abre en esta pestaña (internalLinks.ts).
       links: { onClick: (event) => editorLinkClick(event) },
-      // Pegar archivos (con portero, cualquier archivo): un bloque por archivo, en orden (fileDrop.ts).
+      // Pegar archivos: las fotos y los videos en el renglón, donde está el cursor (fotos en línea,
+      // inlinePhotoCreate.ts); con portero, cualquier otro archivo, un bloque debajo (fileDrop.ts).
       pasteHandler: (ctx) => {
         const dt = ctx.event.clipboardData;
-        if (!media.enabled || !isFilesTransfer(dt)) return drivePaste.pasteHandler(ctx);
+        if (!isFilesTransfer(dt)) return drivePaste.pasteHandler(ctx);
         const { files: taken, folders } = takeFiles(dt!);
         if (folders > 0) notify(t('editor.foldersNotSupported'));
-        void insertFiles(ctx.editor as unknown as FileEditor, taken, null);
+        void addFiles(ctx.editor as unknown as PhotoEditor, taken, null, fileOptions(ctx.editor as unknown as FileEditor));
         return true;
       },
       uploadFile: (file: File, blockId?: string) =>
@@ -395,6 +411,8 @@ function BlockEditor({
       extensions: [
         // Las fotos en línea (Docs/Doc_Fotos_En_Linea.md): sus filas, la marca de la selección y su teclado.
         ...inlinePhotoExtensions,
+        // El lugar (y la marca de espera) de las fotos que se están guardando (inlinePhotoCreate.ts).
+        inlinePhotoSpotsExtension,
         findExtension,
         // Cada borrado es un solo Ctrl+Z, y el deshacer del navegador nunca edita la página (undoGuard.ts).
         undoGuardExtension(),
@@ -587,7 +605,20 @@ function BlockEditor({
             onItemClick: () =>
               insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: { [SCRIPT_PROP]: false } }),
           }
-        : item,
+        : (item as { key?: string }).key === 'image'
+          ? {
+              ...item,
+              // "/Image": el selector de archivos del sistema; lo elegido entra en el renglón, donde estaba el cursor
+              // (fotos en línea, inlinePhotoCreate.ts). Con portero, también videos y adjuntos (estos, como tarjeta).
+              subtext: tr('editor.imageHint'),
+              onItemClick: () =>
+                pickFiles(
+                  editor as unknown as PhotoEditor,
+                  media.enabled ? 'image/*,video/*,*/*' : 'image/*',
+                  fileOptions(editor as unknown as FileEditor),
+                ),
+            }
+          : item,
     );
     const at = items.findIndex((i) => i.group !== headings && i.group !== basic);
     // Script, Question y Paragraph se sacan la marca uno al otro (nunca Script y pregunta juntos).
@@ -599,7 +630,7 @@ function BlockEditor({
     const extra = [withParagraphVariants(script, editor, 'script'), questionSlashItem(editor, tr, basic)];
     return (query: string) =>
       Promise.resolve(filterSuggestionItems([...variants.slice(0, at), ...extra, ...variants.slice(at)], query));
-  }, [editor, tr]);
+  }, [editor, tr, media]);
 
   const toolbarItems = useMemo(
     () => pageToolbarItems(editor.dictionary, tr),
@@ -621,24 +652,38 @@ function BlockEditor({
     notify(acceptedText());
   };
 
-  // Con portero, soltar archivos en la página: un bloque por archivo, en orden, donde se soltó (fileDrop.ts).
+  // Soltar archivos en la página: las fotos y los videos en el renglón, entre las letras donde se soltaron (o en un
+  // renglón nuevo al lado del bloque, si ahí no pueden ir); con portero, los demás archivos como bloques, en orden,
+  // donde se soltaron (fileDrop.ts).
   const dropFiles = (e: React.DragEvent) => {
     const dt = e.nativeEvent.dataTransfer;
-    if (!media.enabled) return rejectOtherFiles(e.nativeEvent, dt);
+    if (!media.enabled) {
+      rejectOtherFiles(e.nativeEvent, dt);
+      if (e.nativeEvent.defaultPrevented) return;
+    }
     const root = editor.domElement;
     if (!editable || !dt || !isFilesTransfer(dt) || handledDrops.has(dt) || !root?.contains(e.target as Node)) return;
     handledDrops.add(dt);
     e.preventDefault();
     e.stopPropagation();
     const { files: taken, folders: dirs, supported } = takeDrop(dt);
-    let at = dropTarget(root, e.clientX, e.clientY);
-    // Los archivos sueltos van primero; las carpetas del mismo soltar, después de ellos (el párrafo vacío donde se
-    // soltó ya no está).
+    let at: InsertAt | null = dropTarget(root, e.clientX, e.clientY);
+    // Los archivos sueltos van primero (las fotos y videos al renglón, los adjuntos como bloques); las carpetas del
+    // mismo soltar, después de los adjuntos (el párrafo vacío donde se soltó ya no está).
     if (taken.length > 0) {
-      void insertFiles(editor as unknown as FileEditor, taken, at, (ids) => {
-        const last = ids[ids.length - 1];
-        if (last) at = { blockId: last, placement: 'after' };
-      });
+      void addFiles(
+        editor as unknown as PhotoEditor,
+        taken,
+        { pos: dropPos(editor.prosemirrorView, e.clientX, e.clientY), block: at },
+        {
+          ...fileOptions(editor as unknown as FileEditor),
+          insertAttachments: (list, where) =>
+            void insertFiles(editor as unknown as FileEditor, list, where, (ids) => {
+              const last = ids[ids.length - 1];
+              if (last) at = { blockId: last, placement: 'after' };
+            }),
+        },
+      );
     }
     if (dirs.length === 0) return;
     // Sin forma de leer carpetas (P.9): se sigue pidiendo comprimirlas.
@@ -819,7 +864,9 @@ function BlockEditor({
   // también abre; Enter y las letras pasan el cursor a la derecha de la foto y siguen (inlinePhotoEditor.ts).
   const openWithKeyboard = (e: KeyboardEvent) => {
     if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !editor.isFocused()) return;
-    const key = selectedKey();
+    // Con varias fotos en línea elegidas, en la primera (y la barra espaciadora no las reemplaza).
+    const view = editor.prosemirrorView;
+    const key = view ? spacePhotoKey(view.state) : null;
     if (!key) return;
     if (openAt(key, 'keyboard')) {
       e.preventDefault();
@@ -837,8 +884,22 @@ function BlockEditor({
   const openAtRef = useRef(openAt);
   openAtRef.current = openAt;
   const formattingToolbar = useCallback(
-    () => <PageFormattingToolbar items={toolbarItems} canComment={canComment} onView={(id) => openAtRef.current(id)} />,
+    () => <PageFormattingToolbar items={toolbarItems} canComment={canComment} />,
     [toolbarItems, canComment],
+  );
+  // Lo que usan las barras de las fotos (MediaBar.tsx, PhotoToolbar.tsx): guardar al reemplazar, qué acepta el
+  // selector, comentar y abrir el carrete (siempre con el último `openAt`).
+  const mediaActions = useMemo<MediaActions>(
+    () => ({
+      store: (file) => fileOptions(editor as unknown as FileEditor).store(file),
+      accept: {
+        inline: media.enabled ? 'image/*,video/*' : 'image/*',
+        block: media.enabled ? 'image/*,video/*,*/*' : 'image/*',
+      },
+      canComment,
+      onView: (key) => void openAtRef.current(key),
+    }),
+    [editor, media, canComment],
   );
 
   return (
@@ -852,6 +913,7 @@ function BlockEditor({
       onClickCapture={(e) => !editable && followInternalLink(e.nativeEvent)}
       onClick={openCarrete}
     >
+      <MediaActionsContext.Provider value={mediaActions}>
       <BlockNoteView
         editor={editor}
         editable={editable}
@@ -862,10 +924,13 @@ function BlockEditor({
         sideMenu={false}
       >
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
-        <FormattingToolbarController formattingToolbar={formattingToolbar} />
+        <PageFormattingToolbarController formattingToolbar={formattingToolbar} />
+        {/* La barra de la foto en línea elegida (PhotoToolbar.tsx). */}
+        {editable && <PhotoToolbarController />}
         {/* Los tres puntos de cada bloque: arrastrar lo mueve, un clic lo elige y abre la barra de formato. */}
         <BlockSideMenuController />
       </BlockNoteView>
+      </MediaActionsContext.Provider>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
       {/* El triángulo de cada título (P.11): una capa encima, como el margen. */}
       {canCollapse && <CollapseToggles editor={editor} host={host} editable={editable} />}

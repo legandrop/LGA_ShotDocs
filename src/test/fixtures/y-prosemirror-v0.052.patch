@@ -1,0 +1,147 @@
+diff --git a/node_modules/y-prosemirror/src/plugins/sync-plugin.js b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
+index dccfb76..284f592 100644
+--- a/node_modules/y-prosemirror/src/plugins/sync-plugin.js
++++ b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
+@@ -248,37 +248,104 @@ export const ySyncPlugin = (yXmlFragment, {
+  */
+ const restoreRelativeSelection = (tr, relSel, binding) => {
+   if (relSel !== null && relSel.anchor !== null && relSel.head !== null) {
+-    if (relSel.type === 'all') {
+-      tr.setSelection(new AllSelection(tr.doc))
+-    } else if (relSel.type === 'node') {
+-      const anchor = relativePositionToAbsolutePosition(
+-        binding.doc,
+-        binding.type,
+-        relSel.anchor,
+-        binding.mapping
+-      )
+-      tr.setSelection(NodeSelection.create(tr.doc, anchor))
+-    } else {
+-      const anchor = relativePositionToAbsolutePosition(
+-        binding.doc,
+-        binding.type,
+-        relSel.anchor,
+-        binding.mapping
+-      )
+-      const head = relativePositionToAbsolutePosition(
+-        binding.doc,
+-        binding.type,
+-        relSel.head,
+-        binding.mapping
+-      )
+-      if (anchor !== null && head !== null) {
+-        const sel = TextSelection.between(tr.doc.resolve(anchor), tr.doc.resolve(head))
+-        tr.setSelection(sel)
++    // LGA-SHOTDOCS-PATCH (patches/y-prosemirror+1.3.7.patch): this runs inside the Yjs observer that
++    // renders a change into the editor. If it throws, the change stays in the Y.Doc but the editor never
++    // shows it, and the next local keystroke writes the stale editor back over it. So: only a node
++    // selection when the selected node is still there (not deleted, not another node that took its place),
++    // only positions inside the document, and never throw; otherwise a text cursor.
++    const size = tr.doc.content.size
++    const inDoc = (pos) => pos !== null && pos >= 0 && pos <= size
++    const textCursor = (pos) => {
++      try {
++        const at = math.min(math.max(pos === null ? tr.selection.head : pos, 0), size)
++        const $at = tr.doc.resolve(at)
++        // Text only: Selection.near would pick a whole block (a node selection) again.
++        const sel = TextSelection.findFrom($at, 1, true) || TextSelection.findFrom($at, -1, true)
++        if (sel) tr.setSelection(sel)
++      } catch (_err) {
++        // Keep whatever selection the transaction has.
++      }
++    }
++    try {
++      if (relSel.type === 'all') {
++        tr.setSelection(new AllSelection(tr.doc))
++      } else if (relSel.type === 'node') {
++        const anchor = relativePositionToAbsolutePosition(
++          binding.doc,
++          binding.type,
++          relSel.anchor,
++          binding.mapping
++        )
++        if (!inDoc(anchor)) {
++          textCursor(null)
++          return
++        }
++        const $anchor = tr.doc.resolve(anchor)
++        if ($anchor.nodeAfter && !relativeItemDeleted(binding.doc, relSel.anchor) && sameSelectedNode(binding, $anchor)) {
++          tr.setSelection(NodeSelection.create(tr.doc, anchor))
++        } else {
++          textCursor(anchor)
++        }
++      } else {
++        const anchor = relativePositionToAbsolutePosition(
++          binding.doc,
++          binding.type,
++          relSel.anchor,
++          binding.mapping
++        )
++        const head = relativePositionToAbsolutePosition(
++          binding.doc,
++          binding.type,
++          relSel.head,
++          binding.mapping
++        )
++        if (inDoc(anchor) && inDoc(head)) {
++          const sel = TextSelection.between(tr.doc.resolve(anchor), tr.doc.resolve(head))
++          tr.setSelection(sel)
++        } else if (anchor !== null || head !== null) {
++          textCursor(inDoc(head) ? head : null)
++        }
+       }
++    } catch (_err) {
++      textCursor(null)
+     }
+   }
+ }
+ 
++/**
++ * LGA-SHOTDOCS-PATCH: whether the node after $anchor is the node that was selected before the change. The
++ * binding rewrites nodes by position, so the same Yjs item can now hold another node: if nodes carry an
++ * `id` attribute (on themselves or on their parent), it has to be the same one.
++ *
++ * @param {ProsemirrorBinding} binding
++ * @param {any} $anchor
++ */
++const sameSelectedNode = (binding, $anchor) => {
++  const before = binding.prosemirrorView && binding.prosemirrorView.state.selection
++  if (!before || !(before instanceof NodeSelection)) return true
++  const node = $anchor.nodeAfter
++  if (node.type !== before.node.type) return false
++  const idOf = (n, $pos) => (n.attrs.id != null ? n.attrs.id : $pos.parent.attrs.id)
++  const was = idOf(before.node, before.$from)
++  return was == null || was === idOf(node, $anchor)
++}
++
++/**
++ * LGA-SHOTDOCS-PATCH: whether the Yjs item a relative position points at was deleted. A relative position
++ * to a deleted item resolves to the next item, i.e. to a different node.
++ *
++ * @param {Y.Doc} ydoc
++ * @param {Y.RelativePosition} relPos
++ */
++const relativeItemDeleted = (ydoc, relPos) => {
++  if (relPos.item == null) return false
++  try {
++    return Y.getItem(ydoc.store, relPos.item).deleted
++  } catch (_err) {
++    return true
++  }
++}
++
+ /**
+  * @param {ProsemirrorBinding} pmbinding
+  * @param {import('prosemirror-state').EditorState} state
+@@ -935,6 +1002,11 @@ const equalAttrs = (pattrs, yattrs) => {
+ const normalizePNodeContent = (pnode) => {
+   const c = pnode.content.content
+   const res = []
++  // LGA-SHOTDOCS-PATCH: an empty textblock is represented by an empty Y.XmlText (not by nothing), so
++  // two devices typing into the same empty paragraph write into the same Y.XmlText instead of each
++  // creating its own (y-prosemirror later merges two of them by copying one and deleting the other, and
++  // what was typed into the deleted one in the meantime is lost).
++  if (pnode.isTextblock && c.length === 0) return [[]]
+   for (let i = 0; i < c.length; i++) {
+     const n = c[i]
+     if (n.isText) {

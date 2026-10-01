@@ -174,6 +174,24 @@ describe('tablas de Coda → páginas', () => {
     expect(() => convert({ tables: { Planos: 'nada' } })).toThrow(/modo desconocido/)
   })
 
+  it('las fotos de una columna de fotos van juntas en un renglón: una sola, de su ancho; varias, a un tercio cada una', () => {
+    // r1: una foto (sin ancho: el natural). Con dos, cada una a 208 px (un tercio del renglón de Coda, 624 px).
+    expect(file('row-T1-r1')).toContain(`<div><img src="${blob('bl-1')}" alt=""></div>`)
+    const rows = structuredClone(ROWS)
+    rows.T1.rows[2].values['c-img'] = [img('bl-7'), img('bl-8')]
+    const got = convertTables({
+      manifest: MANIFEST,
+      index: INDEX,
+      rows: (id) => rows[id] ?? null,
+      html: (f) => HTML[f] ?? null,
+      parse,
+      extraMedia: [{ url: blob('bl-7'), file: 'bl-7.png' }, { url: blob('bl-8'), file: 'bl-8.png' }],
+    })
+    expect(got.files.get('pages/row-T1-r3.import.html')).toContain(
+      `<div><img src="${blob('bl-7')}" alt="bl-7.png" width="208"><img src="${blob('bl-8')}" alt="bl-8.png" width="208"></div>`,
+    )
+  })
+
   it('un archivo que solo está en los datos de una tabla se pide; con él en extraMedia, queda en la ficha', () => {
     const rows = structuredClone(ROWS)
     rows.T1.rows[2].values['c-img'] = [img('bl-7')]

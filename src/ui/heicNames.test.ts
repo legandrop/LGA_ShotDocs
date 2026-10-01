@@ -54,4 +54,18 @@ describe('el nombre del bloque de un HEIC convertido', () => {
     // Sin saber todavía qué es el archivo, tampoco.
     expect(renameConvertedHeic(editor as unknown as NameEditor, { fileInfo: () => null }, B)).toBe(0);
   });
+
+  it('una foto en línea también (solo su nombre; el texto del renglón y la otra foto, iguales)', () => {
+    const editor = mount();
+    const ph = (id: string, name: string) => ({ type: 'photo', props: { url: `sdmedia://${id}`, name, w: 0.5 } });
+    editor.replaceBlocks(editor.document, [
+      { type: 'paragraph', content: [{ type: 'text', text: 'antes ', styles: {} }, ph(A, 'IMG_0001.HEIC'), ph(B, 'IMG_0002.HEIC')] },
+    ] as never);
+    const files = new Map([[A, info('image/jpeg', 'IMG_0001.jpg')], [B, info('image/heic', 'IMG_0002.HEIC')]]);
+    const media = { fileInfo: (id: string) => files.get(id) ?? null };
+    expect(renameConvertedHeic(editor as unknown as NameEditor, media, A)).toBe(1);
+    const content = editor.document[0].content as { type: string; text?: string; props?: { name: string; url: string; w: number } }[];
+    expect(content.map((c) => c.text ?? `${c.props!.name}@${c.props!.w}`)).toEqual(['antes ', 'IMG_0001.jpg@0.5', 'IMG_0002.HEIC@0.5']);
+    expect(renameConvertedHeic(editor as unknown as NameEditor, media, A)).toBe(0);
+  });
 });

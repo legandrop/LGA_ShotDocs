@@ -9,6 +9,7 @@ import { CONTENT_FRAGMENT, normalizeStructure } from '../sync/structure';
 import { mountEditor, pmFromY, seeded, showsDoc, tick, unmountAll, view } from './collabHarness';
 import { GAP_TEXT_SPEC, PHOTO } from './inlinePhoto';
 import { brokenGaps, para, photo, photosIn, previousSchema, textEnds } from './photoHarness';
+import { STABLE_GAPS_MARKER } from './unknownContent';
 
 // Los huecos estables (Docs/Doc_Colaboracion.md, "Huecos estables"; patches/y-prosemirror+1.3.7.patch): en un
 // renglón con fotos en línea, ningún texto de Yjs se borra ni se vuelve a crear. Borrar una foto saca solo la
@@ -72,12 +73,12 @@ describe('borrar una foto deja los textos de los dos lados, seguidos, y se leen 
     const doc = docWith([top, para('p1', ['abc', photo('F1'), 'def', photo('F2'), 'ghi'])]);
     const p = contentOf(doc, 1);
     const before = textsOf(p);
-    expect(stored(p)).toBe('"abc" <photo> "def" <photo> "ghi"');
+    expect(stored(p)).toBe('<lgaStableGaps> "abc" <photo> "def" <photo> "ghi"');
 
     const E = mountEditor(doc);
     for (const f of photosIn(E).reverse()) dispatch(E, (tr) => tr.delete(f.pos, f.pos + 1));
     // Solo se fueron las fotos: los tres textos son los mismos objetos de Yjs, con la marca.
-    expect(stored(p)).toBe('"abc" "def" "ghi"');
+    expect(stored(p)).toBe('<lgaStableGaps> "abc" "def" "ghi"');
     expect(textsOf(p)).toEqual(before);
     expect(before.every((t) => !t._item!.deleted)).toBe(true);
     // El editor los muestra como un solo texto, y es lo que se lee de Yjs.
@@ -96,7 +97,7 @@ describe('borrar una foto deja los textos de los dos lados, seguidos, y se leen 
     const others = textsOf(contentOf(other, 1));
     B.setTextCursorPosition('p0', 'end');
     B.insertInlineContent('!');
-    expect(stored(contentOf(other, 1))).toBe('"abc" "def" "ghi"');
+    expect(stored(contentOf(other, 1))).toBe('<lgaStableGaps> "abc" "def" "ghi"');
     expect(textsOf(contentOf(other, 1))).toEqual(others);
   });
 
@@ -108,19 +109,19 @@ describe('borrar una foto deja los textos de los dos lados, seguidos, y se leen 
     dispatch(E, (tr) => tr.delete(f.pos, f.pos + 1));
     const [start] = rangeOf(E);
     dispatch(E, (tr) => tr.insertText('X', start + 3));
-    expect(stored(p)).toBe('"abcX" "def"');
+    expect(stored(p)).toBe('<lgaStableGaps> "abcX" "def"');
     // Al principio y al final del renglón: en el primero y en el último.
     dispatch(E, (tr) => tr.insertText('Y', start));
     dispatch(E, (tr) => tr.insertText('Z', rangeOf(E)[1]));
-    expect(stored(p)).toBe('"YabcX" "defZ"');
+    expect(stored(p)).toBe('<lgaStableGaps> "YabcX" "defZ"');
     // Borrar a los dos lados del borde borra letras de los dos textos (los textos quedan).
     dispatch(E, (tr) => tr.delete(start + 4, start + 6));
-    expect(stored(p)).toBe('"Yabc" "efZ"');
+    expect(stored(p)).toBe('<lgaStableGaps> "Yabc" "efZ"');
     // Borrar todo deja los textos vacíos (no se borran).
     dispatch(E, (tr) => tr.delete(rangeOf(E)[0], rangeOf(E)[1]));
-    expect(stored(p)).toBe('"" ""');
+    expect(stored(p)).toBe('<lgaStableGaps> "" ""');
     dispatch(E, (tr) => tr.insertText('q', rangeOf(E)[0]));
-    expect(stored(p)).toBe('"q" ""');
+    expect(stored(p)).toBe('<lgaStableGaps> "q" ""');
     expect(showsDoc(E, doc)).toBe(true);
   });
 
@@ -131,12 +132,12 @@ describe('borrar una foto deja los textos de los dos lados, seguidos, y se leen 
     const E = mountEditor(doc);
     const [start] = rangeOf(E);
     dispatch(E, (tr) => tr.insert(start + 5, view(E).state.schema.nodes[PHOTO].create({ name: 'F2' })));
-    expect(stored(p)).toBe('"abc" <photo> "d" <photo> "ef"');
+    expect(stored(p)).toBe('<lgaStableGaps> "abc" <photo> "d" <photo> "ef"');
     expect(textsOf(p).slice(0, 2)).toEqual([abc, def]);
-    // Un cambio de ancho no vuelve a crear la foto.
-    const photoEl = p.get(1);
+    // Un cambio de ancho no vuelve a crear la foto (la 0 es la marca del renglón).
+    const photoEl = p.get(2);
     dispatch(E, (tr) => tr.setNodeAttribute(photosIn(E)[0].pos, 'w', 0.5));
-    expect(p.get(1)).toBe(photoEl);
+    expect(p.get(2)).toBe(photoEl);
     expect((photoEl as Y.XmlElement).getAttribute('w')).toBe(0.5);
     expect(showsDoc(E, doc)).toBe(true);
   });
@@ -149,7 +150,7 @@ describe('borrar una foto deja los textos de los dos lados, seguidos, y se leen 
     const [start] = rangeOf(E);
     const bold = view(E).state.schema.marks.bold.create();
     dispatch(E, (tr) => tr.addMark(start + 2, start + 4, bold));
-    expect(contentOf(doc, 1).toArray().map((t) => (t as Y.XmlText).toDelta())).toEqual([
+    expect(textsOf(contentOf(doc, 1)).map((t) => t.toDelta())).toEqual([
       [{ insert: 'ab' }, { insert: 'c', attributes: { bold: {} } }],
       [{ insert: 'd', attributes: { bold: {} } }, { insert: 'ef' }],
     ]);
@@ -166,11 +167,11 @@ describe('borrar una foto deja los textos de los dos lados, seguidos, y se leen 
     expect(stored(contentOf(doc, 0))).toBe('*"solo texto"');
     const E = mountEditor(doc);
     dispatch(E, (tr) => tr.delete(photosIn(E)[0].pos, photosIn(E)[0].pos + 1));
-    expect(stored(contentOf(doc, 1))).toBe('"abc" ""');
+    expect(stored(contentOf(doc, 1))).toBe('<lgaStableGaps> "abc" ""');
     // Una foto nueva al final, donde se tocan los dos textos: va entre los dos (ninguno se toca).
     const [abc, empty] = textsOf(contentOf(doc, 1));
     dispatch(E, (tr) => tr.insert(rangeOf(E)[1], view(E).state.schema.nodes[PHOTO].create({ name: 'F2' })));
-    expect(stored(contentOf(doc, 1))).toBe('"abc" <photo> ""');
+    expect(stored(contentOf(doc, 1))).toBe('<lgaStableGaps> "abc" <photo> ""');
     expect(textsOf(contentOf(doc, 1))).toEqual([abc, empty]);
     // El otro párrafo, escrito por el camino de siempre: sin marca.
     E.setTextCursorPosition('p0', 'end');
@@ -178,7 +179,7 @@ describe('borrar una foto deja los textos de los dos lados, seguidos, y se leen 
     expect(stored(contentOf(doc, 0))).toBe('*"solo texto!"');
   });
 
-  it('la reparación de estructura conserva la marca de los textos al copiar un renglón', () => {
+  it('la reparación de estructura conserva la marca de los textos y la del renglón al copiarlo', () => {
     const doc = docWith([top, para('p1', ['abc', photo('F1'), 'def'])]);
     const E = mountEditor(doc);
     dispatch(E, (tr) => tr.delete(photosIn(E)[0].pos, photosIn(E)[0].pos + 1));
@@ -191,10 +192,10 @@ describe('borrar una foto deja los textos de los dos lados, seguidos, y se leen 
     t1.setAttribute(GAP_TEXT_SPEC, true);
     const t2 = new Y.XmlText('dos');
     t2.setAttribute(GAP_TEXT_SPEC, true);
-    extra.insert(0, [t1, t2]);
+    extra.insert(0, [new Y.XmlElement(STABLE_GAPS_MARKER), t1, t2]);
     container.insert(1, [extra]);
     expect(normalizeStructure(doc, 'repair')).toBe(true);
-    expect(stored(contentOf(doc, 2))).toBe('"uno" "dos"');
+    expect(stored(contentOf(doc, 2))).toBe('<lgaStableGaps> "uno" "dos"');
   });
 });
 
