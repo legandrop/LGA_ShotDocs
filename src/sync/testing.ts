@@ -722,13 +722,22 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (!this.team) return this.server.workspaceId;
     const uid = this.userId;
     if (!this.server.role(uid)) return null;
-    const byAge = [...this.server.projects.values()].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
-    const own = byAge.find((p) => p.owner_id === uid);
-    if (own) return own.id;
-    const project = byAge.find((p) => this.server.grants.some((g) => g.user_id === uid && g.project_id === p.id));
-    if (project) return project.id;
-    const page = byAge.find((p) => this.server.canViewProject(uid, p.id));
-    return page?.id ?? null;
+    // Como la base (P.14): nunca uno borrado, y los archivados después de todos los demás.
+    const byAge = [...this.server.projects.values()]
+      .filter((p) => !this.server.projectDeleted(p.id))
+      .sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+    const steps = [
+      (p: ProjectRow) => p.owner_id === uid,
+      (p: ProjectRow) => this.server.grants.some((g) => g.user_id === uid && g.project_id === p.id),
+      (p: ProjectRow) => this.server.canViewProject(uid, p.id),
+    ];
+    for (const archived of [false, true]) {
+      for (const step of steps) {
+        const found = byAge.find((p) => !!p.archived_at === archived && step(p));
+        if (found) return found.id;
+      }
+    }
+    return null;
   }
 
   async fetchTree(projectIds: string[]): Promise<PageRow[]> {

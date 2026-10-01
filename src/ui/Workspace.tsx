@@ -435,7 +435,7 @@ function Home() {
  * primero (con red: es la puesta en marcha); los demás esperan a que les compartan uno, y la app vuelve a
  * preguntar sola.
  */
-function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) {
+export function NoProjects({ user, onRetry }: { user: AuthUser; onRetry: () => void }) {
   const { client, config } = useWorkspace();
   const [canCreate, setCanCreate] = useState(false);
   // Un id por pantalla: si la respuesta se pierde y se reintenta, no se crea un segundo proyecto.

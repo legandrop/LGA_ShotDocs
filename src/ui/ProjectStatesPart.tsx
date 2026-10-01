@@ -135,7 +135,7 @@ export function DeleteProjectDialog(props: {
         )}
         {!info && !error && <p className="muted">{tr('common.loading')}</p>}
         <p>{tr('deleteProject.where', { days: PROJECT_TRASH_DAYS })}</p>
-        {info && <p className="muted">{tr('deleteProject.driveStays', { size: formatSize(info.drive_bytes, tr.lang) })}</p>}
+        {info && info.files > 0 && <p className="muted">{tr('deleteProject.driveStays', { size: formatSize(info.drive_bytes, tr.lang) })}</p>}
         {info && info.used_elsewhere > 0 && (
           <p className="delete-project-warning">{tr('deleteProject.usedElsewhere', { count: info.used_elsewhere })}</p>
         )}
