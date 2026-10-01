@@ -57,19 +57,22 @@ export function unionRanges(a: DeleteRanges, b: DeleteRanges): DeleteRanges {
   return normalizeRanges(out);
 }
 
-/** Lo de `a` que no está en `b` (los dos normalizados). */
+/** Lo de `a` que no está en `b`. Lineal en la cantidad de tramos (los dos se recorren una sola vez, en orden). */
 export function subtractRanges(a: DeleteRanges, b: DeleteRanges): DeleteRanges {
   const out: DeleteRanges = new Map();
-  for (const [client, list] of a) {
-    const minus = b.get(client) ?? [];
+  const left = normalizeRanges(a);
+  const right = normalizeRanges(b);
+  for (const [client, list] of left) {
+    const minus = right.get(client) ?? [];
     const rest: [number, number][] = [];
+    let j = 0;
     for (const [from, to] of list) {
+      // Los de `minus` que terminan antes de este tramo ya no tocan a ninguno de los siguientes.
+      while (j < minus.length && minus[j][1] <= from) j++;
       let start = from;
-      for (const [mFrom, mTo] of minus) {
-        if (mTo <= start) continue;
-        if (mFrom >= to) break;
-        if (mFrom > start) rest.push([start, mFrom]);
-        start = Math.max(start, mTo);
+      for (let k = j; k < minus.length && minus[k][0] < to; k++) {
+        if (minus[k][0] > start) rest.push([start, minus[k][0]]);
+        start = Math.max(start, minus[k][1]);
         if (start >= to) break;
       }
       if (start < to) rest.push([start, to]);
@@ -138,7 +141,8 @@ export function buildUpload(
   const all = rangesOfDeleteSet(decoded.ds);
   const whole = { update: full, ds: encodeRanges(all), trimmed: false };
   if (!known) return whole;
-  const missing = subtractRanges(all, rangesOf(known));
+  const knownRanges = rangesOf(known);
+  const missing = subtractRanges(all, knownRanges);
   // El delete set de Yjs, tal cual lo leyó (mismo orden de tramos): tiene que ser el final exacto del update.
   const written = deleteSetBytes(
     [...decoded.ds.clients].map(([client, items]) => [client, items.map((i) => [i.clock, i.len] as [number, number])]),
@@ -159,7 +163,7 @@ export function buildUpload(
       check.structs.length === decoded.structs.length &&
       Y.encodeStateVectorFromUpdate(update).join() === Y.encodeStateVectorFromUpdate(full).join();
     const checkRanges = rangesOfDeleteSet(check.ds);
-    if (!sameStructs || !rangesContain(unionRanges(checkRanges, rangesOf(known)), all) || !rangesContain(missing, checkRanges)) {
+    if (!sameStructs || !rangesContain(unionRanges(checkRanges, knownRanges), all) || !rangesContain(missing, checkRanges)) {
       return whole;
     }
   } catch {
