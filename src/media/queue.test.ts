@@ -705,6 +705,183 @@ describe('cola de archivos: subidas que se traban', () => {
     expect(a.engine.getStatus().failedMedia).toBe(0);
   });
 
+  /** Agrega archivos de 1 MB, uno por segundo (la cola sube por orden de llegada), y deja el reloj del vigilante simulado. */
+  async function withFiles(names: string[]): Promise<{ server: FakeServer; a: Device; page: string; ids: string[] }> {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const ids: string[] = [];
+    for (const name of names) {
+      server.clockOffset += 1000;
+      ids.push(mediaIdOf(await a.media.add(page, makeFile(MB, name, 'image/jpeg')))!);
+    }
+    await a.engine.syncNow();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    return { server, a, page, ids };
+  }
+
+  it('con el portero colgado para todos, la vuelta deja de subir a la segunda trabada seguida y la cola espera antes de volver a probar', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    // Un archivo ya subido, que se copia a otra página: ese uso va a la base, no al portero.
+    const used = mediaIdOf(await a.media.add(page, makeFile(10, 'used.jpg', 'image/jpeg')))!;
+    const other = await a.tree.create(null, 'Día 9');
+    await sync(a);
+    expect(server.mediaFiles.get(used)?.drive_id).toBeTruthy();
+    const ids: string[] = [];
+    for (const name of ['uno.jpg', 'dos.jpg', 'tres.jpg', 'cuatro.jpg']) {
+      server.clockOffset += 1000;
+      ids.push(mediaIdOf(await a.media.add(page, makeFile(MB, name, 'image/jpeg')))!);
+    }
+    await a.media.ensureLinks(other, [used]);
+    await a.engine.syncNow();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    server.portero.hang = true;
+    // Desde acá: el archivo ya subido abrió su subida antes.
+    server.portero.calls.length = 0;
+    const opens = () => server.portero.calls.filter((c) => c.path === '/upload').length;
+
+    const { done, finished } = round(a);
+    for (const n of [1, 2]) {
+      await until(() => opens() === n);
+      elapse(server, CONTROL_TIMEOUT_MS + STALL_CHECK_MS);
+    }
+    // Dos archivos distintos seguidos se trabaron sin avanzar: no se espera un minuto más por cada uno de los demás.
+    await Promise.race([done, new Promise((r) => setTimeout(r, 300))]);
+    expect(finished()).toBe(true);
+    expect(opens()).toBe(2);
+    // Los dos trabados quedan con su espera; los otros dos, intactos (no fallaron: no se probaron).
+    for (const id of ids.slice(0, 2)) expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, blocked: false, stalls: 1, failures: 1 });
+    for (const id of ids.slice(2)) expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, blocked: false, failures: 0, error: null });
+    // El uso de la otra página salió igual en esa vuelta: va a la base.
+    expect(server.pageFiles.has(`${other}:${used}`)).toBe(true);
+    // Mientras la cola espera, no hay nada que subir "ahora": las bajadas de "Available offline" no la esperan.
+    expect(await a.media.hasUploadableNow()).toBe(false);
+    // Una vuelta enseguida no vuelve a probar el portero.
+    await a.engine.syncMedia();
+    expect(opens()).toBe(2);
+    await until(() => a.engine.getStatus().pendingMedia === 4);
+    expect(a.engine.getStatus().failedMedia).toBe(0);
+
+    // Cuando vuelve el portero y pasó la espera, sube todo, sin duplicar.
+    server.portero.hang = false;
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    for (const id of ids) expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(server.portero.drive.size).toBe(5);
+    for (const id of ids) expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0, error: null });
+  });
+
+  it('cada vez que el portero sigue colgado, la cola espera más antes de volver a probar; al volver, la espera vuelve a cero', async () => {
+    const { server, a, ids } = await withFiles(['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg', 'e.jpg', 'f.jpg', 'g.jpg']);
+    server.portero.hang = true;
+    const opens = () => server.portero.calls.filter((c) => c.path === '/upload').length;
+    const closedRound = async (before: number) => {
+      const { done } = round(a);
+      for (const n of [before + 1, before + 2]) {
+        await until(() => opens() === n);
+        elapse(server, CONTROL_TIMEOUT_MS + STALL_CHECK_MS);
+      }
+      await done;
+    };
+    await closedRound(0);
+    // Primera espera: 10 s. Pasados, vuelve a probar.
+    server.clockOffset += 9_000;
+    await a.engine.syncMedia();
+    expect(opens()).toBe(2);
+    server.clockOffset += 2_000;
+    await closedRound(2);
+    // Segunda: 20 s.
+    server.clockOffset += 19_000;
+    await a.engine.syncMedia();
+    expect(opens()).toBe(4);
+    server.clockOffset += 2_000;
+    server.portero.hang = false;
+    await a.engine.syncMedia();
+    // Volvió: sube lo que no está esperando su propio reintento.
+    for (const id of ids.slice(4)) expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    for (const id of ids) expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+  });
+
+  it('una trabada después de avanzar no cuenta para dejar de subir: el portero anda, aunque despacio', async () => {
+    const size = PART_BYTES + MB;
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const video = mediaIdOf(await a.media.add(page, makeFile(size, 'video.mov', 'video/quicktime')))!;
+    server.clockOffset += 1000;
+    const stuck = mediaIdOf(await a.media.add(page, makeFile(MB, 'trabado.jpg', 'image/jpeg')))!;
+    server.clockOffset += 1000;
+    const last = mediaIdOf(await a.media.add(page, makeFile(MB, 'ultimo.jpg', 'image/jpeg')))!;
+    await a.engine.syncNow();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const fileOf = (uploadId: string) => server.portero.uploads.get(uploadId)?.file;
+    let hung = 0;
+    const seen = new Set<string>();
+    const tried: string[] = [];
+    // Al video le llega la primera parte y se traba la segunda; el segundo archivo se traba entero; el tercero pasa.
+    // Cada uno se traba una sola vez (al terminar la vuelta, la cola puede volver a probar el video).
+    server.portero.partDelay = ({ uploadId, size: bytes }) => {
+      const file = fileOf(uploadId)!;
+      tried.push(file === video ? 'video' : file === stuck ? 'stuck' : 'last');
+      if (file === last || (file === video && bytes === PART_BYTES) || seen.has(file)) return Promise.resolve();
+      seen.add(file);
+      hung++;
+      return never();
+    };
+    const { done } = round(a);
+    for (const n of [1, 2]) {
+      await until(() => hung === n);
+      elapse(server, STALL_MS + STALL_CHECK_MS);
+    }
+    await done;
+    // Después del video (que avanzó) y del trabado, la vuelta siguió con el tercero.
+    expect(tried.slice(0, 4)).toEqual(['video', 'video', 'stuck', 'last']);
+    expect(server.mediaFiles.get(last)?.drive_id).toBeTruthy();
+    expect(server.mediaFiles.get(stuck)?.drive_id).toBeFalsy();
+    expect(await a.mediaDb.get('files', stuck)).toMatchObject({ pending: 1, stalls: 1 });
+  });
+
+  it('una subida que el portero pierde en cada vuelta se espacia: volver a mandar lo que ya había llegado no es avanzar', async () => {
+    const size = 2 * PART_BYTES + MB;
+    const { server, a, file, id } = await withFile(size, 'IMG_0900.JPG');
+    let hung = 0;
+    const parts = new Map<string, number>();
+    // De cada subida pasa la primera parte y se traba la segunda.
+    server.portero.partDelay = ({ uploadId }) => {
+      const n = (parts.get(uploadId) ?? 0) + 1;
+      parts.set(uploadId, n);
+      if (n === 1) return Promise.resolve();
+      hung++;
+      return never();
+    };
+    const waits: number[] = [];
+    for (let lap = 1; lap <= 3; lap++) {
+      const before = await a.mediaDb.get('files', id);
+      // El portero perdió la subida de la vuelta anterior (por ejemplo, se reinició): al retomar empieza de cero.
+      if (before?.uploadId) server.portero.uploads.delete(before.uploadId);
+      server.clockOffset += 10 * LATER;
+      await stalledRound(a, server, () => hung === lap);
+      const record = (await a.mediaDb.get('files', id))!;
+      expect(record).toMatchObject({ sent: PART_BYTES, blocked: false });
+      waits.push(record.retryAt - (Date.now() + server.clockOffset));
+    }
+    // La primera vuelta avanzó de verdad (espera 10 s); las siguientes mandaron otra vez lo mismo: 20 s, 40 s.
+    expect(waits[0]).toBeLessThanOrEqual(10_000);
+    expect(waits[1]).toBeGreaterThan(10_000);
+    expect(waits[2]).toBeGreaterThan(waits[1]);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ failures: 3, stalls: 3 });
+
+    // Cuando anda, sube entero y una sola vez.
+    server.portero.partDelay = null;
+    server.clockOffset += 10 * LATER;
+    await a.engine.syncMedia();
+    const row = server.mediaFiles.get(id)!;
+    expect(server.portero.drive.size).toBe(1);
+    expect(await same(file, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0, failures: 0 });
+  });
+
   it('un registro guardado por una versión anterior (sin `stalls`) sube igual', async () => {
     const { server, a, id } = await withFile(MB);
     // Así queda un archivo agregado y todavía sin subir: el campo no existe (como en lo guardado antes de v0.068).
@@ -733,12 +910,17 @@ describe('cola de archivos: miniaturas que Storage no contesta', () => {
 
   /** Lo que tarda Storage en contestar cada pedido; `never` es que no contesta. */
   interface Storage {
+    /** Lo que tarda en recibir la miniatura (después de esto queda guardada). */
     upload: (id: string) => Promise<void>;
+    /** Lo que tarda la respuesta de una subida, con la miniatura ya guardada. */
+    answer: (id: string) => Promise<void>;
     download: (id: string) => Promise<void>;
     /** Los pedidos que llegaron, en orden: `POST <id>` o `GET <id>`. */
     calls: string[];
-    /** Los pedidos de bajada que el navegador cortó. */
+    /** Los pedidos de bajada que el navegador cortó (el id). */
     aborted: string[];
+    /** Los pedidos de subida que el navegador cortó (`POST <id>`). */
+    abortedUploads: string[];
   }
   const never = () => new Promise<void>(() => undefined);
 
@@ -748,18 +930,43 @@ describe('cola de archivos: miniaturas que Storage no contesta', () => {
    * (`server.clockOffset`).
    */
   function realThumbs(d: Device, server: FakeServer): Storage {
-    const storage: Storage = { upload: () => Promise.resolve(), download: () => Promise.resolve(), calls: [], aborted: [] };
+    const storage: Storage = {
+      upload: () => Promise.resolve(),
+      answer: () => Promise.resolve(),
+      download: () => Promise.resolve(),
+      calls: [],
+      aborted: [],
+      abortedUploads: [],
+    };
     const json = (body: unknown, status: number) =>
       new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    /** Espera `work`, salvo que el navegador corte el pedido antes (entonces rechaza como `fetch`). */
+    const cuttable = (signal: AbortSignal | null | undefined, work: Promise<void>, onCut: () => void) =>
+      new Promise<void>((resolve, reject) => {
+        const cut = () => {
+          onCut();
+          reject(signal!.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+        };
+        if (signal?.aborted) return cut();
+        signal?.addEventListener('abort', cut);
+        // Una señal que vence con el pedido ya contestado no corta nada.
+        void work.then(() => {
+          signal?.removeEventListener('abort', cut);
+          resolve();
+        });
+      });
     const fetchStorage: typeof fetch = async (input, init) => {
       const id = /\/object\/thumbs\/([^/?]+)\.jpg/.exec(String(input))![1];
       const method = init?.method ?? 'GET';
       storage.calls.push(`${method} ${id}`);
       if (method === 'POST') {
-        await storage.upload(id);
+        // Desde que se sube con un `fetch` propio, la subida también se puede cortar.
+        const cut = () => storage.abortedUploads.push(`POST ${id}`);
+        await cuttable(init?.signal, storage.upload(id), cut);
         // Sin reemplazar: si ya está, lo dice (y la app lo da por hecho).
         if (server.thumbs.has(id)) return json({ statusCode: '409', error: 'Duplicate', message: 'The resource already exists' }, 400);
         server.thumbs.set(id, (init!.body as FormData).get('') as Blob);
+        await cuttable(init?.signal, storage.answer(id), cut);
         return json({ Id: id, Key: `thumbs/${id}.jpg` }, 200);
       }
       // La bajada sí se puede cortar: `download` le pasa la señal del tope al pedido.
@@ -784,7 +991,7 @@ describe('cola de archivos: miniaturas que Storage no contesta', () => {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
     const real = new SupabaseRemote(client, '0.070');
-    d.remote.uploadThumb = (id, data) => real.uploadThumb(id, data);
+    d.remote.uploadThumb = (id, data, stalledBefore) => real.uploadThumb(id, data, stalledBefore);
     d.remote.downloadThumb = (id) => real.downloadThumb(id);
     // El tope por `setTimeout` (el que se usa si el navegador no tiene `AbortSignal.timeout`), para poder
     // adelantar el reloj. IndexedDB de prueba no usa `setTimeout`.
@@ -868,7 +1075,7 @@ describe('cola de archivos: miniaturas que Storage no contesta', () => {
     expect(await a.mediaDb.get('files', stuck)).toMatchObject({ pending: 0, thumb: 'done', error: null, failures: 0 });
   });
 
-  it('si la miniatura cortada termina de subir sola, el reintento la encuentra y sigue, sin subirla dos veces', async () => {
+  it('si Storage guardó la miniatura pero la respuesta no volvió, el reintento la encuentra y sigue, sin subirla dos veces', async () => {
     const server = new FakeServer();
     const { a, page } = await withPage(server);
     const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0201.JPG', 'image/jpeg')))!;
@@ -876,20 +1083,18 @@ describe('cola de archivos: miniaturas que Storage no contesta', () => {
     await a.engine.syncNow();
     const thumb = (await a.mediaDb.get('thumbs', id))!;
     const storage = realThumbs(a, server);
-    // Storage tarda más que el tope en contestar, pero la miniatura llega.
-    let arrive = () => undefined as void;
-    storage.upload = () => new Promise<void>((resolve) => (arrive = resolve));
+    // La miniatura llega al bucket, pero la respuesta tarda más que el tope (o no vuelve).
+    storage.answer = never;
 
     await hungRound(a, () => storage.calls.length === 1, timeoutFor(thumb.size));
     expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, thumb: 'local', failures: 1 });
-    expect(server.mediaFiles.get(id)).toMatchObject({ thumb_at: null });
-    // El pedido que quedó suelto termina: la miniatura está en el bucket, pero la base todavía no lo sabe.
-    arrive();
-    await until(() => server.thumbs.has(id));
+    // El pedido se cortó, pero la miniatura ya estaba en el bucket; la base todavía no lo sabe.
+    expect(storage.abortedUploads).toEqual([`POST ${id}`]);
+    expect(server.thumbs.has(id)).toBe(true);
     const first = server.thumbs.get(id);
     expect(server.mediaFiles.get(id)).toMatchObject({ thumb_at: null });
 
-    storage.upload = () => Promise.resolve();
+    storage.answer = () => Promise.resolve();
     server.clockOffset += LATER;
     await a.engine.syncMedia();
     // Storage dijo que ya estaba (no se reemplaza): se da por hecho, se marca en la base y sube el original.
@@ -926,6 +1131,75 @@ describe('cola de archivos: miniaturas que Storage no contesta', () => {
     expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
     expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
     expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, thumb: 'done', error: null, failures: 0 });
+  });
+
+  it('con Storage colgado para todos, la vuelta deja de subir a la segunda miniatura vencida, y las subidas cortadas no quedan sueltas', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const ids: string[] = [];
+    for (const name of ['IMG_0301.JPG', 'IMG_0302.JPG', 'IMG_0303.JPG']) {
+      server.clockOffset += 1000;
+      ids.push(mediaIdOf(await a.media.add(page, makeFile(MB, name, 'image/jpeg')))!);
+    }
+    await a.media.idle();
+    await a.engine.syncNow();
+    const limit = timeoutFor((await a.mediaDb.get('thumbs', ids[0]))!.size);
+    const storage = realThumbs(a, server);
+    storage.upload = never;
+    const posts = () => storage.calls.filter((c) => c.startsWith('POST')).length;
+
+    const { done, finished } = round(a);
+    for (const n of [1, 2]) {
+      await until(() => posts() === n);
+      await vi.advanceTimersByTimeAsync(limit + 1000);
+    }
+    await Promise.race([done, pause(300)]);
+    expect(finished()).toBe(true);
+    // El tercero no se probó: hubiera esperado otro tope entero.
+    expect(storage.calls).toEqual([`POST ${ids[0]}`, `POST ${ids[1]}`]);
+    // El navegador cortó las dos subidas: no quedan pedidos sueltos acumulándose.
+    expect(storage.abortedUploads).toEqual([`POST ${ids[0]}`, `POST ${ids[1]}`]);
+    for (const id of ids.slice(0, 2)) expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, thumb: 'local', failures: 1 });
+    expect(await a.mediaDb.get('files', ids[2])).toMatchObject({ pending: 1, thumb: 'local', failures: 0, error: null });
+    for (const id of ids) expect(server.mediaFiles.get(id)?.drive_id).toBeFalsy();
+
+    // Cuando Storage vuelve y pasa la espera, sube todo.
+    storage.upload = () => Promise.resolve();
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    for (const id of ids) {
+      expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
+      expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    }
+  });
+
+  it('el tope de la miniatura crece con las fallas seguidas: una que tarda más que el tope termina pasando', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0304.JPG', 'image/jpeg')))!;
+    await a.media.idle();
+    await a.engine.syncNow();
+    const limit = timeoutFor((await a.mediaDb.get('thumbs', id))!.size);
+    const storage = realThumbs(a, server);
+    // Una red tan lenta que la miniatura tarda una vez y media el tope.
+    const takes = Math.round(limit * 1.5);
+    storage.upload = () => new Promise<void>((resolve) => setTimeout(resolve, takes));
+
+    await hungRound(a, () => storage.calls.length === 1, limit);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, thumb: 'local', thumbStalls: 1 });
+
+    // Segunda vez: con el doble de tope, pasa.
+    server.clockOffset += LATER;
+    const { done, finished } = round(a);
+    await until(() => storage.calls.length === 2);
+    await vi.advanceTimersByTimeAsync(takes - 1000);
+    await pause(30);
+    expect(finished()).toBe(false);
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
+    expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, thumb: 'done', thumbStalls: 0, error: null });
   });
 
   /** `b` mostró con un ícono dos fotos de `a` que todavía no tenían miniatura; después las miniaturas llegan. */

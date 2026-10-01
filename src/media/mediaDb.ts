@@ -37,6 +37,12 @@ export interface MediaRecord {
   probed?: boolean;
   /** Por qué no se pudo subir la miniatura (se siguió con el original sin ella). */
   thumbError?: string | null;
+  /**
+   * Veces seguidas que la subida de la miniatura venció su tope (Storage no contestó a tiempo): el tope siguiente
+   * es más largo (`thumbUploadLimit` en remote.ts). Vuelve a 0 al subirla. Opcional: una versión anterior no lo
+   * escribe ni lo lee (lo ignora, y su tope es el de siempre).
+   */
+  thumbStalls?: number;
   /** Veces seguidas que el servidor dijo que el archivo no existe aunque figuraba registrado. */
   lost?: number;
   /**
