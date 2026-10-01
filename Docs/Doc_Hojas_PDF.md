@@ -14,7 +14,8 @@ Y.Doc: las marcas son una capa encima del editor y el PDF se arma con una copia.
 hecho sobre la misma vista.
 
 **Con secciones colapsadas** (P.11, `Doc_Colapsar.md`), el cálculo se hace igual con todo abierto: la vista
-no copia lo colapsado, el PDF sale todo abierto y los cortes que caen en algo escondido se muestran juntos en
+no copia lo colapsado, el PDF sale todo abierto (salvo con la casilla "Imprimir como se ve", desde v0.067: ahí
+sale sin lo colapsado y pagina lo que queda, y las hojas ya no coinciden con las marcas) y los cortes que caen en algo escondido se muestran juntos en
 el título colapsado ("Hojas 2–4 adentro"); los números de las marcas que se ven cuentan también las hojas
 escondidas.
 

@@ -153,6 +153,17 @@ describe('imprimir como se ve', () => {
     expect(printAsSeen()).toBe(true);
     setPrintAsSeen(false);
     expect(printAsSeen()).toBe(false);
+    // Sin almacenamiento (ventana privada): apagada y sin errores.
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('sin almacenamiento');
+    });
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('sin almacenamiento');
+    });
+    expect(printAsSeen()).toBe(false);
+    expect(() => setPrintAsSeen(true)).not.toThrow();
+    get.mockRestore();
+    set.mockRestore();
   });
 });
 
