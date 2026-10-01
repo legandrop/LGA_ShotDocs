@@ -41,6 +41,7 @@ import {
   RemoteError,
   type DueFileRow,
   type MediaFileRow,
+  type PageUseRow,
   type TrashedFileRow,
   type NewMediaFile,
   type ProjectSizeRow,
@@ -1428,6 +1429,28 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     });
   }
 
+  /** `page_files` con su política: los usos de las páginas que la sesión ve (activos, quitados y ajenos). */
+  async fetchPageUses(pageIds: string[]): Promise<PageUseRow[]> {
+    this.server.check();
+    this.server.mediaCalls.push(`page_files ${pageIds.length}`);
+    const rows: PageUseRow[] = [];
+    for (const pageId of new Set(pageIds)) {
+      if (!this.server.pages.has(pageId) || this.server.pageInDeletedProject(pageId)) continue;
+      if (this.team && this.server.pageLevel(this.userId, pageId) < 1) continue;
+      for (const [set, removed, foreign] of [
+        [this.server.pageFiles, false, false],
+        [this.server.removedPageFiles, true, false],
+        [this.server.foreignPageFiles, false, true],
+      ] as const) {
+        for (const key of set) {
+          const [p, f] = key.split(':');
+          if (p === pageId) rows.push({ page_id: p, file_id: f, removed_at: removed ? new Date().toISOString() : null, is_foreign: foreign });
+        }
+      }
+    }
+    return rows;
+  }
+
   // --- comentarios (mismas reglas que supabase/migrations/20260930170000_comentarios.sql) ---
 
   /** `private.page_level`; sin las reglas del equipo, quien ve la página la puede todo (como antes). */
@@ -1750,6 +1773,8 @@ export async function makeDevice(
     viewImage: fakeViewImage,
     convertHeic: (file) => server.convertHeic(file),
     heicTimeoutMs: server.heicTimeoutMs,
+    // Sin red, el dispositivo lo sabe (como `navigator.onLine` en false).
+    offline: () => !server.online,
     now: () => Date.now() + server.clockOffset,
   });
   await media.load();

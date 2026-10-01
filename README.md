@@ -103,6 +103,8 @@ In production (v0.049). What works today:
   the photo viewer and downloads; whoever sees the page sees the folder, and nothing above it.
 - Collapse sections by their headings: a triangle next to any heading hides everything up to the next heading
   of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
+  Shift+click collapses or expands it for everyone who views the page (if you can edit it); the tooltip says
+  which. Dragging a collapsed heading, or Ctrl/⌘+Shift+↑/↓, moves its whole section.
   Deleting a collapsed heading deletes its whole section; sheet marks still count everything and the PDF
   prints it all open (or as shown, with *Print as shown* in the page menu).
 - Archive and delete projects: icons next to each project in the project menu (a "⋯" on the phone). Archiving keeps

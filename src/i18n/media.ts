@@ -85,6 +85,7 @@ export const media = {
   'queue.notOnDevice': { en: "Not available on this device", es: "No está disponible en este dispositivo" },
   'queue.heicConverting': { en: "HEIC photo: turning it into a JPEG…", es: "Foto HEIC: pasándola a JPEG…" },
   'queue.heicPending': { en: "HEIC photo: turns into a JPEG once online", es: "Foto HEIC: pasa a JPEG cuando haya conexión" },
+  'queue.heicRetrying': { en: "HEIC photo: trying again to turn it into a JPEG…", es: "Foto HEIC: volviendo a intentar pasarla a JPEG…" },
   'queue.heicFailed': { en: "HEIC photo: could not turn it into a JPEG", es: "Foto HEIC: no se pudo pasar a JPEG" },
   'queue.heicNoPreview': { en: "HEIC photo: this browser cannot show it", es: "Foto HEIC: este navegador no la muestra" },
   'probe.deleted': { en: "File deleted (in the Drive trash)", es: "Borrado (en la papelera de Drive)" },

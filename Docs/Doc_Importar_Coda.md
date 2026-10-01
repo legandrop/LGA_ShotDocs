@@ -236,7 +236,45 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   no hay tarjeta (queda el link), y debajo de un título "Guion" la tarjeta no pasa a Script. No se toca: lo
   que ya es un link (en Coda era un link, no un embebido), una dirección adentro de un texto más largo, dos
   en un mismo texto (no se sabe dónde cortar), lo escrito como código y los archivos de Coda.
+  - **Prolijidad** (v0.087, lo que quedó de v0.069). Una dirección **partida por un cambio de formato**
+    (`<span>https://drive.google.com/file/d/</span><b>1AbC/view</b>`) se junta en el primer texto y queda un
+    solo link entero, con el formato de su primera parte; antes era un link cortado con el resto en otro
+    renglón. Se junta solo lo pegado (sin espacio, en la misma línea) que la continúa: lo que sigue tiene forma
+    de dirección (lleva `/`, `?`, `=`, `&`, `#` o `%`); o la primera parte quedó abierta (termina en `/`, `?`,
+    `=`, `&`, `-`…) y lo que sigue no es una palabra común; o, después de un punto, un dominio en minúsculas.
+    No se juntan una palabra común ("Luego", "Sigue."), aunque la dirección termine en `/`; otra dirección
+    (también una que empieza con `www.`); "Google.com" después de un punto; un link ni código. Límite: un corte en el medio del final de la dirección (un id sin `/` ni `?`)
+    con la primera parte terminada en letra o número no se reconoce y queda como antes. La **puntuación del
+    final** (`.`, `,`, `;`, `:`, `!`, `?`, comillas, y `)` o `]` si no cierran uno que abrió adentro de la
+    dirección) queda afuera del link, como texto, y en su renglón: tampoco se separa la puntuación que cierra
+    pegada después ni la que abre (`(`, `«`) pegada antes. Una de Drive con un punto pegado ya no está sola en
+    su renglón: queda link, no tarjeta. **Saltos de línea:** el que la importación pone para separar una
+    dirección de un adjunto o una foto que van como bloque ya no queda al final del párrafo (el editor lo
+    guardaba adentro del link y no se recortaba), y alrededor de una tarjeta se sacan todos los saltos y
+    renglones en blanco que la separaban (la tarjeta ya es su propio bloque). El espacio de ancho cero que Coda
+    deja al lado de una foto cuenta como espacio.
+- **Renglones en blanco y el último salto** (v0.087). En el HTML de Coda el último `<br>` de un bloque no agrega
+  un renglón (`<div><br></div>` es un renglón en blanco; `<div>Dos<br></div>` ocupa uno), pero el editor lo
+  muestra: cada renglón en blanco y cada renglón terminado en salto se veían de dos de alto (un reporte de ERSO,
+  12 % más largo). Ahora `finishBlocks` le saca a cada párrafo, título, cita o ítem **un solo** salto final
+  (también si el editor lo guardó adentro de un link al final): un renglón en blanco es un párrafo vacío,
+  "Dos<br>" es "Dos" y con dos saltos queda uno, como se veía. Los párrafos vacíos seguidos quedan **hasta dos**
+  (antes se juntaban en uno; en ERSO, el 99 % de los huecos son de uno o dos renglones), y los de las puntas se
+  sacan como antes. Solo se sacan saltos: ninguna letra.
 - **Subtítulo** de la página de Coda: un párrafo en cursiva arriba de todo.
+
+### Correcciones de la auditoría (v0.087, direcciones sueltas)
+
+- **Una palabra pegada a una dirección que termina en `/`, `=` o `-`** entraba en el link («https://wanka.tv/» +
+  «Luego» daba `…/Luego`); también `www.…` y «…/x.» + «Google.com». Ahora, si lo único que justificaba juntar era
+  el final abierto, una palabra común no se junta; `www.` cuenta como otra dirección y el dominio después de un
+  punto tiene que ir en minúsculas. Costo: un id corto todo en minúsculas sin números (`…/` + `abc`) no se junta.
+- **El anclaje contra bloques seguidos** era unas 7 a 10 veces más lento con hilos que no se encuentran: por cada
+  bloque juntaba hasta 20 y buscaba en el texto que crecía. Ahora junta una sola vez el texto de la página y recorre
+  las apariciones con `indexOf` (lineal), y los textos de la página se normalizan una vez y no una por hilo. Da los
+  mismos anclajes (comparado al azar contra la cuenta anterior, y los 12 hilos reales de MGTZD).
+- **Renglones en blanco** (lo que encontró la auditoría al medir): ver "Renglones en blanco y el último salto"
+  arriba.
 
 ### Páginas embebidas (desde v0.066)
 
@@ -330,7 +368,9 @@ una, que es lo que se importa. El código es `scripts/lib/codaHeic.mjs`.
   a `media/<blob>.jpg`: calidad 0,92, a tamaño completo y **con la orientación aplicada** (una foto vertical
   sale vertical; el JPEG no lleva ninguna marca de rotación que un programa pueda ignorar). El **perfil de
   color** del HEIC (las fotos del iPhone están en Display P3) se copia al JPEG: sin él se leería como sRGB y se
-  vería menos saturado.
+  vería menos saturado. Desde v0.086 es el de la imagen principal (`pitm` → `ipma` → `ipco`), y si la foto solo
+  declara `nclx` se arma uno estándar (Display P3 o BT.2020): el mismo código que la app,
+  `src/media/heifColor.mjs` (`Doc_Imagenes.md`, "Fotos HEIC").
 - **Dónde queda cada cosa.** El JPEG, en `media/` con el mismo nombre de blob: así lo encuentran los dos
   lugares que buscan un archivo por ese prefijo (`bl-….`), la bajada, que no lo pide de nuevo, y la
   importación. El original, en **`media-originals/<blob>.heic`**, al lado de `media/`: se conserva, pero la
@@ -466,7 +506,9 @@ transformarla, en `comments.json` en la raíz de la carpeta exportada:
   tablas, gana la primera); si no hay, el primero que lo contiene, de la línea más larga a la más corta y solo con
   textos de 8 letras o más, o de dos palabras ("ok" no se busca adentro de "Plano 12: ok"); y por último lo
   mismo **sin espacios** (desde v0.071, con 12 caracteres o más y, adentro de un bloque, solo si es uno solo: Coda puede dar pegado el texto de un renglón con
-  direcciones que la importación separó en links o tarjetas, o al revés). Si no se encuentra
+  direcciones que la importación separó en links o tarjetas, o al revés); si ningún bloque lo tiene, también
+  contra **varios bloques seguidos juntos** (v0.087, hasta 20: un párrafo que la importación partió en el texto
+  y sus tarjetas de Drive), en el bloque donde empieza y solo si pasa una sola vez en la página. Si no se encuentra
   (se borró en Coda, por ejemplo), el hilo va a la página entera y queda anotado en la lista del final. Sin
   `reference`, o con un texto que queda vacío al limpiarlo, va a la página entera sin anotarlo.
 - **Autor:** un comentario con el correo de quien importa queda a su nombre (es suyo: lo edita y lo borra
@@ -584,7 +626,9 @@ Además, `coda-export` no sigue redirecciones en los pedidos con token.
 
 `src/import/codaImport.test.ts`: la conversión con HTML con la forma del de Coda (sin datos de clientes:
 fotos en párrafos, ítems, links, títulos y tablas, videos, párrafos con solo un link, colores, guion,
-direcciones sueltas en un ítem, un párrafo, una celda y un título, con sus tarjetas de Drive) y la
+direcciones sueltas en un ítem, un párrafo, una celda y un título, con sus tarjetas de Drive; partidas por un
+cambio de formato, una palabra pegada a una que termina en `/`, con puntuación al final y sin saltos de línea de
+más; el último salto de cada renglón y hasta dos renglones en blanco; siempre comparando que no se pierda texto) y la
 importación entera contra el servidor y el portero en memoria, con un segundo dispositivo que ve las fotos y
 un documento que la app abre (sin contenido desconocido y con una sola raíz); una página que falla no corta
 el resto. Y cada corrección de la auditoría: una importación cortada que se sigue sin duplicar nada en el
@@ -605,7 +649,8 @@ entraron todos, cada uno en su lugar.
 
 Comentarios: `src/import/codaComments.test.ts`, con `comments.json` inventado con la forma del MCP de Coda: el
 Markdown de Coda normalizado, el anclaje (texto exacto antes que contenido, textos cortos, cursivas, varias
-líneas, texto que ya no está, sin anclaje), datos raros (sin texto, nombre largo, correo inválido, fecha
+líneas, texto que ya no está, sin anclaje, sin espacios, un párrafo partido en tarjetas, y la cuenta lineal de los bloques seguidos comparada al azar contra la anterior y
+con una página de 3000 bloques), datos raros (sin texto, nombre largo, correo inválido, fecha
 imposible), ids estables por proyecto, lo propio a nombre de quien importa, y la importación entera contra el
 servidor en memoria (cada hilo en el bloque con su texto, resueltos, a la página, otro dispositivo que los ve,
 seguir sin repetir, sin red y con red después de subir, con los bloques nuevos, un `comments.json` roto, de otro
@@ -624,7 +669,21 @@ HEIC (no cambia nada ni se carga la librería); el HTML (tipo y nombre de la fot
 raros, lo que no se convirtió queda igual) y el manifest (una página sin tablas, una que ya tenía su
 `.import.html`, una embebida y las fichas de una tabla, con `convertTables`); el perfil de color; lo mismo
 sobre una carpeta temporal; y, **solo si `heic-convert` está instalado**, un HEIC de verdad hecho para la
-prueba (96×64, cuatro colores planos, guardado girado): sale derecho, a su tamaño y con su perfil.
+prueba (96×64, cuatro colores planos, guardado girado): sale derecho, a su tamaño y con su perfil. El perfil
+de la imagen principal (y no el primero que aparece) y el Display P3 armado desde `nclx`, con cabeceras armadas a
+mano.
+
+El comando entero (desde v0.086): `scripts/coda-export-run.test.mjs` corre `coda-export.mjs` en un proceso de
+node, como una persona, contra una API de Coda de mentira (`scripts/fixtures/codaFakeApi.mjs`, cargado con
+`node --import`: reemplaza `fetch`, no espera entre pedidos y da un `heic-convert` de mentira o "no instalado")
+sin tocar el comando. Un doc de dos páginas con una foto HEIC: la bajada, la conversión, el manifest, el
+`.import.html` y la vista local; que el token vaya solo a la API; repetir (no pide ni convierte nada y deja el
+mismo manifest) y `--refresh`; sin la librería (sale con error y la forma de instalarla) y `--convert-only`
+después; un HEIC roto (anotado, sale con error, las demás se convierten); y un doc sin HEIC (sin
+`manifest.coda.json` ni cargar la librería). Encontró que repetir el comando dejaba sin `type` ni `bytes` las
+entradas de los archivos ya bajados (la importación no los usa): ahora la bajada que reutiliza un archivo los
+completa por la extensión y el disco; un tipo que la extensión no dice (un `.bin`) sale del manifest de la
+corrida anterior.
 
 Fuera del repo (2026-10-01), con un doc real de 618 fotos HEIC (404 de 12 megapíxeles, 205 de 24 y 9 de 9; 11
 con rotación guardada, 9 de ellas verticales; 1,24 GB): las 618 convertidas, ninguna falló; alrededor de un

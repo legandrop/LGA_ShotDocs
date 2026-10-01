@@ -160,7 +160,7 @@ export function anchorBlock(thread: CodaThread, blocks: PageBlock[]): { blockId:
   const ref = thread.reference?.text;
   const whole = ref ? normalizeText(ref) : '';
   if (!whole) return { blockId: null, lost: false };
-  const normalized = blocks.map((b) => ({ id: b.id, text: normalizeText(b.text), cells: b.cells?.map(normalizeText) }));
+  const { normalized, squashed, joined } = pageIndex(blocks);
   const lines = [...new Set([whole, ...ref!.split('\n').map(normalizeText).filter(Boolean)])];
   for (const line of lines) {
     const hit = normalized.find((b) => b.text === line);
@@ -179,19 +179,106 @@ export function anchorBlock(thread: CodaThread, blocks: PageBlock[]): { blockId:
   }
   // Último intento, sin espacios: Coda puede dar el texto marcado con todo pegado (un renglón con direcciones
   // que la importación separa en links o tarjetas), o al revés. Solo con textos que alcanzan para no
-  // confundirse: sin espacios, "ot ra" sería "otra"; acá hacen falta 12 caracteres o más.
-  const bare = (s: string) => s.replace(/\s+/g, '');
-  const squashed = normalized.map((b) => ({ id: b.id, text: bare(b.text) }));
+  // confundirse: sin espacios, "ot ra" sería "otra"; acá hacen falta 12 caracteres o más. Si ningún bloque lo
+  // tiene, se prueba con varios bloques seguidos juntos.
   for (const line of [...lines].sort((a, b) => b.length - a.length)) {
-    const want = bare(line);
+    const want = line.replace(/\s+/g, '');
     if (want.length < 12) continue;
     const exact = squashed.find((b) => b.text === want);
     if (exact) return { blockId: exact.id, lost: false };
     // Adentro de otro bloque, solo si es uno solo: sin espacios, dos renglones parecidos se confunden más.
     const inside = squashed.filter((b) => b.text.includes(want));
     if (inside.length === 1) return { blockId: inside[0].id, lost: false };
+    if (inside.length > 1) continue;
+    // Un párrafo que la importación partió (el texto, cada tarjeta de Drive en su bloque): el texto marcado
+    // cruza bloques seguidos. Va al bloque donde empieza, solo si pasa una sola vez en la página.
+    const across = acrossBlocks(squashed, want, joined);
+    if (across.length === 1) return { blockId: across[0], lost: false };
   }
   return { blockId: null, lost: true };
+}
+
+/** Hasta cuántos bloques seguidos se juntan: un renglón con varias direcciones, partido en tarjetas. */
+const MAX_JOINED_BLOCKS = 20;
+
+/** Los textos de una página, listos para comparar. Se calculan una vez por página, no una por hilo. */
+interface PageIndex {
+  normalized: { id: string; text: string; cells?: string[] }[];
+  /** Sin espacios. */
+  squashed: { id: string; text: string }[];
+  joined: Joined;
+}
+
+/** Los textos sin espacios de todos los bloques, uno detrás del otro, y dónde empieza cada uno. */
+interface Joined {
+  text: string;
+  starts: number[];
+}
+
+const pageIndexes = new WeakMap<PageBlock[], PageIndex>();
+
+function pageIndex(blocks: PageBlock[]): PageIndex {
+  let index = pageIndexes.get(blocks);
+  if (!index) {
+    const normalized = blocks.map((b) => ({ id: b.id, text: normalizeText(b.text), cells: b.cells?.map(normalizeText) }));
+    const squashed = normalized.map((b) => ({ id: b.id, text: b.text.replace(/\s+/g, '') }));
+    index = { normalized, squashed, joined: joinBlocks(squashed) };
+    pageIndexes.set(blocks, index);
+  }
+  return index;
+}
+
+function joinBlocks(blocks: { text: string }[]): Joined {
+  const starts: number[] = [];
+  let text = '';
+  for (const b of blocks) {
+    starts.push(text.length);
+    text += b.text;
+  }
+  return { text, starts };
+}
+
+/**
+ * Los bloques donde empieza `want` cuando cruza de un bloque a los siguientes (sin espacios; se usa cuando ningún
+ * bloque lo tiene entero): de cada uno, la menor tira de hasta 20 bloques seguidos que lo contiene y que no lo
+ * contiene sin el primero. Lineal en el largo de la página: el texto de todos los bloques juntos se recorre con
+ * `indexOf`, y cada aparición se ubica por el bloque donde empieza y donde termina.
+ */
+export function acrossBlocks(blocks: { id: string; text: string }[], want: string, joined = joinBlocks(blocks)): string[] {
+  if (!want) return [];
+  const { text, starts } = joined;
+  // El bloque que tiene el carácter `pos` (uno vacío no tiene ninguno). Las posiciones solo avanzan: se sigue
+  // desde el último encontrado.
+  const blockAt = (pos: number, from: number) => {
+    let i = from;
+    while (i + 1 < starts.length && starts[i + 1] <= pos) i++;
+    return i;
+  };
+  // De cada bloque donde empieza una aparición (también las que se pisan), el menor bloque donde termina una.
+  const firstEnd = new Map<number, number>();
+  const order: number[] = [];
+  let s = 0;
+  let e = 0;
+  for (let pos = text.indexOf(want); pos !== -1; pos = text.indexOf(want, pos + 1)) {
+    s = blockAt(pos, s);
+    e = blockAt(pos + want.length - 1, Math.max(e, s));
+    const known = firstEnd.get(s);
+    if (known === undefined) {
+      order.push(s);
+      firstEnd.set(s, e);
+    } else if (e < known) firstEnd.set(s, e);
+  }
+  // De atrás para adelante: un bloque cuenta si su aparición termina antes que cualquiera que empiece más
+  // adelante (si no, la tira más corta desde él también la tiene sin él), cruza a otro bloque y entra en 20.
+  const out: string[] = [];
+  let laterEnd = Infinity;
+  for (let k = order.length - 1; k >= 0; k--) {
+    const i = order[k];
+    const end = firstEnd.get(i)!;
+    if (end < laterEnd && end > i && end - i < MAX_JOINED_BLOCKS) out.push(blocks[i].id);
+    laterEnd = Math.min(laterEnd, end);
+  }
+  return out.reverse();
 }
 
 /** Un id de comentario estable (uuid) para un comentario de Coda en un proyecto: reintentar no duplica. */

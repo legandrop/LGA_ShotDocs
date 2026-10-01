@@ -76,6 +76,8 @@ const BEFORE_HELP = '0.081';
 const HELP = '0.082';
 /** "Available offline" y el espacio en el dispositivo (P.10, Docs/Doc_Copias_Locales.md). */
 const OFFLINE = '0.083';
+/** La que trajo colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2). */
+const COLLAPSE_2 = '0.084';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -299,6 +301,24 @@ export const HELP_ENTRIES: HelpEntry[] = [
 
   // --- Colapsar ---
   { id: 'collapse', section: 'collapse', title: 'help.collapse.title', text: 'help.collapse.text', keys: { collapse: 'collapse' }, since: BEFORE_HELP },
+  {
+    id: 'collapseEveryone',
+    section: 'collapse',
+    title: 'help.collapseEveryone.title',
+    text: 'help.collapseEveryone.text',
+    keys: { everyone: 'collapseEveryone' },
+    words: ['shift', 'clic', 'click', 'para todos', 'everyone', 'compartido', 'shared', 'tooltip'],
+    since: COLLAPSE_2,
+  },
+  {
+    id: 'collapseMove',
+    section: 'collapse',
+    title: 'help.collapseMove.title',
+    text: 'help.collapseMove.text',
+    keys: { up: 'moveUp', down: 'moveDown' },
+    words: ['mover', 'move', 'arrastrar', 'drag', 'puntos', 'dots', 'sección', 'section'],
+    since: COLLAPSE_2,
+  },
   { id: 'collapsePrint', section: 'collapse', title: 'help.collapsePrint.title', text: 'help.collapsePrint.text', since: BEFORE_HELP },
 
   // --- Compartir ---

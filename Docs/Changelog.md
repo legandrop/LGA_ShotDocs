@@ -11,6 +11,72 @@ mostrarlo. En el carrete, los adjuntos aparecen en grande con *Open* y *Download
 nuevas en el bloque. Ayuda actualizada.
 [ Adjuntos - vista previa del PDF y tarjeta grande en el carrete ]
 
+v0.089 :
+
+Una carpeta soltada en la página llegaba al Drive con otro nombre: «Día 2 - Puerto» quedaba `Día_2_-_Puerto`, y
+sus subcarpetas igual, porque el portero les aplicaba la regla de las carpetas de la app (sin espacios). Decisión D3
+(2026-10-01): las carpetas que suelta el usuario conservan su nombre, con espacios, tildes y emojis; solo se sacan,
+como en los archivos, controles, marcas de dirección y caracteres de ancho cero (un emoji compuesto, como el de una
+familia, queda en sus partes), las barras van como `_` y se corta en 200 caracteres. Las que crea la app
+(`LGA_ShotDocs`, la del proyecto, `Carpetas`) siguen sin espacios. Lo ya subido no se renombra, y retomarlo no
+duplica nada: cada subcarpeta se encuentra por su marca, no por el nombre. Además, una carpeta sin nada visible en
+el nombre se llamaba `file.bin`: ahora, `Folder`.
+[ Carpetas - las que suelta el usuario conservan su nombre en el Drive ]
+
+v0.088 :
+
+Cada subida de contenido repetía todos los borrados de la historia de la página (el *delete set* de Yjs):
+`encodeStateAsUpdate` corta los elementos con el vector de estado, pero un borrado no avanza ningún reloj y
+viajaban enteros. En una página muy editada era el 96 % del peso de `page_updates`. Ahora el dispositivo anota
+qué borrados ya tiene el servidor (`syncedDS`, que como `syncedSV` crece solo con lo confirmado al subir y lo
+bajado) y cada subida lleva solo los nuevos; si el armado no se comprueba, sube todo como antes. La cuenta lleva
+la generación del workspace: una versión anterior que restaura una copia no la conoce. Con 2000 subidas de una
+página, de 4,2 MB a 87 KB en `page_updates`. Sin migración.
+[ Sincronización - subir solo los borrados nuevos de cada página ]
+
+v0.087 :
+
+Importar de Coda: direcciones sueltas y renglones en blanco. Una dirección partida por un cambio de formato quedaba
+como un link cortado (cada texto se miraba solo): ahora lo pegado que la continúa se junta, pero no una palabra común
+ni otra dirección. La puntuación final queda afuera del link. Cada renglón en blanco de Coda y cada renglón
+terminado en salto se veían de dos renglones de alto, porque el editor muestra el último `<br>` de un bloque y el
+HTML no: ahora se saca un solo salto final por bloque y quedan hasta dos renglones en blanco seguidos (un reporte de
+ERSO pasa de 18174 a 16280 px; en Coda, unos 16660), sin perder ninguna letra. Un comentario pegado a un párrafo
+partido en tarjetas se busca contra los bloques seguidos juntos, en tiempo lineal.
+[ Importar de Coda - direcciones partidas, puntuación y renglones en blanco ]
+
+v0.086 :
+
+Fotos HEIC: con red, si el decodificador no bajaba una vez, la foto se subía como HEIC para siempre; sin red,
+la conversión esperaba unos 7 s a que fallara la consulta a la base; un canvas en blanco pasaba la comprobación
+con una foto casi toda blanca; el perfil de color era el primero del archivo, o ninguno con solo `nclx`; y
+varias juntas se convertían todas a la vez. Ahora con red se reintenta a los 30 s y a los 2 min (con su aviso)
+antes de subir el HEIC; se convierte sin esperar la consulta; la comprobación mira también los puntos que se
+apartan del fondo; el perfil es el de la imagen principal, con un Display P3 o BT.2020 estándar para `nclx`; y
+se convierten de a dos. Pruebas del comando de Coda entero, que al repetirse ya deja el mismo manifest.
+[ Fotos HEIC - reintentar el decodificador, convertir sin esperar la base, comprobar mejor y el perfil de la imagen principal ]
+
+v0.085 :
+
+Un dispositivo nuevo mostraba "Subiendo ~2750 cambios" unos minutos al abrir el workspace, sin escribir nada
+en la base. Era lo bajado contado como pendiente: al comparar cada página con sus fotos y videos (papelera de
+archivos), el dispositivo no tenía anotado ningún uso y ponía en la cola un `link_page_file` por cada uno, que
+salían de a uno y no cambiaban nada. Ahora, para las páginas que nunca comparó, lee primero qué usos tiene el
+servidor (una lectura por cada 100 páginas) y solo manda los que faltan; si la lectura falla, manda todo como
+antes. Medido con 302 páginas y 2704 fotos: de unos 3 minutos con el número y 2704 pedidos, a ninguno.
+[ Sincronización - un dispositivo nuevo no cuenta como pendientes los usos de fotos que ya están en el servidor ]
+
+v0.084 :
+
+Colapsar, lo que faltaba: mover una sección colapsada entera y colapsar para todos. Arrastrar o mover con
+Shift+Ctrl/⌘+↑/↓ un título colapsado movía solo el título y abría lo escondido. Mover reescribía cada bloque
+del medio: con otro editando a la vez, su texto caía en otro bloque o se perdía, y un bloque que nadie tocó
+podía desaparecer (hasta 192 de 300). Ahora la sección se mueve entera, los demás bloques la saltan como uno,
+se esconde lo mismo, deshacer es un paso y Yjs recrea solo el lado más chico: lo que nadie tocó ya no se
+pierde (salvo un bloque anidado a la vez, menos que antes). Shift+clic colapsa o abre para todos (si se puede
+editar), en un mapa aparte que las versiones viejas conservan. La ayuda suma las dos funciones.
+[ Colapsar 1b y 2 - mover la sección entera y colapsar para todos ]
+
 v0.083 :
 
 No había forma de tener una página o un proyecto para usar sin red, ni de saber cuánto ocupa la app en el

@@ -3,7 +3,7 @@
 Cómo funciona hoy la regla de no perder nunca información. El código está en `src/sync/` y las pruebas
 (`npm test`) en `src/sync/sync.test.ts`, `audit.test.ts` (los casos de la auditoría de la fase 1),
 `editor.test.ts` (con el editor real, en jsdom), `docs.test.ts` (qué falta subir después de bajar y la
-semilla solo en memoria), `projects.test.ts` (proyectos en la cola, también sin
+semilla solo en memoria), `uploadDeletes.test.ts` y `uploadDeletesVersions.test.ts` (subir solo los borrados nuevos, B.15), `projects.test.ts` (proyectos en la cola, también sin
 red y rechazados), `restore.test.ts` (la generación al restaurar una copia y la versión mínima del
 workspace, y el aviso de base vieja), `src/workspace.test.ts` (los nombres de lo guardado en el
 dispositivo), `src/workspaces.test.ts` (la lista de workspaces del dispositivo, los nombres de Wanka, los
@@ -91,8 +91,9 @@ y no sube `DB_SCHEMA_VERSION`: con la base sin migrar, eso no se muestra y no ha
    tiene. Lo pendiente es siempre la diferencia entre el documento local y ese vector, así que no
    importa si la app se cerró a mitad de camino: al volver se recalcula entera. La única regla es que
    `syncedSV` nunca diga que el servidor tiene algo que no tiene: avanza solo con lo que el servidor
-   confirma al subir (punto 3) o manda al bajar (punto 4). Los borrados viajan siempre todos en cada
-   subida (Yjs los manda enteros), así que no dependen del vector.
+   confirma al subir (punto 3) o manda al bajar (punto 4). Los borrados no dependen del vector (un borrado
+   no avanza ningún reloj de Yjs): tienen su propia cuenta, `syncedDS`, con la misma regla (ver "Subir solo
+   los borrados nuevos", abajo; hasta B.15 viajaban todos en cada subida).
 3. **Envío con confirmación.** Lo que se sube se calcula desde lo guardado en IndexedDB, leído en la misma
    transacción que la marca de "sin subir" y la versión: la confirmación nunca cubre algo que no viajó.
    **Una página tiene algo sin subir** si tiene marca, si su versión es mayor que la confirmada
@@ -203,6 +204,127 @@ y no sube `DB_SCHEMA_VERSION`: con la base sin migrar, eso no se muestra y no ha
    versión publicada sobre la misma base; `LOCAL_SAVE_SEEDS` y `LOCAL_SAVE_STEPS` para correr más).
 8. **Compactación local.** Con más de 64 updates guardados, al abrir la página se fusionan en uno solo, en la
    misma transacción. En el servidor no se compacta todavía.
+
+## Subir solo los borrados nuevos (B.15)
+
+**Qué pasaba.** Un update de Yjs son dos partes seguidas: los elementos (structs) y el *delete set*, la lista
+de tramos borrados `[reloj, reloj + largo)` de cada autor. `Y.encodeStateAsUpdate(doc, syncedSV)` corta los
+elementos con el vector, pero escribe siempre **todos** los borrados del documento (un borrado no avanza
+ningún reloj, así que el vector no los puede describir). Cada subida repetía la historia entera de borrados de
+la página. Dos medidas, de dos guiones distintos (por eso los números no coinciden):
+
+- **La simulación del diseño de compactar** (roadmap B.9; ediciones sueltas de un texto en bloques, una subida
+  por pausa): con 2000 subidas, 2,4 MB en `page_updates` contra 92 KB sin los borrados repetidos. Los borrados
+  repetidos eran el 96 % del peso.
+- **Las pruebas de esta tanda** (`src/sync/uploadDeletes.test.ts`, por `PageDocs` y el servidor de prueba, con
+  más borrados por subida): con 200 ediciones, las últimas 20 subidas pesaban 929 B de promedio y el total 112 KB;
+  con el guion de sesiones de 60 subidas y 2000 subidas, 4,2 MB.
+
+**Cómo es ahora** (`src/sync/deleteSets.ts` y `pushPage` en `docs.ts`):
+
+- **`DocState.syncedDS`**: los borrados que el servidor ya tiene, guardados como un update de Yjs sin elementos
+  (cualquier Yjs lo lee con `Y.decodeUpdate`). Es el equivalente de `syncedSV` para los borrados.
+- **Qué se sube**: los elementos de siempre (después de `syncedSV`) y solo los borrados del documento que no
+  están en `syncedDS`. Se arma cortando el update entero: el delete set que escribió Yjs se vuelve a escribir
+  igual desde lo leído (mismo orden, byte a byte) y tiene que ser el final exacto del update; se reemplaza por
+  el de los que faltan. Antes de usarlo se comprueba leyéndolo: los mismos elementos que el update entero, y
+  sus borrados más `syncedDS` cubren todos los del documento. **Si algo no cierra, se sube el update entero,
+  con todos los borrados, como antes.** Sin `syncedDS` (o sin que valga, ver abajo), también.
+- **La regla, la misma que la del vector: `syncedDS` nunca dice que el servidor tiene un borrado que no
+  tiene.** Crece solo con dos cosas, cada una en la misma transacción que lo demás:
+  1. Al **confirmarse un envío**, con los borrados que viajaron en él (`pending.ds`; un envío armado por una
+     versión anterior no lo trae y se leen del update, que lleva todos los de su documento). Va junto con
+     `syncedSV`, `ackedVersion` y el envío que se borra.
+  2. Al **bajar**, con los borrados de lo que mandó el servidor, en la transacción que guarda lo bajado y
+     avanza el cursor. Acá no hace falta el tope de lo integrado que tiene el vector: un borrado de más en la
+     cuenta (de algo que el documento todavía no tiene) no cambia qué hay que subir. La cuenta se prepara
+     **antes y fuera** de esa transacción (como el tope del vector, `integratedCap`), con los borrados de lo
+     bajado ya juntado (`mergeUpdates` une los de todas las filas); adentro solo se guarda, si `syncedDS` y la
+     generación siguen siendo los que se leyeron (si no, se vuelve a hacer adentro). Así el guardado local de
+     ninguna página espera a la cuenta: las filas de las versiones anteriores traen el delete set entero cada
+     una, y unirlas fila por fila adentro trababa ese guardado. Bajar 1500 filas viejas de una página: unos
+     140 ms, contra unos 130 ms de main (sumándolas fila por fila adentro eran unos 220 ms).
+  Nunca crece con lo local. Como el servidor no borra nunca una fila de `page_updates` (y compactar tampoco
+  pierde borrados: en su diseño, roadmap B.9, el snapshot es `Y.mergeUpdates` sin recolectar), lo que tenía lo sigue
+  teniendo, salvo al restaurar una copia.
+- **Por qué no se puede dejar de subir un borrado propio:** el envío lleva los borrados del documento menos
+  `syncedDS`; el servidor ya tenía `syncedDS`; con el envío confirmado tiene todos los del documento. Un
+  borrado que no se sube "vuelve" en los demás dispositivos (es perder la edición del usuario), así que toda
+  duda se resuelve subiendo de más.
+
+**Cada caso:**
+
+- **Reintentos.** El envío se guarda con su id, sus bytes y sus borrados (`pending.ds`) antes de mandarlo; si la
+  respuesta se pierde, se reenvía igual y el servidor devuelve el mismo `seq`. Sumar a `syncedDS` es una unión:
+  confirmar dos veces da lo mismo.
+- **Cerrar la app a la mitad.** `syncedDS` cambia solo en la transacción de la confirmación o de la bajada; si la
+  app se cierra antes, no cambió y el envío sigue guardado (se reenvía).
+- **Restaurar una copia.** `resetForRestore` borra `syncedDS` junto con `syncedSV`: todo vuelve a subir entero.
+- **Una versión anterior de la app sobre la misma base** (una pestaña vieja, `localSave` y `publishedCompat`):
+  no conoce `syncedDS`. Sube siempre todos los borrados (de más, nunca de menos) y al confirmar no lo toca (la
+  cuenta queda de menos: la próxima subida de esta repite esos borrados una vez). Lo delicado es que **restaura
+  a su manera**: borra `syncedSV`, `ackedVersion` y el envío, pero deja `syncedDS`, y guarda la generación nueva
+  (esta versión ya no restaura). Por eso `syncedDS` lleva la generación del workspace con que se anotó
+  (`syncedDSGeneration`, comparada con la de `meta`, que sin guardar vale 1 como en el motor): con otra
+  generación no cuenta y se suben todos. La prueba lo muestra: sin la generación, la versión anterior que
+  restaura y se cierra antes de subir deja un borrado sin subir, y vuelve en otro dispositivo.
+  - Un envío de una versión anterior confirmado por esta: sus borrados (todos los de su documento) se leen del
+    update. Un envío de esta (solo lo nuevo) confirmado por la anterior: el servidor tiene el resto desde antes.
+- **Lo que ya está en el servidor.** Las filas viejas, con los borrados repetidos, quedan como están: quien baja
+  todas las filas arma lo mismo (los borrados se suman). Una fila con solo los borrados nuevos es un update de
+  Yjs común: las versiones anteriores la leen igual. No cambia la base ni hace falta una migración, ni subir
+  `min_app_version`.
+- **Dos pestañas** (la app no lo deja, Web Locks): `syncedDS` solo crece con cosas ciertas, en transacciones de
+  lectura y escritura, y el envío se arma con el `syncedDS` leído en la misma transacción que lo guardado. Hay
+  una prueba con dos instancias sobre la misma base.
+- **Lo que Yjs deja pendiente** (elementos que dependen de algo que falta, o borrados de algo que todavía no
+  llegó): `encodeStateAsUpdate` los suma con `mergeUpdates`; el corte se comprueba igual y, si no cierra, va
+  entero.
+- **"Download my unsynced changes"** (`unsynced.ts`) sigue llevando todos los borrados, a propósito: ese
+  archivo tiene que servir solo, sin saber qué tiene el servidor.
+- **Peso en el dispositivo:** `syncedDS` pesa lo que antes viajaba en cada subida (de bytes a pocos KB en una
+  página muy editada), una vez por página. **Tiempo:** armar una subida con 2000 tramos borrados conocidos tarda
+  unos 9 ms, y con 20 000 de un solo autor (un caso extremo) unos 36 ms; la resta de tramos es lineal.
+- **Lo mismo que el vector no cubre:** dos sesiones con el mismo autor de Yjs al azar (2⁻³², punto 4).
+
+**Pruebas:**
+
+- **`src/sync/uploadDeletes.test.ts`:**
+  - el delete set escrito igual que Yjs, byte a byte;
+  - restar, sumar y contener, contra conjuntos de relojes;
+  - lo armado más lo del servidor es todo el documento (200 casos al azar, también con cosas pendientes de Yjs);
+  - el tamaño tras 200 ediciones (fallaba antes): las últimas 20 subidas, de 929 B a 53 B; el total, de 112 KB a
+    9,2 KB;
+  - el mismo guion con la versión publicada y con esta (sesiones de 60 subidas, borrados en casi todas): con 300
+    subidas, 105 KB contra 12,8 KB; con 2000, 4,2 MB contra 86 KB, y las últimas subidas de 4285 B a 44 B
+    (`DELETES_MEASURE_EDITS` para otra cantidad);
+  - los borrados de otro no se vuelven a subir, y restaurar una copia;
+  - con cada versión anterior (la publicada hoy, `fixtures/mainDocs.ts`, y la v0.029): la que restaura y se
+    cierra antes de subir, y los envíos cruzados;
+  - dos instancias sobre la misma base;
+  - corridas al azar con tres dispositivos que escriben y borran (también lo de otros), pierden respuestas, se
+    quedan sin red, se cierran de golpe con una subida en vuelo, vuelven con una versión anterior (que a veces
+    restaura y se cierra), con el servidor que se restaura (`DELETES_SEEDS` y `DELETES_STEPS` para más; pasaron
+    150 semillas de 80 pasos).
+- **`src/sync/uploadDeletesVersions.test.ts`** (con la versión publicada hoy como versión anterior, y a veces la
+  v0.029):
+  - corridas al azar con tres bases y dos páginas, y a veces dos instancias vivas sobre la misma base (la
+    publicada y esta, o dos de esta); borrados chicos, de media página y de todo el texto; cierres de golpe de toda
+    la base con el ciclo en vuelo; y una versión anterior que restaura y se cierra antes o después de guardar la
+    generación (`DELETES_VERSIONS_SEEDS` y `DELETES_VERSIONS_STEPS`; en la suite, 20 semillas de 70 pasos; pasaron
+    200 de 90);
+  - una subida con la generación vieja contra un servidor ya restaurado;
+  - la publicada que restaura en otra pestaña mientras esta tiene un envío armado;
+  - 400 `buildUpload` con cosas pendientes de Yjs de tres autores;
+  - el tiempo de bajar una página grande escrita con la publicada (`DELETES_PERF=1`, fuera de la suite).
+- **En todas:** en cada paso `syncedDS` no dice de más; después de cada subida confirmada, el servidor tiene todos
+  los borrados del dispositivo; al final, todos iguales y al servidor no le falta nada.
+- **Mutantes a mano** (para ver que las pruebas los detectan):
+  - ignorar la generación: falla la prueba de la versión anterior que restaura, y semillas al azar de los dos
+    archivos;
+  - sumar al bajar también los borrados locales: fallan semillas al azar y varias pruebas;
+  - dejar afuera un tramo: fallan 6 pruebas. Con la comprobación interna de `buildUpload` puesta, ese error se
+    ataja solo y sube todo.
 
 ## Árbol de páginas
 
@@ -360,6 +482,17 @@ pestaña en `src/ui/TrashView.tsx` y `src/media/fileTrash.ts`.
   mientras no cambie, no se vuelve a leer. Solo queda anotada si se pudo quitar lo que hiciera falta: una
   página a medio subir, con algo ilegible o desconocido, o sin comprobar (ver abajo), se vuelve a mirar en
   cada ciclo.
+- **Dispositivo nuevo: lo bajado no cuenta como pendiente** (B.14). Un dispositivo que nunca comparó una
+  página (recién instalado, recién entrado, o una página que acaba de llegar) no tiene anotado ningún uso, y
+  antes ponía en la cola un `link_page_file` por cada foto o video de lo que bajaba: miles de cambios "sin
+  subir" que salían de a uno durante minutos y no escribían nada (la base ya tenía cada fila). Ahora, antes
+  de comparar esas páginas, se lee una vez qué usos activos tiene el servidor (`page_files`, de a 100 páginas;
+  `MediaQueue.serverUses`) y lo que ya está queda anotado como confirmado, igual que después de mandarlo (si es
+  ajeno, como ajeno, sin avisar). Lo que el servidor no tiene, o tiene quitado, se manda como siempre, y si la
+  lectura falla (sin red, un error), todo se manda como antes: nunca se deja de mandar un uso sin ver que el
+  servidor lo tiene. Cada página se lee una vez por apertura de la app. La lectura solo se usa si la página no
+  tiene nada propio por subir: si no, entre la lectura y la comparación otro dispositivo pudo quitar un uso que
+  esta página volvió a tener (lo encontró la auditoría; prueba A2 de `trash.test.ts`).
 - **Una sola fila por página y archivo** (store `links`, con `removed` y una revisión `rev`): gana lo último
   que se vio en el documento. Borrar y deshacer antes de sincronizar no manda nada; si el deshacer llega
   mientras viaja el `unlink`, la respuesta no marca la fila como hecha (cambió la revisión) y después sale el

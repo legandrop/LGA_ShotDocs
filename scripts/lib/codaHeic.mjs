@@ -18,6 +18,7 @@ import { mkdir, open, readdir, readFile, rename, rm, stat, writeFile } from 'nod
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { mediaBaseName } from './codaExport.mjs'
+import { heicColorProfile as profileOf } from '../../src/media/heifColor.mjs'
 
 /** La carpeta de los originales, al lado de `media/` (la importación busca solo adentro de `media/`). */
 export const ORIGINALS = 'media-originals'
@@ -162,25 +163,13 @@ export async function loadHeicConverter(importer = (name) => import(name)) {
 }
 
 /**
- * El perfil de color (ICC) de un HEIC: el contenido de su caja `colr` de tipo `prof` (o `rICC`), o `null`. Las
- * fotos del iPhone están en Display P3: sin el perfil, el JPEG se leería como sRGB y se vería menos saturado
- * (la librería entrega los píxeles tal cual, sin perfil).
+ * El perfil de color (ICC) que lleva el JPEG de un HEIC, o `null`: el de su imagen principal (las fotos del
+ * iPhone están en Display P3: sin el perfil, el JPEG se leería como sRGB y se vería menos saturado), o uno
+ * estándar si solo declara `nclx`. Es el mismo código que usa la app (`src/media/heifColor.mjs`).
  */
 export function heicColorProfile(input) {
-  const heic = Buffer.isBuffer(input) ? input : Buffer.from(input)
-  for (const type of ['prof', 'rICC']) {
-    const mark = Buffer.from(`colr${type}`, 'latin1')
-    for (let at = heic.indexOf(mark); at >= 0; at = heic.indexOf(mark, at + 1)) {
-      if (at < 4) continue
-      const end = at - 4 + heic.readUInt32BE(at - 4)
-      const icc = heic.subarray(at + 8, end)
-      // Un perfil ICC lleva la firma `acsp` en el byte 36: lo que no la tiene no se copia. Y tiene que ser de
-      // color (`RGB ` en el byte 16): el de una imagen auxiliar en grises (profundidad, por ejemplo) no es el de
-      // la foto, y se sigue buscando.
-      if (end <= heic.length && icc.length >= 128 && icc.toString('latin1', 36, 40) === 'acsp' && icc.toString('latin1', 16, 20) === 'RGB ') return icc
-    }
-  }
-  return null
+  const icc = profileOf(Buffer.isBuffer(input) ? input : Buffer.from(input))
+  return icc ? Buffer.from(icc.buffer, icc.byteOffset, icc.byteLength) : null
 }
 
 /** Un JPEG con el perfil de color adentro (segmentos APP2 `ICC_PROFILE`, después de la cabecera JFIF). */

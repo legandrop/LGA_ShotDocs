@@ -145,10 +145,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Lega: vista en vivo de la carpeta de Drive, subida directa a Google, sin tope y en el plan gratis.
   **Entrega 1 hecha (v0.081):** soltar una carpeta, la ventana de qué se sube, su cola propia (los bytes por el
   portero), la tarjeta, el visor con el carrete y bajar uno, retomar volviendo a soltarla, y el portero con la
-  regla de no salir del árbol. Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
+  regla de no salir del árbol. Las carpetas soltadas conservan su nombre en el Drive (D3, 2026-10-01). Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
   la subida directa a Google con el Drive real, "Agregar a esta carpeta", la cuadrícula, la lista sin red, "Seguir"
   en Chrome y Edge, el botón "Carpeta…" del menú `/` y *Bajar todo* (entrega 2). Detalle en `Doc_Carpetas.md`,
-  "Cómo quedó".
+  "Cómo quedó". Pendientes de los nombres (auditoría de D3, todos BAJOS y previos al cambio):
+  - *Bajar todo* como zip tiene que limpiar cada nombre que viene de Drive: `.` y `..`, y los que terminan en punto
+    (Windows no los acepta). Vale aunque la app no los cree: el dueño puede renombrar en Drive a lo que quiera.
+  - El corte de 200 caracteres va por punto de código: en un nombre muy largo puede partir una bandera o sacar un tono
+    de piel. Cortar por grafema (`Intl.Segmenter`, existe en Workers) lo resuelve.
+  - Mac y Windows: la marca de cada subcarpeta resume la ruta sin normalizar los acentos (la Mac da `í` en dos
+    partes). Volver a soltar desde el otro sistema crea subcarpetas nuevas, con el mismo nombre, al lado de las de
+    antes. Normalizarla cambiaría la marca de lo ya subido: hay que pensarlo (por ejemplo, buscar por las dos formas).
 - **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
   confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
@@ -173,7 +180,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   plegable" del menú `/`. **Diseño en [`Doc_Colapsar.md`](Doc_Colapsar.md)** (sin tipo de bloque ni propiedad
   nueva). **Entrega 1a hecha (v0.053):** colapsar para vos, con toda la seguridad al editar, las marcas de hoja
   contadas con todo abierto y el PDF todo abierto. **"Imprimir como se ve" hecho
-  (v0.067).** Faltan de la 1b arrastrar la sección entera y Shift+Ctrl/⌘+↑/↓, y la 2 (para todos, Shift+clic).
+  (v0.067).** **Arrastrar la sección entera, Shift+Ctrl/⌘+↑/↓ y la 2 (para todos, Shift+clic) hechos (v0.084)**;
+  el mover se escribe en Yjs en dos pasadas y recrea solo el lado más chico (medido con dos editores: el texto que
+  nadie tocó no se pierde nunca; lo que otro escribe a la vez en el lado recreado, sí). Decidido el 2026-10-01: ese
+  mover solo con secciones colapsadas en juego (1A) y los tooltips como la tabla del §3. Falta probar a mano en
+  Safari, Firefox y el iPhone.
 - **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página;
   entrega 2 hecha (v0.054): buscar en el proyecto con Ctrl/⌘+K** (`Doc_Buscar.md`, "Cómo quedó (entrega 1)" y
   "(entrega 2)"). Queda para después: reemplazar en el proyecto, la papelera, todos los proyectos y los
@@ -339,13 +350,21 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
      siempre a los 10 s en vez de espaciarse (comparar contra el máximo confirmado del intento).
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
-    - **Hecho (v0.071): el anclaje de un comentario** pegado a un renglón con direcciones: un último intento
-      compara sin espacios (12 caracteres o más; adentro de un bloque, solo si es uno solo). Queda sin probar con un comentario real de ese tipo, y un párrafo
-      partido en tarjetas todavía no se compara contra los bloques seguidos juntos.
-    - **Prolijidad:** una dirección partida en dos por un cambio de formato queda como un link cortado; una
-      dirección con un punto final lo lleva adentro del link; un salto de línea puede quedar adentro del
-      link al final del párrafo o alrededor de una tarjeta.
+    - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último
+      intento compara sin espacios (12 caracteres o más; adentro de un bloque, solo si es uno solo) y, desde
+      v0.087, contra hasta 20 bloques seguidos juntos (un párrafo partido en tarjetas). Queda sin probar con un
+      comentario real de ese tipo (ERSO no trae comentarios de páginas con direcciones sueltas).
+    - **Hecho (v0.087): prolijidad.** Una dirección partida por un cambio de formato queda entera en un link;
+      la puntuación del final queda afuera; sin saltos de línea de más al final del párrafo ni alrededor de una
+      tarjeta. ERSO no tiene ninguno de esos casos (sale igual: 4492 links, 22 tarjetas); con ERSO alterado en
+      memoria, una dirección partida en tres se junta siempre (407 de 407) y partida a la mitad, 217 de 407.
+      Después de una dirección que termina en `/`, `=` o `-`, una palabra común no se junta (auditoría).
+      **Falta:** un corte en el medio del final de la dirección (un id sin `/` ni `?`) no se reconoce (no se
+      adivina: podría ser una palabra pegada).
     - **Verlo en la app** con una importación real: una página con muchas tarjetas de Drive.
+    - **Hecho (v0.087): renglones en blanco.** Se veían de dos renglones de alto (en ERSO, 7594 párrafos con
+      solo un salto y 121 bloques terminados en salto): ahora cada bloque pierde un solo salto final y quedan
+      hasta dos renglones en blanco seguidos. Falta verlo en la app con una importación real contra Coda.
 13. **Fotos HEIC: lo que quedó de v0.072 y v0.075** (`Doc_Importar_Coda.md` y `Doc_Imagenes.md`, "Fotos
     HEIC"). El comando que baja un doc de Coda deja un JPEG de cada foto HEIC, y **desde v0.075 la app pasa a
     JPEG en el dispositivo cualquier HEIC que se agrega a una página** (D-20): lo guarda tal cual en el acto y
@@ -357,31 +376,44 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     - **Probarlo en Safari, en la Mac y en el iPhone** (un HEIC que llega como archivo): la auditoría de v0.075
       lo recorrió en la app real en Chromium de Windows (soltar, pegar, varias juntas, sin red, recargar en
       plena conversión). En el iPhone falta medir la memoria con una foto de 48 MP.
-    - **Con red, la primera vez que el decodificador no baja ya se sube el HEIC** sin convertir: con una red
-      mala de rodaje queda así para siempre. Volver a probar una o dos veces antes de rendirse.
-    - **Sin red, la conversión arranca unos 7 s después de soltar la foto** (espera que falle la consulta a la
-      base antes de convertir).
-    - **La comprobación del JPEG** dejaría pasar un canvas en blanco si la foto es casi toda blanca
-      (documentos, cielos).
+    - **Hecho (v0.086): con red, si el decodificador no baja** se vuelve a probar a los 30 s y a los 2 min antes
+      de subir el HEIC tal cual; sin red los intentos no cuentan. **Sin red, la conversión arranca enseguida**
+      (no espera la consulta a la base, que tardaba unos 7 s en fallar). **La comprobación del JPEG** mira además
+      los puntos que se apartan del fondo: un canvas en blanco ya no pasa con una foto casi toda blanca.
     - **Subir `min_app_version` a 0.075** cuando Lega tenga la versión en sus dispositivos: una pestaña de
       v0.074 o anterior puede registrar un HEIC mientras esta lo convierte (sospecha de la auditoría, sin
-      reproducir). Antes, verificar si `min_app_version` frena también la cola de archivos (en
-      `sync/engine.ts` solo frena las páginas).
-    - **Un HEIC sin perfil ICC** (color solo `nclx`) sale sin perfil.
+      reproducir). **Verificado (v0.086): no la frena.** Solo la usan `push_page_update` y el ciclo de páginas;
+      `register_file`, el portero y la cola de archivos no miran la versión. Frenarla pide una migración que haga
+      con `register_file` lo mismo que con `push_page_update` (`Doc_Imagenes.md`, "Pendiente").
+    - **Hecho (v0.086): el perfil de color** es el de la imagen principal (`pitm` → `ipma` → `ipco`), en la app y
+      en el comando de Coda (el mismo código, `src/media/heifColor.mjs`), y un HEIC con solo `nclx` lleva un
+      Display P3 o BT.2020 estándar. HDR (`nclx` PQ o HLG) sigue sin perfil.
     - **Sin portero** (fotos a Supabase) no se convierte.
     - **Verlo en la app con el doc entero.** Probado con una importación real de cuatro páginas (46 fotos
       convertidas: en el Drive, con miniatura y a la vista); falta la de un doc completo.
     - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.
-    - **De a una.** La conversión tarda alrededor de un segundo por foto; con miles, convendría en paralelo.
-    - **El perfil de color se toma por orden** en el archivo (el primero de color que aparece), que en las
-      fotos del iPhone es el de la foto. Un HEIC de otro origen con una imagen auxiliar de color antes de la
-      principal llevaría el perfil equivocado, y uno que lo declara sin perfil (`nclx`) sale sin él. Lo
-      correcto es seguir la imagen principal (`pitm` → `ipma` → `ipco`).
-    - **Pruebas del comando entero** (`convertFolder`, la bajada con una foto ya convertida, el código de
-      salida): hoy se probó a mano contra una API de Coda simulada; en el repo solo está probada la librería.
-14. **Un dispositivo nuevo muestra "Subiendo ~2750 cambios" unos 4 minutos** al abrir un proyecto grande
-    ("HEIC (prueba)"), sin escrituras visibles en la base (lo vio la auditoría de v0.075). Averiguar qué
-    cuenta ese número: si son cambios que de verdad suben, o lo bajado contado como pendiente.
+    - **Hecho (v0.086): de a dos.** Varias HEIC soltadas juntas se convertían todas a la vez (cientos de MB
+      cada una); ahora de a dos (`HEIC_PARALLEL`).
+    - **El comando de Coda convierte de a una.** Tarda alrededor de un segundo por foto (unos 10 minutos con 618);
+      con miles, convendría en paralelo.
+    - **La comprobación del JPEG acepta uno con la mitad en blanco**, y una carrera de microsegundos entre dos
+      pestañas al tercer intento deja el aviso de HEIC sobre un JPEG: anotados en `Doc_Imagenes.md`, "Pendiente".
+    - **Hecho (v0.086): pruebas del comando entero** (`scripts/coda-export-run.test.mjs`, contra una API de Coda
+      de mentira): bajar, convertir, repetir, `--refresh`, sin la librería, `--convert-only`, un HEIC roto y un doc
+      sin HEIC, con el código de salida.
+    - **Probar en la app real con sesión** lo de v0.086 (con red mala y sin red): se probó en Chromium sin sesión,
+      con un banco de prueba fuera del repo.
+14. **Hecho: un dispositivo nuevo ya no muestra "Subiendo ~2750 cambios".** Era lo bajado contado como
+    pendiente: cada foto o video de las páginas bajadas entraba a la cola de usos y salía un `link_page_file`
+    por uso (2757 en el workspace de Lega, sumando todos sus proyectos), que no cambiaba nada en la base. Ahora,
+    para las páginas que el dispositivo nunca comparó, se lee primero qué usos tiene el servidor y solo se manda
+    lo que falta (`Doc_Sincronizacion.md`, "Dispositivo nuevo"). Medido con 302 páginas y 2704 fotos: de unos 3 min
+    con el número y 2704 pedidos a 0 pedidos, 4 lecturas y sin número.
+15. **Hecho (v0.088): cada subida lleva solo los borrados nuevos.** Cada subida de contenido repetía todos los
+    borrados de la página (el *delete set* de Yjs), el 96 % del peso de `page_updates` en una página muy editada
+    (lo midió el diseño de B.9). Ahora el dispositivo anota los que el servidor ya tiene (`syncedDS`, con la misma
+    regla que `syncedSV`: nunca dice de más) y sube solo los demás; si algo no cierra, sube todos. Sin migración.
+    Ver `Doc_Sincronizacion.md`, "Subir solo los borrados nuevos".
 
 ### C. Esperan a Lega
 

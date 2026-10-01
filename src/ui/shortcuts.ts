@@ -39,11 +39,6 @@ export interface Shortcut {
   source: 'keymap' | 'window' | 'dom' | 'react' | 'typed';
   /** Cómo se muestra si no son las teclas de `keys` (por ejemplo, "⌘⌥1…6" en vez de seis atajos). */
   display?: string[];
-  /**
-   * `hidden`: está en el código pero no se muestra en la ayuda (Shift+⌘⌥↩ hace hoy lo mismo que sin Shift; se
-   * muestra cuando llegue "para todos", Doc_Colapsar.md, entrega 2).
-   */
-  hidden?: boolean;
 }
 
 /** Lo que se toma con una función sobre `window` o en un componente; los textos van en la ayuda. */
@@ -61,7 +56,9 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'scriptEnter', keys: ['Enter'], place: 'editor', context: 'script', owner: 'app', source: 'keymap' },
   { id: 'paragraph', keys: ['Mod-Alt-0'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'collapse', keys: ['Mod-Alt-Enter'], place: 'editor', owner: 'app', source: 'keymap' },
-  { id: 'collapseEveryone', keys: ['Shift-Mod-Alt-Enter'], place: 'editor', owner: 'app', source: 'keymap', hidden: true },
+  // Para todos (Doc_Colapsar.md, entrega 2): solo quien puede editar; si no, como sin Shift. Shift+clic en el
+  // triángulo hace lo mismo (es un clic: va en el texto de la ayuda, no en el registro).
+  { id: 'collapseEveryone', keys: ['Shift-Mod-Alt-Enter'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'selectAll', keys: ['Mod-a'], place: 'editor', owner: 'app', source: 'dom' },
 
   // --- Editor: BlockNote ---
@@ -82,8 +79,10 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'redo', keys: ['Mod-Shift-z', 'Mod-y'], place: 'editor', owner: 'blocknote', source: 'keymap' },
   { id: 'indent', keys: ['Tab'], place: 'editor', owner: 'blocknote', source: 'keymap' },
   { id: 'outdent', keys: ['Shift-Tab'], place: 'editor', owner: 'blocknote', source: 'keymap' },
-  { id: 'moveUp', keys: ['Mod-Shift-ArrowUp'], place: 'editor', owner: 'blocknote', source: 'keymap' },
-  { id: 'moveDown', keys: ['Mod-Shift-ArrowDown'], place: 'editor', owner: 'blocknote', source: 'keymap' },
+  // Mover bloques: los toma primero la app (collapseEditor.ts): con una sección colapsada en juego la mueve entera
+  // (Doc_Colapsar.md, "Mover la sección entera"); si no, se los deja a BlockNote.
+  { id: 'moveUp', keys: ['Mod-Shift-ArrowUp'], place: 'editor', owner: 'app', source: 'keymap' },
+  { id: 'moveDown', keys: ['Mod-Shift-ArrowDown'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'lineBreak', keys: ['Shift-Enter'], place: 'editor', owner: 'blocknote', source: 'keymap' },
   { id: 'link', keys: ['Mod-k'], place: 'editor', context: 'selection', owner: 'blocknote', source: 'react' },
 
