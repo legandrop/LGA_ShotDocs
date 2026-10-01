@@ -246,25 +246,41 @@ describe('las funciones is…Shortcut dicen lo mismo que el registro', () => {
 
 const SRC = resolve(__dirname, '..');
 
-/** Los archivos de la interfaz (src/ui, src/help, src/tutorial), sin las pruebas. */
+/** Los archivos de la app (todo `src`, sin las pruebas ni los diccionarios). */
 function sourceFiles(): Map<string, string> {
   const out = new Map<string, string>();
-  for (const dir of ['ui', 'help', 'tutorial']) {
-    const root = join(SRC, dir);
-    let names: string[] = [];
-    try {
-      names = readdirSync(root);
-    } catch {
-      continue;
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) {
+        if (name !== 'i18n' && name !== 'fixtures') walk(path);
+      } else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) && !name.endsWith('.d.ts')) {
+        out.set(path, readFileSync(path, 'utf8'));
+      }
     }
-    for (const name of names) {
-      const path = join(root, name);
-      if (statSync(path).isDirectory() || !/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name)) continue;
-      out.set(path, readFileSync(path, 'utf8'));
-    }
-  }
+  };
+  walk(SRC);
   return out;
 }
+
+/** Las teclas que un archivo compara con las de un evento: `e.key === 'Enter'`, `case 'Home':`, `isLetter(e, 'k')`. */
+function comparedKeys(code: string): string[] {
+  const found = [
+    ...[...code.matchAll(/\b(?:e|ev|event|evt)\.key\s*(?:===|!==)\s*'([^']*)'/g)].map((m) => m[1]),
+    ...[...code.matchAll(/\b(?:e|ev|event|evt)\.key\.toLowerCase\(\)\s*(?:===|!==)\s*'([^']*)'/g)].map((m) => m[1]),
+    ...[...code.matchAll(/\b(?:e|ev|event|evt)\.code\s*(?:===|!==)\s*'Key([A-Z])'/g)].map((m) => m[1]),
+    ...[...code.matchAll(/\bisLetter\(\w+,\s*'(\w)'\)/g)].map((m) => m[1]),
+    // Un `switch` sobre la tecla (treeNav.ts).
+    ...(/switch\s*\(\s*(?:e\.)?key\s*\)/.test(code) ? [...code.matchAll(/case '([^']*)':/g)].map((m) => m[1]) : []),
+  ];
+  return found.map(keyName);
+}
+
+/** Una tecla como en el registro: la barra espaciadora es `Space`, las letras en minúscula. */
+const keyName = (key: string) => (key === ' ' ? 'Space' : key.length === 1 ? key.toLowerCase() : key);
+
+/** Teclas que se miran sin ser atajos: escribir con un IME, el foco atrapado de un diálogo, los modificadores solos. */
+const NOT_SHORTCUTS = new Set(['Tab', 'Dead', 'Process', 'Shift', 'Control', 'Meta', 'Alt', 'AltGraph', 'OS']);
 
 describe('el código contra el registro', () => {
   it('cada combinación escrita en el código ("Mod-…", "Shift-…") está en el registro', () => {
@@ -279,16 +295,29 @@ describe('el código contra el registro', () => {
     expect(loose).toEqual([]);
   });
 
-  it('cada archivo que mira las teclas de un evento figura en el registro', () => {
-    const listed = new Set(Object.values(SHORTCUT_FILES).flat());
-    // Lo que mira la tecla sin ser un atajo: escribir con un IME, la barra espaciadora que abre el carrete está
-    // en PageEditor (listado), los menús de la barra de BlockNote (botones, no teclas).
-    const missing: string[] = [];
-    for (const [path, code] of sourceFiles()) {
-      if (/\b(?:e|ev|event)\.key\s*(?:===|!==)\s*['"]|\b(?:e|ev|event)\.key\.toLowerCase\(\)/.test(code) && !listed.has(basename(path))) {
-        missing.push(basename(path));
+  it('cada tecla que el código compara con un evento es de un atajo del registro de ese archivo', () => {
+    // Las teclas de los atajos de cada archivo (shortcutSources.ts), como las escribe el evento.
+    const byFile = new Map<string, Set<string>>();
+    for (const [id, files] of Object.entries(SHORTCUT_FILES)) {
+      for (const file of files) {
+        const set = byFile.get(file) ?? new Set<string>();
+        for (const k of shortcut(id).keys) set.add(keyName(k.split(/-(?!$)/).pop()!));
+        byFile.set(file, set);
       }
     }
-    expect(missing, 'archivos con teclas que no están en ningún `files` de shortcuts.ts').toEqual([]);
+    const missing: string[] = [];
+    for (const [path, code] of sourceFiles()) {
+      const keys = comparedKeys(code).filter((k) => !NOT_SHORTCUTS.has(k));
+      const known = byFile.get(basename(path));
+      for (const k of new Set(keys)) if (!known?.has(k)) missing.push(`${basename(path)}: ${k}`);
+    }
+    // Una tecla nueva en un archivo (aunque el archivo ya tenga otros atajos) tiene que sumarse al registro, con
+    // su archivo en shortcutSources.ts y su texto en la ayuda.
+    expect(missing, 'teclas del código sin su atajo en shortcuts.ts / shortcutSources.ts').toEqual([]);
+  });
+
+  it('nada de `keymap()` sueltos de ProseMirror: los atajos del editor van por las extensiones (las ve la prueba)', () => {
+    const loose = [...sourceFiles()].filter(([, code]) => /\bkeymap\(/.test(code)).map(([path]) => basename(path));
+    expect(loose).toEqual([]);
   });
 });

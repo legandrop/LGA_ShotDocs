@@ -96,8 +96,8 @@ export const help = {
   },
   'help.projectsArchive.title': { en: "Archive and delete projects", es: "Archivar y borrar proyectos" },
   'help.projectsArchive.text': {
-    en: "Hover a project in the list (on a phone, tap its ⋯) to rename, archive or delete it. An archived project leaves the everyday list but can still be opened and edited. Deleting asks you to type delete and moves it to Deleted projects: nobody sees it, and Restore brings it back as it was for 30 days.",
-    es: "Pasá el mouse por un proyecto de la lista (en el teléfono, tocá su ⋯) para renombrarlo, archivarlo o borrarlo. Un archivado sale de la lista de todos los días pero se sigue abriendo y editando. Borrar pide escribir borrar y lo pasa a Proyectos borrados: nadie lo ve, y Restaurar lo deja como estaba durante 30 días.",
+    en: "Hover a project in the list (on a phone, tap its ⋯) to rename, archive or delete it. An archived project leaves the everyday list but can still be opened and edited. Deleting asks you to type delete and moves it to Deleted projects: nobody sees it, and Restore brings it back exactly as it was.",
+    es: "Pasá el mouse por un proyecto de la lista (en el teléfono, tocá su ⋯) para renombrarlo, archivarlo o borrarlo. Un archivado sale de la lista de todos los días pero se sigue abriendo y editando. Borrar pide escribir borrar y lo pasa a Proyectos borrados: nadie lo ve, y Restaurar lo deja tal como estaba.",
   },
   'help.workspaces.title': { en: "Workspaces", es: "Workspaces" },
   'help.workspaces.text': {
@@ -134,7 +134,7 @@ export const help = {
   'help.script.title': { en: "Script", es: "Script (guion)" },
   'help.script.text': {
     en: "Script is text in a screenplay typeface ({script}, or / Script). INT/EXT, DAY, NIGHT and DAWN/DUSK are marked in color. Enter keeps writing Script; on an empty line it goes back to normal text.",
-    es: "Script es texto con la tipografía de los guiones ({script}, o / Script). INT/EXT, DÍA, NOCHE y AMANECER/ATARDECER se marcan con color. Enter sigue en Script; en un renglón vacío vuelve al texto común.",
+    es: "Script es texto con la tipografía de los guiones ({script}, o / Guion). INT/EXT, DÍA, NOCHE y AMANECER/ATARDECER se marcan con color. Enter sigue en Script; en un renglón vacío vuelve al texto común.",
   },
   'help.undo.title': { en: "Undo", es: "Deshacer" },
   'help.undo.text': {
@@ -215,12 +215,12 @@ export const help = {
   // --- Colapsar ---
   'help.collapse.title': { en: "Collapse a section", es: "Colapsar una sección" },
   'help.collapse.text': {
-    en: "Every heading has a triangle: click it to hide what's under it, just for you. Shift+click collapses it for everyone (if you can edit). {collapse} does it from the keyboard; the ⋯ menu collapses or expands them all.",
-    es: "Cada título tiene un triángulo: un clic esconde lo que tiene abajo, solo para vos. Shift+clic lo colapsa para todos (si podés editar). {collapse} lo hace con el teclado; el menú ⋯ colapsa o abre todos.",
+    en: "Every heading has a triangle: click it to hide what's under it, just for you (saved on this device). {collapse} does it from the keyboard; the ⋯ menu collapses or expands them all.",
+    es: "Cada título tiene un triángulo: un clic esconde lo que tiene abajo, solo para vos (queda guardado en este dispositivo). {collapse} lo hace con el teclado; el menú ⋯ colapsa o abre todos.",
   },
-  'help.collapsePrint.title': { en: "Print as seen", es: "Imprimir como se ve" },
+  'help.collapsePrint.title': { en: "Print as shown", es: "Imprimir como se ve" },
   'help.collapsePrint.text': {
-    en: "With something collapsed, the PDF comes out fully expanded unless you turn on Print as seen in the ⋯ menu.",
+    en: "With something collapsed, the PDF comes out fully expanded unless you turn on Print as shown in the ⋯ menu.",
     es: "Con algo colapsado, el PDF sale con todo abierto, salvo que prendas Imprimir como se ve en el menú ⋯.",
   },
 
@@ -239,8 +239,8 @@ export const help = {
   // --- Papelera ---
   'help.trash.title': { en: "Trash", es: "Papelera" },
   'help.trash.text': {
-    en: "Sending a page to the Trash takes its subpages with it; Restore brings everything back where it was. The Trash, at the bottom of the sidebar, also lists the photos and files no page uses anymore.",
-    es: "Mandar una página a la papelera se lleva sus subpáginas; Restaurar devuelve todo a su lugar. La papelera, abajo en la barra lateral, también muestra las fotos y los archivos que ya no usa ninguna página.",
+    en: "Sending a page to the Trash, at the bottom of the sidebar, takes its subpages with it; Restore brings everything back where it was. With Google Drive connected, its Files tab lists the photos and files no page uses anymore (the owner and admins manage it).",
+    es: "Mandar una página a la papelera, abajo en la barra lateral, se lleva sus subpáginas; Restaurar devuelve todo a su lugar. Con Google Drive conectado, su pestaña Archivos muestra las fotos y los archivos que ya no usa ninguna página (los manejan el dueño y los admins).",
   },
 
   // --- Sin red ---
@@ -336,7 +336,14 @@ export const help = {
   'shortcut.photoRowPrev': { en: "In a row: previous photo", es: "En una fila: la foto anterior" },
   'shortcut.photoRowLeave': { en: "In a row: leave the row", es: "En una fila: salir de la fila" },
   'shortcut.photoRowEnter': { en: "In a row: new line after the whole row", es: "En una fila: renglón nuevo después de toda la fila" },
-  'shortcut.photoInlineMove': { en: "Photo in a line: move the cursor past it", es: "Foto en un renglón: pasar el cursor al costado" },
+  'shortcut.photoInlineSelect': {
+    en: "Photo in a line selected: select more photos and text, like letters",
+    es: "Foto de un renglón elegida: elegir más fotos y texto, como letras",
+  },
+  'shortcut.photoInlineType': {
+    en: "Photo in a line selected: a new line after it (a letter is written after it, never replacing it)",
+    es: "Foto de un renglón elegida: renglón nuevo después de ella (una letra se escribe después, nunca la reemplaza)",
+  },
   'shortcut.carretePrev': { en: "Previous", es: "Anterior" },
   'shortcut.carreteNext': { en: "Next", es: "Siguiente" },
   'shortcut.carreteEnds': { en: "First / last", es: "Primera / última" },

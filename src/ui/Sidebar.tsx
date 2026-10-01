@@ -203,6 +203,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     return (
       <ul
         className={role === 'tree' ? 'tree' : undefined}
+        data-tour={role === 'tree' ? 'pages' : undefined}
         role={role}
         aria-label={role === 'tree' ? tr('sidebar.tree') : undefined}
         style={style}

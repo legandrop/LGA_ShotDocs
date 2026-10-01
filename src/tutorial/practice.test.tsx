@@ -271,14 +271,15 @@ describe('la recorrida', () => {
     expect(document.querySelector('.tour-live')?.textContent).toBe('Step 1 of 10: Hi!');
     // El foco va a "Siguiente".
     expect(document.activeElement?.textContent).toBe('Next');
-    // Mientras dura, sin tooltips.
+    // Mientras dura, sin tooltips, y la app no se alcanza ni con el teclado (Tab hasta el "+" de verdad).
     expect(document.documentElement.dataset.tourRunning).toBe('1');
+    expect(document.querySelector('.shell')?.hasAttribute('inert')).toBe(true);
 
     click(button('Next'));
     await until(() => count() === '2/10', 'el paso 2');
     press('ArrowRight');
     await until(() => count() === '3/10', 'el paso 3');
-    expect(bubble()!.textContent).toContain('(Ctrl+K)');
+    expect(bubble()!.textContent).toContain('Ctrl+K finds pages and projects');
     press('ArrowLeft');
     await until(() => count() === '2/10', 'atrás');
     click(button('Back'));
@@ -297,6 +298,7 @@ describe('la recorrida', () => {
     expect(readDeviceTour()).toEqual({ v: 1, done: true, step: null, account: true });
     expect(h.metadata.shotdocs_tour).toBe(1);
     expect(document.documentElement.dataset.tourRunning).toBeUndefined();
+    expect(document.querySelector('.shell')?.hasAttribute('inert')).toBe(false);
   });
 
   it('Esc sale (cuenta como vista) y avisa que se puede volver a ver desde la ayuda', async () => {

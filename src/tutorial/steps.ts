@@ -9,7 +9,10 @@ import { PRACTICE_BLOCKS } from './practiceTemplate';
 // misma tanda; una prueba revisa que cada `data-tour` de acá exista en `src/ui/`.
 
 export type TourAnchor =
-  /** El elemento con `data-tour="…"` que se ve (en el teléfono, el de la barra de arriba o el del cajón). */
+  /**
+   * Los elementos con `data-tour="…"` que se ven (en el teléfono, el de la barra de arriba o el del cajón): el foco
+   * de luz los abarca a todos (el árbol: su título con el "+" y la lista).
+   */
   | { tour: string }
   /** Bloques de la página de práctica (`data-id` de BlockNote): el foco de luz los abarca a todos. */
   | { blocks: readonly string[] };
@@ -38,14 +41,18 @@ export interface TourStep {
   sides?: Side[];
 }
 
+const SIDEBAR: Side[] = ['right', 'below', 'above', 'left'];
+
 export const TOUR_STEPS: TourStep[] = [
   { id: 'hello', anchor: null, layout: 'all', title: 'tour.hello.title', text: 'tour.hello.text' },
-  { id: 'pages', anchor: { tour: 'pages' }, layout: 'all', drawer: true, title: 'tour.pages.title', text: 'tour.pages.text' },
+  // Lo de la barra lateral: el globito a la derecha, así no tapa el árbol.
+  { id: 'pages', anchor: { tour: 'pages' }, layout: 'all', drawer: true, sides: SIDEBAR, title: 'tour.pages.title', text: 'tour.pages.text' },
   {
     id: 'project-switcher',
     anchor: { tour: 'project-switcher' },
     layout: 'all',
     drawer: true,
+    sides: SIDEBAR,
     title: 'tour.projects.title',
     text: 'tour.projects.text',
     textPhone: 'tour.projects.textPhone',
@@ -91,8 +98,8 @@ export const TOUR_STEPS: TourStep[] = [
     keys: { print: 'print' },
   },
   // En el teléfono, el ícono de la barra de arriba (el de la barra lateral queda en el cajón cerrado).
-  { id: 'sync', anchor: { tour: 'sync' }, layout: 'all', title: 'tour.sync.title', text: 'tour.sync.text' },
-  { id: 'help', anchor: { tour: 'help' }, layout: 'all', drawer: true, title: 'tour.help.title', text: 'tour.help.text' },
+  { id: 'sync', anchor: { tour: 'sync' }, layout: 'all', sides: SIDEBAR, title: 'tour.sync.title', text: 'tour.sync.text' },
+  { id: 'help', anchor: { tour: 'help' }, layout: 'all', drawer: true, sides: SIDEBAR, title: 'tour.help.title', text: 'tour.help.text' },
 ];
 
 /** Los pasos de este diseño (computadora o teléfono): con ellos se cuenta "3/10", así el número nunca salta. */

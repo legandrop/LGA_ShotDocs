@@ -110,7 +110,9 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'photoRowPrev', keys: ['ArrowLeft'], place: 'photos', context: 'row', owner: 'app', source: 'keymap' },
   { id: 'photoRowLeave', keys: ['ArrowUp', 'ArrowDown'], place: 'photos', context: 'row', owner: 'app', source: 'keymap' },
   { id: 'photoRowEnter', keys: ['Enter'], place: 'photos', context: 'row', owner: 'app', source: 'keymap' },
-  { id: 'photoInlineMove', keys: ['ArrowLeft', 'ArrowRight'], place: 'photos', context: 'inline', owner: 'app', source: 'dom' },
+  // Las fotos en línea (Docs/Doc_Fotos_En_Linea.md): con una elegida.
+  { id: 'photoInlineSelect', keys: ['Shift-ArrowLeft', 'Shift-ArrowRight', 'Shift-ArrowUp', 'Shift-ArrowDown'], place: 'photos', context: 'inline', owner: 'app', source: 'dom' },
+  { id: 'photoInlineType', keys: ['Enter'], place: 'photos', context: 'inline', owner: 'app', source: 'dom' },
 
   // --- Carrete ---
   { id: 'carretePrev', keys: ['ArrowLeft'], place: 'carrete', owner: 'app', source: 'dom' },

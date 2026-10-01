@@ -165,7 +165,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.photosRows.title',
     text: 'help.photosRows.text',
     keys: { next: 'photoRowNext', prev: 'photoRowPrev', leave: 'photoRowLeave', enter: 'photoRowEnter' },
-    more: ['photoInlineMove'],
+    more: ['photoInlineSelect', 'photoInlineType'],
     since: BEFORE_HELP,
   },
   {

@@ -98,14 +98,6 @@ function Running({ step, onPractice }: { step: number; onPractice: boolean }) {
     if (onPractice) setEntered(true);
   }, [onPractice]);
 
-  // Mientras dura, sin tooltips (styles.css); al terminar, el cajón del teléfono se cierra.
-  useEffect(() => {
-    document.documentElement.dataset.tourRunning = '1';
-    return () => {
-      delete document.documentElement.dataset.tourRunning;
-    };
-  }, []);
-
   if (!onPractice) return entered ? <PausedCard /> : null;
   return <StepView key={current.id} step={current} index={index} total={steps.length} phone={phone} />;
 }
@@ -131,18 +123,63 @@ function StepView({ step, index, total, phone }: { step: TourStep; index: number
   const modal = useModalOpen();
   const rect = useAnchorRect(step.anchor, phone && !!step.drawer);
   const [size, setSize] = useState({ width: 320, height: 160 });
+  const interactive = !!step.interactive;
+  const [, redraw] = useState(0);
+
+  // Mientras se ve un paso, sin tooltips (styles.css); en pausa vuelven.
+  useEffect(() => {
+    document.documentElement.dataset.tourRunning = '1';
+    return () => {
+      delete document.documentElement.dataset.tourRunning;
+    };
+  }, []);
+
+  // En un paso que no se toca, la app tampoco se alcanza con el teclado (Tab hasta el "+" crearía una página real):
+  // `inert` en la app; el globito va aparte, en `body`.
+  useEffect(() => {
+    if (interactive) return;
+    const shell = document.querySelector('.shell');
+    shell?.setAttribute('inert', '');
+    return () => shell?.removeAttribute('inert');
+  }, [interactive]);
+
+  // El teclado del teléfono cambia lo que se ve sin un `resize` de la ventana: la hoja se vuelve a ubicar.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onChange = () => redraw((n) => n + 1);
+    vv.addEventListener('resize', onChange);
+    vv.addEventListener('scroll', onChange);
+    return () => {
+      vv.removeEventListener('resize', onChange);
+      vv.removeEventListener('scroll', onChange);
+    };
+  }, []);
 
   // Lo de antes de cada paso: el cajón del teléfono, el cursor en el renglón vacío.
   useEffect(() => {
-    if (phone) setNavOpen(!!step.drawer);
+    // En el cuadro siguiente: al seguir desde otra página, el Shell cierra el cajón al cambiar de dirección (en el
+    // mismo dibujo, después de este efecto).
+    const frame = phone ? requestAnimationFrame(() => setNavOpen(!!step.drawer)) : 0;
+    if (step.interactive === 'slash') {
+      practiceHooks.focusEmptyLine?.();
+      const off = onTourSignal((s) => {
+        if (s === 'slash') go(index + 1, total);
+      });
+      return () => {
+        cancelAnimationFrame(frame);
+        off();
+      };
+    }
     if (step.interactive === 'slash') {
       practiceHooks.focusEmptyLine?.();
       return onTourSignal((s) => {
         if (s === 'slash') go(index + 1, total);
       });
     }
-    // El foco va al globito, salvo que la persona esté escribiendo en la página (lo dejó el paso anterior).
-    if (!document.activeElement?.closest('.bn-editor')) next.current?.focus({ preventScroll: true });
+    // El foco va al globito (la app quedó `inert`: lo que tenía el foco, como el editor, lo pierde).
+    next.current?.focus({ preventScroll: true });
+    return () => cancelAnimationFrame(frame);
   }, [step, phone, index, total]);
 
   useLayoutEffect(() => {
@@ -158,7 +195,6 @@ function StepView({ step, index, total, phone }: { step: TourStep; index: number
   const params = Object.fromEntries(Object.entries(step.keys ?? {}).map(([name, id]) => [name, shortcutLabel(id, undefined, tr.lang)]));
   const title = tr(step.title);
   const last = index === total - 1;
-  const interactive = !!step.interactive;
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
@@ -270,7 +306,7 @@ function anchorElements(anchor: TourAnchor): HTMLElement[] {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && r.right > 0 && r.left < window.innerWidth;
   });
-  return 'tour' in anchor ? visible.slice(0, 1) : visible;
+  return visible;
 }
 
 function union(els: HTMLElement[]): Rect | null {

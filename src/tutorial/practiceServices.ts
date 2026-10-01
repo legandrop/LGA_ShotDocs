@@ -25,22 +25,40 @@ export class PracticeWriteError extends Error {
   }
 }
 
-/** Lo de `target` que se puede leer; cualquier otra función tira `PracticeWriteError` al llamarla. */
+/** Lo que se lee tal cual (no es un objeto con métodos que escriban). */
+const plain = (value: unknown) =>
+  value === null || typeof value !== 'object' || Array.isArray(value) || value instanceof Date || value instanceof Map || value instanceof Set;
+
+/**
+ * Lo de `target` que se puede leer; cualquier otra función tira `PracticeWriteError` al llamarla. Los objetos que
+ * cuelgan de él (la base de un árbol, el cliente de una cola) también quedan envueltos, sin ninguna lectura.
+ */
 function readOnly<T extends object>(target: T, name: string, reads: readonly string[], overrides: Record<string, unknown> = {}): T {
   const allowed = new Set(reads);
+  // La misma función cada vez (`useSyncExternalStore` no se vuelve a suscribir en cada dibujo).
+  const cache = new Map<PropertyKey, unknown>();
+  const deny = (what: string) => {
+    throw new PracticeWriteError(`${name}.${what}`);
+  };
   return new Proxy(target, {
     get(obj, prop, receiver) {
       if (typeof prop === 'string' && prop in overrides) return overrides[prop];
+      if (cache.has(prop)) return cache.get(prop);
       const value = Reflect.get(obj, prop, receiver);
-      if (typeof value !== 'function') return value;
-      if (typeof prop === 'string' && allowed.has(prop)) return value.bind(obj);
-      return () => {
-        throw new PracticeWriteError(`${name}.${String(prop)}`);
-      };
+      let out: unknown;
+      if (typeof value === 'function') {
+        out = typeof prop === 'string' && allowed.has(prop) ? value.bind(obj) : () => deny(String(prop));
+      } else if (typeof prop === 'symbol' || plain(value)) {
+        return value;
+      } else {
+        out = readOnly(value as object, `${name}.${prop}`, []);
+      }
+      cache.set(prop, out);
+      return out;
     },
-    set(_obj, prop) {
-      throw new PracticeWriteError(`${name}.${String(prop)} =`);
-    },
+    set: (_obj, prop) => deny(`${String(prop)} =`),
+    deleteProperty: (_obj, prop) => deny(`delete ${String(prop)}`),
+    defineProperty: (_obj, prop) => deny(`define ${String(prop)}`),
   });
 }
 
@@ -325,8 +343,8 @@ function practiceServices(real: Services, session: PracticeSession): Services {
   return {
     workspace: real.workspace,
     user: real.user,
-    // El cliente de Supabase: nada (tampoco su `auth`, que es un objeto y no una función).
-    client: readOnly(real.client, 'client', [], { auth: readOnly(real.client.auth, 'client.auth', []) }),
+    // El cliente de Supabase: nada (tampoco lo que cuelga de él: `auth`, `storage`, `functions`).
+    client: readOnly(real.client, 'client', []),
     db: null as never,
     tree,
     docs: readOnly(real.docs, 'docs', DOCS_READS),

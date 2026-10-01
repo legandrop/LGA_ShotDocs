@@ -647,8 +647,9 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
   ejemplo ya contestado), fotos y archivos que avisan "En la práctica no se suben archivos" (también pegar, soltar,
   elegir y las `data:`), `access` sin datos (`Permissions` deja editar y comentar sin preguntarle al árbol), `db`,
   `mediaDb` y `commentsDb` en `null` (lo colapsado queda en memoria), y `tree`, `engine`, `docs`, `remote`, `client`
-  (también `client.auth`) y `sizes` envueltos en un `Proxy` que deja pasar una lista de lecturas y tira
-  `PracticeWriteError` en cualquier otra llamada. El tamaño de hoja de la práctica vive en la sesión (el `Proxy` del
+  y `sizes` envueltos en un `Proxy` que deja pasar una lista de lecturas y tira `PracticeWriteError` en cualquier
+  otra llamada; los objetos que cuelgan de ellos (`client.auth`, la base del árbol, el cliente de la cola) quedan
+  envueltos igual, sin ninguna lectura. El tamaño de hoja de la práctica vive en la sesión (el `Proxy` del
   árbol responde `resolveSetting`). La sesión va en un `WeakMap` por instancia de servicios (corrección 4).
 - **El documento**: plantillas `practice.es.ts` y `practice.en.ts` en el idioma de la interfaz al armarla, pasadas al
   fragmento de siempre con `blocksToYXmlFragment`; ids fijos para la pregunta, las tres fotos y el renglón vacío.
@@ -658,7 +659,8 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
   terceros que atribuir (`LICENSES.txt`). Si Lega prefiere fotos, se reemplazan con los mismos nombres (son un
   contrato público). Regla de Workbox `CacheFirst` para `/tutorial/*.webp` (corrección 18).
 - **El motor** (`TourLayer.tsx`, aparte): foco de luz con sombra de 100vmax que se desliza en 250 ms y pulsa (nada con
-  movimiento reducido), una capa que no deja tocar lo señalado salvo en el paso interactivo, globito con `n/total`,
+  movimiento reducido), una capa que no deja tocar lo señalado salvo en el paso interactivo (y `inert` en la app: Tab
+  tampoco llega a la barra lateral de verdad), globito con `n/total`,
   *Atrás*, *Siguiente* / *Terminar* y *Saltar recorrida*; → y Enter avanzan, ← vuelve, Esc sale con el aviso; región
   `aria-live`; los tooltips se apagan mientras dura; se esconde si se abre un diálogo o el carrete. Posición con
   `placeNear` (`src/ui/floating.ts`), que ahora también usa `Tooltip.tsx`. En el teléfono, hoja abajo arriba del
@@ -682,7 +684,10 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
 - `src/ui/shortcuts.test.ts`: el registro (ids, textos, rótulos de las dos plataformas, sin choques), el editor real
   contra el registro en los dos sentidos (BlockNote, Tiptap y nuestras extensiones; las reglas de lo que se escribe),
   cada `is…Shortcut` con eventos de Mac y de Windows, ninguna función de atajos sin registrar, ninguna combinación
-  suelta en el código y ningún archivo que escucha teclas fuera del registro; los rótulos del menú "/".
+  suelta en el código, ningún `keymap()` suelto, y **cada tecla que un archivo compara con un evento** (`e.key ===`,
+  `case` de un `switch` sobre la tecla, `isLetter`, `e.code`) tiene que ser de un atajo registrado para ese archivo
+  (`src/ui/shortcutSources.ts`); los rótulos del menú "/". No ve teclas que se comparen de otra forma (una variable,
+  un `Set` de teclas): ahí sigue haciendo falta la revisión de la auditoría.
 - `src/help/help.test.tsx`: la búsqueda (atajos escritos de varias formas, tildes, los dos idiomas) y el diálogo en
   el Shell (lo abren el "?" y el menú, ninguna tecla, Esc devuelve el foco, castellano).
 - `src/tutorial/tourState.test.ts`: cuándo arranca (los siete casos), la marca de la cuenta (con y sin red, sin tocar
@@ -696,6 +701,14 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
   oscuro; la recorrida entera en computadora y teléfono (claro y oscuro), cada foco de luz dentro de la pantalla y
   sobre su ancla; "/" y elegir avanza el paso 4; Esc, volver a verla desde la ayuda, recargar a mitad y retomar, el
   punto, la tarjeta del link, sin red al terminar, movimiento reducido y cero pedidos de red en la práctica.
+- **Auditoría independiente** (antes de cerrar): sin bloqueantes. Se corrigieron la ayuda que prometía Shift+clic
+  "para todos" en colapsar (todavía no existe), la prueba de atajos (ahora mira cada tecla, no solo el archivo), los
+  tooltips apagados durante la pausa, el cajón que quedaba cerrado al retomar en el teléfono, el teclado que llegaba a
+  la app durante un paso, el `Proxy` sin los objetos anidados, la hoja del teléfono que no seguía al teclado y textos
+  ("Print as shown", "/ Guion", los 30 días de proyectos borrados, la papelera de archivos solo con Drive, Ctrl/⌘+K
+  busca y no crea). Quedan para Lega: una foto real (`sdmedia://`) pegada en la práctica se ve rota (no escribe
+  nada), y "ya la vi" y el paso a medias son del dispositivo, no de la persona (otra persona en el mismo navegador ve
+  "¿Seguimos la recorrida?"; la marca de la cuenta va solo al workspace donde se terminó).
 - **Falta probar a mano:** Safari de la Mac, el iPhone (Safari y la app instalada, con el teclado en pantalla en el
   paso del menú "/"), Firefox y VoiceOver. La prueba de punta a punta `tour.mjs` del repo de pruebas privado todavía
   no está.
