@@ -869,6 +869,8 @@ export class MediaQueue {
     if (ids.length === 0 || this.now() - this.missingCheckedAt < 60_000) return;
     this.missingCheckedAt = this.now();
     const rows = await this.remote.fetchMediaFiles(ids);
+    // Una bajada no llegó (sin red, o Storage no contestó a tiempo): en esta pasada no se pide ninguna más.
+    let noDownloads = false;
     for (const row of rows) {
       if (fileKind(row.mime, row.name) === 'file') {
         // Sigue sin llegar a Drive: la tarjeta que se ve ya es la de "todavía no".
@@ -880,15 +882,21 @@ export class MediaQueue {
         this.thumbReady(row.id);
         continue;
       }
-      if (!row.thumb_at) continue;
+      if (!row.thumb_at || noDownloads) continue;
       let thumb: Blob;
       try {
         thumb = await this.remote.downloadThumb(row.id);
       } catch (err) {
-        // Sin red, o Storage no contestó a tiempo (la bajada tiene tope): no se sigue con las demás. Cada una
-        // esperaría su tope entero, y mientras esta vuelta no termina no empieza otra: no se sube nada. Las
-        // que faltan siguen anotadas y se vuelve a preguntar más tarde.
-        if (isNetworkError(err)) return;
+        if (isNetworkError(err)) {
+          // Sin red, o Storage no contestó a tiempo (la bajada tiene tope): no se piden las demás. Cada una
+          // esperaría su tope entero, y mientras esta vuelta no termina no empieza otra: no se sube nada.
+          // Las que faltan siguen anotadas; el bucle sigue solo por los adjuntos, que no piden nada a Storage.
+          noDownloads = true;
+          // La espera para volver a preguntar se cuenta desde acá y no desde que se preguntó: el tope de la
+          // bajada dura más que esa espera, y la vuelta siguiente volvería a pedir enseguida y a esperar otro
+          // tope entero.
+          this.missingCheckedAt = this.now();
+        }
         continue;
       }
       await this.store.put('thumbs', thumb, row.id);

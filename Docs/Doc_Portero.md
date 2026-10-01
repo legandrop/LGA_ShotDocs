@@ -316,7 +316,8 @@ tamaño, y al vencer el archivo vuelve a la cola como una subida trabada. Detall
 `Doc_Sincronizacion.md`, "Cada consulta a la base tiene un tope de tiempo".
 
 **Lo que queda afuera** (anotado en `Doc_Roadmap.md`, B.11). Con el portero colgado para todos los
-archivos, la vuelta gasta un minuto en cada uno en vez de cortarse. Y el plazo que le sirvió a un archivo
+archivos, la vuelta gasta un minuto en cada uno en vez de cortarse; con Storage colgado para todos pasa lo
+mismo con la miniatura (de 30 a 62 s por archivo en cada vuelta). Y el plazo que le sirvió a un archivo
 detrás de un proxy lento no se recuerda para el siguiente.
 
 ## Publicarlo y conectarlo (una vez por workspace)

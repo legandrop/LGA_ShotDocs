@@ -800,10 +800,14 @@ describe('cola de archivos: miniaturas que Storage no contesta', () => {
     return { done, finished: () => finished };
   }
 
-  /** Una vuelta en la que un pedido a Storage queda colgado: sigue esperando hasta su tope, y ahí termina. */
-  async function hungRound(d: Device, hung: () => boolean, limit: number): Promise<void> {
+  /**
+   * Una vuelta en la que un pedido a Storage queda colgado: sigue esperando hasta su tope, y ahí termina. Con
+   * `server`, el reloj de la cola (que no corre con el de los topes) avanza lo mismo mientras espera.
+   */
+  async function hungRound(d: Device, hung: () => boolean, limit: number, server?: FakeServer): Promise<void> {
     const { done, finished } = round(d);
     await until(hung);
+    if (server) server.clockOffset += limit;
     await vi.advanceTimersByTimeAsync(limit - 1000);
     await pause(30);
     expect(finished()).toBe(false);
@@ -976,6 +980,74 @@ describe('cola de archivos: miniaturas que Storage no contesta', () => {
     expect(ready.filter((x) => ids.includes(x)).sort()).toEqual([...ids].sort());
     expect(missing.size).toBe(0);
     for (const id of ids) expect(await b.media.resolve(MEDIA_SCHEME + id)).toMatch(/^blob:/);
+  });
+
+  it('con Storage colgado, la bajada se vuelve a pedir al minuto de cortarse, no en la vuelta siguiente', async () => {
+    const { server, b } = await waitingForThumbs();
+    const storage = realThumbs(b, server);
+    storage.download = never;
+    /** Una vuelta que no tiene nada que esperar: termina enseguida. */
+    const quickRound = async () => {
+      const { done, finished } = round(b);
+      await Promise.race([done, pause(300)]);
+      return finished();
+    };
+
+    // Mientras espera, para la cola también pasa el tiempo: 62 s, más que el minuto que deja pasar entre una
+    // pregunta y la siguiente.
+    expect(THUMB_DOWNLOAD_TIMEOUT_MS).toBeGreaterThan(60_000);
+    await hungRound(b, () => storage.calls.length === 1, THUMB_DOWNLOAD_TIMEOUT_MS, server);
+    // La vuelta siguiente no vuelve a pedir: esperaría otro tope entero, y así todas.
+    expect(await quickRound()).toBe(true);
+    expect(storage.calls).toHaveLength(1);
+    server.clockOffset += 59_000;
+    expect(await quickRound()).toBe(true);
+    expect(storage.calls).toHaveLength(1);
+
+    // Pasado el minuto desde el corte, sí.
+    server.clockOffset += 2000;
+    await hungRound(b, () => storage.calls.length === 2, THUMB_DOWNLOAD_TIMEOUT_MS, server);
+    expect(storage.calls).toHaveLength(2);
+  });
+
+  it('una miniatura que no baja no frena lo que no necesita bajada: el adjunto de atrás se actualiza igual', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    // `b` mostró con un ícono una foto de `a` que todavía no tenía miniatura...
+    server.rejectThumbs = true;
+    const photo = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0206.JPG', 'image/jpeg')))!;
+    await sync(a);
+    const b = await device(server);
+    await sync(b);
+    expect(await b.media.resolve(MEDIA_SCHEME + photo)).toMatch(/^data:image\/svg\+xml/);
+    // ...y después un adjunto que todavía no estaba en la base ("todavía no").
+    server.online = false;
+    const url = await a.media.add(page, makeFile(10, 'guion.txt', 'text/plain'));
+    const attachment = mediaIdOf(url)!;
+    server.online = true;
+    expect(cardText(await b.media.resolve(url))).toContain(t('queue.notYet'));
+    const missing = (b.media as unknown as { missing: Set<string> }).missing;
+    expect([...missing]).toEqual([photo, attachment]);
+    // Llegan los dos: el adjunto a la base y la miniatura de la foto al bucket.
+    await sync(a);
+    server.thumbs.set(photo, new Blob([new Uint8Array([0xff, 0xd8, 9])], { type: 'image/jpeg' }));
+    server.mediaFiles.get(photo)!.thumb_at = new Date().toISOString();
+    server.clockOffset += 61_000;
+    const heard: string[] = [];
+    b.media.subscribeThumbs((x) => heard.push(x));
+    const storage = realThumbs(b, server);
+    storage.download = never;
+
+    await hungRound(b, () => storage.calls.length === 1, THUMB_DOWNLOAD_TIMEOUT_MS);
+
+    // La foto sigue esperando su miniatura; el adjunto, que sale de la fila, ya tiene su tarjeta.
+    expect(storage.calls).toEqual([`GET ${photo}`]);
+    expect(heard).toEqual([attachment]);
+    expect([...missing]).toEqual([photo]);
+    expect(await b.mediaDb.get('known', attachment)).toMatchObject({ mime: 'text/plain', name: 'guion.txt' });
+    const card = cardText(await b.media.resolve(url));
+    expect(card).toContain('guion.txt');
+    expect(card).not.toContain(t('queue.notYet'));
   });
 
   it('una miniatura que tarda en bajar pero llega no se corta', async () => {

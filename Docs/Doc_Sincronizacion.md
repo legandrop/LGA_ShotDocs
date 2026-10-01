@@ -559,7 +559,7 @@ tope (`within` en `remote.ts`), que termina en el mismo `request_timeout`.
 | Pedido | Tope | Si vence |
 |---|---|---|
 | Subir la miniatura (`uploadThumb`) | `timeoutFor(tamaño)`: 30 s más lo que tarda a 16 KB/s (40 s para 160 KB; 62 s para 512 KB, lo máximo que acepta el bucket) | El archivo vuelve a la cola con su espera (10 s, 20 s… hasta 10 minutos) y el aviso *The upload stopped moving; it will try again*; la vuelta sigue con los demás |
-| Bajar la miniatura de otro dispositivo (`downloadThumb`) | 62 s (`THUMB_DOWNLOAD_TIMEOUT_MS`): no se sabe de antemano cuánto pesa, se le da lo de la más pesada posible | Al final de la vuelta: no se sigue con las demás miniaturas y se vuelve a preguntar al minuto. Al dibujar la página: queda el ícono y se vuelve a preguntar |
+| Bajar la miniatura de otro dispositivo (`downloadThumb`) | 62 s (`THUMB_DOWNLOAD_TIMEOUT_MS`): no se sabe de antemano cuánto pesa, se le da lo de la más pesada posible | Al final de la vuelta: no se piden las demás miniaturas en esa pasada (los adjuntos, que no piden nada a Storage, sí se actualizan) y se vuelve a preguntar un minuto después del corte. Al dibujar la página: queda el ícono y se vuelve a preguntar |
 
 - **Subir no se puede cortar:** el cliente de Storage (`@supabase/storage-js` 2.117) no acepta una señal de
   corte en `upload`; en `download` sí, y se le pasa. La subida cortada queda suelta y puede terminar sola.
@@ -570,7 +570,12 @@ tope (`within` en `remote.ts`), que termina en el mismo `request_timeout`.
 - **Por qué no cuenta como "sin red"** (que corta la vuelta): la vuelta siguiente empezaría otra vez por el
   mismo archivo, porque van por orden de llegada, y con Storage colgado solo para él los demás no subirían
   nunca. Una falla de red de verdad (el pedido falla en vez de colgarse) sigue cortando la vuelta.
-- Las imágenes del bucket `page-files` (un workspace sin portero, `files.ts`) siguen sin tope.
+- **El minuto de la bajada se cuenta desde el corte,** no desde que se preguntó: el tope (62 s) dura más
+  que esa espera (60 s), y contado desde el principio la vuelta siguiente volvería a pedir enseguida.
+- **Lo que queda afuera** (`Doc_Roadmap.md`, B.11): con Storage colgado para todos, la vuelta gasta de 30
+  a 62 s en cada archivo con miniatura por subir, en vez de cortarse; el tope de la subida no crece entre
+  reintentos; las subidas sueltas se acumulan; y las imágenes del bucket `page-files` (un workspace sin
+  portero, `files.ts`) siguen sin tope.
 - Pruebas: `src/sync/remoteTimeout.test.ts` (el tope) y `src/media/queue.test.ts`, "miniaturas que Storage
   no contesta" (lo que hace la cola).
 
