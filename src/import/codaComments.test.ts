@@ -246,6 +246,41 @@ describe('comentarios de Coda: importar la carpeta', () => {
     expect(threads.filter((t) => t.resolved)).toHaveLength(2);
   });
 
+  it('un hilo pegado al texto de una celda (también uno corto) queda en el bloque de la tabla, sin nota de problema', async () => {
+    const { server, a } = await setup();
+    const files = new Map<string, string>([
+      ['pages/root.html', '<h2><span>Tareas</span></h2>'],
+      // Un párrafo "ok" después de una tabla con una celda "ok": el hilo pegado a "ok" sigue yendo al párrafo.
+      ['pages/s1.html', '<div>Antes</div><table><thead><tr><th>Tarea</th><th>Quién</th></tr></thead><tbody><tr><td>Pedir el plano 12</td><td>Ana</td></tr><tr><td>Lente</td><td>ok</td></tr></tbody></table><div>ok</div>'],
+      // Uno largo (se encuentra adentro del bloque) y uno corto, de una palabra (antes no se buscaba adentro de
+      // otro bloque; ahora vale si es el texto entero de una celda).
+      [COMMENTS_FILE, JSON.stringify({ docId: 'DOC', pages: { s1: [codaThread(1, { ref: 'Pedir el plano 12' }), codaThread(2, { ref: 'Lente' }), codaThread(3, { ref: 'ok' }), codaThread(4, { ref: 'Quién' })] } })],
+    ]);
+    const f: CodaFolder = {
+      manifest: { doc: { id: 'DOC', name: 'Prueba' }, pages: [page('root', 'Raíz', null, 0), page('s1', 'Tabla', 'root', 0)] },
+      has: (p) => files.has(p),
+      paths: () => [...files.keys()],
+      text: async (p) => String(files.get(p)),
+      file: async (p) => new Blob([String(files.get(p))]),
+      size: (p) => files.get(p)?.length ?? 0,
+    };
+    const result = await importCoda(f, { ...a, comments: a.comments, userEmail: ME });
+    expect(result.problems).toEqual([]);
+    for (let i = 0; i < 3; i++) await a.engine.syncNow();
+    const tablePage = [...server.pages.values()].find((p) => p.workspace_id === result.projectId && p.title === 'Tabla')!;
+    const doc = await a.docs.open(tablePage.id);
+    const { pageBlocks } = await import('./codaComments');
+    const { CONTENT_FRAGMENT } = await import('../sync/structure');
+    const blocks = pageBlocks(doc.getXmlFragment(CONTENT_FRAGMENT));
+    a.docs.close(tablePage.id);
+    const tableBlock = blocks.find((b) => b.text.includes('Pedir el plano 12'))!;
+    const rows = [...server.comments.values()].filter((c) => c.page_id === tablePage.id);
+    const okBlock = blocks.find((b) => b.text === 'ok')!;
+    const byBody = new Map(rows.map((r) => [r.body, r.block_id]));
+    expect([1, 2, 4].map((n) => byBody.get(`Comentario ${n}`))).toEqual([tableBlock.id, tableBlock.id, tableBlock.id]);
+    expect(byBody.get('Comentario 3')).toBe(okBlock.id);
+  });
+
   it('seguir una importación cortada no repite comentarios, y lo que no salió toma los bloques nuevos de la página', async () => {
     const { server, a } = await setup();
     const f = folder(COMMENTS);
