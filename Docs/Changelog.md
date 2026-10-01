@@ -8,7 +8,8 @@ Soltar una carpeta en la página se rechazaba pidiendo comprimirla. Ahora una ve
 cierra la pestaña, se retoma volviendo a soltarla. En la página queda una tarjeta de carpeta (el mismo bloque
 `image` con `sdmedia://` y una fila `inode/directory`, sin migración) que abre un visor con lo que hay hoy en
 esa carpeta de Drive: miniaturas, carrete y bajar. El portero suma `/folder/prepare`, `/folder/sessions`,
-`/folder/list` y `/t/`, y nunca sale del árbol de la carpeta. Falta que Lega decida `drive.readonly`.
+`/folder/list` y `/t/`, nunca sale del árbol de la carpeta y solo deja subir a quien la creó. Falta que Lega
+decida `drive.readonly`.
 [ Carpetas - soltar una carpeta entera, con su visor y la regla de no salir del árbol ]
 
 v0.077 :
