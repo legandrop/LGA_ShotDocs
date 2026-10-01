@@ -226,14 +226,20 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    así que pide un plan de migración y convivencia de versiones.
 
 11. **Subidas que se traban: lo que quedó de v0.068** (`Doc_Portero.md`, "Subidas que se traban"). La app
-   corta los pedidos al portero que dejan de moverse y sigue con los demás archivos. **Falta:**
+   corta los pedidos al portero que dejan de moverse (y, desde v0.070, los de la miniatura a Storage) y
+   sigue con los demás archivos. **Falta:**
    - **Probarlo en Safari de iPhone y con una red lenta de verdad.** Está probado a mano en Chromium contra
      un servidor local; el aviso de bytes que salen (`XMLHttpRequest`) puede portarse distinto en Safari,
      con HTTP/2 y a través de Cloudflare.
-   - **Tope para los pedidos de la miniatura a Supabase Storage** (subirla y bajarla, `uploadThumb` y
-     `downloadThumb` en `src/sync/remote.ts`): hoy no tienen, y uno colgado clava la cola igual que antes.
    - **Cerrar la vuelta de la cola como sin conexión** después de 2 o 3 trabadas seguidas de archivos
-     distintos: hoy, con el portero colgado para todos, gasta un minuto por archivo.
+     distintos: hoy, con el portero colgado para todos, gasta un minuto por archivo. Lo mismo con Storage
+     colgado para todos: de 30 a 62 s por archivo en cada vuelta, lo que tarda en vencer su miniatura.
+   - **La miniatura (lo que quedó de v0.070,** `Doc_Sincronizacion.md`, "Cada consulta a la base tiene un
+     tope de tiempo"**).** El tope de la subida no crece entre reintentos: una miniatura de 500 KB con
+     menos de unos 8 KB/s vence siempre (agrandarlo con las fallas seguidas, como `stalledBefore` en el
+     portero). Las subidas cortadas quedan sueltas y se acumulan si Storage está colgado para todos (subir
+     con un `fetch` propio que acepte una señal de corte). Y `uploadFile` y `downloadFile` del bucket
+     `page-files` (un workspace sin portero) siguen sin tope.
    - **Recordar el plazo que funcionó.** Detrás de un antivirus o un proxy que recibe el cuerpo de golpe,
      cada archivo vuelve a empezar con el plazo corto y se traba una o más veces antes de pasar.
    - **Casos raros en que espera o reintenta de más** (no pierden ni duplican): una pestaña tan frenada

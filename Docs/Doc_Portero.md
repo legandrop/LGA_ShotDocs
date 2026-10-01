@@ -309,12 +309,16 @@ contesta al abrir la subida se cortan y el navegador aborta el pedido (con la pe
 los 60 segundos al abrir y a los 125 la parte); al retomar no se manda nada dos veces. Falta verlo en
 Safari de iPhone y con una red lenta de verdad.
 
-**Lo que queda afuera** (anotado en `Doc_Roadmap.md`, B.11). Los pedidos de la miniatura a Supabase
-Storage no tienen tope (`Doc_Sincronizacion.md`, "cada consulta a la base tiene un tope de tiempo"), ni al
-subirla antes del original (`uploadThumb`) ni al bajar, al final de cada vuelta, las de otros dispositivos
-(`downloadThumb`): si lo que se cuelga es uno de esos, la cola espera igual que antes. Con el portero
-colgado para todos los archivos, la vuelta gasta un minuto en cada uno en vez de cortarse. Y el plazo que
-le sirvió a un archivo detrás de un proxy lento no se recuerda para el siguiente.
+**La miniatura (v0.070).** Los dos pedidos de la miniatura a Supabase Storage (subirla antes del original
+y bajar, al final de cada vuelta, las de otros dispositivos) no pasan por el portero y no tenían tope: si
+el que se colgaba era uno de esos, la cola esperaba igual que antes. Ahora tienen uno proporcional al
+tamaño, y al vencer el archivo vuelve a la cola como una subida trabada. Detalle en
+`Doc_Sincronizacion.md`, "Cada consulta a la base tiene un tope de tiempo".
+
+**Lo que queda afuera** (anotado en `Doc_Roadmap.md`, B.11). Con el portero colgado para todos los
+archivos, la vuelta gasta un minuto en cada uno en vez de cortarse; con Storage colgado para todos pasa lo
+mismo con la miniatura (de 30 a 62 s por archivo en cada vuelta). Y el plazo que le sirvió a un archivo
+detrás de un proxy lento no se recuerda para el siguiente.
 
 ## Publicarlo y conectarlo (una vez por workspace)
 

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { t } from '../i18n';
 import { fromBase64, toBase64 } from '../lib/base64';
+import { THUMB_MAX_BYTES } from '../media/probe';
 import { parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import {
   REQUEST_TIMEOUT,
@@ -246,8 +247,9 @@ export function toRemoteError(
  * nada más hasta recargar, con `syncing` prendido y el estado diciendo "All synced" porque no queda nada sin
  * subir. Lo mismo con la cola de fotos y videos y la de comentarios. Al vencer, la consulta vuelve como un
  * error de red (estado 0) y la vuelta siguiente la reintenta; todo lo que se manda es idempotente
- * (`clientUpdateId`, ids creados en el dispositivo). Los archivos (Storage) no lo usan: una foto grande en
- * una red lenta puede tardar más.
+ * (`clientUpdateId`, ids creados en el dispositivo). Los archivos de Storage no usan este tope fijo (una foto
+ * grande en una red lenta puede tardar más): las miniaturas tienen uno proporcional a su tamaño (`within` con
+ * `timeoutFor`) y las imágenes del bucket `page-files` (un workspace sin portero) siguen sin ninguno.
  */
 export const REQUEST_TIMEOUT_MS = 30_000;
 /**
@@ -276,7 +278,41 @@ export function timed<T>(query: T, ms = REQUEST_TIMEOUT_MS): T {
   return typeof q.abortSignal === 'function' ? q.abortSignal(deadline(ms)) : query;
 }
 
+/**
+ * Corre un pedido contra un tope: si no terminó en `ms`, rechaza con el mismo error de red que una consulta
+ * cortada por su tope (`request_timeout`), que se reintenta. Es para los pedidos a Storage, que no pasan por
+ * `timed`. Al pedido se le da la señal del tope por si la acepta (así el navegador lo corta de verdad); si no
+ * la acepta, queda suelto: su resultado ya no lo espera nadie, y si falla más tarde no molesta.
+ */
+export function within<T>(ms: number, request: (signal: AbortSignal) => PromiseLike<T>): Promise<T> {
+  const signal = deadline(ms);
+  return new Promise<T>((resolve, reject) => {
+    const expired = () => reject(new RemoteError(REQUEST_TIMEOUT, false, REQUEST_TIMEOUT, true));
+    if (signal.aborted) {
+      expired();
+      return;
+    }
+    // Antes de hacer el pedido: al vencer, este aviso llega primero y el error es siempre el del tope, no el
+    // que dé el pedido al cortarse.
+    signal.addEventListener('abort', expired, { once: true });
+    Promise.resolve()
+      .then(() => request(signal))
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', expired));
+  });
+}
+
+/**
+ * El tope de la bajada de una miniatura, que no sabe de antemano cuánto llega: el de la más pesada que puede
+ * haber. El bucket `thumbs` no acepta más de `THUMB_MAX_BYTES` (512 KB, `file_size_limit` en
+ * supabase/migrations/20260930150000_archivos.sql), así que una sana termina siempre antes: 30 s más los 32 s
+ * que tardan 512 KB a 16 KB/s. Las de verdad pesan decenas de KB.
+ */
+export const THUMB_DOWNLOAD_TIMEOUT_MS = timeoutFor(THUMB_MAX_BYTES);
+
 function networkError(err: unknown): RemoteError {
+  // El tope de `within` ya viene como error de red.
+  if (err instanceof RemoteError) return err;
   return new RemoteError(err instanceof Error ? err.message : String(err), false, undefined, true);
 }
 
@@ -620,9 +656,18 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
   async uploadThumb(fileId: string, data: Blob): Promise<void> {
     let result;
     try {
-      result = await this.client.storage
-        .from(THUMBS_BUCKET)
-        .upload(thumbPath(fileId), data, { contentType: 'image/jpeg', upsert: false });
+      // Con tope: sin él, un Storage que no contesta dejaba clavada la cola de archivos, que sube de a uno
+      // (la miniatura va antes que el original). Es proporcional al tamaño (30 s más lo que tarda a 16 KB/s),
+      // así una miniatura lenta pero sana termina. `upload` no acepta una señal de corte en esta versión del
+      // cliente, por eso es una carrera: si el tope vence, el pedido queda suelto y puede terminar solo. No
+      // hace daño: no reemplaza (`upsert: false`), así que el reintento se encuentra con que ya está (409,
+      // abajo) y lo da por hecho, y si no había llegado, la sube. `thumb_at` se marca recién después de una
+      // subida confirmada (`setFileThumb`), nunca por una que quedó suelta.
+      result = await within(timeoutFor(data.size), () =>
+        this.client.storage
+          .from(THUMBS_BUCKET)
+          .upload(thumbPath(fileId), data, { contentType: 'image/jpeg', upsert: false }),
+      );
     } catch (err) {
       throw networkError(err);
     }
@@ -642,7 +687,12 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
   async downloadThumb(fileId: string): Promise<Blob> {
     let result;
     try {
-      result = await this.client.storage.from(THUMBS_BUCKET).download(thumbPath(fileId));
+      // Con tope, como la subida. La bajada no sabe cuánto llega: se le da lo que tardaría la miniatura más
+      // pesada que acepta el bucket. `download` sí acepta la señal: al vencer, el navegador corta el pedido.
+      // La carrera queda igual, por si la respuesta se cuelga a mitad del cuerpo.
+      result = await within(THUMB_DOWNLOAD_TIMEOUT_MS, (signal) =>
+        this.client.storage.from(THUMBS_BUCKET).download(thumbPath(fileId), {}, { signal }),
+      );
     } catch (err) {
       throw networkError(err);
     }
