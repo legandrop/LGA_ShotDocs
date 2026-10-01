@@ -53,6 +53,7 @@ import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
 import { BlockSideMenuController } from './BlockSideMenu';
 import { PageFormattingToolbar, pageToolbarItems } from './PageToolbar';
+import { PhotoToolbarController } from './PhotoToolbar';
 import { undoGuardExtension } from './undoGuard';
 import { BACKGROUND_META } from './editorMeta';
 import { notToggleHeading } from './collapseMenus';
@@ -822,6 +823,8 @@ function BlockEditor({
       >
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
         <FormattingToolbarController formattingToolbar={formattingToolbar} />
+        {/* La barra de la foto en línea elegida (PhotoToolbar.tsx). */}
+        {editable && <PhotoToolbarController canComment={canComment} onView={(key) => openAtRef.current(key)} />}
         {/* Los tres puntos de cada bloque: arrastrar lo mueve, un clic lo elige y abre la barra de formato. */}
         <BlockSideMenuController />
       </BlockNoteView>

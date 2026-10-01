@@ -85,6 +85,15 @@ export const editor = {
     es: "Las fotos y videos seguidos a esta, en orden, con la misma altura en cada fila",
   },
   'imageSize.waiting': { en: "Waiting for the images to load", es: "Esperando que carguen las fotos" },
+  'photoSize.arrangeSelected': {
+    en: "The selected images, in order, with the same height in each row",
+    es: "Las fotos elegidas, en orden, con la misma altura en cada fila",
+  },
+  'photoSize.notAdjacent': {
+    en: "Select images that are next to each other, with no text between them",
+    es: "Elegí fotos que estén seguidas, sin texto en el medio",
+  },
+  'photoSize.allSelected': { en: "For all the selected images", es: "Para todas las fotos elegidas" },
   'driveCard.tap': { en: "Tap to use the player", es: "Tocá para usar el reproductor" },
   'driveCard.open': { en: "Open in Drive", es: "Abrir en Drive" },
   'driveCard.showAsLink': { en: "Show as link", es: "Mostrar como link" },

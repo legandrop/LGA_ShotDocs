@@ -20,6 +20,8 @@ import { CommentToolbarButton, paragraphVariantItems } from './EditorComments';
 import { SCRIPT_PROP } from './editorSchema';
 import { ScriptIcon } from './icons';
 import { HideForDriveFiles, ImageSizeButtons, MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
+import { onlyPhotosSelected, selectedPhotos } from './inlinePhotoSize';
+import { PhotoSizeButtons } from './PhotoToolbar';
 
 // La barra de formato de la página (PageEditor.tsx). Aparece al elegir texto y también al hacer clic en los
 // puntos de un bloque (BlockSideMenu.tsx, el bloque entero elegido): ahí trae además los colores del bloque (los
@@ -150,8 +152,26 @@ export function BlockColorButton() {
   );
 }
 
+/**
+ * Con una foto en línea elegida, o solo fotos elegidas, la barra es la propia de la foto (PhotoToolbar.tsx): esta no
+ * se muestra. Con texto y fotos elegidos, suma los tamaños y "Arrange in rows" de las fotos.
+ */
+function usePhotoSelection(): 'only' | 'mixed' | null {
+  const editor = useBlockNoteEditor();
+  return useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      const state = (e as AnyEditor).prosemirrorState;
+      if (onlyPhotosSelected(state)) return 'only';
+      return selectedPhotos(state).length > 0 ? 'mixed' : null;
+    },
+  });
+}
+
 /** La barra de formato de la página. */
 export function PageFormattingToolbar({ items, canComment, onView }: { items: BlockTypeSelectItem[]; canComment: boolean; onView: (id: string) => void }) {
+  const photos = usePhotoSelection();
+  if (photos === 'only') return null;
   return (
     <FormattingToolbar blockTypeSelectItems={items}>
       {getFormattingToolbarItems(items).flatMap((item) =>
@@ -171,6 +191,7 @@ export function PageFormattingToolbar({ items, canComment, onView }: { items: Bl
                 ? [item, <BlockColorButton key="blockColorButton" />]
                 : [item],
       )}
+      {photos === 'mixed' && <PhotoSizeButtons key="photoSizeButtons" />}
       {canComment && <CommentToolbarButton key="comment" />}
     </FormattingToolbar>
   );

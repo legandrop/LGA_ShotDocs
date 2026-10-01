@@ -47,7 +47,7 @@ export function MediaDownloadButton() {
   return <OriginalDownloadButton key={id} fileId={id} />;
 }
 
-function OriginalDownloadButton({ fileId }: { fileId: string }) {
+export function OriginalDownloadButton({ fileId }: { fileId: string }) {
   const Components = useComponentsContext()!;
   const dict = useDictionary();
   const { media } = useServices();
@@ -147,7 +147,7 @@ function OpenIcon() {
   );
 }
 
-function ViewIcon() {
+export function ViewIcon() {
   return (
     <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M4 8V4h4M16 8V4h-4M4 12v4h4M16 12v4h-4" />
@@ -155,7 +155,7 @@ function ViewIcon() {
   );
 }
 
-const SIZE_LABELS: Record<number, { text: string; tip: 'imageSize.full' | 'imageSize.half' | 'imageSize.third' | 'imageSize.quarter' }> = {
+export const SIZE_LABELS: Record<number, { text: string; tip: 'imageSize.full' | 'imageSize.half' | 'imageSize.third' | 'imageSize.quarter' }> = {
   [1]: { text: '1/1', tip: 'imageSize.full' },
   [1 / 2]: { text: '1/2', tip: 'imageSize.half' },
   [1 / 3]: { text: '1/3', tip: 'imageSize.third' },
@@ -293,7 +293,7 @@ export function ImageSizeButtons() {
   );
 }
 
-function ArrangeIcon() {
+export function ArrangeIcon() {
   return (
     <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" aria-hidden="true">
       <path d="M3 4h5.5v5H3zM10.5 4H17v5h-6.5zM3 11h8v5H3zM13 11h4v5h-4z" />
