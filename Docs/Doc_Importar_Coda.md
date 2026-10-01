@@ -235,8 +235,11 @@ probada en `scripts/coda-tables.test.mjs` con datos inventados).
   - En `table` y `text`, **las filas que escondía el filtro** (el HTML trae solo las visibles) van debajo, en otra
     tabla con las mismas columnas y el texto de la API: en un doc bakeado no se pierde ninguna fila.
 - **Las filas.** El HTML trae la vista con su filtro y su contenido rico pero sin id de fila; la API trae todas
-  las filas con su id. Se juntan por posición (la vista viene en su orden) y, si no coincide, por el texto de
-  sus columnas de texto; las que no se reconocen quedan anotadas.
+  las filas con su id. Desde v0.064 una fila del HTML se junta con una de la API **solo si coinciden todas sus
+  columnas comparables** (texto, opciones, relaciones, números, personas, correos; solo letras y números):
+  primero la de su posición, si no la primera exacta sin usar. Si ninguna coincide en todo, la más parecida sirve
+  solo para ubicarla en la lista de esa vista: su ficha sale de la API (sin celdas ni colores del HTML) y queda una
+  nota. Así dos filas con el mismo nombre nunca se cruzan.
 - **Links.** Un link a otra página del doc o a una fila con ficha pasa a `coda-page:<id>` (ver "Links entre
   páginas del doc" arriba). Un link a una fila sin ficha queda apuntando a Coda, contado en las notas.
 - **Archivos que solo están en los datos de una tabla** (una fila que ninguna vista mostraba): se bajan a

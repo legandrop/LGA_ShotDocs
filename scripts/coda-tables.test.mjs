@@ -231,3 +231,43 @@ describe('tables.config.json, --convert-only y archivos de Coda', () => {
     expect(() => parseExportArgs(['--convert-only', '--refresh', 'x'])).toThrow(/no va con --refresh/)
   })
 })
+
+describe('cada fila del HTML con su fila exacta de la API', () => {
+  const cols = [
+    { id: 'e-name', name: 'Toma', type: 'text' },
+    { id: 'e-desc', name: 'Descripción', type: 'text' },
+    { id: 'e-place', name: 'Lugar', type: 'text' },
+    { id: 'e-note', name: 'Notas', type: 'canvas' },
+    { id: 'e-img', name: 'Fotos', type: 'image' },
+  ].map((c) => ({ calculated: false, formula: null, display: c.id === 'e-name', lookupTableId: null, isArray: false, ...c }))
+  const index = { tables: [{ id: 'T3', name: 'Tomas', type: 'table', layout: 'default', pageId: 'q1', baseTableId: null, displayColumnId: 'e-name', visibleColumnIds: cols.map((c) => c.id), columns: cols }] }
+  const row = (id, desc, extra = {}) => ({ id, name: 'Toma', values: { 'e-name': 'Toma', 'e-desc': desc, 'e-place': 'Set', 'e-note': `nota ${id} api`, 'e-img': [img(`bl-${id}`)], ...extra } })
+  const rows = { T3: { visible: ['a', 'b', 'c'], rows: [row('a', 'Desc A'), row('b', 'Desc B'), row('c', 'Desc C')] } }
+  // Nombre y lugar iguales en las filas: el emparejamiento viejo (puntaje ≥ 1) aceptaba la de su posición.
+  const tr = (desc, note) => `<tr><td>Toma</td><td>${desc}</td><td>Set</td><td><div>${note}</div></td><td></td></tr>`
+  // Mismo nombre visible en las tres; en el HTML, b antes que a, y c con un texto que ya no es el de la API.
+  const html = {
+    'q1.html': `<table data-coda-grid-id="T3"><thead><tr>${['e-name', 'e-desc', 'e-place', 'e-note', 'e-img'].map((id) => `<th data-coda-column-id="${id}">x</th>`).join('')}</tr></thead><tbody>${tr('Desc B', 'nota B rica')}${tr('Desc A', 'nota A rica')}${tr('Desc C cambiado', 'nota C del html')}</tbody></table>`,
+  }
+  const manifest = { doc: { id: 'DOC', name: 'Inventado' }, pages: [page('q1', 0)], problems: [] }
+  const r = convertTables({ manifest, index, rows: (id) => rows[id] ?? null, html: (f) => html[f] ?? null, parse })
+  const ficha = (id) => r.files.get(`pages/row-T3-${id}.import.html`)
+
+  it('dos filas con el mismo nombre en otro orden: cada ficha con SU descripción y SU nota', () => {
+    expect(ficha('a')).toContain('Desc A')
+    expect(ficha('a')).toContain('nota A rica')
+    expect(ficha('a')).not.toMatch(/Desc B|nota B/)
+    expect(ficha('b')).toContain('Desc B')
+    expect(ficha('b')).toContain('nota B rica')
+    expect(ficha('b')).not.toMatch(/Desc A|nota A/)
+  })
+
+  it('una fila cuyo texto cambió: entra igual, su ficha sale de la API y queda una nota', () => {
+    expect(ficha('c')).toContain('Desc C')
+    expect(ficha('c')).not.toContain('cambiado')
+    expect(ficha('c')).not.toContain('nota C del html')
+    expect(ficha('c')).toContain('nota c api')
+    expect(r.files.get('pages/q1.import.html')).toContain('coda-page:row-T3-c')
+    expect(r.notes.some((n) => n.includes('no coincidían en todo'))).toBe(true)
+  })
+})

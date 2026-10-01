@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.064 :
+
+Tablas de Coda: fichas con datos de otra fila. Al convertir una tabla en fichas, el comando junta cada fila del
+HTML (con las notas y fotos de las celdas) con su fila de la API. Aceptaba la fila de la misma posición si se
+parecía en algo, así que dos filas con el mismo nombre visible se podían cruzar y una ficha terminaba con la
+descripción o la nota de otra. Ahora una fila del HTML se junta solo con una fila de la API que coincide en todas
+sus columnas comparables (texto, opciones, relaciones, números, personas). Si ninguna coincide en todo, la más
+parecida sirve solo para ubicarla en la lista; su ficha sale de la API y queda una nota. Las menciones a personas
+ya no rompen la comparación.
+[ Exportar de Coda - cada fila con su fila exacta ]
+
 v0.063 :
 
 Tablas de Coda al exportar un doc. El comando bajaba solo las páginas: una tabla de Coda llegaba como la vista
