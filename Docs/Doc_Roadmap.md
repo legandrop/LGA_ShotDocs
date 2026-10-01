@@ -122,6 +122,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   la app, con la lista de archivos que sirve el portero con los mismos pases. Diseño y auditoría antes de
   implementar (sin tipo de bloque nuevo). **Diseño en `Doc_Carpetas.md`**, rediseñado con las respuestas de
   Lega: vista en vivo de la carpeta de Drive, subida directa a Google, sin tope y en el plan gratis.
+  **Entrega 1 hecha (v0.081):** soltar una carpeta, la ventana de qué se sube, su cola propia (los bytes por el
+  portero), la tarjeta, el visor con el carrete y bajar uno, retomar volviendo a soltarla, y el portero con la
+  regla de no salir del árbol. Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
+  la subida directa a Google con el Drive real, "Agregar a esta carpeta", la cuadrícula, la lista sin red, "Seguir"
+  en Chrome y Edge, el botón "Carpeta…" del menú `/` y *Bajar todo* (entrega 2). Detalle en `Doc_Carpetas.md`,
+  "Cómo quedó".
 - **P.10 Liberar la copia de la app en el dispositivo** (Lega, 2026-09-30): el archivo que el usuario eligió
   nunca se toca (queda en su disco); lo que se puede liberar es la copia que la app guarda en el almacenamiento
   del navegador después de que el archivo está confirmado en el Drive (por ejemplo, un video grande subido

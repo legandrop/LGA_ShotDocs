@@ -1,11 +1,90 @@
 # Arrastrar una carpeta entera (P.9)
 
-Estado: **diseño, sin implementar**. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
+Estado: **entrega 1 implementada (v0.081, rama `lega/carpetas`)**, con lo que no depende de Lega; ver "Cómo
+quedó" justo abajo. El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
 Lega"): la carpeta de la página es **una vista en vivo de una carpeta del Drive**, sin tope de archivos y en el
 plan gratis de Cloudflare. El primer diseño (commit `47bbbf4`, una fila de `files` por archivo) y su auditoría
 quedan resumidos al final, en "Historia"; lo que la auditoría encontró y sigue valiendo está incorporado.
 Sale de leer `fileDrop.ts`, `queue.ts`, `mediaDb.ts`, `attachments.ts`, el portero (`portero/src/`) y las
 migraciones de archivos y de la papelera en `main` (v0.051).
+
+## Cómo quedó (entrega 1, v0.081)
+
+**Qué ve el usuario.** Soltar una carpeta en la página abre la ventana "Upload this folder to Google Drive?": el
+nombre, "512 files in 38 folders · 4,2 GB", el desglose por tipo, el árbol plegable (hasta 300 renglones), lo
+salteado con su lista, la casilla *Include hidden files*, los avisos (más de 1000 archivos, archivos de más de
+1 GB), quién la va a ver y que la pestaña tiene que quedar abierta. *Upload* registra la carpeta, pone su bloque
+donde se soltó (después de los archivos sueltos del mismo soltar) y muestra cómo va: barra, "34 of 512 files ·
+1,2 of 4,2 GB", lo que falta, *Pause* / *Resume*, los errores por archivo con *Retry*, *Open the folder* y
+*Close* (sigue en segundo plano). La tarjeta de la carpeta (SVG de 360×96, como la de un adjunto, con una
+carpeta) dice "Google Drive folder · 4,2 GB" o, en el dispositivo que sube, "Uploading 34 of 512", "Paused…",
+"N files left: drop the folder here again" o "N files could not be uploaded". Un clic la elige y el segundo la
+abre (en solo lectura y en el teléfono, uno); *Open* de la barra y la barra espaciadora también. Mientras sube
+desde este dispositivo, abrirla muestra cómo va; si no, el visor.
+
+**El visor** (`src/ui/FolderViewer.tsx`): lo que hay ahora en la carpeta de Drive, pedido al portero cada vez que
+se abre. Migas que empiezan en la carpeta, primero las subcarpetas y después los archivos en orden natural, con
+la miniatura de Drive (por `/t/`) o un ícono, el peso y *Download*. Una foto o un video abre el carrete con las
+fotos y videos de esa subcarpeta (un `CarreteLoader` propio: la miniatura mientras carga y el archivo por su
+pase); un PDF o un texto se abre en otra pestaña; lo demás se baja con `?download=1`. Escape sube un nivel y, en
+la carpeta, cierra. Los accesos directos y los documentos de Google se muestran sin abrirse. Más de 1000 cosas:
+*Show more*. En el teléfono ocupa la pantalla.
+
+**Cómo está hecho:**
+
+- **En la página:** un bloque `image` con `sdmedia://<uuid>`, sin tipo nuevo; la fila de `files` tiene
+  `mime = 'inode/directory'` y el peso de lo que se subió (1 si estaba vacía). `MediaQueue.addFolder` la registra
+  en el acto con `register_file` (hace falta red: sin copia no hay nada que guardar para después) y la anota en el
+  dispositivo como propia, ya registrada y sin original; si vuelve a la cola (una copia restaurada), se registra
+  de nuevo y queda lista sin buscar un original. **Sin migración.**
+- **Leer la carpeta** (`src/media/folderRead.ts`): `webkitGetAsEntry` en el acto, `readEntries` en bucle,
+  subcarpetas vacías incluidas; se saltean lo que empieza con punto, `Thumbs.db`, `ehthumbs.db`, `desktop.ini`,
+  `Icon\r`, `__MACOSX` y `~$…` (con la casilla, entran); lo ilegible queda afuera con su motivo. La lista de un
+  `<input webkitdirectory>` también sirve (la usa "Choose the folder…" para retomar).
+- **La cola propia** (`src/media/folderUpload.ts`, `FolderUploads`): primero la carpeta y las subcarpetas, de a
+  30 por pedido y en orden; después los archivos, de a 3 a la vez, pidiendo las subidas de a 30. Los bytes pasan
+  **por el portero** (plan B del diseño, sección 5): el id de cada subida es la dirección de Google cifrada por el
+  portero, así no se guarda nada por archivo en el portero ni en la base, y el navegador nunca ve la dirección de
+  Google. Si Drive pide ir más despacio, espera (5 s, 10 s… hasta 2 min) y sigue; un archivo que falla 5 veces
+  queda con su error sin frenar a los demás. La lista de trabajo (ruta, peso, tipo, su subida, si llegó; sin
+  bytes) vive en `<base local>:folders`; al terminar se borra. Si la pestaña se cierra, la tarjeta pide volver a
+  soltar la carpeta (o elegirla en la ventana): se toma cada archivo que falta con la misma ruta y el mismo peso.
+  Sacar el workspace del dispositivo borra esa base.
+- **El portero** (`portero/src/core.ts`, ver `Doc_Portero.md`): `POST /folder/prepare`, `/folder/sessions`,
+  `/folder/list`, `GET /t/<pase>`, `PUT /upload/f.…` y `features: ['folders']` en `/drive/status`. La regla
+  "nunca hacia arriba" es código (`inTree`): todo id que manda la app (una subcarpeta para listar, una para subir,
+  la de arriba de una subcarpeta nueva) tiene que estar adentro del árbol, comprobado subiendo por sus `parents`
+  hasta la carpeta (o hasta una subcarpeta comprobada hace menos de 10 minutos, en la memoria de la instancia);
+  la raíz del Drive, un ciclo, algo que no es una carpeta, algo en la papelera o 30 niveles dicen que no. Las
+  subcarpetas creadas llevan `sdFolder` y `sdPath` (la ruta resumida): repetir un pedido no crea nada dos veces.
+  `/pass` de una carpeta responde `409 is_folder`.
+- **Permisos:** listar y bajar, nivel 1 sobre la carpeta (quien ve la página); crear y subir, nivel 3. Sin acceso
+  a la página, 404 como si no existiera; pedir otra carpeta del Drive, 404 al listar y 403 al subir.
+
+**Lo que falta, con su nivel:**
+
+- **Lega (MEDIO):** decidir `drive.readonly` (decisión 1). Hoy el portero pide `drive.file`: el visor muestra lo
+  que subió la app, no lo que se agregue a mano en Drive. El código no cambia con la decisión (la regla del árbol
+  ya es código); hace falta el cambio de permiso y que el dueño reconecte (ver el informe de la tanda).
+- **Subida directa del navegador a Google (plan A, BAJO):** no se probó (pide el Drive real); los bytes van por el
+  portero, que entra en el plan gratis (unos 10.300 pedidos por carpeta de 10.000 archivos, sección 12).
+- **Entrega 1b pendiente (BAJO):** "Agregar a esta carpeta", la cuadrícula, la copia de la última lista para
+  verla sin red, retomar con "Seguir" en Chrome y Edge (`FileSystemHandle`), el botón "Carpeta…" del menú `/`,
+  la cuenta de pedidos del día y contar lo que falta subir en "sacar el workspace del dispositivo".
+- **Entrega 2:** *Bajar todo* como zip.
+- **A confirmar por Lega (BAJO):** las carpetas que crea el portero siguen la regla de las carpetas del Drive
+  (sin espacios: `Dia 2` queda `Dia_2`, y una segunda `Referencias` del proyecto, `Referencias_2`); el visor
+  muestra los nombres de Drive. Los archivos conservan su nombre. La sección 6 decía "se limpian solo los
+  controles": si Lega prefiere los nombres tal cual en las subcarpetas, es un cambio de una línea
+  (`driveFolderName`).
+- **El iPhone:** sin probar a mano; si el navegador no da `webkitGetAsEntry`, se sigue pidiendo comprimirla.
+
+**Pruebas:** `portero/src/folders.test.ts` (crear el árbol y repetirlo, nombres, `_2`, niveles, rutas con `..`,
+subcarpetas de afuera, subidas cifradas de otra persona, tocadas o vencidas, Drive que pide ir más despacio,
+listar, accesos directos, documentos de Google, subcarpeta movida afuera, ciclos, el pase de una carpeta) y
+`src/media/folders.test.ts` (leer más de 100 por carpeta, salteados, `webkitdirectory`, la cola de punta a punta,
+un error que no frena, retomar por ruta y peso después de cerrar, pausar, la fila de la carpeta, sin red, la
+tarjeta). Recorrido en Chromium con el portero real en la página y un Drive de mentira: 16 de 16.
 
 ## Qué se pide
 

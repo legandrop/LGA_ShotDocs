@@ -18,8 +18,10 @@ Carpetas en el Drive del dueño, sin espacios (guiones bajos):
 └── LGA_ShotDocs
     ├── Media_Test                      (lo de la prueba de media)
     └── <Proyecto>                      (el nombre del proyecto, con _ y sin caracteres raros)
-        └── <AAAA-MM-DD>                (el día en que se subió)
-            └── IMG_1234.MOV
+        ├── <AAAA-MM-DD>                (el día en que se subió)
+        │   └── IMG_1234.MOV
+        └── Carpetas                    (las carpetas soltadas en las páginas, P.9)
+            └── Referencias             (con su árbol; sin espacios: Dia 2 → Dia_2)
 ```
 
 - **El nombre del proyecto** se pasa a guiones bajos y se le sacan los caracteres raros (barras, dos puntos,
@@ -119,6 +121,7 @@ Carpetas en el Drive del dueño, sin espacios (guiones bajos):
   | `cache:<id>:<peso>:h<n>`, `cache:<id>:<peso>:t<n>` | Los trozos de 127 KiB de cada punta. |
   | `cacheSlot:<n>` | Qué archivo ocupa cada uno de los 256 lugares de la caché. |
   | `cache:<id>` | El peso aprendido de un archivo de la prueba de media (su pase no lo trae). |
+| `carpetas:<id del proyecto>` | La carpeta `Carpetas` del proyecto (P.9). Lo de adentro de cada carpeta no se guarda: ni subidas ni listas. |
 
   **Nunca** se cambia el nombre de la clase `Store` ni las `migrations` de `portero/wrangler.jsonc`: ahí vive
   todo esto.
@@ -138,14 +141,18 @@ Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el arc
 | `GET /health` | Cualquiera | Responde `{ ok: true }`: sirve para ver que el portero está publicado. |
 | `GET /drive/callback` | Google | Vuelta de Google al conectar Drive. Guarda la conexión y vuelve a la ruta de la app que pidió `/drive/connect` (por defecto `/media-test`) con `?drive=<resultado>`. |
 | `GET` o `HEAD /m/<pase>` | Quien tenga el pase | Devuelve el archivo desde Drive o desde la caché del arranque, por partes (Range). El pase firmado es la única credencial y vence a las 8 horas. `?download=1`: se baja (`attachment`). `403 abusive` si Drive lo marcó como malware. |
-| `GET /drive/status` | Cualquier sesión | `{ connected, broken, email, isOwner, folder, picker }`. `email` y `folder` (la carpeta elegida para `LGA_ShotDocs`, `{ id, name }`, o `null` si va en la raíz) solo se le muestran al dueño. `picker`: si está `GOOGLE_API_KEY`. |
+| `GET /drive/status` | Cualquier sesión | `{ connected, broken, email, isOwner, folder, picker, features }`. `features`: lo que sabe hacer este portero (`['folders']` desde v0.081; la app no ofrece soltar carpetas a uno anterior). `email` y `folder` (la carpeta elegida para `LGA_ShotDocs`, `{ id, name }`, o `null` si va en la raíz) solo se le muestran al dueño. `picker`: si está `GOOGLE_API_KEY`. |
 | `POST /drive/connect` | Dueño | `{ return?: "/ruta" }` → la dirección de Google para conectar Drive. `return` es la ruta de la app a la que se vuelve (tiene que empezar con `/`). Solo desde una dirección de `APP_ORIGINS`. |
 | `POST /drive/picker` | Dueño | `{ apiKey, appId, token }` para el selector de carpetas de Google: la clave de API, el número del proyecto de Google (el principio de `GOOGLE_CLIENT_ID`, antes del primer `-`) y un token de acceso nuevo, de una hora, solo con `drive.file`. `404` si no está `GOOGLE_API_KEY`. |
 | `POST /drive/folder` | Dueño | `{ parentId: "<id>" \| null }`: guarda dónde va `LGA_ShotDocs` (`null` = la raíz) y, si la carpeta ya existe, la mueve ahí con todo lo que tiene adentro. Devuelve `{ folder }`. |
 | `POST /upload` con `file` | Nivel 3 o más | `{ file: <id>, name, mime, size, day: "AAAA-MM-DD" }`. Abre una subida reanudable en `LGA_ShotDocs/<Proyecto>/<día>` y devuelve `{ uploadId }`; si ya está en Drive, `{ status: 'done', file, linked }`. `404` si no existe o no lo puede ver; `403` si lo ve pero no puede editar; `409` si la base lo tiene en un archivo de Drive sin su marca; `507 drive_full` si el Drive del dueño está lleno. |
 | `POST /upload` sin `file` | Dueño | La prueba de media: abre una subida en `LGA_ShotDocs/Media_Test`. |
-| `PUT /upload/<id>` | El que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. Al terminar: `{ status: 'done', file }`; si es un archivo de una página, además `linked: true\|false` (si la base ya se enteró; la app lo marca subido solo con `true`). `507 drive_full` si el Drive se llenó (la subida queda y se retoma después). |
-| `POST /pass` con `file` | Nivel 1 o más | `{ file: <id> }` → `{ url, named: true }`: un pase para `/m/…`, siempre con el tipo y el nombre de `files` (un `type` o un `name` que mande la app no cuentan). `named: true` le dice a la app que este portero pone el nombre y entiende `?download=1` (un portero anterior responde solo `{ url }`). Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
+| `PUT /upload/<id>` | El que abrió la subida | Pasa una parte a Drive (`Content-Range: bytes a-b/total`), o, sin cuerpo y con `bytes */total`, pregunta cuánto llegó para retomar. Al terminar: `{ status: 'done', file }`; si es un archivo de una página, además `linked: true\|false` (si la base ya se enteró; la app lo marca subido solo con `true`). `507 drive_full` si el Drive se llenó (la subida queda y se retoma después). Con un id `f.…` (un archivo de una carpeta, P.9): el portero lo descifra, comprueba que sea de esta persona y de menos de 6 días (`410` si venció) y no guarda nada; al terminar responde `done` sin `linked` (no hay fila en la base). Si Drive pide ir más despacio, `503 rate`. |
+| `POST /pass` con `file` | Nivel 1 o más | Una carpeta (P.9): `409 is_folder` (lo de adentro se lista). `{ file: <id> }` → `{ url, named: true }`: un pase para `/m/…`, siempre con el tipo y el nombre de `files` (un `type` o un `name` que mande la app no cuentan). `named: true` le dice a la app que este portero pone el nombre y entiende `?download=1` (un portero anterior responde solo `{ url }`). Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
+| `POST /folder/prepare` | Nivel 3 o más | Carpetas (P.9, `Doc_Carpetas.md`). `{ file, name, dirs?, parents? }`: `file` es la fila de la carpeta (`mime = 'inode/directory'`). La primera vez crea `<Proyecto>/Carpetas/<nombre>` (si el nombre ya está, `_2`, `_3`…) con la marca `sdFile` y llama a `set_file_drive`. Después crea las subcarpetas de `dirs` (rutas relativas sin `..`, primero las de arriba, hasta 30); `parents` trae los ids de las de arriba creadas antes, y cada uno tiene que estar adentro del árbol (`403 outside` si no). Cada subcarpeta lleva `sdFolder` y `sdPath`: repetir un pedido no crea nada dos veces. → `{ root: { id, name }, dirs: { <ruta>: <id> } }`. |
+| `POST /folder/sessions` | Nivel 3 o más | `{ file, items: [{ dir, name, mime, size }] }`, hasta 30; `dir`: el id de la subcarpeta (adentro del árbol) o `null`. Abre una subida reanudable por archivo con el nombre, la carpeta y el peso fijados, y devuelve por cada uno `{ uploadId }` (la dirección de Google cifrada por el portero, con quién la abrió y cuándo; se usa con `PUT /upload/<id>` y vence a los 6 días), `{ done }` (un archivo vacío, ya creado) o `{ error: 'rate' }` (Drive pidió ir más despacio: pedirlo de nuevo después). No guarda nada por archivo. |
+| `POST /folder/list` | Nivel 1 o más | `{ file, dir?, pageToken? }`: lo que hay ahora en la carpeta (o en la subcarpeta `dir`, adentro del árbol; si no, `404`), sin la papelera de Drive, hasta 1000 por pedido. Las subcarpetas traen su id; cada archivo, su pase (`url`, 8 horas, con `m` = la fecha de cambio) y `thumb` si Drive tiene miniatura; los accesos directos y los documentos de Google, solo el nombre. → `{ entries, nextPageToken }`. `409 not_ready` si la carpeta todavía no se creó en Drive. |
+| `GET /t/<pase>` | Quien tenga el pase | La miniatura que hace Drive del archivo del pase (lado 320), por el portero (Drive no deja usarlas desde una página), con CSP `sandbox`; la guarda la caché de Cloudflare por archivo y fecha de cambio, y el navegador un día. |
 | `POST /pass` con `fileId` | Dueño | La prueba de media: un pase para un archivo de Drive por su id. |
 | `POST /trash` | Dueño o admin (lo decide la base) | `{ file: <id> }`: manda un archivo de la papelera de la app a la papelera de Drive (`PATCH files/<id>` con `trashed: true`; nunca lo borra). Con la sesión de la persona: `media_file`; Drive conectado y, si el archivo está en Drive, que lleve la marca de este (si algo de eso falla, no se le pide nada a la base y el archivo queda como estaba); `purge_file` (la base comprueba que sea dueño o admin con permiso sobre el proyecto y que el archivo esté en la papelera, y lo marca); `media_file` de nuevo (tiene que decir que está en la papelera y pedido); Drive; y al final `media_purged`. Devuelve `{ status: 'done', file, drive }`, con `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba) o `none` (todavía no está en Drive: si la subida seguía en curso, al terminar el portero lo manda solo a la papelera de Drive). Pedirlo de nuevo no hace nada de más. Los errores traen `{ error, code }` (tabla de abajo). |
 
@@ -224,7 +231,10 @@ subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuel
   subida se traba (ver "Subidas que se traban").
 - `src/ui/DriveDialog.tsx`: el diálogo *Google Drive* del menú de la cuenta (conectar, reconectar y
   dónde va la carpeta).
+- `src/media/folderUpload.ts` (`FolderUploads`): la cola de las carpetas (P.9), aparte de la de los archivos
+  sueltos; `src/ui/FolderViewer.tsx`, el visor. Ver `Doc_Carpetas.md`, "Cómo quedó".
 - Pruebas (entran en `npm test`): `portero/src/core.test.ts` (el Worker, con Drive y Supabase simulados),
+  `portero/src/folders.test.ts` (las carpetas y la regla de no salir del árbol),
   `src/media/portero.test.ts` (el cliente) y `src/media/queue.test.ts` (la cola). Los tipos del portero se
   revisan aparte, con `npx tsc -p portero --noEmit` (`npm run typecheck` no los cubre).
 
@@ -320,6 +330,17 @@ tamaño, y al vencer el archivo vuelve a la cola como una subida trabada. Detall
 archivos, la vuelta gasta un minuto en cada uno en vez de cortarse; con Storage colgado para todos pasa lo
 mismo con la miniatura (de 30 a 62 s por archivo en cada vuelta). Y el plazo que le sirvió a un archivo
 detrás de un proxy lento no se recuerda para el siguiente.
+
+### Carpetas: nunca hacia arriba (P.9)
+
+Con `drive.file` (hoy) el portero ve solo lo que creó la app; con `drive.readonly` (si Lega lo decide) vería
+todo el Drive del dueño. Por eso la regla de no salir de la carpeta es **código del portero** y no depende del
+permiso de Google: todo id de Drive que manda la app (una subcarpeta para listar, una para subir, la de arriba de
+una subcarpeta nueva) se comprueba subiendo por sus `parents` hasta la carpeta de la app (`inTree`). Lo
+comprobado se recuerda 10 minutos en la memoria de la instancia (`index.ts` usa el mismo `Store` en todos los
+pedidos de la instancia): una subcarpeta que el dueño movió afuera deja de verse a más tardar a los 10 minutos.
+La raíz del Drive, un ciclo, algo que no es una carpeta (un acceso directo), algo en la papelera, una carpeta con
+dos padres o 30 niveles: no. Sin acceso a la página, todo da `404` como si no existiera.
 
 ## Publicarlo y conectarlo (una vez por workspace)
 
