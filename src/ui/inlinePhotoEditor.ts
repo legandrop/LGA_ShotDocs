@@ -82,8 +82,10 @@ export function decorateRows(doc: PMNode): DecorationSet {
       const n = row.positions.length;
       const sum = row.fracs.reduce((s, f) => s + f, 0);
       const full = sum > 1 - 1e-3;
+      // Después del cursor (`side: 1`): con el cursor al final del texto, lo que se escribe va al texto (antes de la
+      // marca, el navegador lo ponía después de la primera foto: medido en Chromium).
       if (full && afterText(doc, row.positions[0])) {
-        decorations.push(Decoration.widget(row.positions[0], rowStart, { side: -1, key: 'sd-photo-row-start', marks: [] }));
+        decorations.push(Decoration.widget(row.positions[0], rowStart, { side: 1, key: 'sd-photo-row-start', marks: [] }));
       }
       row.positions.forEach((at, k) => {
         const classes = ['sd-photo-sized'];

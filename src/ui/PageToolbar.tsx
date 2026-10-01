@@ -2,6 +2,7 @@ import type { Dictionary } from '@blocknote/core';
 import {
   blockTypeSelectItems,
   FormattingToolbar,
+  FormattingToolbarController,
   getFormattingToolbarItems,
   useBlockNoteEditor,
   useComponentsContext,
@@ -11,7 +12,7 @@ import {
   type BlockTypeSelectItem,
 } from '@blocknote/react';
 import { NodeSelection } from '@tiptap/pm/state';
-import type { ReactNode } from 'react';
+import { useMemo, type JSX, type ReactNode } from 'react';
 import { useT, type Translate } from '../i18n';
 import '../i18n/lazy/editor';
 import { selectWholeBlock } from './blockHandle';
@@ -166,6 +167,18 @@ function usePhotoSelection(): 'only' | 'mixed' | null {
       return selectedPhotos(state).length > 0 ? 'mixed' : null;
     },
   });
+}
+
+/**
+ * El controlador de BlockNote para la barra de formato, que no se abre con una foto en línea elegida o solo fotos
+ * elegidas (ahí va la barra propia, PhotoToolbar.tsx). No alcanza con no dibujar su contenido: su contenedor
+ * flotante igual aparece un instante al soltar el clic (arriba a la izquierda, antes de ubicarse) y se queda con el
+ * clic en otra foto (medido en Chromium: el clic en la foto vecina no la elegía).
+ */
+export function PageFormattingToolbarController({ formattingToolbar }: { formattingToolbar: () => JSX.Element }) {
+  const photos = usePhotoSelection();
+  const closed = useMemo(() => ({ useFloatingOptions: { open: false } }), []);
+  return <FormattingToolbarController formattingToolbar={formattingToolbar} floatingUIOptions={photos === 'only' ? closed : undefined} />;
 }
 
 /** La barra de formato de la página. */

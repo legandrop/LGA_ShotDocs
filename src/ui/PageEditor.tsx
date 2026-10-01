@@ -4,7 +4,6 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import { BlockNoteView } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
 import {
-  FormattingToolbarController,
   getDefaultReactSlashMenuItems,
   SuggestionMenuController,
   useCreateBlockNote,
@@ -52,7 +51,7 @@ import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
 import { BlockSideMenuController } from './BlockSideMenu';
-import { PageFormattingToolbar, pageToolbarItems } from './PageToolbar';
+import { PageFormattingToolbar, PageFormattingToolbarController, pageToolbarItems } from './PageToolbar';
 import { PhotoToolbarController } from './PhotoToolbar';
 import { undoGuardExtension } from './undoGuard';
 import { BACKGROUND_META } from './editorMeta';
@@ -821,7 +820,7 @@ function BlockEditor({
         sideMenu={false}
       >
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
-        <FormattingToolbarController formattingToolbar={formattingToolbar} />
+        <PageFormattingToolbarController formattingToolbar={formattingToolbar} />
         {/* La barra de la foto en línea elegida (PhotoToolbar.tsx). */}
         {editable && <PhotoToolbarController canComment={canComment} onView={(key) => openAtRef.current(key)} />}
         {/* Los tres puntos de cada bloque: arrastrar lo mueve, un clic lo elige y abre la barra de formato. */}

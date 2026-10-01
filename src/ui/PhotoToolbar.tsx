@@ -169,7 +169,11 @@ export function PhotoToolbar({ canComment, onView }: { canComment: boolean; onVi
   );
 }
 
-/** El rectángulo que abarca las fotos (en la pantalla), o `null`. */
+/**
+ * El rectángulo que abarca las fotos (en la pantalla), o `null`. Arriba, el de la foto más alta de su renglón: las
+ * fotos se alinean abajo, y una barra puesta arriba de una foto baja taparía a la vecina más alta (y el clic en la
+ * vecina caería en la barra, como pasaba en la auditoría de v0.076 con la barra de texto).
+ */
 function photosRect(editor: AnyEditor, positions: readonly number[]): DOMRect | null {
   const view = editor.prosemirrorView;
   if (!view) return null;
@@ -181,12 +185,24 @@ function photosRect(editor: AnyEditor, positions: readonly number[]): DOMRect | 
     const dom = view.nodeDOM(p);
     if (!(dom instanceof HTMLElement)) continue;
     const r = dom.getBoundingClientRect();
-    top = Math.min(top, r.top);
+    top = Math.min(top, r.top, lineTop(dom, r));
     left = Math.min(left, r.left);
     right = Math.max(right, r.right);
     bottom = Math.max(bottom, r.bottom);
   }
   return Number.isFinite(top) ? new DOMRect(left, top, right - left, bottom - top) : null;
+}
+
+/** Lo más alto de las fotos del mismo renglón visual que `photo` (las que terminan a la misma altura). */
+function lineTop(photo: HTMLElement, r: DOMRect): number {
+  let top = r.top;
+  const line = photo.parentElement;
+  if (!line) return top;
+  for (const other of line.querySelectorAll<HTMLElement>(':scope > .sd-photo')) {
+    const o = other.getBoundingClientRect();
+    if (Math.abs(o.bottom - r.bottom) < 3) top = Math.min(top, o.top);
+  }
+  return top;
 }
 
 /** Dónde va la barra: arriba de las fotos (10 px), o abajo si arriba no entra; adentro de la pantalla. */
