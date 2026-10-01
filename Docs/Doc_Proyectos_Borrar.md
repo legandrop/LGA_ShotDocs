@@ -1,13 +1,12 @@
 # Borrar y archivar proyectos (P.14)
 
-Estado: **diseño EN CURSO, incompleto; sin implementar** (2026-10-01). Están escritas todas las secciones, pero
-el documento se cerró sin la relectura final ni la auditoría: ver "Lo que falta", al final. Faltan también las
-respuestas de Lega a las preguntas. Nada de esto está en la base ni en la app: el SQL de las secciones 1 y 3 es una
-propuesta **sin ejecutar** (no hay Postgres en la computadora de trabajo); antes de aplicarlo se corre con su
-prueba dentro de `begin; … rollback;` contra la base, como manda la sección 11 de `Plan_Workspaces.md`. Sale
-de leer `main` en `19c7692` (v0.074): las migraciones de `supabase/migrations/`, `src/sync/` (árbol, motor,
-remoto, permisos), `src/ui/ProjectSwitcher.tsx`, `src/ui/project.ts`, `src/ui/Workspace.tsx`,
-`src/ui/WorkspaceMenu.tsx`, `src/ui/TrashView.tsx`, `src/media/` (papelera de archivos, peso) y `portero/src/`.
+Estado: **diseño completo, sin implementar** (2026-10-01). Faltan la auditoría independiente del diseño y las
+respuestas de Lega a las preguntas del final. Nada de esto está aplicado en la base ni en la app: el SQL de las
+tres migraciones (entregas 1, 2 y 3: secciones 1.3, 3.6 y 2.3) **se corrió con sus pruebas contra la base real
+dentro de `begin; … rollback;`** y pasa entero, con las once pruebas que ya existían (sección 9.3). Sale de leer
+`main` en `19c7692` (v0.074): las migraciones de `supabase/migrations/`, `src/sync/` (árbol, motor, remoto,
+permisos), `src/ui/ProjectSwitcher.tsx`, `src/ui/project.ts`, `src/ui/Workspace.tsx`, `src/ui/WorkspaceMenu.tsx`,
+`src/ui/TrashView.tsx`, `src/media/` (papelera de archivos, peso) y `portero/src/`.
 
 ## Qué se pide
 
@@ -69,10 +68,12 @@ se desarchiva desde una lista de archivados.
    archivar y borrar; en el teléfono, un "⋯" por renglón. Al pie, *Archived projects (N)* y *Deleted
    projects*, que cambian el mismo selector a esas listas. La ventana de borrar muestra nombre, páginas,
    archivos, GB en Drive, con quiénes está compartido, el plazo y pide escribir `delete` / `borrar`.
-10. **Migración** `20261001120000_proyectos_archivar_borrar.sql` (entrega 1, `schema_version` 9) completa en la
-    sección 1.3, con su prueba SQL en la 1.4. La de Drive (entrega 2, versión 10) va como borrador en la 3.6.
+10. **Migraciones, completas y probadas en rollback:** `20261001120000_proyectos_archivar_borrar.sql` (entrega 1,
+    `schema_version` 9; secciones 1.3 y 1.4), la de Drive (entrega 2, versión 10; 3.6 y 3.7) y la de *Delete
+    forever* (entrega 3, versión 11; 2.3). Borrar y restaurar el proyecto más grande de la base (640 páginas,
+    2297 archivos) tarda 1,2 y 1,3 segundos.
 11. **Entregas:** 1) archivar, borrar y restaurar sin tocar Drive; 2) la casilla de Drive (portero y migración
-    10, después de la prueba técnica); 3) *Delete forever*.
+    10, después de la prueba técnica); 3) *Delete forever*, recién después de los 30 días.
 
 ## 0. Lo que hay hoy y condiciona el diseño
 
@@ -95,6 +96,18 @@ se desarchiva desde una lista de archivados.
 | `portero/src/core.ts:679-703`, `:894-932`, `:954-962` | La carpeta de cada proyecto se crea con la marca `sdProject` y el portero recuerda su id (`project:<id>`); si está en la papelera, crea otra. `/trash` manda **un archivo** a la papelera de Drive. | Mandar la carpeta entera es un pedido; archivo por archivo, 2300 pedidos para un proyecto como el de Coda (sección 3.4). |
 | `src/import/codaImport.ts:336-340`, `Doc_Importar_Coda.md:128` | Una importación cortada se puede seguir si su proyecto sigue en el árbol; si no, se olvida. "El proyecto a medias queda: la app todavía no borra ni archiva proyectos". | Borrar es la forma de limpiar importaciones de prueba; el diario de la importación se conserva mientras el proyecto esté en la papelera (sección 8). |
 | `Plan_Workspaces.md:213-216` | Los proyectos privados de alguien que se va "van a la papelera del workspace y nadie los ve en la app". | Esa "papelera del workspace" es esta papelera de proyectos. |
+
+### 0.1 Cómo queda cada condicionante
+
+| Condicionante | Cómo queda | Dónde |
+|---|---|---|
+| El "primer proyecto" guardado en cada dispositivo (`services.ts:172-191`) que el árbol agrega siempre (`tree.ts:565-569`), y que además es el proyecto por defecto al crear una página sin proyecto (`tree.ts:243`) y al que cae `useCurrentProject` (`project.ts:69`) | **Resuelto en el diseño, a implementar:** el relleno solo mientras el dispositivo nunca bajó la lista; si la lista del servidor no lo trae, se reemplaza por el primero activo y se guarda. `tree.workspaceId` hoy es `readonly` (`tree.ts:93`): pasa a poder cambiarse (o a calcularse). En una versión vieja queda un "My project" vacío: lo acota subir `min_app_version`. | 6.4, 6.5 |
+| `can_view_file` deja ver un archivo a su creador sin mirar niveles | **Resuelto y probado:** el creador lo ve solo si su proyecto no está borrado. La prueba lo mira para la dueña que creó f1 (`files` en 0, `media_file` nulo). | 1.3, 1.4 (C e I) |
+| `accept_invitations` perdería el permiso de una invitación a un proyecto borrado | **Resuelto y probado:** revisa a quien invitó con los niveles "sin mirar el borrado"; el permiso queda guardado y vale al restaurar. | 1.3, 1.4 (F) |
+| `project_sizes` da "no" con el proyecto borrado | **Resuelto y probado:** para un borrado, la puerta es `can_manage_project`; en la entrega 2 cuenta además la carpeta en la papelera de Drive. | 1.3, 3.6, pruebas B, C, J, K |
+| Cada renglón del selector es un `<button>` (`ProjectSwitcher.tsx:244-275`): no admite íconos adentro | **Resuelto en el diseño, a implementar:** el renglón pasa a ser un contenedor con la zona que abre (la opción) y los íconos al lado. | 7.1 |
+| Versiones viejas publicadas | **Resuelto donde importa:** la base decide (niveles en 0, política de `workspaces`, marcas no escribibles desde la API), así que una versión vieja no ve ni escribe un borrado; lo que tenga sin subir queda rechazado y a la vista. Lo que se ve raro (primer proyecto vacío, archivados como uno más) lo acota subir `min_app_version`. | 6.5, 6.6 |
+| El portero recrea la carpeta del proyecto si está en la papelera de Drive (`core.ts:679-703`) | **Resuelto en el diseño:** con el proyecto borrado no se puede abrir ninguna subida (pide nivel 3), y restaurar exige traer la carpeta antes; los casos que quedan (una subida ya abierta, restaurar sin la carpeta) están en 3.8. | 3.8 |
 
 ## 1. Modelo de datos y migración (entrega 1)
 
@@ -128,14 +141,14 @@ En `public.workspaces` (una fila por proyecto):
 | `public.accept_invitations` | Revisa a quien invitó con los niveles "sin mirar el borrado". | Una invitación aceptada mientras el proyecto está borrado deja su permiso guardado (sin efecto); al restaurar, vale. |
 | `public.project_sizes` | Para un proyecto borrado, la puerta es `can_manage_project`. | Quien puede restaurarlo sigue viendo su peso (la lista de borrados lo muestra). La app publicada lo suma en el total del diálogo de Drive, que es lo correcto: sigue ocupando el Drive. |
 | Nuevas privadas | `could_view_project` (lo veía, sin mirar el borrado), `can_manage_project` (la regla de la sección 5), `refresh_project_files` (recalcula la papelera de archivos del proyecto). | |
-| Nuevas públicas | `set_project_archived`, `delete_project`, `restore_project`, `trashed_projects`, `project_delete_info`. | Idempotentes: repetirlas no cambia nada. Errores: `project_not_found` (P0002) si no existe o la sesión no lo veía; `not_allowed` (42501) si lo ve pero no puede; `project_deleted` (P0001) al archivar uno borrado; `archived_invalid` (22023). |
+| Nuevas públicas | `set_project_archived`, `delete_project`, `restore_project`, `trashed_projects`, `project_delete_info`. | Idempotentes: repetirlas no cambia nada. Errores: `project_not_found` (P0002) si no existe o la sesión no lo veía; `not_allowed` (42501) si lo ve pero no puede; `project_deleted` (P0001) al archivar uno borrado; `archived_invalid` (22023). `trashed_projects` muestra quién lo borró solo a quien lo maneja y al dueño y los admins, y los números (páginas, archivos) solo a quien lo maneja: a quien veía una sola página no le dice cuánto tenía el proyecto ni le da correos del equipo (como `list_members`). |
 | Sin cambios | `workspaces_insert` (crear con el mismo id que uno borrado: `on conflict do nothing`, no da error y el proyecto sigue borrado), `remove_member` (los proyectos borrados que compartía pasan a un heredero como los demás: alguien podrá restaurarlos), `media_whoami`. | |
 
 Archivar no toca ninguna política: los niveles no cambian.
 
 ### 1.3 La migración, completa
 
-`supabase/migrations/20261001120000_proyectos_archivar_borrar.sql` (propuesta; sin ejecutar):
+`supabase/migrations/20261001120000_proyectos_archivar_borrar.sql` (probada en rollback contra la base real, sección 9.3; sin aplicar):
 
 ```sql
 -- LGA Shot Docs · archivar y borrar proyectos (P.14 del roadmap; Docs/Doc_Proyectos_Borrar.md), entrega 1.
@@ -450,19 +463,29 @@ $$;
 
 -- La papelera de proyectos: los borrados que la sesión veía antes, lo último primero. `days_left`: cuántos días
 -- faltan para los 30 (30 el día que entra, 0 si ya pasaron). `can_restore`: si la sesión lo puede restaurar.
--- `pages` (sin las que están en la papelera de páginas) y `files` (sin los que ya están en la papelera de Drive),
--- para mostrar. El peso sale de `project_sizes` (solo a quien puede restaurarlo).
+-- Quién lo borró (`deleted_by`, `deleted_by_email`): solo a quien lo maneja y al dueño y los admins (los demás no
+-- ven correos del equipo: `list_members`). `pages` (sin las que están en la papelera de páginas) y `files` (sin
+-- los que ya están en la papelera de Drive): solo a quien lo maneja (a quien veía una sola página no se le dice
+-- cuánto tenía el proyecto). El peso sale de `project_sizes` (también solo a quien puede restaurarlo).
 create function public.trashed_projects()
 returns table (id uuid, name text, archived_at timestamptz, deleted_at timestamptz, deleted_by uuid,
                deleted_by_email text, days_left int, can_restore boolean, pages int, files int)
 language sql stable security definer set search_path = ''
 as $$
-  select w.id, w.name, w.archived_at, w.deleted_at, w.deleted_by, u.email::text,
+  select w.id, w.name, w.archived_at, w.deleted_at,
+         case when m.can or m.staff then w.deleted_by end,
+         case when m.can or m.staff then u.email::text end,
          greatest(0, ceil(extract(epoch from (w.deleted_at + interval '30 days' - now())) / 86400))::int,
-         private.can_manage_project(w.id),
-         (select count(*)::int from public.pages pg where pg.workspace_id = w.id and pg.deleted_at is null),
-         (select count(*)::int from public.files f where f.project_id = w.id and f.drive_trashed_at is null)
+         m.can,
+         case when m.can then
+           (select count(*)::int from public.pages pg where pg.workspace_id = w.id and pg.deleted_at is null) end,
+         case when m.can then
+           (select count(*)::int from public.files f where f.project_id = w.id and f.drive_trashed_at is null) end
   from public.workspaces w
+  cross join lateral (
+    select private.can_manage_project(w.id) as can,
+           coalesce(private.workspace_role() in ('owner', 'admin'), false) as staff
+  ) m
   left join auth.users u on u.id = w.deleted_by
   where w.deleted_at is not null
     and private.could_view_project(w.id, w.owner_id)
@@ -745,16 +768,21 @@ Notas para la auditoría:
   id (`refresh_project_files`), como el trigger `pages_file_trash`: un borrado y una página que entra a la
   papelera a la vez no se cruzan. Un `push_page_update` que ya pasó su control de permiso antes del borrado
   termina y queda guardado: no se pierde nada.
-- **Tiempo:** `refresh_project_files` hace un `refresh_file_trash` por archivo (bloquea la fila y mira sus usos).
-  Para un proyecto como la importación de Coda (unos 2300 archivos) son unos pocos miles de búsquedas por
-  índice, bien adentro del tope de 8 s de las consultas de la API (`authenticated`), pero **hay que medirlo**
-  en la prueba con la base real (sección 9). Con decenas de miles de archivos haría falta partirlo en tandas.
+- **Tiempo (medido, sección 9.3):** `refresh_project_files` hace un `refresh_file_trash` por archivo (bloquea la
+  fila y mira sus usos). Con el proyecto más grande de la base (la importación de Coda: 640 páginas, 2297
+  archivos, 2602 usos), `delete_project` tardó **1,24 s** y `restore_project` **1,29 s**, y `project_delete_info`
+  59 ms: unos 0,5 ms por archivo, adentro del tope de 8 s de las consultas de la API (`authenticated`). El
+  límite cae cerca de los 12.000–15.000 archivos por proyecto; si alguna vez se acerca, `refresh_project_files`
+  se parte en tandas (la app llama de nuevo hasta que termine).
 
 ### 1.4 La prueba SQL, completa
 
-`supabase/tests/proyectos_borrar_permisos.sql` (propuesta; sin ejecutar). Huella antes de borrar y después de
-restaurar (la regla "exactamente como estaba"), cada persona con lo que ve y lo que no, la papelera de archivos
-y el peso mientras está borrado, la invitación aceptada en el medio y que nada se escribe directo.
+`supabase/tests/proyectos_borrar_permisos.sql` (corrida contra la base real dentro de la transacción con la
+migración: pasa; sección 9.3). Huella antes de borrar y después de restaurar (la regla "exactamente como estaba"),
+cada persona con lo que ve y lo que no, la papelera de archivos y el peso mientras está borrado, la invitación
+aceptada en el medio, que nada se escribe directo y (sección I) todos los niveles y las filas que ve cada persona
+—dueña, admin que lo maneja, miembro, invitada por una página, admin sin permiso, invitada nueva— en cero con el
+proyecto borrado y otra vez iguales a los de antes al restaurarlo, también en los buckets `page-files` y `thumbs`.
 
 ```sql
 -- Pruebas de archivar y borrar proyectos (P.14, Docs/Doc_Proyectos_Borrar.md): quién archiva, borra y restaura;
@@ -1197,6 +1225,10 @@ do $$
 begin
   assert (select not t.can_restore from public.trashed_projects() t where t.id = '00000000-0000-4000-8000-0000000d1001'),
     'la admin con ver no lo ve en la papelera de proyectos, o lo puede restaurar';
+  -- Una admin ve quién lo borró, pero no cuánto tenía (no lo maneja).
+  assert (select t.deleted_by_email = 'pb-ow@test.invalid' and t.pages is null and t.files is null
+          from public.trashed_projects() t where t.id = '00000000-0000-4000-8000-0000000d1001'),
+    'la admin con ver: quién lo borró o los números de P no son los esperados';
   assert pg_temp.size_of('00000000-0000-4000-8000-0000000d1001') is null, 'la admin con ver ve el peso de P borrado';
   perform pg_temp.expect_error($q$select public.restore_project('00000000-0000-4000-8000-0000000d1001')$q$,
     'not_allowed', 'la admin con ver restaura P');
@@ -1209,6 +1241,9 @@ begin
   assert private.page_level('00000000-0000-4000-8000-0000000d2001') = 0, 'el miembro tiene nivel sobre p1';
   assert (select not t.can_restore from public.trashed_projects() t where t.id = '00000000-0000-4000-8000-0000000d1001'),
     'el miembro no lo ve en la papelera de proyectos, o lo puede restaurar';
+  assert (select t.deleted_by_email is null and t.pages is null
+          from public.trashed_projects() t where t.id = '00000000-0000-4000-8000-0000000d1001'),
+    'el miembro ve quién borró P o cuánto tenía';
   assert public.ensure_workspace() is null, 'ensure_workspace da al miembro un proyecto borrado';
 end;
 $$;
@@ -1220,6 +1255,10 @@ begin
     'la invitada ve p1';
   assert (select not t.can_restore from public.trashed_projects() t where t.id = '00000000-0000-4000-8000-0000000d1001'),
     'la invitada no lo ve en la papelera de proyectos, o lo puede restaurar';
+  -- Ni el correo de quien lo borró ni cuánto tenía el proyecto: solo veía una página.
+  assert (select t.deleted_by is null and t.deleted_by_email is null and t.pages is null and t.files is null
+          from public.trashed_projects() t where t.id = '00000000-0000-4000-8000-0000000d1001'),
+    'la invitada ve quién borró P o cuánto tenía';
 end;
 $$;
 -- Los que nunca lo vieron: tampoco en la papelera de proyectos.
@@ -1393,14 +1432,135 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------------------------------
+-- I. Todos los niveles en 0 con el proyecto borrado, y de vuelta igual al restaurar (por persona), más los
+--    buckets `page-files` y `thumbs`
+-- ---------------------------------------------------------------------------------------------------
+-- Todo lo que decide permisos sobre P, p1, p2 y f1, en un texto. Corre como la sesión.
+create function pg_temp.levels() returns text language sql as $$
+  select concat_ws(' ',
+    'pl1=' || private.page_level('00000000-0000-4000-8000-0000000d2001'),
+    'pl2=' || private.page_level('00000000-0000-4000-8000-0000000d2002'),
+    'prl=' || private.project_level('00000000-0000-4000-8000-0000000d1001'),
+    'vp=' || private.can_view_page('00000000-0000-4000-8000-0000000d2001'),
+    'ep=' || private.can_edit_page('00000000-0000-4000-8000-0000000d2001'),
+    'cp=' || private.can_create_page('00000000-0000-4000-8000-0000000d1001', null),
+    'cpp=' || private.can_create_page('00000000-0000-4000-8000-0000000d1001', '00000000-0000-4000-8000-0000000d2001'),
+    'sh=' || private.can_share('00000000-0000-4000-8000-0000000d1001', null),
+    'shp=' || private.can_share(null, '00000000-0000-4000-8000-0000000d2001'),
+    'ft=' || private.can_see_file_trash('00000000-0000-4000-8000-0000000d1001'),
+    'pu=' || private.can_purge_files('00000000-0000-4000-8000-0000000d1001'),
+    'fl=' || private.file_level('00000000-0000-4000-8000-0000000d3001'),
+    'es=' || private.can_edit_some_page('00000000-0000-4000-8000-0000000d1001'),
+    'w=' || (select count(*) from public.workspaces w where w.id = '00000000-0000-4000-8000-0000000d1001'),
+    'pg=' || (select count(*) from public.pages pg where pg.workspace_id = '00000000-0000-4000-8000-0000000d1001'),
+    'up=' || (select count(*) from public.page_updates u where u.page_id = '00000000-0000-4000-8000-0000000d2001'),
+    'f=' || (select count(*) from public.files f where f.project_id = '00000000-0000-4000-8000-0000000d1001'),
+    'pf=' || (select count(*) from public.page_files pf where pf.page_id = '00000000-0000-4000-8000-0000000d2001'),
+    'c=' || (select count(*) from public.comments c where c.page_id = '00000000-0000-4000-8000-0000000d2001'),
+    'st=' || (select count(*) from storage.objects o
+              where (o.bucket_id = 'thumbs' and o.name = '00000000-0000-4000-8000-0000000d3001.jpg')
+                 or (o.bucket_id = 'page-files' and o.name = '00000000-0000-4000-8000-0000000d2001/x.jpg')));
+$$;
+
+-- Lo que da todo cero.
+create function pg_temp.zero() returns text language sql as $$
+  select 'pl1=0 pl2=0 prl=0 vp=false ep=false cp=false cpp=false sh=false shp=false ft=false pu=false fl=0 es=false w=0 pg=0 up=0 f=0 pf=0 c=0 st=0';
+$$;
+
+select set_config('role', 'postgres', true);
+-- Una miniatura de f1 y un archivo viejo de p1 en los buckets (filas solas: el contenido no importa).
+insert into storage.objects (bucket_id, name) values
+  ('thumbs', '00000000-0000-4000-8000-0000000d3001.jpg'),
+  ('page-files', '00000000-0000-4000-8000-0000000d2001/x.jpg');
+
+-- Antes de borrar: cada persona anota lo suyo.
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0001'); select set_config('borrar.lv1', pg_temp.levels(), true);
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0002'); select set_config('borrar.lv2', pg_temp.levels(), true);
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0004'); select set_config('borrar.lv4', pg_temp.levels(), true);
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0006'); select set_config('borrar.lv6', pg_temp.levels(), true);
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0007'); select set_config('borrar.lv7', pg_temp.levels(), true);
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0009'); select set_config('borrar.lv9', pg_temp.levels(), true);
+
+do $$
+begin
+  -- Que la prueba mida algo: antes de borrar, la dueña ve todo, la invitada ve p1 y p2 por su permiso de
+  -- página, y la admin sin permiso no ve nada.
+  assert current_setting('borrar.lv1') like 'pl1=4 pl2=4 prl=4 vp=true ep=true cp=true cpp=true sh=true shp=true ft=true pu=true fl=4 es=true w=1 pg=3 up=1 f=4 pf=2 c=1 st=2',
+    format('la dueña antes: %s', current_setting('borrar.lv1'));
+  assert current_setting('borrar.lv6') like 'pl1=1 pl2=1 prl=0 vp=true ep=false % w=1 pg=2 %',
+    format('la invitada antes: %s', current_setting('borrar.lv6'));
+  assert current_setting('borrar.lv7') = pg_temp.zero(), format('la admin sin permiso antes: %s', current_setting('borrar.lv7'));
+end;
+$$;
+
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0002');
+select public.delete_project('00000000-0000-4000-8000-0000000d1001');
+
+-- Con P borrado: todo en cero para todos (dueña, admin que lo borró, miembro, invitada por página, sin permiso,
+-- invitada nueva).
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0001');
+do $$ begin assert pg_temp.levels() = pg_temp.zero(), format('dueña con P borrado: %s', pg_temp.levels()); end; $$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0002');
+do $$ begin assert pg_temp.levels() = pg_temp.zero(), format('admin con P borrado: %s', pg_temp.levels()); end; $$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0004');
+do $$ begin assert pg_temp.levels() = pg_temp.zero(), format('miembro con P borrado: %s', pg_temp.levels()); end; $$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0006');
+do $$
+begin
+  assert pg_temp.levels() = pg_temp.zero(), format('invitada con P borrado: %s', pg_temp.levels());
+  -- Tampoco por los caminos de la papelera de archivos ni del portero.
+  assert public.media_file('00000000-0000-4000-8000-0000000d3001') is null, 'la invitada: media_file da f1';
+  perform pg_temp.expect_error($q$select public.project_delete_info('00000000-0000-4000-8000-0000000d1001')$q$,
+    'not_allowed', 'la invitada lee la ventana de borrar de P borrado');
+end;
+$$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0007');
+do $$
+begin
+  assert pg_temp.levels() = pg_temp.zero(), format('admin sin permiso con P borrado: %s', pg_temp.levels());
+  perform pg_temp.expect_error($q$select public.project_delete_info('00000000-0000-4000-8000-0000000d1001')$q$,
+    'project_not_found', 'la admin sin permiso lee la ventana de borrar');
+end;
+$$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0009');
+do $$ begin assert pg_temp.levels() = pg_temp.zero(), format('invitada nueva con P borrado: %s', pg_temp.levels()); end; $$;
+
+-- Un proyecto borrado no se puede archivar; y la papelera la ve la invitada por página (sin restaurar).
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0001');
+do $$
+begin
+  perform pg_temp.expect_error($q$select public.set_project_archived('00000000-0000-4000-8000-0000000d1001', true)$q$,
+    'project_deleted', 'archiva un proyecto borrado');
+end;
+$$;
+
+-- Restaurar (la dueña): cada persona vuelve a tener exactamente lo de antes.
+select public.restore_project('00000000-0000-4000-8000-0000000d1001');
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0001');
+do $$ begin assert pg_temp.levels() = current_setting('borrar.lv1'), format('dueña restaurado: %s', pg_temp.levels()); end; $$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0002');
+do $$ begin assert pg_temp.levels() = current_setting('borrar.lv2'), format('admin restaurado: %s', pg_temp.levels()); end; $$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0004');
+do $$ begin assert pg_temp.levels() = current_setting('borrar.lv4'), format('miembro restaurado: %s', pg_temp.levels()); end; $$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0006');
+do $$ begin assert pg_temp.levels() = current_setting('borrar.lv6'), format('invitada restaurado: %s', pg_temp.levels()); end; $$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0007');
+do $$ begin assert pg_temp.levels() = current_setting('borrar.lv7'), format('sin permiso restaurado: %s', pg_temp.levels()); end; $$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0009');
+do $$ begin assert pg_temp.levels() = current_setting('borrar.lv9'), format('invitada nueva restaurado: %s', pg_temp.levels()); end; $$;
+select set_config('role', 'postgres', true);
+
 rollback;
 
 select 'ok' as result;
 ```
 
-Lo que la prueba no cubre y queda para la de punta a punta (sección 9): el bucket `thumbs` y el portero con
-un proyecto borrado (siguen a `file_level`, que la prueba sí mira con `media_file`), y el tiempo de
-`refresh_project_files` con miles de archivos.
+Lo que la prueba no cubre y queda para la de punta a punta (sección 9): el portero de verdad con un proyecto
+borrado (decide con `media_file`, que la prueba mira: da nulo) y dos pedidos a la vez (un borrado mientras otra
+sesión sube contenido: la prueba corre en una sola conexión). Los buckets se miran con filas de
+`storage.objects` (sin el archivo: las políticas solo miran el nombre). El tiempo con miles de archivos se midió
+aparte, con el proyecto más grande de la base (sección 9.3).
 
 ## 2. Borrar no es borrado duro: la papelera de proyectos
 
@@ -1434,6 +1594,298 @@ ni tareas en el portero, ni ninguna clave de servicio.
 - **Borrar filas de verdad** (las páginas y su contenido de un proyecto purgado) queda fuera de la app: si
   algún día hace falta (la base gratis tiene 500 MB y hoy usa unos 2 MB), es un SQL a mano del dueño de la base,
   con la copia de seguridad antes.
+
+### 2.3 La migración de la entrega 3 (*Delete forever*)
+
+**Decisión del diseño:** *Delete forever* existe, pero es una marca y no un borrado. Así se cumplen las dos
+reglas a la vez: "no hay borrado duro" (ninguna fila se borra, nunca) y "se puede restaurar durante 30 días"
+(la base no deja usarlo antes). Lo que hace de verdad, liberar el Drive, ya lo hace la casilla de la entrega 2;
+*Delete forever* solo saca el proyecto de la papelera de proyectos y deja sus archivos marcados como mandados a
+la papelera de Drive. Si Lega prefiere que no exista hasta pedirlo, la entrega 3 simplemente no se construye:
+nada de las entregas 1 y 2 depende de ella.
+
+Cómo se usa desde la app (lista de borrados, después de los 30 días, dueño o admin que maneja el proyecto, con
+la palabra): si la carpeta todavía no está en la papelera de Drive, primero el portero la manda
+(`POST /project/trash`, sección 3.8) y después `purge_project`. La base exige ese orden (`drive_trash_first`): un
+proyecto con archivos subidos fuera de la papelera de Drive no se marca, para que el peso nunca diga que se
+liberó algo que sigue ocupando.
+
+`supabase/migrations/20261010120000_proyectos_borrar_definitivo.sql` (`schema_version` 11; probada en rollback
+encima de la 9 y la 10, sección 9.3; sin aplicar):
+
+```sql
+-- LGA Shot Docs · borrar un proyecto para siempre (P.14, entrega 3; Docs/Doc_Proyectos_Borrar.md, sección 2).
+--
+-- *Delete forever* no borra ninguna fila: marca el proyecto (`purged_at`, `purged_by`), que sale de la papelera de
+-- proyectos y ya no se restaura desde la app. Sus archivos subidos quedan marcados como mandados a la papelera de
+-- Drive (la carpeta tiene que haber ido antes: `drive_trash_first`). El texto, las páginas y los comentarios
+-- siguen en la base y se recuperan solo a mano (SQL del dueño de la base); los archivos, desde la papelera de
+-- Drive mientras Google los tenga.
+--
+-- Recién a los 30 días de borrado (`project_trash_not_due`): el plazo "se puede restaurar durante 30 días" se
+-- cumple siempre. Solo dueño y admins que manejan el proyecto (`private.can_purge_project`). Nada automático.
+
+alter table public.workspaces
+  add column purged_at timestamptz,
+  add column purged_by uuid references auth.users (id) on delete set null,
+  add constraint workspaces_purged    check (purged_at is null or deleted_at is not null),
+  add constraint workspaces_purged_by check (purged_by is null or purged_at is not null);
+
+-- Errores: `project_not_found` (P0002) si no existe o la sesión no lo veía; `not_allowed` (42501);
+-- `project_not_deleted` (P0001); `project_trash_not_due` (P0001) antes de los 30 días; `drive_trash_first`
+-- (P0001) si tiene archivos subidos que no están en la papelera de Drive ni en una carpeta confirmada ahí.
+-- Repetirlo no cambia nada.
+create function public.purge_project(p_project uuid)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  w record;
+begin
+  select pr.owner_id, pr.deleted_at, pr.drive_trashed_at, pr.purged_at into w
+  from public.workspaces pr where pr.id = p_project for update;
+  if not found or not private.could_view_project(p_project, w.owner_id) then
+    raise exception 'project_not_found' using errcode = 'P0002';
+  end if;
+  if not private.can_purge_project(p_project) then
+    raise exception 'not_allowed' using errcode = '42501',
+      hint = 'Only an owner or admin of the workspace who manages the project deletes it forever.';
+  end if;
+  if w.purged_at is not null then
+    return;
+  end if;
+  if w.deleted_at is null then
+    raise exception 'project_not_deleted' using errcode = 'P0001';
+  end if;
+  if w.deleted_at > now() - interval '30 days' then
+    raise exception 'project_trash_not_due' using errcode = 'P0001',
+      hint = 'A deleted project can be deleted forever 30 days after it was deleted.';
+  end if;
+  if w.drive_trashed_at is null and exists (
+       select 1 from public.files f
+       where f.project_id = p_project and f.drive_id is not null and f.drive_trashed_at is null) then
+    raise exception 'drive_trash_first' using errcode = 'P0001',
+      hint = 'Send the project folder to the Google Drive trash first.';
+  end if;
+  perform private.project_files_purged(p_project);
+  update public.workspaces set purged_at = now(), purged_by = auth.uid() where id = p_project;
+end;
+$$;
+
+revoke all on function public.purge_project(uuid) from public, anon;
+grant execute on function public.purge_project(uuid) to authenticated;
+
+-- Un proyecto borrado para siempre no se restaura (`project_purged`). Lo demás, como en la entrega 2.
+create or replace function public.restore_project(p_project uuid, p_without_drive boolean default false)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  w record;
+begin
+  select pr.owner_id, pr.deleted_at, pr.drive_trash_requested_at, pr.purged_at into w
+  from public.workspaces pr where pr.id = p_project for update;
+  if not found or not private.could_view_project(p_project, w.owner_id) then
+    raise exception 'project_not_found' using errcode = 'P0002';
+  end if;
+  if not private.can_manage_project(p_project) then
+    raise exception 'not_allowed' using errcode = '42501',
+      hint = 'Restoring a project needs the same permission as deleting it.';
+  end if;
+  if w.deleted_at is null then
+    return;
+  end if;
+  if w.purged_at is not null then
+    raise exception 'project_purged' using errcode = 'P0001';
+  end if;
+  if w.drive_trash_requested_at is not null then
+    if not coalesce(p_without_drive, false) then
+      raise exception 'drive_untrash_first' using errcode = 'P0001',
+        hint = 'Bring the project folder back from the Google Drive trash first, or restore it without its files.';
+    end if;
+    perform private.project_files_purged(p_project);
+  end if;
+  update public.workspaces set deleted_at = null, deleted_by = null where id = p_project;
+  perform private.refresh_project_files(p_project);
+end;
+$$;
+
+-- La carpeta de un proyecto borrado para siempre no vuelve desde la app.
+create or replace function public.project_drive_untrashed(p_project uuid)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  w record;
+begin
+  select pr.purged_at into w from public.workspaces pr where pr.id = p_project for update;
+  if not found or not private.can_purge_project(p_project) then
+    raise exception 'not_allowed' using errcode = '42501';
+  end if;
+  if w.purged_at is not null then
+    raise exception 'project_purged' using errcode = 'P0001';
+  end if;
+  update public.workspaces
+  set drive_trash_requested_at = null, drive_trash_requested_by = null, drive_trashed_at = null
+  where id = p_project and drive_trash_requested_at is not null;
+end;
+$$;
+
+-- La papelera de proyectos deja afuera los borrados para siempre. Misma firma que en la entrega 2.
+create or replace function public.trashed_projects()
+returns table (id uuid, name text, archived_at timestamptz, deleted_at timestamptz, deleted_by uuid,
+               deleted_by_email text, days_left int, can_restore boolean, pages int, files int,
+               drive_trash_requested_at timestamptz, drive_trashed_at timestamptz, can_purge boolean)
+language sql stable security definer set search_path = ''
+as $$
+  select w.id, w.name, w.archived_at, w.deleted_at,
+         case when m.can or m.staff then w.deleted_by end,
+         case when m.can or m.staff then u.email::text end,
+         greatest(0, ceil(extract(epoch from (w.deleted_at + interval '30 days' - now())) / 86400))::int,
+         m.can,
+         case when m.can then
+           (select count(*)::int from public.pages pg where pg.workspace_id = w.id and pg.deleted_at is null) end,
+         case when m.can then
+           (select count(*)::int from public.files f where f.project_id = w.id and f.drive_trashed_at is null) end,
+         case when m.can then w.drive_trash_requested_at end,
+         case when m.can then w.drive_trashed_at end,
+         m.can and private.can_purge_project(w.id)
+  from public.workspaces w
+  cross join lateral (
+    select private.can_manage_project(w.id) as can,
+           coalesce(private.workspace_role() in ('owner', 'admin'), false) as staff
+  ) m
+  left join auth.users u on u.id = w.deleted_by
+  where w.deleted_at is not null and w.purged_at is null
+    and private.could_view_project(w.id, w.owner_id)
+  order by w.deleted_at desc, w.id;
+$$;
+
+update public.workspace_settings set schema_version = 11 where id and schema_version < 11;
+
+notify pgrst, 'reload schema';
+```
+
+Su prueba (`supabase/tests/proyectos_borrar_definitivo_permisos.sql`; en el archivo final lleva la preparación
+de la 1.4, acá sigue a las pruebas de la entrega 2 con las mismas personas y datos): el plazo, el orden con
+Drive, quién puede (el creador miembro no; la dueña no ve el privado de otro), que no se restaura ni se trae la
+carpeta, el peso y que **ninguna fila se borró**.
+
+```sql
+-- Pruebas de la entrega 3 (borrar para siempre). Siguen a las de la entrega 2: O activo, con o1 y f3 (subido,
+-- usado solo en p2 de P como uso de afuera).
+
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0001');
+do $$
+begin
+  perform pg_temp.expect_error($q$select public.purge_project('00000000-0000-4000-8000-0000000d1002')$q$,
+    'project_not_deleted', 'borra para siempre un proyecto activo');
+  perform public.delete_project('00000000-0000-4000-8000-0000000d1002');
+  perform pg_temp.expect_error($q$select public.purge_project('00000000-0000-4000-8000-0000000d1002')$q$,
+    'project_trash_not_due', 'borra para siempre antes de los 30 días');
+end;
+$$;
+-- Pasaron 31 días.
+select set_config('role', 'postgres', true);
+update public.workspaces set deleted_at = now() - interval '31 days' where id = '00000000-0000-4000-8000-0000000d1002';
+select set_config('borrar.filas11', (select format('%s %s %s %s',
+  (select count(*) from public.pages where id::text like '00000000-0000-4000-8000-0000000d2%'),
+  (select count(*) from public.page_updates where page_id::text like '00000000-0000-4000-8000-0000000d2%'),
+  (select count(*) from public.files where id::text like '00000000-0000-4000-8000-0000000d3%'),
+  (select count(*) from public.comments where id::text like '00000000-0000-4000-8000-0000000d4%'))), true);
+
+-- Quien no es dueño ni admin que lo maneja, no.
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0004');
+do $$ begin
+  perform pg_temp.expect_error($q$select public.purge_project('00000000-0000-4000-8000-0000000d1002')$q$,
+    'project_not_found', 'un miembro sin permiso sobre O lo borra para siempre');
+end; $$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0007');
+do $$ begin
+  perform pg_temp.expect_error($q$select public.purge_project('00000000-0000-4000-8000-0000000d1002')$q$,
+    'project_not_found', 'la admin sin permiso borra O para siempre');
+end; $$;
+
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0001');
+do $$
+begin
+  assert (select t.days_left = 0 and t.can_purge from public.trashed_projects() t
+          where t.id = '00000000-0000-4000-8000-0000000d1002'), 'O a los 31 días: days_left o can_purge';
+  -- f3 está subido y la carpeta no se mandó: primero la carpeta.
+  perform pg_temp.expect_error($q$select public.purge_project('00000000-0000-4000-8000-0000000d1002')$q$,
+    'drive_trash_first', 'borra para siempre con archivos fuera de la papelera de Drive');
+  perform public.request_project_drive_trash('00000000-0000-4000-8000-0000000d1002');
+  perform public.project_drive_trashed('00000000-0000-4000-8000-0000000d1002');
+  perform public.purge_project('00000000-0000-4000-8000-0000000d1002');
+  perform public.purge_project('00000000-0000-4000-8000-0000000d1002');
+  assert not exists (select 1 from public.trashed_projects() t where t.id = '00000000-0000-4000-8000-0000000d1002'),
+    'O borrado para siempre sigue en la papelera de proyectos';
+  perform pg_temp.expect_error($q$select public.restore_project('00000000-0000-4000-8000-0000000d1002')$q$,
+    'project_purged', 'restaura un proyecto borrado para siempre');
+  perform pg_temp.expect_error($q$select public.restore_project('00000000-0000-4000-8000-0000000d1002', true)$q$,
+    'project_purged', 'restaura sin Drive un proyecto borrado para siempre');
+  perform pg_temp.expect_error($q$select public.project_drive_untrashed('00000000-0000-4000-8000-0000000d1002')$q$,
+    'project_purged', 'trae la carpeta de un proyecto borrado para siempre');
+  perform pg_temp.expect_error($q$select public.set_project_archived('00000000-0000-4000-8000-0000000d1002', false)$q$,
+    'project_deleted', 'desarchiva un proyecto borrado para siempre');
+  assert pg_temp.sees('00000000-0000-4000-8000-0000000d1002') = 0, 'la dueña ve O';
+  -- f3 quedó como mandado a la papelera de Drive: su peso cuenta ahí (30 días) y no en el principal.
+  assert pg_temp.size_of('00000000-0000-4000-8000-0000000d1002') = '0/0 0/0 50000000/1 0/0',
+    format('peso de O borrado para siempre: %s', pg_temp.size_of('00000000-0000-4000-8000-0000000d1002'));
+end;
+$$;
+
+select set_config('role', 'postgres', true);
+do $$
+begin
+  -- Ninguna fila se borró: O, su página, su archivo y todo lo demás siguen.
+  assert (select count(*) from public.workspaces where id = '00000000-0000-4000-8000-0000000d1002') = 1, 'se borró O';
+  assert (select format('%s %s %s %s',
+    (select count(*) from public.pages where id::text like '00000000-0000-4000-8000-0000000d2%'),
+    (select count(*) from public.page_updates where page_id::text like '00000000-0000-4000-8000-0000000d2%'),
+    (select count(*) from public.files where id::text like '00000000-0000-4000-8000-0000000d3%'),
+    (select count(*) from public.comments where id::text like '00000000-0000-4000-8000-0000000d4%')))
+    = current_setting('borrar.filas11'), 'borrar para siempre borró filas';
+  assert (select f.purged_at is not null and f.drive_trashed_at is not null from public.files f
+          where f.id = '00000000-0000-4000-8000-0000000d3003'), 'f3 no quedó marcado';
+  assert (select w.purged_at is not null and w.purged_by = '00000000-0000-4000-8000-0000000d0001'
+                 and w.drive_trash_requested_at is null from public.workspaces w
+          where w.id = '00000000-0000-4000-8000-0000000d1002'), 'las marcas de O no son las esperadas';
+end;
+$$;
+
+-- El creador miembro de M no lo borra para siempre (no es dueño ni admin), ni con los 30 días cumplidos y sin
+-- archivos.
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0005');
+select public.delete_project('00000000-0000-4000-8000-0000000d1003');
+select set_config('role', 'postgres', true);
+update public.workspaces set deleted_at = now() - interval '31 days' where id = '00000000-0000-4000-8000-0000000d1003';
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0005');
+do $$ begin
+  perform pg_temp.expect_error($q$select public.purge_project('00000000-0000-4000-8000-0000000d1003')$q$,
+    'not_allowed', 'el creador miembro borra M para siempre');
+end; $$;
+-- La dueña no ve M (es privado de otro): para ella no existe.
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0001');
+do $$ begin
+  perform pg_temp.expect_error($q$select public.purge_project('00000000-0000-4000-8000-0000000d1003')$q$,
+    'project_not_found', 'la dueña borra para siempre un proyecto privado de otro');
+end; $$;
+
+select set_config('role', 'anon', true);
+select set_config('request.jwt.claims', '', true);
+do $$ begin
+  perform pg_temp.expect_error($q$select public.purge_project('00000000-0000-4000-8000-0000000d1002')$q$, '42501', 'anon: borra para siempre');
+end; $$;
+select set_config('role', 'postgres', true);
+do $$
+begin
+  assert (select p.prosecdef and p.proconfig @> array['search_path=""'] from pg_proc p
+          where p.oid = 'public.purge_project(uuid)'::regprocedure), 'purge_project no es security definer';
+  assert (select schema_version from public.workspace_settings where id) >= 11, 'la versión de la base no es 11';
+end;
+$$;
+```
 
 ## 3. Los archivos del Drive (entrega 2)
 
@@ -1476,32 +1928,20 @@ Drive trash)*.
 
 ### 3.4 Los pasos
 
-**Borrar con la casilla:** (1) `delete_project` (la base), (2) portero `POST /project/trash`. Si el paso 2 falla
-(Drive sin conectar, sin red), el proyecto queda borrado con sus archivos en el Drive, y la lista de borrados
-ofrece *Send files to the Drive trash* para terminarlo. Nunca al revés: la carpeta no va a la papelera de Drive
-de un proyecto que no está borrado (la base lo exige).
+**Borrar con la casilla:** (1) `delete_project` (la base), (2) portero `POST /project/trash` (sección 3.8). Si el
+paso 2 falla (Drive sin conectar, sin red), el proyecto queda borrado con sus archivos en el Drive, y la lista de
+borrados ofrece *Send files to the Drive trash* para terminarlo. Nunca al revés: la carpeta no va a la papelera
+de Drive de un proyecto que no está borrado (la base lo exige: `project_not_deleted`).
 
-**`POST /project/trash { project }`** (con la sesión de la persona, como `/trash`):
-1. `media_project(project)`: que la sesión lo pueda hacer (dueño o admin que maneja el proyecto) y que esté
-   borrado. Si no, `403 not_allowed` o `409 project_not_deleted`.
-2. Drive conectado (`driveReady`), si no `503 drive_not_connected` sin pedir nada a la base.
-3. La carpeta: el id guardado en `project:<id>`. Sin carpeta (nunca se subió nada): se marca igual y responde
-   `drive: 'none'`. Con carpeta: `GET` con `appProperties`; si no lleva `sdProject = <id>`, `403
-   drive_mismatch` y no se toca; si Drive dice 404, `drive: 'missing'`.
-4. `request_project_drive_trash(project)` (la base lo marca), Drive `PATCH { trashed: true }` a la carpeta, y
-   `project_drive_trashed(project)`. Responde `{ status: 'done', project, drive: 'trashed' | 'missing' | 'none' }`.
-   Repetirlo no hace nada de más.
+**Restaurar:** si el proyecto tiene la carpeta pedida o en la papelera de Drive (`trashed_projects` lo dice),
+primero portero `POST /project/untrash` y después `restore_project`. La base exige ese orden
+(`drive_untrash_first`). Si la app se cierra entre los dos, el proyecto sigue borrado con la carpeta ya fuera de
+la papelera: consistente, y *Restore* de nuevo termina.
 
-**Restaurar:** si el proyecto tiene la carpeta en la papelera de Drive, primero portero `POST /project/untrash`
-y después `restore_project`. Si la app se cierra entre los dos, el proyecto sigue borrado con la carpeta ya
-fuera de la papelera: consistente, y *Restore* de nuevo termina.
-
-**`POST /project/untrash { project }`:** `media_project`; Drive conectado; `GET` de la carpeta: si está en la
-papelera, `PATCH { trashed: false }` y `project_drive_untrashed(project)` (borra las tres marcas); si no está en la
-papelera, lo mismo sin el `PATCH`; si Drive dice 404, responde `drive: 'missing'` **sin tocar la base**. Un 404
-puede ser "Google ya la borró" o "el Drive conectado ahora es otra cuenta de Google" (`core.ts:515-516`): la app
-pregunta antes de seguir ("Google Drive ya no tiene la carpeta de este proyecto: o se borró para siempre, o el
-Drive conectado es otra cuenta. ¿Restaurar las páginas y el texto sin sus archivos?") y recién con un sí llama a
+**Si Drive ya no tiene la carpeta** (`/project/untrash` responde `drive: 'missing'` sin tocar la base): puede ser
+"Google ya la borró" o "el Drive conectado ahora es otra cuenta de Google" (`core.ts:515-516`). La app pregunta
+antes de seguir ("Google Drive ya no tiene la carpeta de este proyecto: o se borró para siempre, o el Drive
+conectado es otra cuenta. ¿Restaurar las páginas y el texto sin sus archivos?") y recién con un sí llama a
 `restore_project(project, p_without_drive => true)`, que pone las marcas por archivo y restaura.
 
 **Restaurar sin Drive** (Drive sin conectar, portero caído): la lista ofrece *Restore without its files*, con la
@@ -1525,13 +1965,33 @@ ahí mientras Google los tenga) y el texto vuelve.
   automática, y sale solo al restaurar P (está en la prueba SQL). La pestaña lo muestra con el título vacío
   (*Untitled*): conviene un texto propio, "una página de un proyecto borrado".
 
-### 3.6 La migración de la entrega 2 (borrador)
+### 3.6 La migración de la entrega 2
 
-`20261005120000_proyectos_drive.sql`, `schema_version` 10. **Borrador:** se escribe de nuevo, con su prueba SQL
-completa, después de la prueba técnica de Drive (sección 3.7).
+`supabase/migrations/20261005120000_proyectos_drive.sql` (`schema_version` 10; probada en rollback encima de la 9,
+sección 9.3; sin aplicar). Cambia respecto del borrador: `trashed_projects` y `project_sizes` escritas enteras,
+`restore_project` con su permiso después del `drop`, `project_drive_untrashed` que no toca nada si no había
+marca, y `project_files_purged` que bloquea los archivos en orden de id.
 
 ```sql
--- LGA Shot Docs · la carpeta de un proyecto borrado en la papelera de Drive (P.14, entrega 2). Borrador.
+-- LGA Shot Docs · la carpeta de un proyecto borrado en la papelera de Drive (P.14, entrega 2;
+-- Docs/Doc_Proyectos_Borrar.md, sección 3).
+--
+-- Con la casilla de la ventana de borrar, la carpeta del proyecto en el Drive del dueño (`LGA_ShotDocs/<Proyecto>`,
+-- la que lleva la marca `sdProject`) va entera a la papelera de Drive. Lo hace el portero con la sesión de la
+-- persona (`POST /project/trash`); la base decide si puede y guarda el estado en el proyecto, no en cada archivo:
+--   drive_trash_requested_at/_by  alguien pidió mandar la carpeta (el proyecto tiene que estar borrado).
+--   drive_trashed_at              el portero confirmó que la mandó (o que Drive no la tenía).
+-- Restaurar con la carpeta de vuelta (`POST /project/untrash`) solo borra las marcas: los archivos quedan
+-- exactamente como estaban. Las marcas por archivo (`purged_at`, `drive_trashed_at`) se ponen solo cuando ya no
+-- hay vuelta: restaurar sin la carpeta (`restore_project(p, true)`) o borrar para siempre (entrega 3).
+--
+-- Quién: dueño o admin del workspace que maneja el proyecto (`private.can_purge_project`), como mandar archivos a
+-- la papelera de Drive. Nada se borra: ni filas ni archivos de Drive (la papelera de Drive los guarda 30 días).
+--
+-- Compatible con la app de la entrega 1: `restore_project(p)` sigue andando igual (el segundo parámetro tiene
+-- valor por defecto) y solo falla con `drive_untrash_first` si alguien mandó la carpeta con una app nueva.
+-- `trashed_projects` suma columnas al final.
+
 alter table public.workspaces
   add column drive_trash_requested_at timestamptz,
   add column drive_trash_requested_by uuid references auth.users (id) on delete set null,
@@ -1540,15 +2000,23 @@ alter table public.workspaces
   add constraint workspaces_drive_requested_by check (drive_trash_requested_by is null or drive_trash_requested_at is not null),
   add constraint workspaces_drive_trashed      check (drive_trashed_at is null or drive_trash_requested_at is not null);
 
--- Mandar la carpeta (o traerla de vuelta): dueño o admin que maneja el proyecto.
+-- ---------------------------------------------------------------------------------------------------
+-- Quién manda o trae la carpeta
+-- ---------------------------------------------------------------------------------------------------
 create function private.can_purge_project(ws uuid)
 returns boolean
 language sql stable security definer set search_path = ''
 as $$
-  select private.can_manage_project(ws) and coalesce(private.workspace_role() in ('owner', 'admin'), false);
+  select coalesce(private.workspace_role() in ('owner', 'admin'), false) and private.can_manage_project(ws);
 $$;
 
--- Para el portero, con la sesión de la persona: el proyecto, si lo puede hacer. Null si no.
+revoke all on function private.can_purge_project(uuid) from public, anon;
+grant execute on function private.can_purge_project(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------------------------------
+-- Para el portero
+-- ---------------------------------------------------------------------------------------------------
+-- El proyecto y su estado de Drive, si la sesión puede mandar o traer su carpeta; null si no (no dice si existe).
 create function public.media_project(p_project uuid)
 returns json
 language plpgsql stable security definer set search_path = ''
@@ -1556,7 +2024,7 @@ as $$
 declare
   r json;
 begin
-  if not private.can_purge_project(p_project) then
+  if p_project is null or not private.can_purge_project(p_project) then
     return null;
   end if;
   select json_build_object('id', w.id, 'name', w.name, 'deleted_at', w.deleted_at,
@@ -1567,6 +2035,7 @@ begin
 end;
 $$;
 
+-- Pide mandar la carpeta (antes de tocar Drive). Solo con el proyecto borrado. Repetirlo no cambia nada.
 create function public.request_project_drive_trash(p_project uuid)
 returns void
 language plpgsql security definer set search_path = ''
@@ -1589,7 +2058,7 @@ begin
 end;
 $$;
 
--- La confirma el portero después de mandar la carpeta (o de ver que Drive no la tiene).
+-- La confirma el portero después de mandar la carpeta (o de ver que Drive no la tiene). Repetirla no cambia nada.
 create function public.project_drive_trashed(p_project uuid)
 returns void
 language plpgsql security definer set search_path = ''
@@ -1610,7 +2079,8 @@ begin
 end;
 $$;
 
--- La carpeta salió de la papelera de Drive (o no estaba en ella): el proyecto vuelve a tener sus archivos.
+-- La carpeta salió de la papelera de Drive (o nunca llegó): el proyecto vuelve a tener sus archivos. La llama el
+-- portero después de sacarla. Repetirla no cambia nada.
 create function public.project_drive_untrashed(p_project uuid)
 returns void
 language plpgsql security definer set search_path = ''
@@ -1622,12 +2092,13 @@ begin
   end if;
   update public.workspaces
   set drive_trash_requested_at = null, drive_trash_requested_by = null, drive_trashed_at = null
-  where id = p_project;
+  where id = p_project and drive_trash_requested_at is not null;
 end;
 $$;
 
--- Sin vuelta: cada archivo subido del proyecto queda como mandado a la papelera de Drive (lo de hoy, archivo
--- por archivo) y el proyecto deja de tener la marca. Lo usa restaurar sin la carpeta.
+-- Sin vuelta: cada archivo subido del proyecto queda como mandado a la papelera de Drive (las marcas de hoy,
+-- archivo por archivo) y el proyecto deja de tener las suyas. Lo usan restaurar sin la carpeta y borrar para
+-- siempre. En orden de id, como `refresh_project_files`. No llama a nadie de afuera.
 create function private.project_files_purged(p_project uuid)
 returns void
 language plpgsql security definer set search_path = ''
@@ -1640,6 +2111,7 @@ begin
   if w.drive_trash_requested_at is null then
     return;
   end if;
+  perform 1 from public.files f where f.project_id = p_project and f.drive_id is not null order by f.id for update;
   update public.files f
   set trashed_at       = coalesce(f.trashed_at, w.drive_trash_requested_at),
       purged_at        = coalesce(f.purged_at, w.drive_trash_requested_at),
@@ -1652,8 +2124,22 @@ begin
 end;
 $$;
 
--- Restaurar: con la carpeta en la papelera de Drive pide traerla primero (`drive_untrash_first`), salvo que se
--- elija restaurar sin ella. La app de la entrega 1 la sigue llamando igual (con el valor por defecto).
+revoke all on function private.project_files_purged(uuid) from public, anon, authenticated;
+revoke all on function public.media_project(uuid) from public, anon;
+revoke all on function public.request_project_drive_trash(uuid) from public, anon;
+revoke all on function public.project_drive_trashed(uuid) from public, anon;
+revoke all on function public.project_drive_untrashed(uuid) from public, anon;
+grant execute on function public.media_project(uuid) to authenticated;
+grant execute on function public.request_project_drive_trash(uuid) to authenticated;
+grant execute on function public.project_drive_trashed(uuid) to authenticated;
+grant execute on function public.project_drive_untrashed(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------------------------------
+-- Restaurar: con la carpeta pedida para la papelera de Drive, primero traerla
+-- ---------------------------------------------------------------------------------------------------
+-- `drive_untrash_first` (P0001) si la carpeta está pedida o en la papelera de Drive, salvo `p_without_drive`:
+-- entonces los archivos subidos quedan marcados como mandados a la papelera de Drive (se recuperan a mano desde
+-- ahí mientras Google los tenga) y el texto vuelve. Lo demás, como en la entrega 1.
 drop function public.restore_project(uuid);
 create function public.restore_project(p_project uuid, p_without_drive boolean default false)
 returns void
@@ -1686,32 +2172,408 @@ begin
 end;
 $$;
 
--- `trashed_projects` suma el estado de Drive y si la sesión puede mandarla; `project_sizes` cuenta los
--- archivos subidos de un proyecto con la carpeta confirmada en la papelera de Drive como `drive_trash`
--- (30 días desde `workspaces.drive_trashed_at`). Se escriben enteras en la versión final (cambian lo que
--- devuelve `trashed_projects`: drop y create; `project_sizes` conserva su firma).
+revoke all on function public.restore_project(uuid, boolean) from public, anon;
+grant execute on function public.restore_project(uuid, boolean) to authenticated;
 
--- Permisos de siempre: revoke a public y anon, execute a authenticated; `project_files_purged` y
--- `can_purge_project`, solo para las funciones (revoke a authenticated en la primera).
+-- ---------------------------------------------------------------------------------------------------
+-- La papelera de proyectos: el estado de Drive
+-- ---------------------------------------------------------------------------------------------------
+-- Como en la entrega 1, más: `drive_trash_requested_at` y `drive_trashed_at` (solo a quien lo maneja) y
+-- `can_purge` (si la sesión puede mandar o traer la carpeta). Cambia lo que devuelve: drop y create.
+drop function public.trashed_projects();
+create function public.trashed_projects()
+returns table (id uuid, name text, archived_at timestamptz, deleted_at timestamptz, deleted_by uuid,
+               deleted_by_email text, days_left int, can_restore boolean, pages int, files int,
+               drive_trash_requested_at timestamptz, drive_trashed_at timestamptz, can_purge boolean)
+language sql stable security definer set search_path = ''
+as $$
+  select w.id, w.name, w.archived_at, w.deleted_at,
+         case when m.can or m.staff then w.deleted_by end,
+         case when m.can or m.staff then u.email::text end,
+         greatest(0, ceil(extract(epoch from (w.deleted_at + interval '30 days' - now())) / 86400))::int,
+         m.can,
+         case when m.can then
+           (select count(*)::int from public.pages pg where pg.workspace_id = w.id and pg.deleted_at is null) end,
+         case when m.can then
+           (select count(*)::int from public.files f where f.project_id = w.id and f.drive_trashed_at is null) end,
+         case when m.can then w.drive_trash_requested_at end,
+         case when m.can then w.drive_trashed_at end,
+         m.can and private.can_purge_project(w.id)
+  from public.workspaces w
+  cross join lateral (
+    select private.can_manage_project(w.id) as can,
+           coalesce(private.workspace_role() in ('owner', 'admin'), false) as staff
+  ) m
+  left join auth.users u on u.id = w.deleted_by
+  where w.deleted_at is not null
+    and private.could_view_project(w.id, w.owner_id)
+  order by w.deleted_at desc, w.id;
+$$;
+
+revoke all on function public.trashed_projects() from public, anon;
+grant execute on function public.trashed_projects() to authenticated;
+
+-- ---------------------------------------------------------------------------------------------------
+-- project_sizes: los archivos de una carpeta en la papelera de Drive
+-- ---------------------------------------------------------------------------------------------------
+-- Como en la entrega 1, con un estado más mirado justo después de la marca por archivo: un archivo subido de un
+-- proyecto con la carpeta confirmada en la papelera de Drive (`workspaces.drive_trashed_at`) está "en la papelera
+-- de Drive" durante 30 días desde esa confirmación (después Google ya lo borró y no cuenta). Uno pedido sin
+-- confirmar sigue contando como antes (puede que siga en Drive).
+create or replace function public.project_sizes()
+returns table (project_id uuid,
+               drive_bytes bigint, drive_files int,
+               trash_bytes bigint, trash_files int,
+               drive_trash_bytes bigint, drive_trash_files int,
+               pending_bytes bigint, pending_files int)
+language sql stable security definer set search_path = ''
+as $$
+  with gate as materialized (
+    select w.id, w.drive_trashed_at as folder_trashed_at,
+           case when w.deleted_at is null then private.can_see_file_trash(w.id)
+                else private.can_manage_project(w.id) end as allowed
+    from public.workspaces w
+  ),
+  me as materialized (
+    select coalesce(private.workspace_role() = 'owner', false) as is_owner
+  ),
+  state as (
+    select f.project_id, f.size, f.drive_id is not null as uploaded,
+           case
+             when f.drive_trashed_at is not null then
+               case when f.drive_id is not null
+                         and greatest(f.drive_trashed_at, f.uploaded_at) > now() - interval '30 days'
+                    then 'drive_trash' end
+             when g.folder_trashed_at is not null and f.drive_id is not null then
+               case when greatest(g.folder_trashed_at, f.uploaded_at) > now() - interval '30 days'
+                    then 'drive_trash' end
+             when f.trashed_at is not null then 'trash'
+             when f.drive_id is null then 'pending'
+             else 'live'
+           end as st
+    from public.files f
+    join gate g on g.id = f.project_id
+    where g.allowed or (select me.is_owner from me)
+  ),
+  per_project as (
+    select s.project_id,
+           coalesce(sum(s.size) filter (where s.st = 'live' or (s.st = 'trash' and s.uploaded)), 0)::bigint as drive_bytes,
+           (count(*) filter (where s.st = 'live' or (s.st = 'trash' and s.uploaded)))::int as drive_files,
+           coalesce(sum(s.size) filter (where s.st = 'trash'), 0)::bigint as trash_bytes,
+           (count(*) filter (where s.st = 'trash'))::int as trash_files,
+           coalesce(sum(s.size) filter (where s.st = 'drive_trash'), 0)::bigint as drive_trash_bytes,
+           (count(*) filter (where s.st = 'drive_trash'))::int as drive_trash_files,
+           coalesce(sum(s.size) filter (where s.st = 'pending'), 0)::bigint as pending_bytes,
+           (count(*) filter (where s.st = 'pending'))::int as pending_files
+    from state s
+    group by s.project_id
+  )
+  select g.id,
+         coalesce(p.drive_bytes, 0::bigint), coalesce(p.drive_files, 0),
+         coalesce(p.trash_bytes, 0::bigint), coalesce(p.trash_files, 0),
+         coalesce(p.drive_trash_bytes, 0::bigint), coalesce(p.drive_trash_files, 0),
+         coalesce(p.pending_bytes, 0::bigint), coalesce(p.pending_files, 0)
+  from gate g
+  left join per_project p on p.project_id = g.id
+  where g.allowed
+  union all
+  -- Los que no ve, todos juntos y sin nombres: solo el dueño.
+  select null::uuid,
+         coalesce(sum(p.drive_bytes), 0)::bigint, coalesce(sum(p.drive_files), 0)::int,
+         coalesce(sum(p.trash_bytes), 0)::bigint, coalesce(sum(p.trash_files), 0)::int,
+         coalesce(sum(p.drive_trash_bytes), 0)::bigint, coalesce(sum(p.drive_trash_files), 0)::int,
+         coalesce(sum(p.pending_bytes), 0)::bigint, coalesce(sum(p.pending_files), 0)::int
+  from gate g
+  left join per_project p on p.project_id = g.id
+  where not g.allowed and (select me.is_owner from me)
+  having count(*) > 0;
+$$;
+
 update public.workspace_settings set schema_version = 10 where id and schema_version < 10;
+
 notify pgrst, 'reload schema';
 ```
 
-### 3.7 Prueba técnica antes de construir la entrega 2
+Notas para la auditoría:
 
-Con un proyecto de prueba (tres archivos subidos), borrado desde la app de la entrega 1, en el Drive de Lega:
+- `restore_project` cambia de firma (suma `p_without_drive` con valor por defecto): `drop` y `create`, y los
+  permisos se vuelven a dar. La app de la entrega 1 llama `restore_project` con `{ p_project }` y sigue andando.
+- `trashed_projects` cambia lo que devuelve (columnas nuevas al final): `drop` y `create`. La app de la entrega 1
+  lee las columnas por nombre: las nuevas no le molestan.
+- `project_sizes` conserva su firma. Un archivo subido de una carpeta confirmada en la papelera de Drive cuenta
+  en `drive_trash` 30 días desde la confirmación y después en nada (Google ya lo borró); mientras solo está
+  pedida, como antes (puede que siga en Drive).
+- Nada escribe en `files` salvo `project_files_purged`, que solo corre cuando ya no hay vuelta (restaurar sin la
+  carpeta, o *Delete forever*).
 
-1. Que con el permiso `drive.file` el portero pueda mandar a la papelera la carpeta que creó (`PATCH trashed`)
-   y sacarla.
-2. Que los archivos de adentro queden en la papelera (`trashed: true`, `explicitlyTrashed: false`) y vuelvan
-   con la carpeta; y que uno mandado antes por su cuenta (`/trash`) **no** vuelva.
-3. Que un pase (`/m/<pase>`) de un archivo cuya carpeta está en la papelera siga sirviendo hasta que vence (8
-   horas) o deje de servir: cualquiera de las dos está bien, pero hay que saberlo.
-4. Qué ve el dueño en su papelera de Drive (una carpeta con todo adentro) y que la fecha de borrado de Google
+### 3.7 La prueba SQL de la entrega 2
+
+`supabase/tests/proyectos_drive_permisos.sql`. En el archivo final lleva la preparación de la 1.4 (personas, P,
+O, M, archivos); acá sigue a las pruebas de la entrega 1 con los mismos datos, que es como se corrió (sección
+9.3): quién puede mandar y traer la carpeta (el creador miembro no, aunque borre y restaure su proyecto), que solo
+con el proyecto borrado, los pasos del portero en orden, el peso pedido y confirmado, que restaurar pide traerla
+primero, la huella igual después de traerla, restaurar sin la carpeta (marcas por archivo, ninguna fila borrada)
+y sin sesión nada.
+
+```sql
+-- Pruebas de la entrega 2 (la carpeta del proyecto en la papelera de Drive). Siguen a las de la entrega 1, con
+-- las mismas personas y datos (P activo, sin archivar; f1, f2 y f4 subidos, f5 sin subir).
+
+-- ---------------------------------------------------------------------------------------------------
+-- J1. Quién puede, y solo con el proyecto borrado
+-- ---------------------------------------------------------------------------------------------------
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0001');
+do $$
+begin
+  assert (public.media_project('00000000-0000-4000-8000-0000000d1001') ->> 'deleted_at') is null,
+    'media_project: P activo no da su fila a la dueña';
+  perform pg_temp.expect_error($q$select public.request_project_drive_trash('00000000-0000-4000-8000-0000000d1001')$q$,
+    'project_not_deleted', 'manda a Drive la carpeta de un proyecto activo');
+end;
+$$;
+
+select set_config('role', 'postgres', true);
+select set_config('borrar.antes10', pg_temp.fingerprint(), true);
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0002');
+select public.delete_project('00000000-0000-4000-8000-0000000d1001');
+
+-- Un miembro con editar y crear (no lo maneja), la admin con ver, la invitada y la admin sin permiso: nada.
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0004');
+do $$
+begin
+  assert public.media_project('00000000-0000-4000-8000-0000000d1001') is null, 'media_project da P a un miembro';
+  perform pg_temp.expect_error($q$select public.request_project_drive_trash('00000000-0000-4000-8000-0000000d1001')$q$,
+    'not_allowed', 'un miembro manda la carpeta de P');
+end;
+$$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0003');
+do $$
+begin
+  assert public.media_project('00000000-0000-4000-8000-0000000d1001') is null, 'media_project da P a la admin con ver';
+  perform pg_temp.expect_error($q$select public.request_project_drive_trash('00000000-0000-4000-8000-0000000d1001')$q$,
+    'not_allowed', 'la admin con ver manda la carpeta de P');
+end;
+$$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0006');
+do $$
+begin
+  assert public.media_project('00000000-0000-4000-8000-0000000d1001') is null, 'media_project da P a la invitada';
+  perform pg_temp.expect_error($q$select public.project_drive_untrashed('00000000-0000-4000-8000-0000000d1001')$q$,
+    'not_allowed', 'la invitada trae la carpeta de P');
+end;
+$$;
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0007');
+do $$
+begin
+  assert public.media_project('00000000-0000-4000-8000-0000000d1001') is null, 'media_project da P a la admin sin permiso';
+end;
+$$;
+
+-- El creador de un proyecto que no es dueño ni admin lo borra y lo restaura, pero no manda su carpeta.
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0005');
+do $$
+begin
+  perform public.delete_project('00000000-0000-4000-8000-0000000d1003');
+  assert public.media_project('00000000-0000-4000-8000-0000000d1003') is null, 'media_project da M a su creador miembro';
+  perform pg_temp.expect_error($q$select public.request_project_drive_trash('00000000-0000-4000-8000-0000000d1003')$q$,
+    'not_allowed', 'el creador miembro manda la carpeta de M');
+  assert (select not t.can_purge from public.trashed_projects() t where t.id = '00000000-0000-4000-8000-0000000d1003'),
+    'trashed_projects: el creador miembro puede mandar la carpeta de M';
+  perform public.restore_project('00000000-0000-4000-8000-0000000d1003');
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- J2. La dueña manda la carpeta (los pasos del portero), y restaurar pide traerla primero
+-- ---------------------------------------------------------------------------------------------------
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0001');
+do $$
+declare
+  r record;
+  first_at timestamptz;
+begin
+  perform pg_temp.expect_error($q$select public.project_drive_trashed('00000000-0000-4000-8000-0000000d1001')$q$,
+    'project_drive_not_requested', 'confirma una carpeta que nadie pidió');
+  perform public.request_project_drive_trash('00000000-0000-4000-8000-0000000d1001');
+  first_at := (public.media_project('00000000-0000-4000-8000-0000000d1001') ->> 'drive_trash_requested_at')::timestamptz;
+  assert first_at is not null, 'media_project no muestra el pedido';
+  perform public.request_project_drive_trash('00000000-0000-4000-8000-0000000d1001');
+  -- Pedida y sin confirmar: el peso sigue como con el proyecto borrado (puede que siga en Drive).
+  assert pg_temp.size_of('00000000-0000-4000-8000-0000000d1001') = '321000/3 4021000/3 0/0 0/0',
+    format('peso de P con la carpeta pedida: %s', pg_temp.size_of('00000000-0000-4000-8000-0000000d1001'));
+  perform public.project_drive_trashed('00000000-0000-4000-8000-0000000d1001');
+  perform public.project_drive_trashed('00000000-0000-4000-8000-0000000d1001');
+  -- Confirmada: lo subido (f1, f2, f4) está en la papelera de Drive; f5 (sin subir) sigue en la de la app.
+  assert pg_temp.size_of('00000000-0000-4000-8000-0000000d1001') = '0/0 4000000/1 321000/3 0/0',
+    format('peso de P con la carpeta en la papelera de Drive: %s', pg_temp.size_of('00000000-0000-4000-8000-0000000d1001'));
+  select * into r from public.trashed_projects() t where t.id = '00000000-0000-4000-8000-0000000d1001';
+  assert found and r.can_purge and r.drive_trashed_at is not null and r.drive_trash_requested_at = first_at,
+    format('trashed_projects de la dueña con la carpeta: %s', r);
+  perform pg_temp.expect_error($q$select public.restore_project('00000000-0000-4000-8000-0000000d1001')$q$,
+    'drive_untrash_first', 'restaura sin traer la carpeta');
+  -- Ningún archivo cambió: la marca es del proyecto.
+  assert not exists (select 1 from public.files f where f.id::text like '00000000-0000-4000-8000-0000000d3%'
+                     and (f.purged_at is not null or f.drive_trashed_at is not null)),
+    'mandar la carpeta marcó archivos';
+end;
+$$;
+-- Quien no maneja P no ve el estado de Drive.
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0004');
+do $$
+begin
+  assert (select t.drive_trashed_at is null and not t.can_purge from public.trashed_projects() t
+          where t.id = '00000000-0000-4000-8000-0000000d1001'), 'el miembro ve el estado de Drive de P';
+  assert pg_temp.size_of('00000000-0000-4000-8000-0000000d1001') is null, 'el miembro ve el peso de P';
+end;
+$$;
+-- La admin que maneja P (no la que lo mandó) lo trae y lo restaura: todo exactamente como estaba.
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0002');
+select public.project_drive_untrashed('00000000-0000-4000-8000-0000000d1001');
+select public.project_drive_untrashed('00000000-0000-4000-8000-0000000d1001');
+select public.restore_project('00000000-0000-4000-8000-0000000d1001');
+select set_config('role', 'postgres', true);
+do $$
+begin
+  assert pg_temp.fingerprint() = current_setting('borrar.antes10'), 'traer la carpeta y restaurar no dejó todo como estaba';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- J3. Restaurar sin la carpeta (Google ya no la tiene, u otro Drive conectado)
+-- ---------------------------------------------------------------------------------------------------
+select pg_temp.as_user('00000000-0000-4000-8000-0000000d0001');
+select public.delete_project('00000000-0000-4000-8000-0000000d1001');
+select public.request_project_drive_trash('00000000-0000-4000-8000-0000000d1001');
+select public.project_drive_trashed('00000000-0000-4000-8000-0000000d1001');
+select public.restore_project('00000000-0000-4000-8000-0000000d1001', true);
+do $$
+declare
+  m json := public.media_file('00000000-0000-4000-8000-0000000d3001');
+begin
+  assert pg_temp.sees('00000000-0000-4000-8000-0000000d1001') = 1, 'restaurado sin la carpeta, la dueña no ve P';
+  assert (select w.drive_trash_requested_at is null and w.drive_trashed_at is null from public.workspaces w
+          where w.id = '00000000-0000-4000-8000-0000000d1001'), 'quedaron las marcas de Drive del proyecto';
+  -- Cada archivo subido queda como mandado a la papelera de Drive (f4 también, aunque o1 lo usa); f5 vuelve a
+  -- estar en uso y sin subir.
+  assert m ->> 'purged_at' is not null and m ->> 'drive_trashed_at' is not null, format('f1: %s', m);
+  assert (select count(*) from public.files f where f.id::text like '00000000-0000-4000-8000-0000000d3%'
+          and f.project_id = '00000000-0000-4000-8000-0000000d1001'
+          and f.purged_at is not null and f.drive_trashed_at is not null and f.trashed_at is not null) = 3,
+    'no quedaron marcados f1, f2 y f4';
+  assert pg_temp.size_of('00000000-0000-4000-8000-0000000d1001') = '0/0 0/0 321000/3 4000000/1',
+    format('peso de P restaurado sin la carpeta: %s', pg_temp.size_of('00000000-0000-4000-8000-0000000d1001'));
+  -- Ninguna fila se borró.
+  assert (select count(*) from public.pages where workspace_id = '00000000-0000-4000-8000-0000000d1001') = 3,
+    'se borraron páginas';
+  assert (select count(*) from public.page_files where file_id::text like '00000000-0000-4000-8000-0000000d3%') = 6,
+    'se borraron usos';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- J4. Sin sesión, nada; y cómo quedaron las funciones
+-- ---------------------------------------------------------------------------------------------------
+select set_config('role', 'anon', true);
+select set_config('request.jwt.claims', '', true);
+do $$
+begin
+  perform pg_temp.expect_error($q$select public.media_project('00000000-0000-4000-8000-0000000d1001')$q$, '42501', 'anon: media_project');
+  perform pg_temp.expect_error($q$select public.request_project_drive_trash('00000000-0000-4000-8000-0000000d1001')$q$, '42501', 'anon: pide');
+  perform pg_temp.expect_error($q$select public.project_drive_trashed('00000000-0000-4000-8000-0000000d1001')$q$, '42501', 'anon: confirma');
+  perform pg_temp.expect_error($q$select public.project_drive_untrashed('00000000-0000-4000-8000-0000000d1001')$q$, '42501', 'anon: trae');
+  perform pg_temp.expect_error($q$select public.restore_project('00000000-0000-4000-8000-0000000d1001', true)$q$, '42501', 'anon: restaura');
+end;
+$$;
+select set_config('role', 'postgres', true);
+do $$
+declare
+  fn text;
+begin
+  foreach fn in array array['public.media_project(uuid)', 'public.request_project_drive_trash(uuid)',
+                            'public.project_drive_trashed(uuid)', 'public.project_drive_untrashed(uuid)',
+                            'public.restore_project(uuid,boolean)', 'public.trashed_projects()',
+                            'private.can_purge_project(uuid)', 'private.project_files_purged(uuid)'] loop
+    assert (select p.prosecdef and p.proconfig @> array['search_path=""'] from pg_proc p
+            where p.oid = fn::regprocedure), format('%s no es security definer con search_path vacío', fn);
+  end loop;
+  assert not has_function_privilege('authenticated', 'private.project_files_purged(uuid)', 'execute'),
+    'authenticated marca los archivos de un proyecto';
+  assert to_regprocedure('public.restore_project(uuid)') is null, 'quedó la firma vieja de restore_project';
+  assert (select schema_version from public.workspace_settings where id) >= 10, 'la versión de la base no es 10';
+end;
+$$;
+```
+
+### 3.8 El portero: dos rutas nuevas
+
+Las dos van con la sesión de la persona, como `/trash`, antes de la línea que deja pasar solo al dueño
+(`core.ts:340`): la base decide con `media_project`. No cambian ninguna ruta existente, así que el portero nuevo
+anda con la app de la entrega 1. Los errores llevan `code` fijo, como `/trash` (`Doc_Portero.md`): `bad_request`,
+`not_found`, `project_not_deleted`, `drive_not_connected`, `drive_mismatch`, `drive_failed`, `db_error`,
+`db_outdated`, `session_expired`.
+
+**Cuáles son las carpetas del proyecto.** La que el portero recuerda (`project:<id>`, `core.ts:683`) y, además,
+las que Drive encuentra con su marca: `q = mimeType = 'application/vnd.google-apps.folder' and appProperties has
+{ key = 'sdProject' and value = '<id>' }` (con el permiso `drive.file` Drive solo devuelve lo que creó la app). La
+búsqueda cubre dos casos: que el portero haya perdido su registro, y que haya **dos** carpetas con la misma marca
+porque el portero recreó una (abajo). Cada carpeta se toca solo si su `appProperties.sdProject` es el proyecto;
+si la recordada no lo lleva, `403 drive_mismatch` y no se toca nada.
+
+**`POST /project/trash { project }`:**
+
+1. `media_project(project)`: nulo, `404 not_found` (no dice si existe); `deleted_at` nulo, `409
+   project_not_deleted`; `drive_trashed_at` puesto, responde `done` sin ir a Drive (repetirlo no hace nada).
+2. `driveReady()`: si no, `503 drive_not_connected` sin pedir nada a la base.
+3. Las carpetas del proyecto que no están en la papelera (arriba). Ninguna: `drive: 'none'` (nunca se subió
+   nada) o `'missing'` (la recordada da 404).
+4. `request_project_drive_trash(project)`; Drive `PATCH { trashed: true }` a cada carpeta; guarda en
+   `projectTrash:<id>` los ids que mandó; `project_drive_trashed(project)`. Responde `{ status: 'done', project,
+   drive: 'trashed' | 'missing' | 'none', folders }`. Si Drive falla en el medio: `502 drive_failed`, la base queda
+   con el pedido sin confirmar y repetir termina.
+
+**`POST /project/untrash { project }`:**
+
+1. `media_project(project)`: nulo, `404`; `deleted_at` nulo, `409 project_not_deleted`.
+2. `driveReady()`.
+3. Las carpetas a traer: las de `projectTrash:<id>`; si el registro no está, las de la búsqueda que están en la
+   papelera con `trashedTime` posterior a `drive_trash_requested_at` (así no trae una carpeta vieja que ya
+   estaba en la papelera por otro motivo).
+4. Cada una con la marca y en la papelera: `PATCH { trashed: false }`. Si alguna existe (en la papelera o no):
+   `project_drive_untrashed(project)` y `drive: 'untrashed'`. Si no existe ninguna: `drive: 'missing'` **sin
+   tocar la base** (la app pregunta, sección 3.4).
+
+**El portero recrea la carpeta si está en la papelera** (`dayFolder`, `core.ts:679-703`: si la recordada está en
+la papelera o no existe, crea otra con la marca). Cuándo puede pasar con un proyecto borrado:
+
+| Caso | Qué pasa | Resultado |
+|---|---|---|
+| Subir un archivo nuevo a un proyecto borrado | `startUpload` pide nivel 3 sobre el archivo (`core.ts:780-781`) y `media_file` da nulo: `404`. Nunca llega a `dayFolder`. | No se crea nada. |
+| Un pase nuevo (`/pass`) | `media_file` nulo: `404`. | Nada. Un pase ya dado sigue sirviendo hasta que vence (8 horas, `PASS_MS`), como hoy al dejar de compartir; con la carpeta en la papelera, depende de Drive (prueba técnica). |
+| Una subida que ya estaba abierta cuando se borró | Las partes van a la sesión de Google sin volver a preguntar (`uploadChunk`); el archivo se crea en su carpeta del día. Si la carpeta ya está en la papelera, el archivo queda adentro (prueba técnica) y vuelve con ella. Al terminar, `set_file_drive` falla (nivel 0): el portero lo anota sin vincular y lo vincula en el próximo pedido de ese archivo, después de restaurar. | Nada se pierde. |
+| Restaurar normal | La carpeta vuelve antes que el proyecto (la base lo exige): `dayFolder` la encuentra viva. | La misma carpeta. |
+| Restaurar sin la carpeta, o después de que Google la borró | La próxima subida no encuentra viva la recordada y crea `LGA_ShotDocs/<Proyecto>` de nuevo, con la marca, y la recuerda. | Correcto: los archivos nuevos van a una carpeta viva. Quedan dos con la misma marca (la vieja en la papelera hasta que Google la vacíe); por eso `/project/untrash` trae solo las que mandó esa vez. |
+
+### 3.9 Prueba técnica antes de construir la entrega 2
+
+Con un proyecto de prueba (tres archivos subidos), borrado desde la app de la entrega 1, en el Drive de Lega, con
+una versión del portero con las dos rutas nuevas (solo actúan sobre proyectos borrados), antes de mostrar la
+casilla en la app:
+
+1. Que con el permiso `drive.file` la búsqueda por `appProperties` encuentre la carpeta del proyecto, y que el
+   portero pueda mandarla a la papelera (`PATCH trashed`) y sacarla.
+2. Que los archivos de adentro queden en la papelera (`trashed: true`, `explicitlyTrashed: false`) y vuelvan con
+   la carpeta; y que uno mandado antes por su cuenta (`/trash`) **no** vuelva.
+3. Que la carpeta en la papelera tenga `trashedTime` legible con `drive.file` (lo usa `/project/untrash` sin su
+   registro).
+4. Que un pase (`/m/<pase>`) de un archivo cuya carpeta está en la papelera siga sirviendo hasta que vence o deje
+   de servir: cualquiera de las dos está bien, pero hay que saberlo.
+5. Que una subida abierta antes de mandar la carpeta termine adentro de la carpeta en la papelera (y no en la
+   raíz del Drive) y vuelva con ella.
+6. Qué ve el dueño en su papelera de Drive (una carpeta con todo adentro) y que la fecha de borrado de Google
    cuente desde ese momento.
-
-Se prueba con una versión del portero con las dos rutas nuevas (solo actúan sobre proyectos borrados, que en
-ese momento no existen fuera de la prueba), antes de mostrar la casilla en la app.
+7. Que todos los archivos subidos del proyecto estén de verdad adentro de su carpeta (sus `parents`): uno que
+   estuviera en otro lado no se iría con ella. No debería haber ninguno (los archivos se suben siempre a
+   `LGA_ShotDocs/<Proyecto>/<día>`), pero se comprueba con el proyecto más grande antes de ofrecer la casilla.
 
 ## 4. Archivar
 
@@ -1735,9 +2597,9 @@ ese momento no existen fuera de la prueba), antes de mostrar la casilla en la ap
 |---|---|---|
 | Archivar y desarchivar | Quien maneja el proyecto: "Editar y crear páginas" sobre el proyecto entero **y** ser dueño o admin del workspace, o quien lo creó (miembro activo) | `private.can_manage_project` en `set_project_archived` |
 | Borrar y restaurar | Igual | `delete_project`, `restore_project` |
-| Casilla de Drive, mandar o traer la carpeta | Además, dueño o admin | `private.can_purge_project` (entrega 2) |
-| *Delete forever* | Dueño o admin que maneja el proyecto, después de los 30 días | Entrega 3 |
-| Ver la papelera de proyectos | Quien veía el proyecto (su creador, permiso sobre el proyecto o sobre una página de adentro), con *Restore* solo para quien lo maneja | `trashed_projects` (`could_view_project`) |
+| Casilla de Drive, mandar o traer la carpeta | Además, dueño o admin | `private.can_purge_project` en `media_project` y las tres funciones del portero (entrega 2) |
+| *Delete forever* | Dueño o admin que maneja el proyecto, después de los 30 días | `purge_project` (entrega 3, sección 2.3) |
+| Ver la papelera de proyectos | Quien veía el proyecto (su creador, permiso sobre el proyecto o sobre una página de adentro), con *Restore* solo para quien lo maneja. Quién lo borró: quien lo maneja, el dueño y los admins. Páginas, archivos, peso y estado de Drive: solo quien lo maneja | `trashed_projects` (`could_view_project`) |
 
 - Es **la misma regla que compartir el proyecto entero** (`private.can_share`, `equipo.sql:797-813`): quien
   puede decidir quién lo ve puede sacarlo de la vista de todos. Un miembro con "Editar y crear páginas" que no lo
@@ -1778,7 +2640,9 @@ ese momento no existen fuera de la prueba), antes de mostrar la casilla en la ap
 - **Qué ve la persona (app nueva):** cuando un proyecto conocido deja de venir, la app pregunta una vez
   `trashed_projects()`. Si está ahí, avisa: "*ana@… mandó “MGTZD” a Proyectos borrados. Lo que tenías sin subir
   de ese proyecto quedó en este dispositivo.*" (con *Download my unsynced changes* si hay algo) y, si lo tenía
-  abierto, pasa al siguiente proyecto. Si no está (le dejaron de compartir), el aviso de siempre.
+  abierto, pasa al siguiente proyecto. Si no está (le dejaron de compartir), el aviso de siempre. A quien la base
+  no le dice quién lo borró (no lo maneja ni es dueño o admin), el aviso va sin el correo
+  (`deletedList.goneNoticeNoEmail`).
 - Un editor abierto en una página de ese proyecto: lo escrito ya está en el dispositivo (cada tecla se guarda
   en IndexedDB); la página pasa al aviso de arriba en vez de "Esta página no existe o no tenés acceso".
 
@@ -1801,6 +2665,12 @@ agrega siempre a la lista (`tree.ts:565-569`). Si ese proyecto se borra, sin cam
 - Si la lista del servidor no trae su primer proyecto (y no es uno creado en el dispositivo sin subir), lo
   cambia por el primero activo de la lista y lo guarda; si la lista está vacía, muestra la pantalla "sin
   proyectos". Esto arregla también el caso que ya existe hoy cuando le dejan de compartir el primero.
+- Qué toca en el código: `PageTree.workspaceId` es hoy `readonly` (`tree.ts:93`) y además de agregarse a la
+  lista es el proyecto por defecto de `createPage` sin proyecto (`tree.ts:243`) y aquel al que cae
+  `useCurrentProject` (`project.ts:69`). Pasa a cambiarse con un método (`replacePrimary`, que también escribe
+  `meta.workspaceId`), y `useCurrentProject` cae al primero **activo** (no archivado) de la lista. El
+  reemplazo no borra nada del dispositivo: las páginas del proyecto viejo siguen en la base local y vuelven si
+  el proyecto vuelve.
 
 ### 6.5 Una versión vieja de la app
 
@@ -1823,9 +2693,10 @@ agrega siempre a la lista (`tree.ts:565-569`). Si ese proyecto se borra, sin cam
    db:test`. La migración es compatible con la app publicada: mientras nadie borre nada, nada cambia.
 2. Push de la app a `main` (Cloudflare publica).
 3. Subir `min_app_version` a esa versión (SQL Editor), antes del primer borrado.
-4. Entrega 2: la prueba técnica de Drive, la migración 10 igual que la 9, y el portero con la app **en el mismo
-   push** (regla del plan); el portero nuevo tiene que seguir andando con la app de la entrega 1 (las rutas son
-   nuevas, no cambia ninguna).
+4. Entrega 2: la prueba técnica de Drive (sección 3.9), la migración 10 igual que la 9, y el portero con la app
+   **en el mismo push** (regla del plan); el portero nuevo tiene que seguir andando con la app de la entrega 1
+   (las rutas son nuevas, no cambia ninguna).
+5. Entrega 3 (si Lega la quiere): la migración 11 igual que las otras y la app.
 
 ## 7. La interfaz
 
@@ -1912,7 +2783,8 @@ página nueva.
   restaurar). No se abren: un proyecto borrado no se ve. *Restore* no pregunta; en la entrega 2, si la carpeta
   está en la papelera de Drive, primero la trae (sección 3.4). La línea *Deleted projects* se muestra a los
   dueños y admins y a quien maneja algún proyecto; a los demás, solo si la app sabe de alguno borrado que
-  veían.
+  veían. A quien no lo maneja, el renglón muestra solo el nombre, cuándo se borró y los días que quedan (la base
+  no le da quién lo borró, salvo al dueño y los admins, ni cuánto tenía: sección 1.2).
 - En la entrega 2, cada borrado con archivos en el Drive suma *Send files to the Drive trash (1.2 GB)* (dueño y
   admins); en la 3, *Delete forever…* después de los 30 días.
 
@@ -2003,6 +2875,7 @@ pruebas de siempre (las dos lenguas, los mismos `{valores}`).
 | `deletedList.passed` | 30 days passed | Pasaron los 30 días |
 | `deletedList.restore` | Restore | Restaurar |
 | `deletedList.goneNotice` | {email} moved “{name}” to Deleted projects. | {email} mandó “{name}” a Proyectos borrados. |
+| `deletedList.goneNoticeNoEmail` | “{name}” was moved to Deleted projects. | “{name}” se mandó a Proyectos borrados. |
 | `deletedList.keptNotice` | What you had not uploaded from it is kept on this device. | Lo que tenías sin subir de ese proyecto quedó en este dispositivo. |
 | `page.notFound` (se agrega) | …If it was in a deleted project, it comes back when the project is restored. | …Si era de un proyecto borrado, vuelve cuando lo restauren. |
 
@@ -2049,8 +2922,8 @@ Drive y el plazo) en la misma tanda. No hay atajos nuevos.
   lo que deja de verse y de escribirse; la papelera de archivos y el peso; la huella antes y después; la
   invitación en el medio; las marcas no se escriben desde la API; sin sesión nada. Y la de siempre: que la dueña
   sigue viendo y editando todo después de restaurar. Las once pruebas de hoy tienen que seguir pasando (algunas
-  miran `ensure_workspace` y `project_sizes`). **Medir** `delete_project` con un proyecto de prueba de unos 2500
-  archivos dentro de la transacción.
+  miran `ensure_workspace` y `project_sizes`). Lo mismo para las entregas 2 y 3 (secciones 3.7 y 2.3). Todo esto
+  ya se corrió (sección 9.3); se vuelve a correr al implementar, con los archivos de prueba separados.
 - **Unitarias** (`src/sync/`): `PageTree` (`activeProjects`, `archivedProjects`, el primer proyecto que se
   reemplaza, sin relleno con la lista conocida), `Permissions.canManageProject` contra la tabla de la sección 5,
   lo sin subir de un proyecto (`unsyncedInProject`), y el `FakeServer` de `src/sync/testing.ts` con proyectos
@@ -2066,7 +2939,7 @@ Drive y el plazo) en la misma tanda. No hay atajos nuevos.
 - **Portero** (entrega 2, `portero/src/core.test.ts` con Drive simulado): la carpeta con la marca va y vuelve; sin
   la marca, `drive_mismatch` y nada se toca; 404; sin carpeta; quien no es dueño ni admin; un proyecto no
   borrado; repetir no hace nada de más.
-- **A mano:** la prueba técnica de Drive (sección 3.7); borrar y restaurar en Wanka un proyecto de prueba con
+- **A mano:** la prueba técnica de Drive (sección 3.9); borrar y restaurar en Wanka un proyecto de prueba con
   fotos y comentarios desde la computadora y ver el resultado en el iPhone.
 
 ### 9.2 Entregas
@@ -2076,16 +2949,51 @@ Drive y el plazo) en la misma tanda. No hay atajos nuevos.
    prueba y proyectos viejos sin perder nada.
 2. **La casilla de Drive:** prueba técnica, migración 10, las dos rutas del portero (`Doc_Portero.md`), *Send files
    to the Drive trash* en la lista de borrados y restaurar trayendo la carpeta.
-3. ***Delete forever*** después de los 30 días (`purged_at`, dueño y admins), con su palabra.
+3. ***Delete forever*** después de los 30 días (`purge_project`, dueño y admins), con su palabra (sección 2.3).
 
 Cada una con su auditoría antes de publicar.
 
+### 9.3 Cómo se probó el SQL (2026-10-01)
+
+Contra la base real (`lga_shotdocs`, en etapa de desarrollo), por la Management API, el mismo camino que `npm run
+db:migrate` (`scripts/lib/management.mjs`), **siempre dentro de `begin; … rollback;`**: nada quedó aplicado. Antes
+y después de cada tanda se comprobó por una consulta de solo lectura que la base seguía en `schema_version` 8, sin
+las columnas nuevas en `workspaces` y sin conexiones colgadas en una transacción.
+
+| Corrida | Qué | Resultado |
+|---|---|---|
+| Entregas 1, 2 y 3 juntas | `begin`, migración 9, su prueba (1.4, secciones A a I), migración 10, su prueba (3.7), migración 11, su prueba (2.3), `rollback`. Armada solo con el SQL de este documento, para que lo versionado sea exactamente lo probado. | `ok` (6 s). |
+| Las once pruebas de `supabase/tests/` | Cada una dentro de la misma transacción que las migraciones nuevas: con la 9 sola y con la 9, la 10 y la 11. | Las once `ok` en las dos. |
+| Controles (mutantes) | La misma corrida con un cambio que rompe algo a propósito, para ver que la prueba lo encuentra: (1) `user_page_level` sin mirar el borrado, (2) `restore_project` sin pedir traer la carpeta, (3) `purge_project` sin el plazo de 30 días; y una aserción falsa agregada al final. | Las cuatro fallan donde tienen que fallar ("la dueña ve páginas de P", "restaura sin traer la carpeta", "borra para siempre antes de los 30 días"). |
+| Tiempo con el proyecto más grande | Migración 9 y, como su dueño, `project_delete_info`, `delete_project`, `trashed_projects`, `project_sizes` y `restore_project` sobre la importación de Coda (640 páginas, 2297 archivos, 2602 usos, 5,6 GB), con una huella de sus filas antes y después. | 59 ms, **1,24 s** y **1,29 s**; la ventana daría 640 páginas, 2297 archivos y 5.639.291.372 bytes; con el proyecto borrado los 2297 entran a la papelera de archivos y al restaurar la huella es idéntica. |
+
+Casos de permisos que cubre (las personas son las de la 1.4):
+
+- **Sin ningún permiso** (admin sin permiso sobre P, sacada, sesión con contraseña, `anon`): no lo ve, no lo
+  archiva, no lo borra ni lo restaura, no lo ve en la papelera de proyectos (`project_not_found`, sin decir si
+  existe); `anon` no llama ninguna función (`42501`).
+- **Con permiso de una página** (invitada con ver p1): antes ve p1 y p2 (nivel 1); con P borrado todos sus niveles
+  dan 0 (`page_level`, `can_view_page`, `file_level`, `media_file`, las filas de `pages`, `page_updates`,
+  `page_files`, `files`, `comments` y los buckets); ve P en la papelera de proyectos sin poder restaurarlo y sin
+  saber quién lo borró ni cuánto tenía; al restaurar, todo igual que antes.
+- **Con permiso sobre el proyecto sin manejarlo** (miembro con editar y crear, admin con ver): no archiva, no borra,
+  no restaura, no manda la carpeta; con P borrado, todo en 0.
+- **Quien lo maneja** (admin con editar y crear, creador miembro de M): borra y restaura; la admin además manda y
+  trae la carpeta; el creador miembro no (no es dueño ni admin) ni borra para siempre.
+- **La dueña:** antes, todo en 4 y `true`; con P borrado, **todo en 0 también para ella** (aunque creó P y f1); al
+  restaurar, exactamente lo de antes (la huella de todas las filas de la prueba es la misma).
+- Que restaurar devuelve los niveles: la sección I guarda, para seis personas, todos sus niveles y las filas que
+  ve, y compara después de restaurar.
+
+Lo que **no** se pudo probar acá: el portero y Drive de verdad (las rutas no existen; sección 3.9), dos sesiones a la
+vez (la prueba usa una sola conexión) y la app.
+
 ## Riesgos
 
-1. **SQL sin ejecutar.** Puede tener errores de escritura; la prueba en `begin; … rollback;` los encuentra antes
-   de aplicar. La parte más delicada es que `user_page_level` y `user_project_level` cambian para todos: la
-   prueba de siempre de la dueña y las once pruebas existentes tienen que pasar.
-2. **El tiempo de `delete_project`** con muchos archivos (sección 1.3): medir.
+1. **Los niveles cambian para todos:** `user_page_level` y `user_project_level` miran ahora el borrado. Probado:
+   las once pruebas existentes pasan con la migración, y la sección I compara cada nivel antes y después.
+2. **El tiempo de `delete_project`** crece con los archivos del proyecto (0,5 ms por archivo, sección 9.3): un
+   proyecto de más de unos 12.000 archivos pasaría el tope de 8 s y habría que partirlo en tandas.
 3. **Versiones viejas** con el primer proyecto borrado (sección 6.5): un renglón vacío y, si escriben ahí,
    rechazos con el contenido guardado. Lo acota subir `min_app_version`.
 4. **La carpeta entera se lleva lo agregado a mano** y deja lo sacado a mano (sección 3.2). La confirmación lo
@@ -2095,34 +3003,47 @@ Cada una con su auditoría antes de publicar.
 6. **Un 404 de Drive al restaurar** puede ser otra cuenta de Google conectada, no un borrado: por eso nunca marca
    nada sin preguntar (sección 3.4).
 7. **Restaurar una copia de seguridad** anterior a un borrado con la carpeta en la papelera de Drive (sección 8).
+8. **Lo de Drive es una suposición** hasta la prueba técnica (sección 3.9): cómo se porta una carpeta en la
+   papelera con el permiso `drive.file`, la búsqueda por `appProperties` y `trashedTime`.
 
 ## Preguntas para Lega
 
+Cada una con la propuesta del diseño; el SQL probado sigue la propuesta.
+
 1. **Quién puede archivar, borrar y restaurar.** Propuesta: quien puede compartir el proyecto entero ("Editar y
-   crear páginas" sobre él y ser dueño o admin, o haberlo creado); la casilla de Drive y el borrado definitivo,
-   solo dueño y admins. ¿O solo dueño y admins para todo?
-2. **Un proyecto archivado, ¿se edita?** Propuesta: sí, con la marca *Archived* a la vista (archivar es orden).
-   Alternativa: abrirlo en solo lectura en la app (sin que la base rechace nada) hasta desarchivarlo.
-3. **Drive: ¿la carpeta entera del proyecto?** Propuesta: sí (un pedido, se restaura entera), avisando que se
-   lleva también lo que hayas puesto a mano en esa carpeta. Alternativa: archivo por archivo (unos 40 minutos
-   para un proyecto como el de Coda).
-4. **La casilla de Drive, ¿destildada por defecto?** Propuesta: sí, destildada.
-5. **El plazo y el definitivo.** Propuesta: 30 días; al vencer no pasa nada solo; *Delete forever* (a mano, solo
-   dueño y admins) recién después de los 30 días. ¿O el definitivo también antes?
-6. **Los íconos, ¿al pasar el mouse o siempre?** Propuesta: al pasar el mouse y con el foco (siempre se ven en el
-   renglón activo); en el teléfono, un "⋯" por renglón. Y renombrar pasa a ser el lápiz del renglón (sale la
-   línea *Rename*).
-7. **La palabra:** `delete` en inglés y `borrar` en castellano, sin distinguir mayúsculas. ¿Aceptar también la
-   del otro idioma? Propuesta: no, solo la del idioma de la app (la ventana la muestra).
+   crear páginas" sobre él y ser dueño o admin, o haberlo creado). La casilla de Drive y el borrado definitivo,
+   solo dueño y admins. Alternativa: solo dueño y admins para todo (más simple; el creador miembro de un proyecto
+   no podría limpiarlo).
+2. **Un proyecto archivado, ¿se edita?** Propuesta: sí, con la marca *Archived* a la vista (archivar es orden, no
+   candado: así nada que estuviera sin subir en otro dispositivo queda rechazado). Alternativa: abrirlo en solo
+   lectura en la app (sin que la base rechace nada) hasta desarchivarlo.
+3. **Drive: ¿la carpeta entera del proyecto?** Propuesta: sí (un pedido al portero, se restaura entera), avisando
+   que se lleva también lo que hayas puesto a mano en esa carpeta. Alternativa: archivo por archivo (unos 40
+   minutos con la app abierta para un proyecto como el de Coda).
+4. **La casilla de Drive, ¿destildada por defecto?** Propuesta: sí, destildada: el borrado común no toca Drive.
+5. **El plazo: 30 días.** Propuesta: 30 días para restaurar (como la papelera de archivos y la de Drive); al vencer
+   no pasa nada solo (la lista dice "Pasaron los 30 días" y se puede seguir restaurando).
+6. ***Delete forever*, ¿existe?** Propuesta: sí, como entrega 3, solo dueño y admins y recién después de los 30
+   días; es una marca (ninguna fila se borra) que lo saca de la papelera de proyectos y deja sus archivos en la
+   papelera de Drive. Alternativa: no construirlo hasta que haga falta (las entregas 1 y 2 no dependen de él).
+7. **Los íconos, ¿al pasar el mouse o siempre?** Propuesta: al pasar el mouse y con el foco (siempre se ven en el
+   renglón activo); en el teléfono, un "⋯" por renglón. Y renombrar pasa a ser el lápiz del renglón (sale la línea
+   *Rename*).
+8. **La palabra de confirmación:** `delete` con la app en inglés y `borrar` en castellano, sin distinguir
+   mayúsculas. ¿Aceptar también la del otro idioma? Propuesta: no, solo la del idioma de la app (la ventana la
+   muestra).
+9. **Quién ve un proyecto borrado en *Deleted projects*.** Propuesta: todos los que lo veían, para que entiendan
+   por qué desapareció; quién lo borró, solo el dueño, los admins y quien lo maneja; páginas, archivos y peso,
+   solo quien lo maneja. Alternativa: solo quien lo puede restaurar (los demás ven el aviso una vez y nada más).
+10. **El último proyecto activo no se archiva ni se borra** (íconos apagados con el motivo). Propuesta: sí, así
+    nunca queda la app sin un proyecto abierto.
+11. **Subir `min_app_version`** a la versión de la entrega 1 antes del primer borrado. Propuesta: sí (una pestaña
+    vieja deja de escribir y pide recargar; sin esto, un dispositivo viejo puede mostrar un "My project" vacío).
 
-## Lo que falta (el documento se cerró antes de terminar)
+## Pendiente
 
-- **Relectura final y auditoría independiente** de todo el documento: no se hicieron.
-- **El SQL de las secciones 1.3, 1.4 y 3.6 nunca se ejecutó** (ni siquiera se revisó su sintaxis con un
-  analizador): correrlo en `begin; … rollback;` antes de darlo por bueno. La 3.6 es un borrador y le faltan
-  `trashed_projects` y `project_sizes` de la entrega 2 y su prueba SQL.
-- **`Docs/index.md` y `Docs/Doc_Roadmap.md` (P.14) todavía no apuntan a este documento.**
-- La entrega 3 (*Delete forever*, `purged_at`) está descrita (sección 2.2) pero sin SQL.
-- La prueba técnica de Drive (sección 3.7) no se hizo: lo de la carpeta entera en la papelera de Drive es una
-  suposición sobre cómo se porta Drive con el permiso `drive.file`.
-- Lo encontrado en el código que condiciona el diseño está en la tabla de la sección 0, con archivo y línea.
+- **Auditoría independiente del diseño** (regla del repo para cerrar una tanda de riesgo alto): no se hizo.
+- **Las respuestas de Lega** a las preguntas de arriba.
+- **La prueba técnica de Drive** (sección 3.9), antes de construir la entrega 2.
+- Al implementar: las pruebas SQL van a `supabase/tests/` como archivos separados, cada una con la preparación de
+  la 1.4, y se vuelven a correr en `begin; … rollback;` antes de migrar.

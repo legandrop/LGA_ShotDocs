@@ -156,6 +156,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   proyecto entero, o dueño y admins), qué ven los que lo tenían compartido y qué pasa con lo que está sin
   sincronizar en otros dispositivos. Diseño y auditoría antes. Mientras tanto: renombrarlo y mandar sus páginas
   a la papelera.
+  **Diseño completo, sin implementar: `Doc_Proyectos_Borrar.md`** (Lega, 2026-10-01: un ícono de archivar y uno de
+  borrar al lado de cada proyecto; borrar con una ventana que muestra páginas, archivos y GB en el Drive, con una
+  casilla para mandar también lo del Drive y la palabra `delete` / `borrar`). Papelera de proyectos con 30 días
+  para restaurar, sin borrar filas; tres entregas (archivar y borrar; la carpeta del Drive; *Delete forever*) con
+  sus migraciones probadas en `begin; … rollback;` contra la base. Falta: auditoría independiente del diseño,
+  las respuestas de Lega a sus preguntas y la prueba técnica de Drive antes de la entrega 2.
 - **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
   (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
   instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la
