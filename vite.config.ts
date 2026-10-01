@@ -26,6 +26,12 @@ function decodeJwtPayload(token: string): string {
   }
 }
 
+// El aviso de licencia de libheif (LGPL-3.0, Docs/Doc_Decisiones.md, D-21) al principio de los archivos que la
+// llevan: el Worker que convierte las fotos HEIC y su respaldo en la página. `/*!`: el minificador lo conserva.
+const LIBHEIF_BANNER =
+  '/*! Includes libheif and libde265 (LGPL-3.0-or-later, (c) struktur AG, Dirk Farin and contributors) via libheif-js, ' +
+  'unmodified. Source and license texts: /licenses/THIRD_PARTY_NOTICES.md */';
+
 // La versión que se muestra en la app es la última entrada del changelog.
 function appVersion(): string {
   try {
@@ -102,7 +108,22 @@ export default defineConfig(({ mode }) => {
           // afuera de la caché y el build NO falla (workbox solo escribe una advertencia en la salida del
           // build); sin red, esa parte no abriría. Revisar que `dist/sw.js` liste todos los .js.
           globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+          // Menos el decodificador de fotos HEIC (Docs/Doc_Imagenes.md, "Fotos HEIC"): el Worker, la librería y
+          // su `.wasm` (que tampoco entra por la extensión) pesan ~1,6 MB y solo hacen falta cuando alguien
+          // agrega un HEIC. Se guardan en la caché `heic-decoder` la primera vez que se usan (abajo): desde ahí
+          // la conversión anda sin red. Un HEIC agregado sin red en un dispositivo que nunca lo bajó se guarda
+          // tal cual y se convierte antes de subirlo, cuando vuelve la red.
+          globIgnores: ['**/heic.worker-*.js', '**/heicLib-*.js'],
+          runtimeCaching: [
+            {
+              urlPattern: /\/assets\/(?:heic\.worker|heicLib|libheif)-[^/]+\.(?:js|wasm)$/,
+              handler: 'CacheFirst',
+              options: { cacheName: 'heic-decoder', expiration: { maxEntries: 6 } },
+            },
+          ],
           navigateFallback: '/index.html',
+          // Los avisos y los textos de las licencias (`public/licenses/`) son archivos, no pantallas de la app.
+          navigateFallbackDenylist: [/^\/licenses\//],
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         },
       }),
@@ -110,6 +131,12 @@ export default defineConfig(({ mode }) => {
     build: {
       // El editor se baja aparte (roadmap B.4) y pesa alrededor de 1 MB sin comprimir (300 KB comprimido).
       chunkSizeWarningLimit: 1200,
+      rolldownOptions: {
+        output: { postBanner: (chunk: { name: string }) => (chunk.name === 'heicLib' ? LIBHEIF_BANNER : '') },
+      },
+    },
+    worker: {
+      rolldownOptions: { output: { postBanner: LIBHEIF_BANNER } },
     },
     test: {
       environment: 'node',

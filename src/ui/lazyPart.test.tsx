@@ -316,6 +316,43 @@ describe('una parte que se carga aparte', () => {
     stop();
   });
 
+  it('un import opcional que no baja (el decodificador de fotos HEIC sin red) no recarga ni avisa; los demás sí', async () => {
+    const { listenForMissingFiles, newVersionNotice, reload, seen } = await reloadSetup();
+    const { optionalImport } = await import('../lib/optionalImport');
+    const stop = listenForMissingFiles();
+    const missing = () => new TypeError('Failed to fetch dynamically imported module: /assets/heicLib-x.js');
+    // Como el ayudante de Vite: avisa con `vite:preloadError` y después rechaza el import.
+    const viteImport = (err: Error) => {
+      window.dispatchEvent(Object.assign(new Event('vite:preloadError', { cancelable: true }), { payload: err }));
+      return Promise.reject(err);
+    };
+    const err = missing();
+    await expect(optionalImport(() => viteImport(err))).rejects.toBe(err);
+    await wait(250);
+    expect(seen).toEqual([]);
+    expect(reload).not.toHaveBeenCalled();
+
+    // La conversión de verdad (heicConvert.ts) sin el decodificador: termina en "no está", sin recargar.
+    vi.doMock('../media/heicLib', () => {
+      const failed = missing();
+      window.dispatchEvent(Object.assign(new Event('vite:preloadError', { cancelable: true }), { payload: failed }));
+      throw failed;
+    });
+    const { convertHeic } = await import('../media/heicConvert');
+    await expect(convertHeic(new Blob([new Uint8Array([1, 2, 3])]))).rejects.toMatchObject({ reason: 'unavailable' });
+    await wait(250);
+    expect(seen).toEqual([]);
+    expect(reload).not.toHaveBeenCalled();
+    vi.doUnmock('../media/heicLib');
+
+    // Fuera de un import opcional, el mismo evento sigue siendo una versión nueva.
+    await viteImport(missing()).catch(() => undefined);
+    await wait(250);
+    expect(seen).toEqual([newVersionNotice()]);
+    expect(reload).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
   it('otros errores siguen de largo como antes (la caja es solo para lo que no bajó)', async () => {
     const { lazyPart, Part } = await lazyModule();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
