@@ -304,6 +304,40 @@ describe('originales envueltos: ningún blob: con un tipo que corra en la app', 
   });
 });
 
+describe('pases: dos pedidos a la vez usan el mismo', () => {
+  it('abrir y bajar un adjunto juntos piden un solo pase al portero', async () => {
+    let calls = 0;
+    let release: (url: string) => void = () => undefined;
+    const media = {
+      pass: () => {
+        calls++;
+        return new Promise<string>((r) => (release = r));
+      },
+    };
+    const both = Promise.all([passFor(media, 'x'), passFor(media, 'x')]);
+    release('https://portero.test/m/uno');
+    expect(await both).toEqual(['https://portero.test/m/uno', 'https://portero.test/m/uno']);
+    expect(calls).toBe(1);
+    // Ya guardado: el siguiente tampoco pide.
+    expect(await passFor(media, 'x')).toBe('https://portero.test/m/uno');
+    expect(calls).toBe(1);
+  });
+
+  it('si el pedido falla, el siguiente vuelve a pedir', async () => {
+    let calls = 0;
+    const media = {
+      pass: async () => {
+        calls++;
+        if (calls === 1) throw new Error('Failed to fetch');
+        return 'https://portero.test/m/dos';
+      },
+    };
+    await expect(passFor(media, 'y')).rejects.toThrow();
+    expect(await passFor(media, 'y')).toBe('https://portero.test/m/dos');
+    expect(calls).toBe(2);
+  });
+});
+
 describe('carrete: un adjunto en grande (Docs/Doc_Adjuntos.md, entrega 2)', () => {
   async function withPdf(preview = true) {
     const server = new FakeServer();

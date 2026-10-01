@@ -80,15 +80,35 @@ function passesOf(media: object): Map<string, { url: string; at: number; named?:
   return cache;
 }
 
-/** Un pase del portero para el archivo, reusando el de hace menos de 7 horas. */
+/**
+ * Los pases que se están pidiendo, por cola y por archivo: dos pedidos a la vez (el carrete prepara abrir y bajar un
+ * adjunto juntos) usan el mismo, así no se le pide dos veces al portero.
+ */
+const passInFlight = new WeakMap<object, Map<string, Promise<string>>>();
+
+/** Un pase del portero para el archivo, reusando el de hace menos de 7 horas (o el que ya se está pidiendo). */
 export async function passFor(media: Pick<MediaQueue, 'pass'>, id: string): Promise<string> {
   const cache = passesOf(media);
   const known = cache.get(id);
   if (known && Date.now() - known.at < PASS_REUSE_MS) return known.url;
+  let flying = passInFlight.get(media);
+  if (!flying) {
+    flying = new Map();
+    passInFlight.set(media, flying);
+  }
+  const asked = flying.get(id);
+  if (asked) return asked;
   const at = Date.now();
-  const url = await media.pass(id);
-  cache.set(id, { url, at });
-  return url;
+  const pending = media.pass(id).then((url) => {
+    cache.set(id, { url, at });
+    return url;
+  });
+  flying.set(id, pending);
+  const forget = () => {
+    if (flying.get(id) === pending) flying.delete(id);
+  };
+  pending.then(forget, forget);
+  return pending;
 }
 
 /**

@@ -5,17 +5,21 @@ import { thumbFromCanvas, THUMB_SIDE } from './probe';
 // de un PDF, hecha en el dispositivo que lo agrega, como la miniatura de una foto. Va por el mismo camino que las
 // miniaturas: el almacén `thumbs` del dispositivo, el bucket `thumbs` y `set_file_thumb`. Ningún pedido al
 // portero ni a Drive, y anda sin red. pdf.js se baja aparte, solo cuando llega un PDF (`pdfLib.ts`).
+//
+// De a una por vez (soltar o importar muchos PDF no abre muchos Workers ni lee muchos PDF enteros en memoria a la
+// vez: el iPhone cerraría la pestaña), y cada paso con su tope, así una red que no contesta o un PDF que traba a
+// pdf.js nunca frenan la cola de subida, que espera la vista previa antes de registrar el archivo.
 
 /** Un PDF más grande que esto no tiene vista previa (pdf.js lo lee entero en memoria; el iPhone no da para más). */
 export const PDF_PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
 /** Lo más que se espera para dibujar la primera página (un PDF enorme o muy complejo). */
 export const PDF_PREVIEW_TIMEOUT_MS = 20_000;
-/** Lo más que se espera para bajar pdf.js (una red que no contesta). */
-const LIB_FETCH_TIMEOUT_MS = 30_000;
+/** Lo más que se espera para bajar pdf.js y su Worker (una red que no contesta). */
+const LIB_LOAD_TIMEOUT_MS = 30_000;
 
 /**
- * pdf.js no se pudo cargar (sin red la primera vez, o la bajada falló): no es un PDF sin vista previa, se
- * prueba de nuevo más tarde (la cola deja el archivo sin medir y lo intenta antes de subirlo).
+ * pdf.js no se pudo cargar (sin red la primera vez, o la bajada falló): no es un PDF sin vista previa. La cola sube
+ * el archivo igual y la vista previa se hace la próxima vez que se lo muestra (`MediaQueue.backfillPreview`).
  */
 export class PreviewUnavailable extends Error {
   constructor(message: string) {
@@ -33,36 +37,63 @@ export function previewable(mime: string | null | undefined, name: string | null
 type PdfLib = typeof import('./pdfLib');
 let loading: Promise<PdfLib> | null = null;
 
+/** `work`, o un error si tarda más que `ms`. */
+function within<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} took too long`)), ms);
+  });
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
+}
+
 /** pdf.js listo (una sola vez), con su Worker comprobado. Si no se puede: `PreviewUnavailable`. */
 function loadPdfLib(): Promise<PdfLib> {
-  loading ??= (async () => {
-    const lib = await import('./pdfLib');
-    // El Worker se baja aparte: se comprueba que llegue (pasa por el service worker, que lo guarda), así una
-    // falta de red no se confunde con un PDF que no se puede leer.
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), LIB_FETCH_TIMEOUT_MS);
-    try {
-      const res = await fetch(lib.PDF_WORKER_URL, { credentials: 'same-origin', signal: controller.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      await res.arrayBuffer();
-    } finally {
-      clearTimeout(timer);
-    }
-    return lib;
-  })().catch((err: unknown) => {
+  loading ??= within(
+    (async () => {
+      const lib = await import('./pdfLib');
+      // El Worker se baja aparte: se comprueba que llegue (pasa por el service worker, que lo guarda), así una falta
+      // de red no se confunde con un PDF que no se puede leer. Un archivo que ya no existe (una pestaña vieja después
+      // de publicar una versión) vuelve como la página de la app, con 200: eso tampoco es el Worker.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), LIB_LOAD_TIMEOUT_MS);
+      try {
+        const res = await fetch(lib.PDF_WORKER_URL, { credentials: 'same-origin', signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (/text\/html/i.test(res.headers.get('Content-Type') ?? '')) throw new Error('not the PDF reader');
+        await res.arrayBuffer();
+      } finally {
+        clearTimeout(timer);
+      }
+      return lib;
+    })(),
+    LIB_LOAD_TIMEOUT_MS + 5_000,
+    'Loading the PDF reader',
+  ).catch((err: unknown) => {
     loading = null;
     throw new PreviewUnavailable(`The PDF reader could not be loaded (${err instanceof Error ? err.message : String(err)}).`);
   });
   return loading;
 }
 
+/** La última vista previa pedida: la siguiente espera a que termine (de a una por vez). */
+let previous: Promise<unknown> = Promise.resolve();
+
 /**
  * La vista previa del adjunto: un JPEG de lado mayor `THUMB_SIDE` (como la miniatura de una foto), o `null` si no
- * tiene (no es un PDF, es muy grande, está dañado o tiene contraseña). Tira `PreviewUnavailable` si pdf.js no se
- * pudo cargar. El archivo de la persona no se toca.
+ * tiene (no es un PDF, es muy grande, está dañado o tiene contraseña, o tardó demasiado). Tira `PreviewUnavailable`
+ * si pdf.js no se pudo cargar. El archivo de la persona no se toca. De a una por vez.
  */
-export async function attachmentPreview(file: Blob, mime: string, name: string): Promise<Blob | null> {
-  if (typeof document === 'undefined' || !previewable(mime, name, file.size)) return null;
+export function attachmentPreview(file: Blob, mime: string, name: string): Promise<Blob | null> {
+  if (typeof document === 'undefined' || !previewable(mime, name, file.size)) return Promise.resolve(null);
+  const run = previous.then(
+    () => makePreview(file, name),
+    () => makePreview(file, name),
+  );
+  previous = run.catch(() => undefined);
+  return run;
+}
+
+async function makePreview(file: Blob, name: string): Promise<Blob | null> {
   const lib = await loadPdfLib();
   let canvas: HTMLCanvasElement | null = null;
   try {
@@ -78,7 +109,7 @@ export async function attachmentPreview(file: Blob, mime: string, name: string):
       },
       PDF_PREVIEW_TIMEOUT_MS,
     );
-    return await thumbFromCanvas(canvas);
+    return await within(thumbFromCanvas(canvas), 10_000, 'Encoding the preview');
   } catch (err) {
     console.info('[adjuntos] sin vista previa del PDF', name, err instanceof Error ? err.message : err);
     return null;

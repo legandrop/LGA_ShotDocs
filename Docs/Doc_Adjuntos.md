@@ -351,6 +351,11 @@ nuevas, sin migración) se mantiene. Cambios:
   el PDF en grande, *Open* (el original del dispositivo con su tipo) y *Download*, el zip con su tarjeta, otro
   dispositivo que la baja del bucket, sin red y la app abierta de nuevo (la vista previa sigue; el carrete avisa y
   apaga los botones), y en el teléfono en oscuro la tarjeta, la hoja y el carrete.
+- Auditoría independiente, arreglado antes de publicar: las vistas previas van de a una (soltar o importar muchos
+  PDF no abre muchos Workers ni lee muchos PDF enteros a la vez); cada paso tiene tope (bajar pdf.js, dibujar,
+  pasar a JPEG) y el Worker de pdf.js se corta siempre, así un PDF que traba a pdf.js no frena la subida; abrir y
+  bajar un adjunto en el carrete piden un solo pase (dos pedidos a la vez usan el mismo); una pestaña vieja que pide
+  el Worker después de publicar una versión (y recibe la página de la app) cuenta como "pdf.js no está".
 - Pendiente:
   - Probar a mano con el portero real y Safari/iPhone: que pdf.js se baje, dibuje y quede guardado para usarlo sin
     red; un PDF grande (50 MB) en el iPhone.
