@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { prefs } from './prefs';
 import { App } from './ui/App';
+import { listenForInstallPrompt } from './ui/install';
 import { listenForMissingFiles } from './ui/lazyPart';
 // Los estilos del editor van con la primera pantalla aunque el editor se baje aparte (roadmap B.4): así
 // quedan antes de styles.css, que los ajusta, como antes. Cargados con el editor irían después y le
@@ -19,6 +20,8 @@ import './styles.css';
 prefs.init();
 // Un archivo de la versión vieja que ya no está (se publicó una nueva): recargar una vez (lazyPart.tsx).
 listenForMissingFiles();
+// Chrome y Edge ofrecen instalar enseguida al cargar: se guarda para el botón "Install" (install.ts).
+listenForInstallPrompt();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -349,6 +349,20 @@ Arriba, un campo de búsqueda; abajo, las secciones:
 - **"Mostrame"** en cada entrada con `showMe` (entrega 3): abre la práctica y hace **solo ese paso** (o una
   tanda corta), y al terminar vuelve a donde estaba la persona.
 
+### Entradas de funciones que llegaron antes que la ayuda
+
+Las funciones nuevas que ve el usuario dejan acá su entrada, para pasarla a `src/help/entries.ts` cuando exista.
+
+- **Instalar la app** (v0.079, `Doc_Instalar.md`). Sección *Primeros pasos*. Sin atajos. `since: '0.083'`.
+  - *Install the app* / *Instalar la app*: "Install app in the account menu (or Install in the banner on your
+    phone) shows the steps for your device: iPhone and iPad, Android or computer. Installed, Shot Docs opens
+    from the home screen in its own window; on iPhone it keeps its own storage, which Safari doesn't clear." /
+    "*Instalar la app* en el menú de la cuenta (o *Instalar* en el aviso del teléfono) muestra los pasos para tu
+    dispositivo: iPhone y iPad, Android o computadora. Instalada, Shot Docs se abre desde la pantalla de inicio
+    en su propia ventana; en el iPhone guarda sus datos aparte y Safari no los borra."
+  - Palabras para buscar: instalar, app, pantalla de inicio, home screen, iPhone, Android, PWA, Dock.
+  - `when`: solo si la pestaña no es la app instalada (si lo es, la entrada dice que ya está instalada).
+
 ## 6. Un solo registro de atajos
 
 - **`src/ui/shortcuts.ts`** (en la parte que se baja siempre, chico): una lista con `id`, `keys` en el formato de
