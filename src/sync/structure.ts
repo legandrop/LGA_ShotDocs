@@ -4,6 +4,26 @@ import * as Y from 'yjs';
 export const CONTENT_FRAGMENT = 'document-store';
 
 /**
+ * Una copia de un elemento o un texto de Yjs, con todo lo suyo. El `clone()` de Yjs no copia las propiedades de
+ * un texto (`Y.XmlText.setAttribute`), y ahí vive la marca `lgaGapText` de los textos de un renglón con fotos en
+ * línea: sin ella, un renglón copiado al que ya no le quedan fotos volvería a guardarse a la manera de siempre
+ * (Docs/Doc_Colaboracion.md, "Huecos estables").
+ */
+export function copyType<T extends Y.XmlElement | Y.XmlText>(type: T): T {
+  if (type instanceof Y.XmlText) {
+    const copy = type.clone();
+    for (const [key, value] of Object.entries(type.getAttributes())) copy.setAttribute(key, value);
+    return copy as T;
+  }
+  const copy = new Y.XmlElement(type.nodeName);
+  for (const [key, value] of Object.entries(type.getAttributes())) copy.setAttribute(key, value as never);
+  // (Un Y.XmlHook no aparece en las páginas: se copia como lo haría Yjs.)
+  const children = type.toArray().map((child) => (child instanceof Y.XmlHook ? child.clone() : copyType(child)));
+  copy.insert(0, children as (Y.XmlElement | Y.XmlText)[]);
+  return copy as T;
+}
+
+/**
  * El editor guarda cada página como un único `blockGroup` raíz. Si dos dispositivos empiezan la misma
  * página sin haberse visto (una página nueva, o sin red), cada uno crea su raíz y al fusionarse quedan
  * dos. El editor muestra solo una y, en la próxima edición, borra la otra, que se sincroniza como un
@@ -23,7 +43,7 @@ export function mergeRootGroups(doc: Y.Doc, origin: unknown): boolean {
     for (const extra of roots) {
       if (extra === first) continue;
       const blocks = extra instanceof Y.XmlElement ? extra.toArray() : [];
-      const copies = blocks.map((b) => (b as Y.XmlElement | Y.XmlText).clone());
+      const copies = blocks.map((b) => copyType(b as Y.XmlElement | Y.XmlText));
       if (copies.length > 0) first.insert(first.length, copies);
     }
     const firstIndex = roots.indexOf(first);
@@ -142,9 +162,9 @@ function looseToBlock(node: unknown): Y.XmlElement | null {
   let content: Y.XmlElement | null = null;
   if (node instanceof Y.XmlText) {
     if (node.length === 0) return null;
-    content = emptyParagraph([node.clone()]);
+    content = emptyParagraph([copyType(node)]);
   } else if (isContent(node)) {
-    content = node.clone();
+    content = copyType(node);
   }
   if (!content) return null;
   const block = new Y.XmlElement(BLOCK_CONTAINER);
@@ -183,7 +203,7 @@ function repairContainer(container: Y.XmlElement): Y.XmlElement[] {
         const json = child.toJSON();
         if (present.has(json)) continue;
         present.add(json);
-        copies.push(child.clone());
+        copies.push(copyType(child));
       }
       if (copies.length > 0) keep.insert(keep.length, copies);
       remove(extra);
@@ -197,7 +217,7 @@ function repairContainer(container: Y.XmlElement): Y.XmlElement[] {
       if (!sameContent(keep, extra)) {
         const block = new Y.XmlElement(BLOCK_CONTAINER);
         block.setAttribute('id', crypto.randomUUID());
-        block.insert(0, [extra.clone()]);
+        block.insert(0, [copyType(extra)]);
         siblings.push(block);
       }
       remove(extra);
@@ -213,7 +233,7 @@ function repairContainer(container: Y.XmlElement): Y.XmlElement[] {
   const group = now.find((k): k is Y.XmlElement => isElement(k, BLOCK_GROUP));
   const content = now.find(isContent);
   if (group && content && now.indexOf(group) < now.indexOf(content)) {
-    const copy = content.clone();
+    const copy = copyType(content);
     remove(content);
     container.insert(0, [copy]);
   }

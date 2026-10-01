@@ -292,3 +292,16 @@ describe('fechas', () => {
     expect(when('2025-09-12T09:05:00', now)).toBe('Sep 12, 2025');
   });
 });
+
+describe('el texto de un bloque en el panel', () => {
+  it('una foto en línea se ve como [Image] en su lugar', async () => {
+    const { plainText } = await import('./EditorComments');
+    const content = [
+      { type: 'text', text: 'Antes ' },
+      { type: 'photo', props: { url: 'sdmedia://x' } },
+      { type: 'text', text: ' gato ' },
+      { type: 'photo', props: { url: 'sdmedia://y' } },
+    ];
+    expect(plainText(content)).toBe('Antes [Image] gato [Image]');
+  });
+});

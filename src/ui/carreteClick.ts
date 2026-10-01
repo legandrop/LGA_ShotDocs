@@ -21,3 +21,12 @@ export function clickOpens(p: {
   if (p.kind === 'mouse') return !p.modifier && (p.mouseOpens || p.detail >= 2);
   return !p.pressedSelected;
 }
+
+/**
+ * Shift+clic en una foto en línea elige el texto hasta ella (inlinePhotoEditor.ts, Docs/Doc_Fotos_En_Linea.md): ese
+ * clic no abre el carrete. Solo si la página se puede editar: en solo lectura no hay nada que elegir y el clic
+ * abre, como en una foto-bloque.
+ */
+export function shiftSelects(p: { editable: boolean; shiftKey: boolean; inlinePhoto: boolean }): boolean {
+  return p.editable && p.shiftKey && p.inlinePhoto;
+}

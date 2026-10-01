@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clickOpens, mousePressOpens } from './carreteClick';
+import { clickOpens, mousePressOpens, shiftSelects } from './carreteClick';
 
 describe('el clic en una foto', () => {
   const press = { editable: true, focused: true, selectedId: 'a', targetId: 'a' };
@@ -30,5 +30,16 @@ describe('el clic en una foto', () => {
     const tap = { kind: 'touch', mouseOpens: false, pressedSelected: false, detail: 1, modifier: false };
     expect(clickOpens(tap)).toBe(true);
     expect(clickOpens({ ...tap, pressedSelected: true })).toBe(false);
+  });
+
+  it('Shift+clic en una foto en línea elige texto (no abre) solo si se puede editar; en solo lectura abre', () => {
+    expect(shiftSelects({ editable: true, shiftKey: true, inlinePhoto: true })).toBe(true);
+    expect(shiftSelects({ editable: false, shiftKey: true, inlinePhoto: true })).toBe(false);
+    expect(shiftSelects({ editable: true, shiftKey: false, inlinePhoto: true })).toBe(false);
+    // Una foto-bloque: Shift no cambia nada (como antes).
+    expect(shiftSelects({ editable: true, shiftKey: true, inlinePhoto: false })).toBe(false);
+    // En solo lectura, apretar abre y el clic con Shift no cuenta como modificador.
+    const modifier = shiftSelects({ editable: false, shiftKey: true, inlinePhoto: true });
+    expect(clickOpens({ kind: 'mouse', mouseOpens: mousePressOpens({ editable: false, focused: false, selectedId: null, targetId: 'p#0' }), pressedSelected: false, detail: 1, modifier })).toBe(true);
   });
 });

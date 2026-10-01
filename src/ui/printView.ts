@@ -58,6 +58,8 @@ const STATE_CLASSES = [
   'sd-find-current',
   'sd-find-block',
   'sd-find-block-current',
+  // Una foto en línea dentro de una selección de texto (inlinePhotoEditor.ts).
+  'sd-photo-in-range',
 ];
 /** Atributos de colapsar que tampoco van en la copia. */
 const STATE_ATTRIBUTES = ['data-sd-collapsed', 'data-sd-hider'];
@@ -167,6 +169,10 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement, asSeen = false): void {
     }
     // Una foto en fila (con `rowWidth`) ya tiene su ancho: la parte de la fila, igual en cualquier pantalla.
     if (source && img.classList.contains('bn-visual-media') && !img.closest('.img-sized')) fixMediaWidth(img, source);
+    // Una foto en línea sin ancho propio (`w = 0`, Docs/Doc_Fotos_En_Linea.md): el ancho natural de lo que se ve
+    // en pantalla (la miniatura), con tope en el renglón (styles.css). Con ancho propio, su parte del renglón.
+    const inline = img.parentElement?.classList.contains('sd-photo') ? img.parentElement : null;
+    if (inline && !inline.classList.contains('sd-photo-sized') && natural && natural.width > 0) img.style.width = `${natural.width}px`;
   });
   for (const el of copy.querySelectorAll(REMOVE)) el.remove();
   // "Imprimir como se ve": sin lo que esconde un título colapsado (los bloques de afuera y sus hijos). Las

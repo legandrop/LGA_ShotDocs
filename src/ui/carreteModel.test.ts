@@ -8,6 +8,9 @@ import {
   dismissResult,
   fallbackName,
   fitSize,
+  inlinePhotosOf,
+  parsePhotoKey,
+  photoPropsIn,
   isDoubleTap,
   isZoomed,
   MAX_SCALE,
@@ -41,6 +44,11 @@ const image = (id: string, url: string, extra: Record<string, unknown> = {}, chi
 });
 const paragraph = (id: string, children: BlockLike[] = []): BlockLike => ({ id, type: 'paragraph', props: {}, children });
 
+// Fotos en línea (Docs/Doc_Fotos_En_Linea.md): en el texto de un bloque, entre textos.
+const inline = (url: string, name = '') => ({ type: 'photo', props: { url, name, w: 0.5 } });
+const txt = (text: string) => ({ type: 'text', text, styles: {} });
+const withText = (id: string, type: string, content: unknown, children: BlockLike[] = []): BlockLike => ({ id, type, props: {}, content, children });
+
 describe('carrete: los elementos de la página', () => {
   it('junta las fotos y videos en el orden de la página, también los que están adentro de otro bloque', () => {
     const page = [
@@ -53,7 +61,9 @@ describe('carrete: los elementos de la página', () => {
     const items = collectCarrete(page);
     expect(items.map((i) => i.blockId)).toEqual(['i1', 'i2', 'i3', 'i4', 'i5']);
     expect(items[0]).toEqual({
+      key: 'i1',
       blockId: 'i1',
+      at: null,
       url: MEDIA_A,
       source: 'media',
       mediaId: '6f1c2a4e-0b7d-4c8e-9f10-112233445566',
@@ -83,6 +93,63 @@ describe('carrete: los elementos de la página', () => {
     expect(startIndex(items, 'b')).toBe(1);
     expect(startIndex(items, 'zzz')).toBe(-1);
     expect(startIndex(items, null)).toBe(-1);
+  });
+
+  it('junta también las fotos en línea, en el orden del documento: en párrafos, títulos, listas y celdas de tabla', () => {
+    const page = [
+      withText('p1', 'paragraph', [txt('Antes '), inline(MEDIA_A, 'A.jpg'), txt(' entre '), inline('https://x.test/b.jpg')], [
+        image('i1', MEDIA_B),
+        withText('li', 'bulletListItem', [inline('https://x.test/c.jpg')]),
+      ]),
+      withText('h', 'heading', [txt('Título '), inline('sdfile://page/d.jpg')]),
+      image('i2', 'https://x.test/e.jpg'),
+      withText('t', 'table', {
+        type: 'tableContent',
+        rows: [
+          // Una celda como lista de contenido y otra como objeto `tableCell` (BlockNote da las dos formas).
+          { cells: [[inline('https://x.test/f.jpg')], { type: 'tableCell', props: {}, content: [txt('x'), inline('https://x.test/g.jpg')] }] },
+          { cells: [[inline('https://x.test/h.jpg')], []] },
+        ],
+      }),
+    ];
+    const items = collectCarrete(page);
+    expect(items.map((i) => i.key)).toEqual(['p1#0', 'p1#1', 'i1', 'li#0', 'h#0', 'i2', 't#0', 't#1', 't#2']);
+    expect(items.map((i) => i.url.replace(/^.*\//, ''))).toEqual(['6f1c2a4e-0b7d-4c8e-9f10-112233445566', 'b.jpg', '0a1b2c3d-4e5f-4a6b-8c7d-8e9f00112233', 'c.jpg', 'd.jpg', 'e.jpg', 'f.jpg', 'g.jpg', 'h.jpg']);
+    expect(items[0]).toEqual({
+      key: 'p1#0',
+      blockId: 'p1',
+      at: 0,
+      url: MEDIA_A,
+      source: 'media',
+      mediaId: '6f1c2a4e-0b7d-4c8e-9f10-112233445566',
+      name: 'A.jpg',
+      caption: '',
+    });
+    // Dos fotos del mismo párrafo: mismo bloque, distinta clave; se empieza por la que se tocó.
+    expect(startIndex(items, 'p1#1')).toBe(1);
+    expect(startIndex(items, 'p1')).toBe(-1);
+    expect(startIndex(items, 't#2')).toBe(8);
+  });
+
+  it('una foto en línea que no se muestra no corre el lugar de las demás (el lugar es el de la pantalla)', () => {
+    const page = [withText('p', 'paragraph', [inline(''), inline('sdmedia://no-es-un-id'), inline('https://x.test/ok.jpg')])];
+    expect(collectCarrete(page).map((i) => i.key)).toEqual(['p#2']);
+    // Un adjunto en línea tampoco va al carrete (como el bloque).
+    const skip = (id: string) => id.startsWith('6f1c');
+    expect(collectCarrete([withText('q', 'paragraph', [inline(MEDIA_A, 'plano.pdf'), inline(MEDIA_B)])], skip).map((i) => i.key)).toEqual(['q#1']);
+    expect(inlinePhotosOf(undefined)).toEqual([]);
+    expect(inlinePhotosOf('texto')).toEqual([]);
+  });
+
+  it('la clave de una foto ida y vuelta, y sus propiedades en su bloque', () => {
+    expect(parsePhotoKey('p1#3')).toEqual({ blockId: 'p1', at: 3 });
+    expect(parsePhotoKey('i1')).toEqual({ blockId: 'i1', at: null });
+    const p = withText('p1', 'paragraph', [txt('a'), inline(MEDIA_A, 'A.jpg'), inline(MEDIA_B, 'B.jpg')]);
+    expect(photoPropsIn(p, 'p1#1')).toMatchObject({ url: MEDIA_B, name: 'B.jpg' });
+    expect(photoPropsIn(p, 'p1#2')).toBeNull();
+    expect(photoPropsIn(p, 'p1')).toBeNull();
+    expect(photoPropsIn(p, 'otro#0')).toBeNull();
+    expect(photoPropsIn(image('i1', MEDIA_A, { name: 'x.jpg' }), 'i1')).toMatchObject({ url: MEDIA_A, name: 'x.jpg' });
   });
 
   it('un nombre para bajar el archivo aunque el bloque no traiga uno', () => {

@@ -16,6 +16,10 @@ dos dispositivos de la misma persona) editan la misma página a la vez. Compleme
   un bloque, lo sangra, lo mueve o lo junta con otro, y **al mismo tiempo** otra escribe en ESE bloque, lo que
   escribió la segunda se puede perder (ver la tabla). Es raro (tiene que ser el mismo bloque, en los mismos
   segundos, o con uno de los dos sin red) y se ve enseguida.
+- **Desde v0.074, los renglones con fotos en línea** (nada las crea todavía) tienen su parte del parche ("El
+  texto de los huecos" y "Huecos estables") y su tabla, medida: escribir los dos en el mismo hueco, y borrar,
+  mover o agregar una foto mientras el otro escribe pegado a ella, no pierden nada. Lo que queda es lo de los
+  cambios de estructura (unir, cambiar el tipo; Enter deja algunas marcas con las letras desordenadas).
 
 ## Lo que todavía puede pasar (y por qué)
 
@@ -44,6 +48,39 @@ Qué pasa, en palabras de usuario (A y B cambian la misma página a la vez, sin 
 | Le cambia el tipo a un renglón | Le cambia el tipo al mismo renglón | Queda uno de los dos tipos, con su texto (antes se borraba el renglón entero). |
 | Sangra un renglón | Sangra el mismo renglón | Queda sangrado una vez (si el de arriba ya tenía hijos, puede quedar dos veces; nunca se pierde). |
 
+**En un renglón con fotos en línea** (desde v0.074; nada las crea todavía, ver `Doc_Fotos_En_Linea.md`). Las
+fotos son elementos entre los textos del renglón. Con los huecos estables (ver "Huecos estables") ningún texto
+de un renglón con fotos se borra ni se vuelve a crear: sacar, mover o insertar una foto toca solo la foto.
+Medido con 300 agendas al azar por caso (`src/ui/collabPhotos*.test.ts`; el número es la cantidad de agendas
+con algo de eso, en agendas hechas para chocar: todos los pasos caen en el mismo renglón). Entre paréntesis, lo
+que daba antes de los huecos estables:
+
+| Lo que hace A | Lo que hace B a la vez | Resultado |
+|---|---|---|
+| Escribe en un hueco (antes, entre o después de fotos) | Escribe en el mismo hueco | Quedan los dos textos (0 de 300). |
+| Escribe en el renglón | Cambia el ancho de una foto, o agrega fotos en los huecos | Queda todo (0 de 300). |
+| Escribe al final del renglón | Pone una foto en el medio del texto | Queda todo, pero lo de A aparece antes de la foto (0 de 300 perdido). |
+| Escribe en un hueco vacío pegado a una foto | Borra esa foto | Queda todo (0 de 300; antes se perdía en 205 en una fila de tres fotos y en 206 con texto entre las fotos). |
+| Escribe pegado a una foto | Mueve una foto del renglón | Queda todo (0 de 300; antes, 74 y 29 con alguna marca desordenada). |
+| Borra una foto | Borra otra foto del mismo renglón | Queda todo (0 de 300; antes, el texto entre ellas se perdía en 53 y quedaba dos veces en 139). |
+| Escribe pegado a una foto | Aprieta Enter pegado a una foto (parte el renglón) | No se pierde ninguna letra (antes se perdían en 166 de 300). En 41 de 300 una marca escrita queda **con las letras desordenadas** (`7}{A` por `{A7}`; ver abajo). |
+| Une el renglón con el de arriba, o le cambia el tipo | Pega fotos en ese renglón | **Se pierden las fotos que pegó B** (227 y 261 de 300, igual que antes), como el texto en la tabla de arriba. |
+| Une el renglón con el de arriba | Escribe pegado a sus fotos | **Se pierde lo que escribió B** (231 de 300, igual que antes), como en la tabla de arriba. |
+
+Con todo mezclado (los dos escriben, agregan, cambian anchos, borran, mueven y aprietan Enter): de 300
+agendas, 7 con una marca desordenada y ninguna con letras perdidas (antes, 98 con letras perdidas); 6 con una
+marca dos veces y 13 con texto que ya estaba dos veces, todas con los dos apretando Enter (cada uno se lleva el
+mismo pedazo a su renglón nuevo; antes 19 y 61); ninguna foto perdida (antes 25) y **39 con una foto dos veces**
+(antes 25), todas con una foto movida o un Enter de los dos lados a la vez: mover es sacar e insertar, y si los
+dos mueven la misma foto (o uno la mueve y el otro parte el renglón) quedan dos. Se prefiere duplicar a perder.
+
+**Las letras desordenadas.** El editor no le dice a la librería qué tecla se apretó: le da el renglón nuevo y la
+librería compara letra por letra. Si A escribe `{A7}` justo antes de `{A0}`, la comparación ve que `{A` ya
+estaba y guarda `7}{A` en el medio de `{A0}`. Si B, a la vez, se llevó `{A0}` a otro renglón (o lo borró),
+queda `7}{A` (o, si después escribe algo más en el medio, `7}{A3}{A`). Pasaba igual antes y pasa igual en un renglón sin fotos (es la comparación de siempre de
+y-prosemirror); en la vida real, escribiendo letra por letra, se nota solo con algo pegado de una vez. Las
+pruebas lo cuentan aparte: `lost` (la marca no está tal cual) y `gone` (ni siquiera están sus letras, `lettersGone`).
+
 Dos cosas más, sin pérdida de texto:
 
 - **Ids repetidos.** Si por una fusión quedan dos bloques con el mismo id (por ejemplo, los dos sangraron el mismo
@@ -58,6 +95,13 @@ antes** (cualquiera, no solo el primero de una página) no tienen texto adentro.
 abajo (dos personas escribiendo a la vez en ese mismo párrafo vacío) hasta que alguien escribe en él; desde ahí
 ya tiene su texto y queda como los nuevos. Los párrafos vacíos que se crean desde v0.052 (Enter, un tipo nuevo,
 una página nueva) ya nacen con su texto.
+
+Y otra que ya pasaba y se midió en v0.074: **dos personas que escriben a la vez en el hueco entre dos saltos de
+línea (Shift+Enter), o después del último**, donde no hay texto. Cada una crea su texto y después se juntan mal:
+2 agendas con texto perdido y 1 con texto duplicado de 300 con saltos en el medio del párrafo; 4 y 12 con saltos
+al principio y al final. Es lo mismo que se arregló para las fotos con el texto de los huecos; para los saltos
+no se tocó, porque cambia cómo se guardan párrafos que las versiones de hoy sí abren (ver "El texto de los
+huecos").
 
 ## Qué se arregló
 
@@ -107,11 +151,53 @@ Están en `patches/y-prosemirror+1.3.7.patch` y los aplica `patch-package` al in
 - **`normalizePNodeContent`**: un bloque de texto vacío se representa con un texto vacío (`[[]]`), no con nada.
   Así el editor crea un texto vacío en cada párrafo vacío nuevo (Enter, un tipo nuevo), y lo compara bien con
   uno que ya lo tiene.
+- **`normalizePNodeContent`, el texto de los huecos (v0.074)**: alrededor de un elemento en línea que lo pide
+  (`needsGapText`: los que tienen `lgaGapText: true` en su esquema, hoy solo la foto en línea), donde no hay
+  texto va un texto vacío. Ver "El texto de los huecos".
+- **Los huecos estables**: en un renglón con fotos (o cuyos textos llevan la marca), `updateYFragment` escribe
+  con `updateStableGapsChildren` (nunca borra ni reemplaza un texto), `equalYTypePNode` compara con
+  `equalStableContent` (varios textos seguidos valen como uno) y `createNodeFromYElement` no junta textos
+  seguidos (el arreglo #160 de la librería). Ver "Huecos estables".
 
 **Si los parches faltan, la app no se construye ni corren las pruebas**: `vite.config.ts`
 (`assertYProsemirrorPatched`) revisa las marcas en los dos archivos (si falta un archivo, también corta) y corta con un mensaje (pasa si se instaló con
 `--ignore-scripts`, o si se actualizó y-prosemirror y el parche no se volvió a hacer). `y-prosemirror` quedó
-fijo en `1.3.7` en `package.json` para que una actualización sea a propósito.
+fijo en `1.3.7` en `package.json` para que una actualización sea a propósito. Desde v0.074 también busca la
+parte de los huecos y la de los huecos estables, y una prueba (`inlinePhoto.test.ts`) compara el nombre de la
+marca del nodo, y el del atributo de los textos, con los que lee el parche. Otra (`stableGaps.test.ts`) le da
+a los dos archivos la misma secuencia de documentos y exige los mismos cambios de Yjs, byte a byte.
+
+### El texto de los huecos (v0.074)
+
+Un renglón con fotos en línea se guarda como elementos hermanos: texto, foto, texto. Donde no hay texto (antes
+de la primera foto, entre dos fotos, después de la última) y-prosemirror no guardaba nada, y cada persona que
+escribía ahí creaba su propio texto; después los juntaba copiando uno en el otro y borrando el segundo (el caso
+2 de "Qué se arregló", en otro lugar). Ahora en cada hueco hay un texto vacío y los dos escriben en el mismo:
+`"" [foto] "" [foto] ""`.
+
+- **A quién le toca.** Solo a los elementos que lo piden con `lgaGapText: true` en su esquema: la foto en línea
+  (`src/ui/inlinePhoto.ts`, `extendNodeSchema`). Un salto de línea no lo pide: `[salto] [salto]` se guarda como
+  siempre, y al lado de una foto el texto vacío va solo del lado de la foto (`[salto] "" [foto] ""`). Agregar
+  una foto a un renglón que ya tiene texto o saltos no vuelve a crear nada de lo que había.
+- **Por qué no los saltos de línea.** Ya existen en párrafos de los usuarios, y las versiones de hoy los abren.
+  Una versión sin esta parte del parche que edita un párrafo guardado con textos vacíos junto a los saltos lo
+  reescribe entero (borra los textos vacíos y vuelve a crear los saltos y el texto de la derecha), y con eso
+  pierde lo que otro escriba a la vez. Con las fotos no pasa: la versión anterior no abre una página que las
+  tenga (`unknownContent.ts`).
+- **Versiones mezcladas.** Sin fotos, esta versión y la anterior escriben exactamente igual (la parte nueva no
+  se ejecuta si el párrafo no tiene un elemento marcado): las mismas agendas con saltos de línea dan lo mismo
+  con dos editores de esta versión, dos de la anterior o uno de cada una (`collabPhotosVersions.test.ts`). Y
+  abrir una página no escribe nada (`inlinePhoto.test.ts`).
+- **Las dos formas no se mezclan.** Un editor con los huecos estables y otro sin el texto de los huecos en el
+  mismo renglón con fotos no entran en un ida y vuelta (cada uno reescribe solo el párrafo que él mismo edita) y
+  terminan iguales; como el primero nunca borra un texto, no se pierde nada en 300 agendas (antes de los huecos
+  estables, 173), y los textos que escribe el otro quedan sin la marca (`collabPhotosNoGaps.test.ts`). No pasa
+  en la app: toda versión que conoce la foto en línea tiene el parche entero.
+- **Lo que arregla y lo que empeoraba** (300 agendas por caso; sin el texto de los huecos → con él): escribir los
+  dos en el mismo hueco, de 21 perdido y 52 duplicado a 0 (`[foto][foto]`) y de 20 duplicado a 0 (con texto
+  entre las fotos). Solo, el texto de los huecos **empeoraba** borrar una foto mientras el otro escribe en un
+  hueco vacío pegado a ella (de 40 a 205) y Enter (de 139 a 172): al borrar la foto, y-prosemirror borraba
+  también el texto del hueco, con lo que el otro escribió. Eso lo resuelven los huecos estables (abajo).
 
 ### Al actualizar BlockNote o y-prosemirror
 
@@ -119,9 +205,14 @@ fijo en `1.3.7` en `package.json` para que una actualización sea a propósito.
    mirar si la versión nueva ya trae el arreglo (buscar `restoreRelativeSelection` y `normalizePNodeContent` en
    `node_modules/y-prosemirror/src/plugins/sync-plugin.js`). Si no, aplicar los mismos cambios a mano en los dos
    archivos y regenerar con `npx patch-package y-prosemirror` (borrar el parche viejo). Si ya lo trae, borrar el
-   parche y sacar la revisión de `vite.config.ts`.
-2. Correr las pruebas de este documento: `npx vitest run src/ui/collab src/sync/structure.test.ts`, y la grande
-   al azar: `COLLAB_SEEDS=200 npx vitest run src/ui/collabRandom.test.ts`. Tienen que dar 0 pérdidas.
+   parche y sacar la revisión de `vite.config.ts`. El texto de los huecos y los huecos estables son de la app
+   (ninguna versión de la librería los va a traer): se vuelven a aplicar siempre, en los dos archivos
+   (`stableGaps.test.ts` comprueba que escriben igual). `patch-package` baja la librería original para comparar;
+   sin red, se arma igual con `git diff` entre los dos archivos originales (se recuperan aplicando el parche al
+   revés) y los cambiados, y se comprueba con `patch-package` sobre una copia.
+2. Correr las pruebas de este documento: `npx vitest run src/ui/collab src/ui/inlinePhoto.test.ts
+   src/ui/stableGaps.test.ts src/sync/structure.test.ts`, y la grande al azar: `COLLAB_SEEDS=200 npx vitest run src/ui/collabRandom.test.ts`.
+   Tienen que dar 0 pérdidas (las de `collabPhotosLimits` y `collabPhotosNoGaps` tienen que dar su número).
 3. Si `collabSemantics.test.ts` falla, cambió cómo se fusionan dos cambios del mismo bloque: puede ser para bien
    (algo que se perdía ahora queda). Revisar el caso, actualizar la tabla de arriba y la prueba.
 4. Correr la prueba de punta a punta `e2e.mjs` (dos dispositivos que se fusionan).
@@ -197,6 +288,13 @@ borrar uno perdía lo que se escribía en él.
 | `src/ui/collabSemantics.test.ts` | La tabla de "Lo que todavía puede pasar" (escenas S1–S13 y C1–C9 de la investigación), en los dos modos de entrega. Documenta lo inherente: falla si cambia. |
 | `src/sync/structure.test.ts` | La semilla (byte por byte la raíz de siempre, la capa de texto, versión vieja y nueva a la vez) y cada caso de la reparación, también dos dispositivos reparando a la vez (y un tercero escribiendo en los hijos) y textos sueltos. |
 | `src/ui/collabHarness.ts` | Las ayudas de esas pruebas (no es una prueba). `connect` entrega lo de cada lado **en orden**, como el servidor. |
+| `src/ui/collabPhotos.test.ts` | Fotos en línea (v0.074), lo que tiene que dar 0 en 300 agendas al azar por caso: los dos escriben en los huecos de `[foto][foto]` y de `"abc"[foto]"def"[foto]`, uno escribe y el otro cambia anchos o agrega fotos, los dos hacen todo eso, y el control solo con texto. `COLLAB_PHOTO_SCHEDULES` cambia la cantidad. |
+| `src/ui/collabPhotosLimits.test.ts` | La tabla de los renglones con fotos: borrar, mover, Enter, poner una foto en el medio de un texto, unir y cambiar el tipo, y de todo un poco. Documenta el número de hoy de cada caso (300 agendas), con las marcas perdidas y, aparte, las que perdieron letras: falla si cambia. Siempre exige que terminen iguales y que nada quede yendo y viniendo. |
+| `src/ui/collabPhotosNoGaps.test.ts` | Los mismos casos sin el texto de los huecos, para comparar (qué arregla el parche), y las dos formas mezcladas en el mismo renglón. |
+| `src/ui/stableGaps.test.ts` | Los huecos estables con un solo editor: borrar una foto deja los textos (los mismos objetos de Yjs) y se leen como uno; ida y vuelta Yjs → editor → Yjs sin cambios; la regla del borde; una foto en el medio de un texto; formatos que cruzan el borde; la marca; la reparación que copia; la versión anterior abriendo un renglón al que le borraron las fotos; 400 pasos al azar (con fotos: ningún texto se borra y abrir no escribe; sin fotos: sin marca); y las dos copias de la librería (`src` y `dist/*.cjs`) escribiendo los mismos cambios de Yjs, byte a byte. |
+| `src/ui/collabPhotosVersions.test.ts` | Saltos de línea con la versión anterior y esta: las mismas agendas dan lo mismo con cualquier combinación de las dos. |
+| `src/ui/inlinePhoto.test.ts` | El nodo, cómo queda guardado cada caso (con y sin saltos de línea), que abrir una página no escribe nada, la versión anterior (no la abre; si la abriera, borraría las fotos) y deshacer. |
+| `src/ui/photoHarness.ts` | Las ayudas de las pruebas de fotos (no es una prueba): las agendas (con `trace` para mirar una paso a paso), los casos con sus números, la forma de los huecos (`brokenGaps`), las marcas que perdieron letras (`lettersGone`), el esquema de la versión anterior y el de la foto sin la marca de los huecos. |
 
 **Una recomendación para las pruebas de colapsar** (`collapseProperty.test.ts`, en la rama `lega/colapsar`):
 la comparación "A y B coinciden" conviene hacerla sobre los documentos de Yjs (vector de estado y XML, como
@@ -214,3 +312,103 @@ sigue pudiendo deshacer cambios de otros con un editor viejo (caso 1) y borrar e
 esos borrados le llegan a todos. **`min_app_version` sube a 0.052** al publicar esta
 versión (hoy está en 0.045): una versión vieja deja de poder subir contenido hasta actualizarse. No hace falta
 para no perder datos con la versión nueva; es para cerrar la puerta a las viejas.
+
+**El texto de los huecos y los huecos estables (v0.074) sí cambian lo guardado**, pero solo en los renglones con
+fotos en línea, que una versión anterior no abre (`unknownContent.ts`, desde v0.021). Nada crea fotos en línea
+hasta que `min_app_version` suba a la versión que las conoce (el orden está en `Doc_Fotos_En_Linea.md`,
+"Versiones viejas"); esta entrega no lo sube.
+
+Un caso que queda abierto mientras convivan versiones: un renglón al que le **borraron todas las fotos** queda
+con sus textos seguidos y con la marca, y la página ya no tiene nada que la versión anterior desconozca, así
+que esa versión la abre. Probado a mano con la librería de `main` (sin los huecos estables): abre sin escribir
+nada y muestra el texto bien; al editar ese renglón lo reescribe en un solo texto (copia los otros en el primero
+y los borra). **Eso pierde texto si otro dispositivo escribe a la vez** (lo midió la auditoría de v0.076, 7
+posiciones por lado): con uno viejo y uno nuevo, 28 de 49 combinaciones pierden lo que escribió el nuevo en el
+segundo o el tercer texto; con dos viejos, las 49 dejan **el renglón entero dos veces**. No puede pasar mientras
+nada cree fotos. Antes de la versión que las crea: subir `min_app_version` y resolver el resquicio que queda aun
+así (un dispositivo viejo sin red que se actualiza después sube su cola, hecha con la librería vieja). Las
+pruebas de versiones (`collabPhotosVersions.test.ts`, "versión anterior" de `stableGaps.test.ts`) usan el
+esquema viejo con la librería nueva: no prueban la librería publicada. Hace falta sumar una prueba con la
+librería de `main` (alias de Vite; la auditoría dejó cómo) antes de la entrega 2.
+
+## Huecos estables
+
+Para que borrar, mover o agregar una foto no pierda lo que otro escribe pegado a ella. Parte del parche de
+y-prosemirror (`updateStableGapsChildren` y lo que la rodea, en los dos archivos de la librería).
+
+- **De dónde venía la pérdida.** Con el texto de los huecos, al borrar una foto y-prosemirror juntaba los dos
+  textos vecinos: copiaba uno en el otro y **borraba un `Y.XmlText` entero**, con lo que otro hubiera escrito en
+  él mientras tanto. Reescribir letras adentro de un texto no pierde lo que otro escribe; borrar el texto sí.
+  Además, al dibujar, la librería junta dos textos seguidos si el segundo lo creó ese dispositivo (#160).
+- **Cómo es ahora.** En un renglón con fotos, ningún texto se borra ni se vuelve a crear. Borrar una foto saca
+  solo su elemento y deja los textos de los dos lados como hermanos seguidos (`"abc" "def"`); mover es sacar e
+  insertar. Al leer, varios textos seguidos son un solo texto del editor, y no se juntan (ni el #160). Al
+  escribir, el renglón se compara como una secuencia de letras y fotos (prefijo y sufijo comunes; en el medio,
+  la secuencia de cambios más corta, con tope de 512 pasos) y cada cambio va al texto que tiene esa posición.
+  Los textos vacíos no molestan y nunca se limpian.
+- **Regla del borde.** Lo que se escribe donde se tocan dos textos va al final del de la izquierda (donde Yjs
+  pone el cursor). Una foto puesta en el medio de un texto deja la parte izquierda donde está y pasa la derecha
+  a un texto nuevo después de la foto (un `Y.XmlText` no se puede partir): lo que otro escriba a la vez en esa
+  parte queda a la izquierda de la foto, no se pierde. Una foto puesta donde se tocan dos textos va entre los
+  dos. Un cambio de ancho actualiza la foto sin volver a crearla.
+- **La marca.** Los textos de un renglón con fotos llevan el atributo `lgaGapText: true` (en el `Y.XmlText`, el
+  mismo nombre que la marca del nodo), que se pone al crear el bloque y al escribir en él. Así el renglón sigue
+  así cuando se le borra la última foto. Sin fotos y sin textos marcados, el renglón va por el código de
+  siempre: todo párrafo de hoy, también con saltos de línea.
+- **La forma.** Cada foto tiene un texto (aunque sea vacío) a cada lado, y todos los textos del renglón llevan
+  la marca (`brokenGaps` en `photoHarness.ts`). Puede haber varios textos seguidos. Si dos personas insertan a
+  la vez una foto en el mismo lugar, las dos fotos pueden quedar pegadas, sin texto entre ellas (2 de 300 en
+  "de todo un poco"): no se pierde nada (quien escriba ahí crea un texto que no se junta con nada) y la próxima
+  edición de ese renglón vuelve a poner el texto vacío.
+
+### Cómo quedó
+
+300 agendas al azar por caso (las mismas semillas de siempre; `collabPhotos*.test.ts`, `limits` en
+`photoHarness.ts`). "Antes" es el texto de los huecos solo (`fd600c2`); "sin huecos", sin el texto de los
+huecos. El número es la cantidad de agendas con algo perdido (entre paréntesis, con letras perdidas de verdad, no
+solo desordenadas):
+
+| Caso | Sin huecos | Antes | Ahora |
+|---|---|---|---|
+| Los dos escriben en los huecos de `[foto][foto]` | 21 perdido, 52 dos veces | 0 | 0 |
+| Los dos escriben en los huecos de `"abc"[foto]"def"[foto]` | 20 dos veces | 0 | 0 |
+| A escribe a la derecha de una foto, B borra fotos (`[foto][foto][foto]`) | 40 (40) | 205 (205) | **0** |
+| A escribe pegado a una foto, B borra fotos (texto entre fotos) | 167 (167) | 206 (206) | **0** |
+| A escribe a la derecha de una foto, B mueve fotos (`[foto][foto][foto]`) | 87 (87) | 74 (0) | **0** |
+| A escribe pegado a una foto, B mueve fotos (texto entre fotos) | 166 (166) | 29 (0) | **0** |
+| A escribe pegado a una foto, B aprieta Enter pegado a una foto | 139 (139) | 172 (166) | **41 (0)** |
+| Los dos borran fotos (texto entre fotos) | 53 perdido, 139 dos veces | igual | **0** |
+| A une el renglón, B escribe pegado a sus fotos | 231 (231) | igual | igual |
+| A une el renglón o le cambia el tipo, B pega fotos | 227 y 261 fotos | igual | igual |
+| De todo un poco (los dos, todo) | 101 (101) | 103 (98) | **7 (0)**; 6 y 13 dos veces; 39 fotos dos veces |
+| Control, solo texto | 0 | 0 | 0 |
+| Saltos de línea (esta versión, la anterior y mezcladas) | — | 2 y 1; 4 y 12 | igual |
+| Las dos formas mezcladas en un renglón | — | 173 | **0** |
+
+La vara del encargo era: los huecos en 0; "borrar mientras el otro escribe pegado" en 40 o menos (objetivo 0);
+Enter no peor que sin huecos (139); y los párrafos sin fotos igual que hoy. Da: 0, **0**, **41 sin ninguna letra
+perdida** (las 41 son marcas desordenadas, ver "Lo que todavía puede pasar"), y el control y los saltos de
+línea con los mismos números que antes, por el mismo camino de código. Lo que queda es de la estructura (unir,
+cambiar el tipo: y-prosemirror vuelve a crear el bloque) y de copiar (dos Enter a la vez, o mover y Enter a la
+vez, dejan cosas dos veces): no se pierde nada nuevo.
+
+### Para el auditor
+
+- **Dónde toca el camino de un párrafo sin fotos.** Tres lugares, todos detrás de una pregunta que con un
+  párrafo de hoy da "no": `isStableGapsBlock` al principio de `updateYFragment` (después de los atributos) y en
+  `equalYTypePNode`, y `yChildrenHaveStableGaps` en `createNodeFromYElement` (salta el #160 solo si el renglón
+  tiene una foto o un texto marcado). `isStableGapsBlock` exige un `Y.XmlElement`, un nodo de texto del editor
+  (`isTextblock`) y una foto o un texto marcado; recorre los hijos en cada comparación (costo lineal, sin
+  escrituras). `createTypeFromElementNode` pone la marca solo si el nodo tiene una foto (`hasGapTextChild`).
+  Lo comprueban: el control de solo texto y los saltos de línea con los mismos números que antes (también con el
+  esquema anterior y mezclados), el editor al azar sin fotos (ningún texto con la marca) y "abrir una página no
+  escribe nada" (`inlinePhoto.test.ts`, `stableGaps.test.ts`).
+- **La reparación** (`structure.ts`) copiaba con `clone()` de Yjs, que no copia los atributos de un
+  `Y.XmlText`: un renglón copiado sin fotos perdía la marca y volvía al código de siempre. Ahora copia con
+  `copyType`, que los copia (prueba en `stableGaps.test.ts`).
+- **Las dos copias de la librería.** `src/plugins/sync-plugin.js` (la que usan la app y las pruebas) y
+  `dist/y-prosemirror.cjs` llevan el mismo código, con los nombres de módulo de cada una; `stableGaps.test.ts`
+  les da la misma secuencia de 200 documentos y exige los mismos cambios de Yjs byte a byte (falla con la
+  `.cjs` de antes). El parche regenerado con `npx patch-package y-prosemirror` reproduce los dos archivos exactos
+  sobre la librería original (comprobado con `git apply` sobre `npm pack y-prosemirror@1.3.7`).
+- Los comentarios nuevos del parche están en inglés, como el resto de ese archivo.

@@ -136,6 +136,10 @@ export const importCoda = {
     en: "was edited after the import stopped: it stays as you left it (what failed there was not retried)",
     es: "se editó después del corte: queda como la dejaste (lo que había fallado ahí no se reintentó)",
   },
+  'import.unsupported': {
+    en: "has content from a newer version of the app: it was not changed (update the app and resume the import)",
+    es: "tiene contenido de una versión más nueva de la app: no se tocó (actualizá la app y seguí la importación)",
+  },
   'import.reattached': {
     en: "went to the top level: its parent page is missing or the pages loop",
     es: "quedó en el primer nivel: falta su página madre o las páginas forman un círculo",
