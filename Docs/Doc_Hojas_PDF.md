@@ -7,7 +7,8 @@ acá está lo que pasa después.
 ## La regla
 
 **Un corte es un cálculo, no contenido.** Nada de esto agrega nodos al documento, guarda algo o cambia el
-Y.Doc: las marcas son una capa encima del editor y el PDF se arma con una copia. Lo prueba
+Y.Doc: las marcas son una capa encima del editor y el PDF se arma con una copia. La única excepción la pone la
+persona a mano: el **salto de hoja** (más abajo), que es un párrafo del documento con una propiedad. Lo prueba
 `src/ui/pagination.test.ts` (el Y.Doc y los bloques quedan iguales al paginar y al imprimir).
 
 **Lo que se ve es lo que sale.** Las marcas de la pantalla y los saltos del PDF salen del mismo cálculo,
@@ -27,6 +28,7 @@ escondidas.
 | `src/ui/printView.ts` | La **vista de impresión**: una copia del encabezado, el título y el contenido del editor, con el ancho del área de texto de la hoja, afuera de la pantalla. Mide, pagina y pone los saltos. |
 | `src/ui/pagination.ts` | El cálculo puro (`paginate`) y la medición de la vista (`measureUnits`). |
 | `src/ui/SheetBreaks.tsx` | Las marcas en el editor ("Page 2", "Page 3"…), y Ctrl/⌘+P. |
+| `src/ui/editorSchema.ts` | El salto de hoja: la propiedad `pageBreak` del párrafo, `insertPageBreak`, el menú "/" y el teclado (`pageBreakExtension`). |
 | `src/ui/printPage.ts` | Imprimir: arma la vista, pone la hoja con `@page` y llama a `window.print()`. |
 | `src/i18n/print.ts` | Los textos ("Page 2" / "Hoja 2", los avisos). |
 | `src/media/queue.ts` | `localImage`: la foto original si está en el dispositivo (solo lee lo local, nunca la red). |
@@ -175,10 +177,69 @@ Los links (también el de cada tarjeta de Drive) quedan como links en el PDF.
   teléfono o la computadora, que no cambia al poner el original, que respeta `previewWidth` y que no toca
   otras imágenes).
 
+## Salto de hoja
+
+Lo que sigue empieza en una hoja nueva, en las marcas de la pantalla y en el PDF (sección 10 del plan, "Control
+de cortes").
+
+### Diseño
+
+- **Qué es.** Un párrafo con `pageBreak: true`, igual que Script es un párrafo con `script: true`: **nada de
+  tipos de bloque nuevos**. La hoja nueva empieza **después** de ese párrafo. Es una variante más del párrafo
+  (`paragraphProps('pageBreak')`): no va junto con Script, pregunta ni tarjeta de Drive, y *Paragraph* en la
+  barra de formato se la saca.
+- **Puede tener texto.** Es lo más simple que no pierde nada: si alguien escribe en el salto, el texto se ve, se
+  imprime como un párrafo común al pie de su hoja y la hoja nueva empieza después. Bloquear la escritura obligaba
+  a decidir qué hacer con lo pegado, el dictado o lo que llega de otro dispositivo, y cualquier error ahí borraba
+  texto. Vacío, en el papel no ocupa lugar.
+- **Cómo se crea.** El menú "/" (*Page break* / *Salto de hoja*, en los bloques básicos; también "salto", "page
+  break", "hoja nueva"…) convierte el renglón del "/" en el salto (si tiene texto, el salto va abajo) y deja el
+  cursor en un párrafo nuevo, en la hoja siguiente. **Ctrl+Enter** (⌘↩ en la Mac), como en Word y Google Docs:
+  en un párrafo vacío, ese párrafo pasa a ser el salto; al principio de un bloque, el salto va antes; en el medio
+  de un párrafo, lo parte y queda entre las dos partes (la segunda conserva sus propiedades: Script sigue Script);
+  al final, va después con un párrafo nuevo. En una tabla, una imagen o un bloque de código no hace nada.
+  Ctrl+Enter no lo usaba nadie en el editor (el de mandar un comentario es en su campo, otro lugar del registro).
+- **Cómo se saca.** Retroceso al principio del bloque que sigue: vacío se borra, con texto queda como párrafo
+  común. Sin esto, BlockNote juntaba el bloque con el salto y el texto subía arriba de la línea; por eso el teclado
+  va en una extensión que corre antes que la de BlockNote (`pageBreakExtension`). También se borra como cualquier
+  párrafo, o con *Paragraph* en la barra.
+- **Cómo se ve.** Una línea punteada con "PAGE BREAK" / "SALTO DE HOJA" (el rótulo es CSS y sale de
+  `--sd-page-break-label`, en el idioma de la app): vacío, la línea pasa por el renglón; con texto, va debajo. En
+  una página libre, más tenue: no hay hojas en pantalla, pero el PDF (A4) lo respeta. En el teléfono, igual.
+- **El cálculo.** La unidad del salto lleva `breakAfter`; la siguiente unidad con alto empieza hoja (si no la
+  empieza ya). Vacío mide 0 en la vista de impresión (`print-page-break-empty`, `display: none`) y cuenta igual.
+  Varios saltos seguidos valen uno (no dejan hojas en blanco) y uno al final no suma una hoja vacía. Un título justo
+  antes del salto queda en su hoja: el salto manda. El PDF usa el mismo cálculo (`break-before: page` en el bloque
+  que sigue), así marcas y hojas coinciden; la línea y el rótulo nunca salen en el papel.
+- **Secciones colapsadas** (P.11): el cálculo, con todo abierto como siempre (un salto adentro de lo colapsado
+  suma "Hoja N adentro" en el título). Con "Imprimir como se ve", el salto escondido no se imprime ni corta.
+- **Copiar y pegar:** adentro de la app sigue siendo salto (vacío o con texto). Afuera sale como
+  `<p class="page-break-line" style="break-after: page">`; al pegar, se reconoce esa clase o cualquier `<p>` con
+  `break-after: page` o `page-break-after: always`. Deshacer: un solo Ctrl+Z (partir un párrafo va en dos pasos
+  que el historial junta). Buscar: el rótulo no es texto y no aparece; lo escrito en el salto, sí. No hay exportar
+  ni importar `.md` todavía: cuando exista, el salto tiene que ir como una línea propia que vuelva al importar.
+- **Una versión vieja** (hasta v0.083) ve un párrafo vacío o con su texto, sin línea, y no lo borra (las
+  propiedades que no conoce quedan en el Y.Doc). Si escribe en ese renglón, pierde solo el salto; el texto y el id
+  quedan. Como perder la propiedad deja el contenido intacto, **no hace falta subir `min_app_version`**.
+
+### Cómo quedó
+
+- `src/ui/pageBreak.test.ts` (21 pruebas): el cálculo con saltos (vacío, con texto, seguidos, al final, cuando ya
+  empieza hoja, un título antes, un bloque alto después), crear y sacar (también con el teclado real del editor de
+  la página), el menú "/", partir un Script, copiar y pegar (HTML de la app y de afuera), la vista de impresión
+  (esconde el vacío, el Y.Doc no cambia) y la **versión anterior** (`fixtures/editorSchemaV083.ts`, copia del
+  esquema publicado): abre la página, ve los párrafos con su texto, no borra ni desmarca nada al editar otro bloque
+  y, si escribe en el salto, conserva texto e id.
+- En Chromium, con la página real sobre el servidor en memoria (sin login), 28 de 28: la línea; las marcas
+  "Page 2" y "Page 3" antes de los bloques que siguen a cada salto; el PDF (`page.pdf`) con 3 hojas que empiezan
+  donde marca la pantalla y sin el rótulo; Ctrl+Enter en el medio de un párrafo (4 hojas) y un solo Ctrl+Z; "/page
+  br" + Enter; Retroceso; escribir en el salto (el texto sale al pie de la hoja 1); copiar y pegar; el teléfono
+  (las mismas marcas y el mismo PDF); la página libre (sin marcas, línea tenue, PDF A4 con los saltos); una sección
+  colapsada ("Page 3 inside", el PDF con todo abierto da 3 hojas, "como se ve" 2). Y el rótulo en castellano, en
+  oscuro.
+
 ## Pendiente
 
-- El **bloque de salto de hoja** (sección 10 del plan). Tiene que degradar en una versión vieja como Script
-  (una propiedad de un párrafo, nunca un tipo de bloque nuevo).
 - En la computadora las hojas se ven como una sola tira con líneas; no hay un espacio entre hojas.
 - Safari: `@page { size }` depende de la versión; si no lo toma, el papel es el que se elige en el diálogo
   (los cortes se calculan para el de la página).

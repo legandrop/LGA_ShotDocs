@@ -210,10 +210,6 @@ const createParagraph = createBlockSpec(
         // Ctrl/⌘+Alt+P, en una pregunta (Ctrl/⌘+Alt+Q ya es la cita del editor; con AltGr, Q y E escriben
         // "@" y "€" en los teclados en castellano).
         [QUESTION_SHORTCUT]: ({ editor }) => setParagraph(editor, 'question'),
-        // Ctrl+Enter (⌘↩ en la Mac): un salto de hoja donde está el cursor, como en los procesadores de texto.
-        [PAGE_BREAK_SHORTCUT]: ({ editor }) => insertPageBreak(editor),
-        // Retroceso al principio del bloque que sigue a un salto: saca el salto (no junta el texto con él).
-        Backspace: ({ editor }) => removeBreakBefore(editor),
         // Como en un procesador de guiones: Enter en una línea de guion con texto sigue en Script; en una
         // línea vacía sale a un párrafo común.
         Enter: ({ editor }) =>
@@ -263,7 +259,8 @@ export function paragraphProps(kind: 'paragraph' | 'script' | 'question' | 'driv
 function isPageBreakElement(element: HTMLElement): boolean {
   if (element.classList.contains('page-break-line')) return true;
   const after = `${element.style.getPropertyValue('break-after')} ${element.style.getPropertyValue('page-break-after')}`;
-  return /\b(page|always)\b/.test(after);
+  // Valores enteros: `avoid-page` (no cortar) no es un salto.
+  return after.split(/\s+/).some((v) => ['page', 'always', 'left', 'right', 'recto', 'verso'].includes(v.trim().toLowerCase()));
 }
 
 type AnyBlock = { id: string; type: string; props: Record<string, unknown>; content?: unknown; children?: unknown[] };
@@ -332,6 +329,21 @@ export function insertPageBreakForSlashMenu(editor: BlockNoteEditor<any, any, an
     followWithParagraph(editor, marker.id);
   });
 }
+
+/**
+ * El teclado del salto de hoja, antes que el de BlockNote (si no, su Retroceso junta el bloque con el salto antes de
+ * que lleguemos). Va en las extensiones del editor de la página (editorExtensions.ts).
+ */
+export const pageBreakExtension = createExtension({
+  key: 'shotdocs-page-break',
+  runsBefore: ['default'],
+  keyboardShortcuts: {
+    // Ctrl+Enter (⌘↩ en la Mac): un salto de hoja donde está el cursor, como en los procesadores de texto.
+    [PAGE_BREAK_SHORTCUT]: ({ editor }) => insertPageBreak(editor),
+    // Retroceso al principio del bloque que sigue a un salto: saca el salto (no junta el texto con él).
+    Backspace: ({ editor }) => removeBreakBefore(editor),
+  },
+});
 
 /** Deja el cursor en un párrafo vacío nuevo después de `id` (un salto recién puesto). */
 function followWithParagraph(editor: BlockNoteEditor<any, any, any>, id: string): void {

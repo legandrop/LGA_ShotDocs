@@ -13,6 +13,7 @@ import {
   schema,
   SCRIPT_PROP,
 } from './editorSchema';
+import { pageEditorExtensions } from './editorExtensions';
 import { schema as v083Schema } from './fixtures/editorSchemaV083';
 import { paginate, PAGE_BREAK_SELECTOR, type Unit } from './pagination';
 import { buildPrintView } from './printView';
@@ -87,12 +88,13 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-function mount(doc: Y.Doc, withSchema: unknown = schema, into?: HTMLElement): BlockNoteEditor {
+function mount(doc: Y.Doc, withSchema: unknown = schema, into?: HTMLElement, extensions?: unknown[]): BlockNoteEditor {
   const editor = BlockNoteEditor.create(
     withCollaboration({
       schema: withSchema as typeof schema,
       collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name: 'u', color: '#000' } },
-    }),
+      ...(extensions ? { extensions } : {}),
+    } as never),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
   (into ?? document.body).appendChild(el);
@@ -210,17 +212,20 @@ describe('crear y sacar un salto', () => {
     expect(removeBreakBefore(editor)).toBe(false);
   });
 
-  it('el atajo de teclado Ctrl/⌘+Enter está en el editor y pone el salto', () => {
-    const editor = mount(new Y.Doc());
+  it('con el teclado del editor de la página: Ctrl/⌘+Enter lo pone y Retroceso (antes que el de BlockNote) lo saca', () => {
+    const editor = mount(new Y.Doc(), schema, undefined, pageEditorExtensions({}));
     editor.replaceBlocks(editor.document, [p('Uno.')]);
     editor.setTextCursorPosition(editor.document[0], 'end');
     const view = editor.prosemirrorView!;
     const mac = /Mac|iPhone|iPad/.test(navigator.platform);
-    const handled = view.someProp('handleKeyDown', (f) =>
-      f(view, new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: !mac, metaKey: mac })),
-    );
-    expect(handled).toBe(true);
-    expect(kinds(editor)[1]).toBe('break');
+    const key = (init: KeyboardEventInit) => view.someProp('handleKeyDown', (f) => f(view, new KeyboardEvent('keydown', init)));
+    expect(key({ key: 'Enter', ctrlKey: !mac, metaKey: mac })).toBe(true);
+    expect(kinds(editor).slice(0, 3)).toEqual(['paragraph', 'break', 'paragraph']);
+    editor.insertInlineContent('Dos.');
+    editor.setTextCursorPosition(editor.document[2], 'start');
+    expect(key({ key: 'Backspace' })).toBe(true);
+    expect(kinds(editor).slice(0, 2)).toEqual(['paragraph', 'paragraph']);
+    expect(texts(editor).slice(0, 2)).toEqual(['Uno.', 'Dos.']);
   });
 });
 
@@ -257,6 +262,14 @@ describe('copiar y pegar', () => {
     c.pasteHTML('<p>Antes</p><p style="page-break-after: always">Fin</p><p>Después</p>');
     expect(kinds(c).slice(0, 3)).toEqual(['paragraph', 'break', 'paragraph']);
     expect(texts(c).slice(0, 3)).toEqual(['Antes', 'Fin', 'Después']);
+    // "No cortar acá" (avoid-page) no es un salto, ni un <p> vacío común.
+    const d = mount(new Y.Doc());
+    d.replaceBlocks(d.document, [p('')]);
+    d.setTextCursorPosition(d.document[0], 'start');
+    d.pasteHTML('<p style="break-after: avoid-page">Uno</p><p></p><p style="page-break-after: auto">Dos</p>');
+    expect(kinds(d).filter((k) => k === 'break')).toHaveLength(0);
+    expect(texts(d).join('|')).toContain('Uno');
+    expect(texts(d).join('|')).toContain('Dos');
   });
 });
 
