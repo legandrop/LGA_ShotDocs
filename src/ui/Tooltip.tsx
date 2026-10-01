@@ -51,7 +51,8 @@ export function TooltipLayer() {
       current.current = null;
       setShown(null);
     };
-    const show = (target: HTMLElement, immediate: boolean) => {
+    // `warm`: si otro tooltip se acaba de cerrar, este no espera.
+    const show = (target: HTMLElement, immediate: boolean, warm = true) => {
       if (!target.dataset.tip) return;
       clear();
       const open = () => {
@@ -61,7 +62,7 @@ export function TooltipLayer() {
         current.current = target;
         setShown(tip);
       };
-      if (immediate || Date.now() - lastHidden.current < WARM_MS) open();
+      if (immediate || (warm && Date.now() - lastHidden.current < WARM_MS)) open();
       else {
         pending.current = target;
         timer.current = setTimeout(open, SHOW_DELAY_MS);
@@ -83,14 +84,29 @@ export function TooltipLayer() {
       const from = (e.target as Element | null)?.closest('[data-tip]');
       if (from && !to) hide();
     };
-    // Con el teclado: al llegar con Tab se muestra enseguida.
+    // Una fila del árbol de páginas se recorre con las flechas: ahí el foco espera como el mouse, siempre.
+    const isTreeRow = (el: EventTarget | null): el is HTMLElement =>
+      el instanceof HTMLElement && el.classList.contains('tree-row');
+    // Con el teclado: al llegar con Tab se muestra enseguida. En una fila del árbol, solo si uno se queda
+    // quieto: recorriendo con las flechas no sale un globo en cada fila.
     const onFocus = (e: FocusEvent) => {
       const target = e.target as HTMLElement;
       if (!target.matches?.(':focus-visible')) return;
       const tip = target.closest<HTMLElement>('[data-tip]');
-      if (tip) show(tip, true);
+      if (!tip) return;
+      if (isTreeRow(target)) show(tip, false, false);
+      else show(tip, true);
     };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && hide();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') return hide();
+      // Una tecla en la fila del árbol (una flecha que despliega, por ejemplo) esconde el globo y la espera
+      // vuelve a empezar.
+      const target = e.target;
+      if (isTreeRow(target) && (current.current === target || pending.current === target)) {
+        hide();
+        show(target, false, false);
+      }
+    };
 
     document.addEventListener('pointerover', onOver);
     document.addEventListener('pointerout', onOut);

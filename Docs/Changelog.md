@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.074 :
+
+El árbol de páginas con el teclado y plegar una madre de la página abierta. Las flechas solo abrían y cerraban
+ramas; ahora, con el foco en una fila, ↑ y ↓ abren la página anterior o siguiente (con la tecla apretada se
+abre la última al frenar), → despliega o baja a la primera subpágina, ← pliega o sube a la madre, e Inicio y
+Fin van a las puntas. Además, plegar con el triángulo una madre de la página abierta no dejaba: el efecto que
+abre las madres de la abierta corría con cada cambio de lo desplegado y la volvía a abrir. Ahora corre solo
+cuando cambia la página abierta o el árbol, y plegar esa madre la deja como página abierta (en el teléfono el
+cajón sigue abierto).
+[ Árbol de páginas - teclado y plegar una madre de la abierta ]
+
 v0.073 :
 
 Diseño de las fotos en línea, sin código. Hoy una foto es un bloque: no se puede poner el cursor a su lado, ni

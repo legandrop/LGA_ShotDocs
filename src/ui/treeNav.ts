@@ -1,0 +1,148 @@
+// El teclado del árbol de páginas de la barra lateral (patrón de árbol de WAI-ARIA): qué filas se ven y en qué
+// orden, y qué hace cada tecla según dónde está el foco. Funciones puras; `Sidebar.tsx` las aplica.
+
+/** Una fila visible del árbol, en el orden en que se ve. */
+export interface VisibleRow {
+  id: string;
+  /** La madre en el árbol que se ve (`null` en el primer nivel, también si la madre real no es visible). */
+  parentId: string | null;
+  depth: number;
+  hasChildren: boolean;
+  /** Abierta: tiene subpáginas y se ven. */
+  open: boolean;
+}
+
+/**
+ * Las filas que se ven, de arriba abajo: cada página y, si está abierta, sus subpáginas (las de una cerrada no).
+ * `children` devuelve las subpáginas ya ordenadas y sin las de la papelera, como `PageTree.children`.
+ */
+export function visibleRows(
+  roots: readonly { id: string }[],
+  children: (id: string) => readonly { id: string }[],
+  expanded: ReadonlySet<string>,
+): VisibleRow[] {
+  const out: VisibleRow[] = [];
+  // Un ciclo en datos rotos no cuelga el recorrido.
+  const seen = new Set<string>();
+  const walk = (pages: readonly { id: string }[], parentId: string | null, depth: number) => {
+    for (const page of pages) {
+      if (seen.has(page.id)) continue;
+      seen.add(page.id);
+      const kids = children(page.id);
+      const open = kids.length > 0 && expanded.has(page.id);
+      out.push({ id: page.id, parentId, depth, hasChildren: kids.length > 0, open });
+      if (open) walk(kids, page.id, depth + 1);
+    }
+  };
+  walk(roots, null, 0);
+  return out;
+}
+
+/** Lo que hace una tecla en el árbol. */
+export type TreeAction =
+  | { type: 'none' }
+  /** Pasar el foco a esa fila y abrir su página (navegar, como un clic; ver `createOpenScheduler`). */
+  | { type: 'go'; id: string }
+  /** Abrir ya la página de la fila (Enter, Espacio). */
+  | { type: 'open'; id: string }
+  /** Desplegar sus subpáginas (sin cambiar de página). */
+  | { type: 'expand'; id: string }
+  /** Plegar sus subpáginas. */
+  | { type: 'collapse'; id: string };
+
+const NONE: TreeAction = { type: 'none' };
+
+/** Las teclas del árbol. Cualquier otra no es del árbol. */
+export function isTreeKey(key: string): boolean {
+  return ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter', ' '].includes(key);
+}
+
+/**
+ * La tecla sola: con Ctrl, ⌘, Alt o Shift no es del árbol (son de otros atajos, del sistema o del navegador), y
+ * escribiendo con un IME tampoco.
+ */
+export function isPlainKey(e: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; isComposing?: boolean }): boolean {
+  return !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.isComposing;
+}
+
+/** Qué hace `key` con el foco en la fila `focusId`. */
+export function treeKeyAction(rows: readonly VisibleRow[], focusId: string, key: string): TreeAction {
+  const at = rows.findIndex((r) => r.id === focusId);
+  if (at < 0) return NONE;
+  const row = rows[at];
+  const go = (i: number): TreeAction => (i >= 0 && i < rows.length && i !== at ? { type: 'go', id: rows[i].id } : NONE);
+  switch (key) {
+    case 'ArrowDown':
+      return go(at + 1);
+    case 'ArrowUp':
+      return go(at - 1);
+    case 'Home':
+      return go(0);
+    case 'End':
+      return go(rows.length - 1);
+    case 'ArrowRight':
+      // Cerrada con subpáginas: la abre. Abierta: a su primera subpágina (la fila que sigue). Sin subpáginas: nada.
+      if (!row.hasChildren) return NONE;
+      return row.open ? go(at + 1) : { type: 'expand', id: row.id };
+    case 'ArrowLeft':
+      // Abierta: la cierra. Cerrada o sin subpáginas: a su madre. En el primer nivel sin nada que cerrar: nada.
+      if (row.open) return { type: 'collapse', id: row.id };
+      return row.parentId ? { type: 'go', id: row.parentId } : NONE;
+    case 'Enter':
+    case ' ':
+      return { type: 'open', id: row.id };
+    default:
+      return NONE;
+  }
+}
+
+/** La espera para abrir la página cuando las flechas vienen seguidas (tecla apretada o pulsaciones rápidas). */
+export const OPEN_DELAY_MS = 150;
+
+export interface OpenScheduler {
+  /** Pide abrir `id`. `repeat`: la tecla viene apretada (`KeyboardEvent.repeat`). */
+  request(id: string, repeat?: boolean): void;
+  /** Olvida lo que estaba por abrirse. */
+  cancel(): void;
+  /** Lo que está por abrirse, si hay algo. */
+  pending(): string | null;
+}
+
+/**
+ * Abrir páginas al moverse con las flechas sin encolar cargas: una pulsación suelta abre la página al instante;
+ * con la tecla apretada o pulsaciones más seguidas que `delay`, el foco corre fila por fila y solo se abre la
+ * última, `delay` ms después de la última tecla. Así nunca se arma una fila de páginas abriéndose una tras otra.
+ */
+export function createOpenScheduler(
+  open: (id: string) => void,
+  { delay = OPEN_DELAY_MS, now = () => performance.now() }: { delay?: number; now?: () => number } = {},
+): OpenScheduler {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let target: string | null = null;
+  let last = -Infinity;
+  const cancel = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+    target = null;
+  };
+  return {
+    request(id, repeat = false) {
+      const t = now();
+      const burst = repeat || timer !== null || t - last < delay;
+      last = t;
+      cancel();
+      if (!burst) {
+        open(id);
+        return;
+      }
+      target = id;
+      timer = setTimeout(() => {
+        timer = null;
+        target = null;
+        open(id);
+      }, delay);
+    },
+    cancel,
+    pending: () => target,
+  };
+}
