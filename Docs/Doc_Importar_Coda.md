@@ -64,7 +64,8 @@ repite solo esa conversión, sin token (solo baja, si faltan, archivos guardados
   archivos no: un blob de Coda es siempre el mismo archivo); borrar la carpeta también sirve.
 - La misma foto usada en dos páginas se baja una vez; desde v0.061 en la app también entra una vez.
 - Una página que no es texto (una página embebida o sincronizada de otro doc) no se exporta: queda anotada en
-  `problems` del manifest y en la app entra vacía.
+  `problems` del manifest y en la app entra vacía. **Salvo una embebida con su dirección en `embeds.json`**
+  (desde v0.066, ver abajo).
 
 ## 2. Importar la carpeta (la app)
 
@@ -208,6 +209,25 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   anotan en la lista (no hay archivo que traer).
 - **Subtítulo** de la página de Coda: un párrafo en cursiva arriba de todo.
 
+### Páginas embebidas (desde v0.066)
+
+Una página `embed` de Coda muestra otra cosa (otra página, de este doc o de otro, o un sitio). La API no dice
+qué ni deja exportarla ("Only canvas pages can be exported"); el servidor MCP de Coda sí da la dirección
+(`content_read` con `markdown`). Como con los comentarios, la captura quien tiene el MCP y la deja en la carpeta:
+
+- **`embeds.json`** (en la raíz de la carpeta exportada): `{ "source": "…", "docId": "<id del doc>", "pages":
+  { "<id de la página embebida>": "<dirección>" } }`. Uno de otro doc, sin `pages` o roto es un error claro
+  antes de bajar nada.
+- **Qué hace el comando** con cada página `embed` que tiene dirección:
+  - una página de Coda (`https://coda.io/d/…_d<doc>/…_su<página>`, o la misma en `docs.superhuman.com`): busca
+    esa página en su doc (por `_su…` en su `browserLink`), exporta su HTML y sus archivos como los de cualquier
+    página y los deja como contenido de la página embebida, con `embedOf: { docId, pageId, url }` en el manifest
+    (y en `pages/<n>_<id>.embed.json`, para cuando se reusa lo ya bajado). El token va solo a la API de Coda;
+  - cualquier otra dirección: un link a ella;
+  - sin permiso sobre el otro doc, o una página que no se encuentra: queda como antes (vacía) y anotada con el
+    motivo. Sin `embeds.json`, todo igual que antes.
+- La importación trae una página `embed` con archivo como cualquier otra.
+
 ### Tablas (desde v0.063)
 
 Shot Docs no tiene bases de datos: una tabla de Coda se importa **bakeada**, como páginas (decisión de Lega para
@@ -274,7 +294,8 @@ probada en `scripts/coda-tables.test.mjs` con datos inventados).
   el manifest pero la app todavía no muestra íconos de página.
 - **Tablas y vistas de Coda como bases de datos:** desde v0.063 entran como páginas (ver "Tablas"); lo vivo
   (relaciones, filtros, botones, fórmulas) no.
-- **Una página que no es texto** (embebida o sincronizada de otro doc): entra vacía y queda anotada.
+- **Una página que no es texto** (embebida o sincronizada de otro doc): entra vacía y queda anotada, salvo una
+  embebida con su dirección en `embeds.json` (ver "Páginas embebidas").
 - **Un editor por página.** Cada página se escribe con un editor sin pantalla atado a su documento; la atadura
   (colaboración) se fija al crear el editor, así que no se puede reusar uno para todas. El que convierte el
   HTML sí es uno solo para toda la importación.

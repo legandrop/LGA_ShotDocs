@@ -669,6 +669,17 @@ describe('importar la carpeta', () => {
     expect(saved?.media['p1 bl-r']).toMatchObject({ key: 'bl-r' });
   });
 
+  it('una página embebida con archivo (lo que mostraba, traído por el comando) se importa como cualquier otra', async () => {
+    const { a } = await mediaDevice();
+    const embed = { ...page('e1', 'Reporte embebido', null, 0), contentType: 'embed' };
+    const result = await importCoda(smallFolder([embed], { e1: '<div><a href="https://www.youtube.com/watch?v=1">video</a></div>' }), a);
+    expect(result.problems).toEqual([]);
+    const id = a.tree.roots(result.projectId)[0].id;
+    const doc = await a.docs.open(id);
+    expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('https://www.youtube.com/watch?v=1');
+    a.docs.close(id);
+  });
+
   it('el mismo archivo en varias páginas se guarda y se sube una vez; cada página lo usa (page_files)', async () => {
     const { server, a } = await mediaDevice();
     const add = vi.spyOn(a.media, 'add');

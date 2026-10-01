@@ -32,3 +32,28 @@ describe('coda-export', () => {
     expect(() => parseExportArgs(['MGTZD', '--force'])).toThrow(/--force/)
   })
 })
+
+describe('páginas embebidas (embeds.json)', () => {
+  it('reconoce una página de otro doc de Coda; cualquier otra dirección queda como link', async () => {
+    const { parseEmbedUrl } = await import('./lib/codaExport.mjs')
+    expect(parseEmbedUrl('https://coda.io/d/_dAbC123/_suXyZ9')).toEqual({ kind: 'coda', docId: 'AbC123', slug: 'XyZ9' })
+    expect(parseEmbedUrl('https://coda.io/d/Reportes_dAbC123/Dia-43_suXyZ9#tabla')).toEqual({ kind: 'coda', docId: 'AbC123', slug: 'XyZ9' })
+    expect(parseEmbedUrl('https://docs.superhuman.com/d/Reportes_dAbC123/Dia_suXyZ9')).toEqual({ kind: 'coda', docId: 'AbC123', slug: 'XyZ9' })
+    expect(parseEmbedUrl('https://www.youtube.com/watch?v=1')).toEqual({ kind: 'link', url: 'https://www.youtube.com/watch?v=1' })
+    // Un doc de Coda sin página (o un host parecido) es un link, no una página que bajar con el token.
+    expect(parseEmbedUrl('https://coda.io/d/_dAbC123')).toEqual({ kind: 'link', url: 'https://coda.io/d/_dAbC123' })
+    expect(parseEmbedUrl('https://coda.io.evil.com/d/_dAbC/_suX')).toEqual({ kind: 'link', url: 'https://coda.io.evil.com/d/_dAbC/_suX' })
+    expect(parseEmbedUrl('http://coda.io/d/_dAbC/_suX')).toBeNull()
+    expect(parseEmbedUrl('javascript:alert(1)')).toBeNull()
+    expect(parseEmbedUrl('')).toBeNull()
+  })
+
+  it('embeds.json se revisa: de otro doc o sin "pages" es un error claro; las direcciones vacías se ignoran', async () => {
+    const { checkEmbeds } = await import('./lib/codaExport.mjs')
+    const ok = checkEmbeds({ source: 'x', docId: 'D1', pages: { 'canvas-a': ' https://coda.io/d/_dX/_suY ', 'canvas-b': '' } }, 'D1')
+    expect([...ok]).toEqual([['canvas-a', 'https://coda.io/d/_dX/_suY']])
+    expect(() => checkEmbeds({ docId: 'D2', pages: {} }, 'D1')).toThrow(/otro doc/)
+    expect(() => checkEmbeds({ docId: 'D1' }, 'D1')).toThrow(/falta "pages"/)
+    expect(() => checkEmbeds([], 'D1')).toThrow(/objeto/)
+  })
+})

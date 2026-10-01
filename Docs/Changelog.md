@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.066 :
+
+Páginas embebidas de Coda. Una página que en Coda muestra otra página (de otro doc, por ejemplo) entraba vacía:
+la API de Coda no dice qué muestra ni deja exportarla. Ahora, si la carpeta exportada trae `embeds.json` con la
+dirección de cada una (la da el servidor MCP de Coda, que captura quien importa), el comando busca esa página en
+su doc, baja su HTML y sus archivos y los deja como contenido de la página embebida, anotando de dónde salió. Una
+dirección que no es de Coda queda como link. Si no hay permiso sobre el otro doc, la página queda vacía como
+antes, con el motivo en la lista. Sin `embeds.json`, nada cambia.
+[ Exportar de Coda - páginas embebidas ]
+
 v0.065 :
 
 Colores al importar de Coda. Al comparar un doc importado con Coda, un fondo verde muy claro (como el que Coda

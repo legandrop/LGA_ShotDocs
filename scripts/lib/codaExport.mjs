@@ -18,6 +18,41 @@ export function isCodaApi(url) {
   }
 }
 
+/**
+ * La dirección de lo que muestra una página embebida (`embeds.json`): una página de un doc de Coda
+ * (`{ kind: 'coda', docId, slug }`, de `…/d/…_d<docId>/…_su<slug>`) o cualquier otra cosa como link
+ * (`{ kind: 'link', url }`). `null` si no es una dirección https.
+ */
+export function parseEmbedUrl(url) {
+  let u
+  try {
+    u = new URL(String(url ?? '').trim())
+  } catch {
+    return null
+  }
+  if (u.protocol !== 'https:' || u.username || u.password) return null
+  if (u.host === 'coda.io' || u.host === 'docs.superhuman.com') {
+    const docId = u.pathname.match(/^\/d\/(?:[^/]*_)?d([A-Za-z0-9_-]+)(?:\/|$)/)?.[1]
+    const slug = u.pathname.match(/_su([A-Za-z0-9_-]+)(?:\/|$|#|\?)/)?.[1]
+    if (docId && slug) return { kind: 'coda', docId, slug }
+  }
+  return { kind: 'link', url: u.href }
+}
+
+/**
+ * `embeds.json` (lo captura quien tiene el servidor MCP de Coda): `{ docId, pages: { <id de la página
+ * embebida>: <dirección> } }`. Devuelve el mapa id → dirección; uno de otro doc o sin forma es un error claro.
+ */
+export function checkEmbeds(raw, docId) {
+  const where = 'embeds.json'
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`${where}: tiene que ser un objeto`)
+  if (raw.docId !== docId) throw new Error(`${where}: es de otro doc (${raw.docId ?? 'sin docId'}, se esperaba ${docId})`)
+  if (!raw.pages || typeof raw.pages !== 'object' || Array.isArray(raw.pages)) throw new Error(`${where}: falta "pages" { id: dirección }`)
+  const out = new Map()
+  for (const [id, url] of Object.entries(raw.pages)) if (typeof url === 'string' && url.trim()) out.set(id, url.trim())
+  return out
+}
+
 /** Un archivo guardado en Coda (las fotos y adjuntos de las páginas y de las tablas): solo esos se bajan. */
 export function isCodaHosted(url) {
   try {
