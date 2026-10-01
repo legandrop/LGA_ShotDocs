@@ -150,7 +150,8 @@ choca con los permisos; la estática no deja probar, que es lo que más enseña.
 - **Qué tiene** (un ejemplo de VFX corto, que entre en dos pantallas): un título "Plano 012 · Persecución en la
   terraza", un párrafo con negrita y un link, una lista de casillas (tareas del plano), dos líneas de Script
   ("EXT. TERRAZA - NOCHE" con sus marcas de color), una pregunta ("¿El cielo se reemplaza en todos los
-  planos?") con un hilo de ejemplo ya contestado, una fila de tres fotos, una tabla de tomas y un H2 con texto
+  planos?") con un hilo de ejemplo ya contestado, un renglón con tres fotos en línea (como las crea hoy pegar o
+  soltar), una tabla de tomas y un H2 con texto
   debajo (para colapsar, cuando exista P.11). Ni tarjeta de Drive (cargaría un reproductor de Google) ni
   adjunto (la tarjeta sale de un archivo registrado en el Drive): los explican la recorrida y la ayuda.
 - **Fotos del ejemplo:** tres WebP chicas (unos 1200 px de ancho, 30 a 60 KB cada una) en `public/tutorial/`,
@@ -261,7 +262,7 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 | 2 | `pages` (árbol y su "+") | Tus páginas / Your pages | Acá están las páginas del proyecto, unas adentro de otras. Con + creás una; arrastrándolas las ordenás. | Your project's pages live here, nested. + creates one; drag to reorder. |
 | 3 | `project-switcher` | Proyectos / Projects | Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno ({Mod+K}). | A workspace has several projects. Switch or create one here ({Mod+K}). |
 | 4 | `practice-empty-line` (interactivo) | El menú / / The / menu | Escribí / en un renglón vacío: títulos, listas, tablas, guion, preguntas y fotos. Con ⋮⋮, al costado, arrastrás un bloque. | Type / on an empty line: headings, lists, tables, script, questions and images. Drag a block by its ⋮⋮ handle. |
-| 5 | `practice-photos` | Fotos / Images | Un clic elige una foto y otro la abre en grande. En su barra elegís el tamaño o las acomodás en filas. Con Google Drive conectado, soltá cualquier archivo (PDF, zip) y queda como tarjeta. | One click selects an image, another opens it full screen. Its toolbar sets the size or arranges a row. With Google Drive connected, drop any file (PDF, zip) to attach it. |
+| 5 | `practice-photos` | Fotos / Images | Las fotos van en el renglón, como letras: podés escribir al lado. Un clic elige una y otro la abre en grande; en su barra elegís el tamaño o las acomodás en filas. Con Google Drive conectado, soltá cualquier archivo (PDF, zip) y queda como tarjeta. | Photos go in the line, like letters: you can write right next to them. One click selects one, another opens it full screen; its bar sets the size or arranges them in rows. With Google Drive connected, drop any file (PDF, zip) to attach it. |
 | 6 | `comments` (ícono de arriba) | Comentarios y preguntas / Comments and questions | Comentá cualquier bloque ({Mod+Alt+M}) y acá ves todos los hilos. Una pregunta, como la del ejemplo, la puede contestar quien solo comenta. | Comment on any block ({Mod+Alt+M}); all threads are here. A question, like the one above, can be answered by anyone who can comment. |
 | 7 | `find` (lupa) | Buscar / Find | Buscá y reemplazá en la página ({Mod+F}). | Find and replace in the page ({Mod+F}). |
 | 8 | `page-menu` ("⋯") | La página / The page | Compartir, mover, tamaño de hoja y Exportar PDF ({Mod+P}). | Share, move, page size and Export PDF ({Mod+P}). |
@@ -271,7 +272,8 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 - `{Mod+K}` y los demás se reemplazan con el rótulo del registro para esa plataforma (⌘K o Ctrl+K). Cuando
   P.12 entrega 2 cambie Mod+K, el paso 3 cambia solo con el registro (y su texto, en la misma tanda).
 - **Teléfono:** sin el paso 7 como atajo (la lupa sigue, texto sin atajo); el 2 y el 3 abren el cajón; el 9
-  señala el ícono de sincronización de la barra de arriba; el 5 dice "Tocá una foto para verla en grande"; el
+  señala el ícono de sincronización de la barra de arriba; el 5 dice "Tocá una foto para verla en grande" y que, de
+  vuelta en la página, otro toque muestra su barra (en el teléfono el primer toque abre el carrete); el
   10 señala la ayuda en el cajón.
 - El menú de la cuenta (preferencias, idioma, miembros, Drive) no tiene paso propio: lo nombra el 9 si hace
   falta y lo explica la ayuda. Diez pasos es el tope; más cansa.
@@ -712,7 +714,11 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
   envueltos igual, sin ninguna lectura. El tamaño de hoja de la práctica vive en la sesión (el `Proxy` del
   árbol responde `resolveSetting`). La sesión va en un `WeakMap` por instancia de servicios (corrección 4).
 - **El documento**: plantillas `practice.es.ts` y `practice.en.ts` en el idioma de la interfaz al armarla, pasadas al
-  fragmento de siempre con `blocksToYXmlFragment`; ids fijos para la pregunta, las tres fotos y el renglón vacío.
+  fragmento de siempre con `blocksToYXmlFragment`; ids fijos para la pregunta, el renglón de las fotos y el renglón
+  vacío. **Las tres fotos van en línea** (nodos `photo` en un párrafo, con el ancho `w` de `arrangeRows`: una fila a
+  la misma altura, como deja *Arrange in rows*), como las crea hoy la app desde v0.078; la primera versión de la
+  práctica usaba la fila vieja de fotos-bloque y enseñaba algo que una página nueva ya no hace (no se podía escribir
+  al lado). El paso "Fotos" de la recorrida lo dice: van en el renglón, como letras.
 - **Las fotos del ejemplo** (`public/tutorial/terraza-{1,2,3}.webp`, 60 a 72 KB, 3:2, 2:3 y 16:9): **no son las de
   la lista** de "Fotos del ejemplo". La red de trabajo no deja bajar de Commons y bajar archivos pide permiso de Lega,
   así que se dibujaron para la app (una terraza de noche, con un script de canvas que no se versiona); no hay nada de
@@ -724,7 +730,9 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
   *Atrás*, *Siguiente* / *Terminar* y *Saltar recorrida*; → y Enter avanzan, ← vuelve, Esc sale con el aviso; región
   `aria-live`; los tooltips se apagan mientras dura; se esconde si se abre un diálogo o el carrete. Posición con
   `placeNear` (`src/ui/floating.ts`), que ahora también usa `Tooltip.tsx`. En el teléfono, hoja abajo arriba del
-  teclado (o arriba, si taparía lo señalado, como el "?" del pie del cajón). El cajón pasó a un almacén
+  teclado (o arriba, si taparía lo señalado, como el "?" del pie del cajón). Lo decide la altura de la hoja **abajo**
+  (arriba mide otra cosa: otro relleno y el notch); con la de donde estaba, lo señalado justo en el borde la hacía
+  saltar de abajo a arriba sin parar y React cortaba la recorrida (pasaba en inglés, en el paso del menú "/"). El cajón pasó a un almacén
   (`src/ui/navStore.ts`) y la recorrida lo abre en los pasos que lo piden.
 - **Diferencias con el diseño, para que Lega confirme:**
   1. **El paso del menú "/" avanza cuando el menú se cierra** (se eligió algo o Esc), no cuando aparece: si avanzaba al
@@ -744,15 +752,20 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
 - `src/ui/shortcuts.test.ts`: el registro (ids, textos, rótulos de las dos plataformas, sin choques), el editor real
   contra el registro en los dos sentidos (BlockNote, Tiptap y nuestras extensiones; las reglas de lo que se escribe),
   cada `is…Shortcut` con eventos de Mac y de Windows, ninguna función de atajos sin registrar, ninguna combinación
-  suelta en el código, ningún `keymap()` suelto, y **cada tecla que un archivo compara con un evento** (`e.key ===`,
-  `case` de un `switch` sobre la tecla, `isLetter`, `e.code`) tiene que ser de un atajo registrado para ese archivo
-  (`src/ui/shortcutSources.ts`); los rótulos del menú "/". No ve teclas que se comparen de otra forma (una variable,
-  un `Set` de teclas): ahí sigue haciendo falta la revisión de la auditoría.
+  suelta en el código, ningún `keymap()` suelto, y **cada tecla que un archivo compara con un evento** tiene que ser
+  de un atajo registrado para ese archivo (`src/ui/shortcutSources.ts`): `e.key === 'x'` y `'x' === e.key`, con
+  `.toLowerCase()`, `case` de un `switch` sobre la tecla, `isLetter`, `e.code === 'KeyX'`, una expresión regular
+  (`/^F8$/.test(e.key)`, `/^Arrow(Left|Right)$/`; si tiene clases o comodines la prueba la nombra para que se mire),
+  `['a', 'b'].includes(e.key)` y la tecla guardada aparte (`const { key } = event`, `const { key: k } = e`,
+  `const k = e.key`). Una prueba con código de ejemplo fija cada forma. Los rótulos del menú "/". No ve teclas
+  guardadas en un `Set` con nombre ni las que pasan por una función propia (`isTreeKey`): ahí sigue haciendo falta
+  la revisión de la auditoría.
 - `src/help/help.test.tsx`: la búsqueda (atajos escritos de varias formas, tildes, los dos idiomas) y el diálogo en
   el Shell (lo abren el "?" y el menú, ninguna tecla, Esc devuelve el foco, castellano).
 - `src/tutorial/tourState.test.ts`: cuándo arranca (los siete casos), la marca de la cuenta (con y sin red, sin tocar
   las preferencias), los pasos por diseño y que cada `data-tour` exista.
-- `src/tutorial/practice.test.tsx`: aislamiento con el Shell y la app de verdad (escribir, comentar, contestar y
+- `src/tutorial/practice.test.tsx`: la plantilla (las tres fotos en línea, en un renglón y a la misma altura, sin
+  fotos-bloque), aislamiento con el Shell y la app de verdad (escribir, comentar, contestar y
   resolver la pregunta, la hoja, buscar, agregar archivos, empezar de nuevo, salir: el servidor, la base local
   `meta`, las colas, los contadores de "sin subir" y `localStorage` quedan iguales; lo que escribiría tira
   `PracticeWriteError`) y el motor (arranque, Siguiente, Atrás, flechas, Esc con el aviso, sin ancla al centro,
@@ -760,13 +773,19 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
 - En Chromium sin ventana (un arnés con el servidor en memoria, fuera del repo): la ayuda en computadora, teléfono y
   oscuro; la recorrida entera en computadora y teléfono (claro y oscuro), cada foco de luz dentro de la pantalla y
   sobre su ancla; "/" y elegir avanza el paso 4; Esc, volver a verla desde la ayuda, recargar a mitad y retomar, el
-  punto, la tarjeta del link, sin red al terminar, movimiento reducido y cero pedidos de red en la práctica.
+  punto, la tarjeta del link, sin red al terminar, movimiento reducido y cero pedidos de red en la práctica. Después
+  de la unión con main (v0.078 a v0.081): la recorrida en el teléfono en 10 tamaños (360×640 a 428×926) y los dos
+  idiomas sin trabarse; las fotos de la práctica (se ven, un clic elige con barra y tiradores, Shift+clic elige las
+  tres, 1/2, *Arrange in rows*, escribir al lado, el carrete; en el teléfono el toque abre y el segundo muestra la
+  barra); y los recorridos de fotos en línea, carpetas e instalar la app comparados con los de main.
 - **Auditoría independiente** (antes de cerrar): sin bloqueantes. Se corrigieron la ayuda que prometía Shift+clic
   "para todos" en colapsar (todavía no existe), la prueba de atajos (ahora mira cada tecla, no solo el archivo), los
   tooltips apagados durante la pausa, el cajón que quedaba cerrado al retomar en el teléfono, el teclado que llegaba a
   la app durante un paso, el `Proxy` sin los objetos anidados, la hoja del teléfono que no seguía al teclado y textos
   ("Print as shown", "/ Guion", los 30 días de proyectos borrados, la papelera de archivos solo con Drive, Ctrl/⌘+K
-  busca y no crea). Quedan para Lega: una foto real (`sdmedia://`) pegada en la práctica se ve rota (no escribe
+  busca y no crea). La segunda auditoría (la unión con main) corrigió *Images in a row* en la ayuda en inglés, la
+  práctica con fotos en línea, la prueba de atajos con las formas que no veía y el sangrado de `Workspace.tsx`; el
+  recorrido en el navegador encontró la hoja del teléfono que saltaba sin parar. Quedan para Lega: una foto real (`sdmedia://`) pegada en la práctica se ve rota (no escribe
   nada), y "ya la vi" y el paso a medias son del dispositivo, no de la persona (otra persona en el mismo navegador ve
   "¿Seguimos la recorrida?"; la marca de la cuenta va solo al workspace donde se terminó).
 - **Falta probar a mano:** Safari de la Mac, el iPhone (Safari y la app instalada, con el teclado en pantalla en el
