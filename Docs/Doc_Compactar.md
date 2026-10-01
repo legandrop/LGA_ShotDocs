@@ -14,8 +14,12 @@ borrador.
   lo que no se usa más es solo "dejar de bajarlo". Lo único que se borra son snapshots viejos, que se pueden volver a
   armar desde `page_updates`.
 - **Compacta un dispositivo con permiso de edición**, con un pedido de reserva a la base, y lo comprueba por dos
-  caminos de Yjs distintos antes de subirlo. La base no sabe leer Yjs: sus controles son de forma (hasta qué fila,
-  sobre qué snapshot anterior, tamaño, huella), y sirve el snapshot solo cuando está **confirmado**.
+  caminos de Yjs distintos (incluido lo que queda pendiente) antes de subirlo. La base no sabe leer Yjs: sus
+  controles son de forma (hasta qué fila, sobre qué snapshot anterior, tamaño, huella), y sirve el snapshot solo
+  cuando está **confirmado** y sigue siendo válido. Si uno sale mal, se invalida con toda su cadena y los
+  dispositivos que lo usaron vuelven a bajar filas.
+- **Auditado:** una auditoría independiente del diseño encontró tres caminos para que un dispositivo nuevo viera una
+  página con algo de menos; están corregidos (última sección).
 - **Las versiones viejas de la app no se enteran:** siguen usando `pull_page_updates`, que no cambia, y bajan las
   filas como hoy. Degradan en velocidad, nunca en datos.
 - **Hoy no hace falta:** la página con más updates tiene 63 (37 KB). Se vuelve necesario con el uso en rodaje: una
@@ -164,11 +168,20 @@ página por ciclo como mucho**, si se cumple todo:
 - La base acepta la reserva (abajo), que además pide al menos 64 KB de cola y al menos la mitad de lo que pesa el
   snapshot vigente (así una página de 2 MB no se vuelve a compactar por 64 KB de cambios).
 
+`snapshot_seq` es solo una pista para no preguntar de más: la base decide siempre con el snapshot vigente de verdad
+(`private.current_snapshot`, sección 4.7), no con la columna.
+
 ### 4.2 Reservar
 
 `claim_page_compaction(page, app_version)` devuelve el tramo a compactar (`base_id`, `base_seq`, `up_to_seq`,
 `last_update_id`) o nada. Anota la reserva en la página por 10 minutos: dos dispositivos no bajan lo mismo a la vez.
-Si el dispositivo se cae, la reserva vence sola.
+Si el dispositivo se cae, la reserva vence sola. La base es el snapshot vigente; si no hay ninguno (o se invalidó
+la cadena, sección 12), nula: se compacta desde la fila 1.
+
+**Una página que no se puede compactar no se reintenta en cada ciclo.** Si el snapshot pasa de 8 MB, una fila no
+se puede leer o la comprobación falla, el dispositivo lo avisa (`skip_page_compaction(page, motivo)`) y la reserva
+queda bloqueada 24 horas (`compaction_skip_until`), con el motivo, para mirarlo. Una comprobación que falla se anota
+además en la consola, porque es la señal de un error del compactador.
 
 ### 4.3 Bajar
 
@@ -181,14 +194,24 @@ Cada fila se decodifica; **si una no se puede leer** (la escribió una versión 
 1. `snap = Y.mergeUpdates([base, ...cola])`.
 2. **Comprobar por dos caminos:** un `Y.Doc({ gc: false })` con la base y las filas aplicadas de a una, contra otro
    con el snapshot. Tienen que ser **equivalentes**: el mismo vector de estado y el mismo delete set
-   (`Y.equalSnapshots`), el mismo contenido, y aplicar el estado completo de cada uno sobre una copia del otro no
-   cambia nada (en los dos sentidos).
-3. **No sirve comparar bytes.** `encodeStateAsUpdate` de los dos documentos da bytes distintos en 255 de 300
+   (`Y.equalSnapshots`), el mismo contenido, aplicar el estado completo de cada uno sobre una copia del otro no
+   cambia nada (en los dos sentidos), y **lo pendiente igual** (abajo).
+3. **Lo pendiente se compara aparte.** Lo que espera algo que no llegó (structs y borrados) no lo ven ni el vector,
+   ni `Y.snapshot`, ni el evento `update`: la primera versión de esta comprobación daba por bueno un snapshot al que
+   le faltaba una fila que dependía de algo ausente, y un dispositivo nuevo mostraba "hello" en vez de "hello WORLD"
+   (lo encontró la auditoría). Se compara como tramos (autor, desde, hasta) unidos, decodificando
+   `store.pendingStructs.update` y `store.pendingDs`, que Yjs guarda **en formato v2**. En la app lo pendiente en el
+   servidor es raro (cada subida lleva todo lo que el servidor no confirmó, así que sus dependencias ya están o
+   viajan con ella), pero aparece después de restaurar una copia o con una fila ilegible, y la comprobación lo cubre.
+4. **No sirve comparar bytes.** `encodeStateAsUpdate` de los dos documentos da bytes distintos en 255 de 300
    casos al azar aunque sean el mismo documento: aplicar de a una parte los textos en otros lugares que el update
    fusionado. Comparar bytes daría falsas alarmas; comparar solo el texto visible no vería lo borrado.
-4. Cada 10 snapshots de una página, además, se compara contra todo desde cero (`1..N` sin base), siempre que lo
-   cubierto pese 4 MB o menos (si no, se salta y se compara la próxima vez que se pueda): un error que se colara en
-   un snapshot no pasa al siguiente.
+5. Cada 10 snapshots de una página, además, se compara el nuevo contra todo desde cero (`1..N` sin base), siempre
+   que esas filas pesen 16 MB o menos (si no, se salta y se anota). Si no da igual, se invalida la cadena entera
+   (sección 12). Cada paso ya se comprueba contra lo que juntó, así que esto es una segunda red, contra un error de
+   la propia comprobación o del dispositivo. Para las páginas más pesadas la segunda red no corre: es un riesgo que
+   queda (sección 16) y que se achica mucho si las subidas dejan de repetir los borrados (sección 18), porque las
+   mismas filas pasarían a pesar unas 25 veces menos.
 
 ```js
 // El núcleo (lo probado en el prototipo).
@@ -202,7 +225,17 @@ function absorbs(x, y) { // ¿aplicar todo lo de y sobre una copia de x cambia a
   c.destroy();
   return !changed;
 }
-const same = (a, b) => Y.equalSnapshots(Y.snapshot(a), Y.snapshot(b)) && absorbs(a, b) && absorbs(b, a);
+// Lo pendiente, como tramos unidos por autor: structs y borrados (Yjs lo guarda en v2).
+const EMPTY_V2 = Y.encodeStateAsUpdateV2(new Y.Doc());
+function pendingKey(x) {
+  const u = Y.mergeUpdatesV2([x.store.pendingStructs?.update ?? EMPTY_V2, x.store.pendingDs ?? EMPTY_V2]);
+  const d = Y.decodeUpdateV2(u);
+  const structs = d.structs.filter((s) => !(s instanceof Y.Skip)).map((s) => [s.id.client, s.id.clock, s.id.clock + s.length]);
+  const ds = [...d.ds.clients].flatMap(([client, items]) => items.map((i) => [client, i.clock, i.clock + i.len]));
+  return tramos(structs) + '|' + tramos(ds); // tramos(): ordena y une los que se tocan, por autor
+}
+const same = (a, b) =>
+  pendingKey(a) === pendingKey(b) && Y.equalSnapshots(Y.snapshot(a), Y.snapshot(b)) && absorbs(a, b) && absorbs(b, a);
 function verify(base, tail, snap) {
   const a = new Y.Doc({ gc: false });
   if (base) Y.applyUpdate(a, base);
@@ -219,18 +252,25 @@ function verify(base, tail, snap) {
 fila de la página bloqueada (como `push_page_update`):
 
 - nivel 3 o más, snapshots prendidos y versión de la app suficiente;
-- la fila `up_to_seq` existe con ese `id`, y `up_to_seq` es mayor que el `snapshot_seq` vigente;
+- la fila `up_to_seq` existe con ese `id`, y `up_to_seq` es mayor que el del snapshot vigente (`current_snapshot`);
 - `base_id` es el snapshot vigente (o los dos nulos): nunca se arma sobre una base vieja;
 - tamaño entre 1 byte y 8 MB, y la huella SHA-256 coincide con lo que llegó;
-- guarda la fila **sin confirmar**. Si ya hay una para el mismo tramo: con la misma huella devuelve esa (reintentar
-  no duplica); con otra huella, **invalida las dos** y devuelve `snapshot_mismatch` (dos dispositivos calcularon
-  distinto lo mismo: algo anda mal, mejor que nadie lo use).
+- **la cadena:** cada snapshot hereda `chain_id` de su base (uno sin base empieza una cadena nueva, con su propio
+  id) y `chain_min_version`, la versión más vieja de la app que armó un eslabón de la cadena;
+- guarda la fila **sin confirmar**. Si ya hay una válida para el mismo tramo y la misma base: con la misma huella
+  devuelve esa (reintentar no duplica); con otra huella y **la misma versión de la app**, guarda la nueva ya
+  invalidada, **invalida la otra** y devuelve `snapshot_mismatch` (dos dispositivos calcularon distinto lo mismo:
+  algo anda mal, mejor que nadie lo use); con otra versión de la app, devuelve `snapshot_exists` sin invalidar
+  nada (otra versión de Yjs puede armar otros bytes para lo mismo). Lo único que no se repite es un snapshot
+  **válido** por tramo (índice único parcial, `where invalid_at is null`): uno invalidado no impide volver a
+  compactar el mismo tramo.
 
 ### 4.6 Confirmar
 
 El mismo dispositivo baja lo que subió (`pull_page_snapshot`), comprueba la huella y que se decodifica, y llama a
-`confirm_page_snapshot(id, sha256)`. La base comprueba otra vez que la base sigue siendo la vigente y que la fila
-`up_to_seq` sigue con su `id`, marca `confirmed_at` y sube `pages.snapshot_seq`. Desde ahí se sirve. Si el
+`confirm_page_snapshot(id, sha256)`. La base comprueba otra vez que la base sigue siendo la vigente
+(`current_snapshot`) y que la fila `up_to_seq` sigue con su `id`, marca `confirmed_at` y pone `pages.snapshot_seq`.
+Desde ahí se sirve. Si el
 dispositivo se cae entre subir y confirmar, el snapshot queda sin confirmar, no se sirve nunca y se limpia (ver
 "¿Se borra algo?").
 
@@ -240,13 +280,15 @@ caminos de Yjs, la base comprobó el tramo y la huella, y volvió entero de la b
 
 ### 4.7 Validez
 
-Un snapshot se sirve solo si está confirmado, no está invalidado, `up_to_seq <= pages.update_seq` y la fila
-`up_to_seq` sigue teniendo `last_update_id`. Lo último cubre restaurar una copia de seguridad (ver abajo).
+Un snapshot se sirve solo si está confirmado, no está invalidado, `up_to_seq <= pages.update_seq`, la fila
+`up_to_seq` sigue teniendo `last_update_id` (cubre una copia restaurada que no trae esas filas, ver abajo) y su
+`chain_min_version` es al menos `snapshot_min_version` (subir la versión mínima deja afuera toda cadena en la que
+participó una versión con errores, aunque los eslabones nuevos sean de una versión buena).
 
 ## 5. Cómo baja un dispositivo
 
 `pull_page_content(page, after_seq, limit)` reemplaza en la app a `pull_page_updates` (que queda igual para las
-versiones viejas). Devuelve filas `(seq, update, snapshot_id)`:
+versiones viejas). Devuelve filas `(seq, update, snapshot_id, content_epoch)`:
 
 - **Si hay un snapshot válido con `up_to_seq > after_seq` y pesa menos que las filas `after_seq+1..up_to_seq`**:
   primero el snapshot, con `seq = up_to_seq` y su `snapshot_id`, y después las filas posteriores, hasta `limit`.
@@ -268,13 +310,22 @@ cualquier fila. Casos:
 - **Al día**: no baja nada (no hay filas nuevas).
 - **El lote y el tope de tiempo** quedan como hoy: si un lote vence, se pide uno más chico, hasta de a uno, que
   tiene el tope más largo (pensado para 8 MB, lo máximo de un snapshot).
+- **Un snapshot que esta versión no puede leer** (lo armó una versión más nueva con algo que esta no decodifica):
+  hoy `applyRemote` descarta un update ilegible y **avanza el cursor igual**, anotando `unreadable`. Con un snapshot
+  eso saltearía las filas `1..up_to_seq` enteras, así que no: si la fila con `snapshot_id` no se decodifica, no se
+  guarda nada de ese lote, el cursor no se mueve y esa página se vuelve a pedir con `pull_page_updates` (filas
+  sueltas, como hoy) hasta la próxima vez que se abra la app.
 - **Base sin la migración**: la app ve que la función no existe y vuelve a `pull_page_updates` por 10 minutos, como
   ya hace con `push_page_update` (`versionedPushMissingAt`). Va con su constante opcional
-  (`SNAPSHOT_SCHEMA_VERSION`), como la papelera de archivos: no sube `DB_SCHEMA_VERSION` y no hay aviso.
+  (`SNAPSHOT_SCHEMA_VERSION`), como la papelera de archivos: no sube `DB_SCHEMA_VERSION` y no hay aviso. **El
+  árbol** pide `snapshot_seq` y `content_epoch` solo si `workspace_settings.schema_version` llega a esa constante
+  (como `PROJECT_STATES_SCHEMA_VERSION` en `remote.ts`), y si igual falta la columna reintenta sin ellas: pedir una
+  columna que no existe dejaría al workspace sin árbol.
 
 El dispositivo anota en `DocState` el último snapshot que aplicó (`snapshotId`) y la época de contenido de la
-página (`contentEpoch`, ver "Si un snapshot sale mal"). Las versiones anteriores, que leen y vuelven a escribir el
-mismo objeto, conservan esos campos.
+página que vino **en la misma respuesta** (`contentEpoch`, ver "Si un snapshot sale mal"): si la leyera del árbol,
+podría anotar una época posterior al snapshot que bajó y no enterarse nunca de que lo invalidaron. Las versiones
+anteriores, que leen y vuelven a escribir el mismo objeto, conservan esos campos.
 
 ## 6. Versiones viejas de la app
 
@@ -283,8 +334,9 @@ mismo objeto, conservan esos campos.
 - **No pueden compactar**: no conocen las funciones nuevas.
 - **No hace falta subir `min_app_version`.** Lo nuevo no cambia nada de lo guardado ni de cómo se sube; solo agrega
   una forma de bajar.
-- **Una versión con un compactador con errores** se deja afuera subiendo `snapshot_min_version` por encima de ella,
-  e invalidando sus snapshots (cada fila guarda `app_version`).
+- **Una versión con un compactador con errores** se deja afuera subiendo `snapshot_min_version` por encima de ella:
+  deja de servirse toda cadena en la que participó (`chain_min_version`, sección 4.7), y la próxima compactación de
+  esas páginas arranca desde la fila 1.
 - **Misma base con una versión anterior** (pestaña sin recargar): lo bajado como snapshot quedó guardado como una
   fila más de `docUpdates`; la versión anterior lo lee como cualquier otra.
 
@@ -318,24 +370,31 @@ mismo objeto, conservan esos campos.
 
 - **La copia** (`z_shotdocs_backup`) lleva toda la base con `supabase db dump`: `page_snapshots` entra sola. Crece
   poco (uno o dos snapshots por página compactada).
-- **Restaurar sobre el mismo proyecto:** `page_snapshots` es contenido, así que se reemplaza con lo de la copia
-  junto con `page_updates`, y queda coherente. Si la copia es anterior a la tabla, el script la **conserva** (regla 7
-  del script: tablas más nuevas que la copia): quedarían snapshots que cubren filas que la copia no tiene. No hace
-  daño, porque **la validez** (sección 4.7) los descarta: o `up_to_seq` pasa de `update_seq`, o la fila
-  `up_to_seq` es otra (un `id` nuevo, el contador no vuelve atrás). Igual conviene que el script vacíe `page_snapshots`
-  cuando la copia no la trae (una línea en `restaurar_mismo_proyecto.sql`, repo privado) y que `pages.snapshot_seq`
-  vuelva con la copia.
-- **Los dispositivos** ven la generación nueva, borran cursor y vector y bajan de cero: reciben el snapshot de la
-  copia (si es válido) y la cola.
+- **Restaurar sobre el mismo proyecto: el script vacía siempre `page_snapshots`** y deja `pages.snapshot_seq` en 0
+  (`restaurar_mismo_proyecto.sql`, repo privado; **es requisito para prenderlos**). Dos razones:
+  - Si la copia trae snapshots y es anterior a una invalidación, el script los recarga con su `id` original y sin
+    `invalid_at`, y pasan la validez (la fila `up_to_seq` es la misma): **un snapshot descartado volvería a
+    servirse.**
+  - Si la copia es anterior a la tabla, el script la conserva (regla 7: tablas más nuevas que la copia). No haría
+    daño (la validez los descarta: o `up_to_seq` pasa de `update_seq`, o la fila `up_to_seq` tiene otro `id`, porque
+    el contador no vuelve atrás), pero no hay razón para guardarlos.
+
+  Vaciar no pierde nada: son copias de `page_updates`, que sí vuelve con la copia; la próxima compactación arranca
+  desde la fila 1. `pages.content_epoch` queda en el mayor entre el de hoy y el de la copia (nunca vuelve atrás).
+- **Los dispositivos** ven la generación nueva y hacen lo de siempre (`resetForRestore`: cursor, vector y envío a
+  cero), que además borra `snapshotId` y `contentEpoch`. Bajan de cero: filas, hasta que haya un snapshot nuevo.
 
 ## 10. Permisos (Row Level Security)
 
-- `page_snapshots`: **solo lectura** para `authenticated` con `private.can_view_page(page_id)`, la misma regla que
-  `page_updates` (un snapshot no muestra nada que las filas no muestren: también lleva lo borrado, igual que ellas).
-  Sin `insert`, `update` ni `delete` desde la API.
+- `page_snapshots`: **ningún permiso directo** para `authenticated` ni `anon` (RLS prendida y sin políticas). Todo
+  pasa por funciones, que sirven solo lo confirmado y válido; si la tabla se pudiera leer, se verían también los sin
+  confirmar e invalidados (hasta 8 MB cada uno). Lo que un snapshot muestra es lo mismo que las filas que cubre, que
+  quien ve la página ya puede leer (también lo borrado, igual que ellas).
 - Escriben solo las funciones `security definer`: reservar, subir, confirmar e invalidar piden nivel 3 sobre la
   página (`page_level`); bajar, nivel 1. Todas controlan que la página no esté en un proyecto borrado (como hoy
   `page_level`).
+- Las funciones auxiliares (`private.current_snapshot`, `private.snapshots_allowed`) llevan `revoke all ... from
+  public, anon, authenticated`, como las de `equipo.sql`: si no, Postgres deja ejecutarlas a `PUBLIC`.
 - Columnas nuevas de `pages` (`snapshot_seq`, `content_epoch`, la reserva): sin permiso de `update` para
   `authenticated`; las cambian solo esas funciones (que corren como su dueño, así que el trigger
   `pages_permissions` no las frena y `updated_at` no se toca: no está en la lista de columnas que lo cambian).
@@ -349,7 +408,9 @@ en cada subida, y eso se arregla en la subida (ver "Fuera de este diseño"), no 
 
 **Lo que sí se borra, porque se puede volver a armar desde `page_updates`:**
 
-- Al confirmar un snapshot, los de esa página anteriores a su base (quedan el vigente y el anterior).
+- Al confirmar un snapshot, los de esa página anteriores a su base (quedan el vigente y el anterior). La cadena no
+  se pierde: cada uno lleva `chain_id`, así que invalidar alcanza a todos los de la cadena aunque los del medio ya no
+  estén.
 - Los sin confirmar con más de un día (un dispositivo que se cayó entre subir y confirmar).
 - Los invalidados con más de 30 días (se guardan ese tiempo para mirar qué pasó).
 
@@ -361,13 +422,17 @@ propone.
 
 ## 12. Si un snapshot sale mal
 
-- **Invalidar:** `invalidate_page_snapshot(id, motivo)` (nivel 3). Marca `invalid_at`, recalcula
-  `pages.snapshot_seq` con el anterior válido (o 0) y suma uno a `pages.content_epoch`. Lo llama la app cuando una
-  comprobación desde cero no da igual, y se puede llamar a mano desde el SQL Editor.
-- **Los dispositivos que lo usaron:** el árbol trae `content_epoch`. Si es mayor que el que el dispositivo anotó y
-  el dispositivo aplicó algún snapshot de esa página (`DocState.snapshotId`), hace con esa página lo mismo que al
-  restaurar una copia: cursor y vector a cero, vuelve a subir todo lo suyo (Yjs no duplica) y baja de nuevo. Lo
-  propio sin subir nunca se toca.
+- **Invalidar:** `invalidate_page_snapshot(id, motivo)` (nivel 3). Invalida **la cadena entera** (todos los de su
+  `chain_id`): un error en un eslabón pasa a los que se armaron encima, y si se invalidara solo el malo, el de más
+  arriba seguiría sirviéndose con el mismo error. Pone `pages.snapshot_seq` en 0 y suma uno a `pages.content_epoch`;
+  la próxima compactación arranca desde la fila 1. Lo llama la app cuando la comparación desde cero no da igual, y se
+  puede llamar a mano desde el SQL Editor.
+- **Los dispositivos que lo usaron:** el árbol trae `content_epoch`. Si es **distinto** del que el dispositivo anotó
+  (no "mayor": después de restaurar puede haber cambiado de cualquier forma) y el dispositivo aplicó algún snapshot de
+  esa página (`DocState.snapshotId`), pone el cursor de esa página en 0 y la baja de nuevo (filas, porque la cadena ya
+  no se sirve; Yjs no duplica lo que ya tiene). **No toca `syncedSV`**: un snapshot al que le faltaba algo no pudo
+  hacer avanzar el vector de más (`serverReach` solo cuenta lo que llegó), así que no hace falta volver a subir
+  todo. Lo propio sin subir nunca se toca.
 - **Apagar todo:** `snapshot_min_version = null` en `workspace_settings`. Desde el próximo pedido, todos bajan filas.
 
 ## 13. Migración (borrador, sin aplicar)
@@ -383,92 +448,105 @@ create table public.page_snapshots (
   page_id        uuid not null references public.pages (id) on delete cascade,
   up_to_seq      bigint not null check (up_to_seq > 0),
   last_update_id bigint not null,                 -- page_updates.id de la fila up_to_seq
-  base_id        uuid references public.page_snapshots (id) on delete set null,
+  base_id        uuid,                            -- sin FK: la base se puede limpiar; la cadena la sigue chain_id
+  chain_id       uuid not null,                   -- id del primer snapshot de la cadena (el que no tiene base)
+  chain_min_version numeric(8, 3) not null,       -- la versión más vieja de la app que armó un eslabón
   state          bytea not null,
   state_sv       bytea not null,                  -- vector de estado (diagnóstico y comprobaciones)
   sha256         bytea not null,
   state_bytes    int generated always as (octet_length(state)) stored,
-  app_version    text not null,
+  app_version    numeric(8, 3) not null,
   created_by     uuid default auth.uid() references auth.users (id) on delete set null,
   created_at     timestamptz not null default now(),
   confirmed_at   timestamptz,
   invalid_at     timestamptz,
-  invalid_reason text,
-  unique (page_id, up_to_seq)
+  invalid_reason text
 );
-create index page_snapshots_page_idx on public.page_snapshots (page_id, up_to_seq desc)
-  where confirmed_at is not null and invalid_at is null;
+-- Un solo snapshot VÁLIDO por tramo: uno invalidado no impide volver a compactar el mismo tramo.
+create unique index page_snapshots_tramo_key on public.page_snapshots (page_id, up_to_seq)
+  where invalid_at is null;
+create index page_snapshots_chain_idx on public.page_snapshots (chain_id);
 
 alter table public.pages
-  add column snapshot_seq        bigint not null default 0,  -- up_to_seq del snapshot vigente
-  add column content_epoch       int    not null default 0,  -- sube al invalidar un snapshot
-  add column compaction_claim_at timestamptz,
-  add column compaction_claim_by uuid;
+  add column snapshot_seq          bigint not null default 0,  -- pista para el árbol; la base decide con current_snapshot
+  add column content_epoch         int    not null default 0,  -- sube al invalidar; nunca vuelve atrás
+  add column compaction_claim_at   timestamptz,
+  add column compaction_claim_by   uuid,
+  add column compaction_skip_until timestamptz,                -- no se puede compactar (motivo abajo)
+  add column compaction_skip_why   text;
 
 alter table public.workspace_settings
-  add column snapshot_min_version text;           -- null: apagados (no se aceptan ni se sirven)
+  add column snapshot_min_version numeric(8, 3) check (snapshot_min_version >= 0);  -- null: apagados
 
+-- Sin políticas ni grants: nadie lee ni escribe la tabla desde la API; todo pasa por las funciones.
 alter table public.page_snapshots enable row level security;
-create policy page_snapshots_select on public.page_snapshots
-  for select to authenticated using (private.can_view_page(page_id));
 revoke all on public.page_snapshots from anon, authenticated;
-grant select on public.page_snapshots to authenticated;
--- pages: sin grants nuevos (snapshot_seq, content_epoch y la reserva solo los tocan las funciones).
+-- pages: sin grants nuevos (las columnas nuevas solo las tocan las funciones).
 
--- El snapshot vigente de una página, si es válido (confirmado, no invalidado, y su última fila sigue igual).
+-- El snapshot vigente de una página, si es válido: confirmado, no invalidado, su última fila sigue igual y toda su
+-- cadena es de una versión permitida. Null si los snapshots están apagados.
 create function private.current_snapshot(p uuid)
 returns public.page_snapshots
 language sql stable security definer set search_path = ''
 as $$
   select s.* from public.page_snapshots s
   join public.pages pg on pg.id = s.page_id
+  cross join public.workspace_settings ws
   where s.page_id = p and s.confirmed_at is not null and s.invalid_at is null
+    and ws.snapshot_min_version is not null and s.chain_min_version >= ws.snapshot_min_version
     and s.up_to_seq <= pg.update_seq
     and exists (select 1 from public.page_updates u
                 where u.page_id = p and u.seq = s.up_to_seq and u.id = s.last_update_id)
   order by s.up_to_seq desc limit 1;
 $$;
+revoke all on function private.current_snapshot(uuid) from public, anon, authenticated;
 
--- ¿Prendidos y con versión suficiente? (app_version_allowed ya existe para min_app_version.)
+-- ¿Prendidos y con versión suficiente para armar uno? (Como private.app_version_allowed.)
 create function private.snapshots_allowed(p_app_version text) returns boolean ...;
+revoke all on function private.snapshots_allowed(text) from public, anon, authenticated;
 
--- Bajar: el snapshot (si conviene) y las filas posteriores; si no, como pull_page_updates.
+-- Bajar: el snapshot (si conviene) y las filas posteriores; si no, como pull_page_updates. Cada fila lleva la
+-- época de contenido de la página, leída en la misma consulta.
 create function public.pull_page_content(p_page_id uuid, p_after_seq bigint, p_limit int default 200)
-returns table (seq bigint, update text, snapshot_id uuid)
+returns table (seq bigint, update text, snapshot_id uuid, content_epoch int)
 language plpgsql stable security definer set search_path = '' as $$
-declare s public.page_snapshots; lim int := least(greatest(p_limit, 1), 1000);
+declare
+  s     public.page_snapshots;
+  ep    int;
+  lim   int := least(greatest(p_limit, 1), 1000);
 begin
   if not private.can_view_page(p_page_id) then
     raise exception 'page_not_found' using errcode = 'P0002';
   end if;
-  if (select snapshot_min_version from public.workspace_settings) is not null then
-    s := private.current_snapshot(p_page_id);
-  end if;
+  select pg.content_epoch into ep from public.pages pg where pg.id = p_page_id;
+  s := private.current_snapshot(p_page_id);
   if s.id is not null and s.up_to_seq > p_after_seq
      and s.state_bytes < (select coalesce(sum(octet_length(u.update)), 0) from public.page_updates u
                           where u.page_id = p_page_id and u.seq > p_after_seq and u.seq <= s.up_to_seq) then
-    return query select s.up_to_seq, translate(encode(s.state, 'base64'), E'\n', ''), s.id;
+    return query select s.up_to_seq, translate(encode(s.state, 'base64'), E'\n', ''), s.id, ep;
     p_after_seq := s.up_to_seq;
     lim := lim - 1;
     if lim = 0 then return; end if;
   end if;
   return query
-    select u.seq, translate(encode(u.update, 'base64'), E'\n', ''), null::uuid
+    select u.seq, translate(encode(u.update, 'base64'), E'\n', ''), null::uuid, ep
     from public.page_updates u
     where u.page_id = p_page_id and u.seq > p_after_seq
     order by u.seq limit lim;
 end; $$;
 
--- Reservar, subir, confirmar, bajar uno e invalidar: como se describe en las secciones 4 y 12.
+-- Reservar, subir, confirmar, bajar uno, saltear e invalidar: como se describe en las secciones 4 y 12. Todas
+-- comparan contra private.current_snapshot(), nunca contra pages.snapshot_seq.
 create function public.claim_page_compaction(p_page_id uuid, p_app_version text)
   returns table (base_id uuid, base_seq bigint, up_to_seq bigint, last_update_id bigint) ...;
 create function public.push_page_snapshot(p_page_id uuid, p_base_id uuid, p_up_to_seq bigint,
   p_last_update_id bigint, p_state text, p_sv text, p_sha256 text, p_app_version text) returns uuid ...;
 create function public.confirm_page_snapshot(p_id uuid, p_sha256 text) returns boolean ...;
-create function public.pull_page_snapshot(p_id uuid) returns text ...;          -- nivel 1, también sin confirmar
-create function public.invalidate_page_snapshot(p_id uuid, p_reason text) returns boolean ...;
--- revoke de public y anon, grant execute a authenticated; private.* sin grants.
--- La consulta del árbol (remote.ts) suma snapshot_seq y content_epoch a las columnas que pide.
+create function public.pull_page_snapshot(p_id uuid) returns text ...;   -- nivel 1; también sin confirmar (la vuelta)
+create function public.skip_page_compaction(p_page_id uuid, p_reason text) returns void ...;
+create function public.invalidate_page_snapshot(p_id uuid, p_reason text) returns boolean ...;  -- toda la cadena
+-- revoke de public y anon, grant execute a authenticated.
+-- El árbol (remote.ts) pide snapshot_seq y content_epoch solo con schema_version >= SNAPSHOT_SCHEMA_VERSION.
 notify pgrst, 'reload schema';
 ```
 
@@ -478,10 +556,10 @@ La migración no toca `page_updates`, `push_page_update` ni `pull_page_updates`,
 
 | Archivo | Qué cambia |
 |---|---|
-| `src/sync/remote.ts` | `pullContent` (con vuelta a `pullUpdates` si falta la función), `claimCompaction`, `pushSnapshot`, `pullSnapshot`, `confirmSnapshot`, `invalidateSnapshot`; el árbol pide `snapshot_seq` y `content_epoch` |
-| `src/sync/types.ts` | `RemoteUpdate.snapshotId?`, `PageRow.snapshot_seq?`, `PageRow.content_epoch?` |
-| `src/sync/docs.ts` | `pullPage` usa `pullContent`; `applyRemote` anota `snapshotId`; el reinicio de una página por `content_epoch` (lo mismo que `resetForRestore`, para una sola) |
-| `src/sync/compact.ts` (nuevo) | `compact`, `verify`, `same` y el que compacta una página (reservar, bajar, armar, comprobar, subir, confirmar) |
+| `src/sync/remote.ts` | `pullContent` (con vuelta a `pullUpdates` si falta la función), `claimCompaction`, `pushSnapshot`, `pullSnapshot`, `confirmSnapshot`, `skipCompaction`, `invalidateSnapshot`; el árbol pide `snapshot_seq` y `content_epoch` según `schema_version`, con reintento sin ellas |
+| `src/sync/types.ts` | `RemoteUpdate.snapshotId?` y `contentEpoch?`, `PageRow.snapshot_seq?`, `PageRow.content_epoch?` |
+| `src/sync/docs.ts` | `pullPage` usa `pullContent`; `applyRemote` anota `snapshotId` y `contentEpoch`, y si el snapshot no se puede leer no guarda el lote ni mueve el cursor (vuelve a filas); el reinicio de una página por `content_epoch` (solo el cursor); `resetForRestore` borra también `snapshotId` y `contentEpoch` |
+| `src/sync/compact.ts` (nuevo) | `compact`, `verify`, `same`, `pendingKey` y el que compacta una página (reservar, bajar, armar, comprobar, subir, confirmar, saltear) |
 | `src/sync/engine.ts` | Al final del ciclo, una página por vuelta; sus errores no cortan el ciclo |
 | `src/sync/localDb.ts` | `DocState.snapshotId?`, `DocState.contentEpoch?` |
 | `src/sync/testing.ts` | El servidor en memoria con las mismas funciones y reglas |
@@ -496,11 +574,14 @@ Antes de escribir en la base, en este orden:
 1. **El núcleo** (`src/sync/compact.test.ts`, el prototipo pasado a vitest): equivalencia por los dos caminos con
    updates al azar de tres dispositivos, subidas demoradas (lo pendiente), snapshots incrementales y desde cero;
    determinismo; un update ilegible corta; una página vacía, una con solo la semilla, una vieja con dos raíces; y
-   **pruebas mutantes**: un snapshot al que le falta una fila, o un borrado, tiene que fallar la comprobación (con
-   una fila de menos, el prototipo da 461 fallas en 100 corridas: la comprobación lo ve).
+   **pruebas mutantes**: un snapshot al que le falta una fila, un borrado sobre algo integrado, **una fila pendiente o
+   un borrado pendiente** (los casos de la auditoría) tiene que fallar la comprobación. Con la comparación de lo
+   pendiente, el prototipo rechaza los cuatro y sigue sin falsas alarmas en 600 corridas.
 2. **El dispositivo con el servidor en memoria** (`docs.test.ts`, `sync.test.ts`): dispositivo nuevo, cursor viejo,
    cursor viejo con ediciones sin subir, subida en vuelo mientras llega un snapshot, cerrar la app en cada punto de
-   `applyRemote`; en cada paso, la revisión que ya existe de que `syncedSV` no diga de más.
+   `applyRemote`, un snapshot ilegible (el cursor no se mueve), una invalidación con la época leída en la misma
+   respuesta, una base sin la migración (el árbol sigue llegando); en cada paso, la revisión que ya existe de que
+   `syncedSV` no diga de más.
 3. **Al azar con varios dispositivos y versiones** (`localSaveRandom.test.ts` y las corridas de tres dispositivos de
    `docs.test.ts`): compactaciones en momentos al azar, reservas que vencen, confirmaciones que no llegan, una
    invalidación, una restauración, y **la versión publicada** (`fixtures/publishedDocs.ts`, que solo conoce
@@ -510,12 +591,14 @@ Antes de escribir en la base, en este orden:
 4. **Con el editor real** (`editor.test.ts`, jsdom): una página con fotos en línea, script y preguntas, compactada y
    abierta en un dispositivo nuevo: el mismo documento que sin snapshot, sin reparaciones de más.
 5. **Permisos en SQL** (`supabase/tests/snapshots_permisos.sql`, en una transacción que se deshace, contra la base):
-   quien ve lee el snapshot y no puede subir; quien edita otra página no puede; tramo con otro `id`, base vieja,
-   huella que no coincide, tamaño, versión vieja y apagados: rechazados; mismo tramo con la misma huella devuelve el
-   mismo; con otra, invalida las dos; un snapshot de un proyecto borrado no se sirve; `pull_page_updates` devuelve lo
-   mismo que antes.
-6. **Restaurar** (el script del repo privado, en una base aparte): una copia anterior a la tabla y una con
-   snapshots; en los dos casos, lo servido coincide con las filas.
+   quien ve baja el snapshot y no puede subir; nadie lee la tabla directo; quien edita otra página no puede; tramo con
+   otro `id`, base vieja, huella que no coincide, tamaño, versión vieja y apagados: rechazados; mismo tramo con la
+   misma huella devuelve el mismo; con otra huella y la misma versión, invalida; con otra versión, `snapshot_exists`;
+   invalidar un eslabón invalida la cadena; subir `snapshot_min_version` deja de servir las cadenas viejas; un
+   snapshot de un proyecto borrado no se sirve; `pull_page_updates` devuelve lo mismo que antes.
+6. **Restaurar** (el script del repo privado, en una base aparte): una copia anterior a la tabla, una con snapshots
+   y una anterior a una invalidación; en los tres casos `page_snapshots` queda vacía, `content_epoch` no vuelve atrás y
+   lo servido coincide con las filas.
 7. **De punta a punta** (Playwright contra la base, en un proyecto de prueba): dos navegadores editan 300 veces, uno
    compacta, un tercero abre de cero y ve lo mismo; la versión publicada abre la misma página y baja filas.
 8. **Medir en el navegador** el tiempo de abrir una página de 2000 y 5000 subidas en un dispositivo nuevo, con y sin
@@ -525,10 +608,12 @@ Antes de escribir en la base, en este orden:
 
 | Riesgo | Qué lo cubre |
 |---|---|
-| Un error del compactador (o del navegador) arma un snapshot al que le falta algo | Comprobación por dos caminos antes de subir; vuelta desde la base antes de confirmar; comparación desde cero cada 10; huella distinta entre dos dispositivos invalida; invalidar y `content_epoch`; las filas nunca se borran |
+| Un error del compactador (o del navegador) arma un snapshot al que le falta algo | Comprobación por dos caminos, con lo pendiente, antes de subir; vuelta desde la base antes de confirmar; comparación desde cero cada 10; huella distinta entre dos dispositivos de la misma versión invalida; invalidar la cadena y `content_epoch`; las filas nunca se borran |
+| En páginas cuyas filas pesan más de 16 MB no corre la comparación desde cero | Cada paso igual se comprueba contra lo que juntó; queda como riesgo. Se achica con no repetir los borrados (sección 18) |
 | Un editor malicioso sube un snapshot fabricado | Lo mismo que puede hacer con un update; se invalida a mano. Para cerrarlo del todo: Edge Function (pregunta 2) |
 | Un snapshot al que le falta un bloque con una foto hace que la papelera de archivos la marque sin uso | La marca no borra nada (la papelera de archivos guarda 30 días y el borrado automático está apagado); invalidar y volver a bajar la vuelve a usar |
-| Restaurar una copia anterior a los snapshots | La validez por `last_update_id`; el script vacía la tabla |
+| Restaurar una copia (anterior a los snapshots, o anterior a una invalidación) | El script vacía la tabla y no deja volver atrás `content_epoch` (requisito para prenderlos); la validez por `last_update_id` |
+| Una página que no se puede compactar (más de 8 MB, algo ilegible) se reintenta en cada ciclo | `compaction_skip_until`: 24 horas, con el motivo |
 | Dos dispositivos compactan a la vez | La reserva; si igual pasa, mismo tramo y misma base dan la misma huella |
 | Un snapshot enorme que no baja en una red mala | Hasta 8 MB, con el tope de tiempo del lote de a uno (pensado para 8 MB); si es más grande, no se compacta |
 | Yjs 14 (B.10) cambia el formato | Apagar o invalidar antes de esa migración |
@@ -542,9 +627,11 @@ Antes de escribir en la base, en este orden:
    migrar.
 2. **Crear snapshots**: `compact.ts`, el paso en el ciclo, la confirmación, la invalidación y el reinicio por
    `content_epoch`; las pruebas 1, 3 completas y 4. Se publica con los snapshots apagados.
-3. **Prenderlos**: probar de punta a punta en un proyecto de prueba (7) y medir (8); después
-   `snapshot_min_version` a la versión de la entrega 2 en Wanka. Mirar los snapshots inválidos la primera semana.
-4. **Más adelante**: `verifyHistory` sobre el snapshot; la línea del script de restaurar (repo privado).
+3. **Prenderlos**: antes, el cambio del script de restaurar (vaciar `page_snapshots`, `content_epoch` que no vuelve
+   atrás; repo privado, con su prueba 6). Probar de punta a punta en un proyecto de prueba (7) y medir (8); después
+   `snapshot_min_version` a la versión de la entrega 2 en Wanka. Mirar los snapshots inválidos y las páginas
+   salteadas (`compaction_skip_why`) la primera semana.
+4. **Más adelante**: `verifyHistory` sobre el snapshot.
 
 Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos y RLS, no perder datos, docs).
 
@@ -577,5 +664,28 @@ Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos 
 - **El crecimiento**: una simulación en Node con el patrón de subida de la app (una semilla fija; los tiempos son de
   una PC).
 - **El prototipo**: 600 corridas al azar (dos semillas, 300 cada una) de tres dispositivos con subidas demoradas y
-  bajadas parciales, 1850 snapshots incrementales: 0 fallas de equivalencia (por los dos caminos y contra todo desde
-  cero), 1850 de 1850 deterministas, 600 dispositivos nuevos y 600 con cursor viejo y ediciones propias sin pérdida.
+  bajadas parciales, 1850 snapshots incrementales (545 con algo pendiente): 0 fallas de equivalencia (por los dos
+  caminos, con lo pendiente, y contra todo desde cero), 1850 de 1850 deterministas, 600 dispositivos nuevos y 600 con
+  cursor viejo y ediciones propias sin pérdida. Las cuatro mutantes (le falta una fila, un borrado integrado, una
+  fila pendiente, un borrado pendiente) se rechazan.
+
+## Correcciones de la auditoría (ya incorporadas arriba)
+
+Una auditoría independiente del diseño encontró tres caminos por los que un dispositivo nuevo podía abrir una página
+con algo de menos sin que nadie lo notara (nunca con pérdida en el servidor: `page_updates` queda entera), y varios
+problemas menores. Todo quedó corregido en el texto:
+
+| Hallazgo | Corrección |
+|---|---|
+| **Grave:** la comprobación no veía lo pendiente; un snapshot sin una fila que dependía de algo ausente pasaba | Se compara lo pendiente como tramos (en v2, como lo guarda Yjs); el prototipo rechaza esos casos (4.4) |
+| **Grave:** invalidar un snapshot dejaba vivos los armados encima | Invalidar alcanza a toda la cadena (`chain_id`), que no se pierde al limpiar; la siguiente arranca desde la fila 1 (12) |
+| **Grave:** restaurar una copia revivía snapshots invalidados y hacía volver atrás la época | El script vacía siempre la tabla y la época no vuelve atrás; `resetForRestore` borra los campos nuevos; la época se compara con "distinto" (9, 12) |
+| `unique (page_id, up_to_seq)` no dejaba invalidar ni volver a compactar un tramo | Índice único solo sobre los válidos (13) |
+| La época leída del árbol podía ser posterior al snapshot bajado | Viene en la misma respuesta de `pull_page_content` (5) |
+| Un snapshot ilegible salteaba el historial entero | No se guarda el lote ni se mueve el cursor; esa página baja filas (5) |
+| Pedir columnas nuevas en el árbol rompía un workspace sin migrar | Según `schema_version`, con reintento sin ellas (5) |
+| `snapshot_seq` podía quedar viejo | Las funciones deciden con `current_snapshot()` (4.1, 13) |
+| Una página que no se puede compactar se reintentaba en cada ciclo | `compaction_skip_until` con el motivo (4.2) |
+| Versiones como texto, función auxiliar ejecutable por todos, tabla legible con lo no confirmado | `numeric(8,3)`, `revoke`, sin permisos directos sobre la tabla (10, 13) |
+| El reinicio por época volvía a subir todo | Solo el cursor: un snapshot incompleto no pudo inflar `syncedSV` (12) |
+| Otra versión de Yjs puede dar otros bytes para lo mismo | Huellas distintas invalidan solo entre la misma versión de la app (4.5) |
