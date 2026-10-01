@@ -27,8 +27,8 @@ describe('coda-export', () => {
   })
 
   it('--refresh vuelve a pedir las páginas; una opción desconocida es un error', () => {
-    expect(parseExportArgs(['MGTZD'])).toEqual({ nameOrId: 'MGTZD', out: undefined, refresh: false })
-    expect(parseExportArgs(['--refresh', 'MGTZD', 'C:\\salida'])).toEqual({ nameOrId: 'MGTZD', out: 'C:\\salida', refresh: true })
+    expect(parseExportArgs(['MGTZD'])).toEqual({ nameOrId: 'MGTZD', out: undefined, refresh: false, convertOnly: false })
+    expect(parseExportArgs(['--refresh', 'MGTZD', 'C:\\salida'])).toEqual({ nameOrId: 'MGTZD', out: 'C:\\salida', refresh: true, convertOnly: false })
     expect(() => parseExportArgs(['MGTZD', '--force'])).toThrow(/--force/)
   })
 })

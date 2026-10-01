@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.063 :
+
+Tablas de Coda al exportar un doc. El comando bajaba solo las páginas: una tabla de Coda llegaba como la vista
+que se veía en el HTML, con las fotos de las celdas debajo de la tabla y sin el detalle de cada fila. Ahora, si
+el doc tiene tablas, el comando las baja por la API (columnas y todas las filas, también las que escondía un
+filtro) y las convierte en páginas, como acordó Lega para docs cerrados: una ficha por fila con sus fotos, campos
+y notas, un índice con links a las fichas donde estaba la tabla, una tarjeta por fila en las vistas de tarjetas
+y los links entre filas como links entre páginas. Las tablas de maquetado se desarman y las chicas de texto
+quedan igual, con las filas que escondía el filtro debajo. `--convert-only` repite la conversión sin red y `tables.config.json` elige el modo de cada tabla.
+[ Exportar de Coda - tablas como páginas ]
+
 v0.062 :
 
 Comentarios de Coda en filas de una tabla. Al importar un doc con tablas, los comentarios de una fila de una
