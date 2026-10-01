@@ -30,11 +30,11 @@ function readExpanded(): Set<string> {
 type DropZone = 'before' | 'inside' | 'after';
 
 /**
- * `onBrowse` se llama justo antes de que el árbol abra una página que la persona no eligió con un clic ni con
- * Enter (las flechas, o plegar una madre de la página abierta): en el teléfono, el cajón sigue abierto para
- * seguir recorriendo el árbol.
+ * `onBrowse` se llama justo antes de que el árbol abra la página `id` sin que la persona la haya elegido con un
+ * clic ni con Enter (las flechas, o plegar una madre de la página abierta): en el teléfono, el cajón sigue
+ * abierto para seguir recorriendo el árbol.
  */
-export function Sidebar({ onBrowse }: { onBrowse?: () => void } = {}) {
+export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) {
   const tree = useTree();
   const perms = usePermissions();
   const { user } = useServices();
@@ -76,15 +76,16 @@ export function Sidebar({ onBrowse }: { onBrowse?: () => void } = {}) {
   // versión, para el temporizador de `opener`.
   const browse = useRef<(id: string) => void>(() => undefined);
   browse.current = (id: string) => {
-    if (!tree.get(id) || tree.isTrashed(id) || location.pathname === pagePath(id)) return;
-    onBrowse?.();
+    // Contra la página abierta, no contra la dirección: `/p/<id>/` (con barra al final) es la misma página.
+    if (id === activeId || !tree.get(id) || tree.isTrashed(id)) return;
+    onBrowse?.(id);
     navigate(pagePath(id));
   };
   const [opener] = useState(() => createOpenScheduler((id) => browse.current(id)));
   useEffect(() => () => opener.cancel(), [opener]);
-  // Si la página abierta cambia por otro camino (un link, la búsqueda, un clic), lo que las flechas iban a
-  // abrir ya no va.
-  useEffect(() => opener.cancel(), [activeId, opener]);
+  // Si la ruta cambia por otro camino (un link, la búsqueda, un clic, la papelera), lo que las flechas iban a
+  // abrir ya no va. Lo mismo si el foco sale del árbol (el `onBlur` del árbol).
+  useEffect(() => opener.cancel(), [route.name, activeId, opener]);
 
   useEffect(() => {
     try {
@@ -107,6 +108,8 @@ export function Sidebar({ onBrowse }: { onBrowse?: () => void } = {}) {
   const expand = (id: string) => setExpanded((prev) => new Set(prev).add(id));
   /** Pliega `id`. Si la página abierta queda escondida adentro, la abierta pasa a ser `id` (pedido de Lega). */
   const collapse = (id: string) => {
+    // Lo que las flechas iban a abrir no se pierde: se abre ya (o `id`, si quedaba escondido adentro).
+    const pending = opener.pending();
     opener.cancel();
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -114,6 +117,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: () => void } = {}) {
       return next;
     });
     if (activeId && tree.isDescendant(activeId, id)) browse.current(id);
+    else if (pending) browse.current(tree.isDescendant(pending, id) ? id : pending);
   };
   const focusRow = (id: string, preventScroll = false) => rowEls.current.get(id)?.focus({ preventScroll });
 
@@ -195,13 +199,16 @@ export function Sidebar({ onBrowse }: { onBrowse?: () => void } = {}) {
       <ul
         className={role === 'tree' ? 'tree' : undefined}
         role={role}
-        aria-label={role === 'tree' ? tr('sidebar.pages') : undefined}
+        aria-label={role === 'tree' ? tr('sidebar.tree') : undefined}
         style={style}
         onBlur={
           role === 'tree'
             ? (e) => {
-                // El foco salió del árbol: al volver con Tab, entra por la página abierta.
-                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocusId(null);
+                if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+                // El foco salió del árbol: al volver con Tab, entra por la página abierta, y lo que las
+                // flechas iban a abrir ya no va (la página no cambia bajo el cursor).
+                setFocusId(null);
+                opener.cancel();
               }
             : undefined
         }
@@ -227,7 +234,6 @@ export function Sidebar({ onBrowse }: { onBrowse?: () => void } = {}) {
           role="treeitem"
           aria-level={depth + 1}
           aria-expanded={children.length ? open : undefined}
-          aria-selected={page.id === activeId}
           aria-label={page.title || tr('common.untitled')}
           className={`tree-row${children.length ? ' parent' : ''}${page.id === activeId ? ' active' : ''}${dropClass}`}
           style={{ paddingLeft: 4 + depth * 18 }}
@@ -339,6 +345,24 @@ export function Sidebar({ onBrowse }: { onBrowse?: () => void } = {}) {
   const visible = new Set(rows.map((r) => r.id));
   const tabStop =
     focusId && visible.has(focusId) ? focusId : activeId && visible.has(activeId) ? activeId : (rows[0]?.id ?? null);
+
+  // Si la fila con el foco desaparece (otra persona la mandó a la papelera o la movió adentro de una cerrada),
+  // el foco caería al documento y las flechas dejarían de responder: pasa a la fila visible que le seguía (o
+  // a la anterior, si era la última). Solo si el foco estaba en el árbol y no se fue a otro lado.
+  const shownBefore = useRef<string[]>([]);
+  useEffect(() => {
+    const before = shownBefore.current;
+    shownBefore.current = rows.map((r) => r.id);
+    if (!focusId || visible.has(focusId)) return;
+    const at = before.indexOf(focusId);
+    const lost = !document.activeElement || document.activeElement === document.body;
+    const neighbor =
+      at < 0 || !lost
+        ? undefined
+        : (before.slice(at + 1).find((id) => visible.has(id)) ?? before.slice(0, at).reverse().find((id) => visible.has(id)));
+    if (neighbor) focusRow(neighbor, true);
+    else setFocusId(null);
+  });
   const trashCount = tree.trashed(projectId).length;
   const canCreateRoot = perms.canCreateIn(null, projectId);
 

@@ -8,6 +8,7 @@ export const sidebar = {
   'sidebar.moreActions': { en: "More actions", es: "Más acciones" },
   'sidebar.addInside': { en: "Add a page inside", es: "Agregar una página adentro" },
   'sidebar.pages': { en: "Pages", es: "Páginas" },
+  'sidebar.tree': { en: "Page tree", es: "Árbol de páginas" },
   'sidebar.width': { en: "Sidebar width", es: "Ancho de la barra lateral" },
   'sidebar.widthTip': {
     en: "**Drag:** resize the sidebar\n**Double-click:** back to the default width\n**Arrow keys:** resize from the keyboard",

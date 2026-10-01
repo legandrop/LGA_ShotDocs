@@ -231,10 +231,13 @@ export function Shell() {
 
   // Al cambiar de página se cierra el cajón del teléfono, salvo que la haya abierto el árbol sin que se la
   // eligiera (las flechas, plegar una madre de la página abierta): ahí se sigue recorriendo el árbol.
-  const keepNav = useRef(false);
+  // Se anota la página que el árbol va a abrir, no un sí o no: si esa navegación no llega a cambiar la ruta, la
+  // marca no vale para la siguiente.
+  const keepNav = useRef<string | null>(null);
   useEffect(() => {
-    if (keepNav.current) keepNav.current = false;
-    else setNavOpen(false);
+    const kept = route.name === 'page' && keepNav.current === route.id;
+    keepNav.current = null;
+    if (!kept) setNavOpen(false);
     setPageMenu(null);
   }, [route.name, route.name === 'page' ? route.id : null]);
 
@@ -262,7 +265,7 @@ export function Shell() {
 
   return (
     <div className={`shell${navOpen ? ' nav-open' : ''}`}>
-      <Sidebar onBrowse={() => (keepNav.current = true)} />
+      <Sidebar onBrowse={(id) => (keepNav.current = id)} />
       <SidebarResizer />
       <div className="scrim" onClick={() => setNavOpen(false)} />
       <main className="main">

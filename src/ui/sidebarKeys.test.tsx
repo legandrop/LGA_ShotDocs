@@ -90,7 +90,7 @@ function services(device: Device): Services {
  * Uno ▸ Uno.A ▸ Uno.A.1, Uno ▸ Uno.B, Dos (sin subpáginas), Tres ▸ Tres.C. La página abierta es `open` (Uno.A.1
  * si no se dice): sus madres se abren solas, Tres queda cerrada.
  */
-async function app(opts: { open?: 'a1' | 'none'; shell?: boolean } = {}) {
+async function app(opts: { open?: 'a1' | 'none'; shell?: boolean; slash?: boolean; shared?: boolean } = {}) {
   const server = new FakeServer();
   const d = await makeDevice(server);
   devices.push(d);
@@ -102,7 +102,14 @@ async function app(opts: { open?: 'a1' | 'none'; shell?: boolean } = {}) {
   const tres = await d.tree.create(null, 'Tres');
   const c = await d.tree.create(tres, 'Tres.C');
   const ids = { uno, a, a1, b, dos, tres, c };
-  history.replaceState(null, '', opts.open === 'none' ? '/' : pagePath(a1));
+  if (opts.shared) {
+    // Una rama compartida: la madre real de Uno.A no está entre las páginas que la persona puede ver.
+    await d.engine.syncNow();
+    const all = Object.values(ids).map((id) => d.tree.get(id)!);
+    await d.tree.setSnapshot(all.filter((p) => p.id !== uno && p.id !== b));
+  }
+  // `/p/<id>/` (con barra al final) también es la página.
+  history.replaceState(null, '', opts.open === 'none' ? '/' : pagePath(a1) + (opts.slash ? '/' : ''));
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -110,7 +117,7 @@ async function app(opts: { open?: 'a1' | 'none'; shell?: boolean } = {}) {
   act(() =>
     root.render(<ServicesContext.Provider value={services(d)}>{opts.shell ? <Shell /> : <Sidebar />}</ServicesContext.Provider>),
   );
-  return { host, d, ids };
+  return { host, d, ids, root };
 }
 
 const rows = () => [...document.querySelectorAll<HTMLElement>('.tree-row')];
@@ -206,6 +213,150 @@ describe('↑ y ↓', () => {
     focusRow('Dos');
     press('Enter');
     expect(path()).toBe(pagePath(ids.dos));
+    // Espacio, igual (y no desplaza la barra lateral).
+    focusRow('Tres');
+    const e = press(' ');
+    expect(e.defaultPrevented).toBe(true);
+    expect(path()).toBe(pagePath(ids.tres));
+  });
+});
+
+describe('lo que las flechas iban a abrir', () => {
+  /** Con la tecla apretada desde Uno: el foco en Uno.A y esa página por abrirse. */
+  async function pending() {
+    const made = await app();
+    focusRow('Uno');
+    press('ArrowDown', { repeat: true });
+    expect(focusedTitle()).toBe('Uno.A');
+    expect(path()).toBe(pagePath(made.ids.a1));
+    return made;
+  }
+
+  it('un clic en otra fila lo anula', async () => {
+    const { ids } = await pending();
+    act(() => row('Dos').click());
+    await wait(OPEN_DELAY_MS + 60);
+    expect(path()).toBe(pagePath(ids.dos));
+  });
+
+  it('abrir otra página por un link lo anula', async () => {
+    const { ids } = await pending();
+    act(() => navigate(pagePath(ids.c)));
+    await wait(OPEN_DELAY_MS + 60);
+    expect(path()).toBe(pagePath(ids.c));
+  });
+
+  it('al desmontar la barra lateral no queda nada por abrirse', async () => {
+    const { ids, root } = await pending();
+    act(() => root.unmount());
+    roots.splice(roots.indexOf(root), 1);
+    await wait(OPEN_DELAY_MS + 60);
+    expect(path()).toBe(pagePath(ids.a1));
+  });
+
+  it('si el foco sale del árbol (un clic en el editor), la página no cambia bajo el cursor', async () => {
+    const { ids } = await pending();
+    const outside = document.createElement('input');
+    document.body.append(outside);
+    act(() => outside.focus());
+    await wait(OPEN_DELAY_MS + 60);
+    expect(path()).toBe(pagePath(ids.a1));
+  });
+
+  it('sin página abierta, ir a la papelera lo anula', async () => {
+    await app({ open: 'none' });
+    focusRow('Uno');
+    press('ArrowDown', { repeat: true });
+    expect(focusedTitle()).toBe('Dos');
+    act(() => document.querySelector<HTMLButtonElement>('.sidebar-footer .footer-item')!.click());
+    expect(path()).toBe('/trash');
+    await wait(OPEN_DELAY_MS + 60);
+    expect(path()).toBe('/trash');
+  });
+
+  it('plegar la fila del foco antes de que se abra: se abre igual', async () => {
+    const { ids } = await app();
+    act(() => row('Dos').click());
+    await wait(OPEN_DELAY_MS + 30);
+    focusRow('Uno');
+    press('ArrowDown', { repeat: true });
+    expect(focusedTitle()).toBe('Uno.A');
+    press('ArrowLeft');
+    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.B', 'Dos', 'Tres']);
+    await wait(OPEN_DELAY_MS + 60);
+    // Antes quedaba Dos abierta con el foco en Uno.A.
+    expect(path()).toBe(pagePath(ids.a));
+    expect(focusedTitle()).toBe('Uno.A');
+  });
+
+  it('plegar con el triángulo una madre de lo que se iba a abrir: se abre esa madre', async () => {
+    const { ids } = await app();
+    act(() => row('Dos').click());
+    await wait(OPEN_DELAY_MS + 30);
+    focusRow('Uno.A');
+    press('ArrowDown', { repeat: true });
+    expect(focusedTitle()).toBe('Uno.A.1');
+    act(() => row('Uno').querySelector<HTMLButtonElement>('.toggle')!.click());
+    await wait(OPEN_DELAY_MS + 60);
+    expect(titles()).toEqual(['Uno', 'Dos', 'Tres']);
+    expect(path()).toBe(pagePath(ids.uno));
+    expect(focusedTitle()).toBe('Uno');
+  });
+});
+
+describe('la fila con el foco desaparece', () => {
+  it('el foco pasa a la fila visible que sigue, o a la anterior si era la última', async () => {
+    const { d, ids } = await app();
+    focusRow('Dos');
+    await act(async () => d.tree.trash(ids.dos));
+    expect(titles()).toEqual(['Uno', 'Uno.A', 'Uno.A.1', 'Uno.B', 'Tres']);
+    expect(focusedTitle()).toBe('Tres');
+    await act(async () => d.tree.trash(ids.tres));
+    expect(focusedTitle()).toBe('Uno.B');
+    // Las flechas siguen respondiendo.
+    press('ArrowUp');
+    expect(focusedTitle()).toBe('Uno.A.1');
+    // Movida adentro de una cerrada: igual.
+    focusRow('Uno.B');
+    act(() => row('Uno.A').querySelector<HTMLButtonElement>('.toggle')!.click());
+    focusRow('Uno.B');
+    await act(async () => d.tree.move(ids.b, ids.a));
+    expect(titles()).toEqual(['Uno', 'Uno.A']);
+    expect(focusedTitle()).toBe('Uno.A');
+  });
+
+  it('con el foco fuera del árbol, no se lo trae', async () => {
+    const { d, ids } = await app();
+    const outside = document.createElement('input');
+    document.body.append(outside);
+    focusRow('Dos');
+    act(() => outside.focus());
+    await act(async () => d.tree.trash(ids.dos));
+    expect(document.activeElement).toBe(outside);
+    // Y sin foco en ningún lado, tampoco.
+    act(() => outside.blur());
+    await act(async () => d.tree.trash(ids.tres));
+    expect(document.activeElement).toBe(document.body);
+  });
+});
+
+describe('una rama compartida', () => {
+  it('la madre real no se ve: la rama está en el primer nivel y ← no sale de ella', async () => {
+    const { ids } = await app({ shared: true });
+    expect(titles()).toEqual(['Uno.A', 'Uno.A.1', 'Dos', 'Tres']);
+    expect(row('Uno.A').getAttribute('aria-level')).toBe('1');
+    focusRow('Uno.A.1');
+    await wait(OPEN_DELAY_MS + 30);
+    press('ArrowLeft');
+    expect(focusedTitle()).toBe('Uno.A');
+    expect(path()).toBe(pagePath(ids.a));
+    // Plegada, en el primer nivel: nada (no hay madre a la vista).
+    press('ArrowLeft');
+    expect(titles()).toEqual(['Uno.A', 'Dos', 'Tres']);
+    await wait(OPEN_DELAY_MS + 30);
+    press('ArrowLeft');
+    expect(focusedTitle()).toBe('Uno.A');
+    expect(path()).toBe(pagePath(ids.a));
   });
 });
 
@@ -376,11 +527,16 @@ describe('accesibilidad', () => {
   it('árbol con niveles, la abierta marcada y una sola fila en el orden de Tab, que sigue al foco', async () => {
     await app();
     expect(document.querySelectorAll('[role="tree"]')).toHaveLength(1);
+    // El árbol tiene su nombre, distinto del de la barra que lo contiene.
+    const tree = document.querySelector('[role="tree"]')!;
+    expect(tree.getAttribute('aria-label')).toBe('Page tree');
+    expect(tree.closest('nav')!.getAttribute('aria-label')).toBe('Pages');
     expect(row('Uno.A.1').getAttribute('role')).toBe('treeitem');
     expect(row('Uno.A.1').getAttribute('aria-level')).toBe('3');
+    // Un árbol de navegación: la página abierta se marca con aria-current y ninguna fila lleva aria-selected.
     expect(row('Uno.A.1').getAttribute('aria-current')).toBe('page');
-    expect(row('Uno.A.1').getAttribute('aria-selected')).toBe('true');
-    expect(row('Dos').getAttribute('aria-selected')).toBe('false');
+    expect(row('Dos').getAttribute('aria-current')).toBeNull();
+    expect(document.querySelectorAll('.tree [aria-selected]')).toHaveLength(0);
     expect(row('Dos').getAttribute('aria-expanded')).toBeNull();
     const stops = () => rows().filter((r) => r.tabIndex === 0);
     expect(stops()).toEqual([row('Uno.A.1')]);
@@ -404,6 +560,35 @@ describe('teléfono', () => {
     expect(path()).toBe(pagePath(ids.uno));
     expect(host.querySelector('.shell.nav-open')).not.toBeNull();
     // Tocar una página sí lo cierra, como siempre.
+    act(() => row('Dos').click());
+    await wait();
+    expect(path()).toBe(pagePath(ids.dos));
+    expect(host.querySelector('.shell.nav-open')).toBeNull();
+  });
+
+  it('con el cajón abierto, las flechas recorren sin cerrarlo', async () => {
+    const { host, ids } = await app({ shell: true });
+    await until(() => host.querySelector('.bn-editor'), 'el editor');
+    act(() => host.querySelector<HTMLButtonElement>('.topbar .only-mobile')!.click());
+    focusRow('Uno.A.1');
+    press('ArrowDown');
+    await until(() => path() === pagePath(ids.b), 'abrir Uno.B');
+    await wait(OPEN_DELAY_MS + 30);
+    expect(host.querySelector('.shell.nav-open')).not.toBeNull();
+    expect(focusedTitle()).toBe('Uno.B');
+  });
+
+  it('una flecha hacia la página ya abierta (dirección con barra al final) no deja el cajón clavado', async () => {
+    const { host, ids } = await app({ shell: true, slash: true });
+    await until(() => host.querySelector('.bn-editor'), 'el editor');
+    expect(path()).toBe(pagePath(ids.a1) + '/');
+    act(() => host.querySelector<HTMLButtonElement>('.topbar .only-mobile')!.click());
+    focusRow('Uno.B');
+    press('ArrowUp');
+    expect(focusedTitle()).toBe('Uno.A.1');
+    await wait(OPEN_DELAY_MS + 60);
+    // Ya era la página abierta: la dirección ni se toca.
+    expect(path()).toBe(pagePath(ids.a1) + '/');
     act(() => row('Dos').click());
     await wait();
     expect(path()).toBe(pagePath(ids.dos));
