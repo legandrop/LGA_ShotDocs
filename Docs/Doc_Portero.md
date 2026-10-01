@@ -245,7 +245,7 @@ corta, se manda entera otra vez y se vuelve a cortar.
 |---|---|---|
 | Abrir la subida (`POST /upload`) y preguntar cuánto llegó (`bytes */total`) | Pasa 1 minuto sin respuesta | `CONTROL_TIMEOUT_MS` |
 | Una parte, mientras sale | Pasan 2 minutos sin que salga **ni un byte** más | `STALL_MS` |
-| Una parte, ya enviada entera | La respuesta tarda más de 2 minutos más lo que tardó en salir el cuerpo (a lo sumo 4 minutos) | `STALL_MS` |
+| Una parte, ya enviada entera | La respuesta tarda más que su plazo (`answerLimit`: 2 minutos, y 2 más por cada trabada seguida anterior) más lo que tardó en salir el cuerpo (hasta 2 minutos más) | `STALL_MS` |
 
 - Los pedidos de control casi no llevan cuerpo: tardan lo que tardan el portero y Drive (segundos), no lo
   que da la red. Un minuto sin respuesta es un pedido colgado.
@@ -253,7 +253,15 @@ corta, se manda entera otra vez y se vuelve a cortar.
   lenta, y es la mitad o menos de lo que tardaba en cortar solo el navegador.
 - Con el cuerpo afuera ya no hay bytes que avisen: falta que el portero le pase la parte a Drive y Drive
   la guarde (segundos). El plazo se estira con lo que tardó el cuerpo porque parte de lo que el navegador
-  da por enviado puede seguir en camino, y con una red lenta eso también tarda más.
+  da por enviado puede seguir en camino (medido en Chromium: da por enviado medio megabyte que el servidor
+  todavía no leyó), y con una red lenta eso también tarda más.
+- **Si el cuerpo sale de golpe** (un antivirus que revisa HTTPS o un proxy lo reciben entero y lo suben
+  ellos, despacio), el navegador no ve nada de la subida de verdad y una parte lenta se cortaría siempre
+  en el mismo lugar. Por eso cada trabada seguida sin avance le da 2 minutos más al intento siguiente
+  (`stalledBefore`): lento termina pasando. El techo es lo que tardaría la parte entera a 16 KiB/s, la
+  misma red lenta de los topes de la base: 10 minutos y medio para una parte de 8 MiB, 5 para una foto
+  de 3 MB. Más lento que eso y con el cuerpo tragado de golpe, la parte no pasa: es el único caso que
+  queda sin cubrir.
 - Donde no hay `XMLHttpRequest`, o con un `fetch` propio (las pruebas del cliente), las partes van por
   `fetch` y **no se vigilan**: sin saber cuántos bytes salieron, cortar por tiempo cortaría las lentas.
   Los pedidos de control sí tienen su tope.
@@ -272,12 +280,20 @@ sigue en el dispositivo y lo que Drive ya recibió sigue en la subida.
   nada más. Nunca se abre otra subida sin preguntar, que es lo que dejaría el archivo dos veces en Drive.
 - Recibió algo: se sigue con ella desde ahí, siempre. Una subida que ya recibió bytes anda; si de verdad
   se perdió, Drive lo dice (404 o 410) y recién entonces se empieza de nuevo.
-- No recibió nada y ya se trabó dos veces seguidas (`STALLS_BEFORE_RENEW`): se abre otra
+- No recibió nada y van dos trabadas seguidas (y después cada dos: `STALLS_BEFORE_RENEW`): se abre otra
   (`renewIfEmpty`), por si la que se cuelga es esa. No se pierde nada, porque no tenía nada.
+- La pregunta tampoco contesta: no se abre otra (no se sabe si la que hay terminó). El archivo sigue
+  pendiente con el aviso y se vuelve a preguntar más tarde.
 
 `MediaRecord.stalls` cuenta las trabadas **seguidas y sin avance**: vuelve a 0 cuando el portero confirma
-más bytes, cuando se abre otra subida y cuando el archivo termina de subir. Es un campo nuevo y opcional:
-lo guardado por una versión anterior no lo tiene y vale 0.
+más bytes y cuando el archivo termina de subir (abrir otra subida no es avanzar). Es un campo nuevo y
+opcional: lo guardado por una versión anterior no lo tiene y vale 0.
+
+**Probado a mano en Chromium 152** contra un portero de mentira en otro origen (con el mismo CORS): tres partes
+por `XMLHttpRequest` llegan intactas; una parte leída a 256 KB/s (que tarda ocho veces el plazo) no se
+corta; un servidor que no lee el cuerpo, que deja de leerlo a la mitad, que no contesta la parte o que no
+contesta al abrir la subida se cortan y el navegador aborta el pedido; al retomar no se manda nada dos
+veces. Falta verlo en Safari de iPhone y con una red lenta de verdad.
 
 **Lo que queda afuera.** La miniatura va a Supabase Storage antes del original, y Storage no tiene tope
 (`Doc_Sincronizacion.md`, "cada consulta a la base tiene un tope de tiempo"): si lo que se cuelga es ese

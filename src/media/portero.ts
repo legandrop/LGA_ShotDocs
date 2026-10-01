@@ -30,6 +30,21 @@ export const CONTROL_TIMEOUT_MS = 60_000;
 export const STALL_MS = 120_000;
 /** Cada cuánto mira el vigilante si el pedido se sigue moviendo. */
 export const STALL_CHECK_MS = 5_000;
+/** Una red lenta: la misma con la que se calculan los topes de las consultas a la base (`remote.ts`). */
+const SLOW_BYTES_PER_SECOND = 16 * 1024;
+
+/**
+ * Lo que se espera la respuesta de una parte que ya salió entera. Ahí no hay bytes que avisen, y "salió" es
+ * lo que dice el navegador: detrás de un antivirus o un proxy que recibe el cuerpo de golpe, la parte puede
+ * seguir subiendo despacio mucho después. Por eso cada trabada seguida sin avance (`stalledBefore`) le da
+ * `STALL_MS` más al intento siguiente, y así una subida lenta termina pasando en vez de cortarse siempre en
+ * el mismo lugar. El techo es lo que tardaría la parte entera con una red lenta: más que eso es un pedido
+ * colgado, y la cola no lo espera (8 MiB: unos 10 minutos y medio; una foto de 3 MB: 5).
+ */
+export function answerLimit(bytes: number, stalledBefore = 0): number {
+  const slowest = STALL_MS + Math.ceil((bytes / SLOW_BYTES_PER_SECOND) * 1000);
+  return Math.min(STALL_MS * (1 + Math.max(0, stalledBefore)), slowest);
+}
 
 export interface DriveStatus {
   connected: boolean;
@@ -113,6 +128,11 @@ export interface UploadOptions {
    * usando siempre.
    */
   renewIfEmpty?: boolean;
+  /**
+   * Cuántas veces seguidas ya se trabó esta subida sin avanzar: a la respuesta de cada parte se le da ese
+   * tanto más de plazo (ver `answerLimit`).
+   */
+  stalledBefore?: number;
 }
 
 /**
@@ -400,7 +420,7 @@ export class Portero {
    * con `stalled` y lo enviado, para que quien llama siga con otra cosa y la retome más tarde.
    */
   async upload(file: Blob & { name?: string }, options: UploadOptions = {}): Promise<UploadResult> {
-    const { onProgress, signal, appFile, onlyIfSent, renewIfEmpty } = options;
+    const { onProgress, signal, appFile, onlyIfSent, renewIfEmpty, stalledBefore = 0 } = options;
     const total = file.size;
     let uploadId = options.resume ?? null;
     // Al retomar, primero se pregunta; si el portero ya no la tiene, se empieza de nuevo.
@@ -467,7 +487,7 @@ export class Portero {
           }
         } else {
           const end = Math.min(sent + PART_BYTES, total);
-          answer = await this.chunk(uploadId, `bytes ${sent}-${end - 1}/${total}`, file.slice(sent, end), signal);
+          answer = await this.chunk(uploadId, `bytes ${sent}-${end - 1}/${total}`, file.slice(sent, end), signal, stalledBefore);
           if (answer.status === 'incomplete' && answer.received <= sent) {
             throw new PorteroError(t('portero.partLost'), 0, true);
           }
@@ -521,7 +541,13 @@ export class Portero {
     }
   }
 
-  private chunk(uploadId: string, range: string, body: Blob | null, signal?: AbortSignal): Promise<ChunkAnswer> {
+  private chunk(
+    uploadId: string,
+    range: string,
+    body: Blob | null,
+    signal?: AbortSignal,
+    stalledBefore = 0,
+  ): Promise<ChunkAnswer> {
     return this.request<ChunkAnswer>('PUT', `/upload/${encodeURIComponent(uploadId)}`, {
       headers: { 'Content-Range': range },
       body,
@@ -530,14 +556,16 @@ export class Portero {
       // eso solo se sabe con `send`: sin él queda como antes (sin tope), porque un tope por tiempo cortaría
       // también las partes que van lentas pero bien.
       stallMs: body ? (this.send ? STALL_MS : undefined) : CONTROL_TIMEOUT_MS,
+      answerMs: body ? answerLimit(body.size, stalledBefore) : undefined,
     });
   }
 
   /**
    * El vigilante de un pedido: lo corta si pasan `limitMs` sin que se mueva. Un pedido de control no avisa
    * nada, así que `limitMs` es su tope; una parte avisa cada vez que salen bytes y el plazo vuelve a empezar.
+   * `answerMs`: lo que se espera la respuesta de una parte que ya salió entera (ver `answerLimit`).
    */
-  private watch(limitMs: number, outer?: AbortSignal): Watch {
+  private watch(limitMs: number, outer?: AbortSignal, answerMs = limitMs): Watch {
     const controller = new AbortController();
     const startedAt = this.now();
     let lastMove = startedAt;
@@ -558,11 +586,11 @@ export class Portero {
       },
       moved: (done) => {
         lastMove = this.now();
-        // Con el cuerpo entero afuera ya no hay bytes que avisen. A la respuesta se le da el plazo más lo
+        // Con el cuerpo entero afuera ya no hay bytes que avisen. A la respuesta se le da su plazo más lo
         // que tardó en salir el cuerpo: parte de lo "enviado" puede seguir en camino, y con una red lenta
-        // (el cuerpo tardó mucho) eso también tarda más. A lo sumo el doble, para que un pedido colgado
-        // justo ahí no tenga a la cola esperando tanto como tardó la parte.
-        if (done) patience = limitMs + Math.min(lastMove - startedAt, limitMs);
+        // (el cuerpo tardó mucho) eso también tarda más. Ese extra es a lo sumo otro `limitMs`, para que un
+        // pedido colgado justo ahí no tenga a la cola esperando tanto como tardó la parte.
+        if (done) patience = answerMs + Math.min(lastMove - startedAt, limitMs);
       },
       stop: () => {
         clearInterval(timer);
@@ -581,9 +609,11 @@ export class Portero {
       signal?: AbortSignal;
       /** Con esto el pedido se vigila: se corta (`StalledError`) si pasa este tiempo sin moverse. */
       stallMs?: number;
+      /** Para una parte: lo que se espera la respuesta una vez que el cuerpo salió entero. */
+      answerMs?: number;
     } = {},
   ): Promise<T> {
-    const watch = init.stallMs ? this.watch(init.stallMs, init.signal) : null;
+    const watch = init.stallMs ? this.watch(init.stallMs, init.signal, init.answerMs) : null;
     const signal = watch?.signal ?? init.signal;
     // Por qué se soltó el pedido: lo canceló quien llama, o lo cortó el vigilante.
     const interrupted = (): unknown =>

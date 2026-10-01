@@ -171,7 +171,7 @@ function flipLink(link: MediaLink, removed: boolean): MediaLink {
 }
 
 /**
- * Con estas trabadas seguidas sin que la subida avance (`MediaRecord.stalls`), al retomarla se abre otra si
+ * Cada tantas trabadas seguidas sin que la subida avance (`MediaRecord.stalls`), al retomarla se abre otra si
  * la que hay todavía no recibió nada (`renewIfEmpty` del portero). Dos y no una: la primera puede ser un
  * corte de la red, y retomar la misma no cuesta nada.
  */
@@ -896,6 +896,9 @@ export class MediaQueue {
     let saving: Promise<unknown> = Promise.resolve();
     // Trabadas seguidas sin que la subida avance (un registro de una versión anterior no lo trae).
     let stalls = start.stalls ?? 0;
+    // La subida del portero que se está usando y hasta dónde confirmó: para saber cuándo avanza de verdad.
+    let savedId = start.uploadId;
+    let confirmed = start.sent;
     try {
       if (record.probed === false) {
         await this.ensureProbed(record.id);
@@ -963,9 +966,8 @@ export class MediaQueue {
 
       const controller = new AbortController();
       this.controller = controller;
-      let savedId = record.uploadId;
-      // Hasta dónde confirmó el portero, para saber cuándo la subida avanza de verdad.
-      let confirmed = record.sent;
+      savedId = record.uploadId;
+      confirmed = record.sent;
       this.setUploading({ name: record.name, sent: record.sent, total: record.size });
       const onProgress = (p: UploadProgress) => {
         this.setUploading({ name: record.name, sent: p.sent, total: p.total });
@@ -974,8 +976,9 @@ export class MediaQueue {
         if (other) confirmed = 0;
         if (!other && p.sent === confirmed) return;
         const changes: Partial<MediaRecord> = { uploadId: p.uploadId, sent: p.sent };
-        // Las trabadas se cuentan seguidas y sin avance: el portero confirmó más bytes, o es otra subida.
-        if (stalls > 0 && (other || p.sent > confirmed)) changes.stalls = stalls = 0;
+        // Las trabadas se cuentan seguidas y sin avance: la cuenta vuelve a cero recién cuando el portero
+        // confirma más bytes (abrir otra subida no es avanzar).
+        if (stalls > 0 && p.sent > confirmed) changes.stalls = stalls = 0;
         savedId = p.uploadId;
         confirmed = p.sent;
         saving = saving.then(() => this.patch(record.id, changes)).catch(() => undefined);
@@ -988,7 +991,10 @@ export class MediaQueue {
         result = await portero.upload(file, {
           appFile: { id: record.id, day: record.day },
           resume: record.uploadId,
-          renewIfEmpty: stalls >= STALLS_BEFORE_RENEW,
+          // Cada `STALLS_BEFORE_RENEW` trabadas seguidas, y solo si la que hay no recibió nada.
+          renewIfEmpty: stalls > 0 && stalls % STALLS_BEFORE_RENEW === 0,
+          // Cada trabada seguida le da más plazo a la respuesta de la parte: lento termina pasando.
+          stalledBefore: stalls,
           signal: controller.signal,
           onProgress,
         });
@@ -1039,11 +1045,14 @@ export class MediaQueue {
         ...(notThere ? { registered: false, thumb: hasThumb ? 'local' : 'none' } : {}),
       };
       // Una subida que el portero ya no tiene se empieza de nuevo.
-      if (err instanceof UploadError) Object.assign(changes, { uploadId: err.uploadId, sent: err.uploadId ? err.sent : 0 });
-      // Una trabada más (si la subida avanzó en este intento, la cuenta ya volvió a cero y esta es la
-      // primera). Las trabadas son de una subida: si el portero ya no la tiene, la cuenta empieza de nuevo.
-      if (err instanceof UploadError && err.stalled) changes.stalls = stalls + 1;
-      else if (err instanceof UploadError && !err.uploadId && stalls > 0) changes.stalls = 0;
+      if (err instanceof UploadError) {
+        // Si se cortó al preguntarle cuánto llegó, el error no lo sabe (dice 0): lo que esa misma subida
+        // ya había confirmado sigue ahí. Bajarlo haría pasar por avance la próxima pregunta que conteste.
+        const sent = err.uploadId && err.uploadId === savedId ? Math.max(err.sent, confirmed) : err.sent;
+        Object.assign(changes, { uploadId: err.uploadId, sent: err.uploadId ? sent : 0 });
+        // Una trabada más (si la subida avanzó en este intento, la cuenta ya volvió a cero y esta es la primera).
+        if (err.stalled) changes.stalls = stalls + 1;
+      }
       await this.patch(record.id, changes).catch(() => undefined);
       this.onChange?.();
       return outcome === 'waiting' ? 'retry' : outcome;

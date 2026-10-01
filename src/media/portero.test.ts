@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AlreadySentError,
+  answerLimit,
   CONTROL_TIMEOUT_MS,
   localDay,
   MAX_RETRIES,
@@ -599,6 +600,34 @@ describe('portero: pedidos que dejan de moverse', () => {
     expect(await second.result).toMatchObject({ stalled: true });
   });
 
+  it('cada trabada seguida le da más plazo a la respuesta de la parte, hasta lo que tardaría con una red lenta', async () => {
+    expect(answerLimit(PART_BYTES)).toBe(STALL_MS);
+    expect(answerLimit(PART_BYTES, 1)).toBe(2 * STALL_MS);
+    expect(answerLimit(PART_BYTES, 2)).toBe(3 * STALL_MS);
+    // El techo: el plazo más la parte entera a 16 KiB/s. 8 MiB son 512 s más; 1 MiB, 64 s más.
+    expect(answerLimit(PART_BYTES, 50)).toBe(STALL_MS + 512_000);
+    expect(answerLimit(MB, 50)).toBe(STALL_MS + 64_000);
+
+    // El cuerpo sale de golpe y la respuesta tarda dos minutos y medio: la primera vez se corta...
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const first = track(portero(server, { send: slow.send }).upload(makeFile(MB)));
+    await settle();
+    slow.part().sent(MB);
+    elapse(STALL_MS + 3 * STALL_CHECK_MS);
+    expect(await first.result).toMatchObject({ stalled: true, uploadId: 'up-1' });
+
+    // ...y al retomarla sabiendo que ya se trabó una vez, la misma espera no la corta.
+    const second = track(portero(server, { send: slow.send }).upload(makeFile(MB), { resume: 'up-1', stalledBefore: 1 }));
+    await settle();
+    slow.part().sent(MB);
+    elapse(STALL_MS + 30_000);
+    await settle();
+    expect(second.settled()).toBe(false);
+    slow.part().arrive();
+    expect(await second.result).toMatchObject({ id: 'drive-file-1' });
+  });
+
   it('sin saber cuántos bytes salen (solo fetch), una parte no se corta por tiempo', async () => {
     const server = new FakePortero();
     let arrive!: () => void;
@@ -764,6 +793,14 @@ describe('portero: las partes por XMLHttpRequest', () => {
     const res = await answer;
     expect(res.status).toBe(507);
     expect(await res.json()).toEqual({ error: 'The Drive is full.' });
+  });
+
+  it('una respuesta sin cuerpo (204) llega como tal', async () => {
+    const answer = xhrSend(`${BASE}/upload/up-1`, init());
+    FakeXhr.made[0].answer(204, '');
+    const res = await answer;
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe('');
   });
 
   it('si se corta la red, falla como fetch; si se aborta, corta el pedido', async () => {
