@@ -399,3 +399,38 @@ texto de varias líneas a los costados de una foto (ver "Prototipo (entrega 0)")
 3. **Alto de las fotos de un renglón:** en Coda cada foto conserva su alto y quedan alineadas abajo. *Arrange in
    rows* las deja de la misma altura. ¿Al pegar varias juntas, se acomodan solas o entran con su tamaño y se
    acomodan a pedido? (Propuesta: entran a 1/3 del ancho cada una, y se acomodan a pedido.)
+
+## Entrega 1b: en curso (pausada)
+
+Lo que se ve y se toca de la foto en línea. **El código y sus pruebas con jsdom están hechos** (suite: 1426 pasan,
+`tsc` limpio); **falta medirlo en un navegador real** y cerrar los docs. Nada en la app crea fotos en línea todavía.
+
+**Hecho, archivo por archivo:**
+
+- `src/ui/inlinePhoto.ts`: la imagen pasa por `resolveFileUrl` del editor, como el bloque `image` (miniatura,
+  cuadro de video con la marca de reproducir, marcador de subida, sin red o de otro proyecto); una respuesta
+  vieja no pisa la nueva; `--ph-w` con el ancho.
+- `src/ui/inlinePhotoEditor.ts` (nuevo; lo suma `PageEditor.tsx`, porque BlockNote no registra extensiones de un
+  contenido en línea): filas con `groupRows` (`sd-photo-sized`, `--row-n`, `sd-photo-row-first`,
+  `sd-photo-row-break` con `--row-rest`), la marca `sd-photo-in-range`, y el teclado y el mouse antes de
+  `nodeSelectionKeyboard`: letra, Enter y composición pasan el cursor a la derecha de la foto y siguen;
+  Shift+flechas y Shift+clic dan una selección de texto. La barra espaciadora abre el carrete, como en el bloque.
+- `src/styles.css` ("Fotos en línea"): el modelo de ancho del prototipo, `w = 0`, listas, el contorno de la
+  elegida, la marca de la selección y "apiladas" en el teléfono.
+- `src/ui/carreteModel.ts` y `PageEditor.tsx`: cada foto tiene una clave (el id del bloque `image`, o
+  `<bloque>#<n>` para la n-ésima foto en línea): el carrete junta las dos clases en el orden del documento
+  (listas, hijos y celdas), y el clic, el segundo clic, el dedo y `ensureLinks` usan la clave.
+- `sharpImages.ts`, `attachments.ts`, `printPage.ts`, `printView.ts`: encuentran la foto en línea por
+  `.sd-photo[data-url] > img` (nunca el `<img>` separador de ProseMirror); la impresión espera sus imágenes, usa
+  los originales y fija el ancho natural de las de `w = 0`.
+- Pruebas: `inlinePhotoEditor.test.ts` (22) y casos nuevos en `carreteModel`, `sharpImages`, `attachments` y
+  `pagination`.
+
+**Falta:** la página de prueba con los módulos reales (Vite en el puerto 4182) y las mediciones en Chromium
+(cursor, letra, Enter y composición con la foto elegida, Shift+flechas, Shift+clic, la selección visible, filas de
+2, 3 y 4 en varios anchos, `w = 0`, clic y segundo clic); arrastrar una foto dentro del renglón y deshacer en el
+navegador; reescribir esta sección como "Cómo quedó (entrega 1b)"; `Doc_Roadmap.md` (P.15); la auditoría.
+
+**Anotado, sin hacer:** la conversión de imágenes `data:` sigue mirando solo bloques; un párrafo con fotos se
+imprime como una sola unidad (partirlo entre renglones es la entrega 2); Shift+clic en una foto en línea no abre
+el carrete (en una foto-bloque sigue como antes).
