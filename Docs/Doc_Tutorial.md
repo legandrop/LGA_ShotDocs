@@ -1,8 +1,9 @@
 # Tutorial animado y ayuda (P.13)
 
-Estado: **diseño, sin implementar; auditoría previa hecha.** "Correcciones de la auditoría" (al final) manda
-sobre lo anterior; lo simple ya está corregido en su lugar. **Lega respondió las preguntas el 2026-09-30**
-("Decisiones", al final; el texto ya está ajustado). Falta elegir las fotos de la lista. Lo
+Estado: **entregas 1 y 2 hechas (v0.079); la 3 ("Mostrame" y novedades), pendiente.** "Cómo quedó" (al final)
+dice lo que se hizo y en qué se apartó del diseño; "Correcciones de la auditoría" manda sobre lo anterior. **Lega
+respondió las preguntas el 2026-09-30** ("Decisiones"). Las fotos del ejemplo quedaron dibujadas para la app (ver
+"Cómo quedó"); falta que Lega diga si se cambian por fotos de la lista. Lo
 pidió Lega el 2026-09-30 ("sí o sí lo tenemos que tener"). Sale de leer el código de `main` (v0.051) y el
 diseño de colapsar (`Doc_Colapsar.md`, rama `lega/colapsar`).
 
@@ -603,3 +604,98 @@ sobre lo que quede.
 ### Preguntas de estas correcciones
 
 Respondidas por Lega el 2026-09-30: ver "Decisiones".
+
+## Cómo quedó (entregas 1 y 2, v0.079)
+
+### La ayuda y el registro de atajos (entrega 1)
+
+- **El registro** (`src/ui/shortcuts.ts`, en la primera carga): 68 atajos con `id`, teclas en el formato de
+  ProseMirror, lugar (`global`, `editor`, `markdown`, `photos`, `carrete`, `find`, `comments`, `tree`, `menus` y
+  `tour`), `context` (cuándo vale dentro del lugar), de quién es y cómo se toma (`keymap`, `window`, `dom`, `react`,
+  `typed`). `IS_MAC` vive acá (findUi lo reexporta); `shortcutLabel(id, mac, lang)` arma ⌘⌥M / Ctrl+Alt+M. Se fueron
+  `FIND_SHORTCUT_LABEL`, `COMMENT_SHORTCUT_LABEL`, `QUESTION_SHORTCUT_LABEL`, `SEARCH_SHORTCUT_LABEL`, las copias de
+  `IS_MAC` de `CommentsPanel.tsx` y `collapseEditor.ts`, y los rótulos sueltos del carrete. El esquema, las filas de
+  fotos y colapsar toman sus teclas del registro (`shortcutKeys`).
+- **Los ids van en camelCase** (`findNext`, `carreteClose`): con punto chocaban con claves del diccionario
+  (`find.next`, `carrete.next`) y la prueba de las claves sin usar dejaba de ver si se usaban.
+- **Los textos de cada atajo no van en la primera carga** (aparte de la corrección 11): están en la parte de la ayuda
+  (`src/help/shortcutTexts.ts`, claves `shortcut.*` en `src/i18n/lazy/help.ts`), y el registro queda chico. Una
+  prueba exige un texto en los dos idiomas por atajo.
+- **El menú "/"** muestra los rótulos del registro (`slashBadge`) y "Bloque de código" queda sin el ⌘⌥C que BlockNote
+  0.55 rotula y no existe (corrección 9). Script suma su rótulo.
+- **Las extensiones del editor** salen de una sola función (`pageEditorExtensions`, `src/ui/editorExtensions.ts`), que
+  usan la página, la práctica y la prueba.
+- **La ayuda** (`src/help/HelpDialog.tsx`, se baja aparte con `src/i18n/lazy/help.ts`): botón "?" al lado de
+  Papelera (sin tooltip) y *Help and shortcuts* en el menú de la cuenta; ninguna tecla la abre. 760 px con el índice a
+  la izquierda; en el teléfono, pantalla completa con el índice en una fila arriba. Las 15 secciones, 41 entradas
+  (`src/help/entries.ts`) con sus atajos por id, y la tabla entera por lugar. La búsqueda (`src/help/search.ts`) usa
+  `normalize.ts`, mira los dos idiomas y los rótulos de las dos plataformas ("ctrl f", "⌘F" y "Ctrl+F" llevan a
+  Buscar). Una entrada de algo que la persona no puede usar (`when`: adjuntos sin Drive, miembros sin ser admin) se ve
+  apagada con el porqué. Esc cierra y el foco vuelve al botón que la abrió; Tab queda adentro (es modal). Las entradas
+  de lo que ya existía llevan `since: '0.078'`; las nuevas, `0.079` (para las novedades de la entrega 3).
+- **Textos de otras funciones que ya están:** el árbol con el teclado (v0.074), archivar y borrar proyectos (v0.077,
+  sin la casilla de Drive, que todavía no existe) y las fotos HEIC como JPEG (v0.075).
+
+### La práctica y la recorrida (entrega 2)
+
+- **`/practice`** (`src/router.ts`). `PracticeView` (`src/tutorial/`, se baja aparte) arma su propia barra de arriba
+  (migas "Práctica", lupa, comentarios y "⋯") y el `article.page[data-page-id="practice"]` con su `.page-header`,
+  el aviso (*Empezar de nuevo*, *Salir*), el título en memoria, la `FindBar` con Ctrl/⌘+F y el `BlockEditor` de la
+  página (ahora exportado, con `filesNotice`). El Provider de la práctica envuelve solo los botones de la barra y el
+  artículo: la barra lateral y el ícono de sincronización del teléfono siguen con los servicios de verdad.
+- **Aislamiento** (`practiceServices.ts`): `MemoryComments` (la misma `buildThreads` que la cola real, con el hilo de
+  ejemplo ya contestado), fotos y archivos que avisan "En la práctica no se suben archivos" (también pegar, soltar,
+  elegir y las `data:`), `access` sin datos (`Permissions` deja editar y comentar sin preguntarle al árbol), `db`,
+  `mediaDb` y `commentsDb` en `null` (lo colapsado queda en memoria), y `tree`, `engine`, `docs`, `remote`, `client`
+  (también `client.auth`) y `sizes` envueltos en un `Proxy` que deja pasar una lista de lecturas y tira
+  `PracticeWriteError` en cualquier otra llamada. El tamaño de hoja de la práctica vive en la sesión (el `Proxy` del
+  árbol responde `resolveSetting`). La sesión va en un `WeakMap` por instancia de servicios (corrección 4).
+- **El documento**: plantillas `practice.es.ts` y `practice.en.ts` en el idioma de la interfaz al armarla, pasadas al
+  fragmento de siempre con `blocksToYXmlFragment`; ids fijos para la pregunta, las tres fotos y el renglón vacío.
+- **Las fotos del ejemplo** (`public/tutorial/terraza-{1,2,3}.webp`, 60 a 72 KB, 3:2, 2:3 y 16:9): **no son las de
+  la lista** de "Fotos del ejemplo". La red de trabajo no deja bajar de Commons y bajar archivos pide permiso de Lega,
+  así que se dibujaron para la app (una terraza de noche, con un script de canvas que no se versiona); no hay nada de
+  terceros que atribuir (`LICENSES.txt`). Si Lega prefiere fotos, se reemplazan con los mismos nombres (son un
+  contrato público). Regla de Workbox `CacheFirst` para `/tutorial/*.webp` (corrección 18).
+- **El motor** (`TourLayer.tsx`, aparte): foco de luz con sombra de 100vmax que se desliza en 250 ms y pulsa (nada con
+  movimiento reducido), una capa que no deja tocar lo señalado salvo en el paso interactivo, globito con `n/total`,
+  *Atrás*, *Siguiente* / *Terminar* y *Saltar recorrida*; → y Enter avanzan, ← vuelve, Esc sale con el aviso; región
+  `aria-live`; los tooltips se apagan mientras dura; se esconde si se abre un diálogo o el carrete. Posición con
+  `placeNear` (`src/ui/floating.ts`), que ahora también usa `Tooltip.tsx`. En el teléfono, hoja abajo arriba del
+  teclado (o arriba, si taparía lo señalado, como el "?" del pie del cajón). El cajón pasó a un almacén
+  (`src/ui/navStore.ts`) y la recorrida lo abre en los pasos que lo piden.
+- **Diferencias con el diseño, para que Lega confirme:**
+  1. **El paso del menú "/" avanza cuando el menú se cierra** (se eligió algo o Esc), no cuando aparece: si avanzaba al
+     aparecer, el foco se iba al globito y el menú se cerraba antes de poder usarlo. *Siguiente* sigue disponible. Se
+     mira el estado de la extensión `suggestionMenu` de BlockNote, no su clase (corrección 16).
+  2. **En el teléfono sale el paso de Buscar** (quedan nueve): el diseño no decía cuál salía.
+  3. **Primera carga entrando por un link a una página** (sin invitación): también la tarjeta "¿Primera vez?".
+  4. **El punto del "?"** está mientras la recorrida no se terminó en este dispositivo y la ayuda nunca se abrió en él.
+- **Arranque y "ya la vi"** (`tourState.ts` y `TourHost.tsx`, en la primera carga): `Services.firstLoad` dice si la
+  base local no tenía proyecto (corrección 5); el dispositivo guarda `{ v, done, step, account }` en
+  `shotdocs-tour`; la cuenta, `shotdocs_tour: 1` en los metadatos del usuario de Supabase Auth del workspace (se lee
+  con `getSession`, sin red; se escribe con `updateUser`, y sin red queda `account: false` y se reintenta al abrir y
+  al volver la red). Nada va a `user_settings.prefs` (corrección 12).
+
+### Pruebas
+
+- `src/ui/shortcuts.test.ts`: el registro (ids, textos, rótulos de las dos plataformas, sin choques), el editor real
+  contra el registro en los dos sentidos (BlockNote, Tiptap y nuestras extensiones; las reglas de lo que se escribe),
+  cada `is…Shortcut` con eventos de Mac y de Windows, ninguna función de atajos sin registrar, ninguna combinación
+  suelta en el código y ningún archivo que escucha teclas fuera del registro; los rótulos del menú "/".
+- `src/help/help.test.tsx`: la búsqueda (atajos escritos de varias formas, tildes, los dos idiomas) y el diálogo en
+  el Shell (lo abren el "?" y el menú, ninguna tecla, Esc devuelve el foco, castellano).
+- `src/tutorial/tourState.test.ts`: cuándo arranca (los siete casos), la marca de la cuenta (con y sin red, sin tocar
+  las preferencias), los pasos por diseño y que cada `data-tour` exista.
+- `src/tutorial/practice.test.tsx`: aislamiento con el Shell y la app de verdad (escribir, comentar, contestar y
+  resolver la pregunta, la hoja, buscar, agregar archivos, empezar de nuevo, salir: el servidor, la base local
+  `meta`, las colas, los contadores de "sin subir" y `localStorage` quedan iguales; lo que escribiría tira
+  `PracticeWriteError`) y el motor (arranque, Siguiente, Atrás, flechas, Esc con el aviso, sin ancla al centro,
+  pausa y seguir, retomar, la cuenta que ya la vio con el punto y la ayuda, el link de invitación).
+- En Chromium sin ventana (un arnés con el servidor en memoria, fuera del repo): la ayuda en computadora, teléfono y
+  oscuro; la recorrida entera en computadora y teléfono (claro y oscuro), cada foco de luz dentro de la pantalla y
+  sobre su ancla; "/" y elegir avanza el paso 4; Esc, volver a verla desde la ayuda, recargar a mitad y retomar, el
+  punto, la tarjeta del link, sin red al terminar, movimiento reducido y cero pedidos de red en la práctica.
+- **Falta probar a mano:** Safari de la Mac, el iPhone (Safari y la app instalada, con el teclado en pantalla en el
+  paso del menú "/"), Firefox y VoiceOver. La prueba de punta a punta `tour.mjs` del repo de pruebas privado todavía
+  no está.

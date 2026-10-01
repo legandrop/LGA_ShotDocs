@@ -16,7 +16,8 @@ import { editorSchemaOptions } from './editorSchema';
 import { isFindShortcut, isStepShortcut } from './findUi';
 import { isPrintShortcut } from './printPage';
 import { isSearchShortcut } from './projectSearchUi';
-import { keyLabel, shortcut, shortcutLabel, SHORTCUT_PLACES, SHORTCUTS, type Shortcut } from './shortcuts';
+import { SHORTCUT_FILES, SHORTCUT_RULES } from './shortcutSources';
+import { keyLabel, shortcut, shortcutLabel, SHORTCUT_PLACES, SHORTCUTS, slashBadge, type Shortcut } from './shortcuts';
 
 // El registro único de atajos (Docs/Doc_Tutorial.md, sección 6) contra lo que hace la app de verdad: el editor
 // real (BlockNote, Tiptap y nuestras extensiones), las funciones `is…Shortcut`, los archivos que escuchan teclas
@@ -42,12 +43,12 @@ describe('el registro', () => {
       expect(key, `${s.id} sin texto en shortcutTexts.ts`).toBeTruthy();
       expect(translate('en', key)).not.toBe(key);
       expect(translate('es', key)).not.toBe(key);
-      if (s.source === 'window' || s.source === 'dom') expect(s.files?.length, `${s.id} sin archivos`).toBeGreaterThan(0);
-      if (s.source === 'typed' && s.id !== 'mdSlash') expect(s.rules?.length, `${s.id} sin reglas`).toBeGreaterThan(0);
+      if (s.source === 'window' || s.source === 'dom') expect(SHORTCUT_FILES[s.id]?.length, `${s.id} sin archivos`).toBeGreaterThan(0);
+      if (s.source === 'typed' && s.id !== 'mdSlash') expect(SHORTCUT_RULES[s.id]?.length, `${s.id} sin reglas`).toBeGreaterThan(0);
     }
     for (const place of SHORTCUT_PLACES) expect(translate('es', PLACE_TEXTS[place])).not.toBe(PLACE_TEXTS[place]);
     // Nada de textos que sobren.
-    for (const id of Object.keys(SHORTCUT_TEXTS)) expect(() => shortcut(id)).not.toThrow();
+    for (const id of [...Object.keys(SHORTCUT_TEXTS), ...Object.keys(SHORTCUT_FILES), ...Object.keys(SHORTCUT_RULES)]) expect(() => shortcut(id)).not.toThrow();
   });
 
   it('rótulos de la Mac (con ⌘, nunca Ctrl) y del resto', () => {
@@ -72,6 +73,15 @@ describe('el registro', () => {
       expect(mac, s.id).not.toMatch(/Ctrl/);
       expect(keyLabel('Mod-x', true)).toBe('⌘X');
     }
+  });
+
+  it('los rótulos del menú "/" salen del registro, y "Bloque de código" queda sin el ⌘⌥C que no existe', () => {
+    expect(slashBadge('heading_2', false)).toBe('Ctrl+Alt+2');
+    expect(slashBadge('heading', true)).toBe('⌘⌥1');
+    expect(slashBadge('numbered_list', false)).toBe('Ctrl+Shift+7');
+    expect(slashBadge('paragraph', true)).toBe('⌘⌥0');
+    expect(slashBadge('code_block', false)).toBeUndefined();
+    expect(slashBadge(undefined)).toBeUndefined();
   });
 
   it('sin choques: las mismas teclas en lugares que se pisan solo con distinto contexto', () => {
@@ -173,7 +183,7 @@ describe('el editor real contra el registro', () => {
       .filter(([key, ext]) => !NOT_IN_APP.has(key) && (ext.inputRules?.length ?? 0) > 0)
       .map(([key]) => key)
       .sort();
-    const listed = SHORTCUTS.flatMap((s) => s.rules ?? []).sort();
+    const listed = Object.values(SHORTCUT_RULES).flat().sort();
     expect(listed).toEqual(withRules);
   });
 });
@@ -270,7 +280,7 @@ describe('el código contra el registro', () => {
   });
 
   it('cada archivo que mira las teclas de un evento figura en el registro', () => {
-    const listed = new Set(SHORTCUTS.flatMap((s) => s.files ?? []));
+    const listed = new Set(Object.values(SHORTCUT_FILES).flat());
     // Lo que mira la tecla sin ser un atajo: escribir con un IME, la barra espaciadora que abre el carrete está
     // en PageEditor (listado), los menús de la barra de BlockNote (botones, no teclas).
     const missing: string[] = [];

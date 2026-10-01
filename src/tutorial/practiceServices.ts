@@ -325,7 +325,8 @@ function practiceServices(real: Services, session: PracticeSession): Services {
   return {
     workspace: real.workspace,
     user: real.user,
-    client: readOnly(real.client, 'client', []),
+    // El cliente de Supabase: nada (tampoco su `auth`, que es un objeto y no una función).
+    client: readOnly(real.client, 'client', [], { auth: readOnly(real.client.auth, 'client.auth', []) }),
     db: null as never,
     tree,
     docs: readOnly(real.docs, 'docs', DOCS_READS),

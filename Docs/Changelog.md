@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.079 :
+
+Faltaban una ayuda y una forma de aprender la app. Ahora el "?" al lado de Papelera (o *Help and shortcuts* en el
+menú de la cuenta) abre la ayuda: cada función explicada, todos los atajos de teclado por lugar y una búsqueda
+("ctrl f", "carrete"). La primera vez, una recorrida de diez pasos (nueve en el teléfono) que se avanza con *Next*
+muestra lo principal sobre una página de práctica en `/practice`: el editor de verdad, pero no se guarda, no se
+sincroniza y no la ve nadie. Las dos se vuelven a abrir desde la ayuda. "Ya la vi" queda en el dispositivo y en la
+cuenta. Los atajos salen de un solo registro (`src/ui/shortcuts.ts`) y una prueba falla si uno del código no está
+ahí, así la ayuda no queda vieja.
+[ Ayuda, recorrida y página de práctica (P.13, entregas 1 y 2) ]
+
 v0.077 :
 
 No había forma de sacar un proyecto de la lista: la base no dejaba borrar proyectos y la app no tenía nada para

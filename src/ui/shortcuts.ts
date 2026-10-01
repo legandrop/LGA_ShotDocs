@@ -5,7 +5,7 @@
 // atajo nuevo que no esté acá hace fallar la suite.
 //
 // Va en la primera carga y es chico: los textos que explican cada atajo están en la ayuda, que se baja aparte
-// (`src/help/shortcutTexts.ts`).
+// (`src/help/shortcutTexts.ts`), y qué archivos maneja cada uno, en `shortcutSources.ts` (solo lo usan las pruebas).
 
 /** En la Mac los atajos son con ⌘ (nunca Ctrl); en el resto, con Ctrl. Una sola copia para toda la app. */
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -33,13 +33,10 @@ export interface Shortcut {
   /**
    * Cómo se toma: `keymap` (un atajo de ProseMirror: la prueba lo busca en el editor real), `window` (una
    * función `is…Shortcut` sobre `window`), `dom` (un `onKeyDown` de un componente), `react` (un botón de
-   * BlockNote) o `typed` (se escribe; una regla de entrada de BlockNote).
+   * BlockNote) o `typed` (se escribe; una regla de entrada de BlockNote). Los archivos y las reglas de cada uno
+   * están en `shortcutSources.ts`.
    */
   source: 'keymap' | 'window' | 'dom' | 'react' | 'typed';
-  /** Los archivos que lo manejan (para `dom` y `window`): la prueba revisa que cada archivo con teclas esté acá. */
-  files?: string[];
-  /** Las extensiones de BlockNote cuyas reglas de entrada lo hacen (solo `typed`). */
-  rules?: string[];
   /** Cómo se muestra si no son las teclas de `keys` (por ejemplo, "⌘⌥1…6" en vez de seis atajos). */
   display?: string[];
   /**
@@ -52,20 +49,20 @@ export interface Shortcut {
 /** Lo que se toma con una función sobre `window` o en un componente; los textos van en la ayuda. */
 export const SHORTCUTS: Shortcut[] = [
   // --- En toda la app (con una página abierta) ---
-  { id: 'search', keys: ['Mod-k'], place: 'global', owner: 'app', source: 'window', files: ['Workspace.tsx', 'projectSearchUi.ts'] },
-  { id: 'find', keys: ['Mod-f'], place: 'global', owner: 'app', source: 'window', files: ['PageEditor.tsx', 'findUi.ts'] },
-  { id: 'print', keys: ['Mod-p'], place: 'global', owner: 'app', source: 'window', files: ['printPage.ts'] },
-  { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom', files: ['PageView.tsx', 'PracticeView.tsx'] },
+  { id: 'search', keys: ['Mod-k'], place: 'global', owner: 'app', source: 'window' },
+  { id: 'find', keys: ['Mod-f'], place: 'global', owner: 'app', source: 'window' },
+  { id: 'print', keys: ['Mod-p'], place: 'global', owner: 'app', source: 'window' },
+  { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom' },
 
   // --- Editor: lo de la app ---
-  { id: 'comment', keys: ['Mod-Alt-m'], place: 'editor', owner: 'app', source: 'window', files: ['EditorComments.tsx', 'commentsUi.ts'] },
+  { id: 'comment', keys: ['Mod-Alt-m'], place: 'editor', owner: 'app', source: 'window' },
   { id: 'question', keys: ['Mod-Alt-p'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'script', keys: ['Mod-Alt-s'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'scriptEnter', keys: ['Enter'], place: 'editor', context: 'script', owner: 'app', source: 'keymap' },
   { id: 'paragraph', keys: ['Mod-Alt-0'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'collapse', keys: ['Mod-Alt-Enter'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'collapseEveryone', keys: ['Shift-Mod-Alt-Enter'], place: 'editor', owner: 'app', source: 'keymap', hidden: true },
-  { id: 'selectAll', keys: ['Mod-a'], place: 'editor', owner: 'app', source: 'dom', files: ['collapseEditor.ts'] },
+  { id: 'selectAll', keys: ['Mod-a'], place: 'editor', owner: 'app', source: 'dom' },
 
   // --- Editor: BlockNote ---
   {
@@ -99,83 +96,56 @@ export const SHORTCUTS: Shortcut[] = [
 
   // --- Lo que se escribe al principio de un renglón ---
   { id: 'mdSlash', keys: ['/'], place: 'markdown', owner: 'blocknote', source: 'typed' },
-  {
-    id: 'mdHeading',
-    keys: ['# ', '## ', '### '],
-    place: 'markdown',
-    owner: 'blocknote',
-    source: 'typed',
-    rules: ['heading-shortcuts'],
-  },
-  { id: 'mdBullet', keys: ['- ', '* '], place: 'markdown', owner: 'blocknote', source: 'typed', rules: ['bullet-list-item-shortcuts'] },
-  { id: 'mdNumbered', keys: ['1. '], place: 'markdown', owner: 'blocknote', source: 'typed', rules: ['numbered-list-item-shortcuts'] },
-  { id: 'mdChecklist', keys: ['[] ', '[x] '], place: 'markdown', owner: 'blocknote', source: 'typed', rules: ['check-list-item-shortcuts'] },
-  { id: 'mdQuote', keys: ['> '], place: 'markdown', owner: 'blocknote', source: 'typed', rules: ['quote-block-shortcuts'] },
-  { id: 'mdDivider', keys: ['---'], place: 'markdown', owner: 'blocknote', source: 'typed', rules: ['divider-block-shortcuts'] },
-  { id: 'mdCode', keys: ['```'], place: 'markdown', owner: 'blocknote', source: 'typed', rules: ['code-block-keyboard-shortcuts'] },
+  { id: 'mdHeading', keys: ['# ', '## ', '### '], place: 'markdown', owner: 'blocknote', source: 'typed' },
+  { id: 'mdBullet', keys: ['- ', '* '], place: 'markdown', owner: 'blocknote', source: 'typed' },
+  { id: 'mdNumbered', keys: ['1. '], place: 'markdown', owner: 'blocknote', source: 'typed' },
+  { id: 'mdChecklist', keys: ['[] ', '[x] '], place: 'markdown', owner: 'blocknote', source: 'typed' },
+  { id: 'mdQuote', keys: ['> '], place: 'markdown', owner: 'blocknote', source: 'typed' },
+  { id: 'mdDivider', keys: ['---'], place: 'markdown', owner: 'blocknote', source: 'typed' },
+  { id: 'mdCode', keys: ['```'], place: 'markdown', owner: 'blocknote', source: 'typed' },
 
   // --- Fotos ---
-  { id: 'photoOpen', keys: ['Space'], place: 'photos', context: 'photo', owner: 'app', source: 'dom', files: ['PageEditor.tsx'] },
+  { id: 'photoOpen', keys: ['Space'], place: 'photos', context: 'photo', owner: 'app', source: 'dom' },
   { id: 'photoRowNext', keys: ['ArrowRight'], place: 'photos', context: 'row', owner: 'app', source: 'keymap' },
   { id: 'photoRowPrev', keys: ['ArrowLeft'], place: 'photos', context: 'row', owner: 'app', source: 'keymap' },
   { id: 'photoRowLeave', keys: ['ArrowUp', 'ArrowDown'], place: 'photos', context: 'row', owner: 'app', source: 'keymap' },
   { id: 'photoRowEnter', keys: ['Enter'], place: 'photos', context: 'row', owner: 'app', source: 'keymap' },
-  { id: 'photoInlineMove', keys: ['ArrowLeft', 'ArrowRight'], place: 'photos', context: 'inline', owner: 'app', source: 'dom', files: ['inlinePhotoEditor.ts'] },
+  { id: 'photoInlineMove', keys: ['ArrowLeft', 'ArrowRight'], place: 'photos', context: 'inline', owner: 'app', source: 'dom' },
 
   // --- Carrete ---
-  { id: 'carretePrev', keys: ['ArrowLeft'], place: 'carrete', owner: 'app', source: 'dom', files: ['Carrete.tsx'] },
-  { id: 'carreteNext', keys: ['ArrowRight'], place: 'carrete', owner: 'app', source: 'dom', files: ['Carrete.tsx'] },
-  { id: 'carreteEnds', keys: ['Home', 'End'], place: 'carrete', owner: 'app', source: 'dom', files: ['Carrete.tsx'] },
-  { id: 'carreteClose', keys: ['Escape'], place: 'carrete', owner: 'app', source: 'dom', files: ['Carrete.tsx'] },
+  { id: 'carretePrev', keys: ['ArrowLeft'], place: 'carrete', owner: 'app', source: 'dom' },
+  { id: 'carreteNext', keys: ['ArrowRight'], place: 'carrete', owner: 'app', source: 'dom' },
+  { id: 'carreteEnds', keys: ['Home', 'End'], place: 'carrete', owner: 'app', source: 'dom' },
+  { id: 'carreteClose', keys: ['Escape'], place: 'carrete', owner: 'app', source: 'dom' },
 
   // --- Buscar en la página ---
-  { id: 'findNext', keys: ['Enter', 'F3', 'Mod-g'], place: 'find', owner: 'app', source: 'dom', files: ['FindBar.tsx', 'findUi.ts'] },
-  { id: 'findPrev', keys: ['Shift-Enter', 'Shift-F3', 'Mod-Shift-g'], place: 'find', owner: 'app', source: 'dom', files: ['FindBar.tsx', 'findUi.ts'] },
-  { id: 'findClose', keys: ['Escape'], place: 'find', owner: 'app', source: 'dom', files: ['FindBar.tsx'] },
+  { id: 'findNext', keys: ['Enter', 'F3', 'Mod-g'], place: 'find', owner: 'app', source: 'dom' },
+  { id: 'findPrev', keys: ['Shift-Enter', 'Shift-F3', 'Mod-Shift-g'], place: 'find', owner: 'app', source: 'dom' },
+  { id: 'findClose', keys: ['Escape'], place: 'find', owner: 'app', source: 'dom' },
 
   // --- Comentarios ---
-  { id: 'commentsSend', keys: ['Mod-Enter'], place: 'comments', owner: 'app', source: 'dom', files: ['CommentsPanel.tsx', 'commentsUi.ts'] },
-  { id: 'commentsCancel', keys: ['Escape'], place: 'comments', owner: 'app', source: 'dom', files: ['CommentsPanel.tsx'] },
+  { id: 'commentsSend', keys: ['Mod-Enter'], place: 'comments', owner: 'app', source: 'dom' },
+  { id: 'commentsCancel', keys: ['Escape'], place: 'comments', owner: 'app', source: 'dom' },
 
   // --- Árbol de páginas y barra lateral ---
-  { id: 'treeStep', keys: ['ArrowUp', 'ArrowDown'], place: 'tree', owner: 'app', source: 'dom', files: ['Sidebar.tsx', 'treeNav.ts'] },
-  { id: 'treeEnds', keys: ['Home', 'End'], place: 'tree', owner: 'app', source: 'dom', files: ['Sidebar.tsx', 'treeNav.ts'] },
-  { id: 'treeExpand', keys: ['ArrowRight'], place: 'tree', owner: 'app', source: 'dom', files: ['Sidebar.tsx', 'treeNav.ts'] },
-  { id: 'treeCollapse', keys: ['ArrowLeft'], place: 'tree', owner: 'app', source: 'dom', files: ['Sidebar.tsx', 'treeNav.ts'] },
-  { id: 'treeOpen', keys: ['Enter', 'Space'], place: 'tree', owner: 'app', source: 'dom', files: ['Sidebar.tsx', 'treeNav.ts'] },
-  { id: 'treeRename', keys: ['Enter', 'Escape'], place: 'tree', context: 'rename', owner: 'app', source: 'dom', files: ['Sidebar.tsx'] },
-  { id: 'sidebarResize', keys: ['ArrowLeft', 'ArrowRight', 'Home', 'End'], place: 'tree', context: 'resizer', owner: 'app', source: 'dom', files: ['SidebarResizer.tsx'] },
+  { id: 'treeStep', keys: ['ArrowUp', 'ArrowDown'], place: 'tree', owner: 'app', source: 'dom' },
+  { id: 'treeEnds', keys: ['Home', 'End'], place: 'tree', owner: 'app', source: 'dom' },
+  { id: 'treeExpand', keys: ['ArrowRight'], place: 'tree', owner: 'app', source: 'dom' },
+  { id: 'treeCollapse', keys: ['ArrowLeft'], place: 'tree', owner: 'app', source: 'dom' },
+  { id: 'treeOpen', keys: ['Enter', 'Space'], place: 'tree', owner: 'app', source: 'dom' },
+  { id: 'treeRename', keys: ['Enter', 'Escape'], place: 'tree', context: 'rename', owner: 'app', source: 'dom' },
+  { id: 'sidebarResize', keys: ['ArrowLeft', 'ArrowRight', 'Home', 'End'], place: 'tree', context: 'resizer', owner: 'app', source: 'dom' },
 
   // --- Menús, paneles y diálogos ---
-  { id: 'menusMove', keys: ['ArrowUp', 'ArrowDown', 'Home', 'End'], place: 'menus', owner: 'app', source: 'dom', files: ['menus.tsx'] },
-  {
-    id: 'menusClose',
-    keys: ['Escape'],
-    place: 'menus',
-    owner: 'app',
-    source: 'dom',
-    files: [
-      'menus.tsx',
-      'MoveDialog.tsx',
-      'ShareDialog.tsx',
-      'MembersDialog.tsx',
-      'DriveDialog.tsx',
-      'PageFormatDialog.tsx',
-      'ProjectStatesPart.tsx',
-      'WorkspaceMenu.tsx',
-      'Welcome.tsx',
-      'AttachmentSheet.tsx',
-      'Tooltip.tsx',
-      'HelpDialog.tsx',
-    ],
-  },
-  { id: 'listPick', keys: ['ArrowUp', 'ArrowDown', 'Enter'], place: 'menus', context: 'list', owner: 'app', source: 'dom', files: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'] },
-  { id: 'listClose', keys: ['Escape'], place: 'menus', context: 'list', owner: 'app', source: 'dom', files: ['ProjectSwitcher.tsx', 'ProjectSearch.tsx', 'DrivePasteMenu.tsx'] },
+  { id: 'menusMove', keys: ['ArrowUp', 'ArrowDown', 'Home', 'End'], place: 'menus', owner: 'app', source: 'dom' },
+  { id: 'menusClose', keys: ['Escape'], place: 'menus', owner: 'app', source: 'dom' },
+  { id: 'listPick', keys: ['ArrowUp', 'ArrowDown', 'Enter'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
+  { id: 'listClose', keys: ['Escape'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
 
   // --- La recorrida (con el foco en el globito) ---
-  { id: 'tourNext', keys: ['ArrowRight', 'Enter'], place: 'tour', owner: 'app', source: 'dom', files: ['TourLayer.tsx'] },
-  { id: 'tourBack', keys: ['ArrowLeft'], place: 'tour', owner: 'app', source: 'dom', files: ['TourLayer.tsx'] },
-  { id: 'tourExit', keys: ['Escape'], place: 'tour', owner: 'app', source: 'dom', files: ['TourLayer.tsx'] },
+  { id: 'tourNext', keys: ['ArrowRight', 'Enter'], place: 'tour', owner: 'app', source: 'dom' },
+  { id: 'tourBack', keys: ['ArrowLeft'], place: 'tour', owner: 'app', source: 'dom' },
+  { id: 'tourExit', keys: ['Escape'], place: 'tour', owner: 'app', source: 'dom' },
 ];
 
 const byId = new Map(SHORTCUTS.map((s) => [s.id, s]));

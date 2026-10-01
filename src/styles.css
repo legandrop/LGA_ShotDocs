@@ -4964,8 +4964,11 @@ mark.search-hit {
   padding: 0;
 }
 
+.help-search input:focus,
 .help-search input:focus-visible {
   outline: none;
+  box-shadow: none;
+  border: none;
 }
 
 .help-search:focus-within {
