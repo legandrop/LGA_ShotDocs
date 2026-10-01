@@ -512,8 +512,7 @@ veces el HEIC (3,3 a 6,5 MB) y lleva el perfil Display P3 entero.
   repartidos. Un canvas entero vacío (blanco o negro) sí se rechaza, y es lo que se conoce del tope de iOS. Se
   cerraría rechazando también cuando una mitad entera, la de arriba o la de abajo, es distinta.
 - **`min_app_version` frena la cola de archivos desde v0.090** (antes, revisado en v0.086, solo frenaba el
-  contenido). La app nueva se frena sola, y la migración `20261006120000_version_minima_archivos.sql` (sin aplicar
-  todavía) frena a las versiones publicadas cuando la mínima es 0.090 o más: una pestaña de v0.074 queda con el
+  contenido). La app nueva se frena sola, y la migración `20261006120000_version_minima_archivos.sql` frena a las versiones publicadas cuando la mínima es 0.090 o más: una pestaña de v0.074 queda con el
   HEIC detenido en el dispositivo, sin perderlo, hasta actualizar. Ojo: al actualizar, un HEIC que esa versión
   guardó sin la marca de convertir se registra tal cual (el freno lo demora, no lo convierte). Detalle en
   `Doc_Sincronizacion.md`, "La versión mínima y los archivos".

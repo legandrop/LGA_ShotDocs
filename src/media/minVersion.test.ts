@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -226,6 +227,38 @@ describe('versión mínima: los pedidos de archivos llevan la versión', () => {
     ]);
   });
 
+  it('si la de siempre dice app_outdated (la migración llegó en los 10 minutos), repite una vez con versión', async () => {
+    let migrated = false;
+    const rpc = vi.fn(async (_fn: string, args: Record<string, unknown>) => {
+      if ('p_app_version' in args) {
+        return migrated
+          ? { data: 'ok', error: null, status: 200 }
+          : { data: null, error: { code: 'PGRST202', message: 'Could not find the function' }, status: 404 };
+      }
+      return migrated
+        ? { data: null, error: { code: 'P0001', message: 'app_outdated' }, status: 400 }
+        : { data: 'ok', error: null, status: 200 };
+    });
+    const remote = new SupabaseRemote({ rpc } as never, '0.090');
+    expect(await remote.linkPageFile('p', 'f')).toBe('ok');
+    // Se aplica la migración y la mínima sube a 0.090 antes de los 10 minutos.
+    migrated = true;
+    rpc.mockClear();
+    expect(await remote.linkPageFile('p', 'f')).toBe('ok');
+    expect(rpc.mock.calls.map((c) => 'p_app_version' in c[1])).toEqual([false, true]);
+    // Y desde ahí, directo con versión.
+    rpc.mockClear();
+    expect(await remote.linkPageFile('p', 'f')).toBe('ok');
+    expect(rpc.mock.calls.map((c) => 'p_app_version' in c[1])).toEqual([true]);
+  });
+
+  it('con versión, app_outdated no se repite: esta versión es menor a la mínima', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: { code: 'P0001', message: 'app_outdated' }, status: 400 }));
+    const remote = new SupabaseRemote({ rpc } as never, '0.090');
+    await expect(remote.registerFile({ id: 'f', pageId: 'p', name: 'a.jpg', mime: 'image/jpeg', size: 1, width: null, height: null, duration: null })).rejects.toThrow('app_outdated');
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
   it('app_outdated de la base llega como tal (la cola lo reconoce)', async () => {
     const rpc = vi.fn(async () => ({ data: null, error: { code: 'P0001', message: 'app_outdated' }, status: 400 }));
     const remote = new SupabaseRemote({ rpc } as never, '0.050');
@@ -233,5 +266,34 @@ describe('versión mínima: los pedidos de archivos llevan la versión', () => {
     expect(err).toBeInstanceOf(RemoteError);
     expect((err as RemoteError).message).toBe('app_outdated');
     expect((err as RemoteError).permanent).toBe(true);
+  });
+});
+
+describe('versión mínima: el umbral de la migración', () => {
+  const MIGRATION = '20261006120000_version_minima_archivos';
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+
+  it('es la versión de la entrada del changelog que la nombra (si se renumera la tanda, esto falla)', () => {
+    // La versión con la que sale: la entrada del changelog que nombra la migración (la app la toma del changelog).
+    const changelog = read('../../Docs/Changelog.md');
+    const at = changelog.indexOf(MIGRATION);
+    expect(at).toBeGreaterThan(0);
+    const headers = [...changelog.slice(0, at).matchAll(/^v(\d+\.\d{3}) :$/gm)];
+    const version = headers[headers.length - 1]?.[1];
+    expect(version).toMatch(/^\d+\.\d{3}$/);
+
+    // El umbral de `private.files_version_allowed`: una sola comparación con la mínima.
+    const migration = read(`../../supabase/migrations/${MIGRATION}.sql`);
+    const thresholds = [...migration.matchAll(/min_app_version >= (\d+\.\d{3})/g)].map((m) => m[1]);
+    expect(thresholds).toEqual([version]);
+
+    // La prueba SQL: la mínima más alta que pone es el umbral, la otra queda abajo, y rechaza la versión de antes.
+    const test = read(`../../supabase/tests/version_minima_archivos_permisos.sql`);
+    const minimums = [...test.matchAll(/set min_app_version = (\d+\.\d{3});/g)].map((m) => Number(m[1]));
+    expect(Math.max(...minimums).toFixed(3)).toBe(version);
+    expect(Math.min(...minimums)).toBeLessThan(Number(version));
+    const before = (Number(version) - 0.001).toFixed(3);
+    expect(test).toContain(`'${before}'`);
+    expect(test).toContain(`'${version}') = 'ok'`);
   });
 });

@@ -7,7 +7,7 @@ archivos (por ejemplo, un HEIC sin convertir), porque `register_file`, `link_pag
 recibían la versión y la cola de archivos no miraba el aviso de actualizar. Ahora la cola se frena sola con una
 versión menor a la mínima: no registra, no sube al portero, no manda usos ni manda a la papelera de Drive, y una
 carpeta no se puede soltar. Todo queda en el dispositivo, contado como pendiente y sin error, y sale al actualizar.
-Para las versiones ya publicadas, la migración `20261006120000_version_minima_archivos.sql` (sin aplicar) suma esas
+Para las versiones ya publicadas, la migración `20261006120000_version_minima_archivos.sql` suma esas
 funciones con `p_app_version`; las de siempre las llaman solo versiones anteriores y dejan de andar cuando la mínima
 es 0.090 o más.
 [ Versión mínima - también frena la cola de archivos ]

@@ -958,7 +958,9 @@ registrando y subiendo archivos (por ejemplo, un HEIC sin pasar a JPEG, `Doc_Ima
 **Para que frene a las versiones viejas:** aplicar la migración (con copia de seguridad), publicar la v0.090 y,
 cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.090 o más. 0.090 está escrito en
 `private.files_version_allowed`: si esta versión se publica con otro número, se cambia ahí y en la prueba antes de
-aplicar. El portero no recibe la versión: una versión vieja con un archivo ya registrado puede terminar de subir su
+aplicar (`minVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la migración). Si la app
+abrió antes de la migración (usa la función de siempre por 10 minutos) y la base le contesta `app_outdated`, repite
+el pedido una vez con versión. El portero no recibe la versión: una versión vieja con un archivo ya registrado puede terminar de subir su
 original, que no cambia nada de lo que la base sabe del archivo. Un HEIC que una versión anterior a v0.075 guardó
 sin la marca de convertir se registra tal cual cuando la app se actualiza: el freno lo demora, no lo convierte.
 

@@ -779,6 +779,12 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
       this.versionedFilesMissingAt = Date.now();
       return this.fileRpc(name, args);
     }
+    // La de siempre dijo `app_outdated`: la base ya tiene la función con versión (la migración llegó en estos 10
+    // minutos) y una mínima de 0.090 o más. Se repite una vez con versión, que es la que vale para esta app.
+    if (error?.message === APP_OUTDATED && !versioned) {
+      this.versionedFilesMissingAt = 0;
+      return this.fileRpc(name, args);
+    }
     if (error) throw toRemoteError(error, status);
     return data;
   }
