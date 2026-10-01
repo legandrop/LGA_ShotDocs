@@ -236,6 +236,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
      distintos: hoy, con el portero colgado para todos, gasta un minuto por archivo.
    - **Recordar el plazo que funcionó.** Detrás de un antivirus o un proxy que recibe el cuerpo de golpe,
      cada archivo vuelve a empezar con el plazo corto y se traba una o más veces antes de pasar.
+   - **Casos raros en que espera o reintenta de más** (no pierden ni duplican): una pestaña tan frenada
+     que el vigilante mira menos de una vez cada 90 s no corta nunca mientras dure (descontar a lo sumo uno
+     o dos huecos seguidos sin movimiento); si el equipo se suspende mientras sale el cuerpo, la espera de
+     la respuesta queda hasta 120 s más larga; y una subida que el portero pierde en cada vuelta reintenta
+     siempre a los 10 s en vez de espaciarse (comparar contra el máximo confirmado del intento).
 
 ### C. Esperan a Lega
 
