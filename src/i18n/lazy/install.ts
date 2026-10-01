@@ -33,8 +33,8 @@ export const installDialog = {
   // iPhone y iPad (Safari).
   'installDialog.ios.share': { en: "Tap the **Share** button", es: "Tocá el botón **Compartir**" },
   'installDialog.ios.shareNote': {
-    en: "At the bottom of Safari (at the top on iPad). If you only see the address bar, tap **⋯** first.",
-    es: "Abajo en Safari (arriba en el iPad). Si solo ves la barra de la dirección, tocá primero **⋯**.",
+    en: "On iOS 26: **⋯** at the right of the address bar → **Share**. Before iOS 26 it's at the bottom of Safari (at the top on iPad).",
+    es: "En iOS 26: **⋯** a la derecha de la barra de la dirección → **Compartir**. Antes de iOS 26 está abajo en Safari (arriba en el iPad).",
   },
   'installDialog.ios.add': { en: "Tap **Add to Home Screen**", es: "Tocá **Agregar a pantalla de inicio**" },
   'installDialog.ios.addNote': {
@@ -54,8 +54,8 @@ export const installDialog = {
     es: "Abrí **Shot Docs** desde la pantalla de inicio y entrá con tu mail",
   },
   'installDialog.ios.openNote': {
-    en: "The app keeps its own data, apart from Safari, so it asks you to sign in once. Before switching, wait until this page says **All synced**: changes not uploaded yet stay in Safari until you open it again.",
-    es: "La app guarda sus datos aparte de Safari, así que pide entrar una vez. Antes de pasarte, esperá a que esta página diga **Todo sincronizado**: lo que falta subir queda en Safari hasta que lo vuelvas a abrir.",
+    en: "The app keeps its own data, apart from Safari, so it asks you to sign in once and downloads your pages again. Before switching, wait until nothing is left to upload: the icon at the top right turns into a green check mark. Changes not uploaded yet stay in Safari until you open it again.",
+    es: "La app guarda sus datos aparte de Safari, así que pide entrar una vez y vuelve a bajar tus páginas. Antes de pasarte, esperá a que no quede nada por subir: el ícono de arriba a la derecha pasa a ser un tilde verde. Lo que falta subir queda en Safari hasta que lo vuelvas a abrir.",
   },
   'installDialog.ios.otherBrowser': {
     en: "In Chrome, Edge or Firefox on iPhone (iOS 16.4 or later) the **Share** button is in the address bar or in the menu. If **Add to Home Screen** isn't there, open this page in Safari.",
@@ -69,6 +69,10 @@ export const installDialog = {
   'installDialog.linkCopied': { en: "Link copied", es: "Link copiado" },
 
   // Android (Chrome).
+  'installDialog.android.inApp': {
+    en: "This browser runs inside another app and can't install apps. Open this page in **Chrome**: look for **Open in Chrome** or **Open in browser** in its menu (often **⋮**), or copy the link and paste it in Chrome.",
+    es: "Este navegador corre adentro de otra app y no puede instalar apps. Abrí esta página en **Chrome**: buscá **Abrir en Chrome** o **Abrir en el navegador** en su menú (muchas veces **⋮**), o copiá el link y pegalo en Chrome.",
+  },
   'installDialog.android.menu': { en: "Tap the **⋮** menu", es: "Tocá el menú **⋮**" },
   'installDialog.android.menuNote': { en: "Top right in Chrome.", es: "Arriba a la derecha en Chrome." },
   'installDialog.android.install': { en: "Tap **Install app**", es: "Tocá **Instalar app**" },

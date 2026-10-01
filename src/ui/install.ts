@@ -13,6 +13,7 @@ import { useSyncExternalStore } from 'react';
  * - `ios-browser`: iPhone o iPad con Chrome, Edge o Firefox (desde iOS 16.4 también pueden; si no, Safari).
  * - `ios-inapp`: un navegador adentro de otra app (Instagram, Gmail, el de Google...): no puede instalar.
  * - `android`: Android (Chrome y casi todos los demás instalan).
+ * - `android-inapp`: un navegador adentro de otra app en Android (Instagram, Facebook, un WebView): no instala.
  * - `desktop-chromium`: Chrome, Edge, Brave u Opera en una computadora.
  * - `mac-safari`: Safari en la Mac (Archivo → Agregar al Dock, macOS Sonoma o más nuevo).
  * - `desktop-other`: Firefox u otro navegador de computadora que no instala apps web.
@@ -22,6 +23,7 @@ export type InstallPlatform =
   | 'ios-browser'
   | 'ios-inapp'
   | 'android'
+  | 'android-inapp'
   | 'desktop-chromium'
   | 'mac-safari'
   | 'desktop-other';
@@ -52,7 +54,11 @@ export function detectPlatform(device: DeviceInfo = currentDevice()): InstallPla
     if (/CriOS|EdgiOS|FxiOS|OPiOS|OPT\//.test(ua)) return 'ios-browser';
     return 'ios-safari';
   }
-  if (/Android/.test(ua)) return 'android';
+  if (/Android/.test(ua)) {
+    // Los WebView de Android dicen `; wv)`; las apps conocidas se nombran solas.
+    if (/; wv\)|FBAN|FBAV|FB_IAB|Instagram|Line\/|GSA\/|LinkedInApp|Snapchat|TikTok|musical_ly|MicroMessenger/.test(ua)) return 'android-inapp';
+    return 'android';
+  }
   if (/Firefox\//.test(ua)) return 'desktop-other';
   if (/Edg\/|Chrome\/|Chromium\//.test(ua)) return 'desktop-chromium';
   if (/Macintosh/.test(ua) && /Safari\//.test(ua)) return 'mac-safari';
@@ -62,16 +68,18 @@ export function detectPlatform(device: DeviceInfo = currentDevice()): InstallPla
 /** La pestaña que se abre primero. */
 export function tabFor(platform: InstallPlatform): InstallTab {
   if (platform.startsWith('ios')) return 'iphone';
-  if (platform === 'android') return 'android';
+  if (platform.startsWith('android')) return 'android';
   return 'computer';
 }
 
 /** Un teléfono o una tableta: ahí va el aviso de arriba (en la computadora queda solo el menú de la cuenta). */
 export function isMobilePlatform(platform: InstallPlatform): boolean {
-  return platform.startsWith('ios') || platform === 'android';
+  return platform.startsWith('ios') || platform.startsWith('android');
 }
 
-const DISPLAY_MODES = ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'];
+// Sin `fullscreen`: es también la pantalla completa del navegador de la computadora (F11), que no es la app
+// instalada (el manifiesto pide `standalone`).
+const DISPLAY_MODES = ['standalone', 'minimal-ui', 'window-controls-overlay'];
 
 /** Esta pestaña es la app instalada (abierta desde la pantalla de inicio, el Dock o su propia ventana). */
 export function isStandalone(): boolean {

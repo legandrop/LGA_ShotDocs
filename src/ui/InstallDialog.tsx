@@ -97,7 +97,6 @@ export function InstallDialog({ onClose }: { onClose: () => void }) {
                 role="tab"
                 type="button"
                 aria-selected={tab === name}
-                aria-pressed={tab === name}
                 aria-controls="install-panel"
                 tabIndex={tab === name ? 0 : -1}
                 autoFocus={!canPrompt && tab === name}
@@ -111,7 +110,7 @@ export function InstallDialog({ onClose }: { onClose: () => void }) {
           <div id="install-panel" role="tabpanel" aria-labelledby={`install-tab-${tab}`} className="install-panel">
             {tab === here && <p className="mono-label install-here">{tr('installDialog.thisDevice')}</p>}
             {tab === 'iphone' && <IphoneSteps platform={platform} />}
-            {tab === 'android' && <AndroidSteps />}
+            {tab === 'android' && <AndroidSteps platform={platform} />}
             {tab === 'computer' && <ComputerSteps platform={platform} />}
             <p className="muted install-words">{tr('installDialog.words')}</p>
           </div>
@@ -165,7 +164,7 @@ function IphoneSteps({ platform }: { platform: InstallPlatform }) {
   const tr = useT();
   return (
     <>
-      {platform === 'ios-inapp' && <InAppNotice />}
+      {platform === 'ios-inapp' && <InAppNotice text={'installDialog.ios.inApp'} />}
       {platform === 'ios-browser' && (
         <p className="install-box">
           <Marked text={tr('installDialog.ios.otherBrowser')} />
@@ -183,15 +182,15 @@ function IphoneSteps({ platform }: { platform: InstallPlatform }) {
   );
 }
 
-/** Un navegador adentro de otra app: no instala. Se explica cómo pasar a Safari, con el link para copiar. */
-function InAppNotice() {
+/** Un navegador adentro de otra app: no instala. Se explica cómo pasar a Safari o a Chrome, con el link para copiar. */
+function InAppNotice({ text }: { text: Key }) {
   const tr = useT();
   const [copied, setCopied] = useState(false);
   const url = typeof location === 'undefined' ? '' : `${location.origin}/`;
   return (
     <div className="install-box install-warn">
       <p>
-        <Marked text={tr('installDialog.ios.inApp')} />
+        <Marked text={tr(text)} />
       </p>
       <div className="install-link">
         <code>{url.replace(/^https?:\/\//, '').replace(/\/$/, '')}</code>
@@ -211,10 +210,11 @@ function InAppNotice() {
   );
 }
 
-function AndroidSteps() {
+function AndroidSteps({ platform }: { platform: InstallPlatform }) {
   const tr = useT();
   return (
     <>
+      {platform === 'android-inapp' && <InAppNotice text={'installDialog.android.inApp'} />}
       <Steps
         steps={[
           { fig: <FigAndroidMenu />, text: 'installDialog.android.menu', note: 'installDialog.android.menuNote' },
@@ -302,6 +302,7 @@ const TABS_GLYPH = 'M6.75 3.5h8.75a1 1 0 0 1 1 1v8.75M4 6.25h8.75a1 1 0 0 1 1 1V
 const ADD_SQUARE =
   'M4.75 3.25h10.5a1.5 1.5 0 0 1 1.5 1.5v10.5a1.5 1.5 0 0 1-1.5 1.5H4.75a1.5 1.5 0 0 1-1.5-1.5V4.75a1.5 1.5 0 0 1 1.5-1.5zM10 6.75v6.5M6.75 10h6.5';
 const COPY = 'M7 7h8.5v9.5H7zM4.5 13V3.5H13';
+const MORE = 'M4.5 8.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8zm5.5 0a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8zm5.5 0a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z';
 const KEBAB = 'M10 3a1.6 1.6 0 1 1 0 3.2A1.6 1.6 0 0 1 10 3zm0 5.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2zm0 5.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z';
 const INSTALL_PC = 'M3 4h14v9.75H3zM7.25 16.75h5.5M10 6.25v4.75M8 9l2 2 2-2';
 const STAR = 'M10 3.25l2 4.3 4.6.5-3.45 3.1 1 4.6L10 13.4l-4.15 2.35 1-4.6L3.4 8.05 8 7.55z';
@@ -316,14 +317,22 @@ function Url() {
   );
 }
 
-/** La barra de abajo de Safari del iPhone, con Compartir marcado. */
+/**
+ * Safari del iPhone, las dos barras: la compacta de iOS 26 (Compartir está adentro de "⋯", marcado) y la de antes
+ * (Compartir abajo, marcado).
+ */
 function FigIosShare() {
   return (
-    <div className="fig fig-ios">
-      <div className="fig-pill">
-        <span className="fig-aa">aA</span>
+    <div className="fig fig-ios fig-ios-two">
+      <span className="fig-version">iOS 26</span>
+      <div className="fig-pill compact">
+        <Glyph d={BACK} size={13} />
         <Url />
+        <span className="hl round small">
+          <Glyph d={MORE} fill size={13} />
+        </span>
       </div>
+      <span className="fig-version">iOS 18</span>
       <div className="fig-toolbar">
         <Glyph d={BACK} />
         <Glyph d={FORWARD} />

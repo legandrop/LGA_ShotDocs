@@ -50,6 +50,12 @@ const UA = {
     'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Mobile Safari/537.36',
   androidSamsung:
     'Mozilla/5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/28.0 Chrome/130.0.0.0 Mobile Safari/537.36',
+  androidInstagram:
+    'Mozilla/5.0 (Linux; Android 14; SM-S921B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.107 Mobile Safari/537.36 Instagram 356.0.0.41.101 Android',
+  androidFacebook:
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP2A.240805.005; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/127.0.6533.103 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/478.0.0.40.86;]',
+  androidWebView:
+    'Mozilla/5.0 (Linux; Android 13; Pixel 6 Build/TQ3A.230805.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36',
   windowsChrome:
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
   windowsEdge:
@@ -150,6 +156,9 @@ describe('plataforma', () => {
     [UA.iphoneWebView, 5, 'ios-inapp'],
     [UA.androidChrome, 5, 'android'],
     [UA.androidSamsung, 5, 'android'],
+    [UA.androidInstagram, 5, 'android-inapp'],
+    [UA.androidFacebook, 5, 'android-inapp'],
+    [UA.androidWebView, 5, 'android-inapp'],
     [UA.windowsChrome, 0, 'desktop-chromium'],
     [UA.windowsEdge, 0, 'desktop-chromium'],
     [UA.macChrome, 0, 'desktop-chromium'],
@@ -164,6 +173,8 @@ describe('plataforma', () => {
   it('cada plataforma abre su pestaña, y el aviso es solo de teléfonos y tabletas', () => {
     expect(tabFor('ios-inapp')).toBe('iphone');
     expect(tabFor('android')).toBe('android');
+    expect(tabFor('android-inapp')).toBe('android');
+    expect(isMobilePlatform('android-inapp')).toBe(true);
     expect(tabFor('mac-safari')).toBe('computer');
     expect(tabFor('desktop-other')).toBe('computer');
     expect(isMobilePlatform('ios-browser')).toBe(true);
@@ -176,11 +187,14 @@ describe('plataforma', () => {
 describe('instalada o no', () => {
   it('en una pestaña del navegador no; abierta como app (cualquier display-mode de app, o el iPhone viejo), sí', () => {
     expect(isStandalone()).toBe(false);
-    for (const mode of ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay']) {
+    for (const mode of ['standalone', 'minimal-ui', 'window-controls-overlay']) {
       stubDisplayMode(mode);
       expect(isStandalone(), mode).toBe(true);
     }
     stubDisplayMode('browser');
+    expect(isStandalone()).toBe(false);
+    // La pantalla completa del navegador de la computadora (F11) no es la app instalada.
+    stubDisplayMode('fullscreen');
     expect(isStandalone()).toBe(false);
     Object.defineProperty(navigator, 'standalone', { value: true, configurable: true });
     expect(isStandalone()).toBe(true);
@@ -320,9 +334,14 @@ describe('la ventana de pasos', () => {
     expect(steps).toHaveLength(4);
     expect([...steps].every((s) => s.querySelector('.install-fig .fig'))).toBe(true);
     expect(steps[0].textContent).toContain('Share');
+    // iOS 26: Compartir está adentro de "⋯"; el dibujo muestra las dos barras.
+    expect(steps[0].textContent).toContain('On iOS 26: ⋯');
+    expect(steps[0].querySelectorAll('.fig .hl')).toHaveLength(2);
     expect(steps[1].textContent).toContain('Add to Home Screen');
     expect(steps[2].textContent).toContain('Open as Web App');
-    expect(steps[3].textContent).toContain('All synced');
+    // Lo que se ve en el teléfono (el ícono de arriba), no un texto que ahí no aparece.
+    expect(steps[3].textContent).toContain('green check mark');
+    expect(tabs.every((t) => !t.hasAttribute('aria-pressed'))).toBe(true);
     // Lo que se ve escrito en el teléfono va en negrita.
     expect(steps[1].querySelector('strong')?.textContent).toBe('Add to Home Screen');
 
@@ -345,6 +364,15 @@ describe('la ventana de pasos', () => {
     const d = await openDialog();
     expect(d.querySelector('.install-warn')?.textContent).toContain('Safari');
     expect(buttonByText(d, 'Copy link')).toBeDefined();
+  });
+
+  it('en Android adentro de Instagram: abrí en Chrome, con el link para copiar, y los pasos de Android', async () => {
+    setDevice(UA.androidInstagram, 5);
+    const d = await openDialog();
+    expect(d.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain('Android');
+    expect(d.querySelector('.install-warn')?.textContent).toContain('Open in Chrome');
+    expect(buttonByText(d, 'Copy link')).toBeDefined();
+    expect(d.querySelectorAll('.install-step')).toHaveLength(4);
   });
 
   it('en Chrome con el pedido: el botón "Install" instala y cierra; Esc cierra', async () => {
