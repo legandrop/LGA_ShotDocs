@@ -885,6 +885,46 @@ describe('importar la carpeta', () => {
     ]);
   });
 
+  it('al seguir, una página con algo que esta versión no conoce no se toca: queda anotada y sin terminar', async () => {
+    const { a } = await mediaDevice();
+    const folder = makeFolder();
+    await importCoda(folder, spyDeps(a, { failOpen: (n) => n === 3 }).deps);
+    const s1 = findPage(a, '001 | Primera | Iglesia');
+    // La persona la editó con una versión más nueva de la app: un párrafo y un bloque que esta no conoce.
+    const doc = await a.docs.open(s1, { seed: true });
+    doc.transact(() => {
+      const group = doc.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+      const block = new Y.XmlElement('blockContainer');
+      block.setAttribute('id', 'future');
+      const future = new Y.XmlElement('hologram');
+      future.setAttribute('url', 'sdmedia://00000000-0000-4000-8000-000000000001');
+      block.insert(0, [future]);
+      group.insert(group.length, [block]);
+      const paragraph = (group.get(0) as Y.XmlElement).get(0) as Y.XmlElement;
+      (paragraph.get(0) as Y.XmlText).insert(0, 'NOTAS DEL USUARIO');
+    });
+    await a.docs.flush(s1);
+    a.docs.close(s1);
+    const before = await a.docs.open(s1);
+    const vector = Y.encodeStateVector(before);
+    a.docs.close(s1);
+
+    const again = await importCoda(folder, spyDeps(a).deps, { resume: true });
+    // Sin el resguardo, el editor de la importación borraba el bloque desconocido del documento compartido.
+    const after = await a.docs.open(s1);
+    expect(findUnknownContent(after)).toBe('"hologram"');
+    expect(Y.encodeStateVector(after)).toEqual(vector);
+    expect(after.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('NOTAS DEL USUARIO');
+    expect(after.getXmlFragment(CONTENT_FRAGMENT).toString()).not.toContain('Brief Sup');
+    a.docs.close(s1);
+    expect(again.problems).toEqual([
+      '001 | Primera | Iglesia: has content from a newer version of the app: it was not changed (update the app and resume the import)',
+    ]);
+    // Las demás páginas se importaron, y la importación se puede seguir (con la app al día).
+    expect(await pageText(a, findPage(a, '002 | Segunda | Calle'))).toContain('sdmedia://');
+    expect(again.resumable).toBe(true);
+  });
+
   it('al seguir, una página terminada que la persona mandó a la papelera no vuelve', async () => {
     const { a } = await mediaDevice();
     const folder = makeFolder();

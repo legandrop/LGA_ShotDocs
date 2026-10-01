@@ -9,6 +9,7 @@ import { t } from '../i18n';
 import '../i18n/lazy/importCoda';
 import type { LocalDb } from '../sync/localDb';
 import { editorSchemaOptions } from '../ui/editorSchema';
+import { findUnknownContent } from '../ui/unknownContent';
 import type { CommentQueue } from '../sync/comments';
 import { pagePath } from '../router';
 import { checkForeignImages, finishBlocks, prepareCodaHtml, type CodaMedia, type LooseBlock } from './codaHtml';
@@ -659,6 +660,12 @@ async function importPage(
     if (files) problems.push(`${title}: ${t('import.notPlaced', { count: files })}`);
     throw err;
   }
+  // Una página con algo que esta versión no conoce no se tocó (ver `writePage`): queda sin terminar, así al
+  // seguir la importación con la app al día se escribe.
+  if (outcome.result === 'unsupported') {
+    problems.push(`${title}: ${t('import.unsupported')}`);
+    return { files, comments: 0, complete: false };
+  }
   // Lo que la persona escribió en la página después del corte nunca se pisa.
   if (outcome.result === 'appended') problems.push(`${title}: ${t('import.appended')}`);
   // Los comentarios, con los bloques como quedaron (también en una página que la persona editó).
@@ -723,15 +730,23 @@ function hasContent(node: Y.XmlFragment | Y.XmlElement): boolean {
  * escribió la persona: si la página está vacía o sigue como la dejó la importación (`previous`, su huella),
  * la reemplaza; si tiene otra cosa y la importación no la había escrito, agrega lo importado debajo; si la
  * importación la había escrito y la persona la cambió después, no la toca.
+ *
+ * Si la página tiene algo que esta versión del editor no conoce (la editó una versión más nueva de la app),
+ * tampoco la toca (`unsupported`): el editor que se monta acá lo borraría del documento compartido, como en
+ * la página abierta (`unknownContent.ts`), y el borrado llegaría a todos.
  */
 async function writePage(
   docs: ImportDeps['docs'],
   pageId: string,
   blocks: PartialBlock<any, any, any>[],
   previous?: string,
-): Promise<{ result: 'replaced' | 'appended' | 'kept'; fingerprint?: string; blocks: PageBlock[] }> {
+): Promise<{ result: 'replaced' | 'appended' | 'kept' | 'unsupported'; fingerprint?: string; blocks: PageBlock[] }> {
   const doc = await docs.open(pageId, { seed: true });
   const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
+  if (findUnknownContent(doc)) {
+    docs.close(pageId);
+    return { result: 'unsupported', blocks: [] };
+  }
   const edited = hasContent(fragment) && contentFingerprint(fragment) !== previous;
   if (edited && previous) {
     const blocks = pageBlocks(fragment);

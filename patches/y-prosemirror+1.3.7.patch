@@ -1,5 +1,5 @@
 diff --git a/node_modules/y-prosemirror/dist/y-prosemirror.cjs b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
-index de4d1e6..68141df 100644
+index de4d1e6..35962f2 100644
 --- a/node_modules/y-prosemirror/dist/y-prosemirror.cjs
 +++ b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
 @@ -322,37 +322,104 @@ const ySyncPlugin = (yXmlFragment, {
@@ -48,7 +48,7 @@ index de4d1e6..68141df 100644
 +        if (sel) tr.setSelection(sel);
 +      } catch (_err) {
 +        // Keep whatever selection the transaction has.
-+      }
+       }
 +    };
 +    try {
 +      if (relSel.type === 'all') {
@@ -89,7 +89,7 @@ index de4d1e6..68141df 100644
 +        } else if (anchor !== null || head !== null) {
 +          textCursor(inDoc(head) ? head : null);
 +        }
-       }
++      }
 +    } catch (_err) {
 +      textCursor(null);
      }
@@ -133,7 +133,24 @@ index de4d1e6..68141df 100644
  /**
   * @param {ProsemirrorBinding} pmbinding
   * @param {import('prosemirror-state').EditorState} state
-@@ -1009,6 +1076,11 @@ const equalAttrs = (pattrs, yattrs) => {
+@@ -1002,6 +1069,16 @@ const equalAttrs = (pattrs, yattrs) => {
+  * @typedef {Array<Array<PModel.Node>|PModel.Node>} NormalizedPNodeContent
+  */
+ 
++/**
++ * LGA-SHOTDOCS-PATCH (gap text): whether an inline node keeps a (possibly empty) Y.XmlText on each side.
++ * A node type opts in with `lgaGapText: true` in its spec (the app's inline `photo`). No other node type
++ * is affected (`hardBreak` included): what was stored before this part of the patch keeps its shape, and a
++ * version of the app without it writes those nodes exactly the same way.
++ *
++ * @param {any} n prosemirror node, or an array of text nodes
++ */
++const needsGapText = (n) => !(n instanceof Array) && n.isInline === true && n.type.spec.lgaGapText === true;
++
+ /**
+  * @param {any} pnode
+  * @return {NormalizedPNodeContent}
+@@ -1009,6 +1086,11 @@ const equalAttrs = (pattrs, yattrs) => {
  const normalizePNodeContent = (pnode) => {
    const c = pnode.content.content;
    const res = [];
@@ -145,8 +162,29 @@ index de4d1e6..68141df 100644
    for (let i = 0; i < c.length; i++) {
      const n = c[i];
      if (n.isText) {
+@@ -1019,9 +1101,20 @@ const normalizePNodeContent = (pnode) => {
+       i--;
+       res.push(textNodes);
+     } else {
++      // LGA-SHOTDOCS-PATCH (gap text): where there is no text next to a node that asks for it (before,
++      // between or after inline photos), the gap is represented by an empty Y.XmlText. Two devices typing
++      // into the same gap then write into the same Y.XmlText instead of each creating its own (two sibling
++      // Y.XmlText are later merged by copying one into the other and deleting it: what was typed into the
++      // deleted one in the meantime is lost, or ends up twice).
++      const prev = res.length > 0 ? res[res.length - 1] : null;
++      if (!(prev instanceof Array) && (needsGapText(n) || (prev !== null && needsGapText(prev)))) {
++        res.push([]);
++      }
+       res.push(n);
+     }
+   }
++  // LGA-SHOTDOCS-PATCH (gap text): and after the last one.
++  if (res.length > 0 && needsGapText(res[res.length - 1])) res.push([]);
+   return res
+ };
+ 
 diff --git a/node_modules/y-prosemirror/src/plugins/sync-plugin.js b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
-index dccfb76..284f592 100644
+index dccfb76..dbaacc6 100644
 --- a/node_modules/y-prosemirror/src/plugins/sync-plugin.js
 +++ b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
 @@ -248,37 +248,104 @@ export const ySyncPlugin = (yXmlFragment, {
@@ -280,7 +318,24 @@ index dccfb76..284f592 100644
  /**
   * @param {ProsemirrorBinding} pmbinding
   * @param {import('prosemirror-state').EditorState} state
-@@ -935,6 +1002,11 @@ const equalAttrs = (pattrs, yattrs) => {
+@@ -928,6 +995,16 @@ const equalAttrs = (pattrs, yattrs) => {
+  * @typedef {Array<Array<PModel.Node>|PModel.Node>} NormalizedPNodeContent
+  */
+ 
++/**
++ * LGA-SHOTDOCS-PATCH (gap text): whether an inline node keeps a (possibly empty) Y.XmlText on each side.
++ * A node type opts in with `lgaGapText: true` in its spec (the app's inline `photo`). No other node type
++ * is affected (`hardBreak` included): what was stored before this part of the patch keeps its shape, and a
++ * version of the app without it writes those nodes exactly the same way.
++ *
++ * @param {any} n prosemirror node, or an array of text nodes
++ */
++const needsGapText = (n) => !(n instanceof Array) && n.isInline === true && n.type.spec.lgaGapText === true
++
+ /**
+  * @param {any} pnode
+  * @return {NormalizedPNodeContent}
+@@ -935,6 +1012,11 @@ const equalAttrs = (pattrs, yattrs) => {
  const normalizePNodeContent = (pnode) => {
    const c = pnode.content.content
    const res = []
@@ -292,3 +347,24 @@ index dccfb76..284f592 100644
    for (let i = 0; i < c.length; i++) {
      const n = c[i]
      if (n.isText) {
+@@ -945,9 +1027,20 @@ const normalizePNodeContent = (pnode) => {
+       i--
+       res.push(textNodes)
+     } else {
++      // LGA-SHOTDOCS-PATCH (gap text): where there is no text next to a node that asks for it (before,
++      // between or after inline photos), the gap is represented by an empty Y.XmlText. Two devices typing
++      // into the same gap then write into the same Y.XmlText instead of each creating its own (two sibling
++      // Y.XmlText are later merged by copying one into the other and deleting it: what was typed into the
++      // deleted one in the meantime is lost, or ends up twice).
++      const prev = res.length > 0 ? res[res.length - 1] : null
++      if (!(prev instanceof Array) && (needsGapText(n) || (prev !== null && needsGapText(prev)))) {
++        res.push([])
++      }
+       res.push(n)
+     }
+   }
++  // LGA-SHOTDOCS-PATCH (gap text): and after the last one.
++  if (res.length > 0 && needsGapText(res[res.length - 1])) res.push([])
+   return res
+ }
+ 

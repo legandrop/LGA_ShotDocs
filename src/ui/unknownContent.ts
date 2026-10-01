@@ -32,6 +32,7 @@ const KNOWN_NODES = [
   'image',
   'numberedListItem',
   'paragraph',
+  'photo',
   'quote',
   'table',
   'tableCell',

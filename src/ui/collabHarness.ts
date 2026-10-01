@@ -24,10 +24,13 @@ export function unmountAll(): void {
   document.body.replaceChildren();
 }
 
-/** Un editor como el de la app (mismo esquema, con Yjs) sobre el documento. */
-export function mountEditor(doc: Y.Doc, name = 'u'): BlockNoteEditor {
+/** Un editor como el de la app (mismo esquema, con Yjs) sobre el documento. Con `withSchema`, el de otra versión. */
+export function mountEditor(doc: Y.Doc, name = 'u', withSchema: unknown = schema): BlockNoteEditor {
   const editor = BlockNoteEditor.create(
-    withCollaboration({ schema, collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name, color: '#000' } } }),
+    withCollaboration({
+      schema: withSchema as typeof schema,
+      collaboration: { fragment: doc.getXmlFragment(CONTENT_FRAGMENT), user: { name, color: '#000' } },
+    }),
   ) as unknown as BlockNoteEditor;
   const el = document.createElement('div');
   document.body.appendChild(el);
