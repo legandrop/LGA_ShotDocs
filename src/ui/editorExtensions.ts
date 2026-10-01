@@ -1,5 +1,6 @@
 import { collapseExtension, headingBackspaceExtension, type CollapseOptions } from './collapseEditor';
 import { findExtension } from './findEditor';
+import { inlinePhotoSpotsExtension } from './inlinePhotoCreate';
 import { inlinePhotoExtensions } from './inlinePhotoEditor';
 import { undoGuardExtension } from './undoGuard';
 
@@ -13,6 +14,8 @@ export function pageEditorExtensions(collapse: CollapseOptions | null) {
   return [
     // Las fotos en línea (Docs/Doc_Fotos_En_Linea.md): sus filas, la marca de la selección y su teclado.
     ...inlinePhotoExtensions,
+    // El lugar (y la marca de espera) de las fotos que se están guardando (inlinePhotoCreate.ts).
+    inlinePhotoSpotsExtension,
     findExtension,
     // Cada borrado es un solo Ctrl+Z, y el deshacer del navegador nunca edita la página (undoGuard.ts).
     undoGuardExtension(),

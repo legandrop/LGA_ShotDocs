@@ -1,6 +1,6 @@
 # Tutorial animado y ayuda (P.13)
 
-Estado: **entregas 1 y 2 hechas (v0.079); la 3 ("Mostrame" y novedades), pendiente.** "Cómo quedó" (al final)
+Estado: **entregas 1 y 2 hechas (v0.082); la 3 ("Mostrame" y novedades), pendiente.** "Cómo quedó" (al final)
 dice lo que se hizo y en qué se apartó del diseño; "Correcciones de la auditoría" manda sobre lo anterior. **Lega
 respondió las preguntas el 2026-09-30** ("Decisiones"). Las fotos del ejemplo quedaron dibujadas para la app (ver
 "Cómo quedó"); falta que Lega diga si se cambian por fotos de la lista. Lo
@@ -49,7 +49,7 @@ Relevado del código de `main`. Son los lugares a los que puede apuntar un globi
 | Menú "⋯" de la página | `PageMenu` en `menus.tsx` | Compartir, página nueva adentro, renombrar, mover, tamaño de hoja, **Exportar PDF / Imprimir**, títulos cortos, mandar a la papelera. Con P.11: colapsar todo / abrir todo. |
 | Título de la página | `PageView.tsx` | Enter pasa al texto. |
 | Editor | `PageEditor.tsx` (BlockNote 0.55) | Menú "/" (títulos, listas, tabla, cita, código, divisor, foto, Script, pregunta), tirador "⋮⋮" y "+" al costado de cada bloque, barra de formato al elegir texto, atajos de Markdown ("# ", "- ", "1. ", "[] ", "> "). |
-| Fotos y videos | `imageRowsEditor.ts`, `MediaToolbarButtons.tsx` | Primer clic elige, segundo abre el carrete; tamaños rápidos (entero, 1/2, 1/3, 1/4), fotos en fila, "Acomodar en filas". |
+| Fotos y videos | `inlinePhotoCreate.ts`, `PhotoToolbar.tsx`, `inlinePhotoEditor.ts`; las fotos-bloque viejas, `imageRowsEditor.ts`, `MediaToolbarButtons.tsx` | Desde v0.078 entran en el renglón (pegar, soltar, "/Image"), como letras: texto al lado, Shift+clic o Shift+flechas para elegir varias. Primer clic elige, segundo abre el carrete; tiradores que imantan a 1/1, 1/2, 1/3 y 1/4; la barra de la foto (la misma para la foto-bloque, por sectores, D-24): ver, bajar, tamaños rápidos (para todas las elegidas) y "Acomodar en filas" de las elegidas, alinear el renglón, comentar, reemplazar, renombrar y borrar. |
 | Adjuntos | `attachments.ts`, `AttachmentSheet.tsx` | Soltar o pegar cualquier archivo: tarjeta con ícono; segundo clic abre o baja; en el teléfono, la hoja con *Open*, *Download*, *Share*. |
 | Carrete | `Carrete.tsx` | Pantalla completa, flechas, zoom, bajar el original. |
 | Links de Drive | `DrivePasteMenu.tsx`, `driveCard.ts` | Pegar un link de Drive ofrece link, texto o tarjeta con reproductor. |
@@ -89,6 +89,11 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | "# ", "## "…, "- ", "1. ", "[] ", "> " o `" `, "---", "```" | Título, viñeta, numerada, casilla, cita, divisor, código | Editor, al principio del renglón | BlockNote |
 | Esc | Cerrar la hoja de un adjunto | Hoja del adjunto (teléfono) | App (`AttachmentSheet.tsx`) |
 | Clic en una foto elegida, doble clic, barra espaciadora | Abrir el carrete (en un adjunto: abrir o bajar) | Editor | App (`PageEditor.tsx`) |
+| Una letra, Enter, un emoji o el dictado con una foto en línea elegida | Escribe después de la foto (no la reemplaza); Enter parte el renglón ahí | Editor | App (`inlinePhotoEditor.ts`; v0.076, emojis y dictado v0.078) |
+| Shift+← / →, Shift+clic, arrastrar | Elegir varias fotos en línea (y texto), como letras | Editor | ProseMirror y app (`inlinePhotoEditor.ts`) |
+| Una letra, Enter, Espacio con varias fotos en línea elegidas | Escribe después de la última / parte el renglón ahí / abre el carrete en la primera (no las borra) | Editor | App (v0.078) |
+| Supr o Retroceso con fotos elegidas | Borrarlas (también *Delete image* en su barra) | Editor | ProseMirror |
+| Mod+V con archivos, soltar archivos | Fotos y videos en el renglón, donde está el cursor o donde se sueltan; otros archivos, como tarjeta debajo | Editor | App (`inlinePhotoCreate.ts`; v0.078) |
 | ← / → | De una foto a otra en una fila | Foto de una fila elegida | App (`imageRowsEditor.ts`) |
 | ↑ / ↓ | Salir de la fila | Foto de una fila elegida | App |
 | Enter | Párrafo nuevo después de toda la fila | Foto de una fila elegida | App |
@@ -315,9 +320,13 @@ Arriba, un campo de búsqueda; abajo, las secciones:
 2. **Páginas y proyectos:** crear, anidar, arrastrar, renombrar, mover, títulos cortos, proyectos, workspaces.
 3. **Escribir:** menú "/", títulos, listas, tabla, cita, código, divisor, atajos de Markdown, Script (con sus
    colores de escena), deshacer.
-4. **Fotos y videos:** elegir y abrir, tamaños, filas, "Acomodar en filas", el carrete, el teléfono (en fila o
-   apiladas), qué pasa sin red.
-5. **Archivos adjuntos:** soltar o pegar cualquier archivo, abrir o bajar, la hoja del teléfono.
+4. **Fotos y videos:** agregarlas al renglón (pegar, soltar, "/Image"; una con su tamaño, varias a un tercio),
+   escribir al lado, elegir varias (Shift+clic, Shift+flechas, arrastrar), elegir y abrir, los tiradores (imantan a
+   1/1, 1/2, 1/3 y 1/4), la barra de la foto (ver, bajar, tamaños para las elegidas, "Acomodar en filas" de las
+   elegidas, alinear, comentar, reemplazar, renombrar, borrar), el carrete, el teléfono (en fila o apiladas), el PDF
+   (un párrafo de fotos se parte por filas), qué pasa sin red.
+5. **Archivos adjuntos:** soltar o pegar cualquier archivo, abrir o bajar, la hoja del teléfono. Y **carpetas**
+   (P.9; ver "Entradas que suma P.9" en la sección 7).
 6. **Links de Drive:** pegar un link y elegir link, texto o tarjeta.
 7. **Comentarios y preguntas.**
 8. **Buscar y reemplazar** (y, con P.12 entrega 2, buscar en el proyecto).
@@ -341,6 +350,21 @@ Arriba, un campo de búsqueda; abajo, las secciones:
   encuentran lo suyo. Sin resultados: "No encontramos eso. Probá con otra palabra."
 - **"Mostrame"** en cada entrada con `showMe` (entrega 3): abre la práctica y hace **solo ese paso** (o una
   tanda corta), y al terminar vuelve a donde estaba la persona.
+
+### Entradas de funciones que llegaron antes que la ayuda
+
+**Ya están en la ayuda (v0.082):** la entrada `install` de `src/help/entries.ts`. Desde v0.082 cada función nueva suma
+su entrada directamente ahí, no acá.
+
+- **Instalar la app** (v0.079, `Doc_Instalar.md`). Sección *Primeros pasos*. Sin atajos. `since: '0.083'`.
+  - *Install the app* / *Instalar la app*: "Install app in the account menu (or Install in the banner on your
+    phone) shows the steps for your device: iPhone and iPad, Android or computer. Installed, Shot Docs opens
+    from the home screen in its own window; on iPhone it keeps its own storage, which Safari doesn't clear." /
+    "*Instalar la app* en el menú de la cuenta (o *Instalar* en el aviso del teléfono) muestra los pasos para tu
+    dispositivo: iPhone y iPad, Android o computadora. Instalada, Shot Docs se abre desde la pantalla de inicio
+    en su propia ventana; en el iPhone guarda sus datos aparte y Safari no los borra."
+  - Palabras para buscar: instalar, app, pantalla de inicio, home screen, iPhone, Android, PWA, Dock.
+  - `when`: solo si la pestaña no es la app instalada (si lo es, la entrada dice que ya está instalada).
 
 ## 6. Un solo registro de atajos
 
@@ -382,6 +406,33 @@ Y pruebas que lo sostienen sin depender de acordarse:
 - La de los textos (`i18n.test.tsx`) cubre `help.ts` y `tour.ts` como las demás partes: mismas claves y mismos
   `{valores}` en los dos idiomas.
 - Cada entrada de `Changelog.md` que trae algo visible nombra su entrada de ayuda (costumbre, no prueba).
+
+### Entradas que suma P.9: carpetas (v0.081)
+
+**Ya están en la ayuda (v0.082):** `folderDrop`, `folderUpload`, `folderOpen` y `folderWho` de `src/help/entries.ts`
+(sección "Archivos adjuntos"; textos en inglés en la app, con su traducción). `when`: solo con portero; subir, solo quien puede editar la página.
+
+- **Drop a folder** (*Soltar una carpeta*). "Drag a folder from your computer onto the page. A window shows what
+  goes up: how many files, in how many folders, how much it weighs, and what is skipped (hidden and system
+  files, unless you tick *Include hidden files*). *Upload* sends it to the owner's Google Drive and leaves a
+  folder card in the page. Keep the tab open until it finishes." Palabras: carpeta, folder, subir, arrastrar,
+  soltar, drive. Sin atajos.
+- **While it uploads** (*Mientras sube*). "The card says how it is going; click it to see the upload: *Pause*,
+  *Resume*, *Retry* for the files that failed. If you close the tab, drop the same folder on its card again (or
+  *Choose the folder…*): only what is missing goes up. Dropping the same folder elsewhere in the page offers to
+  continue it. *Stop uploading* forgets it on this device (what reached Drive stays)." Palabras: pausar, retomar,
+  faltan, error, dejar de subir.
+- **Open a folder** (*Abrir una carpeta*). "Click the card twice (once on the phone or without edit access), or
+  press Space with it selected, or *Open* in its bar. You see what is in the Drive folder right now: subfolders
+  first, then files with their thumbnail. A photo or a video opens in the viewer; a PDF opens in a new tab; the
+  rest downloads. Esc goes up one level." Palabras: ver, visor, migas, bajar, download. Atajos: Space (abrir la
+  elegida, el mismo de las fotos), Escape (subir un nivel; ya está en el registro como "cerrar").
+- **Who sees a folder** (*Quién ve una carpeta*). "Whoever sees the page sees and downloads what is in the
+  folder, but never the folders above it or next to it. Only the person who added the folder uploads into it."
+  Palabras: permisos, compartir, invitado. (Si Lega suma `drive.readonly`, agregar: "also what is added later in
+  Drive".)
+
+En la recorrida no hace falta un paso nuevo (no cambia nada de lo que ya señala).
 
 ## 8. Tamaño y carga
 
@@ -605,11 +656,11 @@ sobre lo que quede.
 
 Respondidas por Lega el 2026-09-30: ver "Decisiones".
 
-## Cómo quedó (entregas 1 y 2, v0.079)
+## Cómo quedó (entregas 1 y 2, v0.082)
 
 ### La ayuda y el registro de atajos (entrega 1)
 
-- **El registro** (`src/ui/shortcuts.ts`, en la primera carga): 68 atajos con `id`, teclas en el formato de
+- **El registro** (`src/ui/shortcuts.ts`, en la primera carga): 73 atajos con `id`, teclas en el formato de
   ProseMirror, lugar (`global`, `editor`, `markdown`, `photos`, `carrete`, `find`, `comments`, `tree`, `menus` y
   `tour`), `context` (cuándo vale dentro del lugar), de quién es y cómo se toma (`keymap`, `window`, `dom`, `react`,
   `typed`). `IS_MAC` vive acá (findUi lo reexporta); `shortcutLabel(id, mac, lang)` arma ⌘⌥M / Ctrl+Alt+M. Se fueron
@@ -627,14 +678,23 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
   usan la página, la práctica y la prueba.
 - **La ayuda** (`src/help/HelpDialog.tsx`, se baja aparte con `src/i18n/lazy/help.ts`): botón "?" al lado de
   Papelera (sin tooltip) y *Help and shortcuts* en el menú de la cuenta; ninguna tecla la abre. 760 px con el índice a
-  la izquierda; en el teléfono, pantalla completa con el índice en una fila arriba. Las 15 secciones, 41 entradas
+  la izquierda; en el teléfono, pantalla completa con el índice en una fila arriba. Las 15 secciones, 48 entradas
   (`src/help/entries.ts`) con sus atajos por id, y la tabla entera por lugar. La búsqueda (`src/help/search.ts`) usa
   `normalize.ts`, mira los dos idiomas y los rótulos de las dos plataformas ("ctrl f", "⌘F" y "Ctrl+F" llevan a
   Buscar). Una entrada de algo que la persona no puede usar (`when`: adjuntos sin Drive, miembros sin ser admin) se ve
   apagada con el porqué. Esc cierra y el foco vuelve al botón que la abrió; Tab queda adentro (es modal). Las entradas
-  de lo que ya existía llevan `since: '0.078'`; las nuevas, `0.079` (para las novedades de la entrega 3).
-- **Textos de otras funciones que ya están:** el árbol con el teclado (v0.074), archivar y borrar proyectos (v0.077,
-  sin la casilla de Drive, que todavía no existe) y las fotos HEIC como JPEG (v0.075).
+  de lo que ya existía llevan `since: '0.081'`; las nuevas, `0.082` (para las novedades de la entrega 3).
+- **Textos de otras funciones que ya están:** el árbol con el teclado (v0.074), archivar y borrar proyectos (v0.077) y
+  sus archivos en Drive (v0.080, solo dueño y admins), las fotos HEIC como JPEG (v0.075), las fotos en el renglón
+  (v0.078: pegar y soltar donde está el cursor, elegir varias con Shift+clic, Shift+flechas o arrastrando, escribir
+  al lado, borrar, los tiradores que imantan, la barra por sectores y el PDF por filas), instalar la app (v0.079,
+  apagada con "Esta ya es la app instalada" si lo es, con el botón que abre la ventana de instalar) y las carpetas
+  (v0.081, cuatro entradas en "Archivos adjuntos", solo con portero). *Convert photos to inline* no tiene entrada en
+  la interfaz (D-26): no va en la ayuda. Atajos nuevos en el registro: borrar las fotos elegidas (Supr / Retroceso),
+  pegar archivos (Mod+V), Esc en el visor de una carpeta (sube un nivel) y las flechas de las pestañas de la ventana
+  de instalar; Espacio abre también la primera de varias fotos elegidas y una carpeta. Las entradas que esas funciones
+  habían dejado escritas en este documento ("Entradas de funciones que llegaron antes que la ayuda", "Entradas que
+  suma P.9" y "Entradas esperando la ayuda") ya están en `src/help/entries.ts`.
 
 ### La práctica y la recorrida (entrega 2)
 
@@ -712,3 +772,25 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
 - **Falta probar a mano:** Safari de la Mac, el iPhone (Safari y la app instalada, con el teclado en pantalla en el
   paso del menú "/"), Firefox y VoiceOver. La prueba de punta a punta `tour.mjs` del repo de pruebas privado todavía
   no está.
+
+## Entradas esperando la ayuda
+
+**Ya están en la ayuda (v0.082):** esta entrada es `projectsDrive` de `src/help/entries.ts`. Se deja el texto como
+referencia. Desde v0.082 cada función nueva suma su entrada directamente en `src/help/entries.ts` (regla de
+`Docs/index.md`), no acá.
+
+- **Archivar o borrar un proyecto (P.14, entregas 1 y 2; `Doc_Proyectos_Borrar.md`).** La entrada de la entrega 1
+  está en "Cómo quedó (entrega 1)". La entrega 2 le suma:
+
+  > **Its files in Google Drive.** When the workspace owner or an admin deletes a project, *Also send its files to the
+  > Google Drive trash* sends its whole folder to the Drive trash; it starts unticked. Google deletes it for good after
+  > 30 days; *Restore* before that brings the folder back with everything in it. From *Deleted projects* you can also
+  > send it later. If Google Drive no longer has the folder, the app asks before restoring the pages without their
+  > files, and *Look for its files again*, on the project's start page, brings them back if the folder turns up.
+  >
+  > **Sus archivos en Google Drive.** Cuando el dueño del workspace o un admin borra un proyecto, *Mandar también sus
+  > archivos a la papelera de Google Drive* manda su carpeta entera a la papelera de Drive; arranca destildada. Google
+  > la borra para siempre a los 30 días; *Restaurar* antes la trae de vuelta con todo lo de adentro. Desde *Proyectos
+  > borrados* también se puede mandar después. Si Google Drive ya no tiene la carpeta, la app pregunta antes de
+  > restaurar las páginas sin sus archivos, y *Buscar sus archivos de nuevo*, en el inicio del proyecto, los trae si la
+  > carpeta aparece.

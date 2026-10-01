@@ -6,6 +6,8 @@ import { mediaDbName, openMediaDb, type MediaDb } from './media/mediaDb';
 import { Portero, sessionToken } from './media/portero';
 import { ProjectSizes, type SizesView } from './media/projectSizes';
 import { foreignFileNotice, MediaQueue } from './media/queue';
+import { FolderUploads, foldersDbName, openFoldersDb, type FolderPortero, type FoldersDb } from './media/folderUpload';
+import type { ProjectDrive } from './media/projectDrive';
 import { notify } from './ui/notice';
 import { acceptInvitationsQuietly, AccessStore, Permissions } from './sync/access';
 import { CommentQueue, commentsDbName, openCommentsDb, type CommentsDb } from './sync/comments';
@@ -33,6 +35,8 @@ export interface Services {
   files: PageFiles;
   /** Fotos y videos que van al Drive del dueño por el portero (`sdmedia://`). */
   media: MediaQueue;
+  /** Las carpetas que se suben desde este dispositivo (P.9). Opcional: las pruebas que no las usan no la arman. */
+  folders?: FolderUploads;
   engine: SyncEngine;
   /** Los permisos de la persona, guardados en el dispositivo (paso 9). */
   access: AccessStore;
@@ -48,6 +52,11 @@ export interface Services {
   commentsDb: CommentsDb | null;
   /** Cuánto ocupa cada proyecto en el Drive (P.7), con la última respuesta guardada en el dispositivo. */
   sizes: ProjectSizes;
+  /**
+   * El portero para la carpeta de un proyecto borrado (P.14, entrega 2). Sin él, se arma con la dirección del portero
+   * del workspace (`useProjectDrive`); las pruebas ponen uno propio.
+   */
+  projectDrive?: ProjectDrive;
   /** Para la sincronización y cierra las bases del dispositivo (antes de borrarlas). */
   shutdown: () => Promise<void>;
   /**
@@ -243,6 +252,20 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         onForeignFile: (name) => notify(foreignFileNotice(name)),
       });
       await media.load().catch(() => undefined);
+      // Las carpetas (P.9): solo la lista de trabajo, sin bytes, en otra base. Si no se abre, se suben igual
+      // mientras la pestaña esté abierta (no se retoman después de cerrarla).
+      let foldersDb: FoldersDb | null = null;
+      try {
+        foldersDb = await openFoldersDb(foldersDbName(dbName));
+      } catch {
+        foldersDb = null;
+      }
+      const folders = new FolderUploads(foldersDb, {
+        portero: () => media.porteroClient() as unknown as FolderPortero | null,
+        note: (id, text) => media.setFolderNote(id, text),
+        uploaded: (id, bytes) => media.setFolderSize(id, bytes),
+      });
+      await folders.load().catch(() => undefined);
       // Los comentarios, también en una base aparte. Si no se abre, se leen con red pero no se escriben.
       let commentsDb: CommentsDb | null = null;
       let commentsProblem: string | undefined;
@@ -268,6 +291,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       if (cancelled) {
         mediaDb?.close();
         commentsDb?.close();
+        foldersDb?.close();
         return db.close();
       }
       engine.start();
@@ -282,6 +306,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           const stopping = engine.stop();
           docs.dispose();
           media.dispose();
+          folders.stop();
           try {
             await docs.flush();
             // El ciclo en curso corta en su próximo paso, pero puede estar esperando al servidor: se lo
@@ -293,6 +318,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
             db.close();
             mediaDb?.close();
             commentsDb?.close();
+            foldersDb?.close();
             releaseLock?.();
           }
         })();
@@ -310,6 +336,7 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
           docs,
           files,
           media,
+          folders,
           engine,
           access,
           remote,

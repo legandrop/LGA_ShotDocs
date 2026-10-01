@@ -1,11 +1,11 @@
-import { FileDownloadButton, useBlockNoteEditor, useComponentsContext, useDictionary, useEditorState } from '@blocknote/react';
+import { useBlockNoteEditor, useDictionary, useEditorState } from '@blocknote/react';
 import { thumbSize } from './sharpMarks';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { BarButton } from './BarButton';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { mediaIdOf } from '../media/queue';
 import { useServices } from '../services';
-import { carreteSourceOf } from './carreteModel';
 import { isOffline, originalFor, startDownload } from './carreteLoader';
 import { DownloadIcon } from './icons';
 import { isAttachment } from './attachments';
@@ -13,10 +13,9 @@ import { arrangeRows, ROW_PRESETS } from './imageRows';
 import { ROW_WIDTH_PROP } from './imageRowsEditor';
 import { notify } from './notice';
 
-// Botones de la barra de una imagen en el editor (Docs/Doc_Carrete.md):
+// Botones de la barra de una foto-bloque en el editor (Docs/Doc_Carrete.md; la barra entera es MediaBar.tsx):
 //   - Bajar: para `sdmedia://`, el original (el del dispositivo con su nombre, o con un pase del portero),
-//     nunca la miniatura que muestra la página. Las demás imágenes usan el botón de BlockNote.
-//   - Ver: abre el carrete en esa imagen (también con la barra espaciadora, con la imagen elegida).
+//     nunca la miniatura que muestra la página (también lo usa la foto en línea).
 //   - Tamaño: todo el ancho, 1/2, 1/3 o 1/4 del ancho de la página (`rowWidth`, Docs/Doc_Imagenes.md);
 //     fotos seguidas que entran se ponen en fila.
 //   - Acomodar en filas: la tanda de fotos y videos seguidos a la elegida, en orden, en filas de la misma
@@ -40,15 +39,7 @@ function useSelectedImage(): { id: string; url: string; name: string; rowWidth: 
   });
 }
 
-export function MediaDownloadButton() {
-  const block = useSelectedImage();
-  const id = mediaIdOf(block?.url);
-  if (!id) return <FileDownloadButton />;
-  return <OriginalDownloadButton key={id} fileId={id} />;
-}
-
-function OriginalDownloadButton({ fileId }: { fileId: string }) {
-  const Components = useComponentsContext()!;
+export function OriginalDownloadButton({ fileId, label: given }: { fileId: string; label?: string }) {
   const dict = useDictionary();
   const { media } = useServices();
   // Se prepara apenas se elige la imagen: así el clic baja enseguida (Safari no abre otra pestaña si hay
@@ -90,36 +81,8 @@ function OriginalDownloadButton({ fileId }: { fileId: string }) {
     );
   };
 
-  const label = dict.formatting_toolbar.file_download.tooltip.image ?? t('mediaButton.download');
-  return (
-    <Components.FormattingToolbar.Button
-      className="bn-button"
-      label={label}
-      mainTooltip={label}
-      icon={<DownloadIcon size={18} />}
-      onClick={onClick}
-    />
-  );
-}
-
-export function MediaViewButton({ onView }: { onView: (blockId: string) => void }) {
-  const Components = useComponentsContext()!;
-  const block = useSelectedImage();
-  const tr = useT();
-  const attachment = useIsAttachment(block);
-  if (!block || !carreteSourceOf(block.url)) return null;
-  // Un adjunto (Docs/Doc_Adjuntos.md) no va al carrete: *Open* lo abre en otra pestaña o lo baja.
-  const label = attachment ? tr('attachment.open') : tr('mediaButton.view');
-  return (
-    <Components.FormattingToolbar.Button
-      className="bn-button"
-      label={label}
-      mainTooltip={label}
-      secondaryTooltip={attachment ? tr('attachment.openTip') : tr('mediaButton.space')}
-      icon={attachment ? <OpenIcon /> : <ViewIcon />}
-      onClick={() => onView(block.id)}
-    />
-  );
+  const label = given ?? dict.formatting_toolbar.file_download.tooltip.image ?? t('mediaButton.download');
+  return <BarButton label={label} tip={`**${label}**\n${t('photoTip.download')}`} icon={<DownloadIcon size={18} />} test="mediaDownload" onClick={onClick} />;
 }
 
 /** La foto elegida es un adjunto (un PDF, un zip…) y no una foto o un video. */
@@ -129,25 +92,7 @@ function useIsAttachment(block: { url: string; name?: string } | undefined): boo
   return !!id && isAttachment(media, id, block?.name ?? '');
 }
 
-/**
- * Los botones de BlockNote que no sirven en un archivo del Drive (`sdmedia://`): renombrar (la tarjeta y la
- * descarga usan el nombre del archivo) y ver u ocultar la vista previa (sin la imagen no se puede abrir).
- */
-export function HideForDriveFiles({ children }: { children: ReactNode }) {
-  const block = useSelectedImage();
-  if (block && mediaIdOf(block.url)) return null;
-  return <>{children}</>;
-}
-
-function OpenIcon() {
-  return (
-    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M11 4h5v5M16 4l-7 7M14 11.5V16H4V6h4.5" />
-    </svg>
-  );
-}
-
-function ViewIcon() {
+export function ViewIcon() {
   return (
     <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M4 8V4h4M16 8V4h-4M4 12v4h4M16 12v4h-4" />
@@ -155,7 +100,7 @@ function ViewIcon() {
   );
 }
 
-const SIZE_LABELS: Record<number, { text: string; tip: 'imageSize.full' | 'imageSize.half' | 'imageSize.third' | 'imageSize.quarter' }> = {
+export const SIZE_LABELS: Record<number, { text: string; tip: 'imageSize.full' | 'imageSize.half' | 'imageSize.third' | 'imageSize.quarter' }> = {
   [1]: { text: '1/1', tip: 'imageSize.full' },
   [1 / 2]: { text: '1/2', tip: 'imageSize.half' },
   [1 / 3]: { text: '1/3', tip: 'imageSize.third' },
@@ -227,7 +172,6 @@ function groupWidth(dom: Element | null | undefined, id: string): number {
  */
 export function ImageSizeButtons() {
   const editor = useBlockNoteEditor();
-  const Components = useComponentsContext()!;
   const block = useSelectedImage();
   const tr = useT();
   const { media } = useServices();
@@ -263,37 +207,37 @@ export function ImageSizeButtons() {
       now.forEach((id, i) => editor.updateBlock(id, { props: { [ROW_WIDTH_PROP]: fracs[i], previewWidth: Math.round(fracs[i] * width) } }));
     });
   };
+  // D-24: primero los tamaños y después "Arrange in rows", en el mismo sector.
   return (
     <>
-      {run.length > 1 && (
-        <Components.FormattingToolbar.Button
-          className="bn-button"
-          label={tr('imageSize.arrange')}
-          mainTooltip={tr('imageSize.arrange')}
-          secondaryTooltip={ready ? tr('imageSize.arrangeHint') : tr('imageSize.waiting')}
-          icon={<ArrangeIcon />}
-          isDisabled={!ready}
-          onClick={arrange}
-        />
-      )}
       {ROW_PRESETS.map((f) => (
-        <Components.FormattingToolbar.Button
+        <BarButton
           key={f}
-          className="bn-button image-size-button"
+          className="image-size-button"
           label={tr(SIZE_LABELS[f].tip)}
-          mainTooltip={tr(SIZE_LABELS[f].tip)}
-          secondaryTooltip={f < 1 ? tr('imageSize.rows') : undefined}
-          isSelected={Math.abs(block.rowWidth - f) < 1e-4}
+          tip={`**${tr(SIZE_LABELS[f].tip)}**\n${tr('photoTip.size')}`}
+          test={`size-${SIZE_LABELS[f].text}`}
+          selected={Math.abs(block.rowWidth - f) < 1e-4}
           onClick={() => setSize(f)}
         >
           {SIZE_LABELS[f].text}
-        </Components.FormattingToolbar.Button>
+        </BarButton>
       ))}
+      {run.length > 1 && (
+        <BarButton
+          label={tr('imageSize.arrange')}
+          tip={`**${tr('imageSize.arrange')}**\n${ready ? tr('imageSize.arrangeHint') : tr('imageSize.waiting')}`}
+          icon={<ArrangeIcon />}
+          test="arrange"
+          disabled={!ready}
+          onClick={arrange}
+        />
+      )}
     </>
   );
 }
 
-function ArrangeIcon() {
+export function ArrangeIcon() {
   return (
     <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" aria-hidden="true">
       <path d="M3 4h5.5v5H3zM10.5 4H17v5h-6.5zM3 11h8v5H3zM13 11h4v5h-4z" />

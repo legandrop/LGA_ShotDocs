@@ -122,7 +122,7 @@ export function withParagraphVariants(item: DefaultReactSuggestionItem, editor: 
 // --- Botones "Comment" -------------------------------------------------------------------------------
 
 /** El bloque donde está el cursor (o el primero elegido). */
-function currentBlockId(editor: AnyEditor): string | null {
+export function currentBlockId(editor: AnyEditor): string | null {
   try {
     return editor.getSelection()?.blocks[0]?.id ?? editor.getTextCursorPosition().block.id;
   } catch {

@@ -42,7 +42,7 @@ export const HELP_SECTIONS: { id: HelpSection; title: Key }[] = [
 ];
 
 /** Para quién está una función: si la persona no la puede usar, la entrada se ve apagada con el porqué. */
-export type HelpWhen = 'portero' | 'admin' | 'owner';
+export type HelpWhen = 'portero' | 'admin' | 'owner' | 'notInstalled';
 
 export interface HelpEntry {
   id: string;
@@ -56,8 +56,10 @@ export interface HelpEntry {
   keys?: Record<string, string>;
   /** Más atajos de la función, que la búsqueda encuentra aunque el texto no los nombre. */
   more?: string[];
+  /** Palabras que la búsqueda encuentra aunque el texto no las diga (en cualquier idioma). */
+  words?: string[];
   /** Lo que hace el botón de la entrada (la recorrida, la práctica). */
-  action?: 'tour' | 'practice';
+  action?: 'tour' | 'practice' | 'install';
   /** El paso de la recorrida que la muestra (para "Mostrame", entrega 3). */
   showMe?: string;
   /**
@@ -68,13 +70,25 @@ export interface HelpEntry {
   when?: HelpWhen;
 }
 
-/** Lo que ya existía cuando llegó la ayuda (v0.079). */
-const BEFORE_HELP = '0.078';
+/** Lo que ya existía cuando llegó la ayuda (v0.082). */
+const BEFORE_HELP = '0.081';
+/** La versión que trajo la ayuda. */
+const HELP = '0.082';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
-  { id: 'tour', section: 'start', title: 'help.tour.title', text: 'help.tour.text', action: 'tour', since: '0.079' },
-  { id: 'practice', section: 'start', title: 'help.practice.title', text: 'help.practice.text', action: 'practice', since: '0.079' },
+  { id: 'tour', section: 'start', title: 'help.tour.title', text: 'help.tour.text', action: 'tour', since: HELP },
+  { id: 'practice', section: 'start', title: 'help.practice.title', text: 'help.practice.text', action: 'practice', since: HELP },
+  {
+    id: 'install',
+    section: 'start',
+    title: 'help.install.title',
+    text: 'help.install.text',
+    action: 'install',
+    when: 'notInstalled',
+    words: ['instalar', 'app', 'pantalla de inicio', 'home screen', 'iPhone', 'Android', 'PWA', 'Dock'],
+    since: BEFORE_HELP,
+  },
 
   // --- Páginas y proyectos ---
   { id: 'pagesTree', section: 'pages', title: 'help.pagesTree.title', text: 'help.pagesTree.text', showMe: 'pages', since: BEFORE_HELP },
@@ -100,6 +114,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: BEFORE_HELP,
   },
   { id: 'projectsArchive', section: 'pages', title: 'help.projectsArchive.title', text: 'help.projectsArchive.text', since: BEFORE_HELP },
+  { id: 'projectsDrive', section: 'pages', title: 'help.projectsDrive.title', text: 'help.projectsDrive.text', when: 'admin', since: BEFORE_HELP },
   { id: 'workspaces', section: 'pages', title: 'help.workspaces.title', text: 'help.workspaces.text', since: BEFORE_HELP },
 
   // --- Escribir ---
@@ -149,7 +164,17 @@ export const HELP_ENTRIES: HelpEntry[] = [
   { id: 'undo', section: 'writing', title: 'help.undo.title', text: 'help.undo.text', keys: { undo: 'undo', redo: 'redo' }, more: ['selectAll'], since: BEFORE_HELP },
 
   // --- Fotos y videos ---
-  { id: 'photosAdd', section: 'photos', title: 'help.photosAdd.title', text: 'help.photosAdd.text', since: BEFORE_HELP },
+  { id: 'photosAdd', section: 'photos', title: 'help.photosAdd.title', text: 'help.photosAdd.text', keys: { paste: 'pasteFiles' }, since: BEFORE_HELP },
+  {
+    id: 'photosInline',
+    section: 'photos',
+    title: 'help.photosInline.title',
+    text: 'help.photosInline.text',
+    keys: { select: 'photoInlineSelect', delete: 'photoDelete' },
+    more: ['photoInlineType', 'photoOpen'],
+    words: ['shift', 'clic', 'click', 'arrastrar', 'drag', 'elegir', 'select'],
+    since: BEFORE_HELP,
+  },
   {
     id: 'photosOpen',
     section: 'photos',
@@ -181,6 +206,43 @@ export const HELP_ENTRIES: HelpEntry[] = [
 
   // --- Adjuntos y links de Drive ---
   { id: 'attach', section: 'attachments', title: 'help.attach.title', text: 'help.attach.text', when: 'portero', since: BEFORE_HELP },
+  {
+    id: 'folderDrop',
+    section: 'attachments',
+    title: 'help.folderDrop.title',
+    text: 'help.folderDrop.text',
+    when: 'portero',
+    words: ['carpeta', 'folder', 'subir', 'arrastrar', 'soltar', 'drive'],
+    since: BEFORE_HELP,
+  },
+  {
+    id: 'folderUpload',
+    section: 'attachments',
+    title: 'help.folderUpload.title',
+    text: 'help.folderUpload.text',
+    when: 'portero',
+    words: ['pausar', 'retomar', 'faltan', 'error', 'dejar de subir'],
+    since: BEFORE_HELP,
+  },
+  {
+    id: 'folderOpen',
+    section: 'attachments',
+    title: 'help.folderOpen.title',
+    text: 'help.folderOpen.text',
+    keys: { open: 'photoOpen', up: 'folderUp' },
+    when: 'portero',
+    words: ['ver', 'visor', 'migas', 'bajar', 'download'],
+    since: BEFORE_HELP,
+  },
+  {
+    id: 'folderWho',
+    section: 'attachments',
+    title: 'help.folderWho.title',
+    text: 'help.folderWho.text',
+    when: 'portero',
+    words: ['permisos', 'compartir', 'invitado'],
+    since: BEFORE_HELP,
+  },
   {
     id: 'driveLinks',
     section: 'drive',
@@ -248,7 +310,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
   { id: 'language', section: 'prefs', title: 'help.language.title', text: 'help.language.text', since: BEFORE_HELP },
 
   // --- Atajos (la tabla entera va abajo de esta entrada) ---
-  { id: 'keys', section: 'keys', title: 'help.keys.title', text: 'help.keys.text', since: '0.079' },
+  { id: 'keys', section: 'keys', title: 'help.keys.title', text: 'help.keys.text', more: ['tabsMove'], since: HELP },
 ];
 
 /** Los atajos de una entrada: los que nombra el texto y los demás. */

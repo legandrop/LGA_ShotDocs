@@ -45,6 +45,7 @@ export function searchHelp(entries: HelpEntry[], query: string, lang: Language):
       ...labels.map(plain),
       plain(translate(other, entry.title)),
       plain(translate(other, entry.text, params)),
+      ...(entry.words ?? []).map(plain),
     ].join(' ');
     // Cada palabra tiene que estar (en cualquier orden).
     if (!words.every((w) => haystack.includes(w))) continue;

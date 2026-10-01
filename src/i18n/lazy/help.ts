@@ -18,6 +18,7 @@ export const help = {
   },
   'help.when.admin': { en: "only the owner and the admins.", es: "solo el dueño y los admins." },
   'help.when.owner': { en: "only the workspace owner.", es: "solo el dueño del workspace." },
+  'help.installed': { en: "This is already the installed app.", es: "Esta ya es la app instalada." },
   'help.keysPhone': {
     en: "Keyboard shortcuts are for a hardware keyboard (an iPad with a keyboard, a computer).",
     es: "Los atajos son para un teclado físico (un iPad con teclado, una computadora).",
@@ -65,6 +66,12 @@ export const help = {
     es: "Una página de ejemplo para editar libremente: no se guarda, no se sincroniza y no la ve nadie. Abrirla de nuevo la arma de cero.",
   },
   'help.practice.action': { en: "Practice", es: "Practicar" },
+  'help.install.title': { en: "Install the app", es: "Instalar la app" },
+  'help.install.text': {
+    en: "Install app in the account menu (or Install in the banner on your phone) shows the steps for your device: iPhone and iPad, Android or computer. Installed, Shot Docs opens from the home screen in its own window; on iPhone it keeps its own storage, which Safari doesn't clear.",
+    es: "Instalar la app, en el menú de la cuenta (o Instalar en el aviso del teléfono), muestra los pasos para tu dispositivo: iPhone y iPad, Android o computadora. Instalada, Shot Docs se abre desde la pantalla de inicio en su propia ventana; en el iPhone guarda sus datos aparte y Safari no los borra.",
+  },
+  'help.install.action': { en: "Install app", es: "Instalar la app" },
 
   // --- Páginas y proyectos ---
   'help.pagesTree.title': { en: "Pages inside pages", es: "Páginas adentro de páginas" },
@@ -98,6 +105,11 @@ export const help = {
   'help.projectsArchive.text': {
     en: "Hover a project in the list (on a phone, tap its ⋯) to rename, archive or delete it. An archived project leaves the everyday list but can still be opened and edited. Deleting asks you to type delete and moves it to Deleted projects: nobody sees it, and Restore brings it back exactly as it was.",
     es: "Pasá el mouse por un proyecto de la lista (en el teléfono, tocá su ⋯) para renombrarlo, archivarlo o borrarlo. Un archivado sale de la lista de todos los días pero se sigue abriendo y editando. Borrar pide escribir borrar y lo pasa a Proyectos borrados: nadie lo ve, y Restaurar lo deja tal como estaba.",
+  },
+  'help.projectsDrive.title': { en: "Its files in Google Drive", es: "Sus archivos en Google Drive" },
+  'help.projectsDrive.text': {
+    en: "When the workspace owner or an admin deletes a project, Also send its files to the Google Drive trash sends its whole folder to the Drive trash; it starts unticked. Google deletes it for good after 30 days; Restore before that brings the folder back with everything in it. From Deleted projects you can also send it later. If Google Drive no longer has the folder, the app asks before restoring the pages without their files, and Look for its files again, on the project's start page, brings them back if the folder turns up.",
+    es: "Cuando el dueño del workspace o un admin borra un proyecto, Mandar también sus archivos a la papelera de Google Drive manda su carpeta entera a la papelera de Drive; arranca destildada. Google la borra para siempre a los 30 días; Restaurar antes la trae de vuelta con todo lo de adentro. Desde Proyectos borrados también se puede mandar después. Si Google Drive ya no tiene la carpeta, la app pregunta antes de restaurar las páginas sin sus archivos, y Buscar sus archivos de nuevo, en el inicio del proyecto, los trae si la carpeta aparece.",
   },
   'help.workspaces.title': { en: "Workspaces", es: "Workspaces" },
   'help.workspaces.text': {
@@ -145,18 +157,23 @@ export const help = {
   // --- Fotos y videos ---
   'help.photosAdd.title': { en: "Adding photos and videos", es: "Sumar fotos y videos" },
   'help.photosAdd.text': {
-    en: "Drop, paste or choose them with / Image. With Google Drive connected they're stored in the workspace owner's Drive (videos too). iPhone photos (HEIC) are saved as JPEG.",
-    es: "Soltalas, pegalas o elegilas con / Imagen. Con Google Drive conectado se guardan en el Drive del dueño del workspace (también los videos). Las fotos del iPhone (HEIC) se guardan como JPEG.",
+    en: "Paste them ({paste}), drop them or choose them with / Image: they go into the line, where the cursor is or where you drop them (one at its own size, several at a third each); other files go below as a card. With Google Drive connected they're stored in the workspace owner's Drive (videos too). iPhone photos (HEIC) are saved as JPEG.",
+    es: "Pegalas ({paste}), soltalas o elegilas con / Imagen: entran en el renglón, donde está el cursor o donde las soltás (una con su tamaño, varias a un tercio cada una); los demás archivos van abajo, como tarjeta. Con Google Drive conectado se guardan en el Drive del dueño del workspace (también los videos). Las fotos del iPhone (HEIC) se guardan como JPEG.",
+  },
+  'help.photosInline.title': { en: "Photos in the line, like letters", es: "Fotos en el renglón, como letras" },
+  'help.photosInline.text': {
+    en: "A photo sits in the line like a letter: write next to it, before or after. Select several (and text) with Shift+click, {select} or by dragging. With photos selected, a letter or Enter writes after them (never replacing them), Space opens the first one full screen and {delete} deletes them.",
+    es: "Una foto va en el renglón como una letra: escribí al lado, antes o después. Elegí varias (y texto) con Shift+clic, {select} o arrastrando. Con fotos elegidas, una letra o Enter escriben después (nunca las reemplazan), Espacio abre la primera en grande y {delete} las borra.",
   },
   'help.photosOpen.title': { en: "Select and open", es: "Elegir y abrir" },
   'help.photosOpen.text': {
     en: "One click selects a photo (its bar and handles); a second click or a double click opens it full screen. With the keyboard, {open} opens the selected one.",
     es: "Un clic elige la foto (su barra y sus tiradores); un segundo clic, o un doble clic, la abre en pantalla completa. Con el teclado, {open} abre la elegida.",
   },
-  'help.photosRows.title': { en: "Sizes and rows", es: "Tamaños y filas" },
+  'help.photosRows.title': { en: "Sizes, rows and the photo bar", es: "Tamaños, filas y la barra de la foto" },
   'help.photosRows.text': {
-    en: "The photo bar has quick sizes (full, 1/2, 1/3, 1/4). Photos side by side form a row, and Arrange in rows lays out a run of photos for you. In a row, {next} and {prev} go from photo to photo, {leave} leave the row and {enter} adds a line after it.",
-    es: "La barra de la foto tiene tamaños rápidos (entera, 1/2, 1/3, 1/4). Las fotos una al lado de la otra forman una fila, y Acomodar en filas reparte una tanda de fotos. En una fila, {next} y {prev} van de una foto a otra, {leave} salen de la fila y {enter} suma un renglón después.",
+    en: "Drag a photo's handles to resize it: they snap to the full width, 1/2, 1/3 and 1/4. Its bar (the same for every photo) has view, download, quick sizes for all the selected photos, Arrange in rows for the selected ones, align the line, comment, replace, rename and delete. In the PDF a line of photos breaks between sheets by rows. In an older row of photo blocks, {next} and {prev} go from photo to photo, {leave} leave the row and {enter} adds a line after it.",
+    es: "Arrastrá los tiradores de una foto para cambiarle el tamaño: imantan al ancho entero, 1/2, 1/3 y 1/4. Su barra (la misma para todas las fotos) tiene ver, bajar, tamaños rápidos para todas las elegidas, Acomodar en filas de las elegidas, alinear el renglón, comentar, reemplazar, renombrar y borrar. En el PDF, un renglón de fotos se parte entre hojas por filas. En una fila vieja de fotos-bloque, {next} y {prev} van de una foto a otra, {leave} salen de la fila y {enter} suma un renglón después.",
   },
   'help.carrete.title': { en: "The full-screen viewer", es: "El carrete" },
   'help.carrete.text': {
@@ -179,6 +196,27 @@ export const help = {
   'help.attach.text': {
     en: "Drop or paste any file (a PDF, a zip, a sound) and it shows as a card with its icon. A second click opens or downloads it; on a phone, a sheet offers Open, Download and Share.",
     es: "Soltá o pegá cualquier archivo (un PDF, un zip, un sonido) y queda como una tarjeta con su ícono. Un segundo clic lo abre o lo baja; en el teléfono, una hoja ofrece Abrir, Descargar y Compartir.",
+  },
+
+  'help.folderDrop.title': { en: "Drop a folder", es: "Soltar una carpeta" },
+  'help.folderDrop.text': {
+    en: "Drag a folder from your computer onto the page. A window shows what goes up: how many files, in how many folders, how much it weighs, and what is skipped (hidden and system files, unless you tick Include hidden files). Upload sends it to the owner's Google Drive and leaves a folder card in the page. Keep the tab open until it finishes.",
+    es: "Arrastrá una carpeta de tu computadora a la página. Una ventana muestra qué se sube: cuántos archivos, en cuántas carpetas, cuánto pesa y qué se saltea (los archivos ocultos y del sistema, salvo que tildes Incluir archivos ocultos). Subir la manda al Google Drive del dueño y deja una tarjeta de carpeta en la página. Dejá la pestaña abierta hasta que termine.",
+  },
+  'help.folderUpload.title': { en: "While it uploads", es: "Mientras sube" },
+  'help.folderUpload.text': {
+    en: "The card says how it is going; click it to see the upload: Pause, Resume, Retry for the files that failed. If you close the tab, drop the same folder on its card again (or Choose the folder…): only what is missing goes up. Dropping the same folder elsewhere in the page offers to continue it. Stop uploading forgets it on this device (what reached Drive stays).",
+    es: "La tarjeta dice cómo va; un clic muestra la subida: Pausar, Seguir, Reintentar los archivos que fallaron. Si cerrás la pestaña, soltá la misma carpeta otra vez en su tarjeta (o Elegir la carpeta…): sube solo lo que falta. Soltar la misma carpeta en otro lugar de la página ofrece seguirla. Dejar de subir la olvida en este dispositivo (lo que llegó a Drive queda).",
+  },
+  'help.folderOpen.title': { en: "Open a folder", es: "Abrir una carpeta" },
+  'help.folderOpen.text': {
+    en: "Click the card twice (once on the phone or without edit access), press {open} with it selected, or Open in its bar. You see what is in the Drive folder right now: subfolders first, then files with their thumbnail. A photo or a video opens in the viewer; a PDF opens in a new tab; the rest downloads. {up} goes up one level.",
+    es: "Dos clics en la tarjeta (uno en el teléfono o sin permiso de editar), {open} con la tarjeta elegida, o Abrir en su barra. Ves lo que hay ahora en la carpeta de Drive: primero las subcarpetas, después los archivos con su miniatura. Una foto o un video se abren en el carrete; un PDF, en otra pestaña; lo demás se baja. {up} sube un nivel.",
+  },
+  'help.folderWho.title': { en: "Who sees a folder", es: "Quién ve una carpeta" },
+  'help.folderWho.text': {
+    en: "Whoever sees the page sees and downloads what is in the folder, but never the folders above it or next to it. Only the person who added the folder uploads into it.",
+    es: "Quien ve la página ve y baja lo que hay en la carpeta, pero nunca las carpetas de arriba ni las de al lado. Solo quien agregó la carpeta sube a ella.",
   },
 
   // --- Links de Drive ---
@@ -331,7 +369,10 @@ export const help = {
   'shortcut.mdQuote': { en: "Quote", es: "Cita" },
   'shortcut.mdDivider': { en: "Divider", es: "Divisor" },
   'shortcut.mdCode': { en: "Code block", es: "Bloque de código" },
-  'shortcut.photoOpen': { en: "Open the selected photo (an attachment: open or download)", es: "Abrir la foto elegida (un adjunto: abrir o bajar)" },
+  'shortcut.photoOpen': {
+    en: "Open the selected photo (with several, the first; an attachment: open or download; a folder: its viewer)",
+    es: "Abrir la foto elegida (con varias, la primera; un adjunto: abrir o bajar; una carpeta: su visor)",
+  },
   'shortcut.photoRowNext': { en: "In a row: next photo", es: "En una fila: la foto siguiente" },
   'shortcut.photoRowPrev': { en: "In a row: previous photo", es: "En una fila: la foto anterior" },
   'shortcut.photoRowLeave': { en: "In a row: leave the row", es: "En una fila: salir de la fila" },
@@ -370,6 +411,16 @@ export const help = {
     es: "En la lista de proyectos, el panel de buscar y el menú de pegar Drive: moverse y elegir",
   },
   'shortcut.listClose': { en: "Close that list", es: "Cerrar esa lista" },
+  'shortcut.photoDelete': { en: "Photos selected: delete them", es: "Fotos elegidas: borrarlas" },
+  'shortcut.pasteFiles': {
+    en: "Paste files: photos and videos into the line, where the cursor is (other files, as a card)",
+    es: "Pegar archivos: fotos y videos en el renglón, donde está el cursor (los demás, como tarjeta)",
+  },
+  'shortcut.folderUp': { en: "Folder viewer: up one level (at the top, close)", es: "Visor de una carpeta: subir un nivel (arriba de todo, cerrar)" },
+  'shortcut.tabsMove': {
+    en: "Tabs of a window (Install app): previous / next tab, first / last",
+    es: "Pestañas de una ventana (Instalar la app): anterior / siguiente, primera / última",
+  },
   'shortcut.tourNext': { en: "Next step", es: "Paso siguiente" },
   'shortcut.tourBack': { en: "Previous step", es: "Paso anterior" },
   'shortcut.tourExit': { en: "Leave the tour (it can be replayed from the help)", es: "Salir de la recorrida (se vuelve a ver desde la ayuda)" },

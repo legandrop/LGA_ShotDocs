@@ -56,13 +56,13 @@ const table = (cell: unknown[]): PartialBlock =>
   ({ id: 't1', type: 'table', content: { type: 'tableContent', rows: [{ cells: [cell, ['b']] }] } }) as never;
 
 describe('el nodo', () => {
-  it('es un nodo en línea, atómico, elegible y arrastrable, con url, name y w', () => {
+  it('es un nodo en línea, atómico, elegible y arrastrable, con url, name, w y rowStart (empieza fila)', () => {
     const E = mountEditor(new Y.Doc());
     const type = view(E).state.schema.nodes[PHOTO];
     expect(type.isInline && type.isAtom && type.isLeaf).toBe(true);
     expect(type.spec.selectable).toBe(true);
     expect(type.spec.draggable).toBe(true);
-    expect(Object.keys(type.spec.attrs ?? {}).sort()).toEqual(['name', 'url', 'w']);
+    expect(Object.keys(type.spec.attrs ?? {}).sort()).toEqual(['name', 'rowStart', 'url', 'w']);
     expect(schema.inlineContentSchema.photo).toMatchObject({ type: 'photo', content: 'none' });
   });
 
@@ -165,20 +165,20 @@ describe('el nodo', () => {
 describe('cómo se guarda: un texto (aunque esté vacío) a cada lado de cada foto', () => {
   const F = () => photo('F');
   const cases: [string, Parameters<typeof para>[1], string][] = [
-    ['una foto sola', [F()], '"" <photo> ""'],
-    ['dos fotos', [F(), F()], '"" <photo> "" <photo> ""'],
-    ['texto y fotos', ['abc', F(), 'def', F()], '"abc" <photo> "def" <photo> ""'],
-    ['foto y texto', [F(), 'x'], '"" <photo> "x"'],
+    ['una foto sola', [F()], '<lgaStableGaps> "" <photo> ""'],
+    ['dos fotos', [F(), F()], '<lgaStableGaps> "" <photo> "" <photo> ""'],
+    ['texto y fotos', ['abc', F(), 'def', F()], '<lgaStableGaps> "abc" <photo> "def" <photo> ""'],
+    ['foto y texto', [F(), 'x'], '<lgaStableGaps> "" <photo> "x"'],
     // El salto de línea (Shift+Enter) queda como siempre: sin textos vacíos a su lado...
     ['un salto', ['\n'], '<hardBreak>'],
     ['dos saltos', ['\n\n'], '<hardBreak> <hardBreak>'],
     ['texto, salto, texto', ['a\nb'], '"a" <hardBreak> "b"'],
     ['salto al principio y al final', ['\na\n'], '<hardBreak> "a" <hardBreak>'],
     // ...también al lado de una foto: el texto vacío va solo del lado de la foto.
-    ['salto y foto', ['\n', F()], '<hardBreak> "" <photo> ""'],
-    ['foto y salto', [F(), '\n'], '"" <photo> "" <hardBreak>'],
-    ['dos saltos y una foto', ['\n\n', F()], '<hardBreak> <hardBreak> "" <photo> ""'],
-    ['foto, salto, foto', [F(), '\n', F()], '"" <photo> "" <hardBreak> "" <photo> ""'],
+    ['salto y foto', ['\n', F()], '<lgaStableGaps> <hardBreak> "" <photo> ""'],
+    ['foto y salto', [F(), '\n'], '<lgaStableGaps> "" <photo> "" <hardBreak>'],
+    ['dos saltos y una foto', ['\n\n', F()], '<lgaStableGaps> <hardBreak> <hardBreak> "" <photo> ""'],
+    ['foto, salto, foto', [F(), '\n', F()], '<lgaStableGaps> "" <photo> "" <hardBreak> "" <photo> ""'],
   ];
   for (const [name, content, stored] of cases) {
     it(name, () => expect(storedInline(docWith([para('p1', content)]))).toEqual([stored]));
@@ -243,7 +243,7 @@ describe('cómo se guarda: un texto (aunque esté vacío) a cada lado de cada fo
     // Una al final del primero y otra al principio del segundo.
     insertPhotoAt(E, textEnds(E)[1], 'F1');
     insertPhotoAt(E, textEnds(E)[2], 'F0');
-    expect(storedInline(doc)).toEqual(['<hardBreak> "abc" <photo> ""', '"" <photo> "abc" <hardBreak>']);
+    expect(storedInline(doc)).toEqual(['<lgaStableGaps> <hardBreak> "abc" <photo> ""', '<lgaStableGaps> "" <photo> "abc" <hardBreak>']);
     // Los mismos elementos de antes, en el mismo orden.
     expect(children(0).toArray().filter((c) => before[0].includes(c))).toEqual(before[0]);
     expect(children(1).toArray().filter((c) => before[1].includes(c))).toEqual(before[1]);
@@ -335,7 +335,7 @@ describe('deshacer (un paso, y los dos editores terminan iguales)', () => {
     const { A, docA, docB, initial, check } = await setup();
     insertPhotoAt(A, photosIn(A)[1].pos, 'F3', 1 / 3);
     await check();
-    expect(storedInline(docB)).toEqual(['"abc" <photo> "" <photo> "" <photo> ""']);
+    expect(storedInline(docB)).toEqual(['<lgaStableGaps> "abc" <photo> "" <photo> "" <photo> ""']);
     undoManager(A).stopCapturing();
     A.undo();
     await check();

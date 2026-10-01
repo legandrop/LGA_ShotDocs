@@ -30,6 +30,8 @@ const REMOVE = [
   '.bn-side-menu',
   '.bn-drag-handle-menu',
   '.bn-resize-handle',
+  // Los tiradores de la foto en línea (inlinePhoto.ts).
+  '.sd-photo-handle',
   '.bn-add-file-button',
   '.bn-file-loading-preview',
   '.bn-collaboration-cursor__base',
@@ -256,7 +258,8 @@ export function paginateView(view: PrintView): Paginated {
 export function applyBreaks(result: Paginated): void {
   result.elements.forEach((el, i) => {
     for (const member of result.members?.[i] ?? [el]) {
-      member.classList.toggle('sheet-keep', result.units[i].height <= result.sheetHeight);
+      // Un párrafo con fotos en línea se deja partir entre renglones (`breakable`, pagination.ts).
+      member.classList.toggle('sheet-keep', result.units[i].height <= result.sheetHeight && !result.units[i].breakable);
       member.classList.remove('sheet-break-before');
     }
   });

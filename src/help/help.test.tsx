@@ -38,6 +38,12 @@ describe('buscar en la ayuda', () => {
     expect(ids('PDF')).toContain('pdf');
     expect(ids('filas', 'es')).toContain('photosRows');
     expect(ids('papelera', 'en')).toContain('trash');
+    // Lo que llegó con main antes que la ayuda: instalar, carpetas, fotos en el renglón, sus archivos en Drive.
+    expect(first('instalar', 'es')).toBe('install');
+    expect(ids('carpeta', 'es')).toEqual(expect.arrayContaining(['folderDrop', 'folderUpload', 'folderOpen', 'folderWho']));
+    expect(ids('shift clic', 'es')).toContain('photosInline');
+    expect(ids('ctrl v')[0]).toBe('photosAdd');
+    expect(ids('look for its files again')).toContain('projectsDrive');
   });
 
   it('nada escrito, nada; algo que no está, ninguna', () => {

@@ -94,6 +94,10 @@ export const sidebar = {
     en: "This project no longer exists, or you can't see it anymore.",
     es: "Este proyecto ya no existe, o ya no lo ves.",
   },
+  'project.errorDriveFirst': {
+    en: "Its files are in the Google Drive trash: Restore brings them back first. Open Deleted projects again.",
+    es: "Sus archivos están en la papelera de Google Drive: Restaurar primero los trae. Abrí Proyectos borrados de nuevo.",
+  },
   'project.errorDeleted': {
     en: "This project was deleted in the meantime: it is in Deleted projects.",
     es: "Este proyecto se borró mientras tanto: está en Proyectos borrados.",

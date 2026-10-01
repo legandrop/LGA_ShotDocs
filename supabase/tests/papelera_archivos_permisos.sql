@@ -463,11 +463,12 @@ begin
   perform pg_temp.expect_error(format('select public.purge_file(%L)', gen_random_uuid()), 'file_not_found', 'mandar algo que no existe');
   assert (select purged_at is null from public.files where id = f3), 'un intento fallido marcó f3';
 
-  -- media_file: los 9 campos de siempre, más el estado de la papelera.
+  -- media_file: los 9 campos de siempre, más el estado de la papelera y, desde las carpetas (P.9), quién agregó el
+  -- archivo (`created_by`).
   j := public.media_file(f1)::jsonb;
   assert j ?& array['id', 'project_id', 'project_name', 'name', 'mime', 'size', 'drive_id', 'created_at', 'level'],
     format('media_file perdió campos: %s', j);
-  assert (select count(*) from jsonb_object_keys(j)) = 12, format('media_file no trae 12 campos: %s', j);
+  assert (select count(*) from jsonb_object_keys(j)) = 13 and j ? 'created_by', format('media_file no trae 13 campos: %s', j);
   assert j ->> 'trashed_at' is not null and j -> 'purged_at' = 'null'::jsonb and j -> 'drive_trashed_at' = 'null'::jsonb,
     format('media_file no dice bien el estado de la papelera: %s', j);
 

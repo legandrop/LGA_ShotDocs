@@ -1,8 +1,15 @@
 /// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+// La librería de las versiones publicadas para las pruebas *.published.test.ts: la arma
+// src/test/publishedYProsemirror.ts (`PUBLISHED_ENTRY`, la misma ruta; una prueba lo comprueba).
+const PUBLISHED_Y_PROSEMIRROR = fileURLToPath(
+  new URL('./node_modules/.cache/lga-y-prosemirror-v0.052/src/y-prosemirror.js', import.meta.url),
+).replace(/\\/g, '/');
 
 // La app solo recibe la URL del proyecto y la clave pública. Se leen por nombre, sin exponer prefijos
 // enteros, para que una clave secreta cargada en el mismo entorno nunca termine en el bundle.
@@ -49,9 +56,9 @@ function appVersion(): string {
 // en línea se guardarían de otra forma): el build y las pruebas se niegan a correr (por ejemplo, si se instaló
 // con --ignore-scripts o si se actualizó la librería y el parche no se volvió a hacer). Se miran los dos
 // archivos de la librería: `src` (el que usan la app y las pruebas) y `dist/*.cjs` (stableGaps.test.ts
-// comprueba que los dos escriben lo mismo).
+// comprueba que los dos escriben lo mismo), más `src/lib.js` (las posiciones, desde la marca del renglón) y
+// `src/plugins/undo-plugin.js` (deshacer no borra la marca).
 function assertYProsemirrorPatched(): void {
-  const files = ['src/plugins/sync-plugin.js', 'dist/y-prosemirror.cjs'];
   const marks = [
     'LGA-SHOTDOCS-PATCH',
     'relativeItemDeleted',
@@ -67,15 +74,29 @@ function assertYProsemirrorPatched(): void {
     'isStableGapsBlock(ytype, pnode)',
     '!stableGaps && nextytext',
     'if (hasGapTextChild(node))',
+    // La marca del renglón (`STABLE_GAPS_MARKER` de src/ui/unknownContent.ts, el mismo nombre): sin ella, las
+    // versiones anteriores abrirían un renglón al que le borraron todas las fotos (Docs/Doc_Colaboracion.md).
+    "const STABLE_GAPS_MARKER = 'lgaStableGaps'",
+    'if (isStableGapsMarker(type)) return',
+    'if (!hasMarker) yel.insert(0,',
   ];
-  for (const file of files) {
+  const libMarks = ["if (t.nodeName !== 'lgaStableGaps')", "if (contentType.nodeName !== 'lgaStableGaps')"];
+  // Deshacer nunca borra la marca del renglón (si no, deshacer la primera foto la sacaba).
+  const undoMarks = ["item.content.type.nodeName === 'lgaStableGaps'", 'isStableGapsMarkerItem(item) ? false :'];
+  const files: [string, string[]][] = [
+    ['src/plugins/sync-plugin.js', marks],
+    ['src/lib.js', libMarks],
+    ['src/plugins/undo-plugin.js', undoMarks],
+    ['dist/y-prosemirror.cjs', [...marks, ...libMarks, ...undoMarks]],
+  ];
+  for (const [file, wanted] of files) {
     let source = '';
     try {
       source = readFileSync(new URL(`./node_modules/y-prosemirror/${file}`, import.meta.url), 'utf8');
     } catch {
       // Sin el archivo tampoco se sabe si está el parche (la librería cambió de forma): se corta igual.
     }
-    const missing = marks.filter((mark) => !source.includes(mark));
+    const missing = wanted.filter((mark) => !source.includes(mark));
     if (missing.length > 0) {
       throw new Error(
         `y-prosemirror sin el parche de la app (node_modules/y-prosemirror/${file}: falta ${missing.join(', ')}). ` +
@@ -100,6 +121,9 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: ['icons/icon.svg', 'icons/apple-touch-icon.png'],
         manifest: {
+          // La identidad de la app instalada: la misma que tenía sin `id` (la dirección de inicio), explícita para
+          // que cambiar `start_url` algún día no la convierta en otra app (Docs/Doc_Instalar.md).
+          id: '/',
           name: 'LGA Shot Docs',
           short_name: 'Shot Docs',
           description: 'VFX documentation: pre-production notes and on-set reports.',
@@ -165,8 +189,35 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: { output: { postBanner: LIBHEIF_BANNER } },
     },
     test: {
-      environment: 'node',
-      include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'portero/src/**/*.test.ts', 'scripts/**/*.test.mjs'],
+      // 15 s por prueba (el de vitest es 5 s): las que montan el editor (38 archivos: buscar, la página, las fotos,
+      // colapsar, editar a la vez…) tardan cerca de 5 s con la máquina cargada y fallaban por tiempo, cada vez en
+      // otra (auditoría de las fotos en línea, ronda 3). Solas pasan siempre; lo que prueban no cambia.
+      testTimeout: 15_000,
+      projects: [
+        {
+          extends: true,
+          test: {
+            name: 'app',
+            environment: 'node',
+            include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'portero/src/**/*.test.ts', 'scripts/**/*.test.mjs'],
+            exclude: ['**/node_modules/**', 'src/**/*.published.test.ts'],
+          },
+        },
+        {
+          // Versiones mezcladas con la librería de verdad de las versiones publicadas (src/test/
+          // publishedYProsemirror.ts): en estas pruebas `y-prosemirror` es esa, también adentro de BlockNote
+          // (por eso BlockNote pasa por Vite: `inline`). La de hoy se importa por su ruta.
+          extends: true,
+          resolve: { alias: [{ find: /^y-prosemirror$/, replacement: PUBLISHED_Y_PROSEMIRROR }] },
+          test: {
+            name: 'published',
+            environment: 'node',
+            include: ['src/**/*.published.test.ts'],
+            globalSetup: ['src/test/publishedYProsemirror.setup.ts'],
+            server: { deps: { inline: [/@blocknote\/core/] } },
+          },
+        },
+      ],
     },
   };
 });

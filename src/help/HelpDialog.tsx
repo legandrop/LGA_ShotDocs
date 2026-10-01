@@ -3,6 +3,7 @@ import { useT, type Translate } from '../i18n';
 import '../i18n/lazy/help';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { isPhoneLayout } from '../ui/commentsUi';
+import { openInstallDialog, useInstallState } from '../ui/install';
 import { CloseIcon, SearchIcon } from '../ui/icons';
 import { IS_MAC, shortcutLabel, SHORTCUT_PLACES, SHORTCUTS } from '../ui/shortcuts';
 import { HELP_ENTRIES, HELP_SECTIONS, type HelpEntry, type HelpWhen } from './entries';
@@ -75,7 +76,14 @@ export function HelpDialog({ section = null, onClose, onTour, onPractice }: Help
     }
   };
 
-  const actions = { tour: onTour, practice: onPractice };
+  const actions = {
+    tour: onTour,
+    practice: onPractice,
+    install: () => {
+      onClose();
+      openInstallDialog();
+    },
+  };
   const renderEntry = (entry: HelpEntry, withSection = false) => (
     <HelpEntryView
       key={entry.id}
@@ -160,11 +168,13 @@ export function HelpDialog({ section = null, onClose, onTour, onPractice }: Help
 function useUnavailable(): (when: HelpWhen) => string | null {
   const { media, user } = useServices();
   const status = useSyncStatus();
+  const { installed } = useInstallState();
   const perms = usePermissions();
   const tr = useT();
   return (when) => {
     if (when === 'portero') return media.enabled ? null : tr('help.when.portero');
     if (when === 'admin') return perms.canManageMembers ? null : tr('help.when.admin');
+    if (when === 'notInstalled') return installed ? tr('help.installed') : null;
     return status.ownerId && status.ownerId === user.id ? null : tr('help.when.owner');
   };
 }
@@ -189,10 +199,10 @@ function HelpEntryView({
       {sectionLabel && <span className="mono-label help-entry-section">{sectionLabel}</span>}
       <h4>{tr(entry.title)}</h4>
       <p>{tr.rich(entry.text, params)}</p>
-      {reason && <p className="help-reason">{tr('help.unavailable', { reason })}</p>}
-      {onAction && (
+      {reason && <p className="help-reason">{entry.when === 'notInstalled' ? reason : tr('help.unavailable', { reason })}</p>}
+      {onAction && !reason && (
         <button className="secondary help-action" onClick={onAction}>
-          {entry.action === 'tour' ? tr('help.tour.action') : tr('help.practice.action')}
+          {entry.action === 'tour' ? tr('help.tour.action') : entry.action === 'install' ? tr('help.install.action') : tr('help.practice.action')}
         </button>
       )}
     </article>

@@ -85,7 +85,7 @@ async function namedPassFor(media: Pick<MediaQueue, 'pass' | 'passInfo'>, id: st
 }
 
 /** La dirección del portero que obliga a bajar el archivo (en vez de abrirlo). */
-function forceDownload(url: string): string {
+export function forceDownload(url: string): string {
   return `${url}${url.includes('?') ? '&' : '?'}download=1`;
 }
 

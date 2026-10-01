@@ -52,6 +52,13 @@ export interface ProjectRow {
    * archivado. Archivar es solo orden: sale de la lista de todos los días, con los mismos permisos.
    */
   archived_at?: string | null;
+  /**
+   * La carpeta del proyecto en la papelera de Drive (versión 10 de la base, P.14 entrega 2): cuándo se pidió
+   * mandarla y, si se restauró sin ella porque Drive ya no la tenía, cuándo. Con `drive_missing_at`, el dueño o
+   * un admin que lo maneja puede buscarla de nuevo (*Look for its files again*). Ausentes con una base anterior.
+   */
+  drive_trash_requested_at?: string | null;
+  drive_missing_at?: string | null;
 }
 
 /** Una fila de `trashed_projects` (P.14): un proyecto en la papelera de proyectos que la sesión veía. */
@@ -70,6 +77,15 @@ export interface TrashedProjectRow {
   /** Solo a quien lo maneja; si no, `null`. */
   pages: number | null;
   files: number | null;
+  /**
+   * La carpeta en la papelera de Drive (versión 10, solo a quien lo maneja): pedida, confirmada por el portero, o
+   * restaurado antes sin ella. `null` con una base anterior o sin pedido.
+   */
+  drive_trash_requested_at: string | null;
+  drive_trashed_at: string | null;
+  drive_missing_at: string | null;
+  /** La sesión puede mandar o traer su carpeta (dueño o admin que lo maneja, `private.can_purge_project`). */
+  can_purge: boolean;
 }
 
 /** Lo que muestra la ventana de borrar (`project_delete_info`, P.14). */

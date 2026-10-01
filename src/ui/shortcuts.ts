@@ -113,6 +113,12 @@ export const SHORTCUTS: Shortcut[] = [
   // Las fotos en línea (Docs/Doc_Fotos_En_Linea.md): con una elegida.
   { id: 'photoInlineSelect', keys: ['Shift-ArrowLeft', 'Shift-ArrowRight', 'Shift-ArrowUp', 'Shift-ArrowDown'], place: 'photos', context: 'inline', owner: 'app', source: 'dom' },
   { id: 'photoInlineType', keys: ['Enter'], place: 'photos', context: 'inline', owner: 'app', source: 'dom' },
+  // Borrar las fotos elegidas (ProseMirror; también *Delete image* en su barra).
+  { id: 'photoDelete', keys: ['Delete', 'Backspace'], place: 'photos', context: 'selected', owner: 'blocknote', source: 'keymap' },
+  // Pegar archivos: fotos y videos en el renglón, donde está el cursor (inlinePhotoCreate.ts).
+  { id: 'pasteFiles', keys: ['Mod-v'], place: 'photos', owner: 'app', source: 'dom' },
+  // El visor de una carpeta de Drive (Docs/Doc_Carpetas.md): Esc sube un nivel; arriba de todo, cierra.
+  { id: 'folderUp', keys: ['Escape'], place: 'photos', context: 'folder', owner: 'app', source: 'dom' },
 
   // --- Carrete ---
   { id: 'carretePrev', keys: ['ArrowLeft'], place: 'carrete', owner: 'app', source: 'dom' },
@@ -143,6 +149,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'menusClose', keys: ['Escape'], place: 'menus', owner: 'app', source: 'dom' },
   { id: 'listPick', keys: ['ArrowUp', 'ArrowDown', 'Enter'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
   { id: 'listClose', keys: ['Escape'], place: 'menus', context: 'list', owner: 'app', source: 'dom' },
+  // Las pestañas de una ventana (Install app: iPhone, Android, computadora).
+  { id: 'tabsMove', keys: ['ArrowLeft', 'ArrowRight', 'Home', 'End'], place: 'menus', context: 'tabs', owner: 'app', source: 'dom' },
 
   // --- La recorrida (con el foco en el globito) ---
   { id: 'tourNext', keys: ['ArrowRight', 'Enter'], place: 'tour', owner: 'app', source: 'dom' },

@@ -4,7 +4,6 @@ import { withCollaboration } from '@blocknote/core/yjs';
 import { BlockNoteView } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
 import {
-  FormattingToolbarController,
   getDefaultReactSlashMenuItems,
   SuggestionMenuController,
   useCreateBlockNote,
@@ -12,8 +11,9 @@ import {
 } from '@blocknote/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
-import { t, useT } from '../i18n';
+import { localize, t, useT } from '../i18n';
 import '../i18n/lazy/editor';
+import '../i18n/lazy/folders';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
@@ -22,7 +22,11 @@ import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
-import { dropTarget, insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
+import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
+import { addFiles, dropPos, pickFiles, type AddFilesOptions, type PhotoEditor } from './inlinePhotoCreate';
+import { readFolder, summarize, takeDrop, type FolderSource } from '../media/folderRead';
+import { FolderAskDialog, FolderProgressDialog } from './FolderDialog';
+import { FolderViewer } from './FolderViewer';
 import { renameConvertedHeic } from './heicNames';
 import { isAttachment, markAttachments } from './attachments';
 import { openAttachmentNow, prepareAttachment } from './attachmentOpen';
@@ -52,12 +56,14 @@ import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
 import { BlockSideMenuController } from './BlockSideMenu';
-import { PageFormattingToolbar, pageToolbarItems } from './PageToolbar';
+import { PageFormattingToolbar, PageFormattingToolbarController, pageToolbarItems } from './PageToolbar';
+import { PhotoToolbarController } from './PhotoToolbar';
+import { MediaActionsContext, type MediaActions } from './MediaBar';
 import { BACKGROUND_META } from './editorMeta';
 import { notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens, shiftSelects } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
-import { selectedPhotoKey } from './inlinePhotoEditor';
+import { selectedPhotoKey, spacePhotoKey } from './inlinePhotoEditor';
 import { shortcutLabel, slashBadge } from './shortcuts';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession } from './projectSearchUi';
@@ -276,7 +282,7 @@ export function BlockEditor({
    */
   filesNotice?: string;
 }) {
-  const { docs, files, media, user, db } = useServices();
+  const { docs, files, media, user, db, folders } = useServices();
   const scheme = useScheme();
   const tr = useT();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
@@ -285,6 +291,11 @@ export function BlockEditor({
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
   /** El adjunto con su hoja abierta (Docs/Doc_Adjuntos.md). */
   const [sheet, setSheet] = useState<string | null>(null);
+  /** Carpetas soltadas que esperan "Subir" (P.9, Docs/Doc_Carpetas.md), dónde se soltaron. */
+  const [folderAsk, setFolderAsk] = useState<{ sources: FolderSource[]; at: InsertAt | null; resumes: (string | null)[] } | null>(null);
+  /** La carpeta abierta en el visor, y la que muestra cómo va su subida. */
+  const [folderView, setFolderView] = useState<{ id: string; name: string } | null>(null);
+  const [folderUpload, setFolderUpload] = useState<string | null>(null);
   // Con el editor ya abierto, el carrete se baja cuando el navegador está libre: tocar una foto no espera.
   useEffect(() => preloadWhenIdle(Carrete), []);
   /** El toque empezó sobre una foto que ya estaba elegida (ver `openCarrete`). */
@@ -312,6 +323,19 @@ export function BlockEditor({
     if (!isAllowedImage(blob.type)) return Promise.reject(new FileRejected(t(media.enabled ? 'editor.embeddedOnlyMedia' : 'editor.onlyImages')));
     return files.add(pageId, blob);
   };
+
+  // Pegar, soltar o elegir archivos (inlinePhotoCreate.ts): qué va en el renglón, cómo se guarda y dónde van los
+  // adjuntos. Sin portero, solo imágenes (a Supabase); con portero, fotos y videos en el renglón y lo demás como
+  // tarjeta.
+  const fileOptions = (target: FileEditor): AddFilesOptions => ({
+    isInline: (file) => (media.enabled ? isMediaFile(file) : isAllowedImage(file.type)),
+    store: (file) =>
+      store(file).catch((err: unknown) => {
+        notify(err instanceof FileRejected ? err.message : t('editor.fileNotSaved'));
+        throw err;
+      }),
+    insertAttachments: (list, at) => void insertFiles(target, list, at),
+  });
 
   // Los eventos de soltar ya procesados (el menú lateral del editor reenvía el mismo al soltar cerca).
   const handledDrops = useMemo(() => new WeakSet<DataTransfer>(), []);
@@ -346,13 +370,14 @@ export function BlockEditor({
       dictionary: editorDictionary(tr.lang),
       // Un link a otra página de la app la abre en esta pestaña (internalLinks.ts).
       links: { onClick: (event) => editorLinkClick(event) },
-      // Pegar archivos (con portero, cualquier archivo): un bloque por archivo, en orden (fileDrop.ts).
+      // Pegar archivos: las fotos y los videos en el renglón, donde está el cursor (fotos en línea,
+      // inlinePhotoCreate.ts); con portero, cualquier otro archivo, un bloque debajo (fileDrop.ts).
       pasteHandler: (ctx) => {
         const dt = ctx.event.clipboardData;
-        if (!media.enabled || !isFilesTransfer(dt)) return drivePaste.pasteHandler(ctx);
+        if (!isFilesTransfer(dt)) return drivePaste.pasteHandler(ctx);
         const { files: taken, folders } = takeFiles(dt!);
         if (folders > 0) notify(t('editor.foldersNotSupported'));
-        void insertFiles(ctx.editor as unknown as FileEditor, taken, null);
+        void addFiles(ctx.editor as unknown as PhotoEditor, taken, null, fileOptions(ctx.editor as unknown as FileEditor));
         return true;
       },
       uploadFile: (file: File, blockId?: string) =>
@@ -584,7 +609,20 @@ export function BlockEditor({
             onItemClick: () =>
               insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: { [SCRIPT_PROP]: false } }),
           }
-        : item,
+        : (item as { key?: string }).key === 'image'
+          ? {
+              ...item,
+              // "/Image": el selector de archivos del sistema; lo elegido entra en el renglón, donde estaba el cursor
+              // (fotos en línea, inlinePhotoCreate.ts). Con portero, también videos y adjuntos (estos, como tarjeta).
+              subtext: tr('editor.imageHint'),
+              onItemClick: () =>
+                pickFiles(
+                  editor as unknown as PhotoEditor,
+                  media.enabled ? 'image/*,video/*,*/*' : 'image/*',
+                  fileOptions(editor as unknown as FileEditor),
+                ),
+            }
+          : item,
     );
     const at = items.findIndex((i) => i.group !== headings && i.group !== basic);
     // Script, Question y Paragraph se sacan la marca uno al otro (nunca Script y pregunta juntos).
@@ -596,7 +634,7 @@ export function BlockEditor({
     const extra = [withParagraphVariants(script, editor, 'script'), questionSlashItem(editor, tr, basic)];
     return (query: string) =>
       Promise.resolve(filterSuggestionItems([...variants.slice(0, at), ...extra, ...variants.slice(at)], query));
-  }, [editor, tr]);
+  }, [editor, tr, media]);
 
   const toolbarItems = useMemo(
     () => pageToolbarItems(editor.dictionary, tr),
@@ -626,18 +664,115 @@ export function BlockEditor({
     notify(acceptedText());
   };
 
-  // Con portero, soltar archivos en la página: un bloque por archivo, en orden, donde se soltó (fileDrop.ts).
+  // Soltar archivos en la página: las fotos y los videos en el renglón, entre las letras donde se soltaron (o en un
+  // renglón nuevo al lado del bloque, si ahí no pueden ir); con portero, los demás archivos como bloques, en orden,
+  // donde se soltaron (fileDrop.ts).
   const dropFiles = (e: React.DragEvent) => {
     const dt = e.nativeEvent.dataTransfer;
-    if (!media.enabled) return rejectOtherFiles(e.nativeEvent, dt);
+    if (!media.enabled) {
+      rejectOtherFiles(e.nativeEvent, dt);
+      if (e.nativeEvent.defaultPrevented) return;
+    }
     const root = editor.domElement;
     if (!editable || !dt || !isFilesTransfer(dt) || handledDrops.has(dt) || !root?.contains(e.target as Node)) return;
     handledDrops.add(dt);
     e.preventDefault();
     e.stopPropagation();
-    const { files: taken, folders } = takeFiles(dt);
-    if (folders > 0) notify(t('editor.foldersNotSupported'));
-    void insertFiles(editor as unknown as FileEditor, taken, dropTarget(root, e.clientX, e.clientY));
+    const { files: taken, folders: dirs, supported } = takeDrop(dt);
+    let at: InsertAt | null = dropTarget(root, e.clientX, e.clientY);
+    // Los archivos sueltos van primero (las fotos y videos al renglón, los adjuntos como bloques); las carpetas del
+    // mismo soltar, después de los adjuntos (el párrafo vacío donde se soltó ya no está).
+    if (taken.length > 0) {
+      void addFiles(
+        editor as unknown as PhotoEditor,
+        taken,
+        { pos: dropPos(editor.prosemirrorView, e.clientX, e.clientY), block: at },
+        {
+          ...fileOptions(editor as unknown as FileEditor),
+          insertAttachments: (list, where) =>
+            void insertFiles(editor as unknown as FileEditor, list, where, (ids) => {
+              const last = ids[ids.length - 1];
+              if (last) at = { blockId: last, placement: 'after' };
+            }),
+        },
+      );
+    }
+    if (dirs.length === 0) return;
+    // Sin forma de leer carpetas (P.9): se sigue pidiendo comprimirlas.
+    if (!supported || !folders) return notify(t('editor.foldersNotSupported'));
+    void Promise.all(dirs.map((d) => readFolder(d)))
+      .then((sources) => {
+        // Soltada sobre la tarjeta de una carpeta que quedó a medias (se cerró la pestaña): se retoma.
+        const target = at ? folderIn(at.blockId) : null;
+        if (target && sources.length === 1 && folders.progress(target.id)?.state === 'missing') {
+          const found = folders.resumeWith(target.id, sources[0]!);
+          notify(found > 0 ? t('folders.matched', { count: found }) : t('folders.noMatch'));
+          return;
+        }
+        // La misma carpeta a medio subir en esta página (mismo nombre, algún archivo en común): se ofrece seguir.
+        const resumes = sources.map((s) => sameUpload(s));
+        setFolderAsk({ sources, at, resumes });
+      })
+      .catch(() => notify(t('editor.fileNotSaved')));
+  };
+
+  /** Una subida a medias de esta página que parece la misma carpeta: mismo nombre y algún archivo con la misma ruta. */
+  const sameUpload = (source: FolderSource): string | null => {
+    const paths = new Set(source.files.map((f) => f.path));
+    const match = (folders?.all() ?? []).find(
+      (p) => p.pageId === pageId && p.name === source.name && p.state !== 'done' && folders!.hasAnyPath(p.id, paths),
+    );
+    return match?.id ?? null;
+  };
+
+  /** Sube las carpetas confirmadas: registra cada una, pone su bloque donde se soltó y empieza a subir. */
+  const uploadFolders = async (sources: FolderSource[], at: InsertAt | null, resumes: (string | null)[] = []) => {
+    setFolderAsk(null);
+    // Si el bloque donde se soltó ya no está (otro dispositivo lo borró mientras se confirmaba), después del cursor.
+    let ref = at && editor.getBlock(at.blockId) ? at : { blockId: editor.getTextCursorPosition().block.id, placement: 'after' as const };
+    for (const [n, source] of sources.entries()) {
+      const again = resumes[n];
+      if (again && folders) {
+        const found = folders.resumeWith(again, source);
+        notify(found > 0 ? t('folders.matched', { count: found }) : t('folders.noMatch'));
+        if (sources.length === 1) setFolderUpload(again);
+        continue;
+      }
+      try {
+        const { id, url } = await media.addFolder(pageId, source.name, summarize(source).bytes);
+        const refBlock = editor.getBlock(ref.blockId);
+        const [block] = editor.insertBlocks([{ type: 'image', props: { url, name: source.name } }] as never, ref.blockId, ref.placement);
+        // Como al soltar archivos: un párrafo vacío donde se soltó se reemplaza.
+        if (isEmptyParagraph(refBlock as never)) {
+          try {
+            editor.removeBlocks([ref.blockId]);
+          } catch {
+            // Ya no estaba.
+          }
+        }
+        if (block) ref = { blockId: block.id, placement: 'after' };
+        await folders?.start(id, pageId, source);
+        if (sources.length === 1) setFolderUpload(id);
+      } catch (err) {
+        notify(t('folders.notSaved', { reason: localizeError(err) }));
+      }
+    }
+  };
+
+  /** La carpeta (P.9) de un bloque `image`, o `null`. */
+  const folderIn = (blockId: string): { id: string; name: string } | null => {
+    const block = editor.getBlock(blockId) as BlockLike | undefined;
+    if (block?.type !== 'image') return null;
+    const props = (block.props ?? {}) as { url?: string; name?: string };
+    const id = mediaIdOf(props.url);
+    return id && media.isFolder(id) ? { id, name: typeof props.name === 'string' ? props.name : '' } : null;
+  };
+
+  /** Abre una carpeta: cómo va su subida si se está subiendo desde acá, o el visor. */
+  const openFolder = (folder: { id: string; name: string }) => {
+    const p = folders?.progress(folder.id);
+    if (p && p.state !== 'done') setFolderUpload(folder.id);
+    else setFolderView(folder);
   };
 
   // Un archivo soltado afuera del editor (o en solo lectura) no abre el archivo en la pestaña en lugar de la app.
@@ -699,6 +834,12 @@ export function BlockEditor({
 
   /** `key`: la foto (`photoKeyOf`), o el id de un bloque `image` (la barra de la foto: "View"). */
   const openAt = (key: string | null, kind = pressKind.current) => {
+    // Una carpeta (P.9) abre su visor (o cómo va su subida).
+    const folder = key ? folderIn(parsePhotoKey(key).blockId) : null;
+    if (folder) {
+      openFolder(folder);
+      return true;
+    }
     // Un adjunto se abre o se baja (con el mouse, en el acto si ya está preparado; si no, o con el dedo, su hoja).
     const attachment = key ? attachmentOf(key) : null;
     if (attachment) {
@@ -718,6 +859,8 @@ export function BlockEditor({
   const attachmentOf = (key: string): string | null => {
     const props = photoPropsIn(editor.getBlock(parsePhotoKey(key).blockId) as BlockLike | undefined, key);
     const id = props ? mediaIdOf(props.url as string | undefined) : null;
+    // Una carpeta no es un adjunto que se abre o se baja con un pase: tiene su visor.
+    if (id && media.isFolder(id)) return null;
     return id && isAttachment(media, id, typeof props?.name === 'string' ? props.name : '') ? id : null;
   };
 
@@ -751,7 +894,9 @@ export function BlockEditor({
   // también abre; Enter y las letras pasan el cursor a la derecha de la foto y siguen (inlinePhotoEditor.ts).
   const openWithKeyboard = (e: KeyboardEvent) => {
     if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !editor.isFocused()) return;
-    const key = selectedKey();
+    // Con varias fotos en línea elegidas, en la primera (y la barra espaciadora no las reemplaza).
+    const view = editor.prosemirrorView;
+    const key = view ? spacePhotoKey(view.state) : null;
     if (!key) return;
     if (openAt(key, 'keyboard')) {
       e.preventDefault();
@@ -769,8 +914,22 @@ export function BlockEditor({
   const openAtRef = useRef(openAt);
   openAtRef.current = openAt;
   const formattingToolbar = useCallback(
-    () => <PageFormattingToolbar items={toolbarItems} canComment={canComment} onView={(id) => openAtRef.current(id)} />,
+    () => <PageFormattingToolbar items={toolbarItems} canComment={canComment} />,
     [toolbarItems, canComment],
+  );
+  // Lo que usan las barras de las fotos (MediaBar.tsx, PhotoToolbar.tsx): guardar al reemplazar, qué acepta el
+  // selector, comentar y abrir el carrete (siempre con el último `openAt`).
+  const mediaActions = useMemo<MediaActions>(
+    () => ({
+      store: (file) => fileOptions(editor as unknown as FileEditor).store(file),
+      accept: {
+        inline: media.enabled ? 'image/*,video/*' : 'image/*',
+        block: media.enabled ? 'image/*,video/*,*/*' : 'image/*',
+      },
+      canComment,
+      onView: (key) => void openAtRef.current(key),
+    }),
+    [editor, media, canComment],
   );
 
   return (
@@ -784,6 +943,7 @@ export function BlockEditor({
       onClickCapture={(e) => !editable && followInternalLink(e.nativeEvent)}
       onClick={openCarrete}
     >
+      <MediaActionsContext.Provider value={mediaActions}>
       <BlockNoteView
         editor={editor}
         editable={editable}
@@ -794,10 +954,13 @@ export function BlockEditor({
         sideMenu={false}
       >
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
-        <FormattingToolbarController formattingToolbar={formattingToolbar} />
+        <PageFormattingToolbarController formattingToolbar={formattingToolbar} />
+        {/* La barra de la foto en línea elegida (PhotoToolbar.tsx). */}
+        {editable && <PhotoToolbarController />}
         {/* Los tres puntos de cada bloque: arrastrar lo mueve, un clic lo elige y abre la barra de formato. */}
         <BlockSideMenuController />
       </BlockNoteView>
+      </MediaActionsContext.Provider>
       <CommentMargin editor={editor} pageId={pageId} canComment={canComment} host={host} />
       {/* El triángulo de cada título (P.11): una capa encima, como el margen. */}
       {canCollapse && <CollapseToggles editor={editor} host={host} editable={editable} />}
@@ -806,6 +969,36 @@ export function BlockEditor({
       {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}
       {carrete && <CarreteHost {...carrete} onClose={() => setCarrete(null)} />}
       {sheet && <AttachmentSheet fileId={sheet} onClose={() => setSheet(null)} />}
+      {folderAsk && (
+        <FolderAskDialog
+          sources={folderAsk.sources}
+          resumes={folderAsk.resumes}
+          onCancel={() => setFolderAsk(null)}
+          onConfirm={(sources, resume) => void uploadFolders(sources, folderAsk.at, resume ? folderAsk.resumes : [])}
+        />
+      )}
+      {folderUpload && (
+        <FolderProgressDialog
+          id={folderUpload}
+          onClose={() => setFolderUpload(null)}
+          onOpen={() => {
+            const block = folderUpload;
+            setFolderUpload(null);
+            setFolderView({ id: block, name: folders?.progress(block)?.name ?? '' });
+          }}
+        />
+      )}
+      {folderView && (
+        <FolderViewer
+          fileId={folderView.id}
+          name={folderView.name}
+          onClose={() => setFolderView(null)}
+          onShowUpload={() => {
+            setFolderUpload(folderView.id);
+            setFolderView(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -824,6 +1017,10 @@ function CarreteHost(props: OpenCarrete & { onClose: () => void }) {
       <Carrete {...props} online={online} />
     </Part>
   );
+}
+
+function localizeError(err: unknown): string {
+  return localize(err instanceof Error ? err.message : String(err));
 }
 
 function flatten(blocks: Block[]): Block[] {

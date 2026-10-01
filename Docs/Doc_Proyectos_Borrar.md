@@ -1,7 +1,8 @@
 # Borrar y archivar proyectos (P.14)
 
-Estado: **entrega 1 implementada en la rama `lega/proyectos-borrar`, sin publicar ni migrar** (2026-10-01; ver
-"Cómo quedó (entrega 1)", al final). Las entregas 2 (Drive) y 3 (*Delete forever*) siguen en diseño. Lega aprobó
+Estado: **entrega 1 publicada (v0.077, migración 9 aplicada); entrega 2 implementada en la rama
+`lega/proyectos-borrar-drive`, sin publicar y con la migración 10 sin aplicar** (2026-10-01; ver "Cómo quedó (entrega
+1)" y "Cómo quedó (entrega 2)", al final). La entrega 3 (*Delete forever*) sigue en diseño. Lega aprobó
 todas las propuestas ("sí a todo", sección "Decisiones de Lega"). La auditoría independiente del diseño dio
 "aprobado con cambios" y, corregido, "aprobado" (sección "Correcciones de la auditoría"). La migración 9 está en el
 repo pero no aplicada en la base; las 10 y 11, solo en este documento: el SQL de las tres migraciones (entregas 1, 2 y 3: secciones 1.3, 3.6 y 2.3) **se corrió con
@@ -3527,10 +3528,98 @@ Veredicto: "se puede publicar corrigiendo". Lo corregido, cada punto con su prue
 | Obs. 7 | "Create the first project" a quien tenía borrados para restaurar; "· Quedan 30 días" con mayúscula. | Texto propio ("Restaurá un proyecto borrado de abajo, o creá uno nuevo"); el plazo en minúscula después del "·" y con mayúscula si abre el renglón. |
 | Obs. 8 | Una prueba de `pageView` pasa el tope de 5 s con la suite entera, 1 de cada 4 veces. | Viene de antes (falla igual en `main`); no se toca. |
 
+## Cómo quedó (entrega 2)
+
+Implementada en la rama `lega/proyectos-borrar-drive` (sin publicar). Se construyó antes de la prueba técnica, que
+queda como un script para correr contra el portero publicado (abajo): Lega necesita la casilla ya, para borrar la
+importación de prueba de ERSO (5,6 GB en su Drive) sin dejarla huérfana.
+
+**Base** (`supabase/migrations/20261005120000_proyectos_drive.sql`, la de la sección 3.6, y su prueba
+`supabase/tests/proyectos_drive_permisos.sql`, la de la 3.7 con la preparación de la 1.4): corridas en `begin; …
+rollback;` contra la base real (versión 9) junto con las otras doce pruebas, todas `ok`. La prueba de la entrega 1
+acepta las dos firmas de `restore_project` (la 10 le suma `p_without_drive`) y pasa con la migración y sin ella.
+**La migración 10 no está aplicada.**
+
+**Portero** (`portero/src/core.ts`, `Doc_Portero.md`): `POST /project/trash` y `POST /project/untrash` como en la
+sección 3.8, con el registro acumulado antes de cada `PATCH`, la búsqueda por la marca, la unión al traer, el margen de
+5 minutos, `drive_other_account` y los errores con `code`. Tres cosas que se agregaron al implementar:
+
+- **La carpeta recordada se revisa antes de pedirle nada a la base:** si no lleva la marca (`drive_mismatch`), el
+  proyecto queda sin pedido y se puede restaurar. Al traer, una carpeta sin la marca se deja afuera en vez de trabar
+  la restauración.
+- **Sin `trashedTime`** (Google lo documenta solo para unidades compartidas; lo dice la prueba técnica, punto 3), una
+  carpeta con la marca en la papelera cuenta como del pedido: traer de más nunca pierde nada.
+- **Restaurado mientras se mandaba:** si al confirmar la base dice que ya no hay pedido, lo mandado en ese pedido
+  vuelve y la respuesta es `409 project_restored`. Mandar y traer del mismo proyecto van de a uno.
+
+Y, solo para el dueño y para la prueba técnica: `GET /project/inspect` (solo mira) y los modos `test: 'lost_response'`
+y `'lost_registry'`, que dejan el estado exacto de una respuesta perdida o de un registro perdido. Los modos están
+**apagados** salvo con la variable `TEST_MODES=1` en el Worker, que se prende para la prueba técnica y se saca al
+terminar (`Doc_Portero.md`).
+
+**Corrección de la auditoría del código (B1):** *Look for its files again* podía decir "volvieron" sin que volviera
+nada: si Google ya había borrado la carpeta y, después de restaurar sin ella, una foto nueva creaba otra carpeta con la
+misma marca, `/project/untrash` contaba esa carpeta nueva como "existe" y la base borraba `drive_missing_at`. Ahora
+cuentan solo las carpetas de ese pedido: las del registro, las que se traen de la papelera y una viva creada antes del
+pedido (`createdTime`). Con la carpeta nueva sola, la respuesta es `missing` y la marca queda (prueba A1 en
+`core.test.ts`, con los casos A3 a A5 del auditor).
+
+**App:**
+
+- **La ventana de borrar** (`ProjectStatesPart.tsx`): con la base en la versión 10 y portero, la casilla *Also send its
+  files to the Google Drive trash (5.3 GB)*, **destildada** al abrir. Tildada, explica la carpeta
+  (`LGA_ShotDocs/<Proyecto>`, también lo agregado a mano) y los 30 días de Google. Apagada con el motivo si quien borra
+  no es dueño ni admin o si Drive no está conectado. Con el proyecto restaurado antes sin su carpeta, avisa que lo no
+  encontrado esa vez deja de poder recuperarse desde la app. Primero borra (la base) y después manda la carpeta; si eso
+  falla, el proyecto queda borrado y el aviso dice que se termina desde *Deleted projects*.
+- **La lista de borrados:** "Files in the Google Drive trash until Oct 29" (o que el envío no terminó); *Send files to
+  the Drive trash (782 MB)* para dueños y admins, que pregunta en el renglón (uno a medias se termina sin preguntar);
+  *Restore* trae primero la carpeta. Si Drive, con la misma cuenta, ya no la tiene, pregunta en el renglón y *Restore
+  without its files* restaura con la marca reversible. Con otra cuenta, sin conectar o sin red, solo el motivo. A quien
+  maneja el proyecto sin ser dueño ni admin, *Restore* apagado con el porqué (traer la carpeta no le toca).
+- **El inicio de un proyecto restaurado sin su carpeta:** lo dice y, a dueños y admins que lo manejan, *Look for its
+  files again*.
+- La sincronización pide `drive_trash_requested_at` y `drive_missing_at` solo con la versión 10 y, ante un `42703`,
+  sigue sin ellas diez minutos (como `archived_at`). `restore_project` lleva el segundo parámetro solo cuando hace
+  falta (una base de la versión 9 tiene uno).
+
+**Pruebas:** portero, 21 nuevas (`core.test.ts`, Drive simulado con la papelera de las carpetas, `trashedTime`
+opcional, respuestas perdidas y fallas a mitad: ida y vuelta, el orden del registro, un archivo mandado antes que no
+vuelve, permisos, `drive_mismatch`, respuesta perdida, registro perdido con y sin `trashedTime`, dos carpetas con falla
+en el medio, carpeta vieja, otra cuenta, carpeta que no existe, Google que la borró y reaparece, proyecto sin carpeta,
+volver a mandar después de restaurar sin ella, restaurado mientras se mandaba, sin Drive, base sin migrar, CORS,
+`inspect` y los modos de prueba). App: 11 de componente (`projectStates.test.tsx`) y 6 en `projectDrive.test.ts`.
+Suite completa, `tsc` y `build` bien. Capturas en Chromium sin ventana contra el servidor de las pruebas, sin errores
+en la consola.
+
+**La prueba técnica (sección 3.9), lista para correr después de publicar:** un script de Node sin dependencias
+(`prueba-drive.mjs`, en el depósito privado de pruebas) que entra con el código de 8 dígitos, se niega con ERSO o con
+más de 20 archivos y pide escribir el nombre del proyecto. Con un proyecto de prueba de tres fotos (y una cuarta
+mandada antes a la papelera de Drive) comprueba solo los puntos 1, 2, 3, 4, 6, 7 y 9 (el 9 también de solo lectura
+sobre ERSO, `--check-parents`), pregunta el 8 y deja el 5 como opcional (`--other-account`: cambia la cuenta
+conectada). Termina con el proyecto restaurado y su carpeta de vuelta. Se probó de punta a punta contra el portero de
+verdad con Drive y base de mentira.
+
+**Lo que se apartó del diseño o quedó para después:**
+
+- La prueba técnica corre después de publicar, no antes (pedido de Lega). Si encuentra algo, se corrige con la casilla
+  ya publicada; mientras tanto, nada va a la papelera de Drive sin la casilla tildada.
+- Las fotos de un proyecto restaurado sin su carpeta se ven rotas en la página: la app todavía no muestra *File deleted
+  (in the Drive trash)* con la regla de `project_sizes` (sección 3.3). El inicio lo explica.
+- El pase de un archivo dado antes de mandar la carpeta (punto 6) sigue la regla de siempre: vale hasta que vence.
+- **La app v0.077 no puede restaurar un proyecto con la carpeta en la papelera de Drive:** con la base en la versión
+  10, su *Restore* llama a `restore_project(p)` sin traer la carpeta y la base responde `drive_untrash_first` ("Could
+  not do it: drive_untrash_first"). No pierde nada: el proyecto sigue borrado y se restaura desde la app nueva. Lo acota
+  `min_app_version` (hoy 0.078): al publicar esta entrega se sube a esta versión, antes del primer borrado con la
+  casilla.
+
+**Ayuda (regla de P.13):** la entrada de la entrega 1 suma un párrafo; está en `Doc_Tutorial.md`, "Entradas esperando
+la ayuda".
+
 ## Pendiente
 
-- **Entrega 1:** auditoría del código hecha y corregida; copia de seguridad y `db:migrate` de la migración 9; publicar; subir
-  `min_app_version`; probar en la app real (Wanka, la computadora y el iPhone).
-- **La prueba técnica de Drive** (sección 3.9), antes de construir la entrega 2.
-- Las entregas 2 y 3: sus pruebas SQL van a `supabase/tests/` como archivos separados, cada una con la preparación de
-  la 1.4, y se vuelven a correr en `begin; … rollback;` antes de migrar.
+- **Entrega 2:** auditoría del código hecha y corregida (B1); copia de seguridad y `db:migrate` de la migración 10;
+  publicar el portero y la app en el mismo push; subir `min_app_version` a esta versión; prender `TEST_MODES=1`, correr
+  la prueba técnica con un proyecto de prueba y sacar la variable; recién después borrar ERSO con la casilla.
+- **Entrega 3** (*Delete forever*): su prueba SQL va a `supabase/tests/` con la preparación de la 1.4 y se vuelve a
+  correr en `begin; … rollback;` antes de migrar.
