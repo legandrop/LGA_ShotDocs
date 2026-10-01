@@ -332,6 +332,53 @@ function nameLines(name: string): string[] {
   return [chars.slice(0, end).join('').trimEnd(), `…${tail.join('').trimStart()}`];
 }
 
+/** El tipo de la fila de `files` de una carpeta soltada en una página (P.9, Docs/Doc_Carpetas.md). */
+export const FOLDER_MIME = 'inode/directory';
+
+/** Es una carpeta (lo de adentro está en Drive, se ve con el visor de carpetas). */
+export function isFolderMime(mime: string | null | undefined): boolean {
+  return baseType(mime) === FOLDER_MIME;
+}
+
+/**
+ * La tarjeta de una carpeta (P.9): la misma forma que la de un adjunto, con una carpeta a la izquierda, el nombre
+ * y abajo "Carpeta de Google Drive · 4,2 GB" (el peso de lo que se subió al crearla) o `note` (por ejemplo,
+ * "Subiendo 120 de 512" en el dispositivo que la sube). `foreign` y `deleted`, como los adjuntos.
+ */
+export function folderCardUrl(info: { name: string; size?: number | null; note?: string | null; state?: 'ok' | 'foreign' | 'deleted' }): string {
+  const state = info.state ?? 'ok';
+  const name = (info.name ?? '').trim() ? cleanFileName(info.name) : t('folder.card');
+  const size = typeof info.size === 'number' && info.size > 1 ? formatSize(info.size) : '';
+  const meta =
+    state === 'foreign'
+      ? t('attachment.foreign')
+      : state === 'deleted'
+        ? (info.note ?? deletedLabel())
+        : (info.note ?? [t('folder.card'), size].filter(Boolean).join(' · '));
+  const lines = nameLines(name);
+  const faded = state === 'deleted';
+  const nameY = lines.length === 1 ? [45] : [36, 55];
+  const metaY = lines.length === 1 ? 67 : 76;
+  const titleInk = faded ? '#8a8580' : '#3f3b37';
+  const strike = faded ? ' text-decoration="line-through"' : '';
+  const text =
+    lines
+      .map((line, i) => `<text x="${TEXT_X}" y="${nameY[i]}" font-size="${NAME_SIZE}" font-weight="500" fill="${titleInk}"${strike}>${escapeXml(line)}</text>`)
+      .join('') + `<text x="${TEXT_X}" y="${metaY}" font-size="${META_SIZE}" fill="#76716b">${escapeXml(fitOne(meta, META_SIZE))}</text>`;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">` +
+    `<defs><clipPath id="text"><rect x="${TEXT_X}" y="0" width="${TEXT_W}" height="${HEIGHT}"/></clipPath></defs>` +
+    `<rect x="0.5" y="0.5" width="${WIDTH - 1}" height="${HEIGHT - 1}" rx="10" fill="#ebe8e4" stroke="#dcd8d3"/>` +
+    `<g${faded ? ' opacity="0.6"' : ''}>` +
+    // La carpeta: la pestaña de atrás y el frente.
+    '<path d="M16 26a4 4 0 0 1 4-4h16l6 6h28a4 4 0 0 1 4 4v38a4 4 0 0 1-4 4H20a4 4 0 0 1-4-4z" fill="#d9b45a" stroke="#b8923a" stroke-width="1.5"/>' +
+    '<path d="M16 38a4 4 0 0 1 4-4h50a4 4 0 0 1 4 4v32a4 4 0 0 1-4 4H20a4 4 0 0 1-4-4z" fill="#f0cf78" stroke="#b8923a" stroke-width="1.5"/>' +
+    '</g>' +
+    `<g font-family="${FONT}" clip-path="url(#text)">${text}</g>` +
+    '</svg>';
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 /**
  * La tarjeta de un adjunto para la página: un SVG de 360×96 sin scripts ni nada de afuera, como dirección
  * `data:` (BlockNote la pone en su `<img>`, así que elegir, mover, comentar e imprimir andan igual que con una

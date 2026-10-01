@@ -66,8 +66,40 @@ export interface DriveStatus {
   folder?: { id: string; name: string } | null;
   /** El portero tiene la clave del selector de carpetas de Google (`GOOGLE_API_KEY`). */
   picker?: boolean;
-  /** Lo que entiende además de lo de siempre (`verify`, `known`, `offline`, `codes`); un portero anterior no lo manda. */
+  /**
+   * Lo que sabe hacer el portero además de lo de siempre: `verify`, `known`, `offline` y `codes`
+   * (Doc_Copias_Locales.md) y `folders` (carpetas, P.9). Uno anterior no lo manda.
+   */
   features?: string[];
+}
+
+/** Lo que devuelve `POST /folder/prepare`: la carpeta en Drive y las subcarpetas creadas en este pedido. */
+export interface FolderPrepared {
+  root: { id: string; name: string };
+  dirs: Record<string, string>;
+}
+
+/** Un archivo para abrirle la subida (`POST /folder/sessions`): `dir` es el id de la subcarpeta o `null`. */
+export interface FolderSessionItem {
+  dir: string | null;
+  name: string;
+  mime: string;
+  size: number;
+}
+
+/** Por archivo: la subida abierta, el archivo ya creado (vacío) o por qué no (`rate`: pedirlo de nuevo después). */
+export type FolderSession = { uploadId: string } | { done: DriveFile } | { error: string };
+
+/** Una cosa de una carpeta de Drive, como la lista el portero (`POST /folder/list`). */
+export type FolderEntry =
+  | { type: 'folder'; id: string; name: string; modified: string | null }
+  | { type: 'file'; id: string; name: string; mime: string; size: number; modified: string | null; url: string; thumb: string | null }
+  | { type: 'shortcut'; name: string; modified: string | null }
+  | { type: 'google'; name: string; mime: string; modified: string | null };
+
+export interface FolderListing {
+  entries: FolderEntry[];
+  nextPageToken: string | null;
 }
 
 /** Lo que responde `POST /verify` por archivo (portero/src/core.ts). */
@@ -111,6 +143,18 @@ export interface TrashResult {
   drive: 'trashed' | 'missing' | 'none';
 }
 
+/**
+ * La respuesta de `POST /project/trash` y `POST /project/untrash` (P.14, entrega 2): `trashed` (la carpeta del
+ * proyecto quedó en la papelera de Drive), `untrashed` (volvió), `missing` (Drive no la tiene: al mandar, se confirma
+ * igual; al traer, la base no se tocó) o `none` (el proyecto nunca tuvo carpeta).
+ */
+export interface ProjectDriveResult {
+  status: 'done';
+  project: string;
+  drive: 'trashed' | 'untrashed' | 'missing' | 'none';
+  folders: number;
+}
+
 export interface UploadProgress {
   /** El pedido del portero para esta subida: con él se puede retomar (`resume`). */
   uploadId: string;
@@ -148,6 +192,11 @@ export interface UploadOptions {
    * tanto más de plazo (ver `answerLimit`).
    */
   stalledBefore?: number;
+  /**
+   * Nunca abre una subida nueva (`POST /upload`): los archivos de una carpeta (P.9) traen la suya, abierta por
+   * `POST /folder/sessions`. Si el portero ya no la tiene, falla con un `UploadError` sin `uploadId`.
+   */
+  noOpen?: boolean;
 }
 
 /**
@@ -406,6 +455,24 @@ export class Portero {
     return (await this.request<{ results: Record<string, VerifyResult> }>('POST', '/verify', { json: { files } })).results;
   }
 
+  /**
+   * Carpetas (P.9): crea la carpeta en Drive (la primera vez) y las subcarpetas `dirs` (rutas relativas, primero las
+   * de arriba, hasta 30). `parents`: los ids de las de arriba que se crearon en pedidos anteriores.
+   */
+  folderPrepare(file: string, name: string, dirs: string[] = [], parents: Record<string, string> = {}): Promise<FolderPrepared> {
+    return this.request<FolderPrepared>('POST', '/folder/prepare', { json: { file, name, dirs, parents }, stallMs: CONTROL_TIMEOUT_MS });
+  }
+
+  /** Abre las subidas de hasta 30 archivos de una carpeta. */
+  async folderSessions(file: string, items: FolderSessionItem[]): Promise<FolderSession[]> {
+    return (await this.request<{ items: FolderSession[] }>('POST', '/folder/sessions', { json: { file, items }, stallMs: CONTROL_TIMEOUT_MS })).items;
+  }
+
+  /** Lo que hay ahora en la carpeta (o en la subcarpeta `dir`), con un pase por archivo. */
+  folderList(file: string, dir: string | null = null, pageToken: string | null = null): Promise<FolderListing> {
+    return this.request<FolderListing>('POST', '/folder/list', { json: { file, dir, pageToken }, stallMs: CONTROL_TIMEOUT_MS });
+  }
+
   /** Lo que necesita el selector de carpetas de Google (solo el dueño; 404 si el portero no tiene la clave). */
   picker(): Promise<PickerConfig> {
     return this.request<PickerConfig>('POST', '/drive/picker', { json: {} });
@@ -434,6 +501,20 @@ export class Portero {
   }
 
   /**
+   * Manda a la papelera de Drive la carpeta entera de un proyecto borrado (`POST /project/trash`). Solo dueño y
+   * admins que lo manejan (lo decide la base). Errores con `code`: `project_not_deleted`, `drive_not_connected`,
+   * `drive_other_account`, `drive_mismatch`, `drive_failed` (repetirlo termina), `db_outdated`, `not_found`.
+   */
+  projectTrash(project: string): Promise<ProjectDriveResult> {
+    return this.request<ProjectDriveResult>('POST', '/project/trash', { json: { project }, stallMs: CONTROL_TIMEOUT_MS });
+  }
+
+  /** La trae de la papelera de Drive (`POST /project/untrash`). Además: `nothing_to_untrash`. */
+  projectUntrash(project: string): Promise<ProjectDriveResult> {
+    return this.request<ProjectDriveResult>('POST', '/project/untrash', { json: { project }, stallMs: CONTROL_TIMEOUT_MS });
+  }
+
+  /**
    * Sube el archivo por partes, leyendo del disco solo la parte que se manda. Si una parte falla por la
    * red o por el servidor, espera, pregunta cuánto llegó y sigue desde ahí.
    *
@@ -443,7 +524,7 @@ export class Portero {
    * con `stalled` y lo enviado, para que quien llama siga con otra cosa y la retome más tarde.
    */
   async upload(file: Blob & { name?: string }, options: UploadOptions = {}): Promise<UploadResult> {
-    const { onProgress, signal, appFile, onlyIfSent, renewIfEmpty, stalledBefore = 0 } = options;
+    const { onProgress, signal, appFile, onlyIfSent, renewIfEmpty, stalledBefore = 0, noOpen } = options;
     const total = file.size;
     let uploadId = options.resume ?? null;
     // Al retomar, primero se pregunta; si el portero ya no la tiene, se empieza de nuevo.
@@ -471,6 +552,7 @@ export class Portero {
       try {
         if (signal?.aborted) throw abortError(signal);
         if (!uploadId) {
+          if (noOpen) throw new UploadError(t('portero.lost'), 410, null, sent);
           const meta = { name: file.name || 'file', mime: file.type || 'application/octet-stream', size: total };
           const started = await this.request<{ uploadId?: string } & Partial<ChunkAnswer>>('POST', '/upload', {
             json: appFile ? { file: appFile.id, ...meta, day: appFile.day } : meta,
@@ -526,14 +608,15 @@ export class Portero {
         report();
       } catch (err) {
         if (err instanceof AlreadySentError) throw err;
+        if (err instanceof UploadError) throw err;
         if (signal?.aborted) throw new UploadError(t('mediaTest.cancelled'), 0, uploadId, sent, true);
         // Un pedido que dejó de moverse no se reintenta acá (cada intento puede volver a tardar lo mismo):
         // se devuelve con lo enviado, y quien llama decide cuándo retomar.
         if (err instanceof StalledError) throw new UploadError(err.message, err.status, uploadId, sent, false, true);
         const error =
           err instanceof PorteroError ? err : new PorteroError(err instanceof Error ? err.message : String(err));
-        // Al retomar, una subida que el portero ya no tiene se empieza de cero.
-        if (resuming && (error.status === 404 || error.status === 410)) {
+        // Al retomar, una subida que el portero ya no tiene se empieza de cero (la de una carpeta, la pide quien llama).
+        if (resuming && !noOpen && (error.status === 404 || error.status === 410)) {
           uploadId = null;
           ask = resuming = false;
           continue;

@@ -2,7 +2,7 @@ import { localize, stored, t } from '../i18n';
 import { FileRejected } from '../sync/files';
 import type { MediaRemote } from '../sync/remote';
 import { errorMessage, isNetworkError, isTimeout, RemoteError } from '../sync/types';
-import { attachmentCardUrl, cleanFileName, EXTENSION_MIME, fileKind, mimeFromName, type FileKind } from './attachments';
+import { attachmentCardUrl, cleanFileName, EXTENSION_MIME, fileKind, folderCardUrl, FOLDER_MIME, isFolderMime, mimeFromName, type FileKind } from './attachments';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
 import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress, type VerifyResult } from './portero';
 import {
@@ -407,6 +407,8 @@ export class MediaQueue {
   private missingCheckedAt = 0;
   /** Las tarjetas de los adjuntos ya dibujadas (no se vuelve a preguntar nada en cada dibujo). */
   private readonly cards = new Map<string, string>();
+  /** Lo que dice la tarjeta de una carpeta que se está subiendo desde este dispositivo (P.9, `setFolderNote`). */
+  private readonly folderNotes = new Map<string, string>();
   /** Lo que se sabe de cada archivo que pasó por acá (ver `fileInfo`). */
   private readonly infos = new Map<string, FileInfo>();
   private persistAsked = false;
@@ -530,6 +532,98 @@ export class MediaQueue {
   /** Hay un archivo a medio guardar en el dispositivo: cerrar la app ahora lo perdería. */
   hasUnsavedWrites(): boolean {
     return this.adding > 0;
+  }
+
+  /**
+   * Una carpeta soltada en la página (P.9, Docs/Doc_Carpetas.md): una sola fila de `files` con
+   * `mime = 'inode/directory'` y el peso de lo que se va a subir (lo de adentro va a Drive y no tiene filas). Se
+   * registra en el acto, con la página (`register_file`): sin copia en el dispositivo no hay nada que guardar para
+   * después, así que hace falta conexión (si falla, tira y no queda nada). En el dispositivo queda anotada como
+   * archivo propio ya registrado (sin original), para que la cuenta de qué usa cada página la trate como tal.
+   * Devuelve el id y la dirección para el bloque `image`.
+   */
+  async addFolder(pageId: string, name: string, size: number): Promise<{ id: string; url: string }> {
+    if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
+    if (!this.enabled) throw new FileRejected(t('queue.needsDrive'));
+    const id = crypto.randomUUID();
+    const clean = cleanFileName(name || 'Folder');
+    const record: MediaRecord = {
+      id,
+      pageId,
+      projectId: this.options.projectOf?.(pageId) ?? null,
+      name: clean,
+      mime: FOLDER_MIME,
+      // La base pide un peso mayor que cero: una carpeta vacía pesa 1.
+      size: Math.max(1, Math.round(size)),
+      width: null,
+      height: null,
+      duration: null,
+      day: localDay(new Date(this.now())),
+      createdAt: this.now(),
+      pending: 0,
+      registered: true,
+      thumb: 'none',
+      probed: true,
+      thumbError: null,
+      uploadId: null,
+      sent: 0,
+      driveId: null,
+      error: null,
+      blocked: false,
+      failures: 0,
+      retryAt: 0,
+    };
+    await this.remote.registerFile({
+      id,
+      pageId,
+      name: record.name,
+      mime: record.mime,
+      size: record.size,
+      width: null,
+      height: null,
+      duration: null,
+    });
+    await this.store.put('files', record);
+    this.seenLinks.add(`${pageId}:${id}`);
+    this.remember(id, record, true);
+    return { id, url: MEDIA_SCHEME + id };
+  }
+
+  /**
+   * Lo que dice la tarjeta de una carpeta que se sube desde este dispositivo ("Subiendo 120 de 512"); `null`
+   * vuelve a la de siempre. El editor la vuelve a dibujar (como cuando llega una miniatura).
+   */
+  setFolderNote(id: string, note: string | null): void {
+    if ((this.folderNotes.get(id) ?? null) === note) return;
+    if (note === null) this.folderNotes.delete(id);
+    else this.folderNotes.set(id, note);
+    this.cards.delete(id);
+    this.thumbReady(id);
+  }
+
+  /**
+   * Se dejó de subir una carpeta (P.9): en este dispositivo su tarjeta dice el peso de lo que llegó a Drive, no el
+   * que se iba a subir. Solo cambia lo anotado acá (la fila de la base guarda el peso con el que se registró).
+   */
+  async setFolderSize(id: string, bytes: number): Promise<void> {
+    if (!this.db) return;
+    const own = await this.db.get('files', id);
+    if (!own || !isFolderMime(own.mime)) return;
+    const record = { ...own, size: Math.max(1, Math.round(bytes)) };
+    await this.db.put('files', record);
+    this.remember(id, record, true);
+    this.cards.delete(id);
+    this.thumbReady(id);
+  }
+
+  /** El archivo es una carpeta (P.9), según lo que ya se sabe (`fileInfo`). */
+  isFolder(id: string): boolean {
+    return isFolderMime(this.fileInfo(id)?.mime);
+  }
+
+  /** El cliente del portero del workspace (para las carpetas, P.9), o `null` si no hay portero. */
+  porteroClient(): MediaPortero | null {
+    return this.url ? this.porteroFor(this.url) : null;
   }
 
   private async save(pageId: string, file: Blob & { name?: string }, heic = false): Promise<string> {
@@ -1053,6 +1147,13 @@ export class MediaQueue {
         } else {
           record = await this.patch(record.id, { registered: true });
         }
+      }
+      // Una carpeta (P.9) no tiene original: lo de adentro lo sube su propia cola. Registrada, está lista (vuelve
+      // acá, por ejemplo, después de restaurar una copia de la base).
+      if (isFolderMime(record.mime)) {
+        await this.patch(record.id, { pending: 0, error: null, blocked: false, failures: 0, retryAt: 0 });
+        this.onChange?.();
+        return 'done';
       }
       if (record.thumb === 'local') {
         const thumb = await this.store.get('thumbs', record.id);
@@ -1751,6 +1852,7 @@ export class MediaQueue {
         if (kind === false) return this.resolveOwn(id);
         if (kind === 'file') {
           const info = this.infos.get(id);
+          if (isFolderMime(info?.mime)) return folderCardUrl({ name: info?.name ?? '', size: info?.size, state: 'foreign' });
           return attachmentCardUrl({ name: info?.name ?? '', mime: info?.mime ?? '', size: info?.size, state: 'foreign' });
         }
         return placeholderUrl(kind, foreignPlaceholder());
@@ -1806,8 +1908,9 @@ export class MediaQueue {
   }
 
   /** La tarjeta de un adjunto, guardada para los próximos dibujos (hasta que algo cambie: `thumbReady`). */
-  private card(id: string, info: Parameters<typeof attachmentCardUrl>[0]): string {
-    const url = attachmentCardUrl(info);
+  private card(id: string, info: Parameters<typeof attachmentCardUrl>[0] | string): string {
+    // Un texto ya es la dirección de la tarjeta (la de una carpeta).
+    const url = typeof info === 'string' ? info : attachmentCardUrl(info);
     this.cards.set(id, url);
     return url;
   }
@@ -1825,6 +1928,7 @@ export class MediaQueue {
       const own = await db.get('files', id);
       if (own) {
         this.remember(id, own, true);
+        if (isFolderMime(own.mime)) return this.card(id, folderCardUrl({ name: own.name, size: own.size, note: this.folderNotes.get(id) ?? null }));
         const kind = viewKind(own.mime, own.name);
         if (!kind) return this.card(id, { name: own.name, mime: own.mime, size: own.size });
         const thumb = await db.get('thumbs', id);
@@ -1842,6 +1946,10 @@ export class MediaQueue {
         meta = (await this.fetchMeta(id).catch(() => null)) ?? meta;
       }
       if (meta) this.remember(id, meta, false);
+      if (meta && isFolderMime(meta.mime)) {
+        if (meta.deleted) return await this.deletedDisplay(id, meta);
+        return this.card(id, folderCardUrl({ name: meta.name, size: meta.size }));
+      }
       if (meta && fileKind(meta.mime, meta.name) === 'file') {
         if (meta.deleted) return await this.deletedDisplay(id, meta);
         // No va a `missing`: no hay miniatura que esperar. Si todavía no llegó a Drive, se vuelve a preguntar.
@@ -1873,6 +1981,7 @@ export class MediaQueue {
     // papelera). Sin el dato (guardado antes), se lo da por confirmado.
     const notice = meta.inDriveTrash === false ? requestedLabel() : deletedLabel();
     const kind = viewKind(meta.mime, meta.name);
+    if (isFolderMime(meta.mime)) return this.card(id, folderCardUrl({ name: meta.name, size: meta.size, state: 'deleted', note: notice }));
     if (!kind) return this.card(id, { name: meta.name, mime: meta.mime, size: meta.size, state: 'deleted', notice });
     const thumb = this.db ? await this.db.get('thumbs', id).catch(() => undefined) : undefined;
     return deletedUrl(kind, meta.name, thumb ?? null, notice);

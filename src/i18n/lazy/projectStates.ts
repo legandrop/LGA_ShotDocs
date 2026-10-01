@@ -25,6 +25,37 @@ export const projectStates = {
     en: "Its files stay in Google Drive ({size}).",
     es: "Sus archivos quedan en Google Drive ({size}).",
   },
+  // La casilla de Drive (entrega 2): arranca destildada; solo dueño y admins, con Drive conectado.
+  'deleteProject.driveOption': {
+    en: "Also send its files to the Google Drive trash ({size})",
+    es: "Mandar también sus archivos a la papelera de Google Drive ({size})",
+  },
+  'deleteProject.driveHint': {
+    en: "The folder {folder} goes to the Drive trash with everything in it, also what someone added to it by hand. Google deletes it for good after 30 days; restoring the project before that brings it back.",
+    es: "La carpeta {folder} va a la papelera de Drive con todo lo que tiene adentro, también lo que alguien haya agregado a mano. Google la borra para siempre a los 30 días; restaurar el proyecto antes la trae de vuelta.",
+  },
+  'deleteProject.driveOnlyStaff': {
+    en: "Only the workspace owner or an admin can send its files to the Google Drive trash.",
+    es: "Solo el dueño del workspace o un admin puede mandar sus archivos a la papelera de Google Drive.",
+  },
+  'deleteProject.driveChecking': { en: "Checking Google Drive…", es: "Revisando Google Drive…" },
+  'deleteProject.driveMissingBefore': {
+    en: "The files that were not found the last time can no longer be recovered from the app; only by hand from Google Drive, if they are still there.",
+    es: "Los archivos que no se encontraron la vez anterior dejan de poder recuperarse desde la app; se recuperan solo a mano desde Google Drive, si siguen ahí.",
+  },
+  'deleteProject.sendingDrive': { en: "Sending to the Drive trash…", es: "Mandando a la papelera de Drive…" },
+  'deleteProject.driveSent': {
+    en: "Its folder is in the Google Drive trash.",
+    es: "Su carpeta está en la papelera de Google Drive.",
+  },
+  'deleteProject.driveWasMissing': {
+    en: "Google Drive no longer had its folder.",
+    es: "Google Drive ya no tenía su carpeta.",
+  },
+  'deleteProject.driveFailed': {
+    en: "Its files did not go to the Google Drive trash ({reason}): send them from Deleted projects.",
+    es: "Sus archivos no fueron a la papelera de Google Drive ({reason}): mandalos desde Proyectos borrados.",
+  },
   'deleteProject.usedElsewhere': {
     en: {
       one: "{count} file of this project is also used in pages of other projects: it stops showing there.",
@@ -68,8 +99,8 @@ export const projectStates = {
     es: "No se pudo leer este proyecto: {reason}",
   },
   'deletedList.hint': {
-    en: "Deleted projects can be restored exactly as they were. After 30 days too, until someone deletes them forever. Their files stay in Google Drive.",
-    es: "Los proyectos borrados se restauran tal como estaban. También después de los 30 días, mientras nadie los borre para siempre. Sus archivos siguen en Google Drive.",
+    en: "Deleted projects can be restored exactly as they were. After 30 days too, until someone deletes them forever. Their files stay in Google Drive unless they were sent to its trash.",
+    es: "Los proyectos borrados se restauran tal como estaban. También después de los 30 días, mientras nadie los borre para siempre. Sus archivos siguen en Google Drive, salvo que se hayan mandado a su papelera.",
   },
   'deletedList.by': { en: "Deleted by {email} · {when}", es: "Lo borró {email} · {when}" },
   'deletedList.on': { en: "Deleted {when}", es: "Borrado {when}" },
@@ -84,6 +115,46 @@ export const projectStates = {
     en: "“{name}” is back exactly as it was.",
     es: "“{name}” volvió tal como estaba.",
   },
+  'deletedList.restoredWithoutFiles': {
+    en: "“{name}” is back without its files. If its folder turns up in Google Drive, “Look for its files again” on its start page brings them back.",
+    es: "“{name}” volvió sin sus archivos. Si su carpeta aparece en Google Drive, “Buscar sus archivos de nuevo” en su inicio los trae.",
+  },
+  'deletedList.driveTrashed': {
+    en: "Files in the Google Drive trash until {date}",
+    es: "Archivos en la papelera de Google Drive hasta el {date}",
+  },
+  'deletedList.driveTrashedPast': {
+    en: "Files sent to the Google Drive trash on {date}: Google deletes them for good after 30 days",
+    es: "Archivos mandados a la papelera de Google Drive el {date}: Google los borra para siempre a los 30 días",
+  },
+  'deletedList.driveUnfinished': {
+    en: "Sending its files to the Google Drive trash did not finish",
+    es: "No terminó de mandar sus archivos a la papelera de Google Drive",
+  },
+  'deletedList.needsStaff': {
+    en: "Its files are in the Google Drive trash: the workspace owner or an admin has to restore it.",
+    es: "Sus archivos están en la papelera de Google Drive: lo tiene que restaurar el dueño del workspace o un admin.",
+  },
+  'deletedList.sendToDrive': { en: "Send files to the Drive trash", es: "Mandar archivos a la papelera de Drive" },
+  'deletedList.sendToDriveSize': {
+    en: "Send files to the Drive trash ({size})",
+    es: "Mandar archivos a la papelera de Drive ({size})",
+  },
+  'deletedList.sendConfirm': {
+    en: "Send the folder {folder} to the Google Drive trash, with everything in it? Google deletes it for good after 30 days; restoring the project before that brings it back.",
+    es: "¿Mandar la carpeta {folder} a la papelera de Google Drive, con todo lo que tiene adentro? Google la borra para siempre a los 30 días; restaurar el proyecto antes la trae de vuelta.",
+  },
+  'deletedList.send': { en: "Send to the Drive trash", es: "Mandar a la papelera" },
+  'deletedList.sending': { en: "Sending…", es: "Mandando…" },
+  'deletedList.sent': {
+    en: "The folder of “{name}” is in the Google Drive trash.",
+    es: "La carpeta de “{name}” está en la papelera de Google Drive.",
+  },
+  'deletedList.missingQuestion': {
+    en: "Google Drive no longer has the folder of this project: Google deleted it for good, or someone took it out of the trash and deleted it. Restore its pages and text without its files?",
+    es: "Google Drive ya no tiene la carpeta de este proyecto: Google la borró para siempre o alguien la sacó de la papelera y la borró. ¿Restaurar las páginas y el texto sin sus archivos?",
+  },
+  'deletedList.restoreWithoutFiles': { en: "Restore without its files", es: "Restaurar sin sus archivos" },
   'deletedList.none': { en: "No deleted projects.", es: "No hay proyectos borrados." },
   'deletedList.notYet': {
     en: "This workspace does not have deleted projects yet: its database needs an update.",

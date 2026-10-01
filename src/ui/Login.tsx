@@ -4,6 +4,8 @@ import { inviteArrival, takeArrivalNotice } from '../invite';
 import { useWorkspace } from '../workspace';
 import { AppIcon, ArrowLeftIcon, ArrowRightIcon, MailIcon, SlateBand } from './icons';
 import { LegalLinks } from './Legal';
+import { openInstallDialog, useInstallState } from './install';
+import { InstallHost } from './InstallBanner';
 import { LoginWorkspaceBar } from './Welcome';
 
 type Step = { name: 'email' } | { name: 'sent'; email: string };
@@ -41,6 +43,7 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tr = useT();
+  const { installed } = useInstallState();
 
   async function sendEmail(e?: FormEvent) {
     e?.preventDefault();
@@ -202,8 +205,15 @@ export function Login() {
         <footer className="login-footer">
           <span>{tr('login.footer')}</span>
           <LegalLinks />
+          {/* Instalar antes de entrar: en el iPhone la app instalada guarda su sesión aparte de Safari. */}
+          {!installed && (
+            <button type="button" className="login-install" onClick={openInstallDialog}>
+              {tr('install.menu')}
+            </button>
+          )}
           {__APP_VERSION__ && <span>v{__APP_VERSION__}</span>}
         </footer>
+        <InstallHost />
       </section>
     </main>
   );

@@ -23,6 +23,27 @@ function firstLine(el: Element, rect: DOMRect): number {
   return Math.min(line, rect.height || line);
 }
 
+/**
+ * El centro (en alto) del primer renglón de un texto, en coordenadas de la ventana. Con fotos en línea altas, el
+ * primer renglón es tan alto como la foto más alta y el texto (y el cursor) van abajo, alineados con el borde de
+ * abajo de las fotos: el centro es el del texto de ese renglón, no el de arriba del bloque (pedido de Lega: los
+ * puntos quedaban lejos del texto).
+ */
+export function firstLineCenter(text: Element, rect: DOMRect): number {
+  const line = firstLine(text, rect);
+  const plain = rect.top + line / 2;
+  if (!text.querySelector('.sd-photo')) return plain;
+  const range = text.ownerDocument.createRange();
+  range.selectNodeContents(text);
+  if (typeof range.getClientRects !== 'function') return plain;
+  const rects = [...range.getClientRects()].filter((r) => r.height > 0).sort((a, b) => a.top - b.top);
+  if (rects.length === 0) return plain;
+  // El primer renglón: lo que se superpone en alto con lo primero (como `splitPoints` en pagination.ts).
+  let bottom = rects[0].bottom;
+  for (const r of rects) if (r.top < bottom - 1) bottom = Math.max(bottom, r.bottom);
+  return bottom - line / 2;
+}
+
 export interface TriangleBox {
   /** El lado del dibujo (px): más grande en los títulos más grandes. */
   size: number;
@@ -50,7 +71,7 @@ export function triangleBox(text: Element, editorLeft: number): TriangleBox {
   }
   const center = r.left - GUTTER_GAP + GLYPH_INSET * size - size / 2;
   const left = Math.min(Math.max(center - box / 2, r.left - room), r.left - box);
-  return { size, box, left, top: r.top + firstLine(text, r) / 2 - box / 2 };
+  return { size, box, left, top: firstLineCenter(text, r) - box / 2 };
 }
 
 /** Dónde empieza a verse el triángulo (su borde izquierdo), a partir de su dibujo en pantalla. */
@@ -92,5 +113,5 @@ export function handlePlace(block: Element, triangle: Element | null): HandlePla
   const editorLeft = editor ? editor.getBoundingClientRect().left : -Infinity;
   const glyphRight = (triangle ? triangleVisibleLeft(triangle) : left) - GUTTER_GAP;
   const right = glyphRight + DOTS_RIGHT_PAD;
-  return { right, centerY: r.top + firstLine(text, r) / 2, fits: right - DOTS_BUTTON.width >= editorLeft - 0.5 };
+  return { right, centerY: firstLineCenter(text, r), fits: right - DOTS_BUTTON.width >= editorLeft - 0.5 };
 }

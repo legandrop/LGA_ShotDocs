@@ -2,6 +2,7 @@ import type { Dictionary } from '@blocknote/core';
 import {
   blockTypeSelectItems,
   FormattingToolbar,
+  FormattingToolbarController,
   getFormattingToolbarItems,
   useBlockNoteEditor,
   useComponentsContext,
@@ -11,7 +12,7 @@ import {
   type BlockTypeSelectItem,
 } from '@blocknote/react';
 import { NodeSelection } from '@tiptap/pm/state';
-import type { ReactNode } from 'react';
+import { useMemo, type JSX, type ReactNode } from 'react';
 import { useT, type Translate } from '../i18n';
 import '../i18n/lazy/editor';
 import { selectWholeBlock } from './blockHandle';
@@ -19,7 +20,11 @@ import { headingItems } from './collapseMenus';
 import { CommentToolbarButton, paragraphVariantItems } from './EditorComments';
 import { SCRIPT_PROP } from './editorSchema';
 import { ScriptIcon } from './icons';
-import { HideForDriveFiles, ImageSizeButtons, MediaDownloadButton, MediaViewButton } from './MediaToolbarButtons';
+import { ImageBlockBar, useChosenImageBlock } from './MediaBar';
+
+const FILE_ITEMS = new Set(['fileCaptionButton', 'replaceFileButton', 'fileRenameButton', 'fileDeleteButton', 'fileDownloadButton', 'filePreviewButton']);
+import { onlyPhotosSelected, selectedPhotos } from './inlinePhotoSize';
+import { PhotoSizeButtons } from './PhotoToolbar';
 
 // La barra de formato de la página (PageEditor.tsx). Aparece al elegir texto y también al hacer clic en los
 // puntos de un bloque (BlockSideMenu.tsx, el bloque entero elegido): ahí trae además los colores del bloque (los
@@ -150,27 +155,54 @@ export function BlockColorButton() {
   );
 }
 
-/** La barra de formato de la página. */
-export function PageFormattingToolbar({ items, canComment, onView }: { items: BlockTypeSelectItem[]; canComment: boolean; onView: (id: string) => void }) {
+/**
+ * Con una foto en línea elegida, o solo fotos elegidas, la barra es la propia de la foto (PhotoToolbar.tsx): esta no
+ * se muestra. Con texto y fotos elegidos, suma los tamaños y "Arrange in rows" de las fotos.
+ */
+function usePhotoSelection(): 'only' | 'mixed' | null {
+  const editor = useBlockNoteEditor();
+  return useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      const state = (e as AnyEditor).prosemirrorState;
+      if (onlyPhotosSelected(state)) return 'only';
+      return selectedPhotos(state).length > 0 ? 'mixed' : null;
+    },
+  });
+}
+
+/**
+ * El controlador de BlockNote para la barra de formato, que no se abre con una foto en línea elegida o solo fotos
+ * elegidas (ahí va la barra propia, PhotoToolbar.tsx). No alcanza con no dibujar su contenido: su contenedor
+ * flotante igual aparece un instante al soltar el clic (arriba a la izquierda, antes de ubicarse) y se queda con el
+ * clic en otra foto (medido en Chromium: el clic en la foto vecina no la elegía).
+ */
+export function PageFormattingToolbarController({ formattingToolbar }: { formattingToolbar: () => JSX.Element }) {
+  const photos = usePhotoSelection();
+  const closed = useMemo(() => ({ useFloatingOptions: { open: false } }), []);
+  return <FormattingToolbarController formattingToolbar={formattingToolbar} floatingUIOptions={photos === 'only' ? closed : undefined} />;
+}
+
+/** La barra de formato de la página. Con una foto-bloque elegida, la barra de la foto (MediaBar.tsx, D-24). */
+export function PageFormattingToolbar({ items, canComment }: { items: BlockTypeSelectItem[]; canComment: boolean }) {
+  const photos = usePhotoSelection();
+  const imageBlock = useChosenImageBlock();
+  if (photos === 'only') return null;
+  if (imageBlock) return <ImageBlockBar />;
   return (
     <FormattingToolbar blockTypeSelectItems={items}>
       {getFormattingToolbarItems(items).flatMap((item) =>
-        // Para las fotos y videos del Drive, "Download" baja el original (no la miniatura), y "View" abre el
-        // carrete.
-        item.key === 'fileDownloadButton'
-          ? [
-              <MediaViewButton key="mediaViewButton" onView={onView} />,
-              <MediaDownloadButton key="fileDownloadButton" />,
-              <ImageSizeButtons key="imageSizeButtons" />,
-            ]
-          : item.key === 'fileRenameButton' || item.key === 'filePreviewButton'
-            ? [<HideForDriveFiles key={String(item.key)}>{item}</HideForDriveFiles>]
-            : item.key === 'createLinkButton'
+        // Los botones de archivo (leyenda, reemplazar, renombrar, borrar, bajar, vista previa) son de la barra de la
+        // foto; acá no van (D-24: sin leyenda).
+        FILE_ITEMS.has(String(item.key))
+          ? []
+          : item.key === 'createLinkButton'
               ? [<HideOnBlockSelection key="createLinkButton">{item}</HideOnBlockSelection>]
               : item.key === 'colorStyleButton'
                 ? [item, <BlockColorButton key="blockColorButton" />]
                 : [item],
       )}
+      {photos === 'mixed' && <PhotoSizeButtons key="photoSizeButtons" />}
       {canComment && <CommentToolbarButton key="comment" />}
     </FormattingToolbar>
   );

@@ -12,6 +12,7 @@ import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb, type LocalDb } from './localDb';
 import {
+  PROJECT_DRIVE_SCHEMA_VERSION,
   PROJECT_STATES_SCHEMA_VERSION,
   type AccessRow,
   type InvitationGrant,
@@ -170,6 +171,18 @@ export class FakeServer {
    * y no se ve por ningún camino, como en la base (`user_page_level`, `workspaces_select`).
    */
   readonly deletedProjects = new Map<string, { at: string; by: string }>();
+
+  /**
+   * La carpeta de cada proyecto en la papelera de Drive (P.14, entrega 2, versión 10): pedida, confirmada y, si se
+   * restauró sin ella, cuándo. Las pruebas la ponen como lo haría el portero.
+   */
+  readonly projectDrive = new Map<string, { requested_at: string; trashed_at: string | null; missing_at: string | null }>();
+
+  /** Prende la carpeta de un proyecto en la papelera de Drive: la base en la versión 10. */
+  enableProjectDrive(): void {
+    this.enableProjectStates();
+    this.settings = { ...this.settings!, schemaVersion: Math.max(this.settings!.schemaVersion, PROJECT_DRIVE_SCHEMA_VERSION) };
+  }
 
   /** Prende archivar y borrar proyectos: la base en la versión 9. */
   enableProjectStates(): void {
@@ -671,6 +684,8 @@ export class FakePortero {
       if (!media || this.hidden.has(String(body?.file ?? ''))) {
         return json({ error: 'This file does not exist or you cannot see it.', code: 'not_found' }, 404);
       }
+      // Como el portero: una carpeta (P.9) no se baja con un pase.
+      if (media.mime === 'inode/directory') return json({ error: 'This is a folder: open it in the app to see its files.', code: 'is_folder' }, 409);
       if (!media.drive_id) return json({ error: 'This file has not finished uploading yet.', code: 'not_uploaded' }, 409);
       if (!this.drive.has(media.drive_id)) return json({ error: 'This file is not in Google Drive anymore.', code: 'drive_missing' }, 404);
       return json({ url: `${PORTERO_URL}/m/${media.drive_id}` });
@@ -810,12 +825,21 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
   async fetchProjects(schemaVersion?: number | null): Promise<ProjectRow[]> {
     this.server.check();
     this.fetchProjectsVersions.push(schemaVersion);
-    // Como pide las columnas la app: `archived_at` solo con la versión 9 o más.
+    // Como pide las columnas la app: `archived_at` solo con la versión 9 o más; las de Drive, con la 10.
     const withArchived = (schemaVersion ?? 0) >= PROJECT_STATES_SCHEMA_VERSION;
+    const withDrive =
+      (schemaVersion ?? 0) >= PROJECT_DRIVE_SCHEMA_VERSION && (this.server.settings?.schemaVersion ?? 0) >= PROJECT_DRIVE_SCHEMA_VERSION;
     return [...this.server.projects.values()]
       .filter((p) => !this.server.projectDeleted(p.id))
       .filter((p) => !this.team || this.server.canViewProject(this.userId, p.id))
-      .map(({ archived_at, ...p }) => (withArchived ? { ...p, archived_at: archived_at ?? null } : { ...p }));
+      .map(({ archived_at, drive_trash_requested_at: _r, drive_missing_at: _m, ...p }) => {
+        const d = this.server.projectDrive.get(p.id);
+        return {
+          ...p,
+          ...(withArchived ? { archived_at: archived_at ?? null } : {}),
+          ...(withDrive ? { drive_trash_requested_at: d?.requested_at ?? null, drive_missing_at: d?.missing_at ?? null } : {}),
+        };
+      });
   }
 
   // --- archivar, borrar y restaurar proyectos (P.14) ---------------------------------------------------
@@ -850,9 +874,16 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     return at;
   }
 
-  async restoreProject(projectId: string): Promise<void> {
+  async restoreProject(projectId: string, withoutDrive = false): Promise<void> {
     this.projectStatesCheck(projectId);
-    if (!this.server.deletedProjects.delete(projectId)) return;
+    if (!this.server.deletedProjects.has(projectId)) return;
+    // Como la migración 10: con la carpeta pedida para la papelera de Drive, primero traerla (o sin ella, con marca).
+    const d = this.server.projectDrive.get(projectId);
+    if (d && !d.missing_at) {
+      if (!withoutDrive) throw new RemoteError('drive_untrash_first', true, 'P0001');
+      d.missing_at = new Date().toISOString();
+    }
+    this.server.deletedProjects.delete(projectId);
     this.server.refreshAllFileTrash();
   }
 
@@ -868,6 +899,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       .map(([id, d]) => {
         const p = this.server.projects.get(id)!;
         const can = this.server.canManageProject(this.userId, id);
+        const drive = can ? this.server.projectDrive.get(id) : undefined;
         const email = this.server.members.get(d.by)?.email ?? d.by + '@test';
         return {
           id,
@@ -882,6 +914,10 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
           files: can
             ? [...this.server.mediaFiles.values()].filter((f) => f.project_id === id && f.drive_id && !f.drive_trashed_at).length
             : null,
+          drive_trash_requested_at: drive?.requested_at ?? null,
+          drive_trashed_at: drive?.trashed_at ?? null,
+          drive_missing_at: drive?.missing_at ?? null,
+          can_purge: can && (role === 'owner' || role === 'admin' || !this.team),
         };
       });
   }

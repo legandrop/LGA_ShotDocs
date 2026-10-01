@@ -10,14 +10,29 @@ import { BACKGROUND_META } from './editorMeta';
 const TEXT_TYPES = ['vscode-editor-data', 'blocknote/html', 'text/html', 'text/markdown'];
 
 /**
- * El evento trae archivos para guardar: tiene `Files` y nada de HTML (pegar desde Excel o Word, "Copiar
- * imagen" o arrastrar una imagen de otra pestaña traen `text/html` y siguen el camino de BlockNote). Copiar en
- * el Finder y pegar puede traer además un `text/plain` con el nombre: igual son archivos.
+ * El evento trae archivos para guardar: tiene `Files` y nada de HTML (pegar desde Excel o Word trae `text/html` y
+ * sigue el camino de BlockNote). Copiar en el Finder y pegar puede traer además un `text/plain` con el nombre: igual
+ * son archivos. "Copiar imagen" de una página web (o de Drive, o de WhatsApp Web) trae el archivo y un HTML que es
+ * solo esa imagen: también son archivos (si no, entraba una foto-bloque con la dirección de la web, sin subirla;
+ * auditoría de la entrega 2 de fotos en línea).
  */
 export function isFilesTransfer(dt: DataTransfer | null | undefined): boolean {
   if (!dt) return false;
   const types = Array.from(dt.types ?? []);
-  return types.includes('Files') && !types.some((t) => TEXT_TYPES.includes(t));
+  if (!types.includes('Files')) return false;
+  const others = types.filter((t) => TEXT_TYPES.includes(t));
+  if (others.length === 0) return true;
+  return others.every((t) => t === 'text/html') && htmlIsOnlyImages(dt.getData('text/html'));
+}
+
+/** El HTML es solo una o más imágenes, sin texto (lo que copia "Copiar imagen" de un navegador). */
+export function htmlIsOnlyImages(html: string): boolean {
+  if (!html || typeof DOMParser === 'undefined') return false;
+  const body = new DOMParser().parseFromString(html, 'text/html').body;
+  if (!body || body.querySelectorAll('img').length === 0) return false;
+  if ((body.textContent ?? '').trim() !== '') return false;
+  // Nada más que imágenes y sus envoltorios (un link, un párrafo, un salto).
+  return [...body.querySelectorAll('*')].every((el) => ['IMG', 'A', 'SPAN', 'DIV', 'P', 'BR', 'PICTURE', 'SOURCE', 'FIGURE', 'META'].includes(el.tagName));
 }
 
 /**
@@ -84,7 +99,7 @@ export interface FileEditor {
  * Un párrafo común, vacío y sin bloques adentro (se reemplaza, como hace BlockNote; cualquier otro bloque se
  * deja: sacar un párrafo con hijos se los llevaría).
  */
-function isEmptyParagraph(block: BlockLike | undefined): boolean {
+export function isEmptyParagraph(block: BlockLike | undefined): boolean {
   if (!block || block.type !== 'paragraph') return false;
   if (Array.isArray(block.children) && block.children.length > 0) return false;
   const props = block.props ?? {};
@@ -95,9 +110,15 @@ function isEmptyParagraph(block: BlockLike | undefined): boolean {
 /**
  * Inserta un bloque `image` por archivo, todos juntos y en orden, y después guarda cada uno con
  * `uploadFile` (que muestra "Loading…" y, si falla, saca el bloque y avisa). Un archivo que falla no corta los
- * demás. Devuelve los ids de los bloques nuevos.
+ * demás. Devuelve los ids de los bloques nuevos. `onInserted`: los mismos ids, apenas se insertan (antes de guardar
+ * nada), para poner otra cosa después de ellos (las carpetas del mismo soltar, P.9).
  */
-export async function insertFiles(editor: FileEditor, files: readonly File[], at: InsertAt | null): Promise<string[]> {
+export async function insertFiles(
+  editor: FileEditor,
+  files: readonly File[],
+  at: InsertAt | null,
+  onInserted?: (ids: string[]) => void,
+): Promise<string[]> {
   if (files.length === 0) return [];
   const ref = at ?? { blockId: editor.getTextCursorPosition().block.id, placement: 'after' as const };
   const refBlock = editor.getBlock(ref.blockId);
@@ -111,6 +132,7 @@ export async function insertFiles(editor: FileEditor, files: readonly File[], at
     }
   }
   const ids = inserted.map((b) => b.id);
+  onInserted?.(ids);
   for (let i = 0; i < files.length; i++) {
     const id = ids[i];
     if (!id) continue;

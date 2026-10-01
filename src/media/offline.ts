@@ -3,7 +3,7 @@ import type { DocState } from '../sync/localDb';
 import type { MediaRemote } from '../sync/remote';
 import type { PageRow, ProjectRow, MediaFileRow } from '../sync/types';
 import { isNetworkError } from '../sync/types';
-import { fileKind } from './attachments';
+import { fileKind, isFolderMime } from './attachments';
 import type { MediaDb, MediaRecord } from './mediaDb';
 import {
   appendPart,
@@ -176,6 +176,8 @@ export interface OfflineDeps {
   comments?: { refresh(pageId: string): Promise<void> };
   older?: { ensureStored(url: string): Promise<boolean>; isStored(url: string): Promise<boolean> };
   online: () => boolean;
+  /** Otra cola está subiendo (las carpetas, P.9): las bajadas esperan, como con la cola de fotos y videos. */
+  uploadsBusy?: () => boolean;
   /** `fetch` para bajar con los pases (las pruebas usan el portero en memoria). */
   fetch?: (url: string, init?: RequestInit) => Promise<Response>;
   storage?: () => Pick<StorageManager, 'estimate' | 'persist' | 'persisted'> | undefined;
@@ -868,6 +870,9 @@ export class OfflineManager {
         out.push({ id, kind: 'file', mime: '', size: null, width: null, height: null, inDrive: false, deleted: false, ownBlob: false, copy: false, offview: false, view2048: false, thumb: false, thumbAt: false });
         continue;
       }
+      // Una carpeta (P.9) no tiene original que bajar: lo de adentro está en Drive y es la casilla *Drive folders*
+      // (entrega 3). No pesa en ninguna fila ni se pide un pase (el portero responde `is_folder`).
+      if (isFolderMime(meta.mime)) continue;
       const entry = await getCopy(db, id);
       const size = row ? (row.size ?? null) : own ? own.size : (known?.size ?? null);
       out.push({
@@ -987,7 +992,8 @@ export class OfflineManager {
     for (const mark of await listMarks(db)) {
       if (this.stopped) return;
       if (!this.deps.online()) return;
-      // Subir le gana a bajar: con algo que se puede subir ahora, se espera.
+      // Subir le gana a bajar: con algo que se puede subir ahora (también una carpeta, P.9), se espera.
+      if (this.deps.uploadsBusy?.()) return;
       if (await this.deps.media.hasUploadableNow()) return;
       if (mark.state === 'noSpace') continue;
       const signature = this.signature(mark);

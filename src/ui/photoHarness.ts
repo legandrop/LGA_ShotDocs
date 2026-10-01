@@ -7,10 +7,12 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import { applyLikeApp, mountEditor, press, sameDocs, seeded, showsDoc, unmountAll, view, yText } from './collabHarness';
 import { appBlockSpecs, schema } from './editorSchema';
 import { GAP_TEXT_SPEC, PHOTO, PhotoNode, photoSpec } from './inlinePhoto';
+import { STABLE_GAPS_MARKER } from './unknownContent';
 
 /**
  * El esquema de la versión anterior (`origin/main` al hacer la entrega 1a): los mismos bloques y el contenido
- * en línea de BlockNote, sin `photo`.
+ * en línea de BlockNote, sin `photo`. Ojo: con la librería de HOY (la de esta app); la librería que tenían esas
+ * versiones la prueba collabPhotosVersions.published.test.ts.
  */
 export const previousSchema = BlockNoteSchema.create({ blockSpecs: appBlockSpecs });
 
@@ -152,24 +154,31 @@ export function storedPhotos(doc: Y.Doc): string[] {
 
 /**
  * La forma de los huecos estables: en un bloque con fotos, cada foto tiene un texto (aunque sea vacío) a cada
- * lado, y todos los textos del bloque llevan la marca `lgaGapText`. Puede haber varios textos seguidos (lo que
- * queda al borrar una foto: no se juntan). Devuelve los bloques que no la cumplen, como los muestra
- * `storedInline` (con `*` en un texto sin la marca).
+ * lado, todos los textos del bloque llevan la marca `lgaGapText` y el bloque tiene su marca de renglón
+ * (`lgaStableGaps`, que no cuenta como vecino de una foto). Puede haber varios textos seguidos (lo que queda al
+ * borrar una foto: no se juntan). Un bloque sin fotos con textos marcados (le borraron las fotos) también tiene
+ * que tener la marca de renglón: es lo que no deja abrirlo a una versión anterior. Devuelve los bloques que no la
+ * cumplen, como los muestra `storedInline` (con `*` en un texto sin la marca).
  */
 export function brokenGaps(doc: Y.Doc): string[] {
   const out: string[] = [];
   const walk = (el: Y.XmlElement | Y.XmlFragment) => {
-    const children = el.toArray();
+    const all = el.toArray();
+    const isMarker = (c: unknown) => c instanceof Y.XmlElement && c.nodeName === STABLE_GAPS_MARKER;
+    const children = all.filter((c) => !isMarker(c));
     const isPhoto = (c: unknown) => c instanceof Y.XmlElement && c.nodeName === PHOTO;
-    if (children.some(isPhoto)) {
-      const bad = children.some(
-        (c, i) =>
-          (isPhoto(c) && (!(children[i - 1] instanceof Y.XmlText) || !(children[i + 1] instanceof Y.XmlText))) ||
-          (c instanceof Y.XmlText && c.getAttribute(GAP_TEXT_SPEC) !== true),
-      );
+    const marked = children.some((c) => c instanceof Y.XmlText && c.getAttribute(GAP_TEXT_SPEC) === true);
+    if (children.some(isPhoto) || marked) {
+      const bad =
+        !all.some(isMarker) ||
+        children.some(
+          (c, i) =>
+            (isPhoto(c) && (!(children[i - 1] instanceof Y.XmlText) || !(children[i + 1] instanceof Y.XmlText))) ||
+            (c instanceof Y.XmlText && c.getAttribute(GAP_TEXT_SPEC) !== true),
+        );
       if (bad)
         out.push(
-          children
+          all
             .map((c) =>
               c instanceof Y.XmlText
                 ? `${c.getAttribute(GAP_TEXT_SPEC) === true ? '' : '*'}${JSON.stringify(c.toString().replace(/<[^>]+>/g, ''))}`

@@ -12,6 +12,50 @@ lee "Offline · N to upload", también en el teléfono. El portero suma códigos
 `only: 'known'` y `?offline=1`. Página de medición en `/storage-test`.
 [ Available offline - marcar, bajar, tope con aviso y espacio en el dispositivo ]
 
+v0.081 :
+
+Soltar una carpeta en la página se rechazaba pidiendo comprimirla. Ahora una ventana muestra qué se sube
+(archivos, carpetas, peso, tipos, el árbol y lo salteado) y *Upload* la manda al Drive del dueño, a
+`<Proyecto>/Carpetas/<nombre>`, con su propia cola: 3 archivos a la vez, pausa, errores por archivo y, si se
+cierra la pestaña, se retoma volviendo a soltarla. En la página queda una tarjeta de carpeta (el mismo bloque
+`image` con `sdmedia://` y una fila `inode/directory`) que abre un visor con lo que hay hoy en
+esa carpeta de Drive: miniaturas, carrete y bajar. El portero suma `/folder/prepare`, `/folder/sessions`,
+`/folder/list` y `/t/`, nunca sale del árbol de la carpeta y solo deja subir a quien la agregó (migración: `media_file` suma
+`created_by`). Falta que Lega decida `drive.readonly`.
+[ Carpetas - soltar una carpeta entera, con su visor y la regla de no salir del árbol ]
+
+v0.080 :
+
+Borrar un proyecto dejaba sus archivos en Google Drive: la casilla de la ventana todavía no existía, y la
+importación de prueba de ERSO iba a dejar 5,6 GB huérfanos. Ahora, con la casilla tildada (arranca destildada; solo
+dueño y admins), después de borrar el proyecto el portero manda su carpeta entera a la papelera de Drive, y
+*Restore* la trae antes de restaurarlo. El portero anota cada carpeta antes de mandarla y la busca por su marca, así
+una respuesta perdida o una falla a mitad se terminan sin perder ninguna. Si Drive, con la misma cuenta, ya no la
+tiene, la app pregunta antes de restaurar sin los archivos, con una marca reversible (*Look for its files again*).
+Migración 10.
+[ Proyectos - mandar su carpeta a la papelera de Drive al borrarlos ]
+
+v0.079 :
+
+La app no sabía si estaba instalada ni explicaba cómo instalarla, y en el iPhone importa: Safari puede borrar lo
+que una web guarda en el dispositivo tras unos días sin usarla, pero no lo de la app agregada a la pantalla de
+inicio. Ahora, mientras no está instalada, *Install app* aparece en el menú de la cuenta y en la pantalla de
+entrar, y en el teléfono un aviso que *Not now* esconde por 30 días. La ventana abre en los pasos del dispositivo
+(iPhone, Android o computadora, con las otras en pestañas), cada uno con un dibujo del botón que hay que tocar, y
+con *Install* directo donde Chrome o Edge lo ofrecen. Ayuda: entrada en `Doc_Tutorial.md`.
+[ Instalar la app - detección, aviso y pasos por plataforma ]
+
+v0.078 :
+
+Fotos en línea, entregas 2 a 4: hasta ahora nada creaba fotos en el renglón y lo importado de Coda quedaba apilado.
+Pegar, soltar, "/Image" y "Copy image" de una web ponen fotos y videos donde está el cursor. Lega pidió que hagan
+todo lo de la foto-bloque (D-24): tiradores que imantan y la misma barra para las dos, por sectores y con tooltips
+que explican cada botón; sin leyenda. *Arrange in rows* acomoda solo las elegidas y un párrafo de fotos se parte
+entre hojas por filas. Una versión vieja que abría un renglón sin fotos perdía texto: el renglón lleva una marca que
+esas versiones no conocen y que deshacer no saca. Importar de Coda pone cada foto en su renglón con su ancho
+(859 páginas de ERSO: las 14.316 fotos y el texto, iguales). Convertir fotos-bloque existe sin entrada (D-26).
+[ Fotos en línea - crear, paridad con la foto-bloque e importar de Coda en el renglón ]
+
 v0.077 :
 
 No había forma de sacar un proyecto de la lista: la base no dejaba borrar proyectos y la app no tenía nada para

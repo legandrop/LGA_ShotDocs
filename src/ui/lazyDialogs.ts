@@ -14,3 +14,6 @@ export const DeletedProjectsList = lazyPart(() => import('./ProjectStatesPart').
 // "Available offline" y "Storage on this device" (P.10).
 export const OfflineDialog = lazyPart(() => import('./OfflinePart').then((m) => m.OfflineDialog));
 export const StorageDialog = lazyPart(() => import('./OfflinePart').then((m) => m.StorageDialog));
+export const LookForFilesButton = lazyPart(() => import('./ProjectStatesPart').then((m) => m.LookForFilesButton));
+// Los pasos para instalar la app (Doc_Instalar.md).
+export const InstallDialog = lazyPart(() => import('./InstallDialog').then((m) => m.InstallDialog));

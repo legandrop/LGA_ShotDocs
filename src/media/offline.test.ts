@@ -11,6 +11,7 @@ import {
   dropCopy,
   getCopy,
   listMarks,
+  markGone,
   offviewKey,
   partKey,
   protects,
@@ -574,6 +575,59 @@ describe('después de la auditoría de la implementación', { timeout: 60_000 },
     const kept = b.offline.takeUnsaved(0)!;
     expect(new Uint8Array(await kept.arrayBuffer())).toEqual(bytes(MB, 31));
     expect(b.offline.getSnapshot().unsaved).toEqual([]);
+  });
+
+  it('hacer lugar para una foto nueva (sin preguntar) libera solo copias bajadas que siguen en Drive', async () => {
+    const { server, a, b, page, child, photo, video, pdf, photo2 } = await setup();
+    // Copias enteras de todo; después la página deja de estar marcada (sin borrar) y queda marcada solo la subpágina.
+    const mark = await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, originals: true, videos: true });
+    await b.offline.unmark(mark, false);
+    await markAndWait(b, 'page', child, { ...DEFAULT_OPTIONS, originals: true });
+    // El video: Drive ya no lo tiene (puede ser la única copia). El PDF: en la papelera de la app.
+    await markGone(b.mediaDb, video, Date.now());
+    server.mediaFiles.get(pdf)!.trashed_at = new Date().toISOString();
+    // Una foto agregada en este dispositivo y todavía sin subir.
+    const unsent = mediaIdOf(await b.media.add(page, file(MB, 'IMG_0300.JPG', 'image/jpeg', 40)))!;
+    expect((await b.mediaDb.get('files', unsent))!.pending).toBe(1);
+
+    // Con red: pide más de lo que hay, para que libere todo lo que puede.
+    await b.offline.makeRoom(10 * 1024 * MB);
+    expect(await readCopy(b.mediaDb, photo)).toBeNull();
+    expect(await readCopy(b.mediaDb, photo2)).not.toBeNull();
+    expect(await readCopy(b.mediaDb, video)).not.toBeNull();
+    expect(await readCopy(b.mediaDb, pdf)).not.toBeNull();
+    expect(new Uint8Array(await (await b.mediaDb.get('blobs', unsent))!.arrayBuffer())).toEqual(bytes(MB, 40));
+
+    // Sin red: lo mismo, con lo último que se supo de la base.
+    server.online = false;
+    await b.offline.makeRoom(10 * 1024 * MB);
+    expect(await readCopy(b.mediaDb, photo2)).not.toBeNull();
+    expect(await readCopy(b.mediaDb, video)).not.toBeNull();
+    expect(await b.mediaDb.get('blobs', unsent)).toBeInstanceOf(Blob);
+    server.online = true;
+
+    // En el dispositivo que los agregó (ya subidos): los originales propios nunca se liberan para hacer lugar.
+    await a.offline.makeRoom(10 * 1024 * MB);
+    for (const id of [photo, video, pdf, photo2]) expect(await a.mediaDb.get('blobs', id)).toBeInstanceOf(Blob);
+  });
+
+  it('una carpeta de Drive (P.9) en la página no se baja ni pesa: la marca llega a "listo"', async () => {
+    const { server, a, b, page, pdf } = await setup();
+    const folder = await a.media.addFolder(page, 'Referencias', 5 * MB);
+    // Ya creada en Drive (`/folder/prepare` le pone su id de Drive).
+    server.mediaFiles.get(folder.id)!.drive_id = 'carpetaDrivexxxx';
+    await edit(a, page, (doc) => insert(doc, folder.id));
+    await sync(a);
+    await sync(b);
+    const plan = await b.offline.plan('page', page, () => undefined);
+    expect(plan.weights.rows.attachments.count).toBe(1);
+    await markAndWait(b, 'page', page);
+    const [mark] = await listMarks(b.mediaDb);
+    expect(mark.state).toBe('ready');
+    expect(mark.error).toBeNull();
+    expect(b.offline.getSnapshot().marks[0]).toMatchObject({ state: 'ready' });
+    expect(await readCopy(b.mediaDb, pdf)).not.toBeNull();
+    expect(await getCopy(b.mediaDb, folder.id)).toBeUndefined();
   });
 
   it('el carrete sin red muestra la de 2048 guardada aunque la página no la haya procesado', async () => {

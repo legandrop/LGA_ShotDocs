@@ -6,6 +6,7 @@ import { formatSize } from '../media/fileTrash';
 import type { MediaRecord } from '../media/mediaDb';
 import { mediaDbName } from '../media/mediaDb';
 import { commentsDbName } from '../sync/comments';
+import { foldersDbName } from '../media/folderUpload';
 import { useServices, useSyncStatus } from '../services';
 import { unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
 import { errorMessage } from '../sync/types';
@@ -47,6 +48,8 @@ export async function deleteWorkspaceDatabases(dbName: string, keepMedia = false
   await deleteDatabase(dbName);
   if (!keepMedia) await deleteDatabase(mediaDbName(dbName));
   await deleteDatabase(commentsDbName(dbName));
+  // La lista de trabajo de las carpetas (sin bytes: las carpetas siguen en el disco de quien las soltó).
+  await deleteDatabase(foldersDbName(dbName));
 }
 
 /**
@@ -137,6 +140,8 @@ export function RemovedScreen() {
   }, [db, mediaDb, commentsDb, docs, status.pendingOps, status.pendingPages, status.pendingMedia, status.pendingComments]);
 
   const pending = summary?.total ?? 0;
+  // Lo que falta subir de las carpetas (P.9): sigue en el disco de quien las soltó, pero conviene decirlo.
+  const foldersLeft = (services.folders?.all() ?? []).reduce((n, p) => n + (p.files - p.doneFiles), 0);
   const name = status.workspaceName || workspace.config.name || tr('noProjects.thisWorkspace');
 
   async function download() {
@@ -226,9 +231,11 @@ export function RemovedScreen() {
               {busy === 'download' ? tr('common.preparing') : downloaded ? tr('removed.downloadAgain') : tr('sync.downloadUnsynced')}
             </button>
             <PendingMediaList media={media} downloaded={mediaDone} onDownload={(m) => void downloadMedia(m)} />
+            {foldersLeft > 0 && <p className="muted">{tr('removed.foldersLeft', { count: foldersLeft })}</p>}
           </>
         )}
-        {summary !== null && pending === 0 && <p className="muted">{tr('removed.allUploaded')}</p>}
+        {summary !== null && pending === 0 && foldersLeft === 0 && <p className="muted">{tr('removed.allUploaded')}</p>}
+        {summary !== null && pending === 0 && foldersLeft > 0 && <p>{tr('removed.foldersLeft', { count: foldersLeft })}</p>}
         {mediaDb === null && <p className="muted">{tr('removed.mediaKept')}</p>}
         {error && <p className="error">{error}</p>}
         <button className={pending > 0 ? 'secondary' : 'primary'} disabled={busy !== null || summary === null} onClick={() => void removeFromDevice()}>

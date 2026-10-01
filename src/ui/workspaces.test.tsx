@@ -315,15 +315,15 @@ describe('en la app abierta', () => {
       button(document.body, 'Download my unsynced changes').click();
       await new Promise((r) => setTimeout(r, 20));
     });
-    // El archivo no trae los originales: todavía no.
-    expect(document.body.textContent).toContain('does not include the original photos and videos');
+    // El archivo no trae los originales: todavía no. (Con la máquina cargada, el aviso puede tardar más de 20 ms.)
+    await act(() => vi.waitFor(() => expect(document.body.textContent).toContain('does not include the original photos and videos')));
     expect(remove.disabled).toBe(true);
     await act(async () => {
       button(document.body, 'IMG_0001.MOV').click();
       await new Promise((r) => setTimeout(r, 20));
     });
-    expect(saved).toEqual(['IMG_0001.MOV']);
-    expect(remove.disabled).toBe(false);
+    await act(() => vi.waitFor(() => expect(saved).toEqual(['IMG_0001.MOV'])));
+    await act(() => vi.waitFor(() => expect(remove.disabled).toBe(false)));
   });
 });
 

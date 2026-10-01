@@ -68,6 +68,55 @@ export const shell = {
     en: "Archived: out of your everyday list. Unarchive it from Archived projects in the project menu.",
     es: "Archivado: fuera de tu lista de todos los días. Se desarchiva desde Proyectos archivados, en el selector.",
   },
+  // Restaurado sin su carpeta de Drive (P.14, entrega 2): las fotos y archivos subidos antes no se ven.
+  'home.driveMissing': {
+    en: "Its files were not in Google Drive when it was restored, so its photos and files do not show. If its folder turns up in Google Drive, look for them again.",
+    es: "Sus archivos no estaban en Google Drive cuando se restauró, así que sus fotos y archivos no se ven. Si su carpeta vuelve a aparecer en Google Drive, buscalos de nuevo.",
+  },
+  'project.lookForFiles': { en: "Look for its files again", es: "Buscar sus archivos de nuevo" },
+  'project.lookingForFiles': { en: "Looking…", es: "Buscando…" },
+  'project.filesBack': {
+    en: "Its files are back from the Google Drive trash.",
+    es: "Sus archivos volvieron de la papelera de Google Drive.",
+  },
+  'project.filesStillMissing': {
+    en: "Google Drive still does not have the folder of this project.",
+    es: "Google Drive sigue sin tener la carpeta de este proyecto.",
+  },
+  // Los errores del portero con la carpeta de un proyecto (src/media/projectDrive.ts).
+  'projectDrive.notConnected': {
+    en: "Google Drive is not connected: the workspace owner has to connect it.",
+    es: "Google Drive no está conectado: el dueño del workspace tiene que conectarlo.",
+  },
+  'projectDrive.otherAccount': {
+    en: "Google Drive is connected to another account: connect the one this project used to restore its files.",
+    es: "Google Drive está conectado a otra cuenta: conectá la que usaba este proyecto para restaurar sus archivos.",
+  },
+  'projectDrive.mismatch': {
+    en: "The folder in Google Drive does not belong to this project: nothing was touched. Ask the workspace owner.",
+    es: "La carpeta de Google Drive no es de este proyecto: no se tocó nada. Preguntale al dueño del workspace.",
+  },
+  'projectDrive.driveFailed': {
+    en: "Google Drive did not answer. Try again: nothing is lost.",
+    es: "Google Drive no respondió. Probá de nuevo: no se pierde nada.",
+  },
+  'projectDrive.notAllowed': {
+    en: "Only the workspace owner or an admin who manages this project can do this.",
+    es: "Solo el dueño del workspace o un admin que maneja este proyecto puede hacerlo.",
+  },
+  'projectDrive.outdated': {
+    en: "This workspace's database needs an update for this.",
+    es: "Para esto hay que actualizar la base de este workspace.",
+  },
+  'projectDrive.restoredMeanwhile': {
+    en: "Someone restored the project meanwhile: its folder stays in Google Drive.",
+    es: "Alguien restauró el proyecto mientras tanto: su carpeta queda en Google Drive.",
+  },
+  'projectDrive.noPortero': {
+    en: "This workspace has no file server.",
+    es: "Este workspace no tiene servidor de archivos.",
+  },
+  'projectDrive.unreachable': { en: "Could not reach the file server.", es: "No se pudo llegar al servidor de archivos." },
   'invite.incomplete': {
     en: "This invitation link is incomplete. Copy the whole link again, or ask for a new one.",
     es: "Este link de invitación está incompleto. Copiá el link entero otra vez, o pedí uno nuevo.",
@@ -103,4 +152,22 @@ export const shell = {
   'lazy.couldNotOpen': { en: "Could not open", es: "No se pudo abrir" },
   'lazy.couldNotOpenTitle': { en: "Could not open this", es: "No se pudo abrir esto" },
   'legal.openApp': { en: "Open the app", es: "Abrir la app" },
+  // Instalar la app (Docs/Doc_Instalar.md): la entrada del menú de la cuenta y de la pantalla de entrar, y el aviso
+  // del teléfono. Los pasos están en lazy/install.ts.
+  'install.menu': { en: "Install app", es: "Instalar la app" },
+  'install.menuTip': {
+    en: "Opens in its own window, from the home screen or the Dock.\nSteps for iPhone, Android and computer",
+    es: "Se abre en su propia ventana, desde la pantalla de inicio o el Dock.\nPasos para iPhone, Android y computadora",
+  },
+  'install.banner.title': { en: "Install the app", es: "Instalá la app" },
+  'install.banner.text': {
+    en: "Open Shot Docs from your home screen, full screen, and keep your offline copy safer.",
+    es: "Abrí Shot Docs desde la pantalla de inicio, en pantalla completa, y cuidá mejor tu copia sin red.",
+  },
+  'install.banner.install': { en: "Install", es: "Instalar" },
+  'install.banner.notNow': { en: "Not now", es: "Ahora no" },
+  'install.installed': {
+    en: "Installed. Open Shot Docs from your home screen or app list.",
+    es: "Instalada. Abrí Shot Docs desde la pantalla de inicio o la lista de apps.",
+  },
 } satisfies Dict;

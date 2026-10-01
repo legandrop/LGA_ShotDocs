@@ -953,6 +953,9 @@ aviso, *Not now* y *Free up*.
 - Una copia que dice estar completa pero perdió una parte se vuelve a bajar; `cleanOrphans` va en una sola transacción.
 - El carrete sin red muestra la de 2048 guardada aunque la página no la haya procesado.
 - "Offline · N" en el teléfono sale según la conexión, también con algo rechazado.
+- Las tarjetas de carpeta de P.9 (una fila `inode/directory`) no se bajan ni pesan en ninguna fila: lo de adentro
+  llega con la casilla *Drive folders* (entrega 3). Mientras una carpeta se sube, las bajadas esperan, como con la cola
+  de fotos y videos.
 
 **La medición del iPhone (sección 9.1), para Lega:** en *Storage on this device*, abajo, *Measure storage on this
 device…* abre la página de prueba (también en `/storage-test`). La página no deja llenar si algún workspace de este
@@ -975,7 +978,9 @@ poco lugar libre, como pide la sección 9.1. Con los números, se cambia el tope
 sin red; las copias enteras y abrirlas sin red; el portero viejo que corta las partes; la página a medio bajar que solo
 suma; desmarcar; las claves que nunca alcanzan un original propio; el tope que avisa y no borra; lo abierto en la
 sesión; Drive que ya no lo tiene; permiso quitado con las dos señales; subir antes que bajar; sin lugar por la reserva
-y al escribir; el tope del iPhone; la nítida de la página que pasa a la marca), `src/ui/offlineUi.test.tsx` (las dos
+y al escribir; el tope del iPhone; la nítida de la página que pasa a la marca; la foto nueva que no entra, que libera
+solo copias bajadas que siguen en Drive y nunca algo sin subir, marcado, `gone` o en una papelera; la tarjeta de una
+carpeta de P.9, que no se baja), `src/ui/offlineUi.test.tsx` (las dos
 ventanas, el aviso y "Offline · N"), `portero/src/core.test.ts` (los códigos, `/verify`, `only: 'known'` y
 `?offline=1` con la caché del arranque de verdad) y un recorrido en Chromium con el servidor de mentira (marcar,
 pesos, progreso, listo, sin red, teléfono, el diálogo de espacio, el aviso del tope y liberar; la página de
@@ -1049,18 +1054,10 @@ cambios". Todas quedaron en el cuerpo:
 | 24: adjunto propio de más de 50 MB | 3.2 |
 | Las 9 preguntas | "Respuestas de Lega a las propuestas" |
 
-## En curso (pausado, 2026-10-01)
+## Unión con `main` (v0.081, 2026-10-01)
 
-Lega reinició la computadora. Estado de las correcciones de la auditoría de la implementación (`6a26d1f`):
-
-- **Hecho** (commits `30902ee` y el siguiente): I1 (el tope del iPhone suma lo bajado en la vuelta y la ventana usa el
-  total del dispositivo); altas 1 ("Offline · N" según la conexión), 2 (el carrete usa la de 2048 guardada), 3
-  (`cleanOrphans` en una transacción y la copia sin una parte se vuelve a bajar), 4 (una foto nueva que no entra libera
-  y reintenta; si igual no, se ofrece guardarla) y 5 (`/storage-test` no llena con algo por subir y borra lo que quedó);
-  medias (una marca lista no se consulta entera en cada vuelta, *Show what* con la lista, sin Web Locks no aparece);
-  bajas 10, 11 y 12. Pruebas: 1596 de la suite, 24 de `offline.test.ts`, 7 de `offlineUi.test.tsx`; `tsc` de la app y
-  del portero sin errores. Tope del iPhone: 5 GB en total (Lega).
-- **Falta:** unir `origin/main` (v0.081; 14 archivos en conflicto, entre ellos `portero/src/core.ts` y
-  `src/services.ts`, conservando las dos partes), `npm ci` (cambió el parche de y-prosemirror), `scripts/portero-smoke.mjs`,
-  las pruebas del portero, la suite, `tsc` (app y portero), el build y el recorrido en Chromium después de unir; el
-  changelog ya está como v0.083.
+La rama se unió con `main` en `b03267e` (carpetas, borrar la carpeta de un proyecto en Drive, instalar la app, fotos en
+línea), conservando lo de los dos lados. En el portero, `features` anuncia `verify`, `known`, `offline`, `codes` y
+`folders`, y los errores nuevos de `main` (`is_folder`) conviven con los códigos de esta rama. Pruebas, `tsc`, build, el
+smoke del portero (con `/verify` y `?offline=1`) y el recorrido en Chromium, en verde después de unir. Lo que sigue
+pendiente: la medición del iPhone (sección 9.1) y la entrega 2.

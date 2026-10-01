@@ -4,8 +4,9 @@ import { unmountAll } from './collabHarness';
 import { schema } from './editorSchema';
 import { para, previousSchema, tally, type Tally } from './photoHarness';
 
-// Versiones mezcladas (Docs/Doc_Colaboracion.md, "El texto de los huecos"). Entre que se publica esta versión y
-// se sube `min_app_version`, la anterior y esta pueden editar la misma página. La parte nueva del parche solo
+// Versiones mezcladas (Docs/Doc_Colaboracion.md, "El texto de los huecos"), con el ESQUEMA anterior y la librería
+// de hoy (la librería de las versiones publicadas: collabPhotosVersions.published.test.ts). Entre que se publica
+// esta versión y se sube `min_app_version`, la anterior y esta pueden editar la misma página. La parte nueva del parche solo
 // cambia los párrafos que tienen fotos en línea, y la versión anterior no abre esas páginas (unknownContent.ts):
 // en todo lo demás las dos escriben exactamente igual. Acá se prueba con los saltos de línea (Shift+Enter), el
 // otro elemento en línea que ya existe en las páginas de los usuarios.

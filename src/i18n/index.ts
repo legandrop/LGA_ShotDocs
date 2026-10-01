@@ -4,7 +4,9 @@ import type { carrete } from './lazy/carrete';
 import type { commentsPanel } from './lazy/commentsPanel';
 import type { drive } from './lazy/drive';
 import type { editor } from './lazy/editor';
+import type { folders } from './lazy/folders';
 import type { importCoda } from './lazy/importCoda';
+import type { installDialog } from './lazy/install';
 import type { offline } from './lazy/offline';
 import type { projectStates } from './lazy/projectStates';
 import type { search } from './lazy/search';
@@ -32,7 +34,9 @@ type LazyStrings = typeof carrete &
   typeof commentsPanel &
   typeof drive &
   typeof editor &
+  typeof folders &
   typeof importCoda &
+  typeof installDialog &
   typeof offline &
   typeof projectStates &
   typeof search &
