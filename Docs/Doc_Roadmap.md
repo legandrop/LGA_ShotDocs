@@ -142,7 +142,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Lega: vista en vivo de la carpeta de Drive, subida directa a Google, sin tope y en el plan gratis.
   **Entrega 1 hecha (v0.081):** soltar una carpeta, la ventana de qué se sube, su cola propia (los bytes por el
   portero), la tarjeta, el visor con el carrete y bajar uno, retomar volviendo a soltarla, y el portero con la
-  regla de no salir del árbol. Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
+  regla de no salir del árbol. Las carpetas soltadas conservan su nombre en el Drive (D3, 2026-10-01). Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
   la subida directa a Google con el Drive real, "Agregar a esta carpeta", la cuadrícula, la lista sin red, "Seguir"
   en Chrome y Edge, el botón "Carpeta…" del menú `/` y *Bajar todo* (entrega 2). Detalle en `Doc_Carpetas.md`,
   "Cómo quedó".

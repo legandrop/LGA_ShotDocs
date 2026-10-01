@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Una carpeta soltada en la página llegaba al Drive con otro nombre: «Día 2 - Puerto» quedaba `Día_2_-_Puerto`, y
+sus subcarpetas igual, porque el portero les aplicaba la regla de las carpetas de la app (sin espacios). Decisión D3
+(2026-10-01): las carpetas que suelta el usuario conservan su nombre, con espacios, tildes y emojis; solo se sacan
+controles y marcas de dirección, las barras van como `_` y se corta en 200 caracteres. Las que crea la app
+(`LGA_ShotDocs`, la del proyecto, `Carpetas`) siguen sin espacios. Lo ya subido no se renombra, y retomarlo no
+duplica nada: cada subcarpeta se encuentra por su marca, no por el nombre. Además, una carpeta sin nada visible en
+el nombre se llamaba `file.bin`: ahora, `Folder`.
+[ Carpetas - las que suelta el usuario conservan su nombre en el Drive ]
+
 v0.083 :
 
 No había forma de tener una página o un proyecto para usar sin red, ni de saber cuánto ocupa la app en el

@@ -198,9 +198,9 @@ const MAX_NAME = 250;
  * El nombre sin lo que puede engañar o romper algo: caracteres de control, los que XML no admite (y pares
  * sustitutos sueltos) y los de dirección del texto (con los que `exe.pdf` se ve como `fdp.exe`). Se recorta a
  * 250 caracteres contados por puntos de código (nunca queda medio emoji), conservando la extensión. Vacío,
- * `file.bin`.
+ * `empty` (`file.bin`; una carpeta pasa `Folder`).
  */
-export function cleanFileName(name: string, max = MAX_NAME): string {
+export function cleanFileName(name: string, max = MAX_NAME, empty = 'file.bin'): string {
   const kept: string[] = [];
   for (const ch of name ?? '') {
     const c = ch.codePointAt(0)!;
@@ -213,7 +213,7 @@ export function cleanFileName(name: string, max = MAX_NAME): string {
     kept.push(ch);
   }
   const clean = kept.join('').trim();
-  if (!clean) return 'file.bin';
+  if (!clean) return empty;
   const points = Array.from(clean);
   if (points.length <= max) return clean;
   const ext = /\.[A-Za-z0-9]{1,10}$/.exec(clean)?.[0] ?? '';

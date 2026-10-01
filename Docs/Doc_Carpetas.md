@@ -105,14 +105,12 @@ la carpeta, cierra. Los accesos directos y los documentos de Google se muestran 
   verla sin red, retomar con "Seguir" en Chrome y Edge (`FileSystemHandle`), el botón "Carpeta…" del menú `/`,
   la cuenta de pedidos del día y contar lo que falta subir en "sacar el workspace del dispositivo".
 - **Entrega 2:** *Bajar todo* como zip.
-- **A confirmar por Lega (BAJO):** las carpetas que crea el portero siguen la regla de las carpetas del Drive
-  (sin espacios: `Dia 2` queda `Dia_2`, y una segunda `Referencias` del proyecto, `Referencias_2`); el visor
-  muestra los nombres de Drive. Los archivos conservan su nombre. La sección 6 decía "se limpian solo los
-  controles": si Lega prefiere los nombres tal cual en las subcarpetas, es un cambio de una línea
-  (`driveFolderName`).
+- **Nombres de las carpetas: decidido (D3, 2026-10-01).** Lega delegó; quedó respetar el nombre en las carpetas que
+  suelta el usuario (ver "Respondidas por Lega", punto 6). Hecho en `driveFolderName`.
 - **El iPhone:** sin probar a mano; si el navegador no da `webkitGetAsEntry`, se sigue pidiendo comprimirla.
 
-**Pruebas:** `portero/src/folders.test.ts` (crear el árbol y repetirlo, nombres, `_2`, niveles, rutas con `..`,
+**Pruebas:** `portero/src/folders.test.ts` (crear el árbol y repetirlo, nombres tal cual y retomar una subida con
+los nombres de antes, `_2`, niveles, rutas con `..`,
 subcarpetas de afuera, subidas cifradas de otra persona, tocadas o vencidas, Drive que pide ir más despacio,
 listar, accesos directos, documentos de Google, subcarpeta movida afuera, ciclos, el pase de una carpeta) y
 `src/media/folders.test.ts` (leer más de 100 por carpeta, salteados, `webkitdirectory`, la cola de punta a punta,
@@ -328,6 +326,7 @@ no puede ir nunca al navegador de un miembro.
 - Un archivo que no se puede leer queda afuera y figura como salteado.
 - **Nombres:** Drive acepta cualquier nombre; se limpian solo los controles y las marcas de dirección
   (`cleanFileName`). Dos nombres que solo difieren en mayúsculas se suben tal cual (el zip los desambigua).
+  Las carpetas también conservan su nombre (D3, punto 6 de "Respondidas por Lega").
 
 ## 7. La ventana: "esta carpeta, con todo esto"
 
@@ -530,6 +529,16 @@ un acceso directo que no se sigue, una subcarpeta movida afuera que deja de vers
    subidas pueden ir directo a Google.
 4. **Bajar todo como zip:** sí, en la entrega 2, con los bytes de Drive por el portero (sección 9).
 5. **iPhone sin forma de elegir una carpeta → pedir que se comprima:** de acuerdo.
+6. **Nombres de las carpetas (D3, 2026-10-01):** Lega delegó; quedó respetar el nombre en las carpetas que suelta
+   el usuario. «Día 2 - Puerto» queda así en el Drive, y sus subcarpetas también (`driveFolderName` en
+   `portero/src/core.ts`): solo se sacan controles y marcas de dirección (como `cleanFileName`), las barras van como
+   `_`, se corta en 200 caracteres y, vacío, `Folder`. Las que crea la app (`LGA_ShotDocs`, la del proyecto,
+   `Carpetas`) siguen sin espacios (`folderName`). Una segunda carpeta con el mismo nombre en el proyecto, sin
+   distinguir mayúsculas, sigue llevando `_2` (`Día 2 - Puerto_2`). **Lo ya subido** con guiones bajos (`Dia_2`) no
+   se renombra: la carpeta se encuentra por su marca `sdFile` y cada subcarpeta por `sdPath` (sale de la ruta que
+   manda la app, con los nombres originales), así que volver a soltarla no duplica nada y lo nuevo va adentro de la
+   vieja, con su nombre (puede quedar `Dia_2/Toma 2`). Una subida vieja con `Dia_2` y una nueva `Dia 2` son nombres
+   distintos: no llevan `_2`.
 
 ## Decisiones que quedan (a confirmar por Lega)
 

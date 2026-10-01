@@ -129,9 +129,10 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
   la app acceso a esa carpeta, para crear adentro (falta confirmarlo al hacerlo). Hace falta activar
   *Google Picker API* y crear una clave de API en el proyecto de Google Cloud, y el selector usa además
   el número del proyecto (paso 8). Hasta entonces, la carpeta de prueba va a la raíz.
-- **Nombres sin espacios, nunca:** guiones bajos en todas las carpetas. La de la app se llama
+- **Nombres sin espacios, nunca:** guiones bajos en todas las carpetas que crea la app. La de la app se llama
   `LGA_ShotDocs`, igual que el repo; la del proyecto, su nombre con guiones bajos en vez de espacios; la
-  del día, `AAAA-MM-DD`.
+  del día, `AAAA-MM-DD`. Las carpetas que suelta el usuario en una página (P.9) conservan su nombre (D3,
+  2026-10-01, `Doc_Carpetas.md`).
 - Carpetas: `<donde eligió el dueño> / LGA_ShotDocs / <Proyecto> / <día> / IMG_1234.HEIC`, con el día en
   que se subió. Renombrar el proyecto renombra su carpeta (si el dueño no la renombró a mano). Las páginas
   apuntan al id del archivo, así que moverlo o renombrarlo en Drive no rompe nada. Lo que se agregue a

@@ -289,20 +289,21 @@ const memory = new WeakMap<object, Map<string, Map<string, number>>>();
 const TREE_MEMORY_MAX = 20_000;
 
 /**
- * El nombre de una carpeta en el Drive del dueño: sin controles ni marcas de dirección y, como todas las carpetas
- * que crea la app, sin espacios (guiones bajos). Las barras ya separan las partes de la ruta. Vacío, `Folder`.
+ * El nombre en el Drive del dueño de una carpeta que soltó el usuario y de sus subcarpetas: el suyo, tal cual
+ * (D3, 2026-10-01: `Día 2 - Puerto` queda así, con espacios, tildes y emojis). Solo se saca lo que saca
+ * `cleanFileName` (controles y marcas de dirección; las barras van como `_`), se corta en 200 caracteres por
+ * puntos de código y sin espacios en los bordes. Vacío, `Folder`. Las carpetas que crea la app (la de la app, la
+ * de cada proyecto, `Carpetas`) siguen sin espacios (`folderName`). Las de antes, con guiones bajos (`Dia_2`),
+ * no se renombran: cada una se encuentra por su marca (`sdFile`, `sdPath`), nunca por el nombre.
  */
 export function driveFolderName(name: string): string {
-  const clean = cleanFileName(name)
-    .replace(/[\s\\]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  return Array.from(clean).slice(0, 200).join('') || 'Folder';
+  return Array.from(cleanFileName(name)).slice(0, 200).join('').trim() || 'Folder';
 }
 
 /**
  * Una ruta relativa de una subcarpeta (`Fotos/Dia_2`): partes no vacías, sin `.` ni `..`, sin barra al principio,
  * hasta `TREE_DEPTH` niveles. Una barra invertida es parte del nombre (en Mac y Linux es válida): en Drive va `_`.
+ * La marca de cada subcarpeta (`pathMark`) sale de esta ruta, con los nombres como los manda la app.
  * La app aplica las mismas reglas antes de mandar nada (src/media/folderRead.ts, `folderPathOk`).
  */
 export function validFolderPath(path: unknown): path is string {
