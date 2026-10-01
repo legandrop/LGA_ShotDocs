@@ -3,10 +3,10 @@ import { t } from '../i18n';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { resolveObjectURL } from 'node:buffer';
 import { FileRejected } from '../sync/files';
-import { PART_BYTES, localDay } from './portero';
+import { CONTROL_TIMEOUT_MS, PART_BYTES, STALL_CHECK_MS, STALL_MS, localDay } from './portero';
 import { fileKind } from './attachments';
 import { deletedLabel, mediaKind } from './probe';
-import { MEDIA_SCHEME, STALL_MS, mediaIdOf, normalizeMime } from './queue';
+import { MEDIA_SCHEME, STALLS_BEFORE_RENEW, mediaIdOf, normalizeMime } from './queue';
 
 const MB = 1024 * 1024;
 const devices: Device[] = [];
@@ -170,33 +170,6 @@ describe('cola de archivos: subir', () => {
     expect(a.engine.getStatus()).toMatchObject({ pendingMedia: 0, failedMedia: 0 });
   });
 
-  it('una subida que no avanza (el portero no contesta, sin error) se aborta y la cola sigue; después sube', async () => {
-    const server = new FakeServer();
-    const { a, page } = await withPage(server);
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
-    try {
-      server.portero.hang = true;
-      const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0002.JPG', 'image/jpeg')))!;
-      await a.engine.syncNow();
-      const running = a.engine.syncMedia();
-      // Sin avance: pasado el tiempo del vigilante, la subida se aborta (antes quedaba colgada para siempre).
-      for (let i = 0; i < 50 && !server.portero.calls.some((c) => c.path === '/upload'); i++) await new Promise((r) => setTimeout(r, 5));
-      server.clockOffset += STALL_MS + 1;
-      vi.advanceTimersByTime(STALL_MS);
-      await running;
-      expect(server.mediaFiles.get(id)?.drive_id).toBeFalsy();
-      const status = a.engine.getStatus();
-      expect(status.pendingMedia).toBe(1);
-      // Vuelve a la cola para más tarde (no queda detenido) y, cuando el portero contesta, sube.
-      server.portero.hang = false;
-      server.clockOffset += 3_600_000;
-      await sync(a);
-      expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('espera a que la página exista en el servidor', async () => {
     const server = new FakeServer();
     server.enableMedia();
@@ -334,6 +307,273 @@ describe('cola de archivos: subir', () => {
     server.online = true;
     await sync(a);
     expect(a.engine.getStatus().pendingMedia).toBe(0);
+  });
+});
+
+// Un pedido al portero que nunca contesta (sin error de red) dejaba la cola entera clavada, porque se sube de
+// a uno. El portero corta el pedido que deja de moverse y la cola sigue (Docs/Doc_Portero.md, "Subidas que se
+// traban"). Acá el tiempo no pasa de verdad: se adelanta el reloj y se hace mirar al vigilante.
+describe('cola de archivos: subidas que se traban', () => {
+  /** Lo que tarda en volver a intentarse un archivo que falló (más que la espera más larga de estas pruebas). */
+  const LATER = 60_000;
+  const never = () => new Promise<void>(() => undefined);
+
+  /** Espera de verdad (unos milisegundos) a que pase algo que depende de la base del dispositivo. */
+  async function until(check: () => boolean): Promise<void> {
+    for (let i = 0; i < 600 && !check(); i++) await new Promise((r) => setTimeout(r, 5));
+    expect(check()).toBe(true);
+  }
+
+  /** Pasa el tiempo: se adelanta el reloj y el vigilante vuelve a mirar. */
+  function elapse(server: FakeServer, ms: number): void {
+    server.clockOffset += ms;
+    vi.advanceTimersByTime(STALL_CHECK_MS);
+  }
+
+  /** Una vuelta de la cola, y si terminó. */
+  function round(d: Device): { done: Promise<void>; finished: () => boolean } {
+    let finished = false;
+    const done = d.engine.syncMedia().then(() => {
+      finished = true;
+    });
+    return { done, finished: () => finished };
+  }
+
+  /** Una vuelta en la que un pedido queda colgado: se espera a que salga, pasa el tiempo límite y termina. */
+  async function stalledRound(d: Device, server: FakeServer, hung: () => boolean, limit = STALL_MS): Promise<void> {
+    const { done, finished } = round(d);
+    await until(hung);
+    // Un poco antes del límite sigue esperando (no se corta de más)...
+    elapse(server, limit - 2 * STALL_CHECK_MS);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(finished()).toBe(false);
+    // ...y pasado el límite se corta.
+    elapse(server, 3 * STALL_CHECK_MS);
+    await done;
+  }
+
+  async function withFile(size: number, name = 'IMG_0002.JPG'): Promise<{ server: FakeServer; a: Device; file: File; id: string }> {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const file = makeFile(size, name, 'image/jpeg');
+    const id = mediaIdOf(await a.media.add(page, file))!;
+    await a.engine.syncNow();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    return { server, a, file, id };
+  }
+
+  /** Los pedidos de subida al portero, en orden: la parte o la pregunta (`Content-Range`), o `POST /upload`. */
+  const uploadCalls = (server: FakeServer) =>
+    server.portero.calls.filter((c) => c.path.startsWith('/upload')).map((c) => c.range ?? `${c.method} ${c.path}`);
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('si el portero no contesta al abrir la subida, se corta al minuto y el archivo vuelve a la cola; después sube', async () => {
+    const { server, a, id } = await withFile(MB);
+    server.portero.hang = true;
+    await stalledRound(a, server, () => server.portero.calls.some((c) => c.path === '/upload'), CONTROL_TIMEOUT_MS);
+
+    expect(server.mediaFiles.get(id)?.drive_id).toBeFalsy();
+    const record = await a.mediaDb.get('files', id);
+    // No queda detenido: se reintenta solo. El original sigue en el dispositivo.
+    expect(record).toMatchObject({ pending: 1, blocked: false, stalls: 1, uploadId: null });
+    expect(record?.error).toMatch(/stopped moving/);
+    expect((await a.mediaDb.get('blobs', id))?.size).toBe(MB);
+    await until(() => a.engine.getStatus().pendingMedia === 1);
+    expect(a.engine.getStatus().failedMedia).toBe(0);
+
+    server.portero.hang = false;
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0, error: null });
+  });
+
+  it('una parte colgada (no sale ni un byte) se corta; a la segunda seguida se abre otra subida, sin duplicar', async () => {
+    const { server, a, file, id } = await withFile(MB);
+    let hung = 0;
+    server.portero.partDelay = () => {
+      hung++;
+      return never();
+    };
+
+    // Primera: se corta y queda la misma subida para retomar.
+    await stalledRound(a, server, () => hung === 1);
+    const first = await a.mediaDb.get('files', id);
+    expect(first).toMatchObject({ pending: 1, blocked: false, stalls: 1, sent: 0 });
+    expect(first?.uploadId).toBeTruthy();
+    expect(first?.error).toMatch(/stopped moving/);
+
+    // Segunda: retoma la misma (pregunta cuánto llegó) y se vuelve a trabar.
+    server.clockOffset += LATER;
+    await stalledRound(a, server, () => hung === 2);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ stalls: STALLS_BEFORE_RENEW, uploadId: first!.uploadId, sent: 0 });
+    expect(server.portero.uploads.size).toBe(1);
+
+    // Tercera: le pregunta a la que hay; no recibió nada, así que abre otra y sube por ahí.
+    server.portero.partDelay = null;
+    server.portero.calls.length = 0;
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    expect(uploadCalls(server)).toEqual([`bytes */${MB}`, 'POST /upload', `bytes 0-${MB - 1}/${MB}`]);
+    expect(server.portero.uploads.size).toBe(2);
+    expect(server.portero.drive.size).toBe(1);
+    const row = server.mediaFiles.get(id)!;
+    expect(await same(file, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0, uploadId: null, error: null });
+  });
+
+  it('una subida lenta pero sana no se corta: mientras salgan bytes, la parte tarda lo que tarde', async () => {
+    const { server, a, file, id } = await withFile(MB);
+    const out: { part?: { size: number; sent: (bytes: number) => void }; arrive?: () => void } = {};
+    server.portero.partDelay = (part) => {
+      out.part = part;
+      return new Promise((resolve) => (out.arrive = resolve));
+    };
+    const { done, finished } = round(a);
+    await until(() => !!out.part);
+
+    // 20 tramos de casi dos minutos sin que salga nada y después un poco más del archivo: la parte tarda
+    // unos 37 minutos (18 veces el tiempo del vigilante), pero nunca pasa ese tiempo sin moverse.
+    const steps = 20;
+    for (let i = 1; i <= steps; i++) {
+      elapse(server, STALL_MS - 2 * STALL_CHECK_MS);
+      out.part!.sent(Math.floor((out.part!.size * i) / steps));
+    }
+    // Ya salió entera: el portero se la pasa a Drive y tarda en contestar más que el tiempo del vigilante
+    // (a la respuesta se le da ese tiempo más lo que tardó el cuerpo, hasta el doble).
+    elapse(server, STALL_MS + 30_000);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(finished()).toBe(false);
+
+    out.arrive!();
+    await done;
+    expect(uploadCalls(server)).toEqual(['POST /upload', `bytes 0-${MB - 1}/${MB}`]);
+    const row = server.mediaFiles.get(id)!;
+    expect(await same(file, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0, error: null, failures: 0 });
+  });
+
+  it('la parte salió entera y la respuesta no llega nunca: también se corta', async () => {
+    const { server, a, id } = await withFile(MB);
+    server.portero.loseAnswer = true;
+    server.portero.failLink = true;
+    await stalledRound(a, server, () => server.portero.drive.size === 1);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, stalls: 1 });
+  });
+
+  it('si la última parte ya había llegado, no abre otra subida: le pregunta a la que hay y no sube dos veces', async () => {
+    const { server, a, id } = await withFile(MB);
+    let hung = 0;
+    server.portero.partDelay = () => {
+      hung++;
+      return never();
+    };
+    await stalledRound(a, server, () => hung === 1);
+
+    // Segunda trabada seguida: esta vez la parte llega a Drive, pero la respuesta no vuelve y la base no se
+    // entera. Para la app es igual que la anterior: no avanzó.
+    server.portero.partDelay = null;
+    server.portero.loseAnswer = true;
+    server.portero.failLink = true;
+    server.clockOffset += LATER;
+    await stalledRound(a, server, () => server.portero.drive.size === 1);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, stalls: STALLS_BEFORE_RENEW });
+    expect(server.mediaFiles.get(id)?.drive_id).toBeFalsy();
+
+    // Tercera: tocaría abrir otra subida, pero primero pregunta, y la que hay ya terminó: no manda nada más.
+    server.portero.loseAnswer = false;
+    server.portero.failLink = false;
+    server.portero.calls.length = 0;
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    expect(uploadCalls(server)).toEqual([`bytes */${MB}`]);
+    expect(server.portero.uploads.size).toBe(1);
+    expect(server.portero.drive.size).toBe(1);
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0, uploadId: null });
+  });
+
+  it('las trabadas se cuentan seguidas y sin avance; una subida que ya recibió algo se retoma siempre', async () => {
+    const size = PART_BYTES + MB;
+    const { server, a, file, id } = await withFile(size, 'IMG_0700.JPG');
+    let hung = 0;
+    const hang = () => {
+      hung++;
+      return never();
+    };
+
+    // Primera: se traba la primera parte.
+    server.portero.partDelay = hang;
+    await stalledRound(a, server, () => hung === 1);
+    const first = await a.mediaDb.get('files', id);
+    expect(first).toMatchObject({ stalls: 1, sent: 0 });
+
+    // Segunda: la primera parte llega (la cuenta vuelve a cero) y se traba la segunda: es la primera sin avance.
+    server.portero.partDelay = (part) => (part.size === PART_BYTES ? Promise.resolve() : hang());
+    server.clockOffset += LATER;
+    await stalledRound(a, server, () => hung === 2);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ stalls: 1, sent: PART_BYTES, uploadId: first!.uploadId });
+
+    // Tercera: retoma, no avanza y se vuelve a trabar: van dos seguidas.
+    server.clockOffset += LATER;
+    await stalledRound(a, server, () => hung === 3);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ stalls: 2, sent: PART_BYTES, uploadId: first!.uploadId });
+
+    // Cuarta: aunque van dos, la subida ya tiene la primera parte: se sigue con ella, sin mandar eso de nuevo.
+    server.portero.partDelay = null;
+    server.portero.calls.length = 0;
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    expect(uploadCalls(server)).toEqual([`bytes */${size}`, `bytes ${PART_BYTES}-${size - 1}/${size}`]);
+    expect(server.portero.uploads.size).toBe(1);
+    const row = server.mediaFiles.get(id)!;
+    expect(await same(file, server.portero.drive.get(row.drive_id!)!.data)).toBe(true);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0, uploadId: null });
+  });
+
+  it('un archivo trabado no frena a los demás: se corta y la cola sigue con el siguiente', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const stuck = mediaIdOf(await a.media.add(page, makeFile(MB, 'trabado.jpg', 'image/jpeg')))!;
+    // La cola sube por orden de llegada: el trabado va primero.
+    server.clockOffset += 1000;
+    const other = mediaIdOf(await a.media.add(page, makeFile(MB, 'otro.jpg', 'image/jpeg')))!;
+    await a.engine.syncNow();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    let hung = 0;
+    server.portero.partDelay = ({ uploadId }) => {
+      if (server.portero.uploads.get(uploadId)?.file !== stuck) return Promise.resolve();
+      hung++;
+      return never();
+    };
+
+    const { done } = round(a);
+    await until(() => hung === 1);
+    // Mientras está colgado, el otro espera (se sube de a uno): es lo que antes duraba minutos.
+    await new Promise((r) => setTimeout(r, 30));
+    expect(server.mediaFiles.get(other)?.drive_id).toBeFalsy();
+    elapse(server, STALL_MS + STALL_CHECK_MS);
+    await done;
+
+    expect(server.mediaFiles.get(other)?.drive_id).toBeTruthy();
+    expect(server.mediaFiles.get(stuck)?.drive_id).toBeFalsy();
+    expect(await a.mediaDb.get('files', stuck)).toMatchObject({ pending: 1, blocked: false, stalls: 1 });
+    expect(await a.mediaDb.get('files', other)).toMatchObject({ pending: 0 });
+    // Lo que se ve en la app (el conteo se actualiza un instante después de la vuelta): falta uno, sin detenidos.
+    await until(() => a.engine.getStatus().pendingMedia === 1);
+    expect(a.engine.getStatus().failedMedia).toBe(0);
+  });
+
+  it('un registro guardado por una versión anterior (sin `stalls`) sube igual', async () => {
+    const { server, a, id } = await withFile(MB);
+    // Así queda un archivo agregado y todavía sin subir: el campo no existe (como en lo guardado antes de v0.068).
+    expect(Object.keys((await a.mediaDb.get('files', id))!)).not.toContain('stalls');
+    await a.engine.syncMedia();
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0 });
   });
 });
 

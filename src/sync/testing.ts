@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { wrap } from 'idb';
 import { mediaDbName, openMediaDb, type MediaDb } from '../media/mediaDb';
 import { AccessStore, levelValue, parseAccess, Permissions, type AccessSnapshot, type GrantLevel, type Role } from './access';
-import { Portero } from '../media/portero';
+import { Portero, type PartSender } from '../media/portero';
 import type { Probe } from '../media/probe';
 import { ProjectSizes } from '../media/projectSizes';
 import { MediaQueue } from '../media/queue';
@@ -420,6 +420,14 @@ export class FakePortero {
   forbid = false;
   /** Los pedidos de subida nunca contestan (sin error de red) hasta que se abortan. */
   hang = false;
+  /**
+   * Lo que pasa mientras sale una parte (pruebas del vigilante): la prueba avisa con `sent` cuántos bytes
+   * van saliendo y la parte recién le llega al portero cuando la promesa se resuelve. Una promesa que nunca
+   * se resuelve es una parte colgada. Sin esto, la parte sale entera al instante.
+   */
+  partDelay: ((part: { uploadId: string; size: number; sent: (bytes: number) => void }) => Promise<void>) | null = null;
+  /** La parte le llega al portero (y a Drive) pero la respuesta nunca vuelve. */
+  loseAnswer = false;
   /** La base apunta a otro archivo de Drive (409 que no se arregla solo). */
   conflict = false;
   /**
@@ -559,6 +567,29 @@ export class FakePortero {
       return json({ url: `${PORTERO_URL}/m/${media.drive_id}` });
     }
     return json({ error: 'Not found' }, 404);
+  };
+
+  /**
+   * Las partes, como las manda la app (`PartSender`): avisa los bytes que salen y después hace el mismo
+   * pedido que `fetch`.
+   */
+  readonly send: PartSender = async (input, init) => {
+    const { signal } = init;
+    // Lo que queda esperando se suelta cuando el pedido se aborta, como un pedido de verdad.
+    const aborted = new Promise<never>((_, reject) => {
+      const stop = () => reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
+      if (signal?.aborted) stop();
+      else signal?.addEventListener('abort', stop, { once: true });
+    });
+    aborted.catch(() => undefined);
+    if (this.partDelay) {
+      const uploadId = /\/upload\/(.+)$/.exec(new URL(input).pathname)?.[1] ?? '';
+      await Promise.race([this.partDelay({ uploadId, size: init.body.size, sent: init.onSent }), aborted]);
+    }
+    init.onSent(init.body.size);
+    const res = await this.fetch(input, { method: init.method, headers: init.headers, body: init.body, signal });
+    if (this.loseAnswer) return aborted;
+    return res;
   };
 
   /** `set_file_drive`, como lo llama el portero. */
@@ -1407,7 +1438,13 @@ export async function makeDevice(
   const media = new MediaQueue(server.mediaDbFails ? null : mediaDb, remote, {
     // El portero en memoria sabe quién pide por el token (`token:<usuario>`).
     portero: (url) =>
-      new Portero(url, { fetch: server.portero.fetch, token: async () => `token:${remote.userId}`, wait: async () => undefined }),
+      new Portero(url, {
+        fetch: server.portero.fetch,
+        send: server.portero.send,
+        token: async () => `token:${remote.userId}`,
+        wait: async () => undefined,
+        now: () => Date.now() + server.clockOffset,
+      }),
     projectOf: (pageId) => tree.get(pageId)?.workspace_id,
     onForeignFile: (name) => server.foreignNotices.push(name),
     probe: fakeProbe,

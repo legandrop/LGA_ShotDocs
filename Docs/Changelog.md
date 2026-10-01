@@ -2,13 +2,14 @@
 
 v0.068 :
 
-La subida de archivos se quedaba clavada. Al importar un doc grande (unos 2300 archivos), la app subía bien y de
-golpe dejaba de subir del todo durante 5 a 10 minutos, sin ningún error y con la barra en 0 %. Los archivos se
-suben de a uno, y un pedido al servidor de archivos que nunca contestaba (sin cortarse la red) dejaba la cola
-entera esperando. Ahora un vigilante mira que la subida avance: sin avance en 3 minutos, la aborta y el archivo
-vuelve a la cola para más tarde, sin frenar a los demás. La primera vez retoma la misma subida desde lo enviado;
-si se vuelve a trabar, empieza otra. No se pierde nada: el archivo sigue guardado en el dispositivo.
-[ Subida de archivos - vigilante contra subidas clavadas ]
+La subida de archivos se quedaba clavada. Al importar un doc grande (unos 2300 archivos), la app dejaba de subir
+del todo durante 5 a 9 minutos, sin ningún error y con la barra en 0 %. Los archivos se suben de a uno, y ningún
+pedido al servidor de archivos tenía tiempo límite: uno que nunca contestaba dejaba la cola entera esperando.
+Ahora el pedido que deja de moverse se corta y el archivo vuelve a la cola para más tarde, sin frenar a los demás.
+Abrir la subida y preguntar cuánto llegó tienen un minuto; una parte se corta recién a los dos minutos sin que
+salga ni un byte, así que una red lenta no se confunde con una subida colgada. Al retomar siempre se pregunta
+primero qué llegó: nunca se sube dos veces. El original sigue guardado en el dispositivo.
+[ Subida de archivos - cortar los pedidos que se traban ]
 
 v0.067 :
 

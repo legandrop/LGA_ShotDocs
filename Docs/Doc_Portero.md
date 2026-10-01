@@ -219,18 +219,69 @@ subida, no en cada parte (una subida dura minutos); al terminar, la base lo vuel
 - `src/media/portero.ts`: el cliente del portero (estado de Drive, conectar, subir por partes retomando lo
   que ya llegó, pedir pases y mandar a la papelera de Drive, `trash`). Lee la dirección de
   `workspace_settings.media_url`.
-- `src/media/queue.ts` (`MediaQueue`): sube los archivos de a uno. **Vigilante (v0.068):** un pedido al portero
-  que nunca contesta (sin error de red) dejaba la cola entera clavada; sin ningún avance en `STALL_MS` (3 min),
-  la subida se aborta y el archivo vuelve a la cola con espera (error "La subida dejó de avanzar"), sin frenar a
-  los demás. La primera vez retoma la misma subida desde lo enviado; desde la segunda (`stalls` del registro),
-  abre otra. Visto al importar un doc de unos 2300 archivos: 5 a 10 minutos sin subir nada, la barra en 0 %, y
-  en la base un archivo registrado sin `drive_id`. La causa del cuelgue (Drive, el Worker o la red) no se
-  encontró; el vigilante evita que frene todo.
+- `src/media/queue.ts` (`MediaQueue`): sube los archivos de a uno, y sigue con el siguiente cuando una
+  subida se traba (ver "Subidas que se traban").
 - `src/ui/DriveDialog.tsx`: el diálogo *Google Drive* del menú de la cuenta (conectar, reconectar y
   dónde va la carpeta).
-- Pruebas (entran en `npm test`): `portero/src/core.test.ts` (el Worker, con Drive y Supabase simulados)
-  y `src/media/portero.test.ts` (el cliente). Los tipos del portero se revisan aparte, con
-  `npx tsc -p portero --noEmit` (`npm run typecheck` no los cubre).
+- Pruebas (entran en `npm test`): `portero/src/core.test.ts` (el Worker, con Drive y Supabase simulados),
+  `src/media/portero.test.ts` (el cliente) y `src/media/queue.test.ts` (la cola). Los tipos del portero se
+  revisan aparte, con `npx tsc -p portero --noEmit` (`npm run typecheck` no los cubre).
+
+### Subidas que se traban (v0.068)
+
+**Qué pasaba.** La cola sube de a un archivo y ningún pedido al portero tenía tiempo límite. Un pedido que
+nunca contestaba, sin error de red, dejaba la cola entera esperando: visto al importar un doc de unos 2300
+archivos, 5 a 9 minutos sin subir nada, la barra en 0 % y en la base un archivo registrado sin `drive_id`,
+hasta que el navegador o Cloudflare cortaban la conexión. Por qué se cuelga ese pedido (Drive, el Worker o
+la red) no se encontró.
+
+**Lento no es colgado.** Lo que distingue una cosa de la otra es si siguen saliendo bytes, y `fetch` no lo
+dice: no avisa nada hasta que llega la respuesta. Por eso las partes se mandan con `XMLHttpRequest`
+(`xhrSend`), que avisa cuántos bytes del cuerpo van saliendo (`upload.onprogress`). Un tope por tiempo para
+la parte entera no sirve: con una red lenta una parte de 8 MiB tarda más que cualquier tope razonable, se
+corta, se manda entera otra vez y se vuelve a cortar.
+
+| Pedido | Se corta cuando | Constante |
+|---|---|---|
+| Abrir la subida (`POST /upload`) y preguntar cuánto llegó (`bytes */total`) | Pasa 1 minuto sin respuesta | `CONTROL_TIMEOUT_MS` |
+| Una parte, mientras sale | Pasan 2 minutos sin que salga **ni un byte** más | `STALL_MS` |
+| Una parte, ya enviada entera | La respuesta tarda más de 2 minutos más lo que tardó en salir el cuerpo (a lo sumo 4 minutos) | `STALL_MS` |
+
+- Los pedidos de control casi no llevan cuerpo: tardan lo que tardan el portero y Drive (segundos), no lo
+  que da la red. Un minuto sin respuesta es un pedido colgado.
+- La parte no tiene tope: tarda lo que tarde mientras se mueva. Dos minutos sin un byte ya no es una red
+  lenta, y es la mitad o menos de lo que tardaba en cortar solo el navegador.
+- Con el cuerpo afuera ya no hay bytes que avisen: falta que el portero le pase la parte a Drive y Drive
+  la guarde (segundos). El plazo se estira con lo que tardó el cuerpo porque parte de lo que el navegador
+  da por enviado puede seguir en camino, y con una red lenta eso también tarda más.
+- Donde no hay `XMLHttpRequest`, o con un `fetch` propio (las pruebas del cliente), las partes van por
+  `fetch` y **no se vigilan**: sin saber cuántos bytes salieron, cortar por tiempo cortaría las lentas.
+  Los pedidos de control sí tienen su tope.
+- El vigilante mira cada 5 segundos (`STALL_CHECK_MS`). Solo cubre los pedidos de una subida: `pass`,
+  `trash` y los del diálogo de Drive siguen sin tope.
+
+**Qué pasa al cortarse.** El pedido cortado no se reintenta en el momento (cada intento podría tardar lo
+mismo): la subida termina con un `UploadError` con `stalled`, el archivo queda con el aviso *The upload
+stopped moving; it will try again* y vuelve a la cola con la espera de cualquier error que se arregla solo
+(10 s, 20 s… hasta 10 minutos), y la cola sigue con los demás archivos. No se pierde nada: el original
+sigue en el dispositivo y lo que Drive ya recibió sigue en la subida.
+
+**Al retomar** siempre se le pregunta primero a la subida que quedó (`bytes */total`):
+
+- Ya terminó (la última parte había llegado y la respuesta se perdió): el portero lo dice y no se manda
+  nada más. Nunca se abre otra subida sin preguntar, que es lo que dejaría el archivo dos veces en Drive.
+- Recibió algo: se sigue con ella desde ahí, siempre. Una subida que ya recibió bytes anda; si de verdad
+  se perdió, Drive lo dice (404 o 410) y recién entonces se empieza de nuevo.
+- No recibió nada y ya se trabó dos veces seguidas (`STALLS_BEFORE_RENEW`): se abre otra
+  (`renewIfEmpty`), por si la que se cuelga es esa. No se pierde nada, porque no tenía nada.
+
+`MediaRecord.stalls` cuenta las trabadas **seguidas y sin avance**: vuelve a 0 cuando el portero confirma
+más bytes, cuando se abre otra subida y cuando el archivo termina de subir. Es un campo nuevo y opcional:
+lo guardado por una versión anterior no lo tiene y vale 0.
+
+**Lo que queda afuera.** La miniatura va a Supabase Storage antes del original, y Storage no tiene tope
+(`Doc_Sincronizacion.md`, "cada consulta a la base tiene un tope de tiempo"): si lo que se cuelga es ese
+pedido, la cola espera igual que antes.
 
 ## Publicarlo y conectarlo (una vez por workspace)
 

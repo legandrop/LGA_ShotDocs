@@ -62,10 +62,6 @@ export const media = {
     es: "Acá solo se pueden agregar fotos: para adjuntar otros archivos, el dueño del workspace tiene que conectar Google Drive.",
   },
   'attachment.foreign': { en: "File from another project", es: "Archivo de otro proyecto" },
-  'queue.stalled': {
-    en: "The upload stopped moving; it will try again.",
-    es: "La subida dejó de avanzar; se vuelve a intentar.",
-  },
   'queue.originalMissing': {
     en: "The original file is missing on this device.",
     es: "El archivo original ya no está en este dispositivo.",
@@ -104,6 +100,10 @@ export const media = {
     es: "El servidor de archivos no empezó la subida.",
   },
   'portero.partLost': { en: "The part did not arrive.", es: "La parte no llegó." },
+  'portero.stalled': {
+    en: "The upload stopped moving; it will try again.",
+    es: "La subida dejó de avanzar; se vuelve a intentar.",
+  },
   'portero.retries': {
     en: "The upload stopped after {max} failed retries in a row: {reason}",
     es: "La subida se frenó después de {max} reintentos fallidos seguidos: {reason}",
