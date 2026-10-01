@@ -9,7 +9,7 @@ import {
   useCreateBlockNote,
   type DefaultReactSuggestionItem,
 } from '@blocknote/react';
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
 import { localize, t, useT } from '../i18n';
 import '../i18n/lazy/editor';
@@ -21,7 +21,7 @@ import { collectCarrete, inlinePhotosOf, parsePhotoKey, photoKeyOf, photoPropsIn
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
+import { editorSchemaOptions, insertPageBreakForSlashMenu, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
 import { addFiles, dropPos, pickFiles, type AddFilesOptions, type PhotoEditor } from './inlinePhotoCreate';
 import { readFolder, summarize, takeDrop, type FolderSource } from '../media/folderRead';
@@ -42,7 +42,7 @@ import {
   withParagraphVariants,
 } from './EditorComments';
 import { useCommentAccess } from './CommentsToggle';
-import { ScriptIcon } from './icons';
+import { PageBreakIcon, ScriptIcon } from './icons';
 import { notify } from './notice';
 import { useScheme } from '../prefs';
 import { createDrivePaste } from './drivePaste';
@@ -631,7 +631,17 @@ export function BlockEditor({
         ? withParagraphVariants(i, editor, 'paragraph')
         : i,
     );
-    const extra = [withParagraphVariants(script, editor, 'script'), questionSlashItem(editor, tr, basic)];
+    // El salto de hoja (Docs/Doc_Hojas_PDF.md): un párrafo con `pageBreak`, nunca un tipo de bloque nuevo.
+    const pageBreak: DefaultReactSuggestionItem = {
+      title: tr('editor.pageBreak'),
+      subtext: tr('editor.pageBreakHint'),
+      aliases: ['salto', 'salto de hoja', 'salto de pagina', 'salto de página', 'page break', 'pagebreak', 'break', 'hoja nueva', 'new page', 'new sheet'],
+      group: basic,
+      badge: shortcutLabel('pageBreak'),
+      icon: <PageBreakIcon size={18} />,
+      onItemClick: () => insertPageBreakForSlashMenu(editor),
+    };
+    const extra = [withParagraphVariants(script, editor, 'script'), questionSlashItem(editor, tr, basic), pageBreak];
     return (query: string) =>
       Promise.resolve(filterSuggestionItems([...variants.slice(0, at), ...extra, ...variants.slice(at)], query));
   }, [editor, tr, media]);
@@ -936,6 +946,8 @@ export function BlockEditor({
     <div
       ref={host}
       className="editor-host"
+      // El rótulo de la línea de los saltos de hoja (styles.css lo pone con `content`), en el idioma de la app.
+      style={{ '--sd-page-break-label': JSON.stringify(tr('editor.pageBreak')) } as CSSProperties}
       onPasteCapture={(e) => rejectOtherFiles(e.nativeEvent, e.clipboardData)}
       onDropCapture={dropFiles}
       onPointerDownCapture={notePress}

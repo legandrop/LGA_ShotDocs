@@ -60,6 +60,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'script', keys: ['Mod-Alt-s'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'scriptEnter', keys: ['Enter'], place: 'editor', context: 'script', owner: 'app', source: 'keymap' },
   { id: 'paragraph', keys: ['Mod-Alt-0'], place: 'editor', owner: 'app', source: 'keymap' },
+  // El salto de hoja (Docs/Doc_Hojas_PDF.md): Ctrl+Enter como en los procesadores de texto (⌘↩ en la Mac).
+  { id: 'pageBreak', keys: ['Mod-Enter'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'collapse', keys: ['Mod-Alt-Enter'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'collapseEveryone', keys: ['Shift-Mod-Alt-Enter'], place: 'editor', owner: 'app', source: 'keymap', hidden: true },
   { id: 'selectAll', keys: ['Mod-a'], place: 'editor', owner: 'app', source: 'dom' },

@@ -1,3 +1,6 @@
+// Copia de src/ui/editorSchema.ts de la versión publicada antes del salto de hoja (v0.083), para probar que
+// esa versión no borra un salto de hoja ni su texto (pageBreak.test.ts). No se toca.
+
 import {
   addDefaultPropsExternalHTML,
   BlockNoteSchema,
@@ -8,16 +11,15 @@ import {
   defaultInlineContentSpecs,
   defaultProps,
   getBlockInfoFromSelection,
-  insertOrUpdateBlockForSlashMenu,
   parseDefaultProps,
 } from '@blocknote/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
-import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from './driveCard';
-import { imageRowsExtension, ROW_WIDTH_PROP } from './imageRowsEditor';
-import { photoSpec } from './inlinePhoto';
-import { shortcutKeys } from './shortcuts';
+import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from '../driveCard';
+import { imageRowsExtension, ROW_WIDTH_PROP } from '../imageRowsEditor';
+import { photoSpec } from '../inlinePhoto';
+import { shortcutKeys } from '../shortcuts';
 
 // --- Script (guion) ----------------------------------------------------------------------------------
 //
@@ -52,18 +54,6 @@ export const QUESTION_PROP = 'question';
 // junto con Script ni con pregunta.
 
 export { DRIVE_CARD_PROP };
-
-// --- Salto de hoja -----------------------------------------------------------------------------------
-//
-// Un párrafo con `pageBreak: true` (Docs/Doc_Hojas_PDF.md, "Salto de hoja"): lo que sigue empieza en una hoja
-// nueva, en las marcas del editor y en el PDF. Se ve como una línea con "Page break". Puede tener texto (si
-// alguien escribe ahí, se ve y se imprime como un párrafo común, y la hoja nueva empieza después); vacío, en el
-// papel no ocupa lugar. Igual que Script, NO es un tipo de bloque nuevo: una versión que no lo conoce ve un
-// párrafo (vacío o con su texto) y, si lo edita, pierde solo el salto.
-
-export const PAGE_BREAK_PROP = 'pageBreak';
-/** El atajo del salto de hoja: Ctrl+Enter (⌘↩ en la Mac), del registro de atajos. */
-export const PAGE_BREAK_SHORTCUT = shortcutKeys('pageBreak')[0];
 /** El atajo de las preguntas (en el formato de ProseMirror): Ctrl/⌘+Alt+P, del registro de atajos. */
 export const QUESTION_SHORTCUT = shortcutKeys('question')[0];
 
@@ -142,25 +132,20 @@ const createParagraph = createBlockSpec(
       [SCRIPT_PROP]: { default: false },
       [QUESTION_PROP]: { default: false },
       [DRIVE_CARD_PROP]: { default: false },
-      [PAGE_BREAK_PROP]: { default: false },
     },
     content: 'inline',
   },
   {
     meta: { isolating: false },
     parse: (element) => {
-      if (element.tagName !== 'P') return undefined;
-      // Un salto de hoja se reconoce aunque esté vacío (copiado de la app, o de un programa que lo marca así).
-      const pageBreak = isPageBreakElement(element);
-      if (!pageBreak && !element.textContent?.trim()) return undefined;
-      const question = !pageBreak && element.classList.contains('question-line');
-      const script = !pageBreak && !question && element.classList.contains('script-line');
+      if (element.tagName !== 'P' || !element.textContent?.trim()) return undefined;
+      const question = element.classList.contains('question-line');
+      const script = !question && element.classList.contains('script-line');
       return {
         ...parseDefaultProps(element),
         [SCRIPT_PROP]: script,
         [QUESTION_PROP]: question,
-        [DRIVE_CARD_PROP]: !pageBreak && !question && !script && element.classList.contains('drive-card-line'),
-        [PAGE_BREAK_PROP]: pageBreak,
+        [DRIVE_CARD_PROP]: !question && !script && element.classList.contains('drive-card-line'),
       };
     },
     render: function (block, editor) {
@@ -173,19 +158,12 @@ const createParagraph = createBlockSpec(
       const dom = document.createElement('p');
       if (block.props[QUESTION_PROP]) dom.className = 'question-line';
       else if (block.props[SCRIPT_PROP]) dom.className = 'script-line';
-      // La línea del salto la dibuja styles.css sobre `.bn-block-content[data-page-break]` (lo pone BlockNote).
-      else if (block.props[PAGE_BREAK_PROP]) dom.className = 'page-break-line';
       return { dom, contentDOM: dom };
     },
     toExternalHTML: (block) => {
       const dom = document.createElement('p');
       addDefaultPropsExternalHTML(block.props, dom);
-      if (block.props[PAGE_BREAK_PROP]) {
-        // Afuera de la app, el salto como lo escriben los procesadores de texto; la clase la reconoce al pegar.
-        dom.className = 'page-break-line';
-        dom.style.setProperty('break-after', 'page');
-        dom.style.setProperty('page-break-after', 'always');
-      } else if (block.props[QUESTION_PROP]) {
+      if (block.props[QUESTION_PROP]) {
         dom.className = 'question-line';
       } else if (block.props[SCRIPT_PROP]) {
         dom.className = 'script-line';
@@ -210,10 +188,6 @@ const createParagraph = createBlockSpec(
         // Ctrl/⌘+Alt+P, en una pregunta (Ctrl/⌘+Alt+Q ya es la cita del editor; con AltGr, Q y E escriben
         // "@" y "€" en los teclados en castellano).
         [QUESTION_SHORTCUT]: ({ editor }) => setParagraph(editor, 'question'),
-        // Ctrl+Enter (⌘↩ en la Mac): un salto de hoja donde está el cursor, como en los procesadores de texto.
-        [PAGE_BREAK_SHORTCUT]: ({ editor }) => insertPageBreak(editor),
-        // Retroceso al principio del bloque que sigue a un salto: saca el salto (no junta el texto con él).
-        Backspace: ({ editor }) => removeBreakBefore(editor),
         // Como en un procesador de guiones: Enter en una línea de guion con texto sigue en Script; en una
         // línea vacía sale a un párrafo común.
         Enter: ({ editor }) =>
@@ -250,116 +224,8 @@ function isDriveCard(props: Record<string, unknown>): boolean {
  * Las propiedades de cada variante del párrafo: común, Script, pregunta o tarjeta de Drive (nunca dos a la
  * vez). Pasar una tarjeta a párrafo, Script o pregunta le saca la tarjeta (queda el link).
  */
-export function paragraphProps(kind: 'paragraph' | 'script' | 'question' | 'driveCard' | 'pageBreak'): Record<string, boolean> {
-  return {
-    [SCRIPT_PROP]: kind === 'script',
-    [QUESTION_PROP]: kind === 'question',
-    [DRIVE_CARD_PROP]: kind === 'driveCard',
-    [PAGE_BREAK_PROP]: kind === 'pageBreak',
-  };
-}
-
-/** Un `<p>` pegado que es un salto de hoja: el de la app (`page-break-line`) o uno con `break-after: page`. */
-function isPageBreakElement(element: HTMLElement): boolean {
-  if (element.classList.contains('page-break-line')) return true;
-  const after = `${element.style.getPropertyValue('break-after')} ${element.style.getPropertyValue('page-break-after')}`;
-  return /\b(page|always)\b/.test(after);
-}
-
-type AnyBlock = { id: string; type: string; props: Record<string, unknown>; content?: unknown; children?: unknown[] };
-
-/** Un párrafo de salto de hoja (con texto o sin). */
-export function isPageBreakBlock(block: AnyBlock | undefined): boolean {
-  return !!block && block.type === 'paragraph' && block.props[PAGE_BREAK_PROP] === true;
-}
-
-const isEmptyContent = (block: AnyBlock) => Array.isArray(block.content) && block.content.length === 0;
-
-/**
- * Pone un salto de hoja en el cursor (Ctrl/⌘+Enter). En un párrafo vacío, ese párrafo pasa a ser el salto; al
- * principio de un bloque con texto, el salto va antes; en el medio de un párrafo, lo parte y el salto queda entre
- * las dos partes; al final (o en otro bloque de texto), va después. Si el cursor no queda en un bloque que sigue,
- * se agrega un párrafo vacío para seguir escribiendo en la hoja nueva. Todo en un solo paso de deshacer. En una
- * tabla, una imagen o un bloque de código no hace nada.
- */
-export function insertPageBreak(editor: BlockNoteEditor<any, any, any>): boolean {
-  const { block } = editor.getTextCursorPosition() as unknown as { block: AnyBlock };
-  if (editor.schema.blockSchema[block.type]?.content !== 'inline' || block.type === 'codeBlock') return false;
-  if (isPageBreakBlock(block)) return true;
-  const marker = { type: 'paragraph', props: paragraphProps('pageBreak') };
-  const selection = editor.prosemirrorState.selection;
-  const $from = selection.$from;
-  const atStart = selection.empty && $from.parentOffset === 0;
-  const atEnd = $from.parentOffset === $from.parent.content.size;
-  if (!atStart && !atEnd && selection.empty && block.type === 'paragraph' && !isEmptyContent(block)) {
-    // En el medio de un párrafo: se parte en el cursor (la segunda parte, con las mismas propiedades: Script sigue
-    // Script) y el salto va antes de la segunda. Partir va en su propio paso para que la parte nueva tenga su id;
-    // deshacer lo junta con el salto (los dos pasos van juntos, dentro de la pausa del historial).
-    editor.transact((tr) => {
-      const info = getBlockInfoFromSelection(tr);
-      if (!info.isBlockContainer) return;
-      tr.split(tr.selection.from, 2, [
-        { type: info.bnBlock.node.type, attrs: {} },
-        { type: info.blockContent.node.type, attrs: { ...info.blockContent.node.attrs } },
-      ]);
-    });
-    const second = (editor.getTextCursorPosition() as unknown as { block: AnyBlock }).block;
-    editor.transact(() => {
-      editor.insertBlocks([marker as never], second.id, 'before');
-      editor.setTextCursorPosition(second.id, 'start');
-    });
-    return true;
-  }
-  editor.transact(() => {
-    if (block.type === 'paragraph' && isEmptyContent(block)) {
-      editor.updateBlock(block.id, marker as never);
-      followWithParagraph(editor, block.id);
-    } else if (atStart) {
-      editor.insertBlocks([marker as never], block.id, 'before');
-      editor.setTextCursorPosition(block.id, 'start');
-    } else {
-      const [inserted] = editor.insertBlocks([marker as never], block.id, 'after') as unknown as AnyBlock[];
-      followWithParagraph(editor, inserted.id);
-    }
-  });
-  return true;
-}
-
-/** El menú "/": el renglón del "/" pasa a ser el salto (o, si tiene texto, el salto va abajo) y se sigue abajo. */
-export function insertPageBreakForSlashMenu(editor: BlockNoteEditor<any, any, any>): void {
-  editor.transact(() => {
-    const marker = insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: paragraphProps('pageBreak') } as never) as unknown as AnyBlock;
-    followWithParagraph(editor, marker.id);
-  });
-}
-
-/** Deja el cursor en un párrafo vacío nuevo después de `id` (un salto recién puesto). */
-function followWithParagraph(editor: BlockNoteEditor<any, any, any>, id: string): void {
-  const [next] = editor.insertBlocks([{ type: 'paragraph', props: paragraphProps('paragraph') } as never], id, 'after') as unknown as AnyBlock[];
-  editor.setTextCursorPosition(next.id, 'start');
-}
-
-/**
- * Retroceso con el cursor al principio de un bloque cuyo anterior es un salto de hoja: saca el salto. Vacío (y sin
- * bloques adentro), se borra el párrafo; con texto, queda como párrafo común (el texto nunca se borra). Sin esto,
- * el bloque se juntaría con el salto y su texto pasaría arriba de la línea.
- */
-export function removeBreakBefore(editor: BlockNoteEditor<any, any, any>): boolean {
-  const selection = editor.prosemirrorState.selection;
-  if (!selection.empty || selection.$from.parentOffset !== 0) return false;
-  let position: { block: AnyBlock; prevBlock?: AnyBlock };
-  try {
-    position = editor.getTextCursorPosition() as unknown as typeof position;
-  } catch {
-    return false;
-  }
-  const prev = position.prevBlock;
-  if (!prev || !isPageBreakBlock(prev) || isPageBreakBlock(position.block)) return false;
-  editor.transact(() => {
-    if (isEmptyContent(prev) && !prev.children?.length) editor.removeBlocks([prev.id]);
-    else editor.updateBlock(prev.id, { props: { [PAGE_BREAK_PROP]: false } } as never);
-  });
-  return true;
+export function paragraphProps(kind: 'paragraph' | 'script' | 'question' | 'driveCard'): Record<string, boolean> {
+  return { [SCRIPT_PROP]: kind === 'script', [QUESTION_PROP]: kind === 'question', [DRIVE_CARD_PROP]: kind === 'driveCard' };
 }
 
 function setParagraph(editor: BlockNoteEditor<any, any, any>, kind: 'paragraph' | 'script' | 'question'): boolean {

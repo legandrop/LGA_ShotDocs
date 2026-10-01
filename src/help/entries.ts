@@ -76,6 +76,8 @@ const BEFORE_HELP = '0.081';
 const HELP = '0.082';
 /** "Available offline" y el espacio en el dispositivo (P.10, Docs/Doc_Copias_Locales.md). */
 const OFFLINE = '0.083';
+/** El salto de hoja (fase 4, Docs/Doc_Hojas_PDF.md). */
+const PAGE_BREAK = '0.084';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -321,6 +323,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
 
   // --- Hojas y PDF ---
   { id: 'sheets', section: 'print', title: 'help.sheets.title', text: 'help.sheets.text', since: BEFORE_HELP },
+  {
+    id: 'pageBreak',
+    section: 'print',
+    title: 'help.pageBreak.title',
+    text: 'help.pageBreak.text',
+    keys: { pageBreak: 'pageBreak' },
+    words: ['salto', 'salto de página', 'hoja nueva', 'page break', 'new page', 'new sheet', 'corte', 'ctrl enter'],
+    since: PAGE_BREAK,
+  },
   { id: 'pdf', section: 'print', title: 'help.pdf.title', text: 'help.pdf.text', keys: { print: 'print' }, showMe: 'page-menu', since: BEFORE_HELP },
 
   // --- Preferencias ---
