@@ -207,6 +207,19 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   queda anotada: nunca se pierde en silencio.
 - **Videos embebidos** (YouTube, Vimeo), un `<video>` de otro sitio o un `<embed>`: quedan como link y se
   anotan en la lista (no hay archivo que traer).
+- **Direcciones sueltas** (desde v0.069). Lo que en Coda era un embebido (un video de Drive con su
+  reproductor, por ejemplo) sale en el HTML como la dirección en texto, sin `<a>`, cada una en su `<span>` y
+  pegada a lo de al lado: entraba como un solo texto, sin links. Ahora un texto que es **entero** una
+  dirección `http(s)` (un `<span>`, o el texto suelto de una celda) pasa a ser un link, y si estaba pegado a
+  un texto o a otra dirección (sin un espacio de por medio) va en su propio renglón, con un salto de línea
+  adentro del mismo bloque: ítem de lista, párrafo, celda o título. **Una de Drive** (las que reconoce
+  `parseDriveLink`) que queda sola en su renglón de un párrafo de primer nivel sale a su propio párrafo como
+  **tarjeta de Drive** (`<p class="drive-card-line">`, el mismo camino que pegar una tarjeta copiada; ver
+  "Links de Drive" en `Doc_Sincronizacion.md`): lo que en Coda se veía con reproductor se sigue viendo así, y
+  el texto de antes y el de después quedan en sus párrafos. Adentro de un ítem, de una tabla o de un título
+  no hay tarjeta (queda el link), y debajo de un título "Guion" la tarjeta no pasa a Script. No se toca: lo
+  que ya es un link (en Coda era un link, no un embebido), una dirección adentro de un texto más largo, dos
+  en un mismo texto (no se sabe dónde cortar), lo escrito como código y los archivos de Coda.
 - **Subtítulo** de la página de Coda: un párrafo en cursiva arriba de todo.
 
 ### Páginas embebidas (desde v0.066)
@@ -487,7 +500,8 @@ Además, `coda-export` no sigue redirecciones en los pedidos con token.
 ## Prueba
 
 `src/import/codaImport.test.ts`: la conversión con HTML con la forma del de Coda (sin datos de clientes:
-fotos en párrafos, ítems, links, títulos y tablas, videos, párrafos con solo un link, colores, guion) y la
+fotos en párrafos, ítems, links, títulos y tablas, videos, párrafos con solo un link, colores, guion,
+direcciones sueltas en un ítem, un párrafo, una celda y un título, con sus tarjetas de Drive) y la
 importación entera contra el servidor y el portero en memoria, con un segundo dispositivo que ve las fotos y
 un documento que la app abre (sin contenido desconocido y con una sola raíz); una página que falla no corta
 el resto. Y cada corrección de la auditoría: una importación cortada que se sigue sin duplicar nada en el

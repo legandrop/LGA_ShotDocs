@@ -6,6 +6,7 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { prefs } from '../prefs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
+import { driveLinkInContent } from '../ui/driveCard';
 import { findUnknownContent } from '../ui/unknownContent';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { schema } from '../ui/editorSchema';
@@ -926,6 +927,28 @@ describe('importar la carpeta', () => {
     expect(text).toContain('https://example.com/x.swf');
   });
 
+  it('una dirección de Drive suelta llega al documento: link en el ítem, tarjeta de Drive en el párrafo, y la app lo abre', async () => {
+    const { a } = await mediaDevice();
+    const url = 'https://drive.google.com/file/d/1AAAaaaBBBbbbCCCcccDDDdddEEEeeeFFF/view?usp=sharing';
+    const html = `<ul><li><span>Referencia:</span><span>${url}</span></li></ul><div><span>Toma elegida:</span><span>${url}</span></div>`;
+    const result = await importCoda(smallFolder([page('p', 'Links', null, 0)], { p: html }), a);
+    expect(result.problems).toEqual([]);
+    const pageId = findPage(a, 'Links');
+    const doc = await a.docs.open(pageId);
+    const editor = BlockNoteEditor.create({ schema }) as unknown as BlockNoteEditor;
+    const blocks = yXmlFragmentToBlocks(editor, doc.getXmlFragment(CONTENT_FRAGMENT)) as unknown as LooseBlock[];
+    expect(blocks.map((b) => [b.type, b.props?.driveCard])).toEqual([
+      ['bulletListItem', undefined],
+      ['paragraph', false],
+      ['paragraph', true],
+    ]);
+    // El link está en los dos, y el de la tarjeta es el que la app usa para el reproductor.
+    expect(driveLinkInContent(blocks[0].content)).toEqual({ kind: 'file', id: '1AAAaaaBBBbbbCCCcccDDDdddEEEeeeFFF' });
+    expect(driveLinkInContent(blocks[2].content)).toEqual({ kind: 'file', id: '1AAAaaaBBBbbbCCCcccDDDdddEEEeeeFFF' });
+    expect(findUnknownContent(doc)).toBeNull();
+    a.docs.close(pageId);
+  });
+
   it('los ids que faltan en el manifest no dependen del orden de las páginas', () => {
     const one = { name: 'Uno', parentId: null, order: 0, file: '1.html' };
     const two = { name: 'Dos', parentId: null, order: 1, file: '2.html' };
@@ -994,5 +1017,134 @@ describe('HTML de Coda: correcciones de la auditoría', () => {
   it('una foto de otro sitio adentro de un párrafo no se pierde en silencio: queda marcada como externa', () => {
     const { media } = prepareCodaHtml(`<div>x <img src="https://example.com/a.png"></div>`);
     expect(media).toMatchObject([{ src: 'https://example.com/a.png', external: true, blobId: '' }]);
+  });
+});
+
+// Lo que en Coda era un embebido (un video de Drive con su reproductor) sale en el HTML como la dirección en
+// texto, sin <a>, cada una en su <span> y pegada a lo de al lado. Ids inventados.
+describe('HTML de Coda: direcciones sueltas', () => {
+  const DRIVE_A = 'https://drive.google.com/file/d/1AAAaaaBBBbbbCCCcccDDDdddEEEeeeFFF/view?usp=sharing';
+  const DRIVE_B = 'https://drive.google.com/file/d/1GGGgggHHHhhhIIIiiiJJJjjjKKKkkkLLL/view?usp=drive_link';
+  const SITE_A = 'https://example.com/ref/a?x=1&y=2';
+  const SITE_B = 'http://example.org/ref/b';
+
+  type Piece = { type: string; text?: string; href?: string; content?: { text: string }[] };
+  /** El contenido de un bloque como se lee: el texto tal cual y cada link entre corchetes con su dirección. */
+  const reading = (content: unknown) =>
+    ((content as Piece[]) ?? []).map((c) => (c.type === 'link' ? `[${c.content!.map((x) => x.text).join('')}](${c.href})` : (c.text ?? ''))).join('');
+  const isCard = (b: LooseBlock) => b.props?.driveCard === true;
+  /** Cada bloque: su tipo (o `card`) y cómo se lee. */
+  const shape = (blocks: LooseBlock[]) => blocks.map((b) => [isCard(b) ? 'card' : b.type, reading(b.content)]);
+
+  it('una dirección sola en su <span> pasa a ser un link (con http también)', async () => {
+    const blocks = await convert(`<div><span>${SITE_A.replace(/&/g, '&amp;')}</span></div><div><span> ${SITE_B} </span></div>`);
+    expect(shape(blocks)).toEqual([
+      ['paragraph', `[${SITE_A}](${SITE_A})`],
+      ['paragraph', `[${SITE_B}](${SITE_B})`],
+    ]);
+  });
+
+  it('en un ítem de lista, la dirección pegada al texto y a otra dirección queda cada una en su renglón, adentro del ítem', async () => {
+    const blocks = await convert(
+      `<ul><li><span>Se mencionó como referencia la escena del muelle:</span><span>${DRIVE_A}</span><span>${DRIVE_B}</span></li>` +
+        `<li><span>Otro renglón.</span></li></ul>`,
+    );
+    expect(blocks.map((b) => b.type)).toEqual(['bulletListItem', 'bulletListItem']);
+    // El salto de línea queda al final del tramo anterior (así lo escribe el editor): un renglón por dirección.
+    expect(reading(blocks[0].content)).toBe(
+      `Se mencionó como referencia la escena del muelle:\n[${DRIVE_A}\n](${DRIVE_A})[${DRIVE_B}](${DRIVE_B})`,
+    );
+    expect(text(blocks[1])).toBe('Otro renglón.');
+    // Adentro de un ítem no hay tarjeta de Drive: queda el link.
+    expect(blocks.some(isCard)).toBe(false);
+    expect(blocks[0].children).toEqual([]);
+  });
+
+  it('en un párrafo, las direcciones de otro sitio pegadas al texto quedan en el mismo párrafo, una por renglón', async () => {
+    const blocks = await convert(`<div><span>Ver:</span><span>${SITE_A}</span><span>${SITE_B}</span></div>`);
+    expect(shape(blocks)).toEqual([['paragraph', `Ver:\n[${SITE_A}\n](${SITE_A})[${SITE_B}](${SITE_B})`]]);
+  });
+
+  it('una dirección separada del texto por un espacio no se mueve de su renglón', async () => {
+    const blocks = await convert(`<div><span>Ver </span><span>${DRIVE_A}</span><span> y avisar.</span></div>`);
+    expect(shape(blocks)).toEqual([['paragraph', `Ver [${DRIVE_A}](${DRIVE_A}) y avisar.`]]);
+  });
+
+  it('una dirección de Drive sola en un párrafo entra como tarjeta de Drive', async () => {
+    const blocks = await convert(`<div><span>${DRIVE_A}</span></div>`);
+    expect(shape(blocks)).toEqual([['card', `[${DRIVE_A}](${DRIVE_A})`]]);
+    expect(blocks[0].type).toBe('paragraph');
+    expect(blocks[0].props).toMatchObject({ driveCard: true, script: false, question: false });
+  });
+
+  it('en un párrafo, cada dirección de Drive pegada sale a su propio párrafo como tarjeta y el texto queda donde estaba', async () => {
+    const blocks = await convert(
+      `<div><span>Referencia:</span><span>${DRIVE_A}</span><span>${DRIVE_B}</span></div><div><span>Sigue.</span></div>` +
+        // Con saltos de línea ya puestos, y con texto después.
+        `<div>Antes<br>${DRIVE_A}<br>Después</div>`,
+    );
+    expect(shape(blocks)).toEqual([
+      ['paragraph', 'Referencia:'],
+      ['card', `[${DRIVE_A}](${DRIVE_A})`],
+      ['card', `[${DRIVE_B}](${DRIVE_B})`],
+      ['paragraph', 'Sigue.'],
+      ['paragraph', 'Antes'],
+      ['card', `[${DRIVE_A}](${DRIVE_A})`],
+      ['paragraph', 'Después'],
+    ]);
+  });
+
+  it('la tarjeta no va con Script ni en un título, y una foto al lado no se pierde', async () => {
+    const blocks = await convert(
+      `<h2><span>Guion:</span></h2><div><span>1 INT. CASA - NOCHE</span></div><div><span>${DRIVE_A}</span>${img('bl-u', 'u.png')}</div>` +
+        `<h2><span>Video:</span><span>${DRIVE_B}</span></h2>`,
+    );
+    expect(shape(blocks)).toEqual([
+      ['heading', 'Guion:'],
+      ['paragraph', '1 INT. CASA - NOCHE'],
+      ['card', `[${DRIVE_A}](${DRIVE_A})`],
+      ['image', ''],
+      ['heading', `Video:\n[${DRIVE_B}](${DRIVE_B})`],
+    ]);
+    expect(blocks[1].props?.script).toBe(true);
+    expect(blocks[2].props?.script).toBe(false);
+    expect(blocks[3].props?.url).toBe('sdmedia://bl-u');
+  });
+
+  it('en una celda de tabla queda el link (dos pegadas, una por renglón) y nunca una tarjeta', async () => {
+    const blocks = await convert(
+      `<table><tr><td>Link</td><td><span>${DRIVE_A}</span></td></tr>` +
+        `<tr><td><div><span>${DRIVE_A}</span><span>${DRIVE_B}</span></div></td><td>${SITE_B}</td></tr></table>`,
+    );
+    expect(blocks.map((b) => b.type)).toEqual(['table']);
+    const rows = (blocks[0].content as { rows: { cells: { content: unknown }[] }[] }).rows;
+    expect(rows.map((r) => r.cells.map((c) => reading(c.content)))).toEqual([
+      ['Link', `[${DRIVE_A}](${DRIVE_A})`],
+      [`[${DRIVE_A}\n](${DRIVE_A})[${DRIVE_B}](${DRIVE_B})`, `[${SITE_B}](${SITE_B})`],
+    ]);
+  });
+
+  it('lo que ya es un link no cambia, tampoco uno de Drive solo en su párrafo (en Coda era un link, no un embebido)', async () => {
+    const html = `<div><span><a href="${DRIVE_A}">${DRIVE_A}</a></span></div><ul><li><span>Ver:</span><a href="${SITE_B}">${SITE_B}</a></li></ul>`;
+    expect(prepareCodaHtml(html).html).toBe(html);
+    const blocks = await convert(html);
+    expect(shape(blocks)).toEqual([
+      ['paragraph', `[${DRIVE_A}](${DRIVE_A})`],
+      ['bulletListItem', `Ver:[${SITE_B}](${SITE_B})`],
+    ]);
+  });
+
+  it('no toca una dirección adentro de un texto más largo, dos en un mismo texto, código, ni un archivo de Coda', () => {
+    const hosted = 'https://codahosted.io/docs/DOC/blobs/bl-q/abc';
+    const html =
+      `<div><span>Mirar ${SITE_B} antes del rodaje.</span></div>` +
+      `<div><span>${DRIVE_A}${DRIVE_B}</span></div>` +
+      `<div><span>https://example.com/go?to=${SITE_B}</span></div>` +
+      `<div><code>${SITE_B}</code></div><pre>${SITE_B}</pre>` +
+      `<div><span>${hosted}</span></div>` +
+      `<div><span>coda-page:canvas-B</span></div><div><span>https://</span></div>`;
+    const got = prepareCodaHtml(html);
+    expect(got.html).toBe(html);
+    expect(got.media).toEqual([]);
   });
 });

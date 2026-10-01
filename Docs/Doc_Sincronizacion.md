@@ -792,7 +792,8 @@ opción), `ui/DrivePasteMenu.tsx` (el menú), `ui/driveCard.ts` (la tarjeta) y `
   el link (el texto del párrafo, que se edita como cualquier texto) y **Open in Drive**. **Show as link** (solo
   con permiso de edición) la vuelve un link común, igual que pasarla a párrafo, Script o pregunta desde el
   menú "/" (la tarjeta no va junto con Script ni con pregunta). Al copiar a otro programa sale el link
-  (`<p class="drive-card-line">`), y al pegarlo en la app vuelve a ser tarjeta.
+  (`<p class="drive-card-line">`), y al pegarlo en la app vuelve a ser tarjeta. La importación de Coda usa esa
+  misma marca para lo que en Coda era un embebido de Drive (`Doc_Importar_Coda.md`, "Direcciones sueltas").
 - **El iframe:** la dirección se arma con una plantilla fija y el id (`https://drive.google.com/file/d/<id>/preview`;
   una carpeta, `drive.google.com/embeddedfolderview`; un documento, `docs.google.com/<tipo>/d/<id>/preview`),
   nunca con el link tal cual: un link que no es de Drive, o con un id raro, deja un párrafo común.
