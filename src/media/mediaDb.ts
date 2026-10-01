@@ -37,6 +37,12 @@ export interface MediaRecord {
   probed?: boolean;
   /** Por qué no se pudo subir la miniatura (se siguió con el original sin ella). */
   thumbError?: string | null;
+  /**
+   * Un adjunto (Docs/Doc_Adjuntos.md, entrega 2): ya se probó sacarle la vista previa (la primera página de un
+   * PDF), con o sin suerte. Sin el campo (lo agregado antes, o pdf.js no se pudo bajar), se prueba al mostrarlo en
+   * este dispositivo. Una versión anterior lo ignora y lo conserva.
+   */
+  previewTried?: boolean;
   /** Veces seguidas que el servidor dijo que el archivo no existe aunque figuraba registrado. */
   lost?: number;
   /**

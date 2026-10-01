@@ -25,6 +25,20 @@ export interface Preview {
   preview: string | null;
   /** La vista previa es una versión grande guardada en el dispositivo (la nítida), no la miniatura. */
   large?: boolean;
+  /**
+   * Es un adjunto (un PDF, un zip…; Docs/Doc_Adjuntos.md): el carrete muestra su tarjeta grande con *Open* y
+   * *Download*. `preview` es entonces su vista previa (la primera página de un PDF) o, si no tiene, la tarjeta.
+   */
+  file?: AttachmentView;
+}
+
+export interface AttachmentView {
+  mime: string;
+  size: number | null;
+  /** El navegador lo sabe mostrar (un PDF, texto plano…): se ofrece *Open* además de *Download*. */
+  canOpen: boolean;
+  /** `preview` es la tarjeta (sin vista previa), no la primera página. */
+  card: boolean;
 }
 
 export interface Full {
@@ -39,6 +53,11 @@ export interface CarreteLoader {
   preview(item: CarreteItem): Promise<Preview>;
   /** La foto grande o el video. Tira si no se puede (sin red, sin portero, error del portero). */
   full(item: CarreteItem): Promise<Full>;
+  /**
+   * La dirección para abrir un adjunto en otra pestaña (lo prepara antes del clic: Safari no deja abrir una
+   * pestaña después de esperar), o `null` si no se puede abrir (se baja) o no está a mano (sin red).
+   */
+  open?(item: CarreteItem): Promise<string | null>;
   /** Olvida lo grande de este elemento (y su pase): la próxima vez se pide de nuevo. */
   retry(item: CarreteItem): void;
   /** Suelta lo creado para este carrete (las direcciones de los originales en memoria). */
@@ -208,12 +227,14 @@ export function isOffline(err: unknown): boolean {
   return err instanceof TypeError && /fetch|network|load failed/i.test(err.message);
 }
 
-type Media = Pick<MediaQueue, 'resolve' | 'thumbnail' | 'source' | 'pass'> & Partial<Pick<MediaQueue, 'viewUrl' | 'view'>>;
+type Media = Pick<MediaQueue, 'resolve' | 'thumbnail' | 'source' | 'pass'> &
+  Partial<Pick<MediaQueue, 'viewUrl' | 'view' | 'fileInfo' | 'passInfo' | 'mediaUrl'>>;
 type Files = Pick<PageFiles, 'resolve'>;
 
 export function createCarreteLoader({ media, files }: { media: Media; files: Files }): CarreteLoader {
   const previews = new Map<string, Promise<Preview>>();
   const fulls = new Map<string, Promise<Full>>();
+  const opens = new Map<string, Promise<string | null>>();
   const sources = new Map<string, Promise<MediaSource>>();
   const created: string[] = [];
   let disposed = false;
@@ -235,6 +256,17 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
     if (item.source === 'media' && item.mediaId) {
       const id = item.mediaId;
       const [source, thumb] = await Promise.all([sourceOf(id), media.thumbnail(id).catch(() => null)]);
+      // Un adjunto: su vista previa tal cual (la primera página de un PDF), o su tarjeta.
+      if (source.kind === null && source.mime && fileKind(source.mime, source.name) === 'file') {
+        const card = thumb ? null : await media.resolve(item.url).catch(() => null);
+        const size = media.fileInfo?.(id)?.size ?? null;
+        return {
+          kind: null,
+          name: source.name || fallbackName(item),
+          preview: thumb ?? card,
+          file: { mime: source.mime, size, canOpen: inlineType(source.mime), card: !thumb },
+        };
+      }
       // Si la página ya tiene la imagen nítida (sharpImages.ts), esa; si no, la miniatura. Sin miniatura: lo que
       // muestra la página (un ícono con el nombre).
       // Sin el original en el dispositivo, la de 2048 guardada (la de "Available offline" o una ya hecha), sin bajar
@@ -282,13 +314,30 @@ export function createCarreteLoader({ media, files }: { media: Media; files: Fil
     preview: (item) => {
       const pending = once(previews, item.url, () => loadPreview(item), true);
       void pending.then((p) => {
-        if (p.kind === null || p.preview === null) previews.delete(item.url);
+        if ((p.kind === null && !p.file) || p.preview === null) previews.delete(item.url);
       });
       return pending;
     },
     full: (item) => once(fulls, item.url, () => loadFull(item), false),
+    open: (item) =>
+      once(
+        opens,
+        item.url,
+        async () => {
+          if (item.source !== 'media' || !item.mediaId || !media.passInfo) return null;
+          const target = await openTarget(media as Opener, item.mediaId);
+          if (!target) return null;
+          if (target.url.startsWith('blob:')) {
+            if (disposed) target.release();
+            else created.push(target.url);
+          }
+          return target.inline ? target.url : null;
+        },
+        false,
+      ),
     retry(item) {
       fulls.delete(item.url);
+      opens.delete(item.url);
       if (item.mediaId) forgetPass(media, item.mediaId);
     },
     dispose() {

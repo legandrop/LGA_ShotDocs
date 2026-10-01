@@ -164,6 +164,14 @@ function toThumb(source: Drawable, width: number, height: number): Promise<Blob 
   return toJpeg(source, width, height, THUMB_SIDE, THUMB_QUALITY, THUMB_MAX_BYTES);
 }
 
+/**
+ * La miniatura de algo ya dibujado en un canvas (la primera página de un PDF, `pdfPreview.ts`): JPEG de lado mayor
+ * `THUMB_SIDE` y menos de 512 KB, o `null`.
+ */
+export function thumbFromCanvas(canvas: HTMLCanvasElement): Promise<Blob | null> {
+  return toThumb(canvas, canvas.width, canvas.height);
+}
+
 /** Las medidas de una foto sin decodificarla entera: el navegador las lee de la cabecera al cargarla. */
 function imageSize(file: Blob): Promise<{ width: number; height: number; img: HTMLImageElement; url: string }> {
   const url = URL.createObjectURL(file);

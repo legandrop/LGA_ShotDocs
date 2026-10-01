@@ -2,7 +2,7 @@ import { localize, stored, t } from '../i18n';
 import { FileRejected } from '../sync/files';
 import type { MediaRemote } from '../sync/remote';
 import { errorMessage, isNetworkError, isTimeout, RemoteError } from '../sync/types';
-import { attachmentCardUrl, cleanFileName, EXTENSION_MIME, fileKind, folderCardUrl, FOLDER_MIME, isFolderMime, mimeFromName, type FileKind } from './attachments';
+import { attachmentCardUrl, blobToDataUrl, cleanFileName, EXTENSION_MIME, fileKind, folderCardUrl, FOLDER_MIME, isFolderMime, mimeFromName, type FileKind } from './attachments';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
 import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress, type VerifyResult } from './portero';
 import {
@@ -26,6 +26,7 @@ import type { DueFileRow, MediaFileRow } from '../sync/types';
 import { HEIC_TIMEOUT_MS, HeicError, heicFailure, isHeicFile, isHeicType, jpegName, JPEG_TYPE } from './heic';
 import { convertHeic as convertHeicNow } from './heicConvert';
 import { dropCopy, readCopy, readOfflineView } from './offlineStore';
+import { attachmentPreview, previewable, PreviewUnavailable } from './pdfPreview';
 
 // La cola de fotos y videos (paso 6 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Archivos
 // grandes"). El archivo se guarda primero en el dispositivo (base `<base local>:media`) y en la página queda
@@ -228,6 +229,11 @@ export interface MediaQueueOptions {
   /** El proyecto de una página (se guarda con el archivo). */
   projectOf?: (pageId: string) => string | undefined;
   probe?: (file: Blob, mime: string) => Promise<Probe>;
+  /**
+   * La vista previa de un adjunto (la primera página de un PDF, `pdfPreview.ts`), o `null` si no tiene. Tira
+   * `PreviewUnavailable` si el lector no se pudo cargar (se prueba otra vez más tarde).
+   */
+  preview?: (file: Blob, mime: string, name: string) => Promise<Blob | null>;
   playMark?: (thumb: Blob) => Promise<Blob>;
   /** La imagen para la página cuando la miniatura queda chica (ver `MediaQueue.view`), de lado mayor `side`. */
   viewImage?: (file: Blob, mime: string, side: number) => Promise<Blob | null>;
@@ -414,6 +420,11 @@ export class MediaQueue {
   private persistAsked = false;
   private readonly thumbListeners = new Set<(id: string) => void>();
   private readonly probe: (file: Blob, mime: string) => Promise<Probe>;
+  private readonly preview: (file: Blob, mime: string, name: string) => Promise<Blob | null>;
+  /** Las vistas previas que se están haciendo tarde (`backfillPreview`), una vez por archivo y por sesión. */
+  private readonly previewing = new Set<string>();
+  /** Los adjuntos cuya tarjeta ya se mostró con vista previa (no hace falta volver a dibujarla cuando llega). */
+  private readonly previewed = new Set<string>();
   private readonly playMark: (thumb: Blob) => Promise<Blob>;
   private readonly makeView: (file: Blob, mime: string, side: number) => Promise<Blob | null>;
   private readonly heic: (file: Blob) => Promise<Blob>;
@@ -438,6 +449,7 @@ export class MediaQueue {
     private readonly options: MediaQueueOptions,
   ) {
     this.probe = options.probe ?? probeMedia;
+    this.preview = options.preview ?? attachmentPreview;
     this.playMark = options.playMark ?? withPlayMark;
     this.makeView = options.viewImage ?? viewImage;
     this.heic = options.convertHeic ?? loadAndConvertHeic;
@@ -768,10 +780,22 @@ export class MediaQueue {
     const record = await db.get('files', id);
     if (!record || record.probed !== false) return;
     const blob = await db.get('blobs', id);
-    // A un adjunto (también un PSD o un SVG) no se le sacan medidas ni miniatura: se ve como tarjeta.
+    // A un adjunto (también un PSD o un SVG) no se le sacan medidas: se ve como tarjeta. Un PDF tiene vista
+    // previa (su primera página), guardada como la miniatura de una foto (Docs/Doc_Adjuntos.md, entrega 2).
     const kind = fileKind(record.mime, record.name);
     const none: Probe = { width: null, height: null, duration: null, thumb: null };
-    const probe = blob && kind !== 'file' ? await this.probe(blob, record.mime).catch(() => none) : none;
+    let probe = none;
+    let previewTried = false;
+    if (blob && kind !== 'file') probe = await this.probe(blob, record.mime).catch(() => none);
+    else if (blob && previewable(record.mime, record.name, record.size)) {
+      try {
+        probe = { ...none, thumb: await this.preview(blob, record.mime, record.name) };
+        previewTried = true;
+      } catch (err) {
+        // pdf.js no se pudo bajar (sin red la primera vez): se prueba más tarde, al mostrarlo (`backfillPreview`).
+        if (!(err instanceof PreviewUnavailable)) previewTried = true;
+      }
+    }
     const tx = db.transaction(['files', 'thumbs'], 'readwrite');
     const current = await tx.objectStore('files').get(id);
     // Mientras se medía, el archivo cambió (un HEIC que pasó a JPEG): estas medidas no son las suyas.
@@ -784,6 +808,7 @@ export class MediaQueue {
         duration: kind === 'video' ? seconds(probe.duration) : null,
         thumb: probe.thumb ? 'local' : 'none',
         probed: true,
+        ...(previewTried ? { previewTried: true } : {}),
       });
     }
     await tx.done;
@@ -1911,8 +1936,79 @@ export class MediaQueue {
   private card(id: string, info: Parameters<typeof attachmentCardUrl>[0] | string): string {
     // Un texto ya es la dirección de la tarjeta (la de una carpeta).
     const url = typeof info === 'string' ? info : attachmentCardUrl(info);
+    if (typeof info !== 'string' && info.preview && (info.state ?? 'ok') === 'ok') this.previewed.add(id);
     this.cards.set(id, url);
     return url;
+  }
+
+  /** La vista previa guardada de un adjunto como `data:` para la tarjeta, o `null`. */
+  private async previewOf(thumb: Blob | undefined | null): Promise<string | null> {
+    if (!thumb) return null;
+    try {
+      return await blobToDataUrl(thumb);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * La vista previa de un adjunto propio que no la tiene (Docs/Doc_Adjuntos.md, entrega 2): agregado con una
+   * versión anterior, o cuando pdf.js no se pudo bajar. Se hace con el original del dispositivo y, si el archivo
+   * ya está subido (la cola no lo va a tocar más), se sube al bucket `thumbs` con `set_file_thumb`, como hace la
+   * cola antes del original. Una vez por archivo y por sesión; sin red, se prueba la próxima vez que se muestre.
+   * Nunca falla.
+   */
+  private async backfillPreview(own: MediaRecord): Promise<void> {
+    const db = this.db;
+    const id = own.id;
+    if (!db || this.previewing.has(id) || own.probed === false || !previewable(own.mime, own.name, own.size)) return;
+    const uploadOnly = own.thumb === 'local' && own.registered && own.pending === 0;
+    if (!uploadOnly && !(own.thumb === 'none' && !own.previewTried)) return;
+    this.previewing.add(id);
+    let retry = false;
+    try {
+      let record = own;
+      if (!uploadOnly) {
+        const blob = await db.get('blobs', id);
+        if (!blob) return;
+        let thumb: Blob | null;
+        try {
+          thumb = await this.preview(blob, own.mime, own.name);
+        } catch (err) {
+          retry = err instanceof PreviewUnavailable;
+          if (!retry) thumb = null;
+          else return;
+        }
+        const tx = db.transaction(['files', 'thumbs'], 'readwrite');
+        const current = await tx.objectStore('files').get(id);
+        // Mientras se hacía, otra cosa la puso (o el archivo cambió): no se pisa.
+        if (!current || current.thumb !== 'none' || current.mime !== own.mime || current.size !== own.size) {
+          await tx.done;
+          return;
+        }
+        if (thumb) await tx.objectStore('thumbs').put(thumb, id);
+        record = { ...current, thumb: thumb ? 'local' : 'none', previewTried: true };
+        await tx.objectStore('files').put(record);
+        await tx.done;
+        if (!thumb) return;
+        this.thumbReady(id);
+      }
+      if (record.thumb !== 'local' || !record.registered || record.pending !== 0) return;
+      const thumb = await db.get('thumbs', id);
+      if (!thumb) return;
+      try {
+        await this.remote.uploadThumb(id, thumb);
+        await this.remote.setFileThumb(id);
+        await this.patch(id, { thumb: 'done' });
+      } catch {
+        // Sin red o sin permiso: queda en el dispositivo y se prueba en otra sesión.
+        retry = true;
+      }
+    } catch {
+      retry = true;
+    } finally {
+      if (retry) this.previewing.delete(id);
+    }
   }
 
   private async display(id: string): Promise<string> {
@@ -1930,7 +2026,11 @@ export class MediaQueue {
         this.remember(id, own, true);
         if (isFolderMime(own.mime)) return this.card(id, folderCardUrl({ name: own.name, size: own.size, note: this.folderNotes.get(id) ?? null }));
         const kind = viewKind(own.mime, own.name);
-        if (!kind) return this.card(id, { name: own.name, mime: own.mime, size: own.size });
+        if (!kind) {
+          // Un adjunto: con su vista previa si la tiene; si falta (agregado antes, o pdf.js no estaba), se hace ahora.
+          void this.backfillPreview(own);
+          return this.card(id, { name: own.name, mime: own.mime, size: own.size, preview: await this.previewOf(await db.get('thumbs', id)) });
+        }
         const thumb = await db.get('thumbs', id);
         if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
         // Una foto HEIC que no se pudo pasar a JPEG: el ícono dice por qué no se ve.
@@ -1952,10 +2052,17 @@ export class MediaQueue {
       }
       if (meta && fileKind(meta.mime, meta.name) === 'file') {
         if (meta.deleted) return await this.deletedDisplay(id, meta);
-        // No va a `missing`: no hay miniatura que esperar. Si todavía no llegó a Drive, se vuelve a preguntar.
+        // No va a `missing`: la vista previa, si la hay, llega antes que el original (la cola la sube primero). Si
+        // todavía no llegó a Drive, se vuelve a preguntar.
         if (meta.driveId) this.unfinished.delete(id);
         else this.unfinished.add(id);
-        return this.card(id, { name: meta.name, mime: meta.mime, size: meta.size, state: meta.driveId ? 'ok' : 'pending' });
+        // La vista previa (la primera página de un PDF) se baja del bucket `thumbs` como la miniatura de una foto, y
+        // queda en el dispositivo: sin red se ve lo que ya se vio.
+        if (!thumb && meta.thumbAt) {
+          thumb = await this.remote.downloadThumb(id).catch(() => undefined);
+          if (thumb) await db.put('thumbs', thumb, id);
+        }
+        return this.card(id, { name: meta.name, mime: meta.mime, size: meta.size, state: meta.driveId ? 'ok' : 'pending', preview: await this.previewOf(thumb) });
       }
       if (!thumb && meta?.thumbAt) {
         thumb = await this.remote.downloadThumb(id).catch(() => undefined);
@@ -1996,9 +2103,14 @@ export class MediaQueue {
     this.deletedChecked.add(id);
     try {
       const meta = await this.fetchMeta(id);
-      if (!meta?.deleted) return;
+      // Un adjunto de otro dispositivo que se vio sin vista previa y ahora la tiene (la hizo más tarde el que lo
+      // agregó): se vuelve a dibujar con ella.
+      const latePreview =
+        !!meta && !meta.deleted && !!meta.thumbAt && fileKind(meta.mime, meta.name) === 'file' && !this.previewed.has(id) && !(await this.db?.get('files', id));
+      if (!meta?.deleted && !latePreview) return;
       // Si se está mostrando justo ahora, se espera a que termine para que no quede la imagen de antes.
       await this.resolving.get(id)?.catch(() => undefined);
+      if (latePreview && this.previewed.has(id)) return;
       this.thumbReady(id);
     } catch {
       // Sin red: se vuelve a preguntar la próxima vez que se muestre.

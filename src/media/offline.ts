@@ -1041,7 +1041,7 @@ export class OfflineManager {
         unavailable++;
         continue;
       }
-      if (f.kind !== 'file' && f.thumbAt && !f.thumb) items.push({ id: f.id, what: 'thumb', bytes: 40 * 1024, mime: f.mime, size: 0 });
+      if (f.thumbAt && !f.thumb) items.push({ id: f.id, what: 'thumb', bytes: 40 * 1024, mime: f.mime, size: 0 });
       const want = wanted(f, mark.options);
       if (!want.orig && !want.view) continue;
       if (!f.inDrive && !f.ownBlob) {

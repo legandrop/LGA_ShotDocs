@@ -105,7 +105,7 @@ describe('carrete: pantalla', () => {
   it('abre a pantalla completa en la que se tocó, con el foco adentro', async () => {
     await open({ start: 1 });
     expect(dialog().getAttribute('aria-modal')).toBe('true');
-    expect(dialog().getAttribute('aria-label')).toBe('Photos and videos');
+    expect(dialog().getAttribute('aria-label')).toBe('Photos, videos and files');
     expect(dialog().parentElement).toBe(document.body);
     expect(document.activeElement).toBe(dialog());
     expect(counter()).toBe('2 / 3');

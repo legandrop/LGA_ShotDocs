@@ -848,7 +848,9 @@ export function BlockEditor({
       if (!direct || !openAttachmentNow(media, attachment)) setSheet(attachment);
       return true;
     }
-    const items = collectCarrete(editor.document as unknown as BlockLike[], (id, name) => isAttachment(media, id, name));
+    // Los adjuntos entran (se ven en grande, con abrir y bajar: Docs/Doc_Adjuntos.md, entrega 2); las carpetas no
+    // (tienen su visor).
+    const items = collectCarrete(editor.document as unknown as BlockLike[], (id) => media.isFolder(id));
     const start = startIndex(items, key);
     if (start < 0) return false;
     setCarrete({ items, start, loader: createCarreteLoader({ media, files }) });

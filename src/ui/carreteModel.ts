@@ -100,8 +100,8 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
  * Todas las fotos y videos de la página, en el orden en que aparecen (de arriba abajo, también los que
  * están adentro de otro bloque): los bloques `image` y las fotos en línea del texto de cada bloque (también en
  * listas y en celdas de tabla; las de un bloque, antes que sus hijos). Solo las que tienen una dirección que se
- * pueda mostrar. `skip`: las que no van (los adjuntos, Docs/Doc_Adjuntos.md: un PDF o un zip no se ven en el
- * carrete).
+ * pueda mostrar, también los adjuntos (un PDF, un zip: el carrete los muestra en grande, Docs/Doc_Adjuntos.md).
+ * `skip`: las que no van (las carpetas, que tienen su visor).
  */
 export function collectCarrete(blocks: readonly BlockLike[], skip?: (mediaId: string, name: string) => boolean): CarreteItem[] {
   const out: CarreteItem[] = [];
