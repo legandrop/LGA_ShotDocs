@@ -4868,3 +4868,255 @@ mark.search-hit {
   gap: 8px;
   justify-items: start;
 }
+
+/* --- Carpetas (P.9, Docs/Doc_Carpetas.md) ------------------------------------------------------------ */
+
+.folder-dialog {
+  width: min(560px, 100%);
+  max-height: 80vh;
+}
+
+.folder-dialog h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.folder-dialog p {
+  margin: 0;
+}
+
+.folder-dialog .small,
+.folder-viewer .small {
+  font-size: 13px;
+}
+
+.folder-dialog .warn {
+  color: var(--warn);
+}
+
+.folder-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.folder-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.folder-summary-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.folder-summary-counts {
+  font-weight: 500;
+}
+
+.folder-tree-list,
+.folder-tree-list ul,
+.folder-skipped ul,
+.folder-errors ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding-left: 14px;
+  font-size: 13px;
+}
+
+.folder-tree-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding-left: 0;
+}
+
+.folder-tree-list summary {
+  cursor: pointer;
+}
+
+.folder-tree-file {
+  padding-left: 14px;
+  overflow-wrap: anywhere;
+}
+
+.folder-skipped summary,
+.folder-tree summary,
+.folder-errors summary {
+  cursor: pointer;
+}
+
+.folder-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.folder-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.folder-glyph {
+  flex: none;
+  vertical-align: -3px;
+}
+
+.folder-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.folder-bar > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.folder-viewer {
+  width: min(760px, 100%);
+  max-height: 80vh;
+  padding: 16px;
+}
+
+.folder-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.folder-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.folder-crumbs button.link,
+.folder-crumbs strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.folder-crumb-sep {
+  margin: 0 4px;
+  color: var(--faint);
+}
+
+.folder-upload-strip {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  color: var(--muted);
+}
+
+.folder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.folder-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.folder-row-main:hover {
+  background: var(--hover);
+}
+
+.folder-row-off {
+  cursor: default;
+  color: var(--muted);
+}
+
+.folder-row-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--border-soft);
+}
+
+.folder-row-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.folder-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-row-size {
+  flex: none;
+  font-size: 13px;
+}
+
+.folder-row-download {
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  /* En el teléfono, el visor ocupa la pantalla. */
+  .folder-viewer-backdrop {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .folder-viewer {
+    width: 100%;
+    max-height: none;
+    height: 100%;
+    border-radius: 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .folder-row-size {
+    display: none;
+  }
+}

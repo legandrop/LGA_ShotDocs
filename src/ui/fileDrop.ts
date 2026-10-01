@@ -84,7 +84,7 @@ export interface FileEditor {
  * Un párrafo común, vacío y sin bloques adentro (se reemplaza, como hace BlockNote; cualquier otro bloque se
  * deja: sacar un párrafo con hijos se los llevaría).
  */
-function isEmptyParagraph(block: BlockLike | undefined): boolean {
+export function isEmptyParagraph(block: BlockLike | undefined): boolean {
   if (!block || block.type !== 'paragraph') return false;
   if (Array.isArray(block.children) && block.children.length > 0) return false;
   const props = block.props ?? {};

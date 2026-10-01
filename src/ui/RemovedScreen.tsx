@@ -6,6 +6,7 @@ import { formatSize } from '../media/fileTrash';
 import type { MediaRecord } from '../media/mediaDb';
 import { mediaDbName } from '../media/mediaDb';
 import { commentsDbName } from '../sync/comments';
+import { foldersDbName } from '../media/folderUpload';
 import { useServices, useSyncStatus } from '../services';
 import { unsyncedSummary, type UnsyncedSummary } from '../sync/unsynced';
 import { errorMessage } from '../sync/types';
@@ -47,6 +48,8 @@ export async function deleteWorkspaceDatabases(dbName: string, keepMedia = false
   await deleteDatabase(dbName);
   if (!keepMedia) await deleteDatabase(mediaDbName(dbName));
   await deleteDatabase(commentsDbName(dbName));
+  // La lista de trabajo de las carpetas (sin bytes: las carpetas siguen en el disco de quien las soltó).
+  await deleteDatabase(foldersDbName(dbName));
 }
 
 /**

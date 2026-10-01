@@ -12,8 +12,9 @@ import {
 } from '@blocknote/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import type * as Y from 'yjs';
-import { t, useT } from '../i18n';
+import { localize, t, useT } from '../i18n';
 import '../i18n/lazy/editor';
+import '../i18n/lazy/folders';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
@@ -22,7 +23,10 @@ import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
-import { dropTarget, insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
+import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
+import { readFolder, summarize, takeDrop, type FolderSource } from '../media/folderRead';
+import { FolderAskDialog, FolderProgressDialog } from './FolderDialog';
+import { FolderViewer } from './FolderViewer';
 import { renameConvertedHeic } from './heicNames';
 import { isAttachment, markAttachments } from './attachments';
 import { openAttachmentNow, prepareAttachment } from './attachmentOpen';
@@ -266,7 +270,7 @@ function BlockEditor({
   /** El editor no se pudo volver a dibujar después de un error: hay que montarlo de nuevo. */
   onBroken?: () => void;
 }) {
-  const { docs, files, media, user, db } = useServices();
+  const { docs, files, media, user, db, folders } = useServices();
   const scheme = useScheme();
   const tr = useT();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
@@ -275,6 +279,11 @@ function BlockEditor({
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
   /** El adjunto con su hoja abierta (Docs/Doc_Adjuntos.md). */
   const [sheet, setSheet] = useState<string | null>(null);
+  /** Carpetas soltadas que esperan "Subir" (P.9, Docs/Doc_Carpetas.md), dónde se soltaron. */
+  const [folderAsk, setFolderAsk] = useState<{ sources: FolderSource[]; at: InsertAt | null } | null>(null);
+  /** La carpeta abierta en el visor, y la que muestra cómo va su subida. */
+  const [folderView, setFolderView] = useState<{ id: string; name: string } | null>(null);
+  const [folderUpload, setFolderUpload] = useState<string | null>(null);
   // Con el editor ya abierto, el carrete se baja cuando el navegador está libre: tocar una foto no espera.
   useEffect(() => preloadWhenIdle(Carrete), []);
   /** El toque empezó sobre una foto que ya estaba elegida (ver `openCarrete`). */
@@ -621,9 +630,66 @@ function BlockEditor({
     handledDrops.add(dt);
     e.preventDefault();
     e.stopPropagation();
-    const { files: taken, folders } = takeFiles(dt);
-    if (folders > 0) notify(t('editor.foldersNotSupported'));
-    void insertFiles(editor as unknown as FileEditor, taken, dropTarget(root, e.clientX, e.clientY));
+    const { files: taken, folders: dirs, supported } = takeDrop(dt);
+    const at = dropTarget(root, e.clientX, e.clientY);
+    if (taken.length > 0) void insertFiles(editor as unknown as FileEditor, taken, at);
+    if (dirs.length === 0) return;
+    // Sin forma de leer carpetas (P.9): se sigue pidiendo comprimirlas.
+    if (!supported || !folders) return notify(t('editor.foldersNotSupported'));
+    void Promise.all(dirs.map((d) => readFolder(d)))
+      .then((sources) => {
+        // Soltada sobre la tarjeta de una carpeta que quedó a medias (se cerró la pestaña): se retoma.
+        const target = at ? folderIn(at.blockId) : null;
+        if (target && sources.length === 1 && folders.progress(target.id)?.state === 'missing') {
+          const found = folders.resumeWith(target.id, sources[0]!);
+          notify(found > 0 ? t('folders.matched', { count: found }) : t('folders.noMatch'));
+          return;
+        }
+        setFolderAsk({ sources, at });
+      })
+      .catch(() => notify(t('editor.fileNotSaved')));
+  };
+
+  /** Sube las carpetas confirmadas: registra cada una, pone su bloque donde se soltó y empieza a subir. */
+  const uploadFolders = async (sources: FolderSource[], at: InsertAt | null) => {
+    setFolderAsk(null);
+    let ref = at ?? { blockId: editor.getTextCursorPosition().block.id, placement: 'after' as const };
+    for (const source of sources) {
+      try {
+        const { id, url } = await media.addFolder(pageId, source.name, summarize(source).bytes);
+        const refBlock = editor.getBlock(ref.blockId);
+        const [block] = editor.insertBlocks([{ type: 'image', props: { url, name: source.name } }] as never, ref.blockId, ref.placement);
+        // Como al soltar archivos: un párrafo vacío donde se soltó se reemplaza.
+        if (isEmptyParagraph(refBlock as never)) {
+          try {
+            editor.removeBlocks([ref.blockId]);
+          } catch {
+            // Ya no estaba.
+          }
+        }
+        if (block) ref = { blockId: block.id, placement: 'after' };
+        await folders?.start(id, pageId, source);
+        if (sources.length === 1) setFolderUpload(id);
+      } catch (err) {
+        notify(t('folders.notSaved', { reason: localizeError(err) }));
+      }
+    }
+  };
+
+  /** La carpeta (P.9) de un bloque `image`, o `null`. */
+  const folderIn = (blockId: string): { id: string; name: string } | null => {
+    const block = editor.getBlock(blockId) as BlockLike | undefined;
+    if (block?.type !== 'image') return null;
+    const props = (block.props ?? {}) as { url?: string; name?: string };
+    const id = mediaIdOf(props.url);
+    return id && media.isFolder(id) ? { id, name: typeof props.name === 'string' ? props.name : '' } : null;
+  };
+
+  /** Abre una carpeta: cómo va su subida si se está subiendo desde acá, o el visor. */
+  const openFolder = (folder: { id: string; name: string }) => {
+    const p = folders?.progress(folder.id);
+    if (p && p.state !== 'done') setFolderUpload(folder.id);
+    else setFolderView(folder);
   };
 
   // Un archivo soltado afuera del editor (o en solo lectura) no abre el archivo en la pestaña en lugar de la app.
@@ -685,6 +751,12 @@ function BlockEditor({
 
   /** `key`: la foto (`photoKeyOf`), o el id de un bloque `image` (la barra de la foto: "View"). */
   const openAt = (key: string | null, kind = pressKind.current) => {
+    // Una carpeta (P.9) abre su visor (o cómo va su subida).
+    const folder = key ? folderIn(parsePhotoKey(key).blockId) : null;
+    if (folder) {
+      openFolder(folder);
+      return true;
+    }
     // Un adjunto se abre o se baja (con el mouse, en el acto si ya está preparado; si no, o con el dedo, su hoja).
     const attachment = key ? attachmentOf(key) : null;
     if (attachment) {
@@ -704,6 +776,8 @@ function BlockEditor({
   const attachmentOf = (key: string): string | null => {
     const props = photoPropsIn(editor.getBlock(parsePhotoKey(key).blockId) as BlockLike | undefined, key);
     const id = props ? mediaIdOf(props.url as string | undefined) : null;
+    // Una carpeta no es un adjunto que se abre o se baja con un pase: tiene su visor.
+    if (id && media.isFolder(id)) return null;
     return id && isAttachment(media, id, typeof props?.name === 'string' ? props.name : '') ? id : null;
   };
 
@@ -792,6 +866,31 @@ function BlockEditor({
       {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}
       {carrete && <CarreteHost {...carrete} onClose={() => setCarrete(null)} />}
       {sheet && <AttachmentSheet fileId={sheet} onClose={() => setSheet(null)} />}
+      {folderAsk && (
+        <FolderAskDialog sources={folderAsk.sources} onCancel={() => setFolderAsk(null)} onConfirm={(sources) => void uploadFolders(sources, folderAsk.at)} />
+      )}
+      {folderUpload && (
+        <FolderProgressDialog
+          id={folderUpload}
+          onClose={() => setFolderUpload(null)}
+          onOpen={() => {
+            const block = folderUpload;
+            setFolderUpload(null);
+            setFolderView({ id: block, name: folders?.progress(block)?.name ?? '' });
+          }}
+        />
+      )}
+      {folderView && (
+        <FolderViewer
+          fileId={folderView.id}
+          name={folderView.name}
+          onClose={() => setFolderView(null)}
+          onShowUpload={() => {
+            setFolderUpload(folderView.id);
+            setFolderView(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -810,6 +909,10 @@ function CarreteHost(props: OpenCarrete & { onClose: () => void }) {
       <Carrete {...props} online={online} />
     </Part>
   );
+}
+
+function localizeError(err: unknown): string {
+  return localize(err instanceof Error ? err.message : String(err));
 }
 
 function flatten(blocks: Block[]): Block[] {

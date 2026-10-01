@@ -42,8 +42,12 @@ function useSelectedImage(): { id: string; url: string; name: string; rowWidth: 
 
 export function MediaDownloadButton() {
   const block = useSelectedImage();
+  const { media } = useServices();
   const id = mediaIdOf(block?.url);
   if (!id) return <FileDownloadButton />;
+  // Una carpeta (P.9) no se baja entera desde la barra todavía ("Bajar todo" es la entrega 2): cada archivo se
+  // baja desde su visor.
+  if (media.isFolder(id)) return null;
   return <OriginalDownloadButton key={id} fileId={id} />;
 }
 
