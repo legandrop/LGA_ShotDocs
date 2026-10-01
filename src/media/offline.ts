@@ -477,9 +477,19 @@ export class OfflineManager {
       // Una copia bajada se libera si la base dice que sigue en Drive (fuera de las papeleras). Sin red se usa
       // lo último que se supo; algo en una papelera puede ser la última copia y no se libera.
       const inDrive = await this.stillInDrive(copies.map((c) => c.id));
+      // Con un portero que lo sabe, además se le pregunta a Drive (sin caché) antes de borrar una copia entera:
+      // si Drive ya no lo tiene, la copia puede ser la única y queda `gone` (nunca se borra sola).
+      const drive = await this.askDrive(copies.filter((c) => c.orig && inDrive.has(c.id)).map((c) => c.id));
       for (const entry of copies) {
         if (goal <= 0) break;
-        if (entry.orig && !inDrive.has(entry.id)) continue;
+        if (entry.orig && (!inDrive.has(entry.id) || (drive && !drive.has(entry.id)))) {
+          // Sin la copia entera, igual se puede liberar su nítida (se rehace del original de Drive).
+          if (!entry.view) continue;
+          const bytes = await dropCopy(db, entry.id, { rev, what: 'view' });
+          freed += bytes;
+          goal -= bytes;
+          continue;
+        }
         const bytes = await dropCopy(db, entry.id, { rev });
         freed += bytes;
         goal -= bytes;
@@ -508,6 +518,31 @@ export class OfflineManager {
       }
     }
     return out;
+  }
+
+  /**
+   * `/verify` (si el portero lo anuncia y hay red): los que Drive tiene hoy, fuera de su papelera y con la marca de
+   * ese archivo. Los que Drive ya no tiene quedan `gone`. `null`: no se pudo preguntar (se decide con la base).
+   */
+  private async askDrive(ids: string[]): Promise<Set<string> | null> {
+    if (ids.length === 0 || !this.deps.online() || !(await this.hasFeature('verify'))) return null;
+    let results: Record<string, VerifyResult>;
+    try {
+      results = await this.deps.media.verify(ids);
+    } catch {
+      return null;
+    }
+    const ok = new Set<string>();
+    for (const id of ids) {
+      const r = results[id];
+      if (!r) continue;
+      if ('code' in r) {
+        if (r.code === 'drive_missing') await markGone(this.deps.db!, id, this.now());
+        continue;
+      }
+      if (!r.trashed && r.marked) ok.add(id);
+    }
+    return ok;
   }
 
   /** Las copias que Google Drive ya no tiene (a mano, con el aviso de "única copia"). */
@@ -731,11 +766,22 @@ export class OfflineManager {
     // El tipo y el peso de cada archivo, de lo que ya se sabe (la base, después).
     const db = this.deps.db;
     if (db) {
+      const unknown: string[] = [];
       for (const [id, f] of Object.entries(files)) {
         const own = await db.get('files', id);
         const known = own ? null : await db.get('known', id);
         const meta = own ?? known;
         if (meta) files[id] = { ...f, kind: fileKind(meta.mime, meta.name), size: typeof meta.size === 'number' ? meta.size : f.size };
+        if (!meta || typeof meta.size !== 'number') unknown.push(id);
+      }
+      // Lo que el dispositivo todavía no sabe, a la base (el tipo decide qué casilla lo protege).
+      if (unknown.length > 0 && this.deps.online()) {
+        const rows = await this.deps.remote.fetchMediaFiles(unknown).catch(() => [] as MediaFileRow[]);
+        await this.deps.media.learn(rows);
+        for (const row of rows) {
+          const f = files[row.id];
+          if (f) files[row.id] = { ...f, kind: fileKind(row.mime, row.name), size: row.size ?? f.size };
+        }
       }
     }
     return { pages, pagesRead, files, older: [...older], waitingPages, needsUpdate, vanished };

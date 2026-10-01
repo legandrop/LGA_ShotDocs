@@ -531,6 +531,8 @@ export class FakePortero {
   shortParts = 0;
   /** No hace caso del `Range` (un portero muy viejo): siempre el archivo entero. */
   ignoreRanges = false;
+  /** Un portero anterior a la entrega 0 de P.10: no conoce `?offline=1` (la caché del arranque corta igual). */
+  oldOffline = false;
   private parts = 0;
   private next = 1;
 
@@ -654,7 +656,7 @@ export class FakePortero {
       if (asked && !this.ignoreRanges) {
         const start = Number(asked[1]);
         // Como la caché del arranque del portero sin `?offline=1`: una parte más corta que la pedida.
-        const cap = this.shortParts && url.searchParams.get('offline') !== '1' ? this.shortParts : Infinity;
+        const cap = this.shortParts && (this.oldOffline || url.searchParams.get('offline') !== '1') ? this.shortParts : Infinity;
         const end = Math.min(asked[2] ? Number(asked[2]) : stored.data.length - 1, stored.data.length - 1, start + cap - 1);
         if (start >= stored.data.length) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${stored.data.length}` } });
         return new Response(new Blob([stored.data.slice(start, end + 1) as BlobPart], { type: mime }), {
