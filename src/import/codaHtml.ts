@@ -248,16 +248,19 @@ function joinSplitUrl(node: Text): void {
   for (let next = nextTextInLine(node); next; next = nextTextInLine(next)) {
     if (next.parentElement?.closest('a, code, pre')) break;
     const piece = next.textContent!.match(/^\S*/)![0];
-    if (!piece || /^https?:\/\//i.test(piece) || !URL_CHARS.test(piece)) break;
+    if (!piece || /^(?:https?:\/\/|www\.)/i.test(piece) || !URL_CHARS.test(piece)) break;
     pieces.push({ node: next, length: piece.length });
     tail += piece;
     // Con un espacio adentro, la palabra termina ahí.
     if (piece.length < next.textContent!.length) break;
   }
   if (!tail) return;
-  // Que la continúa: la primera parte quedó abierta (`/d/`, `?id=`), lo que sigue tiene forma de dirección
-  // (`1AbC/view?usp=sharing`) o, después de un punto, de dominio (`google.com`). "Sigue." o "Después" no.
-  const continues = OPEN_END.test(token) || URL_STRUCTURE.test(tail) || (token.endsWith('.') && /^[a-z0-9-]+\.[a-z]{2,}/i.test(tail));
+  // Que la continúa: lo que sigue tiene forma de dirección (`1AbC/view?usp=sharing`); o la primera parte quedó
+  // abierta (`/d/`, `?id=`, `plano-`) y lo que sigue no es una palabra común ("Luego", "Sigue.": un embebido de
+  // Instagram termina en `/` y en Coda el texto de al lado puede ir pegado); o, después de un punto, un dominio en
+  // minúsculas (`google.com`; "Google.com" empieza otra frase). `www.` es otra dirección.
+  const word = /^\p{Lu}?\p{Ll}+[.,;:!?'")\]]*$/u.test(tail);
+  const continues = (OPEN_END.test(token) && !word) || URL_STRUCTURE.test(tail) || (token.endsWith('.') && /^[a-z0-9-]+\.[a-z]{2,}/.test(tail));
   if (!continues || !bareUrl(token + tail)) return;
   node.textContent += tail;
   for (const p of pieces) {
@@ -525,8 +528,9 @@ const PHOTO_HOSTS = new Set(['paragraph', 'heading', 'quote', 'bulletListItem', 
 /**
  * Cambia cada marca por su foto: en el renglón donde estaba (`photoOf`, entrega 4 de Doc_Fotos_En_Linea.md) o, si
  * no es una foto ni un video (un adjunto) o el bloque no lleva fotos en línea, por su bloque `image` (`imageOf`).
- * Junta los párrafos vacíos seguidos, saca los del final y marca como Script lo que está debajo de un título
- * "Guion". Los bloques salen sin id. Sin `photoOf`, todas van como bloque (como antes de la entrega 4).
+ * Saca el último salto de línea de cada renglón (`dropLastBreak`), deja hasta dos párrafos vacíos seguidos, saca
+ * los del final y marca como Script lo que está debajo de un título "Guion". Los bloques salen sin id. Sin
+ * `photoOf`, todas van como bloque (como antes de la entrega 4).
  */
 export function finishBlocks(
   blocks: LooseBlock[],
@@ -534,6 +538,7 @@ export function finishBlocks(
   photoOf?: (index: number, line: number) => InlinePhoto | null,
 ): LooseBlock[] {
   const out = splitAll(blocks, imageOf, photoOf, 0);
+  dropLastBreak(out);
   markScript(out);
   // Una marca que quedó donde no se la buscó (no debería pasar) no se ve como basura en el texto; la foto
   // la ubica al final quien importa (codaImport.ts).
@@ -785,10 +790,39 @@ function mergeRuns(items: Inline[]): Inline[] {
   return out;
 }
 
+/**
+ * Saca un salto de línea al final de cada renglón (párrafo, título, cita, ítem): el último `<br>` de un bloque
+ * de HTML no agrega un renglón, pero en el editor sí (se veía de dos renglones de alto). Así `<div><br></div>`
+ * (un renglón en blanco de Coda) es un párrafo vacío y `<div>Dos<br></div>` es "Dos"; con dos saltos queda uno,
+ * como se veía. Si el salto quedó adentro de un link al final (así lo guarda el editor), también, pero nunca el
+ * texto del link. Solo saca saltos: ninguna letra.
+ */
+function dropLastBreak(blocks: LooseBlock[]): void {
+  for (const b of blocks) {
+    dropLastBreak(b.children ?? []);
+    if (!PHOTO_HOSTS.has(b.type) || !Array.isArray(b.content)) continue;
+    const items = b.content as Inline[];
+    const last = items.at(-1);
+    if (last?.type === 'text' && last.text?.endsWith('\n')) {
+      const text = last.text.slice(0, -1);
+      b.content = text ? [...items.slice(0, -1), { ...last, text }] : items.slice(0, -1);
+    } else if (last?.type === 'link' && last.content?.length) {
+      const inner = last.content.at(-1)!;
+      if (inner.type !== 'text' || !inner.text?.endsWith('\n')) continue;
+      const text = inner.text.slice(0, -1);
+      // Un link que es solo un salto queda como estaba.
+      if (!text && last.content.length === 1) continue;
+      const content = text ? [...last.content.slice(0, -1), { ...inner, text }] : last.content.slice(0, -1);
+      b.content = [...items.slice(0, -1), { ...last, content }];
+    }
+  }
+}
+
+/** Hasta dos párrafos vacíos seguidos (en Coda, casi todos los huecos son de uno o dos renglones); sin los de las puntas. */
 function collapseEmpty(blocks: LooseBlock[]): LooseBlock[] {
   const isEmpty = (b: LooseBlock) =>
     b.type === 'paragraph' && !b.children?.length && Array.isArray(b.content) && isBlank(b.content as Inline[]);
-  const out = blocks.filter((b, i) => !(isEmpty(b) && i > 0 && isEmpty(blocks[i - 1])));
+  const out = blocks.filter((b, i) => !(isEmpty(b) && i > 1 && isEmpty(blocks[i - 1]) && isEmpty(blocks[i - 2])));
   while (out.length > 1 && isEmpty(out.at(-1)!)) out.pop();
   while (out.length > 1 && isEmpty(out[0])) out.shift();
   return out;

@@ -1225,6 +1225,54 @@ describe('HTML de Coda: direcciones sueltas', () => {
     expect(squash(textOnly(blocks))).toBe(squash(sourceText(html)));
   });
 
+  it('el último salto de un renglón (que en Coda no se ve) no se trae; hasta dos renglones en blanco seguidos quedan', async () => {
+    const html =
+      `<div><span>Uno</span></div><div><br></div><div><span>Dos</span><br></div>` +
+      // Dos saltos: en Coda se ven dos renglones (el texto y uno en blanco).
+      `<div><span>Tres</span><br><br></div>` +
+      `<div><br></div><div><br></div><div><br></div><div><br></div>` +
+      `<ul><li><span>Ítem</span><br></li></ul><h2><span>Título</span><br></h2>` +
+      `<div><span>Ver </span><a href="${SITE_B}">${SITE_B}</a><br></div><div><br><br></div><div><span>Fin</span></div>`;
+    const blocks = await convert(html);
+    expect(shape(blocks)).toEqual([
+      ['paragraph', 'Uno'],
+      ['paragraph', ''],
+      ['paragraph', 'Dos'],
+      ['paragraph', 'Tres\n'],
+      // Cuatro renglones en blanco seguidos: quedan dos.
+      ['paragraph', ''],
+      ['paragraph', ''],
+      ['bulletListItem', 'Ítem'],
+      ['heading', 'Título'],
+      ['paragraph', `Ver [${SITE_B}](${SITE_B})`],
+      ['paragraph', '\n'],
+      ['paragraph', 'Fin'],
+    ]);
+    // Un renglón en blanco es un párrafo vacío de verdad, sin ningún salto adentro.
+    expect(blocks[1].content).toEqual([]);
+    expect(squash(textOnly(blocks))).toBe(squash(sourceText(html)));
+  });
+
+  it('una palabra pegada a una dirección que termina abierta (/, =, -) no entra en el link; tampoco www. ni un dominio con mayúscula', async () => {
+    const html =
+      `<div><span>https://wanka.tv/</span><b>Luego</b><span> seguimos</span></div>` +
+      `<div><span>https://wanka.tv/</span><span>Sigue.</span></div>` +
+      `<div><span>https://x.com/?id=</span><b>Hola</b></div>` +
+      `<div><span>https://x.com/plano-</span><b>final</b></div>` +
+      `<div><span>https://x.com/</span><span>www.y.com/a</span></div>` +
+      `<div><span>https://a.com/x.</span><span>Google.com es otra</span></div>`;
+    const blocks = await convert(html);
+    expect(shape(blocks)).toEqual([
+      ['paragraph', '[https://wanka.tv/\n](https://wanka.tv/)Luego seguimos'],
+      ['paragraph', '[https://wanka.tv/\n](https://wanka.tv/)Sigue.'],
+      ['paragraph', '[https://x.com/?id=\n](https://x.com/?id=)Hola'],
+      ['paragraph', '[https://x.com/plano-\n](https://x.com/plano-)final'],
+      ['paragraph', '[https://x.com/\n](https://x.com/)www.y.com/a'],
+      ['paragraph', '[https://a.com/x](https://a.com/x).Google.com es otra'],
+    ]);
+    expect(squash(textOnly(blocks))).toBe(squash(sourceText(html)));
+  });
+
   it('el punto final, la coma o el paréntesis que cierra quedan afuera del link y en su renglón', async () => {
     const wiki = 'https://en.wikipedia.org/wiki/Foo_(bar)';
     const html =
