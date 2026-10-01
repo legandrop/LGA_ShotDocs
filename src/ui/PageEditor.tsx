@@ -17,7 +17,7 @@ import '../i18n/lazy/folders';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { FileRejected, isAllowedImage } from '../sync/files';
 import { isMediaFile, MEDIA_SCHEME, mediaIdOf } from '../media/queue';
-import { collectCarrete, inlinePhotosOf, parsePhotoKey, photoKeyOf, photoPropsIn, startIndex, type BlockLike, type CarreteItem } from './carreteModel';
+import { carreteItemsOf, collectCarrete, inlinePhotosOf, parsePhotoKey, photoKeyOf, photoPropsIn, startIndex, type BlockLike, type CarreteItem } from './carreteModel';
 import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -860,11 +860,14 @@ export function BlockEditor({
       return true;
     }
     // Los adjuntos entran (se ven en grande, con abrir y bajar: Docs/Doc_Adjuntos.md, entrega 2); las carpetas no
-    // (tienen su visor).
-    const items = collectCarrete(editor.document as unknown as BlockLike[], (id) => media.isFolder(id));
-    const start = startIndex(items, key);
-    if (start < 0) return false;
-    setCarrete({ items, start, loader: createCarreteLoader({ media, files }) });
+    // (tienen su visor). Si de algún archivo no se sabe qué es (una carpeta de otro dispositivo que la página no llegó
+    // a dibujar), se averigua antes de abrir (`carreteItemsOf`); casi siempre ya se sabe y abre en el acto.
+    const blocks = editor.document as unknown as BlockLike[];
+    if (startIndex(collectCarrete(blocks, (id) => media.isFolder(id)), key) < 0) return false;
+    void carreteItemsOf(blocks, media).then((items) => {
+      const start = startIndex(items, key);
+      if (start >= 0) setCarrete({ items, start, loader: createCarreteLoader({ media, files }) });
+    });
     return true;
   };
 

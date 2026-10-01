@@ -18,6 +18,9 @@ export interface PageCanvas {
   getContext(type: '2d'): unknown;
 }
 
+/** La imagen más grande (en píxeles) que pdf.js decodifica para la vista previa: 16 Mpx, 64 MB en RGBA. */
+export const MAX_IMAGE_PIXELS = 16_000_000;
+
 /** Lo más que se espera a que pdf.js cierre el documento antes de cortar su Worker. */
 const DESTROY_WAIT_MS = 1000;
 
@@ -43,6 +46,11 @@ export async function renderFirstPage<C extends PageCanvas>(
     enableXfa: false,
     useWasm: false,
     stopAtErrors: false,
+    // La memoria queda acotada aunque el PDF sea una página escaneada enorme (20000×15000 serían ~1,2 GB): una imagen
+    // de más de 16 Mpx (64 MB) no se decodifica (la página sale sin ella), y las que se dibujan se achican en el Worker
+    // a 64 MB como mucho. El canvas de la vista previa ya es chico (480 de lado mayor).
+    maxImageSize: MAX_IMAGE_PIXELS,
+    canvasMaxAreaInBytes: MAX_IMAGE_PIXELS * 4,
     disableAutoFetch: true,
     disableStream: true,
   });

@@ -667,6 +667,31 @@ export class MediaQueue {
     return isFolderMime(this.fileInfo(id)?.mime);
   }
 
+  /**
+   * Averigua lo que `fileInfo` todavía no sabe de esos archivos (de otro dispositivo, que la página no llegó a dibujar):
+   * lo guardado en el dispositivo y, si falta, la base (un solo pedido para todos). Sin red y sin nada guardado, quedan
+   * sin saber. No cuenta como abrirlos ni mostrarlos. Nunca falla.
+   */
+  async learnInfo(ids: readonly string[]): Promise<void> {
+    await Promise.all(
+      ids
+        .filter((id) => !this.fileInfo(id))
+        .map(async (id) => {
+          try {
+            const own = this.db ? await this.db.get('files', id) : undefined;
+            if (own) {
+              this.remember(id, own, true);
+              return;
+            }
+            const known = (this.db ? await this.db.get('known', id) : undefined) ?? (await this.fetchMeta(id).catch(() => null));
+            if (known) this.remember(id, known, this.infos.get(id)?.local ?? false);
+          } catch {
+            // Sin base de archivos o sin red: queda sin saber.
+          }
+        }),
+    );
+  }
+
   /** El cliente del portero del workspace (para las carpetas, P.9), o `null` si no hay portero. */
   porteroClient(): MediaPortero | null {
     return this.url ? this.porteroFor(this.url) : null;
@@ -822,12 +847,17 @@ export class MediaQueue {
     let previewTried = false;
     if (blob && kind !== 'file') probe = await this.probe(blob, record.mime).catch(() => none);
     else if (blob && previewable(record.mime, record.name, record.size)) {
-      try {
-        probe = { ...none, thumb: await this.preview(blob, record.mime, record.name) };
-        previewTried = true;
-      } catch (err) {
-        // pdf.js no se pudo bajar (sin red la primera vez): se prueba más tarde, al mostrarlo (`backfillPreview`).
-        if (!(err instanceof PreviewUnavailable)) previewTried = true;
+      // La marca va ANTES de dibujar: si el navegador cierra la pestaña mientras pdf.js dibuja (memoria, en el
+      // iPhone), al volver a abrir la app la marca está sin terminar (`probed: false`) y la vista previa se saltea:
+      // queda el ícono y el archivo se registra y se sube. Sin esto, cada apertura volvería a cerrar la pestaña.
+      previewTried = true;
+      if (!record.previewTried && (await this.markPreviewTried(id, true))) {
+        try {
+          probe = { ...none, thumb: await this.preview(blob, record.mime, record.name) };
+        } catch (err) {
+          // pdf.js no se pudo bajar (sin red la primera vez): se prueba más tarde, al mostrarlo (`backfillPreview`).
+          if (err instanceof PreviewUnavailable) previewTried = false;
+        }
       }
     }
     const tx = db.transaction(['files', 'thumbs'], 'readwrite');
@@ -842,11 +872,23 @@ export class MediaQueue {
         duration: kind === 'video' ? seconds(probe.duration) : null,
         thumb: probe.thumb ? 'local' : 'none',
         probed: true,
-        ...(previewTried ? { previewTried: true } : {}),
+        previewTried: previewTried || undefined,
       });
     }
     await tx.done;
     if (probe.thumb) this.thumbReady(id);
+  }
+
+  /**
+   * Anota (o borra) en el registro del dispositivo que se está probando la vista previa, antes de dibujarla (ver
+   * `probeNow` y `backfillPreview`). `false` si el registro ya no está.
+   */
+  private async markPreviewTried(id: string, tried: boolean): Promise<boolean> {
+    const tx = this.store.transaction('files', 'readwrite');
+    const current = await tx.store.get(id);
+    if (current) await tx.store.put({ ...current, previewTried: tried || undefined });
+    await tx.done;
+    return !!current;
   }
 
   /**
@@ -2086,13 +2128,19 @@ export class MediaQueue {
       if (!uploadOnly) {
         const blob = await db.get('blobs', id);
         if (!blob) return;
+        // La marca va antes de dibujar (como en `probeNow`): si la pestaña se cierra en el medio, no se vuelve a probar.
+        if (!(await this.markPreviewTried(id, true))) return;
         let thumb: Blob | null;
         try {
           thumb = await this.preview(blob, own.mime, own.name);
         } catch (err) {
           retry = err instanceof PreviewUnavailable;
           if (!retry) thumb = null;
-          else return;
+          else {
+            // pdf.js no estaba: se borra la marca para probar otra vez.
+            await this.markPreviewTried(id, false);
+            return;
+          }
         }
         const tx = db.transaction(['files', 'thumbs'], 'readwrite');
         const current = await tx.objectStore('files').get(id);

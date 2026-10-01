@@ -7,8 +7,9 @@ primera página: la hace el dispositivo que lo agrega con pdf.js (bajado aparte,
 y viaja como la miniatura de una foto (bucket `thumbs`, antes que el original), así los demás la bajan sin pasar por
 el portero y lo ya visto se ve sin red. Se eligió sobre la miniatura de Drive, que no existe hasta que Drive recibe
 el archivo y, para guardarla, pedía cambiar el portero. Si pdf.js no estaba, o el PDF es de antes, se hace al
-mostrarlo. En el carrete, los adjuntos aparecen en grande con *Open* y *Download*. Sin migración ni propiedades
-nuevas en el bloque. Ayuda actualizada.
+mostrarlo; si la pestaña se cierra mientras se dibuja (memoria en el iPhone), no se vuelve a probar y el PDF sube
+igual. En el carrete, los adjuntos aparecen en grande con *Open* y *Download*. Sin migración ni propiedades nuevas
+en el bloque. Ayuda actualizada.
 [ Adjuntos - vista previa del PDF y tarjeta grande en el carrete ]
 
 v0.089 :

@@ -45,6 +45,22 @@ export interface BlockLike {
 /** El tipo de la foto en línea (inlinePhoto.ts; acá sin importarlo, para no traer el editor). */
 const INLINE_PHOTO = 'photo';
 
+/**
+ * Lo que va al carrete de una página: todo menos las carpetas (tienen su visor). Si de algún archivo todavía no se
+ * sabe qué es (de otro dispositivo, y la página no lo llegó a dibujar: una carpeta entraría como adjunto), primero se
+ * averigua (`learnInfo`).
+ */
+export async function carreteItemsOf(
+  blocks: readonly BlockLike[],
+  media: { fileInfo(id: string): unknown; isFolder(id: string): boolean; learnInfo(ids: readonly string[]): Promise<void> },
+): Promise<CarreteItem[]> {
+  const unknown = collectCarrete(blocks)
+    .map((item) => item.mediaId)
+    .filter((id): id is string => !!id && !media.fileInfo(id));
+  if (unknown.length > 0) await media.learnInfo(unknown);
+  return collectCarrete(blocks, (id) => media.isFolder(id));
+}
+
 /** La clave de una foto: la de un bloque `image` es su id; la de una foto en línea, `<bloque>#<n>`. */
 export const photoKey = (blockId: string, at: number | null): string => (at === null ? blockId : `${blockId}#${at}`);
 

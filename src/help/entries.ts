@@ -78,6 +78,11 @@ const HELP = '0.082';
 const OFFLINE = '0.083';
 /** La que trajo colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2). */
 const COLLAPSE_2 = '0.084';
+/**
+ * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2). La versión la pone
+ * quien numera la entrada del changelog (hoy `0.0XX`): cambiarla acá en la misma pasada.
+ */
+const ATTACH_PREVIEW = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -215,9 +220,10 @@ export const HELP_ENTRIES: HelpEntry[] = [
     title: 'help.attach.title',
     text: 'help.attach.text',
     when: 'portero',
-    // La vista previa del PDF y la tarjeta grande en el carrete llegaron después (Doc_Adjuntos.md, entrega 2).
+    // La vista previa del PDF y la tarjeta grande en el carrete llegaron después (Doc_Adjuntos.md, entrega 2): sale en
+    // las novedades con esa versión.
     words: ['pdf', 'vista previa', 'preview', 'miniatura', 'thumbnail', 'primera página', 'first page', 'carrete', 'viewer'],
-    since: BEFORE_HELP,
+    since: ATTACH_PREVIEW,
   },
   {
     id: 'folderDrop',

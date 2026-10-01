@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PDF_PREVIEW_MAX_BYTES, previewable } from './pdfPreview';
 
 // La vista previa de los PDF adjuntos (Docs/Doc_Adjuntos.md, entrega 2). Qué tiene vista previa, y pdf.js de
@@ -74,5 +74,73 @@ describe.skipIf(!canvasLib)('renderFirstPage (pdf.js de verdad)', () => {
     const { renderFirstPage } = await setup();
     const broken = new TextEncoder().encode('%PDF-1.4\nesto no es un pdf');
     await expect(renderFirstPage(broken, 480, (w, h) => canvasLib!.createCanvas(w, h), 10_000)).rejects.toThrow();
+  });
+});
+
+// El Worker de pdf.js se corta siempre, también si se pasó del tiempo, y un PDF con contraseña no queda esperando.
+describe.skipIf(!canvasLib)('renderFirstPage: topes y Worker', () => {
+  const setup = async () => {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.min.mjs')).href;
+    const lib = await import('./pdfLib');
+    return { pdfjs, lib };
+  };
+  const make = (w: number, h: number) => canvasLib!.createCanvas(w, h);
+
+  it('una página que nunca llega: tira "took too long" al llegar al tope y corta el Worker', async () => {
+    const { pdfjs, lib } = await setup();
+    // En Node pdf.js analiza en el mismo hilo: para simular un PDF que lo traba, `getPage` no contesta nunca.
+    const first = pdfjs.getDocument({ data: tinyPdf() });
+    const opened = await first.promise;
+    const proto = Object.getPrototypeOf(opened) as { getPage: (n: number) => Promise<unknown> };
+    await first.destroy();
+    const hang = vi.spyOn(proto, 'getPage').mockImplementation(() => new Promise(() => undefined));
+    const destroy = vi.spyOn(pdfjs.PDFWorker.prototype, 'destroy');
+    try {
+      const t0 = Date.now();
+      await expect(lib.renderFirstPage(tinyPdf(), 480, make, 300)).rejects.toThrow(/too long/);
+      expect(Date.now() - t0).toBeLessThan(2500);
+      expect(destroy).toHaveBeenCalledTimes(1);
+    } finally {
+      destroy.mockRestore();
+      hang.mockRestore();
+    }
+  });
+
+  it('bien o dañado, el Worker se corta en los dos casos', async () => {
+    const { pdfjs, lib } = await setup();
+    const destroy = vi.spyOn(pdfjs.PDFWorker.prototype, 'destroy');
+    try {
+      await lib.renderFirstPage(tinyPdf(), 100, make, 10_000);
+      await expect(lib.renderFirstPage(new TextEncoder().encode('%PDF-1.4\nroto'), 100, make, 10_000)).rejects.toThrow();
+      expect(destroy).toHaveBeenCalledTimes(2);
+    } finally {
+      destroy.mockRestore();
+    }
+  });
+
+  it('un PDF con contraseña tira enseguida (no pide la contraseña ni se queda esperando)', async () => {
+    const { lib } = await setup();
+    // Un PDF cifrado mínimo (RC4 de 40 bits, con contraseña de usuario): pdf.js lo rechaza con PasswordException.
+    const content = 'q Q';
+    const objs = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R >>',
+      `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+      '<< /Filter /Standard /V 1 /R 2 /O <' + '00'.repeat(32) + '> /U <' + '11'.repeat(32) + '> /P -4 >>',
+    ];
+    let out = '%PDF-1.4\n';
+    const offs: number[] = [];
+    objs.forEach((b, i) => {
+      offs.push(out.length);
+      out += `${i + 1} 0 obj\n${b}\nendobj\n`;
+    });
+    const x = out.length;
+    out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('');
+    out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R /Encrypt 5 0 R /ID [<00112233445566778899aabbccddeeff><00112233445566778899aabbccddeeff>] >>\nstartxref\n${x}\n%%EOF\n`;
+    const t0 = Date.now();
+    await expect(lib.renderFirstPage(new TextEncoder().encode(out), 100, make, 5_000)).rejects.toThrow();
+    expect(Date.now() - t0).toBeLessThan(4000);
   });
 });

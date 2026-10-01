@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  carreteItemsOf,
   carreteSourceOf,
   clampZoom,
   classifyDrag,
@@ -165,6 +166,44 @@ describe('carrete: los elementos de la página', () => {
     expect(fallbackName(web)).toBe('Plano 12.jpg');
     expect(fallbackName(data)).toBe('image.jpg');
     expect(fallbackName(bare)).toBe('image.jpg');
+  });
+});
+
+describe('carrete: qué entra (adjuntos sí, carpetas no)', () => {
+  const PDF = 'sdmedia://11111111-1111-4111-8111-111111111111';
+  const FOLDER = 'sdmedia://22222222-2222-4222-8222-222222222222';
+  const PHOTO = 'sdmedia://33333333-3333-4333-8333-333333333333';
+  const page: BlockLike[] = [
+    { id: 'f', type: 'image', props: { url: PHOTO, name: 'IMG_1.JPG' } },
+    { id: 'p', type: 'image', props: { url: PDF, name: 'guion.pdf' } },
+    { id: 'c', type: 'image', props: { url: FOLDER, name: 'Material' } },
+  ];
+
+  it('una carpeta de otro dispositivo que todavía no se mostró: se averigua antes y no entra', async () => {
+    const infos = new Map<string, { mime: string }>([
+      [PHOTO.slice(10), { mime: 'image/jpeg' }],
+      [PDF.slice(10), { mime: 'application/pdf' }],
+    ]);
+    const asked: string[][] = [];
+    const media = {
+      fileInfo: (id: string) => infos.get(id) ?? null,
+      isFolder: (id: string) => infos.get(id)?.mime === 'inode/directory',
+      learnInfo: async (ids: readonly string[]) => {
+        asked.push([...ids]);
+        for (const id of ids) infos.set(id, { mime: 'inode/directory' });
+      },
+    };
+    const items = await carreteItemsOf(page, media);
+    expect(asked).toEqual([[FOLDER.slice(10)]]);
+    expect(items.map((i) => i.blockId)).toEqual(['f', 'p']);
+    // Ya sabido: no se vuelve a preguntar.
+    await carreteItemsOf(page, media);
+    expect(asked).toHaveLength(1);
+  });
+
+  it('sin red y sin saber qué es: entra (como antes), no se pierde nada de la página', async () => {
+    const media = { fileInfo: () => null, isFolder: () => false, learnInfo: async () => undefined };
+    expect((await carreteItemsOf(page, media)).map((i) => i.blockId)).toEqual(['f', 'p', 'c']);
   });
 });
 

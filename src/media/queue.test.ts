@@ -1763,6 +1763,83 @@ describe('adjuntos: vista previa (Docs/Doc_Adjuntos.md, entrega 2)', () => {
     expect(heard).toContain(id);
     expect(previewIn(cardText(await b.media.resolve(url)))).toContain('preview:tarde.pdf');
   });
+
+  it('learnInfo: lo que no se sabía de un archivo de otro dispositivo (una carpeta) se averigua sin contarlo como abierto', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const url = await a.media.add(page, makeFile(10, 'notas.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    // Como si fuera la fila de una carpeta soltada en otro dispositivo.
+    server.mediaFiles.get(id)!.mime = 'inode/directory';
+    const b = await device(server);
+    await sync(b);
+    expect(b.media.fileInfo(id)).toBeNull();
+    await b.media.learnInfo([id]);
+    expect(b.media.isFolder(id)).toBe(true);
+  });
+
+  it('si la pestaña se cierra mientras se dibuja la vista previa, al volver a abrir no se prueba otra vez y el PDF sube', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const name = crypto.randomUUID();
+    const a = await device(server, name);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    let calls = 0;
+    // El navegador cierra la pestaña acá (memoria, en el iPhone): la vista previa nunca termina.
+    server.preview = () => {
+      calls++;
+      return new Promise(() => undefined);
+    };
+    const url = await a.media.add(page, makeFile(4096, 'pesado.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await vi.waitFor(() => expect(calls).toBe(1));
+    // La marca quedó antes de dibujar, sin terminar.
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ probed: false, previewTried: true, registered: false });
+    a.engine.stop();
+
+    // Se vuelve a abrir la app (la misma base del dispositivo), varias veces.
+    for (let i = 0; i < 3; i++) {
+      const again = await device(server, name);
+      await sync(again);
+      again.engine.stop();
+    }
+    expect(calls).toBe(1);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ probed: true, previewTried: true, thumb: 'none', registered: true, pending: 0 });
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(server.thumbs.has(id)).toBe(false);
+  });
+
+  it('lo mismo al hacerla después (un PDF de antes): si la pestaña se cierra, no se vuelve a probar', async () => {
+    const server = new FakeServer();
+    server.enableMedia();
+    const name = crypto.randomUUID();
+    const a = await device(server, name);
+    const page = await a.tree.create(null, 'Día 3');
+    await sync(a);
+    const url = await a.media.add(page, makeFile(2048, 'viejo.pdf', 'application/pdf'));
+    const id = mediaIdOf(url)!;
+    await sync(a);
+    const old = (await a.mediaDb.get('files', id))!;
+    delete old.previewTried;
+    await a.mediaDb.put('files', old);
+
+    let calls = 0;
+    server.preview = () => {
+      calls++;
+      return new Promise(() => undefined);
+    };
+    await a.media.resolve(url);
+    await vi.waitFor(() => expect(calls).toBe(1));
+    expect((await a.mediaDb.get('files', id))?.previewTried).toBe(true);
+    a.engine.stop();
+
+    const again = await device(server, name);
+    expect(cardText(await again.media.resolve(url))).toContain('height="96"');
+    await new Promise((r) => setTimeout(r, 30));
+    expect(calls).toBe(1);
+  });
 });
 
 describe('espacio en el dispositivo', () => {

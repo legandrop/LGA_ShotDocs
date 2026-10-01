@@ -135,6 +135,14 @@ Detalles:
 - Solo PDF de hasta **64 MB** (pdf.js lo lee entero en memoria; el iPhone no da para más). Un PDF dañado, con
   contraseña o que tarda más de 20 s en dibujarse queda con el ícono. La vista previa es un JPEG de 480 de lado mayor
   (igual que la miniatura de una foto, menos de 512 KB).
+- **Memoria acotada:** el tope de 64 MB mide el archivo, no lo que pdf.js descomprime (una página escaneada de
+  20000×15000 serían ~1,2 GB). pdf.js no decodifica imágenes de más de 16 Mpx (`maxImageSize`; la página sale sin
+  ellas) y achica las demás a 64 MB como mucho (`canvasMaxAreaInBytes`). De a una vista previa por vez.
+- **Si igual la pestaña se cierra mientras se dibuja** (el iPhone la mata por memoria): `previewTried` se anota en el
+  registro del dispositivo **antes** de dibujar. Al volver a abrir la app, un registro sin medir con la marca puesta
+  es un intento que no terminó: se saltea la vista previa (queda el ícono) y el archivo se registra y se sube. Sin
+  esto, cada apertura volvía a dibujarlo, a cerrarse, y el PDF no subía nunca. Igual al hacerla después
+  (`backfillPreview`). Si pdf.js no se pudo bajar, la marca se borra para probar otra vez.
 - **Sin red la primera vez** (pdf.js nunca se bajó en ese dispositivo): el archivo se guarda y se sube igual, sin
   vista previa; se hace la próxima vez que se muestra con red, y si el archivo ya estaba subido, se sube al bucket en
   ese momento. Lo mismo con los PDF agregados antes de esta versión, en el dispositivo que tiene el original.
@@ -356,8 +364,13 @@ nuevas, sin migración) se mantiene. Cambios:
   pasar a JPEG) y el Worker de pdf.js se corta siempre, así un PDF que traba a pdf.js no frena la subida; abrir y
   bajar un adjunto en el carrete piden un solo pase (dos pedidos a la vez usan el mismo); una pestaña vieja que pide
   el Worker después de publicar una versión (y recibe la página de la app) cuenta como "pdf.js no está".
+- Verificación final, arreglado: la marca antes de dibujar (un PDF que cierra la pestaña ya no se reintenta en cada
+  apertura), el límite de imagen de pdf.js, y una carpeta de otro dispositivo que la página no llegó a dibujar ya no
+  entra al carrete como un adjunto (antes de abrirlo se averigua qué es lo que no se sabe, `learnInfo`). La entrada de
+  la ayuda de adjuntos sale en las novedades (`since`, en `src/help/entries.ts`, `ATTACH_PREVIEW`).
 - Pendiente:
   - Probar a mano con el portero real y Safari/iPhone: que pdf.js se baje, dibuje y quede guardado para usarlo sin
-    red; un PDF grande (50 MB) en el iPhone.
+    red; un PDF grande (50 MB) y una página escaneada a muy alta resolución en el iPhone; 3 fotos HEIC y un PDF de
+    40 MB soltados juntos.
   - La miniatura de Drive para Office, PSD y demás (roadmap).
   - Los PDF de antes que solo están en Drive (ningún dispositivo tiene el original) siguen con el ícono.
