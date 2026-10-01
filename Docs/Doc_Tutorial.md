@@ -1,8 +1,9 @@
 # Tutorial animado y ayuda (P.13)
 
-Estado: **diseño, sin implementar; auditoría previa hecha.** "Correcciones de la auditoría" (al final) manda
-sobre lo anterior; lo simple ya está corregido en su lugar. **Lega respondió las preguntas el 2026-09-30**
-("Decisiones", al final; el texto ya está ajustado). Falta elegir las fotos de la lista. Lo
+Estado: **entregas 1 y 2 hechas (v0.082); la 3 ("Mostrame" y novedades), pendiente.** "Cómo quedó" (al final)
+dice lo que se hizo y en qué se apartó del diseño; "Correcciones de la auditoría" manda sobre lo anterior. **Lega
+respondió las preguntas el 2026-09-30** ("Decisiones"). Las fotos del ejemplo quedaron dibujadas para la app (ver
+"Cómo quedó"); falta que Lega diga si se cambian por fotos de la lista. Lo
 pidió Lega el 2026-09-30 ("sí o sí lo tenemos que tener"). Sale de leer el código de `main` (v0.051) y el
 diseño de colapsar (`Doc_Colapsar.md`, rama `lega/colapsar`).
 
@@ -45,7 +46,7 @@ Relevado del código de `main`. Son los lugares a los que puede apuntar un globi
 | Pie de la barra lateral | `Sidebar.tsx` | Papelera (páginas y archivos) y el menú de la cuenta. |
 | Menú de la cuenta | `AccountMenu` en `menus.tsx` | Apariencia (tema, letra, tamaño, ancho de la página), fotos en fila en el teléfono, idioma, miembros, Google Drive (el dueño), salir, textos legales. Las preferencias siguen a la persona ("Guardado en tu cuenta"). |
 | Barra de arriba de la página | `Workspace.tsx` | Migas, **lupa** (buscar en la página, Ctrl/⌘+F), **ícono de comentarios**, menú "⋯" de la página. |
-| Menú "⋯" de la página | `PageMenu` en `menus.tsx` | Compartir, página nueva adentro, renombrar, mover, tamaño de hoja, **Exportar PDF / Imprimir**, títulos cortos, mandar a la papelera. Con P.11: colapsar todo / abrir todo. |
+| Menú "⋯" de la página | `PageMenu` en `menus.tsx` | Compartir, página nueva adentro, renombrar, mover, tamaño de hoja, **Exportar PDF / Imprimir**, títulos cortos, mandar a la papelera. Desde P.11 (v0.053): colapsar todo / abrir todo. |
 | Título de la página | `PageView.tsx` | Enter pasa al texto. |
 | Editor | `PageEditor.tsx` (BlockNote 0.55) | Menú "/" (títulos, listas, tabla, cita, código, divisor, foto, Script, pregunta), tirador "⋮⋮" y "+" al costado de cada bloque, barra de formato al elegir texto, atajos de Markdown ("# ", "- ", "1. ", "[] ", "> "). |
 | Fotos y videos | `inlinePhotoCreate.ts`, `PhotoToolbar.tsx`, `inlinePhotoEditor.ts`; las fotos-bloque viejas, `imageRowsEditor.ts`, `MediaToolbarButtons.tsx` | Desde v0.078 entran en el renglón (pegar, soltar, "/Image"), como letras: texto al lado, Shift+clic o Shift+flechas para elegir varias. Primer clic elige, segundo abre el carrete; tiradores que imantan a 1/1, 1/2, 1/3 y 1/4; la barra de la foto (la misma para la foto-bloque, por sectores, D-24): ver, bajar, tamaños rápidos (para todas las elegidas) y "Acomodar en filas" de las elegidas, alinear el renglón, comentar, reemplazar, renombrar y borrar. |
@@ -151,8 +152,9 @@ choca con los permisos; la estática no deja probar, que es lo que más enseña.
 - **Qué tiene** (un ejemplo de VFX corto, que entre en dos pantallas): un título "Plano 012 · Persecución en la
   terraza", un párrafo con negrita y un link, una lista de casillas (tareas del plano), dos líneas de Script
   ("EXT. TERRAZA - NOCHE" con sus marcas de color), una pregunta ("¿El cielo se reemplaza en todos los
-  planos?") con un hilo de ejemplo ya contestado, una fila de tres fotos, una tabla de tomas y un H2 con texto
-  debajo (para colapsar, cuando exista P.11). Ni tarjeta de Drive (cargaría un reproductor de Google) ni
+  planos?") con un hilo de ejemplo ya contestado, un renglón con tres fotos en línea (como las crea hoy pegar o
+  soltar), una tabla de tomas y un H2 con texto
+  debajo (para colapsar). Ni tarjeta de Drive (cargaría un reproductor de Google) ni
   adjunto (la tarjeta sale de un archivo registrado en el Drive): los explican la recorrida y la ayuda.
 - **Fotos del ejemplo:** tres WebP chicas (unos 1200 px de ancho, 30 a 60 KB cada una) en `public/tutorial/`,
   con la dirección **absoluta** de la app (`https://<app>/tutorial/terraza-1.webp`; una relativa no la acepta
@@ -262,7 +264,7 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 | 2 | `pages` (árbol y su "+") | Tus páginas / Your pages | Acá están las páginas del proyecto, unas adentro de otras. Con + creás una; arrastrándolas las ordenás. | Your project's pages live here, nested. + creates one; drag to reorder. |
 | 3 | `project-switcher` | Proyectos / Projects | Un workspace tiene varios proyectos. Acá cambiás de proyecto o creás uno ({Mod+K}). | A workspace has several projects. Switch or create one here ({Mod+K}). |
 | 4 | `practice-empty-line` (interactivo) | El menú / / The / menu | Escribí / en un renglón vacío: títulos, listas, tablas, guion, preguntas y fotos. Con ⋮⋮, al costado, arrastrás un bloque. | Type / on an empty line: headings, lists, tables, script, questions and images. Drag a block by its ⋮⋮ handle. |
-| 5 | `practice-photos` | Fotos / Images | Un clic elige una foto y otro la abre en grande. En su barra elegís el tamaño o las acomodás en filas. Con Google Drive conectado, soltá cualquier archivo (PDF, zip) y queda como tarjeta. | One click selects an image, another opens it full screen. Its toolbar sets the size or arranges a row. With Google Drive connected, drop any file (PDF, zip) to attach it. |
+| 5 | `practice-photos` | Fotos / Images | Las fotos van en el renglón, como letras: podés escribir al lado. Un clic elige una y otro la abre en grande; en su barra elegís el tamaño o las acomodás en filas. Con Google Drive conectado, soltá cualquier archivo (PDF, zip) y queda como tarjeta. | Photos go in the line, like letters: you can write right next to them. One click selects one, another opens it full screen; its bar sets the size or arranges them in rows. With Google Drive connected, drop any file (PDF, zip) to attach it. |
 | 6 | `comments` (ícono de arriba) | Comentarios y preguntas / Comments and questions | Comentá cualquier bloque ({Mod+Alt+M}) y acá ves todos los hilos. Una pregunta, como la del ejemplo, la puede contestar quien solo comenta. | Comment on any block ({Mod+Alt+M}); all threads are here. A question, like the one above, can be answered by anyone who can comment. |
 | 7 | `find` (lupa) | Buscar / Find | Buscá y reemplazá en la página ({Mod+F}). | Find and replace in the page ({Mod+F}). |
 | 8 | `page-menu` ("⋯") | La página / The page | Compartir, mover, tamaño de hoja y Exportar PDF ({Mod+P}). | Share, move, page size and Export PDF ({Mod+P}). |
@@ -272,7 +274,8 @@ Diez en la computadora, nueve en el teléfono. Textos cortos, de vos, sin jerga.
 - `{Mod+K}` y los demás se reemplazan con el rótulo del registro para esa plataforma (⌘K o Ctrl+K). Cuando
   P.12 entrega 2 cambie Mod+K, el paso 3 cambia solo con el registro (y su texto, en la misma tanda).
 - **Teléfono:** sin el paso 7 como atajo (la lupa sigue, texto sin atajo); el 2 y el 3 abren el cajón; el 9
-  señala el ícono de sincronización de la barra de arriba; el 5 dice "Tocá una foto para verla en grande"; el
+  señala el ícono de sincronización de la barra de arriba; el 5 dice "Tocá una foto para verla en grande" y que, de
+  vuelta en la página, otro toque muestra su barra (en el teléfono el primer toque abre el carrete); el
   10 señala la ayuda en el cajón.
 - El menú de la cuenta (preferencias, idioma, miembros, Drive) no tiene paso propio: lo nombra el 9 si hace
   falta y lo explica la ayuda. Diez pasos es el tope; más cansa.
@@ -331,7 +334,7 @@ Arriba, un campo de búsqueda; abajo, las secciones:
 6. **Links de Drive:** pegar un link y elegir link, texto o tarjeta.
 7. **Comentarios y preguntas.**
 8. **Buscar y reemplazar** (y, con P.12 entrega 2, buscar en el proyecto).
-9. **Colapsar secciones** (P.11; el texto de la entrada, abajo en "Entrada de ayuda: colapsar").
+9. **Colapsar secciones** (P.11): colapsar, colapsar para todos (Shift+clic) y mover la sección entera; ver "Entrada de ayuda: colapsar".
 10. **Compartir y miembros:** permisos, invitados.
 11. **Papelera:** páginas y archivos, qué se recupera.
 12. **Sin red y sincronización:** qué quiere decir cada estado, por qué no se pierde nada.
@@ -354,7 +357,8 @@ Arriba, un campo de búsqueda; abajo, las secciones:
 
 ### Entradas de funciones que llegaron antes que la ayuda
 
-Las funciones nuevas que ve el usuario dejan acá su entrada, para pasarla a `src/help/entries.ts` cuando exista.
+**Ya están en la ayuda (v0.082):** la entrada `install` de `src/help/entries.ts`. Desde v0.082 cada función nueva suma
+su entrada directamente ahí, no acá.
 
 - **Instalar la app** (v0.079, `Doc_Instalar.md`). Sección *Primeros pasos*. Sin atajos. `since: '0.083'`.
   - *Install the app* / *Instalar la app*: "Install app in the account menu (or Install in the banner on your
@@ -409,8 +413,8 @@ Y pruebas que lo sostienen sin depender de acordarse:
 
 ### Entradas que suma P.9: carpetas (v0.081)
 
-Para `src/help/entries.ts` cuando exista (sección "Archivos adjuntos"; textos en inglés en la app, con su
-traducción). `when`: solo con portero; subir, solo quien puede editar la página.
+**Ya están en la ayuda (v0.082):** `folderDrop`, `folderUpload`, `folderOpen` y `folderWho` de `src/help/entries.ts`
+(sección "Archivos adjuntos"; textos en inglés en la app, con su traducción). `when`: solo con portero; subir, solo quien puede editar la página.
 
 - **Drop a folder** (*Soltar una carpeta*). "Drag a folder from your computer onto the page. A window shows what
   goes up: how many files, in how many folders, how much it weighs, and what is skipped (hidden and system
@@ -457,7 +461,8 @@ En la recorrida no hace falta un paso nuevo (no cambia nada de lo que ya señala
 5. **Que la ayuda quede vieja.** Mitigación: la regla, el registro con su prueba contra el editor y las entradas
    que citan atajos por id.
 6. **Mod+K cambia de dueño con P.12 entrega 2** y Mod+Alt+Enter llega con P.11: si la ayuda sale antes, esas
-   entradas se marcan `soon` y se prenden con su tanda.
+   entradas se marcan `soon` y se prenden con su tanda. (Ya llegaron todos: Mod+Alt+Enter en v0.053 y, con Shift,
+   para todos, en v0.0XX.)
 7. (Sacado: la ayuda ya no tiene atajo de teclado.)
 8. **Sin red al terminar la recorrida,** la marca de la cuenta no se escribe: queda la del dispositivo y se
    reintenta al volver la red.
@@ -658,27 +663,155 @@ Respondidas por Lega el 2026-09-30: ver "Decisiones".
 
 ## Entrada de ayuda: colapsar (P.11, v0.0XX)
 
-Texto para la sección 9 de la ayuda (lo suma la rama de la ayuda al registro de entradas). Atajos: Mod+Alt+Enter
-(con Shift, para todos) y Mod+Shift+↑ / ↓ (tabla de la sección 2).
+**Hecha** al unir colapsar 1b y 2 con la ayuda: en la sección 9 de la ayuda (`src/help/entries.ts`) quedan
+*Collapse a section* (el triángulo, solo para vos, Mod+Alt+Enter, el menú ⋯ y qué dice el tooltip), *Collapse for
+everyone* (Shift+clic o Mod+Alt+Shift+Enter, si podés editar; en el teléfono, solo para vos) y *Move a collapsed
+section* (arrastrar los puntos o Mod+Shift+↑/↓; deshacer en un paso), con sus textos en los dos idiomas
+(`src/i18n/lazy/help.ts`). En el registro (`src/ui/shortcuts.ts`), `collapseEveryone` se muestra (ya no está
+escondido) y `moveUp` / `moveDown` son de la app (con una sección colapsada en juego la mueven entera; si no, se
+los deja a BlockNote). Shift+clic es un clic: va en el texto, no en el registro, como en las fotos en línea. Sin
+`when`: la ayuda no conoce el permiso de cada página, y el texto dice "si podés editarla". La práctica deja probar
+Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no muestra colapsar.
 
-- **Título:** Colapsar secciones / *Collapse sections*.
-- **Texto (es):** El triángulo a la izquierda de un título esconde todo lo que sigue hasta el próximo título de su
-  nivel. Un clic colapsa o abre solo para vos; con Shift+clic, para todos los que miran la página (solo si podés
-  editarla). El tooltip dice si está colapsado para todos o solo para vos. Arrastrar los puntos de un título
-  colapsado, o {Mod+Shift+↑/↓}, mueve la sección entera.
-- **Text (en):** The triangle to the left of a heading hides everything up to the next heading of its level. A
-  click collapses or expands it just for you; Shift+click does it for everyone who views the page (only if you can
-  edit it). The tooltip says whether it is collapsed for everyone or just for you. Dragging the dots of a
-  collapsed heading, or {Mod+Shift+↑/↓}, moves the whole section.
-- **Palabras para buscar:** colapsar, plegar, abrir, sección, título, para todos, mover sección / collapse, fold,
-  expand, section, heading, everyone, move section.
-- **Cuándo:** "para todos" solo para quien puede editar (para el resto la entrada lo muestra apagado, con el
-  porqué); en el teléfono, solo para vos.
+## Cómo quedó (entregas 1 y 2, v0.082)
+
+### La ayuda y el registro de atajos (entrega 1)
+
+- **El registro** (`src/ui/shortcuts.ts`, en la primera carga): 73 atajos con `id`, teclas en el formato de
+  ProseMirror, lugar (`global`, `editor`, `markdown`, `photos`, `carrete`, `find`, `comments`, `tree`, `menus` y
+  `tour`), `context` (cuándo vale dentro del lugar), de quién es y cómo se toma (`keymap`, `window`, `dom`, `react`,
+  `typed`). `IS_MAC` vive acá (findUi lo reexporta); `shortcutLabel(id, mac, lang)` arma ⌘⌥M / Ctrl+Alt+M. Se fueron
+  `FIND_SHORTCUT_LABEL`, `COMMENT_SHORTCUT_LABEL`, `QUESTION_SHORTCUT_LABEL`, `SEARCH_SHORTCUT_LABEL`, las copias de
+  `IS_MAC` de `CommentsPanel.tsx` y `collapseEditor.ts`, y los rótulos sueltos del carrete. El esquema, las filas de
+  fotos y colapsar toman sus teclas del registro (`shortcutKeys`).
+- **Los ids van en camelCase** (`findNext`, `carreteClose`): con punto chocaban con claves del diccionario
+  (`find.next`, `carrete.next`) y la prueba de las claves sin usar dejaba de ver si se usaban.
+- **Los textos de cada atajo no van en la primera carga** (aparte de la corrección 11): están en la parte de la ayuda
+  (`src/help/shortcutTexts.ts`, claves `shortcut.*` en `src/i18n/lazy/help.ts`), y el registro queda chico. Una
+  prueba exige un texto en los dos idiomas por atajo.
+- **El menú "/"** muestra los rótulos del registro (`slashBadge`) y "Bloque de código" queda sin el ⌘⌥C que BlockNote
+  0.55 rotula y no existe (corrección 9). Script suma su rótulo.
+- **Las extensiones del editor** salen de una sola función (`pageEditorExtensions`, `src/ui/editorExtensions.ts`), que
+  usan la página, la práctica y la prueba.
+- **La ayuda** (`src/help/HelpDialog.tsx`, se baja aparte con `src/i18n/lazy/help.ts`): botón "?" al lado de
+  Papelera (sin tooltip) y *Help and shortcuts* en el menú de la cuenta; ninguna tecla la abre. 760 px con el índice a
+  la izquierda; en el teléfono, pantalla completa con el índice en una fila arriba. Las 15 secciones, 48 entradas
+  (`src/help/entries.ts`) con sus atajos por id, y la tabla entera por lugar. La búsqueda (`src/help/search.ts`) usa
+  `normalize.ts`, mira los dos idiomas y los rótulos de las dos plataformas ("ctrl f", "⌘F" y "Ctrl+F" llevan a
+  Buscar). Una entrada de algo que la persona no puede usar (`when`: adjuntos sin Drive, miembros sin ser admin) se ve
+  apagada con el porqué. Esc cierra y el foco vuelve al botón que la abrió; Tab queda adentro (es modal). Las entradas
+  de lo que ya existía llevan `since: '0.081'`; las nuevas, `0.082` (para las novedades de la entrega 3).
+- **Textos de otras funciones que ya están:** el árbol con el teclado (v0.074), archivar y borrar proyectos (v0.077) y
+  sus archivos en Drive (v0.080, solo dueño y admins), las fotos HEIC como JPEG (v0.075), las fotos en el renglón
+  (v0.078: pegar y soltar donde está el cursor, elegir varias con Shift+clic, Shift+flechas o arrastrando, escribir
+  al lado, borrar, los tiradores que imantan, la barra por sectores y el PDF por filas), instalar la app (v0.079,
+  apagada con "Esta ya es la app instalada" si lo es, con el botón que abre la ventana de instalar) y las carpetas
+  (v0.081, cuatro entradas en "Archivos adjuntos", solo con portero). *Convert photos to inline* no tiene entrada en
+  la interfaz (D-26): no va en la ayuda. Atajos nuevos en el registro: borrar las fotos elegidas (Supr / Retroceso),
+  pegar archivos (Mod+V), Esc en el visor de una carpeta (sube un nivel) y las flechas de las pestañas de la ventana
+  de instalar; Espacio abre también la primera de varias fotos elegidas y una carpeta. Las entradas que esas funciones
+  habían dejado escritas en este documento ("Entradas de funciones que llegaron antes que la ayuda", "Entradas que
+  suma P.9" y "Entradas esperando la ayuda") ya están en `src/help/entries.ts`.
+
+### La práctica y la recorrida (entrega 2)
+
+- **`/practice`** (`src/router.ts`). `PracticeView` (`src/tutorial/`, se baja aparte) arma su propia barra de arriba
+  (migas "Práctica", lupa, comentarios y "⋯") y el `article.page[data-page-id="practice"]` con su `.page-header`,
+  el aviso (*Empezar de nuevo*, *Salir*), el título en memoria, la `FindBar` con Ctrl/⌘+F y el `BlockEditor` de la
+  página (ahora exportado, con `filesNotice`). El Provider de la práctica envuelve solo los botones de la barra y el
+  artículo: la barra lateral y el ícono de sincronización del teléfono siguen con los servicios de verdad.
+- **Aislamiento** (`practiceServices.ts`): `MemoryComments` (la misma `buildThreads` que la cola real, con el hilo de
+  ejemplo ya contestado), fotos y archivos que avisan "En la práctica no se suben archivos" (también pegar, soltar,
+  elegir y las `data:`), `access` sin datos (`Permissions` deja editar y comentar sin preguntarle al árbol), `db`,
+  `mediaDb` y `commentsDb` en `null` (lo colapsado queda en memoria), y `tree`, `engine`, `docs`, `remote`, `client`
+  y `sizes` envueltos en un `Proxy` que deja pasar una lista de lecturas y tira `PracticeWriteError` en cualquier
+  otra llamada; los objetos que cuelgan de ellos (`client.auth`, la base del árbol, el cliente de la cola) quedan
+  envueltos igual, sin ninguna lectura. El tamaño de hoja de la práctica vive en la sesión (el `Proxy` del
+  árbol responde `resolveSetting`). La sesión va en un `WeakMap` por instancia de servicios (corrección 4).
+- **El documento**: plantillas `practice.es.ts` y `practice.en.ts` en el idioma de la interfaz al armarla, pasadas al
+  fragmento de siempre con `blocksToYXmlFragment`; ids fijos para la pregunta, el renglón de las fotos y el renglón
+  vacío. **Las tres fotos van en línea** (nodos `photo` en un párrafo, con el ancho `w` de `arrangeRows`: una fila a
+  la misma altura, como deja *Arrange in rows*), como las crea hoy la app desde v0.078; la primera versión de la
+  práctica usaba la fila vieja de fotos-bloque y enseñaba algo que una página nueva ya no hace (no se podía escribir
+  al lado). El paso "Fotos" de la recorrida lo dice: van en el renglón, como letras.
+- **Las fotos del ejemplo** (`public/tutorial/terraza-{1,2,3}.webp`, 60 a 72 KB, 3:2, 2:3 y 16:9): **no son las de
+  la lista** de "Fotos del ejemplo". La red de trabajo no deja bajar de Commons y bajar archivos pide permiso de Lega,
+  así que se dibujaron para la app (una terraza de noche, con un script de canvas que no se versiona); no hay nada de
+  terceros que atribuir (`LICENSES.txt`). Si Lega prefiere fotos, se reemplazan con los mismos nombres (son un
+  contrato público). Regla de Workbox `CacheFirst` para `/tutorial/*.webp` (corrección 18).
+- **El motor** (`TourLayer.tsx`, aparte): foco de luz con sombra de 100vmax que se desliza en 250 ms y pulsa (nada con
+  movimiento reducido), una capa que no deja tocar lo señalado salvo en el paso interactivo (y `inert` en la app: Tab
+  tampoco llega a la barra lateral de verdad), globito con `n/total`,
+  *Atrás*, *Siguiente* / *Terminar* y *Saltar recorrida*; → y Enter avanzan, ← vuelve, Esc sale con el aviso; región
+  `aria-live`; los tooltips se apagan mientras dura; se esconde si se abre un diálogo o el carrete. Posición con
+  `placeNear` (`src/ui/floating.ts`), que ahora también usa `Tooltip.tsx`. En el teléfono, hoja abajo arriba del
+  teclado (o arriba, si taparía lo señalado, como el "?" del pie del cajón). Lo decide la altura de la hoja **abajo**
+  (arriba mide otra cosa: otro relleno y el notch); con la de donde estaba, lo señalado justo en el borde la hacía
+  saltar de abajo a arriba sin parar y React cortaba la recorrida (pasaba en inglés, en el paso del menú "/"). El cajón pasó a un almacén
+  (`src/ui/navStore.ts`) y la recorrida lo abre en los pasos que lo piden.
+- **Diferencias con el diseño, para que Lega confirme:**
+  1. **El paso del menú "/" avanza cuando el menú se cierra** (se eligió algo o Esc), no cuando aparece: si avanzaba al
+     aparecer, el foco se iba al globito y el menú se cerraba antes de poder usarlo. *Siguiente* sigue disponible. Se
+     mira el estado de la extensión `suggestionMenu` de BlockNote, no su clase (corrección 16).
+  2. **En el teléfono sale el paso de Buscar** (quedan nueve): el diseño no decía cuál salía.
+  3. **Primera carga entrando por un link a una página** (sin invitación): también la tarjeta "¿Primera vez?".
+  4. **El punto del "?"** está mientras la recorrida no se terminó en este dispositivo y la ayuda nunca se abrió en él.
+- **Arranque y "ya la vi"** (`tourState.ts` y `TourHost.tsx`, en la primera carga): `Services.firstLoad` dice si la
+  base local no tenía proyecto (corrección 5); el dispositivo guarda `{ v, done, step, account }` en
+  `shotdocs-tour`; la cuenta, `shotdocs_tour: 1` en los metadatos del usuario de Supabase Auth del workspace (se lee
+  con `getSession`, sin red; se escribe con `updateUser`, y sin red queda `account: false` y se reintenta al abrir y
+  al volver la red). Nada va a `user_settings.prefs` (corrección 12).
+
+### Pruebas
+
+- `src/ui/shortcuts.test.ts`: el registro (ids, textos, rótulos de las dos plataformas, sin choques), el editor real
+  contra el registro en los dos sentidos (BlockNote, Tiptap y nuestras extensiones; las reglas de lo que se escribe),
+  cada `is…Shortcut` con eventos de Mac y de Windows, ninguna función de atajos sin registrar, ninguna combinación
+  suelta en el código, ningún `keymap()` suelto, y **cada tecla que un archivo compara con un evento** tiene que ser
+  de un atajo registrado para ese archivo (`src/ui/shortcutSources.ts`): `e.key === 'x'` y `'x' === e.key`, con
+  `.toLowerCase()`, `case` de un `switch` sobre la tecla, `isLetter`, `e.code === 'KeyX'`, una expresión regular
+  (`/^F8$/.test(e.key)`, `/^Arrow(Left|Right)$/`; si tiene clases o comodines la prueba la nombra para que se mire),
+  `['a', 'b'].includes(e.key)` y la tecla guardada aparte (`const { key } = event`, `const { key: k } = e`,
+  `const k = e.key`). Una prueba con código de ejemplo fija cada forma. Los rótulos del menú "/". No ve teclas
+  guardadas en un `Set` con nombre ni las que pasan por una función propia (`isTreeKey`): ahí sigue haciendo falta
+  la revisión de la auditoría.
+- `src/help/help.test.tsx`: la búsqueda (atajos escritos de varias formas, tildes, los dos idiomas) y el diálogo en
+  el Shell (lo abren el "?" y el menú, ninguna tecla, Esc devuelve el foco, castellano).
+- `src/tutorial/tourState.test.ts`: cuándo arranca (los siete casos), la marca de la cuenta (con y sin red, sin tocar
+  las preferencias), los pasos por diseño y que cada `data-tour` exista.
+- `src/tutorial/practice.test.tsx`: la plantilla (las tres fotos en línea, en un renglón y a la misma altura, sin
+  fotos-bloque), aislamiento con el Shell y la app de verdad (escribir, comentar, contestar y
+  resolver la pregunta, la hoja, buscar, agregar archivos, empezar de nuevo, salir: el servidor, la base local
+  `meta`, las colas, los contadores de "sin subir" y `localStorage` quedan iguales; lo que escribiría tira
+  `PracticeWriteError`) y el motor (arranque, Siguiente, Atrás, flechas, Esc con el aviso, sin ancla al centro,
+  pausa y seguir, retomar, la cuenta que ya la vio con el punto y la ayuda, el link de invitación).
+- En Chromium sin ventana (un arnés con el servidor en memoria, fuera del repo): la ayuda en computadora, teléfono y
+  oscuro; la recorrida entera en computadora y teléfono (claro y oscuro), cada foco de luz dentro de la pantalla y
+  sobre su ancla; "/" y elegir avanza el paso 4; Esc, volver a verla desde la ayuda, recargar a mitad y retomar, el
+  punto, la tarjeta del link, sin red al terminar, movimiento reducido y cero pedidos de red en la práctica. Después
+  de la unión con main (v0.078 a v0.081): la recorrida en el teléfono en 10 tamaños (360×640 a 428×926) y los dos
+  idiomas sin trabarse; las fotos de la práctica (se ven, un clic elige con barra y tiradores, Shift+clic elige las
+  tres, 1/2, *Arrange in rows*, escribir al lado, el carrete; en el teléfono el toque abre y el segundo muestra la
+  barra); y los recorridos de fotos en línea, carpetas e instalar la app comparados con los de main.
+- **Auditoría independiente** (antes de cerrar): sin bloqueantes. Se corrigieron la ayuda que prometía Shift+clic
+  "para todos" en colapsar (todavía no existe), la prueba de atajos (ahora mira cada tecla, no solo el archivo), los
+  tooltips apagados durante la pausa, el cajón que quedaba cerrado al retomar en el teléfono, el teclado que llegaba a
+  la app durante un paso, el `Proxy` sin los objetos anidados, la hoja del teléfono que no seguía al teclado y textos
+  ("Print as shown", "/ Guion", los 30 días de proyectos borrados, la papelera de archivos solo con Drive, Ctrl/⌘+K
+  busca y no crea). La segunda auditoría (la unión con main) corrigió *Images in a row* en la ayuda en inglés, la
+  práctica con fotos en línea, la prueba de atajos con las formas que no veía y el sangrado de `Workspace.tsx`; el
+  recorrido en el navegador encontró la hoja del teléfono que saltaba sin parar. Quedan para Lega: una foto real (`sdmedia://`) pegada en la práctica se ve rota (no escribe
+  nada), y "ya la vi" y el paso a medias son del dispositivo, no de la persona (otra persona en el mismo navegador ve
+  "¿Seguimos la recorrida?"; la marca de la cuenta va solo al workspace donde se terminó).
+- **Falta probar a mano:** Safari de la Mac, el iPhone (Safari y la app instalada, con el teclado en pantalla en el
+  paso del menú "/"), Firefox y VoiceOver. La prueba de punta a punta `tour.mjs` del repo de pruebas privado todavía
+  no está.
 
 ## Entradas esperando la ayuda
 
-La ayuda todavía no existe en el código. Lo que cada función ya hecha tiene que sumar cuando exista (inglés para la
-interfaz, castellano para la traducción):
+**Ya están en la ayuda (v0.082):** esta entrada es `projectsDrive` de `src/help/entries.ts`. Se deja el texto como
+referencia. Desde v0.082 cada función nueva suma su entrada directamente en `src/help/entries.ts` (regla de
+`Docs/index.md`), no acá.
 
 - **Archivar o borrar un proyecto (P.14, entregas 1 y 2; `Doc_Proyectos_Borrar.md`).** La entrada de la entrega 1
   está en "Cómo quedó (entrega 1)". La entrega 2 le suma:

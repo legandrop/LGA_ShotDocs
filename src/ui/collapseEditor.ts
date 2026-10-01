@@ -25,6 +25,7 @@ import {
 } from './collapse';
 import { blockPos } from './blockHandle';
 import { buildMove, dispatchMove, movingBlocks, recreatedRange, type BlockMove } from './blockMove';
+import { IS_MAC, shortcutKeys, shortcutLabel } from './shortcuts';
 import { hiddenInDom } from './collapseDom';
 import { BACKGROUND_META, FIND_REPLACE_META } from './editorMeta';
 import { isFindReplaceTransaction, setFindCollapseHooks, type FindCollapseHooks } from './findEditor';
@@ -69,8 +70,6 @@ interface CollapseMeta {
   /** Colapsado para todos, entero (cambió el mapa de la página). */
   shared?: Shared;
 }
-
-const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export const collapseKey = new PluginKey<CollapseState>('shotdocs-collapse');
 
@@ -560,7 +559,7 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   // Lo escondido que se borró con una edición propia: un aviso (se deshace con Ctrl+Z).
   if (structural) {
     const gone = [...before.analysis.hidden.keys()].some((id) => !analysis.blocks.has(id));
-    if (gone) notify(t('collapse.deletedHidden', { shortcut: IS_MAC ? '⌘Z' : 'Ctrl+Z' }));
+    if (gone) notify(t('collapse.deletedHidden', { shortcut: shortcutLabel('undo') }));
   }
 
   for (const id of reveal) {
@@ -1591,12 +1590,13 @@ export const collapseExtension = createExtension(({ options }: ExtensionOptions<
   runsBefore: ['default'],
   prosemirrorPlugins: [createCollapsePlugin(options ?? {})],
   keyboardShortcuts: {
-    'Mod-Alt-Enter': withView((view) => toggleAtSelection(view)),
+    // Las teclas salen del registro de atajos (shortcuts.ts).
+    [shortcutKeys('collapse')[0]]: withView((view) => toggleAtSelection(view)),
     // Para todos (entrega 2), si se puede editar.
-    'Shift-Mod-Alt-Enter': withView((view) => toggleAtSelection(view, true)),
+    [shortcutKeys('collapseEveryone')[0]]: withView((view) => toggleAtSelection(view, true)),
     // Mover la sección entera (1b); sin nada colapsado en juego, el de BlockNote.
-    'Shift-Mod-ArrowUp': withView((view) => moveByKeyboard(view, 'up')),
-    'Shift-Mod-ArrowDown': withView((view) => moveByKeyboard(view, 'down')),
+    [shortcutKeys('moveUp')[0]]: withView((view) => moveByKeyboard(view, 'up')),
+    [shortcutKeys('moveDown')[0]]: withView((view) => moveByKeyboard(view, 'down')),
     Enter: withView(enterAfter),
     Delete: withView(deleteAtEnd),
     Backspace: withView(backspaceAfter),
@@ -1644,5 +1644,5 @@ export function isSelectAllKey(event: KeyboardEvent, mac = IS_MAC): boolean {
   return modPressed(event, mac) && !event.altKey && !event.shiftKey && isLetter(event, 'a');
 }
 
-/** El atajo, como se ve en los tooltips. */
-export const COLLAPSE_SHORTCUT_LABEL = IS_MAC ? '⌘⌥↩' : 'Ctrl+Alt+Enter';
+/** El atajo, como se ve en los tooltips (del registro de atajos). */
+export const COLLAPSE_SHORTCUT_LABEL = shortcutLabel('collapse');
