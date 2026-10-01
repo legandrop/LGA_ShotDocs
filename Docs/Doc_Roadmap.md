@@ -226,12 +226,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    así que pide un plan de migración y convivencia de versiones.
 
 11. **Subidas que se traban: lo que quedó de v0.068** (`Doc_Portero.md`, "Subidas que se traban"). La app
-   corta los pedidos al portero que dejan de moverse y sigue con los demás archivos. **Falta:**
+   corta los pedidos al portero que dejan de moverse (y, desde v0.070, los de la miniatura a Storage) y
+   sigue con los demás archivos. **Falta:**
    - **Probarlo en Safari de iPhone y con una red lenta de verdad.** Está probado a mano en Chromium contra
      un servidor local; el aviso de bytes que salen (`XMLHttpRequest`) puede portarse distinto en Safari,
      con HTTP/2 y a través de Cloudflare.
-   - **Tope para los pedidos de la miniatura a Supabase Storage** (subirla y bajarla, `uploadThumb` y
-     `downloadThumb` en `src/sync/remote.ts`): hoy no tienen, y uno colgado clava la cola igual que antes.
    - **Cerrar la vuelta de la cola como sin conexión** después de 2 o 3 trabadas seguidas de archivos
      distintos: hoy, con el portero colgado para todos, gasta un minuto por archivo.
    - **Recordar el plazo que funcionó.** Detrás de un antivirus o un proxy que recibe el cuerpo de golpe,

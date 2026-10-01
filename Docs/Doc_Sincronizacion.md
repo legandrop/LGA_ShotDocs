@@ -304,7 +304,8 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   registrar en vez de detenerlo; recién si sigue igual tres veces seguidas, se detiene.
 - **Subidas que se traban:** un pedido al portero que deja de moverse (sin error de red) se corta y el
   archivo vuelve a la cola para más tarde, sin frenar a los demás; una subida lenta no se corta mientras
-  sigan saliendo bytes. Los topes y el detalle están en `Doc_Portero.md`, "Subidas que se traban".
+  sigan saliendo bytes. Los topes y el detalle están en `Doc_Portero.md`, "Subidas que se traban". Lo mismo
+  con la miniatura si Storage no contesta (v0.070; ver "Cada consulta a la base tiene un tope de tiempo").
 - **Si la base de archivos del dispositivo no se abre,** la app arranca igual: la cola de fotos y videos
   queda apagada (no se pueden agregar), el estado lo avisa con un aviso propio (`mediaWarning`, que no
   pisa ni es pisado por los demás) y el texto sincroniza como siempre. Un error de esa base nunca corta la
@@ -547,9 +548,31 @@ un lote vence, pide uno más chico (50, 5 y 1; de a uno tiene el tope más largo
 vuelve como un error de red (`request_timeout`) y la vuelta siguiente la reintenta: todo lo que se manda es
 idempotente. **El vencimiento de una página no corta el ciclo:** se sigue con las demás (subir y bajar),
 el estado lo avisa como último error (`request_timeout`) y la página no queda rechazada; se reintenta en
-la vuelta siguiente. Los archivos de Storage no lo usan (una foto grande en una red lenta puede tardar
-más). No cubre una espera adentro del cliente de sesión de Supabase (la renovación del token): si se viera,
-haría falta un vigilante del ciclo en `engine.ts`. Pruebas en `src/sync/remoteTimeout.test.ts`.
+la vuelta siguiente. No cubre una espera adentro del cliente de sesión de Supabase (la renovación del token):
+si se viera, haría falta un vigilante del ciclo en `engine.ts`. Pruebas en `src/sync/remoteTimeout.test.ts`.
+
+**Los archivos de Storage no usan el tope fijo** (una foto grande en una red lenta puede tardar más), pero
+desde v0.070 **las miniaturas sí tienen uno, proporcional** (hoy a Storage van solo miniaturas, de 480 px y
+decenas de KB; los originales van al Drive por el portero). No pasan por `timed`: son una carrera contra el
+tope (`within` en `remote.ts`), que termina en el mismo `request_timeout`.
+
+| Pedido | Tope | Si vence |
+|---|---|---|
+| Subir la miniatura (`uploadThumb`) | `timeoutFor(tamaño)`: 30 s más lo que tarda a 16 KB/s (40 s para 160 KB; 62 s para 512 KB, lo máximo que acepta el bucket) | El archivo vuelve a la cola con su espera (10 s, 20 s… hasta 10 minutos) y el aviso *The upload stopped moving; it will try again*; la vuelta sigue con los demás |
+| Bajar la miniatura de otro dispositivo (`downloadThumb`) | 62 s (`THUMB_DOWNLOAD_TIMEOUT_MS`): no se sabe de antemano cuánto pesa, se le da lo de la más pesada posible | Al final de la vuelta: no se sigue con las demás miniaturas y se vuelve a preguntar al minuto. Al dibujar la página: queda el ícono y se vuelve a preguntar |
+
+- **Subir no se puede cortar:** el cliente de Storage (`@supabase/storage-js` 2.117) no acepta una señal de
+  corte en `upload`; en `download` sí, y se le pasa. La subida cortada queda suelta y puede terminar sola.
+  No hace daño: no reemplaza (`upsert: false`), así que el reintento se encuentra con que ya está (409) y
+  lo da por hecho; `thumb_at` se marca recién después de una subida confirmada.
+- **No se marca ni se pierde nada:** la miniatura sigue por subir (`thumb: 'local'`), el original sigue en
+  el dispositivo y todavía no fue al portero.
+- **Por qué no cuenta como "sin red"** (que corta la vuelta): la vuelta siguiente empezaría otra vez por el
+  mismo archivo, porque van por orden de llegada, y con Storage colgado solo para él los demás no subirían
+  nunca. Una falla de red de verdad (el pedido falla en vez de colgarse) sigue cortando la vuelta.
+- Las imágenes del bucket `page-files` (un workspace sin portero, `files.ts`) siguen sin tope.
+- Pruebas: `src/sync/remoteTimeout.test.ts` (el tope) y `src/media/queue.test.ts`, "miniaturas que Storage
+  no contesta" (lo que hace la cola).
 
 ## Permisos en el dispositivo
 

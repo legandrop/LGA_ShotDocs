@@ -1,5 +1,7 @@
+import { createClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../i18n';
+import { SupabaseRemote, THUMB_DOWNLOAD_TIMEOUT_MS, timeoutFor } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { resolveObjectURL } from 'node:buffer';
 import { FileRejected } from '../sync/files';
@@ -708,6 +710,292 @@ describe('cola de archivos: subidas que se traban', () => {
     await a.engine.syncMedia();
     expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
     expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, stalls: 0 });
+  });
+});
+
+// Los dos pedidos de la miniatura a Storage (subirla antes del original; bajar las de otros dispositivos al
+// final de la vuelta) no tenían tope: si Storage no contestaba, la cola quedaba esperando igual que con el
+// portero colgado. Acá las miniaturas pasan por el cliente de verdad (`SupabaseRemote`, con su tope) contra un
+// Storage de mentira, y lo demás por los dobles de siempre. El reloj de los topes es simulado.
+describe('cola de archivos: miniaturas que Storage no contesta', () => {
+  const LATER = 60_000;
+  const realTimeout = AbortSignal.timeout;
+  // El de verdad, para esperar a la base del dispositivo con el reloj de los topes simulado.
+  const realSetTimeout = globalThis.setTimeout;
+  const pause = (ms: number) => new Promise((r) => realSetTimeout(r, ms));
+
+  async function until(check: () => boolean): Promise<void> {
+    for (let i = 0; i < 600 && !check(); i++) await pause(5);
+    expect(check()).toBe(true);
+  }
+
+  /** Lo que tarda Storage en contestar cada pedido; `never` es que no contesta. */
+  interface Storage {
+    upload: (id: string) => Promise<void>;
+    download: (id: string) => Promise<void>;
+    /** Los pedidos que llegaron, en orden: `POST <id>` o `GET <id>`. */
+    calls: string[];
+    /** Los pedidos de bajada que el navegador cortó. */
+    aborted: string[];
+  }
+  const never = () => new Promise<void>(() => undefined);
+
+  /**
+   * Las miniaturas de `d` van por `SupabaseRemote` a un Storage en memoria que guarda en el bucket del
+   * servidor de prueba. Desde acá el reloj de los topes es simulado (`setTimeout`); la cola sigue con el suyo
+   * (`server.clockOffset`).
+   */
+  function realThumbs(d: Device, server: FakeServer): Storage {
+    const storage: Storage = { upload: () => Promise.resolve(), download: () => Promise.resolve(), calls: [], aborted: [] };
+    const json = (body: unknown, status: number) =>
+      new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    const fetchStorage: typeof fetch = async (input, init) => {
+      const id = /\/object\/thumbs\/([^/?]+)\.jpg/.exec(String(input))![1];
+      const method = init?.method ?? 'GET';
+      storage.calls.push(`${method} ${id}`);
+      if (method === 'POST') {
+        await storage.upload(id);
+        // Sin reemplazar: si ya está, lo dice (y la app lo da por hecho).
+        if (server.thumbs.has(id)) return json({ statusCode: '409', error: 'Duplicate', message: 'The resource already exists' }, 400);
+        server.thumbs.set(id, (init!.body as FormData).get('') as Blob);
+        return json({ Id: id, Key: `thumbs/${id}.jpg` }, 200);
+      }
+      // La bajada sí se puede cortar: `download` le pasa la señal del tope al pedido.
+      await new Promise<void>((resolve, reject) => {
+        const signal = init?.signal;
+        const cut = () => {
+          storage.aborted.push(id);
+          reject(signal!.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+        };
+        signal?.addEventListener('abort', cut);
+        // Una señal que vence con el pedido ya contestado no corta nada.
+        void storage.download(id).then(() => {
+          signal?.removeEventListener('abort', cut);
+          resolve();
+        });
+      });
+      const thumb = server.thumbs.get(id);
+      return thumb ? new Response(thumb) : json({ statusCode: '404', error: 'not_found', message: 'Object not found' }, 400);
+    };
+    const client = createClient('https://example.supabase.co', 'sb_publishable_test', {
+      global: { fetch: fetchStorage },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const real = new SupabaseRemote(client, '0.070');
+    d.remote.uploadThumb = (id, data) => real.uploadThumb(id, data);
+    d.remote.downloadThumb = (id) => real.downloadThumb(id);
+    // El tope por `setTimeout` (el que se usa si el navegador no tiene `AbortSignal.timeout`), para poder
+    // adelantar el reloj. IndexedDB de prueba no usa `setTimeout`.
+    (AbortSignal as { timeout: unknown }).timeout = undefined;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    return storage;
+  }
+
+  /** Una vuelta de la cola, y si terminó. */
+  function round(d: Device): { done: Promise<void>; finished: () => boolean } {
+    let finished = false;
+    const done = d.engine.syncMedia().then(() => {
+      finished = true;
+    });
+    return { done, finished: () => finished };
+  }
+
+  /** Una vuelta en la que un pedido a Storage queda colgado: sigue esperando hasta su tope, y ahí termina. */
+  async function hungRound(d: Device, hung: () => boolean, limit: number): Promise<void> {
+    const { done, finished } = round(d);
+    await until(hung);
+    await vi.advanceTimersByTimeAsync(limit - 1000);
+    await pause(30);
+    expect(finished()).toBe(false);
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    (AbortSignal as { timeout: unknown }).timeout = realTimeout;
+  });
+
+  it('si Storage no contesta al subir la miniatura, se corta al vencer el tope: el archivo vuelve a la cola y los demás siguen', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const stuck = mediaIdOf(await a.media.add(page, makeFile(MB, 'trabado.jpg', 'image/jpeg')))!;
+    // La cola sube por orden de llegada: el trabado va primero.
+    server.clockOffset += 1000;
+    const other = mediaIdOf(await a.media.add(page, makeFile(MB, 'otro.jpg', 'image/jpeg')))!;
+    await a.media.idle();
+    await a.engine.syncNow();
+    const thumb = (await a.mediaDb.get('thumbs', stuck))!;
+    const storage = realThumbs(a, server);
+    storage.upload = (id) => (id === stuck ? never() : Promise.resolve());
+
+    await hungRound(a, () => storage.calls.includes(`POST ${stuck}`), timeoutFor(thumb.size));
+
+    // El otro subió entero en la misma vuelta, con su miniatura.
+    expect(server.mediaFiles.get(other)?.drive_id).toBeTruthy();
+    expect(server.mediaFiles.get(other)?.thumb_at).toBeTruthy();
+    expect(server.thumbs.has(other)).toBe(true);
+    expect(await a.mediaDb.get('files', other)).toMatchObject({ pending: 0, thumb: 'done', error: null });
+    // El trabado no quedó detenido ni marcado como hecho: se reintenta solo, con su espera.
+    const record = (await a.mediaDb.get('files', stuck))!;
+    expect(record).toMatchObject({ pending: 1, blocked: false, registered: true, thumb: 'local', failures: 1, driveId: null });
+    expect(record.error).toMatch(/stopped moving/);
+    expect(record.retryAt).toBeGreaterThan(Date.now() + server.clockOffset);
+    expect(server.mediaFiles.get(stuck)).toMatchObject({ thumb_at: null });
+    expect(server.mediaFiles.get(stuck)?.drive_id).toBeFalsy();
+    expect(server.thumbs.has(stuck)).toBe(false);
+    // No se perdió nada: el original y la miniatura siguen en el dispositivo.
+    expect((await a.mediaDb.get('blobs', stuck))?.size).toBe(MB);
+    expect((await a.mediaDb.get('thumbs', stuck))?.size).toBe(thumb.size);
+    await until(() => a.engine.getStatus().pendingMedia === 1);
+    expect(a.engine.getStatus().failedMedia).toBe(0);
+
+    // Antes de su espera no se vuelve a pedir; después, con Storage contestando, sube todo.
+    storage.upload = () => Promise.resolve();
+    await a.engine.syncMedia();
+    expect(storage.calls.filter((c) => c === `POST ${stuck}`)).toHaveLength(1);
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    expect(server.thumbs.get(stuck)?.size).toBe(thumb.size);
+    expect(server.mediaFiles.get(stuck)?.thumb_at).toBeTruthy();
+    expect(server.mediaFiles.get(stuck)?.drive_id).toBeTruthy();
+    expect(await a.mediaDb.get('files', stuck)).toMatchObject({ pending: 0, thumb: 'done', error: null, failures: 0 });
+  });
+
+  it('si la miniatura cortada termina de subir sola, el reintento la encuentra y sigue, sin subirla dos veces', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0201.JPG', 'image/jpeg')))!;
+    await a.media.idle();
+    await a.engine.syncNow();
+    const thumb = (await a.mediaDb.get('thumbs', id))!;
+    const storage = realThumbs(a, server);
+    // Storage tarda más que el tope en contestar, pero la miniatura llega.
+    let arrive = () => undefined as void;
+    storage.upload = () => new Promise<void>((resolve) => (arrive = resolve));
+
+    await hungRound(a, () => storage.calls.length === 1, timeoutFor(thumb.size));
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, thumb: 'local', failures: 1 });
+    expect(server.mediaFiles.get(id)).toMatchObject({ thumb_at: null });
+    // El pedido que quedó suelto termina: la miniatura está en el bucket, pero la base todavía no lo sabe.
+    arrive();
+    await until(() => server.thumbs.has(id));
+    const first = server.thumbs.get(id);
+    expect(server.mediaFiles.get(id)).toMatchObject({ thumb_at: null });
+
+    storage.upload = () => Promise.resolve();
+    server.clockOffset += LATER;
+    await a.engine.syncMedia();
+    // Storage dijo que ya estaba (no se reemplaza): se da por hecho, se marca en la base y sube el original.
+    expect(storage.calls).toEqual([`POST ${id}`, `POST ${id}`]);
+    expect(server.thumbs.get(id)).toBe(first);
+    expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(server.portero.drive.size).toBe(1);
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, thumb: 'done', error: null });
+  });
+
+  it('una miniatura lenta pero sana no se corta: el tope crece con su tamaño', async () => {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0202.JPG', 'image/jpeg')))!;
+    await a.media.idle();
+    await a.engine.syncNow();
+    // Una miniatura pesada (320 KB) en una red lenta: tarda 45 s, más que los 30 s de una consulta a la base.
+    const heavy = new Blob([new Uint8Array(320 * 1024)], { type: 'image/jpeg' });
+    await a.mediaDb.put('thumbs', heavy, id);
+    expect(timeoutFor(heavy.size)).toBe(50_000);
+    const storage = realThumbs(a, server);
+    storage.upload = () => new Promise<void>((resolve) => setTimeout(resolve, 45_000));
+
+    const { done, finished } = round(a);
+    await until(() => storage.calls.length === 1);
+    await vi.advanceTimersByTimeAsync(44_000);
+    await pause(30);
+    expect(finished()).toBe(false);
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
+
+    expect(server.thumbs.get(id)?.size).toBe(heavy.size);
+    expect(server.mediaFiles.get(id)?.thumb_at).toBeTruthy();
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 0, thumb: 'done', error: null, failures: 0 });
+  });
+
+  /** `b` mostró con un ícono dos fotos de `a` que todavía no tenían miniatura; después las miniaturas llegan. */
+  async function waitingForThumbs(): Promise<{ server: FakeServer; b: Device; ids: string[]; page: string }> {
+    const server = new FakeServer();
+    const { a, page } = await withPage(server);
+    // `a` registra y sube los archivos, pero todavía no las miniaturas.
+    server.rejectThumbs = true;
+    const ids = [
+      mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0203.JPG', 'image/jpeg')))!,
+      mediaIdOf(await a.media.add(page, makeFile(MB, 'IMG_0204.JPG', 'image/jpeg')))!,
+    ];
+    await sync(a);
+    const b = await device(server);
+    await sync(b);
+    for (const id of ids) expect(await b.media.resolve(MEDIA_SCHEME + id)).toMatch(/^data:image\/svg\+xml/);
+    for (const id of ids) {
+      server.thumbs.set(id, new Blob([new Uint8Array([0xff, 0xd8, 9])], { type: 'image/jpeg' }));
+      server.mediaFiles.get(id)!.thumb_at = new Date().toISOString();
+    }
+    server.clockOffset += 61_000;
+    return { server, b, ids, page };
+  }
+
+  it('si Storage no contesta al bajar una miniatura, la vuelta termina al vencer el tope y se reintenta más tarde', async () => {
+    const { server, b, ids, page } = await waitingForThumbs();
+    const ready: string[] = [];
+    b.media.subscribeThumbs((x) => ready.push(x));
+    const storage = realThumbs(b, server);
+    storage.download = never;
+
+    await hungRound(b, () => storage.calls.length === 1, THUMB_DOWNLOAD_TIMEOUT_MS);
+
+    // Se cortó el pedido de verdad y no se siguió con la otra: cada una hubiera esperado su tope entero.
+    expect(storage.calls).toHaveLength(1);
+    expect(storage.aborted).toEqual([storage.calls[0].slice('GET '.length)]);
+    expect(ready).toEqual([]);
+    for (const id of ids) expect(await b.mediaDb.get('thumbs', id)).toBeUndefined();
+    const missing = (b.media as unknown as { missing: Set<string> }).missing;
+    expect([...missing].sort()).toEqual([...ids].sort());
+
+    // La cola no quedó trabada: un archivo nuevo sube en la vuelta siguiente (todavía no toca volver a
+    // preguntar por las miniaturas).
+    const added = mediaIdOf(await b.media.add(page, makeFile(MB, 'IMG_0205.JPG', 'image/jpeg')))!;
+    await b.media.idle();
+    await sync(b);
+    expect(server.mediaFiles.get(added)?.drive_id).toBeTruthy();
+    expect(storage.calls.filter((c) => c.startsWith('GET'))).toHaveLength(1);
+
+    // Más tarde, con Storage contestando, llegan las dos.
+    storage.download = () => Promise.resolve();
+    server.clockOffset += 61_000;
+    await sync(b);
+    expect(ready.filter((x) => ids.includes(x)).sort()).toEqual([...ids].sort());
+    expect(missing.size).toBe(0);
+    for (const id of ids) expect(await b.media.resolve(MEDIA_SCHEME + id)).toMatch(/^blob:/);
+  });
+
+  it('una miniatura que tarda en bajar pero llega no se corta', async () => {
+    const { server, b, ids } = await waitingForThumbs();
+    const storage = realThumbs(b, server);
+    // Cada una tarda 55 s: más que una consulta a la base, menos que el tope de una miniatura.
+    storage.download = () => new Promise<void>((resolve) => setTimeout(resolve, 55_000));
+
+    const { done, finished } = round(b);
+    for (const n of [1, 2]) {
+      await until(() => storage.calls.length === n);
+      await vi.advanceTimersByTimeAsync(54_000);
+      await pause(30);
+      expect(finished()).toBe(false);
+      await vi.advanceTimersByTimeAsync(2000);
+    }
+    await done;
+
+    expect(storage.aborted).toEqual([]);
+    for (const id of ids) expect((await b.mediaDb.get('thumbs', id))?.size).toBe(3);
   });
 });
 

@@ -1,7 +1,7 @@
 import { localize, stored, t } from '../i18n';
 import { FileRejected } from '../sync/files';
 import type { MediaRemote } from '../sync/remote';
-import { errorMessage, RemoteError } from '../sync/types';
+import { errorMessage, isNetworkError, isTimeout, RemoteError } from '../sync/types';
 import { attachmentCardUrl, cleanFileName, EXTENSION_MIME, fileKind, mimeFromName, type FileKind } from './attachments';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
 import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress } from './portero';
@@ -881,8 +881,16 @@ export class MediaQueue {
         continue;
       }
       if (!row.thumb_at) continue;
-      const thumb = await this.remote.downloadThumb(row.id).catch(() => undefined);
-      if (!thumb) continue;
+      let thumb: Blob;
+      try {
+        thumb = await this.remote.downloadThumb(row.id);
+      } catch (err) {
+        // Sin red, o Storage no contestó a tiempo (la bajada tiene tope): no se sigue con las demás. Cada una
+        // esperaría su tope entero, y mientras esta vuelta no termina no empieza otra: no se sube nada. Las
+        // que faltan siguen anotadas y se vuelve a preguntar más tarde.
+        if (isNetworkError(err)) return;
+        continue;
+      }
       await this.store.put('thumbs', thumb, row.id);
       const known = await this.store.get('known', row.id);
       if (known) await this.store.put('known', { ...known, thumbAt: row.thumb_at, fetchedAt: this.now() });
@@ -901,6 +909,8 @@ export class MediaQueue {
     // La subida del portero que se está usando y hasta dónde confirmó: para saber cuándo avanza de verdad.
     let savedId = start.uploadId;
     let confirmed = start.sent;
+    // Storage no contestó a tiempo al subir la miniatura (el tope de `uploadThumb`).
+    let thumbStalled = false;
     try {
       if (record.probed === false) {
         await this.ensureProbed(record.id);
@@ -923,7 +933,10 @@ export class MediaQueue {
         const thumb = await this.store.get('thumbs', record.id);
         try {
           if (thumb) {
-            await this.remote.uploadThumb(record.id, thumb);
+            await this.remote.uploadThumb(record.id, thumb).catch((err: unknown) => {
+              thumbStalled = isTimeout(err);
+              throw err;
+            });
             await this.remote.setFileThumb(record.id);
           }
           record = await this.patch(record.id, { thumb: thumb ? 'done' : 'none' });
@@ -1031,6 +1044,12 @@ export class MediaQueue {
     } catch (err) {
       let outcome = classify(err);
       if (outcome === 'cancelled') return outcome;
+      // Una miniatura que Storage no contestó a tiempo es como una subida trabada del portero: el archivo
+      // vuelve a la cola con su espera y la vuelta sigue con los demás. Tratada como "sin red" cortaría la
+      // vuelta, y la siguiente empezaría otra vez por este archivo (van por orden de llegada): con Storage
+      // colgado solo para él, los demás no subirían nunca. No se marca nada: la miniatura sigue por subir y
+      // el original, en el dispositivo.
+      if (thumbStalled) outcome = 'retry';
       const failures = failed + 1;
       // El servidor dice que el archivo no existe aunque acá figura registrado (por ejemplo, se restauró la
       // base): se vuelve a registrar en vez de detenerlo. Si sigue igual después de varias veces, se detiene.
@@ -1041,7 +1060,7 @@ export class MediaQueue {
       if (notThere) outcome = lost >= 3 ? 'blocked' : 'retry';
       const hasThumb = notThere && (await this.store.count('thumbs', record.id).catch(() => 0)) > 0;
       const changes: Partial<MediaRecord> = {
-        error: friendly(err),
+        error: thumbStalled ? stored('portero.stalled') : friendly(err),
         blocked: outcome === 'blocked',
         failures,
         // Sin red no se espera: se vuelve a probar en la próxima sincronización (al volver la red).

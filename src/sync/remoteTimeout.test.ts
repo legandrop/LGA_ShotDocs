@@ -1,6 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MAX_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, SupabaseRemote, timed, timeoutFor } from './remote';
+import {
+  MAX_REQUEST_TIMEOUT_MS,
+  REQUEST_TIMEOUT_MS,
+  SupabaseRemote,
+  THUMB_DOWNLOAD_TIMEOUT_MS,
+  timed,
+  timeoutFor,
+  within,
+} from './remote';
 import { FakeServer, makeDevice, type Device } from './testing';
 import { isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, RemoteError } from './types';
 import * as Y from 'yjs';
@@ -119,6 +127,134 @@ describe('tope de tiempo de las consultas', () => {
     );
     await vi.advanceTimersByTimeAsync(50_000);
     expect(await result).toBe('ok 7');
+  });
+});
+
+// Las miniaturas van a Storage, que no pasa por `timed`: sin tope, un Storage que no contestaba dejaba
+// esperando para siempre a la cola de archivos. El tope es proporcional al tamaño (`within` con `timeoutFor`).
+describe('tope de tiempo de las miniaturas (Storage)', () => {
+  const KB = 1024;
+  const jpeg = (bytes: number) => new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' });
+  const stored = () => new Response(JSON.stringify({ Id: '1', Key: 'thumbs/f.jpg' }), { status: 200, headers: { 'content-type': 'application/json' } });
+
+  /** El cliente de verdad contra un Storage de mentira, con el reloj simulado. */
+  function remoteWith(storage: typeof fetch): SupabaseRemote {
+    (AbortSignal as { timeout: unknown }).timeout = undefined;
+    vi.useFakeTimers();
+    const client = createClient('https://example.supabase.co', 'sb_publishable_test', {
+      global: { fetch: storage },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    return new SupabaseRemote(client, '0.070');
+  }
+
+  /** Lo que da el pedido cuando se lo deja correr `ms`: `null` si todavía no terminó. */
+  async function after<T>(request: Promise<T>, ms: number): Promise<{ value?: T; error?: unknown } | null> {
+    let settled: { value?: T; error?: unknown } | null = null;
+    void request.then(
+      (value) => (settled = { value }),
+      (error: unknown) => (settled = { error }),
+    );
+    await vi.advanceTimersByTimeAsync(ms);
+    return settled;
+  }
+
+  it('subir a un Storage que no contesta vuelve como error de red al vencer el tope, que crece con el tamaño', async () => {
+    const signals: (AbortSignal | null | undefined)[] = [];
+    // Nunca contesta, y no hay señal que lo corte: `upload` no la acepta.
+    const remote = remoteWith((_input, init) => {
+      signals.push(init?.signal);
+      return new Promise(() => undefined);
+    });
+    // 160 KB a 16 KB/s son 10 s más que los 30 de base.
+    const thumb = jpeg(160 * KB);
+    expect(timeoutFor(thumb.size)).toBe(40_000);
+    const request = remote.uploadThumb('f', thumb);
+    expect(await after(request, 39_000)).toBeNull();
+    const done = await after(request, 2000);
+    expect(signals).toEqual([undefined]);
+    expect(done?.error).toBeInstanceOf(RemoteError);
+    expect(isNetworkError(done?.error)).toBe(true);
+    expect(isTimeout(done?.error)).toBe(true);
+    expect(isPermanent(done?.error)).toBe(false);
+  });
+
+  it('bajar de un Storage que no contesta vuelve como error de red al vencer el tope, y el pedido se corta', async () => {
+    let aborted = 0;
+    const remote = remoteWith((input, init) => {
+      init?.signal?.addEventListener('abort', () => aborted++);
+      return hanging(input, init);
+    });
+    // Lo que tardaría la miniatura más pesada que acepta el bucket (512 KB): 30 s + 32 s.
+    expect(THUMB_DOWNLOAD_TIMEOUT_MS).toBe(62_000);
+    const request = remote.downloadThumb('f');
+    expect(await after(request, THUMB_DOWNLOAD_TIMEOUT_MS - 1000)).toBeNull();
+    expect(aborted).toBe(0);
+    const done = await after(request, 2000);
+    expect(aborted).toBe(1);
+    expect(isNetworkError(done?.error)).toBe(true);
+    expect(isTimeout(done?.error)).toBe(true);
+    expect(isPermanent(done?.error)).toBe(false);
+  });
+
+  it('una miniatura lenta pero sana no se corta, ni al subir ni al bajar', async () => {
+    // Storage contesta bien, pero tarde: más que los 30 s de una consulta y menos que el tope de la miniatura.
+    let delay = 0;
+    const remote = remoteWith(
+      (_input, init) =>
+        new Promise((resolve) => {
+          const answer = init?.method === 'POST' ? stored() : new Response(jpeg(40 * KB));
+          setTimeout(() => resolve(answer), delay);
+        }),
+    );
+    delay = 45_000;
+    const up = remote.uploadThumb('f', jpeg(320 * KB));
+    expect(await after(up, 44_000)).toBeNull();
+    expect(await after(up, 2000)).toEqual({ value: undefined });
+
+    delay = 55_000;
+    const down = remote.downloadThumb('f');
+    expect(await after(down, 54_000)).toBeNull();
+    expect((await after(down, 2000))?.value?.size).toBe(40 * KB);
+  });
+
+  it('la subida que quedó suelta puede terminar sola: el reintento la encuentra y la da por hecha', async () => {
+    const bucket = new Set<string>();
+    let delay = 50_000;
+    const remote = remoteWith(
+      (input, _init) =>
+        new Promise((resolve) => {
+          const path = String(input);
+          setTimeout(() => {
+            // Sin reemplazar (`x-upsert: false`): si ya está, Storage lo dice.
+            if (bucket.has(path)) {
+              resolve(new Response(JSON.stringify({ statusCode: '409', error: 'Duplicate', message: 'The resource already exists' }), { status: 400 }));
+              return;
+            }
+            bucket.add(path);
+            resolve(stored());
+          }, delay);
+        }),
+    );
+    // El tope (30 s y monedas) vence antes de que Storage conteste (50 s)...
+    const first = remote.uploadThumb('f', jpeg(8 * KB));
+    expect(isTimeout((await after(first, 31_000))?.error)).toBe(true);
+    expect(bucket.size).toBe(0);
+    // ...y el pedido, que nadie espera ya, termina igual.
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(bucket.size).toBe(1);
+    // El reintento no la pisa ni falla: ya está.
+    delay = 1000;
+    expect(await after(remote.uploadThumb('f', jpeg(8 * KB)), 2000)).toEqual({ value: undefined });
+    expect(bucket.size).toBe(1);
+  });
+
+  it('`within` deja pasar el resultado y el error del pedido, y no espera de más', async () => {
+    (AbortSignal as { timeout: unknown }).timeout = undefined;
+    vi.useFakeTimers();
+    await expect(within(1000, async () => 7)).resolves.toBe(7);
+    await expect(within(1000, async () => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
+    await expect(within(1000, () => { throw new Error('antes de pedir'); })).rejects.toThrow('antes de pedir');
   });
 });
 

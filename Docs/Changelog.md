@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.070 :
+
+La miniatura todavía podía clavar la cola de archivos. Desde v0.068 los pedidos al servidor de archivos tienen
+tiempo límite, pero los dos de la miniatura van a otro lado (Supabase Storage) y seguían sin ninguno: subirla,
+antes del original, y bajar las de otros dispositivos al final de cada vuelta. Si Storage no contestaba, la cola
+esperaba para siempre. Ahora los dos tienen un tope proporcional al tamaño (30 segundos más lo que tardaría en
+una red lenta: hasta 62 para la miniatura más pesada), así una lenta pero sana no se corta. Si vence al subir,
+el archivo vuelve a la cola para más tarde y los demás siguen; si vence al bajar, la vuelta termina y se vuelve
+a preguntar al minuto. No se marca nada como hecho y el original sigue en el dispositivo.
+[ Subida de archivos - tope para la miniatura ]
+
 v0.069 :
 
 Direcciones sueltas de Coda. Lo que en Coda era un embebido (un video de Drive con su reproductor) entraba como
