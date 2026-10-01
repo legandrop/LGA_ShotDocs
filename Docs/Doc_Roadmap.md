@@ -168,7 +168,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   plegable" del menú `/`. **Diseño en [`Doc_Colapsar.md`](Doc_Colapsar.md)** (sin tipo de bloque ni propiedad
   nueva). **Entrega 1a hecha (v0.053):** colapsar para vos, con toda la seguridad al editar, las marcas de hoja
   contadas con todo abierto y el PDF todo abierto. **"Imprimir como se ve" hecho
-  (v0.067).** **Arrastrar la sección entera, Shift+Ctrl/⌘+↑/↓ y la 2 (para todos, Shift+clic) hechos (v0.0XX)**;
+  (v0.067).** **Arrastrar la sección entera, Shift+Ctrl/⌘+↑/↓ y la 2 (para todos, Shift+clic) hechos (v0.084)**;
   el mover se escribe en Yjs en dos pasadas y recrea solo el lado más chico (medido con dos editores: el texto que
   nadie tocó no se pierde nunca; lo que otro escribe a la vez en el lado recreado, sí). Decidido el 2026-10-01: ese
   mover solo con secciones colapsadas en juego (1A) y los tooltips como la tabla del §3. Falta probar a mano en

@@ -83,7 +83,7 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | Mod+B, Mod+I, Mod+U, Mod+Shift+S, Mod+E | Negrita, cursiva, subrayado, tachado, código | Editor | Tiptap |
 | Mod+Z, Mod+Shift+Z / Mod+Y | Deshacer, rehacer | Editor | BlockNote |
 | Tab / Shift+Tab | Meter o sacar un nivel el bloque (en una tabla, la celda siguiente o anterior) | Editor | BlockNote |
-| Mod+Shift+↑ / ↓ | Mover el bloque arriba o abajo. Un título colapsado se mueve con su sección entera, y un bloque salta una sección colapsada como si fuera uno; en solo lectura no mueve nada | Editor | BlockNote; con algo colapsado en juego, app (`sectionMove.ts`, v0.0XX) |
+| Mod+Shift+↑ / ↓ | Mover el bloque arriba o abajo. Un título colapsado se mueve con su sección entera, y un bloque salta una sección colapsada como si fuera uno; en solo lectura no mueve nada | Editor | BlockNote; con algo colapsado en juego, app (`sectionMove.ts`, v0.084) |
 | Shift+Enter | Salto de renglón dentro del bloque (a verificar con el registro, sección 6) | Editor | BlockNote |
 | "/" | Menú de bloques (↑ / ↓, Enter elige, Esc cierra; seguir escribiendo filtra) | Editor | BlockNote |
 | "# ", "## "…, "- ", "1. ", "[] ", "> " o `" `, "---", "```" | Título, viñeta, numerada, casilla, cita, divisor, código | Editor, al principio del renglón | BlockNote |
@@ -107,9 +107,9 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | ↑ / ↓, Enter | Elegir un proyecto | Selector de proyectos | App |
 | ↑ / ↓, Inicio / Fin, Esc | Recorrer y cerrar menús; Esc cierra diálogos | Menús y diálogos | App (`menus.tsx`) |
 | Enter | Pasar al texto | Título de la página | App (`PageView.tsx`) |
-| Mod+Alt+Enter (con Shift: para todos) | Colapsar o abrir la sección del título; con Shift, para todos (solo quien puede editar; si no, para vos) | Editor | App (`collapseEditor.ts`; v0.053, para todos v0.0XX) |
-| Clic / Shift+clic en el triángulo de un título | Colapsar o abrir para vos / para todos (Shift solo quien puede editar, y no en pantallas táctiles) | Editor | App (`CollapseToggles.tsx`, v0.0XX) |
-| Arrastrar los puntos de un título colapsado | Mueve su sección entera | Editor | App (`startSectionDrag`, v0.0XX) |
+| Mod+Alt+Enter (con Shift: para todos) | Colapsar o abrir la sección del título; con Shift, para todos (solo quien puede editar; si no, para vos) | Editor | App (`collapseEditor.ts`; v0.053, para todos v0.084) |
+| Clic / Shift+clic en el triángulo de un título | Colapsar o abrir para vos / para todos (Shift solo quien puede editar, y no en pantallas táctiles) | Editor | App (`CollapseToggles.tsx`, v0.084) |
+| Arrastrar los puntos de un título colapsado | Mueve su sección entera | Editor | App (`startSectionDrag`, v0.084) |
 
 Dos observaciones del relevamiento:
 
@@ -462,7 +462,7 @@ En la recorrida no hace falta un paso nuevo (no cambia nada de lo que ya señala
    que citan atajos por id.
 6. **Mod+K cambia de dueño con P.12 entrega 2** y Mod+Alt+Enter llega con P.11: si la ayuda sale antes, esas
    entradas se marcan `soon` y se prenden con su tanda. (Ya llegaron todos: Mod+Alt+Enter en v0.053 y, con Shift,
-   para todos, en v0.0XX.)
+   para todos, en v0.084.)
 7. (Sacado: la ayuda ya no tiene atajo de teclado.)
 8. **Sin red al terminar la recorrida,** la marca de la cuenta no se escribe: queda la del dispositivo y se
    reintenta al volver la red.
@@ -661,7 +661,7 @@ sobre lo que quede.
 
 Respondidas por Lega el 2026-09-30: ver "Decisiones".
 
-## Entrada de ayuda: colapsar (P.11, v0.0XX)
+## Entrada de ayuda: colapsar (P.11, v0.084)
 
 **Hecha** al unir colapsar 1b y 2 con la ayuda: en la sección 9 de la ayuda (`src/help/entries.ts`) quedan
 *Collapse a section* (el triángulo, solo para vos, Mod+Alt+Enter, el menú ⋯ y qué dice el tooltip), *Collapse for

@@ -259,12 +259,12 @@ export const help = {
   'help.collapseEveryone.title': { en: "Collapse for everyone", es: "Colapsar para todos" },
   'help.collapseEveryone.text': {
     en: "Shift+click on the triangle (or {everyone}) collapses or expands the section for everyone who views the page, if you can edit it. A plain click still changes it just for you, and what you set for yourself stays even if someone changes it for everyone. On the phone, a tap is always just for you.",
-    es: "Shift+clic en el triángulo (o {everyone}) colapsa o abre la sección para todos los que miran la página, si podés editarla. Un clic solo la sigue cambiando solo para vos, y lo tuyo se mantiene aunque otro la cambie para todos. En el teléfono, un toque es siempre solo para vos.",
+    es: "Shift+clic en el triángulo (o {everyone}) colapsa o abre la sección para todos los que miran la página, si podés editarla. Un clic sin Shift la sigue cambiando solo para vos, y lo tuyo se mantiene aunque otro la cambie para todos. En el teléfono, un toque es siempre solo para vos.",
   },
   'help.collapseMove.title': { en: "Move a collapsed section", es: "Mover una sección colapsada" },
   'help.collapseMove.text': {
-    en: "Dragging the dots of a collapsed heading, or {up} / {down}, moves its whole section, and what was hidden stays hidden. Other blocks jump over a collapsed section as if it were one. Undo puts it back in one step.",
-    es: "Arrastrar los puntos de un título colapsado, o {up} / {down}, mueve su sección entera, y lo escondido sigue escondido. Los demás bloques saltan una sección colapsada como si fuera uno. Deshacer la vuelve en un solo paso.",
+    en: "Dragging the dots of a collapsed heading, or {up} / {down}, moves its whole section, and what was hidden stays hidden. With {up} / {down}, any other block jumps over a collapsed section as if it were a single block. Undo puts it back in one step.",
+    es: "Arrastrar los puntos de un título colapsado, o {up} / {down}, mueve su sección entera, y lo escondido sigue escondido. Con {up} / {down}, cualquier otro bloque salta una sección colapsada como si fuera uno solo. Deshacer la vuelve en un solo paso.",
   },
   'help.collapsePrint.title': { en: "Print as shown", es: "Imprimir como se ve" },
   'help.collapsePrint.text': {

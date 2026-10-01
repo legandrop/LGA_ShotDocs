@@ -2,7 +2,7 @@
 
 Estado: **entrega 1a hecha (v0.053)**: colapsar para vos, con toda la seguridad al editar, las marcas de hoja
 contadas con todo abierto y el PDF todo abierto (ver "Cómo quedó (1a)", al final). De la 1b, **"Imprimir como se
-ve" hecho (v0.067)**; **arrastrar la sección entera, Shift+⌘/Ctrl+↑/↓ y la entrega 2 (para todos), en v0.0XX**
+ve" hecho (v0.067)**; **arrastrar la sección entera, Shift+⌘/Ctrl+↑/↓ y la entrega 2 (para todos), en v0.084**
 ("Mover la sección entera" y "Cómo quedó (1b, mover, y 2)", al final). Lega
 contestó casi todas las decisiones el 2026-09-30 (al final, "Decisiones"); las que faltan siguen "a
 confirmar". **"Correcciones de la auditoría", al final, manda sobre lo de arriba**, y "Cómo quedó" sobre las
@@ -985,7 +985,7 @@ sección colapsada); el resto de los movimientos siguen siendo los de BlockNote.
 camino sería mejor para el texto que nadie tocó, pero cambia lo que pasa al mover un bloque suelto: **decidido que
 no (decisión 20, 1A)**.
 
-## Cómo quedó (1b, mover, y 2), v0.0XX
+## Cómo quedó (1b, mover, y 2), v0.084
 
 Sin tipo de bloque ni propiedad nueva, sin migración, sin cambios en el portero ni en `min_app_version`.
 
@@ -1079,6 +1079,9 @@ vez, en su bloque, en los dos.
   la corrección 5.
 - **Quedó como está:** el tooltip de quien solo ve o comenta tiene una segunda línea ("Colapsado para todos." o "Solo
   para vos…") que la tabla del §3 no pone; dice si es para todos o solo para vos (decisión 6).
+
+**En la ayuda** (unido con `main` v0.082): las entradas *Collapse for everyone* y *Move a collapsed section*, y
+los atajos en el registro; detalle en `Doc_Tutorial.md`, "Entrada de ayuda: colapsar".
 
 **Unido con `main` v0.081** (con las fotos en línea): una sección colapsada con fotos en línea, movida con el teclado,
 con deshacer y arrastrada, las lleva todas, sin perder ni duplicar ninguna, también del lado que Yjs recrea
