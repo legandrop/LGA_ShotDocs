@@ -28,7 +28,11 @@ nada (un segundo).
 
 ```
 node scripts/coda-export.mjs "MGTZD" [carpeta] [--refresh]
+node scripts/coda-export.mjs --convert-only "<carpeta exportada o nombre del doc>"
 ```
+
+Si el doc tiene tablas, además las baja y las convierte en páginas (ver "Tablas", abajo). `--convert-only`
+repite solo esa conversión, sin red ni token: para probar `tables.config.json` sin volver a bajar el doc.
 
 - **Token.** Usa la API de Coda con un token personal (*Account settings → API settings*, conviene de solo
   lectura). Se lee de la variable `CODA_API_TOKEN` o del archivo `%USERPROFILE%\.coda-token` (en Mac,
@@ -57,7 +61,7 @@ node scripts/coda-export.mjs "MGTZD" [carpeta] [--refresh]
 - **Lo ya bajado no se actualiza.** Como vuelve a usar lo que está en la carpeta, una página que cambió en
   Coda después de bajarla queda como estaba. `--refresh` vuelve a pedir el HTML de todas las páginas (los
   archivos no: un blob de Coda es siempre el mismo archivo); borrar la carpeta también sirve.
-- La misma foto usada en dos páginas se baja una vez, pero en la app entra una vez por página.
+- La misma foto usada en dos páginas se baja una vez; desde v0.061 en la app también entra una vez.
 - Una página que no es texto (una página embebida o sincronizada de otro doc) no se exporta: queda anotada en
   `problems` del manifest y en la app entra vacía.
 
@@ -202,12 +206,62 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   anotan en la lista (no hay archivo que traer).
 - **Subtítulo** de la página de Coda: un párrafo en cursiva arriba de todo.
 
+### Tablas (desde v0.063)
+
+Shot Docs no tiene bases de datos: una tabla de Coda se importa **bakeada**, como páginas (decisión de Lega para
+docs con tablas, 2026-09-30). Lo hace el **comando**, no la app: la app importa páginas como siempre, sin ningún
+tipo de bloque nuevo. El código de la conversión es `scripts/lib/codaTables.mjs` (función pura de lo bajado,
+probada en `scripts/coda-tables.test.mjs` con datos inventados).
+
+- **Qué baja.** Después de las páginas, `GET /docs/{doc}/tables?tableTypes=table,view`, y por cada tabla o vista
+  sus columnas (todas y las visibles) y sus filas a `tables/`: `index.json` (cada tabla y vista, su tipo y forma
+  —tabla, tarjetas, calendario—, la página donde está, su tabla base y sus columnas) y `<id>.rows.json` (en una
+  tabla base, todas las filas con sus valores ricos y, aparte, los ids que deja ver su filtro, en orden; en una
+  vista, solo los ids que muestra). Lo ya bajado no se vuelve a pedir, salvo con `--refresh`.
+- **Qué hace con cada tabla** (el modo; `tables.config.json` lo puede forzar):
+  - `fichas` (una tabla con fotos o con más de 8 columnas): **una página por fila** ("ficha") con las fotos
+    arriba, los campos cortos en una tabla de dos columnas (con el color que la celda tenía en Coda) y los textos
+    largos debajo, cada uno con su título; las notas salen del HTML de la página (con formato y fotos) y, si esa
+    celda no se veía en ninguna vista, del texto de la API. Las fichas van debajo de la página donde estaba la
+    tabla, agrupadas como en Coda (una página por grupo). Donde estaba la tabla queda un **índice** (una tabla
+    de texto con un link a cada ficha) y, al final, las filas que escondía el filtro de la vista. Una vista de
+    **tarjetas** queda como una tarjeta por fila; un **calendario** o una línea de tiempo, como una lista por
+    fecha. Una **relación** entre filas pasa a ser un link entre fichas.
+  - `unwrap` (una tabla sin encabezados, con fotos: Coda la usa para maquetar): se desarma por filas, así cada
+    foto queda junto a su texto.
+  - `table` (una tabla chica de solo texto): queda como tabla.
+  - `text` (forzado): queda como tabla, sin fotos. `skip` (forzado): queda una nota en su lugar.
+- **Las filas.** El HTML trae la vista con su filtro y su contenido rico pero sin id de fila; la API trae todas
+  las filas con su id. Se juntan por posición (la vista viene en su orden) y, si no coincide, por el texto de
+  sus columnas de texto; las que no se reconocen quedan anotadas.
+- **Links.** Un link a otra página del doc o a una fila con ficha pasa a `coda-page:<id>` (ver "Links entre
+  páginas del doc" arriba). Un link a una fila sin ficha queda apuntando a Coda, contado en las notas.
+- **Archivos que solo están en los datos de una tabla** (una fila que ninguna vista mostraba): se bajan a
+  `media/` (sin token, solo de Coda) y quedan en `tables/extra-media.json`.
+- **Qué deja.** El HTML de Coda queda intacto en `pages/<n>_<id>.html`; lo convertido va a
+  `pages/<n>_<id>.import.html` y a `pages/row-….import.html` / `pages/group-….import.html`. `manifest.coda.json`
+  es el manifest de las páginas de Coda tal cual (la base para convertir de nuevo) y `manifest.json`, el
+  convertido: cada página apunta a su `.import.html` y las nuevas llevan `generated: 'row' | 'group'`. Las notas
+  de la conversión (qué modo tuvo cada tabla, cuántas notas salieron de la API, cuántos links quedaron) van al
+  resumen del comando y a `tableNotes` del manifest; no son problemas y no cortan con error. Un doc **sin
+  tablas** deja el mismo `manifest.json` de siempre.
+- **`tables.config.json`** (opcional, en la carpeta exportada): `{ "tables": { "<tabla o id>": "fichas|unwrap|
+  table|text|skip" }, "index": { "<tabla>": ["<columna>", …] }, "skipColumns": { "<tabla>": ["<columna>", …] } }`.
+  Se revisa antes de convertir y un error dice qué está mal.
+- **Comentarios de filas.** Los da el servidor MCP de Coda (`table_rows_read` con `includeComments`), no la API.
+  `rowCommentsByPage` (en `codaTables.mjs`) los pasa a la ficha de su fila (a la página entera) o, si la tabla
+  quedó como tabla, a su página anclados al texto de la fila (desde v0.062 el anclaje encuentra el texto de una
+  celda). Juntarlos en `comments.json` es parte del paso de los comentarios (la skill), no del comando.
+- **Lo que no pasa:** las relaciones vivas, los filtros (queda el resultado), los botones (queda su texto), las
+  fórmulas (queda su valor), las reglas de color (queda el color de cada celda, no la regla), las vistas como
+  vistas (calendario, línea de tiempo) y las fotos adentro de las celdas de una tabla que queda como tabla.
+
 ### Lo que no pasa
 
 - **El ícono de la página** de Coda (en MGTZD, el estado de cada escena: ok, importante, cancelada): queda en
   el manifest pero la app todavía no muestra íconos de página.
-- **Tablas y vistas de Coda** (bases de datos): la API las da aparte (`/tables`); falta el paso para docs con
-  tablas.
+- **Tablas y vistas de Coda como bases de datos:** desde v0.063 entran como páginas (ver "Tablas"); lo vivo
+  (relaciones, filtros, botones, fórmulas) no.
 - **Una página que no es texto** (embebida o sincronizada de otro doc): entra vacía y queda anotada.
 - **Un editor por página.** Cada página se escribe con un editor sin pantalla atado a su documento; la atadura
   (colaboración) se fija al crear el editor, así que no se puede reusar uno para todas. El que convierte el
