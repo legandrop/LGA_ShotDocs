@@ -7,7 +7,8 @@ nombre en cincuenta páginas era abrirlas de a una. `Doc_Buscar.md` suma la secc
 con vista previa y confirmación; se escribe en el Y.Doc de cada página que se puede editar y está completa (como
 "Reemplazar todo" de la página), así se guarda y se sube como cualquier edición; y un registro guardado antes de
 escribir deja deshacer todo, solo donde sigue igual. Un prototipo midió 3000 corridas al azar con otro dispositivo
-escribiendo a la vez, sin borrar nada suyo, y 300 páginas en 1,1 s. Tres preguntas para Lega.
+escribiendo a la vez, sin borrar nada suyo, y 300 páginas en 1,1 s. Una auditoría sumó lo que faltaba (pasar por la
+protección del editor abierto, comprobar lo guardado, permisos conocidos, lo escondido). Cuatro preguntas para Lega.
 [ Docs - diseño de reemplazar en el proyecto ]
 
 v0.088 :

@@ -857,15 +857,17 @@ lo de arriba.
   la app.
 - Sin tipo de bloque, sin propiedad, sin migración y sin subir `min_app_version`: es texto.
 - **Medido en el prototipo:** 3000 corridas al azar con otro dispositivo escribiendo y borrando a la vez: el
-  reemplazo y el deshacer **no borraron ningún carácter del otro** (0) y los dos terminaron iguales; en las 598
-  corridas sin cambios del otro, deshacer dejó el documento **idéntico** al de antes. 300 páginas en 1,1 s.
+  reemplazo y el deshacer **no borraron ningún carácter escrito por el otro** (0, contado por su id de Yjs) y los dos
+  terminaron iguales; en las 598 corridas sin cambios del otro, deshacer dejó el documento **idéntico** al de antes.
+  300 páginas en 1,1 s. Lo que el deshacer sí puede hacer con el otro a la vez (volver a poner algo que borró, sin
+  perder nada) está en la sección 3 y en "Auditoría del diseño".
 
 ### 1. Lo que ve la persona
 
 **Desplegar.** En el panel de Ctrl/⌘+K, la flecha a la izquierda del campo (la misma de la barra de la página)
 despliega un segundo renglón: el campo *Replace*, *Aa*, *ab* (palabra entera) y **Replace all (37)**. La flecha
-aparece solo si la persona puede editar alguna página del proyecto (`perms.canEditPage`); a quien solo ve o
-comenta, nunca. Sin atajo propio (decisión 8): se llega con la flecha o con Tab. Desplegado o no se recuerda en la
+aparece solo si **se conocen los permisos** (`perms.known`: sin datos, `pageLevel` da 4 a todos) y la persona puede
+editar alguna página del proyecto (`perms.canEditPage`); a quien solo ve o comenta, nunca. Sin atajo propio (decisión 8): se llega con la flecha o con Tab. Desplegado o no se recuerda en la
 sesión de búsqueda (`projectSearchUi.ts`), como la barra de la página.
 
 **Desplegado, se busca la frase** tal cual, como la barra de la página y VS Code: "cada palabra por separado" no
@@ -880,6 +882,11 @@ sirve para reemplazar. Los proyectos que coinciden no se muestran en ese modo. P
   unos 60 caracteres alrededor, lo encontrado tachado en rojo suave y el reemplazo en verde a su lado, con *Replace*
   y ×. Tocar el renglón va a la coincidencia, como hoy (sección 8). × saca de la lista, no toca el documento: lo
   sacado no entra en *Replace all*.
+- **Cada coincidencia de la lista se identifica por sus caracteres, no por su número:** la lista se arma con el
+  mismo plan que escribe (sección 2.3), leído del documento guardado (`indexSnapshot`, o `peek` si está abierta), y
+  cada coincidencia guarda el id de Yjs de su primer y su último carácter y su texto (los ids son los mismos en el
+  documento guardado y en el vivo). *Replace* (una) y las sacadas con × se comparan por eso: si otro agrega una
+  "cámara" antes, la número 2 pasa a ser otra, pero sus caracteres no.
 - **Lo que no se cambia** sale igual, sin botones y con el motivo en gris: en un pie, en el nombre de un archivo,
   "would remove a link", "crosses a deleted photo" (sección 2.4); y por página: *View only*, *Not downloaded yet*,
   *This version can't show this page*, *The server rejected changes to this page*, *Couldn't be read entirely*. Un
@@ -893,12 +900,15 @@ sirve para reemplazar. Los proyectos que coinciden no se muestran en ese modo. P
    cuenta es la de las páginas al día.
 2. **Confirmación** (`role="dialog"` con `aria-modal`; el botón elegido de entrada es *Cancel*): "**Replace 37
    matches in 12 pages?**", "“Cámara” → “Camera”", lo que no cambia ("4 won't change: 2 in captions, 1 would remove
-   a link, 1 in a view-only page") y "You can undo it from the notice or from this panel." Con el reemplazo vacío:
+   a link, 1 in a view-only page"), **cuántas están escondidas** ("6 are in collapsed sections": lo colapsado para
+   todos, el `Y.Map` del documento, más lo tuyo, `collapse:<página>` en `meta`; ver pregunta 4) y "You can undo it
+   from the notice or from this panel." Con el reemplazo vacío:
    "**Delete 37 matches in 12 pages?**". Sin red, una línea más: "You're offline: it's saved on this device and
    uploads when you're back online." Botones *Cancel* y *Replace 37*.
 3. **Avance:** "Replacing… 5 of 12 pages" con *Stop* (termina la página en curso y para). Cerrar el panel no lo
    corta: el avance sigue en el aviso. Mientras corre, el navegador pide confirmación antes de cerrar la pestaña
-   (como al guardar una foto).
+   (como al guardar una foto), y cambiar de workspace o cerrar sesión espera o pide confirmar, como la importación
+   de Coda (`importJob.ts` con `useLeaveGuard`).
 4. **Al terminar, el aviso** con acción (`notice.ts` hoy es solo texto: suma un botón): "37 replacements in 12
    pages · Undo" (15 s; también queda en el panel). Si alguna cambió en el medio: "36 replacements in 12 pages · 1
    had changed and was left as is".
@@ -936,10 +946,15 @@ el editor: no es nuevo.
 #### 2.2 Qué páginas se tocan
 
 Se revisa **justo antes de escribir cada una** (en el código, no solo en la pantalla, como la corrección 4). Si
-falta algo, la página no se toca y queda en la lista con el motivo:
+falta algo, la página no se toca y queda en la lista con el motivo. **Lo que no necesita el documento (1, 2, 3 y 5)
+se revisa antes de abrirla**: `docs.open` ya puede escribir (la guardia de versión y una reparación de estructura),
+y una página que se va a saltear no tiene por qué recibir nada. Lo demás, con la página abierta y adentro del
+candado (2.3), donde también se vuelven a mirar las otras (son baratas):
 
 1. Está en el árbol, en el proyecto, y no en la papelera (`tree.get`, `isTrashed`: como la búsqueda, corrección 15).
-2. **Puede editarla:** `perms.canEditPage(pageId)` (nivel 3). El servidor manda igual: si rechaza la subida (le
+2. **Puede editarla:** `perms.known` y `perms.canEditPage(pageId)` (nivel 3). Sin datos de permisos (la primera
+   apertura sin red, una base sin la versión del equipo) `pageLevel` da 4 a todos: ahí no se reemplaza nada (como
+   colapsar para todos, que ya pide `permsKnown`). El servidor manda igual: si rechaza la subida (le
    sacaron el permiso mientras estaba sin red), pasa lo de siempre: la página queda rechazada, el contenido sigue en
    el dispositivo, *Retry* y *Download my unsynced changes*.
 3. **Completa:** `!engine.isMissingContent(pageId)` (el cursor llegó al `update_seq` del árbol), la misma regla que
@@ -955,7 +970,11 @@ falta algo, la página no se toca y queda en la lista con el motivo:
 #### 2.3 Escribir una página: el plan, el registro antes, la transacción
 
 Con el candado de la página de `PageDocs` (`withLock`, el mismo de subir y bajar: lo que llega del servidor para esa
-página espera). Hace falta una función nueva, `docs.edit(pageId, fn)`, que abre, toma el candado, corre `fn` y cierra.
+página, la reparación y la compactación esperan). Hace falta una función nueva, `docs.edit(pageId, fn)`, que abre,
+toma el candado, corre `fn` y cierra. **Regla del candado:** adentro, `fn` nunca espera algo que tome el candado de la
+misma página (`pushPage`, `pullPage`, `indexSnapshot`, `markUnreadable`, `resetForRestore`): `withLock` encadena
+promesas y eso se traba para siempre. Solo espera la escritura del registro en `meta`, que no lo toma. Lo prueba una
+prueba que corre una subida y una bajada de la misma página a la vez.
 
 1. **El plan** (`src/search/replaceDoc.ts`, nuevo, sin React ni editor): recorre los bloques de texto con la misma
    regla de `unitsFromYDoc` (celdas de tabla, hijos anidados, separadores) y arma el texto de cada bloque **con un
@@ -969,17 +988,29 @@ página espera). Hace falta una función nueva, `docs.edit(pageId, fn)`, que abr
 2. **El registro se guarda antes de escribir** (en `meta`, sección 3) y se espera a que IndexedDB lo confirme. Si la
    app se cierra entre el registro y la escritura, el registro dice algo que no pasó: deshacer lo reconoce (entre las
    anclas no está el reemplazo) y no hace nada. Al revés, una escritura sin registro, no puede pasar.
-3. **Se vuelve a planear**, en la misma tarea en que se escribe: si el documento cambió mientras se guardaba el
-   registro (una edición en el editor abierto, que no pasa por el candado), el plan nuevo tiene que ser igual al
-   guardado; si no, se vuelve al paso 2 (hasta 3 veces; después la página se saltea: "changed while replacing").
+3. **Se vuelve a planear**, en la misma tarea en que se escribe (sin ningún `await` entre planear y escribir): si el
+   documento cambió mientras se guardaba el registro (una edición en el editor abierto, que no pasa por el candado),
+   el plan nuevo tiene que ser igual al guardado. Se comparan **las anclas, lo de antes y lo nuevo**, no los índices
+   (una tecla en otra parte del mismo texto corre los índices y no cambia nada). Si no es igual, se vuelve al paso 2
+   (hasta 3 veces; después la página se saltea: "changed while replacing").
 4. **Una sola transacción de Yjs** por página, con `ORIGIN_REPLACE`, de atrás para adelante en cada texto: `delete`
    + `insert` con el formato (los atributos que no se dan se sacan: Yjs los anula). **Cada página queda entera o no
-   queda.**
-5. `docs.flush(pageId)` (ya en el dispositivo) y el registro de esa página pasa a "aplicado". Deshacer no depende de
-   esa marca: es para el aviso de "se cortó en la página 5".
+   queda.** La transacción va **por `applyRendering`** de `PageDocs` (con `local = true`), la misma que usan los
+   cambios del servidor: con la página abierta, el editor dibuja el cambio adentro de la transacción y, si dibujar
+   tira un error, Yjs ya aplicó y ya guardó; `applyRendering` avisa (`subscribeRenderFailed`) y la página vuelve a
+   dibujar el editor desde el documento antes de la próxima tecla. Sin eso, el editor quedaría con lo de antes y con
+   la próxima tecla escribiría su versión vieja encima (`Doc_Colaboracion.md`, "Qué se arregló" 1 y 5). Un error
+   después de aplicar cuenta como **escrito**: nunca se reintenta (con un reemplazo que contiene lo buscado,
+   reintentar lo aplicaría dos veces).
+5. **Comprobar que quedó en el dispositivo:** `docs.flush(pageId)` vuelve aunque la escritura en IndexedDB haya
+   fallado (sin espacio: la edición queda en memoria y se reintenta cada 3 s), así que hace falta una función nueva,
+   `docs.isSaved(pageId)` (nada sin guardar de esa página y sin error de escritura). Recién ahí el registro de la página
+   pasa a "aplicado". **Con un error de escritura, se corta toda la tanda** con el aviso de siempre ("no se pudo guardar
+   en el dispositivo"): seguir dejaría cientos de documentos en memoria, y un teléfono que cierra la app los pierde.
 
-*Replace* (una): el plan de ese bloque, y solo si la coincidencia número N del bloque sigue siendo exactamente el
-texto que se mostró (como la corrección 18); si no, "changed" y la lista se vuelve a buscar.
+*Replace* (una): el plan de ese bloque, y solo si está **la misma coincidencia** de la lista (los mismos ids de su primer
+y su último carácter, sección 1) con el mismo texto (como la corrección 18); si no, "changed" y la lista se vuelve a
+buscar. Las sacadas con × se filtran igual, por esos ids, **antes** de juntar las pegadas.
 
 #### 2.4 Los casos, uno por uno
 
@@ -995,7 +1026,7 @@ texto que se mostró (como la corrección 18); si no, "changed" y la lista se vu
 | **Formato partido en varias marcas** ("Cá**mara**") | El texto nuevo toma el formato del primer carácter, como en la página. El registro guarda las partes de antes con el suyo: deshacer las vuelve a partir igual (el prototipo lo comprueba: documento idéntico). |
 | **Links** | Se conserva el link si el primer carácter lo tiene. **Se saltea lo que borraría un link entero** (reemplazo vacío, o una coincidencia que empieza afuera del link y lo cubre): una tarjeta de Drive se quedaría sin `href`. La misma regla que la página. |
 | **Celdas de tabla** | Cada celda es su bloque de texto: entran, cada una por su lado. |
-| **Lo escondido** (secciones colapsadas, listas plegables cerradas) | Se reemplaza igual (decisión 2: "también en lo colapsado") y no se abre nada, ni en el editor abierto ni al abrir la página después. |
+| **Lo escondido** (secciones colapsadas, listas plegables cerradas) | No se abre nada, ni en el editor abierto (un cambio que llega por Yjs no abre secciones, `collapseEditor.ts`) ni al abrir la página después. La decisión 2 de Lega ("también en lo colapsado") es de la **página**, donde la barra dice cuántas están escondidas; en el proyecto la confirmación lo dice ("6 are in collapsed sections") y la lista las marca. **Con el reemplazo vacío** (borrar), las escondidas quedan afuera salvo que se marque *Also delete the 6 in collapsed sections*: la regla de P.11 es que nada escondido se borra sin que se vea. Pregunta 4. |
 | **Fotos en línea y saltos de línea** | Son elementos entre los textos del renglón: una coincidencia nunca los cruza y nunca se tocan. **Un renglón al que le borraron una foto** queda con dos textos seguidos que el editor muestra como uno (huecos estables): una coincidencia que cruza ese borde no se escribe (tocaría dos textos y el registro se complica) y se lista *crosses a deleted photo: open the page and use Replace all there* (la barra de la página lo hace por ProseMirror). Es raro. |
 | **Bloques de código** | Cada renglón por su lado (el "\n" separa). |
 | **Pies y nombres de archivo** | Se encuentran y no se cambian (decisión 7), como en la página. |
@@ -1041,6 +1072,13 @@ leen `meta` solo por clave, nunca recorren estas):
   una, para arreglarlas a mano.
 - Las páginas que hoy no se pueden tocar (sin permiso, sin bajar) no se deshacen: el registro las conserva y el panel
   ofrece *Undo the rest* más tarde.
+- **"No se llegó a aplicar" no es "cambió":** una página cuyo registro no quedó "aplicado" (la app se cerró entre el
+  registro y la escritura) y donde entre las anclas está lo de antes se cuenta aparte ("3 were never applied") y no
+  como "had changed".
+- **Lo que sí puede hacer con el otro a la vez** (medido por la auditoría, sin perder texto): si otro borró parte de la
+  palabra sin haber visto el reemplazo (su borrado cae sobre caracteres que el reemplazo ya había borrado), deshacer la
+  vuelve a poner entera; y si otro borró el reemplazo y escribió exactamente lo mismo, deshacer lo trata como el
+  reemplazo y pone lo de antes. Las anclas no lo pueden distinguir; no se pierde nada distinto.
 - Deshacer dos veces no hace nada (entre las anclas ya no está el reemplazo). Sin rehacer: se reemplaza de nuevo.
 - Ctrl/⌘+Z del editor no lo deshace (pregunta 3).
 
@@ -1084,6 +1122,12 @@ sin subir `min_app_version`. Lo fija una prueba con el esquema publicado (`ui/fi
 - **Con el editor real** (jsdom): la página abierta lo muestra en el acto, Ctrl/⌘+Z no lo deshace, las secciones
   colapsadas no se abren, la barra de la página vuelve a contar, los comentarios siguen en su bloque, y la versión
   publicada (el esquema de `main`) abre el resultado sin cambiar nada.
+- **Lo que pidió la auditoría:** un error del editor al dibujar el reemplazo (cuenta como escrito, no se reintenta y
+  el editor se vuelve a dibujar antes de la próxima tecla); una escritura en IndexedDB que falla (corta la tanda y no
+  marca "aplicado"); sin datos de permisos no hay flecha ni reemplazo; otro agrega una coincidencia antes de la elegida
+  (se reemplaza la elegida, por sus ids) y una sacada con × que no entra después de sincronizar; una subida y una bajada
+  de la misma página mientras se reemplaza (sin trabarse); lo escondido contado en la confirmación y el borrado que lo
+  deja afuera; las páginas salteadas no reciben ninguna escritura (ni la guardia ni una reparación).
 - **Con `PageDocs` y el servidor falso:** las cinco revisiones de 2.2 (cada una saltea la página), el registro
   antes de escribir y **cortar en cada punto** (antes del registro, entre el registro y la transacción, entre la
   transacción y el guardado, a mitad de las páginas): nada se pierde y deshacer coincide con lo que quedó; sin red
@@ -1119,12 +1163,16 @@ sin subir `min_app_version`. Lo fija una prueba con el esquema publicado (`ui/fi
    proyecto.
 8. **Formato:** lo reemplazado toma el del primer carácter (como en la página).
 9. **El borde de una foto borrada** no se reemplaza desde el proyecto (raro; se avisa).
+10. **Deshacer con el otro a la vez** puede volver a poner algo que el otro borró sin ver el reemplazo, o tomar como
+    propio un texto idéntico que el otro escribió (sección 3). Queda texto de más, nunca de menos.
+11. **Importar de Coda otra vez** (v0.087): una página que tocó el reemplazo cambió su huella y queda como "kept" (no
+    se pisa). No pierde nada; es lo esperado para una página editada.
 
 ### 8. Entregas
 
-1. **El núcleo, sin pantalla:** `replaceDoc.ts` (plan, escribir, deshacer), `docs.edit` con el candado, el registro
-   en `meta`, `projectReplace.ts` (sin React, como `projectIndex.ts`: las revisiones, de a una página, avance, *Stop*,
-   cortes) y todas sus pruebas, también las al azar. Auditoría independiente contra la regla de no perder datos.
+1. **El núcleo, sin pantalla:** `replaceDoc.ts` (plan, escribir, deshacer), `docs.edit` (con el candado y por
+   `applyRendering`), `docs.isSaved`, el registro en `meta`, `projectReplace.ts` (sin React, como
+   `projectIndex.ts`: las revisiones, de a una página, avance, *Stop*, cortes) y todas sus pruebas, también las al azar. Auditoría independiente contra la regla de no perder datos.
 2. **La pantalla:** la flecha y el renglón en `ProjectSearch.tsx`, frase con *Aa* y *ab*, la vista previa, una, la
    página y todas con confirmación, el aviso con acción, los últimos reemplazos, la ayuda, los textos y las pruebas de
    pantalla y de punta a punta. Su auditoría.
@@ -1142,3 +1190,38 @@ sin subir `min_app_version`. Lo fija una prueba con el esquema publicado (`ui/fi
 3. **¿Ctrl/⌘+Z en una página abierta tendría que deshacer el reemplazo del proyecto?** Recomendación: **no**: solo
    *Undo* del aviso y del panel. Un Ctrl/⌘+Z que cambia cincuenta páginas sin avisar sorprende más que uno que no lo
    hace, y mezclarlo con la pila de la página complica los dos deshacer.
+4. **¿Lo escondido en secciones colapsadas también se cambia desde el proyecto?** (La decisión 2 era para la página,
+   donde la barra lo cuenta.) Recomendación: **cambiar sí, con la cuenta en la confirmación** ("6 are in collapsed
+   sections"); **borrar (reemplazo vacío) no, salvo que se marque** *Also delete the 6 in collapsed sections*, para no
+   romper la regla de P.11 de que nada escondido se borra sin que se vea.
+
+### Auditoría del diseño (independiente, 2026-10-01)
+
+Un auditor que no escribió el diseño lo contrastó con el código (`docs.ts`, `engine.ts`, `findEditor.ts`,
+`collapseEditor.ts`, `access.ts`, el parche de y-prosemirror) y con seis pruebas de ataque sobre el prototipo. El
+enfoque se sostiene (escribir en el Y.Doc con un origen propio, el registro antes, deshacer solo lo que sigue igual).
+Encontró un bloqueante y cuatro importantes; **todos quedaron incorporados arriba**:
+
+1. **Bloqueante: la escritura no pasaba por `applyRendering`.** Con la página abierta, si el editor tira un error al
+   dibujar el cambio, Yjs ya lo aplicó y lo guardó, pero el editor queda con lo de antes y con la próxima tecla lo pisa
+   para todos; y quien implemente podría tomar el error como "no se escribió" y reintentar (con "cámara" → "cámara
+   roja", dos veces). Probado con el editor real. Ahora la transacción va por `applyRendering`, un error después de
+   aplicar cuenta como escrito y dispara `subscribeRenderFailed` (2.3, paso 4).
+2. **`docs.flush` no garantiza que quedó guardado:** con la escritura en IndexedDB fallando, vuelve igual. Ahora
+   `docs.isSaved(pageId)` y, con un error de escritura, se corta la tanda (2.3, paso 5).
+3. **Faltaba `perms.known`:** sin datos de permisos todo da nivel 4, y quien solo ve habría podido reemplazar en todo el
+   proyecto (cada página, rechazada). Ahora la flecha y las revisiones lo piden (1 y 2.2).
+4. **Cada coincidencia por su número no alcanzaba:** si otro agrega una antes, la número N es otra (y una sacada con ×
+   podía terminar reemplazada). Ahora se identifican por los ids de su primer y su último carácter (1 y 2.3).
+5. **Lo escondido se cambiaba o se borraba sin que se vea**, y la decisión 2 de Lega era para la página. Ahora la
+   confirmación lo cuenta, el borrado lo deja afuera salvo que se marque, y es la pregunta 4.
+
+Menores, también incorporados: revisar antes de abrir lo que no necesita el documento (así una página salteada no
+recibe la guardia ni una reparación); la regla del candado (nada adentro que tome el candado de la misma página;
+planear y escribir sin `await` en el medio; comparar planes por anclas y no por índices); "no se llegó a aplicar"
+distinto de "cambió" al deshacer; esperar o confirmar antes de cambiar de workspace mientras corre (como la importación
+de Coda); y lo que deshacer puede hacer con el otro a la vez (volver a poner algo que el otro borró sin ver el
+reemplazo, o tomar como propio un texto idéntico que el otro escribió: texto de más, nunca de menos), que corrige la
+frase "ningún carácter del otro" (se contaba por id). La auditoría además reprodujo las mediciones del prototipo (300
+corridas al azar sin pérdidas; 300 páginas en 1,4 s en su máquina) y revisó `main` hasta v0.087: el reemplazo no toca
+el mapa de "colapsado para todos", y una página reemplazada queda "kept" al volver a importar de Coda.
