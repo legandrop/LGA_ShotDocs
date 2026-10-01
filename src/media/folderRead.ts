@@ -138,7 +138,7 @@ function fileOf(entry: EntryLike): Promise<File> {
  * sistema, salteado con su motivo (con la casilla "Incluir archivos ocultos" se suma: `withHidden`).
  */
 export async function readFolder(root: EntryLike): Promise<FolderSource> {
-  const source: FolderSource = { name: cleanFileName(root.name) || 'Folder', files: [], dirs: [], skipped: [] };
+  const source: FolderSource = { name: cleanFileName(root.name, undefined, 'Folder'), files: [], dirs: [], skipped: [] };
   const walk = async (dir: EntryLike, prefix: string, hiddenReason: 'hidden' | 'system' | null): Promise<void> => {
     let entries: EntryLike[];
     try {
@@ -180,7 +180,7 @@ export function foldersFromList(list: ArrayLike<File>): FolderSource[] {
     const rootName = rel.length > 1 ? rel[0]! : '';
     let source = byRoot.get(rootName);
     if (!source) {
-      source = { name: cleanFileName(rootName) || 'Folder', files: [], dirs: [], skipped: [] };
+      source = { name: cleanFileName(rootName, undefined, 'Folder'), files: [], dirs: [], skipped: [] };
       byRoot.set(rootName, source);
     }
     const parts = rel.length > 1 ? rel.slice(1) : rel;

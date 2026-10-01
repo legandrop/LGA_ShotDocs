@@ -580,7 +580,7 @@ export class MediaQueue {
     if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
     if (!this.enabled) throw new FileRejected(t('queue.needsDrive'));
     const id = crypto.randomUUID();
-    const clean = cleanFileName(name || 'Folder');
+    const clean = cleanFileName(name, undefined, 'Folder');
     const record: MediaRecord = {
       id,
       pageId,
