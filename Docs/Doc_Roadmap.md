@@ -177,8 +177,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Safari, Firefox y el iPhone.
 - **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página;
   entrega 2 hecha (v0.054): buscar en el proyecto con Ctrl/⌘+K** (`Doc_Buscar.md`, "Cómo quedó (entrega 1)" y
-  "(entrega 2)"). Queda para después: reemplazar en el proyecto, la papelera, todos los proyectos y los
-  comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
+  "(entrega 2)"). **Reemplazar en el proyecto: diseño hecho (v0.089, sin código)**, en `Doc_Buscar.md`,
+  "Reemplazar en el proyecto (diseño)": escribe en el Y.Doc de cada página que se puede editar y está completa, con
+  confirmación y un deshacer de todo el reemplazo; tres preguntas para Lega. Queda para después: la papelera, todos
+  los proyectos y los comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y
   contenido) y lleva al lugar. **En la página:** una lupa a la izquierda del ícono de comentarios, que busca en
   la página abierta, también adentro de las secciones colapsadas (P.11: el resultado abre la sección). A pensar
