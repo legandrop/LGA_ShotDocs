@@ -51,7 +51,7 @@ const HOSTED = /^https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.c
 export function prepareCodaHtml(
   html: string,
   pageLink?: (codaId: string) => string | null,
-): { html: string; media: CodaMedia[]; embeds: string[]; brokenLinks: string[] } {
+): { html: string; media: CodaMedia[]; embeds: string[]; brokenLinks: BrokenLink[] } {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   const media: CodaMedia[] = [];
   stripMarkers(doc.body);
@@ -139,16 +139,22 @@ export function prepareCodaHtml(
   return { html: doc.body.innerHTML, media, embeds, brokenLinks };
 }
 
+/** Un link a otra página del doc que quedó como texto: el id de Coda y el texto del link. */
+export interface BrokenLink {
+  id: string;
+  text: string;
+}
+
 /** El esquema con que el comando marca un link a otra página del mismo doc de Coda. */
 export const CODA_PAGE_SCHEME = 'coda-page:';
 
 /**
  * Cada link `coda-page:<id>` pasa a la dirección que da `pageLink`. Uno sin dirección (la página no está en
- * la exportación o no se pudo crear) queda como su texto, sin link. Devuelve los ids sin dirección, una vez
- * cada uno.
+ * la exportación o no se pudo crear) queda como su texto, sin link. Devuelve los que quedaron sin dirección,
+ * uno por id.
  */
-function resolvePageLinks(body: HTMLElement, pageLink?: (codaId: string) => string | null): string[] {
-  const broken = new Set<string>();
+function resolvePageLinks(body: HTMLElement, pageLink?: (codaId: string) => string | null): BrokenLink[] {
+  const broken = new Map<string, BrokenLink>();
   for (const a of [...body.querySelectorAll('a[href]')]) {
     const href = a.getAttribute('href')!.trim();
     if (!href.toLowerCase().startsWith(CODA_PAGE_SCHEME)) continue;
@@ -157,11 +163,11 @@ function resolvePageLinks(body: HTMLElement, pageLink?: (codaId: string) => stri
     if (target) {
       a.setAttribute('href', target);
     } else {
-      broken.add(id);
+      if (!broken.has(id)) broken.set(id, { id, text: (a.textContent ?? '').replace(MARKERS, '').trim() });
       a.replaceWith(...a.childNodes);
     }
   }
-  return [...broken];
+  return [...broken.values()];
 }
 
 /** Un `%` suelto no corta la importación: queda el texto tal cual. */

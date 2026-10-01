@@ -563,7 +563,7 @@ describe('importar la carpeta', () => {
     expect(await linksOf(idA)).toEqual([`/p/${idB}`]);
     expect(await linksOf(idB)).toEqual([`/p/${idA}`]);
     // El que va a una página que no está en la exportación queda como texto y anotado (una vez).
-    expect(result.problems).toEqual(['Plano A: a link to a page that is not in the export stays as text (canvas-X)']);
+    expect(result.problems).toEqual(['Plano A: a link to another page stays as text (that page is not in the import): “otra”']);
     const doc = await a.docs.open(idA);
     expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain('otra');
     expect(findUnknownContent(doc)).toBeNull();
@@ -594,9 +594,74 @@ describe('importar la carpeta', () => {
     const pages = projectPages(a, result.projectId);
     expect(pages).toHaveLength(2);
     const id = (title: string) => pages.find((p) => p.title === title)!.id;
-    const doc = await a.docs.open(id('Dos'));
-    expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`href="/p/${id('Uno')}"`);
-    a.docs.close(id('Dos'));
+    // Los dos sentidos: Uno (escrita antes del corte) apunta a Dos, creada en la pre-pasada.
+    for (const [from, to] of [['Uno', 'Dos'], ['Dos', 'Uno']]) {
+      const doc = await a.docs.open(id(from));
+      expect(doc.getXmlFragment(CONTENT_FRAGMENT).toString()).toContain(`href="/p/${id(to)}"`);
+      a.docs.close(id(from));
+    }
+  });
+
+  it('si la madre no se pudo crear en la pre-pasada, la hija espera y queda adentro de ella', async () => {
+    const { a } = await mediaDevice();
+    let failOnce = true;
+    const create = a.tree.create.bind(a.tree);
+    vi.spyOn(a.tree, 'create').mockImplementation((parent, title, project) => {
+      if (title === 'Madre' && failOnce) {
+        failOnce = false;
+        return Promise.reject(new Error('un instante sin espacio'));
+      }
+      return create(parent, title, project);
+    });
+    const tree = a.tree;
+    const folder = smallFolder([page('m', 'Madre', null, 0), page('h', 'Hija', 'm', 0)], { m: '<div>m</div>', h: '<div>h</div>' });
+    const result = await importCoda(folder, { tree, docs: a.docs, media: a.media });
+    expect(result.problems).toEqual([]);
+    const roots = a.tree.roots(result.projectId).map((p) => p.title);
+    expect(roots).toEqual(['Madre']);
+    expect(a.tree.children(a.tree.roots(result.projectId)[0].id).map((p) => p.title)).toEqual(['Hija']);
+  });
+
+  it('al seguir, una página terminada no presta su archivo (pudo quedar sin uso): la que falta guarda su copia', async () => {
+    const { a } = await mediaDevice();
+    const journal = metaJournal(a.db);
+    const html = `<div>${img('bl-r', 'r.png')}</div>`;
+    const folder = smallFolder([page('p1', 'Uno', null, 0, ['bl-r']), page('p2', 'Dos', null, 1, ['bl-r'])], { p1: html, p2: html }, ['bl-r']);
+    const add = vi.spyOn(a.media, 'add');
+    let crash = true;
+    const deps: ImportDeps = { tree: a.tree, docs: a.docs, media: a.media, journal };
+    await expect(
+      importCoda(folder, deps, {
+        onProgress: (p) => {
+          if (p.page === 'Dos' && crash) throw new Error('se cerró la app');
+        },
+      }),
+    ).rejects.toThrow('se cerró la app');
+    expect(add).toHaveBeenCalledTimes(1);
+    crash = false;
+    const result = await importCoda(folder, deps, { resume: true });
+    expect(result).toMatchObject({ files: 2, problems: [] });
+    expect(add).toHaveBeenCalledTimes(2);
+  });
+
+  it('una página que solo usa archivos de otra y no se pudo escribir no dice "0 archivos guardados"', async () => {
+    const { a } = await mediaDevice();
+    const html = `<div>${img('bl-r', 'r.png')}</div>`;
+    const folder = smallFolder([page('p1', 'Uno', null, 0, ['bl-r']), page('p2', 'Dos', null, 1, ['bl-r'])], { p1: html, p2: html }, ['bl-r']);
+    const journal = metaJournal(a.db);
+    let opens = 0;
+    const deps: ImportDeps = {
+      tree: a.tree,
+      docs: { open: (id, o) => (++opens === 2 ? Promise.reject(new Error('sin espacio')) : a.docs.open(id, o)), close: (id) => a.docs.close(id), flush: (id) => a.docs.flush(id) },
+      media: a.media,
+      journal,
+    };
+    const result = await importCoda(folder, deps);
+    expect(result.problems).toEqual(['Dos: sin espacio']);
+    // En el diario, la página que usa el archivo de otra queda marcada (no se cuenta dos veces al seguir).
+    const saved = await journal.get('DOC2');
+    expect(saved?.media['p2 bl-r']).toMatchObject({ shared: true });
+    expect(saved?.media['p1 bl-r']).toMatchObject({ key: 'bl-r' });
   });
 
   it('el mismo archivo en varias páginas se guarda y se sube una vez; cada página lo usa (page_files)', async () => {
@@ -903,11 +968,11 @@ describe('HTML de Coda: correcciones de la auditoría', () => {
     expect(got.html).toContain('<a href="https://x.com">x</a>');
     expect(got.html).not.toContain('coda-page');
     expect(got.html).toContain('Z');
-    expect(got.brokenLinks).toEqual(['canvas-Z']);
+    expect(got.brokenLinks).toEqual([{ id: 'canvas-Z', text: 'Z' }]);
     // Sin quien resuelva (y con un % suelto): texto, nunca un link a ninguna parte.
     const bare = prepareCodaHtml('<div><a href="coda-page:%E0">roto</a></div>');
     expect(bare.html).toBe('<div>roto</div>');
-    expect(bare.brokenLinks).toEqual(['%E0']);
+    expect(bare.brokenLinks).toEqual([{ id: '%E0', text: 'roto' }]);
   });
 
   it('una foto de otro sitio adentro de un párrafo no se pierde en silencio: queda marcada como externa', () => {

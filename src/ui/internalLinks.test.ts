@@ -32,6 +32,11 @@ describe('links a páginas de la app', () => {
     expect(internalPageId('https://x.com', origin)).toBeNull();
     expect(internalPageId('', origin)).toBeNull();
     expect(internalPageId(null, origin)).toBeNull();
+    // Un link pegado a mano en mayúsculas va a la página (el árbol guarda los ids en minúsculas).
+    expect(internalPageId(`/p/${ID.toUpperCase()}`, origin)).toBe(ID);
+    // Nada de otro origen disfrazado.
+    expect(internalPageId(`//evil.com/p/${ID}`, origin)).toBeNull();
+    expect(internalPageId(`javascript:alert(1)//p/${ID}`, origin)).toBeNull();
   });
 
   it('un clic simple abre la página en esta pestaña (sin recargar)', () => {
@@ -43,13 +48,13 @@ describe('links a páginas de la app', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it('⌘/Ctrl+clic o Shift+clic en una página de la app: otra pestaña, como un link', () => {
+  it('⌘/Ctrl+clic en una página de la app: otra pestaña, como un link', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    for (const init of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }]) {
+    for (const init of [{ metaKey: true }, { ctrlKey: true }]) {
       expect(editorLinkClick(click(`/p/${ID}`, init))).toBe(true);
     }
     expect(location.pathname).toBe('/');
-    expect(open).toHaveBeenCalledTimes(3);
+    expect(open).toHaveBeenCalledTimes(2);
     expect(open.mock.calls[0][0]).toBe(`${location.origin}/p/${ID}`);
   });
 

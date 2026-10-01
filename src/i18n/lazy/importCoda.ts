@@ -121,8 +121,8 @@ export const importCoda = {
     },
   },
   'import.brokenPageLink': {
-    en: "a link to a page that is not in the export stays as text ({id})",
-    es: "un link a una página que no está en la exportación queda como texto ({id})",
+    en: "a link to another page stays as text (that page is not in the import): “{text}”",
+    es: "un link a otra página queda como texto (esa página no está en la importación): “{text}”",
   },
   'import.embed': {
     en: "a video or embed from another site stays as a link: {url}",

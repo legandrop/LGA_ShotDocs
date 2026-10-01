@@ -2,8 +2,9 @@ import { navigate, pagePath, parseRoute } from '../router';
 
 // Links a otras páginas de la app (`/p/<id>`, o la dirección entera de la app): por ejemplo los que deja la
 // importación de Coda entre sus páginas, o una dirección de página pegada en el texto. Un clic abre la
-// página en la misma pestaña, sin recargar la app; ⌘/Ctrl+clic (o Shift, o el botón del medio) sigue
-// abriéndola en otra pestaña, como cualquier link.
+// página en la misma pestaña, sin recargar la app; ⌘/Ctrl+clic sigue abriéndola en otra pestaña, como
+// cualquier link. Mientras se edita, Shift+clic extiende la selección (el editor no lo trata como clic en el
+// link); en una página de solo lectura, Shift+clic y el botón del medio los resuelve el navegador.
 
 /** La página a la que va un link de la app, o null si es un link a otro lado. */
 export function internalPageId(href: string | null | undefined, origin = location.origin): string | null {
@@ -16,7 +17,8 @@ export function internalPageId(href: string | null | undefined, origin = locatio
   }
   if (url.origin !== origin) return null;
   const route = parseRoute(url.pathname);
-  return route.name === 'page' ? route.id : null;
+  // El árbol guarda los ids en minúsculas; un link pegado a mano puede venir en mayúsculas.
+  return route.name === 'page' ? route.id.toLowerCase() : null;
 }
 
 /**

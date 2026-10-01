@@ -77,7 +77,8 @@ export function ImportCodaDialog() {
   };
 
   const close = () => job.close();
-  const files = folder?.manifest.pages.reduce((n, p) => n + p.media.length, 0) ?? 0;
+  // Cada archivo una vez, aunque esté en varias páginas (se guarda y se sube una vez, como cuenta el final).
+  const files = new Set(folder?.manifest.pages.flatMap((p) => p.media.map((m) => m.file)) ?? []).size;
 
   return (
     <div className="modal-backdrop" onClick={() => !busy && close()}>
