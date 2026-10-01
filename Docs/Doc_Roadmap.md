@@ -93,6 +93,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   leyenda y los adjuntos, y los comentarios siguen anclados. Medido en una página tipo ERSO (61 fotos, 25 filas
   iguales, ±0,55 px). **Para Lega:** ¿convertir sola al abrir? Propuesta y riesgos en `Doc_Fotos_En_Linea.md`,
   "Cómo quedó (entrega 3)".
+  **Entrega 4 hecha (v0.079):** importar de Coda deja cada foto en su renglón, como foto en línea, con la parte del
+  renglón que ocupaba en Coda (624 px = todo el renglón); las fotos de una ficha, juntas. Medido con una copia
+  parcial de ERSO contra el HTML de Coda: las mismas filas, ±1 % de ancho. Sin el recorte de Coda (101 fotos de
+  ERSO). Para la importación definitiva de ERSO hay que volver a correr `--convert-only`.
   **Queda:**
   - Probar en Safari y en el iPhone: pegar, soltar, "/Image" con la cámara, la barra con el dedo, la composición
     (sin tecla previa entre dos fotos duplica el primer carácter en Chromium). Medir la decoración de filas con un doc

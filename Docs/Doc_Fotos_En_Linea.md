@@ -1,8 +1,9 @@
 # Fotos en línea: la foto como un carácter del renglón (P.15)
 
-Estado: **entregas 0 (prototipo), 1 (v0.076: el nodo, los huecos estables, lo que se ve y se toca) y 2 (v0.077:
-crear, dar tamaño, acomodar las elegidas, hojas y PDF) y 3 (v0.078: convertir las fotos-bloque de una página)
-hechas; falta la 4 (importar de Coda)** (2026-10-01; ver "Cómo quedó" de cada una; las "Correcciones de la auditoría", más abajo,
+Estado: **entregas 0 (prototipo), 1 (v0.076: el nodo, los huecos estables, lo que se ve y se toca), 2 (v0.077:
+crear, dar tamaño, acomodar las elegidas, hojas y PDF), 3 (v0.078: convertir las fotos-bloque de una página) y 4
+(v0.079: importar de Coda con los renglones) hechas; queda aparte la 5 (fotos en las celdas de una tabla)**
+(2026-10-01; ver "Cómo quedó" de cada una; las "Correcciones de la auditoría", más abajo,
 mandan sobre el diseño de arriba, y la entrega 2 trae propuestas nuevas, marcadas). Pedido de Lega del
 2026-10-01, con sus palabras: las
 imágenes tienen que ser "como en Coda o en cualquier lado, un carácter más de un texto". Reemplaza el modelo de
@@ -783,3 +784,42 @@ cambios y avisan que hay que actualizar.
   vieja quedan como están: no entraron en esta entrega.
 - El ícono de comentario del margen de un renglón con fotos altas sigue arriba del renglón (los puntos ya bajan al
   texto, v0.077).
+
+## Cómo quedó (entrega 4: importar de Coda con los renglones como estaban)
+
+### Qué cambió
+
+- **La importación** (`codaHtml.ts`, `codaImport.ts`): cada foto o video de Coda entra como foto en línea en el
+  mismo lugar de su renglón (Coda pone cada `<img>` en un `<span style="display: inline-block">` dentro del
+  renglón), en párrafos, ítems de lista, títulos y citas. `w` = el ancho que tenía en Coda sobre 624 px (el ancho
+  del texto de Coda, `CODA_TEXT_WIDTH`): las que iban juntas en un renglón de Coda van juntas en uno de la app, y
+  las más anchas que el renglón, a todo el renglón. Un título con solo fotos pasa a párrafo. Un adjunto sigue
+  siendo la tarjeta (bloque). Las fotos de una celda de tabla van debajo de la tabla, juntas en un renglón
+  (las fotos en celdas son la entrega 5). Detalle en `Doc_Importar_Coda.md`, "La conversión".
+- **Las fichas de las tablas** (`codaTables.mjs`, el comando): las fotos de una columna de fotos van en un solo
+  renglón (una con su ancho; varias, a un tercio cada una). Cambia lo que escribe `--convert-only`: para una
+  importación nueva hay que volver a correrlo (sin red ni token).
+- **Un arreglo de la entrega 2** que apareció con fotos reales: un renglón de solo fotos que no lo llenaban medía
+  lo que sumaban los anchos naturales de las miniaturas (`.bn-block-content` es flex), y cada foto salía más chica
+  (una a 1/1 medía 479 px en vez de 720). Ahora el renglón con fotos ocupa todo el bloque (`styles.css`). Con las
+  fotos de prueba (SVG grandes) no se veía.
+
+### Lo medido
+
+- Pruebas: `codaInlinePhotos.test.ts` (10, con las formas de HTML de ERSO: dos de 312 px juntas, el carácter de
+  objeto, ítem con texto y foto, texto y fotos en un renglón, títulos, celdas, adjunto y video, Script, y la página
+  escrita como en la app: con la marca del renglón, sin nada que una versión anterior abra), `codaImport.test.ts`
+  (las fotos en línea con su `w`) y `coda-tables.test.mjs` (las fotos de la ficha juntas).
+- Copia parcial de ERSO (3 páginas de reporte y 2 fichas, 41 archivos, 93 MB; la exportación real solo se leyó)
+  importada en Chromium contra el servidor de mentira, comparada con el HTML de Coda en una columna de 624 px:
+  17 de 17. Las mismas filas que en Coda en las tres páginas (la más cargada: 23 renglones con 24 fotos, uno con dos), cada
+  foto ocupa la misma parte de la página (diferencia máxima 1 %; 3 % en un ítem de lista, que en Coda tiene más
+  sangría), todas en línea y ningún bloque de foto; las fichas, con sus fotos en línea.
+
+### Límites
+
+- **El recorte de Coda** (`data-docx-crop`, 101 de 6129 fotos de ERSO) no se trae: la foto entra entera, más alta.
+- Una página cuya tabla pasó a tarjetas o fichas (v0.063) no se compara foto a foto con Coda: sus miniaturas de
+  celda pasan a ser las fotos de la tarjeta.
+- La importación de prueba de ERSO ("ERSO (prueba)") se hizo antes: tiene fotos-bloque. La definitiva, con esta
+  versión, entra con los renglones; para las páginas ya importadas está *Convert photos to inline* (entrega 3).

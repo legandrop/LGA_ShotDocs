@@ -2677,6 +2677,15 @@ code {
   margin-left: var(--img-gap, 8px);
 }
 
+/* El renglón con fotos ocupa todo el ancho del bloque. `.bn-block-content` es flex y el renglón, sin esto, mide lo que
+   su contenido: en un renglón de solo fotos que no lo llenan, la suma de los anchos naturales de las miniaturas (480 px
+   o menos), y el ancho de cada foto (una parte del renglón) salía de esa medida (medido con fotos de ERSO: una a 1/1
+   medía 479 px en vez de 720). */
+.bn-block-content > .bn-inline-content:has(.sd-photo) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* Una fila llena justo después de un texto del mismo renglón empieza en un renglón nuevo (la marca la pone la
    decoración de las filas; no es parte del documento). */
 .sd-photo-row-start {

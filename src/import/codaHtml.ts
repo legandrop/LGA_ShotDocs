@@ -7,8 +7,9 @@ import { DRIVE_CARD_PROP, SCRIPT_PROP, scriptMarks } from '../ui/editorSchema';
 //
 // - Fotos y archivos. BlockNote descarta una <img> que está adentro de un párrafo o de un ítem de lista
 //   (Coda las pone siempre así: `<div><span><img></span></div>`) y todo <video>. Antes de convertir, cada
-//   archivo de Coda se cambia por una marca de texto; después, cada marca pasa a ser un bloque `image` con
-//   la dirección que devuelve `urlOf` (la de la cola de archivos, `sdmedia://`).
+//   archivo de Coda se cambia por una marca de texto; después, cada marca pasa a ser una foto en línea en su
+//   renglón (desde la entrega 4 de Doc_Fotos_En_Linea.md), o un bloque `image` si es un adjunto, con la
+//   dirección de la cola de archivos (`sdmedia://`).
 // - Colores. Coda escribe `rgb(...)`; el editor solo tiene sus colores con nombre (gray, yellow…). Se pasa
 //   al más parecido. El gris del texto de cuerpo de Coda se saca: es la convención de Coda, no del texto.
 // - Guion. Los párrafos debajo de un título "Guion" pasan a ser texto Script, que marca solo INT/EXT y DÍA/
@@ -45,6 +46,8 @@ const OPEN = '\uE000';
 const CLOSE = '\uE001';
 const TOKEN = /\uE000(\d+)\uE001/g;
 const MARKERS = /[\uE000\uE001]/g;
+/** El car\u00E1cter de "objeto" (U+FFFC) que Coda deja al lado de una foto. */
+const OBJECT = '\uFFFC';
 
 const HOSTED = /^https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.com\/blobs)\//;
 
@@ -308,12 +311,15 @@ function sameMedia(m: CodaMedia | undefined, href: string): boolean {
   return blob ? blob === m.blobId : href === m.src;
 }
 
-/** Saca los caracteres que se usan de marca del texto y de los atributos que trae Coda. */
+/**
+ * Saca los caracteres que se usan de marca del texto y de los atributos que trae Coda, y el carácter de "objeto"
+ * (U+FFFC) que Coda deja en el texto al lado de una foto: no es texto y se vería como un cuadradito.
+ */
 function stripMarkers(root: Element): void {
   const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     const text = n.textContent!;
-    if (text.includes(OPEN) || text.includes(CLOSE)) n.textContent = text.replace(MARKERS, '');
+    if (text.includes(OPEN) || text.includes(CLOSE) || text.includes(OBJECT)) n.textContent = text.replace(MARKERS, '').replaceAll(OBJECT, '');
   }
   for (const el of root.querySelectorAll('*')) {
     for (const attr of [...el.attributes]) {
@@ -382,39 +388,94 @@ export interface LooseBlock {
 const LIST_ITEMS = new Set(['bulletListItem', 'numberedListItem', 'checkListItem', 'toggleListItem']);
 const SCRIPT_HEADING = /^gui[oó]n\b|^script\b/i;
 
+/** Una foto en línea (`photo`, Doc_Fotos_En_Linea.md): lo que da `photoOf` para una marca. */
+export interface InlinePhoto {
+  type: 'photo';
+  props: { url: string; name: string; w: number };
+}
+
+/** El ancho del texto de una página de Coda (px): una foto de ese ancho o más ocupa todo el renglón. */
+export const CODA_TEXT_WIDTH = 624;
+
 /**
- * Cambia cada marca por su bloque `image` (`imageOf`), junta los párrafos vacíos seguidos, saca los del
- * final y marca como Script lo que está debajo de un título "Guion". Los bloques salen sin id.
+ * El `w` de una foto en línea con el ancho con que se veía en Coda: la parte del renglón de Coda que ocupaba (así
+ * las que entraban juntas en un renglón de Coda entran juntas en uno de la app). 0: su ancho natural.
  */
-export function finishBlocks(blocks: LooseBlock[], imageOf: (index: number) => LooseBlock | null): LooseBlock[] {
-  const out = splitAll(blocks, imageOf);
+export function codaPhotoWidth(px: number): number {
+  return px > 0 ? Math.min(1, Math.round((px / CODA_TEXT_WIDTH) * 10000) / 10000) : 0;
+}
+
+// Los bloques cuyo renglón lleva fotos en línea. En los demás (código) la foto sigue siendo un bloque aparte.
+const PHOTO_HOSTS = new Set(['paragraph', 'heading', 'quote', 'bulletListItem', 'numberedListItem', 'checkListItem', 'toggleListItem']);
+
+/**
+ * Cambia cada marca por su foto: en el renglón donde estaba (`photoOf`, entrega 4 de Doc_Fotos_En_Linea.md) o, si
+ * no es una foto ni un video (un adjunto) o el bloque no lleva fotos en línea, por su bloque `image` (`imageOf`).
+ * Junta los párrafos vacíos seguidos, saca los del final y marca como Script lo que está debajo de un título
+ * "Guion". Los bloques salen sin id. Sin `photoOf`, todas van como bloque (como antes de la entrega 4).
+ */
+export function finishBlocks(
+  blocks: LooseBlock[],
+  imageOf: (index: number) => LooseBlock | null,
+  photoOf?: (index: number) => InlinePhoto | null,
+): LooseBlock[] {
+  const out = splitAll(blocks, imageOf, photoOf);
   markScript(out);
   // Una marca que quedó donde no se la buscó (no debería pasar) no se ve como basura en el texto; la foto
   // la ubica al final quien importa (codaImport.ts).
   return stripTableTokens(collapseEmpty(out), []) as LooseBlock[];
 }
 
-function splitAll(blocks: LooseBlock[], imageOf: (index: number) => LooseBlock | null): LooseBlock[] {
+function splitAll(
+  blocks: LooseBlock[],
+  imageOf: (index: number) => LooseBlock | null,
+  photoOf?: (index: number) => InlinePhoto | null,
+): LooseBlock[] {
   const out: LooseBlock[] = [];
   for (const block of blocks) {
-    const children = splitAll(block.children ?? [], imageOf);
+    const children = splitAll(block.children ?? [], imageOf, photoOf);
     const base: LooseBlock = { type: block.type, props: block.props, content: block.content, children };
     if (block.type === 'table') {
-      // Una foto no puede ir en una celda: la marca se saca y la foto va debajo de la tabla.
+      // Una foto no va en una celda (todavía: entrega 5): la marca se saca y la foto va debajo de la tabla, las
+      // seguidas en un mismo renglón.
       const found: number[] = [];
       base.content = stripTableTokens(block.content, found);
       out.push(base);
+      let row: InlinePhoto[] = [];
+      const flush = () => {
+        if (row.length) out.push({ type: 'paragraph', content: row, children: [] });
+        row = [];
+      };
       for (const i of found) {
+        const photo = photoOf?.(i);
+        if (photo) {
+          row.push(photo);
+          continue;
+        }
+        flush();
         const img = imageOf(i);
         if (img) out.push(img);
       }
+      flush();
       continue;
     }
     if (!Array.isArray(block.content)) {
       out.push(base);
       continue;
     }
-    const parts = splitInline(block.content as Inline[]);
+    if (photoOf && PHOTO_HOSTS.has(block.type)) {
+      const content = inlinePhotos(block.content as Inline[], photoOf);
+      if (content !== block.content) {
+        base.content = content;
+        // Un título que quedó solo con fotos (sin texto) es un renglón de fotos: un título sin texto cortaría el
+        // guion y quedaría vacío en el índice.
+        if (block.type === 'heading' && !inlineText(content).trim()) {
+          base.type = 'paragraph';
+          base.props = { textAlignment: block.props?.textAlignment ?? 'left' };
+        }
+      }
+    }
+    const parts = splitInline(base.content as Inline[]);
     if (parts.length === 1 && typeof parts[0] !== 'number') {
       out.push(base);
       continue;
@@ -445,6 +506,55 @@ function splitAll(blocks: LooseBlock[], imageOf: (index: number) => LooseBlock |
     }
   }
   return out;
+}
+
+/**
+ * Cada marca que `photoOf` resuelve pasa a ser la foto en línea, en su lugar del renglón (las demás quedan como
+ * marca, para ir como bloque). Coda pone cada foto en un `<span style="display: inline-block">` dentro del renglón:
+ * lo que se veía junto en Coda queda junto. Sin cambios devuelve el mismo arreglo.
+ *
+ * Lo que rodeaba a las fotos en Coda y no es texto se saca: el espacio de ancho cero (U+200B) que Coda pone antes de
+ * una foto, los espacios sueltos entre dos fotos (cortarían la fila) y los del borde del renglón, y los espacios
+ * entre un salto de línea y una foto. Los saltos de línea quedan: la foto que en Coda iba debajo del texto sigue
+ * debajo.
+ */
+function inlinePhotos(content: Inline[], photoOf: (index: number) => InlinePhoto | null): Inline[] {
+  const items: Inline[] = [];
+  let found = false;
+  for (const item of content) {
+    if (item.type !== 'text' || !item.text || !item.text.includes(OPEN)) {
+      items.push(item);
+      continue;
+    }
+    let last = 0;
+    for (const m of item.text.matchAll(TOKEN)) {
+      const photo = photoOf(Number(m[1]));
+      if (!photo) continue;
+      found = true;
+      const before = item.text.slice(last, m.index);
+      if (before) items.push({ ...item, text: before });
+      items.push(photo as unknown as Inline);
+      last = m.index + m[0].length;
+    }
+    const rest = item.text.slice(last);
+    if (rest) items.push({ ...item, text: rest });
+  }
+  if (!found) return content;
+  const isPhoto = (i: Inline | undefined) => i?.type === 'photo';
+  const out = items
+    .map((i) => (i.type === 'text' && i.text ? { ...i, text: i.text.replace(/​/g, '') } : i))
+    .map((i, k, all) => {
+      if (i.type !== 'text' || i.text === undefined) return i;
+      let text = i.text;
+      if (isPhoto(all[k + 1])) text = text.replace(/\n[ \t]+$/, '\n');
+      if (isPhoto(all[k - 1])) text = text.replace(/^[ \t]+\n/, '\n');
+      // Solo espacios entre dos fotos, o entre una foto y el borde del renglón.
+      const between = (k === 0 || isPhoto(all[k - 1])) && (k === all.length - 1 || isPhoto(all[k + 1]));
+      if (between && !text.trim() && !text.includes('\n')) text = '';
+      return { ...i, text };
+    })
+    .filter((i) => i.type !== 'text' || i.text !== '');
+  return trimBreaks(out);
 }
 
 /** Parte el contenido en tramos de texto y números de marca, sin saltos de línea sueltos en los bordes. */
@@ -564,7 +674,20 @@ function collapseEmpty(blocks: LooseBlock[]): LooseBlock[] {
  */
 export function checkForeignImages(blocks: LooseBlock[], note: (url: string, kept: boolean) => void): LooseBlock[] {
   const out: LooseBlock[] = [];
-  for (const block of blocks) {
+  for (const original of blocks) {
+    let block = original;
+    // Las fotos en línea del renglón, igual que los bloques.
+    if (Array.isArray(block.content) && (block.content as Inline[]).some((i) => i.type === 'photo')) {
+      const content = (block.content as (Inline & { props?: { url?: unknown } })[]).filter((i) => {
+        if (i.type !== 'photo') return true;
+        const url = String(i.props?.url ?? '');
+        if (url.startsWith('sdmedia://')) return true;
+        const kept = /^https:\/\//i.test(url);
+        note(url, kept);
+        return kept;
+      });
+      block = { ...block, content };
+    }
     const children = block.children?.length ? checkForeignImages(block.children, note) : block.children;
     if (block.type === 'image') {
       const url = String(block.props?.url ?? '');

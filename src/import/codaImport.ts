@@ -1,7 +1,7 @@
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
 import * as Y from 'yjs';
-import type { MediaQueue } from '../media/queue';
+import { isMediaFile, type MediaQueue } from '../media/queue';
 import type { PageDocs } from '../sync/docs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { PageTree } from '../sync/tree';
@@ -12,7 +12,7 @@ import { editorSchemaOptions } from '../ui/editorSchema';
 import { findUnknownContent } from '../ui/unknownContent';
 import type { CommentQueue } from '../sync/comments';
 import { pagePath } from '../router';
-import { checkForeignImages, finishBlocks, prepareCodaHtml, type CodaMedia, type LooseBlock } from './codaHtml';
+import { checkForeignImages, codaPhotoWidth, finishBlocks, prepareCodaHtml, type CodaMedia, type InlinePhoto, type LooseBlock } from './codaHtml';
 import { buildComments, pageBlocks, parseCodaComments, type CodaComments, type PageBlock } from './codaComments';
 
 // Importa a un proyecto nuevo la carpeta que arma `scripts/coda-export.mjs` (Docs/Doc_Importar_Coda.md):
@@ -632,16 +632,37 @@ async function importPage(
     if (!url) return null;
     return { type: 'image', props: { url, name: names.get(index) ?? '', ...size }, children: [] };
   };
+  // Una foto o un video va en línea, en su renglón y con la parte del renglón que ocupaba en Coda (entrega 4 de
+  // Doc_Fotos_En_Linea.md); un adjunto (PDF, zip…) queda como bloque, la tarjeta.
+  const photoOf = (index: number): InlinePhoto | null => {
+    const m = media[index];
+    const w = codaPhotoWidth(m.width);
+    // Una foto de otro sitio va con su dirección; `checkForeignImages` decide si queda y la anota.
+    if (m.external) return { type: 'photo', props: { url: m.src, name: m.name, w } };
+    const url = urls.get(index);
+    const name = names.get(index) ?? '';
+    if (!url || !isMediaFile({ type: m.mime, name })) return null;
+    return { type: 'photo', props: { url, name, w } };
+  };
   const placed = new Set<number>();
   const parsed = (await parser.tryParseHTMLToBlocks(html)) as unknown as LooseBlock[];
-  let blocks = finishBlocks(parsed, (index) => {
-    placed.add(index);
-    return imageOf(index);
-  });
+  let blocks = finishBlocks(
+    parsed,
+    (index) => {
+      placed.add(index);
+      return imageOf(index);
+    },
+    (index) => {
+      const photo = photoOf(index);
+      if (photo) placed.add(index);
+      return photo;
+    },
+  );
   // Red de seguridad: una foto ya guardada que la conversión no ubicó va al final, anotada; nunca se pierde.
   for (const index of urls.keys()) {
     if (placed.has(index)) continue;
-    blocks.push(imageOf(index)!);
+    const photo = photoOf(index);
+    blocks.push(photo ? { type: 'paragraph', content: [photo], children: [] } : imageOf(index)!);
     problems.push(`${title}: ${t('import.movedToEnd', { file: names.get(index) ?? '' })}`);
   }
   // Las fotos que no quedaron guardadas en la app: las https quedan enlazadas, las demás se sacan.

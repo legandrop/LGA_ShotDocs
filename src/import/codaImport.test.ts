@@ -67,6 +67,17 @@ async function convert(html: string): Promise<LooseBlock[]> {
 
 const text = (b: LooseBlock) => ((b.content as { text?: string }[]) ?? []).map((c) => c.text ?? '').join('');
 
+/** Las fotos de los bloques, en orden: los bloques `image` y las fotos en línea (`photo`) de cada renglón. */
+function mediaIn(list: LooseBlock[]): LooseBlock[] {
+  const out: LooseBlock[] = [];
+  for (const x of list) {
+    if (x.type === 'image') out.push(x);
+    if (Array.isArray(x.content)) for (const c of x.content as LooseBlock[]) if (c.type === 'photo') out.push(c);
+    out.push(...mediaIn(x.children ?? []));
+  }
+  return out;
+}
+
 describe('HTML de Coda', () => {
   it('ninguna foto se pierde: las de un ítem quedan adentro, las de un párrafo quedan en su lugar', async () => {
     const blocks = await convert(SCENE);
@@ -230,19 +241,15 @@ describe('importar la carpeta', () => {
     const doc = await b.docs.open(byTitle.get('001 | Primera | Iglesia')!.id);
     const editor = BlockNoteEditor.create({ schema }) as unknown as BlockNoteEditor;
     const blocks = yXmlFragmentToBlocks(editor, doc.getXmlFragment(CONTENT_FRAGMENT)) as unknown as LooseBlock[];
-    const urls: string[] = [];
-    const walk = (list: LooseBlock[]) =>
-      list.forEach((x) => {
-        if (x.type === 'image') urls.push(String(x.props?.url));
-        walk(x.children ?? []);
-      });
-    walk(blocks);
+    const urls = mediaIn(blocks).map((x) => String(x.props?.url));
     expect(urls).toHaveLength(3);
     const ids = new Set([...server.mediaFiles.values()].filter((f) => f.drive_id).map((f) => `sdmedia://${f.id}`));
     for (const url of urls) expect(ids.has(url)).toBe(true);
-    // El ancho de Coda queda si es menor que la página; si no, la foto va sin ancho propio.
+    // Las fotos van en su renglón (entrega 4 de las fotos en línea), con la parte del renglón de Coda que ocupaban
+    // (533 de 624 px); la de 1200 px, todo el renglón.
     const [first] = blocks.filter((x) => x.type === 'bulletListItem');
-    expect(first.children?.[0].props?.previewWidth).toBe(533);
+    expect(mediaIn([first]).map((x) => [x.type, x.props?.w])).toEqual([['photo', 0.8542]]);
+    expect(mediaIn(blocks).map((x) => x.props?.w)).toEqual([0.8542, 0, 1]);
     // La app lo abre: nada que la guarda no conozca y una sola raíz (ninguna reparación escondida).
     expect(findUnknownContent(doc)).toBeNull();
     expect(doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
@@ -311,20 +318,13 @@ describe('importar la carpeta', () => {
     return out;
   }
 
-  /** Los bloques `image` de una página, como los ve la app. */
+  /** Las fotos de una página (bloques `image` y fotos en línea), como las ve la app. */
   async function imagesOf(d: Device, pageId: string): Promise<LooseBlock[]> {
     const doc = await d.docs.open(pageId);
     const editor = BlockNoteEditor.create({ schema }) as unknown as BlockNoteEditor;
     const blocks = yXmlFragmentToBlocks(editor, doc.getXmlFragment(CONTENT_FRAGMENT)) as unknown as LooseBlock[];
     d.docs.close(pageId);
-    const out: LooseBlock[] = [];
-    const walk = (list: LooseBlock[]) =>
-      list.forEach((x) => {
-        if (x.type === 'image') out.push(x);
-        walk(x.children ?? []);
-      });
-    walk(blocks);
-    return out;
+    return mediaIn(blocks);
   }
 
   it('cortada a mitad, se sigue en el mismo proyecto sin repetir páginas ni archivos (nada duplicado en el Drive)', async () => {

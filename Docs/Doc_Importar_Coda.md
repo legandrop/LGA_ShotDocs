@@ -162,12 +162,21 @@ forma un círculo con otras (A dentro de B dentro de A), va al primer nivel y qu
 BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código. Lo demás lo resuelve
 `codaHtml.ts`:
 
-- **Fotos.** BlockNote descarta una `<img>` adentro de un párrafo o de un ítem de lista (Coda las pone
-  siempre así) y todo `<video>`. Antes de convertir, cada archivo se cambia por una marca de texto y después
-  cada marca pasa a ser un bloque `image` con su `sdmedia://`. Una foto adentro de un ítem queda adentro del
-  ítem (con el texto que sigue), como se veía en Coda; una en una tabla va debajo de la tabla.
-- **Ancho.** El ancho con que se veía en Coda pasa a `previewWidth` si es menor que 700 px; más ancho, la foto
-  va sin ancho propio (a lo ancho de la página).
+- **Fotos (desde v0.079, en el renglón).** BlockNote descarta una `<img>` adentro de un párrafo o de un ítem de
+  lista (Coda las pone siempre así: cada una en un `<span style="display: inline-block">` dentro del renglón) y
+  todo `<video>`. Antes de convertir, cada archivo se cambia por una marca de texto y después cada marca pasa a
+  ser una **foto en línea** (`photo`, `Doc_Fotos_En_Linea.md`) en el mismo lugar del renglón, con su
+  `sdmedia://`: las fotos que en Coda iban juntas en un renglón quedan juntas, y las que iban con texto o debajo
+  del texto de un ítem (un salto de línea) quedan igual. Vale en párrafos, ítems de lista, títulos y citas; un
+  título con solo fotos pasa a ser un párrafo (un título vacío cortaría el guion). Un **adjunto** (PDF, zip…)
+  sigue siendo un bloque `image` (la tarjeta). Las fotos de las **celdas de una tabla** que queda como tabla van
+  debajo de la tabla, juntas en un renglón (las fotos en celdas son la entrega 5). Se sacan el espacio de ancho
+  cero y el carácter de objeto (U+FFFC) que Coda deja al lado de una foto, y los espacios sueltos entre fotos.
+  Antes de v0.079 cada foto era un bloque aparte.
+- **Ancho.** `w` = el ancho con que se veía en Coda sobre **624 px** (el ancho del texto de una página de Coda,
+  `CODA_TEXT_WIDTH`): la misma parte del renglón, así dos fotos de 312 px van juntas a la mitad cada una. Más
+  ancha que 624 px, todo el renglón; sin ancho, su ancho natural. Medido en ERSO: la mayor diferencia contra Coda
+  fue 1 % del ancho de la página (3 % en un ítem de lista, que en Coda tiene más sangría).
 - **Nombre.** El de Coda si es un nombre de archivo; si Coda solo sabe el blob, `bl-….<ext>`.
 - **Colores.** Coda escribe `rgb(...)` (también se entiende `#rrggbb`); se pasa al color con nombre más
   parecido del editor (por tono), salvo que de 70° a 165° siempre es verde, como se ve en Coda (desde v0.065).
@@ -258,7 +267,8 @@ probada en `scripts/coda-tables.test.mjs` con datos inventados).
   vista, solo los ids que muestra). Lo ya bajado no se vuelve a pedir, salvo con `--refresh`.
 - **Qué hace con cada tabla** (el modo; `tables.config.json` lo puede forzar):
   - `fichas` (una tabla con fotos o con más de 8 columnas): **una página por fila** ("ficha") con las fotos
-    arriba, los campos cortos en una tabla de dos columnas (con el color que la celda tenía en Coda) y los textos
+    arriba (desde v0.079 juntas en un renglón: una sola con su ancho, varias a un tercio cada una, como al pegar
+    varias en la app), los campos cortos en una tabla de dos columnas (con el color que la celda tenía en Coda) y los textos
     largos debajo, cada uno con su título; las notas salen del HTML de la página (con formato y fotos) y, si esa
     celda no se veía en ninguna vista, del texto de la API. Las fichas van debajo de la página donde estaba la
     tabla, agrupadas como en Coda (una página por grupo). Donde estaba la tabla queda un **índice** (una tabla
@@ -366,6 +376,8 @@ una, que es lo que se importa. El código es `scripts/lib/codaHeic.mjs`.
 
 ### Lo que no pasa
 
+- **El recorte de una foto** que se hizo en Coda (`data-docx-crop`, 101 de 6129 fotos de ERSO): la foto entra
+  entera, con su ancho de Coda (más alta si estaba recortada).
 - **El ícono de la página** de Coda (en MGTZD, el estado de cada escena: ok, importante, cancelada): queda en
   el manifest pero la app todavía no muestra íconos de página.
 - **Tablas y vistas de Coda como bases de datos:** desde v0.063 entran como páginas (ver "Tablas"); lo vivo
