@@ -656,7 +656,10 @@ do $$
 declare
   fn text;
 begin
-  foreach fn in array array['public.delete_project(uuid)', 'public.restore_project(uuid)',
+  -- restore_project suma un parámetro con la entrega 2 (migración 10): vale cualquiera de las dos firmas.
+  foreach fn in array array['public.delete_project(uuid)',
+                            coalesce(to_regprocedure('public.restore_project(uuid)'),
+                                     to_regprocedure('public.restore_project(uuid,boolean)'))::text,
                             'public.set_project_archived(uuid,boolean)', 'public.trashed_projects()',
                             'public.project_delete_info(uuid)', 'private.can_manage_project(uuid)',
                             'private.could_view_project(uuid,uuid)', 'private.refresh_project_files(uuid)',

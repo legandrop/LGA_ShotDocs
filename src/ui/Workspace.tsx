@@ -16,6 +16,7 @@ import {
   useTree,
 } from '../services';
 import { SupabaseRemote } from '../sync/remote';
+import { lazyProjectDrive } from '../media/projectDrive';
 import { useWorkspace } from '../workspace';
 import { FIND_SHORTCUT_LABEL, isFindSelectionTarget, openFindBar } from './findUi';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
@@ -28,7 +29,7 @@ import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
-import { DeletedProjectsList, ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
+import { DeletedProjectsList, ImportCodaDialog, LookForFilesButton, ProjectSearch, ShareDialog } from './lazyDialogs';
 import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
@@ -420,6 +421,17 @@ export function Home() {
           <ArchiveIcon size={16} /> {tr('home.archived')}
         </p>
       )}
+      {/* Restaurado sin su carpeta de Drive (P.14, entrega 2): lo dice, y quien puede la busca de nuevo. */}
+      {tree.project(projectId)?.drive_missing_at && (
+        <div className="archived-note drive-missing-note">
+          <p>{tr('home.driveMissing')}</p>
+          {(perms.role === 'owner' || perms.role === 'admin') && perms.canManageProject(projectId) && (
+            <Part>
+              <LookForFilesButton projectId={projectId} />
+            </Part>
+          )}
+        </div>
+      )}
       <p className="muted">
         {!canCreate
           ? empty
@@ -489,6 +501,9 @@ export function NoProjects({
   const [error, setError] = useState<string | null>(null);
   // Los proyectos borrados que la persona puede restaurar (P.14): si hay alguno, la pantalla los ofrece.
   const remote = useMemo(() => new SupabaseRemote(client), [client]);
+  // Sin la sincronización abierta, la dirección del portero se busca recién si hace falta (restaurar con la carpeta
+  // en la papelera de Drive).
+  const drive = useMemo(() => lazyProjectDrive(client), [client]);
   const [restorable, setRestorable] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const tr = useT();
@@ -551,7 +566,7 @@ export function NoProjects({
           <>
             <h2 className="mono-label">{tr('project.deletedList')}</h2>
             <Part>
-              <DeletedProjectsList remote={remote} onRestored={onRetry} />
+              <DeletedProjectsList remote={remote} drive={drive} onRestored={onRetry} />
             </Part>
           </>
         )}
