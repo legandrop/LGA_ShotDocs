@@ -27,6 +27,11 @@ export interface Env {
 
 /** Lo que el portero guarda (la conexión con Drive, las subidas en curso). Ver index.ts. */
 export interface Store {
+  /**
+   * La llave de lo que se recuerda en la memoria de la instancia (P.9): la misma en todos los pedidos aunque cada
+   * uno tenga su `Store` (index.ts). Sin ella, el propio `Store`.
+   */
+  memoryKey?: object;
   get<T>(key: string): Promise<T | undefined>;
   put(key: string, value: unknown): Promise<void>;
   delete(key: string): Promise<void>;
@@ -63,6 +68,8 @@ interface Upload {
   file?: string;
   /** `set_file_drive` ya respondió bien (o la base ya tenía el archivo subido). */
   linked?: boolean;
+  /** Un archivo de una carpeta (P.9, cifrado en el id): la fila de la carpeta, para volver a mirar el permiso. */
+  folder?: string;
 }
 
 /** `file:<uuid>`: lo que el portero sabe de un archivo de la app. */
@@ -211,10 +218,10 @@ const THUMB_SIDE = 320;
 
 /**
  * Lo que el portero recuerda en la memoria de la instancia (no en el almacenamiento): por carpeta de la app, las
- * subcarpetas ya comprobadas adentro de su árbol y cuándo. Va por `Store` para que dos portales distintos (las
- * pruebas) no se mezclen; index.ts usa el mismo `Store` en todos los pedidos de la instancia.
+ * subcarpetas ya comprobadas adentro de su árbol y cuándo. Va por `Store.memoryKey` (la misma en todos los pedidos
+ * de la instancia, index.ts) o, sin ella, por el `Store`, para que dos porteros distintos (las pruebas) no se mezclen.
  */
-const memory = new WeakMap<Store, Map<string, Map<string, number>>>();
+const memory = new WeakMap<object, Map<string, Map<string, number>>>();
 /** Lo más que se recuerda por carpeta (pasado esto se empieza de nuevo: solo cuesta volver a comprobar). */
 const TREE_MEMORY_MAX = 20_000;
 
@@ -224,15 +231,19 @@ const TREE_MEMORY_MAX = 20_000;
  */
 export function driveFolderName(name: string): string {
   const clean = cleanFileName(name)
-    .replace(/\s+/g, '_')
+    .replace(/[\s\\]+/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '');
   return Array.from(clean).slice(0, 200).join('') || 'Folder';
 }
 
-/** Una ruta relativa de una subcarpeta (`Fotos/Dia_2`): partes no vacías, sin `.` ni `..`, sin barra al principio. */
+/**
+ * Una ruta relativa de una subcarpeta (`Fotos/Dia_2`): partes no vacías, sin `.` ni `..`, sin barra al principio,
+ * hasta `TREE_DEPTH` niveles. Una barra invertida es parte del nombre (en Mac y Linux es válida): en Drive va `_`.
+ * La app aplica las mismas reglas antes de mandar nada (src/media/folderRead.ts, `folderPathOk`).
+ */
 export function validFolderPath(path: unknown): path is string {
-  if (typeof path !== 'string' || !path || path.length > 2000 || path.includes('\\')) return false;
+  if (typeof path !== 'string' || !path || path.length > 2000) return false;
   const parts = path.split('/');
   return parts.length <= TREE_DEPTH && parts.every((p) => p !== '' && p !== '.' && p !== '..' && !/[\u0000-\u001f]/.test(p));
 }
@@ -974,6 +985,9 @@ export class Portero {
       if (total !== upload.size || end < start || body.byteLength !== end - start + 1 || body.byteLength > MAX_CHUNK) {
         throw new HttpError(400, 'The part does not match the upload.');
       }
+      // La última parte de un archivo de una carpeta crea el archivo en Drive: antes se vuelve a mirar que la persona
+      // todavía pueda subir ahí (sacada de la página o del workspace, la subida queda sin terminar).
+      if (sealed && upload.folder && end + 1 === total) await this.appFolder(who, upload.folder, 3);
     }
     const res = await this.http(upload.session, {
       method: 'PUT',
@@ -1221,10 +1235,11 @@ export class Portero {
    * el id de Drive de la carpeta de la app.
    */
   private known(root: string): Map<string, number> {
-    let byRoot = memory.get(this.store);
+    const key = this.store.memoryKey ?? this.store;
+    let byRoot = memory.get(key);
     if (!byRoot) {
       byRoot = new Map();
-      memory.set(this.store, byRoot);
+      memory.set(key, byRoot);
     }
     let set = byRoot.get(root);
     if (!set || set.size > TREE_MEMORY_MAX) {
@@ -1424,7 +1439,9 @@ export class Portero {
         throw new HttpError(400, 'Each file needs its folder, name and size.', 'bad_request');
       }
       const name = cleanFileName(item.name) || 'file';
-      const mime = typeof item.mime === 'string' && MIME.test(item.mime) ? item.mime.toLowerCase() : 'application/octet-stream';
+      const asked = typeof item.mime === 'string' && MIME.test(item.mime) ? item.mime.toLowerCase() : '';
+      // Un tipo de Google (carpeta, documento) crearía eso en vez de un archivo: va como bytes sin tipo.
+      const mime = asked && !asked.startsWith('application/vnd.google-apps.') ? asked : 'application/octet-stream';
       return { dir, name, mime, size };
     });
     // Cada subcarpeta, adentro del árbol. Las que no se llegan a comprobar en este pedido (el tope de llamados)
@@ -1474,7 +1491,7 @@ export class Portero {
       }
       const session = res.headers.get('Location');
       if (res.ok && session) {
-        out.push({ uploadId: await seal(secret, { s: session, u: who.userId, z: w.size, c: Date.now() }) });
+        out.push({ uploadId: await seal(secret, { s: session, u: who.userId, z: w.size, c: Date.now(), f: file }) });
         continue;
       }
       const reasons = await driveReasons(res);
@@ -1491,14 +1508,14 @@ export class Portero {
 
   /** Una subida de un archivo de una carpeta, de su id cifrado (`folderSessions`); `null` si no es de este portero. */
   private async folderUpload(uploadId: string): Promise<Upload | null> {
-    const data = await unseal<{ s: string; u: string; z: number; c: number }>(await this.secret(), uploadId);
+    const data = await unseal<{ s: string; u: string; z: number; c: number; f?: string }>(await this.secret(), uploadId);
     if (!data || typeof data.s !== 'string' || !data.s.startsWith('https://')) return null;
-    return { session: data.s, user: data.u, size: data.z, createdAt: data.c };
+    return { session: data.s, user: data.u, size: data.z, createdAt: data.c, ...(data.f ? { folder: data.f } : {}) };
   }
 
   /**
    * `POST /folder/list` (nivel 1): `{ file, dir?, pageToken? }`. Lo que hay ahora en la carpeta (o en la
-   * subcarpeta `dir`, que tiene que estar adentro del árbol), sin la papelera de Drive, hasta 300 cosas por
+   * subcarpeta `dir`, que tiene que estar adentro del árbol), sin la papelera de Drive, hasta 100 cosas por
    * pedido (`nextPageToken` para seguir). Cada archivo sale con su pase (`url`, el mismo de las fotos, 8 horas) y,
    * si Drive tiene miniatura, la dirección de la miniatura (`thumb`). Las subcarpetas traen su id (para abrirlas);
    * los accesos directos y los documentos de Google, solo el nombre: nunca se siguen ni se bajan.
@@ -1510,14 +1527,17 @@ export class Portero {
     if (!root) throw new HttpError(409, 'This folder is still being created: try again in a moment.', 'not_ready');
     const dir = body.dir === undefined || body.dir === null || body.dir === '' ? root : body.dir;
     if (typeof dir !== 'string' || !DRIVE_ID.test(dir)) throw new HttpError(400, 'Missing the folder.', 'bad_request');
-    // Lo de afuera del árbol no existe para la app: el mismo 404 que algo que no está.
+    // La subcarpeta pedida se vuelve a mirar en Drive siempre (una en la papelera o movida afuera deja de verse en el
+    // acto); lo de arriba se toma de lo ya comprobado. Lo de afuera del árbol no existe: el mismo 404.
+    if (dir !== root) this.known(root).delete(dir);
     if (!(await this.inTree(root, dir))) throw new HttpError(404, 'This folder does not exist or you cannot see it.', 'not_found');
     const pageToken = typeof body.pageToken === 'string' && /^[\w.~-]{1,2000}$/.test(body.pageToken) ? body.pageToken : '';
     const params = new URLSearchParams({
       q: `${quoted(dir)} in parents and trashed = false`,
       fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,hasThumbnail)',
-      // 300 por pedido: cada archivo lleva su pase firmado, y el plan gratis da 10 ms de CPU por pedido.
-      pageSize: '300',
+      // 100 por pedido: cada archivo lleva su pase firmado, y el plan gratis da 10 ms de CPU por pedido (300 se
+      // midieron en ~9,5 ms en una computadora; falta medirlo en Cloudflare).
+      pageSize: '100',
       orderBy: 'folder,name_natural',
       ...(pageToken ? { pageToken } : {}),
     });

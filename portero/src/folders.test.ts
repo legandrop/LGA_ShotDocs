@@ -244,7 +244,11 @@ describe('carpetas: nombres y rutas', () => {
 
   it('una ruta no puede subir ni empezar con barra', () => {
     expect(validFolderPath('Fotos/Dia 2')).toBe(true);
-    for (const bad of ['', '/Fotos', 'Fotos/', 'a//b', '..', 'a/../b', './a', 'a\\b', 1]) expect(validFolderPath(bad)).toBe(false);
+    for (const bad of ['', '/Fotos', 'Fotos/', 'a//b', '..', 'a/../b', './a', 1]) expect(validFolderPath(bad)).toBe(false);
+    // Una barra invertida es parte del nombre (Mac, Linux): vale, y en Drive va "_".
+    expect(validFolderPath('Raras/a\\b')).toBe(true);
+    expect(driveFolderName('a\\b')).toBe('a_b');
+    expect(validFolderPath(Array.from({ length: 31 }, () => 'x').join('/'))).toBe(false);
   });
 });
 
@@ -430,7 +434,65 @@ describe('carpetas: subir', () => {
   });
 });
 
+describe('carpetas: la instancia', () => {
+  it('cada pedido trae su Store (como index.ts) y lo comprobado se comparte por la llave de memoria', async () => {
+    const { world, store, p } = await setup();
+    const tree = await prepare(p, { dirs: ['Fotos'] });
+    const memoryKey = {};
+    const fresh = () => new Portero(env, { ...store, memoryKey }, world.http);
+    expect((await call(fresh(), '/folder/list', 'viewer-jwt', { file: F1, dir: tree.dirs.Fotos })).status).toBe(200);
+    // Otro pedido, otro Store, la misma llave: no vuelve a subir por los padres de "Fotos" (solo mira la subcarpeta).
+    const before = world.calls.filter((c) => c.startsWith('GET www.googleapis.com/drive/v3/files/')).length;
+    expect((await call(fresh(), '/folder/list', 'viewer-jwt', { file: F1, dir: tree.dirs.Fotos })).status).toBe(200);
+    const metaGets = world.calls.filter((c) => c.startsWith('GET www.googleapis.com/drive/v3/files/')).length - before;
+    expect(metaGets).toBeLessThanOrEqual(2);
+  });
+});
+
 describe('carpetas: quién sube', () => {
+  it('perder el permiso deja la subida sin terminar: la última parte vuelve a mirar', async () => {
+    const { world, p } = await setup();
+    await prepare(p, {});
+    const { items } = (await (await call(p, '/folder/sessions', 'editor-jwt', { file: F1, items: [{ dir: null, name: 'a.bin', size: 4 }] })).json()) as {
+      items: { uploadId: string }[];
+    };
+    const part = (from: number, to: number) =>
+      call(p, `/upload/${items[0]!.uploadId}`, 'editor-jwt', undefined, {
+        method: 'PUT',
+        headers: { 'Content-Range': `bytes ${from}-${to}/4` },
+        body: new Uint8Array(to - from + 1),
+      });
+    expect((await part(0, 1)).status).toBe(200);
+    world.base.get(F1)!.levels['u-editor'] = 0;
+    expect((await part(2, 3)).status).toBe(404);
+    expect([...world.drive.values()].some((f) => f.name === 'a.bin')).toBe(false);
+  });
+
+  it('un tipo de Google (carpeta, documento) no se crea por las subidas', async () => {
+    const { world, p } = await setup();
+    await prepare(p, {});
+    const res = await call(p, '/folder/sessions', 'editor-jwt', {
+      file: F1,
+      items: [{ dir: null, name: 'falsa', mime: 'application/vnd.google-apps.folder', size: 0 }],
+    });
+    const { items } = (await res.json()) as { items: { done?: { id: string } }[] };
+    expect(world.drive.get(items[0]!.done!.id)!.mimeType).toBe('application/octet-stream');
+  });
+
+  it('una subcarpeta mandada a la papelera deja de listarse en el acto', async () => {
+    const { world, p } = await setup();
+    const tree = await prepare(p, { dirs: ['Fotos'] });
+    expect((await call(p, '/folder/list', 'viewer-jwt', { file: F1, dir: tree.dirs.Fotos })).status).toBe(200);
+    world.drive.get(tree.dirs.Fotos!)!.trashed = true;
+    expect((await call(p, '/folder/list', 'viewer-jwt', { file: F1, dir: tree.dirs.Fotos })).status).toBe(404);
+  });
+
+  it('una subcarpeta con barra invertida en el nombre se crea, con "_"', async () => {
+    const { world, p } = await setup();
+    const tree = await prepare(p, { dirs: ['a\\b'] });
+    expect(world.drive.get(tree.dirs['a\\b']!)!.name).toBe('a_b');
+  });
+
   it('solo quien la creó sube adentro, aunque otro llegue a editarla pegando su bloque en una página propia', async () => {
     const { world, p } = await setup();
     const tree = await prepare(p, { dirs: ['Fotos'] });

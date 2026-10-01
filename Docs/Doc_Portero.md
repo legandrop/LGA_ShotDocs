@@ -151,7 +151,7 @@ Supabase (`Authorization: Bearer …`). "Nivel" es el de la persona sobre el arc
 | `POST /pass` con `file` | Nivel 1 o más | Una carpeta (P.9): `409 is_folder` (lo de adentro se lista). `{ file: <id> }` → `{ url, named: true }`: un pase para `/m/…`, siempre con el tipo y el nombre de `files` (un `type` o un `name` que mande la app no cuentan). `named: true` le dice a la app que este portero pone el nombre y entiende `?download=1` (un portero anterior responde solo `{ url }`). Comprueba que el archivo de Drive lleve la marca de ese archivo. `409` si todavía no terminó de subirse. |
 | `POST /folder/prepare` | Nivel 3 o más, y quien agregó la carpeta (`files.created_by`, desde la migración `20261001150000_carpetas_creador.sql`; sin ella, quien la creó en Drive): si no, `403 not_creator` | Carpetas (P.9, `Doc_Carpetas.md`). `{ file, name, dirs?, parents? }`: `file` es la fila de la carpeta (`mime = 'inode/directory'`). La primera vez crea `<Proyecto>/Carpetas/<nombre>` (si el nombre ya está, `_2`, `_3`…) con la marca `sdFile` y llama a `set_file_drive`. Después crea las subcarpetas de `dirs` (rutas relativas sin `..`, primero las de arriba, hasta 30); `parents` trae los ids de las de arriba creadas antes, y cada uno tiene que estar adentro del árbol (`403 outside` si no). Cada subcarpeta lleva `sdFolder` y `sdPath`: repetir un pedido no crea nada dos veces. → `{ root: { id, name }, dirs: { <ruta>: <id> } }`. |
 | `POST /folder/sessions` | Nivel 3 o más, y quien creó la carpeta | `{ file, items: [{ dir, name, mime, size }] }`, hasta 30; `dir`: el id de la subcarpeta (adentro del árbol) o `null`. Abre una subida reanudable por archivo con el nombre, la carpeta y el peso fijados, y devuelve por cada uno `{ uploadId }` (la dirección de Google cifrada por el portero, con quién la abrió y cuándo; se usa con `PUT /upload/<id>` y vence a los 6 días), `{ done }` (un archivo vacío, ya creado) o `{ error: 'rate' }` (Drive pidió ir más despacio: pedirlo de nuevo después). No guarda nada por archivo. |
-| `POST /folder/list` | Nivel 1 o más | `{ file, dir?, pageToken? }`: lo que hay ahora en la carpeta (o en la subcarpeta `dir`, adentro del árbol; si no, `404`), sin la papelera de Drive, hasta 300 por pedido (cada archivo lleva su pase firmado: 10 ms de CPU del plan gratis). Las subcarpetas traen su id; cada archivo, su pase (`url`, 8 horas, con `m` = la fecha de cambio) y `thumb` si Drive tiene miniatura; los accesos directos y los documentos de Google, solo el nombre. → `{ entries, nextPageToken }`. `409 not_ready` si la carpeta todavía no se creó en Drive. |
+| `POST /folder/list` | Nivel 1 o más | `{ file, dir?, pageToken? }`: lo que hay ahora en la carpeta (o en la subcarpeta `dir`, adentro del árbol; si no, `404`), sin la papelera de Drive, hasta 100 por pedido (cada archivo lleva su pase firmado; 300 se midieron en ~9,5 ms de CPU en una computadora, al límite de los 10 ms del plan gratis: falta medirlo en Cloudflare). Las subcarpetas traen su id; cada archivo, su pase (`url`, 8 horas, con `m` = la fecha de cambio) y `thumb` si Drive tiene miniatura; los accesos directos y los documentos de Google, solo el nombre. → `{ entries, nextPageToken }`. `409 not_ready` si la carpeta todavía no se creó en Drive. |
 | `GET /t/<pase>` | Quien tenga el pase | La miniatura que hace Drive del archivo del pase (lado 320), por el portero (Drive no deja usarlas desde una página), con CSP `sandbox`; la guarda la caché de Cloudflare por archivo y fecha de cambio, y el navegador un día. |
 | `POST /pass` con `fileId` | Dueño | La prueba de media: un pase para un archivo de Drive por su id. |
 | `POST /trash` | Dueño o admin (lo decide la base) | `{ file: <id> }`: manda un archivo de la papelera de la app a la papelera de Drive (`PATCH files/<id>` con `trashed: true`; nunca lo borra). Con la sesión de la persona: `media_file`; Drive conectado y, si el archivo está en Drive, que lleve la marca de este (si algo de eso falla, no se le pide nada a la base y el archivo queda como estaba); `purge_file` (la base comprueba que sea dueño o admin con permiso sobre el proyecto y que el archivo esté en la papelera, y lo marca); `media_file` de nuevo (tiene que decir que está en la papelera y pedido); Drive; y al final `media_purged`. Devuelve `{ status: 'done', file, drive }`, con `drive`: `trashed` (quedó en la papelera de Drive), `missing` (en Drive ya no estaba) o `none` (todavía no está en Drive: si la subida seguía en curso, al terminar el portero lo manda solo a la papelera de Drive). Pedirlo de nuevo no hace nada de más. Los errores traen `{ error, code }` (tabla de abajo). |
@@ -337,8 +337,12 @@ Con `drive.file` (hoy) el portero ve solo lo que creó la app; con `drive.readon
 todo el Drive del dueño. Por eso la regla de no salir de la carpeta es **código del portero** y no depende del
 permiso de Google: todo id de Drive que manda la app (una subcarpeta para listar, una para subir, la de arriba de
 una subcarpeta nueva) se comprueba subiendo por sus `parents` hasta la carpeta de la app (`inTree`). Lo
-comprobado se recuerda 10 minutos en la memoria de la instancia (`index.ts` usa el mismo `Store` en todos los
-pedidos de la instancia): una subcarpeta que el dueño movió afuera deja de verse a más tardar a los 10 minutos.
+comprobado se recuerda 10 minutos en la memoria de la instancia, con una llave fija (`memoryKey` de `index.ts`;
+cada pedido crea su propio stub del Durable Object, que en Cloudflare queda atado al pedido que lo creó). La
+subcarpeta que se pide listar se vuelve a mirar en Drive siempre: una que el dueño mandó a la papelera o movió afuera
+deja de listarse en el acto; lo que está adentro de ella, a más tardar a los 10 minutos. La última parte de cada
+archivo de una carpeta vuelve a preguntarle a la base si la persona todavía puede subir ahí: sacada de la página, la
+subida queda sin terminar.
 La raíz del Drive, un ciclo, algo que no es una carpeta (un acceso directo), algo en la papelera, una carpeta con
 dos padres o 30 niveles: no. Sin acceso a la página, todo da `404` como si no existiera.
 
@@ -350,6 +354,27 @@ las páginas, además, la migración de archivos (`20260930150000_archivos.sql`,
 *"The workspace database is not up to date for files yet."* Para la papelera de archivos, la migración
 `20260930180000_papelera_archivos.sql` (`purge_file` y `media_purged`); sin ella, `/trash` responde *"The
 workspace database is not up to date for the file trash yet."* y no toca Drive.
+
+### 0. Antes de publicar: la prueba en `workerd`
+
+Las pruebas de `portero/src/*.test.ts` corren `core.ts` con un almacenamiento en memoria y **no pasan por
+`index.ts`** ni por el Durable Object. Antes de publicar un cambio del portero, correr desde la raíz del repo:
+
+```
+node scripts/portero-smoke.mjs
+```
+
+Levanta el portero con `wrangler dev` (local: `workerd` y el Durable Object en una carpeta temporal, sin cuenta
+de Cloudflare ni red; la primera vez `npx` baja `wrangler`) y le manda varios pedidos seguidos (pases inválidos que
+leen el Durable Object, el estado sin sesión, un listado de carpeta sin sesión, el preflight, la salud). Falla si
+alguno da otra cosa, por ejemplo un `500`: así se vio que guardar el stub del Durable Object entre pedidos rompe
+todo desde el segundo pedido ("Cannot perform I/O on behalf of a different request"). `PORTERO_SMOKE_PORT` cambia
+el puerto (4198) y `PORTERO_SMOKE_WRANGLER` la versión (`wrangler@4.146.0`, que conoce la `compatibility_date` del portero: si se sube esa fecha, subir también esta versión).
+
+**Pendiente de medir en Cloudflare (P.9):** el CPU de `/folder/list` con 100 archivos (panel del Worker →
+Metrics), y la caché de las miniaturas: `caches.default` no guarda nada en una dirección `*.workers.dev` (sí con un
+dominio propio), así que ahí cada miniatura cuesta dos llamados a Drive; y cada `/t/` lee el Durable Object (la
+clave de los pases y el token), cuando el diseño decía cero. Lejos de los límites del plan gratis.
 
 ### 1. Publicar el portero en Cloudflare
 

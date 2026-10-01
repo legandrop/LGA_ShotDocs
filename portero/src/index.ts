@@ -23,21 +23,21 @@ interface Env extends PorteroEnv {
 }
 
 /**
- * El mismo `Store` para todos los pedidos de la instancia: lo que el portero recuerda en memoria (las subcarpetas
- * ya comprobadas de una carpeta, P.9) va por `Store`. Lo guardado vive siempre en el Durable Object.
+ * La llave de lo que el portero recuerda en la memoria de la instancia (las subcarpetas ya comprobadas de una
+ * carpeta, P.9): la misma para todos los pedidos. El stub del Durable Object, en cambio, se crea en cada pedido:
+ * en Cloudflare queda atado al pedido que lo creó y usarlo desde otro tira "Cannot perform I/O on behalf of a
+ * different request" (un 500 desde el segundo pedido de la instancia).
  */
-let shared: { ns: DurableObjectNamespace<Store>; store: PorteroStore } | null = null;
+const memoryKey = {};
 
 function storeFor(env: Env): PorteroStore {
-  if (shared?.ns === env.STORE) return shared.store;
   const stub = env.STORE.get(env.STORE.idFromName('main'));
-  const store: PorteroStore = {
+  return {
+    memoryKey,
     get: async <T>(key: string) => (await stub.read(key)) as T | undefined,
     put: (key, value) => stub.write(key, value),
     delete: (key) => stub.remove(key),
   };
-  shared = { ns: env.STORE, store };
-  return store;
 }
 
 export default {
