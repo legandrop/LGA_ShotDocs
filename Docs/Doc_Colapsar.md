@@ -872,3 +872,18 @@ Pedido de Lega sobre v0.053/v0.054. **Manda sobre lo de arriba.**
   triángulo (los puntos pasan a su título); en las listas, los puntos a la izquierda y un clic de verdad en la
   casilla la marca y en el botón abre la desplegable; arrastrar los puntos con el mouse mueve el bloque.
 
+## Cómo quedó (1b, primer paso: "Imprimir como se ve", v0.067)
+
+- **La casilla** está en el menú de la página, debajo de "Exportar PDF / Imprimir", y **solo aparece con algo
+  colapsado** en la página (`counts.collapsed > 0`). Su tooltip dice que deja afuera las secciones colapsadas y
+  que las hojas no coinciden con las marcas de la pantalla.
+- **Se guarda en el dispositivo** (`src/ui/printAsSeen.ts`, `localStorage`, clave `shotdocs-print-as-seen`; sin
+  almacenamiento vale para esa vez). La usan el menú, Ctrl/⌘+P y la impresión desde el navegador, porque todo
+  pasa por `prepare` en `printPage.ts`.
+- **Qué sale:** `buildPrintView(…, 'output', { asSeen })` saca de la copia los `.bn-block-outer` escondidos y el
+  grupo de hijos de cada título colapsado, y la vista pagina su propio contenido. Solo en la vista de salida y
+  solo si hay algo colapsado; la de medir (las marcas de la pantalla) sigue con todo abierto. No toca el
+  documento.
+- **Pruebas:** `src/ui/collapsePagination.test.ts` ("imprimir como se ve").
+- **Falta de la 1b:** arrastrar la sección entera y Shift+⌘/Ctrl+↑/↓ como una unidad (tocan el documento: ver
+  "Para la 1b (riesgo)").

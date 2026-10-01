@@ -9,6 +9,11 @@ export const menus = {
   'pageMenu.move': { en: "Move to…", es: "Mover a…" },
   'pageMenu.pageSize': { en: "Page size", es: "Tamaño de hoja" },
   'pageMenu.print': { en: "Export PDF / Print", es: "Exportar PDF / Imprimir" },
+  'pageMenu.printAsSeen': { en: "Print as shown", es: "Imprimir como se ve" },
+  'pageMenu.printAsSeenTip': {
+    en: "Leaves out collapsed sections.\nThe pages won't match the page marks on screen.",
+    es: "Sin las secciones colapsadas.\nLas hojas no coinciden con las marcas de la pantalla.",
+  },
   'pageMenu.collapseAll': { en: "Collapse all", es: "Colapsar todo" },
   'pageMenu.expandAll': { en: "Expand all", es: "Abrir todo" },
   'pageMenu.printTip': {

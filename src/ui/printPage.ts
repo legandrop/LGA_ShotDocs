@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { printAsSeen } from './printAsSeen';
 import { MEDIA_SCHEME, mediaIdOf, type MediaQueue } from '../media/queue';
 import { navigate, pagePath } from '../router';
 import { IS_MAC, isLetter, modPressed } from './findUi';
@@ -64,7 +65,9 @@ if (typeof window !== 'undefined') window.addEventListener('afterprint', onAfter
 /** Arma la vista de impresión de la página abierta y calcula sus cortes (sin mostrar nada todavía). */
 function prepare(article: HTMLElement, format: Format): Job {
   finishPrint();
-  const view = buildPrintView(article, format, 'output');
+  // Como se ve solo si hay algo colapsado: si no, es lo mismo.
+  const asSeen = printAsSeen() && !!article.querySelector('.sd-collapsed');
+  const view = buildPrintView(article, format, 'output', { asSeen });
   try {
     const result = paginateView(view);
     applyBreaks(result);

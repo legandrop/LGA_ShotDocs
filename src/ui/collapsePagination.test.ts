@@ -127,6 +127,35 @@ describe('las hojas con secciones colapsadas', () => {
   });
 });
 
+describe('imprimir como se ve', () => {
+  it('con la casilla, la vista para imprimir sale sin lo colapsado (también los hijos del título); para medir, todo abierto', () => {
+    const { editor, article } = mountPage([h('T'), p('a'), p('b'), h('U'), p('c')]);
+    setCollapsed(editor.prosemirrorView!, [editor.document[0].id], true);
+    const view = buildPrintView(article, { size: 'A4', landscape: false }, 'output', { asSeen: true });
+    const measure = buildPrintView(article, { size: 'A4', landscape: false }, 'measure', { asSeen: true });
+    try {
+      expect([...view.root.querySelectorAll('.bn-block-content')].map((el) => el.textContent)).toEqual(['T', 'U', 'c']);
+      expect(view.root.querySelectorAll('.sd-collapsed-hidden, .sd-collapsed')).toHaveLength(0);
+      // Las marcas de la pantalla siguen contando todo abierto.
+      expect([...measure.root.querySelectorAll('.bn-block-content')].map((el) => el.textContent)).toEqual(['T', 'a', 'b', 'U', 'c']);
+      // El documento no cambió.
+      expect(editor.document.map((b) => (b.content as { text: string }[])[0]?.text)).toEqual(['T', 'a', 'b', 'U', 'c']);
+    } finally {
+      view.root.remove();
+      measure.root.remove();
+    }
+  });
+
+  it('la casilla se guarda en el dispositivo (y sin almacenamiento no rompe)', async () => {
+    const { printAsSeen, setPrintAsSeen } = await import('./printAsSeen');
+    expect(printAsSeen()).toBe(false);
+    setPrintAsSeen(true);
+    expect(printAsSeen()).toBe(true);
+    setPrintAsSeen(false);
+    expect(printAsSeen()).toBe(false);
+  });
+});
+
 describe('la etiqueta de las hojas escondidas', () => {
   it('"Hoja 5", "Hoja 3 adentro" y "Hojas 2–4 adentro"', () => {
     expect(sheetLabel({ sheet: 5, y: 0 }, t)).toBe('Page 5');

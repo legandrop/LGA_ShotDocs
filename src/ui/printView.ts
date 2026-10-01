@@ -85,6 +85,7 @@ export function buildPrintView(
   article: HTMLElement,
   format: Pick<PageFormat, 'size' | 'landscape'>,
   kind: 'measure' | 'output',
+  options: { asSeen?: boolean } = {},
 ): PrintView {
   const geometry = printGeometry(format);
   const root = document.createElement('div');
@@ -132,7 +133,7 @@ export function buildPrintView(
     shell.setAttribute('data-color-scheme', 'light');
     shell.setAttribute('data-mantine-color-scheme', 'light');
     const copy = live.cloneNode(true) as HTMLElement;
-    cleanCopy(copy, live);
+    cleanCopy(copy, live, kind === 'output' && !!options.asSeen);
     shell.append(copy);
     host.append(shell);
     page.append(host);
@@ -151,7 +152,7 @@ export function buildPrintView(
 /**
  * Saca de la copia lo que no va en papel, antes de agregarla al documento (así un iframe no carga).
  */
-function cleanCopy(copy: HTMLElement, live: HTMLElement): void {
+function cleanCopy(copy: HTMLElement, live: HTMLElement, asSeen = false): void {
   // Las imágenes con la proporción que ya tienen en pantalla (emparejadas antes de sacar nada): la copia
   // mide bien aunque no haya terminado de cargar.
   const liveImages = live.querySelectorAll('img');
@@ -168,6 +169,12 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement): void {
     if (source && img.classList.contains('bn-visual-media') && !img.closest('.img-sized')) fixMediaWidth(img, source);
   });
   for (const el of copy.querySelectorAll(REMOVE)) el.remove();
+  // "Imprimir como se ve": sin lo que esconde un título colapsado (los bloques de afuera y sus hijos). Las
+  // clases solas no alcanzan: más abajo se sacan para que el resto salga abierto.
+  if (asSeen) {
+    for (const el of copy.querySelectorAll('.bn-block-content.sd-collapsed-hidden')) el.closest('.bn-block-outer')?.remove();
+    for (const el of copy.querySelectorAll('.bn-block-content.sd-collapsed')) el.parentElement?.querySelector(':scope > .bn-block-group')?.remove();
+  }
   for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('[contenteditable]')]) el.removeAttribute('contenteditable');
   // Sin ids repetidos en la página.
   for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('[id]')]) el.removeAttribute('id');
