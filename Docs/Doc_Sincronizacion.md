@@ -3,7 +3,7 @@
 Cómo funciona hoy la regla de no perder nunca información. El código está en `src/sync/` y las pruebas
 (`npm test`) en `src/sync/sync.test.ts`, `audit.test.ts` (los casos de la auditoría de la fase 1),
 `editor.test.ts` (con el editor real, en jsdom), `docs.test.ts` (qué falta subir después de bajar y la
-semilla solo en memoria), `uploadDeletes.test.ts` (subir solo los borrados nuevos, B.15), `projects.test.ts` (proyectos en la cola, también sin
+semilla solo en memoria), `uploadDeletes.test.ts` y `uploadDeletesVersions.test.ts` (subir solo los borrados nuevos, B.15), `projects.test.ts` (proyectos en la cola, también sin
 red y rechazados), `restore.test.ts` (la generación al restaurar una copia y la versión mínima del
 workspace, y el aviso de base vieja), `src/workspace.test.ts` (los nombres de lo guardado en el
 dispositivo), `src/workspaces.test.ts` (la lista de workspaces del dispositivo, los nombres de Wanka, los
@@ -211,9 +211,14 @@ y no sube `DB_SCHEMA_VERSION`: con la base sin migrar, eso no se muestra y no ha
 de tramos borrados `[reloj, reloj + largo)` de cada autor. `Y.encodeStateAsUpdate(doc, syncedSV)` corta los
 elementos con el vector, pero escribe siempre **todos** los borrados del documento (un borrado no avanza
 ningún reloj, así que el vector no los puede describir). Cada subida repetía la historia entera de borrados de
-la página: con 200 ediciones con borrados (`src/sync/uploadDeletes.test.ts`), las últimas 20 subidas pesaban
-929 B de promedio y el total 112 KB; la simulación del diseño de compactar (roadmap B.9) dio que es el 96 %
-del peso de `page_updates` de una página muy editada (2,4 MB contra 92 KB en 2000 subidas).
+la página. Dos medidas, de dos guiones distintos (por eso los números no coinciden):
+
+- **La simulación del diseño de compactar** (roadmap B.9; ediciones sueltas de un texto en bloques, una subida
+  por pausa): con 2000 subidas, 2,4 MB en `page_updates` contra 92 KB sin los borrados repetidos. Los borrados
+  repetidos eran el 96 % del peso.
+- **Las pruebas de esta tanda** (`src/sync/uploadDeletes.test.ts`, por `PageDocs` y el servidor de prueba, con
+  más borrados por subida): con 200 ediciones, las últimas 20 subidas pesaban 929 B de promedio y el total 112 KB;
+  con el guion de sesiones de 60 subidas y 2000 subidas, 4,2 MB.
 
 **Cómo es ahora** (`src/sync/deleteSets.ts` y `pushPage` en `docs.ts`):
 
@@ -232,7 +237,13 @@ del peso de `page_updates` de una página muy editada (2,4 MB contra 92 KB en 20
      `syncedSV`, `ackedVersion` y el envío que se borra.
   2. Al **bajar**, con los borrados de lo que mandó el servidor, en la transacción que guarda lo bajado y
      avanza el cursor. Acá no hace falta el tope de lo integrado que tiene el vector: un borrado de más en la
-     cuenta (de algo que el documento todavía no tiene) no cambia qué hay que subir.
+     cuenta (de algo que el documento todavía no tiene) no cambia qué hay que subir. La cuenta se prepara
+     **antes y fuera** de esa transacción (como el tope del vector, `integratedCap`), con los borrados de lo
+     bajado ya juntado (`mergeUpdates` une los de todas las filas); adentro solo se guarda, si `syncedDS` y la
+     generación siguen siendo los que se leyeron (si no, se vuelve a hacer adentro). Así el guardado local de
+     ninguna página espera a la cuenta: las filas de las versiones anteriores traen el delete set entero cada
+     una, y unirlas fila por fila adentro trababa ese guardado. Bajar 1500 filas viejas de una página: unos
+     140 ms, contra unos 130 ms de main (sumándolas fila por fila adentro eran unos 220 ms).
   Nunca crece con lo local. Como el servidor no borra nunca una fila de `page_updates` (y compactar tampoco
   pierde borrados: en su diseño, roadmap B.9, el snapshot es `Y.mergeUpdates` sin recolectar), lo que tenía lo sigue
   teniendo, salvo al restaurar una copia.
@@ -276,21 +287,44 @@ del peso de `page_updates` de una página muy editada (2,4 MB contra 92 KB en 20
   unos 9 ms, y con 20 000 de un solo autor (un caso extremo) unos 36 ms; la resta de tramos es lineal.
 - **Lo mismo que el vector no cubre:** dos sesiones con el mismo autor de Yjs al azar (2⁻³², punto 4).
 
-**Pruebas** (`src/sync/uploadDeletes.test.ts`): el delete set escrito igual que Yjs byte a byte; restar, sumar y
-contener contra conjuntos de relojes; lo armado más lo del servidor es todo el documento (200 casos al azar,
-también con cosas pendientes de Yjs); el tamaño tras 200 ediciones (fallaba antes: 929 B por subida al final,
-ahora 53 B, y 9,2 KB en total contra 112 KB); el mismo guion con la versión publicada y con esta (sesiones de 60
-subidas, borrados en casi todas: con 300 subidas, 105 KB contra 12,8 KB; con 2000, 4,2 MB contra 86,5 KB, y las
-últimas subidas de 4289 B a 44 B; `DELETES_MEASURE_EDITS` para otra cantidad); los borrados de otro no se vuelven a subir; restaurar; la versión
-anterior que restaura y se cierra; los envíos cruzados entre versiones; dos instancias sobre la misma base; y
-corridas al azar con tres dispositivos (escriben y borran, también lo de otros, pierden respuestas, se quedan
-sin red, se cierran de golpe con una subida en vuelo, vuelven con la versión publicada, que a veces restaura y
-se cierra, y el servidor se restaura): en cada paso `syncedDS` no dice de más, después de cada subida confirmada
-el servidor tiene todos los borrados del dispositivo, y al final todos iguales y al servidor no le falta nada
-(`DELETES_SEEDS` y `DELETES_STEPS` para correr más; pasaron 150 semillas de 80 pasos). Dos mutantes a mano
-comprobaron que las pruebas los ven: ignorar la generación (falla la prueba de la versión anterior y 4 de 60
-semillas) y dejar afuera un tramo (fallan 6 pruebas; con la comprobación interna de `buildUpload` puesta, ese
-error se ataja solo y sube todo).
+**Pruebas:**
+
+- **`src/sync/uploadDeletes.test.ts`:**
+  - el delete set escrito igual que Yjs, byte a byte;
+  - restar, sumar y contener, contra conjuntos de relojes;
+  - lo armado más lo del servidor es todo el documento (200 casos al azar, también con cosas pendientes de Yjs);
+  - el tamaño tras 200 ediciones (fallaba antes): las últimas 20 subidas, de 929 B a 53 B; el total, de 112 KB a
+    9,2 KB;
+  - el mismo guion con la versión publicada y con esta (sesiones de 60 subidas, borrados en casi todas): con 300
+    subidas, 105 KB contra 12,8 KB; con 2000, 4,2 MB contra 86 KB, y las últimas subidas de 4285 B a 44 B
+    (`DELETES_MEASURE_EDITS` para otra cantidad);
+  - los borrados de otro no se vuelven a subir, y restaurar una copia;
+  - con cada versión anterior (la publicada hoy, `fixtures/mainDocs.ts`, y la v0.029): la que restaura y se
+    cierra antes de subir, y los envíos cruzados;
+  - dos instancias sobre la misma base;
+  - corridas al azar con tres dispositivos que escriben y borran (también lo de otros), pierden respuestas, se
+    quedan sin red, se cierran de golpe con una subida en vuelo, vuelven con una versión anterior (que a veces
+    restaura y se cierra), con el servidor que se restaura (`DELETES_SEEDS` y `DELETES_STEPS` para más; pasaron
+    150 semillas de 80 pasos).
+- **`src/sync/uploadDeletesVersions.test.ts`** (con la versión publicada hoy como versión anterior, y a veces la
+  v0.029):
+  - corridas al azar con tres bases y dos páginas, y a veces dos instancias vivas sobre la misma base (la
+    publicada y esta, o dos de esta); borrados chicos, de media página y de todo el texto; cierres de golpe de toda
+    la base con el ciclo en vuelo; y una versión anterior que restaura y se cierra antes o después de guardar la
+    generación (`DELETES_VERSIONS_SEEDS` y `DELETES_VERSIONS_STEPS`; en la suite, 20 semillas de 70 pasos; pasaron
+    200 de 90);
+  - una subida con la generación vieja contra un servidor ya restaurado;
+  - la publicada que restaura en otra pestaña mientras esta tiene un envío armado;
+  - 400 `buildUpload` con cosas pendientes de Yjs de tres autores;
+  - el tiempo de bajar una página grande escrita con la publicada (`DELETES_PERF=1`, fuera de la suite).
+- **En todas:** en cada paso `syncedDS` no dice de más; después de cada subida confirmada, el servidor tiene todos
+  los borrados del dispositivo; al final, todos iguales y al servidor no le falta nada.
+- **Mutantes a mano** (para ver que las pruebas los detectan):
+  - ignorar la generación: falla la prueba de la versión anterior que restaura, y semillas al azar de los dos
+    archivos;
+  - sumar al bajar también los borrados locales: fallan semillas al azar y varias pruebas;
+  - dejar afuera un tramo: fallan 6 pruebas. Con la comprobación interna de `buildUpload` puesta, ese error se
+    ataja solo y sube todo.
 
 ## Árbol de páginas
 

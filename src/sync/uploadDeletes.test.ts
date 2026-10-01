@@ -10,10 +10,11 @@ import {
   unionRanges,
   type DeleteRanges,
 } from './deleteSets';
+import { PageDocs as MainPageDocs } from './fixtures/mainDocs';
 import { PageDocs as PublishedPageDocs } from './fixtures/publishedDocs';
 import { openLocalDb as openPublishedDb } from './fixtures/publishedLocalDb';
-import { GENERATION_KEY, storedGeneration, type LocalDb } from './localDb';
-import { mergeRootGroups, seedIfEmpty } from './structure';
+import { GENERATION_KEY, openLocalDb, storedGeneration, type LocalDb } from './localDb';
+import { mergeRootGroups, normalizeStructure, seedIfEmpty } from './structure';
 import { FakeRemote, FakeServer, makeDevice, microtasks, watchTransactions, type Device } from './testing';
 
 // Roadmap B.15: cada subida de contenido llevaba todos los borrados de la página (el "delete set" de Yjs).
@@ -29,20 +30,32 @@ async function device(server: FakeServer, dbName?: string): Promise<Device> {
   return d;
 }
 
+/** Las versiones anteriores que se prueban: la publicada hoy (main v0.082) y la v0.029. */
+type OldVersion = 'main' | 'v0.029';
+const OLD_VERSIONS: OldVersion[] = ['main', 'v0.029'];
 interface Published {
   db: LocalDb;
-  docs: PublishedPageDocs;
+  docs: MainPageDocs | PublishedPageDocs;
   remote: FakeRemote;
 }
 const published: Published[] = [];
-/** La versión publicada (fixtures/publishedDocs.ts) sobre la misma base: no conoce `syncedDS`. */
-async function openPublished(server: FakeServer, dbName: string): Promise<Published> {
-  const db = (await openPublishedDb(dbName)) as unknown as LocalDb;
-  const p = {
-    db,
-    docs: new PublishedPageDocs(db as never, { normalize: mergeRootGroups, seed: seedIfEmpty }),
-    remote: new FakeRemote(server, '0.029'),
-  };
+/**
+ * Una versión anterior sobre la misma base (fixtures/mainDocs.ts, la publicada hoy, o fixtures/publishedDocs.ts,
+ * la v0.029): ninguna conoce `syncedDS`.
+ */
+async function openPublished(server: FakeServer, dbName: string, version: OldVersion = 'main'): Promise<Published> {
+  let p: Published;
+  if (version === 'main') {
+    const db = await openLocalDb(dbName);
+    p = { db, docs: new MainPageDocs(db, { normalize: normalizeStructure, seed: seedIfEmpty }), remote: new FakeRemote(server, '0.082') };
+  } else {
+    const db = (await openPublishedDb(dbName)) as unknown as LocalDb;
+    p = {
+      db,
+      docs: new PublishedPageDocs(db as never, { normalize: mergeRootGroups, seed: seedIfEmpty }),
+      remote: new FakeRemote(server, '0.029'),
+    };
+  }
   published.push(p);
   return p;
 }
@@ -412,100 +425,106 @@ describe('B.15: cada subida lleva solo los borrados nuevos', () => {
     expect(await read(c, pageId)).toBe('abefgh');
   });
 
-  it('una versión anterior restaura una copia y se cierra antes de subir: la actual sube igual los borrados (la generación)', async () => {
-    const server = new FakeServer();
-    const dbName = crypto.randomUUID();
-    const a = await device(server, dbName);
-    const pageId = await a.tree.create(null, 'P');
-    await write(a, pageId, (t) => t.insert(0, 'abcdefgh'));
-    await a.engine.syncNow();
-    const restore = server.backup();
-    await write(a, pageId, (t) => t.delete(2, 2));
-    await a.engine.syncNow();
-    a.engine.stop();
-    a.db.close();
+  for (const version of OLD_VERSIONS) {
+    it(`una versión anterior restaura una copia y se cierra antes de subir: la actual sube igual los borrados (la generación) (${version})`, async () => {
+      const server = new FakeServer();
+      const dbName = crypto.randomUUID();
+      const a = await device(server, dbName);
+      const pageId = await a.tree.create(null, 'P');
+      await write(a, pageId, (t) => t.insert(0, 'abcdefgh'));
+      await a.engine.syncNow();
+      const restore = server.backup();
+      await write(a, pageId, (t) => t.delete(2, 2));
+      await a.engine.syncNow();
+      a.engine.stop();
+      a.db.close();
 
-    restore();
-    // La versión anterior ve la generación nueva: borra `syncedSV` (no conoce `syncedDS`), guarda la
-    // generación y la app se cierra antes de subir nada.
-    const old = await openPublished(server, dbName);
-    await publishedSync(old, server, [pageId], false);
-    expect((await old.db.get('docState', pageId))?.syncedSV).toBeUndefined();
-    expect((await old.db.get('docState', pageId))?.syncedDS).toBeDefined();
-    old.db.close();
+      restore();
+      // La versión anterior ve la generación nueva: borra `syncedSV` (no conoce `syncedDS`), guarda la
+      // generación y la app se cierra antes de subir nada.
+      const old = await openPublished(server, dbName, version);
+      await publishedSync(old, server, [pageId], false);
+      expect((await old.db.get('docState', pageId))?.syncedSV).toBeUndefined();
+      expect((await old.db.get('docState', pageId))?.syncedDS).toBeDefined();
+      old.db.close();
 
-    // La actual no vuelve a restaurar (la generación ya está guardada), pero no confía en `syncedDS`.
-    const again = await device(server, dbName);
-    await again.engine.syncNow();
-    await again.engine.syncNow();
-    await expectNothingMissing(again.db, server, pageId);
-    const c = await device(server);
-    await c.engine.syncNow();
-    expect(await read(c, pageId)).toBe('abefgh');
-  });
+      // La actual no vuelve a restaurar (la generación ya está guardada), pero no confía en `syncedDS`.
+      const again = await device(server, dbName);
+      await again.engine.syncNow();
+      await again.engine.syncNow();
+      await expectNothingMissing(again.db, server, pageId);
+      const c = await device(server);
+      await c.engine.syncNow();
+      expect(await read(c, pageId)).toBe('abefgh');
+    });
+  }
 
-  it('un envío de la versión anterior (con todos los borrados) confirmado por la actual cuenta para lo que sigue', async () => {
-    const server = new FakeServer();
-    const dbName = crypto.randomUUID();
-    const a = await device(server, dbName);
-    const pageId = await a.tree.create(null, 'P');
-    await write(a, pageId, (t) => t.insert(0, 'uno dos tres cuatro cinco'));
-    await a.engine.syncNow();
-    a.engine.stop();
-    a.db.close();
+  for (const version of OLD_VERSIONS) {
+    it(`un envío de la versión anterior (con todos los borrados) confirmado por la actual cuenta para lo que sigue (${version})`, async () => {
+      const server = new FakeServer();
+      const dbName = crypto.randomUUID();
+      const a = await device(server, dbName);
+      const pageId = await a.tree.create(null, 'P');
+      await write(a, pageId, (t) => t.insert(0, 'uno dos tres cuatro cinco'));
+      await a.engine.syncNow();
+      a.engine.stop();
+      a.db.close();
 
-    const old = await openPublished(server, dbName);
-    await write(old, pageId, (t) => t.delete(0, 4));
-    // Llega al servidor pero la respuesta se pierde: queda el envío de la versión anterior, sin `ds`.
-    server.loseNextPushResponse = true;
-    await old.docs.pushPage(pageId, old.remote).catch(() => undefined);
-    expect((await old.db.get('docState', pageId))?.pending?.ds).toBeUndefined();
-    old.db.close();
+      const old = await openPublished(server, dbName, version);
+      await write(old, pageId, (t) => t.delete(0, 4));
+      // Llega al servidor pero la respuesta se pierde: queda el envío de la versión anterior, sin `ds`.
+      server.loseNextPushResponse = true;
+      await old.docs.pushPage(pageId, old.remote).catch(() => undefined);
+      expect((await old.db.get('docState', pageId))?.pending?.ds).toBeUndefined();
+      old.db.close();
 
-    const again = await device(server, dbName);
-    await again.engine.syncNow();
-    const oldDeletes = rangesOf(server.updates.get(pageId)!.at(-1)!.data);
-    expect(rangesContain(rangesOf((await again.db.get('docState', pageId))!.syncedDS!), oldDeletes)).toBe(true);
-    await write(again, pageId, (t) => t.delete(t.length - 6, 6));
-    await again.engine.syncNow();
-    const last = rangesOf(server.updates.get(pageId)!.at(-1)!.data);
-    expect(subtractRanges(last, oldDeletes)).toEqual(last);
-    await expectNothingMissing(again.db, server, pageId);
-    expect(await read(again, pageId)).toBe('dos tres cuatro');
-  });
+      const again = await device(server, dbName);
+      await again.engine.syncNow();
+      const oldDeletes = rangesOf(server.updates.get(pageId)!.at(-1)!.data);
+      expect(rangesContain(rangesOf((await again.db.get('docState', pageId))!.syncedDS!), oldDeletes)).toBe(true);
+      await write(again, pageId, (t) => t.delete(t.length - 6, 6));
+      await again.engine.syncNow();
+      const last = rangesOf(server.updates.get(pageId)!.at(-1)!.data);
+      expect(subtractRanges(last, oldDeletes)).toEqual(last);
+      await expectNothingMissing(again.db, server, pageId);
+      expect(await read(again, pageId)).toBe('dos tres cuatro');
+    });
+  }
 
-  it('un envío de la actual (solo lo nuevo) confirmado por la versión anterior: nada se pierde y la actual sigue bien', async () => {
-    const server = new FakeServer();
-    const dbName = crypto.randomUUID();
-    const a = await device(server, dbName);
-    const pageId = await a.tree.create(null, 'P');
-    await write(a, pageId, (t) => t.insert(0, 'uno dos tres cuatro cinco seis'));
-    await a.engine.syncNow();
-    await write(a, pageId, (t) => t.delete(0, 4));
-    await a.engine.syncNow();
-    await write(a, pageId, (t) => t.delete(0, 4));
-    server.loseNextPushResponse = true;
-    await a.engine.syncNow().catch(() => undefined);
-    const pending = (await a.db.get('docState', pageId))?.pending;
-    expect(pending?.ds).toBeDefined();
-    a.engine.stop();
-    a.db.close();
+  for (const version of OLD_VERSIONS) {
+    it(`un envío de la actual (solo lo nuevo) confirmado por la versión anterior: nada se pierde y la actual sigue bien (${version})`, async () => {
+      const server = new FakeServer();
+      const dbName = crypto.randomUUID();
+      const a = await device(server, dbName);
+      const pageId = await a.tree.create(null, 'P');
+      await write(a, pageId, (t) => t.insert(0, 'uno dos tres cuatro cinco seis'));
+      await a.engine.syncNow();
+      await write(a, pageId, (t) => t.delete(0, 4));
+      await a.engine.syncNow();
+      await write(a, pageId, (t) => t.delete(0, 4));
+      server.loseNextPushResponse = true;
+      await a.engine.syncNow().catch(() => undefined);
+      const pending = (await a.db.get('docState', pageId))?.pending;
+      expect(pending?.ds).toBeDefined();
+      a.engine.stop();
+      a.db.close();
 
-    const old = await openPublished(server, dbName);
-    await publishedSync(old, server, [pageId]);
-    await write(old, pageId, (t) => t.delete(0, 5));
-    await publishedSync(old, server, [pageId]);
-    old.db.close();
+      const old = await openPublished(server, dbName, version);
+      await publishedSync(old, server, [pageId]);
+      await write(old, pageId, (t) => t.delete(0, 5));
+      await publishedSync(old, server, [pageId]);
+      old.db.close();
 
-    const again = await device(server, dbName);
-    await write(again, pageId, (t) => t.delete(t.length - 5, 5));
-    await again.engine.syncNow();
-    await expectDeletesSound(again.db, server, pageId);
-    await expectNothingMissing(again.db, server, pageId);
-    const c = await device(server);
-    await c.engine.syncNow();
-    expect(await read(c, pageId)).toBe('cuatro cinco');
-  });
+      const again = await device(server, dbName);
+      await write(again, pageId, (t) => t.delete(t.length - 5, 5));
+      await again.engine.syncNow();
+      await expectDeletesSound(again.db, server, pageId);
+      await expectNothingMissing(again.db, server, pageId);
+      const c = await device(server);
+      await c.engine.syncNow();
+      expect(await read(c, pageId)).toBe('cuatro cinco');
+    });
+  }
 
   it('dos instancias sobre la misma base (dos pestañas, que la app no deja): no se pierde ningún borrado', async () => {
     const server = new FakeServer();
@@ -581,7 +600,7 @@ describe('B.15 al azar', () => {
       };
       const reopen = async (i: number, old: boolean) => {
         const dbName = slots[i].dbName;
-        slots[i] = old ? { dbName, kind: 'old', d: await openPublished(server, dbName) } : { dbName, kind: 'new', d: await device(server, dbName) };
+        slots[i] = old ? { dbName, kind: 'old', d: await openPublished(server, dbName, rnd() < 0.6 ? 'main' : 'v0.029') } : { dbName, kind: 'new', d: await device(server, dbName) };
       };
       const sync = async (s: Slot) => {
         if (s.kind === 'new') await s.d.engine.syncNow();
