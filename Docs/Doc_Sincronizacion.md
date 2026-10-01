@@ -926,10 +926,43 @@ Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nu
 - **La versión mínima del workspace** (`workspace_settings.min_app_version`). Cada subida de contenido
   lleva la versión de la app, y el servidor rechaza las de una versión menor (también las de versiones
   anteriores a v0.021, que no mandan versión). La app vieja lo ve, deja de subir contenido (queda en el
-  dispositivo), y pide actualizar; al actualizar, sube todo.
+  dispositivo), y pide actualizar; al actualizar, sube todo. Desde v0.090 frena también la cola de archivos (ver
+  abajo, "La versión mínima y los archivos").
 
 **Regla para un bloque nuevo:** antes de publicar la versión que lo trae, subir `min_app_version` a la
 primera versión con la guarda (0.021) o más, para que ninguna versión sin guarda pueda mandar el borrado.
+
+### La versión mínima y los archivos (v0.090)
+
+Hasta v0.089 la versión mínima frenaba solo el contenido de las páginas: `register_file`, `link_page_file` y
+`unlink_page_file` no recibían la versión y la cola de archivos no miraba el aviso, así que una pestaña vieja seguía
+registrando y subiendo archivos (por ejemplo, un HEIC sin pasar a JPEG, `Doc_Imagenes.md`). Ahora hay dos frenos:
+
+- **La app se frena sola** (desde v0.090). El motor calcula en cada sincronización si esta versión es menor a la
+  mínima (`status.outdated`) y se lo pasa a la cola (`MediaQueue.setOutdated`). Mientras tanto la cola no manda
+  nada: no registra, no sube la miniatura ni el original al portero, no manda usos de páginas
+  (`link_page_file`/`unlink_page_file`), no manda a la papelera de Drive (a mano ni el borrado automático) y no deja
+  soltar una carpeta (se registra en el acto). Las imágenes sin portero (`sdfile://`) tampoco suben. Todo queda en
+  el dispositivo y en la cola, contado como pendiente y **sin marcarse como error**; las bajadas de "Available
+  offline" no lo esperan. Al actualizar, la versión nueva lo manda todo. Si la base responde `app_outdated` (subieron
+  la mínima entre la consulta y el pedido), la cola deja el archivo como estaba, corta la vuelta y se ve el aviso.
+- **La base frena a las versiones ya publicadas** (migración `20261006120000_version_minima_archivos.sql`, prueba
+  `supabase/tests/version_minima_archivos_permisos.sql`). Las tres funciones tienen una versión con
+  `p_app_version`, que la app usa desde v0.090 (si la base todavía no la tiene, usa la de siempre por 10 minutos y
+  vuelve a probar). Las versiones anteriores no mandan nada que las identifique, pero solo ellas llaman a las
+  funciones de siempre: esas dejan de andar (`app_outdated`) **cuando la mínima es 0.090 o más**. Con una mínima
+  menor siguen andando, porque quien llama puede ser una versión permitida y rechazarla la rompería. Una versión
+  vieja rechazada deja el archivo detenido en el dispositivo, con el error a la vista; al abrir la versión nueva,
+  lo detenido se vuelve a intentar (`clearBlocked`) y sale.
+
+**Para que frene a las versiones viejas:** aplicar la migración (con copia de seguridad), publicar la v0.090 y,
+cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.090 o más. 0.090 está escrito en
+`private.files_version_allowed`: si esta versión se publica con otro número, se cambia ahí y en la prueba antes de
+aplicar (`minVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la migración). Si la app
+abrió antes de la migración (usa la función de siempre por 10 minutos) y la base le contesta `app_outdated`, repite
+el pedido una vez con versión. El portero no recibe la versión: una versión vieja con un archivo ya registrado puede terminar de subir su
+original, que no cambia nada de lo que la base sabe del archivo. Un HEIC que una versión anterior a v0.075 guardó
+sin la marca de convertir se registra tal cual cuando la app se actualiza: el freno lo demora, no lo convierte.
 
 ## Links de Drive
 

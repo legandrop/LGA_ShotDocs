@@ -1,6 +1,6 @@
 import { localize, stored, t } from '../i18n';
 import { FileRejected } from '../sync/files';
-import type { MediaRemote } from '../sync/remote';
+import { APP_OUTDATED, type MediaRemote } from '../sync/remote';
 import { errorMessage, isNetworkError, isTimeout, RemoteError } from '../sync/types';
 import { attachmentCardUrl, blobToDataUrl, cleanFileName, EXTENSION_MIME, fileKind, folderCardUrl, FOLDER_MIME, isFolderMime, mimeFromName, type FileKind } from './attachments';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
@@ -140,7 +140,11 @@ function backoff(failures: number): number {
   return Math.min(10_000 * 2 ** Math.max(0, failures - 1), MAX_BACKOFF_MS);
 }
 
-type Outcome = 'offline' | 'retry' | 'blocked' | 'waiting' | 'cancelled';
+/**
+ * `outdated`: la base rechazó el pedido porque esta versión de la app es más vieja que la mínima del workspace
+ * (`app_outdated`). No es un error del archivo: no se marca nada y la vuelta se corta (ver `MediaQueue.outdated`).
+ */
+type Outcome = 'offline' | 'retry' | 'blocked' | 'waiting' | 'cancelled' | 'outdated';
 
 /** Una fila nueva de usos: la página usa el archivo (`pending` 1: falta mandarlo). */
 function newLink(pageId: string, fileId: string, pending: 0 | 1): MediaLink {
@@ -187,6 +191,7 @@ export function classify(err: unknown): Outcome {
   if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled';
   if (err instanceof RemoteError) {
     if (err.network) return 'offline';
+    if (err.message === APP_OUTDATED) return 'outdated';
     if (err.message === 'file_not_found') return 'waiting';
     return err.permanent ? 'blocked' : 'retry';
   }
@@ -400,6 +405,8 @@ function viewKind(mime: string, name: string): MediaKind | null {
 export class MediaQueue {
   /** Se agregó algo a la cola: conviene sincronizar pronto. */
   onQueued?: () => void;
+  /** La base rechazó un pedido de archivos porque esta versión es más vieja que la mínima (ver `outdated`). */
+  onOutdated?: () => void;
   /** Además de `onQueued` (que usa el motor): lo que quiere saber que llegó algo para subir (las bajadas). */
   private readonly queuedListeners = new Set<() => void>();
   /** Lo que dice el portero que entiende (`/drive/status`, `features`), una vez por sesión. */
@@ -409,6 +416,14 @@ export class MediaQueue {
 
   private url: string | null = null;
   private schemaReady = false;
+  /**
+   * Esta versión de la app es más vieja que la mínima del workspace (`workspace_settings.min_app_version`; lo
+   * decide el motor en cada sincronización, ver `setOutdated`). Mientras tanto no sale nada de archivos: ni
+   * registrar, ni miniaturas, ni subir al portero, ni usos de páginas (`link_page_file`/`unlink_page_file`), ni
+   * mandar a la papelera de Drive. Todo queda en el dispositivo y en la cola, sin marcar como error, y sale
+   * cuando la app se actualiza (Docs/Doc_Sincronizacion.md, "La versión mínima y los archivos").
+   */
+  private outdatedNow = false;
   /** La base tiene la papelera de archivos (versión 6): se puede mandar `unlink_page_file`. */
   private trashReady = false;
   /**
@@ -554,6 +569,24 @@ export class MediaQueue {
     return !!this.db && this.schemaReady && this.trashReady;
   }
 
+  /** Ver `outdatedNow`. */
+  get outdated(): boolean {
+    return this.outdatedNow;
+  }
+
+  /** El motor, en cada sincronización: si esta versión es más vieja que la mínima del workspace. */
+  setOutdated(value: boolean): void {
+    if (this.outdatedNow === value) return;
+    this.outdatedNow = value;
+    this.onChange?.();
+  }
+
+  /** La base dijo `app_outdated` (subieron la mínima entre la consulta del motor y el pedido). */
+  private markOutdated(): void {
+    this.setOutdated(true);
+    this.onOutdated?.();
+  }
+
   // --- agregar --------------------------------------------------------------------------------------
 
   /**
@@ -591,6 +624,8 @@ export class MediaQueue {
   async addFolder(pageId: string, name: string, size: number): Promise<{ id: string; url: string }> {
     if (!this.db) throw new FileRejected(t('queue.cannotAdd', { reason: localize(this.unavailable ?? '') }));
     if (!this.enabled) throw new FileRejected(t('queue.needsDrive'));
+    // Se registra en el acto: con una versión más vieja que la mínima no se puede (no queda nada a medias).
+    if (this.outdatedNow) throw new FileRejected(t('queue.outdated'));
     const id = crypto.randomUUID();
     const clean = cleanFileName(name, undefined, 'Folder');
     const record: MediaRecord = {
@@ -619,16 +654,22 @@ export class MediaQueue {
       failures: 0,
       retryAt: 0,
     };
-    await this.remote.registerFile({
-      id,
-      pageId,
-      name: record.name,
-      mime: record.mime,
-      size: record.size,
-      width: null,
-      height: null,
-      duration: null,
-    });
+    try {
+      await this.remote.registerFile({
+        id,
+        pageId,
+        name: record.name,
+        mime: record.mime,
+        size: record.size,
+        width: null,
+        height: null,
+        duration: null,
+      });
+    } catch (err) {
+      if (errorMessage(err) !== APP_OUTDATED) throw err;
+      this.markOutdated();
+      throw new FileRejected(t('queue.outdated'));
+    }
     await this.store.put('files', record);
     this.seenLinks.add(`${pageId}:${id}`);
     this.remember(id, record, true);
@@ -1146,6 +1187,12 @@ export class MediaQueue {
 
   private async round(skipPage: (pageId: string) => boolean): Promise<void> {
     if (!this.enabled) return;
+    // Versión más vieja que la mínima: no sale nada (queda todo en la cola). Las miniaturas de otros
+    // dispositivos se siguen bajando: solo leen.
+    if (this.outdatedNow) {
+      await this.refreshMissing().catch(() => undefined);
+      return;
+    }
     const portero = this.porteroFor(this.url!);
     const db = this.store;
     const records = (await db.getAllFromIndex('files', 'pending', 1)).sort((a, b) => a.createdAt - b.createdAt);
@@ -1153,7 +1200,7 @@ export class MediaQueue {
       if (this.stopped) return;
       if (record.blocked || record.retryAt > this.now() || skipPage(record.pageId)) continue;
       const outcome = await this.process(record, portero);
-      if (outcome === 'offline' || outcome === 'cancelled') return;
+      if (outcome === 'offline' || outcome === 'cancelled' || outcome === 'outdated') return;
     }
     // Primero los usos nuevos y después los que se quitaron: un archivo que se cortó de una página y se pegó
     // en otra no pasa por la papelera en el medio.
@@ -1175,7 +1222,8 @@ export class MediaQueue {
           continue;
         }
       }
-      if ((await this.linkOne(link)) === 'offline') return;
+      const sent = await this.linkOne(link);
+      if (sent === 'offline' || sent === 'outdated') return;
     }
     await this.refreshMissing().catch(() => undefined);
   }
@@ -1411,6 +1459,11 @@ export class MediaQueue {
     } catch (err) {
       let outcome = classify(err);
       if (outcome === 'cancelled') return outcome;
+      // La base no deja registrar con esta versión: el archivo queda como estaba, sin error ni espera.
+      if (outcome === 'outdated') {
+        this.markOutdated();
+        return outcome;
+      }
       // Una miniatura que Storage no contestó a tiempo es como una subida trabada del portero: el archivo
       // vuelve a la cola con su espera y la vuelta sigue con los demás. Tratada como "sin red" cortaría la
       // vuelta, y la siguiente empezaría otra vez por este archivo (van por orden de llegada): con Storage
@@ -1695,6 +1748,11 @@ export class MediaQueue {
     } catch (err) {
       const outcome = classify(err);
       if (outcome === 'offline') return outcome;
+      // Lo mismo con los usos: la fila queda por mandar, como estaba.
+      if (outcome === 'outdated') {
+        this.markOutdated();
+        return outcome;
+      }
       const failures = link.failures + 1;
       const denied = errorMessage(err) === 'page_not_found';
       // Un archivo de este dispositivo que figura registrado pero el servidor no tiene (se restauró la base):
@@ -1791,7 +1849,8 @@ export class MediaQueue {
    * haya (Docs/Doc_Copias_Locales.md, sección 3.5); un archivo detenido no las frena.
    */
   async hasUploadableNow(): Promise<boolean> {
-    if (!this.db || !this.enabled) return false;
+    // Con una versión más vieja que la mínima no se sube nada: las bajadas no esperan.
+    if (!this.db || !this.enabled || this.outdatedNow) return false;
     const now = this.now();
     const [records, links] = await Promise.all([
       this.db.getAllFromIndex('files', 'pending', 1),
@@ -2681,6 +2740,7 @@ export class MediaQueue {
    */
   async trash(id: string): Promise<void> {
     if (!this.url) throw new PorteroError(t('queue.noServer'), 0);
+    if (this.outdatedNow) throw new Error(t('queue.outdated'));
     // Una página de este dispositivo que lo usa y todavía no se sincronizó: se saltea (y se avisa).
     if (await this.hasUnsentUse(id)) throw new UnsentUseError();
     try {
@@ -2715,7 +2775,7 @@ export class MediaQueue {
    * portero de a uno; un error no corta los demás. Devuelve cuántos mandó.
    */
   async autoPurge(enabled: boolean, projectIds: string[]): Promise<number> {
-    if (!this.url) return 0;
+    if (!this.url || this.outdatedNow) return 0;
     return autoPurgeFiles({
       enabled,
       projectIds,

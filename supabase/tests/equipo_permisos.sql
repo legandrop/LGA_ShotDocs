@@ -5,6 +5,10 @@
 
 begin;
 
+-- Las funciones de archivos de abajo van sin versión (las de siempre): con una mínima de 0.090 o más no andan
+-- (version_minima_archivos_permisos.sql). La prueba arranca sin mínima; se deshace al final.
+update public.workspace_settings set min_app_version = null;
+
 create function pg_temp.as_user(uid uuid) returns void language sql as $$
   select set_config('role', 'authenticated', true),
          set_config('request.jwt.claims',

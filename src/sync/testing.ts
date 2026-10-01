@@ -788,6 +788,14 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     return new RemoteError(message, true, '42501');
   }
 
+  /** Como `private.app_version_allowed` de la base: con mínimo, una versión menor o ilegible no pasa. */
+  private checkAppVersion(): void {
+    const min = this.server.settings?.minAppVersion;
+    if (min != null && !(/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion) && Number(this.appVersion) >= min)) {
+      throw new RemoteError('app_outdated', true, 'P0001');
+    }
+  }
+
   async fetchWorkspaceSettings(): Promise<WorkspaceSettings | null> {
     this.server.check();
     return this.server.settings && { ...this.server.settings };
@@ -1032,10 +1040,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (!page || this.server.pageInDeletedProject(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) {
       throw new RemoteError('page_not_found', true, 'P0002');
     }
-    const min = this.server.settings?.minAppVersion;
-    if (min != null && !(/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion) && Number(this.appVersion) >= min)) {
-      throw new RemoteError('app_outdated', true, 'P0001');
-    }
+    this.checkAppVersion();
     const list = this.server.updates.get(pageId) ?? [];
     const existing = list.find((u) => u.clientUpdateId === clientUpdateId);
     if (existing) return existing.seq;
@@ -1278,6 +1283,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.server.mediaCalls.push(`register_file ${file.id}`);
     const page = this.server.pages.get(file.pageId);
     if (!page) throw pageNotFound();
+    // supabase/migrations/20261006120000_version_minima_archivos.sql: la cola de archivos también manda la versión.
+    this.checkAppVersion();
     const existing = this.server.mediaFiles.get(file.id);
     if (existing && existing.project_id !== page.workspace_id) {
       // De otro proyecto (que la sesión ve): guarda el uso ajeno y lo dice con el valor, sin error.
@@ -1319,6 +1326,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.server.mediaCalls.push(`link_page_file ${pageId} ${fileId}`);
     const page = this.server.pages.get(pageId);
     if (!page) throw pageNotFound();
+    this.checkAppVersion();
     const file = this.server.mediaFiles.get(fileId);
     if (!file) throw fileNotFound();
     if (file.project_id !== page.workspace_id) {
@@ -1343,6 +1351,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.server.seenSeqs.push(seenSeq ?? null);
     const page = this.server.pages.get(pageId);
     if (!page || (this.team && this.server.pageLevel(this.userId, pageId) < 3)) throw pageNotFound();
+    this.checkAppVersion();
     // `p_seen_seq`: si la página cambió después del documento con el que se decidió, no hace nada.
     if (seenSeq != null && page.update_seq > seenSeq) {
       this.server.lostMediaResponse('unlink_page_file');
