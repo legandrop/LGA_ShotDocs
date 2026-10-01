@@ -66,16 +66,16 @@ export const tutorial = {
   },
   'tour.photos.title': { en: "Images", es: "Fotos" },
   'tour.photos.text': {
-    en: "One click selects an image, another opens it full screen. Its toolbar sets the size or arranges a row.",
-    es: "Un clic elige una foto y otro la abre en grande. En su barra elegís el tamaño o las acomodás en filas.",
+    en: "Photos go in the line, like letters: you can write right next to them. One click selects one, another opens it full screen; its bar sets the size or arranges them in rows.",
+    es: "Las fotos van en el renglón, como letras: podés escribir al lado. Un clic elige una y otro la abre en grande; en su barra elegís el tamaño o las acomodás en filas.",
   },
   'tour.photos.textDrive': {
-    en: "One click selects an image, another opens it full screen. Its toolbar sets the size or arranges a row. With Google Drive connected, drop any file (PDF, zip) to attach it.",
-    es: "Un clic elige una foto y otro la abre en grande. En su barra elegís el tamaño o las acomodás en filas. Con Google Drive conectado, soltá cualquier archivo (PDF, zip) y queda como tarjeta.",
+    en: "Photos go in the line, like letters: you can write right next to them. One click selects one, another opens it full screen; its bar sets the size or arranges them in rows. With Google Drive connected, drop any file (PDF, zip) to attach it.",
+    es: "Las fotos van en el renglón, como letras: podés escribir al lado. Un clic elige una y otro la abre en grande; en su barra elegís el tamaño o las acomodás en filas. Con Google Drive conectado, soltá cualquier archivo (PDF, zip) y queda como tarjeta.",
   },
   'tour.photos.textPhone': {
-    en: "Tap an image to see it full screen. Its toolbar sets the size or arranges a row.",
-    es: "Tocá una foto para verla en grande. En su barra elegís el tamaño o las acomodás en filas.",
+    en: "Photos go in the line, like letters. Tap one to see it full screen; back on the page, tap it again for its bar: size, or arrange them in rows.",
+    es: "Las fotos van en el renglón, como letras. Tocá una para verla en grande; de vuelta en la página, tocala otra vez y aparece su barra: tamaño o acomodarlas en filas.",
   },
   'tour.comments.title': { en: "Comments and questions", es: "Comentarios y preguntas" },
   'tour.comments.text': {

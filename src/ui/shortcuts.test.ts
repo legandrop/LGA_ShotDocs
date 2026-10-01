@@ -263,15 +263,91 @@ function sourceFiles(): Map<string, string> {
   return out;
 }
 
-/** Las teclas que un archivo compara con las de un evento: `e.key === 'Enter'`, `case 'Home':`, `isLetter(e, 'k')`. */
+/** Los nombres que se le dan al evento de teclado. */
+const EVENT = '(?:e|ev|event|evt)';
+
+/**
+ * Los nombres con que un archivo guarda la tecla del evento: `const { key } = event`, `const { key: k } = e`,
+ * `const k = e.key` (también con `.toLowerCase()`).
+ */
+function keyAliases(code: string): string[] {
+  const names = new Set<string>();
+  for (const m of code.matchAll(new RegExp(`\\{([^{}]*)\\}\\s*=\\s*${EVENT}\\b`, 'g'))) {
+    for (const part of m[1].split(',')) {
+      const field = /^\s*key\s*(?::\s*([\w$]+))?\s*(?:=[^,]*)?$/.exec(part);
+      if (field) names.add(field[1] ?? 'key');
+    }
+  }
+  for (const m of code.matchAll(new RegExp(`\\b(?:const|let|var)\\s+([\\w$]+)\\s*=\\s*${EVENT}\\.key(?:\\.toLowerCase\\(\\))?\\s*[;\\n]`, 'g'))) {
+    names.add(m[1]);
+  }
+  return [...names];
+}
+
+/**
+ * Las teclas que acepta una expresión regular escrita para una tecla (`/^F8$/`, `/^Arrow(Left|Right)$/`), o `null`
+ * si tiene algo que no se sabe abrir (clases, comodines, repeticiones): entonces la prueba la nombra para que se mire.
+ */
+function regexKeys(source: string): string[] | null {
+  const body = source.replace(/^\^/, '').replace(/\$$/, '');
+  const expand = (s: string): string[] | null => {
+    // Las alternativas de afuera (`a|b`), sin partir las de adentro de un grupo.
+    const alts: string[] = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === '(') depth++;
+      else if (s[i] === ')') depth--;
+      else if (s[i] === '|' && depth === 0) {
+        alts.push(s.slice(start, i));
+        start = i + 1;
+      }
+    }
+    alts.push(s.slice(start));
+    const out: string[] = [];
+    for (const alt of alts) {
+      const open = alt.indexOf('(');
+      if (open < 0) {
+        if (/[[\]\\.*+?{}^$]/.test(alt)) return null;
+        out.push(alt);
+        continue;
+      }
+      let close = open;
+      for (let d = 0; close < alt.length; close++) {
+        if (alt[close] === '(') d++;
+        else if (alt[close] === ')' && --d === 0) break;
+      }
+      const inner = expand(alt.slice(open + 1, close).replace(/^\?:/, ''));
+      const rest = expand(alt.slice(close + 1));
+      const head = alt.slice(0, open);
+      if (!inner || !rest || /[[\]\\.*+?{}^$]/.test(head)) return null;
+      for (const a of inner) for (const b of rest) out.push(head + a + b);
+    }
+    return out;
+  };
+  return expand(body);
+}
+
+/**
+ * Las teclas que un archivo compara con las de un evento: `e.key === 'Enter'`, `'Enter' === e.key`, `case 'Home':`,
+ * `isLetter(e, 'k')`, `/^F8$/.test(e.key)`, `['a', 'b'].includes(e.key)` y lo mismo con la tecla guardada aparte
+ * (`const { key } = event`). Lo que no se entiende (una expresión regular con clases) sale como `/…/?` y hace fallar.
+ */
 function comparedKeys(code: string): string[] {
+  const aliases = keyAliases(code).map((a) => `(?<![\\w.$])${a.replace(/\$/g, '\\$')}`);
+  const key = `(?:\\b${EVENT}\\.key|${[...aliases, '(?!)'].join('|')})(?:\\.toLowerCase\\(\\))?`;
+  const all = (re: string) => [...code.matchAll(new RegExp(re, 'g'))];
   const found = [
-    ...[...code.matchAll(/\b(?:e|ev|event|evt)\.key\s*(?:===|!==)\s*'([^']*)'/g)].map((m) => m[1]),
-    ...[...code.matchAll(/\b(?:e|ev|event|evt)\.key\.toLowerCase\(\)\s*(?:===|!==)\s*'([^']*)'/g)].map((m) => m[1]),
-    ...[...code.matchAll(/\b(?:e|ev|event|evt)\.code\s*(?:===|!==)\s*'Key([A-Z])'/g)].map((m) => m[1]),
-    ...[...code.matchAll(/\bisLetter\(\w+,\s*'(\w)'\)/g)].map((m) => m[1]),
+    ...all(`${key}\\s*(?:===|!==)\\s*'([^']*)'`).map((m) => m[1]),
+    ...all(`'([^']*)'\\s*(?:===|!==)\\s*${key}(?![\\w$])`).map((m) => m[1]),
+    ...all(`\\b${EVENT}\\.code\\s*(?:===|!==)\\s*'Key([A-Z])'`).map((m) => m[1]),
+    ...all(`\\bisLetter\\(\\w+,\\s*'(\\w)'\\)`).map((m) => m[1]),
+    ...all(`\\[([^\\]]*)\\]\\.includes\\(\\s*${key}\\s*\\)`).flatMap((m) => [...m[1].matchAll(/'([^']*)'/g)].map((s) => s[1])),
+    ...all(`/((?:\\\\/|[^/\\n])+)/[a-z]*\\.test\\(\\s*${key}\\s*\\)`)
+      .filter((m) => !KEY_CLASSES.has(m[1]))
+      .flatMap((m) => regexKeys(m[1]) ?? [`/${m[1]}/?`]),
     // Un `switch` sobre la tecla (treeNav.ts).
-    ...(/switch\s*\(\s*(?:e\.)?key\s*\)/.test(code) ? [...code.matchAll(/case '([^']*)':/g)].map((m) => m[1]) : []),
+    ...(new RegExp(`switch\\s*\\(\\s*(?:key|${key})\\s*\\)`).test(code) ? all(`case '([^']*)':`).map((m) => m[1]) : []),
   ];
   return found.map(keyName);
 }
@@ -279,10 +355,33 @@ function comparedKeys(code: string): string[] {
 /** Una tecla como en el registro: la barra espaciadora es `Space`, las letras en minúscula. */
 const keyName = (key: string) => (key === ' ' ? 'Space' : key.length === 1 ? key.toLowerCase() : key);
 
+/** Expresiones que clasifican la tecla sin ser un atajo: `isLetter` (findUi.ts) pregunta si es una letra latina. */
+const KEY_CLASSES = new Set(['^[a-z]$']);
+
 /** Teclas que se miran sin ser atajos: escribir con un IME, el foco atrapado de un diálogo, los modificadores solos. */
 const NOT_SHORTCUTS = new Set(['Tab', 'Dead', 'Process', 'Shift', 'Control', 'Meta', 'Alt', 'AltGraph', 'OS']);
 
 describe('el código contra el registro', () => {
+  it('la búsqueda de teclas ve cada forma de escribir una tecla', () => {
+    const seen = (code: string) => comparedKeys(code);
+    expect(seen(`if (e.key === 'F7') x();`)).toEqual(['F7']);
+    expect(seen(`if ('F7' !== event.key) return;`)).toEqual(['F7']);
+    expect(seen(`if (ev.key.toLowerCase() === 'K') x();`)).toEqual(['k']);
+    expect(seen(`if (event.code === 'KeyJ') x();`)).toEqual(['j']);
+    expect(seen(`if (/^F8$/.test(event.key)) x();`)).toEqual(['F8']);
+    expect(seen(`if (/^Arrow(Left|Right)$/.test(e.key)) x();`)).toEqual(['ArrowLeft', 'ArrowRight']);
+    expect(seen(`if (/^(?:F1|F2)$/i.test(e.key)) x();`)).toEqual(['F1', 'F2']);
+    expect(seen(`if (/^F[0-9]$/.test(e.key)) x();`)).toEqual(['/^F[0-9]$/?']);
+    expect(seen(`if (['Home', 'End'].includes(evt.key)) x();`)).toEqual(['Home', 'End']);
+    expect(seen(`const { key } = event;\nif (key === 'F9') x();`)).toEqual(['F9']);
+    expect(seen(`const { shiftKey, key: k } = event;\nif (k === 'F9') x();`)).toEqual(['F9']);
+    expect(seen(`const k = e.key;\nif (/^F10$/.test(k)) x();`)).toEqual(['F10']);
+    expect(seen(`const { key: k } = e;\nswitch (k) {\n  case 'PageDown':\n}`)).toEqual(['PageDown']);
+    // Lo que no es una tecla del evento no cuenta.
+    expect(seen(`if (item.key === 'F9' || row.key === 'x') x();`)).toEqual([]);
+    expect(seen(`if (/^[a-z]$/i.test(e.key)) x();`)).toEqual([]);
+  });
+
   it('cada combinación escrita en el código ("Mod-…", "Shift-…") está en el registro', () => {
     const registered = new Set(SHORTCUTS.flatMap((s) => s.keys.map(norm)));
     const loose: string[] = [];

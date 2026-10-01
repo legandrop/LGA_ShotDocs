@@ -299,67 +299,67 @@ export function Shell() {
           </Part>
         ) : (
           <>
-        <header className="topbar">
-          <button className="icon-button only-mobile" aria-label={tr('shell.openPages')} onClick={() => setNavOpen(true)}>
-            <MenuIcon />
-          </button>
-          <nav className="breadcrumbs" aria-label={tr('shell.location')}>
-            {crumbs.map((p) => (
-              <span key={p.id}>
-                <button className="crumb" onClick={() => navigate(pagePath(p.id))}>
-                  {p.title || tr('common.untitled')}
+            <header className="topbar">
+              <button className="icon-button only-mobile" aria-label={tr('shell.openPages')} onClick={() => setNavOpen(true)}>
+                <MenuIcon />
+              </button>
+              <nav className="breadcrumbs" aria-label={tr('shell.location')}>
+                {crumbs.map((p) => (
+                  <span key={p.id}>
+                    <button className="crumb" onClick={() => navigate(pagePath(p.id))}>
+                      {p.title || tr('common.untitled')}
+                    </button>
+                    <span className="sep" aria-hidden="true">
+                      /
+                    </span>
+                  </span>
+                ))}
+                {current && (
+                  <span className="crumb current" aria-current="page">
+                    {current.title || tr('common.untitled')}
+                  </span>
+                )}
+                {route.name === 'trash' && <span className="crumb current">{tr('trash.title')}</span>}
+              </nav>
+              <span className="only-mobile">
+                <SyncIcon onClick={() => setNavOpen(true)} />
+              </span>
+              {pageId && current && (
+                <button
+                  className="icon-button"
+                  data-tour="find"
+                  aria-label={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
+                  data-tip={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
+                  onClick={() => openFindBar()}
+                >
+                  <SearchIcon size={18} />
                 </button>
-                <span className="sep" aria-hidden="true">
-                  /
-                </span>
-              </span>
-            ))}
-            {current && (
-              <span className="crumb current" aria-current="page">
-                {current.title || tr('common.untitled')}
-              </span>
+              )}
+              {pageId && current && <CommentsToggle pageId={pageId} />}
+              {pageId && (
+                <button
+                  className="icon-button"
+                  data-tour="page-menu"
+                  aria-label={tr('pageMenu.label')}
+                  aria-expanded={!!pageMenu}
+                  onClick={(e) => {
+                    const anchor = e.currentTarget;
+                    setPageMenu(pageMenu ? null : { position: menuBelow(anchor), anchor });
+                  }}
+                >
+                  <MoreIcon />
+                </button>
+              )}
+            </header>
+            {/* En el teléfono, mientras no está instalada: el aviso para instalarla (se puede cerrar). */}
+            <InstallBanner />
+            {route.name === 'page' ? (
+              <PageView key={route.id} id={route.id} />
+            ) : route.name === 'trash' ? (
+              <TrashView />
+            ) : (
+              <Home />
             )}
-            {route.name === 'trash' && <span className="crumb current">{tr('trash.title')}</span>}
-          </nav>
-          <span className="only-mobile">
-            <SyncIcon onClick={() => setNavOpen(true)} />
-          </span>
-          {pageId && current && (
-            <button
-              className="icon-button"
-              data-tour="find"
-              aria-label={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
-              data-tip={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
-              onClick={() => openFindBar()}
-            >
-              <SearchIcon size={18} />
-            </button>
-          )}
-          {pageId && current && <CommentsToggle pageId={pageId} />}
-          {pageId && (
-            <button
-              className="icon-button"
-              data-tour="page-menu"
-              aria-label={tr('pageMenu.label')}
-              aria-expanded={!!pageMenu}
-              onClick={(e) => {
-                const anchor = e.currentTarget;
-                setPageMenu(pageMenu ? null : { position: menuBelow(anchor), anchor });
-              }}
-            >
-              <MoreIcon />
-            </button>
-          )}
-        </header>
-        {/* En el teléfono, mientras no está instalada: el aviso para instalarla (se puede cerrar). */}
-        <InstallBanner />
-        {route.name === 'page' ? (
-          <PageView key={route.id} id={route.id} />
-        ) : route.name === 'trash' ? (
-          <TrashView />
-        ) : (
-          <Home />
-        )}
           </>
         )}
       </main>

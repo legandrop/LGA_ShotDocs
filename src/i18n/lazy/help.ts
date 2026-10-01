@@ -182,8 +182,8 @@ export const help = {
   },
   'help.photosPhone.title': { en: "On the phone", es: "En el teléfono" },
   'help.photosPhone.text': {
-    en: "Tap a photo to see it full size. Photos in a row can show side by side or one under the other: Photos in a row, in the account menu.",
-    es: "Tocá una foto para verla en grande. Las fotos en fila se pueden ver una al lado de la otra o apiladas: Fotos en fila, en el menú de la cuenta.",
+    en: "Tap a photo to see it full size; back on the page, tap it again for its bar and handles. Photos in a row can show side by side or one under the other: Images in a row, in the account menu.",
+    es: "Tocá una foto para verla en grande; de vuelta en la página, tocala otra vez y aparecen su barra y sus tiradores. Las fotos en fila se pueden ver una al lado de la otra o apiladas: Fotos en fila, en el menú de la cuenta.",
   },
   'help.photosOffline.title': { en: "Without a connection", es: "Sin conexión" },
   'help.photosOffline.text': {

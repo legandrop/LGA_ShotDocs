@@ -13,7 +13,8 @@ import { setNavOpen } from '../ui/navStore';
 import { Shell } from '../ui/Workspace';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { PracticeWriteError, practiceSession } from './practiceServices';
-import { PRACTICE_BLOCKS, PRACTICE_ID } from './practiceTemplate';
+import { practiceEn } from './practice.en';
+import { practiceBlocks, PRACTICE_BLOCKS, PRACTICE_ID } from './practiceTemplate';
 import { dismissTour, getTourUi, readDeviceTour, startTour } from './tourState';
 
 // La página de práctica y la recorrida con la app de verdad (Shell, barra lateral, editor, comentarios) sobre el
@@ -170,6 +171,24 @@ async function snapshot(h: Harness) {
   };
 }
 
+describe('la plantilla de la práctica', () => {
+  it('las tres fotos en un solo renglón, en línea y a la misma altura (como "Arrange in rows")', () => {
+    const blocks = practiceBlocks(practiceEn, 'https://app.test') as { id?: string; type: string; content?: unknown }[];
+    expect(blocks.some((b) => b.type === 'image')).toBe(false);
+    const row = blocks.find((b) => b.id === PRACTICE_BLOCKS.photos)!;
+    expect(row.type).toBe('paragraph');
+    const photos = row.content as { type: string; props: { url: string; name: string; w: number } }[];
+    expect(photos.map((p) => p.type)).toEqual(['photo', 'photo', 'photo']);
+    expect(photos[0].props.url).toBe('https://app.test/tutorial/terraza-1.webp');
+    // Una sola fila: los anchos más los dos espacios llenan el renglón, y la altura (ancho / proporción) es la misma.
+    const total = photos.reduce((n, p) => n + p.props.w, 0);
+    expect(total).toBeGreaterThan(0.95);
+    expect(total).toBeLessThanOrEqual(1);
+    const heights = photos.map((p, i) => p.props.w / [1200 / 800, 800 / 1200, 1200 / 675][i]);
+    for (const h of heights) expect(h).toBeCloseTo(heights[0], 3);
+  });
+});
+
 describe('la página de práctica no toca nada real', () => {
   it('escribir, comentar, contestar la pregunta, cambiar la hoja, buscar y empezar de nuevo: cero escrituras', async () => {
     const h = await app();
@@ -186,6 +205,15 @@ describe('la página de práctica no toca nada real', () => {
     expect(h.host.querySelector('.practice-banner')?.textContent).toContain("Practice page: nothing you do here is saved or seen by anyone.");
     const session = practiceSession(h.services)!;
     expect(session).toBeTruthy();
+
+    // Las fotos de ejemplo van en el renglón, como las crea hoy la app al pegar o soltar (no la fila vieja de
+    // fotos-bloque), y se ven con la dirección de la app.
+    const photos = [...document.querySelectorAll(`.bn-editor [data-id="${PRACTICE_BLOCKS.photos}"] .sd-photo`)];
+    expect(photos.map((p) => p.getAttribute('data-name'))).toEqual(['terraza-1.webp', 'terraza-2.webp', 'terraza-3.webp']);
+    expect(photos.map((p) => p.querySelector('img')?.getAttribute('src'))).toEqual(
+      ['terraza-1.webp', 'terraza-2.webp', 'terraza-3.webp'].map((f) => `${location.origin}/tutorial/${f}`),
+    );
+    expect(document.querySelector('.bn-editor [data-content-type="image"]')).toBeNull();
 
     // Escribir en el editor (el de verdad, con el documento en memoria).
     const view = editorView();

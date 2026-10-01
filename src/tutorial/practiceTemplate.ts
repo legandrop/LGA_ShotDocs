@@ -1,9 +1,12 @@
 import { paragraphProps } from '../ui/editorSchema';
-import { ROW_WIDTH_PROP } from '../ui/imageRowsEditor';
+import { arrangeRows } from '../ui/imageRows';
+import { PHOTO } from '../ui/inlinePhoto';
 
 // Lo común de las plantillas de la página de práctica (practice.es.ts y practice.en.ts): los ids de los bloques
 // que señala la recorrida, las fotos de ejemplo y la forma de cada bloque. Solo tipos de bloque que ya existen
-// (párrafo con Script o pregunta como propiedad, títulos, casillas, `image`, tabla): la regla del editor.
+// (párrafo con Script o pregunta como propiedad, títulos, casillas, tabla) y las fotos en línea (`photo` en el
+// renglón), como las crea hoy la app al pegar o soltar (desde v0.078): la práctica enseña lo que pasa en una página
+// nueva, no la fila vieja de fotos-bloque.
 
 /** El id de la página de práctica (no es una página del árbol: nunca llega a la base ni al servidor). */
 export const PRACTICE_ID = 'practice';
@@ -11,7 +14,8 @@ export const PRACTICE_ID = 'practice';
 /** Los bloques que señala la recorrida (`data-id` de BlockNote) y la pregunta con su hilo de ejemplo. */
 export const PRACTICE_BLOCKS = {
   question: 'practice-question',
-  photos: ['practice-photo-1', 'practice-photo-2', 'practice-photo-3'],
+  /** El renglón con las tres fotos en línea. */
+  photos: 'practice-photos',
   empty: 'practice-empty',
 } as const;
 
@@ -30,11 +34,6 @@ const PHOTOS = [
   { file: 'terraza-3.webp', aspect: 1200 / 675 },
 ];
 
-/** El `rowWidth` de cada foto de una fila, como "Acomodar en filas": todas a la misma altura. */
-function rowWidths(aspects: number[]): number[] {
-  const total = aspects.reduce((a, b) => a + b, 0);
-  return aspects.map((a) => Math.floor((a / total) * 1e4) / 1e4);
-}
 
 export interface PracticeTexts {
   title: string;
@@ -57,7 +56,8 @@ export interface PracticeTexts {
 
 /** Los bloques de BlockNote de la plantilla, con sus ids fijos. */
 export function practiceBlocks(texts: PracticeTexts, origin?: string): unknown[] {
-  const widths = rowWidths(PHOTOS.map((p) => p.aspect));
+  // El ancho de cada foto (`w`, la parte del renglón), como lo deja "Arrange in rows": las tres a la misma altura.
+  const widths = arrangeRows(PHOTOS.map((p) => p.aspect));
   return [
     {
       type: 'paragraph',
@@ -76,11 +76,14 @@ export function practiceBlocks(texts: PracticeTexts, origin?: string): unknown[]
     { type: 'paragraph', props: paragraphProps('script'), content: texts.scene },
     { type: 'paragraph', props: paragraphProps('script'), content: texts.action },
     { id: PRACTICE_BLOCKS.question, type: 'paragraph', props: paragraphProps('question'), content: texts.question },
-    ...PHOTOS.map((photo, i) => ({
-      id: PRACTICE_BLOCKS.photos[i],
-      type: 'image',
-      props: { url: practicePhotoUrl(photo.file, origin), name: photo.file, caption: '', [ROW_WIDTH_PROP]: widths[i] },
-    })),
+    {
+      id: PRACTICE_BLOCKS.photos,
+      type: 'paragraph',
+      content: PHOTOS.map((photo, i) => ({
+        type: PHOTO,
+        props: { url: practicePhotoUrl(photo.file, origin), name: photo.file, w: widths[i] },
+      })),
+    },
     { type: 'heading', props: { level: 3 }, content: texts.takesTitle },
     { type: 'table', content: { type: 'tableContent', headerRows: 1, rows: texts.takes.map((cells) => ({ cells })) } },
     { id: PRACTICE_BLOCKS.empty, type: 'paragraph', content: '' },

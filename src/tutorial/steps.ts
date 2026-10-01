@@ -70,7 +70,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'practice-photos',
-    anchor: { blocks: PRACTICE_BLOCKS.photos },
+    anchor: { blocks: [PRACTICE_BLOCKS.photos] },
     layout: 'all',
     title: 'tour.photos.title',
     text: 'tour.photos.text',
