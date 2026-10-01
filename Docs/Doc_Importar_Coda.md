@@ -217,10 +217,11 @@ qué ni deja exportarla ("Only canvas pages can be exported"); el servidor MCP d
 
 - **`embeds.json`** (en la raíz de la carpeta exportada): `{ "source": "…", "docId": "<id del doc>", "pages":
   { "<id de la página embebida>": "<dirección>" } }`. Uno de otro doc, sin `pages` o roto es un error claro
-  antes de bajar nada.
+  antes de exportar ninguna página. Si después se corrige o se quita una dirección, lo bajado para esa página se
+  descarta y se vuelve a bajar (o la página queda vacía, como antes).
 - **Qué hace el comando** con cada página `embed` que tiene dirección:
   - una página de Coda (`https://coda.io/d/…_d<doc>/…_su<página>`, o la misma en `docs.superhuman.com`): busca
-    esa página en su doc (por `_su…` en su `browserLink`), exporta su HTML y sus archivos como los de cualquier
+    esa página en su doc (por el `_su…` del final de su `browserLink`, comparado entero), exporta su HTML y sus archivos como los de cualquier
     página y los deja como contenido de la página embebida, con `embedOf: { docId, pageId, url }` en el manifest
     (y en `pages/<n>_<id>.embed.json`, para cuando se reusa lo ya bajado). El token va solo a la API de Coda;
   - cualquier otra dirección: un link a ella;

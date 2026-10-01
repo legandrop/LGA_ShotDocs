@@ -33,10 +33,23 @@ export function parseEmbedUrl(url) {
   if (u.protocol !== 'https:' || u.username || u.password) return null
   if (u.host === 'coda.io' || u.host === 'docs.superhuman.com') {
     const docId = u.pathname.match(/^\/d\/(?:[^/]*_)?d([A-Za-z0-9_-]+)(?:\/|$)/)?.[1]
-    const slug = u.pathname.match(/_su([A-Za-z0-9_-]+)(?:\/|$|#|\?)/)?.[1]
-    if (docId && slug) return { kind: 'coda', docId, slug }
+    const slug = codaPageSlug(u.href)
+    if (docId && slug && u.pathname.split('/').filter(Boolean).length >= 3) return { kind: 'coda', docId, slug }
   }
   return { kind: 'link', url: u.href }
+}
+
+/**
+ * El `_su<slug>` de una página de Coda: el del último tramo de la dirección (el nombre de la página puede
+ * traer `_su` antes, como en "Resumen_super_suXyZ9").
+ */
+export function codaPageSlug(url) {
+  try {
+    const last = new URL(url).pathname.replace(/\/+$/, '').split('/').pop() ?? ''
+    return last.match(/_su([A-Za-z0-9-]+)$/)?.[1] ?? null
+  } catch {
+    return null
+  }
 }
 
 /**

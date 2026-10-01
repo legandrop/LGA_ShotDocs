@@ -46,6 +46,18 @@ describe('páginas embebidas (embeds.json)', () => {
     expect(parseEmbedUrl('http://coda.io/d/_dAbC/_suX')).toBeNull()
     expect(parseEmbedUrl('javascript:alert(1)')).toBeNull()
     expect(parseEmbedUrl('')).toBeNull()
+    // Un nombre de doc o de página con "_su" antes del slug de verdad.
+    expect(parseEmbedUrl('https://coda.io/d/Mis_summary_dAbC123/Page_suXyZ9')).toEqual({ kind: 'coda', docId: 'AbC123', slug: 'XyZ9' })
+    expect(parseEmbedUrl('https://coda.io/d/Rep_dAbC/Resumen_super_suXyZ9')).toEqual({ kind: 'coda', docId: 'AbC', slug: 'XyZ9' })
+  })
+
+  it('el slug de una página se compara entero (uno corto no encuentra otra que lo contiene)', async () => {
+    const { codaPageSlug } = await import('./lib/codaExport.mjs')
+    expect(codaPageSlug('https://coda.io/d/_dD/Dia-43_suXyZ9')).toBe('XyZ9')
+    expect(codaPageSlug('https://coda.io/d/_dD/Dia-43_suXyZ9/')).toBe('XyZ9')
+    expect(codaPageSlug('https://coda.io/d/_dD/Dia-43_suXyZ9') === 'X').toBe(false)
+    expect(codaPageSlug('https://coda.io/d/_dD')).toBeNull()
+    expect(codaPageSlug('no')).toBeNull()
   })
 
   it('embeds.json se revisa: de otro doc o sin "pages" es un error claro; las direcciones vacías se ignoran', async () => {
