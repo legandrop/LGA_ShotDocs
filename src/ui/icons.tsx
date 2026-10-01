@@ -36,6 +36,10 @@ export const RestoreIcon = icon('M4 10a6 6 0 1 0 1.8-4.3M4 3.5v3h3');
 // Archivar y desarchivar un proyecto (P.14): una caja con su tapa; desarchivar, con una flecha que sale.
 export const ArchiveIcon = icon('M3.25 4.25h13.5v3H3.25zM4.5 7.25v8a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-8M8.25 10.5h3.5');
 export const UnarchiveIcon = icon('M3.25 4.25h13.5v3H3.25zM4.5 7.25v8a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-8M10 14V9.75M8 11.5l2-2 2 2');
+// "Available offline" (P.10): un círculo con una flecha que baja al dispositivo.
+export const OfflineMarkIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM10 6.75v6M7.5 10.5l2.5 2.5 2.5-2.5');
+// "Storage on this device": un disco.
+export const StorageIcon = icon('M3.25 11.5h13.5v3.75a1 1 0 0 1-1 1H4.25a1 1 0 0 1-1-1zM3.25 11.5l2-6.75h9.5l2 6.75M13.25 14h.5');
 export const SyncedIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM7.25 10.25l1.9 1.9 3.6-4', {
   strokeWidth: 1.7,
 });
@@ -72,6 +76,10 @@ export const ScriptIcon = icon('M5.5 3h9v14h-9zM8 6.5h4M7.5 9.5h1.5M11 9.5h1.5M8
 export const CommentIcon = icon('M4.75 4h10.5c.7 0 1.25.55 1.25 1.25v7c0 .7-.55 1.25-1.25 1.25H9l-3.5 2.75V13.5h-.75c-.7 0-1.25-.55-1.25-1.25v-7C3.5 4.55 4.05 4 4.75 4z');
 export const QuestionIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1', {
   strokeWidth: 1.6,
+});
+/** La ayuda: un signo de pregunta en un círculo, más liviano que el de las preguntas. */
+export const HelpIcon = icon('M10 3.25a6.75 6.75 0 1 1 0 13.5 6.75 6.75 0 0 1 0-13.5zM8.1 8.2a1.95 1.95 0 1 1 2.75 1.78c-.5.25-.85.7-.85 1.27v.35M10 13.75v.1', {
+  strokeWidth: 1.5,
 });
 export const SheetIcon = icon('M5.5 2.75h9v14.5h-9zM7.75 5.5h4.5M7.75 8h4.5M7.75 10.5h3');
 export const PrintIcon = icon(

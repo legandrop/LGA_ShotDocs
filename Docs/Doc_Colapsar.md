@@ -2,7 +2,8 @@
 
 Estado: **entrega 1a hecha (v0.053)**: colapsar para vos, con toda la seguridad al editar, las marcas de hoja
 contadas con todo abierto y el PDF todo abierto (ver "Cómo quedó (1a)", al final). De la 1b, **"Imprimir como se
-ve" hecho (v0.067)**; faltan arrastrar la sección entera, Shift+⌘/Ctrl+↑/↓ y la 2. Lega
+ve" hecho (v0.067)**; **arrastrar la sección entera, Shift+⌘/Ctrl+↑/↓ y la entrega 2 (para todos), en v0.084**
+("Mover la sección entera" y "Cómo quedó (1b, mover, y 2)", al final). Lega
 contestó casi todas las decisiones el 2026-09-30 (al final, "Decisiones"); las que faltan siguen "a
 confirmar". **"Correcciones de la auditoría", al final, manda sobre lo de arriba**, y "Cómo quedó" sobre las
 dos. **"El margen del bloque y deshacer (v0.059)", lo último, manda sobre todo lo anterior** en lo que toca: los
@@ -187,7 +188,8 @@ a la persona en todos sus dispositivos, como las preferencias.
 - **Lo que ves:** `P.colapsado` si `P` existe; si no, `G`.
 - **Clic:** lo contrario de lo que ves, guardado como `P` (si coincide con `G`, igual queda: lo tuyo se mantiene
   aunque después cambie `G`).
-- **Shift+clic (quien edita):** `G` pasa a lo contrario de lo que ves y se borra tu `P` (ves lo de todos).
+- **Shift+clic (quien edita):** `G` pasa a lo contrario de lo que ves y se borra tu `P` (ves lo de todos). Si lo
+  que ves es solo tuyo, lo tuyo pasa a todos, como la tabla del §3 (decisión 21).
 - **Un Shift+clic de otro nunca cambia lo que ve alguien que tiene lo suyo en ese título.** Quien no tiene nada
   propio ve el `G` nuevo. "Abrir todo" y "Colapsar todo" del menú guardan lo tuyo en todos los títulos.
 
@@ -436,6 +438,18 @@ Pruebas:
     Colapsar no se deshace: Ctrl+Z trae el título, abierto.
 19. **Orden de lo que sigue** (2026-09-30): después de 1a, la búsqueda en el proyecto (P.12, entrega 2), colapsar
     1b, colapsar para todos (entrega 2), P.9 carpetas, P.10 copias locales, la segunda entrega de adjuntos y P.8.
+
+### Decididas el 2026-10-01 (1b y 2)
+
+20. **El mover en dos pasadas (`blockMove.ts`) se usa solo con secciones colapsadas en juego** (1A): cuando lo que
+    se mueve tiene un título colapsado o salta una sección colapsada. Mover un renglón suelto sin nada colapsado
+    sigue siendo el de BlockNote. Lega delegó la decisión el 2026-10-01; quedó 1A: solo con secciones
+    colapsadas, porque con un teléfono sin red "a la vez" es todo lo que pasa entre dos sincronizaciones y perder
+    lo escrito en el lado recreado no se extiende a los movimientos comunes. Lo fija `collapseMove.test.ts`
+    ("decisión 1A"). El costo del lado recreado (sección "Mover la sección entera") queda aceptado para estos
+    movimientos.
+21. **Tooltips y Shift+clic: se sigue la tabla del §3.** Donde la regla del §4 y la tabla no coinciden (lo que
+    ves es solo tuyo), Shift+clic pasa lo tuyo a todos, como dice la tabla. Queda como está.
 
 ### A confirmar por Lega
 
@@ -889,4 +903,188 @@ Pedido de Lega sobre v0.053/v0.054. **Manda sobre lo de arriba.**
   imprime desde el menú de la barra lateral (donde no se ve la casilla, porque esa página no está abierta).
 - **Pruebas:** `src/ui/collapsePagination.test.ts` ("imprimir como se ve").
 - **Falta de la 1b:** arrastrar la sección entera y Shift+⌘/Ctrl+↑/↓ como una unidad (tocan el documento: ver
-  "Para la 1b (riesgo)").
+  "Mover la sección entera", abajo).
+
+## Mover la sección entera (1b, segundo paso): lo medido y la propuesta
+
+Pedido: arrastrar un título colapsado mueve toda su sección, y Shift+⌘/Ctrl+↑/↓ la mueve como una unidad
+(correcciones 4 y 7). El riesgo: mover toca el documento compartido, y otro puede estar editando a la vez.
+
+**Lo que costó descubrir (leído en el código y ahora medido).** En Yjs 13 no existe mover. y-prosemirror traduce
+cada cambio del editor comparando por posición (`updateYFragment`): deja el principio y el final que coinciden y
+**reescribe en su lugar** cada bloque del medio (le cambia el id y el contenido). Mover k bloques por encima de m
+reescribe los k + m. Si otro escribe a la vez en uno de ellos, su texto aparece en otro bloque (el que quedó en ese
+lugar) o se pierde (si el tipo no coincide: un título contra un párrafo). Si otro borra uno, **se pierde otro
+bloque, que nadie tocó**, y el borrado vuelve. Una sola transacción de ProseMirror no lo cambia: es lo mismo.
+
+**Cómo se midió.** `src/ui/moveHarness.ts` y `src/ui/collabMoveMeasure.test.ts` (con `MOVE_MEASURE=<archivo>`):
+dos editores reales con Yjs, como `photoHarness.ts`; 300 agendas al azar por caso (semillas fijas). A mueve; B, sin
+haber visto el mover (y A sin haber visto lo de B), escribe una marca en un bloque de una región, borra un bloque,
+agrega uno, o mueve lo mismo; después se entregan los cambios en orden, con la reparación de la app. Páginas: un
+párrafo arriba, la sección (k bloques, empieza con un H2), lo que salta (m bloques) y el destino (H2 + párrafo).
+Tres caminos: **hoy al arrastrar** (BlockNote: sacar e insertar, una transacción), **hoy con el teclado**
+(Shift+Ctrl+↓ de BlockNote, un bloque por vez) y **la propuesta** (abajo). El número es la cantidad de agendas
+(de 300) con algo de eso. "Perdido": la marca no está; "en otro bloque": está, en un bloque que no es el suyo.
+
+| Caso | B, a la vez | Hoy, arrastrar | Hoy, teclado | Propuesta |
+|---|---|---|---|---|
+| Un bloque suelto salta uno (k=1, m=1) | escribe en el que se mueve | 25 perdido, 196 en otro | igual | **0** |
+| | escribe en el que salta | 32 perdido, 186 en otro | igual | 250 perdido |
+| | borra un bloque | **85 con texto de nadie perdido**, 70 borrados que vuelven | igual | 0 perdido, 144 vuelven |
+| | mueve lo mismo | 14 perdido, 115 en otro | igual | 62 perdido, 6 en otro |
+| Sección de 3 salta un título (k=3, m=1) | escribe en la sección | 161 perdido, 173 en otro | igual | **0** |
+| | escribe en el título que salta | 246 perdido, 21 en otro | igual | 254 perdido |
+| | borra un bloque | **137 con texto de nadie perdido** | igual | **0** |
+| | mueve lo mismo | 87 perdido, 99 en otro | igual | 74 perdido, 7 en otro |
+| Sección de 3 salta una sección de 3 (k=3, m=3) | escribe en la sección | 12 perdido, 212 en otro | 220 perdido, 142 en otro | **0** |
+| | escribe en lo que salta | 14 perdido, 200 en otro | 153 perdido, 170 en otro | 248 perdido |
+| | borra un bloque | **172 con texto de nadie perdido** | igual | 0 perdido, 177 vuelven |
+| Sección de 2 arrastrada lejos (k=2, m=6) | escribe en la sección | 31 perdido, 207 en otro | 187 perdido, 158 en otro | 258 perdido |
+| | escribe en lo que salta | 138 perdido, 177 en otro | 241 perdido, 70 en otro | **0** |
+| | borra un bloque | **192 con texto de nadie perdido** | igual | 0 perdido, 145 vuelven |
+| Todos | escribe en el destino o arriba | 0 | 0 | 0 |
+| Todos | agrega un bloque | 0 perdido | 0 | 0 perdido |
+| Un bloque suelto / sección de 3 que salta 1 / de 3 que salta 3 / de 2 lejos | anida bloques con Tab (de la auditoría) | **106 / 172 / 185 / 202 con un bloque perdido** | — | 39 / 43 / 115 / 40 |
+
+En todos los casos y caminos los dos documentos terminan iguales y nadie queda escribiendo de más. Con la
+propuesta, "mueve lo mismo" deja la sección **dos veces** (como hoy: 120 a 146 de 300 con algo dos veces; se
+prefiere duplicar a perder) y los bloques duplicados tienen el mismo id (el editor le cambia el id a uno al
+dibujarlo, como ya pasa con los ids repetidos de `Doc_Colaboracion.md`).
+
+**La propuesta: dos pasadas en Yjs, recreando el lado más chico** (`src/ui/blockMove.ts`). En el editor, el mover
+es una transacción común (los mismos nodos, sacados e insertados; los plugins la ven como cualquier otra). En Yjs
+se escribe en una sola transacción (un solo cambio que se sube, un solo paso de deshacer) en dos pasadas: primero
+el documento sin el lado que se recrea (un borrado limpio) y después el final (una inserción limpia). Se recrea el
+lado más chico, contado en bloques: lo que se mueve o lo que salta (empate: lo que salta); si el destino es de otro
+grupo (sale de un bloque o entra en otro), lo que se mueve. El otro lado **no se toca**.
+
+**Por qué esta y no la de BlockNote:**
+
+- **Texto que nadie tocó: 0 en todos los casos, salvo uno** (hoy, 85 a 192 de 300 cuando B borra un bloque,
+  también moviendo un bloque suelto). Es la vara que la de BlockNote no cumple con ningún tamaño. **La excepción**
+  (la encontró la auditoría): si B anida a la vez con Tab un bloque debajo de uno del lado recreado, ese bloque se
+  pierde (Yjs lo pone adentro de un bloque borrado): 39 a 115 de 300; hoy, sin colapsar, se pierde un bloque en el
+  mismo caso más seguido (106 a 202). Anidar es borrar e insertar en y-prosemirror (`Doc_Colaboracion.md`).
+- **Nada aparece en otro bloque**, nunca (hoy, casi siempre que B escribe en algo que se reescribe).
+- Lo que B escribe en el lado que no se recrea (casi siempre el más grande) queda donde lo escribió: 0.
+- **El costo:** lo que B escribe a la vez en el lado recreado (el más chico) **se pierde** en vez de aparecer en
+  otro bloque: 248 a 258 de 300, contra 25 a 32 perdidos (y 186 a 196 en otro bloque) al mover hoy un bloque
+  suelto. Sumando perdido y en otro bloque, la propuesta nunca es peor que hoy en ningún caso; contando solo lo
+  perdido, el lado recreado sí. No hay un camino que conserve las dos cosas: para que un lado no se toque, el otro
+  tiene que borrarse y crearse de nuevo (Yjs no mueve), o reescribirse entero en su lugar (lo de hoy).
+- Un bloque que B borró en el lado recreado vuelve (144 a 177 de 300): la copia lo trae. Se prefiere a perder.
+
+**La vara del encargo** ("no peor que mover un bloque suelto hoy, y 0 en el texto que nadie tocó"): lo segundo se
+cumple siempre salvo con Tab a la vez (y ahí, menos que hoy); lo primero se cumple contando el daño (perdido o en otro bloque) y no contando solo lo perdido en
+el lado recreado. **Decidido (decisión 20):** perder lo que otro escribe a la vez en el lado más chico se acepta
+solo para los movimientos con secciones colapsadas. Mientras no haya colaboración en tiempo real (D-04), "a la vez"
+es todo lo que pasa entre dos sincronizaciones.
+
+**Cuándo se usa.** Solo cuando hay algo colapsado en juego (lo que se mueve tiene un título colapsado, o salta una
+sección colapsada); el resto de los movimientos siguen siendo los de BlockNote. Pasar todos los movimientos por este
+camino sería mejor para el texto que nadie tocó, pero cambia lo que pasa al mover un bloque suelto: **decidido que
+no (decisión 20, 1A)**.
+
+## Cómo quedó (1b, mover, y 2), v0.084
+
+Sin tipo de bloque ni propiedad nueva, sin migración, sin cambios en el portero ni en `min_app_version`.
+
+**Mover la sección entera** (correcciones 4 y 7, con la propuesta de arriba):
+
+- **`src/ui/blockMove.ts`**: el mover en dos pasadas en Yjs (`dispatchMove`, `recreatedRange`). Adentro del `mux`
+  de y-prosemirror se despacha la transacción del editor (los mismos nodos, sacados e insertados) y después, en una
+  sola transacción de Yjs, el documento sin el lado que se recrea y el final. Sin Yjs (o si el documento del medio
+  no se puede armar), un despacho común. Antes y después corta la pila de deshacer: es su propio paso.
+- **`src/ui/sectionMove.ts`**: qué se mueve y adónde. Teclado (`planKeyboardMove`): lo elegido se agranda hasta el
+  final de la sección de cada título colapsado que tiene; lo de al lado, si es una sección colapsada, se salta
+  entera (también un párrafo salta una sección colapsada como si fuera un bloque); el resto como BlockNote (entra
+  en los hijos del de al lado; al principio o al final de un grupo sale al de afuera; arriba o abajo de todo, nada).
+  Sin nada colapsado en juego, mueve BlockNote como siempre. Arrastrar (`planSectionDrag`): el bloque que eligió
+  BlockNote, agrandado hasta el final de su sección.
+- **Se esconde lo mismo que antes** (`preserveHidden` en `collapse.ts`): después de mover, el fin (`e`) de cada
+  título colapsado que se ve se ajusta para que esconda exactamente lo mismo (por ejemplo, una sección colapsada que
+  baja un bloque y queda arriba de párrafos que se veían: siguen a la vista). Si no se puede (haría falta alargar
+  una sección), manda la corrección 2: se abre lo que quedó escondido. Deshacer y rehacer un mover hacen lo mismo
+  (el paso de la pila va marcado con `SECTION_MOVE_META`).
+- **Arrastrar** (`startSectionDrag`, `dropSection`, `handleDrop` del plugin; los puntos en `BlockSideMenu.tsx`): al
+  empezar, si lo elegido tiene un título colapsado, lo que se suelta (`view.dragging` y el portapapeles del
+  arrastre) es la sección entera; al soltar en la misma página, el mover en dos pasadas, al lugar entre bloques más
+  cercano (`dropPoint`, como ProseMirror). Soltarla en su mismo lugar no hace nada. **La selección no cambia al
+  empezar**: cambiarla en medio del `dragstart` hacía que Chromium cancelara el arrastre (lo encontró el recorrido
+  de punta a punta). Soltar adentro de otra sección colapsada: se abre (corrección 2), como antes.
+- **Solo lectura:** Shift+⌘/Ctrl+↑/↓ no mueve nada (BlockNote movía igual y la subida se rechazaba).
+
+**Para todos** (entrega 2, sección 4, correcciones 5 y 9):
+
+- **El mapa** `collapsedHeadings` en el mismo Y.Doc de la página (`SHARED_COLLAPSE_MAP`): clave, el id del título;
+  `true`. Abrir para todos borra la clave. Se escribe con su propio origen (`ORIGIN_SHARED_COLLAPSE`), así se guarda
+  y se sube como cualquier edición; el deshacer no lo toca (mira solo el contenido).
+- **Lo que vale** (`effective` en `collapse.ts`): lo tuyo si lo hay; si no, lo de todos. El plugin guarda los dos
+  (`records`, `shared`) y lo que vale (`merged`). Un clic guarda lo tuyo (también abrir: `{c: false}`), y "Colapsar
+  todo" / "Abrir todo" lo guardan en todos los títulos: un cambio de otro para todos ya no los mueve (decisión 17).
+  Lo que se abre solo (una edición, "Ir al bloque", la búsqueda) borra lo tuyo, salvo que esté colapsado para
+  todos. Enter al final de un título colapsado para todos le pone un fin: pasa a ser tuyo.
+- **Shift+clic** (`toggleShared`) y **Ctrl/⌘+Alt+Shift+Enter**: si lo que ves es solo tuyo, pasa a ser de todos; si
+  no, colapsa o abre para todos. Lo tuyo en ese título se borra. Solo con el editor editable y los permisos
+  conocidos (`canShare` = `editable && perms.known` en `PageEditor`); si no, no escribe el mapa y hace lo del clic.
+  En pantallas táctiles, solo para vos.
+- **Lo que llega de otro** (`sharedChanged`): se aplica después de que Yjs termina de avisar (un microtask): si el
+  mismo cambio trae contenido, y-prosemirror lo dibuja primero; despachar antes haría que el editor, con lo de antes,
+  lo escribiera encima. Si otro colapsa para todos y eso escondería tu selección (y no tenés nada tuyo ahí), queda
+  abierto para vos con un aviso (`collapse.keptOpen`, corrección 5).
+- **Tooltips** (`toggleTip` en `CollapseToggles.tsx`), como la tabla de la sección 3: quien puede editar ve
+  "Colapsar solo para vos / Shift+clic: para todos", "Colapsado solo para vos / Clic: abrir · Shift+clic: colapsar
+  para todos", "Colapsado para todos / Clic: abrir solo para vos · Shift+clic: abrir para todos" y "Abierto solo para
+  vos / Clic: colapsar · Shift+clic: abrir para todos"; quien solo ve o comenta, la acción sin Shift. **Diferencia
+  con la sección 4:** la regla de ahí ("Shift+clic: lo de todos pasa a lo contrario de lo que ves") y la tabla no
+  coinciden cuando lo que ves es solo tuyo; se siguió la tabla (lo tuyo pasa a ser de todos). Decidido: queda así
+  (decisión 21).
+- **Versiones viejas:** no ven el mapa (ven todo abierto, como lo de cada uno) y lo conservan: no toca el fragmento
+  ni ninguna propiedad. Lo prueban `collapseShared.test.ts` (el editor publicado edita y el mapa sigue) y
+  `publishedCompat.test.ts` (la versión publicada de la sincronización lo baja, lo conserva y lo vuelve a subir).
+
+**Pruebas:** `collapseMove.test.ts` (el teclado y el arrastre con el editor real: secciones que bajan y suben
+enteras, un párrafo que salta una sección, sin nada colapsado mueve BlockNote, arriba de todo, varios bloques, solo
+lectura, anidados, Yjs igual al editor, deshacer en un paso), `collabMove.test.ts` (dos editores, 40 agendas por
+caso: el texto que nadie tocó, lo que no se recrea, iguales; y el atajo con otro editor que escribe adentro de lo
+escondido), `collapseShared.test.ts` (para todos), el caso 5 de `collapseEditor.test.ts` (ahora sube con su sección)
+y `collapseProperty.test.ts` con el arrastre de secciones: **pasa con las 70 semillas**. `collapseMove.test.ts`
+fija además la decisión 20 (el mover en dos pasadas solo con algo colapsado en juego; sin nada colapsado, ni una
+llamada) y las fotos en línea de una sección que se mueve.
+
+**De punta a punta** (Chromium sin ventana, un arnés con dos personas lado a lado sobre el servidor de prueba, sin
+login; fuera del repo): los tooltips de quien edita y de quien solo comenta, colapsar para vos y para todos, que el
+otro lo vea al sincronizar, abrir solo para vos, Ctrl+Shift+↓ con dos secciones colapsadas y Ctrl+Z, arrastrar los
+puntos de un título colapsado con el mouse (la sección entera, lo escondido sigue escondido, el otro lo recibe),
+Shift+clic de quien solo comenta (solo para él, el mapa vacío) y Ctrl+Shift+↓ en solo lectura: 26 de 26. Unido
+con `main` v0.081 suma las fotos en línea (una sección colapsada con dos fotos salta otra con una, que Yjs recrea;
+el otro escribe a la vez en el renglón de las fotos; deshacer; arrastrar): 37 de 37, las tres fotos siempre una
+vez, en su bloque, en los dos.
+
+**Auditoría de la 1b y la 2** (independiente; sin bloqueantes). Cada punto con su prueba, que fallaba antes
+(`collapseMove.test.ts` y `collapseShared.test.ts`, "auditoría de la 1b"):
+
+- **I-1.** Soltar una sección justo debajo de otro título colapsado la metía entre el título y lo que esconde (se
+  abría y le robaba la sección). Ahora cae después de toda la sección de ese título (`dropTarget`), como el teclado.
+- **I-2.** Shift+clic en un título colapsado solo para vos con un fin (un renglón agregado con Enter) escondía ese
+  renglón: el fin queda tuyo al pasarlo a todos.
+- **I-3.** "Texto que nadie tocó: 0" tenía una excepción, anidar a la vez con Tab (medido y escrito arriba; la
+  agenda tiene el paso `I`).
+- **M-1.** Sacar de su bloque un título colapsado que era el único hijo dejaba un renglón vacío nuevo: ahora se saca
+  el grupo de hijos entero (`deletionRange`).
+- **M-2.** Si las dos pasadas fallaran en el medio, Yjs vuelve a "antes" y el final se escribe como un despacho común
+  (nunca queda el lado recreado borrado).
+- **M-3.** Un arrastre de texto que empieza en el editor olvida la sección que se había empezado a arrastrar.
+- **M-4.** Un cambio del mapa que baja por el camino de la reparación (Yjs lo marca local) cuenta como de otro para
+  la corrección 5.
+- **Quedó como está:** el tooltip de quien solo ve o comenta tiene una segunda línea ("Colapsado para todos." o "Solo
+  para vos…") que la tabla del §3 no pone; dice si es para todos o solo para vos (decisión 6).
+
+**En la ayuda** (unido con `main` v0.082): las entradas *Collapse for everyone* y *Move a collapsed section*, y
+los atajos en el registro; detalle en `Doc_Tutorial.md`, "Entrada de ayuda: colapsar".
+
+**Unido con `main` v0.081** (con las fotos en línea): una sección colapsada con fotos en línea, movida con el teclado,
+con deshacer y arrastrada, las lleva todas, sin perder ni duplicar ninguna, también del lado que Yjs recrea
+(`collapseMove.test.ts` y el recorrido de punta a punta).
+
+**Pendiente:** probar a mano en Safari, Firefox y el iPhone (el arrastre y el teclado).

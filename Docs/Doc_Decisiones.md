@@ -191,6 +191,29 @@ diga otra cosa.
   (8) La palabra es la del idioma de la app (`delete` / `borrar`). (9) En *Deleted projects* lo ven todos los que lo
   veían; quién lo borró, dueño, admins y quien lo maneja; los números, solo quien lo maneja. (10) El último
   proyecto activo no se archiva ni se borra. (11) Se sube `min_app_version` antes del primer borrado.
+- **D-25 · Espacio en el dispositivo y "Available offline"** (2026-10-01, P.10). Reemplaza la propuesta anterior
+  de liberar solo a mano. (1) **Tope automático de 2 GB por dispositivo:** pasado eso, la app borra las copias
+  ya confirmadas en el Drive que hace más que no se abren; la miniatura queda siempre; nunca se borra algo no
+  confirmado en el Drive. (2) **Available offline** para una página (con sus subpáginas) o un proyecto entero:
+  baja lo que falta para usarlo sin red y lo mantiene al día mientras haya red; lo marcado no cuenta para el tope
+  y nunca se libera solo. (3) **Una ventana al marcar** con casillas y su peso: fotos en grande (2048 px) tildada,
+  fotos originales destildada, adjuntos de hasta 50 MB tildada, videos destildada, carpetas del Drive destildada
+  (P.9); pesos de todo, también de lo destildado, y el total de lo elegido, con un indicador circular mientras
+  calcula; el espacio libre del dispositivo y no arranca si no entra; barra de progreso y aviso de listo.
+  (4) **A mano**, "Espacio en este dispositivo" en el menú de la cuenta: cuánto ocupa, lo marcado, *Free up
+  space* y desmarcar. Diseño: `Doc_Copias_Locales.md`.
+  **Respuestas de Lega a las propuestas del diseño (2026-10-01), que ajustan lo anterior:** (a) **el tope lo pone la
+  persona**: la ventana de "Available offline" y "Espacio en este dispositivo" muestran el tope y cuánto se está
+  ocupando, "para decidir antes de activar"; se puede cambiar; de fábrica, **2 GB por workspace**. (b) **Esperar y
+  avisar antes de liberar**: nunca se libera solo sin aviso previo ("this is taking X, free up space?"); lo marcado
+  offline no se libera nunca solo; lo no marcado sí, con ese aviso. (c) "Lo marcado offline se mantiene siempre en la
+  versión tildada" (de fábrica, fotos en 2048); los originales propios ya confirmados en el Drive son liberables,
+  **siempre con aviso previo**; lo no subido nunca se toca, con o sin red. (d) Sin "Keep on this device" por archivo:
+  offline es por página, página con subpáginas, o proyecto. (e) Se muestra cuánto se baja por la red. (f) Los
+  comentarios de la rama marcada se bajan siempre; desmarcar borra las copias bajadas (con una casilla para dejarlas).
+  (g) Con permiso quitado se borran las copias; al restaurar un proyecto o devolver el permiso "vuelve como online":
+  no se vuelve a bajar solo, se vuelve a marcar si se quiere. (h) Sin internet la app dice claramente "Offline" junto
+  con lo pendiente ("Offline · 700 to upload").
 
 ## Decididas en la implementación, a confirmar por Lega (2026-09-30)
 

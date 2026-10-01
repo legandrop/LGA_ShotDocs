@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   CACHE_FILES,
@@ -5,6 +6,8 @@ import {
   CACHE_PIECE,
   CACHE_TAIL_PIECES,
   cacheSlot,
+  FEATURES,
+  VERIFY_MAX,
   cleanFileName,
   contentDisposition,
   folderName,
@@ -42,6 +45,8 @@ type FakeFile = {
   appProperties?: Record<string, string>;
   /** Mandado a la papelera él mismo (no por estar adentro de una carpeta en la papelera). */
   trashed?: boolean;
+  /** Drive no da su MD5 (pasa con algunos archivos). */
+  noMd5?: boolean;
   trashedTime?: string;
   createdTime?: string;
 };
@@ -274,7 +279,15 @@ function fakeWorld() {
     if (one) {
       metaGets++;
       const f = files.get(one);
-      return f ? jsonRes(describe(one, f)) : jsonRes({ error: 'not found' }, 404);
+      return f
+        ? jsonRes({
+            ...describe(one, f),
+            // Drive da el peso como texto y el MD5 de los archivos binarios (no de las carpetas).
+            ...(f.mime === 'application/vnd.google-apps.folder'
+              ? {}
+              : { size: String(f.data.length), ...(f.noMd5 ? {} : { md5Checksum: createHash('md5').update(f.data).digest('hex') }) }),
+          })
+        : jsonRes({ error: 'not found' }, 404);
     }
     if (url.host === 'www.googleapis.com' && url.pathname === '/upload/drive/v3/files') {
       const meta = JSON.parse(String(init.body)) as { name: string; parents: string[]; appProperties?: Record<string, string> };
@@ -1483,7 +1496,15 @@ describe('portero: compatibilidad con lo guardado y la app de hoy', () => {
 
     // El estado tiene lo de antes, más lo nuevo.
     const status = (await (await call(p, '/drive/status', { jwt: 'owner-jwt' })).json()) as Record<string, unknown>;
-    expect(status).toEqual({ connected: true, broken: null, email: 'lega@example.com', isOwner: true, folder: null, picker: false, features: ['folders'] });
+    expect(status).toEqual({
+      connected: true,
+      broken: null,
+      email: 'lega@example.com',
+      isOwner: true,
+      folder: null,
+      picker: false,
+      features: ['verify', 'known', 'offline', 'codes', 'folders'],
+    });
   });
 
   it('reconectar Drive conserva las carpetas; con otra cuenta de Google olvida la carpeta elegida', async () => {
@@ -1841,6 +1862,155 @@ describe('portero: la app puede leer lo que se sirve (CORS, fotos nítidas de v0
     const res = await p.handle(new Request(expired, { headers: { Origin: APP } }));
     expect(res.status).toBe(403);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+  });
+});
+
+// --- espacio en el dispositivo y Available offline (Doc_Copias_Locales.md, entrega 0) ---------------------
+
+describe('portero: códigos, /verify, only known y ?offline=1', () => {
+  const code = async (res: Response) => ((await res.json()) as { code?: string }).code;
+
+  it('/pass dice qué pasó con un code fijo, no solo con el número', async () => {
+    const { world, p } = await setup();
+    // Sin fila o sin permiso: not_found.
+    expect(await code(await filePass(p, 'viewer-jwt', FILE_A))).toBe('not_found');
+    addBaseFile(world, FILE_A, { levels: { 'u-owner': 4 } });
+    const denied = await filePass(p, 'viewer-jwt', FILE_A);
+    expect(denied.status).toBe(404);
+    expect(await code(denied)).toBe('not_found');
+    // Todavía sin subir: not_uploaded.
+    addBaseFile(world, FILE_A);
+    expect(await code(await filePass(p, 'viewer-jwt', FILE_A))).toBe('not_uploaded');
+    // Drive no lo tiene (mismo 404 que sin permiso): drive_missing.
+    world.base.get(FILE_A)!.drive_id = 'noExistexxxxxxxx';
+    const missing = await filePass(p, 'viewer-jwt', FILE_A);
+    expect(missing.status).toBe(404);
+    expect(await code(missing)).toBe('drive_missing');
+    // Drive tiene ahí otro archivo: drive_mismatch.
+    world.files.set('otroArchivoxxxxx', { name: 'x', mime: 'video/quicktime', data: bytes(10), parents: [], appProperties: { sdFile: FILE_B } });
+    world.base.get(FILE_A)!.drive_id = 'otroArchivoxxxxx';
+    const other = await filePass(p, 'viewer-jwt', FILE_A);
+    expect(other.status).toBe(403);
+    expect(await code(other)).toBe('drive_mismatch');
+  });
+
+  it('/m/ dice pass_expired, pass_invalid y drive_missing', async () => {
+    const { world, store, get } = await servedFile('IMG_0007.JPG', 'image/jpeg');
+    const p = new Portero(env, store, world.http);
+    const expired = await signedPass(store, { f: 'adjuntoxxxxxxxxx', u: Date.now() - 1000, t: 'image/jpeg' });
+    expect(await code(await p.handle(new Request(expired, { headers: { Origin: APP } })))).toBe('pass_expired');
+    const bad = await p.handle(new Request(`${SELF}/m/abc.def`, { headers: { Origin: APP } }));
+    expect(bad.status).toBe(403);
+    expect(await code(bad)).toBe('pass_invalid');
+    world.files.delete('adjuntoxxxxxxxxx');
+    const gone = await get('', { headers: { Origin: APP } });
+    expect(gone.status).toBe(404);
+    expect(await code(gone)).toBe('drive_missing');
+  });
+
+  it('sin conexión con Drive, /pass dice drive_not_connected', async () => {
+    const world = fakeWorld();
+    const p = new Portero(env, memoryStore(), world.http);
+    world.files.set('elBuenoxxxxxxxxx', { name: 'a', mime: 'image/jpeg', data: bytes(10), parents: [], appProperties: { sdFile: FILE_A } });
+    addBaseFile(world, FILE_A, { drive_id: 'elBuenoxxxxxxxxx', mime: 'image/jpeg' });
+    expect(await code(await filePass(p, 'viewer-jwt', FILE_A))).toBe('drive_not_connected');
+  });
+
+  it('?offline=1 saltea la caché del arranque: devuelve lo pedido y no ocupa lugar', async () => {
+    const { world, store, p } = await setup();
+    const size = 2 * 1024 * 1024 + 99;
+    const data = bytes(size);
+    world.files.set('videoxxxxxxxxxxx', { name: 'v.mov', mime: 'video/quicktime', data, parents: [], appProperties: { sdFile: FILE_A } });
+    addBaseFile(world, FILE_A, { drive_id: 'videoxxxxxxxxxxx', size, mime: 'video/quicktime' });
+    const { url } = (await (await filePass(p, 'viewer-jwt', FILE_A)).json()) as { url: string };
+    const end = 1024 * 1024 - 1;
+    // Sin el parámetro, la caché responde más corto que lo pedido (lo que veía la bajada).
+    const cached = await p.handle(new Request(url, { headers: { Range: `bytes=0-${end}` } }));
+    expect(cached.headers.get('Content-Range')).not.toBe(`bytes 0-${end}/${size}`);
+    // Con `offline=1`, lo pedido entero, desde Drive.
+    const keys = [...store.data.keys()].filter((k) => k.startsWith('cache')).length;
+    const res = await p.handle(new Request(`${url}?offline=1`, { headers: { Range: `bytes=0-${end}`, Origin: APP } }));
+    expect(res.status).toBe(206);
+    expect(res.headers.get('Content-Range')).toBe(`bytes 0-${end}/${size}`);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(APP);
+    expect(sameBytes(new Uint8Array(await res.arrayBuffer()), data.subarray(0, end + 1))).toBe(true);
+    // Partes seguidas hasta el final, sin huecos.
+    const rest = await p.handle(new Request(`${url}?offline=1`, { headers: { Range: `bytes=${end + 1}-${size + 10}` } }));
+    expect(rest.headers.get('Content-Range')).toBe(`bytes ${end + 1}-${size - 1}/${size}`);
+    expect([...store.data.keys()].filter((k) => k.startsWith('cache')).length).toBe(keys);
+  });
+
+  it('/verify: lo que dice Drive hoy (id, peso, papelera, marca y MD5), sin lo anotado', async () => {
+    const { world, p } = await setup();
+    const data = bytes(1000);
+    world.files.set('elBuenoxxxxxxxxx', { name: 'a.mov', mime: 'video/quicktime', data, parents: [], appProperties: { sdFile: FILE_A } });
+    addBaseFile(world, FILE_A, { drive_id: 'elBuenoxxxxxxxxx' });
+    // Un pase anota la marca como comprobada: /verify igual vuelve a preguntar.
+    expect((await filePass(p, 'viewer-jwt', FILE_A)).status).toBe(200);
+    const verify = (files: unknown, jwt = 'viewer-jwt') =>
+      call(p, '/verify', { method: 'POST', jwt, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files }) });
+    const before = world.metaCalls();
+    const res = await verify([FILE_A]);
+    expect(res.status).toBe(200);
+    const md5 = createHash('md5').update(data).digest('hex');
+    expect(await res.json()).toEqual({ results: { [FILE_A]: { driveId: 'elBuenoxxxxxxxxx', size: 1000, trashed: false, marked: true, md5 } } });
+    expect(world.metaCalls()).toBe(before + 1);
+
+    // En la papelera de Drive, sin la marca, sin MD5: lo dice tal cual.
+    world.files.get('elBuenoxxxxxxxxx')!.trashed = true;
+    world.files.get('elBuenoxxxxxxxxx')!.appProperties = { sdFile: FILE_B };
+    world.files.get('elBuenoxxxxxxxxx')!.noMd5 = true;
+    const changed = (await (await verify([FILE_A])).json()) as { results: Record<string, Record<string, unknown>> };
+    expect(changed.results[FILE_A]).toMatchObject({ trashed: true, marked: false, md5: null });
+
+    // Varios a la vez: cada uno con lo suyo, sin cortar a los demás.
+    addBaseFile(world, FILE_B, { drive_id: 'noExistexxxxxxxx' });
+    addBaseFile(world, FILE_C, { levels: { 'u-owner': 4 } });
+    const many = (await (await verify([FILE_A, FILE_B, FILE_C])).json()) as { results: Record<string, { code?: string }> };
+    expect(many.results[FILE_B].code).toBe('drive_missing');
+    expect(many.results[FILE_C].code).toBe('not_found');
+    expect(many.results[FILE_A].code).toBeUndefined();
+    const notUploaded = '44444444-5555-4666-8777-888888888888';
+    addBaseFile(world, notUploaded);
+    const pending = (await (await verify([notUploaded])).json()) as { results: Record<string, { code?: string }> };
+    expect(pending.results[notUploaded].code).toBe('not_uploaded');
+  });
+
+  it(`/verify acepta hasta ${VERIFY_MAX} por pedido y pide sesión y conexión con Drive`, async () => {
+    const { p } = await setup();
+    const ids = Array.from({ length: VERIFY_MAX + 1 }, (_, i) => `${String(i).padStart(8, '0')}-2222-4333-8444-555555555555`);
+    const post = (body: unknown, jwt?: string) =>
+      call(p, '/verify', { method: 'POST', ...(jwt ? { jwt } : {}), headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const tooMany = await post({ files: ids }, 'viewer-jwt');
+    expect(tooMany.status).toBe(400);
+    expect(await code(tooMany)).toBe('too_many');
+    expect((await post({ files: ['no-es-un-id'] }, 'viewer-jwt')).status).toBe(400);
+    expect((await post({}, 'viewer-jwt')).status).toBe(400);
+    expect((await post({ files: [FILE_A] })).status).toBe(401);
+    const unconnected = new Portero(env, memoryStore(), fakeWorld().http);
+    const res = await call(unconnected, '/verify', { method: 'POST', jwt: 'viewer-jwt', body: JSON.stringify({ files: [FILE_A] }) });
+    expect(res.status).toBe(503);
+    expect(await code(res)).toBe('drive_not_connected');
+  });
+
+  it("only: 'known' responde unknown sin crear carpetas ni abrir una subida; si lo recuerda, done", async () => {
+    const { world, p } = await setup();
+    addBaseFile(world, FILE_A);
+    const folders = world.folders().length;
+    const calls = world.calls.length;
+    const res = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, day: '2026-09-30', only: 'known' });
+    expect(await res.json()).toEqual({ status: 'unknown' });
+    expect(world.folders().length).toBe(folders);
+    expect(world.calls.slice(calls).some((c) => c.includes('/upload/drive/v3/files'))).toBe(false);
+    // Subido de verdad: `only: 'known'` responde done, con la marca comprobada.
+    const done = await uploadFile(p, 'editor-jwt', FILE_A, bytes(1000));
+    expect(done.status).toBe('done');
+    const again = await startFile(p, 'editor-jwt', { file: FILE_A, size: 1000, only: 'known' });
+    expect(await again.json()).toMatchObject({ status: 'done', linked: true });
+  });
+
+  it('las features que anuncia /drive/status son las que entiende', () => {
+    expect([...FEATURES]).toEqual(['verify', 'known', 'offline', 'codes', 'folders']);
   });
 });
 

@@ -14,8 +14,8 @@ export const sync = {
   },
   'sync.offline': { en: "Offline", es: "Sin conexión" },
   'sync.offlinePending': {
-    en: "Offline · {changes} saved on this device",
-    es: "Sin conexión · {changes} en este dispositivo",
+    en: "Offline · {count} to upload",
+    es: "Sin conexión · {count} por subir",
   },
   'sync.notUploadedRetrying': { en: "{changes} not uploaded · retrying", es: "{changes} sin subir · reintentando" },
   'sync.problem': { en: "Sync problem · retrying", es: "Problema al sincronizar · reintentando" },

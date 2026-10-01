@@ -18,12 +18,12 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 | [`Doc_Imagenes.md`](Doc_Imagenes.md) | Fotos en la página: el primer clic elige, tamaños rápidos, fotos en fila, acomodar en filas, la opción del teléfono, la calidad en la página (v0.058: la imagen nítida que reemplaza a la miniatura) y las fotos HEIC, que se pasan a JPEG al agregarlas (v0.075). |
 | [`Doc_Adjuntos.md`](Doc_Adjuntos.md) | Adjuntar cualquier archivo (PDF, zip…): la tarjeta, abrir y bajar, lo que sirve el portero y la seguridad. |
 | [`Doc_Peso_Proyectos.md`](Doc_Peso_Proyectos.md) | Cuánto ocupa cada proyecto en el Drive (P.7, primera entrega hecha en v0.050) y el diseño de la lista de media por peso (P.8). |
-| [`Doc_Colapsar.md`](Doc_Colapsar.md) | Colapsar secciones por sus títulos (P.11; entrega 1a, para vos, hecha en v0.053; "Imprimir como se ve", v0.067): qué esconde cada título, el triángulo, para vos y para todos (Shift+clic), editar con secciones colapsadas, las marcas de hoja y el PDF; el margen del bloque (tres puntos, [puntos] [triángulo] [texto], la barra al hacer clic, sin "Borrar") y deshacer un borrado en un paso (v0.059). |
+| [`Doc_Colapsar.md`](Doc_Colapsar.md) | Colapsar secciones por sus títulos (P.11; entrega 1a, para vos, hecha en v0.053; "Imprimir como se ve", v0.067; mover la sección entera y para todos, v0.084, con la medición de mover con dos editores): qué esconde cada título, el triángulo, para vos y para todos (Shift+clic), editar con secciones colapsadas, las marcas de hoja y el PDF; el margen del bloque (tres puntos, [puntos] [triángulo] [texto], la barra al hacer clic, sin "Borrar") y deshacer un borrado en un paso (v0.059). |
 | [`Doc_Buscar.md`](Doc_Buscar.md) | Buscar y reemplazar en la página (Ctrl/⌘+F; entrega 1, v0.051; desde v0.053 abre las secciones colapsadas) y buscar en todo el proyecto (Ctrl/⌘+K; entrega 2, v0.054): en el dispositivo, permisos, qué se busca, el índice, ir al resultado (P.12); ajustes de v0.057 (llegar a la coincidencia en páginas largas, el campo enfocado, la barra con hojas anchas). |
-| [`Doc_Tutorial.md`](Doc_Tutorial.md) | Diseño del tutorial y la ayuda (P.13, sin implementar): la página de práctica en memoria que no se guarda ni sincroniza, la recorrida con globitos (motor propio, pasos, teléfono, dónde se guarda que ya se vio), la ayuda con todas las funciones y un registro único de atajos, y la regla de que cada función nueva suma su ayuda. |
+| [`Doc_Tutorial.md`](Doc_Tutorial.md) | **La ayuda, la recorrida y la página de práctica (P.13; entregas 1 y 2 hechas, v0.082; "Mostrame" y novedades, pendientes).** La página de práctica en memoria que no se guarda ni sincroniza, la recorrida con globitos (motor propio, pasos, teléfono, dónde se guarda que ya se vio), la ayuda con todas las funciones y el registro único de atajos (`src/ui/shortcuts.ts`) con las pruebas que lo comparan con el código, la regla de que cada función nueva suma su ayuda y cómo quedó. |
 | [`Doc_Carpetas.md`](Doc_Carpetas.md) | Arrastrar una carpeta entera (P.9; **entrega 1 hecha en v0.081**, ver "Cómo quedó"): la ventana de qué se sube, la cola propia, el visor, el portero y la regla de no salir del árbol; y el diseño: el bloque de carpeta (el mismo `image` con `sdmedia://`), una vista en vivo de la carpeta de Drive, la subida directa del navegador a Google, el portero como portero, cuánto entra en el plan gratis, el visor adentro de la app, permisos, papelera y versiones viejas. |
 | [`Doc_Proyectos_Borrar.md`](Doc_Proyectos_Borrar.md) | **Archivar y borrar proyectos (P.14): entrega 1 implementada (v0.077); Drive y *Delete forever*, en diseño.** Cómo quedó la entrega 1, y el diseño completo: Tres estados (activo, archivado, borrado), la papelera de proyectos con 30 días para restaurar sin borrar ninguna fila, los permisos en cero con el proyecto borrado, quién puede, la carpeta del proyecto en la papelera de Drive (portero), *Delete forever*, los demás dispositivos y las versiones viejas, la interfaz (íconos por renglón, la ventana con la palabra `delete` / `borrar`), las tres migraciones con sus pruebas SQL (corridas en rollback contra la base), las decisiones de Lega y las correcciones de la auditoría. |
-| [`Doc_Copias_Locales.md`](Doc_Copias_Locales.md) | Diseño de liberar la copia que la app guarda en el navegador de los archivos ya confirmados en el Drive (P.10, sin implementar): qué se guarda hoy, cómo se comprueba que está en Drive, cuándo se libera sola o a mano, qué se pierde y cómo se vuelve a tener. |
+| [`Doc_Copias_Locales.md`](Doc_Copias_Locales.md) | Diseño del espacio de la app en el dispositivo y de "Available offline" (P.10, D-25; entregas 0 y 1 implementadas, con "Cómo quedó" y la medición del iPhone): qué se guarda y dónde, el tope automático de 2 GB, marcar una página o un proyecto para usarlo sin red (la ventana con los pesos, la descarga, mantenerlo al día), cómo se comprueba que algo está en Drive antes de liberarlo y "Espacio en este dispositivo". |
 | [`Doc_Instalar.md`](Doc_Instalar.md) | Instalar la app (v0.079): cómo se sabe si está instalada, *Install app* en el menú de la cuenta y en la pantalla de entrar, el aviso del teléfono (30 días con *Not now*), la ventana con los pasos dibujados de iPhone, Android y computadora, el botón *Install* directo de Chrome y Edge, el manifiesto y lo que falta probar en teléfonos reales. |
 | [`Doc_Carrete.md`](Doc_Carrete.md) | El carrete: el visor a pantalla completa de las fotos y los videos de una página (qué entra, gestos, zoom, qué se ve sin red o si el navegador no puede reproducirlo, y cómo convive con la edición). |
 | [`Doc_Colaboracion.md`](Doc_Colaboracion.md) | Editar a la vez: qué puede pasar cuando dos personas cambian el mismo bloque (lo inherente de y-prosemirror), qué se arregló en v0.052, los parches de y-prosemirror y cómo revisarlos al actualizar, la semilla con texto y la reparación de bloques; desde v0.074, el texto de los huecos y los huecos estables de las fotos en línea, con su tabla medida. |
@@ -50,17 +50,25 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
   al sincronizar y la documentación. Lo que encuentre se corrige antes de cerrarlo.
 - **Atajos de teclado.** En la Mac, siempre ⌘ y nunca Ctrl; en Windows y Linux, Ctrl (regla de Lega). Se
   comparan con `modPressed` e `isLetter` de `src/ui/findUi.ts`, con la plataforma como parámetro para probar las
-  dos (`src/ui/macShortcuts.test.ts`).
+  dos (`src/ui/macShortcuts.test.ts`). Todos están en el registro único `src/ui/shortcuts.ts`, de donde salen los
+  rótulos (⌘⌥M / Ctrl+Alt+M) y la tabla de la ayuda.
+- **Ayuda y atajos.** Toda función nueva que ve un usuario suma en la misma tanda: su entrada en la ayuda
+  (`src/help/entries.ts` y sus textos en los dos idiomas, `src/i18n/lazy/help.ts`), sus atajos en el registro
+  (`src/ui/shortcuts.ts`, con su texto en `src/help/shortcutTexts.ts`), y si cambia algo que señala la recorrida, el
+  paso (`src/tutorial/steps.ts`). La auditoría de cierre lo revisa como parte de la documentación. Lo sostienen
+  pruebas: `src/ui/shortcuts.test.ts` falla si el editor real, una función `is…Shortcut` o un archivo que escucha
+  teclas tienen un atajo que no está en el registro, y `src/tutorial/tourState.test.ts` si un ancla `data-tour` de
+  los pasos desaparece.
 - **Claves.** Nunca se versionan. La app solo lee `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` (o sus
   variantes `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`), nunca una clave secreta.
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 1784 pruebas (v0.0XX): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 1927 pruebas (v0.086): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`; las de editar a la vez son `src/ui/collab*.test.ts`, ver
   `Doc_Colaboracion.md`; las de fotos en línea corren 300 agendas al azar por caso y suman alrededor de un
   minuto y medio), el cliente del portero (`src/media/`), el portero
-  (`portero/src/`), el importador de Coda (`src/import/`) y los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`
+  (`portero/src/`), la ayuda (`src/help/`), la recorrida y la página de práctica (`src/tutorial/`), el importador de Coda (`src/import/`) y los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`
   revisa los tipos de la app pero no los del portero: esos van con `npx tsc -p portero --noEmit`.
 
 ## Direcciones de la app
@@ -73,6 +81,7 @@ cualquier dirección que no sea un archivo, y sin red lo hace el service worker.
 | `/` | El inicio: salta a la última página abierta del proyecto elegido en ese dispositivo. |
 | `/p/<uuid>` | Una página, por su id. |
 | `/trash` | La papelera de páginas. |
+| `/practice` | La página de práctica (P.13, `Doc_Tutorial.md`): un documento de ejemplo en memoria, con el editor de verdad; no es una página del árbol y no se guarda ni se sincroniza. |
 | `/media-test` | Ya no existe (v0.042): abre la app, como `/`. Queda por si está en un link guardado o en la vuelta de Google de un portero viejo. |
 | `/privacy` | La política de privacidad, en inglés (`src/ui/Legal.tsx`). **Pública:** se ve sin sesión ni workspace. |
 | `/terms` | Las condiciones de uso, en inglés (`src/ui/Legal.tsx`). **Pública:** se ve sin sesión ni workspace. |

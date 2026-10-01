@@ -4,12 +4,15 @@ import type { carrete } from './lazy/carrete';
 import type { commentsPanel } from './lazy/commentsPanel';
 import type { drive } from './lazy/drive';
 import type { editor } from './lazy/editor';
+import type { help } from './lazy/help';
 import type { folders } from './lazy/folders';
 import type { importCoda } from './lazy/importCoda';
 import type { installDialog } from './lazy/install';
+import type { offline } from './lazy/offline';
 import type { projectStates } from './lazy/projectStates';
 import type { search } from './lazy/search';
 import type { teamDialogs } from './lazy/teamDialogs';
+import type { tutorial } from './lazy/tutorial';
 import { strings } from './strings';
 import type { Dict, Entry } from './types';
 
@@ -33,12 +36,15 @@ type LazyStrings = typeof carrete &
   typeof commentsPanel &
   typeof drive &
   typeof editor &
+  typeof help &
   typeof folders &
   typeof importCoda &
   typeof installDialog &
+  typeof offline &
   typeof projectStates &
   typeof search &
-  typeof teamDialogs;
+  typeof teamDialogs &
+  typeof tutorial;
 export type Key = keyof typeof strings | keyof LazyStrings;
 
 /** Todas las claves cargadas hasta ahora: las de la primera carga y las de las partes ya bajadas. */

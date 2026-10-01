@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.086 :
 
 Fotos HEIC: con red, si el decodificador no bajaba una vez, la foto se subía como HEIC para siempre; sin red,
 la conversión esperaba unos 7 s a que fallara la consulta a la base; un canvas en blanco pasaba la comprobación
@@ -10,6 +10,49 @@ antes de subir el HEIC; se convierte sin esperar la consulta; la comprobación m
 apartan del fondo; el perfil es el de la imagen principal, con un Display P3 o BT.2020 estándar para `nclx`; y
 se convierten de a dos. Pruebas del comando de Coda entero, que al repetirse ya deja el mismo manifest.
 [ Fotos HEIC - reintentar el decodificador, convertir sin esperar la base, comprobar mejor y el perfil de la imagen principal ]
+
+v0.085 :
+
+Un dispositivo nuevo mostraba "Subiendo ~2750 cambios" unos minutos al abrir el workspace, sin escribir nada
+en la base. Era lo bajado contado como pendiente: al comparar cada página con sus fotos y videos (papelera de
+archivos), el dispositivo no tenía anotado ningún uso y ponía en la cola un `link_page_file` por cada uno, que
+salían de a uno y no cambiaban nada. Ahora, para las páginas que nunca comparó, lee primero qué usos tiene el
+servidor (una lectura por cada 100 páginas) y solo manda los que faltan; si la lectura falla, manda todo como
+antes. Medido con 302 páginas y 2704 fotos: de unos 3 minutos con el número y 2704 pedidos, a ninguno.
+[ Sincronización - un dispositivo nuevo no cuenta como pendientes los usos de fotos que ya están en el servidor ]
+
+v0.084 :
+
+Colapsar, lo que faltaba: mover una sección colapsada entera y colapsar para todos. Arrastrar o mover con
+Shift+Ctrl/⌘+↑/↓ un título colapsado movía solo el título y abría lo escondido. Mover reescribía cada bloque
+del medio: con otro editando a la vez, su texto caía en otro bloque o se perdía, y un bloque que nadie tocó
+podía desaparecer (hasta 192 de 300). Ahora la sección se mueve entera, los demás bloques la saltan como uno,
+se esconde lo mismo, deshacer es un paso y Yjs recrea solo el lado más chico: lo que nadie tocó ya no se
+pierde (salvo un bloque anidado a la vez, menos que antes). Shift+clic colapsa o abre para todos (si se puede
+editar), en un mapa aparte que las versiones viejas conservan. La ayuda suma las dos funciones.
+[ Colapsar 1b y 2 - mover la sección entera y colapsar para todos ]
+
+v0.083 :
+
+No había forma de tener una página o un proyecto para usar sin red, ni de saber cuánto ocupa la app en el
+dispositivo. *Available offline…* (menú de la página o del proyecto) muestra el peso de cada casilla y baja lo elegido
+por partes, sin frenar las subidas, hasta "listo"; después lo mantiene al día. *Storage on this device* (menú de la
+cuenta) tiene un tope elegible (2 GB de fábrica): pasado, un aviso pregunta antes de liberar copias bajadas y
+nítidas, nunca lo marcado ni lo agregado en el dispositivo. Una foto nueva que no entra libera copias que siguen en
+Drive o se ofrece guardarla. Sin red se lee "Offline · N to upload", también en el teléfono. El portero suma códigos
+de error fijos, `POST /verify`, `only: 'known'` y `?offline=1`. Medición en `/storage-test`. Ayuda: dos entradas en *Offline and syncing*.
+[ Available offline - marcar, bajar, tope con aviso y espacio en el dispositivo ]
+
+v0.082 :
+
+Faltaban una ayuda y una forma de aprender la app. Ahora el "?" al lado de Papelera (o *Help and shortcuts* en el
+menú de la cuenta) abre la ayuda: cada función explicada, todos los atajos de teclado por lugar y una búsqueda
+("ctrl f", "carrete"). La primera vez, una recorrida de diez pasos (nueve en el teléfono) que se avanza con *Next*
+muestra lo principal sobre una página de práctica en `/practice`: el editor de verdad, pero no se guarda, no se
+sincroniza y no la ve nadie; sus fotos van en el renglón, como las crea hoy la app. Las dos se vuelven a abrir desde
+la ayuda. "Ya la vi" queda en el dispositivo y en la cuenta. Los atajos salen de un solo registro
+(`src/ui/shortcuts.ts`) y una prueba falla si uno del código no está ahí, así la ayuda no queda vieja.
+[ Ayuda, recorrida y página de práctica (P.13, entregas 1 y 2) ]
 
 v0.081 :
 

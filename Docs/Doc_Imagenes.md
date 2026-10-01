@@ -407,7 +407,7 @@ lenta" son el mismo camino: el HEIC ya está guardado y se convierte cuando se p
 - **Perfil de color:** las fotos del iPhone están en Display P3. Los píxeles se decodifican tal cual, se
   codifica el JPEG y se le mete el perfil ICC del HEIC (segmentos APP2). Sin eso el JPEG se leería como sRGB y se
   vería menos saturado. Si el navegador le puso un perfil propio al codificar, se saca: queda uno solo. Desde
-  v0.0XX el perfil es el de la **imagen principal** (`pitm` → `ipma` → `ipco`; una grilla sin color propio toma
+  v0.086 el perfil es el de la **imagen principal** (`pitm` → `ipma` → `ipco`; una grilla sin color propio toma
   el de su primer cuadro), no el primero que aparece en el archivo: un HEIC con un mapa o una miniatura con
   perfil antes de la foto llevaba el equivocado. Si la foto declara su color solo con números (`nclx`, sin
   perfil), se arma un perfil estándar equivalente: Display P3 (primarios 12) o BT.2020 (9), con la curva sRGB o
@@ -419,7 +419,7 @@ lenta" son el mismo camino: el HEIC ya está guardado y se convierte cuando se p
   mismo que el HEIC y parecerse. Lo que devuelve un canvas no es de fiar a ciegas: pasado su tope de área (16,7 MP
   en iOS) puede salir vacío (blanco o negro), y hay navegadores que alteran lo que se lee. Dos comparaciones: una
   grilla pareja de 16 puntos (el promedio de cuadraditos de 8 × 8, con tolerancia amplia; más de la mitad
-  distintos no es la foto) y, desde v0.0XX, hasta 12 **puntos que se apartan del fondo** de la foto (la mediana
+  distintos no es la foto) y, desde v0.086, hasta 12 **puntos que se apartan del fondo** de la foto (la mediana
   de la luminancia, en una grilla de hasta 48 × 48 cuadraditos de 4 × 4): el texto de un documento, el horizonte
   de un cielo. En cada uno, el JPEG tiene que estar más cerca de la foto que del fondo (en luminancia, que el JPEG
   guarda casi exacta); si más de la mitad no, es un canvas vacío. Antes, con una foto casi toda blanca, un canvas
@@ -439,7 +439,7 @@ lenta" son el mismo camino: el HEIC ya está guardado y se convierte cuando se p
 |---|---|---|---|
 | Recién agregada | `pending` | *HEIC photo: turning it into a JPEG…* | Se convierte en segundo plano; apenas está el JPEG la página lo muestra, sin recargar. |
 | El decodificador no está, sin red (y este dispositivo nunca lo bajó) | `pending` | *HEIC photo: turns into a JPEG once online* | La cola vuelve a probar en cada vuelta, antes de registrarla. Si el dispositivo cree que no tiene red (`navigator.onLine` en `false`), sigue el camino de siempre: la manda a registrar (falla sin red, queda `sent`) y al volver la red pregunta a la base y la convierte. Si en realidad había red, se registra y se sube el HEIC: nunca espera para siempre. |
-| El decodificador no cargó con red (una red mala cortó la bajada) | `pending` | *HEIC photo: trying again to turn it into a JPEG…* (desde v0.0XX) | Hasta 3 intentos, a los 30 s y a los 2 min (`HEIC_ONLINE_TRIES`, `MediaRecord.heicMisses`), sin registrarla. Si el tercero tampoco carga, se registra y se sube el HEIC (subir manda). Después de recargar, el aviso sale de `heicMisses`: dice esto mientras espera el próximo intento, no "convirtiendo" (sin red, el aviso de sin red). |
+| El decodificador no cargó con red (una red mala cortó la bajada) | `pending` | *HEIC photo: trying again to turn it into a JPEG…* (desde v0.086) | Hasta 3 intentos, a los 30 s y a los 2 min (`HEIC_ONLINE_TRIES`, `MediaRecord.heicMisses`), sin registrarla. Si el tercero tampoco carga, se registra y se sube el HEIC (subir manda). Después de recargar, el aviso sale de `heicMisses`: dice esto mientras espera el próximo intento, no "convirtiendo" (sin red, el aviso de sin red). |
 | Se mandó a registrar como HEIC sin saber si llegó | `sent` | el mismo | Antes de convertirla se le pregunta a la base (`fetchMediaFiles`): si ya tiene la fila, queda como HEIC; sin respuesta, se espera. |
 | No se pudo convertir (archivo roto, falta de memoria, más de 50 MP, el JPEG no pasó la comprobación, más de 2 minutos) o ya se registró como HEIC | `failed` | *HEIC photo: could not turn it into a JPEG* | Se sube como HEIC. No se reintenta. |
 | Un HEIC subido sin convertir (otro dispositivo, una versión anterior) | — | *HEIC photo: this browser cannot show it* | Queda así (ver pendientes). |
@@ -449,7 +449,7 @@ archivo con el de la fila. Si la respuesta del registro como HEIC se pierde y de
 quedaría detenido ("The size does not match the file") y el HEIC ya no estaría en el dispositivo. Una vez
 registrada como HEIC, la foto no se convierte más.
 
-**Sin esperar la pregunta (v0.0XX).** Un `pending` se convierte enseguida, mientras se pregunta a la base; el
+**Sin esperar la pregunta (v0.086).** Un `pending` se convierte enseguida, mientras se pregunta a la base; el
 JPEG se guarda recién con la respuesta (si la base ya tiene la fila, se descarta y queda el HEIC). Si el
 dispositivo sabe que no tiene red (`navigator.onLine` en `false`), no se pregunta: sin red, la consulta tardaba
 unos 7 s en fallar y la conversión empezaba recién ahí. Medido en Chromium con la cola de verdad y una base que
@@ -469,7 +469,7 @@ se traba. Si el navegador no deja crear el Worker, o su script no arranca, se ha
 mismo, trabando mientras dura); si el Worker no tiene `OffscreenCanvas`, decodifica él y el JPEG lo codifica
 la página. **Siempre termina:** el Worker y el respaldo en la página tienen tope (2 minutos; un Worker que ni
 arrancó cuenta como "no está"), la bajada del `.wasm` se corta a los 45 s ("no está") y la cola pone su propio
-tope por encima de todo (`HEIC_LIMIT_MS`). **De a dos** (`HEIC_PARALLEL`, desde v0.0XX): cada conversión pide
+tope por encima de todo (`HEIC_LIMIT_MS`). **De a dos** (`HEIC_PARALLEL`, desde v0.086): cada conversión pide
 cientos de MB (cerca de 800 con 48 MP) y antes, al soltar muchas juntas, se abrían todas a la vez. Las demás
 esperan su turno, y la espera no cuenta para el tope.
 
@@ -504,14 +504,14 @@ veces el HEIC (3,3 a 6,5 MB) y lleva el perfil Display P3 entero.
 - **Dos pestañas a la vez:** si una pestaña con una versión anterior registra el HEIC, la respuesta se pierde y
   justo entonces esta versión lo convierte sin red (sin poder preguntar), el JPEG quedaría detenido. Necesita
   las tres cosas juntas; con red, la pregunta a la base lo evita. Otra, de la misma pestaña líder (anterior a
-  v0.0XX, ventana de microsegundos): si al tercer intento marca `sent` justo después de que otra pestaña guardó
+  v0.086, ventana de microsegundos): si al tercer intento marca `sent` justo después de que otra pestaña guardó
   el JPEG, el JPEG se sube bien pero en este dispositivo queda con el aviso de HEIC. Se cerraría haciendo ese
   `patch` condicional a que la marca siga en `pending`.
-- **La comprobación del JPEG acepta uno con la mitad en blanco** (límite conocido, anterior a v0.0XX): en la
+- **La comprobación del JPEG acepta uno con la mitad en blanco** (límite conocido, anterior a v0.086): en la
   grilla pareja da justo la mitad distinta (no "más de la mitad") y los puntos que se apartan del fondo caen
   repartidos. Un canvas entero vacío (blanco o negro) sí se rechaza, y es lo que se conoce del tope de iOS. Se
   cerraría rechazando también cuando una mitad entera, la de arriba o la de abajo, es distinta.
-- **`min_app_version` no frena la cola de archivos** (revisado en v0.0XX): solo la usan `push_page_update` en la
+- **`min_app_version` no frena la cola de archivos** (revisado en v0.086): solo la usan `push_page_update` en la
   base y el ciclo de páginas de `sync/engine.ts`. `register_file` no recibe la versión, el portero tampoco, y la
   cola de archivos no mira `status.outdated`: una pestaña de v0.074 o anterior sigue registrando y subiendo
   HEIC sin convertir aunque se suba la mínima. Para frenarla haría falta una migración que haga con
@@ -540,7 +540,7 @@ la conversión mientras la pregunta tarda, la respuesta perdida de `register_fil
 mientras se convertía, la medición en curso), `heicNames.test.ts`, `lazyPart.test.tsx` (el oyente de verdad con
 un import opcional) y `scripts/licenses.test.mjs`. En Chromium, fuera del repo, el camino entero con el build de
 producción: en el Worker, sin Worker, sin el `.wasm` y sin el decodificador, y las cuatro fotos reales. Para
-v0.0XX, en Chromium con el servidor de desarrollo y sin sesión (un banco de prueba fuera del repo): cuatro fotos
+v0.086, en Chromium con el servidor de desarrollo y sin sesión (un banco de prueba fuera del repo): cuatro fotos
 reales de iPhone (dos verticales) convertidas en el Worker con el perfil de su imagen principal (536 bytes, el
 mismo que el HEIC) en 0,9 a 2,0 s; la comprobación con el codificador de verdad pasa con las fotos reales y con
 un documento, un cielo y una nieve dibujados, y rechaza el canvas en blanco de cada uno; el Display P3 armado desde

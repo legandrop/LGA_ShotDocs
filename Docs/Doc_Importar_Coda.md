@@ -330,7 +330,7 @@ una, que es lo que se importa. El código es `scripts/lib/codaHeic.mjs`.
   a `media/<blob>.jpg`: calidad 0,92, a tamaño completo y **con la orientación aplicada** (una foto vertical
   sale vertical; el JPEG no lleva ninguna marca de rotación que un programa pueda ignorar). El **perfil de
   color** del HEIC (las fotos del iPhone están en Display P3) se copia al JPEG: sin él se leería como sRGB y se
-  vería menos saturado. Desde v0.0XX es el de la imagen principal (`pitm` → `ipma` → `ipco`), y si la foto solo
+  vería menos saturado. Desde v0.086 es el de la imagen principal (`pitm` → `ipma` → `ipco`), y si la foto solo
   declara `nclx` se arma uno estándar (Display P3 o BT.2020): el mismo código que la app,
   `src/media/heifColor.mjs` (`Doc_Imagenes.md`, "Fotos HEIC").
 - **Dónde queda cada cosa.** El JPEG, en `media/` con el mismo nombre de blob: así lo encuentran los dos
@@ -630,7 +630,7 @@ prueba (96×64, cuatro colores planos, guardado girado): sale derecho, a su tama
 de la imagen principal (y no el primero que aparece) y el Display P3 armado desde `nclx`, con cabeceras armadas a
 mano.
 
-El comando entero (desde v0.0XX): `scripts/coda-export-run.test.mjs` corre `coda-export.mjs` en un proceso de
+El comando entero (desde v0.086): `scripts/coda-export-run.test.mjs` corre `coda-export.mjs` en un proceso de
 node, como una persona, contra una API de Coda de mentira (`scripts/fixtures/codaFakeApi.mjs`, cargado con
 `node --import`: reemplaza `fetch`, no espera entre pedidos y da un `heic-convert` de mentira o "no instalado")
 sin tocar el comando. Un doc de dos páginas con una foto HEIC: la bajada, la conversión, el manifest, el

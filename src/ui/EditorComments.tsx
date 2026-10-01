@@ -17,16 +17,15 @@ import {
   answerQuestion,
   blocksChanged,
   clearBlockSource,
-  COMMENT_SHORTCUT_LABEL,
   commentOnBlock,
   isCommentShortcut,
-  QUESTION_SHORTCUT_LABEL,
   setBlockSource,
   type BlockSource,
 } from './commentsUi';
 import { paragraphProps, QUESTION_PROP } from './editorSchema';
 import { CommentIcon, QuestionIcon } from './icons';
 import { PHOTO } from './inlinePhoto';
+import { shortcutLabel } from './shortcuts';
 
 /** Lo que se corre un contador de comentarios que caería encima de otro (el alto del botón y un poco). */
 const MARK_STACK_PX = 26;
@@ -106,7 +105,7 @@ export function questionSlashItem(editor: AnyEditor, tr: Translate, group: strin
     subtext: tr('editor.questionHint'),
     aliases: ['pregunta', 'duda', 'dudas', 'question', 'ask', 'q'],
     group,
-    badge: QUESTION_SHORTCUT_LABEL,
+    badge: shortcutLabel('question'),
     icon: <QuestionIcon size={18} />,
     onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'paragraph', props: paragraphProps('question') } as never),
   };
@@ -141,7 +140,7 @@ export function CommentToolbarButton() {
       className="bn-button"
       label={tr('comments.comment')}
       mainTooltip={tr('comments.comment')}
-      secondaryTooltip={COMMENT_SHORTCUT_LABEL}
+      secondaryTooltip={shortcutLabel('comment')}
       icon={<CommentIcon size={18} />}
       onClick={() => commentOnBlock(currentBlockId(editor as AnyEditor))}
     />
@@ -371,7 +370,7 @@ export function CommentMargin({
           className="comment-margin-button comment-add"
           style={{ top: active.top }}
           aria-label={tr('comments.onBlock')}
-          data-tip={`${tr('comments.comment')}\n${COMMENT_SHORTCUT_LABEL}`}
+          data-tip={`${tr('comments.comment')}\n${shortcutLabel('comment')}`}
           onClick={() => commentOnBlock(active.id)}
         >
           <CommentIcon size={15} />
