@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.087 :
+
+Importar de Coda: direcciones sueltas y renglones en blanco. Una dirección partida por un cambio de formato quedaba
+como un link cortado (cada texto se miraba solo): ahora lo pegado que la continúa se junta, pero no una palabra común
+ni otra dirección. La puntuación final queda afuera del link. Cada renglón en blanco de Coda y cada renglón
+terminado en salto se veían de dos renglones de alto, porque el editor muestra el último `<br>` de un bloque y el
+HTML no: ahora se saca un solo salto final por bloque y quedan hasta dos renglones en blanco seguidos (un reporte de
+ERSO pasa de 18174 a 16280 px; en Coda, unos 16660), sin perder ninguna letra. Un comentario pegado a un párrafo
+partido en tarjetas se busca contra los bloques seguidos juntos, en tiempo lineal.
+[ Importar de Coda - direcciones partidas, puntuación y renglones en blanco ]
+
 v0.086 :
 
 Fotos HEIC: con red, si el decodificador no bajaba una vez, la foto se subía como HEIC para siempre; sin red,
