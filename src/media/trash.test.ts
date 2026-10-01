@@ -965,3 +965,88 @@ describe('papelera de archivos: correcciones de la auditoría', () => {
     expect(row).toMatchObject({ id, in_trashed_page: true, trashed_page_title: 'Día 1' });
   });
 });
+
+describe('dispositivo nuevo: los usos que el servidor ya tiene (B.14)', () => {
+  /** Un proyecto con dos páginas y tres fotos, hecho en el dispositivo `a`. */
+  async function bigger(server: FakeServer) {
+    const { a, page, id } = await withPhoto(server);
+    const other = await a.tree.create(null, 'Día 2');
+    await sync(a);
+    const ids = [mediaIdOf(await a.media.add(other, photo('IMG_0002.JPG')))!, mediaIdOf(await a.media.add(other, photo('IMG_0003.JPG')))!];
+    await edit(a, other, (doc) => ids.forEach((x) => insertImage(doc, x)));
+    await sync(a);
+    return { a, page, id, other, ids };
+  }
+
+  it('abrir el proyecto en un dispositivo nuevo no cuenta ni manda los usos que el servidor ya tiene', async () => {
+    const server = new FakeServer();
+    const { page, id, other, ids } = await bigger(server);
+    const sent = calls(server, 'link_page_file').length;
+    const b = await device(server);
+    // Apenas termina el ciclo (antes de la cola de archivos), el contador ya está en cero.
+    await b.engine.syncNow();
+    expect(b.engine.getStatus()).toMatchObject({ pendingMedia: 0, pendingPages: 0, pendingOps: 0, pendingFiles: 0 });
+    await sync(b);
+    expect(calls(server, 'link_page_file')).toHaveLength(sent);
+    for (const [p, f] of [[page, id], [other, ids[0]], [other, ids[1]]]) {
+      expect(await b.mediaDb.get('links', `${p}:${f}`)).toMatchObject({ pending: 0, removed: false });
+    }
+    // Lo confirmado así se comporta como lo mandado: quitar el bloque en `b` manda el unlink.
+    await edit(b, page, (doc) => removeImage(doc, id));
+    await sync(b);
+    expect(calls(server, 'unlink_page_file')).toEqual([`unlink_page_file ${page} ${id}`]);
+    expect(server.mediaFiles.get(id)?.trashed_at).toBeTruthy();
+  });
+
+  it('un uso que el servidor no tiene, o tiene quitado, se sigue mandando', async () => {
+    const server = new FakeServer();
+    const { page, id, other, ids } = await bigger(server);
+    // Como si una versión vieja nunca lo hubiera registrado, y otro quitado en el servidor.
+    server.pageFiles.delete(`${page}:${id}`);
+    server.pageFiles.delete(`${other}:${ids[0]}`);
+    server.removedPageFiles.add(`${other}:${ids[0]}`);
+    const sent = calls(server, 'link_page_file').length;
+    const b = await device(server);
+    await b.engine.syncNow();
+    expect(b.engine.getStatus().pendingMedia).toBe(2);
+    await sync(b);
+    expect(calls(server, 'link_page_file').slice(sent).sort()).toEqual(
+      [`link_page_file ${page} ${id}`, `link_page_file ${other} ${ids[0]}`].sort(),
+    );
+    expect(server.pageFiles.has(`${page}:${id}`)).toBe(true);
+    expect(server.pageFiles.has(`${other}:${ids[0]}`)).toBe(true);
+    expect(b.engine.getStatus().pendingMedia).toBe(0);
+  });
+
+  it('si no se pueden leer los usos del servidor, se mandan como antes', async () => {
+    const server = new FakeServer();
+    const { page, id } = await withPhoto(server);
+    const sent = calls(server, 'link_page_file').length;
+    const b = await device(server);
+    b.remote.fetchPageUses = async () => {
+      throw new RemoteError('Internal Server Error', false, '500');
+    };
+    await sync(b);
+    expect(calls(server, 'link_page_file').slice(sent)).toEqual([`link_page_file ${page} ${id}`]);
+    expect(await b.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ pending: 0 });
+  });
+
+  it('un uso ajeno ya guardado queda confirmado como ajeno, sin avisar de nuevo', async () => {
+    const server = new FakeServer();
+    const { a, page, id } = await withPhoto(server);
+    const project = await a.tree.createProject('Otro rodaje');
+    const foreign = await a.tree.create(null, 'Día 1 (otro)', project);
+    await sync(a);
+    await edit(a, foreign, (doc) => insertImage(doc, id));
+    await sync(a);
+    expect(server.foreignPageFiles.has(`${foreign}:${id}`)).toBe(true);
+    const notices = server.foreignNotices.length;
+    const sent = calls(server, 'link_page_file').length;
+    const b = await device(server);
+    await sync(b);
+    expect(calls(server, 'link_page_file')).toHaveLength(sent);
+    expect(await b.mediaDb.get('links', `${foreign}:${id}`)).toMatchObject({ pending: 0, foreign: true });
+    expect(await b.mediaDb.get('links', `${page}:${id}`)).toMatchObject({ pending: 0 });
+    expect(server.foreignNotices).toHaveLength(notices);
+  });
+});
