@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.073 :
+
+Diseño de las fotos en línea, sin código. Hoy una foto es un bloque: no se puede poner el cursor a su lado, ni
+escribir o pegar otra foto en su renglón, ni subirla al renglón de arriba, ni elegir varias con Shift; y
+"acomodar en filas" reparte toda la tanda en vez de las elegidas, que era lo pedido. Por eso lo importado de
+Coda queda apilado. `Doc_Fotos_En_Linea.md` propone la foto como un elemento del renglón, con una prueba
+técnica y una auditoría que midió qué se pierde al editar a la vez y corrigió el plan: nodo propio, un parche
+para los huecos entre fotos, el ancho como en las filas de hoy, convertir por tanda y hojas junto con crear.
+El roadmap lo pone primero (P.15), corrige P.4 y anota que la app tiene que mostrar las fotos HEIC.
+[ Docs - diseño de las fotos en línea ]
+
 v0.072 :
 
 Las fotos HEIC de un doc de Coda no se veían. Un doc con fotos del iPhone (HEIC) se importaba completo, pero sus

@@ -14,6 +14,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 | [`Doc_Supabase.md`](Doc_Supabase.md) | Cómo está armado el backend: configuración del proyecto, migraciones, pruebas de permisos y login. |
 | [`Doc_Portero.md`](Doc_Portero.md) | El portero de archivos (Worker de Cloudflare del dueño): cómo guarda la conexión con Drive, sube y devuelve archivos, y cómo publicarlo y conectarlo paso a paso. |
 | [`Doc_Hojas_PDF.md`](Doc_Hojas_PDF.md) | Hojas y PDF: cómo se calculan y se marcan los cortes entre hojas en el editor (sin tocar el documento) y cómo sale el PDF con la misma hoja y los mismos cortes. |
+| [`Doc_Fotos_En_Linea.md`](Doc_Fotos_En_Linea.md) | **Diseño, sin implementar (P.15):** la foto como un carácter del renglón, como en Coda (cursor al lado, escribir y pegar en su renglón, fluir y bajar de renglón, elegir varias con Shift y acomodar las elegidas). Qué se pide, la prueba técnica, por qué un nodo en línea nuevo, qué pasa con una versión vieja, qué cambia en cada parte de la app, las fotos que ya existen, las entregas y las preguntas para Lega. |
 | [`Doc_Imagenes.md`](Doc_Imagenes.md) | Fotos en la página: el primer clic elige, tamaños rápidos, fotos en fila, acomodar en filas, la opción del teléfono y la calidad en la página (v0.058: la imagen nítida que reemplaza a la miniatura). |
 | [`Doc_Adjuntos.md`](Doc_Adjuntos.md) | Adjuntar cualquier archivo (PDF, zip…): la tarjeta, abrir y bajar, lo que sirve el portero y la seguridad. |
 | [`Doc_Peso_Proyectos.md`](Doc_Peso_Proyectos.md) | Cuánto ocupa cada proyecto en el Drive (P.7, primera entrega hecha en v0.050) y el diseño de la lista de media por peso (P.8). |
@@ -53,7 +54,7 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 1331 pruebas (v0.072): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 1331 pruebas (v0.073): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`; las de editar a la vez son `src/ui/collab*.test.ts`, ver
   `Doc_Colaboracion.md`), el cliente del portero (`src/media/`), el portero
   (`portero/src/`), el importador de Coda (`src/import/`) y los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`
