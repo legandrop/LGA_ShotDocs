@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.069 :
+
+Direcciones sueltas de Coda. Lo que en Coda era un embebido (un video de Drive con su reproductor) entraba como
+un solo texto, sin links y con las direcciones pegadas entre sí y al texto anterior: Coda las exporta como texto,
+sin link, cada una en su `<span>`. Ahora, antes de convertir, un texto que es entero una dirección pasa a ser un
+link, y si estaba pegado a un texto o a otra dirección va en su propio renglón, en el mismo ítem, párrafo, celda
+o título. Una dirección de Drive que queda sola en su renglón de un párrafo sale a su propio párrafo como tarjeta
+de Drive, la que la app ya tenía; en un ítem, una tabla o un título queda el link. Lo que ya era un link, una
+dirección adentro de un texto más largo y los archivos de Coda no cambian.
+[ Importar de Coda - direcciones sueltas ]
+
 v0.068 :
 
 La subida de archivos se quedaba clavada. Al importar un doc grande (unos 2300 archivos), la app dejaba de subir

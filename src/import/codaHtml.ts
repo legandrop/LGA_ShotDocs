@@ -1,4 +1,5 @@
-import { SCRIPT_PROP, scriptMarks } from '../ui/editorSchema';
+import { parseDriveLink } from '../ui/driveLinks';
+import { DRIVE_CARD_PROP, SCRIPT_PROP, scriptMarks } from '../ui/editorSchema';
 
 // Convierte el HTML que exporta Coda (API `beginPageContentExport`, formato html) en bloques del editor.
 // El texto, los títulos, las listas y las tablas los convierte BlockNote (`tryParseHTMLToBlocks`); lo que
@@ -15,6 +16,9 @@ import { SCRIPT_PROP, scriptMarks } from '../ui/editorSchema';
 // - Links entre páginas. El comando escribe `coda-page:<id del manifest>` en un link a otra página del doc;
 //   acá pasa a la dirección de la página creada (`/p/<id>`). El editor descarta un link con un esquema que
 //   no conoce, por eso se cambia antes.
+// - Direcciones sueltas. Lo que en Coda era un embebido (un video de Drive con su reproductor) sale como
+//   la dirección en texto, sin link y pegada a lo de al lado. Cada una pasa a ser un link en su renglón, y
+//   una de Drive sola en un párrafo, una tarjeta de Drive (ver `linkBareUrls`).
 
 /** Un archivo de Coda en la página (foto, video o adjunto). */
 export interface CodaMedia {
@@ -119,6 +123,8 @@ export function prepareCodaHtml(
     p.append(a);
     el.replaceWith(p);
   }
+  // Después de las marcas: así una foto al lado de una dirección ya es texto y nunca se la toma por nada.
+  linkBareUrls(doc.body);
 
   for (const el of [...doc.body.querySelectorAll<HTMLElement>('[style]')]) {
     const text = el.style.color ? namedColor(el.style.color, 'text') : null;
@@ -168,6 +174,120 @@ function resolvePageLinks(body: HTMLElement, pageLink?: (codaId: string) => stri
     }
   }
   return [...broken.values()];
+}
+
+// --- Direcciones sueltas -----------------------------------------------------------------------------
+//
+// Un link de verdad Coda lo exporta como <a>. Lo que era un embebido sale como la dirección en texto, cada
+// una en su <span>, sin espacio con lo que tiene al lado:
+//   <li><span>Referencia:</span><span>https://…/view</span><span>https://…/view</span></li>
+// Sin esto entraba todo como un solo texto, sin links y con las direcciones pegadas.
+
+/** El texto entero es una dirección (lo que hay en un mismo texto con más palabras no se toca). */
+const BARE_URL = /^https?:\/\/\S+$/i;
+// Lo que va en la línea de un texto. Cualquier otra etiqueta corta la línea (un bloque, una celda, un <br>).
+const INLINE = new Set(['SPAN', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'A', 'CODE', 'FONT', 'MARK', 'SMALL', 'SUB', 'SUP']);
+// La clase con que el editor reconoce una tarjeta de Drive al convertir HTML (el `parse` del párrafo en
+// `ui/editorSchema.ts`): el mismo camino que pegar una tarjeta copiada.
+const DRIVE_CARD_CLASS = 'drive-card-line';
+
+/** La dirección, si `text` es una sola dirección suelta que no es un archivo de Coda. */
+function bareUrl(text: string): string | null {
+  const url = text.trim();
+  if (!BARE_URL.test(url) || HOSTED.test(url)) return null;
+  // Dos direcciones pegadas en un mismo texto, o una que lleva otra adentro (un redireccionador): no se
+  // sabe dónde cortar, y un link a las dos juntas no iría a ningún lado. Queda como texto.
+  if (/https?:\/\//i.test(url.slice(4))) return null;
+  try {
+    return new URL(url).hostname ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Cada dirección suelta pasa a ser un link, en su propio renglón si estaba pegada a un texto o a otra
+ * dirección. Una de Drive que queda sola en su renglón de un párrafo va a su propio párrafo, como tarjeta.
+ * No toca lo que ya es un link ni lo que está escrito como código.
+ */
+function linkBareUrls(body: HTMLElement): void {
+  const doc = body.ownerDocument;
+  const found: { node: Node; url: string }[] = [];
+  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const url = bareUrl(n.textContent ?? '');
+    if (url && !n.parentElement?.closest('a, code, pre')) found.push({ node: n, url });
+  }
+  // En el orden de la página: el salto que se pone después de una dirección es el "antes" de la siguiente.
+  for (const { node, url } of found) {
+    const text = node.textContent!;
+    const at = text.indexOf(url);
+    const a = doc.createElement('a');
+    a.setAttribute('href', url);
+    a.textContent = url;
+    (node as ChildNode).replaceWith(...[text.slice(0, at), a, text.slice(at + url.length)].filter((part) => part !== ''));
+    // La dirección con los envoltorios que son solo suyos (el <span> de Coda): lo que se mueve entero.
+    let unit: Element = a;
+    for (let p = unit.parentElement; p && p !== body && INLINE.has(p.tagName) && p.textContent!.trim() === url; p = unit.parentElement) unit = p;
+    if (isStuck(unit, 'previousSibling')) unit.before(doc.createElement('br'));
+    if (isStuck(unit, 'nextSibling')) unit.after(doc.createElement('br'));
+    if (parseDriveLink(url)) driveCardParagraph(unit, body);
+  }
+}
+
+/** Lo que hay de ese lado en la misma línea es texto (u otra dirección) sin un espacio de por medio. */
+function isStuck(unit: Node, side: 'previousSibling' | 'nextSibling'): boolean {
+  for (let node: Node = unit; ; ) {
+    let next = node[side];
+    while (next && next.nodeName !== 'BR' && !next.textContent) next = next[side];
+    if (next) {
+      if (next.nodeType !== 3 && !INLINE.has(next.nodeName)) return false;
+      // Un envoltorio que empieza (o termina) con un salto de línea ya separa.
+      let leaf: Node = next;
+      while (side === 'previousSibling' ? leaf.lastChild : leaf.firstChild) leaf = (side === 'previousSibling' ? leaf.lastChild : leaf.firstChild)!;
+      if (leaf.nodeName === 'BR') return false;
+      const edge = side === 'previousSibling' ? next.textContent!.slice(-1) : next.textContent![0];
+      return !/\s/.test(edge);
+    }
+    // Nada de ese lado adentro del envoltorio: se mira afuera, mientras siga siendo la misma línea.
+    const parent = node.parentElement;
+    if (!parent || !INLINE.has(parent.tagName)) return false;
+    node = parent;
+  }
+}
+
+/**
+ * Una dirección de Drive sola en su renglón de un párrafo de primer nivel sale a su propio párrafo, que el
+ * editor convierte en tarjeta de Drive: lo que en Coda se veía con reproductor se sigue viendo así. El
+ * texto de antes y el de después quedan en sus párrafos; nada se borra salvo los saltos de línea que la
+ * separaban. Adentro de un ítem de lista, de una tabla o de un título no hay tarjeta: queda el link.
+ */
+function driveCardParagraph(unit: Element, body: HTMLElement): void {
+  const host = unit.parentElement!;
+  if (host.parentElement !== body || (host.tagName !== 'DIV' && host.tagName !== 'P')) return;
+  // Un <div> que envuelve una tabla o una lista no es un párrafo.
+  if ([...host.children].some((c) => c.tagName !== 'BR' && !INLINE.has(c.tagName))) return;
+  const blank = (n: Node | null): boolean => !!n && n.nodeType === 3 && !n.textContent!.trim();
+  const beside = (side: 'previousSibling' | 'nextSibling') => {
+    let n = unit[side];
+    while (blank(n)) n = n![side];
+    return n;
+  };
+  const before = beside('previousSibling');
+  const after = beside('nextSibling');
+  if ((before && before.nodeName !== 'BR') || (after && after.nodeName !== 'BR')) return;
+  const empty = (el: Element) => [...el.childNodes].every((n) => n.nodeName === 'BR' || blank(n));
+
+  before?.remove();
+  after?.remove();
+  const rest = host.cloneNode(false) as Element;
+  while (unit.nextSibling) rest.append(unit.nextSibling);
+  const card = body.ownerDocument.createElement('p');
+  card.className = DRIVE_CARD_CLASS;
+  card.append(unit);
+  host.after(card);
+  if (!empty(rest)) card.after(rest);
+  if (empty(host)) host.remove();
 }
 
 /** Un `%` suelto no corta la importación: queda el texto tal cual. */
@@ -398,6 +518,8 @@ function markScript(blocks: LooseBlock[]): void {
       continue;
     }
     if (!inScript || b.type !== 'paragraph' || !textOf(b).trim()) continue;
+    // Una tarjeta de Drive no va junto con Script: debajo de un "Guion" sigue siendo tarjeta.
+    if (b.props?.[DRIVE_CARD_PROP] === true) continue;
     b.props = { ...b.props, [SCRIPT_PROP]: true };
     // Los fondos que Coda ponía a mano en INT/EXT y DÍA/NOCHE: Script ya los marca.
     b.content = (b.content as Inline[]).map((i) => {
