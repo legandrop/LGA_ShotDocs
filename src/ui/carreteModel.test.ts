@@ -316,6 +316,10 @@ describe('carrete: avisos', () => {
 
   it('sin red: la miniatura y cuándo llega lo grande', () => {
     expect(noticeFor({ ...base, state: 'offline' }, 'a.jpg')).toMatch(/offline: this is the thumbnail/);
+    // Con la versión grande guardada (la nítida de la página o la de "Available offline"), no dice "miniatura".
+    expect(noticeFor({ ...base, state: 'offline', large: true }, 'a.jpg')).toBe(
+      "You're offline: this is the large version saved on this device. The original loads when you're back online.",
+    );
     expect(noticeFor({ ...base, kind: 'video', state: 'offline' }, 'a.mov')).toMatch(/video plays when you're back online/);
     expect(noticeFor({ kind: null, preview: null, error: null, state: 'offline' }, 'a')).toMatch(/isn't on this device/);
   });

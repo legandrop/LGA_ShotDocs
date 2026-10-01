@@ -4,6 +4,7 @@ import { mediaDbName, openMediaDb, type MediaDb } from '../media/mediaDb';
 import { AccessStore, levelValue, parseAccess, Permissions, type AccessSnapshot, type GrantLevel, type Role } from './access';
 import { Portero, type PartSender } from '../media/portero';
 import type { Probe } from '../media/probe';
+import { OfflineManager } from '../media/offline';
 import { ProjectSizes } from '../media/projectSizes';
 import { MediaQueue } from '../media/queue';
 import { PageDocs, type PageDocsOptions } from './docs';
@@ -40,6 +41,7 @@ import {
   RemoteError,
   type DueFileRow,
   type MediaFileRow,
+  type PageUseRow,
   type TrashedFileRow,
   type NewMediaFile,
   type ProjectSizeRow,
@@ -131,6 +133,12 @@ export class FakeServer {
   readonly mediaCalls: string[] = [];
   /** El portero del workspace, en memoria. */
   readonly portero = new FakePortero(this);
+  /**
+   * El almacenamiento del navegador para "Available offline" (`estimate()`, `persist()`); sin esto, el navegador
+   * no dice cuánto hay (se prueba igual).
+   */
+  storage: { estimate: () => Promise<StorageEstimate>; persist: () => Promise<boolean>; persisted: () => Promise<boolean> } | undefined =
+    undefined;
   /** Funciones de archivos que hacen su trabajo y después pierden la respuesta, una vez cada una. */
   readonly loseMediaResponse = new Set<string>();
   /** Cuánto adelantar el reloj de la cola de archivos (para no esperar de verdad entre reintentos). */
@@ -527,6 +535,18 @@ export class FakePortero {
   readonly failTrash = new Set<string>();
   /** El Drive del dueño no está conectado: `/trash` responde 503 con `code: 'drive_not_connected'`. */
   driveDisconnected = false;
+  /** Lo que dice que entiende (`/drive/status`): el de la entrega 0 de P.10. Vacío: un portero anterior. */
+  features: string[] = ['verify', 'known', 'offline', 'codes'];
+  /** Archivos que la persona ya no puede ver (`not_found`): un permiso quitado. */
+  readonly hidden = new Set<string>();
+  /** Pases (ids de Drive) que la próxima vez responden como vencidos. */
+  readonly expiredPasses = new Set<string>();
+  /** Sin `?offline=1`, las partes salen de este largo como mucho (la caché del arranque del portero). */
+  shortParts = 0;
+  /** No hace caso del `Range` (un portero muy viejo): siempre el archivo entero. */
+  ignoreRanges = false;
+  /** Un portero anterior a la entrega 0 de P.10: no conoce `?offline=1` (la caché del arranque corta igual). */
+  oldOffline = false;
   private parts = 0;
   private next = 1;
 
@@ -637,18 +657,56 @@ export class FakePortero {
       return json({ status: 'done', file: id, drive });
     }
     if (method === 'GET' && url.pathname.startsWith('/m/')) {
-      // El archivo entero con un pase (el pase de prueba es el id de Drive).
+      // El archivo con un pase (el pase de prueba es el id de Drive), entero o por partes (`Range`). Un pase en
+      // `expiredPasses` responde como vencido.
       const driveId = decodeURIComponent(url.pathname.slice(3));
+      if (this.expiredPasses.delete(driveId)) {
+        return json({ error: 'This link expired: open the file again from the app.', code: 'pass_expired' }, 403);
+      }
       const stored = this.drive.get(driveId);
-      if (!stored) return json({ error: 'Not found' }, 404);
+      if (!stored) return json({ error: 'This file is not in Google Drive anymore.', code: 'drive_missing' }, 404);
       const mime = this.server.mediaFiles.get(stored.file)?.mime ?? 'application/octet-stream';
+      const asked = /^bytes=(\d+)-(\d*)$/.exec(headers.get('Range') ?? '');
+      if (asked && !this.ignoreRanges) {
+        const start = Number(asked[1]);
+        // Como la caché del arranque del portero sin `?offline=1`: una parte más corta que la pedida.
+        const cap = this.shortParts && (this.oldOffline || url.searchParams.get('offline') !== '1') ? this.shortParts : Infinity;
+        const end = Math.min(asked[2] ? Number(asked[2]) : stored.data.length - 1, stored.data.length - 1, start + cap - 1);
+        if (start >= stored.data.length) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${stored.data.length}` } });
+        return new Response(new Blob([stored.data.slice(start, end + 1) as BlobPart], { type: mime }), {
+          status: 206,
+          headers: { 'Content-Type': mime, 'Content-Range': `bytes ${start}-${end}/${stored.data.length}` },
+        });
+      }
       return new Response(new Blob([stored.data as BlobPart], { type: mime }), { status: 200, headers: { 'Content-Type': mime } });
     }
     if (method === 'POST' && url.pathname === '/pass') {
       const media = this.server.mediaFiles.get(String(body?.file ?? ''));
-      if (!media) return json({ error: 'This file does not exist or you cannot see it.' }, 404);
-      if (!media.drive_id) return json({ error: 'This file has not finished uploading yet.' }, 409);
+      if (!media || this.hidden.has(String(body?.file ?? ''))) {
+        return json({ error: 'This file does not exist or you cannot see it.', code: 'not_found' }, 404);
+      }
+      // Como el portero: una carpeta (P.9) no se baja con un pase.
+      if (media.mime === 'inode/directory') return json({ error: 'This is a folder: open it in the app to see its files.', code: 'is_folder' }, 409);
+      if (!media.drive_id) return json({ error: 'This file has not finished uploading yet.', code: 'not_uploaded' }, 409);
+      if (!this.drive.has(media.drive_id)) return json({ error: 'This file is not in Google Drive anymore.', code: 'drive_missing' }, 404);
       return json({ url: `${PORTERO_URL}/m/${media.drive_id}` });
+    }
+    if (method === 'GET' && url.pathname === '/drive/status') {
+      return json({ connected: true, broken: null, email: null, isOwner: true, folder: null, picker: false, features: this.features });
+    }
+    if (method === 'POST' && url.pathname === '/verify') {
+      const results: Record<string, unknown> = {};
+      for (const id of (body?.files as string[]) ?? []) {
+        const media = this.server.mediaFiles.get(id);
+        if (!media || this.hidden.has(id)) results[id] = { error: 'not found', code: 'not_found' };
+        else if (!media.drive_id) results[id] = { error: 'not uploaded', code: 'not_uploaded' };
+        else if (!this.drive.has(media.drive_id)) results[id] = { error: 'missing', code: 'drive_missing' };
+        else {
+          const d = this.drive.get(media.drive_id)!;
+          results[id] = { driveId: media.drive_id, size: d.data.length, trashed: this.driveTrash.has(media.drive_id), marked: d.file === id, md5: null };
+        }
+      }
+      return json({ results });
     }
     return json({ error: 'Not found' }, 404);
   };
@@ -1366,6 +1424,28 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     });
   }
 
+  /** `page_files` con su política: los usos de las páginas que la sesión ve (activos, quitados y ajenos). */
+  async fetchPageUses(pageIds: string[]): Promise<PageUseRow[]> {
+    this.server.check();
+    this.server.mediaCalls.push(`page_files ${pageIds.length}`);
+    const rows: PageUseRow[] = [];
+    for (const pageId of new Set(pageIds)) {
+      if (!this.server.pages.has(pageId) || this.server.pageInDeletedProject(pageId)) continue;
+      if (this.team && this.server.pageLevel(this.userId, pageId) < 1) continue;
+      for (const [set, removed, foreign] of [
+        [this.server.pageFiles, false, false],
+        [this.server.removedPageFiles, true, false],
+        [this.server.foreignPageFiles, false, true],
+      ] as const) {
+        for (const key of set) {
+          const [p, f] = key.split(':');
+          if (p === pageId) rows.push({ page_id: p, file_id: f, removed_at: removed ? new Date().toISOString() : null, is_foreign: foreign });
+        }
+      }
+    }
+    return rows;
+  }
+
   // --- comentarios (mismas reglas que supabase/migrations/20260930170000_comentarios.sql) ---
 
   /** `private.page_level`; sin las reglas del equipo, quien ve la página la puede todo (como antes). */
@@ -1631,6 +1711,7 @@ export interface Device {
   comments: CommentQueue;
   commentsDb: CommentsDb;
   sizes: ProjectSizes;
+  offline: OfflineManager;
 }
 
 /** Un dispositivo con su propia base local. Reusar `dbName` simula cerrar y volver a abrir la app. */
@@ -1658,7 +1739,12 @@ export async function makeDevice(
   });
   const files = new PageFiles(db, remote);
   const mediaDb = await openMediaDb(mediaDbName(dbName));
+  // Como la app (services.ts): "Available offline" se arma después y la cola le avisa por acá.
+  let offlineRef: OfflineManager | null = null;
   const media = new MediaQueue(server.mediaDbFails ? null : mediaDb, remote, {
+    onUse: (id, how) => offlineRef?.used(id, how),
+    makeRoom: async (bytes) => (offlineRef ? offlineRef.makeRoom(bytes) : 0),
+    onRejected: (file) => offlineRef?.rejected(file),
     // El portero en memoria sabe quién pide por el token (`token:<usuario>`).
     portero: (url) =>
       new Portero(url, {
@@ -1675,6 +1761,8 @@ export async function makeDevice(
     viewImage: fakeViewImage,
     convertHeic: (file) => server.convertHeic(file),
     heicTimeoutMs: server.heicTimeoutMs,
+    // Sin red, el dispositivo lo sabe (como `navigator.onLine` en false).
+    offline: () => !server.online,
     now: () => Date.now() + server.clockOffset,
   });
   await media.load();
@@ -1690,7 +1778,24 @@ export async function makeDevice(
   });
   await sizes.load();
   const engine = new SyncEngine(remote, tree, docs, files, { appVersion, schemaVersion, media, access, comments, sizes });
-  return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb, sizes };
+  const offline = new OfflineManager({
+    db: server.mediaDbFails ? null : mediaDb,
+    media,
+    tree,
+    docs,
+    remote,
+    comments,
+    older: files,
+    online: () => server.online,
+    fetch: (url, init) => server.portero.fetch(url, init),
+    storage: () => server.storage,
+    now: () => Date.now() + server.clockOffset,
+    dbName,
+    local: null,
+  });
+  await offline.load();
+  offlineRef = offline;
+  return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb, sizes, offline };
 }
 
 /** Lo que se corta al matar la app (un dispositivo, o la versión publicada sin motor). */

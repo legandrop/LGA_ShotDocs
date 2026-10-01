@@ -4,7 +4,7 @@ import type { MediaRemote } from '../sync/remote';
 import { errorMessage, isNetworkError, isTimeout, RemoteError } from '../sync/types';
 import { attachmentCardUrl, cleanFileName, EXTENSION_MIME, fileKind, folderCardUrl, FOLDER_MIME, isFolderMime, mimeFromName, type FileKind } from './attachments';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
-import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress } from './portero';
+import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress, type VerifyResult } from './portero';
 import {
   deletedLabel,
   deletedUrl,
@@ -25,6 +25,7 @@ import {
 import type { DueFileRow, MediaFileRow } from '../sync/types';
 import { HEIC_TIMEOUT_MS, HeicError, heicFailure, isHeicFile, isHeicType, jpegName, JPEG_TYPE } from './heic';
 import { convertHeic as convertHeicNow } from './heicConvert';
+import { dropCopy, readCopy, readOfflineView } from './offlineStore';
 
 // La cola de fotos y videos (paso 6 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Archivos
 // grandes"). El archivo se guarda primero en el dispositivo (base `<base local>:media`) y en la página queda
@@ -217,6 +218,8 @@ function friendly(err: unknown): string {
  */
 export type MediaPortero = Pick<Portero, 'upload' | 'pass' | 'trash'> & {
   passInfo?: (target: { file: string }) => Promise<{ url: string; named: boolean }>;
+  status?: Portero['status'];
+  verify?: Portero['verify'];
 };
 
 export interface MediaQueueOptions {
@@ -250,7 +253,46 @@ export interface MediaQueueOptions {
   convertHeic?: (file: Blob) => Promise<Blob>;
   /** Lo más que se espera una conversión antes de darla por fallida (por defecto `HEIC_LIMIT_MS`; las pruebas). */
   heicTimeoutMs?: number;
+  /**
+   * El dispositivo sabe que no tiene red (por defecto, `navigator.onLine` en `false`): no se pregunta nada que
+   * tardaría en fallar (ver `convertNow`). En `false` no asegura que haya red.
+   */
+  offline?: () => boolean;
+  /**
+   * Se mostró (`show`: la página que lo usa) o se abrió (`open`: carrete, adjunto, impresión) un archivo: para
+   * saber qué hace más que no se abre (Docs/Doc_Copias_Locales.md, sección 5.5) y qué no liberar en esta sesión.
+   */
+  onUse?: (id: string, how: 'show' | 'open') => void;
+  /**
+   * No entra un archivo nuevo en el dispositivo: libera lo que se rehace o ya está en Drive (Docs/Doc_Copias_Locales.md,
+   * sección 5.7) y devuelve cuánto; la cola vuelve a probar una vez.
+   */
+  makeRoom?: (bytes: number) => Promise<number>;
+  /** Igual no entró: para ofrecer guardarlo en el dispositivo (bajarlo o compartirlo) y que no se pierda. */
+  onRejected?: (file: Blob & { name?: string }) => void;
 }
+
+/**
+ * Con red, cuántas veces se prueba cargar el decodificador de HEIC antes de subir la foto tal cual, y cuánto se
+ * espera entre un intento y el siguiente (`MediaRecord.heicMisses`). Una red mala de rodaje puede cortar la
+ * bajada una vez; tres intentos en unos dos minutos y medio no demoran mucho la subida, y después se sube igual
+ * (subir manda: la foto nunca queda esperando para siempre). Sin red no cuenta: no se podría subir de todos modos.
+ */
+export const HEIC_ONLINE_TRIES = 3;
+export const HEIC_RETRY_MS = [30_000, 120_000];
+/**
+ * Cuántas conversiones de HEIC a la vez. Cada una pide cientos de MB (cerca de 800 con una foto de 48 MP): sin
+ * turno, soltar muchas juntas las abría todas a la vez. Dos aprovechan una computadora sin pasarse en un teléfono.
+ */
+export const HEIC_PARALLEL = 2;
+
+const browserOffline = (): boolean => {
+  try {
+    return (globalThis as { navigator?: Navigator }).navigator?.onLine === false;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Lo más que la cola espera una conversión, pase lo que pase adentro del conversor: el tope del conversor
@@ -269,15 +311,17 @@ const loadAndConvertHeic = convertHeicNow;
 
 /**
  * En qué anda una foto HEIC que todavía no se ve (`MediaQueue.heicState`): `converting`, guardada y por pasar a
- * JPEG; `waiting`, el decodificador no estaba (sin red) y se vuelve a probar; `failed`, no se pudo convertir y
+ * JPEG; `waiting`, el decodificador no estaba (sin red) y se vuelve a probar con red; `retrying`, con red el
+ * decodificador no cargó y se vuelve a probar en un rato (`HEIC_ONLINE_TRIES`); `failed`, no se pudo convertir y
  * queda como HEIC; `none`, un HEIC que llegó así (de otro dispositivo o de una versión anterior).
  */
-export type HeicState = 'converting' | 'waiting' | 'failed' | 'none';
+export type HeicState = 'converting' | 'waiting' | 'retrying' | 'failed' | 'none';
 
 /** Lo que dice en la página, en el lugar de una foto HEIC que no se ve. */
 export function heicNotice(state: HeicState): string {
   if (state === 'converting') return t('queue.heicConverting');
   if (state === 'waiting') return t('queue.heicPending');
+  if (state === 'retrying') return t('queue.heicRetrying');
   if (state === 'failed') return t('queue.heicFailed');
   return t('queue.heicNoPreview');
 }
@@ -350,6 +394,10 @@ function viewKind(mime: string, name: string): MediaKind | null {
 export class MediaQueue {
   /** Se agregó algo a la cola: conviene sincronizar pronto. */
   onQueued?: () => void;
+  /** Además de `onQueued` (que usa el motor): lo que quiere saber que llegó algo para subir (las bajadas). */
+  private readonly queuedListeners = new Set<() => void>();
+  /** Lo que dice el portero que entiende (`/drive/status`, `features`), una vez por sesión. */
+  private featuresAsked: Promise<string[]> | null = null;
   /** Cambió lo que muestra el estado (pendientes, errores, progreso). */
   onChange?: () => void;
 
@@ -399,8 +447,12 @@ export class MediaQueue {
   private readonly makeView: (file: Blob, mime: string, side: number) => Promise<Blob | null>;
   private readonly heic: (file: Blob) => Promise<Blob>;
   private readonly heicTimeoutMs: number;
+  private readonly offline: () => boolean;
   /** Las conversiones de HEIC en curso (una sola por archivo; ver `ensureConverted`). */
   private readonly converting = new Map<string, Promise<void>>();
+  /** Conversiones de HEIC corriendo y las que esperan su turno (ver `HEIC_PARALLEL`). */
+  private heicRunning = 0;
+  private readonly heicTurns: (() => void)[] = [];
   /** HEIC cuyo último intento no encontró el decodificador (sin red): el aviso de la página lo dice. */
   private readonly heicWaiting = new Set<string>();
   private readonly now: () => number;
@@ -423,6 +475,7 @@ export class MediaQueue {
     this.makeView = options.viewImage ?? viewImage;
     this.heic = options.convertHeic ?? loadAndConvertHeic;
     this.heicTimeoutMs = options.heicTimeoutMs ?? HEIC_LIMIT_MS;
+    this.offline = options.offline ?? browserOffline;
     this.now = options.now ?? Date.now;
   }
 
@@ -614,7 +667,12 @@ export class MediaQueue {
     const name = cleanName(file.name, mime);
     // Un adjunto solo va por el portero (sin él, las fotos siguen por el camino de antes).
     if (!this.enabled && fileKind(mime, name) === 'file') throw new FileRejected(t('queue.needsDrive'));
-    await this.checkRoom(file.size);
+    try {
+      await this.checkRoom(file.size);
+    } catch (err) {
+      if (err instanceof FileRejected) this.options.onRejected?.(file);
+      throw err;
+    }
     this.askPersist();
     const id = crypto.randomUUID();
     const record: MediaRecord = {
@@ -643,24 +701,40 @@ export class MediaQueue {
       retryAt: 0,
       ...(heic ? { heic: 'pending' as const } : {}),
     };
-    // Todo junto: o queda el archivo con su registro, o no queda nada.
-    try {
-      const tx = this.db.transaction(['files', 'blobs'], 'readwrite');
-      await Promise.all([tx.objectStore('blobs').put(file, id), tx.objectStore('files').put(record), tx.done]);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'QuotaExceededError') {
-        throw new FileRejected(t('queue.noSpace'));
+    // Todo junto: o queda el archivo con su registro, o no queda nada. Sin lugar, se hace lugar y se prueba otra vez;
+    // si igual no entra, se ofrece guardar el archivo para que no se pierda (una foto de "Tomar foto" del iPhone no
+    // queda en la fototeca).
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const tx = this.db.transaction(['files', 'blobs'], 'readwrite');
+        await Promise.all([tx.objectStore('blobs').put(file, id), tx.objectStore('files').put(record), tx.done]);
+        break;
+      } catch (err) {
+        if (err instanceof DOMException && (err.name === 'QuotaExceededError' || err.name === 'UnknownError')) {
+          if (attempt === 0 && (await this.makeRoom(file.size)) > 0) continue;
+          this.options.onRejected?.(file);
+          throw new FileRejected(t('queue.noSpace'));
+        }
+        throw err;
       }
-      throw err;
     }
     this.seenLinks.add(`${pageId}:${id}`);
     this.remember(id, record, true);
     this.onQueued?.();
+    for (const fn of this.queuedListeners) fn();
     // Medidas y miniatura, sin esperarlas: el archivo ya está a salvo. La cola no lo registra antes. Un HEIC
     // primero se convierte (las medidas y la miniatura salen del JPEG, al terminar).
     if (heic) void this.ensureConverted(id);
     else void this.ensureProbed(id);
     return MEDIA_SCHEME + id;
+  }
+
+  private async makeRoom(bytes: number): Promise<number> {
+    try {
+      return (await this.options.makeRoom?.(bytes)) ?? 0;
+    } catch {
+      return 0;
+    }
   }
 
   /**
@@ -679,11 +753,14 @@ export class MediaQueue {
     }
     const quota = estimate.quota;
     if (typeof quota === 'number' && quota > 0 && (estimate.usage ?? 0) + size + ROOM_MARGIN > quota) {
-      // Primero se hace lugar con las imágenes nítidas (se vuelven a hacer cuando hagan falta).
-      if ((await this.clearViews().catch(() => 0)) > 0) {
+      // Primero se hace lugar con las imágenes nítidas (se vuelven a hacer cuando hagan falta) y las copias bajadas
+      // que ninguna marca pide.
+      const fits = async () => {
         const again = await storage.estimate().catch(() => estimate);
-        if (!((again.usage ?? 0) + size + ROOM_MARGIN > (again.quota ?? quota))) return;
-      }
+        return !((again.usage ?? 0) + size + ROOM_MARGIN > (again.quota ?? quota));
+      };
+      if ((await this.clearViews().catch(() => 0)) > 0 && (await fits())) return;
+      if ((await this.makeRoom(size)) > 0 && (await fits())) return;
       throw new FileRejected(t('queue.noRoom'));
     }
   }
@@ -812,11 +889,17 @@ export class MediaQueue {
    * `unlink`: SOLO si el documento está completo y al día con el servidor. Un documento a medio bajar (o
    * que esta versión no puede leer entero) no dice que un archivo se quitó, dice que todavía no llegó:
    * entonces se suman los usos nuevos y nunca se quita ninguno. Devuelve si puso algo por mandar.
+   *
+   * `onServer`: los usos que el servidor ya tiene activos en esta página, recién leídos (`serverUses`). Un
+   * archivo del documento que este dispositivo no tenía anotado y que está ahí no se manda: `link_page_file`
+   * no cambiaría nada. Queda anotado como confirmado, igual que después de mandarlo (B.14: un dispositivo
+   * nuevo contaba como "sin subir" cada foto de lo que bajaba y las mandaba de a una, minutos, sin escribir
+   * nada en la base). Lo que no está (o está quitado) se manda como siempre.
    */
   async reconcilePage(
     pageId: string,
     docIds: ReadonlySet<string>,
-    { unlink, seenSeq }: { unlink: boolean; seenSeq?: number },
+    { unlink, seenSeq, onServer }: { unlink: boolean; seenSeq?: number; onServer?: ReadonlyMap<string, { foreign: boolean }> },
   ): Promise<boolean> {
     if (!this.db || !this.schemaReady) return false;
     const allowUnlink = unlink && this.trashReady;
@@ -838,6 +921,10 @@ export class MediaQueue {
         // Lo registra `register_file` con esta página: solo se anota que el documento lo tiene, para saber
         // después si se quitó. No hay nada que mandar.
         writes.push(newLink(pageId, id, 0));
+      } else if (onServer?.has(id)) {
+        // Bajado con la página y ya registrado en el servidor: nada que mandar ni que contar. Si es ajeno, se
+        // anota como lo dejaría `linkOne`, sin avisar (no lo pegó esta persona).
+        writes.push({ ...newLink(pageId, id, 0), ...(onServer.get(id)!.foreign ? { foreign: true } : {}) });
       } else {
         // También uno de otro proyecto: la base lo guarda como uso ajeno (ver `linkOne`).
         writes.push(newLink(pageId, id, 1));
@@ -859,6 +946,23 @@ export class MediaQueue {
       else this.seenLinks.add(w.key);
     }
     return writes.some((w) => w.pending === 1 && !w.waiting);
+  }
+
+  /**
+   * Los usos que el servidor tiene activos en estas páginas (`page_files` sin `removed_at`, los que la sesión
+   * ve): por página, cada archivo y si es ajeno. Para `reconcilePage`. Solo lee; tira si no se pudo leer, y
+   * entonces quien llama sigue sin esto (todo se manda como siempre).
+   */
+  async serverUses(pageIds: string[]): Promise<Map<string, Map<string, { foreign: boolean }>>> {
+    const out = new Map<string, Map<string, { foreign: boolean }>>();
+    if (!this.db || !this.schemaReady || pageIds.length === 0) return out;
+    for (const row of await this.remote.fetchPageUses(pageIds)) {
+      if (row.removed_at) continue;
+      let uses = out.get(row.page_id);
+      if (!uses) out.set(row.page_id, (uses = new Map()));
+      uses.set(row.file_id.toLowerCase(), { foreign: row.is_foreign === true });
+    }
+    return out;
   }
 
   /** El archivo es de otro proyecto que la página (si se saben los dos). */
@@ -1076,6 +1180,19 @@ export class MediaQueue {
       if (isConvertible(record)) {
         await this.ensureConverted(record.id);
         record = (await this.store.get('files', record.id)) ?? record;
+        // El decodificador no cargó: antes de subir el HEIC tal cual se vuelve a probar, con red hasta
+        // `HEIC_ONLINE_TRIES` veces (la espera la puso `convertNow` en `retryAt`); sin red, en la próxima vuelta.
+        // Solo con red: si el dispositivo cree que no la tiene, sigue el camino de siempre (se manda a registrar,
+        // falla sin red y al volver se pregunta a la base y se convierte). Así, si `navigator.onLine` dice "sin
+        // red" y no es cierto, la foto se sube igual en vez de quedar esperando para siempre.
+        if (
+          record.heic === 'pending' &&
+          this.heicWaiting.has(record.id) &&
+          !this.offline() &&
+          (record.heicMisses ?? 0) < HEIC_ONLINE_TRIES
+        ) {
+          return 'retry';
+        }
       }
       if (record.probed === false) {
         await this.ensureProbed(record.id);
@@ -1288,7 +1405,12 @@ export class MediaQueue {
     if (record.heic === 'failed') return 'failed';
     // Registrado sin convertir (una pestaña de una versión anterior, por ejemplo): queda como HEIC.
     if (!record.heic || record.registered) return record.heic ? 'failed' : 'none';
-    return this.heicWaiting.has(record.id) ? 'waiting' : 'converting';
+    const retried = record.heic === 'pending' && (record.heicMisses ?? 0) > 0;
+    if (this.heicWaiting.has(record.id)) return retried && !this.offline() ? 'retrying' : 'waiting';
+    // Después de recargar la lista de espera está vacía: si ya hubo intentos con red y no hay uno en curso, está
+    // esperando el próximo (no "convirtiendo"); sin red, el aviso de siempre.
+    if (retried && !this.converting.has(record.id)) return this.offline() ? 'waiting' : 'retrying';
+    return 'converting';
   }
 
   private async convertNow(id: string): Promise<void> {
@@ -1298,16 +1420,24 @@ export class MediaQueue {
       if (record?.registered && record.heic && record.heic !== 'failed') await this.keepHeic(id);
       return;
     }
+    const blob = await db.get('blobs', id);
+    if (!blob) return;
     // ¿La base ya tiene la fila? Pasa si se mandó a registrar como HEIC y la respuesta se perdió (`sent`), o si
     // la registró una pestaña con una versión anterior. Entonces no se convierte: el portero compara el peso
     // con la fila y el JPEG quedaría detenido, sin el HEIC. Sin respuesta (sin red), un `pending` se convierte
     // igual (esta versión nunca lo mandó) y un `sent` espera a poder preguntar.
-    let exists: boolean | null;
-    try {
-      exists = (await this.remote.fetchMediaFiles([id])).some((row) => row.id === id);
-    } catch {
-      exists = null;
-    }
+    const asking = this.askExists(id);
+    // Un `pending` se convierte ya, mientras se pregunta: sin red la pregunta tarda segundos en fallar, y la foto
+    // no tiene por qué esperarla. Lo convertido se guarda recién con la respuesta. Un `sent` espera la respuesta
+    // antes de convertir.
+    type Converted = { jpeg: Blob } | { error: unknown };
+    const convert = (): Promise<Converted> =>
+      this.convertWithLimit(blob).then(
+        (jpeg) => ({ jpeg }),
+        (error: unknown) => ({ error }),
+      );
+    const early = record.heic === 'pending' ? convert() : null;
+    const exists = await asking;
     if (exists) return this.keepHeic(id);
     if (exists === null && record.heic === 'sent') {
       // Se espera a la red: el aviso lo dice.
@@ -1317,15 +1447,20 @@ export class MediaQueue {
       }
       return;
     }
-    const blob = await db.get('blobs', id);
-    if (!blob) return;
-    let jpeg: Blob;
-    try {
-      jpeg = await this.convertWithLimit(blob);
-      if (!(jpeg.size > 0)) throw new HeicError('failed', 'The HEIC converter returned an empty file.');
-    } catch (err) {
-      if (heicFailure(err) === 'unavailable') {
-        // Sin el decodificador (sin red): se vuelve a probar en la próxima vuelta de la cola.
+    const result = await (early ?? convert());
+    const jpeg = 'jpeg' in result ? result.jpeg : null;
+    if (!jpeg || !(jpeg.size > 0)) {
+      const error = 'error' in result ? result.error : new HeicError('failed', 'The HEIC converter returned an empty file.');
+      if (heicFailure(error) === 'unavailable') {
+        // Sin el decodificador: se vuelve a probar. Con red (la base contestó, o el dispositivo no sabe que
+        // está sin red) el intento cuenta (`HEIC_ONLINE_TRIES`), con su espera; sin red, se prueba en la próxima
+        // vuelta de la cola. Que cuente de más no pierde nada: un HEIC mandado a registrar sin red (`sent`)
+        // todavía se convierte si la base no tiene su fila.
+        if (exists !== null || !this.offline()) {
+          const misses = (record.heicMisses ?? 0) + 1;
+          const wait = HEIC_RETRY_MS[Math.min(misses, HEIC_RETRY_MS.length) - 1];
+          await this.patch(id, { heicMisses: misses, retryAt: misses < HEIC_ONLINE_TRIES ? this.now() + wait : 0 }).catch(() => undefined);
+        }
         this.heicWaiting.add(id);
         this.thumbReady(id);
         return;
@@ -1354,6 +1489,7 @@ export class MediaQueue {
           thumbError: null,
         };
         delete next.heic;
+        delete next.heicMisses;
         await Promise.all([
           tx.objectStore('blobs').put(new File([jpeg], name, { type: JPEG_TYPE }), id),
           tx.objectStore('files').put(next),
@@ -1376,14 +1512,36 @@ export class MediaQueue {
     this.thumbReady(id);
   }
 
+  /**
+   * Si la base ya tiene la fila de este archivo; `null` si no se sabe (sin red, o no contestó). Si el dispositivo
+   * sabe que no tiene red, no se pregunta: la consulta tardaría segundos en fallar. Nunca falla.
+   */
+  private async askExists(id: string): Promise<boolean | null> {
+    if (this.offline()) return null;
+    try {
+      return (await this.remote.fetchMediaFiles([id])).some((row) => row.id === id);
+    } catch {
+      return null;
+    }
+  }
+
   /** La conversión con tope: un conversor que no contesta nunca no deja la cola esperando. */
-  private convertWithLimit(blob: Blob): Promise<Blob> {
-    return new Promise<Blob>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new HeicError('failed', 'The HEIC conversion took too long.')), this.heicTimeoutMs);
-      this.heic(blob)
-        .then(resolve, reject)
-        .finally(() => clearTimeout(timer));
-    });
+  private async convertWithLimit(blob: Blob): Promise<Blob> {
+    // De a `HEIC_PARALLEL`: soltar veinte fotos no abre veinte decodificaciones a la vez (cientos de MB cada una).
+    // El tope corre desde que le toca: esperar el turno no cuenta.
+    while (this.heicRunning >= HEIC_PARALLEL) await new Promise<void>((resume) => this.heicTurns.push(resume));
+    this.heicRunning++;
+    try {
+      return await new Promise<Blob>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new HeicError('failed', 'The HEIC conversion took too long.')), this.heicTimeoutMs);
+        this.heic(blob)
+          .then(resolve, reject)
+          .finally(() => clearTimeout(timer));
+      });
+    } finally {
+      this.heicRunning--;
+      this.heicTurns.shift()?.();
+    }
   }
 
   /** La foto queda como HEIC (no se pudo convertir, o ya está registrada así): se sube tal cual, con su aviso. */
@@ -1415,6 +1573,8 @@ export class MediaQueue {
 
   private async markUploaded(record: MediaRecord, driveId: string): Promise<'done'> {
     await this.patch(record.id, {
+      // Cuándo se confirmó la subida: un original propio no se libera antes de 14 días desde acá (entrega 2).
+      uploadedAt: this.now(),
       pending: 0,
       lost: 0,
       stalls: 0,
@@ -1559,6 +1719,126 @@ export class MediaQueue {
   }
 
   /**
+   * Hay algo que se puede subir ahora: un archivo o un uso pendiente que no está detenido, ni esperando un
+   * reintento, ni esperando a otro dispositivo o a la base. Las bajadas de "Available offline" esperan a que no
+   * haya (Docs/Doc_Copias_Locales.md, sección 3.5); un archivo detenido no las frena.
+   */
+  async hasUploadableNow(): Promise<boolean> {
+    if (!this.db || !this.enabled) return false;
+    const now = this.now();
+    const [records, links] = await Promise.all([
+      this.db.getAllFromIndex('files', 'pending', 1),
+      this.db.getAllFromIndex('links', 'pending', 1),
+    ]);
+    return (
+      records.some((r) => !r.blocked && (r.retryAt ?? 0) <= now) ||
+      links.some((l) => !l.blocked && !l.waiting && (l.retryAt ?? 0) <= now)
+    );
+  }
+
+  /** Avisa cada vez que se agrega algo para subir. */
+  subscribeQueued(fn: () => void): () => void {
+    this.queuedListeners.add(fn);
+    return () => this.queuedListeners.delete(fn);
+  }
+
+  /**
+   * Lo que el portero dice que entiende (`features` de `/drive/status`), una vez por sesión: vacío con un portero
+   * anterior, sin portero o sin red (se vuelve a preguntar la próxima vez).
+   */
+  features(): Promise<string[]> {
+    if (!this.url) return Promise.resolve([]);
+    if (!this.featuresAsked) {
+      const portero = this.porteroFor(this.url);
+      const asked = (portero.status ? portero.status() : Promise.resolve({ features: [] as unknown }))
+        .then((s: { features?: unknown }) => (Array.isArray(s.features) ? s.features.filter((f): f is string => typeof f === 'string') : []))
+        .catch((err: unknown) => {
+          this.featuresAsked = null;
+          throw err;
+        });
+      this.featuresAsked = asked;
+    }
+    return this.featuresAsked;
+  }
+
+  /** `POST /verify` del portero (solo uno que anuncia `verify`): qué dice Drive hoy de cada archivo, de a 15. */
+  async verify(ids: string[]): Promise<Record<string, VerifyResult>> {
+    if (!this.url) throw new PorteroError(t('queue.noServer'), 0);
+    const portero = this.porteroFor(this.url);
+    if (!portero.verify) return {};
+    const out: Record<string, VerifyResult> = {};
+    for (let i = 0; i < ids.length; i += 15) Object.assign(out, await portero.verify(ids.slice(i, i + 15)));
+    return out;
+  }
+
+  /** Guarda lo que la base dice de unos archivos (como `fetchMeta`), para mostrarlos y bajarlos sin red. */
+  async learn(rows: MediaFileRow[]): Promise<void> {
+    for (const row of rows) {
+      const known = this.knownFrom(row);
+      if (this.db && !(await this.db.get('files', row.id))) await this.db.put('known', known).catch(() => undefined);
+    }
+  }
+
+  /** La nítida de 2048 de un archivo, hecha acá (para una marca, sin guardarla en `viewIndex`). */
+  async makeOfflineView(file: Blob, mime: string): Promise<Blob | null> {
+    return this.makeView(file, mime, VIEW_SIDE).catch(() => null);
+  }
+
+  /**
+   * La miniatura en el dispositivo: si falta y la base dice que hay, se baja y se guarda (como al mostrarla).
+   * Devuelve si quedó. Para "Available offline".
+   */
+  async ensureThumb(id: string): Promise<boolean> {
+    if (!this.db) return false;
+    if (await this.db.get('thumbs', id)) return true;
+    const own = await this.db.get('files', id);
+    if (own) return false;
+    let meta = await this.db.get('known', id);
+    if (!meta?.thumbAt) meta = (await this.fetchMeta(id).catch(() => null)) ?? meta;
+    if (!meta?.thumbAt) return false;
+    const thumb = await this.remote.downloadThumb(id);
+    if (!thumb) return false;
+    await this.db.put('thumbs', thumb, id);
+    return true;
+  }
+
+  /** Lo que ocupan las nítidas de la página guardadas (`viewIndex`). */
+  async viewBytes(): Promise<number> {
+    if (!this.db) return 0;
+    return (await this.loadViewIndex()).reduce((n, e) => n + e.bytes, 0);
+  }
+
+  /**
+   * Borra las nítidas de la página guardadas, de la más vieja a la más nueva, hasta liberar `bytes` (todas con
+   * `Infinity`). Se vuelven a hacer cuando hagan falta. Devuelve lo liberado.
+   */
+  async trimViews(bytes: number): Promise<number> {
+    if (!this.db) return 0;
+    const index = await this.loadViewIndex();
+    let freed = 0;
+    while (index.length > 0 && freed < bytes) {
+      const gone = index.shift()!;
+      freed += gone.bytes;
+      await this.db.delete('thumbs', gone.key).catch(() => undefined);
+    }
+    await this.db.put('meta', index, VIEW_INDEX_KEY).catch(() => undefined);
+    return freed;
+  }
+
+  /**
+   * La nítida de 2048 de la página (`view:<id>`), si está: para pasarla a una marca sin bajar nada. La saca del
+   * índice (y de `thumbs`) solo si quien llama ya la guardó como `offview:`.
+   */
+  async savedView(id: string): Promise<Blob | null> {
+    if (!this.db) return null;
+    return (await this.db.get('thumbs', viewKey(id, VIEW_SIDE)).catch(() => undefined)) ?? null;
+  }
+
+  async forgetSavedView(id: string): Promise<void> {
+    await this.dropView(viewKey(id, VIEW_SIDE));
+  }
+
+  /**
    * Las páginas con fotos, videos o usos sin confirmar (también los detenidos y los que esperan), una vez cada
    * una. Para no borrar un proyecto con algo suyo sin subir en este dispositivo (P.14).
    */
@@ -1681,6 +1961,7 @@ export class MediaQueue {
   resolve(url: string, pageId?: string): Promise<string> {
     const id = mediaIdOf(url);
     if (!id) return Promise.resolve(url);
+    this.options.onUse?.(id, 'show');
     if (pageId) {
       return this.foreignTo(id, pageId).then((kind) => {
         if (kind === false) return this.resolveOwn(id);
@@ -1877,6 +2158,8 @@ export class MediaQueue {
       driveId: row.drive_id,
       deleted: isDeletedRow(row),
       inDriveTrash: !!row.drive_trashed_at,
+      // La papelera de la app (`trashed_at`): sin el dato en la fila, no se sabe.
+      ...(row.trashed_at === undefined ? {} : { inAppTrash: !!row.trashed_at }),
       projectId: row.project_id ?? null,
       fetchedAt: this.now(),
     };
@@ -1911,15 +2194,19 @@ export class MediaQueue {
       return { kind: viewKind(meta.mime, meta.name), name: meta.name, original: null, mime: meta.mime };
     }
     const db = this.db;
+    this.options.onUse?.(id, 'open');
     const own = await db.get('files', id);
     if (own) {
-      this.remember(id, own, true);
-      return { kind: viewKind(own.mime, own.name), name: own.name, original: (await db.get('blobs', id)) ?? null, mime: own.mime };
+      const original = (await db.get('blobs', id)) ?? (await readCopy(db, id).catch(() => null));
+      this.remember(id, own, !!original);
+      return { kind: viewKind(own.mime, own.name), name: own.name, original, mime: own.mime };
     }
     const meta = (await db.get('known', id)) ?? (await this.fetchMeta(id).catch(() => null));
     if (!meta) return { kind: null, name: '', original: null };
-    this.remember(id, meta, false);
-    return { kind: viewKind(meta.mime, meta.name), name: meta.name, original: null, mime: meta.mime };
+    // Una copia bajada para "Available offline" (Docs/Doc_Copias_Locales.md): se abre sin red.
+    const copy = await readCopy(db, id).catch(() => null);
+    this.remember(id, meta, !!copy);
+    return { kind: viewKind(meta.mime, meta.name), name: meta.name, original: copy, mime: meta.mime };
   }
 
   /**
@@ -1929,9 +2216,11 @@ export class MediaQueue {
   async localImage(id: string): Promise<Blob | null> {
     if (!this.db) return null;
     try {
+      this.options.onUse?.(id, 'open');
       const own = await this.db.get('files', id);
-      if (!own || fileKind(own.mime, own.name) !== 'image') return null;
-      return (await this.db.get('blobs', id)) ?? null;
+      const meta = own ?? (await this.db.get('known', id));
+      if (!meta || fileKind(meta.mime, meta.name) !== 'image') return null;
+      return (own ? await this.db.get('blobs', id) : undefined) ?? (await readCopy(this.db, id));
     } catch {
       return null;
     }
@@ -1944,7 +2233,8 @@ export class MediaQueue {
   async localOriginal(id: string): Promise<Blob | null> {
     if (!this.db) return null;
     try {
-      return (await this.db.get('blobs', id.toLowerCase())) ?? null;
+      this.options.onUse?.(id.toLowerCase(), 'open');
+      return (await this.db.get('blobs', id.toLowerCase())) ?? (await readCopy(this.db, id));
     } catch {
       return null;
     }
@@ -2051,6 +2341,9 @@ export class MediaQueue {
       if ('deleted' in meta && meta.deleted) return null;
       const long = Math.max(meta.width ?? 0, meta.height ?? 0);
       if (long > 0 && long <= THUMB_SIDE * VIEW_GAIN) return this.noSharp(id);
+      // La de una marca "Available offline" (Docs/Doc_Copias_Locales.md): es de 2048, fuera del tope de las nítidas.
+      const offline = await readOfflineView(db, id).catch(() => null);
+      if (offline) return this.keepView(id, VIEW_SIDE, offline);
       for (const s of VIEW_SIDES) {
         if (s < side) continue;
         const saved = await db.get('thumbs', viewKey(id, s));
@@ -2059,7 +2352,7 @@ export class MediaQueue {
           return this.keepView(id, s, saved);
         }
       }
-      const original = await db.get('blobs', id);
+      const original = (await db.get('blobs', id)) ?? (await readCopy(db, id).catch(() => null));
       if (original) {
         const view = await this.makeView(original, meta.mime, side).catch(() => null);
         if (!view) return this.noSharp(id);
@@ -2193,6 +2486,8 @@ export class MediaQueue {
       this.views.delete(`${side}:${id}`);
       void this.dropView(viewKey(id, side));
     }
+    // La de una marca también: el archivo se ve como borrado (Docs/Doc_Copias_Locales.md, sección 3.6).
+    if (this.db) void dropCopy(this.db, id, { what: 'view', ignoreMarks: true }).catch(() => undefined);
   }
 
   /** Un pase del portero para ver el archivo entero (vence a las 8 horas). */

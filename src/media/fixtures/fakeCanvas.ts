@@ -49,8 +49,11 @@ class FakeContext {
 
 export class FakeOffscreenCanvas {
   data: Uint8ClampedArray;
-  /** Lo que hace el codificador: `ok`, un JPEG de mentira de los píxeles; `blank`, uno vacío (como pasado el tope de área de iOS). */
-  static mode: 'ok' | 'blank' = 'ok';
+  /**
+   * Lo que hace el codificador: `ok`, un JPEG de mentira de los píxeles; `blank`, uno vacío (como pasado el tope de
+   * área de iOS); `white`, uno todo blanco (un canvas vacío con el fondo blanco que se pinta atrás).
+   */
+  static mode: 'ok' | 'blank' | 'white' = 'ok';
   constructor(
     public width: number,
     public height: number,
@@ -61,7 +64,8 @@ export class FakeOffscreenCanvas {
     return new FakeContext(this);
   }
   async convertToBlob({ type }: { type: string }) {
-    const pixels = FakeOffscreenCanvas.mode === 'blank' ? new Uint8ClampedArray(this.data.length) : this.data;
+    const mode = FakeOffscreenCanvas.mode;
+    const pixels = mode === 'ok' ? this.data : new Uint8ClampedArray(this.data.length).fill(mode === 'white' ? 255 : 0);
     const head = new TextEncoder().encode(`${MARK}${this.width}x${this.height};`);
     return new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x4a, 0x46]), head, pixels as Uint8ClampedArray<ArrayBuffer>], { type });
   }

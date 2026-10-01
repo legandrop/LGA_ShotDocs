@@ -239,10 +239,21 @@ export const CACHE_FILES = 256;
 /** Carpetas que se están buscando o creando en este momento: dos subidas a la vez no crean dos iguales. */
 const pending = new Map<string, Promise<string>>();
 
+/** Lo que responde `/verify` por cada archivo: lo que dice Drive, o el error con su `code`. */
+type VerifyResult =
+  | { driveId: string; size: number; trashed: boolean; marked: boolean; md5: string | null }
+  | { error: string; code: string };
+
+/**
+ * Lo que este portero sabe hacer además de lo de siempre (`/drive/status`, `features`): `verify`, `known`, `offline`
+ * y `codes` (Doc_Copias_Locales.md) y `folders` (P.9: la app no ofrece soltar carpetas a uno anterior).
+ */
+export const FEATURES = ['verify', 'known', 'offline', 'codes', 'folders'] as const;
+/** Cuántos archivos por `POST /verify`: dos pedidos cada uno (base y Drive) más la sesión y el token, en 50. */
+export const VERIFY_MAX = 15;
+
 // --- carpetas (P.9, Docs/Doc_Carpetas.md) -------------------------------------------------------------
 
-/** Lo que sabe hacer este portero (`/drive/status`): la app no ofrece soltar carpetas a uno anterior. */
-const FEATURES = ['folders'];
 /** El tipo de la fila de `files` de una carpeta de la app. Lo de adentro es de Drive y no tiene filas. */
 export const APP_FOLDER_MIME = 'inode/directory';
 /** Adentro de la carpeta del proyecto, donde van las carpetas que se sueltan en las páginas. */
@@ -544,6 +555,8 @@ export class Portero {
       const upload = /^\/upload\/([^/]+)$/.exec(path)?.[1];
       if (upload && req.method === 'PUT') return json(req, this.env, await this.uploadChunk(req, upload, who));
       if (path === '/pass' && req.method === 'POST') return json(req, this.env, await this.makePass(req, who));
+      // Antes de liberar la copia de un dispositivo: qué dice Drive hoy de cada archivo (Doc_Copias_Locales.md).
+      if (path === '/verify' && req.method === 'POST') return json(req, this.env, await this.verify(req, who));
       // A la papelera de Drive: lo decide la base con la sesión de la persona (dueño y admins).
       if (path === '/trash' && req.method === 'POST') return json(req, this.env, await this.trashFile(req, who));
       // Carpetas (P.9, Docs/Doc_Carpetas.md): crear el árbol y abrir las subidas (nivel 3), listar (nivel 1).
@@ -654,8 +667,10 @@ export class Portero {
       isOwner: who.isOwner,
       folder: place ? { id: place.id, name: place.name } : null,
       picker: !!this.env.GOOGLE_API_KEY,
-      // Lo que sabe hacer este portero: la app no ofrece soltar carpetas a uno anterior.
-      features: FEATURES,
+      // Lo que entiende este portero, para que la app no le pida lo que no sabe hacer (Doc_Copias_Locales.md):
+      // `verify` (POST /verify), `known` (`only: 'known'` en /upload), `offline` (`?offline=1` en /m/), `codes`
+      // (los errores de /pass, /m/ y /verify traen un `code` fijo) y `folders` (P.9: soltar carpetas).
+      features: [...FEATURES],
     };
   }
 
@@ -743,7 +758,7 @@ export class Portero {
   /** Pide a Google un token de acceso con la conexión guardada (`scope`: uno más chico, opcional). */
   private async refresh(scope?: string): Promise<{ token: string; expiresIn?: number }> {
     const google = await this.store.get<Google>('google');
-    if (!google || google.broken) throw new HttpError(409, 'Google Drive is not connected.');
+    if (!google || google.broken) throw new HttpError(409, 'Google Drive is not connected.', 'drive_not_connected');
     const res = await this.http(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -758,7 +773,7 @@ export class Portero {
     const token = (await res.json()) as { access_token?: string; expires_in?: number; error?: string };
     if (res.status === 400 && token.error === 'invalid_grant') {
       await this.store.put('google', { ...google, broken: 'The connection with Google Drive stopped working: connect it again.' });
-      throw new HttpError(409, 'The connection with Google Drive stopped working: connect it again.');
+      throw new HttpError(409, 'The connection with Google Drive stopped working: connect it again.', 'drive_not_connected');
     }
     if (!res.ok || !token.access_token) throw new HttpError(502, `Google did not answer (${token.error ?? res.status}).`);
     return { token: token.access_token, expiresIn: token.expires_in };
@@ -831,7 +846,7 @@ export class Portero {
     }
     const previous = (await this.store.get<Place>('drivePlace')) ?? null;
     const google = await this.store.get<Google>('google');
-    if (!google || google.broken) throw new HttpError(409, 'Google Drive is not connected.');
+    if (!google || google.broken) throw new HttpError(409, 'Google Drive is not connected.', 'drive_not_connected');
     if (google.rootFolder && (previous?.id ?? null) !== (place?.id ?? null)) await this.moveRoot(google.rootFolder, place);
     if (place) await this.store.put('drivePlace', place);
     else await this.store.delete('drivePlace');
@@ -872,7 +887,7 @@ export class Portero {
   private rootFolder(): Promise<string> {
     return this.once('root', async () => {
       const google = await this.store.get<Google>('google');
-      if (!google || google.broken) throw new HttpError(409, 'Google Drive is not connected.');
+      if (!google || google.broken) throw new HttpError(409, 'Google Drive is not connected.', 'drive_not_connected');
       const place = await this.store.get<Place>('drivePlace');
       const root = await this.folder(google.rootFolder, ROOT_FOLDER, place?.id ?? null);
       if (root !== google.rootFolder) {
@@ -1004,7 +1019,7 @@ export class Portero {
     const day = body.day === undefined ? today() : body.day;
     if (typeof day !== 'string' || !DAY.test(day)) throw new HttpError(400, 'The day must look like 2026-09-30.');
     const media = await this.mediaFile(who, file);
-    if (!media) throw new HttpError(404, 'This file does not exist or you cannot see it.');
+    if (!media) throw new HttpError(404, 'This file does not exist or you cannot see it.', 'not_found');
     // Una carpeta (P.9) no se sube como un archivo: su Drive lo crea `/folder/prepare`.
     if (media.mime === APP_FOLDER_MIME) throw new HttpError(409, 'This is a folder: drop it again to upload its files.', 'is_folder');
     if (media.level < 3) throw new HttpError(403, 'You cannot add files to this page.');
@@ -1024,6 +1039,9 @@ export class Portero {
       const linked = await this.linkFile(who, file, rec.drive);
       return { status: 'done', file: rec.drive, linked };
     }
+    // La app solo pregunta si el portero recuerda la subida (la copia del dispositivo se liberó): sin bytes que
+    // mandar, no se crea la carpeta del día ni se abre una sesión de Drive que quedaría abandonada.
+    if (body.only === 'known') return { status: 'unknown' };
 
     const folder = await this.dayFolder(media, day);
     const name = (typeof body.name === 'string' && body.name ? body.name : media.name || 'file').slice(0, 250);
@@ -2122,7 +2140,7 @@ export class Portero {
     const file = typeof value === 'string' ? value.toLowerCase() : '';
     if (!UUID.test(file)) throw new HttpError(400, 'Missing the file.');
     const media = await this.mediaFile(who, file);
-    if (!media || !(media.level >= 1)) throw new HttpError(404, 'This file does not exist or you cannot see it.');
+    if (!media || !(media.level >= 1)) throw new HttpError(404, 'This file does not exist or you cannot see it.', 'not_found');
     // Una carpeta no se baja con un pase: lo de adentro se lista (`/folder/list`) y cada archivo trae el suyo.
     if (media.mime === APP_FOLDER_MIME) throw new HttpError(409, 'This is a folder: open it in the app to see its files.', 'is_folder');
     let rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
@@ -2135,10 +2153,10 @@ export class Portero {
         rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? rec;
       }
     }
-    if (!drive) throw new HttpError(409, 'This file has not finished uploading yet.');
+    if (!drive) throw new HttpError(409, 'This file has not finished uploading yet.', 'not_uploaded');
     const mark = await this.checkMark(file, drive, rec);
-    if (mark === 'missing') throw new HttpError(404, 'This file is not in Google Drive anymore.');
-    if (mark === 'other') throw new HttpError(403, 'This file in Google Drive does not belong to this file of the app.');
+    if (mark === 'missing') throw new HttpError(404, 'This file is not in Google Drive anymore.', 'drive_missing');
+    if (mark === 'other') throw new HttpError(403, 'This file in Google Drive does not belong to this file of the app.', 'drive_mismatch');
     // El nombre va tal cual (con un tope, para que el pase no crezca de más): se limpia al servir.
     const name = typeof media.name === 'string' ? keepExtension(Array.from(media.name), NAME_MAX) : '';
     return { drive, type: MIME.test(media.mime ?? '') ? media.mime : '', size: Number(media.size) || 0, name };
@@ -2160,6 +2178,58 @@ export class Portero {
     return 'ok';
   }
 
+  /**
+   * `POST /verify` con `{ files: [id…] }` (hasta `VERIFY_MAX`): para cada archivo de la app que la persona puede
+   * ver, lo que dice Drive **hoy**, sin usar lo anotado en `rec.verified`: el id de Drive que se miró, el peso, si
+   * está en la papelera de Drive, si lleva la marca `appProperties.sdFile` de este archivo y su MD5. La app libera
+   * la copia de un dispositivo solo si todo coincide (Doc_Copias_Locales.md, sección 5.3). Lo que falla de un
+   * archivo va en su lugar con un `code` fijo y no corta a los demás.
+   */
+  private async verify(req: Request, who: Who): Promise<{ results: Record<string, VerifyResult> }> {
+    const body = await readBody(req);
+    const asked = Array.isArray(body.files) ? body.files : null;
+    if (!asked || asked.length === 0) throw new HttpError(400, 'Missing the files.');
+    if (asked.length > VERIFY_MAX) throw new HttpError(400, `At most ${VERIFY_MAX} files at a time.`, 'too_many');
+    const ids = [...new Set(asked.map((v) => (typeof v === 'string' ? v.toLowerCase() : '')))];
+    if (ids.some((id) => !UUID.test(id))) throw new HttpError(400, 'Missing the file.');
+    await this.driveReady();
+    const results: Record<string, VerifyResult> = {};
+    for (const id of ids) {
+      try {
+        results[id] = await this.verifyOne(id, who);
+      } catch (err) {
+        const code = err instanceof HttpError ? (err.code ?? 'failed') : 'failed';
+        results[id] = { error: err instanceof Error ? err.message : String(err), code };
+      }
+    }
+    return { results };
+  }
+
+  private async verifyOne(file: string, who: Who): Promise<VerifyResult> {
+    const media = await this.mediaFile(who, file);
+    if (!media || !(media.level >= 1)) return { error: 'This file does not exist or you cannot see it.', code: 'not_found' };
+    const drive = media.drive_id;
+    if (!drive) return { error: 'This file has not finished uploading yet.', code: 'not_uploaded' };
+    const fields = encodeURIComponent('id,size,trashed,appProperties,md5Checksum');
+    const res = await this.drive(`/files/${encodeURIComponent(drive)}?fields=${fields}`);
+    if (res.status === 404) return { error: 'This file is not in Google Drive anymore.', code: 'drive_missing' };
+    if (!res.ok) return { error: `Google Drive answered ${res.status}.`, code: 'drive_failed' };
+    const found = (await res.json()) as {
+      id?: string;
+      size?: string | number;
+      trashed?: boolean;
+      appProperties?: Record<string, string>;
+      md5Checksum?: string;
+    };
+    return {
+      driveId: typeof found.id === 'string' ? found.id : drive,
+      size: found.size === undefined ? -1 : Number(found.size),
+      trashed: found.trashed === true,
+      marked: found.appProperties?.sdFile === file,
+      md5: typeof found.md5Checksum === 'string' ? found.md5Checksum.toLowerCase() : null,
+    };
+  }
+
   private async passUrl(req: Request, data: Pass): Promise<string> {
     const payload = b64url(new TextEncoder().encode(JSON.stringify(data)));
     const pass = `${payload}.${await hmac(await this.secret(), payload)}`;
@@ -2170,21 +2240,26 @@ export class Portero {
   private async readPass(pass: string): Promise<Pass> {
     const [payload, signature] = pass.split('.');
     if (!payload || !signature || !sameText(signature, await hmac(await this.secret(), payload))) {
-      throw new HttpError(403, 'Invalid link.');
+      throw new HttpError(403, 'Invalid link.', 'pass_invalid');
     }
     const data = JSON.parse(new TextDecoder().decode(fromB64url(payload))) as Pass;
-    if (data.u < Date.now()) throw new HttpError(403, 'This link expired: open the file again from the app.');
+    if (data.u < Date.now()) throw new HttpError(403, 'This link expired: open the file again from the app.', 'pass_expired');
     return data;
   }
 
   private async media(req: Request, pass: string): Promise<Response> {
     const data = await this.readPass(pass);
+    const params = new URL(req.url).searchParams;
     // `?download=1` no va firmado: solo puede pedir que se baje, nunca que se muestre.
-    const download = new URL(req.url).searchParams.get('download') === '1';
+    const download = params.get('download') === '1';
+    // `?offline=1` (tampoco firmado) solo saltea la caché del arranque: la app baja el archivo entero por partes
+    // para tenerlo sin red, y la caché respondería partes más cortas que las pedidas y le quitaría el lugar al
+    // video que alguien esté mirando. No cambia lo que el pase deja ver.
+    const offline = params.get('offline') === '1';
 
     const range = req.headers.get('Range');
     // Solo los videos pasan por la caché del arranque: un PDF pedido por partes desplazaría a los videos.
-    const cached = range && isVideo(data.t) ? await this.fromCache(req, data, range, download) : {};
+    const cached = range && isVideo(data.t) && !offline ? await this.fromCache(req, data, range, download) : {};
     if (cached.response) return cached.response;
 
     const headers = new Headers();
@@ -2196,7 +2271,8 @@ export class Portero {
       if (res.status === 403 && (await driveReasons(res)).includes('cannotDownloadAbusiveFile')) {
         throw new HttpError(403, 'Google Drive flagged this file as malware or spam and does not let it be downloaded.', 'abusive');
       }
-      throw new HttpError(res.status === 404 ? 404 : 502, `Google Drive answered ${res.status}.`);
+      if (res.status === 404) throw new HttpError(404, 'This file is not in Google Drive anymore.', 'drive_missing');
+      throw new HttpError(502, `Google Drive answered ${res.status}.`);
     }
     // Un pase sin el peso del archivo (la prueba de media): se aprende de la respuesta, para la próxima.
     if (cached.learn && res.status === 206) await this.learnSize(data.f, res);

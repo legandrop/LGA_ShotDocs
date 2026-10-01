@@ -66,7 +66,10 @@ export interface DriveStatus {
   folder?: { id: string; name: string } | null;
   /** El portero tiene la clave del selector de carpetas de Google (`GOOGLE_API_KEY`). */
   picker?: boolean;
-  /** Lo que sabe hacer el portero (`folders`: carpetas, P.9). Uno anterior no lo manda. */
+  /**
+   * Lo que sabe hacer el portero además de lo de siempre: `verify`, `known`, `offline` y `codes`
+   * (Doc_Copias_Locales.md) y `folders` (carpetas, P.9). Uno anterior no lo manda.
+   */
   features?: string[];
 }
 
@@ -98,6 +101,11 @@ export interface FolderListing {
   entries: FolderEntry[];
   nextPageToken: string | null;
 }
+
+/** Lo que responde `POST /verify` por archivo (portero/src/core.ts). */
+export type VerifyResult =
+  | { driveId: string; size: number; trashed: boolean; marked: boolean; md5: string | null }
+  | { error: string; code: string };
 
 /** Lo que necesita el selector de carpetas de Google (Google Picker) en el navegador del dueño. */
 export interface PickerConfig {
@@ -437,6 +445,14 @@ export class Portero {
   async passInfo(target: { file: string }): Promise<{ url: string; named: boolean }> {
     const body = await this.request<{ url: string; named?: unknown }>('POST', '/pass', { json: target });
     return { url: body.url, named: body.named === true };
+  }
+
+  /**
+   * Lo que dice Drive hoy de cada archivo (`POST /verify`, hasta 15 por pedido): id de Drive, peso, papelera,
+   * marca y MD5, o el error con su `code`. Solo un portero que anuncia `verify` en `features`.
+   */
+  async verify(files: string[]): Promise<Record<string, VerifyResult>> {
+    return (await this.request<{ results: Record<string, VerifyResult> }>('POST', '/verify', { json: { files } })).results;
   }
 
   /**
