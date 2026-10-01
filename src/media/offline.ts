@@ -17,6 +17,7 @@ import {
   listCopies,
   listMarks,
   markGone,
+  partKey,
   protects,
   putMark,
   putOfflineView,
@@ -115,8 +116,8 @@ export interface Usage {
 }
 
 export interface SpacePrompt {
-  /** `limit`: se pasó el tope; `room`: no entró un archivo nuevo; `mark`: una marca no tiene lugar. */
-  reason: 'limit' | 'room' | 'mark';
+  /** `limit`: se pasó el tope; `mark`: una marca no tiene lugar. */
+  reason: 'limit' | 'mark';
   /** Lo que ocupa lo guardado automáticamente y el tope. */
   kept: number;
   limit: number | null;
@@ -137,6 +138,8 @@ export interface OfflineSnapshot {
   prompt: SpacePrompt | null;
   /** La marca que está bajando ahora. */
   active: string | null;
+  /** Archivos nuevos que no entraron en el dispositivo: se ofrece guardarlos para no perderlos. */
+  unsaved: { name: string; size: number }[];
 }
 
 /** Lo que se calcula para la ventana de marcar, por partes (el indicador circular espera cada una). */
@@ -206,6 +209,12 @@ async function porteroCode(res: Response): Promise<string | undefined> {
   }
 }
 
+/** Están todas las partes que la entrada dice tener. */
+async function partsPresent(db: MediaDb, entry: { id: string; orig?: { parts: { n: number }[] } }): Promise<boolean> {
+  for (const p of entry.orig?.parts ?? []) if (!(await db.getKey('blobs', partKey(entry.id, p.n)))) return false;
+  return true;
+}
+
 function parseContentRange(value: string | null): { start: number; end: number; total: number } | null {
   const m = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(value ?? '');
   return m ? { start: Number(m[1]), end: Number(m[2]), total: Number(m[3]) } : null;
@@ -213,7 +222,7 @@ function parseContentRange(value: string | null): { start: number; end: number; 
 
 export class OfflineManager {
   private readonly listeners = new Set<() => void>();
-  private snapshot: OfflineSnapshot = { loaded: false, marks: [], limit: DEFAULT_LIMIT, usage: null, prompt: null, active: null };
+  private snapshot: OfflineSnapshot = { loaded: false, marks: [], limit: DEFAULT_LIMIT, usage: null, prompt: null, active: null, unsaved: [] };
   private readonly now: () => number;
   private readonly progress = new Map<string, { done: number; total: number; bytesDone: number; bytesTotal: number; unavailable: number; waiting: number; pages: number; update: number }>();
   /** Lo abierto en esta sesión: no se libera (un video que se está mirando desde un `blob:`). */
@@ -226,7 +235,10 @@ export class OfflineManager {
   private timer: ReturnType<typeof setInterval> | null = null;
   private maintainTimer: ReturnType<typeof setTimeout> | null = null;
   /** Lo que pidió liberar "sin lugar" para un archivo nuevo (se ofrece en el aviso). */
-  private roomNeeded = 0;
+  /** Lo bajado en esta vuelta, que `localStorage` todavía no cuenta (el tope del iPhone, sección 9.1). */
+  private written = 0;
+  /** Cuándo se miró por última vez cada marca entera, y con qué conjunto (para no consultar todo en cada vuelta). */
+  private readonly checked = new Map<string, { signature: string; at: number }>();
   private features: string[] | null = null;
   private readonly cleanups: (() => void)[] = [];
 
@@ -306,11 +318,39 @@ export class OfflineManager {
     if (this.deps.db) void touchCopy(this.deps.db, key, this.now()).catch(() => undefined);
   }
 
-  /** No entró un archivo nuevo: el aviso ofrece liberar copias (sección 5.7). */
-  noRoom(bytes: number): void {
-    this.roomNeeded = Math.max(this.roomNeeded, bytes);
-    void this.refresh({ room: true }).catch(() => undefined);
+  /**
+   * No entra un archivo nuevo (sección 5.7): antes de rechazarlo se libera lo que se rehace o ya está en Drive (las
+   * nítidas de la página y las copias bajadas que ninguna marca pide), sin preguntar, para que una foto recién
+   * sacada no se pierda. Nunca lo marcado, lo `gone`, lo abierto en la sesión ni un original propio. Devuelve lo
+   * liberado; la cola vuelve a probar.
+   */
+  async makeRoom(bytes: number): Promise<number> {
+    const freed = await this.freeBytes(bytes + 200 * MB);
+    await this.refresh().catch(() => undefined);
+    return freed;
   }
+
+  /**
+   * Un archivo nuevo que igual no entró: se guarda en memoria para ofrecer bajarlo o compartirlo ("Guardar imagen"
+   * en el iPhone), así no se pierde una foto de "Tomar foto", que no queda en la fototeca.
+   */
+  rejected(file: Blob & { name?: string }): void {
+    this.unsaved.push(file);
+    this.set({ unsaved: this.unsaved.map((f) => ({ name: f.name ?? '', size: f.size })) });
+  }
+
+  /** El archivo que no entró, para guardarlo (y sacarlo de la lista). */
+  takeUnsaved(index: number): (Blob & { name?: string }) | null {
+    const [file] = this.unsaved.splice(index, 1);
+    this.set({ unsaved: this.unsaved.map((f) => ({ name: f.name ?? '', size: f.size })) });
+    return file ?? null;
+  }
+
+  peekUnsaved(index: number): (Blob & { name?: string }) | null {
+    return this.unsaved[index] ?? null;
+  }
+
+  private readonly unsaved: (Blob & { name?: string })[] = [];
 
   // --- el tope ------------------------------------------------------------------------------------------
 
@@ -324,7 +364,6 @@ export class OfflineManager {
   async snooze(): Promise<void> {
     if (!this.deps.db) return;
     await this.deps.db.put('meta', this.now() + SNOOZE_MS, SNOOZE_KEY);
-    this.roomNeeded = 0;
     this.set({ prompt: null });
   }
 
@@ -394,16 +433,14 @@ export class OfflineManager {
   }
 
   /** Vuelve a contar y decide si hay que avisar (nunca libera nada sola). */
-  async refresh(options: { room?: boolean } = {}): Promise<void> {
+  async refresh(): Promise<void> {
     const db = this.deps.db;
     if (!db) return;
     const [usage, limit, marks] = await Promise.all([this.usage(), this.limit(), listMarks(db)]);
     let prompt: SpacePrompt | null = null;
     const snoozed = ((await db.get('meta', SNOOZE_KEY)) as number | undefined) ?? 0;
     const first = (await db.get('meta', 'space:prompted')) === undefined;
-    if (this.roomNeeded > 0 && usage.freeable > 0) {
-      prompt = { reason: 'room', kept: usage.kept, limit, free: Math.min(usage.freeable, this.roomNeeded + 200 * MB), count: 0, needed: this.roomNeeded, first };
-    } else if (!options.room && limit !== null && usage.kept > limit && usage.freeable > 0 && this.now() >= snoozed) {
+    if (limit !== null && usage.kept > limit && usage.freeable > 0 && this.now() >= snoozed) {
       const free = Math.min(usage.freeable, usage.kept - Math.floor(limit * 0.9));
       prompt = { reason: 'limit', kept: usage.kept, limit, free, count: 0, needed: 0, first };
     }
@@ -412,6 +449,8 @@ export class OfflineManager {
       prompt = { reason: 'mark', kept: usage.kept, limit, free: usage.freeable, count: 0, needed: 0, first };
     }
     if (prompt && first) await db.put('meta', this.now(), 'space:prompted');
+    // Lo bajado en esta vuelta ya está en `usage.offline`.
+    this.written = 0;
     this.saveDeviceTotal(usage.offline);
     this.set({ usage, limit, prompt, marks: marks.map((m) => this.view(m, usage)) });
   }
@@ -454,14 +493,45 @@ export class OfflineManager {
    * nuevo; `all`: todo (*Free up space*). Nunca toca lo marcado, lo `gone`, lo abierto en esta sesión ni un
    * original propio. Devuelve lo liberado.
    */
-  async freeUp(mode: 'over' | 'room' | 'all'): Promise<number> {
-    const db = this.deps.db;
-    if (!db) return 0;
+  async freeUp(mode: 'over' | 'all'): Promise<number> {
     const usage = await this.usage();
     const limit = await this.limit();
-    let goal =
-      mode === 'all' ? Infinity : mode === 'room' ? this.roomNeeded + 200 * MB : limit === null ? 0 : usage.kept - Math.floor(limit * 0.9);
-    if (!(goal > 0)) return 0;
+    const goal = mode === 'all' ? Infinity : limit === null ? 0 : usage.kept - Math.floor(limit * 0.9);
+    const freed = await this.freeBytes(goal);
+    // Una marca que se detuvo por falta de lugar vuelve a probar.
+    const db = this.deps.db;
+    if (db) for (const m of await listMarks(db)) if (m.state === 'noSpace') await putMark(db, { ...m, state: 'downloading', error: null });
+    await this.refresh();
+    this.kick();
+    return freed;
+  }
+
+  /**
+   * Lo que se ofrecería liberar, en orden (de la que hace más que no se abre a la más reciente): para "Show what".
+   * Las nítidas de la página van en una sola línea (`id` vacío).
+   */
+  async candidates(): Promise<{ id: string; name: string; bytes: number; usedAt: number | null }[]> {
+    const db = this.deps.db;
+    if (!db) return [];
+    const marks = await listMarks(db);
+    const out: { id: string; name: string; bytes: number; usedAt: number | null }[] = [];
+    const views = await this.deps.media.viewBytes();
+    if (views > 0) out.push({ id: '', name: '', bytes: views, usedAt: null });
+    const copies = (await listCopies(db)).filter((e) => !e.gone && !this.opened.has(e.id)).sort((a, b) => a.usedAt - b.usedAt);
+    for (const e of copies) {
+      const p = protects(marks, e.id);
+      const bytes = (e.orig && !p.orig ? copyReceived(e) : 0) + (e.view && !p.view ? e.view.bytes : 0);
+      if (bytes === 0) continue;
+      const known = await db.get('known', e.id);
+      out.push({ id: e.id, name: known?.name ?? e.id, bytes, usedAt: e.usedAt });
+    }
+    return out;
+  }
+
+  /** Libera hasta `goal` bytes de lo que se puede (ver `freeUp`). */
+  private async freeBytes(goal: number): Promise<number> {
+    const db = this.deps.db;
+    if (!db || !(goal > 0)) return 0;
     let freed = await this.deps.media.trimViews(goal);
     goal -= freed;
     if (goal > 0) {
@@ -495,11 +565,6 @@ export class OfflineManager {
         goal -= bytes;
       }
     }
-    if (mode === 'room') this.roomNeeded = 0;
-    // Una marca que se detuvo por falta de lugar vuelve a probar.
-    for (const m of await listMarks(db)) if (m.state === 'noSpace') await putMark(db, { ...m, state: 'downloading', error: null });
-    await this.refresh();
-    this.kick();
     return freed;
   }
 
@@ -815,7 +880,8 @@ export class OfflineManager {
         inDrive: row ? !!row.drive_id : own ? !!own.driveId : !!known?.driveId,
         deleted: row ? !!(row.purged_at || row.drive_trashed_at) : !!known?.deleted,
         ownBlob: !!own && !!(await db.getKey('blobs', id)),
-        copy: !!entry?.orig?.complete,
+        // Una copia que dice estar completa pero perdió una parte no cuenta: se vuelve a bajar.
+        copy: !!entry?.orig?.complete && (await partsPresent(db, entry)),
         offview: !!entry?.view,
         view2048: !!(await db.getKey('thumbs', `view:${id}`)),
         thumb: !!(await db.getKey('thumbs', id)),
@@ -924,9 +990,20 @@ export class OfflineManager {
       // Subir le gana a bajar: con algo que se puede subir ahora, se espera.
       if (await this.deps.media.hasUploadableNow()) return;
       if (mark.state === 'noSpace') continue;
+      const signature = this.signature(mark);
+      const seen = this.checked.get(mark.id);
+      if (mark.state === 'ready' && seen?.signature === signature && this.now() - seen.at < MAINTAIN_EVERY_MS) continue;
       await this.download(mark);
+      const after = (await listMarks(db)).find((m) => m.id === mark.id);
+      if (after?.state === 'ready') this.checked.set(mark.id, { signature, at: this.now() });
+      else this.checked.delete(mark.id);
       await this.refresh();
     }
+  }
+
+  /** Lo que define qué pide una marca: sus casillas, sus archivos y las páginas leídas. */
+  private signature(mark: OfflineMark): string {
+    return JSON.stringify([mark.options, Object.keys(mark.files).sort(), Object.entries(mark.pages).sort(), mark.older ?? []]);
   }
 
   /** Lo que falta bajar de una marca. */
@@ -1030,6 +1107,7 @@ export class OfflineManager {
         }
         progress.done++;
         progress.bytesDone += item.bytes;
+        this.written += item.what === 'orig' ? item.size : item.bytes;
         this.set({ marks: this.snapshot.marks.map((m) => (m.id === mark.id ? { ...m, done: progress.done, bytesDone: progress.bytesDone, total: progress.total, bytesTotal: progress.bytesTotal } : m)) });
       }
       const complete = progress.pages === 0 && progress.update === 0;
@@ -1084,19 +1162,24 @@ export class OfflineManager {
   }
 
   /** El total marcado de todos los workspaces de este dispositivo (cada uno anota el suyo). */
-  private deviceTotal(): number {
+  deviceTotal(): number {
     const local = this.deps.local;
-    if (!local) return this.snapshot.usage?.offline ?? 0;
+    const own = this.snapshot.usage?.offline ?? 0;
+    if (!local) return own + this.written;
     let total = 0;
+    let mine = false;
     try {
       for (let i = 0; i < local.length; i++) {
         const key = local.key(i);
-        if (key?.startsWith('sd:offline:')) total += Number(local.getItem(key)) || 0;
+        if (!key?.startsWith('sd:offline:')) continue;
+        total += Number(local.getItem(key)) || 0;
+        if (key === `sd:offline:${this.deps.dbName}`) mine = true;
       }
     } catch {
-      return this.snapshot.usage?.offline ?? 0;
+      return own + this.written;
     }
-    return total;
+    // Lo de este workspace, si todavía no está anotado, y lo bajado en esta vuelta.
+    return total + (mine ? 0 : own) + this.written;
   }
 
   private saveDeviceTotal(bytes: number): void {
@@ -1186,7 +1269,7 @@ export class OfflineManager {
     const db = this.deps.db!;
     const total = item.size;
     let entry = await getCopy(db, item.id);
-    if (entry?.orig && (entry.orig.total !== total || entry.orig.mime !== item.mime)) entry = undefined;
+    if (entry?.orig && (entry.orig.total !== total || entry.orig.mime !== item.mime || !(await partsPresent(db, entry)))) entry = undefined;
     let start = entry ? copyReceived(entry) : 0;
     let reset = !entry;
     try {
@@ -1237,6 +1320,10 @@ export class OfflineManager {
     while (start < total) {
       const end = Math.min(start + PART_BYTES, total) - 1;
       const res = await this.requestPart(item.id, start, end, signal);
+      if (res.status !== 206 && (start !== 0 || total > PART_BYTES)) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new Error('no ranges');
+      }
       const part = await res.blob();
       if (res.status === 206) {
         const range = parseContentRange(res.headers.get('Content-Range'));

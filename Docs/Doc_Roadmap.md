@@ -126,7 +126,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   automático de 2 GB por dispositivo (se liberan las copias ya confirmadas en el Drive que hace más que no se
   abren; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
   pesos), y "Espacio en este dispositivo" en el menú de la cuenta. **Diseño en `Doc_Copias_Locales.md`**
-  (rehecho con D-25; auditado y aprobado). **Entregas 0 y 1 implementadas** (v0.084, rama `lega/espacio-offline`);
+  (rehecho con D-25; auditado y aprobado). **Entregas 0 y 1 implementadas** (v0.083, rama `lega/espacio-offline`);
   falta la entrega 2 (liberar los originales agregados en el dispositivo, con su auditoría) y la medición del iPhone
   casi lleno (sección 9.1).
 - **P.11 Colapsar secciones por sus títulos, como en Coda** (Lega, 2026-09-30): cualquier título (H1, H2, H3…)

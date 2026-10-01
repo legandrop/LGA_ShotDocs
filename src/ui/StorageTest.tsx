@@ -2,13 +2,35 @@ import { useEffect, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/offline';
 import { formatSize } from '../media/fileTrash';
+import { PENDING_PREFIX, STORAGE_TEST_DB } from '../services';
 
 // La medición del iPhone casi lleno (Docs/Doc_Copias_Locales.md, sección 9.1): qué dicen `estimate()` y
 // `persisted()`, y hasta dónde se puede escribir antes de que el navegador diga que no hay lugar. Escribe en una base
 // aparte (`shotdocs-storage-test`), nunca en las de la app, y "Clean up" la borra entera. Se abre desde "Storage on
 // this device" (también en la app instalada, que no tiene barra de direcciones) o en `/storage-test`.
 
-const DB = 'shotdocs-storage-test';
+const DB = STORAGE_TEST_DB;
+
+/** Lo que falta subir en todos los workspaces de este dispositivo (lo anota cada uno al sincronizar). */
+function pendingOnDevice(): number | null {
+  try {
+    let n = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(PENDING_PREFIX)) n += Number(localStorage.getItem(key)) || 0;
+    }
+    return n;
+  } catch {
+    return null;
+  }
+}
+
+function deleteTestDb(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const req = indexedDB.deleteDatabase(DB);
+    req.onsuccess = req.onerror = req.onblocked = () => resolve();
+  });
+}
 const PART = 16 * 1024 * 1024;
 
 function openTestDb(): Promise<IDBDatabase> {
@@ -56,8 +78,10 @@ export function StorageTest() {
     setEstimate((await navigator.storage?.estimate?.().catch(() => null)) ?? null);
     setPersisted((await navigator.storage?.persisted?.().catch(() => null)) ?? null);
   };
+  const [pending] = useState(pendingOnDevice);
   useEffect(() => {
-    void refresh();
+    // Lo que haya quedado de una medición cortada se borra al abrir.
+    void deleteTestDb().then(refresh);
   }, []);
 
   async function fill() {
@@ -86,10 +110,7 @@ export function StorageTest() {
   async function clean() {
     stop.current = true;
     setState('cleaning');
-    await new Promise<void>((resolve) => {
-      const req = indexedDB.deleteDatabase(DB);
-      req.onsuccess = req.onerror = req.onblocked = () => resolve();
-    });
+    await deleteTestDb();
     setWritten(0);
     setState('idle');
     await refresh();
@@ -107,6 +128,8 @@ export function StorageTest() {
         <li>{tr('storageTest.written', { size: formatSize(written, tr.lang) })}</li>
       </ul>
       {error && <p className="error">{tr('storageTest.stoppedWith', { error })}</p>}
+      {pending !== 0 && <p className="error">{tr('storageTest.pending', { count: pending ?? '?' })}</p>}
+      {persisted === false && <p className="muted">{tr('offlineDialog.notPersisted')}</p>}
       {state === 'filling' ? (
         <button className="secondary" onClick={() => (stop.current = true)}>
           {tr('offlineDialog.stop')}
@@ -117,7 +140,7 @@ export function StorageTest() {
             {tr('storageTest.typeFill')}{' '}
             <input value={word} autoComplete="off" autoCapitalize="off" spellCheck={false} onChange={(e) => setWord(e.target.value)} />
           </label>{' '}
-          <button className="primary danger" disabled={word.trim().toLowerCase() !== 'fill' || state === 'cleaning'} onClick={() => void fill()}>
+          <button className="primary danger" disabled={word.trim().toLowerCase() !== 'fill' || state === 'cleaning' || pending !== 0} onClick={() => void fill()}>
             {tr('storageTest.fill')}
           </button>
         </>

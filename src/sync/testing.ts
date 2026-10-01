@@ -1680,7 +1680,12 @@ export async function makeDevice(
   });
   const files = new PageFiles(db, remote);
   const mediaDb = await openMediaDb(mediaDbName(dbName));
+  // Como la app (services.ts): "Available offline" se arma después y la cola le avisa por acá.
+  let offlineRef: OfflineManager | null = null;
   const media = new MediaQueue(server.mediaDbFails ? null : mediaDb, remote, {
+    onUse: (id, how) => offlineRef?.used(id, how),
+    makeRoom: async (bytes) => (offlineRef ? offlineRef.makeRoom(bytes) : 0),
+    onRejected: (file) => offlineRef?.rejected(file),
     // El portero en memoria sabe quién pide por el token (`token:<usuario>`).
     portero: (url) =>
       new Portero(url, {
@@ -1728,6 +1733,7 @@ export async function makeDevice(
     local: null,
   });
   await offline.load();
+  offlineRef = offline;
   return { db, tree, docs, files, media, mediaDb, engine, remote, access, comments, commentsDb, sizes, offline };
 }
 

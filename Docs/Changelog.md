@@ -1,14 +1,15 @@
 # Changelog — LGA Shot Docs
 
-v0.084 :
+v0.083 :
 
 No había forma de tener una página o un proyecto para usar sin red, ni de saber cuánto ocupa la app en el
 dispositivo. *Available offline…* (menú de la página o del proyecto) abre una ventana con casillas y el peso de cada
 una, también de lo destildado, y baja lo elegido por partes, sin frenar las subidas, hasta "listo"; después lo
 mantiene al día. *Storage on this device* (menú de la cuenta) muestra lo guardado con un tope elegible (2 GB de
 fábrica): pasado el tope, un aviso pregunta antes de liberar, y solo se liberan copias bajadas y nítidas, nunca lo
-marcado ni lo agregado en el dispositivo. Sin red se lee "Offline · N to upload", también en el teléfono. El portero
-suma códigos de error fijos, `POST /verify`, `only: 'known'` y `?offline=1`. Página de medición en `/storage-test`.
+marcado ni lo agregado en el dispositivo; una foto nueva que no entra libera copias o se ofrece guardarla. Sin red se
+lee "Offline · N to upload", también en el teléfono. El portero suma códigos de error fijos, `POST /verify`,
+`only: 'known'` y `?offline=1`. Página de medición en `/storage-test`.
 [ Available offline - marcar, bajar, tope con aviso y espacio en el dispositivo ]
 
 v0.077 :

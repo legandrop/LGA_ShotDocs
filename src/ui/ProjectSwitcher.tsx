@@ -28,7 +28,7 @@ import { editedLabel, monogram, projectStateError, useCurrentProject, useSwitchP
 import { SEARCH_SHORTCUT_LABEL, useSearchSession } from './projectSearchUi';
 import { DeletedProjectsList, DeleteProjectDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
-import { OfflineBadge, openOffline } from './SpaceHost';
+import { OfflineBadge, offlineSupported, openOffline } from './SpaceHost';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
 import {
   RemoveWorkspaceDialog,
@@ -350,7 +350,7 @@ function ProjectMenu(props: {
     const canRename = !archived && perms.canRenameProject(id);
     const canManage = statesReady && perms.canManageProject(id);
     // "Available offline" (P.10): cualquiera que vea el proyecto, si hay base de archivos en el dispositivo.
-    const canOffline = !!mediaDb;
+    const canOffline = !!mediaDb && offlineSupported();
     if (!canRename && !canManage && !canOffline) return null;
     const reason = blockedReason(id, archived);
     const deleteReason = offline ? tr('fileTrash.needsInternet') : archived ? null : reason;
@@ -517,7 +517,7 @@ function ProjectMenu(props: {
               {actions && !touch && actions}
               {actions && touch && opened === p.id && (
                 <span className="project-sheet">
-                  {mediaDb && (
+                  {mediaDb && offlineSupported() && (
                     <button
                       onClick={() => {
                         props.onClose();

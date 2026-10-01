@@ -331,21 +331,30 @@ export async function dropCopy(db: MediaDb, id: string, guard: DropGuard = {}): 
  * tomaron el control y terminó de escribir una parte en vuelo): ocupan lugar que las sumas propias no ven.
  */
 export async function cleanOrphans(db: MediaDb): Promise<number> {
-  const entries = new Map((await listCopies(db)).map((e) => [e.id, e]));
+  // Todo en una sola transacción: una parte que otra pestaña termina de escribir en el medio no puede quedar
+  // borrada con su entrada diciendo que está (la copia quedaría "completa" e ilegible).
+  const tx = db.transaction(['blobs', 'thumbs', 'meta'], 'readwrite');
+  const meta = tx.objectStore('meta');
+  const entries = new Map(
+    ((await meta.getAll(range(COPY_PREFIX))) as CopyEntry[]).filter((e) => e && typeof e.id === 'string').map((e) => [e.id, e]),
+  );
   let removed = 0;
-  const partKeys = (await db.getAllKeys('blobs', range(OFF_PREFIX))) as string[];
+  const blobs = tx.objectStore('blobs');
+  const partKeys = (await blobs.getAllKeys(range(OFF_PREFIX))) as string[];
   for (const key of partKeys) {
     const m = /^off:(.+)#(\d+)$/.exec(key);
     const entry = m ? entries.get(m[1]) : undefined;
     if (m && entry?.orig?.parts.some((p) => p.n === Number(m[2]))) continue;
-    await db.delete('blobs', assertCopyKey(key));
+    await blobs.delete(assertCopyKey(key));
     removed++;
   }
-  const viewKeys = (await db.getAllKeys('thumbs', range(OFFVIEW_PREFIX))) as string[];
+  const thumbs = tx.objectStore('thumbs');
+  const viewKeys = (await thumbs.getAllKeys(range(OFFVIEW_PREFIX))) as string[];
   for (const key of viewKeys) {
     if (entries.get(key.slice(OFFVIEW_PREFIX.length))?.view) continue;
-    await db.delete('thumbs', assertCopyKey(key));
+    await thumbs.delete(assertCopyKey(key));
     removed++;
   }
+  await tx.done;
   return removed;
 }

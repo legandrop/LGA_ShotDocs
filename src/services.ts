@@ -96,7 +96,7 @@ export function useOffline(): OfflineSnapshot {
   return useSyncExternalStore(offline?.subscribe ?? noSubscribe, offline?.getSnapshot ?? emptyOffline);
 }
 
-const EMPTY_OFFLINE: OfflineSnapshot = { loaded: false, marks: [], limit: null, usage: null, prompt: null, active: null };
+const EMPTY_OFFLINE: OfflineSnapshot = { loaded: false, marks: [], limit: null, usage: null, prompt: null, active: null, unsaved: [] };
 const emptyOffline = () => EMPTY_OFFLINE;
 const noSubscribe = () => () => undefined;
 
@@ -108,6 +108,29 @@ export function deviceTraits(): { ios: boolean; safari: boolean; phone: boolean 
   const safari = /^((?!chrome|chromium|crios|fxios|android|edg).)*safari/i.test(ua);
   const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   return { ios, safari, phone };
+}
+
+/** La base de la página de medición del espacio (src/ui/StorageTest.tsx). */
+export const STORAGE_TEST_DB = 'shotdocs-storage-test';
+/** Lo que falta subir de cada workspace de este dispositivo, para la página de medición. */
+export const PENDING_PREFIX = 'sd:pending:';
+
+function savePendingForStorageTest(dbName: string, s: SyncStatus): void {
+  const n = s.pendingOps + s.pendingPages + s.pendingFiles + s.pendingMedia + s.failedMedia + s.pendingComments + s.failedOps;
+  try {
+    localStorage.setItem(PENDING_PREFIX + dbName, String(n));
+  } catch {
+    // Sin `localStorage`: la página de medición lo dice.
+  }
+}
+
+/** Borra los datos de prueba de la medición, si quedaron. */
+export function dropStorageTest(): void {
+  try {
+    indexedDB.deleteDatabase(STORAGE_TEST_DB);
+  } catch {
+    // Sin IndexedDB no hay nada que borrar.
+  }
 }
 
 /** La base dijo que sacaron a la persona del workspace. */
@@ -262,7 +285,8 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         // Se pegó una foto o un video de otro proyecto (papelera de archivos, paso 11).
         onForeignFile: (name) => notify(foreignFileNotice(name)),
         onUse: (id, how) => offline?.used(id, how),
-        onNoRoom: (bytes) => offline?.noRoom(bytes),
+        makeRoom: async (bytes) => (offline ? offline.makeRoom(bytes) : 0),
+        onRejected: (file) => offline?.rejected(file),
       });
       await media.load().catch(() => undefined);
       // Los comentarios, también en una base aparte. Si no se abre, se leen con red pero no se escriben.
@@ -279,6 +303,14 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
       await comments.load().catch(() => undefined);
       const sizes = new ProjectSizes(db, remote);
       await sizes.load().catch(() => undefined);
+      const engine = new SyncEngine(remote, tree, docs, files, {
+        appVersion: __APP_VERSION__,
+        schemaVersion: DB_SCHEMA_VERSION,
+        media,
+        access,
+        comments,
+        sizes,
+      });
       const traits = deviceTraits();
       offline = new OfflineManager({
         db: mediaDb,
@@ -295,14 +327,6 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         local: typeof localStorage === 'undefined' ? null : localStorage,
       });
       await offline.load().catch(() => undefined);
-      const engine = new SyncEngine(remote, tree, docs, files, {
-        appVersion: __APP_VERSION__,
-        schemaVersion: DB_SCHEMA_VERSION,
-        media,
-        access,
-        comments,
-        sizes,
-      });
       if (cancelled) {
         mediaDb?.close();
         commentsDb?.close();
@@ -318,7 +342,11 @@ export function useBootServices(workspace: ActiveWorkspace, user: AuthUser): Boo
         if (status.lastSyncAt !== lastSync || (status.online && !wasOnline)) offlineManager.maintainSoon();
         lastSync = status.lastSyncAt;
         wasOnline = status.online;
+        // Lo que falta subir en este workspace, para la página de medición (no llena el disco con algo sin subir).
+        savePendingForStorageTest(dbName, status);
       });
+      // Datos de una medición que quedaron (la app se cortó en el medio): se borran al abrir.
+      dropStorageTest();
       offlineManager.start();
       // Si una invitación nueva sumó permisos, se sincroniza de nuevo para traer lo compartido.
       void accepted?.then((n) => {

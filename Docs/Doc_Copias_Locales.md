@@ -928,8 +928,14 @@ aviso, *Not now* y *Free up*.
   sabe, a Drive (`/verify`): si Drive ya no la tiene, queda como "única copia". **Los originales agregados en este
   dispositivo no se liberan** (cuentan para el tope y el diálogo lo dice).
 - **Sin lugar:** las bajadas dejan la reserva de `max(1 GB, 5 %)`; si no entra, la marca se detiene y el aviso ofrece
-  liberar. Al agregar una foto que no entra, el aviso ofrece liberar y la persona la vuelve a agregar. En el iPhone,
-  el total marcado del dispositivo no pasa `IOS_OFFLINE_TOTAL_MAX` (5 GB, en `src/media/offline.ts`).
+  liberar. En el iPhone, el total marcado del dispositivo (todos los workspaces, más lo bajado en la vuelta en curso)
+  no pasa `IOS_OFFLINE_TOTAL_MAX` (5 GB, en `src/media/offline.ts`), y la ventana mira ese mismo total.
+- **Una foto nueva que no entra no se pierde** (auditoría de la implementación): antes de rechazarla, la cola libera
+  sin preguntar lo que se rehace o ya está en Drive (las nítidas de la página y las copias bajadas que ninguna marca
+  pide; nunca lo marcado, lo `gone`, lo abierto ni un original propio) y vuelve a probar. Es la única excepción a
+  "nada se libera sin el sí": una foto de "Tomar foto" del iPhone no queda en la fototeca. Si igual no entra, un aviso
+  ofrece guardarla (*Save…*: la hoja de compartir, con "Guardar imagen" en el iPhone, o una descarga); queda en
+  memoria hasta guardarla o descartarla.
 - **Comentarios:** de a una página (`CommentQueue.refresh`), al marcar y cada 6 horas. La función por proyecto de la
   sección 3.6 no se hizo (no hace falta migración en esta entrega).
 
@@ -940,10 +946,18 @@ aviso, *Not now* y *Free up*.
 - Una página abierta no se vuelve nítida en el acto cuando termina la marca: lo hace al cambiar de ancho, al volver la
   red o al minuto (lo que ya hacía la página).
 - Al liberar para un archivo nuevo que no entró, no se vuelve a probar solo: la persona lo agrega de nuevo.
-- *Storage on this device* no tiene la lista de las copias más grandes (del diseño anterior).
+- *Show what* (en el aviso y en *Storage on this device*) muestra la lista de lo que se liberaría primero: nombre,
+  peso y "abierto hace…", con las nítidas de la página en una línea.
+- Sin Web Locks (Safari anterior a 15.4) *Available offline* y *Storage on this device* no aparecen.
+- Una marca lista y sin cambios no se vuelve a consultar entera en cada sincronización: recién a los 10 minutos.
+- Una copia que dice estar completa pero perdió una parte se vuelve a bajar; `cleanOrphans` va en una sola transacción.
+- El carrete sin red muestra la de 2048 guardada aunque la página no la haya procesado.
+- "Offline · N" en el teléfono sale según la conexión, también con algo rechazado.
 
 **La medición del iPhone (sección 9.1), para Lega:** en *Storage on this device*, abajo, *Measure storage on this
-device…* abre la página de prueba (también en `/storage-test`). Pasos:
+device…* abre la página de prueba (también en `/storage-test`). La página no deja llenar si algún workspace de este
+dispositivo tiene algo por subir, avisa si el almacenamiento no es persistente y, al abrirla (y al abrir la app),
+borra los datos de una medición que haya quedado cortada. Pasos (con **0 por subir**):
 
 1. En el iPhone, mirar el lugar libre en *Ajustes → General → Almacenamiento del iPhone* y anotarlo.
 2. Abrir la app instalada → menú de la cuenta → *Storage on this device* → *Measure storage on this device…*. Anotar

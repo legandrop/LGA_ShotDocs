@@ -247,4 +247,13 @@ describe('"Offline" a la vista en el teléfono', () => {
     await settle();
     expect(host.querySelector('.sync-icon-label')?.textContent).toMatch(/^Sin conexión · \d+$/);
   });
+  it('sin conexión y con algo rechazado (el ícono de aviso), sigue diciendo "Offline · N"', async () => {
+    const { b } = await setup();
+    const real = b.engine.getStatus();
+    const status = { ...real, online: false, failedMedia: 1 };
+    vi.spyOn(b.engine, 'getStatus').mockReturnValue(status);
+    const host = await mount(services(b), <SyncIcon onClick={() => undefined} />);
+    expect(host.querySelector('.sync-icon')?.classList.contains('warn')).toBe(true);
+    expect(host.querySelector('.sync-icon-label')?.textContent).toMatch(/^Offline/);
+  });
 });

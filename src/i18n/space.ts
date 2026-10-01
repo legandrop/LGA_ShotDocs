@@ -20,10 +20,12 @@ export const space = {
     en: "Shot Docs is keeping {kept} of files on this device (limit {limit}). Free up {free}? Files stay in Drive; without a connection you'll see their thumbnails.",
     es: "Shot Docs guarda {kept} de archivos en este dispositivo (tope {limit}). ¿Liberar {free}? Los archivos siguen en Drive; sin conexión vas a ver sus miniaturas.",
   },
-  'space.promptRoom': {
-    en: "Not enough space for the new file ({needed}). Free up {free} of copies already in Drive, then add it again?",
-    es: "No hay lugar para el archivo nuevo ({needed}). ¿Liberar {free} de copias que ya están en Drive y volver a agregarlo?",
+  'space.unsaved': {
+    en: "Not enough space on this device: “{name}” ({size}) was not added. Save it so it isn't lost.",
+    es: "No hay lugar en este dispositivo: “{name}” ({size}) no se agregó. Guardalo para no perderlo.",
   },
+  'space.saveFile': { en: "Save…", es: "Guardar…" },
+  'space.discardFile': { en: "Dismiss", es: "Descartar" },
   'space.promptMark': {
     en: "An offline page needs more space. Free up {free} of copies already in Drive?",
     es: "Una página sin conexión necesita más lugar. ¿Liberar {free} de copias que ya están en Drive?",

@@ -13,7 +13,15 @@ import { notify } from './notice';
 
 const OPEN = 'shotdocs:space';
 
-type Request = { kind: 'offline'; target: 'page' | 'project'; id: string } | { kind: 'storage' };
+/**
+ * "Available offline" necesita Web Locks (una sola pestaña escribe la base: sección 2.1 del diseño). Sin eso
+ * (Safari anterior a 15.4), la opción no aparece.
+ */
+export function offlineSupported(): boolean {
+  return typeof navigator !== 'undefined' && !!navigator.locks;
+}
+
+type Request = { kind: 'offline'; target: 'page' | 'project'; id: string } | { kind: 'storage'; list?: boolean };
 
 /** Abre la ventana "Available offline" de una página (con sus subpáginas) o de un proyecto. */
 export function openOffline(target: 'page' | 'project', id: string): void {
@@ -58,17 +66,54 @@ export function SpaceHost() {
     if (!prompt) return;
     setFreeing(true);
     try {
-      const freed = await offline.freeUp(prompt.reason === 'room' ? 'room' : prompt.reason === 'limit' ? 'over' : 'all');
+      const freed = await offline.freeUp(prompt.reason === 'limit' ? 'over' : 'all');
       notify(t('space.freed', { size: formatSize(freed, tr.lang) }));
     } finally {
       setFreeing(false);
     }
   }
 
+  /** Un archivo nuevo que no entró: compartirlo (en el iPhone, "Guardar imagen") o bajarlo, así no se pierde. */
+  async function saveUnsaved(index: number) {
+    const file = offline.peekUnsaved(index);
+    if (!file) return;
+    const named = file instanceof File ? file : new File([file], file.name || 'file', { type: file.type });
+    const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean };
+    try {
+      if (nav.canShare?.({ files: [named] }) && nav.share) {
+        await nav.share({ files: [named] });
+      } else {
+        const url = URL.createObjectURL(named);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = named.name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+      offline.takeUnsaved(index);
+    } catch {
+      // Se canceló la hoja de compartir: el archivo sigue en la lista.
+    }
+  }
+
   const close = () => setOpen(null);
+  const unsaved = snapshot.unsaved[0];
   return (
     <>
-      {prompt && !open && (
+      {unsaved && (
+        <div className="notice space-notice unsaved-notice" role="alert">
+          <span>{tr('space.unsaved', { name: unsaved.name || '—', size: formatSize(unsaved.size, tr.lang) })}</span>
+          <span className="space-notice-actions">
+            <button className="primary" onClick={() => void saveUnsaved(0)}>
+              {tr('space.saveFile')}
+            </button>
+            <button className="link" onClick={() => offline.takeUnsaved(0)}>
+              {tr('space.discardFile')}
+            </button>
+          </span>
+        </div>
+      )}
+      {prompt && !open && !unsaved && (
         <div className="notice space-notice" role="status">
           <span>
             {prompt.first && prompt.limit !== null && (
@@ -83,15 +128,13 @@ export function SpaceHost() {
                   limit: formatSize(prompt.limit, tr.lang),
                   free: formatSize(prompt.free, tr.lang),
                 })
-              : prompt.reason === 'room'
-                ? tr('space.promptRoom', { needed: formatSize(prompt.needed, tr.lang), free: formatSize(prompt.free, tr.lang) })
-                : tr('space.promptMark', { free: formatSize(prompt.free, tr.lang) })}
+              : tr('space.promptMark', { free: formatSize(prompt.free, tr.lang) })}
           </span>
           <span className="space-notice-actions">
             <button className="primary" disabled={freeing} onClick={() => void free()}>
               {tr('space.freeUp')}
             </button>
-            <button className="link" onClick={() => setOpen({ kind: 'storage' })}>
+            <button className="link" onClick={() => setOpen({ kind: 'storage', list: true })}>
               {tr('space.showWhat')}
             </button>
             <button className="link" onClick={() => void offline.snooze()}>
@@ -107,7 +150,11 @@ export function SpaceHost() {
       )}
       {open?.kind === 'storage' && (
         <Part onClose={close}>
-          <StorageDialog onClose={close} onEdit={(m) => setOpen({ kind: 'offline', target: m.kind, id: m.target })} />
+          <StorageDialog
+            onClose={close}
+            onEdit={(m) => setOpen({ kind: 'offline', target: m.kind, id: m.target })}
+            showList={open.list === true}
+          />
         </Part>
       )}
     </>

@@ -173,6 +173,11 @@ export const CACHE_FILES = 256;
 /** Carpetas que se están buscando o creando en este momento: dos subidas a la vez no crean dos iguales. */
 const pending = new Map<string, Promise<string>>();
 
+/** Lo que responde `/verify` por cada archivo: lo que dice Drive, o el error con su `code`. */
+type VerifyResult =
+  | { driveId: string; size: number; trashed: boolean; marked: boolean; md5: string | null }
+  | { error: string; code: string };
+
 /** Lo que este portero sabe hacer además de lo de siempre (`/drive/status`, `features`). */
 export const FEATURES = ['verify', 'known', 'offline', 'codes'] as const;
 /** Cuántos archivos por `POST /verify`: dos pedidos cada uno (base y Drive) más la sesión y el token, en 50. */
@@ -1338,11 +1343,6 @@ export class Portero {
  * o se baja no va en el pase: se decide al servir, a partir de `t`, así los pases viejos también reciben
  * los encabezados de ahora.
  */
-/** Lo que responde `/verify` por cada archivo: lo que dice Drive, o el error con su `code`. */
-type VerifyResult =
-  | { driveId: string; size: number; trashed: boolean; marked: boolean; md5: string | null }
-  | { error: string; code: string };
-
 interface Pass {
   f: string;
   t: string;

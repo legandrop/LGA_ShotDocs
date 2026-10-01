@@ -25,7 +25,7 @@ import {
   SystemIcon,
   TrashIcon,
 } from './icons';
-import { openOffline, openStorage } from './SpaceHost';
+import { offlineSupported, openOffline, openStorage } from './SpaceHost';
 import { isPhoneLayout } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
 import { notify } from './notice';
@@ -138,7 +138,8 @@ export function PageMenu(props: {
   const { media, mediaDb, offline } = useServices();
   // "Available offline" (P.10): marcada ella o una de arriba.
   useOffline();
-  const offlineMark = mediaDb && offline ? offline.markFor('page', props.pageId) : null;
+  const canOffline = !!mediaDb && offlineSupported();
+  const offlineMark = canOffline && offline ? offline.markFor('page', props.pageId) : null;
   const ref = useRef<HTMLDivElement>(null);
   useFloating(ref, props.onClose, props.anchor, true);
   const split = splitEnabled(tree, props.pageId);
@@ -215,7 +216,7 @@ export function PageMenu(props: {
         </button>
       )}
       {/* Bajar la página con sus subpáginas para usarla sin conexión (P.10, Docs/Doc_Copias_Locales.md). */}
-      {mediaDb && (
+      {canOffline && (
         <button
           role="menuitem"
           onClick={() => {
@@ -432,7 +433,7 @@ export function AccountMenu({
           Google Drive
         </button>
       )}
-      {mediaDb && (
+      {mediaDb && offlineSupported() && (
         <button
           className="menu-row"
           onClick={() => {

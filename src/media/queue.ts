@@ -258,8 +258,13 @@ export interface MediaQueueOptions {
    * saber qué hace más que no se abre (Docs/Doc_Copias_Locales.md, sección 5.5) y qué no liberar en esta sesión.
    */
   onUse?: (id: string, how: 'show' | 'open') => void;
-  /** No entró un archivo nuevo en el dispositivo: para ofrecer liberar copias (sección 5.7), con su peso. */
-  onNoRoom?: (bytes: number) => void;
+  /**
+   * No entra un archivo nuevo en el dispositivo: libera lo que se rehace o ya está en Drive (Docs/Doc_Copias_Locales.md,
+   * sección 5.7) y devuelve cuánto; la cola vuelve a probar una vez.
+   */
+  makeRoom?: (bytes: number) => Promise<number>;
+  /** Igual no entró: para ofrecer guardarlo en el dispositivo (bajarlo o compartirlo) y que no se pierda. */
+  onRejected?: (file: Blob & { name?: string }) => void;
 }
 
 /**
@@ -534,7 +539,12 @@ export class MediaQueue {
     const name = cleanName(file.name, mime);
     // Un adjunto solo va por el portero (sin él, las fotos siguen por el camino de antes).
     if (!this.enabled && fileKind(mime, name) === 'file') throw new FileRejected(t('queue.needsDrive'));
-    await this.checkRoom(file.size);
+    try {
+      await this.checkRoom(file.size);
+    } catch (err) {
+      if (err instanceof FileRejected) this.options.onRejected?.(file);
+      throw err;
+    }
     this.askPersist();
     const id = crypto.randomUUID();
     const record: MediaRecord = {
@@ -563,16 +573,22 @@ export class MediaQueue {
       retryAt: 0,
       ...(heic ? { heic: 'pending' as const } : {}),
     };
-    // Todo junto: o queda el archivo con su registro, o no queda nada.
-    try {
-      const tx = this.db.transaction(['files', 'blobs'], 'readwrite');
-      await Promise.all([tx.objectStore('blobs').put(file, id), tx.objectStore('files').put(record), tx.done]);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'QuotaExceededError') {
-        this.options.onNoRoom?.(file.size);
-        throw new FileRejected(t('queue.noSpace'));
+    // Todo junto: o queda el archivo con su registro, o no queda nada. Sin lugar, se hace lugar y se prueba otra vez;
+    // si igual no entra, se ofrece guardar el archivo para que no se pierda (una foto de "Tomar foto" del iPhone no
+    // queda en la fototeca).
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const tx = this.db.transaction(['files', 'blobs'], 'readwrite');
+        await Promise.all([tx.objectStore('blobs').put(file, id), tx.objectStore('files').put(record), tx.done]);
+        break;
+      } catch (err) {
+        if (err instanceof DOMException && (err.name === 'QuotaExceededError' || err.name === 'UnknownError')) {
+          if (attempt === 0 && (await this.makeRoom(file.size)) > 0) continue;
+          this.options.onRejected?.(file);
+          throw new FileRejected(t('queue.noSpace'));
+        }
+        throw err;
       }
-      throw err;
     }
     this.seenLinks.add(`${pageId}:${id}`);
     this.remember(id, record, true);
@@ -583,6 +599,14 @@ export class MediaQueue {
     if (heic) void this.ensureConverted(id);
     else void this.ensureProbed(id);
     return MEDIA_SCHEME + id;
+  }
+
+  private async makeRoom(bytes: number): Promise<number> {
+    try {
+      return (await this.options.makeRoom?.(bytes)) ?? 0;
+    } catch {
+      return 0;
+    }
   }
 
   /**
@@ -601,12 +625,13 @@ export class MediaQueue {
     }
     const quota = estimate.quota;
     if (typeof quota === 'number' && quota > 0 && (estimate.usage ?? 0) + size + ROOM_MARGIN > quota) {
-      // Primero se hace lugar con las imágenes nítidas (se vuelven a hacer cuando hagan falta).
-      if ((await this.clearViews().catch(() => 0)) > 0) {
+      // Primero se hace lugar con las imágenes nítidas (se vuelven a hacer cuando hagan falta) y las copias bajadas
+      // que ninguna marca pide.
+      const freed = (await this.clearViews().catch(() => 0)) + (await this.makeRoom(size));
+      if (freed > 0) {
         const again = await storage.estimate().catch(() => estimate);
         if (!((again.usage ?? 0) + size + ROOM_MARGIN > (again.quota ?? quota))) return;
       }
-      this.options.onNoRoom?.(size);
       throw new FileRejected(t('queue.noRoom'));
     }
   }

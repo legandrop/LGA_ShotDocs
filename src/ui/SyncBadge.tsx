@@ -66,12 +66,14 @@ function useSyncTone(): { tone: Tone; text: string; rejected: number } {
 /** Versión chica para la barra de arriba en el teléfono: solo el ícono, con el texto como etiqueta. */
 export function SyncIcon({ onClick }: { onClick: () => void }) {
   const { tone, text } = useSyncTone();
+  const status = useSyncStatus();
   const pending = usePendingCount();
   const tr = useT();
   const Icon = TONE_ICONS[tone];
-  // Sin conexión se dice con palabras, también en el teléfono (D-25): "Offline · 700" al lado del ícono. El
-  // `data-tip` no repite lo que ya se lee.
-  const offline = tone === 'offline';
+  // Sin conexión se dice con palabras, también en el teléfono (D-25): "Offline · 700" al lado del ícono, según la
+  // conexión y no según el tono (con algo rechazado el tono pasa a aviso, y justo ahí importa saber que no hay red).
+  // El `data-tip` no repite lo que ya se lee.
+  const offline = !status.online;
   return (
     <button
       className={`icon-button sync-icon ${tone}${offline ? ' with-label' : ''}`}

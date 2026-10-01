@@ -17,6 +17,9 @@ import {
   readCopy,
 } from './offlineStore';
 import { MEDIA_SCHEME, mediaIdOf, VIEW_PREFIX } from './queue';
+import { createCarreteLoader } from '../ui/carreteLoader';
+import { collectCarrete } from '../ui/carreteModel';
+import { FileRejected } from '../sync/files';
 
 // "Available offline" y el tope del espacio en el dispositivo (Docs/Doc_Copias_Locales.md, entrega 1), con el
 // servidor y el portero en memoria (src/sync/testing.ts).
@@ -452,5 +455,145 @@ describe('Available offline', { timeout: 30_000 }, () => {
     // El original de esa foto no se pidió.
     const driveId = server.mediaFiles.get(photo)!.drive_id!;
     expect(server.portero.calls.some((c) => c.path === `/m/${driveId}`)).toBe(false);
+  });
+});
+
+describe('después de la auditoría de la implementación', { timeout: 60_000 }, () => {
+  /** Un `localStorage` en memoria, con lo marcado en otro workspace del mismo iPhone. */
+  function fakeLocal(other: number) {
+    const store = new Map<string, string>([['sd:offline:otro', String(other)]]);
+    return {
+      get length() {
+        return store.size;
+      },
+      key: (i: number) => [...store.keys()][i] ?? null,
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    };
+  }
+
+  function iosManager(server: FakeServer, b: Device, local: ReturnType<typeof fakeLocal>): OfflineManager {
+    b.offline.stop();
+    return new OfflineManager({
+      db: b.mediaDb,
+      media: b.media,
+      tree: b.tree,
+      docs: b.docs,
+      remote: b.remote,
+      online: () => server.online,
+      fetch: (url, init) => server.portero.fetch(url, init),
+      ios: true,
+      dbName: 'este',
+      local,
+    });
+  }
+
+  async function offBytes(d: Device): Promise<number> {
+    let total = 0;
+    for (const k of await d.mediaDb.getAllKeys('blobs')) if (String(k).startsWith('off:')) total += (await d.mediaDb.get('blobs', k))!.size;
+    return total;
+  }
+
+  it('I1: el tope del iPhone suma lo bajado en la misma vuelta (al marcar)', async () => {
+    const { server, b, page } = await setup();
+    const ios = iosManager(server, b, fakeLocal(5 * 1024 * MB - 2.5 * MB));
+    await ios.load();
+    // Quedan 2,5 MB: la foto (2 MB), el video (1 MB) y el PDF (0,3 MB) enteros no entran todos.
+    await ios.mark('page', page, { ...DEFAULT_OPTIONS, originals: true, videos: true });
+    await ios.idle();
+    ios.stop();
+    expect(await offBytes(b)).toBeLessThanOrEqual(2.5 * MB);
+    expect((await listMarks(b.mediaDb))[0].state).toBe('noSpace');
+  });
+
+  it('I1: el tope del iPhone también al mantener al día (lo nuevo no pasa el tope)', async () => {
+    const { server, a, b, page } = await setup();
+    const ios = iosManager(server, b, fakeLocal(5 * 1024 * MB - 2.7 * MB));
+    await ios.load();
+    await ios.mark('page', page, { ...DEFAULT_OPTIONS, attachments: true, sharp: false });
+    await ios.idle();
+    expect((await listMarks(b.mediaDb))[0].state).toBe('ready');
+    // Llegan dos PDFs nuevos de 1,5 MB: entra uno solo.
+    const extra: string[] = [];
+    for (const n of [1, 2]) extra.push(mediaIdOf(await a.media.add(page, file(1.5 * MB, `anexo${n}.pdf`, 'application/pdf', 20 + n)))!);
+    await edit(a, page, (doc) => extra.forEach((id) => insert(doc, id)));
+    await sync(a);
+    await sync(b);
+    await ios.maintain();
+    await ios.idle();
+    ios.stop();
+    const got = await Promise.all(extra.map(async (id) => (await readCopy(b.mediaDb, id)) !== null));
+    expect(got.filter(Boolean).length).toBe(1);
+    expect((await listMarks(b.mediaDb))[0].state).toBe('noSpace');
+  });
+
+  it('una copia "completa" a la que le falta una parte se vuelve a bajar con Update now', async () => {
+    const { b, page, video } = await setup({ videoSize: 20 * MB });
+    const mark = await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, videos: true });
+    const entry = (await getCopy(b.mediaDb, video))!;
+    expect(entry.orig!.parts.length).toBe(2);
+    await b.mediaDb.delete('blobs', partKey(video, entry.orig!.parts[1].n));
+    expect(await readCopy(b.mediaDb, video)).toBeNull();
+    await b.offline.update(mark);
+    await b.offline.idle();
+    expect((await readCopy(b.mediaDb, video))?.size).toBe(20 * MB);
+  });
+
+  it('cleanOrphans, en una transacción: borra lo suelto y no toca una copia completa', async () => {
+    const { b, page, video } = await setup({ videoSize: 20 * MB });
+    await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, videos: true });
+    await b.mediaDb.put('blobs', new Blob(['huérfana']), partKey(video, 99));
+    expect(await cleanOrphans(b.mediaDb)).toBe(1);
+    expect((await readCopy(b.mediaDb, video))?.size).toBe(20 * MB);
+  });
+
+  it('una foto nueva que no entra: primero se hace lugar y se vuelve a probar; si igual no, se ofrece guardarla', async () => {
+    const { b, page, photo } = await setup();
+    const mark = await markAndWait(b, 'page', page, { ...DEFAULT_OPTIONS, originals: true });
+    await b.offline.unmark(mark, false);
+    expect(await readCopy(b.mediaDb, photo)).not.toBeNull();
+    const real = IDBObjectStore.prototype.put;
+    let full = 1;
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      if (this.name === 'blobs' && typeof key === 'string' && !key.startsWith('off:') && full-- > 0) {
+        throw new DOMException('full', 'QuotaExceededError');
+      }
+      return real.call(this, value, key);
+    });
+    // Entra al segundo intento, después de liberar la copia bajada que nadie pide.
+    const added = await b.media.add(page, file(MB, 'IMG_0200.JPG', 'image/jpeg', 30));
+    expect(added.startsWith(MEDIA_SCHEME)).toBe(true);
+    expect(await readCopy(b.mediaDb, photo)).toBeNull();
+
+    // Sin nada para liberar: se rechaza y queda para guardarla.
+    full = 10;
+    await expect(b.media.add(page, file(MB, 'IMG_0201.JPG', 'image/jpeg', 31))).rejects.toBeInstanceOf(FileRejected);
+    vi.restoreAllMocks();
+    expect(b.offline.getSnapshot().unsaved).toEqual([{ name: 'IMG_0201.JPG', size: MB }]);
+    const kept = b.offline.takeUnsaved(0)!;
+    expect(new Uint8Array(await kept.arrayBuffer())).toEqual(bytes(MB, 31));
+    expect(b.offline.getSnapshot().unsaved).toEqual([]);
+  });
+
+  it('el carrete sin red muestra la de 2048 guardada aunque la página no la haya procesado', async () => {
+    const { server, b, page, photo } = await setup();
+    await markAndWait(b, 'page', page);
+    server.online = false;
+    const item = collectCarrete([{ id: 'x', type: 'image', props: { url: MEDIA_SCHEME + photo, name: '' } }])[0];
+    const preview = await createCarreteLoader({ media: b.media, files: b.files }).preview(item);
+    expect(preview.preview).toBe(b.media.viewUrl(photo));
+    expect(b.media.viewOf(photo)?.side).toBe(2048);
+  });
+
+  it('mantener al día no vuelve a consultar una marca lista y sin cambios', async () => {
+    const { b, page } = await setup();
+    await markAndWait(b, 'page', page);
+    const spy = vi.spyOn(b.remote, 'fetchMediaFiles');
+    await b.offline.maintain();
+    await b.offline.idle();
+    await b.offline.maintain();
+    await b.offline.idle();
+    expect(spy).not.toHaveBeenCalled();
   });
 });

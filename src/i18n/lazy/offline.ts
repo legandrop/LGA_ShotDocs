@@ -155,6 +155,9 @@ export const offline = {
     en: "Free up {size}? Files stay in Drive. Without a connection, this device will only show their thumbnails.",
     es: "¿Liberar {size}? Los archivos siguen en Drive. Sin conexión, este dispositivo va a mostrar solo sus miniaturas.",
   },
+  'storage.list': { en: "Freed first (opened least recently first):", es: "Se liberaría primero (lo que hace más que no se abre):" },
+  'storage.listViews': { en: "Large photos made for pages", es: "Fotos en grande hechas para las páginas" },
+  'storage.openedAgo': { en: "opened {when}", es: "abierto {when}" },
   'storage.nothingToFree': { en: "Nothing to free up right now.", es: "Ahora no hay nada para liberar." },
   'storage.ownLater': {
     en: "Photos and videos added on this device stay for now: freeing them comes in a later version.",
@@ -190,6 +193,10 @@ export const offline = {
   'storageTest.written': { en: "Test data written: {size}", es: "Datos de prueba escritos: {size}" },
   'storageTest.stoppedWith': { en: "Stopped with: {error}", es: "Se cortó con: {error}" },
   'storageTest.typeFill': { en: "Type fill to start:", es: "Escribí fill para empezar:" },
+  'storageTest.pending': {
+    en: "There are {count} changes waiting to upload on this device: let them upload first (the test fills the same space).",
+    es: "Hay {count} cambios esperando subir en este dispositivo: dejalos subir primero (la prueba llena el mismo lugar).",
+  },
   'storageTest.fill': { en: "Fill", es: "Llenar" },
   'storageTest.clean': { en: "Clean up", es: "Limpiar" },
   'storageTest.back': { en: "Back to the app", es: "Volver a la app" },

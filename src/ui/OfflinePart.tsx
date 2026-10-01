@@ -135,7 +135,8 @@ export function OfflineDialog(props: { kind: 'page' | 'project'; target: string;
   const needed = total?.missing ?? 0;
   const fits = available === null || needed <= available - reserve;
   const fitsFreeing = !fits && available !== null && needed <= available - reserve + freeable;
-  const iosUsed = snapshot.usage?.offline ?? 0;
+  // El total marcado de todo el dispositivo (todos los workspaces y cuentas), no solo este.
+  const iosUsed = traits.ios ? offline.deviceTotal() : 0;
   const iosFits = !traits.ios || iosUsed + needed <= IOS_OFFLINE_TOTAL_MAX;
   const changed = !own || JSON.stringify(own.options) !== JSON.stringify(options);
   const ready = plan?.remote === true && online && (fits || fitsFreeing) && iosFits && !busy && changed;
@@ -335,7 +336,7 @@ export function OfflineDialog(props: { kind: 'page' | 'project'; target: string;
  * "Storage on this device" (sección 6): lo que usa la app, lo guardado automáticamente con su tope (elegible),
  * *Free up space*, lo marcado sin conexión (actualizar, editar, sacar) y las copias que pueden ser las únicas.
  */
-export function StorageDialog(props: { onClose: () => void; onEdit: (mark: MarkView) => void }) {
+export function StorageDialog(props: { onClose: () => void; onEdit: (mark: MarkView) => void; showList?: boolean }) {
   const { offline, media } = useServices();
   const snapshot = useOffline();
   const tr = useT();
@@ -345,6 +346,16 @@ export function StorageDialog(props: { onClose: () => void; onEdit: (mark: MarkV
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [goneConfirm, setGoneConfirm] = useState(false);
   const saveLink = useRef<HTMLAnchorElement>(null);
+  const [list, setList] = useState<{ id: string; name: string; bytes: number; usedAt: number | null }[] | null>(null);
+  const [showList, setShowList] = useState(props.showList === true);
+  useEffect(() => {
+    if (!showList) return;
+    let live = true;
+    void offline.candidates().then((c) => live && setList(c), () => undefined);
+    return () => {
+      live = false;
+    };
+  }, [offline, showList, snapshot.usage]);
 
   useEffect(() => {
     void offline.refresh().catch(() => undefined);
@@ -454,6 +465,27 @@ export function StorageDialog(props: { onClose: () => void; onEdit: (mark: MarkV
             </button>
           )}
           {usage && usage.freeable <= 0 && <p className="muted">{tr('storage.nothingToFree')}</p>}
+          {usage && usage.freeable > 0 && !showList && (
+            <button className="link" onClick={() => setShowList(true)}>
+              {tr('space.showWhat')}
+            </button>
+          )}
+          {showList && list && list.length > 0 && (
+            <div className="storage-list">
+              <p className="muted">{tr('storage.list')}</p>
+              <ul>
+                {list.slice(0, 30).map((c) => (
+                  <li key={c.id || 'views'}>
+                    <span className="storage-list-name">{c.id ? c.name : tr('storage.listViews')}</span>
+                    <span className="muted">
+                      {formatSize(c.bytes, tr.lang)}
+                      {c.usedAt ? ` · ${tr('storage.openedAgo', { when: ago(c.usedAt, tr.lang) })}` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
 
         <section className="storage-section">
