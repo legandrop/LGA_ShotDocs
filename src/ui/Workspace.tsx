@@ -159,7 +159,7 @@ function useInviteTarget(): void {
 export function Shell() {
   const route = useRoute();
   const tree = useTree();
-  const { comments, docs, media, user, workspace } = useServices();
+  const { comments, docs, media, folders, user, workspace } = useServices();
   const keys = workspace.config.storage;
   const [navOpen, setNavOpen] = useState(false);
   const [pageMenu, setPageMenu] = useState<{ position: MenuPosition; anchor: HTMLElement } | null>(null);
@@ -214,7 +214,8 @@ export function Shell() {
 
   // Lo que todavía no llegó a IndexedDB se perdería al cerrar: el navegador pide confirmación. Lo mismo
   // espera la recarga que sigue a publicar una versión nueva (lazyPart.tsx). Una importación de Coda en
-  // curso cuenta igual: cortada, deja el proyecto a medias (se puede seguir, pero mejor no cortarla).
+  // curso cuenta igual: cortada, deja el proyecto a medias (se puede seguir, pero mejor no cortarla). Y una carpeta
+  // que se está subiendo (P.9): cortada, hay que volver a soltarla para terminar.
   useEffect(() => {
     const importing = importJobFor(tree);
     const unsaved = () =>
@@ -222,6 +223,7 @@ export function Shell() {
       tree.hasUnsavedWrites() ||
       media.hasUnsavedWrites() ||
       comments.hasUnsavedWrites() ||
+      !!folders?.busy() ||
       importing.get().running;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!unsaved()) return;
@@ -235,7 +237,7 @@ export function Shell() {
       window.removeEventListener('beforeunload', onBeforeUnload);
       unwatch();
     };
-  }, [comments, docs, tree, media]);
+  }, [comments, docs, tree, media, folders]);
 
   // Con la barra lateral ya dibujada, el editor se baja cuando el navegador está libre: abrir una página
   // después no espera, y una versión nueva publicada mientras tanto no deja al editor sin sus archivos.

@@ -88,11 +88,15 @@ export function ViewButton({ url, attachment = false, onView }: { url: string | 
  */
 export function DownloadButton({ url, name }: { url: string | null; name: string }) {
   const editor = useBlockNoteEditor();
+  const { media } = useServices();
   const tr = useT();
   const kind = useMediaKind(url, name);
   const id = mediaIdOf(url);
   const label = kindLabel(kind, tr('mediaButton.download'), tr('photoBar.downloadVideo'), tr('photoBar.downloadFile'));
   if (!url) return null;
+  // Una carpeta (P.9) no se baja entera desde la barra todavía ("Bajar todo" es la entrega 2): cada archivo, desde su
+  // visor.
+  if (id && media.isFolder(id)) return null;
   if (id) return <OriginalDownloadButton key={id} fileId={id} label={label} />;
   const download = () => {
     const resolve = (editor as unknown as { resolveFileUrl?: (u: string) => Promise<string> }).resolveFileUrl;

@@ -99,7 +99,7 @@ export interface FileEditor {
  * Un párrafo común, vacío y sin bloques adentro (se reemplaza, como hace BlockNote; cualquier otro bloque se
  * deja: sacar un párrafo con hijos se los llevaría).
  */
-function isEmptyParagraph(block: BlockLike | undefined): boolean {
+export function isEmptyParagraph(block: BlockLike | undefined): boolean {
   if (!block || block.type !== 'paragraph') return false;
   if (Array.isArray(block.children) && block.children.length > 0) return false;
   const props = block.props ?? {};
@@ -110,9 +110,15 @@ function isEmptyParagraph(block: BlockLike | undefined): boolean {
 /**
  * Inserta un bloque `image` por archivo, todos juntos y en orden, y después guarda cada uno con
  * `uploadFile` (que muestra "Loading…" y, si falla, saca el bloque y avisa). Un archivo que falla no corta los
- * demás. Devuelve los ids de los bloques nuevos.
+ * demás. Devuelve los ids de los bloques nuevos. `onInserted`: los mismos ids, apenas se insertan (antes de guardar
+ * nada), para poner otra cosa después de ellos (las carpetas del mismo soltar, P.9).
  */
-export async function insertFiles(editor: FileEditor, files: readonly File[], at: InsertAt | null): Promise<string[]> {
+export async function insertFiles(
+  editor: FileEditor,
+  files: readonly File[],
+  at: InsertAt | null,
+  onInserted?: (ids: string[]) => void,
+): Promise<string[]> {
   if (files.length === 0) return [];
   const ref = at ?? { blockId: editor.getTextCursorPosition().block.id, placement: 'after' as const };
   const refBlock = editor.getBlock(ref.blockId);
@@ -126,6 +132,7 @@ export async function insertFiles(editor: FileEditor, files: readonly File[], at
     }
   }
   const ids = inserted.map((b) => b.id);
+  onInserted?.(ids);
   for (let i = 0; i < files.length; i++) {
     const id = ids[i];
     if (!id) continue;

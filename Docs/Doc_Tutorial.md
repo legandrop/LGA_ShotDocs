@@ -324,7 +324,8 @@ Arriba, un campo de búsqueda; abajo, las secciones:
    1/1, 1/2, 1/3 y 1/4), la barra de la foto (ver, bajar, tamaños para las elegidas, "Acomodar en filas" de las
    elegidas, alinear, comentar, reemplazar, renombrar, borrar), el carrete, el teléfono (en fila o apiladas), el PDF
    (un párrafo de fotos se parte por filas), qué pasa sin red.
-5. **Archivos adjuntos:** soltar o pegar cualquier archivo, abrir o bajar, la hoja del teléfono.
+5. **Archivos adjuntos:** soltar o pegar cualquier archivo, abrir o bajar, la hoja del teléfono. Y **carpetas**
+   (P.9; ver "Entradas que suma P.9" en la sección 7).
 6. **Links de Drive:** pegar un link y elegir link, texto o tarjeta.
 7. **Comentarios y preguntas.**
 8. **Buscar y reemplazar** (y, con P.12 entrega 2, buscar en el proyecto).
@@ -403,6 +404,33 @@ Y pruebas que lo sostienen sin depender de acordarse:
 - La de los textos (`i18n.test.tsx`) cubre `help.ts` y `tour.ts` como las demás partes: mismas claves y mismos
   `{valores}` en los dos idiomas.
 - Cada entrada de `Changelog.md` que trae algo visible nombra su entrada de ayuda (costumbre, no prueba).
+
+### Entradas que suma P.9: carpetas (v0.081)
+
+Para `src/help/entries.ts` cuando exista (sección "Archivos adjuntos"; textos en inglés en la app, con su
+traducción). `when`: solo con portero; subir, solo quien puede editar la página.
+
+- **Drop a folder** (*Soltar una carpeta*). "Drag a folder from your computer onto the page. A window shows what
+  goes up: how many files, in how many folders, how much it weighs, and what is skipped (hidden and system
+  files, unless you tick *Include hidden files*). *Upload* sends it to the owner's Google Drive and leaves a
+  folder card in the page. Keep the tab open until it finishes." Palabras: carpeta, folder, subir, arrastrar,
+  soltar, drive. Sin atajos.
+- **While it uploads** (*Mientras sube*). "The card says how it is going; click it to see the upload: *Pause*,
+  *Resume*, *Retry* for the files that failed. If you close the tab, drop the same folder on its card again (or
+  *Choose the folder…*): only what is missing goes up. Dropping the same folder elsewhere in the page offers to
+  continue it. *Stop uploading* forgets it on this device (what reached Drive stays)." Palabras: pausar, retomar,
+  faltan, error, dejar de subir.
+- **Open a folder** (*Abrir una carpeta*). "Click the card twice (once on the phone or without edit access), or
+  press Space with it selected, or *Open* in its bar. You see what is in the Drive folder right now: subfolders
+  first, then files with their thumbnail. A photo or a video opens in the viewer; a PDF opens in a new tab; the
+  rest downloads. Esc goes up one level." Palabras: ver, visor, migas, bajar, download. Atajos: Space (abrir la
+  elegida, el mismo de las fotos), Escape (subir un nivel; ya está en el registro como "cerrar").
+- **Who sees a folder** (*Quién ve una carpeta*). "Whoever sees the page sees and downloads what is in the
+  folder, but never the folders above it or next to it. Only the person who added the folder uploads into it."
+  Palabras: permisos, compartir, invitado. (Si Lega suma `drive.readonly`, agregar: "also what is added later in
+  Drive".)
+
+En la recorrida no hace falta un paso nuevo (no cambia nada de lo que ya señala).
 
 ## 8. Tamaño y carga
 

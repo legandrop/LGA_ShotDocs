@@ -32,6 +32,11 @@ export interface Env {
 
 /** Lo que el portero guarda (la conexión con Drive, las subidas en curso). Ver index.ts. */
 export interface Store {
+  /**
+   * La llave de lo que se recuerda en la memoria de la instancia (P.9): la misma en todos los pedidos aunque cada
+   * uno tenga su `Store` (index.ts). Sin ella, el propio `Store`.
+   */
+  memoryKey?: object;
   get<T>(key: string): Promise<T | undefined>;
   put(key: string, value: unknown): Promise<void>;
   delete(key: string): Promise<void>;
@@ -68,6 +73,8 @@ interface Upload {
   file?: string;
   /** `set_file_drive` ya respondió bien (o la base ya tenía el archivo subido). */
   linked?: boolean;
+  /** Un archivo de una carpeta (P.9, cifrado en el id): la fila de la carpeta, para volver a mirar el permiso. */
+  folder?: string;
 }
 
 /** `file:<uuid>`: lo que el portero sabe de un archivo de la app. */
@@ -80,6 +87,11 @@ interface FileRecord {
   verified?: string;
   /** El id de Drive que el portero ya mandó a la papelera de Drive (`/trash` o al terminar una subida). */
   trashed?: string;
+  /**
+   * Una carpeta (P.9): quién la creó en Drive. Solo esa persona sube adentro: el nivel de `media_file` es el más
+   * alto entre las páginas que usan la carpeta, y pegar su bloque en una página propia lo subiría.
+   */
+  creator?: string;
 }
 
 /** `project:<project_id>`: la carpeta del proyecto y el nombre que le puso la app. */
@@ -172,6 +184,8 @@ interface MediaFile {
   trashed_at?: string | null;
   purged_at?: string | null;
   drive_trashed_at?: string | null;
+  /** Quién agregó el archivo (`files.created_by`; desde la migración de carpetas, P.9; antes no viene). */
+  created_by?: string | null;
 }
 
 export interface DriveFile {
@@ -224,6 +238,83 @@ export const CACHE_FILES = 256;
 
 /** Carpetas que se están buscando o creando en este momento: dos subidas a la vez no crean dos iguales. */
 const pending = new Map<string, Promise<string>>();
+
+// --- carpetas (P.9, Docs/Doc_Carpetas.md) -------------------------------------------------------------
+
+/** Lo que sabe hacer este portero (`/drive/status`): la app no ofrece soltar carpetas a uno anterior. */
+const FEATURES = ['folders'];
+/** El tipo de la fila de `files` de una carpeta de la app. Lo de adentro es de Drive y no tiene filas. */
+export const APP_FOLDER_MIME = 'inode/directory';
+/** Adentro de la carpeta del proyecto, donde van las carpetas que se sueltan en las páginas. */
+const FOLDERS_DIR = 'Carpetas';
+/**
+ * Lo más que se crea o se abre en un pedido: el plan gratis de Workers deja 50 llamados afuera por pedido y cada
+ * pedido ya usa unos pocos (la sesión, la base, el token, el árbol).
+ */
+export const FOLDER_BATCH = 30;
+/**
+ * Lo más que un pedido de carpetas le pide a Drive: con la sesión, la base, el token y el almacenamiento queda
+ * debajo de los 50 llamados afuera del plan gratis. Lo que no entra vuelve como `later` (o sin crear) y la app lo
+ * pide en el pedido siguiente; cada pedido avanza al menos una cosa.
+ */
+export const DRIVE_CALL_BUDGET = 36;
+/** Una subcarpeta comprobada adentro del árbol se vuelve a comprobar pasado esto (el dueño puede moverla afuera). */
+export const TREE_TTL_MS = 10 * 60_000;
+/** Lo más hondo que se sube por los `parents` buscando la carpeta de la app. */
+const TREE_DEPTH = 30;
+/** Una dirección de subida de Drive vale una semana: se deja de usar un día antes. */
+const SESSION_MAX_MS = 6 * 24 * 60 * 60_000;
+const SHORTCUT_MIME = 'application/vnd.google-apps.shortcut';
+/** El lado de las miniaturas que sirve `/t/` (Drive las hace del tamaño que se le pide). */
+const THUMB_SIDE = 320;
+
+/**
+ * Lo que el portero recuerda en la memoria de la instancia (no en el almacenamiento): por carpeta de la app, las
+ * subcarpetas ya comprobadas adentro de su árbol y cuándo. Va por `Store.memoryKey` (la misma en todos los pedidos
+ * de la instancia, index.ts) o, sin ella, por el `Store`, para que dos porteros distintos (las pruebas) no se mezclen.
+ */
+const memory = new WeakMap<object, Map<string, Map<string, number>>>();
+/** Lo más que se recuerda por carpeta (pasado esto se empieza de nuevo: solo cuesta volver a comprobar). */
+const TREE_MEMORY_MAX = 20_000;
+
+/**
+ * El nombre de una carpeta en el Drive del dueño: sin controles ni marcas de dirección y, como todas las carpetas
+ * que crea la app, sin espacios (guiones bajos). Las barras ya separan las partes de la ruta. Vacío, `Folder`.
+ */
+export function driveFolderName(name: string): string {
+  const clean = cleanFileName(name)
+    .replace(/[\s\\]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return Array.from(clean).slice(0, 200).join('') || 'Folder';
+}
+
+/**
+ * Una ruta relativa de una subcarpeta (`Fotos/Dia_2`): partes no vacías, sin `.` ni `..`, sin barra al principio,
+ * hasta `TREE_DEPTH` niveles. Una barra invertida es parte del nombre (en Mac y Linux es válida): en Drive va `_`.
+ * La app aplica las mismas reglas antes de mandar nada (src/media/folderRead.ts, `folderPathOk`).
+ */
+export function validFolderPath(path: unknown): path is string {
+  if (typeof path !== 'string' || !path || path.length > 2000) return false;
+  const parts = path.split('/');
+  return parts.length <= TREE_DEPTH && parts.every((p) => p !== '' && p !== '.' && p !== '..' && !/[\u0000-\u001f]/.test(p));
+}
+
+function parentPath(path: string): string {
+  const at = path.lastIndexOf('/');
+  return at < 0 ? '' : path.slice(0, at);
+}
+
+/** Lo que marca a una subcarpeta creada por la app (`appProperties.sdPath`): la ruta, resumida (cabe en 124 bytes). */
+async function pathMark(path: string): Promise<string> {
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(path)));
+  return b64url(hash).slice(0, 22);
+}
+
+/** Una consulta de Drive con un valor adentro de comillas simples. */
+function quoted(value: string): string {
+  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
 
 /**
  * El reloj de Google y el de la base pueden no coincidir: una carpeta que fue a la papelera hasta este tiempo antes
@@ -293,15 +384,44 @@ function randomId(bytes = 24): string {
   return b64url(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
+/** La clave de los pases ya importada (un listado de una carpeta firma cientos): por clave, en la instancia. */
+const hmacKeys = new Map<string, Promise<CryptoKey>>();
+
 async function hmac(secret: string, data: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    fromB64url(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data))));
+  let key = hmacKeys.get(secret);
+  if (!key) {
+    key = crypto.subtle.importKey('raw', fromB64url(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    hmacKeys.set(secret, key);
+  }
+  return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', await key, new TextEncoder().encode(data))));
+}
+
+/**
+ * La clave con la que el portero cifra las direcciones de subida de los archivos de una carpeta (sale de la de
+ * los pases y nunca sale del portero): así no guarda nada por archivo y el navegador no ve la dirección de Google.
+ */
+async function sealKey(secret: string): Promise<CryptoKey> {
+  const material = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`folder-upload:${secret}`)));
+  return crypto.subtle.importKey('raw', material, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+async function seal(secret: string, data: unknown): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plain = new TextEncoder().encode(JSON.stringify(data));
+  const box = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await sealKey(secret), plain));
+  return `f.${b64url(iv)}.${b64url(box)}`;
+}
+
+/** Lo cifrado con `seal`, o `null` si no es de este portero (o lo tocaron). */
+async function unseal<T>(secret: string, text: string): Promise<T | null> {
+  const [tag, iv, box] = text.split('.');
+  if (tag !== 'f' || !iv || !box) return null;
+  try {
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64url(iv) }, await sealKey(secret), fromB64url(box));
+    return JSON.parse(new TextDecoder().decode(plain)) as T;
+  } catch {
+    return null;
+  }
 }
 
 function sameText(a: string, b: string): boolean {
@@ -392,6 +512,9 @@ function today(): string {
 
 export class Portero {
   private accessToken: { token: string; until: number } | null = null;
+  private passSecret: string | null = null;
+  /** Llamados a Drive en este pedido (cada pedido crea un Portero nuevo): ver `DRIVE_CALL_BUDGET`. */
+  private driveCalls = 0;
 
   constructor(
     private readonly env: Env,
@@ -410,6 +533,9 @@ export class Portero {
       if (path === '/drive/callback' && req.method === 'GET') return await this.callback(url);
       const pass = /^\/m\/([^/]+)$/.exec(path)?.[1];
       if (pass && (req.method === 'GET' || req.method === 'HEAD')) return withMediaCors(await this.media(req, pass), req, this.env);
+      // La miniatura de un archivo de una carpeta (P.9), con el mismo pase que el archivo.
+      const thumb = /^\/t\/([^/]+)$/.exec(path)?.[1];
+      if (thumb && (req.method === 'GET' || req.method === 'HEAD')) return withMediaCors(await this.thumbnail(req, thumb), req, this.env);
 
       const who = await this.whoami(req);
       if (path === '/drive/status' && req.method === 'GET') return json(req, this.env, await this.status(who));
@@ -420,6 +546,10 @@ export class Portero {
       if (path === '/pass' && req.method === 'POST') return json(req, this.env, await this.makePass(req, who));
       // A la papelera de Drive: lo decide la base con la sesión de la persona (dueño y admins).
       if (path === '/trash' && req.method === 'POST') return json(req, this.env, await this.trashFile(req, who));
+      // Carpetas (P.9, Docs/Doc_Carpetas.md): crear el árbol y abrir las subidas (nivel 3), listar (nivel 1).
+      if (path === '/folder/prepare' && req.method === 'POST') return json(req, this.env, await this.folderPrepare(req, who));
+      if (path === '/folder/sessions' && req.method === 'POST') return json(req, this.env, await this.folderSessions(req, who));
+      if (path === '/folder/list' && req.method === 'POST') return json(req, this.env, await this.folderList(req, who));
       // La carpeta entera de un proyecto borrado (P.14, entrega 2): lo decide la base (dueño y admins que lo manejan).
       if (path === '/project/trash' && req.method === 'POST') return json(req, this.env, await this.trashProject(req, who));
       if (path === '/project/untrash' && req.method === 'POST') return json(req, this.env, await this.untrashProject(req, who));
@@ -524,6 +654,8 @@ export class Portero {
       isOwner: who.isOwner,
       folder: place ? { id: place.id, name: place.name } : null,
       picker: !!this.env.GOOGLE_API_KEY,
+      // Lo que sabe hacer este portero: la app no ofrece soltar carpetas a uno anterior.
+      features: FEATURES,
     };
   }
 
@@ -653,6 +785,7 @@ export class Portero {
   }
 
   private async drive(path: string, init: RequestInit = {}): Promise<Response> {
+    this.driveCalls++;
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${await this.token()}`);
     return this.http(path.startsWith('https://') ? path : `${DRIVE}${path}`, { ...init, headers });
@@ -766,8 +899,24 @@ export class Portero {
    * pero solo si todavía tiene el nombre que le puso la app (si el dueño la renombró a mano, se respeta).
    */
   private async dayFolder(media: MediaFile, day: string): Promise<string> {
+    const project = await this.projectFolder(media);
+    return this.once(`day:${media.project_id}:${day}`, async () => {
+      const key = `day:${media.project_id}:${day}`;
+      const saved = await this.store.get<string>(key);
+      if (saved) {
+        const found = await this.look(saved, day);
+        if (found && !found.trashed) return saved;
+      }
+      const id = await this.create(day, project);
+      await this.store.put(key, id);
+      return id;
+    });
+  }
+
+  /** `LGA_ShotDocs / <Proyecto>`, renombrada si el proyecto cambió de nombre (ver `dayFolder`). */
+  private async projectFolder(media: MediaFile): Promise<string> {
     const root = await this.rootFolder();
-    const project = await this.once(`project:${media.project_id}`, async () => {
+    return this.once(`project:${media.project_id}`, async () => {
       const key = `project:${media.project_id}`;
       const want = folderName(media.project_name ?? '');
       const saved = await this.store.get<ProjectFolder>(key);
@@ -788,17 +937,6 @@ export class Portero {
       }
       const id = await this.create(want, root, { sdProject: media.project_id });
       await this.store.put(key, { id, name: want } satisfies ProjectFolder);
-      return id;
-    });
-    return this.once(`day:${media.project_id}:${day}`, async () => {
-      const key = `day:${media.project_id}:${day}`;
-      const saved = await this.store.get<string>(key);
-      if (saved) {
-        const found = await this.look(saved, day);
-        if (found && !found.trashed) return saved;
-      }
-      const id = await this.create(day, project);
-      await this.store.put(key, id);
       return id;
     });
   }
@@ -867,6 +1005,8 @@ export class Portero {
     if (typeof day !== 'string' || !DAY.test(day)) throw new HttpError(400, 'The day must look like 2026-09-30.');
     const media = await this.mediaFile(who, file);
     if (!media) throw new HttpError(404, 'This file does not exist or you cannot see it.');
+    // Una carpeta (P.9) no se sube como un archivo: su Drive lo crea `/folder/prepare`.
+    if (media.mime === APP_FOLDER_MIME) throw new HttpError(409, 'This is a folder: drop it again to upload its files.', 'is_folder');
     if (media.level < 3) throw new HttpError(403, 'You cannot add files to this page.');
     const size = Number(media.size);
     if (body.size !== undefined && Number(body.size) !== size) throw new HttpError(400, 'The size does not match the file.');
@@ -916,9 +1056,12 @@ export class Portero {
    * `bytes *\/123456789` sin cuerpo para preguntar cuánto llegó (para retomar).
    */
   private async uploadChunk(req: Request, uploadId: string, who: Who): Promise<unknown> {
-    const upload = await this.store.get<Upload>(`upload:${uploadId}`);
+    // Un archivo de una carpeta (P.9): la subida viene cifrada en el id y no hay nada guardado.
+    const sealed = uploadId.startsWith('f.');
+    const upload = sealed ? await this.folderUpload(uploadId) : await this.store.get<Upload>(`upload:${uploadId}`);
     if (!upload || upload.user !== who.userId) throw new HttpError(404, 'This upload does not exist anymore: start it again.');
-    if (!upload.file && !who.isOwner) throw new HttpError(403, 'Only the owner of the workspace can do this for now.');
+    if (sealed && Date.now() - upload.createdAt > SESSION_MAX_MS) throw new HttpError(410, 'This upload expired: start it again.');
+    if (!sealed && !upload.file && !who.isOwner) throw new HttpError(403, 'Only the owner of the workspace can do this for now.');
     if (upload.done) return this.finish(uploadId, upload, upload.done, who);
     const range = req.headers.get('Content-Range') ?? '';
     const part = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(range);
@@ -931,6 +1074,9 @@ export class Portero {
       if (total !== upload.size || end < start || body.byteLength !== end - start + 1 || body.byteLength > MAX_CHUNK) {
         throw new HttpError(400, 'The part does not match the upload.');
       }
+      // La última parte de un archivo de una carpeta crea el archivo en Drive: antes se vuelve a mirar que la persona
+      // todavía pueda subir ahí (sacada de la página o del workspace, la subida queda sin terminar).
+      if (sealed && upload.folder && end + 1 === total) await this.appFolder(who, upload.folder, 3);
     }
     const res = await this.http(upload.session, {
       method: 'PUT',
@@ -944,14 +1090,19 @@ export class Portero {
     if (res.status === 200 || res.status === 201) {
       const file = (await res.json()) as { id: string; name: string; mimeType: string; size?: string };
       const done = { id: file.id, name: file.name, mimeType: file.mimeType, size: Number(file.size ?? upload.size) };
+      // Lo de una carpeta no tiene fila en la base ni nada guardado: si la respuesta se pierde, Drive contesta lo
+      // mismo a la pregunta de cuánto llegó.
+      if (sealed) return { status: 'done', file: done };
       // Se recuerda: si la respuesta no llega, la app pregunta y no vuelve a subir todo.
       await this.store.put(`upload:${uploadId}`, { ...upload, done } satisfies Upload);
       return this.finish(uploadId, { ...upload, done }, done, who);
     }
     if (res.status === 404 || res.status === 410) {
-      await this.store.delete(`upload:${uploadId}`);
+      if (!sealed) await this.store.delete(`upload:${uploadId}`);
       throw new HttpError(410, 'Google Drive dropped this upload: start it again.');
     }
+    // Drive pide ir más despacio: la app espera y sigue (los archivos de una carpeta pueden ser miles).
+    if (res.status === 429) throw new HttpError(503, 'Google Drive asked to slow down: trying again shortly.', 'rate');
     // La subida queda guardada: cuando el dueño libere espacio, la app la retoma desde lo que llegó.
     if (res.status === 403 && (await driveReasons(res)).includes('storageQuotaExceeded')) throw driveFull();
     throw new HttpError(502, `Google Drive answered ${res.status} to a part of the upload.`);
@@ -1086,6 +1237,465 @@ export class Portero {
       throw new HttpError(502, 'The workspace database is not up to date for the file trash yet.', 'db_outdated');
     }
     throw new HttpError(502, `The workspace did not answer (${res.status}).`, 'db_error');
+  }
+
+  // --- carpetas (P.9, Docs/Doc_Carpetas.md) ---------------------------------------------------------
+  //
+  // Una carpeta soltada en una página es UNA fila de `files` (`mime = 'inode/directory'`) que apunta a una
+  // carpeta de Drive, `LGA_ShotDocs/<Proyecto>/Carpetas/<nombre>`, con la marca `sdFile` como cualquier archivo.
+  // Lo de adentro es de Drive y no tiene filas: se lista en vivo. Quien ve la página ve y baja lo de adentro;
+  // nunca lo de arriba ni lo de al lado: todo id de Drive que llega de la app (una subcarpeta para listar o para
+  // subir) tiene que estar adentro del árbol de la carpeta, comprobado subiendo por sus `parents` (`inTree`).
+
+  /** La fila de la carpeta y lo que el portero sabe de ella; el nivel de la persona tiene que alcanzar `min`. */
+  private async appFolder(who: Who, value: unknown, min: number): Promise<{ file: string; media: MediaFile; rec: FileRecord }> {
+    const file = typeof value === 'string' ? value.toLowerCase() : '';
+    if (!UUID.test(file)) throw new HttpError(400, 'Missing the folder.', 'bad_request');
+    const media = await this.mediaFile(who, file);
+    if (!media || !(media.level >= 1)) throw new HttpError(404, 'This folder does not exist or you cannot see it.', 'not_found');
+    if (media.mime !== APP_FOLDER_MIME) throw new HttpError(400, 'This file is not a folder.', 'not_folder');
+    if (media.level < min) throw new HttpError(403, 'You cannot add files to this page.', 'not_allowed');
+    const rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
+    // Crear y subir: solo quien agregó la carpeta. Lo dice la base (`created_by`, desde la migración de carpetas);
+    // con una base anterior, quien la creó en Drive (`FileRecord.creator`), y una carpeta ya creada sin ese dato no
+    // acepta subidas de nadie.
+    if (min >= 3 && !isCreator(who, media, rec)) {
+      throw new HttpError(403, 'Only the person who added this folder can upload into it.', 'not_creator');
+    }
+    return { file, media, rec };
+  }
+
+  /**
+   * La carpeta de Drive de una carpeta de la app que ya existe (la base la tiene, o la creó el portero y la base
+   * todavía no se enteró), con la marca comprobada. `null` si todavía no se creó.
+   */
+  private async existingRoot(who: Who, file: string, media: MediaFile, rec: FileRecord): Promise<string | null> {
+    let drive = media.drive_id;
+    if (!drive && rec.drive) {
+      drive = rec.drive.id;
+      if (!rec.linked && media.level >= 3) await this.linkFile(who, file, rec.drive);
+    }
+    if (!drive) return null;
+    const mark = await this.checkMark(file, drive, rec);
+    if (mark === 'missing') throw new HttpError(404, 'This folder is not in Google Drive anymore.', 'folder_gone');
+    if (mark === 'other') throw new HttpError(403, 'This folder in Google Drive does not belong to this folder of the app.', 'drive_mismatch');
+    return drive;
+  }
+
+  /** `LGA_ShotDocs/<Proyecto>/Carpetas`. La crea si falta (una que el dueño mandó a la papelera se vuelve a crear). */
+  private async foldersDir(media: MediaFile): Promise<string> {
+    const project = await this.projectFolder(media);
+    return this.once(`carpetas:${media.project_id}`, async () => {
+      const key = `carpetas:${media.project_id}`;
+      const saved = await this.store.get<string>(key);
+      if (saved) {
+        const found = await this.look(saved, FOLDERS_DIR);
+        if (found && !found.trashed) return saved;
+      }
+      const id = await this.create(FOLDERS_DIR, project);
+      await this.store.put(key, id);
+      return id;
+    });
+  }
+
+  /** Un nombre que no esté usado en `parent` (lo que ve la app): `Fotos`, si no `Fotos_2`, `Fotos_3`… */
+  private async freeName(parent: string, want: string): Promise<string> {
+    const q = `${quoted(parent)} in parents and mimeType = ${quoted(FOLDER_MIME)} and trashed = false`;
+    const taken = new Set<string>();
+    let pageToken = '';
+    for (let page = 0; page < 10; page++) {
+      const params = new URLSearchParams({ q, fields: 'nextPageToken,files(name)', pageSize: '1000', ...(pageToken ? { pageToken } : {}) });
+      const res = await this.drive(`/files?${params}`);
+      if (!res.ok) throw new HttpError(502, `Could not look inside the folder "${FOLDERS_DIR}" in Google Drive (${res.status}).`, 'drive_failed');
+      const body = (await res.json()) as { nextPageToken?: string; files?: { name?: string }[] };
+      for (const f of body.files ?? []) if (f.name) taken.add(f.name.toLowerCase());
+      if (!body.nextPageToken) break;
+      pageToken = body.nextPageToken;
+    }
+    if (!taken.has(want.toLowerCase())) return want;
+    for (let n = 2; ; n++) {
+      const name = `${want}_${n}`;
+      if (!taken.has(name.toLowerCase())) return name;
+    }
+  }
+
+  /**
+   * Las subcarpetas comprobadas de una carpeta de la app (en la memoria de la instancia; ver `memory`). `root` es
+   * el id de Drive de la carpeta de la app.
+   */
+  private known(root: string): Map<string, number> {
+    const key = this.store.memoryKey ?? this.store;
+    let byRoot = memory.get(key);
+    if (!byRoot) {
+      byRoot = new Map();
+      memory.set(key, byRoot);
+    }
+    let set = byRoot.get(root);
+    if (!set || set.size > TREE_MEMORY_MAX) {
+      set = new Map();
+      byRoot.set(root, set);
+    }
+    return set;
+  }
+
+  /**
+   * Si la carpeta de Drive `id` está adentro del árbol de `root` (o es `root`). Sube por sus `parents` hasta
+   * encontrar `root` (sí) o una subcarpeta ya comprobada hace menos de `TREE_TTL_MS` (sí), o hasta la raíz del
+   * Drive, un ciclo, algo que no es una carpeta, algo en la papelera o `TREE_DEPTH` niveles (no). Nunca sigue un
+   * acceso directo (no es una carpeta). Lo comprobado queda anotado por `TREE_TTL_MS`.
+   */
+  private async inTree(root: string, id: string, budgeted = false): Promise<boolean | null> {
+    if (id === root) return true;
+    const known = this.known(root);
+    const now = Date.now();
+    const fresh = (x: string) => {
+      const at = known.get(x);
+      return at !== undefined && now - at < TREE_TTL_MS;
+    };
+    if (fresh(id)) return true;
+    const seen: string[] = [];
+    let current = id;
+    for (let depth = 0; depth < TREE_DEPTH; depth++) {
+      // Con `budgeted`, si ya no entra en este pedido: `null` (no se sabe; se pregunta en el siguiente).
+      if (budgeted && this.driveCalls >= DRIVE_CALL_BUDGET) return null;
+      const res = await this.drive(`/files/${encodeURIComponent(current)}?fields=id,mimeType,parents,trashed`);
+      if (res.status === 404 || res.status === 403) return false;
+      if (!res.ok) throw new HttpError(502, `Google Drive answered ${res.status}.`, 'drive_failed');
+      const meta = (await res.json()) as { mimeType?: string; parents?: string[]; trashed?: boolean };
+      if (meta.mimeType !== FOLDER_MIME || meta.trashed) return false;
+      seen.push(current);
+      const parents = meta.parents ?? [];
+      // Drive deja un solo padre; uno con varios (de antes de 2020) no se acepta: no se sabe por dónde sube.
+      if (parents.length !== 1) return false;
+      const parent = parents[0]!;
+      if (parent === root || fresh(parent)) {
+        // Con la fecha de la comprobación más vieja del camino: lo de abajo no dura más que lo de arriba.
+        const at = parent === root ? now : known.get(parent)!;
+        for (const x of seen) known.set(x, at);
+        return true;
+      }
+      if (seen.includes(parent)) return false;
+      current = parent;
+    }
+    return false;
+  }
+
+  /**
+   * `POST /folder/prepare` (nivel 3): `{ file, name, dirs?: string[], parents?: { <ruta>: <id> } }`. La primera
+   * vez crea la carpeta en `<Proyecto>/Carpetas` (con la marca `sdFile`) y le dice a la base dónde quedó
+   * (`set_file_drive`). Después crea las subcarpetas de `dirs` (rutas relativas, primero las de arriba, hasta
+   * `FOLDER_BATCH` por pedido); `parents` trae los ids de las carpetas de arriba que se crearon en pedidos
+   * anteriores, y cada uno tiene que estar adentro del árbol. Se puede repetir: una subcarpeta que un pedido
+   * anterior ya creó (la respuesta se perdió) se encuentra por su marca (`sdFolder` + `sdPath`) y no se crea dos
+   * veces. Devuelve `{ root: { id, name }, dirs: { <ruta>: <id> } }`.
+   */
+  private async folderPrepare(req: Request, who: Who): Promise<unknown> {
+    const body = await readBody(req);
+    const { file, media, rec } = await this.appFolder(who, body.file, 3);
+    const dirs = body.dirs === undefined ? [] : body.dirs;
+    if (!Array.isArray(dirs) || dirs.length > FOLDER_BATCH || !dirs.every(validFolderPath)) {
+      throw new HttpError(400, `Send up to ${FOLDER_BATCH} folder paths at a time.`, 'bad_request');
+    }
+    const given = body.parents && typeof body.parents === 'object' && !Array.isArray(body.parents) ? (body.parents as Record<string, unknown>) : {};
+
+    let root = await this.existingRoot(who, file, media, rec);
+    let rootName = rec.drive?.id === root ? rec.drive.name : media.name;
+    if (!root) {
+      const want = driveFolderName(typeof body.name === 'string' && body.name ? body.name : media.name);
+      root = await this.once(`folder:${file}`, async () => {
+        const again = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
+        if (again.drive) {
+          if (!isCreator(who, media, again)) throw new HttpError(403, 'Only the person who added this folder can upload into it.', 'not_creator');
+          return again.drive.id;
+        }
+        // Otra instancia del portero puede haberla creado recién (dos pedidos a la vez): se busca por su marca.
+        const q = `mimeType = ${quoted(FOLDER_MIME)} and trashed = false and appProperties has { key='sdFile' and value=${quoted(file)} }`;
+        const found = await this.drive(`/files?${new URLSearchParams({ q, fields: 'files(id,name)', pageSize: '10' })}`);
+        if (!found.ok) throw new HttpError(502, `Could not look for the folder in Google Drive (${found.status}).`, 'drive_failed');
+        const twin = ((await found.json()) as { files?: { id: string; name?: string }[] }).files?.[0];
+        let id: string;
+        let name: string;
+        if (twin) {
+          [id, name] = [twin.id, twin.name ?? want];
+        } else {
+          const parent = await this.foldersDir(media);
+          name = await this.freeName(parent, want);
+          id = await this.create(name, parent, { sdFile: file });
+        }
+        rootName = name;
+        // Quién la creó (solo esa persona sube adentro), y queda anotada antes de avisarle a la base: si eso falla,
+        // el próximo pedido usa esta y no crea otra.
+        await this.store.put(`file:${file}`, { ...again, creator: who.userId } satisfies FileRecord);
+        await this.linkFile(who, file, { id, name, mimeType: FOLDER_MIME, size: 0 });
+        return id;
+      });
+    }
+
+    const out: Record<string, string> = {};
+    if (dirs.length > 0) {
+      const inBatch = new Set(dirs);
+      // Las de arriba que no van en este pedido: tienen que estar adentro del árbol.
+      const outside = new Map<string, string>();
+      for (const path of dirs) {
+        const up = parentPath(path);
+        if (up === '' || inBatch.has(up) || outside.has(up)) continue;
+        const id = given[up];
+        if (typeof id !== 'string' || !DRIVE_ID.test(id)) throw new HttpError(400, `Missing the folder "${up}".`, 'bad_request');
+        const inside = await this.inTree(root, id, outside.size > 0);
+        // No entra en este pedido: estas subcarpetas se crean en el siguiente.
+        if (inside === null) break;
+        if (!inside) throw new HttpError(403, 'That folder is not inside this folder.', 'outside');
+        outside.set(up, id);
+      }
+      // Las que un pedido anterior ya creó (si la respuesta se perdió), por su marca.
+      const marks = new Map<string, string>();
+      for (const path of dirs) marks.set(await pathMark(path), path);
+      const q =
+        `mimeType = ${quoted(FOLDER_MIME)} and trashed = false and appProperties has { key='sdFolder' and value=${quoted(file)} } and (` +
+        [...marks.keys()].map((m) => `appProperties has { key='sdPath' and value=${quoted(m)} }`).join(' or ') +
+        ')';
+      const params = new URLSearchParams({ q, fields: 'files(id,parents,appProperties)', pageSize: '1000' });
+      const found = await this.drive(`/files?${params}`);
+      if (!found.ok) throw new HttpError(502, `Could not look inside the folder in Google Drive (${found.status}).`, 'drive_failed');
+      const existing = new Map<string, { id: string; parent: string }>();
+      for (const f of ((await found.json()) as { files?: { id: string; parents?: string[]; appProperties?: Record<string, string> }[] }).files ?? []) {
+        const path = marks.get(f.appProperties?.sdPath ?? '');
+        if (path && f.parents?.length === 1) existing.set(path, { id: f.id, parent: f.parents[0]! });
+      }
+      const known = this.known(root);
+      for (const path of dirs) {
+        const up = parentPath(path);
+        const parent = up === '' ? root : (out[up] ?? outside.get(up));
+        if (!parent) {
+          // La de arriba quedó para el pedido siguiente (el tope de llamados): esta también.
+          if (inBatch.has(up) || typeof given[up] === 'string') continue;
+          throw new HttpError(400, `The folder "${up}" has to come before "${path}".`, 'bad_request');
+        }
+        const was = existing.get(path);
+        let id: string;
+        if (was && was.parent === parent) id = was.id;
+        else {
+          // Lo que no entra en este pedido queda para el siguiente (la app pide las que faltan).
+          if (this.driveCalls >= DRIVE_CALL_BUDGET && Object.keys(out).length > 0) break;
+          const name = driveFolderName(path.slice(up ? up.length + 1 : 0));
+          id = await this.createChecked(name, parent, { sdFolder: file, sdPath: (await pathMark(path)) });
+        }
+        out[path] = id;
+        known.set(id, Date.now());
+      }
+    }
+    return { root: { id: root, name: rootName }, dirs: out };
+  }
+
+  /** Como `create`, pero un Drive que pide ir más despacio o que está lleno sale con su código. */
+  private async createChecked(name: string, parent: string, appProperties: Record<string, string>): Promise<string> {
+    const res = await this.drive('/files?fields=id', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parent], appProperties }),
+    });
+    if (res.ok) return ((await res.json()) as { id: string }).id;
+    const reasons = await driveReasons(res);
+    if (res.status === 429 || reasons.some((r) => /rateLimitExceeded/i.test(r))) {
+      throw new HttpError(503, 'Google Drive asked to slow down: trying again shortly.', 'rate');
+    }
+    if (reasons.includes('storageQuotaExceeded')) throw driveFull();
+    throw new HttpError(502, `Could not create the folder "${name}" in Google Drive (${res.status}).`, 'drive_failed');
+  }
+
+  /**
+   * `POST /folder/sessions` (nivel 3): `{ file, items: [{ dir, name, mime, size }] }`, hasta `FOLDER_BATCH`. `dir`:
+   * el id de Drive de la subcarpeta (adentro del árbol) o `null` para la carpeta misma. Por cada archivo abre una
+   * subida reanudable en Drive con el nombre, la carpeta y el peso fijados (Drive rechaza otro peso) y devuelve su
+   * `uploadId`: la dirección de Google cifrada por el portero, que la app usa con `PUT /upload/<id>` como cualquier
+   * subida. Un archivo vacío se crea directamente (`done`). No se guarda nada por archivo, ni acá ni en la base.
+   * Si Drive pide ir más despacio, los que faltan vuelven con `error: 'rate'` para pedirlos de nuevo después.
+   */
+  private async folderSessions(req: Request, who: Who): Promise<unknown> {
+    const body = await readBody(req);
+    const { file, media, rec } = await this.appFolder(who, body.file, 3);
+    const items = body.items;
+    if (!Array.isArray(items) || items.length === 0 || items.length > FOLDER_BATCH) {
+      throw new HttpError(400, `Send between 1 and ${FOLDER_BATCH} files at a time.`, 'bad_request');
+    }
+    const root = await this.existingRoot(who, file, media, rec);
+    if (!root) throw new HttpError(409, 'This folder is not in Google Drive yet.', 'not_ready');
+    const wanted = items.map((raw) => {
+      const item = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+      const size = Number(item.size);
+      const dir = item.dir === null || item.dir === undefined || item.dir === '' ? root : item.dir;
+      if (typeof dir !== 'string' || !DRIVE_ID.test(dir) || !Number.isSafeInteger(size) || size < 0 || typeof item.name !== 'string') {
+        throw new HttpError(400, 'Each file needs its folder, name and size.', 'bad_request');
+      }
+      const name = cleanFileName(item.name) || 'file';
+      const asked = typeof item.mime === 'string' && MIME.test(item.mime) ? item.mime.toLowerCase() : '';
+      // Un tipo de Google (carpeta, documento) crearía eso en vez de un archivo: va como bytes sin tipo.
+      const mime = asked && !asked.startsWith('application/vnd.google-apps.') ? asked : 'application/octet-stream';
+      return { dir, name, mime, size };
+    });
+    // Cada subcarpeta, adentro del árbol. Las que no se llegan a comprobar en este pedido (el tope de llamados)
+    // vuelven como `later`; una de afuera corta todo el pedido.
+    const checked = new Set<string>();
+    for (const dir of new Set(wanted.map((w) => w.dir))) {
+      const inside = await this.inTree(root, dir, checked.size > 0);
+      if (inside === null) break;
+      if (!inside) throw new HttpError(403, 'That folder is not inside this folder.', 'outside');
+      checked.add(dir);
+    }
+    const secret = await this.secret();
+    const out: unknown[] = [];
+    let slowDown = false;
+    let opened = 0;
+    for (const w of wanted) {
+      if (slowDown) {
+        out.push({ error: 'rate' });
+        continue;
+      }
+      if (!checked.has(w.dir) || (opened > 0 && this.driveCalls >= DRIVE_CALL_BUDGET)) {
+        out.push({ error: 'later' });
+        continue;
+      }
+      opened++;
+      const meta = { name: w.name, parents: [w.dir], appProperties: { sdFolder: file } };
+      const res =
+        w.size === 0
+          ? await this.drive('/files?fields=id,name,mimeType,size', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...meta, mimeType: w.mime }),
+            })
+          : await this.drive(`${UPLOAD}/files?uploadType=resumable&fields=id,name,mimeType,size`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json; charset=UTF-8',
+                'X-Upload-Content-Type': w.mime,
+                'X-Upload-Content-Length': String(w.size),
+              },
+              body: JSON.stringify(meta),
+            });
+      if (res.ok && w.size === 0) {
+        const f = (await res.json()) as { id: string; name: string; mimeType: string };
+        out.push({ done: { id: f.id, name: f.name, mimeType: f.mimeType, size: 0 } });
+        continue;
+      }
+      const session = res.headers.get('Location');
+      if (res.ok && session) {
+        out.push({ uploadId: await seal(secret, { s: session, u: who.userId, z: w.size, c: Date.now(), f: file }) });
+        continue;
+      }
+      const reasons = await driveReasons(res);
+      if (res.status === 429 || reasons.some((r) => /rateLimitExceeded/i.test(r))) {
+        slowDown = true;
+        out.push({ error: 'rate' });
+        continue;
+      }
+      if (reasons.includes('storageQuotaExceeded')) throw driveFull();
+      out.push({ error: res.status === 404 ? 'gone' : 'drive_failed' });
+    }
+    return { items: out };
+  }
+
+  /** Una subida de un archivo de una carpeta, de su id cifrado (`folderSessions`); `null` si no es de este portero. */
+  private async folderUpload(uploadId: string): Promise<Upload | null> {
+    const data = await unseal<{ s: string; u: string; z: number; c: number; f?: string }>(await this.secret(), uploadId);
+    if (!data || typeof data.s !== 'string' || !data.s.startsWith('https://')) return null;
+    return { session: data.s, user: data.u, size: data.z, createdAt: data.c, ...(data.f ? { folder: data.f } : {}) };
+  }
+
+  /**
+   * `POST /folder/list` (nivel 1): `{ file, dir?, pageToken? }`. Lo que hay ahora en la carpeta (o en la
+   * subcarpeta `dir`, que tiene que estar adentro del árbol), sin la papelera de Drive, hasta 100 cosas por
+   * pedido (`nextPageToken` para seguir). Cada archivo sale con su pase (`url`, el mismo de las fotos, 8 horas) y,
+   * si Drive tiene miniatura, la dirección de la miniatura (`thumb`). Las subcarpetas traen su id (para abrirlas);
+   * los accesos directos y los documentos de Google, solo el nombre: nunca se siguen ni se bajan.
+   */
+  private async folderList(req: Request, who: Who): Promise<unknown> {
+    const body = await readBody(req);
+    const { file, media, rec } = await this.appFolder(who, body.file, 1);
+    const root = await this.existingRoot(who, file, media, rec);
+    if (!root) throw new HttpError(409, 'This folder is still being created: try again in a moment.', 'not_ready');
+    const dir = body.dir === undefined || body.dir === null || body.dir === '' ? root : body.dir;
+    if (typeof dir !== 'string' || !DRIVE_ID.test(dir)) throw new HttpError(400, 'Missing the folder.', 'bad_request');
+    // La subcarpeta pedida se vuelve a mirar en Drive siempre (una en la papelera o movida afuera deja de verse en el
+    // acto); lo de arriba se toma de lo ya comprobado. Lo de afuera del árbol no existe: el mismo 404.
+    if (dir !== root) this.known(root).delete(dir);
+    if (!(await this.inTree(root, dir))) throw new HttpError(404, 'This folder does not exist or you cannot see it.', 'not_found');
+    const pageToken = typeof body.pageToken === 'string' && /^[\w.~-]{1,2000}$/.test(body.pageToken) ? body.pageToken : '';
+    const params = new URLSearchParams({
+      q: `${quoted(dir)} in parents and trashed = false`,
+      fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,hasThumbnail)',
+      // 100 por pedido: cada archivo lleva su pase firmado, y el plan gratis da 10 ms de CPU por pedido (300 se
+      // midieron en ~9,5 ms en una computadora; falta medirlo en Cloudflare).
+      pageSize: '100',
+      orderBy: 'folder,name_natural',
+      ...(pageToken ? { pageToken } : {}),
+    });
+    const res = await this.drive(`/files?${params}`);
+    if (res.status === 429) throw new HttpError(503, 'Google Drive asked to slow down: trying again shortly.', 'rate');
+    if (!res.ok) throw new HttpError(502, `Could not list the folder in Google Drive (${res.status}).`, 'drive_failed');
+    const listed = (await res.json()) as {
+      nextPageToken?: string;
+      files?: { id: string; name?: string; mimeType?: string; size?: string; modifiedTime?: string; hasThumbnail?: boolean }[];
+    };
+    const known = this.known(root);
+    const now = Date.now();
+    const until = now + PASS_MS;
+    // Las subcarpetas de esta valen lo mismo que ella: si se comprobó hace 8 minutos, ellas también.
+    const dirAt = dir === root ? now : (known.get(dir) ?? now);
+    const entries: unknown[] = [];
+    for (const f of listed.files ?? []) {
+      if (!f.id || !DRIVE_ID.test(f.id)) continue;
+      const name = cleanFileName(f.name ?? '') || 'file';
+      const mime = (f.mimeType ?? '').toLowerCase();
+      const modified = typeof f.modifiedTime === 'string' ? f.modifiedTime : null;
+      if (mime === FOLDER_MIME) {
+        // Una carpeta que Drive lista adentro de una comprobada está adentro del árbol.
+        known.set(f.id, dirAt);
+        entries.push({ type: 'folder', id: f.id, name, modified });
+      } else if (mime === SHORTCUT_MIME) {
+        entries.push({ type: 'shortcut', name, modified });
+      } else if (mime.startsWith('application/vnd.google-apps.')) {
+        entries.push({ type: 'google', name, mime, modified });
+      } else {
+        const size = Number(f.size ?? 0);
+        const type = MIME.test(mime) ? mime : '';
+        const pass: Pass = { f: f.id, t: type, u: until, s: Number.isSafeInteger(size) ? size : 0, n: keepExtension(Array.from(name), NAME_MAX), ...(modified ? { m: modified } : {}) };
+        const url = await this.passUrl(req, pass);
+        entries.push({ type: 'file', id: f.id, name, mime: type, size: pass.s, modified, url, thumb: f.hasThumbnail ? url.replace('/m/', '/t/') : null });
+      }
+    }
+    return { entries, nextPageToken: listed.nextPageToken ?? null };
+  }
+
+  /**
+   * `GET /t/<pase>`: la miniatura que hace Drive de ese archivo, del lado `THUMB_SIDE`. El pase es el del archivo
+   * (quien puede verlo puede ver su miniatura). Drive no deja usar sus miniaturas desde una página (piden la
+   * conexión del dueño): pasan por acá, y quedan en la caché de Cloudflare por archivo y fecha de cambio.
+   */
+  private async thumbnail(req: Request, pass: string): Promise<Response> {
+    const data = await this.readPass(pass);
+    const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+    const cacheKey = data.m ? new Request(`https://portero.cache/t/${encodeURIComponent(data.f)}/${encodeURIComponent(data.m)}`) : null;
+    if (cache && cacheKey) {
+      const hit = await cache.match(cacheKey).catch(() => undefined);
+      if (hit) return new Response(req.method === 'HEAD' ? null : hit.body, { status: 200, headers: thumbHeaders(hit.headers.get('Content-Type') ?? 'image/jpeg') });
+    }
+    const meta = await this.drive(`/files/${encodeURIComponent(data.f)}?fields=thumbnailLink`);
+    if (!meta.ok) throw new HttpError(meta.status === 404 ? 404 : 502, `Google Drive answered ${meta.status}.`);
+    const link = ((await meta.json()) as { thumbnailLink?: string }).thumbnailLink;
+    if (!link || !/^https:\/\/[\w.-]+\.(googleusercontent|google)\.com\//.test(link)) throw new HttpError(404, 'This file has no thumbnail.');
+    const sized = link.replace(/=s\d+$/, `=s${THUMB_SIDE}`);
+    const res = await this.http(sized, { headers: { Authorization: `Bearer ${await this.token()}` } });
+    const type = (res.headers.get('Content-Type') ?? '').split(';')[0]!.trim().toLowerCase();
+    if (!res.ok || !/^image\/(jpeg|png|webp|gif)$/.test(type)) {
+      await res.body?.cancel();
+      throw new HttpError(404, 'This file has no thumbnail.');
+    }
+    const bytes = await res.arrayBuffer();
+    if (cache && cacheKey) {
+      await cache.put(cacheKey, new Response(bytes, { headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=604800' } })).catch(() => undefined);
+    }
+    return new Response(req.method === 'HEAD' ? null : bytes, { status: 200, headers: thumbHeaders(type) });
   }
 
   // --- la carpeta de un proyecto borrado a la papelera de Drive, y de vuelta (P.14, entrega 2) --------
@@ -1472,11 +2082,14 @@ export class Portero {
   // --- ver (con un pase firmado, por partes) --------------------------------------------------------
 
   private async secret(): Promise<string> {
+    // Una vez por pedido: un listado de una carpeta firma un pase por archivo.
+    if (this.passSecret) return this.passSecret;
     let secret = await this.store.get<string>('passSecret');
     if (!secret) {
       secret = randomId(32);
       await this.store.put('passSecret', secret);
     }
+    this.passSecret = secret;
     return secret;
   }
 
@@ -1510,6 +2123,8 @@ export class Portero {
     if (!UUID.test(file)) throw new HttpError(400, 'Missing the file.');
     const media = await this.mediaFile(who, file);
     if (!media || !(media.level >= 1)) throw new HttpError(404, 'This file does not exist or you cannot see it.');
+    // Una carpeta no se baja con un pase: lo de adentro se lista (`/folder/list`) y cada archivo trae el suyo.
+    if (media.mime === APP_FOLDER_MIME) throw new HttpError(409, 'This is a folder: open it in the app to see its files.', 'is_folder');
     let rec = (await this.store.get<FileRecord>(`file:${file}`)) ?? {};
     let drive = media.drive_id;
     if (!drive && rec.drive) {
@@ -1551,13 +2166,19 @@ export class Portero {
     return `${new URL(req.url).origin}/m/${pass}`;
   }
 
-  private async media(req: Request, pass: string): Promise<Response> {
+  /** Lo que lleva un pase, con la firma comprobada y sin vencer; si no, `403`. */
+  private async readPass(pass: string): Promise<Pass> {
     const [payload, signature] = pass.split('.');
     if (!payload || !signature || !sameText(signature, await hmac(await this.secret(), payload))) {
       throw new HttpError(403, 'Invalid link.');
     }
     const data = JSON.parse(new TextDecoder().decode(fromB64url(payload))) as Pass;
     if (data.u < Date.now()) throw new HttpError(403, 'This link expired: open the file again from the app.');
+    return data;
+  }
+
+  private async media(req: Request, pass: string): Promise<Response> {
+    const data = await this.readPass(pass);
     // `?download=1` no va firmado: solo puede pedir que se baje, nunca que se muestre.
     const download = new URL(req.url).searchParams.get('download') === '1';
 
@@ -1742,6 +2363,30 @@ interface Pass {
   u: number;
   s?: number;
   n?: string;
+  /** La fecha de cambio en Drive (los archivos de una carpeta, P.9): la miniatura se guarda por archivo y fecha. */
+  m?: string;
+}
+
+/**
+ * Si la persona puede crear y subir adentro de una carpeta (P.9): la que la agregó según la base (`created_by`);
+ * con una base sin ese dato, la que la creó en Drive (`FileRecord.creator`), o cualquiera con nivel 3 mientras
+ * todavía no se creó (esa pasa a ser la creadora).
+ */
+function isCreator(who: Who, media: MediaFile, rec: FileRecord): boolean {
+  if (media.created_by !== undefined) return !!media.created_by && media.created_by === who.userId;
+  if (!(media.drive_id || rec.drive)) return true;
+  return rec.creator === who.userId;
+}
+
+/** Los encabezados de una miniatura (`/t/`): una foto chica que el navegador guarda un día, sin nada que corra. */
+function thumbHeaders(type: string): Headers {
+  return new Headers({
+    'Content-Type': type,
+    'Cache-Control': 'private, max-age=86400',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Content-Security-Policy': 'sandbox',
+  });
 }
 
 interface ByteRange {

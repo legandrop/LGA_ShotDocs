@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.081 :
+
+Soltar una carpeta en la página se rechazaba pidiendo comprimirla. Ahora una ventana muestra qué se sube
+(archivos, carpetas, peso, tipos, el árbol y lo salteado) y *Upload* la manda al Drive del dueño, a
+`<Proyecto>/Carpetas/<nombre>`, con su propia cola: 3 archivos a la vez, pausa, errores por archivo y, si se
+cierra la pestaña, se retoma volviendo a soltarla. En la página queda una tarjeta de carpeta (el mismo bloque
+`image` con `sdmedia://` y una fila `inode/directory`) que abre un visor con lo que hay hoy en
+esa carpeta de Drive: miniaturas, carrete y bajar. El portero suma `/folder/prepare`, `/folder/sessions`,
+`/folder/list` y `/t/`, nunca sale del árbol de la carpeta y solo deja subir a quien la agregó (migración: `media_file` suma
+`created_by`). Falta que Lega decida `drive.readonly`.
+[ Carpetas - soltar una carpeta entera, con su visor y la regla de no salir del árbol ]
+
 v0.080 :
 
 Borrar un proyecto dejaba sus archivos en Google Drive: la casilla de la ventana todavía no existía, y la

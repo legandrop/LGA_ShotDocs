@@ -1483,7 +1483,7 @@ describe('portero: compatibilidad con lo guardado y la app de hoy', () => {
 
     // El estado tiene lo de antes, más lo nuevo.
     const status = (await (await call(p, '/drive/status', { jwt: 'owner-jwt' })).json()) as Record<string, unknown>;
-    expect(status).toEqual({ connected: true, broken: null, email: 'lega@example.com', isOwner: true, folder: null, picker: false });
+    expect(status).toEqual({ connected: true, broken: null, email: 'lega@example.com', isOwner: true, folder: null, picker: false, features: ['folders'] });
   });
 
   it('reconectar Drive conserva las carpetas; con otra cuenta de Google olvida la carpeta elegida', async () => {

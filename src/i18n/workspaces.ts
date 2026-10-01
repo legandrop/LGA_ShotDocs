@@ -92,6 +92,10 @@ export const workspaces = {
     en: "Sign out and keep it on this device",
     es: "Cerrar sesión y dejarlo en este dispositivo",
   },
+  'removed.foldersLeft': {
+    en: { one: "{count} file of a folder was not uploaded yet (it is still on your disk).", other: "{count} files of folders were not uploaded yet (they are still on your disk)." },
+    es: { one: "Falta subir {count} archivo de una carpeta (sigue en tu disco).", other: "Falta subir {count} archivos de carpetas (siguen en tu disco)." },
+  },
   'removed.mediaList': {
     en: "The file does not include the original photos and videos. Download each one:",
     es: "El archivo no trae las fotos y los videos originales. Descargá cada uno:",

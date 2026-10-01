@@ -97,6 +97,9 @@ In production (v0.049). What works today:
   shows them; the converter is downloaded only the first time it is needed.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;
   a PDF opens in a new tab and everything else downloads with its name.
+- Drop a whole folder, subfolders included: a window shows what goes up, it uploads to the owner's Drive and
+  stays in the page as a folder card. Opening it shows what is in that Drive folder right now, with thumbnails,
+  the photo viewer and downloads; whoever sees the page sees the folder, and nothing above it.
 - Collapse sections by their headings: a triangle next to any heading hides everything up to the next heading
   of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
   Deleting a collapsed heading deletes its whole section; sheet marks still count everything and the PDF
