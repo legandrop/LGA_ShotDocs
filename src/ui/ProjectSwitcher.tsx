@@ -24,7 +24,8 @@ import {
 import { menuBelow, useFloating, type MenuPosition } from './menus';
 import { notify } from './notice';
 import { editedLabel, monogram, projectStateError, useCurrentProject, useSwitchProject } from './project';
-import { SEARCH_SHORTCUT_LABEL, useSearchSession } from './projectSearchUi';
+import { useSearchSession } from './projectSearchUi';
+import { shortcutLabel } from './shortcuts';
 import { DeletedProjectsList, DeleteProjectDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
@@ -90,7 +91,7 @@ export function ProjectSwitcher() {
         className="project-button"
         aria-haspopup="dialog"
         aria-expanded={!!position}
-        data-tip={tr('project.switchTip', { shortcut: SEARCH_SHORTCUT_LABEL })}
+        data-tip={tr('project.switchTip', { shortcut: shortcutLabel('search') })}
         onClick={toggle}
       >
         <Monogram name={name} />

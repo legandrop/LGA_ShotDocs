@@ -11,6 +11,7 @@ import {
   DarkIcon,
   ExpandAllIcon,
   DriveIcon,
+  HelpIcon,
   LightIcon,
   MembersIcon,
   MoveIcon,
@@ -23,6 +24,7 @@ import {
   SystemIcon,
   TrashIcon,
 } from './icons';
+import { openHelp } from '../help/helpUi';
 import { isPhoneLayout } from './commentsUi';
 import { collapseControlFor } from './collapseControl';
 import { notify } from './notice';
@@ -412,6 +414,17 @@ export function AccountMenu({
           Google Drive
         </button>
       )}
+      {/* La ayuda (Docs/Doc_Tutorial.md, sección 5): el foco vuelve al botón de la cuenta al cerrarla. */}
+      <button
+        className="menu-row"
+        onClick={() => {
+          onClose();
+          openHelp(null, anchor);
+        }}
+      >
+        <HelpIcon />
+        {tr('help.open')}
+      </button>
       <button className="menu-row" onClick={() => void signOut()}>
         <SignOutIcon />
         {tr('common.signOut')}

@@ -46,19 +46,18 @@ import { DrivePasteMenu } from './DrivePasteMenu';
 import { lazyPart, Part, preloadWhenIdle } from './lazyPart';
 import { SheetBreaks } from './SheetBreaks';
 import type { HeadingRecord } from './collapse';
-import { collapseExtension, collapseSupported, headingBackspaceExtension, headingCounts, revealBlock, setAllCollapsed } from './collapseEditor';
+import { collapseSupported, headingCounts, revealBlock, setAllCollapsed } from './collapseEditor';
+import { pageEditorExtensions } from './editorExtensions';
 import { setCollapseControl } from './collapseControl';
 import { collapseSaver, loadCollapse } from './collapseStore';
 import { CollapseToggles } from './CollapseToggles';
 import { BlockSideMenuController } from './BlockSideMenu';
 import { PageFormattingToolbar, pageToolbarItems } from './PageToolbar';
-import { undoGuardExtension } from './undoGuard';
 import { BACKGROUND_META } from './editorMeta';
 import { notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens, shiftSelects } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
-import { findExtension } from './findEditor';
-import { inlinePhotoExtensions, selectedPhotoKey } from './inlinePhotoEditor';
+import { selectedPhotoKey } from './inlinePhotoEditor';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession } from './projectSearchUi';
 
@@ -381,29 +380,19 @@ function BlockEditor({
         fragment: doc.getXmlFragment(CONTENT_FRAGMENT),
         user: { name: user.email, color: '#2383e2' },
       },
-      // Buscar y reemplazar en la página (findEditor.ts) y colapsar secciones (collapseEditor.ts): las dos con
-      // decoraciones, sin tocar el documento. Colapsar, solo si el navegador puede esconder (`:has()`).
-      extensions: [
-        // Las fotos en línea (Docs/Doc_Fotos_En_Linea.md): sus filas, la marca de la selección y su teclado.
-        ...inlinePhotoExtensions,
-        findExtension,
-        // Cada borrado es un solo Ctrl+Z, y el deshacer del navegador nunca edita la página (undoGuard.ts).
-        undoGuardExtension(),
-        // Retroceso al principio de un título "sube la línea", en todos los navegadores (también sin colapsar).
-        headingBackspaceExtension,
-        ...(canCollapse
-          ? [
-              collapseExtension({
-                initial: collapse,
-                save: (records: ReadonlyMap<string, HeadingRecord>) => {
-                  collapse.clear();
-                  for (const [id, r] of records) collapse.set(id, r);
-                  collapseSave.save(records);
-                },
-              }),
-            ]
-          : []),
-      ],
+      // Las extensiones de la página (editorExtensions.ts): fotos en línea, buscar, deshacer, títulos y colapsar.
+      extensions: pageEditorExtensions(
+        canCollapse
+          ? {
+              initial: collapse,
+              save: (records: ReadonlyMap<string, HeadingRecord>) => {
+                collapse.clear();
+                for (const [id, r] of records) collapse.set(id, r);
+                collapseSave.save(records);
+              },
+            }
+          : null,
+      ),
     }),
     [doc],
   );

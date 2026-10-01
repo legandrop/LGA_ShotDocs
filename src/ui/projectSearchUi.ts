@@ -112,9 +112,6 @@ export function useSearchSession(): SearchSession {
   return session;
 }
 
-/** El atajo como se ve en los tooltips. */
-export const SEARCH_SHORTCUT_LABEL = IS_MAC ? '⌘K' : 'Ctrl+K';
-
 /** Ctrl/⌘+K, sin Alt ni Shift. */
 export function isSearchShortcut(
   e: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; key: string; code?: string },

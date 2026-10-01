@@ -69,6 +69,10 @@ export const CommentIcon = icon('M4.75 4h10.5c.7 0 1.25.55 1.25 1.25v7c0 .7-.55 
 export const QuestionIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM8 8.1a2 2 0 1 1 2.9 1.8c-.55.3-.9.8-.9 1.4v.2M10 13.6v.1', {
   strokeWidth: 1.6,
 });
+/** La ayuda: un signo de pregunta en un círculo, más liviano que el de las preguntas. */
+export const HelpIcon = icon('M10 3.25a6.75 6.75 0 1 1 0 13.5 6.75 6.75 0 0 1 0-13.5zM8.1 8.2a1.95 1.95 0 1 1 2.75 1.78c-.5.25-.85.7-.85 1.27v.35M10 13.75v.1', {
+  strokeWidth: 1.5,
+});
 export const SheetIcon = icon('M5.5 2.75h9v14.5h-9zM7.75 5.5h4.5M7.75 8h4.5M7.75 10.5h3');
 export const PrintIcon = icon(
   'M5.5 7.5V3.25h9V7.5M5.5 14H3.75a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1h12.5a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H14.5M5.5 11.5h9v5.25h-9z',

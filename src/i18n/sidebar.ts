@@ -10,6 +10,8 @@ export const sidebar = {
   'sidebar.pages': { en: "Pages", es: "Páginas" },
   'sidebar.tree': { en: "Page tree", es: "Árbol de páginas" },
   'sidebar.width': { en: "Sidebar width", es: "Ancho de la barra lateral" },
+  // El botón "?" del pie y la entrada del menú de la cuenta (la ayuda, Docs/Doc_Tutorial.md).
+  'help.open': { en: "Help and shortcuts", es: "Ayuda y atajos" },
   'sidebar.widthTip': {
     en: "**Drag:** resize the sidebar\n**Double-click:** back to the default width\n**Arrow keys:** resize from the keyboard",
     es: "**Arrastrar:** cambia el ancho de la barra\n**Doble clic:** vuelve al ancho de fábrica\n**Flechas:** cambia el ancho con el teclado",

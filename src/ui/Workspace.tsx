@@ -17,7 +17,8 @@ import {
 } from '../services';
 import { SupabaseRemote } from '../sync/remote';
 import { useWorkspace } from '../workspace';
-import { FIND_SHORTCUT_LABEL, isFindSelectionTarget, openFindBar } from './findUi';
+import { isFindSelectionTarget, openFindBar } from './findUi';
+import { shortcutLabel } from './shortcuts';
 import { disposeSearchSession, isSearchShortcut, otherModalOpen, takesSearchShortcut, useSearchSession } from './projectSearchUi';
 import { ArchiveIcon, DownloadIcon, MenuIcon, MoreIcon, PlusIcon, SearchIcon } from './icons';
 import { menuBelow, PageMenu, type MenuPosition } from './menus';
@@ -27,7 +28,8 @@ import { notify, useNotice } from './notice';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
 import type { ShareTarget } from './ShareDialog';
-import { DeletedProjectsList, ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
+import { DeletedProjectsList, HelpDialog, ImportCodaDialog, ProjectSearch, ShareDialog } from './lazyDialogs';
+import { closeHelp, useHelpUi } from '../help/helpUi';
 import { Part, preloadWhenIdle, watchPendingWrites } from './lazyPart';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
@@ -307,8 +309,8 @@ export function Shell() {
           {pageId && current && (
             <button
               className="icon-button"
-              aria-label={tr('shell.findInPage', { shortcut: FIND_SHORTCUT_LABEL })}
-              data-tip={tr('shell.findInPage', { shortcut: FIND_SHORTCUT_LABEL })}
+              aria-label={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
+              data-tip={tr('shell.findInPage', { shortcut: shortcutLabel('find') })}
               onClick={() => openFindBar()}
             >
               <SearchIcon size={18} />
@@ -369,6 +371,7 @@ export function Shell() {
         </Part>
       )}
       {codaOwner && <ImportCodaHost />}
+      <HelpHost />
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
@@ -378,6 +381,17 @@ export function Shell() {
         </div>
       )}
     </div>
+  );
+}
+
+/** La ayuda (Docs/Doc_Tutorial.md, sección 5): la abren el botón "?" y el menú de la cuenta. */
+function HelpHost() {
+  const help = useHelpUi();
+  if (!help.open) return null;
+  return (
+    <Part onClose={closeHelp}>
+      <HelpDialog section={help.section} onClose={closeHelp} />
+    </Part>
   );
 }
 

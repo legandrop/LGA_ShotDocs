@@ -16,6 +16,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { createDriveCardView, DRIVE_CARD_PROP, driveLinkInContent } from './driveCard';
 import { imageRowsExtension, ROW_WIDTH_PROP } from './imageRowsEditor';
 import { photoSpec } from './inlinePhoto';
+import { shortcutKeys } from './shortcuts';
 
 // --- Script (guion) ----------------------------------------------------------------------------------
 //
@@ -50,8 +51,8 @@ export const QUESTION_PROP = 'question';
 // junto con Script ni con pregunta.
 
 export { DRIVE_CARD_PROP };
-/** El atajo de las preguntas (en el formato de ProseMirror): Ctrl/⌘+Alt+P. */
-export const QUESTION_SHORTCUT = 'Mod-Alt-p';
+/** El atajo de las preguntas (en el formato de ProseMirror): Ctrl/⌘+Alt+P, del registro de atajos. */
+export const QUESTION_SHORTCUT = shortcutKeys('question')[0];
 
 /** Una "Í" pegada desde macOS puede venir descompuesta (I + tilde combinada). */
 const I_ACUTE = '(?:Í|I\\u0301)';
@@ -177,9 +178,10 @@ const createParagraph = createBlockSpec(
       key: 'shotdocs-paragraph',
       prosemirrorPlugins: [scriptMarksPlugin],
       keyboardShortcuts: {
-        'Mod-Alt-0': ({ editor }) => setParagraph(editor, 'paragraph'),
+        // Las teclas salen del registro de atajos (shortcuts.ts), como las de la ayuda.
+        [shortcutKeys('paragraph')[0]]: ({ editor }) => setParagraph(editor, 'paragraph'),
         // Ctrl/⌘+Alt+S convierte el bloque en Script.
-        'Mod-Alt-s': ({ editor }) => setParagraph(editor, 'script'),
+        [shortcutKeys('script')[0]]: ({ editor }) => setParagraph(editor, 'script'),
         // Ctrl/⌘+Alt+P, en una pregunta (Ctrl/⌘+Alt+Q ya es la cita del editor; con AltGr, Q y E escriben
         // "@" y "€" en los teclados en castellano).
         [QUESTION_SHORTCUT]: ({ editor }) => setParagraph(editor, 'question'),

@@ -4,6 +4,7 @@ import { NodeSelection, Plugin, PluginKey, Selection, type EditorState, type Tra
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { BACKGROUND_META } from './editorMeta';
 import { groupRows, pxToRowWidth, snapRowWidth } from './imageRows';
+import { shortcutKeys } from './shortcuts';
 
 // Fotos en fila (Docs/Doc_Imagenes.md). Una fila NO es un bloque: son bloques `image` hermanos y seguidos
 // con `rowWidth` (la parte del ancho que ocupa cada uno, entre 0 y 1; 0 = sin ancho propio, como antes).
@@ -270,19 +271,20 @@ const last = (at: RowAt) => at.row[at.row.length - 1];
 export const imageRowsExtension = createExtension({
   key: 'shotdocs-image-rows',
   prosemirrorPlugins: [imageRowsPlugin],
+  // Las teclas salen del registro de atajos (shortcuts.ts).
   keyboardShortcuts: {
     // Entre las fotos de una fila, de una a otra (sin pasar por el cursor de hueco).
-    ArrowRight: ({ editor }: KeyContext) =>
+    [shortcutKeys('photoRowNext')[0]]: ({ editor }: KeyContext) =>
       move(editor, (at) => (at.k < at.row.length - 1 ? { to: at.kids[at.row[at.k + 1]], end: false } : null)),
-    ArrowLeft: ({ editor }: KeyContext) =>
+    [shortcutKeys('photoRowPrev')[0]]: ({ editor }: KeyContext) =>
       move(editor, (at) => (at.k > 0 ? { to: at.kids[at.row[at.k - 1]], end: true } : null)),
     // Arriba y abajo salen de la fila entera.
-    ArrowDown: ({ editor }: KeyContext) =>
+    [shortcutKeys('photoRowLeave')[1]]: ({ editor }: KeyContext) =>
       move(editor, (at) => (at.kids[last(at) + 1] ? { to: at.kids[last(at) + 1], end: false, leaving: true } : null)),
-    ArrowUp: ({ editor }: KeyContext) =>
+    [shortcutKeys('photoRowLeave')[0]]: ({ editor }: KeyContext) =>
       move(editor, (at) => (at.kids[first(at) - 1] ? { to: at.kids[first(at) - 1], end: true, leaving: true } : null)),
     // Enter con una foto de una fila elegida: el párrafo nuevo va después de la fila, no en el medio.
-    Enter: ({ editor }: KeyContext) => {
+    [shortcutKeys('photoRowEnter')[0]]: ({ editor }: KeyContext) => {
       const view = editor.prosemirrorView;
       const at = view ? rowOfSelection(view.state) : null;
       if (!at || at.row.length < 2) return false;
