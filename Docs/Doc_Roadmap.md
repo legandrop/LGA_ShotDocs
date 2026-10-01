@@ -283,9 +283,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     tanto, o si no se puede, un aviso en el lugar de la foto; sin red se vuelve a probar. **Falta:**
     - **Los HEIC ya subidos sin convertir** (antes de v0.075, o cuando la conversión falló) siguen sin verse,
       con un aviso en su lugar. Convertirlos pide bajar el original, subir un archivo nuevo y cambiar su fila.
-    - **Probarlo en la app real** (Chrome en Windows y Mac, y un HEIC que llega como archivo al iPhone): se
-      probó la conversión entera en Chromium con el build de producción, fuera de la app. En el iPhone falta
-      medir la memoria con una foto de 48 MP.
+    - **Probarlo en Safari, en la Mac y en el iPhone** (un HEIC que llega como archivo): la auditoría de v0.075
+      lo recorrió en la app real en Chromium de Windows (soltar, pegar, varias juntas, sin red, recargar en
+      plena conversión). En el iPhone falta medir la memoria con una foto de 48 MP.
+    - **Con red, la primera vez que el decodificador no baja ya se sube el HEIC** sin convertir: con una red
+      mala de rodaje queda así para siempre. Volver a probar una o dos veces antes de rendirse.
+    - **Sin red, la conversión arranca unos 7 s después de soltar la foto** (espera que falle la consulta a la
+      base antes de convertir).
+    - **La comprobación del JPEG** dejaría pasar un canvas en blanco si la foto es casi toda blanca
+      (documentos, cielos).
+    - **Subir `min_app_version` a 0.075** cuando Lega tenga la versión en sus dispositivos: una pestaña de
+      v0.074 o anterior puede registrar un HEIC mientras esta lo convierte (sospecha de la auditoría, sin
+      reproducir). Antes, verificar si `min_app_version` frena también la cola de archivos (en
+      `sync/engine.ts` solo frena las páginas).
     - **Un HEIC sin perfil ICC** (color solo `nclx`) sale sin perfil.
     - **Sin portero** (fotos a Supabase) no se convierte.
     - **Verlo en la app con el doc entero.** Probado con una importación real de cuatro páginas (46 fotos
@@ -298,6 +308,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       correcto es seguir la imagen principal (`pitm` → `ipma` → `ipco`).
     - **Pruebas del comando entero** (`convertFolder`, la bajada con una foto ya convertida, el código de
       salida): hoy se probó a mano contra una API de Coda simulada; en el repo solo está probada la librería.
+14. **Un dispositivo nuevo muestra "Subiendo ~2750 cambios" unos 4 minutos** al abrir un proyecto grande
+    ("HEIC (prueba)"), sin escrituras visibles en la base (lo vio la auditoría de v0.075). Averiguar qué
+    cuenta ese número: si son cambios que de verdad suben, o lo bajado contado como pendiente.
 
 ### C. Esperan a Lega
 
