@@ -1,9 +1,10 @@
 # Borrar y archivar proyectos (P.14)
 
-Estado: **diseño completo y auditado, sin implementar** (2026-10-01). Lega aprobó todas las propuestas ("sí a
-todo", sección "Decisiones de Lega"). La auditoría independiente dio "aprobado con cambios": los tres bloqueantes y
-las observaciones ya están corregidos acá (sección "Correcciones de la auditoría"). Nada de esto está aplicado en
-la base ni en la app: el SQL de las tres migraciones (entregas 1, 2 y 3: secciones 1.3, 3.6 y 2.3) **se corrió con
+Estado: **entrega 1 implementada en la rama `lega/proyectos-borrar`, sin publicar ni migrar** (2026-10-01; ver
+"Cómo quedó (entrega 1)", al final). Las entregas 2 (Drive) y 3 (*Delete forever*) siguen en diseño. Lega aprobó
+todas las propuestas ("sí a todo", sección "Decisiones de Lega"). La auditoría independiente del diseño dio
+"aprobado con cambios" y, corregido, "aprobado" (sección "Correcciones de la auditoría"). La migración 9 está en el
+repo pero no aplicada en la base; las 10 y 11, solo en este documento: el SQL de las tres migraciones (entregas 1, 2 y 3: secciones 1.3, 3.6 y 2.3) **se corrió con
 sus pruebas contra la base real dentro de `begin; … rollback;`** y pasa entero, con las once pruebas que ya
 existían y los casos negativos de la auditoría (sección 9.3). Sale de leer
 `main` en `19c7692` (v0.074): las migraciones de `supabase/migrations/`, `src/sync/` (árbol, motor, remoto,
@@ -2124,6 +2125,11 @@ proyecto vuelve con la marca `drive_missing_at` y **ningún archivo se marca**. 
 (alguien la recupera a mano de la papelera de Drive), *Look for its files again* en el proyecto llama a
 `/project/untrash`, que la trae y borra la marca: todo vuelve a como estaba.
 
+**Volver a tildar la casilla** en un proyecto restaurado sin la carpeta (con `drive_missing_at`) y borrado de nuevo
+cierra la marca vieja archivo por archivo (sección 3.3): los archivos que no se encontraron la otra vez dejan de
+poder recuperarse desde la app. La ventana lo dice antes de confirmar ("Los archivos que no se encontraron la vez
+anterior dejan de poder recuperarse desde la app; se recuperan solo a mano desde Google Drive, si siguen ahí").
+
 **Con Drive sin conectar, conectado a otra cuenta, el portero caído o sin red** no se ofrece restaurar sin los
 archivos: la lista dice qué pasa (*Google Drive is not connected: the workspace owner has to connect it*, *Google
 Drive is connected to another account*, *Could not reach the file server*) y la única acción es esperar o
@@ -2822,7 +2828,8 @@ sus ids a los que ya estaban, nunca los reemplaza. Así, aunque Drive cumpla un 
 3. `request_project_drive_trash(project)` (la base marca el pedido; con `drive_trash_requested_at` como fecha de
    corte).
 4. Las carpetas del proyecto (arriba): las que **no** están en la papelera se mandan; las que ya están en la
-   papelera con `trashedTime` ≥ `drive_trash_requested_at` cuentan como **ya mandadas** (un intento anterior cuya
+   papelera con `trashedTime` ≥ `drive_trash_requested_at` menos unos minutos (5: el reloj de Google y el de la
+   base pueden no coincidir; el registro las cubre igual) cuentan como **ya mandadas** (un intento anterior cuya
    respuesta se perdió). Para cada una por mandar: sumarla al registro, `PATCH { trashed: true }`.
 5. `project_drive_trashed(project)`. Responde `{ status: 'done', project, drive: 'trashed' | 'missing' | 'none',
    folders }`: `trashed` si mandó o encontró ya mandada alguna; `none` si el proyecto nunca tuvo carpeta (no hay
@@ -2837,7 +2844,7 @@ restaurado sin la carpeta):
 2. `driveReady()`: si no, `503 drive_not_connected`. Si el registro existe y su `email` no es la cuenta conectada:
    `409 drive_other_account` (la app no ofrece restaurar sin los archivos: sección 3.4).
 3. Las carpetas a traer: la **unión** de las del registro y las de la búsqueda por marca que están en la papelera
-   con `trashedTime` ≥ `drive_trash_requested_at` (así no trae una carpeta vieja que ya estaba en la papelera por
+   con `trashedTime` ≥ `drive_trash_requested_at` menos el mismo margen de 5 minutos (así no trae una carpeta vieja que ya estaba en la papelera por
    otro motivo, y no depende de que el registro esté completo).
 4. Cada una con la marca y en la papelera: `PATCH { trashed: false }`. Si alguna existe (en la papelera o no):
    `project_drive_untrashed(project)` y `drive: 'untrashed'`. Si no existe ninguna, con Drive conectado a la misma
@@ -3420,9 +3427,93 @@ contra el código. Veredicto: **aprobado con cambios**. Lo que encontró y cómo
 | Obs. 12 y 13 | Una importación en curso en otro dispositivo; una creación de página reenviada se ve como rechazada. | Explicadas (secciones 6.1, 6.2 y 8): nada se pierde. |
 | Obs. 14 | Pases ya dados siguen sirviendo. | En "Riesgos". |
 
+## Cómo quedó (entrega 1, v0.077)
+
+Implementada en la rama `lega/proyectos-borrar` (sin publicar). **La migración 9 está en el repo y no está aplicada**:
+se aplica después de la auditoría del código y de la copia de seguridad (sección 6.7). Mientras la base no la tenga,
+la app nueva se ve y anda como la anterior (sin íconos ni listas nuevas): todo depende de `schema_version` ≥ 9.
+
+**Base** (`supabase/migrations/20261001120000_proyectos_archivar_borrar.sql`, la de la sección 1.3, y su prueba
+`supabase/tests/proyectos_borrar_permisos.sql`, la de la 1.4): corridas otra vez en `begin; … rollback;` contra la
+base real, con las once pruebas que ya existían y los casos negativos de la auditoría (sección 9.3).
+
+**Sincronización** (`src/sync/`):
+
+| Pieza | Qué hace |
+|---|---|
+| `remote.ts` | `fetchProjects(schemaVersion)` pide `archived_at` solo con la versión 9 o más y, ante un `42703`, sigue sin la columna diez minutos (como `settings` en `fetchTreeOf`): una base de otro workspace sin migrar no corta la sincronización. `ProjectStatesRemote`: `setProjectArchived`, `deleteProject`, `restoreProject`, `trashedProjects` (nulo sin la función), `projectDeleteInfo`. `trashedFiles` trae `in_deleted_project`. |
+| `engine.ts` | Guarda la versión de la base en el estado (`schemaVersion`) y se la pasa a `fetchProjects`. |
+| `tree.ts` | `activeProjects()`, `archivedProjects()`, `hasNoProjects()`; `markArchived` y `forgetProject` (la lista cambia enseguida, sin esperar a sincronizar; nada se borra del dispositivo). El primer proyecto (`workspaceId`) dejó de ser fijo: el de relleno sale solo mientras el dispositivo nunca bajó la lista, y si el servidor deja de mandarlo se reemplaza por el primero activo y se guarda en `meta` (sección 6.4). |
+| `access.ts` | `canManageProject`: la misma regla que compartir el proyecto entero. |
+| `projectStates.ts` | La palabra por idioma, lo sin subir de un proyecto en el dispositivo (cambios del árbol en la cola o rechazados, contenido, imágenes, fotos y videos, comentarios), a cuál se pasa después de archivar o borrar el abierto y el "último activo". |
+
+**Interfaz:**
+
+- **Selector** (`ProjectSwitcher.tsx`): cada renglón es un contenedor con la opción que abre el proyecto y, al lado,
+  renombrar (lápiz), archivar y borrar, visibles al pasar el mouse, con el foco o en el renglón activo de las flechas;
+  solo los que la persona puede usar. Tooltips con `data-tip` (*Rename*, *Archive*, *Delete…*; apagados, el motivo:
+  sin red o "es tu único proyecto"). Archivar pregunta en el mismo renglón. Al pie: *Archived projects (N)* (la lista
+  con su buscador, desarchivar y borrar) y *Deleted projects* (la papelera de proyectos con *Restore*). La línea
+  *Rename “X”* salió. En el teléfono, un "⋯" por renglón despliega *Rename*, *Share…*, *Archive* y *Delete…* debajo.
+- **Ventana de borrar** (`ProjectStatesPart.tsx`, se baja aparte): páginas, archivos y GB en Drive, con cuántas
+  personas está compartido, el plazo, "Sus archivos quedan en Google Drive", los avisos de archivos usados en otros
+  proyectos, la palabra `delete` / `borrar` (campo sin mayúscula ni corrector en el iPhone), y el bloqueo con lo sin
+  subir de ese proyecto (con *Download my unsynced changes*) o con una importación de Coda en curso. En el teléfono
+  ocupa la pantalla, con los botones abajo.
+- **Pantalla "sin proyectos"** (`Workspace.tsx`): también cuando el servidor deja de mandar todos los proyectos de un
+  dispositivo ya abierto; suma *Deleted projects* si hay alguno que la persona puede restaurar.
+- **Papelera de archivos** (`TrashView.tsx`): un archivo con `in_deleted_project` dice "Lo usa una página de un
+  proyecto borrado…" y no tiene el botón; *Empty* lo deja afuera.
+- **Búsqueda** (Ctrl/⌘+K): sin los archivados (el abierto, sí).
+- **Portero:** `purge_file` con `file_in_deleted_project` responde `409 in_deleted_project` (antes, `502 db_error`):
+  la app publicada antes, que todavía ofrece el botón, recibe un motivo claro. `Doc_Portero.md`.
+- **Importación de Coda:** el diario de una importación cortada ya no se borra si su proyecto no está en el árbol:
+  puede estar en la papelera de proyectos y volver (sección 8).
+
+**Pruebas:** `src/sync/projectStates.test.ts` (14: archivar, quién puede, otro dispositivo con cambios sin subir que
+los conserva y los sube al restaurar sin duplicar, nadie lo ve borrado, el primer proyecto reemplazado, sin
+proyectos, el archivo de otro proyecto, lo sin subir por proyecto, a cuál se pasa, y la base sin migrar: versión 8,
+`42703`, `PGRST202`), `src/ui/projectStates.test.tsx` (11: íconos y tooltips sin `title`, archivar en el renglón y la
+lista de archivados, el último activo, quien no maneja, la base vieja, la ventana con la palabra en los dos idiomas y
+los atributos del iPhone, el bloqueo por cambios sin subir, la lista de borrados con *Restore*, el teléfono con "⋯",
+y la pantalla sin proyectos), uno más en `trashView.test.tsx` y en la prueba del portero. Suite completa, `tsc` y
+`build` bien. Capturas en Chromium sin ventana contra el servidor de las pruebas (selector, íconos, tooltip,
+confirmar, archivados, ventana en inglés y en castellano oscuro, borrados, teléfono): sin errores en la consola.
+
+**Lo que se apartó del diseño o quedó para después:**
+
+- *Deleted projects* se ofrece a todos con la base en la versión 9 (no solo a quien maneja algún proyecto o sabe de
+  uno borrado, sección 7.2): la lista vacía dice "No deleted projects".
+- El aviso de 6.2 ("ana@… mandó “X” a Proyectos borrados") no está: el proyecto sale de la lista en la próxima
+  sincronización y, si estaba abierto, la app cae al primero activo. Tampoco la línea de `page.notFound`.
+- El bloqueo por importación mira cualquier importación de Coda en curso en el dispositivo, no solo hacia ese
+  proyecto (el trabajo de importación no sabe todavía a qué proyecto va hasta crearlo).
+- En el teléfono, las acciones se despliegan debajo del renglón en vez de una hoja aparte.
+- Subir `min_app_version` (decisión 11) es un paso de la publicación, no del código.
+
+**Ayuda (regla de P.13):** la ayuda todavía no existe en el código (`Doc_Tutorial.md`, sin implementar). Su entrada,
+lista para sumarla, en inglés (la interfaz) y en castellano:
+
+> **Archive or delete a project.** Point at a project in the project menu (or tap "⋯" on the phone): the pencil
+> renames it, the box archives it and the trash can deletes it. Archiving takes it out of your everyday list; it
+> stays exactly as it is, still editable, under *Archived projects*. Deleting asks you to type *delete*: the project
+> goes to *Deleted projects*, nobody sees it anymore, and it can be restored exactly as it was (after 30 days too,
+> until someone deletes it forever). Nothing is erased, and its files stay in Google Drive. Your only active project
+> cannot be archived or deleted, and a device with unsynced changes in that project has to upload them first.
+>
+> **Archivar o borrar un proyecto.** Pasá el mouse por un proyecto en el selector (o tocá "⋯" en el teléfono): el
+> lápiz lo renombra, la caja lo archiva y el tacho lo borra. Archivar lo saca de tu lista de todos los días; queda
+> tal como está, editable, en *Proyectos archivados*. Borrar pide escribir *borrar*: va a *Proyectos borrados*, nadie
+> lo ve más y se puede restaurar tal como estaba (también después de los 30 días, mientras nadie lo borre para
+> siempre). Nada se borra de verdad y sus archivos quedan en Google Drive. Tu único proyecto activo no se archiva ni
+> se borra, y un dispositivo con cambios de ese proyecto sin subir tiene que subirlos antes.
+
+No hay atajos de teclado nuevos (Enter confirma y Escape cierra, como en las otras ventanas).
+
 ## Pendiente
 
-- **La prueba técnica de Drive** (sección 3.9), antes de construir la entrega 2 (y para decidir si sale con la 1).
-- Implementar: la app, el portero y las migraciones, con su auditoría de código antes de publicar. Las pruebas SQL
-  van a `supabase/tests/` como archivos separados, cada una con la preparación de la 1.4, y se vuelven a correr en
-  `begin; … rollback;` antes de migrar.
+- **Entrega 1:** auditoría del código; copia de seguridad y `db:migrate` de la migración 9; publicar; subir
+  `min_app_version`; probar en la app real (Wanka, la computadora y el iPhone).
+- **La prueba técnica de Drive** (sección 3.9), antes de construir la entrega 2.
+- Las entregas 2 y 3: sus pruebas SQL van a `supabase/tests/` como archivos separados, cada una con la preparación de
+  la 1.4, y se vuelven a correr en `begin; … rollback;` antes de migrar.

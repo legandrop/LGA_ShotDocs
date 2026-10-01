@@ -182,8 +182,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   borrar al lado de cada proyecto; borrar con una ventana que muestra páginas, archivos y GB en el Drive, con una
   casilla para mandar también lo del Drive y la palabra `delete` / `borrar`). Papelera de proyectos con 30 días
   para restaurar, sin borrar filas; tres entregas (archivar y borrar; la carpeta del Drive; *Delete forever*) con
-  sus migraciones probadas en `begin; … rollback;` contra la base. Próximo paso: la prueba técnica de Drive y,
-  si pasa, implementar las entregas 1 y 2 juntas.
+  sus migraciones probadas en `begin; … rollback;` contra la base. **Entrega 1 implementada (v0.077, rama
+  `lega/proyectos-borrar`):** íconos de archivar y borrar en el selector, la ventana con la palabra, las listas de
+  archivados y de borrados con *Restore*, el primer proyecto de cada dispositivo y la pantalla sin proyectos; falta
+  aplicar la migración 9 (después de la auditoría del código y la copia de seguridad) y subir `min_app_version`.
+  Sigue: la prueba técnica de Drive y la entrega 2 (la casilla); después, la 3 (*Delete forever*).
 - **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
   (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
   instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la

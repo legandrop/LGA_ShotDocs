@@ -90,6 +90,9 @@ In production (v0.049). What works today:
   of its level (just for you, saved on the device; Ctrl/⌘+Alt+Enter, and *Collapse all* in the page menu).
   Deleting a collapsed heading deletes its whole section; sheet marks still count everything and the PDF
   prints it all open (or as shown, with *Print as shown* in the page menu).
+- Archive and delete projects: icons next to each project in the project menu (a "⋯" on the phone). Archiving keeps
+  the project as it is, out of the everyday list; deleting asks you to type *delete* and moves it to *Deleted
+  projects*, from where it can be restored exactly as it was. Nothing is erased, and its files stay in Google Drive.
 - Keyboard in the page tree: ↑ and ↓ open the previous or next page, → and ← expand and collapse (← on a page with nothing to collapse goes to its parent page).
 - Page breaks and PDF: pages with a paper size show where each sheet starts, and *Export PDF / Print* in the page menu prints exactly those sheets.
 - English and Spanish: the whole interface in both languages, chosen in the account menu and saved in your account (Script is *Guion* in Spanish).

@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.077 :
+
+No había forma de sacar un proyecto de la lista: la base no dejaba borrar proyectos y la app no tenía nada para
+eso. Ahora, al pasar el mouse por un proyecto del selector (o con "⋯" en el teléfono), renombrar, archivar y
+borrar. Archivar pregunta en el mismo renglón y lo pasa a *Archived projects*, editable y con los mismos permisos.
+Borrar abre una ventana con páginas, archivos y peso en Drive, y pide escribir `delete` o `borrar` según el idioma;
+el proyecto va a *Deleted projects*: nadie lo ve, ninguna fila se borra y *Restore* lo deja como estaba. Lo decide
+la base (migración 9: los permisos dan cero con el proyecto borrado). Un dispositivo cuyo primer proyecto se borró
+pasa al siguiente, y con una base sin migrar todo sigue como antes.
+[ Proyectos - archivar, borrar y restaurar ]
+
 v0.076 :
 
 Fotos en línea, entrega 1: la foto como un carácter del renglón, todavía sin nada que la cree. Faltaba que el

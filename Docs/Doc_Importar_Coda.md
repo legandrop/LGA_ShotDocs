@@ -125,8 +125,8 @@ importación escribió en cada una, cuáles están terminadas y la dirección `s
 queda guardado. Al volver a elegir la misma carpeta el diálogo lo dice ("no terminó: 12 de 35 páginas") y
 ofrece **Seguir**, que continúa en el mismo proyecto: no crea otra vez las páginas ya creadas, saltea las
 terminadas y usa los archivos ya guardados en vez de guardarlos (y subirlos al Drive) de nuevo. **Importar a
-un proyecto nuevo** empieza de cero (el proyecto a medias queda: la app todavía no borra ni archiva proyectos, ver
-P.14 del roadmap; se le puede cambiar el nombre y mandar sus páginas a la papelera).
+un proyecto nuevo** empieza de cero (el proyecto a medias queda; desde P.14 se puede borrar desde el selector, y
+va a la papelera de proyectos: `Doc_Proyectos_Borrar.md`).
 
 - **Qué queda para seguir.** La anotación se borra solo cuando todas las páginas quedaron terminadas. Queda
   sin terminar una página cuyo contenido no se pudo escribir ("3 archivos quedaron guardados pero la página no
@@ -141,7 +141,9 @@ P.14 del roadmap; se le puede cambiar el nombre y mandar sus páginas a la papel
   queda como la dejó (lo que había fallado ahí no se reintenta). Las dos cosas quedan anotadas.
 - **Una página terminada** no se vuelve a tocar al seguir, aunque la persona la haya mandado a la papelera
   (no vuelve). Una sin terminar que se mandó a la papelera sí se crea de nuevo.
-- **Si el proyecto ya no está** (se perdió el acceso), la anotación se borra al elegir la carpeta.
+- **Si el proyecto ya no está** (se perdió el acceso, o está en la papelera de proyectos), no se ofrece seguir, pero
+  la anotación se conserva (desde P.14): si el proyecto se restaura, se puede seguir. Una importación nueva del mismo
+  doc la reemplaza.
 - **Huecos que quedan** (un corte en el instante justo): una página creada y no anotada todavía se crea de
   nuevo al seguir (queda una vacía de más, con el mismo título), y un archivo guardado y no anotado todavía se
   guarda de nuevo (entra dos veces al Drive; la copia de más, sin página que la use, va a la papelera de
