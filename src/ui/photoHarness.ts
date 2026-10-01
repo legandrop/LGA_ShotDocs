@@ -11,7 +11,8 @@ import { STABLE_GAPS_MARKER } from './unknownContent';
 
 /**
  * El esquema de la versión anterior (`origin/main` al hacer la entrega 1a): los mismos bloques y el contenido
- * en línea de BlockNote, sin `photo`.
+ * en línea de BlockNote, sin `photo`. Ojo: con la librería de HOY (la de esta app); la librería que tenían esas
+ * versiones la prueba collabPhotosVersions.published.test.ts.
  */
 export const previousSchema = BlockNoteSchema.create({ blockSpecs: appBlockSpecs });
 

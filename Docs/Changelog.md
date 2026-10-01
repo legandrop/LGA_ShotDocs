@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.077 :
+
+Fotos en línea, entrega 2: pegar, soltar y "/Image" ponen fotos y videos en el renglón, donde está el cursor (una
+con su tamaño, varias a un tercio, juntas y con un solo deshacer); los adjuntos siguen como tarjeta. La foto elegida
+tiene su barra: ver, bajar, tamaños para todas las elegidas y *Arrange in rows* de las elegidas; un párrafo de fotos
+se parte entre hojas por filas enteras. Antes de crear, se midió con la librería publicada que una versión vieja
+que abría un renglón al que le borraron las fotos perdía texto (28 de 49): ahora el renglón lleva una marca que esas
+versiones no conocen, y no lo abren (0 de 49). También: emojis y dictado con una foto elegida, arrastrar soltando
+sobre una foto y la barra de texto que tapaba la foto vecina.
+[ Fotos en línea - entrega 2: crear, tamaños, acomodar las elegidas y hojas ]
+
 v0.076 :
 
 Fotos en línea, entrega 1: la foto como un carácter del renglón, todavía sin nada que la cree. Faltaba que el

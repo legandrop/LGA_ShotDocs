@@ -3,6 +3,12 @@
 Diseño de lo que pidió Lega el 2026-09-30 (fotos y videos del editor; en la página los dos son un bloque
 `image`, ver `Doc_Carrete.md`). Estado: **hecho: v0.044 (elegir y abrir), v0.045 (anchos y filas), v0.046 (acomodar en filas), v0.047 (en el teléfono, en fila o apiladas) y v0.058 (calidad en la página).** "Correcciones de la auditoría previa" manda sobre lo anterior.
 
+**Desde v0.077, nada crea fotos-bloque nuevas** con un archivo: pegar, soltar y "/Image" ponen las fotos y los videos
+en el renglón (`Doc_Fotos_En_Linea.md`, "Cómo quedó (entrega 2)"); los adjuntos siguen siendo un bloque `image` (la
+tarjeta). Lo de este documento sigue valiendo para las fotos-bloque que ya existen (sus filas, tamaños y *Arrange in
+rows* sobre la tanda) y para las que todavía crea pegar HTML con un `<img>`, hasta convertirlas (entrega 3 de las
+fotos en línea).
+
 ## Lo que se pide
 
 1. **El primer clic elige, el segundo abre.** Hoy, con el mouse, un clic en una foto abre el carrete. El

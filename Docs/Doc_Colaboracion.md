@@ -16,7 +16,7 @@ dos dispositivos de la misma persona) editan la misma página a la vez. Compleme
   un bloque, lo sangra, lo mueve o lo junta con otro, y **al mismo tiempo** otra escribe en ESE bloque, lo que
   escribió la segunda se puede perder (ver la tabla). Es raro (tiene que ser el mismo bloque, en los mismos
   segundos, o con uno de los dos sin red) y se ve enseguida.
-- **Desde v0.074, los renglones con fotos en línea** (nada las crea todavía) tienen su parte del parche ("El
+- **Desde v0.074, los renglones con fotos en línea** (desde v0.077 las crean pegar, soltar y "/Image") tienen su parte del parche ("El
   texto de los huecos" y "Huecos estables") y su tabla, medida: escribir los dos en el mismo hueco, y borrar,
   mover o agregar una foto mientras el otro escribe pegado a ella, no pierden nada. Lo que queda es lo de los
   cambios de estructura (unir, cambiar el tipo; Enter deja algunas marcas con las letras desordenadas).
@@ -48,7 +48,7 @@ Qué pasa, en palabras de usuario (A y B cambian la misma página a la vez, sin 
 | Le cambia el tipo a un renglón | Le cambia el tipo al mismo renglón | Queda uno de los dos tipos, con su texto (antes se borraba el renglón entero). |
 | Sangra un renglón | Sangra el mismo renglón | Queda sangrado una vez (si el de arriba ya tenía hijos, puede quedar dos veces; nunca se pierde). |
 
-**En un renglón con fotos en línea** (desde v0.074; nada las crea todavía, ver `Doc_Fotos_En_Linea.md`). Las
+**En un renglón con fotos en línea** (desde v0.074; desde v0.077 las crean pegar, soltar y "/Image", ver `Doc_Fotos_En_Linea.md`). Las
 fotos son elementos entre los textos del renglón. Con los huecos estables (ver "Huecos estables") ningún texto
 de un renglón con fotos se borra ni se vuelve a crear: sacar, mover o insertar una foto toca solo la foto.
 Medido con 300 agendas al azar por caso (`src/ui/collabPhotos*.test.ts`; el número es la cantidad de agendas

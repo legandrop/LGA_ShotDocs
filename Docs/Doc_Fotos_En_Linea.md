@@ -1,9 +1,9 @@
 # Fotos en línea: la foto como un carácter del renglón (P.15)
 
-Estado: **entrega 0 (prototipo), 1a (el nodo, el parche de huecos y los huecos estables) y 1b (lo que se ve y
-se toca) hechas; falta publicar la entrega 1 y el resto** (2026-10-01; ver "Prototipo (entrega 0)", "Cómo quedó
-(entrega 1a)" y "Cómo quedó (entrega 1b)"; las "Correcciones de la auditoría", más
-abajo, mandan sobre el diseño de arriba). Nada en la app crea todavía una foto en línea. Pedido de Lega del
+Estado: **entregas 0 (prototipo), 1 (v0.076: el nodo, los huecos estables, lo que se ve y se toca) y 2 (v0.077:
+crear, dar tamaño, acomodar las elegidas, hojas y PDF) hechas; faltan la 3 (convertir las fotos-bloque) y la 4
+(importar de Coda)** (2026-10-01; ver "Cómo quedó" de cada una; las "Correcciones de la auditoría", más abajo,
+mandan sobre el diseño de arriba, y la entrega 2 trae propuestas nuevas, marcadas). Pedido de Lega del
 2026-10-01, con sus palabras: las
 imágenes tienen que ser "como en Coda o en cualquier lado, un carácter más de un texto". Reemplaza el modelo de
 `Doc_Imagenes.md` (la foto como bloque y las filas como arreglo entre bloques), que queda para las fotos que
@@ -84,6 +84,11 @@ toda versión que puede entrar tiene el resguardo. Orden de publicación:
 
 Así nunca hay una página con fotos en línea que una versión permitida no sepa abrir más que con el aviso.
 `unknownContent.ts` suma `photo` a sus nombres conocidos en el paso 1 (su prueba lo exige).
+
+**Cómo quedó (entrega 2):** el renglón con fotos lleva además una marca propia (`lgaStableGaps`) que ninguna versión
+anterior conoce, así que ninguna abre una página con fotos en línea ni con un renglón que las tuvo. Con eso el
+paso 2 deja de ser previo: se publica la v0.077 (paso 1 y 3 juntos) y **después** se sube `min_app_version` a
+0.077. Ver "Cómo quedó (entrega 2)".
 
 ## Cómo se ve y se comporta
 
@@ -489,3 +494,131 @@ distingue la letra de la tecla misma).
 - La auditoría de v0.076 dejó tres cosas para antes de la entrega 2 y algunas para decidir (roadmap P.15):
   emojis y dictado con una foto elegida la reemplazan, arrastrar para elegir y soltar sobre una foto, la barra
   de texto encima de la foto vecina; pegar HTML con una foto (`data-inline-content-type="photo"`) ya crea una.
+
+## Cómo quedó (entrega 2: crear, dar tamaño, acomodar las elegidas, hojas y PDF)
+
+v0.077. Es la primera versión que **crea** fotos en línea. Antes de crear se cerró lo que dejaron las auditorías de
+v0.076 (fase A); después, lo de crear (fase B). Todo medido con pruebas en el repo y en Chromium sin ventana, con la
+página real de la app sobre el servidor en memoria (scripts fuera de este repo).
+
+### Antes de crear (fase A)
+
+**Versiones mezcladas: la marca del renglón. PROPUESTA para la auditoría; cambia la forma guardada.** Un renglón
+al que le borraban todas las fotos quedaba con sus textos seguidos y sin nada que una versión anterior desconociera:
+esas versiones lo abrían y, al editarlo, juntaban los textos en uno y borraban los otros, con lo que otro hubiera
+escrito en ellos. Medido con la librería **publicada** de verdad (`collabPhotosVersions.published.test.ts`, 7
+posiciones por lado, sin verse): uno viejo y uno nuevo, **28 de 49 perdían**; dos viejos, **49 de 49 dejaban el
+renglón dos veces**. Subir `min_app_version` no alcanzaba: una versión vieja sin permiso para subir sigue bajando y
+editando en el dispositivo, y al actualizarse sube su cola (para Yjs el orden no cambia nada: las mismas pérdidas).
+
+Ahora el renglón lleva, primero, un elemento vacío `lgaStableGaps` que el parche pone con la primera foto, nunca
+borra y nunca dibuja; las versiones de la v0.052 a la v0.076 no lo conocen y no abren la página. Con la marca:
+**0 de 49** en todas las combinaciones (viejo y nuevo, dos viejos, dos nuevos, renglón con fotos), y un dispositivo
+viejo sin red que editó el renglón *antes* de que tuviera fotos y sube su cola después: **0 letras perdidas en 104
+combinaciones** (en 9, lo que el viejo borró vuelve, porque el nuevo partió ese texto con una foto). Un párrafo sin
+fotos se guarda igual que antes, byte a byte, contra la librería publicada (40 agendas de 40 pasos). La otra salida
+medida, juntar los textos al borrar la última foto, perdía 4 de 7 entre dos versiones nuevas y duplicaba si los dos
+borraban a la vez: descartada. Detalle en `Doc_Colaboracion.md`, "Versiones viejas".
+
+**La prueba con la librería publicada** queda en el repo: `src/test/publishedYProsemirror.ts` la arma sin red ni git
+(copia `node_modules/y-prosemirror` a `node_modules/.cache/`, le saca el parche de hoy, le pone el de la v0.052,
+`src/test/fixtures/y-prosemirror-v0.052.patch`, y comprueba las huellas), y el proyecto `published` de
+`vite.config.ts` la pone en lugar de `y-prosemirror`, también adentro de BlockNote.
+
+**Lo que dejó la auditoría de la 1b** (`inlinePhotoEditor.ts`, con su prueba cada uno):
+
+- Texto que entra sin tecla con una foto elegida (emojis, dictado): va después de la foto (`handleTextInput`).
+- Arrastrar para elegir y soltar sobre una foto: la elección termina en el borde de la foto más cercano al puntero
+  (mitad izquierda, antes; derecha, después), al leer la selección y al soltar. Mientras se arrastra, la marca puede
+  quedarse atrás un instante: corregirla en el medio del arrastre le corría el ancla al navegador (medido).
+- La barra de texto con una foto elegida: ya no se abre (tapaba la foto vecina y se quedaba con su clic); va la barra
+  propia.
+
+### Crear (`inlinePhotoCreate.ts`)
+
+- **Pegar** (archivos), **soltar** y **"/Image"** (abre el selector de archivos del sistema, con varios). Las fotos y
+  los videos entran en el renglón, donde está el cursor o entre las letras donde se soltaron; los adjuntos siguen
+  entrando como tarjeta, un bloque debajo (`fileDrop.ts`). Sin portero, solo imágenes (a Supabase), también en el
+  renglón.
+- **Dónde, si ahí no pueden ir:** con una foto-bloque o un bloque elegido entero, con el cursor en una celda de tabla
+  o en código, o soltando sobre una foto-bloque o una tarjeta, van en un renglón nuevo al lado del bloque.
+- **Al pegar** con texto elegido, lo reemplazan (como al pegar texto); con una foto en línea elegida, van después de
+  ella (como una letra).
+- **El ancho:** una sola, su ancho natural (como entraba un bloque); varias a la vez, 1/3 cada una. Es la propuesta
+  del diseño mientras Lega no responda ("Preguntas para Lega", 3): una constante (`NEW_PHOTO_WIDTH`).
+- **Cuándo:** la foto entra cuando el archivo ya está guardado en el dispositivo, con su dirección definitiva: no hay
+  marcador en el documento ni "la subida fallida saca la foto". Mientras tanto, una marca de espera (una decoración)
+  en el lugar, que se sigue con el mapeo de ProseMirror y, para lo que llega de otro dispositivo o un deshacer (que
+  reescriben todo el documento del editor), con una posición de Yjs. Todas juntas, en orden, en un solo cambio: un
+  Ctrl+Z las saca. Un archivo que no se pudo guardar avisa y no corta los demás.
+- Las fotos HEIC pasan a `.jpg` en el nombre cuando se convierten, también las en línea (`heicNames.ts`).
+
+### La barra de la foto (`PhotoToolbar.tsx`) y el tamaño (`inlinePhotoSize.ts`)
+
+- Con una foto en línea elegida, o una selección de solo fotos, la barra propia: ver (el carrete), bajar el original
+  (las del Drive), *Arrange in rows*, los cuatro tamaños y comentar. Va arriba de la foto más alta de su renglón
+  (abajo, si arriba no entra) y adentro de la pantalla; no se muestra mientras se aprieta el mouse. La barra de texto
+  de BlockNote no se abre (su contenedor vacío igual aparecía un instante al soltar el clic y se quedaba con el clic en
+  la foto vecina: medido).
+- Con texto y fotos elegidos, la barra de texto de BlockNote suma los tamaños y *Arrange in rows*.
+- **Los tamaños** valen para todas las fotos elegidas, en un solo cambio (un atributo del nodo: editar a la vez no
+  pierde nada, medido en la entrega 1).
+- ***Arrange in rows*** acomoda **las elegidas** (pedido de Lega) con el `arrangeRows` de siempre; con una sola
+  elegida, las seguidas de su renglón. Si hay texto entre las elegidas, el botón queda apagado y dice *Select images
+  that are next to each other, with no text between them*. **Propuesta:** para que queden en filas propias dentro de
+  una tanda más larga (las filas las arma `groupRows` desde el principio de la tanda), si la fila de antes de la
+  primera elegida no está llena, entran también las fotos de esa fila (las que se ven en el mismo renglón), y si
+  después de la última sigue otra foto y la última fila no llena el renglón, esa fila se llena.
+- **Una fila llena después de un texto** del mismo renglón empieza en un renglón nuevo (una marca que no es parte del
+  documento, `sd-photo-row-start`, puesta después del cursor para que lo que se escribe al final del texto quede en
+  el texto). Sin ella, las primeras fotos de la fila quedaban al lado del texto y la última bajaba sola. Una fila que
+  no llena sigue al lado del texto, como una palabra.
+
+### Hojas y PDF
+
+Un párrafo con fotos en línea se parte entre renglones (cada renglón, una fila) aunque entre entero en una hoja, como
+se partían las filas de fotos-bloque (`breakable` en `pagination.ts`; la copia de impresión no le pone "no
+partir"). Una fila nunca se corta.
+
+### Lo medido
+
+| Caso | Resultado |
+|---|---|
+| Pegar una foto en el medio de un renglón (Chromium, con portero) | Entra ahí, `sdmedia://`, ancho natural; el cursor queda después |
+| Pegar tres al final de un texto | Juntas, en orden, a 1/3; una fila propia debajo del texto; un Ctrl+Z las saca, Ctrl+Y las vuelve |
+| Soltar dos entre dos palabras / sobre una foto-bloque / pegar en una celda | Entre las palabras / renglón nuevo después de la foto-bloque / renglón nuevo después de la tabla |
+| "/Image" | Abre el selector (varios archivos); entran donde estaba el cursor |
+| Mientras se guardan, el otro escribe en el renglón (dos editores con Yjs) | Lo escrito queda, las fotos en su lugar, el renglón con su forma |
+| Clic en una foto | La elige; la barra propia arriba (no tapa la foto ni la vecina más alta); la de texto no aparece |
+| Shift+clic sobre tres y 1/4, *Arrange in rows* | Las tres a 1/4; acomodadas llenan el renglón con la misma altura (diferencia < 0,05 px); la no elegida no cambia; un Ctrl+Z |
+| Emoji (`insertText`) con una foto elegida | `[F5]😀[F6]` |
+| Arrastrar para elegir y soltar en la mitad derecha / izquierda de una foto | Termina después / antes de ella (las cuatro posiciones de la auditoría de la 1b, bien al soltar) |
+| Escribir delante de una fila llena que pasa a empezar renglón | `abc[F3][F4][F5]`; tres Backspace borran las letras |
+| Teléfono (375 px): pegar tres, en fila y apiladas; la barra | Una fila de tres / cada una al ancho; la barra adentro de la pantalla |
+| Imprimir A4 con un párrafo de tres filas de fotos que cruza el corte | El cálculo corta entre la 2.ª y la 3.ª fila, y el PDF de Chromium (`page.pdf`) también: las fotos 1 a 6 en la hoja 1, 7 a 9 en la 2 |
+| Los scripts de la 1b (teclado, composición, carrete, el resto) | Iguales a la 1b, salvo lo cambiado a propósito (las barras) |
+| Anchos: 831 anchos × 2 densidades (1 y 1,75) | 0 renglones distintos de su fila; diferencia de alto ≤ 0,08 px (como la 1b) |
+
+Pruebas en el repo: `inlinePhotoCreate.test.ts`, `inlinePhotoSize.test.ts`, `stableGapsMarker.test.ts`,
+`collabPhotosVersions.published.test.ts`, y casos nuevos en `inlinePhotoEditor.test.ts`, `pagination.test.ts` y
+`heicNames.test.ts`.
+
+### Límites que quedan
+
+- **Sin probar en Safari ni en el iPhone** (pegar, soltar, el selector de "/Image" con la cámara, la barra con el
+  dedo, la composición).
+- Pegar HTML con un `<img>` (de una web, de otro programa) sigue creando una foto-bloque: llevarlo al renglón es de la
+  entrega 3, con la conversión de imágenes `data:`.
+- "/Image" ya no ofrece pegar una dirección (*Embed*) para una foto de otro sitio: abre el selector de archivos.
+- Las fotos en las celdas de una tabla siguen afuera (van en un renglón después de la tabla; entrega 5).
+- Llenar la última fila al acomodar puede dejarla muy alta (dos verticales a todo el ancho).
+- La marca de espera solo se ve en el renglón; si las fotos van a un renglón nuevo, no hay marca mientras se guardan.
+- Lo que sigue de editar a la vez junto a fotos (unir renglones, cambiar el tipo, dos Enter a la vez) está en
+  `Doc_Colaboracion.md`, igual que en la entrega 1.
+
+### `min_app_version`
+
+Con la marca del renglón, ninguna versión anterior abre una página con fotos en línea (ni con un renglón que las
+tuvo), así que no hace falta subirlo antes. Orden: **publicar la v0.077 y después subir `min_app_version` a 0.077**
+(una fila de la base; la cambia Lega), cuando la tenga en sus dispositivos. Así las versiones viejas dejan de subir
+cambios y avisan que hay que actualizar.

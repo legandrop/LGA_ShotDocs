@@ -9,10 +9,10 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 //
 // ESTE SÍ ES UN TIPO DE NODO NUEVO, la excepción a la regla "nada de tipos nuevos" (editorSchema.ts): una
 // versión que no lo conoce lo borraría del documento compartido al abrir la página. Lo que la cubre es el
-// resguardo de `unknownContent.ts` (toda versión que puede entrar lo tiene: `min_app_version`), que no abre
-// en el editor una página con algo que no conoce. Por eso esta versión solo lo CONOCE (lo muestra y lo
-// edita): nada en la app lo crea todavía (ni pegar, ni soltar, ni importar). Recién cuando el workspace
-// exija esta versión se publica la que lo crea.
+// resguardo de `unknownContent.ts` (toda versión que puede entrar lo tiene, desde v0.021), que no abre en el
+// editor una página con algo que no conoce: la foto (v0.052 a v0.075) o la marca del renglón `lgaStableGaps`
+// (también v0.076), que queda aunque al renglón le borren todas las fotos. Desde v0.077 la crean pegar, soltar y
+// el menú "/" (inlinePhotoCreate.ts); importar de Coda, todavía no (entrega 4).
 //
 // Propiedades:
 // - `url`: `sdmedia://<id>` (o una dirección `https`). Se llama `url` a propósito: `mediaIdsInDoc`
@@ -102,8 +102,9 @@ export const PhotoNode = Node.create({
     return extension.name === PHOTO ? { [GAP_TEXT_SPEC]: true } : {};
   },
 
-  // Solo lo que copió la propia app. Sin regla para un `<img>` de afuera, a propósito: pegar de una web no
-  // tiene que crear fotos en línea mientras haya versiones permitidas que no las conocen.
+  // Solo lo que copió la propia app. Sin regla para un `<img>` de afuera: pegar HTML de una web o de otro programa
+  // sigue creando fotos-bloque (y pasa por la conversión de imágenes `data:`, que mira bloques); llevarlo al renglón
+  // es de la entrega 3.
   parseHTML() {
     return [{ tag: `span[data-inline-content-type="${PHOTO}"]` }];
   },
