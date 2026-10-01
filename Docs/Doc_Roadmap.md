@@ -263,8 +263,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       **Decisión de Lega**, entre dos caminos: decodificarlo en el dispositivo para armar la miniatura y la
       imagen de la página (el mismo decodificador del comando, libheif, pesa alrededor de 1,4 MB y tendría que
       bajarse aparte, solo cuando hace falta), o convertirlo a JPEG al agregarlo y guardar el original aparte.
-    - **Verlo en la app** con una importación real de un doc con fotos HEIC convertidas (probado hasta la
-      carpeta exportada: archivos, manifest y HTML).
+    - **Verlo en la app con el doc entero.** Probado con una importación real de cuatro páginas (46 fotos
+      convertidas: en el Drive, con miniatura y a la vista); falta la de un doc completo.
     - **Los metadatos** de la foto (fecha, lugar, cámara) no pasan al JPEG: quedan en el original.
     - **De a una.** La conversión tarda alrededor de un segundo por foto; con miles, convendría en paralelo.
     - **El perfil de color se toma por orden** en el archivo (el primero de color que aparece), que en las

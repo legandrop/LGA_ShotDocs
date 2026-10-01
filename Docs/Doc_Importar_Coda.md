@@ -617,4 +617,6 @@ archivos rotos (quedan como estaban, las demás se convierten) y después de un 
 mover y un JPEG a medias). Además, el comando entero contra una API de Coda simulada, sin red (primera corrida,
 repetir, `--refresh`, sin la librería, y un doc sin HEIC comparado con el comando anterior: mismos pedidos y
 mismos archivos), y la carpeta que dejó, importada con el código de la app: llega el JPEG, con nombre y tipo
-de JPEG, y el original no se sube. **No se probó** en la app real (navegador, Drive) con una importación.
+de JPEG, y el original no se sube. Y **en la app real** (navegador, base y Drive), una importación de cuatro
+páginas con 46 de esas fotos ya convertidas: las 46 quedaron con tipo y nombre de JPEG, en el Drive y con su
+miniatura, y las páginas las muestran, las verticales derechas. Falta la importación del doc entero.
