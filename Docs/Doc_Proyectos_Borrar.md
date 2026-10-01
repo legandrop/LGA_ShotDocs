@@ -3553,7 +3553,16 @@ sección 3.8, con el registro acumulado antes de cada `PATCH`, la búsqueda por 
   vuelve y la respuesta es `409 project_restored`. Mandar y traer del mismo proyecto van de a uno.
 
 Y, solo para el dueño y para la prueba técnica: `GET /project/inspect` (solo mira) y los modos `test: 'lost_response'`
-y `'lost_registry'`, que dejan el estado exacto de una respuesta perdida o de un registro perdido.
+y `'lost_registry'`, que dejan el estado exacto de una respuesta perdida o de un registro perdido. Los modos están
+**apagados** salvo con la variable `TEST_MODES=1` en el Worker, que se prende para la prueba técnica y se saca al
+terminar (`Doc_Portero.md`).
+
+**Corrección de la auditoría del código (B1):** *Look for its files again* podía decir "volvieron" sin que volviera
+nada: si Google ya había borrado la carpeta y, después de restaurar sin ella, una foto nueva creaba otra carpeta con la
+misma marca, `/project/untrash` contaba esa carpeta nueva como "existe" y la base borraba `drive_missing_at`. Ahora
+cuentan solo las carpetas de ese pedido: las del registro, las que se traen de la papelera y una viva creada antes del
+pedido (`createdTime`). Con la carpeta nueva sola, la respuesta es `missing` y la marca queda (prueba A1 en
+`core.test.ts`, con los casos A3 a A5 del auditor).
 
 **App:**
 
@@ -3598,13 +3607,19 @@ verdad con Drive y base de mentira.
 - Las fotos de un proyecto restaurado sin su carpeta se ven rotas en la página: la app todavía no muestra *File deleted
   (in the Drive trash)* con la regla de `project_sizes` (sección 3.3). El inicio lo explica.
 - El pase de un archivo dado antes de mandar la carpeta (punto 6) sigue la regla de siempre: vale hasta que vence.
+- **La app v0.077 no puede restaurar un proyecto con la carpeta en la papelera de Drive:** con la base en la versión
+  10, su *Restore* llama a `restore_project(p)` sin traer la carpeta y la base responde `drive_untrash_first` ("Could
+  not do it: drive_untrash_first"). No pierde nada: el proyecto sigue borrado y se restaura desde la app nueva. Lo acota
+  `min_app_version` (hoy 0.078): al publicar esta entrega se sube a esta versión, antes del primer borrado con la
+  casilla.
 
 **Ayuda (regla de P.13):** la entrada de la entrega 1 suma un párrafo; está en `Doc_Tutorial.md`, "Entradas esperando
 la ayuda".
 
 ## Pendiente
 
-- **Entrega 2:** auditoría del código; copia de seguridad y `db:migrate` de la migración 10; publicar el portero y la
-  app en el mismo push; correr la prueba técnica con un proyecto de prueba; recién después borrar ERSO con la casilla.
+- **Entrega 2:** auditoría del código hecha y corregida (B1); copia de seguridad y `db:migrate` de la migración 10;
+  publicar el portero y la app en el mismo push; subir `min_app_version` a esta versión; prender `TEST_MODES=1`, correr
+  la prueba técnica con un proyecto de prueba y sacar la variable; recién después borrar ERSO con la casilla.
 - **Entrega 3** (*Delete forever*): su prueba SQL va a `supabase/tests/` con la preparación de la 1.4 y se vuelve a
   correr en `begin; … rollback;` antes de migrar.

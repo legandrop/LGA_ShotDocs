@@ -43,6 +43,7 @@ type FakeFile = {
   /** Mandado a la papelera él mismo (no por estar adentro de una carpeta en la papelera). */
   trashed?: boolean;
   trashedTime?: string;
+  createdTime?: string;
 };
 /** Un proyecto en la base, con lo de la entrega 2 de P.14 (migración 10). */
 type BaseProject = {
@@ -121,6 +122,7 @@ function fakeWorld() {
     trashed: inTrash(id),
     explicitlyTrashed: !!f.trashed,
     ...(f.trashed && f.trashedTime && !hideTrashedTime ? { trashedTime: f.trashedTime } : {}),
+    ...(f.createdTime ? { createdTime: f.createdTime } : {}),
     parents: f.parents,
     appProperties: f.appProperties,
   });
@@ -219,7 +221,7 @@ function fakeWorld() {
       const meta = JSON.parse(String(init.body)) as { name: string; parents?: string[]; appProperties?: Record<string, string> };
       if (meta.parents?.some((p) => p !== 'root' && !files.has(p))) return jsonRes({ error: 'parent not found' }, 404);
       const id = `folder${++n}xxxxxxxx`;
-      files.set(id, { name: meta.name, mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: meta.parents ?? ['root'], appProperties: meta.appProperties });
+      files.set(id, { name: meta.name, mime: 'application/vnd.google-apps.folder', data: new Uint8Array(), parents: meta.parents ?? ['root'], appProperties: meta.appProperties, createdTime: now });
       return jsonRes({ id });
     }
     if (url.host === 'www.googleapis.com' && url.pathname === '/drive/v3/files' && (init.method ?? 'GET') === 'GET') {
@@ -2196,6 +2198,9 @@ describe('portero: la carpeta de un proyecto borrado en la papelera de Drive', (
 });
 
 describe('portero: lo de la prueba técnica de la carpeta de un proyecto (solo el dueño)', () => {
+  /** El mismo portero (lo guardado y el Drive de mentira) con `TEST_MODES=1`. */
+  const withTests = (world: World, store: ReturnType<typeof memoryStore>) => new Portero({ ...env, TEST_MODES: '1' }, store, world.http);
+
   it('/project/inspect muestra la carpeta, lo de adentro y el registro, sin cambiar nada; solo el dueño', async () => {
     const { world, p, folder, driveFiles } = await deletedProject();
     expect((await projectCall(p, 'trash', 'owner-jwt')).status).toBe(200);
@@ -2222,7 +2227,8 @@ describe('portero: lo de la prueba técnica de la carpeta de un proyecto (solo e
   });
 
   it('modo de prueba lost_response: deja el estado de una respuesta perdida; repetir sin él termina', async () => {
-    const { world, store, p, folder } = await deletedProject();
+    const { world, store, folder } = await deletedProject();
+    const p = withTests(world, store);
     const res = await call(p, '/project/trash', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ project: PROJ, test: 'lost_response' }) });
     expect(res.status).toBe(502);
     expect(world.files.get(folder)!.trashed).toBe(true);
@@ -2232,7 +2238,8 @@ describe('portero: lo de la prueba técnica de la carpeta de un proyecto (solo e
   });
 
   it('modo de prueba lost_registry: sin registro ni carpeta recordada, la búsqueda la cuenta al mandar y la trae', async () => {
-    const { world, store, p, folder } = await deletedProject();
+    const { world, store, folder } = await deletedProject();
+    const p = withTests(world, store);
     await call(p, '/project/trash', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ project: PROJ, test: 'lost_response' }) });
     const before = world.calls.length;
     const retry = await call(p, '/project/trash', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ project: PROJ, test: 'lost_registry' }) });
@@ -2245,8 +2252,14 @@ describe('portero: lo de la prueba técnica de la carpeta de un proyecto (solo e
     expect(world.files.get(folder)!.trashed).toBe(false);
   });
 
-  it('los modos de prueba son solo del dueño y solo los conocidos', async () => {
-    const { world, p, folder } = await deletedProject();
+  it('los modos de prueba: apagados sin TEST_MODES=1 (también para el dueño); con ella, solo el dueño y los conocidos', async () => {
+    const { world, store, p: off, folder } = await deletedProject();
+    for (const test of ['lost_response', 'lost_registry']) {
+      const res = await call(off, '/project/trash', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ project: PROJ, test }) });
+      expect(res.status).toBe(400);
+      expect((await call(off, '/project/untrash', { method: 'POST', jwt: 'owner-jwt', body: JSON.stringify({ project: PROJ, test }) })).status).toBe(400);
+    }
+    const p = withTests(world, store);
     for (const [jwt, test] of [['admin-jwt', 'lost_response'], ['owner-jwt', 'otra'], ['owner-jwt', 1]] as const) {
       const res = await call(p, '/project/trash', { method: 'POST', jwt, body: JSON.stringify({ project: PROJ, test }) });
       expect(res.status).toBe(400);
@@ -2254,5 +2267,61 @@ describe('portero: lo de la prueba técnica de la carpeta de un proyecto (solo e
     expect((await call(p, '/project/untrash', { method: 'POST', jwt: 'admin-jwt', body: JSON.stringify({ project: PROJ, test: 'lost_registry' }) })).status).toBe(400);
     expect(world.files.get(folder)!.trashed).toBeFalsy();
     expect(world.projects.get(PROJ)!.requested_at).toBeNull();
+  });
+});
+
+describe('portero: auditoría de la entrega 2', () => {
+  it('A1: restaurado sin la carpeta y con una subida nueva (otra carpeta con la marca): buscar de nuevo dice missing y la marca queda', async () => {
+    const { world, store, p, folder } = await deletedProject();
+    expect((await projectCall(p, 'trash', 'owner-jwt')).status).toBe(200);
+    // Google la borró; la app restaura sin la carpeta (la base pone missing_at, el pedido queda).
+    world.files.delete(folder);
+    expect(await (await projectCall(p, 'untrash', 'owner-jwt')).json()).toMatchObject({ drive: 'missing' });
+    Object.assign(world.projects.get(PROJ)!, { deleted_at: null, missing_at: '2026-10-02T10:00:00Z' });
+    world.setNow('2026-10-02T11:00:00.000Z');
+    addBaseFile(world, FILE_C, { project_id: PROJ, project_name: 'Bosque Negro', size: 10 });
+    await uploadFile(p, 'editor-jwt', FILE_C, bytes(10));
+    const second = (await store.get<{ id: string }>(`project:${PROJ}`))!.id;
+    expect(second).not.toBe(folder);
+    const before = world.calls.length;
+    expect(await (await projectCall(p, 'untrash', 'owner-jwt')).json()).toMatchObject({ drive: 'missing', folders: 0 });
+    expect(changes(world, before)).toEqual([]);
+    expect(world.projects.get(PROJ)).toMatchObject({ requested_at: expect.any(String), missing_at: '2026-10-02T10:00:00Z' });
+    expect(world.files.get(second)!.trashed).toBeFalsy();
+  });
+
+  it('A3: una carpeta de otro proyecto y una sin marca metidas en el registro: traer no las toca', async () => {
+    const { world, store, p, folder } = await deletedProject();
+    expect((await projectCall(p, 'trash', 'owner-jwt')).status).toBe(200);
+    world.files.set('ajena-de-otro-proyecto', { ...world.files.get(folder)!, trashed: true, appProperties: { sdProject: OTHER_PROJ } });
+    world.files.set('carpeta-sin-marca-xxx', { ...world.files.get(folder)!, trashed: true, appProperties: {} });
+    const reg = (await store.get<{ folders: string[] }>(`projectTrash:${PROJ}`))!;
+    await store.put(`projectTrash:${PROJ}`, { ...reg, folders: [...reg.folders, 'ajena-de-otro-proyecto', 'carpeta-sin-marca-xxx'] });
+    expect(await (await projectCall(p, 'untrash', 'owner-jwt')).json()).toMatchObject({ drive: 'untrashed', folders: 1 });
+    expect(world.files.get('ajena-de-otro-proyecto')!.trashed).toBe(true);
+    expect(world.files.get('carpeta-sin-marca-xxx')!.trashed).toBe(true);
+  });
+
+  it('A4: una carpeta ajena en el registro del mismo pedido: mandar responde drive_mismatch y no la toca', async () => {
+    const { world, store, p, folder } = await deletedProject();
+    world.onPatch(() => 'lose');
+    expect((await projectCall(p, 'trash', 'owner-jwt')).status).toBe(502);
+    world.onPatch(null);
+    world.files.set('ajena-viva-xxxxxxxxx', { ...world.files.get(folder)!, trashed: false, appProperties: { sdProject: OTHER_PROJ } });
+    const reg = (await store.get<{ folders: string[] }>(`projectTrash:${PROJ}`))!;
+    await store.put(`projectTrash:${PROJ}`, { ...reg, folders: [...reg.folders, 'ajena-viva-xxxxxxxxx'] });
+    const res = await projectCall(p, 'trash', 'owner-jwt');
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'drive_mismatch' });
+    expect(world.files.get('ajena-viva-xxxxxxxxx')!.trashed).toBe(false);
+  });
+
+  it('A5: mandar y traer a la vez del mismo proyecto van de a uno: la carpeta termina fuera de la papelera y sin marcas', async () => {
+    const { world, p, folder } = await deletedProject();
+    const [a, b] = await Promise.all([projectCall(p, 'trash', 'owner-jwt'), projectCall(p, 'untrash', 'owner-jwt')]);
+    expect(await a.json()).toMatchObject({ drive: 'trashed' });
+    expect(await b.json()).toMatchObject({ drive: 'untrashed', folders: 1 });
+    expect(world.files.get(folder)!.trashed).toBe(false);
+    expect(world.projects.get(PROJ)).toMatchObject({ requested_at: null, trashed_at: null });
   });
 });

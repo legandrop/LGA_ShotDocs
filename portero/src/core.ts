@@ -23,6 +23,11 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   /** Clave de API de Google para el selector de carpetas (Picker). Sin ella, la carpeta va a la raíz. */
   GOOGLE_API_KEY?: string;
+  /**
+   * `1` prende los modos de prueba de `/project/trash` y `/project/untrash` (solo el dueño), para la prueba técnica de
+   * P.14 (Doc_Portero.md). Apagado (sin la variable) en el día a día.
+   */
+  TEST_MODES?: string;
 }
 
 /** Lo que el portero guarda (la conexión con Drive, las subidas en curso). Ver index.ts. */
@@ -117,6 +122,8 @@ interface DriveFolder {
   trashed?: boolean;
   /** Cuándo fue a la papelera. Google lo documenta solo para unidades compartidas: puede no venir. */
   trashedTime?: string;
+  /** Cuándo se creó: una carpeta viva creada después del pedido es otra (la de una subida nueva), no la del pedido. */
+  createdTime?: string;
   appProperties?: Record<string, string>;
 }
 
@@ -1103,7 +1110,7 @@ export class Portero {
     // Para la prueba técnica (sección 3.9), solo el dueño: dejar el estado exacto de una respuesta perdida (Drive la
     // mandó, la base no se enteró) o de un registro perdido. Nunca hace nada que un corte de red no pudiera hacer.
     const test = body.test === undefined ? null : body.test;
-    if (test !== null && (!who.isOwner || (test !== 'lost_response' && test !== 'lost_registry'))) {
+    if (test !== null && (!this.testModes(who) || (test !== 'lost_response' && test !== 'lost_registry'))) {
       throw new HttpError(400, 'Unknown test mode.', 'bad_request');
     }
     return this.oneAtATime(project, () =>
@@ -1123,8 +1130,13 @@ export class Portero {
     const project = this.projectId(body);
     // Prueba técnica (solo el dueño): traer sin mirar el registro ni la carpeta recordada, solo con la búsqueda.
     const test = body.test === undefined ? null : body.test;
-    if (test !== null && (!who.isOwner || test !== 'lost_registry')) throw new HttpError(400, 'Unknown test mode.', 'bad_request');
+    if (test !== null && (!this.testModes(who) || test !== 'lost_registry')) throw new HttpError(400, 'Unknown test mode.', 'bad_request');
     return this.oneAtATime(project, () => this.bringProjectFolder(project, who, test === 'lost_registry').catch(withProjectCode));
+  }
+
+  /** Los modos de prueba: solo el dueño, y solo con `TEST_MODES=1` en el Worker. */
+  private testModes(who: Who): boolean {
+    return who.isOwner && (this.env.TEST_MODES ?? '').trim() === '1';
   }
 
   private projectId(body: Record<string, unknown>): string {
@@ -1256,19 +1268,29 @@ export class Portero {
       (f) =>
         f.trashed && ((!onlySearch && reg?.folders.includes(f.id)) || !f.trashedTime || Date.parse(f.trashedTime) >= cutoff),
     );
+    // Las que son de este pedido: las del registro (en cualquier estado: alguien pudo sacarla a mano de la papelera),
+    // las que se traen y una viva creada antes del pedido. Una viva creada después (la carpeta nueva que arma el
+    // portero en la primera subida después de restaurar sin la carpeta) es otra: no cuenta, así *Look for its files
+    // again* no dice "volvieron" ni borra la marca de la base sin que vuelva nada.
+    const ours = folders.filter(
+      (f) =>
+        (!onlySearch && reg?.folders.includes(f.id)) ||
+        toBring.includes(f) ||
+        (!f.trashed && !!f.createdTime && Date.parse(f.createdTime) < Date.parse(requestedAt)),
+    );
     let brought = 0;
     for (const f of toBring) {
       if (await this.untrashFolder(f.id)) brought++;
     }
 
-    if (folders.length === 0 && !(reg?.result === 'none' && reg.folders.length === 0)) {
+    if (ours.length === 0 && !(reg?.result === 'none' && reg.folders.length === 0)) {
       // Drive no tiene ninguna, con la misma cuenta: la app pregunta antes de restaurar sin los archivos.
       return { status: 'done', project, drive: 'missing', folders: 0 };
     }
     await this.projectRpc(who, 'project_drive_untrashed', project);
     // Volvió todo: el registro de este pedido ya no hace falta (la base no tiene más el pedido).
     await this.store.delete(`projectTrash:${project}`);
-    return { status: 'done', project, drive: folders.length ? 'untrashed' : 'none', folders: brought };
+    return { status: 'done', project, drive: ours.length ? 'untrashed' : 'none', folders: brought };
   }
 
   /**
@@ -1353,7 +1375,7 @@ export class Portero {
 
   /** Una carpeta por su id, con lo que hace falta para decidir; `null` si ya no existe. */
   private async lookFolder(id: string): Promise<DriveFolder | null> {
-    const res = await this.drive(`/files/${encodeURIComponent(id)}?fields=id,name,trashed,trashedTime,appProperties`);
+    const res = await this.drive(`/files/${encodeURIComponent(id)}?fields=id,name,trashed,trashedTime,createdTime,appProperties`);
     if (res.status === 404) return null;
     if (!res.ok) throw new HttpError(502, `Could not check the project folder in Google Drive (${res.status}).`, 'drive_failed');
     return (await res.json()) as DriveFolder;
@@ -1366,7 +1388,7 @@ export class Portero {
     for (let page = 0; page < 10; page++) {
       const params = new URLSearchParams({
         q: `mimeType = '${FOLDER_MIME}' and appProperties has { key='sdProject' and value='${project}' }`,
-        fields: 'nextPageToken,files(id,name,trashed,trashedTime,appProperties)',
+        fields: 'nextPageToken,files(id,name,trashed,trashedTime,createdTime,appProperties)',
         pageSize: '100',
         spaces: 'drive',
       });

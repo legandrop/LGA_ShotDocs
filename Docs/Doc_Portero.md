@@ -236,7 +236,10 @@ exige: `restore_project` da `drive_untrash_first`). Con la sesión de la persona
 - **Ya mandadas:** al mandar, una carpeta con la marca que ya está en la papelera cuenta como mandada por este pedido
   si está en el registro o si su `trashedTime` es posterior al pedido menos 5 minutos (`CLOCK_MARGIN_MS`: los relojes
   de Google y de la base pueden no coincidir). **Al traer**, se trae la unión del registro y de las de la búsqueda que
-  fueron a la papelera desde el pedido (no una vieja que ya estaba ahí). Google documenta `trashedTime` solo para las
+  fueron a la papelera desde el pedido (no una vieja que ya estaba ahí). Para responder `untrashed` (y que la base borre
+  sus marcas) cuentan solo las carpetas de ese pedido: las del registro, las que se traen y una viva creada antes del
+  pedido. Una viva creada después (la que arma el portero en la primera subida tras restaurar sin la carpeta) no
+  cuenta: sin ninguna del pedido, la respuesta es `missing` y la base no se toca. Google documenta `trashedTime` solo para las
   unidades compartidas: si no viene, la carpeta cuenta como del pedido (traer de más nunca pierde nada; lo mide la
   prueba técnica).
 - **Mandar y traer de un mismo proyecto van de a uno** en el Worker. Si lo restauraron mientras se mandaba (la base
@@ -261,10 +264,16 @@ Códigos de error de `/project/trash` y `/project/untrash`:
 | 502 | `db_outdated` | La base no tiene la migración 10. | Avisar. |
 | 502 | `db_error` | La base no contestó bien. | Reintentar más tarde. |
 
-**Modos de prueba (solo el dueño, para la prueba técnica, sección 3.9):** `POST /project/trash { project, test:
-'lost_response' }` manda la primera carpeta y responde `502 drive_failed` sin confirmar en la base (el estado exacto de
-una respuesta perdida); `test: 'lost_registry'` (en las dos rutas) hace el pedido sin el registro ni la carpeta
-recordada, solo con la búsqueda por la marca. Ninguno hace algo que un corte de red no pudiera hacer.
+**Modos de prueba (solo el dueño, y solo con la variable `TEST_MODES=1` en el Worker; para la prueba técnica,
+sección 3.9):** `POST /project/trash { project, test: 'lost_response' }` manda la primera carpeta y responde `502
+drive_failed` sin confirmar en la base (el estado exacto de una respuesta perdida); `test: 'lost_registry'` (en las dos
+rutas) hace el pedido sin el registro ni la carpeta recordada, solo con la búsqueda por la marca (al mandar, borra de
+verdad el registro de ese proyecto). Sin la variable, cualquier `test` responde `400 bad_request`, también al dueño.
+
+- **Prenderlos para la prueba técnica:** Cloudflare → Workers → `shotdocs-portero` → Settings → Variables and Secrets →
+  agregar `TEST_MODES` (texto) con el valor `1` y guardar (se publica sola).
+- **Apagarlos al terminar:** borrar la variable `TEST_MODES` (o dejarla vacía) y guardar. Como `keep_vars` está
+  prendido, publicar el portero no la toca: hay que sacarla a mano.
 
 La app manda partes de 8 MiB (`PART_BYTES` en `src/media/portero.ts`); el portero acepta hasta 64 MiB por
 parte (`MAX_CHUNK`) y rechaza la que no coincide con la subida. El permiso para subir se mira al abrir la
