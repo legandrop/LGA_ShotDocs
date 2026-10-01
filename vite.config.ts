@@ -56,9 +56,8 @@ function appVersion(): string {
 // en línea se guardarían de otra forma): el build y las pruebas se niegan a correr (por ejemplo, si se instaló
 // con --ignore-scripts o si se actualizó la librería y el parche no se volvió a hacer). Se miran los dos
 // archivos de la librería: `src` (el que usan la app y las pruebas) y `dist/*.cjs` (stableGaps.test.ts
-// comprueba que los dos escriben lo mismo).
+// comprueba que los dos escriben lo mismo), más `src/lib.js` (las posiciones, desde la marca del renglón).
 function assertYProsemirrorPatched(): void {
-  const files = ['src/plugins/sync-plugin.js', 'dist/y-prosemirror.cjs'];
   const marks = [
     'LGA-SHOTDOCS-PATCH',
     'relativeItemDeleted',
@@ -74,15 +73,26 @@ function assertYProsemirrorPatched(): void {
     'isStableGapsBlock(ytype, pnode)',
     '!stableGaps && nextytext',
     'if (hasGapTextChild(node))',
+    // La marca del renglón (`STABLE_GAPS_MARKER` de src/ui/unknownContent.ts, el mismo nombre): sin ella, las
+    // versiones anteriores abrirían un renglón al que le borraron todas las fotos (Docs/Doc_Colaboracion.md).
+    "const STABLE_GAPS_MARKER = 'lgaStableGaps'",
+    'if (isStableGapsMarker(type)) return',
+    'if (!hasMarker) yel.insert(0,',
   ];
-  for (const file of files) {
+  const libMarks = ["if (t.nodeName !== 'lgaStableGaps')", "if (contentType.nodeName !== 'lgaStableGaps')"];
+  const files: [string, string[]][] = [
+    ['src/plugins/sync-plugin.js', marks],
+    ['src/lib.js', libMarks],
+    ['dist/y-prosemirror.cjs', [...marks, ...libMarks]],
+  ];
+  for (const [file, wanted] of files) {
     let source = '';
     try {
       source = readFileSync(new URL(`./node_modules/y-prosemirror/${file}`, import.meta.url), 'utf8');
     } catch {
       // Sin el archivo tampoco se sabe si está el parche (la librería cambió de forma): se corta igual.
     }
-    const missing = marks.filter((mark) => !source.includes(mark));
+    const missing = wanted.filter((mark) => !source.includes(mark));
     if (missing.length > 0) {
       throw new Error(
         `y-prosemirror sin el parche de la app (node_modules/y-prosemirror/${file}: falta ${missing.join(', ')}). ` +
