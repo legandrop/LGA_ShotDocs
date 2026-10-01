@@ -4,7 +4,7 @@ v0.079 :
 
 Fotos en línea, entrega 4: importar de Coda partía cada renglón con fotos en bloques sueltos, una foto debajo de
 otra, aunque en Coda fueran juntas o al lado del texto. Ahora cada foto o video entra en su renglón como foto en
-línea, con la parte del renglón que ocupaba en Coda (sobre sus 624 px), también en ítems, títulos y citas; los
+línea, con la parte del renglón que ocupaba en Coda (sobre sus 624 px, menos la sangría de las listas), también en ítems, títulos y citas; los
 adjuntos siguen como tarjeta y las fotos de una ficha van juntas. Con fotos reales apareció un defecto de la
 entrega 2: un renglón de solo fotos que no lo llenaban medía lo que sus miniaturas y las fotos salían más chicas
 (una a 1/1, 479 px en vez de 720); ahora el renglón ocupa todo el bloque. Medido con una copia parcial de ERSO

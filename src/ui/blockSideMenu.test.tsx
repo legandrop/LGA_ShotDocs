@@ -156,7 +156,14 @@ describe('los puntos de cada bloque', () => {
     };
     const pick = async (test: string) => {
       await open();
-      const item = document.querySelector<HTMLElement>(`[data-test="${test}"]`);
+      // Con la máquina cargada el menú puede tardar más de un cuadro: se espera a que aparezca (hasta 3 s).
+      let item = document.querySelector<HTMLElement>(`[data-test="${test}"]`);
+      for (let i = 0; !item && i < 60; i++) {
+        await act(async () => {
+          await new Promise((r) => setTimeout(r, 50));
+        });
+        item = document.querySelector<HTMLElement>(`[data-test="${test}"]`);
+      }
       expect(item, test).not.toBeNull();
       await act(async () => {
         item!.click();

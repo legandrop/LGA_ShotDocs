@@ -172,11 +172,14 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   sigue siendo un bloque `image` (la tarjeta). Las fotos de las **celdas de una tabla** que queda como tabla van
   debajo de la tabla, juntas en un renglón (las fotos en celdas son la entrega 5). Se sacan el espacio de ancho
   cero y el carácter de objeto (U+FFFC) que Coda deja al lado de una foto, y los espacios sueltos entre fotos.
-  Antes de v0.079 cada foto era un bloque aparte.
-- **Ancho.** `w` = el ancho con que se veía en Coda sobre **624 px** (el ancho del texto de una página de Coda,
-  `CODA_TEXT_WIDTH`): la misma parte del renglón, así dos fotos de 312 px van juntas a la mitad cada una. Más
-  ancha que 624 px, todo el renglón; sin ancho, su ancho natural. Medido en ERSO: la mayor diferencia contra Coda
-  fue 1 % del ancho de la página (3 % en un ítem de lista, que en Coda tiene más sangría).
+  **Una foto recortada en Coda se ve entera**: el recorte (`data-docx-crop`) no se trae (101 de 6129 fotos en ERSO;
+  ver "Lo que no pasa"). Antes de v0.079 cada foto era un bloque aparte.
+- **Ancho.** `w` = el ancho con que se veía en Coda sobre **su renglón de Coda**: 624 px (el ancho del texto de una
+  página de Coda, `CODA_TEXT_WIDTH`) menos 24 px por cada nivel de lista (`CODA_LIST_INDENT`, medido en una
+  captura de Coda), porque `w` es una parte del renglón donde está la foto. Así dos fotos de 312 px van juntas a la
+  mitad cada una, y una foto de un ítem no sale más chica que en Coda. Más ancha que su renglón, todo el renglón; sin
+  ancho, su ancho natural. Medido en ERSO: la mayor diferencia contra Coda fue 1 % del ancho de la página fuera de
+  las listas; en las listas, antes de descontar la sangría, las fotos salían 1 a 5 % más chicas.
 - **Nombre.** El de Coda si es un nombre de archivo; si Coda solo sabe el blob, `bl-….<ext>`.
 - **Colores.** Coda escribe `rgb(...)` (también se entiende `#rrggbb`); se pasa al color con nombre más
   parecido del editor (por tono), salvo que de 70° a 165° siempre es verde, como se ve en Coda (desde v0.065).

@@ -165,7 +165,7 @@ describe('la barra, por sectores (D-24)', () => {
       'A quarter of the page width',
       '|',
       'Align left',
-      'Center',
+      'Align center',
       'Align right',
       '|',
       'Comment',
@@ -191,7 +191,7 @@ describe('la barra, por sectores (D-24)', () => {
       'Arrange in rows',
       '|',
       'Align left',
-      'Center',
+      'Align center',
       'Align right',
       '|',
       'Comment',
@@ -219,9 +219,9 @@ describe('lo que hace cada botón de la foto en línea', () => {
   it('alinear: el renglón (el bloque), y marca la alineación que tiene', async () => {
     const { editor } = await mount();
     await choosePhoto(editor, 'F1');
-    await click(INLINE, 'Center');
+    await click(INLINE, 'Align center');
     expect((editor.getBlock('p')!.props as { textAlignment: string }).textAlignment).toBe('center');
-    const center = [...document.querySelectorAll(`${INLINE} button`)].find((b) => b.getAttribute('aria-label') === 'Center')!;
+    const center = [...document.querySelectorAll(`${INLINE} button`)].find((b) => b.getAttribute('aria-label') === 'Align center')!;
     expect(center.getAttribute('aria-pressed')).toBe('true');
   });
 

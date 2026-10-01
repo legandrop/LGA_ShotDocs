@@ -108,7 +108,8 @@ export type Alignment = 'left' | 'center' | 'right';
 
 export function AlignButtons({ current, inline = false, onAlign }: { current: Alignment | null; inline?: boolean; onAlign: (a: Alignment) => void }) {
   const tr = useT();
-  const what = inline ? tr('photoTip.alignLine') : tr('photoTip.alignBlock');
+  // En línea alinea el renglón; la foto-bloque va a un costado o al centro.
+  const what = (a: Alignment) => (inline ? tr('photoTip.alignLine') : a === 'center' ? tr('photoTip.alignCenter') : tr('photoTip.alignSide'));
   const items: [Alignment, string, ReactNode][] = [
     ['left', tr('photoBar.alignLeft'), <AlignLeftIcon key="l" />],
     ['center', tr('photoBar.alignCenter'), <AlignCenterIcon key="c" />],
@@ -117,7 +118,7 @@ export function AlignButtons({ current, inline = false, onAlign }: { current: Al
   return (
     <>
       {items.map(([a, label, ic]) => (
-        <BarButton key={a} label={label} tip={`**${label}**\n${what}`} icon={ic} selected={current === a} test={`align-${a}`} onClick={() => onAlign(a)} />
+        <BarButton key={a} label={label} tip={`**${label}**\n${what(a)}`} icon={ic} selected={current === a} test={`align-${a}`} onClick={() => onAlign(a)} />
       ))}
     </>
   );
@@ -190,7 +191,7 @@ export function RenameButton({ name, kind = 'image', onRename }: { name: string;
 export function DeleteButton({ many, kind = 'image', onDelete }: { many: boolean; kind?: MediaKind; onDelete: () => void }) {
   const tr = useT();
   const label = many ? tr('photoBar.deleteMany') : kindLabel(kind, tr('photoBar.delete'), tr('photoBar.deleteVideo'), tr('photoBar.deleteFile'));
-  return <BarButton label={label} tip={`**${label}**\n${tr('photoTip.delete')}\n${tr('photoBar.deleteKeys')}`} icon={<TrashIcon />} test="mediaDelete" onClick={onDelete} />;
+  return <BarButton label={label} tip={`**${label}**\n${many ? tr('photoTip.deleteMany') : tr('photoTip.delete')}\n${tr('photoBar.deleteKeys')}`} icon={<TrashIcon />} test="mediaDelete" onClick={onDelete} />;
 }
 
 // --- La barra de la foto-bloque ---------------------------------------------------------------------------

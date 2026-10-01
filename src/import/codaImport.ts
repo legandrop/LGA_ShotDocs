@@ -12,7 +12,7 @@ import { editorSchemaOptions } from '../ui/editorSchema';
 import { findUnknownContent } from '../ui/unknownContent';
 import type { CommentQueue } from '../sync/comments';
 import { pagePath } from '../router';
-import { checkForeignImages, codaPhotoWidth, finishBlocks, prepareCodaHtml, type CodaMedia, type InlinePhoto, type LooseBlock } from './codaHtml';
+import { checkForeignImages, CODA_TEXT_WIDTH, codaPhotoWidth, finishBlocks, prepareCodaHtml, type CodaMedia, type InlinePhoto, type LooseBlock } from './codaHtml';
 import { buildComments, pageBlocks, parseCodaComments, type CodaComments, type PageBlock } from './codaComments';
 
 // Importa a un proyecto nuevo la carpeta que arma `scripts/coda-export.mjs` (Docs/Doc_Importar_Coda.md):
@@ -634,9 +634,9 @@ async function importPage(
   };
   // Una foto o un video va en línea, en su renglón y con la parte del renglón que ocupaba en Coda (entrega 4 de
   // Doc_Fotos_En_Linea.md); un adjunto (PDF, zip…) queda como bloque, la tarjeta.
-  const photoOf = (index: number): InlinePhoto | null => {
+  const photoOf = (index: number, line = CODA_TEXT_WIDTH): InlinePhoto | null => {
     const m = media[index];
-    const w = codaPhotoWidth(m.width);
+    const w = codaPhotoWidth(m.width, line);
     // Una foto de otro sitio va con su dirección; `checkForeignImages` decide si queda y la anota.
     if (m.external) return { type: 'photo', props: { url: m.src, name: m.name, w } };
     const url = urls.get(index);
@@ -652,8 +652,8 @@ async function importPage(
       placed.add(index);
       return imageOf(index);
     },
-    (index) => {
-      const photo = photoOf(index);
+    (index, line) => {
+      const photo = photoOf(index, line);
       if (photo) placed.add(index);
       return photo;
     },

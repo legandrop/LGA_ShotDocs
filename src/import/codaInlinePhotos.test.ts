@@ -11,7 +11,7 @@ import { isMediaFile } from '../media/queue';
 import { schema } from '../ui/editorSchema';
 import { brokenGaps, storedPhotos } from '../ui/photoHarness';
 import { findUnknownContent } from '../ui/unknownContent';
-import { codaPhotoWidth, CODA_TEXT_WIDTH, finishBlocks, prepareCodaHtml, type LooseBlock } from './codaHtml';
+import { codaLineWidth, codaPhotoWidth, CODA_TEXT_WIDTH, finishBlocks, prepareCodaHtml, type LooseBlock } from './codaHtml';
 
 const editors: BlockNoteEditor[] = [];
 afterEach(() => {
@@ -39,9 +39,9 @@ async function convert(html: string): Promise<LooseBlock[]> {
   return finishBlocks(
     parsed,
     (i) => ({ type: 'image', props: { url: url(i), name: media[i].name }, children: [] }),
-    (i) =>
+    (i, line) =>
       isMediaFile({ type: media[i].mime, name: media[i].name })
-        ? { type: 'photo', props: { url: url(i), name: media[i].blobId, w: codaPhotoWidth(media[i].width) } }
+        ? { type: 'photo', props: { url: url(i), name: media[i].blobId, w: codaPhotoWidth(media[i].width, line) } }
         : null,
   );
 }
@@ -63,7 +63,7 @@ function shape(blocks: LooseBlock[], depth = 0): string[] {
 describe('los renglones de Coda con fotos', () => {
   it('el ancho: la parte del renglón de Coda (624 px); más ancho, todo el renglón; sin ancho, el natural', () => {
     expect(CODA_TEXT_WIDTH).toBe(624);
-    expect([312, 624, 1024, 76, 0].map(codaPhotoWidth)).toEqual([0.5, 1, 1, 0.1218, 0]);
+    expect([312, 624, 1024, 76, 0].map((px) => codaPhotoWidth(px))).toEqual([0.5, 1, 1, 0.1218, 0]);
   });
 
   it('dos fotos de 312 px en un renglón quedan juntas en uno, cada una a la mitad', async () => {
@@ -84,6 +84,14 @@ describe('los renglones de Coda con fotos', () => {
       `<ul><li style="list-style-type: disc;"><span>Las filas pintadas</span><br><span> </span>${img('bl-a', 1004)}<br></li></ul>`,
     );
     expect(shape(blocks)).toEqual(['bulletListItem "Las filas pintadas\\n[bl-a@1]"']);
+  });
+
+  it('en una lista, el ancho es sobre el renglón del ítem (sin la sangría): no sale más chica que en Coda', async () => {
+    expect(codaLineWidth(0)).toBe(624);
+    const blocks = await convert(
+      `<ul><li><span>Uno</span><br>${img('bl-a', 300)}<ul><li><span>Dos</span><br>${img('bl-b', 288)}</li></ul></li></ul>`,
+    );
+    expect(shape(blocks)).toEqual(['bulletListItem "Uno\\n[bl-a@0.5]"', '  bulletListItem "Dos\\n[bl-b@0.5]"']);
   });
 
   it('texto y fotos en el mismo renglón quedan en el mismo renglón, en orden', async () => {

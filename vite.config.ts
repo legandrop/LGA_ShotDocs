@@ -179,6 +179,10 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: { output: { postBanner: LIBHEIF_BANNER } },
     },
     test: {
+      // 15 s por prueba (el de vitest es 5 s): las que montan el editor (38 archivos: buscar, la página, las fotos,
+      // colapsar, editar a la vez…) tardan cerca de 5 s con la máquina cargada y fallaban por tiempo, cada vez en
+      // otra (auditoría de las fotos en línea, ronda 3). Solas pasan siempre; lo que prueban no cambia.
+      testTimeout: 15_000,
       projects: [
         {
           extends: true,

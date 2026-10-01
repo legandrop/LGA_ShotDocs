@@ -398,11 +398,22 @@ export interface InlinePhoto {
 export const CODA_TEXT_WIDTH = 624;
 
 /**
- * El `w` de una foto en línea con el ancho con que se veía en Coda: la parte del renglón de Coda que ocupaba (así
- * las que entraban juntas en un renglón de Coda entran juntas en uno de la app). 0: su ancho natural.
+ * Lo que entra un ítem de lista de Coda por cada nivel (px): medido en una captura de Coda, el texto de un ítem empieza
+ * 22 a 24 px más adentro que el de un párrafo.
  */
-export function codaPhotoWidth(px: number): number {
-  return px > 0 ? Math.min(1, Math.round((px / CODA_TEXT_WIDTH) * 10000) / 10000) : 0;
+export const CODA_LIST_INDENT = 24;
+
+/** El ancho del renglón de Coda (px) adentro de `depth` niveles de lista. */
+export const codaLineWidth = (depth: number): number => Math.max(CODA_TEXT_WIDTH / 2, CODA_TEXT_WIDTH - depth * CODA_LIST_INDENT);
+
+/**
+ * El `w` de una foto en línea con el ancho con que se veía en Coda: la parte de SU renglón de Coda que ocupaba
+ * (`line`: 624 px, menos la sangría si está en una lista), porque `w` es una parte del renglón donde está. Así las que
+ * entraban juntas en un renglón de Coda entran juntas en uno de la app, y una foto de un ítem no sale más chica que en
+ * Coda (auditoría, ronda 3). 0: su ancho natural.
+ */
+export function codaPhotoWidth(px: number, line = CODA_TEXT_WIDTH): number {
+  return px > 0 ? Math.min(1, Math.round((px / line) * 10000) / 10000) : 0;
 }
 
 // Los bloques cuyo renglón lleva fotos en línea. En los demás (código) la foto sigue siendo un bloque aparte.
@@ -417,9 +428,9 @@ const PHOTO_HOSTS = new Set(['paragraph', 'heading', 'quote', 'bulletListItem', 
 export function finishBlocks(
   blocks: LooseBlock[],
   imageOf: (index: number) => LooseBlock | null,
-  photoOf?: (index: number) => InlinePhoto | null,
+  photoOf?: (index: number, line: number) => InlinePhoto | null,
 ): LooseBlock[] {
-  const out = splitAll(blocks, imageOf, photoOf);
+  const out = splitAll(blocks, imageOf, photoOf, 0);
   markScript(out);
   // Una marca que quedó donde no se la buscó (no debería pasar) no se ve como basura en el texto; la foto
   // la ubica al final quien importa (codaImport.ts).
@@ -429,11 +440,14 @@ export function finishBlocks(
 function splitAll(
   blocks: LooseBlock[],
   imageOf: (index: number) => LooseBlock | null,
-  photoOf?: (index: number) => InlinePhoto | null,
+  photoOf: ((index: number, line: number) => InlinePhoto | null) | undefined,
+  depth: number,
 ): LooseBlock[] {
   const out: LooseBlock[] = [];
   for (const block of blocks) {
-    const children = splitAll(block.children ?? [], imageOf, photoOf);
+    // `depth`: niveles de lista alrededor (el renglón de un ítem es más angosto que el de la página).
+    const inner = LIST_ITEMS.has(block.type) ? depth + 1 : depth;
+    const children = splitAll(block.children ?? [], imageOf, photoOf, inner);
     const base: LooseBlock = { type: block.type, props: block.props, content: block.content, children };
     if (block.type === 'table') {
       // Una foto no va en una celda (todavía: entrega 5): la marca se saca y la foto va debajo de la tabla, las
@@ -447,7 +461,7 @@ function splitAll(
         row = [];
       };
       for (const i of found) {
-        const photo = photoOf?.(i);
+        const photo = photoOf?.(i, codaLineWidth(depth));
         if (photo) {
           row.push(photo);
           continue;
@@ -464,7 +478,8 @@ function splitAll(
       continue;
     }
     if (photoOf && PHOTO_HOSTS.has(block.type)) {
-      const content = inlinePhotos(block.content as Inline[], photoOf);
+      const line = codaLineWidth(inner);
+      const content = inlinePhotos(block.content as Inline[], (i) => photoOf(i, line));
       if (content !== block.content) {
         base.content = content;
         // Un título que quedó solo con fotos (sin texto) es un renglón de fotos: un título sin texto cortaría el

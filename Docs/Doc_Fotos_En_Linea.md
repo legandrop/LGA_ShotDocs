@@ -729,6 +729,12 @@ hilos de la página y sin convertir hasta que los comentarios estén bajados (`c
 `d02c1aa`. Convertir sola al abrir sigue descartado: dos dispositivos que convierten a la vez dejan cada renglón
 dos veces (medido, ver abajo).
 
+**Riesgos si vuelve al menú** (auditoría de datos de las entregas 3 y 4): convertir saca los bloques y pone el
+renglón, así que lo que **otro dispositivo cambie a la vez** en esas fotos-bloque se pierde: una leyenda que agrega, un
+*Replace*, un comentario nuevo en una foto que no es la que da su id al renglón (queda sin bloque), el texto que
+escribe en un bloque hijo de una foto. Y de la foto-bloque no pasan al renglón `backgroundColor` ni `showPreview`
+(la foto en línea no los tiene).
+
 ### Qué hace (`convertPhotos.ts`)
 
 - **Cada fila de fotos-bloque** (las seguidas con `rowWidth`, las mismas que arma `groupRows`) pasa a ser **un
@@ -788,7 +794,8 @@ dos veces (medido, ver abajo).
   mismo lugar de su renglón (Coda pone cada `<img>` en un `<span style="display: inline-block">` dentro del
   renglón), en párrafos, ítems de lista, títulos y citas. `w` = el ancho que tenía en Coda sobre 624 px (el ancho
   del texto de Coda, `CODA_TEXT_WIDTH`): las que iban juntas en un renglón de Coda van juntas en uno de la app, y
-  las más anchas que el renglón, a todo el renglón. Un título con solo fotos pasa a párrafo. Un adjunto sigue
+  las más anchas que el renglón, a todo el renglón. En una lista, el renglón de Coda es más angosto (24 px menos por
+  nivel) y `w` se calcula sobre él (auditoría, ronda 3: sin eso salían 1 a 5 % más chicas). Un título con solo fotos pasa a párrafo. Un adjunto sigue
   siendo la tarjeta (bloque). Las fotos de una celda de tabla van debajo de la tabla, juntas en un renglón
   (las fotos en celdas son la entrega 5). Detalle en `Doc_Importar_Coda.md`, "La conversión".
 - **Las fichas de las tablas** (`codaTables.mjs`, el comando): las fotos de una columna de fotos van en un solo

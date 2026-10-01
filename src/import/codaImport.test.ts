@@ -246,10 +246,10 @@ describe('importar la carpeta', () => {
     const ids = new Set([...server.mediaFiles.values()].filter((f) => f.drive_id).map((f) => `sdmedia://${f.id}`));
     for (const url of urls) expect(ids.has(url)).toBe(true);
     // Las fotos van en su renglón (entrega 4 de las fotos en línea), con la parte del renglón de Coda que ocupaban
-    // (533 de 624 px); la de 1200 px, todo el renglón.
+    // (533 de los 600 px del renglón de un ítem de Coda); la de 1200 px, todo el renglón.
     const [first] = blocks.filter((x) => x.type === 'bulletListItem');
-    expect(mediaIn([first]).map((x) => [x.type, x.props?.w])).toEqual([['photo', 0.8542]]);
-    expect(mediaIn(blocks).map((x) => x.props?.w)).toEqual([0.8542, 0, 1]);
+    expect(mediaIn([first]).map((x) => [x.type, x.props?.w])).toEqual([['photo', 0.8883]]);
+    expect(mediaIn(blocks).map((x) => x.props?.w)).toEqual([0.8883, 0, 1]);
     // La app lo abre: nada que la guarda no conozca y una sola raíz (ninguna reparación escondida).
     expect(findUnknownContent(doc)).toBeNull();
     expect(doc.getXmlFragment(CONTENT_FRAGMENT).length).toBe(1);
