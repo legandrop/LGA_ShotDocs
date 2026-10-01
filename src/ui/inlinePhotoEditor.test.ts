@@ -355,6 +355,63 @@ describe('el teclado con una foto elegida', () => {
   });
 });
 
+describe('con varias fotos elegidas (solo fotos)', () => {
+  // Lo que encontró la auditoría de la entrega 2: después de "Arrange in rows" o de un tamaño quedan elegidas, y una
+  // letra, Enter o la barra espaciadora las borraban. Ahora, como con una: la tecla sigue después de la última.
+  const doc = () => [p('b', 'x', ph('F3', 1 / 3), ph('F4', 1 / 3), ph('F5', 1 / 3), 'y')];
+  const chooseRange = (E: BlockNoteEditor) =>
+    view(E).dispatch(view(E).state.tr.setSelection(TextSelection.create(view(E).state.doc, at(E, 'F3'), at(E, 'F5') + 1)));
+
+  it('una letra, Shift+letra, AltGr, la barra espaciadora (sin la página) y Enter: el cursor pasa después de la última', () => {
+    const E = mount(doc());
+    for (const init of [{ key: 'a' }, { key: 'A', shiftKey: true }, { key: '@', code: 'KeyQ', ctrlKey: true, altKey: true }, { key: ' ' }]) {
+      chooseRange(E);
+      const e = key(E, init.key, init);
+      expect(e.defaultPrevented).toBe(false);
+      expect(sel(E)).toEqual({ kind: 'text', anchor: at(E, 'F5') + 1, head: at(E, 'F5') + 1 });
+    }
+    expect(line(E, 'b')).toBe('x[F3][F4][F5]y');
+    // Enter parte el renglón después de la última (las fotos quedan).
+    chooseRange(E);
+    key(E, 'Enter');
+    expect(E.document.map((b) => line(E, b.id))).toEqual(['x[F3][F4][F5]', 'y']);
+  });
+
+  it('una composición, y el texto que entra sin tecla (emojis, dictado): después de la última', () => {
+    const E = mount(doc());
+    chooseRange(E);
+    key(E, 'Dead');
+    expect(sel(E).head).toBe(at(E, 'F5') + 1);
+    chooseRange(E);
+    view(E).dom.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    expect(sel(E).head).toBe(at(E, 'F5') + 1);
+    chooseRange(E);
+    const from = at(E, 'F3');
+    const to = at(E, 'F5') + 1;
+    expect(view(E).someProp('handleTextInput', (f) => f(view(E), from, to, '😀', () => view(E).state.tr))).toBe(true);
+    expect(line(E, 'b')).toBe('x[F3][F4][F5]😀y');
+  });
+
+  it('Backspace, Supr, Ctrl o ⌘ + letra y Shift+flechas: los de siempre (no los toma)', () => {
+    const E = mount(doc());
+    const plugin = view(E).state.plugins.find((pl) => (pl as unknown as { key: string }).key.startsWith('shotdocs-photo-keys'))!;
+    for (const init of [{ key: 'Backspace' }, { key: 'Delete' }, { key: 'c', ctrlKey: true }, { key: 'c', metaKey: true }, { key: 'ArrowRight', shiftKey: true }]) {
+      chooseRange(E);
+      const before = view(E).state;
+      expect(plugin.props.handleKeyDown!.call(plugin, view(E), new KeyboardEvent('keydown', init))).toBe(false);
+      expect(view(E).state).toBe(before);
+    }
+  });
+
+  it('con texto en la selección no hace nada distinto (es una selección de texto)', () => {
+    const E = mount(doc());
+    view(E).dispatch(view(E).state.tr.setSelection(TextSelection.create(view(E).state.doc, at(E, 'F3') - 1, at(E, 'F5') + 1)));
+    const before = view(E).state.selection;
+    key(E, 'a');
+    expect(view(E).state.selection.eq(before)).toBe(true);
+  });
+});
+
 describe('arrastrar para elegir y soltar sobre una foto', () => {
   // jsdom no ubica nada: cada foto mide 100 px y está una al lado de la otra.
   const place = (E: BlockNoteEditor, names: string[]) =>

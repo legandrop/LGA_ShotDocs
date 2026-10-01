@@ -60,7 +60,7 @@ import { notToggleHeading } from './collapseMenus';
 import { clickOpens, mousePressOpens, shiftSelects } from './carreteClick';
 import { FindBar, type FindEditor } from './FindBar';
 import { findExtension } from './findEditor';
-import { inlinePhotoExtensions, selectedPhotoKey } from './inlinePhotoEditor';
+import { inlinePhotoExtensions, selectedPhotoKey, spacePhotoKey } from './inlinePhotoEditor';
 import { closeFindBar, isFindShortcut, openFindBar, openFindBarAt, takesFindShortcut } from './findUi';
 import { searchSession } from './projectSearchUi';
 
@@ -778,7 +778,9 @@ function BlockEditor({
   // también abre; Enter y las letras pasan el cursor a la derecha de la foto y siguen (inlinePhotoEditor.ts).
   const openWithKeyboard = (e: KeyboardEvent) => {
     if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !editor.isFocused()) return;
-    const key = selectedKey();
+    // Con varias fotos en línea elegidas, en la primera (y la barra espaciadora no las reemplaza).
+    const view = editor.prosemirrorView;
+    const key = view ? spacePhotoKey(view.state) : null;
     if (!key) return;
     if (openAt(key, 'keyboard')) {
       e.preventDefault();

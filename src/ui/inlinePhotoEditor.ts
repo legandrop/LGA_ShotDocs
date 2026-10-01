@@ -5,6 +5,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { photoKey } from './carreteModel';
 import { groupRows } from './imageRows';
 import { PHOTO, photoWidth } from './inlinePhoto';
+import { onlyPhotosSelected, selectedPhotos } from './inlinePhotoSize';
 
 // Lo que acompaña a la foto en línea en el editor (Docs/Doc_Fotos_En_Linea.md, entrega 1b): las filas, la marca
 // de las fotos que abarca una selección de texto, y el teclado y el mouse con una foto elegida. Lo midió el
@@ -173,6 +174,17 @@ export function photoKeyAtPos(doc: PMNode, pos: number): string | null {
   return null;
 }
 
+/**
+ * La foto que abre la barra espaciadora: la elegida (`selectedPhotoKey`) o, con varias fotos en línea elegidas, la
+ * primera.
+ */
+export function spacePhotoKey(state: EditorState): string | null {
+  const key = selectedPhotoKey(state);
+  if (key) return key;
+  const range = photosRange(state);
+  return range ? (selectedPhotos(state).map((p) => photoKeyAtPos(state.doc, p)).find((k) => k !== null) ?? null) : null;
+}
+
 /** La foto elegida (selección de nodo): la clave de un bloque `image` (su id) o de una foto en línea; o `null`. */
 export function selectedPhotoKey(state: EditorState): string | null {
   const sel = state.selection;
@@ -226,6 +238,8 @@ function caretAfter(view: EditorView, sel: NodeSelection): void {
 
 export function handlePhotoKey(view: EditorView, event: KeyboardEvent): boolean {
   if (!view.editable) return false;
+  const range = photosRange(view.state);
+  if (range) return handlePhotosRangeKey(view, range, event);
   const sel = selectedPhoto(view.state);
   if (!sel) return false;
   // La composición empieza con el cursor ya a la derecha (hacerlo recién en `compositionstart` corta la
@@ -287,6 +301,37 @@ export function handlePhotoShiftClick(view: EditorView, event: MouseEvent): bool
 }
 
 /**
+ * Varias fotos elegidas (una selección de texto de solo fotos: Shift+clic, Shift+flechas, arrastrar, o después de
+ * "Arrange in rows" o de un tamaño): `null` si no. La barra de la foto las trata como fotos elegidas, y el teclado
+ * también (auditoría de la entrega 2: una letra, Enter o la barra espaciadora las borraban).
+ */
+export function photosRange(state: EditorState): TextSelection | null {
+  const sel = state.selection;
+  return sel instanceof TextSelection && onlyPhotosSelected(state) ? sel : null;
+}
+
+/** El cursor después de la última foto elegida. */
+function caretAfterRange(view: EditorView, sel: TextSelection): void {
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, sel.to)));
+}
+
+/**
+ * Con varias fotos elegidas, como con una: una letra, Enter, una composición siguen después de la última (no las
+ * reemplazan). Backspace, Supr y Shift+flechas, los de ProseMirror (borran, extienden).
+ */
+function handlePhotosRangeKey(view: EditorView, sel: TextSelection, event: KeyboardEvent): boolean {
+  if (startsComposition(event)) {
+    caretAfterRange(view, sel);
+    return false;
+  }
+  if (event.isComposing) return false;
+  const enter = event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+  if (!enter && !typesCharacter(event)) return false;
+  caretAfterRange(view, sel);
+  return false;
+}
+
+/**
  * Texto que entra SIN tecla con una foto elegida: el selector de emojis (Win+. en Windows, Ctrl+⌘+Espacio en la
  * Mac), el dictado o algunos teclados de terceros. El navegador lo escribe sobre la selección y ProseMirror
  * reemplazaría la foto (lo encontró la auditoría de v0.076). Va después de la foto, como una letra, con el cursor
@@ -294,7 +339,7 @@ export function handlePhotoShiftClick(view: EditorView, event: MouseEvent): bool
  */
 export function handlePhotoTextInput(view: EditorView, from: number, to: number, text: string): boolean {
   if (!view.editable) return false;
-  const sel = selectedPhoto(view.state);
+  const sel = selectedPhoto(view.state) ?? photosRange(view.state);
   if (!sel) return false;
   const overPhoto = from === sel.from && to === sel.to;
   const atEdge = from === to && (from === sel.from || from === sel.to);
@@ -416,8 +461,9 @@ const keysPlugin = new Plugin({
       // Una composición que empieza sin la tecla de antes (algunos teclados del teléfono): igual, el cursor pasa a
       // la derecha de la foto antes, así lo que se compone no la reemplaza.
       compositionstart(view) {
-        const sel = view.editable ? selectedPhoto(view.state) : null;
-        if (sel) caretAfter(view, sel);
+        const sel = view.editable ? (selectedPhoto(view.state) ?? photosRange(view.state)) : null;
+        if (sel instanceof NodeSelection) caretAfter(view, sel);
+        else if (sel) caretAfterRange(view, sel);
         return false;
       },
     },
