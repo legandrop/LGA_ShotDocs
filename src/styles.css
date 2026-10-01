@@ -2914,6 +2914,25 @@ code {
   display: contents;
 }
 
+/* En el teléfono cada sector baja de renglón entero y sin separador: un separador al final o al principio de un
+   renglón queda colgando. Entre sectores, el espacio alcanza. */
+@media (max-width: 600px) {
+  .bn-formatting-toolbar .sd-bar-sector {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    margin-right: 8px;
+  }
+
+  .bn-formatting-toolbar .sd-bar-sector:last-child {
+    margin-right: 0;
+  }
+
+  .bn-formatting-toolbar .sd-bar-sep {
+    display: none;
+  }
+}
+
 /* En una pantalla angosta (el teléfono) la barra entera no entra: pasa a dos renglones, adentro de la pantalla. */
 .bn-formatting-toolbar.sd-media-bar {
   flex-wrap: wrap;

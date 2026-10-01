@@ -256,7 +256,12 @@ export function ImageBlockBar() {
             {actions && <ReplaceButton accept={actions.accept.block} kind={kind} onFile={replace} />}
             {/* Un archivo del Drive no se renombra (la tarjeta y la descarga usan el nombre del archivo). */}
             {!id && <RenameButton name={block.name} kind={kind} onRename={(name) => update({ name })} />}
-            <DeleteButton many={false} kind={kind} onDelete={() => editor.removeBlocks([block.id])} />
+            <DeleteButton many={false} kind={kind} onDelete={() => {
+                editor.removeBlocks([block.id]);
+                // La barra se va con el bloque y el foco quedaba en ningún lado: Ctrl/⌘+Z no deshacía hasta un clic.
+                editor.focus();
+              }}
+            />
           </>,
         ]}
       </Sectors>
