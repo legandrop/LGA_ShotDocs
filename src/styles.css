@@ -2033,6 +2033,22 @@ code {
   padding-left: 0;
 }
 
+/* Adentro del selector (`.menu button` ocupa todo el ancho): el link de *Send files…* va a la izquierda y entero. */
+.deleted-project-actions button.link {
+  width: auto;
+  height: auto;
+  min-height: 28px;
+  padding: 0;
+  text-align: left;
+  white-space: normal;
+}
+
+.deleted-project-actions button.primary {
+  width: auto;
+  height: 32px;
+  padding: 0 12px;
+}
+
 .delete-project-drive {
   display: grid;
   gap: 4px;
@@ -2040,6 +2056,20 @@ code {
 
 .delete-project-drive p {
   margin: 0 0 0 24px;
+}
+
+.delete-project-check {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: start;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.delete-project-check input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
 }
 
 .delete-project-stats {

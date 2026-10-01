@@ -187,7 +187,7 @@ export function DeleteProjectDialog(props: {
         {info && info.files > 0 && !drive && <p className="muted">{tr('deleteProject.driveStays', { size })}</p>}
         {info && info.files > 0 && drive && (
           <div className="delete-project-drive">
-            <label className="team-check">
+            <label className="delete-project-check">
               <input
                 type="checkbox"
                 checked={sendDrive}
@@ -321,7 +321,15 @@ export function DeletedProjectsList(props: {
   const [busy, setBusy] = useState<string | null>(null);
   /** Una pregunta en el renglón: restaurar sin los archivos, o mandar la carpeta a la papelera de Drive. */
   const [ask, setAsk] = useState<{ id: string; kind: 'missing' | 'send' } | null>(null);
+  const askRef = useRef<HTMLDivElement>(null);
   const tr = useT();
+
+  // La pregunta del renglón puede quedar abajo del borde del selector: se la trae a la vista, con el foco en su botón.
+  useEffect(() => {
+    if (!ask) return;
+    askRef.current?.scrollIntoView?.({ block: 'nearest' });
+    askRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+  }, [ask]);
 
   const load = () => {
     setError(null);
@@ -433,7 +441,7 @@ export function DeletedProjectsList(props: {
                 </div>
               )}
               {asking === 'send' && (
-                <div className="deleted-project-ask" role="group" aria-label={tr('deletedList.sendToDrive')}>
+                <div ref={askRef} className="deleted-project-ask" role="group" aria-label={tr('deletedList.sendToDrive')}>
                   <p className="small">{tr('deletedList.sendConfirm', { folder: driveFolderLabel(r.name) })}</p>
                   {r.drive_missing_at && <p className="small delete-project-warning">{tr('deleteProject.driveMissingBefore')}</p>}
                   <div className="deleted-project-actions">
@@ -447,7 +455,7 @@ export function DeletedProjectsList(props: {
                 </div>
               )}
               {asking === 'missing' && (
-                <div className="deleted-project-ask" role="group" aria-label={tr('deletedList.restoreWithoutFiles')}>
+                <div ref={askRef} className="deleted-project-ask" role="group" aria-label={tr('deletedList.restoreWithoutFiles')}>
                   <p className="small">{tr('deletedList.missingQuestion')}</p>
                   <div className="deleted-project-actions">
                     <button className="primary" disabled={busy !== null} onClick={() => void restore(r, true)}>
