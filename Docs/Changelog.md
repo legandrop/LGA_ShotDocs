@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.084 :
+
+Colapsar, lo que faltaba: mover una sección colapsada entera y colapsar para todos. Arrastrar o mover con
+Shift+Ctrl/⌘+↑/↓ un título colapsado movía solo el título y abría lo escondido. Mover reescribía cada bloque
+del medio: con otro editando a la vez, su texto caía en otro bloque o se perdía, y un bloque que nadie tocó
+podía desaparecer (hasta 192 de 300). Ahora la sección se mueve entera, los demás bloques la saltan como uno,
+se esconde lo mismo, deshacer es un paso y Yjs recrea solo el lado más chico: lo que nadie tocó ya no se
+pierde (salvo un bloque anidado a la vez, menos que antes). Shift+clic colapsa o abre para todos (si se puede
+editar), en un mapa aparte que las versiones viejas conservan. La ayuda suma las dos funciones.
+[ Colapsar 1b y 2 - mover la sección entera y colapsar para todos ]
+
 v0.083 :
 
 No había forma de tener una página o un proyecto para usar sin red, ni de saber cuánto ocupa la app en el

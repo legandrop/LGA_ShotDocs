@@ -16,7 +16,7 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   'scriptEnter': 'shortcut.scriptEnter',
   paragraph: 'shortcut.paragraph',
   collapse: 'shortcut.collapse',
-  'collapseEveryone': 'shortcut.collapse',
+  'collapseEveryone': 'shortcut.collapseEveryone',
   selectAll: 'shortcut.selectAll',
   heading: 'shortcut.heading',
   quote: 'shortcut.quote',

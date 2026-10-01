@@ -219,6 +219,9 @@ function PracticePage({ session, onStartOver }: { session: PracticeSession; onSt
         collapse={collapse}
         pageId={PRACTICE_ID}
         editable
+        // Colapsar para todos (Shift+clic) se puede probar: el mapa vive en el documento de la práctica, que no se
+        // guarda ni se sincroniza.
+        permsKnown
         canComment
         onEditor={setFindEditor}
         filesNotice={practiceFilesRejected().message}

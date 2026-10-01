@@ -4,11 +4,13 @@ import type { ComponentProps } from 'react';
 import { useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { selectWholeBlock } from './blockHandle';
+import { endSectionDrag, startSectionDrag } from './collapseEditor';
 import { handlePlace } from './gutterLayout';
 import { BlockDotsIcon } from './icons';
 
 // El menú lateral de cada bloque (pedido de Lega sobre v0.053/v0.054): solo tres puntos, sin el "+" de BlockNote
-// ni su menú del tirador. Arrastrar los puntos mueve el bloque (lo de BlockNote, `blockDragStart`); un clic
+// ni su menú del tirador. Arrastrar los puntos mueve el bloque (lo de BlockNote, `blockDragStart`; un título
+// colapsado, con su sección entera); un clic
 // elige el bloque entero (blockHandle.ts), y con eso aparece la barra de formato entera: tipo de bloque ("Turn
 // into"), negrita, colores, comentar… Borrar es Retroceso o Supr con el bloque elegido (ya no hay "Borrar" en un
 // menú). En un título los puntos van a la izquierda del triángulo de colapsar: [puntos] [triángulo] [texto]
@@ -69,8 +71,17 @@ function DotsHandle({ block }: { block: { id: string } }) {
       draggable
       aria-label={tr('block.handleLabel')}
       data-tip={`**${tr('block.handleClick')}**\n${tr('block.handleDrag')}`}
-      onDragStart={(e) => sideMenu.blockDragStart(e, block as never)}
-      onDragEnd={() => sideMenu.blockDragEnd()}
+      onDragStart={(e) => {
+        sideMenu.blockDragStart(e, block as never);
+        // Un título colapsado se arrastra con su sección entera (Doc_Colapsar.md, "Mover la sección entera").
+        const view = editor.prosemirrorView;
+        if (view) startSectionDrag(view, e.dataTransfer);
+      }}
+      onDragEnd={() => {
+        const view = editor.prosemirrorView;
+        if (view) endSectionDrag(view);
+        sideMenu.blockDragEnd();
+      }}
       onClick={() => {
         const view = editor.prosemirrorView;
         if (view) selectWholeBlock(view, block.id);
