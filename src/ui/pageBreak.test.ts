@@ -14,14 +14,14 @@ import {
   SCRIPT_PROP,
 } from './editorSchema';
 import { pageEditorExtensions } from './editorExtensions';
-import { schema as v083Schema } from './fixtures/editorSchemaV083';
+import { schema as v088Schema } from './fixtures/editorSchemaV088';
 import { paginate, PAGE_BREAK_SELECTOR, type Unit } from './pagination';
 import { buildPrintView } from './printView';
 import { findUnknownContent } from './unknownContent';
 
 // El salto de hoja (Docs/Doc_Hojas_PDF.md, "Salto de hoja"): un párrafo con `pageBreak: true`, nunca un tipo de
 // bloque nuevo. El cálculo de las hojas con saltos, cómo se crea y se saca en el editor, copiar y pegar, y la
-// versión publicada antes del salto (v0.083, copiada en fixtures/): abre la página, no borra el párrafo ni su
+// versión publicada antes del salto (v0.083 a v0.088, copiada en fixtures/): abre la página, no borra el párrafo ni su
 // texto, y si edita esa línea pierde solo el salto.
 
 // --- El cálculo ---------------------------------------------------------------------------------------------
@@ -243,6 +243,23 @@ describe('copiar y pegar', () => {
     expect(texts(b).join('|')).toContain('Con texto.');
   });
 
+  it('pegar en un salto vacío deja lo pegado arriba de la línea, y el salto sigue', () => {
+    const editor = mount(new Y.Doc());
+    editor.replaceBlocks(editor.document, [p('Uno.'), marker(), p('Dos.')]);
+    editor.setTextCursorPosition(editor.document[1], 'start');
+    editor.pasteHTML('<p>Pegado.</p>');
+    expect(texts(editor).slice(0, 3)).toEqual(['Uno.', 'Pegado.', 'Dos.']);
+    expect(kinds(editor).slice(0, 3)).toEqual(['paragraph', 'break', 'paragraph']);
+    // Si lo pegado empieza con otra cosa (un título), el salto se pierde; el texto, nunca.
+    editor.setTextCursorPosition(editor.document[1], 'end');
+    editor.replaceBlocks([editor.document[1]], [marker()]);
+    editor.setTextCursorPosition(editor.document[1], 'start');
+    editor.pasteHTML('<h2>Título</h2><p>Más.</p>');
+    expect(texts(editor).join('|')).toContain('Título');
+    expect(texts(editor).join('|')).toContain('Más.');
+    expect(texts(editor).join('|')).toContain('Dos.');
+  });
+
   it('afuera de la app sale con break-after: page; pegado de vuelta, es un salto', async () => {
     const a = mount(new Y.Doc());
     a.replaceBlocks(a.document, [p('Uno.'), marker(), p('Dos.')]);
@@ -303,7 +320,7 @@ describe('la vista de impresión', () => {
   });
 });
 
-// --- La versión publicada antes del salto (v0.083) -------------------------------------------------------
+// --- La versión publicada antes del salto (v0.088) -------------------------------------------------------
 
 function newPage(): { doc: Y.Doc; editor: BlockNoteEditor } {
   const doc = new Y.Doc();
@@ -312,21 +329,21 @@ function newPage(): { doc: Y.Doc; editor: BlockNoteEditor } {
   return { doc, editor };
 }
 
-function openInV083(doc: Y.Doc): { old: BlockNoteEditor; updates: Uint8Array[] } {
+function openInV088(doc: Y.Doc): { old: BlockNoteEditor; updates: Uint8Array[] } {
   const docOld = new Y.Doc();
   Y.applyUpdate(docOld, Y.encodeStateAsUpdate(doc));
   const updates: Uint8Array[] = [];
   docOld.on('update', (u: Uint8Array) => updates.push(u));
-  return { old: mount(docOld, v083Schema), updates };
+  return { old: mount(docOld, v088Schema), updates };
 }
 
-describe('saltos de hoja con el editor de la versión anterior (v0.083)', () => {
+describe('saltos de hoja con el editor de la versión anterior (v0.088)', () => {
   it('abre la página, ve párrafos (vacío o con su texto) y al editar otro bloque no borra ni desmarca nada', async () => {
     const { doc, editor } = newPage();
     await tick();
     const ids = editor.document.map((b) => b.id);
 
-    const { old, updates } = openInV083(doc);
+    const { old, updates } = openInV088(doc);
     await tick();
     expect(old.document.slice(0, 5).map((b) => b.type)).toEqual(['paragraph', 'paragraph', 'paragraph', 'paragraph', 'paragraph']);
     expect(texts(old).slice(0, 5)).toEqual(['Escena 1.', '', 'Escena 2.', 'Nota antes del corte.', 'Escena 3.']);
@@ -349,7 +366,7 @@ describe('saltos de hoja con el editor de la versión anterior (v0.083)', () => 
     await tick();
     const id = editor.document[3].id;
 
-    const { old, updates } = openInV083(doc);
+    const { old, updates } = openInV088(doc);
     await tick();
     old.setTextCursorPosition(old.document[3], 'end');
     old.insertInlineContent(' Y algo más.');
@@ -367,7 +384,7 @@ describe('saltos de hoja con el editor de la versión anterior (v0.083)', () => 
   it('la guarda contra lo desconocido no bloquea la página en la versión anterior', async () => {
     const { doc } = newPage();
     await tick();
-    const probe = BlockNoteEditor.create({ schema: v083Schema });
+    const probe = BlockNoteEditor.create({ schema: v088Schema });
     const names = { nodes: new Set(Object.keys(probe.pmSchema.nodes)), marks: new Set(Object.keys(probe.pmSchema.marks)) };
     expect(findUnknownContent(doc, names)).toBeNull();
   });

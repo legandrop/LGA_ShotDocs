@@ -197,12 +197,18 @@ de cortes").
   cursor en un párrafo nuevo, en la hoja siguiente. **Ctrl+Enter** (⌘↩ en la Mac), como en Word y Google Docs:
   en un párrafo vacío, ese párrafo pasa a ser el salto; al principio de un bloque, el salto va antes; en el medio
   de un párrafo, lo parte y queda entre las dos partes (la segunda conserva sus propiedades: Script sigue Script);
-  al final, va después con un párrafo nuevo. En una tabla, una imagen o un bloque de código no hace nada.
+  al final, va después con un párrafo nuevo. En una tabla o una imagen no hace nada; en un bloque de código hace lo
+  de antes (sale del bloque).
   Ctrl+Enter no lo usaba nadie en el editor (el de mandar un comentario es en su campo, otro lugar del registro).
 - **Cómo se saca.** Retroceso al principio del bloque que sigue: vacío se borra, con texto queda como párrafo
   común. Sin esto, BlockNote juntaba el bloque con el salto y el texto subía arriba de la línea; por eso el teclado
   va en una extensión que corre antes que la de BlockNote (`pageBreakExtension`). También se borra como cualquier
   párrafo, o con *Paragraph* en la barra.
+- **Lo que se le pone encima.** Soltar o pegar un archivo o una carpeta en un salto vacío no lo reemplaza (el
+  archivo va debajo, como con una pregunta vacía). Pegar texto en un salto vacío lo deja adentro, arriba de la
+  línea: ProseMirror reemplaza el párrafo vacío por el pegado y el salto se perdía, así que se le devuelve al párrafo
+  que queda ahí (si lo pegado empieza con un título o una lista, el salto se pierde; el texto, nunca). Un link de
+  Drive pegado como tarjeta en el salto lo deja tarjeta y salto a la vez.
 - **Cómo se ve.** Una línea punteada con "PAGE BREAK" / "SALTO DE HOJA" (el rótulo es CSS y sale de
   `--sd-page-break-label`, en el idioma de la app): vacío, la línea pasa por el renglón; con texto, va debajo. En
   una página libre, más tenue: no hay hojas en pantalla, pero el PDF (A4) lo respeta. En el teléfono, igual.
@@ -218,16 +224,16 @@ de cortes").
   `break-after: page` o `page-break-after: always`. Deshacer: un solo Ctrl+Z (partir un párrafo va en dos pasos
   que el historial junta). Buscar: el rótulo no es texto y no aparece; lo escrito en el salto, sí. No hay exportar
   ni importar `.md` todavía: cuando exista, el salto tiene que ir como una línea propia que vuelva al importar.
-- **Una versión vieja** (hasta v0.083) ve un párrafo vacío o con su texto, sin línea, y no lo borra (las
+- **Una versión vieja** (hasta v0.088) ve un párrafo vacío o con su texto, sin línea, y no lo borra (las
   propiedades que no conoce quedan en el Y.Doc). Si escribe en ese renglón, pierde solo el salto; el texto y el id
   quedan. Como perder la propiedad deja el contenido intacto, **no hace falta subir `min_app_version`**.
 
 ### Cómo quedó
 
-- `src/ui/pageBreak.test.ts` (21 pruebas): el cálculo con saltos (vacío, con texto, seguidos, al final, cuando ya
+- `src/ui/pageBreak.test.ts` (22 pruebas, más una en `fileDrop.test.ts` y otra en `driveCard.test.ts`): el cálculo con saltos (vacío, con texto, seguidos, al final, cuando ya
   empieza hoja, un título antes, un bloque alto después), crear y sacar (también con el teclado real del editor de
-  la página), el menú "/", partir un Script, copiar y pegar (HTML de la app y de afuera), la vista de impresión
-  (esconde el vacío, el Y.Doc no cambia) y la **versión anterior** (`fixtures/editorSchemaV083.ts`, copia del
+  la página), el menú "/", partir un Script, copiar y pegar (HTML de la app y de afuera, `avoid-page` no es salto, pegar en un salto vacío), la vista de impresión
+  (esconde el vacío, el Y.Doc no cambia) y la **versión anterior** (`fixtures/editorSchemaV088.ts`, copia del
   esquema publicado): abre la página, ve los párrafos con su texto, no borra ni desmarca nada al editar otro bloque
   y, si escribe en el salto, conserva texto e id.
 - En Chromium, con la página real sobre el servidor en memoria (sin login), 28 de 28: la línea; las marcas

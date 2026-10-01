@@ -134,6 +134,17 @@ const CHECK_GRID = 4;
 const CHECK_BLOCK = 8;
 /** Cuánto puede diferir el promedio de un cuadradito (de 0 a 255): mucho más que lo que cambia un JPEG de 0,92. */
 const CHECK_TOLERANCE = 64;
+/**
+ * Los puntos que más se apartan del fondo: se buscan en una grilla de hasta 48 × 48 cuadraditos de 4 × 4, y se
+ * comparan los 12 más distintos, si se apartan del fondo en más de 40 (de 0 a 255, en luminancia).
+ */
+const SALIENT_GRID = 48;
+const SALIENT_BLOCK = 4;
+const SALIENT_POINTS = 12;
+const SALIENT_MIN = 40;
+
+/** La luminancia (la misma fórmula que usa el JPEG para su canal Y, que guarda con más detalle que el color). */
+const luma = (r: number, g: number, b: number) => 0.299 * r + 0.587 * g + 0.114 * b;
 
 function blankCanvas(width: number, height: number): OffscreenCanvas | HTMLCanvasElement | null {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(width, height);
@@ -144,11 +155,82 @@ function blankCanvas(width: number, height: number): OffscreenCanvas | HTMLCanva
   return canvas;
 }
 
+/** El promedio de cada canal (R, G, B) de un cuadradito de lado `block` en (x, y) de los píxeles decodificados. */
+function blockMean(pixels: Pixels, x: number, y: number, block: number): [number, number, number] {
+  const sum = [0, 0, 0];
+  for (let dy = 0; dy < block; dy++) {
+    for (let dx = 0; dx < block; dx++) {
+      const at = ((y + dy) * pixels.width + x + dx) * 4;
+      sum[0] += pixels.data[at];
+      sum[1] += pixels.data[at + 1];
+      sum[2] += pixels.data[at + 2];
+    }
+  }
+  const n = block * block;
+  return [sum[0] / n, sum[1] / n, sum[2] / n];
+}
+
+/** Lo mismo, de una tira de cuadraditos leída del JPEG (`readBlocks`). */
+function stripMean(read: Uint8ClampedArray, count: number, i: number, block: number): [number, number, number] {
+  const sum = [0, 0, 0];
+  for (let dy = 0; dy < block; dy++) {
+    for (let dx = 0; dx < block; dx++) {
+      const at = (dy * block * count + i * block + dx) * 4;
+      sum[0] += read[at];
+      sum[1] += read[at + 1];
+      sum[2] += read[at + 2];
+    }
+  }
+  const n = block * block;
+  return [sum[0] / n, sum[1] / n, sum[2] / n];
+}
+
+/** Los cuadraditos del JPEG en esos puntos, uno al lado del otro en una tira (una sola lectura del canvas). */
+function readBlocks(bitmap: ImageBitmap, points: [number, number][], block: number): Uint8ClampedArray {
+  const strip = blankCanvas(block * points.length, block);
+  const ctx = strip?.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  if (!ctx) throw new HeicError('failed', 'No canvas to check the JPEG.');
+  points.forEach(([x, y], i) => ctx.drawImage(bitmap, x, y, block, block, i * block, 0, block, block));
+  return ctx.getImageData(0, 0, block * points.length, block).data;
+}
+
+/**
+ * Los puntos de la foto que más se apartan de su fondo (la mediana de la luminancia): el texto de un documento,
+ * el horizonte de un cielo. Un canvas vacío (todo blanco o todo negro) se parece al fondo de una foto casi toda
+ * de ese color, y en una grilla pareja podría pasar; en estos puntos, no. Sin ninguno (una foto lisa), ninguno.
+ */
+function salientPoints(pixels: Pixels): { points: [number, number][]; lumas: number[]; background: number } {
+  const block = Math.min(SALIENT_BLOCK, pixels.width, pixels.height);
+  const across = Math.max(1, Math.min(SALIENT_GRID, Math.floor(pixels.width / block)));
+  const down = Math.max(1, Math.min(SALIENT_GRID, Math.floor(pixels.height / block)));
+  const candidates: { x: number; y: number; luma: number }[] = [];
+  for (let row = 0; row < down; row++) {
+    for (let col = 0; col < across; col++) {
+      const x = Math.floor(((col + 0.5) / across) * (pixels.width - block));
+      const y = Math.floor(((row + 0.5) / down) * (pixels.height - block));
+      candidates.push({ x, y, luma: luma(...blockMean(pixels, x, y, block)) });
+    }
+  }
+  const sorted = candidates.map((c) => c.luma).sort((a, b) => a - b);
+  const background = sorted[Math.floor(sorted.length / 2)];
+  const chosen = candidates
+    .filter((c) => Math.abs(c.luma - background) > SALIENT_MIN)
+    .sort((a, b) => Math.abs(b.luma - background) - Math.abs(a.luma - background))
+    .slice(0, SALIENT_POINTS);
+  return { points: chosen.map((c) => [c.x, c.y]), lumas: chosen.map((c) => c.luma), background };
+}
+
 /**
  * El JPEG se vuelve a abrir y se compara con lo decodificado: tiene que decodificar, medir lo mismo que el HEIC
- * y, en una grilla de puntos, parecerse (el promedio de un cuadradito de 8 × 8). Lo que devuelve un canvas no
- * es de fiar a ciegas: pasado su tope de área (16,7 MP en iOS) puede salir vacío o negro, y hay navegadores que
- * alteran lo que se lee de un canvas. Si no coincide, la conversión cuenta como fallida y queda el HEIC.
+ * y parecerse. Lo que devuelve un canvas no es de fiar a ciegas: pasado su tope de área (16,7 MP en iOS) puede
+ * salir vacío, blanco o negro, y hay navegadores que alteran lo que se lee de un canvas. Si no coincide, la
+ * conversión cuenta como fallida y queda el HEIC. Dos comparaciones:
+ *   - una grilla pareja de 4 × 4 cuadraditos de 8 × 8 (el promedio de cada canal, con tolerancia amplia): más de
+ *     la mitad distintos es otra cosa (vacío, ruido);
+ *   - los puntos que más se apartan del fondo de la foto (`salientPoints`), en luminancia, que el JPEG guarda
+ *     casi exacta: en cada uno el JPEG tiene que estar más cerca de la foto que del fondo. Si más de la mitad
+ *     no, es un canvas vacío del color del fondo (una foto casi toda blanca, como un documento o un cielo,
+ *     pasaba la grilla pareja con un canvas en blanco).
  */
 export const checkJpeg: JpegCheck = async (jpeg, pixels) => {
   if (typeof createImageBitmap !== 'function') throw new HeicError('failed', 'This browser cannot check the JPEG.');
@@ -173,30 +255,28 @@ export const checkJpeg: JpegCheck = async (jpeg, pixels) => {
         ]);
       }
     }
-    const strip = blankCanvas(block * points.length, block);
-    const ctx = strip?.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-    if (!ctx) throw new HeicError('failed', 'No canvas to check the JPEG.');
-    points.forEach(([x, y], i) => ctx.drawImage(bitmap, x, y, block, block, i * block, 0, block, block));
-    const read = ctx.getImageData(0, 0, block * points.length, block).data;
+    const read = readBlocks(bitmap, points, block);
     let different = 0;
     points.forEach(([x, y], i) => {
-      for (let channel = 0; channel < 3; channel++) {
-        let want = 0;
-        let got = 0;
-        for (let dy = 0; dy < block; dy++) {
-          for (let dx = 0; dx < block; dx++) {
-            want += pixels.data[((y + dy) * pixels.width + x + dx) * 4 + channel];
-            got += read[(dy * block * points.length + i * block + dx) * 4 + channel];
-          }
-        }
-        if (Math.abs(want - got) / (block * block) > CHECK_TOLERANCE) {
-          different++;
-          return;
-        }
-      }
+      const want = blockMean(pixels, x, y, block);
+      const got = stripMean(read, points.length, i, block);
+      if (want.some((v, channel) => Math.abs(v - got[channel]) > CHECK_TOLERANCE)) different++;
     });
     // Más de la mitad de los puntos distintos: no es la foto (vacío, negro, ruido).
     if (different * 2 > points.length) throw new HeicError('failed', 'The JPEG does not look like the photo.');
+
+    const salient = salientPoints(pixels);
+    if (salient.points.length) {
+      const small = Math.min(SALIENT_BLOCK, pixels.width, pixels.height);
+      const readSalient = readBlocks(bitmap, salient.points, small);
+      let lost = 0;
+      salient.lumas.forEach((want, i) => {
+        const got = luma(...stripMean(readSalient, salient.points.length, i, small));
+        // Más cerca del fondo que de la foto: ese detalle no está en el JPEG.
+        if (Math.abs(got - want) > Math.abs(want - salient.background) / 2) lost++;
+      });
+      if (lost * 2 > salient.points.length) throw new HeicError('failed', 'The JPEG lost the details of the photo.');
+    }
   } finally {
     bitmap.close();
   }

@@ -1,29 +1,37 @@
 import { createExtension, type BlockNoteEditor, type ExtensionOptions } from '@blocknote/core';
 import { Fragment, Slice, type Node as PMNode, type ResolvedPos } from '@tiptap/pm/model';
-import { AddMarkStep, RemoveMarkStep, ReplaceStep, type Mappable } from '@tiptap/pm/transform';
+import { AddMarkStep, RemoveMarkStep, ReplaceStep, dropPoint, type Mappable } from '@tiptap/pm/transform';
 import { AllSelection, NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { ySyncPluginKey, yUndoPluginKey } from 'y-prosemirror';
+import type * as Y from 'yjs';
 import { t } from '../i18n';
 import '../i18n/lazy/editor';
 import {
   analyze,
+  effective,
   headingLevel,
   headingsOf,
   headingTextEnd,
   hidesSomething,
   isCollapsed,
+  preserveHidden,
   sectionAt,
   type Analysis,
   type BlockAt,
   type HeadingRecord,
+  type Records,
+  type Shared,
 } from './collapse';
+import { blockPos } from './blockHandle';
+import { buildMove, dispatchMove, movingBlocks, recreatedRange, type BlockMove } from './blockMove';
 import { IS_MAC, shortcutKeys, shortcutLabel } from './shortcuts';
 import { hiddenInDom } from './collapseDom';
 import { BACKGROUND_META, FIND_REPLACE_META } from './editorMeta';
 import { isFindReplaceTransaction, setFindCollapseHooks, type FindCollapseHooks } from './findEditor';
 import { isLetter, modPressed } from './findUi';
 import { notify } from './notice';
+import { dropTarget, movedSelection, planKeyboardMove, planSectionDrag } from './sectionMove';
 
 // Colapsar secciones por sus títulos (P.11, Docs/Doc_Colapsar.md), en el editor. Como las filas de fotos
 // (imageRowsEditor.ts): un plugin de ProseMirror que calcula qué se esconde (collapse.ts) y lo dibuja con
@@ -44,7 +52,12 @@ import { notify } from './notice';
 // avisa cada cambio con `save`.
 
 export interface CollapseState {
+  /** Lo tuyo (de esta persona en este dispositivo). */
   records: ReadonlyMap<string, HeadingRecord>;
+  /** Colapsado para todos (el mapa de la página, entrega 2). */
+  shared: Shared;
+  /** Lo que vale para vos: lo tuyo si lo hay; si no, lo de todos (`effective`). */
+  merged: Records;
   analysis: Analysis;
   decorations: DecorationSet;
   /** La selección de ahora es la de Ctrl+A (la eligió el navegador justo después de la tecla). */
@@ -53,7 +66,9 @@ export interface CollapseState {
 
 interface CollapseMeta {
   /** Lo guardado de cada título, entero (lo arma quien despacha). */
-  records: ReadonlyMap<string, HeadingRecord>;
+  records?: ReadonlyMap<string, HeadingRecord>;
+  /** Colapsado para todos, entero (cambió el mapa de la página). */
+  shared?: Shared;
 }
 
 export const collapseKey = new PluginKey<CollapseState>('shotdocs-collapse');
@@ -63,6 +78,13 @@ export interface CollapseOptions {
   initial?: ReadonlyMap<string, HeadingRecord>;
   /** Cada cambio de lo colapsado, para guardarlo. */
   save?: (records: ReadonlyMap<string, HeadingRecord>) => void;
+  /**
+   * Lo colapsado para todos (entrega 2): el mapa de la página, en el mismo Y.Doc que el contenido
+   * (`SHARED_COLLAPSE_MAP`). Sin él, no hay "para todos".
+   */
+  shared?: Y.Map<unknown>;
+  /** Si esta persona puede escribir el mapa: con permiso de editar la página, y los permisos conocidos. */
+  canShare?: () => boolean;
 }
 
 export function collapseState(state: EditorState): CollapseState | undefined {
@@ -80,9 +102,10 @@ function decorate(doc: PMNode, analysis: Analysis): DecorationSet {
   return DecorationSet.create(doc, decorations);
 }
 
-function build(doc: PMNode, records: ReadonlyMap<string, HeadingRecord>): CollapseState {
-  const analysis = analyze(doc, records);
-  return { records, analysis, decorations: decorate(doc, analysis) };
+function build(doc: PMNode, records: ReadonlyMap<string, HeadingRecord>, shared: Shared): CollapseState {
+  const merged = effective(records, shared);
+  const analysis = analyze(doc, merged);
+  return { records, shared, merged, analysis, decorations: decorate(doc, analysis) };
 }
 
 /** Cada decoración que corresponde a lo calculado, con una clave (el bloque, y quién lo esconde). */
@@ -153,12 +176,13 @@ function sameRecords(a: ReadonlyMap<string, HeadingRecord>, b: ReadonlyMap<strin
  *   vuelta (auditoría, punto 4).
  */
 function remapRecords(tr: Transaction, old: CollapseState, records: ReadonlyMap<string, HeadingRecord>): ReadonlyMap<string, HeadingRecord> {
-  if (records.size === 0) return records;
+  if (records.size === 0 && old.shared.size === 0) return records;
   const ids = blockIds(tr.doc);
   const local = !yjsOrigin(tr).fromYjs;
   let out: Map<string, HeadingRecord> | null = null;
   const edit = () => (out ??= new Map(records));
-  for (const [id, record] of records) {
+  // También un título colapsado solo para todos: con el id nuevo pasa a ser tuyo (el mapa no se toca).
+  for (const [id, record] of effective(records, old.shared)) {
     if (ids.has(id) || !local) continue;
     const was = old.analysis.blocks.get(id);
     if (!was) continue;
@@ -168,7 +192,7 @@ function remapRecords(tr: Transaction, old: CollapseState, records: ReadonlyMap<
     const renamed = node?.type.name === 'blockContainer' ? String(node.attrs.id ?? '') : '';
     if (!renamed || renamed === id || old.analysis.blocks.has(renamed) || headingLevel(node!) === null) continue;
     edit().delete(id);
-    edit().set(renamed, record);
+    edit().set(renamed, { ...record });
   }
   for (const [id, record] of out ?? records) {
     if (!record.e || ids.has(record.e) || !local) continue;
@@ -219,14 +243,17 @@ function hiddenInSelection(analysis: Analysis, sel: Selection): { head: string |
  * Abre, para vos, un título colapsado. Si tenía un fin (Enter después de él), los títulos colapsados de adentro
  * que llegarían más allá lo heredan: lo que se veía después del fin se sigue viendo (auditoría, punto 3).
  */
-function openRecord(doc: PMNode, records: Map<string, HeadingRecord>, analysis: Analysis, id: string): void {
-  const record = records.get(id);
-  records.delete(id);
+function openRecord(doc: PMNode, records: Map<string, HeadingRecord>, analysis: Analysis, id: string, shared: Shared, explicit = false): void {
+  const record = records.get(id) ?? (shared.has(id) ? { c: true, g: null } : undefined);
+  // Abrir con un clic queda como tuyo, aunque después cambie lo de todos (decisión 17). Lo que se abre solo (una
+  // edición, "Ir al bloque", la búsqueda) borra lo tuyo, salvo que esté colapsado para todos.
+  if (explicit || shared.has(id)) records.set(id, { c: false, g: null });
+  else records.delete(id);
   if (!record?.e) return;
   for (const [inner, hider] of analysis.hidden) {
     if (hider !== id || !analysis.collapsed.has(inner)) continue;
     const at = analysis.blocks.get(inner);
-    const innerRecord = records.get(inner);
+    const innerRecord = records.get(inner) ?? (shared.has(inner) ? { c: true, g: null } : undefined);
     if (!at || !innerRecord || innerRecord.e) continue;
     // Su sección llega hasta el fin del de afuera (o más): corta ahí.
     const section = sectionAt(doc, at.pos, innerRecord);
@@ -235,11 +262,11 @@ function openRecord(doc: PMNode, records: Map<string, HeadingRecord>, analysis: 
 }
 
 /** Abre, para vos, todos los títulos que esconden `blockId` (de afuera hacia adentro). */
-function revealIn(doc: PMNode, records: Map<string, HeadingRecord>, blockId: string): Analysis {
-  let analysis = analyze(doc, records);
+function revealIn(doc: PMNode, records: Map<string, HeadingRecord>, blockId: string, shared: Shared): Analysis {
+  let analysis = analyze(doc, effective(records, shared));
   for (let guard = 0; guard < 64 && analysis.hidden.has(blockId); guard++) {
-    openRecord(doc, records, analysis, analysis.hidden.get(blockId)!);
-    analysis = analyze(doc, records);
+    openRecord(doc, records, analysis, analysis.hidden.get(blockId)!, shared);
+    analysis = analyze(doc, effective(records, shared));
   }
   return analysis;
 }
@@ -393,7 +420,7 @@ function revealAndCollapse(view: EditorView, ids: readonly string[]): void {
   if (!state) return;
   const records = new Map(state.records);
   let analysis = state.analysis;
-  for (const id of ids) if (analysis.hidden.has(id)) analysis = revealIn(view.state.doc, records, id);
+  for (const id of ids) if (analysis.hidden.has(id)) analysis = revealIn(view.state.doc, records, id, state.shared);
   const tr = view.state.tr;
   if (!sameRecords(records, state.records)) tr.setMeta(collapseKey, { records } satisfies CollapseMeta);
   const sel = view.state.selection;
@@ -441,7 +468,13 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   const after = collapseKey.getState(newState);
   if (!before || !after) return null;
   const docChanged = trs.some((tr) => tr.docChanged);
-  const ownAction = trs.some((tr) => tr.getMeta(collapseKey));
+  // Deshacer o rehacer un mover de la 1b: se esconde lo mismo que antes (el fin de cada título se ajusta), como
+  // al mover; si no se puede, manda lo de siempre (lo que quedó escondido se abre).
+  const preserved =
+    docChanged && !trs.some((tr) => tr.getMeta(collapseKey)) && trs.some((tr) => yjsOrigin(tr).undo) && taggedMoveUndo(newState)
+      ? preserveHidden(newState.doc, after.records, after.shared, before.analysis.hidden)
+      : null;
+  const ownAction = trs.some((tr) => tr.getMeta(collapseKey)) || preserved !== null;
   if (!docChanged && !ownAction && !trs.some((tr) => tr.selectionSet)) return null;
 
   // Qué transacciones son de la persona (no de otro por Yjs; deshacer sí cuenta) y cuáles no abren nada.
@@ -465,7 +498,9 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   }
 
   const tr = newState.tr;
-  const records = new Map(after.records);
+  const records = new Map(preserved ?? after.records);
+  const shared = after.shared;
+  const seen = () => effective(records, shared);
 
   // Escribir en un renglón (lo más común) no saca ni mueve bloques: no hay nada que borrar ni avisar.
   const structural = [...plain].some((t) => !textOnly(t));
@@ -479,7 +514,7 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
     for (const id of before.analysis.collapsed) {
       // Solo un título que se veía: lo que esconde uno escondido lo decide el de afuera.
       // Un título al que solo se le cambió el id (su estado pasó al id nuevo) no se borró.
-      if (before.analysis.hidden.has(id) || after.analysis.blocks.has(id) || !after.records.has(id)) continue;
+      if (before.analysis.hidden.has(id) || after.analysis.blocks.has(id) || !after.merged.has(id)) continue;
       const at = before.analysis.blocks.get(id);
       if (!at) continue;
       const meant = textDeleted(trs, plain, at.pos + 2) && meantToDelete(at, oldState.selection);
@@ -491,7 +526,7 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
     deleteBlocks(tr, doomed);
   }
 
-  let analysis = tr.docChanged ? analyze(tr.doc, records) : after.analysis;
+  let analysis = tr.docChanged || preserved ? analyze(tr.doc, seen()) : after.analysis;
   const reveal = new Set<string>(orphaned);
 
   if (docChanged && !ownAction) {
@@ -502,9 +537,10 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
         if (before.analysis.hidden.has(id)) continue;
         // El último renglón vacío de la página, justo después de una sección colapsada, al escribirle: pasa a
         // ser el fin de ese título, como con Enter (auditoría, punto 5).
-        if (wasTrailingLine(oldState.doc, id) && records.has(hider) && !records.get(hider)!.e) {
-          records.set(hider, { ...records.get(hider)!, e: id });
-          analysis = analyze(tr.doc, records);
+        const hiderRecord = seen().get(hider);
+        if (wasTrailingLine(oldState.doc, id) && hiderRecord && !hiderRecord.e) {
+          records.set(hider, { ...hiderRecord, e: id });
+          analysis = analyze(tr.doc, seen());
           continue;
         }
         reveal.add(id);
@@ -527,7 +563,7 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
   }
 
   for (const id of reveal) {
-    if (analysis.hidden.has(id)) analysis = revealIn(tr.doc, records, id);
+    if (analysis.hidden.has(id)) analysis = revealIn(tr.doc, records, id, shared);
   }
   // Lo que escondía un título que sigue colapsado a la vista y ahora esconde otro título que ya se veía (se movió
   // el título, con el tirador o con Shift+Ctrl+flechas) se ve: hasta la entrega 1b, que mueve la sección entera
@@ -541,8 +577,8 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
       for (let guard = 0; guard < 64; guard++) {
         const hider = analysis.hidden.get(id);
         if (!hider || hider === was) break;
-        openRecord(tr.doc, records, analysis, hider);
-        analysis = analyze(tr.doc, records);
+        openRecord(tr.doc, records, analysis, hider, shared);
+        analysis = analyze(tr.doc, seen());
       }
     }
   }
@@ -555,7 +591,7 @@ function appendCollapse(trs: readonly Transaction[], oldState: EditorState, newS
     const inside = hiddenInSelection(analysis, sel);
     if (inside.head || inside.anchor) {
       if (docChanged && local) {
-        for (const id of [inside.head, inside.anchor]) if (id && analysis.hidden.has(id)) analysis = revealIn(tr.doc, records, id);
+        for (const id of [inside.head, inside.anchor]) if (id && analysis.hidden.has(id)) analysis = revealIn(tr.doc, records, id, shared);
       } else {
         const target = (id: string | null, fallback: number) => {
           const hider = id ? analysis.hidden.get(id) : undefined;
@@ -610,7 +646,7 @@ export function setCollapsed(view: EditorView, ids: readonly string[], collapsed
   const records = new Map(state.records);
   for (const id of ids) {
     if (collapsed) records.set(id, { c: true, g: null });
-    else if (records.has(id)) openRecord(view.state.doc, records, state.analysis, id);
+    else openRecord(view.state.doc, records, state.analysis, id, state.shared, true);
   }
   if (!sameRecords(records, state.records)) dispatchRecords(view, records);
 }
@@ -618,18 +654,18 @@ export function setCollapsed(view: EditorView, ids: readonly string[], collapsed
 export function toggleCollapsed(view: EditorView, id: string): void {
   const state = collapseKey.getState(view.state);
   if (!state) return;
-  setCollapsed(view, [id], !isCollapsed(state.records.get(id)));
+  setCollapsed(view, [id], !isCollapsed(state.merged.get(id)));
 }
 
 /** Colapsa o abre todos los títulos de la página (para vos). */
 export function setAllCollapsed(view: EditorView, collapsed: boolean): void {
   const state = collapseKey.getState(view.state);
   if (!state) return;
-  if (!collapsed) return setCollapsed(view, [...state.records.keys()], false);
+  // Lo tuyo en todos los títulos (Doc_Colapsar.md §4): un cambio de otro para todos no los mueve.
   setCollapsed(
     view,
     headingsOf(view.state.doc).map((h) => h.id),
-    true,
+    collapsed,
   );
 }
 
@@ -638,7 +674,7 @@ export function revealBlock(view: EditorView, blockId: string): boolean {
   const state = collapseKey.getState(view.state);
   if (!state?.analysis.hidden.has(blockId)) return false;
   const records = new Map(state.records);
-  revealIn(view.state.doc, records, blockId);
+  revealIn(view.state.doc, records, blockId, state.shared);
   dispatchRecords(view, records);
   return true;
 }
@@ -660,6 +696,251 @@ export function onCollapseChange(view: EditorView, fn: () => void): () => void {
   return () => set!.delete(fn);
 }
 
+// --- Para todos (entrega 2, Doc_Colapsar.md §4) ---------------------------------------------------------
+
+/** El mapa de la página con lo colapsado para todos: clave, el id del título; valor, `true`. */
+export const SHARED_COLLAPSE_MAP = 'collapsedHeadings';
+/** El origen de lo que se escribe en el mapa: se guarda y se sube como cualquier edición de la página. */
+export const ORIGIN_SHARED_COLLAPSE = Symbol('shared-collapse');
+
+/** Lo colapsado para todos que dice el mapa. */
+export function readShared(map: Y.Map<unknown> | undefined): Shared {
+  const out = new Set<string>();
+  map?.forEach((value, key) => {
+    if (value === true) out.add(key);
+  });
+  return out;
+}
+
+/** Las opciones de cada editor (para saber, desde afuera del plugin, si hay "para todos" y si se puede). */
+const optionsOf = new WeakMap<EditorView, CollapseOptions>();
+/** Los mapas que está escribiendo este editor (su propio aviso de cambio no hace falta). */
+const writing = new WeakSet<Y.Map<unknown>>();
+
+/**
+ * Si esta persona puede colapsar o abrir para todos en este editor: con el mapa, con el editor editable (permiso de
+ * editar y la página completa) y con los permisos conocidos (corrección 9).
+ */
+export function canShareCollapse(view: EditorView): boolean {
+  const options = optionsOf.get(view);
+  return !!options?.shared && view.editable && (options.canShare?.() ?? false);
+}
+
+export interface HeadingCollapse {
+  /** Lo que se ve. */
+  collapsed: boolean;
+  /** Colapsado para todos (el mapa). */
+  forAll: boolean;
+  /** Lo que ves es solo tuyo (distinto de lo de todos). */
+  onlyYou: boolean;
+}
+
+/** Cómo está un título para esta persona (para el tooltip del triángulo). */
+export function headingCollapse(state: EditorState, id: string): HeadingCollapse {
+  const s = collapseKey.getState(state);
+  const collapsed = !!s?.analysis.collapsed.has(id);
+  const forAll = !!s?.shared.has(id);
+  return { collapsed, forAll, onlyYou: collapsed !== forAll };
+}
+
+/**
+ * Shift+clic (o el atajo con Shift), quien puede editar: si lo que ves es solo tuyo, pasa a ser de todos; si no,
+ * colapsa o abre para todos. Lo tuyo en ese título se borra (ves lo de todos). Sin permiso, no hace nada (`false`).
+ */
+export function toggleShared(view: EditorView, id: string): boolean {
+  const s = collapseKey.getState(view.state);
+  const options = optionsOf.get(view);
+  const map = options?.shared;
+  if (!s || !map || !canShareCollapse(view)) return false;
+  const seen = isCollapsed(s.merged.get(id));
+  const forAll = s.shared.has(id);
+  const next = s.records.has(id) && seen !== forAll ? seen : !seen;
+  const records = new Map(s.records);
+  const shared = new Set(s.shared);
+  if (next) shared.add(id);
+  else shared.delete(id);
+  // Abrir para todos lo que tenía un fin tuyo: los de adentro lo heredan, como al abrir para vos.
+  if (!next) openRecord(view.state.doc, records, s.analysis, id, shared);
+  const mine = records.get(id);
+  // Pasar a todos lo que tenía un fin tuyo (Enter después del título): el fin queda tuyo, así no se esconde el
+  // renglón que se veía (auditoría de la 1b, I-2). Los demás ven la sección entera colapsada.
+  if (next && mine?.c && mine.e) records.set(id, { c: true, g: null, e: mine.e });
+  else records.delete(id);
+  writing.add(map);
+  try {
+    const write = () => (next ? map.set(id, true) : map.delete(id));
+    if (map.doc) map.doc.transact(write, ORIGIN_SHARED_COLLAPSE);
+    else write();
+  } finally {
+    writing.delete(map);
+  }
+  view.dispatch(view.state.tr.setMeta(collapseKey, { records, shared } satisfies CollapseMeta));
+  return true;
+}
+
+/**
+ * Llegó un cambio del mapa (de otro, o de otra parte de la app). Lo que otro colapsa para todos y escondería tu
+ * selección queda abierto para vos (guardado como tuyo), con un aviso (corrección 5); lo tuyo nunca cambia.
+ */
+function sharedChanged(view: EditorView, map: Y.Map<unknown>, event: Y.YMapEvent<unknown>): void {
+  const changed = [...event.keysChanged];
+  // Lo que escribe este editor no llega acá (`writing`): todo lo demás es de otro, también lo que baja por el camino
+  // de la reparación (que Yjs marca como local; auditoría de la 1b, M-4).
+  const remote = event.transaction.origin !== ORIGIN_SHARED_COLLAPSE;
+  // Después de que Yjs termine de avisar: si el mismo cambio trae contenido, y-prosemirror lo dibuja en su propio
+  // aviso; despachar antes haría que el editor, todavía con lo de antes, lo escribiera encima en Yjs.
+  queueMicrotask(() => applyShared(view, map, changed, remote));
+}
+
+function applyShared(view: EditorView, map: Y.Map<unknown>, changed: readonly string[], remote: boolean): void {
+  const s = collapseKey.getState(view.state);
+  if (!s || view.isDestroyed) return;
+  const shared = readShared(map);
+  const records = new Map(s.records);
+  let kept = false;
+  if (remote) {
+    for (const id of changed) {
+      if (!shared.has(id) || s.shared.has(id) || records.has(id)) continue;
+      const alone = new Set(s.shared).add(id);
+      const inside = hiddenInSelection(analyze(view.state.doc, effective(records, alone)), view.state.selection);
+      if (!inside.head && !inside.anchor) continue;
+      records.set(id, { c: false, g: null });
+      kept = true;
+    }
+  }
+  view.dispatch(view.state.tr.setMeta(collapseKey, { records, shared } satisfies CollapseMeta));
+  if (kept) notify(t('collapse.keptOpen'));
+}
+
+// --- Mover la sección entera (1b, Doc_Colapsar.md "Mover la sección entera") ------------------------------
+
+/** La marca del mover en su transacción y en su paso de deshacer (al deshacerlo se esconde lo mismo). */
+export const SECTION_MOVE_META = 'sd-section-move';
+
+function undoManagerOf(state: EditorState): Y.UndoManager | null {
+  return (yUndoPluginKey.getState(state as never) as { undoManager?: Y.UndoManager } | undefined)?.undoManager ?? null;
+}
+
+/** Deshacer o rehacer un mover de la 1b. */
+function taggedMoveUndo(state: EditorState): boolean {
+  return undoManagerOf(state)?.currStackItem?.meta.get(SECTION_MOVE_META) === true;
+}
+
+const taggedManagers = new WeakSet<Y.UndoManager>();
+
+/** Marca en la pila de deshacer los pasos de un mover (y los de deshacerlo, para rehacer). */
+function tagMoves(state: EditorState): void {
+  const um = undoManagerOf(state);
+  if (!um || taggedManagers.has(um)) return;
+  taggedManagers.add(um);
+  um.on('stack-item-added', ({ stackItem }: { stackItem: { meta: Map<unknown, unknown> } }) => {
+    if (movingBlocks() || um.currStackItem?.meta.get(SECTION_MOVE_META) === true) stackItem.meta.set(SECTION_MOVE_META, true);
+  });
+}
+
+/**
+ * Despacha un mover: la transacción con los mismos nodos, lo colapsado ajustado para que se esconda lo mismo que
+ * antes (si no se puede, manda la corrección 2: se abre lo que quedó escondido) y, en Yjs, las dos pasadas
+ * (blockMove.ts). `select`: la selección de antes corrida con lo movido, o un cursor en el primer bloque movido.
+ */
+export function dispatchSectionMove(view: EditorView, move: BlockMove, select: 'keep' | 'first' = 'keep'): void {
+  const s = collapseKey.getState(view.state);
+  if (!s) return;
+  const { tr, at } = buildMove(view.state, move);
+  const kept = preserveHidden(tr.doc, s.records, s.shared, s.analysis.hidden);
+  if (kept) tr.setMeta(collapseKey, { records: kept } satisfies CollapseMeta);
+  if (select === 'keep') tr.setSelection(movedSelection(view.state.selection, move, tr, at));
+  else {
+    const content = tr.doc.nodeAt(at)?.firstChild;
+    tr.setSelection(
+      content?.isTextblock ? TextSelection.create(tr.doc, at + 2 + content.content.size) : Selection.near(tr.doc.resolve(Math.min(at + 1, tr.doc.content.size))),
+    );
+  }
+  tr.setMeta(SECTION_MOVE_META, true).scrollIntoView();
+  dispatchMove(view, tr, recreatedRange(view.state.doc, move));
+}
+
+/**
+ * Shift+⌘/Ctrl+↑/↓ (corrección 4): un título colapsado se mueve con su sección, y los demás bloques saltan una
+ * sección colapsada como si fuera un bloque. Sin nada colapsado en juego, mueve BlockNote. En solo lectura no se
+ * mueve nada (BlockNote movía igual y la subida se rechazaba).
+ */
+function moveByKeyboard(view: EditorView, dir: 'up' | 'down'): boolean {
+  if (!view.editable) return true;
+  const s = collapseKey.getState(view.state);
+  if (!s) return false;
+  const plan = planKeyboardMove(view.state.doc, view.state.selection, s.analysis, s.merged, dir);
+  if (plan === null) return false;
+  if (plan !== 'stay') dispatchSectionMove(view, plan);
+  return true;
+}
+
+/** Lo que se está arrastrando: una sección colapsada (del primer bloque al último, por id). */
+const drags = new WeakMap<EditorView, { first: string; last: string }>();
+
+/**
+ * Al empezar a arrastrar los puntos de un bloque (después del `blockDragStart` de BlockNote, que ya eligió el
+ * bloque o los bloques): si hay un título colapsado, se arrastra su sección entera (corrección 7). Devuelve si
+ * tomó el arrastre.
+ */
+export function startSectionDrag(view: EditorView, dataTransfer: DataTransfer | null): boolean {
+  drags.delete(view);
+  const s = collapseKey.getState(view.state);
+  if (!s || !view.editable) return false;
+  const range = planSectionDrag(view.state.doc, view.state.selection, s.analysis, s.merged);
+  if (!range) return false;
+  const sel = SectionSelection.create(view.state.doc, range.from, range.to);
+  const nodes = sel.nodes;
+  if (nodes.length === 0) return false;
+  // La selección no se toca (queda el bloque que eligió BlockNote): cambiarla en medio del `dragstart` hace que
+  // Chromium cancele el arrastre (lo encontró el recorrido de punta a punta). Lo que se suelta es `view.dragging`.
+  const slice = sel.content();
+  // Lo que ProseMirror va a soltar (BlockNote lo arma desde el HTML solo si no está puesto).
+  (view as unknown as { dragging: unknown }).dragging = { slice, move: true };
+  try {
+    if (dataTransfer) {
+      const html = view.serializeForClipboard(slice).dom.innerHTML;
+      dataTransfer.setData('blocknote/html', html);
+      dataTransfer.setData('text/html', html);
+      dataTransfer.setData('text/plain', slice.content.textBetween(0, slice.content.size, '\n\n'));
+    }
+  } catch {
+    // El portapapeles del arrastre es para soltar en otro lado; acá se usa `view.dragging`.
+  }
+  drags.set(view, { first: String(nodes[0].attrs.id ?? ''), last: String(nodes[nodes.length - 1].attrs.id ?? '') });
+  return true;
+}
+
+/** Terminó el arrastre (se soltó o se canceló). */
+export function endSectionDrag(view: EditorView): void {
+  drags.delete(view);
+}
+
+/**
+ * Suelta la sección que se arrastra cerca de `pos` (el lugar entre bloques más cercano, como ProseMirror). Soltarla
+ * en su mismo lugar no hace nada. Devuelve si había una sección arrastrándose.
+ */
+export function dropSection(view: EditorView, pos: number): boolean {
+  const drag = drags.get(view);
+  drags.delete(view);
+  if (!drag) return false;
+  const doc = view.state.doc;
+  const first = blockPos(view, drag.first);
+  const last = blockPos(view, drag.last);
+  if (first < 0 || last < first || doc.resolve(first).parent !== doc.resolve(last).parent) return true;
+  const to = last + doc.nodeAt(last)!.nodeSize;
+  const slice = doc.slice(first, to);
+  const point = dropPoint(doc, Math.max(0, Math.min(pos, doc.content.size)), slice);
+  if (point === null || point === undefined) return true;
+  // Justo debajo de un título colapsado (o entre lo que esconde): después de su sección entera.
+  const s = collapseKey.getState(view.state);
+  const insertAt = s ? dropTarget(doc, point, s.analysis, s.merged) : point;
+  if (insertAt >= first && insertAt <= to) return true;
+  if (doc.resolve(insertAt).parent.type.name !== 'blockGroup') return true;
+  dispatchSectionMove(view, { from: first, to, insertAt }, 'first');
+  return true;
+}
+
 // --- Teclado ---------------------------------------------------------------------------------------------
 
 /** El título colapsado donde está la selección (de texto). */
@@ -672,7 +953,7 @@ function collapsedHeadingAt(state: EditorState): { at: BlockAt; record: HeadingR
   if (text.type.name !== 'heading' || $head.depth < 2) return null;
   const container = $head.node($head.depth - 1);
   const id = String(container.attrs.id ?? '');
-  const record = s.records.get(id);
+  const record = s.merged.get(id);
   if (!s.analysis.collapsed.has(id) || !record) return null;
   const at = { node: container, pos: $head.before($head.depth - 1) };
   return { at, record, text, offset: $head.parentOffset };
@@ -735,7 +1016,7 @@ function deleteAtEnd(view: EditorView): boolean {
   if (!next) return false;
   const nextId = String(next.node.attrs.id ?? '');
   if (!s.analysis.collapsed.has(nextId) || s.analysis.hidden.has(nextId)) return false;
-  if (!hidesSomething(sectionAt(state.doc, next.pos, s.records.get(nextId)))) return false;
+  if (!hidesSomething(sectionAt(state.doc, next.pos, s.merged.get(nextId)))) return false;
   const empty = sel.$head.parent.content.size === 0 && container.childCount === 1;
   if (!empty) return true;
   const from = sel.$head.before(containerDepth);
@@ -938,10 +1219,14 @@ function backspaceAfter(view: EditorView): boolean {
   return true;
 }
 
-/** Ctrl/⌘+Alt+Enter: colapsa o abre el título de la sección donde está la selección. */
-function toggleAtSelection(view: EditorView): boolean {
+/**
+ * Ctrl/⌘+Alt+Enter: colapsa o abre el título de la sección donde está la selección. Con Shift, para todos (si se
+ * puede editar; si no, para vos, como sin Shift).
+ */
+function toggleAtSelection(view: EditorView, forAll = false): boolean {
   const id = headingOfSelection(view.state);
   if (!id) return false;
+  if (forAll && toggleShared(view, id)) return true;
   toggleCollapsed(view, id);
   return true;
 }
@@ -961,7 +1246,7 @@ function widenForClipboard(view: EditorView): boolean {
   for (const id of s.analysis.collapsed) {
     const at = s.analysis.blocks.get(id);
     if (!at || s.analysis.hidden.has(id) || !covers(range, at)) continue;
-    const section = sectionAt(state.doc, at.pos, s.records.get(id));
+    const section = sectionAt(state.doc, at.pos, s.merged.get(id));
     if (section && section.after > to) to = section.after;
   }
   if (to === range.to) return false;
@@ -1097,14 +1382,15 @@ function applyCollapse(tr: Transaction, old: CollapseState): CollapseState {
   // Escribir en un renglón no cambia qué se esconde: se corren las posiciones y las decoraciones, sin
   // volver a calcular todo en cada tecla (auditoría, punto 7).
   if (!meta && tr.docChanged && textOnly(tr)) {
-    return { records: old.records, analysis: mapAnalysis(old.analysis, tr), decorations: old.decorations.map(tr.mapping, tr.doc) };
+    return { ...old, selectAll: undefined, analysis: mapAnalysis(old.analysis, tr), decorations: old.decorations.map(tr.mapping, tr.doc) };
   }
   let records = tr.docChanged ? remapRecords(tr, old, old.records) : old.records;
-  if (meta) records = meta.records;
-  if (!tr.docChanged && records === old.records) return old;
-  if (!tr.docChanged && sameRecords(records, old.records)) return old;
-  const analysis = analyze(tr.doc, records);
-  const next: CollapseState = { records, analysis, decorations: redecorate(old.decorations, tr, analysis) };
+  if (meta?.records) records = meta.records;
+  const shared = meta?.shared ?? old.shared;
+  if (!tr.docChanged && shared === old.shared && (records === old.records || sameRecords(records, old.records))) return old;
+  const merged = effective(records, shared);
+  const analysis = analyze(tr.doc, merged);
+  const next: CollapseState = { records, shared, merged, analysis, decorations: redecorate(old.decorations, tr, analysis) };
   // Si lo escondido quedó igual, se conservan los mismos objetos (así nadie vuelve a medir de más).
   if (sameStructure(next.analysis, old.analysis)) {
     next.analysis = { ...next.analysis, hidden: old.analysis.hidden, collapsed: old.analysis.collapsed };
@@ -1147,7 +1433,7 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
   return new Plugin<CollapseState>({
     key: collapseKey,
     state: {
-      init: (_, state) => build(state.doc, new Map(options.initial ?? [])),
+      init: (_, state) => build(state.doc, new Map(options.initial ?? []), readShared(options.shared)),
       apply: (tr, old) => {
         const next = applyCollapse(tr, old);
         const selectAll = selectAllAfter(tr, !!old.selectAll);
@@ -1172,6 +1458,17 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
     },
     props: {
       decorations: (state) => collapseKey.getState(state)?.decorations,
+      // Soltar una sección colapsada que se arrastra (startSectionDrag): se mueve entera.
+      handleDrop: (view, event, _slice, moved) => {
+        if (!moved || !drags.has(view)) return false;
+        const e = event as DragEvent;
+        const at = view.posAtCoords({ left: e.clientX, top: e.clientY });
+        if (!at) {
+          drags.delete(view);
+          return true;
+        }
+        return dropSection(view, at.pos);
+      },
       handleKeyDown: (_view, event) => {
         pendingAll = isSelectAllKey(event);
         return false;
@@ -1179,6 +1476,11 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
       handleDOMEvents: {
         // Empezar a componer (una tecla muerta, el teclado del teléfono) o escribir encima de una selección que
         // borraría algo escondido: se abre y la selección queda vacía antes de que el navegador toque la pantalla.
+        // Un arrastre que empieza en el texto del editor no es el de una sección (auditoría de la 1b, M-3).
+        dragstart: (view) => {
+          drags.delete(view);
+          return false;
+        },
         compositionstart: (view) => {
           refuseAhead(view);
           return false;
@@ -1229,6 +1531,14 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
     },
     view: (editorView) => {
       pluginView = editorView;
+      optionsOf.set(editorView, options);
+      tagMoves(editorView.state);
+      // Lo colapsado para todos: cada cambio del mapa (de otro, o de otra pestaña de la misma página).
+      const map = options.shared;
+      const onShared = (event: Y.YMapEvent<unknown>) => {
+        if (map && !writing.has(map)) sharedChanged(editorView, map, event);
+      };
+      map?.observe(onShared);
       let paused = new WeakSet<HTMLIFrameElement>();
       // La búsqueda en la página (Docs/Doc_Buscar.md) cuenta lo que está en secciones colapsadas y, al ir ahí, lo
       // abre para vos. Cada editor registra los suyos (por vista).
@@ -1240,6 +1550,8 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
       setFindCollapseHooks(editorView, hooks);
       return {
         destroy: () => {
+          map?.unobserve(onShared);
+          optionsOf.delete(editorView);
           setFindCollapseHooks(editorView, null);
           if (pluginView === editorView) pluginView = null;
         },
@@ -1259,7 +1571,7 @@ function createCollapsePlugin(options: CollapseOptions): Plugin<CollapseState> {
             }
             paused = next;
           }
-          if (structural || !sameRecords(now.records, was!.records)) for (const fn of listeners.get(view) ?? []) fn();
+          if (structural || now.shared !== was!.shared || !sameRecords(now.records, was!.records)) for (const fn of listeners.get(view) ?? []) fn();
         },
       };
     },
@@ -1279,9 +1591,12 @@ export const collapseExtension = createExtension(({ options }: ExtensionOptions<
   prosemirrorPlugins: [createCollapsePlugin(options ?? {})],
   keyboardShortcuts: {
     // Las teclas salen del registro de atajos (shortcuts.ts).
-    [shortcutKeys('collapse')[0]]: withView(toggleAtSelection),
-    // Para todos (entrega 2); por ahora, igual que sin Shift.
-    [shortcutKeys('collapseEveryone')[0]]: withView(toggleAtSelection),
+    [shortcutKeys('collapse')[0]]: withView((view) => toggleAtSelection(view)),
+    // Para todos (entrega 2), si se puede editar.
+    [shortcutKeys('collapseEveryone')[0]]: withView((view) => toggleAtSelection(view, true)),
+    // Mover la sección entera (1b); sin nada colapsado en juego, el de BlockNote.
+    [shortcutKeys('moveUp')[0]]: withView((view) => moveByKeyboard(view, 'up')),
+    [shortcutKeys('moveDown')[0]]: withView((view) => moveByKeyboard(view, 'down')),
     Enter: withView(enterAfter),
     Delete: withView(deleteAtEnd),
     Backspace: withView(backspaceAfter),

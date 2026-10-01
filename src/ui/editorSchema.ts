@@ -133,6 +133,31 @@ const scriptMarksPlugin = new Plugin<DecorationSet>({
   },
 });
 
+/**
+ * Pegar en un salto de hoja vacío: ProseMirror reemplaza el párrafo vacío por el pegado, con las propiedades de
+ * fábrica, y el salto se perdía (el texto no). Si donde estaba quedó un párrafo, se le devuelve el salto: lo pegado
+ * queda arriba de la línea y la hoja nueva empieza después, como si se hubiera escrito ahí. Si lo pegado empieza con
+ * otra cosa (un título, una lista), el salto se pierde como antes; el contenido, nunca.
+ */
+const pageBreakPastePlugin = new Plugin({
+  appendTransaction: (trs, oldState, newState) => {
+    if (!trs.some((tr) => tr.getMeta('uiEvent') === 'paste')) return null;
+    const { $from } = oldState.selection;
+    const content = $from.parent;
+    if (content.type.name !== 'paragraph' || content.attrs[PAGE_BREAK_PROP] !== true || content.content.size !== 0) return null;
+    // Donde estaba el párrafo vacío, seguido por los cambios: ahí queda el primer bloque pegado.
+    // BlockNote cambia el bloque entero (el contenedor): el párrafo es el primer hijo del que quedó ahí.
+    let pos = $from.before($from.depth - 1);
+    for (const tr of trs) pos = tr.mapping.map(pos, -1);
+    const container = pos >= 0 && pos < newState.doc.content.size ? newState.doc.nodeAt(pos) : null;
+    if (container?.type.name !== 'blockContainer') return null;
+    pos += 1;
+    const node = container.firstChild;
+    if (node?.type.name !== 'paragraph' || node.attrs[PAGE_BREAK_PROP] === true) return null;
+    return newState.tr.setNodeAttribute(pos, PAGE_BREAK_PROP, true);
+  },
+});
+
 // El párrafo de BlockNote, con una propiedad más.
 const createParagraph = createBlockSpec(
   {
@@ -201,7 +226,7 @@ const createParagraph = createBlockSpec(
   [
     createExtension({
       key: 'shotdocs-paragraph',
-      prosemirrorPlugins: [scriptMarksPlugin],
+      prosemirrorPlugins: [scriptMarksPlugin, pageBreakPastePlugin],
       keyboardShortcuts: {
         // Las teclas salen del registro de atajos (shortcuts.ts), como las de la ayuda.
         [shortcutKeys('paragraph')[0]]: ({ editor }) => setParagraph(editor, 'paragraph'),
@@ -277,7 +302,7 @@ const isEmptyContent = (block: AnyBlock) => Array.isArray(block.content) && bloc
  * principio de un bloque con texto, el salto va antes; en el medio de un párrafo, lo parte y el salto queda entre
  * las dos partes; al final (o en otro bloque de texto), va después. Si el cursor no queda en un bloque que sigue,
  * se agrega un párrafo vacío para seguir escribiendo en la hoja nueva. Todo en un solo paso de deshacer. En una
- * tabla, una imagen o un bloque de código no hace nada.
+ * tabla o una imagen no hace nada, y en un bloque de código deja lo que hace el editor (sale del bloque).
  */
 export function insertPageBreak(editor: BlockNoteEditor<any, any, any>): boolean {
   const { block } = editor.getTextCursorPosition() as unknown as { block: AnyBlock };

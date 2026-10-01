@@ -55,6 +55,11 @@ export interface MediaRecord {
    */
   heic?: 'pending' | 'sent' | 'failed';
   /**
+   * Veces que, con red (la base contestó), el decodificador de HEIC no cargó. Hasta `HEIC_ONLINE_TRIES` se vuelve
+   * a probar antes de subir el HEIC tal cual (queue.ts). Opcional: una versión anterior no lo escribe ni lo lee.
+   */
+  heicMisses?: number;
+  /**
    * Cuándo se confirmó la subida (`markUploaded`). Opcional: lo subido antes de esta versión no lo tiene. Un
    * original propio no se libera antes de 14 días desde acá (Docs/Doc_Copias_Locales.md, sección 5.2).
    */

@@ -1299,14 +1299,14 @@ describe('verificación de cbed5dc: lo escondido se borra solo a propósito', ()
     expect(visible(editor)).toEqual(expect.arrayContaining(['x1', 'x2']));
   });
 
-  it('5. Shift+Ctrl+↑ en un título colapsado: lo que pasa a esconder otro título se ve', async () => {
+  it('5. Shift+Ctrl+↑ en un título colapsado: (desde la 1b) sube con su sección y salta la de arriba entera', async () => {
     const { editor } = page([h(1, 'W'), p('w1'), h(1, 'X'), p('x1'), h(1, 'T'), p('t1')]);
     collapse(editor, 'X', 'W');
     putCaret(editor, 'X');
     press(editor, 'ArrowUp', { shiftKey: true, ctrlKey: true });
     await settle();
-    expect(texts(editor)).toEqual(['W', 'X', 'w1', 'x1', 'T', 't1']);
-    expect(visible(editor)).toContain('w1');
+    expect(texts(editor)).toEqual(['X', 'x1', 'W', 'w1', 'T', 't1']);
+    expect(visible(editor)).toEqual(['X', 'W', 'T', 't1']);
   });
 
   it('6. Enter en una página grande con todo colapsado no rearma todas las decoraciones', () => {

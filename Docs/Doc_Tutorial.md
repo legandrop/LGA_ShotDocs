@@ -46,7 +46,7 @@ Relevado del código de `main`. Son los lugares a los que puede apuntar un globi
 | Pie de la barra lateral | `Sidebar.tsx` | Papelera (páginas y archivos) y el menú de la cuenta. |
 | Menú de la cuenta | `AccountMenu` en `menus.tsx` | Apariencia (tema, letra, tamaño, ancho de la página), fotos en fila en el teléfono, idioma, miembros, Google Drive (el dueño), salir, textos legales. Las preferencias siguen a la persona ("Guardado en tu cuenta"). |
 | Barra de arriba de la página | `Workspace.tsx` | Migas, **lupa** (buscar en la página, Ctrl/⌘+F), **ícono de comentarios**, menú "⋯" de la página. |
-| Menú "⋯" de la página | `PageMenu` en `menus.tsx` | Compartir, página nueva adentro, renombrar, mover, tamaño de hoja, **Exportar PDF / Imprimir**, títulos cortos, mandar a la papelera. Con P.11: colapsar todo / abrir todo. |
+| Menú "⋯" de la página | `PageMenu` en `menus.tsx` | Compartir, página nueva adentro, renombrar, mover, tamaño de hoja, **Exportar PDF / Imprimir**, títulos cortos, mandar a la papelera. Desde P.11 (v0.053): colapsar todo / abrir todo. |
 | Título de la página | `PageView.tsx` | Enter pasa al texto. |
 | Editor | `PageEditor.tsx` (BlockNote 0.55) | Menú "/" (títulos, listas, tabla, cita, código, divisor, foto, Script, pregunta), tirador "⋮⋮" y "+" al costado de cada bloque, barra de formato al elegir texto, atajos de Markdown ("# ", "- ", "1. ", "[] ", "> "). |
 | Fotos y videos | `inlinePhotoCreate.ts`, `PhotoToolbar.tsx`, `inlinePhotoEditor.ts`; las fotos-bloque viejas, `imageRowsEditor.ts`, `MediaToolbarButtons.tsx` | Desde v0.078 entran en el renglón (pegar, soltar, "/Image"), como letras: texto al lado, Shift+clic o Shift+flechas para elegir varias. Primer clic elige, segundo abre el carrete; tiradores que imantan a 1/1, 1/2, 1/3 y 1/4; la barra de la foto (la misma para la foto-bloque, por sectores, D-24): ver, bajar, tamaños rápidos (para todas las elegidas) y "Acomodar en filas" de las elegidas, alinear el renglón, comentar, reemplazar, renombrar y borrar. |
@@ -84,7 +84,7 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | Mod+B, Mod+I, Mod+U, Mod+Shift+S, Mod+E | Negrita, cursiva, subrayado, tachado, código | Editor | Tiptap |
 | Mod+Z, Mod+Shift+Z / Mod+Y | Deshacer, rehacer | Editor | BlockNote |
 | Tab / Shift+Tab | Meter o sacar un nivel el bloque (en una tabla, la celda siguiente o anterior) | Editor | BlockNote |
-| Mod+Shift+↑ / ↓ | Mover el bloque arriba o abajo | Editor | BlockNote |
+| Mod+Shift+↑ / ↓ | Mover el bloque arriba o abajo. Un título colapsado se mueve con su sección entera, y un bloque salta una sección colapsada como si fuera uno; en solo lectura no mueve nada | Editor | BlockNote; con algo colapsado en juego, app (`sectionMove.ts`, v0.084) |
 | Shift+Enter | Salto de renglón dentro del bloque (a verificar con el registro, sección 6) | Editor | BlockNote |
 | "/" | Menú de bloques (↑ / ↓, Enter elige, Esc cierra; seguir escribiendo filtra) | Editor | BlockNote |
 | "# ", "## "…, "- ", "1. ", "[] ", "> " o `" `, "---", "```" | Título, viñeta, numerada, casilla, cita, divisor, código | Editor, al principio del renglón | BlockNote |
@@ -108,7 +108,9 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | ↑ / ↓, Enter | Elegir un proyecto | Selector de proyectos | App |
 | ↑ / ↓, Inicio / Fin, Esc | Recorrer y cerrar menús; Esc cierra diálogos | Menús y diálogos | App (`menus.tsx`) |
 | Enter | Pasar al texto | Título de la página | App (`PageView.tsx`) |
-| Mod+Alt+Enter (con Shift: para todos) | Colapsar o abrir la sección del título | Editor | App, **cuando llegue P.11** (`Doc_Colapsar.md`) |
+| Mod+Alt+Enter (con Shift: para todos) | Colapsar o abrir la sección del título; con Shift, para todos (solo quien puede editar; si no, para vos) | Editor | App (`collapseEditor.ts`; v0.053, para todos v0.084) |
+| Clic / Shift+clic en el triángulo de un título | Colapsar o abrir para vos / para todos (Shift solo quien puede editar, y no en pantallas táctiles) | Editor | App (`CollapseToggles.tsx`, v0.084) |
+| Arrastrar los puntos de un título colapsado | Mueve su sección entera | Editor | App (`startSectionDrag`, v0.084) |
 
 Dos observaciones del relevamiento:
 
@@ -153,7 +155,7 @@ choca con los permisos; la estática no deja probar, que es lo que más enseña.
   ("EXT. TERRAZA - NOCHE" con sus marcas de color), una pregunta ("¿El cielo se reemplaza en todos los
   planos?") con un hilo de ejemplo ya contestado, un renglón con tres fotos en línea (como las crea hoy pegar o
   soltar), una tabla de tomas y un H2 con texto
-  debajo (para colapsar, cuando exista P.11). Ni tarjeta de Drive (cargaría un reproductor de Google) ni
+  debajo (para colapsar). Ni tarjeta de Drive (cargaría un reproductor de Google) ni
   adjunto (la tarjeta sale de un archivo registrado en el Drive): los explican la recorrida y la ayuda.
 - **Fotos del ejemplo:** tres WebP chicas (unos 1200 px de ancho, 30 a 60 KB cada una) en `public/tutorial/`,
   con la dirección **absoluta** de la app (`https://<app>/tutorial/terraza-1.webp`; una relativa no la acepta
@@ -333,7 +335,7 @@ Arriba, un campo de búsqueda; abajo, las secciones:
 6. **Links de Drive:** pegar un link y elegir link, texto o tarjeta.
 7. **Comentarios y preguntas.**
 8. **Buscar y reemplazar** (y, con P.12 entrega 2, buscar en el proyecto).
-9. **Colapsar secciones** (cuando llegue P.11).
+9. **Colapsar secciones** (P.11): colapsar, colapsar para todos (Shift+clic) y mover la sección entera; ver "Entrada de ayuda: colapsar".
 10. **Compartir y miembros:** permisos, invitados.
 11. **Papelera:** páginas y archivos, qué se recupera.
 12. **Sin red y sincronización:** qué quiere decir cada estado, por qué no se pierde nada.
@@ -468,7 +470,8 @@ Cuando llegue la entrega 2 (liberar originales propios), el texto de `storageDev
 5. **Que la ayuda quede vieja.** Mitigación: la regla, el registro con su prueba contra el editor y las entradas
    que citan atajos por id.
 6. **Mod+K cambia de dueño con P.12 entrega 2** y Mod+Alt+Enter llega con P.11: si la ayuda sale antes, esas
-   entradas se marcan `soon` y se prenden con su tanda.
+   entradas se marcan `soon` y se prenden con su tanda. (Ya llegaron todos: Mod+Alt+Enter en v0.053 y, con Shift,
+   para todos, en v0.084.)
 7. (Sacado: la ayuda ya no tiene atajo de teclado.)
 8. **Sin red al terminar la recorrida,** la marca de la cuenta no se escribe: queda la del dispositivo y se
    reintenta al volver la red.
@@ -666,6 +669,18 @@ sobre lo que quede.
 ### Preguntas de estas correcciones
 
 Respondidas por Lega el 2026-09-30: ver "Decisiones".
+
+## Entrada de ayuda: colapsar (P.11, v0.084)
+
+**Hecha** al unir colapsar 1b y 2 con la ayuda: en la sección 9 de la ayuda (`src/help/entries.ts`) quedan
+*Collapse a section* (el triángulo, solo para vos, Mod+Alt+Enter, el menú ⋯ y qué dice el tooltip), *Collapse for
+everyone* (Shift+clic o Mod+Alt+Shift+Enter, si podés editar; en el teléfono, solo para vos) y *Move a collapsed
+section* (arrastrar los puntos o Mod+Shift+↑/↓; deshacer en un paso), con sus textos en los dos idiomas
+(`src/i18n/lazy/help.ts`). En el registro (`src/ui/shortcuts.ts`), `collapseEveryone` se muestra (ya no está
+escondido) y `moveUp` / `moveDown` son de la app (con una sección colapsada en juego la mueven entera; si no, se
+los deja a BlockNote). Shift+clic es un clic: va en el texto, no en el registro, como en las fotos en línea. Sin
+`when`: la ayuda no conoce el permiso de cada página, y el texto dice "si podés editarla". La práctica deja probar
+Shift+clic (el mapa vive en su documento, que no se guarda). La recorrida no muestra colapsar.
 
 ## Cómo quedó (entregas 1 y 2, v0.082)
 

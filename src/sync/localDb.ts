@@ -27,11 +27,27 @@ export interface DocState {
   guardVersion?: number;
   /** Vector de estado de lo que el servidor ya tiene. Lo que falta subir se calcula contra esto. */
   syncedSV?: Uint8Array;
+  /**
+   * Los borrados de Yjs que el servidor ya tiene (roadmap B.15), como un update sin elementos (ver
+   * `deleteSets.ts`): cada subida lleva solo los borrados que no están acá. Como `syncedSV`, nunca dice de
+   * más: crece solo con lo que el servidor confirma al subir o manda al bajar. Vale solo con la generación
+   * del workspace con que se anotó (`syncedDSGeneration`): una versión anterior de la app que restaura una
+   * copia borra `syncedSV` pero no conoce este campo, y guarda la generación nueva; con otra generación,
+   * esto no cuenta y se suben todos los borrados.
+   */
+  syncedDS?: Uint8Array;
+  /** La generación del workspace (`meta`, `GENERATION_KEY`, sin guardar vale 1) con que se anotó `syncedDS`. */
+  syncedDSGeneration?: number;
   /** Update enviado y todavía sin confirmar. Se reenvía igual (mismo id) hasta que el servidor responde. */
   pending?: {
     id: string;
     update: Uint8Array;
     sv: Uint8Array;
+    /**
+     * Los borrados que lleva `update` (un update sin elementos): al confirmarse se suman a `syncedDS`. Un envío
+     * armado por una versión anterior no lo tiene: se leen del update mismo.
+     */
+    ds?: Uint8Array;
     version: number;
     /**
      * La marca de ediciones sin subir (`dirtyKey`) que había al armar el envío, leída en la misma
@@ -87,6 +103,14 @@ export function openLocalDb(name: string): Promise<LocalDb> {
       db.createObjectStore('files', { keyPath: 'path' }).createIndex('uploaded', 'uploaded');
     },
   });
+}
+
+/** Clave en `meta` de la última generación del workspace que vio el dispositivo (ver engine.ts). */
+export const GENERATION_KEY = 'generation';
+
+/** La generación guardada, como la cuenta el motor: sin guardar vale 1 (la que crea la migración). */
+export function storedGeneration(value: unknown): number {
+  return typeof value === 'number' ? value : 1;
 }
 
 export function emptyDocState(pageId: string): DocState {

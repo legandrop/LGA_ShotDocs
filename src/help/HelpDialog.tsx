@@ -215,7 +215,7 @@ function ShortcutTable({ tr, phone }: { tr: Translate; phone: boolean }) {
     <div className="help-keys">
       {phone && <p className="muted">{tr('help.keysPhone')}</p>}
       {SHORTCUT_PLACES.map((place) => {
-        const rows = SHORTCUTS.filter((s) => s.place === place && !s.hidden);
+        const rows = SHORTCUTS.filter((s) => s.place === place);
         if (rows.length === 0) return null;
         return (
           <div key={place} className="help-keys-group">

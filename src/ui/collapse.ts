@@ -25,9 +25,29 @@ export interface HeadingRecord {
 
 export type Records = ReadonlyMap<string, HeadingRecord>;
 
-/** Lo que se ve: colapsado para vos. (En la entrega 2: lo tuyo si lo hay; si no, "para todos"; Doc_Colapsar.md §4.) */
+/** Lo que se ve, con lo tuyo y lo de todos ya juntos (`effective`): colapsado. */
 export function isCollapsed(record: HeadingRecord | undefined): boolean {
   return record?.c === true;
+}
+
+/** Colapsado para todos: lo que no esconde nada para nadie, abierto (un título sin entrada). */
+export type Shared = ReadonlySet<string>;
+
+const COLLAPSED_FOR_ALL: HeadingRecord = Object.freeze({ c: true, g: null }) as HeadingRecord;
+
+/**
+ * Lo que vale para esta persona en cada título (entrega 2, Doc_Colapsar.md §4): lo tuyo si lo hay; si no, lo de
+ * todos. Sin nada colapsado para todos es el mismo mapa (cada tecla pasa por acá).
+ */
+export function effective(records: Records, shared: Shared): Records {
+  if (shared.size === 0) return records;
+  let out: Map<string, HeadingRecord> | null = null;
+  for (const id of shared) {
+    if (records.has(id)) continue;
+    out ??= new Map(records);
+    out.set(id, COLLAPSED_FOR_ALL);
+  }
+  return out ?? records;
 }
 
 export interface BlockAt {
@@ -200,4 +220,36 @@ export function headingsOf(doc: PMNode): { id: string; level: number }[] {
     return node.type.name === 'blockGroup' || node.type.name === 'doc';
   });
   return out;
+}
+
+/**
+ * Lo tuyo, con el fin (`e`) de cada título colapsado que se ve puesto para que, en `doc`, se esconda exactamente
+ * lo que esconde `target` (bloque → título que lo esconde): después de mover bloques (1b), nada que se veía queda
+ * escondido ni al revés. El fin solo acorta una sección: si hace falta alargar una, o no alcanza, `null` (y manda
+ * la corrección 2: se abre lo que quedó escondido). Un título colapsado solo para todos que necesita un fin pasa a
+ * tener lo suyo (colapsado, con el fin).
+ */
+export function preserveHidden(doc: PMNode, records: Records, shared: Shared, target: ReadonlyMap<string, string>): Map<string, HeadingRecord> | null {
+  const out = new Map(records);
+  for (let guard = 0; guard < 64; guard++) {
+    const merged = effective(out, shared);
+    const now = analyze(doc, merged);
+    let same = now.hidden.size === [...target.keys()].filter((id) => now.blocks.has(id)).length;
+    if (same) for (const [id, hider] of now.hidden) if (target.get(id) !== hider) same = false;
+    if (same) return out;
+    let changed = false;
+    for (const id of now.collapsed) {
+      if (now.hidden.has(id)) continue;
+      const at = now.blocks.get(id);
+      const record = merged.get(id);
+      if (!at || !record) continue;
+      const section = sectionAt(doc, at.pos, record);
+      const extra = section?.siblings.find((s) => target.get(String(s.node.attrs.id ?? '')) !== id);
+      if (!extra) continue;
+      out.set(id, { ...record, g: record.g ?? null, e: String(extra.node.attrs.id ?? '') });
+      changed = true;
+    }
+    if (!changed) return null;
+  }
+  return null;
 }

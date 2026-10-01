@@ -13,6 +13,7 @@ import {
   type ProjectRow,
   type DueFileRow,
   type MediaFileRow,
+  type PageUseRow,
   type NewMediaFile,
   type ProjectSizeRow,
   type ProjectDeleteInfo,
@@ -147,6 +148,11 @@ export interface MediaRemote {
   downloadThumb(fileId: string): Promise<Blob>;
   /** Las filas de `files` que la sesión puede ver (las demás no vuelven). */
   fetchMediaFiles(ids: string[]): Promise<MediaFileRow[]>;
+  /**
+   * Los usos (`page_files`) de estas páginas que la sesión ve, activos y quitados. Solo lee: con lo que vuelve,
+   * un dispositivo nuevo no vuelve a mandar uno por uno los usos que el servidor ya tiene (B.14).
+   */
+  fetchPageUses(pageIds: string[]): Promise<PageUseRow[]>;
   /**
    * La página dejó de usar el archivo (el bloque desapareció): marca el uso, no lo borra. Idempotente.
    * `seenSeq`: el `seq` del documento con el que se decidió; si la página cambió después en el servidor, la
@@ -855,6 +861,38 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
       drive_trashed_at: r.drive_trashed_at ?? null,
       project_id: r.project_id ?? null,
     }));
+  }
+
+  async fetchPageUses(pageIds: string[]): Promise<PageUseRow[]> {
+    const rows: PageUseRow[] = [];
+    // De a 100 páginas (la lista viaja en la dirección) y de a 1000 filas. Todas las columnas: una base anterior
+    // a la papelera de archivos no tiene `removed_at` ni `is_foreign`. Si se cuela o se pierde una fila porque
+    // algo cambió entre dos lotes, no pasa nada: un uso que no vuelve se manda como siempre.
+    for (let i = 0; i < pageIds.length; i += 100) {
+      for (let from = 0; ; from += 1000) {
+        const { data, error, status } = await timed(
+          this.client
+            .from('page_files')
+            .select('*')
+            .in('page_id', pageIds.slice(i, i + 100))
+            .order('page_id')
+            .order('file_id')
+            .range(from, from + 999),
+        );
+        if (error) throw toRemoteError(error, status);
+        const page = (data ?? []) as unknown as PageUseRow[];
+        rows.push(
+          ...page.map((r) => ({
+            page_id: r.page_id,
+            file_id: r.file_id,
+            removed_at: r.removed_at ?? null,
+            is_foreign: r.is_foreign === true,
+          })),
+        );
+        if (page.length < 1000) break;
+      }
+    }
+    return rows;
   }
 
   async unlinkPageFile(pageId: string, fileId: string, seenSeq?: number | null): Promise<boolean> {
