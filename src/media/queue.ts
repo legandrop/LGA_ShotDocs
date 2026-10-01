@@ -582,6 +582,21 @@ export class MediaQueue {
     this.thumbReady(id);
   }
 
+  /**
+   * Se dejó de subir una carpeta (P.9): en este dispositivo su tarjeta dice el peso de lo que llegó a Drive, no el
+   * que se iba a subir. Solo cambia lo anotado acá (la fila de la base guarda el peso con el que se registró).
+   */
+  async setFolderSize(id: string, bytes: number): Promise<void> {
+    if (!this.db) return;
+    const own = await this.db.get('files', id);
+    if (!own || !isFolderMime(own.mime)) return;
+    const record = { ...own, size: Math.max(1, Math.round(bytes)) };
+    await this.db.put('files', record);
+    this.remember(id, record, true);
+    this.cards.delete(id);
+    this.thumbReady(id);
+  }
+
   /** El archivo es una carpeta (P.9), según lo que ya se sabe (`fileInfo`). */
   isFolder(id: string): boolean {
     return isFolderMime(this.fileInfo(id)?.mime);

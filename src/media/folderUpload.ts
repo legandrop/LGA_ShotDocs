@@ -132,6 +132,8 @@ export interface FolderUploadsOptions {
   portero: () => FolderPortero | null;
   /** Lo que dice la tarjeta de la carpeta en la página. */
   note?: (id: string, note: string | null) => void;
+  /** Se dejó de subir: lo que llegó de verdad a Drive (la tarjeta muestra ese peso, no el que se iba a subir). */
+  uploaded?: (id: string, bytes: number) => void;
   wait?: (ms: number) => Promise<void>;
   now?: () => number;
 }
@@ -289,13 +291,16 @@ export class FolderUploads {
   /** Deja de seguir una carpeta en este dispositivo (lo que subió queda en Drive). */
   async forget(id: string): Promise<void> {
     const r = this.running.get(id);
+    let uploaded: number | null = null;
     if (r) {
       r.job.paused = true;
       for (const a of r.active.values()) a.abort.abort();
       r.wake?.();
+      uploaded = r.items.reduce((n, i) => n + (i.done ? i.size : 0), 0);
     }
     this.running.delete(id);
     await this.drop(id);
+    if (uploaded !== null) await Promise.resolve(this.options.uploaded?.(id, uploaded)).catch(() => undefined);
     this.options.note?.(id, null);
     this.emit();
   }

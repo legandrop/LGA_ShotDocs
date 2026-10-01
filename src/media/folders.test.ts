@@ -408,7 +408,8 @@ describe('la cola de las carpetas', () => {
     const fake = fakeFolderPortero();
     const db = await openFoldersDb(`folders-${++dbCount}`);
     const notes: (string | null)[] = [];
-    const f = new FolderUploads(db, { portero: () => fake.portero, wait: noWait, note: (_, text) => notes.push(text) });
+    const uploaded: number[] = [];
+    const f = new FolderUploads(db, { portero: () => fake.portero, wait: noWait, note: (_, text) => notes.push(text), uploaded: (_, bytes) => void uploaded.push(bytes) });
     fake.failAlways('b.bin');
     await f.start('id-8', 'page', sourceOf('Ref', { 'a.bin': 1, 'b.bin': 1 }));
     await settle(f, 'id-8');
@@ -416,6 +417,8 @@ describe('la cola de las carpetas', () => {
     expect(f.hasAnyPath('id-8', new Set(['otra.bin']))).toBe(false);
     await f.forget('id-8');
     expect(f.progress('id-8')).toBeNull();
+    // Lo que llegó de verdad: a.bin (1 byte), no b.bin.
+    expect(uploaded).toEqual([1]);
     expect(await db.getAll('jobs')).toEqual([]);
     expect(await db.getAll('items')).toEqual([]);
     expect(notes.at(-1)).toBeNull();
@@ -477,6 +480,10 @@ describe('la fila de una carpeta', () => {
     expect(decodeURIComponent(await a.media.resolve(url))).toContain('Google Drive folder');
     a.media.setFolderNote(id, 'Uploading 3 of 10');
     expect(decodeURIComponent(await a.media.resolve(url))).toContain('Uploading 3 of 10');
+    // Dejar de subir: la tarjeta de este dispositivo dice lo que llegó.
+    a.media.setFolderNote(id, null);
+    await a.media.setFolderSize(id, 3 * 1024 * 1024);
+    expect(decodeURIComponent(await a.media.resolve(url))).toContain('3 MB');
   });
 
   it('sin conexión no se agrega (no hay nada que guardar para después)', async () => {

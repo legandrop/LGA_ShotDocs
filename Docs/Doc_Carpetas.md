@@ -85,10 +85,12 @@ la carpeta, cierra. Los accesos directos y los documentos de Google se muestran 
   en la ventana, y el resto sube. Si el portero igual rechaza una tanda, la cola prueba de a una, saltea la que no
   pasa y "Retry" no la repite.
 - **Dejar de subir** (*Stop uploading*, con confirmación): olvida la subida en este dispositivo; lo que llegó queda
-  en Drive.
+  en Drive, y la tarjeta de este dispositivo pasa a decir el peso de lo que llegó (la base y los demás dispositivos
+  siguen con el que se registró al soltarla).
 - **Volver a soltar la misma carpeta en otro lugar de la página** (mismo nombre y algún archivo con la misma ruta):
   la ventana ofrece *Continue the upload* (sube solo lo que falta) o *Upload as a new folder*.
-- Perder el acceso deja la subida sin terminar (la última parte vuelve a mirar el permiso); una subcarpeta en la
+- Perder el acceso deja la subida sin terminar (la última parte vuelve a mirar el permiso; una subida abierta con
+  un portero anterior a esta corrección no lleva la carpeta en su id y no repite ese control: vence a los 6 días); una subcarpeta en la
   papelera deja de listarse en el acto; los tipos de Google no se crean por las subidas; textos (plurales, ocultos
   sin contar carpetas, la tarjeta sin cortar, documentos de Google, sin *Pause* en una detenida).
 
