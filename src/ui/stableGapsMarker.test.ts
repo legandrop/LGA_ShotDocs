@@ -47,7 +47,7 @@ describe('la marca del renglón', () => {
     expect(brokenGaps(doc)).toEqual([]);
   });
 
-  it('se pone al agregarle la primera foto a un renglón; deshacer la saca y el renglón vuelve a ser común', async () => {
+  it('se pone al agregarle la primera foto a un renglón; deshacer saca la foto y deja la marca (nunca la borra)', async () => {
     const doc = docWith([para('p0', ['top']), para('p1', ['abcdef'])]);
     const E = mountEditor(doc);
     await tick(20);
@@ -58,7 +58,8 @@ describe('la marca del renglón', () => {
     undoManager(E).undo();
     await tick(5);
     expect(storedInline(doc)).toEqual([]);
-    expect(rows(doc)[1]).toBe('*"abcdef"');
+    // La marca queda: un renglón que tuvo fotos sigue sin abrirse en una versión anterior, como al borrarla.
+    expect(rows(doc)[1]).toBe(`<${STABLE_GAPS_MARKER}> *"abcdef"`);
     expect(showsDoc(E, doc)).toBe(true);
   });
 

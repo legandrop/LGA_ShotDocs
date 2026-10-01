@@ -1,5 +1,5 @@
 diff --git a/node_modules/y-prosemirror/dist/y-prosemirror.cjs b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
-index de4d1e6..5acf046 100644
+index de4d1e6..05d80ef 100644
 --- a/node_modules/y-prosemirror/dist/y-prosemirror.cjs
 +++ b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
 @@ -322,37 +322,104 @@ const ySyncPlugin = (yXmlFragment, {
@@ -276,7 +276,7 @@ index de4d1e6..5acf046 100644
 +
 +/**
 + * The marker of a block with stable gaps: an empty Y.XmlElement with this name, added (first) when the block
-+ * gets its first such node and never removed by this binding, which never renders it either. A version of the
++ * gets its first such node and never removed by this binding (nor by undo: undo-plugin.js), which never renders it. A version of the
 + * app from before stable gaps does not know this node name, so it does not open the page (its guard refuses
 + * unknown content), even after every inline node of the block was removed. If it opened it, it would rewrite
 + * the block's consecutive texts into one and delete the others, with what someone else typed into them.
@@ -918,6 +918,21 @@ index de4d1e6..5acf046 100644
              pos += /** @type {any} */ (mapping.get(contentType)).nodeSize;
            }
          }
+@@ -2109,7 +2859,13 @@ const defaultProtectedNodes = new Set(['paragraph']);
+  * @param {Set<string>} protectedNodes
+  * @returns {boolean}
+  */
+-const defaultDeleteFilter = (item, protectedNodes) => !(item instanceof Y.Item) ||
++// LGA-SHOTDOCS-PATCH (stable gaps): undo never removes the marker of a block with stable gaps (an empty
++// Y.XmlElement named 'lgaStableGaps', see sync-plugin.js). Undoing the first inline node of a block took the marker
++// with it, and a block with several texts and no marker is rewritten by older versions of the app.
++const isStableGapsMarkerItem = (item) => item instanceof Y.Item && item.content instanceof Y.ContentType &&
++  item.content.type instanceof Y.XmlElement && item.content.type.nodeName === 'lgaStableGaps';
++
++const defaultDeleteFilter = (item, protectedNodes) => isStableGapsMarkerItem(item) ? false : !(item instanceof Y.Item) ||
+   !(item.content instanceof Y.ContentType) ||
+   !(item.content.type instanceof Y.Text ||
+   (item.content.type instanceof Y.XmlElement && protectedNodes.has(item.content.type.nodeName))) ||
 diff --git a/node_modules/y-prosemirror/src/lib.js b/node_modules/y-prosemirror/src/lib.js
 index 3f48497..285a6f9 100644
 --- a/node_modules/y-prosemirror/src/lib.js
@@ -943,7 +958,7 @@ index 3f48497..285a6f9 100644
            }
          }
 diff --git a/node_modules/y-prosemirror/src/plugins/sync-plugin.js b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
-index dccfb76..7ca05d7 100644
+index dccfb76..4d58750 100644
 --- a/node_modules/y-prosemirror/src/plugins/sync-plugin.js
 +++ b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
 @@ -248,37 +248,104 @@ export const ySyncPlugin = (yXmlFragment, {
@@ -1219,7 +1234,7 @@ index dccfb76..7ca05d7 100644
 +
 +/**
 + * The marker of a block with stable gaps: an empty Y.XmlElement with this name, added (first) when the block
-+ * gets its first such node and never removed by this binding, which never renders it either. A version of the
++ * gets its first such node and never removed by this binding (nor by undo: undo-plugin.js), which never renders it. A version of the
 + * app from before stable gaps does not know this node name, so it does not open the page (its guard refuses
 + * unknown content), even after every inline node of the block was removed. If it opened it, it would rewrite
 + * the block's consecutive texts into one and delete the others, with what someone else typed into them.
@@ -1841,3 +1856,22 @@ index dccfb76..7ca05d7 100644
    // update children
    const pChildren = normalizePNodeContent(pNode)
    const pChildCnt = pChildren.length
+diff --git a/node_modules/y-prosemirror/src/plugins/undo-plugin.js b/node_modules/y-prosemirror/src/plugins/undo-plugin.js
+index 7c9448b..2d5c67b 100644
+--- a/node_modules/y-prosemirror/src/plugins/undo-plugin.js
++++ b/node_modules/y-prosemirror/src/plugins/undo-plugin.js
+@@ -47,7 +47,13 @@ export const defaultProtectedNodes = new Set(['paragraph'])
+  * @param {Set<string>} protectedNodes
+  * @returns {boolean}
+  */
+-export const defaultDeleteFilter = (item, protectedNodes) => !(item instanceof Item) ||
++// LGA-SHOTDOCS-PATCH (stable gaps): undo never removes the marker of a block with stable gaps (an empty
++// Y.XmlElement named 'lgaStableGaps', see sync-plugin.js). Undoing the first inline node of a block took the marker
++// with it, and a block with several texts and no marker is rewritten by older versions of the app.
++const isStableGapsMarkerItem = (item) => item instanceof Item && item.content instanceof ContentType &&
++  item.content.type instanceof XmlElement && item.content.type.nodeName === 'lgaStableGaps'
++
++export const defaultDeleteFilter = (item, protectedNodes) => isStableGapsMarkerItem(item) ? false : !(item instanceof Item) ||
+   !(item.content instanceof ContentType) ||
+   !(item.content.type instanceof Text ||
+   (item.content.type instanceof XmlElement && protectedNodes.has(item.content.type.nodeName))) ||

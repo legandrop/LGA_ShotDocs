@@ -14,7 +14,6 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SYNC_PLUGIN = 'src/plugins/sync-plugin.js';
-const LIB = 'src/lib.js';
 const inPatch = (file: string) => `node_modules/y-prosemirror/${file}`;
 
 /** Dónde queda la librería publicada (fuera del repo: `node_modules` no se versiona). */
@@ -22,10 +21,13 @@ export const PUBLISHED_DIR = path.join(ROOT, 'node_modules/.cache/lga-y-prosemir
 /** El archivo de entrada que reemplaza a `y-prosemirror` en las pruebas *.published.test.ts (alias de Vite). */
 export const PUBLISHED_ENTRY = path.join(PUBLISHED_DIR, 'src/y-prosemirror.js').replace(/\\/g, '/');
 
-// sha256 de `src/plugins/sync-plugin.js`: el de `npm pack y-prosemirror@1.3.7` y el de la app publicada. Y el de
-// `src/lib.js` de la 1.3.7, que el parche de entonces no tocaba (el de hoy sí).
+// sha256 de `src/plugins/sync-plugin.js`: el de `npm pack y-prosemirror@1.3.7` y el de la app publicada.
 const SHA_ORIGINAL = '2525b13d7b9cae04e8e81fc59674493dddb5017b68f3097a76994ea65ff264f8';
-const SHA_LIB_ORIGINAL = 'cc2940350b9236c531d3a6fa22d788ceec8cb65fa4c415b1c10544718ceebe55';
+/** Los archivos que el parche de entonces no tocaba (el de hoy sí): vuelven a la 1.3.7 original, con su sha256. */
+const ORIGINAL_FILES: Record<string, string> = {
+  'src/lib.js': 'cc2940350b9236c531d3a6fa22d788ceec8cb65fa4c415b1c10544718ceebe55',
+  'src/plugins/undo-plugin.js': '09e33654e102716ec1bcd507fd00a7a6eff756b7f38252ebd438ea1d29bb60d7',
+};
 export const SHA_PUBLISHED = 'bb6940b405ed8ecf0dae9e62204891860f29f90812a24e26abf3862547546e98';
 
 const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
@@ -90,23 +92,19 @@ export function applyPatch(source: string, patch: string, file: string, reverse 
 /** Arma la librería publicada (si ya está y coincide, no hace nada). Devuelve el archivo de entrada. */
 export function buildPublishedYProsemirror(): string {
   const target = path.join(PUBLISHED_DIR, SYNC_PLUGIN);
-  const libTarget = path.join(PUBLISHED_DIR, LIB);
-  if (
-    existsSync(target) &&
-    sha256(readFileSync(target, 'utf8')) === SHA_PUBLISHED &&
-    existsSync(libTarget) &&
-    sha256(readFileSync(libTarget, 'utf8')) === SHA_LIB_ORIGINAL
-  ) {
-    return PUBLISHED_ENTRY;
-  }
+  const same = (file: string, sha: string) => {
+    const at = path.join(PUBLISHED_DIR, file);
+    return existsSync(at) && sha256(readFileSync(at, 'utf8')) === sha;
+  };
+  if (same(SYNC_PLUGIN, SHA_PUBLISHED) && Object.entries(ORIGINAL_FILES).every(([file, sha]) => same(file, sha))) return PUBLISHED_ENTRY;
   const todayPatch = readFileSync(path.join(ROOT, 'patches/y-prosemirror+1.3.7.patch'), 'utf8');
   const unpatch = (file: string) => {
     const today = readFileSync(path.join(ROOT, inPatch(file)), 'utf8');
     return todayPatch.includes(` b/${inPatch(file)}`) ? applyPatch(today, todayPatch, inPatch(file), true) : today;
   };
   const original = unpatch(SYNC_PLUGIN);
-  const lib = unpatch(LIB);
-  if (sha256(original) !== SHA_ORIGINAL || sha256(lib) !== SHA_LIB_ORIGINAL) {
+  const others = Object.keys(ORIGINAL_FILES).map((file) => [file, unpatch(file)] as const);
+  if (sha256(original) !== SHA_ORIGINAL || others.some(([file, text]) => sha256(text) !== ORIGINAL_FILES[file])) {
     throw new Error('Sacando el parche de hoy no quedó y-prosemirror 1.3.7 original: ¿cambió la librería o el parche?');
   }
   const publishedPatch = readFileSync(path.join(ROOT, 'src/test/fixtures/y-prosemirror-v0.052.patch'), 'utf8');
@@ -116,6 +114,6 @@ export function buildPublishedYProsemirror(): string {
   mkdirSync(PUBLISHED_DIR, { recursive: true });
   cpSync(path.join(ROOT, 'node_modules/y-prosemirror'), PUBLISHED_DIR, { recursive: true, dereference: true });
   writeFileSync(target, published, 'utf8');
-  writeFileSync(path.join(PUBLISHED_DIR, LIB), lib, 'utf8');
+  for (const [file, text] of others) writeFileSync(path.join(PUBLISHED_DIR, file), text, 'utf8');
   return PUBLISHED_ENTRY;
 }

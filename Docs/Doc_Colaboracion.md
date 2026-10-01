@@ -66,6 +66,8 @@ que daba antes de los huecos estables:
 | Escribe pegado a una foto | Aprieta Enter pegado a una foto (parte el renglón) | No se pierde ninguna letra (antes se perdían en 166 de 300). En 41 de 300 una marca escrita queda **con las letras desordenadas** (`7}{A` por `{A7}`; ver abajo). |
 | Une el renglón con el de arriba, o le cambia el tipo | Pega fotos en ese renglón | **Se pierden las fotos que pegó B** (227 y 261 de 300, igual que antes), como el texto en la tabla de arriba. |
 | Une el renglón con el de arriba | Escribe pegado a sus fotos | **Se pierde lo que escribió B** (231 de 300, igual que antes), como en la tabla de arriba. |
+| Pone una foto en el medio de un texto y la deshace (Ctrl+Z) | Escribe a la derecha de la foto, a la vez | **Se pierde lo de B** (20 de 70 en `stableGapsUndo.test.ts`, los "a la vez"): la parte de la derecha pasó a un texto nuevo de A, y deshacer borra lo que A creó, con lo que B escribió adentro. Es la regla del deshacer de Yjs: sin fotos pasa igual con Enter y deshacer (auditoría de la entrega 2). |
+| Pone una foto en el medio de un texto | Borra o aprieta Enter a la derecha, a la vez | No se pierde nada, pero **lo borrado vuelve** o, con Enter, **la cola del renglón queda dos veces** (13 de 18 en la matriz de la auditoría): la parte de la derecha es una copia (un `Y.XmlText` no se parte). Igual con una versión anterior del otro lado. Se prefiere duplicar a perder. |
 
 Con todo mezclado (los dos escriben, agregan, cambian anchos, borran, mueven y aprietan Enter): de 300
 agendas, 7 con una marca desordenada y ninguna con letras perdidas (antes, 98 con letras perdidas); 6 con una
@@ -339,8 +341,11 @@ lo borra y el editor nunca lo dibuja (no cuenta para el cursor ni para las posic
 (de la v0.052 a la v0.076) no conocen ese nombre: su resguardo (`unknownContent.ts`, desde v0.021) no abre la
 página, aunque al renglón le hayan borrado todas las fotos. La de hoy lo conoce (`yjsOnly` en
 `unknownContent.ts`). Un párrafo que nunca tuvo fotos no lo lleva y se guarda igual que antes, byte a byte
-(probado contra la librería publicada con 40 agendas de 40 pasos al azar). Deshacer la primera foto lo saca, y el
-renglón vuelve a ser común.
+(probado contra la librería publicada con 40 agendas de 40 pasos al azar). **Deshacer tampoco lo saca** (el filtro de
+borrado del deshacer, `src/plugins/undo-plugin.js` del parche): deshacer la primera foto deja el renglón con la marca
+y su texto, como borrarla. Antes lo sacaba (lo encontró la auditoría de la entrega 2): con otro escribiendo en el
+renglón, en 20 de 70 casos quedaba un renglón con dos textos y sin marca, que las versiones anteriores abrían y que dos
+versiones de hoy escribiendo a la vez duplicaban entero (49 de 49). Ahora, 0 de 70 (`stableGapsUndo.test.ts`).
 
 | Medido con la librería publicada (49 combinaciones por caso) | Antes (v0.076) | Con la marca |
 |---|---|---|

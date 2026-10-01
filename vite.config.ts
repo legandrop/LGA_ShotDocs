@@ -56,7 +56,8 @@ function appVersion(): string {
 // en línea se guardarían de otra forma): el build y las pruebas se niegan a correr (por ejemplo, si se instaló
 // con --ignore-scripts o si se actualizó la librería y el parche no se volvió a hacer). Se miran los dos
 // archivos de la librería: `src` (el que usan la app y las pruebas) y `dist/*.cjs` (stableGaps.test.ts
-// comprueba que los dos escriben lo mismo), más `src/lib.js` (las posiciones, desde la marca del renglón).
+// comprueba que los dos escriben lo mismo), más `src/lib.js` (las posiciones, desde la marca del renglón) y
+// `src/plugins/undo-plugin.js` (deshacer no borra la marca).
 function assertYProsemirrorPatched(): void {
   const marks = [
     'LGA-SHOTDOCS-PATCH',
@@ -80,10 +81,13 @@ function assertYProsemirrorPatched(): void {
     'if (!hasMarker) yel.insert(0,',
   ];
   const libMarks = ["if (t.nodeName !== 'lgaStableGaps')", "if (contentType.nodeName !== 'lgaStableGaps')"];
+  // Deshacer nunca borra la marca del renglón (si no, deshacer la primera foto la sacaba).
+  const undoMarks = ["item.content.type.nodeName === 'lgaStableGaps'", 'isStableGapsMarkerItem(item) ? false :'];
   const files: [string, string[]][] = [
     ['src/plugins/sync-plugin.js', marks],
     ['src/lib.js', libMarks],
-    ['dist/y-prosemirror.cjs', [...marks, ...libMarks]],
+    ['src/plugins/undo-plugin.js', undoMarks],
+    ['dist/y-prosemirror.cjs', [...marks, ...libMarks, ...undoMarks]],
   ];
   for (const [file, wanted] of files) {
     let source = '';
