@@ -343,7 +343,9 @@ export function PhotoToolbarController() {
     const up = () => setPressing(false);
     const focus = () => {
       const active = document.activeElement;
-      setFocused(!!active && (dom.contains(active) || !!box.current?.contains(active)));
+      // También con el foco en un globo de la barra (renombrar): está en el contenedor del editor.
+      const wrapper = dom.closest('.bn-container');
+      setFocused(!!active && (dom.contains(active) || !!box.current?.contains(active) || !!wrapper?.contains(active)));
     };
     const blur = () => setTimeout(focus);
     const redraw = () => setTick((n) => n + 1);
