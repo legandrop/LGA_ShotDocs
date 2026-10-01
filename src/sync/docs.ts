@@ -1,12 +1,15 @@
 import * as Y from 'yjs';
 import { t } from '../i18n';
+import { buildUpload, encodeRanges, rangesOf, rangesOfDeleteSet, unionRanges, type DeleteRanges } from './deleteSets';
 import {
   DIRTY_PREFIX,
   dirtyKey,
   dirtyRange,
   emptyDocState,
+  GENERATION_KEY,
   hasUnsyncedContent,
   onlyGuard,
+  storedGeneration,
   updateDocState,
   type DocState,
   type LocalDb,
@@ -262,6 +265,9 @@ export class PageDocs {
         updateDocState(this.db, state.pageId, (s) => {
           s.cursor = 0;
           s.syncedSV = undefined;
+          // Con todos los borrados (B.15): el servidor restaurado puede no tener los que ya había confirmado.
+          s.syncedDS = undefined;
+          s.syncedDSGeneration = undefined;
           s.ackedVersion = -1;
           // Todo vuelve a subir: la guardia no puede esconder nada.
           s.guardVersion = undefined;
@@ -374,10 +380,13 @@ export class PageDocs {
             });
             continue;
           }
+          // Los elementos que el servidor no tiene y solo los borrados que no tiene (B.15).
+          const upload = buildUpload(saved.doc, saved.state.syncedSV, knownDeletes(saved.state, saved.generation));
           const next = {
             id: crypto.randomUUID(),
-            update: Y.encodeStateAsUpdate(saved.doc, saved.state.syncedSV),
+            update: upload.update,
             sv: Y.encodeStateVector(saved.doc),
+            ds: upload.ds,
             version: saved.state.version,
             dirty: saved.dirty,
           };
@@ -397,11 +406,14 @@ export class PageDocs {
           throw err;
         }
         const confirmed = pending;
-        state = await this.confirm(pageId, confirmed.dirty, (s) => {
+        state = await this.confirm(pageId, confirmed.dirty, (s, generation) => {
           if (s.pending?.id !== confirmed.id) return false;
           // Se suma a lo que ya se sabía (lo bajado mientras la subida estaba en vuelo también cuenta): los
           // dos vectores dicen solo lo que el servidor tiene, así que el mayor de cada autor también.
           s.syncedSV = mergeStateVectors(s.syncedSV, confirmed.sv);
+          // Los borrados que viajaron ya están en el servidor (B.15). Un envío de una versión anterior no trae
+          // `ds`: se leen del update (que lleva todos los borrados de su documento).
+          addKnownDeletes(s, generation, rangesOf(confirmed.ds ?? confirmed.update));
           // La versión del envío guardado: puede haber sumado las ediciones que ya entraron en él (ver
           // `bumpVersion`).
           s.ackedVersion = Math.max(s.ackedVersion, confirmed.version, s.pending.version);
@@ -452,11 +464,15 @@ export class PageDocs {
   private async confirm(
     pageId: string,
     dirty: string | undefined,
-    mutate: (state: DocState) => boolean | void,
+    mutate: (state: DocState, generation: number) => boolean | void,
   ): Promise<DocState> {
     const tx = this.db.transaction(['docState', 'meta'], 'readwrite');
-    const state = (await tx.objectStore('docState').get(pageId)) ?? emptyDocState(pageId);
-    const applied = mutate(state) !== false;
+    const [stored, generation] = await Promise.all([
+      tx.objectStore('docState').get(pageId),
+      tx.objectStore('meta').get(GENERATION_KEY),
+    ]);
+    const state = stored ?? emptyDocState(pageId);
+    const applied = mutate(state, storedGeneration(generation)) !== false;
     // Con la página abierta para editar, la guardia se vuelve a armar en la misma transacción.
     if (this.live.get(pageId)?.guarded && (this.live.get(pageId)?.refs ?? 0) > 0) raiseGuard(state);
     await tx.objectStore('docState').put(state);
@@ -566,8 +582,12 @@ export class PageDocs {
     // documento; adentro se comprueba que lo guardado no cambió en el medio.
     const cap = merged ? await this.integratedCap(pageId, maxSeq, decoded, merged) : null;
 
-    const tx = this.db.transaction(['docUpdates', 'docState'], 'readwrite');
-    const state = (await tx.objectStore('docState').get(pageId)) ?? emptyDocState(pageId);
+    const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readwrite');
+    const [stored, generation] = await Promise.all([
+      tx.objectStore('docState').get(pageId),
+      tx.objectStore('meta').get(GENERATION_KEY),
+    ]);
+    const state = stored ?? emptyDocState(pageId);
     if (maxSeq <= state.cursor) {
       await tx.done;
       return;
@@ -582,6 +602,10 @@ export class PageDocs {
         }
       }
       await tx.objectStore('docUpdates').add({ pageId, data: merged });
+      // Los borrados que mandó el servidor ya los tiene (B.15): la próxima subida no los repite. No depende de
+      // lo que el dispositivo integró: un borrado de más en la cuenta no cambia lo que hay que subir.
+      const pulled = decoded.reduce<DeleteRanges>((acc, d) => unionRanges(acc, rangesOfDeleteSet(d.ds)), new Map());
+      if (pulled.size > 0) addKnownDeletes(state, storedGeneration(generation), pulled);
     }
     state.cursor = maxSeq;
     if (valid.length < updates.length) state.unreadable = true;
@@ -876,17 +900,25 @@ export class PageDocs {
    * Lee en una sola transacción lo guardado de una página, su estado y su marca de ediciones sin subir, y
    * arma el documento. La marca que se lee corresponde a la última escritura que entró en lo leído.
    */
-  private async readSaved(pageId: string): Promise<{ doc: Y.Doc; state: DocState; dirty?: string }> {
+  private async readSaved(
+    pageId: string,
+  ): Promise<{ doc: Y.Doc; state: DocState; dirty?: string; generation: number }> {
     const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readonly');
-    const [rows, stored, dirty] = await Promise.all([
+    const [rows, stored, dirty, generation] = await Promise.all([
       tx.objectStore('docUpdates').index('pageId').getAll(pageId),
       tx.objectStore('docState').get(pageId),
       tx.objectStore('meta').get(dirtyKey(pageId)),
+      tx.objectStore('meta').get(GENERATION_KEY),
     ]);
     await tx.done;
     const doc = new Y.Doc();
     if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)), ORIGIN_LOAD);
-    return { doc, state: stored ?? emptyDocState(pageId), dirty: typeof dirty === 'string' ? dirty : undefined };
+    return {
+      doc,
+      state: stored ?? emptyDocState(pageId),
+      dirty: typeof dirty === 'string' ? dirty : undefined,
+      generation: storedGeneration(generation),
+    };
   }
 
   /** Carga en `doc` todo lo guardado de la página, y compacta si hay muchos updates sueltos. */
@@ -971,6 +1003,22 @@ export function advanceSynced(
     }
   }
   return changed ? Y.encodeStateVector(next) : syncedSV;
+}
+
+/**
+ * Los borrados que el servidor ya tiene según `syncedDS` (B.15), o `undefined` si no se puede contar con ellos:
+ * no hay, o se anotaron con otra generación del workspace (una versión anterior restauró una copia: borra
+ * `syncedSV` pero no conoce este campo). Sin ellos se suben todos los borrados, como antes.
+ */
+export function knownDeletes(state: DocState, generation: number): Uint8Array | undefined {
+  return state.syncedDS && state.syncedDSGeneration === generation ? state.syncedDS : undefined;
+}
+
+/** Suma a `syncedDS` borrados que el servidor tiene (confirmados o bajados), con la generación de ahora. */
+function addKnownDeletes(state: DocState, generation: number, more: DeleteRanges): void {
+  const known = knownDeletes(state, generation);
+  state.syncedDS = encodeRanges(known ? unionRanges(rangesOf(known), more) : more);
+  state.syncedDSGeneration = generation;
 }
 
 /** El mayor de cada autor entre dos vectores de estado. */
