@@ -162,9 +162,14 @@ export function anchorBlock(thread: CodaThread, blocks: PageBlock[]): { blockId:
   if (!whole) return { blockId: null, lost: false };
   const normalized = blocks.map((b) => ({ id: b.id, text: normalizeText(b.text), cells: b.cells?.map(normalizeText) }));
   const lines = [...new Set([whole, ...ref!.split('\n').map(normalizeText).filter(Boolean)])];
-  // Exacto: el texto entero de un bloque o de una celda de una tabla (el hilo queda en el bloque de la tabla).
   for (const line of lines) {
-    const hit = normalized.find((b) => b.text === line || b.cells?.includes(line));
+    const hit = normalized.find((b) => b.text === line);
+    if (hit) return { blockId: hit.id, lost: false };
+  }
+  // Después, el texto entero de una celda de una tabla (el hilo queda en el bloque de la tabla), aunque sea
+  // corto: solo si ningún bloque tenía exactamente ese texto.
+  for (const line of lines) {
+    const hit = normalized.find((b) => b.cells?.includes(line));
     if (hit) return { blockId: hit.id, lost: false };
   }
   for (const line of [...lines].sort((a, b) => b.length - a.length)) {

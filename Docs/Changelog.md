@@ -6,8 +6,8 @@ Comentarios de Coda en filas de una tabla. Al importar un doc con tablas, los co
 tabla que entra como tabla se anclan al texto de su primera celda. Un texto largo ya se encontraba adentro del
 bloque de la tabla, pero uno corto (una palabra de menos de 8 letras) no se busca adentro de otro bloque, para no
 confundir "ok" con "Plano 12: ok", y esos hilos quedaban en la página entera con una nota. Ahora el anclaje mira
-también cada celda de las tablas: si el texto es exactamente el de una celda, el hilo queda en el bloque de la
-tabla, sin nota, aunque sea corto. Lo demás del anclaje no cambia.
+también cada celda de las tablas: si ningún bloque tiene exactamente ese texto y una celda sí, el hilo queda en
+el bloque de la tabla, sin nota, aunque sea corto. Lo demás del anclaje no cambia.
 [ Importar de Coda - comentarios en celdas de tablas ]
 
 v0.061 :

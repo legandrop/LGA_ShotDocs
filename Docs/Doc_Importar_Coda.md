@@ -280,9 +280,10 @@ transformarla, en `comments.json` en la raíz de la carpeta exportada:
 - **Dónde va cada hilo:** al bloque de la página que tiene el texto marcado, comparado sin el Markdown de
   Coda (viñetas, casillas, títulos, negritas, cursivas, links, escapes), sin mayúsculas ni tildes y con los
   espacios juntados. Primero un bloque cuyo texto es exactamente ese (entero, o una de sus líneas si abarcaba
-  varios bloques), o una **celda de una tabla** con exactamente ese texto (desde v0.062: el hilo queda en el
-  bloque de la tabla, aunque el texto sea corto; así entran los comentarios de las filas de una tabla de Coda
-  que se importa como tabla, pegados al texto de su primera celda); si no hay, el primero que lo contiene, de la línea más larga a la más corta y solo con
+  varios bloques); si no hay, una **celda de una tabla** con exactamente ese texto (desde v0.062: el hilo
+  queda en el bloque de la tabla, aunque el texto sea corto; así entran los comentarios de las filas de una
+  tabla de Coda que se importa como tabla, pegados al texto de su primera celda; con el mismo texto en varias
+  tablas, gana la primera); si no hay, el primero que lo contiene, de la línea más larga a la más corta y solo con
   textos de 8 letras o más, o de dos palabras ("ok" no se busca adentro de "Plano 12: ok"). Si no se encuentra
   (se borró en Coda, por ejemplo), el hilo va a la página entera y queda anotado en la lista del final. Sin
   `reference`, o con un texto que queda vacío al limpiarlo, va a la página entera sin anotarlo.
