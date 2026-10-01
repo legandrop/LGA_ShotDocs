@@ -4,7 +4,8 @@ Estado: **diseño, sin implementar. Auditado ("aprobado con cambios", 3 bloquean
 corregido**: lo que cambió por la auditoría está en el cuerpo y se lista en "Correcciones de la auditoría", al
 final; la re-verificación dejó dos bloqueantes nuevos, N1 y N2, también corregidos. Después llegaron las respuestas
 de Lega a las propuestas (tope elegible, avisar antes de liberar, permiso quitado): están en "Qué se pide" y en el
-cuerpo. Falta una: el tope por marca del iPhone (sección 9.1). Esta versión sale de las decisiones de Lega del 2026-10-01 (**D-25**, `Doc_Decisiones.md`) y reemplaza al
+cuerpo. Falta una: el tope del total marcado en el iPhone (sección 9.1). **Diseño aprobado** en la tercera
+verificación (2026-10-01). Esta versión sale de las decisiones de Lega del 2026-10-01 (**D-25**, `Doc_Decisiones.md`) y reemplaza al
 diseño anterior ("liberar a mano por defecto", commits `47bbbf4` y `cd6cb98`). De aquel diseño y de su auditoría
 sigue valiendo, y quedó adentro de este, todo lo que asegura que nunca se borra un original sin confirmar: la
 comprobación en tres pasos con `POST /verify`, el `relink` sin bytes después de una restauración, la fecha de uso con
@@ -73,7 +74,8 @@ comprobación en tres pasos con `POST /verify`, el `relink` sin bytes después d
 - **Nunca se borra:** el registro (`files`), la miniatura, lo que se sabe del archivo (`known`), los usos
   (`links`), el texto de las páginas ni los comentarios. La página se ve igual.
 - **Lo nuevo tiene lugar:** las bajadas nunca usan la reserva para fotos y videos nuevos (sección 5.7). En el iPhone
-  la cuota puede pasar lo libre del disco, así que además hay un tope fijo por marca hasta medirlo (sección 9.1).
+  la cuota puede pasar lo libre del disco, así que además hay un tope fijo para el total de lo marcado hasta medirlo
+  (sección 9.1).
 - **Sin versión nueva de IndexedDB ni almacenes nuevos:** claves nuevas en los almacenes que ya existen y campos
   opcionales. Una versión vieja las ignora (sección 11).
 - **Sin cambios en el documento ni en las tablas.** La base suma, como mucho, una función de solo lectura para los
@@ -140,7 +142,7 @@ uuids. Ninguna versión publicada recorre estos almacenes (solo lee y escribe po
 { id, usedAt,                       // la última vez que se abrió (sección 5.5)
   orig?: { mime, total, parts: [{ n, start, bytes }], savedAt, complete },   // copia bajada (off:)
   view?: { bytes },                 // nítida de una marca (offview:)
-  gone?: number }                   // cuándo el portero respondió 404: puede ser la única copia
+  gone?: number }                   // cuándo se confirmó `drive_missing`: puede ser la única copia
 ```
 
 Una entrada por clave (y no un índice único, como `viewIndex`) para poder escribir o borrar la copia y su entrada
@@ -310,7 +312,7 @@ Available offline · Escena 12 (and 14 pages inside)
 - **El lugar:** "Available to Shot Docs on this device" es `quota − usage` de `navigator.storage.estimate()` (lo que
   el navegador le deja a la app; en Safari puede pasar lo libre del disco: no se llama "free"). Para arrancar, lo
   elegido tiene que entrar en ese lugar **menos la reserva para lo nuevo** (sección 5.7) y, en el iPhone, en el tope
-  por marca (sección 9.1). Si entra solo liberando copias no marcadas (sección 5.2; en la entrega 1 solo cuentan las
+  del total marcado (sección 9.1). Si entra solo liberando copias no marcadas (sección 5.2; en la entrega 1 solo cuentan las
   copias bajadas y las nítidas, que se liberan sin red ni espera), la ventana lo dice y el botón lo nombra: "Free up 0.6 GB and make available
   offline" (con *Show what* para ver la lista); tocarlo es el sí del aviso. Si ni así entra, el botón queda apagado
   con el motivo ("Needs 3.4 GB; 2.1 GB available, keeping 1 GB for new photos and videos"). Si el navegador no da
@@ -442,12 +444,14 @@ Available offline · Escena 12 (and 14 pages inside)
   porque los permisos propios (`meta.access`) dejaron de darla, **y** el portero responde `not_found` al pedir el
   pase de ese archivo. Ninguna de las dos sola alcanza: un `not_found` también sale después de restaurar una copia de
   la base (sin fila), y que la base deje de devolver la fila tampoco alcanza. En esos casos la copia se deja como
-  está y se vuelve a mirar en la vuelta siguiente. Nunca se ofrece *Save a copy* de algo que se borra por permiso. Los originales propios no se tocan
+  está y se vuelve a mirar en la vuelta siguiente. Nunca se ofrece *Save a copy* de algo que se borra por permiso.
+  Las copias `gone` no se borran por esto (puede ser la única copia; quedan en "Only copy on this device"). Los originales propios no se tocan
   nunca por esto (son de esta persona y pueden estar sin subir).
 - **Proyecto archivado** (D-23): archivar es solo orden; la marca sigue igual.
 - **Proyecto borrado** (P.14, `deleted_at`): para todos es un permiso quitado (nivel 0), así que va igual: con la
   señal explícita (el proyecto vuelve de la base con `deleted_at`, o sale de la lista de proyectos visibles **y** el
-  portero responde `not_found`), **se sacan sus marcas y se borran sus copias bajadas**. Los originales propios no se tocan.
+  portero responde `not_found`), **se sacan sus marcas y se borran sus copias bajadas**, salvo las `gone` (pueden ser
+  la única copia: quedan en "Only copy on this device"). Los originales propios no se tocan.
 - **Al restaurar el proyecto o devolver el permiso** (respuesta de Lega): **vuelve como online**. No se vuelve a
   bajar nada solo; si se quiere sin red, se vuelve a marcar. Por eso las marcas se borran (no quedan en pausa).
 - **Sacado del workspace:** el ciclo se detiene y `RemovedScreen` hace lo de siempre; *Remove from this device*
@@ -564,7 +568,7 @@ Los 14 días desde la subida siguen.
 
 - **Reserva:** las bajadas nunca usan los últimos `max(1 GB, 5 % de la cuota)`: un teléfono con casi todo marcado
   tiene que poder seguir filmando. **En el iPhone esto no alcanza** (la cuota puede pasar lo libre del disco): ver el
-  tope por marca y la medición de la sección 9.1.
+  tope del total marcado y la medición de la sección 9.1.
 - **`save()`** (agregar una foto o un video): hoy, ante `QuotaExceededError`, rechaza con `queue.noSpace`, y
   `checkRoom` solo mira archivos de más de 50 MB. Ahora, ante `QuotaExceededError` (o el `UnknownError` de Safari),
   libera y reintenta **una vez**; y `checkRoom` mira todos los tamaños.
@@ -716,9 +720,13 @@ bajaría hasta llenar el disco, y **la cámara del teléfono tampoco podría fil
      Ajustes;
   3. con el disco así, abrir la cámara y probar filmar 10 segundos;
   4. tocar *Clean up* (borra todo lo de prueba) y comprobar en Ajustes que el lugar volvió.
-- **Mientras no se mida, en el iPhone (y el iPad) una marca no puede pasar un tope fijo** que no depende de la cuota,
-  con el aviso "Check free space in iPhone Settings before marking large projects". **Propuesta: 5 GB por marca**
-  (pregunta para Lega). Con la medición, se cambia por una regla basada en lo medido.
+- **Mientras no se mida, en el iPhone (y el iPad) el total de lo marcado offline en todo el dispositivo** (todas las
+  marcas de todos los workspaces y cuentas de este origen) **no puede pasar un tope fijo** que no depende de la cuota,
+  con el aviso "Check free space in iPhone Settings before marking large projects". **Propuesta: 5 GB** (pendiente de
+  Lega). Es una constante (`IOS_OFFLINE_TOTAL_MAX` en `src/media/offline.ts`) fácil de cambiar. El total sale de las
+  sumas propias de cada workspace, que cada uno anota en `localStorage` (`sd:offline:<base>`) al cambiar sus marcas;
+  un workspace que se sacó del dispositivo borra la suya. Con la medición, se cambia por una regla basada en lo
+  medido.
 - **Al primer error de escritura por falta de lugar**, la marca se detiene y se borran las partes del archivo en curso
   (sección 3.5).
 
@@ -845,15 +853,15 @@ Cloudflare no cobra el tráfico de un Worker.
   (`not_found` no borra solo ni ofrece *Save a copy*; `drive_missing` marca `gone` solo con `/verify`; `drive_mismatch`
   no borra nada; pase vencido pide otro); un portero sin códigos nunca borra ni marca `gone`; mantener al día solo
   relee las páginas que cambiaron;
-  desmarcar borra solo lo suyo, no lo `gone` y nunca un original propio; permiso quitado (403, fuera del árbol por
-  permisos) borra y "la base no devuelve la fila" no; proyecto borrado saca la marca y borra sus copias; restaurado
-  vuelve como online, sin bajar nada.
+  desmarcar borra solo lo suyo, no lo `gone` y nunca un original propio; permiso quitado (`not_found` más la página
+  fuera del árbol por permisos) borra y "la base no devuelve la fila" no; proyecto borrado saca la marca y borra sus
+  copias, salvo las `gone`; restaurado vuelve como online, sin bajar nada.
 - **Opción A** de la sección 3.2: un original propio de la rama con su casilla destildada no está protegido y se
   ofrece con el aviso; con la casilla tildada, nunca.
 - **Bajar no demora subir:** con una bajada de 16 MiB en vuelo, agregar una foto corta la bajada y la foto sube
   primero; un archivo detenido o esperando un reintento no frena las bajadas.
 - **Sin lugar al escribir:** el primer `QuotaExceededError` o `UnknownError` detiene la marca y borra las partes del
-  archivo en curso; el tope fijo por marca en el iPhone.
+  archivo en curso; el tope fijo del total marcado en el iPhone.
 - **Comentarios:** una página que entra a la rama se baja con su propio cursor aunque sus comentarios sean más viejos
   que el cursor del proyecto.
 - **`uploadedAt`:** lo pone `markUploaded`; sin el campo vale `space:rollout`; subido hace menos de 14 días no se
@@ -892,14 +900,15 @@ El diseño de arriba ya las sigue.
 6. **Comentarios:** siempre los de la rama marcada, sin casilla, cada una hora con una función nueva de la base (sin
    ella, al marcar y cada 6 horas, de a una página).
 7. **Desmarcar** borra las copias bajadas en el acto (con una casilla para dejarlas), salvo lo que pide otra marca
-   (según su conjunto guardado) y lo que Drive ya no tiene (404: puede ser la única copia).
+   (según su conjunto guardado) y lo que Drive ya no tiene (`drive_missing` confirmado: puede ser la única copia).
 8. **2 GB por workspace** (por cuenta, en este dispositivo).
-9. **Permiso quitado** (también un proyecto borrado): se borran las copias bajadas, con una señal explícita. Al
+9. **Permiso quitado** (también un proyecto borrado): se borran las copias bajadas (salvo las `gone`), con una
+   señal explícita. Al
    restaurar el proyecto o devolver el permiso, vuelve como online: no se baja nada solo; se vuelve a marcar si se
    quiere.
 
-**Pregunta nueva (de la re-verificación):** en el iPhone, hasta medir con el disco casi lleno (sección 9.1), ¿un tope
-fijo de **5 GB por marca** (propuesta)?
+**Pendiente de Lega:** en el iPhone, hasta medir con el disco casi lleno (sección 9.1), un tope fijo para el **total**
+de lo marcado en todo el dispositivo; propuesta **5 GB** (constante `IOS_OFFLINE_TOTAL_MAX`).
 
 **Re-verificación (2026-10-01):** B1, B2 y B3 resueltos; dos bloqueantes nuevos corregidos: N1 (decidir por el `code`
 del portero: secciones 3.5, 4, 6 y 10) y N2 (el iPhone casi lleno: secciones 3.5 y 9.1). También `uploadedAt`,
