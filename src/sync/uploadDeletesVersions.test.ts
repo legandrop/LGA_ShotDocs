@@ -7,7 +7,7 @@
 // Medir la bajada de una página grande escrita con main: DELETES_PERF=1 (no corre en la suite).
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { knownDeletes } from './docs';
+import { knownDeletes, PageDocs } from './docs';
 import { buildUpload, encodeRanges, rangesOf, subtractRanges, unionRanges, type DeleteRanges } from './deleteSets';
 import { PageDocs as MainPageDocs } from './fixtures/mainDocs';
 import { PageDocs as PublishedPageDocs } from './fixtures/publishedDocs';
@@ -460,4 +460,121 @@ describe('B.15: rendimiento', () => {
     console.log(`main baja lo mismo en ${(performance.now() - t1).toFixed(0)} ms`);
     local.destroy();
   }, 300_000);
+});
+
+// La ventana entre `preparePulledDeletes` (la cuenta de los borrados bajados, que se arma fuera de la transacción)
+// y la transacción de `applyRemote` que la guarda: otra instancia sobre la misma base cambia `syncedDS` o la
+// generación justo en el medio. La primera es la que vigila el control de la generación: si la cuenta preparada se
+// guardara sin mirarla, `syncedDS` diría de más después de que main restaura.
+describe('B.15: la ventana entre preparar la cuenta de borrados y guardarla', () => {
+  /** Corre `between` una sola vez en la ventana de `docs`: después de preparar afuera y antes de la transacción. */
+  function hookWindow(docs: PageDocs, between: () => Promise<void>) {
+    const proto = PageDocs.prototype as unknown as { preparePulledDeletes: (...a: unknown[]) => Promise<unknown> };
+    const original = proto.preparePulledDeletes;
+    let fired = false;
+    proto.preparePulledDeletes = async function (this: PageDocs, ...a: unknown[]) {
+      const result = await original.apply(this, a);
+      if (this === docs && !fired) {
+        fired = true;
+        await between();
+      }
+      return result;
+    };
+    return { restore: () => (proto.preparePulledDeletes = original), fired: () => fired };
+  }
+
+  /** Una página con un borrado X confirmado, una copia de antes de X, la restauración y otro dispositivo que borra después. */
+  async function setup() {
+    const server = new FakeServer();
+    const dbName = crypto.randomUUID();
+    const a = await newDevice(server, dbName);
+    const pageId = await a.tree.create(null, 'P');
+    await write(a.docs, pageId, (t) => t.insert(0, 'abcdefghijklmnopqrstuvwxyz'));
+    await a.engine.syncNow();
+    const restore = server.backup();
+    await write(a.docs, pageId, (t) => t.delete(2, 3)); // X
+    await a.engine.syncNow();
+    for (let i = 0; i < 3; i++) {
+      await write(a.docs, pageId, (t) => t.insert(t.length, `${i}`));
+      await a.engine.syncNow();
+    }
+    restore(); // el servidor pierde X y lo de después
+    const c = await newDevice(server, crypto.randomUUID());
+    await c.engine.syncNow();
+    for (let i = 0; i < 8; i++) {
+      await write(c.docs, pageId, (t) => t.delete(t.length - 1, 1));
+      await c.engine.syncNow();
+    }
+    return { server, dbName, a, pageId };
+  }
+
+  it('main, en otra pestaña, restaura y guarda la generación en el medio: syncedDS no dice de más y X vuelve a subir', async () => {
+    const { server, dbName, a, pageId } = await setup();
+    a.engine.stop();
+    const db = await openLocalDb(dbName);
+    opened.push({ db });
+    const old = new MainPageDocs(db, { normalize: normalizeStructure, seed: seedIfEmpty });
+    const hook = hookWindow(a.docs, async () => {
+      await old.resetForRestore();
+      await db.put('meta', server.settings!.generation, GENERATION_KEY);
+    });
+    try {
+      await a.docs.pullPage(pageId, a.remote);
+    } finally {
+      hook.restore();
+    }
+    expect(hook.fired()).toBe(true);
+    expect(await deletesSound(a.db, server, pageId)).toBeNull();
+    const again = await newDevice(server, dbName);
+    await again.engine.syncNow();
+    await again.engine.syncNow();
+    expect([...(await missingDeletes(again.db, server, pageId))]).toEqual([]);
+  });
+
+  it('la actual, en otra instancia, restaura en el medio (antes de guardar la generación)', async () => {
+    const { server, dbName, a, pageId } = await setup();
+    a.engine.stop();
+    const b = await newDevice(server, dbName);
+    const hook = hookWindow(a.docs, async () => {
+      await b.docs.resetForRestore();
+    });
+    try {
+      await a.docs.pullPage(pageId, a.remote);
+    } finally {
+      hook.restore();
+    }
+    expect(hook.fired()).toBe(true);
+    await b.engine.syncNow();
+    expect(await deletesSound(a.db, server, pageId)).toBeNull();
+    await b.engine.syncNow();
+    expect([...(await missingDeletes(b.db, server, pageId))]).toEqual([]);
+  });
+
+  it('otra instancia confirma una subida en el medio: la cuenta no dice de más y no falta ningún borrado', async () => {
+    const server = new FakeServer();
+    const dbName = crypto.randomUUID();
+    const a = await newDevice(server, dbName);
+    const pageId = await a.tree.create(null, 'P');
+    await write(a.docs, pageId, (t) => t.insert(0, 'uno dos tres cuatro cinco seis siete ocho'));
+    await a.engine.syncNow();
+    a.engine.stop();
+    const c = await newDevice(server, crypto.randomUUID());
+    await c.engine.syncNow();
+    await write(c.docs, pageId, (t) => t.delete(0, 4));
+    await c.engine.syncNow();
+    const b = await newDevice(server, dbName);
+    b.engine.stop();
+    await write(b.docs, pageId, (t) => t.delete(5, 5));
+    const hook = hookWindow(a.docs, async () => {
+      await b.docs.pushPage(pageId, b.remote);
+    });
+    try {
+      await a.docs.pullPage(pageId, a.remote);
+    } finally {
+      hook.restore();
+    }
+    expect(hook.fired()).toBe(true);
+    expect(await deletesSound(a.db, server, pageId)).toBeNull();
+    expect([...(await missingDeletes(a.db, server, pageId))]).toEqual([]);
+  });
 });
