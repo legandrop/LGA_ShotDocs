@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.083 :
+
+La app no sabía si estaba instalada ni explicaba cómo instalarla, y en el iPhone importa: Safari puede borrar lo
+que una web guarda en el dispositivo tras unos días sin usarla, pero no lo de la app agregada a la pantalla de
+inicio. Ahora, mientras no está instalada, *Install app* aparece en el menú de la cuenta y en la pantalla de
+entrar, y en el teléfono un aviso que *Not now* esconde por 30 días. La ventana abre en los pasos del dispositivo
+(iPhone, Android o computadora, con las otras en pestañas), cada uno con un dibujo del botón que hay que tocar, y
+con *Install* directo donde Chrome o Edge lo ofrecen. Ayuda: entrada en `Doc_Tutorial.md`.
+[ Instalar la app - detección, aviso y pasos por plataforma ]
+
 v0.077 :
 
 No había forma de sacar un proyecto de la lista: la base no dejaba borrar proyectos y la app no tenía nada para

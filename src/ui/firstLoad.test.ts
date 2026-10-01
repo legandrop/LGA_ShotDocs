@@ -43,6 +43,9 @@ const LAZY_FILES = [
   'ui/ImportCodaDialog.tsx',
   'import/codaImport.ts',
   'import/codaHtml.ts',
+  // Los pasos para instalar la app (el aviso, la entrada del menú y `install.ts` sí van).
+  'ui/InstallDialog.tsx',
+  'i18n/lazy/install.ts',
 ];
 
 const IMPORT = /^\s*import\s+(type\s+)?(?:[\w$]+\s*,?\s*)?(?:\{[^}]*\}|\*\s+as\s+[\w$]+)?\s*from\s*['"]([^'"]+)['"]/gm;

@@ -100,6 +100,9 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: ['icons/icon.svg', 'icons/apple-touch-icon.png'],
         manifest: {
+          // La identidad de la app instalada: la misma que tenía sin `id` (la dirección de inicio), explícita para
+          // que cambiar `start_url` algún día no la convierta en otra app (Docs/Doc_Instalar.md).
+          id: '/',
           name: 'LGA Shot Docs',
           short_name: 'Shot Docs',
           description: 'VFX documentation: pre-production notes and on-set reports.',

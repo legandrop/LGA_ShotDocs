@@ -1,0 +1,518 @@
+/* La ventana con los pasos para instalar la app (Docs/Doc_Instalar.md). Se baja con ella (InstallDialog.tsx). */
+
+.modal.install-dialog {
+  width: min(580px, 100%);
+  max-height: calc(100dvh - 12vh - 16px);
+  padding: 20px 0 16px;
+  gap: 14px;
+}
+
+.install-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+}
+
+.install-head h2 {
+  font-size: 18px;
+}
+
+.install-body {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 4px;
+}
+
+.install-body p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.install-dialog .modal-actions {
+  padding: 0 20px;
+}
+
+.install-why {
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.install-optional {
+  font-size: 13px;
+}
+
+.install-box {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--seg-bg);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.install-direct {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.install-direct .primary {
+  height: 36px;
+  padding: 0 16px;
+}
+
+.install-warn {
+  display: grid;
+  gap: 10px;
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.install-link {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.install-link code {
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.install-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.install-tabs button[aria-selected='true'] {
+  color: var(--text);
+}
+
+.install-here-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.install-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.install-here {
+  width: auto;
+  height: auto;
+  font-size: 11px;
+  color: var(--accent-text);
+}
+
+.install-group {
+  display: grid;
+  gap: 10px;
+}
+
+.install-group h3 {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.install-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.install-step {
+  display: grid;
+  grid-template-columns: 172px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.install-step-text {
+  display: grid;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.install-step-main {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.install-num {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary-bg);
+  color: var(--primary-text);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+.install-note {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.install-step .install-note {
+  padding-left: 28px;
+}
+
+.install-other,
+.install-words {
+  font-size: 12.5px;
+}
+
+/* Los dibujos: imitan el botón o la opción del sistema; lo que hay que tocar va marcado con el acento. */
+.install-fig {
+  display: grid;
+}
+
+.fig {
+  --fig-blue: #0a7aff;
+  height: 92px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--sidebar-bg);
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.2;
+  overflow: hidden;
+}
+
+:root[data-theme='dark'] .fig {
+  --fig-blue: #4ba3ff;
+}
+
+.fig svg {
+  display: block;
+  flex: none;
+}
+
+.fig .hl {
+  color: var(--text);
+  border-radius: 7px;
+  box-shadow: 0 0 0 2px var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+
+.fig .hl.round {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+}
+
+.fig-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.fig-text.strong {
+  font-weight: 600;
+}
+
+.fig-bar {
+  display: block;
+  height: 6px;
+  width: 70%;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+.fig-bar.short {
+  width: 45%;
+}
+
+.fig-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 9.5px;
+  color: var(--text-2);
+}
+
+/* Safari del iPhone: la dirección en una píldora y la barra de botones abajo. */
+.fig-ios .fig-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.fig-aa {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.fig-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  color: var(--fig-blue);
+}
+
+.fig .fig-toolbar .hl {
+  color: var(--fig-blue);
+}
+
+/* Una lista o un menú del sistema. */
+.fig-list {
+  gap: 4px;
+  padding: 6px;
+}
+
+.fig-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.fig-row.left {
+  justify-content: flex-start;
+}
+
+.fig-row.hl {
+  height: auto;
+  min-height: 22px;
+  padding-block: 3px;
+}
+
+.fig-row.hl .fig-text {
+  white-space: normal;
+}
+
+.fig-row.faint {
+  opacity: 0.55;
+}
+
+.fig-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 2px;
+}
+
+.fig-ios-link {
+  padding: 1px 5px;
+  color: var(--fig-blue);
+}
+
+.fig-ios-link.strong {
+  font-weight: 700;
+}
+
+.fig .fig-ios-link.hl {
+  color: var(--fig-blue);
+}
+
+.fig-app {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.fig-switch {
+  flex: none;
+  position: relative;
+  width: 22px;
+  height: 13px;
+  border-radius: 7px;
+  background: #34c759;
+}
+
+.fig-switch::after {
+  content: "";
+  position: absolute;
+  top: 1.5px;
+  right: 1.5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* La pantalla de inicio. */
+.fig-home {
+  grid-template-columns: repeat(3, 1fr);
+  justify-items: center;
+  align-items: center;
+  gap: 4px;
+}
+
+.fig-tile {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--border);
+}
+
+.fig-tile-app {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 2px 3px;
+  font-size: 8.5px;
+  white-space: nowrap;
+}
+
+/* Chrome o Edge: la barra de la dirección y un poco de página. */
+.fig-chrome {
+  align-content: start;
+  gap: 8px;
+}
+
+.fig-addr {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.fig-addr .fig-url {
+  flex: 1 1 0;
+}
+
+.fig-url-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fig-page {
+  display: grid;
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+/* La ventana de confirmar del navegador. */
+.fig-dialog {
+  gap: 6px;
+  background: var(--surface);
+}
+
+.fig-title {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fig-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.fig-button {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.fig .fig-button.primary {
+  border-color: transparent;
+  font-weight: 600;
+}
+
+/* El menú Archivo de Safari en la Mac. */
+.fig-menubar {
+  display: flex;
+  gap: 10px;
+  padding: 0 4px 2px;
+}
+
+.fig-menubar .open {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--fig-blue);
+  color: #fff;
+}
+
+@media (max-width: 520px) {
+  .modal-backdrop.install-backdrop {
+    padding: 12px 8px;
+    place-items: stretch center;
+  }
+
+  .modal.install-dialog {
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    margin-top: env(safe-area-inset-top);
+  }
+
+  .install-head,
+  .install-body,
+  .install-dialog .modal-actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  /* En el teléfono, primero lo que hay que hacer y abajo el dibujo, más grande. */
+  .install-step {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .install-step-text {
+    order: -1;
+  }
+
+  .install-fig {
+    width: min(100%, 248px);
+    margin-left: 28px;
+  }
+
+  .fig {
+    height: 96px;
+    font-size: 11.5px;
+  }
+}

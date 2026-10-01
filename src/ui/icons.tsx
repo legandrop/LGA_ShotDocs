@@ -57,6 +57,10 @@ export const LightIcon = icon(
   'M10 6.75a3.25 3.25 0 1 1 0 6.5 3.25 3.25 0 0 1 0-6.5zM10 2.5v1.5M10 16v1.5M2.5 10H4M16 10h1.5M4.7 4.7l1.05 1.05M14.25 14.25l1.05 1.05M4.7 15.3l1.05-1.05M14.25 5.75l1.05-1.05',
 );
 export const DarkIcon = icon('M15.5 12.25A6 6 0 0 1 7.75 4.5a6 6 0 1 0 7.75 7.75z');
+// Instalar la app: un teléfono con una flecha que baja.
+export const InstallIcon = icon(
+  'M6.75 2.75h6.5a1 1 0 0 1 1 1v12.5a1 1 0 0 1-1 1h-6.5a1 1 0 0 1-1-1V3.75a1 1 0 0 1 1-1zM10 6.5v5.25M8 9.75l2 2 2-2M9 14.75h2',
+);
 export const MenuIcon = icon('M3.5 6h13M3.5 10h13M3.5 14h8', { strokeWidth: 1.6 });
 export const AccountIcon = icon('M6.5 8L10 4.5 13.5 8M6.5 12L10 15.5 13.5 12', { strokeWidth: 1.6 });
 export const SignOutIcon = icon('M8 3.75H5a1 1 0 0 0-1 1v10.5a1 1 0 0 0 1 1h3M11.5 6.5L15 10l-3.5 3.5M15 10H8');

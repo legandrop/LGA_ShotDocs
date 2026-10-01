@@ -45,7 +45,10 @@ In production (v0.049). What works today:
 - Email sign-in with an 8-digit code, which works inside the installed iPhone app (a sign-in link would
   open Safari instead). It needs your own mail server (SMTP) in Supabase, and sign-ups are invite-only.
 - The page tree, the block editor with autosave and pasted images, light and dark themes and
-  per-account appearance settings. The app can be installed (PWA).
+  per-account appearance settings. The app can be installed (PWA): *Install app* in the account menu (and a
+  dismissible banner on phones) shows the exact steps for iPhone, Android and desktop, with a direct *Install*
+  button where the browser offers one. On iPhone the installed app keeps its own storage, which Safari does not
+  clear.
 - Offline first: every edit is saved on the device first and synced when a connection is available;
   edits made offline on several devices are merged.
 - Projects, each with its own page tree (v0.013).

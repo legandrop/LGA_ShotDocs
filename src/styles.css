@@ -4868,3 +4868,61 @@ mark.search-hit {
   gap: 8px;
   justify-items: start;
 }
+
+/* --- Instalar la app (Docs/Doc_Instalar.md) ---------------------------------------------------------- */
+
+/* El aviso del teléfono: abajo de la barra de arriba, se va con el resto al desplazar. */
+.install-banner {
+  position: sticky;
+  left: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 12px;
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.install-banner-text {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.install-banner-text strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.install-banner-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.install-banner-actions .primary {
+  height: 36px;
+  padding: 0 14px;
+}
+
+.login-footer .login-install {
+  border: none;
+  padding: 2px 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
+.login-footer .login-install:hover {
+  background: none;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

@@ -194,6 +194,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   abren. Solo con el foco en el árbol y sin Ctrl, ⌘, Alt ni Shift. Y el defecto: plegar con el triángulo (o
   con ←) una madre de la página abierta no dejaba; ahora pliega y la abierta pasa a ser esa madre (en el
   teléfono el cajón sigue abierto). Lógica en `src/ui/treeNav.ts`. Falta su entrada en la ayuda (P.13).
+- **P.17 Hecho (v0.083): instalar la app** (Lega, 2026-10-01). La app reconoce si está instalada; si no, ofrece
+  *Install app* en el menú de la cuenta y en la pantalla de entrar, y en el teléfono un aviso que se cierra por 30
+  días. La ventana muestra los pasos con dibujos para iPhone, Android y computadora, con *Install* directo donde
+  el navegador lo ofrece. Ver `Doc_Instalar.md`. Falta: probarlo en un iPhone y un Android reales, su entrada en
+  la ayuda (P.13, ya escrita en `Doc_Tutorial.md`), y a futuro las capturas del manifiesto (`screenshots`) y la
+  pantalla de arranque del iPhone.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
