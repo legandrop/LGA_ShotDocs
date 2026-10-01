@@ -9,7 +9,7 @@ import { mediaIdOf } from '../media/queue';
 import { BarButton } from './BarButton';
 import { ROW_PRESETS } from './imageRows';
 import { PHOTO, photoWidth } from './inlinePhoto';
-import { trackSpot, takeSpot } from './inlinePhotoCreate';
+import { liveView, trackSpot, takeSpot } from './inlinePhotoCreate';
 import { photoKeyAtPos } from './inlinePhotoEditor';
 import { arrangeSelected, arrangeTarget, aspectAt, onlyPhotosSelected, selectedPhotos, setPhotoWidths } from './inlinePhotoSize';
 import {
@@ -21,6 +21,7 @@ import {
   ReplaceButton,
   Sectors,
   useMediaActions,
+  useMediaKind,
   ViewButton,
   type Alignment,
 } from './MediaBar';
@@ -186,6 +187,7 @@ export function PhotoToolbar() {
   const Components = useComponentsContext()!;
   const actions = useMediaActions();
   const choice = usePhotoChoice();
+  const kind = useMediaKind(choice?.url ?? null, choice?.name ?? '');
   const view = editor.prosemirrorView;
   if (!choice || !view) return null;
   const single = choice.positions.length === 1;
@@ -204,10 +206,10 @@ export function PhotoToolbar() {
           <AlignButtons current={choice.align} onAlign={(a) => alignBlocks(editor, choice.blocks, a)} />,
           actions?.canComment && <CommentButton blockId={choice.blocks[0] ?? null} />,
           <>
-            {single && actions && <ReplaceButton accept={actions.accept.inline} onFile={(file) => replacePhoto(editor, choice.positions[0], choice.url ?? '', file, actions.store)} />}
+            {single && actions && <ReplaceButton accept={actions.accept.inline} kind={kind} onFile={(file) => replacePhoto(editor, choice.positions[0], choice.url ?? '', file, actions.store)} />}
             {/* Un archivo del Drive no se renombra (la descarga y la papelera usan el nombre del archivo), como la foto-bloque. */}
-            {single && !fileId && <RenameButton name={choice.name} onRename={(name) => renamePhoto(view, name)} />}
-            <DeleteButton many={!single} onDelete={() => deletePhotos(view, choice.positions)} />
+            {single && !fileId && <RenameButton name={choice.name} kind={kind} onRename={(name) => renamePhoto(view, name)} />}
+            <DeleteButton many={!single} kind={kind} onDelete={() => deletePhotos(view, choice.positions)} />
           </>,
         ]}
       </Sectors>
@@ -257,14 +259,14 @@ function replacePhoto(editor: AnyEditor, pos: number, oldUrl: string, file: File
   const spot = trackSpot(view, pos, false);
   store(file).then(
     (url) => {
-      if (view.isDestroyed) return;
+      if (!liveView(editor as never)) return;
       const at = takeSpot(view, spot);
       const node = at === null ? null : view.state.doc.nodeAt(at);
       if (at === null || node?.type.name !== PHOTO || node.attrs.url !== oldUrl) return;
       view.dispatch(view.state.tr.setNodeMarkup(at, undefined, { ...node.attrs, url, name: file.name || 'image' }));
     },
     () => {
-      if (!view.isDestroyed) takeSpot(view, spot);
+      if (liveView(editor as never)) takeSpot(view, spot);
     },
   );
 }

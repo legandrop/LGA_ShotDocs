@@ -249,6 +249,23 @@ describe('pegar fotos', () => {
     expect(lines(E)).toEqual(['a[A.jpg@0.3333][C.jpg@0.3333]b']);
   });
 
+  it('si se sale de la página mientras se guardan, avisa (no queda un archivo guardado que no aparece en silencio)', async () => {
+    const E = mount([p('a', 'ab')]);
+    caret(E, at(E, 'a', 1));
+    const s = storage();
+    const done = addFiles(E as unknown as PhotoEditor, [file('A.jpg'), file('B.jpg')], null, options(s));
+    E.unmount();
+    editors.splice(editors.indexOf(E), 1);
+    const shown: string[] = [];
+    const listen = (e: Event) => shown.push((e as CustomEvent<string>).detail);
+    window.addEventListener('shotdocs:notice', listen);
+    await s.finish();
+    expect(await done).toEqual([]);
+    window.removeEventListener('shotdocs:notice', listen);
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toMatch(/2 photos/);
+  });
+
   it('si el renglón del lugar se borra mientras se guardan, van en un renglón nuevo donde estaba', async () => {
     const E = mount([p('a', 'uno'), p('b', 'dos'), p('c', 'tres')]);
     caret(E, at(E, 'b', 2));

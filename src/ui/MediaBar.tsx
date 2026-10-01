@@ -52,6 +52,25 @@ export function Sectors({ children }: { children: (ReactNode | null | false)[] }
   );
 }
 
+// --- Qué es: foto, video o adjunto (los nombres de los botones lo dicen) ---------------------------------------
+
+export type MediaKind = 'image' | 'video' | 'file';
+
+/** Qué es lo que muestra esa dirección: del Drive, lo que dice la cola; si no, por la extensión del nombre. */
+export function useMediaKind(url: string | null, name: string): MediaKind {
+  const { media } = useServices();
+  const id = mediaIdOf(url);
+  const info = id ? media.fileInfo(id) : null;
+  if (info) return info.kind === 'video' ? 'video' : info.kind === 'file' ? 'file' : 'image';
+  if (id && isAttachment(media, id, name)) return 'file';
+  return /\.(mp4|m4v|mov|webm|ogv|mkv)$/i.test(name || url || '') ? 'video' : 'image';
+}
+
+/** El nombre de un botón según lo que es. */
+export function kindLabel(kind: MediaKind, image: string, video: string, file: string): string {
+  return kind === 'video' ? video : kind === 'file' ? file : image;
+}
+
 // --- Botones -----------------------------------------------------------------------------------------------
 
 export function ViewButton({ url, label, onView }: { url: string | null; label?: string; onView: () => void }) {
@@ -68,10 +87,11 @@ export function ViewButton({ url, label, onView }: { url: string | null; label?:
 export function DownloadButton({ url, name }: { url: string | null; name: string }) {
   const editor = useBlockNoteEditor();
   const tr = useT();
+  const kind = useMediaKind(url, name);
   const id = mediaIdOf(url);
+  const label = kindLabel(kind, tr('mediaButton.download'), tr('photoBar.downloadVideo'), tr('photoBar.downloadFile'));
   if (!url) return null;
-  if (id) return <OriginalDownloadButton key={id} fileId={id} />;
-  const label = tr('mediaButton.download');
+  if (id) return <OriginalDownloadButton key={id} fileId={id} label={label} />;
   const download = () => {
     const resolve = (editor as unknown as { resolveFileUrl?: (u: string) => Promise<string> }).resolveFileUrl;
     (resolve ? resolve(url) : Promise.resolve(url)).then(
@@ -107,7 +127,7 @@ export function CommentButton({ blockId }: { blockId: string | null }) {
 }
 
 /** Reemplazar: el selector de archivos del sistema (uno); lo elegido se guarda y pasa a ser la foto. */
-export function ReplaceButton({ accept, onFile }: { accept: string; onFile: (file: File) => void }) {
+export function ReplaceButton({ accept, kind = 'image', onFile }: { accept: string; kind?: MediaKind; onFile: (file: File) => void }) {
   const tr = useT();
   const pick = () => {
     const input = document.createElement('input');
@@ -124,11 +144,12 @@ export function ReplaceButton({ accept, onFile }: { accept: string; onFile: (fil
     document.body.append(input);
     input.click();
   };
-  return <BarButton label={tr('photoBar.replace')} icon={<ReplaceIcon />} test="mediaReplace" onClick={pick} />;
+  const label = kindLabel(kind, tr('photoBar.replace'), tr('photoBar.replaceVideo'), tr('photoBar.replaceFile'));
+  return <BarButton label={label} icon={<ReplaceIcon />} test="mediaReplace" onClick={pick} />;
 }
 
 /** Renombrar: un campo en un globo, como el de BlockNote; cada letra cambia el nombre. */
-export function RenameButton({ name, onRename }: { name: string; onRename: (name: string) => void }) {
+export function RenameButton({ name, kind = 'image', onRename }: { name: string; kind?: MediaKind; onRename: (name: string) => void }) {
   const Components = useComponentsContext()!;
   const editor = useBlockNoteEditor();
   const portal = usePortalElement();
@@ -141,7 +162,7 @@ export function RenameButton({ name, onRename }: { name: string; onRename: (name
     },
     [editor],
   );
-  const label = tr('photoBar.rename');
+  const label = kind === 'video' ? tr('photoBar.renameVideo') : tr('photoBar.rename');
   return (
     <Components.Generic.Popover.Root open={open} onOpenChange={setOpen} portalElement={portal}>
       <Components.Generic.Popover.Trigger>
@@ -163,9 +184,9 @@ export function RenameButton({ name, onRename }: { name: string; onRename: (name
   );
 }
 
-export function DeleteButton({ many, onDelete }: { many: boolean; onDelete: () => void }) {
+export function DeleteButton({ many, kind = 'image', onDelete }: { many: boolean; kind?: MediaKind; onDelete: () => void }) {
   const tr = useT();
-  const label = many ? tr('photoBar.deleteMany') : tr('photoBar.delete');
+  const label = many ? tr('photoBar.deleteMany') : kindLabel(kind, tr('photoBar.delete'), tr('photoBar.deleteVideo'), tr('photoBar.deleteFile'));
   return <BarButton label={label} tip={`**${label}**\n${tr('photoBar.deleteKeys')}`} icon={<TrashIcon />} test="mediaDelete" onClick={onDelete} />;
 }
 
@@ -203,6 +224,7 @@ export function ImageBlockBar() {
   const { media } = useServices();
   const tr = useT();
   const block = useChosenImageBlock();
+  const kind = useMediaKind(block?.url ?? null, block?.name ?? '');
   if (!block) return null;
   const id = mediaIdOf(block.url);
   const attachment = !!id && isAttachment(media, id, block.name);
@@ -230,10 +252,10 @@ export function ImageBlockBar() {
           <AlignButtons current={block.align} onAlign={(a) => update({ textAlignment: a })} />,
           actions?.canComment && <CommentButton blockId={block.id} />,
           <>
-            {actions && <ReplaceButton accept={actions.accept.block} onFile={replace} />}
+            {actions && <ReplaceButton accept={actions.accept.block} kind={kind} onFile={replace} />}
             {/* Un archivo del Drive no se renombra (la tarjeta y la descarga usan el nombre del archivo). */}
-            {!id && <RenameButton name={block.name} onRename={(name) => update({ name })} />}
-            <DeleteButton many={false} onDelete={() => editor.removeBlocks([block.id])} />
+            {!id && <RenameButton name={block.name} kind={kind} onRename={(name) => update({ name })} />}
+            <DeleteButton many={false} kind={kind} onDelete={() => editor.removeBlocks([block.id])} />
           </>,
         ]}
       </Sectors>

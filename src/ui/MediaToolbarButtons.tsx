@@ -39,7 +39,7 @@ function useSelectedImage(): { id: string; url: string; name: string; rowWidth: 
   });
 }
 
-export function OriginalDownloadButton({ fileId }: { fileId: string }) {
+export function OriginalDownloadButton({ fileId, label: given }: { fileId: string; label?: string }) {
   const dict = useDictionary();
   const { media } = useServices();
   // Se prepara apenas se elige la imagen: así el clic baja enseguida (Safari no abre otra pestaña si hay
@@ -81,7 +81,7 @@ export function OriginalDownloadButton({ fileId }: { fileId: string }) {
     );
   };
 
-  const label = dict.formatting_toolbar.file_download.tooltip.image ?? t('mediaButton.download');
+  const label = given ?? dict.formatting_toolbar.file_download.tooltip.image ?? t('mediaButton.download');
   return <BarButton label={label} icon={<DownloadIcon size={18} />} test="mediaDownload" onClick={onClick} />;
 }
 

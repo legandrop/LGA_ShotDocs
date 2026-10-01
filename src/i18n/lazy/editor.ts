@@ -101,6 +101,23 @@ export const editor = {
   'photoBar.rename': { en: "Rename image", es: "Renombrar la foto" },
   'photoBar.renamePlaceholder': { en: "Image name", es: "Nombre de la foto" },
   'photoBar.delete': { en: "Delete image", es: "Borrar la foto" },
+  'photoCreate.notPlaced': {
+    en: {
+      one: "The page closed before a photo finished saving, so it wasn't added. Add it again.",
+      other: "The page closed before {count} photos finished saving, so they weren't added. Add them again.",
+    },
+    es: {
+      one: "La página se cerró antes de que terminara de guardarse una foto: no se agregó. Agregala de nuevo.",
+      other: "La página se cerró antes de que terminaran de guardarse {count} fotos: no se agregaron. Agregalas de nuevo.",
+    },
+  },
+  'photoBar.downloadVideo': { en: "Download video", es: "Descargar el video" },
+  'photoBar.replaceVideo': { en: "Replace video", es: "Reemplazar el video" },
+  'photoBar.renameVideo': { en: "Rename video", es: "Renombrar el video" },
+  'photoBar.deleteVideo': { en: "Delete video", es: "Borrar el video" },
+  'photoBar.downloadFile': { en: "Download file", es: "Descargar el archivo" },
+  'photoBar.replaceFile': { en: "Replace file", es: "Reemplazar el archivo" },
+  'photoBar.deleteFile': { en: "Delete file", es: "Borrar el archivo" },
   'photoBar.deleteMany': { en: "Delete images", es: "Borrar las fotos" },
   'photoBar.deleteKeys': { en: "Delete or Backspace", es: "Supr o Retroceso" },
   'photoBar.resize': { en: "Drag to resize: it snaps to 1/1, 1/2, 1/3 and 1/4", es: "Arrastrá para cambiar el tamaño: se imanta a 1/1, 1/2, 1/3 y 1/4" },

@@ -4,7 +4,10 @@ import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState, type
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition, ySyncPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
+import { t } from '../i18n';
+import '../i18n/lazy/editor';
 import { PHOTO } from './inlinePhoto';
+import { notify } from './notice';
 
 // Crear fotos en línea (Docs/Doc_Fotos_En_Linea.md, entrega 2): pegar, soltar, elegir archivos desde el menú "/".
 // Las fotos y los videos entran EN EL RENGLÓN, donde está el cursor o donde se soltaron; los adjuntos (PDF, zip…)
@@ -260,6 +263,19 @@ function blockExists(doc: PMNode, id: string): boolean {
 }
 
 /**
+ * La vista del editor, si sigue en la página (no se salió de la página ni se desmontó el editor), o `null`. Desmontado,
+ * el editor de Tiptap da una vista que falla al tocarla.
+ */
+export function liveView(editor: PhotoEditor): EditorView | null {
+  try {
+    const view = editor.prosemirrorView;
+    return view && !view.isDestroyed && view.dom.isConnected ? view : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Guarda los archivos (`store`, con el aviso de error que corresponda) y pone los que se guardaron en el lugar
  * `spot` (seguido desde que se pegaron o soltaron), o, sin lugar (`null`), en un renglón nuevo junto a `fallback`. Los que fallan no cortan los demás. Devuelve las direcciones
  * puestas.
@@ -276,8 +292,13 @@ export async function storeAndPlace(
   results.forEach((r, i) => {
     if (r.status === 'fulfilled' && typeof r.value === 'string' && r.value) photos.push({ url: r.value, name: files[i].name || 'image' });
   });
-  const view = editor.prosemirrorView;
-  if (!view || view.isDestroyed) return [];
+  const view = liveView(editor);
+  if (!view) {
+    // Se salió de la página (o el editor se volvió a montar) mientras se guardaban: el lugar ya no existe. Que no
+    // quede un archivo guardado que no aparece sin que nadie se entere (auditoría de la entrega 2).
+    if (photos.length > 0) notify(t('photoCreate.notPlaced', { count: photos.length }));
+    return [];
+  }
   const pos = spot === null ? null : takeSpot(view, spot);
   if (photos.length === 0) return [];
   return placePhotos(editor, photos, pos, fallback) ? photos.map((p) => p.url) : [];
