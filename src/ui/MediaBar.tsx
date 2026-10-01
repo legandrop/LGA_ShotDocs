@@ -78,7 +78,7 @@ export function ViewButton({ url, attachment = false, onView }: { url: string | 
   if (!url || !carreteSourceOf(url)) return null;
   // Un adjunto (Docs/Doc_Adjuntos.md) no va al carrete: *Open* lo abre en otra pestaña o lo baja.
   const name = attachment ? tr('attachment.open') : tr('mediaButton.view');
-  const tip = `**${name}**\n${attachment ? tr('attachment.openTip') : tr('mediaButton.space')}`;
+  const tip = attachment ? `**${name}**\n${tr('attachment.openTip')}` : `**${name}**\n${tr('photoTip.view')}\n${tr('mediaButton.space')}`;
   return <BarButton label={name} tip={tip} icon={<ViewIcon />} test="mediaView" onClick={onView} />;
 }
 
@@ -101,13 +101,14 @@ export function DownloadButton({ url, name }: { url: string | null; name: string
       (err: unknown) => notify(isOffline(err) ? t('mediaButton.offline') : t('mediaButton.failed')),
     );
   };
-  return <BarButton label={label} icon={<DownloadIcon size={18} />} test="mediaDownload" onClick={download} />;
+  return <BarButton label={label} tip={`**${label}**\n${tr('photoTip.download')}`} icon={<DownloadIcon size={18} />} test="mediaDownload" onClick={download} />;
 }
 
 export type Alignment = 'left' | 'center' | 'right';
 
-export function AlignButtons({ current, onAlign }: { current: Alignment | null; onAlign: (a: Alignment) => void }) {
+export function AlignButtons({ current, inline = false, onAlign }: { current: Alignment | null; inline?: boolean; onAlign: (a: Alignment) => void }) {
   const tr = useT();
+  const what = inline ? tr('photoTip.alignLine') : tr('photoTip.alignBlock');
   const items: [Alignment, string, ReactNode][] = [
     ['left', tr('photoBar.alignLeft'), <AlignLeftIcon key="l" />],
     ['center', tr('photoBar.alignCenter'), <AlignCenterIcon key="c" />],
@@ -116,7 +117,7 @@ export function AlignButtons({ current, onAlign }: { current: Alignment | null; 
   return (
     <>
       {items.map(([a, label, ic]) => (
-        <BarButton key={a} label={label} icon={ic} selected={current === a} test={`align-${a}`} onClick={() => onAlign(a)} />
+        <BarButton key={a} label={label} tip={`**${label}**\n${what}`} icon={ic} selected={current === a} test={`align-${a}`} onClick={() => onAlign(a)} />
       ))}
     </>
   );
@@ -125,7 +126,7 @@ export function AlignButtons({ current, onAlign }: { current: Alignment | null; 
 export function CommentButton({ blockId }: { blockId: string | null }) {
   const tr = useT();
   const label = tr('comments.comment');
-  return <BarButton label={label} tip={`**${label}**\n${COMMENT_SHORTCUT_LABEL}`} icon={<CommentIcon size={18} />} test="mediaComment" onClick={() => commentOnBlock(blockId)} />;
+  return <BarButton label={label} tip={`**${label}**\n${tr('photoTip.comment')}\n${COMMENT_SHORTCUT_LABEL}`} icon={<CommentIcon size={18} />} test="mediaComment" onClick={() => commentOnBlock(blockId)} />;
 }
 
 /** Reemplazar: el selector de archivos del sistema (uno); lo elegido se guarda y pasa a ser la foto. */
@@ -147,7 +148,7 @@ export function ReplaceButton({ accept, kind = 'image', onFile }: { accept: stri
     input.click();
   };
   const label = kindLabel(kind, tr('photoBar.replace'), tr('photoBar.replaceVideo'), tr('photoBar.replaceFile'));
-  return <BarButton label={label} icon={<ReplaceIcon />} test="mediaReplace" onClick={pick} />;
+  return <BarButton label={label} tip={`**${label}**\n${tr('photoTip.replace')}`} icon={<ReplaceIcon />} test="mediaReplace" onClick={pick} />;
 }
 
 /** Renombrar: un campo en un globo, como el de BlockNote; cada letra cambia el nombre. */
@@ -168,7 +169,7 @@ export function RenameButton({ name, kind = 'image', onRename }: { name: string;
   return (
     <Components.Generic.Popover.Root open={open} onOpenChange={setOpen} portalElement={portal}>
       <Components.Generic.Popover.Trigger>
-        <BarButton label={label} icon={<RenameIcon />} test="mediaRename" onClick={() => setOpen(!open)} />
+        <BarButton label={label} tip={`**${label}**\n${tr('photoTip.rename')}`} icon={<RenameIcon />} test="mediaRename" onClick={() => setOpen(!open)} />
       </Components.Generic.Popover.Trigger>
       <Components.Generic.Popover.Content className="bn-popover-content bn-form-popover" variant="form-popover">
         <Components.Generic.Form.Root onSubmit={() => setOpen(false)} submitButton={<ScreenReaderOnlySubmit />}>
@@ -189,7 +190,7 @@ export function RenameButton({ name, kind = 'image', onRename }: { name: string;
 export function DeleteButton({ many, kind = 'image', onDelete }: { many: boolean; kind?: MediaKind; onDelete: () => void }) {
   const tr = useT();
   const label = many ? tr('photoBar.deleteMany') : kindLabel(kind, tr('photoBar.delete'), tr('photoBar.deleteVideo'), tr('photoBar.deleteFile'));
-  return <BarButton label={label} tip={`**${label}**\n${tr('photoBar.deleteKeys')}`} icon={<TrashIcon />} test="mediaDelete" onClick={onDelete} />;
+  return <BarButton label={label} tip={`**${label}**\n${tr('photoTip.delete')}\n${tr('photoBar.deleteKeys')}`} icon={<TrashIcon />} test="mediaDelete" onClick={onDelete} />;
 }
 
 // --- La barra de la foto-bloque ---------------------------------------------------------------------------

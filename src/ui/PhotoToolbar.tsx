@@ -150,7 +150,7 @@ export function PhotoSizeButtons() {
           className="image-size-button"
           test={`photoSize-${SIZE_LABELS[f].text}`}
           label={tr(SIZE_LABELS[f].tip)}
-          tip={`**${tr(SIZE_LABELS[f].tip)}**${many ? `\n${tr('photoSize.allSelected')}` : f < 1 ? `\n${tr('imageSize.rows')}` : ''}`}
+          tip={`**${tr(SIZE_LABELS[f].tip)}**\n${many ? tr('photoTip.sizeAll') : tr('photoTip.size')}`}
           selected={choice.widths.every((w) => Math.abs(w - f) < 1e-4)}
           onClick={() => {
             setPhotoWidths(view, choice.positions, f);
@@ -203,7 +203,7 @@ export function PhotoToolbar() {
             </>
           ),
           <PhotoSizeButtons />,
-          <AlignButtons current={choice.align} onAlign={(a) => alignBlocks(editor, choice.blocks, a)} />,
+          <AlignButtons current={choice.align} inline onAlign={(a) => alignBlocks(editor, choice.blocks, a)} />,
           actions?.canComment && <CommentButton blockId={choice.blocks[0] ?? null} />,
           <>
             {single && actions && <ReplaceButton accept={actions.accept.inline} kind={kind} onFile={(file) => replacePhoto(editor, choice.positions[0], choice.url ?? '', file, actions.store)} />}

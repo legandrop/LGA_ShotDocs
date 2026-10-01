@@ -78,7 +78,6 @@ export const editor = {
   'imageSize.half': { en: "Half the page width", es: "La mitad del ancho de la página" },
   'imageSize.third': { en: "A third of the page width", es: "Un tercio del ancho de la página" },
   'imageSize.quarter': { en: "A quarter of the page width", es: "Un cuarto del ancho de la página" },
-  'imageSize.rows': { en: "Images next to each other fill a row", es: "Las fotos seguidas llenan una fila" },
   'imageSize.arrange': { en: "Arrange in rows", es: "Acomodar en filas" },
   'imageSize.arrangeHint': {
     en: "The images and videos next to this one, in order, with the same height in each row",
@@ -93,7 +92,34 @@ export const editor = {
     en: "Select images that are next to each other, with no text between them",
     es: "Elegí fotos que estén seguidas, sin texto en el medio",
   },
-  'photoSize.allSelected': { en: "For all the selected images", es: "Para todas las fotos elegidas" },
+  'photoTip.view': {
+    en: "Opens it full screen, with every photo and video on the page",
+    es: "La abre en pantalla completa, con todas las fotos y videos de la página",
+  },
+  'photoTip.download': { en: "Saves the original file, at full size", es: "Guarda el archivo original, en su tamaño completo" },
+  'photoTip.size': {
+    en: "Its width, as a part of the page; images next to each other share a row",
+    es: "Su ancho, como parte de la página; las fotos seguidas comparten una fila",
+  },
+  'photoTip.sizeAll': {
+    en: "The same width for every selected image; images next to each other share a row",
+    es: "El mismo ancho para todas las fotos elegidas; las fotos seguidas comparten una fila",
+  },
+  'photoTip.alignBlock': { en: "Moves the image to that side of the page", es: "Lleva la foto a ese lado de la página" },
+  'photoTip.alignLine': {
+    en: "Aligns the line the image is in (its text and photos)",
+    es: "Alinea el renglón de la foto (su texto y sus fotos)",
+  },
+  'photoTip.comment': { en: "Starts a comment thread on this block", es: "Abre un hilo de comentarios sobre este bloque" },
+  'photoTip.replace': {
+    en: "Pick another file in its place, with the same size",
+    es: "Elegí otro archivo en su lugar, con el mismo tamaño",
+  },
+  'photoTip.rename': {
+    en: "The name it's shown and downloaded with",
+    es: "El nombre con el que se muestra y se descarga",
+  },
+  'photoTip.delete': { en: "Takes it out of the page; undo brings it back", es: "La saca de la página; deshacer la vuelve" },
   'photoBar.alignLeft': { en: "Align left", es: "Alinear a la izquierda" },
   'photoBar.alignCenter': { en: "Center", es: "Centrar" },
   'photoBar.alignRight': { en: "Align right", es: "Alinear a la derecha" },
