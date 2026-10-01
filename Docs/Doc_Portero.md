@@ -376,9 +376,14 @@ vuelta deja de subir archivos, como sin conexión, y la cola espera antes de vol
 contestó (`Doc_Sincronizacion.md`, "Cada consulta a la base tiene un tope de tiempo").
 
 - Una sola trabada no corta: puede estar colgado solo ese archivo, y cortar haría que la vuelta siguiente empezara
-  otra vez por él.
-- Una trabada **después de avanzar** no cuenta: el portero anda, aunque despacio. Un archivo que termina de subir
-  vuelve a cero la cuenta y la espera.
+  otra vez por él. Y los que ya se trabaron (`stalls` o `thumbStalls` mayor que 0) van **después** de los demás:
+  si no, dos archivos colgados solo para ellos irían siempre primero, cerrarían cada vuelta y el resto no subiría
+  nunca (lo encontró la auditoría).
+- Una trabada **después de avanzar** no cuenta: el portero anda, aunque despacio. Un archivo que termina de subir,
+  o cualquier avance, vuelve a cero la cuenta y la espera. Una carpeta registrada o un HEIC que espera su
+  decodificador no cuentan para nada: no hablaron con el portero ni con Storage.
+- Un archivo nuevo acorta la espera a la más corta (10 s), sin volver la cuenta a cero: si el portero ya anda, la
+  foto sube enseguida; si sigue colgado, la espera siguiente es más larga.
 - Los archivos que no se probaron quedan como estaban, sin error ni espera propia. Los usos de páginas
   (`link_page_file`, `unlink_page_file`) salen igual en esa vuelta: van a la base, no al portero.
 - Mientras la cola espera, no hay nada "para subir ahora" (`hasUploadableNow`): las bajadas de "Available offline"

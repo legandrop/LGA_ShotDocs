@@ -396,6 +396,33 @@ describe('tope de tiempo de las imágenes de `page-files` (un workspace sin port
     // Nada se pierde: siguen en el dispositivo.
     for (const path of [...paths, ...more.map((u) => u.slice('sdfile://'.length))]) expect(await d.db.get('files', path)).toBeTruthy();
   });
+
+  it('dos imágenes colgadas solo para ellas no dejan sin subir a las demás: las que vencieron van después', async () => {
+    const server = new FakeServer();
+    const d = await makeDevice(server);
+    devices.push(d);
+    const page = await d.tree.create(null, 'Día 1');
+    await d.engine.syncNow();
+    const png = (n: number) => new File([new Uint8Array([n, 1, 2, 3])], `${n}.png`, { type: 'image/png' });
+    for (const n of [1, 2, 3]) await d.files.add(page, png(n));
+    const order = (await d.db.getAllFromIndex('files', 'uploaded', 0)).map((f) => f.path);
+    const hung = new Set(order.slice(0, 2));
+    const tried: string[] = [];
+    const upload = d.remote.uploadFile.bind(d.remote);
+    d.remote.uploadFile = async (path, data, mime) => {
+      tried.push(path);
+      if (hung.has(path)) throw new RemoteError(REQUEST_TIMEOUT, false, REQUEST_TIMEOUT, true);
+      return upload(path, data, mime);
+    };
+    // Primera pasada: las dos primeras vencen y la pasada termina sin probar la tercera.
+    await d.files.pushPending(() => false);
+    expect(tried).toEqual(order.slice(0, 2));
+    // Segunda: la tercera va primero y sube.
+    tried.length = 0;
+    await d.files.pushPending(() => false);
+    expect(tried[0]).toBe(order[2]);
+    expect(server.files.has(order[2])).toBe(true);
+  });
 });
 
 describe('una página que vence el tope no traba al resto', () => {

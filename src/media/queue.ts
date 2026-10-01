@@ -180,6 +180,11 @@ function flipLink(link: MediaLink, removed: boolean): MediaLink {
  */
 export const STALLS_BEFORE_RENEW = 2;
 
+/** El archivo ya se trabó (su subida al portero o su miniatura a Storage) y todavía no avanzó desde entonces. */
+function hasStalled(record: MediaRecord): boolean {
+  return (record.stalls ?? 0) > 0 || (record.thumbStalls ?? 0) > 0;
+}
+
 /** Qué hacer con un error: esperar la red, reintentar más tarde, o dejarlo a la vista hasta "Retry". */
 export function classify(err: unknown): Outcome {
   if (err instanceof UploadError && err.cancelled) return 'cancelled';
@@ -726,6 +731,9 @@ export class MediaQueue {
     }
     this.seenLinks.add(`${pageId}:${id}`);
     this.remember(id, record, true);
+    // Si la cola esperaba porque el portero o Storage no contestaban, un archivo nuevo acorta la espera a la más
+    // corta (sin volver la cuenta a cero): si ya anda, sube enseguida; si sigue colgado, la próxima espera crece.
+    if (this.stallPause) this.stallPause.until = Math.min(this.stallPause.until, this.now() + backoff(1));
     this.onQueued?.();
     for (const fn of this.queuedListeners) fn();
     // Medidas y miniatura, sin esperarlas: el archivo ya está a salvo. La cola no lo registra antes. Un HEIC
@@ -1087,7 +1095,11 @@ export class MediaQueue {
     if (!this.enabled) return;
     const portero = this.porteroFor(this.url!);
     const db = this.store;
-    const records = (await db.getAllFromIndex('files', 'pending', 1)).sort((a, b) => a.createdAt - b.createdAt);
+    // Por orden de llegada, pero primero los que nunca se trabaron: si dos archivos están colgados solo para ellos,
+    // irían siempre primero, cerrarían la vuelta (ver abajo) y los demás no subirían nunca.
+    const records = (await db.getAllFromIndex('files', 'pending', 1)).sort(
+      (a, b) => Number(hasStalled(a)) - Number(hasStalled(b)) || a.createdAt - b.createdAt,
+    );
     // Archivos distintos seguidos que se trabaron sin avanzar en esta vuelta (portero o miniatura a Storage).
     let stalled = 0;
     for (const record of this.uploadsPaused() ? [] : records) {
@@ -1095,6 +1107,8 @@ export class MediaQueue {
       if (record.blocked || record.retryAt > this.now() || skipPage(record.pageId)) continue;
       const outcome = await this.process(record, portero);
       if (outcome === 'offline' || outcome === 'cancelled') return;
+      // No habló con el portero ni con Storage (una carpeta, un HEIC que espera el decodificador): no dice nada.
+      if (outcome === 'neutral') continue;
       if (outcome !== 'stalled') {
         stalled = 0;
         if (outcome === 'done') this.stallPause = null;
@@ -1193,7 +1207,7 @@ export class MediaQueue {
    * Sube un archivo. `stalled`: se trabó (el portero o Storage dejaron de moverse) sin que la subida avanzara en
    * este intento; quedó anotado como cualquier error que se arregla solo, y la vuelta lo cuenta (ver `round`).
    */
-  private async process(start: MediaRecord, portero: MediaPortero): Promise<Outcome | 'done' | 'stalled'> {
+  private async process(start: MediaRecord, portero: MediaPortero): Promise<Outcome | 'done' | 'stalled' | 'neutral'> {
     let record = start;
     // Lo que el progreso guarda (la subida para retomar) va en orden, antes del resultado final.
     let saving: Promise<unknown> = Promise.resolve();
@@ -1229,7 +1243,8 @@ export class MediaQueue {
           !this.offline() &&
           (record.heicMisses ?? 0) < HEIC_ONLINE_TRIES
         ) {
-          return 'retry';
+          // Espera su próximo intento (`retryAt`): no le pidió nada a nadie.
+          return 'neutral';
         }
       }
       if (record.probed === false) {
@@ -1265,7 +1280,8 @@ export class MediaQueue {
       if (isFolderMime(record.mime)) {
         await this.patch(record.id, { pending: 0, error: null, blocked: false, failures: 0, retryAt: 0 });
         this.onChange?.();
-        return 'done';
+        // Registrada: lista. No habló con el portero ni con Storage (no dice si andan).
+        return 'neutral';
       }
       if (record.thumb === 'local') {
         const thumb = await this.store.get('thumbs', record.id);
@@ -1338,6 +1354,8 @@ export class MediaQueue {
         if (p.sent > best) {
           best = p.sent;
           advanced = true;
+          // El portero anda: si vuelve a colgarse, la cola espera otra vez desde la espera más corta.
+          this.stallPause = null;
           if (stalls > 0) changes.stalls = stalls = 0;
           if (failed > 0) changes.failures = failed = 0;
         }

@@ -650,6 +650,19 @@ describe('portero: pedidos que dejan de moverse', () => {
     await settle();
     expect(settled()).toBe(true);
     expect(await result).toMatchObject({ stalled: true, uploadId: 'up-1' });
+
+    // Lo mismo si al despertar el cuerpo termina de salir antes de que el vigilante vuelva a mirar.
+    const other = new FakePortero();
+    const late = slowSend(other);
+    const second = track(portero(other, { send: late.send }).upload(makeFile(MB)));
+    await settle();
+    late.part().sent(1000);
+    elapse(30_000);
+    clock += 600_000;
+    late.part().sent(MB);
+    elapse(STALL_MS + 35_000 + 3 * STALL_CHECK_MS);
+    await settle();
+    expect(second.settled()).toBe(true);
   });
 
   it('recuerda el plazo que funcionó: detrás de un proxy que recibe el cuerpo de golpe, el archivo siguiente no se traba antes de pasar', async () => {
@@ -686,6 +699,27 @@ describe('portero: pedidos que dejan de moverse', () => {
     await settle();
     expect(third.settled()).toBe(true);
     expect(await third.result).toMatchObject({ stalled: true });
+
+    // Detrás de un proxy todavía más lento (5 minutos), lo aprendido daría 7 minutos: el techo, 6 y monedas, manda.
+    const slower = new FakePortero();
+    const slowerSend = slowSend(slower);
+    const other = portero(slower, { send: slowerSend.send });
+    const learned = track(other.upload(makeFile(size), { stalledBefore: 2 }));
+    await settle();
+    slowerSend.part().sent(size);
+    elapse(300_000);
+    slowerSend.part().arrive();
+    await learned.result;
+    expect(STALL_MS + 300_000).toBeGreaterThan(answerLimit(size, 50));
+    const capped = track(other.upload(makeFile(size)));
+    await settle();
+    slowerSend.part().sent(size);
+    elapse(answerLimit(size, 50) - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(capped.settled()).toBe(false);
+    elapse(3 * STALL_CHECK_MS);
+    await settle();
+    expect(capped.settled()).toBe(true);
 
     // Otro cliente (otra sesión, otro portero) arranca con el plazo de siempre.
     const fresh = new FakePortero();

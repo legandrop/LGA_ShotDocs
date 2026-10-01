@@ -804,6 +804,64 @@ describe('cola de archivos: subidas que se traban', () => {
     for (const id of ids) expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
   });
 
+  it('dos archivos colgados solo para ellos no dejan sin subir a los demás: los que ya se trabaron van después', async () => {
+    const { server, a, ids } = await withFiles(['a.jpg', 'b.jpg', 'c.jpg']);
+    const [first, second, third] = ids;
+    let hung = 0;
+    server.portero.partDelay = ({ uploadId }) => {
+      const file = server.portero.uploads.get(uploadId)?.file;
+      if (file === third) return Promise.resolve();
+      hung++;
+      return never();
+    };
+    const closed = async (from: number) => {
+      const { done } = round(a);
+      for (const n of [from + 1, from + 2]) {
+        await until(() => hung === n);
+        elapse(server, STALL_MS + STALL_CHECK_MS);
+      }
+      await done;
+    };
+    // Primera vuelta: los dos primeros se traban y la vuelta se cierra antes de probar el tercero.
+    await closed(0);
+    expect(server.mediaFiles.get(third)?.drive_id).toBeFalsy();
+    // Segunda: el tercero, que nunca se trabó, va primero y sube; los otros dos se vuelven a trabar.
+    server.clockOffset += LATER;
+    await closed(2);
+    expect(server.mediaFiles.get(third)?.drive_id).toBeTruthy();
+    for (const id of [first, second]) expect(await a.mediaDb.get('files', id)).toMatchObject({ pending: 1, stalls: 2, blocked: false });
+  });
+
+  it('un archivo nuevo acorta la espera de la cola (sin volver la cuenta a cero), y un avance la borra', async () => {
+    const { server, a, page } = await withFiles([]);
+    const pause = () => (a.media as unknown as { stallPause: { until: number; count: number } | null }).stallPause;
+    const setPause = (value: { until: number; count: number } | null) =>
+      ((a.media as unknown as { stallPause: unknown }).stallPause = value);
+    // La cola venía esperando 10 minutos: el portero no contestó varias veces seguidas.
+    setPause({ until: Date.now() + server.clockOffset + 600_000, count: 7 });
+    const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'nueva.jpg', 'image/jpeg')))!;
+    expect(pause()?.count).toBe(7);
+    expect(pause()!.until - (Date.now() + server.clockOffset)).toBeLessThanOrEqual(10_000);
+    server.clockOffset += 11_000;
+    await a.engine.syncMedia();
+    expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    // Subió: la cuenta vuelve a cero.
+    expect(pause()).toBeNull();
+
+    // Un video al que le llega una parte y se traba: avanzó, así que la cuenta también vuelve a cero.
+    const video = mediaIdOf(await a.media.add(page, makeFile(PART_BYTES + MB, 'video.mov', 'video/quicktime')))!;
+    setPause({ until: 0, count: 5 });
+    let hung = 0;
+    server.portero.partDelay = ({ size }) => {
+      if (size === PART_BYTES) return Promise.resolve();
+      hung++;
+      return never();
+    };
+    await stalledRound(a, server, () => hung === 1);
+    expect(await a.mediaDb.get('files', video)).toMatchObject({ sent: PART_BYTES, stalls: 1 });
+    expect(pause()).toBeNull();
+  });
+
   it('una trabada después de avanzar no cuenta para dejar de subir: el portero anda, aunque despacio', async () => {
     const size = PART_BYTES + MB;
     const server = new FakeServer();

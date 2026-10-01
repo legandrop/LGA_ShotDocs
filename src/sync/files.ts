@@ -1,7 +1,7 @@
 import { t } from '../i18n';
 import type { LocalDb } from './localDb';
 import type { Remote } from './remote';
-import { errorMessage, isNetworkError, isTimeout, STALLS_TO_CLOSE_ROUND } from './types';
+import { errorMessage, isNetworkError, isTimeout, REQUEST_TIMEOUT, STALLS_TO_CLOSE_ROUND } from './types';
 
 /** Las imágenes se guardan en el documento con esta dirección, que no depende de ningún servidor. */
 export const FILE_SCHEME = 'sdfile://';
@@ -146,7 +146,11 @@ export class PageFiles {
    * sincronización, y ninguna se descarta. Devuelve el último error, si hubo.
    */
   async pushPending(skipPage: (pageId: string) => boolean): Promise<string | null> {
-    const pending = await this.db.getAllFromIndex('files', 'uploaded', 0);
+    // Las que ya vencieron su tope van al final: si dos están colgadas solo para ellas, irían siempre primero,
+    // cortarían la pasada (abajo) y las demás no subirían nunca.
+    const pending = (await this.db.getAllFromIndex('files', 'uploaded', 0)).sort(
+      (a, b) => Number(a.lastError === REQUEST_TIMEOUT) - Number(b.lastError === REQUEST_TIMEOUT),
+    );
     let lastError: string | null = null;
     // Imágenes seguidas que vencieron su tope (Storage no contestó).
     let timeouts = 0;
