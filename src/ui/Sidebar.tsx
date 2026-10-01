@@ -15,6 +15,7 @@ import { ProjectSwitcher } from './ProjectSwitcher';
 import { SEARCH_SHORTCUT_LABEL, useSearchSession } from './projectSearchUi';
 import { SyncBadge } from './SyncBadge';
 import { splitEnabled, splitSiblings, type SplitTitle } from './titles';
+import { createOpenScheduler, isPlainKey, isTreeKey, treeKeyAction, visibleRows } from './treeNav';
 
 const EXPANDED_KEY = 'shotdocs-expanded';
 
@@ -28,7 +29,12 @@ function readExpanded(): Set<string> {
 
 type DropZone = 'before' | 'inside' | 'after';
 
-export function Sidebar() {
+/**
+ * `onBrowse` se llama justo antes de que el árbol abra una página que la persona no eligió con un clic ni con
+ * Enter (las flechas, o plegar una madre de la página abierta): en el teléfono, el cajón sigue abierto para
+ * seguir recorriendo el árbol.
+ */
+export function Sidebar({ onBrowse }: { onBrowse?: () => void } = {}) {
   const tree = useTree();
   const perms = usePermissions();
   const { user } = useServices();
@@ -62,6 +68,23 @@ export function Sidebar() {
   const [members, setMembers] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ id: string; zone: DropZone } | null>(null);
+  // La fila con el foco del teclado mientras el foco está en el árbol (fuera del árbol, `null`).
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const rowEls = useRef(new Map<string, HTMLDivElement>());
+
+  // Abrir una página desde el árbol sin clic (flechas, plegar una madre de la abierta). Siempre la última
+  // versión, para el temporizador de `opener`.
+  const browse = useRef<(id: string) => void>(() => undefined);
+  browse.current = (id: string) => {
+    if (!tree.get(id) || tree.isTrashed(id) || location.pathname === pagePath(id)) return;
+    onBrowse?.();
+    navigate(pagePath(id));
+  };
+  const [opener] = useState(() => createOpenScheduler((id) => browse.current(id)));
+  useEffect(() => () => opener.cancel(), [opener]);
+  // Si la página abierta cambia por otro camino (un link, la búsqueda, un clic), lo que las flechas iban a
+  // abrir ya no va.
+  useEffect(() => opener.cancel(), [activeId, opener]);
 
   useEffect(() => {
     try {
@@ -71,21 +94,28 @@ export function Sidebar() {
     }
   }, [expanded]);
 
-  // La página abierta siempre se ve en el árbol, también cuando el árbol llega después (otro dispositivo).
+  // La página abierta siempre se ve en el árbol: sus madres se abren cuando cambia la página abierta (un link,
+  // la búsqueda, al cargar) o cuando el árbol llega o cambia (otro dispositivo). No cuando cambia `expanded`:
+  // plegar una madre de la página abierta tiene que poder (`collapse` pasa la página abierta a esa madre).
   const revision = tree.getRevision();
   useEffect(() => {
     if (!activeId) return;
-    const missing = tree.ancestors(activeId).filter((p) => !expanded.has(p.id));
-    if (missing.length) setExpanded((prev) => new Set([...prev, ...missing.map((p) => p.id)]));
-  }, [activeId, tree, revision, expanded]);
+    const ids = tree.ancestors(activeId).map((p) => p.id);
+    setExpanded((prev) => (ids.every((id) => prev.has(id)) ? prev : new Set([...prev, ...ids])));
+  }, [activeId, tree, revision]);
 
   const expand = (id: string) => setExpanded((prev) => new Set(prev).add(id));
-  const toggle = (id: string) =>
+  /** Pliega `id`. Si la página abierta queda escondida adentro, la abierta pasa a ser `id` (pedido de Lega). */
+  const collapse = (id: string) => {
+    opener.cancel();
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (!next.delete(id)) next.add(id);
+      next.delete(id);
       return next;
     });
+    if (activeId && tree.isDescendant(activeId, id)) browse.current(id);
+  };
+  const focusRow = (id: string, preventScroll = false) => rowEls.current.get(id)?.focus({ preventScroll });
 
   async function newPage(parentId: string | null) {
     const id = await tree.create(parentId, '', projectId);
@@ -137,12 +167,45 @@ export function Sidebar() {
     }
   }
 
+  /** Las flechas, Inicio, Fin, Enter y Espacio en una fila (patrón de árbol de WAI-ARIA, treeNav.ts). */
+  function onRowKey(e: KeyboardEvent<HTMLDivElement>, id: string) {
+    // Solo con el foco en la fila misma (no en el renombrado ni en sus botones) y la tecla sola.
+    if (e.target !== e.currentTarget || !isTreeKey(e.key) || !isPlainKey(e.nativeEvent)) return;
+    e.preventDefault();
+    const action = treeKeyAction(rows, id, e.key);
+    if (action.type === 'go') {
+      // El foco pasa ya; la página se abre al instante o, con la tecla apretada, al frenar (treeNav.ts).
+      focusRow(action.id);
+      opener.request(action.id, e.repeat);
+    } else if (action.type === 'open') {
+      opener.cancel();
+      navigate(pagePath(action.id));
+    } else if (action.type === 'expand') {
+      expand(action.id);
+    } else if (action.type === 'collapse') {
+      collapse(action.id);
+    }
+  }
+
   /** Una lista de hermanas: si corresponde, con los títulos divididos y la columna del código alineada. */
-  function renderList(parentId: string | null, pages: PageRow[], depth: number, role?: 'tree' | 'group') {
+  function renderList(parentId: string | null, pages: PageRow[], depth: number, role: 'tree' | 'group') {
     const split = splitEnabled(tree, parentId) ? splitSiblings(pages) : null;
     const style = split ? ({ '--code-w': `${split.width}ch` } as CSSProperties) : undefined;
     return (
-      <ul className={role === 'tree' ? 'tree' : undefined} role={role} style={style}>
+      <ul
+        className={role === 'tree' ? 'tree' : undefined}
+        role={role}
+        aria-label={role === 'tree' ? tr('sidebar.pages') : undefined}
+        style={style}
+        onBlur={
+          role === 'tree'
+            ? (e) => {
+                // El foco salió del árbol: al volver con Tab, entra por la página abierta.
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocusId(null);
+              }
+            : undefined
+        }
+      >
         {pages.map((page) => renderItem(page, depth, split?.titles.get(page.id) ?? null))}
       </ul>
     );
@@ -152,9 +215,20 @@ export function Sidebar() {
     const children = tree.children(page.id);
     const open = expanded.has(page.id);
     const dropClass = drop?.id === page.id ? ` drop-${drop.zone}` : '';
+    // Una sola fila del árbol en el orden de Tab (con sus botones): la del foco o, si no, la abierta.
+    const tabIndex = page.id === tabStop ? 0 : -1;
     return (
-      <li key={page.id} role="treeitem" aria-expanded={children.length ? open : undefined}>
+      <li key={page.id} role="none">
         <div
+          ref={(el) => {
+            if (el) rowEls.current.set(page.id, el);
+            else rowEls.current.delete(page.id);
+          }}
+          role="treeitem"
+          aria-level={depth + 1}
+          aria-expanded={children.length ? open : undefined}
+          aria-selected={page.id === activeId}
+          aria-label={page.title || tr('common.untitled')}
           className={`tree-row${children.length ? ' parent' : ''}${page.id === activeId ? ' active' : ''}${dropClass}`}
           style={{ paddingLeft: 4 + depth * 18 }}
           data-tip={split ? page.title : undefined}
@@ -172,15 +246,16 @@ export function Sidebar() {
           onDragOver={(e) => onDragOver(e, page)}
           onDragLeave={() => drop?.id === page.id && setDrop(null)}
           onDrop={(e) => onDrop(e, page)}
-          onClick={() => navigate(pagePath(page.id))}
-          tabIndex={0}
-          aria-current={page.id === activeId ? 'page' : undefined}
-          onKeyDown={(e) => {
-            if (e.target !== e.currentTarget) return;
-            if (e.key === 'Enter') navigate(pagePath(page.id));
-            if (e.key === 'ArrowRight' && children.length && !open) toggle(page.id);
-            if (e.key === 'ArrowLeft' && open) toggle(page.id);
+          onClick={(e) => {
+            opener.cancel();
+            // El foco queda en la fila (Safari no lo da solo): las flechas siguen desde acá.
+            e.currentTarget.focus({ preventScroll: true });
+            navigate(pagePath(page.id));
           }}
+          onFocus={() => setFocusId(page.id)}
+          tabIndex={tabIndex}
+          aria-current={page.id === activeId ? 'page' : undefined}
+          onKeyDown={(e) => onRowKey(e, page.id)}
         >
           {children.length > 0 ? (
             <button
@@ -189,7 +264,9 @@ export function Sidebar() {
               tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation();
-                toggle(page.id);
+                focusRow(page.id, true);
+                if (open) collapse(page.id);
+                else expand(page.id);
               }}
             >
               {open ? <CollapseIcon size={14} /> : <ExpandIcon size={14} />}
@@ -200,9 +277,11 @@ export function Sidebar() {
           {renaming === page.id ? (
             <RenameInput
               initial={page.title}
-              onDone={(title) => {
+              onDone={(title, byKey) => {
                 setRenaming(null);
                 if (title !== null) void tree.rename(page.id, title);
+                // Con Enter o Esc el foco vuelve a la fila; si se fue con un clic a otro lado, no se lo saca.
+                if (byKey) focusRow(page.id, true);
               }}
             />
           ) : split ? (
@@ -225,6 +304,7 @@ export function Sidebar() {
           <span className="row-actions">
             <button
               aria-label={tr('sidebar.moreActions')}
+              tabIndex={tabIndex}
               onClick={(e) => {
                 e.stopPropagation();
                 const anchor = e.currentTarget;
@@ -237,6 +317,7 @@ export function Sidebar() {
               <button
                 aria-label={tr('sidebar.addInside')}
                 data-tip={tr('sidebar.addInside')}
+                tabIndex={tabIndex}
                 onClick={(e) => {
                   e.stopPropagation();
                   void newPage(page.id);
@@ -253,6 +334,11 @@ export function Sidebar() {
   }
 
   const roots = tree.roots(projectId);
+  // Las filas que se ven, en orden: lo que recorren las flechas.
+  const rows = visibleRows(roots, (id) => tree.children(id), expanded);
+  const visible = new Set(rows.map((r) => r.id));
+  const tabStop =
+    focusId && visible.has(focusId) ? focusId : activeId && visible.has(activeId) ? activeId : (rows[0]?.id ?? null);
   const trashCount = tree.trashed(projectId).length;
   const canCreateRoot = perms.canCreateIn(null, projectId);
 
@@ -372,12 +458,12 @@ export function Sidebar() {
   );
 }
 
-function RenameInput({ initial, onDone }: { initial: string; onDone: (title: string | null) => void }) {
+function RenameInput({ initial, onDone }: { initial: string; onDone: (title: string | null, byKey: boolean) => void }) {
   const done = useRef(false);
-  const finish = (value: string | null) => {
+  const finish = (value: string | null, byKey = false) => {
     if (done.current) return;
     done.current = true;
-    onDone(value);
+    onDone(value, byKey);
   };
   return (
     <input
@@ -388,8 +474,8 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (title: str
       onFocus={(e) => e.currentTarget.select()}
       onBlur={(e) => finish(e.currentTarget.value.trim())}
       onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') finish(e.currentTarget.value.trim());
-        if (e.key === 'Escape') finish(null);
+        if (e.key === 'Enter') finish(e.currentTarget.value.trim(), true);
+        if (e.key === 'Escape') finish(null, true);
       }}
     />
   );

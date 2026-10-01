@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AuthUser } from '../auth';
 import { t, useT } from '../i18n';
 import { useCodaOwner } from '../import/codaOwner';
@@ -229,8 +229,12 @@ export function Shell() {
   // después no espera, y una versión nueva publicada mientras tanto no deja al editor sin sus archivos.
   useEffect(() => preloadWhenIdle({ preload: preloadPageParts }), []);
 
+  // Al cambiar de página se cierra el cajón del teléfono, salvo que la haya abierto el árbol sin que se la
+  // eligiera (las flechas, plegar una madre de la página abierta): ahí se sigue recorriendo el árbol.
+  const keepNav = useRef(false);
   useEffect(() => {
-    setNavOpen(false);
+    if (keepNav.current) keepNav.current = false;
+    else setNavOpen(false);
     setPageMenu(null);
   }, [route.name, route.name === 'page' ? route.id : null]);
 
@@ -258,7 +262,7 @@ export function Shell() {
 
   return (
     <div className={`shell${navOpen ? ' nav-open' : ''}`}>
-      <Sidebar />
+      <Sidebar onBrowse={() => (keepNav.current = true)} />
       <SidebarResizer />
       <div className="scrim" onClick={() => setNavOpen(false)} />
       <main className="main">

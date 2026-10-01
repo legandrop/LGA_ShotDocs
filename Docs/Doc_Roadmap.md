@@ -156,6 +156,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   proyecto entero, o dueño y admins), qué ven los que lo tenían compartido y qué pasa con lo que está sin
   sincronizar en otros dispositivos. Diseño y auditoría antes. Mientras tanto: renombrarlo y mandar sus páginas
   a la papelera.
+- **P.16 Hecho (v0.074): el árbol de páginas con el teclado** (Lega, 2026-10-01). Con el foco en una fila
+  (queda ahí después de un clic): ↑ / ↓ abren la página visible anterior o siguiente (una pulsación al
+  instante; con la tecla apretada el foco corre y se abre la última al frenar, 150 ms), → despliega o pasa a la
+  primera subpágina, ← pliega o va a la página madre, Inicio / Fin a la primera o la última, Enter / Espacio
+  abren. Solo con el foco en el árbol y sin Ctrl, ⌘, Alt ni Shift. Y el defecto: plegar con el triángulo (o
+  con ←) una madre de la página abierta no dejaba; ahora pliega y la abierta pasa a ser esa madre (en el
+  teléfono el cajón sigue abierto). Lógica en `src/ui/treeNav.ts`. Falta su entrada en la ayuda (P.13).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
