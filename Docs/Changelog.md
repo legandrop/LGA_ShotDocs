@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.061 :
+
+Links entre páginas y archivos repetidos al importar de Coda (pedidos para importar un doc con tablas). Un link
+de una página de Coda a otra del mismo doc quedaba apuntando a Coda, y la app no tenía links internos: un link
+a una página se abría en otra pestaña, recargando la app. Ahora la exportación marca esos links
+(`coda-page:<id>`) y la importación crea primero todas las páginas y después escribe cada una, así cada link
+pasa a la página creada (también en un ciclo A ↔ B y al seguir una importación cortada); uno a una página que
+no está en la exportación queda como texto y anotado. En el editor, un clic en un link a una página de la app
+la abre en la misma pestaña, sin recargar; Ctrl/⌘+clic, en otra. Además, el mismo archivo en varias páginas
+de una importación se guarda y se sube al Drive una sola vez: las demás páginas usan la misma dirección.
+[ Importar de Coda - links entre páginas y archivos compartidos ]
+
 v0.060 :
 
 Comentarios de Coda al importar. No pasaban a Shot Docs porque la API REST de Coda y su exportación HTML no los
