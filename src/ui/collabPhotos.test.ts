@@ -8,15 +8,16 @@ import { para, photo, tally, type Tally } from './photoHarness';
 // cruzan los cambios en cualquier orden, con la reparación de la app. Esta es la vara para publicar: en estos
 // casos no se pierde ni se duplica nada.
 //
-// Lo que sí puede perder (borrar, mover o insertar una foto mientras el otro escribe al lado; unir renglones o
-// cambiar el tipo): collabPhotosLimits.test.ts. Los mismos casos sin el texto de los huecos (pierden):
-// collabPhotosNoGaps.test.ts. Por defecto 300 agendas por caso; COLLAB_PHOTO_SCHEDULES cambia la cantidad.
+// Borrar, mover o insertar una foto mientras el otro escribe al lado, y lo que todavía puede salir mal (Enter,
+// unir renglones, cambiar el tipo): collabPhotosLimits.test.ts, con sus números. Los mismos casos sin el texto
+// de los huecos (pierden): collabPhotosNoGaps.test.ts. Un solo editor al azar y las dos copias de la librería:
+// stableGaps.test.ts. Por defecto 300 agendas por caso; COLLAB_PHOTO_SCHEDULES cambia la cantidad.
 
 afterEach(unmountAll);
 
 const N = Number(process.env.COLLAB_PHOTO_SCHEDULES ?? 300);
 const top = para('p0', ['top']);
-const zero = { lost: 0, twice: 0, baseLost: 0, baseTwice: 0, photosLost: 0, photosTwice: 0, breaks: 0, different: 0, unsettled: 0, broken: 0 };
+const zero = { lost: 0, gone: 0, twice: 0, baseLost: 0, baseTwice: 0, photosLost: 0, photosTwice: 0, breaks: 0, different: 0, unsettled: 0, broken: 0 };
 const counts = ({ schedules: _s, examples: _e, ...rest }: Tally) => rest;
 
 const cases: { name: string; alphabet: string[]; initial: () => ReturnType<typeof para>[] }[] = [

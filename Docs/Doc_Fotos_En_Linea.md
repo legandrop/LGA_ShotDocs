@@ -1,6 +1,6 @@
 # Fotos en línea: la foto como un carácter del renglón (P.15)
 
-Estado: **entrega 0 (prototipo) y entrega 1a (el nodo y el parche de huecos) hechas; falta la 1b y el resto**
+Estado: **entrega 0 (prototipo) y entrega 1a (el nodo, el parche de huecos y los huecos estables) hechas; falta la 1b y el resto**
 (2026-10-01; ver "Prototipo (entrega 0)" y "Cómo quedó (entrega 1a)"; las "Correcciones de la auditoría", más
 abajo, mandan sobre el diseño de arriba). Nada en la app crea todavía una foto en línea. Pedido de Lega del
 2026-10-01, con sus palabras: las
@@ -291,7 +291,7 @@ de fotos en línea"). Conclusiones:
 **A futuro (Lega, 2026-10-01, después de ver el prototipo):** que se puedan escribir varias líneas de texto a
 los costados de una foto (el texto rodea la foto), no solo un renglón alineado abajo.
 
-## Cómo quedó (entrega 1a: el nodo y el parche de huecos)
+## Cómo quedó (entrega 1a: el nodo, el parche de huecos y los huecos estables)
 
 La parte del modelo de datos de la entrega 1 (v0.074). La 1b es lo que se ve y se toca: la imagen resuelta
 (`sdmedia://`, miniatura, nitidez), el CSS y la decoración de las filas, el teclado y el mouse propios, la
@@ -326,45 +326,55 @@ vacío, a cada lado de cada foto: `"" [foto] "" [foto] ""`. Decisiones:
 - **Versiones mezcladas.** La versión anterior nunca edita un renglón con fotos (no abre la página), y todo lo
   demás las dos lo escriben igual: las mismas 300 agendas con saltos de línea dan lo mismo con dos editores
   de esta versión, dos de la anterior, o uno de cada una. Las dos formas de guardar un renglón con fotos (con
-  y sin el texto de los huecos) no llegan a mezclarse; si se mezclaran no habría un ida y vuelta de arreglos,
-  pero se perdería texto en 173 de 300 agendas: por eso la marca y el parche van juntos (`vite.config.ts` no
-  construye sin esa parte del parche).
+  y sin el texto de los huecos) no llegan a mezclarse; si se mezclaran no habría un ida y vuelta de arreglos
+  (con los huecos estables, tampoco pérdidas en 300 agendas; antes, 173). La marca y el parche van juntos
+  (`vite.config.ts` no construye sin esa parte del parche). Un renglón al que le borraron todas las fotos sí lo
+  abre la versión anterior: lo muestra bien y no se pierde nada, pero si dos lo editan a la vez con esa versión
+  el texto puede quedar dos veces (`Doc_Colaboracion.md`, "Versiones viejas"); no pasa mientras nada cree fotos.
 - **Sacarlo es una línea** (`extendNodeSchema` en `inlinePhoto.ts`), mientras nada cree fotos en línea.
+
+**Los huecos estables** (el resto del parche; detalle en `Doc_Colaboracion.md`, "Huecos estables"). En un
+renglón con fotos ningún texto de Yjs se borra ni se vuelve a crear: borrar una foto saca solo la foto y deja
+los textos de los dos lados seguidos (`"abc" "def"`), que el editor lee como un solo texto; cada cambio va al
+texto que tiene esa posición (lo que se escribe en el borde entre dos textos, al de la izquierda). Los textos de
+un renglón con fotos llevan la marca `lgaGapText` como atributo, para que el renglón siga así cuando se le borra
+la última foto. Un párrafo sin fotos va por el código de siempre.
 
 **Lo medido** (dos editores sobre dos documentos de Yjs que se cruzan los cambios en cualquier orden; 300
 agendas al azar por caso, con semilla; cada número es la cantidad de agendas con algo perdido o duplicado; son
-agendas hechas para chocar: todos los pasos caen en el mismo renglón):
+agendas hechas para chocar: todos los pasos caen en el mismo renglón). "Desordenada" es una marca escrita que
+quedó con todas sus letras, desordenadas (`7}{A` por `{A7}`, ver `Doc_Colaboracion.md`): ninguna letra se
+perdió.
 
-| Qué hacen dos personas a la vez en el mismo renglón | Con el texto de los huecos | Sin él |
-|---|---|---|
-| Solo texto, sin fotos (control) | 0 | 0 |
-| Escriben en los huecos de `[foto][foto]` | **0** | 21 perdido, 52 duplicado |
-| Escriben en los huecos de `"abc"[foto]"def"[foto]` | **0** | 20 duplicado |
-| Uno escribe y el otro cambia el ancho o agrega fotos en los huecos | 0 | 0 |
-| Los dos escriben, cambian anchos y agregan fotos en los huecos | **0** | 2 duplicado |
-| Uno escribe justo a la derecha de una foto y el otro borra fotos (`[foto][foto][foto]`) | **205 perdido** | 40 perdido, 3 duplicado |
-| Uno escribe pegado a una foto y el otro borra fotos (`"abc"[foto]"def"[foto]`) | 206 perdido | 167 perdido |
-| Uno escribe a la derecha de una foto y el otro mueve fotos (fila de tres) | 74 perdido | 87 perdido, 1 duplicado |
-| Uno escribe pegado a una foto y el otro mueve fotos (texto y fotos) | 29 perdido | 166 perdido, 5 duplicado; una foto perdida en 3 y duplicada en 3 |
-| Uno escribe pegado a una foto y el otro aprieta Enter pegado a una foto | 172 perdido | 139 perdido |
-| Uno escribe al final y el otro pone fotos en el medio del texto | 0 (lo escrito queda antes de la foto) | 0 |
-| Los dos borran fotos de un renglón con texto entre ellas | texto que ya estaba: perdido en 53, duplicado en 139 | igual |
-| Uno une el renglón con el de arriba o le cambia el tipo y el otro pega fotos en él | las fotos pegadas se pierden (227 y 261) | igual |
-| Uno une el renglón con el de arriba y el otro escribe pegado a sus fotos | 231 perdido | igual |
-| De todo un poco, los dos | 103 perdido, 19 duplicado; fotos: 25 perdidas, 25 duplicadas | 101 perdido, 18 duplicado; fotos: 19 y 33 |
+| Qué hacen dos personas a la vez en el mismo renglón | Con los huecos estables (lo de esta entrega) | Solo el texto de los huecos | Sin él |
+|---|---|---|---|
+| Solo texto, sin fotos (control) | 0 | 0 | 0 |
+| Escriben en los huecos de `[foto][foto]` | **0** | 0 | 21 perdido, 52 duplicado |
+| Escriben en los huecos de `"abc"[foto]"def"[foto]` | **0** | 0 | 20 duplicado |
+| Uno escribe y el otro cambia el ancho o agrega fotos en los huecos | 0 | 0 | 0 |
+| Los dos escriben, cambian anchos y agregan fotos en los huecos | **0** | 0 | 2 duplicado |
+| Uno escribe justo a la derecha de una foto y el otro borra fotos (`[foto][foto][foto]`) | **0** | 205 perdido | 40 perdido, 3 duplicado |
+| Uno escribe pegado a una foto y el otro borra fotos (`"abc"[foto]"def"[foto]`) | **0** | 206 perdido | 167 perdido |
+| Uno escribe a la derecha de una foto y el otro mueve fotos (fila de tres) | **0** | 74 desordenada | 87 perdido, 1 duplicado |
+| Uno escribe pegado a una foto y el otro mueve fotos (texto y fotos) | **0** | 29 desordenada | 166 perdido, 5 duplicado; una foto perdida en 3 y duplicada en 3 |
+| Uno escribe pegado a una foto y el otro aprieta Enter pegado a una foto | **41 desordenada, 0 perdido** | 172 (166 perdido) | 139 perdido |
+| Uno escribe al final y el otro pone fotos en el medio del texto | 0 (lo escrito queda antes de la foto) | 0 | 0 |
+| Los dos borran fotos de un renglón con texto entre ellas | **0** | texto que ya estaba: perdido en 53, duplicado en 139 | igual |
+| Uno une el renglón con el de arriba o le cambia el tipo y el otro pega fotos en él | las fotos pegadas se pierden (227 y 261) | igual | igual |
+| Uno une el renglón con el de arriba y el otro escribe pegado a sus fotos | 231 perdido | igual | igual |
+| De todo un poco, los dos | **7 desordenada, 0 perdido**; 6 y 13 duplicado (los dos con Enter); fotos: 0 perdidas, **39 duplicadas** | 103 (98 perdido), 19 duplicado; fotos: 25 perdidas, 25 duplicadas | 101 perdido, 18 duplicado; fotos: 19 y 33 |
+| Saltos de línea, esta versión, la anterior y mezcladas | 2 perdido y 1 duplicado; 4 y 12 | igual | — |
 
-🔴 **Lo que encontró la medición, y queda para decidir.** El texto de los huecos arregla lo que se buscaba
-(escribir los dos en el mismo hueco: de 73 agendas con problemas a 0) y mejora mover una foto, pero **empeora
-borrar una foto o apretar Enter mientras el otro escribe en un hueco vacío pegado a ella**: de 40 a 205 en la
-fila de tres fotos. La causa: sin el parche, quien escribe en un hueco vacío crea su propio texto, que sobrevive
-si el otro borra la foto de al lado; con el parche los dos comparten el texto del hueco, y al borrar la foto
-y-prosemirror borra también ese texto (une los dos de los costados en uno), con lo que el otro escribió
-adentro. En el conjunto ("de todo un poco") las dos formas pierden parecido. La auditoría del diseño midió los
-huecos, no esto. Se dejó el parche como estaba decidido, medido y con sus pruebas; se puede sacar con una
-línea mientras nada cree fotos. **Propuesta para antes de publicar la versión que las crea:** que borrar una
-foto no borre el texto vacío de al lado (queda como texto de más, que la comparación saltea del lado de Yjs) y
-que al dibujar no se junten dos textos seguidos; es un cambio más grande en el mismo parche y necesita su
-diseño y su auditoría. Es compatible con lo guardado por esta entrega.
+**Lo que encontró la medición, y cómo se resolvió.** Solo, el texto de los huecos arreglaba lo que se buscaba
+(escribir los dos en el mismo hueco: de 73 agendas con problemas a 0) pero **empeoraba borrar una foto o
+apretar Enter mientras el otro escribe en un hueco vacío pegado a ella** (de 40 a 205 en la fila de tres
+fotos): al borrar la foto, y-prosemirror unía los dos textos de los costados y borraba uno, con lo que el otro
+escribió adentro. Los huecos estables lo resuelven: borrar una foto ya no borra ningún texto. La vara era
+"borrar" en 40 o menos y Enter no peor que sin huecos (139); dio 0 y 41 (sin ninguna letra perdida). Lo que
+queda es de la estructura (unir y cambiar el tipo vuelven a crear el bloque, igual que antes) y de copiar: dos
+Enter a la vez, o mover y Enter a la vez, dejan texto o fotos dos veces (39 fotos duplicadas en "de todo un
+poco", contra 25 antes; ninguna perdida, contra 25). Se prefiere duplicar a perder. Sacar todo esto sigue
+siendo una línea (`extendNodeSchema` en `inlinePhoto.ts`) mientras nada cree fotos.
 
 **Deshacer.** Insertar, borrar y cambiar el ancho de una foto se deshacen de un paso, y los dos editores
 terminan iguales.
@@ -372,6 +382,8 @@ terminan iguales.
 **Pruebas.** `src/ui/inlinePhoto.test.ts` (el nodo, cómo se guarda, abrir no escribe, la versión anterior,
 deshacer), `collabPhotos.test.ts` (los casos que tienen que dar 0), `collabPhotosLimits.test.ts` (los límites,
 con su número), `collabPhotosNoGaps.test.ts` (lo mismo sin el texto de los huecos y las dos formas mezcladas),
+`stableGaps.test.ts` (los huecos estables con un editor: ida y vuelta, el borde, 400 pasos al azar, y las dos
+copias de la librería escribiendo lo mismo),
 `collabPhotosVersions.test.ts` (saltos de línea con las dos versiones) y la de `writePage` en
 `src/import/codaImport.test.ts`. Las ayudas están en `src/ui/photoHarness.ts`.
 
@@ -383,8 +395,10 @@ con su número), `collabPhotosNoGaps.test.ts` (lo mismo sin el texto de los huec
   guardan párrafos que las versiones de hoy sí abren, así que necesita su propio paso (una versión que
   entienda las dos formas, subir `min_app_version`, y recién después escribir la nueva).
 - El texto de un bloque que usa la importación para ubicar los comentarios de Coda (`pageBlocks`) junta los
-  textos de un párrafo con un espacio: con fotos en línea, los textos vacíos de los huecos suman espacios.
-  Se revisa en la entrega 4 (importar en línea).
+  textos de un párrafo con un espacio: con fotos en línea, los textos vacíos de los huecos suman espacios, y
+  los textos seguidos que deja borrar una foto quedan separados por un espacio (`"abc" "def"` → `abc def`). Lo
+  mismo el texto plano de "exportar lo no sincronizado" (`unsynced.ts`, un renglón por texto). La búsqueda
+  (`search/extract.ts`) ya los junta bien. Se revisa en la entrega 4 (importar en línea).
 - El `README.md` dice que el parche de y-prosemirror son dos arreglos chicos; ahora tiene una parte más. No se
   tocó (nada visible para el usuario cambió).
 

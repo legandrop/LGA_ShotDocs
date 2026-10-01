@@ -38,10 +38,12 @@ function appVersion(): string {
 
 // y-prosemirror lleva arreglos propios (patches/y-prosemirror+1.3.7.patch, Docs/Doc_Colaboracion.md) que
 // aplica `patch-package` al instalar (postinstall): la selección que se restaura, el texto vacío del párrafo
-// vacío y el de los huecos alrededor de las fotos en línea (desde v0.074). Sin ellos, editar a la vez pierde
-// texto (y sin el último, las fotos en línea se guardarían de otra forma): el build y las pruebas se niegan a
-// correr (por ejemplo, si se instaló con --ignore-scripts o si se actualizó la librería y el parche no se
-// volvió a hacer).
+// vacío, el de los huecos alrededor de las fotos en línea y los huecos estables (un renglón con fotos nunca
+// borra ni vuelve a crear un texto). Sin ellos, editar a la vez pierde texto (y sin los dos últimos, las fotos
+// en línea se guardarían de otra forma): el build y las pruebas se niegan a correr (por ejemplo, si se instaló
+// con --ignore-scripts o si se actualizó la librería y el parche no se volvió a hacer). Se miran los dos
+// archivos de la librería: `src` (el que usan la app y las pruebas) y `dist/*.cjs` (stableGaps.test.ts
+// comprueba que los dos escriben lo mismo).
 function assertYProsemirrorPatched(): void {
   const files = ['src/plugins/sync-plugin.js', 'dist/y-prosemirror.cjs'];
   const marks = [
@@ -52,6 +54,13 @@ function assertYProsemirrorPatched(): void {
     // La marca que lee el parche es la de `GAP_TEXT_SPEC` (src/ui/inlinePhoto.ts); una prueba lo compara.
     'n.type.spec.lgaGapText === true',
     'needsGapText(res[res.length - 1])',
+    // Los huecos estables. El nombre del atributo de los textos es el mismo `GAP_TEXT_SPEC` (inlinePhoto.test.ts).
+    "const STABLE_GAP_TEXT = 'lgaGapText'",
+    'updateStableGapsChildren(y,',
+    'isStableGapsBlock(yDomFragment, pNode)',
+    'isStableGapsBlock(ytype, pnode)',
+    '!stableGaps && nextytext',
+    'if (hasGapTextChild(node))',
   ];
   for (const file of files) {
     let source = '';

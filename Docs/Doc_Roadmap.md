@@ -74,12 +74,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   **Hecho: el prototipo (entrega 0; Lega lo vio y lo aprobó el 2026-10-01) y la entrega 1a (v0.074):** el nodo
   `photo` en el esquema (nada lo crea todavía), el resguardo de versiones anteriores también en la importación
   de Coda, el parche de los huecos de y-prosemirror (solo alrededor de las fotos; los saltos de línea se
-  guardan igual que antes) y las pruebas al azar con dos editores (0 pérdidas al escribir los dos en los
-  huecos). **Falta de la entrega 1 (1b):** la imagen resuelta con miniatura y nitidez, el CSS y la decoración
+  guardan igual que antes), los huecos estables (en un renglón con fotos ningún texto se borra ni se vuelve a
+  crear) y las pruebas al azar con dos editores (0 pérdidas al escribir en los huecos, borrar o mover fotos). **Falta de la entrega 1 (1b):** la imagen resuelta con miniatura y nitidez, el CSS y la decoración
   de las filas, el teclado y el mouse propios, elegir varias, la barra, el carrete y los selectores por bloque
-  más posición; después, publicar y subir `min_app_version`. 🔴 **Para decidir antes de la versión que crea
-  fotos:** el texto de los huecos empeora borrar una foto mientras otro escribe pegado a ella (medido, con una
-  propuesta, en `Doc_Fotos_En_Linea.md`, "Cómo quedó").
+  más posición; después, publicar y subir `min_app_version`. Lo que queda de editar a la vez junto a fotos
+  (unir renglones, cambiar el tipo, dos Enter a la vez) está medido en `Doc_Colaboracion.md`.
   **A futuro (Lega, 2026-10-01, después de ver el prototipo):** que se puedan escribir varias líneas de texto a
   los costados de una foto (el texto rodea la foto), no solo un renglón alineado abajo.
 - **P.4 Hecho a medias (v0.046): acomodar en filas** (`Doc_Imagenes.md`, entrega 3): con una foto elegida, reparte la tanda de fotos

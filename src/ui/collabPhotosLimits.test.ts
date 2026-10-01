@@ -4,13 +4,15 @@ import * as Y from 'yjs';
 import { connect, mountEditor, sameDocs, showsDoc, tick, unmountAll } from './collabHarness';
 import { insertPhotoAt, limits, losses, midTextIn, para, storedInline, tally, textEnds, typeAtPos } from './photoHarness';
 
-// Lo que SÍ puede perder editar a la vez un renglón con fotos en línea: es de y-prosemirror 1.x, que borra y
-// vuelve a crear lo que cambia de lugar (Docs/Doc_Colaboracion.md, "Lo que todavía puede pasar"). Estas
-// pruebas DOCUMENTAN el número de hoy (300 agendas al azar por caso, semillas fijas; los casos y sus números
-// están en photoHarness.ts, `limits`): no tienen que dar 0, pero si un número cambia (para bien o para mal) la
-// prueba falla y hay que revisar la tabla del documento. Siempre se exige que los dos terminen iguales, que
-// cada editor muestre su documento y que no quede nada yendo y viniendo. Los mismos casos sin el texto de los
-// huecos (para comparar): collabPhotosNoGaps.test.ts.
+// Lo que todavía puede salir mal al editar a la vez un renglón con fotos en línea. Con los huecos estables
+// (Docs/Doc_Colaboracion.md, "Huecos estables") borrar, mover o agregar una foto ya no pierde lo que el otro
+// escribe al lado; queda lo que viene de cambiar la estructura (unir renglones, cambiar el tipo, Enter), que
+// y-prosemirror 1.x resuelve volviendo a crear el bloque. Estas pruebas DOCUMENTAN el número de hoy (300 agendas
+// al azar por caso, semillas fijas; los casos y sus números están en photoHarness.ts, `limits`): no tienen que
+// dar 0, pero si un número cambia (para bien o para mal) la prueba falla y hay que revisar la tabla del
+// documento. Siempre se exige que los dos terminen iguales, que cada editor muestre su documento y que no quede
+// nada yendo y viniendo. Los mismos casos sin el texto de los huecos (para comparar):
+// collabPhotosNoGaps.test.ts.
 
 afterEach(unmountAll);
 

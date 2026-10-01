@@ -5,12 +5,12 @@ v0.074 :
 Fotos en línea, entrega 1a: el modelo de datos, sin nada visible todavía. Faltaba que el editor conociera la
 foto como elemento del renglón antes de poder crearla. Se suma el nodo `photo` al esquema (nada lo crea aún) y
 al resguardo de versiones anteriores, que ahora también corre en la importación de Coda: una página con algo
-que esta versión no conoce no se toca. Dos personas escribiendo en el mismo hueco entre fotos perdían o
-duplicaban texto, porque cada una creaba su propio tramo; el parche de y-prosemirror ahora guarda un texto
-vacío en cada hueco, solo alrededor de las fotos (los saltos de línea quedan igual). Medido con 300 agendas
-por caso: 0 pérdidas en los huecos; borrar una foto mientras otro escribe pegado a ella empeora y queda para
-decidir (`Doc_Fotos_En_Linea.md`).
-[ Fotos en línea 1a - el nodo photo y el parche de los huecos ]
+que esta versión no conoce no se toca. Editar a la vez junto a una foto perdía texto: cada uno creaba su
+propio tramo en un hueco, y al borrar o mover una foto y-prosemirror borraba el texto vecino. El parche ahora
+guarda un texto vacío en cada hueco y, en un renglón con fotos, nunca borra ni recrea un texto (borrar una
+foto saca solo la foto). Los párrafos sin fotos siguen igual. Medido con 300 agendas por caso: 0 pérdidas al
+escribir en los huecos, borrar o mover fotos (antes hasta 206); Enter, 0 letras perdidas (`Doc_Colaboracion.md`).
+[ Fotos en línea 1a - el nodo photo, el parche de los huecos y los huecos estables ]
 
 v0.073 :
 

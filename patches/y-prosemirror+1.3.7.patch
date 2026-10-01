@@ -1,5 +1,5 @@
 diff --git a/node_modules/y-prosemirror/dist/y-prosemirror.cjs b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
-index de4d1e6..35962f2 100644
+index de4d1e6..8ca3dd0 100644
 --- a/node_modules/y-prosemirror/dist/y-prosemirror.cjs
 +++ b/node_modules/y-prosemirror/dist/y-prosemirror.cjs
 @@ -322,37 +322,104 @@ const ySyncPlugin = (yXmlFragment, {
@@ -133,7 +133,51 @@ index de4d1e6..35962f2 100644
  /**
   * @param {ProsemirrorBinding} pmbinding
   * @param {import('prosemirror-state').EditorState} state
-@@ -1002,6 +1069,16 @@ const equalAttrs = (pattrs, yattrs) => {
+@@ -805,6 +872,10 @@ const createNodeFromYElement = (
+   computeYChange
+ ) => {
+   const children = [];
++  // LGA-SHOTDOCS-PATCH (stable gaps): in a block with stable gaps, consecutive Y__namespace.XmlText are kept as they
++  // are (they read as one run of text: ProseMirror joins adjacent text nodes with the same marks), so the
++  // merge below (#160) must not run there.
++  const stableGaps = yChildrenHaveStableGaps(el.toArray(), schema)
+   /**
+    * @param {Y.XmlElement | Y.XmlText} type
+    */
+@@ -826,7 +897,7 @@ const createNodeFromYElement = (
+       // This is a fix for #160 -- duplication of characters when two Y.Text exist next to each
+       // other.
+       const nextytext = /** @type {Y.ContentType} */ (type._item.right?.content)?.type;
+-      if (nextytext instanceof Y__namespace.Text && !nextytext._item.deleted && nextytext._item.id.client === nextytext.doc.clientID) {
++      if (!stableGaps && nextytext instanceof Y__namespace.Text && !nextytext._item.deleted && nextytext._item.id.client === nextytext.doc.clientID) {
+         type.applyDelta([
+           { retain: type.length },
+           ...nextytext.toDelta()
+@@ -953,12 +1024,17 @@ const createTypeFromElementNode = (node, meta) => {
+       type.setAttribute(key, val);
+     }
+   }
+-  type.insert(
+-    0,
+-    normalizePNodeContent(node).map((n) =>
+-      createTypeFromTextOrElementNode(n, meta)
+-    )
+-  );
++  const children = normalizePNodeContent(node).map((n) =>
++    createTypeFromTextOrElementNode(n, meta)
++  )
++  // LGA-SHOTDOCS-PATCH (stable gaps): the texts of a block with inline nodes that ask for gap text carry
++  // the stable-gaps mark, so the block keeps its stable gaps after its last such node is removed.
++  if (hasGapTextChild(node)) {
++    children.forEach((c) => {
++      if (c instanceof Y__namespace.XmlText) c.setAttribute(STABLE_GAP_TEXT, true)
++    })
++  }
++  type.insert(0, children)
+   meta.mapping.set(type, node);
+   return type
+ };
+@@ -1002,6 +1078,16 @@ const equalAttrs = (pattrs, yattrs) => {
   * @typedef {Array<Array<PModel.Node>|PModel.Node>} NormalizedPNodeContent
   */
  
@@ -150,7 +194,7 @@ index de4d1e6..35962f2 100644
  /**
   * @param {any} pnode
   * @return {NormalizedPNodeContent}
-@@ -1009,6 +1086,11 @@ const equalAttrs = (pattrs, yattrs) => {
+@@ -1009,6 +1095,11 @@ const equalAttrs = (pattrs, yattrs) => {
  const normalizePNodeContent = (pnode) => {
    const c = pnode.content.content;
    const res = [];
@@ -162,7 +206,7 @@ index de4d1e6..35962f2 100644
    for (let i = 0; i < c.length; i++) {
      const n = c[i];
      if (n.isText) {
-@@ -1019,9 +1101,20 @@ const normalizePNodeContent = (pnode) => {
+@@ -1019,9 +1110,20 @@ const normalizePNodeContent = (pnode) => {
        i--;
        res.push(textNodes);
      } else {
@@ -183,6 +227,645 @@ index de4d1e6..35962f2 100644
    return res
  };
  
+@@ -1052,6 +1154,10 @@ const equalYTypePNode = (ytype, pnode) => {
+     ytype instanceof Y__namespace.XmlElement && !(pnode instanceof Array) &&
+     matchNodeName(ytype, pnode)
+   ) {
++    // LGA-SHOTDOCS-PATCH (stable gaps): a run of Y__namespace.XmlText equals the text between two inline nodes.
++    if (isStableGapsBlock(ytype, pnode)) {
++      return equalAttrs(ytype.getAttributes(), pnode.attrs) && equalStableContent(ytype, pnode)
++    }
+     const normalizedContent = normalizePNodeContent(pnode);
+     return ytype._length === normalizedContent.length &&
+       equalAttrs(ytype.getAttributes(), pnode.attrs) &&
+@@ -1203,6 +1309,614 @@ const marksToAttributes = (marks, meta) => {
+   return pattrs
+ };
+ 
++// LGA-SHOTDOCS-PATCH (stable gaps) ----------------------------------------------------------------------
++//
++// In a block whose inline content has nodes that ask for gap text (`lgaGapText: true` in their spec: the
++// app's inline photo), every Y__namespace.XmlText is stable: this binding never deletes it or rewrites it.
++//
++// - Removing an inline node removes only its Y__namespace.XmlElement; the texts on both sides stay, as consecutive
++//   siblings. Moving one is removing it and inserting it elsewhere.
++// - Reading: a run of consecutive Y__namespace.XmlText is one run of ProseMirror text (adjacent text nodes with the
++//   same marks are joined), and the merge of #160 does not run in these blocks.
++// - Writing: the block's inline content is compared as a sequence of characters and inline nodes; every
++//   change is applied as the smallest inserts and deletes in the Y__namespace.XmlText that holds that position.
++//   Boundary rule: text inserted where two texts meet goes to the end of the LEFT one (the leftmost text of
++//   the run whose end reaches the position: where absolutePositionToRelativePosition puts a cursor). A node
++//   inserted strictly inside a text keeps the left part in place and moves the right part into a new text
++//   after the node (a Y__namespace.XmlText cannot be split). Empty texts are harmless and are never cleaned up.
++// - The texts of such a block carry the attribute `lgaGapText: true`, set when the block is written, so the
++//   block keeps this behaviour after its last such node is removed.
++//
++// Two people typing next to a node that a third removes, moves or splits off then write into texts that
++// survive. Blocks without such nodes and without marked texts (every block of a document without inline
++// photos, hardBreak included) take the original code, unchanged.
++
++const STABLE_GAP_TEXT = 'lgaGapText'
++
++/**
++ * Longest edit script searched for when a change mixes text and inline nodes; past it, the changed range
++ * is replaced (texts still survive).
++ */
++const STABLE_GAPS_MAX_DIFF = 512
++
++/**
++ * @param {any} nodeType
++ */
++const isGapTextNodeType = (nodeType) => nodeType != null && nodeType.isInline === true && nodeType.spec.lgaGapText === true
++
++/**
++ * @param {any} pnode
++ */
++const hasGapTextChild = (pnode) => {
++  if (pnode.isTextblock !== true) return false
++  const c = pnode.content.content
++  for (let i = 0; i < c.length; i++) {
++    if (needsGapText(c[i])) return true
++  }
++  return false
++}
++
++/**
++ * @param {Array<any>} children
++ * @param {any} schema
++ */
++const yChildrenHaveStableGaps = (children, schema) => {
++  for (let i = 0; i < children.length; i++) {
++    const c = children[i]
++    if (c instanceof Y__namespace.XmlText) {
++      if (c.getAttribute(STABLE_GAP_TEXT) === true) return true
++    } else if (c instanceof Y__namespace.XmlElement) {
++      if (isGapTextNodeType(schema.nodes[c.nodeName])) return true
++    }
++  }
++  return false
++}
++
++/**
++ * @param {any} ytype
++ * @param {any} pnode
++ */
++const isStableGapsBlock = (ytype, pnode) =>
++  ytype instanceof Y__namespace.XmlElement && !(pnode instanceof Array) && pnode.isTextblock === true &&
++  (hasGapTextChild(pnode) || yChildrenHaveStableGaps(ytype.toArray(), pnode.type.schema))
++
++/**
++ * @param {any} attrs Yjs format attributes of a delta
++ * @param {Array<any>} marks prosemirror marks
++ */
++const equalDeltaAttrsMarks = (attrs, marks) =>
++  object__namespace.keys(attrs || {}).length === marks.length &&
++  object__namespace.every(attrs, (attr, yattrname) => {
++    const markname = yattr2markname(yattrname)
++    return equalAttrs(attr, marks.find(/** @param {any} mark */ (mark) => mark.type.name === markname)?.attrs)
++  })
++
++/**
++ * Whether a run of consecutive Y__namespace.XmlText holds exactly these prosemirror text nodes (text and marks).
++ *
++ * @param {Array<Y__namespace.XmlText>} run
++ * @param {Array<any>} ptexts
++ */
++const equalYTextRunPTexts = (run, ptexts) => {
++  const ops = []
++  for (let i = 0; i < run.length; i++) ops.push(...run[i].toDelta())
++  let oi = 0
++  let off = 0
++  for (let i = 0; i < ptexts.length; i++) {
++    const p = ptexts[i]
++    let rest = p.text
++    while (rest.length > 0) {
++      if (oi >= ops.length) return false
++      const d = ops[oi]
++      if (typeof d.insert !== 'string') return false
++      const take = math__namespace.min(d.insert.length - off, rest.length)
++      if (d.insert.slice(off, off + take) !== rest.slice(0, take) || !equalDeltaAttrsMarks(d.attributes, p.marks)) return false
++      rest = rest.slice(take)
++      off += take
++      if (off === d.insert.length) {
++        oi++
++        off = 0
++      }
++    }
++  }
++  return oi === ops.length
++}
++
++/**
++ * Content equality of a block with stable gaps: the same characters, marks and inline nodes, wherever the
++ * texts of a run start and end, and with or without empty texts.
++ *
++ * @param {Y__namespace.XmlElement} ytype
++ * @param {any} pnode
++ */
++const equalStableContent = (ytype, pnode) => {
++  const ych = ytype.toArray()
++  const pc = pnode.content.content
++  let i = 0
++  let j = 0
++  while (true) {
++    const run = []
++    while (i < ych.length && ych[i] instanceof Y__namespace.XmlText) run.push(ych[i++])
++    const ptexts = []
++    while (j < pc.length && pc[j].isText) ptexts.push(pc[j++])
++    if (!equalYTextRunPTexts(/** @type {Array<Y__namespace.XmlText>} */ (run), ptexts)) return false
++    if (i >= ych.length || j >= pc.length) return i >= ych.length && j >= pc.length
++    if (!equalYTypePNode(ych[i], pc[j])) return false
++    i++
++    j++
++  }
++}
++
++/**
++ * The inline content of a Y block as a sequence: one token per character (code point) of each Y__namespace.XmlText,
++ * with its child index and its offset in that text, and one per element.
++ *
++ * @param {Array<any>} children
++ */
++const stableYTokens = (children) => {
++  const toks = []
++  for (let c = 0; c < children.length; c++) {
++    const child = children[c]
++    if (child instanceof Y__namespace.XmlText) {
++      let o = 0
++      for (let n = child._start; n !== null; n = n.right) {
++        if (n.deleted || !n.countable) continue
++        if (n.content instanceof Y__namespace.ContentString) {
++          for (const ch of n.content.str) {
++            toks.push({ c, o, s: ch })
++            o += ch.length
++          }
++        } else {
++          // Embedded content (never written by this binding): a token that equals nothing.
++          for (let k = 0; k < n.length; k++) {
++            toks.push({ c, o, s: null })
++            o++
++          }
++        }
++      }
++    } else {
++      toks.push({ c, el: child })
++    }
++  }
++  return toks
++}
++
++/**
++ * The inline content of a prosemirror textblock as a sequence: one token per character (code point), with
++ * the index of its text node, and one per inline node.
++ *
++ * @param {Array<any>} pc
++ */
++const stablePTokens = (pc) => {
++  const toks = []
++  for (let i = 0; i < pc.length; i++) {
++    const n = pc[i]
++    if (n.isText) {
++      for (const ch of n.text) toks.push({ ni: i, s: ch })
++    } else {
++      toks.push({ ni: i, node: n })
++    }
++  }
++  return toks
++}
++
++/**
++ * Shortest edit script (Myers) between a[a0..a1) and b[b0..b1), or null if it is longer than maxD.
++ * Ops: {k: 0, y, p} keep, {k: 1, y} delete from a, {k: 2, p} insert from b (absolute indices), in order.
++ *
++ * @param {Array<any>} a
++ * @param {number} a0
++ * @param {number} a1
++ * @param {Array<any>} b
++ * @param {number} b0
++ * @param {number} b1
++ * @param {function(any, any): boolean} eq
++ * @param {number} maxD
++ */
++const stableMyers = (a, a0, a1, b, b0, b1, eq, maxD) => {
++  const N = a1 - a0
++  const M = b1 - b0
++  const max = math__namespace.min(N + M, maxD)
++  const off = max + 1
++  const v = new Int32Array(2 * max + 3)
++  const trace = []
++  for (let d = 0; d <= max; d++) {
++    trace.push(v.slice())
++    for (let k = -d; k <= d; k += 2) {
++      let x = (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) ? v[off + k + 1] : v[off + k - 1] + 1
++      let y = x - k
++      while (x < N && y < M && eq(a[a0 + x], b[b0 + y])) {
++        x++
++        y++
++      }
++      v[off + k] = x
++      if (x >= N && y >= M) {
++        const ops = []
++        let px = N
++        let py = M
++        for (let e = d; e > 0; e--) {
++          const vv = trace[e]
++          const kk = px - py
++          const prevK = (kk === -e || (kk !== e && vv[off + kk - 1] < vv[off + kk + 1])) ? kk + 1 : kk - 1
++          const prevX = vv[off + prevK]
++          const prevY = prevX - prevK
++          while (px > prevX && py > prevY) {
++            px--
++            py--
++            ops.push({ k: 0, y: a0 + px, p: b0 + py })
++          }
++          if (px === prevX) {
++            py--
++            ops.push({ k: 2, p: b0 + py })
++          } else {
++            px--
++            ops.push({ k: 1, y: a0 + px })
++          }
++        }
++        while (px > 0 && py > 0) {
++          px--
++          py--
++          ops.push({ k: 0, y: a0 + px, p: b0 + py })
++        }
++        return ops.reverse()
++      }
++    }
++  }
++  return null
++}
++
++/**
++ * The edit script from the Y tokens to the prosemirror tokens: common prefix and suffix, and in between a
++ * plain replace when only text changed, or the shortest edit script when inline nodes are involved.
++ *
++ * @param {Array<any>} yt
++ * @param {Array<any>} pt
++ * @param {function(any, any): boolean} eq
++ */
++const stableDiff = (yt, pt, eq) => {
++  const n = yt.length
++  const m = pt.length
++  let pre = 0
++  while (pre < n && pre < m && eq(yt[pre], pt[pre])) pre++
++  let suf = 0
++  while (suf < n - pre && suf < m - pre && eq(yt[n - 1 - suf], pt[m - 1 - suf])) suf++
++  const ops = []
++  for (let i = 0; i < pre; i++) ops.push({ k: 0, y: i, p: i })
++  const ya = pre
++  const yb = n - suf
++  const pa = pre
++  const pb = m - suf
++  let mid = null
++  if (ya < yb && pa < pb && (yt.slice(ya, yb).some((t) => t.el !== undefined) || pt.slice(pa, pb).some((t) => t.node !== undefined))) {
++    mid = stableMyers(yt, ya, yb, pt, pa, pb, eq, STABLE_GAPS_MAX_DIFF)
++  }
++  if (mid !== null) {
++    ops.push(...mid)
++  } else {
++    for (let i = ya; i < yb; i++) ops.push({ k: 1, y: i })
++    for (let j = pa; j < pb; j++) ops.push({ k: 2, p: j })
++  }
++  for (let i = 0; i < suf; i++) ops.push({ k: 0, y: yb + i, p: pb + i })
++  return ops
++}
++
++/**
++ * Groups the edit script in steps: keep ('='), update an element in place ('~': a removed element and an
++ * inserted node of the same type at the same place, e.g. a new width) and hunks ('h': what is deleted and
++ * what is inserted between two kept tokens).
++ *
++ * @param {Array<any>} ops
++ * @param {Array<any>} yt
++ * @param {Array<any>} pt
++ */
++const stableSteps = (ops, yt, pt) => {
++  const steps = []
++  let dels = []
++  let ins = []
++  const flush = () => {
++    if (dels.length === 0 && ins.length === 0) return
++    const de = dels.filter((i) => yt[i].el !== undefined)
++    const ie = ins.filter((j) => pt[j].node !== undefined)
++    if (de.length > 0 && de.length === ie.length && de.every((i, n) => yt[i].el.nodeName === pt[ie[n]].node.type.name)) {
++      let di = 0
++      let ii = 0
++      for (let n = 0; n <= de.length; n++) {
++        const dEnd = n < de.length ? dels.indexOf(de[n]) : dels.length
++        const iEnd = n < de.length ? ins.indexOf(ie[n]) : ins.length
++        const sd = dels.slice(di, dEnd)
++        const si = ins.slice(ii, iEnd)
++        if (sd.length > 0 || si.length > 0) steps.push({ k: 'h', dels: sd, ins: si })
++        if (n < de.length) {
++          steps.push({ k: '~', y: de[n], p: ie[n] })
++          di = dEnd + 1
++          ii = iEnd + 1
++        }
++      }
++    } else {
++      steps.push({ k: 'h', dels, ins })
++    }
++    dels = []
++    ins = []
++  }
++  for (let i = 0; i < ops.length; i++) {
++    const op = ops[i]
++    if (op.k === 0) {
++      flush()
++      steps.push({ k: '=', y: op.y, p: op.p })
++    } else if (op.k === 1) {
++      dels.push(op.y)
++    } else {
++      ins.push(op.p)
++    }
++  }
++  flush()
++  return steps
++}
++
++/**
++ * Writes the inline content of a prosemirror textblock into a Y block with stable gaps. Never deletes or
++ * replaces a Y__namespace.XmlText (see above).
++ *
++ * @param {{transact: Function}} y
++ * @param {Y__namespace.XmlElement} yel
++ * @param {any} pnode
++ * @param {BindingMetadata} meta
++ */
++const updateStableGapsChildren = (y, yel, pnode, meta) => {
++  const yChildren = yel.toArray()
++  const pc = pnode.content.content
++  const yt = stableYTokens(yChildren)
++  const pt = stablePTokens(pc)
++  /**
++   * @param {any} a
++   * @param {any} b
++   */
++  const eq = (a, b) => a.el === undefined
++    ? b.node === undefined && a.s !== null && a.s === b.s
++    : b.node !== undefined && (mappedIdentity(meta.mapping.get(a.el), b.node) || equalYTypePNode(a.el, b.node))
++  const steps = stableSteps(stableDiff(yt, pt, eq), yt, pt)
++  // The next kept token (its index in yt) after each step, or -1.
++  const nextKept = new Array(steps.length)
++  for (let i = steps.length - 1, next = -1; i >= 0; i--) {
++    nextKept[i] = next
++    if (steps[i].k !== 'h') next = steps[i].y
++  }
++
++  // 1. The layout: the final children, in order. Texts: {text: true, y (or null for a new one), c, segs
++  //    (kept ranges {o, len} and inserted strings {s}), p (its prosemirror tokens)}. Elements: {y (or null
++  //    for a new one), c, node, update}. Removed elements are not in it.
++  const layout = []
++  /** @type {Map<number, any>} */
++  const textAt = new Map()
++  /** @type {Map<number, any>} the new text that takes the rest of a text split by a node */
++  const redirect = new Map()
++  let ci = 0 // the next Y child not yet placed in the layout
++  let host = null // the text that gets text inserted at the current position
++  let hostSrc = -1 // the Y child whose content host holds (-1: none)
++  const pushText = (c) => {
++    const e = { text: true, y: yChildren[c], c, segs: [], p: [] }
++    layout.push(e)
++    textAt.set(c, e)
++    return e
++  }
++  // Places every text before child c (the elements left behind are the removed ones).
++  const passTo = (c) => {
++    for (; ci < c; ci++) {
++      if (yChildren[ci] instanceof Y__namespace.XmlText) pushText(ci)
++    }
++  }
++  const newText = () => {
++    host = { text: true, y: null, c: -1, segs: [], p: [] }
++    hostSrc = -1
++    layout.push(host)
++  }
++  // The first text not yet placed before the next kept token (the position belongs to its run), or -1.
++  const freeText = (nk) => {
++    let lim = yChildren.length
++    if (nk >= 0) lim = yt[nk].el !== undefined ? yt[nk].c : yt[nk].c + 1
++    for (let i = ci; i < lim; i++) {
++      if (yChildren[i] instanceof Y__namespace.XmlText) return i
++    }
++    return -1
++  }
++  const hostAt = (c) => {
++    if (c < 0) {
++      newText()
++    } else {
++      passTo(c)
++      host = pushText(c)
++      hostSrc = c
++      ci = c + 1
++    }
++  }
++  const append = (e, js) => {
++    for (let n = 0; n < js.length; n++) {
++      const s = pt[js[n]].s
++      e.p.push(js[n])
++      const last = e.segs[e.segs.length - 1]
++      if (last !== undefined && last.s !== undefined) last.s += s
++      else e.segs.push({ s })
++    }
++  }
++  // Whether the next kept token is a character of the Y child c (text after the position stays in c).
++  const keepsRightOf = (c, nk) => c >= 0 && nk >= 0 && yt[nk].el === undefined && yt[nk].c === c
++  for (let si = 0; si < steps.length; si++) {
++    const st = steps[si]
++    if (st.k === '=' && yt[st.y].el === undefined) {
++      const tok = yt[st.y]
++      if (redirect.has(tok.c)) {
++        host = redirect.get(tok.c)
++        hostSrc = tok.c
++        append(host, [st.p])
++      } else {
++        if (tok.c >= ci) {
++          passTo(tok.c)
++          pushText(tok.c)
++          ci = tok.c + 1
++        }
++        host = textAt.get(tok.c)
++        hostSrc = tok.c
++        host.p.push(st.p)
++        const last = host.segs[host.segs.length - 1]
++        if (last !== undefined && last.s === undefined && last.o + last.len === tok.o) last.len += tok.s.length
++        else host.segs.push({ o: tok.o, len: tok.s.length })
++      }
++    } else if (st.k === '=' || st.k === '~') {
++      const tok = yt[st.y]
++      passTo(tok.c)
++      layout.push({ text: false, y: tok.el, c: tok.c, node: pt[st.p].node, update: st.k === '~' })
++      ci = tok.c + 1
++      host = null
++      hostSrc = -1
++    } else {
++      // A hunk: what it deletes is simply left out; what it inserts is s0 N1 s1 ... Nb sb.
++      const nk = nextKept[si]
++      const segs = [[]]
++      const nodes = []
++      for (let n = 0; n < st.ins.length; n++) {
++        const j = st.ins[n]
++        if (pt[j].node !== undefined) {
++          nodes.push(pt[j].node)
++          segs.push([])
++        } else {
++          segs[segs.length - 1].push(j)
++        }
++      }
++      if (nodes.length === 0) {
++        if (segs[0].length > 0) {
++          if (host === null) hostAt(freeText(nk))
++          append(host, segs[0])
++        }
++        continue
++      }
++      if (host === null) {
++        const t = freeText(nk)
++        if (t >= 0 && !keepsRightOf(t, nk)) hostAt(t) // an empty text before the nodes takes s0
++        else if (segs[0].length > 0) newText() // the nodes go before that text (or there is none)
++      }
++      if (segs[0].length > 0) append(host, segs[0])
++      const split = host !== null && keepsRightOf(hostSrc, nk)
++      const src = hostSrc
++      for (let n = 0; n < nodes.length; n++) {
++        layout.push({ text: false, y: null, c: -1, node: nodes[n], update: false })
++        host = null
++        hostSrc = -1
++        if (n < nodes.length - 1 && segs[n + 1].length > 0) {
++          newText()
++          append(host, segs[n + 1])
++        }
++      }
++      const last = segs[nodes.length]
++      if (split) {
++        // A node inside a text: the rest of that text moves to a new text after the node.
++        newText()
++        redirect.set(src, host)
++        hostSrc = src
++        append(host, last)
++      } else if (last.length > 0) {
++        hostAt(freeText(nk))
++        append(host, last)
++      }
++    }
++  }
++  passTo(yChildren.length)
++
++  // 2. Every node that asks for gap text gets a text on each side; an empty textblock gets an empty text.
++  const isGap = (e) => !e.text && needsGapText(e.node)
++  const final = []
++  const emptyText = () => ({ text: true, y: null, c: -1, segs: [], p: [] })
++  for (let i = 0; i < layout.length; i++) {
++    const e = layout[i]
++    if (isGap(e) && (final.length === 0 || !final[final.length - 1].text)) final.push(emptyText())
++    final.push(e)
++    if (isGap(e) && (i + 1 >= layout.length || !layout[i + 1].text)) final.push(emptyText())
++  }
++  if (final.length === 0) final.push(emptyText())
++
++  // The prosemirror text nodes (text and marks) of a text of the layout.
++  const spansOf = (e) => {
++    const spans = []
++    for (let n = 0; n < e.p.length; n++) {
++      const t = pt[e.p[n]]
++      const last = spans[spans.length - 1]
++      if (last !== undefined && last.ni === t.ni) last.text += t.s
++      else spans.push({ ni: t.ni, text: t.s, marks: pc[t.ni].marks })
++    }
++    return spans
++  }
++
++  y.transact(() => {
++    // 3. Elements updated in place, and the content of the texts that stay.
++    for (let i = 0; i < final.length; i++) {
++      const e = final[i]
++      if (!e.text && e.y !== null) {
++        if (e.update) updateYFragment(y, e.y, e.node, meta)
++        else meta.mapping.set(e.y, e.node)
++      } else if (e.text && e.y !== null) {
++        const ytext = e.y
++        meta.mapping.delete(ytext)
++        const len = ytext.length
++        const edits = []
++        let o = 0
++        let pending = ''
++        for (let n = 0; n < e.segs.length; n++) {
++          const sg = e.segs[n]
++          if (sg.s !== undefined) {
++            pending += sg.s
++          } else {
++            if (sg.o > o || pending.length > 0) edits.push({ at: o, del: sg.o - o, ins: pending })
++            pending = ''
++            o = sg.o + sg.len
++          }
++        }
++        if (o < len || pending.length > 0) edits.push({ at: o, del: len - o, ins: pending })
++        for (let n = edits.length - 1; n >= 0; n--) {
++          const ed = edits[n]
++          if (ed.del > 0) ytext.delete(ed.at, ed.del)
++          if (ed.ins.length > 0) ytext.insert(ed.at, ed.ins)
++        }
++        const spans = spansOf(e)
++        if (spans.length > 0 && !equalYTextPText(ytext, spans)) {
++          const { nAttrs } = ytextTrans(ytext)
++          ytext.applyDelta(spans.map((s) => ({ retain: s.text.length, attributes: Object.assign({}, nAttrs, marksToAttributes(s.marks, meta)) })))
++        }
++        if (ytext.getAttribute(STABLE_GAP_TEXT) !== true) ytext.setAttribute(STABLE_GAP_TEXT, true)
++      }
++    }
++    // 4. The children: new ones go right after the child that precedes them; removed elements go.
++    /** @type {Map<number, Array<any>>} */
++    const inserts = new Map()
++    const placed = new Set()
++    let anchor = -1
++    for (let i = 0; i < final.length; i++) {
++      const e = final[i]
++      if (e.y !== null) {
++        anchor = e.c
++        placed.add(e.c)
++      } else {
++        map__namespace.setIfUndefined(inserts, anchor, () => []).push(e)
++      }
++    }
++    for (let c = yChildren.length - 1; c >= -1; c--) {
++      const group = inserts.get(c)
++      if (group !== undefined) {
++        yel.insert(c + 1, group.map((e) => {
++          if (!e.text) return createTypeFromElementNode(e.node, meta)
++          const t = new Y__namespace.XmlText()
++          const spans = spansOf(e)
++          if (spans.length > 0) t.applyDelta(spans.map((s) => ({ insert: s.text, attributes: marksToAttributes(s.marks, meta) })))
++          t.setAttribute(STABLE_GAP_TEXT, true)
++          return t
++        }))
++      }
++      if (c >= 0 && !placed.has(c)) {
++        meta.mapping.delete(yChildren[c])
++        yel.delete(c, 1)
++      }
++    }
++  }, ySyncPluginKey)
++}
++
+ /**
+  * Update a yDom node by syncing the current content of the prosemirror node.
+  *
+@@ -1244,6 +1958,12 @@ const updateYFragment = (y, yDomFragment, pNode, meta) => {
+       }
+     }
+   }
++  // LGA-SHOTDOCS-PATCH (stable gaps): a block with inline nodes that ask for gap text (or that had them)
++  // is updated without ever deleting or rewriting a Y__namespace.XmlText. Every other node takes the code below.
++  if (isStableGapsBlock(yDomFragment, pNode)) {
++    updateStableGapsChildren(y, /** @type {Y__namespace.XmlElement} */ (yDomFragment), pNode, meta)
++    return
++  }
+   // update children
+   const pChildren = normalizePNodeContent(pNode);
+   const pChildCnt = pChildren.length;
 diff --git a/node_modules/y-prosemirror/src/plugins/sync-plugin.js b/node_modules/y-prosemirror/src/plugins/sync-plugin.js
 index dccfb76..59d3240 100644
 --- a/node_modules/y-prosemirror/src/plugins/sync-plugin.js

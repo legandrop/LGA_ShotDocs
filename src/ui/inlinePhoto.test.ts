@@ -77,6 +77,8 @@ describe('el nodo', () => {
     for (const file of ['src/plugins/sync-plugin.js', 'dist/y-prosemirror.cjs']) {
       const source = readFileSync(resolve(process.cwd(), 'node_modules/y-prosemirror', file), 'utf8');
       expect(source).toContain(`n.type.spec.${GAP_TEXT_SPEC} === true`);
+      // Y el atributo de los textos de un renglón con fotos (huecos estables) se llama igual.
+      expect(source).toContain(`const STABLE_GAP_TEXT = '${GAP_TEXT_SPEC}'`);
     }
   });
 
