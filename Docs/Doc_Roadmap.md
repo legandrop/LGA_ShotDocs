@@ -126,7 +126,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   automático de 2 GB por dispositivo (se liberan las copias ya confirmadas en el Drive que hace más que no se
   abren; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
   pesos), y "Espacio en este dispositivo" en el menú de la cuenta. **Diseño en `Doc_Copias_Locales.md`**
-  (rehecho con D-25, esperando su auditoría).
+  (rehecho con D-25; auditado "aprobado con cambios" y corregido).
 - **P.11 Colapsar secciones por sus títulos, como en Coda** (Lega, 2026-09-30): cualquier título (H1, H2, H3…)
   se colapsa con un triángulo lleno a su izquierda (apunta a la derecha colapsado, abajo abierto). Colapsar un
   título esconde todo lo que sigue hasta el próximo título de su nivel o mayor (un H1 esconde sus H2 y H3, que
