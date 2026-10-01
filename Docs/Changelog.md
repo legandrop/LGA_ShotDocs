@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.067 :
+
+Imprimir como se ve (colapsar, entrega 1b, primer paso). El PDF de una página con secciones colapsadas sale
+siempre con todo abierto, para que las hojas coincidan con las marcas de la pantalla; Lega pidió poder imprimirla
+también como se ve. Ahora, con algo colapsado en la página, el menú tiene la casilla "Imprimir como se ve": con
+ella, el PDF sale sin las secciones colapsadas y pagina lo que queda (las hojas ya no coinciden con las marcas,
+y el tooltip lo avisa). La casilla se guarda en el dispositivo y vale también para Ctrl/⌘+P y para imprimir
+desde el menú del navegador. No cambia el documento ni lo que ven los demás.
+[ Colapsar - imprimir como se ve ]
+
 v0.066 :
 
 Páginas embebidas de Coda. Una página que en Coda muestra otra página (de otro doc, por ejemplo) entraba vacía:

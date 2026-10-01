@@ -109,8 +109,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   corte siguiente dice página 5); arrastrar un título colapsado mueve toda su sección; se saca "Encabezado
   plegable" del menú `/`. **Diseño en [`Doc_Colapsar.md`](Doc_Colapsar.md)** (sin tipo de bloque ni propiedad
   nueva). **Entrega 1a hecha (v0.053):** colapsar para vos, con toda la seguridad al editar, las marcas de hoja
-  contadas con todo abierto y el PDF todo abierto. Faltan la 1b (arrastrar la sección entera,
-  Shift+Ctrl/⌘+↑/↓, "Imprimir como se ve") y la 2 (para todos, Shift+clic).
+  contadas con todo abierto y el PDF todo abierto. **"Imprimir como se ve" hecho
+  (v0.067).** Faltan de la 1b arrastrar la sección entera y Shift+Ctrl/⌘+↑/↓, y la 2 (para todos, Shift+clic).
 - **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página;
   entrega 2 hecha (v0.054): buscar en el proyecto con Ctrl/⌘+K** (`Doc_Buscar.md`, "Cómo quedó (entrega 1)" y
   "(entrega 2)"). Queda para después: reemplazar en el proyecto, la papelera, todos los proyectos y los

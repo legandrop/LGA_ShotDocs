@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { printAsSeen, setPrintAsSeen } from './printAsSeen';
 import { t, useT } from '../i18n';
 import { importJobFor } from '../import/importJob';
 import { prefs, usePrefs, type Prefs } from '../prefs';
@@ -139,6 +140,7 @@ export function PageMenu(props: {
   const tr = useT();
   const collapse = collapseControlFor(props.pageId);
   const counts = collapse?.counts() ?? { headings: 0, collapsed: 0 };
+  const [asSeen, setAsSeen] = useState(printAsSeen);
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -190,6 +192,22 @@ export function PageMenu(props: {
         <PrintIcon />
         {tr('pageMenu.print')}
       </button>
+      {/* El PDF sale con todo abierto; con esto, como se ve (solo con algo colapsado; Doc_Colapsar.md, sección 7). */}
+      {collapse && counts.collapsed > 0 && (
+        <button
+          role="menuitemcheckbox"
+          aria-checked={asSeen}
+          data-tip={tr('pageMenu.printAsSeenTip')}
+          onClick={() => {
+            setPrintAsSeen(!asSeen);
+            setAsSeen(!asSeen);
+          }}
+        >
+          <CollapseAllIcon />
+          {tr('pageMenu.printAsSeen')}
+          <span className="check">{asSeen ? tr('common.on') : tr('common.off')}</span>
+        </button>
+      )}
       {/* Colapsar todos los títulos, o abrirlos, para vos: solo la página abierta (P.11, Doc_Colapsar.md). */}
       {collapse && counts.headings > 0 && item(tr('pageMenu.collapseAll'), <CollapseAllIcon />, () => collapse.setAll(true))}
       {collapse &&

@@ -1,7 +1,8 @@
 # Colapsar secciones por sus títulos (P.11)
 
 Estado: **entrega 1a hecha (v0.053)**: colapsar para vos, con toda la seguridad al editar, las marcas de hoja
-contadas con todo abierto y el PDF todo abierto (ver "Cómo quedó (1a)", al final). Faltan la 1b y la 2. Lega
+contadas con todo abierto y el PDF todo abierto (ver "Cómo quedó (1a)", al final). De la 1b, **"Imprimir como se
+ve" hecho (v0.067)**; faltan arrastrar la sección entera, Shift+⌘/Ctrl+↑/↓ y la 2. Lega
 contestó casi todas las decisiones el 2026-09-30 (al final, "Decisiones"); las que faltan siguen "a
 confirmar". **"Correcciones de la auditoría", al final, manda sobre lo de arriba**, y "Cómo quedó" sobre las
 dos. **"El margen del bloque y deshacer (v0.059)", lo último, manda sobre todo lo anterior** en lo que toca: los
@@ -303,8 +304,8 @@ recalcula (hoy igual). A verificar en Safari del iPhone, que puede demorar las i
 **El PDF:**
 
 - **Por defecto, todo abierto**: la vista de salida es la copia abierta, y las hojas coinciden con las marcas.
-- **"Imprimir como se ve" (colapsado)**, una casilla. Con ella, `cleanCopy` deja las marcas del colapso en la
-  vista de salida y **esa vista pagina su propio contenido** (`paginateView` ya lo hace sobre la copia que va a
+- **"Imprimir como se ve" (colapsado)**, una casilla. Con ella, `cleanCopy` saca de la vista de salida lo
+  escondido (ver "Cómo quedó (1b…)", al final) y **esa vista pagina su propio contenido** (`paginateView` ya lo hace sobre la copia que va a
   imprimir): las secciones colapsadas no salen y los cortes son otros. **Las marcas de la pantalla no
   cambian** (siguen contando todo abierto): las hojas impresas no van a coincidir con ellas, y la casilla lo
   dice en su tooltip ("Las hojas no coinciden con las marcas de la pantalla").
@@ -872,3 +873,20 @@ Pedido de Lega sobre v0.053/v0.054. **Manda sobre lo de arriba.**
   triángulo (los puntos pasan a su título); en las listas, los puntos a la izquierda y un clic de verdad en la
   casilla la marca y en el botón abre la desplegable; arrastrar los puntos con el mouse mueve el bloque.
 
+## Cómo quedó (1b, primer paso: "Imprimir como se ve", v0.067)
+
+- **La casilla** está en el menú de la página, debajo de "Exportar PDF / Imprimir", y **solo aparece con algo
+  colapsado** en la página (`counts.collapsed > 0`). Su tooltip dice que deja afuera las secciones colapsadas y
+  que las hojas no coinciden con las marcas de la pantalla.
+- **Se guarda en el dispositivo** (`src/ui/printAsSeen.ts`, `localStorage`, clave `shotdocs-print-as-seen`; sin
+  almacenamiento vale para esa vez). La usan el menú, Ctrl/⌘+P y la impresión desde el navegador, porque todo
+  pasa por `prepare` en `printPage.ts`.
+- **Qué sale:** `buildPrintView(…, 'output', { asSeen })` saca de la copia los `.bn-block-outer` escondidos y el
+  grupo de hijos de cada título colapsado, y la vista pagina su propio contenido. Solo en la vista de salida y
+  solo si hay algo colapsado; la de medir (las marcas de la pantalla) sigue con todo abierto. No toca el
+  documento.
+- **Es del dispositivo, no de la página:** marcada, vale para cualquier página con algo colapsado, también si se
+  imprime desde el menú de la barra lateral (donde no se ve la casilla, porque esa página no está abierta).
+- **Pruebas:** `src/ui/collapsePagination.test.ts` ("imprimir como se ve").
+- **Falta de la 1b:** arrastrar la sección entera y Shift+⌘/Ctrl+↑/↓ como una unidad (tocan el documento: ver
+  "Para la 1b (riesgo)").
