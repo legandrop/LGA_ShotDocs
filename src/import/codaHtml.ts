@@ -12,6 +12,9 @@ import { SCRIPT_PROP, scriptMarks } from '../ui/editorSchema';
 //   al más parecido. El gris del texto de cuerpo de Coda se saca: es la convención de Coda, no del texto.
 // - Guion. Los párrafos debajo de un título "Guion" pasan a ser texto Script, que marca solo INT/EXT y DÍA/
 //   NOCHE; los fondos que Coda les ponía a mano a esas palabras se sacan para que no queden dos veces.
+// - Links entre páginas. El comando escribe `coda-page:<id del manifest>` en un link a otra página del doc;
+//   acá pasa a la dirección de la página creada (`/p/<id>`). El editor descarta un link con un esquema que
+//   no conoce, por eso se cambia antes.
 
 /** Un archivo de Coda en la página (foto, video o adjunto). */
 export interface CodaMedia {
@@ -45,10 +48,14 @@ const HOSTED = /^https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.c
  * Cambia cada archivo de Coda por una marca y normaliza los colores. Devuelve el HTML, los archivos y los
  * videos o embebidos de otros sitios que quedaron como link.
  */
-export function prepareCodaHtml(html: string): { html: string; media: CodaMedia[]; embeds: string[] } {
+export function prepareCodaHtml(
+  html: string,
+  pageLink?: (codaId: string) => string | null,
+): { html: string; media: CodaMedia[]; embeds: string[]; brokenLinks: BrokenLink[] } {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   const media: CodaMedia[] = [];
   stripMarkers(doc.body);
+  const brokenLinks = resolvePageLinks(doc.body, pageLink);
 
   const mark = (el: Element, src: string, fallbackName: string, external = false) => {
     const blobId = external ? '' : (el.getAttribute('data-coda-blob-id') ?? blobOf(src));
@@ -129,7 +136,47 @@ export function prepareCodaHtml(html: string): { html: string; media: CodaMedia[
     if (italic) el.style.fontStyle = 'italic';
     if (underline || strike) el.style.textDecoration = [underline && 'underline', strike && 'line-through'].filter(Boolean).join(' ');
   }
-  return { html: doc.body.innerHTML, media, embeds };
+  return { html: doc.body.innerHTML, media, embeds, brokenLinks };
+}
+
+/** Un link a otra página del doc que quedó como texto: el id de Coda y el texto del link. */
+export interface BrokenLink {
+  id: string;
+  text: string;
+}
+
+/** El esquema con que el comando marca un link a otra página del mismo doc de Coda. */
+export const CODA_PAGE_SCHEME = 'coda-page:';
+
+/**
+ * Cada link `coda-page:<id>` pasa a la dirección que da `pageLink`. Uno sin dirección (la página no está en
+ * la exportación o no se pudo crear) queda como su texto, sin link. Devuelve los que quedaron sin dirección,
+ * uno por id.
+ */
+function resolvePageLinks(body: HTMLElement, pageLink?: (codaId: string) => string | null): BrokenLink[] {
+  const broken = new Map<string, BrokenLink>();
+  for (const a of [...body.querySelectorAll('a[href]')]) {
+    const href = a.getAttribute('href')!.trim();
+    if (!href.toLowerCase().startsWith(CODA_PAGE_SCHEME)) continue;
+    const id = safeDecode(href.slice(CODA_PAGE_SCHEME.length)).trim();
+    const target = id && pageLink ? pageLink(id) : null;
+    if (target) {
+      a.setAttribute('href', target);
+    } else {
+      if (!broken.has(id)) broken.set(id, { id, text: (a.textContent ?? '').replace(MARKERS, '').trim() });
+      a.replaceWith(...a.childNodes);
+    }
+  }
+  return [...broken.values()];
+}
+
+/** Un `%` suelto no corta la importación: queda el texto tal cual. */
+function safeDecode(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
 }
 
 const blobOf = (url: string): string => url.match(/\/blobs\/(bl-[\w-]+)/)?.[1] ?? '';

@@ -10,6 +10,7 @@ import '../i18n/lazy/importCoda';
 import type { LocalDb } from '../sync/localDb';
 import { editorSchemaOptions } from '../ui/editorSchema';
 import type { CommentQueue } from '../sync/comments';
+import { pagePath } from '../router';
 import { checkForeignImages, finishBlocks, prepareCodaHtml, type CodaMedia, type LooseBlock } from './codaHtml';
 import { buildComments, pageBlocks, parseCodaComments, type CodaComments, type PageBlock } from './codaComments';
 
@@ -21,7 +22,9 @@ import { buildComments, pageBlocks, parseCodaComments, type CodaComments, type P
 // dispositivo se sube solo. Si se corta a mitad, el diario (`ImportJournal`) deja seguir en el mismo
 // proyecto sin repetir páginas ni archivos (y sin duplicarlos en el Drive). Si la carpeta tiene
 // `comments.json` (los comentarios, capturados aparte: ver codaComments.ts), cada página suma los suyos a la
-// cola de comentarios apenas se escribe.
+// cola de comentarios apenas se escribe. Primero se crean todas las páginas y después se escribe cada una:
+// así un link a otra página del doc (`coda-page:<id>`, ver codaHtml.ts) siempre tiene adónde ir. El mismo
+// archivo en varias páginas se guarda (y se sube) una sola vez: las demás usan la misma dirección.
 
 /** Los comentarios capturados, en la raíz de la carpeta exportada. */
 export const COMMENTS_FILE = 'comments.json';
@@ -71,8 +74,19 @@ export interface ImportJournal {
    * saber al seguir si la persona la editó después); `done`, terminada (no se vuelve a tocar).
    */
   pages: Record<string, JournalPage>;
-  /** Por página de Coda y archivo (`<página> <blob o dirección>`): la dirección `sdmedia://` y el nombre. */
-  media: Record<string, { url: string; name: string }>;
+  /**
+   * Por página de Coda y archivo (`<página> <blob o dirección>`): la dirección `sdmedia://` y el nombre.
+   * `shared`: la página usa un archivo que se guardó para otra página (no se cuenta dos veces).
+   */
+  media: Record<string, JournalMedia>;
+}
+
+export interface JournalMedia {
+  url: string;
+  name: string;
+  shared?: true;
+  /** El blob o la dirección del archivo (lo que va después de `<página> ` en la clave). */
+  key?: string;
 }
 
 export interface JournalPage {
@@ -396,12 +410,50 @@ export async function importCoda(
     problems.push(t('import.commentsOff'));
     codaComments = null;
   }
-  const context: PageContext = { comments: codaComments, projectId: state.projectId };
+  // Los archivos ya guardados en esta importación, por blob (de cualquier página): otra página que usa el
+  // mismo, usa la misma dirección.
+  const sharedMedia = new Map<string, JournalMedia>();
+  // Solo los de páginas sin terminar: el archivo de una página terminada pudo quedar sin uso (la persona lo
+  // borró de la página) y hasta mandarse a la papelera del Drive; reusarlo lo dejaría perdido. Esas páginas
+  // guardan su propia copia, como antes.
+  for (const [key, saved] of Object.entries(state.media)) {
+    const codaPage = key.slice(0, key.indexOf(' '));
+    if (saved.shared || state.pages[codaPage]?.done) continue;
+    sharedMedia.set(saved.key ?? key.slice(key.indexOf(' ') + 1), saved);
+  }
+  // Un link a otra página del doc va a la página creada (aunque esté en la papelera: si vuelve, el link anda).
+  const pageLink = (codaId: string) => {
+    const id = state.pages[codaId]?.pageId;
+    return id ? pagePath(id) : null;
+  };
+  const context: PageContext = { comments: codaComments, projectId: state.projectId, sharedMedia, pageLink };
 
   const live = (pageId: string | undefined): pageId is string => !!pageId && !!deps.tree.get(pageId) && !deps.tree.isTrashed(pageId);
   const parser = BlockNoteEditor.create(editorSchemaOptions) as unknown as BlockNoteEditor<any, any, any>;
   let files = 0;
   let comments = 0;
+
+  // Primero, todas las páginas que faltan, en el orden del árbol (la madre antes que sus hijas): cuando se
+  // escriba una, las páginas a las que apuntan sus links ya existen (también en un ciclo A ↔ B). Una que no
+  // se pudo crear acá se reintenta, y se anota si vuelve a fallar, al escribirla.
+  // Una hija cuya madre no se pudo crear acá espera a la segunda pasada (que reintenta la madre antes): si
+  // no, quedaría en el primer nivel sin que nadie lo anote.
+  const planned = new Set(pages.map((p) => p.id));
+  for (const [i, page] of pages.entries()) {
+    if (i > 0 && i % 20 === 0) await breathe();
+    const entry = state.pages[page.id];
+    if (entry?.done || live(entry?.pageId)) continue;
+    const mother = page.parentId && planned.has(page.parentId) ? state.pages[page.parentId] : undefined;
+    if (page.parentId && planned.has(page.parentId) && !mother?.done && !live(mother?.pageId)) continue;
+    try {
+      const parent = page.parentId ? state.pages[page.parentId]?.pageId : undefined;
+      const pageId = await deps.tree.create(live(parent) ? parent : null, pageTitle(page), state.projectId);
+      state.pages[page.id] = { pageId };
+      await save();
+    } catch {
+      // Se reintenta al escribirla.
+    }
+  }
 
   for (const [i, page] of pages.entries()) {
     if (i > 0) await breathe();
@@ -453,6 +505,10 @@ export async function importCoda(
 interface PageContext {
   comments: CodaComments | null;
   projectId: string;
+  /** Los archivos ya guardados en esta importación, por blob o dirección. */
+  sharedMedia: Map<string, JournalMedia>;
+  /** La dirección de la página creada para una página de Coda, o null. */
+  pageLink: (codaId: string) => string | null;
 }
 
 /**
@@ -508,25 +564,36 @@ async function importPage(
     return { files: 0, comments: got.count, complete: got.ok };
   }
 
-  const { html, media, embeds } = prepareCodaHtml(await folder.text(`pages/${page.file}`));
+  const { html, media, embeds, brokenLinks } = prepareCodaHtml(await folder.text(`pages/${page.file}`), context.pageLink);
   for (const url of embeds) problems.push(`${title}: ${t('import.embed', { url: shortUrl(url) })}`);
+  for (const link of brokenLinks) problems.push(`${title}: ${t('import.brokenPageLink', { text: link.text || link.id || '?' })}`);
   // Un archivo que no se pudo guardar (sin espacio, por ejemplo) deja la página sin terminar: al seguir se
   // reintenta. Uno que falta en la carpeta no: volver a probar no lo trae.
   let complete = true;
   // Cada archivo, a la cola de la app (en el dispositivo; se sube solo). El mismo archivo dos veces en la
-  // página (el mismo blob) se guarda una vez y los dos bloques usan la misma dirección.
+  // página, o ya guardado para otra página de esta importación (el mismo blob), se guarda una vez y todos
+  // los bloques usan la misma dirección (la app suma el uso de la otra página sola: `link_page_file`).
+  // `files` cuenta los archivos guardados para esta página, no los que usa de otra.
   let files = 0;
   const urls = new Map<number, string>();
   const names = new Map<number, string>();
-  const byKey = new Map<string, { url: string; name: string }>();
+  const byKey = new Map<string, JournalMedia>();
   for (const m of media) {
     if (m.external) continue;
     const key = m.blobId || m.src;
-    const saved = byKey.get(key) ?? journal.media[`${page.id} ${key}`];
+    let saved = byKey.get(key) ?? journal.media[`${page.id} ${key}`];
+    if (!saved) {
+      const other = context.sharedMedia.get(key);
+      if (other) {
+        saved = { url: other.url, name: other.name, shared: true };
+        journal.media[`${page.id} ${key}`] = saved;
+        await save();
+      }
+    }
     if (saved) {
       urls.set(m.index, saved.url);
       names.set(m.index, saved.name);
-      if (!byKey.has(key)) files++;
+      if (!byKey.has(key) && !saved.shared) files++;
       byKey.set(key, saved);
       continue;
     }
@@ -539,10 +606,11 @@ async function importPage(
       const blob = await folder.file(`media/${stored}`);
       const type = m.mime || blob.type;
       const file = new File([blob], fileName(m, stored), { type });
-      const got = { url: await deps.media.add(pageId, file), name: file.name };
+      const got: JournalMedia = { url: await deps.media.add(pageId, file), name: file.name, key };
       // Anotado apenas quedó guardado: si la importación se corta, al seguirla no se guarda (ni sube) otra vez.
       journal.media[`${page.id} ${key}`] = got;
       await save();
+      context.sharedMedia.set(key, got);
       byKey.set(key, got);
       urls.set(m.index, got.url);
       names.set(m.index, got.name);
@@ -588,7 +656,7 @@ async function importPage(
     outcome = await writePage(deps.docs, pageId, blocks as PartialBlock<any, any, any>[], previous);
   } catch (err) {
     // Los archivos ya están guardados (y se van a subir); el diario los recuerda para ubicarlos al seguir.
-    if (urls.size) problems.push(`${title}: ${t('import.notPlaced', { count: files })}`);
+    if (files) problems.push(`${title}: ${t('import.notPlaced', { count: files })}`);
     throw err;
   }
   // Lo que la persona escribió en la página después del corte nunca se pisa.

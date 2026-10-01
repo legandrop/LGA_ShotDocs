@@ -77,6 +77,7 @@ In production (v0.049). What works today:
   only, with the Drive trash and what is still uploading) and at the top of the file trash (v0.050; it shows
   once the workspace database is on version 7).
 - Google Drive links: paste one and keep it as a link, as plain text, or as a card with the Drive player.
+- Links to other pages: a link to a page of the app opens it in the same tab (Ctrl/⌘+click, in a new one).
 - Photos in rows: the first click selects a photo (handles and its toolbar), the second opens it; quick sizes
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the

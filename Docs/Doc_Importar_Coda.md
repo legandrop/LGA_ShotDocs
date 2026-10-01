@@ -99,8 +99,10 @@ dispositivo se sube solo. Una página que falla (un archivo que no se puede leer
 anotada en la lista del final, y las demás siguen:
 
 1. **Páginas**: `tree.create(padre, título, proyecto)`, en el orden del árbol (cada padre antes que sus hijas,
-   las hermanas en su orden de Coda).
-2. **Archivos**: `media.add(página, archivo)`, lo mismo que soltar una foto en el editor. Quedan en el
+   las hermanas en su orden de Coda). **Desde v0.061 se crean todas primero** y después se escribe cada una:
+   así un link a otra página del doc siempre tiene adónde ir (ver "Links entre páginas").
+2. **Archivos**: `media.add(página, archivo)`, lo mismo que soltar una foto en el editor. El mismo archivo en
+   varias páginas (el mismo blob) se guarda y se sube **una sola vez** (desde v0.061; ver abajo). Quedan en el
    dispositivo y la sincronización los sube al Drive por el portero, a
    `LGA_ShotDocs/<Proyecto>/<día de la importación>`. La app tiene que quedar abierta hasta que el estado
    diga que se subió todo.
@@ -167,7 +169,26 @@ BlockNote convierte texto, títulos, listas, checklists, tablas, citas y código
   apunta al mismo archivo de Coda (Coda envuelve así la foto para abrirla grande), queda solo el texto: si
   no, la foto entraría dos veces.
 - **El mismo archivo dos veces en una página** (el mismo blob) se guarda una vez; los dos bloques usan la
-  misma dirección.
+  misma dirección. **Desde v0.061, también en páginas distintas** de la misma importación (una foto de una
+  tabla de Coda sale en la tabla y en cada vista): la primera página lo guarda y las demás usan su
+  `sdmedia://`. La app suma sola el uso de cada página (`link_page_file`, el mismo camino que copiar un bloque
+  entre páginas; si el archivo todavía no llegó al servidor, reintenta), así que el portero lo muestra en
+  todas y la papelera de archivos solo lo toma cuando ninguna página lo usa. En el diario queda anotado por
+  página con `shared: true` (no se cuenta dos veces en "archivos"). Al seguir una importación cortada, solo se
+  reusan archivos de páginas **sin terminar**: el de una página terminada pudo quedar sin uso (la persona lo
+  borró) y hasta mandarse a la papelera del Drive, así que la página que falta guarda su propia copia. El
+  diálogo cuenta cada archivo una vez. Entre proyectos distintos, no se reusa.
+- **Links entre páginas del doc** (desde v0.061). El comando escribe `href="coda-page:<id del manifest>"` en
+  un link a otra página del mismo doc (acuerdo con quien hace el comando: el formato lo fija `codaHtml.ts`,
+  `CODA_PAGE_SCHEME`). Antes de convertir, cada uno pasa a la dirección de la página creada, `/p/<id>`
+  (relativa: vale en cualquier dirección de la app); hace falta antes porque el editor descarta un link con
+  un esquema que no conoce. Como todas las páginas se crean primero, un ciclo A ↔ B se resuelve solo, y al
+  seguir una importación cortada salen a las mismas páginas (una hija cuya madre no se pudo crear en esa
+  primera pasada espera a la segunda, para no quedar en el primer nivel). Uno a un id que no está en el
+  manifest (o cuya página no se pudo crear) queda como su texto, sin link, y se anota una vez por página con
+  el texto del link. Un link a una página
+  que después se mandó a la papelera sigue apuntándola (si vuelve, anda). En la app, un clic en un link a una
+  página de la app la abre en la misma pestaña (ver `src/ui/internalLinks.ts`).
 - **Las marcas** son caracteres de uso privado (U+E000, U+E001). Antes de marcar se sacan del texto y de los
   atributos que trae Coda, así nada escrito se confunde con una marca.
 - **Fotos que no están en Coda** (una dirección de otro sitio): no hay archivo que subir. Una `https` queda
