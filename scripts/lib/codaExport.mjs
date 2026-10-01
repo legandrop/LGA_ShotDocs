@@ -28,11 +28,48 @@ export function mediaBaseName(url) {
   return 'url-' + createHash('sha256').update(url).digest('hex').slice(0, 20)
 }
 
-/** `node coda-export.mjs "<doc>" [carpeta] [--refresh]`. */
+/**
+ * `node coda-export.mjs "<doc>" [carpeta] [--refresh]`, o `--convert-only <carpeta exportada>` (convierte otra
+ * vez las tablas de una carpeta ya bajada, sin red ni token).
+ */
 export function parseExportArgs(argv) {
   const flags = argv.filter((a) => a.startsWith('--'))
   const rest = argv.filter((a) => !a.startsWith('--'))
-  const unknown = flags.filter((f) => f !== '--refresh')
+  const unknown = flags.filter((f) => f !== '--refresh' && f !== '--convert-only')
   if (unknown.length) throw new Error(`Opción desconocida: ${unknown.join(' ')}`)
-  return { nameOrId: rest[0], out: rest[1], refresh: flags.includes('--refresh') }
+  const convertOnly = flags.includes('--convert-only')
+  if (convertOnly && flags.includes('--refresh')) throw new Error('--convert-only no baja nada: no va con --refresh')
+  return { nameOrId: rest[0], out: rest[1], refresh: flags.includes('--refresh'), convertOnly }
+}
+
+const TABLE_MODES = ['fichas', 'unwrap', 'table', 'text', 'skip']
+
+/**
+ * Revisa `tables.config.json` (opcional, en la carpeta exportada) y lo devuelve; un error dice qué está mal.
+ * `tables`: modo por tabla (nombre o id); `index`: columnas del índice por tabla; `skipColumns`: columnas que
+ * no van a las fichas, por tabla.
+ */
+export function checkTablesConfig(raw) {
+  const where = 'tables.config.json'
+  if (raw == null) return {}
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`${where}: tiene que ser un objeto`)
+  const extra = Object.keys(raw).filter((k) => !['tables', 'index', 'skipColumns'].includes(k))
+  if (extra.length) throw new Error(`${where}: clave desconocida ${extra.map((k) => `"${k}"`).join(', ')} (valen tables, index y skipColumns)`)
+  const map = (key, check) => {
+    const value = raw[key]
+    if (value === undefined) return
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${where}: "${key}" tiene que ser un objeto { tabla: … }`)
+    for (const [table, v] of Object.entries(value)) check(table, v)
+  }
+  map('tables', (table, mode) => {
+    if (!TABLE_MODES.includes(mode)) throw new Error(`${where}: modo "${mode}" para "${table}" (valen ${TABLE_MODES.join(', ')})`)
+  })
+  const columns = (key) => (table, list) => {
+    if (!Array.isArray(list) || !list.every((c) => typeof c === 'string' && c.trim())) {
+      throw new Error(`${where}: "${key}" de "${table}" tiene que ser una lista de nombres de columna`)
+    }
+  }
+  map('index', columns('index'))
+  map('skipColumns', columns('skipColumns'))
+  return raw
 }

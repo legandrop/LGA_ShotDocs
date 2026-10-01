@@ -1,8 +1,12 @@
 // Exporta un doc de Coda a una carpeta local: una página HTML por página de Coda, todas las imágenes y
 // videos bajados a media/, y manifest.json con el árbol (padre, orden, título, subtítulo, ícono). La app la
 // importa desde el selector de proyectos (Import from Coda…). Ver Docs/Doc_Importar_Coda.md.
+// Si el doc tiene tablas, las baja a tables/ y las convierte en páginas (fichas, índices, tarjetas: ver
+// scripts/lib/codaTables.mjs); el HTML de Coda queda intacto y lo convertido va a pages/*.import.html.
 //
 // Uso:  node scripts/coda-export.mjs "<nombre del doc o id>" [carpeta de salida] [--refresh]
+//       node scripts/coda-export.mjs --convert-only "<carpeta exportada o nombre del doc>"
+//         (convierte otra vez las tablas, sin red ni token: para probar tables.config.json)
 // Sale por defecto en %USERPROFILE%\Coda_Export\<doc> (en Mac, ~/Coda_Export/<doc>).
 // Token: variable CODA_API_TOKEN o archivo %USERPROFILE%\.coda-token (nunca en el repo).
 // Se puede cortar y volver a correr: lo ya bajado (páginas y archivos) no se vuelve a pedir. Por eso una
@@ -11,12 +15,13 @@
 // también sirve.
 
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { createWriteStream, existsSync } from 'node:fs'
+import { createWriteStream, existsSync, readFileSync } from 'node:fs'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { homedir } from 'node:os'
 import { join, extname } from 'node:path'
-import { API, isCodaApi, mediaBaseName, parseExportArgs } from './lib/codaExport.mjs'
+import { API, checkTablesConfig, isCodaApi, mediaBaseName, parseExportArgs } from './lib/codaExport.mjs'
+import { convertTables } from './lib/codaTables.mjs'
 
 async function token() {
   if (process.env.CODA_API_TOKEN) return process.env.CODA_API_TOKEN.trim()
@@ -162,8 +167,146 @@ async function download(url, dir) {
   return { file: blob + ext, type, bytes }
 }
 
+// --- Tablas ------------------------------------------------------------------------------------------------
+
+/**
+ * Baja las tablas y vistas del doc a tables/: `index.json` (cada una con sus columnas y la página donde está)
+ * y `<id>.rows.json` (en una tabla base, todas las filas con sus valores ricos y, aparte, las que deja ver su
+ * filtro, en orden; en una vista, solo los ids que muestra, en su orden). Solo GET. Lo ya bajado no se vuelve
+ * a pedir, salvo con --refresh. Devuelve cuántas hay.
+ */
+async function exportTables(docId, out, refresh) {
+  const dir = join(out, 'tables')
+  await mkdir(dir, { recursive: true })
+  const list = await listAll(`/docs/${docId}/tables?tableTypes=table,view`)
+  const tables = []
+  for (const [i, t] of list.entries()) {
+    const d = await api(`/docs/${docId}/tables/${t.id}`)
+    const columns = await listAll(`/docs/${docId}/tables/${t.id}/columns`)
+    const visible = await listAll(`/docs/${docId}/tables/${t.id}/columns?visibleOnly=true`)
+    tables.push({
+      id: d.id,
+      name: d.name,
+      type: d.tableType,
+      layout: d.layout,
+      rowCount: d.rowCount,
+      pageId: d.parent?.id ?? null,
+      baseTableId: d.parentTable?.id ?? null,
+      displayColumnId: d.displayColumn?.id ?? null,
+      sorts: (d.sorts ?? []).map((s) => ({ columnId: s.column?.id, direction: s.direction })),
+      browserLink: d.browserLink,
+      // Las columnas que se ven en la tabla o vista (las demás están ocultas).
+      visibleColumnIds: visible.map((c) => c.id),
+      columns: columns.map((c) => ({
+        id: c.id,
+        name: c.name,
+        type: c.format?.type ?? 'text',
+        isArray: !!c.format?.isArray,
+        calculated: !!c.calculated,
+        formula: c.formula ?? null,
+        display: !!c.display,
+        lookupTableId: c.format?.table?.id ?? null,
+      })),
+    })
+    const file = join(dir, `${d.id}.rows.json`)
+    if (existsSync(file) && !refresh) continue
+    process.stdout.write(`  tabla [${i + 1}/${list.length}] ${d.name} ... `)
+    // Sin sortBy, 'natural' trae solo lo que deja ver el filtro: es el orden y lo visible. En una tabla base,
+    // además, todas las filas con sus valores ricos.
+    const natural = await listAll(`/docs/${docId}/tables/${t.id}/rows?sortBy=natural`)
+    const data = { visible: natural.map((r) => r.id) }
+    if (d.tableType === 'table') {
+      const rows = await listAll(`/docs/${docId}/tables/${t.id}/rows?valueFormat=rich&visibleOnly=false`)
+      data.rows = rows.map((r) => ({ id: r.id, index: r.index, name: r.name, browserLink: r.browserLink, createdAt: r.createdAt, updatedAt: r.updatedAt, values: r.values }))
+    }
+    await writeAtomic(file, JSON.stringify(data))
+    console.log(`${(data.rows ?? natural).length} filas`)
+  }
+  await writeAtomic(join(dir, 'index.json'), JSON.stringify({ docId, fetchedAt: new Date().toISOString(), tables }, null, 1))
+  return tables.length
+}
+
+const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'))
+
+/**
+ * Convierte las tablas de una carpeta exportada (sin red, salvo para bajar archivos que solo están en los
+ * datos de una tabla, sin token). Parte de `manifest.coda.json` (el manifest de las páginas de Coda, tal cual)
+ * y escribe `manifest.json` con las páginas convertidas y las nuevas. Se puede repetir: no toca el HTML de Coda.
+ */
+async function convertFolder(out) {
+  const basePath = join(out, 'manifest.coda.json')
+  const indexPath = join(out, 'tables', 'index.json')
+  if (!existsSync(basePath) || !existsSync(indexPath)) return null
+  const manifest = await readJson(basePath)
+  const index = await readJson(indexPath)
+  if (!index.tables?.length) return null
+  const configPath = join(out, 'tables.config.json')
+  const config = checkTablesConfig(existsSync(configPath) ? await readJson(configPath) : null)
+  // jsdom solo hace falta acá (y pide Node 22): se carga solo con un doc con tablas.
+  const { JSDOM } = await import('jsdom')
+  const parse = (html) => new JSDOM(html).window.document
+  const rowsCache = new Map()
+  const rows = (id) => {
+    if (!rowsCache.has(id)) {
+      const file = join(out, 'tables', `${id}.rows.json`)
+      rowsCache.set(id, existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null)
+    }
+    return rowsCache.get(id)
+  }
+  const pages = new Map()
+  for (const p of manifest.pages) if (p.file && existsSync(join(out, 'pages', p.file))) pages.set(p.file, await readFile(join(out, 'pages', p.file), 'utf8'))
+  const html = (file) => pages.get(file) ?? null
+  const extraPath = join(out, 'tables', 'extra-media.json')
+  const extraMedia = existsSync(extraPath) ? await readJson(extraPath) : []
+  let result = convertTables({ manifest, index, rows, html, parse, config, extraMedia })
+  if (result.missingMedia.length) {
+    console.log(`  bajando ${result.missingMedia.length} archivos que solo están en los datos de las tablas…`)
+    for (const url of result.missingMedia) {
+      // Solo archivos de Coda, sin token (como los de las páginas).
+      if (!/^https:\/\/(?:codahosted\.io|coda\.io\/blobs|docs\.superhuman\.com\/blobs)\//.test(url)) continue
+      try {
+        const got = await download(url, join(out, 'media'))
+        extraMedia.push({ url, file: got.file, type: got.type })
+      } catch (e) {
+        manifest.problems = [...(manifest.problems ?? []), `archivo de una tabla: ${e.message}`]
+      }
+    }
+    await writeAtomic(extraPath, JSON.stringify(extraMedia, null, 1))
+    result = convertTables({ manifest, index, rows, html, parse, config, extraMedia })
+  }
+  for (const [path, text] of result.files) await writeAtomic(join(out, path), text)
+  const converted = { ...result.manifest, tableNotes: result.notes }
+  if (result.missingMedia.length) converted.problems = [...(converted.problems ?? []), `${result.missingMedia.length} archivos de tablas no se pudieron bajar`]
+  await writeAtomic(join(out, 'manifest.json'), JSON.stringify(converted, null, 2))
+  return converted
+}
+
+function printTableNotes(manifest) {
+  if (!manifest?.tableNotes) return
+  const generated = manifest.pages.filter((p) => p.generated)
+  console.log(`Tablas: ${generated.filter((p) => p.generated === 'row').length} fichas y ${generated.filter((p) => p.generated === 'group').length} páginas de grupo nuevas`)
+  for (const n of manifest.tableNotes) console.log('  · ' + n)
+}
+
+async function convertOnly(arg) {
+  const out = existsSync(join(arg, 'manifest.coda.json')) || existsSync(join(arg, 'manifest.json')) ? arg : join(homedir(), 'Coda_Export', arg)
+  if (!existsSync(join(out, 'tables', 'index.json'))) throw new Error(`${out} no tiene tables/index.json: corré primero la exportación completa`)
+  if (!existsSync(join(out, 'manifest.coda.json'))) throw new Error(`${out} no tiene manifest.coda.json: corré primero la exportación completa con esta versión del comando`)
+  const converted = await convertFolder(out)
+  if (!converted) {
+    console.log('El doc no tiene tablas: no hay nada que convertir.')
+    return
+  }
+  console.log(`Listo: ${converted.pages.length} páginas en ${out}`)
+  printTableNotes(converted)
+}
+
 async function main() {
-  const { nameOrId, out: outArg, refresh } = parseExportArgs(process.argv.slice(2))
+  const { nameOrId, out: outArg, refresh, convertOnly: onlyConvert } = parseExportArgs(process.argv.slice(2))
+  if (onlyConvert) {
+    if (!nameOrId) throw new Error('Uso: node coda-export.mjs --convert-only "<carpeta exportada o nombre del doc>"')
+    return convertOnly(nameOrId)
+  }
   if (!nameOrId) throw new Error('Uso: node coda-export.mjs "<nombre del doc>" [carpeta] [--refresh]')
   TOKEN = await token()
   const doc = await findDoc(nameOrId)
@@ -229,12 +372,28 @@ async function main() {
   }
 
   manifest.problems = problems
-  await writeAtomic(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2))
-  const files = manifest.pages.reduce((n, p) => n + p.media.length, 0)
-  console.log(`\nListo: ${manifest.pages.length} páginas, ${files} archivos. Problemas: ${problems.length}`)
-  for (const pr of problems) console.log('  - ' + pr)
+  // Las tablas: si el doc tiene, se bajan y se convierten; el manifest de Coda queda aparte (manifest.coda.json)
+  // para poder convertir de nuevo sin bajar nada. Un doc sin tablas da el mismo manifest.json de siempre.
+  let tableCount = 0
+  try {
+    tableCount = await exportTables(doc.id, out, refresh)
+  } catch (e) {
+    problems.push(`tablas: ${e.message}`)
+  }
+  let final = manifest
+  if (tableCount) {
+    await writeAtomic(join(out, 'manifest.coda.json'), JSON.stringify(manifest, null, 2))
+    final = (await convertFolder(out)) ?? manifest
+  } else {
+    await rm(join(out, 'manifest.coda.json'), { force: true })
+  }
+  if (final === manifest) await writeAtomic(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2))
+  const files = new Set(final.pages.flatMap((p) => p.media.map((m) => m.file))).size
+  console.log(`\nListo: ${final.pages.length} páginas, ${files} archivos. Problemas: ${final.problems.length}`)
+  for (const pr of final.problems) console.log('  - ' + pr)
+  printTableNotes(final)
   // Con problemas, sale con error: se vuelve a correr y trae solo lo que falta.
-  if (problems.length) process.exitCode = 1
+  if (final.problems.length) process.exitCode = 1
 }
 
 main().catch((e) => {
