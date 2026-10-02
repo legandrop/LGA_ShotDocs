@@ -344,9 +344,11 @@ describe('un dispositivo que baja snapshots', () => {
     const { server, e1, page } = await setup();
     const b = await device(server);
     await b.engine.syncNow();
-    await compactOnServer(server, page);
+    // Una fila más y el snapshot llega hasta ella: a b le falta una fila (chica) y el snapshot trae la página entera.
     await edit(e1, page, add('x'));
     await e1.engine.syncNow();
+    await compactOnServer(server, page);
+    expect(server.snapshots[0].upToSeq).toBe(server.pages.get(page)!.update_seq);
     const calls = recordContent(b);
     await b.engine.syncNow();
     expect(calls.flat().map((u) => u.seq)).toEqual([server.pages.get(page)!.update_seq]);
