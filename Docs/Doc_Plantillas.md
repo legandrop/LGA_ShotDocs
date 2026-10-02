@@ -662,7 +662,7 @@ contenido (IndexedDB primero).
   fecha, el día y lo del reporte anterior de la carpeta, toma el título `… | Day 01` si no tenía, marca la carpeta y
   deja el cursor en *Summary*. Ahí el deshacer desde el título (entrega 1) no se arma: el título ya tiene texto; Ctrl/⌘+Z
   en la página saca la plantilla y el título queda. **En la raíz del proyecto** quedaba como plantilla común con el aviso
-  *Put day reports inside a folder to get New day report*; **D82 lo cambió** (v0.125, ver "Cómo quedó (D82)").
+  *Put day reports inside a folder to get New day report*; **D82 lo cambió** (v0.0XX, ver "Cómo quedó (D82)").
 - **El globito.** Fecha (`type="date"`), día y locación, con el foco en la fecha: Enter crea (o abre el de esa fecha si
   ya hay uno, con *Create another* al lado, que propone el mismo día de rodaje); si hay dos o más, *2 reports for 2026-10-02*. El anterior a medio bajar
   muestra el aviso de O2. La propuesta se lee una vez al abrir; lo escrito en los campos manda. El nuevo reporte se abre
@@ -801,18 +801,23 @@ plantilla y crear el reporte pasan por la cola del árbol y por IndexedDB.
   igual, y sube al volver.
 - **Las carreras.** Si otro dispositivo ya movió la página a una carpeta mientras la ventana estaba abierta, es un
   reporte de esa carpeta y no se crea otra. Si llegó texto a la página, se avisa *Only on an empty page* y no se crea ni se
-  mueve nada. Si mover falla a medias, la ventana avisa y sigue abierta; la carpeta que ya quedó (marcada y vacía) se
-  ofrece al reintentar, así no se duplica. Dos dispositivos sin red que crean *On-Set Reports* a la vez terminan con dos
+  mueve nada. Si mover falla a medias, la ventana avisa y sigue abierta; al reintentar se usa la carpeta que ya quedó
+  (marcada y vacía, con el nombre que se pida ahora: `createReportFolder` con `reuse`), así no queda una vacía de más; si
+  se cierra la ventana en vez de reintentar, esa carpeta se ofrece la próxima vez como cualquier otra. Dos dispositivos sin red que crean *On-Set Reports* a la vez terminan con dos
   carpetas, como con las páginas de 6.6: nada se pierde ni se fusiona solo.
 - **Permisos.** Mover la página y crear la carpeta piden nivel 4 (`canMove`, `canCreateIn`). Una carpeta de reportes que la
   persona no puede usar no se ofrece. Si no puede crear en la raíz ni hay carpeta adonde ir (editar una página de la raíz
   que le compartieron, por ejemplo), se avisa *Day reports go inside a folder, and you can't create one here. Put this page
   inside a folder first.* y no se escribe nada.
+- **Dos cosas que se dejaron así** (auditoría): *Apply template…* en una página de la raíz **con subpáginas** la mete
+  adentro de la carpeta con todo su subárbol (no se pierde ni duplica nada; coherente con D82, y el texto dice *This page goes
+  inside it*), y si la carpeta elegida ya tiene el reporte de hoy no se avisa (sale otro del mismo día, como con la tira
+  adentro de una carpeta). Las dos, en el roadmap.
 - **Adentro de una carpeta no cambia nada** (la tira sigue marcando la carpeta y llenando el reporte). *Pre-production Notes*
   y *Shot Breakdown* siguen sin ventana también en la raíz. El aviso *Put day reports inside a folder…* se retiró.
 - **Ayuda.** La entrada *Day reports* (`help.dayReports`) cuenta lo de la raíz. Ningún atajo nuevo (la ventana se cierra con
   Escape).
-- **Pruebas.** `dayReportRoot.test.tsx` (16, la página de verdad sobre el servidor en memoria): la tira abre la ventana sin
+- **Pruebas.** `dayReportRoot.test.tsx` (17, la página de verdad sobre el servidor en memoria): la tira abre la ventana sin
   escribir y Enter crea carpeta y reporte (orden, marca, cursor en Summary, sin páginas vacías); el nombre editable y el
   de respaldo; con una carpeta ya hecha propone usarla (Day 02, al final, sin otra carpeta); *New folder…* a propósito;
   Cancel y Escape; las otras dos de fábrica y la carpeta como antes; *Apply template…* (título respetado) y una plantilla

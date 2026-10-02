@@ -64,6 +64,8 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
   // *On-Set Report* en la raíz del proyecto (6.2, D82): la ventana que ofrece la carpeta de reportes. `template`: la propia
   // con *Use for day reports* que se eligió (ya leída), o `null`: la de fábrica.
   const [rootAsk, setRootAsk] = useState<{ template: ReportTemplate | null } | null>(null);
+  // La carpeta que dejó un intento que falló al mover la página: el reintento la usa en vez de crear otra.
+  const madeFolder = useRef<string | null>(null);
   const fresh = tree.isFresh(pageId);
   const hasChildren = tree.children(pageId).length > 0;
   const live = useRef({ editable, editor });
@@ -213,7 +215,8 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
           }
         } else {
           if (!perms.canManagePage(pageId) || !perms.canCreateIn(null, row.workspace_id)) throw new Error('Needs permission to create pages here.');
-          folderId = await createReportFolder(tree, choice.name, row.workspace_id, pageId, t('dayReport.folderName'));
+          folderId = await createReportFolder(tree, choice.name, row.workspace_id, pageId, t('dayReport.folderName'), madeFolder.current);
+          madeFolder.current = folderId;
         }
         await tree.move(pageId, folderId);
       } catch (err) {
@@ -221,6 +224,7 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
         return false;
       }
       setRootAsk(null);
+      madeFolder.current = null;
       await applyDayReport(ask.template);
       return true;
     },

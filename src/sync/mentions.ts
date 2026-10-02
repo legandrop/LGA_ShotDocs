@@ -9,6 +9,10 @@ import { labelForEmail, type CommentQueue, type CommentsDb } from './comments';
 // menciones, la fecha hasta la que bajó y la hora de la última pregunta), `inbox:read` (las marcas de leídas que
 // todavía no subieron: no cuentan como cambios sin sincronizar, perderlas solo deja una mención sin leer) y
 // `mentionCandidates:<página>` (la lista del `@` de cada página, para mencionar sin red).
+//
+// Entrega 2 (ME2): al dueño y a los admins que pueden compartir la página, la base les suma a quienes NO la ven
+// (`has_access = false`). Esas filas quedan solo en memoria: compartir pide red, y una versión anterior de la app que
+// leyera la lista guardada las ofrecería como si vieran la página.
 
 /** Cada cuánto pregunta con la ventana a la vista (ME5). */
 export const INBOX_EVERY_MS = 60_000;
@@ -53,6 +57,8 @@ export interface MentionCandidate {
   userId: string;
   email: string;
   label: string;
+  /** `false`: no ve la página (solo le llega al dueño y a los admins que pueden compartirla, ME2). */
+  hasAccess?: boolean;
 }
 
 /** Lo que devuelve `mentions_inbox`. */
@@ -69,6 +75,8 @@ export interface MentionsRemote {
   mentionsIndex(): Promise<[string, boolean, boolean][]>;
   markMentionsRead(ids: string[] | null, upTo: string | null): Promise<number>;
   mentionCandidates(pageId: string): Promise<MentionCandidate[]>;
+  /** `share_for_mention` (20261016120000_menciones_e2.sql): *Can comment* sobre esa página. `true` si compartió. */
+  shareForMention(pageId: string, userId: string): Promise<boolean>;
 }
 
 interface SavedInbox {
@@ -134,6 +142,8 @@ export class MentionsInbox {
   private saved: SavedInbox = { items: [], since: null, serverNow: null, checkedAt: null };
   private reads: PendingReads = { ids: [], upTo: null };
   private readonly candidates = new Map<string, { at: number; list: MentionCandidate[] }>();
+  /** Quienes no ven cada página (ME2), solo en memoria. */
+  private readonly outsiders = new Map<string, MentionCandidate[]>();
   private readonly fetching = new Map<string, Promise<void>>();
   private readonly listeners = new Set<() => void>();
   private snapshot: InboxSnapshot = EMPTY;
@@ -399,6 +409,27 @@ export class MentionsInbox {
     return this.candidates.get(pageId)?.list ?? fallback();
   }
 
+  /** Quienes no ven la página y se le pueden compartir desde la mención (ME2); vacía para el resto. */
+  outsidersFor(pageId: string): MentionCandidate[] {
+    return this.outsiders.get(pageId) ?? [];
+  }
+
+  /**
+   * Comparte la página con *Can comment* con quien no la ve, para mencionarlo (ME2). Pide red; si falla, tira. Al
+   * volver, la persona pasa a la lista con acceso (y se pide la lista de nuevo).
+   */
+  async shareForMention(pageId: string, who: MentionCandidate): Promise<void> {
+    await this.remote.shareForMention(pageId, who.userId);
+    const person: MentionCandidate = { userId: who.userId, email: who.email, label: who.label };
+    this.outsiders.set(pageId, this.outsidersFor(pageId).filter((c) => c.userId !== who.userId));
+    const saved = this.candidates.get(pageId);
+    if (saved && !saved.list.some((c) => c.userId === who.userId)) {
+      this.candidates.set(pageId, { at: saved.at, list: [...saved.list, person] });
+    }
+    this.publish(true);
+    await this.refreshCandidates(pageId, true);
+  }
+
   /** La pide de nuevo si no hay o tiene más de 5 minutos (y hay red). Avisa a los suscriptos cuando llega. */
   refreshIfStale(pageId: string): Promise<void> {
     const saved = this.candidates.get(pageId);
@@ -412,15 +443,20 @@ export class MentionsInbox {
   }
 
   /** Pide la lista del `@` de la página ya (si hay red); la que esté en curso se comparte. */
-  refreshCandidates(pageId: string): Promise<void> {
+  refreshCandidates(pageId: string, again = false): Promise<void> {
     if (this.options.online && !this.options.online()) return Promise.resolve();
     let running = this.fetching.get(pageId);
-    if (running) return running;
+    // `again`: lo que estaba en curso salió antes de un cambio (compartir): se pide otra vez después.
+    if (running) return again ? running.then(() => this.refreshCandidates(pageId)) : running;
     running = (async () => {
       try {
-        const list = (await this.remote.mentionCandidates(pageId))
-          .filter((c) => typeof c?.userId === 'string' && typeof c.email === 'string')
-          .map((c) => ({ userId: c.userId, email: c.email, label: c.label || labelForEmail(c.email) }));
+        const rows = (await this.remote.mentionCandidates(pageId)).filter(
+          (c) => typeof c?.userId === 'string' && typeof c.email === 'string',
+        );
+        const person = (c: MentionCandidate): MentionCandidate => ({ userId: c.userId, email: c.email, label: c.label || labelForEmail(c.email) });
+        // Lo guardado en el dispositivo, solo quienes ven la página.
+        const list = rows.filter((c) => c.hasAccess !== false).map(person);
+        this.outsiders.set(pageId, rows.filter((c) => c.hasAccess === false).map((c) => ({ ...person(c), hasAccess: false })));
         const entry = { at: this.now, list };
         this.candidates.set(pageId, entry);
         if (this.db) await this.db.put('meta', entry, CANDIDATES_KEY + pageId).catch(() => undefined);

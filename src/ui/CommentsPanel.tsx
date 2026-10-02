@@ -32,6 +32,7 @@ import {
 import { CommentsToggle, useCommentAccess } from './CommentsToggle';
 import { activeMentions, insertMention, mentionQuery, mentionSegments } from './mentionText';
 import { useInbox } from './MentionsBell';
+import { MentionShareArea } from './MentionShare';
 import { shortcutLabel } from './shortcuts';
 import { CloseIcon, CollapseIcon, ExpandIcon, QuestionIcon } from './icons';
 
@@ -560,27 +561,39 @@ function knownAuthors(comments: ReturnType<typeof useServices>['comments'], page
   return out;
 }
 
-/** La lista del `@` de la página (vacía si no hay menciones: base sin migrar, link público, sin la campana). */
-function useMentionCandidates(pageId: string | null): { on: boolean; list: MentionCandidate[] } {
+/**
+ * La lista del `@` de la página (vacía si no hay menciones: base sin migrar, link público, sin la campana), y quienes
+ * no ven la página y se les puede compartir desde la mención (ME2: solo le llegan al dueño y a los admins que pueden
+ * compartirla; pide red).
+ */
+function useMentionCandidates(pageId: string | null): { on: boolean; list: MentionCandidate[]; outsiders: MentionCandidate[] } {
   const { mentions, comments, user } = useServices();
   const inbox = useInbox();
   const link = useLinkMode();
+  const status = useSyncStatus();
   const on = !!pageId && !!mentions && inbox.ready && !link && comments.writable;
   useEffect(() => {
     if (on && pageId) void mentions?.refreshIfStale(pageId);
   }, [on, pageId, mentions]);
-  if (!on || !pageId || !mentions) return { on: false, list: [] };
-  return { on, list: mentions.candidatesFor(pageId, () => knownAuthors(comments, pageId, user.id)) };
+  if (!on || !pageId || !mentions) return { on: false, list: [], outsiders: [] };
+  return {
+    on,
+    list: mentions.candidatesFor(pageId, () => knownAuthors(comments, pageId, user.id)),
+    outsiders: status.online ? mentions.outsidersFor(pageId) : [],
+  };
 }
 
-/** Hasta 8 de la lista que coinciden con lo escrito después del `@` (primero los que empiezan así). */
-function matchCandidates(list: MentionCandidate[], query: string, taken: Set<string>, me: string): MentionCandidate[] {
+/** Hasta `max` de la lista que coinciden con lo escrito después del `@` (primero los que empiezan así). */
+function matchCandidates(list: MentionCandidate[], query: string, taken: Set<string>, me: string, max = 8): MentionCandidate[] {
   const q = query.toLowerCase();
   return list
     .filter((c) => c.userId !== me && !taken.has(c.userId) && (c.label.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)))
     .sort((a, b) => Number(!a.label.toLowerCase().startsWith(q)) - Number(!b.label.toLowerCase().startsWith(q)) || a.email.localeCompare(b.email))
-    .slice(0, 8);
+    .slice(0, max);
 }
+
+/** Cuántos de los que no ven la página muestra la lista, abajo y en gris (ME2). */
+const MAX_OUTSIDERS = 4;
 
 /**
  * Un cambio que el servidor no aceptó: el motivo, "Retry" y "Discard". Descartar pide confirmación y dice
@@ -682,7 +695,18 @@ function Composer({
   const query = candidates.on && caret !== null ? mentionQuery(text, caret) : null;
   const listOpen = !!query && query.start !== closedAt;
   const full = active.length >= MAX_MENTIONS;
-  const matches = listOpen && !full ? matchCandidates(candidates.list, query.query, new Set(active.map((m) => m.userId)), user.id) : [];
+  const taken = new Set(active.map((m) => m.userId));
+  const inside = listOpen && !full ? matchCandidates(candidates.list, query.query, taken, user.id) : [];
+  // Quienes no ven la página (ME2), debajo de los que la ven; las flechas recorren las dos partes.
+  const outside =
+    listOpen && !full
+      ? matchCandidates(candidates.outsiders, query.query, new Set([...taken, ...inside.map((c) => c.userId)]), user.id, MAX_OUTSIDERS)
+      : [];
+  const matches = [...inside, ...outside];
+  // La pregunta de compartir desde la mención, con dónde estaba el `@` cuando se eligió.
+  const [asking, setAsking] = useState<{ who: MentionCandidate; start: number; end: number; typed: string } | null>(null);
+  const textNow = useRef(text);
+  textNow.current = text;
   useEffect(() => setChoice(0), [query?.query, query?.start]);
   // Cerrada con Esc: vuelve a abrir en cuanto ese `@` ya no está (se borró o se movió el cursor a otro lado).
   useEffect(() => {
@@ -691,6 +715,12 @@ function Composer({
 
   const pick = (c: MentionCandidate) => {
     if (!query || caret === null) return;
+    if (c.hasAccess === false) {
+      // No ve la página: primero la pregunta de compartir (la lista se cierra; el `@` queda escrito).
+      setAsking({ who: c, start: query.start, end: caret, typed: text.slice(query.start, caret) });
+      setClosedAt(query.start);
+      return;
+    }
     const next = insertMention(text, query.start, caret, c.label);
     setText(next.text);
     setPicked((list) => [...list.filter((m) => m.userId !== c.userId), { userId: c.userId, label: c.label }]);
@@ -701,6 +731,29 @@ function Composer({
     });
   };
   const syncCaret = () => setCaret(ref.current?.selectionStart ?? null);
+
+  /** Ya compartida: la mención va donde estaba el `@` (si se cambió lo escrito ahí, al final). */
+  const placeShared = (who: MentionCandidate) => {
+    const at = asking;
+    setAsking(null);
+    const cur = textNow.current;
+    const still = !!at && cur.slice(at.start, at.end) === at.typed;
+    const base = still || cur === '' || /\s$/u.test(cur) ? cur : `${cur} `;
+    const next = still && at ? insertMention(cur, at.start, at.end, who.label) : insertMention(base, base.length, base.length, who.label);
+    setText(next.text);
+    setPicked((list) => [...list.filter((m) => m.userId !== who.userId), { userId: who.userId, label: who.label }]);
+    setCaret(next.caret);
+    requestAnimationFrame(() => {
+      ref.current?.focus();
+      ref.current?.setSelectionRange(next.caret, next.caret);
+    });
+  };
+  const cancelAsk = () => {
+    setAsking(null);
+    // La lista vuelve a abrirse en ese `@` (para elegir a otro).
+    setClosedAt(null);
+    requestAnimationFrame(() => ref.current?.focus());
+  };
 
   // Lo escrito a medias: cerrar el panel (tocar afuera, Escape, la X) pide confirmación.
   const draftKey = useRef(Symbol('draft'));
@@ -825,25 +878,24 @@ function Composer({
           ) : matches.length === 0 ? (
             <li className="mention-list-note">{tr('mentions.noMatch')}</li>
           ) : (
-            matches.map((c, i) => (
-              <li
-                key={c.userId}
-                role="option"
-                aria-selected={i === choice}
-                className={i === choice ? 'selected' : undefined}
-                // El mouse elige sin sacarle el foco al cuadro.
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  pick(c);
-                }}
-                onMouseEnter={() => setChoice(i)}
-              >
-                <strong>{c.label}</strong>
-                <span className="muted">{c.email}</span>
-              </li>
-            ))
+            <>
+              {inside.length === 0 && <li className="mention-list-note">{tr('mentions.noMatch')}</li>}
+              {matches.map((c, i) => (
+                <MentionOption
+                  key={c.userId}
+                  candidate={c}
+                  selected={i === choice}
+                  head={i === inside.length && outside.length > 0 ? tr('mentions.outsideHead') : null}
+                  onPick={() => pick(c)}
+                  onHover={() => setChoice(i)}
+                />
+              ))}
+            </>
           )}
         </ul>
+      )}
+      {candidates.on && mentionPage && (
+        <MentionShareArea pageId={mentionPage} who={asking?.who ?? null} onShared={placeShared} onCancel={cancelAsk} />
       )}
       {(error || tooLong) && (
         <p className="comment-error">{tooLong ? tr('comments.tooLong', { max: MAX_COMMENT_LENGTH, now: text.length }) : error}</p>
@@ -857,6 +909,46 @@ function Composer({
         </button>
       </div>
     </form>
+  );
+}
+
+/** Una persona de la lista del `@`; las que no ven la página (ME2), en gris y con su título arriba de la primera. */
+function MentionOption({
+  candidate: c,
+  selected,
+  head,
+  onPick,
+  onHover,
+}: {
+  candidate: MentionCandidate;
+  selected: boolean;
+  head: string | null;
+  onPick: () => void;
+  onHover: () => void;
+}) {
+  const outside = c.hasAccess === false;
+  return (
+    <>
+      {head && (
+        <li className="mention-list-head" role="presentation">
+          {head}
+        </li>
+      )}
+      <li
+        role="option"
+        aria-selected={selected}
+        className={[selected ? 'selected' : '', outside ? 'outside' : ''].filter(Boolean).join(' ') || undefined}
+        // El mouse elige sin sacarle el foco al cuadro.
+        onMouseDown={(e) => {
+          e.preventDefault();
+          onPick();
+        }}
+        onMouseEnter={onHover}
+      >
+        <strong>{c.label}</strong>
+        <span className="muted">{c.email}</span>
+      </li>
+    </>
   );
 }
 

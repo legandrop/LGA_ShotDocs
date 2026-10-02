@@ -192,6 +192,10 @@
   line-height: 1.5;
 }
 
+.root-report-dialog .modal-actions {
+  gap: 8px;
+}
+
 .root-report-field {
   display: grid;
   gap: 4px;

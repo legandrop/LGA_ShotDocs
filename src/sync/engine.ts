@@ -6,7 +6,7 @@ import * as Y from 'yjs';
 import { LEVEL_EDIT, Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
 import { CLEAN_PER_ROUND, CLEAN_SCHEMA_VERSION, sha256Hex } from './clean';
 import type { CommentQueue } from './comments';
-import type { PageDocs } from './docs';
+import { epochChanged, type PageDocs } from './docs';
 import type { PageFiles } from './files';
 import { hasUnsyncedContent, type DocState } from './localDb';
 import { APP_OUTDATED, type Remote } from './remote';
@@ -388,7 +388,7 @@ export class SyncEngine {
       // que no es vieja no tiene por qué esperar al ciclo.
       if (!this.versionKnown) await this.learnOutdated().catch(() => undefined);
       if (this.status.outdated) return;
-      await this.docs.pullPage(pageId, this.remote);
+      await this.docs.pullPage(pageId, this.remote, { contentEpoch: this.tree.get(pageId)?.content_epoch });
     })().catch(() => undefined);
     await Promise.race([pull, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
     return !(await this.isMissingContent(pageId));
@@ -508,14 +508,16 @@ export class SyncEngine {
       // lugares: no los toca ningún editor). `status.outdated` y no `outdated`: la base puede haber rechazado una
       // subida en este mismo ciclo (subieron la mínima entre la consulta y la subida).
       // Hasta `serverSeq`: las filas, o la base limpia para quien no ve lo borrado (Docs/Doc_Privacidad_Borrado.md).
+      // También las que tienen otra época de contenido después de aplicar un snapshot (Docs/Doc_Compactar.md, 12).
+      const epochs = new Map(rows.map((r) => [r.id, r.content_epoch]));
       const stale = this.status.outdated
         ? []
         : rows
-            .filter((r) => this.tree.serverSeq(r) > (cursors.get(r.id)?.cursor ?? 0))
+            .filter((r) => this.tree.serverSeq(r) > (cursors.get(r.id)?.cursor ?? 0) || epochChanged(cursors.get(r.id), r.content_epoch))
             .filter((r) => this.options.pullOnly?.(r.id, cursors.get(r.id)?.cursor ?? 0) ?? true)
             .map((r) => r.id);
       await runPool(stale, PULL_CONCURRENCY, (id) =>
-        this.docs.pullPage(id, this.remote).then((n) => {
+        this.docs.pullPage(id, this.remote, { contentEpoch: epochs.get(id) }).then((n) => {
           if (n > 0) this.lastActivityAt = Date.now();
         }, (err) => {
           // Lo mismo al bajar: esta página se reintenta en la próxima vuelta y las demás siguen.

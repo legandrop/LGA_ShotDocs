@@ -1,9 +1,44 @@
 # Changelog — LGA Shot Docs
 
-v0.125 :
+v0.0XX :
 
 *On-Set Report* en una página de la raíz del proyecto creaba la plantilla común con un aviso: sin carpeta de reportes no había "ayer" que copiar ni días que numerar (D82, `Doc_Plantillas.md`). Ahora, en la raíz, no se crea un reporte de set: *On-Set Report* (la tira, *More…*, *Apply template…* o una propia con *Use for day reports*) abre una ventana que propone la carpeta de reportes que ya tenga el proyecto, o crear una nueva (*On-Set Reports*, nombre editable) marcada para reportes. Enter crea la carpeta donde estaba la página, mueve la misma página adentro y la llena como `2026-10-02 | Day 01`: no queda ninguna vacía. Sin red anda igual; si la página cambió con la ventana abierta, o falta permiso para crear, no escribe nada. Nuevo `dayReportRoot.ts` y `RootReportDialog.tsx`; sin migración.
 [ Reporte en la raíz - On-Set Report ofrece crear o elegir la carpeta de reportes y el reporte va adentro ]
+
+v0.127 :
+
+Compactar (B.9), entrega 1: leer snapshots. Un dispositivo nuevo baja todas las filas de cada página, y una página muy
+editada llega a miles. Nueva migración `20261019120000_compactar_leer.sql` (`schema_version` 17, snapshots apagados):
+`page_snapshots` y la reserva en `page_compaction`, sin permisos directos; `pull_page_content`, que con un snapshot
+vigente lo manda primero y si no llama a `pull_page_updates`; y las funciones de quien compacta, para la entrega 2.
+Solo lo recibe quien ve lo borrado. En la app, `pullContent` (apagados, el mismo pedido de siempre), la época de
+contenido en `DocState`, un snapshot ilegible que no mueve el cursor y el reinicio de la página si su cadena se
+invalida. Sin snapshots, los pedidos son los de antes. Pruebas SQL en rollback con 60 mutantes y 32 del dispositivo.
+[ Compactar, entrega 1 - leer snapshots: la migración apagada, pull_page_content, la época de contenido y sus pruebas ]
+
+v0.126 :
+
+Asistente, entrega A2 (P.24): el asistente solo trabajaba sobre lo elegido y la política del workspace no tenía cómo
+cambiarse. El panel suma *Summarize page* (*Insert at top* / *Insert below*), *Translate page* (*Replace page content*,
+que traduce cada bloque en su lugar con el reemplazo de A1, o *Create translated subpage*, por `tree.create` y
+`writeNewPage`) y *Format as…* (viñetas, casillas, tabla, títulos; solo bloques que ya existen, un deshacer, la guarda
+más el tipo de cada bloque, sin partir bloques con hijos; no aplica si la respuesta deja afuera palabras de lo
+elegido y subraya las que agrega). Medido: cambiar el tipo rehace el texto en Yjs, así que lo
+escrito a la vez sin red queda en el historial; el diseño quedó corregido. Migración
+`20261017120000_asistente_politica_ventana.sql` (sin aplicar): `set_assistant_policy` para dueño y admins, con la
+sección *This workspace* en *Assistant…*.
+[ Asistente A2 - resumir y traducir la página, Format as… y la política del workspace ]
+
+v0.125 :
+
+Menciones en comentarios (P.21), entrega 2. Para mencionar a alguien que no veía la página había que ir a *Share*,
+compartirla y volver, y sin abrir la campana no se veía que había menciones. Nueva migración
+`20261016120000_menciones_e2.sql` (`schema_version` 16): `mention_candidates` suma a quienes no ven la página solo
+para el dueño y los admins que pueden compartirla, y `share_for_mention` la comparte con Comentar, solo esa página y
+sin tocar a quien ya la ve; pruebas en rollback y 19 mutantes. En la app, esas personas aparecen en gris bajo *Can't
+see this page* y elegir una pregunta *Share and mention*, por el mismo paso previo que *Share*. Además, un punto en el
+árbol (hueco en la madre plegada) y el número en el título de la pestaña y en el ícono de la app instalada.
+[ Menciones, entrega 2 - compartir desde la mención, el punto del árbol y el número en la pestaña y el ícono ]
 
 v0.124 :
 

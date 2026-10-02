@@ -10,6 +10,7 @@ import { showComments } from './commentsUi';
 import { useFloating } from './menus';
 import { mentionSegments, plainCoda } from './mentionText';
 import { useCurrentProject } from './project';
+import { setAppBadge, setTitleCount } from './titleBadge';
 
 // La campana de las menciones (P.21, Docs/Doc_Menciones.md, 2.3): en la barra de arriba, a la derecha, con el número
 // de menciones sin leer (1 a 9, y 9+). Al tocarla, la lista de la más nueva a la más vieja; abrir una lleva a la
@@ -33,6 +34,20 @@ export function MentionsBell() {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const tr = useT();
+  // El número también en el título de la pestaña y en el ícono de la app instalada (entrega 2).
+  const shown = mentions && !link && inbox.ready ? inbox.unread : 0;
+  useEffect(() => {
+    setTitleCount(shown);
+    setAppBadge(shown);
+  }, [shown]);
+  useEffect(
+    () => () => {
+      // Al salir del workspace (o de la cuenta), sin número.
+      setTitleCount(0);
+      setAppBadge(0);
+    },
+    [],
+  );
   if (!mentions || link || !inbox.ready) return null;
   const count = inbox.unread >= 10 ? '9+' : String(inbox.unread);
   const label =

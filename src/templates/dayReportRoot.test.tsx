@@ -474,7 +474,7 @@ describe('On-Set Report en la raíz: sin red y con dos dispositivos', () => {
 });
 
 describe('On-Set Report en la raíz: cuando algo falla', () => {
-  it('si mover la página falla, avisa en la ventana y el reintento usa la carpeta que ya quedó (no la duplica)', async () => {
+  it('si mover la página falla, avisa en la ventana y el reintento (aun con otro nombre) usa la carpeta que ya quedó: una sola carpeta', async () => {
     const { device } = await setup();
     const project = device.tree.workspaceId;
     const page = await device.tree.create(null, '');
@@ -500,12 +500,19 @@ describe('On-Set Report en la raíz: cuando algo falla', () => {
     const folders = device.tree.roots(project).filter((p) => isDayReportFolder(device.tree, p.id));
     expect(folders.length).toBe(1);
     expect(device.tree.children(folders[0].id).length).toBe(0);
-    // Reintentar: la ventana sigue abierta; la carpeta de antes se usa si se la elige, o se crea otra a propósito.
+    // Reintentar (con otro nombre): la ventana sigue abierta y se usa la carpeta que ya quedó, no se crea otra.
     expect(confirmButton().disabled).toBe(false);
+    setInput(field('name')!, 'Reportes del rodaje');
     submit();
     await waitFor(() => device.tree.get(page)?.title);
     await wait(100);
-    expect(device.tree.get(page)?.parent_id).toBeTruthy();
+    expect(device.tree.get(page)?.parent_id).toBe(folders[0].id);
+    const after = device.tree.roots(project).filter((p) => isDayReportFolder(device.tree, p.id));
+    expect(after.map((f) => f.id)).toEqual([folders[0].id]);
+    expect(after[0].title).toBe('Reportes del rodaje');
+    // Ninguna carpeta vacía de más: la raíz es la carpeta con el reporte y nada más.
+    expect(device.tree.roots(project).map((p) => p.id)).toEqual([folders[0].id]);
+    expect(device.tree.children(folders[0].id).map((p) => p.id)).toEqual([page]);
   });
 
   it('sin permiso para crear en la raíz ni carpeta de reportes adonde ir: avisa y no escribe nada', async () => {
@@ -573,6 +580,27 @@ describe('reportFolderOptions', () => {
     // Sin permiso para mover la página ahí: no se ofrece.
     const none = { canMove: () => false } as unknown as Permissions;
     expect(reportFolderOptions(tree, none, project, page)).toEqual([]);
+  });
+
+  it('createReportFolder con reuse: usa la carpeta del intento anterior si sigue vacía y marcada en la raíz; si no, crea otra', async () => {
+    const { device } = await setup();
+    const project = device.tree.workspaceId;
+    const page = await device.tree.create(null, '');
+    const first = await createReportFolder(device.tree, 'Reportes', project, page, 'On-Set Reports');
+    // Se reusa (con el nombre nuevo).
+    expect(await createReportFolder(device.tree, 'Otro nombre', project, page, 'On-Set Reports', first)).toBe(first);
+    expect(device.tree.get(first)?.title).toBe('Otro nombre');
+    expect(device.tree.roots(project).filter((p) => isDayReportFolder(device.tree, p.id)).length).toBe(1);
+    // Con algo adentro, o en la papelera, o sin la marca: no se reusa.
+    const kid = await device.tree.create(first, 'Algo');
+    const second = await createReportFolder(device.tree, 'Reportes', project, page, 'On-Set Reports', first);
+    expect(second).not.toBe(first);
+    await device.tree.trash(kid);
+    await device.tree.trash(second);
+    expect(await createReportFolder(device.tree, 'Reportes', project, page, 'On-Set Reports', second)).not.toBe(second);
+    await device.tree.setSetting(first, 'dayReports', false);
+    await device.tree.restore(kid).catch(() => undefined);
+    expect(await createReportFolder(device.tree, 'Reportes', project, page, 'On-Set Reports', first)).not.toBe(first);
   });
 
   it('createReportFolder: marcada, justo donde está la página, con nombre limpio y de respaldo si queda vacío', async () => {

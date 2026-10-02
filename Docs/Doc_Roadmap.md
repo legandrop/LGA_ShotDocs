@@ -335,8 +335,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   lo que se copia del día anterior, "ya existe" y el orden, sin red. **Entrega 3 hecha** (v0.124): plantillas propias
   (*Save as template…* con *Clear filled-in values*, la carpeta *Templates*, la franja con *Template settings…* y *Stop
   using as template*, *Customize*, las de otros proyectos sin sus fotos, *Wait* / *Use built-in* a medio bajar y el
-  selector de plantilla del globito, con el aviso de O4). **D82 hecha** (v0.125): *On-Set Report* en la raíz del proyecto
-  ofrece crear o elegir la carpeta de reportes y mueve ahí la página (ya no sale como plantilla común). **Falta** que Lega revise el contenido de las tres (PL1) y
+  selector de plantilla del globito, con el aviso de O4). **D82 hecha** (v0.0XX): *On-Set Report* en la raíz del proyecto
+  ofrece crear o elegir la carpeta de reportes y mueve ahí la página (ya no sale como plantilla común). Quedan dos
+  sorpresas anotadas por la auditoría: *Apply template…* en una página de la raíz con subpáginas las mueve con la página, y
+  la ventana no avisa si la carpeta elegida ya tiene el reporte de hoy (mostrar el *already exists* con *Open*). **Falta** que Lega revise el contenido de las tres (PL1) y
   pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
   *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
   proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la
@@ -404,7 +406,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
   que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Entrega 1 programada (v0.120;
   migración `20261015120000_menciones.sql` sin aplicar):** el `@` con la lista, el pintado, la cola, la campana y el
-  punto en el botón de comentarios; auditada y corregida. Faltan las entregas 2 y 3, y un detalle cosmético (O6 de la
+  punto en el botón de comentarios; auditada y corregida. **Entrega 2 programada (v0.125; migración
+  `20261016120000_menciones_e2.sql` sin aplicar, `schema_version` 16):** compartir desde la mención (dueño y admins que
+  pueden compartir la página, con Comentar y solo esa página), el punto en el árbol y el número en el título de la
+  pestaña y en el ícono de la app. Falta la entrega 3 (correo), y un detalle cosmético (O6 de la
   auditoría): un comentario con mención cuenta como 2 cambios sin subir (alta y menciones). **Diseño en `Doc_Menciones.md`** (auditado y
   corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
   ve la página; un miembro ve al equipo y a los clientes que ya comentaron (ME10); el dueño y los admins la comparten
@@ -413,12 +418,23 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
+  De la auditoría de la entrega 2 (ninguna pierde datos ni da acceso de más): falta una prueba que caiga si se saca el paso
+  previo de compartir (`useShareGate`), antes de prender D14 (O1); después de Esc o *Cancel* en la pregunta de compartir,
+  la lista del `@` no vuelve hasta tocar el campo (O2); se puede compartir desde la mención en un proyecto archivado, como
+  con *Share* (O3); no mira la versión mínima de la app de quien recibe (O4); si se descarta el comentario después de
+  compartir, la persona queda con acceso y sin mención (O5).
 - **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
   Lega). **A1 implementada (v0.118):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y
   la guarda de "cambió mientras pensaba", permisos, sin red, atajo, ayuda, CSP y la migración de `assistant_policy`
-  (sin aplicar; la aplica quien publica). Falta: A2, A3 y el MCP (M0 a M3); lo que Lega prueba con sus claves está en
-  "Cómo quedó A1". Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
+  (sin aplicar; la aplica quien publica). **A2 implementada (v0.126):** *Summarize page* (*Insert at top* / *Insert
+  below*), *Translate page* (*Replace page content* en su lugar o *Create translated subpage*), *Format as…* (viñetas,
+  casillas, tabla, títulos) y la política del workspace en *Assistant…* para dueño y admins, con su migración
+  `20261017120000_asistente_politica_ventana.sql` (sin aplicar). Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
+  sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
+  panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
+  cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;
+  *Format as… Headings* sobre un bloque Script le saca el Script sin decirlo en la vista previa. Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
   cuando lo elegido queda debajo; una traducción a japonés o chino de cerca de 20 000 caracteres todavía puede
   llegar cortada (se avisa y no se aplica; afinar el tope por idioma o por modelo); un modelo que razona por un servicio
   compatible (OpenRouter) no lleva el margen de tokens, y en OpenAI y Gemini se podría además bajar cuánto piensan
@@ -505,10 +521,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    castellano y las plantillas, que todavía no existen (fase 3), con su nombre en cada idioma.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
    datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes. **Diseño en
-   `Doc_Compactar.md`** (auditado, sin implementar): el snapshot se arma aplicando las filas en orden en un `Y.Doc`
+   `Doc_Compactar.md`** (auditado): el snapshot se arma aplicando las filas en orden en un `Y.Doc`
    sin GC (conserva lo borrado, D16), lo arma y lo comprueba el dispositivo de quien edita (D5), la base lo sirve
-   solo confirmado y válido, y `page_updates` no pierde nunca una fila (D4). Hoy no es urgente: ninguna página lo
-   necesita.
+   solo confirmado y válido, y `page_updates` no pierde nunca una fila (D4). **Entrega 1 hecha (v0.127): leer
+   snapshots** (la migración `20261019120000_compactar_leer.sql`, sin aplicar y con los snapshots apagados;
+   `pull_page_content`, la época de contenido y el reinicio de una página cuyo snapshot se invalidó). **Falta:** la
+   entrega 2 (armarlos en el dispositivo, `compact.ts`, con la prueba 1 y la del editor real) y la 3 (el script de
+   restaurar, probar de punta a punta, medir y prender `snapshot_min_version`). Hoy no es urgente: ninguna página lo
+   necesita. **De la auditoría de la entrega 1 (antes de prender):** (O1, medio-alto) al invalidar, `resetContent` de
+   `docs.ts` sube la página entera y propaga a todos el borrado de un snapshot malo: una página sin nada pendiente tiene
+   que descartar lo local y rearmarse con las filas del servidor (como `replace` de la base limpia); (O2) con snapshots
+   prendidos, que el reinicio lo decida solo la época de la respuesta, no la del árbol (hoy un árbol atrasado provoca una
+   subida entera de más); (O3) `invalidate_page_snapshot` pide `can_edit_page`: pedir `sees_deleted` como las demás; (O5)
+   al prender, subir `min_app_version` a la versión de lectura auditada en ese momento.
 
 10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la
