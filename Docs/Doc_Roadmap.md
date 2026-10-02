@@ -259,7 +259,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   huérfano en su versión, el Worker con la página de respaldo, la diferencia solo de lo tocado y la lista que se
   actualiza sola. **Falta:** aplicar la migración (con copia de seguridad), la entrega 3 (nombrar versiones, la caché
   sin red) y medir en el iPhone. Encontrado por la prueba al azar: una versión con dos bloques del mismo id no se puede
-  restaurar (se deshace sola, sin perder nada; `Doc_Historial.md`, entrega 2). Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
+  restaurar (se deshace sola, sin perder nada; `Doc_Historial.md`, entrega 2; ya pasaba en v0.098). Arreglo propuesto:
+  antes de restaurar, en la copia en memoria, darle un id nuevo al repetido (el segundo en el orden de Yjs), como hace el
+  editor. **De la auditoría de la entrega 2, para después:** (O2) dos sangrías a la vez bajo el mismo bloque dejan dos
+  grupos de hijos; la unión los junta sin descartar el hijo repetido (como `repairBlocks`) y lo muestra agregado (solo
+  presentación); (O9) al confirmar una restauración, `refreshRows` puede devolver una consulta empezada antes de
+  sincronizar: esperarla y pedir otra; (M5) ninguna prueba ve que `mergeRows` descarte una fila repetida; (M10) si en un
+  mismo lote crece la sesión elegida y aparece otra, la elegida puede saltar a la actual. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
   diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y

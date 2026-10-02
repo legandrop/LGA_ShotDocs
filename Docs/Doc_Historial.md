@@ -900,8 +900,11 @@ con Yjs) sin el aviso de libheif (`vite.config.ts`).
 **La diferencia solo de lo que cambió:** la unión se arma en **una sola transacción** sobre el documento del historial
 (Yjs parte los elementos en los bordes de cada snapshot una vez, no en cada texto: era lo caro del prototipo), y con
 `scope = 'changed'` solo los bloques que tocó alguna fila del medio (lo que agregaron o borraron por primera vez,
-`PageHistory.fresh`) se comparan con los dos snapshots; el resto se copia como está. La prueba la compara con la
-completa: igual en más de 500 casos al azar.
+`PageHistory.fresh`) se comparan con los dos snapshots; el resto se copia como está. Un bloque o un grupo agregado o
+borrado suma los de adentro, y algo del contenido fuera de un bloque (una raíz) pasa a la diferencia completa. Las
+pruebas la comparan con la completa en los casos al azar y en los que la auditoría encontró distintos (ver abajo); no
+está demostrado que dé igual siempre: si en algún caso diera distinto, es solo de presentación (el contenido de la
+unión es el mismo).
 
 **La lista se actualiza sola** (O3): después de cada sincronización se piden las filas posteriores a la última y se
 suman (`PageHistory.append`, sin armar todo de nuevo). La versión elegida sigue elegida (por su `seq` o la sesión que
@@ -942,3 +945,20 @@ tocar restaurar (fuera de esta entrega).
 y el historial sin red), medir en el iPhone, y aplicar la migración de la entrega 1. Detalles que quedaron así: el
 tooltip de un tramo largo de una misma apertura (un autor de Yjs) dice la hora de su primera fila; un cambio solo de
 formato de texto (negrita) no se marca; en un bloque rehecho con fotos en línea, las fotos no se marcan.
+
+## Correcciones de la auditoría de la entrega 2
+
+Una auditoría independiente encontró dos bloqueantes y nueve observaciones (ninguna letra perdida en unas 100 000
+versiones al azar). Corregido; manda sobre "Cómo quedó (entrega 2)" en lo que toca:
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1.** Con *Show changes* prendido, copiar llevaba lo borrado (y con el editor de solo lectura, el navegador copiaba los estilos de las marcas: al pegar entraba tachado y en color) | Copiar, cortar y arrastrar desde la vista se atienden antes que el editor: lo elegido sin lo marcado como borrado (un estado aparte sin esos tramos ni esos bloques, nunca despachado), serializado como lo hace BlockNote (`cleanClipboard` en `historyMarks.ts`). Con los cambios apagados, como siempre |
+| **B2.** Con StrictMode (`npm run dev`) el historial no cargaba (el motor memorizado se destruía) y quedaba un Worker abierto | El motor se crea en el efecto y se cierra al desmontar; una prueba monta la pantalla en StrictMode y comprueba que todos los Workers se cierran |
+| O1. "Solo lo tocado" a veces distinto de la completa (un bloque que deja de verse porque se borró uno de arriba, la raíz vieja de una página con dos raíces) | Un bloque o grupo tocado suma los de adentro; una raíz tocada pasa a la completa. Los 14 casos guardados por la auditoría dan igual; 4 quedan como prueba (`src/sync/fixtures/historyTouched/`). El doc ya no dice que da igual siempre |
+| O3. Marcas de borrado sin fila (texto de un bloque borrado con su padre): tooltip sin hora | Sin borrado propio, la fila que borró lo más cercano de arriba |
+| O4. Mutantes vivos: restaurar la unión en vez de la versión, el Worker que no se cierra, sin compensar el scroll | Pruebas nuevas en `historyPanel.test.tsx` y `historyClient.test.ts`; cada una falla con su mutante |
+| O5. La ayuda decía "hover": en el teléfono no hay | Tocar una marca en el teléfono muestra quién y cuándo en un aviso; la ayuda lo dice |
+| O6. La vista quedaba en blanco mientras se armaba la unión | *Loading the version…* también ahí |
+| O7. La prueba de las letras huérfanas comparaba un carácter | El texto huérfano lleva sus tramos de Yjs y la prueba compara por id |
+| O2, O8, O9 y los mutantes M5 y M10 | Al roadmap (P.18), con su detalle |
