@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.128 :
+
+Carpetas con guiones bajos (D3 → B) y dos diseños. Las carpetas que se sueltan en una página llegaban al Drive del dueño
+con espacios (`Día 2 - Puerto`), por la regla de v0.089; Lega decidió que ninguna carpeta del Drive lleve espacios.
+`driveFolderName` del portero vuelve a pasar cada tramo de espacios a `_`, también en subcarpetas, y conserva lo que ya
+protegía (controles, ZWJ entre emojis, corte por grafema); lo ya subido no se renombra y se encuentra por su marca.
+Diseños sin código, auditados y corregidos: **⌘Z en el orden en que editaste** (P.26, `Doc_Deshacer.md`: una línea de
+tiempo por proyecto arriba de las pilas de Yjs, con el reemplazo del proyecto adentro; antes, investigar B.21) y el
+**dictado al reporte** (P.27, `Doc_Dictado.md`: micrófono propio que transcribe con el proveedor de la persona y una
+lista de cambios con fila y columna que valida la app, con vista previa y deshacer).
+[ Carpetas con guiones bajos (D3 → B) y los diseños de deshacer y dictado ]
+
 v0.127 :
 
 Compactar (B.9), entrega 1: leer snapshots. Un dispositivo nuevo baja todas las filas de cada página, y una página muy
