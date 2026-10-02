@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Cinco pedidos de Lega del 2026-10-02 no tenían diseño. Se publican los cinco, sin código, cada uno auditado por
+separado, corregido y re-verificado: `Doc_Plantillas.md` (P.23: las tres plantillas de supervisión, las propias como
+páginas marcadas y *New day report*; PL1-PL10), `Doc_Anotar_Fotos.md` (P.20: anotaciones al estilo de FrameRev en un
+mapa del documento, afuera del contenido, y la poda de las de una foto sacada; AN1-AN11), `Doc_Exportar.md` (P.22: el
+PDF con índice de una rama o un proyecto y el zip para archivar y volver, sin correos; EX1-EX15), `Doc_Menciones.md`
+(P.21: *@persona* con `comment_mentions` y la campana; ME1-ME10) y `Doc_Asistente.md` (P.24: la clave de cada persona
+en su dispositivo, aplicar como edición que se deshace y el MCP en el portero, sin escribir en páginas con invitados,
+ni siquiera creando una subpágina; IA1-IA10). Las decisiones quedan propuestas para que Lega las cambie.
+[ Diseños - plantillas, anotar fotos, exportar, menciones y asistente, auditados ]
+
 v0.110 :
 
 No se podía sacar una foto ni filmar desde la página: había que salir de la app, sacarla y elegirla con "/Image", y
@@ -19,54 +31,6 @@ publicada" comparaban contra una versión de hace meses. Se regeneró desde v0.1
 una foto, en una celda con solo fotos, iba a la celda de la izquierda: el primer renglón se medía comparando bordes de
 abajo con tolerancia de 2 px y daba justo 2. Ahora se mira si los renglones se superponen.
 [ Fixture del esquema publicado regenerado desde v0.107 y ↑ después de una foto en una celda ]
-v0.0XX :
-
-Las plantillas (fase 3) esperaban que Lega definiera sus campos, y en el set no había forma rápida de empezar el reporte
-del día. `Doc_Plantillas.md` propone una primera versión de *Pre-production Notes*, *On-Set Report* y *Shot Breakdown*
-con lo que anota un supervisor de VFX, armadas solo con bloques que ya existen. Una plantilla propia es una página
-marcada en una carpeta *Templates*: sin tabla ni migración, con los permisos de la página. Crear desde una plantilla
-copia los bloques sin borrar nada, también sin red. *New day report* crea la página del día con la fecha local y la
-locación del reporte anterior. Decisiones PL1 a PL10 y cuatro entregas. Una auditoría independiente (aprobado con
-cambios) cambió el atajo a Ctrl/⌘+Alt+Shift+N y sumó datos de set, una sección *Internal* y avisos sin red.
-[ Plantillas - diseño auditado de las tres plantillas, las propias como páginas y el reporte del día ]
-v0.0XX :
-
-No había forma de anotar una foto de set (flechas, círculos, texto, lápiz) sin editarla afuera. `Doc_Anotar_Fotos.md`
-diseña P.20 tomando de referencia LGA FrameRev: las mismas letras de herramienta, el verde y los grosores por defecto,
-Shift y Alt, y los nombres de campo de su `.frproj`. Las anotaciones van en un mapa del documento de la página, afuera
-del contenido, con una clave por forma: se guardan sin red, dos a la vez no se pisan, entran al historial y una versión
-vieja no las borra; las de una foto sacada se podan para que no lleguen a quien solo ve. Se dibujan encima de la foto en
-la página, el carrete y el PDF; la copia anotada se arma al bajar. Auditado y corregido; once decisiones propuestas
-(AN1 a AN11) y seis entregas. Sin código.
-[ Anotar fotos - diseño: anotaciones en el documento de la página, al estilo de FrameRev ]
-v0.0XX :
-
-No había cómo sacar de la app una página con sus subpáginas o un proyecto entero para entregarle al cliente o archivarlo:
-solo el PDF de una página por vez y *Download all* de una carpeta de Drive. `Doc_Exportar.md` lo diseña (P.22, sin
-código): un PDF con toda la rama en orden, un índice con la hoja de cada página y cada página con su tamaño de hoja
-(medido en Chromium), y un zip con HTML, Markdown y JSON por página, los originales y los comentarios, que vuelve a
-Shot Docs como proyecto nuevo. Exporta quien ve, solo lo suyo; nunca lo borrado ni la papelera. Auditado: el zip no
-lleva ningún correo y cada foto tiene una vista JPEG. Decisiones EX1 a EX15 a confirmar.
-[ Exportar - diseño del PDF con índice y del zip para archivar y volver ]
-v0.0XX :
-
-Mencionar a alguien en un comentario no existía: nadie se enteraba de un comentario en una página que no tenía
-abierta. `Doc_Menciones.md` diseña *@persona* (P.21): solo a quien ya ve la página; un miembro ve al equipo y a los
-clientes que ya comentaron, un invitado solo a quienes participan y a quien le compartió algo; el texto sigue plano y
-quién es va en `comment_mentions`, así una versión vieja ve `@lega` sin perder nada; una campana (*9+*) que pregunta
-cada 60 segundos; sin red con la cola de siempre. Correo, después (grupo C). Auditado y corregido (va después del link
-público; compartir desde la mención, solo dueño y admins); ME1 a ME10, ME10 espera a Lega.
-[ Menciones - diseño de @persona en comentarios, con la campana y sin red ]
-v0.0XX :
-
-El asistente de la fase 5 y su servidor MCP esperaban que Lega eligiera entre D-06 y D-07. `Doc_Asistente.md` lo
-diseña sin esperar (IA1 a IA10, propuestas, auditado): la clave de cada persona solo en su dispositivo; el pedido directo
-del navegador al proveedor (Anthropic, OpenAI, Google y compatibles; CORS probado); vista previa y aplicar como una
-edición que se deshace, sin aplicar si el texto cambió mientras tanto; aplicar pide Editar; un interruptor del dueño. El
-MCP va en el portero, con el OAuth del Supabase del workspace, el token cerrado de fábrica, la base limpia de D14 y sin
-escribir en páginas con invitados; con páginas reales pide, casi seguro, el plan pago de Workers (o un MCP local).
-[ Asistente del producto - diseño de la clave, el panel y el servidor MCP ]
-
 v0.108 :
 
 Compartir una página con alguien sin cuenta no existía: solo usuarios invitados. Faltaba un diseño seguro para

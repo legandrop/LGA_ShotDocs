@@ -577,9 +577,6 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 ### C. Esperan a Lega
 
 10. **Fase 3 (plantillas): pasó a P.23** (2026-10-02), con una primera versión de los campos para que Lega la ajuste.
-11. **Fase 5.** Asistente con la clave de cada usuario y MCP: Lega elige entre las opciones de D-06 y D-07.
-10. **Fase 3.** Plantillas: definir con Lega los campos de *Pre-production Notes*, *On-Set Report* y
-    *Shot Breakdown*.
 11. **Pasó a P.24** (2026-10-02): el asistente y el MCP ya no esperan a Lega; diseño en `Doc_Asistente.md`.
 12. **Correo automático de invitaciones** (el portero lo manda con Resend): hace falta una clave de Resend
     solo para enviar, cargada por Lega en el portero. Mientras tanto, la app copia el link.
