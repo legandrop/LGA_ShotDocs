@@ -2,7 +2,7 @@
 
 **Estado: entregas 1 y 2 programadas.** La migración de la entrega 1 (`20261015120000_menciones.sql`, `schema_version`
 15) ya está en la base de Wanka; la de la entrega 2 (`20261016120000_menciones_e2.sql`, `schema_version` 16), sin
-aplicar (ver «Cómo quedó la entrega 1» y «Cómo quedó la entrega 2», abajo; v0.0XX cerró las observaciones de su auditoría). La entrega 3 (correo) sigue en diseño. Roadmap P.21; pedido de Lega del 2026-10-02.
+aplicar (ver «Cómo quedó la entrega 1» y «Cómo quedó la entrega 2», abajo; v0.131 cerró las observaciones de su auditoría). La entrega 3 (correo) sigue en diseño. Roadmap P.21; pedido de Lega del 2026-10-02.
 El diseño de abajo es el de partida: Se diseñó contra `main`
 v0.108, con la base en `schema_version` 13 y `min_app_version` 0.104. Toca permisos y la privacidad de quién ve a
 quién: cada entrega va con sus pruebas de permisos (casos negativos y mutantes) y su auditoría independiente. Las
@@ -105,7 +105,7 @@ auditoría», al final. **Va después del link público** (su migración sube a 
 - **No hace falta subir `min_app_version`**: la entrega 1 publicada ya descarta las filas `has_access = false` y no
   llama a `share_for_mention`; nada de lo que ella usa cambia.
 
-### Arreglos de la auditoría de la entrega 2 (v0.0XX)
+### Arreglos de la auditoría de la entrega 2 (v0.131)
 
 La auditoría de la entrega 2 la aprobó con cinco observaciones; ninguna perdía datos ni daba acceso de más.
 

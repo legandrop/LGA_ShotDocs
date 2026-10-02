@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.131 :
 
 Arreglos de las menciones, entrega 2 (lo que dejó su auditoría). **Sin prueba:** el paso de compartir desde la mención
 por `useShareGate` (sube lo pendiente antes y arma las bases después) no tenía ninguna; había 2 mutantes vivos. Ahora 5
@@ -11,6 +11,18 @@ por código no avisa que cambió la selección. `cancelAsk` la vuelve a leer; pr
 aclara** que se comparte en el acto aunque después no se mande el comentario (O5, y la ayuda). Sin migración: la versión
 mínima en `share_for_mention` (O4) no suma, `public.share` tampoco la mira; compartir en un archivado se deja (O3).
 [ Arreglos de las menciones: la prueba de compartir con la puerta de lo borrado, la lista del @ tras Esc y la pregunta más clara ]
+
+v0.130 :
+
+Buscar dentro de secciones colapsadas (D11) y el reporte de set en la raíz (D82), dos pedidos de Lega del 2026-10-02.
+**Buscar**: las coincidencias escondidas en una sección colapsada solo se veían al ir una por una y esa sección quedaba
+abierta para siempre. Ahora buscar en la página (o abrir un resultado del proyecto) abre todas las secciones que esconden
+coincidencias y las vuelve a cerrar al terminar; es solo la vista de este dispositivo (los registros de "abrir para vos"
+de P.11), no escribe el Y.Doc. **Reporte en la raíz**: *On-Set Report* en una página de la raíz creaba la plantilla común
+sin "ayer" que copiar ni días que numerar. Ahora ofrece la carpeta de reportes que ya tenga el proyecto o crear una
+(*On-Set Reports*), mueve la página adentro y la llena como `2026-10-02 | Day 01`; si la página cambió o falta permiso,
+no escribe nada (`dayReportRoot.ts`, `RootReportDialog.tsx`). Sin migración ni `min_app_version`.
+[ Buscar con secciones colapsadas (D11) y el reporte de set en la raíz (D82) ]
 
 v0.129 :
 
