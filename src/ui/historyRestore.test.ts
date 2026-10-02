@@ -2,7 +2,7 @@
 import type { PartialBlock } from '@blocknote/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { PageHistory, STABLE_GAPS_MARKER, yShape, type HistoryRow } from '../sync/history';
+import { PageHistory, rowHasTrace, STABLE_GAPS_MARKER, yShape, type HistoryRow } from '../sync/history';
 import { STABLE_GAPS_MARKER as GUARD_MARKER } from './unknownContent';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { connect, mountEditor, pmFromY, undoManager, unmountAll, view, yText } from './collabHarness';
@@ -69,9 +69,16 @@ describe('restaurar por el editor', () => {
     const textNow = yText(doc);
     const kept = blockItem(doc, String(idsV[5]));
     expect(kept).not.toBeNull();
+    const afterChanges = Y.encodeStateVector(doc);
+    const changes = Y.encodeStateAsUpdate(doc, Y.encodeStateVector(v));
 
     const outcome = restoreInEditor(view(ed), v);
     expect(outcome.ok).toBe(true);
+    // La huella de la restauración (para *Restored from…*): la reconoce lo que sube después y no lo de antes.
+    const trace = outcome.ok ? outcome.trace : undefined;
+    expect(trace && trace.ins.length + trace.del.length).toBeGreaterThan(0);
+    expect(rowHasTrace(Y.encodeStateAsUpdate(doc, afterChanges), trace!)).toBe(true);
+    expect(rowHasTrace(changes, trace!)).toBe(false);
     expect(yText(doc)).toBe(textV);
     expect(ids(doc)).toEqual(idsV);
     expect(yShape(doc)).toEqual(yShape(v));

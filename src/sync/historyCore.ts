@@ -27,6 +27,8 @@ export interface VersionPayload {
 export type HistoryRequest =
   | { op: 'load'; rows: HistoryRow[]; pageId: string }
   | { op: 'append'; rows: HistoryRow[] }
+  /** Los cortes de las versiones con nombre y de las restauraciones (`versionBreaks` en history.ts). */
+  | { op: 'breaks'; after: number[]; before: number[] }
   | { op: 'version'; seq: number }
   | { op: 'changes'; seq: number };
 
@@ -56,6 +58,10 @@ export class HistoryCore {
       case 'append':
         if (!this.history) throw new Error('not_loaded');
         this.history.append(req.rows);
+        return this.summary();
+      case 'breaks':
+        if (!this.history) throw new Error('not_loaded');
+        this.history.setBreaks(req.after, req.before);
         return this.summary();
       case 'version': {
         const i = this.index(req.seq);

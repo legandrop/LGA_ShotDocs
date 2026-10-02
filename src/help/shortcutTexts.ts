@@ -77,6 +77,7 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   'menusClose': 'shortcut.menusClose',
   'listPick': 'shortcut.listPick',
   'listClose': 'shortcut.listClose',
+  versionName: 'shortcut.versionName',
   tabsMove: 'shortcut.tabsMove',
   tourNext: 'shortcut.tourNext',
   tourBack: 'shortcut.tourBack',

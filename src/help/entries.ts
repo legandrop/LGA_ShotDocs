@@ -90,6 +90,8 @@ const DELETED_PRIVACY = '0.104';
 const HISTORY = '0.098';
 /** Los cambios marcados por persona en el historial (entrega 2; la versión la pone quien publica). */
 const HISTORY_CHANGES = '0.103';
+/** Las versiones con nombre y el historial sin red (entrega 3; la versión la pone quien publica). */
+const HISTORY_NAMES = '0.106';
 /** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
 const REPLACE_PROJECT = '0.094';
 /** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */
@@ -390,6 +392,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.historyChanges.text',
     words: ['cambios', 'mostrar cambios', 'marcas', 'colores', 'tachado', 'subrayado', 'quién escribió', 'show changes', 'changes', 'who wrote', 'compare'],
     since: HISTORY_CHANGES,
+  },
+  {
+    id: 'historyNames',
+    section: 'trash',
+    title: 'help.historyNames.title',
+    text: 'help.historyNames.text',
+    words: ['nombre', 'nombrar', 'versión con nombre', 'restaurada desde', 'sin conexión', 'name', 'named versions', 'restored from', 'offline'],
+    since: HISTORY_NAMES,
   },
 
   // --- Sin red ---

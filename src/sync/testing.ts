@@ -25,11 +25,12 @@ import {
   type MemberRow,
   type HistoryAuthor,
   type HistoryRemote,
+  type NamedVersionsRemote,
   type ProjectStatesRemote,
   type Remote,
   type TeamRemote,
 } from './remote';
-import type { HistoryRow } from './history';
+import type { HistoryRow, PageVersionRow } from './history';
 import {
   CommentQueue,
   commentsDbName,
@@ -81,6 +82,13 @@ export class FakeServer {
   loseNextPushResponse = false;
   /** Como una base sin la migración del historial: `page_history` no existe (PGRST202). */
   historyMissing = false;
+  /** Como una base sin la migración de las versiones con nombre: `list_page_versions` y las demás no existen. */
+  versionsMissing = false;
+  /**
+   * `page_versions` (20261011120000_versiones_con_nombre.sql): nombres y marcas de restauración, con el `id` de su fila
+   * (`updateId`) y `removedAt` (nunca se borran).
+   */
+  readonly versions: (PageVersionRow & { pageId: string; updateId: number; removedAt: string | null; removedBy: string | null })[] = [];
   /** Rechaza las creaciones de páginas como si faltaran permisos. */
   rejectCreates = false;
   /** Tope de tamaño de un update, como en push_page_update (8 MB). */
@@ -907,7 +915,9 @@ const ROLE_RANK: Record<Role, number> = { guest: 1, member: 2, admin: 3, owner: 
 const pageNotFound = () => new RemoteError('page_not_found', true, 'P0002');
 const fileNotFound = () => new RemoteError('file_not_found', true, 'P0002');
 
-export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemote, ProjectStatesRemote, HistoryRemote {
+export class FakeRemote
+  implements Remote, MediaRemote, TeamRemote, CommentRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote
+{
   /** La sesión: por defecto, el dueño del workspace. */
   readonly userId: string;
   readonly email: string;
@@ -1375,6 +1385,134 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       .filter((id): id is string => !!id)
       .map((id) => ({ user_id: id, email: this.server.members.get(id)?.email ?? `${id}@test` }))
       .sort((a, b) => a.email.localeCompare(b.email));
+  }
+
+  // --- Versiones con nombre (las reglas de 20261011120000_versiones_con_nombre.sql) ------------------------------------
+
+  private checkVersions(pageId: string): void {
+    if (this.server.versionsMissing) throw new RemoteError('Could not find the function public.list_page_versions', true, 'PGRST202');
+    this.checkHistory(pageId);
+  }
+
+  private rowOf(pageId: string, seq: number): { id: number; createdBy: string | null } | null {
+    const u = (this.server.updates.get(pageId) ?? []).find((x) => x.seq === seq);
+    return u ? { id: u.id ?? u.seq, createdBy: u.createdBy === undefined ? this.server.ownerId : u.createdBy } : null;
+  }
+
+  private static plain(v: FakeServer['versions'][number]): PageVersionRow {
+    return { id: v.id, seq: v.seq, kind: v.kind, label: v.label, restoredFromSeq: v.restoredFromSeq, createdBy: v.createdBy, createdAt: v.createdAt };
+  }
+
+  private static label(label: string): string {
+    const v = label.replace(/\s+/g, ' ').trim();
+    if (v.length < 1 || v.length > 100) throw new RemoteError('label_invalid', true, '22023');
+    return v;
+  }
+
+  async listPageVersions(pageId: string): Promise<PageVersionRow[]> {
+    this.checkVersions(pageId);
+    return this.server.versions
+      .filter((v) => v.pageId === pageId && v.removedAt === null && this.rowOf(pageId, v.seq)?.id === v.updateId)
+      .sort((a, b) => a.seq - b.seq || a.createdAt.localeCompare(b.createdAt))
+      .map((v) => FakeRemote.plain(v));
+  }
+
+  async namePageVersion(id: string, pageId: string, seq: number, label: string): Promise<PageVersionRow> {
+    this.checkVersions(pageId);
+    const known = this.server.versions.find((v) => v.id === id);
+    if (known) {
+      if (known.pageId !== pageId || known.seq !== seq || known.kind !== 'named') throw new RemoteError('version_conflict', true, 'P0001');
+      if (known.removedAt) throw new RemoteError('version_not_found', true, 'P0002');
+      return FakeRemote.plain(known);
+    }
+    const text = FakeRemote.label(label);
+    const row = this.rowOf(pageId, seq);
+    if (!row) throw new RemoteError('version_not_found', true, 'P0002');
+    if (this.server.versions.some((v) => v.pageId === pageId && v.seq === seq && v.kind === 'named' && v.removedAt === null)) {
+      throw new RemoteError('version_named', true, 'P0001');
+    }
+    this.checkWriteVersion();
+    const v = {
+      id,
+      pageId,
+      seq,
+      updateId: row.id,
+      kind: 'named' as const,
+      label: text,
+      restoredFromSeq: null,
+      createdBy: this.userId,
+      createdAt: new Date(this.server.now()).toISOString(),
+      removedAt: null,
+      removedBy: null,
+    };
+    this.server.versions.push(v);
+    return FakeRemote.plain(v);
+  }
+
+  private manageable(id: string): FakeServer['versions'][number] {
+    const v = this.server.versions.find((x) => x.id === id);
+    if (!v) throw new RemoteError('version_not_found', true, 'P0002');
+    this.checkVersions(v.pageId);
+    return v;
+  }
+
+  private checkManage(v: FakeServer['versions'][number]): void {
+    if (v.kind !== 'named') throw new RemoteError('version_not_named', true, 'P0001');
+    if (v.createdBy !== this.userId && this.team && this.server.pageLevel(this.userId, v.pageId) < 4) {
+      throw new RemoteError('not_allowed', true, '42501');
+    }
+  }
+
+  async renamePageVersion(id: string, label: string): Promise<PageVersionRow> {
+    const v = this.manageable(id);
+    if (v.removedAt) throw new RemoteError('version_not_found', true, 'P0002');
+    this.checkManage(v);
+    const text = FakeRemote.label(label);
+    if (text !== v.label) {
+      this.checkWriteVersion();
+      v.label = text;
+    }
+    return FakeRemote.plain(v);
+  }
+
+  async removePageVersion(id: string): Promise<void> {
+    const v = this.manageable(id);
+    this.checkManage(v);
+    if (v.removedAt) return;
+    this.checkWriteVersion();
+    v.removedAt = new Date(this.server.now()).toISOString();
+    v.removedBy = this.userId;
+  }
+
+  async markPageRestored(id: string, pageId: string, seq: number, fromSeq: number): Promise<PageVersionRow> {
+    this.checkVersions(pageId);
+    const known = this.server.versions.find((v) => v.id === id);
+    if (known) {
+      if (known.pageId !== pageId || known.seq !== seq || known.kind !== 'restore' || known.restoredFromSeq !== fromSeq) {
+        throw new RemoteError('version_conflict', true, 'P0001');
+      }
+      return FakeRemote.plain(known);
+    }
+    const row = this.rowOf(pageId, seq);
+    if (!(fromSeq < seq) || !this.rowOf(pageId, fromSeq) || !row || row.createdBy !== this.userId) {
+      throw new RemoteError('version_not_found', true, 'P0002');
+    }
+    this.checkWriteVersion();
+    const v = {
+      id,
+      pageId,
+      seq,
+      updateId: row.id,
+      kind: 'restore' as const,
+      label: null,
+      restoredFromSeq: fromSeq,
+      createdBy: this.userId,
+      createdAt: new Date(this.server.now()).toISOString(),
+      removedAt: null,
+      removedBy: null,
+    };
+    this.server.versions.push(v);
+    return FakeRemote.plain(v);
   }
 
   async uploadFile(path: string, data: ArrayBuffer, mime: string): Promise<void> {
