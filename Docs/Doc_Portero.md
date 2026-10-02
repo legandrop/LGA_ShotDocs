@@ -11,8 +11,8 @@ dueño, a `Media_Test`) por si la usa una versión vieja. Conectar Drive y elegi
 app los hace solo el dueño (menú de la cuenta → *Google Drive*); subir y ver un archivo de una página depende del permiso de cada
 persona sobre esa página.
 
-Carpetas en el Drive del dueño. Las que crea la app van sin espacios (guiones bajos); las que suelta el usuario
-conservan su nombre (D3, 2026-10-01):
+Carpetas en el Drive del dueño. Ninguna lleva espacios, nunca: guiones bajos, también las que suelta el usuario en
+una página (D3 → B, 2026-10-02; entre v0.089 y v0.123 esas conservaban su nombre y esas subidas no se renombran):
 
 ```
 <carpeta elegida por el dueño, o la raíz de su Drive>
@@ -22,7 +22,7 @@ conservan su nombre (D3, 2026-10-01):
         ├── <AAAA-MM-DD>                (el día en que se subió)
         │   └── IMG_1234.MOV
         └── Carpetas                    (las carpetas soltadas en las páginas, P.9)
-            └── Día 2 - Puerto          (con su árbol, cada carpeta con su nombre tal cual)
+            └── Día_2_-_Puerto          (con su árbol: cada carpeta con su nombre y los espacios en "_")
 ```
 
 - **El nombre del proyecto** se pasa a guiones bajos y se le sacan los caracteres raros (barras, dos puntos,

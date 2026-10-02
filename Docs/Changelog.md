@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.124 :
+
+Las carpetas que se sueltan en una página llegaban al Drive del dueño con espacios (`Día 2 - Puerto`), a diferencia de
+todas las demás que crea la app. Era la regla de v0.089 (D3, 2026-10-01); Lega decidió el 2026-10-02 que ninguna
+carpeta del Drive lleve espacios, nunca (D3 → B). `driveFolderName` del portero vuelve a pasar cada tramo de
+espacios a un `_` (`Día_2_-_Puerto`, también en las subcarpetas) y conserva lo que ya protegía: sin controles,
+marcas de dirección ni ancho cero, el ZWJ solo entre emojis (v0.119), corte de 200 por grafema, `Folder` si queda
+vacío. En la app, la tarjeta sigue con el nombre del usuario. Lo ya subido no se renombra y se encuentra por su
+marca, así que volver a soltarla no duplica nada. Pruebas con una subida de v0.089 a v0.123 retomada.
+[ Carpetas - las que suelta el usuario van al Drive sin espacios, con guiones bajos (D3 → B) ]
+
 v0.123 :
 
 Anotar fotos en la compu (P.20, entrega 2 de `Doc_Anotar_Fotos.md`). Las anotaciones se veían pero no había con qué
