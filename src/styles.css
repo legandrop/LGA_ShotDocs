@@ -2747,6 +2747,13 @@ code {
   font-size: 12px;
 }
 
+/* El PDF en partes (D84): qué parte es y qué páginas lleva, arriba de la fecha. */
+.print-view .sd-export-index-part {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .print-view .sd-export-index-label {
   margin: 0 0 8px;
   font-size: 13px;
@@ -6088,11 +6095,31 @@ ins.replace-new {
   overflow-wrap: anywhere;
 }
 
-.export-too-big ul {
+/* Las páginas que no se pudieron exportar (D88): cada una con su link y *Export again*. */
+.export-failed ul {
   margin: 6px 0 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
   max-height: 180px;
   overflow-y: auto;
+}
+
+.export-failed li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.export-failed li > a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.export-failed li > button {
+  flex: none;
+  margin-left: auto;
 }
 
 .export-progress {
@@ -7797,6 +7824,39 @@ button.folder-row-main:hover {
 
 @media (max-width: 520px) {
   .annotator-name {
+    display: none;
+  }
+}
+
+/* *Dictate to report* (Docs/Doc_Dictado.md, V1): en la compu, el botón de la barra; en el teléfono, uno redondo de 56 px
+   abajo a la derecha (fuera del alcance de los menús de la página) y no el de la barra, que ya está llena. */
+.dictate-fab {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .dictate-top {
+    display: none;
+  }
+
+  .dictate-fab {
+    position: fixed;
+    right: calc(16px + env(safe-area-inset-right));
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    z-index: 25;
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: 1px solid var(--primary-bg);
+    border-radius: 50%;
+    background: var(--primary-bg);
+    color: var(--primary-text);
+    box-shadow: var(--shadow);
+  }
+
+  .nav-open .dictate-fab {
     display: none;
   }
 }

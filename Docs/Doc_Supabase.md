@@ -147,7 +147,7 @@ Deja los snapshots **apagados** (`workspace_settings.snapshot_min_version` nulo)
   página): `select public.invalidate_page_snapshot('<id>', '<motivo>')` con una sesión que edita la página, o desde el
   SQL Editor `select private.invalidate_snapshot_chain(page_id, chain_id, '<motivo>') from public.page_snapshots where
   id = '<id>'`. **Apagar todo:** `snapshot_min_version = null`.
-- **Prenderlos** (entrega 3, listo desde v0.0XX): el script de restaurar del repo de copias ya los anula y los vacía
+- **Prenderlos** (entrega 3, listo desde v0.137): el script de restaurar del repo de copias ya los anula y los vacía
   (D142). Después de la prueba de punta a punta y la medición en el iPhone, el SQL de "Cómo quedó la entrega 3" en
   `Doc_Compactar.md` (sube `snapshot_min_version` y `min_app_version` a esa versión).
 - **Pruebas:** `supabase/tests/snapshots_permisos.sql` (corrida en `begin … rollback`).

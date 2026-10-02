@@ -265,7 +265,7 @@ describe('usar una plantilla propia (4.2)', () => {
     const doc = await a.docs.open(page, { seed: true });
     const editor = mountOn(doc);
     await tick();
-    insertTemplateCopy(editor as never, doc, { ok: true, blocks: foreign.blocks, collapsed: foreign.collapsed });
+    insertTemplateCopy(editor as never, doc, { blocks: foreign.blocks, collapsed: foreign.collapsed });
     await tick();
     expect(mediaIdsInDoc(doc).size).toBe(0);
     expect(JSON.stringify(blocksOf(doc))).toContain('Body');

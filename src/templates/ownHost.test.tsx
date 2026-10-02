@@ -2,6 +2,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { addShape, PHOTO_MARKUP_MAP } from '../media/markup';
+import { PHOTO_MARKUP_CAP } from '../media/markupLimits';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
 import type { SupabaseRemote } from '../sync/remote';
@@ -321,6 +323,76 @@ describe('la ventana Templates con las propias (4.1 y 4.2)', () => {
     expect(text).not.toContain('sdmedia');
     // El foco va al título vacío, como con las de fábrica.
     expect(document.activeElement?.tagName).toBe('TEXTAREA');
+  });
+
+  /** Una plantilla propia con una foto anotada (P.20): la foto `...01` con una flecha. */
+  async function templateWithAnnotatedPhoto(device: Device, projectId: string, long = 0): Promise<string> {
+    const tpl = await device.tree.create(null, 'Annotated', projectId);
+    await writeNewPage(device.docs, tpl, [{ type: 'image', props: { url: 'sdmedia://0f8fad5b-d9cb-469f-a165-708677289501', name: 'a.jpg' } }, { type: 'paragraph', content: 'Body' }] as never);
+    const doc = await device.docs.open(tpl);
+    addShape(doc, '0f8fad5b-d9cb-469f-a165-708677289501', 'flecha', { type: 'arrow', zValue: 1, posX: 10, posY: 10, startX: 0, startY: 0, endX: 50, endY: 50 }, { w: 4000, h: 3000 });
+    if (long) addShape(doc, '0f8fad5b-d9cb-469f-a165-708677289501', 'larga', { type: 'text', zValue: 2, text: 'x'.repeat(long) }, { w: 4000, h: 3000 });
+    await device.docs.flush(tpl);
+    device.docs.close(tpl);
+    await device.tree.setSetting(tpl, 'template', { description: 'Has arrows' });
+    return tpl;
+  }
+
+  async function pageMarkup(device: Device, pageId: string): Promise<string[]> {
+    const doc = await device.docs.open(pageId);
+    try {
+      return Object.keys(doc.getMap(PHOTO_MARKUP_MAP).toJSON()).sort();
+    } finally {
+      device.docs.close(pageId);
+    }
+  }
+
+  it('Use en una del mismo proyecto lleva las anotaciones de sus fotos; la de otro proyecto no (ni la foto)', async () => {
+    const { device } = await setup();
+    const home = device.tree.workspaceId;
+    const ours = await templateWithAnnotatedPhoto(device, home);
+    const other = await device.tree.createProject('MGTZD');
+    const theirs = await templateWithAnnotatedPhoto(device, other);
+    const photo = '0f8fad5b-d9cb-469f-a165-708677289501';
+
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    click([...host.querySelectorAll('.template-chip')].find((b) => b.textContent === 'More…'));
+    await waitFor(() => dialog('Templates'));
+    click([...dialog('Templates')!.querySelectorAll(`[data-template-page="${ours}"] button`)].find((b) => b.textContent === 'Use'));
+    await waitFor(() => device.tree.get(page)?.template_id === ours);
+    await wait(80);
+    expect(await pageMarkup(device, page)).toEqual([photo, `${photo}/flecha`]);
+    expect(notices).toEqual([]);
+
+    // Otra página, de la de otro proyecto: sin foto y sin anotaciones.
+    const page2 = await device.tree.create(null, '');
+    unmountAll();
+    for (const r of roots.splice(0)) act(() => r.unmount());
+    document.body.innerHTML = '';
+    const host2 = await open(device, page2);
+    click([...host2.querySelectorAll('.template-chip')].find((b) => b.textContent === 'More…'));
+    await waitFor(() => dialog('Templates'));
+    click([...dialog('Templates')!.querySelectorAll(`[data-template-page="${theirs}"] button`)].find((b) => b.textContent === 'Use'));
+    await waitFor(() => device.tree.get(page2)?.template_id === theirs);
+    await wait(80);
+    expect(await pageMarkup(device, page2)).toEqual([]);
+    expect(await pageText(device, page2)).not.toContain('sdmedia');
+  });
+
+  it('si las anotaciones no entran por los topes de la página, la foto llega limpia y se avisa', async () => {
+    const { device } = await setup();
+    const tpl = await templateWithAnnotatedPhoto(device, device.tree.workspaceId, PHOTO_MARKUP_CAP + 10);
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    click([...host.querySelectorAll('.template-chip')].find((b) => b.textContent === 'More…'));
+    await waitFor(() => dialog('Templates'));
+    click([...dialog('Templates')!.querySelectorAll(`[data-template-page="${tpl}"] button`)].find((b) => b.textContent === 'Use'));
+    await waitFor(() => device.tree.get(page)?.template_id === tpl);
+    await wait(80);
+    expect(notices).toContain('Some photos came without their annotations: this page already has too many.');
+    expect(await pageMarkup(device, page)).toEqual([]);
+    expect(await pageText(device, page)).toContain('sdmedia://0f8fad5b-d9cb-469f-a165-708677289501');
   });
 
   it('Customize hace la copia en Templates y la abre; sin permiso para crear, apagado con el porqué', async () => {

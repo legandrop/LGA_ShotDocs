@@ -6,7 +6,7 @@ import { measureUnits, paginate, SHEET_TOLERANCE_PX, type Unit } from '../ui/pag
 import { applyBreaks, type Paginated, type PrintView } from '../ui/printView';
 import { internalPageId } from '../ui/internalLinks';
 import { commentsSection, type CommentSource } from './exportComments';
-import { imagesLoaded, PixelBudget, shrinkImages, workerResizer, type ImageSource, type Resizer } from './exportImages';
+import { imagesLoaded, PhotoLimitError, PixelBudget, shrinkImages, workerResizer, type ImageSource, type Resizer } from './exportImages';
 import { ExportCancelled, type ExportEditor } from './exportEditor';
 import { renderPages, type ContentGap, type ExportedPage, type ExportPlanPage, type ExportProgress, type ExportSource } from './exportPages';
 import type { PageContent } from './pageContent';
@@ -15,7 +15,9 @@ import type { PageContent } from './pageContent';
 //
 // Un solo PDF por la impresión del navegador (sin librerías de PDF, como la fase 4): una vista con el índice y todas
 // las páginas una detrás de otra, cada una con su hoja ("páginas con nombre" de CSS) y los mismos cortes que marca la
-// pantalla, y un solo `window.print()`. Cada página sale del editor de exportación (exportEditor.tsx: bloques puestos
+// pantalla, y un solo `window.print()`. Si lo elegido pasa los topes de este dispositivo (páginas, píxeles o peso de
+// las fotos), el PDF sale en partes (D84, Lega 2026-10-02): páginas enteras, en orden, *Part 1*, *Part 2*…; cada parte
+// es un libro con su índice, que se arma cuando la anterior ya se guardó (así nunca hay dos en la memoria). Cada página sale del editor de exportación (exportEditor.tsx: bloques puestos
 // en un editor sin colaboración, copiados con la vista de impresión y paginados); acá se le suman los avisos, los
 // comentarios, los links entre páginas y las fotos achicadas, se vuelve a paginar y se junta. El índice se pagina al
 // final, cuando ya se sabe cuántas hojas ocupa cada página: así el número de hoja de cada renglón es el del PDF.
@@ -23,14 +25,18 @@ import type { PageContent } from './pageContent';
 
 type Format = Pick<PageFormat, 'size' | 'landscape'>;
 
-/** Los topes de un PDF (Docs/Doc_Exportar.md, sección 5): a ajustar con lo medido. */
+/** Los topes de un PDF (o de cada parte; Docs/Doc_Exportar.md, sección 5): a ajustar con lo medido. */
 export interface PdfLimits {
   /** Páginas por PDF. */
   pages: number;
-  /** Píxeles decodificados de las fotos (ya achicadas) de todo el PDF. */
+  /** Píxeles decodificados de las fotos achicadas (*Smaller file*) de un PDF. */
   pixels: number;
-  /** Nítidas pedidas al Drive con *Sharp photos*. */
+  /** Nítidas pedidas al Drive con *Smaller file*. */
   sharp: number;
+  /** Con las fotos en resolución completa (D85): sus píxeles por PDF… */
+  fullPixels: number;
+  /** …y su peso (bytes): un JPEG entra tal cual al PDF, así que el PDF pesa más o menos esto. */
+  bytes: number;
 }
 
 /**
@@ -40,19 +46,27 @@ export interface PdfLimits {
  */
 export function deviceLimits(touch: boolean, memoryGb: number | undefined = typeof navigator === 'undefined' ? undefined : (navigator as Navigator & { deviceMemory?: number }).deviceMemory): PdfLimits {
   if (touch) return PDF_LIMITS.touch;
-  if (typeof memoryGb === 'number' && memoryGb > 0 && memoryGb < 8) return { ...PDF_LIMITS.desktop, pixels: SMALL_DESKTOP_PIXELS };
+  if (typeof memoryGb === 'number' && memoryGb > 0 && memoryGb < 8) return { ...PDF_LIMITS.desktop, ...SMALL_DESKTOP };
   return PDF_LIMITS.desktop;
 }
 
-/** El tope de píxeles de una computadora con menos de 8 GB. */
-export const SMALL_DESKTOP_PIXELS = 400_000_000;
+/** Los topes de una computadora con menos de 8 GB. */
+export const SMALL_DESKTOP = { pixels: 400_000_000, fullPixels: 800_000_000, bytes: 200_000_000 };
+/** El tope de píxeles (fotos achicadas) de una computadora con menos de 8 GB. */
+export const SMALL_DESKTOP_PIXELS = SMALL_DESKTOP.pixels;
 
 export const PDF_LIMITS: { desktop: PdfLimits; touch: PdfLimits } = {
   // Medido en Chrome con la impresión real (entrega 1): 300 páginas con 2219 fotos son 882 millones de píxeles y los
   // procesos del navegador llegan a 3,3 GB mientras arma el PDF. El tope deja pasar ese proyecto y corta antes de
   // los 4 GB.
-  desktop: { pages: 500, pixels: 1_000_000_000, sharp: 1000 },
-  touch: { pages: 60, pixels: 50_000_000, sharp: 100 },
+  // Con los originales (entrega 1b, medido con `page.pdf` de Chromium, Docs/Doc_Exportar.md): un JPEG entra tal cual al
+  // PDF y la memoria sigue al peso, no a los píxeles. El proyecto de 300 páginas con fotos de teléfono (3,75 MB) en
+  // partes de 800 MB llegó a 3 a 4,6 GB por encima de la app quieta; en partes de 400 MB, 0,9 a 2,7 GB (lo de la parte
+  // anterior tarda en soltarse). 500 MB (unas 130 fotos de teléfono por parte) deja margen en una compu de 8 GB, que
+  // el navegador no distingue de una de 32. El diálogo de imprimir de verdad suma la vista previa (sin medir).
+  desktop: { pages: 500, pixels: 1_000_000_000, sharp: 1000, fullPixels: 2_000_000_000, bytes: 500_000_000 },
+  // Teléfono o tableta: sin medir (WebKit). Unas 15 fotos de teléfono por parte.
+  touch: { pages: 60, pixels: 50_000_000, sharp: 100, fullPixels: 150_000_000, bytes: 60_000_000 },
 };
 
 /** El prefijo del id de cada página en la vista (destino de los links internos del PDF). */
@@ -90,8 +104,16 @@ export interface BookPage {
   outdated: boolean;
   unknown: boolean;
   failed: boolean;
+  /** Por qué falló: no se pudo leer o dibujar, o sus fotos solas pasan el tope de un PDF. */
+  failReason?: 'error' | 'photos';
   /** Fotos que no llegaron a tiempo (pueden salir en blanco). */
   imagesTimedOut: boolean;
+  /** Con resolución completa: fotos que salieron achicadas (sin su original a mano, o la página sola pasaba el tope). */
+  lowRes: number;
+  /** Sus fotos solas pasaban el tope de un PDF: salieron todas achicadas (avisado arriba del título). */
+  shrunkToFit: boolean;
+  /** Fotos cuyo original no llegó a tiempo (la bajada pasó su tope): salieron achicadas y la página va a la lista. */
+  timedOut: number;
   /** Milisegundos: leer y dibujar en el editor (por paso) y achicar las fotos (para medir). */
   ms?: ExportedPage['ms'] & { photos: number; load: number };
 }
@@ -99,9 +121,20 @@ export interface BookPage {
 export interface PdfBook {
   /** La vista entera (en el documento, afuera de la pantalla). */
   root: HTMLElement;
-  /** El nombre del PDF: el título de la raíz y la fecha. */
+  /** El nombre del PDF: el título de la raíz y la fecha (y *Part N* si sale en partes). */
   fileTitle: string;
   pages: BookPage[];
+  /** Las páginas del plan que lleva este libro: de `from` a `to` (sin incluir). */
+  from: number;
+  to: number;
+  /** Cuántas páginas tiene lo elegido entero (el plan). */
+  total: number;
+  /** El número de parte (1, 2…), o `null` si lo elegido entró entero en un solo PDF. */
+  part: number | null;
+  /** Peso de las fotos (bytes), con resolución completa. */
+  bytes: number;
+  /** Los originales ya traídos de la primera página de la parte siguiente (la que no entró): se pasan a esa parte. */
+  carry: Map<string, Blob> | null;
   indexSheets: number;
   sheets: number;
   /** Las reglas `@page` para imprimir. */
@@ -116,13 +149,6 @@ export interface PdfBook {
   destroy(): void;
 }
 
-/** Se superó el tope de páginas: la ventana lo dice antes de empezar. */
-export class PageLimitError extends Error {
-  constructor(readonly pages: number, readonly limit: number) {
-    super('Too many pages for one PDF');
-    this.name = 'PageLimitError';
-  }
-}
 
 export interface BuildOptions {
   /** El título de la raíz de lo exportado (el proyecto, o la página raíz de la rama: nunca nada de arriba). */
@@ -137,6 +163,22 @@ export interface BuildOptions {
   resizer?: Resizer;
   /** Con la casilla *Comments*. */
   comments?: CommentSource | null;
+  /** Las fotos en resolución completa (D85: lo de siempre); `false` con *Smaller file*. */
+  full?: boolean;
+  /** Pasa un HEIC a JPEG (el convertidor de la app), para su original donde el navegador no lo abre. */
+  convertHeic?: ((blob: Blob) => Promise<Blob>) | null;
+  /** Cuánto se espera a que carguen las fotos cambiadas de cada página (las pruebas, sin cargar imágenes: 0). */
+  photoLoadMs?: number;
+  /** Los originales que dejó la parte anterior (`PdfBook.carry`): no se vuelven a bajar. */
+  carry?: Map<string, Blob> | null;
+  /** Píxeles que se pueden estar convirtiendo a la vez (`DECODE_PIXELS`; las pruebas lo achican). */
+  decodePixels?: number;
+  /** El tope de tiempo de cada bajada de un original (`ORIGINAL_TIMEOUT_MS`; las pruebas lo achican). */
+  downloadMs?: number;
+  /** Desde qué página del plan arranca este libro (el PDF en partes: donde terminó la parte anterior). */
+  from?: number;
+  /** El número de esta parte (1 la primera). */
+  part?: number;
   /** Cada página con su hoja (`keepsPageSizes`); si no, todas con la de la raíz. */
   named: boolean;
   limits: PdfLimits;
@@ -214,6 +256,14 @@ export function rewriteLinks(root: HTMLElement, inside: ReadonlySet<string>): vo
   }
 }
 
+/** Los links internos del libro a una página que quedó en otra parte del PDF: solo su texto. */
+export function unlinkOutside(root: HTMLElement, included: ReadonlySet<string>): void {
+  for (const a of root.querySelectorAll<HTMLAnchorElement>(`a[href^="#${ANCHOR_PREFIX}"]`)) {
+    const id = (a.getAttribute('href') ?? '').slice(1 + ANCHOR_PREFIX.length);
+    if (id !== 'index' && !included.has(id)) a.replaceWith(...a.childNodes);
+  }
+}
+
 /** La línea de aviso arriba del título de una página. */
 function noteLine(view: PrintView, text: string): void {
   const note = el('p', 'sd-export-note sd-export-unit', text);
@@ -232,22 +282,25 @@ function isoDay(at: Date): string {
 }
 
 /**
- * Arma la vista del PDF: el índice y cada página con su hoja, paginadas. Tira `PageLimitError` antes de empezar si
- * son demasiadas páginas, `PhotoLimitError` si las fotos pasan el tope de píxeles, y `ExportCancelled` al cancelar;
- * en los tres casos no deja nada en el documento.
+ * Arma la vista del PDF: el índice y cada página con su hoja, paginadas, desde la página `from` del plan hasta llenar
+ * un tope (páginas, píxeles o peso de las fotos). Si no entró todo, el libro es una parte (`part`) y `to` dice dónde
+ * sigue la próxima; una página nunca se parte. Tira `ExportCancelled` al cancelar, sin dejar nada en el documento.
  */
 export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
   const now = options.now ?? new Date();
-  if (options.plan.length > options.limits.pages) throw new PageLimitError(options.plan.length, options.limits.pages);
+  const from = Math.max(0, Math.min(options.from ?? 0, options.plan.length));
   // Donde el diálogo no respeta cada hoja, todas con la de la raíz, y se pagina con esa (así el índice es cierto).
   const rootFormat: Format = options.plan[0]?.format ?? { size: 'A4', landscape: false };
-  const plan = options.named ? options.plan : options.plan.map((p) => ({ ...p, format: rootFormat }));
-  const inside = new Set(plan.map((p) => p.id));
+  const whole = options.named ? options.plan : options.plan.map((p) => ({ ...p, format: rootFormat }));
+  // Esta parte: como mucho el tope de páginas; las fotos pueden cortarla antes.
+  const plan = whole.slice(from, from + Math.max(1, options.limits.pages));
+  const inside = new Set(whole.map((p) => p.id));
   const book = el('div', 'print-output sd-export-book');
   book.setAttribute('aria-hidden', 'true');
   document.body.append(book);
   const urls: string[] = [];
-  const budget = new PixelBudget(options.limits.pixels);
+  const full = options.full === true && !!options.images?.original;
+  const budget = new PixelBudget(full ? options.limits.fullPixels : options.limits.pixels, full ? options.limits.bytes : Infinity);
   // Las fotos se achican en Workers (fuera del hilo de la pantalla), salvo que se pase otro achicador (las pruebas).
   const pool = options.resizer ? null : workerResizer();
   const resizer = options.resizer ?? pool!;
@@ -258,6 +311,10 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
     book.remove();
     for (const v of views) v.root.remove();
     for (const url of urls) URL.revokeObjectURL(url);
+  };
+  const drop = (view: PrintView) => {
+    view.root.remove();
+    views.delete(view);
   };
 
   /** Deja una página paginada en la vista del PDF. */
@@ -271,19 +328,35 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
     pages.push({ id: page.id, title: page.title, depth: page.depth, format: page.format, start: 0, sheets: result.pagination.sheets, ...info });
   };
 
+  /** Una página que no se pudo armar: su título y el aviso, en su lugar. */
+  const placeFailed = (page: ExportPlanPage, reason: 'error' | 'photos') => {
+    const view = plainView(page.format, 'sd-export-failed');
+    views.add(view);
+    view.page.append(el('h1', 'page-title', page.title.trim() || t('common.untitled')));
+    noteLine(view, t(reason === 'photos' ? 'exportPdf.failedPhotos' : 'exportPdf.failedPage'));
+    place(view, page, { outdated: false, unknown: false, failed: true, failReason: reason, imagesTimedOut: false, lowRes: 0, shrunkToFit: false, timedOut: 0 });
+  };
+
+  /** Con el progreso de lo elegido entero (no el de esta parte). */
+  const progress = (p: ExportProgress) => options.onProgress?.({ ...p, done: p.done + from, total: whole.length });
+
   try {
-    // Los comentarios de los demás, al día (con red): antes de dibujar, con su propio avance.
+    // Los comentarios de los demás, al día (con red): antes de dibujar, con su propio avance. Con el PDF en partes, la
+    // primera baja todo lo que falta y las siguientes no vuelven a pedir lo ya bajado.
     let commentsStale = 0;
     if (options.comments?.prepare) {
-      commentsStale = await options.comments.prepare(
-        plan.map((p) => p.id),
-        { signal: options.signal, onProgress: (done, total) => options.onProgress?.({ done, total, title: '', step: 'comments' }) },
-      );
+      const rest = whole.slice(from).map((p) => p.id);
+      commentsStale = await options.comments.prepare(rest, {
+        signal: options.signal,
+        onProgress: (done, total) => options.onProgress?.({ done, total, title: '', step: 'comments' }),
+      });
       if (options.signal?.aborted) throw new ExportCancelled();
     }
+    let to = from + plan.length;
+    let carry: Map<string, Blob> | null = null;
     await renderPages(plan, options.source, options.editor, {
       signal: options.signal,
-      onProgress: options.onProgress,
+      onProgress: progress,
       onPage: async (rendered, content: PageContent, page, out: ExportedPage) => {
         const view = rendered.view;
         views.add(view);
@@ -298,21 +371,66 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
           if (section) view.page.append(section);
         }
         const t0 = performance.now();
-        const shrunk = await shrinkImages(view.root, { source: options.images, budget, resizer, signal: options.signal });
+        // Lo que le queda a esta parte (a la primera página de una parte, el tope entero).
+        const first = pages.length === 0;
+        const own = new PixelBudget(first ? budget.limit : budget.limit - budget.used, first ? budget.byteLimit : budget.byteLimit - budget.bytes);
+        const shrinkWith = (b: PixelBudget, fullSize: boolean) =>
+          shrinkImages(view.root, {
+            source: options.images,
+            budget: b,
+            resizer,
+            signal: options.signal,
+            full: fullSize,
+            convertHeic: options.convertHeic,
+            carry: options.carry,
+            decodePixels: options.decodePixels,
+            downloadMs: options.downloadMs,
+          });
+        let shrunk: Awaited<ReturnType<typeof shrinkImages>>;
+        let shrunkToFit = false;
+        try {
+          shrunk = await shrinkWith(own, full);
+        } catch (err) {
+          if (!(err instanceof PhotoLimitError)) throw err;
+          if (!first) {
+            // No entra en esta parte: va primera en la siguiente (se vuelve a dibujar ahí).
+            to = from + plan.indexOf(page);
+            carry = err.fetched && err.fetched.size > 0 ? err.fetched : null;
+            drop(view);
+            return 'stop';
+          }
+          // Sola no entra en un PDF: con las fotos achicadas, avisado; y si ni así, se saltea marcada.
+          try {
+            if (!full) throw err;
+            const small = new PixelBudget(options.limits.pixels);
+            shrunk = await shrinkWith(small, false);
+            own.used = small.used;
+            own.bytes = 0;
+            shrunkToFit = true;
+            noteLine(view, t('exportPdf.shrunkToFit'));
+          } catch (again) {
+            if (!(again instanceof PhotoLimitError)) throw again;
+            drop(view);
+            placeFailed(page, 'photos');
+            return;
+          }
+        }
+        budget.used += own.used;
+        budget.bytes += own.bytes;
         urls.push(...shrunk.urls);
         const t1 = performance.now();
-        if (shrunk.shrunk > 0) await imagesLoaded(view.root, 6000);
+        if (shrunk.shrunk + shrunk.full > 0) await imagesLoaded(view.root, options.photoLoadMs ?? 6000);
         const ms = { ...out.ms, photos: t1 - t0, load: performance.now() - t1, ...Object.fromEntries(Object.entries(shrunk.ms).map(([k, v]) => [`photo_${k}`, v])) };
-        place(view, page, { outdated, unknown, failed: false, imagesTimedOut: out.imagesTimedOut, ms });
+        const lowRes = shrunkToFit ? shrunk.shrunk + shrunk.kept : shrunk.lowRes;
+        place(view, page, { outdated, unknown, failed: false, imagesTimedOut: out.imagesTimedOut, lowRes, shrunkToFit, timedOut: shrunk.timedOut, ms });
       },
-      onFailed: (page) => {
-        const view = plainView(page.format, 'sd-export-failed');
-        views.add(view);
-        view.page.append(el('h1', 'page-title', page.title.trim() || t('common.untitled')));
-        noteLine(view, t('exportPdf.failedPage'));
-        place(view, page, { outdated: false, unknown: false, failed: true, imagesTimedOut: false });
-      },
+      onFailed: (page) => placeFailed(page, 'error'),
     });
+    if (options.signal?.aborted) throw new ExportCancelled();
+    const done = to >= whole.length;
+    const part = options.part && options.part > 1 ? options.part : done ? null : 1;
+    const included = new Set(pages.map((p) => p.id));
+    if (options.comments?.stale) commentsStale = [...included].filter((id) => options.comments!.stale!(id)).length;
 
     // El índice: se pagina con la hoja de la raíz y recién ahí se escriben los números.
     const index = plainView(rootFormat, 'sd-export-index');
@@ -320,6 +438,9 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
     const head = el('div', 'sd-export-index-head sd-export-unit');
     // Sin la clase `page-title`: el encabezado entero es una sola unidad de la paginación.
     head.append(el('h1', 'sd-export-index-title', options.title.trim() || t('common.untitled')));
+    if (part !== null) {
+      head.append(el('p', 'sd-export-index-part', t('exportPdf.part', { part, first: from + 1, last: to, total: whole.length })));
+    }
     const asOf = options.lastSync ? t('exportPdf.asOf', { date: formatDate(options.lastSync, true) }) : null;
     head.append(el('p', 'sd-export-index-meta', [t('exportPdf.exported', { date: formatDate(now, false) }), asOf].filter(Boolean).join(' · ')));
     if (commentsStale > 0) {
@@ -351,16 +472,25 @@ export async function buildPdf(options: BuildOptions): Promise<PdfBook> {
     index.root.id = 'sd-x-index';
     if (options.named) index.root.style.setProperty('page', sheetName(rootFormat));
     book.prepend(index.root);
+    // Un link a una página de otra parte no tiene destino en este PDF: queda como texto.
+    unlinkOutside(book, included);
 
+    const name = `${options.title.trim() || t('common.untitled')} ${isoDay(now)}`;
     return {
       root: book,
-      fileTitle: `${options.title.trim() || t('common.untitled')} ${isoDay(now)}`,
+      fileTitle: part === null ? name : `${name} ${t('exportPdf.partName', { part })}`,
       pages,
+      from,
+      to,
+      total: whole.length,
+      part,
       indexSheets,
       sheets: next - 1,
       css: pageRules([rootFormat, ...pages.map((p) => p.format)], options.named),
       named: options.named,
       pixels: budget.used,
+      bytes: budget.bytes,
+      carry,
       commentsStale,
       destroy,
     };

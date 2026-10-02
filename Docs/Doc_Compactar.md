@@ -2,7 +2,7 @@
 
 **Estado: entregas 1, 2 y 3 implementadas (LEER snapshots, v0.127, migración `20261019120000_compactar_leer.sql`;
 CREARLOS en el dispositivo, v0.133, migración `20261020120000_compactar_crear.sql`; dejarlos LISTOS PARA PRENDER,
-v0.0XX, migración `20261025120000_compactar_prender.sql`; ver "Cómo quedó la entrega 1", "… 2" y "… 3", al final).
+v0.137, migración `20261025120000_compactar_prender.sql`; ver "Cómo quedó la entrega 1", "… 2" y "… 3", al final).
 Siguen apagados: el interruptor está listo y se prende con un SQL después de la prueba de punta a punta y la medición
 en el iPhone que hace Lega** (roadmap B.9, diseño del 2026-10-01). Toca la regla de no perder datos, así que va con
 pruebas antes de cualquier código que escriba en la base. **Revisado el 2026-10-01 con el diseño del historial
@@ -688,7 +688,7 @@ Antes de escribir en la base, en este orden:
    migrar.
 2. **Crear snapshots** (hecha, v0.133): `compact.ts`, el paso en el ciclo, la confirmación, la invalidación y el
    rearmado por `content_epoch` (D110); las pruebas 1, 3 completas y 4. Se publica con los snapshots apagados.
-3. **Prenderlos** (hecha la parte de código, v0.0XX; ver "Cómo quedó la entrega 3"): el script de restaurar (D142),
+3. **Prenderlos** (hecha la parte de código, v0.137; ver "Cómo quedó la entrega 3"): el script de restaurar (D142),
    la marca del rearmado guardada (R-1), la huella (O-D), lo medido (O-C) y la bajada sin versión sin snapshots.
    Falta lo de Lega: probar de punta a punta en un proyecto de prueba (7) y medir en el iPhone (8); después el SQL
    de prender. Mirar los snapshots inválidos y las páginas salteadas (`page_compaction.skip_why`) la primera semana.
@@ -911,7 +911,7 @@ azar ahora mezcla restaurar con snapshots malos; 8 mutantes de las correcciones,
 
 ## Cómo quedó la entrega 3 (LISTOS PARA PRENDER)
 
-Implementada en v0.0XX. Todo lo que hacía falta del lado del código para prenderlos está hecho; **siguen apagados**
+Implementada en v0.137. Todo lo que hacía falta del lado del código para prenderlos está hecho; **siguen apagados**
 (`snapshot_min_version` nulo) hasta que Lega pruebe de punta a punta con sesión y mida en el iPhone (pruebas 7 y 8, que
 piden login). Con ellos apagados la app hace exactamente los mismos pedidos que v0.133.
 
