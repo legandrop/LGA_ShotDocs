@@ -98,7 +98,8 @@ export function checkCleanBase(base: Uint8Array, source: Y.Doc): string | null {
 /**
  * Si `incoming` (una base que bajó) cubre lo guardado: se lee entera, tiene todo lo de cada autor que tiene lo guardado
  * y todos sus borrados. Recién así puede reemplazar lo guardado sin que se pierda nada visible (lo que no cubre se
- * suma como una fila más).
+ * suma como una fila más). Lo guardado con piezas pendientes (que esperan algo que no llegó) no se cubre nunca: no
+ * cuentan en el vector de estado ni en los borrados, y reemplazarlo las tiraría.
  */
 export function coversLocal(rows: Uint8Array[], incoming: Uint8Array): boolean {
   const inc = new Y.Doc();
@@ -107,6 +108,7 @@ export function coversLocal(rows: Uint8Array[], incoming: Uint8Array): boolean {
     Y.applyUpdate(inc, incoming);
     if (inc.store.pendingStructs || inc.store.pendingDs) return false;
     if (rows.length > 0) Y.applyUpdate(local, Y.mergeUpdates(rows));
+    if (local.store.pendingStructs || local.store.pendingDs) return false;
     const have = Y.decodeStateVector(Y.encodeStateVector(inc));
     for (const [client, clock] of Y.decodeStateVector(Y.encodeStateVector(local))) {
       if ((have.get(client) ?? 0) < clock) return false;

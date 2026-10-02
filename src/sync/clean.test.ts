@@ -549,6 +549,35 @@ describe('las cuentas (clean.ts) y lo guardado en el dispositivo', () => {
     good.doc.destroy();
   });
 
+  it('una base no cubre lo guardado si lo guardado tiene piezas pendientes (que esperan algo que no llegó)', async () => {
+    const { buildCleanBase, coversLocal } = await import('./clean');
+    // A escribe; B, con lo de A, sigue escribiendo. Lo guardado tiene solo la fila de B: sus piezas cuelgan de las de
+    // A, que no están, y quedan pendientes (no cuentan en el vector de estado ni en los borrados).
+    const a = new Y.Doc();
+    a.getText('t').insert(0, '<t1> ');
+    const b = new Y.Doc();
+    Y.applyUpdate(b, Y.encodeStateAsUpdate(a));
+    const before = Y.encodeStateVector(b);
+    b.getText('t').insert(5, '<t2> ');
+    const onlyB = Y.encodeStateAsUpdate(b, before);
+    const probe = new Y.Doc();
+    Y.applyUpdate(probe, onlyB);
+    expect(probe.store.pendingStructs).not.toBe(null);
+    probe.destroy();
+    // Una base con otra cosa, entera: no tiene lo de B. Reemplazar lo guardado tiraría <t2> (que se armaría al llegar
+    // lo de A): no lo cubre.
+    const other = new Y.Doc();
+    other.getText('t').insert(0, '<t3> ');
+    const base = buildCleanBase([Y.encodeStateAsUpdate(other)]);
+    expect(coversLocal([onlyB], base.base)).toBe(false);
+    // Con lo de A guardado también, ya no hay nada pendiente y la cuenta es la de siempre.
+    expect(coversLocal([Y.encodeStateAsUpdate(a), onlyB], base.base)).toBe(false);
+    const full = buildCleanBase([Y.encodeStateAsUpdate(a), onlyB]);
+    expect(coversLocal([Y.encodeStateAsUpdate(a), onlyB], full.base)).toBe(true);
+    base.doc.destroy();
+    full.doc.destroy();
+  });
+
   it('una base no reemplaza lo guardado de un invitado con algo sin subir: se suma y no se pierde nada', async () => {
     const { server, e1, page, tick } = await setup();
     await edit(e1, page, add('<t1>'));
