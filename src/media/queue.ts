@@ -231,6 +231,7 @@ export type MediaPortero = Pick<Portero, 'upload' | 'pass' | 'trash'> & {
   passInfo?: (target: { file: string }) => Promise<{ url: string; named: boolean }>;
   status?: Portero['status'];
   verify?: Portero['verify'];
+  relink?: Portero['relink'];
 };
 
 export interface MediaQueueOptions {
@@ -389,6 +390,8 @@ export interface MediaSource {
   original: Blob | null;
   /** El tipo (`files.mime`), si se sabe. */
   mime?: string;
+  /** Se agregó en este dispositivo y su original se liberó (está en Drive): para el aviso sin conexión. */
+  freed?: boolean;
 }
 
 /** Lo que se sabe de un archivo sin esperar a nada (ver `MediaQueue.fileInfo`). */
@@ -732,7 +735,7 @@ export class MediaQueue {
           try {
             const own = this.db ? await this.db.get('files', id) : undefined;
             if (own) {
-              this.remember(id, own, true);
+              this.remember(id, own, !own.freedAt);
               return;
             }
             const known = (this.db ? await this.db.get('known', id) : undefined) ?? (await this.fetchMeta(id).catch(() => null));
@@ -1432,7 +1435,15 @@ export class MediaQueue {
         }
       }
 
-      const blob = await this.store.get('blobs', record.id);
+      let blob: Blob | undefined = await this.store.get('blobs', record.id);
+      if (!blob && record.freedAt) {
+        // El original se liberó (Drive tenía el mismo archivo) y una restauración de la base lo volvió a la cola. Si
+        // hay una copia bajada entera, se sube esa (es el mismo archivo); si no, se vuelve a enlazar sin mandar bytes
+        // (Docs/Doc_Copias_Locales.md, sección 7).
+        const copy = this.db ? await readCopy(this.db, record.id).catch(() => null) : null;
+        if (copy && copy.size === record.size) blob = copy;
+        else return await this.relinkFreed(record, portero);
+      }
       if (!blob) {
         await this.patch(record.id, { error: stored('queue.originalMissing'), blocked: true });
         return 'blocked';
@@ -1752,6 +1763,25 @@ export class MediaQueue {
     // Medidas y miniatura del HEIC (Safari lo abre; Chrome no): las del archivo que se va a subir.
     await this.ensureProbed(id);
     this.thumbReady(id);
+  }
+
+  /**
+   * Un original liberado que volvió a la cola (una restauración de la base): `POST /upload` con `only: 'known'`, sin
+   * bytes. Si el portero recuerda la subida o la encuentra en Drive por su marca, le avisa a la base y queda subido.
+   * Si no, o con un portero que no anuncia `known` (abriría una subida nueva), se detiene con el aviso: el archivo
+   * está en el Drive del dueño, pero este dispositivo ya no tiene con qué volver a subirlo.
+   */
+  private async relinkFreed(record: MediaRecord, portero: MediaPortero): Promise<Outcome | 'done'> {
+    const stop = async (): Promise<Outcome> => {
+      await this.patch(record.id, { error: stored('queue.freedUnknown'), blocked: true });
+      this.onChange?.();
+      return 'blocked';
+    };
+    if (!portero.relink || !(await this.features()).includes('known')) return stop();
+    const found = await portero.relink({ id: record.id, day: record.day, name: record.name, mime: record.mime, size: record.size });
+    if (!found) return stop();
+    if (await this.confirmed(record.id)) return this.markUploaded(record, found.id);
+    return this.waitForDatabase(await this.patch(record.id, { driveId: found.id, uploadId: null, sent: record.size }));
   }
 
   /** La base ya tiene el id de Drive del archivo. */
@@ -2205,7 +2235,7 @@ export class MediaQueue {
         return fileKind(meta.mime, meta.name);
       }
       const own = this.db ? await this.db.get('files', id) : undefined;
-      if (own) this.remember(id, own, true);
+      if (own) this.remember(id, own, !own.freedAt);
       if (own?.projectId) return own.projectId !== pageProject && fileKind(own.mime, own.name);
       let known = this.db ? await this.db.get('known', id) : undefined;
       if (!known || known.projectId === undefined) known = (await this.fetchMeta(id).catch(() => null)) ?? known;
@@ -2333,7 +2363,7 @@ export class MediaQueue {
       void this.checkDeleted(id);
       const own = await db.get('files', id);
       if (own) {
-        this.remember(id, own, true);
+        this.remember(id, own, !own.freedAt);
         if (isFolderMime(own.mime)) return this.card(id, folderCardUrl({ name: own.name, size: own.size, note: this.folderNotes.get(id) ?? null }));
         const kind = viewKind(own.mime, own.name);
         if (!kind) {
@@ -2525,7 +2555,7 @@ export class MediaQueue {
     if (own) {
       const original = (await db.get('blobs', id)) ?? (await readCopy(db, id).catch(() => null));
       this.remember(id, own, !!original);
-      return { kind: viewKind(own.mime, own.name), name: own.name, original, mime: own.mime };
+      return { kind: viewKind(own.mime, own.name), name: own.name, original, mime: own.mime, ...(!original && own.freedAt ? { freed: true } : {}) };
     }
     const meta = (await db.get('known', id)) ?? (await this.fetchMeta(id).catch(() => null));
     if (!meta) return { kind: null, name: '', original: null };
@@ -2686,7 +2716,8 @@ export class MediaQueue {
         if (view !== original) await this.storeView(id, side, view);
         return this.keepView(id, side, view);
       }
-      if (!download || own || !meta.driveId || !VIEW_FETCH_TYPES.has(meta.mime)) return null;
+      // Lo agregado acá se hace del original del dispositivo; si se liberó (está en Drive), se baja como cualquier otro.
+      if (!download || (own && !own.freedAt) || !meta.driveId || !VIEW_FETCH_TYPES.has(meta.mime)) return null;
       if (typeof meta.size === 'number' && meta.size > maxBytes) return null;
       // Después de una bajada que falló se espera 1 minuto, después 4, 16 y hasta una hora (una página abierta
       // no insiste cada minuto con un portero que no responde).

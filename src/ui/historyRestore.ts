@@ -7,6 +7,7 @@ import { CONTENT_FRAGMENT } from '../sync/structure';
 import type { RestoreOutcome } from './historyUi';
 import { asOneUndoStep } from './undoGuard';
 import { BACKGROUND_META } from './editorMeta';
+import { subscribeStepPopped } from './undoTimeline';
 
 // Restaurar una versión del historial (P.18, Docs/Doc_Historial.md, sección 6): una edición nueva POR EL EDITOR, la
 // misma vía que escribir. Una sola transacción de ProseMirror reemplaza el contenido de la página; y-prosemirror (con
@@ -221,12 +222,20 @@ interface PoppedEvent {
  */
 function onStepUndone(undo: Y.UndoManager | null, step: unknown, fn: () => void): () => void {
   if (!undo || !step) return () => undefined;
+  let done = false;
   const handler = (e: PoppedEvent) => {
-    if (e.type !== 'undo' || e.stackItem !== step) return;
+    if (done || e.type !== 'undo' || e.stackItem !== step) return;
+    done = true;
     off();
     fn();
   };
-  const off = () => undo.off('stack-item-popped', handler as never);
+  // El paso puede deshacerse con otro editor de la misma página (se fue y volvió: la línea de tiempo le pasó la pila,
+  // P.26): se escucha también a la línea de tiempo, que avisa lo deshecho por cualquier editor de página.
+  const offTimeline = subscribeStepPopped((stackItem, type) => handler({ stackItem, type }));
+  const off = () => {
+    undo.off('stack-item-popped', handler as never);
+    offTimeline();
+  };
   undo.on('stack-item-popped', handler as never);
   return off;
 }

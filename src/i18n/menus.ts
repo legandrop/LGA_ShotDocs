@@ -106,6 +106,22 @@ export const menus = {
     en: "On a shared computer, check it: otherwise whoever uses this browser next could use your key.",
     es: "En una computadora compartida, tildala: si no, quien use este navegador después podría usar tu clave.",
   },
+  'account.forgetAssistantKeySynced': {
+    en: "Your synced copy stays in this workspace, protected by your passphrase.",
+    es: "Tu copia sincronizada queda en este workspace, protegida por tu frase.",
+  },
+  // *Sign out other devices* (Docs/Doc_Clave_Sincronizada.md, entrega S1): para un dispositivo perdido.
+  'account.signOutOthers': { en: "Sign out other devices", es: "Cerrar la sesión en los otros dispositivos" },
+  'account.signOutOthersText': {
+    en: "Sign out of {workspace} on all your other devices? They'll need a new code to get back in. A device that is already open can keep working for up to an hour.",
+    es: "¿Cerrar la sesión de {workspace} en todos tus otros dispositivos? Van a necesitar un código nuevo para volver a entrar. Un dispositivo que ya está abierto puede seguir andando hasta una hora.",
+  },
+  'account.signOutOthersButton': { en: "Sign out others", es: "Cerrar los otros" },
+  'account.signOutOthersDone': { en: "Your other devices were signed out.", es: "Se cerró la sesión en tus otros dispositivos." },
+  'account.signOutOthersFailed': {
+    en: "Couldn't sign out the other devices. Check the connection and try again.",
+    es: "No se pudo cerrar la sesión en los otros dispositivos. Revisá la conexión y probá de nuevo.",
+  },
   'account.signOutPending': {
     en: { one: "{count} change is not uploaded yet. It stays saved on this device and uploads the next time you sign in with this account. Sign out anyway?", other: "{count} changes are not uploaded yet. They stay saved on this device and upload the next time you sign in with this account. Sign out anyway?" },
     es: { one: "Hay {count} cambio sin subir. Queda guardado en este dispositivo y se sube la próxima vez que entres con esta cuenta. ¿Cerrar la sesión igual?", other: "Hay {count} cambios sin subir. Quedan guardados en este dispositivo y se suben la próxima vez que entres con esta cuenta. ¿Cerrar la sesión igual?" },

@@ -8,6 +8,7 @@ import { copyText } from './commentsUi';
 import { usePendingCount } from './usePendingCount';
 import { downloadUnsynced } from './unsyncedDownload';
 import { notify } from './notice';
+import { VoiceNotesNotice } from '../dictation/VoiceNotes';
 import {
   forceUpdate,
   isOfflineNotReady,
@@ -155,6 +156,8 @@ export function SyncBadge() {
           {tr('sync.rejected', { count: rejected })}
         </button>
       )}
+      {/* Las notas de *Dictate to report* guardadas para ubicar después (Docs/Doc_Dictado.md, 8). */}
+      <VoiceNotesNotice />
       {details && (
         <div className="sync-details">
           {status.localError && (

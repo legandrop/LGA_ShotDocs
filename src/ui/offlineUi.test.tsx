@@ -12,7 +12,11 @@ import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { appendPart, getCopy, listMarks, offviewKey, putOfflineView } from '../media/offlineStore';
 import { MEDIA_SCHEME, mediaIdOf } from '../media/queue';
 import { OfflineDialog, StorageDialog } from './OfflinePart';
-import { SpaceHost } from './SpaceHost';
+import { freedText, SpaceHost } from './SpaceHost';
+import type { Usage } from '../media/offline';
+import { noticeFor } from './Carrete';
+import { t } from '../i18n';
+import '../i18n/lazy/carrete';
 import { SyncIcon } from './SyncBadge';
 
 // La ventana "Available offline", "Storage on this device", el aviso del tope y "Offline · N" en el teléfono
@@ -175,6 +179,44 @@ describe('la ventana "Available offline"', { timeout: 30_000 }, () => {
     expect(host.querySelector('.error')?.textContent).toMatch(/^Needs .*; .* available, keeping 1 GB for new photos and videos\.$/);
   });
 
+  it('"Free up … and make available offline" libera solo copias: los originales agregados acá no cuentan ni se liberan', async () => {
+    const { b, page } = await setup();
+    // Sin lugar libre fuera de la reserva: solo entra liberando.
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      onLine: true,
+      storage: { estimate: async () => ({ quota: 4 * 1024 * MB, usage: 3 * 1024 * MB }), persisted: async () => true, persist: async () => true },
+    });
+    const usage = (copies: number, own: number) => ({
+      kept: copies + own,
+      freeable: copies + own,
+      own: { freeable: own, count: own ? 3 : 0, recent: 0, recentCount: 0, held: null, heldBytes: 0 },
+      waiting: 0,
+      waitingCount: 0,
+      offline: 0,
+      gone: { count: 0, bytes: 0, ids: [] },
+    });
+    // Solo originales propios para liberar: no alcanza (no se ofrece liberarlos desde esta ventana).
+    const spyUsage = vi.spyOn(b.offline, 'usage').mockResolvedValue(usage(0, 50 * 1024 * MB));
+    await act(async () => b.offline.refresh());
+    const host = await mount(services(b), <OfflineDialog kind="page" target={page} onClose={() => undefined} />);
+    await until(() => !host.querySelector('.offline-total .offline-spinner'));
+    await settle();
+    expect(([...host.querySelectorAll('button')].find((x) => x.textContent === 'Make available offline') as HTMLButtonElement).disabled).toBe(true);
+    // Con copias bajadas para liberar: el botón lo dice, y al tocarlo libera solo copias.
+    spyUsage.mockResolvedValue(usage(50 * 1024 * MB, 50 * 1024 * MB));
+    await act(async () => b.offline.refresh());
+    await settle();
+    const freeUp = vi.spyOn(b.offline, 'freeUp').mockResolvedValue(0);
+    const mark = vi.spyOn(b.offline, 'mark').mockResolvedValue('m');
+    const start = [...host.querySelectorAll('button')].find((x) => /^Free up .* and make available offline$/.test(x.textContent ?? '')) as HTMLButtonElement;
+    expect(start.disabled).toBe(false);
+    await act(async () => start.click());
+    await settle();
+    expect(freeUp).toHaveBeenCalledWith('all', { own: false });
+    expect(mark).toHaveBeenCalled();
+  });
+
   it('una marca existente: estado, sacar con la casilla de borrar las copias', async () => {
     const { b, page, ids } = await setup();
     await b.offline.mark('page', page);
@@ -230,6 +272,80 @@ describe('"Storage on this device" y el aviso del tope', () => {
     await settle();
     expect(host.querySelector('.space-notice')).toBeNull();
     expect((await getCopy(b.mediaDb, ids[2]))?.orig).toBeDefined();
+  });
+});
+
+describe('liberar los originales agregados en este dispositivo (entrega 2)', { timeout: 30_000 }, () => {
+  // Liberar de verdad (con el portero y la base en memoria) lo prueba src/media/ownFree.test.ts. Acá, lo que se ve y que
+  // nada se libera sin el sí: el uso viene armado (en jsdom la cola no termina de subir los originales).
+  const own = (over: Partial<Usage['own']>): Usage => ({
+    kept: 3 * MB,
+    freeable: over.freeable ?? 0,
+    own: { freeable: 0, count: 0, recent: 0, recentCount: 0, held: null, heldBytes: 0, ...over },
+    waiting: 0,
+    waitingCount: 0,
+    offline: 0,
+    gone: { count: 0, bytes: 0, ids: [] },
+  });
+
+  it('el diálogo dice qué originales se pueden liberar, cuáles quedan por los 14 días y libera con la confirmación', async () => {
+    const { a } = await setup();
+    vi.spyOn(a.offline, 'usage').mockResolvedValue(own({ freeable: 2 * MB, count: 2, recent: MB, recentCount: 1 }));
+    const freeUp = vi.spyOn(a.offline, 'freeUp').mockResolvedValue(2 * MB);
+    const host = await mount(services(a), <StorageDialog onClose={() => undefined} onEdit={() => undefined} />);
+    await until(() => (host.textContent ?? '').includes('already in Drive'));
+    expect(host.textContent).toContain('Added on this device and already in Drive: 2 MB (2 files). Before removing each one, Shot Docs checks that Drive has the same file.');
+    expect(host.textContent).toContain('1 file added on this device (1 MB) was uploaded less than 14 days ago: it stays for now.');
+    const free = [...host.querySelectorAll('button')].find((x) => x.textContent === 'Free up space') as HTMLButtonElement;
+    await act(async () => free.click());
+    expect(freeUp).not.toHaveBeenCalled();
+    expect(host.textContent).toMatch(/Free up 2 MB\? Files stay in Drive/);
+    const yes = [...host.querySelectorAll('.offline-remove button')].find((x) => x.textContent === 'Free up') as HTMLButtonElement;
+    await act(async () => yes.click());
+    await settle();
+    expect(freeUp).toHaveBeenCalledWith('all');
+  });
+
+  it('sin conexión o con un portero viejo, lo dice y no ofrece liberarlos', async () => {
+    const { a } = await setup();
+    const usage = vi.spyOn(a.offline, 'usage').mockResolvedValue(own({ held: 'offline', heldBytes: 3 * MB }));
+    const host = await mount(services(a), <StorageDialog onClose={() => undefined} onEdit={() => undefined} />);
+    await until(() => (host.textContent ?? '').includes('only with a connection'));
+    expect(host.textContent).toContain('Files added on this device (3 MB) can be freed only with a connection');
+    expect(host.textContent).toContain('Nothing to free up right now.');
+    usage.mockResolvedValue(own({ held: 'server', heldBytes: 3 * MB }));
+    await act(async () => a.offline.refresh());
+    expect(host.textContent).toContain("can't be freed until the media server is updated");
+  });
+
+  it('un archivo nuevo que no entró: el aviso ofrece liberar los originales ya en Drive y recién con el sí los libera', async () => {
+    const { a } = await setup();
+    vi.spyOn(a.offline, 'usage').mockResolvedValue(own({ freeable: 3 * MB, count: 3 }));
+    const freeUp = vi.spyOn(a.offline, 'freeUp').mockResolvedValue(3 * MB);
+    const host = await mount(services(a), <SpaceHost />);
+    act(() => a.offline.rejected(new File([new Uint8Array(10)], 'IMG_0500.JPG', { type: 'image/jpeg' })));
+    await until(() => (host.textContent ?? '').includes('Free up 3 MB'));
+    expect(host.querySelector('.unsaved-notice')!.textContent).toMatch(/IMG_0500\.JPG.*\(0\.1 KB\) was not added\. Save it so it isn't lost\.Free up 3 MB of files added here that are already in Drive\?/s);
+    expect(freeUp).not.toHaveBeenCalled();
+    const button = [...host.querySelectorAll('button')].find((x) => x.textContent === 'Free up 3 MB') as HTMLButtonElement;
+    await act(async () => button.click());
+    await settle();
+    expect(freeUp).toHaveBeenCalledWith('room');
+  });
+
+  it('lo que dice al terminar: cuánto se liberó y, con motivo, lo que quedó', () => {
+    const tr = t;
+    expect(freedText({ freed: 3 * MB, own: 2, skipped: {}, at: 0 }, tr)).toBe('Freed 3 MB on this device.');
+    expect(freedText({ freed: MB, own: 1, skipped: { notInDrive: 1, offline: 2 }, at: 0 }, tr)).toBe(
+      'Freed 1 MB on this device. 3 files stayed on this device: no connection (2), not in Drive (1).',
+    );
+  });
+
+  it('el carrete sin conexión dice que la copia de este dispositivo se liberó', () => {
+    const tr = t;
+    const view = { kind: 'image' as const, state: 'offline' as const, preview: 'blob:x', error: null };
+    expect(noticeFor({ ...view, freed: true }, 'IMG.JPG', tr)).toMatch(/thumbnail.*The copy on this device was freed to save space; it's in Drive\./);
+    expect(noticeFor(view, 'IMG.JPG', tr)).not.toMatch(/freed/);
   });
 });
 

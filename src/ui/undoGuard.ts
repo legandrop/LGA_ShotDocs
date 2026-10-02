@@ -3,6 +3,7 @@ import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/p
 import type { EditorView } from '@tiptap/pm/view';
 import { ySyncPluginKey, yUndoPluginKey } from 'y-prosemirror';
 import type * as Y from 'yjs';
+import { runUndoFrom } from './undoTimeline';
 
 // Deshacer en la página: cada borrado es un solo Ctrl+Z, y Ctrl+Z nunca deshace otra cosa antes.
 //
@@ -17,6 +18,7 @@ import type * as Y from 'yjs';
 // - El deshacer del navegador sobre el editor (`beforeinput` con `historyUndo` / `historyRedo`: Ctrl+Z con el foco
 //   afuera, el menú Edición) se cancela y hace el deshacer de la página (Yjs). Con el foco en otro campo (el
 //   título, un comentario, la búsqueda, un diálogo), que se quedó sin nada para deshacer, se cancela y no hace nada.
+//   En la página de verdad, el deshacer va por la línea de tiempo del proyecto (P.26, undoTimeline.ts).
 // - Todo lo que saca bloques (los puntos y borrar, varios bloques, la sección, Ctrl+A, una selección de texto de un
 //   bloque a otro, juntar dos renglones) es siempre su propio paso: la pila de Yjs junta lo hecho en medio segundo
 //   (`captureTimeout`), así que antes y después se corta (`stopCapturing`). Un Ctrl+Z trae justo lo borrado; el
@@ -115,6 +117,9 @@ export const undoGuardExtension = createExtension(({ editor }: ExtensionOptions<
             // el navegador sigue con el editor: se cancela y no se hace nada (si no, cada Ctrl+Z en el título iría
             // deshaciendo la página).
             if (otherTextField(view, view.dom.ownerDocument.activeElement)) return true;
+            // La página de verdad deshace por la línea de tiempo (P.26, undoTimeline.ts: el orden en que editaste);
+            // la práctica y las pruebas, por el editor como siempre.
+            if (runUndoFrom(type === 'historyUndo' ? 'undo' : 'redo', view.dom)) return true;
             if (type === 'historyUndo') editor.undo();
             else editor.redo();
             return true;

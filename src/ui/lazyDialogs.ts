@@ -6,6 +6,8 @@ import { lazyPart } from './lazyPart';
 export const ShareDialog = lazyPart(() => import('./ShareDialog').then((m) => m.ShareDialog));
 export const MembersDialog = lazyPart(() => import('./MembersDialog').then((m) => m.MembersDialog));
 export const ImportCodaDialog = lazyPart(() => import('./ImportCodaDialog').then((m) => m.ImportCodaDialog));
+// Volver a Shot Docs desde un zip exportado (P.22, entrega 3).
+export const ImportArchiveDialog = lazyPart(() => import('./ImportArchiveDialog').then((m) => m.ImportArchiveDialog));
 export const DriveDialogHost = lazyPart(() => import('./DriveDialog').then((m) => m.DriveDialogHost));
 export const ProjectSearch = lazyPart(() => import('./ProjectSearch').then((m) => m.ProjectSearch));
 // Borrar un proyecto y la papelera de proyectos (P.14).

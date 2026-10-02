@@ -68,6 +68,8 @@ export function renameConvertedHeic(editor: NameEditor | null, media: Pick<Media
       const photos = tr.setNodeAttribute ? inlineTargets(tr, id) : [];
       if (targets.length === 0 && photos.length === 0) return;
       tr.setMeta(BACKGROUND_META, true);
+      // Lo hizo la app, no la persona: no entra en la pila de deshacer (P.26, Doc_Deshacer.md, 3.4).
+      tr.setMeta('addToHistory', false);
       for (const p of photos) tr.setNodeAttribute!(p.pos, 'name', jpegName(p.name));
       inline = photos.length;
       for (const block of targets) editor.updateBlock(block.id, { props: { name: jpegName(block.props!.name as string) } });
