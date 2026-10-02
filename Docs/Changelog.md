@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.134 :
 
 Exportar, entrega 1b: los cambios de Lega al PDF (D84, D85 y D88). Las fotos salían achicadas a 200 ppp, lo que pasaba
 el tope solo se podía exportar por ramas y una página que fallaba quedaba apenas marcada. Ahora cada foto va con su
@@ -10,6 +10,18 @@ peso). *Smaller file* vuelve a las achicadas. Lo que no entra sale en partes por
 una por vez, con tope de peso); al terminar, la lista de las que fallaron con su link y *Export again*. *Cancel* corta
 las bajadas, que tienen tope de 90 s.
 [ Exportar 1b - fotos en resolución completa, el PDF en partes y la lista de las páginas que fallaron ]
+
+v0.133 :
+
+Compactar (B.9), entrega 2: crear snapshots. Nadie armaba las copias resumidas que v0.127 sabe bajar. Nuevo
+`compact.ts`: al final del ciclo, el dispositivo de quien ve lo borrado arma como mucho una página con las filas del
+servidor, la comprueba por los dos caminos (con lo pendiente y elemento por elemento; cada 10, contra todo desde cero),
+la sube, baja la vuelta y la confirma; lo que no se puede se saltea 24 horas. Al invalidarse un snapshot, una página sin
+nada sin subir ya no vuelve a subir entera (el borrado de uno malo llegaba a todos, D110): se rearma con lo del
+servidor conservando sus elementos sin sus borrados, y lo mismo al restaurar una copia (sobra texto antes que falte).
+La época del árbol reinicia solo si es más nueva; `invalidate_page_snapshot` pide ver lo borrado (migración
+`20261020120000_compactar_crear.sql`, aplicada al publicar). Siguen apagados.
+[ Compactar, entrega 2 - armar las copias resumidas en el dispositivo (apagadas) y rearmar sin propagar el borrado de una mala ]
 
 v0.132 :
 

@@ -271,8 +271,8 @@ export interface SnapshotPushResult {
 }
 
 /**
- * Las funciones de quien compacta (Docs/Doc_Compactar.md, secciones 4 y 12). En la entrega 1 solo las tiene el servidor
- * en memoria (las pruebas arman snapshots como lo hará un dispositivo); la app las usa desde la entrega 2.
+ * Las funciones de quien compacta (Docs/Doc_Compactar.md, secciones 4 y 12): las usa el compactador del dispositivo
+ * (`compact.ts`, entrega 2), solo con los snapshots prendidos y una versión que alcanza.
  */
 export interface SnapshotsRemote {
   claimCompaction(pageId: string): Promise<CompactionClaim | null>;
@@ -359,6 +359,16 @@ export function parseContentRows(data: unknown): RemoteUpdate[] {
     ...(r.snapshot_id ? { snapshotId: String(r.snapshot_id) } : {}),
     ...(r.content_epoch === null || r.content_epoch === undefined ? {} : { contentEpoch: Number(r.content_epoch) }),
   }));
+}
+
+/** Lo que contesta `push_page_snapshot` (una fila `(snapshot_id, result)`). */
+export function parseSnapshotPush(data: unknown): SnapshotPushResult {
+  const row = (Array.isArray(data) ? data[0] : data) as { snapshot_id?: unknown; result?: unknown } | undefined;
+  const result = row?.result;
+  if (!row?.snapshot_id || (result !== 'ok' && result !== 'snapshot_mismatch' && result !== 'snapshot_exists')) {
+    throw new RemoteError(`push_page_snapshot: unexpected answer ${JSON.stringify(data)}`, true);
+  }
+  return { id: String(row.snapshot_id), result };
 }
 
 /** Una fila de `trashed_projects` como llega (los números pueden venir como texto). */
@@ -611,7 +621,7 @@ export function parseProjectSize(row: Record<string, unknown>): ProjectSizeRow {
 }
 
 export class SupabaseRemote
-  implements Remote, MediaRemote, TeamRemote, SizesRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote
+  implements Remote, MediaRemote, TeamRemote, SizesRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote, SnapshotsRemote
 {
   /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
   private settingsMissingAt = 0;
@@ -885,6 +895,69 @@ export class SupabaseRemote
     }
     if (error) throw toRemoteError(error, status);
     return parseContentRows(data);
+  }
+
+  // --- compactar: quien arma los snapshots (Docs/Doc_Compactar.md, sección 4; 20261019120000_compactar_leer.sql) ----
+
+  async claimCompaction(pageId: string): Promise<CompactionClaim | null> {
+    const { data, error, status } = await timed(
+      this.client.rpc('claim_page_compaction', { p_page_id: pageId, p_app_version: this.appVersion || null }),
+    );
+    // Una base sin la migración: nada que compactar.
+    if (error?.code === MISSING_FUNCTION) return null;
+    if (error) throw toRemoteError(error, status);
+    const row = ((data ?? []) as Record<string, unknown>[])[0];
+    if (!row) return null;
+    return {
+      baseId: row.base_id === null || row.base_id === undefined ? null : String(row.base_id),
+      baseSeq: Number(row.base_seq),
+      upToSeq: Number(row.up_to_seq),
+      lastUpdateId: Number(row.last_update_id),
+    };
+  }
+
+  async pushSnapshot(snapshot: NewSnapshot): Promise<SnapshotPushResult> {
+    const state = toBase64(snapshot.state);
+    const { data, error, status } = await timed(
+      this.client.rpc('push_page_snapshot', {
+        p_page_id: snapshot.pageId,
+        p_base_id: snapshot.baseId,
+        p_up_to_seq: snapshot.upToSeq,
+        p_last_update_id: snapshot.lastUpdateId,
+        p_state: state,
+        p_sv: toBase64(snapshot.sv),
+        p_sha256: snapshot.sha256,
+        p_app_version: this.appVersion || null,
+      }),
+      timeoutFor(state.length),
+    );
+    if (error) throw toRemoteError(error, status);
+    return parseSnapshotPush(data);
+  }
+
+  async pullSnapshot(id: string): Promise<Uint8Array> {
+    // Como bajar de a una fila: el tope más largo (un snapshot puede pesar 8 MB).
+    const { data, error, status } = await timed(this.client.rpc('pull_page_snapshot', { p_id: id }), MAX_REQUEST_TIMEOUT_MS);
+    if (error) throw toRemoteError(error, status);
+    if (typeof data !== 'string') throw new RemoteError(`pull_page_snapshot: unexpected answer ${String(data)}`, true);
+    return fromBase64(data);
+  }
+
+  async confirmSnapshot(id: string, sha256: string): Promise<boolean> {
+    const { data, error, status } = await timed(this.client.rpc('confirm_page_snapshot', { p_id: id, p_sha256: sha256 }));
+    if (error) throw toRemoteError(error, status);
+    return data === true;
+  }
+
+  async skipCompaction(pageId: string, reason: string): Promise<void> {
+    const { error, status } = await timed(this.client.rpc('skip_page_compaction', { p_page_id: pageId, p_reason: reason }));
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async invalidateSnapshot(id: string, reason: string): Promise<boolean> {
+    const { data, error, status } = await timed(this.client.rpc('invalidate_page_snapshot', { p_id: id, p_reason: reason }));
+    if (error) throw toRemoteError(error, status);
+    return data === true;
   }
 
   async cleanWork({ pages, urgent = false }: { pages?: string[]; urgent?: boolean } = {}): Promise<CleanWorkRow[]> {

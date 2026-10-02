@@ -1,6 +1,6 @@
 # Exportar una página o un proyecto entero (P.22)
 
-**Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto), 2 (v0.129: el zip) y 1b (v0.0XX: los
+**Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto), 2 (v0.129: el zip) y 1b (v0.134: los
 cambios de Lega al PDF, D84, D85 y D88: fotos en resolución completa, el PDF en partes y la lista de las que fallaron)
 hechas; volver, pendiente** (roadmap P.22; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final:
 "Cómo quedó la entrega 0" (el editor de exportación medido con 300 páginas), "Cómo quedó la entrega 1" (el PDF, medido
@@ -987,7 +987,7 @@ un zip de más de 1 GB en Firefox (el tope).
   tiene que escribirlas al crear el proyecto nuevo, cambiando los ids viejos por los nuevos; hasta que exista, la prueba
   es que el manifest las lleve, en el proyecto entero y en una rama.
 
-## Cómo quedó la entrega 1b (v0.0XX: los cambios de Lega al PDF, D84, D85 y D88)
+## Cómo quedó la entrega 1b (v0.134: los cambios de Lega al PDF, D84, D85 y D88)
 
 **Qué ve el usuario.** En la ventana *Export*, la casilla *Sharp photos* se reemplaza por *Smaller file (lower-resolution
 photos)*, destildada (D85): sin tildar, cada foto va como se tomó, en resolución completa; tildada, achicada a su ancho
