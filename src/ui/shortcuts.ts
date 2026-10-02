@@ -11,9 +11,9 @@
 export const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** Dónde vale un atajo (las secciones de la tabla de la ayuda). */
-export type ShortcutPlace = 'global' | 'editor' | 'markdown' | 'photos' | 'carrete' | 'find' | 'comments' | 'tree' | 'menus' | 'tour';
+export type ShortcutPlace = 'global' | 'editor' | 'markdown' | 'photos' | 'carrete' | 'annotate' | 'find' | 'comments' | 'tree' | 'menus' | 'tour';
 
-export const SHORTCUT_PLACES: ShortcutPlace[] = ['global', 'editor', 'markdown', 'photos', 'carrete', 'find', 'comments', 'tree', 'menus', 'tour'];
+export const SHORTCUT_PLACES: ShortcutPlace[] = ['global', 'editor', 'markdown', 'photos', 'carrete', 'annotate', 'find', 'comments', 'tree', 'menus', 'tour'];
 
 export interface Shortcut {
   id: string;
@@ -128,6 +128,32 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'carreteNext', keys: ['ArrowRight'], place: 'carrete', owner: 'app', source: 'dom' },
   { id: 'carreteEnds', keys: ['Home', 'End'], place: 'carrete', owner: 'app', source: 'dom' },
   { id: 'carreteClose', keys: ['Escape'], place: 'carrete', owner: 'app', source: 'dom' },
+  // Anotar la foto que se ve (P.20, Docs/Doc_Anotar_Fotos.md): solo quien puede editar la página.
+  { id: 'carreteAnnotate', keys: ['a'], place: 'carrete', owner: 'app', source: 'dom' },
+
+  // --- El anotador de fotos (P.20, entrega 2): las letras de FrameRev, solo con el anotador abierto y sin una caja
+  // de texto con el foco (annotatorKeys.ts). ⌘[ y ⌘] (atrás y adelante del navegador en la Mac) se frenan ahí. ---
+  { id: 'annotateSelect', keys: ['v'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateRectangle', keys: ['r'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateEllipse', keys: ['e'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateArrow', keys: ['a'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateLine', keys: ['l'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotatePencil', keys: ['p'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateMarker', keys: ['m'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateText', keys: ['t'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateNumber', keys: ['n'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateWidth', keys: ['[', ']'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateWidthNext', keys: ['Mod-[', 'Mod-]'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateUndo', keys: ['Mod-z'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateRedo', keys: ['Mod-Shift-z', 'Mod-y'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateDelete', keys: ['Delete', 'Backspace'], place: 'annotate', owner: 'app', source: 'dom' },
+  // Esc deja de elegir (o termina el texto); sin nada elegido, cierra.
+  { id: 'annotateEscape', keys: ['Escape'], place: 'annotate', owner: 'app', source: 'dom' },
+  { id: 'annotateFit', keys: ['f'], place: 'annotate', owner: 'app', source: 'dom' },
+  // Mantener apretada: arrastrar mueve la foto ampliada.
+  { id: 'annotatePan', keys: ['Space'], place: 'annotate', owner: 'app', source: 'dom' },
+  // Solo el aviso de que se guarda solo (y no el "guardar página" del navegador).
+  { id: 'annotateSave', keys: ['Mod-s'], place: 'annotate', owner: 'app', source: 'dom' },
 
   // --- Buscar en la página ---
   { id: 'findNext', keys: ['Enter', 'F3', 'Mod-g'], place: 'find', owner: 'app', source: 'dom' },

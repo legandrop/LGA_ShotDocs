@@ -144,6 +144,12 @@ export const editor = {
   'photoBar.alignCenter': { en: "Align center", es: "Alinear al centro" },
   'photoBar.alignRight': { en: "Align right", es: "Alinear a la derecha" },
   'photoBar.replace': { en: "Replace image", es: "Reemplazar la foto" },
+  // Anotar la foto (P.20, Docs/Doc_Anotar_Fotos.md): solo con la página editable.
+  'photoBar.annotate': { en: "Annotate", es: "Anotar" },
+  'photoTip.annotate': {
+    en: "Draw arrows, circles, text and numbers on top; the original never changes",
+    es: "Dibujá flechas, círculos, texto y números encima; el original nunca cambia",
+  },
   'photoBar.rename': { en: "Rename image", es: "Renombrar la foto" },
   'photoBar.renamePlaceholder': { en: "Image name", es: "Nombre de la foto" },
   'photoBar.delete': { en: "Delete image", es: "Borrar la foto" },
