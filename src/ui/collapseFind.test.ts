@@ -177,6 +177,21 @@ describe('buscar con secciones colapsadas', () => {
     expect(hiddenTexts(editor)).toEqual(['uno en A', 'uno en C', 'nada en D']);
   });
 
+  it('una sección que estaba abierta y la persona colapsa durante la búsqueda tampoco se reabre sola', () => {
+    const { editor } = page(PAGE());
+    const [a, b] = heads(editor);
+    setCollapsed(view(editor), [b], true);
+    setFind(view(editor), 'uno', {});
+    expect(hiddenTexts(editor)).toEqual(['nada en B']);
+    setCollapsed(view(editor), [a], true);
+    expect(hiddenTexts(editor)).toEqual(['uno en A', 'nada en B']);
+    setFind(view(editor), 'uno en', {});
+    expect(hiddenTexts(editor)).toEqual(['uno en A', 'nada en B']);
+    closeFind(view(editor), { select: false });
+    // Lo colapsó la persona: queda colapsada, y B también.
+    expect(hiddenTexts(editor)).toEqual(['uno en A', 'nada en B']);
+  });
+
   it('ir a una coincidencia (Enter) muestra la sección aunque la persona la haya cerrado durante la búsqueda', () => {
     const { editor } = page(PAGE());
     const [a, b, c, d] = heads(editor);

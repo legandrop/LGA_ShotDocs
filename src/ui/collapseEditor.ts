@@ -702,6 +702,8 @@ interface SearchSession {
   touched: Set<string>;
   /** Los bloques con coincidencias de la última vez. */
   wanted: ReadonlySet<string>;
+  /** Lo colapsado justo después del último paso: lo que cambie después, lo cambió la persona. */
+  seen: ReadonlyMap<string, HeadingRecord>;
   /** Cuántos títulos abrió la última vez. */
   opened: number;
 }
@@ -743,10 +745,19 @@ export function syncSearchOpen(
   const state = collapseKey.getState(view.state);
   let session = sessions.get(view);
   if (!state || (!session && (end || wanted.size === 0))) return { changed: false, opened: 0 };
-  if (!session) sessions.set(view, (session = { held: new Map(), touched: new Set(), wanted, opened: 0 }));
+  if (!session) sessions.set(view, (session = { held: new Map(), touched: new Set(), wanted, seen: state.records, opened: 0 }));
   const doc = view.state.doc;
   const current = state.records;
   const shared = state.shared;
+
+  // 0. Lo que cambió desde el último paso lo cambió la persona (el triángulo, Colapsar todo...): es suyo.
+  if (current !== session.seen) {
+    for (const id of new Set([...current.keys(), ...session.seen.keys()])) {
+      const a = current.get(id);
+      const b = session.seen.get(id);
+      if (a !== b && !(a && b && a.c === b.c && a.e === b.e)) session.touched.add(id);
+    }
+  }
 
   // 1. Lo que abrió la búsqueda y nadie tocó vuelve a lo de antes; lo tocado pasa a ser de la persona.
   const base = new Map(current);
@@ -802,6 +813,7 @@ export function syncSearchOpen(
   // Sin cambios de valor se conservan los objetos de ahora (así la próxima vez se sabe que nadie los tocó).
   if (!changed) for (const [id, h] of session.held) h.set = current.get(id);
   session.wanted = wanted;
+  session.seen = changed ? base : current;
   session.opened = openedNow.size;
   if (changed) dispatchRecords(view, base);
   if (end) sessions.delete(view);
