@@ -147,6 +147,9 @@ function fakeFolderPortero() {
   const failures = new Map<string, number>();
   let rateOnce = false;
   let lostOnce: string | null = null;
+  /** Los archivos para los que el portero no se mueve (la subida se corta por trabada). */
+  let hung: (name: string) => boolean = () => false;
+  const uploadCalls: { name: string; renew: boolean; stalledBefore: number }[] = [];
   let active = 0;
   let maxActive = 0;
   let n = 0;
@@ -186,6 +189,16 @@ function fakeFolderPortero() {
         await new Promise((r) => setTimeout(r, 1));
         const s = sessions.get(options.resume ?? '');
         if (!s) throw new UploadError('gone', 410, null, 0);
+        uploadCalls.push({ name: s.name, renew: !!options.renewIfEmpty, stalledBefore: options.stalledBefore ?? 0 });
+        if (hung(s.name)) {
+          // Como el cliente de verdad: pregunta cuánto llegó (nada) y la parte deja de moverse.
+          options.onProgress?.({ uploadId: options.resume!, sent: 0, total: file.size, bytesPerSecond: 0, retries: 0 });
+          if (options.renewIfEmpty) {
+            sessions.delete(options.resume!);
+            throw new UploadError('gone', 410, null, 0);
+          }
+          throw new UploadError('The upload stopped moving; it will try again.', 408, options.resume!, 0, false, true);
+        }
         if (lostOnce === s.name) {
           lostOnce = null;
           sessions.delete(options.resume!);
@@ -215,6 +228,8 @@ function fakeFolderPortero() {
     failTimes: (name: string, times: number) => failures.set(name, times),
     rateOnce: () => (rateOnce = true),
     loseOnce: (name: string) => (lostOnce = name),
+    hang: (fn: (name: string) => boolean) => (hung = fn),
+    uploadCalls,
   };
 }
 
@@ -448,6 +463,133 @@ describe('la cola de las carpetas', () => {
     f.resume('id-4');
     await settle(f, 'id-4');
     expect(f.progress('id-4')!.doneFiles).toBe(20);
+  });
+
+  it('con el portero colgado para todos, cierra la vuelta como los archivos sueltos: no gasta intentos y espera cada vez más', async () => {
+    const fake = fakeFolderPortero();
+    let down = true;
+    fake.hang(() => down);
+    const waits: number[] = [];
+    let states: string[] = [];
+    let f!: FolderUploads;
+    f = new FolderUploads(null, {
+      portero: () => fake.portero,
+      wait: async (ms) => {
+        waits.push(ms);
+        const p = f.progress('id-5')!;
+        states.push(`${p.state}:${p.problem}`);
+        // A la tercera espera vuelve el portero.
+        if (waits.length === 3) down = false;
+      },
+    });
+    const files: Record<string, number> = {};
+    for (let i = 0; i < 12; i++) files[`f${String(i).padStart(2, '0')}.jpg`] = 2;
+    await f.start('id-5', 'page', sourceOf('Ref', files));
+    await settle(f, 'id-5');
+    const p = f.progress('id-5')!;
+    expect(p.state).toBe('done');
+    expect(p.doneFiles).toBe(12);
+    expect(p.errors).toEqual([]);
+    // 10 s, 20 s, 40 s: la espera crece mientras el portero sigue colgado.
+    expect(waits).toEqual([10_000, 20_000, 40_000]);
+    expect(states.every((x) => x === 'waiting:The media server is not answering; it will try again shortly.')).toBe(true);
+    // Mientras estuvo colgado, cada vuelta probó a lo sumo 4 (las 2 trabadas que la cierran y las que ya iban), no los
+    // 12 con sus 5 intentos cada uno (60).
+    const stalledTries = fake.uploadCalls.length - 12;
+    expect(stalledTries).toBeLessThanOrEqual(3 * (2 + FOLDER_CONCURRENCY - 1));
+    expect(stalledTries).toBeGreaterThanOrEqual(3 * 2);
+    states = [];
+  });
+
+  it('un archivo colgado solo para él no frena a los demás, no queda con error y, a las dos trabadas, pide otra subida', async () => {
+    const fake = fakeFolderPortero();
+    let stuck = true;
+    fake.hang((name) => stuck && name === 'a.jpg');
+    const waits: number[] = [];
+    const f = new FolderUploads(null, {
+      portero: () => fake.portero,
+      wait: async (ms) => {
+        waits.push(ms);
+        if (waits.length === 4) stuck = false;
+      },
+    });
+    await f.start('id-6', 'page', sourceOf('Ref', { 'a.jpg': 1, 'b.jpg': 1, 'c.jpg': 1, 'd.jpg': 1, 'e.jpg': 1 }));
+    await settle(f, 'id-6');
+    const p = f.progress('id-6')!;
+    expect(p.state).toBe('done');
+    expect(p.errors).toEqual([]);
+    const tries = fake.uploadCalls.filter((c) => c.name === 'a.jpg');
+    // Las demás subieron en la primera vuelta, sin esperar a "a.jpg".
+    const firstOthers = fake.uploadCalls.findIndex((c) => c.name !== 'a.jpg');
+    expect(firstOthers).toBeLessThan(3);
+    // Cada intento con más plazo (stalledBefore) y, cada dos trabadas, pidiendo otra subida si la que hay no recibió nada.
+    expect(tries.map((c) => c.stalledBefore).slice(0, 3)).toEqual([0, 1, 2]);
+    expect(tries[2]!.renew).toBe(true);
+    // La subida nueva se pidió al portero (una sesión más para "a.jpg").
+    expect(fake.sessionsAsked.flat().filter((i) => i.name === 'a.jpg').length).toBeGreaterThanOrEqual(2);
+    expect(Math.max(...waits)).toBeLessThanOrEqual(600_000);
+  });
+
+  it('una trabada después de avanzar no cuenta: el portero anda, aunque despacio', async () => {
+    const fake = fakeFolderPortero();
+    const portero: FolderPortero = {
+      ...fake.portero,
+      upload: async (file, options = {}) => {
+        const name = (file as File).name;
+        const attempt = fake.uploadCalls.filter((c) => c.name === name).length;
+        fake.uploadCalls.push({ name, renew: false, stalledBefore: options.stalledBefore ?? 0 });
+        // Los primeros tres intentos de cada archivo avanzan un byte más y se traban; el cuarto termina.
+        if (attempt < 3) {
+          options.onProgress?.({ uploadId: options.resume!, sent: attempt, total: file.size, bytesPerSecond: 0, retries: 0 });
+          options.onProgress?.({ uploadId: options.resume!, sent: attempt + 1, total: file.size, bytesPerSecond: 0, retries: 0 });
+          throw new UploadError('The upload stopped moving; it will try again.', 408, options.resume!, attempt + 1, false, true);
+        }
+        return fake.portero.upload(file, options);
+      },
+    };
+    const waits: number[] = [];
+    const f = new FolderUploads(null, { portero: () => portero, wait: async (ms) => void waits.push(ms) });
+    await f.start('id-7', 'page', sourceOf('Ref', { 'a.bin': 4, 'b.bin': 4, 'c.bin': 4 }));
+    await settle(f, 'id-7');
+    expect(f.progress('id-7')!.state).toBe('done');
+    // Avanzó cada vez: nunca cerró la vuelta.
+    expect(waits).toEqual([]);
+  });
+
+  it('una lista guardada por una versión anterior (sin trabadas) se retoma igual; la carpeta soltada desde el otro sistema se reconoce', async () => {
+    const fake = fakeFolderPortero();
+    const name = `folders-${++dbCount}`;
+    const db = await openFoldersDb(name);
+    const first = new FolderUploads(db, { portero: () => fake.portero, wait: noWait });
+    // Rutas con acentos como los da la Mac (en dos partes).
+    const mac: Record<string, number> = { 'Di\u0301a/a.jpg': 1 };
+    const nfd = 'Di\u0301a/foto.jpg';
+    fake.failAlways('foto.jpg');
+    await first.start('id-8', 'page', sourceOf('Ref', { [nfd]: 2, 'b.jpg': 1, ...mac }));
+    await settle(first, 'id-8');
+    first.stop();
+    const items = await db.getAll('items');
+    // Como las guardaba una versión anterior: sin `stalls`.
+    for (const item of items) {
+      delete item.stalls;
+      await db.put('items', item);
+    }
+    const again = new FolderUploads(db, { portero: () => fake.portero, wait: noWait });
+    await again.load();
+    fake.failTimes('foto.jpg', 0);
+    // Desde Windows: la misma ruta en NFC.
+    const nfc = nfd.normalize('NFC');
+    expect(nfc).not.toBe(nfd);
+    expect(again.hasAnyPath('id-8', new Set([nfc]))).toBe(true);
+    again.retry('id-8');
+    await settle(again, 'id-8');
+    expect(again.progress('id-8')!.state).toBe('missing');
+    expect(again.resumeWith('id-8', sourceOf('Ref', { [nfc]: 2 }))).toBe(1);
+    await settle(again, 'id-8');
+    expect(again.progress('id-8')!.state).toBe('done');
+    // Subió a la subcarpeta que ya existía (la de la ruta guardada), no a una nueva.
+    expect(fake.dirs.size).toBe(1);
+    db.close();
   });
 });
 
