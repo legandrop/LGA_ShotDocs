@@ -310,6 +310,24 @@ describe('la base limpia: quién recibe qué', () => {
     expect(server.currentBase(page)?.toSeq).toBe(server.pages.get(page)!.update_seq);
   });
 
+  it('preparar después de compartir arma todas las páginas, también más de las 50 que da clean_work por pedido', async () => {
+    const { server, e1, page } = await setup();
+    const pages = [page];
+    for (let i = 0; i < 120; i++) pages.push(await e1.tree.create(null, `P${i}`));
+    for (const p of pages) await edit(e1, p, add('<t1>'));
+    await e1.engine.syncNow();
+    await share(e1, server, 'v', 'member', { projectId: server.workspaceId }, 'view');
+    const seen: Array<[number, number]> = [];
+    await e1.engine.prepareBases(pages, (d, t) => seen.push([d, t]));
+    expect(pages.filter((p) => !server.currentBase(p))).toEqual([]);
+    // (La vuelta de sincronización del principio ya arma algunas: el progreso cuenta las demás.)
+    const [lastDone, lastTotal] = seen.at(-1)!;
+    expect(lastDone).toBe(lastTotal);
+    expect(lastDone).toBeGreaterThan(0);
+    // El progreso nunca retrocede.
+    for (let i = 1; i < seen.length; i++) expect(seen[i][0]).toBeGreaterThanOrEqual(seen[i - 1][0]);
+  });
+
   it('una vista atrasada no arma; una base anterior a compartir se rechaza (clean_stale)', async () => {
     const { server, e1, page } = await setup();
     server.addMember('e2', 'member');

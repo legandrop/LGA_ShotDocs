@@ -857,14 +857,27 @@ export class SyncEngine {
 
   /**
    * Arma enseguida las bases de estas páginas (después de compartir, invitar o mover), con progreso: primero una vuelta
-   * de sincronización para tener las páginas al día. Lo que no se pueda armar acá lo arma el próximo editor que
-   * sincronice. Nunca tira.
+   * de sincronización para tener las páginas al día. `clean_work` da como mucho 50 páginas por pedido: se vuelve a
+   * pedir con las que faltan, sin las ya pedidas (armadas o no), hasta que no dé ninguna. Lo que no se pueda armar acá
+   * lo arma el próximo editor que sincronice. Nunca tira.
    */
   async prepareBases(pageIds: string[], onProgress?: (done: number, total: number) => void): Promise<void> {
     if (!this.status.cleanOn || this.stopped) return;
     try {
       await this.syncNow();
-      await this.buildCleanBases({ pages: pageIds, urgent: true, all: true, onProgress });
+      const left = new Set(pageIds);
+      let done = 0;
+      while (left.size > 0 && !this.stopped) {
+        const asked = await this.buildCleanBases({
+          pages: [...left],
+          urgent: true,
+          all: true,
+          onProgress: onProgress && ((d, total) => onProgress(done + d, done + total)),
+        });
+        if (asked.length === 0) break;
+        for (const id of asked) left.delete(id);
+        done += asked.length;
+      }
     } catch {
       // Lo arma el próximo editor.
     }
@@ -874,17 +887,18 @@ export class SyncEngine {
    * Arma y sube las bases limpias que pide la base (`clean_work`): solo con el interruptor prendido, una versión que
    * alcanza y, salvo que sea urgente, si este dispositivo subió o bajó algo hace poco (o cada 2 minutos). Solo las
    * páginas que este dispositivo tiene al día; como mucho `CLEAN_PER_ROUND` por vuelta (`all`: todas las pedidas).
+   * Devuelve las páginas que dio `clean_work` (armadas o no).
    */
   private async buildCleanBases(
     { pages, urgent = false, all = false, onProgress }: { pages?: string[]; urgent?: boolean; all?: boolean; onProgress?: (done: number, total: number) => void } = {},
-  ): Promise<void> {
-    if (this.cleanMin === null || this.stopped || this.removed) return;
+  ): Promise<string[]> {
+    if (this.cleanMin === null || this.stopped || this.removed) return [];
     const version = Number(this.options.appVersion);
-    if (!(Number.isFinite(version) && version >= this.cleanMin)) return;
+    if (!(Number.isFinite(version) && version >= this.cleanMin)) return [];
     const now = Date.now();
     const wasUrgent = this.urgentClean;
     const due = urgent || wasUrgent || now - this.lastActivityAt < CLEAN_ACTIVE_MS || now - this.lastCleanAt >= CLEAN_IDLE_MS;
-    if (!due) return;
+    if (!due) return [];
     this.urgentClean = false;
     this.lastCleanAt = now;
     let work;
@@ -902,7 +916,7 @@ export class SyncEngine {
     let done = 0;
     onProgress?.(0, list.length);
     for (const w of list) {
-      if (this.stopped) return;
+      if (this.stopped) return [];
       try {
         const built = await this.docs.buildCleanBase(w.page_id, w.update_seq);
         if ('base' in built) {
@@ -923,6 +937,7 @@ export class SyncEngine {
       }
       onProgress?.(++done, list.length);
     }
+    return work.map((w) => w.page_id);
   }
 
   private applyOp({ op }: QueuedOp): Promise<void> {
