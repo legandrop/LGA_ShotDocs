@@ -279,7 +279,7 @@ describe('pantallas del equipo', () => {
       await act(async () => new Promise((r) => setTimeout(r, 20)));
       expect(signOut).not.toHaveBeenCalled();
       expect(shutdown).not.toHaveBeenCalled();
-      expect(alert).toHaveBeenCalledWith('An import from Coda is running. Wait until it finishes.');
+      expect(alert).toHaveBeenCalledWith('An import is running. Wait until it finishes.');
     } finally {
       finish();
       await running;

@@ -757,11 +757,16 @@ function hasContent(node: Y.XmlFragment | Y.XmlElement): boolean {
  * tampoco la toca (`unsupported`): el editor que se monta acá lo borraría del documento compartido, como en
  * la página abierta (`unknownContent.ts`), y el borrado llegaría a todos.
  */
-async function writePage(
+export async function writePage(
   docs: ImportDeps['docs'],
   pageId: string,
   blocks: PartialBlock<any, any, any>[],
   previous?: string,
+  /**
+   * Lo que se escribe en el mismo documento después de los bloques y antes de guardar (solo si se escribieron): el
+   * colapsado para todos y las anotaciones de las fotos de un archivo de Shot Docs (shotdocsImport.ts).
+   */
+  extra?: (doc: Y.Doc, blocks: PageBlock[]) => void,
 ): Promise<{ result: 'replaced' | 'appended' | 'kept' | 'unsupported'; fingerprint?: string; blocks: PageBlock[] }> {
   const doc = await docs.open(pageId, { seed: true });
   const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
@@ -789,8 +794,10 @@ async function writePage(
     editor.mount(host);
     if (blocks.length && edited) editor.insertBlocks(blocks, editor.document[editor.document.length - 1], 'after');
     else if (blocks.length) editor.replaceBlocks(editor.document, blocks);
+    const written = pageBlocks(fragment);
+    extra?.(doc, written);
     await docs.flush(pageId);
-    return { result: edited ? 'appended' : 'replaced', fingerprint: contentFingerprint(fragment), blocks: pageBlocks(fragment) };
+    return { result: edited ? 'appended' : 'replaced', fingerprint: contentFingerprint(fragment), blocks: written };
   } finally {
     editor.unmount();
     host.remove();

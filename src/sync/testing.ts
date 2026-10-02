@@ -50,6 +50,7 @@ import {
   cleanLabel,
   labelForEmail,
   MENTIONS_SCHEMA_VERSION,
+  ARCHIVE_COMMENTS_SCHEMA_VERSION,
 } from './comments';
 import { MentionsInbox, type InboxResponse, type MentionCandidate, type MentionsRemote } from './mentions';
 import { CLEAN_SCHEMA_VERSION } from './clean';
@@ -2485,7 +2486,9 @@ export class FakeRemote
       if (root.thread_id || (block !== null && block !== root.block_id)) throw new RemoteError('thread_invalid', true, '22023');
       block = root.block_id;
     }
-    if (c.source !== 'coda' || !/\S/.test(c.body) || c.body.length > 10000 || (block !== null && !/^[A-Za-z0-9_-]{1,128}$/.test(block))) {
+    // `'shotdocs'` (un archivo exportado que vuelve) desde la versión 18 de la base (20261021120000_comentarios_archivo.sql).
+    const sources = (this.server.settings?.schemaVersion ?? 0) >= ARCHIVE_COMMENTS_SCHEMA_VERSION ? ['coda', 'shotdocs'] : ['coda'];
+    if (!sources.includes(c.source) || !/\S/.test(c.body) || c.body.length > 10000 || (block !== null && !/^[A-Za-z0-9_-]{1,128}$/.test(block))) {
       throw new RemoteError('new row for relation "comments" violates check constraint', true, '23514');
     }
     if (existing) {
