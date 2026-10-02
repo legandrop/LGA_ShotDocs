@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.090 :
+v0.0XX :
 
 Subidas que se traban (lo que quedó de v0.068 y v0.070). Con el portero o Storage colgados para todos, la cola
 esperaba el tope entero de cada archivo: un minuto, o hasta 62 s por miniatura. Ahora, a la segunda trabada seguida
@@ -10,6 +10,18 @@ sueltas) y su tope crece con las fallas seguidas; `page-files` tiene tope. El po
 respuesta lenta (un proxy que recibe el cuerpo de golpe), descuenta a lo sumo dos huecos seguidos como suspensión,
 una suspensión no estira la espera de la respuesta, y volver a mandar lo que una subida perdida tenía no es avance.
 [ Subidas trabadas - la cola deja de subir cuando el portero o Storage no contestan, y lo demás de B.11 ]
+
+v0.090 :
+
+Subir `min_app_version` frenaba solo el contenido de las páginas: una pestaña vieja seguía registrando y subiendo
+archivos (por ejemplo, un HEIC sin convertir), porque `register_file`, `link_page_file` y `unlink_page_file` no
+recibían la versión y la cola de archivos no miraba el aviso de actualizar. Ahora la cola se frena sola con una
+versión menor a la mínima: no registra, no sube al portero, no manda usos ni manda a la papelera de Drive, y una
+carpeta no se puede soltar. Todo queda en el dispositivo, contado como pendiente y sin error, y sale al actualizar.
+Para las versiones ya publicadas, la migración `20261006120000_version_minima_archivos.sql` suma esas
+funciones con `p_app_version`; las de siempre las llaman solo versiones anteriores y dejan de andar cuando la mínima
+es 0.090 o más.
+[ Versión mínima - también frena la cola de archivos ]
 
 v0.089 :
 

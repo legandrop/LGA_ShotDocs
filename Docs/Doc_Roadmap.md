@@ -325,7 +325,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 
 11. **Subidas que se traban: lo que quedó de v0.068** (`Doc_Portero.md`, "Subidas que se traban"). La app
    corta los pedidos al portero que dejan de moverse (y, desde v0.070, los de la miniatura a Storage) y
-   sigue con los demás archivos. **Hecho en v0.090:** a la segunda trabada seguida de archivos distintos sin
+   sigue con los demás archivos. **Hecho en v0.0XX:** a la segunda trabada seguida de archivos distintos sin
    avance, la vuelta deja de subir archivos y la cola espera antes de volver a probar (10 s, 20 s… hasta 10
    minutos; `Doc_Portero.md`, "Colgado para todos"), también con Storage colgado; la miniatura se sube con la
    señal de corte (ya no quedan subidas sueltas) y su tope crece con las fallas seguidas; `uploadFile` y
@@ -374,11 +374,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
       de subir el HEIC tal cual; sin red los intentos no cuentan. **Sin red, la conversión arranca enseguida**
       (no espera la consulta a la base, que tardaba unos 7 s en fallar). **La comprobación del JPEG** mira además
       los puntos que se apartan del fondo: un canvas en blanco ya no pasa con una foto casi toda blanca.
-    - **Subir `min_app_version` a 0.075** cuando Lega tenga la versión en sus dispositivos: una pestaña de
-      v0.074 o anterior puede registrar un HEIC mientras esta lo convierte (sospecha de la auditoría, sin
-      reproducir). **Verificado (v0.086): no la frena.** Solo la usan `push_page_update` y el ciclo de páginas;
-      `register_file`, el portero y la cola de archivos no miran la versión. Frenarla pide una migración que haga
-      con `register_file` lo mismo que con `push_page_update` (`Doc_Imagenes.md`, "Pendiente").
+    - **Frenar a las versiones viejas (v0.074 o anterior registra un HEIC sin convertir).** Verificado en v0.086
+      que `min_app_version` no frenaba la cola de archivos. **Hecho en el código (v0.090):** la app se frena sola y
+      la migración `20261006120000_version_minima_archivos.sql` frena a las publicadas cuando la mínima es 0.090 o
+      más (`Doc_Sincronizacion.md`, "La versión mínima y los archivos"). **Falta:** aplicar la migración (con copia
+      de seguridad), publicar la v0.090 y, cuando Lega la tenga en sus dispositivos, subir `min_app_version` a
+      0.090. Un HEIC que una versión anterior a v0.075 guardó sin la marca se registra tal cual al actualizar: se
+      cerraría convirtiendo también, antes de registrarlo, un HEIC propio sin la marca.
     - **Hecho (v0.086): el perfil de color** es el de la imagen principal (`pitm` → `ipma` → `ipco`), en la app y
       en el comando de Coda (el mismo código, `src/media/heifColor.mjs`), y un HEIC con solo `nclx` lleva un
       Display P3 o BT.2020 estándar. HDR (`nclx` PQ o HLG) sigue sin perfil.

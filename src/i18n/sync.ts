@@ -54,8 +54,8 @@ export const sync = {
     es: "Este workspace necesita una versión más nueva de la app.",
   },
   'sync.detail.outdated': {
-    en: "Your edits are saved on this device and upload after updating.",
-    es: "Tus cambios están guardados en este dispositivo y se suben después de actualizar.",
+    en: "Your edits and files are saved on this device and upload after updating.",
+    es: "Tus cambios y archivos están guardados en este dispositivo y se suben después de actualizar.",
   },
   'sync.detail.updateNow': { en: "Update now", es: "Actualizar ahora" },
   'sync.detail.schemaTitle': {

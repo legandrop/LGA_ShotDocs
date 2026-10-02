@@ -430,7 +430,7 @@ portero) y `picker.ts` (el selector de carpetas de Google).
   sigan saliendo bytes. Los topes y el detalle están en `Doc_Portero.md`, "Subidas que se traban". Lo mismo
   con la miniatura si Storage no contesta (v0.070; ver "Cada consulta a la base tiene un tope de tiempo"). Si
   se traban dos archivos distintos seguidos sin avanzar, la vuelta deja de subir archivos y la cola espera
-  antes de volver a probar (v0.090; `Doc_Portero.md`, "Colgado para todos").
+  antes de volver a probar (v0.0XX; `Doc_Portero.md`, "Colgado para todos").
 - **Si la base de archivos del dispositivo no se abre,** la app arranca igual: la cola de fotos y videos
   queda apagada (no se pueden agregar), el estado lo avisa con un aviso propio (`mediaWarning`, que no
   pisa ni es pisado por los demás) y el texto sincroniza como siempre. Un error de esa base nunca corta la
@@ -689,7 +689,7 @@ si se viera, haría falta un vigilante del ciclo en `engine.ts`. Pruebas en `src
 
 **Los archivos de Storage no usan el tope fijo** (una foto grande en una red lenta puede tardar más), pero
 desde v0.070 **las miniaturas sí tienen uno, proporcional** (hoy a Storage van solo miniaturas, de 480 px y
-decenas de KB; los originales van al Drive por el portero), y desde v0.090 también las imágenes del bucket
+decenas de KB; los originales van al Drive por el portero), y desde v0.0XX también las imágenes del bucket
 `page-files` (un workspace sin portero). No pasan por `timed`: son una carrera contra el tope (`within` en
 `remote.ts`), que termina en el mismo `request_timeout`.
 
@@ -700,7 +700,7 @@ decenas de KB; los originales van al Drive por el portero), y desde v0.090 tambi
 | Subir una imagen de `page-files` (`uploadFile`) | `storageTimeout(tamaño)`: 30 s más lo que tarda a 16 KB/s, **sin el techo** de las consultas (una de 25 MB tiene 27 minutos) | Queda por subir con su error y la pasada sigue con las demás; a la segunda seguida, la pasada termina (`PageFiles.pushPending`). Las que vencieron van al final de la pasada siguiente |
 | Bajar una imagen de `page-files` (`downloadFile`) | `FILE_DOWNLOAD_TIMEOUT_MS`: el de la más pesada que acepta el bucket (25 MB, 27 minutos) | Error de red: la imagen no se muestra y se vuelve a pedir al dibujarla |
 
-- **Las subidas se cortan de verdad** (v0.090). `upload` del cliente de Storage (`@supabase/storage-js` 2.117)
+- **Las subidas se cortan de verdad** (v0.0XX). `upload` del cliente de Storage (`@supabase/storage-js` 2.117)
   no acepta una señal de corte, pero cada pedido sale por el `fetch` del cliente, y cada `storage.from(bucket)`
   es un objeto nuevo con el suyo: `bucketWith` lo envuelve para que lleve la señal del tope. Antes la subida
   cortada quedaba suelta, y con Storage colgado para todos se acumulaban. Si la miniatura igual había llegado
@@ -712,7 +712,7 @@ decenas de KB; los originales van al Drive por el portero), y desde v0.090 tambi
   anterior no lo lee y usa el tope de siempre.
 - **Por qué una sola no cuenta como "sin red"** (que corta la vuelta): la vuelta siguiente empezaría otra vez por
   el mismo archivo, porque van por orden de llegada, y con Storage colgado solo para él los demás no subirían
-  nunca. **Dos seguidas sí** (v0.090): con Storage colgado para todos, cada archivo esperaba su tope entero (de 30
+  nunca. **Dos seguidas sí** (v0.0XX): con Storage colgado para todos, cada archivo esperaba su tope entero (de 30
   a 62 s). La vuelta deja de subir archivos y la cola espera antes de volver a probar, igual que con el portero
   colgado (`Doc_Portero.md`, "Colgado para todos"). Lo mismo en `PageFiles.pushPending` con `page-files`. Una
   falla de red de verdad (el pedido falla en vez de colgarse) sigue cortando enseguida.
@@ -936,10 +936,43 @@ Desde v0.021 hay dos protecciones para poder sumar tipos de bloque (y marcas) nu
 - **La versión mínima del workspace** (`workspace_settings.min_app_version`). Cada subida de contenido
   lleva la versión de la app, y el servidor rechaza las de una versión menor (también las de versiones
   anteriores a v0.021, que no mandan versión). La app vieja lo ve, deja de subir contenido (queda en el
-  dispositivo), y pide actualizar; al actualizar, sube todo.
+  dispositivo), y pide actualizar; al actualizar, sube todo. Desde v0.090 frena también la cola de archivos (ver
+  abajo, "La versión mínima y los archivos").
 
 **Regla para un bloque nuevo:** antes de publicar la versión que lo trae, subir `min_app_version` a la
 primera versión con la guarda (0.021) o más, para que ninguna versión sin guarda pueda mandar el borrado.
+
+### La versión mínima y los archivos (v0.090)
+
+Hasta v0.089 la versión mínima frenaba solo el contenido de las páginas: `register_file`, `link_page_file` y
+`unlink_page_file` no recibían la versión y la cola de archivos no miraba el aviso, así que una pestaña vieja seguía
+registrando y subiendo archivos (por ejemplo, un HEIC sin pasar a JPEG, `Doc_Imagenes.md`). Ahora hay dos frenos:
+
+- **La app se frena sola** (desde v0.090). El motor calcula en cada sincronización si esta versión es menor a la
+  mínima (`status.outdated`) y se lo pasa a la cola (`MediaQueue.setOutdated`). Mientras tanto la cola no manda
+  nada: no registra, no sube la miniatura ni el original al portero, no manda usos de páginas
+  (`link_page_file`/`unlink_page_file`), no manda a la papelera de Drive (a mano ni el borrado automático) y no deja
+  soltar una carpeta (se registra en el acto). Las imágenes sin portero (`sdfile://`) tampoco suben. Todo queda en
+  el dispositivo y en la cola, contado como pendiente y **sin marcarse como error**; las bajadas de "Available
+  offline" no lo esperan. Al actualizar, la versión nueva lo manda todo. Si la base responde `app_outdated` (subieron
+  la mínima entre la consulta y el pedido), la cola deja el archivo como estaba, corta la vuelta y se ve el aviso.
+- **La base frena a las versiones ya publicadas** (migración `20261006120000_version_minima_archivos.sql`, prueba
+  `supabase/tests/version_minima_archivos_permisos.sql`). Las tres funciones tienen una versión con
+  `p_app_version`, que la app usa desde v0.090 (si la base todavía no la tiene, usa la de siempre por 10 minutos y
+  vuelve a probar). Las versiones anteriores no mandan nada que las identifique, pero solo ellas llaman a las
+  funciones de siempre: esas dejan de andar (`app_outdated`) **cuando la mínima es 0.090 o más**. Con una mínima
+  menor siguen andando, porque quien llama puede ser una versión permitida y rechazarla la rompería. Una versión
+  vieja rechazada deja el archivo detenido en el dispositivo, con el error a la vista; al abrir la versión nueva,
+  lo detenido se vuelve a intentar (`clearBlocked`) y sale.
+
+**Para que frene a las versiones viejas:** aplicar la migración (con copia de seguridad), publicar la v0.090 y,
+cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.090 o más. 0.090 está escrito en
+`private.files_version_allowed`: si esta versión se publica con otro número, se cambia ahí y en la prueba antes de
+aplicar (`minVersion.test.ts` falla si no coincide con la entrada del changelog que nombra la migración). Si la app
+abrió antes de la migración (usa la función de siempre por 10 minutos) y la base le contesta `app_outdated`, repite
+el pedido una vez con versión. El portero no recibe la versión: una versión vieja con un archivo ya registrado puede terminar de subir su
+original, que no cambia nada de lo que la base sabe del archivo. Un HEIC que una versión anterior a v0.075 guardó
+sin la marca de convertir se registra tal cual cuando la app se actualiza: el freno lo demora, no lo convierte.
 
 ## Links de Drive
 
