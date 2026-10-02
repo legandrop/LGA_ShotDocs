@@ -216,6 +216,8 @@ export class FakeServer {
   pullContentMissing = false;
   /** Los pedidos de contenido que llegaron, en orden (`pull_page_updates` o `pull_page_content`). */
   readonly contentCalls: string[] = [];
+  /** Cuántos snapshots sirvió `pull_page_content` (para las pruebas al azar). */
+  snapshotsServed = 0;
   /** Restaurar sin el paso del script que vacía `page_snapshots` (la vigencia mira el id de la fila final). */
   keepSnapshotsOnRestore = false;
 
@@ -1522,6 +1524,7 @@ export class FakeRemote
     const rows = this.server.updates.get(pageId) ?? [];
     const replaced = rows.filter((u) => u.seq > afterSeq && u.seq <= (sn?.upToSeq ?? 0)).reduce((n, u) => n + u.data.length, 0);
     if (!sn || sn.upToSeq <= afterSeq || sn.state.length >= replaced) return withEpoch(this.serveUpdates(pageId, afterSeq, lim));
+    this.server.snapshotsServed++;
     const out: RemoteUpdate[] = [{ seq: sn.upToSeq, data: sn.state.slice(), snapshotId: sn.id }];
     if (lim > 1) out.push(...rows.filter((u) => u.seq > sn.upToSeq).slice(0, lim - 1).map((u) => ({ seq: u.seq, data: u.data.slice() })));
     return withEpoch(out);
