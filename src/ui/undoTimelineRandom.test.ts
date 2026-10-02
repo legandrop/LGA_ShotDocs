@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // La línea de tiempo al azar con el editor real (P.26, entrega 1; Docs/Doc_Deshacer.md, sección 12): tres páginas,
-// escribir, borrar tramos, borrar bloques enteros, cambiar de página (el editor se desmonta y se monta otro), ⌘Z y ⌘⇧Z
+// escribir, renglones nuevos, borrar tramos, borrar bloques enteros, cambiar de página (el editor se desmonta y se monta otro), ⌘Z y ⌘⇧Z
 // por la línea de tiempo en el medio; al final, deshacer todo (cada página vuelve a lo de antes) y rehacer todo (vuelve a
 // lo último). Con otra persona escribiendo y borrando en las tres a la vez: nada suyo se va por un deshacer y los dos
 // terminan iguales. Cuántas semillas: `TIMELINE_SEEDS` (por defecto, pocas: la medición grande va en el informe).
@@ -115,6 +115,10 @@ async function run(seed: number, { blocks = false, withOther = false } = {}) {
       const r = rnd();
       if (r < 0.3) {
         v.dispatch(v.state.tr.insertText(pick(['x', 'yz', 'wk', 'vhp']), pick(positions)));
+      } else if (r < 0.37) {
+        // Un renglón nuevo (Enter y escribir): el otro puede escribir adentro (B1 de la auditoría).
+        const ids = E.document.map((b) => b.id);
+        E.insertBlocks([{ type: 'paragraph', content: pick(['wk', 'vhp']) }] as never, pick(ids), 'after');
       } else if (r < 0.45) {
         const from = pick(positions);
         const to = Math.min(from + 1 + Math.floor(rnd() * 4), v.state.doc.content.size);
