@@ -375,6 +375,17 @@ que enterarse y tener su texto a mano:
   leer nada antes. Así vale después de cerrar la app, de restaurar una copia o con `syncedSV` atrasado, y nunca toma
   como propio lo de un tercero. Si no se sabe que algo es propio, no se avisa: mejor no avisar que avisar con texto
   ajeno. Lo escrito con una versión anterior (que no anota) no avisa.
+- **Un documento abierto puede tener varios autores** (v0.0XX). Yjs le cambia el número a un documento cuando una
+  transacción que aplica algo bajado también escribe con el número del documento: es la reparación de estructura que va
+  en la misma transacción que lo que llega (`applyToLive`). `applyUpdate` marca esa transacción como remota y Yjs, al
+  ver su propio número en una transacción remota, cree que otro lo usa y elige uno nuevo (avisa en la consola
+  *Changed the client-id…*). Lo que escribió la reparación es del número de antes, pero el `update` sale cuando ya
+  tiene el nuevo, y solo se anotaba ese: si era lo primero que el documento guardaba, lo que copió la reparación (por
+  ejemplo el texto propio, sin subir, que pasa a un bloque nuevo cuando dos cambian el tipo del mismo párrafo) no era
+  "propio" y, si otro lo borraba sin verlo, desaparecía sin aviso (el texto igual llegaba al servidor). Ahora se anotan
+  todos los números que tuvo el documento desde que se abrió (el del principio de cada transacción y el del final).
+  La prueba al azar, que solo conocía el número con que se abrió cada documento, tomaba como ajeno el aviso de lo que
+  el mismo dispositivo escribió después del cambio (semillas 2 y 88 con 120 pasos): el aviso era correcto.
 - **Dónde se guarda:** en `meta`, clave `removedWriting:<pageId>` (el texto, un renglón por bloque en el orden de la
   página, las fotos y los archivos por su nombre entre corchetes, la hora y los tramos de relojes; hasta 20 por
   página), **en la misma transacción que lo bajado**. Las versiones anteriores leen `meta` solo por clave: no les

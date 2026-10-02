@@ -31,9 +31,9 @@ import { schema as mainSchema } from './fixtures/editorSchemaMain';
 // primero, y con más corridas avisaba de "texto ajeno" que era del mismo dispositivo (semillas 2 y 88 con 120 pasos,
 // que quedan como casos fijos con la forma de entonces).
 //
-// Con la forma ampliada (la de las semillas al azar) a veces se cierra y se vuelve a abrir la página (al abrir se
-// compacta lo guardado si pasa de 64 filas), en la misma pestaña o en otra (otro PageDocs sobre la misma base, como al
-// cerrar la app y volver a abrirla), también sin red.
+// Con la forma ampliada (la de las semillas al azar) a veces se cierra y se vuelve a abrir la página, en la misma
+// pestaña o en otra (otro PageDocs sobre la misma base, como al cerrar la app y volver a abrirla), a veces después de
+// un rato sin red con más de 64 filas guardadas (al abrir se compactan).
 //
 // Más corridas: REMOVED_SEEDS=300 REMOVED_STEPS=200 npx vitest run src/ui/collabRemovedWriting.test.ts
 // Solo algunas: REMOVED_ONLY=2,88 (con REMOVED_CLASSIC=1, la forma de los casos fijos).
@@ -244,14 +244,18 @@ async function run(seed: number, steps: number, classic: boolean): Promise<Outco
     s.E.unmount();
     s.docs.close(pageId);
     await s.docs.flush(pageId);
+    // Lo guardado antes de abrir (abrir, o el índice de la búsqueda, lo compacta si pasa de 64 filas).
+    if ((await s.dev.d.db.countFromIndex('docUpdates', 'pageId', pageId)) > 64) compacted++;
     // Con el candado de la página: espera a que el cierre termine (el documento se descarta).
     (await s.docs.indexSnapshot(pageId)).doc.destroy();
     if (newTab) {
+      // La pestaña anterior se cerró: su motor (que sincroniza solo después de cada edición, con el PageDocs de
+      // esa pestaña) también.
+      s.dev.d.engine.stop();
       s.docs = new PageDocs(s.dev.d.db, { normalize: normalizeStructure, seed: seedIfEmpty });
       tabs.push(s.docs);
       s.remote = new FakeRemote(server, '0.021');
     }
-    if ((await s.dev.d.db.countFromIndex('docUpdates', 'pageId', pageId)) > 64) compacted++;
     s.doc = await s.docs.open(pageId);
     watch(s.doc, s.dev.clients, renewed);
     s.E = mountEditor(s.doc, s.name);
@@ -261,7 +265,17 @@ async function run(seed: number, steps: number, classic: boolean): Promise<Outco
   for (let step = 0; step < steps; step++) {
     if (!classic && extra() < 0.05) {
       try {
-        await reopen(sides[Math.floor(extra() * sides.length)], extra() < 0.5);
+        const s = sides[Math.floor(extra() * sides.length)];
+        if (extra() < 0.3) {
+          // Un rato largo sin red: cada marca es una fila guardada, y al volver a abrir se compactan (más de 64).
+          s.dev.offline = true;
+          for (let i = 0; i < 70; i++) {
+            const mark = token(s.name);
+            if (type(s.E, s.doc, mark)) s.typed.push(mark);
+            await s.docs.flush(pageId);
+          }
+        }
+        await reopen(s, extra() < 0.5);
       } catch (err) {
         errors.push(`step ${step} (reopen): ${String(err)}`);
       }
@@ -411,6 +425,8 @@ async function run(seed: number, steps: number, classic: boolean): Promise<Outco
   }
   for (const e of editors.splice(0)) e.unmount();
   for (const s of sides) s.docs.close(pageId);
+  // Los motores de esta corrida no siguen sincronizando mientras corren las siguientes.
+  for (const d of [a, b, c]) d.engine.stop();
   for (const t of tabs) {
     await t.flush(pageId);
     t.dispose();
