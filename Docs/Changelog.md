@@ -11,6 +11,29 @@ actualizar (las páginas que cambiaron se ven en solo lectura, con aviso). Y la 
 versión nueva: ahora la busca, recarga sola y *Update now* espera a que llegue.
 [ Volver sin red - prueba de semanas offline con la v0.090, la versión vieja no sube ni baja nada y se actualiza sola ]
 
+v0.095 :
+
+Lo que alguien escribía adentro de un bloque que otro borraba al mismo tiempo podía no llegar nunca al servidor: la
+subida se armaba en un `Y.Doc` con GC y, si el dispositivo bajaba el borrado antes de subir, ese texto viajaba como
+hueco y quedaba solo en su IndexedDB (lo encontró la auditoría del historial). Ahora la subida se arma sin GC,
+aplicando lo guardado fila por fila y en orden: el texto llega, borrado (también lo escrito y borrado entre dos
+subidas; con más de 6 MB se arma con GC, como antes). Y quien escribió se entera: la página muestra un aviso con lo
+que escribió ahí, para verlo, copiarlo o descartarlo; el estado lo dice si la página no está abierta, y *Download my
+unsynced changes* lo incluye. Sin migración. Suma el diseño de compactar en el servidor (`Doc_Compactar.md`).
+[ Subida sin GC - lo escrito en algo que otro borra a la vez llega al servidor y se avisa ]
+
+v0.094 :
+
+Faltaba reemplazar en todo el proyecto: cambiar un nombre en cincuenta páginas era abrirlas de a una. Ahora la
+flecha del panel de Ctrl/⌘+K despliega el reemplazo: lista cada coincidencia con lo de antes tachado y lo nuevo
+al lado, y reemplaza una, una página o todas, con una confirmación que dice cuántos cambios, en cuántas páginas y
+cuántos escondidos en secciones colapsadas (borrarlos pide su casilla). Escribe en el Y.Doc de cada página que se
+puede editar y está completa, sin editor, por el mismo camino que cualquier edición; antes guarda un registro, y
+*Undo* vuelve a poner lo que nadie cambió después, también sin red o tras cerrar la app. Diseño auditado (la
+protección del editor abierto, el guardado comprobado, los permisos conocidos). Pruebas al azar con dos
+dispositivos: nada del otro se pierde. Al buscar, la ñ pasa a ser otra letra (D12). Ayuda nueva.
+[ Reemplazar en el proyecto - vista previa, confirmación y deshacer en todas las páginas ]
+
 v0.093 :
 
 En una página con tamaño de hoja no había forma de forzar que algo empiece en una hoja nueva: los cortes eran

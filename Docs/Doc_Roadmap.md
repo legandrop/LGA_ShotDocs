@@ -187,8 +187,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Safari, Firefox y el iPhone.
 - **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página;
   entrega 2 hecha (v0.054): buscar en el proyecto con Ctrl/⌘+K** (`Doc_Buscar.md`, "Cómo quedó (entrega 1)" y
-  "(entrega 2)"). Queda para después: reemplazar en el proyecto, la papelera, todos los proyectos y los
-  comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
+  "(entrega 2)"). **Entrega 3 hecha (v0.094): reemplazar en todo el proyecto** (`Doc_Buscar.md`, "Reemplazar en el proyecto
+  (diseño)" y "Cómo quedó (entrega 3)"): la flecha en Ctrl/⌘+K, vista previa, una, la página o todas con confirmación,
+  escrito en el Y.Doc de cada página que se puede editar y está completa, y *Undo* de todo lo que siga igual (también
+  sin red y después de cerrar la app). Falta probarlo a mano en Safari, el iPhone y Firefox. Queda para después:
+  reemplazar en los títulos, pies y nombres; la papelera, todos los proyectos y los comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y
   contenido) y lleva al lugar. **En la página:** una lupa a la izquierda del ícono de comentarios, que busca en
   la página abierta, también adentro de las secciones colapsadas (P.11: el resultado abre la sección). A pensar
@@ -316,7 +319,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    castellano), la guía para crear un workspace y los mensajes que manda el portero. **Falta:** el correo con el código (su plantilla está en `supabase/`), la guía en
    castellano y las plantillas, que todavía no existen (fase 3), con su nombre en cada idioma.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
-   datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes.
+   datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes. **Diseño en
+   `Doc_Compactar.md`** (auditado, sin implementar): el snapshot se arma aplicando las filas en orden en un `Y.Doc`
+   sin GC (conserva lo borrado, D16), lo arma y lo comprueba el dispositivo de quien edita (D5), la base lo sirve
+   solo confirmado y válido, y `page_updates` no pierde nunca una fila (D4). Hoy no es urgente: ninguna página lo
+   necesita.
 
 10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la
@@ -418,7 +425,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     (lo midió el diseño de B.9). Ahora el dispositivo anota los que el servidor ya tiene (`syncedDS`, con la misma
     regla que `syncedSV`: nunca dice de más) y sube solo los demás; si algo no cierra, sube todos. Sin migración.
     Ver `Doc_Sincronizacion.md`, "Subir solo los borrados nuevos".
-16. **Hecho (v0.0XX): volver después de semanas sin red con una versión vieja.** Prueba con la sincronización de la
+16. **Hecho (v0.095): lo escrito adentro de algo que otro borra a la vez llega al servidor.** La subida se armaba
+    con GC: si el dispositivo bajaba el borrado antes de subir, ese texto viajaba como hueco y se perdía para
+    siempre (lo encontró la auditoría del historial; decisión D15: arreglarlo ya). Ahora se arma sin GC y en orden,
+    y quien escribió ve en la página un aviso con su texto para copiarlo. Sin migración. Falta: subir
+    `min_app_version` a esta versión cuando se publique (las anteriores siguen subiendo con GC) y, con el historial,
+    decir quién borró. Ver `Doc_Sincronizacion.md`, "La subida sin GC".
+17. **Hecho (v0.0XX): volver después de semanas sin red con una versión vieja.** Prueba con la sincronización de la
     v0.090 (`src/sync/offlineLargo.test.ts`): nada se pierde, con la mínima subida o sin ella. Desde esta versión, con
     la app vieja para el workspace no sale ni baja nada y la app instalada se actualiza sola. **Falta:** ver en el
     iPhone (Safari, app instalada) que se actualiza sola al volver la red (solo se midió Chromium); y la base no frena

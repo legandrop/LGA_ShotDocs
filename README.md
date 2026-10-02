@@ -10,7 +10,9 @@ its own project: a tree of pages you own.
   top of the sidebar without leaving the page you are on.
 - **Search.** Ctrl/⌘+F finds and replaces in the open page. Ctrl/⌘+K (or the magnifying glass next to
   "+" in the sidebar) searches the titles and text of every page in the project, on your device and
-  offline, takes you to the exact spot, and lists matching projects to switch to.
+  offline, takes you to the exact spot, and lists matching projects to switch to. Its arrow opens **Replace
+  across the project**: a preview of every change, replace one, a page or all of them (after a confirmation that
+  says how many changes in how many pages), and *Undo* puts back everything nobody changed afterwards.
 - **Pages and subpages.** A sidebar with a tree of pages, as deep as you need. Every page can hold
   content and other pages; a "folder" is just a page with no content.
 - **Visual editor.** Headings, lists, checklists, tables and images. You never see Markdown; it is only

@@ -84,6 +84,10 @@ const PAGE_BREAK = '0.093';
  * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2).
  */
 const ATTACH_PREVIEW = '0.091';
+/** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
+const REPLACE_PROJECT = '0.094';
+/** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */
+const REMOVED_WRITING = '0.095';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -305,6 +309,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     more: ['listPick', 'listClose'],
     since: BEFORE_HELP,
   },
+  {
+    id: 'replaceProject',
+    section: 'find',
+    title: 'help.replaceProject.title',
+    text: 'help.replaceProject.text',
+    keys: { search: 'search', undo: 'undo' },
+    words: ['replace all', 'reemplazar todo', 'find and replace', 'buscar y reemplazar'],
+    since: REPLACE_PROJECT,
+  },
 
   // --- Colapsar ---
   { id: 'collapse', section: 'collapse', title: 'help.collapse.title', text: 'help.collapse.text', keys: { collapse: 'collapse' }, since: BEFORE_HELP },
@@ -338,6 +351,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
   // --- Sin red ---
   { id: 'syncStatus', section: 'sync', title: 'help.syncStatus.title', text: 'help.syncStatus.text', showMe: 'sync', since: BEFORE_HELP },
   { id: 'syncSafe', section: 'sync', title: 'help.syncSafe.title', text: 'help.syncSafe.text', since: BEFORE_HELP },
+  {
+    id: 'removedWriting',
+    section: 'sync',
+    title: 'help.removedWriting.title',
+    text: 'help.removedWriting.text',
+    words: ['borrado', 'borró', 'deleted', 'perdí', 'lost', 'a la vez', 'same time', 'recuperar', 'recover'],
+    since: REMOVED_WRITING,
+  },
   {
     id: 'availableOffline',
     section: 'sync',

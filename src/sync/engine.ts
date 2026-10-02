@@ -190,6 +190,16 @@ export class SyncEngine {
       if (!this.stopped) void this.refreshCounts().catch(() => undefined);
     };
     docs.onWarning = (message) => this.patch({ warning: message });
+    // Lo que se escribía en algo que otro borró (B.16): la página lo muestra con el texto; acá, el aviso para
+    // cuando la página no está abierta (la sincronización la bajó de fondo).
+    this.cleanups.push(
+      docs.subscribeRemovedWriting((pageId) => {
+        // Con la página abierta, el aviso ya está en la página (con el texto).
+        if (this.stopped || docs.peek(pageId)) return;
+        const title = this.tree.get(pageId)?.title || t('common.untitled');
+        this.patch({ notice: t('engine.removedWriting', { page: title }) });
+      }),
+    );
   }
 
   subscribe = (fn: () => void): (() => void) => {

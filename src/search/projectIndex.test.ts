@@ -82,7 +82,7 @@ describe('las palabras', () => {
 });
 
 describe('el índice del proyecto', () => {
-  it('busca en títulos y contenido: cada palabra en algún lado, sin tildes, con partes de palabras, la ñ como n', async () => {
+  it('busca en títulos y contenido: cada palabra en algún lado, sin tildes, con partes de palabras, la ñ como otra letra', async () => {
     const d = await device();
     await page(d, 'Cámara A', [{ text: 'Lente de 35 mm y luz de relleno' }]);
     await page(d, 'Sonido', [{ text: 'El año pasado, la CÁMARA estaba rota' }]);
@@ -95,7 +95,10 @@ describe('el índice del proyecto', () => {
     expect(titles(index, d, 'camara luz')).toEqual(['Cámara A']);
     // Falta una palabra: no entra.
     expect(titles(index, d, 'camara vestuario')).toEqual([]);
-    expect(titles(index, d, 'ano')).toEqual(['Sonido']);
+    // La ñ es otra letra (D12): "ano" no encuentra "año"; "año", sí.
+    expect(titles(index, d, 'ano')).toEqual([]);
+    expect(titles(index, d, 'ANO')).toEqual([]);
+    expect(titles(index, d, 'año')).toEqual(['Sonido']);
     expect(titles(index, d, 'relle')).toEqual(['Cámara A']);
     expect(titles(index, d, '')).toEqual([]);
   });

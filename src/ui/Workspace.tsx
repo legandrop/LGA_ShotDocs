@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { AuthUser } from '../auth';
 import { t, useT } from '../i18n';
 import { useCodaOwner } from '../import/codaOwner';
@@ -26,6 +26,7 @@ import { menuBelow, PageMenu, type MenuPosition } from './menus';
 import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { notify, useNotice } from './notice';
+import { replaceBlocksLeaving, replaceRunning, replaceSession } from './replaceUi';
 import { InstallBanner, InstallHost } from './InstallBanner';
 import { lastPageOf, rememberPage, useCurrentProject, useSwitchProject } from './project';
 import { RemovedScreen } from './RemovedScreen';
@@ -177,7 +178,7 @@ export function Shell() {
   const [moving, setMoving] = useState<string | null>(null);
   const [formatting, setFormatting] = useState<string | null>(null);
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
-  const [notice, dismissNotice] = useNotice();
+  const [notice, dismissNotice, noticeAction] = useNotice();
   const perms = usePermissions();
   // "Importar de Coda" es solo de la cuenta de Lega (codaOwner.ts): para los demás el diálogo ni se monta.
   const codaOwner = useCodaOwner();
@@ -235,7 +236,8 @@ export function Shell() {
       media.hasUnsavedWrites() ||
       comments.hasUnsavedWrites() ||
       !!folders?.busy() ||
-      importing.get().running;
+      importing.get().running ||
+      replaceRunning({ docs });
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!unsaved()) return;
       e.preventDefault();
@@ -415,13 +417,47 @@ export function Shell() {
       <HelpHost />
       <TourHost />
       <InstallHost />
+      <ReplaceProgressHost />
       {notice && (
         <div className="notice" role="status">
           <span>{notice}</span>
+          {noticeAction && (
+            <button
+              className="link"
+              onClick={() => {
+                dismissNotice();
+                noticeAction.run();
+              }}
+            >
+              {noticeAction.label}
+            </button>
+          )}
           <button className="link" onClick={dismissNotice}>
             {tr('common.ok')}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * El avance de reemplazar en el proyecto con el panel de Ctrl/⌘+K cerrado (sigue corriendo), con *Stop*. Con el panel
+ * abierto, el avance está en el panel.
+ */
+function ReplaceProgressHost() {
+  const session = replaceSession(useServices());
+  const progress = useSyncExternalStore(session.engine.subscribe, () => session.engine.getProgress());
+  const search = useSearchSession();
+  const tr = useT();
+  if (!progress || search.isOpen()) return null;
+  return (
+    <div className="notice replace-progress-bar" role="status">
+      <span>{tr(progress.kind === 'undo' ? 'replace.barUndo' : 'replace.bar', { done: progress.done, total: progress.total })}</span>
+      {progress.kind === 'replace' && (
+        <button className="link" onClick={() => session.engine.stop()}>
+          {tr('replace.barStop')}
+        </button>
       )}
     </div>
   );
@@ -658,6 +694,7 @@ export function NoProjects({
           className="link"
           onClick={() => {
             // Como el menú de la cuenta: con algo sin subir, salir pregunta (no se borra nada del dispositivo).
+            if (replaceBlocksLeaving()) return;
             if (pending > 0 && !confirm(t('account.signOutPending', { count: pending }))) return;
             void client.auth.signOut({ scope: 'local' });
           }}
