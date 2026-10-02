@@ -27,6 +27,18 @@ const blocksOf = (doc: Y.Doc) => yXmlFragmentToBlocks(reader() as never, doc.get
 const strip = (blocks: AnyB[]): unknown => blocks.map((b) => ({ type: b.type, props: b.props, content: b.content, children: strip(b.children ?? []) }));
 const allIds = (blocks: AnyB[]): string[] => blocks.flatMap((b) => [b.id, ...allIds(b.children ?? [])]);
 
+/** Fila y celda de la tabla donde está el cursor del editor (null si no está en una tabla). */
+function cellOfCursor(e: BlockNoteEditor): { row: number; cell: number } | null {
+  const $from = e.prosemirrorView!.state.selection.$from;
+  if ($from.parent.type.name !== 'tableParagraph') return null;
+  for (let d = $from.depth; d > 1; d--) {
+    if ($from.node(d).type.name === 'tableCell' || $from.node(d).type.name === 'tableHeader') {
+      return { row: $from.index(d - 2), cell: $from.index(d - 1) };
+    }
+  }
+  return null;
+}
+
 function seeded(): Y.Doc {
   const doc = new Y.Doc();
   Y.applyUpdate(doc, buildSeed('p'));
@@ -79,6 +91,25 @@ describe('agregar una de fábrica', () => {
     await tick();
     expect(isEmptyPage(doc)).toBe(true);
     expect(blocksOf(doc).map((b) => b.id)).toEqual(['initialBlockId']);
+  });
+
+  it('el cursor queda en el primer dato de la ficha (2.ª celda de la 1.ª fila), no en el renglón vacío del pie', async () => {
+    for (const kind of ['prepro', 'onset', 'shot'] as const) {
+      const doc = seeded();
+      const e = mountEditor(doc, 'a');
+      await tick();
+      insertTemplate(e as never, builtinBlocks(kind, 'en'));
+      await tick();
+      expect(cellOfCursor(e), kind).toEqual({ row: 0, cell: 1 });
+      // Escribir cae ahí: en la ficha, no al final de la página.
+      e.prosemirrorView!.dispatch(e.prosemirrorView!.state.tr.insertText('012_010'));
+      await tick();
+      const first = blocksOf(doc)[0] as AnyB & { content: { rows: { cells: unknown[] }[] } };
+      expect(first.type, kind).toBe('table');
+      expect(JSON.stringify(first.content.rows[0].cells[1]), kind).toContain('012_010');
+      expect(blocksOf(doc).at(-1)!.content, kind).toEqual([]);
+      unmountAll();
+    }
   });
 
   it('dos dispositivos sin red: uno la elige y el otro escribe en el renglón vacío; al juntarse no se pierde nada', async () => {
