@@ -1,10 +1,12 @@
 import { createElement, Fragment, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { prefs, type Language } from '../prefs';
+import type { annotator } from './lazy/annotator';
 import type { assistant } from './lazy/assistant';
 import type { carrete } from './lazy/carrete';
 import type { commentsPanel } from './lazy/commentsPanel';
 import type { drive } from './lazy/drive';
 import type { editor } from './lazy/editor';
+import type { exportPdf } from './lazy/exportPdf';
 import type { help } from './lazy/help';
 import type { folders } from './lazy/folders';
 import type { history } from './lazy/history';
@@ -35,11 +37,13 @@ import type { Dict, Entry } from './types';
 // Question) son solo etiquetas.
 
 export type { Entry, Plural } from './types';
-type LazyStrings = typeof assistant &
+type LazyStrings = typeof annotator &
+  typeof assistant &
   typeof carrete &
   typeof commentsPanel &
   typeof drive &
   typeof editor &
+  typeof exportPdf &
   typeof help &
   typeof folders &
   typeof history &

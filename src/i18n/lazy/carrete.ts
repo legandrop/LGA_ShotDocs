@@ -72,6 +72,7 @@ export const carrete = {
   'carrete.hideMarkup': { en: "Hide annotations", es: "Ocultar anotaciones" },
   'carrete.showMarkup': { en: "Show annotations", es: "Mostrar anotaciones" },
   'carrete.markupHidden': { en: "This photo has hidden annotations", es: "Esta foto tiene anotaciones ocultas" },
+  'carrete.annotate': { en: "Annotate", es: "Anotar" },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

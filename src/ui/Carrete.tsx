@@ -33,7 +33,8 @@ import {
 } from './carreteModel';
 import { downloadProps, isOffline, type AttachmentView, type CarreteLoader, type Full } from './carreteLoader';
 import { CarreteMarkup, useHasMarkup } from './CarreteMarkup';
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, EyeIcon, EyeOffIcon, OpenIcon } from './icons';
+import { AnnotateIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, EyeIcon, EyeOffIcon, OpenIcon } from './icons';
+import { isLetter } from './findUi';
 import { shortcutLabel } from './shortcuts';
 
 // El carrete (paso 7 de Docs/Plan_Workspaces.md; Docs/Doc_Carrete.md): todas las fotos y videos de la
@@ -117,9 +118,14 @@ export interface CarreteProps {
    * foto anotada. Sin esto (las fotos de una carpeta), no hay anotaciones.
    */
   markup?: Y.Map<unknown> | null;
+  /**
+   * Anotar la foto que se ve (P.20, entrega 2): *Annotate* y la tecla A. Solo con la página editable (sin esto, no
+   * está). El carrete se cierra y quien lo abrió abre el anotador.
+   */
+  onAnnotate?: (item: CarreteItem) => void;
 }
 
-export function Carrete({ items, start, loader, online, onClose, markup = null }: CarreteProps) {
+export function Carrete({ items, start, loader, online, onClose, markup = null, onAnnotate }: CarreteProps) {
   const count = items.length;
   const tr = useT();
   const [index, setIndex] = useState(() => stepIndex(start, 0, count));
@@ -167,10 +173,12 @@ export function Carrete({ items, start, loader, online, onClose, markup = null }
   const zoomable = view.kind === 'image' && !!view.preview;
   /** La foto que se ve tiene anotaciones (el botón para ocultarlas solo aparece entonces). */
   const annotated = useHasMarkup(markup, view.kind === 'image' && !view.file ? (item?.mediaId ?? null) : null);
+  /** Se puede anotar la foto que se ve: una foto del Drive (no un video ni un adjunto) y quien abrió deja. */
+  const annotatable = !!onAnnotate && !!item?.mediaId && item.source === 'media' && view.kind === 'image' && !view.file;
 
   // Lo que los manejadores nativos (rueda, teclado) necesitan leer sin volver a registrarse.
-  const live = useRef({ index, zoom, fit, stage, zoomable, count });
-  live.current = { index, zoom, fit, stage, zoomable, count };
+  const live = useRef({ index, zoom, fit, stage, zoomable, count, annotatable, item });
+  live.current = { index, zoom, fit, stage, zoomable, count, annotatable, item };
 
   const patch = useCallback((url: string, changes: Partial<View>) => {
     if (!mounted.current) return;
@@ -272,6 +280,16 @@ export function Carrete({ items, start, loader, online, onClose, markup = null }
 
   const goTo = useCallback((target: number) => go(target - live.current.index), [go]);
 
+  const onAnnotateRef = useRef(onAnnotate);
+  onAnnotateRef.current = onAnnotate;
+  /** *Annotate*: avisa qué foto y cierra el carrete (el anotador se abre cuando terminó de cerrarse). */
+  const annotate = useCallback(() => {
+    const { annotatable: can, item: it } = live.current;
+    if (!can || !it || !onAnnotateRef.current) return;
+    onAnnotateRef.current(it);
+    requestClose();
+  }, [requestClose]);
+
   // Teclado: en captura, para que los atajos de la app no actúen debajo del carrete.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -283,6 +301,7 @@ export function Carrete({ items, start, loader, online, onClose, markup = null }
       else if (e.key === 'ArrowLeft') go(-1);
       else if (e.key === 'Home') goTo(0);
       else if (e.key === 'End') goTo(live.current.count - 1);
+      else if (isLetter(e, 'a') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && live.current.annotatable) annotate();
       else if (e.key === 'Tab') {
         trapTab(dialog, e);
         e.stopPropagation();
@@ -312,7 +331,7 @@ export function Carrete({ items, start, loader, online, onClose, markup = null }
       document.removeEventListener('focusin', onFocus);
       document.removeEventListener('gesturestart', noPageZoom);
     };
-  }, [go, goTo, requestClose]);
+  }, [go, goTo, requestClose, annotate]);
 
   // --- cargar lo que se ve ------------------------------------------------------------------------
 
@@ -763,6 +782,17 @@ export function Carrete({ items, start, loader, online, onClose, markup = null }
           >
             {markupHidden ? <EyeIcon size={20} /> : <EyeOffIcon size={20} />}
             <span className="carrete-btn-label">{tr(markupHidden ? 'carrete.showMarkup' : 'carrete.hideMarkup')}</span>
+          </button>
+        )}
+        {annotatable && (
+          <button
+            className="carrete-btn carrete-annotate"
+            aria-label={tr('carrete.annotate')}
+            data-tip={tr('carrete.keyboard', { key: shortcutLabel('carreteAnnotate') })}
+            onClick={annotate}
+          >
+            <AnnotateIcon size={20} />
+            <span className="carrete-btn-label">{tr('carrete.annotate')}</span>
           </button>
         )}
         {downloadLink('carrete-btn', true)}

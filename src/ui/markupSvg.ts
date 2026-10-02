@@ -338,6 +338,14 @@ function defaultMeasure(): Ctx['measure'] {
   return measurer;
 }
 
+/**
+ * Lo que mide un renglón con la letra de las anotaciones (el anotador arma la caja de un texto con esto), o `null` si
+ * el navegador no tiene con qué medir.
+ */
+export function markupMeasure(): ((text: string, font: string) => number) | null {
+  return defaultMeasure();
+}
+
 function drawText(s: TextShape, ctx: Ctx): SVGGElement {
   const g = group(s, s.rect);
   const boxed = s.rect && s.rect.w > 0 && s.rect.h > 0 ? s.rect : null;

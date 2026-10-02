@@ -3,6 +3,7 @@ import type { PageRow } from '../sync/types';
 import { modPressed } from '../ui/findUi';
 import { IS_MAC } from '../ui/shortcuts';
 import { BUILTIN_ONSET } from './builtinIds';
+import { isDayReportTemplate, isTemplatesFolder } from './own';
 
 // El reporte del día (Docs/Doc_Plantillas.md, sección 6): lo que va en la primera carga (el botón está arriba del título
 // y el menú de la página lo ofrece): la fecha local, el nombre de la página, cuál es la carpeta de reportes y el atajo.
@@ -84,12 +85,14 @@ export function dayReportsMark(row: PageRow | undefined): 'on' | 'off' | null {
 }
 
 /**
- * Una página que es un reporte del día: salió de *On-Set Report* y su título empieza con una fecha (lo que pone
- * *New day report*, o la tira al crear el primero). Una página a la que se le deshizo la plantilla conserva el
- * `template_id` (entrega 1), pero no tiene la fecha en el título: no cuenta.
+ * Una página que es un reporte del día: salió de *On-Set Report* (o de una plantilla propia con *Use for day reports*,
+ * entrega 3) y su título empieza con una fecha (lo que pone *New day report*, o la tira al crear el primero). Una página
+ * a la que se le deshizo la plantilla conserva el `template_id` (entrega 1), pero no tiene la fecha en el título: no
+ * cuenta. Sin `tree` solo se reconoce la de fábrica.
  */
-export function isReportPage(row: PageRow): boolean {
-  return row.template_id === BUILTIN_ONSET && dateAtStart(row.title) !== null;
+export function isReportPage(row: PageRow, tree?: Pick<PageTree, 'get'>): boolean {
+  if (dateAtStart(row.title) === null) return false;
+  return row.template_id === BUILTIN_ONSET || (!!tree && isDayReportTemplate(tree, row.template_id));
 }
 
 /** Un título con la forma exacta de `reportTitle`: `2026-10-02 | Day 06` o `2026-10-02 | Día 06`, nada más. */
@@ -105,7 +108,7 @@ export function hasReportTitle(title: string): boolean {
  */
 export function isReusableReport(tree: PageTree, id: string): boolean {
   const row = tree.get(id);
-  if (!row || tree.isTrashed(id) || !isReportPage(row) || !hasReportTitle(row.title)) return false;
+  if (!row || tree.isTrashed(id) || !isReportPage(row, tree) || !hasReportTitle(row.title)) return false;
   if (tree.children(id).length > 0) return false;
   return !tree.trashed(row.workspace_id).some((p) => p.parent_id === id);
 }
@@ -119,7 +122,9 @@ export function isDayReportFolder(tree: PageTree, id: string): boolean {
   if (!row || tree.isTrashed(id)) return false;
   const mark = dayReportsMark(row);
   if (mark) return mark === 'on';
-  return tree.children(id).some(isReportPage);
+  // La carpeta *Templates* no se deduce: una plantilla guardada desde un reporte puede tener nombre de reporte.
+  if (isTemplatesFolder(row)) return false;
+  return tree.children(id).some((p) => isReportPage(p, tree));
 }
 
 /** La carpeta de reportes de la página: ella misma, o la de arriba si es una (cada reporte tiene el botón), o `null`. */

@@ -22,6 +22,7 @@ import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { attachMarkupOverlay } from './markupOverlay';
 import { PHOTO_MARKUP_MAP } from '../media/markup';
+import { startMarkupPrune } from '../media/markupPrune';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, insertPageBreakForSlashMenu, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
@@ -79,6 +80,8 @@ import { TemplateHost } from '../templates/TemplateHost';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
+// El anotador de fotos (P.20, entrega 2), también aparte: solo lo abre quien puede editar.
+const Annotator = lazyPart(() => import('./Annotator').then((m) => m.Annotator));
 
 type Opening =
   | { state: 'loading' }
@@ -339,6 +342,10 @@ export function BlockEditor({
   const canShare = editable && permsKnown;
   const canShareRef = useRef(canShare);
   const [carrete, setCarrete] = useState<OpenCarrete | null>(null);
+  /** La foto abierta en el anotador (P.20, Docs/Doc_Anotar_Fotos.md). */
+  const [annotating, setAnnotating] = useState<OpenAnnotator | null>(null);
+  /** *Annotate* desde el carrete: se abre cuando el carrete termina de cerrarse. */
+  const annotateAfterCarrete = useRef<CarreteItem | null>(null);
   /** El adjunto con su hoja abierta (Docs/Doc_Adjuntos.md). */
   const [sheet, setSheet] = useState<string | null>(null);
   /** Carpetas soltadas que esperan "Subir" (P.9, Docs/Doc_Carpetas.md), dónde se soltaron. */
@@ -348,6 +355,8 @@ export function BlockEditor({
   const [folderUpload, setFolderUpload] = useState<string | null>(null);
   // Con el editor ya abierto, el carrete se baja cuando el navegador está libre: tocar una foto no espera.
   useEffect(() => preloadWhenIdle(Carrete), []);
+  // El anotador también, para quien puede editar (así anda sin red aunque nunca se haya abierto).
+  useEffect(() => (editable ? preloadWhenIdle(Annotator) : undefined), [editable]);
   /** El toque empezó sobre una foto que ya estaba elegida (ver `openCarrete`). */
   const pressedSelected = useRef(false);
   /** Con el mouse: el clic empezó sobre la foto ya elegida (o en solo lectura), así que la abre. */
@@ -711,6 +720,35 @@ export function BlockEditor({
       overlay?.stop();
     };
   }, [editor, markupMap]);
+
+  // La poda de las anotaciones de las fotos sacadas (AN11, media/markupPrune.ts): solo un dispositivo que edita, con la
+  // página entera (`editable` ya lo dice), abierta y SINCRONIZADA (con red, nada sin subir ni sin bajar: sin red no ve
+  // que otro volvió a poner la foto, auditoría B2); cada minuto. Nunca en la vista de una versión.
+  const { engine: syncEngine } = useServices();
+  useEffect(
+    () =>
+      startMarkupPrune({
+        doc,
+        editable,
+        permsKnown,
+        preview,
+        synced: async () =>
+          syncEngine.getStatus().online && !(await docs.unsyncedPages()).includes(pageId) && !(await syncEngine.isMissingContent(pageId)),
+      }),
+    [doc, editable, permsKnown, preview, docs, syncEngine, pageId],
+  );
+
+  /** Abre el anotador en una foto del Drive de la página (solo quien edita). */
+  const openAnnotator = (item: CarreteItem) => {
+    if (!editableRef.current || !item.mediaId) return;
+    const id = item.mediaId;
+    // La medida del archivo: el marco de la primera anotación (auditoría B1).
+    setAnnotating({ item, loader: createCarreteLoader({ media, files }), size: () => media.dimensions(id) });
+  };
+  const openAnnotatorRef = useRef(openAnnotator);
+  openAnnotatorRef.current = openAnnotator;
+  // Lo creado para el anotador (los originales en memoria) se suelta al cerrarlo.
+  useEffect(() => () => annotating?.loader.dispose(), [annotating]);
 
   // El selector del bloque `image` ofrece videos solo si el workspace tiene portero.
   setVideosAccepted(media.enabled);
@@ -1094,13 +1132,20 @@ export function BlockEditor({
       },
       canComment,
       onView: (key) => void openAtRef.current(key),
+      // Anotar (P.20): solo con la página editable; la barra de la foto ya solo se ve así.
+      onAnnotate: editable
+        ? (url, name) => {
+            const mediaId = mediaIdOf(url);
+            if (mediaId) openAnnotatorRef.current({ key: '', blockId: '', at: null, url, source: 'media', mediaId, name, caption: '' });
+          }
+        : undefined,
       // *Download all* de una carpeta (P.9, entrega 2): su visor, con la descarga abierta.
       onDownloadAll: (blockId) => {
         const folder = folderInRef.current(blockId);
         if (folder) setFolderView({ ...folder, download: true });
       },
     }),
-    [editor, media, canComment],
+    [editor, media, canComment, editable],
   );
 
   return (
@@ -1143,7 +1188,32 @@ export function BlockEditor({
       {/* Dónde empieza cada hoja (solo una capa encima; roadmap B.7). */}
       <SheetBreaks pageId={pageId} host={host} />
       {editable && <DrivePasteMenu paste={drivePaste} editor={editor} />}
-      {carrete && <CarreteHost {...carrete} markup={markupMap} onClose={() => setCarrete(null)} />}
+      {carrete && (
+        <CarreteHost
+          {...carrete}
+          markup={markupMap}
+          onAnnotate={editable ? (item) => (annotateAfterCarrete.current = item) : undefined}
+          onClose={() => {
+            setCarrete(null);
+            const item = annotateAfterCarrete.current;
+            annotateAfterCarrete.current = null;
+            if (item) openAnnotatorRef.current(item);
+          }}
+        />
+      )}
+      {annotating && editable && (
+        <Part onClose={() => setAnnotating(null)}>
+          <Annotator
+            doc={doc}
+            fileId={annotating.item.mediaId!}
+            name={annotating.item.name}
+            item={annotating.item}
+            loader={annotating.loader}
+            size={annotating.size}
+            onClose={() => setAnnotating(null)}
+          />
+        </Part>
+      )}
       {sheet && <AttachmentSheet fileId={sheet} onClose={() => setSheet(null)} />}
       {folderAsk && (
         <FolderAskDialog
@@ -1186,8 +1256,14 @@ interface OpenCarrete {
   loader: CarreteLoader;
 }
 
+interface OpenAnnotator {
+  item: CarreteItem;
+  loader: CarreteLoader;
+  size: () => Promise<{ width: number; height: number } | null>;
+}
+
 /** El carrete con el estado de la red (aparte, para que el editor no se vuelva a dibujar con cada cambio). */
-function CarreteHost(props: OpenCarrete & { onClose: () => void; markup: Y.Map<unknown> }) {
+function CarreteHost(props: OpenCarrete & { onClose: () => void; markup: Y.Map<unknown>; onAnnotate?: (item: CarreteItem) => void }) {
   const { online } = useSyncStatus();
   return (
     <Part onClose={props.onClose}>
