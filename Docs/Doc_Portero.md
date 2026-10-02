@@ -12,7 +12,7 @@ app los hace solo el dueño (menú de la cuenta → *Google Drive*); subir y ver
 persona sobre esa página.
 
 Carpetas en el Drive del dueño. Ninguna lleva espacios, nunca: guiones bajos, también las que suelta el usuario en
-una página (D3 → B, 2026-10-02; entre v0.089 y v0.123 esas conservaban su nombre y esas subidas no se renombran):
+una página (D3 → B, 2026-10-02; entre v0.089 y v0.127 esas conservaban su nombre y esas subidas no se renombran):
 
 ```
 <carpeta elegida por el dueño, o la raíz de su Drive>

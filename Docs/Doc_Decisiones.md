@@ -109,7 +109,7 @@ diga otra cosa.
     decide por él. **Ningún nombre de carpeta que crea la app lleva espacios:** guiones bajos, y la de la app
     se llama `LGA_ShotDocs`, igual que el repo (pedido de Lega, 2026-09-30). **Tampoco las que suelta el
     usuario en una página** («Día 2 - Puerto» queda `Día_2_-_Puerto`, y sus subcarpetas): D3 → B, 2026-10-02.
-    El 2026-10-01 Lega había delegado y quedó respetar el nombre (v0.089 a v0.123); lo cambió: ninguna carpeta
+    El 2026-10-01 Lega había delegado y quedó respetar el nombre (v0.089 a v0.127); lo cambió: ninguna carpeta
     que la app crea en el Drive lleva espacios, nunca (`Doc_Carpetas.md`).
   - **Los videos se reproducen adentro de la app** (teléfono, web y app instalada), y hay un **carrete**
     de fotos y videos de la página. Lo que el navegador no pueda reproducir muestra la miniatura y se baja.

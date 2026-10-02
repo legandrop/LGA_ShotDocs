@@ -132,7 +132,7 @@ Caso típico: Lega arma un brief o un desglose, y se lo manda al cliente con pre
 - **Nombres sin espacios, nunca:** guiones bajos en todas las carpetas que crea la app. La de la app se llama
   `LGA_ShotDocs`, igual que el repo; la del proyecto, su nombre con guiones bajos en vez de espacios; la
   del día, `AAAA-MM-DD`. Las carpetas que suelta el usuario en una página (P.9) también: `Día 2 - Puerto` queda
-  `Día_2_-_Puerto` (D3 → B, 2026-10-02; lo subido entre v0.089 y v0.123 con espacios no se renombra,
+  `Día_2_-_Puerto` (D3 → B, 2026-10-02; lo subido entre v0.089 y v0.127 con espacios no se renombra,
   `Doc_Carpetas.md`).
 - Carpetas: `<donde eligió el dueño> / LGA_ShotDocs / <Proyecto> / <día> / IMG_1234.HEIC`, con el día en
   que se subió. Renombrar el proyecto renombra su carpeta (si el dueño no la renombró a mano). Las páginas

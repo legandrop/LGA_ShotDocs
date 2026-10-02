@@ -410,7 +410,7 @@ describe('carpetas: crear el árbol', () => {
     expect(world.drive.get('oldfolderxxxxxxx')!.name).toBe('Fotos rodaje');
   });
 
-  it('una subida de v0.089 a v0.123, con espacios, se retoma sin renombrar nada ni crear carpetas de más; lo nuevo va con guiones bajos', async () => {
+  it('una subida de v0.089 a v0.127, con espacios, se retoma sin renombrar nada ni crear carpetas de más; lo nuevo va con guiones bajos', async () => {
     const { world, store, p } = await setup();
     const dirs = ['Fotos', 'Fotos/Dia 2', 'Fotos/Dia 2/Toma 1'];
     const first = await prepare(p, { name: 'Dia 2 - Puerto', dirs });

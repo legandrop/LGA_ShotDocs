@@ -8,7 +8,7 @@ carpeta del Drive lleve espacios, nunca (D3 → B). `driveFolderName` del porter
 espacios a un `_` (`Día_2_-_Puerto`, también en las subcarpetas) y conserva lo que ya protegía: sin controles,
 marcas de dirección ni ancho cero, el ZWJ solo entre emojis (v0.119), corte de 200 por grafema, `Folder` si queda
 vacío. En la app, la tarjeta sigue con el nombre del usuario. Lo ya subido no se renombra y se encuentra por su
-marca, así que volver a soltarla no duplica nada. Pruebas con una subida de v0.089 a v0.123 retomada.
+marca, así que volver a soltarla no duplica nada. Pruebas con una subida de v0.089 a v0.127 retomada.
 [ Carpetas - las que suelta el usuario van al Drive sin espacios, con guiones bajos (D3 → B) ]
 
 Compactar (B.9), entrega 1: leer snapshots. Un dispositivo nuevo baja todas las filas de cada página, y una página muy
