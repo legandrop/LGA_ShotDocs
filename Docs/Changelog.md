@@ -3,12 +3,12 @@
 v0.0XX :
 
 Lo borrado de una página viajaba en las filas de `page_updates` a cualquiera que la puede ver, invitados incluidos, y
-desde v0.095 también lo tecleado y borrado antes de subir (D14). Diseño, sin código, en `Doc_Privacidad_Borrado.md`:
-medido con filas reales y simulaciones, propone una subida con GC selectivo (lo que uno borra antes de subir no sale
-del dispositivo; lo de D15 sigue llegando) y una cadena limpia, base y deltas con lo borrado como hueco armados por un
-editor, que `pull_page_updates` sirve a Ver, Comentar e invitados. Con la migración en borrador, las pruebas, las
-entregas y una pregunta para Lega.
-[ Privacidad de lo borrado - diseño de la subida con GC selectivo y la cadena limpia para quien no edita ]
+las fotos sacadas se seguían abriendo (D14). Diseño, sin código, en `Doc_Privacidad_Borrado.md`, medido con filas
+reales y simulaciones y corregido con la auditoría: quien no edita (Ver, Comentar, invitados) baja siempre la última
+base limpia de la página, armada por el dispositivo de un editor con lo borrado como hueco, nunca filas; al compartir
+se exige una base posterior; los usos sacados de fotos y archivos dejan de darle permiso. La subida no cambia (D19) y
+los deltas quedan para más adelante (D20). Con la migración en borrador, las pruebas y una pregunta para Lega.
+[ Privacidad de lo borrado - diseño de la base limpia para quien no edita ]
 
 v0.098 :
 

@@ -451,13 +451,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     mínima subida): si alguna vez hace falta, una migración como la de archivos. Ver `Doc_Sincronizacion.md`, "Volver
     después de mucho tiempo sin red".
 18. **Que lo borrado no llegue a quien solo ve la página (D14). Diseño en `Doc_Privacidad_Borrado.md`, sin código.**
-    Hoy lo borrado viaja en las filas a cualquiera que ve la página (también invitados), y desde v0.095 también lo
-    tecleado y borrado antes de subir. Entregas: (0) avisarlo al compartir y en la ayuda; (1) subida con GC selectivo:
-    lo que uno borra antes de subir no sale del dispositivo, lo de D15 sigue llegando (solo app); (2) la cadena limpia
-    (base y deltas con lo borrado como hueco, la arma un editor) para Ver, Comentar e invitados, con la migración y el
-    interruptor `clean_min_version`, antes de invitar al primer cliente de verdad; (3) limpiar el dispositivo de quien
-    deja de ver lo borrado. Pregunta para Lega: aceptar que el cliente vea los cambios con unos segundos o minutos de
-    demora (sección 13).
+    Hoy lo borrado viaja en las filas a cualquiera que ve la página (también invitados) y las fotos sacadas se siguen
+    abriendo. Entregas: (0) avisarlo al compartir y en la ayuda; (1) la base limpia: quien no edita baja siempre la
+    última base de la página (armada por un editor, con lo borrado como hueco), con `clean_reset_seq` al compartir, los
+    permisos de los usos sacados de archivos y el interruptor `clean_min_version`, antes de invitar al primer cliente de
+    verdad; (2) medir; (3) limpiar el dispositivo de quien deja de ver lo borrado; (4) deltas si hacen falta. La subida
+    no cambia (D19). Depende del frente de las páginas en la papelera legibles con Ver. Pregunta para Lega: aceptar la
+    demora del cliente (sección 13).
 
 ### C. Esperan a Lega
 
