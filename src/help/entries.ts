@@ -110,6 +110,8 @@ const TEMPLATES = '0.117';
 const PUBLIC_LINK = '0.111';
 /** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
 const PHOTO_MARKUP = '0.116';
+/** Anotar las fotos en la compu (P.20, entrega 2). El número lo pone quien publica. */
+const ANNOTATE = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -261,6 +263,31 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.photosMarkup.text',
     words: ['annotate', 'annotations', 'anotar', 'anotaciones', 'flecha', 'arrow', 'dibujo', 'drawing', 'framerev', 'hide', 'ocultar'],
     since: PHOTO_MARKUP,
+  },
+  {
+    id: 'photosAnnotate',
+    section: 'photos',
+    title: 'help.photosAnnotate.title',
+    text: 'help.photosAnnotate.text',
+    keys: { viewer: 'carreteAnnotate', width: 'annotateWidth', next: 'annotateWidthNext', undo: 'annotateUndo', close: 'annotateEscape' },
+    more: [
+      'annotateSelect',
+      'annotateRectangle',
+      'annotateEllipse',
+      'annotateArrow',
+      'annotateLine',
+      'annotatePencil',
+      'annotateMarker',
+      'annotateText',
+      'annotateNumber',
+      'annotateRedo',
+      'annotateDelete',
+      'annotateFit',
+      'annotatePan',
+      'annotateSave',
+    ],
+    words: ['annotate', 'anotar', 'flecha', 'arrow', 'círculo', 'circle', 'texto', 'lápiz', 'pencil', 'marker', 'marcador', 'número', 'framerev', 'dibujar', 'draw'],
+    since: ANNOTATE,
   },
   { id: 'photosPhone', section: 'photos', title: 'help.photosPhone.title', text: 'help.photosPhone.text', since: BEFORE_HELP },
   {
