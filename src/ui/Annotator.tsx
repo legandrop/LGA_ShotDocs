@@ -169,7 +169,7 @@ type Drag =
   | { mode: 'stroke'; tool: 'pencil' | 'marker'; pointerId: number; points: number[] }
   | { mode: 'number'; pointerId: number; at: Point }
   | { mode: 'move'; pointerId: number; ids: string[]; start: Point; current: Point; hit: string; shift: boolean }
-  | { mode: 'handle'; pointerId: number; id: string; handle: Handle; current: Point; shift: boolean }
+  | { mode: 'handle'; pointerId: number; id: string; handle: Handle; start: Point; current: Point; shift: boolean }
   | { mode: 'band'; pointerId: number; start: Point; current: Point; add: boolean }
   | { mode: 'pan'; pointerId: number; lastX: number; lastY: number }
   // Dos dedos: amplían y mueven la foto (nunca dibujan). `mid` en el escenario, como el carrete.
@@ -820,7 +820,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
       if (selected.length === 1) {
         const handle = handlesOf(selected[0]).find((h) => Math.hypot(h.at.x - raw.x, h.at.y - raw.y) <= TOLERANCES[input].handle / pxPerUnit);
         if (handle) {
-          begin({ mode: 'handle', pointerId: e.pointerId, id: selected[0].id, handle: handle.handle, current: raw, shift: e.shiftKey });
+          begin({ mode: 'handle', pointerId: e.pointerId, id: selected[0].id, handle: handle.handle, start: raw, current: raw, shift: e.shiftKey });
           captureIt();
           return;
         }
@@ -991,21 +991,15 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
           update(list.map((s) => [s.id, moveFields(s, dx, dy)]));
         } else {
           if (d.ids.length > 1) setSelection([d.hit]);
-          // Con el dedo o el lápiz no hay doble clic: dos toques seguidos en un texto lo editan, en un número lo renumeran.
-          if (input !== 'mouse') {
-            const tap = { at: e.timeStamp, x: e.clientX, y: e.clientY };
-            if (isDoubleTap(lastTap.current, tap)) {
-              lastTap.current = null;
-              const hit = byId.get(d.hit);
-              if (hit) editShape(hit, true);
-            } else lastTap.current = tap;
-          }
+          tapped(e, input, d.hit);
         }
         break;
       }
       case 'handle': {
         const s = byId.get(d.id);
-        if (s) update([[s.id, handleFields(s, d.handle, d.current, { shift: d.shift, alt: false })]]);
+        // Tocar un tirador sin moverlo no cambia nada (con el dedo, los tiradores son grandes y tapan la forma).
+        if (!moved(d.start, d.current, slop)) tapped(e, input, d.id);
+        else if (s) update([[s.id, handleFields(s, d.handle, d.current, { shift: d.shift, alt: false })]]);
         break;
       }
       case 'band': {
@@ -1018,6 +1012,19 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
         break;
     }
     redraw();
+  };
+
+  /** Con el dedo o el lápiz no hay doble clic: dos toques seguidos en un texto lo editan, en un número lo renumeran. */
+  const tapped = (e: { timeStamp: number; clientX: number; clientY: number }, input: InputType, id: string) => {
+    if (input === 'mouse') return;
+    const tap = { at: e.timeStamp, x: e.clientX, y: e.clientY };
+    if (!isDoubleTap(lastTap.current, tap)) {
+      lastTap.current = tap;
+      return;
+    }
+    lastTap.current = null;
+    const hit = byId.get(id);
+    if (hit) editShape(hit, true);
   };
 
   const startTextEdit = (s: MarkupShape, now = false) => {
