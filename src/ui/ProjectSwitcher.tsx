@@ -12,6 +12,7 @@ import {
   AccountIcon,
   ArchiveIcon,
   ChevronLeftIcon,
+  ExportIcon,
   ImportIcon,
   MoreIcon,
   OfflineMarkIcon,
@@ -30,6 +31,8 @@ import { shortcutLabel } from './shortcuts';
 import { DeletedProjectsList, DeleteProjectDialog, ShareDialog } from './lazyDialogs';
 import { Part } from './lazyPart';
 import { OfflineBadge, offlineSupported, openOffline } from './SpaceHost';
+import { openExport } from './ExportHost';
+import { LEVEL_VIEW } from '../sync/access';
 import { WorkspacesDialog, type WorkspacesMode } from './Welcome';
 import {
   RemoveWorkspaceDialog,
@@ -355,7 +358,9 @@ function ProjectMenu(props: {
     const canManage = statesReady && perms.canManageProject(id);
     // "Available offline" (P.10): cualquiera que vea el proyecto, si hay base de archivos en el dispositivo.
     const canOffline = !!mediaDb && offlineSupported();
-    if (!canRename && !canManage && !canOffline) return null;
+    // "Export project…" (P.22): quien ve el proyecto entero (un invitado con páginas sueltas exporta cada rama).
+    const canExport = perms.projectLevel(id) >= LEVEL_VIEW;
+    if (!canRename && !canManage && !canOffline && !canExport) return null;
     const reason = blockedReason(id, archived);
     const deleteReason = offline ? tr('fileTrash.needsInternet') : archived ? null : reason;
     return (
@@ -371,6 +376,19 @@ function ProjectMenu(props: {
             }}
           >
             <OfflineMarkIcon size={16} />
+          </button>
+        )}
+        {canExport && (
+          <button
+            className="icon-button"
+            aria-label={tr('project.export')}
+            data-tip={tr('project.export')}
+            onClick={() => {
+              props.onClose();
+              openExport('project', id);
+            }}
+          >
+            <ExportIcon size={16} />
           </button>
         )}
         {canRename && (
@@ -529,6 +547,16 @@ function ProjectMenu(props: {
                       }}
                     >
                       <OfflineMarkIcon size={16} /> {tr('project.offline')}
+                    </button>
+                  )}
+                  {perms.projectLevel(p.id) >= LEVEL_VIEW && (
+                    <button
+                      onClick={() => {
+                        props.onClose();
+                        openExport('project', p.id);
+                      }}
+                    >
+                      <ExportIcon size={16} /> {tr('project.export')}
                     </button>
                   )}
                   {perms.canRenameProject(p.id) && !archived && (

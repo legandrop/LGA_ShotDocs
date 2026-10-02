@@ -12,6 +12,13 @@ export const menus = {
   'pageMenu.move': { en: "Move to…", es: "Mover a…" },
   'pageMenu.pageSize': { en: "Page size", es: "Tamaño de hoja" },
   'pageMenu.print': { en: "Export PDF / Print", es: "Exportar PDF / Imprimir" },
+  // Exportar una rama o un proyecto (P.22, Docs/Doc_Exportar.md): la ventana se baja aparte.
+  'pageMenu.export': { en: "Export…", es: "Exportar…" },
+  'pageMenu.exportTip': {
+    en: "One PDF with this page and the pages inside, with a contents page.",
+    es: "Un solo PDF con esta página y las de adentro, con un índice.",
+  },
+  'project.export': { en: "Export project…", es: "Exportar proyecto…" },
   'pageMenu.printAsSeen': { en: "Print as shown", es: "Imprimir como se ve" },
   'pageMenu.printAsSeenTip': {
     en: "Leaves out collapsed sections.\nThe pages won't match the page marks on screen.",

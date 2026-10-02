@@ -169,13 +169,14 @@ export function testProject(options: TestProjectOptions, photo: (n: number) => T
     return out;
   };
 
-  // El árbol: cinco ramas de primer nivel, cada una con su hoja, y adentro páginas y subpáginas.
+  // El árbol: cinco ramas de primer nivel, cuatro con su hoja y la última libre (como la mayoría de las páginas de un
+  // proyecto real: sale en A4), y adentro páginas y subpáginas.
   const formats: TestPageSpec['format'][] = [
     { size: 'A4', landscape: false },
     { size: 'A5', landscape: true },
     { size: 'Letter', landscape: false },
     { size: 'A3', landscape: true },
-    { size: 'A4', landscape: false },
+    undefined,
   ];
   const rootTitles = ['Preproducción', 'Rodaje · Semana 1', 'Rodaje · Semana 2', 'Desgloses', 'Entregas'];
   const total = Math.max(1, options.pages);

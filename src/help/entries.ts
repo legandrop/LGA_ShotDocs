@@ -106,6 +106,8 @@ const FOLDER_ZIP = '0.105';
 const CAMERA = '0.110';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
+/** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
+const EXPORT_PDF = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -488,6 +490,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: PAGE_BREAK,
   },
   { id: 'pdf', section: 'print', title: 'help.pdf.title', text: 'help.pdf.text', keys: { print: 'print' }, showMe: 'page-menu', since: BEFORE_HELP },
+  {
+    id: 'export',
+    section: 'print',
+    title: 'help.export.title',
+    text: 'help.export.text',
+    words: ['exportar', 'export', 'pdf', 'índice', 'contents', 'proyecto entero', 'whole project', 'entregar', 'cliente', 'client', 'reporte'],
+    since: EXPORT_PDF,
+  },
 
   // --- Preferencias ---
   { id: 'prefs', section: 'prefs', title: 'help.prefs.title', text: 'help.prefs.text', since: BEFORE_HELP },

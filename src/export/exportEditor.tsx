@@ -53,6 +53,8 @@ export interface ExportEditorOptions {
   imageTimeoutMs?: number;
   /** Lo que se espera a que carguen las imágenes de la copia (como `printPage`: 6 s). */
   copyTimeoutMs?: number;
+  /** La espera corta, después de varias páginas seguidas con imágenes que no llegaron (1 s). */
+  shortTimeoutMs?: number;
 }
 
 /** Una página dibujada, copiada y paginada. */
@@ -79,6 +81,12 @@ export class ExportCancelled extends Error {
 
 const IMAGE_TIMEOUT_MS = 8000;
 const COPY_TIMEOUT_MS = 6000;
+/**
+ * Después de tantas páginas seguidas con imágenes que no llegaron (un servidor que no contesta), la espera de las
+ * siguientes baja a `SHORT_TIMEOUT_MS`: con 8 s por página, 300 páginas serían 40 minutos de espera inútil.
+ */
+const TIMEOUTS_BEFORE_SHORT = 3;
+const SHORT_TIMEOUT_MS = 1000;
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -113,6 +121,8 @@ export class ExportEditor {
   private readonly root: Root;
   private currentPage = '';
   private destroyed = false;
+  /** Páginas seguidas cuyas imágenes no llegaron a tiempo. */
+  private timeouts = 0;
 
   private constructor(private readonly options: ExportEditorOptions) {
     const resolve = options.resolveFileUrl;
@@ -122,7 +132,8 @@ export class ExportEditor {
       dictionary: editorDictionary(options.lang ?? 'en'),
       resolveFileUrl: (url: string) => {
         const pageId = this.currentPage;
-        const out = resolve ? resolve(url, pageId) : Promise.resolve(url);
+        // Si la dirección no se puede resolver, la imagen queda rota (no se espera) y el error no sale suelto.
+        const out = (resolve ? resolve(url, pageId) : Promise.resolve(url)).catch(() => url);
         const id = media ? mediaIdOf(url) : null;
         if (!id || !media) return out;
         return out.then((src) => {
@@ -201,18 +212,28 @@ export class ExportEditor {
     this.setHeader(page.header);
     this.title.value = page.title.trim() || t('common.untitled');
     const blocks = page.blocks.length > 0 ? page.blocks : [{ type: 'paragraph' }];
-    this.editor.replaceBlocks(this.editor.document, blocks as never);
+    // Fuera del historial de deshacer: si no, el editor guardaría cada página anterior (crece sin tope).
+    this.editor.transact((tr) => {
+      tr.setMeta('addToHistory', false);
+      this.editor.replaceBlocks(this.editor.document, blocks as never);
+    });
     // BlockNote pone las imágenes después (pide la dirección a `resolveFileUrl`).
     await tick();
     const t1 = performance.now();
-    const settled = await until(() => !imagesPending(this.article), this.options.imageTimeoutMs ?? IMAGE_TIMEOUT_MS, signal);
+    const full = this.options.imageTimeoutMs ?? IMAGE_TIMEOUT_MS;
+    const timeout = this.timeouts >= TIMEOUTS_BEFORE_SHORT ? Math.min(full, this.options.shortTimeoutMs ?? SHORT_TIMEOUT_MS) : full;
+    const hadImages = imagesPending(this.article);
+    const settled = await until(() => !imagesPending(this.article), timeout, signal);
+    if (!settled) this.timeouts++;
+    else if (hadImages) this.timeouts = 0;
     await document.fonts?.ready.catch(() => undefined);
     check(signal);
     const t2 = performance.now();
     const view = buildPrintView(this.article, page.format, 'output');
     try {
-      // Las imágenes de la copia ya están en la memoria del navegador; igual se esperan, como `printPage`.
-      if (copyImagesPending(view.root)) await until(() => !copyImagesPending(view.root), this.options.copyTimeoutMs ?? COPY_TIMEOUT_MS, signal);
+      // Las imágenes de la copia ya están en la memoria del navegador; igual se esperan, como `printPage`. Si las del
+      // editor no llegaron, las de la copia son las mismas y tampoco van a llegar: no se espera otra vez.
+      if (settled && copyImagesPending(view.root)) await until(() => !copyImagesPending(view.root), this.options.copyTimeoutMs ?? COPY_TIMEOUT_MS, signal);
       const t3 = performance.now();
       const result = paginateView(view);
       applyBreaks(result);

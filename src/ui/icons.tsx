@@ -90,6 +90,8 @@ export const PrintIcon = icon(
   'M5.5 7.5V3.25h9V7.5M5.5 14H3.75a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1h12.5a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H14.5M5.5 11.5h9v5.25h-9z',
 );
 // Colapsar / abrir todos los títulos (P.11): renglones con un triángulo a la izquierda.
+// Exportar una rama o un proyecto (P.22): una hoja con una flecha que sale.
+export const ExportIcon = icon('M8.5 3H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-5M11.25 3H15v3.75M15 3l-5.5 5.5', { strokeWidth: 1.5 });
 export const CollapseAllIcon = icon('M4 5.5l2.5 1.75L4 9M9 7.25h7M4 12.25l2.5 1.75L4 15.75M9 14h7');
 export const ExpandAllIcon = icon('M3.75 5.75h5L6.25 8.5zM11 7h5M3.75 12.25h5l-2.5 2.75zM11 13.5h5');
 export const CloseIcon = icon('M5 5l10 10M15 5L5 15', { strokeWidth: 1.7 });

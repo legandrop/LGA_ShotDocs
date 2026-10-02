@@ -61,6 +61,9 @@ export interface ExportSource {
   snapshot(pageId: string): Promise<{ doc: Y.Doc; supported: boolean; state: { unreadable?: boolean } }>;
 }
 
+/** Lo que le falta a una página en el dispositivo (`contentGap`, clean.ts): sale con lo que hay y un aviso. */
+export type ContentGap = 'missing' | 'preparing' | null;
+
 /** Cómo salió una página. */
 export interface ExportedPage {
   id: string;
@@ -72,6 +75,8 @@ export interface ExportedPage {
   unreadable: boolean;
   imagesTimedOut: boolean;
   ms: { read: number } & RenderedPage['ms'];
+  /** La página no se pudo dibujar: se salteó (el motivo, para el informe). Las demás salen igual. */
+  failed?: string;
 }
 
 export interface ExportProgress {
@@ -88,7 +93,9 @@ export interface RunOptions {
    * Lo que se hace con cada página dibujada (el PDF las junta, el zip las serializa). Si no está, la vista se saca
    * enseguida. Si está, quien la recibe se hace cargo de sacarla.
    */
-  onPage?: (page: RenderedPage, content: PageContent, plan: ExportPlanPage) => void | Promise<void>;
+  onPage?: (page: RenderedPage, content: PageContent, plan: ExportPlanPage, out: ExportedPage) => void | Promise<void>;
+  /** Una página que no se pudo leer ni dibujar (se saltea y sigue con las demás). */
+  onFailed?: (plan: ExportPlanPage, out: ExportedPage) => void | Promise<void>;
 }
 
 /**
@@ -102,29 +109,53 @@ export async function renderPages(plan: ExportPlanPage[], source: ExportSource, 
     if (options.signal?.aborted) throw new ExportCancelled();
     options.onProgress?.({ done: i, total: plan.length, title: page.title });
     const t0 = performance.now();
-    const snap = await source.snapshot(page.id);
+    let rendered: RenderedPage;
     let content: PageContent;
+    let unreadable = false;
+    let read = 0;
     try {
-      content = readPageContent(snap.doc);
-    } finally {
-      snap.doc.destroy();
+      const snap = await source.snapshot(page.id);
+      unreadable = !snap.supported || !!snap.state.unreadable;
+      try {
+        content = readPageContent(snap.doc);
+      } finally {
+        snap.doc.destroy();
+      }
+      read = performance.now() - t0;
+      rendered = await editor.render(
+        { id: page.id, title: page.title, header: page.header, format: page.format, blocks: content.blocks },
+        { signal: options.signal },
+      );
+    } catch (err) {
+      if (err instanceof ExportCancelled) throw err;
+      // Una página mala no corta la exportación: se saltea con su motivo y siguen las demás.
+      console.warn('[exportar] no se pudo dibujar la página', page.id, err);
+      const failed: ExportedPage = {
+        id: page.id,
+        sheets: 0,
+        breaks: [],
+        content: { blocks: 0, collapsedForAll: [], unknown: null },
+        unreadable,
+        imagesTimedOut: false,
+        ms: { read, blocks: 0, images: 0, copy: 0, paginate: 0 },
+        failed: err instanceof Error ? err.message : String(err),
+      };
+      out.push(failed);
+      await options.onFailed?.(page, failed);
+      continue;
     }
-    const read = performance.now() - t0;
-    const rendered = await editor.render(
-      { id: page.id, title: page.title, header: page.header, format: page.format, blocks: content.blocks },
-      { signal: options.signal },
-    );
     try {
-      out.push({
+      const entry: ExportedPage = {
         id: page.id,
         sheets: rendered.sheets,
         breaks: rendered.breaks.map((b) => ({ key: b.key, offset: b.offset })),
         content: { blocks: content.blocks.length, collapsedForAll: content.collapsedForAll, unknown: content.unknown },
-        unreadable: !snap.supported || !!snap.state.unreadable,
+        unreadable,
         imagesTimedOut: rendered.imagesTimedOut,
         ms: { read, ...rendered.ms },
-      });
-      if (options.onPage) await options.onPage(rendered, content, page);
+      };
+      out.push(entry);
+      if (options.onPage) await options.onPage(rendered, content, page, entry);
       else rendered.view.root.remove();
     } catch (err) {
       rendered.view.root.remove();
