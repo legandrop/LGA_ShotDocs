@@ -159,6 +159,31 @@ describe('Enter, Retroceso y Supr alrededor de un salto', () => {
     expect(e.getTextCursorPosition().block.id).toBe(flat(e)[1].id);
   });
 
+  it('Supr en un salto vacío que es el último hijo de un bloque: lo saca y lo de abajo no se mueve', async () => {
+    const { e } = page([p('Madre', [p('hija'), br()]), p('Dos')]);
+    caret(e, 2, 0);
+    expect(press(e, 'Delete')).toBe(true);
+    expect(show(e)).toEqual(['paragraph:Madre', 'paragraph:hija', 'paragraph:Dos']);
+    // "Dos" sigue en su nivel (no sube adentro de "Madre" ni del salto) y el cursor queda al principio.
+    expect(e.document.map((b) => textOf(b as never)).slice(0, 2)).toEqual(['Madre', 'Dos']);
+    expect(e.document[0].children.map((b) => textOf(b as never))).toEqual(['hija']);
+    expect(e.getTextCursorPosition().block.id).toBe(e.document[1].id);
+    await tick();
+    e.undo();
+    await tick();
+    expect(show(e)).toEqual(['paragraph:Madre', 'paragraph:hija', 'BR:', 'paragraph:Dos']);
+    // Hijo único, y en el último bloque de la página (sin nada después): sin el salto, el renglón queda.
+    const b = page([p('Madre', [br()]), p('Dos')]).e;
+    caret(b, 1, 0);
+    press(b, 'Delete');
+    expect(show(b)).toEqual(['paragraph:Madre', 'paragraph:Dos']);
+    expect(b.document[0].children).toHaveLength(0);
+    const c = page([p('Uno'), br()]).e;
+    caret(c, 1, 0);
+    expect(press(c, 'Delete')).toBe(true);
+    expect(flat(c).map((x) => `${x.k}:${x.t}`)).toEqual(['paragraph:Uno', 'paragraph:']);
+  });
+
   it('Supr al final de un salto con texto y Retroceso en un salto: hacen lo de siempre, sin perder texto', () => {
     const a = page([p('Uno'), br('Nota'), p('Dos')]).e;
     caret(a, 1, 4);
@@ -206,6 +231,37 @@ describe('Ctrl/⌘+Enter en otros lugares', () => {
     const st = collapseState(e.prosemirrorState)!;
     expect(st.analysis.hidden.has(flat(e)[2].id)).toBe(true);
     expect(st.analysis.hidden.has(e.getTextCursorPosition().block.id)).toBe(false);
+  });
+
+  it('en el medio de un título colapsado o con una parte elegida: no lo parte ni abre la sección', async () => {
+    for (const how of ['medio', 'elegido'] as const) {
+      const { e } = page([p('top'), h(2, 'Escena'), p('s1'), p('s2'), h(2, 'G'), p('g1')]);
+      setCollapsed(e.prosemirrorView!, [flat(e)[1].id], true);
+      await tick();
+      if (how === 'medio') caret(e, 1, 3);
+      else select(e, 1, 1, 1, 4);
+      expect(modEnter(e)).toBe(true);
+      await tick();
+      expect(show(e), how).toEqual(['paragraph:top', 'heading:Escena', 'paragraph:s1', 'paragraph:s2', 'BR:', 'heading:G', 'paragraph:g1']);
+      const st = collapseState(e.prosemirrorState)!;
+      expect(st.analysis.hidden.has(flat(e)[2].id), how).toBe(true);
+      expect(st.analysis.hidden.has(e.getTextCursorPosition().block.id), how).toBe(false);
+      e.undo();
+      await tick();
+      expect(show(e), how).toEqual(['paragraph:top', 'heading:Escena', 'paragraph:s1', 'paragraph:s2', 'heading:G', 'paragraph:g1']);
+      expect(collapseState(e.prosemirrorState)!.analysis.hidden.has(flat(e)[2].id), how).toBe(true);
+    }
+  });
+
+  it('al principio de un título colapsado: el salto va antes y la sección sigue colapsada', async () => {
+    const { e } = page([p('top'), h(2, 'Escena'), p('s1'), h(2, 'G')]);
+    setCollapsed(e.prosemirrorView!, [flat(e)[1].id], true);
+    await tick();
+    caret(e, 1, 0);
+    expect(modEnter(e)).toBe(true);
+    await tick();
+    expect(show(e)).toEqual(['paragraph:top', 'BR:', 'heading:Escena', 'paragraph:s1', 'heading:G']);
+    expect(collapseState(e.prosemirrorState)!.analysis.hidden.has(flat(e)[3].id)).toBe(true);
   });
 
   it('deshacer: un solo paso, en el medio y al final', async () => {
@@ -277,6 +333,43 @@ describe('pegar adentro de un salto', () => {
     expect(show(e).at(-1)).toBe('paragraph:Dos');
   });
 
+  it('lo pegado que ya trae saltos los conserva, y el salto donde se pegó queda una sola vez', async () => {
+    const a = page([p('A'), br(), p('B'), br('Con texto'), p('C')]).e;
+    const html = await a.blocksToFullHTML(a.document.slice(0, 5));
+    // En un salto vacío y sobre el texto elegido de un salto: lo pegado arriba, con sus saltos, y el salto al final.
+    const vacio = page([p('Uno'), br(), p('Dos')]).e;
+    caret(vacio, 1, 0);
+    vacio.pasteHTML(html, true);
+    expect(show(vacio)).toEqual(['paragraph:Uno', 'paragraph:A', 'BR:', 'paragraph:B', 'BR:Con texto', 'BR:C', 'paragraph:Dos']);
+    const elegido = page([p('Uno'), br('Nota'), p('Dos')]).e;
+    select(elegido, 1, 0, 1, 4);
+    elegido.pasteHTML(html, true);
+    expect(show(elegido)).toEqual(['paragraph:Uno', 'paragraph:A', 'BR:', 'paragraph:B', 'BR:Con texto', 'BR:C', 'paragraph:Dos']);
+    // En el medio del texto de un salto: el primero pegado se junta con "No" y no hereda el salto.
+    const medio = page([p('Uno'), br('Nota'), p('Dos')]).e;
+    caret(medio, 1, 2);
+    medio.pasteHTML(html, true);
+    expect(show(medio)).toEqual(['paragraph:Uno', 'paragraph:NoA', 'BR:', 'paragraph:B', 'BR:Con texto', 'BR:Cta', 'paragraph:Dos']);
+    // Un solo Ctrl+Z deshace el pegado y el arreglo del salto.
+    await tick();
+    medio.undo();
+    await tick();
+    expect(show(medio)).toEqual(['paragraph:Uno', 'BR:Nota', 'paragraph:Dos']);
+  });
+
+  it('si lo pegado termina en un salto, no se duplica; uno pegado de afuera también se conserva', async () => {
+    const a = page([p('A'), br()]).e;
+    const html = await a.blocksToFullHTML(a.document.slice(0, 2));
+    const b = page([p('Uno'), br(), p('Dos')]).e;
+    caret(b, 1, 0);
+    b.pasteHTML(html, true);
+    expect(show(b)).toEqual(['paragraph:Uno', 'paragraph:A', 'BR:', 'paragraph:Dos']);
+    const c = page([p('Uno'), br(), p('Dos')]).e;
+    caret(c, 1, 0);
+    c.pasteHTML('<p>A</p><p style="break-after: page"></p><p>B</p>');
+    expect(show(c)).toEqual(['paragraph:Uno', 'paragraph:A', 'BR:', 'BR:B', 'paragraph:Dos']);
+  });
+
   it('copiar con el formato de la app entre dos páginas conserva los saltos', async () => {
     const a = page([p('Uno'), br(), br('Con texto'), p('Dos')]).e;
     const html = await a.blocksToFullHTML(a.document.slice(0, 4));
@@ -300,6 +393,29 @@ describe('la versión anterior (esquema publicado) sobre una página con saltos'
     mount(docOld, previousSchema, false);
     await tick();
     expect(updates).toHaveLength(0);
+  });
+
+  it('lo que dejan pegar con saltos, Supr en un hijo y Ctrl/⌘+Enter en un título colapsado: la versión anterior lo abre sin cambios', async () => {
+    const src = page([p('A'), br(), p('B'), br('Con texto'), p('C')]).e;
+    const html = await src.blocksToFullHTML(src.document.slice(0, 5));
+    const { e, doc } = page([p('Uno'), br(), p('Madre', [p('hija'), br()]), h(2, 'Escena'), p('s1'), p('Dos')]);
+    caret(e, 1, 0);
+    e.pasteHTML(html, true);
+    caret(e, flat(e).findIndex((x) => x.t === 'hija') + 1, 0);
+    press(e, 'Delete');
+    setCollapsed(e.prosemirrorView!, [flat(e).find((x) => x.t === 'Escena')!.id], true);
+    await tick();
+    caret(e, flat(e).findIndex((x) => x.t === 'Escena'), 3);
+    modEnter(e);
+    await tick();
+    const docOld = new Y.Doc();
+    Y.applyUpdate(docOld, Y.encodeStateAsUpdate(doc));
+    const updates: Uint8Array[] = [];
+    docOld.on('update', (u: Uint8Array) => updates.push(u));
+    const old = mount(docOld, previousSchema, false);
+    await tick();
+    expect(updates).toHaveLength(0);
+    expect(flat(old).map((x) => x.t).filter(Boolean)).toEqual(['Uno', 'A', 'B', 'Con texto', 'C', 'Madre', 'hija', 'Escena', 's1', 'Dos']);
   });
 
   it('Enter y Retroceso sobre un salto en la versión anterior: se pierde a lo sumo el salto, nunca el texto', async () => {
