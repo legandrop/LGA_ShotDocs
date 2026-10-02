@@ -11,6 +11,29 @@ de la foto en línea, la de una celda, la foto-bloque, el carrete (con *Hide ann
 (entrega 2).
 [ Anotar fotos - entregas 0 y 1: el mapa de anotaciones, sus pruebas y verlas en la página, la celda, el carrete y el PDF ]
 
+v0.114 :
+
+No se podía compartir una página con alguien sin cuenta. Entregas 0 y 1 de `Doc_Link_Publico.md`: la prueba en la base
+real mostró que Storage revisa la política en cada pedido aunque la miniatura esté en caché, y la app quedó sin indexar
+(`noindex`). La migración `20261012120000_link_publico.sql` (sin aplicar) suma `public_links`, el uso por día y las
+funciones `plink_*` que validan el token en cada pedido: la página y lo de abajo, solo bases limpias, comentarios con
+nombre y topes por cantidad y bytes. Crear un link pide el interruptor de D14. En *Share*, *Anyone with the link* (*Can
+view*): copiar, vencer, *Reset link*; quien lo abre entra sin cuenta, en modo liviano, y recargar sigue en el link. Tras
+la auditoría: *Reset link* reinicia la base de la rama, `plink_media_files` calcula la rama una vez (614 ms a 8 ms) y
+cuenta, y lo ya abierto se vuelve a ver sin red. Ayuda nueva.
+[ Link público - Can view sin cuenta: migración, Share, la app del visitante y el portero ]
+
+v0.113 :
+
+Lo que quedó de *Download all* (P.9). Un portero que dejaba de contestar sin cortar la conexión dejaba la barra quieta:
+no había tope de lectura. Ahora cada pedido tiene uno sin avance (30 s hasta la respuesta o entre pedazos); pasado,
+cuenta como un corte: prueba `/health` (con su tope de 10 s) y, si tampoco contesta, dice "No connection" y sigue sola
+cuando vuelve. Faltaba *Retry missing*: baja solo lo que falló o quedó a medias y vuelve a listar las subcarpetas que no
+se abrieron; a una carpeta escribe en la misma (y borra la lista vieja si ya no falta nada), y cada ronda de un zip va
+a uno numerado (`<carpeta> (missing files).zip`, `(missing files 2).zip`…), para descomprimir encima del primero.
+Los nombres limpios de la app sacaban el ZWJ de los emojis compuestos (O4): ahora se queda entre dos emojis.
+[ Bajar todo - Retry missing, el tope sin avance y el ZWJ de los emojis ]
+
 v0.112 :
 
 Cinco pedidos de Lega del 2026-10-02 no tenían diseño. Se publican los cinco, sin código, cada uno auditado por

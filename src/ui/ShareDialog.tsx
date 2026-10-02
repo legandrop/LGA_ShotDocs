@@ -4,6 +4,7 @@ import '../i18n/lazy/teamDialogs';
 import { usePermissions, useServices, useTree } from '../services';
 import { GRANT_LEVELS, LEVEL_LABELS, ROLE_LABELS, levelValue, type GrantLevel, type Role } from '../sync/access';
 import type { AccessRow, MemberRow } from '../sync/remote';
+import { LinkShare } from './LinkShare';
 import { inviteAndCopy, useInviteLink } from './MembersDialog';
 import { ShareGateNotes, UNSYNCED_BEFORE_SHARE, useShareGate } from './shareGate';
 import { teamErrorText } from './teamText';
@@ -243,6 +244,9 @@ export function ShareDialog({ target, onClose }: { target: ShareTarget; onClose:
         </form>
 
         {error && <p className="error">{error}</p>}
+
+        {/* Anyone with the link (Docs/Doc_Link_Publico.md, 3.11): solo páginas (P16). */}
+        {!isProject && <LinkShare pageId={target.pageId} onClose={onClose} />}
 
         <span className="pref-label">{tr('share.who')}</span>
         <ul className="team-list" aria-label={tr('share.who')}>

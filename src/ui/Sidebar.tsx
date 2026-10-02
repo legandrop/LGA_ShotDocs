@@ -14,6 +14,8 @@ import { MoveDialog } from './MoveDialog';
 import { PageFormatDialog } from './PageFormatDialog';
 import { useCurrentProject } from './project';
 import { ProjectSwitcher } from './ProjectSwitcher';
+import { LinkHeader } from './LinkHeader';
+import { useLinkMode } from '../linkMode';
 import { useSearchSession } from './projectSearchUi';
 import { shortcutLabel } from './shortcuts';
 import { SyncBadge } from './SyncBadge';
@@ -372,11 +374,13 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
     else setFocusId(null);
   });
   const trashCount = tree.trashed(projectId).length;
+  // Con un link público: sin proyectos, papelera ni cuenta (Docs/Doc_Link_Publico.md, 3.5).
+  const linkMode = useLinkMode();
   const canCreateRoot = perms.canCreateIn(null, projectId);
 
   return (
     <nav className="sidebar" aria-label={tr('sidebar.pages')}>
-      <ProjectSwitcher />
+      {linkMode ? <LinkHeader /> : <ProjectSwitcher />}
       <SyncBadge />
       <OfflineLine />
 
@@ -412,13 +416,17 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
       <div className="sidebar-spacer" />
       <div className="sidebar-footer">
         <div className="footer-row">
-          <button
-            className={`footer-item${route.name === 'trash' ? ' active' : ''}`}
-            onClick={() => navigate('/trash')}
-          >
-            <TrashIcon size={17} /> {tr('trash.title')}
-            {trashCount > 0 ? ` (${trashCount})` : ''}
-          </button>
+          {linkMode ? (
+            <span className="footer-item" />
+          ) : (
+            <button
+              className={`footer-item${route.name === 'trash' ? ' active' : ''}`}
+              onClick={() => navigate('/trash')}
+            >
+              <TrashIcon size={17} /> {tr('trash.title')}
+              {trashCount > 0 ? ` (${trashCount})` : ''}
+            </button>
+          )}
           {/* La ayuda (Docs/Doc_Tutorial.md, sección 5): sin tooltip, el ícono ya lo dice (D-15). */}
           <button
             className={`help-button${helpDot ? ' has-dot' : ''}`}
@@ -429,7 +437,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
             <HelpIcon size={18} />
           </button>
         </div>
-        <button
+        {!linkMode && <button
           ref={accountButton}
           className="account-button"
           aria-haspopup="dialog"
@@ -443,7 +451,7 @@ export function Sidebar({ onBrowse }: { onBrowse?: (id: string) => void } = {}) 
           <span className="avatar">{user.email.charAt(0) || '?'}</span>
           <span className="email">{user.email}</span>
           <AccountIcon size={16} />
-        </button>
+        </button>}
       </div>
 
       {account && (

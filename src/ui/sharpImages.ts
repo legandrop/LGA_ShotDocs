@@ -60,8 +60,18 @@ export function sharpSide(cssWidth: number, dpr: number): number {
  * Android); Safari y Firefox no dicen si la conexión es medida o lenta, así que ahí se baja igual (con el tope
  * de `TOUCH_FETCH_MAX_BYTES` en un teléfono). Lo del dispositivo se usa siempre.
  */
+/**
+ * Modo liviano (link público, Docs/Doc_Link_Publico.md, P12): el visitante ve las miniaturas y abre el original en el
+ * carrete o al bajarlo; la página no baja originales sola.
+ */
+let lightMode = false;
+
+export function setLightImages(on: boolean): void {
+  lightMode = on;
+}
+
 export function downloadsAllowed(nav: Navigator | null = typeof navigator === 'undefined' ? null : navigator): boolean {
-  if (!nav) return false;
+  if (!nav || lightMode) return false;
   if (nav.onLine === false) return false;
   const connection = (nav as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
   if (connection?.saveData) return false;

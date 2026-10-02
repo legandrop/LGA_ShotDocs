@@ -195,20 +195,32 @@ export function extensionLabel(name: string | null | undefined, mime: string | n
 /** El largo máximo de un nombre en la base (`files.name`, en caracteres). */
 const MAX_NAME = 250;
 
+// Lo que puede ir antes del ZWJ de un emoji compuesto: un emoji, su selector de variante (U+FE0F, `❤️‍🔥`) o su tono
+// de piel (`👩🏽‍💻`). Lo de después tiene que ser un emoji.
+const EMOJI = /^\p{Extended_Pictographic}$/u;
+const EMOJI_BEFORE_ZWJ = /^[\p{Extended_Pictographic}\u{FE0F}\u{1F3FB}-\u{1F3FF}]$/u;
+
 /**
  * El nombre sin lo que puede engañar o romper algo: caracteres de control, los que XML no admite (y pares
  * sustitutos sueltos) y los de dirección del texto (con los que `exe.pdf` se ve como `fdp.exe`). Se recorta a
  * 250 caracteres (puntos de código, lo que mide la base) sin partir un grafema (ni media bandera ni un emoji sin
  * su tono), conservando la extensión. Vacío,
- * `empty` (`file.bin`; una carpeta pasa `Folder`).
+ * `empty` (`file.bin`; una carpeta pasa `Folder`). El ZWJ (U+200D) se queda solo entre dos emojis (`👨‍👩‍👧`, una
+ * familia, sigue siendo una): entre letras no se ve, y dos nombres iguales a la vista serían distintos.
  */
 export function cleanFileName(name: string, max = MAX_NAME, empty = 'file.bin'): string {
   const kept: string[] = [];
-  for (const ch of name ?? '') {
+  const chars = Array.from(name ?? '');
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i]!;
     const c = ch.codePointAt(0)!;
     if (c < 0x20 || (c >= 0x7f && c <= 0x9f)) continue;
     if (c >= 0xd800 && c <= 0xdfff) continue;
     if (c === 0xfffe || c === 0xffff) continue;
+    if (c === 0x200d && kept.length && EMOJI_BEFORE_ZWJ.test(kept[kept.length - 1]!) && EMOJI.test(chars[i + 1] ?? '')) {
+      kept.push(ch);
+      continue;
+    }
     // Dirección del texto, los de ancho cero y los separadores de renglón (los mismos que saca el portero).
     if (c === 0x061c || (c >= 0x200b && c <= 0x200f) || c === 0x2028 || c === 0x2029 || (c >= 0x202a && c <= 0x202e)) continue;
     if (c === 0x2060 || (c >= 0x2066 && c <= 0x2069)) continue;

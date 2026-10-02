@@ -6695,3 +6695,61 @@ button.folder-row-main:hover {
     animation: none;
   }
 }
+
+/* Link público (Docs/Doc_Link_Publico.md): la cabecera del visitante, "via link" en los comentarios y General access. */
+.link-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px 6px;
+  min-width: 0;
+}
+.link-header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link-header-from {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comment-via {
+  color: var(--accent-text);
+  font-weight: 400;
+}
+.link-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.link-name input {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.link-share {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 14px;
+}
+.link-share-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.link-share-actions {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.notice.link-limited {
+  position: fixed;
+  top: 8px;
+  bottom: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+}

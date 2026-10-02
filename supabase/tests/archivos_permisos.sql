@@ -402,8 +402,14 @@ begin
           from storage.buckets where id = 'thumbs'), 'el bucket thumbs no es privado, de 512 KB y JPEG/WebP';
   assert (select schema_version from public.workspace_settings) >= 3, 'schema_version no subió a 3';
   assert (select count(*) from pg_policies
-          where schemaname = 'storage' and tablename = 'objects' and policyname like 'thumbs%') = 2,
+          where schemaname = 'storage' and tablename = 'objects' and policyname like 'thumbs%'
+            and roles = array['authenticated']::name[]) = 2,
     'thumbs tiene políticas de más';
+  -- Desde el link público (20261012120000_link_publico.sql), una más, solo para anon y con el header del link.
+  assert (select count(*) from pg_policies
+          where schemaname = 'storage' and tablename = 'objects' and policyname like 'thumbs%'
+            and roles <> array['authenticated']::name[]) <= 1,
+    'thumbs tiene políticas de más para otros roles';
   assert (select count(*) from public.files where created_by is null) = 0, 'un archivo sin autor';
 end;
 $$;
