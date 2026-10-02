@@ -17,6 +17,16 @@ export const exportPdf = {
     es: "Una parte de esta página necesita una versión más nueva de la app y no está incluida.",
   },
   'exportPdf.failedPage': { en: "This page could not be exported.", es: "No se pudo exportar esta página." },
+  'exportPdf.failedPhotos': {
+    en: "This page could not be exported: it has too many photos for one PDF on this device.",
+    es: "No se pudo exportar esta página: tiene demasiadas fotos para un PDF en este dispositivo.",
+  },
+  'exportPdf.shrunkToFit': {
+    en: "This page has too many photos for one PDF at full resolution: they are at a lower resolution.",
+    es: "Esta página tiene demasiadas fotos para un PDF en resolución completa: van en menor resolución.",
+  },
+  'exportPdf.part': { en: "Part {part} · pages {first} to {last} of {total}", es: "Parte {part} · páginas {first} a {last} de {total}" },
+  'exportPdf.partName': { en: "Part {part}", es: "Parte {part}" },
   'exportPdf.comments': { en: "Comments", es: "Comentarios" },
   'exportPdf.commentsAsOf': {
     en: "Some comments could not be updated: they are as on this device on {date}.",
@@ -42,13 +52,17 @@ export const exportPdf = {
   },
   'exportDialog.pdf': { en: "PDF — to share", es: "PDF — para compartir" },
   'exportDialog.pdfNote': {
-    en: "One PDF with a contents page that links to each page; every page keeps its page size and sheet breaks.",
-    es: "Un solo PDF con un índice que lleva a cada página; cada página sale con su tamaño de hoja y sus cortes.",
+    en: "One PDF with a contents page that links to each page; every page keeps its page size and sheet breaks. Photos go as they were taken, at full resolution. If it is too much for one PDF on this device, it comes out in parts (Part 1, Part 2…), split between pages.",
+    es: "Un solo PDF con un índice que lleva a cada página; cada página sale con su tamaño de hoja y sus cortes. Las fotos van como se tomaron, en resolución completa. Si es demasiado para un PDF en este dispositivo, sale en partes (Parte 1, Parte 2…), cortadas entre páginas.",
   },
-  'exportDialog.sharp': { en: "Sharp photos", es: "Fotos nítidas" },
-  'exportDialog.sharpTip': {
-    en: "Photos that only have a small preview on this device are fetched from Drive (slower).",
-    es: "Las fotos que en este dispositivo solo tienen la miniatura se piden al Drive (tarda más).",
+  'exportDialog.smaller': { en: "Smaller file (lower-resolution photos)", es: "Archivo más liviano (fotos en menor resolución)" },
+  'exportDialog.smallerTip': {
+    en: "Each photo is reduced to its printed size: a much lighter PDF, faster to make and usually in one part.",
+    es: "Cada foto se achica a su tamaño impreso: un PDF mucho más liviano, más rápido y casi siempre en una sola parte.",
+  },
+  'exportDialog.offlineOriginals': {
+    en: "No connection: photos whose original is not on this device go at a lower resolution.",
+    es: "Sin conexión: las fotos cuyo original no está en este dispositivo van en menor resolución.",
   },
   'exportDialog.comments': { en: "Comments", es: "Comentarios" },
   'exportDialog.commentsTip': {
@@ -63,18 +77,6 @@ export const exportPdf = {
     en: "In the print dialog, leave margins and scale as they are: the page numbers in the contents depend on them.",
     es: "En el diálogo de imprimir, dejá los márgenes y la escala como están: de eso dependen los números de hoja del índice.",
   },
-  'exportDialog.tooManyPages': {
-    en: "{count} pages are too many for one PDF on this device (up to {limit}). Export a smaller part:",
-    es: "{count} páginas son demasiadas para un PDF en este dispositivo (hasta {limit}). Exportá una parte:",
-  },
-  'exportDialog.tooManyPhotos': {
-    en: "There are too many photos for one PDF on this device. Export a smaller part:",
-    es: "Hay demasiadas fotos para un PDF en este dispositivo. Exportá una parte:",
-  },
-  'exportDialog.branch': {
-    en: { one: "{title} · {count} page", other: "{title} · {count} pages" },
-    es: { one: "{title} · {count} página", other: "{title} · {count} páginas" },
-  },
   'exportDialog.empty': { en: "There is nothing to export here.", es: "Acá no hay nada para exportar." },
   'exportDialog.export': { en: "Export PDF", es: "Exportar PDF" },
   'exportDialog.fetchingComments': { en: "Fetching comments: page {done} of {total}", es: "Bajando los comentarios: página {done} de {total}" },
@@ -83,6 +85,32 @@ export const exportPdf = {
     es: { one: "Los comentarios de {count} página no se pudieron poner al día (sin conexión): lleva los de este dispositivo.", other: "Los comentarios de {count} páginas no se pudieron poner al día (sin conexión): llevan los de este dispositivo." },
   },
   'exportDialog.preparing': { en: "Preparing page {done} of {total}: {title}", es: "Preparando la página {done} de {total}: {title}" },
+  'exportDialog.preparingPart': {
+    en: "Part {part} · preparing page {done} of {total}: {title}",
+    es: "Parte {part} · preparando la página {done} de {total}: {title}",
+  },
+  'exportDialog.partReady': {
+    en: { one: "Part {part} ready: pages {first} to {last} of {total} · {count} PDF page.", other: "Part {part} ready: pages {first} to {last} of {total} · {count} PDF pages." },
+    es: { one: "Parte {part} lista: páginas {first} a {last} de {total} · {count} hoja.", other: "Parte {part} lista: páginas {first} a {last} de {total} · {count} hojas." },
+  },
+  'exportDialog.nextPart': { en: "Prepare part {part}", es: "Preparar la parte {part}" },
+  'exportDialog.nextPartNote': {
+    en: "Save this part first: preparing the next one replaces it.",
+    es: "Guardá primero esta parte: al preparar la siguiente, esta se suelta.",
+  },
+  'exportDialog.lastPart': { en: "This is the last part.", es: "Es la última parte." },
+  'exportDialog.lowRes': {
+    en: { one: "{count} photo is at a lower resolution: its original was not available (no connection, or the browser cannot open it).", other: "{count} photos are at a lower resolution: their originals were not available (no connection, or the browser cannot open them)." },
+    es: { one: "{count} foto va en menor resolución: su original no estaba a mano (sin conexión, o el navegador no lo abre).", other: "{count} fotos van en menor resolución: sus originales no estaban a mano (sin conexión, o el navegador no los abre)." },
+  },
+  'exportDialog.shrunkPages': {
+    en: { one: "{count} page has too many photos for one PDF: its photos are at a lower resolution.", other: "{count} pages have too many photos for one PDF: their photos are at a lower resolution." },
+    es: { one: "{count} página tiene demasiadas fotos para un PDF: sus fotos van en menor resolución.", other: "{count} páginas tienen demasiadas fotos para un PDF: sus fotos van en menor resolución." },
+  },
+  'exportDialog.failedList': { en: "These pages could not be exported:", es: "Estas páginas no se pudieron exportar:" },
+  'exportDialog.failedTooBig': { en: "too many photos for one PDF", es: "demasiadas fotos para un PDF" },
+  'exportDialog.retry': { en: "Export again", es: "Exportar de nuevo" },
+  'exportDialog.retryLabel': { en: "Export “{title}” again, on its own", es: "Exportar “{title}” de nuevo, sola" },
   'exportDialog.ready': {
     en: { one: "Ready: {count} PDF page.", other: "Ready: {count} PDF pages." },
     es: { one: "Listo: {count} hoja.", other: "Listo: {count} hojas." },

@@ -9,14 +9,21 @@ import { ORIGINAL_MAX_SIDE } from '../ui/printPage';
 // impreso a 200 ppp (como mucho 2400 px de lado): una foto que ocupa 160 px en la hoja no necesita 2048 px. Medido en
 // el diseño: con fuente de 2048 px la vista suma 368 MB y el PDF 30 MB; achicada, 261 MB y 6 MB. Lo que cuenta para el
 // tope es lo decodificado (ancho × alto de cada foto ya achicada), no la cantidad de fotos.
+//
+// Desde la entrega 3 (D85, Lega 2026-10-02) las fotos van por defecto como se tomaron, en resolución completa: el
+// ORIGINAL (del dispositivo o bajado del Drive por el portero), sin achicar. Un JPEG derecho entra tal cual al PDF
+// (Chrome lo copia sin decodificarlo: medido, el PDF pesa lo mismo que los JPEG y la memoria no crece con los
+// píxeles); uno girado por EXIF, una PNG o un HEIC se pasan antes a JPEG del mismo tamaño en un Worker (Chrome los
+// decodificaba y volvía a codificar uno por uno al imprimir: medio segundo y seis veces el peso por foto). Ahí el
+// tope que manda es el peso (bytes), además de los píxeles. *Smaller file* vuelve a lo de antes: achicadas a 200 ppp.
 
 /** Los puntos por pulgada del papel (la pantalla es de 96 px de CSS por pulgada). */
 export const PRINT_PPI = 200;
 const CSS_PPI = 96;
 
-/** Se superó el tope de píxeles de fotos para un PDF (la vista colgaría la pestaña). */
+/** Se superó el tope de fotos (píxeles o peso) para un PDF (la vista colgaría la pestaña). */
 export class PhotoLimitError extends Error {
-  constructor(readonly pixels: number) {
+  constructor(readonly pixels: number, readonly bytes = 0) {
     super('Too many photos for one PDF');
     this.name = 'PhotoLimitError';
   }
@@ -40,8 +47,96 @@ export function printSize(cssWidth: number, natural: { width: number; height: nu
 
 /** De dónde sale la mejor imagen de una foto del Drive en este dispositivo. */
 export interface ImageSource {
-  /** La mejor imagen que haya de `id` (sin la red, salvo con *Sharp photos*), o `null` (queda la que se ve). */
+  /** La mejor imagen que haya de `id` para achicar (la nítida o la miniatura), o `null` (queda la que se ve). */
   best(id: string): Promise<Blob | null>;
+  /**
+   * El original de una FOTO (nunca de un video ni de un adjunto): el del dispositivo o, con red, bajado del Drive por
+   * el portero. `null` si no se puede (sin red, sin portero): la foto sale con `best`, achicada, y se cuenta.
+   */
+  original?(id: string): Promise<Blob | null>;
+  /** Si `id` es una foto (y no un video ni un adjunto): para contar las que salieron sin su original. */
+  isPhoto?(id: string): Promise<boolean>;
+}
+
+/** Lo que dice la cabecera de un JPEG sin decodificarlo. */
+export interface JpegInfo {
+  width: number;
+  height: number;
+  /** El giro de EXIF (1: derecha; 2 a 8: girada o espejada). */
+  orientation: number;
+  /** Canales: 1 (gris) o 3 (color) entran tal cual al PDF; 4 (CMYK) no. */
+  components: number;
+}
+
+/**
+ * Lee la cabecera de un JPEG (los segmentos hasta el comienzo de los datos): las medidas, el giro de EXIF y los
+ * canales. `null` si no es un JPEG o no se encuentra el tamaño en los bytes dados.
+ */
+export function jpegInfo(bytes: Uint8Array): JpegInfo | null {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  let orientation = 1;
+  let i = 2;
+  while (i + 4 <= bytes.length) {
+    if (bytes[i] !== 0xff) return null;
+    const marker = bytes[i + 1];
+    // Relleno entre segmentos.
+    if (marker === 0xff) {
+      i++;
+      continue;
+    }
+    // Marcadores sin largo.
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      i += 2;
+      continue;
+    }
+    const len = (bytes[i + 2] << 8) | bytes[i + 3];
+    if (len < 2) return null;
+    const body = i + 4;
+    if (marker === 0xe1 && body + 14 <= bytes.length && String.fromCharCode(...bytes.subarray(body, body + 4)) === 'Exif') {
+      orientation = exifOrientation(bytes.subarray(body + 6, Math.min(bytes.length, i + 2 + len))) ?? orientation;
+    }
+    // SOF0 a SOF15, salvo DHT (C4), JPG (C8) y DAC (CC).
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      if (body + 6 > bytes.length) return null;
+      const height = (bytes[body + 1] << 8) | bytes[body + 2];
+      const width = (bytes[body + 3] << 8) | bytes[body + 4];
+      const components = bytes[body + 5];
+      if (!width || !height) return null;
+      return { width, height, orientation, components };
+    }
+    // Empiezan los datos: no hubo tamaño.
+    if (marker === 0xda) return null;
+    i += 2 + len;
+  }
+  return null;
+}
+
+/** La orientación (etiqueta 0x0112) del primer IFD de un bloque TIFF de EXIF, o `null`. */
+function exifOrientation(tiff: Uint8Array): number | null {
+  if (tiff.length < 8) return null;
+  const little = tiff[0] === 0x49 && tiff[1] === 0x49;
+  if (!little && !(tiff[0] === 0x4d && tiff[1] === 0x4d)) return null;
+  const u16 = (at: number) => (little ? tiff[at] | (tiff[at + 1] << 8) : (tiff[at] << 8) | tiff[at + 1]);
+  const u32 = (at: number) => (little ? (tiff[at] | (tiff[at + 1] << 8) | (tiff[at + 2] << 16)) + tiff[at + 3] * 0x1000000 : tiff[at] * 0x1000000 + ((tiff[at + 1] << 16) | (tiff[at + 2] << 8) | tiff[at + 3]));
+  const ifd = u32(4);
+  if (ifd + 2 > tiff.length) return null;
+  const count = u16(ifd);
+  for (let k = 0; k < count; k++) {
+    const entry = ifd + 2 + k * 12;
+    if (entry + 12 > tiff.length) return null;
+    if (u16(entry) === 0x0112) {
+      const value = u16(entry + 8);
+      return value >= 1 && value <= 8 ? value : null;
+    }
+  }
+  return null;
+}
+
+/** Cuánto se lee de un JPEG para la cabecera (el EXIF de un teléfono, con su miniatura, cabe de sobra). */
+const JPEG_HEAD_BYTES = 256 * 1024;
+
+async function headOf(blob: Blob): Promise<Uint8Array> {
+  return new Uint8Array(await blob.slice(0, JPEG_HEAD_BYTES).arrayBuffer());
 }
 
 /** Una imagen abierta: sus medidas y cómo dibujarla más chica. Se cierra siempre (`close`). */
@@ -186,13 +281,18 @@ export function workerResizer(size = 4, create: () => Worker = () => new Worker(
   };
 }
 
-/** La cuenta de lo decodificado de un PDF entero, con su tope. */
+/** La cuenta de las fotos de un PDF (o de una de sus partes): los píxeles y el peso, con sus topes. */
 export class PixelBudget {
   used = 0;
-  constructor(readonly limit: number) {}
-  add(width: number, height: number): void {
+  bytes = 0;
+  constructor(
+    readonly limit: number,
+    readonly byteLimit = Infinity,
+  ) {}
+  add(width: number, height: number, bytes = 0): void {
     this.used += width * height;
-    if (this.used > this.limit) throw new PhotoLimitError(this.used);
+    this.bytes += bytes;
+    if (this.used > this.limit || this.bytes > this.byteLimit) throw new PhotoLimitError(this.used, this.bytes);
   }
 }
 
@@ -203,6 +303,10 @@ export interface ShrinkResult {
   shrunk: number;
   /** Fotos que quedaron como estaban (ya chicas, o el navegador no las abre). */
   kept: number;
+  /** Con resolución completa: fotos que salieron con su original (tal cual, o pasado a JPEG del mismo tamaño). */
+  full: number;
+  /** Con resolución completa: fotos cuyo original no se pudo usar (sin red, o el navegador no lo abre): achicadas. */
+  lowRes: number;
   /** Milisegundos sumados de cada paso (traer la imagen, abrirla, achicarla), para medir. */
   ms: { best: number; open: number; draw: number };
 }
@@ -215,19 +319,35 @@ function vector(src: string): boolean {
   return src.startsWith('data:image/svg') || /\.svg(\?|$)/i.test(src);
 }
 
+export interface ShrinkOptions {
+  source?: ImageSource | null;
+  budget: PixelBudget;
+  resizer?: Resizer;
+  signal?: AbortSignal;
+  parallel?: number;
+  /**
+   * Resolución completa (D85): cada foto con su original (`source.original`), sin achicar. La que no tiene original
+   * a mano sale achicada como siempre y se cuenta en `lowRes`.
+   */
+  full?: boolean;
+  /** Pasa un HEIC a JPEG del mismo tamaño (el convertidor de la app), donde el navegador no lo abre. */
+  convertHeic?: ((blob: Blob) => Promise<Blob>) | null;
+}
+
+/** El marcador con la dirección que tenía una foto antes de cambiarla (para dejarla como estaba si algo corta). */
+const BEFORE = 'sdExportSrc';
+
 /**
  * Cambia cada foto de `root` (una vista de impresión ya paginada, en el documento) por su imagen achicada al ancho
- * impreso. La proporción queda fija antes de cambiar nada, así los cortes no se mueven. Nunca falla por una foto: la
- * que no se puede achicar queda como estaba (y cuenta lo suyo en el tope).
+ * impreso, o por su original con `full`. La proporción queda fija antes de cambiar nada, así los cortes no se mueven.
+ * Nunca falla por una foto: la que no se puede achicar queda como estaba (y cuenta lo suyo en el tope). Si se pasa el
+ * tope (`PhotoLimitError`) o algo falla, deja cada foto como estaba y suelta lo suyo antes de tirar el error.
  */
-export async function shrinkImages(
-  root: HTMLElement,
-  options: { source?: ImageSource | null; budget: PixelBudget; resizer?: Resizer; signal?: AbortSignal; parallel?: number },
-): Promise<ShrinkResult> {
+export async function shrinkImages(root: HTMLElement, options: ShrinkOptions): Promise<ShrinkResult> {
   const resizer = options.resizer ?? browserResizer;
-  const out: ShrinkResult = { urls: [], shrunk: 0, kept: 0, ms: { best: 0, open: 0, draw: 0 } };
+  const out: ShrinkResult = { urls: [], shrunk: 0, kept: 0, full: 0, lowRes: 0, ms: { best: 0, open: 0, draw: 0 } };
   // Primero se mide todo (sin esperar nada en el medio: la vista no se vuelve a armar entre una foto y otra).
-  const jobs: { img: HTMLImageElement; src: string; cssWidth: number; id: string | null }[] = [];
+  const jobs: Job[] = [];
   for (const img of root.querySelectorAll<HTMLImageElement>(MEDIA_IMG)) {
     const src = img.getAttribute('src') ?? '';
     if (!src || vector(src) || img.closest('.drive-card')) continue;
@@ -237,12 +357,61 @@ export async function shrinkImages(
     if (!img.style.aspectRatio && img.naturalWidth > 0 && img.naturalHeight > 0) img.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
     jobs.push({ img, src, cssWidth, id: mediaIdOf(img.closest('[data-url]')?.getAttribute('data-url')) });
   }
+  let failed = false;
+  /** Cambia la imagen de una foto (si nada cortó mientras se preparaba). */
+  const use = (img: HTMLImageElement, blob: Blob): boolean => {
+    if (failed || options.signal?.aborted) return false;
+    const url = URL.createObjectURL(blob);
+    out.urls.push(url);
+    if (img.dataset[BEFORE] === undefined) img.dataset[BEFORE] = img.getAttribute('src') ?? '';
+    img.src = url;
+    return true;
+  };
   const keep = (img: HTMLImageElement) => {
     // No se puede leer (una imagen de afuera, un formato que el navegador no abre): queda la que se ve.
     if (img.naturalWidth > 0) options.budget.add(img.naturalWidth, img.naturalHeight);
     out.kept++;
   };
-  const one = async ({ img, src, cssWidth, id }: (typeof jobs)[number]) => {
+
+  /** Con resolución completa: el original tal cual (un JPEG derecho) o pasado a JPEG del mismo tamaño. */
+  const fullSize = async (img: HTMLImageElement, original: Blob): Promise<boolean> => {
+    const info = jpegInfo(await headOf(original));
+    if (info && info.orientation === 1 && info.components !== 4) {
+      options.budget.add(info.width, info.height, original.size);
+      // Siempre como JPEG (nunca el tipo que diga el archivo guardado).
+      return use(img, original.type === 'image/jpeg' ? original : new Blob([original], { type: 'image/jpeg' }));
+    }
+    // Girado por EXIF, CMYK, PNG, WebP, HEIC…: a JPEG del mismo tamaño (ya derecho), fuera del hilo de la pantalla.
+    let blob = original;
+    let decoded = await resizer.open(blob);
+    if (!decoded && options.convertHeic && !info) {
+      const jpeg = await options.convertHeic(original).catch(() => null);
+      if (!jpeg) return false;
+      const converted = jpegInfo(await headOf(jpeg));
+      if (converted && converted.orientation === 1 && converted.components !== 4) {
+        options.budget.add(converted.width, converted.height, jpeg.size);
+        return use(img, jpeg);
+      }
+      blob = jpeg;
+      decoded = await resizer.open(blob);
+    }
+    if (!decoded) return false;
+    try {
+      // Se cuenta antes de dibujar (con el peso del original como estimado): pasado el tope, no se gasta memoria.
+      options.budget.add(decoded.width, decoded.height, blob.size);
+      const t = performance.now();
+      const jpeg = await decoded.draw(decoded.width, decoded.height);
+      out.ms.draw += performance.now() - t;
+      if (!jpeg) return false;
+      options.budget.bytes += jpeg.size - blob.size;
+      return use(img, jpeg);
+    } finally {
+      decoded.close();
+    }
+  };
+
+  /** Achicada a su ancho impreso (lo de siempre, y *Smaller file*). */
+  const shrink = async ({ img, src, cssWidth, id }: Job) => {
     let blob: Blob | null = null;
     const t0 = performance.now();
     if (id && options.source) blob = await options.source.best(id).catch(() => null);
@@ -272,31 +441,62 @@ export async function shrinkImages(
         out.kept++;
         return;
       }
-      if (options.signal?.aborted) return;
-      const url = URL.createObjectURL(small);
-      out.urls.push(url);
-      img.src = url;
-      out.shrunk++;
+      if (use(img, small)) out.shrunk++;
     } finally {
       decoded.close();
     }
   };
+
+  const one = async (job: Job) => {
+    if (options.full && job.id && options.source?.original) {
+      const t0 = performance.now();
+      const original = await options.source.original(job.id).catch(() => null);
+      out.ms.best += performance.now() - t0;
+      if (original && (await fullSize(job.img, original))) {
+        out.full++;
+        return;
+      }
+      // Una foto sin su original a mano (sin red) o que el navegador no abre: achicada, y contada. `original` da
+      // `null` también para un video o un adjunto: esos no cuentan.
+      if (original || (await options.source.isPhoto?.(job.id))) out.lowRes++;
+    }
+    await shrink(job);
+  };
+
   // De a varias a la vez: decodificar y codificar no usan el hilo principal todo el tiempo.
   let next = 0;
-  let failed = false;
+  let error: unknown = null;
   const worker = async () => {
     while (next < jobs.length && !failed && !options.signal?.aborted) {
       try {
         await one(jobs[next++]);
       } catch (err) {
-        // El tope (u otro error): las demás no empiezan otra foto.
+        // El tope (u otro error): las demás no empiezan otra foto ni cambian la suya.
+        if (!failed) error = err;
         failed = true;
-        throw err;
       }
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, Math.min(options.parallel ?? 4, jobs.length)) }, worker));
+  if (failed) {
+    // Todo como estaba: las fotos con su imagen de antes y lo armado, suelto.
+    restoreImages(root);
+    for (const url of out.urls) URL.revokeObjectURL(url);
+    throw error;
+  }
   return out;
+}
+
+type Job = { img: HTMLImageElement; src: string; cssWidth: number; id: string | null };
+
+/** Deja cada foto de `root` con la imagen que tenía antes de `shrinkImages`. */
+export function restoreImages(root: HTMLElement): void {
+  for (const img of root.querySelectorAll<HTMLImageElement>('img')) {
+    const before = img.dataset[BEFORE];
+    if (before === undefined) continue;
+    img.setAttribute('src', before);
+    delete img.dataset[BEFORE];
+  }
 }
 
 const PASS_THROUGH = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
@@ -330,16 +530,20 @@ export function imagesLoaded(root: HTMLElement, timeoutMs: number): Promise<bool
 
 /**
  * La mejor imagen de cada foto en este dispositivo: el original (propio o bajado), la nítida (la de "Available
- * offline", la guardada de la página o la hecha en esta sesión) y, con `sharp`, la nítida pedida al Drive por el
- * portero (como la página, `sharpImages.ts`), hasta `maxDownloads`. Nada de esto cambia un documento ni el Drive.
+ * offline", la guardada de la página o la hecha en esta sesión) y, con `download`, la nítida pedida al Drive por el
+ * portero (como la página, `sharpImages.ts`), hasta `maxDownloads`. Con `originals` (resolución completa, D85), el
+ * original de cada foto: el del dispositivo o, si no está, bajado entero del Drive por el portero (nunca se guarda:
+ * exportar no escribe nada). Nada de esto cambia un documento ni el Drive.
  */
 export function deviceImages(
-  media: Pick<MediaQueue, 'localImage' | 'view'>,
-  options: { download?: ((id: string) => Promise<Blob>) | null; maxDownloads?: number } = {},
-): ImageSource & { downloads(): number } {
+  media: Pick<MediaQueue, 'localImage' | 'view'> & Partial<Pick<MediaQueue, 'source'>>,
+  options: { download?: ((id: string) => Promise<Blob>) | null; maxDownloads?: number; originals?: ((id: string) => Promise<Blob>) | null } = {},
+): ImageSource & { downloads(): number; originalsFetched(): number } {
   let downloads = 0;
+  let fetched = 0;
   return {
     downloads: () => downloads,
+    originalsFetched: () => fetched,
     async best(id) {
       const original = await media.localImage(id);
       if (original) return original;
@@ -347,6 +551,21 @@ export function deviceImages(
       if (canDownload) downloads++;
       const view = await media.view(id, { side: VIEW_SIDE, download: canDownload ? options.download! : undefined }).catch(() => null);
       return view ? fetchBlob(view.url) : null;
+    },
+    async original(id) {
+      if (!media.source) return media.localImage(id);
+      const source = await media.source(id).catch(() => null);
+      // Solo fotos: un video o un adjunto nunca se baja para el PDF (sale su cuadro o su ícono).
+      if (!source || source.kind !== 'image') return null;
+      if (source.original) return source.original;
+      if (!options.originals) return null;
+      const blob = await options.originals(id).catch(() => null);
+      if (blob) fetched++;
+      return blob;
+    },
+    async isPhoto(id) {
+      if (!media.source) return false;
+      return (await media.source(id).catch(() => null))?.kind === 'image';
     },
   };
 }

@@ -2747,6 +2747,13 @@ code {
   font-size: 12px;
 }
 
+/* El PDF en partes (D84): qué parte es y qué páginas lleva, arriba de la fecha. */
+.print-view .sd-export-index-part {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .print-view .sd-export-index-label {
   margin: 0 0 8px;
   font-size: 13px;
@@ -6088,11 +6095,31 @@ ins.replace-new {
   overflow-wrap: anywhere;
 }
 
-.export-too-big ul {
+/* Las páginas que no se pudieron exportar (D88): cada una con su link y *Export again*. */
+.export-failed ul {
   margin: 6px 0 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
   max-height: 180px;
   overflow-y: auto;
+}
+
+.export-failed li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.export-failed li > a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.export-failed li > button {
+  flex: none;
+  margin-left: auto;
 }
 
 .export-progress {
