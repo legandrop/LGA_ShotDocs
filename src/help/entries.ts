@@ -103,7 +103,7 @@ const UPDATE_APP = '0.097';
 /** *Download all* de una carpeta (P.9, entrega 2, Doc_Carpetas.md): la versión se pone al publicar, igual que en el changelog. */
 const FOLDER_ZIP = '0.105';
 /** Sacar una foto o filmar desde la página y guardar en Fotos (camera.ts): la versión se pone al publicar. */
-const CAMERA = '0.0XX';
+const CAMERA = '0.110';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---

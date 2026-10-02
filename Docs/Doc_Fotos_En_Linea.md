@@ -869,7 +869,9 @@ Pedido anterior de Lega: miniaturas en las celdas. Sin tipos ni propiedades nuev
   mezcla fotos de celdas y de renglones, la barra de siempre (tamaños de la página), sin alinear (auditoría, O7).
 - **↑ desde el primer renglón de una celda con fotos** (`inlinePhotoEditor.ts`, `handleCellArrowUp`): va al final del
   texto de la celda de arriba. Antes iba a la celda de la izquierda: la miniatura hace alto el renglón y ProseMirror no
-  veía el cursor arriba de todo, así que la tecla quedaba al navegador (auditoría, O4).
+  veía el cursor arriba de todo, así que la tecla quedaba al navegador (auditoría, O4). Después de una foto también: el
+  primer renglón se reconoce porque el alto del cursor se superpone con el del principio del texto (comparar solo los
+  bordes de abajo fallaba por 2 px: 518 contra 516).
 - **Imprimir** (`printView.ts`): la copia fija el ancho de una foto sin ancho propio en el de su miniatura; en una celda,
   el ancho que da el alto de 96 px (lo lee de la pantalla), así el original que pone la impresión sale igual y no se
   deforma.
@@ -884,8 +886,8 @@ Nada nuevo en el documento: el mismo nodo, con la marca del renglón (`lgaStable
 celda (probado). La versión publicada de v0.083 a v0.092 (`fixtures/editorSchemaAnterior.ts`) abre una página con fotos
 en celdas **sin escribir nada** y, al escribir en esas celdas, no borra ninguna foto; las de v0.052 a v0.076 (sin
 `photo`) no la abren (el resguardo). Una versión de v0.078 a v0.104 la abre y la ve con las fotos grandes (como antes).
-Ojo: `fixtures/editorSchemaMain.ts` quedó de antes de `photo` (no es la `main` de hoy): montado sin el resguardo borra
-la foto de la celda, como cualquier versión sin `photo` (roadmap, B.20).
+La publicada hoy (`fixtures/editorSchemaMain.ts`, regenerada desde v0.107) también la abre sin escribir nada.
+`editorSchemaFixture.test.ts` falla si ese fixture queda distinto de `editorSchema.ts` sin declararlo.
 
 ### Lo medido
 
@@ -928,7 +930,7 @@ impresión), `inlinePhotoCreate.test.ts` y `codaInlinePhotos.test.ts` (las celda
 - La barra de la foto, como en un renglón, puede quedar sobre la fila de arriba (O5).
 - Sin probar en Safari ni en el iPhone de verdad (el teléfono, emulado en Chromium).
 
-## Cámara: sacar una foto o filmar desde la página (P.19, v0.0XX)
+## Cámara: sacar una foto o filmar desde la página (P.25, v0.110)
 
 Pedido de Lega (2026-10-01): sacar una foto o filmar desde la app, que entre en el renglón y suba al Drive como
 cualquier foto, y poder guardarla en el carrete del teléfono.
@@ -959,7 +961,7 @@ cualquier foto, y poder guardarla en el carrete del teléfono.
 ### Lo que queda para la app nativa
 
 Guardar en el carrete sin la hoja de compartir (y en un álbum propio), la cámara dentro de la app con varias tomas
-seguidas y los metadatos de la toma necesitan la app nativa (Capacitor) y la cuenta de Apple; ver P.19 en el roadmap.
+seguidas y los metadatos de la toma necesitan la app nativa (Capacitor) y la cuenta de Apple; ver P.25 en el roadmap.
 
 ### Lo medido
 
