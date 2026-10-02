@@ -962,3 +962,5 @@ versiones al azar). Corregido; manda sobre "Cómo quedó (entrega 2)" en lo que 
 | O6. La vista quedaba en blanco mientras se armaba la unión | *Loading the version…* también ahí |
 | O7. La prueba de las letras huérfanas comparaba un carácter | El texto huérfano lleva sus tramos de Yjs y la prueba compara por id |
 | O2, O8, O9 y los mutantes M5 y M10 | Al roadmap (P.18), con su detalle |
+| R1 (re-verificación). Elegir solo lo borrado (un triple clic en un párrafo tachado) dejaba la copia al navegador, con los estilos de las marcas | Se copia ese texto como texto común (el documento no tiene tachado ni color: son decoraciones), sirve para recuperar un párrafo borrado |
+| R2 (re-verificación). Sin prueba propia: la fila del borrado heredada del bloque de arriba (O3) y el aviso de carga de la unión (O6) | Una prueba cada una en `historyDiff.test.ts` y `historyPanel.test.tsx`; las dos fallan con su mutante |

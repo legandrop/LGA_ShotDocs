@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { PageHistory, type HistoryRow } from './history';
+import { encodeRanges } from './deleteSets';
 import { diffText, versionChanges } from './historyDiff';
 import { authorOfRow, block, everyLetter, blocksOf, group, readMarks, rowsOf, seeded, serverAt, textOf, unionDoc, visible, withoutMarks } from './historyTesting';
 import { PageDocs as OldPageDocs } from './fixtures/mainDocs';
@@ -347,5 +348,31 @@ describe('solo lo tocado: un bloque que deja de verse porque se borró algo de a
       expect(visible(u1), file).toBe(visible(u2));
       expect(readMarks(u1, changed.marks), file).toEqual(readMarks(u2, all.marks));
     }
+  });
+});
+
+describe('quién borró lo de adentro de un bloque borrado', () => {
+  it('si una fila borra solo el bloque de arriba, lo de adentro lleva la fila (y la persona) que lo borró', () => {
+    // Un bloque con un hijo sangrado. La segunda fila borra SOLO el elemento del padre (sin los de adentro en su lista
+    // de borrados): Yjs borra lo de adentro al integrarla, pero ninguna fila trae ese borrado.
+    const doc = new Y.Doc();
+    const g = group(doc);
+    const parent = block('p', 'Padre');
+    g.insert(0, [parent, block('q', 'Queda')]);
+    const kids = new Y.XmlElement('blockGroup');
+    parent.insert(1, [kids]);
+    kids.insert(0, [block('c', 'Hijo borrado')]);
+    const first = Y.encodeStateAsUpdate(doc);
+    const item = parent._item!;
+    const second = encodeRanges(new Map([[item.id.client, [[item.id.clock, item.id.clock + 1]]]]));
+    const rows: HistoryRow[] = [first, second].map((data, i) => ({ id: i + 1, seq: i + 1, createdBy: i ? 'bea' : 'ana', createdAt: `2026-10-01T1${i}:00:00Z`, data }));
+    const h = new PageHistory(rows);
+    expect(h.sessions.length).toBe(2);
+    const c = versionChanges(h, 1);
+    const read = readMarks(unionDoc(c.update), c.marks);
+    const child = read.filter((m) => m.block === 'c');
+    expect(child.map((m) => `${m.type}:${m.kind}:${m.text}`).sort()).toEqual(['node:del:paragraph', 'text:del:Hijo borrado']);
+    // Todas las marcas del borrado, con la fila de Bea (no "sin fila": el tooltip diría Former member y sin hora).
+    for (const m of read) expect(authorOfRow(h, m.row), JSON.stringify(m)).toBe('bea');
   });
 });

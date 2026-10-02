@@ -170,7 +170,9 @@ export function withoutDeleted(view: EditorView, input: HistoryMarksInput): Edit
   }
   const from = tr.mapping.map(range.from, 1);
   const to = tr.mapping.map(range.to, -1);
-  if (to <= from) return null;
+  // Lo elegido está entero adentro de lo borrado (un triple clic en un párrafo tachado, para recuperarlo): se copia ese
+  // texto como texto común (las marcas son decoraciones: el documento no tiene tachado ni color).
+  if (to <= from) return EditorState.create({ doc, selection: TextSelection.between(doc.resolve(range.from), doc.resolve(range.to)) });
   return EditorState.create({ doc: tr.doc, selection: TextSelection.between(tr.doc.resolve(from), tr.doc.resolve(to)) });
 }
 

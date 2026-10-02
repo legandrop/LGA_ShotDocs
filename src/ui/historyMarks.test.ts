@@ -221,6 +221,24 @@ describe('copiar con Show changes prendido', () => {
     expect(pasted).toContain('cámara en mano');
     expect(pasted).not.toMatch(/strike|underline|rgb|color\(/);
     expect(JSON.stringify(BlockNoteEditor.create({ schema }).tryParseHTMLToBlocks(out.clipboardHTML))).not.toContain('fija');
+    // Elegir SOLO lo borrado (un triple clic en el párrafo tachado, para recuperarlo): se copia como texto común.
+    let start = -1;
+    let size = 0;
+    v.state.doc.descendants((node, pos) => {
+      if (start < 0 && node.isText && node.text?.startsWith('Nota de vestuario')) {
+        start = pos;
+        size = node.nodeSize;
+      }
+    });
+    expect(start).toBeGreaterThan(0);
+    v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, start, start + size)));
+    const only = cleanClipboard(viewer as never, v, input)!;
+    expect(only).not.toBeNull();
+    expect(only.markdown).toContain('Nota de vestuario: camisa azul.');
+    expect(only.markdown).not.toContain('en mano');
+    const pastedOnly = JSON.stringify(BlockNoteEditor.create({ schema }).tryParseHTMLToBlocks(only.externalHTML));
+    expect(pastedOnly).toContain('Nota de vestuario');
+    expect(pastedOnly).not.toMatch(/strike|underline|rgb|color\(|"backgroundColor":"(?!default)/);
     // La unión no se tocó.
     expect(Y.encodeStateVector(union)).toEqual(before);
   });

@@ -676,3 +676,38 @@ describe('en el teléfono, tocar una marca', () => {
     expect(notices[0]).toContain('Added by bea@example.com');
   });
 });
+
+/** Un Worker que retiene los pedidos de la unión hasta que se sueltan (para ver la pantalla mientras se arma). */
+class HoldingWorker extends CountingWorker {
+  static held: (() => void)[] = [];
+  postMessage(message: unknown) {
+    if ((message as { req: HistoryRequest }).req.op === 'changes') HoldingWorker.held.push(() => super.postMessage(message));
+    else super.postMessage(message);
+  }
+}
+
+describe('mientras se arma la unión', () => {
+  it('se ve el aviso de carga (no la vista en blanco ni la versión limpia que después salta)', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setup();
+    const g = globalThis as { Worker?: unknown };
+    const saved = g.Worker;
+    g.Worker = HoldingWorker;
+    HoldingWorker.held = [];
+    try {
+      const host = await mount(services(a, server.ownerId), pageId);
+      // La versión llegó; la unión, todavía no.
+      expect(HoldingWorker.held.length).toBeGreaterThan(0);
+      expect(host.querySelector('.history-version-loading')?.textContent).toBe('Loading the version…');
+      expect(host.querySelector('.history-page')).toBeNull();
+      await act(async () => {
+        for (const release of HoldingWorker.held.splice(0)) release();
+      });
+      await settle(300);
+      expect(host.querySelector('.history-version-loading')).toBeNull();
+      expect(host.querySelector('.history-page .hist-add')).not.toBeNull();
+    } finally {
+      g.Worker = saved;
+    }
+  });
+});
