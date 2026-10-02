@@ -3,6 +3,8 @@ import { BlockNoteEditor } from '@blocknote/core';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import * as Y from 'yjs';
+import { addShape, PHOTO_MARKUP_MAP } from '../media/markup';
 import { PorteroError } from '../media/portero';
 import type { MediaKind } from '../media/probe';
 import { Carrete } from './Carrete';
@@ -507,5 +509,61 @@ describe('carrete: un adjunto en grande (Docs/Doc_Adjuntos.md, entrega 2)', () =
     expect(slot.querySelector('.carrete-file-note')?.textContent).toMatch(/offline/i);
     expect(slot.querySelector<HTMLButtonElement>('.carrete-file-open')!.disabled).toBe(true);
     expect(slot.querySelector('.carrete-file-actions a')).toBeNull();
+  });
+});
+
+describe('carrete: anotaciones (P.20, Docs/Doc_Anotar_Fotos.md, AN9)', () => {
+  const FILE_A = PHOTO_A.slice('sdmedia://'.length);
+
+  /** El carrete con el escenario medido y la foto ya dibujada (jsdom no mide ni carga imágenes). */
+  async function openSized(map: Y.Map<unknown>) {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(800);
+    const opened = await open({ markup: map });
+    const preview = current().querySelector<HTMLImageElement>('.carrete-preview')!;
+    Object.defineProperty(preview, 'naturalWidth', { value: 480 });
+    Object.defineProperty(preview, 'naturalHeight', { value: 360 });
+    await fire(preview, 'load');
+    return opened;
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  it('la foto anotada se ve con su dibujo; Hide annotations lo saca (solo para quien mira) y deja una marca', async () => {
+    const doc = new Y.Doc();
+    addShape(doc, FILE_A, 'a', { type: 'arrow', posX: 10, posY: 10, startX: 0, startY: 0, endX: 100, endY: 50 }, { w: 4000, h: 3000 });
+    const writes: unknown[] = [];
+    doc.on('update', (_u: Uint8Array, o: unknown) => writes.push(o));
+    await openSized(doc.getMap(PHOTO_MARKUP_MAP));
+    const svg = () => current().querySelector('.carrete-media > svg.sd-markup');
+    expect(svg()?.getAttribute('viewBox')).toBe('0 0 4000 3000');
+    expect(svg()?.querySelector('[data-shape="arrow"]')).not.toBeNull();
+    expect(document.querySelector('.carrete-markup-mark')).toBeNull();
+    await act(async () => button('Hide annotations').click());
+    expect(svg()).toBeNull();
+    expect(document.querySelector('.carrete-markup-mark')?.getAttribute('aria-label')).toBe('This photo has hidden annotations');
+    await act(async () => button('Show annotations').click());
+    expect(svg()).not.toBeNull();
+    // Ocultar o mostrar no escribe nada en la página.
+    expect(writes).toEqual([]);
+  });
+
+  it('una anotación nueva (de otro) aparece con el carrete abierto; sin anotaciones no hay botón', async () => {
+    const doc = new Y.Doc();
+    await openSized(doc.getMap(PHOTO_MARKUP_MAP));
+    expect(document.querySelector('.carrete-markup-toggle')).toBeNull();
+    expect(current().querySelector('svg.sd-markup')).toBeNull();
+    await act(async () => {
+      addShape(doc, FILE_A, 'a', { type: 'ellipse', rectX: 0, rectY: 0, rectW: 100, rectH: 100 }, { w: 4000, h: 3000 });
+    });
+    await settle();
+    expect(document.querySelector('.carrete-markup-toggle')).not.toBeNull();
+    expect(current().querySelector('svg.sd-markup ellipse')).not.toBeNull();
+  });
+
+  it('sin el mapa (las fotos de una carpeta) no hay anotaciones ni botón', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
+    await open();
+    expect(document.querySelector('.carrete-markup-toggle')).toBeNull();
+    expect(document.querySelector('svg.sd-markup')).toBeNull();
   });
 });

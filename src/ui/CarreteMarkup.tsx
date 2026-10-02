@@ -26,8 +26,12 @@ export function useHasMarkup(map: Y.Map<unknown> | null | undefined, fileId: str
   return has;
 }
 
-/** El `<svg>` de las anotaciones de una foto del carrete, del tamaño con que se dibuja la foto (`size`). */
+/**
+ * El `<svg>` de las anotaciones de una foto del carrete, del tamaño con que se dibuja la foto (`size`). Una foto sin
+ * anotaciones no tiene `<svg>`.
+ */
 export function CarreteMarkup({ map, fileId, size }: { map: Y.Map<unknown>; fileId: string; size: { width: number; height: number } }) {
+  const has = useHasMarkup(map, fileId);
   const ref = useRef<SVGSVGElement>(null);
   useEffect(() => {
     const svg = ref.current;
@@ -43,6 +47,6 @@ export function CarreteMarkup({ map, fileId, size }: { map: Y.Map<unknown>; file
     };
     map.observeDeep(onChange);
     return () => map.unobserveDeep(onChange);
-  }, [map, fileId, size.width, size.height]);
-  return <svg ref={ref} className="sd-markup" aria-hidden="true" focusable="false" />;
+  }, [map, fileId, size.width, size.height, has]);
+  return has ? <svg ref={ref} className="sd-markup" aria-hidden="true" focusable="false" /> : null;
 }
