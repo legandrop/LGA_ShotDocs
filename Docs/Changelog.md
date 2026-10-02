@@ -2,13 +2,35 @@
 
 v0.0XX :
 
-Diseño del dictado por voz (P.26, `Doc_Dictado.md`, sin código). Lega pidió dictar en el set y que la IA ubique una
+Diseño del dictado por voz (P.27, `Doc_Dictado.md`, sin código). Lega pidió dictar en el set y que la IA ubique una
 nota informal en su campo del reporte. Medido: el reconocimiento del navegador no existe en la app instalada del
 iPhone, así que el micrófono propio graba y transcribe con el proveedor de la persona (US$ 0,0005 por nota de 10 s);
-el dictado común queda en el teclado. La página viaja como un mapa con direcciones y vuelve una lista de cambios
-validada, con vista previa, *Apply* con la guarda y un deshacer; pregunta cuando no sabe qué plano; sin red, una cola
-que nunca se borra sola. Entregas V1 a V4 y decisiones DI1 a DI9.
+el dictado común queda en el teclado. La página viaja como un mapa; vuelve una lista de cambios con su fila y columna,
+validada por la app, con vista previa, *Apply* con la guarda y un deshacer; lo destildado no se pierde; pregunta
+cuando no sabe qué plano; sin red, una cola que nunca se borra sola. Auditado: corregidas cinco condiciones.
 [ Dictado, diseño - dictar en el set y ubicar la nota en el reporte con vista previa ]
+
+v0.125 :
+
+Menciones en comentarios (P.21), entrega 2. Para mencionar a alguien que no veía la página había que ir a *Share*,
+compartirla y volver, y sin abrir la campana no se veía que había menciones. Nueva migración
+`20261016120000_menciones_e2.sql` (`schema_version` 16): `mention_candidates` suma a quienes no ven la página solo
+para el dueño y los admins que pueden compartirla, y `share_for_mention` la comparte con Comentar, solo esa página y
+sin tocar a quien ya la ve; pruebas en rollback y 19 mutantes. En la app, esas personas aparecen en gris bajo *Can't
+see this page* y elegir una pregunta *Share and mention*, por el mismo paso previo que *Share*. Además, un punto en el
+árbol (hueco en la madre plegada) y el número en el título de la pestaña y en el ícono de la app instalada.
+[ Menciones, entrega 2 - compartir desde la mención, el punto del árbol y el número en la pestaña y el ícono ]
+
+v0.124 :
+
+No se podía guardar una página como plantilla ni cambiar las de fábrica (P.23, entrega 3 de `Doc_Plantillas.md`). Ahora
+*Save as template…* (menú ⋯) copia la página a la carpeta *Templates* del proyecto, sin tocarla, con nombre, descripción
+y *Clear filled-in values* (vacía tablas y casillas, deja rótulos, saca fotos). Una plantilla es una página marcada
+(`settings.template`, sin migración): se edita escribiendo, con una franja arriba (*Template settings…*, *Stop using as
+template*). La ventana *Templates* suma las del proyecto, las de otros proyectos (sin sus fotos, con aviso) y
+*Customize*; una a medio bajar nunca se copia (*Wait*, *Use built-in*). *New day report* usa la plantilla de la carpeta y
+deja elegir entre varias; si no la ve, usa la de fábrica y avisa.
+[ Plantillas propias - guardar como plantilla, la carpeta Templates, editar, personalizar y usarlas en el reporte del día ]
 
 v0.123 :
 

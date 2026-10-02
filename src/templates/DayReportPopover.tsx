@@ -5,8 +5,20 @@ import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import { useFloating } from '../ui/menus';
 import { notify } from '../ui/notice';
+import { builtinTexts } from './builtin';
 import { dayName, isValidDate, localDate } from './dayReport';
-import { createDayReport, DayReportWriteError, planDayReport, reportsOn, suggestedDay, type DayReportPlan } from './dayReportCreate';
+import {
+  createDayReport,
+  DayReportWriteError,
+  planDayReport,
+  reportsOn,
+  resolveReportTemplate,
+  suggestedDay,
+  type DayReportPlan,
+  type ReportTemplate,
+  type ReportTemplateNotice,
+} from './dayReportCreate';
+import { dayReportTemplates } from './own';
 import { requestReportFocus } from './dayReportUi';
 
 // El globito del reporte del día (Docs/Doc_Plantillas.md, 6.3): la fecha de hoy (hora del dispositivo), el día de
@@ -42,6 +54,9 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
   const [queued, setQueued] = useState(false);
   // La página que dejó un intento que no pudo escribir el contenido (O4): el reintento la usa en vez de crear otra.
   const failedPage = useRef<string | undefined>(undefined);
+  // La plantilla (entrega 3): la de la carpeta, o la que se elija si hay más de una a mano. `null`: la de fábrica.
+  const [choice, setChoice] = useState<{ id: string | null; template: ReportTemplate | null; notice: ReportTemplateNotice | null } | null>(null);
+  const [reading, setReading] = useState(false);
 
   // La propuesta: se lee una vez al abrir (lo que se escribe en los campos manda desde ahí).
   useEffect(() => {
@@ -52,6 +67,7 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
       .then((next) => {
         if (cancelled) return;
         setPlan(next);
+        setChoice({ id: next.template?.id ?? null, template: next.template, notice: next.templateNotice });
         const t = touched.current;
         const chosen = t.date && isValidDate(dateNow.current) ? dateNow.current : next.suggestion.date;
         if (!t.date) setDate(chosen);
@@ -79,7 +95,7 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
   const validDay = Number.isInteger(dayNumber) && dayNumber > 0 && dayNumber < 10000;
 
   const create = async () => {
-    if (!plan || busy || !validDate || !validDay) return;
+    if (!plan || busy || reading || !validDate || !validDay) return;
     setBusy(true);
     try {
       const id = await createDayReport(
@@ -87,8 +103,15 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
         plan,
         { date, day: dayNumber, location: location.replace(/\s+/g, ' ').trim() },
         tr.lang,
-        { canMark: perms.canEditPage(folderId), reuse: failedPage.current },
+        {
+          canMark: perms.canEditPage(folderId),
+          reuse: failedPage.current,
+          template: choice?.template ?? null,
+          // La de la carpeta que no se pudo usar (O4) no se pisa: se anota solo una que se usó o la que se eligió.
+          markTemplate: choice?.notice ? undefined : (choice?.template?.id ?? null),
+        },
       );
+      if (choice?.template?.removed) notify(t('templates.mediaRemoved', { count: choice.template.removed }));
       onClose();
       requestReportFocus(id);
       navigate(pagePath(id));
@@ -122,6 +145,41 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
     // `submit` es el de este dibujo, con la propuesta ya puesta en los campos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, queued]);
+
+  // Las plantillas de reporte a mano: la de fábrica y las propias con *Use for day reports* que la persona ve (6.3: el
+  // selector sale solo si hay más de una).
+  const projectId = tree.get(folderId)?.workspace_id ?? tree.workspaceId;
+  const onsetName = builtinTexts(tr.lang).names.onset;
+  const options = [
+    { id: '', name: onsetName },
+    ...dayReportTemplates(tree, projectId).map((o) => {
+      const project = o.row.workspace_id !== projectId ? tree.project(o.row.workspace_id)?.name : undefined;
+      return { id: o.row.id, name: `${o.row.title || tr('common.untitled')}${project ? ` · ${project}` : ''}` };
+    }),
+  ];
+  // La de la carpeta, aunque se le haya sacado *Use for day reports* después: sigue siendo la elegida.
+  if (choice?.id && !options.some((o) => o.id === choice.id)) {
+    options.push({ id: choice.id, name: tree.get(choice.id)?.title || tr('common.untitled') });
+  }
+  const choose = async (id: string) => {
+    if (!id) {
+      setChoice({ id: null, template: null, notice: null });
+      return;
+    }
+    setReading(true);
+    try {
+      const next = await resolveReportTemplate({ tree, docs, engine }, id, projectId);
+      setChoice({ id, ...next });
+    } finally {
+      setReading(false);
+    }
+  };
+  const noticeText: Record<ReportTemplateNotice, string> = {
+    notShared: tr('dayReport.templateNotShared', { name: onsetName }),
+    gone: tr('dayReport.templateGone', { name: onsetName }),
+    missing: tr('dayReport.templateMissing', { name: onsetName }),
+    newer: tr('dayReport.templateNewer', { name: onsetName }),
+  };
 
   const existsText =
     existing.length > 1
@@ -176,6 +234,19 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
           }}
         />
       </label>
+      {plan && options.length > 1 && (
+        <label className="day-report-field">
+          <span className="pref-label">{tr('dayReport.template')}</span>
+          <select value={choice?.id ?? ''} disabled={reading || busy} onChange={(e) => void choose(e.target.value)}>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {choice?.notice && <p className="notice-line warn">{noticeText[choice.notice]}</p>}
       {plan?.lastIncomplete && <p className="notice-line warn">{tr('dayReport.incomplete')}</p>}
       {existsText && (
         <p className="notice-line" role="status">

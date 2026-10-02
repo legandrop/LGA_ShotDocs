@@ -1,6 +1,6 @@
 # Dictado por voz y notas informales que se ubican en el reporte
 
-**Estado: diseño, sin código** (roadmap P.26; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.123, con el
+**Estado: diseño, sin código** (roadmap P.27; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.123, con el
 asistente A1 publicado (v0.118) y A2 terminado en su rama (`lega/asistente-a2`, en auditoría). Las decisiones están
 propuestas (DI1 a DI9, sección 13) y valen hasta que Lega diga otra cosa. Lo medido está en "Cómo se midió", al final;
 los precios y el CORS se verificaron el 2026-10-02 en las páginas oficiales y con pedidos sin clave.

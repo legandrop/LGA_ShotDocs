@@ -1,7 +1,7 @@
 # Plantillas y el reporte del día
 
-**Estado: entregas 0, 1 y 2 implementadas** (las tres de fábrica, la vista previa, crear desde una y el reporte del día;
-ver "Cómo quedó", al final); la entrega 3 sigue en diseño. Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
+**Estado: entregas 0 a 3 implementadas** (las tres de fábrica, la vista previa, crear desde una, el reporte del día y las
+plantillas propias; ver "Cómo quedó", al final). Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
 Lega del 2026-10-02). Diseñado contra `main` v0.108. Las decisiones PL1 a PL10 (sección 13) son propuestas: se adoptan como
 están hasta que Lega diga otra cosa. El contenido de las tres plantillas es una primera versión para que Lega la
 ajuste: la entrega 0 la deja a la vista sin guardar nada, justamente para eso. Corregido con la auditoría
@@ -705,3 +705,74 @@ del título, también una carpeta de la persona, y le cambiaba el nombre (B1). Q
 app, con pruebas de una carpeta con fecha con y sin subpágina, con texto, un reporte con subpágina y uno renombrado por
 la persona. Además, si el de fecha más alta no tiene número de día (una página de la persona), el día sale del número
 más alto de la carpeta + 1.
+
+## Cómo quedó (entrega 3: las plantillas propias)
+
+Sin migración: las marcas son `pages.settings.template` (`{ description?, dayReport? }`; `false`, dejada a mano) y
+`pages.settings.templatesFolder` (`true`), que suben y bajan como el formato de hoja. Todo es local: copiar, crear la
+plantilla y crear el reporte pasan por la cola del árbol y por IndexedDB.
+
+- **Dónde está el código.** `src/templates/own.ts` (primera carga, sin el editor): qué página es una plantilla, la carpeta
+  *Templates*, qué lista la ventana, *Template settings* y *Stop using*. `ownCopy.ts` (con el editor): leer una plantilla
+  en una copia en memoria (`readOwnTemplate`: entera o nada, `findUnknownContent`, sin las fotos de otro proyecto),
+  *Clear filled-in values* (`clearFilledIn`), *Save as template* y *Customize*. `ownTemplatesUi.tsx`: la franja arriba del
+  título, lo que ofrece el menú ⋯ y el lugar siempre montado que abre las dos ventanas (`TemplateDialogs.tsx`, se bajan
+  aparte). La ventana *Templates* (`TemplateHost.tsx`) suma *This project*, *Other projects* (con el nombre de cada
+  proyecto), *Open* y *Customize*. El reporte del día lee la plantilla de la carpeta al abrir el globito
+  (`resolveReportTemplate`) y la anota al crear (`markReportFolder`).
+- **Qué es una plantilla.** Marcada, o directamente adentro de una carpeta *Templates* sin marca (la marca perdida, 3).
+  *Stop using as template* deja `false` adentro de *Templates* (si no, la carpeta la volvería a contar) y borra la clave
+  afuera; el menú de esa página ofrece *Use as template* para volver. En la papelera (ella o algo de arriba) no cuenta.
+  Las de proyectos archivados también salen en *Other projects*.
+- **Save as template…** (menú ⋯ de cualquier página que no sea plantilla ni *Templates*): *Name* (propone el título; en un
+  reporte del día, *On-Set Report*), *Description* (un renglón, 300 letras; Enter guarda), *Use for day reports*
+  (marcada si la página está en una carpeta de reportes) y *Clear filled-in values* (marcada). Copia lo vivo si la página
+  está abierta (con lo recién escrito) y nunca le escribe. La plantilla guarda el `template_id` de la página (de qué
+  plantilla salió: sirve para *Use built-in* y para reconocer reportes). Con *Use for day reports*, la carpeta de
+  reportes de esa página pasa a usarla (`dayReports.template`), así el próximo *New day report* sale de ella. Una página a
+  medio bajar o de una versión más nueva no se guarda (aviso en la ventana, nada creado). Sin permiso para crear en
+  *Templates* (o en la raíz, si hay que crearla), el renglón queda apagado con *Needs permission to create pages in
+  Templates*.
+- ***Clear filled-in values*.** Vacía las celdas salvo las filas y columnas de encabezado, la primera columna de las
+  tablas de 2 columnas (la ficha) y **los rótulos de la primera columna de las tablas de las de fábrica** (*Camera
+  package*: A, B; *Measurements*; *Data*), que se reconocen por su fila de encabezado en los dos idiomas: sin eso, un
+  reporte guardado como plantilla perdía esas filas (desvío de 5.1, que solo nombra la ficha). El valor de fábrica
+  *Unit* = *Main unit* se vacía: es un dato y el reporte del día lo copia del anterior. Desmarca las casillas y saca fotos
+  y archivos; títulos, párrafos y viñetas quedan (son la estructura).
+- **La franja** (arriba del encabezado): *Template — new pages get a copy; pages already created don't change.*, la
+  descripción, la marca *Day reports* y, para quien puede editar, *Template settings…* (descripción y *Use for day
+  reports*; si no entra en los 2000 caracteres de `settings`, avisa y no guarda; conserva claves de la marca que esta
+  versión no conoce) y *Stop using as template*.
+- **Usar una propia** (ventana *Templates*): copia en memoria (4.2), ids nuevos, el colapsado remapeado, `template_id` = la
+  página plantilla y el foco como con las de fábrica (título vacío, con Ctrl/⌘+Z que la saca). De otro proyecto, sin sus
+  fotos y archivos, con *3 photos and files weren't copied: they belong to another project.* Una con *Use for day
+  reports* en una página adentro de una carpeta hace lo del primer reporte (fecha, día, lo de ayer) y anota la carpeta.
+  **A medio bajar** se intenta bajar 4 segundos; si no llega, la ventana avisa con *Wait* (sigue intentando y la usa al
+  llegar, mientras la ventana esté abierta) y, si salió de una de fábrica, *Use built-in*. La tira sigue ofreciendo las
+  tres de fábrica: *On-Set Report* de la tira usa la de fábrica aunque la carpeta tenga una propia (es lo que dice el
+  botón); las propias se eligen en *More…* o en el globito.
+- ***Customize*.** Copia la de fábrica (en el idioma de la app) a *Templates* con su nombre y descripción, `template_id`
+  de esa de fábrica y, *On-Set Report*, con *Use for day reports*; la abre. Apagado sin permiso para crear ahí.
+- **El globito del reporte del día.** Usa la plantilla de la carpeta. *Template* aparece si hay más de una a mano
+  (*On-Set Report* y las propias con *Use for day reports* que la persona ve, las de otros proyectos con su nombre);
+  elegir otra la anota en la carpeta al crear. Si la de la carpeta no se ve, está en la papelera, a medio bajar o es de
+  una versión más nueva: *On-Set Report* con el aviso (*The report template isn't shared with you; using On-Set
+  Report*, y los otros tres), sin pisar la anotada (O4). Un reporte que salió de una propia cuenta como reporte (la
+  carpeta se deduce igual) y *Templates* nunca se deduce como carpeta de reportes (una plantilla guardada desde un
+  reporte puede tener nombre de reporte).
+- **Ayuda.** Entrada nueva *Your own templates* (`help.ownTemplates`) y el paso `page-menu` de la recorrida nombra *Save
+  as template*. Ningún atajo nuevo (las dos ventanas se cierran con Escape, en `menusClose`).
+- **Pruebas.** `own.test.ts` (12: qué es una plantilla, marca perdida y dejada, la lista, reportes de una propia, los
+  ajustes que no se pisan ni pasan el tope, *Stop using*, sacar fotos de otro proyecto en bloques, renglones, celdas y
+  links, y *Clear filled-in values* con las tablas de fábrica en los dos idiomas), `ownSync.test.ts` (7, con el servidor
+  en memoria: la prueba de aceptación entera sin red y en otro dispositivo, otro proyecto, a medio bajar, O4, versión
+  más nueva, *Customize*, y la versión publicada y la anterior abriendo la plantilla y lo creado sin escribir) y
+  `ownHost.test.tsx` (10, la página de verdad: el menú, la ventana, permisos, la franja, *Templates* con otro proyecto,
+  *Customize*, *Wait* / *Use built-in* y el selector del globito). Mutantes a mano (sin sacar fotos, sin desmarcar, sin
+  anotar la carpeta, sin deducir, copiar a medio bajar): cada uno tira 1 o 2 pruebas. En Chromium sin ventana, con la
+  app real sobre el servidor en memoria: la prueba de aceptación (32 controles, con modo avión) y el teléfono.
+- **Lo que no se hizo.** En *Buscar en el proyecto*, la marca *Template* y que *Replace all* saltee las plantillas (O9, 9):
+  es de la búsqueda (`src/search`), que lleva otro frente; queda en el roadmap. La marca *2 reports for…* en la barra
+  lateral (O6, de la entrega 2). Copiar subpáginas y esconder las de fábrica (14).
+- **Pendiente para Lega:** guardar un reporte real como plantilla, editarla y crear el día siguiente; usar una de ERSO
+  desde MGTZD (el aviso de fotos); mirar la franja y la ventana en el iPhone.
