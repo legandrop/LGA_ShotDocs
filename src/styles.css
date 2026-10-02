@@ -2945,6 +2945,22 @@ code {
   user-select: none;
 }
 
+/* Las anotaciones de una foto (P.20, Docs/Doc_Anotar_Fotos.md, sección 4; markupOverlay.ts): un `<svg>` en la misma
+   caja que la imagen (la foto en línea, la de una celda, la foto-bloque, el carrete y la vista de impresión), con el
+   `meet` de fábrica, que es `object-fit: contain`. Encima de la foto y debajo de los tiradores; no toma el mouse. */
+svg.sd-markup {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+svg.sd-markup text {
+  white-space: pre;
+}
+
 /* `w = 0`: el ancho natural de lo que se ve (la miniatura), con tope en el renglón. Con la imagen nítida puesta
    (sharpImages.ts, más grande), el de la miniatura sigue de tope: la foto no crece, solo se ve mejor. */
 .sd-photo[data-w='0'] > img.bn-visual-media {
@@ -3418,6 +3434,7 @@ code {
 }
 
 .carrete-media {
+  position: relative;
   display: grid;
   width: 100%;
   height: 100%;
@@ -3519,6 +3536,21 @@ code {
 
 .carrete-notice-btn {
   background: var(--carrete-btn);
+}
+
+/* Las anotaciones ocultas (*Hide annotations*, AN9): una marca chica en la esquina dice que la foto las tiene. */
+.carrete-markup-mark {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  pointer-events: none;
 }
 
 .carrete-spinner {

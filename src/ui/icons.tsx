@@ -181,6 +181,9 @@ export const AlignCenterIcon = icon('M4 5.5h12M6 9h8M4 12.5h12M6 16h8', { stroke
 export const AlignRightIcon = icon('M4 5.5h12M8 9h8M4 12.5h12M8 16h8', { strokeWidth: 1.6 });
 export const ReplaceIcon = icon('M4.5 8.5a5.5 5.5 0 0 1 10-2.5M15.5 3.5v3h-3M15.5 11.5a5.5 5.5 0 0 1-10 2.5M4.5 16.5v-3h3');
 
+// Mostrar y ocultar las anotaciones de una foto en el carrete (P.20, AN9): un ojo; tachado, ocultas.
+export const EyeIcon = icon('M2.5 10s2.75-5 7.5-5 7.5 5 7.5 5-2.75 5-7.5 5-7.5-5-7.5-5zM10 7.75a2.25 2.25 0 1 1 0 4.5 2.25 2.25 0 0 1 0-4.5z');
+export const EyeOffIcon = icon('M2.5 10s2.75-5 7.5-5 7.5 5 7.5 5-2.75 5-7.5 5-7.5-5-7.5-5zM10 7.75a2.25 2.25 0 1 1 0 4.5 2.25 2.25 0 0 1 0-4.5zM3.5 3.5l13 13');
 // Sacar una foto (camera.ts): una cámara de fotos.
 export const CameraIcon = icon('M3 7a1 1 0 0 1 1-1h2.5l1.25-2h4.5l1.25 2H16a1 1 0 0 1 1 1v8.25a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM10 8.25a3 3 0 1 1 0 6 3 3 0 0 1 0-6z');
 // Filmar: una cámara de video.

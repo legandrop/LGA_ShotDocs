@@ -105,9 +105,11 @@ const FOLDER_ZIP = '0.105';
 /** Sacar una foto o filmar desde la página y guardar en Fotos (camera.ts): la versión se pone al publicar. */
 const CAMERA = '0.110';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
-const TEMPLATES = '0.0XX';
+const TEMPLATES = '0.117';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
+/** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
+const PHOTO_MARKUP = '0.116';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -251,6 +253,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.carrete.text',
     keys: { prev: 'carretePrev', next: 'carreteNext', ends: 'carreteEnds', close: 'carreteClose' },
     since: BEFORE_HELP,
+  },
+  {
+    id: 'photosMarkup',
+    section: 'photos',
+    title: 'help.photosMarkup.title',
+    text: 'help.photosMarkup.text',
+    words: ['annotate', 'annotations', 'anotar', 'anotaciones', 'flecha', 'arrow', 'dibujo', 'drawing', 'framerev', 'hide', 'ocultar'],
+    since: PHOTO_MARKUP,
   },
   { id: 'photosPhone', section: 'photos', title: 'help.photosPhone.title', text: 'help.photosPhone.text', since: BEFORE_HELP },
   {
