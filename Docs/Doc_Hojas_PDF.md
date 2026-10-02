@@ -197,8 +197,8 @@ de cortes").
   cursor en un párrafo nuevo, en la hoja siguiente. **Ctrl+Enter** (⌘↩ en la Mac), como en Word y Google Docs:
   en un párrafo vacío, ese párrafo pasa a ser el salto; al principio de un bloque, el salto va antes; en el medio
   de un párrafo, lo parte y queda entre las dos partes (la segunda conserva sus propiedades: Script sigue Script);
-  al final, va después con un párrafo nuevo. En un título colapsado (al final, en el medio o con una parte elegida)
-  hace primero lo de Enter al final (un renglón después de lo escondido, sin abrir la sección) y ese renglón es el
+  al final, va después con un párrafo nuevo. En un título colapsado (al final, en el medio, o con una selección que
+  empieza en el título, aunque siga abajo; no la borra) hace primero lo de Enter al final (un renglón después de lo escondido, sin abrir la sección) y ese renglón es el
   salto: no parte el título, porque partirlo abría la sección y dejaba el salto entre el título y su contenido; al
   principio, el salto va antes del título y la sección sigue colapsada. En una tabla o una imagen no hace nada, y
   en un bloque de código no lo
@@ -210,7 +210,8 @@ de cortes").
   del texto propio del bloque: el principio de una celda de tabla no cuenta. Supr en un salto vacío también lo saca,
   como en Word (si no, el renglón de abajo subía adentro del salto), y el cursor pasa al bloque que sigue, que no se
   mueve: si el salto es el último hijo de un bloque, el de afuera (BlockNote lo subía adentro del salto, como hijo);
-  si no hay nada después, el renglón queda como párrafo común vacío. También se borra como cualquier párrafo, o con
+  si no hay nada después, el renglón queda como párrafo común vacío. Antes de un título colapsado, igual (el Supr de
+  colapsar, que borraba el renglón, deja pasar el salto vacío). También se borra como cualquier párrafo, o con
   *Paragraph* en la barra. El teclado está en `pageBreakExtension` (editorExtensions.ts).
 - **Enter en un salto.** Al principio de un salto con texto deja un renglón común arriba y el salto una sola vez
   (BlockNote lo copiaba: dos saltos y la nota sola en una hoja). En el medio o al final, la parte nueva es un párrafo
@@ -219,7 +220,8 @@ de cortes").
   archivo va debajo, como con una pregunta vacía). Pegar adentro de un salto (vacío, sobre su texto elegido o en el
   medio) deja lo pegado arriba de la línea y el salto del renglón una sola vez, en el último bloque pegado:
   ProseMirror reemplaza el bloque por lo pegado, con las propiedades de fábrica, y el salto se perdía. Si lo último
-  pegado no es un párrafo (un título, una lista), el salto va en un renglón vacío debajo. Los saltos que trae lo
+  pegado no es un párrafo (un título, una lista) o es Script o una pregunta (no van junto con el salto), el salto va
+  en un renglón vacío debajo. Los saltos que trae lo
   pegado se conservan: el plugin anota los de cada bloque de primer nivel al pegar (`transformPasted`) y los demás
   bloques quedan como venían (el primero puede heredar el salto del renglón, y se le saca). Si lo pegado termina en un
   salto, no se duplica; si no se puede saber qué bloque es cuál, queda un solo salto. Un link de Drive pegado como
@@ -246,7 +248,7 @@ de cortes").
 
 ### Cómo quedó
 
-- `src/ui/pageBreak.test.ts` (22 pruebas), `src/ui/pageBreakKeys.test.ts` (25), una en `fileDrop.test.ts` y otra en
+- `src/ui/pageBreak.test.ts` (22 pruebas), `src/ui/pageBreakKeys.test.ts` (30), una en `fileDrop.test.ts` y otra en
   `driveCard.test.ts`: el cálculo con saltos (vacío, con texto, seguidos, al final, cuando ya
   empieza hoja, un título antes, un bloque alto después), crear y sacar (también con el teclado real del editor de
   la página), el menú "/", partir un Script, copiar y pegar (HTML de la app y de afuera, `avoid-page` no es salto, pegar en un salto vacío), la vista de impresión
@@ -254,11 +256,12 @@ de cortes").
   del esquema publicado): abre la página sin subir ningún cambio, ve los párrafos con su texto, no borra ni desmarca
   nada al editar otro bloque y, si escribe, hace Enter o Retroceso en un salto, conserva todo el texto. Y el teclado
   alrededor del salto: Retroceso en las celdas de una tabla debajo de un salto (no lo saca), Enter al principio, en el
-  medio y al final de un salto con texto, Supr en un salto vacío (también el último hijo de un bloque y el último de
-  la página), Ctrl+Enter con una selección, en una casilla y en un título colapsado (al final, en el medio, con una
-  parte elegida y al principio: la sección sigue colapsada), deshacer en un paso, mover una sección colapsada con un
-  salto adentro, y pegar adentro de un salto (texto, varios párrafos, un título al final, sobre el texto elegido, lo
-  pegado con saltos propios y terminado en un salto). Lo que dejan esos tres casos lo abre la versión anterior sin
+  medio y al final de un salto con texto, Supr en un salto vacío (también el último hijo de un bloque, de dos niveles,
+  antes de un título colapsado y el último de la página), Ctrl+Enter con una selección, en una casilla y en un título
+  colapsado (al final, en el medio, con una parte elegida, con una selección que sigue abajo y al principio: la sección
+  sigue colapsada), deshacer en un paso, mover una sección colapsada con un salto adentro, y pegar adentro de un salto
+  (texto, varios párrafos, un título o un Script al final, sobre el texto elegido, lo pegado con saltos propios,
+  terminado en un salto y con cantidades que no se pueden emparejar). Lo que dejan esos tres casos lo abre la versión anterior sin
   subir cambios.
 - En Chromium, con la página real sobre el servidor en memoria (sin login), 31 de 31: la línea; las marcas
   "Page 2" y "Page 3" antes de los bloques que siguen a cada salto; el PDF (`page.pdf`) con 3 hojas que empiezan
