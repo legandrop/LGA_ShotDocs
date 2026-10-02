@@ -487,7 +487,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   migración `20261023120000_clave_sincronizada.sql`, sin aplicar. **S2 implementada (v0.0XX, sin migración):**
   *Change passphrase…*, *Keep the key on this device*, rechazar una copia más vieja, *Also sync in this workspace…*, el
   botón en el 401, la clave de *Voice* en el mismo sobre y las notas de voz en la ventana de salir. Falta medir en el
-  iPhone y el gestor de contraseñas real (recorrido de Lega). Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
+  iPhone y el gestor de contraseñas real (recorrido de Lega). Quedó de la auditoría de S2 (improbable): *Change
+  passphrase…* no rechaza una copia más vieja repuesta con la misma generación que el dispositivo conoce; al recifrarla le
+  da un `savedAt` nuevo y los otros dispositivos la aceptarían (es una clave vieja de la persona, no filtra nada). Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
   sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
   panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
   cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;

@@ -753,8 +753,9 @@ y que `signOut({ scope: 'others' })` corte de verdad otro dispositivo (los tres 
   están *Update* y *Replace*). El dispositivo que la cambió sigue al día; los otros ven "cambió en otro dispositivo".
 - ***Keep the key on this device*** (tildada de fábrica, con `data-tip`) debajo de *Unlock*. Destildada, la clave y la
   de *Voice* quedan en una variable de `keyStore.ts` y de `voiceSettings.ts`, que mientras existe manda sobre lo
-  guardado: leer, cambiar el modelo, *Forget key* y el aviso "cambió" andan, y la base no se toca. La sección dice *This
-  key is only in this tab…*.
+  guardado: leer, cambiar el modelo y el aviso "cambió" andan, y la base no se toca. *Forget key* olvida solo la de la
+  pestaña (si el dispositivo tenía una guardada de antes, vuelve a valer); la casilla de salir olvida las dos. La
+  sección dice *This key is only in this tab…*, y *Stop syncing* avisa que la clave se va al recargar.
 - **Una copia más vieja no se adopta:** `unlockSync` compara el `savedAt` de adentro del sobre con el que anotó el
   dispositivo para ESE workspace (*This synced copy is older than the one on this device.*). Cada sobre nuevo lleva un
   `savedAt` posterior a los conocidos (`nextSavedAt`: la copia abierta, la anotación, y en *Forgot it?* la hora de la
@@ -770,8 +771,8 @@ y que `signOut({ scope: 'others' })` corte de verdad otro dispositivo (los tres 
   la de ese workspace; *Stop syncing* saca solo esa anotación; abrir en un workspace una copia con otra clave marca las de
   los otros.
 - **La observación de la re-verificación de S1:** con la copia cambiada en otro dispositivo, *Choose a new passphrase…*
-  (y el *Forgot it?*) ya no aparece, salvo que la clave de este dispositivo se haya cambiado después (la persona pegó una
-  clave nueva porque perdió la frase nueva).
+  (y el *Forgot it?*) ya no aparece, aunque la clave de este dispositivo se haya cambiado alguna vez. Quien perdió la
+  frase nueva usa *Stop syncing* y prende de nuevo, con la confirmación a la vista.
 - **La clave de *Voice* viaja en el mismo sobre** (campo opcional `voice`, sin cambiar el formato: una versión con S1 lo
   ignora al abrir). Se sube si *Voice* usa una clave propia; al abrir se guarda en *Voice*. La regla 6 vale también para
   ella: si va a otro destino que el que usa hoy *Voice* (la propia o la del asistente), o al mismo con otra clave, se
@@ -796,7 +797,7 @@ y que `signOut({ scope: 'others' })` corte de verdad otro dispositivo (los tres 
   long to sync.* (no se sube sin *Voice* en silencio).
 
 **Probado.** Vitest: 13 pruebas de los pasos (`keySyncS2.test.ts`) y 11 de la ventana (`keySyncS2Ui.test.tsx`), más las
-de S1 sin cambios; la suite entera, 3541 con `main` v0.141 unido. 22 mutantes de las guardas (Change passphrase sin abrir antes o subiendo la
+de S1 sin cambios; la suite entera, 3545 con `main` v0.141 unido (con las correcciones de la auditoría). 22 mutantes de las guardas (Change passphrase sin abrir antes o subiendo la
 clave del dispositivo, la copia más vieja, el `savedAt` sin los conocidos, *Keep the key* que guarda igual, las copias de
 otros workspaces, *Also sync* sin comparar, *Forgot it?* con la copia cambiada, la regla 6 y la 5 en *Voice*, el 401
 siempre, salir borrando sin la casilla, etc.), los 22 detectados. Recorrido sin ventana con dos perfiles, dos tablas
@@ -807,3 +808,21 @@ con notas de voz pendientes.
 **Falta:** el iPhone de verdad (tiempo de *Unlock*, teclado, gestor de contraseñas) y `signOut({ scope: 'others' })`
 contra otro dispositivo, que siguen en el recorrido de Lega. *Keep the key on this device* no tiene botón para pasar
 después la clave de la pestaña al dispositivo (se vuelve a abrir con la casilla tildada).
+
+**Correcciones de la auditoría de S2** (aprobada con observaciones, ninguna bloqueante):
+
+- **O1.** En la computadora prestada, *Stop syncing* decía *Your key stays on this device.* Ahora dice que la clave está
+  solo en la pestaña y que al recargar no va a estar en esa computadora (antes y después de borrar).
+- **O2.** *Forget key* en modo pestaña borraba también la clave que el dispositivo tenía guardada de antes. Ahora olvida
+  solo la de la pestaña (`forgetTabKey`) y la guardada vuelve a verse; la casilla de salir sigue olvidando todo.
+- **O3.** *Choose a new passphrase…* aparecía con la copia cambiada si la clave local se había cambiado alguna vez (un
+  pegado de hace semanas habilitaba pisar la copia nueva). Ya no aparece con la copia cambiada; queda *Stop syncing*.
+- **O4.** Si lo único que se preguntaba era la clave de *Voice*, *Keep my current key* tampoco guardaba la del
+  asistente y decía que la clave de ahora quedaba aunque no hubiera ninguna. Ahora el botón es *Keep my voice key*: toma
+  la del asistente, deja la de *Voice* del dispositivo y lo dice.
+- **O5.** Prueba de que *Change passphrase…* desde un dispositivo atrasado no lo anota como al día (mata el mutante M6).
+- Queda para el roadmap el caso improbable de la auditoría: *Change passphrase…* no aplica el rechazo de la copia más
+  vieja a lo que abre (haría falta un dueño que reponga una fila vieja con la misma generación que el dispositivo
+  conoce; no filtra nada).
+
+Mutantes después de las correcciones: 27, los 27 detectados.
