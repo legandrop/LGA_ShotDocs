@@ -295,11 +295,15 @@ describe('freeOwn: la comprobación adentro de la transacción que borra', () =>
       ['sin uploadedAt ni estreno', () => a.mediaDb.put('files', { ...record, uploadedAt: undefined }), {}],
     ];
     for (const [name, change, over] of tries) {
+      // El `marksRev` de cada caso se lee antes del cambio (el primero lo sube; los demás no lo tocan).
+      const rev = await getRev(a.mediaDb);
       await change();
-      expect(await freeOwn(a.mediaDb, photo, { ...guard, ...over }), name).toBe(0);
+      expect(await freeOwn(a.mediaDb, photo, { ...guard, rev, ...over }), name).toBe(0);
       expect(await hasOriginal(a, photo), name).toBe(true);
       await a.mediaDb.put('files', record);
     }
+    // Y con todo igual, recién ahí borra.
+    expect(await freeOwn(a.mediaDb, photo, { ...guard, rev: await getRev(a.mediaDb) })).toBe(2 * MB);
   });
 
   it('una marca que lo pide (leída en la transacción) no deja borrar', async () => {
