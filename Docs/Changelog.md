@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+No había plantillas: cada reporte o ficha de plano se armaba a mano (P.23, entregas 0 y 1 de `Doc_Plantillas.md`).
+Ahora las tres de fábrica, *Pre-production Notes*, *On-Set Report* y *Shot Breakdown*, viven en el código, en inglés y
+castellano, solo con bloques que ya existen. Una página nueva del "+" ofrece *Start from a template*; *More…* y *Apply
+template…* (menú ⋯, solo con la página vacía) abren la ventana con descripción y *Preview*
+(`/practice?template=on-set`, que no guarda nada). Usar una agrega los bloques antes del primero, con el editor (se
+deshace con Ctrl/⌘+Z), sin borrar nada y sin red, y anota `template_id`. Pruebas con la versión publicada, dos
+dispositivos sin red y la subida al volver la red; ayuda.
+[ Plantillas - las tres de fábrica, la vista previa y crear una página desde una ]
+
 v0.112 :
 
 Cinco pedidos de Lega del 2026-10-02 no tenían diseño. Se publican los cinco, sin código, cada uno auditado por

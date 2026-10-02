@@ -1,7 +1,8 @@
 # Plantillas y el reporte del día
 
-**Estado: diseño, sin código ni migración** (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de Lega del
-2026-10-02). Diseñado contra `main` v0.108. Las decisiones PL1 a PL10 (sección 13) son propuestas: se adoptan como
+**Estado: entregas 0 y 1 implementadas** (las tres de fábrica, la vista previa y crear desde una; ver "Cómo quedó",
+al final); las entregas 2 y 3 siguen en diseño. Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
+Lega del 2026-10-02). Diseñado contra `main` v0.108. Las decisiones PL1 a PL10 (sección 13) son propuestas: se adoptan como
 están hasta que Lega diga otra cosa. El contenido de las tres plantillas es una primera versión para que Lega la
 ajuste: la entrega 0 la deja a la vista sin guardar nada, justamente para eso. Corregido con la auditoría
 independiente del 2026-10-02 ("aprobado con cambios"; ver "Correcciones de la auditoría", al final).
@@ -581,3 +582,39 @@ colapsado remapeado, los dos casos sin red).
 | **O9** Buscar y reemplazar en el proyecto toca *Templates* | Resultados con la marca *Template*; *Replace all* las saltea salvo *Include templates* (9). |
 | **O10** Una página recuperada vuelve sin `template_id` | Anotado en 8 (informativo). |
 | PL1, PL5 y PL10 "aprobado con cambios" | Reescritas con O7 y O8, O1 y O4, y O3. |
+
+## Cómo quedó (entregas 0 y 1)
+
+**Entrega 0.** `src/templates/builtin.ts` arma las tres con los textos de `builtin.en.ts` y `builtin.es.ts` (mismas
+filas, cambian solo los textos; una prueba lo compara) y sus ids fijos (`BUILTIN_IDS`). La vista previa es la página de
+práctica con `?template=pre-production|on-set|shot-breakdown` y `&lang=en|es`: el mismo documento en memoria (no se
+guarda ni se sincroniza), con un selector de plantilla y de idioma del contenido en el aviso de arriba, así se revisan
+las tres en los dos idiomas sin cambiar el idioma de la app. Las tablas de 5 a 7 columnas llevan su ancho (680 px
+repartidos, el `colwidth` de siempre de las celdas) para entrar en una A4 vertical.
+
+**Entrega 1.**
+
+- **La tira** (`src/templates/TemplateHost.tsx`, montado en `PageEditor`): sale en una página editable, completa en el
+  dispositivo, vacía (solo párrafos vacíos, `isEmptyPage`), sin subpáginas y **creada acá**. "Creada acá" es la lista
+  `templateOffer` de `meta` (`PageTree.isFresh`): la anota `tree.create` cuando la página se crea sin título ni
+  plantilla, que es lo que hace el "+" (la importación de Coda siempre pone título), y se borra al tener contenido o al
+  usar una plantilla; se recuerdan las últimas 50. En el teléfono la tira va debajo del rótulo y se desliza de costado.
+- **La ventana *Templates*** (*More…* y *Apply template…*): por ahora solo *Built-in*, con su descripción, *Preview* y
+  *Use*. *Apply template…* está en el menú de la página para quien puede editarla; con contenido queda apagado con el
+  tooltip *Only on an empty page*. Desde la barra lateral, sobre una página que no está abierta, la abre y muestra la
+  ventana allá (`templatesUi.ts`). Una página con título también puede recibir una plantilla por el menú; el título
+  queda.
+- **La copia:** `insertTemplate` agrega los bloques **antes del primer bloque** de la página con el editor visible (entra
+  en su deshacer); el párrafo de la semilla queda al final y lo que otro dispositivo haya escrito a la vez queda debajo.
+  Después, `template_id` va con un `update` de la cola del árbol (la página ya existe), y el foco al título si está
+  vacío. `copyTemplateDoc` (pasos 1 y 2 de 4.2 para una plantilla que es una página: copia en memoria,
+  `findUnknownContent`, ids nuevos, colapsado remapeado) está escrito y probado con la prueba de la auditoría, pero
+  todavía no lo usa la interfaz: lo usa la entrega 3, que suma el control de `update_seq` y PL10.
+- **`template_id`:** `PAGE_COLUMNS` lo baja, `NewPage` lo puede mandar (`tree.create(…, { templateId })`, para las
+  entregas 2 y 3) y `PagePatch` lo acepta.
+- **Pruebas:** `builtin.test.ts` (forma, idiomas, bloques conocidos, anchos, la versión publicada y la anterior abren
+  cada plantilla sin escribir), `builtin.published.test.ts` (la `y-prosemirror` real de v0.052 a v0.075), `apply.test.ts`
+  (vacía, deshacer, dos dispositivos sin red, y la copia de la auditoría), `sync.test.ts` (la prueba de aceptación con
+  el servidor en memoria: con red, sin red y al volver; la marca de "creada acá") y `templateHost.test.tsx` (la tira, la
+  ventana y el menú en la página de verdad). La vista previa, en `practice.test.tsx`.
+- **Pendiente para Lega:** mirar las tres vistas previas en la computadora y en el iPhone (PL1) y decir qué cambiar.
