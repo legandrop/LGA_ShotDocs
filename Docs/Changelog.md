@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Menciones en comentarios (P.21), entrega 2. Para mencionar a alguien que no veía la página había que ir a *Share*,
+compartirla y volver, y sin abrir la campana no se veía que había menciones. Nueva migración
+`20261016120000_menciones_e2.sql` (`schema_version` 16): `mention_candidates` suma a quienes no ven la página solo
+para el dueño y los admins que pueden compartirla, y `share_for_mention` la comparte con Comentar, solo esa página y
+sin tocar a quien ya la ve; pruebas en rollback y 19 mutantes. En la app, esas personas aparecen en gris bajo *Can't
+see this page* y elegir una pregunta *Share and mention*, por el mismo paso previo que *Share*. Además, un punto en el
+árbol (hueco en la madre plegada) y el número en el título de la pestaña y en el ícono de la app instalada.
+[ Menciones, entrega 2 - compartir desde la mención, el punto del árbol y el número en la pestaña y el ícono ]
+
 v0.121 :
 
 En el set, el reporte de cada día se armaba a mano copiando fecha, número de día, locación y cámara de ayer (P.23,
