@@ -104,7 +104,8 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (entrega 5)". Queda: probar en Safari y el iPhone, y con una exportación de Coda que tenga fotos en tablas de página;
   a decidir, si el alto de la miniatura (96 px) se puede elegir. Para después (auditoría): pegar solo `text/html` de una
   fila con fotos las pierde (O1); una tabla de Google Docs o Excel con imágenes llega sin ellas (O2); la papelera de
-  archivos al borrar una fila con fotos, a probar con la base real (O5).
+  archivos al borrar una fila con fotos, a probar con la base real (O5); ↑ con el cursor después de una foto, en una
+  celda que solo tiene fotos, va a la celda de la izquierda (O4: `onFirstLine` compara con tolerancia `< 2` y da justo 2).
   **Queda:**
   - Probar en Safari y en el iPhone: pegar, soltar, "/Image" con la cámara, la barra con el dedo, la composición
     (sin tecla previa entre dos fotos duplica el primer carácter en Chromium). Medir la decoración de filas con un doc
