@@ -67,7 +67,8 @@
   white-space: nowrap;
 }
 
-.history-narrow {
+.history-narrow,
+.history-back-list {
   display: none;
 }
 
@@ -225,5 +226,24 @@
 
   .history-screen.pane-version .history-list {
     display: none;
+  }
+
+  /* En la versión, volver es a la lista. */
+  .history-screen.pane-version .history-back-page {
+    display: none;
+  }
+
+  .history-screen.pane-version .history-back-list {
+    display: inline;
+  }
+
+  /* En la versión, la barra dice de cuándo es (el título ya se sabe). */
+  .history-screen.pane-version .history-heading {
+    display: none;
+  }
+
+  .history-when {
+    color: var(--text);
+    font-weight: 600;
   }
 }

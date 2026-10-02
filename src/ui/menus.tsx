@@ -211,7 +211,7 @@ export function PageMenu(props: {
       {props.onHistory && (
         <button
           role="menuitem"
-          data-tip={tr('pageMenu.historyTip', { shortcut: shortcutLabel('history') })}
+          data-tip={shortcutLabel('history')}
           onClick={() => {
             props.onClose();
             props.onHistory?.();

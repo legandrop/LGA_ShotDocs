@@ -16,7 +16,6 @@ export const menus = {
   },
   'pageMenu.collapseAll': { en: "Collapse all", es: "Colapsar todo" },
   'pageMenu.history': { en: "Version history", es: "Historial de versiones" },
-  'pageMenu.historyTip': { en: "{shortcut}", es: "{shortcut}" },
   'pageMenu.expandAll': { en: "Expand all", es: "Abrir todo" },
   'pageMenu.printTip': {
     en: "Opens the print dialog with this page size.\nChoose **Save as PDF** to export.",

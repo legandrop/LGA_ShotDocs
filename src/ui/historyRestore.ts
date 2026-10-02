@@ -48,6 +48,84 @@ export function versionNode(version: Y.Doc, schema: Schema): { node: PMNode | nu
   }
 }
 
+/** Los pares (i, j) de bloques iguales que se conservan, en orden (la subsecuencia común más larga). */
+function commonBlocks(a: readonly PMNode[], b: readonly PMNode[]): [number, number][] {
+  // Lo igual al principio y al final, sin cuenta; la tabla, solo para el medio.
+  let start = 0;
+  while (start < a.length && start < b.length && a[start].eq(b[start])) start++;
+  let endA = a.length;
+  let endB = b.length;
+  while (endA > start && endB > start && a[endA - 1].eq(b[endB - 1])) {
+    endA--;
+    endB--;
+  }
+  const pairs: [number, number][] = [];
+  for (let i = 0; i < start; i++) pairs.push([i, i]);
+  const n = endA - start;
+  const m = endB - start;
+  if (n > 0 && m > 0 && n * m <= 4_000_000) {
+    const len: Uint32Array[] = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        len[i][j] = a[start + i].eq(b[start + j]) ? len[i + 1][j + 1] + 1 : Math.max(len[i + 1][j], len[i][j + 1]);
+      }
+    }
+    let i = 0;
+    let j = 0;
+    while (i < n && j < m) {
+      if (a[start + i].eq(b[start + j])) {
+        pairs.push([start + i, start + j]);
+        i++;
+        j++;
+      } else if (len[i + 1][j] >= len[i][j + 1]) i++;
+      else j++;
+    }
+  }
+  for (let k = 0; k < a.length - endA; k++) pairs.push([endA + k, endB + k]);
+  return pairs;
+}
+
+/** Un tramo de la página que se reemplaza: los bloques `[from, to)` por `blocks`. */
+export interface RestoreStep {
+  from: number;
+  to: number;
+  blocks: PMNode[];
+}
+
+/**
+ * Los reemplazos que dejan la página como la versión cambiando solo los bloques distintos, del último al primero (así
+ * las posiciones de los anteriores no se corren). Cada uno va en su propia transacción: y-prosemirror, al pasar un
+ * cambio a Yjs, conserva el elemento de cada bloque solo al principio y al final de lo que cambió; con un único
+ * reemplazo de todo, rehacía los bloques iguales que quedaban en el medio (y lo que otra persona escribiera a la vez
+ * en ellos se perdía). `null`: la página no tiene la forma de siempre (un grupo de bloques): se reemplaza todo.
+ */
+export function restoreSteps(current: PMNode, target: PMNode): RestoreStep[] | null {
+  const curGroup = current.childCount === 1 ? current.firstChild : null;
+  const tgtGroup = target.childCount === 1 ? target.firstChild : null;
+  if (!curGroup || !tgtGroup || curGroup.type !== tgtGroup.type) return null;
+  const a: PMNode[] = [];
+  const b: PMNode[] = [];
+  curGroup.forEach((n) => a.push(n));
+  tgtGroup.forEach((n) => b.push(n));
+  // Dónde empieza cada bloque de la página (adentro del grupo, que empieza en 1).
+  const starts: number[] = [];
+  let pos = 1;
+  for (const n of a) {
+    starts.push(pos);
+    pos += n.nodeSize;
+  }
+  starts.push(pos);
+  const steps: RestoreStep[] = [];
+  let prevA = 0;
+  let prevB = 0;
+  for (const [i, j] of [...commonBlocks(a, b), [a.length, b.length] as [number, number]]) {
+    if (i > prevA || j > prevB) steps.push({ from: starts[prevA], to: starts[i], blocks: b.slice(prevB, j) });
+    prevA = i + 1;
+    prevB = j + 1;
+  }
+  return steps.reverse();
+}
+
 interface UndoState {
   undoManager?: Y.UndoManager;
 }
@@ -70,7 +148,10 @@ export function restoreInEditor(
   try {
     // Un paso propio de deshacer: ni se junta con lo escrito antes ni con lo que se escriba después.
     undo?.stopCapturing();
-    view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, node.content).setMeta('addToHistory', true));
+    const steps = restoreSteps(view.state.doc, node);
+    if (!steps) view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, node.content));
+    // Seguidas y sin cortar el deshacer: juntas son un solo paso de Ctrl/⌘+Z.
+    else for (const step of steps) view.dispatch(view.state.tr.replaceWith(step.from, step.to, step.blocks));
     undo?.stopCapturing();
   } catch {
     return { ok: false, reason: 'failed' };

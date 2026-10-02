@@ -247,12 +247,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pantalla de arranque del iPhone.
 - **P.18 Historial de versiones de una página, como el de Google Docs** (Lega, 2026-10-01; era la fase 6): ver quién
   cambió la página y cuándo, cada versión con lo agregado y lo borrado en el color de cada persona, y volver a una
-  versión anterior. **Diseño en `Doc_Historial.md`** (sin implementar): las versiones salen de `page_updates`
-  aplicadas en orden (sin guardar nada nuevo; cada fila ya tiene autor y hora puestos por la base), restaurar es
-  una edición por el editor que se deshace, y la primera entrega es la lista con quién y cuándo, ver una versión y
-  restaurarla. Auditado. Encontró que lo que alguien escribe en algo que otro borra a la vez puede no llegar nunca
-  al servidor (la subida se arma con GC): propone armarla sin GC, como ítem aparte. Tiene cuatro preguntas para
-  Lega (quién lo ve, lo borrado que ya llega a quien ve, la subida sin GC y un ajuste al diseño de compactar).
+  versión anterior. **Diseño en `Doc_Historial.md`** (auditado; las cuatro preguntas, decididas el 2026-10-01): las
+  versiones salen de `page_updates` aplicadas en orden (sin guardar nada nuevo; cada fila ya tiene autor y hora
+  puestos por la base) y restaurar es una edición por el editor que se deshace. **Entrega 1 hecha (v0.0XX):** la lista
+  por sesión con quién y cuándo, ver una versión y restaurarla (Ctrl/⌘+Alt+Shift+H); la migración
+  `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Falta:** aplicarla (con copia
+  de seguridad), las marcas por persona, el texto huérfano con el aviso a quien escribió (necesita la subida sin GC,
+  en otra rama), nombrar versiones, la caché sin red y medir en el iPhone. Aparte, después: que lo borrado no llegue
+  a quien solo ve la página (decisión 2).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

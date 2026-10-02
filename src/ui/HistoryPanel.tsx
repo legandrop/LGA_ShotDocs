@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import type * as Y from 'yjs';
+import * as Y from 'yjs';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/history';
 import { mediaIdsInDoc } from '../media/usage';
@@ -15,6 +15,7 @@ import { closeHistory, requestRestore } from './historyUi';
 import { dismissNotice, notify, notifyWithAction } from './notice';
 import { BlockEditor } from './PageEditor';
 import type { FindEditor } from './FindBar';
+import type { Schema } from '@tiptap/pm/model';
 import { mm, pageFormat, SHEET_MARGIN_MM, sheetSize } from './pageFormat';
 import { findUnknownContent } from './unknownContent';
 import './history.css';
@@ -84,7 +85,8 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
   const [pane, setPane] = useState<'list' | 'version'>('list');
   const [unsynced, setUnsynced] = useState(false);
   const [missing, setMissing] = useState(false);
-  const [shapeOk, setShapeOk] = useState<boolean | null>(null);
+  /** El esquema de ProseMirror del editor de la versión (para la ida y vuelta). */
+  const [pmSchema, setPmSchema] = useState<Schema | null>(null);
   const [confirm, setConfirm] = useState<{ photos: number; others: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -148,20 +150,26 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
 
   // El documento de la versión elegida: en memoria, nunca se guarda ni se sube.
   const version = useMemo<Y.Doc | null>(() => (ready && index >= 0 ? ready.history.version(index) : null), [ready, index]);
+  // Lo que se muestra es una copia: el editor (y-prosemirror) puede tocar el documento que muestra, y la versión tiene
+  // que quedar intacta para comprobarla y restaurarla.
+  const shown = useMemo(() => {
+    if (!version) return null;
+    const copy = new Y.Doc();
+    Y.applyUpdate(copy, Y.encodeStateAsUpdate(version));
+    return copy;
+  }, [version]);
   useEffect(() => () => version?.destroy(), [version]);
+  useEffect(() => () => shown?.destroy(), [shown]);
   const unknown = useMemo(() => (version ? findUnknownContent(version) : null), [version]);
   const tooBig = useMemo(() => (version ? versionBytes(version) > MAX_RESTORE_BYTES : false), [version]);
-  useEffect(() => setShapeOk(null), [version]);
-
-  // La ida y vuelta (Doc_Historial.md, 6.1): con el esquema del editor que muestra la versión.
-  const onPreviewEditor = useCallback(
-    (editor: FindEditor | null) => {
-      const schema = (editor as unknown as { prosemirrorView?: { state: { schema: never } } } | null)?.prosemirrorView?.state.schema;
-      if (!editor || !version || !schema) return;
-      setShapeOk(versionNode(version, schema).complete);
-    },
-    [version],
-  );
+  // La ida y vuelta (Doc_Historial.md, 6.1): con el esquema del editor que muestra la versión (está desde que se
+  // crea, antes de montarse). `null` mientras no se sabe.
+  const onPreviewEditor = useCallback((editor: FindEditor | null) => {
+    const ed = editor as unknown as { pmSchema?: Schema; prosemirrorView?: { state: { schema: Schema } } } | null;
+    const schema = ed?.pmSchema ?? ed?.prosemirrorView?.state.schema;
+    if (schema) setPmSchema(schema);
+  }, []);
+  const shapeOk = useMemo(() => (version && pmSchema ? versionNode(version, pmSchema).complete : null), [version, pmSchema]);
 
   // Las personas, con su nombre (el correo; "Vos") y su color (por orden de aparición en el historial de la página).
   const people = useMemo(() => ready?.history.people() ?? [], [ready]);
@@ -302,10 +310,11 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
             else closeHistory();
           }}
         >
-          ← {tr('history.back')}
+          ← <span className="history-back-page">{tr('history.back')}</span>
+          <span className="history-back-list">{tr('history.versions')}</span>
         </button>
         <h1 className="history-title">
-          {tr('history.title')}
+          <span className="history-heading">{tr('history.title')}</span>
           {session && <span className="history-when">{whenLabel(session.end, lang)}</span>}
         </h1>
         {restoreButton}
@@ -357,7 +366,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
               <ServicesContext.Provider value={previewServices}>
                 <BlockEditor
                   key={`${session?.seq}:${tr.lang}`}
-                  doc={version}
+                  doc={shown!}
                   collapse={new Map()}
                   pageId={pageId}
                   editable={false}

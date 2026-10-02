@@ -1,9 +1,11 @@
 # Historial de versiones de una página (P.18)
 
-**Estado: diseño, sin implementar** (pedido de Lega del 2026-10-01; en el plan figuraba como fase 6). Toca la
-regla de no perder datos (restaurar es una edición) y los permisos (el historial muestra lo borrado), así que cada
-entrega va con sus pruebas y su auditoría. La migración de abajo es un borrador: nada está aplicado. **Auditado:**
-lo que encontró la auditoría independiente del diseño está corregido en el texto (resumen en la última sección).
+**Estado: entrega 1 implementada (v0.0XX; ver "Cómo quedó (entrega 1)", al final, que manda sobre el diseño en lo que
+toca); la migración `20261007120000_historial.sql` está escrita y probada en `begin … rollback` contra la base, SIN
+aplicar.** Pedido de Lega del 2026-10-01 (en el plan figuraba como fase 6). Toca la regla de no perder datos
+(restaurar es una edición) y los permisos (el historial muestra lo borrado), así que cada entrega va con sus pruebas y
+su auditoría. **Diseño auditado:** lo que encontró la auditoría independiente del diseño está corregido en el texto
+("Correcciones de la auditoría"). Las cuatro preguntas, **decididas el 2026-10-01** con la recomendación (sección 15).
 
 ## En corto
 
@@ -662,7 +664,17 @@ notify pgrst, 'reload schema';
 
 Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos y RLS, no perder datos, docs).
 
-## 15. Preguntas para Lega
+## 15. Preguntas para Lega (decididas el 2026-10-01)
+
+Lega delegó la decisión: las cuatro van con la recomendación.
+
+- **1, decidido:** lo ven quien puede editar la página, el dueño y los admins; los invitados no.
+- **2, decidido:** lo borrado que ya llega a quien ve la página se encara aparte, después de la primera entrega.
+- **3, decidido:** sí a la subida sin GC; la hace otra tanda (rama `lega/subida-sin-gc`).
+- **4, decidido:** sí a que compactar conserve lo borrado: `Doc_Compactar.md` (rama `lega/compactar`) ya arma el
+  snapshot aplicando las filas en orden.
+
+Lo que se preguntó:
 
 1. **¿Quién ve el historial?** Recomendación: **quien puede editar la página** (nivel 3 o más), el dueño y los
    admins; **los invitados no**, aunque tengan Editar, hasta que lo pidas. Es como Google Docs y no muestra a un
@@ -718,3 +730,87 @@ migraciones) encontró:
 | Links internos: no hay títulos escondidos (el link es texto) | Menor | Corregida la redacción (regla 4 y 7) |
 | La semilla son dos autores de Yjs fijos compartidos | Menor | 4.2 |
 | El **Undo** del aviso podía deshacer otra cosa; permisos que cambian con el historial abierto | Menor | El aviso desaparece con la próxima edición; los permisos se piden justo antes de restaurar (1.4) |
+
+## Cómo quedó (entrega 1)
+
+Manda sobre lo de arriba en lo que toca. **Quién y cuándo, ver una versión y restaurarla.**
+
+**Dónde se abre.** En el menú de la página, *Version history* (debajo de *Export PDF / Print*; el tooltip dice solo el
+atajo), y con **Ctrl+Alt+Shift+H** (⌘⌥⇧H en la Mac, nunca Ctrl; `isHistoryShortcut` en `src/ui/historyUi.ts`, en el
+registro de atajos). Solo lo ve quien puede editar la página y no es invitado, con la base en la versión 11
+(`canSeeHistory`). El mismo atajo, o Escape, lo cierra; cambiar de página lo cierra.
+
+**La pantalla** (`src/ui/HistoryPanel.tsx`, se baja aparte con sus textos en `src/i18n/lazy/history.ts` y su CSS
+`src/ui/history.css`): a pantalla entera, encima de la página (que sigue montada: restaurar la usa). A la derecha la
+lista por día (*Today*, *Yesterday*, el día de la semana, la fecha) y sesión, la más nueva arriba como *Current
+version*, con la hora local (el tooltip dice que es la de llegada al servidor) y quiénes cambiaron algo, con un punto
+de color (paleta de 8, clara y oscura) y su correo, *You* o *Former member*. A la izquierda la versión elegida con el
+editor de verdad en solo lectura, con el tamaño de hoja de hoy. En el teléfono, la lista a pantalla entera; tocar una
+versión la abre, y *Back to the page* vuelve a la lista. Sin red, *Version history needs a connection* (y reintenta
+sola al volver la red); sin permiso, *You can't see the history of this page*; en la papelera, que se restaure antes.
+Avisos: cambios de la página sin subir en este dispositivo (no están en el historial y no dejan restaurar), filas que
+esta versión no puede leer, y una versión que no se puede mostrar entera. Copiar: elegir y Ctrl/⌘+C, como en la página.
+
+**El núcleo** (`src/sync/history.ts`): `PageHistory` aplica las filas en orden en un `Y.Doc` sin GC (una fila ilegible
+se saltea y se cuenta), los metadatos de cada fila, los dueños de cada tramo (lo agregado y lo borrado), las sesiones
+(corte de 30 minutos; una sin cambios en el contenido se junta con la anterior, y una fila que no trae nada nuevo del
+contenido no suma autores) y los snapshots solo al final de cada sesión. `version(i)` arma la versión en memoria, con la
+estructura reparada (solo ahí) y sin el mapa de colapsar. `loadPageHistory` baja de a 500 (50, 5, 1 si un lote vence).
+Todo en el hilo principal: el Worker queda para la entrega 2 (con 10 000 subidas son unos 270 ms en la PC).
+
+**Ver una versión sin escribir nada** (`src/ui/historyServices.ts`): como la página de práctica, el `BlockEditor` va
+adentro de un `ServicesContext` con los servicios pisados: la cola de fotos ve (miniaturas, carrete) pero no escribe
+(`ensureLinks` y lo demás no hacen nada: una foto de una versión vieja nunca se vuelve a colgar de la página), los demás
+solo leen, sin comentarios, sin base local (colapsar queda en memoria). El editor de la versión lleva `preview`: no se
+anota como el editor de la página (colapsar desde el menú, los bloques de los comentarios) y no muestra el margen de
+comentarios. Muestra una **copia** de la versión: y-prosemirror puede tocar el documento que muestra.
+
+**Restaurar** (`src/ui/historyRestore.ts`, el editor de la página se anota con `registerRestoreTarget` mientras se
+puede editar):
+
+1. *Restore this version* (no está en la versión actual) se apaga, con el motivo en el tooltip, sin red, sin permiso de
+   editar, con la app por debajo de la mínima, con algo que esta versión no conoce, si no pasa la ida y vuelta, si pesa
+   más de 4 MB, con cambios de la página sin subir o si falta bajar algo.
+2. La confirmación dice que no se pierde nada, cuenta las fotos o archivos de la versión mandados a la papelera de
+   Drive (`fetchMediaFiles`, `purged_at` o `drive_trashed_at`) y avisa si otra persona cambió la página en los últimos
+   2 minutos.
+3. Al confirmar: sincroniza, vuelve a comprobar (red, nada sin subir, nada por bajar, los permisos recién bajados, la
+   versión mínima) y se lo pide al editor de la página.
+4. El editor arma el nodo de la versión sobre una copia y compara la forma (ids de los bloques, texto y nodos; la marca
+   de huecos estables de las fotos en línea no cuenta) con la de Yjs: si no coincide, no restaura. **Cambio respecto
+   del diseño:** no reemplaza todo de una vez. Busca los bloques iguales (la subsecuencia común más larga, sobre los
+   bloques de arriba) y reemplaza solo los tramos distintos, **cada uno en su propia transacción**, seguidas y sin
+   cortar el deshacer (un solo Ctrl/⌘+Z). Con un único reemplazo, y-prosemirror conservaba el elemento de Yjs solo de
+   los bloques del principio y del final, y rehacía los iguales del medio (lo que otro escribiera a la vez en ellos se
+   perdía): lo mostró la prueba con fotos en línea.
+5. Se cierra el historial y queda el aviso *Restored the version from …* con **Undo**, que deshace solo la
+   restauración (se va con la próxima edición). Sube como cualquier edición.
+
+**La migración** (`supabase/migrations/20261007120000_historial.sql`, sin aplicar): `page_history`,
+`page_history_authors`, `private.check_history` (nivel 3, no invitado, ni la página ni una de arriba en la papelera),
+`schema_version` 11. **Cambio respecto del diseño:** en vez de sacar todo el `select` de `page_updates`, `authenticated`
+lee solo las columnas del contenido (`id, page_id, seq, client_update_id, update`): quién y cuándo ya no se leen directo,
+y las pruebas de permisos de antes (que cuentan filas como `authenticated`) siguen pasando. Probada contra la base real
+dentro de `begin … rollback` con la Management API: `historial_permisos.sql` da `ok`, las otras 14 pruebas de
+`supabase/tests/` también con la migración puesta, cuatro mutantes de la migración (nivel 1, invitados, el `select`
+entero, la papelera) hacen fallar la prueba, y después no quedó nada (la base sigue en `schema_version` 10, sin
+`page_history`). **Para aplicarla:** copia de seguridad, `npm run db:migrate`, y publicar esta versión.
+
+**El servidor en memoria** (`src/sync/testing.ts`): cada fila con `id`, `createdBy` y `createdAt` (con `server.now`),
+`pageHistory` y `pageHistoryAuthors` con las mismas reglas, y `historyMissing` para una base sin la función.
+
+**Pruebas:** `src/sync/history.test.ts` (9: versiones al azar con dos personas y subidas enteras con GC, contra lo que
+tenía el servidor en cada punto; la mutante de `mergeUpdates`; una fila ilegible; autores de lo agregado y lo borrado;
+sesiones y el colapsar; dos raíces; bajar de a lotes con un lote que vence; permisos), `src/ui/historyRestore.test.ts`
+(8, con el editor real: ids, el mismo elemento de Yjs para lo que no cambió, deshacer en un paso, el Undo que no deshace
+otra cosa, la versión publicada abre lo restaurado, una versión con un bloque imposible no se restaura, solo lectura no
+restaura, otro editando a la vez) y `src/ui/historyPanel.test.tsx` (7: quién lo ve, la lista, sin red, Ver e invitado,
+lo sin subir, restaurar con el aviso y el Undo, y el editor que no está). Más el registro de atajos, la ayuda y el
+diccionario.
+
+**Ayuda:** la entrada *Version history* en la sección *Trash and history* (que se llamaba *Trash*), con el atajo y
+`since` en `0.0XX`.
+
+**Lo que falta (entregas 2 y 3):** los cambios marcados por persona (*Show changes*), el texto huérfano y el aviso en el
+dispositivo de quien escribió (con la subida sin GC de la otra rama), el Worker y la diferencia solo de lo tocado,
+nombrar versiones (`page_versions`), *Restored from…* en la lista, la caché y el historial sin red, y medir en el iPhone.

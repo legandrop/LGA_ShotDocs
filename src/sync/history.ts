@@ -277,6 +277,9 @@ export interface ContentShape {
   nodes: number;
 }
 
+/** La marca del renglón de las fotos en línea (`STABLE_GAPS_MARKER` de ui/unknownContent.ts; una prueba lo compara). */
+export const STABLE_GAPS_MARKER = 'lgaStableGaps';
+
 /** La forma del contenido de un documento de Yjs. */
 export function yShape(doc: Y.Doc): ContentShape {
   const ids: string[] = [];
@@ -287,6 +290,9 @@ export function yShape(doc: Y.Doc): ContentShape {
       if (child instanceof Y.XmlText) {
         for (const op of child.toDelta() as { insert: unknown }[]) if (typeof op.insert === 'string') text += op.insert.length;
       } else if (child instanceof Y.XmlElement) {
+        // La marca de los huecos estables de las fotos en línea no es un nodo del editor (la escribe el parche de
+        // y-prosemirror; Doc_Fotos_En_Linea.md).
+        if (child.nodeName === STABLE_GAPS_MARKER) continue;
         nodes++;
         if (child.nodeName === 'blockContainer') ids.push(String(child.getAttribute('id') ?? ''));
         walk(child);

@@ -2,7 +2,13 @@
 
 v0.0XX :
 
-Historial de versiones de una página (P.18), entrega 1: en preparación (diseño en `Doc_Historial.md`).
+No había forma de ver quién cambió una página ni de volver atrás (P.18). Diseño en `Doc_Historial.md` (auditado, con las
+decisiones de Lega) y entrega 1: *Version history* en el menú de la página (Ctrl/⌘+Alt+Shift+H) lista las versiones
+por sesión con quién y cuándo, muestra cada una con el editor en solo lectura y la restaura. Las versiones salen de
+`page_updates` aplicadas en orden, sin guardar nada nuevo (con `mergeUpdates` se perdía texto borrado). Restaurar es
+una edición por el editor, de a tramos para no rehacer los bloques iguales: conserva los ids, se deshace con **Undo**,
+pide la página sincronizada y no corre si la versión no se puede armar entera. Lo ven quien edita y no es invitado;
+la migración `20261007120000_historial.sql` (sin aplicar) además oculta autor y hora de la tabla.
 [ Historial - quién y cuándo, ver una versión y restaurarla ]
 
 v0.092 :
