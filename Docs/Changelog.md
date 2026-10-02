@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.116 :
+
+Ver las anotaciones de las fotos (P.20, entregas 0 y 1 de `Doc_Anotar_Fotos.md`). No había dónde guardarlas ni cómo
+mostrarlas. Viven en un mapa del documento de la página (`photoMarkup`), afuera del contenido, con una clave por forma:
+las versiones publicadas lo conservan aunque saquen la foto, quien solo ve recibe por la base limpia solo lo vivo, el
+historial lo trae y dos anotando sin red no pierden nada. Se dibujan en un SVG encima de la foto en línea, la de una
+celda, la foto-bloque, el carrete (con *Hide annotations*) y el PDF. El mapa se lee como entrada no confiable; tras la
+auditoría, cortar un texto en renglones es lineal (medía `renglón + palabra` en cada palabra: 200 textos largos
+congelaban la página 6 s por cambio, ahora 12 ms), con topes, y no se dibuja sobre la tarjeta de una foto sin copia.
+Todavía no se puede anotar (entrega 2).
+[ Anotar fotos - entregas 0 y 1: el mapa de anotaciones, sus pruebas y verlas en la página, la celda, el carrete y el PDF ]
+
 v0.115 :
 
 Exportar (P.22), entrega 0. El PDF y el zip de una rama necesitan dibujar cada página fuera de la pantalla con el

@@ -106,6 +106,8 @@ const FOLDER_ZIP = '0.105';
 const CAMERA = '0.110';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
+/** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
+const PHOTO_MARKUP = '0.116';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -240,6 +242,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.carrete.text',
     keys: { prev: 'carretePrev', next: 'carreteNext', ends: 'carreteEnds', close: 'carreteClose' },
     since: BEFORE_HELP,
+  },
+  {
+    id: 'photosMarkup',
+    section: 'photos',
+    title: 'help.photosMarkup.title',
+    text: 'help.photosMarkup.text',
+    words: ['annotate', 'annotations', 'anotar', 'anotaciones', 'flecha', 'arrow', 'dibujo', 'drawing', 'framerev', 'hide', 'ocultar'],
+    since: PHOTO_MARKUP,
   },
   { id: 'photosPhone', section: 'photos', title: 'help.photosPhone.title', text: 'help.photosPhone.text', since: BEFORE_HELP },
   {
