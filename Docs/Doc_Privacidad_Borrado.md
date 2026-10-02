@@ -1,7 +1,9 @@
 # Privacidad de lo borrado (D14)
 
-**Estado: diseño, sin código ni migración aplicada** (roadmap B.18; 2026-10-02, revisado el mismo día con la
-auditoría independiente: ver "Correcciones de la auditoría", al final). Toca los permisos (quién recibe qué bytes de
+**Estado: entregas 0 y 1 implementadas (v0.0XX), con la migración `20261010120000_privacidad_borrado.sql` sin aplicar
+y el interruptor apagado** (roadmap B.18; diseño del 2026-10-02, revisado el mismo día con la auditoría independiente:
+ver "Correcciones de la auditoría"; lo implementado y lo que cambió al implementar, en "Cómo quedó (entregas 0 y 1)",
+al final). Toca los permisos (quién recibe qué bytes de
 una página) y el contrato de datos (qué viaja en `page_updates`), así que cada entrega va con sus pruebas de permisos y
 su auditoría. Lo medido está en prototipos fuera del repo (sección "Cómo se midió").
 
@@ -393,6 +395,7 @@ una página compartida pase de 100 KB y se edite mucho todos los días con lecto
 | Páginas en la papelera | `user_page_level` no mira la papelera de páginas (hallazgo de la auditoría) | Arreglado en v0.102: Ver, Comentar e invitados ya no leen páginas en la papelera |
 | Que quien edita no lo vea | Es el historial (D13) | Al compartir con Editar a un miembro, ve todo lo borrado |
 | Que un editor malintencionado no muestre otra cosa | Puede subir una base que no corresponde | Lo mismo que puede hacer editando; la próxima base de otro editor la reemplaza |
+| Un borrado que **otro** editor todavía tiene en su cola al compartir | Compartir sube solo lo pendiente de quien comparte (R1); nadie sabe lo que otro dispositivo no subió | Si la nota estaba viva en el servidor al compartir, es lo que se compartió; desaparece en la base siguiente a que ese editor suba (al implementar, prueba al azar) |
 | Lo que ya está en la base y en las copias | Las filas no se borran nunca (D4) | Lo tiene el dueño de la base; la regla es sobre quién lo recibe |
 
 **En la app** (textos en inglés, con su traducción en `src/i18n/`):
@@ -635,6 +638,10 @@ Antes de cerrar cada entrega, la auditoría de siempre (funcionalidad, permisos 
   parámetro de `clean_work`; se ajusta con lo que mida la entrega 2.
 - **Compartir, invitar y mover suben antes lo pendiente** de las páginas alcanzadas (R1); si no se confirma, avisan.
 - **Al dejar de ver lo borrado, el dispositivo rearma lo suyo** cuando no tiene nada sin subir (entrega 3).
+- **Al implementar (ejecutor, 2026-10-02; ver "Cómo quedó"):** la base se arma de cero cada vez (no incremental);
+  `clean_work` se pregunta en cada ciclo mientras hubo actividad en los últimos 5 minutos y cada 2 minutos si no; mover
+  sube lo pendiente desde la cola del árbol, sin ventana; un admin con solo Ver sigue viendo la papelera de archivos
+  pero no las miniaturas ni los originales de lo sacado; la base reemplaza lo guardado solo si lo cubre entero.
 
 ## 13. Pregunta para Lega
 
@@ -707,3 +714,73 @@ guardó en el repo contenido de la base.
 - **Lo que no se midió:** el iPhone; el editor real (BlockNote en jsdom) sobre las bases; la migración contra la base
   (borrador, con partes en `...`: no se corrió ni en `begin … rollback`); `has_plain_readers` con muchos miembros; el
   egress real de un cliente.
+
+## Cómo quedó (entregas 0 y 1)
+
+Implementado en v0.0XX. La migración `20261010120000_privacidad_borrado.sql` está **sin aplicar** (probada en
+`begin … rollback` contra la base real, encima de la papelera para lectores ya aplicada) y deja el interruptor
+**apagado**: con él apagado todo baja como antes; desde que se aplica valen la columna `update` cerrada, los permisos de
+los archivos sacados y la papelera de archivos sin invitados.
+
+**La base** (`supabase/migrations/20261010120000_privacidad_borrado.sql`): `private.sees_deleted` (nivel 3 o más y no
+invitado), `private.has_plain_readers`, la tabla `page_clean_bases` (sin permisos: todo por funciones),
+`pages.clean_seq`, `clean_at` y `clean_reset_seq` (se leen con el árbol porque `pages` tiene `grant select` de tabla;
+no se escriben desde la API), `workspace_settings.clean_min_version` (el interruptor), `private.current_clean_base`,
+`pull_page_updates` con la rama de quien no ve lo borrado (misma firma), `clean_work(p_app_version, p_pages,
+p_urgent)` con la cadencia de 4.1, `push_clean_base` (respuestas `ok`, `clean_old`, `clean_stale`; errores
+`page_not_found`, `not_allowed`, `clean_off`, `app_outdated`, `clean_invalid`, `state_size_invalid`,
+`sha256_mismatch`, `clean_row_mismatch`), el reinicio en `share`, `create_invitation` y el trigger nuevo
+`pages_clean_move` (después de cambiar el padre, si la página queda con lectores), y `can_view_file`, `file_level`, la
+política de `page_files` y `can_see_file_trash` con la regla de los usos sacados. `schema_version` sube a 12.
+
+**La app:** `src/sync/clean.ts` (armar la base, las dos comprobaciones, "cubre lo guardado", "al día" con `clean_seq`
+y "en preparación"); `PageTree.serverSeq` y `contentGap` (los usan el ciclo, `isMissingContent`, *Available offline*, la
+búsqueda y el reemplazo del proyecto); `SyncEngine.buildCleanBases` al final del ciclo (sus errores no lo cortan),
+`appHidden` (al pasar a segundo plano), `uploadPagesFirst` y `prepareBases`; `PageDocs.buildCleanBase` (lee filas,
+estado y marca en una transacción y arma solo si el dispositivo tiene exactamente lo del servidor) y el reemplazo de
+lo guardado en `applyRemote`; `remote.ts` (`cleanWork`, `pushCleanBase`, `clean_seq` según `schema_version` con
+reintento sin ella, `cleanMinVersion` de los ajustes); las ventanas de compartir e invitar (`src/ui/shareGate.tsx`: la
+línea, Retry / Share anyway y *Preparing N of M pages for …*); la página "en preparación" (`editor.preparing`); la
+entrada de la ayuda *Who can see what was deleted*; el servidor en memoria (`src/sync/testing.ts`) con las mismas
+reglas y mutantes (`cleanMutant`).
+
+**Pruebas:** `supabase/tests/privacidad_borrado_permisos.sql` (apagado y prendido, quién baja qué, la columna, la forma
+de `push_clean_base` con cada rechazo, `clean_work` y su cadencia, compartir, invitar y mover, la copia restaurada,
+`has_plain_readers`, los archivos y la papelera de archivos, el proyecto borrado; 18 de 18 mutantes de la migración la
+hacen fallar); las 18 pruebas de `supabase/tests/` pasan con la migración (cambiaron, a propósito, tres expectativas de
+`historial_permisos.sql` y `papelera_archivos_permisos.sql`: la columna `update` y los archivos sacados para quien
+solo ve). `src/sync/clean.test.ts` (prueba 1: 26 casos con el motor de verdad, incluida la versión publicada v0.100
+copiada en `src/sync/fixtures/v100/docs.ts`, y la corrida al azar de 20 semillas × 80 pasos sin fugas, con las mutantes
+`raw` y `nogc` que dan fugas y `noreset` y `noshare` en un caso fijo); `src/ui/cleanEditor.test.ts` (prueba 2, editor
+real, también con el esquema anterior); `src/ui/team.test.tsx` (la ventana de compartir). La prueba 7 (de punta a
+punta con usuarios de verdad) está escrita para la carpeta privada de pruebas y no se corrió: pide usuarios reales.
+
+**Lo que cambió al implementar** (decisiones del ejecutor; el diseño de arriba manda en lo demás):
+
+- **La base se arma de cero cada vez**, no incremental: no hay un documento más que mantener al día con la compactación
+  y los reemplazos; el costo medido es de milisegundos (73 ms la de 10 000 subidas) y se arma como mucho cada 20 s × f.
+- **Cuándo se pregunta `clean_work`:** en cada ciclo mientras el dispositivo subió o bajó algo en los últimos
+  5 minutos, y si no cada 2 minutos (preguntar solo "si subió o bajó algo en este ciclo" estiraba la pausa de 20 s a
+  2 minutos). `clean_work` junta primero las páginas que alcanza algún permiso de lector: sin ninguno (hoy), no mira
+  ninguna página.
+- **Mover** no tiene ventana: es un cambio de la cola del árbol que se puede hacer sin red. El motor sube lo pendiente
+  de la página y su rama justo antes de mandar el movimiento; sin red, el movimiento espera en la cola, en orden.
+- **Reiniciar con una base que ya llega a `update_seq`** la deja vigente (es la página tal como se comparte) y
+  `push_clean_base` corrige `clean_seq` si quedó en 0 (si no, la página quedaba "en preparación" para siempre).
+- **La base reemplaza lo guardado** solo sin nada sin subir y si la cubre entera (todo lo de cada autor y todos sus
+  borrados, leída completa): aunque el servidor mandara una fila en vez de una base, nada visible se pierde.
+- **"En preparación"** es: recibe bases, la página tiene contenido, no hay base y el dispositivo no tiene nada. Con algo
+  guardado (una base anterior a un reinicio) la página sigue abierta con lo que tiene.
+- **Un admin con solo Ver** sigue viendo la papelera de archivos (nombres, para mandar a Drive) pero ya no las
+  miniaturas ni los originales de lo sacado: la regla de los archivos es la del historial.
+- **`private.sees_deleted` se puede ejecutar como `authenticated`** (la usa la política de `page_files`).
+- **El borrado en la cola de otro editor** al compartir no se cubre (sección 6).
+
+**Para prender el interruptor** (antes de invitar al primer cliente de verdad): aplicar la migración (con copia de
+seguridad); que el script de restaurar del repo de copias vacíe `page_clean_bases` y deje `clean_seq` en 0 y
+`clean_reset_seq` en el `update_seq` restaurado; publicar esta versión y subir `min_app_version` a ella; correr la prueba
+7; y recién ahí `update public.workspace_settings set clean_min_version = <esta versión> where id`.
+
+**Queda para después:** la entrega 2 (medir), la 3 (rearmar lo guardado al dejar de ver lo borrado), la 4 (deltas);
+`pull_page_content` y `pull_page_snapshot` de `Doc_Compactar.md` tienen que pedir `sees_deleted` cuando se implementen;
+las imágenes viejas `sdfile://`; medir en el iPhone (prueba 6).

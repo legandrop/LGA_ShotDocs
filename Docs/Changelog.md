@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Lo borrado de una página les llegaba con las filas a quien solo ve, comenta o es invitado, y las fotos sacadas se seguían
+abriendo (D14). Entregas 0 y 1 de `Doc_Privacidad_Borrado.md`: con el interruptor `clean_min_version` prendido, quien
+no ve lo borrado baja solo la última base limpia (la página con lo borrado como hueco), que arma el dispositivo de un
+editor a los 20 s de pausa, cada 2 minutos escribiendo y al pasar a segundo plano; sin base, la página dice que está en
+preparación. Compartir, invitar y mover suben antes lo pendiente y reinician la base. La migración
+`20261010120000_privacidad_borrado.sql` (sin aplicar) deja el interruptor apagado y ya cierra la columna `update`, los
+archivos sacados y la papelera de archivos para invitados. Línea al compartir y ayuda nuevas.
+[ Privacidad de lo borrado - quien no edita baja solo la base limpia, con el interruptor apagado ]
+
 v0.102 :
 
 Quien solo podía ver o comentar una rama, y los invitados, leían enteras las páginas mandadas a la papelera dentro de
