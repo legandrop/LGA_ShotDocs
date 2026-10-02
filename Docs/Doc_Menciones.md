@@ -1,6 +1,8 @@
 # Menciones en comentarios: «@persona»
 
-**Estado: diseño, sin código ni migración** (roadmap P.21; pedido de Lega del 2026-10-02). Se diseñó contra `main`
+**Estado: entrega 1 programada, migración sin aplicar** (`20261015120000_menciones.sql`, `schema_version` 15; ver
+«Cómo quedó la entrega 1», abajo). Las entregas 2 y 3 siguen en diseño. Roadmap P.21; pedido de Lega del 2026-10-02.
+El diseño de abajo es el de partida: Se diseñó contra `main`
 v0.108, con la base en `schema_version` 13 y `min_app_version` 0.104. Toca permisos y la privacidad de quién ve a
 quién: cada entrega va con sus pruebas de permisos (casos negativos y mutantes) y su auditoría independiente. Las
 decisiones propuestas van numeradas ME1 a ME10 (sección 10); el número final lo pone quien las publique. **Auditado**
@@ -30,6 +32,35 @@ auditoría», al final. **Va después del link público** (su migración sube a 
   sigue sin ninguna clave de la base.
 - **Entregas:** 1 (base, `@` y lista, la campana, sin red, Coda), 2 (compartir desde la mención, marcas en el árbol y
   en el ícono de la app), 3 (correo, cuando Lega cargue la clave de Resend).
+
+## Cómo quedó la entrega 1
+
+- **La migración** `supabase/migrations/20261015120000_menciones.sql` es el borrador de la sección 7 con lo que faltaba:
+  `list_comments` sobre el cuerpo del link público con `mentions` al final (nulo si el comentario se borró) y
+  `comment_authors` con las mencionadas en comentarios sin borrar. Sube `schema_version` a 15. El nombre cambió
+  respecto del borrador (`20261013…` → `20261015…`) porque va después de `20261014120000_asistente_politica.sql`.
+- **Las pruebas de permisos** (`supabase/tests/menciones_permisos.sql`) cubren los 18 casos de la sección 8.1 con 10
+  cuentas falsas creadas dentro de la transacción. Corridas contra la base real dentro de `begin … rollback` (nunca con
+  `db:test`), con 26 mutantes de la migración: los 26 hacen caer la prueba.
+- **La app** detecta la base con `MENTIONS_SCHEMA_VERSION = 15` (`src/sync/comments.ts`): con la base en 14, el `@` es
+  texto, no hay lista ni campana y no sale ninguna operación nueva. La cola suma la operación `mentions` (en la misma
+  transacción que el alta o la edición, con su copia en `meta` `mentions:<id>` y su recuperación al abrir); las de un
+  alta rechazada esperan con ella; `comment_not_found`, `comment_deleted` y una base sin la función las descartan en
+  silencio. A quién no avisó la base queda en `meta` `unnotified:<id>` y solo lo ve el autor.
+- **La campana** es `src/sync/mentions.ts` (`MentionsInbox`): pregunta al abrir, cada 60 s con la ventana a la vista,
+  al volver a la ventana o a la red y después de subir un comentario propio; concilia con `mentions_index` cuando el
+  número no coincide y al abrirla; las leídas van primero a `meta` `inbox:read` y no cuentan como cambios sin subir. La
+  lista del `@` se guarda en `meta` `mentionCandidates:<página>` y se vuelve a pedir cada 5 minutos; sin lista, los
+  autores conocidos de la página. Con un link público no se arma (ME7).
+- **La interfaz**: `src/ui/MentionsBell.tsx` (la campana y su panel; en el teléfono, una hoja abajo),
+  `src/ui/mentionText.ts` (dónde se escribe una mención, cuáles siguen escritas, el pintado y las de Coda) y el campo de
+  `CommentsPanel.tsx` (la lista con ↑ ↓ Enter Tab Esc, en el registro de atajos como `mentionPick` y `mentionClose`; la
+  copia del texto detrás del cuadro pinta las elegidas). Abrir una mención de otra página pasa el pedido con su página
+  (`showComments(target, pageId)`): al salir de la página de antes no se borra.
+- **Lo que no se hizo:** «Mark as unread» (fuera de la entrega 1, como dice 2.3); avisar de otros workspaces sin
+  abrirlos (entrega 3). ME10 sigue con lo seguro (un miembro ve a los clientes que ya comentaron).
+- **No hace falta subir `min_app_version`:** el texto no cambia de forma y una versión vieja que toma la cola pierde
+  solo la operación `mentions`, que la nueva recupera de `meta`.
 
 ## Reglas que no se rompen
 
@@ -294,7 +325,7 @@ nuevo enseguida. Avisar de otros workspaces sin abrirlos queda para el correo (e
 
 ## 7. Migración (borrador, sin aplicar)
 
-Nombre propuesto: `supabase/migrations/20261013120000_menciones.sql`. **Va después de la del link público** (rama
+Nombre propuesto: `supabase/migrations/20261013120000_menciones.sql` (quedó `20261015120000_menciones.sql`). **Va después de la del link público** (rama
 `lega/link-publico-impl`, que sube `schema_version` a 14 y desde ahí la app ofrece *Anyone with the link*): esta sube a
 **15** y la app usa `MENTIONS_SCHEMA_VERSION = 15`, sin subir `DB_SCHEMA_VERSION`: con la base sin migrar, no muestra la
 campana ni la lista y el `@` es texto. Si las dos compartieran el número, una app nueva prendería la campana sobre una

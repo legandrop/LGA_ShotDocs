@@ -265,6 +265,8 @@ describe('el pintado', () => {
     server.comments.set('c1', { ...base, id: 'c1', body: '@[Juan](superhuman://users/7) listo', author_id: null, imported_from: 'coda', imported_author: 'Pepe', imported_by: owner.remote.userId });
     server.comments.set('c2', { ...base, id: 'c2', body: '@beto desde el link', author_id: null, plink_author: 'Visitante' });
     server.comments.set('c3', { ...base, id: 'c3', body: 'editado por una versión vieja', author_id: ANA });
+    // Aunque la base trajera una mención en lo de un visitante (no puede: ME7), no se pinta.
+    server.mentions.push({ id: 'm2', comment_id: 'c2', page_id: brief, user_id: BETO, mentioned_by: ANA, label: 'beto', created_at: at, updated_at: at, removed_at: null, read_at: null });
     server.mentions.push({ id: 'm3', comment_id: 'c3', page_id: brief, user_id: BETO, mentioned_by: ANA, label: 'beto', created_at: at, updated_at: at, removed_at: null, read_at: null });
     const b = await device(BETO);
     const host = await mount(services(b, BETO), <Panel pageId={brief} />);

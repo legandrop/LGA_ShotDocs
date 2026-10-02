@@ -4115,12 +4115,12 @@ button.link.danger {
 }
 
 @media (max-width: 760px) {
-  /* En el teléfono, una hoja desde abajo (useFloating no la mueve: queda a 8px del borde). */
+  /* En el teléfono, una hoja desde abajo (la posición que pone useFloating no cuenta acá). */
   .mentions-panel {
     top: auto !important;
     left: 8px;
     right: 8px !important;
-    bottom: calc(8px + env(safe-area-inset-bottom));
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
     width: auto;
     max-height: 75vh;
     border-radius: 16px;

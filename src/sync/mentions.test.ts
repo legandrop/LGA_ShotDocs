@@ -326,15 +326,25 @@ describe('la campana', () => {
   });
 
   it('lo que deja de verse sale de la lista sin mostrar el texto (el índice concilia)', async () => {
-    const { server, ana, brief } = await workspace();
-    await ana.comments.add(brief, null, '@beto secreto', null, [beto]);
+    const { server, ana, brief, notes } = await workspace();
+    server.grant(ANA, { pageId: notes }, 'comment');
+    const notesGrant = server.grant(BETO, { pageId: notes }, 'view');
+    await ana.engine.syncNow();
+    await ana.comments.add(notes, null, '@beto secreto', null, [beto]);
+    await ana.engine.syncNow();
+    // Pasa el tiempo y llega otra, más nueva: la vieja ya no entra en el margen de cada pregunta.
+    for (let i = 0; i < 30; i++) server.commentNow();
+    await ana.comments.add(brief, null, '@beto otra', null, [beto]);
     await ana.engine.syncNow();
     const b = await inboxOf(server, BETO);
-    expect(b.mentions.getSnapshot().items).toHaveLength(1);
-    // Le sacan el permiso a Beto: la fila de la mención no cambia, pero el número de la base sí (0 contra 1).
-    server.grants.splice(server.grants.findIndex((g) => g.user_id === BETO), 1);
+    expect(b.mentions.getSnapshot().items).toHaveLength(2);
+    // Le sacan Notes a Beto: la fila de esa mención no cambia, pero el número de la base sí (1 contra 2).
+    server.grants.splice(server.grants.findIndex((g) => g.id === notesGrant), 1);
+    server.commentCalls.length = 0;
     await b.mentions.poll();
-    expect(b.mentions.getSnapshot()).toMatchObject({ unread: 0, items: [] });
+    expect(server.commentCalls).toContain('mentions_index');
+    expect(b.mentions.getSnapshot()).toMatchObject({ unread: 1 });
+    expect(b.mentions.getSnapshot().items.map((m) => m.snippet)).toEqual(['@beto otra']);
   });
 
   it('una mención sacada del comentario llega gone y sale de la lista', async () => {
