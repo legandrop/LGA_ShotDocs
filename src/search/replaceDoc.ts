@@ -341,6 +341,29 @@ type IdJson = { client: number; clock: number } | null | undefined;
 
 const sameId = (x: IdJson, y: IdJson) => (!x && !y) || (!!x && !!y && x.client === y.client && x.clock === y.clock);
 
+/**
+ * Dónde está hoy un carácter: si un deshacer lo borró y lo volvió a poner, es su copia (`redone`, como sigue Yjs las
+ * posiciones relativas). Sin esto, el vecino de un borrado que se borró y se volvió a poner con ⌘Z (la misma letra, a
+ * la vista) contaba como cambiado y el reemplazo no se deshacía.
+ */
+function currentId(doc: Y.Doc, id: IdJson): IdJson {
+  if (!id) return id;
+  try {
+    let next: { client: number; clock: number } | null = id;
+    let out: { client: number; clock: number } = id;
+    for (let guard = 0; next && guard < 10_000; guard++) {
+      const item = Y.getItem(doc.store, Y.createID(next.client, next.clock));
+      if (!(item instanceof Y.Item)) return out;
+      const diff: number = next.clock - item.id.clock;
+      out = { client: next.client, clock: next.clock };
+      next = item.redone ? { client: item.redone.client, clock: item.redone.clock + diff } : null;
+    }
+    return out;
+  } catch {
+    return id;
+  }
+}
+
 export type UndoOutcome = 'undone' | 'changed' | 'notApplied';
 
 interface UndoStep {
@@ -371,7 +394,9 @@ function undoStep(doc: Y.Doc, record: EditRecord): UndoStep {
     // borró).
     const leftNow = a > 0 ? (Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(t, a, -1)) as { item?: IdJson }).item : null;
     const rightNow = b < t.length ? (Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(t, b, 0)) as { item?: IdJson }).item : null;
-    if (!sameId(leftNow, (record.left as { item?: IdJson }).item ?? null) || !sameId(rightNow, (record.right as { item?: IdJson }).item ?? null)) {
+    const leftWas = currentId(doc, (record.left as { item?: IdJson }).item ?? null);
+    const rightWas = currentId(doc, (record.right as { item?: IdJson }).item ?? null);
+    if (!sameId(leftNow, leftWas) || !sameId(rightNow, rightWas)) {
       return { outcome: 'changed' };
     }
   }

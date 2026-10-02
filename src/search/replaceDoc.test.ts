@@ -324,6 +324,20 @@ describe('deshacer con otro dispositivo', () => {
     expect(yt.toString()).toBe('a cd');
   });
 
+  it('un borrado: si el vecino se borró y volvió con un deshacer (una copia de Yjs, la misma letra), se deshace igual', () => {
+    const a = pageDoc([{ parts: ['la cámara roja'] }]);
+    const { records } = replace(a, 'camara', '');
+    const yt = (((a.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText;
+    expect(yt.toString()).toBe('la  roja');
+    // Borrar "a  r" (los dos vecinos adentro) y deshacerlo: vuelven como copias.
+    const um = new Y.UndoManager(yt, { trackedOrigins: new Set(['editor']) });
+    a.transact(() => yt.delete(1, 4), 'editor');
+    um.undo();
+    expect(yt.toString()).toBe('la  roja');
+    expect(undo(a, records)).toEqual({ undone: 1, changed: 0, notApplied: 0 });
+    expect(yt.toString()).toBe('la cámara roja');
+  });
+
   it('el bloque rehecho (cambio de tipo): las anclas quedan en el viejo, no se toca nada', () => {
     const a = pageDoc([{ id: 'x', parts: ['la cámara'] }]);
     const { records } = replace(a, 'camara', 'Z');

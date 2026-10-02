@@ -266,7 +266,7 @@ async function run(seed: number, { blocks = false, withOther = false, replace = 
     for (let guard = 0; guard < 2000 && timeline.peek('P', 'redo'); guard++) await step('redo');
     const afterRedo = pages.map((p) => yText(p.doc));
     const strip = (s: string) => [...s].filter((c) => !OTHER.includes(c)).join('');
-    if (process.env.TIMELINE_DEBUG && afterRedo.some((s, i) => s !== last[i])) console.log(seed, JSON.stringify({ last, afterRedo, afterUndo, initial }, null, 1));
+    if (process.env.TIMELINE_DEBUG && (afterRedo.some((s, i) => s !== last[i]) || afterUndo.some((s, i) => strip(s) !== initial[i]))) console.log(seed, JSON.stringify({ last, afterRedo, afterUndo, initial }, null, 1));
     return {
       undoExact: afterUndo.every((s, i) => strip(s) === initial[i]),
       undoLess: afterUndo.some((s, i) => missing(initial[i], strip(s)).length > 0),
