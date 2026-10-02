@@ -2,9 +2,11 @@ import { createExtension } from '@blocknote/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import { TableMap } from '@tiptap/pm/tables';
 import { photoKey } from './carreteModel';
 import { groupRows } from './imageRows';
 import { PHOTO, photoWidth } from './inlinePhoto';
+import { cellTextEnd } from './inlinePhotoCreate';
 import { onlyPhotosSelected, selectedPhotos } from './inlinePhotoSize';
 
 // Lo que acompaña a la foto en línea en el editor (Docs/Doc_Fotos_En_Linea.md, entrega 1b): las filas, la marca
@@ -239,8 +241,62 @@ function caretAfter(view: EditorView, sel: NodeSelection): void {
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, sel.to)));
 }
 
+// --- ↑ desde el primer renglón de una celda con fotos --------------------------------------------------------
+//
+// Una miniatura hace alto el renglón de la celda (96 px) y el texto queda abajo. ProseMirror decide si ↑ sale del
+// texto mirando si el cursor está arriba de todo, y en ese renglón alto no lo está: dejaba la tecla al navegador, que
+// iba a la celda de la izquierda (auditoría de la entrega 5). Si el cursor está en el primer renglón del texto de una
+// celda que tiene fotos, ↑ va al final del texto de la celda de arriba (la misma columna, con celdas combinadas). En la
+// primera fila sigue lo de siempre.
+
+/** Dónde va ↑ desde `pos` (en una celda): el final del texto de la celda de arriba, o `null` (primera fila, o no es una celda). */
+export function cellAboveEnd(doc: PMNode, pos: number): number | null {
+  const $pos = doc.resolve(pos);
+  for (let d = $pos.depth; d > 2; d--) {
+    const name = $pos.node(d).type.name;
+    if (name !== 'tableCell' && name !== 'tableHeader') continue;
+    const table = $pos.node(d - 2);
+    const tableStart = $pos.start(d - 2);
+    const map = TableMap.get(table);
+    const rect = map.findCell($pos.before(d) - tableStart);
+    if (rect.top === 0) return null;
+    const above = tableStart + map.map[(rect.top - 1) * map.width + rect.left];
+    const cell = doc.nodeAt(above);
+    return cell ? cellTextEnd(cell, above) : null;
+  }
+  return null;
+}
+
+/** El cursor está en el primer renglón visual de su texto (mismo borde de abajo que el principio del texto). */
+function onFirstLine(view: EditorView, pos: number): boolean {
+  const $pos = view.state.doc.resolve(pos);
+  try {
+    return Math.abs(view.coordsAtPos(pos).bottom - view.coordsAtPos($pos.start()).bottom) < 2;
+  } catch {
+    return false;
+  }
+}
+
+export function handleCellArrowUp(view: EditorView, event: KeyboardEvent): boolean {
+  if (event.key !== 'ArrowUp' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false;
+  const sel = view.state.selection;
+  if (!(sel instanceof TextSelection) || !sel.empty) return false;
+  const parent = sel.$head.parent;
+  let photos = false;
+  parent.forEach((child) => {
+    if (child.type.name === PHOTO) photos = true;
+  });
+  if (!photos || !onFirstLine(view, sel.head)) return false;
+  const target = cellAboveEnd(view.state.doc, sel.head);
+  if (target === null) return false;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, target)).scrollIntoView());
+  event.preventDefault();
+  return true;
+}
+
 export function handlePhotoKey(view: EditorView, event: KeyboardEvent): boolean {
   if (!view.editable) return false;
+  if (handleCellArrowUp(view, event)) return true;
   const range = photosRange(view.state);
   if (range) return handlePhotosRangeKey(view, range, event);
   const sel = selectedPhoto(view.state);

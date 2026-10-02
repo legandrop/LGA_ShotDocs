@@ -175,6 +175,11 @@ export const help = {
     en: "Drag a photo's handles to resize it: they snap to the full width, 1/2, 1/3 and 1/4. Its bar (the same for every photo) has view, download, quick sizes for all the selected photos, Arrange in rows for the selected ones, align the line, comment, replace, rename and delete. In the PDF a line of photos breaks between sheets by rows. In an older row of photo blocks, {next} and {prev} go from photo to photo, {leave} leave the row and {enter} adds a line after it.",
     es: "Arrastrá los tiradores de una foto para cambiarle el tamaño: imantan al ancho entero, 1/2, 1/3 y 1/4. Su barra (la misma para todas las fotos) tiene ver, bajar, tamaños rápidos para todas las elegidas, Acomodar en filas de las elegidas, alinear el renglón, comentar, reemplazar, renombrar y borrar. En el PDF, un renglón de fotos se parte entre hojas por filas. En una fila vieja de fotos-bloque, {next} y {prev} van de una foto a otra, {leave} salen de la fila y {enter} suma un renglón después.",
   },
+  'help.photosCells.title': { en: "Photos in a table", es: "Fotos en una tabla" },
+  'help.photosCells.text': {
+    en: "Paste, drop or choose photos with the cursor in a table cell and they go into that cell, as thumbnails as tall as a row, side by side. Their bar has Thumbnail and Full cell width, and their handles make them bigger inside the cell: for more, widen the column. They open full screen like any photo and come out the same in the PDF.",
+    es: "Pegá, soltá o elegí fotos con el cursor en una celda de una tabla y entran en esa celda, como miniaturas del alto de una fila, una al lado de la otra. Su barra tiene Miniatura y Todo el ancho de la celda, y sus tiradores las agrandan dentro de la celda: para más, ensanchá la columna. Se abren en grande como cualquier foto y salen iguales en el PDF.",
+  },
   'help.carrete.title': { en: "The full-screen viewer", es: "El carrete" },
   'help.carrete.text': {
     en: "Shows every photo, video and file of the page: {prev} {next} to go through them, {ends} to jump to the first or last, scroll or double-click to zoom, {close} to close. Download gets the original.",

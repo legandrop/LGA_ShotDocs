@@ -96,6 +96,8 @@ const HISTORY_NAMES = '0.106';
 const REPLACE_PROJECT = '0.094';
 /** El aviso de lo que escribiste en algo que otro borró (roadmap B.16, Doc_Sincronizacion.md): la versión se pone al publicar. */
 const REMOVED_WRITING = '0.095';
+/** Las fotos en las celdas de una tabla (Doc_Fotos_En_Linea.md, entrega 5): la versión se pone al publicar. */
+const CELL_PHOTOS = '0.107';
 /** La que trajo "Update now" que espera la versión nueva y "Force the update" (Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red"). */
 const UPDATE_APP = '0.097';
 /** *Download all* de una carpeta (P.9, entrega 2, Doc_Carpetas.md): la versión se pone al publicar, igual que en el changelog. */
@@ -218,6 +220,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { next: 'photoRowNext', prev: 'photoRowPrev', leave: 'photoRowLeave', enter: 'photoRowEnter' },
     more: ['photoInlineSelect', 'photoInlineType'],
     since: BEFORE_HELP,
+  },
+  {
+    id: 'photosCells',
+    section: 'photos',
+    title: 'help.photosCells.title',
+    text: 'help.photosCells.text',
+    words: ['tabla', 'table', 'celda', 'cell', 'miniatura', 'thumbnail'],
+    since: CELL_PHOTOS,
   },
   {
     id: 'carrete',

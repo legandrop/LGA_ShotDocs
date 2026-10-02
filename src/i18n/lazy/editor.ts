@@ -105,6 +105,24 @@ export const editor = {
     en: "Gives every selected image this width; images side by side share a row",
     es: "Les da este ancho a todas las fotos elegidas; las fotos seguidas comparten una fila",
   },
+  'cellSize.thumb': { en: "Thumbnail", es: "Miniatura" },
+  'cellSize.full': { en: "Full cell width", es: "Todo el ancho de la celda" },
+  'photoTip.thumb': {
+    en: "As tall as a table row; images side by side line up",
+    es: "Del alto de una fila de la tabla; las fotos seguidas quedan alineadas",
+  },
+  'photoTip.thumbAll': {
+    en: "Turns every selected image into a thumbnail as tall as a table row",
+    es: "Pasa todas las fotos elegidas a miniaturas del alto de una fila",
+  },
+  'photoTip.sizeCell': {
+    en: "Fills the cell's width; to make it bigger, widen the column",
+    es: "Ocupa todo el ancho de la celda; para agrandarla, ensanchá la columna",
+  },
+  'photoTip.sizeCellAll': {
+    en: "Every selected image fills its cell's width",
+    es: "Todas las fotos elegidas ocupan el ancho de su celda",
+  },
   'photoTip.alignSide': { en: "Moves it to that side of the page", es: "Lo lleva a ese lado de la página" },
   'photoTip.alignCenter': { en: "Centers it on the page", es: "Lo centra en la página" },
   'photoTip.alignLine': {

@@ -96,6 +96,16 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   renglón que ocupaba en Coda (624 px = todo el renglón); las fotos de una ficha, juntas. Medido con una copia
   parcial de ERSO contra el HTML de Coda: las mismas filas, ±1 % de ancho. Sin el recorte de Coda (101 fotos de
   ERSO). Para la importación definitiva de ERSO hay que volver a correr `--convert-only`.
+  **Entrega 5 hecha (v0.107): fotos en las celdas de una tabla.** Pegar, soltar, "/Image" y "Copy image" con el cursor en
+  una celda ponen la foto en la celda, como miniatura de 96 px de alto (`w = 0`); soltar en el relleno de una celda, al
+  final de su texto; la barra ofrece *Thumbnail* y *Full cell width* (D32), sin alinear; ↑ desde una celda con fotos va
+  a la de arriba; imprimir las deja igual; importar de Coda deja las fotos de una celda en la celda. Sin tipos ni
+  propiedades nuevas (la versión publicada abre la página sin escribir nada). `Doc_Fotos_En_Linea.md`, "Cómo quedó
+  (entrega 5)". Queda: probar en Safari y el iPhone, y con una exportación de Coda que tenga fotos en tablas de página;
+  a decidir, si el alto de la miniatura (96 px) se puede elegir. Para después (auditoría): pegar solo `text/html` de una
+  fila con fotos las pierde (O1); una tabla de Google Docs o Excel con imágenes llega sin ellas (O2); la papelera de
+  archivos al borrar una fila con fotos, a probar con la base real (O5); ↑ con el cursor después de una foto, en una
+  celda que solo tiene fotos, va a la celda de la izquierda (O4: `onFirstLine` compara con tolerancia `< 2` y da justo 2).
   **Queda:**
   - Probar en Safari y en el iPhone: pegar, soltar, "/Image" con la cámara, la barra con el dedo, la composición
     (sin tecla previa entre dos fotos duplica el primer carácter en Chromium). Medir la decoración de filas con un doc
@@ -269,6 +279,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   la app serían dos pedidos y el nombre cambiaría de dueño). Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
   diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
+- **P.19 Link público: *Anyone with the link*** (Lega, 2026-10-02): en *Share*, además de personas y correos, un link
+  que cualquiera abre sin cuenta, con *Can view* (que siempre puede comentar) o *Can edit*; "debería estar seguro".
+  **Diseño en `Doc_Link_Publico.md`** (sin código; auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
+  del link validado por la base en cada pedido (sin cuentas ni cambios en el login; las sesiones anónimas de Supabase no
+  andan con el registro cerrado), solo la página y lo de abajo, como un invitado (base limpia de D14, sin historial ni
+  papelera), comentarios con nombre *(via link)*, *Reset link* instantáneo y topes por link, por día y de por vida.
+  Depende del interruptor de la privacidad de lo borrado (B.18) prendido en Wanka. Entregas: 0 (prueba de los headers y
+  de la caché de miniaturas en la base real, y `noindex`), 1 (*Can view*), 2 (*Can edit*, con topes por bytes y la
+  cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -483,6 +502,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
     sirviendo hasta que vence (8 horas, igual que al sacar un permiso); una invitada con crear que manda una página a la
     papelera y la restaura antes de que suba lo primero recibe un rechazo en la segunda (la página queda en la
     papelera, la restaura el dueño; no se pierde nada). Ver `Doc_Supabase.md`, "La papelera de páginas y quién la ve".
+
+20. **El esquema "publicado" de las pruebas está desactualizado (nivel medio).** Lo encontró la auditoría de la entrega 5
+   de fotos en línea (O8). `src/ui/fixtures/editorSchemaMain.ts` dice ser la copia de `editorSchema.ts` de la versión
+   publicada y que se reemplaza al publicar, pero es de antes de `photo` (último cambio en `62246db`): las pruebas de
+   "versión publicada" de los ~10 archivos que lo usan no prueban la versión publicada de hoy (montado sin el
+   resguardo, borra una foto en línea). Regenerarlo desde `main` y revisar qué pruebas cambian; sumar al cierre de cada
+   publicación el paso de reemplazarlo.
 
 ### C. Esperan a Lega
 
