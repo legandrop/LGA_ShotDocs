@@ -235,3 +235,55 @@ export function simulate(n: number, seed = 7): HistoryRow[] {
   return rows;
 }
 
+
+/**
+ * "Nada se pierde" (Doc_Historial.md, 11.3): cada letra que llegó al servidor se ve en la versión de su fila o está en el
+ * texto huérfano de esa versión; las únicas que no son las escritas y borradas en la misma subida. Con el historial
+ * armado de a una fila por versión (corte -1). Devuelve las que faltan (`lost`) en vez de fallar.
+ */
+export function everyLetter(h: PageHistory): { checked: number; orphaned: number; lost: string[] } {
+  const lost: string[] = [];
+  const content = (item: Y.Item): boolean => {
+    let t = item.parent as Y.AbstractType<any>;
+    while (t._item) t = t._item.parent as Y.AbstractType<any>;
+    return Y.findRootTypeKey(t) === CONTENT_FRAGMENT;
+  };
+  let checked = 0;
+  let orphaned = 0;
+  for (const [client, list] of h.doc.store.clients) {
+    for (const s of list) {
+      if (!(s instanceof Y.Item) || !(s.content instanceof Y.ContentString) || s.parentSub !== null || !content(s)) continue;
+      for (let k = 0; k < s.length; k++) {
+        const clock = s.id.clock + k;
+        const row = h.insertRow(client, clock);
+        // Lo más temprano que se borró: ella o algo de arriba.
+        const ancestorRows: number[] = [];
+        for (let t = s.parent as Y.AbstractType<any>; t._item; t = t._item.parent as Y.AbstractType<any>) {
+          const d = h.deleteRow(t._item.id.client, t._item.id.clock);
+          if (d >= 0) ancestorRows.push(d);
+        }
+        const own = h.deleteRow(client, clock);
+        const earliestAncestor = ancestorRows.length ? Math.min(...ancestorRows) : Infinity;
+        if (earliestAncestor < row) {
+          // Huérfana: tiene que estar en el texto huérfano de la versión de su fila.
+          const where = h.sessionOfRow(row);
+          if (!h.orphansOf(where).some((o) => o.row === row && o.text.includes((s.content as Y.ContentString).str[k]))) lost.push(`huérfana ${client}:${clock} (fila ${row})`);
+          orphaned++;
+          continue;
+        }
+        // Escrita y borrada en la misma subida (entre dos pausas): nunca se vio.
+        if (own === row || earliestAncestor === row) continue;
+        // Si no, se ve en la versión de su fila.
+        const snap = h.snapshot(h.sessionOfRow(row));
+        let seen = (snap.sv.get(client) ?? 0) > clock && !Y.isDeleted(snap.ds, Y.createID(client, clock));
+        for (let t = s.parent as Y.AbstractType<any>; seen && t._item; t = t._item.parent as Y.AbstractType<any>) {
+          if (Y.isDeleted(snap.ds, t._item.id) || (snap.sv.get(t._item.id.client) ?? 0) <= t._item.id.clock) seen = false;
+        }
+        if (!seen) lost.push(`${client}:${clock} (fila ${row})`);
+        checked++;
+      }
+    }
+  }
+  return { checked, orphaned, lost };
+}
+

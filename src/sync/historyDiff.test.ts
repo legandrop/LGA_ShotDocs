@@ -2,10 +2,10 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { PageHistory, type HistoryRow } from './history';
 import { diffText, versionChanges } from './historyDiff';
-import { authorOfRow, block, blocksOf, group, readMarks, rowsOf, seeded, serverAt, textOf, unionDoc, visible, withoutMarks } from './historyTesting';
+import { authorOfRow, block, everyLetter, blocksOf, group, readMarks, rowsOf, seeded, serverAt, textOf, unionDoc, visible, withoutMarks } from './historyTesting';
 import { PageDocs as OldPageDocs } from './fixtures/mainDocs';
 import { openLocalDb } from './localDb';
-import { CONTENT_FRAGMENT, normalizeStructure, seedIfEmpty } from './structure';
+import { normalizeStructure, seedIfEmpty } from './structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from './testing';
 
 // Los cambios de cada versión (P.18, Docs/Doc_Historial.md, entrega 2): la unión de dos versiones con lo agregado y lo
@@ -219,52 +219,6 @@ describe('la diferencia de dos textos', () => {
   });
 });
 
-/** Las letras del documento del historial que trajo cada fila, para la prueba "nada se pierde". */
-function everyLetterIsSomewhere(h: PageHistory, label: string) {
-  const content = (item: Y.Item): boolean => {
-    let t = item.parent as Y.AbstractType<any>;
-    while (t._item) t = t._item.parent as Y.AbstractType<any>;
-    return Y.findRootTypeKey(t) === CONTENT_FRAGMENT;
-  };
-  let checked = 0;
-  let orphaned = 0;
-  for (const [client, list] of h.doc.store.clients) {
-    for (const s of list) {
-      if (!(s instanceof Y.Item) || !(s.content instanceof Y.ContentString) || s.parentSub !== null || !content(s)) continue;
-      for (let k = 0; k < s.length; k++) {
-        const clock = s.id.clock + k;
-        const row = h.insertRow(client, clock);
-        // Lo más temprano que se borró: ella o algo de arriba.
-        const ancestorRows: number[] = [];
-        for (let t = s.parent as Y.AbstractType<any>; t._item; t = t._item.parent as Y.AbstractType<any>) {
-          const d = h.deleteRow(t._item.id.client, t._item.id.clock);
-          if (d >= 0) ancestorRows.push(d);
-        }
-        const own = h.deleteRow(client, clock);
-        const earliestAncestor = ancestorRows.length ? Math.min(...ancestorRows) : Infinity;
-        if (earliestAncestor < row) {
-          // Huérfana: tiene que estar en el texto huérfano de la versión de su fila.
-          const where = h.sessionOfRow(row);
-          expect(h.orphansOf(where).some((o) => o.row === row && o.text.includes(s.content instanceof Y.ContentString ? s.content.str[k] : '')), `${label}: huérfana`).toBe(true);
-          orphaned++;
-          continue;
-        }
-        // Escrita y borrada en la misma subida (entre dos pausas): nunca se vio.
-        if (own === row || earliestAncestor === row) continue;
-        // Si no, se ve en la versión de su fila.
-        const snap = h.snapshot(h.sessionOfRow(row));
-        let seen = (snap.sv.get(client) ?? 0) > clock && !Y.isDeleted(snap.ds, Y.createID(client, clock));
-        for (let t = s.parent as Y.AbstractType<any>; seen && t._item; t = t._item.parent as Y.AbstractType<any>) {
-          if (Y.isDeleted(snap.ds, t._item.id) || (snap.sv.get(t._item.id.client) ?? 0) <= t._item.id.clock) seen = false;
-        }
-        expect(seen, `${label}: la letra ${client}:${clock} de la fila ${row}`).toBe(true);
-        checked++;
-      }
-    }
-  }
-  return { checked, orphaned };
-}
-
 describe('al azar con tres personas: filas con GC (la versión publicada) y sin GC mezcladas', () => {
   it('cada versión es lo del servidor, la unión da las dos versiones, solo lo tocado = completo, y ninguna letra se pierde', async () => {
     let orphansSeen = 0;
@@ -353,7 +307,8 @@ describe('al azar con tres personas: filas con GC (la versión publicada) y sin 
       // Cada fila, su propia versión: también la diferencia de cada una (solo lo tocado = completo, las dos versiones).
       checkUnions(perRow, rows, `semilla ${seed}, por fila`);
       cases += perRow.sessions.length + h.sessions.length;
-      const { checked, orphaned } = everyLetterIsSomewhere(perRow, `semilla ${seed}`);
+      const { checked, orphaned, lost } = everyLetter(perRow);
+      expect(lost, `semilla ${seed}: letras que no se ven en ninguna versión ni en el texto huérfano`).toEqual([]);
       expect(checked).toBeGreaterThan(0);
       orphansSeen += orphaned;
       if (process.env.HIST_DEBUG) console.log(`semilla ${seed}: filas ${rows.length}, sesiones ${h.sessions.length}, letras ${checked}, huérfanas ${orphaned}, casos ${cases}, marcas ${h.sessions.map((_, i) => versionChanges(h, i).marks.length).join(",")}`);
