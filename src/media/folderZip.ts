@@ -256,6 +256,11 @@ export interface DownloadDeps {
   online?: () => boolean;
   /** Espera a que vuelva la conexión (por defecto, el evento `online`). */
   whenOnline?: (signal?: AbortSignal) => Promise<void>;
+  /**
+   * Cada cuánto se vuelve a probar el portero cuando no contesta nadie (wifi conectado sin internet: el navegador
+   * sigue diciendo que hay red). Por defecto, `PROBE_MS`.
+   */
+  probeMs?: number;
   /** El pase nuevo de un archivo (cuando el que se tenía venció): vuelve a listar su subcarpeta. */
   refresh?: (file: PlanFile) => Promise<string | null>;
   /** El texto de `MISSING_FILES.txt`. */
@@ -269,6 +274,11 @@ const PREFETCH = 4;
 /** Reintentos de un archivo que no contesta o se corta, sin avanzar (después de eso, se saltea). */
 const FILE_TRIES = 4;
 const RETRY_MS = [1_000, 3_000, 9_000];
+/** Cada cuánto se prueba si el portero volvió a contestar, sin red de verdad. */
+const PROBE_MS = 5_000;
+
+/** El pedido ni llegó a tener respuesta (`fetch` falló): la red, no el archivo. */
+class NetworkFailed extends Error {}
 
 /** El destino (el disco) no dejó escribir: frena la bajada. */
 class TargetFailed extends Error {
@@ -312,6 +322,11 @@ export async function runDownload(
     ((s?: AbortSignal) =>
       new Promise<void>((ok, fail) => {
         if (s?.aborted) return fail(abortError());
+        // Sin `window` (las pruebas), solo cancelar la termina.
+        if (typeof window === 'undefined') {
+          s?.addEventListener('abort', () => fail(abortError()), { once: true });
+          return;
+        }
         const done = () => {
           window.removeEventListener('online', done);
           s?.removeEventListener('abort', stop);
@@ -339,20 +354,84 @@ export async function runDownload(
   let done = 0;
   let written = 0;
 
+  /** Cuántos pedidos están esperando la conexión (los de adelante también): la ventana dice "No connection". */
+  let waiting = 0;
+  const setWaiting = (delta: number) => {
+    waiting += delta;
+    if (progress.offline !== waiting > 0) {
+      progress.offline = waiting > 0;
+      report();
+    }
+  };
+
   /** Espera la conexión si se fue (sin contar como intento). */
   const ensureOnline = async () => {
     if (online()) return;
-    progress.offline = true;
-    report();
-    await whenOnline(signal);
-    progress.offline = false;
-    report();
+    setWaiting(1);
+    try {
+      await whenOnline(signal);
+    } finally {
+      setWaiting(-1);
+    }
   };
 
-  /** Pide el archivo desde `from` (con `Range` si no es el principio). */
+  /** Si el portero contesta algo (cualquier cosa, también un error): hay camino hasta él. */
+  const reachable = async (url: string): Promise<boolean> => {
+    try {
+      await http(new URL('/health', url).href, { signal, mode: 'cors', credentials: 'omit', cache: 'no-store' });
+      return true;
+    } catch (err) {
+      if (isAbort(err) || signal?.aborted) throw abortError();
+      return false;
+    }
+  };
+
+  /** Hasta `ms` o hasta que el navegador diga que volvió la red, lo que pase antes. Cancelar corta. */
+  const pause = async (ms: number) => {
+    const local = new AbortController();
+    const stop = () => local.abort();
+    signal?.addEventListener('abort', stop, { once: true });
+    try {
+      await Promise.race([wait(ms, local.signal), whenOnline(local.signal)]).catch(() => undefined);
+    } finally {
+      local.abort();
+      signal?.removeEventListener('abort', stop);
+    }
+    if (signal?.aborted) throw abortError();
+  };
+
+  /**
+   * Un pedido falló por la red. Con el wifi conectado y sin internet el navegador sigue diciendo que hay red
+   * (`navigator.onLine`): se prueba el portero. Si tampoco contesta, se espera (diciendo "No connection") hasta que
+   * vuelva, sin gastar intentos del archivo, y devuelve `true`. Si contesta, el problema era de este pedido: `false`
+   * (cuenta como un intento).
+   */
+  const waitForNetwork = async (file: PlanFile): Promise<boolean> => {
+    await ensureOnline();
+    if (await reachable(file.url)) return false;
+    setWaiting(1);
+    try {
+      do await pause(deps.probeMs ?? PROBE_MS);
+      while (!(await reachable(file.url)));
+    } finally {
+      setWaiting(-1);
+    }
+    return true;
+  };
+
+  /**
+   * Pide el archivo desde `from` (con `Range` si no es el principio). Con `?offline=1`: es una bajada entera, no tiene
+   * que pasar por la caché del arranque de los videos ni desplazar lo que hay en ella (Doc_Portero.md).
+   */
   const request = async (file: PlanFile, from: number): Promise<Response> => {
     const headers: Record<string, string> = from > 0 ? { Range: `bytes=${from}-` } : {};
-    const res = await http(file.url, { headers, signal, mode: 'cors', credentials: 'omit', cache: 'no-store' });
+    let res: Response;
+    try {
+      res = await http(withOffline(file.url), { headers, signal, mode: 'cors', credentials: 'omit', cache: 'no-store' });
+    } catch (err) {
+      if (isAbort(err) || signal?.aborted) throw abortError();
+      throw new NetworkFailed(err instanceof Error ? err.message : String(err));
+    }
     if (res.ok) return res;
     let code = '';
     try {
@@ -389,10 +468,20 @@ export async function runDownload(
         }
         if (err instanceof FileFailed) throw err;
         if (!online()) continue;
+        if (err instanceof NetworkFailed && (await waitForNetwork(file))) continue;
         if (++fails >= FILE_TRIES) throw new FileFailed(err instanceof Error ? err.message : String(err));
         await wait(RETRY_MS[Math.min(fails - 1, RETRY_MS.length - 1)]!, signal);
       }
     }
+  };
+
+  /** Un pase nuevo para el archivo (venció en medio de una bajada larga); `false` si no hay. */
+  const renewPass = async (file: PlanFile): Promise<boolean> => {
+    if (!deps.refresh) return false;
+    const url = await deps.refresh(file).catch(() => null);
+    if (!url) return false;
+    file.url = url;
+    return true;
   };
 
   /**
@@ -403,6 +492,7 @@ export async function runDownload(
     let res: Response | null = first;
     let got = 0;
     let fails = 0;
+    let renewed = false;
     for (;;) {
       if (!res) {
         if (signal?.aborted) throw abortError();
@@ -410,8 +500,15 @@ export async function runDownload(
         try {
           res = await request(file, got);
         } catch (err) {
-          if (isAbort(err) || err instanceof FileFailed) throw err;
+          if (isAbort(err)) throw err;
+          // El pase venció entre un corte y el pedido que sigue (una bajada de más de 8 horas): uno nuevo, una vez.
+          if (err instanceof FileFailed && err.expired && !renewed && (await renewPass(file))) {
+            renewed = true;
+            continue;
+          }
+          if (err instanceof FileFailed) throw err;
           if (!online()) continue;
+          if (err instanceof NetworkFailed && (await waitForNetwork(file))) continue;
           if (++fails >= FILE_TRIES) throw err;
           await wait(RETRY_MS[Math.min(fails - 1, RETRY_MS.length - 1)]!, signal);
           continue;
@@ -444,8 +541,10 @@ export async function runDownload(
       } catch (err) {
         if (isAbort(err) || signal?.aborted) throw abortError();
         if (got > before) fails = 0;
-        if (++fails >= FILE_TRIES) throw err;
         res = null;
+        // Se cortó a mitad: si fue la red (el portero tampoco contesta), se espera sin gastar intentos.
+        if (err instanceof TypeError && (await waitForNetwork(file))) continue;
+        if (++fails >= FILE_TRIES) throw err;
         await wait(RETRY_MS[Math.min(fails - 1, RETRY_MS.length - 1)]!, signal);
       } finally {
         // Si quien lee deja de leer (cancelar, un error del disco), la respuesta no sigue bajando sola.
@@ -527,7 +626,21 @@ export async function runDownload(
           progress.missing = missing.length;
         }
       } else if (target.kind === 'dir') {
-        const out = await target.makeFile(file.path);
+        let out: FileOut;
+        try {
+          out = await target.makeFile(file.path);
+        } catch (err) {
+          if (isAbort(err)) throw err;
+          // Un nombre que el navegador no deja crear en el disco (Chrome rechaza `.lnk`, `.scf`, `.local`… con un
+          // TypeError): ese archivo se saltea y se anota; lo demás sigue. Otro error (sin permiso, disco) frena todo.
+          if (!(err instanceof TypeError)) throw err;
+          for await (const _ of opened.chunks) break; // suelta la respuesta abierta
+          failed(file, err);
+          progress.bytesDone += file.size;
+          progress.filesDone++;
+          report();
+          continue;
+        }
         try {
           for await (const c of counted) {
             try {
@@ -577,6 +690,17 @@ export async function runDownload(
   } finally {
     // Lo que se pidió por delante y no se usó (cancelar, un error del disco): se suelta.
     ahead.clear();
+  }
+}
+
+/** La dirección del pase con `?offline=1` (el portero saltea la caché del arranque de los videos). */
+function withOffline(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set('offline', '1');
+    return u.href;
+  } catch {
+    return url;
   }
 }
 
@@ -631,13 +755,34 @@ export async function refreshPass(lister: FolderLister, fileId: string, file: Pl
   return null;
 }
 
-/** Un zip en memoria (Firefox, Safari y los teléfonos): los pedazos se juntan en `Blob` de a 8 MB. */
+/** El zip en memoria pasó su tope (Drive dijo un peso menor que lo que mandó). */
+export class MemoryCapExceeded extends Error {
+  constructor(readonly cap: number) {
+    super('The zip does not fit in this browser\'s memory.');
+    this.name = 'MemoryCapExceeded';
+  }
+}
+
+/**
+ * Un zip en memoria (Firefox, Safari y los teléfonos): los pedazos se juntan en `Blob` de a 8 MB. Con `cap`, pasado
+ * ese peso de verdad (no el que dijo Drive) falla con `MemoryCapExceeded`.
+ */
 export class BlobSink implements ZipSink {
   private parts: Blob[] = [];
   private pending: Uint8Array[] = [];
   private pendingBytes = 0;
+  private total = 0;
+
+  constructor(private readonly cap = Infinity) {}
 
   async write(chunk: Uint8Array): Promise<void> {
+    if (this.total + chunk.length > this.cap) {
+      // Lo juntado se suelta: no se va a usar.
+      this.parts = [];
+      this.pending = [];
+      throw new MemoryCapExceeded(this.cap);
+    }
+    this.total += chunk.length;
     // Se copia: el pedazo después se le pasa al Worker del CRC.
     this.pending.push(chunk.slice());
     this.pendingBytes += chunk.length;

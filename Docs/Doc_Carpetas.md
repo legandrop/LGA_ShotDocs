@@ -92,7 +92,9 @@ bajan (accesos directos, documentos de Google, una subcarpeta que no se pudo abr
 
 Mientras baja: la barra, "34 of 340 files · 1,2 of 2,1 GB", el archivo en curso, "Keep this tab open until it
 finishes" y *Cancel* (Escape y el clic afuera no cierran nada mientras baja). Sin red se queda esperando ("No
-connection: it continues when it comes back") sin gastar reintentos. Al terminar dice dónde quedó y cuántas cosas no
+connection: it continues when it comes back") sin gastar reintentos; también con el wifi conectado y sin internet
+(el navegador sigue diciendo que hay red): un pedido que falla por la red prueba el portero (`/health`) y, si tampoco
+contesta, espera probándolo cada 5 segundos en vez de anotar el archivo como faltante. Al terminar dice dónde quedó y cuántas cosas no
 están. Cancelar un zip lo borra (no queda un archivo a medias); cancelar una carpeta deja lo ya bajado. Sin red, el
 botón se ve apagado y, con el clic, dice que hace falta conexión.
 
@@ -104,9 +106,13 @@ botón se ve apagado y, con el clic, dice que hace falta conexión.
   `runDownload` baja cada archivo por su pase (`fetch` con CORS: `/m/` ya lo dejaba, solo para `APP_ORIGINS`, desde
   v0.058). Los archivos de hasta 4 MB se piden de a 4 por delante; los grandes se escriben a medida que llegan y, si la
   respuesta se corta, se sigue desde donde quedó con `Range` (un `206` más corto, como el del arranque de los videos
-  guardado en el portero, también). Un archivo que falla (404, `abusive`, 4 intentos con 5xx) se saltea; un pase
-  vencido (una bajada de más de 8 horas) vuelve a listar su subcarpeta y sigue con el nuevo. Si el disco no deja
-  escribir, la bajada se frena entera.
+  guardado en el portero, también). Todo se pide con `?offline=1`: una bajada entera no pasa por la caché del
+  arranque de los videos ni la desplaza. Un archivo que falla (404, `abusive`, 4 intentos con 5xx o con un `fetch` que
+  falla mientras el portero sí contesta) se saltea; un pase vencido (una bajada de más de 8 horas), al abrir el
+  archivo o entre un corte y el pedido que sigue, vuelve a listar su subcarpeta y sigue con el nuevo. Si el disco no
+  deja escribir, la bajada se frena entera; un nombre que el navegador no deja crear en el disco (Chrome rechaza
+  `.lnk`, `.scf`, `.local` con un `TypeError`) se saltea y se anota. El zip en memoria tiene su propio tope con los
+  bytes que llegan (`BlobSink`): si Drive dijo un peso menor, falla con el mismo aviso del tope.
 - `src/media/zipWriter.ts`: el zip a mano (sin librería: en modo *store* es simple). Sin comprimir (método 0), cada
   archivo con su descriptor después de los datos (el CRC se sabe al final: nunca se vuelve atrás en lo escrito),
   Zip64 en un archivo de 4 GiB o más (lo decide el `Content-Length` o el peso de Drive antes de escribir el
@@ -118,7 +124,8 @@ botón se ve apagado y, con el clic, dice que hace falta conexión.
   los pedazos sin copiarlos; sin Worker, en la página.
 - `src/media/zipNames.ts`: cada parte de la ruta se limpia para Windows, la Mac y el iPhone (controles y marcas de
   dirección; `<>:"/\|?*` como `_`; sin punto ni espacio al final; `.` y `..` como `_`; `CON`, `NUL`, `COM1`… con un `_`
-  adelante; 200 caracteres por grafema conservando la extensión) y, en cada carpeta, dos nombres iguales sin distinguir
+  adelante; 200 caracteres y 255 bytes UTF-8 y UTF-16 (la Mac, Linux y Android topan en bytes: 100 letras chinas son
+  300), por grafema y conservando la extensión) y, en cada carpeta, dos nombres iguales sin distinguir
   mayúsculas (o que quedan iguales al limpiarlos) llevan « (2)», « (3)». Todo va adentro de una carpeta con el nombre
   de la carpeta (como el zip de Drive), en el zip y en el disco.
 - **`MISSING_FILES.txt`** (decisión de esta tanda): en inglés, como la interfaz, para que el nombre sea el mismo en
@@ -136,11 +143,13 @@ botón se ve apagado y, con el clic, dice que hace falta conexión.
   que mide la base).
 
 **Pruebas:** `src/media/zipWriter.test.ts` (CRC32 de referencia y por partes, el Worker sin copiar, store con carpetas
-vacías y UTF-8, Zip64 forzado, un archivo de 4 GiB y 120 KB sin escribirlo entero (los datos son "huecos" de ceros y
+vacías y UTF-8, Zip64 forzado, 65.534 y 65.535 cosas (el final con Zip64 desde 65.535), nombres de más de 255 bytes, un archivo de 4 GiB y 120 KB sin escribirlo entero (los datos son "huecos" de ceros y
 el CRC se arma sin recorrerlos), el que miente su peso, el que se corta, el disco que falla, la fecha, los nombres y
 el corte por grafema), `src/media/folderZip.test.ts` (recorrer con páginas, nombres repetidos y raros, Drive que pide
 despacio, subcarpeta que no se lista, el zip entero, un archivo que falla, 5xx, cortes con `Range`, el `206` corto,
-incompleto, pase vencido, sin red, cancelar, los chicos por delante, a una carpeta, el disco lleno) y
+incompleto, pase vencido al abrir y a mitad, sin red, el wifi sin internet (espera; si el portero contesta, se
+saltea), el tope propio del zip en memoria, cancelar, los chicos por delante, a una carpeta, un nombre que el navegador
+rechaza, el disco lleno), `src/ui/folderDownload.test.ts` (el aviso del tope) y
 `portero/src/folders.test.ts` (CORS de `/m/` y `/t/` solo para el origen de la app, también en el preflight; quien no
 ve la página no lista ni recibe pases; el corte por grafema). Cada zip de las pruebas lo abre Python
 (`zipfile.testzip()`, que comprueba cada CRC); sin Python, esas comprobaciones se saltean. `scripts/portero-smoke.mjs`
@@ -152,7 +161,16 @@ de 500 MB con un iPhone; la barra de la tarjeta, en castellano).
 **Lo que falta de la entrega 2 (BAJO):** el recorrido pide una subcarpeta por pedido (el diseño decía ~40 por pedido,
 con una ruta nueva del portero): una carpeta con 500 subcarpetas son 500 pedidos de listado, lejos del límite del día.
 Firefox por el service worker (sin tope) queda para otra entrega (D24). Los documentos de Google no se bajan como PDF
-(decisión 5). Probar a mano en Safari, el iPhone y con el Drive real (lista de la tanda).
+(decisión 5). Probar a mano en Safari, el iPhone y con el Drive real (lista de la tanda). De la auditoría:
+
+- **Emojis compuestos (O4, preexistente):** `cleanFileName` (app y portero) saca U+200D y U+200C, así que una familia
+  (`👨‍👩‍👧‍👦`) queda como cuatro emojis sueltos, en el zip y en Drive, y el corte por grafema puede partirla. Va con el
+  pendiente de nombres de D3: dejar el ZWJ cuando está entre dos caracteres visibles.
+- **`tar.exe` de Windows (O11, informativa):** no extrae nombres con emojis desde la consola (le pasa igual con un zip
+  hecho por Python). El Explorador (*Extraer todo*) y .NET extraen todo.
+- **Reemplazar un zip existente:** en *Download as .zip…*, cancelar o fallar borra el archivo elegido, también si ya
+  existía y se aceptó reemplazarlo (coherente con "reemplazar").
+- *Retry missing* (bajar solo lo de `MISSING_FILES.txt`) no existe: hay que bajar todo otra vez.
 
 **Correcciones de la segunda auditoría (2026-10-01):**
 

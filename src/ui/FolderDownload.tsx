@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { localize, useT } from '../i18n';
+import { localize, t, useT } from '../i18n';
 import '../i18n/lazy/folders';
 import { formatSize } from '../media/fileTrash';
 import {
   BlobSink,
   isAbort,
+  MemoryCapExceeded,
   planFolder,
   refreshPass,
   runDownload,
@@ -33,6 +34,14 @@ import { detectPlatform, isMobilePlatform } from './install';
 /** Lo más que se arma en memoria (sin `showSaveFilePicker`): 1 GB, o 500 MB en un teléfono (en las unidades de `formatSize`). */
 export function memoryCap(mobile = isMobilePlatform(detectPlatform())): number {
   return mobile ? 500 * 1024 ** 2 : 1024 ** 3;
+}
+
+/**
+ * El aviso de "demasiado grande" para el zip en memoria. Solo el tope: el peso ya está arriba, y pasado por poco los
+ * dos redondeaban igual ("1 GB; up to 1 GB").
+ */
+export function tooBigNote(cap: number): string {
+  return t('folders.zipTooBig', { max: formatSize(cap) });
 }
 
 // Lo que da Chrome y Edge (no está en los tipos de TypeScript).
@@ -163,7 +172,8 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
         saved = top.name;
         target = dirTarget(top);
       } else {
-        sink = new BlobSink();
+        // Con su tope de verdad: si Drive dijo menos de lo que manda, no se pasa de la memoria.
+        sink = new BlobSink(cap);
         target = { kind: 'zip', sink, crc: () => crc.stream() };
       }
     } catch (err) {
@@ -250,7 +260,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
         </div>
         {plan.files.length === 0 && <p className="muted small">{tr('folders.zipEmpty')}</p>}
         {plan.skipped.length > 0 && <p className="warn small">{tr('folders.zipSkipped', { count: plan.skipped.length })}</p>}
-        {tooBig && <p className="warn small">{tr('folders.zipTooBig', { size: formatSize(total), max: formatSize(cap) })}</p>}
+        {tooBig && <p className="warn small">{tooBigNote(cap)}</p>}
         {!online && <p className="muted small">{tr('folders.downloadAllOffline')}</p>}
       </>
     );
@@ -364,6 +374,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
 }
 
 function reasonOf(err: unknown, tr: ReturnType<typeof useT>): string {
+  if (err instanceof MemoryCapExceeded) return tooBigNote(err.cap);
   const code = (err as { code?: string } | null)?.code;
   if (code === 'not_found' || code === 'folder_gone') return tr('folders.notFound');
   if (code === 'not_ready') return tr('folders.notReady');

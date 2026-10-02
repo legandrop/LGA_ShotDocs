@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BlobSink, MISSING_NAME, planFolder, refreshPass, runDownload, type DownloadPlan, type FileOut, type FolderLister, type MissingItem } from './folderZip';
+import { BlobSink, MemoryCapExceeded, MISSING_NAME, planFolder, refreshPass, runDownload, type DownloadPlan, type FileOut, type FolderLister, type MissingItem } from './folderZip';
 import { PorteroError, type FolderEntry, type FolderListing } from './portero';
 import { concat, hasPython, pythonReadZip, text } from '../test/zipCheck';
 
@@ -54,7 +54,10 @@ function world(tree: Tree, opts: { page?: number } = {}) {
       return { entries: all.slice(from, from + page), nextPageToken: from + page < all.length ? String(from + page) : null };
     },
   };
-  const requests: { id: string; range: string | null }[] = [];
+  const requests: { id: string; range: string | null; offline: boolean }[] = [];
+  /** Sin internet (el wifi conectado, el navegador dice que hay red): todo pedido falla como `fetch`. */
+  let down: (() => boolean) | null = null;
+  let health = 0;
   /** Lo que hace cada pedido de un archivo: cortarse en el medio, fallar, un pase vencido… */
   const behave = new Map<string, (range: string | null, count: number) => Response | 'normal'>();
   const counts = new Map<string, number>();
@@ -62,9 +65,14 @@ function world(tree: Tree, opts: { page?: number } = {}) {
     const url = String(input);
     const signal = init.signal;
     if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+    if (down?.()) throw new TypeError('Failed to fetch');
+    if (url.endsWith('/health')) {
+      health++;
+      return new Response('{"ok":true}', { status: 200 });
+    }
     const id = /\/m\/([^?]+)/.exec(url)?.[1] ?? '';
     const range = new Headers(init.headers).get('Range');
-    requests.push({ id, range });
+    requests.push({ id, range, offline: new URL(url).searchParams.get('offline') === '1' });
     const count = (counts.get(id) ?? 0) + 1;
     counts.set(id, count);
     const special = behave.get(id)?.(range, count);
@@ -87,6 +95,8 @@ function world(tree: Tree, opts: { page?: number } = {}) {
     behave,
     failList,
     setRate: (ids: (string | null)[]) => (rateOnce = new Set(ids)),
+    setDown: (fn: (() => boolean) | null) => (down = fn),
+    health: () => health,
     idOf: (name: string) => ([...dirs.values()].flat().find((e) => e.name === name && 'id' in e) as { id: string }).id,
   };
 }
@@ -268,6 +278,8 @@ describe('Download all: el zip', () => {
     const { result, bytes } = await zipOf({ ...plan, files: plan.files.map((f) => ({ ...f, size: 5000 })) }, w);
     expect(result.missing).toEqual([]);
     expect(w.requests.map((r) => r.range)).toEqual([null, 'bytes=1000-', 'bytes=1200-']);
+    // Una bajada entera no pasa por la caché del arranque de los videos del portero (O8).
+    expect(w.requests.every((r) => r.offline)).toBe(true);
     if (hasPython) expect(text(pythonReadZip(bytes).entries[1])).toBe(big);
   });
 
@@ -355,6 +367,104 @@ describe('Download all: el zip', () => {
   });
 });
 
+describe('Download all: correcciones de la auditoría', () => {
+  it('O1: el wifi conectado sin internet (el navegador dice que hay red): espera diciendo "No connection" y no saltea nada', async () => {
+    const tree: Tree = {};
+    for (let i = 1; i <= 6; i++) tree[`f${i}.txt`] = `archivo ${i}`;
+    const w = world(tree);
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    // Los primeros 40 pedidos fallan como `fetch` sin internet: más que los 4 intentos de cada uno de los 6 archivos.
+    let calls = 0;
+    w.setDown(() => calls++ < 40);
+    const states: boolean[] = [];
+    const sink = new BlobSink();
+    const result = await runDownload(
+      plan,
+      { kind: 'zip', sink },
+      {
+        fetch: w.fetcher,
+        wait: noWait,
+        online: () => true,
+        whenOnline: () => new Promise(() => undefined),
+        probeMs: 1,
+        missingText,
+      },
+      { onProgress: (p) => states.push(p.offline) },
+    );
+    expect(result.missing).toEqual([]);
+    expect(result.done).toBe(6);
+    expect(states).toContain(true);
+    expect(states.at(-1)).toBe(false);
+  });
+
+  it('O1: un archivo que se corta a mitad sin internet espera y sigue desde donde quedó', async () => {
+    const big = 'q'.repeat(4000);
+    const w = world({ 'video.mov': big });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const data = w.files.get(w.idOf('video.mov'))!;
+    let cut = false;
+    let downFor = 0;
+    w.behave.set(w.idOf('video.mov'), (_r, count) => {
+      if (count === 1) {
+        cut = true;
+        return cutResponse(data, 1500);
+      }
+      return 'normal';
+    });
+    // Después del corte, 10 pedidos fallan como sin internet (más que los 4 intentos de un archivo).
+    w.setDown(() => cut && downFor++ < 10);
+    const { result, bytes } = await zipOf({ ...plan, files: plan.files.map((f) => ({ ...f, size: 5 * 1024 * 1024 })) }, w, {
+      whenOnline: () => new Promise(() => undefined),
+      probeMs: 1,
+    });
+    expect(result.missing).toEqual([]);
+    if (hasPython) expect(text(pythonReadZip(bytes).entries[1])).toBe(big);
+  });
+
+  it('O1: si el portero contesta, un fetch que falla es de ese archivo: gasta intentos y se saltea (no espera para siempre)', async () => {
+    const w = world({ 'a.txt': 'aaa', 'b.txt': 'bbb' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const id = w.idOf('a.txt');
+    w.behave.set(id, () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const { result } = await zipOf(plan, w, { whenOnline: () => new Promise(() => undefined), probeMs: 1 });
+    expect(result.done).toBe(1);
+    expect(result.missing).toEqual([{ path: 'a.txt', reason: 'failed', detail: 'Failed to fetch' }]);
+    expect(w.health()).toBeGreaterThanOrEqual(4);
+  });
+
+  it('O10: un pase que vence entre un corte y el pedido que sigue se renueva y el archivo queda entero', async () => {
+    const big = 'p'.repeat(3000);
+    const w = world({ Fotos: { 'largo.mov': big } });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const id = w.idOf('largo.mov');
+    const data = w.files.get(id)!;
+    w.behave.set(id, (_range, count) =>
+      count === 1 ? cutResponse(data, 1000) : count === 2 ? new Response(JSON.stringify({ code: 'pass_expired' }), { status: 403 }) : 'normal',
+    );
+    const lister = w.lister;
+    const { result, bytes } = await zipOf({ ...plan, files: plan.files.map((f) => ({ ...f, size: 5 * 1024 * 1024 })) }, w, {
+      refresh: (f) => refreshPass(lister, 'carpeta-1', f),
+    });
+    expect(result.missing).toEqual([]);
+    expect(w.requests.filter((r) => r.id === id).map((r) => r.range)).toEqual([null, 'bytes=1000-', 'bytes=1000-']);
+    if (hasPython) expect(text(pythonReadZip(bytes).entries[2])).toBe(big);
+  });
+
+  it('O6: el zip en memoria tiene su propio tope (los bytes que llegan, no el peso que dijo Drive)', async () => {
+    const sink = new BlobSink(100);
+    await sink.write(new Uint8Array(60));
+    await expect(sink.write(new Uint8Array(60))).rejects.toBeInstanceOf(MemoryCapExceeded);
+    // Drive dice 10 bytes y manda 5000: la bajada en memoria falla con el aviso del tope.
+    const w = world({ 'mentira.bin': 'm'.repeat(5000) });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const lied = { ...plan, bytes: 10, files: plan.files.map((f) => ({ ...f, size: 10 })) };
+    const run = runDownload(lied, { kind: 'zip', sink: new BlobSink(2000) }, { fetch: w.fetcher, wait: noWait, online: () => true, missingText });
+    await expect(run).rejects.toMatchObject({ name: 'MemoryCapExceeded', cap: 2000 });
+  });
+});
+
 describe('Download all: a una carpeta del disco (Chrome y Edge)', () => {
   /** Un disco de mentira: lo escrito por ruta, y si un archivo quedó a medias. */
   function disk(opts: { failWrite?: string } = {}) {
@@ -415,6 +525,28 @@ describe('Download all: a una carpeta del disco (Chrome y Edge)', () => {
     expect(d.written.has('roto.bin')).toBe(false);
     expect(result.missing[0]).toMatchObject({ path: 'roto.bin', reason: 'failed' });
     expect(d.written.has('ok.txt')).toBe(true);
+
+    // O2: un nombre que el navegador no deja crear (Chrome rechaza `.lnk` con un TypeError) se saltea y se anota.
+    const named = world({ 'acceso.lnk': 'lnk', 'ok.txt': 'ok' });
+    const namedPlan = await planFolder(named.lister, 'carpeta-1', 'X');
+    const picky = disk();
+    const makeFile = picky.target.makeFile;
+    picky.target.makeFile = async (path: string) => {
+      if (path.endsWith('.lnk')) throw new TypeError('Name is not allowed.');
+      return makeFile(path);
+    };
+    const skipped = await runDownload(namedPlan, picky.target, { fetch: named.fetcher, wait: noWait, online: () => true, missingText });
+    expect(skipped.done).toBe(1);
+    expect(skipped.missing).toEqual([{ path: 'acceso.lnk', reason: 'failed', detail: 'Name is not allowed.' }]);
+    expect([...picky.written.keys()]).toEqual(['ok.txt', MISSING_NAME]);
+    // Otro error al crear el archivo (sin permiso sobre la carpeta) sí frena todo.
+    const denied = disk();
+    denied.target.makeFile = async () => {
+      throw new DOMException('Permission revoked.', 'NotAllowedError');
+    };
+    await expect(runDownload(namedPlan, denied.target, { fetch: named.fetcher, wait: noWait, online: () => true, missingText })).rejects.toMatchObject({
+      name: 'NotAllowedError',
+    });
 
     const full = disk({ failWrite: 'ok.txt' });
     await expect(runDownload(plan, full.target, { fetch: w.fetcher, wait: noWait, online: () => true, missingText })).rejects.toMatchObject({

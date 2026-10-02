@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { crc32, crc32Update, CrcWorkerPool, localCrc } from './crc32';
-import { NameSpace, numbered, safeName } from './zipNames';
+import { NAME_MAX_BYTES, NameSpace, nameFits, numbered, safeName } from './zipNames';
 import { dosTime, ZipTooBig, ZipWriter, type ZipSink } from './zipWriter';
 import { cutText, graphemesOf } from '../lib/graphemes';
 import { cleanFileName } from './attachments';
@@ -227,6 +227,38 @@ describe('ZipWriter', () => {
     await expect(full.addFile('x', 2, null, chunked(enc('ok')))).rejects.toThrow('disk full');
   });
 
+  it(
+    'O7: 65.535 cosas o más: el final va con Zip64 (registro y localizador) y lo lee Python',
+    async () => {
+      for (const count of [65_534, 65_535]) {
+        const sink = new MemorySink();
+        const zip = new ZipWriter(sink);
+        const empty = new Uint8Array();
+        for (let i = 0; i < count; i++) await zip.addFile(`f${i}`, 0, null, chunked(empty));
+        await zip.finish();
+        const bytes = sink.bytes();
+        const view = new DataView(bytes.buffer, bytes.byteOffset);
+        const end = bytes.length - 22;
+        expect(view.getUint32(end, true)).toBe(0x06054b50);
+        const hasLocator = view.getUint32(end - 20, true) === 0x07064b50;
+        // 65.534 entran en el final de siempre; 65.535 ya es la marca de "mirá el Zip64".
+        expect(hasLocator).toBe(count >= 65_535);
+        expect(view.getUint16(end + 10, true)).toBe(Math.min(count, 0xffff));
+        if (hasLocator) {
+          const at = Number(view.getBigUint64(end - 20 + 8, true));
+          expect(view.getUint32(at, true)).toBe(0x06064b50);
+          expect(Number(view.getBigUint64(at + 32, true))).toBe(count);
+        }
+        if (hasPython && count === 65_535) {
+          const py = pythonReadZip(bytes);
+          expect(py.bad).toBeNull();
+          expect(py.entries.length).toBe(count);
+        }
+      }
+    },
+    120_000,
+  );
+
   it('la fecha de MS-DOS: hora local de a 2 segundos, nunca antes de 1980', () => {
     const { time, date } = dosTime(new Date(2026, 9, 2, 13, 45, 31));
     expect(date >> 9).toBe(46);
@@ -330,6 +362,27 @@ describe('nombres de lo que se baja', () => {
     expect(safeName('Día')).toBe('Día');
     const long = safeName(`${'x'.repeat(198)}🇦🇷🇦🇷.mov`);
     expect(long).toBe(`${'x'.repeat(196)}.mov`);
+  });
+
+  it('O3: un nombre largo en chino o con emojis entra en 255 bytes UTF-8 (la Mac, Linux) sin partir grafemas', () => {
+    const bytes = (s: string) => new TextEncoder().encode(s).length;
+    const cjk = safeName(`${'漢'.repeat(150)}.mov`);
+    expect(cjk.endsWith('.mov')).toBe(true);
+    expect(bytes(cjk)).toBeLessThanOrEqual(NAME_MAX_BYTES);
+    expect(cjk).toBe(`${'漢'.repeat(83)}.mov`);
+    const emoji = safeName('👨‍👩‍👧'.repeat(10) + '🇦🇷'.repeat(80));
+    expect(bytes(emoji)).toBeLessThanOrEqual(NAME_MAX_BYTES);
+    expect(emoji.length).toBeLessThanOrEqual(255);
+    // Nunca media bandera: la cantidad de letras regionales es par.
+    expect((emoji.match(/[\u{1F1E6}-\u{1F1FF}]/gu) ?? []).length % 2).toBe(0);
+    const n = numbered(`${'é'.repeat(140)}.txt`, 12);
+    expect(n.endsWith(' (12).txt')).toBe(true);
+    expect(nameFits(n)).toBe(true);
+    const ns = new NameSpace();
+    const first = ns.take('', `${'語'.repeat(120)}.jpg`);
+    const second = ns.take('', `${'語'.repeat(120)}.JPG`);
+    expect(nameFits(first) && nameFits(second)).toBe(true);
+    expect(second.endsWith(' (2).JPG')).toBe(true);
   });
 
   it('nombres repetidos sin distinguir mayúsculas: « (2)», « (3)», también entre carpeta y archivo', () => {

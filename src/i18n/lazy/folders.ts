@@ -193,8 +193,8 @@ export const folders = {
     es: "Escribe las carpetas y los archivos tal cual, sin zip",
   },
   'folders.zipTooBig': {
-    en: "Too big to download all at once in this browser ({size}; up to {max}). Download the files one by one, or download it all from a computer with Chrome or Edge.",
-    es: "Es demasiado para bajar todo junto en este navegador ({size}; hasta {max}). Bajá los archivos de a uno, o bajá todo desde una computadora con Chrome o Edge.",
+    en: "Too big to download all at once in this browser (more than {max}). Download the files one by one, or download it all from a computer with Chrome or Edge.",
+    es: "Es demasiado para bajar todo junto en este navegador (más de {max}). Bajá los archivos de a uno, o bajá todo desde una computadora con Chrome o Edge.",
   },
   'folders.zipWaitingOnline': { en: "No connection: it continues when it comes back.", es: "Sin conexión: sigue cuando vuelva." },
   'folders.zipKeepOpen': { en: "Keep this tab open until it finishes.", es: "Dejá esta pestaña abierta hasta que termine." },
