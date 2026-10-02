@@ -928,6 +928,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
   async setProjectArchived(projectId: string, archived: boolean): Promise<void> {
     const project = this.projectStatesCheck(projectId);
     if (this.server.projectDeleted(projectId)) throw new RemoteError('project_deleted', true, 'P0001');
+    // La versión se mira solo si cambia algo (como en la base: repetirlo no escribe).
+    if (archived !== !!project.archived_at) this.checkWriteVersion();
     if (archived && !project.archived_at) project.archived_at = new Date().toISOString();
     else if (!archived) project.archived_at = null;
   }
@@ -936,6 +938,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.projectStatesCheck(projectId);
     const existing = this.server.deletedProjects.get(projectId);
     if (existing) return existing.at;
+    this.checkWriteVersion();
     const at = new Date().toISOString();
     this.server.deletedProjects.set(projectId, { at, by: this.userId });
     this.server.refreshAllFileTrash();
@@ -945,6 +948,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
   async restoreProject(projectId: string, withoutDrive = false): Promise<void> {
     this.projectStatesCheck(projectId);
     if (!this.server.deletedProjects.has(projectId)) return;
+    this.checkWriteVersion();
     // Como la migración 10: con la carpeta pedida para la papelera de Drive, primero traerla (o sin ella, con marca).
     const d = this.server.projectDrive.get(projectId);
     if (d && !d.missing_at) {

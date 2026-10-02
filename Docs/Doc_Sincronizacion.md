@@ -1142,7 +1142,10 @@ Row Level Security (`pages`: `upsert` al crear, `update` con el cambio; `workspa
 archivos: con header, se compara su versión con la mínima (`private.app_version_allowed`); sin header (solo lo
 mandan las versiones desde v0.0XX), se rechaza **solo cuando la mínima es 0.0XX o más**, porque con una mínima menor
 quien llama puede ser una versión permitida (la v0.098 publicada no manda header). Lo hacen
-`private.write_version_allowed()` y `private.require_write_version()`.
+`private.write_version_allowed()` y `private.require_write_version()`. Las funciones de proyectos que usa la app
+(`set_project_archived`, `delete_project`, `restore_project`) no pasan por las políticas: lo miran adentro, después
+de los permisos y solo cuando van a escribir (`private.require_session_write_version()`, que como el trigger mira
+solo los pedidos de una sesión de la app).
 
 **Cómo se rechaza, para no perder nada:** con un error de PostgREST de estado **503** (`raise sqlstate 'PGRST'`) y
 mensaje `app_outdated`. Todas las versiones publicadas tratan un 503 como pasajero: el cambio del árbol **queda en su
@@ -1153,13 +1156,24 @@ quedaban a un clic de perderse. Un comentario o una página ya rechazados por ot
 
 **La versión nueva:** si la base contesta `app_outdated` a un cambio del árbol (subieron la mínima entre la consulta y
 el pedido), el cambio queda en la cola, la ronda se corta y se ve el aviso de actualizar (`status.outdated`); en la
-cola de comentarios, el comentario queda pendiente y la vuelta se corta sin error. Al abrir, vuelve a poner en la cola
+cola de comentarios, el comentario queda pendiente y la vuelta se corta sin error. Archivar, borrar o restaurar un
+proyecto, o crear el primero, dicen *This workspace needs a newer version of the app…* en vez del código. Al abrir,
+vuelve a poner en la cola
 los cambios del árbol que una versión anterior dejó rechazados con `app_outdated` (por si alguna base contestó con
 otro estado). El servidor en memoria (`src/sync/testing.ts`) sigue la misma regla (`FakeServer.writeVersionSince`,
 `FakeRemote.versionHeader`).
 
-**Qué no frena:** las funciones de proyectos (archivar, borrar, restaurar), compartir e invitar, y la papelera de
-archivos, que van por funciones sin versión; son acciones con red y en el momento, no colas.
+**Qué no frena:** compartir e invitar y la papelera de archivos, que van por funciones sin versión; son acciones con
+red y en el momento, no colas. Un header alto falso pasa: la mínima es una guarda de compatibilidad, no de seguridad
+(quien puede editar puede escribir igual por la API), y una app vieja de verdad no manda el header.
+
+**Otros workspaces (D-18):** el CORS de la base tiene que aceptar el header `x-shotdocs-version` (ver
+`Doc_Supabase.md`); si no, el navegador corta todos los pedidos de la app (nada se pierde: queda en el dispositivo).
+
+**Las colas publicadas:** `src/sync/offlineLargo.test.ts` prueba la cola de comentarios de la v0.098 copiada sin tocar
+(`src/sync/fixtures/v098/comments.ts`): con el 503 el comentario queda pendiente, sin rechazados, también al cerrar y
+abrir, y sale con la cola de hoy al actualizar. Esa versión muestra el código `app_outdated` como error del comentario
+(no lo conoce); desde v0.0XX sale en palabras.
 
 **Para que frene:** aplicar `20261008120000_version_minima_arbol.sql` (con copia de seguridad), publicar la v0.0XX y,
 cuando Lega la tenga en sus dispositivos, subir `min_app_version` a 0.0XX o más. 0.0XX está escrito en
@@ -1200,11 +1214,11 @@ quizás con `min_app_version` subida. Qué pasa, paso a paso:
    *A new version is available — reloading* sale recién cuando de verdad va a recargar. *Update now* espera a que la
    versión nueva tome el control antes de recargar (recargar antes abría otra vez la vieja desde la caché). Si el
    navegador **empezó a instalarla y no pudo** (el service worker nuevo pasa a `redundant`: un teléfono sin espacio,
-   una red que corta la descarga del precache), no se ofrece forzar. Cada instalación se sigue desde que empieza
-   (`updatefound` del registro, desde v0.0XX): también la que empezó el navegador solo y la que falla antes de que
-   *Update now* la mire, que antes parecía un navegador que nunca empezó y ofrecía forzar, porque la causa sigue y forzar dejaría el
+   una red que corta la descarga del precache), no se ofrece forzar, porque la causa sigue y forzar dejaría el
    dispositivo sin ninguna versión para abrir sin red: el estado dice que libere espacio o busque mejor conexión y
-   vuelva a tocar *Update now*. Solo si el navegador **nunca empezó** a instalar nada y el servidor publica otra versión
+   vuelva a tocar *Update now*. Cada instalación se sigue desde que empieza (`updatefound`, desde v0.0XX): también la
+   que empezó el navegador solo y la que falla antes de que *Update now* la mire, que antes parecía un navegador que
+   nunca empezó a instalar y ofrecía forzar. Solo si el navegador **nunca empezó** a instalar nada y el servidor publica otra versión
    (lee `/index.html?version-check=…` sin caché; si el servidor redirige a `/`, `fetch` sigue la redirección), el estado
    ofrece **Force the update**: saca el service worker y recarga desde el servidor, sin tocar lo guardado en el
    dispositivo. Antes exige todo guardado, red (comprobada leyendo la versión publicada justo antes) y lugar libre en

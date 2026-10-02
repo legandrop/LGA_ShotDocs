@@ -219,6 +219,43 @@ describe('la app con la base que frena el árbol y los comentarios por versión'
   });
 });
 
+describe('archivar, borrar y restaurar proyectos, y los textos', () => {
+  it('una versión anterior no archiva, borra ni restaura con la mínima en el umbral; repetir lo hecho sí anda', async () => {
+    const server = new FakeServer();
+    server.enableProjectStates();
+    const owner = new FakeRemote(server, NEW);
+    const projectId = server.workspaceId;
+    server.settings = { ...server.settings!, minAppVersion: WRITE_VERSION_SINCE };
+    const old = new FakeRemote(server, '0.098');
+    old.versionHeader = false;
+    for (const call of [() => old.setProjectArchived(projectId, true), () => old.deleteProject(projectId)]) {
+      const err = await call().catch((e: unknown) => e);
+      expect((err as RemoteError).message).toBe('app_outdated');
+      expect(isPermanent(err)).toBe(false);
+    }
+    await old.setProjectArchived(projectId, false);
+    await old.restoreProject(projectId);
+    await owner.deleteProject(projectId);
+    await expect(old.restoreProject(projectId)).rejects.toThrow('app_outdated');
+    await old.deleteProject(projectId);
+    await owner.restoreProject(projectId);
+    expect(server.projectDeleted(projectId)).toBe(false);
+  });
+
+  it('`app_outdated` se muestra en palabras, en los dos idiomas (proyectos, comentarios)', async () => {
+    const { projectStateError } = await import('../ui/project');
+    const { commentErrorText } = await import('./comments');
+    const { translate } = await import('../i18n');
+    const es = Object.assign((key: never, params?: never) => translate('es', key, params), { lang: 'es' }) as never;
+    const err = new RemoteError('app_outdated', false, 'P0001');
+    expect(projectStateError(err)).toBe(translate('en', 'common.appOutdated'));
+    expect(projectStateError(err, es)).toBe(translate('es', 'common.appOutdated'));
+    expect(translate('es', 'common.appOutdated')).toMatch(/versión más nueva/);
+    expect(commentErrorText('app_outdated')).toBe(translate('en', 'commentError.outdated'));
+    expect(commentErrorText('app_outdated')).not.toBe('app_outdated');
+  });
+});
+
 describe('el header con la versión y la respuesta de la base', () => {
   const ok = () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
 

@@ -1,5 +1,6 @@
 -- Pruebas de la versión mínima en el árbol y los comentarios (20261008120000_version_minima_arbol.sql): la escritura
--- directa de `pages` y `workspaces` y las funciones de comentarios miran el header `x-shotdocs-version`; sin header
+-- directa de `pages` y `workspaces`, las funciones de comentarios y las de archivar, borrar y restaurar proyectos miran
+-- el header `x-shotdocs-version`; sin header
 -- (versiones anteriores a 0.0XX) se rechaza solo con una mínima de 0.0XX o más. El rechazo es el error de PostgREST
 -- con estado 503 y mensaje `app_outdated`, y no escribe nada. Leer sigue andando. Corre dentro de una transacción que
 -- se deshace al final: no deja usuarios ni datos. Si todo pasa, devuelve una fila con result = 'ok'.
@@ -73,6 +74,13 @@ create function pg_temp.snapshot() returns text language sql security definer as
           from public.comments where page_id = '00000000-0000-4000-8000-00000000a0d1');
 $$;
 
+-- Archivado y borrado de los proyectos R y R2 (como definer: un proyecto borrado no se ve desde la sesión).
+create function pg_temp.projects() returns text language sql security definer as $$
+  select string_agg(name || ':' || case when archived_at is null then '-' else 'archivado' end || ':' ||
+                    case when deleted_at is null then '-' else 'borrado' end, '|' order by name)
+  from public.workspaces where id in ('00000000-0000-4000-8000-00000000a0e3', '00000000-0000-4000-8000-00000000a0e4');
+$$;
+
 -- Personas: a (admin, dueña del proyecto P: puede crear proyectos) y b (miembro sin permiso en P).
 insert into auth.users (id, email, aud, role) values
   ('00000000-0000-4000-8000-00000000a0a1', 'va-a@test.invalid', 'authenticated', 'authenticated'),
@@ -81,7 +89,11 @@ insert into public.members (user_id, role) values
   ('00000000-0000-4000-8000-00000000a0a1', 'admin'),
   ('00000000-0000-4000-8000-00000000a0b1', 'member');
 insert into public.workspaces (id, owner_id, name) values
-  ('00000000-0000-4000-8000-00000000a0e1', '00000000-0000-4000-8000-00000000a0a1', 'P');
+  ('00000000-0000-4000-8000-00000000a0e1', '00000000-0000-4000-8000-00000000a0a1', 'P'),
+  ('00000000-0000-4000-8000-00000000a0e3', '00000000-0000-4000-8000-00000000a0a1', 'R');
+-- R2: en la papelera de proyectos.
+insert into public.workspaces (id, owner_id, name, deleted_at, deleted_by) values
+  ('00000000-0000-4000-8000-00000000a0e4', '00000000-0000-4000-8000-00000000a0a1', 'R2', now(), '00000000-0000-4000-8000-00000000a0a1');
 insert into public.pages (id, workspace_id, title, sort_key) values
   ('00000000-0000-4000-8000-00000000a0d1', '00000000-0000-4000-8000-00000000a0e1', 'p1', 'a0'),
   ('00000000-0000-4000-8000-00000000a0d2', '00000000-0000-4000-8000-00000000a0e1', 'p2', 'a1');
@@ -147,6 +159,9 @@ begin
   perform public.edit_comment('00000000-0000-4000-8000-00000000a1c1', 'editado sin header');
   perform public.resolve_thread('00000000-0000-4000-8000-00000000a0c1', true);
   assert (select title from public.pages where id = p1) = 'p1 v0.098', 'mínima menor: sin header no renombró';
+  perform public.set_project_archived('00000000-0000-4000-8000-00000000a0e3', true);
+  assert pg_temp.projects() = 'R:archivado:-|R2:-:borrado', 'mínima menor: sin header no archivó: ' || pg_temp.projects();
+  perform public.set_project_archived('00000000-0000-4000-8000-00000000a0e3', false);
 end;
 $$;
 select pg_temp.as_console();
@@ -204,6 +219,20 @@ begin
       'mínima 0.0XX: vuelve a abrir un hilo');
     perform pg_temp.expect_outdated(format('select public.import_comment(%L, %L, null, null, %L, now(), null, %L, null, null)',
       '00000000-0000-4000-8000-00000000a1c5', p1, 'importado', 'coda'), 'mínima 0.0XX: importa un comentario');
+    -- Las funciones de proyectos (no pasan por las políticas): archivar, borrar y restaurar tampoco.
+    perform pg_temp.expect_outdated(format('select public.set_project_archived(%L, true)', '00000000-0000-4000-8000-00000000a0e3'),
+      'mínima 0.0XX: archiva un proyecto');
+    perform pg_temp.expect_outdated(format('select public.delete_project(%L)', '00000000-0000-4000-8000-00000000a0e3'),
+      'mínima 0.0XX: borra un proyecto');
+    perform pg_temp.expect_outdated(format('select public.restore_project(%L)', '00000000-0000-4000-8000-00000000a0e4'),
+      'mínima 0.0XX: restaura un proyecto');
+    perform pg_temp.expect_outdated(format('select public.restore_project(%L, true)', '00000000-0000-4000-8000-00000000a0e4'),
+      'mínima 0.0XX: restaura un proyecto sin su carpeta');
+    -- Repetir lo que ya está hecho no escribe y anda: desarchivar uno activo, borrar uno borrado, restaurar uno activo.
+    perform public.set_project_archived('00000000-0000-4000-8000-00000000a0e3', false);
+    perform public.delete_project('00000000-0000-4000-8000-00000000a0e4');
+    perform public.restore_project('00000000-0000-4000-8000-00000000a0e3');
+    assert pg_temp.projects() = 'R:-:-|R2:-:borrado', 'mínima 0.0XX: los proyectos cambiaron con ' || coalesce(quote_literal(v), 'sin header') || ': ' || pg_temp.projects();
     assert pg_temp.snapshot() = before, 'mínima 0.0XX: lo rechazado escribió algo con ' || coalesce(quote_literal(v), 'sin header');
     -- Leer sigue andando: la versión vieja baja el árbol y los comentarios.
     assert (select count(*) from public.pages where workspace_id = ws) = 3, 'mínima 0.0XX: no lee el árbol';
@@ -243,6 +272,15 @@ begin
     assert (select body from public.comments_view where id = '00000000-0000-4000-8000-00000000a1c1') = 'editado ' || v, 'mínima 0.0XX: no editó con ' || v;
   end loop;
   perform public.delete_comment('00000000-0000-4000-8000-00000000a1c3');
+  -- Proyectos, con header: archivar y desarchivar, borrar y restaurar.
+  perform public.set_project_archived('00000000-0000-4000-8000-00000000a0e3', true);
+  assert pg_temp.projects() = 'R:archivado:-|R2:-:borrado', 'mínima 0.0XX: no archivó: ' || pg_temp.projects();
+  perform public.set_project_archived('00000000-0000-4000-8000-00000000a0e3', false);
+  perform public.delete_project('00000000-0000-4000-8000-00000000a0e3');
+  assert pg_temp.projects() = 'R:-:borrado|R2:-:borrado', 'mínima 0.0XX: no borró el proyecto: ' || pg_temp.projects();
+  perform public.restore_project('00000000-0000-4000-8000-00000000a0e3');
+  perform public.restore_project('00000000-0000-4000-8000-00000000a0e4');
+  assert pg_temp.projects() = 'R:-:-|R2:-:-', 'mínima 0.0XX: no restauró: ' || pg_temp.projects();
   assert (select count(*) from public.pages where workspace_id = ws) = 4, 'mínima 0.0XX: crear duplicó o no creó';
   assert (select count(*) from public.comments where page_id = p1) = 5, 'mínima 0.0XX: comentar duplicó o no comentó';
   assert (select deleted_at is not null from public.comments where id = '00000000-0000-4000-8000-00000000a1c3'), 'mínima 0.0XX: no borró';
@@ -280,12 +318,14 @@ begin
   perform pg_temp.expect_error($q$select private.require_write_version()$q$, '42501', 'anon llama a require_write_version');
   perform pg_temp.expect_error($q$select private.write_version_allowed()$q$, '42501', 'anon llama a write_version_allowed');
   perform pg_temp.expect_error($q$select private.comments_write_version()$q$, '42501', 'anon llama al trigger');
+  perform pg_temp.expect_error($q$select private.require_session_write_version()$q$, '42501', 'anon llama a require_session_write_version');
 end;
 $$;
 select pg_temp.as_user('00000000-0000-4000-8000-00000000a0a1', '9.999');
 do $$
 begin
   perform pg_temp.expect_error($q$select private.comments_write_version()$q$, '42501', 'una sesión llama al trigger');
+  perform pg_temp.expect_error($q$select private.require_session_write_version()$q$, '42501', 'una sesión llama a require_session_write_version');
 end;
 $$;
 

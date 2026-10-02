@@ -31,6 +31,7 @@ import { SyncEngine as SyncEngine090 } from './fixtures/v090/engine';
 import { PageFiles as PageFiles090 } from './fixtures/v090/files';
 import { openLocalDb as openLocalDb090 } from './fixtures/v090/localDb';
 import { PageTree as PageTree090 } from './fixtures/v090/tree';
+import * as Comments098 from './fixtures/v098/comments';
 
 const DAY = 24 * 60 * 60 * 1000;
 const OLD = '0.090';
@@ -680,6 +681,57 @@ describe('volver después de dos semanas sin red con la v0.090', () => {
     await syncAll(updated, b, c);
     clean(updated);
     expect(await sameEverywhere(server, [updated, b, c])).toEqual(pages);
+  });
+});
+
+describe('la cola de comentarios publicada (v0.098, copiada) con la base que la frena (B.17)', () => {
+  it('el comentario queda pendiente, sin rechazados, sobrevive a cerrar y abrir, y sale al actualizar', async () => {
+    const server = workspace();
+    const since = WRITE_VERSION_SINCE.toFixed(3);
+    const owner = await device('actual', server, `o-${crypto.randomUUID()}`, since);
+    const page = await owner.tree.create(null, 'Escena 40');
+    await syncAll(owner);
+    expect(server.pages.has(page)).toBe(true);
+    server.settings = { ...server.settings!, minAppVersion: WRITE_VERSION_SINCE };
+
+    // La v0.098 no manda el header: la base le contesta 503 `app_outdated` a cada comentario.
+    // La misma persona que el dueño (la sesión por defecto del servidor en memoria).
+    const old = new FakeRemote(server, '0.098');
+    old.versionHeader = false;
+    const dbName = `v098-${crypto.randomUUID()}`;
+    const open098 = async () => {
+      const db = await Comments098.openCommentsDb(Comments098.commentsDbName(dbName));
+      const queue = new Comments098.CommentQueue(db as never, old as never, old.userId);
+      await queue.load();
+      queue.configure(5, 1);
+      return { db, queue };
+    };
+    let v098 = await open098();
+    const id = await v098.queue.add(page, null, 'comentario de la v0.098');
+    await v098.queue.run();
+    await v098.queue.run();
+    expect(v098.queue.status()).toMatchObject({ pending: 1, failed: 0 });
+    expect(server.comments.size).toBe(0);
+    // La v0.098 se cierra y se vuelve a abrir: sigue ahí, sin pasar a rechazados.
+    v098.queue.stop();
+    v098.db.close();
+    v098 = await open098();
+    await v098.queue.run();
+    expect(v098.queue.status()).toMatchObject({ pending: 1, failed: 0 });
+    v098.queue.stop();
+    v098.db.close();
+
+    // Se actualiza: la cola de hoy, con header, abre la misma base y lo manda.
+    const fresh = new FakeRemote(server, since, old.userId);
+    const db = await openCommentsDb(commentsDbName(dbName));
+    const queue = new CommentQueue(db, fresh, fresh.userId);
+    await queue.load();
+    queue.configure(5, 1);
+    await queue.run();
+    expect(queue.status()).toMatchObject({ pending: 0, failed: 0 });
+    expect(server.comments.get(id)?.body).toBe('comentario de la v0.098');
+    queue.stop();
+    db.close();
   });
 });
 

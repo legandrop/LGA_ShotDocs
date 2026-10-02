@@ -15,7 +15,7 @@ import {
   useSyncStatus,
   useTree,
 } from '../services';
-import { SupabaseRemote } from '../sync/remote';
+import { APP_OUTDATED, SupabaseRemote } from '../sync/remote';
 import { lazyProjectDrive } from '../media/projectDrive';
 import { useWorkspace } from '../workspace';
 import { isFindSelectionTarget, openFindBar } from './findUi';
@@ -672,7 +672,8 @@ export function NoProjects({
       .from('workspaces')
       .upsert({ id: projectId, name: t('project.defaultName') }, { onConflict: 'id', ignoreDuplicates: true });
     setBusy(false);
-    if (error) setError(error.message);
+    // La base frena por versión la creación de proyectos (B.17): el aviso de actualizar, no el código.
+    if (error) setError(error.message === APP_OUTDATED ? tr('common.appOutdated') : error.message);
     else onRetry();
   }
 
