@@ -254,6 +254,108 @@ export const assistant = {
   },
   'assistant.policy.failed': { en: "Couldn't save the change. Try again.", es: "No se pudo guardar el cambio. Probá de nuevo." },
   'assistant.policy.offline': { en: "Changing it needs internet.", es: "Para cambiarlo hace falta internet." },
+
+  // *Dictate to report* (Docs/Doc_Dictado.md, entrega V1): la hoja, la vista previa por cambio y lo que no se ubicó.
+  'dictation.title': { en: "Dictate to report", es: "Dictar al reporte" },
+  'dictation.close': { en: "Close Dictate to report", es: "Cerrar Dictar al reporte" },
+  'dictation.setupText': {
+    en: "Write or dictate a note in your own words and the assistant places each piece where it goes in this page, with a preview before anything is written. It uses your assistant key: set it up first.",
+    es: "Escribí o dictá una nota con tus palabras y el asistente pone cada dato donde va en esta página, con una vista previa antes de escribir nada. Usa tu clave del asistente: configurala primero.",
+  },
+  'dictation.readOnlyNotice': {
+    en: "You can't edit this page: you can place the note and copy the result.",
+    es: "No podés editar esta página: podés ubicar la nota y copiar el resultado.",
+  },
+  'dictation.note': { en: "Note", es: "Nota" },
+  'dictation.placeholder': {
+    en: "Type, or tap the microphone on your keyboard and talk: “this shot was a 50 mm, put it where it goes”",
+    es: "Escribí, o tocá el micrófono del teclado y hablá: «este plano se filmó con un 50 mm, anotalo donde corresponda»",
+  },
+  'dictation.place': { en: "Place", es: "Ubicar" },
+  'dictation.saveForLater': { en: "Save for later", es: "Guardar para después" },
+  'dictation.hint': {
+    en: "Say which shot, or put the cursor in its row first. Nothing is written until you check the preview and apply it.",
+    es: "Decí qué plano, o poné antes el cursor en su fila. No se escribe nada hasta que revises la vista previa y la apliques.",
+  },
+  'dictation.offline': {
+    en: "Placing a note needs internet. Your note stays saved on this device.",
+    es: "Para ubicar una nota hace falta internet. Tu nota queda guardada en este dispositivo.",
+  },
+  'dictation.policyOff': {
+    en: "The owner of this workspace turned the assistant off, so Dictate to report is off too.",
+    es: "El dueño de este workspace apagó el asistente, y con él Dictar al reporte.",
+  },
+  'dictation.policyLocal': {
+    en: "Only local models are allowed in this workspace: choose one in Assistant settings.",
+    es: "En este workspace solo se permiten modelos locales: elegí uno en los ajustes del asistente.",
+  },
+  'dictation.placing': { en: "Placing…", es: "Ubicando…" },
+  'dictation.whichShot': { en: "Which shot?", es: "¿Qué plano?" },
+  'dictation.heard': { en: "Heard", es: "Se entendió" },
+  'dictation.yourNote': { en: "Your note", es: "Tu nota" },
+  'dictation.noteKept': {
+    en: "Your note stays here until you choose Done or New note: check that nothing was left out.",
+    es: "Tu nota queda acá hasta que toques Listo o Nota nueva: fijate que no haya quedado nada afuera.",
+  },
+  'dictation.nothing': {
+    en: "The assistant couldn't place this note. Edit it and try again, or copy it.",
+    es: "El asistente no pudo ubicar esta nota. Editala y probá de nuevo, o copiala.",
+  },
+  'dictation.replaces': { en: "Replaces “{text}”", es: "Reemplaza «{text}»" },
+  'dictation.chosen': { en: "Row chosen by the assistant", es: "Fila elegida por el asistente" },
+  'dictation.row': { en: "row {n}", es: "fila {n}" },
+  'dictation.newRow': { en: "new: {slate}", es: "nueva: {slate}" },
+  'dictation.addRow': { en: "New row after {after}", es: "Fila nueva después de {after}" },
+  'dictation.newSection': { en: "New section: {title}", es: "Sección nueva: {title}" },
+  'dictation.trimmed': {
+    en: "The page is long: only its tables, checklists, labeled lines and the section with the cursor were sent.",
+    es: "La página es larga: solo se mandaron sus tablas, casillas, renglones con rótulo y la sección del cursor.",
+  },
+  'dictation.couldntPlace': { en: "Couldn't place", es: "No se pudo ubicar" },
+  'dictation.unplacedHint': {
+    en: "These stay on this device after Apply, until you add them to the page or discard them (Copy keeps them).",
+    es: "Esto queda en este dispositivo después de Aplicar, hasta que lo agregues a la página o lo descartes (Copiar lo deja).",
+  },
+  'dictation.addToSummary': { en: "Add to Summary", es: "Agregar al resumen" },
+  'dictation.addFailed': {
+    en: "It couldn't be added to the page. It's still here.",
+    es: "No se pudo agregar a la página. Sigue acá.",
+  },
+  'dictation.unreadable': {
+    en: "The answer couldn't be read. Your note is still here.",
+    es: "No se pudo leer la respuesta. Tu nota sigue acá.",
+  },
+  'dictation.pageEmpty': { en: "This page has nothing to write in.", es: "Esta página no tiene dónde escribir." },
+  'dictation.pageTooLong': {
+    en: "This page is too long to place a note in it.",
+    es: "Esta página es demasiado larga para ubicar una nota.",
+  },
+  'dictation.changed': {
+    en: "Part of the page changed while the assistant was working. Nothing was applied.",
+    es: "Parte de la página cambió mientras el asistente trabajaba. No se aplicó nada.",
+  },
+  'dictation.readOnly': {
+    en: "You can't edit this page anymore. Nothing was applied.",
+    es: "Ya no podés editar esta página. No se aplicó nada.",
+  },
+  'dictation.applied': {
+    en: { one: "Applied {count} change.", other: "Applied {count} changes." },
+    es: { one: "Se aplicó {count} cambio.", other: "Se aplicaron {count} cambios." },
+  },
+  'dictation.undo': { en: "Undo", es: "Deshacer" },
+  'dictation.undone': { en: "Undone. Your note is back.", es: "Deshecho. Tu nota volvió." },
+  'dictation.undoLater': {
+    en: "The page was edited after this: undo it in the page with {undo}.",
+    es: "La página se editó después: deshacelo en la página con {undo}.",
+  },
+  'dictation.another': { en: "New note", es: "Nota nueva" },
+  'dictation.done': { en: "Done", es: "Listo" },
+  'dictation.keep': { en: "Keep", es: "Conservar" },
+  'dictation.discardNote': { en: "Discard this note?", es: "¿Descartar esta nota?" },
+  'dictation.discardPending': {
+    en: { one: "Discard {count} unplaced item?", other: "Discard {count} unplaced items?" },
+    es: { one: "¿Descartar {count} dato sin ubicar?", other: "¿Descartar {count} datos sin ubicar?" },
+  },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

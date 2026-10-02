@@ -110,6 +110,8 @@ const CAMERA = '0.110';
 const ASSISTANT = '0.118';
 /** El asistente, entrega A2 (la página entera, *Format as…*, la política del workspace): la versión la pone quien publica. */
 const ASSISTANT_A2 = '0.126';
+/** *Dictate to report* (Docs/Doc_Dictado.md, entrega V1): la versión la pone quien publica. */
+const DICTATION = '0.135';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
@@ -282,6 +284,23 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { apply: 'assistantApply', undo: 'undo' },
     words: ['formato', 'forma', 'viñetas', 'casillas', 'tabla', 'títulos', 'format', 'bullets', 'checklist', 'table', 'headings', 'asistente', 'assistant'],
     since: ASSISTANT_A2,
+  },
+  {
+    id: 'dictation',
+    section: 'writing',
+    title: 'help.dictation.title',
+    text: 'help.dictation.text',
+    keys: { open: 'dictate', place: 'dictationPlace', apply: 'assistantApply', undo: 'undo' },
+    words: ['dictar', 'dictado', 'voz', 'nota', 'reporte', 'ubicar', 'anotalo donde corresponda', 'dictate', 'dictation', 'voice', 'note', 'report', 'place', "couldn't place", 'asistente', 'assistant'],
+    since: DICTATION,
+  },
+  {
+    id: 'keyboardDictation',
+    section: 'writing',
+    title: 'help.keyboardDictation.title',
+    text: 'help.keyboardDictation.text',
+    words: ['dictar', 'dictado', 'voz', 'micrófono', 'teclado', 'siri', 'win+h', 'dictate', 'dictation', 'voice', 'microphone', 'keyboard', 'iphone', 'android', 'windows', 'mac'],
+    since: DICTATION,
   },
   {
     id: 'assistantPolicy',

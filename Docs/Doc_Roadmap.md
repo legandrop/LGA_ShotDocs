@@ -502,8 +502,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   paso). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
   sobre todo en el teléfono, y que la IA pase «este plano se filmó con un 50 mm, anotalo donde corresponda» a la celda
-  *Lens* de la fila de ese plano en el *On-Set Report*. **Diseño en `Doc_Dictado.md`** (sin código; decisiones propuestas
-  DI1 a DI9): el dictado común queda en el teclado del sistema; un solo micrófono propio, *Dictate to report*, que graba
+  *Lens* de la fila de ese plano en el *On-Set Report*. **V1 hecha (v0.135, `Doc_Dictado.md` sección 15):** *Dictate to
+  report* con texto (escrito o dictado con el teclado del sistema), el mapa, el validador, la vista previa por cambio con
+  casillas, *Apply* con la guarda y *Undo*, `ask` con botones, *Couldn't place* guardado en el dispositivo, permisos y
+  política; falta que Lega mida la calidad con su clave (10.3) y pruebe el dictado del teclado en el editor del teléfono.
+  **Diseño en `Doc_Dictado.md`** (decisiones propuestas DI1 a DI9): el dictado común queda en el teclado del sistema;
+  un solo micrófono propio, *Dictate to report*, que graba
   en el dispositivo y transcribe con el proveedor de la persona (OpenAI o Gemini; el reconocimiento del navegador no
   existe en la app instalada del iPhone); la página va como un mapa con direcciones y vuelve una lista de cambios
   validada, con vista previa, *Apply* con la guarda y un deshacer; «este plano» por lo dicho, el cursor o el plano
@@ -511,6 +515,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   V1 (texto dictado con el teclado → ubicar; requiere A2 de P.24 en `main`), V2 (la cola sin red), V3 (el micrófono
   propio, guantes y ruido), V4 (plano activo, correcciones, la página del plano, el botón de acción del iPhone).
   Queda para medir: transcripción adentro del teléfono (Whisper en WebAssembly), sin red y privada.
+  Quedó de la re-verificación de V1 (BAJO): el resguardo de 600 ms contra el doble toque en *Apply* también corre
+  cuando se aplicó con Ctrl/⌘+Enter, y un *Undo* a propósito en menos de medio segundo se ignora sin aviso (el segundo
+  anda); que valga solo para un clic o un toque sobre *Apply*.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

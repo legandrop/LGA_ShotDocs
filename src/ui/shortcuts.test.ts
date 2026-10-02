@@ -18,6 +18,7 @@ import { isPrintShortcut } from './printPage';
 import { isHistoryShortcut } from './historyUi';
 import { isDayReportShortcut } from '../templates/dayReport';
 import { isAssistantShortcut } from '../assistant/assistantUi';
+import { isDictateShortcut } from '../dictation/dictationUi';
 import { isSearchShortcut } from './projectSearchUi';
 import { SHORTCUT_FILES, SHORTCUT_RULES } from './shortcutSources';
 import { keyLabel, shortcut, shortcutLabel, SHORTCUT_PLACES, SHORTCUTS, slashBadge, type Shortcut } from './shortcuts';
@@ -203,6 +204,7 @@ const FUNCTIONS: Record<string, { fn: Fn; id: string; keys?: string[] }> = {
   isHistoryShortcut: { fn: isHistoryShortcut as Fn, id: 'history' },
   isDayReportShortcut: { fn: isDayReportShortcut as Fn, id: 'newDayReport' },
   isAssistantShortcut: { fn: isAssistantShortcut as Fn, id: 'assistant' },
+  isDictateShortcut: { fn: isDictateShortcut as Fn, id: 'dictate' },
   isCommentShortcut: { fn: isCommentShortcut as Fn, id: 'comment' },
   isSendShortcut: { fn: isSendShortcut as Fn, id: 'commentsSend' },
   // F3 / Shift+F3 y Ctrl/⌘+G (con Shift, la anterior): la barra decide la dirección con Shift.
