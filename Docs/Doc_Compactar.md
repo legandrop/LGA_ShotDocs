@@ -864,7 +864,7 @@ como v0.129. Todo se prueba prendido con el servidor en memoria.
   suba. Restaurar una copia hace lo mismo con las páginas que aplicaron un snapshot (O-B). La época del árbol reinicia
   solo si es más nueva que la anotada.
 
-**La base** (`supabase/migrations/20261020120000_compactar_crear.sql`, sin aplicar; no sube `schema_version`):
+**La base** (`supabase/migrations/20261020120000_compactar_crear.sql`, aplicada al publicar v0.133; no sube `schema_version`):
 `invalidate_page_snapshot` pide ver lo borrado (`sees_deleted`), como las demás (O3). Lo demás de la entrega 1 no
 cambia.
 
