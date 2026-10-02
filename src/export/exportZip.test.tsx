@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BlobSink, type DownloadTarget, type FileOut } from '../media/folderZip';
+import { formatSize } from '../media/fileTrash';
 import { HeicError } from '../media/heic';
 import { mediaIdOf } from '../media/queue';
+import { ServicesContext, type Services } from '../services';
+import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, fakeConvertHeic, makeDevice, type Device } from '../sync/testing';
+import { ExportDialog } from '../ui/ExportDialog';
 import { hasPython, pythonReadZip, text, type PyEntry, type PyZip } from '../test/zipCheck';
 import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { porteroDownload } from '../ui/sharpImages';
@@ -49,7 +55,9 @@ beforeAll(() => {
 
 const devices: Device[] = [];
 const editors: ExportEditor[] = [];
+const roots: Root[] = [];
 afterEach(async () => {
+  for (const r of roots.splice(0)) act(() => r.unmount());
   for (const e of editors.splice(0)) e.destroy();
   for (const d of devices.splice(0)) {
     d.offline.stop();
@@ -596,6 +604,22 @@ describe('exportar zip: el archivo entero', () => {
     expect(html).toContain('src="Files/_view/IMG_0412.jpg"');
   });
 
+  it('sin red, en un dispositivo que nunca vio los archivos: el texto sale y cada archivo queda en la lista con su id', async () => {
+    const w = await world();
+    w.server.online = false;
+    const { result, zip } = await zipOf(w, w.b, { online: false });
+    expect(result.missing.filter((m) => m.why === 'unknown').map((m) => m.path.split('/').pop()).sort()).toEqual(
+      [w.ids.photo, w.ids.heic, w.ids.video, w.ids.pdf, w.ids.inline].sort(),
+    );
+    if (!hasPython) return;
+    const z = read(zip);
+    expect(z.bad).toBeNull();
+    const html = text(z.get('01_Dia_1_exteriores.html'));
+    expect(html).toContain('Plano general');
+    // Ninguna imagen rota que pida algo de afuera.
+    for (const src of html.match(/<img[^>]*src="([^"]*)"/g) ?? []) expect(src).toMatch(/src="data:/);
+  });
+
   it('un archivo que el portero no da queda en la lista, y su foto sin link a un original que no está', async () => {
     const w = await world();
     w.server.portero.hidden.add(w.ids.video);
@@ -647,5 +671,121 @@ describe('exportar zip: el archivo entero', () => {
     const day1 = '01_Rodaje_·_Semana_1/01_Dia_1_exteriores';
     expect([...written.keys()]).toEqual(expect.arrayContaining(['index.html', 'style.css', '_shotdocs/manifest.json', `${day1}/01_Dia_1_exteriores.html`, `${day1}/Files/_view/IMG_0412.jpg`]));
     expect(new TextDecoder().decode(written.get(`${day1}/Files/IMG_0412.JPG`))).toBe(content(4000, 1));
+  });
+});
+
+describe('exportar zip: la ventana', () => {
+  function services(d: Device): Services {
+    const config = { url: 'https://x.supabase.co', publishableKey: 'sb_publishable_test', name: 'Test', localKey: 'test', storage: {} };
+    const client = { auth: { getSession: async () => ({ data: { session: null } }) } } as never;
+    return {
+      workspace: { config, client },
+      client,
+      user: { id: d.remote.userId, email: OWNER_EMAIL },
+      db: d.db,
+      tree: d.tree,
+      docs: d.docs,
+      files: d.files,
+      media: d.media,
+      engine: d.engine,
+      access: d.access,
+      remote: d.remote as unknown as SupabaseRemote,
+      dbName: 'test',
+      mediaDb: d.mediaDb,
+      comments: d.comments,
+      commentsDb: d.commentsDb,
+      sizes: d.sizes,
+      shutdown: async () => undefined,
+    } as unknown as Services;
+  }
+
+  const settle = (ms = 30) => act(async () => new Promise((r) => setTimeout(r, ms)));
+  // jsdom no carga imágenes: sin esto, la ventana espera 8 s por página a que se pongan (como en el navegador si no llegan).
+  const imagesLoad = () => vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
+  const button = (host: HTMLElement, label: string) => [...host.querySelectorAll('button')].find((b) => b.textContent === label);
+
+  it('elegir el zip: los pesos por casilla, armarlo en memoria con avance y guardarlo; Escape no cierra mientras trabaja', async () => {
+    const w = await world();
+    imagesLoad();
+    // El portero en memoria también para lo que pide la app con `fetch` (los originales y el HEIC).
+    const real = globalThis.fetch;
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).startsWith('https://portero.test') ? w.server.portero.fetch(input, init) : real(input, init),
+    );
+    const saved: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      saved.push(this.download);
+    });
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    roots.push(root);
+    let closed = 0;
+    await act(async () =>
+      root.render(
+        <ServicesContext.Provider value={services(w.b)}>
+          <ExportDialog target={{ kind: 'page', id: w.root }} onClose={() => closed++} />
+        </ServicesContext.Provider>,
+      ),
+    );
+    const zipRadio = [...host.querySelectorAll<HTMLInputElement>('input[name="export-format"]')][1]!;
+    expect(zipRadio.parentElement?.textContent).toBe('Zip — to archive');
+    await act(async () => zipRadio.click());
+    for (let i = 0; i < 100 && !host.textContent?.includes('previews'); i++) await settle();
+    expect(host.textContent).toContain(`Original photos3 · ${formatSize(4000 + 5000 + 2200)}`);
+    expect(host.textContent).toContain(`Videos1 · ${formatSize(6000)}`);
+    expect(host.textContent).toContain('3 pages');
+    expect(host.textContent).toContain('5 files');
+    expect(host.textContent).toMatch(/≈ 10 file server requests · 1% of today's limit/);
+    // Las casillas: el tooltip no repite el nombre.
+    expect(host.querySelector('[data-tip]')?.getAttribute('data-tip')).not.toBe('Original photos');
+    // jsdom no tiene `showSaveFilePicker`: el zip se arma en memoria.
+    await act(async () => button(host, 'Prepare .zip')!.click());
+    expect(host.textContent).toContain('Keep this tab open');
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    expect(closed).toBe(0);
+    for (let i = 0; i < 300 && !host.textContent?.includes('The zip is ready'); i++) await settle();
+    expect(host.textContent).toContain('The zip is ready.');
+    const save = button(host, 'Save Rodaje_·_Semana_1.zip')!;
+    await act(async () => save.click());
+    expect(saved).toEqual(['Rodaje_·_Semana_1.zip']);
+    expect(document.querySelectorAll('.print-view, .sd-export-source')).toHaveLength(0);
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    expect(closed).toBe(1);
+  });
+
+  it('sin red avisa qué originales van a faltar; cancelar a mitad vuelve sin dejar nada', async () => {
+    const w = await world();
+    imagesLoad();
+    // B ya vio las páginas con red (sabe qué archivos son) y se quedó sin red.
+    await estimateZip(exportPlan(w.b.tree, 'page', w.root), w.b.docs, appArchiveMedia(w.b.media, w.b.mediaDb));
+    w.server.online = false;
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    roots.push(root);
+    await act(async () =>
+      root.render(
+        <ServicesContext.Provider value={services(w.b)}>
+          <ExportDialog target={{ kind: 'page', id: w.root }} onClose={() => undefined} />
+        </ServicesContext.Provider>,
+      ),
+    );
+    await act(async () => [...host.querySelectorAll<HTMLInputElement>('input[name="export-format"]')][1]!.click());
+    for (let i = 0; i < 100 && !host.textContent?.includes('previews'); i++) await settle();
+    expect(host.textContent).toContain('5 originals are not on this device; they will be missing until you are online.');
+    expect(host.textContent).not.toContain('file server requests');
+    // Sin las fotos, los adjuntos ni los videos, no falta nada.
+    for (const label of ['Original photos', 'Attachments', 'Videos']) {
+      const box = [...host.querySelectorAll('label')].find((l) => l.textContent?.startsWith(label))!.querySelector('input')!;
+      await act(async () => box.click());
+    }
+    expect(host.textContent).not.toContain('are not on this device');
+    await act(async () => button(host, 'Prepare .zip')!.click());
+    await act(async () => button(host, 'Cancel')!.click());
+    for (let i = 0; i < 100 && !host.textContent?.includes('Cancelled'); i++) await settle();
+    expect(host.textContent).toContain('Cancelled: nothing was saved.');
+    expect(document.querySelectorAll('.print-view, .sd-export-source')).toHaveLength(0);
   });
 });

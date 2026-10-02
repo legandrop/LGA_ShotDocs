@@ -231,7 +231,7 @@ export function porteroCost(files: number): { requests: number; percent: number 
 // --- Escribir ----------------------------------------------------------------------------------------------------
 
 /** Por qué falta algo (cada uno con su texto en `MISSING_FILES.txt`). */
-export type MissingWhy = 'offline' | 'failed' | 'incomplete' | 'deleted' | 'noView' | 'pageOutdated' | 'pageUnknown' | 'pageFailed' | 'comments';
+export type MissingWhy = 'offline' | 'failed' | 'incomplete' | 'deleted' | 'noView' | 'unknown' | 'pageOutdated' | 'pageUnknown' | 'pageFailed' | 'comments';
 
 export interface ZipMissing {
   /** La ruta adentro del zip (sin la carpeta de arriba). */
@@ -240,16 +240,18 @@ export interface ZipMissing {
   detail?: string;
 }
 
+/** Un renglón de la lista de lo que falta: la ruta y el motivo (la fecha de lo último sincronizado, para los comentarios). */
+export function missingLine(item: ZipMissing, lastSync: number | null, now: Date = new Date()): string {
+  const syncDate = new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'short' }).format(lastSync ?? now.getTime());
+  const why = item.why === 'comments' ? t('exportZip.why.comments', { date: syncDate }) : t(`exportZip.why.${item.why}`);
+  return `${item.path} — ${why}${item.detail ? ` (${item.detail})` : ''}`;
+}
+
 /** El texto de `MISSING_FILES.txt` (con BOM y fin de renglón de Windows, como el de *Download all*). */
 export function missingText(items: readonly ZipMissing[], root: string, now: Date, lastSync: number | null): string {
-  const date = now.toLocaleString(locale());
-  const lines = [t('exportZip.missingHead', { name: root, date }), ''];
-  const syncDate = new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'short' }).format(lastSync ?? now.getTime());
-  for (const item of items) {
-    const why = item.why === 'comments' ? t('exportZip.why.comments', { date: syncDate }) : t(`exportZip.why.${item.why}`);
-    lines.push(`${item.path} — ${why}${item.detail ? ` (${item.detail})` : ''}`);
-  }
-  return `﻿${lines.join('\r\n')}\r\n`;
+  const lines = [t('exportZip.missingHead', { name: root, date: now.toLocaleString(locale()) }), ''];
+  for (const item of items) lines.push(missingLine(item, lastSync, now));
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
 }
 
 /** Cómo va. */
@@ -347,6 +349,8 @@ export interface Manifest {
 export interface ZipResult {
   /** La carpeta de arriba del zip (y el nombre del zip). */
   root: string;
+  /** La última sincronización del dispositivo (la fecha de "como estaba en este dispositivo"). */
+  lastSync: number | null;
   pages: number;
   /** Archivos escritos (originales y vistas) y lo que bajó por el portero. */
   files: number;
@@ -577,6 +581,8 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
     for (const entry of owned) {
       check();
       const meta = entry.meta;
+      // Un archivo que este dispositivo no conoce todavía (nunca lo vio, y sin red): queda en la lista, con su id.
+      if (media && !meta) missing.push({ path: `${slot.dir}/${FILES_DIR}/${entry.id}`, why: 'unknown' });
       if (!media || !meta || meta.folder) continue;
       if (meta.deleted) {
         if (entry.wanted) missing.push({ path: `${slot.dir}/${FILES_DIR}/${meta.name}`, why: 'deleted' });
@@ -824,7 +830,7 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
     );
     if (missing.length) await out.file(MISSING_FILE, missingText(missing, root, now, options.lastSync ?? null));
     await out.finish();
-    return { root, pages: plan.length, files: out.written, downloaded, missing, manifest };
+    return { root, lastSync: options.lastSync ?? null, pages: plan.length, files: out.written, downloaded, missing, manifest };
   } catch (err) {
     if (isAbort(err)) throw new ExportCancelled();
     throw err;

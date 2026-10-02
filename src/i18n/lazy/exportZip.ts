@@ -21,6 +21,10 @@ export const exportZip = {
   'exportZip.why.failed': { en: "could not be downloaded", es: "no se pudo bajar" },
   'exportZip.why.incomplete': { en: "only part of it arrived", es: "llegó solo una parte" },
   'exportZip.why.deleted': { en: "it was sent to the Drive trash", es: "se mandó a la papelera de Drive" },
+  'exportZip.why.unknown': {
+    en: "this device does not know this file yet (it never showed it and there was no connection)",
+    es: "este dispositivo todavía no conoce este archivo (nunca lo mostró y no había conexión)",
+  },
   'exportZip.why.noView': { en: "there is no preview of it on this device", es: "no hay una vista de este archivo en el dispositivo" },
   'exportZip.why.pageOutdated': {
     en: "this page may be out of date on this device",
