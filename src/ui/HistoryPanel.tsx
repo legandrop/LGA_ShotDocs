@@ -187,6 +187,13 @@ export function whenLabel(iso: string, lang: string): string {
   return `${dayLabel(iso, lang)}, ${timeLabel(iso, lang)}`;
 }
 
+/** Lo mismo en medio de una frase ("Restored from yesterday, 14:05"): hoy y ayer en minúscula. */
+export function whenInline(iso: string, lang: string): string {
+  const day = dayLabel(iso, lang);
+  const lower = day === t('history.today') || day === t('history.yesterday') ? day.charAt(0).toLocaleLowerCase(lang) + day.slice(1) : day;
+  return `${lower}, ${timeLabel(iso, lang)}`;
+}
+
 /**
  * Quién (que no sea `me`) cambió la página en los últimos 2 minutos (con el reloj del dispositivo; `undefined` si nadie).
  * Es el aviso de antes de confirmar; lo que de verdad ataja es volver a mirar el servidor al confirmar (`restore`): si
@@ -893,7 +900,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           {ready && sessions.length === 0 && <p className="muted history-state">{tr('history.empty')}</p>}
           {ready && ready.summary.unreadable > 0 && <p className="banner">{tr('history.unreadable', { count: ready.summary.unreadable })}</p>}
           {ready?.offlineAt != null && (
-            <p className="banner history-offline-saved">{tr('history.offlineSaved', { when: whenLabel(new Date(ready.offlineAt).toISOString(), lang) })}</p>
+            <p className="banner history-offline-saved">{tr('history.offlineSaved', { when: whenInline(new Date(ready.offlineAt).toISOString(), lang) })}</p>
           )}
           {unsynced && <p className="banner">{tr('history.unsynced')}</p>}
           {(unknown || shapeOk === false) && <p className="banner">{tr('history.partial')}</p>}
@@ -952,6 +959,10 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
           )}
         </section>
         <aside className="history-list" aria-label={tr('history.versions')} ref={listRef}>
+          {/* En el teléfono la lista va sola (sin la versión): el aviso de lo guardado va también acá. */}
+          {ready?.offlineAt != null && (
+            <p className="banner history-offline-list">{tr('history.offlineSaved', { when: whenInline(new Date(ready.offlineAt).toISOString(), lang) })}</p>
+          )}
           {namesSupported && sessions.length > 0 && (
             <label className="history-filter">
               <input type="checkbox" checked={onlyNamed} onChange={(e) => setOnlyNamed(e.target.checked)} />
@@ -973,7 +984,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
                 name: named?.label ?? null,
                 restored: restores.map((r) => {
                   const at = r.restoredFromSeq === null ? undefined : rowTimes.get(r.restoredFromSeq);
-                  return at ? tr('history.restoredFrom', { date: whenLabel(at, lang) }) : tr('history.restoredPlain');
+                  return at ? tr('history.restoredFrom', { date: whenInline(at, lang) }) : tr('history.restoredPlain');
                 }),
               };
             }}

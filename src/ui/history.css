@@ -411,6 +411,14 @@
   margin: 10px 16px 2px;
   font-size: 13px;
   color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.history-filter input {
+  width: auto;
+  margin: 0;
+  flex: none;
 }
 
 .history-no-named {
@@ -449,16 +457,20 @@
   background: none;
 }
 
-/* En la computadora aparece al pasar o en la elegida; con el dedo, siempre. */
+/* En la computadora aparece al pasar o en la elegida (apagado, atenuado); con el dedo, siempre. */
 @media (hover: hover) {
-  .history-more {
+  .history-session-row .history-more {
     opacity: 0;
   }
   .history-session-row:hover .history-more,
   .history-session-row .history-session[aria-current='true'] ~ .history-more,
-  .history-more:focus-visible,
-  .history-more[aria-expanded='true'] {
+  .history-session-row .history-more:focus-visible,
+  .history-session-row .history-more[aria-expanded='true'] {
     opacity: 1;
+  }
+  .history-session-row:hover .history-more:disabled,
+  .history-session-row .history-session[aria-current='true'] ~ .history-more:disabled {
+    opacity: 0.45;
   }
 }
 
@@ -494,4 +506,16 @@
   display: block;
   width: calc(100% - 32px);
   margin: 0 16px 8px;
+}
+
+/* El aviso de lo guardado sin red, en la lista: solo en el teléfono (en la computadora va arriba de la versión). */
+.history-offline-list {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .history-offline-list {
+    display: block;
+    margin: 10px 16px 0;
+  }
 }
