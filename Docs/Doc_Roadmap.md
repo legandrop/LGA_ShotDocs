@@ -316,6 +316,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   2 (el reporte del día), 3 (plantillas propias). **Para después:** que la base fusione las claves de `pages.settings`
   (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
   se pisan (`Doc_Plantillas.md`, sección 8).
+- **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una
+  foto de set sin tocar el original, cómodo para quien usa LGA FrameRev (mismas letras, colores y grosores).
+  **Diseño en `Doc_Anotar_Fotos.md`** (sin código; auditado: aprobado con condiciones, ya corregido; decisiones AN1 a AN11
+  propuestas): las anotaciones en un `Y.Map` del documento de la página, afuera del contenido, con una clave por forma
+  (`<archivo>/<forma>`, como "colapsar para todos"), así una versión vieja no las borra y dos sin red no se pisan; las de
+  una foto sacada se podan para que no lleguen a quien solo ve (D14); un SVG encima de la foto en la página, la celda, el carrete y el PDF; la copia con
+  anotaciones se arma en el dispositivo al bajar; anota quien edita la página. Entregas: 0 (prueba técnica), 1 (ver),
+  2 (anotar en la compu), 3 (dedo, y lápiz en el iPad), 4 (bajar, copiar y exportar a FrameRev), 5 (historial, copiar entre
+  páginas, buscar), 6 opcional (dibujar en un comentario).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
