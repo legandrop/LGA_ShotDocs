@@ -178,6 +178,7 @@ export class UndoTimeline {
     h.um = um;
     h.info = info;
     cleanMeta([...um.undoStack, ...um.redoStack], info.binding ?? null);
+    protectOthers(um);
     const page = h;
     const onAdded = (e: StackEvent) => this.onStackItem(page, um, e, true);
     const onUpdated = (e: StackEvent) => this.onStackItem(page, um, e, false);
@@ -493,6 +494,53 @@ export class UndoTimeline {
       extra--;
     }
   }
+}
+
+// --- Nunca pisar lo ajeno adentro de un bloque propio (auditoría de la entrega 1, B1) --------------------------------
+//
+// El filtro de borrado de y-prosemirror protege los `paragraph` con contenido, no el `blockContainer` de BlockNote. Al
+// deshacer la creación de un renglón (Enter y escribir), Yjs borraba el `blockContainer`, que es tuyo, y con él lo que
+// otra persona había escrito adentro. Ahora no se borra un elemento que tiene adentro algo vivo de otro autor: lo tuyo
+// de adentro se va (son sus propios items del paso) y lo del otro queda en su renglón, con el bloque y sus atributos.
+// Si Yjs le cambió el autor al documento abierto (B.16), un renglón tuyo con texto tuyo posterior puede quedar: sobra
+// un renglón, nunca falta nada.
+
+interface ItemLike {
+  id: { client: number };
+  deleted: boolean;
+  right: ItemLike | null;
+  content: { type?: { _start?: ItemLike | null } };
+}
+
+/** Si adentro del tipo de `item` (recorriendo todo lo de abajo) hay algo vivo de un autor que no es el de `item`. */
+export function hasOthersInside(item: ItemLike, client = item.id.client): boolean {
+  let child = item.content?.type?._start ?? null;
+  while (child) {
+    if (!child.deleted) {
+      if (child.id.client !== client) return true;
+      if (hasOthersInside(child, client)) return true;
+    }
+    child = child.right;
+  }
+  return false;
+}
+
+const protectedManagers = new WeakSet<UndoManager>();
+
+/** Envuelve el filtro de borrado del `UndoManager` (una vez): lo de siempre y, además, nada con lo de otro adentro. */
+function protectOthers(um: UndoManager): void {
+  if (protectedManagers.has(um)) return;
+  protectedManagers.add(um);
+  const previous = um.deleteFilter;
+  um.deleteFilter = (item) => {
+    if (!previous(item)) return false;
+    const it = item as unknown as ItemLike & { parentSub: string | null; parent: { _item?: ItemLike | null } | null };
+    if (hasOthersInside(it)) return false;
+    // Un atributo (el `id` del bloque, su tipo de párrafo) de un elemento que queda por lo del otro: queda también. Sin
+    // él, el bloque quedaría sin `id` y el editor le pondría uno nuevo, una edición que borra lo que había para rehacer.
+    const owner = it.parentSub !== null ? it.parent?._item : null;
+    return !(owner && !owner.deleted && hasOthersInside(owner));
+  };
 }
 
 /** Saca de cada paso la selección guardada por editores que ya no están (todo *binding* que no sea `keep`). */

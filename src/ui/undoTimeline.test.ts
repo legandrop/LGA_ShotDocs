@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
-import { mountEditor, undoManager, view, yText, type Editor } from './collabHarness';
+import { connect, mountEditor, undoManager, view, yText, type Editor } from './collabHarness';
 import { previousSchema } from './photoHarness';
 import { revealChange } from './undoReveal';
 import { subscribeStepPopped, UndoTimeline, type TimelineDocs } from './undoTimeline';
@@ -83,6 +83,25 @@ function removeText(doc: Y.Doc, text: string): void {
     };
     walk(doc.getXmlFragment(CONTENT_FRAGMENT));
   }, 'otra-persona');
+}
+
+/** Otra persona (otro documento conectado, otro autor) escribe `text` al final del renglón que dice `where`. */
+function otherWritesIn(doc: Y.Doc, where: string, text: string): Y.Doc {
+  const other = new Y.Doc();
+  Y.applyUpdate(other, Y.encodeStateAsUpdate(doc));
+  connect(doc, other, 'sync', { repair: false });
+  const walk = (n: Y.XmlElement | Y.XmlFragment | Y.XmlText): boolean => {
+    if (n instanceof Y.XmlText) {
+      if (n.toString().includes(where)) {
+        n.insert(n.length, text);
+        return true;
+      }
+      return false;
+    }
+    return n.toArray().some((c) => walk(c as never));
+  };
+  walk(other.getXmlFragment(CONTENT_FRAGMENT));
+  return other;
 }
 
 /** La app, en chico: una página en pantalla por vez, con su editor real sobre el documento de `PageDocs`. */
@@ -577,5 +596,45 @@ describe('la línea de tiempo', () => {
       doc.off('update', count);
       d.docs.close(id);
     }
+  });
+  it('B1: deshacer un renglón que creaste no se lleva lo que otra persona escribió adentro (cruzando de página)', async () => {
+    const { ids, app, runner } = await setup(['A', 'B']);
+    const [A, B] = ids;
+    await app.go(A);
+    type(app.editor!, 'plano');
+    const E = app.editor!;
+    E.insertBlocks([{ type: 'paragraph', content: 'nuevo' }] as never, E.document[0].id, 'after');
+    undoManager(E).stopCapturing();
+    await app.go(B);
+    // A no está en pantalla: su documento retenido recibe lo del otro.
+    const other = otherWritesIn(app.d.docs.peek(A)!, 'nuevo', ' deB');
+    expect(yText(other)).toContain('nuevo deB');
+    await runner.run('undo');
+    expect(app.current).toBe(A);
+    expect(yText(app.doc!)).not.toContain('nuevo');
+    expect(yText(app.doc!)).toContain(' deB');
+    expect(yText(other)).toBe(yText(app.doc!));
+    await runner.run('undo');
+    expect(yText(app.doc!)).toContain(' deB');
+    expect(yText(app.doc!)).not.toContain('plano');
+  });
+
+  it('B1: lo mismo sin cambiar de página (el ⌘Z de siempre)', async () => {
+    const { ids, app, runner } = await setup(['A']);
+    const [A] = ids;
+    await app.go(A);
+    const E = app.editor!;
+    E.insertBlocks([{ type: 'paragraph', content: 'nuevo' }] as never, E.document[0].id, 'after');
+    undoManager(E).stopCapturing();
+    const other = otherWritesIn(app.doc!, 'nuevo', ' deB');
+    await runner.run('undo');
+    expect(app.current).toBe(A);
+    expect(yText(app.doc!)).not.toContain('nuevo');
+    expect(yText(app.doc!)).toContain(' deB');
+    expect(yText(other)).toBe(yText(app.doc!));
+    // Rehacer vuelve a poner lo tuyo, con lo del otro.
+    await runner.run('redo');
+    expect(yText(app.doc!)).toContain('nuevo');
+    expect(yText(app.doc!)).toContain(' deB');
   });
 });
