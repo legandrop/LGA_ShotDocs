@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.107 :
+
+Una foto no entraba en una celda de tabla: pegar, soltar, "/Image" y "Copy image" la ponían debajo (o arriba) de la
+tabla, y la que llegaba a una celda se veía enorme (una tabla de 8 fotos medía 2799 px de alto). La creación filtraba
+las celdas a propósito y el CSS no tenía nada para ellas. Entrega 5 de `Doc_Fotos_En_Linea.md`: la foto en línea entra
+en la celda donde está el cursor como miniatura de 96 px de alto (`w = 0`), una al lado de la otra; la barra suma
+*Thumbnail* y *Full cell width* (D32), sin alinear; los tiradores miden la celda; ↑ va a la celda de arriba; la impresión las deja iguales; importar de
+Coda deja las fotos de una celda en la celda. Sin tipos ni propiedades nuevas: la versión publicada abre la página sin
+escribir nada. Ayuda nueva.
+[ Fotos en las celdas - entran en la celda como miniaturas, con su barra, impresión e importación de Coda ]
+
 v0.106 :
 
 El historial no dejaba nombrar versiones ni se veía sin red (P.18, entrega 3): faltaban la tabla y la caché del

@@ -174,7 +174,9 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement, asSeen = false): void {
     // Una foto en línea sin ancho propio (`w = 0`, Docs/Doc_Fotos_En_Linea.md): el ancho natural de lo que se ve
     // en pantalla (la miniatura), con tope en el renglón (styles.css). Con ancho propio, su parte del renglón.
     const inline = img.parentElement?.classList.contains('sd-photo') ? img.parentElement : null;
-    if (inline && !inline.classList.contains('sd-photo-sized') && natural && natural.width > 0) img.style.width = `${natural.width}px`;
+    if (inline && !inline.classList.contains('sd-photo-sized') && natural && natural.width > 0 && natural.height > 0) {
+      img.style.width = `${inlineNaturalWidth(source, natural)}px`;
+    }
   });
   for (const el of copy.querySelectorAll(REMOVE)) el.remove();
   // "Imprimir como se ve": sin lo que esconde un título colapsado (los bloques de afuera y sus hijos). Las
@@ -212,6 +214,17 @@ function cleanCopy(copy: HTMLElement, live: HTMLElement, asSeen = false): void {
     img.alt = '';
     video.replaceWith(img);
   }
+}
+
+/**
+ * El ancho de una foto en línea sin ancho propio: el natural de lo que se ve (la miniatura). En una celda de tabla es
+ * una miniatura con el alto de una fila (`max-height`, styles.css, "Fotos en las celdas"): el ancho que da ese alto, así
+ * el original que pone la impresión (más grande) sale igual y la foto no se deforma con el ancho fijo y el tope de alto.
+ */
+function inlineNaturalWidth(source: HTMLImageElement | undefined, natural: { width: number; height: number }): number {
+  const cap = source ? parseFloat(getComputedStyle(source).maxHeight) : NaN;
+  if (!(cap > 0) || natural.height <= cap) return natural.width;
+  return Math.round(((natural.width * cap) / natural.height) * 100) / 100;
 }
 
 /**

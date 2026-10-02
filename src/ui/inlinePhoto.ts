@@ -247,9 +247,17 @@ interface Target {
   pos: number;
 }
 
+/**
+ * El renglón de la foto: el texto de su bloque o, en una tabla, el de su celda (`td > p`; la tabla entera también lleva
+ * `.bn-inline-content`, y el ancho de una foto en una celda es una parte de la celda, no de la tabla).
+ */
+export function photoLine(dom: Element): HTMLElement | null {
+  return dom.closest<HTMLElement>('td > p, th > p, .bn-inline-content');
+}
+
 /** El ancho en px que da el CSS al renglón de la foto (sin relleno), el espacio entre fotos y cuántas hay en su fila. */
 export function lineMetrics(dom: HTMLElement): { W: number; g: number; n: number } {
-  const line = dom.closest<HTMLElement>('.bn-inline-content') ?? dom.parentElement;
+  const line = photoLine(dom) ?? dom.parentElement;
   const cs = line ? getComputedStyle(line) : null;
   const W = line && cs ? line.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) : 0;
   const g = parseFloat(getComputedStyle(dom).getPropertyValue('--img-gap')) || 8;

@@ -2,7 +2,7 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { NodeSelection, TextSelection, type EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { arrangeRows } from './imageRows';
-import { PHOTO } from './inlinePhoto';
+import { PHOTO, photoLine } from './inlinePhoto';
 import { thumbSize } from './sharpMarks';
 
 // El tamaño de las fotos en línea elegidas y "Arrange in rows" sobre ellas (Docs/Doc_Fotos_En_Linea.md, entrega 2).
@@ -130,7 +130,7 @@ export function aspectAt(view: EditorView, pos: number): number | null {
 /** El espacio entre fotos (`--img-gap`) sobre el ancho del renglón de la foto en `pos`, o `null` sin medidas. */
 export function gapRatioAt(view: EditorView, pos: number): number | null {
   const dom = view.nodeDOM(pos);
-  const line = dom instanceof HTMLElement ? dom.closest<HTMLElement>('.bn-inline-content') : null;
+  const line = dom instanceof HTMLElement ? photoLine(dom) : null;
   if (!line) return null;
   const width = line.clientWidth;
   if (!(width > 0)) return null;

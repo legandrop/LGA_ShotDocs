@@ -39,16 +39,30 @@ export interface NewPhoto {
 // --- Dónde puede ir una foto en línea -------------------------------------------------------------------
 
 /**
- * Una foto en línea puede ir en el texto de un párrafo, un título, un ítem de lista o una cita; no en una celda de
- * tabla (las fotos en las celdas son otra entrega), ni en un bloque de código (solo texto).
+ * Una foto en línea puede ir en el texto de un párrafo, un título, un ítem de lista, una cita o una celda de tabla
+ * (entrega 5: la celda es texto en línea); no en un bloque de código (solo texto).
  */
 export function canHostPhoto($pos: ResolvedPos): boolean {
   const parent = $pos.parent;
   const type = parent.type.schema.nodes[PHOTO];
-  if (!type || !parent.isTextblock || !parent.canReplaceWith($pos.index(), $pos.index(), type)) return false;
-  for (let d = $pos.depth; d > 0; d--) if ($pos.node(d).type.name === 'table') return false;
-  return true;
+  return !!type && parent.isTextblock && parent.canReplaceWith($pos.index(), $pos.index(), type);
 }
+
+/** La posición está en una celda de una tabla (ahí las fotos entran como miniaturas: `CELL_PHOTO_WIDTH`). */
+export function inTableCell($pos: ResolvedPos): boolean {
+  for (let d = $pos.depth; d > 0; d--) {
+    const name = $pos.node(d).type.name;
+    if (name === 'tableCell' || name === 'tableHeader') return true;
+  }
+  return false;
+}
+
+/**
+ * Con qué ancho entran en una celda: 0 (su ancho natural), siempre, también varias juntas. En una celda, una foto sin
+ * ancho propio es una miniatura con el alto de una fila (styles.css, "Fotos en las celdas"): las de una celda quedan
+ * una al lado de la otra, a la misma altura. Un tercio de una celda angosta sería una estampilla.
+ */
+export const CELL_PHOTO_WIDTH = 0;
 
 /** El id del bloque (`blockContainer`) que contiene la posición, o `null`. */
 export function blockIdAt($pos: ResolvedPos): string | null {
@@ -62,8 +76,8 @@ export function blockIdAt($pos: ResolvedPos): string | null {
 /**
  * Dónde entra lo que se pega con esta selección: con el cursor, ahí; con una foto en línea elegida, después de ella
  * (como una letra); con texto elegido, donde empieza (lo elegido se borra antes, como al pegar texto). `null` si
- * ahí no puede ir una foto en línea (un bloque elegido entero, una celda, código): entonces va en un renglón nuevo
- * después del bloque (`blockIdAt`).
+ * ahí no puede ir una foto en línea (un bloque elegido entero, código, una selección de celdas): entonces va en un
+ * renglón nuevo después del bloque (`blockIdAt`).
  */
 export function pasteSpot(state: EditorState): number | null {
   const sel = state.selection;
@@ -209,9 +223,9 @@ export interface PhotoEditor {
   insertBlocks(blocks: unknown[], ref: string, placement: 'before' | 'after'): { id: string }[];
 }
 
-/** Los nodos de las fotos, con el ancho de cuántas son. */
-function photoNodes(state: EditorState, photos: readonly NewPhoto[]): PMNode[] {
-  const w = newPhotoWidth(photos.length);
+/** Los nodos de las fotos, con el ancho de cuántas son (en una celda, miniaturas). */
+function photoNodes(state: EditorState, photos: readonly NewPhoto[], inCell: boolean): PMNode[] {
+  const w = inCell ? CELL_PHOTO_WIDTH : newPhotoWidth(photos.length);
   return photos.map((p) => state.schema.nodes[PHOTO].create({ url: p.url, name: p.name, w }));
 }
 
@@ -231,7 +245,7 @@ export function placePhotos(
   if (!view || photos.length === 0) return false;
   const { state } = view;
   if (pos !== null && pos >= 0 && pos <= state.doc.content.size && canHostPhoto(state.doc.resolve(pos))) {
-    const nodes = photoNodes(state, photos);
+    const nodes = photoNodes(state, photos, inTableCell(state.doc.resolve(pos)));
     const tr = state.tr.insert(pos, nodes);
     const sel = state.selection;
     if (sel.empty && sel.from === pos) tr.setSelection(TextSelection.create(tr.doc, pos + nodes.length));
@@ -391,15 +405,33 @@ export function pickFiles(editor: PhotoEditor, accept: string, opts: AddFilesOpt
   input.click();
 }
 
+/** El final del último texto de la celda que empieza en `cellPos`, o `null` si no tiene texto. */
+export function cellTextEnd(cell: PMNode, cellPos: number): number | null {
+  let end: number | null = null;
+  cell.descendants((child, offset) => {
+    if (child.isTextblock) end = cellPos + 1 + offset + child.nodeSize - 1;
+    return !child.isTextblock;
+  });
+  return end;
+}
+
 /**
  * La posición entre letras donde se soltó, o `null` si se soltó sobre algo que no es un renglón (una foto-bloque, una
- * tarjeta, una tabla): ProseMirror da igual la posición de texto más cercana, que puede ser la de otro bloque.
+ * tarjeta, el borde de una tabla): ProseMirror da igual la posición de texto más cercana, que puede ser la de otro
+ * bloque. Sobre el texto de una celda, la posición en la celda.
  */
 export function dropPos(view: EditorView | undefined, x: number, y: number): number | null {
   const at = view?.posAtCoords({ left: x, top: y });
   if (!view || !at) return null;
   if (at.inside >= 0) {
     const node = view.state.doc.nodeAt(at.inside);
+    // En el relleno de una celda (alrededor de su texto, o abajo en una fila alta por una miniatura): ProseMirror da la
+    // posición entre el cierre del texto y el de la celda, donde no entra nada en línea. Va al final del texto de esa
+    // celda (auditoría de la entrega 5: sin esto, la foto terminaba debajo de la tabla).
+    if (node && (node.type.name === 'tableCell' || node.type.name === 'tableHeader')) {
+      if (at.pos <= at.inside || at.pos >= at.inside + node.nodeSize) return null;
+      return view.state.doc.resolve(at.pos).parent.isTextblock ? at.pos : cellTextEnd(node, at.inside);
+    }
     if (node && !node.isTextblock && !node.isInline && node.type.name !== 'blockContainer') return null;
   }
   return at.pos;

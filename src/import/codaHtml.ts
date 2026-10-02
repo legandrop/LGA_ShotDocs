@@ -558,10 +558,13 @@ function splitAll(
     const children = splitAll(block.children ?? [], imageOf, photoOf, inner);
     const base: LooseBlock = { type: block.type, props: block.props, content: block.content, children };
     if (block.type === 'table') {
-      // Una foto no va en una celda (todavía: entrega 5): la marca se saca y la foto va debajo de la tabla, las
-      // seguidas en un mismo renglón.
+      // Las fotos y los videos de una celda quedan en la celda, en su lugar (entrega 5 de Doc_Fotos_En_Linea.md),
+      // como miniaturas del alto de una fila (`w = 0`, como en Coda, donde se ven del alto de la fila). Lo que no va
+      // en línea (un adjunto) o una importación sin fotos en línea: la marca se saca y va debajo de la tabla, las
+      // fotos seguidas en un mismo renglón.
       const found: number[] = [];
-      base.content = stripTableTokens(block.content, found);
+      const inCells = photoOf ? cellPhotos(block.content, (i) => photoOf(i, codaLineWidth(depth))) : block.content;
+      base.content = stripTableTokens(inCells, found);
       out.push(base);
       let row: InlinePhoto[] = [];
       const flush = () => {
@@ -733,6 +736,26 @@ function trimBreaks(items: Inline[]): Inline[] {
 /** Sin nada: solo texto en blanco (un link, aunque sea sin texto, no es nada). */
 function isBlank(items: Inline[]): boolean {
   return items.every((i) => i.type === 'text' && !(i.text ?? '').trim());
+}
+
+/**
+ * Las celdas de una tabla (`tableContent`) con sus fotos en línea, en su lugar (`inlinePhotos`), todas sin ancho propio:
+ * en una celda una foto sin ancho es una miniatura del alto de una fila (styles.css, "Fotos en las celdas"). Una celda
+ * es un arreglo de contenido en línea o `{ type: 'tableCell', content }`.
+ */
+function cellPhotos(content: unknown, photoOf: (index: number) => InlinePhoto | null): unknown {
+  const table = content as { type?: string; rows?: { cells?: unknown[] }[] } | null;
+  if (table?.type !== 'tableContent' || !Array.isArray(table.rows)) return content;
+  const thumb = (i: number): InlinePhoto | null => {
+    const photo = photoOf(i);
+    return photo ? { ...photo, props: { ...photo.props, w: 0 } } : null;
+  };
+  const cell = (c: unknown): unknown => {
+    if (Array.isArray(c)) return inlinePhotos(c as Inline[], thumb);
+    const obj = c as { content?: unknown } | null;
+    return obj && Array.isArray(obj.content) ? { ...obj, content: inlinePhotos(obj.content as Inline[], thumb) } : c;
+  };
+  return { ...table, rows: table.rows.map((row) => ({ ...row, cells: (row.cells ?? []).map(cell) })) };
 }
 
 /** Saca las marcas de todo el texto de adentro y anota qué fotos eran. */

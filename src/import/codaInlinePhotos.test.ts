@@ -46,6 +46,21 @@ async function convert(html: string): Promise<LooseBlock[]> {
   );
 }
 
+/** La marca que deja `prepareCodaHtml` en el lugar de la foto `i` (codaHtml.ts). */
+const TOKEN_OF = (i: number) => `${i}`;
+
+/** El renglón de cada celda de una tabla, fila por fila, con cada foto como `[blob@w]`. */
+function cellShapes(table: LooseBlock): string[][] {
+  const rows = (table.content as { rows: { cells: ({ content?: unknown } | unknown[])[] }[] }).rows;
+  return rows.map((r) =>
+    r.cells.map((c) =>
+      ((Array.isArray(c) ? c : ((c as { content?: unknown }).content as unknown[])) as { type: string; text?: string; props?: { name: string; w: number } }[])
+        .map((x) => (x.type === 'photo' ? `[${x.props!.name}@${x.props!.w}]` : (x.text ?? '')))
+        .join(''),
+    ),
+  );
+}
+
 /** Cada bloque: `tipo` y su renglón, con cada foto como `[blob@w]`. */
 function shape(blocks: LooseBlock[], depth = 0): string[] {
   return blocks.flatMap((b) => {
@@ -106,11 +121,33 @@ describe('los renglones de Coda con fotos', () => {
     expect(shape(blocks)).toEqual(['paragraph "[bl-a@0.5][bl-b@0.5]"', 'heading "Plano [bl-c@0.1026]"']);
   });
 
-  it('las fotos de las celdas de una tabla van debajo de la tabla, juntas en un renglón', async () => {
+  it('las fotos de las celdas de una tabla quedan en su celda, como miniaturas (w = 0), con su texto (entrega 5)', async () => {
     const blocks = await convert(
-      `<table><tbody><tr><td>${img('bl-a', 43)}</td><td>Auto</td></tr><tr><td>${img('bl-b', 43)}</td><td>Tranvía</td></tr></tbody></table>`,
+      `<table><tbody><tr><td>${img('bl-a', 43)}</td><td>Auto</td></tr>` +
+        `<tr><td><span>Plano </span>${img('bl-b', 43)}${img('bl-c', 120)}</td><td>Tranvía</td></tr></tbody></table>`,
     );
-    expect(shape(blocks)).toEqual(['table', 'paragraph "[bl-a@0.0689][bl-b@0.0689]"']);
+    expect(shape(blocks)).toEqual(['table']);
+    expect(cellShapes(blocks[0])).toEqual([
+      ['[bl-a@0]', 'Auto'],
+      ['Plano [bl-b@0][bl-c@0]', 'Tranvía'],
+    ]);
+  });
+
+  it('un adjunto en una celda va debajo de la tabla (la tarjeta no entra en una celda); sus fotos quedan', async () => {
+    const pdf = `<a href="https://codahosted.io/docs/DOC/blobs/bl-p/x">plano.pdf</a>`;
+    const blocks = await convert(`<table><tbody><tr><td>${img('bl-a', 43)}${pdf}</td><td>Auto</td></tr></tbody></table>`);
+    expect(shape(blocks)).toEqual(['table', 'image "sdmedia://bl-p"']);
+    expect(cellShapes(blocks[0])[0][0]).toMatch(/^\[bl-a@0\]/);
+    expect(JSON.stringify(blocks[0].content)).not.toMatch(/|/);
+  });
+
+  it('sin fotos en línea (una importación vieja), las de las celdas siguen yendo debajo de la tabla', () => {
+    const table: LooseBlock = {
+      type: 'table',
+      content: { type: 'tableContent', rows: [{ cells: [{ type: 'tableCell', content: [{ type: 'text', text: `${TOKEN_OF(0)}`, styles: {} }] }] }] },
+    };
+    const blocks = finishBlocks([table], (i) => ({ type: 'image', props: { url: `sdmedia://m${i}` }, children: [] }));
+    expect(shape(blocks)).toEqual(['table', 'image "sdmedia://m0"']);
   });
 
   it('un adjunto (un PDF) sigue siendo un bloque, la tarjeta; un video va en línea', async () => {

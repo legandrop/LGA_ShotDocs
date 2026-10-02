@@ -9,7 +9,7 @@ import { mediaIdOf } from '../media/queue';
 import { BarButton } from './BarButton';
 import { ROW_PRESETS } from './imageRows';
 import { PHOTO, photoWidth } from './inlinePhoto';
-import { liveView, trackSpot, takeSpot } from './inlinePhotoCreate';
+import { inTableCell, liveView, trackSpot, takeSpot } from './inlinePhotoCreate';
 import { photoKeyAtPos } from './inlinePhotoEditor';
 import { arrangeSelected, arrangeTarget, aspectAt, onlyPhotosSelected, selectedPhotos, setPhotoWidths } from './inlinePhotoSize';
 import {
@@ -49,6 +49,12 @@ interface PhotoChoice {
   /** Los bloques de las fotos (sin repetir) y su alineación, si es la misma en todos. */
   blocks: string[];
   align: Alignment | null;
+  /**
+   * Dónde están: `all`, todas en celdas de tabla (la barra de la celda: miniatura y todo el ancho de la celda); `some`,
+   * una mezcla con fotos de renglones (la barra de siempre, sin lo de la celda, auditoría de la entrega 5); `none`.
+   * Con alguna en una celda no se alinea (la tabla no tiene alineación propia).
+   */
+  inTable: 'all' | 'some' | 'none';
 }
 
 /** El bloque de la foto en `pos` y la alineación de su texto. */
@@ -61,6 +67,12 @@ function blockOf(state: EditorState, pos: number): { id: string; align: Alignmen
     return { id: String(node.attrs.id ?? ''), align: a === 'center' || a === 'right' ? a : 'left' };
   }
   return null;
+}
+
+/** `all` si todas están en celdas, `some` si algunas, `none` si ninguna. */
+export function tableShare(inCell: readonly boolean[]): 'all' | 'some' | 'none' {
+  const n = inCell.filter(Boolean).length;
+  return n === 0 ? 'none' : n === inCell.length ? 'all' : 'some';
 }
 
 function choiceOf(state: EditorState): PhotoChoice | null {
@@ -80,6 +92,7 @@ function choiceOf(state: EditorState): PhotoChoice | null {
     arrange: arrangeTarget(state),
     blocks,
     align: aligns.size === 1 ? [...aligns][0] : null,
+    inTable: tableShare(positions.map((p) => inTableCell(state.doc.resolve(p)))),
   };
 }
 
@@ -94,6 +107,7 @@ const sameChoice = (a: PhotoChoice | null, b: PhotoChoice | null) =>
     a.key === b.key &&
     a.blocks.join() === b.blocks.join() &&
     a.align === b.align &&
+    a.inTable === b.inTable &&
     a.arrange?.positions.join() === b.arrange?.positions.join() &&
     a.arrange?.adjacent === b.arrange?.adjacent);
 
@@ -124,6 +138,17 @@ function useImageLoads(dom: Element | null | undefined): void {
   }, [dom]);
 }
 
+/** Una miniatura en una fila de tabla: la foto chica entre las dos líneas de la fila. */
+function ThumbIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 4.5h16M2 15.5h16" />
+      <path d="M4 7h6v6H4z" />
+      <path d="M12.5 10h4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Los tamaños rápidos y "Arrange in rows" para las fotos en línea de la selección (D-24: los tamaños primero). */
 export function PhotoSizeButtons() {
   const editor = useBlockNoteEditor();
@@ -142,15 +167,34 @@ export function PhotoSizeButtons() {
       : many
         ? tr('photoSize.arrangeSelected')
         : tr('imageSize.arrangeHint');
+  // En una celda (entrega 5, D32): solo la miniatura del alto de una fila (`w = 0`, con lo que entran) y todo el ancho
+  // de la celda. 1/2, 1/3, 1/4 y "Arrange in rows" no van: en una columna de 120 px (la de fábrica) dejaban la foto más
+  // chica que la miniatura. El tirador sigue agrandándola dentro de la celda. Con una mezcla de celdas y renglones, la
+  // barra de siempre.
+  const cell = choice.inTable === 'all';
+  const presets = cell ? ROW_PRESETS.filter((f) => f === 1) : ROW_PRESETS;
   return (
     <>
-      {ROW_PRESETS.map((f) => (
+      {cell && (
+        <BarButton
+          test="photoSize-thumb"
+          label={tr('cellSize.thumb')}
+          tip={`**${tr('cellSize.thumb')}**\n${tr(many ? 'photoTip.thumbAll' : 'photoTip.thumb')}`}
+          icon={<ThumbIcon />}
+          selected={choice.widths.every((w) => w === 0)}
+          onClick={() => {
+            setPhotoWidths(view, choice.positions, 0);
+            view.focus();
+          }}
+        />
+      )}
+      {presets.map((f) => (
         <BarButton
           key={f}
           className="image-size-button"
           test={`photoSize-${SIZE_LABELS[f].text}`}
-          label={tr(SIZE_LABELS[f].tip)}
-          tip={`**${tr(SIZE_LABELS[f].tip)}**\n${many ? tr('photoTip.sizeAll') : tr('photoTip.size')}`}
+          label={tr(cell ? 'cellSize.full' : SIZE_LABELS[f].tip)}
+          tip={`**${tr(cell ? 'cellSize.full' : SIZE_LABELS[f].tip)}**\n${tr(cell ? (many ? 'photoTip.sizeCellAll' : 'photoTip.sizeCell') : many ? 'photoTip.sizeAll' : 'photoTip.size')}`}
           selected={choice.widths.every((w) => Math.abs(w - f) < 1e-4)}
           onClick={() => {
             setPhotoWidths(view, choice.positions, f);
@@ -160,7 +204,7 @@ export function PhotoSizeButtons() {
           {SIZE_LABELS[f].text}
         </BarButton>
       ))}
-      {arrange && (
+      {arrange && !cell && (
         <BarButton
           test="photoArrange"
           label={tr('imageSize.arrange')}
@@ -203,7 +247,8 @@ export function PhotoToolbar() {
             </>
           ),
           <PhotoSizeButtons />,
-          <AlignButtons current={choice.align} inline onAlign={(a) => alignBlocks(editor, choice.blocks, a)} />,
+          // En una celda, alinear no tiene qué alinear (la tabla no tiene alineación): no va.
+          choice.inTable === 'none' && <AlignButtons current={choice.align} inline onAlign={(a) => alignBlocks(editor, choice.blocks, a)} />,
           actions?.canComment && <CommentButton blockId={choice.blocks[0] ?? null} />,
           <>
             {single && actions && <ReplaceButton accept={actions.accept.inline} kind={kind} onFile={(file) => replacePhoto(editor, choice.positions[0], choice.url ?? '', file, actions.store)} />}
