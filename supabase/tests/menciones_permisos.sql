@@ -607,6 +607,17 @@ begin
     'caso 14: list_comments no da las menciones';
   assert (select l.mentions from public.list_comments('00000000-0000-4000-8000-000000000eb2') l
           where l.id = '00000000-0000-4000-8000-000000000d06') is null, 'caso 10: un borrado da menciones';
+  -- La vista de compatibilidad da lo mismo que `list_comments` (como pide comentarios_permisos.sql).
+  assert (select jsonb_agg(to_jsonb(l) order by l.id) from public.list_comments('00000000-0000-4000-8000-000000000eb2') l)
+       = (select jsonb_agg(to_jsonb(v) order by v.id) from public.comments_view v where v.page_id = '00000000-0000-4000-8000-000000000eb2'),
+    'caso 14: la vista no da lo mismo que list_comments';
+end;
+$$;
+-- Quien no ve la página no recibe las menciones por la función de la vista.
+select pg_temp.as_user('00000000-0000-4000-8000-000000000e06');
+do $$
+begin
+  assert private.comment_mentions_json('00000000-0000-4000-8000-000000000d01') is null, 'caso 14: m0 lee menciones por la función de la vista';
 end;
 $$;
 select pg_temp.as_user('00000000-0000-4000-8000-000000000e02');
@@ -727,6 +738,7 @@ begin
   assert not has_function_privilege('anon', 'public.comment_authors(uuid)', 'execute'), 'caso 13: anon ve autores';
   assert not has_function_privilege('authenticated', 'private.mention_allowed(uuid, uuid, uuid)', 'execute'), 'caso 13: la regla se llama desde la API';
   assert not has_function_privilege('authenticated', 'private.mention_label(text)', 'execute'), 'caso 13: el rótulo se llama desde la API';
+  assert not has_function_privilege('anon', 'private.comment_mentions_json(uuid)', 'execute'), 'caso 13: anon lee menciones por la función de la vista';
 end;
 $$;
 

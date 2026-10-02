@@ -36,12 +36,13 @@ auditoría», al final. **Va después del link público** (su migración sube a 
 ## Cómo quedó la entrega 1
 
 - **La migración** `supabase/migrations/20261015120000_menciones.sql` es el borrador de la sección 7 con lo que faltaba:
-  `list_comments` sobre el cuerpo del link público con `mentions` al final (nulo si el comentario se borró) y
-  `comment_authors` con las mencionadas en comentarios sin borrar. Sube `schema_version` a 15. El nombre cambió
+  `list_comments` sobre el cuerpo del link público con `mentions` al final (nulo si el comentario se borró), la misma
+  columna en `comments_view` (por `private.comment_mentions_json`, porque `comentarios_permisos.sql` pide que la vista y
+  `list_comments` den lo mismo) y `comment_authors` con las mencionadas en comentarios sin borrar. Sube `schema_version` a 15. El nombre cambió
   respecto del borrador (`20261013…` → `20261015…`) porque va después de `20261014120000_asistente_politica.sql`.
 - **Las pruebas de permisos** (`supabase/tests/menciones_permisos.sql`) cubren los 18 casos de la sección 8.1 con 10
   cuentas falsas creadas dentro de la transacción. Corridas contra la base real dentro de `begin … rollback` (nunca con
-  `db:test`), con 26 mutantes de la migración: los 26 hacen caer la prueba.
+  `db:test`), con 27 mutantes de la migración: los 27 hacen caer la prueba. Las otras 21 pruebas del repo, corridas sobre esta migración (también en rollback), siguen pasando.
 - **La app** detecta la base con `MENTIONS_SCHEMA_VERSION = 15` (`src/sync/comments.ts`): con la base en 14, el `@` es
   texto, no hay lista ni campana y no sale ninguna operación nueva. La cola suma la operación `mentions` (en la misma
   transacción que el alta o la edición, con su copia en `meta` `mentions:<id>` y su recuperación al abrir); las de un

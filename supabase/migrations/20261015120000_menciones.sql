@@ -323,6 +323,32 @@ $$;
 revoke all on function public.list_comments(uuid, timestamptz) from public, anon;
 grant execute on function public.list_comments(uuid, timestamptz) to authenticated;
 
+-- La vista de compatibilidad, igual: `mentions` al final (la vista y `list_comments` dan lo mismo). La vista es
+-- `security_invoker` y la tabla no se lee desde la API: las menciones salen por una función, como el texto.
+create function private.comment_mentions_json(p_id uuid)
+returns jsonb
+language sql stable security definer set search_path = ''
+as $$
+  select coalesce((
+    select jsonb_agg(jsonb_build_object('user_id', m.user_id, 'label', m.label) order by m.created_at)
+    from public.comment_mentions m where m.comment_id = c.id and m.removed_at is null), '[]'::jsonb)
+  from public.comments c
+  where c.id = p_id and c.deleted_at is null and private.page_level(c.page_id) >= 1;
+$$;
+revoke all on function private.comment_mentions_json(uuid) from public, anon, authenticated;
+grant execute on function private.comment_mentions_json(uuid) to authenticated;
+
+create or replace view public.comments_view
+with (security_invoker = true)
+as
+  select c.id, c.page_id, c.block_id, c.thread_id,
+         case when c.deleted_at is null then private.comment_body(c.id) end as body,
+         c.author_id, c.created_at, c.edited_at, c.resolved_at, c.resolved_by, c.deleted_at, c.deleted_by,
+         c.updated_at, c.imported_from, c.imported_author, c.imported_author_email, c.imported_by,
+         c.plink_id, c.plink_author,
+         case when c.deleted_at is null then private.comment_mentions_json(c.id) end as mentions
+  from public.comments c;
+
 -- Los correos para el tooltip de cada `@rótulo`: suma a las mencionadas en comentarios sin borrar (ME3: quien
 -- escribe decide a quién nombra delante de un cliente).
 create or replace function public.comment_authors(p_page_id uuid)
