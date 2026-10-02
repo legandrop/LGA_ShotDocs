@@ -13,7 +13,7 @@
 // quedó con `Range`. Un pase vence a las 8 horas: si una bajada larga llega a uno vencido, vuelve a listar esa
 // subcarpeta para tener uno nuevo.
 
-import { PorteroError, type FolderEntry, type FolderListing } from './portero';
+import { FOLDER_LIST_DIRS, PorteroError, type FolderEntry, type FolderListing, type FolderListingMany } from './portero';
 import { NameSpace, safeName } from './zipNames';
 import { ZipWriter, type ZipSink } from './zipWriter';
 import type { CrcStream } from './crc32';
@@ -21,6 +21,11 @@ import type { CrcStream } from './crc32';
 /** Lo que hace falta del portero: listar una carpeta (`media.porteroClient()`). */
 export interface FolderLister {
   folderList(file: string, dir?: string | null, pageToken?: string | null): Promise<FolderListing>;
+  /**
+   * Varias subcarpetas por pedido (hasta `FOLDER_LIST_DIRS`), de un portero que lo sabe. `null`: el portero es
+   * anterior (no devolvió `lists`): se lista de a una con `folderList`, como sin este método.
+   */
+  folderListDirs?(file: string, dirs: string[], pageToken?: string | null): Promise<FolderListingMany | null>;
 }
 
 /** El nombre de la lista de lo que no se pudo bajar (en inglés, como la app; el texto de adentro va en su idioma). */
@@ -93,7 +98,7 @@ export function isAbort(err: unknown): boolean {
   return (err as { name?: string } | null)?.name === 'AbortError';
 }
 
-/** Cuántas subcarpetas se listan a la vez. */
+/** Cuántos pedidos de listado van a la vez (cada uno, de hasta `FOLDER_LIST_DIRS` subcarpetas). */
 const LIST_PARALLEL = 4;
 /** Lo más hondo que se baja (el portero ya corta en 30 al subir; Drive puede tener más). */
 const MAX_DEPTH = 64;
@@ -131,24 +136,108 @@ export async function planFolder(
   const progress: PlanProgress = { folders: 0, files: 0, bytes: 0 };
   const root: Node = { id: opts.start?.id ?? null, path: opts.start?.path ?? '', modified: null, entries: [], children: [] };
 
+  /** Los pedidos de varias subcarpetas (`folderListDirs`) se usan mientras el portero los entienda. */
+  let batched = typeof lister.folderListDirs === 'function';
+
+  const addEntries = (node: Node, entries: FolderEntry[]) => {
+    node.entries.push(...entries);
+    for (const e of entries) {
+      if (e.type === 'file') {
+        progress.files++;
+        progress.bytes += e.size;
+      }
+    }
+  };
+  /** Lo ya anotado de una subcarpeta que se vuelve a listar de cero (un pedido de varias que falló a mitad). */
+  const dropEntries = (node: Node) => {
+    for (const e of node.entries) {
+      if (e.type === 'file') {
+        progress.files--;
+        progress.bytes -= e.size;
+      }
+    }
+    node.entries.length = 0;
+  };
+
+  /** Una subcarpeta (o la carpeta) por pedido: todas sus páginas. */
   const listAll = async (node: Node): Promise<void> => {
     let token: string | null = null;
     do {
       const page = await withRate(() => lister.folderList(fileId, node.id, token), wait, opts.signal);
-      node.entries.push(...page.entries);
-      for (const e of page.entries) {
-        if (e.type === 'file') {
-          progress.files++;
-          progress.bytes += e.size;
-        }
-      }
+      addEntries(node, page.entries);
       opts.onProgress?.({ ...progress });
       token = page.nextPageToken;
     } while (token);
   };
+  const failure = (err: unknown) => (err instanceof PorteroError ? (err.code ?? String(err.status)) : String(err));
+  /** Lo mismo, y una que no se puede listar queda anotada sin frenar a las demás. */
+  const listOne = async (node: Node): Promise<void> => {
+    try {
+      await listAll(node);
+    } catch (err) {
+      if (isAbort(err)) throw err;
+      node.failed = failure(err);
+    }
+  };
+
+  /**
+   * Un pedido (con todas sus páginas) para varias subcarpetas a la vez. Devuelve las que el portero dejó para
+   * después (el tope de llamados a Drive de un pedido). Si el pedido falla a mitad (o el portero no sabe de
+   * `dirs`), se descarta lo recibido de esas y se listan de a una: una que no anda no pierde a las otras. Si Drive
+   * pide ir más despacio y no cede, quedan anotadas con `rate` (de a una serían igual de lentas).
+   */
+  const listRound = async (nodes: Node[]): Promise<Node[]> => {
+    const byId = new Map(nodes.map((n) => [n.id!, n]));
+    let accepted = nodes;
+    const later: Node[] = [];
+    let token: string | null = null;
+    try {
+      do {
+        const ids = accepted.map((n) => n.id!);
+        const page: FolderListingMany | null = await withRate(() => lister.folderListDirs!(fileId, ids, token), wait, opts.signal);
+        if (!page) {
+          if (token) throw new Error('The media server changed its answer.');
+          // Un portero anterior: de a una, también las que siguen.
+          batched = false;
+          for (const n of nodes) await listOne(n);
+          return [];
+        }
+        if (!token) {
+          const deferred = new Set(page.later);
+          accepted = [];
+          for (const n of nodes) {
+            const code = page.failed[n.id!];
+            if (code !== undefined) n.failed = code;
+            else if (deferred.has(n.id!)) later.push(n);
+            else if (n.id! in page.lists) accepted.push(n);
+            else n.failed = 'no_answer';
+          }
+        }
+        const mine = new Set(accepted);
+        for (const [id, entries] of Object.entries(page.lists)) {
+          const n = byId.get(id);
+          if (n && mine.has(n)) addEntries(n, entries);
+        }
+        opts.onProgress?.({ ...progress });
+        token = page.nextPageToken;
+      } while (token);
+    } catch (err) {
+      if (isAbort(err)) throw err;
+      for (const n of accepted) dropEntries(n);
+      if (err instanceof PorteroError && err.code === 'rate') for (const n of accepted) n.failed = 'rate';
+      else for (const n of accepted) await listOne(n);
+    }
+    return later;
+  };
+  /** Todas, sin dejar ninguna: cada vuelta lista al menos una (las que el portero deja para después, vuelven). */
+  const listMany = async (nodes: Node[]): Promise<void> => {
+    let todo = nodes;
+    for (let round = 0; todo.length && round <= nodes.length; round++) todo = await listRound(todo);
+    for (const n of todo) n.failed = 'later';
+  };
 
   await listAll(root);
-  // Las subcarpetas, de a `LIST_PARALLEL` a la vez. Los nombres se ponen después, en orden.
+  // Las subcarpetas, de a `FOLDER_LIST_DIRS` por pedido y `LIST_PARALLEL` pedidos a la vez. Los nombres se ponen después, en orden.
   const queue: { node: Node; entry: Extract<FolderEntry, { type: 'folder' }>; depth: number }[] = [];
   const enqueue = (node: Node, depth: number) => {
     for (const e of node.entries) if (e.type === 'folder') queue.push({ node, entry: e, depth });
@@ -158,22 +247,23 @@ export async function planFolder(
   const worker = async () => {
     while (queue.length) {
       if (opts.signal?.aborted) throw abortError();
-      const { entry, depth } = queue.shift()!;
-      const child: Node = { id: entry.id, path: '', modified: entry.modified, entries: [], children: [] };
-      children.set(entry, child);
-      if (seen.has(entry.id) || depth > MAX_DEPTH) {
-        child.failed = seen.has(entry.id) ? 'loop' : 'too_deep';
-        continue;
+      const taken: { child: Node; depth: number }[] = [];
+      while (queue.length && taken.length < (batched ? FOLDER_LIST_DIRS : 1)) {
+        const { entry, depth } = queue.shift()!;
+        const child: Node = { id: entry.id, path: '', modified: entry.modified, entries: [], children: [] };
+        children.set(entry, child);
+        if (seen.has(entry.id) || depth > MAX_DEPTH) {
+          child.failed = seen.has(entry.id) ? 'loop' : 'too_deep';
+          continue;
+        }
+        seen.add(entry.id);
+        progress.folders++;
+        taken.push({ child, depth });
       }
-      seen.add(entry.id);
-      progress.folders++;
-      try {
-        await listAll(child);
-        enqueue(child, depth + 1);
-      } catch (err) {
-        if (isAbort(err)) throw err;
-        child.failed = err instanceof PorteroError ? (err.code ?? String(err.status)) : String(err);
-      }
+      if (!taken.length) continue;
+      if (batched) await listMany(taken.map((t) => t.child));
+      else await listOne(taken[0]!.child);
+      for (const { child, depth } of taken) if (!child.failed) enqueue(child, depth + 1);
     }
   };
   // Cada trabajador sigue mientras haya algo en la cola; uno que termina temprano no frena a los demás.

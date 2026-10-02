@@ -282,11 +282,43 @@ export const FOLDER_BATCH = 30;
 export const DRIVE_CALL_BUDGET = 36;
 /** Una subcarpeta comprobada adentro del árbol se vuelve a comprobar pasado esto (el dueño puede moverla afuera). */
 export const TREE_TTL_MS = 10 * 60_000;
+/**
+ * Cuántas subcarpetas lista de una vez `POST /folder/list` con `dirs` (el recorrido de *Download all*): una sola
+ * consulta a Drive con `'a' in parents or 'b' in parents`. Cada una se comprueba por separado (un llamado a Drive
+ * cada una, dentro de `DRIVE_CALL_BUDGET`), así que las que no entran vuelven como `later`.
+ */
+export const LIST_DIRS_MAX = 40;
+/**
+ * En un listado de varias subcarpetas, la que se comprobó hace menos que esto (porque Drive la mostró adentro de
+ * otra ya comprobada) no se vuelve a mirar en Drive: el listado de una sola subcarpeta (`dir`) la mira siempre.
+ * Sin esto, 40 subcarpetas serían 40 llamados a Drive antes de listar nada y casi siempre quedarían algunas para
+ * después.
+ */
+export const LIST_TRUST_MS = 60_000;
 /** Lo más hondo que se sube por los `parents` buscando la carpeta de la app. */
 const TREE_DEPTH = 30;
 /** Una dirección de subida de Drive vale una semana: se deja de usar un día antes. */
 const SESSION_MAX_MS = 6 * 24 * 60 * 60_000;
 const SHORTCUT_MIME = 'application/vnd.google-apps.shortcut';
+/**
+ * Los campos y el tamaño de cada página de `/folder/list`. 100 por pedido: cada archivo lleva su pase firmado y el
+ * plan gratis da 10 ms de CPU por pedido (300 se midieron en ~9,5 ms en una computadora; falta medirlo en Cloudflare).
+ */
+const LIST_FIELDS = 'nextPageToken,files(id,name,mimeType,size,modifiedTime,hasThumbnail,parents)';
+const LIST_PAGE = '100';
+interface DriveListed {
+  id: string;
+  name?: string;
+  mimeType?: string;
+  size?: string;
+  modifiedTime?: string;
+  hasThumbnail?: boolean;
+  parents?: string[];
+}
+interface DriveListPage {
+  nextPageToken?: string;
+  files?: DriveListed[];
+}
 /** El lado de las miniaturas que sirve `/t/` (Drive las hace del tamaño que se le pide). */
 const THUMB_SIDE = 320;
 
@@ -302,8 +334,8 @@ const TREE_MEMORY_MAX = 20_000;
 /**
  * El nombre en el Drive del dueño de una carpeta que soltó el usuario y de sus subcarpetas: el suyo, tal cual
  * (D3, 2026-10-01: `Día 2 - Puerto` queda así, con espacios, tildes y emojis). Solo se saca lo que saca
- * `cleanFileName`, igual que la app: controles, marcas de dirección y los de ancho cero (también U+200C y U+200D,
- * así que un emoji compuesto, como el de una familia, queda en sus partes); las barras van como `_`. Se corta en 200 caracteres
+ * `cleanFileName`, igual que la app: controles, marcas de dirección y los de ancho cero (también U+200C; el U+200D
+ * solo se queda entre dos emojis, así que el de una familia sigue siendo uno); las barras van como `_`. Se corta en 200 caracteres
  * sin partir un grafema (`cutText`) y sin espacios en los bordes. Vacío, `Folder`. Las carpetas que crea la app (la de la app, la
  * de cada proyecto, `Carpetas`) siguen sin espacios (`folderName`). Las de antes, con guiones bajos (`Dia_2`),
  * no se renombran: cada una se encuentra por su marca (`sdFile`, `sdPath`), nunca por el nombre.
@@ -1669,13 +1701,15 @@ export class Portero {
    * subcarpeta `dir`, que tiene que estar adentro del árbol), sin la papelera de Drive, hasta 100 cosas por
    * pedido (`nextPageToken` para seguir). Cada archivo sale con su pase (`url`, el mismo de las fotos, 8 horas) y,
    * si Drive tiene miniatura, la dirección de la miniatura (`thumb`). Las subcarpetas traen su id (para abrirlas);
-   * los accesos directos y los documentos de Google, solo el nombre: nunca se siguen ni se bajan.
+   * los accesos directos y los documentos de Google, solo el nombre: nunca se siguen ni se bajan. Con `dirs` en vez
+   * de `dir` (hasta `LIST_DIRS_MAX` subcarpetas) las lista de una vez: ver `folderListMany`.
    */
   private async folderList(req: Request, who: Who): Promise<unknown> {
     const body = await readBody(req);
     const { file, media, rec } = await this.appFolder(who, body.file, 1);
     const root = await this.existingRoot(who, file, media, rec);
     if (!root) throw new HttpError(409, 'This folder is still being created: try again in a moment.', 'not_ready');
+    if (body.dirs !== undefined) return this.folderListMany(req, who, root, body);
     const dir = body.dir === undefined || body.dir === null || body.dir === '' ? root : body.dir;
     if (typeof dir !== 'string' || !DRIVE_ID.test(dir)) throw new HttpError(400, 'Missing the folder.', 'bad_request');
     // La subcarpeta pedida se vuelve a mirar en Drive siempre (una en la papelera o movida afuera deja de verse en el
@@ -1685,20 +1719,12 @@ export class Portero {
     const pageToken = typeof body.pageToken === 'string' && /^[\w.~-]{1,2000}$/.test(body.pageToken) ? body.pageToken : '';
     const params = new URLSearchParams({
       q: `${quoted(dir)} in parents and trashed = false`,
-      fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,hasThumbnail)',
-      // 100 por pedido: cada archivo lleva su pase firmado, y el plan gratis da 10 ms de CPU por pedido (300 se
-      // midieron en ~9,5 ms en una computadora; falta medirlo en Cloudflare).
-      pageSize: '100',
+      fields: LIST_FIELDS,
+      pageSize: LIST_PAGE,
       orderBy: 'folder,name_natural',
       ...(pageToken ? { pageToken } : {}),
     });
-    const res = await this.drive(`/files?${params}`);
-    if (res.status === 429) throw new HttpError(503, 'Google Drive asked to slow down: trying again shortly.', 'rate');
-    if (!res.ok) throw new HttpError(502, `Could not list the folder in Google Drive (${res.status}).`, 'drive_failed');
-    const listed = (await res.json()) as {
-      nextPageToken?: string;
-      files?: { id: string; name?: string; mimeType?: string; size?: string; modifiedTime?: string; hasThumbnail?: boolean }[];
-    };
+    const listed = await this.driveListPage(params);
     const known = this.known(root);
     const now = Date.now();
     const until = now + this.passMs(who);
@@ -1706,27 +1732,119 @@ export class Portero {
     const dirAt = dir === root ? now : (known.get(dir) ?? now);
     const entries: unknown[] = [];
     for (const f of listed.files ?? []) {
-      if (!f.id || !DRIVE_ID.test(f.id)) continue;
-      const name = cleanFileName(f.name ?? '') || 'file';
-      const mime = (f.mimeType ?? '').toLowerCase();
-      const modified = typeof f.modifiedTime === 'string' ? f.modifiedTime : null;
-      if (mime === FOLDER_MIME) {
-        // Una carpeta que Drive lista adentro de una comprobada está adentro del árbol.
-        known.set(f.id, dirAt);
-        entries.push({ type: 'folder', id: f.id, name, modified });
-      } else if (mime === SHORTCUT_MIME) {
-        entries.push({ type: 'shortcut', name, modified });
-      } else if (mime.startsWith('application/vnd.google-apps.')) {
-        entries.push({ type: 'google', name, mime, modified });
-      } else {
-        const size = Number(f.size ?? 0);
-        const type = MIME.test(mime) ? mime : '';
-        const pass: Pass = { f: f.id, t: type, u: until, s: Number.isSafeInteger(size) ? size : 0, n: keepExtension(name, NAME_MAX), ...(modified ? { m: modified } : {}) };
-        const url = await this.passUrl(req, pass);
-        entries.push({ type: 'file', id: f.id, name, mime: type, size: pass.s, modified, url, thumb: f.hasThumbnail ? url.replace('/m/', '/t/') : null });
-      }
+      const entry = await this.listEntry(req, f, until, known, dirAt);
+      if (entry) entries.push(entry);
     }
     return { entries, nextPageToken: listed.nextPageToken ?? null };
+  }
+
+  /**
+   * `POST /folder/list` con `{ file, dirs, pageToken? }` (nivel 1): lo de varias subcarpetas en un solo pedido (el
+   * recorrido de *Download all* pasa de una subcarpeta por pedido a hasta `LIST_DIRS_MAX`). Una sola consulta a
+   * Drive (`('a' in parents or 'b' in parents …) and trashed = false`, con `parents` entre los campos para agrupar
+   * lo que vuelve), con el mismo tope por pedido que el listado de una (100 cosas, que son otros tantos pases
+   * firmados: el tope de CPU del plan gratis). Devuelve `{ lists, failed, later, nextPageToken }`:
+   *   - `lists`: por cada subcarpeta aceptada, lo suyo en esta página (puede ser `[]`);
+   *   - `failed`: por cada una que no se puede listar, el código (`not_found`: no existe, está en la papelera o no es
+   *     del árbol, igual que el 404 del listado de una);
+   *   - `later`: las que no entraron en el tope de llamados a Drive de este pedido (se piden de nuevo);
+   *   - `nextPageToken`: para seguir con el mismo `dirs` (solo las de `lists`: la consulta no puede cambiar).
+   * Cada subcarpeta se comprueba (`inTree`) como en el listado de una, salvo la que se comprobó hace menos de
+   * `LIST_TRUST_MS`. Con `pageToken` el conjunto ya no puede cambiar: una que ya no se puede comprobar corta el
+   * pedido con `409 changed` y la app vuelve a empezar. Cada pedido avanza al menos una subcarpeta.
+   */
+  private async folderListMany(req: Request, who: Who, root: string, body: Record<string, unknown>): Promise<unknown> {
+    if (body.dir !== undefined && body.dir !== null && body.dir !== '') throw new HttpError(400, 'Send either dir or dirs, not both.', 'bad_request');
+    const given = body.dirs;
+    if (!Array.isArray(given) || given.length === 0 || given.length > LIST_DIRS_MAX || !given.every((d) => typeof d === 'string' && DRIVE_ID.test(d))) {
+      throw new HttpError(400, `Send between 1 and ${LIST_DIRS_MAX} folders at a time.`, 'bad_request');
+    }
+    // Sin repetidas y en orden: la consulta tiene que ser la misma en cada página (Drive ata el `pageToken` a ella).
+    const dirs = [...new Set(given as string[])].sort();
+    const pageToken = typeof body.pageToken === 'string' && /^[\w.~-]{1,2000}$/.test(body.pageToken) ? body.pageToken : '';
+    const known = this.known(root);
+    const accepted: string[] = [];
+    const failed: Record<string, string> = {};
+    const later: string[] = [];
+    if (pageToken) {
+      for (const dir of dirs) {
+        if ((await this.inTree(root, dir, accepted.length > 0)) !== true) {
+          throw new HttpError(409, 'A folder changed while it was being listed: start again.', 'changed');
+        }
+        accepted.push(dir);
+      }
+    } else {
+      let checked = 0;
+      for (const dir of dirs) {
+        if (checked > 0 && this.driveCalls >= DRIVE_CALL_BUDGET) {
+          later.push(dir);
+          continue;
+        }
+        const at = known.get(dir);
+        if (dir !== root && (at === undefined || Date.now() - at >= LIST_TRUST_MS)) known.delete(dir);
+        const inside = await this.inTree(root, dir, checked > 0);
+        checked++;
+        if (inside === null) later.push(dir);
+        else if (inside) accepted.push(dir);
+        else failed[dir] = 'not_found';
+      }
+    }
+    const lists: Record<string, unknown[]> = {};
+    for (const dir of accepted) lists[dir] = [];
+    if (accepted.length === 0) return { lists, failed, later, nextPageToken: null };
+
+    const params = new URLSearchParams({
+      q: `(${accepted.map((d) => `${quoted(d)} in parents`).join(' or ')}) and trashed = false`,
+      fields: LIST_FIELDS,
+      pageSize: LIST_PAGE,
+      orderBy: 'folder,name_natural',
+      ...(pageToken ? { pageToken } : {}),
+    });
+    const listed = await this.driveListPage(params);
+    const now = Date.now();
+    const until = now + this.passMs(who);
+    const wanted = new Set(accepted);
+    for (const f of listed.files ?? []) {
+      // Una cosa con dos padres (de antes de 2020) sale en cada subcarpeta pedida que la tiene; sin ninguna, no sale.
+      const parents = (f.parents ?? []).filter((p) => wanted.has(p));
+      if (parents.length === 0) continue;
+      const entry = await this.listEntry(req, f, until, known, known.get(parents[0]!) ?? now);
+      if (!entry) continue;
+      for (const p of parents) lists[p]!.push(entry);
+    }
+    return { lists, failed, later, nextPageToken: listed.nextPageToken ?? null };
+  }
+
+  /** Una página de `files.list` de una carpeta; Drive pide ir más despacio (`rate`) o falla (`drive_failed`). */
+  private async driveListPage(params: URLSearchParams): Promise<DriveListPage> {
+    const res = await this.drive(`/files?${params}`);
+    if (res.status === 429) throw new HttpError(503, 'Google Drive asked to slow down: trying again shortly.', 'rate');
+    if (!res.ok) throw new HttpError(502, `Could not list the folder in Google Drive (${res.status}).`, 'drive_failed');
+    return (await res.json()) as DriveListPage;
+  }
+
+  /**
+   * Lo que sale en la lista por cada cosa de Drive: la subcarpeta (se anota como del árbol, con la fecha `at` de su
+   * carpeta), el acceso directo o el documento de Google (solo el nombre) o el archivo con su pase; `null` si el id
+   * no es un id de Drive.
+   */
+  private async listEntry(req: Request, f: DriveListed, until: number, known: Map<string, number>, at: number): Promise<unknown | null> {
+    if (!f.id || !DRIVE_ID.test(f.id)) return null;
+    const name = cleanFileName(f.name ?? '') || 'file';
+    const mime = (f.mimeType ?? '').toLowerCase();
+    const modified = typeof f.modifiedTime === 'string' ? f.modifiedTime : null;
+    if (mime === FOLDER_MIME) {
+      // Una carpeta que Drive lista adentro de una comprobada está adentro del árbol.
+      known.set(f.id, at);
+      return { type: 'folder', id: f.id, name, modified };
+    }
+    if (mime === SHORTCUT_MIME) return { type: 'shortcut', name, modified };
+    if (mime.startsWith('application/vnd.google-apps.')) return { type: 'google', name, mime, modified };
+    const size = Number(f.size ?? 0);
+    const type = MIME.test(mime) ? mime : '';
+    const pass: Pass = { f: f.id, t: type, u: until, s: Number.isSafeInteger(size) ? size : 0, n: keepExtension(name, NAME_MAX), ...(modified ? { m: modified } : {}) };
+    const url = await this.passUrl(req, pass);
+    return { type: 'file', id: f.id, name, mime: type, size: pass.s, modified, url, thumb: f.hasThumbnail ? url.replace('/m/', '/t/') : null };
   }
 
   /**
@@ -2576,13 +2694,39 @@ export function inlineType(type: string): string | null {
 }
 
 // Controles (C0, DEL, C1), marcas de dirección (bidi: con un U+202E, `gpj.exe` se lee `exe.jpg`), los de ancho
-// cero y los separadores de renglón.
+// cero (U+200B a U+200F: también el ZWJ y el ZWNJ, salvo el ZWJ de un emoji compuesto: ver `stripHidden`) y los
+// separadores de renglón.
 const HIDDEN_CHARS = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060\u2066-\u2069]/g;
 // Mitades de un par sustituto sin su pareja: `encodeURIComponent` no las acepta.
 const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+// Lo que puede ir antes del ZWJ de un emoji compuesto: un emoji, su selector de variante (U+FE0F, `❤️‍🔥`) o su tono de
+// piel (`👩🏽‍💻`). Lo de después tiene que ser un emoji. La misma regla que `cleanFileName` de la app
+// (src/media/attachments.ts).
+const EMOJI = /^\p{Extended_Pictographic}$/u;
+const EMOJI_BEFORE_ZWJ = /^[\p{Extended_Pictographic}\u{FE0F}\u{1F3FB}-\u{1F3FF}]$/u;
+
+/**
+ * El texto sin `HIDDEN_CHARS`, salvo el ZWJ (U+200D) cuando está entre dos emojis (`👨‍👩‍👧`, una familia, sigue siendo
+ * una): entre letras o suelto no se ve y dos nombres iguales a la vista serían distintos. El ZWNJ (U+200C) siempre se saca.
+ */
+function stripHidden(text: string): string {
+  if (!text.includes('‍')) return text.replace(HIDDEN_CHARS, '');
+  const kept: string[] = [];
+  const chars = Array.from(text);
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i]!;
+    if (ch === '‍' && kept.length && EMOJI_BEFORE_ZWJ.test(kept[kept.length - 1]!) && EMOJI.test(chars[i + 1] ?? '')) {
+      kept.push(ch);
+      continue;
+    }
+    if (ch.replace(HIDDEN_CHARS, '') !== '') kept.push(ch);
+  }
+  return kept.join('');
+}
+
 /** El nombre de un archivo listo para `Content-Disposition`: sin controles, bidi ni barras; `''` si no queda nada. */
 export function cleanFileName(name: string): string {
-  const clean = name.replace(LONE_SURROGATE, '').normalize('NFC').replace(HIDDEN_CHARS, '').replace(/[/\\]/g, '_').trim();
+  const clean = stripHidden(name.replace(LONE_SURROGATE, '').normalize('NFC')).replace(/[/\\]/g, '_').trim();
   return keepExtension(clean, NAME_MAX);
 }
 
