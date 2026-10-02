@@ -110,8 +110,37 @@ function assertYProsemirrorPatched(): void {
   }
 }
 
+// Yjs también lleva un arreglo propio (patches/yjs+13.6.33.patch, Docs/Doc_Deshacer.md, "El límite de Yjs"): deshacer
+// sigue en todo su largo lo que otro deshacer volvió a poner. Sin él, deshacer deja restos de lo escrito y a veces se
+// lleva texto de antes. Se miran los tres archivos: `dist/yjs.mjs` (la app y las pruebas), `dist/yjs.cjs` (lo que pide
+// `require`) y `src` (por si algo importa `yjs/src/index.js`).
+function assertYjsPatched(): void {
+  const files: [string, string[]][] = [
+    ['dist/yjs.mjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1']],
+    ['dist/yjs.cjs', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)', 'leftTrace.redone.clock + leftTrace.length - 1']],
+    ['src/utils/UndoManager.js', ['const lgaFollowRedoneRange', 'lgaFollowRedoneRange(transaction, store, struct)']],
+    ['src/structs/Item.js', ['leftTrace.redone.clock + leftTrace.length - 1']],
+  ];
+  for (const [file, wanted] of files) {
+    let source = '';
+    try {
+      source = readFileSync(new URL(`./node_modules/yjs/${file}`, import.meta.url), 'utf8');
+    } catch {
+      // Sin el archivo tampoco se sabe si está el parche: se corta igual.
+    }
+    const missing = wanted.filter((mark) => !source.includes(mark));
+    if (missing.length > 0) {
+      throw new Error(
+        `yjs sin el parche de la app (node_modules/yjs/${file}: falta ${missing.join(', ')}). ` +
+          'Correr "npx patch-package" (o "npm install"). Ver Docs/Doc_Deshacer.md.',
+      );
+    }
+  }
+}
+
 export default defineConfig(({ mode }) => {
   assertYProsemirrorPatched();
+  assertYjsPatched();
   const supabase = supabaseConfig(mode);
   return {
     define: {
