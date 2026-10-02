@@ -6,10 +6,11 @@ import * as Y from 'yjs';
 import { LEVEL_EDIT, Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
 import { CLEAN_PER_ROUND, CLEAN_SCHEMA_VERSION, sha256Hex } from './clean';
 import type { CommentQueue } from './comments';
-import { epochChanged, type PageDocs } from './docs';
+import { canCompact, compactPage, SNAPSHOT_MIN_ROWS, type CompactOptions, type CompactOutcome } from './compact';
+import { epochBehind, type PageDocs } from './docs';
 import type { PageFiles } from './files';
 import { hasUnsyncedContent, type DocState } from './localDb';
-import { APP_OUTDATED, type Remote } from './remote';
+import { APP_OUTDATED, SNAPSHOT_SCHEMA_VERSION, type Remote } from './remote';
 import type { PageTree } from './tree';
 import { errorMessage, isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, type QueuedOp, type WorkspaceSettings } from './types';
 
@@ -85,6 +86,10 @@ const INTERVAL_MS = 10_000;
 const CLEAN_ACTIVE_MS = 5 * 60_000;
 const CLEAN_IDLE_MS = 2 * 60_000;
 const DEBOUNCE_MS = 1_200;
+/** Compactar: cuántas reservas se piden por ciclo como mucho, y cuándo se vuelve a pedir una que la base no dio. */
+const COMPACT_CLAIMS_PER_ROUND = 3;
+const COMPACT_RETRY_ROWS = 50;
+const COMPACT_RETRY_MS = 30 * 60_000;
 const PULL_CONCURRENCY = 4;
 
 /**
@@ -155,6 +160,18 @@ export class SyncEngine {
   private lastCleanAt = 0;
   /** La app pasó a segundo plano: el próximo ciclo arma las bases sin esperar la cadencia. */
   private urgentClean = false;
+  /**
+   * La versión desde la que se arman snapshots de compactar (`snapshot_min_version`, versión 17 de la base), o `null`:
+   * apagados (Docs/Doc_Compactar.md, sección 4.1).
+   */
+  private snapshotMin: number | null = null;
+  /**
+   * Páginas cuya reserva la base no dio (poca cola, otra persona compactando, salteada): no se vuelve a pedir hasta que
+   * tengan `COMPACT_RETRY_ROWS` filas más o pase `COMPACT_RETRY_MS`. Solo en memoria (por apertura de la app).
+   */
+  private readonly compactAsked = new Map<string, { seq: number; at: number }>();
+  /** Hay una compactación en curso (una a la vez). */
+  private compacting = false;
 
   constructor(
     private readonly remote: Remote,
@@ -173,6 +190,10 @@ export class SyncEngine {
       sizes?: { configure(schemaVersion: number): void };
       /** Cada cuánto se sincroniza solo (10 s; el modo link, 30 s: Docs/Doc_Link_Publico.md, P12). */
       intervalMs?: number;
+      /** Compactar (Docs/Doc_Compactar.md): opciones del compactador, para las pruebas. */
+      compact?: CompactOptions;
+      /** Cada compactación terminada (para las pruebas y el diagnóstico). */
+      onCompacted?: (pageId: string, outcome: CompactOutcome) => void;
       /**
        * Modo liviano (link público, P12): qué páginas se bajan en cada ciclo. Sin esto, todas las que cambiaron; con el
        * link, solo las que el dispositivo ya bajó alguna vez (las demás se bajan al abrirlas, `prefetchPage`).
@@ -513,7 +534,7 @@ export class SyncEngine {
       const stale = this.status.outdated
         ? []
         : rows
-            .filter((r) => this.tree.serverSeq(r) > (cursors.get(r.id)?.cursor ?? 0) || epochChanged(cursors.get(r.id), r.content_epoch))
+            .filter((r) => this.tree.serverSeq(r) > (cursors.get(r.id)?.cursor ?? 0) || epochBehind(cursors.get(r.id), r.content_epoch))
             .filter((r) => this.options.pullOnly?.(r.id, cursors.get(r.id)?.cursor ?? 0) ?? true)
             .map((r) => r.id);
       await runPool(stale, PULL_CONCURRENCY, (id) =>
@@ -538,6 +559,10 @@ export class SyncEngine {
       halt();
       // Las bases limpias de las páginas con lectores (sus errores no cortan el ciclo: las arma el próximo).
       if (!this.status.outdated) await this.buildCleanBases().catch(() => undefined);
+
+      halt();
+      // Compactar: como mucho una página por ciclo, con los snapshots prendidos (sus errores no cortan el ciclo).
+      if (!this.status.outdated) await this.compactOne().catch(() => undefined);
 
       halt();
       // Las imágenes sin portero (`sdfile://`) tampoco salen con la app vieja para este workspace.
@@ -580,6 +605,9 @@ export class SyncEngine {
     if ((settings?.schemaVersion ?? 0) !== this.status.schemaVersion) this.patch({ schemaVersion: settings?.schemaVersion ?? 0 });
     // El interruptor de la privacidad de lo borrado: solo con la base en la versión 12 o más.
     this.cleanMin = settings && settings.schemaVersion >= CLEAN_SCHEMA_VERSION ? (settings.cleanMinVersion ?? null) : null;
+    // El de los snapshots de compactar: solo con la base en la versión 17 o más.
+    this.snapshotMin =
+      settings && settings.schemaVersion >= SNAPSHOT_SCHEMA_VERSION ? (settings.snapshotMinVersion ?? null) : null;
     if ((this.cleanMin !== null) !== this.status.cleanOn) this.patch({ cleanOn: this.cleanMin !== null });
     this.versionKnown = true;
     if (!settings) {
@@ -950,6 +978,71 @@ export class SyncEngine {
       onProgress?.(++done, list.length);
     }
     return work.map((w) => w.page_id);
+  }
+
+  /**
+   * Compacta como mucho una página (Docs/Doc_Compactar.md, sección 4.1): con los snapshots prendidos y esta versión de la
+   * app en la mínima o más, entre las páginas que la persona puede editar sin ser invitada (las que ven lo borrado),
+   * fuera de la papelera, que el dispositivo tiene enteras (`cursor == update_seq`) y sin nada rechazado, y que según el
+   * árbol tienen al menos `SNAPSHOT_MIN_ROWS` filas después del snapshot vigente. La base decide con la reserva. El
+   * snapshot sale de las filas del servidor: nunca toca lo guardado en el dispositivo. Devuelve cómo terminó, o `null`.
+   */
+  private async compactOne(): Promise<CompactOutcome | null> {
+    if (this.snapshotMin === null || this.stopped || this.removed || this.compacting || !canCompact(this.remote)) return null;
+    const version = Number(this.options.appVersion);
+    if (!(Number.isFinite(version) && version >= this.snapshotMin)) return null;
+    const remote = this.remote;
+    const access = this.options.access;
+    const known = access?.get() ?? null;
+    const perms = access && known ? new Permissions(this.tree, known, access.userId) : null;
+    const now = Date.now();
+    const minRows = this.options.compact?.minRows ?? SNAPSHOT_MIN_ROWS;
+    const candidates: { id: string; rows: number }[] = [];
+    for (const [pageId, state] of await this.docs.states()) {
+      const row = this.tree.get(pageId);
+      if (!row || row.deleted_at || this.tree.isTrashed(pageId) || this.tree.hasUnsentCreate(pageId)) continue;
+      if (state.rejected || state.cursor !== row.update_seq) continue;
+      const rows = row.update_seq - (row.snapshot_seq ?? 0);
+      if (rows < minRows) continue;
+      // Ve lo borrado: Editar o más y no invitada (como la base, `sees_deleted`). Sin datos de permisos, decide la base.
+      if (perms && !(perms.pageLevel(pageId) >= LEVEL_EDIT && perms.role !== 'guest')) continue;
+      const asked = this.compactAsked.get(pageId);
+      if (asked && row.update_seq - asked.seq < COMPACT_RETRY_ROWS && now - asked.at < COMPACT_RETRY_MS) continue;
+      candidates.push({ id: pageId, rows });
+    }
+    // Primero la que más filas junta.
+    candidates.sort((a, b) => b.rows - a.rows);
+    this.compacting = true;
+    try {
+      for (const { id } of candidates.slice(0, COMPACT_CLAIMS_PER_ROUND)) {
+        if (this.stopped) return null;
+        const seq = this.tree.get(id)?.update_seq ?? 0;
+        const claim = await remote.claimCompaction(id);
+        if (!claim) {
+          this.compactAsked.set(id, { seq, at: Date.now() });
+          continue;
+        }
+        let outcome: CompactOutcome;
+        try {
+          outcome = await compactPage(remote, id, claim, this.options.compact);
+        } catch (err) {
+          // Sin red (o un error de la base): se vuelve a intentar en el próximo ciclo. La reserva es de esta persona,
+          // así que la vuelve a tomar; el mismo tramo sobre la misma base da la misma huella y la base devuelve el que ya
+          // estaba (reintentar no duplica).
+          if (!isNetworkError(err) && !isTimeout(err)) this.compactAsked.set(id, { seq, at: Date.now() });
+          throw err;
+        }
+        // Después de confirmar, de una carrera (`stale`: cambió la base) o de invalidar una cadena mala, se puede volver a
+        // pedir enseguida (la base decide); lo demás espera (salteada, otra versión ya la armó, huellas distintas).
+        if (outcome.kind === 'confirmed' || outcome.kind === 'stale' || outcome.kind === 'invalidated') this.compactAsked.delete(id);
+        else this.compactAsked.set(id, { seq, at: Date.now() });
+        this.options.onCompacted?.(id, outcome);
+        return outcome;
+      }
+      return null;
+    } finally {
+      this.compacting = false;
+    }
   }
 
   private applyOp({ op }: QueuedOp): Promise<void> {

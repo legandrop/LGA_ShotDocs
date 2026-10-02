@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { rangesOf, subtractRanges, unionRanges, type DeleteRanges } from './deleteSets';
-import { epochChanged, knownDeletes } from './docs';
+import { epochBehind, epochChanged, knownDeletes } from './docs';
 import { PageDocs as V100PageDocs } from './fixtures/v100/docs';
 import { GENERATION_KEY, openLocalDb, storedGeneration, type LocalDb } from './localDb';
 import { SNAPSHOT_SCHEMA_VERSION, SupabaseRemote } from './remote';
@@ -591,55 +591,183 @@ describe('si un snapshot sale mal: la época de contenido', () => {
     expect(await text(b, page)).toBe(serverText(server, page));
     await expectSound(b, server, page, 'después de invalidar');
     await expectNothingMissing(b, server, page);
-    // Quien puede escribir la vuelve a subir entera una vez, en el ciclo siguiente (Yjs no duplica nada).
+    // Sin nada sin subir, la página se rearmó con lo del servidor (D110): no vuelve a subir nada.
     expect((server.updates.get(page) ?? []).length).toBe(rows);
-    expect(await b.docs.unsyncedPages()).toEqual([page]);
+    expect(await b.docs.unsyncedPages()).toEqual([]);
     await b.engine.syncNow();
-    expect((server.updates.get(page) ?? []).length).toBe(rows + 1);
-    await b.engine.syncNow();
-    expect((server.updates.get(page) ?? []).length).toBe(rows + 1);
+    expect((server.updates.get(page) ?? []).length).toBe(rows);
     await e1.engine.syncNow();
     expect(await text(e1, page)).toBe(serverText(server, page));
   });
 
-  it('un snapshot con un borrado que las filas no tienen: al invalidar, las cuentas se rehacen y todos terminan iguales (el texto queda en el historial)', async () => {
+  it('un snapshot con un borrado que las filas no tienen: al invalidar, la página se rearma con lo del servidor y el borrado no llega a nadie (D110)', async () => {
     const { server, e1, page } = await setup({ edits: 6 });
     // b tiene la página desde antes (filas).
     const b = await device(server);
     await b.engine.syncNow();
-    // El snapshot malo borra "palabra4" (un borrado que nadie hizo).
+    // El snapshot malo borra "palabra3" (un borrado que nadie hizo).
     const id = (await compactOnServer(server, page, {
       mutate: (_tail, doc) => {
         // Se arma con todas las filas y después se borra algo.
         for (const u of _tail) Y.applyUpdate(doc, u.data);
         const t = doc.getText('t');
-        const i = t.toString().indexOf('palabra4 ');
+        const i = t.toString().indexOf('palabra3 ');
+        expect(i).toBeGreaterThanOrEqual(0);
         t.delete(i, 9);
         return [];
       },
     }))!;
-    // c, nuevo, recibe el snapshot.
+    // c, nuevo, recibe el snapshot (el servidor y b sí tienen "palabra3").
+    expect(serverText(server, page)).toContain('palabra3');
+    expect(await text(b, page)).toContain('palabra3');
     const c = await device(server);
     await c.engine.syncNow();
     expect((await state(c, page))?.snapshotId).toBe(id);
-    expect(await text(c, page)).not.toContain('palabra4');
-    // Si ahora c borra lo mismo, no lo subiría (cree que el servidor lo tiene). Se invalida:
+    expect(await text(c, page)).not.toContain('palabra3');
     const rows = (server.updates.get(page) ?? []).length;
     await new FakeRemote(server, '1.000').invalidateSnapshot(id, 'test');
     await c.engine.syncNow();
+    // c no tenía nada sin subir: tiró lo guardado y se rearmó con las filas (Yjs no deshace un borrado; tirarlo sí).
     // syncedDS se rehízo con las filas: ya no cuenta el borrado del snapshot malo.
     await expectSound(c, server, page, 'después de invalidar');
+    expect(await text(c, page)).toContain('palabra3');
     await c.engine.syncNow();
-    // El borrado del snapshot malo sigue en el dispositivo de c (Yjs no deshace un borrado) y sube con la vuelta entera:
-    // todos convergen (Docs/Doc_Compactar.md, sección 12). Las filas no se tocan: el texto sigue en el historial.
+    // Nada volvió a subir: el borrado del snapshot malo no llegó al servidor ni a nadie (antes, v0.127, sí: O1).
     await expectNothingMissing(c, server, page);
-    expect((server.updates.get(page) ?? []).length).toBe(rows + 1);
-    expect(Buffer.from(server.updates.get(page)!.map((u) => Buffer.from(u.data).toString('latin1')).join('')).toString()).toContain('palabra4');
+    expect((server.updates.get(page) ?? []).length).toBe(rows);
+    expect(serverText(server, page)).toContain('palabra3');
     await b.engine.syncNow();
     await e1.engine.syncNow();
-    expect(await text(b, page)).toBe(serverText(server, page));
+    for (const d of [b, c, e1]) {
+      expect(await text(d, page)).toBe(serverText(server, page));
+      expect(await text(d, page)).toContain('palabra3');
+    }
+  });
+
+  /** Un snapshot malo que borra "palabra3" (un borrado que nadie hizo). */
+  const phantomDelete = (tail: RemoteUpdate[], doc: Y.Doc) => {
+    for (const u of tail) Y.applyUpdate(doc, u.data);
+    const t = doc.getText('t');
+    const at = t.toString().indexOf('palabra3 ');
+    expect(at).toBeGreaterThanOrEqual(0);
+    t.delete(at, 9);
+    return [];
+  };
+
+  it('con algo propio sin subir, el reinicio espera: lo propio sube primero, sin el borrado del snapshot malo, y después se rearma (D110)', async () => {
+    const { server, e1, page } = await setup({ edits: 6 });
+    const id = (await compactOnServer(server, page, { mutate: phantomDelete }))!;
+    const c = await device(server);
+    await c.engine.syncNow();
+    expect(await text(c, page)).not.toContain('palabra3');
+    // c escribe sin red: queda sin subir.
+    server.online = false;
+    await edit(c, page, add('propia'));
+    server.online = true;
+    await new FakeRemote(server, '1.000').invalidateSnapshot(id, 'test');
+    // Otro escribe: la bajada que sigue trae una fila con la época nueva.
+    await edit(e1, page, add('ajena'));
+    await e1.engine.syncNow();
+    const rowsBefore = (server.updates.get(page) ?? []).length;
+    // Una bajada con la época nueva mientras hay algo sin subir: lo guardado no se tira ni se rearma; la fila nueva se
+    // guarda, pero sin anotar la época (así el rearmado se vuelve a intentar).
+    const before = await stored(c, page);
+    await c.docs.pullPage(page, c.remote, { contentEpoch: 1 });
+    let s = await state(c, page);
+    expect(s?.snapshotId).toBe(id);
+    expect(s?.contentEpoch).toBe(0);
+    expect(s?.cursor).toBe(rowsBefore);
+    expect((await stored(c, page)).slice(0, before.length)).toEqual(before);
+    expect(await text(c, page)).toContain('ajena');
+    expect(await c.docs.unsyncedPages()).toEqual([page]);
+    // El ciclo: primero sube lo propio (sin el borrado del snapshot: las cuentas dicen que el servidor ya lo tiene) y
+    // después, sin nada pendiente, rearma la página con lo del servidor.
+    await c.engine.syncNow();
+    s = await state(c, page);
+    expect(s?.snapshotId).toBeUndefined();
+    expect(s?.contentEpoch).toBe(1);
+    expect((server.updates.get(page) ?? []).length).toBe(rowsBefore + 1);
+    expect(serverText(server, page)).toContain('propia');
+    expect(serverText(server, page)).toContain('palabra3');
     expect(await text(c, page)).toBe(serverText(server, page));
+    await expectSound(c, server, page);
+    await expectNothingMissing(c, server, page);
+    await e1.engine.syncNow();
     expect(await text(e1, page)).toBe(serverText(server, page));
+    // Y no vuelve a subir nada.
+    await c.engine.syncNow();
+    expect((server.updates.get(page) ?? []).length).toBe(rowsBefore + 1);
+  });
+
+  it('con la página abierta: se rearma y la página se vuelve a abrir desde lo guardado (con lo que el snapshot malo borró)', async () => {
+    const { server, page } = await setup({ edits: 6 });
+    const id = (await compactOnServer(server, page, { mutate: phantomDelete }))!;
+    const c = await device(server);
+    await c.engine.syncNow();
+    const doc = await c.docs.open(page);
+    expect(doc.getText('t').toString()).not.toContain('palabra3');
+    let reopen = 0;
+    const off = c.docs.subscribeUnsupported((p) => {
+      if (p === page) reopen++;
+    });
+    const rows = (server.updates.get(page) ?? []).length;
+    await new FakeRemote(server, '1.000').invalidateSnapshot(id, 'test');
+    await c.engine.syncNow();
+    off();
+    expect(reopen).toBe(1);
+    // Lo que el documento abierto tenía no se aplica más (lo bajado queda guardado); reabierto, se arma de lo guardado.
+    c.docs.close(page);
+    const again = await c.docs.open(page);
+    expect(again).not.toBe(doc);
+    expect(again.getText('t').toString()).toBe(serverText(server, page));
+    expect(again.getText('t').toString()).toContain('palabra3');
+    // Escribir en la página reabierta sube solo lo nuevo.
+    again.transact(() => again.getText('t').insert(0, 'X '), 'test');
+    await c.docs.flush(page);
+    c.docs.close(page);
+    await c.engine.syncNow();
+    expect((server.updates.get(page) ?? []).length).toBe(rows + 1);
+    expect(serverText(server, page)).toContain('palabra3');
+    await expectSound(c, server, page);
+  });
+
+  it('epochBehind: la época del árbol reinicia solo si es más nueva que la anotada', () => {
+    const base = { pageId: 'p', cursor: 3, version: 0, ackedVersion: 0 };
+    expect(epochBehind(undefined, 1)).toBe(false);
+    expect(epochBehind(base, 1)).toBe(false);
+    expect(epochBehind({ ...base, snapshotId: 's', contentEpoch: 1 }, undefined)).toBe(false);
+    expect(epochBehind({ ...base, snapshotId: 's', contentEpoch: 1 }, 1)).toBe(false);
+    expect(epochBehind({ ...base, snapshotId: 's', contentEpoch: 1 }, 0)).toBe(false);
+    expect(epochBehind({ ...base, snapshotId: 's', contentEpoch: 1 }, 2)).toBe(true);
+    expect(epochBehind({ ...base, snapshotId: 's' }, 0)).toBe(true);
+  });
+
+  it('un árbol atrasado (época vieja) no reinicia una página que ya bajó la época nueva (O2)', async () => {
+    const { server, e1, page } = await setup();
+    const s1 = (await compactOnServer(server, page))!;
+    await new FakeRemote(server, '1.000').invalidateSnapshot(s1, 'test');
+    await type(e1, page, 6, 'mas');
+    const s2 = (await compactOnServer(server, page))!;
+    const c = await device(server);
+    await c.engine.syncNow();
+    expect((await state(c, page))?.snapshotId).toBe(s2);
+    expect((await state(c, page))?.contentEpoch).toBe(1);
+    const rows = (server.updates.get(page) ?? []).length;
+    const calls = recordContent(c);
+    // El árbol leído antes de la invalidación dice 0: no reinicia, no vuelve a bajar nada, no sube nada.
+    await c.docs.pullPage(page, c.remote, { contentEpoch: 0 });
+    expect(calls.flat()).toEqual([]);
+    expect((await state(c, page))?.snapshotId).toBe(s2);
+    // El ciclo con ese árbol atrasado ni siquiera la pide.
+    calls.splice(0);
+    const tree = c.remote.fetchTree.bind(c.remote);
+    c.remote.fetchTree = async (ids, schema) => (await tree(ids, schema)).map((r) => (r.id === page ? { ...r, content_epoch: 0 } : r));
+    await c.engine.syncNow();
+    expect(calls).toHaveLength(0);
+    c.remote.fetchTree = tree;
+    await c.engine.syncNow();
+    expect((server.updates.get(page) ?? []).length).toBe(rows);
+    expect(await text(c, page)).toBe(serverText(server, page));
   });
 
   it('la época que llega en la misma respuesta manda aunque el árbol esté atrasado', async () => {
