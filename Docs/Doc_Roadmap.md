@@ -101,8 +101,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   final de su texto; la barra ofrece *Thumbnail* y *Full cell width* (D32), sin alinear; ↑ desde una celda con fotos va
   a la de arriba; imprimir las deja igual; importar de Coda deja las fotos de una celda en la celda. Sin tipos ni
   propiedades nuevas (la versión publicada abre la página sin escribir nada). `Doc_Fotos_En_Linea.md`, "Cómo quedó
-  (entrega 5)". Queda: probar en Safari y el iPhone, y con una exportación de Coda que tenga fotos en tablas de página;
-  a decidir, si el alto de la miniatura (96 px) se puede elegir. Para después (auditoría): pegar solo `text/html` de una
+  (entrega 5)". Queda: probar en Safari y el iPhone, y con una exportación de Coda que tenga fotos en tablas de página.
+  **El alto de la miniatura se elige por tabla (v0.129, D27 → B):** *Thumbnail size* con *Small*, *Medium* y *Large*
+  (64, 96 y 160 px), en la barra de la foto y en la de la tabla; propiedad de la tabla, la versión publicada vuelve a 96
+  si edita la tabla (`Doc_Fotos_En_Linea.md`, "Alto de las miniaturas (D27 → B)"). Para después (auditoría): pegar solo `text/html` de una
   fila con fotos las pierde (O1); una tabla de Google Docs o Excel con imágenes llega sin ellas (O2); la papelera de
   archivos al borrar una fila con fotos, a probar con la base real (O5); ↑ con el cursor al principio de un segundo
   renglón de una celda que empieza con una miniatura (bajó porque no entraba al lado del texto) va a la celda de la
@@ -157,7 +159,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Lega: vista en vivo de la carpeta de Drive, subida directa a Google, sin tope y en el plan gratis.
   **Entrega 1 hecha (v0.081):** soltar una carpeta, la ventana de qué se sube, su cola propia (los bytes por el
   portero), la tarjeta, el visor con el carrete y bajar uno, retomar volviendo a soltarla, y el portero con la
-  regla de no salir del árbol. Las carpetas soltadas conservan su nombre en el Drive (D3, 2026-10-01). Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
+  regla de no salir del árbol. Las carpetas soltadas van al Drive sin espacios, con guiones bajos (D3 → B, 2026-10-02; antes, del 2026-10-01 a v0.127, conservaban su nombre). Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
   la subida directa a Google con el Drive real, "Agregar a esta carpeta", la cuadrícula, la lista sin red, "Seguir"
   en Chrome y Edge y el botón "Carpeta…" del menú `/`. **Entrega 2 hecha (*Bajar todo*, rama `lega/carpetas-zip`):**
   zip sin comprimir con Zip64 escrito a medida que llega en Chrome y Edge, o el árbol en una carpeta; en memoria con
@@ -371,15 +373,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   de FrameRev, Shift y Alt, colores y grosor contra 1920 px, estilo por herramienta, deshacer propio por foto, escribir
   al soltar, topes en bytes y la poda de AN11; *Annotate* en la barra de la foto y A en el carrete; el PDF con el
   grosor mínimo de su caja impresa (la observación O2). Falta: que `min_app_version` esté en 0.116 o más al publicarla
-  (AN10); probar ⌘[ y ⌘] en Safari y Chrome de una Mac; la entrega 3 (el dedo y el lápiz del iPad), y medir el dedo a 60
+  (AN10); probar ⌘[ y ⌘] en Safari y Chrome de una Mac, y medir el dedo a 60
   y 120 Hz y las fotos HEIC de un iPhone real (entrega 0, no se pudo sin teléfono).
+  **Entrega 3 hecha (v0.129):** el dedo y el lápiz: la tira de herramientas abajo, la hoja de propiedades desde el punto de
+  color, un dedo dibuja y dos amplían sin dibujar, el lápiz del iPad dibuja y el dedo mueve (*Only the pencil draws*), la
+  palma no dibuja, el texto en una caja común con el teclado, tocar un tirador sin moverlo ya no cambia la forma. Falta
+  a mano en un iPhone y un iPad reales: el teclado con el toque, el gesto de "atrás" desde el borde y el doble toque
+  contra el dibujo, el Apple Pencil con la palma. De su auditoría quedan: un `pointercancel` del sistema (el gesto de «atrás», una llamada) descarta el trazo en curso, como en la compu (decidir si se guarda); la tira de herramientas no se desliza sola hasta la elegida al abrir. Sigue la entrega 4 (bajar y copiar con anotaciones).
   De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
   una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
   frena la poda se rompe (hoy, con `synced = async () => true`, la suite sigue en verde; la re-verificación lo comprobó en
   el navegador); una prueba que caiga si `PageEditor` ofrece *Annotate* sin poder editar; un marco ilegible lo pisa la primera forma
   (revisar el día que cambie `v`); una forma con grosor 0 y sin relleno no se ve pero se puede elegir (sirve para
-  borrarla; decidir); en el teléfono el anotador abre y un dedo dibuja sin pellizco: decidir si se esconde en pantallas
-  táctiles hasta la entrega 3; un workspace sin la migración del equipo no conoce los permisos y nunca poda.
+  borrarla; decidir); un workspace sin la migración del equipo no conoce los permisos y nunca poda.
 - **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
   entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
   confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
@@ -397,7 +403,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   correos, topes de páginas y de píxeles (menos con menos de 8 GB). 300 páginas en ~30 s (Chromium sin ventana);
   resueltas O3 a O7 de la auditoría de la 0 y los tres bloqueantes y O1 a O7 de la auditoría de la 1. Falta a mano:
   Safari, Firefox, el iPhone, una compu de 8 GB y guardar de verdad en Chrome y Edge (`Doc_Exportar.md`, "Cómo quedó
-  la entrega 1"). Sigue la entrega 2 (zip).
+  la entrega 1"). **Entrega 2 hecha (v0.129): el zip** (*Zip — to archive* en la misma ventana): una carpeta por página
+  con `.html` sin JavaScript, `.md` con rutas relativas (D57), una vista JPEG de cada foto (también HEIC), los
+  originales elegidos (del dispositivo o por el portero con lo de *Download all*), comentarios sin correos, el JSON para
+  volver y `MISSING_FILES.txt`; los destinos de *Download all*, sin red y cancelar. Solo dueño y admins (D60), nunca
+  desde un teléfono (D63). Probado con `file://` y sin red en Chromium y Firefox. Falta a mano: ERSO entero con el
+  portero de verdad (tiempo y llamados al Durable Object), Safari de la Mac y las rutas largas de Windows
+  (`Doc_Exportar.md`, "Cómo quedó la entrega 2"). Sigue la entrega 3 (volver a Shot Docs).
   Observaciones de la re-verificación de la entrega 1: (R1) el Imprimir del menú del navegador mientras se arma el PDF
   puede llevar la vista de la página en curso: sacar `print-output` a esa vista hasta `place()`; (R2) la prueba de la
   vuelta al achicador del hilo principal no distingue la mutación: hacerlo inyectable en `workerResizer`; (R3) con
@@ -449,6 +461,28 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (página, formato, política), A3 (pie de foto), M0 (prueba técnica del MCP: OAuth de Supabase con el registro cerrado,
   el rol del token, 10 ms de CPU), M1 (MCP de lectura; requiere el interruptor de D14), M2 (MCP que escribe), M3
   (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos.
+- **P.26 ⌘Z en el orden en que editaste** (Lega, 2026-10-02, al responder cómo se deshace un reemplazo en todo el
+  proyecto): ⌘Z deshace lo último que hiciste aunque haya sido en otra página, y un *Replace all in project* se deshace
+  entero en ese orden. **Diseño en `Doc_Deshacer.md`** (sin código; auditado y corregido; decisiones propuestas DH1 a
+  DH10): una línea de tiempo por proyecto y por pestaña
+  arriba de las pilas de Yjs de cada página, que sobreviven al cambiar de página (el documento retenido y la pila pasada
+  al editor nuevo, sin parchear y-prosemirror); ⌘Z en otra página te lleva y lo deshace a la vista; el reemplazo entra
+  en la pila de Yjs de las páginas editadas en la sesión (arregla un resto que deja hoy deshacer el reemplazo y después
+  lo escrito antes, también desde el *Undo* del panel) y por las anclas en las demás; ⌘⇧Z rehace todo, también el
+  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (condición: B.21, el límite de Yjs), 1 (la
+  línea de tiempo con las páginas, con la memoria medida con el editor real), 2 (el reemplazo adentro), 3 (anotar como un
+  paso). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
+- **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
+  sobre todo en el teléfono, y que la IA pase «este plano se filmó con un 50 mm, anotalo donde corresponda» a la celda
+  *Lens* de la fila de ese plano en el *On-Set Report*. **Diseño en `Doc_Dictado.md`** (sin código; decisiones propuestas
+  DI1 a DI9): el dictado común queda en el teclado del sistema; un solo micrófono propio, *Dictate to report*, que graba
+  en el dispositivo y transcribe con el proveedor de la persona (OpenAI o Gemini; el reconocimiento del navegador no
+  existe en la app instalada del iPhone); la página va como un mapa con direcciones y vuelve una lista de cambios
+  validada, con vista previa, *Apply* con la guarda y un deshacer; «este plano» por lo dicho, el cursor o el plano
+  activo, y si no, pregunta; sin red, una cola de notas que nunca se borra sola; sin tipos de bloque nuevos. Entregas:
+  V1 (texto dictado con el teclado → ubicar; requiere A2 de P.24 en `main`), V2 (la cola sin red), V3 (el micrófono
+  propio, guantes y ruido), V4 (plano activo, correcciones, la página del plano, el botón de acción del iPhone).
+  Queda para medir: transcripción adentro del teléfono (Whisper en WebAssembly), sin red y privada.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -677,6 +711,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    regeneró desde v0.107 y `editorSchemaFixture.test.ts` avisa si queda distinto de `editorSchema.ts`. Queda: la prueba
    no ve un atributo nuevo del nodo `photo` (el fixture usa el de hoy), y nada avisa si nadie lo regenera después de
    publicar un cambio del esquema: al publicar una versión que cambia `editorSchema.ts`, regenerarlo.
+
+21. **Restos del deshacer de Yjs (medido al diseñar P.26, `Doc_Deshacer.md`, sección 6).** Si algo que un deshacer
+   volvió a poner se parte escribiendo en el medio, deshacer más atrás deja restos y a veces se lleva un pedazo de texto
+   (un deshacer borró "ám" de "cámara"): en una página sola, con el ⌘Z de hoy, 14 de 3.000 corridas al azar terminan con
+   algo de menos (queda en el historial), igual con y sin la línea de tiempo de P.26. Es de `UndoManager` de Yjs (sigue
+   la copia vuelta a poner solo hasta el primer corte). **Condición de la entrega 1 de P.26** (con P.26 se deshace más
+   lejos): investigar si se corrige con un parche (como los de y-prosemirror) o se reporta arriba, y decidir antes de
+   publicar.
 
 ### C. Esperan a Lega
 

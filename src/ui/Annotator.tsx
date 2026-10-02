@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import * as Y from 'yjs';
 import { t as current, useT, type Key } from '../i18n';
 import '../i18n/lazy/annotator';
@@ -66,12 +66,14 @@ import {
 import { limitState, measureLimits, type MarkupLimits } from '../media/markupLimits';
 import { annotatorKey, type AnnotatorAction } from './annotatorKeys';
 import { loadPrefs, savePrefs, type AnnotatorPrefs } from './annotatorStyles';
-import { fitSize, NO_ZOOM, panBy, wheelScale, zoomAt, type Size, type Zoom } from './carreteModel';
+import { fitSize, isDoubleTap, NO_ZOOM, panBy, pinchZoom, wheelScale, zoomAt, type Size, type Zoom } from './carreteModel';
+import { inputOf, movePoints, routeDown, TOLERANCES, twoFingers, type InputType } from './annotatorTouch';
 import { isOffline, type CarreteLoader } from './carreteLoader';
 import type { CarreteItem } from './carreteModel';
 import {
   ArrowToolIcon,
   EllipseToolIcon,
+  CloseIcon,
   FitIcon,
   LineToolIcon,
   MarkerToolIcon,
@@ -139,19 +141,42 @@ const TOOL_ICONS: Record<Tool, (p: { size?: number }) => ReactNode> = {
   number: NumberToolIcon,
 };
 
-/** En píxeles de pantalla: cuánto se acepta errarle a una forma, un tirador, y cuánto hay que mover para arrastrar. */
-const HIT_PX = 6;
-const HANDLE_PX = 9;
-const SLOP_PX = 3;
+/** En píxeles de pantalla, con el mouse: cuánto se acepta errarle a una forma y a un tirador (con el dedo, más). */
+const HIT_PX = TOLERANCES.mouse.hit;
+const HANDLE_PX = TOLERANCES.mouse.handle;
+
+/**
+ * La pantalla del teléfono y del iPad (entrega 3): las herramientas en una tira abajo y el estilo en una hoja. Va con el
+ * dedo como puntero principal o con la ventana angosta; los gestos, en cambio, dependen de con qué se toca (dedo, lápiz o
+ * mouse), no de esto.
+ */
+const COMPACT_QUERY = '(pointer: coarse), (max-width: 760px)';
+
+function useCompact(): boolean {
+  const query = typeof matchMedia === 'function' ? matchMedia(COMPACT_QUERY) : null;
+  const [compact, setCompact] = useState(() => !!query?.matches);
+  useEffect(() => {
+    if (!query) return;
+    const onChange = () => setCompact(query.matches);
+    query.addEventListener?.('change', onChange);
+    return () => query.removeEventListener?.('change', onChange);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return compact;
+}
 
 type Drag =
   | { mode: 'draw'; tool: 'rectangle' | 'ellipse' | 'arrow' | 'line'; pointerId: number; start: Point; current: Point; shift: boolean; alt: boolean }
   | { mode: 'stroke'; tool: 'pencil' | 'marker'; pointerId: number; points: number[] }
   | { mode: 'number'; pointerId: number; at: Point }
   | { mode: 'move'; pointerId: number; ids: string[]; start: Point; current: Point; hit: string; shift: boolean }
-  | { mode: 'handle'; pointerId: number; id: string; handle: Handle; current: Point; shift: boolean }
+  | { mode: 'handle'; pointerId: number; id: string; handle: Handle; start: Point; current: Point; shift: boolean }
   | { mode: 'band'; pointerId: number; start: Point; current: Point; add: boolean }
-  | { mode: 'pan'; pointerId: number; lastX: number; lastY: number };
+  | { mode: 'pan'; pointerId: number; lastX: number; lastY: number }
+  // Dos dedos: amplían y mueven la foto (nunca dibujan). `mid` en el escenario, como el carrete.
+  | { mode: 'pinch'; pointerId: number; ids: [number, number]; startZoom: Zoom; distance: number; mid: Point }
+  // Un toque con el dedo o el lápiz que se decide al soltar: empezar un texto, o terminar el que se escribe (`commit`).
+  // Al apoyar no se hace nada, así el primer dedo de un pellizco no abre el teclado ni cierra el texto.
+  | { mode: 'tap'; pointerId: number; at: Point; clientX: number; clientY: number; commit: boolean };
 
 interface TextEditing {
   /** La forma que se edita, o `null`: un texto nuevo. */
@@ -241,6 +266,13 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
   const [numberEdit, setNumberEdit] = useState<{ id: string; value: string } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
   const [panning, setPanning] = useState(false);
+  const compact = useCompact();
+  /** La hoja de propiedades del teléfono (color, grosor, opacidad…), abierta. */
+  const [sheet, setSheet] = useState(false);
+  /** Se usó un lápiz en esta sesión (muestra *Only the pencil draws* en la hoja). */
+  const [penSeen, setPenSeen] = useState(false);
+  /** Lo que se escribe en la caja del teléfono, para dibujarlo en la foto mientras tanto. */
+  const [draftText, setDraftText] = useState<string | null>(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -252,6 +284,14 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
   /** Guardar el texto a medio escribir si el anotador se desmonta (ver `commitText`). */
   const commitOnExit = useRef<(() => void) | null>(null);
   const drag = useRef<Drag | null>(null);
+  /** Con qué se apoyó lo que se arrastra ahora (el lápiz manda sobre el dedo; la palma no dibuja). */
+  const dragInput = useRef<InputType | null>(null);
+  /** Los dedos apoyados en la foto (en la pantalla), para los gestos de dos dedos. */
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  /** El último toque (para el doble toque en un texto o un número, con Select). */
+  const lastTap = useRef<{ at: number; x: number; y: number } | null>(null);
+  /** Con qué se tocó por última vez (un doble toque no se cuenta dos veces si el navegador también manda `dblclick`). */
+  const lastInput = useRef<InputType>('mouse');
   const undo = useRef<Y.UndoManager | null>(null);
   const spaceHeld = useRef(false);
   const measureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -480,6 +520,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
     const typedNow = textRef.current?.value ?? typed.current;
     const t = text && typedNow !== null ? { ...text, value: typedNow } : text;
     typed.current = null;
+    setDraftText(null);
     // Una sola vez: cerrar con *Done* o Esc no lo vuelve a guardar al desmontarse.
     commitOnExit.current = null;
     setText(null);
@@ -673,45 +714,115 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
 
   const redraw = () => setTick((n) => n + 1);
 
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (drag.current) return;
-    const el = e.currentTarget;
-    const captureIt = () => {
+  const capture = (el: HTMLElement, ids: number[]) => {
+    for (const id of ids) {
       try {
-        el.setPointerCapture(e.pointerId);
+        el.setPointerCapture(id);
       } catch {
         // El puntero ya no está.
       }
+    }
+  };
+
+  /** Empieza a escribir un texto. Con el dedo, el foco va ya (dentro del toque): si no, el iPhone no abre el teclado. */
+  const beginText = (next: TextEditing, now: boolean) => {
+    setDraftText(null);
+    if (!now) {
+      setText(next);
+      return;
+    }
+    flushSync(() => setText(next));
+    textRef.current?.focus({ preventScroll: true });
+  };
+
+  /** Se usó un lápiz: desde ahora (y en este dispositivo) el lápiz dibuja y el dedo mueve, salvo que se haya elegido. */
+  const notePen = () => {
+    if (!penSeen) setPenSeen(true);
+    const p = prefsRef.current;
+    if (!p.penOnly && !p.penSet) persist({ ...p, penOnly: true });
+  };
+
+  /** Dos dedos: lo que el primero dibujaba se deja (no se escribió nada) y se amplía y mueve la foto. */
+  const startPinch = (el: HTMLElement) => {
+    if (drag.current?.mode === 'pinch') return;
+    const [[ia, a], [ib, b]] = [...touches.current.entries()];
+    const f = twoFingers(a, b);
+    drag.current = { mode: 'pinch', pointerId: ib, ids: [ia, ib], startZoom: liveZoom.current, distance: f.distance, mid: stagePoint(f.mid.x, f.mid.y) };
+    dragInput.current = 'touch';
+    capture(el, [ia, ib]);
+    setHover(null);
+    redraw();
+  };
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    // Las cajas de texto y de número son suyas (elegir letras, mover el cursor).
+    if ((e.target as HTMLElement).closest('.annotator-text, .annotator-number, .annotator-textpanel')) return;
+    const input = inputOf(e.pointerType);
+    lastInput.current = input;
+    if (input === 'touch') touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (input === 'pen') notePen();
+    // La hoja de propiedades abierta: tocar la foto la cierra (y no dibuja).
+    if (sheet) {
+      setSheet(false);
+      return;
+    }
+    const busy = drag.current && drag.current.mode !== 'pinch' && drag.current.mode !== 'pan' ? dragInput.current : null;
+    const route = routeDown({ input, penOnly: prefsRef.current.penOnly, touches: touches.current.size, drawing: busy });
+    if (route === 'ignore') return;
+    if (route === 'pinch') {
+      startPinch(e.currentTarget);
+      return;
+    }
+    if (route === 'pan') {
+      if (drag.current) return;
+      drag.current = { mode: 'pan', pointerId: e.pointerId, lastX: e.clientX, lastY: e.clientY };
+      dragInput.current = 'touch';
+      return;
+    }
+    if (drag.current) {
+      // El lápiz manda: lo que hacían los dedos (mover la foto, un dibujo a medias del dedo) se deja.
+      if (input !== 'pen' || dragInput.current !== 'touch') return;
+      drag.current = null;
+      redraw();
+    }
+    const el = e.currentTarget;
+    const captureIt = () => capture(el, [e.pointerId]);
+    const begin = (next: Drag) => {
+      drag.current = next;
+      dragInput.current = input;
     };
     // La rueda apretada o la barra espaciadora: mover la foto ampliada.
     if (e.button === 1 || (e.button === 0 && spaceHeld.current)) {
       e.preventDefault();
-      drag.current = { mode: 'pan', pointerId: e.pointerId, lastX: e.clientX, lastY: e.clientY };
+      begin({ mode: 'pan', pointerId: e.pointerId, lastX: e.clientX, lastY: e.clientY });
       captureIt();
       return;
     }
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('.annotator-text, .annotator-number')) return;
     const raw = toFramePoint(e.clientX, e.clientY);
     if (!raw || !frame) return;
-    // Un clic afuera termina el texto (y no empieza otra cosa).
+    const touchy = input !== 'mouse';
+    // Un clic afuera termina el texto (y no empieza otra cosa). Con el dedo, al soltar: un pellizco no lo cierra.
     if (text) {
       e.preventDefault();
-      commitText();
+      if (touchy) begin({ mode: 'tap', pointerId: e.pointerId, at: raw, clientX: e.clientX, clientY: e.clientY, commit: true });
+      else commitText();
       return;
     }
     if (numberEdit) {
       setNumberEdit(null);
       return;
     }
-    const tol = HIT_PX / pxPerUnit;
+    const tol = TOLERANCES[input].hit / pxPerUnit;
     if (tool === 'select') {
       if (!canEdit) return;
       // Un tirador de la forma elegida.
       if (selected.length === 1) {
-        const handle = handlesOf(selected[0]).find((h) => Math.hypot(h.at.x - raw.x, h.at.y - raw.y) <= HANDLE_PX / pxPerUnit);
+        const handles = handlesOf(selected[0]);
+        const reach = handleReach(handles, input) / pxPerUnit;
+        const handle = handles.find((h) => Math.hypot(h.at.x - raw.x, h.at.y - raw.y) <= reach);
         if (handle) {
-          drag.current = { mode: 'handle', pointerId: e.pointerId, id: selected[0].id, handle: handle.handle, current: raw, shift: e.shiftKey };
+          begin({ mode: 'handle', pointerId: e.pointerId, id: selected[0].id, handle: handle.handle, start: raw, current: raw, shift: e.shiftKey });
           captureIt();
           return;
         }
@@ -724,12 +835,12 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
         }
         const ids = selection.includes(hit.id) ? selection : [hit.id];
         setSelection(ids);
-        drag.current = { mode: 'move', pointerId: e.pointerId, ids, start: raw, current: raw, hit: hit.id, shift: false };
+        begin({ mode: 'move', pointerId: e.pointerId, ids, start: raw, current: raw, hit: hit.id, shift: false });
         captureIt();
         return;
       }
       if (!e.shiftKey) setSelection([]);
-      drag.current = { mode: 'band', pointerId: e.pointerId, start: raw, current: raw, add: e.shiftKey };
+      begin({ mode: 'band', pointerId: e.pointerId, start: raw, current: raw, add: e.shiftKey });
       captureIt();
       return;
     }
@@ -737,26 +848,66 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
     const p = inside(raw);
     if (tool === 'text') {
       e.preventDefault();
-      const hit = hitTest(shapes, raw, tol, measure);
-      if (hit?.type === 'text') startTextEdit(hit);
-      else {
-        const style = prefs.styles.text;
-        setText({ id: null, at: p, value: '', original: '', fontSize: toFrame(style.fontSize, frame), color: style.color, fill: style.fill });
+      // Con el dedo o el lápiz, el texto empieza al soltar (dentro del toque, para que el teléfono abra el teclado).
+      if (touchy) {
+        begin({ mode: 'tap', pointerId: e.pointerId, at: raw, clientX: e.clientX, clientY: e.clientY, commit: false });
+        captureIt();
+        return;
       }
+      startTextAt(raw, false);
       return;
     }
-    if (tool === 'number') drag.current = { mode: 'number', pointerId: e.pointerId, at: p };
-    else if (tool === 'pencil' || tool === 'marker') drag.current = { mode: 'stroke', tool, pointerId: e.pointerId, points: [p.x, p.y] };
-    else drag.current = { mode: 'draw', tool, pointerId: e.pointerId, start: p, current: p, shift: e.shiftKey, alt: e.altKey };
+    if (tool === 'number') begin({ mode: 'number', pointerId: e.pointerId, at: p });
+    else if (tool === 'pencil' || tool === 'marker') begin({ mode: 'stroke', tool, pointerId: e.pointerId, points: [p.x, p.y] });
+    else begin({ mode: 'draw', tool, pointerId: e.pointerId, start: p, current: p, shift: e.shiftKey, alt: e.altKey });
     captureIt();
     redraw();
   };
 
+  /**
+   * Hasta dónde toma un tirador, en píxeles de pantalla. Con el dedo, 22 px; pero en una forma chica las esquinas taparían
+   * todo y no se podría moverla (auditoría O2): nunca más de un tercio de la distancia entre dos tiradores (ni menos que
+   * con el mouse).
+   */
+  const handleReach = (handles: { at: Point }[], input: InputType): number => {
+    const full = TOLERANCES[input].handle;
+    let gap = Infinity;
+    for (let i = 0; i < handles.length; i++) {
+      for (let j = i + 1; j < handles.length; j++) gap = Math.min(gap, Math.hypot(handles[i].at.x - handles[j].at.x, handles[i].at.y - handles[j].at.y) * pxPerUnit);
+    }
+    return Math.min(full, Math.max(TOLERANCES.mouse.handle, gap / 3));
+  };
+
+  /** Con Text: un texto nuevo en ese punto, o editar el texto que hay ahí. */
+  const startTextAt = (raw: Point, now: boolean) => {
+    if (!frame || !canCreate) return;
+    const hit = hitTest(shapes, raw, TOLERANCES[lastInput.current].hit / pxPerUnit, measure);
+    if (hit?.type === 'text') {
+      startTextEdit(hit, now);
+      return;
+    }
+    const style = prefs.styles.text;
+    beginText({ id: null, at: inside(raw), value: '', original: '', fontSize: toFrame(style.fontSize, frame), color: style.color, fill: style.fill }, now);
+  };
+
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const input = inputOf(e.pointerType);
+    if (input === 'touch' && touches.current.has(e.pointerId)) touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const raw = toFramePoint(e.clientX, e.clientY);
-    if (raw && (tool === 'pencil' || tool === 'marker' || tool === 'select')) setHover(raw);
+    // El cursor de pincel sigue al mouse y al lápiz que flota; debajo del dedo no hace falta.
+    if (raw && input !== 'touch' && (tool === 'pencil' || tool === 'marker' || tool === 'select')) setHover(raw);
     const d = drag.current;
-    if (!d || d.pointerId !== e.pointerId) return;
+    if (!d) return;
+    if (d.mode === 'pinch') {
+      if (!d.ids.includes(e.pointerId)) return;
+      const a = touches.current.get(d.ids[0]);
+      const b = touches.current.get(d.ids[1]);
+      if (!a || !b) return;
+      const f = twoFingers(a, b);
+      setZoom(pinchZoom(d.startZoom, d.distance, d.mid, f.distance, stagePoint(f.mid.x, f.mid.y), liveFit.current, liveStage.current));
+      return;
+    }
+    if (d.pointerId !== e.pointerId) return;
     if (d.mode === 'pan') {
       const dx = e.clientX - d.lastX;
       const dy = e.clientY - d.lastY;
@@ -773,10 +924,16 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
         d.alt = e.altKey;
         break;
       case 'stroke': {
-        const p = inside(raw);
-        const n = d.points.length;
-        // Puntos repetidos no suman nada; el tope de puntos de un trazo (un mapa malicioso tampoco lo pasa).
-        if ((d.points[n - 2] !== p.x || d.points[n - 1] !== p.y) && n < 2 * 5000) d.points.push(p.x, p.y);
+        // Todos los puntos que el navegador juntó en este evento (el lápiz del iPad manda 240 por segundo): el trazo
+        // sale suave, y al soltar se simplifica igual (los bytes no dependen de cuántos llegaron).
+        for (const c of movePoints(e.nativeEvent as PointerEvent)) {
+          const q = toFramePoint(c.x, c.y);
+          if (!q) continue;
+          const p = inside(q);
+          const n = d.points.length;
+          // Puntos repetidos no suman nada; el tope de puntos de un trazo (un mapa malicioso tampoco lo pasa).
+          if ((d.points[n - 2] !== p.x || d.points[n - 1] !== p.y) && n < 2 * 5000) d.points.push(p.x, p.y);
+        }
         break;
       }
       case 'move':
@@ -794,18 +951,38 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
   };
 
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const input = inputOf(e.pointerType);
+    touches.current.delete(e.pointerId);
+    if (input === 'touch') setHover(null);
     const d = drag.current;
-    if (!d || d.pointerId !== e.pointerId) return;
+    if (!d) return;
+    if (d.mode === 'pinch') {
+      if (!d.ids.includes(e.pointerId)) return;
+      // Queda un dedo: sigue moviendo la foto con ese (nunca dibuja), como el carrete.
+      const rest = [...touches.current.entries()][0];
+      drag.current = rest ? { mode: 'pan', pointerId: rest[0], lastX: rest[1].x, lastY: rest[1].y } : null;
+      if (!rest) dragInput.current = null;
+      redraw();
+      return;
+    }
+    if (d.pointerId !== e.pointerId) return;
     drag.current = null;
+    dragInput.current = null;
     const cancelled = e.type === 'pointercancel';
     if (cancelled || !frame) {
       redraw();
       return;
     }
-    const slop = SLOP_PX / pxPerUnit;
+    const slop = TOLERANCES[input].slop / pxPerUnit;
     const z = topZ(shapes);
     const styles = prefsRef.current.styles;
     switch (d.mode) {
+      case 'tap': {
+        if (Math.hypot(e.clientX - d.clientX, e.clientY - d.clientY) > TOLERANCES[input].slop * 2) break;
+        if (d.commit) commitText();
+        else startTextAt(d.at, true);
+        break;
+      }
       case 'draw': {
         if (d.tool === 'rectangle' || d.tool === 'ellipse') {
           const r = dragRect(d.start, d.current, { shift: d.shift, alt: d.alt });
@@ -828,12 +1005,17 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
         if (moved(d.start, d.current, slop)) {
           const list = d.ids.map((id) => byId.get(id)).filter((s): s is MarkupShape => !!s);
           update(list.map((s) => [s.id, moveFields(s, dx, dy)]));
-        } else if (d.ids.length > 1) setSelection([d.hit]);
+        } else {
+          if (d.ids.length > 1) setSelection([d.hit]);
+          tapped(e, input, d.hit);
+        }
         break;
       }
       case 'handle': {
         const s = byId.get(d.id);
-        if (s) update([[s.id, handleFields(s, d.handle, d.current, { shift: d.shift, alt: false })]]);
+        // Tocar un tirador sin moverlo no cambia nada (con el dedo, los tiradores son grandes y tapan la forma).
+        if (!moved(d.start, d.current, slop)) tapped(e, input, d.id);
+        else if (s) update([[s.id, handleFields(s, d.handle, d.current, { shift: d.shift, alt: false })]]);
         break;
       }
       case 'band': {
@@ -848,31 +1030,53 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
     redraw();
   };
 
-  const startTextEdit = (s: MarkupShape) => {
+  /** Con el dedo o el lápiz no hay doble clic: dos toques seguidos en un texto lo editan, en un número lo renumeran. */
+  const tapped = (e: { timeStamp: number; clientX: number; clientY: number }, input: InputType, id: string) => {
+    if (input === 'mouse') return;
+    const tap = { at: e.timeStamp, x: e.clientX, y: e.clientY };
+    if (!isDoubleTap(lastTap.current, tap)) {
+      lastTap.current = tap;
+      return;
+    }
+    lastTap.current = null;
+    const hit = byId.get(id);
+    if (hit) editShape(hit, true);
+  };
+
+  const startTextEdit = (s: MarkupShape, now = false) => {
     if (s.type !== 'text' || !frame || !canEdit) return;
     const pad = s.rect ? s.padding : 0;
     setSelection([]);
-    setText({
-      id: s.id,
-      at: { x: s.posX + (s.rect?.x ?? 0) + pad, y: s.posY + (s.rect?.y ?? 0) + pad },
-      value: s.text,
-      original: s.text,
-      fontSize: s.fontSize,
-      color: s.strokeColor,
-      fill: s.fillMode === 3 || s.fillMode === 2,
-    });
+    beginText(
+      {
+        id: s.id,
+        at: { x: s.posX + (s.rect?.x ?? 0) + pad, y: s.posY + (s.rect?.y ?? 0) + pad },
+        value: s.text,
+        original: s.text,
+        fontSize: s.fontSize,
+        color: s.strokeColor,
+        fill: s.fillMode === 3 || s.fillMode === 2,
+      },
+      now,
+    );
   };
 
-  const onDoubleClick = (e: ReactMouseEvent) => {
-    if (tool !== 'select' || !canEdit) return;
-    const p = toFramePoint(e.clientX, e.clientY);
-    if (!p) return;
-    const hit = hitTest(shapes, p, HIT_PX / pxPerUnit, measure);
-    if (hit?.type === 'text') startTextEdit(hit);
-    else if (hit?.type === 'numbered_marker') {
+  /** Editar un texto o renumerar un número (doble clic, o dos toques con el dedo). */
+  const editShape = (hit: MarkupShape, now: boolean) => {
+    if (hit.type === 'text') startTextEdit(hit, now);
+    else if (hit.type === 'numbered_marker') {
       setSelection([hit.id]);
       setNumberEdit({ id: hit.id, value: String(hit.number) });
     }
+  };
+
+  const onDoubleClick = (e: ReactMouseEvent) => {
+    // Con el dedo, el doble toque ya lo vio `onPointerUp` (el navegador puede mandar también un `dblclick`).
+    if (tool !== 'select' || !canEdit || lastInput.current !== 'mouse') return;
+    const p = toFramePoint(e.clientX, e.clientY);
+    if (!p) return;
+    const hit = hitTest(shapes, p, HIT_PX / pxPerUnit, measure);
+    if (hit) editShape(hit, false);
   };
 
   // La rueda (y el pellizco del trackpad, que llega como rueda con Ctrl) amplía donde está el cursor.
@@ -889,10 +1093,44 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
+
+  // Safari: el pellizco llega además como `gesture*`. Se frena en todo el anotador (en el iPhone ampliaría la página de
+  // atrás); en la Mac, el del trackpad amplía la foto (en el iPhone ya llega como dos dedos).
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    let start: Zoom | null = null;
+    const onStart = (e: Event) => {
+      e.preventDefault();
+      start = liveZoom.current;
+    };
+    const onChange = (e: Event) => {
+      e.preventDefault();
+      const g = e as Event & { scale?: number; clientX?: number; clientY?: number };
+      const f = liveFit.current;
+      if (touches.current.size >= 2 || !start || !g.scale || !(f.width > 0)) return;
+      const at = g.clientX !== undefined && g.clientY !== undefined ? stagePoint(g.clientX, g.clientY) : { x: 0, y: 0 };
+      setZoom(zoomAt(start, start.scale * g.scale, at, f, liveStage.current));
+    };
+    const onEnd = (e: Event) => {
+      e.preventDefault();
+      start = null;
+    };
+    el.addEventListener('gesturestart', onStart);
+    el.addEventListener('gesturechange', onChange);
+    el.addEventListener('gestureend', onEnd);
+    return () => {
+      el.removeEventListener('gesturestart', onStart);
+      el.removeEventListener('gesturechange', onChange);
+      el.removeEventListener('gestureend', onEnd);
+    };
+  }, []);
   const liveFit = useRef(fit);
   liveFit.current = fit;
   const liveStage = useRef(stage);
   liveStage.current = stage;
+  const liveZoom = useRef(zoom);
+  liveZoom.current = zoom;
 
   // Lo que se texto se edita, con el foco al aparecer.
   useEffect(() => {
@@ -919,6 +1157,18 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
     else if (d.mode === 'handle') {
       const s = byId.get(d.id);
       if (s) handlePatch = { id: d.id, fields: handleFields(s, d.handle, d.current, { shift: d.shift, alt: false }) };
+    }
+  }
+  // En el teléfono se escribe en una caja de texto común (arriba, con letra legible); lo escrito se ve en la foto.
+  if (!draft && text && compact && frame) {
+    const value = (draftText ?? typed.current ?? text.value).replace(/\s+$/, '');
+    if (value.trim()) {
+      const font = `${text.fontSize}px ${MARKUP_FONT}`;
+      const raw = text.id ? map.get(`${fileId}/${text.id}`) : null;
+      draft =
+        raw instanceof Y.Map
+          ? { ...(raw.toJSON() as ShapeFields), ...textEdit(value, text.fontSize, measure, font) }
+          : textShape(text.at, value, { ...prefs.styles.text, color: text.color, fill: text.fill }, frame, 1e9, measure, font);
     }
   }
 
@@ -1006,33 +1256,64 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
   /** Píxeles de la caja (antes del zoom) por unidad del marco: el tamaño de la letra de la caja de texto. */
   const boxPx = frame && fit.width > 0 ? fit.width / frame.w : 1;
 
+  const toolButtons = TOOLS.map((t) => {
+    const Icon = TOOL_ICONS[t];
+    const label = tr(TOOL_LABELS[t]);
+    const key = shortcutLabel(TOOL_SHORTCUTS[t]);
+    const modifiers = t === 'rectangle' || t === 'ellipse' || t === 'arrow' || t === 'line';
+    return (
+      <button
+        key={t}
+        className="annotator-btn"
+        aria-label={label}
+        aria-pressed={tool === t}
+        data-tool={t}
+        data-letter={TOOL_LETTERS[t]}
+        disabled={t !== 'select' && !canCreate}
+        // En el teléfono no hay teclado ni Shift: el globito diría solo el nombre, que ya está en el ícono.
+        data-tip={compact ? undefined : modifiers ? tr('annotate.toolTipModifiers', { name: label, key, alt: altName }) : tr('annotate.toolTip', { name: label, key })}
+        onClick={() => setTool(t)}
+      >
+        <Icon size={20} />
+      </button>
+    );
+  });
+  const tools = (
+    <div className="annotator-tools" role="toolbar" aria-label={tr('annotate.tools')}>
+      {toolButtons}
+    </div>
+  );
+  const strip = target && canEdit ? <StyleStrip tool={target.tool} style={target.style} recent={prefs.recent} onChange={changeStyle} /> : null;
+  /** *Only the pencil draws* (AN8): se ve cuando en este dispositivo ya se usó un lápiz. */
+  const penToggle =
+    penSeen || prefs.penOnly || prefs.penSet ? (
+      <label className="annotator-check annotator-pen" data-tip={tr('annotate.penOnlyTip')}>
+        <input
+          type="checkbox"
+          checked={prefs.penOnly}
+          onChange={(e) => persist({ ...prefsRef.current, penOnly: e.currentTarget.checked, penSet: true })}
+        />
+        <span>{tr('annotate.penOnly')}</span>
+      </label>
+    ) : null;
+
   return createPortal(
-    <div ref={dialogRef} className="annotator" role="dialog" aria-modal="true" aria-label={tr('annotate.label', { name })} tabIndex={-1}>
+    <div
+      ref={dialogRef}
+      className="annotator"
+      data-compact={compact ? '' : undefined}
+      role="dialog"
+      aria-modal="true"
+      aria-label={tr('annotate.label', { name })}
+      tabIndex={-1}
+    >
       <div className="annotator-bar">
-        <div className="annotator-tools" role="toolbar" aria-label={tr('annotate.tools')}>
-          {TOOLS.map((t) => {
-            const Icon = TOOL_ICONS[t];
-            const label = tr(TOOL_LABELS[t]);
-            const key = shortcutLabel(TOOL_SHORTCUTS[t]);
-            const modifiers = t === 'rectangle' || t === 'ellipse' || t === 'arrow' || t === 'line';
-            return (
-              <button
-                key={t}
-                className="annotator-btn"
-                aria-label={label}
-                aria-pressed={tool === t}
-                data-tool={t}
-                data-letter={TOOL_LETTERS[t]}
-                disabled={t !== 'select' && !canCreate}
-                data-tip={modifiers ? tr('annotate.toolTipModifiers', { name: label, key, alt: altName }) : tr('annotate.toolTip', { name: label, key })}
-                onClick={() => setTool(t)}
-              >
-                <Icon size={20} />
-              </button>
-            );
-          })}
-        </div>
-        <span className="annotator-sep" />
+        {!compact && (
+          <>
+            {tools}
+            <span className="annotator-sep" />
+          </>
+        )}
         <button className="annotator-btn" aria-label={tr('annotate.undo')} data-tip={tr('annotate.undoTip', { key: shortcutLabel('annotateUndo') })} disabled={!stacks.undo} onClick={() => undo.current?.undo()}>
           <UndoIcon size={20} />
         </button>
@@ -1051,7 +1332,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
         <button
           className="annotator-btn"
           aria-label={tr('annotate.fit')}
-          data-tip={tr('annotate.fitTip', { key: shortcutLabel('annotateFit'), pan: shortcutLabel('annotatePan') })}
+          data-tip={compact ? tr('annotate.fitTipTouch') : tr('annotate.fitTip', { key: shortcutLabel('annotateFit'), pan: shortcutLabel('annotatePan') })}
           onClick={() => setZoom(NO_ZOOM)}
         >
           <FitIcon size={20} />
@@ -1069,18 +1350,12 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
         </button>
       </div>
 
-      <div className="annotator-props">
-        {target && canEdit ? (
-          <StyleStrip
-            tool={target.tool}
-            style={target.style}
-            recent={prefs.recent}
-            onChange={changeStyle}
-          />
-        ) : (
-          <span className="annotator-hint">{tool === 'select' && canEdit ? tr('annotate.selectHint') : ' '}</span>
-        )}
-      </div>
+      {!compact && (
+        <div className="annotator-props">
+          {strip ?? <span className="annotator-hint">{tool === 'select' && canEdit ? tr('annotate.selectHint') : ' '}</span>}
+          {penToggle}
+        </div>
+      )}
 
       <div
         ref={stageRef}
@@ -1093,7 +1368,35 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
         onPointerLeave={() => setHover(null)}
         onDoubleClick={onDoubleClick}
         onDragStart={(e) => e.preventDefault()}
+        onContextMenu={(e) => {
+          // Un dedo apoyado un rato abre el menú del sistema sobre la foto: con el anotador, nunca.
+          if (lastInput.current !== 'mouse') e.preventDefault();
+        }}
       >
+        {compact && text && (
+          // En el teléfono, el texto se escribe en una caja común arriba (letra de 16 px: el iPhone no amplía la página al
+          // tocarla, y no la tapa el teclado); en la foto se ve cómo queda.
+          <div className="annotator-textpanel">
+            <textarea
+              ref={textRef}
+              className="annotator-textfield"
+              // Lo ya escrito (auditoría O1): si la pantalla cambió de la compu al teléfono con la caja abierta, la caja
+              // nueva sigue con lo escrito en la otra.
+              defaultValue={typed.current ?? text.value}
+              maxLength={MAX_TEXT}
+              rows={2}
+              aria-label={tr('annotate.text')}
+              placeholder={tr('annotate.textHintTouch')}
+              onInput={(e) => {
+                typed.current = e.currentTarget.value;
+                setDraftText(e.currentTarget.value);
+              }}
+            />
+            <button className="annotator-done" onClick={commitText}>
+              {tr('annotate.textDone')}
+            </button>
+          </div>
+        )}
         {frame ? (
           <div ref={boxRef} className="annotator-box" style={boxStyle}>
             {image.preview && !image.fullShown && <img className="annotator-photo" src={image.preview} alt="" draggable={false} onLoad={(e) => onNatural(e, false)} />}
@@ -1112,16 +1415,17 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
             <svg className="annotator-ui" viewBox={`0 0 ${frame.w} ${frame.h}`} aria-hidden="true" focusable="false">
               {ui}
             </svg>
-            {text && (
+            {text && !compact && (
               <textarea
                 ref={textRef}
                 className="annotator-text"
                 data-fill={text.fill ? '' : undefined}
-                defaultValue={text.value}
+                // Lo ya escrito, también si se escribió en la caja del teléfono (la ventana se agrandó: auditoría O1).
+                defaultValue={typed.current ?? text.value}
                 maxLength={MAX_TEXT}
                 aria-label={tr('annotate.text')}
                 placeholder={tr('annotate.textHint')}
-                rows={Math.max(1, text.value.split('\n').length)}
+                rows={Math.max(1, (typed.current ?? text.value).split('\n').length)}
                 style={{
                   ...pct(text.at),
                   fontSize: `${text.fontSize * boxPx}px`,
@@ -1158,6 +1462,40 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
           </span>
         )}
       </div>
+
+      {compact && (
+        <div className="annotator-bottom">
+          {sheet && (
+            // La hoja de propiedades: lo de la franja de la compu, con controles grandes. Se cierra tocando la foto.
+            <div className="annotator-sheet" role="group" aria-label={tr('annotate.style')}>
+              <div className="annotator-sheet-head">
+                <span>{target ? tr(TOOL_LABELS[target.tool]) : tr('annotate.style')}</span>
+                <button className="annotator-btn" aria-label={tr('annotate.closeStyle')} onClick={() => setSheet(false)}>
+                  <CloseIcon size={18} />
+                </button>
+              </div>
+              {strip ?? <span className="annotator-hint">{tr('annotate.styleNothing')}</span>}
+              {penToggle}
+            </div>
+          )}
+
+          {/* La tira de abajo: las herramientas (se desliza si no entran) y el punto de color, que abre la hoja. */}
+          <div className="annotator-dock">
+            {tools}
+            <span className="annotator-sep" />
+            <button
+              className="annotator-btn annotator-dot"
+              aria-label={tr('annotate.style')}
+              aria-expanded={sheet}
+              disabled={!canEdit}
+              onClick={() => setSheet((open) => !open)}
+            >
+              <span className="annotator-dot-color" style={{ background: target?.style.color ?? 'transparent' }} data-empty={target ? undefined : ''} />
+              {target && controlsOf(target.tool).width && <span className="annotator-dot-width">{target.style.width}</span>}
+            </button>
+          </div>
+        </div>
+      )}
     </div>,
     document.body,
   );

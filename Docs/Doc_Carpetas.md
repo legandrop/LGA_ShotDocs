@@ -271,12 +271,12 @@ mano). De la auditoría de la entrega 2:
   verla sin red, retomar con "Seguir" en Chrome y Edge (`FileSystemHandle`), el botón "Carpeta…" del menú `/`,
   la cuenta de pedidos del día y contar lo que falta subir en "sacar el workspace del dispositivo".
 - **Entrega 2:** *Bajar todo* como zip. **Hecho** ("Cómo quedó (entrega 2)").
-- **Nombres de las carpetas: decidido (D3, 2026-10-01).** Lega delegó; quedó respetar el nombre en las carpetas que
-  suelta el usuario (ver "Respondidas por Lega", punto 6). Hecho en `driveFolderName`.
+- **Nombres de las carpetas: decidido (D3 → B, 2026-10-02).** Sin espacios, nunca: guiones bajos también en las
+  carpetas que suelta el usuario (ver "Respondidas por Lega", punto 6). Hecho en `driveFolderName`.
 - **El iPhone:** sin probar a mano; si el navegador no da `webkitGetAsEntry`, se sigue pidiendo comprimirla.
 
-**Pruebas:** `portero/src/folders.test.ts` (crear el árbol y repetirlo, nombres tal cual y retomar una subida con
-los nombres de antes, `_2`, niveles, rutas con `..`,
+**Pruebas:** `portero/src/folders.test.ts` (crear el árbol y repetirlo, nombres con guiones bajos y retomar una
+subida con espacios de v0.089 a v0.127, `_2`, niveles, rutas con `..`,
 subcarpetas de afuera, subidas cifradas de otra persona, tocadas o vencidas, Drive que pide ir más despacio,
 listar, accesos directos, documentos de Google, subcarpeta movida afuera, ciclos, el pase de una carpeta) y
 `src/media/folders.test.ts` (leer más de 100 por carpeta, salteados, `webkitdirectory`, la cola de punta a punta,
@@ -493,7 +493,8 @@ no puede ir nunca al navegador de un miembro.
 - **Nombres:** Drive acepta cualquier nombre; se limpian solo los controles, las marcas de dirección y los
   caracteres de ancho cero (`cleanFileName`). Dos nombres que solo difieren en mayúsculas se suben tal cual (el zip los
   desambigua, y limpia lo que Windows no acepta: entrega 2).
-  Las carpetas también conservan su nombre (D3, punto 6 de "Respondidas por Lega").
+  Las carpetas en el Drive, en cambio, van sin espacios (D3 → B, punto 6 de "Respondidas por Lega"); la tarjeta y
+  el nombre en la app conservan el del usuario.
 
 ## 7. La ventana: "esta carpeta, con todo esto"
 
@@ -696,18 +697,21 @@ un acceso directo que no se sigue, una subcarpeta movida afuera que deja de vers
    subidas pueden ir directo a Google.
 4. **Bajar todo como zip:** sí, en la entrega 2, con los bytes de Drive por el portero (sección 9).
 5. **iPhone sin forma de elegir una carpeta → pedir que se comprima:** de acuerdo.
-6. **Nombres de las carpetas (D3, 2026-10-01):** Lega delegó; quedó respetar el nombre en las carpetas que suelta
-   el usuario. «Día 2 - Puerto» queda así en el Drive, y sus subcarpetas también (`driveFolderName` en
-   `portero/src/core.ts`): solo se sacan, como en los archivos (`cleanFileName`, igual en la app y en el portero),
-   controles, marcas de dirección y caracteres de ancho cero, también U+200C y U+200D (un emoji compuesto, como el
-   de una familia, queda en sus partes, y una bandera o un emoji con tono se mantiene), las barras van como
-   `_`, se corta en 200 caracteres y, vacío, `Folder`. Las que crea la app (`LGA_ShotDocs`, la del proyecto,
-   `Carpetas`) siguen sin espacios (`folderName`). Una segunda carpeta con el mismo nombre en el proyecto, sin
-   distinguir mayúsculas, sigue llevando `_2` (`Día 2 - Puerto_2`). **Lo ya subido** con guiones bajos (`Dia_2`) no
-   se renombra: la carpeta se encuentra por su marca `sdFile` y cada subcarpeta por `sdPath` (sale de la ruta que
-   manda la app, con los nombres originales), así que volver a soltarla no duplica nada y lo nuevo va adentro de la
-   vieja, con su nombre (puede quedar `Dia_2/Toma 2`). Una subida vieja con `Dia_2` y una nueva `Dia 2` son nombres
-   distintos: no llevan `_2`.
+6. **Nombres de las carpetas (D3 → B, 2026-10-02):** el 2026-10-01 Lega delegó y quedó respetar el nombre en las
+   carpetas que suelta el usuario (v0.089 a v0.127); el 2026-10-02 decidió lo contrario: **ningún nombre de carpeta
+   que la app crea en el Drive lleva espacios, nunca**, tampoco estas. «Día 2 - Puerto» queda `Día_2_-_Puerto` en
+   el Drive, y sus subcarpetas también (`driveFolderName` en `portero/src/core.ts`): se saca lo que saca
+   `cleanFileName` (igual en la app y en el portero: controles, marcas de dirección y caracteres de ancho cero,
+   también U+200C; el U+200D solo se queda entre dos emojis, así que una familia o un emoji con tono se mantienen;
+   las barras van como `_`), se corta en 200 caracteres por grafema, se sacan los espacios de los bordes y **cada
+   tramo de espacios pasa a un solo `_`** (tildes, eñes, emojis y los `_` del usuario quedan tal cual); vacío,
+   `Folder`. En la app, la tarjeta y el nombre de la fila siguen siendo los del usuario (con espacios). Una segunda
+   carpeta con el mismo nombre en el proyecto, sin distinguir mayúsculas, sigue llevando `_2`
+   (`Día_2_-_Puerto_2`). **Lo ya subido** con espacios (`Dia 2`, de v0.089 a v0.127) o con guiones bajos (antes de
+   v0.089) no se renombra: el portero nunca busca una carpeta por su nombre sino por su marca `sdFile` (la raíz) y
+   `sdPath` (cada subcarpeta, que sale de la ruta que manda la app, con los nombres originales), así que volver a
+   soltarla no duplica nada y lo nuevo va adentro de la vieja con guiones bajos (puede quedar `Dia 2/Toma_2`). Una
+   subida vieja con `Dia 2` y una nueva `Dia_2` son nombres distintos: no llevan `_2`.
 
 ## Decisiones que quedan (a confirmar por Lega)
 

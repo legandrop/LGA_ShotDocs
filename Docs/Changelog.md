@@ -11,6 +11,30 @@ Lo que la persona toca (el triángulo) o donde queda la selección (Esc) se cons
 muestra. El aviso de la barra cuenta lo cierto (abiertas, cerradas a mano, listas plegables) y lo que pasa a ser de la persona se guarda como suyo. Reemplazar sigue igual. Sin migración ni `min_app_version`.
 [ Buscar con secciones colapsadas (D11) - se abren las que esconden coincidencias, solo a la vista, y se cierran al terminar ]
 
+v0.129 :
+
+Tres entregas de fotos y exportar. **El zip para archivar** (P.22, entrega 2): guardar un proyecto fuera de la app no
+tenía forma; *Zip — to archive* en *Export…* arma por página un `.html` sin red, un `.md` con rutas relativas, vistas
+JPEG, los originales, los comentarios sin correos, el JSON para volver y `MISSING_FILES.txt`; los nombres se acortan para
+que ninguna ruta pase 180 caracteres en Windows. Solo dueño y admins. **Anotar con el dedo y el lápiz** (P.20, entrega
+3): en pantallas táctiles una tira abajo, dos dedos amplían sin dibujar, el lápiz del iPad dibuja y el dedo mueve, la
+palma no cuenta. **El alto de las miniaturas en las celdas** (D27 → B): *Thumbnail size* por tabla (64, 96 o 160 px),
+como propiedad de la tabla (`thumbHeight`); una versión vieja la ignora y, si edita la tabla, vuelve a 96 sin perder
+nada. `min_app_version` sube a esta versión.
+[ El zip para archivar, anotar con el dedo y el lápiz, y el alto de las miniaturas en las celdas ]
+
+v0.128 :
+
+Carpetas con guiones bajos (D3 → B) y dos diseños. Las carpetas que se sueltan en una página llegaban al Drive del dueño
+con espacios (`Día 2 - Puerto`), por la regla de v0.089; Lega decidió que ninguna carpeta del Drive lleve espacios.
+`driveFolderName` del portero vuelve a pasar cada tramo de espacios a `_`, también en subcarpetas, y conserva lo que ya
+protegía (controles, ZWJ entre emojis, corte por grafema); lo ya subido no se renombra y se encuentra por su marca.
+Diseños sin código, auditados y corregidos: **⌘Z en el orden en que editaste** (P.26, `Doc_Deshacer.md`: una línea de
+tiempo por proyecto arriba de las pilas de Yjs, con el reemplazo del proyecto adentro; antes, investigar B.21) y el
+**dictado al reporte** (P.27, `Doc_Dictado.md`: micrófono propio que transcribe con el proveedor de la persona y una
+lista de cambios con fila y columna que valida la app, con vista previa y deshacer).
+[ Carpetas con guiones bajos (D3 → B) y los diseños de deshacer y dictado ]
+
 v0.127 :
 
 Compactar (B.9), entrega 1: leer snapshots. Un dispositivo nuevo baja todas las filas de cada página, y una página muy

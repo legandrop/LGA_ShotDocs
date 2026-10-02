@@ -459,8 +459,8 @@ describe('exportar PDF: las anotaciones de las fotos', () => {
       },
     };
     const plan = [
-      { id: 'p1', title: 'Reporte', depth: 0, header: [], format: { size: 'A4' as const, landscape: false } },
-      { id: 'p2', title: 'Otra', depth: 0, header: [], format: { size: 'A4' as const, landscape: false } },
+      { id: 'p1', title: 'Reporte', depth: 0, parent: null, header: [], format: { size: 'A4' as const, landscape: false } },
+      { id: 'p2', title: 'Otra', depth: 0, parent: null, header: [], format: { size: 'A4' as const, landscape: false } },
     ];
     const e = await editor();
     const book = await buildPdf({ title: 'Reporte', plan, source, editor: e, named: true, limits: PDF_LIMITS.desktop });

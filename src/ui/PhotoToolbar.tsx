@@ -7,6 +7,8 @@ import { useT } from '../i18n';
 import '../i18n/lazy/editor';
 import { mediaIdOf } from '../media/queue';
 import { BarButton } from './BarButton';
+import { ThumbHeightMenu } from './CellThumbsMenu';
+import { tablesOf, thumbHeightOfTables, type ThumbHeight } from './cellThumbs';
 import { ROW_PRESETS } from './imageRows';
 import { PHOTO, photoWidth } from './inlinePhoto';
 import { inTableCell, liveView, trackSpot, takeSpot } from './inlinePhotoCreate';
@@ -57,6 +59,9 @@ interface PhotoChoice {
    * Con alguna en una celda no se alinea (la tabla no tiene alineación propia).
    */
   inTable: 'all' | 'some' | 'none';
+  /** Con todas en celdas: sus tablas (sin repetir) y el alto de sus miniaturas, si es el mismo en todas (D27 → B). */
+  tables: number[];
+  thumbHeight: ThumbHeight | null;
 }
 
 /** El bloque de la foto en `pos` y la alineación de su texto. */
@@ -85,6 +90,8 @@ function choiceOf(state: EditorState): PhotoChoice | null {
   const owners = positions.map((p) => blockOf(state, p)).filter((b): b is { id: string; align: Alignment } => !!b);
   const blocks = [...new Set(owners.map((b) => b.id))];
   const aligns = new Set(owners.map((b) => b.align));
+  const inTable = tableShare(positions.map((p) => inTableCell(state.doc.resolve(p))));
+  const tables = inTable === 'all' ? tablesOf(state.doc, positions) : [];
   return {
     positions,
     widths,
@@ -94,7 +101,9 @@ function choiceOf(state: EditorState): PhotoChoice | null {
     arrange: arrangeTarget(state),
     blocks,
     align: aligns.size === 1 ? [...aligns][0] : null,
-    inTable: tableShare(positions.map((p) => inTableCell(state.doc.resolve(p)))),
+    inTable,
+    tables,
+    thumbHeight: tables.length ? thumbHeightOfTables(state.doc, tables) : null,
   };
 }
 
@@ -110,6 +119,8 @@ const sameChoice = (a: PhotoChoice | null, b: PhotoChoice | null) =>
     a.blocks.join() === b.blocks.join() &&
     a.align === b.align &&
     a.inTable === b.inTable &&
+    a.tables.join() === b.tables.join() &&
+    a.thumbHeight === b.thumbHeight &&
     a.arrange?.positions.join() === b.arrange?.positions.join() &&
     a.arrange?.adjacent === b.arrange?.adjacent);
 
@@ -206,6 +217,8 @@ export function PhotoSizeButtons() {
           {SIZE_LABELS[f].text}
         </BarButton>
       ))}
+      {/* El alto de las miniaturas de la tabla (D27 → B, D96): para todas las de esa tabla, no solo las elegidas. */}
+      {cell && <ThumbHeightMenu tables={choice.tables} current={choice.thumbHeight} />}
       {arrange && !cell && (
         <BarButton
           test="photoArrange"

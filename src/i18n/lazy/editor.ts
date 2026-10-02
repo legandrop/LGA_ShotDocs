@@ -115,13 +115,25 @@ export const editor = {
   },
   'cellSize.thumb': { en: "Thumbnail", es: "Miniatura" },
   'cellSize.full': { en: "Full cell width", es: "Todo el ancho de la celda" },
+  'cellThumbs.size': { en: "Thumbnail size", es: "Tamaño de las miniaturas" },
+  'cellThumbs.small': { en: "Small", es: "Chico" },
+  'cellThumbs.medium': { en: "Medium", es: "Mediano" },
+  'cellThumbs.large': { en: "Large", es: "Grande" },
+  'cellThumbs.tip': {
+    en: "For every thumbnail in this table; images you made bigger keep their size",
+    es: "Para todas las miniaturas de esta tabla; las fotos que agrandaste mantienen su tamaño",
+  },
+  'cellThumbs.tipAll': {
+    en: "For every thumbnail in these tables; images you made bigger keep their size",
+    es: "Para todas las miniaturas de estas tablas; las fotos que agrandaste mantienen su tamaño",
+  },
   'photoTip.thumb': {
-    en: "As tall as a table row; images side by side line up",
-    es: "Del alto de una fila de la tabla; las fotos seguidas quedan alineadas",
+    en: "Back to the table's thumbnail size; images side by side line up",
+    es: "Vuelve al tamaño de las miniaturas de la tabla; las fotos seguidas quedan alineadas",
   },
   'photoTip.thumbAll': {
-    en: "Turns every selected image into a thumbnail as tall as a table row",
-    es: "Pasa todas las fotos elegidas a miniaturas del alto de una fila",
+    en: "Turns every selected image into a thumbnail of its table's size",
+    es: "Pasa todas las fotos elegidas a miniaturas del tamaño de su tabla",
   },
   'photoTip.sizeCell': {
     en: "Fills the cell's width; to make it bigger, widen the column",

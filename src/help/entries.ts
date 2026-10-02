@@ -98,6 +98,8 @@ const REPLACE_PROJECT = '0.094';
 const REMOVED_WRITING = '0.095';
 /** Las fotos en las celdas de una tabla (Doc_Fotos_En_Linea.md, entrega 5): la versión se pone al publicar. */
 const CELL_PHOTOS = '0.107';
+/** El alto de las miniaturas de una tabla (Doc_Fotos_En_Linea.md, D27 → B): la versión se pone al publicar. */
+const CELL_THUMBS = '0.129';
 /** La que trajo "Update now" que espera la versión nueva y "Force the update" (Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red"). */
 const UPDATE_APP = '0.097';
 /** *Download all* de una carpeta (P.9, entrega 2, Doc_Carpetas.md): la versión se pone al publicar, igual que en el changelog. */
@@ -118,6 +120,8 @@ const DAY_REPORTS = '0.121';
 const PUBLIC_LINK = '0.111';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
+/** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
+const EXPORT_ZIP = '0.129';
 /** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const MENTIONS = '0.120';
 /** Menciones, entrega 2: compartir desde la mención, el punto del árbol y el número afuera (la versión la pone quien publica). */
@@ -126,6 +130,8 @@ const MENTIONS_SHARE = '0.125';
 const PHOTO_MARKUP = '0.116';
 /** Anotar las fotos en la compu (P.20, entrega 2). El número lo pone quien publica. */
 const ANNOTATE = '0.123';
+/** Anotar con el dedo y con el lápiz (P.20, entrega 3). El número lo pone quien publica. */
+const ANNOTATE_TOUCH = '0.129';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -324,6 +330,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     since: CELL_PHOTOS,
   },
   {
+    id: 'photosCellsSize',
+    section: 'photos',
+    title: 'help.photosCellsSize.title',
+    text: 'help.photosCellsSize.text',
+    words: ['tabla', 'table', 'miniatura', 'thumbnail', 'tamaño', 'size', 'alto', 'height', 'chico', 'grande', 'small', 'large'],
+    since: CELL_THUMBS,
+  },
+  {
     id: 'carrete',
     section: 'photos',
     title: 'help.carrete.title',
@@ -363,6 +377,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     ],
     words: ['annotate', 'anotar', 'flecha', 'arrow', 'círculo', 'circle', 'texto', 'lápiz', 'pencil', 'marker', 'marcador', 'número', 'framerev', 'dibujar', 'draw'],
     since: ANNOTATE,
+  },
+  {
+    id: 'photosAnnotateTouch',
+    section: 'photos',
+    title: 'help.photosAnnotateTouch.title',
+    text: 'help.photosAnnotateTouch.text',
+    words: ['annotate', 'anotar', 'dedo', 'finger', 'pellizco', 'pinch', 'zoom', 'ampliar', 'lápiz', 'pencil', 'apple pencil', 'ipad', 'iphone', 'teléfono', 'phone', 'touch'],
+    since: ANNOTATE_TOUCH,
   },
   { id: 'photosPhone', section: 'photos', title: 'help.photosPhone.title', text: 'help.photosPhone.text', since: BEFORE_HELP },
   {
@@ -637,6 +659,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.export.text',
     words: ['exportar', 'export', 'pdf', 'índice', 'contents', 'proyecto entero', 'whole project', 'entregar', 'cliente', 'client', 'reporte'],
     since: EXPORT_PDF,
+  },
+  {
+    id: 'exportZip',
+    section: 'print',
+    title: 'help.exportZip.title',
+    text: 'help.exportZip.text',
+    words: ['zip', 'archivar', 'archive', 'backup', 'respaldo', 'markdown', 'html', 'originales', 'originals', 'descargar', 'download'],
+    since: EXPORT_ZIP,
   },
 
   // --- Preferencias ---

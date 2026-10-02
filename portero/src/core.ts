@@ -332,16 +332,18 @@ const memory = new WeakMap<object, Map<string, Map<string, number>>>();
 const TREE_MEMORY_MAX = 20_000;
 
 /**
- * El nombre en el Drive del dueño de una carpeta que soltó el usuario y de sus subcarpetas: el suyo, tal cual
- * (D3, 2026-10-01: `Día 2 - Puerto` queda así, con espacios, tildes y emojis). Solo se saca lo que saca
- * `cleanFileName`, igual que la app: controles, marcas de dirección y los de ancho cero (también U+200C; el U+200D
- * solo se queda entre dos emojis, así que el de una familia sigue siendo uno); las barras van como `_`. Se corta en 200 caracteres
- * sin partir un grafema (`cutText`) y sin espacios en los bordes. Vacío, `Folder`. Las carpetas que crea la app (la de la app, la
- * de cada proyecto, `Carpetas`) siguen sin espacios (`folderName`). Las de antes, con guiones bajos (`Dia_2`),
- * no se renombran: cada una se encuentra por su marca (`sdFile`, `sdPath`), nunca por el nombre.
+ * El nombre en el Drive del dueño de una carpeta que soltó el usuario y de sus subcarpetas: sin espacios, nunca
+ * (D3 → B, 2026-10-02, como todas las carpetas que crea la app): cada tramo de espacios pasa a un `_`, así que
+ * `Día 2 - Puerto` queda `Día_2_-_Puerto`. Lo demás es el nombre del usuario: tildes, eñes y emojis se conservan, y
+ * los guiones bajos que ya traía no se tocan (ni se juntan). Se saca lo que saca `cleanFileName`, igual que la app:
+ * controles, marcas de dirección y los de ancho cero (también U+200C; el U+200D solo se queda entre dos emojis, así
+ * que el de una familia sigue siendo uno); las barras van como `_`. Se corta en 200 caracteres sin partir un grafema
+ * (`cutText`) y se le sacan los espacios de los bordes antes de pasarlos a `_` (nunca queda un `_` de más al
+ * principio ni al final). Vacío, `Folder`. Las subidas hechas entre v0.089 y esta versión quedaron con espacios
+ * (`Día 2 - Puerto`) y no se renombran: cada carpeta se encuentra por su marca (`sdFile`, `sdPath`), nunca por el nombre.
  */
 export function driveFolderName(name: string): string {
-  return cutText(cleanFileName(name), 200).trim() || 'Folder';
+  return cutText(cleanFileName(name), 200).trim().replace(/\s+/g, '_') || 'Folder';
 }
 
 /**
