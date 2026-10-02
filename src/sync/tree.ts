@@ -578,6 +578,8 @@ export class PageTree {
       if (r.icon) patch.icon = r.icon;
       if (r.deleted_at) patch.deleted_at = r.deleted_at;
       if (r.settings && Object.keys(r.settings).length > 0) patch.settings = r.settings;
+      // La plantilla con que se hizo (Doc_Plantillas.md): solo si hay una, nunca para borrarla.
+      if (r.template_id) patch.template_id = r.template_id;
       if (Object.keys(patch).length > 0) ops.push({ kind: 'update', id: r.id, patch });
     }
 
@@ -591,6 +593,7 @@ export class PageTree {
       if (r.sort_key !== server.sort_key) patch.sort_key = r.sort_key;
       if (r.deleted_at !== server.deleted_at) patch.deleted_at = r.deleted_at;
       if (r.settings && JSON.stringify(r.settings) !== JSON.stringify(server.settings ?? {})) patch.settings = r.settings;
+      if (r.template_id && r.template_id !== server.template_id) patch.template_id = r.template_id;
       if (Object.keys(patch).length > 0) ops.push({ kind: 'update', id: r.id, patch });
     }
 
