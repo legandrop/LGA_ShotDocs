@@ -35,9 +35,12 @@ const ADMIN = '00000000-0000-4000-8000-0000000000c1';
 const ANA = '00000000-0000-4000-8000-0000000000c2';
 const PEDRO = '00000000-0000-4000-8000-0000000000c3';
 
+// Chromium no avisa que cambió la selección cuando se enfoca un campo por código; jsdom sí (ver el test de Esc y Cancel).
+const mute = (e: Event) => e.stopImmediatePropagation();
 const roots: Root[] = [];
 const devices: Device[] = [];
 afterEach(async () => {
+  document.removeEventListener('selectionchange', mute, true);
   for (const r of roots.splice(0)) act(() => r.unmount());
   for (const d of devices.splice(0)) {
     await d.engine.stop();
@@ -214,6 +217,36 @@ describe('compartir desde la mención', () => {
     expect(host.querySelector('.mention-share')).toBeNull();
     expect(host.querySelector('textarea')?.value).toBe('hola @pedr');
     expect(server.grants.some((g) => g.user_id === PEDRO)).toBe(false);
+    expect(server.mentionShares).toEqual([]);
+  });
+
+  it('tras Esc o Cancel la lista del @ vuelve sola, aunque la pregunta haya estado abierta un rato (el campo perdió el foco)', async () => {
+    const { server, plan, device } = await workspace();
+    const admin = await device(ADMIN);
+    document.addEventListener('selectionchange', mute, true);
+    const host = await mount(services(admin, ADMIN), <Panel pageId={plan} />);
+    const textarea = await openComposer(host);
+    const outsideRows = () => options(host).filter((o) => o.includes('outside'));
+    await typeIn(textarea, 'hola @ped');
+    await key(textarea, 'Enter');
+    // Mientras se lee la pregunta el foco está en su botón y el campo pierde el cursor (el onBlur lo olvida a los 150 ms).
+    expect(document.activeElement).not.toBe(textarea);
+    await wait(250);
+    await key(host.querySelector<HTMLElement>('.mention-share button')!, 'Escape');
+    await wait(80);
+    expect(document.activeElement).toBe(textarea);
+    expect(outsideRows()).toEqual(['option:selected outside:pedropedro@wanka.tv']);
+    expect(textarea.value).toBe('hola @ped');
+    // Lo mismo con Cancel, y se puede volver a elegir.
+    await key(textarea, 'Enter');
+    await wait(250);
+    const cancel = [...host.querySelectorAll<HTMLButtonElement>('.mention-share button')].find((b) => b.textContent === 'Cancel')!;
+    await act(async () => cancel.click());
+    await wait(80);
+    expect(document.activeElement).toBe(textarea);
+    expect(outsideRows()).toEqual(['option:selected outside:pedropedro@wanka.tv']);
+    await key(textarea, 'Enter');
+    expect(host.querySelector('.mention-share')).not.toBeNull();
     expect(server.mentionShares).toEqual([]);
   });
 
