@@ -217,6 +217,34 @@ describe('Format as…: aplicar', () => {
     expect(ed.document.map((b) => b.type)).toEqual(['paragraph', 'heading']);
   });
 
+  it('la guarda mira también las propiedades: si otro tildó la casilla mientras pensaba, no aplica', () => {
+    const ed = page([{ id: 'a', type: 'checkListItem', props: { checked: false }, content: 'Pedir el LiDAR' }]);
+    select(ed, 'a', 0, 'a', 14);
+    const fs = snap(ed);
+    ed.updateBlock('a', { props: { checked: true } } as never);
+    expect(applyFormat(ed$(ed), view(ed), fs, plan(fs, '- Pedir el LiDAR'), true)).toEqual({ ok: false, reason: 'changed' });
+    expect(ed.getBlock('a')!.type).toBe('checkListItem');
+    expect((ed.getBlock('a')!.props as { checked: boolean }).checked).toBe(true);
+  });
+
+  it('si al final un bloque no quedó como se pidió, se deshace todo y no se aplica nada', () => {
+    const ed = page([
+      { id: 'a', type: 'paragraph', content: 'uno' },
+      { id: 'b', type: 'paragraph', content: 'dos' },
+    ]);
+    select(ed, 'a', 0, 'b', 3);
+    const fs = snap(ed);
+    // Un editor que ignora el cambio de 'b' (como si algo lo hubiera rechazado).
+    const real = ed$(ed);
+    const flaky = new Proxy(real, {
+      get: (t, k) => (k === 'updateBlock' ? (id: string, u: unknown) => (id === 'b' ? undefined : t.updateBlock(id, u)) : Reflect.get(t, k)),
+    });
+    const before = undoManager(ed).undoStack.length;
+    expect(applyFormat(flaky, view(ed), fs, plan(fs, '- uno\n- dos'), true)).toEqual({ ok: false, reason: 'failed' });
+    expect(ed.document.map((b) => b.type)).toEqual(['paragraph', 'paragraph']);
+    expect(undoManager(ed).undoStack.length).toBe(before);
+  });
+
   it('sin Editar no aplica', () => {
     const ed = page([{ id: 'a', type: 'paragraph', content: 'uno' }]);
     select(ed, 'a', 0, 'a', 3);
