@@ -4,6 +4,11 @@
 
 begin;
 
+-- Como la app actual (desde v0.099 manda su versión en el header `x-shotdocs-version`): la base puede pedir una
+-- versión mínima (`workspace_settings.min_app_version`) y, sin header, rechaza las escrituras con `app_outdated`.
+-- Vale para toda la transacción; la prueba de la versión mínima la cubre `version_minima_arbol_permisos.sql`.
+select set_config('request.headers', '{"x-shotdocs-version": "9.999"}', true);
+
 create function pg_temp.as_user(uid uuid) returns void language sql as $$
   select set_config('role', 'authenticated', true),
          set_config('request.jwt.claims',
