@@ -73,6 +73,18 @@ export interface DocState {
   snapshotId?: string;
   /** La época de contenido de la página que vino en la misma respuesta que lo último bajado con `pull_page_content`. */
   contentEpoch?: number;
+  /**
+   * La página se rearmó con sus elementos sin borrados (se invalidó un snapshot que usó, o se restauró una copia con uno
+   * aplicado) y todavía no terminó de bajar: al terminar, se sube lo que el servidor no tenga (`settleRebuild`). Se
+   * guarda en la misma transacción que el rearmado y se borra en la que marca la subida: si la app se cierra en el medio,
+   * la próxima bajada lo termina (Docs/Doc_Compactar.md, entrega 3, R-1).
+   */
+  rebuilt?: boolean;
+  /**
+   * La época de contenido para la que ya se olvidó `syncedSV` mientras la página esperaba para rearmarse (tenía algo sin
+   * subir): se olvida una sola vez por época, así cada bajada en espera no vuelve a subir la página entera (R-2).
+   */
+  forgotSyncedForEpoch?: number;
 }
 
 /** Imagen pegada en una página. Se guarda acá primero y se sube cuando hay red. */

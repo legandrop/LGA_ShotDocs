@@ -840,7 +840,8 @@ describe('restaurar una copia de seguridad', () => {
       restore();
       expect(server.snapshots).toEqual([]);
       expect(server.smeta(page).seq).toBe(0);
-      expect(server.smeta(page).epoch).toBe(epoch);
+      // Restaurar empieza por anular las cadenas válidas (D142, entrega 3): la época sube; nunca vuelve atrás.
+      expect(server.smeta(page).epoch).toBe(when === 'antes de una invalidación' ? epoch : epoch + 1);
       await b.engine.syncNow();
       await e1.engine.syncNow();
       await b.engine.syncNow();

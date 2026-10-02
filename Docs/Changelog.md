@@ -12,6 +12,40 @@ importa solo si exportó él; piden la migración `20261026120000_comentarios_ar
 se corta, sigue sin duplicar.
 [ Exportar 3 - volver a Shot Docs desde el zip como proyecto nuevo, con anotaciones, plantillas y comentarios ]
 
+v0.137 :
+
+Compactar (B.9), entrega 3: listos para prender (siguen apagados). Faltaba lo que la re-verificación de la entrega 2
+pedía antes: la marca del rearmado vivía en memoria y, si la app se cerraba a mitad, lo escrito junto a un elemento de un
+snapshot malo quedaba invisible; ahora se guarda con el rearmado (R-1). La espera ya no sube la página entera en cada
+bajada (R-2). La base manda la huella de cada snapshot y el dispositivo no aplica uno que no coincide: lo invalida (O-D).
+`pull_page_content` sin versión (v0.127 a v0.133) deja de servir snapshots (migración
+`20261025120000_compactar_prender.sql`, sin aplicar). Restaurar empieza por anularlos (D142). Armar devuelve el control
+cada 30 ms (O-C, medido con la CPU frenada). El SQL para prenderlos queda en `Doc_Compactar.md`.
+[ Compactar, entrega 3 - listos para prender: marca del rearmado guardada, huella del snapshot y versiones viejas sin snapshots ]
+
+v0.136 :
+
+Plantillas con anotaciones de fotos (P.23 y P.20). Una foto anotada llegaba limpia a una página creada desde una
+plantilla, y a la plantilla guardada desde una página: copian los bloques, y las anotaciones (`photoMarkup`) no están en
+los bloques. Ahora la copia en memoria de la plantilla también toma, campo por campo, el marco y las formas de sus fotos, y
+`carryMarkup` (el de copiar y pegar, D46) las escribe con las mismas claves solo para las fotos que quedaron en la
+página, en el mismo paso de ⌘Z que los bloques; también en el reporte del día y en *Save as template…*. Entre proyectos
+no viajan (D136). *Clear filled-in values* las saca con las fotos (cuentan como valores llenados). Sin migración ni
+`min_app_version`: una versión vieja abre lo creado sin tocar el mapa.
+[ Las anotaciones de las fotos viajan con las plantillas: al usarlas y al guardar como plantilla ]
+
+v0.135 :
+
+**Dictar al reporte** (P.27, entrega V1): pasar una nota informal del set a su lugar en el reporte no tenía forma;
+había que buscar la fila y la columna a mano. *Dictate to report* (el micrófono de la página, el botón redondo del
+teléfono o Ctrl/⌘+Alt+Shift+D) toma la nota escrita o dictada con el teclado del sistema, manda la página como un mapa
+con direcciones al proveedor del asistente y valida la lista de cambios contra el mapa (rótulos de fila y columna, lo de
+antes, marcas). La vista previa muestra cada cambio con su casilla y el destino armado por la app; *Apply* aplica lo
+tildado en un paso de deshacer, con la guarda. Lo destildado y lo no ubicado quedan en *Couldn't place*, y la nota
+escrita sigue a la vista hasta *Done*, guardadas en el dispositivo. Sin tipos de bloque nuevos ni migración;
+`min_app_version` no cambia.
+[ Dictar al reporte: la nota informal que el asistente ubica en el reporte, con vista previa y deshacer ]
+
 v0.134 :
 
 Exportar, entrega 1b: los cambios de Lega al PDF (D84, D85 y D88). Las fotos salían achicadas a 200 ppp, lo que pasaba

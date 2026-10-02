@@ -1,3 +1,4 @@
+import { cachedPolicyValue, rememberPolicyValue } from './policyCache';
 import { isLocalProvider, type ProviderConfig } from './providers';
 
 // La política del workspace sobre el asistente (Docs/Doc_Asistente.md, 7.3; IA7): `workspace_settings.assistant_policy`
@@ -8,27 +9,17 @@ import { isLocalProvider, type ProviderConfig } from './providers';
 
 export type AssistantPolicy = 'on' | 'local_only' | 'off';
 
-const CACHE_PREFIX = 'shotdocs-assistant-policy:';
-
 export function parsePolicy(value: unknown): AssistantPolicy {
   return value === 'off' || value === 'local_only' ? value : 'on';
 }
 
 function cached(workspaceKey: string): AssistantPolicy | null {
-  try {
-    const v = localStorage.getItem(CACHE_PREFIX + workspaceKey);
-    return v ? parsePolicy(v) : null;
-  } catch {
-    return null;
-  }
+  const v = cachedPolicyValue(workspaceKey);
+  return v ? parsePolicy(v) : null;
 }
 
 function remember(workspaceKey: string, policy: AssistantPolicy): void {
-  try {
-    localStorage.setItem(CACHE_PREFIX + workspaceKey, policy);
-  } catch {
-    // Sin almacenamiento: se vuelve a preguntar la próxima vez.
-  }
+  rememberPolicyValue(workspaceKey, policy);
 }
 
 interface SettingsClient {

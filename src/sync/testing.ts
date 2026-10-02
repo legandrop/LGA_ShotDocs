@@ -216,6 +216,11 @@ export class FakeServer {
   snapshotMinTailBytes = 65536;
   /** Como una base que dice la versión 17 pero no tiene `pull_page_content` (PGRST202). */
   pullContentMissing = false;
+  /**
+   * Una base sin la migración de la entrega 3 (20261025120000_compactar_prender.sql): no tiene `pull_page_content` con la
+   * versión ni `pull_page_snapshot_checked` (PGRST202), y la de tres argumentos todavía sirve snapshots.
+   */
+  prenderMissing = false;
   /** Los pedidos de contenido que llegaron, en orden (`pull_page_updates` o `pull_page_content`). */
   readonly contentCalls: string[] = [];
   /** Cuántos snapshots sirvió `pull_page_content` (para las pruebas al azar). */
@@ -719,7 +724,11 @@ export class FakeServer {
       }
       // Como tiene que hacer el script de restaurar antes de prender los snapshots (Docs/Doc_Compactar.md, sección 9):
       // `page_snapshots` vacía, `snapshot_seq` en 0 y la época de contenido que nunca vuelve atrás (la de hoy se queda).
+      // Empieza por anularlas todas (D142, entrega 3): la época de cada página con una cadena válida sube.
       if (!this.keepSnapshotsOnRestore) {
+        for (const sn of [...this.snapshots]) {
+          if (sn.invalidAt === null) this.invalidateChain(sn.pageId, sn.chainId, 'restore');
+        }
         this.snapshots.splice(0);
         this.compaction.clear();
         for (const m of this.snapshotMeta.values()) m.seq = 0;
@@ -1515,17 +1524,27 @@ export class FakeRemote
   // --- compactar: los snapshots (20261019120000_compactar_leer.sql) ------------------------------------------------
 
   /**
+   * Una versión de v0.127 a v0.133: llama a `pull_page_content` sin la versión. Con la migración de la entrega 3, esa
+   * nunca sirve un snapshot (solo filas con la época); sin ella (`prenderMissing`), como antes.
+   */
+  legacyContent = false;
+
+  /**
    * Como `SupabaseRemote.pullContent`: apagados (según los últimos ajustes leídos) o sin la función, `pullUpdates`; si
-   * no, `pull_page_content` con las mismas reglas que la base.
+   * no, `pull_page_content` con la versión (entrega 3) y las mismas reglas que la base: el snapshot con su huella, solo a
+   * una versión permitida. Con `legacyContent`, la de tres argumentos.
    */
   async pullContent(pageId: string, afterSeq: number, limit: number): Promise<RemoteUpdate[]> {
     if (!this.snapshotsOn || Date.now() - this.pullContentMissingAt < 10 * 60_000) return this.pullUpdates(pageId, afterSeq, limit);
     this.server.check();
-    if (this.server.pullContentMissing || !this.server.snapshotsMigrated()) {
+    if (this.server.pullContentMissing || !this.server.snapshotsMigrated() || (!this.legacyContent && this.server.prenderMissing)) {
       this.pullContentMissingAt = Date.now();
       return this.pullUpdates(pageId, afterSeq, limit);
     }
     this.server.contentCalls.push('pull_page_content');
+    // La de tres argumentos con la migración de la entrega 3: nunca un snapshot.
+    const servesSnapshots = this.legacyContent ? this.server.prenderMissing : this.versionAllowed();
+    const withSha = !this.legacyContent;
     const lim = Math.min(Math.max(limit, 1), 1000);
     // `pull_page_updates` mira el permiso de ver y tira `page_not_found` igual que `pull_page_content`.
     const epoch = this.server.pages.has(pageId) ? this.server.smeta(pageId).epoch : 0;
@@ -1533,15 +1552,23 @@ export class FakeRemote
     if (!this.server.pages.has(pageId) || this.server.pageInDeletedProject(pageId) || (this.team && this.server.pageLevel(this.userId, pageId) < 1)) {
       throw new RemoteError('page_not_found', true, 'P0002');
     }
-    if (!this.server.seesDeleted(this.userId, pageId)) return withEpoch(this.serveUpdates(pageId, afterSeq, lim));
+    if (!servesSnapshots || !this.server.seesDeleted(this.userId, pageId)) return withEpoch(this.serveUpdates(pageId, afterSeq, lim));
     const sn = this.server.currentSnapshot(pageId);
     const rows = this.server.updates.get(pageId) ?? [];
     const replaced = rows.filter((u) => u.seq > afterSeq && u.seq <= (sn?.upToSeq ?? 0)).reduce((n, u) => n + u.data.length, 0);
     if (!sn || sn.upToSeq <= afterSeq || sn.state.length >= replaced) return withEpoch(this.serveUpdates(pageId, afterSeq, lim));
     this.server.snapshotsServed++;
-    const out: RemoteUpdate[] = [{ seq: sn.upToSeq, data: sn.state.slice(), snapshotId: sn.id }];
+    const out: RemoteUpdate[] = [
+      { seq: sn.upToSeq, data: sn.state.slice(), snapshotId: sn.id, ...(withSha ? { snapshotSha256: sn.sha256 } : {}) },
+    ];
     if (lim > 1) out.push(...rows.filter((u) => u.seq > sn.upToSeq).slice(0, lim - 1).map((u) => ({ seq: u.seq, data: u.data.slice() })));
     return withEpoch(out);
+  }
+
+  /** Como `private.app_version_allowed`: sin mínimo, cualquiera; con mínimo, una versión legible que alcance. */
+  private versionAllowed(): boolean {
+    const min = this.server.settings?.minAppVersion;
+    return min == null || (/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion) && Number(this.appVersion) >= min);
   }
 
   /** Como `private.snapshots_allowed`. */
@@ -1645,6 +1672,14 @@ export class FakeRemote
       throw new RemoteError('snapshot_not_found', true, 'P0002');
     }
     return sn.state.slice();
+  }
+
+  /** `pull_page_snapshot_checked` (entrega 3): lo mismo que `pull_page_snapshot` y la huella guardada. */
+  async pullSnapshotChecked(id: string): Promise<{ state: Uint8Array; sha256: string } | null> {
+    this.server.check();
+    if (this.server.prenderMissing) return null;
+    const state = await this.pullSnapshot(id);
+    return { state, sha256: this.server.snapshots.find((x) => x.id === id)!.sha256 };
   }
 
   async confirmSnapshot(id: string, sha256: string): Promise<boolean> {

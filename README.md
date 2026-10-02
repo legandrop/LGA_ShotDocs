@@ -29,6 +29,9 @@ its own project: a tree of pages you own.
   OpenAI-compatible service (OpenRouter, or a local model such as Ollama) and fix, improve, shorten, translate,
   rewrite or reshape what you select, or summarize and translate a whole page. You see a preview first; applying it is
   a regular edit: synced, versioned and undoable. The workspace owner can turn it off or allow only local models.
+- **Dictate to report.** Write or dictate (with your keyboard's microphone) an informal note on set, like “this shot
+  was a 50 mm”, and the assistant places each piece where it goes in the report: the right row and column, the line
+  after its label, the checkbox. You check every change before applying it, and nothing you said is lost.
 - **Offline first, nothing lost.** Every change is saved on your device first and synced when you are
   back online. Edits made offline on two devices are merged, never overwritten.
 - **Share a branch, never the tree.** Inside a workspace, people get a role and a permission on a
@@ -160,6 +163,13 @@ In production (v0.049). What works today:
   lines into a bulleted list, a checklist, a table or headings. *Summarize page* adds a summary at the top or below the
   cursor, and *Translate page* replaces the text of every block in place or creates a translated subpage. The owner
   and the admins choose, in *Assistant…*, whether the workspace allows the assistant, only local models, or none.
+- Dictate to report (the microphone in the page bar, the round button on the phone, the page menu or Ctrl+Alt+Shift+D,
+  ⌘⌥⇧D on a Mac): write the note or dictate it with your keyboard's microphone and choose *Place*. The open page goes to
+  your provider as a map of its tables, rows, labeled lines and checkboxes; the answer is checked against that map and
+  shown change by change, each with its checkbox and its place (*Setups & takes › 12 · 010 · 3 › Lens*). *Apply* applies
+  the checked ones as one edit you undo with *Undo* or Ctrl+Z, and nothing is applied if those places changed meanwhile.
+  If it is not clear which shot, it asks with a button per row. What it could not place, and what you unchecked, stays
+  under *Couldn't place* on that device until you add it to *Summary*, copy it or discard it.
 - Templates: a new empty page offers the three built-in ones, and *More…* lists them with your project's own templates
   and the ones from other projects you can see. *Save as template…* in the page menu copies a page to the project's
   *Templates* folder (optionally clearing the filled-in values); a template is a page you edit like any other, and new

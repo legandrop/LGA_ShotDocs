@@ -77,6 +77,10 @@ export const templates = {
       other: "{count} fotos y archivos no se copiaron: son de otro proyecto.",
     },
   },
+  'templates.markupTooMany': {
+    en: "Some photos came without their annotations: this page already has too many.",
+    es: "Algunas fotos llegaron sin sus anotaciones: esta página ya tiene demasiadas.",
+  },
   'templates.customizeFailed': {
     en: "The copy couldn't be made. Nothing was lost; try again.",
     es: "No se pudo hacer la copia. No se perdió nada; probá de nuevo.",
