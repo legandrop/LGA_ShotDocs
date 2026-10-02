@@ -293,6 +293,16 @@ export const help = {
     en: "Share from the ⋯ menu: view, comment, edit, or edit and create pages. A permission covers everything under that page and never what's above it.",
     es: "Se comparte desde el menú ⋯: ver, comentar, editar, o editar y crear páginas. Un permiso vale para todo lo de abajo de esa página y nunca para lo de arriba.",
   },
+  'help.publicLink.title': { en: "Share with a link", es: "Compartir con un link" },
+  'help.publicLink.text': {
+    en: "In Share, General access: Anyone with the link can open the page and the ones inside, without an account, and comment with a name. It never shows what's above, what was deleted or the history. Copy link sends it; Reset link cuts it for everyone at once; it can expire. It needs the setting that keeps deleted text out of shared pages. Not for sensitive material.",
+    es: "En Compartir, Acceso general: cualquiera con el link abre la página y las de adentro, sin cuenta, y comenta con un nombre. Nunca ve lo de arriba, lo borrado ni el historial. Copiar link lo manda; Renovar link lo corta para todos en el acto; puede vencer. Pide el ajuste que deja afuera de lo compartido lo que se borró. No es para material sensible.",
+  },
+  'help.openedWithLink.title': { en: "Opened with a link", es: "Abierto con un link" },
+  'help.openedWithLink.text': {
+    en: "You see the shared page and the ones inside, without an account. To comment, write your name once: it's shown with “(via link)”. What you write is saved in this browser first. The link can stop working if whoever shared it turns it off.",
+    es: "Ves la página compartida y las de adentro, sin cuenta. Para comentar, escribí tu nombre una vez: se muestra con “(vía link)”. Lo que escribís se guarda primero en este navegador. El link puede dejar de andar si quien lo compartió lo apaga.",
+  },
   'help.members.title': { en: "Members and guests", es: "Miembros e invitados" },
   'help.members.text': {
     en: "The owner and the admins invite people from Members, in the account menu. Clients join as guests and only see what's shared with them.",

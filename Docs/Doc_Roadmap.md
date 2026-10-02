@@ -286,7 +286,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.19 Link público: *Anyone with the link*** (Lega, 2026-10-02): en *Share*, además de personas y correos, un link
   que cualquiera abre sin cuenta, con *Can view* (que siempre puede comentar) o *Can edit*; "debería estar seguro".
-  **Diseño en `Doc_Link_Publico.md`** (sin código; auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
+  **Entregas 0 y 1 hechas (v0.0XX: *Can view*, migración sin aplicar; ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
+  publicarla: aplicar la migración, prender el interruptor de D14 y subir la mínima. Falta: el ícono del árbol para las
+  páginas con link, el detalle *Can view link, created by…* para el equipo, y las entregas 2 y 3.
+  **Diseño en `Doc_Link_Publico.md`** (auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
   del link validado por la base en cada pedido (sin cuentas ni cambios en el login; las sesiones anónimas de Supabase no
   andan con el registro cerrado), solo la página y lo de abajo, como un invitado (base limpia de D14, sin historial ni
   papelera), comentarios con nombre *(via link)*, *Reset link* instantáneo y topes por link, por día y de por vida.

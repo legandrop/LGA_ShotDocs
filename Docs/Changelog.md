@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+No se podía compartir una página con alguien sin cuenta. Entregas 0 y 1 de `Doc_Link_Publico.md`: la prueba en la
+base real mostró que Storage revisa la política en cada pedido aunque la miniatura esté en caché (plan A), y la app
+quedó sin indexar (`noindex`, `robots.txt`). La migración `20261012120000_link_publico.sql` (sin aplicar) suma
+`public_links`, el uso por día y las funciones `plink_*` que validan el token en cada pedido: la página y lo de abajo,
+solo bases limpias, comentarios con nombre, topes de cantidad y bytes (también comentarios, árbol y lista, con la guarda
+del tamaño de la base). Crear un link pide el interruptor de D14 (D33). En *Share*, *General access* con *Anyone with
+the link* (*Can view*), copiar, vencer, *Reset link* y el uso de hoy; quien abre el link entra sin cuenta, en modo
+liviano. El portero da pases de 2 horas al link. Ayuda nueva.
+[ Link público - Can view sin cuenta: migración, Share, la app del visitante y el portero ]
+
 v0.108 :
 
 Compartir una página con alguien sin cuenta no existía: solo usuarios invitados. Faltaba un diseño seguro para
