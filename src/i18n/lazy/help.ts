@@ -472,6 +472,10 @@ export const help = {
     es: "En la lista de proyectos, el panel de buscar y el menú de pegar Drive: moverse y elegir",
   },
   'shortcut.listClose': { en: "Close that list", es: "Cerrar esa lista" },
+  'shortcut.versionName': {
+    en: "Naming a version in the history: save / leave it as it was",
+    es: "Al ponerle nombre a una versión del historial: guardar / dejar como estaba",
+  },
   'shortcut.photoDelete': { en: "Photos selected: delete them", es: "Fotos elegidas: borrarlas" },
   'shortcut.pasteFiles': {
     en: "Paste files: photos and videos into the line, where the cursor is (other files, as a card)",
