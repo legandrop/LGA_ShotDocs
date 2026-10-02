@@ -1277,7 +1277,7 @@ Donde esto y el diseño no coinciden, vale esto. Va todo junto (el núcleo y la 
   es `listClose` (sumado `ProjectReplace.tsx` en `shortcutSources.ts`).
 - Sin tipo de bloque ni propiedad, sin migración, sin subir `min_app_version`.
 
-**Pruebas (2089 en total con `main` hasta v0.091 y los arreglos de la auditoría, 2086 que corren):**
+**Pruebas (2111 en total con `main` hasta v0.092 y los arreglos de la auditoría, 2108 que corren):**
 
 - `src/search/replaceDoc.test.ts` (15): formato partido, link, salto de línea, celdas de tabla, código, la cuenta igual a
   la del índice, lo que se saltea, fotos en línea, pegadas, *Aa* y *ab*, "solo esta" por sus ids aunque otro agregue una

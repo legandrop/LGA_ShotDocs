@@ -12,6 +12,17 @@ protección del editor abierto, el guardado comprobado, los permisos conocidos).
 dispositivos: nada del otro se pierde. Al buscar, la ñ pasa a ser otra letra (D12). Ayuda nueva.
 [ Reemplazar en el proyecto - vista previa, confirmación y deshacer en todas las páginas ]
 
+v0.092 :
+
+Subidas que se traban (lo que quedó de v0.068 y v0.070). Con el portero o Storage colgados para todos, la cola
+esperaba el tope entero de cada archivo: un minuto, o hasta 62 s por miniatura. Ahora, a la segunda trabada seguida
+sin avance, deja de subir archivos y espera antes de volver a probar (10 s… hasta 10 minutos); los ya trabados van
+después de los demás. La miniatura se sube con la señal de corte atada al `fetch` del cliente (no quedan subidas
+sueltas) y su tope crece con las fallas seguidas; `page-files` tiene tope. El portero recuerda el plazo de una
+respuesta lenta (un proxy que recibe el cuerpo de golpe), descuenta a lo sumo dos huecos seguidos como suspensión,
+una suspensión no estira la espera de la respuesta, y volver a mandar lo que una subida perdida tenía no es avance.
+[ Subidas trabadas - la cola deja de subir cuando el portero o Storage no contestan, y lo demás de B.11 ]
+
 v0.091 :
 
 Un PDF adjunto se veía solo como un ícono y el carrete salteaba los adjuntos. Ahora la tarjeta de un PDF muestra su

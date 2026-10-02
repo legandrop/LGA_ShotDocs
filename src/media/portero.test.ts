@@ -600,6 +600,185 @@ describe('portero: pedidos que dejan de moverse', () => {
     expect(await result).toMatchObject({ stalled: true, uploadId: 'up-1' });
   });
 
+  it('una pestaña tan frenada que mira menos de una vez por minuto y medio igual corta: se descuentan a lo sumo dos huecos seguidos', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const { result, settled } = track(portero(server, { send: slow.send }).upload(makeFile(MB)));
+    await settle();
+    slow.part().sent(1000);
+    // Cada mirada llega 100 s después de la anterior: cada hueco parece una suspensión (`FROZEN_GAP_MS`).
+    for (let i = 1; i <= 3; i++) {
+      jump(100_000);
+      await settle();
+      expect(settled()).toBe(false);
+    }
+    // Los dos primeros huecos no contaron; el tercero sí (100 s), y con el cuarto pasa el plazo.
+    jump(100_000);
+    await settle();
+    expect(settled()).toBe(true);
+    expect(await result).toMatchObject({ stalled: true, uploadId: 'up-1' });
+
+    // Un movimiento vuelve a dar los dos huecos: una suspensión de verdad, después de que salieron bytes, no corta.
+    const other = new FakePortero();
+    const again = slowSend(other);
+    const second = track(portero(other, { send: again.send }).upload(makeFile(MB)));
+    await settle();
+    again.part().sent(1000);
+    jump(100_000);
+    jump(100_000);
+    again.part().sent(2000);
+    jump(600_000);
+    await settle();
+    expect(second.settled()).toBe(false);
+    again.part().sent(MB);
+    again.part().arrive();
+    expect(await second.result).toMatchObject({ id: 'drive-file-1' });
+  });
+
+  it('si el equipo se suspende mientras sale el cuerpo, la espera de la respuesta no se alarga por eso', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const { result, settled } = track(portero(server, { send: slow.send }).upload(makeFile(MB)));
+    await settle();
+    slow.part().sent(1000);
+    elapse(30_000);
+    // Diez minutos suspendido en medio del cuerpo; al despertar termina de salir.
+    jump(600_000);
+    slow.part().sent(MB);
+    // El cuerpo tardó unos 35 s de verdad: a la respuesta se le dan los 2 minutos más eso, no 2 minutos más otros 2.
+    elapse(STALL_MS + 35_000 + 3 * STALL_CHECK_MS);
+    await settle();
+    expect(settled()).toBe(true);
+    expect(await result).toMatchObject({ stalled: true, uploadId: 'up-1' });
+
+    // Lo mismo si al despertar el cuerpo termina de salir antes de que el vigilante vuelva a mirar.
+    const other = new FakePortero();
+    const late = slowSend(other);
+    const second = track(portero(other, { send: late.send }).upload(makeFile(MB)));
+    await settle();
+    late.part().sent(1000);
+    elapse(30_000);
+    clock += 600_000;
+    late.part().sent(MB);
+    elapse(STALL_MS + 35_000 + 3 * STALL_CHECK_MS);
+    await settle();
+    expect(second.settled()).toBe(true);
+  });
+
+  it('recuerda el plazo que funcionó: detrás de un proxy que recibe el cuerpo de golpe, el archivo siguiente no se traba antes de pasar', async () => {
+    const size = 4 * MB;
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const client = portero(server, { send: slow.send });
+    // El cuerpo sale de golpe y la respuesta llega a los dos minutos y medio: el proxy lo sube despacio.
+    const WAIT = STALL_MS + 30_000;
+
+    // Primer archivo: ya se había trabado una vez, así que tiene más plazo y pasa.
+    const first = track(client.upload(makeFile(size), { stalledBefore: 1 }));
+    await settle();
+    slow.part().sent(size);
+    elapse(WAIT);
+    slow.part().arrive();
+    expect(await first.result).toMatchObject({ id: 'drive-file-1' });
+
+    // Segundo archivo, desde cero: con el plazo de siempre se cortaría a los dos minutos; con lo aprendido, espera.
+    const second = track(client.upload(makeFile(size)));
+    await settle();
+    slow.part().sent(size);
+    elapse(WAIT);
+    await settle();
+    expect(second.settled()).toBe(false);
+    slow.part().arrive();
+    expect(await second.result).toMatchObject({ id: 'drive-file-1' });
+
+    // Lo aprendido tiene techo: una parte colgada se sigue cortando, a lo sumo en lo que tardaría con una red lenta.
+    const third = track(client.upload(makeFile(size)));
+    await settle();
+    slow.part().sent(size);
+    elapse(answerLimit(size, 50) + 3 * STALL_CHECK_MS);
+    await settle();
+    expect(third.settled()).toBe(true);
+    expect(await third.result).toMatchObject({ stalled: true });
+
+    // Detrás de un proxy todavía más lento (5 minutos), lo aprendido daría 7 minutos: el techo, 6 y monedas, manda.
+    const slower = new FakePortero();
+    const slowerSend = slowSend(slower);
+    const other = portero(slower, { send: slowerSend.send });
+    const learned = track(other.upload(makeFile(size), { stalledBefore: 2 }));
+    await settle();
+    slowerSend.part().sent(size);
+    elapse(300_000);
+    slowerSend.part().arrive();
+    await learned.result;
+    expect(STALL_MS + 300_000).toBeGreaterThan(answerLimit(size, 50));
+    const capped = track(other.upload(makeFile(size)));
+    await settle();
+    slowerSend.part().sent(size);
+    elapse(answerLimit(size, 50) - 2 * STALL_CHECK_MS);
+    await settle();
+    expect(capped.settled()).toBe(false);
+    elapse(3 * STALL_CHECK_MS);
+    await settle();
+    expect(capped.settled()).toBe(true);
+
+    // Otro cliente (otra sesión, otro portero) arranca con el plazo de siempre.
+    const fresh = new FakePortero();
+    const freshSend = slowSend(fresh);
+    const fourth = track(portero(fresh, { send: freshSend.send }).upload(makeFile(size)));
+    await settle();
+    freshSend.part().sent(size);
+    elapse(STALL_MS + 3 * STALL_CHECK_MS);
+    await settle();
+    expect(fourth.settled()).toBe(true);
+  });
+
+  it('una parte chica que tarda en contestar no cambia el plazo de las grandes', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const client = portero(server, { send: slow.send });
+    // Una foto de 100 KB cuya respuesta tarda un minuto y medio (Drive lento un rato, no un proxy).
+    const small = track(client.upload(makeFile(100 * 1024), { stalledBefore: 1 }));
+    await settle();
+    slow.part().sent(100 * 1024);
+    elapse(90_000);
+    slow.part().arrive();
+    expect(await small.result).toMatchObject({ id: 'drive-file-1' });
+    // Una parte grande colgada se sigue cortando con el plazo de siempre.
+    const big = track(client.upload(makeFile(4 * MB)));
+    await settle();
+    slow.part().sent(4 * MB);
+    elapse(STALL_MS + 3 * STALL_CHECK_MS);
+    await settle();
+    expect(big.settled()).toBe(true);
+  });
+
+  it('una respuesta rápida olvida lo aprendido: sin el proxy, una parte colgada vuelve a cortarse a los dos minutos', async () => {
+    const size = 4 * MB;
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const client = portero(server, { send: slow.send });
+    const first = track(client.upload(makeFile(size), { stalledBefore: 1 }));
+    await settle();
+    slow.part().sent(size);
+    elapse(STALL_MS + 30_000);
+    slow.part().arrive();
+    await first.result;
+    // Ahora contesta enseguida.
+    const second = track(client.upload(makeFile(size)));
+    await settle();
+    slow.part().sent(size);
+    elapse(1000);
+    slow.part().arrive();
+    expect(await second.result).toMatchObject({ id: 'drive-file-1' });
+    // Y la siguiente, colgada, se corta con el plazo de siempre.
+    const third = track(client.upload(makeFile(size)));
+    await settle();
+    slow.part().sent(size);
+    elapse(STALL_MS + 3 * STALL_CHECK_MS);
+    await settle();
+    expect(third.settled()).toBe(true);
+  });
+
   it('una parte por la que no sale ni un byte se corta a los dos minutos, con la subida para retomar', async () => {
     const server = new FakePortero();
     const slow = slowSend(server);

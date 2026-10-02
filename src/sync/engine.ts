@@ -202,14 +202,19 @@ export class SyncEngine {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') void this.syncNow();
     };
     const onOffline = () => this.patch({ online: false });
+    // Volvió la red: la cola de archivos deja de esperar al portero o a Storage y prueba enseguida.
+    const onOnline = () => {
+      this.options.media?.networkBack();
+      onWake();
+    };
     if (typeof window !== 'undefined') {
       window.addEventListener('offline', onOffline);
-      window.addEventListener('online', onWake);
+      window.addEventListener('online', onOnline);
       window.addEventListener('focus', onWake);
       document.addEventListener('visibilitychange', onWake);
       this.cleanups.push(() => {
         window.removeEventListener('offline', onOffline);
-        window.removeEventListener('online', onWake);
+        window.removeEventListener('online', onOnline);
         window.removeEventListener('focus', onWake);
         document.removeEventListener('visibilitychange', onWake);
       });
@@ -330,6 +335,9 @@ export class SyncEngine {
     try {
       const { outdated, removed } = await this.checkWorkspace();
       halt();
+      // La base contestó después de un ciclo sin conexión: la cola de archivos deja de esperar (si estaba
+      // esperando porque el portero o Storage no contestaban, puede que fuera la red) y prueba enseguida.
+      if (!this.status.online) this.options.media?.networkBack();
       // Si la base dice que sacaron a la persona, no se sube ni se baja nada más: lo del dispositivo queda
       // como está hasta que ella elija qué hacer (pantalla "You no longer have access").
       if (removed) {
