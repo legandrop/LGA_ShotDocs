@@ -29,8 +29,8 @@ export const assistant = {
     es: "Primero elegí un texto, o poné el cursor en un párrafo.",
   },
   'assistant.tooLong': {
-    en: "The selection is too long: select up to 60,000 characters.",
-    es: "Lo elegido es demasiado largo: elegí hasta 60.000 caracteres.",
+    en: "The selection is too long: select up to 20,000 characters.",
+    es: "Lo elegido es demasiado largo: elegí hasta 20.000 caracteres.",
   },
   'assistant.thinking': { en: "{action}…", es: "{action}…" },
   'assistant.stop': { en: "Stop", es: "Parar" },

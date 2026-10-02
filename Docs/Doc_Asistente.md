@@ -105,8 +105,9 @@ de un proyecto), corregidos acá. Ver "Correcciones de la auditoría (2026-10-02
 | *Format as…* (*Bulleted list*, *Checklist*, *Table*, *Headings*) | Lo elegido | Los mismos datos con otra forma | Sí | A2 |
 | *Suggest caption* | Una foto elegida | Un pie de foto | Sí (en el pie, que ya existe) | A3 |
 
-Sin texto elegido, las acciones de A1 toman **el bloque donde está el cursor**. Un pedido manda como máximo **60 000
-caracteres** (unos 15 000 a 20 000 tokens): más que eso pide elegir una parte. Los tokens son las unidades en que el
+Sin texto elegido, las acciones de A1 toman **el bloque donde está el cursor**. Un pedido manda como máximo **20 000
+caracteres** (unos 5 000 a 7 000 tokens; eran 60 000 hasta la auditoría de A1, ver "Cómo quedó A1"): más que eso pide
+elegir una parte. Los tokens son las unidades en que el
 proveedor cuenta y cobra; un token es más o menos 4 caracteres en inglés y algo menos en castellano.
 
 ### 2.2 Lo que no hace (entrega 1)
@@ -965,10 +966,10 @@ Implementada en `src/assistant/` (se baja aparte, la primera vez que se abre el 
   desde abajo): *Fix spelling & grammar*, *Improve writing*, *Make shorter*, *Translate to…* (doce idiomas, recuerda el
   último) y *Ask…*; la respuesta llega como texto; la vista previa marca por palabras lo sacado y lo agregado (sin
   imágenes ni links de verdad: nada pide nada afuera) y avisa los links sacados y un largo muy distinto; *Apply*
-  (Ctrl/⌘+Enter con el foco en el panel), *Discard* (Esc), *Try again*, *Copy*, *Stop*; abajo, proveedor, modelo y
-  tokens. Se abre con Ctrl/⌘+Alt+J (registro `assistant`), con el botón *Assistant* de la barra de formato (sin red, su
+  (Ctrl/⌘+Enter; el foco vuelve al panel cuando llega la respuesta), *Discard* (Esc), *Try again*, *Copy*, *Stop*;
+  abajo, proveedor, modelo y tokens. Se abre con Ctrl/⌘+Alt+J (registro `assistant`), con el botón *Assistant* de la barra de formato (sin red, su
   tooltip dice que necesita internet) y con *Assistant* del menú de la página.
-- **Qué se manda** (`markup.ts`, `prompt.ts`): lo elegido (o el párrafo del cursor), hasta 60 000 caracteres, como el
+- **Qué se manda** (`markup.ts`, `prompt.ts`): lo elegido (o el párrafo del cursor), hasta 20 000 caracteres, como el
   Markdown acotado de 6.2 entre `<user_content>`, con las marcas `⟦photo:N⟧`, `⟦link:N⟧…⟦/link⟧` y `⟦block:N⟧`. Nada
   más: ni el título, ni el workspace, ni correos, ni el resto de la página, ni direcciones de fotos o links.
 - **Aplicar** (`apply.ts`): la foto de lo elegido (su contenido tal cual y dos anclas `RelativePosition`) se compara al
@@ -982,8 +983,9 @@ Implementada en `src/assistant/` (se baja aparte, la primera vez que se abre el 
   panel (y se recuerda por workspace para usarla sin red): *Off* apaga todo y *Local models only* deja solo una dirección
   local. Sin red, el panel y el botón dicen *The assistant needs internet*, salvo un modelo local.
 - **CSP** en `public/_headers` (10.4): `script-src 'self' 'wasm-unsafe-eval'` más el hash del script del tema de
-  `index.html` (`src/csp.test.ts` avisa si ese script cambia sin cambiar el hash), `object-src 'none'`, `base-uri`,
-  `form-action` y `frame-ancestors 'self'`; las conexiones, imágenes y videos quedan abiertos (cada workspace tiene su
+  `index.html` y `https://apis.google.com` (el selector de carpetas de Google; `src/csp.test.ts` avisa si el script del
+  tema cambia sin cambiar el hash y si falta el origen de un script de afuera), `object-src 'none'`, `base-uri`,
+  `form-action` y `frame-ancestors 'self'`, en el mismo bloque `/*` que `X-Robots-Tag` y `Referrer-Policy`; las conexiones, imágenes y videos quedan abiertos (cada workspace tiene su
   Supabase y su portero, y cada persona su proveedor, también uno local por http).
 - **Ayuda:** *Assistant* y *Your assistant key* en "Writing", con los atajos `assistant` y `assistantApply`.
 
@@ -1020,10 +1022,39 @@ Implementada en `src/assistant/` (se baja aparte, la primera vez que se abre el 
   salir con la casilla): 37 de 37; con la CSP puesta, 41 de 41, más una foto HEIC convertida, un PDF dibujado, la
   recorrida de 10 pasos y el build publicado con el tema claro y oscuro, sin ninguna violación.
 
+### Correcciones de la auditoría
+
+La auditoría independiente de A1 dio "no aprobada" con cuatro bloqueantes y uno al unir. Se corrigieron en una ronda,
+cada uno con su prueba que cae sin el arreglo:
+
+| Hallazgo | Qué se cambió |
+|---|---|
+| B1. La CSP bloqueaba el selector de carpetas de Google (`apis.google.com/js/api.js`) | `https://apis.google.com` en `script-src` (sus ventanas, iframes de `docs.google.com`, ya entraban por `frame-src https:`); la CSP en el mismo bloque `/*` que los headers de `main`; `src/csp.test.ts` busca en `src/` cada script de afuera y exige su origen (y ninguno de más). Probado en Chromium con el build servido con esos headers: la entrada en claro y oscuro, HEIC, pdf.js, blob:, data:, el Worker del historial y el selector de verdad (con un token falso) abriendo su iframe, sin ninguna violación |
+| B2. Cambiar la Base URL de un servicio compatible y tocar *Test* o *Save* mandaba la clave guardada a la dirección nueva | La clave guardada vale solo para el mismo proveedor y la misma dirección (`sameDestination`, con la dirección normalizada): con otra, el campo queda vacío, *Test* no la manda, *Save* no la conserva y `readKey` no la da (tampoco si otra pestaña cambió los ajustes mientras se pedía). El aviso nombra el host (`openrouter.ai`) en vez de "OpenAI-compatible", y el campo pide no guardarse en el gestor de contraseñas |
+| B3. 4 pruebas rojas en `blockSideMenu.test.tsx` | El botón de la barra mira si se muestra antes de pedir los servicios (un envoltorio sin hooks y el botón adentro) |
+| B4. Un `⟦link:N⟧` sin cierre se aplicaba y el link se extendía | `parseInline` exige que cada link se cierre en su bloque, sin cierres sueltos ni links adentro de otro: si no, *The suggestion would remove a photo or a block.* |
+| B5. La entrada `v0.113` chocaba con `main` | La rama usa `v0.0XX` (changelog, docs) y `'0.0XX'` en la ayuda; el número lo pone quien publica |
+
+Y de las observaciones: el foco vuelve al panel cuando el botón tocado desaparece (Esc y Ctrl/⌘+Enter andan sin clic,
+salvo que la persona esté escribiendo en la página); a los modelos que razonan (OpenAI `o…` y `gpt-5` o más, Gemini 2.5
+o más) se les suman 16 000 tokens al tope de salida, porque lo que piensan cuenta adentro y podía agotarlo; un pedido
+manda como máximo 20 000 caracteres (eran 60 000), así la respuesta, aun una traducción del doble, entra en el tope de
+16 000; un `<user_content>` o `</user_content>` escrito en la página viaja escapado; sin Editar, una respuesta que no se
+podría aplicar dice *This suggestion can only be copied here.* en vez de hablar de fotos; los select con el estilo de
+los campos y el pie que no se corta. Pruebas nuevas para lo que los mutantes dejaban vivo: la respuesta cortada que
+trae todas las marcas, la comprobación final que deshace, un link inventado, la marca de bloque reemplazada o de más, y
+una clave sin prefijo conocido en un error.
+
 ### Lo que falta y lo que prueba Lega
 
 - Falta: A2 (página, *Format as…*, la ventana de la política), A3 (pie de foto) y el MCP (M0 a M3). Un modelo local
   (Ollama o LM Studio) desde la app publicada en `https://` no se probó (la protección de redes privadas de Chrome puede
   pedir un header más).
-- Lega, con sus claves: los pasos 1 a 7 de la sección 14 con Anthropic, OpenAI y Gemini de verdad, en la compu y en el
-  iPhone, y el atajo ⌘⌥J en la Mac.
+- Lo chico que dejó la auditoría va al roadmap (P.24): la barra de formato encima del panel, una traducción larga a
+  japonés o chino que puede llegar cortada, el margen de tokens de un modelo que razona por un servicio compatible, y
+  las barras de escape que el modelo puede sacar.
+- Lega, con sus claves: los pasos 1 a 7 de la sección 14 con Anthropic, OpenAI (un `-mini`, que razona: no tiene que
+  llegar cortada) y Gemini de verdad, en la compu y en el iPhone, y el atajo ⌘⌥J en la Mac. Además: con un servicio
+  compatible guardado, cambiar la Base URL y tocar *Test* sin pegar clave (el campo tiene que estar vacío), y, cuando
+  esté cargada `GOOGLE_API_KEY`, abrir el selector de carpetas de Drive en la app publicada sin errores de CSP en la
+  consola.

@@ -364,7 +364,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y
   la guarda de "cambió mientras pensaba", permisos, sin red, atajo, ayuda, CSP y la migración de `assistant_policy`
   (sin aplicar; la aplica quien publica). Falta: A2, A3 y el MCP (M0 a M3); lo que Lega prueba con sus claves está en
-  "Cómo quedó A1". **Diseño en `Doc_Asistente.md`** (decisiones propuestas IA1 a IA10; auditado, corregido): la clave
+  "Cómo quedó A1". Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
+  cuando lo elegido queda debajo; una traducción a japonés o chino de cerca de 20 000 caracteres todavía puede
+  llegar cortada (se avisa y no se aplica; afinar el tope por idioma o por modelo); un modelo que razona por un servicio
+  compatible (OpenRouter) no lleva el margen de tokens, y en OpenAI y Gemini se podría además bajar cuánto piensan
+  (`reasoning.effort`, `thinkingConfig`) cuando se pruebe con claves reales qué acepta cada modelo; si el modelo saca
+  las barras de un `\+` o un `\*`, el `++` se lee como subrayado (se ve en la vista previa). **Diseño en `Doc_Asistente.md`** (decisiones propuestas IA1 a IA10; auditado, corregido): la clave
   solo en el dispositivo y por persona (IA1, D-06; el cifrado solo evita verla por accidente); el pedido directo del navegador al proveedor (Anthropic, OpenAI, Google
   y compatibles con OpenAI, CORS probado); vista previa y aplicar como una edición que se deshace, sin aplicar si el
   texto cambió mientras el modelo pensaba; aplicar pide Editar; un interruptor del dueño (*On*, *Local models only*,

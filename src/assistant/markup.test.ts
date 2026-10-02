@@ -6,6 +6,7 @@ import * as Y from 'yjs';
 import { mountEditor, posOf, unmountAll, view, type Editor } from '../ui/collabHarness';
 import { cleanAnswer, collectSelection, diffKeys, MAX_CHARS, parseAnswer, plainNew, type Selected } from './markup';
 import { buildRequest } from './prompt';
+import { assistant as strings } from '../i18n/lazy/assistant';
 
 // Lo elegido como Markdown acotado y la respuesta de vuelta (Docs/Doc_Asistente.md, 6.2 a 6.4), con el editor real.
 
@@ -106,6 +107,9 @@ describe('lo que se manda', () => {
     const v = view(ed);
     v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, posOf(ed, 'p') + 3)));
     expect(collectSelection(v.state)).toBe('tooLong');
+    // El aviso dice el mismo tope.
+    expect(strings['assistant.tooLong'].en).toContain(MAX_CHARS.toLocaleString('en-US'));
+    expect(strings['assistant.tooLong'].es).toContain(MAX_CHARS.toLocaleString('es-AR'));
   });
 
   it('las dos puntas en una celda: solo esa celda; si no, la tabla va como marca', () => {

@@ -3,12 +3,13 @@
 v0.0XX :
 
 No había asistente (P.24, entrega A1 de `Doc_Asistente.md`). Menú de la cuenta → *Assistant…*: Anthropic, OpenAI,
-Gemini o uno compatible (OpenRouter, Ollama), la clave cifrada solo en el dispositivo y el modelo de la lista del
-proveedor. Sobre lo elegido (Ctrl/⌘+Alt+J, la barra o el menú de la página): *Fix*, *Improve*, *Shorter*, *Translate
+Gemini o uno compatible (OpenRouter, Ollama), la clave cifrada solo en el dispositivo y solo para la dirección con que
+se guardó. Sobre lo elegido (Ctrl/⌘+Alt+J, la barra o el menú de la página): *Fix*, *Improve*, *Shorter*, *Translate
 to…* y *Ask…*, directo del navegador al proveedor. La vista previa marca por palabras; *Apply* reemplaza solo lo que
-cambió en una edición que se deshace con un Ctrl/⌘+Z, y no aplica si el texto cambió mientras pensaba. Fotos en línea,
-links y bloques viajan como marcas que tienen que volver; aplicar pide Editar; sin red avisa. Salir ofrece olvidar la
-clave. CSP en `public/_headers`. Migración `assistant_policy` (de fábrica `on`), sin aplicar.
+cambió en un paso de deshacer y no aplica si el texto cambió mientras pensaba. Fotos, links y bloques viajan como marcas
+que tienen que volver bien cerradas; aplicar pide Editar. Tras la auditoría: la CSP de `public/_headers` deja el
+selector de carpetas de Google, los modelos que razonan tienen margen de tokens, 20 000 caracteres por pedido y el foco
+vuelve al panel. Migración `assistant_policy` (de fábrica `on`), sin aplicar.
 [ Asistente A1 - corregir, mejorar, acortar y traducir lo elegido con la clave de cada uno, vista previa y aplicar con deshacer ]
 
 v0.115 :
