@@ -45,6 +45,7 @@ import { lazyPart, Part, preloadWhenIdle, watchPendingWrites } from './lazyPart'
 import { startAppUpdates, stopAppUpdates } from './appUpdate';
 import { focusTitle, PageView, preloadPageParts } from './PageView';
 import { CommentsToggle } from './CommentsToggle';
+import { MentionsBell } from './MentionsBell';
 import { Sidebar } from './Sidebar';
 import { SidebarResizer } from './SidebarResizer';
 import { SyncIcon } from './SyncBadge';
@@ -376,6 +377,8 @@ export function Shell() {
               <span className="only-mobile">
                 <SyncIcon onClick={() => setNavOpen(true)} />
               </span>
+              {/* La campana de las menciones (P.21): siempre, haya o no una página abierta. */}
+              <MentionsBell />
               {pageId && current && (
                 <button
                   className="icon-button"

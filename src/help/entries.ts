@@ -110,6 +110,8 @@ const ASSISTANT = '0.118';
 const TEMPLATES = '0.117';
 /** El link público, *Can view* (Doc_Link_Publico.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const PUBLIC_LINK = '0.111';
+/** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
+const MENTIONS = '0.120';
 /** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
 const PHOTO_MARKUP = '0.116';
 
@@ -370,6 +372,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     more: ['commentsCancel'],
     showMe: 'comments',
     since: BEFORE_HELP,
+  },
+  {
+    id: 'mentions',
+    section: 'comments',
+    title: 'help.mentions.title',
+    text: 'help.mentions.text',
+    keys: { pick: 'mentionPick', close: 'mentionClose' },
+    words: ['@', 'mention', 'mencionar', 'mención', 'campana', 'bell', 'notification', 'aviso', 'unread', 'sin leer'],
+    since: MENTIONS,
   },
   { id: 'questions', section: 'comments', title: 'help.questions.title', text: 'help.questions.text', keys: { question: 'question' }, since: BEFORE_HELP },
 

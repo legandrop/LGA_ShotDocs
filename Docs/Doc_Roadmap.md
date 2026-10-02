@@ -370,8 +370,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pantalla en 8 de 25 casos (pierde el renglón de encabezado); una marca de texto desconocida borra ese texto en la
   copia y el aviso no lo usa nadie; el proyecto de prueba no tiene páginas de hoja libre.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
-  que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Diseño en `Doc_Menciones.md`** (sin
-  código ni migración; auditado y corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
+  que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Entrega 1 programada (v0.120;
+  migración `20261015120000_menciones.sql` sin aplicar):** el `@` con la lista, el pintado, la cola, la campana y el
+  punto en el botón de comentarios; auditada y corregida. Faltan las entregas 2 y 3, y un detalle cosmético (O6 de la
+  auditoría): un comentario con mención cuenta como 2 cambios sin subir (alta y menciones). **Diseño en `Doc_Menciones.md`** (auditado y
+  corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
   ve la página; un miembro ve al equipo y a los clientes que ya comentaron (ME10); el dueño y los admins la comparten
   desde la mención (entrega 2); un invitado ve solo a quienes participan en los comentarios y a quien le compartió
   algo; va después del link público (`schema_version` 15); el texto sigue plano (`@lega`) y quién es va en `comment_mentions`, así una versión vieja no rompe

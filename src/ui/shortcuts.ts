@@ -139,6 +139,9 @@ export const SHORTCUTS: Shortcut[] = [
   // --- Comentarios ---
   { id: 'commentsSend', keys: ['Mod-Enter'], place: 'comments', owner: 'app', source: 'dom' },
   { id: 'commentsCancel', keys: ['Escape'], place: 'comments', owner: 'app', source: 'dom' },
+  // La lista del @ (Docs/Doc_Menciones.md, 2.1): con la lista abierta, eligen y la cierran sin borrar lo escrito.
+  { id: 'mentionPick', keys: ['ArrowUp', 'ArrowDown', 'Enter', 'Tab'], place: 'comments', context: 'mentions', owner: 'app', source: 'dom' },
+  { id: 'mentionClose', keys: ['Escape'], place: 'comments', context: 'mentions', owner: 'app', source: 'dom' },
 
   // --- Árbol de páginas y barra lateral ---
   { id: 'treeStep', keys: ['ArrowUp', 'ArrowDown'], place: 'tree', owner: 'app', source: 'dom' },

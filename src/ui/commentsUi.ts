@@ -8,8 +8,8 @@ import { IS_MAC, modPressed } from './findUi';
 // memoria (no se guarda en el dispositivo).
 
 export type CommentsTarget =
-  /** Un hilo en particular (se lo muestra y se lo marca). */
-  | { kind: 'thread'; threadId: string }
+  /** Un hilo en particular (se lo muestra y se lo marca). `resolved`: se sabe que está resuelto (se despliegan). */
+  | { kind: 'thread'; threadId: string; resolved?: boolean }
   /** Los hilos de un bloque; si no hay ninguno abierto, se escribe uno nuevo. `answer`: es una pregunta. */
   | { kind: 'block'; blockId: string; answer?: boolean }
   /** Escribir un hilo nuevo en un bloque, o en la página entera (`blockId: null`). */
@@ -20,9 +20,14 @@ export interface CommentsUiState {
   target: CommentsTarget | null;
   /** Sube con cada pedido, para volver a llevar la vista al mismo hilo. */
   nonce: number;
+  /**
+   * La página para la que es el pedido (la campana de las menciones abre un hilo de otra página): al salir de la
+   * página de antes, el pedido no se borra, y el panel de otra página no lo toma.
+   */
+  targetPage?: string | null;
 }
 
-let state: CommentsUiState = { open: false, target: null, nonce: 0 };
+let state: CommentsUiState = { open: false, target: null, nonce: 0, targetPage: null };
 const listeners = new Set<() => void>();
 
 function set(next: Partial<CommentsUiState>): void {
@@ -46,7 +51,7 @@ export function toggleComments(): void {
 
 export function closeComments(): void {
   drafts.clear();
-  set({ open: false, target: null });
+  set({ open: false, target: null, targetPage: null });
 }
 
 // Lo escrito a medias en el panel (una respuesta, un hilo nuevo, una edición). Vive en memoria.
@@ -93,9 +98,9 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/** Abre el panel en lo que se pida. */
-export function showComments(target: CommentsTarget | null = null): void {
-  set({ open: true, target, nonce: state.nonce + 1 });
+/** Abre el panel en lo que se pida; con `pageId`, en esa página (que se está abriendo). */
+export function showComments(target: CommentsTarget | null = null, pageId: string | null = null): void {
+  set({ open: true, target, nonce: state.nonce + 1, targetPage: pageId });
 }
 
 /** El botón "Comment" del editor (barra de formato, menú del bloque, margen o Ctrl/⌘+Alt+M). */
@@ -108,8 +113,9 @@ export function answerQuestion(blockId: string): void {
   showComments({ kind: 'block', blockId, answer: true });
 }
 
-export function clearCommentsTarget(): void {
-  if (state.target) set({ target: null });
+/** Al salir de una página, lo pedido para ella no sigue (lo pedido para otra, sí). */
+export function clearCommentsTarget(pageId: string | null = null): void {
+  if (state.target && (!state.targetPage || !pageId || state.targetPage === pageId)) set({ target: null, targetPage: null });
 }
 
 // --- Los bloques de la página abierta ------------------------------------------------------------------
