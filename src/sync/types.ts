@@ -35,6 +35,12 @@ export interface PageSettings {
   split?: boolean;
   /** Tamaño de hoja: la página se ve (y más adelante se exporta) con ese tamaño. `free`: sin hoja. */
   format?: { size: string; landscape?: boolean };
+  /**
+   * La carpeta de reportes del día (Docs/Doc_Plantillas.md, 6.2). No se hereda: se lee solo en la página misma (nunca
+   * con `resolveSetting`). Un objeto la marca (`template`: la plantilla propia del último reporte, entrega 3); `false`
+   * dice que se dejó de usar a mano y gana sobre lo que se deduce de los reportes de adentro.
+   */
+  dayReports?: { template?: string } | false;
 }
 
 export type PagePatch = Partial<Pick<PageRow, 'title' | 'icon' | 'parent_id' | 'sort_key' | 'deleted_at' | 'settings' | 'template_id'>>;

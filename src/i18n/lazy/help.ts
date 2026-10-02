@@ -99,6 +99,11 @@ export const help = {
     en: "A new empty page offers Start from a template: Pre-production Notes (one page per scene), On-Set Report (one per shoot day) or Shot Breakdown (one per VFX shot). More… describes each one and has Preview, to try it without saving anything. Keep writing and the strip goes away. Pick one, type the page name and {enter} takes you to its first field; {undo} takes it all back. Apply template… in the ⋯ menu does the same on any empty page. The page gets a copy in the app's language. Internal — remove before sharing holds bids and vendors: delete that section before sharing the page with a client.",
     es: "Una página nueva vacía ofrece Empezar con una plantilla: Notas de preproducción (una página por escena), Reporte de rodaje (una por día de rodaje) o Desglose de plano (una por plano de VFX). Más… cuenta qué trae cada una y tiene Ver, para probarla sin guardar nada. Si seguís escribiendo, la tira se va. Elegí una, escribí el nombre de la página y {enter} te lleva a su primer dato; {undo} la saca entera. Aplicar plantilla…, en el menú ⋯, hace lo mismo en cualquier página vacía. La página recibe una copia en el idioma de la app. Interno — borrar antes de compartir tiene cotizaciones y proveedores: borrá esa sección antes de compartir la página con un cliente.",
   },
+  'help.dayReports.title': { en: "Day reports", es: "Reportes del día" },
+  'help.dayReports.text': {
+    en: "New day report ({newReport}) is above the title of the day reports folder and of each report inside it. It suggests today's date (your device's time), the next shoot day and the previous report's location: change anything and press Enter. The new page is named like 2026-10-02 | Day 06 and copies the unit, the VFX crew, the director and DP, and the camera package from the previous report. If there's already a report for that date, Enter opens it and Create another makes a second one with the same shoot day (a second unit, a split day). Choosing On-Set Report on a new page inside a folder makes that folder the day reports folder; Use for day reports in the ⋯ menu does it by hand, and a project can have several. It all works offline. The shortcut goes by the key's position (where N is on a US keyboard): on Dvorak it's the key that types B.",
+    es: "Nuevo reporte del día ({newReport}) está arriba del título de la carpeta de reportes y de cada reporte de adentro. Propone la fecha de hoy (la hora de tu dispositivo), el día de rodaje siguiente y la locación del reporte anterior: cambiá lo que haga falta y apretá Enter. La página nueva se llama como 2026-10-02 | Día 06 y copia del reporte anterior la unidad, la gente de VFX, director y DF, y el equipo de cámara. Si ya hay un reporte con esa fecha, Enter lo abre y Crear otro hace uno más con el mismo día de rodaje (una segunda unidad, un día partido). Elegir Reporte de rodaje en una página nueva adentro de una carpeta la vuelve la carpeta de reportes; Usar para reportes del día, en el menú ⋯, lo hace a mano, y un proyecto puede tener varias. Todo anda sin conexión. El atajo va por la posición de la tecla (donde está la N en un teclado de EE. UU.): en Dvorak es la tecla que escribe B.",
+  },
   'help.title.title': { en: "The page title", es: "El título de la página" },
   'help.title.text': { en: "{enter} in the title moves you to the text.", es: "{enter} en el título te pasa al texto." },
   'help.projects.title': { en: "Projects", es: "Proyectos" },
@@ -442,6 +447,10 @@ export const help = {
   'shortcut.find': { en: "Find and replace in the page", es: "Buscar y reemplazar en la página" },
   'shortcut.print': { en: "Export PDF / print the page", es: "Exportar PDF / imprimir la página" },
   'shortcut.history': { en: "Version history of the page", es: "Historial de versiones de la página" },
+  'shortcut.newDayReport': {
+    en: "New day report (in the day reports folder or a report)",
+    es: "Nuevo reporte del día (en la carpeta de reportes o en un reporte)",
+  },
   'shortcut.assistant': { en: "Open or close the assistant", es: "Abrir o cerrar el asistente" },
   'shortcut.assistantApply': { en: "Apply the assistant's suggestion", es: "Aplicar la sugerencia del asistente" },
   'shortcut.titleEnter': { en: "From the title, go to the text", es: "Desde el título, pasar al texto" },

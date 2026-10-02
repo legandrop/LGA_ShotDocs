@@ -49,6 +49,9 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'print', keys: ['Mod-p'], place: 'global', owner: 'app', source: 'window' },
   // El historial de versiones de la página (P.18, Docs/Doc_Historial.md), el mismo de Google Docs.
   { id: 'history', keys: ['Mod-Alt-Shift-h'], place: 'global', owner: 'app', source: 'window' },
+  // El reporte del día (Docs/Doc_Plantillas.md, 6.1 y 9): con la carpeta de reportes o un reporte abierto. ⌘⌥N no
+  // (es *Open split view* de Chrome en la Mac), ⌘⌥D tampoco (esconde el Dock).
+  { id: 'newDayReport', keys: ['Mod-Alt-Shift-n'], place: 'global', context: 'dayReport', owner: 'app', source: 'window' },
   // El asistente (Docs/Doc_Asistente.md, A1): abre y cierra su panel sobre lo elegido.
   { id: 'assistant', keys: ['Mod-Alt-j'], place: 'global', owner: 'app', source: 'window' },
   { id: 'titleEnter', keys: ['Enter'], place: 'global', context: 'title', owner: 'app', source: 'dom' },

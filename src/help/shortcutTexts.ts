@@ -10,6 +10,7 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   find: 'shortcut.find',
   print: 'shortcut.print',
   history: 'shortcut.history',
+  newDayReport: 'shortcut.newDayReport',
   assistant: 'shortcut.assistant',
   'titleEnter': 'shortcut.titleEnter',
   comment: 'shortcut.comment',

@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.121 :
+
+En el set, el reporte de cada día se armaba a mano copiando fecha, número de día, locación y cámara de ayer (P.23,
+entrega 2 de `Doc_Plantillas.md`). Ahora *New day report*, arriba del título de la carpeta de reportes y de cada reporte
+(también en el menú ⋯ y con Ctrl/⌘+Alt+Shift+N, sin AltGr), abre un globito con la fecha local, el día siguiente y la
+locación de ayer; Enter crea `2026-10-02 | Day 06` con la unidad, la gente de VFX y la cámara del anterior, o abre el
+de esa fecha (*Create another*, con el mismo día). La carpeta se marca sola con el primer *On-Set Report* adentro
+(`settings.dayReports`, sin migración) o a mano. Todo local, sin red. Auditada: corregidos el día de *Create another*,
+las páginas vacías, Enter mientras lee y el reintento sin duplicar.
+[ Reporte del día - el botón New day report, la carpeta de reportes y lo que se copia de ayer ]
+
 v0.120 :
 
 Menciones en comentarios (P.21), entrega 1. No había forma de avisarle a alguien de un comentario: solo se veía

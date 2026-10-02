@@ -8,6 +8,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   find: ['PageEditor.tsx', 'findUi.ts'],
   print: ['printPage.ts'],
   history: ['Workspace.tsx', 'historyUi.ts'],
+  newDayReport: ['dayReportUi.tsx', 'dayReport.ts'],
   assistant: ['AssistantHost.tsx', 'assistantUi.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
   // Recién elegida una plantilla, Ctrl/⌘+Z en el título vacío deshace la página (templatesUi.ts).

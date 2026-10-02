@@ -33,6 +33,29 @@ export const templates = {
     es: "No se pudo agregar la plantilla. La página quedó como estaba.",
   },
 
+  // --- El reporte del día (Docs/Doc_Plantillas.md, sección 6): el globito y la tira con On-Set Report ---
+  'dayReport.date': { en: "Date", es: "Fecha" },
+  'dayReport.day': { en: "Shoot day", es: "Día de rodaje" },
+  'dayReport.location': { en: "Location", es: "Locación" },
+  'dayReport.create': { en: "Create", es: "Crear" },
+  'dayReport.open': { en: "Open", es: "Abrir" },
+  'dayReport.createAnother': { en: "Create another", es: "Crear otro" },
+  'dayReport.exists': { en: "{name} already exists", es: "{name} ya existe" },
+  'dayReport.several': { en: "{count} reports for {date}", es: "{count} reportes del {date}" },
+  'dayReport.incomplete': {
+    en: "The previous report hasn't finished downloading — check the location",
+    es: "El reporte anterior todavía no terminó de bajar: revisá la locación",
+  },
+  'dayReport.loading': { en: "Reading the previous report…", es: "Leyendo el reporte anterior…" },
+  'dayReport.failed': {
+    en: "The day report couldn't be created. Nothing was lost; try again.",
+    es: "No se pudo crear el reporte del día. No se perdió nada; probá de nuevo.",
+  },
+  'dayReport.atRoot': {
+    en: "Put day reports inside a folder to get New day report",
+    es: "Poné los reportes del día adentro de una carpeta para tener Nuevo reporte del día",
+  },
+
   // --- La vista previa (la página de práctica con una plantilla) ---
   'templates.previewCrumb': { en: "Template preview", es: "Vista previa de plantilla" },
   'templates.previewBanner': {

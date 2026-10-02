@@ -3,11 +3,14 @@ import type * as Y from 'yjs';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/templates';
 import { navigate } from '../router';
-import { useTree } from '../services';
+import { usePermissions, useServices, useTree } from '../services';
 import { notify } from '../ui/notice';
 import { focusTitle } from '../ui/PageView';
-import { insertTemplate, isEmptyPage, placeAtFirstDatum, type TemplateEditor } from './apply';
+import { insertTemplate, isEmptyPage, placeAtFirstDatum, placeAtSummary, type TemplateEditor } from './apply';
 import { BUILTIN_IDS, BUILTIN_KINDS, BUILTIN_SLUGS, builtinBlocks, builtinTexts, type BuiltinKind } from './builtin';
+import { reportTitle } from './dayReport';
+import { markReportFolder, planDayReport, reportBlocks } from './dayReportCreate';
+import { takeReportFocus } from './dayReportUi';
 import { armTitleUndo, registerTemplateTarget, takeTemplatesRequest } from './templatesUi';
 import './templates.css';
 
@@ -49,6 +52,8 @@ function useEmpty(doc: Y.Doc): boolean {
 
 export function TemplateHost({ pageId, doc, editor, editable, complete }: Props) {
   const tree = useTree();
+  const { docs, engine } = useServices();
+  const perms = usePermissions();
   const tr = useT();
   const empty = useEmpty(doc);
   const [dialog, setDialog] = useState(false);
@@ -95,11 +100,64 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
     else setDialog(true);
   }, [requested, complete, editor, editable, doc]);
 
+  // El reporte del día recién creado (*New day report*) se abre con el cursor en *Summary* (6.5).
+  useEffect(() => {
+    if (!editor || !editable || !takeReportFocus(pageId)) return;
+    const pageEditor = editor as PageEditorLike;
+    placeAtSummary(pageEditor);
+    pageEditor.focus?.();
+  }, [editor, editable, pageId]);
+
+  // *On-Set Report* en una página vacía adentro de otra (6.2): es un reporte del día. Se llena con la fecha, el día y lo
+  // del reporte anterior de la carpeta, toma el título `2026-10-02 | Day 01` si no tenía, y la carpeta queda marcada (si
+  // la persona la puede editar; si no, se deduce por el reporte de adentro).
+  const applyDayReport = useCallback(async () => {
+    const row = tree.get(pageId);
+    if (!row?.parent_id) return;
+    let blocks;
+    let title: string;
+    try {
+      const plan = await planDayReport({ tree, docs, engine }, { parentId: row.parent_id, projectId: row.workspace_id }, { exclude: pageId });
+      blocks = reportBlocks(plan, plan.suggestion, tr.lang);
+      title = reportTitle(plan.suggestion.date, plan.suggestion.day, tr.lang);
+    } catch (err) {
+      console.error('Reporte del día: no se pudieron leer los reportes', err);
+      blocks = builtinBlocks('onset', tr.lang);
+      title = '';
+    }
+    const { editable: canWrite, editor: current } = live.current;
+    // Mientras se leía la carpeta pudo llegar algo (otro dispositivo) o se pudo escribir: se vuelve a mirar.
+    if (!canWrite || !current || !isEmptyPage(doc)) return;
+    const pageEditor = current as PageEditorLike;
+    try {
+      insertTemplate(pageEditor, blocks);
+    } catch (err) {
+      console.error('No se pudo agregar la plantilla', err);
+      notify(t('templates.applyFailed'));
+      return;
+    }
+    setDialog(false);
+    const now = tree.get(pageId);
+    const patch: { template_id?: string; title?: string } = {};
+    if (now?.template_id !== BUILTIN_IDS.onset) patch.template_id = BUILTIN_IDS.onset;
+    if (now && !now.title && title) patch.title = title;
+    if (Object.keys(patch).length) void tree.setPatch(pageId, patch);
+    void tree.dropFresh(pageId);
+    if (perms.canEditPage(row.parent_id)) void markReportFolder(tree, row.parent_id);
+    placeAtSummary(pageEditor);
+    pageEditor.focus?.();
+  }, [tree, docs, engine, perms, pageId, doc, tr.lang]);
+
   const apply = useCallback(
     (kind: BuiltinKind) => {
       const { editable: canWrite, editor: current } = live.current;
       // Se vuelve a mirar en el momento: otro dispositivo pudo escribir mientras la ventana estaba abierta.
       if (!canWrite || !current || !isEmptyPage(doc)) return;
+      const row = tree.get(pageId);
+      if (kind === 'onset' && row?.parent_id) {
+        void applyDayReport();
+        return;
+      }
       const pageEditor = current as PageEditorLike;
       try {
         insertTemplate(pageEditor, builtinBlocks(kind, tr.lang));
@@ -109,9 +167,10 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
         return;
       }
       setDialog(false);
-      const row = tree.get(pageId);
       if (row && row.template_id !== BUILTIN_IDS[kind]) void tree.setPatch(pageId, { template_id: BUILTIN_IDS[kind] });
       void tree.dropFresh(pageId);
+      // En la raíz del proyecto no hay carpeta de reportes (6.2): la página queda como una plantilla común.
+      if (kind === 'onset') notify(t('dayReport.atRoot'));
       if (row?.title) {
         // Con título, el foco va a la página: el cursor ya quedó en el primer dato de la ficha (insertTemplate).
         pageEditor.focus?.();
@@ -132,7 +191,7 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       });
       focusTitle();
     },
-    [doc, tree, pageId, tr.lang],
+    [doc, tree, pageId, tr.lang, applyDayReport],
   );
 
   const strip = fresh && empty && editable && !!editor && !hasChildren;
