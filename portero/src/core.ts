@@ -289,12 +289,18 @@ export const TREE_TTL_MS = 10 * 60_000;
  */
 export const LIST_DIRS_MAX = 40;
 /**
- * En un listado de varias subcarpetas, la que se comprobó hace menos que esto (porque Drive la mostró adentro de
- * otra ya comprobada) no se vuelve a mirar en Drive: el listado de una sola subcarpeta (`dir`) la mira siempre.
+ * En un listado de varias subcarpetas, la que Drive mostró adentro de su carpeta de arriba hace menos que esto (en su
+ * metadata o en el listado de esa) no se vuelve a mirar en Drive, en la primera página y en las siguientes: el
+ * listado de una sola subcarpeta (`dir`) la mira siempre.
  * Sin esto, 40 subcarpetas serían 40 llamados a Drive antes de listar nada y casi siempre quedarían algunas para
  * después.
  */
 export const LIST_TRUST_MS = 60_000;
+/**
+ * Los motivos de un 403 de Drive que piden ir más despacio (no dicen nada del permiso): el límite por usuario o por
+ * proyecto (`userRateLimitExceeded`, `rateLimitExceeded`) y el del día (`dailyLimitExceeded`, `quotaExceeded`).
+ */
+const DRIVE_SLOW_DOWN = /rateLimitExceeded|dailyLimitExceeded|^quotaExceeded$/i;
 /** Lo más hondo que se sube por los `parents` buscando la carpeta de la app. */
 const TREE_DEPTH = 30;
 /** Una dirección de subida de Drive vale una semana: se deja de usar un día antes. */
@@ -326,8 +332,18 @@ const THUMB_SIDE = 320;
  * Lo que el portero recuerda en la memoria de la instancia (no en el almacenamiento): por carpeta de la app, las
  * subcarpetas ya comprobadas adentro de su árbol y cuándo. Va por `Store.memoryKey` (la misma en todos los pedidos
  * de la instancia, index.ts) o, sin ella, por el `Store`, para que dos porteros distintos (las pruebas) no se mezclen.
+ *   - `at`: hasta cuándo vale la comprobación (`TREE_TTL_MS`), con la fecha de la más vieja del camino hasta la
+ *     carpeta: lo de abajo no dura más que lo de arriba.
+ *   - `seen`: cuándo Drive mostró por última vez a esa subcarpeta adentro de su carpeta de arriba (su metadata, o en
+ *     el listado de la de arriba). De esto sale la confianza corta del listado de varias (`LIST_TRUST_MS`): con `at`,
+ *     una subcarpeta honda se volvía a mirar en cada pedido (heredaba la fecha vieja de las de arriba) y, en las
+ *     páginas siguientes de un listado, no se podía pedir lo mismo sin pasarse del tope de llamados.
  */
-const memory = new WeakMap<object, Map<string, Map<string, number>>>();
+interface TreeMemory {
+  at: Map<string, number>;
+  seen: Map<string, number>;
+}
+const memory = new WeakMap<object, Map<string, TreeMemory>>();
 /** Lo más que se recuerda por carpeta (pasado esto se empieza de nuevo: solo cuesta volver a comprobar). */
 const TREE_MEMORY_MAX = 20_000;
 
@@ -363,11 +379,33 @@ function parentPath(path: string): string {
   return at < 0 ? '' : path.slice(0, at);
 }
 
-/** Lo que marca a una subcarpeta creada por la app (`appProperties.sdPath`): la ruta, resumida (cabe en 124 bytes). */
-async function pathMark(path: string): Promise<string> {
-  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(path)));
+/** La ruta resumida (cabe en los 124 bytes de una `appProperties` de Drive). */
+async function markOf(text: string): Promise<string> {
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
   return b64url(hash).slice(0, 22);
 }
+
+/**
+ * Lo que marca a una subcarpeta creada por la app (`appProperties.sdPath`): la ruta en NFC, resumida. La Mac da los
+ * acentos en dos partes (`i` y el acento: NFD) y Windows en una (`í`, NFC): sin normalizar, la misma carpeta soltada
+ * desde el otro sistema tenía otra marca y se creaba otra vez al lado, con el mismo nombre.
+ */
+function pathMark(path: string): Promise<string> {
+  return markOf(path.normalize('NFC'));
+}
+
+/**
+ * Las marcas con las que se busca una subcarpeta que ya existe: la de ahora (NFC) y las que pudo dejar un portero
+ * anterior, que resumía la ruta tal cual llegaba (NFD desde la Mac, NFC desde Windows). Las subcarpetas ya creadas
+ * conservan su marca: nada se renombra ni se vuelve a marcar en el Drive del dueño.
+ */
+async function pathMarks(path: string): Promise<string[]> {
+  const forms = new Set([path.normalize('NFC'), path, path.normalize('NFD')]);
+  return [...new Set(await Promise.all([...forms].map(markOf)))];
+}
+
+/** Cuántas marcas van en una consulta a Drive (cada una suma unos 60 caracteres a la dirección). */
+const MARKS_PER_QUERY = 40;
 
 /** Una consulta de Drive con un valor adentro de comillas simples. */
 function quoted(value: string): string {
@@ -1461,18 +1499,39 @@ export class Portero {
    * el id de Drive de la carpeta de la app.
    */
   private known(root: string): Map<string, number> {
+    return this.tree(root).at;
+  }
+
+  /** Lo que se recuerda de una carpeta de la app (ver `memory`). */
+  private tree(root: string): TreeMemory {
     const key = this.store.memoryKey ?? this.store;
     let byRoot = memory.get(key);
     if (!byRoot) {
       byRoot = new Map();
       memory.set(key, byRoot);
     }
-    let set = byRoot.get(root);
-    if (!set || set.size > TREE_MEMORY_MAX) {
-      set = new Map();
-      byRoot.set(root, set);
+    let tree = byRoot.get(root);
+    if (!tree || tree.at.size > TREE_MEMORY_MAX || tree.seen.size > TREE_MEMORY_MAX) {
+      tree = { at: new Map(), seen: new Map() };
+      byRoot.set(root, tree);
     }
-    return set;
+    return tree;
+  }
+
+  /** Drive mostró a la subcarpeta `id` adentro de su carpeta de arriba (ya comprobada) ahora. */
+  private sawLink(root: string, id: string, now = Date.now()): void {
+    this.tree(root).seen.set(id, now);
+  }
+
+  /**
+   * Para el listado de varias: si a `dir` hay que volver a mirarla en Drive (Drive no la mostró adentro de su carpeta
+   * de arriba en los últimos `LIST_TRUST_MS`). Si hay que mirarla, se olvida su comprobación (`inTree` la hace).
+   */
+  private forgetIfStale(root: string, dir: string): void {
+    if (dir === root) return;
+    const tree = this.tree(root);
+    const seen = tree.seen.get(dir);
+    if (seen === undefined || Date.now() - seen >= LIST_TRUST_MS) tree.at.delete(dir);
   }
 
   /**
@@ -1496,11 +1555,22 @@ export class Portero {
       // Con `budgeted`, si ya no entra en este pedido: `null` (no se sabe; se pregunta en el siguiente).
       if (budgeted && this.driveCalls >= DRIVE_CALL_BUDGET) return null;
       const res = await this.drive(`/files/${encodeURIComponent(current)}?fields=id,mimeType,parents,trashed`);
-      if (res.status === 404 || res.status === 403) return false;
+      if (res.status === 404) return false;
+      if (res.status === 429 || res.status === 403) {
+        // Un 403 de Drive es "no tenés acceso a eso" (fuera del árbol) o "andá más despacio" (el límite de pedidos):
+        // lo segundo no dice nada del árbol, y tomarlo como "afuera" dejaba la subcarpeta como faltante hasta
+        // *Retry missing*. Sale como `rate` (la app espera y vuelve a pedir). Un 403 sin motivo legible, afuera.
+        const reasons = res.status === 403 ? await driveReasons(res) : [];
+        if (res.status === 429 || reasons.some((r) => DRIVE_SLOW_DOWN.test(r))) {
+          throw new HttpError(503, 'Google Drive asked to slow down: trying again shortly.', 'rate');
+        }
+        return false;
+      }
       if (!res.ok) throw new HttpError(502, `Google Drive answered ${res.status}.`, 'drive_failed');
       const meta = (await res.json()) as { mimeType?: string; parents?: string[]; trashed?: boolean };
       if (meta.mimeType !== FOLDER_MIME || meta.trashed) return false;
       seen.push(current);
+      // Drive acaba de decir cuál es su carpeta de arriba (si resulta adentro del árbol, `sawLink` abajo).
       const parents = meta.parents ?? [];
       // Drive deja un solo padre; uno con varios (de antes de 2020) no se acepta: no se sabe por dónde sube.
       if (parents.length !== 1) return false;
@@ -1508,7 +1578,10 @@ export class Portero {
       if (parent === root || fresh(parent)) {
         // Con la fecha de la comprobación más vieja del camino: lo de abajo no dura más que lo de arriba.
         const at = parent === root ? now : known.get(parent)!;
-        for (const x of seen) known.set(x, at);
+        for (const x of seen) {
+          known.set(x, at);
+          this.sawLink(root, x, now);
+        }
         return true;
       }
       if (seen.includes(parent)) return false;
@@ -1584,22 +1657,34 @@ export class Portero {
         if (!inside) throw new HttpError(403, 'That folder is not inside this folder.', 'outside');
         outside.set(up, id);
       }
-      // Las que un pedido anterior ya creó (si la respuesta se perdió), por su marca.
-      const marks = new Map<string, string>();
-      for (const path of dirs) marks.set(await pathMark(path), path);
-      const q =
-        `mimeType = ${quoted(FOLDER_MIME)} and trashed = false and appProperties has { key='sdFolder' and value=${quoted(file)} } and (` +
-        [...marks.keys()].map((m) => `appProperties has { key='sdPath' and value=${quoted(m)} }`).join(' or ') +
-        ')';
-      const params = new URLSearchParams({ q, fields: 'files(id,parents,appProperties)', pageSize: '1000' });
-      const found = await this.drive(`/files?${params}`);
-      if (!found.ok) throw new HttpError(502, `Could not look inside the folder in Google Drive (${found.status}).`, 'drive_failed');
-      const existing = new Map<string, { id: string; parent: string }>();
-      for (const f of ((await found.json()) as { files?: { id: string; parents?: string[]; appProperties?: Record<string, string> }[] }).files ?? []) {
-        const path = marks.get(f.appProperties?.sdPath ?? '');
-        if (path && f.parents?.length === 1) existing.set(path, { id: f.id, parent: f.parents[0]! });
+      // Las que un pedido anterior ya creó (si la respuesta se perdió, o si se soltó la carpeta desde el otro
+      // sistema), por su marca: la de ahora o la que dejó un portero anterior (`pathMarks`). Dos rutas que solo
+      // difieren en la forma de los acentos tienen la misma marca y quedan en la misma subcarpeta.
+      const marks = new Map<string, string[]>();
+      for (const path of dirs) {
+        for (const m of await pathMarks(path)) marks.set(m, [...(marks.get(m) ?? []), path]);
+      }
+      const existing = new Map<string, { id: string; parent: string }[]>();
+      const all = [...marks.keys()];
+      for (let from = 0; from < all.length; from += MARKS_PER_QUERY) {
+        const q =
+          `mimeType = ${quoted(FOLDER_MIME)} and trashed = false and appProperties has { key='sdFolder' and value=${quoted(file)} } and (` +
+          all.slice(from, from + MARKS_PER_QUERY).map((m) => `appProperties has { key='sdPath' and value=${quoted(m)} }`).join(' or ') +
+          ')';
+        const params = new URLSearchParams({ q, fields: 'files(id,parents,appProperties)', pageSize: '1000' });
+        const found = await this.drive(`/files?${params}`);
+        if (!found.ok) throw new HttpError(502, `Could not look inside the folder in Google Drive (${found.status}).`, 'drive_failed');
+        for (const f of ((await found.json()) as { files?: { id: string; parents?: string[]; appProperties?: Record<string, string> }[] }).files ?? []) {
+          if (f.parents?.length !== 1) continue;
+          for (const path of marks.get(f.appProperties?.sdPath ?? '') ?? []) {
+            existing.set(path, [...(existing.get(path) ?? []), { id: f.id, parent: f.parents[0]! }]);
+          }
+        }
       }
       const known = this.known(root);
+      // Las creadas en este pedido, por su carpeta de arriba y su marca: dos rutas del mismo pedido que solo difieren
+      // en la forma de los acentos (en Windows pueden ser dos carpetas) van a la misma subcarpeta, no a dos iguales.
+      const made = new Map<string, string>();
       for (const path of dirs) {
         const up = parentPath(path);
         const parent = up === '' ? root : (out[up] ?? outside.get(up));
@@ -1608,17 +1693,22 @@ export class Portero {
           if (inBatch.has(up) || typeof given[up] === 'string') continue;
           throw new HttpError(400, `The folder "${up}" has to come before "${path}".`, 'bad_request');
         }
-        const was = existing.get(path);
+        // La que está en su lugar (la carpeta de arriba que corresponde). Si hay más de una, la primera que dio Drive.
+        const was = existing.get(path)?.find((e) => e.parent === parent);
+        const mark = await pathMark(path);
         let id: string;
-        if (was && was.parent === parent) id = was.id;
+        if (was) id = was.id;
+        else if (made.has(`${parent}/${mark}`)) id = made.get(`${parent}/${mark}`)!;
         else {
           // Lo que no entra en este pedido queda para el siguiente (la app pide las que faltan).
           if (this.driveCalls >= DRIVE_CALL_BUDGET && Object.keys(out).length > 0) break;
           const name = driveFolderName(path.slice(up ? up.length + 1 : 0));
-          id = await this.createChecked(name, parent, { sdFolder: file, sdPath: (await pathMark(path)) });
+          id = await this.createChecked(name, parent, { sdFolder: file, sdPath: mark });
+          made.set(`${parent}/${mark}`, id);
         }
         out[path] = id;
         known.set(id, Date.now());
+        this.sawLink(root, id);
       }
     }
     return { root: { id: root, name: rootName }, dirs: out };
@@ -1757,7 +1847,10 @@ export class Portero {
     if (typeof dir !== 'string' || !DRIVE_ID.test(dir)) throw new HttpError(400, 'Missing the folder.', 'bad_request');
     // La subcarpeta pedida se vuelve a mirar en Drive siempre (una en la papelera o movida afuera deja de verse en el
     // acto); lo de arriba se toma de lo ya comprobado. Lo de afuera del árbol no existe: el mismo 404.
-    if (dir !== root) this.known(root).delete(dir);
+    if (dir !== root) {
+      this.known(root).delete(dir);
+      this.tree(root).seen.delete(dir);
+    }
     if (!(await this.inTree(root, dir))) throw new HttpError(404, 'This folder does not exist or you cannot see it.', 'not_found');
     const pageToken = typeof body.pageToken === 'string' && /^[\w.~-]{1,2000}$/.test(body.pageToken) ? body.pageToken : '';
     const params = new URLSearchParams({
@@ -1775,7 +1868,7 @@ export class Portero {
     const dirAt = dir === root ? now : (known.get(dir) ?? now);
     const entries: unknown[] = [];
     for (const f of listed.files ?? []) {
-      const entry = await this.listEntry(req, f, until, known, dirAt);
+      const entry = await this.listEntry(req, f, until, known, dirAt, this.tree(root).seen);
       if (entry) entries.push(entry);
     }
     return { entries, nextPageToken: listed.nextPageToken ?? null };
@@ -1811,6 +1904,9 @@ export class Portero {
     const later: string[] = [];
     if (pageToken) {
       for (const dir of dirs) {
+        // La misma confianza corta que en la primera página: sin esto, en las siguientes valía la de `inTree`
+        // (10 minutos) y una subcarpeta movida a otro proyecto se seguía listando hasta terminar las páginas.
+        this.forgetIfStale(root, dir);
         if ((await this.inTree(root, dir, accepted.length > 0)) !== true) {
           throw new HttpError(409, 'A folder changed while it was being listed: start again.', 'changed');
         }
@@ -1823,8 +1919,7 @@ export class Portero {
           later.push(dir);
           continue;
         }
-        const at = known.get(dir);
-        if (dir !== root && (at === undefined || Date.now() - at >= LIST_TRUST_MS)) known.delete(dir);
+        this.forgetIfStale(root, dir);
         const inside = await this.inTree(root, dir, checked > 0);
         checked++;
         if (inside === null) later.push(dir);
@@ -1851,7 +1946,7 @@ export class Portero {
       // Una cosa con dos padres (de antes de 2020) sale en cada subcarpeta pedida que la tiene; sin ninguna, no sale.
       const parents = (f.parents ?? []).filter((p) => wanted.has(p));
       if (parents.length === 0) continue;
-      const entry = await this.listEntry(req, f, until, known, known.get(parents[0]!) ?? now);
+      const entry = await this.listEntry(req, f, until, known, known.get(parents[0]!) ?? now, this.tree(root).seen);
       if (!entry) continue;
       for (const p of parents) lists[p]!.push(entry);
     }
@@ -1871,7 +1966,14 @@ export class Portero {
    * carpeta), el acceso directo o el documento de Google (solo el nombre) o el archivo con su pase; `null` si el id
    * no es un id de Drive.
    */
-  private async listEntry(req: Request, f: DriveListed, until: number, known: Map<string, number>, at: number): Promise<unknown | null> {
+  private async listEntry(
+    req: Request,
+    f: DriveListed,
+    until: number,
+    known: Map<string, number>,
+    at: number,
+    seen?: Map<string, number>,
+  ): Promise<unknown | null> {
     if (!f.id || !DRIVE_ID.test(f.id)) return null;
     const name = cleanFileName(f.name ?? '') || 'file';
     const mime = (f.mimeType ?? '').toLowerCase();
@@ -1879,6 +1981,7 @@ export class Portero {
     if (mime === FOLDER_MIME) {
       // Una carpeta que Drive lista adentro de una comprobada está adentro del árbol.
       known.set(f.id, at);
+      seen?.set(f.id, Date.now());
       return { type: 'folder', id: f.id, name, modified };
     }
     if (mime === SHORTCUT_MIME) return { type: 'shortcut', name, modified };
@@ -2747,18 +2850,20 @@ const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[
 // (src/media/attachments.ts).
 const EMOJI = /^\p{Extended_Pictographic}$/u;
 const EMOJI_BEFORE_ZWJ = /^[\p{Extended_Pictographic}\u{FE0F}\u{1F3FB}-\u{1F3FF}]$/u;
+/** El ZWJ (U+200D), como escape: escrito tal cual no se ve en el código. */
+const ZWJ = '‍';
 
 /**
  * El texto sin `HIDDEN_CHARS`, salvo el ZWJ (U+200D) cuando está entre dos emojis (`👨‍👩‍👧`, una familia, sigue siendo
  * una): entre letras o suelto no se ve y dos nombres iguales a la vista serían distintos. El ZWNJ (U+200C) siempre se saca.
  */
 function stripHidden(text: string): string {
-  if (!text.includes('‍')) return text.replace(HIDDEN_CHARS, '');
+  if (!text.includes(ZWJ)) return text.replace(HIDDEN_CHARS, '');
   const kept: string[] = [];
   const chars = Array.from(text);
   for (let i = 0; i < chars.length; i++) {
     const ch = chars[i]!;
-    if (ch === '‍' && kept.length && EMOJI_BEFORE_ZWJ.test(kept[kept.length - 1]!) && EMOJI.test(chars[i + 1] ?? '')) {
+    if (ch === ZWJ && kept.length && EMOJI_BEFORE_ZWJ.test(kept[kept.length - 1]!) && EMOJI.test(chars[i + 1] ?? '')) {
       kept.push(ch);
       continue;
     }
