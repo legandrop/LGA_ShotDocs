@@ -342,6 +342,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
      tampoco registra archivos nuevos ni sube sus miniaturas (como sin conexión).
    - **La bajada de `page-files` espera hasta 27 minutos** aunque la imagen sea chica (no se sabe cuánto pesa
      antes de pedirla).
+   - **`page-files` con Storage colgado para todos** (solo workspaces sin portero): `PageFiles.pushPending` corre
+     dentro del ciclo del motor y no tiene la espera de la cola, así que cada ciclo espera hasta dos topes
+     (`storageTimeout`, hasta unos 27 minutos cada uno con una imagen de 25 MB) antes de los comentarios. El texto
+     de las páginas ya salió antes en ese ciclo y nada se pierde.
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último

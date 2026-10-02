@@ -732,6 +732,26 @@ describe('portero: pedidos que dejan de moverse', () => {
     expect(fourth.settled()).toBe(true);
   });
 
+  it('una parte chica que tarda en contestar no cambia el plazo de las grandes', async () => {
+    const server = new FakePortero();
+    const slow = slowSend(server);
+    const client = portero(server, { send: slow.send });
+    // Una foto de 100 KB cuya respuesta tarda un minuto y medio (Drive lento un rato, no un proxy).
+    const small = track(client.upload(makeFile(100 * 1024), { stalledBefore: 1 }));
+    await settle();
+    slow.part().sent(100 * 1024);
+    elapse(90_000);
+    slow.part().arrive();
+    expect(await small.result).toMatchObject({ id: 'drive-file-1' });
+    // Una parte grande colgada se sigue cortando con el plazo de siempre.
+    const big = track(client.upload(makeFile(4 * MB)));
+    await settle();
+    slow.part().sent(4 * MB);
+    elapse(STALL_MS + 3 * STALL_CHECK_MS);
+    await settle();
+    expect(big.settled()).toBe(true);
+  });
+
   it('una respuesta rápida olvida lo aprendido: sin el proxy, una parte colgada vuelve a cortarse a los dos minutos', async () => {
     const size = 4 * MB;
     const server = new FakePortero();

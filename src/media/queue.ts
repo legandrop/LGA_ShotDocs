@@ -1248,7 +1248,19 @@ export class MediaQueue {
 
   /** La cola espera antes de volver a probar el portero y Storage (ver `stallPause`). */
   private uploadsPaused(): boolean {
-    return !!this.stallPause && this.now() < this.stallPause.until;
+    if (!this.stallPause) return false;
+    // Una espera más larga que la más larga posible es un reloj que saltó hacia atrás: se da por vencida.
+    if (this.stallPause.until - this.now() > MAX_BACKOFF_MS) this.stallPause.until = 0;
+    return this.now() < this.stallPause.until;
+  }
+
+  /**
+   * Volvió la red (el evento `online`, o la base contestó después de un ciclo sin conexión): si la cola esperaba
+   * porque el portero o Storage no contestaban, puede que fuera la red; prueba enseguida, sin volver la cuenta a
+   * cero (si siguen colgados, la espera siguiente es más larga).
+   */
+  networkBack(): void {
+    if (this.stallPause) this.stallPause.until = 0;
   }
 
   /**
@@ -1347,7 +1359,7 @@ export class MediaQueue {
           // Si la miniatura no se puede subir nunca (por ejemplo, el bucket la rechaza), se sigue con el
           // original sin ella: queda anotado y en la página se ve la del dispositivo.
           if (classify(err) !== 'blocked') throw err;
-          record = await this.patch(record.id, { thumb: 'none', thumbError: friendly(err) });
+          record = await this.patch(record.id, { thumb: 'none', thumbError: friendly(err), ...(record.thumbStalls ? { thumbStalls: 0 } : {}) });
         }
       }
 

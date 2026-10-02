@@ -48,6 +48,8 @@ export const FROZEN_DISCOUNTS = 2;
  * cuerpo y lo sube despacio.
  */
 export const LEARN_FROM_MS = 60_000;
+/** Lo más chico que tiene que ser una parte para aprender (o olvidar) de su respuesta (ver `Portero.learn`). */
+export const LEARN_MIN_BYTES = 1024 * 1024;
 /** Una red lenta: la misma con la que se calculan los topes de las consultas a la base (`remote.ts`). */
 const SLOW_BYTES_PER_SECOND = 16 * 1024;
 
@@ -697,14 +699,17 @@ export class Portero {
    * da la parte por enviada al instante y la respuesta llega cuando el proxy terminó de subirla: minutos. Sin
    * recordarlo, cada archivo nuevo empezaba con el plazo corto y se trababa una o más veces antes de pasar. Con una
    * espera larga (`LEARN_FROM_MS` o más) se anota a qué velocidad llegó, y el plazo de las partes siguientes sale de
-   * ahí (`answerLimit`, con el mismo techo). Una respuesta rápida de una parte de 1 MiB o más lo olvida: ya no hay
-   * nada en el medio que demore. Vale para este cliente (la sesión): al recargar se vuelve a aprender.
+   * ahí (`answerLimit`, con el mismo techo); solo de partes de 1 MiB o más (`LEARN_MIN_BYTES`). Una respuesta rápida
+   * de una de esas lo olvida: ya no hay nada en el medio que demore. Vale para este cliente (la sesión): al recargar se vuelve a aprender.
    */
   private learn(bytes: number, waitMs: number): void {
     // Sin una medida que tenga sentido (el descuento de una suspensión cayó después de que salió el cuerpo), nada.
     if (!(waitMs > 0)) return;
+    // Solo de partes de 1 MiB o más: en una chica casi todo es la espera fija (Drive lento un rato, no un proxy), y
+    // escalada a una parte de 8 MiB daría un plazo de minutos que no hace falta.
+    if (bytes < LEARN_MIN_BYTES) return;
     if (waitMs >= LEARN_FROM_MS) this.slowAnswerRate = bytes / (waitMs / 1000);
-    else if (bytes >= 1024 * 1024) this.slowAnswerRate = null;
+    else this.slowAnswerRate = null;
   }
 
   /**

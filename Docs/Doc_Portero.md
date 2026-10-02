@@ -344,8 +344,9 @@ corta, se manda entera otra vez y se vuelve a cortar.
   nuevo volvía a empezar con el plazo corto y se trababa una o más veces antes de pasar. Cuando la respuesta de
   una parte llega después de un minuto o más con el cuerpo ya afuera (`LEARN_FROM_MS`), el cliente anota a qué
   velocidad llegó (bytes por segundo, sin el tiempo suspendido) y el plazo de las partes siguientes es lo que
-  tardarían a esa velocidad más 2 minutos, con el mismo techo. Una respuesta rápida de una parte de 1 MiB o más lo
-  olvida. Vale para el cliente de la sesión (la cola y las carpetas comparten el mismo): al recargar se vuelve a
+  tardarían a esa velocidad más 2 minutos, con el mismo techo. Solo aprende de partes de 1 MiB o más
+  (`LEARN_MIN_BYTES`): en una foto chica casi todo es la espera fija, y escalada a una parte de 8 MiB daría minutos
+  de más. Una respuesta rápida de una de esas lo olvida. Vale para el cliente de la sesión (la cola y las carpetas comparten el mismo): al recargar se vuelve a
   aprender.
 - Donde no hay `XMLHttpRequest`, o con un `fetch` propio (las pruebas del cliente), las partes van por
   `fetch` y **no se vigilan**: sin saber cuántos bytes salieron, cortar por tiempo cortaría las lentas.
@@ -388,7 +389,10 @@ contestó (`Doc_Sincronizacion.md`, "Cada consulta a la base tiene un tope de ti
   (`link_page_file`, `unlink_page_file`) salen igual en esa vuelta: van a la base, no al portero.
 - Mientras la cola espera, no hay nada "para subir ahora" (`hasUploadableNow`): las bajadas de "Available offline"
   no se quedan esperando a las subidas.
-- *Retry* vuelve a probar enseguida. La espera vive en memoria: al recargar, se prueba de nuevo.
+- La espera se levanta sola al pasar su plazo, y antes cuando vuelve la red (el evento `online`, o la base
+  contesta después de un ciclo sin conexión) y con *Retry* (que se ve solo si hay algo detenido). Un plazo más
+  largo que la espera más larga posible (el reloj del equipo saltó hacia atrás) se da por vencido. Vive en
+  memoria: al recargar, se prueba de nuevo.
 - Lo que sigue sin cubrir: mientras la cola espera tampoco se registran archivos nuevos ni se suben sus miniaturas
   (como sin conexión), y las carpetas (P.9) tienen su propia cola, que no cierra la vuelta: con el portero colgado,
   cada archivo de una carpeta se traba hasta sus 5 intentos y queda con su error a la vista hasta *Retry*.

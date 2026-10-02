@@ -862,6 +862,52 @@ describe('cola de archivos: subidas que se traban', () => {
     expect(pause()).toBeNull();
   });
 
+  describe('la espera de la cola se levanta', () => {
+    type Pause = { until: number; count: number } | null;
+    async function waiting(): Promise<{ server: FakeServer; a: Device; id: string; pause: () => Pause }> {
+      const { server, a, page } = await withFiles([]);
+      const holder = a.media as unknown as { stallPause: Pause };
+      // La cola venía esperando 10 minutos: el portero no contestó varias veces seguidas. (Agregar un archivo la
+      // acorta: se vuelve a poner larga después.)
+      const id = mediaIdOf(await a.media.add(page, makeFile(MB, 'espera.jpg', 'image/jpeg')))!;
+      holder.stallPause = { until: Date.now() + server.clockOffset + 600_000, count: 7 };
+      await a.engine.syncMedia();
+      expect(server.mediaFiles.get(id)?.drive_id).toBeFalsy();
+      return { server, a, id, pause: () => holder.stallPause };
+    }
+
+    it('con *Retry*', async () => {
+      const { server, a, id, pause } = await waiting();
+      await a.media.clearBlocked();
+      expect(pause()).toBeNull();
+      await a.engine.syncMedia();
+      expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    });
+
+    it('al volver la red (sin volver la cuenta a cero), también cuando la base vuelve a contestar después de un ciclo sin conexión', async () => {
+      const { server, a, id, pause } = await waiting();
+      a.media.networkBack();
+      expect(pause()).toMatchObject({ until: 0, count: 7 });
+      // Un ciclo sin conexión y otro con: el motor le avisa a la cola.
+      (a.media as unknown as { stallPause: Pause }).stallPause = { until: Date.now() + server.clockOffset + 600_000, count: 7 };
+      server.online = false;
+      await a.engine.syncNow();
+      expect(a.engine.getStatus().online).toBe(false);
+      expect(pause()!.until).toBeGreaterThan(0);
+      server.online = true;
+      await a.engine.syncNow();
+      await a.engine.syncMedia();
+      expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    });
+
+    it('si el reloj del equipo saltó hacia atrás (una espera más larga que la más larga posible)', async () => {
+      const { server, a, id } = await waiting();
+      (a.media as unknown as { stallPause: Pause }).stallPause = { until: Date.now() + server.clockOffset + 3_600_000, count: 7 };
+      await a.engine.syncMedia();
+      expect(server.mediaFiles.get(id)?.drive_id).toBeTruthy();
+    });
+  });
+
   it('una trabada después de avanzar no cuenta para dejar de subir: el portero anda, aunque despacio', async () => {
     const size = PART_BYTES + MB;
     const server = new FakeServer();
