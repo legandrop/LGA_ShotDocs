@@ -163,6 +163,12 @@ con una ruta nueva del portero): una carpeta con 500 subcarpetas son 500 pedidos
 Firefox por el service worker (sin tope) queda para otra entrega (D24). Los documentos de Google no se bajan como PDF
 (decisión 5). Probar a mano en Safari, el iPhone y con el Drive real (lista de la tanda). De la auditoría:
 
+- **Sin tiempo máximo de lectura (R1):** si el portero deja de contestar sin cortar la conexión, la barra queda quieta
+  sin «No connection» (se puede cancelar). Un tope por pedido sin avance lo cerraría, como el de las subidas (v0.092).
+- **`APP_ORIGINS` mal puesto en el portero de un dueño (R2):** `/m/` falla por CORS y se saltea todo; si `/health` también
+  falla, la bajada espera para siempre. Distinguir el error de CORS del corte de red.
+- **Un nombre de un solo grafema gigante (R3)** puede quedar recortado de forma rara (no es prefijo del original). Inofensivo.
+
 - **Emojis compuestos (O4, preexistente):** `cleanFileName` (app y portero) saca U+200D y U+200C, así que una familia
   (`👨‍👩‍👧‍👦`) queda como cuatro emojis sueltos, en el zip y en Drive, y el corte por grafema puede partirla. Va con el
   pendiente de nombres de D3: dejar el ZWJ cuando está entre dos caracteres visibles.

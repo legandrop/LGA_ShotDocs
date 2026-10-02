@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.105 :
 
 Una carpeta de Drive (P.9) solo se podía bajar de a un archivo: faltaba *Download all*. Ahora el visor y
 la barra de la tarjeta la ofrecen a quien ve la página: la app recorre el árbol con `/folder/list` y baja cada archivo
