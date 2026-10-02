@@ -3,11 +3,11 @@
 v0.0XX :
 
 Mencionar a alguien en un comentario no existía: nadie se enteraba de un comentario en una página que no tenía
-abierta. `Doc_Menciones.md` diseña *@persona* (P.21): solo a quien ya ve la página (quien puede compartirla, la comparte
-desde la mención); un invitado ve solo a quienes participan en esos comentarios y a quien le compartió algo; el texto
-sigue plano y quién es va en la tabla `comment_mentions`, así una versión vieja ve `@lega` sin perder nada; una campana
-con las no leídas que pregunta cada 60 segundos; sin red con la cola de siempre; los visitantes del link no mencionan.
-Correo, después (grupo C). Decisiones propuestas ME1 a ME9; la migración en borrador compila en una transacción deshecha.
+abierta. `Doc_Menciones.md` diseña *@persona* (P.21): solo a quien ya ve la página; un miembro ve al equipo y a los
+clientes que ya comentaron, un invitado solo a quienes participan y a quien le compartió algo; el texto sigue plano y
+quién es va en `comment_mentions`, así una versión vieja ve `@lega` sin perder nada; una campana (*9+*) que pregunta
+cada 60 segundos; sin red con la cola de siempre. Correo, después (grupo C). Auditado y corregido (va después del link
+público; compartir desde la mención, solo dueño y admins); ME1 a ME10, ME10 espera a Lega.
 [ Menciones - diseño de @persona en comentarios, con la campana y sin red ]
 
 v0.108 :

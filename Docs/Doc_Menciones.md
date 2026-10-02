@@ -1,17 +1,20 @@
 # Menciones en comentarios: «@persona»
 
 **Estado: diseño, sin código ni migración** (roadmap P.21; pedido de Lega del 2026-10-02). Se diseñó contra `main`
-v0.108, con la base en `schema_version` 13 y `min_app_version` 0.099. Toca permisos y la privacidad de quién ve a
+v0.108, con la base en `schema_version` 13 y `min_app_version` 0.104. Toca permisos y la privacidad de quién ve a
 quién: cada entrega va con sus pruebas de permisos (casos negativos y mutantes) y su auditoría independiente. Las
-decisiones propuestas van numeradas ME1 a ME9 (sección 10); el número final lo pone quien las publique.
+decisiones propuestas van numeradas ME1 a ME10 (sección 10); el número final lo pone quien las publique. **Auditado**
+(2026-10-02, «aprobado con condiciones», 60 casos en `begin … rollback`) y corregido: ver «Correcciones de la
+auditoría», al final. **Va después del link público** (su migración sube a 14; esta, a 15).
 
 ## En corto
 
 - **El pedido.** En un comentario, escribir `@` y elegir a una persona; esa persona recibe un aviso **dentro de la
   app** ya, y **por correo** más adelante, cuando haya una clave de Resend (grupo C del roadmap).
-- **A quién** (ME1): solo a quien **ya ve la página**. Si alguien no la ve, quien puede compartir la página la ve en
-  una segunda parte de la lista y puede compartírsela y mencionarla en un paso (ME2, entrega 2). Un invitado ve una
-  lista corta: quienes ya participan en los comentarios de esa página y quien le compartió algo (ME3).
+- **A quién** (ME1): solo a quien **ya ve la página**. Un miembro ve en la lista al equipo que ve la página y a los
+  clientes que ya comentaron en ella (lo seguro mientras Lega decide ME10). Un invitado ve una lista corta: quienes ya
+  participan en los comentarios de esa página y quien le compartió algo (ME3). En la entrega 2, el dueño y los admins
+  ven además a quien no ve la página y pueden compartírsela y mencionarla en un paso (ME2).
 - **Cómo se guarda** (ME4): el texto del comentario sigue siendo texto plano con `@lega` escrito; **quién** fue
   mencionado va en una tabla aparte, `comment_mentions`. Una versión vieja de la app ve `@lega` como texto, sin perder
   nada: no hace falta subir la versión mínima.
@@ -98,15 +101,16 @@ Medido en el código de `main` v0.108 y en la base de Wanka (solo lectura, 2026-
   (`data-tip`) con el correo; la base guarda a cada una por su id.
 - Mencionarse a uno mismo no avisa (la base lo descarta).
 - Tope: **20 personas por comentario**. La lista deja de ofrecer más y lo dice: *Up to 20 people per comment*.
-- **Sin coincidencias:** *No one with access matches*. Si quien escribe puede compartir la página, debajo aparece la
-  segunda parte de ME2 (entrega 2).
+- **Sin coincidencias:** *No one with access matches*. En la entrega 2, si quien escribe es dueño o admin y puede
+  compartir la página, debajo aparece la segunda parte de ME2.
 
 ### 2.2 Cómo se ve en el comentario
 
 - En el panel, cada `@rótulo` de una persona mencionada se pinta con el color de las menciones; el tooltip
   (`data-tip`) dice el correo. Si la mencionada es quien mira, más fuerte (como «te nombraron»).
 - Si el autor mencionó a alguien que la base descartó (no ve la página, o un invitado que no lo tenía en su lista),
-  **solo el autor** ve debajo del comentario: *lucia wasn't notified: she can't see this page.* (sin decir más).
+  **solo el autor** ve debajo del comentario: *lucia wasn't notified.* (sin decir por qué: para un invitado el motivo
+  puede ser su lista corta y no la página).
 - Un comentario editado por una versión vieja de la app puede haber perdido el `@rótulo` del texto: la mención sigue
   (el aviso ya se mandó) y simplemente no se pinta.
 
@@ -114,20 +118,24 @@ Medido en el código de `main` v0.108 y en la base de Wanka (solo lectura, 2026-
 
 - **Dónde** (ME6): en la barra de arriba, a la derecha, antes del botón de buscar en la página; en el teléfono,
   también en la barra de arriba (la ruta de la página se achica primero). Está siempre, haya o no una página abierta.
-- **El número:** un círculo con las menciones sin leer (hasta *9+*). Sin ninguna, la campana sola, sin círculo.
-  El tooltip dice *Mentions* y, si hay, *3 unread*; no repite el ícono.
+- **El número:** un círculo con las menciones sin leer, de 1 a 9, y *9+* desde 10: la base cuenta **hasta 10** y no
+  más (contar todas cuesta en proporción a lo sin leer: 186 ms con 1000; con el tope, 2,35 ms). Sin ninguna, la
+  campana sola, sin círculo. El tooltip dice *Mentions* y, si hay, *3 unread* (o *9+ unread*); no repite el ícono.
 - **La lista** (un panel que cae desde la campana; en el teléfono, una hoja como la de comentarios), de la más nueva a
   la más vieja:
   - quién (`lega`), el título de la página y, si es de otro proyecto, su nombre en gris;
   - el comienzo del comentario (hasta 280 caracteres, con las menciones pintadas);
   - cuándo (*5 min ago*) y un punto si no se leyó;
-  - si el hilo está resuelto, *Resolved* en gris.
+  - si el hilo está resuelto, *Resolved* en gris;
+  - si la página está en la papelera (solo le pasa a quien edita: a los demás la mención les desaparece), *In trash*
+    en gris, con el árbol local de la app.
 - **Abrir una mención:** la app va a la página (cambia de proyecto si hace falta, como un link interno), abre el panel
   de comentarios en ese hilo (`showComments({ kind: 'thread', … })`) y la marca leída.
 - **Marcar leídas:** abrir una la marca; ver el hilo en el panel marca las de ese hilo; *Mark all as read* arriba de
   la lista. No hay *Mark as unread* en la entrega 1.
 - **El botón de comentarios de la página** suma un punto si en esa página hay una mención sin leer para quien mira.
 - **Vacía:** *No mentions yet. When someone writes @ and your name in a comment, it shows up here.*
+- **Abrir la campana no baja todo de nuevo:** pide lo cambiado desde la última vez y un índice liviano (sección 5.1).
 - **Sin red:** la lista guardada, con *Offline · checked 10:42* arriba. Abrir una mención funciona si la página está
   en el dispositivo; marcar leídas se guarda y sale al volver la red.
 - **Ayuda:** una entrada nueva en la ayuda (*Mention someone in a comment*) en inglés y castellano
@@ -163,7 +171,8 @@ funciones (sección 7).
   versión de la app permitida. Cada persona del conjunto pasa por `private.mention_allowed` (sección 4); las que no
   pasan se descartan **sin error** y la función devuelve las aceptadas.
 - **`list_comments`** suma al final la columna `mentions` (las activas, `[{user_id, label}]`; vacía si el comentario
-  se borró) y `comment_authors` suma a las mencionadas, para mostrar su correo en el tooltip. Cambiar una mención sube
+  se borró) y `comment_authors` suma a las mencionadas en comentarios **sin borrar**, para mostrar su correo en el
+  tooltip (a un invitado eso le muestra el correo de alguien del equipo que lo nombraron delante de él: ver ME3). Cambiar una mención sube
   el `updated_at` del comentario, así los demás dispositivos lo bajan con su sincronización de siempre.
 
 ### 3.3 La cola en el dispositivo
@@ -176,60 +185,73 @@ funciones (sección 7).
   guardado ahí no coincide con lo que bajó (`mentions` de `list_comments`) y ya no está en la cola, vuelve a la cola.
 - La base local de comentarios **no cambia de versión** (una versión vieja no podría abrirla): todo lo nuevo va en
   stores que ya existen (`outbox`, `meta`).
-- **Rechazos:** `comment_denied`, `not_allowed`, `comment_deleted` y `app_outdated` se tratan como hoy (a la vista, con
-  *Retry* y *Discard…*). Que la base descarte a alguien no es un rechazo (2.2).
+- **Rechazos:** `comment_denied`, `not_allowed` y `app_outdated` se tratan como hoy (a la vista, con *Retry* y
+  *Discard…*). `comment_not_found` y `comment_deleted` sobre una operación `mentions` se **descartan en silencio** (el
+  comentario ya no está o no se ve: la persona no puede arreglar nada), y se borra su copia en `meta`. Que la base
+  descarte a alguien no es un rechazo (2.2).
+- **Un comentario que se borra antes de subir** se lleva su `mentions` y su copia en `meta` (si su alta no viaja,
+  tampoco sus menciones). La copia en `meta` se borra siempre que el servidor confirma o descarta la operación, como
+  `import`: así un descarte no la vuelve a poner en la cola en cada apertura.
 - **Restaurar una copia:** lo propio que vuelve a la cola vuelve con su `mentions` (la de `meta`, o la que bajó antes).
 
 ## 4. A quién se puede mencionar
 
 `private.mention_allowed(página, quien escribe, mencionada)` es la única regla, la usan la lista y la escritura:
 
-1. La mencionada no es quien escribe, y es **miembro activo** del workspace.
-2. La mencionada **ve la página** (`user_page_level ≥ 1`, con la regla de la papelera): ME1.
-3. Si quien escribe es **invitado** (`guest`), además la mencionada ya **participa en los comentarios de esa página**
-   (escribió, resolvió o importó alguno: lo mismo que ya le muestra `comment_authors`), **o le compartió algo** (es
-   `granted_by` de un permiso activo suyo, o le mandó la invitación con la que entró): ME3.
+1. La mencionada no es quien escribe, es **miembro activo** del workspace y **ve la página** (`user_page_level ≥ 1`,
+   con la regla de la papelera): ME1.
+2. Si quien escribe es **dueño o admin**: cualquiera que cumpla 1 (ya ven a todo el workspace con `list_members`).
+3. Si quien escribe es **miembro**: el **equipo** (miembros, admins y el dueño) que cumple 1; un **invitado** solo si
+   ya **participa en los comentarios de esa página** (escribió, resolvió o importó alguno sin borrar). Es lo seguro
+   mientras Lega decide ME10: hoy un miembro que no puede compartir no sabe qué clientes ven una página (eso lo dice
+   `list_access`, solo a quien puede compartirla), y la lista no se lo cuenta.
+4. Si quien escribe es **invitado** (`guest`): quien participa en los comentarios de esa página **o le compartió
+   algo** (es `granted_by` de un permiso activo suyo, o le mandó la invitación con la que entró): ME3.
 
-`mention_candidates(página)` devuelve a quienes cumplen eso (`has_access = true`), con su correo y su rótulo. Pide
-Comentar (2) en la página: con Ver no se comenta, así que no hace falta la lista. **Si quien pide puede compartir la
-página** (`private.can_share`), suma a los miembros activos que **no** la ven (`has_access = false`) para la entrega 2
-(ME2); quien no puede compartir nunca los recibe.
+`mention_candidates(página)` devuelve a quienes cumplen eso, con su correo y su rótulo. Pide Comentar (2) en la página:
+con Ver no se comenta, así que no hace falta la lista. **En la entrega 2**, al dueño y a los admins que pueden compartir
+la página les suma a los miembros activos que **no** la ven (`has_access = false`) para ME2; nadie más los recibe, ni un
+miembro común que sea dueño de un proyecto (ver la nota del borrador, sección 7).
 
 Lo que ve cada uno:
 
 | Quien escribe | Ve en la lista | Lo que no ve |
 |---|---|---|
-| Dueño o admin | Todos los que ven la página; con compartir, también el resto del equipo (entrega 2) | — |
-| Miembro con Comentar o más | Todos los que ven la página (equipo e invitados) | Los miembros que no la ven (salvo que pueda compartirla) |
+| Dueño o admin | Todos los que ven la página; en la entrega 2, también el resto del workspace (para compartir) | — |
+| Miembro con Comentar o más | El equipo que ve la página y los clientes que ya comentaron en ella (ME10: lo seguro mientras tanto) | Los clientes de la página que no comentaron; los miembros que no la ven |
 | Invitado | Los que participan en los comentarios de esa página y quien le compartió algo, si ven la página | El resto del equipo y los demás invitados |
 | Visitante de un link | Nada: no hay lista (ME7) | — |
 
-**Por qué un miembro ve también a los invitados de esa página:** ya ve sus correos en los comentarios
-(`comment_authors`), y mencionar al cliente es justo uno de los usos. **Por qué el invitado no ve al resto:** un
-cliente no tiene por qué conocer al equipo entero ni a los otros clientes; con lo que ya ve en la conversación alcanza
-para responderle a quien le habló.
+**Por qué el invitado no ve al resto:** un cliente no tiene por qué conocer al equipo entero ni a los otros clientes;
+con lo que ya ve en la conversación alcanza para responderle a quien le habló. **Por qué un miembro no ve, por ahora, a
+los clientes que no comentaron:** hoy no lo sabe, y contárselo es ampliar quién ve a quién; queda para Lega (ME10).
 
 **Lo que la base no filtra:** un miembro que conoce el id de alguien puede llamar a `set_comment_mentions` y saber, por
-la respuesta, si esa persona ve la página; es lo mismo que ya le dice la lista. A un invitado, toda persona fuera de su
-lista se le descarta igual, la vea o no: la respuesta no le dice nada nuevo.
+la respuesta, si esa persona pasa la regla; es lo mismo que ya le dice la lista. A un invitado, toda persona fuera de
+su lista se le descarta igual, la vea o no: la respuesta no le dice nada nuevo. Un miembro que menciona a un cliente
+que no comentó recibe el mismo descarte, vea o no la página.
 
 ## 5. El aviso: cómo llega
 
 ### 5.1 Consulta cada 60 segundos, sin Realtime (ME5)
 
 - `mentions_inbox(desde, tope)` devuelve, en una sola llamada, **el número de menciones sin leer que la persona puede
-  ver** y las filas que cambiaron desde la fecha que manda la app (`updated_at`, con un margen como en
-  `list_comments`), más la hora del servidor para el próximo pedido.
+  ver, contado hasta 10** (la campana muestra *9+*), y las filas que cambiaron desde la fecha que manda la app
+  (`updated_at`, con un margen como en `list_comments`; hasta 30, como mucho 50), más la hora del servidor para el
+  próximo pedido. Una fila que ya no se ve llega solo con `id`, `gone` y `updated_at`.
 - La app pregunta **al abrir, cada 60 segundos con la ventana a la vista, al volver a la ventana, al volver la red y
   después de subir un comentario propio**. Con la ventana oculta, no pregunta.
 - **Lo que deja de verse** (le sacan el permiso, la página va a la papelera, se borra el comentario) no cambia la
-  fila: el número que da la base baja y no coincide con el del dispositivo. Entonces la app pide la lista entera
-  (`desde` nulo, hasta 200), donde esas filas vienen marcadas `gone`, sin texto ni título, y las saca. También pide la
-  lista entera cada vez que se abre el panel de la campana.
-- **Cuánto cuesta en el plan gratis:** una llamada sin novedades devuelve unos 100 bytes de datos (unos 600 con los
-  encabezados). Diez horas con la app a la vista son 600 llamadas, unos 360 KB por persona y por día; 20 personas, unos
-  7 MB por día y 0,2 GB por mes, contra 5 GB de egress. En la base es una búsqueda por índice
-  (`user_id, updated_at`) más el permiso de cada fila sin leer.
+  fila de la mención. Lo concilia `mentions_index()`: las últimas 200 menciones como `[id, gone, leída]`, sin texto
+  (unos 10 KB). La app lo pide **cuando el número de la base no coincide con el suyo** (los dos contados hasta 10) y
+  **al abrir el panel de la campana**; saca las `gone` y corrige las leídas. Abrir la campana **no** vuelve a bajar los
+  textos: los tiene guardados, y pide solo lo cambiado. La lista con textos desde cero (`desde` nulo, 30 filas) se
+  pide solo con la caché vacía (un dispositivo nuevo, después de salir de la cuenta).
+- **Cuánto cuesta en el plan gratis:** una pregunta sin novedades devuelve unos 70 bytes de datos (medido; unos 600
+  con los encabezados). Diez horas con la app a la vista son 600 preguntas, unos 360 KB por persona y por día; abrir la
+  campana 10 veces, unos 100 KB más (el índice). 20 personas: unos 9 MB por día, **0,3 GB por mes**, contra 5 GB de
+  egress. Una caché vacía baja 30 filas (unos 24 KB). En la base, la pregunta es una búsqueda por índice
+  (`user_id, updated_at`) más el permiso de, como mucho, 10 filas sin leer: 2,35 ms aunque haya 1000 sin leer.
 - **Por qué no Realtime:** la tabla no se lee desde la API (Postgres Changes necesita darle `select`), y Broadcast
   desde la base pide políticas en `realtime.messages`, una conexión abierta por cada app (200 a la vez en el plan
   gratis) y manejar reconexiones; para un aviso que puede tardar un minuto no se justifica. Si algún día hace falta, la
@@ -272,22 +294,24 @@ nuevo enseguida. Avisar de otros workspaces sin abrirlos queda para el correo (e
 
 ## 7. Migración (borrador, sin aplicar)
 
-Nombre propuesto: `supabase/migrations/20261013120000_menciones.sql` (el orden final lo pone quien la publique, después
-de la del link público si sale antes: las dos cambian lo que devuelve `list_comments` y cada una suma sus columnas al
-final). Sube `schema_version` al que siga (14 si es la primera); la app usa una constante propia
-(`MENTIONS_SCHEMA_VERSION`) y no sube `DB_SCHEMA_VERSION`: con la base sin migrar, no muestra la campana ni la lista y
-el `@` es texto.
+Nombre propuesto: `supabase/migrations/20261013120000_menciones.sql`. **Va después de la del link público** (rama
+`lega/link-publico-impl`, que sube `schema_version` a 14 y desde ahí la app ofrece *Anyone with the link*): esta sube a
+**15** y la app usa `MENTIONS_SCHEMA_VERSION = 15`, sin subir `DB_SCHEMA_VERSION`: con la base sin migrar, no muestra la
+campana ni la lista y el `@` es texto. Si las dos compartieran el número, una app nueva prendería la campana sobre una
+base sin menciones (o el link sobre una base sin `public_links`). Las dos cambian lo que devuelve `list_comments` con
+`drop` y `create`: la de menciones se escribe **sobre el cuerpo del link público** (con `plink_id` y `plink_author`) y
+suma `mentions` al final, repitiendo sus `grant`.
 
 ```sql
--- LGA Shot Docs · menciones en comentarios (P.21; Docs/Doc_Menciones.md).
+-- LGA Shot Docs · menciones en comentarios (P.21; Docs/Doc_Menciones.md). Va después del link público (schema 14).
 --
 -- Una mención es una fila de `comment_mentions`: quién fue mencionado en qué comentario, con el rótulo que se escribió
 -- (`@lega`). El texto del comentario no cambia de forma: sigue siendo texto plano, y una versión vieja de la app ve
 -- `@lega` como texto. Nadie lee ni escribe la tabla desde la API: todo pasa por funciones.
 --
--- Permisos: la regla única es `private.mention_allowed` (miembro activo que ve la página; a un invitado, además, solo
--- quien participa en los comentarios de la página o quien le compartió algo). Escribe solo el autor del comentario,
--- con Comentar. Cada uno lee solo sus menciones, y solo mientras ve la página. Nada se borra.
+-- Permisos: la regla única es `private.mention_allowed` (miembro activo que ve la página; los invitados mencionados o
+-- que mencionan, con condiciones: ver la sección 4 del doc). Escribe solo el autor del comentario, con Comentar. Cada
+-- uno lee solo sus menciones, y solo mientras ve la página. Nada se borra.
 --
 -- Compatible con la app publicada: suma una tabla y funciones, y una columna al final de `list_comments` (que la app
 -- publicada ignora).
@@ -307,7 +331,7 @@ create table public.comment_mentions (
   constraint comment_mentions_once unique (comment_id, user_id)
 );
 create index comment_mentions_inbox_idx on public.comment_mentions (user_id, updated_at);
-create index comment_mentions_unread_idx on public.comment_mentions (user_id)
+create index comment_mentions_unread_idx on public.comment_mentions (user_id, created_at)
   where read_at is null and removed_at is null;
 
 alter table public.comment_mentions enable row level security;
@@ -315,32 +339,52 @@ revoke all on public.comment_mentions from public, anon, authenticated;
 -- Sin políticas ni permisos: la API no la lee ni la escribe.
 
 -- ¿`caller` puede mencionar a `target` en la página `p`? (Docs/Doc_Menciones.md, sección 4.)
+--   - Siempre: miembro activo que ve la página, y no es uno mismo.
+--   - Dueño o admin: a cualquiera que la vea (ya ven a todo el workspace con `list_members`).
+--   - Miembro: al equipo que ve la página; a un invitado, solo si ya participa en sus comentarios (ME10, mientras
+--     tanto).
+--   - Invitado: a quien participa en los comentarios de la página o le compartió algo (ME3).
 create function private.mention_allowed(p uuid, caller uuid, target uuid)
 returns boolean
 language plpgsql stable security definer set search_path = ''
 as $$
 declare
   caller_role text := private.workspace_role(caller);   -- mira la sesión si caller es quien llama
+  target_role text := private.workspace_role(target);
 begin
-  if target is null or caller is null or target = caller or caller_role is null
-     or private.workspace_role(target) is null
+  if target is null or caller is null or target = caller or caller_role is null or target_role is null
      or private.user_page_level(p, target) < 1 then
     return false;
   end if;
-  if caller_role <> 'guest' then
+  if caller_role in ('owner', 'admin') or (caller_role <> 'guest' and target_role <> 'guest') then
     return true;
   end if;
-  return exists (select 1 from public.comments c
-                 where c.page_id = p and target in (c.author_id, c.resolved_by, c.imported_by))
-      or exists (select 1 from public.grants g
-                 where g.user_id = caller and g.revoked_at is null and g.granted_by = target)
-      or exists (select 1 from public.invitations i
-                 where i.used_by = caller and i.invited_by = target);
+  -- Queda: un miembro que menciona a un invitado, o un invitado que menciona a cualquiera.
+  if exists (select 1 from public.comments c
+             where c.page_id = p and c.deleted_at is null
+               and target in (c.author_id, c.resolved_by, c.imported_by)) then
+    return true;
+  end if;
+  return caller_role = 'guest' and (
+    exists (select 1 from public.grants g
+            where g.user_id = caller and g.revoked_at is null and g.granted_by = target)
+    or exists (select 1 from public.invitations i where i.used_by = caller and i.invited_by = target));
 end;
 $$;
 revoke all on function private.mention_allowed(uuid, uuid, uuid) from public, anon, authenticated;
 
--- La lista del `@`. Pide Comentar. Con permiso de compartir la página, suma a los miembros que no la ven.
+-- El rótulo que propone la lista: la parte del correo antes de la @, sin lo que el rótulo no admite.
+create function private.mention_label(email text)
+returns text
+language sql immutable set search_path = ''
+as $$
+  select coalesce(nullif(left(regexp_replace(split_part(email, '@', 1), '[[:space:][:cntrl:]"@]', '', 'g'), 64), ''),
+                  'user');
+$$;
+revoke all on function private.mention_label(text) from public, anon, authenticated;
+
+-- La lista del `@`: quienes `mention_allowed` deja. Pide Comentar. (La parte "sin acceso" de ME2 llega con la
+-- entrega 2, solo para el dueño y los admins: ver la nota de abajo.)
 create function public.mention_candidates(p_page_id uuid)
 returns table (user_id uuid, email text, label text, has_access boolean)
 language plpgsql stable security definer set search_path = ''
@@ -352,15 +396,10 @@ begin
   if lvl < 1 then raise exception 'page_not_found' using errcode = 'P0002'; end if;
   if lvl < 2 then raise exception 'comment_denied' using errcode = '42501'; end if;
   return query
-    select m.user_id, u.email::text, left(split_part(u.email::text, '@', 1), 64), true
+    select m.user_id, u.email::text, private.mention_label(u.email::text), true
     from public.members m join auth.users u on u.id = m.user_id
     where m.removed_at is null and private.mention_allowed(p_page_id, uid, m.user_id)
-    union all
-    select m.user_id, u.email::text, left(split_part(u.email::text, '@', 1), 64), false
-    from public.members m join auth.users u on u.id = m.user_id
-    where private.can_share(null, p_page_id) and m.removed_at is null and m.user_id <> uid
-      and private.user_page_level(p_page_id, m.user_id) < 1
-    order by 4 desc, 2;
+    order by 2;
 end;
 $$;
 
@@ -387,10 +426,13 @@ begin
      or length(p_mentions::text) > 4000 then
     raise exception 'mentions_invalid' using errcode = '22023';
   end if;
+  -- La forma de cada una, también el rótulo (1 a 64, sin espacios, controles ni @), antes de escribir nada.
   for e in select x from jsonb_array_elements(p_mentions) x loop
     if jsonb_typeof(e) <> 'object' or (select count(*) from jsonb_object_keys(e)) <> 2
        or coalesce(e ->> 'user_id', '') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-       or jsonb_typeof(e -> 'label') is distinct from 'string' then
+       or jsonb_typeof(e -> 'label') is distinct from 'string'
+       or char_length(btrim(e ->> 'label')) not between 1 and 64
+       or btrim(e ->> 'label') ~ '[[:space:][:cntrl:]@]' then
       raise exception 'mentions_invalid' using errcode = '22023';
     end if;
     wanted := wanted || (e ->> 'user_id')::uuid;
@@ -441,8 +483,10 @@ begin
 end;
 $$;
 
--- La campana: el número sin leer que la sesión puede ver y lo cambiado desde `p_since`.
-create function public.mentions_inbox(p_since timestamptz default null, p_limit int default 100)
+-- La campana: el número sin leer que la sesión puede ver, contado HASTA 10 (la campana muestra 9+), y lo cambiado
+-- desde `p_since`, hasta `p_limit` filas (30 por defecto, 50 como mucho). Una fila que ya no se ve llega solo con
+-- `id`, `gone` y `updated_at`.
+create function public.mentions_inbox(p_since timestamptz default null, p_limit int default 30)
 returns jsonb
 language plpgsql stable security definer set search_path = ''
 as $$
@@ -454,23 +498,27 @@ begin
   end if;
   return jsonb_build_object(
     'now', now(),
-    'unread', (select count(*) from public.comment_mentions m join public.comments c on c.id = m.comment_id
-               where m.user_id = uid and m.read_at is null and m.removed_at is null and c.deleted_at is null
-                 and private.user_page_level(m.page_id, uid) >= 1),
+    'unread', (select count(*) from (
+                 select 1 from public.comment_mentions m join public.comments c on c.id = m.comment_id
+                 where m.user_id = uid and m.read_at is null and m.removed_at is null and c.deleted_at is null
+                   and private.user_page_level(m.page_id, uid) >= 1
+                 order by m.created_at desc
+                 limit 10) t),
     'rows', coalesce((
-      select jsonb_agg(to_jsonb(r) order by r.updated_at desc) from (
-        select m.id, m.comment_id, m.page_id, m.mentioned_by, m.label, m.created_at, m.updated_at, m.read_at,
-               v.gone,
-               case when not v.gone then (select u.email::text from auth.users u where u.id = m.mentioned_by)
-                    end as mentioned_by_email,
-               case when not v.gone then c.thread_id end as thread_id,
-               case when not v.gone then c.block_id end as block_id,
-               case when not v.gone then left(c.body, 280) end as snippet,
-               case when not v.gone then c.resolved_at is not null
-                    or exists (select 1 from public.comments t where t.id = c.thread_id and t.resolved_at is not null)
-                    end as resolved,
-               case when not v.gone then pg.title end as page_title,
-               case when not v.gone then pg.workspace_id end as project_id
+      select jsonb_agg(r.j order by r.updated_at desc) from (
+        select m.updated_at,
+               case when v.gone then jsonb_build_object('id', m.id, 'gone', true, 'updated_at', m.updated_at)
+               else jsonb_build_object(
+                 'id', m.id, 'gone', false, 'updated_at', m.updated_at, 'created_at', m.created_at,
+                 'read_at', m.read_at, 'comment_id', m.comment_id, 'page_id', m.page_id,
+                 'thread_id', c.thread_id, 'block_id', c.block_id, 'label', m.label,
+                 'mentioned_by', m.mentioned_by,
+                 'mentioned_by_email', (select u.email::text from auth.users u where u.id = m.mentioned_by),
+                 'snippet', left(c.body, 280),
+                 'resolved', c.resolved_at is not null
+                   or exists (select 1 from public.comments t where t.id = c.thread_id and t.resolved_at is not null),
+                 'page_title', pg.title, 'project_id', pg.workspace_id)
+               end as j
         from public.comment_mentions m
         join public.comments c on c.id = m.comment_id
         join public.pages pg on pg.id = m.page_id
@@ -478,7 +526,31 @@ begin
                                    or private.user_page_level(m.page_id, uid) < 1 as gone) v
         where m.user_id = uid and (p_since is null or m.updated_at >= p_since)
         order by m.updated_at desc
-        limit least(greatest(coalesce(p_limit, 100), 1), 200)) r), '[]'::jsonb));
+        limit least(greatest(coalesce(p_limit, 30), 1), 50)) r), '[]'::jsonb));
+end;
+$$;
+
+-- El índice liviano para conciliar lo guardado en el dispositivo: las últimas 200 menciones (por fecha de creación),
+-- cada una como [id, gone, leída]. Sin texto ni títulos.
+create function public.mentions_index()
+returns jsonb
+language plpgsql stable security definer set search_path = ''
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null or private.workspace_role() is null then
+    return '[]'::jsonb;
+  end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_array(r.id, r.gone, r.read) order by r.created_at desc) from (
+      select m.id, m.created_at, m.read_at is not null as read,
+             m.removed_at is not null or c.deleted_at is not null
+               or private.user_page_level(m.page_id, uid) < 1 as gone
+      from public.comment_mentions m join public.comments c on c.id = m.comment_id
+      where m.user_id = uid
+      order by m.created_at desc
+      limit 200) r), '[]'::jsonb);
 end;
 $$;
 
@@ -501,24 +573,27 @@ end;
 $$;
 
 -- `list_comments` suma `mentions` al final (cambia lo que devuelve: se borra y se crea en la misma transacción) y
--- `comment_authors` suma a las mencionadas. Cuerpos: los de 20260930200000_comentarios_importados.sql (o los del
--- link público, si se aplicó antes) con esto agregado:
+-- `comment_authors` suma a las mencionadas. Cuerpos: los del link público (con `plink_id`, `plink_author`) con esto
+-- agregado, y sus `grant` repetidos:
 --   , case when c.deleted_at is null then coalesce((
 --       select jsonb_agg(jsonb_build_object('user_id', m.user_id, 'label', m.label) order by m.created_at)
 --       from public.comment_mentions m where m.comment_id = c.id and m.removed_at is null), '[]'::jsonb) end
 --   y en comment_authors: union select m.user_id from public.comment_mentions m
---                          where m.page_id = p_page_id and m.removed_at is null
+--                          join public.comments c on c.id = m.comment_id
+--                          where m.page_id = p_page_id and m.removed_at is null and c.deleted_at is null
 
 revoke all on function public.mention_candidates(uuid) from public, anon;
 revoke all on function public.set_comment_mentions(uuid, jsonb) from public, anon;
 revoke all on function public.mentions_inbox(timestamptz, int) from public, anon;
+revoke all on function public.mentions_index() from public, anon;
 revoke all on function public.mark_mentions_read(uuid[], timestamptz) from public, anon;
 grant execute on function public.mention_candidates(uuid) to authenticated;
 grant execute on function public.set_comment_mentions(uuid, jsonb) to authenticated;
 grant execute on function public.mentions_inbox(timestamptz, int) to authenticated;
+grant execute on function public.mentions_index() to authenticated;
 grant execute on function public.mark_mentions_read(uuid[], timestamptz) to authenticated;
 
-update public.workspace_settings set schema_version = 14 where id and schema_version < 14;
+update public.workspace_settings set schema_version = 15 where id and schema_version < 15;
 notify pgrst, 'reload schema';
 ```
 
@@ -526,52 +601,76 @@ Notas del borrador para quien lo programe:
 
 - `mention_allowed` llama a `workspace_role(caller)`, que para la sesión mira `session_allowed` (una sesión con
   contraseña no menciona ni ve la campana).
+- **La parte «sin acceso» de ME2 (entrega 2)** se suma a `mention_candidates` como un `union all` con
+  `has_access = false` y la condición
+  `private.workspace_role() in ('owner', 'admin') and private.can_share(null, p_page_id)`: **solo el dueño y los
+  admins**, que ya ven a todo el workspace con `list_members`. `can_share` sola no alcanza: es verdadera para un
+  miembro común que es dueño de un proyecto (pasa cuando a un admin que creó proyectos lo bajan a miembro), y le daría
+  el correo de todo el workspace, que hoy no puede ver (lo encontró la auditoría).
 - El reintento idempotente compara conjuntos **ignorando a uno mismo** (que se descarta siempre); si la primera vez se
   descartó a alguien por permisos, el reintento no es idéntico y pasa por los permisos de nuevo, que es lo correcto.
   El rótulo no entra en la comparación: con las mismas personas y otro rótulo, el reintento no lo cambia (solo es lo
   que se pinta, y el texto lo vuelve a decir).
 - `mentioned_by_email` va en la campana para mostrar quién mencionó: es alguien que escribió en esa página, cuyo
   correo la persona ya ve por `comment_authors`.
-- `mentions_inbox` es `stable` y no escribe: una llamada repetida no gasta más que su lectura.
+- `mentions_inbox` y `mentions_index` son `stable` y no escriben. El conteo con tope cuesta 2,35 ms aunque haya 1000
+  sin leer (sin tope, 186 ms; medido por la auditoría).
 - La versión mínima se mira en `set_comment_mentions` (escribe sobre un comentario); `mark_mentions_read` no la mira
   (es el estado de la propia persona y no toca nada de otros).
+- A quien sacan del workspace la campana le devuelve vacío (no `gone`); lo guardado en su dispositivo lo borra la
+  limpieza de siempre al sacarlo, que incluye la base de comentarios.
 
 ## 8. Pruebas
 
 ### 8.1 Pruebas de permisos (`supabase/tests/menciones_permisos.sql`, en `begin … rollback`)
 
-Con el header de versión (sin él, con la mínima ≥ 0.099, la base rechaza con `app_outdated`). Casos:
+Con el header de versión (sin él, con la mínima de Wanka, hoy 0.104, la base rechaza con `app_outdated`). El
+escenario de la auditoría sirve de base (dueña, admin, miembros con Ver, Comentar y Editar y crear, dos invitadas, un
+miembro sin nada y un miembro común dueño de otro proyecto). Casos:
 
-1. Un miembro con Comentar menciona a otro que ve la página: se crea la fila; la campana de la mencionada da
+1. Un miembro con Comentar menciona a otro miembro que ve la página: se crea la fila; la campana de la mencionada da
    `unread = 1` con el texto y el título.
 2. Mencionar a alguien que no ve la página: se descarta (no está en lo devuelto ni en la tabla).
 3. Un invitado menciona a un miembro que ve la página pero no participa ni le compartió nada: descartado; a uno que
    comentó en la página: aceptado; a quien le compartió la página: aceptado; a otro invitado de la misma página que no
    comentó: descartado.
-4. `mention_candidates`: un invitado recibe solo su lista corta; un miembro, todos los que ven la página; quien puede
-   compartir, además los que no la ven con `has_access = false`; quien no puede compartir, nunca esas filas; con Ver,
-   `comment_denied`; sin acceso, `page_not_found`.
-5. `set_comment_mentions` sobre un comentario ajeno: `not_allowed`; sobre uno borrado: `comment_deleted`; con 21
-   personas o una forma mala: `mentions_invalid`; mencionarse a uno mismo: descartado.
-6. Repetir el mismo conjunto no cambia `updated_at` ni de la mención ni del comentario; el reintento con el permiso
+4. Un **miembro** menciona a una invitada que ve la página pero **nunca comentó**: descartada; a una que comentó:
+   aceptada (ME10, lo seguro). El **dueño o un admin**, a la que nunca comentó: aceptada.
+5. `mention_candidates`: un invitado recibe solo su lista corta; un miembro, el equipo que ve la página y las
+   invitadas que comentaron (no la que nunca comentó); el dueño y los admins, todos los que la ven; **nadie** recibe
+   filas `has_access = false` en la entrega 1, tampoco **un miembro común dueño de un proyecto** (que hoy recibe 1
+   fila de `list_members`); con Ver, `comment_denied`; sin acceso, `page_not_found`. En la entrega 2: las filas
+   `false` solo para el dueño y los admins que pueden compartir.
+6. `set_comment_mentions` sobre un comentario ajeno: `not_allowed`; sobre uno borrado: `comment_deleted`; con 21
+   personas, una forma mala o un rótulo con espacio, vacío o de más de 64: `mentions_invalid` (nunca 23514);
+   mencionarse a uno mismo: descartado.
+7. Repetir el mismo conjunto no cambia `updated_at` ni de la mención ni del comentario; el reintento con el permiso
    ya bajado (mismo conjunto) da bien.
-7. Sacar a alguien del conjunto marca `removed_at` y su campana deja de contarla; volver a ponerlo la reactiva con
+8. Sacar a alguien del conjunto marca `removed_at` y su campana deja de contarla; volver a ponerlo la reactiva con
    `read_at` intacto.
-8. Después de mencionar: sacarle el permiso a la mencionada, mandar la página a la papelera (siendo invitada o con
-   Ver) o sacarla del workspace: `unread = 0`, la fila llega con `gone` y sin texto ni título.
-9. Borrar el comentario: `gone`, sin texto; `list_comments` da `mentions` nulo.
-10. `mark_mentions_read` con ids de otra persona no cambia nada; con `p_up_to`, solo las propias hasta esa fecha.
-11. Nadie lee la tabla (`select` da 42501) ni la escribe; `anon` no ejecuta ninguna de las funciones.
-12. `list_comments` devuelve `mentions` con las activas; `comment_authors` incluye a las mencionadas.
-13. Sin header y con la mínima en 0.099: `set_comment_mentions` da `app_outdated`; el reintento idéntico da bien sin
-    escribir.
-14. `import_comment` no crea menciones aunque el texto tenga `@rótulo`.
-15. Una sesión con contraseña: `mention_candidates` da `page_not_found` y la campana, vacía.
+9. Después de mencionar: sacarle el permiso a la mencionada, mover la página fuera de su rama, mandarla a la papelera
+   (siendo invitada o con Ver): `unread = 0`, la fila llega solo con `id`, `gone` y `updated_at`, y
+   `mentions_index` la da `gone`. Sacarla del workspace: campana vacía.
+10. Borrar el comentario: `gone`; `list_comments` da `mentions` nulo; `comment_authors` ya no da a la mencionada por
+    ese comentario.
+11. Con 15 sin leer, `unread` da 10 (el tope).
+12. `mark_mentions_read` con ids de otra persona no cambia nada; con `p_up_to`, solo las propias hasta esa fecha.
+13. Nadie lee la tabla (`select` da 42501) ni la escribe; `anon` no ejecuta ninguna de las funciones.
+14. `list_comments` devuelve las columnas del link público y después `mentions` con las activas; `comment_authors`
+    incluye a las mencionadas en comentarios sin borrar.
+15. Sin header y con la mínima en 0.104: `set_comment_mentions` da `app_outdated`; el reintento idéntico da bien sin
+    escribir; `mark_mentions_read` anda.
+16. `import_comment` no crea menciones aunque el texto tenga `@rótulo`.
+17. Una sesión con contraseña: `mention_candidates` da `page_not_found` y la campana, vacía.
+18. La rama de `invitations.invited_by`: una invitada que entró con la invitación de un miembro puede mencionarlo
+    aunque él no le haya compartido nada después (la auditoría no la armó).
 
 **Mutantes** (cada uno tiene que hacer fallar al menos una prueba): sacar la condición del invitado en
-`mention_allowed` (3, 4); sacar `user_page_level(p, target)` (2); sacar el filtro de permiso en `mentions_inbox`
-(8); sacar `user_id = auth.uid()` en `mark_mentions_read` (10); sacar la comparación de autor en
-`set_comment_mentions` (5); sacar `can_share` en los candidatos sin acceso (4).
+`mention_allowed` (3, 5); sacar la condición del miembro que menciona a una invitada (4, 5); sacar
+`user_page_level(p, target)` (2); sacar el filtro de permiso en `mentions_inbox` o en `mentions_index` (9); sacar el
+`limit 10` del conteo (11); sacar `user_id = auth.uid()` en `mark_mentions_read` (12); sacar la comparación de autor
+en `set_comment_mentions` (6); sacar la validación del rótulo en el primer bucle (6); en la entrega 2, sacar
+`workspace_role() in ('owner', 'admin')` de las filas sin acceso (5).
 
 ### 8.2 Pruebas de la app (vitest, con el servidor falso de `src/sync/testing.ts`)
 
@@ -583,8 +682,10 @@ Con el header de versión (sin él, con la mínima ≥ 0.099, la base rechaza co
   `@rótulo` saca la mención; escribir el rótulo a mano no menciona; tope de 20.
 - Pintar: un comentario con menciones activas, uno editado por una versión vieja (sin el rótulo), uno de un visitante
   con `@` (no se pinta) y uno importado con la forma de Coda (`@Nombre`).
-- La campana: el número, la lista desde la caché sin red, la pregunta entera cuando el número no coincide, leer una,
-  *Mark all as read* sin red y su salida al volver la red.
+- La campana: el número (con *9+*), la lista desde la caché sin red, el índice cuando el número no coincide y al
+  abrirla (sin volver a bajar textos), leer una, *Mark all as read* sin red y su salida al volver la red, *In trash*.
+- La cola: borrar un comentario sin subir se lleva su `mentions` y su copia en `meta`; `comment_not_found` y
+  `comment_deleted` sobre `mentions` se descartan sin error a la vista y sin volver a la cola.
 - Candidatos sin red: la lista guardada; sin lista guardada, los autores conocidos.
 - El registro de atajos y la ayuda: las pruebas que ya existen (`src/ui/shortcuts.test.ts`, `src/help/help.test.tsx`)
   pasan con las teclas y la entrada nuevas.
@@ -594,8 +695,8 @@ Con el header de versión (sin él, con la mínima ≥ 0.099, la base rechaza co
 | # | Qué | Prueba de aceptación (Lega, a mano) |
 |---|---|---|
 | **1** | La migración y sus pruebas; `@` con la lista y el pintado; la cola `mentions` con su copia en `meta`; la campana con el número, la lista, leer y *Mark all as read*; el punto en el botón de comentarios; sin red; menciones de Coda como `@Nombre`; ayuda y atajos. | Ver abajo. |
-| **2** | ME2: compartir desde la mención (quien puede compartir); un punto en el árbol de páginas para las que tienen menciones sin leer; el número en el ícono de la app instalada (`navigator.setAppBadge`) y en el título de la pestaña. | Mencionar a alguien que no ve la página, compartírsela desde la lista y que le llegue. |
-| **3** | ME9: el correo, cuando Lega cargue la clave de Resend en el portero (grupo C, junto con el correo de invitaciones). | Mencionar y que llegue el correo con el link a la página. |
+| **2** | ME2: compartir desde la mención, **solo el dueño y los admins** que pueden compartir la página (las filas `has_access = false` de `mention_candidates` llegan en esta entrega, con su migración y sus pruebas), por `useShareGate`; un punto en el árbol de páginas para las que tienen menciones sin leer; el número en el ícono de la app instalada (`navigator.setAppBadge`) y en el título de la pestaña. | Mencionar a alguien que no ve la página, compartírsela desde la lista y que le llegue. |
+| **3** | ME9: el correo, cuando Lega cargue la clave de Resend en el portero (grupo C, junto con el correo de invitaciones), con un tope propio por debajo del cupo que necesitan los códigos de login, y el pedido al portero como una operación más de la cola. Se vuelve a diseñar y auditar antes de programarla. | Mencionar y que llegue el correo con el link a la página. |
 
 **Prueba de aceptación de la entrega 1** (Lega, con su cuenta y una cuenta de invitado de prueba que él crea):
 
@@ -607,11 +708,13 @@ Con el header de versión (sin él, con la mínima ≥ 0.099, la base rechaza co
    campana vuelve a cero.
 4. Con la cuenta de prueba, responder escribiendo `@`: la lista muestra solo a Lega (quien le compartió y comentó), no
    al resto del equipo.
-5. Con la cuenta de Lega, sacarle el permiso a la cuenta de prueba y mencionarla de nuevo: no aparece en la lista;
+5. (Si hay un miembro de prueba con Comentar en esa página.) Con el miembro, escribir `@`: la cuenta de prueba aparece
+   **solo después** de que haya comentado en la página.
+6. Con la cuenta de Lega, sacarle el permiso a la cuenta de prueba y mencionarla de nuevo: no aparece en la lista;
    en la otra ventana, la mención vieja desaparece de la campana en el próximo minuto.
-6. Sin red (modo avión o la red cortada), escribir un comentario con una mención: queda pendiente; al volver la red,
+7. Sin red (modo avión o la red cortada), escribir un comentario con una mención: queda pendiente; al volver la red,
    sube y la otra cuenta la recibe.
-7. En una página importada de Coda con menciones, ver `@Nombre` pintado en vez de `@[Nombre](superhuman://…)`.
+8. En una página importada de Coda con menciones, ver `@Nombre` pintado en vez de `@[Nombre](superhuman://…)`.
 
 ## 10. Decisiones propuestas
 
@@ -637,16 +740,18 @@ B filtra que la página existe; C comparte sin que nadie lo decida.
 *Share*, compartirla y volver al comentario.
 
 **Las opciones:**
-- **A.** Si podés compartir esa página, la lista muestra a Pedro abajo, en gris (*Can't see this page*). Al elegirlo:
-  *Pedro can't see this page. Share it with him (Can comment) and mention him?* → *Share and mention* / *Cancel*.
-  Quien no puede compartir no ve a nadie de afuera. Pide red. Entrega 2.
+- **A.** Si sos dueño o admin y podés compartir esa página, la lista muestra a Pedro abajo, en gris (*Can't see this
+  page*). Al elegirlo: *Pedro can't see this page. Share it with him (Can comment) and mention him?* → *Share and
+  mention* / *Cancel*. Nadie más ve a gente de afuera de la página. Pide red. Entrega 2.
 - **B.** Nunca se ofrece: primero se comparte por *Share*.
 - **C.** Igual que A pero para cualquiera que comente, mandándole un pedido al dueño.
 
-**Elegí A** porque es lo que hace Google Docs, y solo puede quien ya podría compartirla por *Share*, con el mismo
-aviso de "preparando la página" de la privacidad de lo borrado.
+**Elegí A** porque es lo que hace Google Docs, y solo lo ve quien ya ve a todo el workspace (dueño y admins), con el
+mismo aviso de "preparando la página" de la privacidad de lo borrado. (Corregido por la auditoría: con "quien puede
+compartir", un miembro común dueño de un proyecto veía los correos de todo el workspace.)
 
-**Si preferís otra:** B es no hacer la entrega 2 en esa parte. C necesita pedidos de acceso, que no existen.
+**Si preferís otra:** B es no hacer la entrega 2 en esa parte. C necesita pedidos de acceso, que no existen. Abrirlo
+a cualquiera que pueda compartir pide antes decidir si un miembro puede ver a todo el workspace.
 
 ### ME3 · Qué lista ve un invitado (cliente)
 
@@ -660,6 +765,10 @@ conoce los correos del equipo entero y de otros clientes de esa página, que hoy
 
 **Elegí A** porque le alcanza para responderle a quien le habló, y no le muestra a nadie que no vea ya en los
 comentarios (los correos de los autores ya se le muestran, por decisión tuya).
+
+**Ojo:** si alguien del equipo nombra a Pedro en un comentario que el cliente ve, el cliente pasa a ver el correo de
+Pedro en el tooltip, aunque Pedro nunca haya escrito ahí (como ya pasa con los autores). Quien escribe decide a quién
+nombra delante del cliente.
 
 **Si preferís otra:** B es sacar una condición de `mention_allowed`; C, poner otra. Una línea cada una.
 
@@ -684,14 +793,16 @@ lo que pasa con una marca dentro del texto: `@[Nombre](superhuman://users/123)`.
 cada 10 segundos.
 
 **Las opciones:**
-- **A.** Preguntar cada 60 segundos con la app a la vista (y al volver a la ventana o la red). Unos 0,2 GB por mes con
-  20 personas, contra 5 GB del plan gratis.
+- **A.** Preguntar cada 60 segundos con la app a la vista (y al volver a la ventana o la red), con el número contado
+  hasta 10 (*9+*) y abrir la campana sin volver a bajar los textos. Unos 0,3 GB por mes con 20 personas, contra 5 GB
+  del plan gratis.
 - **B.** Realtime de Supabase: el aviso llega en el acto, pero cada app abierta deja una conexión (200 a la vez en el
   plan gratis) y suma políticas y reconexiones.
 - **C.** Preguntar solo al abrir la app.
 
 **Elegí A** porque un aviso que tarda hasta un minuto alcanza para comentarios y casi no gasta. Si algún día hace
-falta al instante, se suma B sin cambiar la tabla.
+falta al instante, se suma B sin cambiar la tabla. (La auditoría midió que contar todas las no leídas cuesta 186 ms con
+1000, y bajar la lista entera al abrir la campana, 157 KB: por eso el tope y el índice liviano.)
 
 **Si preferís otra:** cambiar 60 por 30 segundos es una constante; B, dos o tres días.
 
@@ -741,20 +852,43 @@ corregido`.
 ### ME9 · El correo (cuando haya clave de Resend)
 
 **Qué pasaba:** si no abrís la app, no ves la campana. El portero es el único que va a tener la clave de Resend, y no
-tiene ninguna clave de la base.
+tiene ninguna clave de la base. Y la cuenta de Resend es **la misma que manda los códigos para entrar** (el SMTP de
+Supabase): el plan gratis da 100 correos por día entre todo, así que un día de muchas menciones podría dejar a alguien
+sin poder entrar.
 
 **Las opciones:**
 - **A.** Cuando sube una mención, la app de quien menciona le pide al portero *mandá el aviso de esta mención*, con su
   sesión. El portero le pregunta a la base (con esa sesión) a quién y qué texto mandar, marca la mención como mandada
   para no repetir, y manda el correo (*lega mentioned you in "Plan de rodaje"*, el comienzo del comentario y el link a
-  la página). Cada persona puede apagarlo en su cuenta. Tope por día.
+  la página). Cada persona puede apagarlo en su cuenta. **Tope propio de 40 por día** (el resto queda para los
+  códigos de login, que tienen prioridad: pasado el tope, la mención queda solo en la campana). El pedido al portero
+  es **una operación más de la cola**: si la app se cierra después de subir la mención, sale al volver a abrirla.
 - **B.** Un resumen diario con lo no leído (necesita que la base llame al portero sola: `pg_cron` y `pg_net`, que hoy
   no están, y un secreto compartido guardado en la base).
 - **C.** Correo solo si no la leyó en 10 minutos (lo mismo que B, con espera).
 
-**Elegí A** porque usa lo que ya hay (portero sin claves de la base, sesión de quien escribe) y llega en el acto.
+**Elegí A** porque usa lo que ya hay (portero sin claves de la base, sesión de quien escribe) y llega en el acto. Es
+la dirección; la entrega 3 se vuelve a diseñar y auditar cuando haya clave.
 
 **Si preferís otra:** B y C se pueden sumar después sobre la misma tabla (una columna `emailed_at`).
+
+### ME10 · Qué lista ve un miembro del equipo (que no comparte la página)
+
+**Qué pasaba:** Ana es miembro y comenta en la página del plan de rodaje, que también ve el cliente. Hoy Ana no sabe
+qué clientes ven esa página (eso lo ve solo quien puede compartirla). Si la lista del `@` le muestra a todos los que la
+ven, se entera de qué clientes la ven aunque nunca hayan escrito.
+
+**Las opciones:**
+- **A.** Todos los que ven la página, equipo y clientes. Sirve para nombrar al cliente que todavía no escribió, y para
+  saber que el cliente está mirando antes de escribir algo interno.
+- **B.** El equipo que ve la página, y los clientes solo si ya comentaron en ella. Es lo que queda programado mientras
+  decidís.
+- **C.** Solo quienes ya participan en los comentarios de la página.
+
+**Elegí A** si te parece bien que el equipo sepa qué clientes ven una página; mientras no lo digas, se programa **B**,
+que no le cuenta a nadie nada que hoy no sepa.
+
+**Si preferís otra:** A es sacar una condición de `mention_allowed` (una línea) y sumar su prueba; C, agregar otra.
 
 ## 11. Riesgos
 
@@ -763,12 +897,16 @@ tiene ninguna clave de la base.
 | Una versión vieja toma la cola y descarta la operación `mentions` | Copia en `meta` (`mentions:<id>`) y se vuelve a poner al abrir, como `import` |
 | Una versión vieja edita el comentario y borra el `@rótulo` | La mención sigue (el aviso ya salió); solo no se pinta. Ningún texto se pierde |
 | Un invitado conoce al equipo por la lista | Lista corta (ME3); la base descarta a quien no esté en ella |
-| Un miembro conoce los correos de quienes ven la página | Ya los ve en los comentarios; decidido en ME1 y ME3 |
+| Un miembro se entera de qué clientes ven una página | Mientras Lega decide ME10, ve solo a los clientes que ya comentaron (lo que ya ve) |
+| Un miembro común dueño de un proyecto ve todo el workspace | Las filas «sin acceso» son solo para dueño y admins, y recién en la entrega 2 |
+| Un cliente ve el correo de alguien del equipo que nombraron delante de él | Dicho en ME3: quien escribe decide a quién nombra |
+| Las menciones agotan el cupo de Resend y nadie puede entrar | Tope propio de 40 por día, login con prioridad (ME9, entrega 3) |
 | Spam de menciones | 20 por comentario; solo quien comenta (equipo e invitados); los visitantes no mencionan |
-| La campana muestra algo que ya no se ve | El número de la base no coincide y la app pide la lista entera, que lo trae `gone`, sin texto |
+| La campana muestra algo que ya no se ve | El número de la base no coincide (o se abre la campana) y la app pide el índice liviano, que lo trae `gone`, sin texto |
+| Muchas sin leer encarecen cada pregunta | El conteo se corta en 10 (*9+*): 2,35 ms con 1000 sin leer |
 | Dos personas con el mismo rótulo | La lista muestra el correo; el tooltip también; la base guarda el id |
-| Gasto en el plan gratis | Una pregunta por minuto con la app a la vista; ~0,2 GB por mes con 20 personas |
-| El link público y las menciones cambian `list_comments` a la vez | Cada migración suma sus columnas al final; la segunda parte del cuerpo de la primera |
+| Gasto en el plan gratis | Una pregunta por minuto con la app a la vista y el índice al abrir la campana; ~0,3 GB por mes con 20 personas |
+| El link público y las menciones cambian `list_comments` y `schema_version` | Menciones va después: `schema_version` 15, y su `list_comments` sobre el cuerpo del link |
 | Compartir desde la mención sin preparar la página (D14) | La entrega 2 pasa por el mismo `useShareGate` que *Share* |
 | Varios workspaces: no se avisa de los que no están abiertos | Al abrir cada uno se pregunta; el correo (entrega 3) cubre el resto |
 
@@ -786,10 +924,40 @@ tiene ninguna clave de la base.
 - **El código** de `main` v0.108: las migraciones de comentarios, equipo, versión mínima y papelera; `src/sync/comments.ts`
   (la cola, sus stores y el recurso de `meta` para `import`), `src/ui/CommentsPanel.tsx` (el texto se muestra plano) y
   la barra de arriba de `src/ui/Workspace.tsx`.
-- **La base de Wanka, solo lectura** (2026-10-02): `schema_version` 13, mínima 0.099, interruptor de D14 apagado; la
+- **La base de Wanka, solo lectura** (2026-10-02): `schema_version` 13, mínima 0.099 en la primera lectura (0.104 cuando auditó la auditoría), interruptor de D14 apagado; la
   publicación `supabase_realtime` sin tablas; `pg_cron` y `pg_net` sin instalar; 49 comentarios, 47 importados, 18 con
   menciones de Coda crudas; un solo miembro activo.
 - **El borrador de la sección 7 compila** en la base real dentro de `begin … rollback` (sin la parte de
   `list_comments`, que se escribe sobre el cuerpo vigente al programarla): como el dueño, `mention_candidates` y
   `mentions_inbox` corren, y leer `comment_mentions` da 42501. Después, la tabla no existe y `schema_version` sigue en
   13. Las pruebas de la sección 8.1 se escriben con la entrega 1 (necesitan cuentas de prueba dentro de la transacción).
+- **Después de la auditoría** (2026-10-02), el borrador corregido se volvió a correr con el escenario y los casos del
+  auditor (11 cuentas falsas creadas **dentro** de la transacción, `begin … rollback`): un miembro común ya no recibe
+  a las invitadas que no comentaron, el miembro común dueño de un proyecto recibe una lista vacía en su página (antes,
+  las 10 personas del workspace), el admin sigue viendo a todos, un rótulo malo da `mentions_invalid`, y las filas
+  `gone` llegan solo con `id`, `gone` y `updated_at`. Medido con 300 sin leer: la pregunta sin novedades, 2,5 ms y 69
+  bytes (`unread` = 10); la lista desde cero de 30 filas, 9 ms y 23,6 KB; el índice liviano de 200, 40 ms y 11,2 KB.
+  Antes y después: la tabla no existe, `schema_version` 13, ninguna cuenta de prueba.
+
+## Correcciones de la auditoría (2026-10-02)
+
+Auditoría independiente: «aprobado con condiciones», 60 casos en la base real dentro de `begin … rollback`.
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1 (H1)** `schema_version` 14 choca con el link público, que ya sube a 14 | Menciones va **después** del link: `schema_version` 15, `MENTIONS_SCHEMA_VERSION = 15`, y su `list_comments` sobre el cuerpo del link (`plink_id`, `plink_author`, después `mentions`) (sección 7) |
+| **B2 (H2)** La parte «sin acceso» de la lista le daba el workspace entero a un miembro común dueño de un proyecto (`can_share` verdadero) | Sale de la entrega 1; en la entrega 2, solo con `workspace_role() in ('owner', 'admin')` además de `can_share`, con su prueba y su mutante (secciones 4, 7, 8.1 y ME2) |
+| **B3 (H3)** Premisa falsa: «un miembro ya ve los correos de los invitados de la página» (no ve a los que no comentaron) | Texto corregido; decisión nueva **ME10** para Lega; mientras tanto se programa lo seguro: un miembro ve al equipo que ve la página y a los clientes que ya comentaron (`mention_allowed`, secciones 4 y 10) |
+| O1 Un rótulo malo daba 23514 | Se valida en el primer bucle y da `mentions_invalid`; la lista arma el rótulo con `private.mention_label` (saca comillas, espacios y `@`) |
+| O2 El conteo de la campana costaba en proporción a lo sin leer (186 ms con 1000) | Se cuenta **hasta 10** y la campana muestra *9+* (2,5 ms con 300) |
+| O3 Abrir la campana bajaba la lista entera (157 KB) | Abrir pide lo cambiado y el índice liviano `mentions_index()` (11 KB); la lista con textos, solo con la caché vacía (30 filas). Costo recalculado: ~0,3 GB por mes con 20 personas |
+| O4 Una fila `gone` traía página, comentario, quién y rótulo | Llega solo con `id`, `gone` y `updated_at` |
+| O5 `comment_authors` con las mencionadas le muestra al cliente el correo de alguien nombrado delante de él | Dicho en ME3; solo cuenta comentarios sin borrar |
+| O6 La cola: borrar sin subir, y `comment_not_found`/`comment_deleted` sobre `mentions` | El borrado se lleva `mentions` y su copia en `meta`; esos dos errores se descartan en silencio y la copia se borra (sección 3.3) |
+| O7 *«she can't see this page»* podía ser falso para un invitado | Texto neutro: *«lucia wasn't notified.»* |
+| O8 Resend comparte el cupo (100 por día) con los códigos de login, y el pedido al portero se perdía si la app se cerraba | ME9: tope propio de 40 por día con prioridad del login, y el pedido como una operación de la cola; la entrega 3 se rediseña y audita |
+| O9 La mínima de Wanka es 0.104, no 0.099 | Corregido en el encabezado y en las pruebas |
+| O10 Quien edita ve en la campana menciones de páginas en la papelera | Se marcan *In trash* con el árbol local |
+| O11 A quien sacan del workspace la campana le da vacío, no `gone` | Anotado: lo borra la limpieza de siempre al sacarlo |
+| ME5 aprobada con condición (O2, O3) | Hecho en la sección 5.1 |
+| No verificado por la auditoría: la rama de `invitations.invited_by` | Caso 18 de las pruebas 8.1 |
