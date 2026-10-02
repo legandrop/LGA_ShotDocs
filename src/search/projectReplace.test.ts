@@ -476,6 +476,20 @@ describe('lo escondido', () => {
     expect(await textOf(d, a)).toBe('|Título|cámara escondida|otra cámara escondida|Otro| a la vista|');
     await engine.run(request(d, [a], 'camara', '', { deleteHidden: true }));
     expect(await textOf(d, a)).toBe('|Título| escondida|otra  escondida|Otro| a la vista|');
+    expect([...(await engine.hiddenOf(a))]).toEqual(['p1', 'p2']);
+  });
+
+  it('el resultado dice cuántas de las cambiadas estaban escondidas (también una sola, con el reemplazo vacío)', async () => {
+    const d = await device();
+    const a = await d.tree.create(null, 'A');
+    await write(d, a, ['# Título', 'cámara escondida', '# Otro', 'cámara a la vista'], ['h1', 'p1', 'h2', 'p2']);
+    await saveCollapse(d.db, a, new Map([['h1', { c: true, g: null }]]));
+    const engine = engineOf(d);
+    const [hidden] = await engine.matchesOf(a, 'camara', {});
+    const one = await engine.run(request(d, [a], 'camara', '', { only: new Set([hidden.key]), deleteHidden: true, scope: 'some' }));
+    expect([one.replaced, one.hidden]).toEqual([1, 1]);
+    const rest = await engine.run(request(d, [a], 'camara', 'X'));
+    expect([rest.replaced, rest.hidden]).toEqual([1, 0]);
   });
 });
 

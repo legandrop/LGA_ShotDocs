@@ -172,6 +172,8 @@ export interface RunResult {
   stopped: boolean;
   /** Guardar en el dispositivo falló: se cortó todo. */
   unsaved: boolean;
+  /** De las cambiadas, cuántas estaban escondidas en secciones colapsadas (el aviso lo dice). */
+  hidden: number;
 }
 
 export interface UndoResult {
@@ -287,6 +289,12 @@ export class ProjectReplace {
     }
   }
 
+  /** Los bloques de una página escondidos en secciones colapsadas (para marcarlos en la lista). */
+  async hiddenOf(pageId: string): Promise<Set<string>> {
+    const personal = await this.personalCollapse(pageId);
+    return this.readDoc(pageId, (doc) => hiddenBlocks(doc, personal));
+  }
+
   /** Las coincidencias de una página con sus ids (para identificar una de la lista: *Replace* y ×). */
   async matchesOf(pageId: string, query: string, options: SearchOptions): Promise<PlannedMatch[]> {
     return this.readDoc(pageId, (doc) => planReplace(doc, query, '\u0000', options).matches);
@@ -342,7 +350,7 @@ export class ProjectReplace {
 
   /** Reemplaza en las páginas pedidas, de a una. Guarda el registro para deshacer. */
   async run(request: ReplaceRequest): Promise<RunResult> {
-    const result: RunResult = { opId: null, replaced: 0, pages: 0, blocked: {}, skipped: {}, stopped: false, unsaved: false };
+    const result: RunResult = { opId: null, replaced: 0, pages: 0, blocked: {}, skipped: {}, stopped: false, unsaved: false, hidden: 0 };
     if (this.progress || !request.query) return result;
     const { docs, meta } = this.deps;
     const opId = crypto.randomUUID();
@@ -379,7 +387,7 @@ export class ProjectReplace {
           block(before);
         } else {
           const personal = await this.personalCollapse(pageId);
-          let outcome: { block?: PageBlock; count?: number; written?: boolean };
+          let outcome: { block?: PageBlock; count?: number; written?: boolean; hidden?: number };
           try {
             outcome = await docs.edit(pageId, async (doc) => {
               // Otra vez adentro del candado, justo antes de escribir: mientras se esperaba pudo llegar una bajada
@@ -409,7 +417,8 @@ export class ProjectReplace {
                 const again = planOf();
                 if (sameRecords(recordsOf(again), records)) {
                   docs.applyLocal(pageId, doc, ORIGIN_REPLACE, () => applyPlan(again));
-                  return { count: planCount(again), written: true };
+                  const hidden = again.matches.filter((m) => m.hidden && !m.skip).length;
+                  return { count: planCount(again), written: true, hidden };
                 }
                 plan = again;
               }
@@ -426,6 +435,7 @@ export class ProjectReplace {
               // No quedó en el dispositivo (sin espacio): seguir dejaría cientos de documentos en memoria.
               result.unsaved = true;
               result.replaced += outcome.count ?? 0;
+            result.hidden += outcome.hidden ?? 0;
               result.pages++;
               break;
             }
@@ -435,6 +445,7 @@ export class ProjectReplace {
               applied: true,
             } satisfies PageRecord);
             result.replaced += outcome.count ?? 0;
+            result.hidden += outcome.hidden ?? 0;
             result.pages++;
             header.replaced = result.replaced;
           }

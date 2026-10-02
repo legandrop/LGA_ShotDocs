@@ -61,6 +61,7 @@ export function reportRun(session: ReplaceSession, result: RunResult): void {
   if (result.unsaved) parts.push(t('replace.unsaved'));
   parts.push(t('replace.done', { count: result.replaced, pages: t('replace.pages', { count: result.pages }) }));
   if (result.stopped) parts.push(t('replace.stopped'));
+  if (result.hidden > 0) parts.push(t('replace.wereHidden', { count: result.hidden }));
   // Nada cambió: por qué (un link entero, el borde de una foto, ya era igual).
   if (result.replaced === 0) {
     const s = result.skipped;
@@ -161,6 +162,8 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
   const [recent, setRecent] = useState<OpHeader[]>([]);
   const [showAll, setShowAll] = useState(false);
   const [blocks, setBlocks] = useState<Map<string, PageBlock | null>>(new Map());
+  /** Los bloques escondidos en secciones colapsadas de cada página de la lista (se marcan en sus renglones). */
+  const [hiddenBlocks, setHiddenBlocks] = useState<Map<string, Set<string>>>(new Map());
   /** Los ids de cada coincidencia de las páginas con algo sacado de la lista (para esconder esos renglones). */
   const [keys, setKeys] = useState<Map<string, Map<string, string>>>(new Map());
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -196,8 +199,15 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
     let cancelled = false;
     void (async () => {
       const next = new Map<string, PageBlock | null>();
-      for (const h of shown) next.set(h.page.id, await engine.blockOf(h.page.id, projectId).catch(() => 'error' as const));
-      if (!cancelled) setBlocks(next);
+      const hidden = new Map<string, Set<string>>();
+      for (const h of shown) {
+        next.set(h.page.id, await engine.blockOf(h.page.id, projectId).catch(() => 'error' as const));
+        hidden.set(h.page.id, await engine.hiddenOf(h.page.id).catch(() => new Set<string>()));
+      }
+      if (!cancelled) {
+        setBlocks(next);
+        setHiddenBlocks(hidden);
+      }
     })();
     return () => {
       cancelled = true;
@@ -452,6 +462,9 @@ export function ReplaceResults({ index, projectId, searched, indexRevision, onGo
                           <del className="replace-old">{p.found}</del>
                           {!field && !block && ui.replacement && <ins className="replace-new">{ui.replacement}</ins>}
                           {p.after}
+                          {hiddenBlocks.get(hit.page.id)?.has(m.blockId) && (
+                            <span className="replace-hidden-mark muted"> · {tr('replace.inCollapsed')}</span>
+                          )}
                         </button>
                         {field ? (
                           <span className="replace-block muted">{tr('replace.fieldNotReplaced')}</span>

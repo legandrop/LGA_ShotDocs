@@ -21,6 +21,9 @@ describe('normalizar', () => {
     // Una ñ descompuesta (n + tilde, como pega macOS) es la misma ñ.
     expect(found('Año', 'año')).toEqual(['Año']);
     expect(found('Año', 'ano')).toEqual([]);
+    // "an" tampoco corta una ñ descompuesta (la coincidencia no puede terminar entre la n y su tilde).
+    expect(found('Año', 'an')).toEqual([]);
+    expect(found('Año', 'añ')).toEqual(['Añ']);
     expect(found('Año', 'año')).toEqual(['Año']);
     // Con Aa, igual.
     expect(found('Año', 'Ano', { matchCase: true })).toEqual([]);

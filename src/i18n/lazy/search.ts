@@ -113,6 +113,11 @@ export const search = {
     en: { one: "{count} crosses a deleted photo (use Replace all on that page)", other: "{count} cross a deleted photo (use Replace all on that page)" },
     es: { one: "{count} cruza una foto borrada (usá Reemplazar todo en esa página)", other: "{count} cruzan una foto borrada (usá Reemplazar todo en esa página)" },
   },
+  'replace.inCollapsed': { en: "in a collapsed section", es: "en una sección colapsada" },
+  'replace.wereHidden': {
+    en: { one: "{count} was in a collapsed section", other: "{count} were in collapsed sections" },
+    es: { one: "{count} estaba en una sección colapsada", other: "{count} estaban en secciones colapsadas" },
+  },
   'replace.skip.same': {
     en: { one: "{count} was already the same", other: "{count} were already the same" },
     es: { one: "{count} ya era igual", other: "{count} ya eran iguales" },

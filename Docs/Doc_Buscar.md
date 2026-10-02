@@ -1277,7 +1277,7 @@ Donde esto y el diseño no coinciden, vale esto. Va todo junto (el núcleo y la 
   es `listClose` (sumado `ProjectReplace.tsx` en `shortcutSources.ts`).
 - Sin tipo de bloque ni propiedad, sin migración, sin subir `min_app_version`.
 
-**Pruebas (2111 en total con `main` hasta v0.092 y los arreglos de la auditoría, 2108 que corren):**
+**Pruebas (2154 en total con `main` hasta v0.093 y los arreglos de las auditorías, 2151 que corren):**
 
 - `src/search/replaceDoc.test.ts` (15): formato partido, link, salto de línea, celdas de tabla, código, la cuenta igual a
   la del índice, lo que se saltea, fotos en línea, pegadas, *Aa* y *ab*, "solo esta" por sus ids aunque otro agregue una
@@ -1329,8 +1329,10 @@ dos recorridos en Chromium) se perdió texto de nadie. Arreglado todo lo que enc
 5. **Los últimos para deshacer:** un reemplazo que no escribió nada no se guarda; se poda al final y solo si se escribió
    algo; y se guardan los últimos 5 *Replace all* aparte de los últimos 5 sueltos (una coincidencia o una página,
    `scope: 'some'`): los sueltos no le sacan el *Undo* a un *Replace all* grande.
-6. **Con el panel abierto, igual de rápido:** mientras corre, la lista no se vuelve a buscar ni revisa las páginas con
-   cada página escrita (se congela y se recalcula al terminar). Con el panel cerrado, el avance con *Stop* se ve abajo,
+6. **Con el panel abierto, más rápido que antes pero no igual:** mientras corre, la lista no se vuelve a buscar ni revisa
+   las páginas con cada página escrita (se congela y se recalcula al terminar). Medido por la re-verificación (203
+   páginas en Chromium): con el panel abierto 6,8 s y 5,9 s, cerrado 3,8 s y 3,5 s, **1,7 veces más lento** (antes, 3
+   veces); lo que queda es dibujar el avance en el panel. Con el panel cerrado, el avance con *Stop* se ve abajo,
    encima del aviso (`ReplaceProgressHost` en Workspace.tsx).
 7. **D12, la ñ es otra letra:** `normalize` saca las marcas combinadas menos la tilde de la ñ (también la de una ñ
    descompuesta, n + U+0303, como pega macOS), y una coincidencia no puede terminar entre la n y su tilde ("an" no es el
@@ -1339,3 +1341,8 @@ dos recorridos en Chromium) se perdió texto de nadie. Arreglado todo lo que enc
    por qué (un link entero, una foto borrada, ya era igual, escondida); sin el tooltip de *Replace in page*, que repetía
    el botón. Donde decía "idéntico" al deshacer, vale **igual en texto y formato**: en 5 de 750 corridas un link quedó en
    dos marcas iguales seguidas (Yjs compara los atributos de objeto por referencia), que el editor muestra igual.
+
+**Re-verificación (2026-10-01): "se puede publicar".** Sumado después: cada coincidencia escondida en una sección
+colapsada lleva en su renglón "in a collapsed section" (`engine.hiddenOf`, la misma cuenta que la confirmación) y el
+aviso dice cuántas de las cambiadas estaban escondidas (también al reemplazar una sola con el reemplazo vacío); los
+números del avance con `tabular-nums` (*Stop* no se corre); y la prueba de "an" contra una ñ descompuesta.

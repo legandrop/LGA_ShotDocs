@@ -5256,6 +5256,16 @@ mark.search-hit {
   align-items: baseline;
 }
 
+/* Los números del avance con el mismo ancho: Stop no se corre mientras cuentan. */
+.replace-progress,
+.notice.replace-progress-bar {
+  font-variant-numeric: tabular-nums;
+}
+
+.replace-hidden-mark {
+  font-size: 12px;
+}
+
 .replace-progress {
   display: flex;
   gap: 10px;

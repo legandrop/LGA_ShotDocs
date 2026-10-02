@@ -226,6 +226,10 @@ describe('reemplazar', () => {
     expect(first.querySelector('del')!.textContent).toBe('cámara');
     expect(first.querySelector('ins')!.textContent).toBe('Camera');
     expect(replaceAllButton().textContent).toBe('Replace all (4)');
+    // La escondida en la sección colapsada está marcada en su renglón.
+    await until(() => panel()!.querySelector('.replace-hidden-mark'), 'la marca de escondida');
+    const marked = [...panel()!.querySelectorAll('.replace-match')].filter((r) => r.querySelector('.replace-hidden-mark'));
+    expect(marked.map((r) => r.textContent)).toEqual([expect.stringContaining('escondida · in a collapsed section')]);
     // Enter en el campo de reemplazo no reemplaza nada.
     key(replaceInput(), { key: 'Enter' });
     await wait(60);
@@ -245,6 +249,7 @@ describe('reemplazar', () => {
     const confirmButton = [...panel()!.querySelectorAll<HTMLButtonElement>('.replace-confirm button')].find((x) => x.textContent === 'Replace 4')!;
     act(() => confirmButton.click());
     await until(() => document.querySelector('.notice')?.textContent?.includes('4 replacements in 2 pages'), 'el aviso');
+    expect(document.querySelector('.notice')!.textContent).toContain('1 was in a collapsed section');
     expect(await textOf(d, b)).toBe('|sin nada|dos Cameras en B y una Camera más|');
     // La página abierta lo muestra, con la sección todavía colapsada.
     await until(() => host.querySelector('.bn-editor')!.textContent!.includes('otra Camera a la vista'), 'el editor al día');
