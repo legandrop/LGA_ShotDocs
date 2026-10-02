@@ -3,13 +3,14 @@ import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
+import { t } from '../i18n';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
-import { HISTORY_SCHEMA_VERSION, yShape, type HistoryRow } from '../sync/history';
+import { HISTORY_SCHEMA_VERSION, NAMED_VERSIONS_SCHEMA_VERSION, yShape, type HistoryRow } from '../sync/history';
 import { HistoryCore, type HistoryRequest } from '../sync/historyCore';
 import type { SupabaseRemote } from '../sync/remote';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { FakeRemote, FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { HistoryPanel, recentOther } from './HistoryPanel';
 import { canSeeHistory, closeHistory, registerRestoreTarget } from './historyUi';
@@ -54,7 +55,7 @@ afterEach(async () => {
   document.body.innerHTML = '';
 });
 
-function services(d: Device, userId: string): Services {
+function services(d: Device, userId: string, dbName = `test-${crypto.randomUUID()}`): Services {
   const config = {
     url: 'https://znlvpuddswymxpffgvbz.supabase.co',
     publishableKey: 'sb_publishable_test',
@@ -75,7 +76,7 @@ function services(d: Device, userId: string): Services {
     engine: d.engine,
     access: d.access,
     remote: d.remote as unknown as SupabaseRemote,
-    dbName: 'test',
+    dbName,
     mediaDb: d.mediaDb,
     comments: d.comments,
     commentsDb: d.commentsDb,
@@ -709,5 +710,256 @@ describe('mientras se arma la unión', () => {
     } finally {
       g.Worker = saved;
     }
+  });
+});
+
+// --- Entrega 3: versiones con nombre, Restored from… y el historial sin red con la caché -------------------------------
+
+/** Como `setup`, con la base en la versión de las versiones con nombre y una tercera sesión (la dueña, otra hora más). */
+async function setupNamed({ schema = NAMED_VERSIONS_SCHEMA_VERSION } = {}) {
+  const got = await setup();
+  const { server, a, b, pageId } = got;
+  server.settings = { ...server.settings!, schemaVersion: schema };
+  const clock = Date.parse('2026-09-30T17:30:00Z');
+  server.now = () => clock;
+  await edit(a, pageId, (g) => g.insert(0, [block('w', 'Tercera')]));
+  await a.engine.syncNow();
+  await b.engine.syncNow();
+  return got;
+}
+
+/** Escribe en un campo controlado por React. */
+function typeInto(input: HTMLInputElement, value: string): void {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+const press = (el: Element, key: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+
+async function menuItem(host: HTMLElement, row: Element, label: string): Promise<void> {
+  await act(async () => (row.querySelector('.history-more') as HTMLButtonElement).click());
+  const item = [...host.querySelectorAll<HTMLButtonElement>('.history-menu button')].find((x) => x.textContent === label);
+  expect(item, label).toBeDefined();
+  await act(async () => item!.click());
+}
+
+/** El `seq` de la última fila de la primera sesión (la de la dueña, antes de las 16). */
+function firstSessionEnd(server: FakeServer, pageId: string): number {
+  return (server.updates.get(pageId) ?? []).filter((u) => Date.parse(u.createdAt!) < Date.parse('2026-09-30T16:00:00Z')).at(-1)!.seq;
+}
+
+describe('entrega 3: versiones con nombre', () => {
+  it('nombrar desde el ⋯ de una versión: queda en la lista, arriba y en la base; Only named versions; renombrar y quitar', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setupNamed();
+    const host = await mount(services(a, server.ownerId), pageId);
+    const rows = () => [...host.querySelectorAll('.history-session-row')];
+    expect(rows().length).toBe(3);
+    // La más vieja (la primera de la dueña).
+    await menuItem(host, rows()[2], 'Name this version');
+    const input = host.querySelector<HTMLInputElement>('.history-name-input')!;
+    await act(async () => typeInto(input, '  Antes de   Bea '));
+    await act(async () => press(input, 'Enter'));
+    await settle(200);
+    expect(server.versions.map((v) => `${v.kind}:${v.label}:${v.seq}`)).toEqual([`named:Antes de Bea:${firstSessionEnd(server, pageId)}`]);
+    expect(rows()[2].querySelector('.history-name')?.textContent).toBe('Antes de Bea');
+    // Elegida, arriba se ve su nombre.
+    await act(async () => (rows()[2].querySelector('.history-session') as HTMLButtonElement).click());
+    await settle(300);
+    expect(host.querySelector('.history-version-name')?.textContent).toBe('Antes de Bea');
+    expect(host.querySelector('.history-page')?.textContent).toContain('Primera versión');
+    // Solo las que tienen nombre (y la actual).
+    await act(async () => host.querySelector<HTMLInputElement>('.history-filter input')!.click());
+    expect(rows().length).toBe(2);
+    expect(rows()[0].textContent).toContain('Current version');
+    expect(rows()[1].textContent).toContain('Antes de Bea');
+    await act(async () => host.querySelector<HTMLInputElement>('.history-filter input')!.click());
+    expect(rows().length).toBe(3);
+    // Renombrar: el campo trae el nombre; Escape deja como estaba (y no cierra el historial).
+    await menuItem(host, rows()[2], 'Rename');
+    let field = host.querySelector<HTMLInputElement>('.history-name-input')!;
+    expect(field.value).toBe('Antes de Bea');
+    await act(async () => typeInto(field, 'Otro'));
+    await act(async () => press(field, 'Escape'));
+    await settle(100);
+    expect(host.querySelector('.history-name-input')).toBeNull();
+    expect(host.querySelector('.history-screen')).not.toBeNull();
+    expect(server.versions[0].label).toBe('Antes de Bea');
+    await menuItem(host, rows()[2], 'Rename');
+    field = host.querySelector<HTMLInputElement>('.history-name-input')!;
+    await act(async () => typeInto(field, 'Para el cliente'));
+    await act(async () => press(field, 'Enter'));
+    await settle(200);
+    expect(server.versions[0].label).toBe('Para el cliente');
+    expect(rows()[2].querySelector('.history-name')?.textContent).toBe('Para el cliente');
+    // Quitar el nombre: la fila queda en la base, marcada.
+    await menuItem(host, rows()[2], 'Remove name');
+    await settle(200);
+    expect(server.versions[0].removedAt).not.toBeNull();
+    expect(rows()[2].querySelector('.history-name')).toBeNull();
+  });
+
+  it('lo escrito después de una versión con nombre va a una nueva (la sesión se corta en el nombre)', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setupNamed();
+    const host = await mount(services(a, server.ownerId), pageId);
+    const rows = () => [...host.querySelectorAll('.history-session-row')];
+    // Nombrar la actual.
+    await menuItem(host, rows()[0], 'Name this version');
+    const input = host.querySelector<HTMLInputElement>('.history-name-input')!;
+    await act(async () => typeInto(input, 'Entregada'));
+    await act(async () => press(input, 'Enter'));
+    await settle(200);
+    // Un minuto después (misma sesión de 30 minutos) la dueña sigue escribiendo: la lista se actualiza sola.
+    server.now = () => Date.parse('2026-09-30T17:31:00Z');
+    await edit(a, pageId, (g) => g.insert(0, [block('v', 'Después del nombre')]));
+    await act(async () => a.engine.syncNow());
+    for (let i = 0; i < 20 && rows().length < 4; i++) await settle(100);
+    expect(rows().length).toBe(4);
+    expect(rows()[0].textContent).toContain('Current version');
+    expect(rows()[0].querySelector('.history-name')).toBeNull();
+    expect(rows()[1].querySelector('.history-name')?.textContent).toBe('Entregada');
+    await act(async () => (rows()[1].querySelector('.history-session') as HTMLButtonElement).click());
+    await settle(400);
+    expect(host.querySelector('.history-page')?.textContent).toContain('Tercera');
+    expect(host.querySelector('.history-page')?.textContent).not.toContain('Después del nombre');
+  });
+
+  it('un nombre ajeno sin nivel 4 no ofrece acciones; con la base sin la migración (o sin la función) no hay nombres ni filtro', async () => {
+    prefs.set({ language: 'en' });
+    // Carla (Editar) ve el nombre que puso Bea, sin acciones; en las demás versiones, nombrar.
+    const { server, pageId } = await setupNamed();
+    server.enableTeam();
+    // Prender el equipo deja la base en la versión 4: se vuelve a la de los nombres.
+    server.settings = { ...server.settings!, schemaVersion: NAMED_VERSIONS_SCHEMA_VERSION };
+    server.addMember('carla', 'member', 'carla@example.com');
+    server.grant('carla', { projectId: server.workspaceId }, 'edit');
+    server.grant('bea', { projectId: server.workspaceId }, 'edit');
+    await new FakeRemote(server, '9.999', 'bea').namePageVersion('n', pageId, firstSessionEnd(server, pageId), 'De Bea');
+    const c = await makeDevice(server, undefined, '9.999', {}, HISTORY_SCHEMA_VERSION, { id: 'carla', email: 'carla@example.com' });
+    devices.push(c);
+    await c.engine.syncNow();
+    const hc = await mount(services(c, 'carla'), pageId);
+    const crow = [...hc.querySelectorAll('.history-session-row')];
+    const withName = crow.find((r) => r.querySelector('.history-name'))!;
+    expect(withName.querySelector('.history-name')?.textContent).toBe('De Bea');
+    expect(withName.querySelector('.history-more')).toBeNull();
+    expect(crow.filter((r) => r.querySelector('.history-more')).length).toBe(crow.length - 1);
+    act(() => roots.pop()!.unmount());
+    // La base en la versión del historial (11 o 12): ni nombres ni filtro, y el historial anda.
+    const old = await setupNamed({ schema: HISTORY_SCHEMA_VERSION });
+    const h2 = await mount(services(old.a, old.server.ownerId), old.pageId);
+    expect(h2.querySelectorAll('.history-session').length).toBe(3);
+    expect(h2.querySelector('.history-more')).toBeNull();
+    expect(h2.querySelector('.history-filter')).toBeNull();
+    act(() => roots.pop()!.unmount());
+    // La versión dice que sí pero la función no está (PGRST202): igual, sin errores a la vista.
+    const missing = await setupNamed();
+    missing.server.versionsMissing = true;
+    const h3 = await mount(services(missing.a, missing.server.ownerId), missing.pageId);
+    expect(h3.querySelectorAll('.history-session').length).toBe(3);
+    expect(h3.querySelector('.history-more')).toBeNull();
+    expect(h3.querySelector('.history-message')).toBeNull();
+  });
+
+  it('nombrar sin respuesta del servidor lo dice y no cambia nada; si otro dispositivo la nombró antes, la lista se pone al día', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setupNamed();
+    const host = await mount(services(a, server.ownerId), pageId);
+    const rows = () => [...host.querySelectorAll('.history-session-row')];
+    await menuItem(host, rows()[2], 'Name this version');
+    const input = () => host.querySelector<HTMLInputElement>('.history-name-input')!;
+    await act(async () => typeInto(input(), 'Sin red'));
+    server.online = false;
+    await act(async () => press(input(), 'Enter'));
+    await settle(200);
+    expect(host.querySelector('.history-message')?.textContent).toBe('Naming versions needs a connection.');
+    expect(server.versions).toEqual([]);
+    server.online = true;
+    // Otro dispositivo le pone nombre a la misma versión mientras tanto.
+    await new FakeRemote(server, '9.999').namePageVersion('del-otro', pageId, firstSessionEnd(server, pageId), 'Del otro');
+    await act(async () => press(input(), 'Enter'));
+    await settle(300);
+    expect(host.querySelector('.history-message')?.textContent).toContain('The names changed on another device');
+    expect(rows()[2].querySelector('.history-name')?.textContent).toBe('Del otro');
+    expect(server.versions.length).toBe(1);
+  });
+});
+
+describe('entrega 3: Restored from…', () => {
+  it('después de restaurar, la lista dice "Restored from" y la fecha de la versión, y la de antes de restaurar sigue', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setupNamed();
+    // El editor de la página "restaura": una edición propia que sube con la sincronización.
+    offs.push(
+      registerRestoreTarget(pageId, () => {
+        void edit(a, pageId, (g) => g.insert(0, [block('r', 'Restaurada')])).then(() => a.engine.syncNow());
+        return { ok: true, undo: () => true, onEdit: () => () => undefined };
+      }),
+    );
+    // Diez minutos después de la última: sin el corte, la restauración caería en la misma sesión.
+    server.now = () => Date.parse('2026-09-30T17:40:00Z');
+    const host = await mount(services(a, server.ownerId), pageId);
+    const before = host.querySelectorAll('.history-session-row').length;
+    await act(async () => (host.querySelectorAll('.history-session')[2] as HTMLButtonElement).click());
+    await settle(300);
+    await act(async () => host.querySelector<HTMLButtonElement>('.history-restore')!.click());
+    await settle(100);
+    const confirm = [...host.querySelectorAll<HTMLButtonElement>('.history-confirm button')].find((x) => x.textContent === 'Restore')!;
+    await act(async () => confirm.click());
+    for (let i = 0; i < 40 && !server.versions.some((v) => v.kind === 'restore'); i++) await settle(100);
+    const mark = server.versions.find((v) => v.kind === 'restore');
+    expect(mark).toBeDefined();
+    expect(mark!.restoredFromSeq).toBe(firstSessionEnd(server, pageId));
+    act(() => roots.pop()!.unmount());
+    closeHistory();
+    // Abrirlo de nuevo: la restauración es una versión nueva con su rótulo; la de antes sigue.
+    const again = await mount(services(a, server.ownerId), pageId);
+    const rows = [...again.querySelectorAll('.history-session-row')];
+    expect(rows.length).toBe(before + 1);
+    expect(rows[0].querySelector('.history-restored')?.textContent).toMatch(/^Restored from .*\d/);
+    expect(rows[1].querySelector('.history-restored')).toBeNull();
+  });
+});
+
+describe('entrega 3: sin red, con lo guardado en el dispositivo', () => {
+  it('muestra el historial hasta lo último bajado, con el aviso; restaurar y nombrar quedan apagados; al volver la red, se baja lo nuevo', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setupNamed();
+    const dbName = `test-${crypto.randomUUID()}`;
+    await mount(services(a, server.ownerId, dbName), pageId);
+    act(() => roots.pop()!.unmount());
+    closeHistory();
+    server.online = false;
+    const host = await mount(services(a, server.ownerId, dbName), pageId);
+    expect(host.querySelectorAll('.history-session').length).toBe(3);
+    expect(host.querySelector('.history-offline-saved')?.textContent).toContain('Offline: showing the history up to');
+    await act(async () => (host.querySelectorAll('.history-session')[2] as HTMLButtonElement).click());
+    await settle(300);
+    expect(host.querySelector('.history-page')?.textContent).toContain('Primera versión');
+    const restore = host.querySelector<HTMLButtonElement>('.history-restore')!;
+    expect(restore.disabled).toBe(true);
+    expect(restore.getAttribute('data-tip')).toBe(t('history.why.offline'));
+    const more = host.querySelector<HTMLButtonElement>('.history-more')!;
+    expect(more.disabled).toBe(true);
+    expect(more.getAttribute('data-tip')).toBe('Naming versions needs a connection.');
+    // Vuelve la red: con la próxima sincronización se baja lo nuevo y se va el aviso.
+    server.online = true;
+    server.now = () => Date.parse('2026-09-30T19:00:00Z');
+    await edit(a, pageId, (g) => g.insert(0, [block('n', 'Nueva')]));
+    await act(async () => a.engine.syncNow());
+    for (let i = 0; i < 30 && host.querySelector('.history-offline-saved'); i++) await settle(100);
+    await settle(300);
+    expect(host.querySelector('.history-offline-saved')).toBeNull();
+    expect(host.querySelectorAll('.history-session').length).toBe(4);
+    expect(host.querySelector<HTMLButtonElement>('.history-more')!.disabled).toBe(false);
+  });
+
+  it('sin nada guardado sigue diciendo que necesita conexión', async () => {
+    prefs.set({ language: 'en' });
+    const { a, pageId, server } = await setupNamed();
+    server.online = false;
+    const host = await mount(services(a, server.ownerId), pageId);
+    expect(host.textContent).toContain('Version history needs a connection.');
   });
 });
