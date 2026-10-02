@@ -128,11 +128,19 @@ function facts(rows: Row[]): TemplateBlock {
   };
 }
 
+/**
+ * El ancho de las tablas anchas: el texto de una hoja A4 vertical mide unos 700 px y una columna de BlockNote mide
+ * 120 px de fábrica, así que 6 o 7 columnas se saldrían. Con 5 o más se reparten 680 px (el ancho de cada columna es
+ * el `colwidth` de siempre de las celdas: una versión vieja lo conoce y se puede cambiar arrastrando el borde).
+ */
+const SHEET_TABLE_PX = 680;
+
 /** Una tabla con fila de encabezado y `empty` filas vacías (o con la primera celda de cada fila de `first`). */
 function grid(header: string[], empty: number, first: string[] = []): TemplateBlock {
   const blank = (lead = '') => ({ cells: header.map((_, i) => (i === 0 ? lead : '')) });
   const rows = first.length ? first.map((lead) => blank(lead)) : Array.from({ length: empty }, () => blank());
-  return { type: 'table', content: { type: 'tableContent', headerRows: 1, rows: [{ cells: header }, ...rows] } };
+  const columnWidths = header.length >= 5 ? header.map(() => Math.floor(SHEET_TABLE_PX / header.length)) : undefined;
+  return { type: 'table', content: { type: 'tableContent', headerRows: 1, ...(columnWidths ? { columnWidths } : {}), rows: [{ cells: header }, ...rows] } };
 }
 
 /** *Pre-production Notes*: una página por escena (sección 2.2). */

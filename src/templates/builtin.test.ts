@@ -30,7 +30,7 @@ function shape(value: unknown): unknown {
   return value;
 }
 
-type TableContent = { headerRows?: number; headerCols?: number; rows: { cells: string[] }[] };
+type TableContent = { headerRows?: number; headerCols?: number; columnWidths?: number[]; rows: { cells: string[] }[] };
 const tables = (blocks: TemplateBlock[]) => blocks.filter((b) => b.type === 'table').map((b) => b.content as TableContent);
 
 /** Una página nueva (con la semilla) con la plantilla agregada como lo hace la app. */
@@ -78,6 +78,11 @@ describe('plantillas de fábrica', () => {
       for (const table of list) {
         const cols = table.rows[0].cells.length;
         expect(cols).toBeLessThanOrEqual(7);
+        // Las anchas llevan su ancho: entre todas, menos que el texto de una A4 vertical (~700 px).
+        if (cols >= 5) {
+          expect(table.columnWidths?.length).toBe(cols);
+          expect(table.columnWidths!.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(700);
+        }
         for (const row of table.rows) expect(row.cells.length).toBe(cols);
         if (table.headerCols === 1) {
           expect(cols).toBe(2);
