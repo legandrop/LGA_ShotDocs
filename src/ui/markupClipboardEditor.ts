@@ -14,7 +14,7 @@ import {
   type CopiedPhoto,
   type MarkupClip,
 } from '../media/markupClipboard';
-import { mediaIdsInDoc } from '../media/usage';
+import { mediaCountsInDoc } from '../media/usage';
 import { asOneUndoStep } from './undoGuard';
 
 // Copiar y pegar una foto con sus anotaciones (D46, Docs/Doc_Anotar_Fotos.md, "Copiar y pegar con las anotaciones"): lo
@@ -163,12 +163,16 @@ export function pasteWithMarkup(p: PasteWithMarkup): boolean | undefined {
     um.trackedOrigins.add(MARKUP_PASTE_ORIGIN);
   }
   let result: CarryResult | null = null;
+  const before = mediaCountsInDoc(p.doc);
   const handled = asOneUndoStep(p.view.state, () => {
     const out = p.run();
-    // Lo que quedó de verdad en el contenido (una foto que no entró no deja anotaciones huérfanas). Si algo falla, el
-    // pegado ya está hecho: la foto queda limpia, nunca se corta el pegado.
+    // Solo las fotos que trajo de verdad el pegado: las que ahora aparecen más veces que antes (auditoría O1). Si la
+    // foto no entró (pegada como texto en un bloque de código), no se lleva nada, tampoco a la misma foto que ya
+    // estaba en la página. Si algo falla, el pegado ya está hecho: la foto queda limpia, nunca se corta el pegado.
     try {
-      result = carryMarkup(p.doc, clip.photos, mediaIdsInDoc(p.doc));
+      const after = mediaCountsInDoc(p.doc);
+      const pasted = new Set([...after].filter(([id, n]) => n > (before.get(id) ?? 0)).map(([id]) => id));
+      result = carryMarkup(p.doc, clip.photos, pasted);
     } catch (err) {
       console.warn('[anotaciones] no se pudieron pegar las anotaciones', err);
     }

@@ -20,7 +20,8 @@ import { MEDIA_SCHEME } from './queue';
 //   - El marco solo si falta; si la página ya tiene otro marco para esa foto (otro tamaño), esa foto no se lleva nada
 //     (las coordenadas no coincidirían).
 //   - Dentro de los topes (`markupLimits.ts`): si no entra, esa foto llega limpia y se avisa.
-//   - Solo para las fotos que quedaron de verdad en el contenido después de pegar (una que no entró no deja huérfanas).
+//   - Solo para las fotos que trajo de verdad el pegado (las que aparecen más veces que antes en el contenido): una que no
+//     entró no deja huérfanas ni le pone notas a la misma foto que ya estaba en la página (auditoría O1).
 
 /** El origen de la escritura de lo pegado: el deshacer de la página lo sigue (deshacer el pegado lo saca entero). */
 export const MARKUP_PASTE_ORIGIN = 'sd-markup-paste';
@@ -127,7 +128,7 @@ export function snapshotMarkup(map: Y.Map<unknown>, fileIds: Iterable<string>): 
   return out;
 }
 
-/** Por qué una foto pegada no se llevó sus anotaciones. */
+/** Por qué una foto pegada no se llevó sus anotaciones (`notInContent`: el pegado no la trajo). */
 export type CarrySkip = 'notInContent' | 'frame' | 'limit';
 
 export interface CarryResult {
@@ -140,7 +141,7 @@ export interface CarryResult {
 }
 
 /**
- * Escribe en la página (`doc`) lo copiado de cada foto que quedó en su contenido (`inContent`), en UNA transacción con
+ * Escribe en la página (`doc`) lo copiado de cada foto que trajo el pegado (`inContent`), en UNA transacción con
  * `origin`. Solo lo que falta: el marco si no está y las formas cuya clave no está. Respeta los topes de la sección 10.
  */
 export function carryMarkup(doc: Y.Doc, photos: readonly CopiedPhoto[], inContent: ReadonlySet<string>, origin: unknown = MARKUP_PASTE_ORIGIN): CarryResult {

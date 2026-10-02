@@ -803,7 +803,9 @@ editor en `src/ui/markupClipboardEditor.ts`, y lo engancha `PageEditor.tsx` (el 
   tiene: se vuelve a copiar.
 - **Pegar:** si el portapapeles trae justo lo copiado (nadie copió otra cosa después) y la página es del mismo workspace
   y del mismo proyecto, después del pegado de siempre se escriben las formas en el mapa `photoMarkup` de la página de
-  destino, solo para las fotos que quedaron de verdad en el contenido (una que no entró no deja huérfanas).
+  destino, solo para las fotos que **trajo el pegado**: las que aparecen en el contenido más veces que antes. Una que no
+  entró (pegada como texto en un bloque de código) no deja huérfanas ni le pone notas a la misma foto que ya estaba en la
+  página; pegar una foto que ya está en otro lugar de la página sí suma (aparece una vez más).
 - **Qué se escribe:** con las **mismas claves** `<fileId>/<shapeId>`, y una clave que ya está no se toca: pegar dos veces,
   o pegar en la misma página (la foto duplicada comparte el dibujo, AN2), no escribe nada, y lo que alguien movió en el
   destino queda movido. Si la página ya tenía esa foto con sus propias formas, se suman. El marco, solo si falta; si la
@@ -831,13 +833,15 @@ editor en `src/ui/markupClipboardEditor.ts`, y lo engancha `PageEditor.tsx` (el 
 pegado sin tocar el mapa. **`min_app_version` no hace falta subirla:** no hay tipos de bloque ni propiedades nuevas ni
 cambia el formato del mapa; una versión vieja solo no lleva las flechas al pegar.
 
-**Pruebas:** `src/ui/markupClipboard.test.ts` (25, con el editor de verdad): copiar y pegar en otra página del mismo
+**Pruebas:** `src/ui/markupClipboard.test.ts` (35, con el editor de verdad): copiar y pegar en otra página del mismo
 proyecto (marco y formas idénticas, el origen intacto), el portapapeles igual al de un editor sin esta función y sin
 textos de anotaciones, texto y tres fotos en la misma selección, cortar, pegar dos veces y en la misma página sin
 escribir nada, sumar a las formas propias del destino, otro marco, otro proyecto y otro workspace, el portapapeles que
 cambió, la foto que no quedó en el contenido, el tope de la página con su aviso, un solo ⌘Z y rehacer, el ⌘Z de la página
 sin deshacer lo del anotador, la poda a los 10 minutos, dos dispositivos sin red, las dos versiones viejas (pegar y
-abrir), y el canal entre pestañas. Las 9 mutaciones probadas (no llevar, sin el mapa en el deshacer, sin el paso único,
+abrir), el canal entre pestañas, y (después de la auditoría) pegar en un bloque de código con la misma foto ya en la
+página, que solo viajen las fotos copiadas, y cada tope (página, foto y base) con la página 40 bytes por debajo y por
+encima de lo que agrega el pegado medido de verdad. Las 9 mutaciones probadas (no llevar, sin el mapa en el deshacer, sin el paso único,
 sin comparar el portapapeles, sin comparar el alcance, pisar claves, sin mirar el contenido, sin topes, sin comparar el
 marco) hacen caer al menos una prueba. **En el navegador** (Chromium sin ventana, tres páginas lado a lado con el
 servidor en memoria, eventos de copiar y pegar con un portapapeles propio, nunca el de la máquina): 21 de 21, también las
@@ -851,3 +855,14 @@ lleva nada; se avisa solo si no entran por los topes (pegar no avisa que trajo f
 **Falta (Lega, con sesión real):** ⌘C y ⌘V de verdad en Safari de la Mac y en el iPhone (el menú del toque), con una foto
 del Drive: acá se probó con Chromium y con eventos de copiar y pegar armados, no con el portapapeles del sistema. Si
 Safari cambiara lo copiado entre copiar y pegar, la foto llegaría limpia (nunca se pierde nada).
+
+### Correcciones de la auditoría de D46 (2026-10-02)
+
+Auditoría independiente: **aprobado con observaciones**, sin bloqueantes. Lo que pedía y dónde quedó:
+
+| Hallazgo | Corrección |
+|---|---|
+| **O1** Pegar la foto donde no entra (un bloque de código) en una página que ya la tenía le ponía las notas a esa foto, aunque el pegado no la trajo | Se cuentan las apariciones de cada archivo antes y después del pegado (`mediaCountsInDoc`, `src/media/usage.ts`) y solo viajan las de las fotos que aparecen más veces. Prueba con la misma foto ya en la página y el pegado en un bloque de código (cae con el código anterior) |
+| **O2** Los topes casi no tenían prueba (sin el tope por foto, sin el de la base y con `entriesBytes` en cero, la suite seguía en verde; la prueba de «página llena» empezaba ya pasada del tope) | Seis pruebas con `carryMarkup`: por página, por foto y la base, cada una con la página 40 bytes por debajo y por encima de lo que agrega el pegado (medido con `entriesBytes`), una de que lo agregado no es cero y crece, y la de «página llena» rehecha para quedar debajo del tope sola. Los cuatro mutantes (A5, A6, A11 y sin tope por página) caen |
+| **O3** Que solo viajen las fotos copiadas no tenía prueba | Prueba: origen con dos fotos anotadas, destino con la segunda limpia, se copia solo la primera: la copia guarda solo esa y la segunda sigue limpia (el mutante A8 cae) |
+| Menor: la sección decía 25 pruebas | Corregido (35) |

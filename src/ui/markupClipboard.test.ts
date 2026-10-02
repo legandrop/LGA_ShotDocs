@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { addShape, PHOTO_MARKUP_MAP, readFrame, shapeKey, updateShape, type ShapeFields } from '../media/markup';
 import { carryMarkup, clipKey, clipScope, mediaIdsInText, snapshotMarkup } from '../media/markupClipboard';
-import { PAGE_MARKUP_CAP, pageMarkupBytes } from '../media/markupLimits';
+import { entriesBytes, PAGE_BASE_CAP, PAGE_MARKUP_CAP, pageBaseBytes, pageMarkupBytes, PHOTO_MARKUP_CAP, photoMarkupBytes } from '../media/markupLimits';
 import { createMarkupPruner, PRUNE_AFTER_MS } from '../media/markupPrune';
 import { mediaIdsInDoc } from '../media/usage';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -68,6 +68,31 @@ class Clip {
 }
 
 const mapOf = (doc: Y.Doc) => doc.getMap<unknown>(PHOTO_MARKUP_MAP);
+
+/**
+ * Ajusta el largo de un texto (`write(largo)`) hasta que `measure()` dé `target` bytes (±2): los bytes crecen uno a uno
+ * con el largo, así que en pocas vueltas queda. Devuelve lo medido.
+ */
+function padTo(write: (len: number) => void, measure: () => number, target: number): number {
+  let len = 1000;
+  for (let i = 0; i < 6; i++) {
+    write(len);
+    const now = measure();
+    if (Math.abs(now - target) <= 2) return now;
+    len = Math.max(0, len + target - now);
+  }
+  return measure();
+}
+
+/** Lo que agrega pegar las fotos copiadas en una página donde falta todo (o solo las formas, con `withFrame` en falso). */
+function addedBytes(photos: ReturnType<typeof snapshotMarkup>, withFrame = true): number {
+  return entriesBytes(
+    photos.flatMap((p) => [
+      ...(withFrame ? [[p.fileId, p.frame] as [string, unknown]] : []),
+      ...p.shapes.map(([id, f]) => [shapeKey(p.fileId, id), f] as [string, unknown]),
+    ]),
+  );
+}
 
 /** Un editor de página como el de la app: el copiar de las anotaciones y el pegar de PageEditor.tsx. */
 function mountPage(doc: Y.Doc, scope: () => string = () => SCOPE, blocks: PartialBlock[] | null = null, onLimit?: () => void): BlockNoteEditor {
@@ -335,6 +360,26 @@ describe('lo que no viaja', () => {
     expect(clipFor(again, SCOPE)).not.toBeNull();
   });
 
+  it('pegada donde no entra (un bloque de código) en una página que ya tenía la misma foto: no le pone notas a esa foto (auditoría O1)', async () => {
+    const A = await sourcePage();
+    const doc = new Y.Doc();
+    const B = mountPage(doc, undefined, [
+      { id: 'd1', type: 'paragraph', content: [text('Ya estaba: '), inline(1)] },
+      { id: 'code', type: 'codeBlock', content: 'codigo' },
+    ] as never);
+    await tick(10);
+    selectBlock(A.E, 'blk');
+    const data = copy(A.E);
+    B.setTextCursorPosition('code', 'end');
+    paste(B, data);
+    await tick(10);
+    // Lo pegado quedó como texto en el código; la foto sigue una sola vez y sin anotaciones.
+    expect(yText(doc)).toContain('codigo');
+    expect(yText(doc).length).toBeGreaterThan('Ya estaba: | codigo'.length + 5);
+    expect(mediaIdsInDoc(doc).has(ID(1))).toBe(true);
+    expect(mapOf(doc).size).toBe(0);
+  });
+
   it('una foto que no queda en el contenido (pegada como texto en un bloque de código) no deja anotaciones huérfanas', () => {
     const src = new Y.Doc();
     annotate(src, 1);
@@ -348,17 +393,91 @@ describe('lo que no viaja', () => {
     const A = await sourcePage();
     const onLimit = vi.fn();
     const B = await destPage(undefined, onLimit);
-    // Una página con anotaciones casi al tope (otra foto con un texto grande por forma).
-    let i = 0;
-    while (pageMarkupBytes(mapOf(B.doc)) < PAGE_MARKUP_CAP - 600) {
-      addShape(B.doc, ID(9), `t${i++}`, { type: 'text', posX: 0, posY: 0, text: 'x'.repeat(1900) }, FRAME);
-    }
+    // La página queda DEBAJO del tope por 40 bytes menos de lo que trae la foto: sola entra, con la foto no.
+    const added = addedBytes(snapshotMarkup(mapOf(A.doc), [ID(1)]));
+    const target = PAGE_MARKUP_CAP - added + 40;
+    const got = padTo(
+      (len) => addShape(B.doc, ID(9), 'relleno', { type: 'text', posX: 0, posY: 0, text: 'x'.repeat(len) }, FRAME),
+      () => pageMarkupBytes(mapOf(B.doc)),
+      target,
+    );
+    expect(got).toBeLessThan(PAGE_MARKUP_CAP);
+    expect(got + added).toBeGreaterThan(PAGE_MARKUP_CAP);
     selectBlock(A.E, 'blk');
     paste(B.E, copy(A.E));
     await tick(10);
     expect(mediaIdsInDoc(B.doc).has(ID(1))).toBe(true);
     expect(Object.keys(photoKeys(B.doc, 1))).toEqual([]);
     expect(onLimit).toHaveBeenCalledTimes(1);
+  });
+
+  describe('los topes, con lo que agrega el pegado medido de verdad (auditoría O2)', () => {
+    const src = () => {
+      const d = new Y.Doc();
+      annotate(d, 1);
+      return snapshotMarkup(mapOf(d), [ID(1)]);
+    };
+
+    for (const [name, delta, written] of [
+      ['con 40 bytes de más, no entra', 40, false],
+      ['con 40 bytes de menos, entra', -40, true],
+    ] as const) {
+      it(`por página (512 KB): ${name}`, () => {
+        const photos = src();
+        const added = addedBytes(photos);
+        const dst = new Y.Doc();
+        const got = padTo(
+          (len) => addShape(dst, ID(9), 'relleno', { type: 'text', posX: 0, posY: 0, text: 'x'.repeat(len) }, FRAME),
+          () => pageMarkupBytes(mapOf(dst)),
+          PAGE_MARKUP_CAP - added + delta,
+        );
+        expect(got).toBeLessThan(PAGE_MARKUP_CAP);
+        const res = carryMarkup(dst, photos, new Set([ID(1)]));
+        expect(res.written).toEqual(written ? [ID(1)] : []);
+        expect(res.skipped).toEqual(written ? [] : [{ fileId: ID(1), reason: 'limit' }]);
+      });
+
+      it(`por foto (96 KB): ${name}`, () => {
+        const photos = src();
+        // La foto ya tiene su marco y una forma propia en el destino: el pegado agrega solo las formas.
+        const added = addedBytes(photos, false);
+        const dst = new Y.Doc();
+        const got = padTo(
+          (len) => addShape(dst, ID(1), 'propia', { type: 'text', posX: 0, posY: 0, text: 'x'.repeat(len) }, FRAME),
+          () => photoMarkupBytes(mapOf(dst), ID(1)),
+          PHOTO_MARKUP_CAP - added + delta,
+        );
+        expect(got).toBeLessThan(PHOTO_MARKUP_CAP);
+        expect(pageMarkupBytes(mapOf(dst)) + added).toBeLessThan(PAGE_MARKUP_CAP);
+        const res = carryMarkup(dst, photos, new Set([ID(1)]));
+        expect(res.skipped).toEqual(written ? [] : [{ fileId: ID(1), reason: 'limit' }]);
+        expect(mapOf(dst).size).toBe(written ? 2 + SHAPES.length : 2);
+      });
+
+      it(`la base de la página (2,5 MB): ${name}`, () => {
+        const photos = src();
+        const added = addedBytes(photos);
+        const dst = new Y.Doc();
+        const other = dst.getMap<unknown>('relleno');
+        const got = padTo((len) => other.set('x', 'x'.repeat(len)), () => pageBaseBytes(dst), PAGE_BASE_CAP - added + delta);
+        expect(got).toBeLessThan(PAGE_BASE_CAP);
+        expect(pageMarkupBytes(mapOf(dst))).toBe(0);
+        const res = carryMarkup(dst, photos, new Set([ID(1)]));
+        expect(res.skipped).toEqual(written ? [] : [{ fileId: ID(1), reason: 'limit' }]);
+        expect(mapOf(dst).size).toBe(written ? 1 + SHAPES.length : 0);
+      });
+    }
+
+    it('lo que agrega se mide (entriesBytes): no es cero y crece con el largo de los textos', () => {
+      const photos = src();
+      const base = addedBytes(photos);
+      expect(base).toBeGreaterThan(200);
+      const longer = photos.map((p) => ({
+        ...p,
+        shapes: p.shapes.map(([id, f]) => [id, { ...f, text: 'y'.repeat(5000) }] as [string, Record<string, unknown>]),
+      }));
+      expect(addedBytes(longer)).toBeGreaterThan(base + 5000 * 2);
+    });
   });
 });
 
@@ -489,6 +608,23 @@ describe('versiones viejas (la regla de degradar)', () => {
 });
 
 describe('las piezas', () => {
+  it('solo viaja lo de las fotos copiadas: otra foto anotada del origen, que está limpia en el destino, sigue limpia (auditoría O3)', async () => {
+    const A = await sourcePage();
+    const doc = new Y.Doc();
+    const B = mountPage(doc, undefined, [{ id: 'd1', type: 'paragraph', content: [text('La 2, limpia: '), inline(2)] }] as never);
+    await tick(10);
+    selectBlock(A.E, 'blk');
+    const data = copy(A.E);
+    // La copia guarda solo la foto copiada (tampoco a la otra pestaña viaja la 2).
+    expect(clipFor(data, SCOPE)?.photos.map((p) => p.fileId)).toEqual([ID(1)]);
+    expect(snapshotMarkup(mapOf(A.doc), [ID(1)]).map((p) => p.fileId)).toEqual([ID(1)]);
+    B.setTextCursorPosition('d1', 'end');
+    paste(B, data);
+    await tick(10);
+    expect(Object.keys(photoKeys(doc, 1)).length).toBe(1 + SHAPES.length);
+    expect(Object.keys(photoKeys(doc, 2))).toEqual([]);
+  });
+
   it('los archivos que nombra lo copiado, sin repetir y en minúscula; nada que no sea un id', () => {
     const html = `<img src="${URL_OF(1)}"><span data-url="${URL_OF(1).toUpperCase().replace('SDMEDIA', 'sdmedia')}"></span> sdmedia://no-es-un-id ${URL_OF(2)}`;
     expect(mediaIdsInText(html)).toEqual([ID(1), ID(2)]);
