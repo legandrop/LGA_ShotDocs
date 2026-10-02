@@ -2,6 +2,8 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { NO_GC_MAX_BYTES } from './docs';
 import { PageDocs as MainPageDocs } from './fixtures/mainDocs';
+import { fromBase64 } from '../lib/base64';
+import { exportUnsynced } from './unsynced';
 import { applyRowsInOrder, findRemovedWriting } from './removedWriting';
 import { CONTENT_FRAGMENT, normalizeStructure, seedIfEmpty } from './structure';
 import { FakeRemote, FakeServer, makeDevice, type Device } from './testing';
@@ -196,6 +198,25 @@ describe('B.16: lo escrito adentro de algo que otro borra llega al servidor', ()
     expect(await a.docs.removedWriting(pageId)).toEqual([]);
     // Lo escrito y borrado entre dos subidas también llega (es lo que hace la subida sin GC: ver el documento).
     expect(serverText(server, pageId)).toContain('BORRADO-POR-A');
+  });
+
+  it('"Download my unsynced changes" lleva lo escrito en algo que otro borró: el texto del aviso y el update con su texto', async () => {
+    const server = new FakeServer();
+    const { a, b, pageId } = await twoBlocks(server);
+    await edit(a, pageId, (doc) => textOf(doc, 'b2')!.insert(7, ' EN-EL-ARCHIVO'));
+    await edit(b, pageId, (doc) => root(doc).delete(1, 1));
+    await b.engine.syncNow();
+    await a.docs.pullPage(pageId, a.remote);
+    const out = (await exportUnsynced(a.db, null, {
+      appVersion: 'test',
+      workspace: { url: 'u', localKey: 'k', name: 'W' },
+      user: { id: 'u', email: 'e' },
+      titleOf: () => 'P',
+    })) as { pages: { pageId: string; text: string; removedWriting: string[]; yjsUpdate: string }[] };
+    const page = out.pages.find((p) => p.pageId === pageId)!;
+    expect(page.removedWriting).toEqual([' EN-EL-ARCHIVO']);
+    expect(page.text).not.toContain('EN-EL-ARCHIVO');
+    expect(rowText(fromBase64(page.yjsUpdate))).toContain('EN-EL-ARCHIVO');
   });
 
   it('después de cerrar la app: lo que quedó sin subir y otro borró también avisa', async () => {
