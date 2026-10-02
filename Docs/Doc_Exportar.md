@@ -1,9 +1,11 @@
 # Exportar una página o un proyecto entero (P.22)
 
-**Estado: entregas 0 (v0.115) y 1 (v0.122: el PDF de una rama o de un proyecto) hechas; el zip y volver, pendientes**
-(roadmap P.22; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final: "Cómo quedó la
-entrega 0" (el editor de exportación medido con 300 páginas) y "Cómo quedó la entrega 1" (el PDF, medido con la
-impresión real de Chrome y Edge). Las decisiones EX1 a EX15 (sección 11) son propuestas con la recomendación tomada: Lega no estaba y quedan a
+**Estado: entregas 0 (v0.115), 1 (v0.122: el PDF de una rama o de un proyecto) y 2 (v0.0XX: el zip) hechas; volver,
+pendiente** (roadmap P.22; pedido de Lega del 2026-10-02). Se diseñó contra `main` v0.108. Cómo quedaron, al final:
+"Cómo quedó la entrega 0" (el editor de exportación medido con 300 páginas), "Cómo quedó la entrega 1" (el PDF, medido
+con la impresión real de Chrome y Edge) y "Cómo quedó la entrega 2" (el zip, abierto con `file://` en Chromium y
+Firefox). **Cambiado por Lega (2026-10-02):** el zip lo exportan solo el dueño y los admins (D60), nunca desde un
+teléfono o una tableta (D63), y el `.md` lleva rutas relativas que cualquier visor de Markdown abre (D57). Las decisiones EX1 a EX15 (sección 11) son propuestas con la recomendación tomada: Lega no estaba y quedan a
 confirmar. Lo medido está en un prototipo fuera del repo ("Cómo se midió", al final). **Auditado el 2026-10-02
 ("aprobado con condiciones") y corregido:** los dos bloqueantes (ningún correo en el zip, la vista JPEG en el HTML) y
 las doce observaciones están aplicados en el texto; la tabla está en "Correcciones de la auditoría", al final.
@@ -327,6 +329,7 @@ Reporte_ERSO/
 
 ## 4. Quién puede exportar y qué nunca sale (EX7, EX8, EX15)
 
+- **El zip, solo dueño y admins (D60, Lega 2026-10-02); el PDF, quien ve.** Ver EX7.
 - **Quien ve, exporta lo que ve.** Nivel 1 o más sobre la página: Ver, Comentar, Editar, Editar y crear páginas, también
   los invitados. Ver ya incluye bajar los originales (decisión de Lega en `Plan_Workspaces.md`, sección 4): el zip solo
   junta lo que la persona ya puede abrir de a uno. *Export project…* aparece solo si la persona ve el proyecto entero
@@ -565,6 +568,9 @@ Cada entrega con su auditoría independiente antes de pasar a `main`, su entrada
   fotos del iPhone son HEIC, que Chrome y Firefox no abren (`printPage.ts` ya lo resuelve igual, con la miniatura), y
   con *Original photos* destildada el `<img>` quedaba roto. Cuesta unas decenas de KB por foto.
 - **Si preferís otra:** sacar el `.md` es una casilla menos; sacar el JSON deja el zip sin vuelta.
+- **Cambiada por Lega (2026-10-02, D57):** el `.md` de cada página referencia las fotos, sus vistas, los originales y
+  las otras páginas con rutas **relativas** (codificadas, sin `<…>`: `../01_Dia_1/Files/_view/IMG_0412.jpg`), así se
+  ven al abrir el `.md` en un visor de Markdown común. Probado: cada link del `.md` existe en el zip.
 
 ### EX5 · Qué se guarda para volver: los bloques, no el documento Yjs
 
@@ -597,6 +603,13 @@ Cada entrega con su auditoría independiente antes de pasar a `main`, su entrada
 - **Elegí A porque** Ver ya incluye bajar los originales (decisión de Lega en el plan): negarlo solo obliga a bajar de a
   uno, y el PDF es justo lo que el cliente necesita.
 - **Si preferís otra:** B o C son una condición en el menú (la base no cambia, porque no hay nada nuevo que proteger).
+- **Cambiada por Lega (2026-10-02, D60):** el **zip** lo exportan **solo el dueño y los admins** del workspace; el
+  **PDF**, cualquiera que vea la página (como en la entrega 1). En la ventana, el círculo *Zip — to archive* queda apagado
+  con su porqué (`data-tip`). **Qué protege cada lado:** la guarda es de la interfaz; el zip no tiene un camino propio en
+  el portero ni en la base (baja cada original con el mismo `POST /pass` + `/m/` con que se ve una foto, que pide nivel
+  1). Del lado del servidor no se puede distinguir "bajar para el zip" de "abrir una foto": un miembro con Ver sigue
+  pudiendo bajar cada original de a uno, como hoy (`Plan_Workspaces.md`, sección 4). Cerrar eso del lado del servidor
+  sería quitarle a Ver la bajada de originales, una decisión aparte.
 
 ### EX8 · Comentarios y correos
 
@@ -648,6 +661,11 @@ Cada entrega con su auditoría independiente antes de pasar a `main`, su entrada
   desde una computadora con Chrome o Edge. B) No dejar. C) Partir en varios zips de 500 MB.
 - **Elegí A porque** es lo mismo que decidió D24 para *Download all*, sumando una salida útil desde el teléfono.
 - **Si preferís otra:** C se puede sumar después (varios zips, cada uno con su `_shotdocs` parcial).
+- **Cambiada por Lega (2026-10-02, D63 → B):** desde un teléfono **no se exporta zip**, solo el PDF. Se detecta con el
+  mismo criterio que el tope de *Download all* para "teléfono" (`isMobilePlatform(detectPlatform())`, `install.ts`):
+  iPhone, iPad y Android, con la app instalada, Safari o Chrome del teléfono (el iPad con Safari de escritorio se
+  reconoce por el táctil). Una computadora con pantalla táctil sí exporta. Pasado el tope de memoria en Safari y
+  Firefox de computadora queda lo de A: *Lighter zip* (sin fotos originales ni videos), una rama, o Chrome y Edge.
 
 ### EX13 · Sin red
 
@@ -877,3 +895,64 @@ y ofrece las ramas de primer nivel. Teléfono: 60 páginas y 50 millones, sin me
 **Lo que no se midió (para Lega, a mano):** Chrome y Edge guardando de verdad con *Save as PDF*, Safari de la Mac,
 Firefox, el iPhone y el iPad (hojas mezcladas, memoria, el toque para abrir el diálogo), una compu de 8 GB con el
 proyecto más grande, *Sharp photos* con el portero real, las anotaciones en el PDF con fotos reales, videos y adjuntos.
+
+## Cómo quedó la entrega 2 (v0.0XX)
+
+**Qué ve el usuario.** La ventana *Export* suma *Format*: *PDF — to share* (lo de la entrega 1) o *Zip — to archive*.
+Con el zip: *Original photos*, *Attachments* y *Videos* tildadas, cada una con su cantidad y su peso, y *Comments*
+tildada; el resumen ("3 pages · 5 files · 19.7 KB · previews 200 KB"), los pedidos al portero estimados ("≈ 10 file
+server requests · 1% of today's limit", el porcentaje es el del Durable Object, sección 5) y, sin red, cuántos originales
+van a faltar. Chrome y Edge de computadora: *Download .zip…* (escrito a medida que se arma) y *Download to a folder…*
+(el mismo árbol, sin zip, en una carpeta nueva); los demás: *Prepare .zip* en memoria (1 GB) y al terminar *Save
+<nombre>.zip*; pasado el tope, *Lighter zip* (sin fotos originales ni videos). Mientras: "Preparing page 2 of 3: …",
+"Downloading files: 4 of 5 (15 KB of 20 KB)", "No connection: it continues when it comes back." y *Cancel*; Escape no
+cierra y la pestaña pide confirmar antes de cerrarse. Al terminar: dónde quedó y "2 things are missing" con *Show
+list*. Solo el dueño y los admins, y nunca desde un teléfono o una tableta (D60, D63: el círculo del zip apagado con su
+porqué). La ayuda suma *Export pages and projects as a zip*; sin atajos nuevos.
+
+**Cómo está hecho** (`src/export/`):
+
+- `exportZip.ts` (`buildZip`): página por página en el orden del árbol, con el editor de exportación de la entrega 0
+  (sobre una copia, sin colaboración). De cada página se escriben primero los archivos que usa por primera vez (EX10):
+  la vista JPEG (`Files/_view/`: la nítida guardada en el dispositivo o la miniatura; de un video, el cuadro que se ve en
+  la página; de un HEIC sin ninguna, su original pasado a JPEG con el convertidor de la app, bajado una vez si hace
+  falta) y los originales que piden las casillas: los del dispositivo directo; los demás, por el portero con
+  `runDownload` de *Download all* (reintentos, `Range`, el pase que vence, esperar la red, cancelar). Recién después su
+  `.html`, su `.md` y su JSON, así cada link apunta a un original que llegó de verdad; uno que no llegó deja la vista
+  sin link y su renglón en `MISSING_FILES.txt`. Al final, `_shotdocs/manifest.json`, `_shotdocs/comments.json`,
+  `style.css` con las letras de la app en `fonts/`, `index.html` y `MISSING_FILES.txt` si falta algo. `estimateZip`
+  pesa por tipo sin bajar nada (lee las copias de las páginas y las fichas de los archivos).
+- `archiveHtml.ts`: el `.html` (la copia de la vista de impresión, sin `<script>`, atributos `on…`, `javascript:`,
+  reproductores ni atributos del editor; cada foto con su vista y link al original; los links a otra página del zip a
+  su `.html`, los de afuera como texto; `@page` con la hoja de la página), el `.md` (la conversión de BlockNote; cada
+  foto `[![nombre](vista)](original)` con rutas relativas, D57; el salto de hoja como `<!-- shotdocs:page-break -->`;
+  los comentarios como citas) y los bloques para volver (los links de afuera, solo texto, también en las tablas).
+- `zipLayout.ts`: las carpetas `02_Rodaje/01_Dia_1` (número con los ceros que hagan falta, sin espacios, sin tildes en
+  las letras latinas, 60 letras como mucho), los nombres de `Files/` y `_view/` y las rutas relativas.
+- `src/media/folderZip.ts`: `runDownload` suma `part` (escribe en un zip o una carpeta que arma otro, sin cerrarlo ni
+  poner `MISSING_FILES.txt`) y `passFor` (el pase recién cuando le toca a cada archivo).
+- `src/ui/ExportZip.tsx`: la parte del zip de la ventana (los destinos son los de *Download all*: `dirTarget`,
+  `freshFolder`, `BlobSink` con su tope, el CRC en un Worker).
+- `bench/zip.tsx` + `zip.html`: el arnés del navegador (solo con el servidor de desarrollo; el build no lo incluye).
+
+**Lo que nunca sale (probado byte por byte en el zip, que va sin comprimir):** el texto escrito y borrado, la foto
+sacada (ni su nombre, ni su id, ni sus bytes), la página de la papelera, la rama de afuera (ni su título ni su id), el
+id y el nombre del proyecto en una rama, y ningún correo (ni del dueño ni de Ana, la del equipo que comentó). Los
+comentarios van con nombre, `mine` para los de quien exporta y la huella con sal (sección 4). Exportar no cambió ninguna
+página ni el árbol del dispositivo (comparado byte por byte antes y después).
+
+**Medido en el navegador** (Chromium y Firefox de Playwright sin ventana, perfil temporal; el arnés con el servidor y el
+portero en memoria, fotos JPEG de 1600 px hechas en un canvas, un HEIC de verdad sin miniatura, un video con su cuadro,
+un PDF, una tabla con una foto en una celda, comentarios): tres zips (armado en Chromium con originales, en Firefox solo
+con las vistas, en Firefox con originales), los tres abiertos por Python `testzip` sin errores (56 entradas con originales, 50 sin ellos; 28 son
+las letras), y cada `.html` abierto con `file://` y la red cortada en **Chromium y Firefox: 7 de 7 imágenes cargadas en los
+dos, también la del HEIC (pasado a JPEG en Chromium y en Firefox) y con *Original photos* destildada**, ningún
+`<script>`, ningún pedido afuera de `file:`, ningún link roto en el `.html` ni en el `.md` (14 de 14 en el `.md`). Armar
+el zip: 0,4 a 0,9 s para 4 páginas. Nada guardado cambió. Suite: 2839 pruebas (2834 pasan, 5 salteadas), 19 nuevas en
+`src/export/exportZip.test.tsx` (jsdom, servidor y portero en memoria, Python `testzip`). La ventana pasa de 35 a 77 KB
+(su pedazo se baja aparte, al abrirla).
+
+**Lo que no se midió (para Lega, a mano):** ERSO entero en Chrome con el portero de verdad (tiempo, pedidos al Worker y
+llamados al Durable Object en el panel de Cloudflare: la sección 5 sigue siendo una cuenta, no una medición), Safari de
+la Mac (el zip en memoria y *Save*), el árbol más hondo de ERSO contra los 260 caracteres del Explorador de Windows, y
+un zip de más de 1 GB en Firefox (el tope).

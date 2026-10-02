@@ -114,6 +114,8 @@ const DAY_REPORTS = '0.121';
 const PUBLIC_LINK = '0.111';
 /** Exportar una rama o un proyecto como PDF (P.22, Doc_Exportar.md, entrega 1): la versión se pone al publicar. */
 const EXPORT_PDF = '0.122';
+/** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
+const EXPORT_ZIP = '0.0XX';
 /** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const MENTIONS = '0.120';
 /** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
@@ -559,6 +561,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.export.text',
     words: ['exportar', 'export', 'pdf', 'índice', 'contents', 'proyecto entero', 'whole project', 'entregar', 'cliente', 'client', 'reporte'],
     since: EXPORT_PDF,
+  },
+  {
+    id: 'exportZip',
+    section: 'print',
+    title: 'help.exportZip.title',
+    text: 'help.exportZip.text',
+    words: ['zip', 'archivar', 'archive', 'backup', 'respaldo', 'markdown', 'html', 'originales', 'originals', 'descargar', 'download'],
+    since: EXPORT_ZIP,
   },
 
   // --- Preferencias ---

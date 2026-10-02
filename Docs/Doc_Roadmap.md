@@ -378,7 +378,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   correos, topes de páginas y de píxeles (menos con menos de 8 GB). 300 páginas en ~30 s (Chromium sin ventana);
   resueltas O3 a O7 de la auditoría de la 0 y los tres bloqueantes y O1 a O7 de la auditoría de la 1. Falta a mano:
   Safari, Firefox, el iPhone, una compu de 8 GB y guardar de verdad en Chrome y Edge (`Doc_Exportar.md`, "Cómo quedó
-  la entrega 1"). Sigue la entrega 2 (zip).
+  la entrega 1"). **Entrega 2 hecha (v0.0XX): el zip** (*Zip — to archive* en la misma ventana): una carpeta por página
+  con `.html` sin JavaScript, `.md` con rutas relativas (D57), una vista JPEG de cada foto (también HEIC), los
+  originales elegidos (del dispositivo o por el portero con lo de *Download all*), comentarios sin correos, el JSON para
+  volver y `MISSING_FILES.txt`; los destinos de *Download all*, sin red y cancelar. Solo dueño y admins (D60), nunca
+  desde un teléfono (D63). Probado con `file://` y sin red en Chromium y Firefox. Falta a mano: ERSO entero con el
+  portero de verdad (tiempo y llamados al Durable Object), Safari de la Mac y las rutas largas de Windows
+  (`Doc_Exportar.md`, "Cómo quedó la entrega 2"). Sigue la entrega 3 (volver a Shot Docs).
   Observaciones de la re-verificación de la entrega 1: (R1) el Imprimir del menú del navegador mientras se arma el PDF
   puede llevar la vista de la página en curso: sacar `print-output` a esa vista hasta `place()`; (R2) la prueba de la
   vuelta al achicador del hilo principal no distingue la mutación: hacerlo inyectable en `workerResizer`; (R3) con
