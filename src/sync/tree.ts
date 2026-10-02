@@ -402,11 +402,16 @@ export class PageTree {
     this.recompute();
   }
 
-  /** Vuelve a poner en la cola, en el orden original, todo lo que el servidor rechazó. */
-  async retryFailed(): Promise<void> {
+  /**
+   * Vuelve a poner en la cola, en el orden original, todo lo que el servidor rechazó (o solo lo que cumple `only`). Sin
+   * nada que reintentar no escribe nada ni avisa.
+   */
+  async retryFailed(only: (f: FailedOp) => boolean = () => true): Promise<void> {
+    const retry = this.failed.filter(only);
+    if (retry.length === 0) return;
     const tx = this.db.transaction(['ops', 'failedOps'], 'readwrite');
     const queued: QueuedOp[] = [];
-    for (const f of this.failed) {
+    for (const f of retry) {
       const op: QueuedOp = { opId: crypto.randomUUID(), op: f.op, createdAt: Date.now() };
       if (f.opSeq !== undefined) op.seq = f.opSeq;
       op.seq = await tx.objectStore('ops').put(op);
@@ -414,7 +419,7 @@ export class PageTree {
       queued.push(op);
     }
     await tx.done;
-    this.failed = [];
+    this.failed = this.failed.filter((f) => !retry.includes(f));
     this.ops = [...this.ops, ...queued].sort((a, b) => a.seq! - b.seq!);
     this.recompute();
     this.onQueued?.();

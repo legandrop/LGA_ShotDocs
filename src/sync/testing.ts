@@ -59,6 +59,14 @@ import {
   type WorkspaceSettings,
 } from './types';
 
+/**
+ * La primera versión de la app que manda su versión en el header (`x-shotdocs-version`): en la base, el número de
+ * `private.write_version_allowed` (supabase/migrations/20261008120000_version_minima_arbol.sql). Acá es un número de
+ * modelo, más alto que todas las versiones publicadas sin header (hasta la 0.098); las pruebas suben la mínima a este
+ * número, o a uno más bajo, para ver cada caso.
+ */
+export const WRITE_VERSION_SINCE = 0.099;
+
 /** Una fila de `comments` en el servidor en memoria: con el texto aunque se haya borrado, como la tabla. */
 type StoredComment = CommentRow & { body: string; updated_at?: string };
 
@@ -131,6 +139,11 @@ export class FakeServer {
   static generations = 100;
   /** `workspace_settings`; `null` simula una base sin esa migración. */
   settings: WorkspaceSettings | null = { generation: 1, minAppVersion: null, schemaVersion: 1, mediaUrl: null };
+  /**
+   * La versión mínima frena el árbol y los comentarios (20261008120000_version_minima_arbol.sql): sin header, solo con
+   * una mínima de este número o más. `null` simula una base sin esa migración (el header se ignora).
+   */
+  writeVersionSince: number | null = WRITE_VERSION_SINCE;
   /** `files`, con el proyecto (sale de la página), el tamaño y quién lo registró. */
   readonly mediaFiles = new Map<string, MediaFileRow & { project_id: string; size: number; created_by?: string }>();
   /** `page_files` en uso (sin `removed_at`): `<página>:<archivo>`. */
@@ -789,6 +802,12 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
   readonly userId: string;
   readonly email: string;
 
+  /**
+   * Si los pedidos llevan el header con la versión (`x-shotdocs-version`), como el cliente de la app desde v0.099
+   * (`appVersionHeaders` en workspace.ts; sin versión, ninguno). `false`: una versión anterior.
+   */
+  versionHeader = true;
+
   constructor(
     readonly server: FakeServer,
     readonly appVersion = '',
@@ -813,6 +832,22 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (min != null && !(/^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion) && Number(this.appVersion) >= min)) {
       throw new RemoteError('app_outdated', true, 'P0001');
     }
+  }
+
+  /**
+   * Como `private.require_write_version` de la base, al escribir el árbol o un comentario: con header, la versión contra
+   * la mínima; sin header, se rechaza solo con una mínima de `writeVersionSince` o más. El rechazo es pasajero (503,
+   * `app_outdated`): todas las versiones lo reintentan sin marcarlo como rechazado.
+   */
+  private checkWriteVersion(): void {
+    const since = this.server.writeVersionSince;
+    const min = this.server.settings?.minAppVersion;
+    if (since == null || min == null) return;
+    const allowed =
+      this.versionHeader && this.appVersion !== ''
+        ? /^\d{1,4}(\.\d{1,3})?$/.test(this.appVersion) && Number(this.appVersion) >= min
+        : min < since;
+    if (!allowed) throw new RemoteError('app_outdated', false, 'P0001');
   }
 
   async fetchWorkspaceSettings(): Promise<WorkspaceSettings | null> {
@@ -893,6 +928,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
   async setProjectArchived(projectId: string, archived: boolean): Promise<void> {
     const project = this.projectStatesCheck(projectId);
     if (this.server.projectDeleted(projectId)) throw new RemoteError('project_deleted', true, 'P0001');
+    // La versión se mira solo si cambia algo (como en la base: repetirlo no escribe).
+    if (archived !== !!project.archived_at) this.checkWriteVersion();
     if (archived && !project.archived_at) project.archived_at = new Date().toISOString();
     else if (!archived) project.archived_at = null;
   }
@@ -901,6 +938,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     this.projectStatesCheck(projectId);
     const existing = this.server.deletedProjects.get(projectId);
     if (existing) return existing.at;
+    this.checkWriteVersion();
     const at = new Date().toISOString();
     this.server.deletedProjects.set(projectId, { at, by: this.userId });
     this.server.refreshAllFileTrash();
@@ -910,6 +948,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
   async restoreProject(projectId: string, withoutDrive = false): Promise<void> {
     this.projectStatesCheck(projectId);
     if (!this.server.deletedProjects.has(projectId)) return;
+    this.checkWriteVersion();
     // Como la migración 10: con la carpeta pedida para la papelera de Drive, primero traerla (o sin ella, con marca).
     const d = this.server.projectDrive.get(projectId);
     if (d && !d.missing_at) {
@@ -978,6 +1017,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
 
   async createProject(project: NewProject): Promise<void> {
     this.server.check();
+    // La política de la versión mira la fila propuesta aunque el proyecto ya exista (`upsert` sin pisar).
+    this.checkWriteVersion();
     if (this.server.projects.has(project.id)) return;
     const role = this.server.role(this.userId);
     if (this.server.rejectProjects || (this.team && role !== 'owner' && role !== 'admin')) {
@@ -992,11 +1033,14 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (!project || (this.team && this.server.projectLevel(this.userId, id) < 4)) {
       throw new RemoteError('project_not_found', true, 'P0002');
     }
+    this.checkWriteVersion();
     this.server.projects.set(id, { ...project, name });
   }
 
   async createPage(page: NewPage): Promise<void> {
     this.server.check();
+    // Como en los proyectos: la versión se mira aunque la página ya exista.
+    this.checkWriteVersion();
     if (this.server.pages.has(page.id)) return;
     if (this.server.rejectCreates) {
       throw new RemoteError('new row violates row-level security policy for table "pages"', true, '42501');
@@ -1048,6 +1092,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
         if (cur === id) throw new RemoteError('page_cycle', true, '23514');
       }
     }
+    // La política de la versión mira la fila nueva, después de los triggers (como en la base).
+    this.checkWriteVersion();
     this.server.pages.set(id, { ...page, ...patch, updated_at: new Date().toISOString() });
     // Los triggers de la papelera de archivos: la página entró, salió o se movió de la papelera de páginas.
     if (patch.deleted_at !== undefined || patch.parent_id !== undefined) this.server.refreshAllFileTrash();
@@ -1599,6 +1645,8 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
         throw new RemoteError('comment_conflict', true, 'P0001');
       }
     } else {
+      // El trigger de la versión corre solo cuando la función escribe (un reintento de algo que ya está, no).
+      this.checkWriteVersion();
       this.server.comments.set(c.id, {
         id: c.id,
         page_id: c.pageId,
@@ -1661,6 +1709,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       if (!sameOrigin(existing)) throw new RemoteError('comment_conflict', true, 'P0001');
       // Importado de nuevo: el hilo va al bloque de ahora, con sus respuestas (el texto de la base queda).
       if (existing.thread_id === null && !existing.deleted_at && block !== null && existing.block_id !== block) {
+        this.checkWriteVersion();
         const at = this.server.commentNow();
         for (const r of this.server.comments.values()) {
           if (r.id === c.id || (r.thread_id === c.id && r.page_id === c.pageId)) {
@@ -1670,6 +1719,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
         }
       }
     } else {
+      this.checkWriteVersion();
       this.server.comments.set(c.id, {
         id: c.id,
         page_id: c.pageId,
@@ -1703,6 +1753,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (cur.deleted_at) throw new RemoteError('comment_deleted', true, 'P0001');
     if (cur.body !== body) {
       if (!/\S/.test(body) || body.length > 10000) throw new RemoteError('check constraint', true, '23514');
+      this.checkWriteVersion();
       cur.body = body;
       cur.edited_at = this.server.commentNow();
       cur.updated_at = cur.edited_at;
@@ -1717,6 +1768,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (!cur || lvl < 1) throw new RemoteError('comment_not_found', true, 'P0002');
     if (!((cur.author_id === this.userId && lvl >= 2) || lvl >= 4)) throw new RemoteError('not_allowed', true, '42501');
     if (!cur.deleted_at) {
+      this.checkWriteVersion();
       cur.deleted_at = this.server.commentNow();
       cur.deleted_by = this.userId;
       cur.updated_at = cur.deleted_at;
@@ -1731,6 +1783,7 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
     if (!root || lvl < 1) throw new RemoteError('thread_not_found', true, 'P0002');
     if (root.thread_id) throw new RemoteError('thread_invalid', true, '22023');
     if (lvl < 2) throw new RemoteError('comment_denied', true, '42501');
+    if (resolved !== !!root.resolved_at) this.checkWriteVersion();
     if (resolved && !root.resolved_at) {
       root.resolved_at = this.server.commentNow();
       root.resolved_by = this.userId;
