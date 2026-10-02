@@ -165,7 +165,7 @@ Las dos se pueden pedir sobre **esta página**, **esta página y las de adentro*
 
 ### 2.3 El zip (EX4, EX9, EX10, EX11)
 
-Un ejemplo (el proyecto `Reporte ERSO`, exportado el 2026-10-02):
+Un ejemplo (el proyecto `Reporte ERSO`, exportado el 2026-10-02). **Corregido por la auditoría (O1):** el zip ya no lleva la carpeta `Reporte_ERSO/` de arriba (el Explorador la crea al descomprimir), una rama deja su página raíz arriba de todo, y los nombres se acortan para que ninguna ruta pase 180 caracteres (ver "Correcciones de la auditoría de la entrega 2", al final):
 
 ```
 Reporte_ERSO/
@@ -956,3 +956,29 @@ el zip: 0,4 a 0,9 s para 4 páginas. Nada guardado cambió. Suite: 2839 pruebas 
 llamados al Durable Object en el panel de Cloudflare: la sección 5 sigue siendo una cuenta, no una medición), Safari de
 la Mac (el zip en memoria y *Save*), el árbol más hondo de ERSO contra los 260 caracteres del Explorador de Windows, y
 un zip de más de 1 GB en Firefox (el tope).
+
+### Correcciones de la auditoría de la entrega 2 (O1 y O6)
+
+- **O1 · Rutas largas de Windows.** Con tres niveles de títulos largos, una ruta del zip llegaba a 442 caracteres y el
+  Explorador (tope de 260, contando `C:\Users\<usuario>\Downloads\<zip>\`) no la abría ni la descomprimía. Ahora
+  (`zipLayout.ts`): **el zip no tiene carpeta de arriba** (el Explorador ya crea `<nombre del zip>\` al descomprimir; el
+  árbol de la sección 2.3 queda igual sin la primera línea), **la página raíz de una rama queda arriba de todo** con el
+  nombre del zip (`Rodaje.html` junto a `index.html`; si se llamara `index`, `index_page`), el nombre del zip se topa
+  en 40 letras, y cada carpeta de página y cada nombre de archivo se acortan con un **presupuesto**: ninguna ruta pasa
+  **180** caracteres (en UTF-16, como cuenta Windows) contando una carpeta de destino típica
+  (`C:\Users\` + 20 letras + `\Downloads\` + el nombre del zip). Cada carpeta reparte lo que queda entre ella y los
+  niveles que tiene abajo (y entra entera con su `.html`, que repite su nombre); los archivos conservan la extensión y
+  van de 12 a 80 letras; nunca se parte un emoji. Dos hermanas no chocan (el número va adelante) y dos archivos que solo
+  difieren en mayúsculas siguen separados con « (2)». Los paréntesis de los nombres van codificados en los links
+  (`%28`, `%29`): un `)` suelto cortaba el link en el `.md`. El manifest dice dónde quedó cada página y cada archivo,
+  así que volver (EX6) no depende de los nombres. Probado con un árbol hostil (títulos de 200 letras con emojis, 6
+  niveles, hermanas iguales, fotos de 180 letras con el mismo nombre): la ruta más larga cabe, ninguna entrada repite el
+  nombre del zip, sin choques, y cada link del `.html`, del `.md` y del manifest existe en el zip, en una rama y en el
+  proyecto entero.
+- **O6 · Marcas de plantilla (v0.124).** El manifest guardaba solo `format`, `header` y `split`. Ahora `settingsOf`
+  suma `template` (la página es una plantilla propia, o `false`), `templatesFolder` y `dayReports` (la carpeta de
+  reportes; su plantilla solo si también se exporta: nunca el id de una página de afuera), y cada página lleva
+  `templateId` (de qué plantilla salió: una de fábrica o una de adentro; `null` si quedó afuera). La entrega 3 (volver)
+  tiene que escribirlas al crear el proyecto nuevo, cambiando los ids viejos por los nuevos; hasta que exista, la prueba
+  es que el manifest las lleve, en el proyecto entero y en una rama.
+

@@ -3,12 +3,12 @@
 v0.0XX :
 
 Exportar (P.22), entrega 2: el zip para archivar. Guardar un proyecto terminado fuera de la app no tenía forma. Nuevo:
-en *Export…*, *Zip — to archive* arma una carpeta por página con su `.html` (se abre sin red y sin JavaScript), su `.md`
-con rutas relativas, una vista JPEG de cada foto (también HEIC), los originales elegidos por casilla (del dispositivo o
-bajados por el portero con lo de *Download all*, una vez aunque estén en dos páginas), los comentarios sin correos, el
-JSON para volver y `MISSING_FILES.txt`. Nunca sale lo borrado, la papelera ni lo de afuera de la rama. Solo dueño y
-admins, desde una computadora (D60, D63). Probado en Chromium y Firefox: todas las fotos se ven con `file://` y la red
-cortada.
+*Zip — to archive* en *Export…* arma una carpeta por página con su `.html` (sin red ni JavaScript), su `.md` con rutas
+relativas, una vista JPEG de cada foto (también HEIC), los originales elegidos (del dispositivo o por el portero, una vez
+aunque estén en dos páginas), los comentarios sin correos, el JSON para volver (con las marcas de plantilla) y
+`MISSING_FILES.txt`. Nunca sale lo borrado, la papelera ni lo de afuera de la rama. Los nombres se acortan para que
+ninguna ruta pase 180 caracteres al descomprimir en Descargas (el Explorador no abre más de 260). Solo dueño y admins,
+desde una computadora. Probado con `file://` sin red en Chromium y Firefox.
 [ Exportar, entrega 2 - el zip con HTML, Markdown, JSON, vistas JPEG, originales y la lista de lo que falta ]
 v0.125 :
 

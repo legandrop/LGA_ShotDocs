@@ -827,7 +827,8 @@ export async function runDownload(
 
   const part = opts.part ?? null;
   const zip = part ? part.zip : target.kind === 'zip' ? new ZipWriter(target.sink, { crc: target.crc }) : null;
-  const top = (path: string) => `${plan.root}/${path}`;
+  // Sin `root` (exportar): las rutas van tal cual, sin carpeta de arriba.
+  const top = (path: string) => (plan.root ? `${plan.root}/${path}` : path);
   try {
     if (part) {
       // Las carpetas las pone quien arma el zip o la carpeta.

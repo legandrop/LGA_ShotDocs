@@ -18,7 +18,8 @@ import { authorLabel, commentsSection, type CommentSource } from './exportCommen
 import { ExportCancelled, type ExportEditor } from './exportEditor';
 import { browserResizer, type Resizer } from './exportImages';
 import { renderPages, type ContentGap, type ExportPlanPage, type ExportSource } from './exportPages';
-import { FILES_DIR, FileNames, imageExt, pageSlots, rootFolderName, SHOTDOCS_DIR, VIEW_DIR, type PageSlot } from './zipLayout';
+import { BUILTIN_ONSET, BUILTIN_PREPRO, BUILTIN_SHOT } from '../templates/builtinIds';
+import { FILES_DIR, FileNames, imageExt, joinPath, pageSlots, pathLimit, rootFolderName, SHOTDOCS_DIR, VIEW_DIR, type PageSlot } from './zipLayout';
 
 // El zip de exportar (P.22, Docs/Doc_Exportar.md, sección 2.3; entrega 2): para ARCHIVAR una rama o un proyecto.
 //
@@ -283,7 +284,7 @@ export interface ZipOptions {
   project?: { id: string; name: string } | null;
   plan: ExportPlanPage[];
   /** Las filas del árbol (los ajustes y el ícono de cada página). */
-  rows: (id: string) => Pick<PageRow, 'icon' | 'settings'> | undefined;
+  rows: (id: string) => Pick<PageRow, 'icon' | 'settings' | 'template_id'> | undefined;
   source: ExportSource;
   editor: ExportEditor;
   media: ArchiveMedia | null;
@@ -318,6 +319,11 @@ export interface ManifestPage {
   title: string;
   icon: string | null;
   settings: Record<string, unknown>;
+  /**
+   * De qué plantilla salió (`template_id`, v0.124): una de fábrica o una página de adentro de lo exportado; `null` si no
+   * salió de ninguna o si la plantilla quedó afuera (nunca el id de una página de afuera).
+   */
+  templateId: string | null;
   dir: string;
   html: string;
   md: string;
@@ -402,15 +408,14 @@ class ArchiveOut {
     this.zip = target.kind === 'zip' ? new ZipWriter(target.sink, { crc: target.crc }) : null;
   }
 
-  async start(): Promise<void> {
-    if (this.zip) await this.zip.addDirectory(this.root);
-  }
+  /** Sin carpeta de arriba: el zip no repite su nombre adentro (Windows lo descomprime en `<nombre del zip>\`). */
+  async start(): Promise<void> {}
 
   /** Un archivo entero (texto, bytes o un `Blob`). Un error del destino sube y frena todo. */
   async file(path: string, data: string | Uint8Array | Blob, modified?: Date | null): Promise<void> {
     const blob = typeof data === 'string' ? new Blob([data]) : data instanceof Uint8Array ? new Blob([data as BlobPart]) : data;
     if (this.zip) {
-      const r = await this.zip.addFile(`${this.root}/${path}`, blob.size, modified ?? new Date(), blobChunks(blob));
+      const r = await this.zip.addFile(path, blob.size, modified ?? new Date(), blobChunks(blob));
       if (r.error !== undefined) throw r.error;
     } else if (this.target.kind === 'dir') {
       const out = await this.target.makeFile(path);
@@ -492,9 +497,11 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
   };
   const plan = options.plan;
   const root = rootFolderName(options.title);
-  const slots = pageSlots(plan);
+  // Las rutas largas de Windows (O1): cada carpeta y cada nombre se acortan para entrar en `pathLimit`.
+  const limit = pathLimit(root);
+  const slots = pageSlots(plan, { flatRoot: options.kind === 'page', root, limit });
   const inside = new Set(plan.map((p) => p.id));
-  const names = new FileNames();
+  const names = new FileNames(limit);
   const out = new ArchiveOut(options.target, root);
   const media = options.media;
   const resizer = options.resizer ?? browserResizer;
@@ -518,8 +525,8 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
   const dates = new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' });
   const asOf = options.lastSync ? t('exportPdf.asOf', { date: dates.format(options.lastSync) }) : '';
   const footer = [t('exportPdf.exported', { date: new Intl.DateTimeFormat(lang, { dateStyle: 'medium' }).format(now) }), asOf].filter(Boolean).join(' · ');
-  const htmlOf = (slot: PageSlot) => `${slot.dir}/${slot.name}.html`;
-  const mdOf = (slot: PageSlot) => `${slot.dir}/${slot.name}.md`;
+  const htmlOf = (slot: PageSlot) => joinPath(slot.dir, `${slot.name}.html`);
+  const mdOf = (slot: PageSlot) => joinPath(slot.dir, `${slot.name}.md`);
 
   await out.start();
 
@@ -551,7 +558,7 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
     // Un HEIC sin ninguna vista: se pasa a JPEG en el dispositivo (Chrome y Firefox no lo abren).
     if (!blob && heicSource) blob = await convertHeic(heicSource).catch(() => null);
     if (!blob) {
-      missing.push({ path: `${dir}/${FILES_DIR}/${VIEW_DIR}/${meta.name}`, why: 'noView' });
+      missing.push({ path: joinPath(dir, `${FILES_DIR}/${VIEW_DIR}/${meta.name}`), why: 'noView' });
       return null;
     }
     // Siempre una JPEG (la nítida guardada puede ser WebP), de 2048 como mucho.
@@ -569,7 +576,7 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
     }
     if (blob.type === 'image/svg+xml') return null;
     const name = names.view(dir, meta.name, imageExt(blob.type));
-    const path = `${dir}/${FILES_DIR}/${VIEW_DIR}/${name}`;
+    const path = joinPath(dir, `${FILES_DIR}/${VIEW_DIR}/${name}`);
     await out.file(path, blob, meta.created ? new Date(meta.created) : null);
     return path;
   };
@@ -591,10 +598,10 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
       check();
       const meta = entry.meta;
       // Un archivo que este dispositivo no conoce todavía (nunca lo vio, y sin red): queda en la lista, con su id.
-      if (media && !meta) missing.push({ path: `${slot.dir}/${FILES_DIR}/${entry.id}`, why: 'unknown' });
+      if (media && !meta) missing.push({ path: joinPath(slot.dir, `${FILES_DIR}/${entry.id}`), why: 'unknown' });
       if (!media || !meta || meta.folder) continue;
       if (meta.deleted) {
-        if (entry.wanted) missing.push({ path: `${slot.dir}/${FILES_DIR}/${meta.name}`, why: 'deleted' });
+        if (entry.wanted) missing.push({ path: joinPath(slot.dir, `${FILES_DIR}/${meta.name}`), why: 'deleted' });
         continue;
       }
       let local = entry.wanted || HEIC.test(meta.mime) ? await media.original(entry.id) : null;
@@ -607,7 +614,7 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
       entry.view = await writeView(entry, slot.dir, shown.get(entry.id) ?? null, heicSource);
       if (!entry.wanted) continue;
       const name = names.original(slot.dir, meta.name);
-      const path = `${slot.dir}/${FILES_DIR}/${name}`;
+      const path = joinPath(slot.dir, `${FILES_DIR}/${name}`);
       if (local) {
         await out.file(path, local, meta.created ? new Date(meta.created) : null);
         entry.original = path;
@@ -621,7 +628,7 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
     // Los que faltan, por el portero, con lo de *Download all* (reintentos, `Range`, esperar la red, cancelar).
     const base = { ...progress.files };
     const result = await runDownload(
-      { root, dirs: [], files: queue, skipped: [], bytes: queue.reduce((n, f) => n + f.size, 0) },
+      { root: '', dirs: [], files: queue, skipped: [], bytes: queue.reduce((n, f) => n + f.size, 0) },
       options.target,
       {
         ...options.download,
@@ -713,7 +720,7 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
               // Una imagen del dispositivo que no es un archivo del workspace (una imagen vieja): va copiada.
               const blob = await fetchBlob(src);
               if (blob && blob.type !== 'image/svg+xml') {
-                const path = `${slot.dir}/${FILES_DIR}/${VIEW_DIR}/${names.view(slot.dir, `image_${++loose}`, imageExt(blob.type))}`;
+                const path = joinPath(slot.dir, `${FILES_DIR}/${VIEW_DIR}/${names.view(slot.dir, `image_${++loose}`, imageExt(blob.type))}`);
                 await out.file(path, blob);
                 plans.push({ kind: 'file', path });
                 continue;
@@ -771,7 +778,8 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
             order: slot.order,
             title: page.title,
             icon: row?.icon ?? null,
-            settings: settingsOf(row?.settings, page),
+            settings: settingsOf(row?.settings, page, inside),
+            templateId: templateIdOf(row?.template_id, inside),
             dir: slot.dir,
             html: htmlOf(slot),
             md: mdOf(slot),
@@ -792,7 +800,8 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
           order: slot.order,
           title: page.title,
           icon: options.rows(page.id)?.icon ?? null,
-          settings: settingsOf(options.rows(page.id)?.settings, page),
+          settings: settingsOf(options.rows(page.id)?.settings, page, inside),
+          templateId: templateIdOf(options.rows(page.id)?.template_id, inside),
           dir: slot.dir,
           html: htmlOf(slot),
           md: mdOf(slot),
@@ -861,14 +870,31 @@ export async function buildZip(options: ZipOptions): Promise<ZipResult> {
   }
 }
 
-/** Los ajustes que vuelven (hoja, encabezado, títulos cortos); nunca uno que nombre otra página. La raíz, con lo heredado. */
-function settingsOf(settings: PageRow['settings'] | undefined, page: ExportPlanPage): Record<string, unknown> {
+/**
+ * Los ajustes que vuelven: hoja, encabezado, títulos cortos y las marcas de plantilla de v0.124 (auditoría O6): la
+ * página es una plantilla propia (`template`), la carpeta *Templates* (`templatesFolder`) y la carpeta de reportes del
+ * día (`dayReports`, con su plantilla solo si también se exporta). Nunca uno que nombre una página de afuera. La raíz,
+ * con la hoja heredada.
+ */
+export function settingsOf(settings: PageRow['settings'] | undefined, page: Pick<ExportPlanPage, 'parent' | 'format'>, inside: ReadonlySet<string>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const s = (settings ?? {}) as Record<string, unknown>;
-  for (const key of ['format', 'header', 'split']) if (s[key] !== undefined) out[key] = s[key];
+  for (const key of ['format', 'header', 'split', 'template', 'templatesFolder']) if (s[key] !== undefined) out[key] = s[key];
+  const reports = s.dayReports;
+  if (reports === false) out.dayReports = false;
+  else if (reports && typeof reports === 'object') {
+    const template = (reports as { template?: unknown }).template;
+    out.dayReports = typeof template === 'string' && inside.has(template) ? { template } : {};
+  }
   // La raíz de lo exportado no tiene a quién heredarle la hoja: va la que tenía.
   if (page.parent === null && out.format === undefined && page.format.size !== 'free') out.format = { size: page.format.size, landscape: page.format.landscape };
   return out;
+}
+
+/** La plantilla de la que salió una página, si es de fábrica o se exporta también (nunca una página de afuera). */
+function templateIdOf(id: string | null | undefined, inside: ReadonlySet<string>): string | null {
+  if (!id) return null;
+  return [BUILTIN_PREPRO, BUILTIN_ONSET, BUILTIN_SHOT].includes(id) || inside.has(id) ? id : null;
 }
 
 /** Un hilo para `comments.json`: nombres, nunca correos; `mine` si lo escribió quien exporta. */

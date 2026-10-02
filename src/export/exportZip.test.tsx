@@ -18,9 +18,9 @@ import { ARCHIVE_CSS, blocksForArchive, escapeHtml, indexHtml, PAGE_BREAK_MARK, 
 import { appComments } from './exportComments';
 import { ExportCancelled, ExportEditor } from './exportEditor';
 import { exportPlan } from './exportPages';
-import { appArchiveMedia, buildZip, estimateZip, exporterHash, missingText, porteroCost, remoteOf, totalOf, wantsOriginal, type ZipInclude, type ZipOptions } from './exportZip';
+import { appArchiveMedia, buildZip, estimateZip, exporterHash, missingText, porteroCost, remoteOf, settingsOf, totalOf, wantsOriginal, type ZipInclude, type ZipOptions } from './exportZip';
 import { writeBlocks } from './testProject';
-import { FileNames, hrefOf, pageFolderName, pageSlots, PAGE_FOLDER_MAX, relativePath, rootFolderName } from './zipLayout';
+import { FileNames, hrefOf, pageFolderName, pageSlots, PAGE_FOLDER_MAX, pathLimit, relativePath, ROOT_NAME_MAX, rootFolderName, SAFE_PATH, TYPICAL_BASE } from './zipLayout';
 
 // Exportar, entrega 2 (Docs/Doc_Exportar.md, sección 2.3): el zip para archivar. Con el servidor y el portero en
 // memoria (src/sync/testing.ts) y el lector de zip de Python (`testzip`): qué carpetas y nombres salen, el `.html` sin
@@ -282,6 +282,7 @@ describe('exportar zip: los nombres y las rutas', () => {
     expect(relativePath('01_Raiz/02_Rodaje', '01_Raiz/02_Rodaje/Files/a.jpg')).toBe('Files/a.jpg');
     expect(relativePath('01_Raiz/02_Rodaje', 'style.css')).toBe('../../style.css');
     expect(hrefOf('../Files/foto #1 100%.jpg')).toBe('../Files/foto%20%231%20100%25.jpg');
+    expect(hrefOf('Files/IMG_1 (2).jpg')).toBe('Files/IMG_1%20%282%29.jpg');
   });
 
   it('los archivos con su nombre del Drive; dos iguales en la misma carpeta se separan; la vista con .jpg', () => {
@@ -464,15 +465,17 @@ describe('exportar zip: el archivo entero', () => {
     if (!hasPython) return;
     const z = read(zip);
     expect(z.bad).toBeNull();
-    const top = 'Rodaje_·_Semana_1';
-    const day1 = `${top}/01_Rodaje_·_Semana_1/01_Dia_1_exteriores`;
-    const day2 = `${top}/01_Rodaje_·_Semana_1/02_Dia_2`;
-    expect(z.names).toContain(`${top}/index.html`);
-    expect(z.names).toContain(`${top}/style.css`);
+    // Sin carpeta de arriba (O1): la página raíz de la rama queda arriba de todo, con el nombre del zip.
+    const day1 = '01_Dia_1_exteriores';
+    const day2 = '02_Dia_2';
+    expect(z.names).toContain('index.html');
+    expect(z.names).toContain('style.css');
+    expect(z.names).toContain('Rodaje_·_Semana_1.html');
+    expect(z.names).toContain('Rodaje_·_Semana_1.md');
     expect(z.names).toContain(`${day1}/01_Dia_1_exteriores.html`);
     expect(z.names).toContain(`${day1}/01_Dia_1_exteriores.md`);
     expect(z.names).toContain(`${day2}/02_Dia_2.html`);
-    expect(z.names).not.toContain(`${top}/MISSING_FILES.txt`);
+    expect(z.names).not.toContain('MISSING_FILES.txt');
     // Ningún espacio en las carpetas de las páginas; los archivos con su nombre del Drive.
     for (const n of z.names.filter((x) => x.endsWith('.html'))) expect(n).not.toMatch(/\s/);
     expect(z.names).toContain(`${day1}/Files/clip 001.mov`);
@@ -490,7 +493,7 @@ describe('exportar zip: el archivo entero', () => {
     // El .html del día 1.
     const html = text(z.get(`${day1}/01_Dia_1_exteriores.html`));
     expect(html).not.toMatch(/<script|\son[a-z]+=|javascript:|<iframe|blob:/);
-    expect(html).toContain('href="../../style.css"');
+    expect(html).toContain('href="../style.css"');
     expect(html).toContain('<a class="sd-archive-link" href="Files/IMG_0413.HEIC"><img class="bn-visual-media" alt="IMG_0413.HEIC" src="Files/_view/IMG_0413.jpg">');
     expect(html).toContain('src="Files/_view/IMG_0500.jpg"');
     expect(html).toContain('href="../02_Dia_2/02_Dia_2.html"');
@@ -533,7 +536,7 @@ describe('exportar zip: el archivo entero', () => {
     }
 
     // El JSON para volver: los bloques, el colapsado para todos, el manifest y los comentarios.
-    const manifest = JSON.parse(text(z.get(`${top}/_shotdocs/manifest.json`))) as Record<string, any>;
+    const manifest = JSON.parse(text(z.get('_shotdocs/manifest.json'))) as Record<string, any>;
     expect(manifest.format).toBe(1);
     expect(manifest.kind).toBe('page');
     expect(manifest.project).toBeNull();
@@ -544,11 +547,11 @@ describe('exportar zip: el archivo entero', () => {
     expect(manifest.exporter.hash).toBe(await exporterHash(manifest.exporter.salt, OWNER_EMAIL));
     const files = manifest.files as { id: string; original: string | null; view: string | null; size: number }[];
     expect(files.map((f) => f.id).sort()).toEqual([w.ids.photo, w.ids.heic, w.ids.video, w.ids.pdf, w.ids.inline].sort());
-    expect(files.find((f) => f.id === w.ids.photo)).toMatchObject({ original: '01_Rodaje_·_Semana_1/01_Dia_1_exteriores/Files/IMG_0412.JPG', size: 4000 });
-    const page1 = JSON.parse(text(z.get(`${top}/${manifest.pages[1].json}`))) as { blocks: unknown[]; collapsedForAll: string[] };
+    expect(files.find((f) => f.id === w.ids.photo)).toMatchObject({ original: '01_Dia_1_exteriores/Files/IMG_0412.JPG', size: 4000 });
+    const page1 = JSON.parse(text(z.get(manifest.pages[1].json))) as { blocks: unknown[]; collapsedForAll: string[] };
     expect(page1.collapsedForAll).toEqual([w.headingId]);
     expect(JSON.stringify(page1.blocks)).toContain(`sdmedia://${w.ids.heic}`);
-    const comments = JSON.parse(text(z.get(`${top}/_shotdocs/comments.json`))) as {
+    const comments = JSON.parse(text(z.get('_shotdocs/comments.json'))) as {
       threads: { block: string | null; comments: { author?: string; mine?: boolean; deleted?: boolean; body?: string }[] }[];
     };
     const lens = comments.threads.find((th) => th.comments[0].body === 'Cambiar el lente a 35')!;
@@ -565,7 +568,7 @@ describe('exportar zip: el archivo entero', () => {
     if (!hasPython) return;
     const z = read(zip);
     expect(z.bad).toBeNull();
-    const day1 = 'Rodaje_·_Semana_1/01_Rodaje_·_Semana_1/01_Dia_1_exteriores';
+    const day1 = '01_Dia_1_exteriores';
     expect(z.names.filter((n) => n.includes('/Files/') && !n.includes('/_view/'))).toEqual([]);
     for (const v of ['IMG_0412.jpg', 'IMG_0413.jpg', 'clip 001.jpg']) expect(z.names).toContain(`${day1}/Files/_view/${v}`);
     const html = text(z.get(`${day1}/01_Dia_1_exteriores.html`));
@@ -681,7 +684,7 @@ describe('exportar zip: el archivo entero', () => {
       },
     };
     await zipOf(w, w.b, { target });
-    const day1 = '01_Rodaje_·_Semana_1/01_Dia_1_exteriores';
+    const day1 = '01_Dia_1_exteriores';
     expect([...written.keys()]).toEqual(expect.arrayContaining(['index.html', 'style.css', '_shotdocs/manifest.json', `${day1}/01_Dia_1_exteriores.html`, `${day1}/Files/_view/IMG_0412.jpg`]));
     expect(new TextDecoder().decode(written.get(`${day1}/Files/IMG_0412.JPG`))).toBe(content(4000, 1));
   });
@@ -841,5 +844,179 @@ describe('exportar zip: la ventana', () => {
     const phone = await render(w.b);
     expect(phone.zip.disabled).toBe(true);
     expect(phone.zip.parentElement?.getAttribute('data-tip')).toBe('The zip is made from a computer. On a phone or tablet, export the PDF.');
+  });
+});
+
+describe('exportar zip: rutas largas de Windows y marcas de plantilla (auditoría O1 y O6)', () => {
+  /** Un árbol hostil: títulos de 200 letras con emojis, 6 niveles, hermanas con el mismo título, archivos de 180 letras. */
+  async function hostile() {
+    const server = new FakeServer();
+    server.enableTrash();
+    const a = await device(server);
+    await sync(a);
+    const long = (n: number) => `Escena ${n} 👨‍👩‍👧‍👦 con un título larguísimo de supervisión de efectos visuales que no termina más `.repeat(4).slice(0, 200);
+    const root = await a.tree.create(null, `${long(0)} Rodaje`);
+    const chain = [root];
+    for (let level = 1; level < 6; level++) chain.push(await a.tree.create(chain[level - 1], long(level)));
+    // Hermanas con el mismo título (en dos niveles) y una página en el fondo con el mismo título que su madre.
+    const twinA = await a.tree.create(root, long(1));
+    const twinB = await a.tree.create(root, long(1));
+    await sync(a);
+    const deepest = chain[5];
+    const fileName = `${'Foto de referencia del set con un nombre de archivo muy largo 📷 '.repeat(4).slice(0, 176)}.JPG`;
+    const photo = await a.media.add(deepest, file(1500, fileName, 'image/jpeg', 11));
+    const twin = await a.media.add(deepest, file(1600, fileName.toLowerCase(), 'image/jpeg', 12));
+    await writeBlocks(a.docs, deepest, [
+      { type: 'paragraph', content: [{ type: 'link', href: `/p/${twinA}`, content: 'la gemela' }] },
+      { type: 'image', props: { url: photo, name: fileName } },
+      { type: 'image', props: { url: twin, name: fileName } },
+    ] as never);
+    await writeBlocks(a.docs, twinB, [{ type: 'image', props: { url: photo, name: fileName } }] as never);
+    await sync(a);
+    await a.media.idle();
+    await sync(a);
+    return { server, a, root, chain, twinA, twinB };
+  }
+
+  async function build(a: Device, kind: 'page' | 'project', target: string, title: string) {
+    const sink = new BlobSink();
+    const result = await buildZip({
+      title,
+      kind,
+      project: kind === 'project' ? { id: target, name: title } : null,
+      plan: exportPlan(a.tree, kind, target),
+      rows: (id) => a.tree.get(id),
+      source: a.docs,
+      editor: await editor(a),
+      media: appArchiveMedia(a.media, a.mediaDb),
+      include: ALL,
+      comments: null,
+      me: { id: a.remote.userId, email: OWNER_EMAIL },
+      online: true,
+      target: { kind: 'zip', sink },
+      convertHeic: fakeConvertHeic,
+      appVersion: '0.0XX',
+    });
+    return { result, zip: new Uint8Array(await sink.blob().arrayBuffer()) };
+  }
+
+  it('ninguna ruta pasa el tope con la carpeta de Descargas, sin choques, y los links del .html y el .md siguen andando', async () => {
+    const h = await hostile();
+    const title = h.a.tree.get(h.root)!.title;
+    for (const [kind, target, name] of [
+      ['page', h.root, title],
+      ['project', h.server.workspaceId, `${'Proyecto con un nombre larguísimo 🎬 '.repeat(8)}`],
+    ] as const) {
+      const { result, zip } = await build(h.a, kind, target, name);
+      expect(result.missing).toEqual([]);
+      if (!hasPython) continue;
+      const z = read(zip);
+      expect(z.bad).toBeNull();
+      const root = rootFolderName(name);
+      expect(root.length).toBeLessThanOrEqual(ROOT_NAME_MAX);
+      const base = TYPICAL_BASE.length + root.length + 1;
+      const files = z.names.filter((n) => !n.endsWith('/'));
+      // El tope: la carpeta de destino típica, el nombre del zip y la ruta adentro (Windows cuenta en UTF-16).
+      const longest = Math.max(...files.map((n) => base + n.length));
+      expect(longest, files.find((n) => base + n.length === longest)).toBeLessThanOrEqual(SAFE_PATH);
+      // Ninguna entrada repite el nombre del zip como carpeta de arriba.
+      expect(files.some((n) => n.startsWith(`${root}/`))).toBe(false);
+      // Sin choques (Windows y la Mac no distinguen mayúsculas).
+      expect(new Set(files.map((n) => n.toLowerCase())).size).toBe(files.length);
+      // Las dos fotos con el mismo nombre (salvo mayúsculas) quedan separadas, con su extensión.
+      const originals = files.filter((n) => /\/Files\/[^/]+\.jpg$/i.test(n) && !n.includes('/_view/'));
+      expect(originals).toHaveLength(2);
+      for (const o of originals) expect(o).toMatch(/\.JPG$|\.jpg$/);
+      // Cada link del .html y del .md (fotos, originales, otras páginas, estilos) existe en el zip.
+      const resolve = (dir: string, h: string) => {
+        const out: string[] = [];
+        for (const part of (dir ? `${dir}/${decodeURIComponent(h)}` : decodeURIComponent(h)).split('/')) if (part === '..') out.pop(); else out.push(part);
+        return out.join('/');
+      };
+      let links = 0;
+      for (const f of files.filter((n) => /\.(html|md)$/.test(n))) {
+        const body = text(z.entries.find((e) => e.name === f));
+        const dir = f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '';
+        const targets = f.endsWith('.html')
+          ? [...body.matchAll(/(?:href|src)="([^"#]+)"/g)].map((m) => m[1]!).filter((x) => !/^(https?:|data:|mailto:)/.test(x))
+          : [...body.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]!).filter((x) => !/^(https?:|mailto:|#)/.test(x));
+        for (const t of targets) {
+          links++;
+          expect(files, `${f} → ${t}`).toContain(resolve(dir, t));
+        }
+      }
+      expect(links).toBeGreaterThan(20);
+      // El manifest dice dónde está cada página y cada archivo (para volver, EX6): todo existe.
+      const manifest = JSON.parse(text(z.entries.find((e) => e.name === '_shotdocs/manifest.json'))) as {
+        pages: { html: string; md: string; json: string }[];
+        files: { original: string | null; view: string | null }[];
+      };
+      for (const p of manifest.pages) for (const path of [p.html, p.md, p.json]) expect(files).toContain(path);
+      for (const f of manifest.files) for (const path of [f.original, f.view]) if (path) expect(files).toContain(path);
+    }
+  });
+
+  it('cada carpeta reparte lo que queda entre ella y las de abajo; los nombres se cortan sin partir un emoji', () => {
+    const fmt = { size: 'A4' as const, landscape: false };
+    const t = 'Título larguísimo 👨‍👩‍👧‍👦 '.repeat(20);
+    const plan = Array.from({ length: 8 }, (_, i) => ({ id: `p${i}`, title: t, depth: i, parent: i ? `p${i - 1}` : null, header: [], format: fmt }));
+    const limit = pathLimit(rootFolderName(t));
+    const slots = pageSlots(plan, { flatRoot: true, root: rootFolderName(t), limit });
+    expect(slots.get('p0')!.dir).toBe('');
+    const deepest = slots.get('p7')!.dir;
+    expect(deepest.length + '/Files/_view/'.length + 32).toBeLessThanOrEqual(limit + 8);
+    for (const s of slots.values()) for (const part of s.dir.split('/').filter(Boolean)) expect(part).toMatch(/^\d{2}_/);
+    // Sin medio emoji: cada parte es texto bien formado.
+    for (const s of slots.values()) expect(() => encodeURIComponent(s.dir)).not.toThrow();
+    const names = new FileNames(limit);
+    const long = `${'a'.repeat(170)}.HEIC`;
+    const cut = names.original(deepest, long);
+    expect(cut.endsWith('.HEIC')).toBe(true);
+    expect(deepest.length + '/Files/'.length + cut.length).toBeLessThanOrEqual(limit);
+    expect(names.original(deepest, long.toUpperCase().replace('.HEIC', '.heic'))).toMatch(/ \(2\)\.heic$/);
+    // La raíz nunca pisa el índice.
+    expect(pageSlots([{ ...plan[0]!, title: 'index' }], { flatRoot: true, root: 'index', limit }).get('p0')!.name).toBe('index_page');
+  });
+
+  it('el manifest guarda las marcas de plantilla (v0.124) sin nombrar páginas de afuera', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    await sync(a);
+    const folder = await a.tree.create(null, 'Templates');
+    await a.tree.setSetting(folder, 'templatesFolder', true);
+    const own = await a.tree.create(folder, 'Mi reporte');
+    await a.tree.setSetting(own, 'template', { description: 'El de cada día', dayReport: true });
+    const off = await a.tree.create(folder, 'Vieja');
+    await a.tree.setSetting(off, 'template', false);
+    const outside = await a.tree.create(null, 'Plantilla de afuera');
+    const reports = await a.tree.create(null, 'Reportes');
+    await a.tree.setSetting(reports, 'dayReports', { template: own });
+    const day = await a.tree.create(reports, '2026-10-02 | Day 01', undefined, { templateId: own });
+    const fromBuiltin = await a.tree.create(reports, 'De fábrica', undefined, { templateId: '5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e02' });
+    const fromOutside = await a.tree.create(reports, 'De afuera', undefined, { templateId: outside });
+    await sync(a);
+    const pagesOf = async (kind: 'page' | 'project', target: string) => {
+      const { zip } = await build(a, kind, target, 'X');
+      const z = read(zip);
+      const manifest = JSON.parse(text(z.entries.find((e) => e.name === '_shotdocs/manifest.json'))) as { pages: { id: string; settings: Record<string, unknown>; templateId: string | null }[] };
+      return new Map(manifest.pages.map((p) => [p.id, p]));
+    };
+    if (!hasPython) return;
+    // El proyecto entero: todo, con la plantilla de los reportes (que también va).
+    const all = await pagesOf('project', server.workspaceId);
+    expect(all.get(folder)!.settings).toEqual({ templatesFolder: true });
+    expect(all.get(own)!.settings).toEqual({ template: { description: 'El de cada día', dayReport: true } });
+    expect(all.get(off)!.settings).toEqual({ template: false });
+    expect(all.get(reports)!.settings).toEqual({ dayReports: { template: own } });
+    expect(all.get(day)!.templateId).toBe(own);
+    expect(all.get(fromBuiltin)!.templateId).toBe('5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e02');
+    expect(all.get(fromOutside)!.templateId).toBe(outside);
+    // Solo la rama de los reportes: la marca queda, sin el id de la plantilla, que quedó afuera.
+    const branch = await pagesOf('page', reports);
+    expect(branch.get(reports)!.settings).toEqual({ dayReports: {} });
+    expect(branch.get(day)!.templateId).toBeNull();
+    expect(branch.get(fromBuiltin)!.templateId).toBe('5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e02');
+    expect(branch.get(fromOutside)!.templateId).toBeNull();
+    expect(settingsOf({ dayReports: false }, { parent: 'x', format: { size: 'free', landscape: false } }, new Set())).toEqual({ dayReports: false });
   });
 });
