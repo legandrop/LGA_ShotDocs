@@ -1128,7 +1128,7 @@ nuevos. Un comentario que volvió se ve "from an archive".
   sube `schema_version` a 18 (`ARCHIVE_COMMENTS_SCHEMA_VERSION`). **Sin aplicar.** Su prueba va en
   `supabase/tests/comentarios_importados_permisos.sql` (sin correr: pide la base).
 
-**Lo probado** (suite con Node 22: NUMEROS_SUITE; nuevas: `zipReader.test.ts` 8, `archiveBlocks.test.ts` 6,
+**Lo probado** (suite con Node 22: 3245 pruebas, 3240 pasan y 5 salteadas, 34 más que v0.134; en los archivos nuevos: `zipReader.test.ts` 8, `archiveBlocks.test.ts` 6,
 `shotdocsImport.test.tsx` 11, `importArchiveDialog.test.tsx` 4; `tsc` y `npm run build` limpios; la ventana va en su
 pedazo aparte, de 47 KB):
 
