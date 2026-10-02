@@ -1,16 +1,20 @@
+// Copia de la versión publicada v0.090 (commit ca593e7) de src/sync/engine.ts, para probar que lo que esa versión
+// deja en el dispositivo (por ejemplo, después de semanas sin red) lo lee y lo sube la versión actual sin perder
+// nada (src/sync/offlineLargo.test.ts). No se toca, salvo los caminos de los imports.
 // Los avisos del estado van en inglés y se traducen al mostrarlos (`localize` en SyncBadge.tsx).
-import { stored as t } from '../i18n';
-import type { MediaQueue, MediaStatus } from '../media/queue';
-import { mediaIdsInDoc } from '../media/usage';
+import { stored as t } from '../../../i18n';
+import type { MediaQueue, MediaStatus } from '../../../media/queue';
+import { mediaIdsInDoc } from '../../../media/usage';
 import * as Y from 'yjs';
-import { Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from './access';
-import type { CommentQueue } from './comments';
+import { Permissions, TEAM_SCHEMA_VERSION, type AccessStore } from '../../access';
+import type { CommentQueue } from '../../comments';
 import type { PageDocs } from './docs';
 import type { PageFiles } from './files';
 import { hasUnsyncedContent, type DocState } from './localDb';
-import { APP_OUTDATED, type Remote } from './remote';
-import type { PageTree } from './tree';
-import { errorMessage, isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, type QueuedOp, type WorkspaceSettings } from './types';
+import { APP_OUTDATED, type Remote } from '../../remote';
+// El tipo del árbol es el de hoy: `Permissions` lo pide (la clase de la v0.090 tiene la misma forma).
+import type { PageTree } from '../../tree';
+import { errorMessage, isNetworkError, isPermanent, isTimeout, REQUEST_TIMEOUT, type QueuedOp, type WorkspaceSettings } from '../../types';
 
 export interface SyncStatus {
   /** El último intento de hablar con el servidor tuvo respuesta (aunque fuera un error). */
@@ -136,8 +140,6 @@ export class SyncEngine {
   private readonly verifyWait = new Map<string, { failures: number; until: number }>();
   /** Páginas cuyos usos en el servidor ya se leyeron en esta apertura (ver `reconcileMedia`). */
   private readonly usesAsked = new Set<string>();
-  /** Ya se sabe, en esta apertura, si esta versión es más vieja que la mínima del workspace (`status.outdated`). */
-  private versionKnown = false;
 
   constructor(
     private readonly remote: Remote,
@@ -204,19 +206,14 @@ export class SyncEngine {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') void this.syncNow();
     };
     const onOffline = () => this.patch({ online: false });
-    // Volvió la red: la cola de archivos deja de esperar al portero o a Storage y prueba enseguida.
-    const onOnline = () => {
-      this.options.media?.networkBack();
-      onWake();
-    };
     if (typeof window !== 'undefined') {
       window.addEventListener('offline', onOffline);
-      window.addEventListener('online', onOnline);
+      window.addEventListener('online', onWake);
       window.addEventListener('focus', onWake);
       document.addEventListener('visibilitychange', onWake);
       this.cleanups.push(() => {
         window.removeEventListener('offline', onOffline);
-        window.removeEventListener('online', onOnline);
+        window.removeEventListener('online', onWake);
         window.removeEventListener('focus', onWake);
         document.removeEventListener('visibilitychange', onWake);
       });
@@ -290,31 +287,9 @@ export class SyncEngine {
    */
   async prefetchPage(pageId: string, timeoutMs = 4000): Promise<boolean> {
     if (!(await this.isMissingContent(pageId))) return true;
-    const pull = (async () => {
-      // Con la app vieja para el workspace no se baja contenido (ver `cycle`). Al abrir la app, una página se puede
-      // abrir antes de que el primer ciclo sepa si esta versión es vieja: entonces se pregunta antes de bajar.
-      if (!this.versionKnown) await this.learnOutdated();
-      if (this.status.outdated) return;
-      await this.docs.pullPage(pageId, this.remote);
-    })().catch(() => undefined);
+    const pull = this.docs.pullPage(pageId, this.remote).catch(() => undefined);
     await Promise.race([pull, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
     return !(await this.isMissingContent(pageId));
-  }
-
-  /** Si esta versión es más vieja que la mínima del workspace, según sus ajustes (`null`: una base sin ajustes). */
-  private isOutdated(settings: WorkspaceSettings | null): boolean {
-    if (!settings) return false;
-    const version = Number(this.options.appVersion);
-    return settings.minAppVersion !== null && !(Number.isFinite(version) && version >= settings.minAppVersion);
-  }
-
-  /** Lee los ajustes del workspace solo para saber si esta versión es vieja (antes del primer ciclo). */
-  private async learnOutdated(): Promise<void> {
-    const outdated = this.isOutdated(await this.remote.fetchWorkspaceSettings());
-    if (this.stopped || this.versionKnown) return;
-    this.versionKnown = true;
-    if (outdated !== this.status.outdated) this.patch({ outdated });
-    this.options.media?.setOutdated(outdated);
   }
 
   /** La base dijo que sacaron a la persona del workspace (lo guardado en el dispositivo). */
@@ -359,9 +334,6 @@ export class SyncEngine {
     try {
       const { outdated, removed } = await this.checkWorkspace();
       halt();
-      // La base contestó después de un ciclo sin conexión: la cola de archivos deja de esperar (si estaba
-      // esperando porque el portero o Storage no contestaban, puede que fuera la red) y prueba enseguida.
-      if (!this.status.online) this.options.media?.networkBack();
       // Si la base dice que sacaron a la persona, no se sube ni se baja nada más: lo del dispositivo queda
       // como está hasta que ella elija qué hacer (pantalla "You no longer have access").
       if (removed) {
@@ -369,10 +341,7 @@ export class SyncEngine {
         return;
       }
       halt();
-      // Con la app vieja para este workspace (`min_app_version`) no sale nada del dispositivo: ni el árbol, ni el
-      // contenido, ni las imágenes, ni los comentarios. Todo queda en la cola y sale al actualizar, en el orden de
-      // siempre (Docs/Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red").
-      if (!outdated) await this.pushOps();
+      await this.pushOps();
       halt();
       // Primero los proyectos y después sus páginas: nunca llega una página de un proyecto desconocido.
       const projects = await this.remote.fetchProjects(this.status.schemaVersion);
@@ -409,12 +378,7 @@ export class SyncEngine {
 
       halt();
       const cursors = await this.docs.states();
-      // Tampoco se baja contenido: lo que escribió una versión más nueva puede tener algo que el editor de esta no
-      // conoce y que borraría al editar ese bloque (una propiedad nueva), y ese borrado saldría al actualizar. Lo
-      // propio sigue editable; lo nuevo de los demás llega con la versión nueva. El árbol sí se baja (títulos y
-      // lugares: no los toca ningún editor). `status.outdated` y no `outdated`: la base puede haber rechazado una
-      // subida en este mismo ciclo (subieron la mínima entre la consulta y la subida).
-      const stale = this.status.outdated ? [] : rows.filter((r) => r.update_seq > (cursors.get(r.id)?.cursor ?? 0)).map((r) => r.id);
+      const stale = rows.filter((r) => r.update_seq > (cursors.get(r.id)?.cursor ?? 0)).map((r) => r.id);
       await runPool(stale, PULL_CONCURRENCY, (id) =>
         this.docs.pullPage(id, this.remote).catch((err) => {
           // Lo mismo al bajar: esta página se reintenta en la próxima vuelta y las demás siguen.
@@ -439,8 +403,7 @@ export class SyncEngine {
       halt();
       // Los comentarios de páginas que todavía no están en el servidor esperan. Sus errores no cortan el
       // ciclo: quedan en su propia cola (`commentError`, `failedComments`).
-      // Con la app vieja, los comentarios esperan como los de una página que todavía no está en el servidor.
-      await this.options.comments?.run(this.status.outdated ? () => true : (pageId) => this.tree.hasUnsentCreate(pageId));
+      await this.options.comments?.run((pageId) => this.tree.hasUnsentCreate(pageId));
 
       this.patch({ online: true, lastError: contentError ?? fileError, lastSyncAt: Date.now() });
       // Sin esperarla: tiene su propio ciclo y sus propios errores.
@@ -471,13 +434,14 @@ export class SyncEngine {
     this.options.sizes?.configure(settings?.schemaVersion ?? 0);
     // La usan `fetchProjects` (las columnas que pide) y la interfaz (archivar y borrar, P.14).
     if ((settings?.schemaVersion ?? 0) !== this.status.schemaVersion) this.patch({ schemaVersion: settings?.schemaVersion ?? 0 });
-    this.versionKnown = true;
     if (!settings) {
       this.patch({ outdated: false });
       this.options.media?.setOutdated(false);
       return { outdated: false, removed: await this.checkAccess(null) };
     }
-    const outdated = this.isOutdated(settings);
+    const version = Number(this.options.appVersion);
+    const outdated =
+      settings.minAppVersion !== null && !(Number.isFinite(version) && version >= settings.minAppVersion);
     // La cola de archivos se frena sola con la misma cuenta: no registra, no sube y no manda usos (todo queda en
     // el dispositivo y sale al actualizar). Las versiones anteriores a esta no lo hacían: a esas las frena la base
     // (Docs/Doc_Sincronizacion.md, "La versión mínima y los archivos").
