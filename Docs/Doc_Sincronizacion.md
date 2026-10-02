@@ -379,7 +379,7 @@ que enterarse y tener su texto a mano:
   que el aviso puede traer texto que tecleó otro y este dispositivo movió. No se pierde nada: quien lo tecleó no
   recibe aviso (su texto lo borró el movimiento, con nombre), y que lo reciba quien lo movió es la única forma de
   recuperarlo. Por eso el aviso dice *what you wrote or moved*. Lo que nunca pasó por este dispositivo no se avisa.
-- **Un documento abierto puede tener varios autores** (v0.0XX). Yjs le cambia el número a un documento cuando una
+- **Un documento abierto puede tener varios autores** (v0.101). Yjs le cambia el número a un documento cuando una
   transacción que aplica algo bajado también escribe con el número del documento: es la reparación de estructura que va
   en la misma transacción que lo que llega (`applyToLive`). `applyUpdate` marca esa transacción como remota y Yjs, al
   ver su propio número en una transacción remota, cree que otro lo usa y elige uno nuevo (avisa en la consola
@@ -466,7 +466,7 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
   restaurar una copia, lo de un tercero no se avisa (sí a quien lo escribió); descartar borra solo lo que se mostró;
   el texto del aviso (orden, fotos por nombre, sin autores propios no avisa); el estado avisa solo con la página
   cerrada; y compactar en orden conserva el texto que una fila posterior trae como hueco (también al abrir con 70
-  filas propias más una fila hueco: falla si `loadInto` vuelve a `mergeUpdates`). Desde v0.0XX, lo que copia la
+  filas propias más una fila hueco: falla si `loadInto` vuelve a `mergeUpdates`). Desde v0.101, lo que copia la
   reparación que vino con lo bajado (Yjs le cambia el autor al documento) también avisa: falla si se vuelve a anotar
   solo el autor que tiene el documento al guardar; y lo que se escribe después con el número nuevo también (falla si
   se anota solo el número con que se abrió el documento).
@@ -478,7 +478,7 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
   guardó con su texto esté en el servidor con su texto**, que todos terminen iguales al servidor (con el mapa de
   colapsar) y que cada aviso sea solo de lo propio y diga **exactamente las letras de sus tramos**, borradas en el
   servidor. En la suite, 12 corridas de 60 pasos (`REMOVED_SEEDS`, `REMOVED_STEPS`; pasaron 40 de 80). Con la subida
-  de antes fallan 29 de 30 corridas. Desde v0.0XX lo propio de cada dispositivo son todos los autores que tuvieron sus
+  de antes fallan 29 de 30 corridas. Desde v0.101 lo propio de cada dispositivo son todos los autores que tuvieron sus
   documentos (la prueba los anota en cada transacción) y no solo el número con que se abrió cada uno: con 300 corridas
   de 200 pasos, la prueba de antes fallaba en 25 en una corrida (17 en otra: a 200 pasos no es del todo repetible) («was told about text it did not write», que era texto del mismo
   dispositivo escrito después de que Yjs le cambió el número); ahora pasan las 300, y las semillas 2 y 88 con 120

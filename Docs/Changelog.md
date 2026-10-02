@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.101 :
 
 Con 300 corridas al azar, la prueba del aviso de B.16 decía que un dispositivo recibía texto ajeno (25 fallas en
 una corrida). Era suyo: cuando la reparación que va con lo bajado escribe, Yjs le cambia el número al documento, y la
