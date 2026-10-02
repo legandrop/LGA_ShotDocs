@@ -577,9 +577,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    auditoría de la entrega 1: el rearmado de D110 (O1: sin nada sin subir, la página se rearma con lo del servidor y el
    borrado de un snapshot malo no llega a nadie), la época del árbol que reinicia solo si es más nueva (O2) y
    `invalidate_page_snapshot` con `sees_deleted` (O3, migración `20261020120000_compactar_crear.sql`, sin aplicar).
+   De su auditoría, corregido antes de publicarla: el rearmado conserva los elementos sin sus borrados (O-A: tirarlos
+   dejaba invisible lo escrito al lado de un elemento de un snapshot malo), lo mismo al restaurar una copia (O-B).
    **Falta la entrega 3 (prenderlos):** aplicar esa migración, el script de restaurar, subir `min_app_version` a la
-   versión de la entrega 2 (O5), probar de punta a punta, medir en el iPhone (también armar uno en el hilo principal) y
-   `snapshot_min_version`. Hoy no es urgente: ninguna página lo necesita.
+   versión de la entrega 2 (O5), probar de punta a punta, medir en el iPhone (también armar uno en el hilo principal y
+   cuánto frena el ciclo, O-C: si tarda, compactar fuera del ciclo o con tope), separar un snapshot corrupto de uno de
+   una versión más nueva (O-D: hoy uno roto se sigue sirviendo y cada dispositivo nuevo cae a las filas; hace falta que
+   `pull_page_snapshot` devuelva la huella, otra migración) y `snapshot_min_version`. Hoy no es urgente: ninguna página
+   lo necesita.
 
 10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la

@@ -4,12 +4,12 @@ v0.0XX :
 
 Compactar (B.9), entrega 2: crear snapshots. Nadie armaba las copias resumidas que v0.127 sabe bajar. Nuevo
 `compact.ts`: al final del ciclo, el dispositivo de quien ve lo borrado arma como mucho una página con las filas del
-servidor (nunca con lo guardado), la comprueba por los dos caminos, con lo pendiente y elemento por elemento, cada 10
-contra todo desde cero, la sube, baja la vuelta y la confirma; lo que no se puede compactar se saltea 24 horas. De la
-auditoría de la entrega 1: al invalidarse un snapshot, una página sin nada sin subir se rearma con lo del servidor en
-vez de volver a subir entera (D110: el borrado de un snapshot malo llegaba a todos); la época del árbol reinicia solo si
-es más nueva; `invalidate_page_snapshot` pide ver lo borrado (migración `20261020120000_compactar_crear.sql`, sin
-aplicar). Siguen apagados.
+servidor, la comprueba por los dos caminos (con lo pendiente y elemento por elemento; cada 10, contra todo desde cero),
+la sube, baja la vuelta y la confirma; lo que no se puede se saltea 24 horas. Al invalidarse un snapshot, una página sin
+nada sin subir ya no vuelve a subir entera (el borrado de uno malo llegaba a todos, D110): se rearma con lo del
+servidor conservando sus elementos sin sus borrados, y lo mismo al restaurar una copia (sobra texto antes que falte).
+La época del árbol reinicia solo si es más nueva; `invalidate_page_snapshot` pide ver lo borrado (migración
+`20261020120000_compactar_crear.sql`, sin aplicar). Siguen apagados.
 [ Compactar, entrega 2 - armar las copias resumidas en el dispositivo (apagadas) y rearmar sin propagar el borrado de una mala ]
 
 v0.131 :

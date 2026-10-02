@@ -468,17 +468,21 @@ propone.
   si el dispositivo aplicó algún snapshot de esa página (`DocState.snapshotId`) y la época que llega es otra (la de la
   misma respuesta de `pull_page_content`; la del árbol, solo si es **más nueva** que la anotada, porque un árbol leído
   antes de lo último bajado puede traer una vieja y la de la base nunca vuelve atrás):
-  - **Sin nada propio sin subir** (ni en memoria, ni marca, ni envío, ni versión sin confirmar, ni rechazo): tira lo que
-    tiene guardado de esa página y la **rearma con las filas del servidor**, en una sola transacción (filas locales,
-    cursor a 0, `syncedSV`, `syncedDS` y el snapshot). Todo lo que tenía ya está en el servidor, salvo lo que trajo el
-    snapshot malo (un borrado o un elemento que las filas no tienen): así eso no vuelve a subir ni llega a nadie. Si la
-    página está abierta, se vuelve a abrir desde lo guardado.
-  - **Con algo propio sin subir:** no toca nada y espera. Lo propio sube primero con las cuentas de siempre, que no
-    dejan subir lo que trajo el snapshot (según ellas el servidor ya lo tiene), y en la próxima bajada, ya sin nada
-    pendiente, se rearma. Mientras espera, lo bajado se guarda sin anotar la época nueva, así lo vuelve a intentar.
-  - Antes (v0.127) se borraban las cuentas y la página volvía a subir entera: el borrado de un snapshot malo llegaba a
-    todos (O1). Lo que queda: si la persona borró algo sin subir y el snapshot malo borró exactamente lo mismo, ese
-    borrado suyo no sube y vuelve a aparecer (sección 16).
+  - **Sin nada propio sin subir** (ni en memoria, ni marca, ni envío, ni versión sin confirmar, ni rechazo): la
+    **rearma con las filas del servidor**. En una sola transacción, lo guardado se cambia por **sus elementos sin ningún
+    borrado** y se olvidan el cursor, `syncedSV`, `syncedDS` y el snapshot; después baja las filas, que traen los
+    borrados que valen. Así, de lo que trajo un snapshot malo: un **borrado** de más no queda ni llega a nadie; un
+    **elemento** de más se conserva, y con él lo que alguien escribió colgado de él, y si después de bajar lo guardado
+    tiene algo que el servidor no, se sube (auditoría de la entrega 2, O-A: tirarlo dejaba invisible en todos lo
+    escrito al lado). Ante la duda, sobra texto y no falta. Si la página está abierta, se vuelve a abrir desde lo
+    guardado. Mientras baja no se avisa de "lo que escribías lo borró otro": son los borrados de siempre que vuelven.
+  - **Con algo propio sin subir:** no se rearma todavía. Se olvida solo `syncedSV` (y el envío armado contra él): lo
+    propio sube primero con todos sus elementos (también el de más y lo que cuelga de él), mientras `syncedDS` sigue
+    sin dejar subir los borrados del snapshot. En la próxima bajada, ya sin nada pendiente, se rearma. Mientras espera,
+    lo bajado se guarda sin anotar la época nueva, así lo vuelve a intentar.
+  - Antes (v0.127) se borraban las dos cuentas y la página volvía a subir entera: el borrado de un snapshot malo
+    llegaba a todos (O1). Lo que queda: si la persona borró algo sin subir y el snapshot malo borró exactamente lo
+    mismo, ese borrado suyo no sube y vuelve a aparecer (sección 16).
 - **Apagar todo:** `snapshot_min_version = null` en `workspace_settings`. Desde el próximo pedido, todos bajan filas.
 
 ## 13. Migración (borrador, sin aplicar)
@@ -668,7 +672,9 @@ Antes de escribir en la base, en este orden:
 | Un snapshot enorme que no baja en una red mala | Hasta 8 MB, con el tope de tiempo del lote de a uno (pensado para 8 MB); si es más grande, no se compacta |
 | Yjs 14 (B.10) cambia el formato | Apagar o invalidar antes de esa migración |
 | Las versiones viejas siguen bajando todo | Es lento pero correcto; desaparece cuando se actualizan |
-| Restaurar una copia con un snapshot malo todavía sin invalidar | Quien lo aplicó vuelve a subir la página entera (`resetForRestore`) con lo que el snapshot borró de más: el texto sigue en las filas, pero el documento vivo lo pierde. Requiere un snapshot malo que nadie detectó (comprobación por dos caminos, vuelta, desde cero cada 10) y una restauración antes de invalidarlo. Antes de restaurar con los snapshots prendidos, conviene invalidarlos todos (entrega 3) |
+| Restaurar una copia con un snapshot malo todavía sin invalidar | Quien aplicó un snapshot de la página, al restaurar (`resetForRestore`), cambia lo guardado por sus elementos sin borrados y sube eso (auditoría de la entrega 2, O-B): lo que el snapshot borró de más no llega a nadie. Lo que queda: un borrado legítimo que la copia perdió y que ese dispositivo tenía puede volver a aparecer (sobra texto, no falta). Antes de restaurar con los snapshots prendidos, igual conviene invalidarlos (entrega 3) |
+| Un snapshot base que se corrompió en la base (bytes rotos) | Se sirve igual: cada dispositivo nuevo lo baja, no lo puede leer y cae a las filas; el compactador saltea la página 24 horas cada vez. No se pierde nada. No se invalida porque "ilegible" también puede ser "armado por una versión más nueva": separarlo pide que `pull_page_snapshot` devuelva la huella guardada (otra migración; roadmap, entrega 3, auditoría de la entrega 2, O-D) |
+| Compactar una página grande frena el ciclo de sincronización | Lo escrito ya está guardado en el dispositivo y sube en el ciclo siguiente; medirlo en el iPhone en la entrega 3 y, si tarda, compactar fuera del ciclo o con un tope de tiempo (auditoría de la entrega 2, O-C) |
 | Un borrado propio sin subir igual a uno que trajo un snapshot malo | Al rearmarse no sube y la palabra vuelve a aparecer (no se pierde texto: reaparece lo borrado). Necesita que el snapshot malo borre exactamente lo mismo |
 | Armar un snapshot cuesta CPU en el dispositivo (segundos en una página de miles de filas) | Una página por ciclo, de a tramos (el anterior más la cola), devolviendo el control cada 50 filas; en el hilo principal. Medir en el iPhone en la entrega 3 (prueba 8) y, si hace falta, pasarlo a un Worker como el historial |
 
@@ -852,9 +858,11 @@ como v0.129. Todo se prueba prendido con el servidor en memoria.
   huella: la base devuelve el que ya estaba). Sus errores no cortan el ciclo.
 - `remote.ts`: `SupabaseRemote` implementa las seis funciones (`claim_page_compaction`, `push_page_snapshot`,
   `pull_page_snapshot`, `confirm_page_snapshot`, `skip_page_compaction`, `invalidate_page_snapshot`).
-- `docs.ts`: **el rearmado (D110, O1 y O2, sección 12):** sin nada propio sin subir, la página se tira y se rearma con
-  lo del servidor (no se sube nada); con algo sin subir, espera a que suba. La época del árbol reinicia solo si es más
-  nueva que la anotada.
+- `docs.ts`: **el rearmado (D110, O1 y O2, sección 12):** sin nada propio sin subir, lo guardado pasa a ser sus
+  elementos sin borrados y la página se rearma con lo del servidor; si queda algo que el servidor no tiene (un elemento
+  de un snapshot malo y lo escrito colgado de él), se sube (O-A). Con algo sin subir, olvida `syncedSV` y espera a que
+  suba. Restaurar una copia hace lo mismo con las páginas que aplicaron un snapshot (O-B). La época del árbol reinicia
+  solo si es más nueva que la anotada.
 
 **La base** (`supabase/migrations/20261020120000_compactar_crear.sql`, sin aplicar; no sube `schema_version`):
 `invalidate_page_snapshot` pide ver lo borrado (`sees_deleted`), como las demás (O3). Lo demás de la entrega 1 no
@@ -889,5 +897,12 @@ cambia.
 **Para prenderlos (entrega 3):** aplicar `20261020120000_compactar_crear.sql`; el script de restaurar (sección 9);
 **subir `min_app_version` a la versión de esta entrega** (O5: las versiones v0.127 a v0.129 leen snapshots y, al
 invalidarse uno, vuelven a subir la página entera: el O1); probar de punta a punta y medir en el iPhone (pruebas 7 y
-8, también cuánto tarda armar uno en el hilo principal); antes de restaurar una copia con los snapshots prendidos,
-invalidarlos (sección 16); recién ahí `snapshot_min_version`.
+8, también cuánto tarda armar uno en el hilo principal y cuánto frena el ciclo, O-C); separar un snapshot corrupto de
+uno de una versión más nueva (O-D, sección 16); antes de restaurar una copia con los snapshots prendidos, invalidarlos
+(sección 16); recién ahí `snapshot_min_version`.
+
+**Correcciones de la auditoría de la entrega 2** (antes de publicarla): O-A (el rearmado conserva los elementos sin sus
+borrados y sube lo que el servidor no tiene), O-B (lo mismo al restaurar una copia), O-E (la prueba del cliente mira lo
+que manda al invalidar). O-C y O-D, a la entrega 3 (arriba). Con sus pruebas: las dos de la auditoría para O-A, una de
+restaurar con un snapshot malo, la de la espera que olvida `syncedSV` y la del aviso que no se repite; la corrida al
+azar ahora mezcla restaurar con snapshots malos; 8 mutantes de las correcciones, los 8 detectados.
