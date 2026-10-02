@@ -40,9 +40,11 @@ create function pg_temp.expect_table_columns(label text) returns void language p
 begin
   assert (select count(*) from public.page_updates where page_id = '00000000-0000-4000-8000-00000000a1d9') = 2,
     label || ': no se cuentan las filas';
-  assert (select count(*) from (select seq, update, client_update_id, id from public.page_updates
+  assert (select count(*) from (select seq, client_update_id, id from public.page_updates
                                 where page_id = '00000000-0000-4000-8000-00000000a1d9') s) = 2,
-    label || ': no se lee el contenido';
+    label || ': no se leen las columnas sin contenido';
+  -- Desde la privacidad de lo borrado (20261010120000) el contenido tampoco se lee directo: solo por funciones.
+  perform pg_temp.expect_error($q$select update from public.page_updates$q$, '42501', label || ' lee el contenido directo');
   perform pg_temp.expect_error($q$select created_by from public.page_updates$q$, '42501', label || ' lee created_by directo');
   perform pg_temp.expect_error($q$select created_at from public.page_updates$q$, '42501', label || ' lee created_at directo');
   perform pg_temp.expect_error($q$select * from public.page_updates$q$, '42501', label || ' lee la fila entera directo');

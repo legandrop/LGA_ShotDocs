@@ -430,8 +430,10 @@ $$;
 select pg_temp.as_user('00000000-0000-4000-8000-000000000b06');
 do $$
 begin
+  -- Desde la privacidad de lo borrado (20261010120000): f1 ya no se usa en c, así que la invitada (que no ve lo
+  -- borrado) ni lo ve ni ve la papelera: no existe para ella.
   perform pg_temp.expect_error($q$select public.purge_file('00000000-0000-4000-8000-0000000000f1')$q$,
-    'not_allowed', 'la invitada manda a Drive');
+    'file_not_found', 'la invitada manda a Drive');
 end;
 $$;
 select pg_temp.as_user('00000000-0000-4000-8000-000000000b03');
@@ -495,7 +497,8 @@ begin
 
   -- Quien solo ve no confirma; quien edita sí (el portero, al terminar una subida de un archivo ya pedido).
   perform pg_temp.as_user('00000000-0000-4000-8000-000000000b06');
-  perform pg_temp.expect_error(format('select public.media_purged(%L)', f1), 'not_allowed', 'la invitada (ver) confirma');
+  -- (f1 ya no se usa en c: desde la privacidad de lo borrado, para la invitada no existe.)
+  perform pg_temp.expect_error(format('select public.media_purged(%L)', f1), 'file_not_found', 'la invitada (ver) confirma');
   perform pg_temp.as_user('00000000-0000-4000-8000-000000000b05');
   perform public.media_purged(f1);
   perform pg_temp.as_user('00000000-0000-4000-8000-000000000b01');
@@ -518,11 +521,19 @@ do $$
 begin
   perform public.purge_file('00000000-0000-4000-8000-0000000000f2');
   perform public.media_purged('00000000-0000-4000-8000-0000000000f2');
-  assert (select purged_by = auth.uid() and drive_trashed_at is not null from public.files
+  -- La fila se mira como postgres: desde la privacidad de lo borrado (20261010120000), un archivo que ninguna página
+  -- usa no se lee directo con Ver (la admin lo maneja desde la papelera, `trashed_files`).
+  perform set_config('role', 'postgres', true);
+  assert (select purged_by = '00000000-0000-4000-8000-000000000b02' and drive_trashed_at is not null from public.files
           where id = '00000000-0000-4000-8000-0000000000f2'), 'la admin no manda f2';
+  assert (select count(*) from public.files where id in ('00000000-0000-4000-8000-0000000000f1',
+            '00000000-0000-4000-8000-0000000000f2', '00000000-0000-4000-8000-0000000000f3')) = 3
+     and (select count(*) from public.page_files where file_id in ('00000000-0000-4000-8000-0000000000f1',
+            '00000000-0000-4000-8000-0000000000f2', '00000000-0000-4000-8000-0000000000f3')) = 4,
+    'FALLA: se borró algo (la admin manda a Drive)';
+  perform pg_temp.as_user('00000000-0000-4000-8000-000000000b02');
   assert (select count(*) from public.trashed_files('00000000-0000-4000-8000-000000000e01')) = 0,
     'la papelera no quedó vacía';
-  perform pg_temp.check_nothing_deleted(3, 4, 'la admin manda a Drive');
 end;
 $$;
 
@@ -591,9 +602,10 @@ begin
           where id = '00000000-0000-4000-8000-0000000000f4') = 0, 'la admin ve en la papelera algo en uso afuera';
   perform pg_temp.expect_error($q$select public.purge_file('00000000-0000-4000-8000-0000000000f4')$q$,
     'file_not_trashed', 'la admin sin acceso a R manda a Drive algo que usa R');
-  -- Ve el archivo por P, pero no la fila de afuera (no ve rb) ni el proyecto R.
-  assert (select count(*) from public.page_files where file_id = '00000000-0000-4000-8000-0000000000f4') = 1,
-    'la admin ve el uso en una página que no ve';
+  -- No ve la fila de afuera (no ve rb) ni el proyecto R. Desde la privacidad de lo borrado (20261010120000) tampoco
+  -- la de c: c ya no lo usa y la admin solo ve P (no ve lo borrado).
+  assert (select count(*) from public.page_files where file_id = '00000000-0000-4000-8000-0000000000f4') = 0,
+    'la admin ve el uso en una página que no ve, o el uso sacado';
 end;
 $$;
 
