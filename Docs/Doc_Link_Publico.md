@@ -994,8 +994,7 @@ strict-origin-when-cross-origin` para toda la app, `public/robots.txt` con `Disa
   `private.user_can_share_page` (que `can_share` llama, ahora también "nunca un invitado": un dueño de proyecto pasado a
   invitado deja de compartir); `remove_member` revoca los links de quien se va; las funciones del visitante
   `plink_open`, `plink_tree`, `plink_pull_page`, `plink_media_files`, `plink_media_file`, `plink_list_comments`,
-  `plink_add_comment`, `plink_edit_comment` y `plink_delete_comment` (solo `anon`, por `POST`; todas `VOLATILE` salvo
-  `plink_media_files`); las de quien comparte `create_public_link`, `set_public_link`, `reset_public_link`,
+  `plink_add_comment`, `plink_edit_comment` y `plink_delete_comment` (solo `anon`, por `POST`; todas `VOLATILE`); las de quien comparte `create_public_link`, `set_public_link`, `reset_public_link`,
   `revoke_public_link`, `get_public_link`, `public_link_pages` y `delete_public_link_comments`; la política
   `thumbs_select_link`; `has_plain_readers` y `clean_work` cuentan los links; `list_comments` y `comments_view` suman
   `plink_id` y `plink_author` al final; `rls_auto_enable` sin `execute` para `anon`; `schema_version` 14.
@@ -1004,8 +1003,8 @@ strict-origin-when-cross-origin` para toda la app, `public/robots.txt` con `Disa
 - **N2 (lecturas contadas):** `plink_tree` recibe la firma de lo último que bajó y, si el árbol no cambió, no devuelve ni
   cuenta nada; si cambió, cuenta sus bytes como una bajada (`pull`). `plink_list_comments` cuenta sus bytes cuando
   devuelve algo. Las bajadas de todos los links tienen además un tope mensual (`all_month_pull_bytes`, 2 GB de los 5
-  del plan). `plink_media_files` (las filas de los archivos, hasta 200 por pedido) no cuenta: es chico y está acotado
-  por la rama. Para el visitante, `update_seq` es `clean_seq` (o 1, "en preparación"): el árbol no cambia con cada tecla
+  del plan). `plink_media_files` (las filas de los archivos, hasta 200 por pedido) cuenta como una bajada (ver las
+  correcciones de la auditoría, abajo). Para el visitante, `update_seq` es `clean_seq` (o 1, "en preparación"): el árbol no cambia con cada tecla
   de un editor.
 - **D33:** `create_public_link` y `reset_public_link` dan `clean_off` con el interruptor de D14 apagado; *Share* muestra
   *Anyone with the link* apagado con la línea que lo explica.
@@ -1033,6 +1032,34 @@ strict-origin-when-cross-origin` para toda la app, `public/robots.txt` con `Disa
 - **Para publicar:** aplicar la migración (con la copia de seguridad), prender el interruptor de D14 y subir
   `min_app_version` a esta versión (recomendado: la publicada muestra un comentario de un link como de una cuenta
   borrada y no tiene *General access*; no se pierde nada).
+
+### Correcciones de la auditoría (entregas 0 y 1)
+
+Dos auditorías independientes (base y portero; app y motor) dijeron «no pasa»; se corrigió en una ronda:
+
+- **Reset link (base, B1):** `reset_public_link` no reiniciaba la rama (`clean_reset`, como crear): quien recibía el link
+  nuevo bajaba la base armada antes de que el editor borrara algo. Ahora la reinicia. Prueba en
+  `link_publico_permisos.sql` (el editor sube una fila después de la base y resetea: el link nuevo no baja nada).
+- **`plink_media_files` (base, B2):** calculaba la rama una vez por archivo y no contaba. Con 200 ids en una rama de 36
+  páginas, medido en rollback sobre la base real: **614-658 ms antes, 8-15 ms ahora**. Calcula la rama una vez
+  (`materialized`) y cuenta como una bajada (`pull`: un pedido y los bytes devueltos; se ve en los topes y en el contador
+  de *Share*). Pasó a `VOLATILE`. El tiempo no se puede probar en el SQL de pruebas: se midió con
+  `link-impl/corr/perf.mjs` (fuera del repo); la prueba cuida que cuente, que dé solo lo de la rama y el tope de 200.
+- **Abrir sin red (app, B1):** `LinkApp` pedía `plink_open` antes de montar la página, y sin red mostraba «Could not open
+  your workspace». Ahora la entrada guardada recuerda el id del link y de la página (`linkId`, `pageId`): si `plink_open`
+  falla por red (o tarda más de 2 s) se muestra lo guardado, con el aviso *Couldn't reach the server…*, y el motor sigue
+  intentando; el aviso se va cuando contesta. Con red, `plink_open` manda: un link revocado o vencido se corta sin mostrar
+  nada. La primera vez sin red tiene su propio texto. Pruebas en `src/ui/linkApp.test.tsx`.
+- **El cliente del link nunca usa una sesión (app, B2):** `src/linkSession.test.ts` guarda sesiones de cuenta en las tres
+  claves posibles del navegador y comprueba que ningún pedido del cliente del link (RPC y Storage) las lleva ni las toca.
+- **Recargar sigue en el link (app, O1):** el `#link=` se borra de la barra, así que recargar en un dispositivo con un
+  workspace abría ese workspace. Ahora la pestaña recuerda su link (`sessionStorage`) y recargar o restaurar la pestaña
+  sigue en el link; escribir la dirección o abrir otra pestaña abre la cuenta como siempre (`navigation type`).
+- **Pruebas que faltaban:** las guardas de `set`, `reset` y `revoke` (sin permiso, Comentar, Editar, miembro común con 4,
+  invitado), `clean_off` en *Reset*, y `plink_list_comments` solo de la rama. El nombre del visitante saca también U+061C,
+  U+2028 y U+2029 (base y app, como el portero). 14 mutantes nuevos de la base y 9 de la app, todos detectados salvo uno
+  equivalente.
+- **Al roadmap:** el resto de las observaciones (ver `Doc_Roadmap.md`).
 
 ## Cómo se midió
 

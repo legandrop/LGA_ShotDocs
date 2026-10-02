@@ -6713,10 +6713,10 @@ button.folder-row-main:hover {
   justify-content: flex-start;
   gap: 8px;
 }
-.notice.link-limited,
-.notice.link-offline {
+.notice.link-limited {
   position: fixed;
   top: 8px;
+  bottom: auto;
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;

@@ -305,8 +305,8 @@ export const help = {
   },
   'help.openedWithLink.title': { en: "Opened with a link", es: "Abierto con un link" },
   'help.openedWithLink.text': {
-    en: "You see the shared page and the ones inside, without an account. To comment, write your name once: it's shown with “(via link)”. What you write is saved in this browser first. The link can stop working if whoever shared it turns it off.",
-    es: "Ves la página compartida y las de adentro, sin cuenta. Para comentar, escribí tu nombre una vez: se muestra con “(vía link)”. Lo que escribís se guarda primero en este navegador. El link puede dejar de andar si quien lo compartió lo apaga.",
+    en: "You see the shared page and the ones inside, without an account. To comment, write your name once: it's shown with “(via link)”. What you write is saved in this browser first, and a page you already opened shows again without a connection. The link can stop working if whoever shared it turns it off.",
+    es: "Ves la página compartida y las de adentro, sin cuenta. Para comentar, escribí tu nombre una vez: se muestra con “(vía link)”. Lo que escribís se guarda primero en este navegador, y una página que ya abriste se vuelve a ver sin conexión. El link puede dejar de andar si quien lo compartió lo apaga.",
   },
   'help.members.title': { en: "Members and guests", es: "Miembros e invitados" },
   'help.members.text': {
