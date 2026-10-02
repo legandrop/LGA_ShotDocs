@@ -467,7 +467,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (sin aplicar; la aplica quien publica). **A2 implementada (v0.126):** *Summarize page* (*Insert at top* / *Insert
   below*), *Translate page* (*Replace page content* en su lugar o *Create translated subpage*), *Format as…* (viñetas,
   casillas, tabla, títulos) y la política del workspace en *Assistant…* para dueño y admins, con su migración
-  `20261017120000_asistente_politica_ventana.sql` (sin aplicar). Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
+  `20261017120000_asistente_politica_ventana.sql` (sin aplicar). **La clave sincronizada, S1 implementada (v0.138,
+  D72 → B, `Doc_Clave_Sincronizada.md`):** prender la copia cifrada con una frase, abrirla en otro dispositivo
+  (preguntando si cambia el destino), *Update* / *Replace synced key…*, *Stop syncing* y *Sign out other devices*; su
+  migración `20261023120000_clave_sincronizada.sql`, sin aplicar. Falta S2 (*Change passphrase…*, *Keep the key on this
+  device*, el aviso de "cambió en otro dispositivo", rechazar una copia más vieja, *Also sync in this workspace*) y medir
+  en el iPhone. Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
   sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
   panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
   cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;
@@ -513,9 +518,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   report* con texto (escrito o dictado con el teclado del sistema), el mapa, el validador, la vista previa por cambio con
   casillas, *Apply* con la guarda y *Undo*, `ask` con botones, *Couldn't place* guardado en el dispositivo, permisos y
   política; falta que Lega mida la calidad con su clave (10.3) y pruebe el dictado del teclado en el editor del teléfono.
-  **V2 hecha (v0.0XX, sección 16):** la cola sin red (*Save for later*, *N voice notes to place* en el indicador con la
+  **V2 hecha (v0.139, sección 16):** la cola sin red (*Save for later*, *N voice notes to place* en el indicador con la
   lista, ubicar de a una, *Insert as text*, *Discard* con confirmación); falta el número de notas en la ventana de salir
-  de la cuenta (después de S1). **V3 hecha (v0.0XX, sección 17):** el micrófono propio (pedazos de 1 s guardados, C4 y
+  de la cuenta (después de S1). **V3 hecha (v0.139, sección 17):** el micrófono propio (pedazos de 1 s guardados, C4 y
   C5, OpenAI, Gemini o compatible con pistas, *Voice* con la segunda clave, *Insert at cursor*, *Ask…*); falta que Lega
   lo pruebe en su iPhone (instalada y en Safari) con OpenAI y con Gemini, y que la segunda clave siga a la clave
   sincronizada cuando exista (D72, S1), y que salir con «olvidar la clave» también olvide la clave de voz y diga

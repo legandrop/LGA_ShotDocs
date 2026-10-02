@@ -154,8 +154,10 @@ In production (v0.049). What works today:
   a two-minute tour with Next walks through the app on a practice page that is never saved or synced; it can be
   replayed, and the practice page reopened, from the help.
 - Assistant (account menu → *Assistant…*): choose Anthropic, OpenAI, Google Gemini or an OpenAI-compatible service,
-  paste your API key and pick a model from your provider's list. The key is stored encrypted only on that device and
-  sent only to that provider. Select text and press Ctrl+Alt+J (⌘⌥J on a Mac), or use *Assistant* in the toolbar or the
+  paste your API key and pick a model from your provider's list. The key is stored encrypted on that device and sent
+  only to that provider. *Sync across my devices* encrypts it on the device with a six-word passphrase the app proposes
+  and stores only that encrypted copy in the workspace, so another device unlocks it with the passphrase; *Sign out
+  other devices* in the account menu is there for a lost device. Select text and press Ctrl+Alt+J (⌘⌥J on a Mac), or use *Assistant* in the toolbar or the
   page menu: *Fix spelling & grammar*, *Improve writing*, *Make shorter*, *Translate to…* or *Ask…*. The preview marks
   what changes word by word; *Apply* replaces it as one edit you undo with Ctrl+Z, and nothing is applied if the text
   changed while the assistant was working. Photos and links inside the selection stay. *Format as…* turns the selected

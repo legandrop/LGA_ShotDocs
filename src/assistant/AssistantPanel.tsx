@@ -11,6 +11,7 @@ import { appliedDoc, applySuggestion, retakeSnapshot, takeSnapshot, type ApplyOu
 import { closeAssistant, openAssistantSettings, useAssistantTarget, useAssistantUi } from './assistantUi';
 import { applyFormat, formatSnapshotFrom, FORMATS, planFormat, takeFormatSnapshot, type FormatOutcome, type FormatPlan, type FormatSnapshot, type FormatTarget, type LostText } from './format';
 import { loadSettings, readKey, rememberLanguage, type AssistantSettings } from './keyStore';
+import { fetchSyncMeta, type KeySyncClient } from './keySyncRemote';
 import { cleanAnswer, diffKeys, parseAnswer, plainNew, type Atom, type NewUnit, type OldUnit, type Parsed } from './markup';
 import { parseSummary, plainBlocks, toPartialBlocks, type MdBlock, type MdParsed } from './mdBlocks';
 import { insertSummary, parsePageTranslation, subpageAllowed, subpageBlocks, takePageSnapshot } from './pageActions';
@@ -277,6 +278,21 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
       live = false;
     };
   }, [user.email, settingsOpen]);
+
+  // Sin clave en este dispositivo: si la persona tiene una copia sincronizada en este workspace, el panel ofrece abrirla
+  // (Docs/Doc_Clave_Sincronizada.md, sección 9). Con cualquier error (sin red, la base sin la tabla), no se ofrece.
+  const [hasCopy, setHasCopy] = useState(false);
+  const noKey = settings !== undefined && !(settings && (settings.hasKey || settings.provider === 'compatible') && settings.model);
+  useEffect(() => {
+    if (settingsOpen || !noKey || !status.online) return;
+    let live = true;
+    fetchSyncMeta(client as unknown as KeySyncClient, user.id)
+      .then((m) => live && setHasCopy(!!m))
+      .catch(() => live && setHasCopy(false));
+    return () => {
+      live = false;
+    };
+  }, [client, user.id, noKey, status.online, settingsOpen]);
 
   // La política, al abrir y otra vez al cerrar los ajustes (el dueño o un admin la pudo cambiar ahí, A2).
   useEffect(() => {
@@ -701,6 +717,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
             <button className="primary" onClick={openAssistantSettings}>
               {tr('assistant.setup')}
             </button>
+            {hasCopy && <button onClick={openAssistantSettings}>{tr('assistant.unlockSynced')}</button>}
           </div>
         ) : (
           <>

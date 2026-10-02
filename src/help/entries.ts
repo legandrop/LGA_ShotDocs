@@ -113,9 +113,9 @@ const ASSISTANT_A2 = '0.126';
 /** *Dictate to report* (Docs/Doc_Dictado.md, entrega V1): la versión la pone quien publica. */
 const DICTATION = '0.135';
 /** *Dictate to report*, entrega V2 (la cola sin red): la versión la pone quien publica. */
-const DICTATION_QUEUE = '0.0XX';
+const DICTATION_QUEUE = '0.139';
 /** *Dictate to report*, entrega V3 (el micrófono propio): la versión la pone quien publica. */
-const DICTATION_VOICE = '0.0XX';
+const DICTATION_VOICE = '0.139';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
@@ -140,6 +140,8 @@ const ANNOTATE = '0.123';
 const ANNOTATE_TOUCH = '0.129';
 /** Copiar y pegar una foto con sus anotaciones (P.20, D46). El número lo pone quien publica. */
 const ANNOTATE_COPY = '0.132';
+/** La clave del asistente sincronizada, entrega S1 (Doc_Clave_Sincronizada.md). El número lo pone quien publica. */
+const ASSISTANT_SYNC = '0.138';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -270,6 +272,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.assistantKey.text',
     words: ['clave', 'api key', 'key', 'proveedor', 'provider', 'anthropic', 'openai', 'gemini', 'openrouter', 'ollama', 'lm studio', 'tope', 'gasto', 'spending limit', 'olvidar', 'forget', 'local'],
     since: ASSISTANT,
+  },
+  {
+    id: 'assistantSync',
+    section: 'writing',
+    title: 'help.assistantSync.title',
+    text: 'help.assistantSync.text',
+    words: ['sincronizar', 'frase', 'contraseña', 'dispositivos', 'iphone', 'perdido', 'robado', 'sync', 'passphrase', 'password', 'devices', 'lost', 'stolen', 'sign out other devices', 'cerrar la sesión en los otros dispositivos', 'clave', 'key', 'asistente', 'assistant'],
+    since: ASSISTANT_SYNC,
   },
   {
     id: 'assistantPage',
