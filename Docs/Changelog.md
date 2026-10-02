@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Diseño de ⌘Z en el orden en que editaste (D10, P.26), sin código: `Docs/Doc_Deshacer.md`. Hoy la pila de deshacer de
+cada página muere al cambiar de página y el reemplazo del proyecto no está en ninguna; además, deshacer el reemplazo y
+después lo escrito antes deja texto de más (medido). La propuesta: una línea de tiempo por proyecto arriba de las pilas
+de Yjs, que se retienen al salir de la página; ⌘Z en otra página te lleva y lo deshace a la vista; el reemplazo entra en
+la pila de las páginas editadas y por las anclas en las demás; ⌘⇧Z rehace todo. Prototipos al azar con dos
+dispositivos: nada del otro borrado. Decisiones DH1 a DH10.
+[ Deshacer, diseño - la línea de tiempo de ⌘Z con el reemplazo del proyecto adentro ]
+
 v0.123 :
 
 Anotar fotos en la compu (P.20, entrega 2 de `Doc_Anotar_Fotos.md`). Las anotaciones se veían pero no había con qué
