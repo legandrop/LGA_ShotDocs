@@ -128,7 +128,8 @@ describe('el núcleo: armar y comprobar', () => {
     expect(snapshots).toBeGreaterThan(SEEDS * 3);
     // Las subidas demoradas dejan snapshots con algo pendiente: la comprobación los cubre.
     expect(withPending).toBeGreaterThan(0);
-    // eslint-disable-next-line no-console
+    // Incremental o de una vez, los mismos bytes (sección 3: dos dispositivos que arman lo mismo suben la misma huella).
+    expect(sameBytesAsScratch).toBe(snapshots);
     console.info(`compactar al azar: ${snapshots} snapshots, ${withPending} con algo pendiente, ${sameBytesAsScratch} con los mismos bytes que desde cero`);
   });
 

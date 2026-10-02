@@ -879,7 +879,12 @@ cambia.
 - `snapshots.test.ts`: las de la invalidación ahora piden que el borrado de un snapshot malo no llegue a nadie (antes la
   prueba borraba una palabra que ya estaba borrada y no lo veía), la espera con algo sin subir, la página abierta y el
   árbol atrasado.
-- `supabase/tests/snapshots_permisos.sql`: el invitado con Editar ya no invalida. Mutantes en `informe.md` del frente.
+- `supabase/tests/snapshots_permisos.sql`: el invitado con Editar ya no invalida; corrida en `begin … rollback` contra la
+  base con la migración, y las otras 23 pruebas de `supabase/tests/` pasan con ella. **5 mutantes de la migración, los 5
+  detectados; 41 del dispositivo, 38 detectados** (los 3 que no son equivalentes: el vector y los borrados, absorber y
+  lo borrado por unidad se cubren entre sí). Al azar, aparte de la suite: 400 semillas del núcleo, 100 de la corrida de
+  los dispositivos que compactan (258 snapshots confirmados, 65 cadenas malas invalidadas, 175 rearmados) y 60 de la de
+  la entrega 1, sin una falla.
 
 **Para prenderlos (entrega 3):** aplicar `20261020120000_compactar_crear.sql`; el script de restaurar (sección 9);
 **subir `min_app_version` a la versión de esta entrega** (O5: las versiones v0.127 a v0.129 leen snapshots y, al
