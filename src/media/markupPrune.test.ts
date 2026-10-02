@@ -1,16 +1,20 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { buildCleanBase } from '../sync/clean';
 import { CONTENT_FRAGMENT } from '../sync/structure';
-import { mountEditor, tick, unmountAll } from '../ui/collabHarness';
+import { connect, mountEditor, tick, unmountAll } from '../ui/collabHarness';
 import { addShape, markupOrigin, PHOTO_MARKUP_MAP } from './markup';
-import { createMarkupPruner, PRUNE_AFTER_MS } from './markupPrune';
+import { createMarkupPruner, PRUNE_AFTER_MS, startMarkupPrune } from './markupPrune';
+import { mediaIdsInDoc } from './usage';
 
 // La poda de las anotaciones de una foto sacada (AN11; Docs/Doc_Anotar_Fotos.md, sección 3): a los 10 minutos medidos
 // por el dispositivo con la página abierta, como una edición normal, sin perder lo que otro anotó sin red.
 
-afterEach(() => unmountAll());
+afterEach(() => {
+  unmountAll();
+  vi.useRealTimers();
+});
 
 const ID = (n: number) => `0f8fad5b-d9cb-469f-a165-7086772895${String(n).padStart(2, '0')}`;
 const FRAME = { w: 4000, h: 3000 };
@@ -137,5 +141,113 @@ describe('la poda (AN11)', () => {
     const pruner = createMarkupPruner(doc, () => 0);
     expect(pruner.check()).toEqual([]);
     expect(writes).toEqual([]);
+  });
+});
+
+describe('la poda solo con la página sincronizada (auditoría B2)', () => {
+  const MIN = 60_000;
+
+  /** La foto anotada en A y B conectados; con el reloj de los intervalos falso (el editor sigue con el de verdad). */
+  async function twoDevices() {
+    const a = new Y.Doc();
+    const b = new Y.Doc();
+    const link = connect(a, b, 'sync');
+    const EA = mountEditor(a, 'a');
+    EA.replaceBlocks(EA.document, [
+      { id: 'p1', type: 'paragraph', content: 'Plano 12' },
+      { id: 'f1', type: 'image', props: { url: `sdmedia://${ID(1)}`, name: 'F1.jpg' } },
+      { id: 'p2', type: 'paragraph', content: 'Plano 13' },
+    ] as never);
+    await tick(10);
+    addShape(a, ID(1), 's1', { type: 'text', zValue: 1, posX: 10, posY: 10, text: 'Borrar cable' }, FRAME);
+    addShape(a, ID(1), 's2', { type: 'line', zValue: 2, posX: 1, posY: 1, startX: 0, startY: 0, endX: 9, endY: 9 }, FRAME);
+    await tick(10);
+    return { a, b, link, EA };
+  }
+
+  /** Pasan `minutes` minutos con la página abierta (la poda mira cada minuto). */
+  async function pass(clock: { now: number }, minutes: number) {
+    for (let i = 0; i < minutes; i++) {
+      clock.now += MIN;
+      await vi.advanceTimersByTimeAsync(MIN);
+    }
+  }
+
+  it('A sin red saca la foto y B (con red) la vuelve a poner: A no poda nada, y al volver la red están la foto y sus anotaciones', async () => {
+    const { a, b, link, EA } = await twoDevices();
+    link.offline();
+    EA.removeBlocks(['f1']);
+    await tick(10);
+    // B mueve la foto (en BlockNote, sacar y volver a poner el mismo archivo).
+    const EB = mountEditor(b, 'b');
+    await tick(10);
+    EB.removeBlocks(['f1']);
+    EB.insertBlocks([{ type: 'image', props: { url: `sdmedia://${ID(1)}`, name: 'F1.jpg' } }] as never, 'p2', 'after');
+    await tick(10);
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const clock = { now: 0 };
+    let online = false;
+    const stop = startMarkupPrune({ doc: a, editable: true, permsKnown: true, preview: false, synced: async () => online, now: () => clock.now });
+    await pass(clock, 11);
+    expect(map(a).size).toBe(3);
+    link.online();
+    online = true;
+    await tick(20);
+    await pass(clock, 12);
+    stop();
+    unmountAll();
+    for (const doc of [a, b]) {
+      expect(mediaIdsInDoc(doc).has(ID(1))).toBe(true);
+      expect(map(doc).size).toBe(3);
+    }
+  });
+
+  it('con red poda a los 10 minutos; si la red se corta en el medio, los 10 minutos vuelven a contar desde que vuelve', async () => {
+    const { a, EA } = await twoDevices();
+    EA.removeBlocks(['f1']);
+    await tick(10);
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const clock = { now: 0 };
+    let online = true;
+    const stop = startMarkupPrune({ doc: a, editable: true, permsKnown: true, preview: false, synced: async () => online, now: () => clock.now });
+    await vi.advanceTimersByTimeAsync(0);
+    await pass(clock, 5);
+    online = false;
+    await pass(clock, 1);
+    online = true;
+    await pass(clock, 9);
+    expect(map(a).size).toBe(3);
+    await pass(clock, 2);
+    expect(map(a).size).toBe(0);
+    stop();
+  });
+
+  it('nunca sin permiso de editar, sin los permisos conocidos ni en la vista de una versión', async () => {
+    for (const gate of [{ editable: false }, { permsKnown: false }, { preview: true }]) {
+      const { a, EA } = await twoDevices();
+      EA.removeBlocks(['f1']);
+      await tick(10);
+      unmountAll();
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      const clock = { now: 0 };
+      let asked = 0;
+      const stop = startMarkupPrune({
+        doc: a,
+        editable: true,
+        permsKnown: true,
+        preview: false,
+        ...gate,
+        synced: async () => {
+          asked++;
+          return true;
+        },
+        now: () => clock.now,
+      });
+      await pass(clock, 25);
+      stop();
+      vi.useRealTimers();
+      expect(map(a).size, JSON.stringify(gate)).toBe(3);
+      expect(asked).toBe(0);
+    }
   });
 });

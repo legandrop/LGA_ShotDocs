@@ -61,6 +61,10 @@ export const annotator = {
     en: "This photo isn't on this device yet: connect to the internet to annotate it.",
     es: "Esta foto todavía no está en este dispositivo: conectate a internet para anotarla.",
   },
+  'annotate.noSize': {
+    en: "Showing a preview: connect to the internet to annotate this photo for the first time",
+    es: "Se ve una vista previa: conectate a internet para anotar esta foto por primera vez",
+  },
   'annotate.newer': { en: "Update the app to edit these annotations", es: "Actualizá la app para editar estas anotaciones" },
   'annotate.photoWarn': { en: "This photo is close to its annotation limit", es: "Esta foto está cerca del límite de anotaciones" },
   'annotate.photoFull': { en: "This photo has too many annotations", es: "Esta foto tiene demasiadas anotaciones" },

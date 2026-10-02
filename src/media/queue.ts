@@ -2494,6 +2494,23 @@ export class MediaQueue {
     return this.infos.get(id.toLowerCase()) ?? null;
   }
 
+  /**
+   * La medida del archivo (`files.width/height`, ya girada como la muestra el navegador): la del registro de este
+   * dispositivo (lo agregado acá o lo ya visto), también sin red; si no está, la de la base. `null` si no se sabe. Es
+   * el marco de la primera anotación de una foto (Docs/Doc_Anotar_Fotos.md, auditoría B1 de la entrega 2).
+   */
+  async dimensions(id: string): Promise<{ width: number; height: number } | null> {
+    const ok = (m: { width: number | null; height: number | null } | null | undefined) =>
+      m && m.width && m.height && m.width > 0 && m.height > 0 ? { width: m.width, height: m.height } : null;
+    if (this.db) {
+      const own = ok(await this.db.get('files', id).catch(() => undefined));
+      if (own) return own;
+      const known = ok(await this.db.get('known', id).catch(() => undefined));
+      if (known) return known;
+    }
+    return ok(await this.fetchMeta(id).catch(() => null));
+  }
+
   /** El original (si está en el dispositivo), el tipo y el nombre, para el visor. */
   async source(id: string): Promise<MediaSource> {
     if (!this.db) {

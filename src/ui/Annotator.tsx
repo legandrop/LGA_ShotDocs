@@ -171,6 +171,11 @@ export interface AnnotatorProps {
   /** La foto como la ve el carrete (para pedir la miniatura y la grande). */
   item: CarreteItem;
   loader: Pick<CarreteLoader, 'preview' | 'full'>;
+  /**
+   * La medida del archivo (`files.width/height`, ya girada): del registro del dispositivo, también sin red. Es el marco
+   * de la primera anotación de la foto (auditoría B1). Sin esto, el del original cuando carga.
+   */
+  size?: () => Promise<{ width: number; height: number } | null>;
   onClose: () => void;
 }
 
@@ -181,7 +186,10 @@ interface ImageState {
   full: string | null;
   /** El original no se pudo pedir o mostrar. */
   fullFailed: boolean;
+  /** La medida de lo que se ve (para mostrarlo; puede ser la vista previa). */
   natural: Size | null;
+  /** La medida del original cargado (la del archivo). */
+  fullNatural: Size | null;
   fullShown: boolean;
   /** Sin red, se ve la vista previa (el original no está en el dispositivo). */
   offline: boolean;
@@ -203,7 +211,7 @@ function readShapes(map: Y.Map<unknown>, fileId: string, frame: MarkupFrame, pat
   return out.sort((a, b) => a.z - b.z || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-export function Annotator({ doc, fileId, name, item, loader, onClose }: AnnotatorProps) {
+export function Annotator({ doc, fileId, name, item, loader, size, onClose }: AnnotatorProps) {
   const tr = useT();
   const map = useMemo(() => doc.getMap<unknown>(PHOTO_MARKUP_MAP), [doc]);
   const origin = markupOrigin(fileId);
@@ -219,7 +227,9 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
   const [, setTick] = useState(0);
   const [zoom, setZoom] = useState<Zoom>(NO_ZOOM);
   const [stage, setStage] = useState<Size>({ width: 0, height: 0 });
-  const [image, setImage] = useState<ImageState>({ preview: null, previewTried: false, full: null, fullFailed: false, natural: null, fullShown: false, offline: false });
+  const [image, setImage] = useState<ImageState>({ preview: null, previewTried: false, full: null, fullFailed: false, natural: null, fullNatural: null, fullShown: false, offline: false });
+  /** La medida del archivo, si el dispositivo la sabe (`undefined` mientras se pregunta). */
+  const [fileSize, setFileSize] = useState<Size | null | undefined>(undefined);
   /** No hay nada de la foto en el dispositivo (ni miniatura ni original): no se puede anotar. */
   const missing = image.previewTried && !image.preview && image.fullFailed;
   const [stacks, setStacks] = useState({ undo: false, redo: false });
@@ -247,14 +257,22 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
   // --- el marco, las formas y los topes ------------------------------------------------------------------
 
   const stored = readFrame(map.get(fileId));
-  const frame: MarkupFrame | null = stored ?? (image.natural ? { v: MARKUP_FORMAT_VERSION, w: image.natural.width, h: image.natural.height } : null);
+  // El marco que se puede ESCRIBIR (auditoría B1): el guardado; si no hay, la medida del archivo; si no se sabe, la del
+  // original cargado. NUNCA la de la vista previa: dos que anotan por primera vez la misma foto a la vez (uno con la
+  // miniatura, sin red) escribirían marcos distintos, gana uno, y las formas del otro quedarían corridas y achicadas.
+  const sizeFrame = fileSize ?? image.fullNatural;
+  const realFrame: MarkupFrame | null = stored ?? (sizeFrame ? { v: MARKUP_FORMAT_VERSION, w: sizeFrame.width, h: sizeFrame.height } : null);
+  // El de la pantalla: el real o, mientras tanto, la proporción de lo que se ve (solo para mostrar la foto).
+  const frame: MarkupFrame | null = realFrame ?? (image.natural ? { v: MARKUP_FORMAT_VERSION, w: image.natural.width, h: image.natural.height } : null);
+  /** Sin la medida de la foto no se puede crear nada (se ve la foto, con el aviso). */
+  const noSize = !realFrame && fileSize !== undefined && image.fullFailed;
   const readOnly = !!stored && stored.v > MARKUP_FORMAT_VERSION;
   // `version` cambia con cada cambio de las formas de esta foto: las vuelve a leer.
   const shapes = useMemo(() => (frame ? readShapes(map, fileId, frame, patches) : []), [map, fileId, frame?.w, frame?.h, patches, version]); // eslint-disable-line react-hooks/exhaustive-deps
   const byId = useMemo(() => new Map(shapes.map((s) => [s.id, s])), [shapes]);
   const selected = useMemo(() => selection.map((id) => byId.get(id)).filter((s): s is MarkupShape => !!s), [selection, byId]);
   const limit = limits ? limitState(limits) : { state: 'ok' as const, which: null };
-  const canCreate = !readOnly && !!frame && !missing && limit.state !== 'full';
+  const canCreate = !readOnly && !!realFrame && !missing && limit.state !== 'full';
   const canEdit = !readOnly && !!frame;
 
   const fit = frame ? fitSize({ width: frame.w, height: frame.h }, stage) : { width: 0, height: 0 };
@@ -322,30 +340,52 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
     };
   }, [loader, item]);
 
-  // Sin marco guardado (la primera anotación de la foto), el marco es la medida de la foto: se averigua antes de
-  // mostrarla (la caja de dibujo tiene la proporción del marco).
+  // La medida del archivo (registro del dispositivo; con red, la base).
   useEffect(() => {
-    if (stored || image.natural) return;
-    const url = image.full ?? image.preview;
+    let alive = true;
+    if (!size) {
+      setFileSize(null);
+      return;
+    }
+    size().then(
+      (s) => alive && setFileSize(s && s.width > 0 && s.height > 0 ? { width: s.width, height: s.height } : null),
+      () => alive && setFileSize(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [size]);
+
+  // Sin marco guardado, la medida de lo que se ve hace falta antes de mostrarlo (la caja de dibujo tiene su proporción);
+  // la del original, además, es el marco si el archivo no dice la suya.
+  useEffect(() => {
+    if (stored) return;
+    const url = !image.fullNatural && image.full ? image.full : !image.natural ? image.preview : null;
     if (!url) return;
     let alive = true;
     const probe = new Image();
     probe.onload = () => {
-      if (!alive || !(probe.naturalWidth > 0 && probe.naturalHeight > 0)) return;
-      setImage((s) => (s.natural ? s : { ...s, natural: { width: probe.naturalWidth, height: probe.naturalHeight } }));
+      if (!alive) return;
+      onNatural({ currentTarget: probe }, url === image.full);
     };
     probe.src = url;
     return () => {
       alive = false;
     };
-  }, [!!stored, image.natural, image.full, image.preview]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [!!stored, image.natural, image.fullNatural, image.full, image.preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onNatural = (e: { currentTarget: HTMLImageElement }, full: boolean) => {
+  /** Una imagen cargó: su medida (la del original, aparte) y si ya se ve el original. */
+  function onNatural(e: { currentTarget: HTMLImageElement }, full: boolean) {
     const img = e.currentTarget;
     if (!(img.naturalWidth > 0 && img.naturalHeight > 0)) return;
     const natural = { width: img.naturalWidth, height: img.naturalHeight };
-    setImage((s) => ({ ...s, natural: full || !s.natural ? natural : s.natural, fullShown: s.fullShown || full }));
-  };
+    setImage((s) => ({
+      ...s,
+      natural: full || !s.natural ? natural : s.natural,
+      fullNatural: full ? natural : s.fullNatural,
+      fullShown: s.fullShown || (full && img instanceof HTMLImageElement && img.isConnected),
+    }));
+  }
 
   // --- abrir y cerrar (como el carrete: lo de atrás inerte, el foco adentro y de vuelta al cerrar) ---------------
 
@@ -423,11 +463,11 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
     persist({ ...prefsRef.current, tool: next });
   };
 
-  /** Agrega una forma (con el marco, si es la primera de la foto). */
+  /** Agrega una forma (con el marco, si es la primera de la foto: siempre el real, nunca el de lo que se ve). */
   const add = (fields: ShapeFields) => {
-    if (!frame || !canCreate) return;
+    if (!realFrame || !canCreate) return;
     const id = newShapeId();
-    write(() => addShape(doc, fileId, id, fields, { w: frame.w, h: frame.h }));
+    write(() => addShape(doc, fileId, id, fields, { w: realFrame.w, h: realFrame.h }));
     return id;
   };
 
@@ -935,7 +975,9 @@ export function Annotator({ doc, fileId, name, item, loader, onClose }: Annotato
     ? tr('annotate.newer')
     : missing && !image.preview
       ? tr('annotate.missing')
-      : limitText ?? (image.fullFailed && !image.fullShown && image.preview ? tr('annotate.preview') : null);
+      : noSize
+        ? tr('annotate.noSize')
+        : limitText ?? (image.fullFailed && !image.fullShown && image.preview ? tr('annotate.preview') : null);
 
   const altName = IS_MAC ? '⌥' : 'Alt';
   const cursor = panning ? 'grab' : tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair';

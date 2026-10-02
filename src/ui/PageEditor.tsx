@@ -22,7 +22,7 @@ import { createCarreteLoader, type CarreteLoader } from './carreteLoader';
 import { porteroDownload, sharpenImages } from './sharpImages';
 import { attachMarkupOverlay } from './markupOverlay';
 import { PHOTO_MARKUP_MAP } from '../media/markup';
-import { createMarkupPruner, PRUNE_EVERY_MS } from '../media/markupPrune';
+import { startMarkupPrune } from '../media/markupPrune';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { editorSchemaOptions, insertPageBreakForSlashMenu, SCRIPT_PROP, setVideosAccepted } from './editorSchema';
 import { dropTarget, insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor, type InsertAt } from './fileDrop';
@@ -717,20 +717,28 @@ export function BlockEditor({
   }, [editor, markupMap]);
 
   // La poda de las anotaciones de las fotos sacadas (AN11, media/markupPrune.ts): solo un dispositivo que edita, con la
-  // página entera (`editable` ya lo dice) y abierta; cada minuto, y la primera vez al abrir (solo anota desde cuándo
-  // falta cada una: nada se poda antes de 10 minutos con la página abierta). Nunca en la vista de una versión.
-  useEffect(() => {
-    if (!editable || !permsKnown || preview) return;
-    const pruner = createMarkupPruner(doc);
-    pruner.check();
-    const timer = setInterval(() => pruner.check(), PRUNE_EVERY_MS);
-    return () => clearInterval(timer);
-  }, [doc, editable, permsKnown, preview]);
+  // página entera (`editable` ya lo dice), abierta y SINCRONIZADA (con red, nada sin subir ni sin bajar: sin red no ve
+  // que otro volvió a poner la foto, auditoría B2); cada minuto. Nunca en la vista de una versión.
+  const { engine: syncEngine } = useServices();
+  useEffect(
+    () =>
+      startMarkupPrune({
+        doc,
+        editable,
+        permsKnown,
+        preview,
+        synced: async () =>
+          syncEngine.getStatus().online && !(await docs.unsyncedPages()).includes(pageId) && !(await syncEngine.isMissingContent(pageId)),
+      }),
+    [doc, editable, permsKnown, preview, docs, syncEngine, pageId],
+  );
 
   /** Abre el anotador en una foto del Drive de la página (solo quien edita). */
   const openAnnotator = (item: CarreteItem) => {
     if (!editableRef.current || !item.mediaId) return;
-    setAnnotating({ item, loader: createCarreteLoader({ media, files }) });
+    const id = item.mediaId;
+    // La medida del archivo: el marco de la primera anotación (auditoría B1).
+    setAnnotating({ item, loader: createCarreteLoader({ media, files }), size: () => media.dimensions(id) });
   };
   const openAnnotatorRef = useRef(openAnnotator);
   openAnnotatorRef.current = openAnnotator;
@@ -1196,6 +1204,7 @@ export function BlockEditor({
             name={annotating.item.name}
             item={annotating.item}
             loader={annotating.loader}
+            size={annotating.size}
             onClose={() => setAnnotating(null)}
           />
         </Part>
@@ -1245,6 +1254,7 @@ interface OpenCarrete {
 interface OpenAnnotator {
   item: CarreteItem;
   loader: CarreteLoader;
+  size: () => Promise<{ width: number; height: number } | null>;
 }
 
 /** El carrete con el estado de la red (aparte, para que el editor no se vuelva a dibujar con cada cambio). */

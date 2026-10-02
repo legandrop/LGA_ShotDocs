@@ -50,14 +50,16 @@ afterEach(() => {
 const map = (doc: Y.Doc) => doc.getMap<unknown>(PHOTO_MARKUP_MAP);
 const shapes = (doc: Y.Doc) => readPhotoMarkup(map(doc), ID)?.shapes ?? [];
 
-async function open(doc: Y.Doc, left = 0) {
+type Loader = { preview: () => Promise<{ kind: 'image'; name: string; preview: string | null }>; full: () => Promise<{ url: string; local: boolean }> };
+
+async function open(doc: Y.Doc, left = 0, extra: { loader?: Loader; size?: () => Promise<{ width: number; height: number } | null> } = {}) {
   const onClose = vi.fn();
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
   await act(async () => {
-    root.render(<Annotator doc={doc} fileId={ID} name="IMG_0423.jpg" item={ITEM} loader={loader} onClose={onClose} />);
+    root.render(<Annotator doc={doc} fileId={ID} name="IMG_0423.jpg" item={ITEM} loader={extra.loader ?? loader} size={extra.size} onClose={onClose} />);
   });
   await act(async () => new Promise((r) => setTimeout(r, 10)));
   // El anotador va al `body` (como el carrete): el último es el que se acaba de abrir.
@@ -282,6 +284,94 @@ describe('el anotador', () => {
     });
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(shapes(doc).length).toBe(1);
+  });
+
+  describe('el marco de la primera anotación (auditoría B1)', () => {
+    /** jsdom no carga imágenes: una de mentira que "carga" con la medida de cada dirección. */
+    const SIZES: Record<string, [number, number]> = { 'blob:thumb': [480, 360], 'blob:full': [1200, 900] };
+    class FakeImage {
+      naturalWidth = 0;
+      naturalHeight = 0;
+      onload: (() => void) | null = null;
+      set src(url: string) {
+        setTimeout(() => {
+          [this.naturalWidth, this.naturalHeight] = SIZES[url] ?? [0, 0];
+          this.onload?.();
+        }, 0);
+      }
+    }
+    const withOriginal: Loader = { preview: async () => ({ kind: 'image', name: 'x.jpg', preview: 'blob:thumb' }), full: async () => ({ url: 'blob:full', local: true }) };
+    const thumbOnly: Loader = {
+      preview: async () => ({ kind: 'image', name: 'x.jpg', preview: 'blob:thumb' }),
+      full: async () => {
+        throw new TypeError('Failed to fetch');
+      },
+    };
+    const wait = () => act(async () => new Promise((r) => setTimeout(r, 20)));
+
+    it('dos anotan por primera vez la misma foto sin red, uno con el original y otro con la miniatura: cada forma queda donde se dibujó', async () => {
+      vi.stubGlobal('Image', FakeImage);
+      try {
+        const docA = new Y.Doc();
+        const docB = new Y.Doc();
+        const link = connect(docA, docB, 'async');
+        link.offline();
+        const a = await open(docA, 0, { loader: withOriginal });
+        // B, sin red, ve la miniatura; la medida del archivo la sabe el registro del dispositivo.
+        const b = await open(docB, 2000, { loader: thumbOnly, size: async () => ({ width: 1200, height: 900 }) });
+        await wait();
+        act(() => a.el.querySelector<HTMLButtonElement>('[data-tool="rectangle"]')!.click());
+        act(() => b.el.querySelector<HTMLButtonElement>('[data-tool="rectangle"]')!.click());
+        // A, alrededor de la mira azul (70 %, 60 %); B, de la roja (25 %, 30 %). La caja mide 1000 × 750 en pantalla.
+        drag(a.stage, [650, 400], [750, 500], { id: 1 });
+        drag(b.stage, [2200, 175], [2300, 275], { id: 2 });
+        link.online();
+        for (const doc of [docA, docB]) {
+          const frame = readPhotoMarkup(map(doc), ID)!.frame;
+          expect([frame.w, frame.h]).toEqual([1200, 900]);
+          const xs = shapes(doc)
+            .map((s) => (s.type === 'rectangle' ? [Math.round((s.posX / frame.w) * 100), Math.round((s.rect.w / frame.w) * 100)] : []))
+            .sort((p, q) => p[0] - q[0]);
+          expect(xs).toEqual([
+            [20, 10],
+            [65, 10],
+          ]);
+        }
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('sin la medida del archivo y sin el original, se ve la miniatura pero no se crea nada (con el aviso)', async () => {
+      vi.stubGlobal('Image', FakeImage);
+      try {
+        const doc = new Y.Doc();
+        const { el, stage } = await open(doc, 0, { loader: thumbOnly, size: async () => null });
+        await wait();
+        expect(el.querySelector('.annotator-box')).not.toBeNull();
+        expect(el.querySelector<HTMLButtonElement>('[data-tool="arrow"]')!.disabled).toBe(true);
+        expect(el.querySelector('.annotator-status')?.textContent).toBe('Showing a preview: connect to the internet to annotate this photo for the first time');
+        key('a');
+        drag(stage, [100, 600], [700, 200]);
+        expect([...map(doc).keys()]).toEqual([]);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('con el original cargado (sin registro), el marco es su medida', async () => {
+      vi.stubGlobal('Image', FakeImage);
+      try {
+        const doc = new Y.Doc();
+        const { stage } = await open(doc, 0, { loader: withOriginal });
+        await wait();
+        key('r');
+        drag(stage, [100, 100], [200, 200]);
+        expect(readPhotoMarkup(map(doc), ID)!.frame).toMatchObject({ w: 1200, h: 900 });
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
   });
 
   it('un marco de una versión más nueva del formato: solo lectura (no se dibuja ni se borra nada)', async () => {

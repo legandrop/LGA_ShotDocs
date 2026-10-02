@@ -8,7 +8,9 @@ import { mediaIdsInDoc } from './usage';
 // (la base limpia, D14), y un cortar y pegar no las dispara.
 //
 // Las tres condiciones del diseño:
-//   1. Los 10 minutos los mide este dispositivo con la página abierta, con su reloj (nunca una hora del documento).
+//   1. Los 10 minutos los mide este dispositivo con la página abierta Y SINCRONIZADA (con red, nada sin subir ni sin
+//      bajar; `startMarkupPrune`), con su reloj (nunca una hora del documento). Sin red, un dispositivo no ve que otro
+//      volvió a poner la foto (auditoría B2 de la entrega 2): al perder la red se olvida lo contado.
 //   2. Nunca con la página a medio bajar: quien la usa la arranca solo con el editor editable, que ya exige la página
 //      completa (PageEditor.tsx, `opening.complete`); un documento vacío vería todas las fotos como sacadas.
 //   3. Solo mientras alguien que edita tiene la página abierta: si nadie la abre, las notas siguen en la última base.
@@ -29,6 +31,8 @@ export interface MarkupPruner {
   check(): string[];
   /** Desde cuándo falta cada foto anotada (lo usan las pruebas). */
   missing(): ReadonlyMap<string, number>;
+  /** Olvida desde cuándo falta cada una (sin red o con algo sin subir: los 10 minutos vuelven a contar). */
+  forget(): void;
 }
 
 export function createMarkupPruner(doc: Y.Doc, now: () => number = () => Date.now()): MarkupPruner {
@@ -58,5 +62,54 @@ export function createMarkupPruner(doc: Y.Doc, now: () => number = () => Date.no
       return pruned;
     },
     missing: () => since,
+    forget: () => since.clear(),
+  };
+}
+
+export interface PruneOptions {
+  doc: Y.Doc;
+  /** La página se puede editar (en PageEditor ya exige la página entera bajada). */
+  editable: boolean;
+  /** Los permisos se conocen. */
+  permsKnown: boolean;
+  /** La vista de una versión del historial: nunca se poda. */
+  preview: boolean;
+  /**
+   * La página está sincronizada: hay red, nada propio sin subir y nada del servidor sin bajar (auditoría B2). Sin red,
+   * el dispositivo no ve que otro volvió a poner la foto (deshacer, mover, cortar y pegar): podaría lo que sigue en la
+   * página. Mientras no lo está, se olvida desde cuándo falta cada foto: los 10 minutos cuentan desde que vuelve.
+   */
+  synced: () => Promise<boolean>;
+  now?: () => number;
+  everyMs?: number;
+}
+
+/**
+ * Arranca la poda de una página abierta (condiciones 1 a 3 del diseño, sección 3): solo quien edita, con los permisos
+ * conocidos, fuera del historial y con la página sincronizada. Mira al abrir y cada minuto. Devuelve cómo pararla.
+ */
+export function startMarkupPrune(options: PruneOptions): () => void {
+  const { doc, editable, permsKnown, preview, synced, now, everyMs = PRUNE_EVERY_MS } = options;
+  if (!editable || !permsKnown || preview) return () => undefined;
+  const pruner = createMarkupPruner(doc, now);
+  let stopped = false;
+  let running = false;
+  const tick = async () => {
+    if (stopped || running) return;
+    running = true;
+    try {
+      const ok = await synced().catch(() => false);
+      if (stopped) return;
+      if (ok) pruner.check();
+      else pruner.forget();
+    } finally {
+      running = false;
+    }
+  };
+  void tick();
+  const timer = setInterval(() => void tick(), everyMs);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
   };
 }
