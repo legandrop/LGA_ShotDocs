@@ -471,7 +471,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   paso). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
   sobre todo en el teléfono, y que la IA pase «este plano se filmó con un 50 mm, anotalo donde corresponda» a la celda
-  *Lens* de la fila de ese plano en el *On-Set Report*. **V1 hecha (v0.130, `Doc_Dictado.md` sección 15):** *Dictate to
+  *Lens* de la fila de ese plano en el *On-Set Report*. **V1 hecha (v0.0XX, `Doc_Dictado.md` sección 15):** *Dictate to
   report* con texto (escrito o dictado con el teclado del sistema), el mapa, el validador, la vista previa por cambio con
   casillas, *Apply* con la guarda y *Undo*, `ask` con botones, *Couldn't place* guardado en el dispositivo, permisos y
   política; falta que Lega mida la calidad con su clave (10.3) y pruebe el dictado del teclado en el editor del teléfono.

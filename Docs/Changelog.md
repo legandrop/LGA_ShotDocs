@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.130 :
+v0.0XX :
 
 **Dictar al reporte** (P.27, entrega V1): pasar una nota informal del set a su lugar en el reporte no tenía forma;
 había que buscar la fila y la columna a mano. *Dictate to report* (el micrófono de la página, el botón redondo del

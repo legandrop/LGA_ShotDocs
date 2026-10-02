@@ -1,6 +1,6 @@
 # Dictado por voz y notas informales que se ubican en el reporte
 
-**Estado: entrega V1 implementada (v0.130)**; V2 a V4, diseño. Cómo quedó V1 y lo que cambió al implementarla: sección
+**Estado: entrega V1 implementada (v0.0XX)**; V2 a V4, diseño. Cómo quedó V1 y lo que cambió al implementarla: sección
 15, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
 asistente A1 publicado (v0.118) y A2 terminado en su rama (`lega/asistente-a2`, en auditoría). Las decisiones están
 propuestas (DI1 a DI9, sección 13) y valen hasta que Lega diga otra cosa. Lo medido está en "Cómo se midió", al final;
@@ -812,7 +812,7 @@ roadmap pasó a P.27 (P.26 es el diseño de deshacer).
 no las distingue: el validador agrupa los cambios por la *Slate* que escribe la nota y la vista previa muestra el destino
 como *row 3 (new: 12 · 010 · 4)*.
 
-## 15. Cómo quedó V1 (v0.130)
+## 15. Cómo quedó V1 (v0.0XX)
 
 **Qué hay.** *Dictate to report*: el botón del micrófono en la barra de la página (en la compu), el redondo de 56 px abajo
 a la derecha (en el teléfono, solo con Editar y si la política recordada no es *Off*), *Dictate to report* en el menú de
