@@ -3,7 +3,7 @@ import { useT } from '../i18n';
 import '../i18n/lazy/assistant';
 import { usePermissions, useServices, useSyncStatus } from '../services';
 import { builtinTexts } from '../templates/builtin';
-import { CloseIcon, SettingsIcon } from '../ui/icons';
+import { CloseIcon, MicIcon, SettingsIcon } from '../ui/icons';
 import { IS_MAC, modPressed } from '../ui/findUi';
 import { shortcutLabel } from '../ui/shortcuts';
 import { errorText } from '../assistant/errorText';
@@ -16,9 +16,15 @@ import { shotTemplate, validateAnswer, type AskOption, type Change, type Plan } 
 import { addToSummary, applyChanges, undoApplied, type UndoHandle } from './applyPlan';
 import { closeDictation, takeQueuedRequest, useQueuedRequest } from './dictationUi';
 import { loadDraft, saveDraft, type PendingItem } from './drafts';
-import { addNote, getNote, removeNote, restoreNote, useQueuedNotes, type QueuedNote } from './queue';
+import { addNote, getNote, removeNote, restoreNote, updateNote, useQueuedNotes, type QueuedNote } from './queue';
 import { noteSnippet, noteTime } from './VoiceNotes';
 import '../i18n/lazy/dictation';
+import { insertAtCursor, refreshSpot, spotOf, type CursorSpot } from './caretInsert';
+import { canRecord, NoteRecorder, WARN_MS, MAX_MS, type RecorderError, type RecorderState, type RecordingResult } from './recorder';
+import { voiceHints } from './transcribe';
+import { failureText, queueRecordingStore, transcribeNote } from './voiceQueue';
+import { resolveVoice, type VoiceConfig } from './voiceSettings';
+import { VoiceSettingsDialog } from './VoiceSettingsDialog';
 import { buildPageMap, type PageMap } from './pageMap';
 import { buildPlaceRequest, type RecentChange } from './prompt';
 import './dictation.css';
@@ -32,6 +38,8 @@ import './dictation.css';
 type Phase =
   | { kind: 'compose'; note?: string }
   | { kind: 'running' }
+  /** La grabación se está pasando a texto (V3). */
+  | { kind: 'transcribing' }
   | { kind: 'ask'; question: string; options: AskOption[] }
   | { kind: 'preview'; plan: Plan }
   /** Recién aplicado: *Undo* mientras sea lo último que se hizo en la página. `queued`: la nota venía de la cola (V2). */
@@ -120,6 +128,9 @@ function useMarks(view: { domAtPos: (pos: number) => { node: Node } } | null, ch
   }, [view, changes]);
   return boxes;
 }
+
+/** `m:ss`. */
+const clock = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
 
 const newId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).toString();
 
@@ -226,6 +237,49 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     });
   }, [pageId, queueRequest]);
 
+  // --- El micrófono propio (V3) ---
+  /** Con qué se transcribe (`null`: no hay cómo; `undefined`: leyendo). */
+  const [voice, setVoice] = useState<VoiceConfig | null | undefined>(undefined);
+  const [voiceSettings, setVoiceSettings] = useState(false);
+  const [rec, setRec] = useState<{ state: RecorderState; error?: RecorderError; ms: number }>({ state: 'idle', ms: 0 });
+  const recorder = useRef<NoteRecorder | null>(null);
+  const levelBar = useRef<HTMLSpanElement>(null);
+  /** El último campo donde se escribía fuera de la hoja (para *Insert at cursor*). */
+  const spot = useRef<CursorSpot | null>(null);
+  const editTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (settingsOpen || voiceSettings) return;
+    let live = true;
+    void resolveVoice(user.email)
+      .then((v) => live && setVoice(v))
+      .catch(() => live && setVoice(null));
+    return () => {
+      live = false;
+    };
+  }, [user.email, settingsOpen, voiceSettings]);
+
+  // El foco fuera de la hoja: el último campo de texto (un comentario) o la página.
+  useEffect(() => {
+    const onFocus = (e: FocusEvent) => {
+      if (root.current?.contains(e.target as Node)) return;
+      const s = spotOf(e.target);
+      if (s) spot.current = s;
+    };
+    document.addEventListener('focusin', onFocus);
+    return () => document.removeEventListener('focusin', onFocus);
+  }, []);
+
+  // Cerrar la hoja o cambiar de página mientras graba corta y guarda (la nota queda en la cola).
+  useEffect(
+    () => () => {
+      void recorder.current?.stop('cut');
+      recorder.current = null;
+      if (editTimer.current) clearTimeout(editTimer.current);
+    },
+    [],
+  );
+
   // Se guarda mientras se escribe (cerrar la hoja o la app no la pierde).
   const persist = useCallback(
     (nextText: string, nextPending: PendingItem[]) => {
@@ -274,6 +328,11 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   const offline = !status.online && !local;
   const providerName = settings ? PROVIDER_NAMES[settings.provider] : '';
   const blocked = !ready || !allowed || offline;
+  const voiceLocal = voice ? voice.provider === 'compatible' && isLocalProvider({ provider: 'compatible', baseUrl: voice.baseUrl }) : false;
+  const voiceAllowed = policy === null || !voice ? true : policyAllows(policy, voice);
+  /** Se puede transcribir ahora (con red o un servidor local, y la política). */
+  const canTranscribe = !!voice && voiceAllowed && (status.online || voiceLocal);
+  const recording = rec.state === 'starting' || rec.state === 'recording' || rec.state === 'stopping';
 
   const words = useMemo(
     () => ({
@@ -461,6 +520,118 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     run.current = null;
     setPhase({ kind: 'compose', note: tr('dictation.savedForLater') });
     requestAnimationFrame(() => field.current?.focus({ preventScroll: true }));
+  };
+
+  /**
+   * Pasa a texto una nota con audio de la cola y, si salió algo, la ubica (R1: *Transcribing…* y después *Placing…*).
+   * Sin red, sin voz o sin la política, no manda nada: la nota queda guardada.
+   */
+  const transcribeAndPlace = async (noteId: string, autoPlace: boolean) => {
+    const view = target?.view();
+    const map = view ? buildPageMap(view.state, tree.get(pageId)?.title ?? '', { fallbackLang: tr.lang === 'es' ? 'es' : 'en' }) : null;
+    setFocused(null);
+    setPhase({ kind: 'transcribing' });
+    let out = await transcribeNote(noteId, {
+      email: user.email,
+      client,
+      workspaceKey,
+      hints: voiceHints(map && typeof map !== 'string' ? map : null),
+      online: status.online,
+    });
+    // La está transcribiendo la cola (al volver la red): se espera a que termine.
+    for (let i = 0; out === 'busy' && i < 120; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      const n = await getNote(noteId);
+      if (n && n.state !== 'saved') out = n;
+    }
+    if (typeof out === 'string') {
+      const n = await getNote(noteId);
+      setQueued(n);
+      setPhase({ kind: 'compose', note: tr(out === 'policy' ? 'dictation.voicePolicy' : out === 'noVoice' ? 'dictation.voiceSetupText' : 'dictation.recordedOffline') });
+      return;
+    }
+    setQueued(out);
+    if (out.state === 'ready' && autoPlace && ready && allowed && !offline) {
+      await place(out.text, undefined, out);
+      return;
+    }
+    setPhase({ kind: 'compose' });
+  };
+
+  /** La grabación terminó (la persona, el tope o un corte): queda en la cola y, si se puede, se transcribe. */
+  const afterRecording = async (result: RecordingResult) => {
+    recorder.current = null;
+    setRec({ state: 'idle', ms: 0 });
+    if (!result.noteId) {
+      setPhase({ kind: 'compose', note: tr('dictation.nothingRecorded') });
+      return;
+    }
+    if (!canTranscribe) {
+      setQueued(null);
+      setPhase({ kind: 'compose', note: tr(voice && !voiceAllowed ? 'dictation.voicePolicy' : 'dictation.recordedOffline') });
+      return;
+    }
+    await transcribeAndPlace(result.noteId, true);
+  };
+
+  /** El botón grande: tocar para empezar, tocar para cortar (no hay que mantenerlo apretado). */
+  const toggleRecord = async () => {
+    const current = recorder.current;
+    if (current) {
+      if (rec.state === 'stopping') return;
+      await afterRecording(await current.stop('user'));
+      return;
+    }
+    // Sin cómo transcribir, el botón abre la explicación y los ajustes; no graba.
+    if (!voice) {
+      setVoiceSettings(true);
+      return;
+    }
+    if (!voiceAllowed) {
+      setPhase({ kind: 'compose', note: tr('dictation.voicePolicy') });
+      return;
+    }
+    setConfirm(null);
+    setQueued(null);
+    const r = new NoteRecorder({
+      store: queueRecordingStore({ email: user.email, workspace: workspaceKey, pageId, pageTitle: tree.get(pageId)?.title ?? '' }),
+      onState: (state, error) => setRec((s) => ({ ...s, state, error })),
+      onTick: (ms) => setRec((s) => (Math.floor(s.ms / 1000) === Math.floor(ms / 1000) ? s : { ...s, ms })),
+      onLevel: (level) => {
+        if (levelBar.current) levelBar.current.style.transform = `scaleX(${Math.max(0.03, level).toFixed(3)})`;
+      },
+      onAutoStop: (result) => {
+        if (recorder.current === r) void afterRecording(result);
+      },
+    });
+    recorder.current = r;
+    setRec({ state: 'starting', ms: 0 });
+    setPhase({ kind: 'compose' });
+    await r.start();
+    if (r.state === 'error') recorder.current = null;
+  };
+
+  /** *Insert at cursor* (V3): la transcripción donde estaba el cursor (la página o un campo); escrita, sale de la cola. */
+  const insertQueuedAtCursor = () => {
+    if (!queued?.text.trim()) return;
+    const writable = perms.canEditPage(pageId) && (target?.editable() ?? false);
+    if (!insertAtCursor(queued.text, refreshSpot(spot.current), target?.view() ?? null, writable)) {
+      setPhase({ kind: 'compose', note: tr('dictation.cursorFailed') });
+      return;
+    }
+    const id = queued.id;
+    void enqueue(() => removeNote(id));
+    setQueued(null);
+    setPhase({ kind: 'compose', note: tr('dictation.insertedAtCursor') });
+  };
+
+  /** Corregir la transcripción antes de ubicarla: se guarda en la nota de la cola. */
+  const editQueued = (value: string) => {
+    if (!queued) return;
+    const next = { ...queued, text: value };
+    setQueued(next);
+    if (editTimer.current) clearTimeout(editTimer.current);
+    editTimer.current = setTimeout(() => void updateNote(next.id, { text: value }).catch((err) => console.error('Dictado: no se pudo guardar la corrección', err)), 250);
   };
 
   /** Abre una nota guardada de esta página en la hoja. */
@@ -674,6 +845,46 @@ export function DictationPanel({ pageId }: { pageId: string }) {
       </div>
     ) : null;
 
+  const recordText = (): string => {
+    if (rec.state === 'error') {
+      const e = rec.error ?? 'failed';
+      return tr(e === 'denied' ? 'dictation.micDenied' : e === 'noMic' ? 'dictation.micNone' : e === 'unsupported' ? 'dictation.micUnsupported' : e === 'storage' ? 'dictation.micStorage' : 'dictation.micFailed');
+    }
+    if (rec.state === 'starting') return tr('dictation.micStarting');
+    if (rec.state === 'stopping') return tr('dictation.micSaving');
+    if (rec.state === 'recording') return rec.ms >= WARN_MS ? tr('dictation.micEnding', { time: clock(rec.ms), max: clock(MAX_MS) }) : tr('dictation.micRecording', { time: clock(rec.ms) });
+    if (voice === null) return tr('dictation.voiceSetupText');
+    return tr('dictation.micIdle');
+  };
+
+  /** El micrófono grande (V3): tocar y tocar, el nivel, el tiempo y el tope. */
+  const micBox = canRecord() ? (
+    <div className={`dictation-mic${recording ? ' on' : ''}`}>
+      <button
+        className="dictation-record"
+        aria-pressed={recording}
+        aria-label={tr(recording ? 'dictation.micStop' : 'dictation.micStart')}
+        disabled={rec.state === 'stopping' || (!recording && voice === undefined)}
+        onClick={() => void toggleRecord()}
+      >
+        {recording ? <span className="dictation-stop-square" aria-hidden="true" /> : <MicIcon size={30} />}
+      </button>
+      <div className="dictation-mic-text">
+        <p className={rec.state === 'error' ? 'assistant-error' : 'dictation-mic-status'} role="status">
+          {recordText()}
+        </p>
+        {rec.state === 'recording' && (
+          <span className="dictation-level" aria-hidden="true">
+            <span ref={levelBar} />
+          </span>
+        )}
+        <button className="link" onClick={() => setVoiceSettings(true)}>
+          {tr('dictation.voice.title')}
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   /** Las notas guardadas para esta página (V2): se ubican de a una. */
   const savedBox = savedNotes.length > 0 && (
     <section className="dictation-pending dictation-saved" aria-label={tr('dictation.savedNotes')}>
@@ -783,15 +994,37 @@ export function DictationPanel({ pageId }: { pageId: string }) {
             {phase.kind === 'compose' && queued && (
               <div className="dictation-compose dictation-queued">
                 <p className="mono-label">{tr('dictation.savedNote', { time: noteTime(queued.createdAt, tr.lang) })}</p>
-                <p className="dictation-heard dictation-note">“{queued.text}”</p>
+                {queued.audio && queued.state !== 'ready' ? (
+                  <>
+                    <p className={queued.state === 'failed' ? 'assistant-error' : 'dictation-heard'} role="status">
+                      {queued.state === 'failed' ? failureText(queued.error) : tr('dictation.audioSaved', { duration: clock(queued.audio.durationMs) })}
+                    </p>
+                    <div className="assistant-buttons">
+                      <button className="primary dictation-big" disabled={!canTranscribe} onClick={() => void transcribeAndPlace(queued.id, true)}>
+                        {tr(queued.state === 'failed' ? 'assistant.tryAgain' : 'dictation.transcribe')}
+                      </button>
+                    </div>
+                  </>
+                ) : queued.audio ? (
+                  <textarea className="dictation-field" value={queued.text} rows={3} maxLength={2000} aria-label={tr('dictation.transcript')} onChange={(e) => editQueued(e.target.value)} />
+                ) : (
+                  <p className="dictation-heard dictation-note">“{queued.text}”</p>
+                )}
                 <div className="assistant-buttons">
                   <button className="primary dictation-big" disabled={blocked || !queued.text.trim()} data-tip={shortcutLabel('dictationPlace')} onClick={() => void place(queued.text, undefined, queued)}>
                     {tr('dictation.place')}
                   </button>
+                  {queued.audio && (
+                    <button className="dictation-big" disabled={!queued.text.trim()} onClick={insertQueuedAtCursor}>
+                      {tr('dictation.insertAtCursor')}
+                    </button>
+                  )}
                   <button className="dictation-big" disabled={!canEdit || !queued.text.trim()} onClick={insertQueued}>
                     {tr('dictation.insertAsText')}
                   </button>
-                  <button onClick={() => copy(queued.text)}>{tr('assistant.copy')}</button>
+                  <button disabled={!queued.text.trim()} onClick={() => copy(queued.text)}>
+                    {tr('assistant.copy')}
+                  </button>
                   <button className="link" onClick={() => setConfirm('discardQueued')}>
                     {tr('assistant.discard')}
                   </button>
@@ -810,6 +1043,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
             )}
             {phase.kind === 'compose' && !queued && (
               <div className="dictation-compose">
+                {micBox}
                 <textarea
                   ref={field}
                   className="dictation-field"
@@ -847,6 +1081,13 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                     <button onClick={done}>{tr('dictation.done')}</button>
                   </div>
                 )}
+              </div>
+            )}
+            {phase.kind === 'transcribing' && (
+              <div className="assistant-result">
+                <p className="mono-label" role="status">
+                  {tr('dictation.transcribing')}
+                </p>
               </div>
             )}
             {phase.kind === 'running' && (
@@ -976,6 +1217,7 @@ export function DictationPanel({ pageId }: { pageId: string }) {
           </>
         )}
       </div>
+      {voiceSettings && <VoiceSettingsDialog email={user.email} assistant={settings ?? null} onClose={() => setVoiceSettings(false)} />}
       {settings && ready && (
         <footer className="assistant-foot mono-label">
           {providerName} · {settings.model}

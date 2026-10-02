@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useT } from '../i18n';
 import { useRoute } from '../router';
-import { usePermissions, useServices } from '../services';
+import { usePermissions, useServices, useSyncStatus } from '../services';
 import { lazyPart, Part } from '../ui/lazyPart';
 import { MicIcon } from '../ui/icons';
 import { useAssistantTarget, useAssistantUi } from '../assistant/assistantUi';
@@ -38,6 +38,26 @@ export function DictationHost() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Las grabaciones guardadas sin red se transcriben solas al volver la red (V3; transcribir es barato y no cambia la
+  // página: ubicarlas sigue siendo de a una, con su vista previa). Lo que hace falta se baja recién si hay alguna.
+  const { user, workspace, client } = useServices();
+  const workspaceKey = workspace.config.localKey || workspace.config.url;
+  const online = useSyncStatus().online;
+  const waiting = useQueuedNotes(user.email, workspaceKey).filter((n) => n.state === 'saved' && n.audio).length;
+  useEffect(() => {
+    if (!online || waiting === 0) return;
+    let live = true;
+    const id = setTimeout(() => {
+      void import('./voiceQueue')
+        .then((m) => (live ? m.transcribePending(workspaceKey, { email: user.email, client, workspaceKey, online: true }) : 0))
+        .catch((err) => console.error('Dictado: no se pudieron transcribir las notas guardadas', err));
+    }, 1500);
+    return () => {
+      live = false;
+      clearTimeout(id);
+    };
+  }, [online, waiting, user.email, client, workspaceKey]);
 
   // Al cambiar de página, la hoja se cierra (la nota queda guardada con su página).
   useEffect(() => {

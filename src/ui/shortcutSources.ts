@@ -82,6 +82,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
     'ExportDialog.tsx',
     'AssistantPanel.tsx',
     'DictationPanel.tsx',
+    'VoiceSettingsDialog.tsx',
     'AssistantSettings.tsx',
     'SignOutDialog.tsx',
     'TemplateHost.tsx',

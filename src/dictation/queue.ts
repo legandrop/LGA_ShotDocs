@@ -165,11 +165,41 @@ export async function readChunks(noteId: string): Promise<ArrayBuffer[]> {
   return rows.filter((r) => r.kind === 'chunk').sort((a, b) => a.seq - b.seq).map((r) => r.data);
 }
 
+// --- Grabaciones en curso y cortadas (V3) ----------------------------------------------------------------------------
+
+/** Las notas que esta pestaña está grabando ahora. */
+const recording = new Set<string>();
+/** Cuánto sin noticias de una grabación (los pedazos llegan cada segundo) para darla por cortada. */
+const STALE_MS = 5000;
+
+export function markRecording(id: string, on: boolean): void {
+  if (on) recording.add(id);
+  else recording.delete(id);
+}
+
+/**
+ * Una grabación que quedó en `recording` porque la página se cerró o se cortó (iOS mató la pestaña) pasa a `saved` con
+ * lo que se guardó hasta ahí (C5). Si no llegó a guardar ni un pedazo, a `failed` (sin audio no hay qué transcribir):
+ * queda en la lista para que la persona la descarte. Nunca se borra.
+ */
+export async function recoverRecordings(list: QueuedNote[], now = Date.now()): Promise<boolean> {
+  let changed = false;
+  for (const n of list) {
+    if (n.state !== 'recording' || recording.has(n.id) || now - n.updatedAt < STALE_MS) continue;
+    const chunks = (await readChunks(n.id)).length;
+    const audio = { mime: n.audio?.mime ?? 'audio/webm', chunks, durationMs: Math.max(n.audio?.durationMs ?? 0, chunks * 1000) };
+    await updateNote(n.id, chunks > 0 ? { state: 'saved', audio } : { state: 'failed', audio, error: 'empty' });
+    changed = true;
+  }
+  return changed;
+}
+
 // --- Para la interfaz ------------------------------------------------------------------------------------------------
 
 /**
  * Las notas de la cola de esa persona en ese workspace, al día: se vuelven a leer con cada cambio (de esta pestaña o
- * de otra), al volver la red y al volver la app al frente. Mientras lee la primera vez, una lista vacía.
+ * de otra), al volver la red y al volver la app al frente. Mientras lee la primera vez, una lista vacía. Sin las que se
+ * están grabando (una grabación cortada pasa a `saved` y aparece).
  */
 export function useQueuedNotes(email: string, workspace: string): QueuedNote[] {
   const [notes, setNotes] = useState<QueuedNote[]>([]);
@@ -179,7 +209,12 @@ export function useQueuedNotes(email: string, workspace: string): QueuedNote[] {
     const read = () => {
       const mine = ++seq;
       void listNotes(email, workspace)
-        .then((list) => live && mine === seq && setNotes(list))
+        .then(async (list) => {
+          // Una grabación cortada (la página se cerró mientras grababa) se cierra con lo que llegó a guardar.
+          if (await recoverRecordings(list).catch(() => false)) return;
+          // La que se está grabando todavía no es una nota para ubicar.
+          if (live && mine === seq) setNotes(list.filter((n) => n.state !== 'recording'));
+        })
         .catch((err) => console.error('Dictado: no se pudo leer la cola de notas', err));
     };
     read();

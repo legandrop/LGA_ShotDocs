@@ -1,7 +1,7 @@
 # Dictado por voz y notas informales que se ubican en el reporte
 
-**Estado: entregas V1 (v0.135) y V2 (v0.136) implementadas**; V3 y V4, diseño. Cómo quedaron V1 y V2 y lo que cambió
-al implementarlas: secciones 15 y 16, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
+**Estado: entregas V1 (v0.135), V2 (v0.136) y V3 (v0.137) implementadas**; V4, diseño. Cómo quedaron y lo que cambió
+al implementarlas: secciones 15 a 17, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
 asistente A1 publicado (v0.118) y A2 terminado en su rama (`lega/asistente-a2`, en auditoría). Las decisiones están
 propuestas (DI1 a DI9, sección 13) y valen hasta que Lega diga otra cosa. Lo medido está en "Cómo se midió", al final;
 los precios y el CORS se verificaron el 2026-10-02 en las páginas oficiales y con pedidos sin clave. **Auditado el mismo
@@ -924,3 +924,55 @@ sin Editar, el aviso con su lista y el pedido de abrir). Recorrido en Chromium y
 con el proveedor falso: 24 de 24 en cada uno (las tres pruebas de aceptación, recargar, teléfono de 390 px). Mutantes de
 las guardas de la cola: 10 de 11 mueren; el que vive (Ctrl+Enter sin mirar la política) es equivalente: *Place* vuelve a
 pedir la política antes de mandar.
+
+## 17. Cómo quedó V3 (v0.137)
+
+**Qué hay.** En *Dictate to report*, arriba del campo, el botón redondo de 72 px: tocar para grabar y otra vez para
+cortar. Mientras abre el micrófono dice *Getting the microphone…*; *Recording · 0:12 · tap to stop* aparece recién con el
+primer pedazo guardado en el dispositivo (C5); a 1:45 avisa el corte y a los 2:00 corta solo. Al lado, el nivel del
+micrófono y el link *Voice*. Al cortar: *Transcribing…*, *Placing…* y la vista previa de V1 (R1). Sin red (o con la
+política que no deja), la grabación queda en la cola sin preguntar (*Saved. It will be transcribed and placed when
+you're back online.*) y se transcribe sola al volver la red, sin ubicar nada. Una nota con audio abierta en la hoja
+muestra la grabación sin transcribir (*Transcribe*), el error (*Try again*) o la transcripción en un campo editable, con
+*Place*, *Insert at cursor*, *Insert as text*, *Copy* y *Discard*. En el asistente, un micrófono chico en *Ask…* suma lo
+dictado al campo, sin mandarlo.
+
+**Archivos.** `recorder.ts` (grabar: el formato, los pedazos, el primer pedazo, `ended` y `pagehide`, el tope, el nivel,
+`wakeLock` y la vibración), `transcribe.ts` (OpenAI, Gemini y compatible; las pistas de la página; el plan B a WAV),
+`voiceSettings.ts` y `VoiceSettingsDialog.tsx` (*Voice*), `voiceQueue.ts` (la grabación en la cola, transcribir sin
+borrar nunca, la política al mandar), `caretInsert.ts` (*Insert at cursor*) y `AskMic.tsx`; la grabación cortada se
+cierra sola en `queue.ts` (`recoverRecordings`).
+
+**Lo que cambió al implementar:**
+
+- ***Voice* es una ventana propia**, que se abre desde la hoja (el link *Voice*, o el micrófono si todavía no hay con qué
+  transcribir) y desde el micrófono de *Ask…*; no es una sección de *Assistant settings*, que reescribe la entrega S1 de
+  la clave sincronizada. Con el asistente en OpenAI, Gemini o un compatible usa esa clave, leída con la misma API del
+  asistente (`loadSettings` y `readKey`, sin tocar `keyStore.ts`); si no (Anthropic), pide una segunda clave, cifrada
+  igual (AES-GCM, llave del dispositivo no exportable) en la base `shotdocs-dictation` (claves `v:<correo>` y `k:aes` del
+  almacén `notes`; la versión no sube). Cuando exista la sincronización (D72), esta clave tiene que seguirla (roadmap).
+  *Test* pide la lista de modelos (no cuesta).
+- **Modelos por defecto:** `gpt-4o-mini-transcribe` (OpenAI), `gemini-2.5-flash-lite` (Gemini) y `whisper-1`
+  (compatible); se cambian en *Voice*. Las pistas van en `prompt` (OpenAI) o en el pedido (Gemini): la jerga fija y los
+  rótulos de la página (filas, columnas, *Slate*, planos, títulos), nunca el texto de las celdas.
+- **El reconocimiento del navegador (B de 4.3) no se hizo:** era optativo y apagado, manda el audio a Google o Apple sin
+  que la persona lo elija y no existe en la app instalada del iPhone.
+- **La grabación cortada** (la pestaña murió grabando) se cierra al volver a leer la cola: con algún pedazo pasa a
+  `saved`; sin ninguno, a `failed` (*The recording is empty.*) para que la persona la descarte. Nunca se borra sola.
+- **Transcribir nunca borra:** una nota sale de la cola solo con las acciones de V2 (y con *Insert at cursor* ya escrito).
+  Un corte de red la deja `saved` (se reintenta sola); un error del proveedor, `failed` con el texto del error.
+- ***Insert at cursor*** escribe en la selección de la página que quedó al ir a la hoja (una edición más, sin abrir el
+  teclado) o en el último campo de texto donde estaba el foco (un comentario), con espacios si hacen falta. Si no hay
+  dónde, lo dice y la nota sigue.
+- **El micrófono de *Ask…* graba en memoria**, no en la cola: un pedido al asistente no es una nota del reporte, y sin
+  red no hay asistente.
+- La nota que se está grabando no aparece en las listas ni en el número hasta que se corta.
+
+**Pruebas.** Vitest: 17 en `voice.test.ts` (grabar con un `MediaRecorder` simulado: el primer pedazo, el que no se
+guarda, los cortes, el tope, sin permiso; los adaptadores con `fetch` simulado, el plan B, los errores sin la clave;
+*Voice*; la cola con audio y la política) y 5 en `voicePanel.test.tsx` (R1 sin teclado, sin red, *Insert at cursor* en
+un comentario y en la página, sin dónde escribir, el micrófono sin clave de voz). Recorrido en Chromium con el micrófono
+falso: 31 de 31 (72 px, *Recording* con el primer pedazo guardado, WebM/Opus, el nivel, el audio en multipart como
+`note.webm`, R1, R3 sin red con la transcripción sola al volver, cerrar la hoja y cerrar la pestaña grabando: lo
+guardado se decodifica y sin el primer pedazo no, *Insert at cursor*, *Voice*, *Ask…*, teléfono de 390 px). El WebKit
+de Playwright en Windows no trae micrófono: el iPhone lo prueba Lega. Mutantes de las guardas: 16 de 16 mueren.

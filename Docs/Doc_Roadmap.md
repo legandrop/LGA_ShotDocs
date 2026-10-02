@@ -508,7 +508,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   política; falta que Lega mida la calidad con su clave (10.3) y pruebe el dictado del teclado en el editor del teléfono.
   **V2 hecha (v0.136, sección 16):** la cola sin red (*Save for later*, *N voice notes to place* en el indicador con la
   lista, ubicar de a una, *Insert as text*, *Discard* con confirmación); falta el número de notas en la ventana de salir
-  de la cuenta (después de S1).
+  de la cuenta (después de S1). **V3 hecha (v0.137, sección 17):** el micrófono propio (pedazos de 1 s guardados, C4 y
+  C5, OpenAI, Gemini o compatible con pistas, *Voice* con la segunda clave, *Insert at cursor*, *Ask…*); falta que Lega
+  lo pruebe en su iPhone (instalada y en Safari) con OpenAI y con Gemini, y que la segunda clave siga a la clave
+  sincronizada cuando exista (D72, S1). El reconocimiento del navegador quedó afuera (optativo y apagado).
   **Diseño en `Doc_Dictado.md`** (decisiones propuestas DI1 a DI9): el dictado común queda en el teclado del sistema;
   un solo micrófono propio, *Dictate to report*, que graba
   en el dispositivo y transcribe con el proveedor de la persona (OpenAI o Gemini; el reconocimiento del navegador no
