@@ -1,6 +1,6 @@
 # Deshacer en el orden en que editaste (P.26)
 
-**Estado: diseño; entrega 0 hecha (v0.0XX: el límite de Yjs, arreglado con un parche; sección 16).** Pedido de Lega
+**Estado: diseño; entrega 0 hecha (v0.132: el límite de Yjs, arreglado con un parche; sección 16).** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
 y se revisó contra v0.125. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el
@@ -31,7 +31,7 @@ número final lo pone quien las cierre con Lega. Lo medido salió de prototipos 
 - **No cambia nada guardado**: ni el documento, ni el registro de reemplazos, ni la base. Sin migración, sin
   `min_app_version`; una versión vieja no se entera.
 - **Entregas:** 1 la línea de tiempo con las páginas, 2 el reemplazo adentro, 3 anotar fotos como un paso. **La
-  entrega 0 está hecha (v0.0XX):** el deshacer de Yjs dejaba restos y a veces se llevaba texto de antes (B.21) porque
+  entrega 0 está hecha (v0.132):** el deshacer de Yjs dejaba restos y a veces se llevaba texto de antes (B.21) porque
   seguía lo que otro deshacer volvió a poner solo hasta el primer corte; un parche a Yjs lo sigue entero. Medido con
   texto: de 1.844 a 3.000 de 3.000 exactas y de 14 a 0 con algo de menos. Borrando y deshaciendo bloques enteros queda
   un resto chico de Yjs (1 de 300 con el editor, antes 7) (sección 16).
@@ -285,7 +285,7 @@ Reemplazaste en 50 páginas; después escribiste en *Shot 12*; antes del reempla
 - **Lo que deshacés se rehace**: ⌘⇧Z para todo lo de la línea de tiempo, también el reemplazo (hoy no tiene rehacer).
 - **Retener un documento** usa `docs.open`: la página cuenta como abierta (la guardia de versión queda armada, como con
   el editor en pantalla), nada se destruye con ediciones sin guardar.
-- **Un límite de Yjs que existía antes de este diseño, arreglado en la entrega 0 (v0.0XX, sección 16).** Si algo que un
+- **Un límite de Yjs que existía antes de este diseño, arreglado en la entrega 0 (v0.132, sección 16).** Si algo que un
   deshacer volvió a poner se partía escribiendo en el medio, deshacer más atrás dejaba restos ("la ía" en vez de "la ")
   y, a veces, **se llevaba un pedazo de texto**: en un caso, un solo deshacer borró "ám" de "cámara" (texto original
   que un deshacer anterior había vuelto a poner). Medido por la auditoría con la **misma** secuencia al azar en una
@@ -532,7 +532,7 @@ otra sesión (medido).
 
 ## 13. Entregas
 
-0. **Hecha (v0.0XX): el límite de Yjs de la sección 6 (B.21).** La causa, el parche y lo medido, en la sección 16.
+0. **Hecha (v0.132): el límite de Yjs de la sección 6 (B.21).** La causa, el parche y lo medido, en la sección 16.
 1. **La línea de tiempo con las páginas.** La pila de cada página que sobrevive al cambiar de página (retener y pasar
    la pila sin el meta del editor viejo, 3.2), ⌘Z y ⌘⇧Z en orden entre páginas (DH2), fuera del editor, quienes llaman
    directo al deshacer (3.4), lo de fondo fuera de la pila, topes, ayuda y atajos. **Aceptación:** escribir en *A*, en
@@ -578,7 +578,7 @@ Cada entrega con su auditoría antes de publicar.
 - El uso de memoria real en el iPhone con 20 páginas retenidas.
 - El orden de armado y desmontado de React al cambiar de página (3.2, "Cuándo"): leído, no medido con la app entera.
 
-## 16. Entrega 0: el límite de Yjs (B.21), cómo quedó (v0.0XX)
+## 16. Entrega 0: el límite de Yjs (B.21), cómo quedó (v0.132)
 
 ### 16.1 La causa
 
