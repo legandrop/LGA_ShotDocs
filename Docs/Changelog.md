@@ -2,14 +2,15 @@
 
 v0.0XX :
 
-Diseño de ⌘Z en el orden en que editaste (pedido de Lega del 2026-10-02, P.26), sin código: `Docs/Doc_Deshacer.md`.
-Hoy la pila de deshacer de cada página muere al cambiar de página y el reemplazo del proyecto no está en ninguna; además,
-deshacer el reemplazo y después lo escrito antes deja texto de más (medido). La propuesta: una línea de tiempo por
-proyecto arriba de las pilas de Yjs, que se retienen al salir de la página; ⌘Z en otra página te lleva y lo deshace a la
-vista; el reemplazo entra en la pila de las páginas editadas (también al deshacerlo desde el panel) y por las anclas en
-las demás; ⌘⇧Z rehace todo. Auditado: corregidos el panel fuera de orden y la memoria del editor viejo; investigar el
-resto de Yjs (B.21) antes de la entrega 1. Decisiones DH1 a DH10.
-[ Deshacer, diseño - la línea de tiempo de ⌘Z con el reemplazo del proyecto adentro ]
+Dos diseños pedidos por Lega el 2026-10-02, sin código. **⌘Z en el orden en que editaste** (P.26, `Doc_Deshacer.md`):
+hoy la pila de deshacer de cada página muere al cambiar de página, el reemplazo del proyecto no está en ninguna y deshacerlo
+deja texto de más (medido); propone una línea de tiempo por proyecto arriba de las pilas de Yjs, retenidas al salir, con
+el reemplazo adentro; antes de la entrega 1, investigar el resto de Yjs (B.21). **Dictado por voz** (P.27,
+`Doc_Dictado.md`): el reconocimiento del navegador no existe en la app instalada del iPhone, así que un micrófono propio
+graba y transcribe con el proveedor de la persona; la página viaja como un mapa y vuelve una lista de cambios con fila y
+columna que valida la app, con vista previa, *Apply* con la guarda y un deshacer; lo destildado no se pierde. Ambos
+auditados y corregidos (decisiones DH1-DH10 y DI1-DI9).
+[ Diseños - deshacer en el orden en que editaste y el dictado al reporte ]
 
 v0.125 :
 
