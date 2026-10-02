@@ -5,6 +5,11 @@ import type { Dict } from './types';
 export const common = {
   'common.loading': { en: "Loading…", es: "Cargando…" },
   'common.tryAgain': { en: "Try again", es: "Reintentar" },
+  // La base rechazó un cambio porque esta versión de la app es más vieja que la mínima del workspace (`app_outdated`).
+  'common.appOutdated': {
+    en: "This workspace needs a newer version of the app. Reload the app to update it and try again.",
+    es: "Este workspace necesita una versión más nueva de la app. Recargá la app para actualizarla y probá de nuevo.",
+  },
   'common.signOut': { en: "Sign out", es: "Cerrar sesión" },
   'common.untitled': { en: "Untitled", es: "Sin título" },
   'common.ok': { en: "OK", es: "OK" },

@@ -176,6 +176,12 @@ export class SyncEngine {
     }
     if (options.comments) {
       options.comments.onQueued = poke;
+      // La base rechazó un comentario por la versión mínima: se ve el aviso de actualizar.
+      options.comments.onOutdated = () => {
+        if (this.stopped) return;
+        this.patch({ outdated: true });
+        this.options.media?.setOutdated(true);
+      };
       options.comments.onChange = () => {
         if (!this.stopped) void this.refreshCounts().catch(() => undefined);
       };
@@ -233,8 +239,11 @@ export class SyncEngine {
     }
     this.interval = setInterval(onWake, INTERVAL_MS);
     // Lo que el servidor rechazó se vuelve a intentar una vez por apertura: puede que ya se haya arreglado.
-    // Un error de la base de archivos nunca saltea la sincronización del texto.
+    // Un error de la base de archivos nunca saltea la sincronización del texto. Del árbol, solo lo rechazado por la
+    // versión mínima (lo dejó una versión anterior de la app, que lo tomaba como un rechazo): lo demás sigue a la vista
+    // con su botón de reintentar.
     void Promise.all([
+      this.tree.retryFailed((f) => f.error === APP_OUTDATED),
       this.docs.clearRejected(),
       this.clearMediaBlocked(),
       this.options.comments?.retryFailed().catch(() => undefined),
@@ -718,6 +727,13 @@ export class SyncEngine {
         await this.applyOp(op);
         await this.tree.ackOp(op);
       } catch (err) {
+        if (errorMessage(err) === APP_OUTDATED) {
+          // La base frena el árbol por versión (B.17) y subieron la mínima entre la consulta y el pedido: el cambio
+          // queda en la cola (no pasa a rechazados) y sale al actualizar, con los que vienen después, en orden.
+          this.patch({ outdated: true });
+          this.options.media?.setOutdated(true);
+          return;
+        }
         if (!isPermanent(err)) throw err;
         await this.tree.failOp(op, errorMessage(err));
       }

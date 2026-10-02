@@ -11,13 +11,37 @@ import {
   type WorkerContainer,
 } from './appUpdate';
 
-/** Un `navigator.serviceWorker` de mentira: el navegador encuentra (o no) una versión nueva al buscar. */
+/**
+ * Un `navigator.serviceWorker` de mentira: el navegador encuentra (o no) una versión nueva al buscar. Cada instalación
+ * avisa `updatefound` en el registro. `failsAtOnce`: falla antes de que `update()` termine (ya no está en
+ * `reg.installing` cuando se mira).
+ */
 function fakeWorker(
-  opts: { controlled?: boolean; newVersion?: boolean; activateMs?: number; fail?: boolean; installFails?: boolean } = {},
+  opts: {
+    controlled?: boolean;
+    newVersion?: boolean;
+    activateMs?: number;
+    fail?: boolean;
+    installFails?: boolean;
+    failsAtOnce?: boolean;
+  } = {},
 ) {
   const events = new EventTarget();
   let controller: object | null = opts.controlled === false ? null : {};
-  const reg = {
+  /** Empieza una instalación (como el navegador): avisa `updatefound` y devuelve el service worker nuevo. */
+  const startInstall = () => {
+    const installing = Object.assign(new EventTarget(), { state: 'installing' as ServiceWorkerState });
+    reg.installing = installing;
+    reg.dispatchEvent(new Event('updatefound'));
+    return installing;
+  };
+  /** La instalación falla: el service worker nuevo se descarta. */
+  const failInstall = (installing: EventTarget & { state: ServiceWorkerState }) => {
+    reg.installing = null;
+    installing.state = 'redundant';
+    installing.dispatchEvent(new Event('statechange'));
+  };
+  const reg = Object.assign(new EventTarget(), {
     installing: null as object | null,
     waiting: null as object | null,
     updates: 0,
@@ -27,18 +51,19 @@ function fakeWorker(
       if (opts.fail) throw new TypeError('Failed to fetch');
       if (!opts.newVersion) return;
       // Con `autoUpdate` (skipWaiting y clientsClaim): se instala y toma la pestaña enseguida.
-      const installing = Object.assign(new EventTarget(), { state: 'installing' as ServiceWorkerState });
-      reg.installing = installing;
+      const installing = startInstall();
+      if (opts.failsAtOnce) {
+        failInstall(installing);
+        return;
+      }
       setTimeout(() => {
         reg.installing = null;
         // Un archivo del precache no baja (sin espacio, la red se corta): el service worker nuevo se descarta.
-        if (opts.installFails) {
-          installing.state = 'redundant';
-          installing.dispatchEvent(new Event('statechange'));
-        } else takeOver();
+        if (opts.installFails) failInstall(installing);
+        else takeOver();
       }, opts.activateMs ?? 5);
     }),
-  };
+  });
   const takeOver = () => {
     controller = {};
     events.dispatchEvent(new Event('controllerchange'));
@@ -51,7 +76,7 @@ function fakeWorker(
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
   } as unknown as WorkerContainer;
-  return { container, reg, takeOver };
+  return { container, reg, takeOver, startInstall, failInstall };
 }
 
 function setup(
@@ -269,6 +294,70 @@ describe('la versión nueva de la app cuando el workspace pide una más nueva', 
     expect(onStuck).toHaveBeenLastCalledWith('failed');
     expect(onStuck).not.toHaveBeenCalledWith('force');
     expect(reloadByHand).not.toHaveBeenCalled();
+    updates.stop();
+  });
+
+  it('si la instalación falla antes de que se la mire, tampoco ofrece forzar (se sigue desde `updatefound`)', async () => {
+    const worker = fakeWorker({ newVersion: true, failsAtOnce: true });
+    const { updates, reloadByHand, onStuck } = setup(worker, 1000, { published: 'index-nuevo.js' });
+    updates.setOutdated(true);
+    await tick();
+    await updates.updateNow();
+    // `update()` terminó con `reg.installing` vacío: sin seguir la instalación, parecía que el navegador nunca empezó.
+    expect(worker.reg.installing).toBeNull();
+    expect(onStuck).toHaveBeenLastCalledWith('failed');
+    expect(onStuck).not.toHaveBeenCalledWith('force');
+    expect(reloadByHand).not.toHaveBeenCalled();
+    updates.stop();
+  });
+
+  it('también si el service worker se registró después de entrar (la primera vez que se abre la app)', async () => {
+    const worker = fakeWorker({ newVersion: true, failsAtOnce: true });
+    const real = worker.container.getRegistration;
+    let calls = 0;
+    (worker.container as { getRegistration: () => Promise<unknown> }).getRegistration = async () => (calls++ === 0 ? undefined : real());
+    const { updates, onStuck } = setup(worker, 1000, { published: 'index-nuevo.js' });
+    updates.setOutdated(true);
+    await tick();
+    await updates.updateNow();
+    expect(onStuck).toHaveBeenLastCalledWith('failed');
+    updates.stop();
+  });
+
+  it('una instalación que empezó el navegador solo y falló también cuenta; una que después anda, borra la falla', async () => {
+    const worker = fakeWorker();
+    const { updates, reloadByHand, onStuck } = setup(worker, 1000, { published: 'index-nuevo.js' });
+    await tick();
+    // El navegador busca por su cuenta (al abrir o al volver la red), empieza a instalar y no puede.
+    worker.failInstall(worker.startInstall());
+    updates.setOutdated(true);
+    await tick();
+    await updates.updateNow();
+    expect(onStuck).toHaveBeenLastCalledWith('failed');
+    expect(reloadByHand).not.toHaveBeenCalled();
+
+    // Más tarde empieza otra instalación y llega a instalarse (pero no toma el control): ya no hay falla anotada.
+    const next = worker.startInstall();
+    next.state = 'installed';
+    next.dispatchEvent(new Event('statechange'));
+    worker.reg.installing = null;
+    await updates.updateNow();
+    expect(onStuck).toHaveBeenLastCalledWith('force');
+    updates.stop();
+  });
+
+  it('una versión que llegó a instalarse y después quedó reemplazada no es una falla', async () => {
+    const worker = fakeWorker();
+    const { updates, onStuck } = setup(worker, 1000, { published: 'index-nuevo.js' });
+    await tick();
+    const done = worker.startInstall();
+    done.state = 'installed';
+    done.dispatchEvent(new Event('statechange'));
+    worker.failInstall(done);
+    updates.setOutdated(true);
+    await tick();
+    await updates.updateNow();
+    expect(onStuck).toHaveBeenLastCalledWith('force');
     updates.stop();
   });
 

@@ -99,10 +99,24 @@ export function buildWorkspace(): WorkspaceConfig | null {
 // Un solo cliente por workspace en toda la app: dos con la misma sesión se pisarían al renovarla.
 const clients = new Map<string, SupabaseClient>();
 
+/**
+ * El header con la versión de la app, en cada pedido a la base. La base lo mira al escribir el árbol (`pages`,
+ * `workspaces`) y los comentarios: con una versión menor que la mínima del workspace (`min_app_version`) contesta
+ * `app_outdated` (supabase/migrations/20261008120000_version_minima_arbol.sql; Docs/Doc_Sincronizacion.md, "La versión
+ * mínima, el árbol y los comentarios"). Una base sin esa migración lo ignora.
+ */
+export const APP_VERSION_HEADER = 'x-shotdocs-version';
+
+/** Los headers de la versión: ninguno si no se sabe (una compilación sin changelog), como una versión anterior. */
+export function appVersionHeaders(version: string): Record<string, string> {
+  return version ? { [APP_VERSION_HEADER]: version } : {};
+}
+
 export function createWorkspaceClient(ws: WorkspaceConfig): SupabaseClient {
   const known = clients.get(ws.localKey);
   if (known) return known;
   const client = createClient(ws.url, ws.publishableKey, {
+    global: { headers: appVersionHeaders(__APP_VERSION__) },
     auth: {
       storageKey: ws.storage.auth,
       persistSession: true,

@@ -17,8 +17,10 @@ import { hasUnsavedWork, pageReload, reloadByHand, reloadForNewVersion, waitForS
 //   en lazyPart.tsx: espera a que lo escrito esté guardado, nunca encima de un comentario sin mandar, nunca en bucle).
 //   Si en ese momento hay algo sin guardar, se vuelve a intentar con cada cambio del estado de sincronización.
 // - "Update now" busca la versión nueva y, si la encuentra, espera a que tome el control antes de recargar: recargar
-//   antes vuelve a abrir la vieja desde la caché. Si el navegador no trae nada pero el servidor tiene otra versión (el
-//   service worker nuevo no se pudo instalar: un teléfono sin espacio, una red que corta la descarga), ofrece forzarla.
+//   antes vuelve a abrir la vieja desde la caché. Si la instalación empezó y falló (pasa a `redundant`: un teléfono sin
+//   espacio, una red que corta la descarga; se sigue desde `updatefound`, también la que empieza el navegador solo),
+//   explica qué hacer. Solo si el navegador nunca empezó a instalar nada y el servidor tiene otra versión, ofrece
+//   forzarla.
 //
 // Con una versión que no es vieja no se recarga nada solo: eso sigue como siempre (lazyPart.tsx).
 
@@ -168,6 +170,47 @@ function runningScript(): string | null {
 /** El service worker que se está instalando. */
 type InstallingWorker = Pick<ServiceWorker, 'state' | 'addEventListener' | 'removeEventListener'>;
 
+/** Lo que se usa del registro del service worker para seguir sus instalaciones. */
+type InstallsSource = Pick<ServiceWorkerRegistration, 'installing' | 'addEventListener' | 'removeEventListener'>;
+
+/**
+ * Las instalaciones de una versión nueva que empieza el registro (`updatefound`), sea por "Update now", por una búsqueda
+ * de la app o del navegador por su cuenta: anota si la última pasó a `redundant` sin haber llegado a instalarse (poco
+ * espacio, una red que corta el precache). Así "Update now" no confunde una instalación que falló antes de mirarla (ya
+ * no está en `reg.installing`) con un navegador que nunca empezó a instalar nada, que es cuando se ofrece forzar.
+ */
+class InstallWatch {
+  failed = false;
+  private readonly sources = new Map<InstallsSource, () => void>();
+
+  watch(reg: InstallsSource): void {
+    if (this.sources.has(reg)) return;
+    const onFound = () => {
+      const worker = reg.installing;
+      if (!worker) return;
+      // Una instalación nueva: lo que pasó con la anterior ya no cuenta.
+      this.failed = false;
+      let installed = false;
+      const onState = () => {
+        if (worker.state === 'installed' || worker.state === 'activating' || worker.state === 'activated') installed = true;
+        if (worker.state !== 'redundant') return;
+        worker.removeEventListener('statechange', onState);
+        // Una versión que llegó a instalarse y después reemplazó otra más nueva no es una falla.
+        if (!installed) this.failed = true;
+      };
+      worker.addEventListener('statechange', onState);
+      onState();
+    };
+    reg.addEventListener('updatefound', onFound);
+    this.sources.set(reg, onFound);
+  }
+
+  stop(): void {
+    for (const [reg, onFound] of this.sources) reg.removeEventListener('updatefound', onFound);
+    this.sources.clear();
+  }
+}
+
 export class AppUpdates {
   private outdated = false;
   private lastCheck = -Infinity;
@@ -177,15 +220,26 @@ export class AppUpdates {
   private readonly now: () => number;
   private readonly watch: ControllerWatch;
   private readonly stopWatch: () => void;
+  private readonly installs = new InstallWatch();
+  private stopped = false;
 
   constructor(private readonly deps: AppUpdateDeps) {
     this.now = deps.now ?? Date.now;
     this.watch = deps.watch ?? new ControllerWatch(deps.container);
     this.stopWatch = this.watch.onReplaced(this.onReplaced);
     deps.events?.addEventListener('online', this.onOnline);
+    // Desde ya: el navegador también busca e instala versiones nuevas por su cuenta.
+    void deps.container
+      ?.getRegistration()
+      .then((reg) => {
+        if (reg && !this.stopped) this.installs.watch(reg);
+      })
+      .catch(() => undefined);
   }
 
   stop(): void {
+    this.stopped = true;
+    this.installs.stop();
     this.stopWatch();
     this.deps.events?.removeEventListener('online', this.onOnline);
     for (const wake of this.waiters) wake();
@@ -217,6 +271,11 @@ export class AppUpdates {
           this.deps.onStuck?.('failed');
           return;
         }
+      } else if (!this.watch.replaced && this.installs.failed) {
+        // La instalación empezó y falló antes de que se la mirara (o la había empezado el navegador): tampoco se ofrece
+        // forzar.
+        this.deps.onStuck?.('failed');
+        return;
       } else if (!this.watch.replaced && this.outdated) {
         // El navegador no empezó a instalar nada. Si el servidor tiene otra versión, recargar abriría otra vez esta
         // desde la caché: se ofrece forzarla.
@@ -264,6 +323,8 @@ export class AppUpdates {
     this.lastCheck = this.now();
     try {
       const reg = await container.getRegistration();
+      // Antes de buscar: si la instalación que empieza falla enseguida, igual queda anotada.
+      if (reg && !this.stopped) this.installs.watch(reg);
       await reg?.update();
       return reg;
     } catch {

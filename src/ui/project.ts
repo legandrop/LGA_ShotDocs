@@ -4,7 +4,7 @@ import { errorMessage } from '../sync/types';
 import { navigate, pagePath, useRoute } from '../router';
 import { projectDriveAt, type ProjectDrive } from '../media/projectDrive';
 import { useServices, useSyncStatus, useTree } from '../services';
-import { PROJECT_DRIVE_SCHEMA_VERSION } from '../sync/remote';
+import { APP_OUTDATED, PROJECT_DRIVE_SCHEMA_VERSION } from '../sync/remote';
 import type { PageTree } from '../sync/tree';
 import type { StorageNames } from '../workspace';
 
@@ -84,6 +84,7 @@ export function projectStateError(err: unknown, t: Translate = current): string 
   if (code === 'drive_untrash_first') return t('project.errorDriveFirst');
   if (code === 'project_not_found') return t('project.errorNotFound');
   if (code === 'project_deleted') return t('project.errorDeleted');
+  if (code === APP_OUTDATED) return t('common.appOutdated');
   return t('project.stateFailed', { reason: code });
 }
 
