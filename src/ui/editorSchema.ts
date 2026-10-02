@@ -155,8 +155,9 @@ function breaksInSlice(slice: Slice): boolean[] {
  * con las propiedades de fábrica, y el salto se perdía (el texto no). Después de pegar, el salto donde se pegó queda
  * una sola vez, en el último bloque pegado: lo pegado va arriba de la línea y la hoja nueva empieza después, como si
  * se hubiera escrito ahí. Si lo último pegado no es un párrafo (un título, una lista), el salto va en un párrafo vacío
- * debajo. Los saltos que venían en lo pegado se conservan; los demás bloques quedan como venían (el primero puede
- * haber heredado el salto del renglón donde se pegó, y ese se le saca).
+ * debajo; también si es Script o una pregunta, que no van junto con el salto. Los saltos que venían en lo pegado se
+ * conservan; los demás bloques quedan como venían (el primero puede haber heredado el salto del renglón donde se pegó,
+ * y ese se le saca).
  */
 const pageBreakPastePlugin = new Plugin({
   props: {
@@ -202,9 +203,13 @@ const pageBreakPastePlugin = new Plugin({
       if ((first.attrs[PAGE_BREAK_PROP] === true) !== want) tr.setNodeAttribute(b.pos + 1, PAGE_BREAK_PROP, want);
     });
     const lastFirst = last.node.firstChild;
-    if (lastFirst?.type.name === 'paragraph') {
+    // Script o pregunta no van junto con el salto (`paragraphProps`): como un título, el salto va en un renglón debajo.
+    const plain = lastFirst?.type.name === 'paragraph' && lastFirst.attrs[SCRIPT_PROP] !== true && lastFirst.attrs[QUESTION_PROP] !== true;
+    if (plain) {
       if (lastFirst.attrs[PAGE_BREAK_PROP] !== true) tr.setNodeAttribute(last.pos + 1, PAGE_BREAK_PROP, true);
     } else {
+      // Un Script o una pregunta que quedó con el salto lo suelta: el salto va una sola vez, en el renglón de abajo.
+      if (lastFirst?.type.name === 'paragraph' && lastFirst.attrs[PAGE_BREAK_PROP] === true) tr.setNodeAttribute(last.pos + 1, PAGE_BREAK_PROP, false);
       const schema = newState.schema;
       const marker = schema.nodes.paragraph.create({ [PAGE_BREAK_PROP]: true });
       tr.insert(last.pos + last.node.nodeSize, schema.nodes.blockContainer.create({ id: newBlockId() }, marker));

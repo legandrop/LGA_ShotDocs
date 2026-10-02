@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
 import { withCollaboration } from '@blocknote/core/yjs';
+import { Slice } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import { afterEach, describe, expect, it } from 'vitest';
 import { yUndoPluginKey } from 'y-prosemirror';
@@ -184,6 +185,28 @@ describe('Enter, Retroceso y Supr alrededor de un salto', () => {
     expect(flat(c).map((x) => `${x.k}:${x.t}`)).toEqual(['paragraph:Uno', 'paragraph:']);
   });
 
+  it('Supr en un salto vacío último hijo de un hijo: sube los dos niveles y "Dos" no se mueve', () => {
+    const { e } = page([p('L1', [p('L2', [p('x'), br()])]), p('Dos')]);
+    caret(e, 3, 0);
+    expect(press(e, 'Delete')).toBe(true);
+    expect(show(e)).toEqual(['paragraph:L1', 'paragraph:L2', 'paragraph:x', 'paragraph:Dos']);
+    expect(textOf(e.document[1] as never)).toBe('Dos');
+    expect(e.getTextCursorPosition().block.id).toBe(e.document[1].id);
+  });
+
+  it('Supr en un salto vacío último hijo con un título colapsado afuera: no queda un renglón vacío adentro', async () => {
+    const { e } = page([p('Madre', [br()]), h(2, 'Escena'), p('s1'), p('fin')]);
+    setCollapsed(e.prosemirrorView!, [flat(e)[2].id], true);
+    await tick();
+    caret(e, 1, 0);
+    expect(press(e, 'Delete')).toBe(true);
+    await tick();
+    expect(show(e)).toEqual(['paragraph:Madre', 'heading:Escena', 'paragraph:s1', 'paragraph:fin']);
+    expect(e.document[0].children).toHaveLength(0);
+    expect(e.getTextCursorPosition().block.id).toBe(e.document[1].id);
+    expect(collapseState(e.prosemirrorState)!.analysis.hidden.has(flat(e)[2].id)).toBe(true);
+  });
+
   it('Supr al final de un salto con texto y Retroceso en un salto: hacen lo de siempre, sin perder texto', () => {
     const a = page([p('Uno'), br('Nota'), p('Dos')]).e;
     caret(a, 1, 4);
@@ -250,6 +273,20 @@ describe('Ctrl/⌘+Enter en otros lugares', () => {
       await tick();
       expect(show(e), how).toEqual(['paragraph:top', 'heading:Escena', 'paragraph:s1', 'paragraph:s2', 'heading:G', 'paragraph:g1']);
       expect(collapseState(e.prosemirrorState)!.analysis.hidden.has(flat(e)[2].id), how).toBe(true);
+    }
+  });
+
+  it('con una selección que empieza en un título colapsado y sigue abajo (para los dos lados): no lo abre ni borra nada', async () => {
+    for (const back of [false, true]) {
+      const { e } = page([p('top'), h(2, 'Escena'), p('s1'), h(2, 'G'), p('g1')]);
+      setCollapsed(e.prosemirrorView!, [flat(e)[1].id], true);
+      await tick();
+      if (back) select(e, 3, 1, 1, 3);
+      else select(e, 1, 3, 3, 1);
+      expect(modEnter(e)).toBe(true);
+      await tick();
+      expect(show(e), String(back)).toEqual(['paragraph:top', 'heading:Escena', 'paragraph:s1', 'BR:', 'heading:G', 'paragraph:g1']);
+      expect(collapseState(e.prosemirrorState)!.analysis.hidden.has(flat(e)[2].id), String(back)).toBe(true);
     }
   });
 
@@ -368,6 +405,37 @@ describe('pegar adentro de un salto', () => {
     caret(c, 1, 0);
     c.pasteHTML('<p>A</p><p style="break-after: page"></p><p>B</p>');
     expect(show(c)).toEqual(['paragraph:Uno', 'paragraph:A', 'BR:', 'BR:B', 'paragraph:Dos']);
+  });
+
+  it('si lo último pegado es Script, el salto va en un renglón vacío debajo (no van juntos)', async () => {
+    const a = page([p('A'), { type: 'paragraph', props: paragraphProps('script'), content: 'INT. CASA - DÍA' } as PartialBlock]).e;
+    const html = await a.blocksToFullHTML(a.document.slice(0, 2));
+    const { e } = page([p('Uno'), br(), p('Dos')]);
+    caret(e, 1, 0);
+    e.pasteHTML(html, true);
+    expect(show(e)).toEqual(['paragraph:Uno', 'paragraph:A', 'paragraph:INT. CASA - DÍA', 'BR:', 'paragraph:Dos']);
+    const script = e.document.find((b) => textOf(b as never) === 'INT. CASA - DÍA')!;
+    expect(script.props).toMatchObject({ script: true, [PAGE_BREAK_PROP]: false });
+  });
+
+  it('si no se sabe qué bloque pegado es cuál (cantidades distintas), queda un solo salto', () => {
+    const { e } = page([p('Uno'), br(), p('Dos')]);
+    const view = e.prosemirrorView!;
+    // Bloques de otra página, pasados al esquema de esta (cada editor tiene el suyo).
+    const blocksOf = (blocks: PartialBlock[]) => {
+      const group = page(blocks).e.prosemirrorState.doc.firstChild!;
+      return Slice.fromJSON(view.state.schema, new Slice(group.content, 0, 0).toJSON());
+    };
+    const recorded = blocksOf([p('A'), br(), p('B'), p('C')]);
+    const inserted = blocksOf([p('X'), p('Y'), p('Z')]);
+    caret(e, 1, 0);
+    // Lo que anota el pegado es de un contenido y lo que entra es otro: no se puede emparejar.
+    view.someProp('transformPasted', (f) => {
+      f(recorded, view, false);
+    });
+    view.dispatch(view.state.tr.replaceSelection(inserted).setMeta('paste', true).setMeta('uiEvent', 'paste'));
+    expect(breaks(e), show(e).join('|')).toHaveLength(1);
+    expect(show(e).filter((x) => /X|Y|Z/.test(x))).toEqual(['paragraph:X', 'paragraph:Y', 'BR:Z']);
   });
 
   it('copiar con el formato de la app entre dos páginas conserva los saltos', async () => {
