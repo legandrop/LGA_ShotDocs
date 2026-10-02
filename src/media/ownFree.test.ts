@@ -5,7 +5,7 @@ import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { FileRejected } from '../sync/files';
 import { md5Blob } from './md5';
 import { DEFAULT_OPTIONS, getRev, partKey, putMark } from './offlineStore';
-import { ensureMd5, freeOwn, OWN_MIN_AGE_MS } from './ownFree';
+import { ensureMd5, freeOwn, ownBlock, OWN_MIN_AGE_MS } from './ownFree';
 import { MEDIA_SCHEME, mediaIdOf } from './queue';
 
 // Liberar los originales agregados en este dispositivo (Docs/Doc_Copias_Locales.md, entrega 2): solo con el sí de la
@@ -263,8 +263,10 @@ describe('liberar originales propios (entrega 2)', () => {
 describe('freeOwn: la comprobación adentro de la transacción que borra', () => {
   async function ready() {
     const { server, a, photo, video } = await setup();
-    const record = (await a.mediaDb.get('files', photo))!;
     const md5 = (await ensureMd5(a.mediaDb, photo))!;
+    // Leído después del MD5: lo guarda en el registro, y cada caso vuelve a este estado.
+    const record = (await a.mediaDb.get('files', photo))!;
+    expect(record.md5).toBe(md5);
     const guard = { rev: await getRev(a.mediaDb), driveId: record.driveId!, size: record.size, md5, now: Date.now() + server.clockOffset, rollout: null };
     return { server, a, photo, video, record, guard };
   }
@@ -286,6 +288,9 @@ describe('freeOwn: la comprobación adentro de la transacción que borra', () =>
       ['otro peso', async () => undefined, { size: record.size + 1 }],
       ['otro MD5', async () => undefined, { md5: '0'.repeat(32) }],
       ['la restauración lo volvió a la cola', () => a.mediaDb.put('files', { ...record, pending: 1, driveId: null }), {}],
+      ['en Drive pero la base todavía no confirmó', () => a.mediaDb.put('files', { ...record, pending: 1 }), {}],
+      ['ya liberado', () => a.mediaDb.put('files', { ...record, freedAt: 1 }), {}],
+      ['otro MD5 guardado en el registro', () => a.mediaDb.put('files', { ...record, md5: 'f'.repeat(32) }), {}],
       ['14 días todavía no', () => a.mediaDb.put('files', { ...record, uploadedAt: guard.now - OWN_MIN_AGE_MS + 1000 }), {}],
       ['sin uploadedAt ni estreno', () => a.mediaDb.put('files', { ...record, uploadedAt: undefined }), {}],
     ];
@@ -315,6 +320,31 @@ describe('freeOwn: la comprobación adentro de la transacción que borra', () =>
     });
     expect(await freeOwn(a.mediaDb, photo, { ...guard, rev })).toBe(0);
     expect(await hasOriginal(a, photo)).toBe(true);
+  });
+});
+
+describe('ownBlock: lo que mira el dispositivo', () => {
+  const base = {
+    id: 'f1', pageId: 'p', projectId: null, name: 'a.jpg', mime: 'image/jpeg', size: 10, width: null, height: null, duration: null,
+    day: '2026-10-01', createdAt: 0, pending: 0 as const, registered: true, thumb: 'done' as const, uploadId: null, sent: 10,
+    driveId: 'drive-1', error: null, blocked: false, failures: 0, retryAt: 0, uploadedAt: 0,
+  };
+  const now = OWN_MIN_AGE_MS + 1;
+  it('cada condición, por separado', () => {
+    expect(ownBlock(base, true, [], now, null)).toBeNull();
+    expect(ownBlock(base, false, [], now, null)).toBe('missing');
+    expect(ownBlock({ ...base, pending: 1 }, true, [], now, null)).toBe('waiting');
+    expect(ownBlock({ ...base, driveId: null }, true, [], now, null)).toBe('waiting');
+    expect(ownBlock({ ...base, uploadId: 'u' }, true, [], now, null)).toBe('waiting');
+    expect(ownBlock({ ...base, heic: 'pending' }, true, [], now, null)).toBe('waiting');
+    expect(ownBlock({ ...base, heic: 'sent' }, true, [], now, null)).toBe('waiting');
+    expect(ownBlock({ ...base, heic: 'failed' }, true, [], now, null)).toBeNull();
+    expect(ownBlock({ ...base, blocked: true }, true, [], now, null)).toBe('blocked');
+    expect(ownBlock({ ...base, freedAt: 5 }, true, [], now, null)).toBe('freed');
+    expect(ownBlock(base, true, [], now - 2, null)).toBe('recent');
+    // Sin fecha de subida: la del estreno; sin ninguna de las dos, nunca.
+    expect(ownBlock({ ...base, uploadedAt: undefined }, true, [], now, 0)).toBeNull();
+    expect(ownBlock({ ...base, uploadedAt: undefined }, true, [], now, null)).toBe('recent');
   });
 });
 
