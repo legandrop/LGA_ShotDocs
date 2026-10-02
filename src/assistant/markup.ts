@@ -96,7 +96,7 @@ export type SelectError = 'empty' | 'tooLong';
 const PHOTO_KEY = '\u0001photo:';
 
 /** Las letras que forman una palabra (una palabra es una unidad de la diferencia). */
-const WORD = /[\p{L}\p{N}\p{M}_'’]/u;
+export const WORD = /[\p{L}\p{N}\p{M}_'’]/u;
 
 function blockIdAt(doc: PMNode, pos: number): string {
   const $pos = doc.resolve(pos);

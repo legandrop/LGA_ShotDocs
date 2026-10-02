@@ -200,6 +200,14 @@ export const assistant = {
     en: "Edits others make to this text at the same time may only remain in the history.",
     es: "Lo que otros escriban en este texto al mismo tiempo puede quedar solo en el historial.",
   },
+  'assistant.format.lost': {
+    en: "The suggestion leaves out text that was selected ({words}). Nothing can be applied: try again, or copy it.",
+    es: "La sugerencia deja afuera texto de lo elegido ({words}). No se puede aplicar: probá de nuevo, o copiala.",
+  },
+  'assistant.format.added': {
+    en: "The suggestion adds words that weren't in the selection (underlined). Check them before applying.",
+    es: "La sugerencia agrega palabras que no estaban en lo elegido (subrayadas). Revisalas antes de aplicar.",
+  },
   'assistant.format.nothing': { en: "These blocks already have that shape.", es: "Estos bloques ya tienen esa forma." },
   'assistant.nothingChanged': { en: "Nothing to change.", es: "No hay nada que cambiar." },
   'assistant.insertTop': { en: "Insert at top", es: "Agregar arriba" },

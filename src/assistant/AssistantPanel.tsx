@@ -9,9 +9,9 @@ import { IS_MAC, modPressed } from '../ui/findUi';
 import { shortcutLabel } from '../ui/shortcuts';
 import { appliedDoc, applySuggestion, retakeSnapshot, takeSnapshot, type ApplyOutcome, type Snapshot } from './apply';
 import { closeAssistant, openAssistantSettings, useAssistantTarget, useAssistantUi } from './assistantUi';
-import { applyFormat, formatSnapshotFrom, FORMATS, planFormat, takeFormatSnapshot, type FormatOutcome, type FormatPlan, type FormatSnapshot, type FormatTarget } from './format';
+import { applyFormat, formatSnapshotFrom, FORMATS, planFormat, takeFormatSnapshot, type FormatOutcome, type FormatPlan, type FormatSnapshot, type FormatTarget, type LostText } from './format';
 import { loadSettings, readKey, rememberLanguage, type AssistantSettings } from './keyStore';
-import { cleanAnswer, diffKeys, parseAnswer, plainNew, type NewUnit, type OldUnit, type Parsed } from './markup';
+import { cleanAnswer, diffKeys, parseAnswer, plainNew, type Atom, type NewUnit, type OldUnit, type Parsed } from './markup';
 import { parseSummary, plainBlocks, toPartialBlocks, type MdBlock, type MdParsed } from './mdBlocks';
 import { insertSummary, parsePageTranslation, subpageBlocks, takePageSnapshot } from './pageActions';
 import { fetchPolicy, policyAllows, type AssistantPolicy } from './policy';
@@ -190,22 +190,37 @@ function NewText({ units, prefix }: { units: NewUnit[]; prefix: string }) {
   );
 }
 
-/** Unas letras nuevas con su formato (sin links ni fotos de verdad). */
-function Atoms({ atoms }: { atoms: Extract<MdBlock, { kind: 'text' }>['atoms'] }) {
+/**
+ * Unas letras nuevas con su formato (sin links ni fotos de verdad). Las de `added` (palabras que la respuesta agrega y
+ * no estaban en lo elegido, *Format as…*) van subrayadas como en la diferencia de A1.
+ */
+function Atoms({ atoms, added }: { atoms: Extract<MdBlock, { kind: 'text' }>['atoms']; added?: Set<Atom> }) {
   const out: ReactNode[] = [];
+  let run: ReactNode[] = [];
+  const flush = (n: number) => {
+    if (run.length) out.push(<ins key={`i${n}`}>{run}</ins>);
+    run = [];
+  };
   atoms.forEach((a, n) => {
-    if (a.t === 'photo') out.push(<span key={n} className="assistant-chip">▣</span>);
-    else if (a.t === 'br') out.push(<br key={n} />);
+    let node: ReactNode;
+    if (a.t === 'photo') node = <span key={n} className="assistant-chip">▣</span>;
+    else if (a.t === 'br') node = <br key={n} />;
     else {
       const cls = [...a.marks.map((m) => `md-${m}`), a.link !== null ? 'md-link' : ''].filter(Boolean).join(' ');
-      out.push(cls ? <span key={n} className={cls}>{a.ch}</span> : a.ch);
+      node = cls ? <span key={n} className={cls}>{a.ch}</span> : <span key={n}>{a.ch}</span>;
+    }
+    if (added?.has(a)) run.push(node);
+    else {
+      flush(n);
+      out.push(node);
     }
   });
+  flush(atoms.length);
   return <>{out}</>;
 }
 
 /** Los bloques nuevos (*Summarize page*, *Format as…*), dibujados con su forma: nada de links ni imágenes de verdad. */
-function BlocksPreview({ blocks, tr }: { blocks: MdBlock[]; tr: Translate }) {
+function BlocksPreview({ blocks, tr, added }: { blocks: MdBlock[]; tr: Translate; added?: Set<Atom> }) {
   return (
     <>
       {blocks.map((b, i) => {
@@ -224,11 +239,11 @@ function BlocksPreview({ blocks, tr }: { blocks: MdBlock[]; tr: Translate }) {
                     {r.map((c, k) =>
                       b.header && j === 0 ? (
                         <th key={k}>
-                          <Atoms atoms={c} />
+                          <Atoms atoms={c} added={added} />
                         </th>
                       ) : (
                         <td key={k}>
-                          <Atoms atoms={c} />
+                          <Atoms atoms={c} added={added} />
                         </td>
                       ),
                     )}
@@ -243,7 +258,7 @@ function BlocksPreview({ blocks, tr }: { blocks: MdBlock[]; tr: Translate }) {
         return (
           <p key={i} className={cls}>
             {lead && <span className="assistant-lead">{lead}</span>}
-            <Atoms atoms={b.atoms} />
+            <Atoms atoms={b.atoms} added={added} />
           </p>
         );
       })}
@@ -420,6 +435,12 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
                 ? tr('assistant.invalid.structure')
                 : tr('assistant.cutOff');
           setPhase({ kind: 'error', action: next.action, message, text: answer.text });
+          return;
+        }
+        if ('lost' in result) {
+          // *Format as…* dejó afuera palabras de lo elegido: no se aplica; se dice cuáles (las primeras) y se puede copiar.
+          const words = result.lost.slice(0, 8).map((w) => `“${w}”`).join(', ') + (result.lost.length > 8 ? '…' : '');
+          setPhase({ kind: 'error', action: next.action, message: tr('assistant.format.lost', { words }), text: answer.text });
           return;
         }
         setPhase({ kind: 'preview', action: next.action, result, warnings: warningsOf(next, result, tr) });
@@ -622,7 +643,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
           ),
         ),
       ];
-    return <BlocksPreview blocks={result.type === 'summary' ? result.md.blocks : result.plan.blocks} tr={tr} />;
+    return <BlocksPreview blocks={result.type === 'summary' ? result.md.blocks : result.plan.blocks} added={result.type === 'format' ? result.plan.added : undefined} tr={tr} />;
   };
 
   const previewButtons = (p: Extract<Phase, { kind: 'preview' }>, r: Run) => {
@@ -840,7 +861,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
 }
 
 /** La respuesta convertida y validada según la acción, o por qué no se puede aplicar. */
-function readAnswer(run: Run, text: string): Result | 'empty' | 'structure' | 'marker' {
+function readAnswer(run: Run, text: string): Result | LostText | 'empty' | 'structure' | 'marker' {
   if (run.action === 'summarize') {
     const md = parseSummary(text);
     return md ? { type: 'summary', md } : 'empty';
@@ -851,8 +872,8 @@ function readAnswer(run: Run, text: string): Result | 'empty' | 'structure' | 'm
   }
   if (run.action === 'format') {
     if (!run.format) return 'empty';
-    const plan = planFormat(text, run.format);
-    return typeof plan === 'string' ? plan : { type: 'format', plan };
+    const plan = planFormat(text, run.format, run.target);
+    return typeof plan === 'string' || 'lost' in plan ? plan : { type: 'format', plan };
   }
   const parsed = parseAnswer(text, run.snapshot.selected);
   return typeof parsed === 'string' ? parsed : { type: 'text', parsed };
@@ -873,6 +894,7 @@ function warningsOf(run: Run, result: Result, tr: Translate): string[] {
     if (before > 0 && after > before * 3) out.push(tr('assistant.muchLonger'));
     else if (before > 0 && after * 3 < before) out.push(tr('assistant.muchShorter'));
   }
+  if (result.type === 'format' && result.plan.added.size > 0) out.push(tr('assistant.format.added'));
   if (result.type === 'format') out.push(tr('assistant.format.history'));
   return out;
 }

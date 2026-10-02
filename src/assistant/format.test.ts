@@ -6,7 +6,7 @@ import * as Y from 'yjs';
 import { connect, mountEditor, pmFromY, posOf, typeAt, undoManager, unmountAll, view, yText, type Editor } from '../ui/collabHarness';
 import { schema as mainSchema } from '../ui/fixtures/editorSchemaMain';
 import type { AssistantEditor } from './assistantUi';
-import { applyFormat, planFormat, takeFormatSnapshot, type FormatPlan, type FormatSnapshot } from './format';
+import { applyFormat, planFormat, takeFormatSnapshot, type FormatPlan, type FormatSnapshot, type FormatTarget } from './format';
 import { buildRequest } from './prompt';
 
 // *Format as…* con el editor real (Docs/Doc_Asistente.md, entrega A2, 6.3, 6.5 y pruebas 5 y 6 de la sección 13): solo
@@ -38,9 +38,10 @@ function snap(ed: Editor): FormatSnapshot {
   return s;
 }
 
-function plan(fs: FormatSnapshot, text: string): FormatPlan {
-  const p = planFormat(text, fs);
+function plan(fs: FormatSnapshot, text: string, target?: FormatTarget): FormatPlan {
+  const p = planFormat(text, fs, target);
   if (typeof p === 'string') throw new Error(p);
+  if ('lost' in p) throw new Error(`lost: ${p.lost.join(', ')}`);
   return p;
 }
 
@@ -150,7 +151,7 @@ describe('Format as…: aplicar', () => {
     select(ed, 'a', 0, 'b', 13);
     const fs = snap(ed);
     expect(fs.snapshot.selected.markdown).toBe('Toma 1: 35 mm\n\n⟦block:1⟧\n\nToma 2: 50 mm');
-    const p = plan(fs, '| Toma | Lente |\n|---|---|\n| 1 | 35 mm |\n| 2 | 50 mm |\n⟦block:1⟧');
+    const p = plan(fs, '| Toma | Lente |\n|---|---|\n| 1 | 35 mm |\n| 2 | 50 mm |\n⟦block:1⟧', 'table');
     expect(applyFormat(ed$(ed), view(ed), fs, p, true).ok).toBe(true);
     expect(ed.document.map((b) => b.type)).toEqual(['table', 'image']);
     const table = ed.document[0] as unknown as { content: { headerRows?: number; rows: { cells: { content: { text: string }[] }[] }[] } };
@@ -255,6 +256,47 @@ describe('Format as…: aplicar', () => {
     expect(ed.getBlock('a')!.type).toBe('paragraph');
   });
 
+  it('B1: una respuesta que deja afuera un renglón, una palabra o una fila no se puede aplicar, y dice qué falta', () => {
+    const ed = page([
+      { id: 'a', type: 'paragraph', content: 'Llevar trípode' },
+      { id: 'b', type: 'paragraph', content: 'Revisar baterías' },
+      { id: 'c', type: 'paragraph', content: 'Confirmar locación' },
+    ]);
+    select(ed, 'a', 0, 'c', 18);
+    const fs = snap(ed);
+    // Un renglón entero.
+    expect(planFormat('[ ] Llevar trípode\n[ ] Confirmar locación', fs, 'checklist')).toEqual({ lost: ['Revisar', 'baterías'] });
+    // Una palabra, con la misma cantidad de bloques.
+    expect(planFormat('[ ] Llevar trípode\n[ ] Revisar\n[ ] Confirmar locación', fs, 'checklist')).toEqual({ lost: ['baterías'] });
+    // Una fila de una tabla.
+    expect(planFormat('| Tarea |\n|---|\n| Llevar trípode |\n| Confirmar locación |', fs, 'table')).toEqual({ lost: ['Revisar', 'baterías'] });
+    // Sin mayúsculas, puntuación ni formato de por medio, nada falta.
+    expect('lost' in (planFormat('[ ] **llevar** trípode.\n[ ] REVISAR baterías\n[ ] confirmar, locación', fs, 'checklist') as object)).toBe(false);
+    // Nada se aplicó.
+    expect(ed.document.map((b) => b.type)).toEqual(['paragraph', 'paragraph', 'paragraph']);
+  });
+
+  it('B1: las palabras que agrega la respuesta se marcan (se puede aplicar); una "y" entre ítems se puede caer', () => {
+    const ed = page([{ id: 'a', type: 'paragraph', content: 'Llevar trípode y revisar baterías' }]);
+    select(ed, 'a', 0, 'a', 33);
+    const fs = snap(ed);
+    const p = plan(fs, '- Llevar trípode\n- Revisar baterías\n- Pagar al equipo 5000 USD', 'bullets');
+    const added = (p.blocks[2] as { atoms: { t: string; ch?: string }[] }).atoms.filter((a) => p.added.has(a as never)).map((a) => a.ch).join('');
+    expect(added).toBe('Pagaralequipo5000USD');
+    expect(p.blocks.slice(0, 2).every((b) => b.kind === 'text' && b.atoms.every((a) => !p.added.has(a)))).toBe(true);
+    // Una tabla repite un rótulo una sola vez: cuenta que aparezca.
+    unmountAll();
+    const t = page([
+      { id: 'a', type: 'paragraph', content: 'Toma 1: 35 mm' },
+      { id: 'b', type: 'paragraph', content: 'Toma 2: 50 mm' },
+    ]);
+    select(t, 'a', 0, 'b', 13);
+    const ft = snap(t);
+    expect('lost' in (planFormat('| Toma | Lente |\n|---|---|\n| 1 | 35 mm |\n| 2 | 50 mm |', ft, 'table') as object)).toBe(false);
+    // Fuera de una tabla, el segundo "Toma" sí cuenta.
+    expect(planFormat('- Toma 1: 35 mm\n- 2: 50 mm', ft, 'bullets')).toEqual({ lost: ['Toma'] });
+  });
+
   it('una respuesta que saca la foto o el bloque no se puede aplicar', () => {
     const ed = page([{ id: 'a', type: 'paragraph', content: [{ type: 'text', text: 'la calle ', styles: {} }, photo('calle')] }]);
     select(ed, 'a', 0, 'a', 10);
@@ -307,7 +349,7 @@ describe('Format as…: editar a la vez y versiones viejas (6.5, regla del edito
     );
     select(ed, 'a', 0, 'b', 12);
     const fs = snap(ed);
-    expect(applyFormat(ed$(ed), view(ed), fs, plan(fs, '## Tomas\n| Toma | Lente |\n|---|---|\n| 1 ⟦photo:1⟧ | 35 mm |\n| 2 | 50 mm |\n[ ] revisar'), true).ok).toBe(true);
+    expect(applyFormat(ed$(ed), view(ed), fs, plan(fs, '## Tomas\n| Toma | Lente |\n|---|---|\n| 1 ⟦photo:1⟧ | 35 mm |\n| 2 | 50 mm |\n[ ] revisar', 'table'), true).ok).toBe(true);
     const copy = new Y.Doc();
     Y.applyUpdate(copy, Y.encodeStateAsUpdate(doc));
     const before = yText(copy);

@@ -269,6 +269,26 @@ describe('el panel, entrega A2', () => {
     expect(ed.document.slice(0, 3).map((b) => b.type)).toEqual(['paragraph', 'paragraph', 'paragraph']);
   });
 
+  it('B1: Format as… que deja afuera un renglón no ofrece Apply y dice qué falta; si agrega palabras, las marca y avisa', async () => {
+    const { host, ed } = await setup();
+    provider('[ ] Pedir el LiDAR\n[ ] Medir el set');
+    selectBlocks(ed, 'p', 'r', 12);
+    await choose(host.querySelector<HTMLSelectElement>('select[aria-label="Shape"]')!, 'checklist');
+    await click(button(host, 'Format as…'));
+    for (let i = 0; i < 40 && !host.querySelector('.assistant-error'); i++) await wait(30);
+    expect(host.textContent).toContain('The suggestion leaves out text that was selected (“Fotos”, “de”, “set”).');
+    expect(button(host, 'Apply')).toBeUndefined();
+    expect(button(host, 'Copy')).toBeDefined();
+    expect(ed.document.slice(0, 3).map((b) => b.type)).toEqual(['paragraph', 'paragraph', 'paragraph']);
+    await click(button(host, 'Back'));
+    provider('[ ] Pedir el LiDAR\n[ ] Fotos de set\n[ ] Medir el set\n[ ] Pagar 5000 USD');
+    selectBlocks(ed, 'p', 'r', 12);
+    await click(button(host, 'Format as…'));
+    await until(host, 'Apply');
+    expect(host.textContent).toContain("The suggestion adds words that weren't in the selection (underlined).");
+    expect([...host.querySelectorAll('.assistant-diff ins')].map((x) => x.textContent)).toEqual(['Pagar', '5000', 'USD']);
+  });
+
   it('sin Editar: Format as… apagado; Summarize page y Translate page se piden pero solo se copian', async () => {
     const { host } = await setup({ editable: false });
     expect(button(host, 'Format as…')?.disabled).toBe(true);

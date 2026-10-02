@@ -70,7 +70,7 @@ function task(action: Action, opts: { language?: string; instruction?: string; f
     case 'translatePage':
       return `Translate the whole page to ${opts.language ?? 'English'}: its title and every block. Keep the meaning, tone and formatting. Keep names, numbers, scene numbers and technical terms that are normally not translated.`;
     case 'format':
-      return `${FORMAT_TASKS[opts.format ?? 'bullets']} Keep every word, name and number of the content: change only its shape. Do not add or remove information.`;
+      return `${FORMAT_TASKS[opts.format ?? 'bullets']} Keep every word, name and number of the content: change only its shape (you may drop only an "and" or "or" between items). Do not add or remove information.`;
     case 'fix':
       return 'Fix the spelling, grammar and punctuation of the content. Keep its language, meaning, tone, wording and formatting; change only what is wrong. If nothing is wrong, return it unchanged.';
     case 'improve':

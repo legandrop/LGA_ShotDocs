@@ -5,7 +5,7 @@ import type * as Y from 'yjs';
 import { asOneUndoStep } from '../ui/undoGuard';
 import { snapshotOf, unchangedShift, type ApplyOutcome, type Snapshot } from './apply';
 import type { AssistantEditor } from './assistantUi';
-import { collectBetween, plainKey, type Piece, type TextPiece } from './markup';
+import { collectBetween, plainKey, WORD, type Atom, type Piece, type TextPiece } from './markup';
 import { atomKeys, inlineContent, parseShape, toPartialBlocks, type MdBlock, type Restore, type ShapeError } from './mdBlocks';
 
 // *Format as…* (Docs/Doc_Asistente.md, entrega A2, 6.3): los mismos datos de los bloques elegidos con otra forma
@@ -88,12 +88,90 @@ export interface FormatPlan {
   mode: 'type' | 'update' | 'replace';
   blocks: MdBlock[];
   linksRemoved: boolean;
+  /** Las letras de las palabras que la respuesta agrega (no estaban en lo elegido): la vista previa las marca. */
+  added: Set<Atom>;
+}
+
+/** La respuesta dejó afuera palabras de lo elegido: no se aplica (6.4; "los mismos datos con otra forma"). */
+export interface LostText {
+  lost: string[];
 }
 
 const sameKeys = (a: string[], b: string[]) => a.length === b.length && a.every((k, i) => k === b[i]);
 
+/**
+ * Las conjunciones que se pueden caer al partir un renglón en ítems ("lente, T2.8 e ISO 800" → tres viñetas). Ninguna
+ * otra palabra: un nombre, un número o una preposición que falta es texto perdido.
+ */
+const CONNECTORS = new Set(['y', 'e', 'o', 'u', 'ni', 'and', 'or', 'nor', 'et', 'ou', 'ed', 'und', 'oder', 'i']);
+
+const norm = (w: string) => w.normalize('NFC').toLocaleLowerCase();
+
+/** Las palabras de unas letras (con las mismas reglas que la diferencia de A1), con las letras de cada una. */
+function wordsOf(atoms: Atom[]): { word: string; atoms: Atom[] }[] {
+  const out: { word: string; atoms: Atom[] }[] = [];
+  let cur: { word: string; atoms: Atom[] } | null = null;
+  for (const a of atoms) {
+    if (a.t === 'char' && WORD.test(a.ch)) {
+      cur ??= { word: '', atoms: [] };
+      cur.word += a.ch;
+      cur.atoms.push(a);
+    } else if (cur) {
+      out.push(cur);
+      cur = null;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** Las letras de todos los bloques nuevos (también las celdas de una tabla), en orden. */
+function atomsOfBlocks(blocks: MdBlock[]): Atom[][] {
+  return blocks.flatMap((b) => (b.kind === 'text' ? [b.atoms] : b.kind === 'table' ? b.rows.flatMap((r) => r) : []));
+}
+
+/**
+ * Compara las palabras de lo elegido con las de la respuesta (sin formato, puntuación ni mayúsculas): las que faltan
+ * (menos las conjunciones de `CONNECTORS`) y las letras de las que sobran. Con `presence` (una tabla) cuenta que cada
+ * palabra aparezca, no cuántas veces: "Toma 1: 35 mm / Toma 2: 50 mm" pasa a una columna *Toma* con un solo rótulo.
+ */
+export function compareWords(fs: FormatSnapshot, blocks: MdBlock[], presence = false): { lost: string[]; added: Set<Atom> } {
+  const before = new Map<string, number>();
+  const shown = new Map<string, string>();
+  for (const p of fs.snapshot.selected.pieces) {
+    if (p.kind !== 'text') continue;
+    for (const u of p.units) {
+      if (u.atom || !WORD.test(u.text)) continue;
+      // Una unidad de A1 puede juntar varias palabras con formato distinto: se parte igual que la respuesta.
+      for (const w of u.text.split(/[^\p{L}\p{N}\p{M}_'’]+/u).filter(Boolean)) {
+        const k = norm(w);
+        before.set(k, (before.get(k) ?? 0) + 1);
+        if (!shown.has(k)) shown.set(k, w);
+      }
+    }
+  }
+  const added = new Set<Atom>();
+  const used = new Set<string>();
+  for (const atoms of atomsOfBlocks(blocks)) {
+    for (const w of wordsOf(atoms)) {
+      const k = norm(w.word);
+      const left = before.get(k) ?? 0;
+      used.add(k);
+      if (left > 0) before.set(k, left - 1);
+      else for (const a of w.atoms) added.add(a);
+    }
+  }
+  const lost: string[] = [];
+  for (const [k, n] of before) {
+    if (n <= 0 || CONNECTORS.has(k)) continue;
+    if (presence && used.has(k)) continue;
+    for (let i = 0; i < n; i++) lost.push(shown.get(k) ?? k);
+  }
+  return { lost, added };
+}
+
 /** La respuesta convertida y validada, con el modo de aplicar (el de menos cambios que alcanza). */
-export function planFormat(answer: string, fs: FormatSnapshot): FormatPlan | ShapeError {
+export function planFormat(answer: string, fs: FormatSnapshot, target?: FormatTarget): FormatPlan | ShapeError | LostText {
   const { pieces } = fs.snapshot.selected;
   const known = {
     photos: new Set(fs.snapshot.selected.photos.keys()),
@@ -109,12 +187,15 @@ export function planFormat(answer: string, fs: FormatSnapshot): FormatPlan | Sha
       const p: Piece = pieces[i];
       return p.kind === 'block' ? b.kind === 'marker' && b.n === p.marker : b.kind === 'text';
     });
+  // Los mismos datos con otra forma: si falta una palabra (un renglón, una fila, un nombre), no se aplica.
+  const words = compareWords(fs, blocks, target === 'table');
+  if (words.lost.length > 0) return { lost: words.lost };
   let mode: FormatPlan['mode'] = 'replace';
   if (sameShape) {
     const sameText = blocks.every((b, i) => b.kind !== 'text' || sameKeys(atomKeys(b.atoms), (pieces[i] as TextPiece).units.map((u) => plainKey(u.key))));
     mode = sameText ? 'type' : 'update';
   }
-  return { mode, blocks, linksRemoved: parsed.linksRemoved };
+  return { mode, blocks, linksRemoved: parsed.linksRemoved, added: words.added };
 }
 
 export type FormatOutcome = ApplyOutcome | { ok: false; reason: 'nested' };
