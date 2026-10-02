@@ -72,8 +72,8 @@ export interface ReadMark {
 }
 
 /** El id del bloque de un tipo de la unión. */
-function blockIdOf(t: Y.AbstractType<unknown> | null): string {
-  for (let x = t; x; x = (x._item?.parent as Y.AbstractType<unknown> | null) ?? null) {
+function blockIdOf(t: Y.AbstractType<any> | null): string {
+  for (let x = t; x; x = (x._item?.parent as Y.AbstractType<any> | null) ?? null) {
     if (x instanceof Y.XmlElement && x.nodeName === 'blockContainer') return String(x.getAttribute('id') ?? '');
   }
   return '';
@@ -94,7 +94,7 @@ export function readMarks(union: Y.Doc, marks: HistoryMark[]): ReadMark[] {
       type: 'node',
       kind: m.kind,
       row: m.row,
-      block: blockIdOf(node as Y.AbstractType<unknown> | null),
+      block: blockIdOf(node as Y.AbstractType<any> | null),
       text: node instanceof Y.XmlElement ? node.nodeName : '?',
       label: m.label ? JSON.stringify(m.label) : undefined,
     };

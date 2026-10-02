@@ -218,8 +218,8 @@ describe('la diferencia de dos textos', () => {
 /** Las letras del documento del historial que trajo cada fila, para la prueba "nada se pierde". */
 function everyLetterIsSomewhere(h: PageHistory, label: string) {
   const content = (item: Y.Item): boolean => {
-    let t = item.parent as Y.AbstractType<unknown>;
-    while (t._item) t = t._item.parent as Y.AbstractType<unknown>;
+    let t = item.parent as Y.AbstractType<any>;
+    while (t._item) t = t._item.parent as Y.AbstractType<any>;
     return Y.findRootTypeKey(t) === CONTENT_FRAGMENT;
   };
   let checked = 0;
@@ -232,7 +232,7 @@ function everyLetterIsSomewhere(h: PageHistory, label: string) {
         const row = h.insertRow(client, clock);
         // Lo más temprano que se borró: ella o algo de arriba.
         const ancestorRows: number[] = [];
-        for (let t = s.parent as Y.AbstractType<unknown>; t._item; t = t._item.parent as Y.AbstractType<unknown>) {
+        for (let t = s.parent as Y.AbstractType<any>; t._item; t = t._item.parent as Y.AbstractType<any>) {
           const d = h.deleteRow(t._item.id.client, t._item.id.clock);
           if (d >= 0) ancestorRows.push(d);
         }
@@ -250,7 +250,7 @@ function everyLetterIsSomewhere(h: PageHistory, label: string) {
         // Si no, se ve en la versión de su fila.
         const snap = h.snapshot(h.sessionOfRow(row));
         let seen = (snap.sv.get(client) ?? 0) > clock && !Y.isDeleted(snap.ds, Y.createID(client, clock));
-        for (let t = s.parent as Y.AbstractType<unknown>; seen && t._item; t = t._item.parent as Y.AbstractType<unknown>) {
+        for (let t = s.parent as Y.AbstractType<any>; seen && t._item; t = t._item.parent as Y.AbstractType<any>) {
           if (Y.isDeleted(snap.ds, t._item.id) || (snap.sv.get(t._item.id.client) ?? 0) <= t._item.id.clock) seen = false;
         }
         expect(seen, `${label}: la letra ${client}:${clock} de la fila ${row}`).toBe(true);

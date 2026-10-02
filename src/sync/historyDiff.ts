@@ -177,9 +177,9 @@ class UnionBuilder {
   readonly doc = new Y.Doc();
   readonly marks: HistoryMark[] = [];
   private readonly empty = EMPTY();
-  /** Los bloques agregados y borrados entre las dos versiones, por id (para aparearlos). */
-  private readonly added = new Map<string, Y.XmlElement>();
-  private readonly removed = new Map<string, Y.XmlElement>();
+  /** Los pares (agregado → borrado) de bloques con el mismo id entre las dos versiones, y los borrados apareados. */
+  private readonly pairs = new Map<Y.XmlElement, Y.XmlElement>();
+  private readonly pairedOld = new Set<Y.XmlElement>();
   touchedCount = 0;
 
   constructor(
@@ -220,16 +220,27 @@ class UnionBuilder {
 
   /** Antes de recorrer: los bloques que se agregaron o se borraron entre las dos versiones, por id. */
   pairCandidates(candidates: Iterable<AnyType>): void {
+    const added = new Map<string, Y.XmlElement[]>();
+    const removed = new Map<string, Y.XmlElement[]>();
     for (const t of candidates) {
       if (!isElement(t, BLOCK) || !t._item) continue;
       const inCur = this.reachable(t, this.cur);
       const inPrev = this.reachable(t, this.prev);
-      if (inCur && !inPrev) {
-        const id = this.idOf(t, this.cur);
-        if (id && !this.added.has(id)) this.added.set(id, t);
-      } else if (inPrev && !inCur) {
-        const id = this.idOf(t, this.prev);
-        if (id && !this.removed.has(id)) this.removed.set(id, t);
+      const into = inCur && !inPrev ? added : inPrev && !inCur ? removed : null;
+      const id = into ? this.idOf(t, into === added ? this.cur : this.prev) : '';
+      if (into && id) into.set(id, [...(into.get(id) ?? []), t]);
+    }
+    // Uno con uno, en el orden de Yjs (el mismo en las dos formas de calcular): dos dispositivos que rehacen el mismo
+    // bloque a la vez dejan dos con el mismo id; el de más se muestra agregado (o borrado).
+    const order = (a: Y.XmlElement, b: Y.XmlElement) => a._item!.id.client - b._item!.id.client || a._item!.id.clock - b._item!.id.clock;
+    for (const [id, news] of added) {
+      const olds = removed.get(id);
+      if (!olds) continue;
+      news.sort(order);
+      olds.sort(order);
+      for (let i = 0; i < Math.min(news.length, olds.length); i++) {
+        this.pairs.set(news[i], olds[i]);
+        this.pairedOld.add(olds[i]);
       }
     }
   }
@@ -274,17 +285,13 @@ class UnionBuilder {
   /** Un bloque: el contenido y sus hijos, con su marca si se agregó o se borró entero. */
   private container(src: Y.XmlElement, st: State, dst: Y.XmlElement): void {
     const snap = this.snapOf(st);
-    const id = this.idOf(src, snap);
     // Un bloque borrado que se rehízo con el mismo id se muestra en el nuevo; acá quedan solo sus hijos borrados de
     // verdad (los que no se rehicieron), en su lugar.
-    if (st === 'del' && id && this.added.has(id)) {
+    if (st === 'del' && this.pairedOld.has(src)) {
       this.unpairedRemoved(src, dst);
       return;
     }
-    // Cada bloque borrado se aparea con UN agregado (dos dispositivos que rehacen el mismo bloque a la vez dejan dos
-    // con el mismo id: el segundo se muestra como agregado).
-    const old = st === 'add' && id ? this.removed.get(id) : undefined;
-    if (old) this.removed.delete(id);
+    const old = st === 'add' ? this.pairs.get(src) : undefined;
     const touched = this.isTouched(src) || !!old;
     if (touched) this.touchedCount++;
     const el = new Y.XmlElement(BLOCK);
