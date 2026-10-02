@@ -198,6 +198,12 @@ doc.getMap('photoMarkup')                    // al lado de CONTENT_FRAGMENT y de
   otro dispositivo sin red anotó esa foto, sus formas son claves nuevas que no se pierden; quedan huérfanas y las saca
   la próxima poda. No se pierde nada: lo podado sigue en `page_updates` y el historial lo devuelve (entrega 5). Deshacer
   el borrado de la foto después de la poda la trae limpia (se dice en la ayuda).
+  Tres condiciones para programarla (re-verificación del diseño): (1) los 10 minutos los mide el dispositivo con la
+  página abierta y sincronizada, con su reloj local, nunca con una hora guardada en el documento; (2) **nunca se poda si
+  la página no terminó de bajar** (bajada completa confirmada y el contenido ya cargado: un documento todavía vacío vería
+  todas las fotos como sacadas), con su prueba de documento vacío y filas por llegar; (3) como la base limpia, la poda
+  corre solo cuando alguien que edita abre la página: si nadie la abre, las notas siguen en la última base. Esto último se
+  suma a «lo que no garantiza» de `Doc_Privacidad_Borrado.md` en la entrega 2.
 - **El deshacer del anotador** es un `Y.UndoManager` sobre el mapa raíz con un origen propio por foto
   (`sd-markup:<fileId>` en `trackedOrigins`): deshace solo lo de esa foto en esa sesión.
 
