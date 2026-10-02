@@ -1,13 +1,12 @@
+# La política de contenido (Docs/Doc_Asistente.md, 10.4): solo los scripts de la app (y el del tema de index.html, por su
+# hash: src/csp.test.ts lo comprueba), el del selector de carpetas de Google (apis.google.com, que se carga recién al
+# abrirlo; sus ventanas van en iframes de docs.google.com) y WebAssembly (las fotos HEIC). Las conexiones, las imágenes y
+# los videos no se pueden cerrar: cada workspace tiene su Supabase y su portero, y cada persona su proveedor del
+# asistente (también uno local, por http).
 /*
   X-Robots-Tag: noindex, nofollow
   Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rvy7UI+AliPhL4JdA42sCucAApNStfUgqrVvkLN+fo4=' https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' https: wss: http: ws: data: blob:; worker-src 'self' blob:; frame-src 'self' https:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
-
-# La política de contenido (Docs/Doc_Asistente.md, 10.4): solo los scripts de la app (y el del tema de index.html, por su
-# hash: src/csp.test.ts lo comprueba) y WebAssembly (las fotos HEIC). Las conexiones, las imágenes y los videos no se
-# pueden cerrar: cada workspace tiene su Supabase y su portero, y cada persona su proveedor del asistente (también uno
-# local, por http).
-/*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rvy7UI+AliPhL4JdA42sCucAApNStfUgqrVvkLN+fo4='; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' https: wss: http: ws: data: blob:; worker-src 'self' blob:; frame-src 'self' https:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'

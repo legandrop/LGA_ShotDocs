@@ -561,8 +561,11 @@ reporte de error; nunca al portero ni a Supabase. Las pruebas buscan la clave de
 ### 10.4 Scripts de afuera
 
 Una clave en el navegador es tan segura como el código que corre en la página: la app, **sus dependencias** (una de npm
-comprometida la leería igual, y ninguna CSP lo frena) y lo que se inyecte. La app no carga scripts de terceros; el
-asistente suma la prueba de que el `index.html` publicado no los tenga y, en A1, una `Content-Security-Policy` en
+comprometida la leería igual, y ninguna CSP lo frena) y lo que se inyecte. La app carga un solo script de afuera: el del
+selector de carpetas de Google (`https://apis.google.com/js/api.js`, `src/media/picker.ts`), recién cuando el dueño lo
+abre desde la ventana de Drive; su origen va en `script-src` y sus ventanas son iframes de `docs.google.com` (entran por
+`frame-src https:`). `src/csp.test.ts` busca en `src/` cada script de afuera y exige su origen en la CSP (y ninguno de
+más). El asistente suma la prueba de que el `index.html` publicado no tenga otros y, en A1, una `Content-Security-Policy` en
 `public/_headers` (que ya funciona con los archivos estáticos de Workers). **`script-src 'self'` a secas rompería la
 app:** `index.html` tiene un `<script>` en línea (el tema, al cargar) y `src/media/heicLib.ts` arma WebAssembly. La CSP
 va con el script del tema movido a un archivo (o con su hash) y `'wasm-unsafe-eval'`, y se prueba con pdf.js, las fotos
@@ -671,7 +674,7 @@ documentación y las reglas del repo). M1 y M2 llevan además pruebas SQL con mu
 | El asistente pisa lo que otro escribió | La guarda antes de aplicar (6.1); reemplazo por diferencias; lo que llega sin red después de un *Format as…* queda en el historial (6.5) |
 | El modelo saca una foto, un link o un bloque | Las marcas que tienen que volver intactas (6.4) |
 | Una página hace que el asistente agregue un link falso o saque texto al dibujar la vista previa | Links nuevos sacados, sin autolink, vista previa desde los bloques convertidos (6.1, 6.3) |
-| La clave se usa desde el mismo navegador (otra persona, un script, una dependencia comprometida) | Que nunca sale del dispositivo, la casilla al salir, ningún script de terceros, la CSP, el tope de gasto en el proveedor (4, 10.4) |
+| La clave se usa desde el mismo navegador (otra persona, un script, una dependencia comprometida) | Que nunca sale del dispositivo, la casilla al salir, ningún script de terceros salvo el del selector de Google, la CSP, el tope de gasto en el proveedor (4, 10.4) |
 | La CSP rompe la app | Script del tema a un archivo o hash, `'wasm-unsafe-eval'`, prueba con pdf.js, HEIC, tema y recorrida (10.4) |
 | Un cliente MCP (tercero) usa el token para más que el MCP | Rol propio o plan B cerrado de fábrica, el portero rechaza esos tokens fuera de `/mcp`, la prueba de la API de Auth en M0 (9.2) |
 | Inyección por MCP: lo interno termina en una página que ve un cliente | No escribe ni comenta en páginas con invitados sin la casilla aparte (9.7) |
