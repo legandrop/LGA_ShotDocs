@@ -366,22 +366,31 @@ export function addFiles(
   return storeAndPlace(editor, inline, spot, fallback, opts.store);
 }
 
+/** Para sacar con la cámara (camera.ts): qué cámara abre y, si no va donde está el cursor, al lado de qué bloque. */
+export interface PickExtra {
+  /** El atributo `capture` del selector: en el teléfono abre la cámara en vez de la galería (una sola toma). */
+  capture?: 'environment' | 'user';
+  /** En un renglón nuevo al lado de ese bloque, y no donde está el cursor (el menú de la página sin cursor). */
+  at?: { blockId: string; placement: 'before' | 'after' };
+}
+
 /**
  * El menú "/" (Image): abre el selector de archivos del sistema y pone lo elegido donde estaba el cursor. Se llama
- * dentro del clic o la tecla (el iPhone no abre el selector fuera de un toque).
+ * dentro del clic o la tecla (el iPhone no abre el selector fuera de un toque). Con `extra.capture`, la cámara.
  */
-export function pickFiles(editor: PhotoEditor, accept: string, opts: AddFilesOptions): void {
+export function pickFiles(editor: PhotoEditor, accept: string, opts: AddFilesOptions, extra: PickExtra = {}): void {
   const view = editor.prosemirrorView;
   if (!view) return;
-  const pos = pasteSpot(view.state);
+  const pos = extra.at ? null : pasteSpot(view.state);
   const $at = pos !== null ? view.state.doc.resolve(pos) : view.state.selection.$to;
-  const blockId = blockIdAt($at) ?? editor.getTextCursorPosition().block.id;
+  const near = extra.at ?? { blockId: blockIdAt($at) ?? editor.getTextCursorPosition().block.id, placement: 'after' as const };
   // Mientras el selector está abierto, el lugar se sigue sin marca de espera.
   const spot = pos === null ? null : trackSpot(view, pos, false);
   const input = document.createElement('input');
   input.type = 'file';
-  input.multiple = true;
+  input.multiple = !extra.capture;
   input.accept = accept;
+  if (extra.capture) input.setAttribute('capture', extra.capture);
   let done = false;
   const finish = (files: File[]) => {
     if (done) return;
@@ -390,13 +399,13 @@ export function pickFiles(editor: PhotoEditor, accept: string, opts: AddFilesOpt
     if (view.isDestroyed) return;
     const inline = files.filter((f) => opts.isInline(f));
     const attachments = files.filter((f) => !opts.isInline(f));
-    if (attachments.length) opts.insertAttachments(attachments, { blockId, placement: 'after' });
+    if (attachments.length) opts.insertAttachments(attachments, near);
     if (inline.length === 0) {
       if (spot !== null) takeSpot(view, spot);
       return;
     }
     if (spot !== null) showSpot(view, spot);
-    void storeAndPlace(editor, inline, spot, pos === null ? { blockId, placement: 'after' } : null, opts.store);
+    void storeAndPlace(editor, inline, spot, pos === null ? near : null, opts.store);
   };
   input.addEventListener('change', () => finish(Array.from(input.files ?? [])));
   input.addEventListener('cancel', () => finish([]));
