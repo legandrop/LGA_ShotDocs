@@ -33,7 +33,7 @@ const plain = (value: unknown) =>
  * Lo de `target` que se puede leer; cualquier otra función tira `PracticeWriteError` al llamarla. Los objetos que
  * cuelgan de él (la base de un árbol, el cliente de una cola) también quedan envueltos, sin ninguna lectura.
  */
-function readOnly<T extends object>(target: T, name: string, reads: readonly string[], overrides: Record<string, unknown> = {}): T {
+export function readOnly<T extends object>(target: T, name: string, reads: readonly string[], overrides: Record<string, unknown> = {}): T {
   const allowed = new Set(reads);
   // La misma función cada vez (`useSyncExternalStore` no se vuelve a suscribir en cada dibujo).
   const cache = new Map<PropertyKey, unknown>();
@@ -63,7 +63,7 @@ function readOnly<T extends object>(target: T, name: string, reads: readonly str
 }
 
 /** Lo que la pantalla le lee al árbol (la barra de arriba, las hojas, los permisos y el panel de comentarios). */
-const TREE_READS = [
+export const TREE_READS = [
   'subscribe',
   'getRevision',
   'get',
@@ -81,14 +81,14 @@ const TREE_READS = [
   'resolveSetting',
   'hasUnsavedWrites',
 ];
-const ENGINE_READS = ['subscribe', 'getStatus'];
-const DOCS_READS = ['subscribeRenderFailed', 'subscribeUnsupported', 'hasUnsavedEdits'];
-const SIZES_READS = ['subscribe', 'getSnapshot'];
+export const ENGINE_READS = ['subscribe', 'getStatus'];
+export const DOCS_READS = ['subscribeRenderFailed', 'subscribeUnsupported', 'hasUnsavedEdits'];
+export const SIZES_READS = ['subscribe', 'getSnapshot'];
 /**
  * "Available offline" (P.10): la práctica solo lo lee (el ícono de lo marcado); sin `mediaDb` no ofrece marcar ni
  * *Storage on this device*, y nada de la práctica se baja ni se libera.
  */
-const OFFLINE_READS = ['subscribe', 'getSnapshot', 'markFor'];
+export const OFFLINE_READS = ['subscribe', 'getSnapshot', 'markFor'];
 
 // --- Comentarios en memoria ---------------------------------------------------------------------------------
 

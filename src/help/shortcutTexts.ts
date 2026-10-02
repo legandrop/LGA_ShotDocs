@@ -9,6 +9,7 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   search: 'shortcut.search',
   find: 'shortcut.find',
   print: 'shortcut.print',
+  history: 'shortcut.history',
   'titleEnter': 'shortcut.titleEnter',
   comment: 'shortcut.comment',
   question: 'shortcut.question',

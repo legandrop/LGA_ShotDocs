@@ -20,10 +20,13 @@ import {
   type LinkResult,
   type MediaRemote,
   type MemberRow,
+  type HistoryAuthor,
+  type HistoryRemote,
   type ProjectStatesRemote,
   type Remote,
   type TeamRemote,
 } from './remote';
+import type { HistoryRow } from './history';
 import {
   CommentQueue,
   commentsDbName,
@@ -64,6 +67,8 @@ export class FakeServer {
   online = true;
   /** Guarda el próximo update pero hace como si la respuesta se hubiera perdido. */
   loseNextPushResponse = false;
+  /** Como una base sin la migración del historial: `page_history` no existe (PGRST202). */
+  historyMissing = false;
   /** Rechaza las creaciones de páginas como si faltaran permisos. */
   rejectCreates = false;
   /** Tope de tamaño de un update, como en push_page_update (8 MB). */
@@ -78,7 +83,21 @@ export class FakeServer {
   /** Cuántas veces se pidió `project_sizes`. */
   sizesCalls = 0;
   readonly pages = new Map<string, PageRow>();
-  readonly updates = new Map<string, { seq: number; clientUpdateId: string; data: Uint8Array }[]>();
+  /**
+   * Las filas de `page_updates` de cada página. `id`, `createdBy` y `createdAt` los pone el servidor al subir (como la
+   * base con `auth.uid()` y `now()`); una prueba que carga filas a mano puede dejarlos afuera.
+   */
+  readonly updates = new Map<
+    string,
+    { seq: number; clientUpdateId: string; data: Uint8Array; id?: number; createdBy?: string | null; createdAt?: string }[]
+  >();
+  /** El contador de `page_updates.id` (nunca vuelve atrás). */
+  private updateIds = 0;
+  /** El reloj del servidor (`now()`): las pruebas del historial lo mueven. */
+  now: () => number = () => Date.now();
+  nextUpdateId(): number {
+    return ++this.updateIds;
+  }
   readonly files = new Map<string, { data: ArrayBuffer; mime: string }>();
   readonly workspaceId = crypto.randomUUID();
   /** El dueño del workspace y creador del primer proyecto; es el usuario de los dispositivos por defecto. */
@@ -765,7 +784,7 @@ const ROLE_RANK: Record<Role, number> = { guest: 1, member: 2, admin: 3, owner: 
 const pageNotFound = () => new RemoteError('page_not_found', true, 'P0002');
 const fileNotFound = () => new RemoteError('file_not_found', true, 'P0002');
 
-export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemote, ProjectStatesRemote {
+export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemote, ProjectStatesRemote, HistoryRemote {
   /** La sesión: por defecto, el dueño del workspace. */
   readonly userId: string;
   readonly email: string;
@@ -1048,7 +1067,14 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       throw new RemoteError('update_size_invalid', true, '22023');
     }
     page.update_seq += 1;
-    list.push({ seq: page.update_seq, clientUpdateId, data: update.slice() });
+    list.push({
+      seq: page.update_seq,
+      clientUpdateId,
+      data: update.slice(),
+      id: this.server.nextUpdateId(),
+      createdBy: this.userId,
+      createdAt: new Date(this.server.now()).toISOString(),
+    });
     this.server.updates.set(pageId, list);
     if (this.server.loseNextPushResponse) {
       this.server.loseNextPushResponse = false;
@@ -1070,6 +1096,45 @@ export class FakeRemote implements Remote, MediaRemote, TeamRemote, CommentRemot
       .filter((u) => u.seq > afterSeq)
       .slice(0, limit)
       .map((u) => ({ seq: u.seq, data: u.data.slice() }));
+  }
+
+  /** `page_history` (20261007120000_historial.sql): nivel 3 o más, no invitado, no en la papelera. */
+  private checkHistory(pageId: string): void {
+    this.server.check();
+    if (
+      !this.server.pages.has(pageId) ||
+      this.server.pageInDeletedProject(pageId) ||
+      (this.team && (this.server.pageLevel(this.userId, pageId) < 3 || this.server.role(this.userId) === 'guest'))
+    ) {
+      throw new RemoteError('page_not_found', true, 'P0002');
+    }
+    for (let p = this.server.pages.get(pageId); p; p = p.parent_id ? this.server.pages.get(p.parent_id) : undefined) {
+      if (p.deleted_at) throw new RemoteError('page_in_trash', true, 'P0001');
+    }
+  }
+
+  async pageHistory(pageId: string, afterSeq: number, limit: number): Promise<HistoryRow[]> {
+    if (this.server.historyMissing) throw new RemoteError('Could not find the function public.page_history', true, 'PGRST202');
+    this.checkHistory(pageId);
+    return (this.server.updates.get(pageId) ?? [])
+      .filter((u) => u.seq > afterSeq)
+      .slice(0, Math.min(Math.max(limit, 1), 1000))
+      .map((u) => ({
+        id: u.id ?? u.seq,
+        seq: u.seq,
+        createdBy: u.createdBy === undefined ? this.server.ownerId : u.createdBy,
+        createdAt: u.createdAt ?? new Date(0).toISOString(),
+        data: u.data.slice(),
+      }));
+  }
+
+  async pageHistoryAuthors(pageId: string): Promise<HistoryAuthor[]> {
+    this.checkHistory(pageId);
+    const ids = new Set((this.server.updates.get(pageId) ?? []).map((u) => (u.createdBy === undefined ? this.server.ownerId : u.createdBy)));
+    return [...ids]
+      .filter((id): id is string => !!id)
+      .map((id) => ({ user_id: id, email: this.server.members.get(id)?.email ?? `${id}@test` }))
+      .sort((a, b) => a.email.localeCompare(b.email));
   }
 
   async uploadFile(path: string, data: ArrayBuffer, mime: string): Promise<void> {

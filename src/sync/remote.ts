@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { t } from '../i18n';
 import { fromBase64, toBase64 } from '../lib/base64';
+import type { HistoryRow } from './history';
 import { THUMB_MAX_BYTES } from '../media/probe';
 import { MAX_FILE_BYTES } from './files';
 import { parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
@@ -210,6 +211,23 @@ export interface ProjectStatesRemote {
   /** La papelera de proyectos de la sesión. `null` si la base todavía no tiene la función. */
   trashedProjects(): Promise<TrashedProjectRow[] | null>;
   projectDeleteInfo(projectId: string): Promise<ProjectDeleteInfo>;
+}
+
+/** Un autor del historial de una página, con su correo. */
+export interface HistoryAuthor {
+  user_id: string;
+  email: string;
+}
+
+/**
+ * El historial de versiones (P.18, supabase/migrations/20261007120000_historial.sql). Solo con red, a quien puede
+ * editar la página y no es invitado. Errores: `page_not_found` (sin permiso), `page_in_trash`; `PGRST202` con la
+ * base sin migrar (la app no lo ofrece por `HISTORY_SCHEMA_VERSION`).
+ */
+export interface HistoryRemote {
+  /** Las filas de `page_updates` posteriores a `afterSeq`, en orden, con autor y hora. */
+  pageHistory(pageId: string, afterSeq: number, limit: number): Promise<HistoryRow[]>;
+  pageHistoryAuthors(pageId: string): Promise<HistoryAuthor[]>;
 }
 
 /** Una fila de `trashed_projects` como llega (los números pueden venir como texto). */
@@ -461,7 +479,7 @@ export function parseProjectSize(row: Record<string, unknown>): ProjectSizeRow {
   };
 }
 
-export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRemote, ProjectStatesRemote {
+export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRemote, ProjectStatesRemote, HistoryRemote {
   /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
   private settingsMissingAt = 0;
 
@@ -684,6 +702,28 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
       seq: Number(r.seq),
       data: fromBase64(r.update),
     }));
+  }
+
+  async pageHistory(pageId: string, afterSeq: number, limit: number): Promise<HistoryRow[]> {
+    // Como `pullUpdates`: el lote de a uno tiene el tope más largo (una fila puede pesar 8 MB).
+    const { data, error, status } = await timed(
+      this.client.rpc('page_history', { p_page_id: pageId, p_after_seq: afterSeq, p_limit: limit }),
+      limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
+    );
+    if (error) throw toRemoteError(error, status);
+    return (data as { id: number; seq: number; created_by: string | null; created_at: string; update: string }[]).map((r) => ({
+      id: Number(r.id),
+      seq: Number(r.seq),
+      createdBy: r.created_by ?? null,
+      createdAt: String(r.created_at),
+      data: fromBase64(r.update),
+    }));
+  }
+
+  async pageHistoryAuthors(pageId: string): Promise<HistoryAuthor[]> {
+    const { data, error, status } = await timed(this.client.rpc('page_history_authors', { p_page_id: pageId }));
+    if (error) throw toRemoteError(error, status);
+    return ((data ?? []) as { user_id: string; email: string }[]).map((r) => ({ user_id: String(r.user_id), email: String(r.email ?? '') }));
   }
 
   async uploadFile(path: string, data: ArrayBuffer, mime: string): Promise<void> {

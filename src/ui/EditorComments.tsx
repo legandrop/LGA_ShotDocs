@@ -150,8 +150,10 @@ export function CommentToolbarButton() {
 // --- Los bloques para el panel -------------------------------------------------------------------------
 
 /** El editor le cuenta al panel qué dice cada bloque y en qué orden están. */
-export function useBlockSourceRegistration(editor: AnyEditor, pageId: string): void {
+export function useBlockSourceRegistration(editor: AnyEditor, pageId: string, enabled = true): void {
   useEffect(() => {
+    // Una versión del historial no es el editor de la página (P.18): no se anota.
+    if (!enabled) return;
     const src: BlockSource = {
       pageId,
       describe: (id) => {
@@ -178,7 +180,7 @@ export function useBlockSourceRegistration(editor: AnyEditor, pageId: string): v
       off?.();
       clearBlockSource(src);
     };
-  }, [editor, pageId]);
+  }, [editor, pageId, enabled]);
 }
 
 // --- El margen -----------------------------------------------------------------------------------------

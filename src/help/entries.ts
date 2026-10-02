@@ -82,6 +82,8 @@ const COLLAPSE_2 = '0.084';
  * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2).
  */
 const ATTACH_PREVIEW = '0.091';
+/** El historial de versiones de una página (P.18, Docs/Doc_Historial.md, entrega 1). */
+const HISTORY = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -332,6 +334,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
 
   // --- Papelera ---
   { id: 'trash', section: 'trash', title: 'help.trash.title', text: 'help.trash.text', since: BEFORE_HELP },
+  {
+    id: 'history',
+    section: 'trash',
+    title: 'help.history.title',
+    text: 'help.history.text',
+    keys: { open: 'history', undo: 'undo' },
+    words: ['historial', 'versiones', 'versión', 'restaurar', 'revisiones', 'history', 'versions', 'restore', 'revisions', 'quién cambió'],
+    since: HISTORY,
+  },
 
   // --- Sin red ---
   { id: 'syncStatus', section: 'sync', title: 'help.syncStatus.title', text: 'help.syncStatus.text', showMe: 'sync', since: BEFORE_HELP },

@@ -15,6 +15,7 @@ import { pageEditorExtensions } from './editorExtensions';
 import { editorSchemaOptions } from './editorSchema';
 import { isFindShortcut, isStepShortcut } from './findUi';
 import { isPrintShortcut } from './printPage';
+import { isHistoryShortcut } from './historyUi';
 import { isSearchShortcut } from './projectSearchUi';
 import { SHORTCUT_FILES, SHORTCUT_RULES } from './shortcutSources';
 import { keyLabel, shortcut, shortcutLabel, SHORTCUT_PLACES, SHORTCUTS, slashBadge, type Shortcut } from './shortcuts';
@@ -197,6 +198,7 @@ const FUNCTIONS: Record<string, { fn: Fn; id: string; keys?: string[] }> = {
   isFindShortcut: { fn: isFindShortcut as Fn, id: 'find' },
   isSearchShortcut: { fn: isSearchShortcut as Fn, id: 'search' },
   isPrintShortcut: { fn: isPrintShortcut as Fn, id: 'print' },
+  isHistoryShortcut: { fn: isHistoryShortcut as Fn, id: 'history' },
   isCommentShortcut: { fn: isCommentShortcut as Fn, id: 'comment' },
   isSendShortcut: { fn: isSendShortcut as Fn, id: 'commentsSend' },
   // F3 / Shift+F3 y Ctrl/⌘+G (con Shift, la anterior): la barra decide la dirección con Shift.

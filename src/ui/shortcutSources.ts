@@ -7,6 +7,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   search: ['Workspace.tsx', 'projectSearchUi.ts'],
   find: ['PageEditor.tsx', 'findUi.ts'],
   print: ['printPage.ts'],
+  history: ['Workspace.tsx', 'historyUi.ts'],
   titleEnter: ['PageView.tsx', 'PracticeView.tsx'],
   comment: ['EditorComments.tsx', 'commentsUi.ts'],
   selectAll: ['collapseEditor.ts'],

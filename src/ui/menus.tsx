@@ -7,6 +7,7 @@ import { useOffline, usePermissions, useServices, useSyncStatus, useTree } from 
 import { pageFormat, sizeLabel } from './pageFormat';
 import { ownSplit, splitEnabled } from './titles';
 import {
+  HistoryIcon,
   CollapseAllIcon,
   DarkIcon,
   ExpandAllIcon,
@@ -35,6 +36,7 @@ import { notify } from './notice';
 import { usePendingCount } from './usePendingCount';
 import { LegalLinks } from './Legal';
 import { openInstallDialog, useInstallState } from './install';
+import { shortcutLabel } from './shortcuts';
 
 /**
  * Comportamiento común de menús y paneles flotantes: se cierran con Escape o tocando afuera (tocar el
@@ -132,6 +134,8 @@ export function PageMenu(props: {
   onTrash: () => void;
   /** "Share…": solo si la persona puede compartir esta página. */
   onShare?: () => void;
+  /** "Version history" (P.18): solo si la persona lo puede ver (`canSeeHistory`). */
+  onHistory?: () => void;
 }) {
   const tree = useTree();
   const perms = usePermissions();
@@ -203,6 +207,20 @@ export function PageMenu(props: {
         <PrintIcon />
         {tr('pageMenu.print')}
       </button>
+      {/* El historial de versiones (P.18, Docs/Doc_Historial.md): quién cambió la página, cuándo, y restaurar. */}
+      {props.onHistory && (
+        <button
+          role="menuitem"
+          data-tip={tr('pageMenu.historyTip', { shortcut: shortcutLabel('history') })}
+          onClick={() => {
+            props.onClose();
+            props.onHistory?.();
+          }}
+        >
+          <HistoryIcon />
+          {tr('pageMenu.history')}
+        </button>
+      )}
       {/* El PDF sale con todo abierto; con esto, como se ve (solo con algo colapsado; Doc_Colapsar.md, sección 7). */}
       {collapse && counts.collapsed > 0 && (
         <button
