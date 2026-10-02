@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Tres detalles del salto de hoja. Pegar en un renglón de salto algo que ya traía saltos los perdía: el arreglo de
+v0.093 dejaba un solo salto, sin distinguir los pegados del que heredaba el primer bloque. Ahora se anota qué
+bloques eran saltos al pegar y se conservan; el del renglón sigue al final, sin duplicarse. Ctrl/⌘+Enter en el medio
+de un título colapsado lo partía y abría la sección: ahora, como al final, el salto va después de lo escondido y la
+sección sigue colapsada. Supr en un salto vacío que es el último hijo de un bloque subía el bloque de abajo adentro
+del salto: ahora saca el salto y lo de abajo no se mueve. Cada caso se deshace en un paso, con pruebas y con la
+versión anterior.
+[ Salto de hoja - pegar conserva los saltos pegados, Ctrl/⌘+Enter en un título colapsado y Supr en un último hijo ]
+
 v0.094 :
 
 Faltaba reemplazar en todo el proyecto: cambiar un nombre en cincuenta páginas era abrirlas de a una. Ahora la
