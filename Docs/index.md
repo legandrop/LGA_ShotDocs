@@ -73,11 +73,11 @@ Punto de entrada de la documentación. Todo lo de `Docs/` está en castellano, s
 - **Base de datos.** Las migraciones están en `supabase/migrations/` y las pruebas de permisos en
   `supabase/tests/`. `node scripts/db-migrate.mjs --test` aplica lo pendiente y corre las pruebas (ver
   `Doc_Supabase.md`).
-- **Pruebas de la app.** `npm test` corre las 2566 pruebas (v0.116): sincronización (`src/sync/`, algunas con el
+- **Pruebas de la app.** `npm test` corre las 2606 pruebas (v0.117): sincronización (`src/sync/`, algunas con el
   editor real, en jsdom), interfaz (`src/ui/`; las de editar a la vez son `src/ui/collab*.test.ts`, ver
   `Doc_Colaboracion.md`; las de fotos en línea corren 300 agendas al azar por caso y suman alrededor de un
   minuto y medio), el cliente del portero (`src/media/`), el portero
-  (`portero/src/`), la ayuda (`src/help/`), la recorrida y la página de práctica (`src/tutorial/`), el importador de Coda (`src/import/`), exportar (`src/export/`) y los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`
+  (`portero/src/`), la ayuda (`src/help/`), las plantillas (`src/templates/`), la recorrida y la página de práctica (`src/tutorial/`), el importador de Coda (`src/import/`), exportar (`src/export/`) y los comandos que preparan un workspace y exportan de Coda (`scripts/*.test.mjs`, sin red). `npm run typecheck`
   revisa los tipos de la app pero no los del portero: esos van con `npx tsc -p portero --noEmit`.
 
 ## Direcciones de la app
@@ -90,7 +90,7 @@ cualquier dirección que no sea un archivo, y sin red lo hace el service worker.
 | `/` | El inicio: salta a la última página abierta del proyecto elegido en ese dispositivo. |
 | `/p/<uuid>` | Una página, por su id. |
 | `/trash` | La papelera de páginas. |
-| `/practice` | La página de práctica (P.13, `Doc_Tutorial.md`): un documento de ejemplo en memoria, con el editor de verdad; no es una página del árbol y no se guarda ni se sincroniza. |
+| `/practice` | La página de práctica (P.13, `Doc_Tutorial.md`): un documento de ejemplo en memoria, con el editor de verdad; no es una página del árbol y no se guarda ni se sincroniza. Con `?template=pre-production`, `on-set` o `shot-breakdown` (y `&lang=en` o `es`), la vista previa de esa plantilla de fábrica (`Doc_Plantillas.md`), igual de en memoria. |
 | `/media-test` | Ya no existe (v0.042): abre la app, como `/`. Queda por si está en un link guardado o en la vuelta de Google de un portero viejo. |
 | `/privacy` | La política de privacidad, en inglés (`src/ui/Legal.tsx`). **Pública:** se ve sin sesión ni workspace. |
 | `/terms` | Las condiciones de uso, en inglés (`src/ui/Legal.tsx`). **Pública:** se ve sin sesión ni workspace. |

@@ -44,7 +44,7 @@ export function pagePath(id: string): string {
 }
 
 export function navigate(path: string, replace = false): void {
-  if (path === location.pathname) return;
+  if (path === location.pathname || path === location.pathname + location.search) return;
   if (replace) history.replaceState(null, '', path);
   else history.pushState(null, '', path);
   window.dispatchEvent(new Event(EVENT));
@@ -62,4 +62,13 @@ function subscribe(fn: () => void): () => void {
 export function useRoute(): Route {
   const pathname = useSyncExternalStore(subscribe, () => location.pathname);
   return parseRoute(pathname);
+}
+
+/**
+ * Lo que va después del "?" en la dirección: la ruta no lo mira (dos direcciones con la misma ruta son la misma
+ * pantalla), pero una pantalla puede leerlo, como la vista previa de una plantilla (`/practice?template=on-set`).
+ */
+export function useSearchParam(name: string): string | null {
+  const search = useSyncExternalStore(subscribe, () => location.search);
+  return new URLSearchParams(search).get(name);
 }

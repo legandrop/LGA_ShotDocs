@@ -185,6 +185,34 @@ describe('restaurar una copia de seguridad', () => {
     expect(a.tree.failedOps()).toHaveLength(0);
   });
 
+  it('la plantilla con que se hizo una página vuelve con lo recuperado (página nueva y página que ya estaba)', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const before = await a.tree.create(null, 'Antes');
+    await a.engine.syncNow();
+    const restore = server.backup();
+
+    // Después de la copia: una plantilla elegida en la página que ya estaba y una página nueva hecha con otra.
+    const plantilla = '5d1b7a0e-3c4f-4e8a-9b21-0f6c2a7d1e02';
+    // La recuperación reenvía lo que es más nuevo que la copia (`updated_at` estrictamente mayor): el cambio tiene que
+    // caer en un milisegundo posterior al de la fila copiada, que en memoria puede ser el mismo.
+    const copiedAt = Date.parse(server.pages.get(before)!.updated_at);
+    while (Date.now() <= copiedAt) await new Promise((r) => setTimeout(r, 1));
+    await a.tree.setPatch(before, { template_id: plantilla });
+    const after = await a.tree.create(null, '', undefined, { templateId: plantilla });
+    await a.engine.syncNow();
+    expect(server.pages.get(before)?.template_id).toBe(plantilla);
+
+    restore();
+    expect(server.pages.get(before)?.template_id ?? null).toBeNull();
+    expect(server.pages.has(after)).toBe(false);
+    await a.tree.recoverAfterRestore([...server.pages.values()], [...server.projects.values()]);
+    await a.engine.syncNow();
+    expect(server.pages.get(before)?.template_id).toBe(plantilla);
+    expect(server.pages.get(after)?.template_id).toBe(plantilla);
+    expect(a.tree.failedOps()).toHaveLength(0);
+  });
+
   it('una página vacía no manda un update vacío después de restaurar', async () => {
     const server = new FakeServer();
     const a = await device(server);

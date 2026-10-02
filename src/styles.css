@@ -1019,6 +1019,12 @@ code {
   color: var(--danger);
 }
 
+/* Un renglón apagado que explica por qué (aria-disabled: el tooltip sigue), como *Apply template…* con la página llena. */
+.menu button[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .menu hr {
   border: none;
   border-top: 1px solid var(--menu-border);

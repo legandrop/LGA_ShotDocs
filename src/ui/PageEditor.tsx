@@ -74,6 +74,7 @@ import { registerRestoreTarget } from './historyUi';
 import { historyMarksExtension, type HistoryMarksInput } from './historyMarks';
 import { restoreInEditor } from './historyRestore';
 import { RemovedWritingBanner } from './RemovedWritingBanner';
+import { TemplateHost } from '../templates/TemplateHost';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -239,6 +240,14 @@ export function PageEditor({ pageId }: { pageId: string }) {
           {canComment ? tr('editor.commentOnly') : tr('page.viewOnly')}
         </p>
       )}
+      {/* Las plantillas (Docs/Doc_Plantillas.md): la tira de la página vacía y la ventana *Templates*. */}
+      <TemplateHost
+        pageId={pageId}
+        doc={opening.doc}
+        editor={findEditor}
+        editable={opening.complete && canEdit}
+        complete={opening.complete}
+      />
       {/* Cambiar el idioma vuelve a abrir el editor (sus textos se eligen al crearlo); el documento es el mismo. */}
       <BlockEditor
         key={`${pageId}:${opening.complete}:${canEdit}:${tr.lang}:${remounts}`}

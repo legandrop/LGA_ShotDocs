@@ -19,6 +19,9 @@ export const menus = {
   },
   'pageMenu.collapseAll': { en: "Collapse all", es: "Colapsar todo" },
   'pageMenu.history': { en: "Version history", es: "Historial de versiones" },
+  // Las plantillas (Docs/Doc_Plantillas.md, 4.1): la ventana se baja con el editor.
+  'pageMenu.applyTemplate': { en: "Apply template…", es: "Aplicar plantilla…" },
+  'pageMenu.applyTemplateEmpty': { en: "Only on an empty page", es: "Solo en una página vacía" },
   'pageMenu.expandAll': { en: "Expand all", es: "Abrir todo" },
   'pageMenu.printTip': {
     en: "Opens the print dialog with this page size.\nChoose **Save as PDF** to export.",

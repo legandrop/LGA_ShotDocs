@@ -323,7 +323,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   cambios) y corregido: atajo ⌘⌥⇧N / Ctrl+Alt+Shift+N (⌘⌥N es de Chrome en la Mac), marcas que se recuperan solas,
   plantillas a medio bajar, datos de set que faltaban y una sección *Internal* para lo que no debe ver un cliente.
   Entregas: 0 (las tres plantillas en el código y una vista para que Lega las revise), 1 (crear desde una de fábrica),
-  2 (el reporte del día), 3 (plantillas propias). **Para después:** que la base fusione las claves de `pages.settings`
+  2 (el reporte del día), 3 (plantillas propias). **Entregas 0 y 1 hechas** (v0.117): la vista previa
+  (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*; **falta** que Lega revise el
+  contenido de las tres (PL1), y las entregas 2 y 3. Quedó de la auditoría: *Exit* de la vista previa abierta desde
+  la ventana va al inicio y no a la página donde se elegía (Atrás sí vuelve); un aviso de ProseMirror en la consola al
+  abrir la vista previa (sin efecto visible); y que deshacer la plantilla deja `template_id` (la entrega 2 lo tiene
+  que tener en cuenta). **Para después:** que la base fusione las claves de `pages.settings`
   (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
   se pisan (`Doc_Plantillas.md`, sección 8).
 - **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una
