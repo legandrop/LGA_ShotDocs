@@ -23,6 +23,27 @@ export const FULL_CHECK_EVERY = 10;
 const ROWS_BATCH = 500;
 /** Cada cuántas filas aplicadas se le devuelve el control al navegador mientras se arma (no congelar la pantalla). */
 const YIELD_EVERY = 50;
+/**
+ * Y además cada tantos milisegundos de trabajo seguido (entrega 3, O-C): con filas pesadas (las de antes de B.15 llevan
+ * todos los borrados de la página) 50 filas tardaban hasta 100 ms con la CPU frenada ×6, una tecla que se nota.
+ */
+const YIELD_MS = 30;
+
+/**
+ * Le devuelve el control al navegador: con un mensaje (`MessageChannel`), que no tiene la espera mínima de `setTimeout`
+ * (unos 4 ms, y más con la CPU frenada o la pestaña de fondo); lo que el navegador tenga en cola, como una tecla, va antes.
+ */
+function yieldToBrowser(): Promise<void> {
+  if (typeof MessageChannel === 'undefined') return new Promise((resolve) => setTimeout(resolve, 0));
+  return new Promise((resolve) => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => {
+      ch.port1.close();
+      resolve();
+    };
+    ch.port2.postMessage(null);
+  });
+}
 
 /** Un `Y.Doc` sin GC con el update aplicado: lo borrado conserva su texto. */
 export function docFromUpdate(update: Uint8Array): Y.Doc {
@@ -42,13 +63,20 @@ export function buildDoc(base: Uint8Array | null, tail: Uint8Array[]): Y.Doc {
   return doc;
 }
 
-/** Como `buildDoc`, devolviendo el control al navegador cada tantas filas (una página muy editada tarda segundos). */
+/**
+ * Como `buildDoc`, devolviendo el control al navegador cada tantas filas o cada tantos milisegundos (una página muy
+ * editada tarda segundos). El resultado es el mismo: solo cambia cuándo se pausa.
+ */
 export async function buildDocAsync(base: Uint8Array | null, tail: Uint8Array[]): Promise<Y.Doc> {
   const doc = new Y.Doc({ gc: false });
   if (base) Y.applyUpdate(doc, base);
+  let slice = performance.now();
   for (let i = 0; i < tail.length; i++) {
     Y.applyUpdate(doc, tail[i]);
-    if (i % YIELD_EVERY === YIELD_EVERY - 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    if (i % YIELD_EVERY === YIELD_EVERY - 1 || performance.now() - slice >= YIELD_MS) {
+      await yieldToBrowser();
+      slice = performance.now();
+    }
   }
   return doc;
 }
