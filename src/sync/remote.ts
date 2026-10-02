@@ -278,6 +278,11 @@ export interface SnapshotsRemote {
   claimCompaction(pageId: string): Promise<CompactionClaim | null>;
   pushSnapshot(snapshot: NewSnapshot): Promise<SnapshotPushResult>;
   pullSnapshot(id: string): Promise<Uint8Array>;
+  /**
+   * Un snapshot con la huella que guardó la base (entrega 3, O-D), o `null` si la base no tiene la función (entonces se
+   * usa `pullSnapshot`, sin huella).
+   */
+  pullSnapshotChecked?(id: string): Promise<{ state: Uint8Array; sha256: string } | null>;
   confirmSnapshot(id: string, sha256: string): Promise<boolean>;
   skipCompaction(pageId: string, reason: string): Promise<void>;
   invalidateSnapshot(id: string, reason: string): Promise<boolean>;
@@ -352,12 +357,19 @@ export function parsePageVersion(row: Record<string, unknown>): PageVersionRow {
 
 /** Las filas de `pull_page_content` como llegan (los números pueden venir como texto). */
 export function parseContentRows(data: unknown): RemoteUpdate[] {
-  type Row = { seq: number | string; update: string; snapshot_id?: string | null; content_epoch?: number | string | null };
+  type Row = {
+    seq: number | string;
+    update: string;
+    snapshot_id?: string | null;
+    content_epoch?: number | string | null;
+    sha256?: string | null;
+  };
   return ((data ?? []) as Row[]).map((r) => ({
     seq: Number(r.seq),
     data: fromBase64(r.update),
     ...(r.snapshot_id ? { snapshotId: String(r.snapshot_id) } : {}),
     ...(r.content_epoch === null || r.content_epoch === undefined ? {} : { contentEpoch: Number(r.content_epoch) }),
+    ...(r.snapshot_id && typeof r.sha256 === 'string' ? { snapshotSha256: r.sha256.toLowerCase() } : {}),
   }));
 }
 
@@ -885,8 +897,16 @@ export class SupabaseRemote
     if (!this.snapshotsOn || Date.now() - this.pullContentMissingAt < 10 * 60_000) {
       return this.pullUpdates(pageId, afterSeq, limit);
     }
+    // Con la versión (entrega 3, 20261025120000_compactar_prender.sql): la base sirve el snapshot solo a una versión
+    // permitida y con su huella; la de tres argumentos (v0.127 a v0.133) ya no sirve snapshots. Sin la migración,
+    // PGRST202: filas sueltas por 10 minutos.
     const { data, error, status } = await timed(
-      this.client.rpc('pull_page_content', { p_page_id: pageId, p_after_seq: afterSeq, p_limit: limit }),
+      this.client.rpc('pull_page_content', {
+        p_page_id: pageId,
+        p_after_seq: afterSeq,
+        p_limit: limit,
+        p_app_version: this.appVersion || null,
+      }),
       limit <= 1 ? MAX_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
     );
     if (error?.code === MISSING_FUNCTION) {
@@ -941,6 +961,18 @@ export class SupabaseRemote
     if (error) throw toRemoteError(error, status);
     if (typeof data !== 'string') throw new RemoteError(`pull_page_snapshot: unexpected answer ${String(data)}`, true);
     return fromBase64(data);
+  }
+
+  async pullSnapshotChecked(id: string): Promise<{ state: Uint8Array; sha256: string } | null> {
+    const { data, error, status } = await timed(this.client.rpc('pull_page_snapshot_checked', { p_id: id }), MAX_REQUEST_TIMEOUT_MS);
+    // Una base sin la migración de la entrega 3: quien compacta baja la base sin huella, como antes.
+    if (error?.code === MISSING_FUNCTION) return null;
+    if (error) throw toRemoteError(error, status);
+    const row = (Array.isArray(data) ? data[0] : data) as { state?: unknown; sha256?: unknown } | undefined;
+    if (typeof row?.state !== 'string' || typeof row.sha256 !== 'string') {
+      throw new RemoteError(`pull_page_snapshot_checked: unexpected answer ${JSON.stringify(data)?.slice(0, 200)}`, true);
+    }
+    return { state: fromBase64(row.state), sha256: row.sha256.toLowerCase() };
   }
 
   async confirmSnapshot(id: string, sha256: string): Promise<boolean> {

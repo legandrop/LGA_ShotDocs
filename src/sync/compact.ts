@@ -307,7 +307,19 @@ export async function compactPage(
   let base: Uint8Array | null = null;
   if (claim.baseId) {
     try {
-      base = await remote.pullSnapshot(claim.baseId);
+      // Con la huella que guardó la base (entrega 3, O-D): una base corrupta se invalida (con toda su cadena; la próxima
+      // compactación arranca desde la fila 1) en vez de saltear la página cada día. Sin la función, como antes.
+      const checked = remote.pullSnapshotChecked ? await remote.pullSnapshotChecked(claim.baseId) : null;
+      if (checked) {
+        if ((await sha256Hex(checked.state)) !== checked.sha256) {
+          console.error(`Página ${pageId}: la base del snapshot no coincide con su huella; se invalida su cadena.`);
+          await remote.invalidateSnapshot(claim.baseId, 'corrupt base: sha256');
+          return { kind: 'invalidated', reason: 'corrupt base' };
+        }
+        base = checked.state;
+      } else {
+        base = await remote.pullSnapshot(claim.baseId);
+      }
     } catch (err) {
       if (isNetworkError(err) || isTimeout(err)) throw err;
       // La base dejó de ser la vigente entre la reserva y ahora (otro confirmó, o se invalidó): la próxima vuelta.
