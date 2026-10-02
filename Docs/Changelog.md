@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.115 :
+
+Exportar (P.22), entrega 0. El PDF y el zip de una rama necesitan dibujar cada página fuera de la pantalla con el
+esquema real, y no se sabía si eso respetaba los cortes ni cuánto tardaba. Nuevo en `src/export/`: un editor de
+exportación sin colaboración ni interfaz que, por página, lee los bloques de una copia (`docs.snapshot`), espera las
+imágenes, copia la vista de impresión de siempre y la pagina; el plan de la rama sin la papelera, con avance y
+*Cancel*; un proyecto de prueba y su medición en Chromium. Con 300 páginas y 2219 fotos: entre 14,5 y 38,9 s, lo
+guardado de cada página igual byte por byte y las hojas de las 300 iguales a las marcas de la pantalla. Nada cambia para
+el usuario todavía.
+[ Exportar, entrega 0 - el editor de exportación medido con 300 páginas ]
+
 v0.114 :
 
 No se podía compartir una página con alguien sin cuenta. Entregas 0 y 1 de `Doc_Link_Publico.md`: la prueba en la base
