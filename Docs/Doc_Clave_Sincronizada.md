@@ -194,7 +194,7 @@ como versión 2 sin romper nada (CS3).
 - **La fila** guarda: versión (1), sal, iv y el cifrado en base64 (1 388 caracteres siempre).
 - **Frase equivocada** y **fila tocada** dan el mismo error de AES-GCM: la app dice *That passphrase doesn't open your
   synced key.* (no puede distinguirlos, y está bien: no da pistas).
-- **Probado en el prototipo** (Node 22, `.zz-tmp/proto.mjs`, sin versionar): ida y vuelta igual; la fila no contiene ni
+- **Probado en el prototipo** (Node 22, un script fuera del repo): ida y vuelta igual; la fila no contiene ni
   la clave ni la dirección; frase equivocada, otro id, un byte del cifrado cambiado, otra sal y una versión desconocida
   no abren; una tilde compuesta o precompuesta abre igual; la fila mide 290 caracteres sin el relleno.
 
@@ -539,11 +539,11 @@ dispositivo elige el suyo); no se sube `min_app_version`; la base local no sube 
 
 ## Cómo se midió
 
-- **Derivación:** un script fuera del repo (`.zz-tmp/medir.mjs` en el árbol de trabajo, sin versionar) con Node 22.23 y
+- **Derivación:** un script fuera del repo con Node 22.23 y
   Playwright 1.63 (`playwright-core`) sin ventana, Chromium 153 y WebKit 26.6, en una dirección `https` falsa servida por
   el propio script (WebCrypto pide un contexto seguro). PBKDF2 con `crypto.subtle.deriveKey` más un `encrypt` de
   prueba; Argon2id con `hash-wasm` (WebAssembly). Cinco corridas por fila, mediana y mínimo. PC: Intel Core i9-14900K,
   192 GB, Windows 11.
-- **El sobre:** `.zz-tmp/proto.mjs` (Node 22): cifrar, abrir y los seis casos que no tienen que abrir de la sección 4.3.
+- **El sobre:** otro script fuera del repo (Node 22): cifrar, abrir y los seis casos que no tienen que abrir de la sección 4.3.
 - **Adivinar:** la cuenta de la sección 4.2 usa unos 9 000 millones de vueltas de PBKDF2-SHA256 por segundo por placa,
   del orden de lo que publican los benchmarks de `hashcat` para las placas más rápidas de 2023-2024; no se midió acá.
