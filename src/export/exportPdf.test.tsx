@@ -18,7 +18,7 @@ import { appComments, authorLabel, blockText, commentsSection, nameFromEmail } f
 import { ExportEditor } from './exportEditor';
 import { PhotoLimitError, PixelBudget, printSize, shrinkImages, workerResizer, type Resizer } from './exportImages';
 import { exportPlan, type ExportSource } from './exportPages';
-import { anchorId, buildPdf, deviceLimits, PageLimitError, pageRules, paginateExport, PDF_LIMITS, printBook, rewriteLinks, sheetName, SMALL_DESKTOP_PIXELS, type BuildOptions } from './exportPdf';
+import { anchorId, buildPdf, deviceLimits, pageRules, paginateExport, PDF_LIMITS, printBook, rewriteLinks, sheetName, SMALL_DESKTOP_PIXELS, type BuildOptions } from './exportPdf';
 import { keepsPageSizes } from './printSupport';
 import { testProject, writeBlocks, writeTestProject } from './testProject';
 
@@ -122,7 +122,7 @@ describe('exportar PDF: la lista de navegadores probados', () => {
     expect(deviceLimits(true, 16)).toBe(PDF_LIMITS.touch);
     expect(deviceLimits(false, undefined)).toBe(PDF_LIMITS.desktop);
     expect(deviceLimits(false, 8)).toBe(PDF_LIMITS.desktop);
-    expect(deviceLimits(false, 4)).toEqual({ ...PDF_LIMITS.desktop, pixels: SMALL_DESKTOP_PIXELS });
+    expect(deviceLimits(false, 4)).toEqual({ ...PDF_LIMITS.desktop, pixels: SMALL_DESKTOP_PIXELS, fullPixels: expect.any(Number), bytes: expect.any(Number) });
     expect(SMALL_DESKTOP_PIXELS).toBeLessThan(PDF_LIMITS.desktop.pixels);
   });
 
@@ -381,13 +381,6 @@ describe('exportar PDF: el libro', () => {
     expect(page.textContent).toContain('ir a B');
     expect(page.innerHTML).not.toContain(b);
     book.destroy();
-  });
-
-  it('demasiadas páginas: lo dice antes de empezar, sin armar nada', async () => {
-    const { device, projectId } = await project(14);
-    const plan = exportPlan(device.tree, 'project', projectId);
-    await expect(build(device, plan, { limits: { ...PDF_LIMITS.touch, pages: 5 } })).rejects.toBeInstanceOf(PageLimitError);
-    expect(document.querySelectorAll('.print-view, .sd-export-book')).toHaveLength(0);
   });
 
   it('una página que no se puede leer no corta la exportación: sale marcada y las demás siguen', async () => {
@@ -822,33 +815,5 @@ describe('exportar PDF: la ventana', () => {
     expect(general).toBeGreaterThan(-1);
     expect(own).toBeGreaterThan(general);
     expect(css.slice(own, css.indexOf('}', own))).toMatch(/flex:\s*none/);
-  });
-
-  it('pasado el tope de páginas no empieza y ofrece las partes', async () => {
-    const { device, projectId } = await project(14);
-    const original = PDF_LIMITS.desktop.pages;
-    PDF_LIMITS.desktop.pages = 5;
-    try {
-      const host = document.createElement('div');
-      document.body.append(host);
-      const root = createRoot(host);
-      roots.push(root);
-      await act(async () =>
-        root.render(
-          <ServicesContext.Provider value={services(device)}>
-            <ExportDialog target={{ kind: 'project', id: projectId }} onClose={() => undefined} />
-          </ServicesContext.Provider>,
-        ),
-      );
-      expect(host.textContent).toContain('14 pages are too many for one PDF on this device (up to 5)');
-      const exportButton = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Export PDF')!;
-      expect(exportButton.disabled).toBe(true);
-      const parts = [...host.querySelectorAll('.export-too-big button')];
-      expect(parts).toHaveLength(5);
-      await act(async () => (parts[0] as HTMLButtonElement).click());
-      expect(host.textContent).not.toContain('too many');
-    } finally {
-      PDF_LIMITS.desktop.pages = original;
-    }
   });
 });

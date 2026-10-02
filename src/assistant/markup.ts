@@ -162,7 +162,7 @@ const unitKey = (text: string, marks: MdMark[], link: number | null) =>
  * Las unidades de un pedazo de texto: cada palabra, cada signo o espacio, cada foto y cada salto de renglón, con su
  * formato. Los links se numeran a medida que aparecen (`links`), uno por tramo seguido con la misma dirección.
  */
-function oldUnits(doc: PMNode, from: number, to: number, photos: Map<number, PMNode>, links: Map<number, Mark>, counter: { photo: number; link: number }): OldUnit[] {
+export function oldUnits(doc: PMNode, from: number, to: number, photos: Map<number, PMNode>, links: Map<number, Mark>, counter: { photo: number; link: number }): OldUnit[] {
   const out: OldUnit[] = [];
   let lastLink: { mark: Mark; n: number; end: number } | null = null;
   doc.nodesBetween(from, to, (node, pos) => {

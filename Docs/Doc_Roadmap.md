@@ -344,10 +344,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   ofrece crear o elegir la carpeta de reportes y mueve ahí la página (ya no sale como plantilla común). Quedan dos
   sorpresas anotadas por la auditoría: *Apply template…* en una página de la raíz con subpáginas las mueve con la página, y
   la ventana no avisa si la carpeta elegida ya tiene el reporte de hoy (mostrar el *already exists* con *Open*).
-  **Las anotaciones de las fotos viajan con la plantilla (v0.0XX, D46 aplicado a las plantillas):** al usarla (también el
+  **Las anotaciones de las fotos viajan con la plantilla (v0.136, D46 aplicado a las plantillas):** al usarla (también el
   reporte del día) y al guardar como plantilla, mismas reglas que copiar y pegar; *Clear filled-in values* las saca con las
   fotos; entre proyectos no viajan (`Doc_Plantillas.md`, "Cómo quedó (las anotaciones de las fotos)"). Falta a mano: usar
-  una plantilla con fotos anotadas en la Mac y en el iPhone. **Falta** que Lega revise el contenido de las tres (PL1) y
+  una plantilla con fotos anotadas en la Mac y en el iPhone. De su auditoría (BAJO): en el reporte del día, si las anotaciones
+  no entran por los topes, el aviso queda solo en la consola (llevarlo a la pantalla, como al usar una plantilla); dos
+  guardas dobles (si se saca una capa la otra filtra igual) no tienen una prueba por capa. **Falta** que Lega revise el contenido de las tres (PL1) y
   pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
   *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
   proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la
@@ -391,7 +393,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pegarla en otra página del mismo proyecto le lleva sus formas (mismas claves, sin duplicar, un solo ⌘Z saca la foto y
   sus flechas); a otro proyecto o workspace no viajan, y al portapapeles no va nada nuevo
   (`src/media/markupClipboard.ts`, `src/ui/markupClipboardEditor.ts`). Falta a mano: ⌘C y ⌘V de verdad en Safari de la
-  Mac y en el iPhone. **Con plantillas (v0.0XX):** las anotaciones también viajan al usar una plantilla del mismo proyecto y al
+  Mac y en el iPhone. **Con plantillas (v0.136):** las anotaciones también viajan al usar una plantilla del mismo proyecto y al
   guardar como plantilla (*Clear filled-in values* las saca con las fotos). De la entrega 5 quedan el historial de las anotaciones, *Keep annotations?* al reemplazar y buscar
   en sus textos.
   De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
@@ -423,7 +425,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   volver y `MISSING_FILES.txt`; los destinos de *Download all*, sin red y cancelar. Solo dueño y admins (D60), nunca
   desde un teléfono (D63). Probado con `file://` y sin red en Chromium y Firefox. Falta a mano: ERSO entero con el
   portero de verdad (tiempo y llamados al Durable Object), Safari de la Mac y las rutas largas de Windows
-  (`Doc_Exportar.md`, "Cómo quedó la entrega 2"). Sigue la entrega 3 (volver a Shot Docs).
+  (`Doc_Exportar.md`, "Cómo quedó la entrega 2"). **Entrega 1b hecha (v0.134): los cambios de Lega al PDF** (D84,
+  D85, D88): las fotos con su original en resolución completa (*Smaller file* para achicarlas), el PDF en partes por
+  páginas enteras cuando pasa un tope (500 MB de fotos por parte en una computadora; medido en Chromium con 300 páginas
+  y 2219 fotos de teléfono) y la lista de las que fallaron con *Export again*. Falta a mano: guardar de verdad una parte
+  de 500 MB con la vista previa de Chrome y Edge (también en 8 GB), originales reales de iPhone por el portero, Safari,
+  Firefox y el iPhone (`Doc_Exportar.md`, "Cómo quedó la entrega 1b"). Sigue la entrega 3 (volver a Shot Docs).
+  Quedó de la re-verificación de la 1b (BAJO): una foto de más de 100 MP que hay que pasar a JPEG (girada, PNG, CMYK)
+  sale a 200 ppp y el aviso dice «sin conexión» (llevarla al tope de píxeles de a una y dar su motivo); sin red y sin
+  miniaturas en el dispositivo las fotos salen como marcador y la ventana no lo cuenta al terminar (de antes); el tope de
+  90 s cuenta la bajada entera y no el tiempo sin datos (vencer por 30 s sin recibir nada); faltan pruebas de que la
+  parte siguiente no vuelve a bajar los originales; si la pestaña se cuelga en la parte N, no se puede retomar desde ahí.
   Observaciones de la re-verificación de la entrega 1: (R1) el Imprimir del menú del navegador mientras se arma el PDF
   puede llevar la vista de la página en curso: sacar `print-output` a esa vista hasta `place()`; (R2) la prueba de la
   vuelta al achicador del hilo principal no distingue la mutación: hacerlo inyectable en `workerResizer`; (R3) con
@@ -497,8 +509,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   paso). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
   sobre todo en el teléfono, y que la IA pase «este plano se filmó con un 50 mm, anotalo donde corresponda» a la celda
-  *Lens* de la fila de ese plano en el *On-Set Report*. **Diseño en `Doc_Dictado.md`** (sin código; decisiones propuestas
-  DI1 a DI9): el dictado común queda en el teclado del sistema; un solo micrófono propio, *Dictate to report*, que graba
+  *Lens* de la fila de ese plano en el *On-Set Report*. **V1 hecha (v0.135, `Doc_Dictado.md` sección 15):** *Dictate to
+  report* con texto (escrito o dictado con el teclado del sistema), el mapa, el validador, la vista previa por cambio con
+  casillas, *Apply* con la guarda y *Undo*, `ask` con botones, *Couldn't place* guardado en el dispositivo, permisos y
+  política; falta que Lega mida la calidad con su clave (10.3) y pruebe el dictado del teclado en el editor del teléfono.
+  **Diseño en `Doc_Dictado.md`** (decisiones propuestas DI1 a DI9): el dictado común queda en el teclado del sistema;
+  un solo micrófono propio, *Dictate to report*, que graba
   en el dispositivo y transcribe con el proveedor de la persona (OpenAI o Gemini; el reconocimiento del navegador no
   existe en la app instalada del iPhone); la página va como un mapa con direcciones y vuelve una lista de cambios
   validada, con vista previa, *Apply* con la guarda y un deshacer; «este plano» por lo dicho, el cursor o el plano
@@ -506,6 +522,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   V1 (texto dictado con el teclado → ubicar; requiere A2 de P.24 en `main`), V2 (la cola sin red), V3 (el micrófono
   propio, guantes y ruido), V4 (plano activo, correcciones, la página del plano, el botón de acción del iPhone).
   Queda para medir: transcripción adentro del teléfono (Whisper en WebAssembly), sin red y privada.
+  Quedó de la re-verificación de V1 (BAJO): el resguardo de 600 ms contra el doble toque en *Apply* también corre
+  cuando se aplicó con Ctrl/⌘+Enter, y un *Undo* a propósito en menos de medio segundo se ignora sin aviso (el segundo
+  anda); que valga solo para un clic o un toque sobre *Apply*.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

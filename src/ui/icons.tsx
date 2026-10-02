@@ -211,5 +211,7 @@ export const RedoIcon = icon('M12.5 5L16 8.5 12.5 12M15.5 8.5H8.25a4 4 0 0 0 0 8
 export const FitIcon = icon('M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4M7 7h6v6H7z');
 // El asistente (Docs/Doc_Asistente.md): un destello.
 export const AssistantIcon = icon('M9 3.25l1.35 3.9 3.9 1.35-3.9 1.35L9 13.75l-1.35-3.9-3.9-1.35 3.9-1.35zM14.75 12l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z');
+// *Dictate to report* (Docs/Doc_Dictado.md): un micrófono.
+export const MicIcon = icon('M10 2.75a2.5 2.5 0 0 1 2.5 2.5v4.5a2.5 2.5 0 0 1-5 0v-4.5a2.5 2.5 0 0 1 2.5-2.5zM5.25 9.5a4.75 4.75 0 0 0 9.5 0M10 14.25v3M7.5 17.25h5');
 // Los ajustes del asistente: dos reguladores.
 export const SettingsIcon = icon('M4 6.5h7.5M15 6.5h1M13.25 4.75v3.5M4 13.5h1.5M9 13.5h7M7.25 11.75v3.5');

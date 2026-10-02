@@ -2,7 +2,7 @@
 
 **Estado: entregas 0 a 3 implementadas** (las tres de fábrica, la vista previa, crear desde una, el reporte del día y las
 plantillas propias; ver "Cómo quedó", al final), **D82** (el reporte del día en la raíz del proyecto pide una carpeta) **y las
-anotaciones de las fotos** (v0.0XX: viajan con la plantilla; "Cómo quedó (las anotaciones de las fotos)", al final). Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
+anotaciones de las fotos** (v0.136: viajan con la plantilla; "Cómo quedó (las anotaciones de las fotos)", al final). Sin migración (roadmap P.23, fase 3 de `Plan_ShotDocs.md`; pedido de
 Lega del 2026-10-02). Diseñado contra `main` v0.108. Las decisiones PL1 a PL10 (sección 13) son propuestas: se adoptan como
 están hasta que Lega diga otra cosa. El contenido de las tres plantillas es una primera versión para que Lega la
 ajuste: la entrega 0 la deja a la vista sin guardar nada, justamente para eso. Corregido con la auditoría
@@ -830,7 +830,7 @@ plantilla y crear el reporte pasan por la cola del árbol y por IndexedDB.
   Chromium sin ventana con la app real sobre el servidor en memoria: 26 controles (la carpeta nueva, la existente, Cancel,
   Apply template…, modo avión con otro dispositivo, castellano y teléfono de 375 px).
 
-## Cómo quedó (las anotaciones de las fotos, v0.0XX)
+## Cómo quedó (las anotaciones de las fotos, v0.136)
 
 Hasta v0.133, una foto anotada (flechas, texto, lápiz: el mapa `photoMarkup` del documento de la página, `Doc_Anotar_Fotos.md`)
 llegaba **limpia** a una página creada desde una plantilla y a la plantilla guardada desde esa página: la plantilla copia los

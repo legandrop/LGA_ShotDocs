@@ -828,7 +828,7 @@ editor en `src/ui/markupClipboardEditor.ts`, y lo engancha `PageEditor.tsx` (el 
 - **Desde una página que solo se puede ver:** el navegador copia por su cuenta (sin el formato del editor), así que no
   se llevan, como hasta ahora la foto tampoco viajaba como foto del Drive.
 
-**Con las plantillas** (v0.0XX): las anotaciones también viajan al crear una página desde una plantilla del mismo proyecto y al
+**Con las plantillas** (v0.136): las anotaciones también viajan al crear una página desde una plantilla del mismo proyecto y al
 guardar una página como plantilla, con estas mismas reglas (`Doc_Plantillas.md`, "Cómo quedó (las anotaciones de las
 fotos)"); *Clear filled-in values* las saca junto con las fotos.
 
