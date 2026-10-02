@@ -87,12 +87,16 @@ export function openFindBar(): void {
  * coincidencia pedida (Docs/Doc_Buscar.md, sección 8). Con `focus`, el foco va al campo (así se sigue con
  * Enter); en el teléfono no, para no tapar la página con el teclado.
  */
-export function openFindBarAt(query: string, target: Omit<FindTarget, 'nonce'> | null, { focus = true }: { focus?: boolean } = {}): void {
+export function openFindBarAt(
+  query: string,
+  target: Omit<FindTarget, 'nonce'> | null,
+  { focus = true, matchCase = false, wholeWord = false }: { focus?: boolean; matchCase?: boolean; wholeWord?: boolean } = {},
+): void {
   set({
     open: true,
     query,
-    matchCase: false,
-    wholeWord: false,
+    matchCase,
+    wholeWord,
     status: null,
     prefill: false,
     focus: focus ? state.focus + 1 : state.focus,

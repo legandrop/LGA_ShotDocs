@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { schema } from './editorSchema';
-import { insertFiles, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
+import { insertFiles, isEmptyParagraph, isFilesTransfer, takeFiles, type FileEditor } from './fileDrop';
 
 // Soltar o pegar archivos (Docs/Doc_Adjuntos.md): se reconocen los eventos de archivos (y no los de HTML), se
 // leen en el acto, y se inserta un bloque `image` por archivo, en orden, sin cortar si uno falla.
@@ -105,6 +105,14 @@ describe('insertar archivos', () => {
     editor.replaceBlocks(editor.document, [{ type: 'paragraph', props: { question: true } as never, content: '' }]);
     await insertFiles(fe, [new File(['x'], 'b.pdf')], { blockId: editor.document[0].id, placement: 'after' });
     expect(editor.document[0].type).toBe('paragraph');
+    expect(editor.document[1].type).toBe('image');
+
+    // Un salto de hoja vacío (pageBreak) tampoco: el archivo va debajo y el salto queda.
+    editor.replaceBlocks(editor.document, [{ type: 'paragraph', props: { pageBreak: true } as never, content: '' }]);
+    expect(isEmptyParagraph(editor.document[0] as never)).toBe(false);
+    await insertFiles(fe, [new File(['x'], 'c.pdf')], { blockId: editor.document[0].id, placement: 'after' });
+    expect(editor.document[0].type).toBe('paragraph');
+    expect((editor.document[0].props as Record<string, unknown>).pageBreak).toBe(true);
     expect(editor.document[1].type).toBe('image');
   });
 

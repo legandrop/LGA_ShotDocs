@@ -3,6 +3,14 @@ import type { Dict } from './types';
 // La pantalla principal: abrir el workspace, la barra de arriba, el inicio y los avisos de invitación.
 
 export const shell = {
+  // Reemplazar en el proyecto (Docs/Doc_Buscar.md): lo que se ve con el panel cerrado y al salir mientras corre.
+  'replace.runningLeave': {
+    en: "Replacing in the project is still running. Wait until it finishes, or press Stop.",
+    es: "Todavía se está reemplazando en el proyecto. Esperá a que termine, o tocá Parar.",
+  },
+  'replace.bar': { en: "Replacing… {done} of {total} pages", es: "Reemplazando… {done} de {total} páginas" },
+  'replace.barUndo': { en: "Undoing… {done} of {total} pages", es: "Deshaciendo… {done} de {total} páginas" },
+  'replace.barStop': { en: "Stop", es: "Parar" },
   'shell.opening': { en: "Opening your workspace…", es: "Abriendo tu workspace…" },
   'shell.busy.title': { en: "Already open in another window", es: "Ya está abierta en otra ventana" },
   'shell.busy.text': {

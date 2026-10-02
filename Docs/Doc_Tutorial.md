@@ -77,6 +77,7 @@ BlockNote 0.55 que usamos (y los de Tiptap que trae). "Mod" es ⌘ en la Mac y C
 | Mod+Alt+S | Script (guion) | Editor | App |
 | Enter en una línea de Script | Sigue en Script; en una línea vacía, vuelve a párrafo | Editor | App |
 | Mod+Alt+0 | Párrafo común | Editor | BlockNote y app |
+| Mod+Enter | Salto de hoja: lo que sigue empieza en una hoja nueva (también "/" *Page break*) | Editor | App (`pageBreakExtension` en `editorSchema.ts`, Doc_Hojas_PDF.md) |
 | Mod+Alt+1 … 6 | Título 1 a 6 | Editor | BlockNote |
 | Mod+Alt+Q | Cita | Editor | BlockNote |
 | Mod+Shift+7 / 8 / 9 / 6 | Lista numerada / con viñetas / de casillas / plegable | Editor | BlockNote |
@@ -338,7 +339,7 @@ Arriba, un campo de búsqueda; abajo, las secciones:
 10. **Compartir y miembros:** permisos, invitados.
 11. **Papelera:** páginas y archivos, qué se recupera.
 12. **Sin red y sincronización:** qué quiere decir cada estado, por qué no se pierde nada.
-13. **Hojas, PDF e impresión.**
+13. **Hojas, PDF e impresión.** Con el salto de hoja (entrada `pageBreak`: Ctrl/⌘+Enter o "/" *Page break*).
 14. **Preferencias:** tema, letra, tamaño, ancho, idioma.
 15. **Atajos de teclado:** la tabla entera, por lugar (toda la app, editor, fotos, carrete, buscar, comentarios,
     árbol, menús), con los rótulos de la plataforma (⌘⌥M en la Mac, Ctrl+Alt+M en el resto). En el teléfono la

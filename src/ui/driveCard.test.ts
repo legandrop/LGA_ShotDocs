@@ -425,6 +425,24 @@ describe('pegar un link de Drive', () => {
     expect(editor.getTextCursorPosition().block.id).toBe(editor.document[2].id);
   });
 
+  it('"Card" en un salto de hoja vacío: la tarjeta sigue siendo salto', async () => {
+    const { drivePaste, editor } = withPaste();
+    editor.replaceBlocks(editor.document, [
+      { type: 'paragraph', content: 'Antes' },
+      { type: 'paragraph', props: paragraphProps('pageBreak') as never },
+      { type: 'paragraph', content: 'Después' },
+    ]);
+    editor.setTextCursorPosition(editor.document[1], 'start');
+    paste(editor, { 'text/plain': URL_FILE });
+    // Pegar en el salto vacío no le saca el salto.
+    expect((editor.document[1].props as Record<string, unknown>).pageBreak).toBe(true);
+    drivePaste.choose(editor, 'card');
+    await tick();
+    expect(texts(editor)).toEqual(['Antes', URL_FILE, 'Después']);
+    expect(isCard(editor, 1)).toBe(true);
+    expect((editor.document[1].props as Record<string, unknown>).pageBreak).toBe(true);
+  });
+
   it('"Card" en medio de un texto saca el link de ahí y pone la tarjeta debajo', () => {
     const { drivePaste, editor } = withPaste();
     editor.replaceBlocks(editor.document, [{ type: 'paragraph', content: 'Mirá  y avisame' }]);

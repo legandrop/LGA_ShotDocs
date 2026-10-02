@@ -57,6 +57,8 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'script', keys: ['Mod-Alt-s'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'scriptEnter', keys: ['Enter'], place: 'editor', context: 'script', owner: 'app', source: 'keymap' },
   { id: 'paragraph', keys: ['Mod-Alt-0'], place: 'editor', owner: 'app', source: 'keymap' },
+  // El salto de hoja (Docs/Doc_Hojas_PDF.md): Ctrl+Enter como en los procesadores de texto (⌘↩ en la Mac).
+  { id: 'pageBreak', keys: ['Mod-Enter'], place: 'editor', owner: 'app', source: 'keymap' },
   { id: 'collapse', keys: ['Mod-Alt-Enter'], place: 'editor', owner: 'app', source: 'keymap' },
   // Para todos (Doc_Colapsar.md, entrega 2): solo quien puede editar; si no, como sin Shift. Shift+clic en el
   // triángulo hace lo mismo (es un clic: va en el texto de la ayuda, no en el registro).

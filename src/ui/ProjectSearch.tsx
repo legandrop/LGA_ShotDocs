@@ -6,11 +6,13 @@ import { normalize } from '../search/normalize';
 import { nameMatches, parseWords, rangesOf, titlesOnly, type PageHit, type SearchWord, type Snippet } from '../search/projectIndex';
 import { usePermissions, useServices, useSyncStatus, useTree } from '../services';
 import type { ProjectRow } from '../sync/types';
-import { CloseIcon, PageIcon, PlusIcon, SearchIcon } from './icons';
+import { CloseIcon, ExpandIcon, PageIcon, PlusIcon, SearchIcon } from './icons';
 import { notify } from './notice';
 import { useCurrentProject, useSwitchProject } from './project';
 import { Monogram } from './ProjectSwitcher';
+import { ReplaceResults } from './ProjectReplace';
 import { searchSession, type ResultRequest } from './projectSearchUi';
+import { useReplaceSession } from './replaceUi';
 
 // El panel de buscar en el proyecto (Docs/Doc_Buscar.md, secciones 7 y 8, y "Cómo quedó (entrega 2)"). Se abre
 // con la lupa de la barra lateral o con Ctrl/⌘+K; en la computadora es una ventana arriba al centro y en el
@@ -83,6 +85,11 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
   const going = useRef(false);
   const indexRevision = useSyncExternalStore(index.subscribe, index.getRevision);
   const treeRevision = tree.getRevision();
+  // Reemplazar en el proyecto (Docs/Doc_Buscar.md, "Reemplazar en el proyecto"): la flecha, solo con los permisos
+  // conocidos y alguna página que se pueda editar (sin datos de permisos todo daría "puede": corrección 3).
+  const { session: replace, ui: replaceUi } = useReplaceSession();
+  const canReplace = perms.known && index.pagesOf(projectId).some((p) => perms.canEditPage(p.id));
+  const replacing = canReplace && replaceUi.open;
 
   useEffect(() => {
     input.current?.focus();
@@ -159,8 +166,9 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
     !allProjects.some((p) => nameMatches(p.name, words));
 
   const items: Item[] = [];
-  for (const p of projects) items.push({ kind: 'project', id: `search-project-${p.id}`, project: p });
-  if (typed) {
+  // Con el reemplazo desplegado, la lista es la de cambios (ProjectReplace.tsx), no estas opciones.
+  if (!replacing) for (const p of projects) items.push({ kind: 'project', id: `search-project-${p.id}`, project: p });
+  if (typed && !replacing) {
     for (const hit of results.hits) {
       items.push({ kind: 'page', id: `search-page-${hit.page.id}`, hit });
       hit.snippets.forEach((snippet, i) => items.push({ kind: 'snippet', id: `search-snippet-${hit.page.id}-${i}`, hit, snippet }));
@@ -168,7 +176,7 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
     if (results.total > results.hits.length) items.push({ kind: 'more', id: 'search-more' });
   }
   // Al final: con páginas que coinciden, Enter abre la primera y no crea nada.
-  if (offerCreate) items.push({ kind: 'create', id: 'search-create', name: newName });
+  if (offerCreate && !replacing) items.push({ kind: 'create', id: 'search-create', name: newName });
   const current = items[Math.min(active, items.length - 1)];
 
   useEffect(() => {
@@ -285,6 +293,18 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
     >
       <div ref={panel} className="search-panel" role="dialog" aria-modal="true" aria-label={tr('search.label')} onKeyDown={onPanelKey}>
         <div className="search-field">
+          {canReplace && (
+            <button
+              className={`find-button find-toggle search-replace-toggle${replacing ? ' on' : ''}`}
+              aria-expanded={replacing}
+              aria-label={tr(replacing ? 'replace.hide' : 'replace.show')}
+              data-tip={tr(replacing ? 'replace.hide' : 'replace.show')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => replace.update({ open: !replaceUi.open })}
+            >
+              <ExpandIcon size={14} />
+            </button>
+          )}
           <SearchIcon size={18} />
           <input
             ref={input}
@@ -308,6 +328,9 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
             <CloseIcon size={16} />
           </button>
         </div>
+        {replacing ? (
+          <ReplaceResults index={index} projectId={projectId} searched={searched} indexRevision={indexRevision} onGo={go} />
+        ) : (
         <div className="search-results">
           {/* Fuera de la lista: los avisos, la ayuda y la cantidad (anunciada a los lectores de pantalla). */}
           {notices.length > 0 && <p className="search-notice">{notices.join(' · ')}</p>}
@@ -400,7 +423,8 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
           </div>
           {typed && results.total === 0 && !info.building && <p className="search-empty muted">{tr('search.none')}</p>}
         </div>
-        <p className="search-footer muted">{tr('search.keys')}</p>
+        )}
+        {!replacing && <p className="search-footer muted">{tr('search.keys')}</p>}
       </div>
     </div>
   );

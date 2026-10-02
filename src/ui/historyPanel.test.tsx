@@ -229,9 +229,12 @@ describe('la pantalla del historial', () => {
       }),
     );
     const actions: { message: string; action: { label: string; run: () => void } }[] = [];
-    const onAction = (e: Event) => actions.push((e as CustomEvent).detail);
-    window.addEventListener('shotdocs:notice-action', onAction);
-    offs.push(() => window.removeEventListener('shotdocs:notice-action', onAction));
+    const onAction = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail === 'object' && detail.action) actions.push(detail);
+    };
+    window.addEventListener('shotdocs:notice', onAction);
+    offs.push(() => window.removeEventListener('shotdocs:notice', onAction));
     const host = await mount(services(a, server.ownerId), pageId);
     await act(async () => (host.querySelectorAll('.history-session')[1] as HTMLButtonElement).click());
     await settle(300);

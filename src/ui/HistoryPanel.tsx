@@ -12,7 +12,7 @@ import { Permissions } from '../sync/access';
 import { versionNode } from './historyRestore';
 import { historyServices } from './historyServices';
 import { closeHistory, requestRestore } from './historyUi';
-import { dismissNotice, notify, notifyWithAction } from './notice';
+import { dismissNotice, notify } from './notice';
 import { BlockEditor } from './PageEditor';
 import type { FindEditor } from './FindBar';
 import type { Schema } from '@tiptap/pm/model';
@@ -267,7 +267,7 @@ export function HistoryPanel({ pageId }: { pageId: string }) {
       const key = `history:${pageId}:${session.seq}:${Date.now()}`;
       const date = whenLabel(session.end, lang);
       closeHistory();
-      notifyWithAction(t('history.restored', { date }), {
+      notify(t('history.restored', { date }), {
         key,
         label: t('history.undo'),
         run: () => {

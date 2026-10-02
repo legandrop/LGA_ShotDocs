@@ -83,6 +83,8 @@ export const QuestionIcon = icon('M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z
 export const HelpIcon = icon('M10 3.25a6.75 6.75 0 1 1 0 13.5 6.75 6.75 0 0 1 0-13.5zM8.1 8.2a1.95 1.95 0 1 1 2.75 1.78c-.5.25-.85.7-.85 1.27v.35M10 13.75v.1', {
   strokeWidth: 1.5,
 });
+// El salto de hoja: el pie de una hoja y el comienzo de la siguiente, con la línea punteada entre las dos.
+export const PageBreakIcon = icon('M5.5 2.75v4.5h9v-4.5M5.5 17.25v-4.5h9v4.5M3 10h2M7 10h2M11 10h2M15 10h2');
 export const SheetIcon = icon('M5.5 2.75h9v14.5h-9zM7.75 5.5h4.5M7.75 8h4.5M7.75 10.5h3');
 export const PrintIcon = icon(
   'M5.5 7.5V3.25h9V7.5M5.5 14H3.75a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1h12.5a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H14.5M5.5 11.5h9v5.25h-9z',

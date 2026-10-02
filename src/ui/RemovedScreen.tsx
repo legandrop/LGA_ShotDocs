@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { t, useT, type Translate } from '../i18n';
 import { importJobFor } from '../import/importJob';
+import { replaceBlocksLeaving } from './replaceUi';
 import { clearInviteTarget } from '../invite';
 import { formatSize } from '../media/fileTrash';
 import type { MediaRecord } from '../media/mediaDb';
@@ -167,6 +168,8 @@ export function RemovedScreen() {
 
   /** Con una importación de Coda en curso, cerrar la sesión o borrar las bases la cortaría: se espera. */
   function importing(): boolean {
+    // Un reemplazo en todo el proyecto en curso, igual (escribiría en una base cerrada o borrada).
+    if (replaceBlocksLeaving()) return true;
     if (!importJobFor(tree).get().running) return false;
     alert(t('import.running'));
     return true;
