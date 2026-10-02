@@ -630,5 +630,7 @@ repartidos, el `colwidth` de siempre de las celdas) para entrar en una A4 vertic
 - **Auditoría independiente sobre `d772721`** (2026-10-02): pasa con observaciones, sin bloqueantes. Corregidas la
   prueba y los docs del punto de escritura, el foco con título, deshacer desde el título, la barra lateral con texto,
   las pruebas de las guardas de vacía y `template_id` en la recuperación; al roadmap, *Exit* de la vista previa y el
-  aviso de ProseMirror al abrirla.
+  aviso de ProseMirror al abrirla. La re-verificación encontró que rehacer desde el título devolvía la selección que
+  guardó el deshacer (Enter llevaba al pie o, tras dos vueltas, al rótulo de la ficha): ahora rehacer vuelve a poner
+  el punto de escritura en el primer dato (`placeAtFirstDatum`).
 - **Pendiente para Lega:** mirar las tres vistas previas en la computadora y en el iPhone (PL1) y decir qué cambiar.
