@@ -1,4 +1,3 @@
-import { defaultDeleteFilter, defaultProtectedNodes } from 'y-prosemirror';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 
@@ -159,6 +158,8 @@ export class UndoTimeline {
   private counter = 0;
   private lost: LostMark[] = [];
   private readonly replaces = new Map<string, ReplaceEntry>();
+  /** El filtro de borrado del `UndoManager` de y-prosemirror, del primer editor que se anotó (para `tempManager`). */
+  private editorFilter: UndoManager['deleteFilter'] | null = null;
   /** Los pasos de las pilas que son de un reemplazo (no cuentan como pasos de su página). */
   private readonly tagged = new WeakMap<StackItem, ReplaceEntry>();
   private readonly maxPages: number;
@@ -217,6 +218,9 @@ export class UndoTimeline {
     h.um = um;
     h.info = info;
     cleanMeta([...um.undoStack, ...um.redoStack], info.binding ?? null);
+    // El filtro de borrado de y-prosemirror (sin envolver): el `UndoManager` de un momento del reemplazo usa el mismo.
+    // Se toma del editor y no se importa y-prosemirror acá: este archivo va en la primera carga (firstLoad.test.ts).
+    if (!isProtected(um)) this.editorFilter = um.deleteFilter;
     protectOthers(um);
     const page = h;
     const onAdded = (e: StackEvent) => this.onStackItem(page, um, e, true);
@@ -426,7 +430,8 @@ export class UndoTimeline {
   writeReplace(pageId: string, doc: Y.Doc, opId: string, origin: symbol, write: () => void, as: 'new' | StepKind = 'new'): boolean {
     const entry = this.replaces.get(opId);
     const h = this.pages.get(pageId);
-    if (!entry || entry.where !== (as === 'new' ? 'pending' : as) || !h || h.doc !== doc) {
+    // Sin editor en pantalla hace falta el filtro de un editor (siempre lo hay: los pasos de página salen de un editor).
+    if (!entry || entry.where !== (as === 'new' ? 'pending' : as) || !h || h.doc !== doc || (!h.um && !this.editorFilter)) {
       write();
       return false;
     }
@@ -435,7 +440,7 @@ export class UndoTimeline {
     // deshacer de Yjs: así lo que se rehaga después alrededor sigue a estas letras y no a las de antes (las anclas
     // escriben letras nuevas). Sin borrar nada para rehacer (Yjs no borra con `undoing` / `redoing`).
     const temp = !h.um;
-    const um = h.um ?? tempManager(doc);
+    const um = h.um ?? tempManager(doc, this.editorFilter!);
     const target = () => (as === 'undo' ? um.redoStack : um.undoStack);
     const before = target().length;
     um.stopCapturing();
@@ -496,7 +501,7 @@ export class UndoTimeline {
     const entry = this.replaces.get(opId);
     const h = this.pages.get(pageId);
     const item = entry?.items.get(pageId);
-    if (!entry || !h || h.doc !== doc || !item) return 'none';
+    if (!entry || !h || h.doc !== doc || !item || (!h.um && !this.editorFilter)) return 'none';
     const list = this.stack(h, kind);
     const at = list.indexOf(item);
     if (at < 0) {
@@ -532,7 +537,7 @@ export class UndoTimeline {
         if (!keep || failed) other.pop();
       }
     } else {
-      const um = tempManager(h.doc);
+      const um = tempManager(h.doc, this.editorFilter!);
       list.splice(at, 1);
       if (kind === 'undo') um.undoStack = [item];
       else um.redoStack = [item];
@@ -857,14 +862,14 @@ export function hasOthersInside(item: ItemLike, client = item.id.client): boolea
 
 /**
  * Un `UndoManager` de un momento sobre el contenido de una página sin editor en pantalla (escribir, deshacer o rehacer
- * el paso de un reemplazo), con las mismas opciones que el de y-prosemirror (el filtro que protege los párrafos y la
- * marca de huecos estables, lo de fondo afuera) y lo ajeno protegido como en el del editor (B1). Riesgo 2 del diseño:
- * una prueba lo compara con el del editor.
+ * el paso de un reemplazo), con las mismas opciones que el de y-prosemirror: su filtro de borrado (protege los párrafos
+ * y la marca de huecos estables; la línea de tiempo lo toma del editor), lo de fondo afuera, y lo ajeno protegido como
+ * en el del editor (B1). Riesgo 2 del diseño: una prueba lo compara con el del editor.
  */
-export function tempManager(doc: Y.Doc): UndoManager {
+export function tempManager(doc: Y.Doc, deleteFilter: UndoManager['deleteFilter']): UndoManager {
   const um = new Y.UndoManager(doc.getXmlFragment(CONTENT_FRAGMENT), {
     trackedOrigins: new Set(),
-    deleteFilter: (item) => defaultDeleteFilter(item, defaultProtectedNodes),
+    deleteFilter,
     captureTransaction: (tr) => tr.meta.get('addToHistory') !== false,
   });
   protectOthers(um);
@@ -872,6 +877,8 @@ export function tempManager(doc: Y.Doc): UndoManager {
 }
 
 const protectedManagers = new WeakSet<UndoManager>();
+
+const isProtected = (um: UndoManager) => protectedManagers.has(um);
 
 /** Envuelve el filtro de borrado del `UndoManager` (una vez): lo de siempre y, además, nada con lo de otro adentro. */
 function protectOthers(um: UndoManager): void {

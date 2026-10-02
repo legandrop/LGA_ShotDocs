@@ -3,7 +3,7 @@
 // reemplazo del proyecto como UN paso de la línea de tiempo, con el editor real, `PageDocs` de verdad y el motor de
 // reemplazar (`ProjectReplace`) con su registro en `meta`. En las páginas con historia en la sesión el reemplazo entra
 // en la pila de Yjs de la página (deshacerlo vuelve a poner las mismas letras); en las demás, las anclas.
-import { ySyncPluginKey } from 'y-prosemirror';
+import { defaultDeleteFilter, defaultProtectedNodes, ySyncPluginKey } from 'y-prosemirror';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { metaOf, ProjectReplace, type ReplaceRequest } from '../search/projectReplace';
@@ -497,17 +497,21 @@ describe('el reemplazo en la línea de tiempo (entrega 2)', () => {
   });
 
   it('el UndoManager de un momento tiene las mismas opciones que el del editor (riesgo 2)', async () => {
-    const { app, go, d, ids } = await setup({ A: ['la cámara', 'otra'] });
+    const { app, go, d, ids, timeline } = await setup({ A: ['la cámara', 'otra'] });
     await go('A');
     const editorUm = undoManager(app.editor!);
     const doc = await d.docs.open(ids.A);
-    const temp = tempManager(doc);
+    // La línea de tiempo toma el filtro del editor (sin envolver): es el de y-prosemirror.
+    const filter = (timeline as unknown as { editorFilter: (i: Y.Item) => boolean }).editorFilter;
+    const temp = tempManager(doc, filter);
     expect(temp.scope).toEqual(editorUm.scope);
     expect(temp.trackedOrigins.has(null)).toBe(false);
     const items: Y.Item[] = [];
     for (const structs of doc.store.clients.values()) for (const s of structs) if (s instanceof Y.Item) items.push(s);
     expect(items.length).toBeGreaterThan(5);
     expect(items.map((i) => temp.deleteFilter(i))).toEqual(items.map((i) => editorUm.deleteFilter(i)));
+    expect(items.map((i) => filter(i))).toEqual(items.map((i) => defaultDeleteFilter(i, defaultProtectedNodes)));
+    expect(items.some((i) => !filter(i))).toBe(true);
     const fake = { meta: new Map([['addToHistory', false]]) } as unknown as Y.Transaction;
     expect(temp.captureTransaction(fake)).toBe(editorUm.captureTransaction(fake));
     temp.destroy();

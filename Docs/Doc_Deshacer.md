@@ -832,6 +832,9 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
 - **Un reemplazo que no cambió nada no borra lo de rehacer** (`beginReplace` va con el primer cambio).
 - **Sin *Show*** en el aviso de ⌘Z cuando algo había cambiado: el aviso lo cuenta ("2 had changed…"); *Show* tampoco
   existía antes. Al roadmap.
+- **El filtro del `UndoManager` de un momento se toma del editor** (el primero que se anota en la línea de tiempo) en vez
+  de importar y-prosemirror: `undoTimeline.ts` va en la primera carga y la prueba `firstLoad.test.ts` no deja que la
+  arrastre. Siempre hay uno: una página con historia la tuvo en pantalla. Una prueba lo compara con el de y-prosemirror.
 - **A5, A7 y A9** (pruebas de la entrega 1) van con esta entrega.
 
 ### 18.3 Lo medido
@@ -840,9 +843,11 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
 |---|---|
 | Aceptación en Chromium (arnés con la app de verdad, servidor en memoria, 53 páginas; Windows con Ctrl, Mac con ⌘, sin red y a 390 px) | *Replace all* "camara" → "Camera" en 53; ⌘Z en el panel lo deshace y ⌘⇧Z lo rehace (DH9); en Shot 12, ⌘Z saca lo escrito, ⌘Z deshace el reemplazo en las 53 sin moverte ("Undid … in 53 pages · Redo"), ⌘Z va a Shot 3 y deja "plano" exacto; tres ⌘⇧Z vuelven todo en orden; el otro dispositivo baja lo mismo; sin red queda pendiente y sube al volver; 0 errores en la consola. 60 de 60 comprobaciones |
 | El hueco de 1.3 (D167) con el editor real | "Toma 1: " exacto, también cambiando de página; sin la línea de tiempo, "Toma 1: cámara" (la prueba lo muestra) |
-| Al azar con el editor, reemplazos en las tres páginas (300 semillas de 40 acciones) | ver 18.5 |
+| Al azar con el editor, 3 páginas, reemplazos en las tres (el motor de verdad, con su registro; 300 semillas de 40 acciones, 753 reemplazos) | deshacer todo: 300 de 300 exactas, 0 con letras de menos ni de más; rehacer todo: 300 de 300 (sin los dos arreglos de 18.2: rehacer todo exacto en 9 de 12 semillas sin el primero; deshacer todo exacto en 298 de 300 sin el segundo) |
+| Lo mismo con el *Undo* del panel fuera de orden y otra persona escribiendo y borrando en las tres (625 reemplazos, 239 *Undo* del panel) | 0 letras del otro borradas, 300 de 300 iguales en los dos dispositivos, 0 excepciones de Yjs; 1 copia propia de lo ajeno (el caso de Yjs de 17.2) |
+| Las de la entrega 1 (texto, bloques, con el otro), otra vez con 300 | sin cambios: 300 de 300, 300 de 300, 0 letras del otro |
 | `planRedo` al azar con otra persona (300 semillas) | nada del otro borrado, los dos iguales; sin el otro, exacto |
-| Pruebas de mutación | ver 18.5 |
+| Pruebas de mutación (cada protección sacada) | 19 de 21 hacen fallar alguna prueba: entrar en la pila, cortar el tiempo antes y después, el paso marcado, fuera de orden solo ese paso y sin rehacer, las anclas en orden a la pila, borrar lo de rehacer (al escribir y al reemplazar), `planRedo` solo donde sigue lo de antes, DH9 (los dos campos), mantener apretado, las opciones del `UndoManager` de un momento, sacar lo que quedó, el vecino copia, y A5, A7 y A9. Sobreviven dos: `busy` mientras se deshace un reemplazo (el motor ya no deja correr dos a la vez) y olvidar por el tope el paso del reemplazo en vez de la entrada (en la vuelta siguiente se olvida la entrada; en el peor caso esa página va por las anclas) |
 
 ### 18.4 Lo que falta
 
