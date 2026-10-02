@@ -30,9 +30,9 @@ import { detectPlatform, isMobilePlatform } from './install';
 // - Firefox, Safari y los teléfonos: el zip se arma en memoria con tope (1 GB; 500 MB en un teléfono, D24) y al
 //   final se guarda con un clic (un gesto nuevo: Safari no deja bajar sin uno después de minutos de espera).
 
-/** Lo más que se arma en memoria (sin `showSaveFilePicker`). */
+/** Lo más que se arma en memoria (sin `showSaveFilePicker`): 1 GB, o 500 MB en un teléfono (en las unidades de `formatSize`). */
 export function memoryCap(mobile = isMobilePlatform(detectPlatform())): number {
-  return mobile ? 500 * 1000 * 1000 : 1000 * 1000 * 1000;
+  return mobile ? 500 * 1024 ** 2 : 1024 ** 3;
 }
 
 // Lo que da Chrome y Edge (no está en los tipos de TypeScript).
@@ -223,7 +223,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
       <p className="muted small">
         {tr('folders.zipListing', {
           files: tr('folders.files', { count: phase.seen.files }),
-          dirs: tr('folders.dirs', { count: phase.seen.folders + 1 }),
+          dirs: tr('folders.dirs', { count: phase.seen.folders }),
         })}
       </p>
     );
@@ -243,7 +243,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
           <span className="folder-summary-counts">
             {tr('folders.counts', {
               files: tr('folders.files', { count: plan.files.length }),
-              dirs: tr('folders.dirs', { count: plan.dirs.length + 1 }),
+              dirs: tr('folders.dirs', { count: plan.dirs.length }),
               size: formatSize(plan.bytes),
             })}
           </span>
@@ -258,7 +258,7 @@ export function FolderDownloadDialog({ fileId, name, onClose }: { fileId: string
     actions = (
       <>
         <button className="button" onClick={close}>
-          {tr('common.cancel')}
+          {can ? tr('common.cancel') : tr('common.close')}
         </button>
         {can && showDirectoryPicker && (
           <button className="button" data-tip={tr('folders.zipToFolderTip')} onClick={() => void start(plan, 'dir')}>
