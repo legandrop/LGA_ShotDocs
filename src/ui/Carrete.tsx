@@ -2,7 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import { createPortal } from 'react-dom';
 import { t as current, useT, type Translate } from '../i18n';
 import '../i18n/lazy/carrete';
+import { extensionLabel } from '../media/attachments';
+import { formatSize } from '../media/fileTrash';
 import type { MediaKind } from '../media/probe';
+import { openInNewTab } from './attachmentOpen';
 import {
   clampZoom,
   classifyDrag,
@@ -27,8 +30,8 @@ import {
   type Size,
   type Zoom,
 } from './carreteModel';
-import { downloadProps, isOffline, type CarreteLoader, type Full } from './carreteLoader';
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon } from './icons';
+import { downloadProps, isOffline, type AttachmentView, type CarreteLoader, type Full } from './carreteLoader';
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, OpenIcon } from './icons';
 import { shortcutLabel } from './shortcuts';
 
 // El carrete (paso 7 de Docs/Plan_Workspaces.md; Docs/Doc_Carrete.md): todas las fotos y videos de la
@@ -36,6 +39,8 @@ import { shortcutLabel } from './shortcuts';
 // los botones o deslizando; cerrar con Escape, el botón o deslizando hacia abajo; zoom con pellizco,
 // rueda y doble toque. Primero se ve la miniatura y después lo grande (la copia del dispositivo o el
 // archivo con un pase del portero). La lógica (orden, límites, zoom, gestos) está en `carreteModel.ts`.
+// Un adjunto (un PDF, un zip…; Docs/Doc_Adjuntos.md, entrega 2) se ve en grande: su vista previa (la primera
+// página de un PDF) o su tarjeta, el tipo y el peso, y *Open* (si el navegador lo sabe mostrar) y *Download*.
 
 /** Separación entre un elemento y el siguiente mientras se desliza. */
 const GAP = 24;
@@ -62,9 +67,24 @@ interface View {
   fullShown: boolean;
   /** La vista previa es la versión grande guardada en el dispositivo (para el aviso sin red). */
   large: boolean;
+  /** Es un adjunto (ver `AttachmentView`), o `null`. */
+  file: AttachmentView | null;
+  /** La dirección para abrir el adjunto en otra pestaña: `undefined` mientras se prepara, `null` si no se puede. */
+  openUrl?: string | null;
 }
 
-const EMPTY_VIEW: View = { kind: null, name: '', preview: null, full: null, state: 'idle', error: null, natural: null, fullShown: false, large: false };
+const EMPTY_VIEW: View = {
+  kind: null,
+  name: '',
+  preview: null,
+  full: null,
+  state: 'idle',
+  error: null,
+  natural: null,
+  fullShown: false,
+  large: false,
+  file: null,
+};
 
 /** Formatos de foto que muchos navegadores no abren. */
 const RARE_PHOTO = /\.(heic|heif|dng|tiff?|raw|cr2|cr3|nef|arw)$/i;
@@ -121,7 +141,18 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
   const historyToken = useRef(`carrete-${Math.random().toString(36).slice(2)}`);
   const closing = useRef(false);
 
-  const item = items[index];
+  // La lista puede cambiar con el carrete abierto (llegó la respuesta de qué era un archivo: una carpeta sale). Se
+  // sigue en el mismo elemento; si era el que salió, en el que quedó en su lugar.
+  const shownItems = useRef(items);
+  if (shownItems.current !== items) {
+    const was = shownItems.current[index]?.key;
+    shownItems.current = items;
+    const at = items.findIndex((it) => it.key === was);
+    const next = at >= 0 ? at : Math.min(index, Math.max(0, items.length - 1));
+    if (next !== index) setIndex(next);
+  }
+
+  const item = items[Math.min(index, items.length - 1)];
   const view = settled((item && views[item.url]) ?? EMPTY_VIEW);
   const fit = view.natural ? fitSize(view.natural, stage) : null;
   const zoomable = view.kind === 'image' && !!view.preview;
@@ -279,10 +310,23 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     for (const i of [index, ...neighbors(index, count)]) {
       const it = items[i];
       const known = viewsRef.current[it.url];
-      if (known?.preview && known.kind) continue;
-      void loader.preview(it).then((p) => patch(it.url, { kind: p.kind, name: p.name, preview: p.preview, large: !!p.large }));
+      if (known?.preview && (known.kind || known.file)) continue;
+      void loader.preview(it).then((p) => patch(it.url, { kind: p.kind, name: p.name, preview: p.preview, large: !!p.large, file: p.file ?? null }));
     }
   }, [index, count, items, loader, patch, online]);
+
+  // Un adjunto que se puede abrir: la dirección se prepara apenas se lo ve (Safari no deja abrir una pestaña
+  // después de esperar), y otra vez si vuelve la red.
+  const canOpenNow = !!view.file?.canOpen;
+  useEffect(() => {
+    const it = items[index];
+    const known = it ? viewsRef.current[it.url] : undefined;
+    if (!it || !canOpenNow || !loader.open || known?.openUrl) return;
+    void loader
+      .open(it)
+      .catch(() => null)
+      .then((url) => patch(it.url, { openUrl: url }));
+  }, [index, items, loader, patch, online, canOpenNow, attempt]);
 
   // Lo grande del elemento actual; si no se pudo por la red, se vuelve a pedir cuando vuelve.
   useEffect(() => {
@@ -578,7 +622,9 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     };
     const alt = it.caption || v.name || it.name;
     let body;
-    if (current && v.kind === 'video' && v.full && v.state !== 'unsupported' && v.state !== 'unplayable' && v.state !== 'offline') {
+    if (v.file) {
+      body = fileBody(it, v, current, alt);
+    } else if (current && v.kind === 'video' && v.full && v.state !== 'unsupported' && v.state !== 'unplayable' && v.state !== 'offline') {
       body = (
         <video
           key={v.full.url}
@@ -630,7 +676,46 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
     );
   };
 
-  const notice = noticeFor(view, name, tr);
+  /** Un adjunto en grande: la vista previa (o la tarjeta), el tipo y el peso, y abrir y bajar. */
+  const fileBody = (it: CarreteItem, v: View, current: boolean, alt: string) => {
+    const file = v.file!;
+    const meta = [extensionLabel(v.name || it.name, file.mime), file.size ? formatSize(file.size) : ''].filter(Boolean).join(' · ');
+    const inline = current ? noticeFor(v, v.name || it.name, tr) : null;
+    return (
+      <div className="carrete-file" data-card={file.card ? '' : undefined}>
+        {v.preview && <img className="carrete-file-preview" src={v.preview} alt={alt} draggable={false} />}
+        {!file.card && meta && <p className="carrete-file-meta">{meta}</p>}
+        {current && (
+          <div className="carrete-file-actions">
+            {file.canOpen && (
+              <button
+                className="carrete-notice-btn carrete-file-open"
+                disabled={!v.openUrl}
+                onClick={() => v.openUrl && openInNewTab(v.openUrl)}
+              >
+                <OpenIcon size={18} />
+                <span>{v.openUrl === undefined && online ? tr('carrete.preparing') : tr('carrete.open')}</span>
+              </button>
+            )}
+            {downloadLink('carrete-notice-btn', true)}
+          </div>
+        )}
+        {inline && (
+          <p className="carrete-file-note" role="status">
+            {inline}
+          </p>
+        )}
+        {inline && v.state === 'failed' && (
+          <button className="carrete-notice-btn" onClick={retry}>
+            {tr('common.retry')}
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // Un adjunto dice lo suyo adentro de su tarjeta grande.
+  const notice = view.file ? null : noticeFor(view, name, tr);
 
   return createPortal(
     <div
@@ -717,18 +802,23 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
   );
 }
 
-/** Un video está listo apenas tiene dirección: el reproductor muestra su propia carga. */
+/** Un video está listo apenas tiene dirección: el reproductor muestra su propia carga. Un adjunto, también. */
 function settled(v: View): View {
-  return v.kind === 'video' && v.full && v.state === 'loading' ? { ...v, state: 'ready' } : v;
+  return (v.kind === 'video' || v.file) && v.full && v.state === 'loading' ? { ...v, state: 'ready' } : v;
 }
 
 /** El aviso bajo la foto o el video, si hace falta uno. */
 export function noticeFor(
-  view: Pick<View, 'kind' | 'state' | 'preview' | 'error'> & { large?: boolean },
+  view: Pick<View, 'kind' | 'state' | 'preview' | 'error'> & { large?: boolean; file?: AttachmentView | null },
   name: string,
   tr: Translate = current,
 ): string | null {
   const video = view.kind === 'video';
+  if (view.file) {
+    if (view.state === 'offline') return tr('carrete.offlineFile');
+    if (view.state === 'failed') return view.error ? tr('carrete.failedFileReason', { reason: view.error }) : tr('carrete.failedFile');
+    return null;
+  }
   switch (view.state) {
     case 'offline':
       if (!view.kind && !view.preview) return tr('carrete.offlineMissing');

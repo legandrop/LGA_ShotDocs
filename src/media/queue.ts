@@ -1,8 +1,8 @@
 import { localize, stored, t } from '../i18n';
 import { FileRejected } from '../sync/files';
 import { APP_OUTDATED, type MediaRemote } from '../sync/remote';
-import { errorMessage, isNetworkError, isTimeout, RemoteError } from '../sync/types';
-import { attachmentCardUrl, cleanFileName, EXTENSION_MIME, fileKind, folderCardUrl, FOLDER_MIME, isFolderMime, mimeFromName, type FileKind } from './attachments';
+import { errorMessage, isNetworkError, isTimeout, RemoteError, STALLS_TO_CLOSE_ROUND } from '../sync/types';
+import { attachmentCardUrl, blobToDataUrl, cleanFileName, EXTENSION_MIME, fileKind, folderCardUrl, FOLDER_MIME, isFolderMime, mimeFromName, type FileKind } from './attachments';
 import type { KnownFile, MediaDb, MediaLink, MediaRecord } from './mediaDb';
 import { AlreadySentError, PorteroError, UploadError, localDay, type Portero, type UploadProgress, type VerifyResult } from './portero';
 import {
@@ -26,6 +26,7 @@ import type { DueFileRow, MediaFileRow } from '../sync/types';
 import { HEIC_TIMEOUT_MS, HeicError, heicFailure, isHeicFile, isHeicType, jpegName, JPEG_TYPE } from './heic';
 import { convertHeic as convertHeicNow } from './heicConvert';
 import { dropCopy, readCopy, readOfflineView } from './offlineStore';
+import { attachmentPreview, previewable, PreviewUnavailable } from './pdfPreview';
 
 // La cola de fotos y videos (paso 6 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Archivos
 // grandes"). El archivo se guarda primero en el dispositivo (base `<base local>:media`) y en la página queda
@@ -184,6 +185,11 @@ function flipLink(link: MediaLink, removed: boolean): MediaLink {
  */
 export const STALLS_BEFORE_RENEW = 2;
 
+/** El archivo ya se trabó (su subida al portero o su miniatura a Storage) y todavía no avanzó desde entonces. */
+function hasStalled(record: MediaRecord): boolean {
+  return (record.stalls ?? 0) > 0 || (record.thumbStalls ?? 0) > 0;
+}
+
 /** Qué hacer con un error: esperar la red, reintentar más tarde, o dejarlo a la vista hasta "Retry". */
 export function classify(err: unknown): Outcome {
   if (err instanceof UploadError && err.cancelled) return 'cancelled';
@@ -233,6 +239,11 @@ export interface MediaQueueOptions {
   /** El proyecto de una página (se guarda con el archivo). */
   projectOf?: (pageId: string) => string | undefined;
   probe?: (file: Blob, mime: string) => Promise<Probe>;
+  /**
+   * La vista previa de un adjunto (la primera página de un PDF, `pdfPreview.ts`), o `null` si no tiene. Tira
+   * `PreviewUnavailable` si el lector no se pudo cargar (se prueba otra vez más tarde).
+   */
+  preview?: (file: Blob, mime: string, name: string, onStart?: () => Promise<boolean>) => Promise<Blob | null>;
   playMark?: (thumb: Blob) => Promise<Blob>;
   /** La imagen para la página cuando la miniatura queda chica (ver `MediaQueue.view`), de lado mayor `side`. */
   viewImage?: (file: Blob, mime: string, side: number) => Promise<Blob | null>;
@@ -430,6 +441,12 @@ export class MediaQueue {
   /** Archivos cuyo estado en la papelera ya se preguntó en esta sesión (para mostrarlos como borrados). */
   private readonly deletedChecked = new Set<string>();
   private running: Promise<void> | null = null;
+  /**
+   * La cola dejó de subir archivos porque el portero o Storage no contestan para nadie (ver `round`): hasta
+   * `until` no se vuelve a probar, y cada vez que vuelve a pasar se espera más (`count`). Vuelve a cero cuando un
+   * archivo termina de subir o con "Retry". Solo en memoria: al recargar se prueba enseguida.
+   */
+  private stallPause: { until: number; count: number } | null = null;
   private again = false;
   private stopped = false;
   private controller: AbortController | null = null;
@@ -458,6 +475,11 @@ export class MediaQueue {
   private persistAsked = false;
   private readonly thumbListeners = new Set<(id: string) => void>();
   private readonly probe: (file: Blob, mime: string) => Promise<Probe>;
+  private readonly preview: (file: Blob, mime: string, name: string, onStart?: () => Promise<boolean>) => Promise<Blob | null>;
+  /** Las vistas previas que se están haciendo tarde (`backfillPreview`), una vez por archivo y por sesión. */
+  private readonly previewing = new Set<string>();
+  /** Los adjuntos cuya tarjeta ya se mostró con vista previa (no hace falta volver a dibujarla cuando llega). */
+  private readonly previewed = new Set<string>();
   private readonly playMark: (thumb: Blob) => Promise<Blob>;
   private readonly makeView: (file: Blob, mime: string, side: number) => Promise<Blob | null>;
   private readonly heic: (file: Blob) => Promise<Blob>;
@@ -486,6 +508,7 @@ export class MediaQueue {
     private readonly options: MediaQueueOptions,
   ) {
     this.probe = options.probe ?? probeMedia;
+    this.preview = options.preview ?? attachmentPreview;
     this.playMark = options.playMark ?? withPlayMark;
     this.makeView = options.viewImage ?? viewImage;
     this.heic = options.convertHeic ?? loadAndConvertHeic;
@@ -696,6 +719,31 @@ export class MediaQueue {
     return isFolderMime(this.fileInfo(id)?.mime);
   }
 
+  /**
+   * Averigua lo que `fileInfo` todavía no sabe de esos archivos (de otro dispositivo, que la página no llegó a dibujar):
+   * lo guardado en el dispositivo y, si falta, la base (un solo pedido para todos). Sin red y sin nada guardado, quedan
+   * sin saber. No cuenta como abrirlos ni mostrarlos. Nunca falla.
+   */
+  async learnInfo(ids: readonly string[]): Promise<void> {
+    await Promise.all(
+      ids
+        .filter((id) => !this.fileInfo(id))
+        .map(async (id) => {
+          try {
+            const own = this.db ? await this.db.get('files', id) : undefined;
+            if (own) {
+              this.remember(id, own, true);
+              return;
+            }
+            const known = (this.db ? await this.db.get('known', id) : undefined) ?? (await this.fetchMeta(id).catch(() => null));
+            if (known) this.remember(id, known, this.infos.get(id)?.local ?? false);
+          } catch {
+            // Sin base de archivos o sin red: queda sin saber.
+          }
+        }),
+    );
+  }
+
   /** El cliente del portero del workspace (para las carpetas, P.9), o `null` si no hay portero. */
   porteroClient(): MediaPortero | null {
     return this.url ? this.porteroFor(this.url) : null;
@@ -761,6 +809,9 @@ export class MediaQueue {
     }
     this.seenLinks.add(`${pageId}:${id}`);
     this.remember(id, record, true);
+    // Si la cola esperaba porque el portero o Storage no contestaban, un archivo nuevo acorta la espera a la más
+    // corta (sin volver la cuenta a cero): si ya anda, sube enseguida; si sigue colgado, la próxima espera crece.
+    if (this.stallPause) this.stallPause.until = Math.min(this.stallPause.until, this.now() + backoff(1));
     this.onQueued?.();
     for (const fn of this.queuedListeners) fn();
     // Medidas y miniatura, sin esperarlas: el archivo ya está a salvo. La cola no lo registra antes. Un HEIC
@@ -843,10 +894,29 @@ export class MediaQueue {
     const record = await db.get('files', id);
     if (!record || record.probed !== false) return;
     const blob = await db.get('blobs', id);
-    // A un adjunto (también un PSD o un SVG) no se le sacan medidas ni miniatura: se ve como tarjeta.
+    // A un adjunto (también un PSD o un SVG) no se le sacan medidas: se ve como tarjeta. Un PDF tiene vista
+    // previa (su primera página), guardada como la miniatura de una foto (Docs/Doc_Adjuntos.md, entrega 2).
     const kind = fileKind(record.mime, record.name);
     const none: Probe = { width: null, height: null, duration: null, thumb: null };
-    const probe = blob && kind !== 'file' ? await this.probe(blob, record.mime).catch(() => none) : none;
+    let probe = none;
+    let previewTried = false;
+    if (blob && kind !== 'file') probe = await this.probe(blob, record.mime).catch(() => none);
+    else if (blob && previewable(record.mime, record.name, record.size)) {
+      // La marca va justo ANTES de dibujar, en el turno de este PDF y con pdf.js ya bajado (`onStart`): si el
+      // navegador cierra la pestaña mientras pdf.js dibuja (memoria, en el iPhone), al volver a abrir la app la marca
+      // está sin terminar (`probed: false`) y la vista previa se saltea: queda el ícono y el archivo se registra y se
+      // sube. Sin esto, cada apertura volvería a cerrar la pestaña. Los PDF que esperaban su turno no quedan marcados.
+      previewTried = true;
+      if (!record.previewTried) {
+        try {
+          probe = { ...none, thumb: await this.preview(blob, record.mime, record.name, () => this.markPreviewTried(id)) };
+        } catch (err) {
+          // pdf.js no se pudo bajar (sin red la primera vez; no se llegó a marcar): se prueba más tarde, al mostrarlo
+          // (`backfillPreview`).
+          if (err instanceof PreviewUnavailable) previewTried = false;
+        }
+      }
+    }
     const tx = db.transaction(['files', 'thumbs'], 'readwrite');
     const current = await tx.objectStore('files').get(id);
     // Mientras se medía, el archivo cambió (un HEIC que pasó a JPEG): estas medidas no son las suyas.
@@ -859,10 +929,23 @@ export class MediaQueue {
         duration: kind === 'video' ? seconds(probe.duration) : null,
         thumb: probe.thumb ? 'local' : 'none',
         probed: true,
+        previewTried: previewTried || undefined,
       });
     }
     await tx.done;
     if (probe.thumb) this.thumbReady(id);
+  }
+
+  /**
+   * Anota en el registro del dispositivo que se empieza a dibujar la vista previa (ver `probeNow` y
+   * `backfillPreview`). `false` si el registro ya no está (entonces no se dibuja).
+   */
+  private async markPreviewTried(id: string): Promise<boolean> {
+    const tx = this.store.transaction('files', 'readwrite');
+    const current = await tx.store.get(id);
+    if (current) await tx.store.put({ ...current, previewTried: true });
+    await tx.done;
+    return !!current;
   }
 
   /**
@@ -1128,12 +1211,35 @@ export class MediaQueue {
     }
     const portero = this.porteroFor(this.url!);
     const db = this.store;
-    const records = (await db.getAllFromIndex('files', 'pending', 1)).sort((a, b) => a.createdAt - b.createdAt);
-    for (const record of records) {
+    // Por orden de llegada, pero primero los que nunca se trabaron: si dos archivos están colgados solo para ellos,
+    // irían siempre primero, cerrarían la vuelta (ver abajo) y los demás no subirían nunca.
+    const records = (await db.getAllFromIndex('files', 'pending', 1)).sort(
+      (a, b) => Number(hasStalled(a)) - Number(hasStalled(b)) || a.createdAt - b.createdAt,
+    );
+    // Archivos distintos seguidos que se trabaron sin avanzar en esta vuelta (portero o miniatura a Storage).
+    let stalled = 0;
+    for (const record of this.uploadsPaused() ? [] : records) {
       if (this.stopped) return;
       if (record.blocked || record.retryAt > this.now() || skipPage(record.pageId)) continue;
       const outcome = await this.process(record, portero);
       if (outcome === 'offline' || outcome === 'cancelled' || outcome === 'outdated') return;
+      // No habló con el portero ni con Storage (una carpeta, un HEIC que espera el decodificador): no dice nada.
+      if (outcome === 'neutral') continue;
+      if (outcome !== 'stalled') {
+        stalled = 0;
+        if (outcome === 'done') this.stallPause = null;
+        continue;
+      }
+      // Con el portero o Storage colgados para todos, cada archivo esperaría su tope entero (un minuto o más) y
+      // una vuelta por 2300 archivos duraría horas sin subir nada. A la segunda trabada seguida se deja de subir,
+      // como sin conexión, y se espera antes de volver a probar (10 s, 20 s… hasta 10 minutos). Los archivos que
+      // no se probaron quedan como estaban (sin error ni espera propia). Los usos de páginas, que van a la base,
+      // salen igual en esta vuelta.
+      if (++stalled >= STALLS_TO_CLOSE_ROUND) {
+        const count = (this.stallPause?.count ?? 0) + 1;
+        this.stallPause = { until: this.now() + backoff(count), count };
+        break;
+      }
     }
     // Primero los usos nuevos y después los que se quitaron: un archivo que se cortó de una página y se pegó
     // en otra no pasa por la papelera en el medio.
@@ -1209,7 +1315,28 @@ export class MediaQueue {
     }
   }
 
-  private async process(start: MediaRecord, portero: MediaPortero): Promise<Outcome | 'done'> {
+  /** La cola espera antes de volver a probar el portero y Storage (ver `stallPause`). */
+  private uploadsPaused(): boolean {
+    if (!this.stallPause) return false;
+    // Una espera más larga que la más larga posible es un reloj que saltó hacia atrás: se da por vencida.
+    if (this.stallPause.until - this.now() > MAX_BACKOFF_MS) this.stallPause.until = 0;
+    return this.now() < this.stallPause.until;
+  }
+
+  /**
+   * Volvió la red (el evento `online`, o la base contestó después de un ciclo sin conexión): si la cola esperaba
+   * porque el portero o Storage no contestaban, puede que fuera la red; prueba enseguida, sin volver la cuenta a
+   * cero (si siguen colgados, la espera siguiente es más larga).
+   */
+  networkBack(): void {
+    if (this.stallPause) this.stallPause.until = 0;
+  }
+
+  /**
+   * Sube un archivo. `stalled`: se trabó (el portero o Storage dejaron de moverse) sin que la subida avanzara en
+   * este intento; quedó anotado como cualquier error que se arregla solo, y la vuelta lo cuenta (ver `round`).
+   */
+  private async process(start: MediaRecord, portero: MediaPortero): Promise<Outcome | 'done' | 'stalled' | 'neutral'> {
     let record = start;
     // Lo que el progreso guarda (la subida para retomar) va en orden, antes del resultado final.
     let saving: Promise<unknown> = Promise.resolve();
@@ -1220,6 +1347,12 @@ export class MediaQueue {
     // La subida del portero que se está usando y hasta dónde confirmó: para saber cuándo avanza de verdad.
     let savedId = start.uploadId;
     let confirmed = start.sent;
+    // Lo más que el portero confirmó de este archivo: avanzar es pasar de ahí. Si el portero pierde la subida y se
+    // empieza otra, volver a mandar lo que ya había llegado no es avanzar (si no, una subida que se pierde en cada
+    // vuelta reintentaría siempre a los 10 s en vez de espaciarse).
+    let best = start.sent;
+    // La subida avanzó en este intento.
+    let advanced = false;
     // Storage no contestó a tiempo al subir la miniatura (el tope de `uploadThumb`).
     let thumbStalled = false;
     try {
@@ -1239,7 +1372,8 @@ export class MediaQueue {
           !this.offline() &&
           (record.heicMisses ?? 0) < HEIC_ONLINE_TRIES
         ) {
-          return 'retry';
+          // Espera su próximo intento (`retryAt`): no le pidió nada a nadie.
+          return 'neutral';
         }
       }
       if (record.probed === false) {
@@ -1275,24 +1409,26 @@ export class MediaQueue {
       if (isFolderMime(record.mime)) {
         await this.patch(record.id, { pending: 0, error: null, blocked: false, failures: 0, retryAt: 0 });
         this.onChange?.();
-        return 'done';
+        // Registrada: lista. No habló con el portero ni con Storage (no dice si andan).
+        return 'neutral';
       }
       if (record.thumb === 'local') {
         const thumb = await this.store.get('thumbs', record.id);
         try {
           if (thumb) {
-            await this.remote.uploadThumb(record.id, thumb).catch((err: unknown) => {
+            // El tope crece con las veces seguidas que ya venció (`thumbStalls`): una red muy lenta termina pasando.
+            await this.remote.uploadThumb(record.id, thumb, record.thumbStalls ?? 0).catch((err: unknown) => {
               thumbStalled = isTimeout(err);
               throw err;
             });
             await this.remote.setFileThumb(record.id);
           }
-          record = await this.patch(record.id, { thumb: thumb ? 'done' : 'none' });
+          record = await this.patch(record.id, { thumb: thumb ? 'done' : 'none', ...(record.thumbStalls ? { thumbStalls: 0 } : {}) });
         } catch (err) {
           // Si la miniatura no se puede subir nunca (por ejemplo, el bucket la rechaza), se sigue con el
           // original sin ella: queda anotado y en la página se ve la del dispositivo.
           if (classify(err) !== 'blocked') throw err;
-          record = await this.patch(record.id, { thumb: 'none', thumbError: friendly(err) });
+          record = await this.patch(record.id, { thumb: 'none', thumbError: friendly(err), ...(record.thumbStalls ? { thumbStalls: 0 } : {}) });
         }
       }
 
@@ -1331,6 +1467,7 @@ export class MediaQueue {
       this.controller = controller;
       savedId = record.uploadId;
       confirmed = record.sent;
+      best = Math.max(best, record.sent);
       this.setUploading({ name: record.name, sent: record.sent, total: record.size });
       const onProgress = (p: UploadProgress) => {
         this.setUploading({ name: record.name, sent: p.sent, total: p.total });
@@ -1340,9 +1477,14 @@ export class MediaQueue {
         if (!other && p.sent === confirmed) return;
         const changes: Partial<MediaRecord> = { uploadId: p.uploadId, sent: p.sent };
         // Las trabadas y las fallas se cuentan seguidas y sin avance: vuelven a cero recién cuando el portero
-        // confirma más bytes (abrir otra subida no es avanzar). Si no, un video largo al que le llega una
-        // parte más en cada vuelta esperaría cada vez más para seguir, aunque esté avanzando.
-        if (p.sent > confirmed) {
+        // confirma más bytes de los que ya había confirmado de este archivo (abrir otra subida, o volver a mandar
+        // en ella lo que la perdida ya tenía, no es avanzar). Si no, un video largo al que le llega una parte más
+        // en cada vuelta esperaría cada vez más para seguir, aunque esté avanzando.
+        if (p.sent > best) {
+          best = p.sent;
+          advanced = true;
+          // El portero anda: si vuelve a colgarse, la cola espera otra vez desde la espera más corta.
+          this.stallPause = null;
           if (stalls > 0) changes.stalls = stalls = 0;
           if (failed > 0) changes.failures = failed = 0;
         }
@@ -1421,6 +1563,8 @@ export class MediaQueue {
         lost,
         // Se vuelve a registrar y a marcar la miniatura (los dos son idempotentes).
         ...(notThere ? { registered: false, thumb: hasThumb ? 'local' : 'none' } : {}),
+        // Una vez más seguida que la miniatura venció su tope: la próxima tiene más (`thumbUploadLimit`).
+        ...(thumbStalled ? { thumbStalls: (record.thumbStalls ?? 0) + 1 } : {}),
       };
       // Una subida que el portero ya no tiene se empieza de nuevo.
       if (err instanceof UploadError) {
@@ -1433,6 +1577,10 @@ export class MediaQueue {
       }
       await this.patch(record.id, changes).catch(() => undefined);
       this.onChange?.();
+      // Se trabó sin avanzar (el portero o Storage no se movieron): la vuelta lo cuenta para dejar de subir si
+      // les pasa lo mismo a los siguientes. Si avanzó, el servidor anda (despacio): no cuenta.
+      const stuck = thumbStalled || (err instanceof UploadError && err.stalled);
+      if (stuck && !advanced && outcome === 'retry') return 'stalled';
       return outcome === 'waiting' ? 'retry' : outcome;
     }
   }
@@ -1785,12 +1933,15 @@ export class MediaQueue {
     // Con una versión más vieja que la mínima no se sube nada: las bajadas no esperan.
     if (!this.db || !this.enabled || this.outdatedNow) return false;
     const now = this.now();
+    // Mientras la cola espera porque el portero o Storage no contestan (`stallPause`), ningún archivo se puede
+    // subir ahora: las bajadas no se quedan esperando a algo que no va a pasar.
+    const paused = this.uploadsPaused();
     const [records, links] = await Promise.all([
       this.db.getAllFromIndex('files', 'pending', 1),
       this.db.getAllFromIndex('links', 'pending', 1),
     ]);
     return (
-      records.some((r) => !r.blocked && (r.retryAt ?? 0) <= now) ||
+      records.some((r) => !paused && !r.blocked && (r.retryAt ?? 0) <= now) ||
       links.some((l) => !l.blocked && !l.waiting && (l.retryAt ?? 0) <= now)
     );
   }
@@ -1931,6 +2082,8 @@ export class MediaQueue {
   /** Lo detenido por un error se vuelve a intentar (al abrir la app y con "Retry"). */
   async clearBlocked(): Promise<void> {
     if (!this.db) return;
+    // "Retry" vuelve a probar enseguida aunque el portero o Storage no contestaran hace un rato.
+    this.stallPause = null;
     const tx = this.db.transaction(['files', 'links'], 'readwrite');
     const files = tx.objectStore('files');
     for (const r of await files.index('pending').getAll(1)) {
@@ -2085,8 +2238,87 @@ export class MediaQueue {
   private card(id: string, info: Parameters<typeof attachmentCardUrl>[0] | string): string {
     // Un texto ya es la dirección de la tarjeta (la de una carpeta).
     const url = typeof info === 'string' ? info : attachmentCardUrl(info);
+    if (typeof info !== 'string' && info.preview && (info.state ?? 'ok') === 'ok') this.previewed.add(id);
     this.cards.set(id, url);
     return url;
+  }
+
+  /** La vista previa guardada de un adjunto como `data:` para la tarjeta, o `null`. */
+  private async previewOf(thumb: Blob | undefined | null): Promise<string | null> {
+    if (!thumb) return null;
+    try {
+      return await blobToDataUrl(thumb);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * La vista previa de un adjunto propio que no la tiene (Docs/Doc_Adjuntos.md, entrega 2): agregado con una
+   * versión anterior, o cuando pdf.js no se pudo bajar. Se hace con el original del dispositivo y, si el archivo
+   * ya está subido (la cola no lo va a tocar más), se sube al bucket `thumbs` con `set_file_thumb`, como hace la
+   * cola antes del original. Una vez por archivo y por sesión; sin red, se prueba la próxima vez que se muestre.
+   * Nunca falla.
+   */
+  private async backfillPreview(own: MediaRecord): Promise<void> {
+    const db = this.db;
+    const id = own.id;
+    if (!db || this.previewing.has(id) || own.probed === false || !previewable(own.mime, own.name, own.size)) return;
+    const uploadOnly = own.thumb === 'local' && own.registered && own.pending === 0;
+    if (!uploadOnly && !(own.thumb === 'none' && !own.previewTried)) return;
+    this.previewing.add(id);
+    let retry = false;
+    try {
+      let record = own;
+      if (!uploadOnly) {
+        const blob = await db.get('blobs', id);
+        if (!blob) return;
+        // La marca va justo antes de dibujar (como en `probeNow`): si la pestaña se cierra en el medio, no se vuelve
+        // a probar. Si pdf.js no se pudo bajar, no se llegó a marcar y se prueba la próxima vez que se muestre.
+        let thumb: Blob | null;
+        try {
+          thumb = await this.preview(blob, own.mime, own.name, () => this.markPreviewTried(id));
+        } catch (err) {
+          retry = err instanceof PreviewUnavailable;
+          if (retry) return;
+          thumb = null;
+        }
+        const tx = db.transaction(['files', 'thumbs'], 'readwrite');
+        const current = await tx.objectStore('files').get(id);
+        // Mientras se hacía, otra cosa la puso (o el archivo cambió): no se pisa.
+        if (!current || current.thumb !== 'none' || current.mime !== own.mime || current.size !== own.size) {
+          await tx.done;
+          return;
+        }
+        if (thumb) await tx.objectStore('thumbs').put(thumb, id);
+        record = { ...current, thumb: thumb ? 'local' : 'none', previewTried: true };
+        await tx.objectStore('files').put(record);
+        await tx.done;
+        if (!thumb) return;
+        this.thumbReady(id);
+      }
+      if (record.thumb !== 'local' || !record.registered || record.pending !== 0) return;
+      // Con una versión más vieja que la mínima no sale nada de archivos (`outdatedNow`): queda para después.
+      if (this.outdatedNow) {
+        retry = true;
+        return;
+      }
+      const thumb = await db.get('thumbs', id);
+      if (!thumb) return;
+      try {
+        await this.remote.uploadThumb(id, thumb);
+        await this.remote.setFileThumb(id);
+        await this.patch(id, { thumb: 'done' });
+      } catch (err) {
+        // Sin red o sin permiso: queda en el dispositivo y se prueba en otra sesión.
+        if (classify(err) === 'outdated') this.markOutdated();
+        retry = true;
+      }
+    } catch {
+      retry = true;
+    } finally {
+      if (retry) this.previewing.delete(id);
+    }
   }
 
   private async display(id: string): Promise<string> {
@@ -2104,7 +2336,11 @@ export class MediaQueue {
         this.remember(id, own, true);
         if (isFolderMime(own.mime)) return this.card(id, folderCardUrl({ name: own.name, size: own.size, note: this.folderNotes.get(id) ?? null }));
         const kind = viewKind(own.mime, own.name);
-        if (!kind) return this.card(id, { name: own.name, mime: own.mime, size: own.size });
+        if (!kind) {
+          // Un adjunto: con su vista previa si la tiene; si falta (agregado antes, o pdf.js no estaba), se hace ahora.
+          void this.backfillPreview(own);
+          return this.card(id, { name: own.name, mime: own.mime, size: own.size, preview: await this.previewOf(await db.get('thumbs', id)) });
+        }
         const thumb = await db.get('thumbs', id);
         if (thumb) return this.keep(id, kind === 'video' ? await this.playMark(thumb).catch(() => thumb) : thumb);
         // Una foto HEIC que no se pudo pasar a JPEG: el ícono dice por qué no se ve.
@@ -2126,10 +2362,19 @@ export class MediaQueue {
       }
       if (meta && fileKind(meta.mime, meta.name) === 'file') {
         if (meta.deleted) return await this.deletedDisplay(id, meta);
-        // No va a `missing`: no hay miniatura que esperar. Si todavía no llegó a Drive, se vuelve a preguntar.
+        // No va a `missing`: la vista previa, si la hay, llega antes que el original (la cola la sube primero). Si
+        // todavía no llegó a Drive, se vuelve a preguntar.
         if (meta.driveId) this.unfinished.delete(id);
         else this.unfinished.add(id);
-        return this.card(id, { name: meta.name, mime: meta.mime, size: meta.size, state: meta.driveId ? 'ok' : 'pending' });
+        // La vista previa (la primera página de un PDF) se baja del bucket `thumbs` como la miniatura de una foto, y
+        // queda en el dispositivo: sin red se ve lo que ya se vio.
+        if (!thumb && meta.thumbAt) {
+          thumb = await this.remote.downloadThumb(id).catch(() => undefined);
+          if (thumb) await db.put('thumbs', thumb, id);
+          // Sin red: se vuelve a probar con los que esperan miniatura (`refreshMissing`), y la tarjeta se redibuja.
+          else this.missing.add(id);
+        }
+        return this.card(id, { name: meta.name, mime: meta.mime, size: meta.size, state: meta.driveId ? 'ok' : 'pending', preview: await this.previewOf(thumb) });
       }
       if (!thumb && meta?.thumbAt) {
         thumb = await this.remote.downloadThumb(id).catch(() => undefined);
@@ -2170,9 +2415,14 @@ export class MediaQueue {
     this.deletedChecked.add(id);
     try {
       const meta = await this.fetchMeta(id);
-      if (!meta?.deleted) return;
+      // Un adjunto de otro dispositivo que se vio sin vista previa y ahora la tiene (la hizo más tarde el que lo
+      // agregó): se vuelve a dibujar con ella.
+      const latePreview =
+        !!meta && !meta.deleted && !!meta.thumbAt && fileKind(meta.mime, meta.name) === 'file' && !this.previewed.has(id) && !(await this.db?.get('files', id));
+      if (!meta?.deleted && !latePreview) return;
       // Si se está mostrando justo ahora, se espera a que termine para que no quede la imagen de antes.
       await this.resolving.get(id)?.catch(() => undefined);
+      if (latePreview && this.previewed.has(id)) return;
       this.thumbReady(id);
     } catch {
       // Sin red: se vuelve a preguntar la próxima vez que se muestre.

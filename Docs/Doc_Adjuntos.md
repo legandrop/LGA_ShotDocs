@@ -1,6 +1,8 @@
 # Adjuntar cualquier archivo en las páginas (P.6)
 
-Estado: **entregas 1a (portero, v0.048) y 1b (app, v0.049) hechas**; la vista previa, pendiente. "Correcciones de la auditoría previa" manda sobre lo anterior. Lo pidió Lega: "intenté
+Estado: **entregas 1a (portero, v0.048), 1b (app, v0.049) y 2 (vista previa y tarjeta grande en el carrete, ver "Cómo
+quedó (entrega 2)") hechas**. "Correcciones de la auditoría previa" manda sobre lo anterior; la sección 4 manda sobre
+la propuesta original de la vista previa. Lo pidió Lega: "intenté
 arrastrar un PDF y no funcionó. Deberíamos poder arrastrar cualquier tipo de archivo, como una interfaz del
 Drive: .zip, .rar, lo que sea, y que alguien lo pueda bajar desde ahí". Sale de leer el código de la rama
 `lega/acomodar`.
@@ -102,16 +104,67 @@ Cuatro frenos en la app; el portero y la base ya aceptan cualquier tipo.
 
 ## 4. Vista previa (entrega 2)
 
-La primera entrega es solo la tarjeta con el ícono. La segunda reusa el camino de las miniaturas (bucket
-`thumbs`, `set_file_thumb`, sin migración) con la **miniatura que ya hace Drive**, pedida por el portero (ruta
-nueva `POST /thumb`, a verificar con el permiso `drive.file`): sirve para PDF, Office, PSD y más, y no suma
-peso a la app. pdf.js (unos 350 KB comprimidos, con un historial de fallas de seguridad) solo si la de Drive no
-anda bien. Una versión vieja mostraría la miniatura como si fuera una foto.
+La primera entrega es solo la tarjeta con el ícono. La propuesta original era pedirle a Drive su miniatura por el
+portero. **Se cambió (decisión de la entrega 2, contrastada con el código): la primera página del PDF se hace en el
+dispositivo que lo agrega, con pdf.js bajado aparte, como la miniatura de una foto.** Por qué:
+
+- **La de Drive se puede pedir sin darle ninguna clave a la app**: ya existe `GET /t/<pase>` (lo sumó P.9 para el
+  visor de carpetas). El portero le pide a Drive `thumbnailLink` con la conexión del dueño y devuelve la imagen; la
+  app solo necesita el pase. Con `drive.file` anda, porque los archivos los creó la app. Pero:
+  - **No anda sin red ni recién agregado**: Drive la hace después de recibir el archivo, a veces minutos más tarde. En
+    el dispositivo que lo agrega, nada hasta que se sube y Drive termina; habría que volver a preguntar cada tanto.
+  - **Para guardarla** (y verla sin red) la app tiene que leer los bytes: `/t/` no tiene CORS, así que el portero
+    tiene que cambiar, y el portero de cada dueño se publica aparte. Sin guardarla, cada vista son dos pedidos al
+    Worker (el pase y `/t/`) y dos a Drive: el pase de un archivo de la app no trae `m` y la caché de Cloudflare de
+    `/t/` no se usa. No rompe el plan gratis (100.000 pedidos por día, `Doc_Carpetas.md`, sección 12), pero suma
+    pedidos y estados (esperar, reintentar, "Drive no tiene miniatura").
+- **pdf.js en el dispositivo** reusa todo el camino de las fotos sin tocar el portero ni la base: se hace al agregar
+  el archivo (sin red también, si pdf.js ya se bajó una vez), se guarda en `thumbs` del dispositivo, la cola la sube
+  al bucket `thumbs` con `set_file_thumb` **antes que el original**, y los demás la bajan de Supabase Storage (cero
+  pedidos al Worker) y la guardan. Lo ya visto se ve sin red, y "Available offline" la baja con las miniaturas.
+- **Peso y seguridad de pdf.js:** 6.3 (Apache-2.0), la versión `legacy` (con los arreglos para Safari viejos):
+  ~490 KB la librería y ~1,3 MB su Worker, **bajados solo cuando alguien agrega un PDF**, fuera del paquete y de lo que
+  la app guarda al instalarse; se guardan en la caché `pdf-preview` la primera vez (como el decodificador de HEIC).
+  Desde la 5.x pdf.js ya no compila código desde el PDF (la falla de 2024 venía de ahí). Se usa lo mínimo: la
+  primera página en un canvas, sin texto, anotaciones, formularios XFA ni wasm, con el análisis en su Worker.
+- **Lo que queda afuera:** Office, PSD y demás siguen con el ícono. Sumar la miniatura de Drive para esos es una
+  entrega aparte (CORS en `/t/` y guardarla en el bucket), en el roadmap.
+
+Detalles:
+
+- Solo PDF de hasta **64 MB** (pdf.js lo lee entero en memoria; el iPhone no da para más). Un PDF dañado, con
+  contraseña o que tarda más de 20 s en dibujarse queda con el ícono. La vista previa es un JPEG de 480 de lado mayor
+  (igual que la miniatura de una foto, menos de 512 KB).
+- **Memoria acotada:** el tope de 64 MB mide el archivo, no lo que pdf.js descomprime (una página escaneada de
+  20000×15000 serían ~1,2 GB). pdf.js no decodifica imágenes de más de 16 Mpx (`maxImageSize`; la página sale sin
+  ellas) y achica las demás a 64 MB como mucho (`canvasMaxAreaInBytes`). De a una vista previa por vez.
+- **Si igual la pestaña se cierra mientras se dibuja** (el iPhone la mata por memoria): `previewTried` se anota en el
+  registro del dispositivo **justo antes de dibujar ese PDF**: en su turno y con pdf.js ya bajado (`onStart` de
+  `attachmentPreview`). Al volver a abrir la app, un registro sin medir con la marca puesta es un intento que no
+  terminó: se saltea la vista previa (queda el ícono) y el archivo se registra y se sube. Sin esto, cada apertura
+  volvía a dibujarlo, a cerrarse, y el PDF no subía nunca. Los PDF que esperaban su turno no quedan marcados: al
+  reabrir tienen su vista previa. Si pdf.js no se pudo bajar, no se llegó a marcar y se prueba otra vez. Igual al
+  hacerla después (`backfillPreview`), que además no sube nada con una versión más vieja que la mínima.
+- **Sin red la primera vez** (pdf.js nunca se bajó en ese dispositivo): el archivo se guarda y se sube igual, sin
+  vista previa; se hace la próxima vez que se muestra con red, y si el archivo ya estaba subido, se sube al bucket en
+  ese momento. Lo mismo con los PDF agregados antes de esta versión, en el dispositivo que tiene el original.
+- **Otro dispositivo** que ya mostró un adjunto sin vista previa se entera en la sesión siguiente (al preguntar si el
+  archivo se borró, ve `thumb_at`) y vuelve a dibujar la tarjeta.
+- **La tarjeta con vista previa** mide 360×268: la vista previa arriba (llena el ancho y muestra la parte de arriba
+  de la página, como la cuadrícula de Drive) y abajo el nombre en un renglón y la etiqueta del tipo con el peso. Es
+  el mismo SVG `data:` de siempre con la foto adentro (`data:image/jpeg;base64`; un SVG en un `<img>` no carga nada
+  de afuera, y solo se acepta una foto en base64). De otro proyecto o borrado, la tarjeta de siempre, sin vista previa.
+- **Sin migración ni propiedad nueva en el bloque**: la vista previa es la miniatura del archivo (`files.thumb_at`,
+  bucket `thumbs`). En el registro local de la cola se suma `previewTried` (opcional; una versión vieja lo ignora y
+  lo conserva). Una versión anterior a v0.049 mostraría la vista previa como si fuera una foto; desde v0.049 se ve la
+  tarjeta con el ícono. No hace falta subir `min_app_version`.
 
 ## 5. Carrete y filas
 
-- **El carrete saltea los adjuntos** (`collectCarrete` recibe qué saltear). Si uno igual entra, muestra la
-  tarjeta grande con *Open* y *Download* en vez de la foto rota.
+- **El carrete muestra los adjuntos en grande** (entrega 2), en su lugar entre las fotos: la vista previa (la
+  primera página de un PDF, a su tamaño, sin agrandarla) o la tarjeta, el tipo y el peso, y *Open* (si el navegador lo
+  sabe mostrar) y *Download*. Las carpetas siguen afuera (tienen su visor). El segundo clic en un adjunto sigue
+  abriéndolo o bajándolo (sección 3); al carrete se llega desde una foto.
 - Un adjunto puede tener `rowWidth`: los tamaños rápidos lo ponen en fila como a una foto. **"Acomodar en filas"
   corta la tanda en los adjuntos** (una tarjeta de 3,75:1 desarmaría la galería); con un adjunto elegido, el
   botón no aparece.
@@ -146,7 +199,8 @@ anda bien. Una versión vieja mostraría la miniatura como si fuera una foto.
    `fileBlockAccept = ['*/*']` solo para el selector), la cola, la tarjeta, abrir y bajar, el carrete que
    saltea, "Acomodar" que corta, el portero (pase con nombre, `?download=1`, encabezados), la papelera con el
    ícono de tipo, textos y docs.
-2. **Entrega 2:** vista previa con la miniatura de Drive.
+2. **Entrega 2 (hecha):** vista previa de los PDF (pdf.js en el dispositivo, sección 4) y la tarjeta grande en el
+   carrete.
 3. **Opcional:** tarjeta por tema, `/Archivo` en el menú "/", audio en el carrete.
 
 Pruebas: unidad (`fileKind`, `normalizeMime`, `attachmentFamily`, la tarjeta con un nombre con `<script>` y el
@@ -164,7 +218,7 @@ iPhone (Safari y la app instalada), Firefox y un archivo de 1 GB.
 2. Un toque en el teléfono sobre un zip lo baja enseguida (como una foto abre el carrete).
 3. Aviso, sin tope, al agregar algo de más de 1 GB.
 4. Sin subir `min_app_version` por los adjuntos (no hace falta).
-5. Vista previa con la miniatura de Drive, en una segunda entrega.
+5. Vista previa en una segunda entrega: hecha con pdf.js en el dispositivo y no con la miniatura de Drive (sección 4).
 
 ## Correcciones de la auditoría previa (mandan sobre lo de arriba)
 
@@ -217,7 +271,8 @@ nuevas, sin migración) se mantiene. Cambios:
 2. **Entrega 1b, app (hecha, v0.049; ver "Cómo quedó"):** `fileKind` y `normalizeMime`, nombres limpios, `blob:` envueltos, tarjeta y `display()`,
    el manejador de archivos, abrir y bajar (computadora: segundo clic y barra; teléfono: la hoja), carrete y
    "Acomodar" que cortan, impresión y papelera, espacio.
-3. Después: vista previa con la miniatura de Drive, tarjeta por tema, `/Archivo`.
+3. **Entrega 2, hecha:** vista previa de los PDF y la tarjeta grande en el carrete (ver "Cómo quedó (entrega 2)").
+   Después: la miniatura de Drive para Office y PSD, tarjeta por tema, `/Archivo`.
 
 ### Decisiones (respondidas por Lega el 2026-09-30)
 
@@ -271,10 +326,55 @@ nuevas, sin migración) se mantiene. Cambios:
 - Pendiente:
   - Probar a mano con el portero real: PDF en una pestaña con el visor, descargas con nombre, Safari y el
     iPhone instalado.
-  - La vista previa con la miniatura de Drive (entrega 2).
+  - ~~La vista previa (entrega 2).~~ Hecha con pdf.js en el dispositivo: ver "Cómo quedó (entrega 2)".
   - Un adjunto de otro dispositivo que todavía no está registrado se ve con el marcador de foto hasta que llega
     su fila.
   - El aviso "este portero todavía no pone el nombre" (`named: false` de `downloadTarget`) se calcula pero no
     se muestra: con el portero v0.048 siempre llega el nombre. Mostrarlo si algún día hay porteros viejos.
-  - En el carrete, un adjunto no aparece (se corta en él); mostrarlo como tarjeta grande con *Open* y
-    *Download* queda para más adelante.
+  - ~~En el carrete, un adjunto no aparece.~~ Hecho en la entrega 2: se ve en grande con *Open* y *Download*.
+
+## Cómo quedó (entrega 2)
+
+- `src/media/pdfPreview.ts`: qué tiene vista previa (`previewable`: un PDF de hasta 64 MB), la carga de pdf.js
+  (comprueba que su Worker llegue; si no, `PreviewUnavailable` y se prueba más tarde) y `attachmentPreview` (la
+  primera página, JPEG de 480 de lado mayor, con `thumbFromCanvas` de `probe.ts`). `src/media/pdfLib.ts`: lo único
+  que importa pdf.js, bajado aparte (vite.config.ts lo deja fuera de la instalación y lo guarda en `pdf-preview`).
+- `src/media/queue.ts`: al medir un adjunto propio, la vista previa va a `thumbs` como una miniatura (`thumb:
+  'local'`, la cola la sube antes que el original) y se anota `previewTried`; `display()` arma la tarjeta con ella
+  (la propia, o la bajada del bucket para los de otro dispositivo, guardada para verla sin red);
+  `backfillPreview` la hace después (pdf.js no estaba, o PDF de antes) y la sube si el archivo ya estaba subido; si
+  llega más tarde a otro dispositivo, `checkDeleted` lo nota y vuelve a dibujar.
+- `src/media/attachments.ts`: la tarjeta alta (`preview`, 360×268) y `blobToDataUrl`. Solo acepta
+  `data:image/(jpeg|png|webp);base64`.
+- Carrete (`carreteLoader.ts`, `Carrete.tsx`): los adjuntos entran (`collectCarrete` saltea solo las carpetas); la
+  vista previa a su tamaño o la tarjeta, tipo y peso, *Open* (la dirección se prepara al verlo: Safari no deja abrir
+  después de esperar) y *Download*; sin zoom. Sin red y sin el archivo en el dispositivo: el aviso adentro de la
+  tarjeta y los botones apagados. La hoja del teléfono ya mostraba la tarjeta: ahora con la vista previa.
+- "Available offline" baja también la vista previa de los adjuntos (va con las miniaturas, `offline.ts` y
+  `offlinePlan.ts`).
+- Ayuda: la entrada de adjuntos y la del carrete, en los dos idiomas. Avisos de licencia: PDF.js (Apache-2.0) en
+  `THIRD_PARTY_NOTICES.md` y al principio de su archivo.
+- Probado: pdf.js de verdad en Node dibujando un PDF hecho en la prueba (`pdfPreview.test.ts`, con el canvas de
+  `@napi-rs/canvas` que trae pdf.js); la cola (vista previa al agregar, subida antes del original, otro dispositivo,
+  sin red, pdf.js que no se pudo bajar, PDF de antes), la tarjeta, el carrete y su cargador. En Chromium, con un arnés
+  local sin login (servidor en memoria, pdf.js real): soltar un PDF y un zip, la tarjeta de 360×268, el carrete con
+  el PDF en grande, *Open* (el original del dispositivo con su tipo) y *Download*, el zip con su tarjeta, otro
+  dispositivo que la baja del bucket, sin red y la app abierta de nuevo (la vista previa sigue; el carrete avisa y
+  apaga los botones), y en el teléfono en oscuro la tarjeta, la hoja y el carrete.
+- Auditoría independiente, arreglado antes de publicar: las vistas previas van de a una (soltar o importar muchos
+  PDF no abre muchos Workers ni lee muchos PDF enteros a la vez); cada paso tiene tope (bajar pdf.js, dibujar,
+  pasar a JPEG) y el Worker de pdf.js se corta siempre, así un PDF que traba a pdf.js no frena la subida; abrir y
+  bajar un adjunto en el carrete piden un solo pase (dos pedidos a la vez usan el mismo); una pestaña vieja que pide
+  el Worker después de publicar una versión (y recibe la página de la app) cuenta como "pdf.js no está".
+- Verificación final, arreglado: la marca antes de dibujar (un PDF que cierra la pestaña ya no se reintenta en cada
+  apertura), el límite de imagen de pdf.js, y una carpeta de otro dispositivo que la página no llegó a dibujar ya no
+  entra al carrete como un adjunto (antes de abrirlo se averigua qué es lo que no se sabe, `learnInfo`, esperando
+  como mucho 1,5 s y sin preguntar sin red: con una red que no contesta abre con lo que sabe, y si la respuesta llega
+  después el carrete abierto se actualiza). La entrada de la ayuda de adjuntos sale en las novedades (`since`, en
+  `src/help/entries.ts`, `ATTACH_PREVIEW`).
+- Pendiente:
+  - Probar a mano con el portero real y Safari/iPhone: que pdf.js se baje, dibuje y quede guardado para usarlo sin
+    red; un PDF grande (50 MB) y una página escaneada a muy alta resolución en el iPhone; 3 fotos HEIC y un PDF de
+    40 MB soltados juntos.
+  - La miniatura de Drive para Office, PSD y demás (roadmap).
+  - Los PDF de antes que solo están en Drive (ningún dispositivo tiene el original) siguen con el ícono.
