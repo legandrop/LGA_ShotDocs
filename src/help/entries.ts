@@ -142,6 +142,8 @@ const ANNOTATE_TOUCH = '0.129';
 const ANNOTATE_COPY = '0.132';
 /** La clave del asistente sincronizada, entrega S1 (Doc_Clave_Sincronizada.md). El número lo pone quien publica. */
 const ASSISTANT_SYNC = '0.138';
+/** La clave sincronizada, entrega S2 (cambiar la frase, computadora prestada, varios workspaces). El número lo pone quien publica. */
+const ASSISTANT_SYNC_S2 = '0.0XX';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -280,6 +282,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.assistantSync.text',
     words: ['sincronizar', 'frase', 'contraseña', 'dispositivos', 'iphone', 'perdido', 'robado', 'sync', 'passphrase', 'password', 'devices', 'lost', 'stolen', 'sign out other devices', 'cerrar la sesión en los otros dispositivos', 'clave', 'key', 'asistente', 'assistant'],
     since: ASSISTANT_SYNC,
+  },
+  {
+    id: 'assistantSyncMore',
+    section: 'writing',
+    title: 'help.assistantSyncMore.title',
+    text: 'help.assistantSyncMore.text',
+    words: ['cambiar la frase', 'computadora prestada', 'pestaña', 'guardar la clave en este dispositivo', 'otro workspace', 'más vieja', 'voz', 'change passphrase', 'borrowed computer', 'tab', 'keep the key on this device', 'also sync', 'older', 'voice', 'sincronizar', 'sync', 'frase', 'passphrase'],
+    since: ASSISTANT_SYNC_S2,
   },
   {
     id: 'assistantPage',

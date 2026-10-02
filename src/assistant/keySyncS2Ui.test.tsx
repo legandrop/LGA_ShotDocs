@@ -309,3 +309,19 @@ describe('la ventana de salir', () => {
     expect(await loadVoiceSettings(EMAIL)).toBeNull();
   });
 });
+
+describe('la ayuda', () => {
+  it('la entrada de S2 se encuentra en los dos idiomas y nombra los controles como en la ventana', async () => {
+    const { searchHelp } = await import('../help/search');
+    const { HELP_ENTRIES } = await import('../help/entries');
+    const { t } = await import('../i18n');
+    const ids = (q: string, lang: 'en' | 'es') => searchHelp(HELP_ENTRIES, q, lang).map((h) => h.entry.id);
+    expect(ids('change passphrase', 'en')).toContain('assistantSyncMore');
+    expect(ids('computadora prestada', 'es')).toContain('assistantSyncMore');
+    expect(ids('also sync', 'en')).toContain('assistantSyncMore');
+    const text = t('help.assistantSyncMore.text');
+    for (const k of ['assistant.sync.change', 'assistant.sync.keepHere', 'assistant.sync.alsoSync', 'assistant.sync.updateHere'] as const) {
+      expect(text).toContain(t(k).replace(/…$/, ''));
+    }
+  });
+});
