@@ -769,3 +769,14 @@ rato; el texto del teléfono se escribe arriba y no sobre la foto; la caja termi
 "atrás" desde el borde y el doble toque no se peleen con el dibujo (riesgo 6), el Apple Pencil con la palma apoyada, y
 medir el dedo a 60 y 120 Hz y las fotos HEIC (entrega 0). Esta entrega no suma tipos de bloque ni propiedades ni cambia
 el mapa: `min_app_version` no hace falta subirla.
+
+### Correcciones de la auditoría de la entrega 3 (2026-10-02)
+
+Auditoría independiente: **aprobado con observaciones**, sin bloqueantes. Lo que pedía y dónde quedó:
+
+| Hallazgo | Corrección |
+|---|---|
+| **O1** Con la caja de texto abierta, si la pantalla pasaba de la del teléfono a la de la compu (agrandar la ventana) o al revés, la caja nueva salía vacía y lo escrito se perdía | Las dos cajas arrancan con lo ya escrito y el dibujo de mientras tanto también lo usa. Prueba que cambia la pantalla en los dos sentidos (cae con el código anterior) |
+| **O2** Con Elegir y el dedo, una forma chica ya elegida no se podía mover: los tiradores de 22 px de las esquinas la tapaban y se estiraba | El tirador toma como mucho un tercio de la distancia entre dos tiradores (nunca menos que con el mouse). Prueba: un rectángulo de 60 × 36 px se mueve desde el medio de un lado y uno grande se sigue estirando cerca de la esquina (cae con el código anterior) |
+| O3 (un `pointercancel` del sistema descarta el trazo en curso), O5 (la tira no se desliza hasta la herramienta elegida) | Al roadmap (P.20) |
+| O4 (el foco en el mismo toque, sin prueba que caiga en jsdom), O6 (la foto rota del arnés) | Sin cambios: el primero va en la lista de Lega; el segundo es del arnés |

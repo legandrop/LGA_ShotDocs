@@ -818,7 +818,9 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
       if (!canEdit) return;
       // Un tirador de la forma elegida.
       if (selected.length === 1) {
-        const handle = handlesOf(selected[0]).find((h) => Math.hypot(h.at.x - raw.x, h.at.y - raw.y) <= TOLERANCES[input].handle / pxPerUnit);
+        const handles = handlesOf(selected[0]);
+        const reach = handleReach(handles, input) / pxPerUnit;
+        const handle = handles.find((h) => Math.hypot(h.at.x - raw.x, h.at.y - raw.y) <= reach);
         if (handle) {
           begin({ mode: 'handle', pointerId: e.pointerId, id: selected[0].id, handle: handle.handle, start: raw, current: raw, shift: e.shiftKey });
           captureIt();
@@ -860,6 +862,20 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
     else begin({ mode: 'draw', tool, pointerId: e.pointerId, start: p, current: p, shift: e.shiftKey, alt: e.altKey });
     captureIt();
     redraw();
+  };
+
+  /**
+   * Hasta dónde toma un tirador, en píxeles de pantalla. Con el dedo, 22 px; pero en una forma chica las esquinas taparían
+   * todo y no se podría moverla (auditoría O2): nunca más de un tercio de la distancia entre dos tiradores (ni menos que
+   * con el mouse).
+   */
+  const handleReach = (handles: { at: Point }[], input: InputType): number => {
+    const full = TOLERANCES[input].handle;
+    let gap = Infinity;
+    for (let i = 0; i < handles.length; i++) {
+      for (let j = i + 1; j < handles.length; j++) gap = Math.min(gap, Math.hypot(handles[i].at.x - handles[j].at.x, handles[i].at.y - handles[j].at.y) * pxPerUnit);
+    }
+    return Math.min(full, Math.max(TOLERANCES.mouse.handle, gap / 3));
   };
 
   /** Con Text: un texto nuevo en ese punto, o editar el texto que hay ahí. */
@@ -1145,7 +1161,7 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
   }
   // En el teléfono se escribe en una caja de texto común (arriba, con letra legible); lo escrito se ve en la foto.
   if (!draft && text && compact && frame) {
-    const value = (draftText ?? text.value).replace(/\s+$/, '');
+    const value = (draftText ?? typed.current ?? text.value).replace(/\s+$/, '');
     if (value.trim()) {
       const font = `${text.fontSize}px ${MARKUP_FONT}`;
       const raw = text.id ? map.get(`${fileId}/${text.id}`) : null;
@@ -1364,7 +1380,9 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
             <textarea
               ref={textRef}
               className="annotator-textfield"
-              defaultValue={text.value}
+              // Lo ya escrito (auditoría O1): si la pantalla cambió de la compu al teléfono con la caja abierta, la caja
+              // nueva sigue con lo escrito en la otra.
+              defaultValue={typed.current ?? text.value}
               maxLength={MAX_TEXT}
               rows={2}
               aria-label={tr('annotate.text')}
@@ -1402,11 +1420,12 @@ export function Annotator({ doc, fileId, name, item, loader, size, onClose }: An
                 ref={textRef}
                 className="annotator-text"
                 data-fill={text.fill ? '' : undefined}
-                defaultValue={text.value}
+                // Lo ya escrito, también si se escribió en la caja del teléfono (la ventana se agrandó: auditoría O1).
+                defaultValue={typed.current ?? text.value}
                 maxLength={MAX_TEXT}
                 aria-label={tr('annotate.text')}
                 placeholder={tr('annotate.textHint')}
-                rows={Math.max(1, text.value.split('\n').length)}
+                rows={Math.max(1, (typed.current ?? text.value).split('\n').length)}
                 style={{
                   ...pct(text.at),
                   fontSize: `${text.fontSize * boxPx}px`,

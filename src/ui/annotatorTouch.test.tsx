@@ -256,6 +256,31 @@ describe('el anotador con el dedo', () => {
     expect(updates.length).toBe(1);
   });
 
+  it('con el dedo, una forma chica ya elegida se mueve desde el medio de un lado; en una grande, cerca de la esquina se estira (O2)', async () => {
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el, stage } = await open(doc);
+    tool(el, 'rectangle');
+    // 60 × 36 px en pantalla: con 22 px de tirador en cada esquina no quedaría dónde agarrarla.
+    stroke(stage, [100, 100], [160, 136], { kind: 'mouse' });
+    tool(el, 'select');
+    stroke(stage, [130, 118], [130, 118], { id: 2 });
+    // Desde el medio del lado izquierdo (a 18 px de las esquinas), 30 px a la derecha y abajo.
+    stroke(stage, [100, 118], [130, 148], { id: 3 });
+    const [small] = shapes(doc);
+    expect(small).toMatchObject({ type: 'rectangle', posX: 520, posY: 520 });
+    if (small.type === 'rectangle') expect([small.rect.w, small.rect.h]).toEqual([240, 144]);
+    // Una grande: tocar a 15 px de la esquina sigue tomando el tirador.
+    tool(el, 'rectangle');
+    stroke(stage, [400, 300], [700, 600], { kind: 'mouse' });
+    tool(el, 'select');
+    stroke(stage, [550, 450], [550, 450], { id: 4 });
+    stroke(stage, [688, 590], [738, 640], { id: 5 });
+    const big = shapes(doc).find((s) => s.id !== small.id)!;
+    expect(big).toMatchObject({ posX: 1600, posY: 1200 });
+    if (big.type === 'rectangle') expect(big.rect.w).toBeGreaterThan(1300);
+  });
+
   it('con Select, un dedo elige y mueve (con más tolerancia que el mouse)', async () => {
     const doc = new Y.Doc();
     writeFrame(doc, ID, FRAME.w, FRAME.h);
@@ -467,6 +492,48 @@ describe('el teléfono: la tira, la hoja y el texto', () => {
     ptr(stage, 'pointerdown', 800, 100, { id: 48, time: 6100 });
     ptr(stage, 'pointerup', 800, 100, { id: 48, time: 6150 });
     expect(el.querySelector('.annotator-number input')).not.toBeNull();
+  });
+
+  it('si la pantalla cambia (de teléfono a compu o al revés) con el texto abierto, lo escrito sigue y se guarda (O1)', async () => {
+    // Un `matchMedia` que cambia: la ventana que se agranda o se achica.
+    const listeners = new Set<() => void>();
+    const mq = { matches: true, media: '', addEventListener: (_: string, f: () => void) => listeners.add(f), removeEventListener: (_: string, f: () => void) => listeners.delete(f) };
+    vi.stubGlobal('matchMedia', () => mq);
+    const flip = (compact: boolean) =>
+      act(() => {
+        mq.matches = compact;
+        listeners.forEach((f) => f());
+      });
+    const type = (field: HTMLTextAreaElement, value: string) =>
+      act(() => {
+        field.value = value;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    const doc = new Y.Doc();
+    writeFrame(doc, ID, FRAME.w, FRAME.h);
+    const { el, stage } = await open(doc);
+    tool(el, 'text');
+    // Del teléfono a la compu.
+    ptr(stage, 'pointerdown', 200, 300, { id: 80 });
+    ptr(stage, 'pointerup', 200, 300, { id: 80 });
+    type(el.querySelector<HTMLTextAreaElement>('.annotator-textfield')!, 'Ventana');
+    flip(false);
+    expect(el.querySelector('.annotator-textfield')).toBeNull();
+    expect(el.querySelector<HTMLTextAreaElement>('textarea.annotator-text')!.value).toBe('Ventana');
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    expect(shapes(doc).map((s) => (s.type === 'text' ? s.text : s.type))).toEqual(['Ventana']);
+    // De la compu al teléfono.
+    ptr(stage, 'pointerdown', 600, 500, { kind: 'mouse', id: 81 });
+    ptr(stage, 'pointerup', 600, 500, { kind: 'mouse', id: 81 });
+    type(el.querySelector<HTMLTextAreaElement>('textarea.annotator-text')!, 'Poste');
+    flip(true);
+    expect(el.querySelector<HTMLTextAreaElement>('.annotator-textfield')!.value).toBe('Poste');
+    // Mientras tanto, se ve en la foto.
+    expect([...el.querySelectorAll('svg.annotator-shapes [data-shape="text"]')].map((n) => n.textContent).join('|')).toContain('Poste');
+    act(() => el.querySelector<HTMLButtonElement>('.annotator-textpanel .annotator-done')!.click());
+    expect(shapes(doc).map((s) => (s.type === 'text' ? s.text : s.type)).sort()).toEqual(['Poste', 'Ventana']);
   });
 
   it('*Only the pencil draws* se apaga en la hoja y no se vuelve a prender sola', async () => {

@@ -374,7 +374,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   color, un dedo dibuja y dos amplían sin dibujar, el lápiz del iPad dibuja y el dedo mueve (*Only the pencil draws*), la
   palma no dibuja, el texto en una caja común con el teclado, tocar un tirador sin moverlo ya no cambia la forma. Falta
   a mano en un iPhone y un iPad reales: el teclado con el toque, el gesto de "atrás" desde el borde y el doble toque
-  contra el dibujo, el Apple Pencil con la palma. Sigue la entrega 4 (bajar y copiar con anotaciones).
+  contra el dibujo, el Apple Pencil con la palma. De su auditoría quedan: un `pointercancel` del sistema (el gesto de «atrás», una llamada) descarta el trazo en curso, como en la compu (decidir si se guarda); la tira de herramientas no se desliza sola hasta la elegida al abrir. Sigue la entrega 4 (bajar y copiar con anotaciones).
   De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
   una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
   frena la poda se rompe (hoy, con `synced = async () => true`, la suite sigue en verde; la re-verificación lo comprobó en

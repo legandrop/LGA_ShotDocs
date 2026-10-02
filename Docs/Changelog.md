@@ -7,7 +7,7 @@ de la compu: barra chica arriba, un dedo dibujaba y no había cómo ampliar; el 
 pantallas táctiles, las herramientas van en una tira abajo y el estilo en una hoja que abre el punto de color; dos
 dedos amplían y mueven sin dibujar (lo del primer dedo se descarta: se escribe al soltar); el lápiz prende *Only the
 pencil draws* y el dedo mueve, la palma no dibuja; el texto se escribe en una caja común que abre el teclado en el
-toque. Tocar un tirador sin moverlo cambiaba la forma: ya no. Probado con iPhone e iPad emulados y WebKit.
+toque. Tocar un tirador sin moverlo cambiaba la forma: ya no. Auditada: lo escrito ya no se pierde si la pantalla cambia con la caja abierta, y una forma chica se mueve con el dedo.
 [ Anotar fotos, entrega 3 - el dedo, dos dedos para ampliar, el lápiz del iPad, la tira, la hoja y el texto del teléfono ]
 
 v0.126 :
