@@ -36,7 +36,7 @@ su auditoría. Lo medido está en prototipos fuera del repo (sección "Cómo se 
   `file_level`).
 - **Lo que no garantiza:** lo que un dispositivo ya bajó no se puede "desbajar"; los largos de lo borrado y los nombres
   de los atributos pisados viajan (no el contenido); las imágenes viejas `sdfile://` (bucket `page-files`, workspaces sin
-  portero) siguen enteras; las páginas en la papelera (frente aparte); y quien edita ve todo, por diseño (D13).
+  portero) siguen enteras; las páginas en la papelera (arreglado en v0.102: ya no se leen con Ver); y quien edita ve todo, por diseño (D13).
 - **La subida no cambia (D19).** El "GC selectivo" de la primera versión (que lo tecleado y borrado antes de subir no
   saliera del dispositivo) se descartó: la auditoría mostró que pierde texto que D15 manda conservar (entre 61 y 118
   letras con el editor real y 100 semillas), y con la base limpia los lectores quedan protegidos igual.
@@ -79,7 +79,7 @@ segundos, casi nunca. El precio es que el cliente ve los cambios con unos segund
 | Lo tecleado y borrado antes de subir (B.16, v0.095) | Todos los anteriores | Hasta 6 MB por subida (`NO_GC_MAX_BYTES`) |
 | Fotos y archivos sacados: `page_files` con `removed_at`, `files`, la miniatura (`thumbs`), el original por el portero | Nivel 1 o más: `can_view_file`, `file_level` y la política de `page_files` no miran `removed_at` | Nombre, tipo, peso, `drive_id`, miniatura y original |
 | Imágenes viejas `sdfile://` (bucket `page-files`, sin portero) | Nivel 1 o más (la política mira la carpeta de la página) | Toda imagen que se subió a la página, también las sacadas |
-| Páginas en la papelera | Nivel 1 o más (`user_page_level` mira solo si el proyecto está borrado) | Título y contenido (frente aparte, ver sección 6) |
+| Páginas en la papelera | Nivel 1 o más (`user_page_level` mira solo si el proyecto está borrado) | Título y contenido (arreglado en v0.102, `20261009120000_papelera_lectores.sql`) |
 | `page_history` (v0.098) | Nivel 3 o más, no invitado (D13) | Las filas con autor y hora: lo esperado |
 
 Los comentarios ya lo hacen bien: el texto de uno borrado no se sirve (`list_comments` devuelve `body` vacío) y la
@@ -390,7 +390,7 @@ una página compartida pase de 100 KB y se edite mucho todos los días con lecto
 | Que no se sepa nada de lo borrado | Los huecos llevan su largo, el autor de Yjs y el reloj; quedan los nombres de los atributos pisados y las claves del mapa de colapsar; `update_seq` y `updated_at` dicen que hubo cambios | Es metadato, no contenido; se dice en la ayuda |
 | Las imágenes viejas `sdfile://` sacadas | El bucket `page-files` no tiene registro de uso | Workspaces con portero: no se suben más así; en Wanka son 60, de desarrollo. Para cerrarlo, registrarlas en `files`/`page_files` (ítem aparte) |
 | Una foto sacada hasta que un editor la marca | `removed_at` lo pone un dispositivo de editor | La base ya no trae su dirección |
-| Páginas en la papelera | `user_page_level` no mira la papelera de páginas (hallazgo de la auditoría, frente aparte) | Dependencia: hasta que se arregle, una subpágina mandada a la papelera se lee con Ver |
+| Páginas en la papelera | `user_page_level` no mira la papelera de páginas (hallazgo de la auditoría) | Arreglado en v0.102: Ver, Comentar e invitados ya no leen páginas en la papelera |
 | Que quien edita no lo vea | Es el historial (D13) | Al compartir con Editar a un miembro, ve todo lo borrado |
 | Que un editor malintencionado no muestre otra cosa | Puede subir una base que no corresponde | Lo mismo que puede hacer editando; la próxima base de otro editor la reemplaza |
 | Lo que ya está en la base y en las copias | Las filas no se borran nunca (D4) | Lo tiene el dueño de la base; la regla es sobre quién lo recibe |
@@ -558,7 +558,7 @@ notify pgrst, 'reload schema';
    rearmado al pasar a lector (entrega 3).
 4. **La subida no cambia:** las pruebas de B.16 (`uploadNoGc.test.ts`, `history.test.ts` "filas de los dos tipos") y
    la corrida al azar con el editor real (`collabRemovedWriting.test.ts`) pasan sin tocarlas; esta última, con 100
-   semillas, cuando se arregle su frente aparte.
+   semillas, también desde el arreglo de v0.101.
 5. **Permisos en SQL** (`supabase/tests/privacidad_borrado_permisos.sql`, en `begin … rollback` con un script propio,
    nunca `npm run db:test`): con el interruptor apagado, todos bajan filas como hoy; prendido, Ver, Comentar y un
    invitado con Editar reciben solo la base (sus bytes no coinciden con ninguna fila) o nada si no hay base vigente;
