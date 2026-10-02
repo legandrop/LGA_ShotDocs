@@ -1,0 +1,303 @@
+diff --git a/node_modules/yjs/dist/yjs.cjs b/node_modules/yjs/dist/yjs.cjs
+index a29f8ef..116b76b 100644
+--- a/node_modules/yjs/dist/yjs.cjs
++++ b/node_modules/yjs/dist/yjs.cjs
+@@ -3499,6 +3499,43 @@ const clearUndoManagerStackItem = (tr, um, stackItem) => {
+   });
+ };
+ 
++/**
++ * LGA-SHOTDOCS-PATCH (B.21): lo que hoy ocupa en el documento lo que insertó `item`. Si nunca se volvió a poner, es el
++ * mismo item; si un deshacer lo volvió a poner (`redone`), son las copias de todo su largo (la copia tiene el mismo
++ * largo y relojes seguidos), partidas en los bordes y siguiendo las copias de las copias.
++ *
++ * @param {Transaction} transaction
++ * @param {import('./StructStore.js').StructStore} store
++ * @param {Item} item
++ * @return {Array<Item>}
++ */
++const lgaFollowRedoneRange = (transaction, store, item) => {
++  if (item.redone === null) {
++    return [item];
++  }
++  const structs = store.clients.get(item.redone.client);
++  if (structs === undefined) {
++    return [];
++  }
++  /**
++   * @type {Array<Item>}
++   */
++  const pieces = [];
++  iterateStructs(transaction, structs, item.redone.clock, item.length, struct => {
++    if (struct instanceof Item) {
++      pieces.push(struct);
++    }
++  });
++  /**
++   * @type {Array<Item>}
++   */
++  const res = [];
++  pieces.forEach(piece => {
++    res.push(...lgaFollowRedoneRange(transaction, store, piece));
++  });
++  return res;
++}
++
+ /**
+  * @param {UndoManager} undoManager
+  * @param {Array<StackItem>} stack
+@@ -3526,20 +3563,27 @@ const popStackItem = (undoManager, stack, eventType) => {
+        */
+       const itemsToDelete = [];
+       let performedChange = false;
++      // LGA-SHOTDOCS-PATCH (B.21): lo insertado que después volvió a poner otro deshacer (`redone`) se sigue en todo
++      // su largo y no solo hasta el primer corte: `followRedone` devuelve un solo item, así que dejaba restos si la
++      // copia se había partido escribiendo en el medio y borraba de más si la copia se había juntado con la vecina.
++      // Primero se juntan los items (sin partir nada mientras se recorre) y después se siguen las copias, en el mismo
++      // orden de antes (se borra al revés: los hijos antes que los padres).
++      /**
++       * @type {Array<Item>}
++       */
++      const insertedItems = [];
+       iterateDeletedStructs(transaction, stackItem.insertions, struct => {
+         if (struct instanceof Item) {
+-          if (struct.redone !== null) {
+-            let { item, diff } = followRedone(store, struct.id);
+-            if (diff > 0) {
+-              item = getItemCleanStart(transaction, createID(item.id.client, item.id.clock + diff));
+-            }
+-            struct = item;
+-          }
+-          if (!struct.deleted && scope.some(type => type === transaction.doc || isParentOf(/** @type {AbstractType<any>} */ (type), /** @type {Item} */ (struct)))) {
+-            itemsToDelete.push(struct);
+-          }
++          insertedItems.push(struct);
+         }
+       });
++      insertedItems.forEach(struct => {
++        lgaFollowRedoneRange(transaction, store, struct).forEach(item => {
++          if (!item.deleted && scope.some(type => type === transaction.doc || isParentOf(/** @type {AbstractType<any>} */ (type), item))) {
++            itemsToDelete.push(item);
++          }
++        });
++      });
+       iterateDeletedStructs(transaction, stackItem.deletions, struct => {
+         if (
+           struct instanceof Item &&
+@@ -9709,7 +9753,9 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+       let leftTrace = left;
+       // trace redone until parent matches
+       while (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item !== parentItem) {
+-        leftTrace = leftTrace.redone === null ? null : getItemCleanStart(transaction, leftTrace.redone);
++        // LGA-SHOTDOCS-PATCH (B.21): el vecino izquierdo es la copia de su última letra (la copia pudo partirse escribiendo
++        // en el medio; la primera parte dejaba lo vuelto a poner en el medio de su vecino).
++        leftTrace = leftTrace.redone === null ? null : getItemCleanEnd(transaction, store, createID(leftTrace.redone.client, leftTrace.redone.clock + leftTrace.length - 1));
+       }
+       if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
+         left = leftTrace;
+diff --git a/node_modules/yjs/dist/yjs.mjs b/node_modules/yjs/dist/yjs.mjs
+index bd77560..2afcc1a 100644
+--- a/node_modules/yjs/dist/yjs.mjs
++++ b/node_modules/yjs/dist/yjs.mjs
+@@ -3462,6 +3462,43 @@ const clearUndoManagerStackItem = (tr, um, stackItem) => {
+   });
+ };
+ 
++/**
++ * LGA-SHOTDOCS-PATCH (B.21): lo que hoy ocupa en el documento lo que insertó `item`. Si nunca se volvió a poner, es el
++ * mismo item; si un deshacer lo volvió a poner (`redone`), son las copias de todo su largo (la copia tiene el mismo
++ * largo y relojes seguidos), partidas en los bordes y siguiendo las copias de las copias.
++ *
++ * @param {Transaction} transaction
++ * @param {import('./StructStore.js').StructStore} store
++ * @param {Item} item
++ * @return {Array<Item>}
++ */
++const lgaFollowRedoneRange = (transaction, store, item) => {
++  if (item.redone === null) {
++    return [item];
++  }
++  const structs = store.clients.get(item.redone.client);
++  if (structs === undefined) {
++    return [];
++  }
++  /**
++   * @type {Array<Item>}
++   */
++  const pieces = [];
++  iterateStructs(transaction, structs, item.redone.clock, item.length, struct => {
++    if (struct instanceof Item) {
++      pieces.push(struct);
++    }
++  });
++  /**
++   * @type {Array<Item>}
++   */
++  const res = [];
++  pieces.forEach(piece => {
++    res.push(...lgaFollowRedoneRange(transaction, store, piece));
++  });
++  return res;
++}
++
+ /**
+  * @param {UndoManager} undoManager
+  * @param {Array<StackItem>} stack
+@@ -3489,20 +3526,27 @@ const popStackItem = (undoManager, stack, eventType) => {
+        */
+       const itemsToDelete = [];
+       let performedChange = false;
++      // LGA-SHOTDOCS-PATCH (B.21): lo insertado que después volvió a poner otro deshacer (`redone`) se sigue en todo
++      // su largo y no solo hasta el primer corte: `followRedone` devuelve un solo item, así que dejaba restos si la
++      // copia se había partido escribiendo en el medio y borraba de más si la copia se había juntado con la vecina.
++      // Primero se juntan los items (sin partir nada mientras se recorre) y después se siguen las copias, en el mismo
++      // orden de antes (se borra al revés: los hijos antes que los padres).
++      /**
++       * @type {Array<Item>}
++       */
++      const insertedItems = [];
+       iterateDeletedStructs(transaction, stackItem.insertions, struct => {
+         if (struct instanceof Item) {
+-          if (struct.redone !== null) {
+-            let { item, diff } = followRedone(store, struct.id);
+-            if (diff > 0) {
+-              item = getItemCleanStart(transaction, createID(item.id.client, item.id.clock + diff));
+-            }
+-            struct = item;
+-          }
+-          if (!struct.deleted && scope.some(type => type === transaction.doc || isParentOf(/** @type {AbstractType<any>} */ (type), /** @type {Item} */ (struct)))) {
+-            itemsToDelete.push(struct);
+-          }
++          insertedItems.push(struct);
+         }
+       });
++      insertedItems.forEach(struct => {
++        lgaFollowRedoneRange(transaction, store, struct).forEach(item => {
++          if (!item.deleted && scope.some(type => type === transaction.doc || isParentOf(/** @type {AbstractType<any>} */ (type), item))) {
++            itemsToDelete.push(item);
++          }
++        });
++      });
+       iterateDeletedStructs(transaction, stackItem.deletions, struct => {
+         if (
+           struct instanceof Item &&
+@@ -9672,7 +9716,9 @@ const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemoteMapCh
+       let leftTrace = left;
+       // trace redone until parent matches
+       while (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item !== parentItem) {
+-        leftTrace = leftTrace.redone === null ? null : getItemCleanStart(transaction, leftTrace.redone);
++        // LGA-SHOTDOCS-PATCH (B.21): el vecino izquierdo es la copia de su última letra (la copia pudo partirse escribiendo
++        // en el medio; la primera parte dejaba lo vuelto a poner en el medio de su vecino).
++        leftTrace = leftTrace.redone === null ? null : getItemCleanEnd(transaction, store, createID(leftTrace.redone.client, leftTrace.redone.clock + leftTrace.length - 1));
+       }
+       if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
+         left = leftTrace;
+diff --git a/node_modules/yjs/src/structs/Item.js b/node_modules/yjs/src/structs/Item.js
+index fca5827..3e03a7b 100644
+--- a/node_modules/yjs/src/structs/Item.js
++++ b/node_modules/yjs/src/structs/Item.js
+@@ -181,7 +181,9 @@ export const redoItem = (transaction, item, redoitems, itemsToDelete, ignoreRemo
+       let leftTrace = left
+       // trace redone until parent matches
+       while (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item !== parentItem) {
+-        leftTrace = leftTrace.redone === null ? null : getItemCleanStart(transaction, leftTrace.redone)
++        // LGA-SHOTDOCS-PATCH (B.21): el vecino izquierdo es la copia de su última letra (la copia pudo partirse escribiendo
++        // en el medio; la primera parte dejaba lo vuelto a poner en el medio de su vecino).
++        leftTrace = leftTrace.redone === null ? null : getItemCleanEnd(transaction, store, createID(leftTrace.redone.client, leftTrace.redone.clock + leftTrace.length - 1))
+       }
+       if (leftTrace !== null && /** @type {AbstractType<any>} */ (leftTrace.parent)._item === parentItem) {
+         left = leftTrace
+diff --git a/node_modules/yjs/src/utils/UndoManager.js b/node_modules/yjs/src/utils/UndoManager.js
+index e5c4dc8..6a82d38 100644
+--- a/node_modules/yjs/src/utils/UndoManager.js
++++ b/node_modules/yjs/src/utils/UndoManager.js
+@@ -1,6 +1,7 @@
+ import {
+   mergeDeleteSets,
+   iterateDeletedStructs,
++  iterateStructs,
+   keepItem,
+   transact,
+   createID,
+@@ -45,6 +46,43 @@ const clearUndoManagerStackItem = (tr, um, stackItem) => {
+   })
+ }
+ 
++/**
++ * LGA-SHOTDOCS-PATCH (B.21): lo que hoy ocupa en el documento lo que insertó `item`. Si nunca se volvió a poner, es el
++ * mismo item; si un deshacer lo volvió a poner (`redone`), son las copias de todo su largo (la copia tiene el mismo
++ * largo y relojes seguidos), partidas en los bordes y siguiendo las copias de las copias.
++ *
++ * @param {Transaction} transaction
++ * @param {import('./StructStore.js').StructStore} store
++ * @param {Item} item
++ * @return {Array<Item>}
++ */
++const lgaFollowRedoneRange = (transaction, store, item) => {
++  if (item.redone === null) {
++    return [item]
++  }
++  const structs = store.clients.get(item.redone.client)
++  if (structs === undefined) {
++    return []
++  }
++  /**
++   * @type {Array<Item>}
++   */
++  const pieces = []
++  iterateStructs(transaction, structs, item.redone.clock, item.length, struct => {
++    if (struct instanceof Item) {
++      pieces.push(struct)
++    }
++  })
++  /**
++   * @type {Array<Item>}
++   */
++  const res = []
++  pieces.forEach(piece => {
++    res.push(...lgaFollowRedoneRange(transaction, store, piece))
++  })
++  return res
++}
++
+ /**
+  * @param {UndoManager} undoManager
+  * @param {Array<StackItem>} stack
+@@ -72,20 +110,27 @@ const popStackItem = (undoManager, stack, eventType) => {
+        */
+       const itemsToDelete = []
+       let performedChange = false
++      // LGA-SHOTDOCS-PATCH (B.21): lo insertado que después volvió a poner otro deshacer (`redone`) se sigue en todo
++      // su largo y no solo hasta el primer corte: `followRedone` devuelve un solo item, así que dejaba restos si la
++      // copia se había partido escribiendo en el medio y borraba de más si la copia se había juntado con la vecina.
++      // Primero se juntan los items (sin partir nada mientras se recorre) y después se siguen las copias, en el mismo
++      // orden de antes (se borra al revés: los hijos antes que los padres).
++      /**
++       * @type {Array<Item>}
++       */
++      const insertedItems = []
+       iterateDeletedStructs(transaction, stackItem.insertions, struct => {
+         if (struct instanceof Item) {
+-          if (struct.redone !== null) {
+-            let { item, diff } = followRedone(store, struct.id)
+-            if (diff > 0) {
+-              item = getItemCleanStart(transaction, createID(item.id.client, item.id.clock + diff))
+-            }
+-            struct = item
+-          }
+-          if (!struct.deleted && scope.some(type => type === transaction.doc || isParentOf(/** @type {AbstractType<any>} */ (type), /** @type {Item} */ (struct)))) {
+-            itemsToDelete.push(struct)
+-          }
++          insertedItems.push(struct)
+         }
+       })
++      insertedItems.forEach(struct => {
++        lgaFollowRedoneRange(transaction, store, struct).forEach(item => {
++          if (!item.deleted && scope.some(type => type === transaction.doc || isParentOf(/** @type {AbstractType<any>} */ (type), item))) {
++            itemsToDelete.push(item)
++          }
++        })
++      })
+       iterateDeletedStructs(transaction, stackItem.deletions, struct => {
+         if (
+           struct instanceof Item &&

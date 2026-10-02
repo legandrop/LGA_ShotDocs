@@ -213,7 +213,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (diseño)" y "Cómo quedó (entrega 3)"): la flecha en Ctrl/⌘+K, vista previa, una, la página o todas con confirmación,
   escrito en el Y.Doc de cada página que se puede editar y está completa, y *Undo* de todo lo que siga igual (también
   sin red y después de cerrar la app). Falta probarlo a mano en Safari, el iPhone y Firefox. Queda para después:
-  reemplazar en los títulos, pies y nombres; la papelera, todos los proyectos y los comentarios. Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
+  reemplazar en los títulos, pies y nombres; la papelera, todos los proyectos y los comentarios. **D11 (v0.130): al buscar, las
+  secciones colapsadas se abren para mostrar lo encontrado** (solo en este dispositivo y a la vista; se vuelven a cerrar al
+  terminar; `Doc_Buscar.md`, "Abrir al buscar"). Queda para después: abrir también las listas plegables cerradas.
+  Lo pedido: dos lupas. **En el proyecto:** una lupa a la izquierda del "+" de
   páginas en la barra lateral, que busca en todas las páginas del proyecto que la persona puede ver (títulos y
   contenido) y lleva al lugar. **En la página:** una lupa a la izquierda del ícono de comentarios, que busca en
   la página abierta, también adentro de las secciones colapsadas (P.11: el resultado abre la sección). A pensar
@@ -337,7 +340,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   lo que se copia del día anterior, "ya existe" y el orden, sin red. **Entrega 3 hecha** (v0.124): plantillas propias
   (*Save as template…* con *Clear filled-in values*, la carpeta *Templates*, la franja con *Template settings…* y *Stop
   using as template*, *Customize*, las de otros proyectos sin sus fotos, *Wait* / *Use built-in* a medio bajar y el
-  selector de plantilla del globito, con el aviso de O4). **Falta** que Lega revise el contenido de las tres (PL1) y
+  selector de plantilla del globito, con el aviso de O4). **D82 hecha** (v0.130): *On-Set Report* en la raíz del proyecto
+  ofrece crear o elegir la carpeta de reportes y mueve ahí la página (ya no sale como plantilla común). Quedan dos
+  sorpresas anotadas por la auditoría: *Apply template…* en una página de la raíz con subpáginas las mueve con la página, y
+  la ventana no avisa si la carpeta elegida ya tiene el reporte de hoy (mostrar el *already exists* con *Open*). **Falta** que Lega revise el contenido de las tres (PL1) y
   pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
   *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
   proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la
@@ -377,6 +383,12 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   palma no dibuja, el texto en una caja común con el teclado, tocar un tirador sin moverlo ya no cambia la forma. Falta
   a mano en un iPhone y un iPad reales: el teclado con el toque, el gesto de "atrás" desde el borde y el doble toque
   contra el dibujo, el Apple Pencil con la palma. De su auditoría quedan: un `pointercancel` del sistema (el gesto de «atrás», una llamada) descarta el trazo en curso, como en la compu (decidir si se guarda); la tira de herramientas no se desliza sola hasta la elegida al abrir. Sigue la entrega 4 (bajar y copiar con anotaciones).
+  **Copiar y pegar con las anotaciones hecho (v0.132, D46, parte de la entrega 5):** copiar o cortar una foto anotada y
+  pegarla en otra página del mismo proyecto le lleva sus formas (mismas claves, sin duplicar, un solo ⌘Z saca la foto y
+  sus flechas); a otro proyecto o workspace no viajan, y al portapapeles no va nada nuevo
+  (`src/media/markupClipboard.ts`, `src/ui/markupClipboardEditor.ts`). Falta a mano: ⌘C y ⌘V de verdad en Safari de la
+  Mac y en el iPhone. De la entrega 5 quedan el historial de las anotaciones, *Keep annotations?* al reemplazar y buscar
+  en sus textos.
   De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
   una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
   frena la poda se rompe (hoy, con `synced = async () => true`, la suite sigue en verde; la re-verificación lo comprobó en
@@ -432,11 +444,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
-  De la auditoría de la entrega 2 (ninguna pierde datos ni da acceso de más): falta una prueba que caiga si se saca el paso
-  previo de compartir (`useShareGate`), antes de prender D14 (O1); después de Esc o *Cancel* en la pregunta de compartir,
-  la lista del `@` no vuelve hasta tocar el campo (O2); se puede compartir desde la mención en un proyecto archivado, como
-  con *Share* (O3); no mira la versión mínima de la app de quien recibe (O4); si se descarta el comentario después de
-  compartir, la persona queda con acceso y sin mención (O5).
+  De la auditoría de la entrega 2 (ninguna pierde datos ni da acceso de más), **resuelto en v0.131:** la prueba de
+  compartir con `useShareGate` (O1, ya se puede prender D14), la lista del `@` tras Esc o *Cancel* (O2) y la pregunta
+  que aclara que se comparte en el acto (O5). Se dejan, con su motivo: compartir desde la mención en un proyecto
+  archivado, como con *Share* (O3), y que `share_for_mention` no mire la versión mínima, como `public.share` (O4).
 - **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
   Lega). **A1 implementada (v0.118):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y
@@ -462,7 +473,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   permiso aparte; con páginas reales pide, casi seguro, el plan pago de Workers del dueño (US$ 5 por mes) o el MCP local. Entregas: A1 (texto elegido), A2
   (página, formato, política), A3 (pie de foto), M0 (prueba técnica del MCP: OAuth de Supabase con el registro cerrado,
   el rol del token, 10 ms de CPU), M1 (MCP de lectura; requiere el interruptor de D14), M2 (MCP que escribe), M3
-  (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos.
+  (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos. **La clave en todos tus
+  dispositivos (D72 → B, Lega 2026-10-02): diseño en `Doc_Clave_Sincronizada.md`** (sin código; auditado y corregido;
+  decisiones CS1 a CS9): una copia cifrada en el dispositivo con una frase de seis palabras que propone la app (PBKDF2-SHA256 de
+  1 000 000 de vueltas y AES-256-GCM, medidos), guardada en una tabla propia del Supabase del workspace donde la persona
+  la prende, que solo ella lee; el dueño ve que existe, no qué es. Entregas S1 (prender, desbloquear, dejar de
+  sincronizar, *Sign out other devices*, preguntar si cambia a dónde va la clave; riesgo alto, con auditoría) y S2
+  (cambiar la frase, aviso entre dispositivos, copia más vieja, computadora prestada). **D77 (Lega):** el MCP también
+  mueve y manda a la papelera, siempre con la confirmación de la persona y una casilla al conectar (dos pasos, la
+  pregunta directa del cliente si la tiene, *Undo* a un clic; `Doc_Asistente.md` 9.3 bis, IA11), y nunca cambia quién
+  ve algo; compartir e invitar, nunca. Va en M2. Al roadmap, sin diseño: que una sesión robada no pueda seguir una hora
+  con su token de acceso (acortar su vida en Supabase cuesta más pedidos de refresco; para decidir con M0).
 - **P.26 ⌘Z en el orden en que editaste** (Lega, 2026-10-02, al responder cómo se deshace un reemplazo en todo el
   proyecto): ⌘Z deshace lo último que hiciste aunque haya sido en otra página, y un *Replace all in project* se deshace
   entero en ese orden. **Diseño en `Doc_Deshacer.md`** (sin código; auditado y corregido; decisiones propuestas DH1 a
@@ -471,7 +492,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   al editor nuevo, sin parchear y-prosemirror); ⌘Z en otra página te lleva y lo deshace a la vista; el reemplazo entra
   en la pila de Yjs de las páginas editadas en la sesión (arregla un resto que deja hoy deshacer el reemplazo y después
   lo escrito antes, también desde el *Undo* del panel) y por las anclas en las demás; ⌘⇧Z rehace todo, también el
-  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (condición: B.21, el límite de Yjs), 1 (la
+  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (hecha, v0.132: B.21), 1 (la
   línea de tiempo con las páginas, con la memoria medida con el editor real), 2 (el reemplazo adentro), 3 (anotar como un
   paso). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
@@ -714,13 +735,20 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    no ve un atributo nuevo del nodo `photo` (el fixture usa el de hoy), y nada avisa si nadie lo regenera después de
    publicar un cambio del esquema: al publicar una versión que cambia `editorSchema.ts`, regenerarlo.
 
-21. **Restos del deshacer de Yjs (medido al diseñar P.26, `Doc_Deshacer.md`, sección 6).** Si algo que un deshacer
-   volvió a poner se parte escribiendo en el medio, deshacer más atrás deja restos y a veces se lleva un pedazo de texto
-   (un deshacer borró "ám" de "cámara"): en una página sola, con el ⌘Z de hoy, 14 de 3.000 corridas al azar terminan con
-   algo de menos (queda en el historial), igual con y sin la línea de tiempo de P.26. Es de `UndoManager` de Yjs (sigue
-   la copia vuelta a poner solo hasta el primer corte). **Condición de la entrega 1 de P.26** (con P.26 se deshace más
-   lejos): investigar si se corrige con un parche (como los de y-prosemirror) o se reporta arriba, y decidir antes de
-   publicar.
+21. **Hecho (v0.132): restos del deshacer de Yjs** (entrega 0 de P.26, `Doc_Deshacer.md`, sección 16). Deshacer lo
+   escrito seguía lo que otro deshacer había vuelto a poner solo hasta el primer corte: dejaba restos si se había escrito
+   en el medio y se llevaba texto de antes si las copias se habían juntado. Un parche a Yjs (`patches/yjs+13.6.33.patch`,
+   Yjs fijo en 13.6.33) sigue la copia entera. Con texto: de 1.844 a 3.000 de 3.000 exactas y de 14 a 0 con algo de
+   menos; con el editor real, de 68 de 300 con restos a 0. Borrando y deshaciendo bloques enteros no es cero: 1 de 300
+   con una letra de antes de menos con el editor (antes 7) y 10 de 3.000 en un modelo de párrafos (antes 112). Quedan
+   casos raros con las mismas letras en otro orden (1 de 300 con el editor; algunos los trae la parte de `redoItem` del
+   parche, sin pérdida). Pendiente: reportarlo a Yjs con los casos mínimos (`Doc_Deshacer.md`, 16.1 y 16.4).
+22. **La excepción del ⌘Z de Yjs con dos personas** (la encontró la auditoría de la entrega 0 de P.26; ya pasaba antes del
+   parche de B.21). Con dos personas editando la misma página, a veces `UndoManager.undo()` tira `TypeError` (`reading
+   'client'`) en `redoItem`, cuando la copia del padre que tiene que volver ya fue recolectada (1 de 150 con dos editores
+   reales; 24 de 3.000 en un modelo de párrafos); qué deja ese ⌘Z en pantalla no está medido. Con la línea de tiempo (P.26, entrega 1) se
+   deshace más lejos: atraparla ahí (descartar el paso y avisar), medirla, y ver si se arregla con el parche de Yjs o se
+   reporta (`Doc_Deshacer.md`, 16.6).
 
 ### C. Esperan a Lega
 

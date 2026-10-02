@@ -10,7 +10,8 @@ its own project: a tree of pages you own.
   top of the sidebar without leaving the page you are on.
 - **Search.** Ctrl/⌘+F finds and replaces in the open page. Ctrl/⌘+K (or the magnifying glass next to
   "+" in the sidebar) searches the titles and text of every page in the project, on your device and
-  offline, takes you to the exact spot, and lists matching projects to switch to. Its arrow opens **Replace
+  offline, takes you to the exact spot (collapsed sections that hide a match open while you search and fold back when
+  you close the bar), and lists matching projects to switch to. Its arrow opens **Replace
   across the project**: a preview of every change, replace one, a page or all of them (after a confirmation that
   says how many changes in how many pages), and *Undo* puts back everything nobody changed afterwards.
 - **Pages and subpages.** A sidebar with a tree of pages, as deep as you need. Every page can hold
@@ -110,6 +111,10 @@ In production (v0.049). What works today:
   thickness; one finger draws, two fingers zoom and move the photo without drawing, and text is typed in a regular box
   with the phone keyboard. Once you use a pencil (Apple Pencil on the iPad), only the pencil draws and your finger moves
   the photo, like in Notes.
+- Copy or cut an annotated photo and paste it on another page of the same project: its annotations come with it (also
+  into another window of the app), pasting twice doesn't repeat them, and undo right after pasting removes the photo
+  with them. On a page of another project it arrives without them, and nothing of the annotations goes to the
+  clipboard.
 - iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
   shows them; the converter is downloaded only the first time it is needed.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;

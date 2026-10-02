@@ -10,6 +10,46 @@ peso). *Smaller file* vuelve a las achicadas. Si no entra en un PDF, sale en par
 *Part 2*…, una por vez, con tope de peso y de píxeles); al terminar, la lista de las que fallaron con su link y *Export
 again*.
 [ Exportar 1b - fotos en resolución completa, el PDF en partes y la lista de las páginas que fallaron ]
+v0.132 :
+
+Deshacer, entrega 0 (B.21, `Doc_Deshacer.md`, sección 16). Deshacer lo escrito dejaba restos ("la ía" en vez de "la ")
+y a veces se llevaba texto de antes (un ⌘Z borró "ám" de "cámara"). La causa estaba en Yjs: deshacer un borrado escribe
+copias, y el deshacer siguiente seguía la copia solo hasta su primer corte: si se había escrito en el medio quedaba el
+resto, y si las copias se habían juntado se borraban todas. Un parche a Yjs (`patches/yjs+13.6.33.patch`, Yjs fijo en
+13.6.33, `assertYjsPatched`) sigue la copia en todo su largo. Con texto: de 14 a 0 de 3.000 con algo de menos; con el
+editor real, de 68 de 300 con restos a 0. Borrando bloques enteros queda poco: 1 de 300 con una letra de menos (antes
+7). Sin cambios en lo guardado ni en `min_app_version`.
+**Además, copiar y pegar una foto con sus anotaciones** (D46): las flechas son de cada página (`photoMarkup`), así que una
+foto anotada llegaba limpia a otra página. Ahora, al copiar, la app recuerda las formas de las fotos copiadas (y en sus
+otras pestañas, por `BroadcastChannel`); al pegar en una página del mismo proyecto las escribe en el mismo paso de ⌘Z,
+solo para las fotos que el pegado agregó. Al portapapeles no va nada nuevo; otro proyecto o una versión vieja reciben la
+foto limpia.
+[ Deshacer sin restos (parche de Yjs, B.21) y copiar y pegar una foto con sus anotaciones (D46) ]
+
+v0.131 :
+
+Dos cosas del asistente y las menciones. **Arreglos de las menciones, entrega 2:** compartir desde la mención por
+`useShareGate` no tenía prueba (2 mutantes vivos); ahora 5 pruebas y los 9 mutantes mueren, lo que faltaba para prender
+la privacidad de lo borrado. La lista del `@` no volvía tras Esc o *Cancel* (el campo olvidaba la posición y enfocarlo
+por código no la relee): `cancelAsk` la vuelve a leer. La pregunta aclara que se comparte en el acto. **Diseño, sin
+código, de la clave del asistente en todos tus dispositivos** (D72 → B, `Doc_Clave_Sincronizada.md`, CS1 a CS9): una
+copia cifrada en el dispositivo con una frase de seis palabras (PBKDF2 y AES-256-GCM) que solo lee la persona; para un
+dispositivo perdido, *Sign out other devices* y frase nueva. **Mover y borrar por el MCP con confirmación** (D77,
+`Doc_Asistente.md` 9.3 bis, IA11): solo proponen, se hacen con el sí de la persona, nunca cambian quién ve algo y tienen
+*Undo*; compartir e invitar, nunca. Sin migración.
+[ Arreglos de las menciones y el diseño de la clave del asistente sincronizada (D72) y de mover y borrar por el MCP (D77) ]
+
+v0.130 :
+
+Buscar dentro de secciones colapsadas (D11) y el reporte de set en la raíz (D82), dos pedidos de Lega del 2026-10-02.
+**Buscar**: las coincidencias escondidas en una sección colapsada solo se veían al ir una por una y esa sección quedaba
+abierta para siempre. Ahora buscar en la página (o abrir un resultado del proyecto) abre todas las secciones que esconden
+coincidencias y las vuelve a cerrar al terminar; es solo la vista de este dispositivo (los registros de "abrir para vos"
+de P.11), no escribe el Y.Doc. **Reporte en la raíz**: *On-Set Report* en una página de la raíz creaba la plantilla común
+sin "ayer" que copiar ni días que numerar. Ahora ofrece la carpeta de reportes que ya tenga el proyecto o crear una
+(*On-Set Reports*), mueve la página adentro y la llena como `2026-10-02 | Day 01`; si la página cambió o falta permiso,
+no escribe nada (`dayReportRoot.ts`, `RootReportDialog.tsx`). Sin migración ni `min_app_version`.
+[ Buscar con secciones colapsadas (D11) y el reporte de set en la raíz (D82) ]
 
 v0.129 :
 

@@ -1,8 +1,9 @@
 # Anotar sobre las fotos (P.20)
 
 **Estado: entregas 0 a 3 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
-compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final); bajar y copiar con anotaciones
-(entrega 4) sigue en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
+compu y la poda; v0.129: el dedo y el lápiz del iPad; ver "Cómo quedó" al final) y, de la entrega 5, copiar y pegar una
+foto con sus anotaciones (D46, v0.132; "Copiar y pegar con las anotaciones", al final); bajar y copiar la imagen con
+anotaciones (entrega 4) sigue en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
@@ -188,8 +189,8 @@ doc.getMap('photoMarkup')                    // al lado de CONTENT_FRAGMENT y de
   versiones viejas (`src/ui/unknownContent.ts`) revisa solo ese fragmento; el resto del `Y.Doc` viaja intacto en cada
   subida y bajada. La auditoría lo probó con dos esquemas viejos, la librería publicada y la sincronización de v0.029.
 - **La clave es el archivo, dentro de la página** (AN2): la misma foto dos veces en la página (o en una celda y como
-  bloque) comparte las anotaciones (se dice en la ayuda); la misma foto en otra página sale limpia (hasta que se copie
-  con sus anotaciones, entrega 5). Convertir una foto-bloque en foto en línea (`convertPhotos.ts`) no cambia la `url`,
+  bloque) comparte las anotaciones (se dice en la ayuda); la misma foto en otra página sale limpia, salvo que se copie
+  y se pegue ahí: copiar y pegar la lleva con sus anotaciones (D46, "Copiar y pegar con las anotaciones"). Convertir una foto-bloque en foto en línea (`convertPhotos.ts`) no cambia la `url`,
   así que las anotaciones siguen. **Reemplazar** la foto (barra de la foto) cambia el archivo: si la nueva tiene la misma
   proporción, se pregunta *Keep annotations?* y se copian a las claves nuevas; las del archivo viejo quedan huérfanas y
   las saca la poda.
@@ -366,6 +367,8 @@ anotador en solo lectura (*Update the app to edit these annotations*).
   - **B.** De la foto en todos lados: anotarla en una página la anota en todas.
 - **Elegí A porque** lo que ve cada página lo deciden sus permisos, y una nota interna no se cuela en la página del
   cliente. Además sale solo del modelo de AN1.
+- **Decidido por Lega (2026-10-02, D46):** A, pero copiar y pegar una foto la lleva con sus flechas a la página de
+  destino (hecho en v0.132: "Copiar y pegar con las anotaciones").
 - **Si preferís otra:** B pide guardar las anotaciones por archivo (una tabla, como la opción C de AN1) y decidir qué
   pasa cuando alguien que solo ve una página anota la foto de otra. Es más trabajo y más riesgo de filtrar.
 
@@ -495,7 +498,7 @@ anotador en solo lectura (*Update the app to edit these annotations*).
 | **2** | **Anotar en la compu:** el anotador, las 9 herramientas, letras, `[` `]`, Shift y Alt, colores, grosor (AN7), estilo por herramienta, deshacer propio por foto, escribir al soltar, topes en bytes codificados, la poda de huérfanos (AN11); *Annotate* en la barra y A en el carrete; ayuda y atajos en el registro; pruebas de dos editores a la vez y con la versión anterior. | Lega abre una foto de set, pone una flecha roja, un círculo y un texto, cierra: se ven en la página y en el PDF; en otra pestaña aparecen sin recargar; dos pestañas dibujando a la vez conservan todo; con la red cortada anota, y al volver sube; ⌘[ en Safari y Chrome cambia el grosor y no va "atrás"; sacar la foto anotada y, a los 10 minutos, la base limpia ya no trae sus notas |
 | **3** | **El dedo (y el lápiz en el iPad):** la tira de abajo, la hoja de propiedades, dos dedos para ampliar, el lápiz en el iPad, el texto con el teclado del teléfono, sin red. | En el iPhone: anotar una foto con el dedo ampliando para un detalle, en modo avión; al volver la señal aparece en la compu. En un iPad con lápiz: el lápiz dibuja y el dedo mueve |
 | **4** | **Bajar y copiar:** *Download → With annotations* (formas dibujadas con la API del `canvas`), *Copy with annotations*, la opción en *Download all*, el tope de 16 MP en el iPhone, *Export for FrameRev* (`.frproj` v2). | La foto bajada tiene las flechas donde estaban, al tamaño del original y con la misma letra que en pantalla, desde el portero y desde la copia del dispositivo; el `.frproj` abre en FrameRev con las mismas formas y se pueden editar |
-| **5** | **Historial, copiar y buscar:** versiones de "solo anotó", ver y restaurar anotaciones (también las podadas), copiar y pegar una foto con sus anotaciones a otra página, *Keep annotations?* al reemplazar, buscar en los textos de las anotaciones. | Borrar una flecha, cerrar todo, volver desde el historial y recuperarla; pegar la foto en otra página con las flechas |
+| **5** | **Historial, copiar y buscar:** versiones de "solo anotó", ver y restaurar anotaciones (también las podadas), copiar y pegar una foto con sus anotaciones a otra página (**hecho en v0.132, D46**), *Keep annotations?* al reemplazar, buscar en los textos de las anotaciones. | Borrar una flecha, cerrar todo, volver desde el historial y recuperarla; pegar la foto en otra página con las flechas |
 | **6** | **(Opcional, si Lega lo pide) Dibujar en un comentario** (nivel comentar): el dibujo va con el comentario, no con la foto de la página. | Un invitado que comenta marca una ventana; el equipo ve el dibujo al abrir el hilo |
 
 Cada entrega lleva su auditoría independiente antes de pasar a `main`.
@@ -780,3 +783,86 @@ Auditoría independiente: **aprobado con observaciones**, sin bloqueantes. Lo qu
 | **O2** Con Elegir y el dedo, una forma chica ya elegida no se podía mover: los tiradores de 22 px de las esquinas la tapaban y se estiraba | El tirador toma como mucho un tercio de la distancia entre dos tiradores (nunca menos que con el mouse). Prueba: un rectángulo de 60 × 36 px se mueve desde el medio de un lado y uno grande se sigue estirando cerca de la esquina (cae con el código anterior) |
 | O3 (un `pointercancel` del sistema descarta el trazo en curso), O5 (la tira no se desliza hasta la herramienta elegida) | Al roadmap (P.20) |
 | O4 (el foco en el mismo toque, sin prueba que caiga en jsdom), O6 (la foto rota del arnés) | Sin cambios: el primero va en la lista de Lega; el segundo es del arnés |
+
+## Copiar y pegar con las anotaciones (D46, v0.132)
+
+Lega cambió AN2 (D46, 2026-10-02): las anotaciones siguen siendo de la foto **en esa página**, pero copiar y pegar una
+foto la lleva con sus flechas a la página de destino. El modelo está en `src/media/markupClipboard.ts`, lo que lo une al
+editor en `src/ui/markupClipboardEditor.ts`, y lo engancha `PageEditor.tsx` (el pegado y una extensión del editor).
+
+**Cómo funciona:**
+
+- **Copiar o cortar** en el editor: después de que el editor pone lo suyo en el portapapeles (un oyente en el mismo
+  elemento, puesto después que los de ProseMirror), la app lee lo que puso, busca las fotos que nombra
+  (`sdmedia://<id>`) y guarda **en memoria** una copia de las anotaciones de las que tienen: el marco y todas las formas,
+  campo por campo (también los que esta versión no conoce), junto con lo puesto en el portapapeles y el workspace y el
+  proyecto de la página. Es una foto del momento: cortar anda aunque la foto ya no esté al pegar, y lo que cambie
+  después en el origen no viaja. Copiar algo sin fotos anotadas olvida la copia anterior.
+- **Otra ventana de la app:** las pestañas abiertas en el mismo navegador reciben la misma copia por un
+  `BroadcastChannel` (solo el mismo origen; nunca a disco). Una pestaña abierta después de copiar, o recargada, no la
+  tiene: se vuelve a copiar.
+- **Pegar:** si el portapapeles trae justo lo copiado (nadie copió otra cosa después) y la página es del mismo workspace
+  y del mismo proyecto, después del pegado de siempre se escriben las formas en el mapa `photoMarkup` de la página de
+  destino, solo para las fotos que **trajo el pegado**: las que aparecen en el contenido más veces que antes. Una que no
+  entró (pegada como texto en un bloque de código) no deja huérfanas ni le pone notas a la misma foto que ya estaba en la
+  página; pegar una foto que ya está en otro lugar de la página sí suma (aparece una vez más).
+- **Qué se escribe:** con las **mismas claves** `<fileId>/<shapeId>`, y una clave que ya está no se toca: pegar dos veces,
+  o pegar en la misma página (la foto duplicada comparte el dibujo, AN2), no escribe nada, y lo que alguien movió en el
+  destino queda movido. Si la página ya tenía esa foto con sus propias formas, se suman. El marco, solo si falta; si la
+  página ya tiene otro marco para esa foto (otro tamaño), esa foto no se lleva nada (las coordenadas no coincidirían).
+  Dentro de los topes de la sección 10: si no entra, la foto llega limpia y se avisa (*A pasted photo came without its
+  annotations: this page already has too many.*).
+- **Deshacer:** el pegado y sus anotaciones son **un solo paso** del ⌘/Ctrl+Z de la página: su pila (la de
+  y-prosemirror) suma el mapa, pero solo sigue el origen de lo pegado (`sd-markup-paste`); lo dibujado con el anotador y
+  la poda siguen afuera, así que el ⌘/Ctrl+Z de la página sigue sin deshacer lo dibujado. Rehacer trae las dos cosas.
+- **La poda (AN11):** lo pegado está en el contenido, así que no es huérfano y no se poda (también sin red: la poda ni
+  corre sin la página sincronizada). Un pegado deshecho ya sacó sus formas.
+
+**Qué no viaja:**
+
+- **A otro proyecto del workspace:** la foto llega como hasta ahora, con el marcador *Photo from another project* (ahí
+  no se ve), y sin anotaciones: no tendrían dónde verse y llegarían a la gente de otro proyecto.
+- **A otro workspace:** nada (cada workspace es una isla).
+- **Al portapapeles de la máquina: nada nuevo.** Va exactamente lo que ponía el editor; pegada en otra app, la foto sale
+  igual que antes, y ningún texto de una anotación sale de la app.
+- **Desde una página que solo se puede ver:** el navegador copia por su cuenta (sin el formato del editor), así que no
+  se llevan, como hasta ahora la foto tampoco viajaba como foto del Drive.
+
+**Versiones viejas:** lo que va al portapapeles no cambió. La versión publicada y la anterior (los esquemas de
+`src/ui/fixtures/`) pegan lo copiado en esta con la foto limpia y todo el texto, y abren y editan una página con lo
+pegado sin tocar el mapa. **`min_app_version` no hace falta subirla:** no hay tipos de bloque ni propiedades nuevas ni
+cambia el formato del mapa; una versión vieja solo no lleva las flechas al pegar.
+
+**Pruebas:** `src/ui/markupClipboard.test.ts` (35, con el editor de verdad): copiar y pegar en otra página del mismo
+proyecto (marco y formas idénticas, el origen intacto), el portapapeles igual al de un editor sin esta función y sin
+textos de anotaciones, texto y tres fotos en la misma selección, cortar, pegar dos veces y en la misma página sin
+escribir nada, sumar a las formas propias del destino, otro marco, otro proyecto y otro workspace, el portapapeles que
+cambió, la foto que no quedó en el contenido, el tope de la página con su aviso, un solo ⌘Z y rehacer, el ⌘Z de la página
+sin deshacer lo del anotador, la poda a los 10 minutos, dos dispositivos sin red, las dos versiones viejas (pegar y
+abrir), el canal entre pestañas, y (después de la auditoría) pegar en un bloque de código con la misma foto ya en la
+página, que solo viajen las fotos copiadas, y cada tope (página, foto y base) con la página 40 bytes por debajo y por
+encima de lo que agrega el pegado medido de verdad. Las 9 mutaciones probadas (no llevar, sin el mapa en el deshacer, sin el paso único,
+sin comparar el portapapeles, sin comparar el alcance, pisar claves, sin mirar el contenido, sin topes, sin comparar el
+marco) hacen caer al menos una prueba. **En el navegador** (Chromium sin ventana, tres páginas lado a lado con el
+servidor en memoria, eventos de copiar y pegar con un portapapeles propio, nunca el de la máquina): 21 de 21, también las
+flechas dibujadas sobre la foto pegada, Ctrl+Z y Ctrl+Y, otro proyecto, cortar y la otra pestaña.
+
+**Decisiones tomadas sin Lega** (cambiables): a otro proyecto del workspace no viajan (la foto ahí no se ve); la copia
+es la del momento de copiar; si la página de destino ya tiene la foto con sus formas, se suman; con otro marco no se
+lleva nada; se avisa solo si no entran por los topes (pegar no avisa que trajo flechas: se ven en la foto pegada y
+⌘/Ctrl+Z las saca con ella).
+
+**Falta (Lega, con sesión real):** ⌘C y ⌘V de verdad en Safari de la Mac y en el iPhone (el menú del toque), con una foto
+del Drive: acá se probó con Chromium y con eventos de copiar y pegar armados, no con el portapapeles del sistema. Si
+Safari cambiara lo copiado entre copiar y pegar, la foto llegaría limpia (nunca se pierde nada).
+
+### Correcciones de la auditoría de D46 (2026-10-02)
+
+Auditoría independiente: **aprobado con observaciones**, sin bloqueantes. Lo que pedía y dónde quedó:
+
+| Hallazgo | Corrección |
+|---|---|
+| **O1** Pegar la foto donde no entra (un bloque de código) en una página que ya la tenía le ponía las notas a esa foto, aunque el pegado no la trajo | Se cuentan las apariciones de cada archivo antes y después del pegado (`mediaCountsInDoc`, `src/media/usage.ts`) y solo viajan las de las fotos que aparecen más veces. Prueba con la misma foto ya en la página y el pegado en un bloque de código (cae con el código anterior) |
+| **O2** Los topes casi no tenían prueba (sin el tope por foto, sin el de la base y con `entriesBytes` en cero, la suite seguía en verde; la prueba de «página llena» empezaba ya pasada del tope) | Seis pruebas con `carryMarkup`: por página, por foto y la base, cada una con la página 40 bytes por debajo y por encima de lo que agrega el pegado (medido con `entriesBytes`), una de que lo agregado no es cero y crece, y la de «página llena» rehecha para quedar debajo del tope sola. Los cuatro mutantes (A5, A6, A11 y sin tope por página) caen |
+| **O3** Que solo viajen las fotos copiadas no tenía prueba | Prueba: origen con dos fotos anotadas, destino con la segunda limpia, se copia solo la primera: la copia guarda solo esa y la segunda sigue limpia (el mutante A8 cae) |
+| Menor: la sección decía 25 pruebas | Corregido (35) |
