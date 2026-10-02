@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Diseño del dictado por voz (P.26, `Doc_Dictado.md`, sin código). Lega pidió dictar en el set y que la IA ubique una
+nota informal en su campo del reporte. Medido: el reconocimiento del navegador no existe en la app instalada del
+iPhone, así que el micrófono propio graba y transcribe con el proveedor de la persona (US$ 0,0005 por nota de 10 s);
+el dictado común queda en el teclado. La página viaja como un mapa con direcciones y vuelve una lista de cambios
+validada, con vista previa, *Apply* con la guarda y un deshacer; pregunta cuando no sabe qué plano; sin red, una cola
+que nunca se borra sola. Entregas V1 a V4 y decisiones DI1 a DI9.
+[ Dictado, diseño - dictar en el set y ubicar la nota en el reporte con vista previa ]
+
 v0.123 :
 
 Anotar fotos en la compu (P.20, entrega 2 de `Doc_Anotar_Fotos.md`). Las anotaciones se veían pero no había con qué
