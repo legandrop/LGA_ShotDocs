@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
+import type * as Y from 'yjs';
 import { t as current, useT, type Translate } from '../i18n';
 import '../i18n/lazy/carrete';
 import { extensionLabel } from '../media/attachments';
@@ -31,7 +32,8 @@ import {
   type Zoom,
 } from './carreteModel';
 import { downloadProps, isOffline, type AttachmentView, type CarreteLoader, type Full } from './carreteLoader';
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, OpenIcon } from './icons';
+import { CarreteMarkup, useHasMarkup } from './CarreteMarkup';
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, MarkupIcon, MarkupOffIcon, OpenIcon } from './icons';
 import { shortcutLabel } from './shortcuts';
 
 // El carrete (paso 7 de Docs/Plan_Workspaces.md; Docs/Doc_Carrete.md): todas las fotos y videos de la
@@ -110,9 +112,14 @@ export interface CarreteProps {
   /** Hay red (para volver a pedir lo grande cuando vuelve). */
   online: boolean;
   onClose: () => void;
+  /**
+   * Las anotaciones de las fotos de la página (P.20, el mapa `photoMarkup` de su documento): se dibujan encima de cada
+   * foto anotada. Sin esto (las fotos de una carpeta), no hay anotaciones.
+   */
+  markup?: Y.Map<unknown> | null;
 }
 
-export function Carrete({ items, start, loader, online, onClose }: CarreteProps) {
+export function Carrete({ items, start, loader, online, onClose, markup = null }: CarreteProps) {
   const count = items.length;
   const tr = useT();
   const [index, setIndex] = useState(() => stepIndex(start, 0, count));
@@ -124,6 +131,8 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
   const [stage, setStage] = useState<Size>({ width: 0, height: 0 });
   /** Sube con "Retry": vuelve a pedir lo grande del elemento actual. */
   const [attempt, setAttempt] = useState(0);
+  /** *Hide annotations* (AN9): solo para quien mira, mientras el carrete está abierto; no se guarda. */
+  const [markupHidden, setMarkupHidden] = useState(false);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -156,6 +165,8 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
   const view = settled((item && views[item.url]) ?? EMPTY_VIEW);
   const fit = view.natural ? fitSize(view.natural, stage) : null;
   const zoomable = view.kind === 'image' && !!view.preview;
+  /** La foto que se ve tiene anotaciones (el botón para ocultarlas solo aparece entonces). */
+  const annotated = useHasMarkup(markup, view.kind === 'image' && !view.file ? (item?.mediaId ?? null) : null);
 
   // Lo que los manejadores nativos (rueda, teclado) necesitan leer sin volver a registrarse.
   const live = useRef({ index, zoom, fit, stage, zoomable, count });
@@ -666,6 +677,10 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
               onError={onFullError(it, v)}
             />
           )}
+          {/* Las anotaciones, en la misma caja que la foto (ya tiene su proporción y su zoom). */}
+          {markup && it.mediaId && sized && v.preview && v.kind === 'image' && !markupHidden && (
+            <CarreteMarkup map={markup} fileId={it.mediaId} size={sized} />
+          )}
         </div>
       );
     }
@@ -737,6 +752,16 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
         <span className="carrete-name" data-tip={name} data-tip-plain data-tip-overflow>
           {name}
         </span>
+        {annotated && (
+          <button
+            className="carrete-btn carrete-markup-toggle"
+            aria-label={tr(markupHidden ? 'carrete.showMarkup' : 'carrete.hideMarkup')}
+            onClick={() => setMarkupHidden((h) => !h)}
+          >
+            {markupHidden ? <MarkupIcon size={20} /> : <MarkupOffIcon size={20} />}
+            <span className="carrete-btn-label">{tr(markupHidden ? 'carrete.showMarkup' : 'carrete.hideMarkup')}</span>
+          </button>
+        )}
         {downloadLink('carrete-btn', true)}
         <button className="carrete-btn" aria-label={tr('common.close')} data-tip={tr('carrete.keyboard', { key: shortcutLabel('carreteClose') })} onClick={requestClose}>
           <CloseIcon size={22} />
@@ -759,6 +784,13 @@ export function Carrete({ items, start, loader, online, onClose }: CarreteProps)
         </div>
 
         {view.state === 'loading' && view.preview && <span className="carrete-spinner" role="status" aria-label={tr('common.loading')} />}
+
+        {/* Con las anotaciones ocultas, una marca chica en la esquina avisa que la foto las tiene (AN9). */}
+        {annotated && markupHidden && (
+          <span className="carrete-markup-mark" role="img" aria-label={tr('carrete.markupHidden')}>
+            <MarkupOffIcon size={16} />
+          </span>
+        )}
 
         {notice && (
           <div className="carrete-notice" role="status">
