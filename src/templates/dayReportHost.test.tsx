@@ -318,6 +318,42 @@ describe('el botón New day report y su globito', () => {
     expect(location.pathname).toBe(`/p/${kids[1].id}`);
   });
 
+  it('O4 en el globito: si falla escribir, el reintento (aun con otra fecha) usa la misma página', async () => {
+    const { device, folder, first } = await withReport();
+    const host = await open(device, folder);
+    const realOpen = device.docs.open.bind(device.docs);
+    let failNext = true;
+    device.docs.open = (async (id: string, o?: { seed?: boolean }) => {
+      if (failNext && id !== folder && id !== first) {
+        failNext = false;
+        throw new Error('QuotaExceededError');
+      }
+      return realOpen(id, o);
+    }) as typeof device.docs.open;
+    const notices: unknown[] = [];
+    const listen = (e: Event) => notices.push((e as CustomEvent).detail);
+    window.addEventListener('shotdocs:notice', listen);
+    try {
+      click(host.querySelector('.day-report-button'));
+      await popoverReady();
+      setInput(inputs()[0], addDays(localDate(), 1));
+      act(() => popover()!.requestSubmit());
+      for (let i = 0; i < 60 && !notices.length; i++) await wait(30);
+      expect(notices).toContain("The day report couldn't be created. Nothing was lost; try again.");
+      expect(device.tree.children(folder).length).toBe(2);
+      // Se cambia la fecha y se reintenta: la misma página, con el título nuevo y la ficha.
+      setInput(inputs()[0], addDays(localDate(), 2));
+      act(() => popover()!.requestSubmit());
+      const opened = () => location.pathname === `/p/${device.tree.children(folder)[1]?.id}`;
+      for (let i = 0; i < 80 && !opened(); i++) await wait(30);
+      const kids = device.tree.children(folder);
+      expect(kids.map((p) => p.title)).toEqual([`${localDate()} | Day 01`, `${addDays(localDate(), 2)} | Day 02`]);
+      expect(opened()).toBe(true);
+    } finally {
+      window.removeEventListener('shotdocs:notice', listen);
+    }
+  });
+
   it('el atajo abre y cierra el globito (también por la posición de la tecla); con AltGr no', async () => {
     const { device, first } = await withReport();
     await open(device, first);

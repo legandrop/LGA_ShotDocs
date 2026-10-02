@@ -376,6 +376,54 @@ describe('correcciones de la auditoría', () => {
   });
 });
 
+describe('re-verificación: nunca se reusa una página de la persona (B1)', () => {
+  it('"2026-10-04 Fotos de set" (carpeta, vacía o con texto) no se renombra ni recibe la ficha: se crea otra página', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const folder = await a.tree.create(null, 'Reportes');
+    for (const now of [DAY1, DAY2]) {
+      const plan = await planDayReport(deps(a), { parentId: folder, projectId: a.tree.workspaceId }, { now });
+      await createDayReport(deps(a), plan, plan.suggestion, 'en', { canMark: true });
+    }
+    // Una página-carpeta con fecha y una subpágina, la misma sin subpágina, una con texto, y un reporte de la app con
+    // una subpágina: todas vacías salvo la del texto.
+    const fotos = await a.tree.create(folder, '2026-10-04 Fotos de set');
+    await a.tree.create(fotos, 'Foto 1');
+    const sola = await a.tree.create(folder, '2026-10-04 Material');
+    const notas = await a.tree.create(folder, '2026-10-04 Notas');
+    await writeNewPage(a.docs, notas, [{ type: 'paragraph', content: 'Escrito por la persona' }]);
+    const conSub = await a.tree.create(folder, '2026-10-04 | Day 03', undefined, { templateId: BUILTIN_ONSET });
+    await a.tree.create(conSub, 'Anexo');
+    // Un reporte de la app al que la persona le cambió el título (y quedó vacío): tampoco.
+    const renombrado = await a.tree.create(folder, '2026-10-04 Fotos del rodaje', undefined, { templateId: BUILTIN_ONSET });
+    const mine = [fotos, sola, notas, conSub, renombrado];
+    const before = new Map(mine.map((id) => [id, a.tree.get(id)!.title]));
+
+    const DAY4 = new Date(2026, 9, 4, 8);
+    const plan = await planDayReport(deps(a), { parentId: folder, projectId: a.tree.workspaceId }, { now: DAY4 });
+    expect(plan.emptyReports).toEqual([]);
+    // Siguen contando como páginas de ese día (el globito dice que ya existe y Enter las abre sin tocarlas).
+    expect(reportsOn(plan, '2026-10-04').map((r) => r.id).sort()).toEqual([...mine].sort());
+    const id = await createDayReport(deps(a), plan, { ...plan.suggestion, date: '2026-10-04' }, 'en', { canMark: true });
+    expect(mine).not.toContain(id);
+    for (const [page, title] of before) {
+      expect(a.tree.get(page)?.title, title).toBe(title);
+      expect(a.tree.get(page)?.template_id ?? null, title).toBe(page === conSub || page === renombrado ? BUILTIN_ONSET : null);
+    }
+    expect(isEmptyPage(await a.docs.open(renombrado))).toBe(true);
+    a.docs.close(renombrado);
+    expect(isEmptyPage(await a.docs.open(fotos))).toBe(true);
+    a.docs.close(fotos);
+    expect(isEmptyPage(await a.docs.open(sola))).toBe(true);
+    a.docs.close(sola);
+    expect((await factsOn(a, notas)).text).not.toContain('Camera package');
+    // Ni pidiéndolo a mano (`reuse`, el de un intento fallido) se escribe en una página de la persona.
+    const again = await createDayReport(deps(a), plan, { ...plan.suggestion, date: '2026-10-04' }, 'en', { canMark: true, reuse: fotos });
+    expect(again).not.toBe(fotos);
+    expect(a.tree.get(fotos)?.title).toBe('2026-10-04 Fotos de set');
+  });
+});
+
 describe('lo que crea el reporte del día en una versión vieja de la app', () => {
   it('la versión publicada (y la anterior) abren un reporte con lo copiado de ayer sin escribir ni borrar nada', async () => {
     const server = new FakeServer();

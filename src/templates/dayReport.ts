@@ -92,6 +92,24 @@ export function isReportPage(row: PageRow): boolean {
   return row.template_id === BUILTIN_ONSET && dateAtStart(row.title) !== null;
 }
 
+/** Un título con la forma exacta de `reportTitle`: `2026-10-02 | Day 06` o `2026-10-02 | Día 06`, nada más. */
+export function hasReportTitle(title: string): boolean {
+  const m = /^(\d{4}-\d{2}-\d{2}) \| (?:Day|Día) \d{2,4}$/.exec(title);
+  return !!m && isValidDate(m[1]);
+}
+
+/**
+ * Una página que el reporte del día puede reusar si está vacía (auditoría, O2 y O4; re-verificación, B1): un reporte
+ * que salió de *On-Set Report*, con el título exacto que pone la app y sin subpáginas (ni en la papelera). Una página de
+ * la persona con fecha en el título ("2026-10-04 Fotos de set", una carpeta) nunca: se le pisaría el nombre.
+ */
+export function isReusableReport(tree: PageTree, id: string): boolean {
+  const row = tree.get(id);
+  if (!row || tree.isTrashed(id) || !isReportPage(row) || !hasReportTitle(row.title)) return false;
+  if (tree.children(id).length > 0) return false;
+  return !tree.trashed(row.workspace_id).some((p) => p.parent_id === id);
+}
+
 /**
  * La página es una carpeta de reportes: marcada, o (si la marca se perdió por dos cambios de ajustes a la vez, sección 8)
  * con algún reporte adentro. *Stop using for day reports* (`false`) gana sobre lo deducido.

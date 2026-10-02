@@ -12,6 +12,7 @@ import {
   dayReportFolderOf,
   dayReportsMark,
   firstNumber,
+  hasReportTitle,
   isDayReportFolder,
   isDayReportShortcut,
   isValidDate,
@@ -66,6 +67,12 @@ describe('la fecha y el nombre', () => {
     expect(dayInTitle('Holiday 3')).toBeNull();
     expect(dayInTitle('2026-10-02')).toBeNull();
     expect(firstNumber('Day 7')).toBe(7);
+    // La forma exacta del título que pone la app (lo único que se reusa vacío).
+    expect(hasReportTitle('2026-10-04 | Day 03')).toBe(true);
+    expect(hasReportTitle('2026-10-04 | Día 112')).toBe(true);
+    expect(hasReportTitle('2026-10-04 Fotos de set')).toBe(false);
+    expect(hasReportTitle('2026-10-04 | Day 03 Fotos')).toBe(false);
+    expect(hasReportTitle('2026-02-30 | Day 03')).toBe(false);
     expect(firstNumber('')).toBeNull();
   });
 });

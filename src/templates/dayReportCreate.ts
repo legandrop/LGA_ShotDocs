@@ -10,7 +10,7 @@ import { findUnknownContent } from '../ui/unknownContent';
 import { isEmptyPage } from './apply';
 import { builtinBlocks, type TemplateBlock } from './builtin';
 import { BUILTIN_ONSET } from './builtinIds';
-import { dateAtStart, dayInTitle, dayReportsMark, localDate, reportTitle } from './dayReport';
+import { dateAtStart, dayInTitle, dayReportsMark, isReusableReport, localDate, reportTitle } from './dayReport';
 import { fillReport, readFacts, type ReportFacts } from './dayReportFacts';
 
 // Crear el reporte del día (Docs/Doc_Plantillas.md, 6.3 a 6.6): leer los reportes de la carpeta (todo está en el
@@ -124,9 +124,11 @@ export async function planDayReport(
     }
     if (date) reports.push({ id: p.id, title: p.title, date, day });
   }
-  // Los vacíos no cuentan (O2): se miran los más recientes, que es donde aparecen (el que se acaba de deshacer o de
-  // crear sin poder llenarlo).
+  // Los reportes vacíos no cuentan (O2): se miran los más recientes, que es donde aparecen (el que se acaba de deshacer o
+  // de crear sin poder llenarlo). Solo los que son reportes hechos por la app (`isReusableReport`): una página de la
+  // persona con fecha en el título, aunque esté vacía (una carpeta), sigue contando y nunca se reusa (B1).
   const recent = reports
+    .filter((r) => isReusableReport(tree, r.id))
     .map((r, i) => ({ r, i }))
     .sort((a, b) => (a.r.date === b.r.date ? b.i - a.i : a.r.date < b.r.date ? 1 : -1))
     .slice(0, EMPTY_CHECKS);
@@ -231,19 +233,18 @@ export async function createDayReport(
   const blocks = reportBlocks(plan, input, lang);
   const title = reportTitle(input.date, input.day, lang);
   if (plan.parentId && options.canMark) await markReportFolder(tree, plan.parentId);
+  // Solo un reporte hecho por la app, con su título de reporte y sin subpáginas, de esta carpeta (B1). La vacía se
+  // vuelve a comprobar al escribir (`writeNewPage` no escribe en una página con contenido).
   const usable = (id: string | undefined): id is string => {
     const row = id ? tree.get(id) : undefined;
-    return !!row && !tree.isTrashed(row.id) && row.parent_id === plan.parentId && row.workspace_id === plan.projectId;
+    return !!row && isReusableReport(tree, row.id) && row.parent_id === plan.parentId && row.workspace_id === plan.projectId;
   };
-  const candidate = options.reuse ?? plan.emptyReports.find((r) => r.date === input.date)?.id;
+  const candidate = [options.reuse, plan.emptyReports.find((r) => r.date === input.date)?.id].find(usable);
   let id: string;
-  if (usable(candidate)) {
+  if (candidate) {
     id = candidate;
-    const row = tree.get(id)!;
-    const patch: { title?: string; template_id?: string } = {};
-    if (row.title !== title) patch.title = title;
-    if (row.template_id !== BUILTIN_ONSET) patch.template_id = BUILTIN_ONSET;
-    if (Object.keys(patch).length) await tree.setPatch(id, patch);
+    // Ya tiene la forma de un reporte (`isReusableReport`): solo puede cambiar la fecha o el día que eligió la persona.
+    if (tree.get(id)!.title !== title) await tree.rename(id, title);
   } else {
     id = await tree.create(plan.parentId, title, plan.projectId, { templateId: BUILTIN_ONSET, before: placeBefore(plan, input.date) });
   }
