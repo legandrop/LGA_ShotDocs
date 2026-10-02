@@ -1,7 +1,8 @@
 # Arrastrar una carpeta entera (P.9)
 
 Estado: **entrega 1 implementada (v0.081, rama `lega/carpetas`)**, con lo que no depende de Lega; ver "Cómo
-quedó" justo abajo. **Entrega 2 (*Download all*) implementada** (rama `lega/carpetas-zip`): "Cómo quedó (entrega 2)". El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
+quedó" justo abajo. **Entrega 2 (*Download all*) implementada** (rama `lega/carpetas-zip`): "Cómo quedó (entrega 2)". **Entrega 3 (los
+restos de las auditorías y las subidas que se traban, v0.141, rama `lega/carpetas-e3`):** "Cómo quedó (entrega 3)". El diseño sigue debajo. Rediseñado el 2026-09-30 con las respuestas de Lega (ver "Respondidas por
 Lega"): la carpeta de la página es **una vista en vivo de una carpeta del Drive**, sin tope de archivos y en el
 plan gratis de Cloudflare. El primer diseño (commit `47bbbf4`, una fila de `files` por archivo) y su auditoría
 quedan resumidos al final, en "Historia"; lo que la auditoría encontró y sigue valiendo está incorporado.
@@ -282,6 +283,84 @@ listar, accesos directos, documentos de Google, subcarpeta movida afuera, ciclos
 `src/media/folders.test.ts` (leer más de 100 por carpeta, salteados, `webkitdirectory`, la cola de punta a punta,
 un error que no frena, retomar por ruta y peso después de cerrar, pausar, la fila de la carpeta, sin red, la
 tarjeta). Recorrido en Chromium con el portero real en la página y un Drive de mentira: 16 de 16.
+
+## Cómo quedó (entrega 3, v0.141)
+
+Los restos BAJO de las entregas 1 y 2 y la parte de B.11 (subidas que se traban) que toca a las carpetas.
+
+**La cola de una carpeta con el portero colgado para todos.** Antes, cada archivo esperaba su tope (un minuto la
+pregunta de cuánto llegó, dos la parte), gastaba uno de sus 5 intentos y volvía a probar: con el portero colgado una
+carpeta de 500 archivos terminaba con 500 errores a la vista hasta *Retry*. Ahora (`FolderUploads`, igual que la cola
+de los archivos sueltos, `Doc_Portero.md`, "Colgado para todos"):
+
+- Una trabada (`UploadError` con `stalled`) **no gasta un intento**: se anota en `FolderItem.stalls` (campo nuevo y
+  opcional; lo guardado por una versión anterior vale 0) y el archivo vuelve a la fila, detrás de los que nunca se
+  trabaron. Cada trabada le da más plazo a la respuesta de la parte (`stalledBefore`) y cada dos, si la subida no
+  recibió nada, se pide otra (`renewIfEmpty`, que con `noOpen` devuelve la subida sin id y la cola pide otra al
+  portero).
+- Después de una trabada sin avance **no se empieza otro archivo** hasta que los que están en curso terminen o se
+  traben. A la segunda seguida (`STALLS_TO_CLOSE_ROUND`) la cola espera `stallWait` (10 s, 20 s… hasta 10 minutos, la
+  misma escala que la cola de los sueltos) con el aviso *The media server is not answering; it will try again
+  shortly* (en la ventana: "Waiting a moment: …"), y vuelve a probar. Con el portero colgado cada vuelta prueba solo
+  los 3 que van a la vez.
+- Un archivo que avanza o termina vuelve todo a cero (la cuenta, la espera y el aviso). Avanzar es que el portero
+  confirme más de lo que ya había confirmado de ese archivo en la sesión: volver a mandar lo que una subida perdida
+  ya tenía no cuenta.
+- Lo de siempre no cambia: un error que no es una trabada (Drive rechaza, la subida venció) sigue gastando intentos y,
+  a los 5, queda a la vista con *Retry*; sin red no gasta.
+
+**El 403 de Drive por el límite de pedidos (`inTree`).** Drive contesta 403 tanto a "no tenés acceso" como a "andá
+más despacio" (`userRateLimitExceeded`, `rateLimitExceeded`, `dailyLimitExceeded`, `quotaExceeded`). `inTree` tomaba
+cualquier 403 como "fuera del árbol": la subcarpeta salía como faltante hasta *Retry missing*, y al subir el portero
+contestaba `outside` y la app rearmaba el árbol. Ahora un 403 con uno de esos motivos (y un 429) sale como `503 rate`,
+que la app ya sabe esperar; un 403 de permiso o sin motivo legible sigue siendo "afuera" (nunca se lista nada de más).
+
+**La confianza de 60 s, también en las páginas siguientes.** En el listado de varias subcarpetas (`dirs`) la primera
+página volvía a mirar en Drive cada subcarpeta comprobada hace más de un minuto, pero las siguientes (`pageToken`)
+usaban la de `inTree`, de 10 minutos: una subcarpeta movida a otro proyecto se seguía listando hasta terminar las
+páginas. Ahora las dos usan la misma regla (`forgetIfStale`). Para que eso no cueste un llamado a Drive por
+subcarpeta en cada página, el portero recuerda aparte **cuándo Drive mostró cada subcarpeta adentro de su carpeta de
+arriba** (`seen`: su metadata, el listado de la de arriba o el pedido que la creó); antes el minuto se medía con la
+fecha de la comprobación más vieja del camino, y una subcarpeta honda se volvía a mirar en cada pedido. Lo de arriba
+sigue con sus 10 minutos.
+
+**El ZWJ como escape.** `stripHidden` del portero comparaba con el U+200D escrito tal cual (no se ve en el código):
+ahora es la constante `ZWJ = '\u200D'`. De paso, la BOM de `MISSING_FILES.txt` (`FolderDownload.tsx`) y el espacio de
+ancho cero de `codaHtml.ts` también van como escapes.
+
+**Los acentos de la Mac y de Windows en la marca de cada subcarpeta.** La marca (`sdPath`) resumía la ruta tal cual
+llegaba: la Mac da `í` en dos partes (NFD) y Windows en una (NFC), así que la misma subcarpeta tenía dos marcas y
+pedirla desde el otro sistema creaba otra al lado, con el mismo nombre. Opciones: (a) normalizar la marca, que
+cambiaba la de lo ya subido y lo dejaba sin encontrar; (b) normalizar en la app las rutas al leer la carpeta, que
+dejaba igual el problema con las listas de trabajo guardadas; (c) **marcar lo nuevo en NFC y buscar por las dos
+formas**. Se eligió (c), sin tocar nada en el Drive del dueño:
+
+- `pathMark` marca en NFC lo que se crea desde ahora. `pathMarks` da las marcas con las que se busca una subcarpeta
+  que ya existe: NFC, la ruta tal cual y NFD (las que pudo dejar un portero anterior desde cualquiera de los dos
+  sistemas). Lo ya subido conserva su marca y se encuentra igual.
+- Con acentos la búsqueda lleva hasta tres marcas por ruta; van de a 40 por consulta (`MARKS_PER_QUERY`) para no hacer
+  una dirección demasiado larga. 30 rutas con acentos son dos consultas en vez de una.
+- Dos rutas del mismo pedido que solo difieren en la forma de los acentos (en Windows pueden ser dos carpetas) van a la
+  misma subcarpeta: no se pierde nada (Drive admite dos archivos con el mismo nombre), y no quedan dos carpetas
+  iguales a la vista.
+- En la app, retomar (`resumeWith`) y reconocer la misma carpeta soltada otra vez (`hasAnyPath`) comparan las rutas
+  en NFC: una carpeta en un disco externo, o soltada desde otro navegador, puede traer la otra forma. Lo que se sube
+  va con la ruta de la lista de trabajo, la de las subcarpetas ya creadas.
+
+**Pruebas:** `portero/src/folders.test.ts` (el 403 por límite como `rate` al listar de a una y de a varias y al subir,
+el 429, el 403 de permiso o sin motivo como 404; las páginas siguientes con la confianza de un minuto y sin llamados
+de más dentro del minuto con una subcarpeta honda; las marcas desde los dos sistemas, las de un portero anterior en
+NFD y en NFC, dos rutas del mismo pedido, 30 rutas con acentos en dos consultas) y `src/media/folders.test.ts` (el
+portero colgado para todos: 3 vueltas de 3 archivos, esperas de 10, 20 y 40 s, ningún error ni intento gastado; uno
+colgado solo para él, con más plazo y otra subida a las dos trabadas; una trabada después de avanzar no cierra la
+vuelta; una lista guardada sin `stalls` y la misma carpeta desde el otro sistema). **Recorrido en Chromium** con el
+cliente real del portero (partes por `XMLHttpRequest`) contra un portero local que recibe el pedido y no contesta: la
+carpeta de 6 archivos, en castellano, cerró la primera vuelta a los 61 s con 3 pedidos colgados y el aviso, volvió a
+probar a los 10 s, cerró la segunda a los 131 s (6 colgados) y, al volver el portero, subió los 6, una vez cada uno.
+
+**Lo que queda (BAJO):** si el portero se cuelga recién en la última parte de un archivo grande, ese archivo espera su
+plazo (hasta 10 minutos y medio con el plazo más largo) antes de contar como trabado; los otros dos en curso, también.
+Es lo mismo que en la cola de los sueltos.
 
 ## Qué se pide
 

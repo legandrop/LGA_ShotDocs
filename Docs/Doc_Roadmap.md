@@ -176,14 +176,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `lega/carpetas-e2`). Falta (BAJO): Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con
   el Drive real (si Drive rechaza la consulta con varios padres, la app cae a de a una sin perder nada, pero gasta un
   pedido de más por tanda; medir el CPU de un pedido con 40 subcarpetas en el plan gratis). De la auditoría de la entrega
-  2 (BAJO): la confianza de 60 s del listado de varias deja listar hasta 60 s una subcarpeta recién movida a otro proyecto
-  (D81); en las páginas siguientes esa confianza vale 10 min y no 60 s; el ZWJ va como carácter invisible en el código
-  (pasarlo a `'‍'`); `inTree` toma cualquier 403 de Drive (también el de límite de pedidos) como «fuera del árbol»,
-  y la subcarpeta aparece como faltante hasta *Retry missing*. Detalle en
-  `Doc_Carpetas.md`, "Cómo quedó" y "Cómo quedó (entrega 2)". Pendiente de los nombres (auditoría de D3, BAJO):
-  - Mac y Windows: la marca de cada subcarpeta resume la ruta sin normalizar los acentos (la Mac da `í` en dos
-    partes). Volver a soltar desde el otro sistema crea subcarpetas nuevas, con el mismo nombre, al lado de las de
-    antes. Normalizarla cambiaría la marca de lo ya subido: hay que pensarlo (por ejemplo, buscar por las dos formas).
+  2 (BAJO, decidido, sin acción): la confianza de 60 s del listado de varias deja listar hasta 60 s una subcarpeta recién
+  movida a otro proyecto (D81). **Entrega 3 hecha (v0.141, rama `lega/carpetas-e3`):** la confianza de 60 s también
+  en las páginas siguientes (con la fecha en que Drive mostró cada subcarpeta, no la del camino); el ZWJ como escape;
+  el 403 de Drive por el límite de pedidos sale como `rate` (ya no como «fuera del árbol»); la marca de cada
+  subcarpeta en NFC, buscando también las de antes (NFC, tal cual y NFD), así que soltarla desde el otro sistema ya no
+  crea otra al lado; y la cola de una carpeta cierra la vuelta con el portero colgado (B.11). Detalle en
+  `Doc_Carpetas.md`, "Cómo quedó", "Cómo quedó (entrega 2)" y "Cómo quedó (entrega 3)".
 - **P.10 Espacio en el dispositivo y "Available offline"** (Lega, 2026-09-30 y D-25 del 2026-10-01): tope
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
   confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
@@ -668,15 +667,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    - **Probarlo en Safari de iPhone y con una red lenta de verdad** (lo hace Lega). El aviso de bytes que salen
      (`XMLHttpRequest`) puede portarse distinto en Safari, con HTTP/2 y a través de Cloudflare; y que cortar la
      subida de una miniatura (la señal en el `fetch` del cliente de Supabase) la corte de verdad en Safari.
-   - **Las carpetas (P.9) no cierran la vuelta:** con el portero colgado para todos, cada archivo de una carpeta
-     se traba hasta sus 5 intentos y queda con su error hasta *Retry*. Y mientras la cola de archivos espera,
-     tampoco registra archivos nuevos ni sube sus miniaturas (como sin conexión).
-   - **La bajada de `page-files` espera hasta 27 minutos** aunque la imagen sea chica (no se sabe cuánto pesa
-     antes de pedirla).
-   - **`page-files` con Storage colgado para todos** (solo workspaces sin portero): `PageFiles.pushPending` corre
-     dentro del ciclo del motor y no tiene la espera de la cola, así que cada ciclo espera hasta dos topes
-     (`storageTimeout`, hasta unos 27 minutos cada uno con una imagen de 25 MB) antes de los comentarios. El texto
-     de las páginas ya salió antes en ese ciclo y nada se pierde.
+   - **Hecho (v0.141, rama `lega/carpetas-e3`):** las carpetas (P.9) cierran la vuelta como los archivos sueltos (una
+     trabada no gasta intentos; a la segunda, la cola de la carpeta espera 10 s, 20 s… hasta 10 minutos); mientras la
+     cola de archivos espera al portero, registra los archivos nuevos y sube sus miniaturas (si la espera no fue por
+     Storage); la bajada de `page-files` se corta a los 30 s sin recibir nada (antes, 27 minutos con una imagen
+     chica); y las pasadas de `PageFiles.pushPending` esperan después de cerrar por Storage colgado. Probado con
+     relojes simulados y en Chromium contra un portero y un Storage locales que se cuelgan (`Doc_Portero.md`,
+     "Colgado para todos"; `Doc_Sincronizacion.md`; `Doc_Carpetas.md`, "Cómo quedó (entrega 3)").
+   - **Queda (BAJO):** un archivo grande al que el portero se le cuelga en la última parte espera su plazo de
+     respuesta (hasta unos 10 minutos y medio) antes de contar como trabado, en las dos colas.
 12. **Importar de Coda, direcciones sueltas: lo que quedó de v0.069** (`Doc_Importar_Coda.md`, "Direcciones
     sueltas"). **Falta:**
     - **Hecho (v0.071 y v0.087): el anclaje de un comentario** pegado a un renglón con direcciones: un último

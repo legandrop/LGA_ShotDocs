@@ -535,6 +535,13 @@ export class FolderUploads {
         }
         continue;
       }
+      // Uno se trabó sin avanzar: no se empieza otro hasta que los que están en curso terminen o se traben. Si el
+      // portero está colgado para todos, se traban juntos y la vuelta se cierra sin probar más archivos; si era solo
+      // ese, el que termina vuelve la cuenta a cero y se sigue como siempre.
+      if (r.stallStreak > 0 && running.size > 0) {
+        await Promise.race(running);
+        continue;
+      }
       const ready = r.items.filter((i) => !i.done && !i.skipped && i.tries < FOLDER_TRIES && r.files.has(i.path) && !r.active.has(i.path));
       if (ready.length === 0 && running.size === 0) break;
       if (ready.length === 0 || r.active.size >= FOLDER_CONCURRENCY) {
@@ -662,8 +669,8 @@ export class FolderUploads {
           if (best === undefined) best = p.sent;
           else if (p.sent > best) {
             best = p.sent;
-            if (!advanced) this.moved(r, item);
             advanced = true;
+            this.moved(r, item);
           }
           r.best.set(item.path, best);
           this.note(r.job.id);

@@ -493,10 +493,10 @@ describe('la cola de las carpetas', () => {
     // 10 s, 20 s, 40 s: la espera crece mientras el portero sigue colgado.
     expect(waits).toEqual([10_000, 20_000, 40_000]);
     expect(states.every((x) => x === 'waiting:The media server is not answering; it will try again shortly.')).toBe(true);
-    // Mientras estuvo colgado, cada vuelta probó a lo sumo 4 (las 2 trabadas que la cierran y las que ya iban), no los
-    // 12 con sus 5 intentos cada uno (60).
+    // Mientras estuvo colgado, cada vuelta probó solo los 3 que van a la vez (después de una trabada no se empieza
+    // otro hasta que los que están en curso terminen o se traben), no los 12 con sus 5 intentos cada uno (60).
     const stalledTries = fake.uploadCalls.length - 12;
-    expect(stalledTries).toBeLessThanOrEqual(3 * (2 + FOLDER_CONCURRENCY - 1));
+    expect(stalledTries).toBe(3 * FOLDER_CONCURRENCY);
     expect(stalledTries).toBeGreaterThanOrEqual(3 * 2);
     states = [];
   });
