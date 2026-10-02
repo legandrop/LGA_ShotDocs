@@ -28,7 +28,6 @@ const UID = 'uid-lega';
 const KEY = 'sk-ant-api03-CLAVE-de-la-ventana-a1B2';
 const ANT = { provider: 'anthropic' as const, model: 'claude-haiku-4-5', models: [{ id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5' }] };
 const PHRASE = 'acorn-bulb-cider-dove-ember-frost';
-const NEW_PHRASE = 'gift-hello-jump-kite-lemon-mango';
 const roots: Root[] = [];
 
 afterEach(async () => {
