@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.134 :
+
+Exportar, entrega 1b: los cambios de Lega al PDF (D84, D85 y D88). Las fotos salían achicadas a 200 ppp, lo que pasaba
+el tope solo se podía exportar por ramas y una página que fallaba quedaba apenas marcada. Ahora cada foto va con su
+original (del dispositivo o por el portero): un JPEG derecho entra tal cual; uno girado por EXIF, una PNG o un HEIC se
+pasan antes a JPEG del mismo tamaño en Workers, de a pocas por píxeles (Chrome los recodificaba con seis veces el
+peso). *Smaller file* vuelve a las achicadas. Lo que no entra sale en partes por páginas enteras (*Part 1*, *Part 2*…,
+una por vez, con tope de peso); al terminar, la lista de las que fallaron con su link y *Export again*. *Cancel* corta
+las bajadas, que tienen tope de 90 s.
+[ Exportar 1b - fotos en resolución completa, el PDF en partes y la lista de las páginas que fallaron ]
+
 v0.133 :
 
 Compactar (B.9), entrega 2: crear snapshots. Nadie armaba las copias resumidas que v0.127 sabe bajar. Nuevo

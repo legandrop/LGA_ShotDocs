@@ -91,22 +91,24 @@ export function fetchLimit(): number {
  */
 export function porteroDownload(
   media: Pick<MediaQueue, 'pass'>,
-  fetchImpl: (url: string) => Promise<Response> = (url) => fetch(url),
+  fetchImpl: (url: string, signal?: AbortSignal) => Promise<Response> = (url, signal) => fetch(url, signal ? { signal } : undefined),
   now: () => number = Date.now,
   online: () => boolean = () => typeof navigator === 'undefined' || navigator.onLine !== false,
-): (id: string) => Promise<Blob> {
+): (id: string, signal?: AbortSignal) => Promise<Blob> {
   // Con red, un `fetch` que falla sin respuesta es casi siempre CORS (un portero anterior a v0.059): después de
   // `BREAKER_FAILURES` seguidos no se baja nada por `BREAKER_MS` (la página sigue con las miniaturas).
   let failures = 0;
   let closedUntil = 0;
-  return async (id) => {
+  // `signal` corta la bajada (exportar: *Cancel*, o el tope de tiempo por original); un corte no cuenta como falla.
+  return async (id, signal) => {
     if (now() < closedUntil) throw new Error('portero: paused');
     for (let attempt = 0; ; attempt++) {
       const url = await passFor(media, id);
       let res: Response;
       try {
-        res = await fetchImpl(url);
+        res = await fetchImpl(url, signal);
       } catch (err) {
+        if (signal?.aborted) throw err;
         if (online() && ++failures >= BREAKER_FAILURES) {
           closedUntil = now() + BREAKER_MS;
           failures = 0;

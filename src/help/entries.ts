@@ -668,7 +668,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
     section: 'print',
     title: 'help.export.title',
     text: 'help.export.text',
-    words: ['exportar', 'export', 'pdf', 'índice', 'contents', 'proyecto entero', 'whole project', 'entregar', 'cliente', 'client', 'reporte'],
+    words: ['exportar', 'export', 'pdf', 'índice', 'contents', 'proyecto entero', 'whole project', 'entregar', 'cliente', 'client', 'reporte', 'partes', 'parts', 'resolución', 'resolution', 'liviano', 'smaller file'],
     since: EXPORT_PDF,
   },
   {

@@ -418,7 +418,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   volver y `MISSING_FILES.txt`; los destinos de *Download all*, sin red y cancelar. Solo dueño y admins (D60), nunca
   desde un teléfono (D63). Probado con `file://` y sin red en Chromium y Firefox. Falta a mano: ERSO entero con el
   portero de verdad (tiempo y llamados al Durable Object), Safari de la Mac y las rutas largas de Windows
-  (`Doc_Exportar.md`, "Cómo quedó la entrega 2"). Sigue la entrega 3 (volver a Shot Docs).
+  (`Doc_Exportar.md`, "Cómo quedó la entrega 2"). **Entrega 1b hecha (v0.134): los cambios de Lega al PDF** (D84,
+  D85, D88): las fotos con su original en resolución completa (*Smaller file* para achicarlas), el PDF en partes por
+  páginas enteras cuando pasa un tope (500 MB de fotos por parte en una computadora; medido en Chromium con 300 páginas
+  y 2219 fotos de teléfono) y la lista de las que fallaron con *Export again*. Falta a mano: guardar de verdad una parte
+  de 500 MB con la vista previa de Chrome y Edge (también en 8 GB), originales reales de iPhone por el portero, Safari,
+  Firefox y el iPhone (`Doc_Exportar.md`, "Cómo quedó la entrega 1b"). Sigue la entrega 3 (volver a Shot Docs).
+  Quedó de la re-verificación de la 1b (BAJO): una foto de más de 100 MP que hay que pasar a JPEG (girada, PNG, CMYK)
+  sale a 200 ppp y el aviso dice «sin conexión» (llevarla al tope de píxeles de a una y dar su motivo); sin red y sin
+  miniaturas en el dispositivo las fotos salen como marcador y la ventana no lo cuenta al terminar (de antes); el tope de
+  90 s cuenta la bajada entera y no el tiempo sin datos (vencer por 30 s sin recibir nada); faltan pruebas de que la
+  parte siguiente no vuelve a bajar los originales; si la pestaña se cuelga en la parte N, no se puede retomar desde ahí.
   Observaciones de la re-verificación de la entrega 1: (R1) el Imprimir del menú del navegador mientras se arma el PDF
   puede llevar la vista de la página en curso: sacar `print-output` a esa vista hasta `place()`; (R2) la prueba de la
   vuelta al achicador del hilo principal no distingue la mutación: hacerlo inyectable en `workerResizer`; (R3) con

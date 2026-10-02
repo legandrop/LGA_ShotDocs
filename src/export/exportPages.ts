@@ -97,9 +97,10 @@ export interface RunOptions {
   onProgress?: (p: ExportProgress) => void;
   /**
    * Lo que se hace con cada página dibujada (el PDF las junta, el zip las serializa). Si no está, la vista se saca
-   * enseguida. Si está, quien la recibe se hace cargo de sacarla.
+   * enseguida. Si está, quien la recibe se hace cargo de sacarla. Si devuelve `'stop'`, no se dibuja ninguna más (el
+   * PDF en partes: esa página no entró en esta parte y va a la siguiente).
    */
-  onPage?: (page: RenderedPage, content: PageContent, plan: ExportPlanPage, out: ExportedPage) => void | Promise<void>;
+  onPage?: (page: RenderedPage, content: PageContent, plan: ExportPlanPage, out: ExportedPage) => void | 'stop' | Promise<void | 'stop'>;
   /** Una página que no se pudo leer ni dibujar (se saltea y sigue con las demás). */
   onFailed?: (plan: ExportPlanPage, out: ExportedPage) => void | Promise<void>;
 }
@@ -162,8 +163,9 @@ export async function renderPages(plan: ExportPlanPage[], source: ExportSource, 
         ms: { read, ...rendered.ms },
       };
       out.push(entry);
-      if (options.onPage) await options.onPage(rendered, content, page, entry);
-      else rendered.view.root.remove();
+      if (options.onPage) {
+        if ((await options.onPage(rendered, content, page, entry)) === 'stop') return out;
+      } else rendered.view.root.remove();
     } catch (err) {
       rendered.view.root.remove();
       throw err;
