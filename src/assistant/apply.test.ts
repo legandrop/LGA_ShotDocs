@@ -152,6 +152,23 @@ describe('aplicar', () => {
     expect(applySuggestion(view(ed), s, answer(s, 'Todo bien.'), true)).toEqual({ ok: true, changed: 0 });
     expect(undoManager(ed).undoStack.length).toBe(before);
   });
+
+  it('si al final la página no dice lo pedido, deshace lo que quedó y no aplica nada', () => {
+    const ed = page([{ id: 'p', type: 'paragraph', content: 'el kamara se movio' }]);
+    select(ed, 'p', 0, 'p', 18);
+    const s = snap(ed);
+    const v = view(ed);
+    // Algo (un plugin, otra extensión) cambia el texto en el mismo momento en que se aplica: lo escrito no es lo pedido.
+    const dispatch = v.dispatch.bind(v);
+    v.dispatch = (tr) => {
+      dispatch(tr);
+      if (tr.docChanged && tr.getMeta('addToHistory') !== false) dispatch(v.state.tr.insertText('!!', posOf(ed, 'p') + 2));
+    };
+    const out = applySuggestion(v, s, answer(s, 'La cámara se movió'), true);
+    v.dispatch = dispatch;
+    expect(out).toEqual({ ok: false, reason: 'failed' });
+    expect(textOf(ed, 'p')).toBe('el kamara se movio');
+  });
 });
 
 describe('la guarda de "cambió mientras pensaba" (6.1, paso 6)', () => {

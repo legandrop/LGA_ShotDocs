@@ -290,6 +290,8 @@ describe('lo demás', () => {
   it('redact saca la clave y lo que parece una', () => {
     expect(redact(`bad key ${KEY} here`, KEY)).toBe('bad key [key] here');
     expect(redact('sk-proj-abcdef1234567 and AIzaSyABCDEFGHIJKLMNOP', 'otra')).toBe('[key] and [key]');
+    // Una clave de un servicio compatible con otra forma (sin prefijo conocido) también se saca.
+    expect(redact('token llave-local-XYZ987 rechazado', 'llave-local-XYZ987')).toBe('token [key] rechazado');
   });
 
   it('qué dirección es local (para la política local_only y para intentar sin red)', () => {
