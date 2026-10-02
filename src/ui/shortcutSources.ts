@@ -32,6 +32,7 @@ export const SHORTCUT_FILES: Record<string, string[]> = {
   commentsCancel: ['CommentsPanel.tsx'],
   mentionPick: ['CommentsPanel.tsx'],
   mentionClose: ['CommentsPanel.tsx'],
+  mentionShareCancel: ['MentionShare.tsx'],
   treeStep: ['Sidebar.tsx', 'treeNav.ts'],
   treeEnds: ['Sidebar.tsx', 'treeNav.ts'],
   treeExpand: ['Sidebar.tsx', 'treeNav.ts'],

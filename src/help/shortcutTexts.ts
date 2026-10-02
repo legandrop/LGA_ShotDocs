@@ -70,6 +70,7 @@ export const SHORTCUT_TEXTS: Record<string, Key> = {
   'commentsCancel': 'shortcut.commentsCancel',
   mentionPick: 'shortcut.mentionPick',
   mentionClose: 'shortcut.mentionClose',
+  mentionShareCancel: 'shortcut.mentionShareCancel',
   'treeStep': 'shortcut.treeStep',
   'treeEnds': 'shortcut.treeEnds',
   'treeExpand': 'shortcut.treeExpand',
