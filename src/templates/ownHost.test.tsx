@@ -192,10 +192,10 @@ describe('Save as template… (5.1)', () => {
     click(save);
     await waitFor(() => dialog('Save as template'));
     const form = dialog('Save as template')!;
-    const [name] = [...form.querySelectorAll('input[type="text"]')] as HTMLInputElement[];
+    const [name, description] = [...form.querySelectorAll('input[type="text"]')] as HTMLInputElement[];
     expect(name.value).toBe('Escena 12');
     setValue(name, 'Scene notes');
-    setValue(form.querySelector('textarea')!, 'One per scene');
+    setValue(description, 'One per scene');
     const checks = [...form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
     // *Use for day reports* apagada (no está en una carpeta de reportes); *Clear filled-in values* prendida.
     expect(checks.map((c) => c.checked)).toEqual([false, true]);
@@ -262,7 +262,7 @@ describe('la franja de una plantilla (5.2)', () => {
     click([...banner.querySelectorAll('button')].find((b) => b.textContent === 'Template settings…'));
     await waitFor(() => dialog('Template settings'));
     const form = dialog('Template settings') as HTMLFormElement;
-    setValue(form.querySelector('textarea')!, 'Ours, with drone');
+    setValue(form.querySelector('input[type="text"]') as HTMLInputElement, 'Ours, with drone');
     click(form.querySelector('input[type="checkbox"]'));
     act(() => form.requestSubmit());
     await waitFor(() => !dialog('Template settings'));

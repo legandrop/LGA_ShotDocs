@@ -11,7 +11,8 @@ import type { OwnTemplatesRequest } from './ownTemplatesUi';
 import './templates.css';
 
 // Las ventanas de las plantillas propias (Docs/Doc_Plantillas.md, 5.1 y 5.2): *Save as template* (copia la página a la
-// carpeta *Templates*, sin tocarla) y *Template settings* (la descripción y *Use for day reports*). Se bajan aparte.
+// carpeta *Templates*, sin tocarla) y *Template settings* (la descripción y *Use for day reports*). Se bajan aparte. La
+// descripción es de un renglón (Enter guarda, como en el nombre).
 
 export function TemplateDialogs({ request, onClose }: { request: OwnTemplatesRequest; onClose: () => void }) {
   return request.kind === 'save' ? (
@@ -96,7 +97,7 @@ export function SaveTemplateDialog({ pageId, onClose }: { pageId: string; onClos
           </label>
           <label className="template-form-field">
             <span className="pref-label">{tr('saveTemplate.description')}</span>
-            <textarea value={description} maxLength={DESCRIPTION_MAX} rows={2} onChange={(e) => setDescription(e.target.value)} />
+            <input type="text" value={description} maxLength={DESCRIPTION_MAX} onChange={(e) => setDescription(e.target.value)} />
           </label>
           <label className="template-form-check" data-tip={tr('saveTemplate.dayReportTip')}>
             <input type="checkbox" checked={dayReport} onChange={(e) => setDayReport(e.target.checked)} />
@@ -159,7 +160,7 @@ export function TemplateSettingsDialog({ pageId, onClose }: { pageId: string; on
         <div className="template-form-body">
           <label className="template-form-field">
             <span className="pref-label">{tr('saveTemplate.description')}</span>
-            <textarea value={description} maxLength={DESCRIPTION_MAX} rows={3} autoFocus onChange={(e) => setDescription(e.target.value)} />
+            <input type="text" value={description} maxLength={DESCRIPTION_MAX} autoFocus onChange={(e) => setDescription(e.target.value)} />
           </label>
           <label className="template-form-check" data-tip={tr('saveTemplate.dayReportSettingsTip')}>
             <input type="checkbox" checked={dayReport} onChange={(e) => setDayReport(e.target.checked)} />

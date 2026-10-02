@@ -51,21 +51,19 @@
   gap: 4px;
 }
 
-.template-form-field textarea {
-  min-height: 64px;
-  resize: vertical;
-  font: inherit;
-}
-
 .template-form-check {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: flex-start;
   gap: 8px;
+  font-size: 14px;
   line-height: 1.4;
 }
 
 .template-form-check input {
-  margin-top: 3px;
+  width: auto;
+  margin: 0;
+  flex: none;
 }
 
 .template-form p {
