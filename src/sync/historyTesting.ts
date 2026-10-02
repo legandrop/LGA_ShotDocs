@@ -166,3 +166,72 @@ export function unionDoc(update: Uint8Array): Y.Doc {
 
 /** Quién subió la fila de una marca. */
 export const authorOfRow = (h: PageHistory, row: number) => (row >= 0 ? h.rows[row].createdBy : undefined);
+
+/**
+ * Filas simuladas como las del diseño (sección 5.3): dos personas con el patrón de subida de la app después de B.15 (una
+ * subida por pausa con solo lo nuevo, también sus borrados), un autor de Yjs nuevo cada 60 subidas, a veces las dos a
+ * la vez, cambios de tipo como y-prosemirror y una pausa de una hora cada tanto. Para medir y para probar el Worker.
+ */
+export function simulate(n: number, seed = 7): HistoryRow[] {
+  const rnd = seeded(seed);
+  const people = ['ana', 'bea'];
+  const docs = people.map(() => new Y.Doc());
+  const pending: Uint8Array[][] = [[], []];
+  const uploads = [0, 0];
+  docs.forEach((d, i) =>
+    d.on('update', (u: Uint8Array, origin: unknown) => {
+      if (origin !== 'remote') pending[i].push(u);
+    }),
+  );
+  const rows: HistoryRow[] = [];
+  let clock = Date.parse('2026-01-01T10:00:00Z');
+  let ids = 0;
+  const words = ['plano', 'general', 'Ramón', 'suelta', 'los', 'cubiertos', 'mesa', 'luz', 'cámara', 'toma'];
+  const word = () => words[Math.floor(rnd() * words.length)];
+  // La primera fila: el grupo con un bloque.
+  docs[0].transact(() => group(docs[0]).insert(0, [block(`b${++ids}`, 'Escena 1')]));
+  const upload = (i: number) => {
+    if (pending[i].length === 0) return;
+    const data = Y.mergeUpdates(pending[i]);
+    pending[i] = [];
+    rows.push({ id: rows.length + 1, seq: rows.length + 1, createdBy: people[i], createdAt: new Date(clock).toISOString(), data });
+    // El otro lo baja (a veces más tarde: las dos a la vez).
+    uploads[i]++;
+    if (uploads[i] % 60 === 0) docs[i].clientID = Math.floor(rnd() * 2 ** 31) + 1;
+  };
+  const sync = () => {
+    for (const row of rows.slice(-4)) for (const d of docs) Y.applyUpdate(d, row.data, 'remote');
+  };
+  upload(0);
+  sync();
+  while (rows.length < n) {
+    const i = rnd() < 0.5 ? 0 : 1;
+    const d = docs[i];
+    d.transact(() => {
+      const g = group(d);
+      const containers = g.toArray().filter((x): x is Y.XmlElement => x instanceof Y.XmlElement && x.get(0) instanceof Y.XmlElement && (x.get(0) as Y.XmlElement).get(0) instanceof Y.XmlText);
+      const pick = () => containers[Math.floor(rnd() * containers.length)];
+      const r = rnd();
+      if (containers.length === 0 || r < 0.12) g.insert(Math.floor(rnd() * (g.length + 1)), [block(`b${++ids}`, `${word()} ${word()}`)]);
+      else if (r < 0.16 && containers.length > 5) g.delete(g.toArray().indexOf(pick()), 1);
+      else if (r < 0.2) {
+        const c = pick();
+        const at = g.toArray().indexOf(c);
+        const t = ((c.get(0) as Y.XmlElement).get(0) as Y.XmlText).toString();
+        g.delete(at, 1);
+        g.insert(at, [block(String(c.getAttribute('id')), t, rnd() < 0.5 ? 'heading' : 'paragraph')]);
+      } else if (r < 0.35) {
+        const t = (pick().get(0) as Y.XmlElement).get(0) as Y.XmlText;
+        if (t.length > 4) t.delete(Math.floor(rnd() * (t.length - 4)), 1 + Math.floor(rnd() * 4));
+      } else {
+        const t = (pick().get(0) as Y.XmlElement).get(0) as Y.XmlText;
+        t.insert(Math.floor(rnd() * (t.length + 1)), ` ${word()}`);
+      }
+    });
+    upload(i);
+    clock += rnd() < 0.01 ? 60 * 60_000 : 1200 + Math.floor(rnd() * 20_000);
+    if (rnd() < 0.8) sync();
+  }
+  return rows;
+}
+
