@@ -272,6 +272,112 @@ describe('compartir desde la mención', () => {
   });
 });
 
+describe('compartir desde la mención con la privacidad de lo borrado (useShareGate, D14)', () => {
+  /** Abre la pregunta de Pedro en la página Plan, con el admin y la privacidad prendida o apagada. */
+  async function ask(clean: boolean) {
+    const w = await workspace();
+    if (clean) w.server.enableClean();
+    const admin = await w.device(ADMIN);
+    // Una edición del admin que todavía no subió (hecha sin red).
+    const doc = await admin.docs.open(w.plan);
+    doc.transact(() => doc.getText('t').insert(0, 'nota nueva '), 'test');
+    await admin.docs.flush(w.plan);
+    admin.docs.close(w.plan);
+    expect(await admin.docs.unsyncedPages()).toContain(w.plan);
+    const host = await mount(services(admin, ADMIN), <Panel pageId={w.plan} />);
+    const textarea = await openComposer(host);
+    await typeIn(textarea, 'hola @ped');
+    await key(textarea, 'Enter');
+    const button = (name: string) => [...host.querySelectorAll<HTMLButtonElement>('.mention-share button')].find((b) => b.textContent === name)!;
+    return { ...w, admin, host, textarea, button };
+  }
+
+  it('prendida: lo pendiente sube ANTES de compartir y después se arman las bases de la página y su rama', async () => {
+    const { server, plan, toma, admin, host, textarea, button } = await ask(true);
+    expect(admin.engine.getStatus().cleanOn).toBe(true);
+    // La línea de la privacidad prendida: les llega la página como está, no su historia.
+    expect(host.querySelector('.mention-share')?.textContent).toContain("They'll get the page as it is");
+    const order: string[] = [];
+    const real = admin.mentions.shareForMention.bind(admin.mentions);
+    vi.spyOn(admin.mentions, 'shareForMention').mockImplementation(async (...args) => {
+      // En el momento de compartir, el servidor ya tiene lo del admin y no le queda nada pendiente.
+      order.push(`share pendiente=${(await admin.docs.unsyncedPages()).includes(plan)}`);
+      return real(...args);
+    });
+    const realPrepare = admin.engine.prepareBases.bind(admin.engine);
+    const prepare = vi.spyOn(admin.engine, 'prepareBases').mockImplementation(async (...args) => {
+      order.push('prepara bases');
+      return realPrepare(...args);
+    });
+    await act(async () => button('Share and mention').click());
+    await wait(150);
+    expect(order).toEqual(['share pendiente=false', 'prepara bases']);
+    expect(server.mentionShares).toEqual([`${plan} ${PEDRO}`]);
+    expect(textarea.value).toBe('hola @pedro ');
+    // Después de compartir se arman las bases de la página y de su hija (lo que le llega a quien no ve lo borrado).
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect([...prepare.mock.calls[0][0]].sort()).toEqual([plan, toma].sort());
+  });
+
+  it('prendida pero no se pudo subir lo pendiente: avisa con Retry y Share anyway, y no comparte', async () => {
+    const { server, plan, admin, host, textarea, button } = await ask(true);
+    const upload = vi.spyOn(admin.engine, 'uploadPagesFirst').mockResolvedValue(false);
+    await act(async () => button('Share and mention').click());
+    await wait(120);
+    const warn = host.querySelector('.mention-share [role="alert"]')!;
+    expect(warn.textContent).toContain('Retry');
+    expect(warn.textContent).toContain('Share anyway');
+    expect(server.mentionShares).toEqual([]);
+    expect(server.grants.some((g) => g.user_id === PEDRO)).toBe(false);
+    expect(textarea.value).toBe('hola @ped');
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(upload.mock.calls[0][0]).toContain(plan);
+  });
+
+  it('Share anyway comparte igual, sin volver a pedir lo pendiente', async () => {
+    const { server, plan, admin, host, textarea, button } = await ask(true);
+    const upload = vi.spyOn(admin.engine, 'uploadPagesFirst').mockResolvedValue(false);
+    await act(async () => button('Share and mention').click());
+    await wait(120);
+    expect(upload).toHaveBeenCalledTimes(1);
+    const anyway = [...host.querySelectorAll<HTMLButtonElement>('.mention-share [role="alert"] button')].find((b) => b.textContent === 'Share anyway')!;
+    await act(async () => anyway.click());
+    await wait(150);
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(server.mentionShares).toEqual([`${plan} ${PEDRO}`]);
+    expect(host.querySelector('.mention-share')).toBeNull();
+    expect(textarea.value).toBe('hola @pedro ');
+  });
+
+  it('Retry vuelve a intentar: con lo pendiente ya subido, comparte', async () => {
+    const { server, plan, admin, host, button } = await ask(true);
+    const upload = vi.spyOn(admin.engine, 'uploadPagesFirst').mockResolvedValueOnce(false);
+    await act(async () => button('Share and mention').click());
+    await wait(120);
+    expect(server.mentionShares).toEqual([]);
+    const retry = [...host.querySelectorAll<HTMLButtonElement>('.mention-share [role="alert"] button')].find((b) => b.textContent === 'Retry')!;
+    await act(async () => retry.click());
+    await wait(150);
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(server.mentionShares).toEqual([`${plan} ${PEDRO}`]);
+  });
+
+  it('apagada: no pide subir nada antes ni arma bases después, y la línea dice lo de hoy', async () => {
+    const { server, plan, admin, host, textarea, button } = await ask(false);
+    expect(admin.engine.getStatus().cleanOn).toBe(false);
+    expect(host.querySelector('.mention-share')?.textContent).toContain('can still reach the people you share them with');
+    const upload = vi.spyOn(admin.engine, 'uploadPagesFirst');
+    const prepare = vi.spyOn(admin.engine, 'prepareBases');
+    await act(async () => button('Share and mention').click());
+    await wait(150);
+    expect(prepare).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+    expect(server.mentionShares).toEqual([`${plan} ${PEDRO}`]);
+    expect(textarea.value).toBe('hola @pedro ');
+    expect(host.querySelector('.mention-share')).toBeNull();
+  });
+});
+
 describe('el punto del árbol', () => {
   it('lleno en la página con una mención sin leer; hueco en la madre plegada; nada al leerla', async () => {
     const { server, plan, toma, device } = await workspace();
