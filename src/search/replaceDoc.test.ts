@@ -7,6 +7,7 @@ import {
   applyPlan,
   hiddenBlocks,
   planCount,
+  planRedo,
   planReplace,
   planUndo,
   recordsOf,
@@ -391,6 +392,108 @@ describe('deshacer con otro dispositivo', () => {
       if (quiet) {
         expect(xml(a2)).toBe(original);
         expect(r.changed).toBe(0);
+        quietRuns++;
+      }
+      for (const struct of b.store.clients.get(b.clientID) ?? []) {
+        for (let c = struct.id.clock; c < struct.id.clock + struct.length; c++) {
+          if (aDeletes.some((ds) => Y.isDeleted(ds, Y.createID(b.clientID, c)))) lost++;
+        }
+      }
+    }
+    expect(lost).toBe(0);
+    expect(quietRuns).toBeGreaterThan(SEEDS / 10);
+  });
+});
+
+function redo(doc: Y.Doc, records: EditRecord[]) {
+  const r = planRedo(doc, records);
+  doc.transact(() => r.apply(), ORIGIN);
+  const count = (o: string) => r.outcomes.filter((x) => x === o).length;
+  return { redone: count('redone'), changed: count('changed'), already: count('already') };
+}
+
+describe('rehacer con las anclas (planRedo; Docs/Doc_Deshacer.md, 3.3)', () => {
+  it('reemplazar, deshacer y rehacer deja lo reemplazado; otra vez no hace nada; también con formato, pegadas y borrar', () => {
+    const doc = pageDoc([
+      { parts: ['La ', { text: 'Cá', attrs: { bold: true } }, { text: 'mara', attrs: { italic: true } }, ' A y la cámara B'] },
+      { parts: ['cámaracámara pegadas'] },
+      { cells: ['una cámara', 'otra'] },
+    ]);
+    const { records } = replace(doc, 'camara', 'Camera');
+    const replaced = xml(doc);
+    undo(doc, records);
+    const again = reload(doc);
+    expect(redo(again, records)).toEqual({ redone: 4, changed: 0, already: 0 });
+    expect(xml(again)).toBe(replaced);
+    expect(redo(again, records)).toEqual({ redone: 0, changed: 0, already: 4 });
+    expect(xml(again)).toBe(replaced);
+    // Y se puede volver a deshacer con el mismo registro.
+    expect(undo(again, records).undone).toBe(4);
+    const del = pageDoc([{ parts: ['a cámara b cámara c'] }]);
+    const d = replace(del, 'camara', '');
+    const deleted = xml(del);
+    undo(del, d.records);
+    expect(redo(del, d.records)).toEqual({ redone: 2, changed: 0, already: 0 });
+    expect(xml(del)).toBe(deleted);
+  });
+
+  it('si otro cambió lo de antes, eso no se toca; lo demás se rehace', () => {
+    const a = pageDoc([{ parts: ['uno cámara dos cámara'] }]);
+    const b = new Y.Doc();
+    sync(a, b);
+    const { records } = replace(a, 'camara', 'Camera');
+    undo(a, records);
+    sync(a, b);
+    const yt = (((b.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText;
+    yt.insert(yt.toString().indexOf('cámara') + 2, 'XY');
+    sync(a, b);
+    expect(redo(a, records)).toEqual({ redone: 1, changed: 1, already: 0 });
+    sync(a, b);
+    expect(yt.toString()).toBe('uno cáXYmara dos Camera');
+    expect(xml(a)).toBe(xml(b));
+  });
+
+  it('al azar: nada de lo que escribe el otro se borra, terminan iguales, y sin cambios del otro rehacer deja lo reemplazado', () => {
+    const SEEDS = Number(process.env.REPLACE_SEEDS ?? 300);
+    let lost = 0;
+    let quietRuns = 0;
+    for (let seed = 1; seed <= SEEDS; seed++) {
+      let x = seed * 7919 + 104729;
+      const rnd = (m: number) => {
+        x = (x * 9301 + 49297) % 233280;
+        return Math.floor((x / 233280) * m);
+      };
+      const words = ['cámara', 'luz', 'set', 'Cámara', 'plano'];
+      const text = Array.from({ length: 30 }, () => words[rnd(words.length)] + (rnd(3) === 0 ? '' : ' ')).join('');
+      const a = pageDoc([{ parts: [text] }, { parts: [text.slice(0, 40)] }]);
+      const b = new Y.Doc();
+      sync(a, b);
+      const quiet = rnd(5) === 0;
+      const aDeletes: Y.Transaction['deleteSet'][] = [];
+      a.on('afterTransaction', (tr: Y.Transaction) => {
+        if (tr.origin === ORIGIN) aDeletes.push(tr.deleteSet);
+      });
+      const typeB = () => {
+        if (quiet) return;
+        const g = b.getXmlFragment(CONTENT_FRAGMENT).get(0) as Y.XmlElement;
+        const yt = ((g.get(rnd(g.length)) as Y.XmlElement).get(0) as Y.XmlElement).get(0) as Y.XmlText;
+        if (rnd(4) === 0 && yt.length > 3) yt.delete(rnd(yt.length - 2), 1 + rnd(2));
+        else yt.insert(rnd(yt.length + 1), `{${seed}}`);
+      };
+      const replacement = rnd(3) === 0 ? '' : 'Camera';
+      const { records } = replace(a, 'camara', replacement);
+      const replaced = xml(a);
+      if (rnd(2)) sync(a, b);
+      undo(a, records);
+      for (let i = rnd(4); i > 0; i--) typeB();
+      if (rnd(2)) sync(a, b);
+      for (let i = rnd(3); i > 0; i--) typeB();
+      redo(a, records);
+      for (let i = rnd(3); i > 0; i--) typeB();
+      sync(a, b);
+      expect(xml(a)).toBe(xml(b));
+      if (quiet) {
+        expect(xml(a)).toBe(replaced);
         quietRuns++;
       }
       for (const struct of b.store.clients.get(b.clientID) ?? []) {
