@@ -224,7 +224,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
       const request = buildRequest(next.action, next.snapshot.selected, { language: next.language, instruction: next.instruction });
       try {
         // La clave se descifra recién acá y queda solo en esta llamada.
-        const answer = await complete(config, await readKey(user.email), request, {
+        const answer = await complete(config, await readKey(user.email, config), request, {
           signal: controller.signal,
           onText: (text) => {
             if (abort.current === controller) setPhase({ kind: 'running', action: next.action, text });

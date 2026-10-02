@@ -4,7 +4,7 @@ import '../i18n/lazy/assistant';
 import { useServices } from '../services';
 import { errorText } from './AssistantPanel';
 import { closeAssistantSettings } from './assistantUi';
-import { forgetKey, loadSettings, readKey, saveSettings, type AssistantSettings as Saved } from './keyStore';
+import { forgetKey, loadSettings, readKey, sameDestination, saveSettings, type AssistantSettings as Saved } from './keyStore';
 import { defaultModel, listModels, PROVIDER_NAMES, PROVIDERS, SPEND_LIMIT_URLS, type ModelInfo, type ProviderId } from './providers';
 import './assistant.css';
 
@@ -12,6 +12,15 @@ import './assistant.css';
 // clave (que queda solo en este dispositivo, keyStore.ts), la dirección de un proveedor compatible, el modelo de la
 // lista que da el proveedor, *Test* y *Forget key*. La clave escrita vive solo en el campo mientras la ventana está
 // abierta; al guardar se cifra y el campo se vacía.
+
+/** El host de una dirección (`openrouter.ai`, `127.0.0.1:11434`), o `''` si todavía no es una dirección. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url.trim()).host;
+  } catch {
+    return '';
+  }
+}
 
 export function AssistantSettings() {
   const { user } = useServices();
@@ -53,9 +62,13 @@ export function AssistantSettings() {
   }, []);
 
   const name = PROVIDER_NAMES[provider];
-  const sameProvider = saved?.provider === provider;
-  /** La clave que se usa para *Test*: la escrita, o la guardada si es del mismo proveedor. */
-  const keyForTest = async () => (key.trim() ? key.trim() : sameProvider && saved?.hasKey ? await readKey(user.email) : '');
+  // La guardada vale solo para el mismo proveedor y, en uno compatible, la misma dirección: si cambia la Base URL, el
+  // campo queda vacío, *Test* no la usa y *Save* no la conserva (keyStore.ts, sameDestination).
+  const sameProvider = !!saved && sameDestination(saved, { provider, baseUrl });
+  /** A quién va la clave, para el aviso: en uno compatible, el host de la dirección. */
+  const destination = provider === 'compatible' ? hostOf(baseUrl) || name : name;
+  /** La clave que se usa para *Test*: la escrita, o la guardada si es del mismo proveedor y la misma dirección. */
+  const keyForTest = async () => (key.trim() ? key.trim() : sameProvider && saved?.hasKey ? await readKey(user.email, { provider, baseUrl }) : '');
   const needsKey = provider !== 'compatible';
 
   const changeProvider = (next: ProviderId) => {
@@ -188,7 +201,9 @@ export function AssistantSettings() {
                   id="assistant-key"
                   type="password"
                   value={key}
-                  autoComplete="off"
+                  autoComplete="new-password"
+                  data-1p-ignore=""
+                  data-lpignore="true"
                   spellCheck={false}
                   placeholder={sameProvider && saved?.hasKey ? tr('assistant.settings.keySaved') : provider === 'compatible' ? tr('assistant.settings.keyOptional') : ''}
                   onChange={(e) => setKey(e.target.value)}
@@ -210,7 +225,7 @@ export function AssistantSettings() {
               </datalist>
             </label>
             <p className="muted assistant-small">
-              {tr('assistant.settings.stays', { provider: name })}{' '}
+              {tr('assistant.settings.stays', { provider: destination })}{' '}
               {limitUrl && (
                 <a href={limitUrl} target="_blank" rel="noopener noreferrer">
                   {tr('assistant.settings.limit')}

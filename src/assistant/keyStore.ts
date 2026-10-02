@@ -82,6 +82,32 @@ async function deviceKey(): Promise<CryptoKey> {
   return key;
 }
 
+/** A dónde va la clave: el proveedor y, en uno compatible, su dirección (Base URL). */
+export interface KeyDestination {
+  provider: ProviderId;
+  baseUrl?: string;
+}
+
+/** La dirección de un proveedor compatible, para comparar: sin espacios ni barras al final, el host en minúsculas. */
+export function normalizeBaseUrl(url: string | undefined): string {
+  const raw = (url ?? '').trim();
+  try {
+    const u = new URL(raw);
+    return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, '')}${u.search}`;
+  } catch {
+    return raw.replace(/\/+$/, '');
+  }
+}
+
+/**
+ * Si una clave guardada para `a` puede ir a `b`: el mismo proveedor y, en uno compatible, la misma dirección. La clave
+ * de un servicio compatible es de ese servicio: si cambia la Base URL, la guardada no viaja a la nueva (hay que pegarla).
+ */
+export function sameDestination(a: KeyDestination, b: KeyDestination): boolean {
+  if (a.provider !== b.provider) return false;
+  return a.provider !== 'compatible' || normalizeBaseUrl(a.baseUrl) === normalizeBaseUrl(b.baseUrl);
+}
+
 function settingsOf(r: AssistantRecord): AssistantSettings {
   const { iv: _iv, cipher, ...rest } = r;
   return { ...rest, hasKey: !!cipher };
@@ -104,7 +130,8 @@ export async function hasAssistantKey(email: string): Promise<boolean> {
 }
 
 /**
- * Guarda los ajustes. Con `apiKey` (una clave nueva) la cifra y la guarda; sin ella (`undefined`) conserva la que había.
+ * Guarda los ajustes. Con `apiKey` (una clave nueva) la cifra y la guarda; sin ella (`undefined`) conserva la que había,
+ * pero solo si es del mismo proveedor y la misma dirección: si no, la saca (nunca queda guardada para otro destino).
  * Una cadena vacía la saca (un modelo local sin clave).
  */
 export async function saveSettings(
@@ -116,7 +143,10 @@ export async function saveSettings(
   const prev = await d.get('keys', norm(email));
   let iv = prev?.iv ?? null;
   let cipher = prev?.cipher ?? null;
-  if (apiKey !== undefined) {
+  if (apiKey === undefined && prev && !sameDestination(prev, settings)) {
+    iv = null;
+    cipher = null;
+  } else if (apiKey !== undefined) {
     if (apiKey === '') {
       iv = null;
       cipher = null;
@@ -150,12 +180,13 @@ export async function rememberLanguage(email: string, language: string): Promise
 
 /**
  * La clave en claro, justo antes de un pedido. `''` si no hay (un modelo local sin clave). No se guarda en ningún
- * lado: quien la pide la usa y la suelta.
+ * lado: quien la pide la usa y la suelta. Solo si se guardó para `to` (el mismo proveedor y la misma dirección): si los
+ * ajustes cambiaron en otra pestaña mientras este pedido usaba los de antes, la clave nueva no va a la dirección vieja.
  */
-export async function readKey(email: string): Promise<string> {
+export async function readKey(email: string, to: KeyDestination): Promise<string> {
   const d = await db();
   const r = await d.get('keys', norm(email));
-  if (!r?.cipher || !r.iv) return '';
+  if (!r?.cipher || !r.iv || !sameDestination(r, to)) return '';
   const key = await deviceKey();
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: r.iv as BufferSource }, key, r.cipher);
   return new TextDecoder().decode(plain);
