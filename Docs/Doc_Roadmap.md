@@ -254,10 +254,18 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   versiones salen de `page_updates` aplicadas en orden (sin guardar nada nuevo; cada fila ya tiene autor y hora
   puestos por la base) y restaurar es una edición por el editor que se deshace. **Entrega 1 hecha (v0.098):** la lista
   por sesión con quién y cuándo, ver una versión y restaurarla (Ctrl/⌘+Alt+Shift+H); la migración
-  `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Falta:** aplicarla (con copia
-  de seguridad), las marcas por persona, el texto huérfano con el aviso a quien escribió (necesita la subida sin GC,
-  en otra rama), nombrar versiones, la caché sin red, que la lista se actualice sola con el historial abierto (O3 de la
-  auditoría) y medir en el iPhone. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
+  `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Entrega 2 hecha (v0.103):**
+  *Show changes* con lo agregado y lo borrado por persona (decoraciones, bloques rehechos apareados por id), el texto
+  huérfano en su versión, el Worker con la página de respaldo, la diferencia solo de lo tocado y la lista que se
+  actualiza sola. **Falta:** aplicar la migración (con copia de seguridad), la entrega 3 (nombrar versiones, la caché
+  sin red) y medir en el iPhone. Encontrado por la prueba al azar: una versión con dos bloques del mismo id no se puede
+  restaurar (se deshace sola, sin perder nada; `Doc_Historial.md`, entrega 2; ya pasaba en v0.098). Arreglo propuesto:
+  antes de restaurar, en la copia en memoria, darle un id nuevo al repetido (el segundo en el orden de Yjs), como hace el
+  editor. **De la auditoría de la entrega 2, para después:** (O2) dos sangrías a la vez bajo el mismo bloque dejan dos
+  grupos de hijos; la unión los junta sin descartar el hijo repetido (como `repairBlocks`) y lo muestra agregado (solo
+  presentación); (O9) al confirmar una restauración, `refreshRows` puede devolver una consulta empezada antes de
+  sincronizar: esperarla y pedir otra; (M5) ninguna prueba ve que `mergeRows` descarte una fila repetida; (M10) si en un
+  mismo lote crece la sesión elegida y aparece otra, la elegida puede saltar a la actual. Aparte, después: que lo borrado no llegue a quien solo ve la página (decisión 2;
   diseño en `Doc_Privacidad_Borrado.md`, B.18).
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y

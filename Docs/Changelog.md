@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.103 :
+
+El historial no mostraba qué cambió en cada versión ni quién (P.18, entrega 2). *Show changes*, prendido por defecto,
+compara cada versión con la anterior: lo agregado subrayado y lo borrado tachado con el color de cada persona, bloques
+enteros con una barra y los que y-prosemirror rehace (cambiar el tipo, mover) apareados por id, con su rótulo y el
+texto comparado por palabras. Son decoraciones sobre una unión en memoria: ni el esquema ni los documentos cambian, y
+copiar entrega la versión sin lo borrado. Lo
+que alguien escribió en algo ya borrado se ve aparte, en su versión, con **Copy**. El historial se arma en un Worker
+(con la página de respaldo) y la diferencia, en una sola transacción y solo de lo tocado: con 10 000 subidas, de 0,7 s a
+unos 10 ms. La lista se actualiza sola con el historial abierto, sin perder la versión elegida.
+[ Historial - los cambios marcados por persona, el texto huérfano, el Worker y la lista que se actualiza sola ]
+
 v0.102 :
 
 Quien solo podía ver o comentar una rama, y los invitados, leían enteras las páginas mandadas a la papelera dentro de
