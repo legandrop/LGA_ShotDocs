@@ -200,6 +200,18 @@ export const editor = {
     es: "Esta versión no puede mostrarla entera sin perder una parte, así que queda cerrada. No se pierde nada.",
   },
   'editor.updateApp': { en: "Update the app", es: "Actualizar la app" },
+  'removedWriting.text': {
+    en: "Someone deleted a part of this page while you were writing in it, and what you wrote there went with it. You can copy it from here.",
+    es: "Alguien borró una parte de esta página mientras escribías en ella, y lo que escribiste ahí se fue con esa parte. Podés copiarlo desde acá.",
+  },
+  'removedWriting.show': { en: "Show what you wrote", es: "Ver lo que escribiste" },
+  'removedWriting.hide': { en: "Hide", es: "Ocultar" },
+  'removedWriting.copy': { en: "Copy", es: "Copiar" },
+  'removedWriting.dismiss': { en: "Dismiss", es: "Descartar aviso" },
+  'removedWriting.copyFailed': {
+    en: "Could not copy. Select the text and copy it by hand.",
+    es: "No se pudo copiar. Seleccioná el texto y copialo a mano.",
+  },
   'editor.onlyImages': {
     en: "Only images can be added for now (JPEG, PNG, GIF, WebP, AVIF or HEIC). Videos need the workspace media server (Google Drive).",
     es: "Por ahora solo se pueden agregar imágenes (JPEG, PNG, GIF, WebP, AVIF o HEIC). Los videos necesitan el servidor de archivos del workspace (Google Drive).",

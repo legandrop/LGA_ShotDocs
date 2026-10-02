@@ -15,6 +15,17 @@ import {
   type LocalDb,
 } from './localDb';
 import { APP_OUTDATED, type Remote } from './remote';
+import {
+  applyRowsInOrder,
+  clientOfKey,
+  findRemovedWriting,
+  mergeRowsInOrder,
+  ownClientKey,
+  ownClientRange,
+  REMOVED_WRITING_KEEP,
+  removedWritingKey,
+  type RemovedWriting,
+} from './removedWriting';
 import { errorMessage, isPermanent, isTimeout, type RemoteUpdate } from './types';
 
 export const ORIGIN_LOAD = Symbol('load');
@@ -38,6 +49,12 @@ export const ORIGIN_REPLACE = Symbol('replace');
 const COMPACT_AT = 64;
 const PULL_BATCH = 500;
 const WRITE_RETRY_MS = 3000;
+/**
+ * Una subida armada sin GC (B.16) más grande que esto se vuelve a armar con GC, como antes: el servidor rechaza
+ * las de más de 8 MB, y un rechazo dejaría todo lo de la página sin subir. Pasa solo con una página muy editada
+ * que vuelve a subir entera (después de restaurar una copia de seguridad).
+ */
+export const NO_GC_MAX_BYTES = 6 * 1024 * 1024;
 
 interface LiveDoc {
   doc: Y.Doc;
@@ -59,6 +76,8 @@ interface LiveDoc {
    * semilla, así que guardar una sin la otra dejaría la edición sin poder mostrarse al volver a abrir.
    */
   unsavedSeed?: Uint8Array;
+  /** El vector de estado al terminar de cargar lo guardado: lo que está hasta acá ya está en IndexedDB. */
+  loadedSV?: Uint8Array;
   /** Se armó la versión guardia (ver `DocState.guardVersion`): la página se puede editar. */
   guarded?: boolean;
   /** Ya terminó de cargar lo guardado (`ready` se resolvió): `peek` lo puede devolver. */
@@ -124,6 +143,15 @@ export class PageDocs {
   onWarning?: (message: string) => void;
   private readonly unsupportedListeners = new Set<(pageId: string) => void>();
   private readonly renderFailedListeners = new Set<(pageId: string) => void>();
+  private readonly removedWritingListeners = new Set<(pageId: string) => void>();
+  /** Páginas con alguna edición local en esta sesión (para no armar nada al bajar en las demás). */
+  private readonly written = new Set<string>();
+  /**
+   * Los autores de Yjs que escribieron en cada página y todavía no se anotaron en `meta` (B.16, `ownClientKey`):
+   * se anotan con la próxima escritura local. `recordedClients` son los ya anotados en esta sesión.
+   */
+  private readonly unrecordedClients = new Map<string, Set<number>>();
+  private readonly recordedClients = new Set<string>();
 
   constructor(
     private readonly db: LocalDb,
@@ -148,6 +176,7 @@ export class PageDocs {
       const doc = new Y.Doc();
       const created: LiveDoc = { doc, refs: 0, ready: Promise.resolve() };
       created.ready = this.loadInto(pageId, doc).then(async () => {
+        created.loadedSV = Y.encodeStateVector(doc);
         const writable = this.options.canWrite?.(pageId) !== false;
         // Antes de que se pueda editar nada (también la reparación de abajo).
         if (writable) {
@@ -166,17 +195,19 @@ export class PageDocs {
             this.track(pageId, this.armGuard(pageId));
           }
           if (created.repairedInMemory) {
-            // Lo escrito puede colgar de la reparación hecha solo en memoria (y de la semilla): se guarda el
-            // documento entero, así la reparación queda guardada con lo que depende de ella.
+            // Lo escrito puede colgar de la reparación hecha solo en memoria (y de la semilla): se guarda todo lo
+            // que el documento tiene además de lo que se cargó de IndexedDB, así la reparación queda guardada con
+            // lo que depende de ella. Solo lo que no estaba guardado: el documento abierto tiene GC, y lo borrado
+            // en memoria va como hueco; lo cargado ya está en las filas con su texto (B.16).
             created.repairedInMemory = false;
             created.unsavedSeed = undefined;
-            this.persistLocal(pageId, [Y.encodeStateAsUpdate(doc)]);
+            this.persistLocal(pageId, [Y.encodeStateAsUpdate(doc, created.loadedSV)], doc.clientID);
             return;
           }
           const seed = created.unsavedSeed;
           created.unsavedSeed = undefined;
           // La semilla va primero y en el mismo lote: se guardan en la misma transacción.
-          this.persistLocal(pageId, seed ? [seed, update] : [update]);
+          this.persistLocal(pageId, seed ? [seed, update] : [update], doc.clientID);
         });
         if (!writable) {
           // Solo en memoria (origen que no se guarda): la vista queda bien y no sale ningún cambio.
@@ -256,6 +287,35 @@ export class PageDocs {
   subscribeRenderFailed(fn: (pageId: string) => void): () => void {
     this.renderFailedListeners.add(fn);
     return () => this.renderFailedListeners.delete(fn);
+  }
+
+  /**
+   * Avisa cuando un cambio que llegó del servidor dejó borrado algo que este dispositivo había escrito y todavía
+   * no había subido (otro borró el bloque donde se escribía; B.16). El texto queda en `removedWriting`.
+   */
+  subscribeRemovedWriting(fn: (pageId: string) => void): () => void {
+    this.removedWritingListeners.add(fn);
+    return () => this.removedWritingListeners.delete(fn);
+  }
+
+  /** Lo escrito en este dispositivo que otro borró antes de que se subiera (B.16), del más viejo al más nuevo. */
+  async removedWriting(pageId: string): Promise<RemovedWriting[]> {
+    const value = await this.db.get('meta', removedWritingKey(pageId));
+    return Array.isArray(value) ? (value as RemovedWriting[]) : [];
+  }
+
+  /**
+   * Quien escribió ya lo vio: se borran esos avisos (el texto sigue en el servidor). Solo los que se mostraron: uno
+   * que llegó mientras tanto queda.
+   */
+  async dismissRemovedWriting(pageId: string, shown: RemovedWriting[]): Promise<void> {
+    const seen = new Set(shown.map((n) => `${n.at}\u0000${n.text}`));
+    const tx = this.db.transaction('meta', 'readwrite');
+    const before = await tx.store.get(removedWritingKey(pageId));
+    const rest = (Array.isArray(before) ? (before as RemovedWriting[]) : []).filter((n) => !seen.has(`${n.at}\u0000${n.text}`));
+    if (rest.length > 0) await tx.store.put(rest, removedWritingKey(pageId));
+    else await tx.store.delete(removedWritingKey(pageId));
+    await tx.done;
   }
 
   /**
@@ -417,7 +477,8 @@ export class PageDocs {
       for (let round = 0; round < 5; round++) {
         let pending = state.pending;
         if (!pending) {
-          const saved = await this.readSaved(pageId);
+          // Sin GC (B.16): lo propio que quedó adentro de algo que otro borró viaja con su texto, borrado.
+          const saved = await this.readSaved(pageId, { keepDeleted: true });
           if (!hasUnsyncedContent(saved.state, saved.dirty !== undefined)) {
             saved.doc.destroy();
             break;
@@ -431,7 +492,16 @@ export class PageDocs {
             continue;
           }
           // Los elementos que el servidor no tiene y solo los borrados que no tiene (B.15).
-          const upload = buildUpload(saved.doc, saved.state.syncedSV, knownDeletes(saved.state, saved.generation));
+          let upload = buildUpload(saved.doc, saved.state.syncedSV, knownDeletes(saved.state, saved.generation));
+          if (upload.update.length > NO_GC_MAX_BYTES) {
+            // Demasiado grande con todo lo borrado: se arma con GC, como antes de B.16 (ver `NO_GC_MAX_BYTES`).
+            // Los mismos elementos y los mismos borrados; solo pierde el texto de lo ya borrado.
+            const collected = new Y.Doc();
+            Y.applyUpdate(collected, Y.encodeStateAsUpdate(saved.doc), ORIGIN_LOAD);
+            console.warn(`Page ${pageId}: the upload with deleted text is too large; uploading without it.`);
+            upload = buildUpload(collected, saved.state.syncedSV, knownDeletes(saved.state, saved.generation));
+            collected.destroy();
+          }
           const next = {
             id: crypto.randomUUID(),
             update: upload.update,
@@ -579,6 +649,8 @@ export class PageDocs {
   /** Baja lo nuevo de una página y lo guarda. Si está abierta, lo aplica también en el editor. */
   pullPage(pageId: string, remote: Remote): Promise<number> {
     return this.withLock(pageId, async () => {
+      // Lo escrito tiene que estar guardado antes de bajar: el aviso de B.16 mira lo guardado.
+      await this.flush(pageId);
       let total = 0;
       // Si un lote vence el tope de tiempo (una red lenta con updates grandes), se pide uno más chico, hasta
       // de a uno (que tiene el tope más largo). Lo ya bajado queda guardado.
@@ -635,6 +707,9 @@ export class PageDocs {
     // por versiones anteriores (cada fila con el delete set entero) la unión tarda, y adentro trabaría el
     // guardado de todas las páginas.
     const deletes = merged ? await this.preparePulledDeletes(pageId, merged) : null;
+    // Lo propio sin subir que lo bajado deja borrado (B.16): también afuera, y solo si lo bajado trae borrados y
+    // la página tiene algo sin subir (lo común es que no: no se arma nada).
+    const removed = merged && deletes && deletes.pulled.size > 0 ? await this.inspectRemovedWriting(pageId, merged) : null;
 
     const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readwrite');
     const [stored, generation] = await Promise.all([
@@ -672,7 +747,23 @@ export class PageDocs {
     state.cursor = maxSeq;
     if (valid.length < updates.length) state.unreadable = true;
     await tx.objectStore('docState').put(state);
+    if (removed) {
+      // En la misma transacción que lo bajado: si queda guardado, queda el aviso.
+      const meta = tx.objectStore('meta');
+      const before = await meta.get(removedWritingKey(pageId));
+      const list = [...(Array.isArray(before) ? (before as RemovedWriting[]) : []), { at: Date.now(), ...removed }];
+      await meta.put(list.slice(-REMOVED_WRITING_KEEP), removedWritingKey(pageId));
+    }
     await tx.done;
+    if (removed) {
+      for (const fn of this.removedWritingListeners) {
+        try {
+          fn(pageId);
+        } catch (err) {
+          console.error('removed writing listener failed', err);
+        }
+      }
+    }
 
     const live = this.live.get(pageId);
     if (merged && live && !live.stale) {
@@ -716,6 +807,48 @@ export class PageDocs {
     const local = Y.decodeStateVector(Y.encodeStateVector(doc));
     doc.destroy();
     return { local, rows: rows.length };
+  }
+
+  /** Hubo ediciones locales de la página en esta sesión de la app. */
+  private wroteHere(pageId: string): boolean {
+    return this.written.has(pageId);
+  }
+
+  /**
+   * Si lo bajado deja borrado algo que este dispositivo escribió (B.16), su texto (ver `findRemovedWriting`); si
+   * no, `null`. Arma un documento sin GC con lo guardado solo si la página tiene algo sin subir o se editó en esta
+   * sesión, y si hay autores propios anotados. Un error acá no frena la bajada: el texto igual sube (la subida va
+   * sin GC), solo falta el aviso.
+   */
+  private async inspectRemovedWriting(
+    pageId: string,
+    merged: Uint8Array,
+  ): Promise<{ text: string; ranges: [number, number, number][] } | null> {
+    try {
+      const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readonly');
+      const meta = tx.objectStore('meta');
+      const [state, dirty, ownKeys] = await Promise.all([
+        tx.objectStore('docState').get(pageId),
+        meta.get(dirtyKey(pageId)),
+        meta.getAllKeys(ownClientRange(pageId)),
+      ]);
+      // Nada sin subir y nada escrito en esta sesión, o ningún autor propio: no hay qué mirar (lo común).
+      const recent = hasUnsyncedContent(state ?? emptyDocState(pageId), dirty !== undefined) || this.wroteHere(pageId);
+      if (!recent || ownKeys.length === 0) {
+        await tx.done;
+        return null;
+      }
+      const rows = await tx.objectStore('docUpdates').index('pageId').getAll(pageId);
+      await tx.done;
+      return findRemovedWriting(
+        rows.map((r) => r.data),
+        merged,
+        new Set(ownKeys.map(clientOfKey)),
+      );
+    } catch (err) {
+      console.warn(`Page ${pageId}: could not check for removed writing.`, err);
+      return null;
+    }
   }
 
   /**
@@ -830,7 +963,13 @@ export class PageDocs {
    * cierre en ese rato perdía el final de lo escrito (el navegador aborta las transacciones sin confirmar
    * de una página que se va), aunque el estado ya dijera "saved on this device".
    */
-  private persistLocal(pageId: string, updates: Uint8Array[]): void {
+  private persistLocal(pageId: string, updates: Uint8Array[], client?: number): void {
+    this.written.add(pageId);
+    if (client !== undefined && !this.recordedClients.has(`${pageId}:${client}`)) {
+      const pending = this.unrecordedClients.get(pageId) ?? new Set<number>();
+      pending.add(client);
+      this.unrecordedClients.set(pageId, pending);
+    }
     const buffer = this.unsaved.get(pageId);
     if (buffer) buffer.push(...updates);
     else this.unsaved.set(pageId, [...updates]);
@@ -860,6 +999,9 @@ export class PageDocs {
     // Lo de las transacciones anteriores que todavía no terminaron va de nuevo (ver `inFlight`).
     const batch = [...flying, ...fresh];
     for (const update of fresh) flying.add(update);
+    // Los autores de Yjs nuevos de esta página se anotan con la edición (B.16, `ownClientKey`).
+    const clients = [...(this.unrecordedClients.get(pageId) ?? [])];
+    this.unrecordedClients.delete(pageId);
 
     let done: Promise<void>;
     try {
@@ -868,6 +1010,7 @@ export class PageDocs {
       // Los errores de cada pedido llegan también por `tx.done`.
       void tx.objectStore('docUpdates').add({ pageId, data }).catch(() => undefined);
       void tx.objectStore('meta').put(crypto.randomUUID(), dirtyKey(pageId)).catch(() => undefined);
+      for (const client of clients) void tx.objectStore('meta').put(Date.now(), ownClientKey(pageId, client)).catch(() => undefined);
       // Sin esperar a nada: el navegador ya tiene todo lo que tiene que guardar.
       try {
         (tx as unknown as { commit?: () => void }).commit?.();
@@ -881,6 +1024,7 @@ export class PageDocs {
     return done.then(
       () => {
         for (const update of batch) flying.delete(update);
+        for (const client of clients) this.recordedClients.add(`${pageId}:${client}`);
         this.setWriteError(null);
         // Un escucha que falla no deja sin aviso a los demás ni frena la suma de la versión.
         for (const fn of this.localChangeListeners) {
@@ -898,6 +1042,12 @@ export class PageDocs {
       (err: unknown) => {
         // Vuelven a la cola: siguen en el documento en memoria y se reintentan solas. (Las que otra
         // transacción ya guardó no están más en `flying`.)
+        // Los autores sin anotar vuelven a la lista: se anotan con el reintento.
+        if (clients.length > 0) {
+          const pending = this.unrecordedClients.get(pageId) ?? new Set<number>();
+          for (const client of clients) pending.add(client);
+          this.unrecordedClients.set(pageId, pending);
+        }
         const lost = batch.filter((update) => flying.has(update));
         for (const update of lost) flying.delete(update);
         this.unsaved.set(pageId, [...lost, ...(this.unsaved.get(pageId) ?? [])]);
@@ -989,6 +1139,7 @@ export class PageDocs {
    */
   private async readSaved(
     pageId: string,
+    { keepDeleted = false }: { keepDeleted?: boolean } = {},
   ): Promise<{ doc: Y.Doc; state: DocState; dirty?: string; generation: number }> {
     const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readonly');
     const [rows, stored, dirty, generation] = await Promise.all([
@@ -998,8 +1149,16 @@ export class PageDocs {
       tx.objectStore('meta').get(GENERATION_KEY),
     ]);
     await tx.done;
-    const doc = new Y.Doc();
-    if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)), ORIGIN_LOAD);
+    let doc: Y.Doc;
+    if (keepDeleted) {
+      // Para subir (B.16): sin GC, así lo borrado conserva su texto, y fila por fila en orden, así gana la primera
+      // copia de cada elemento (la que se guardó al escribirlo), nunca una posterior que lo trae como hueco.
+      doc = new Y.Doc({ gc: false });
+      applyRowsInOrder(doc, rows.map((r) => r.data), ORIGIN_LOAD);
+    } else {
+      doc = new Y.Doc();
+      if (rows.length > 0) Y.applyUpdate(doc, Y.mergeUpdates(rows.map((r) => r.data)), ORIGIN_LOAD);
+    }
     return {
       doc,
       state: stored ?? emptyDocState(pageId),
@@ -1014,8 +1173,12 @@ export class PageDocs {
     const index = tx.store.index('pageId');
     const keys = await index.getAllKeys(pageId);
     const rows = await index.getAll(pageId);
-    const merged = rows.length > 0 ? Y.mergeUpdates(rows.map((r) => r.data)) : null;
-    if (merged && rows.length > COMPACT_AT) {
+    // Para compactar, en orden y sin GC (B.16): `mergeUpdates` puede quedarse con una copia de un elemento como
+    // hueco en vez de la que tiene el texto.
+    const compact = rows.length > COMPACT_AT;
+    const data = rows.map((r) => r.data);
+    const merged = rows.length === 0 ? null : compact ? mergeRowsInOrder(data) : Y.mergeUpdates(data);
+    if (merged && compact) {
       await tx.store.add({ pageId, data: merged });
       await Promise.all(keys.map((k) => tx.store.delete(k)));
     }
