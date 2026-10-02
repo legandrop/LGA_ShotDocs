@@ -337,8 +337,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   sección 6 quedaron para después el selector de plantilla del globito (con las propias, entrega 3) y la marca *2
   reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6). Quedó de la auditoría de
   la entrega 1: *Exit* de la vista previa abierta desde la ventana va al inicio y no a la página donde se elegía
-  (Atrás sí vuelve); y un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible). **Para
-  después:** que la base fusione las claves de `pages.settings`
+  (Atrás sí vuelve); y un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible). De la
+  auditoría de la entrega 2 (las demás observaciones, corregidas): un invitado con *Edit & create pages* crea reportes,
+  porque la base mira el nivel y no el rol; si un cliente nunca tiene que crear páginas, es una decisión del modelo de
+  permisos (`Plan_Workspaces.md`). **Para después:** que la base fusione las claves de `pages.settings`
   (`settings || patch`) en vez de reemplazar el objeto entero, con su migración: hoy dos cambios de ajustes a la vez
   se pisan (`Doc_Plantillas.md`, sección 8).
 - **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una

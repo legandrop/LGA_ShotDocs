@@ -663,7 +663,7 @@ contenido (IndexedDB primero).
   en la página saca la plantilla y el título queda. **En la raíz del proyecto** queda como en la entrega 1 (plantilla
   común, foco en el título vacío) con el aviso *Put day reports inside a folder to get New day report*.
 - **El globito.** Fecha (`type="date"`), día y locación, con el foco en la fecha: Enter crea (o abre el de esa fecha si
-  ya hay uno, con *Create another* al lado); si hay dos o más, *2 reports for 2026-10-02*. El anterior a medio bajar
+  ya hay uno, con *Create another* al lado, que propone el mismo día de rodaje); si hay dos o más, *2 reports for 2026-10-02*. El anterior a medio bajar
   muestra el aviso de O2. La propuesta se lee una vez al abrir; lo escrito en los campos manda. El nuevo reporte se abre
   con el cursor en *Summary*. Se baja apenas se ve el botón (sin red tiene que estar).
 - **Qué se copia.** Fecha con el día de la semana (`2026-10-02 · Fri`), día y locación del globito; unidad, *VFX on
@@ -684,3 +684,18 @@ contenido (IndexedDB primero).
   atajo con las teclas de Chromium en Windows y con la plataforma de Mac, AltGr simulado y el teléfono.
 - **Pendiente para Lega:** el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico (9), y el
   botón en el iPhone.
+
+### Correcciones de la auditoría de la entrega 2
+
+Auditoría independiente sobre `67b3793`: aprobado con observaciones, sin bloqueantes. Cada arreglo con una prueba que
+falla sin él (`dayReportSync.test.ts`, `dayReportHost.test.tsx`, "correcciones de la auditoría").
+
+| Hallazgo | Corrección |
+|---|---|
+| **O1** *Create another* proponía el día siguiente | Si la fecha ya tiene un reporte, *Shoot day* propone su número (`suggestedDay`); cambiar la fecha lo vuelve a calcular salvo que la persona haya tocado el día. |
+| **O2** El primero deshecho dejaba una página vacía con cara de reporte | La propuesta no cuenta las páginas con título de reporte **vacías y completas** (se miran los 10 más recientes; una a medio bajar no se toma por vacía). Si se crea un reporte con esa fecha, se escribe en ella (título y plantilla al día) en vez de crear otro. No se escribe nada al deshacer. |
+| **O3** Enter mientras se leía la carpeta no hacía nada | El botón queda habilitado: Enter se recuerda y se hace apenas llega la propuesta, con lo que la persona ya haya tocado respetado. El formulario valida solo (`noValidate`): el día vacío mientras carga frenaba el envío del navegador. |
+| **O4** Si fallaba escribir el contenido, el reintento duplicaba la página | `createDayReport` tira `DayReportWriteError` con el id; el reintento escribe en esa página. `writeNewPage` solo escribe en una página vacía: si el intento anterior llegó a escribir, no agrega otra copia. |
+| **O5** Un invitado con *Edit & create pages* crea reportes | Coincide con la base; al roadmap como decisión del modelo de permisos. |
+| **O6** *Use for day reports* en el menú de cada reporte | Se esconde en las páginas que son reportes (salvo que ya estén marcadas como carpeta). |
+| **O7** En Dvorak el atajo es la tecla física N | Una línea en la ayuda: el atajo va por la posición de la tecla. |
