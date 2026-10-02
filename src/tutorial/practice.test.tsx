@@ -280,6 +280,54 @@ describe('la página de práctica no toca nada real', () => {
     expect(after).toEqual(before);
   });
 
+  it('la vista previa de una plantilla (entrega 0 de Doc_Plantillas): las tres, en los dos idiomas, sin escribir nada', async () => {
+    const h = await app();
+    await until(() => h.host.querySelector('.tree'), 'el árbol');
+    await wait(200);
+    const before = await snapshot(h);
+
+    act(() => {
+      history.pushState(null, '', '/practice?template=on-set');
+      window.dispatchEvent(new Event('shotdocs:navigate'));
+    });
+    const editorText = () => document.querySelector('.bn-editor')?.textContent ?? '';
+    await until(() => editorText().includes('Camera package'), 'On-Set Report');
+    expect(h.host.querySelector('.practice-banner')?.textContent).toContain('Template preview: nothing you write here is saved');
+    expect(h.host.querySelector('.breadcrumbs')?.textContent).toBe('Template preview');
+    expect(h.host.querySelector<HTMLTextAreaElement>('article.page.practice .page-title')?.value).toBe('On-Set Report');
+    expect(question()).toBeNull();
+    // Sin el hilo de ejemplo (cuelga de la pregunta del ejemplo).
+    expect(practiceSession(h.services)!.services.comments.threads(PRACTICE_ID)).toEqual([]);
+    expect(document.querySelectorAll('.bn-editor table').length).toBe(6);
+    expect(button('On-Set Report')?.getAttribute('aria-pressed')).toBe('true');
+
+    // Escribir en la vista previa no guarda nada.
+    const view = editorView();
+    act(() => view.dispatch(view.state.tr.insertText('Prueba ', 1)));
+    await wait(50);
+
+    // El mismo contenido en castellano, sin cambiar el idioma de la interfaz.
+    click(button('Español'));
+    await until(() => editorText().includes('Equipo de cámara'), 'el reporte en castellano');
+    expect(location.search).toBe('?template=on-set&lang=es');
+    expect(h.host.querySelector<HTMLTextAreaElement>('article.page.practice .page-title')?.value).toBe('Reporte de rodaje');
+    expect(h.host.querySelector('.breadcrumbs')?.textContent).toBe('Template preview');
+
+    click(button('Shot Breakdown'));
+    await until(() => editorText().includes('Cuadro de referencia'), 'el desglose en castellano');
+    click(button('Pre-production Notes'));
+    await until(() => editorText().includes('Elementos a filmar'), 'la preproducción en castellano');
+    expect(document.querySelector('.bn-editor [data-content-type="paragraph"] .script-line, .bn-editor .question-line')).not.toBeNull();
+
+    click(button('Exit'));
+    await until(() => !document.querySelector('.practice-banner'), 'salir');
+    await act(async () => {
+      await h.d.engine.syncNow();
+    });
+    await wait(300);
+    expect(await snapshot(h)).toEqual(before);
+  });
+
   it('la práctica de una instancia de servicios no aparece en otra (otro workspace, otra sesión)', async () => {
     const a = await app({ route: '/practice' });
     await until(() => question(), 'la práctica');

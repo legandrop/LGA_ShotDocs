@@ -3,7 +3,9 @@ import { useT } from '../i18n';
 import { usePrefs } from '../prefs';
 import { navigate, pagePath } from '../router';
 import { usePermissions, useSyncStatus, useTree } from '../services';
+import { disarmTitleUndo, titleUndoFor } from '../templates/templatesUi';
 import { clearCommentsTarget, closeComments, useCommentsUi } from './commentsUi';
+import { isLetter, modPressed } from './findUi';
 import { CollapseIcon, HeaderIcon } from './icons';
 import { lazyPart, Part } from './lazyPart';
 import { useFloating } from './menus';
@@ -203,15 +205,25 @@ function TitleInput({ id, title, readOnly }: { id: string; title: string; readOn
       onFocus={() => (focused.current = true)}
       onBlur={() => {
         focused.current = false;
+        disarmTitleUndo(id);
         if (!readOnly) commit(value);
       }}
       onChange={(e) => {
+        disarmTitleUndo(id);
         setValue(e.target.value);
         if (timer.current) clearTimeout(timer.current);
         const next = e.target.value;
         timer.current = setTimeout(() => commit(next), 300);
       }}
       onKeyDown={(e) => {
+        // Recién elegida una plantilla, el título no tiene nada para deshacer: Ctrl/⌘+Z saca la plantilla y
+        // Ctrl/⌘+Shift+Z (o Ctrl/⌘+Y) la devuelve (templatesUi.ts).
+        const pageUndo = titleUndoFor(id);
+        if (pageUndo && modPressed(e) && !e.altKey && (isLetter(e, 'z') || (!e.shiftKey && isLetter(e, 'y')))) {
+          e.preventDefault();
+          pageUndo(e.shiftKey || isLetter(e, 'y'));
+          return;
+        }
         if (e.key === 'Enter') {
           e.preventDefault();
           if (readOnly) return;

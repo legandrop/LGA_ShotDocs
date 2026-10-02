@@ -100,8 +100,8 @@ botón se ve apagado y, con el clic, dice que hace falta conexión.
 
 **Cómo está hecho:**
 
-- `src/media/folderZip.ts`: `planFolder` recorre el árbol con `/folder/list` (4 subcarpetas a la vez, todas las
-  páginas de 100; si Drive pide ir más despacio, espera 5, 10, 20… segundos; una subcarpeta que no se puede listar se
+- `src/media/folderZip.ts`: `planFolder` recorre el árbol con `/folder/list` (hasta 40 subcarpetas por pedido con `dirs`, 4 pedidos a la vez,
+  todas las páginas de 100 en total por pedido; la raíz, de a una: no se conoce su id; ver "Lo que quedó de la entrega 2, hecho (rama `lega/carpetas-e2`)"; si Drive pide ir más despacio, espera 5, 10, 20… segundos; una subcarpeta que no se puede listar se
   anota y el resto sigue) y arma la lista en orden: primero las carpetas, después los archivos, como el visor.
   `runDownload` baja cada archivo por su pase (`fetch` con CORS: `/m/` ya lo dejaba, solo para `APP_ORIGINS`, desde
   v0.058). Los archivos de hasta 4 MB se piden de a 4 por delante; los grandes se escriben a medida que llegan y, si la
@@ -196,19 +196,37 @@ el ZWJ. Recorrido en Chromium con el mismo arnés: 22 de 22 (los tres destinos, 
 - **El ZWJ de los emojis compuestos (O4), en la app:** `cleanFileName` deja el U+200D cuando está entre dos emojis (antes
   un emoji, su selector de variante U+FE0F o su tono de piel; después, un emoji): una familia sigue siendo una en el
   nombre de la base, en la tarjeta y en el zip. Entre letras o suelto se sigue sacando (no se ve: dos nombres iguales a
-  la vista serían distintos), y el U+200C también. **Falta el portero** (ver abajo).
+  la vista serían distintos), y el U+200C también. El portero aplica la misma regla (`lega/carpetas-e2`, abajo).
 
-**Lo que falta de la entrega 2 (BAJO):** el recorrido pide una subcarpeta por pedido (el diseño decía ~40 por pedido):
-una carpeta con 500 subcarpetas son 500 pedidos de listado, lejos del límite del día. **No se puede del lado de la app:**
-`/folder/list` lista una sola subcarpeta (`dir`) por pedido; hace falta que el portero acepte una lista (`dirs`, hasta
-40) y pida a Drive `('a' in parents or 'b' in parents …) and trashed = false` con `parents` en los campos, agrupando
-la respuesta por padre (con el control `inTree` de cada una y el tope de CPU de los pases a la vista). El ZWJ en el
-portero: su `cleanFileName` (`HIDDEN_CHARS` en `portero/src/core.ts`) lo sigue sacando, así que lo que sube y lo que
-lista el portero llega sin él; tiene que aplicar la misma regla que la app (y cambia la prueba de `driveFolderName`).
-Firefox por el service worker (sin tope) queda para otra entrega (D24). Los documentos de Google no se bajan como PDF
+**Lo que quedó de la entrega 2, hecho (rama `lega/carpetas-e2`):**
+
+- **Varias subcarpetas por pedido:** `POST /folder/list` acepta `dirs` (hasta 40 ids; `dir` y `dirs` juntos dan `400`) y
+  pide a Drive una sola consulta, `('a' in parents or 'b' in parents …) and trashed = false`, con `parents` en los
+  campos para agrupar lo que vuelve. Devuelve `{ lists, failed, later, nextPageToken }` (detalle en `Doc_Portero.md`).
+  Cada subcarpeta se comprueba con `inTree` (una por una, dentro del tope de llamados a Drive del pedido: las que no
+  entran vuelven en `later` y la app las pide de nuevo; cada pedido avanza al menos una); la comprobada hace menos de 60
+  s (porque Drive la mostró adentro de otra ya comprobada) no se vuelve a mirar: sin eso, 40 subcarpetas eran 40
+  llamados a Drive antes de listar nada. `dir` (el visor) la mira siempre, como antes. **Compatible hacia atrás:** una
+  app anterior que manda `dir` sigue igual; una app nueva contra un portero anterior recibe la respuesta de siempre
+  (`entries`, sin `lists`), lo anota y lista de a una, sin romper nada (le cuesta un pedido de más por bajada).
+- **En la app** (`planFolder`, así también *Retry missing*): toma hasta 40 subcarpetas de la cola por pedido y 4 pedidos
+  a la vez. Una que el portero no puede listar queda anotada con su código y su id (se puede reintentar). Si un pedido
+  falla a mitad (o a la mitad de sus páginas), se descarta lo recibido de esas subcarpetas y se listan de a una: una que
+  no anda no pierde a las otras. Si Drive pide ir más despacio y no cede, quedan anotadas con `rate`; cancelar corta
+  en el acto. Una carpeta con 500 subcarpetas de 2 archivos pasa de 505 pedidos (5 páginas de la raíz y 500) a 18 (las 5
+  de la raíz y 13 de 40). **El tope real es la página:** cada pedido trae a lo sumo 100 cosas en total, porque cada
+  archivo lleva un pase firmado (el tope de CPU del plan gratis); con subcarpetas de muchos archivos los pedidos son
+  `cosas / 100`, igual de bien repartidos que antes pero sin un pedido por subcarpeta vacía o casi vacía.
+- **El ZWJ en el portero:** `cleanFileName` del portero (`stripHidden`, en `portero/src/core.ts`) aplica la misma regla
+  que la de la app (el U+200D se queda entre dos emojis, también con U+FE0F o un tono de piel antes; se saca entre
+  letras o suelto; el U+200C siempre). Alcanza a los nombres que lista el portero, a los de lo que se sube y a los de
+  las carpetas que crea en el Drive del dueño (`driveFolderName`): una carpeta soltada con una familia en el nombre
+  queda con la familia entera. Una prueba compara las dos funciones con los mismos nombres (`src/media/folders.test.ts`).
+  Lo ya subido con una familia partida en el Drive no cambia (sigue encontrándose por su marca, no por el nombre).
+
+**Lo que falta de la entrega 2 (BAJO):** Firefox por el service worker (sin tope) queda para otra entrega (D24). Los documentos de Google no se bajan como PDF
 (decisión 5). Probar a mano en Safari, el iPhone y con el Drive real (lista de la tanda). De la auditoría de
-`lega/carpetas-restos` (sin acción, BAJO): en un mismo zip la carpeta de arriba (de la tarjeta) conserva el ZWJ y lo de
-adentro (del listado del portero) no, hasta que cambie el portero; `within(stallMs, () => res.json())` no corta el
+`lega/carpetas-restos` (sin acción, BAJO): `within(stallMs, () => res.json())` no corta el
 cuerpo de un error que se cuelga (se suelta al cerrar la conexión); la fecha de `MISSING_FILES.txt` usa el formato del
 sistema y no el idioma de la app; en memoria, que Safari y el iPhone no reemplacen el segundo zip guardado (probar a
 mano). De la auditoría de la entrega 2:
@@ -217,7 +235,7 @@ mano). De la auditoría de la entrega 2:
   falla, la bajada espera para siempre. Distinguir el error de CORS del corte de red.
 - **Un nombre de un solo grafema gigante (R3)** puede quedar recortado de forma rara (no es prefijo del original). Inofensivo.
 
-- **Emojis compuestos (O4, preexistente):** hecho en la app (arriba); falta el portero.
+- **Emojis compuestos (O4, preexistente):** hecho en la app y en el portero (arriba).
 - **`tar.exe` de Windows (O11, informativa):** no extrae nombres con emojis desde la consola (le pasa igual con un zip
   hecho por Python). El Explorador (*Extraer todo*) y .NET extraen todo.
 - **Reemplazar un zip existente:** en *Download as .zip…*, cancelar o fallar borra el archivo elegido, también si ya
@@ -585,7 +603,7 @@ llamados a Drive por pedido):
 | Ver una cuadrícula de 500 fotos | 1 por miniatura que aparece ≈ 500 | 0,5 % |
 | Abrir una foto o un PDF | 1 | — |
 | Ver un video | 1 por cada pedido por partes del navegador (entre 5 y 30) | — |
-| Bajar todo (zip de 10.000 archivos) | ~13 (listar el árbol) + 10.000 ≈ **10.000** | 10 % |
+| Bajar todo (zip de 10.000 archivos) | ~13 a 100 (listar el árbol: de a 40 subcarpetas y 100 cosas por pedido) + 10.000 ≈ **10.000** | 10 % |
 
 - **Por día**, sin contar el resto del uso: subir unos 300.000 archivos (plan A; antes frena Drive, con unas pocas
   creaciones por segundo) o unos 95.000 archivos chicos (plan B), o bajar en zips unos 95.000 archivos. **En la

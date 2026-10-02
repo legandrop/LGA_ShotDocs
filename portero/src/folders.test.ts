@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanFileName, cutText, DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
+import { cleanFileName, cutText, DRIVE_CALL_BUDGET, driveFolderName, FOLDER_BATCH, LIST_TRUST_MS, Portero, TREE_TTL_MS, validFolderPath, type Env, type Store } from './core';
 
 // Carpetas (P.9, Docs/Doc_Carpetas.md): crear el árbol, abrir las subidas, listar en vivo y, sobre todo, que
 // nadie pueda listar, subir ni bajar nada de afuera del árbol de la carpeta.
@@ -55,6 +55,15 @@ function fakeWorld() {
   let rateAfter = Infinity;
   let sessionsOpened = 0;
   const calls: string[] = [];
+  /** Las consultas `files.list` de carpetas que llegaron (para contar los pedidos a Drive y ver su forma). */
+  const listQueries: string[] = [];
+  let listFailAfter = -1;
+  const tokenQueries = new Map<string, string>();
+  const pageTokenFor = (q: string, at: number) => {
+    const id = String(tokenQueries.size + 1);
+    tokenQueries.set(id, q);
+    return `t${id}x${at}`;
+  };
   const id = (prefix: string) => `${prefix}${++n}`.padEnd(14, 'x');
 
   const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -119,19 +128,33 @@ function fakeWorld() {
     }
     if (url.pathname === '/drive/v3/files' && method === 'GET') {
       const q = url.searchParams.get('q') ?? '';
-      const parent = /'([^']+)' in parents/.exec(q)?.[1];
+      const parents = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1]!);
       const mime = /mimeType = '([^']+)'/.exec(q)?.[1];
       const sdFolder = /key='sdFolder' and value='([^']+)'/.exec(q)?.[1];
       const sdFile = /key='sdFile' and value='([^']+)'/.exec(q)?.[1];
       const sdPaths = [...q.matchAll(/key='sdPath' and value='([^']+)'/g)].map((m) => m[1]);
       let list = [...drive.entries()].filter(([, f]) => !f.trashed);
-      if (parent) list = list.filter(([, f]) => f.parents.includes(parent));
+      if (parents.length) list = list.filter(([, f]) => f.parents.some((p) => parents.includes(p)));
+      if (parents.length) {
+        listQueries.push(q);
+        if (listFailAfter >= 0 && listQueries.length > listFailAfter) return json({ error: 'boom' }, 500);
+      }
       if (mime) list = list.filter(([, f]) => f.mimeType === mime);
       if (sdFolder) list = list.filter(([, f]) => f.appProperties?.sdFolder === sdFolder);
       if (sdFile) list = list.filter(([, f]) => f.appProperties?.sdFile === sdFile);
       if (sdPaths.length) list = list.filter(([, f]) => sdPaths.includes(f.appProperties?.sdPath ?? ''));
       list.sort(([, a], [, b]) => Number(b.mimeType === FOLDER) - Number(a.mimeType === FOLDER) || a.name.localeCompare(b.name, undefined, { numeric: true }));
-      return json({ files: list.map(([k, f]) => metaOf(k, f)) });
+      // Paginado como Drive: `pageSize` y un `pageToken` que dice dónde seguir y está atado a la consulta.
+      const size = Number(url.searchParams.get('pageSize') ?? 1000);
+      const token = url.searchParams.get('pageToken');
+      let from = 0;
+      if (token) {
+        const [id, at] = token.slice(1).split('x');
+        if (tokenQueries.get(id!) !== q) return json({ error: 'invalid pageToken' }, 400);
+        from = Number(at);
+      }
+      const more = from + size < list.length;
+      return json({ files: list.slice(from, from + size).map(([k, f]) => metaOf(k, f)), ...(more ? { nextPageToken: pageTokenFor(q, from + size) } : {}) });
     }
     const one = /^\/drive\/v3\/files\/([^/]+)$/.exec(url.pathname)?.[1];
     if (one && url.searchParams.get('alt') === 'media') {
@@ -182,6 +205,9 @@ function fakeWorld() {
     drive,
     base,
     calls,
+    listQueries,
+    /** Después de `count` listados más de carpetas, Drive contesta 500. */
+    failListsAfter: (count: number) => (listFailAfter = listQueries.length + count),
     /** Drive deja abrir `count` subidas más y después pide ir más despacio. */
     rateLimitAfter: (count: number) => (rateAfter = sessionsOpened + count),
   };
@@ -244,9 +270,16 @@ describe('carpetas: nombres y rutas', () => {
     // Lo invisible o que engaña se saca; los bordes, sin espacios.
     expect(driveFolderName('a\tb\nc')).toBe('abc');
     expect(driveFolderName('factura\u202Efdp')).toBe('facturafdp');
-    // Como en los archivos (y en la app): sin los de ancho cero, un emoji compuesto queda en sus partes; una bandera
-    // o un tono de piel, no.
-    expect(driveFolderName('👨\u200D👩\u200D👧 Familia 🇦🇷 👍🏽')).toBe('👨👩👧 Familia 🇦🇷 👍🏽');
+    // Como en los archivos (y en la app): el ZWJ se queda entre dos emojis (una familia sigue siendo una); una bandera
+    // o un tono de piel no cambian.
+    expect(driveFolderName('👨\u200D👩\u200D👧 Familia 🇦🇷 👍🏽')).toBe('👨\u200D👩\u200D👧 Familia 🇦🇷 👍🏽');
+    expect(driveFolderName('👩🏽\u200D💻 y ❤\uFE0F\u200D🔥')).toBe('👩🏽\u200D💻 y ❤\uFE0F\u200D🔥');
+    // Entre letras, suelto, al principio o al final se saca; el U+200C, siempre.
+    expect(driveFolderName('a\u200Db')).toBe('ab');
+    expect(driveFolderName('\u200D👨 y 👨\u200D')).toBe('👨 y 👨');
+    expect(driveFolderName('👨\u200C\u200D👩')).toBe('👨\u200D👩'); // sin el U+200C, el ZWJ queda entre dos emojis
+    expect(driveFolderName('👨\u200C👩')).toBe('👨👩');
+    expect(driveFolderName('x\u200D👨 a\u200D👩')).toBe('x👨 a👩');
     expect(driveFolderName('  Fotos  ')).toBe('Fotos');
     // Una letra con su tilde aparte (como las da la Mac) queda en una sola.
     expect(driveFolderName('Di\u0301a 2')).toBe('Día 2');
@@ -817,5 +850,310 @@ describe('carpetas: ver, nunca hacia arriba', () => {
     const { p } = await setup();
     const status = (await (await call(p, '/drive/status', 'viewer-jwt', undefined, { method: 'GET' })).json()) as { features: string[] };
     expect(status.features).toContain('folders');
+  });
+});
+
+describe('carpetas: listar varias subcarpetas de una vez (dirs)', () => {
+  type Many = { lists: Record<string, { type: string; id?: string; name: string; url?: string }[]>; failed: Record<string, string>; later: string[]; nextPageToken: string | null };
+
+  async function many() {
+    const s = await setup();
+    const names = Array.from({ length: 5 }, (_, i) => `D${i}`);
+    const tree = await prepare(s.p, { dirs: names });
+    let n = 0;
+    const add = (name: string, parents: string[], extra: Partial<DriveItem> = {}) => {
+      const key = `m${++n}${name.replace(/\W/g, '')}`.padEnd(14, 'x');
+      s.world.drive.set(key, { name, mimeType: 'image/jpeg', parents, data: new Uint8Array([7]), ...extra });
+      return key;
+    };
+    const ids = names.map((d) => tree.dirs[d]!);
+    // Como en producción, un `Portero` nuevo por pedido (con su cuenta de llamados a Drive en cero) y la misma memoria.
+    const fresh = () => new Portero(env, s.store, s.world.http);
+    const ask = async (body: Record<string, unknown>, jwt = 'viewer-jwt', portero: Portero = fresh()) => call(portero, '/folder/list', jwt, { file: F1, ...body });
+    const askOk = async (body: Record<string, unknown>, jwt = 'viewer-jwt', portero: Portero = fresh()) => {
+      const res = await ask(body, jwt, portero);
+      expect(res.status).toBe(200);
+      return (await res.json()) as Many;
+    };
+    /** Los listados de carpetas que le llegaron a Drive desde `from`. */
+    const listsSince = (from: number) => s.world.listQueries.length - from;
+    return { ...s, tree, add, ids, ask, askOk, listsSince, names };
+  }
+
+  it('una sola consulta a Drive para varias subcarpetas, agrupada por padre, con el pase de cada archivo', async () => {
+    const { world, ids, add, askOk, listsSince } = await many();
+    add('a.jpg', [ids[0]!]);
+    add('b.jpg', [ids[1]!]);
+    add('c.jpg', [ids[1]!]);
+    add('en-d3.jpg', [ids[3]!]);
+    const before = world.listQueries.length;
+    const out = await askOk({ dirs: [ids[1]!, ids[0]!, ids[2]!] });
+    // Un solo listado a Drive, con un `or` entre los padres (en orden, siempre el mismo) y sin la papelera.
+    expect(listsSince(before)).toBe(1);
+    const q = world.listQueries.at(-1)!;
+    expect(q).toBe(`(${[...[ids[0]!, ids[1]!, ids[2]!].sort()].map((d) => `'${d}' in parents`).join(' or ')}) and trashed = false`);
+    expect(Object.keys(out.lists).sort()).toEqual([ids[0]!, ids[1]!, ids[2]!].sort());
+    expect(out.lists[ids[0]!]!.map((e) => e.name)).toEqual(['a.jpg']);
+    expect(out.lists[ids[1]!]!.map((e) => e.name)).toEqual(['b.jpg', 'c.jpg']);
+    expect(out.lists[ids[2]!]).toEqual([]);
+    expect(JSON.stringify(out)).not.toContain('en-d3');
+    expect(out.failed).toEqual({});
+    expect(out.later).toEqual([]);
+    expect(out.nextPageToken).toBeNull();
+    for (const e of out.lists[ids[1]!]!) expect(e.url).toMatch(/^https:\/\/portero\.example\/m\//);
+  });
+
+  it('compatible hacia atrás: dir (o nada) responde igual que antes, con entries', async () => {
+    const { ids, add, tree, ask } = await many();
+    add('a.jpg', [ids[0]!]);
+    const one = (await (await ask({ dir: ids[0] })).json()) as { entries: { name: string }[]; nextPageToken: string | null; lists?: unknown };
+    expect(one.entries.map((e) => e.name)).toEqual(['a.jpg']);
+    expect(one.lists).toBeUndefined();
+    const root = (await (await ask({})).json()) as { entries: { name: string }[] };
+    expect(root.entries.map((e) => e.name)).toEqual(['D0', 'D1', 'D2', 'D3', 'D4']);
+    expect(tree.dirs.D0).toBe(ids[0]);
+  });
+
+  it('pagina con nextPageToken (100 por pedido en total), sin repetir ni perder nada, con los padres mezclados', async () => {
+    const { world, ids, add, askOk } = await many();
+    for (let i = 0; i < 130; i++) add(`f${String(i).padStart(3, '0')}.jpg`, [ids[i % 2]!]);
+    add('solo.jpg', [ids[2]!]);
+    // Una cosa con dos padres (de antes de 2020): sale en las dos.
+    add('doble.jpg', [ids[0]!, ids[1]!]);
+    const dirs = [ids[0]!, ids[1]!, ids[2]!];
+    const got: Record<string, string[]> = { [ids[0]!]: [], [ids[1]!]: [], [ids[2]!]: [] };
+    let token: string | null = null;
+    let pages = 0;
+    const before = world.listQueries.length;
+    do {
+      const out: Many = await askOk({ dirs, pageToken: token });
+      pages++;
+      // Una página trae a lo sumo 100 cosas (un pase firmado cada una); la misma consulta en cada página.
+      expect(Object.values(out.lists).flat().length).toBeLessThanOrEqual(100 + 1);
+      for (const [d, list] of Object.entries(out.lists)) got[d]!.push(...list.map((e) => e.name));
+      token = out.nextPageToken;
+    } while (token && pages < 10);
+    expect(pages).toBe(2);
+    expect(world.listQueries.length - before).toBe(2);
+    expect(new Set(world.listQueries.slice(before)).size).toBe(1);
+    const expected = (k: number) => Array.from({ length: 130 }, (_, i) => i).filter((i) => i % 2 === k).map((i) => `f${String(i).padStart(3, '0')}.jpg`);
+    expect(got[ids[0]!]!.filter((n) => n !== 'doble.jpg')).toEqual(expected(0));
+    expect(got[ids[1]!]!.filter((n) => n !== 'doble.jpg')).toEqual(expected(1));
+    expect(got[ids[2]!]).toEqual(['solo.jpg']);
+    expect(got[ids[0]!]!.filter((n) => n === 'doble.jpg')).toHaveLength(1);
+    expect(got[ids[1]!]!.filter((n) => n === 'doble.jpg')).toHaveLength(1);
+  });
+
+  it('las subcarpetas de adentro salen con su id y se pueden listar enseguida en otro pedido', async () => {
+    const { world, ids, add, askOk } = await many();
+    const sub = add('Hija', [ids[0]!], { mimeType: FOLDER, data: undefined });
+    add('nieta.jpg', [sub]);
+    const first = await askOk({ dirs: [ids[0]!] });
+    expect(first.lists[ids[0]!]).toEqual([{ type: 'folder', id: sub, name: 'Hija', modified: '2026-10-01T10:00:00Z' }]);
+    const gets = world.calls.length;
+    const second = await askOk({ dirs: [sub] });
+    expect(second.lists[sub]!.map((e) => e.name)).toEqual(['nieta.jpg']);
+    // La comprobó recién el listado de arriba: ni una consulta a Drive más que el propio listado.
+    expect(world.calls.slice(gets).filter((c) => c.includes('www.googleapis.com'))).toEqual(['GET www.googleapis.com/drive/v3/files']);
+  });
+
+  it('lo de afuera del árbol (la de arriba, una hermana, otra carpeta de la app, un archivo, un atajo, la papelera) falla con not_found y no muestra nada', async () => {
+    const { world, p, ids, add, tree, askOk, listsSince } = await many();
+    const carpetas = world.drive.get(tree.root.id)!.parents[0]!;
+    const sister = 'sisterxxxxxxxxxx';
+    world.drive.set(sister, { name: 'Hermana secreta', mimeType: FOLDER, parents: [carpetas] });
+    world.drive.set('secretoxxxxxxxx', { name: 'secreto.jpg', mimeType: 'image/jpeg', parents: [sister], data: new Uint8Array([1]) });
+    const other = (await (await call(p, '/folder/prepare', 'editor-jwt', { file: F2, name: 'Otra' })).json()) as Prepared;
+    const file = add('x.jpg', [ids[0]!]);
+    const shortcut = add('atajo', [ids[0]!], { mimeType: SHORTCUT, data: undefined });
+    const trashed = add('Borrada', [ids[0]!], { mimeType: FOLDER, data: undefined, trashed: true });
+    const bad = [carpetas, sister, other.root.id, 'rootxxxxxxxxxx', 'nadaxxxxxxxxxxx', file, shortcut, trashed];
+    // Una sola buena adentro: el listado sale solo con ella.
+    const before = world.listQueries.length;
+    const out = await askOk({ dirs: [ids[0]!, ...bad] });
+    expect(Object.keys(out.lists)).toEqual([ids[0]!]);
+    expect(listsSince(before)).toBe(1);
+    // Las de afuera tardan varios llamados cada una (suben por los padres): las que no entran vuelven como `later`.
+    let failed = out.failed;
+    let pending = out.later;
+    for (let i = 0; i < 6 && pending.length; i++) {
+      const next = await askOk({ dirs: pending });
+      expect(next.lists).toEqual({});
+      failed = { ...failed, ...next.failed };
+      pending = next.later;
+    }
+    expect(pending).toEqual([]);
+    expect(Object.keys(failed).sort()).toEqual([...bad].sort());
+    expect(Object.values(failed).every((c) => c === 'not_found')).toBe(true);
+    expect(JSON.stringify([out, failed])).not.toMatch(/secret|Hermana|Otra/);
+    // Todas malas: ni siquiera se le pregunta a Drive qué hay adentro.
+    const mid = world.listQueries.length;
+    const none = await askOk({ dirs: bad.slice(0, 3) });
+    expect(none.lists).toEqual({});
+    expect(Object.keys(none.failed).length + none.later.length).toBe(3);
+    expect(none.nextPageToken).toBeNull();
+    expect(listsSince(mid)).toBe(0);
+  });
+
+  it('0 resultados: una subcarpeta vacía sale con []', async () => {
+    const { ids, askOk } = await many();
+    const out = await askOk({ dirs: [ids[4]!] });
+    expect(out).toEqual({ lists: { [ids[4]!]: [] }, failed: {}, later: [], nextPageToken: null });
+  });
+
+  it('pide ver (nivel 1): sin sesión 401, sin acceso a la página 404, y quien solo ve la lista; con dir y dirs a la vez, 400', async () => {
+    const { p, ids, ask, askOk } = await many();
+    expect((await ask({ dirs: [ids[0]!] }, 'stranger-jwt')).status).toBe(404);
+    expect((await call(p, '/folder/list', null, { file: F1, dirs: [ids[0]!] })).status).toBe(401);
+    expect(Object.keys((await askOk({ dirs: [ids[0]!] }, 'viewer-jwt')).lists)).toEqual([ids[0]!]);
+    const both = await ask({ dir: ids[0], dirs: [ids[1]!] });
+    expect(both.status).toBe(400);
+  });
+
+  it('valida la lista: vacía, de más de 40, algo que no es un id o que no es una lista dan 400; las repetidas cuentan una vez', async () => {
+    const { ids, ask, askOk, world } = await many();
+    for (const dirs of [[], Array.from({ length: 41 }, (_, i) => `id${i}`.padEnd(14, 'x')), ['corto'], [123], 'abc', { a: 1 }, [ids[0]!, null]]) {
+      const res = await ask({ dirs });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { code: string }).code).toBe('bad_request');
+    }
+    const before = world.listQueries.length;
+    const out = await askOk({ dirs: [ids[0]!, ids[0]!, ids[0]!] });
+    expect(Object.keys(out.lists)).toEqual([ids[0]!]);
+    expect(world.listQueries.length - before).toBe(1);
+    // 40 justas se aceptan.
+    const forty = Array.from({ length: 40 }, (_, i) => `nope${i}`.padEnd(14, 'x'));
+    const res = await ask({ dirs: forty });
+    expect(res.status).toBe(200);
+    const decided = (await res.json()) as Many;
+    expect(Object.keys(decided.failed).length + decided.later.length).toBe(40);
+  });
+
+  it('un error de Drive en una página corta el pedido; Drive que pide ir más despacio sale como rate', async () => {
+    const { world, store, ids, add, ask, askOk } = await many();
+    for (let i = 0; i < 150; i++) add(`g${String(i).padStart(3, '0')}.jpg`, [ids[0]!]);
+    const first = await askOk({ dirs: [ids[0]!] });
+    expect(first.nextPageToken).toBeTruthy();
+    world.failListsAfter(0);
+    const res = await ask({ dirs: [ids[0]!], pageToken: first.nextPageToken });
+    expect(res.status).toBe(502);
+    expect(((await res.json()) as { code: string }).code).toBe('drive_failed');
+    // Drive pide ir más despacio (429): `rate`, y la app espera y repite.
+    const slow = new Portero(env, store, ((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('pageSize') ? Promise.resolve(new Response('{}', { status: 429 })) : world.http(input, init)) as typeof fetch);
+    const limited = await ask({ dirs: [ids[0]!] }, 'viewer-jwt', slow);
+    expect(limited.status).toBe(503);
+    expect(((await limited.json()) as { code: string }).code).toBe('rate');
+  });
+
+  it('con un pageToken, una subcarpeta que ya no se puede comprobar corta con 409 changed (la app empieza de nuevo)', async () => {
+    const { world, ids, add, tree, ask, askOk } = await many();
+    for (let i = 0; i < 150; i++) add(`h${String(i).padStart(3, '0')}.jpg`, [ids[0]!]);
+    const first = await askOk({ dirs: [ids[0]!, ids[1]!] });
+    expect(first.nextPageToken).toBeTruthy();
+    // El dueño la mueve afuera y pasan más de 10 minutos.
+    const carpetas = world.drive.get(tree.root.id)!.parents[0]!;
+    world.drive.get(ids[1]!)!.parents = [carpetas];
+    vi.useFakeTimers({ now: Date.now() + TREE_TTL_MS + 1000, toFake: ['Date'] });
+    const res = await ask({ dirs: [ids[0]!, ids[1]!], pageToken: first.nextPageToken });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe('changed');
+    // Empezar de nuevo: la de afuera falla, la otra sigue.
+    const again = await askOk({ dirs: [ids[0]!, ids[1]!] });
+    expect(Object.keys(again.lists)).toEqual([ids[0]!]);
+    expect(again.failed).toEqual({ [ids[1]!]: 'not_found' });
+  });
+
+  it('el tope de llamados a Drive: lo que no entra vuelve como later y cada pedido avanza al menos una', async () => {
+    const { world, store } = await setup();
+    const names = Array.from({ length: 40 }, (_, i) => `n${i}`);
+    const made: Record<string, string> = {};
+    for (let round = 0; round < 6 && Object.keys(made).length < names.length; round++) {
+      const batch = names.filter((d) => !(d in made)).slice(0, FOLDER_BATCH);
+      const res = await call(new Portero(env, { ...store }, world.http), '/folder/prepare', 'editor-jwt', { file: F1, name: 'Referencias', dirs: batch, parents: {} });
+      Object.assign(made, ((await res.json()) as Prepared).dirs);
+    }
+    expect(Object.keys(made)).toHaveLength(40);
+    const all = names.map((d) => made[d]!);
+    // Una instancia nueva (sin nada comprobado en memoria): cada subcarpeta cuesta un llamado a Drive.
+    let pending = all;
+    let requests = 0;
+    const listed = new Set<string>();
+    while (pending.length && requests < 6) {
+      const before = world.calls.filter((c) => c.includes('googleapis')).length;
+      const res = await call(new Portero(env, { ...store }, world.http), '/folder/list', 'viewer-jwt', { file: F1, dirs: pending });
+      expect(res.status).toBe(200);
+      const out = (await res.json()) as Many;
+      const used = world.calls.filter((c) => c.includes('googleapis')).length - before;
+      expect(used).toBeLessThanOrEqual(DRIVE_CALL_BUDGET + 4);
+      requests++;
+      const accepted = Object.keys(out.lists);
+      expect(accepted.length).toBeGreaterThan(0);
+      expect(accepted.length + out.later.length + Object.keys(out.failed).length).toBe(pending.length);
+      for (const a of accepted) listed.add(a);
+      if (requests === 1) expect(out.later.length).toBeGreaterThan(0);
+      pending = out.later;
+    }
+    expect(pending).toEqual([]);
+    expect(listed.size).toBe(40);
+    expect(requests).toBeLessThanOrEqual(3);
+  });
+
+  it('una subcarpeta comprobada hace menos de un minuto no se vuelve a mirar en Drive; pasado el minuto, sí (y una movida afuera deja de verse)', async () => {
+    const { world, ids, add, tree, askOk } = await many();
+    add('a.jpg', [ids[0]!]);
+    // `many` ya mostró las D0..D4 al crearlas: están comprobadas (las anotó `prepare`).
+    const gets = () => world.calls.filter((c) => c.startsWith('GET www.googleapis.com/drive/v3/files/')).length;
+    const before = gets();
+    await askOk({ dirs: [ids[0]!, ids[1]!, ids[2]!] });
+    expect(gets() - before).toBe(0);
+    // Pasado el minuto vuelve a preguntarle a Drive por cada una.
+    vi.useFakeTimers({ now: Date.now() + LIST_TRUST_MS + 1000, toFake: ['Date'] });
+    const mid = gets();
+    await askOk({ dirs: [ids[0]!, ids[1]!, ids[2]!] });
+    expect(gets() - mid).toBe(3);
+    // Una que el dueño movió afuera: con el minuto cumplido, deja de verse en el acto.
+    const carpetas = world.drive.get(tree.root.id)!.parents[0]!;
+    world.drive.get(ids[1]!)!.parents = [carpetas];
+    vi.useFakeTimers({ now: Date.now() + LIST_TRUST_MS + 1000, toFake: ['Date'] });
+    const out = await askOk({ dirs: [ids[0]!, ids[1]!] });
+    expect(Object.keys(out.lists)).toEqual([ids[0]!]);
+    expect(out.failed).toEqual({ [ids[1]!]: 'not_found' });
+  });
+});
+
+describe('carpetas: el ZWJ de los emojis compuestos en lo que lista el portero', () => {
+  it('cleanFileName: el ZWJ se queda entre dos emojis y se saca entre letras, suelto o con el ZWNJ (igual que la app)', () => {
+    const same = ['👨‍👩‍👧.jpg', '👩🏽‍💻.png', '❤️‍🔥.txt', 'Familia 👨‍👩‍👧‍👦 2026.pdf'];
+    for (const name of same) expect(cleanFileName(name)).toBe(name);
+    expect(cleanFileName('a‍b.jpg')).toBe('ab.jpg');
+    expect(cleanFileName('‍👨.jpg')).toBe('👨.jpg');
+    expect(cleanFileName('👨‍.jpg')).toBe('👨.jpg');
+    expect(cleanFileName('👨‍ a.jpg')).toBe('👨 a.jpg');
+    expect(cleanFileName('👨‌👩.jpg')).toBe('👨👩.jpg');
+    expect(cleanFileName('👨​‍👩.jpg')).toBe('👨‍👩.jpg');
+    // Lo demás de HIDDEN_CHARS sigue igual.
+    expect(cleanFileName('a‮b⁦c‎d.txt')).toBe('abcd.txt');
+    // Un nombre largo con ZWJ no pasa de 255 y no parte la familia.
+    const long = cleanFileName('x'.repeat(240) + '👨‍👩‍👧‍👦.jpg');
+    expect(Array.from(long).length).toBeLessThanOrEqual(255);
+    expect(long.endsWith('.jpg')).toBe(true);
+  });
+
+  it('lo que lista el portero (archivos y subcarpetas) conserva la familia y lo que se sube va con su nombre', async () => {
+    const { world, p } = await setup();
+    const tree = await prepare(p, { dirs: ['👨‍👩‍👧 y a‍b'] });
+    const names = [...world.drive.values()].map((f) => f.name);
+    // La subcarpeta se creó en el Drive del dueño con su familia entera (y sin el ZWJ de entre letras).
+    expect(names).toContain('👨‍👩‍👧 y ab');
+    world.drive.set('familiaxxxxxxxx', { name: 'foto 👩‍💻 a‍b.jpg', mimeType: 'image/jpeg', parents: [tree.root.id], data: new Uint8Array([1]) });
+    const listed = (await (await call(p, '/folder/list', 'viewer-jwt', { file: F1 })).json()) as Listed;
+    expect(listed.entries.map((e) => e.name)).toEqual(['👨‍👩‍👧 y a‍b', 'foto 👩‍💻 ab.jpg'].map((n) => cleanFileName(n)));
+    expect(listed.entries[0]!.name).toBe('👨‍👩‍👧 y ab');
+    // También en el listado de varias subcarpetas.
+    const dir = Object.values(tree.dirs)[0]!;
+    world.drive.set('hijaxxxxxxxxxx', { name: '🇦🇷 👨‍👩‍👧.jpg', mimeType: 'image/jpeg', parents: [dir], data: new Uint8Array([1]) });
+    const many = (await (await call(p, '/folder/list', 'viewer-jwt', { file: F1, dirs: [dir] })).json()) as { lists: Record<string, { name: string }[]> };
+    expect(many.lists[dir]!.map((e) => e.name)).toEqual(['🇦🇷 👨‍👩‍👧.jpg']);
   });
 });

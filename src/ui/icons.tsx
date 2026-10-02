@@ -25,6 +25,8 @@ export const PlusIcon = icon('M10 4.5v11M4.5 10h11', { strokeWidth: 1.6 });
 export const ExpandIcon = icon('M8 5.5l4.5 4.5L8 14.5', { strokeWidth: 1.8 });
 export const CollapseIcon = icon('M5.5 8l4.5 4.5L14.5 8', { strokeWidth: 1.8 });
 export const ChevronUpIcon = icon('M5.5 12l4.5-4.5 4.5 4.5', { strokeWidth: 1.8 });
+// Plantilla (Docs/Doc_Plantillas.md): una hoja con renglones de una ficha ya armada.
+export const TemplateIcon = icon('M5.75 2.75h8.5a1 1 0 0 1 1 1v12.5a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1V3.75a1 1 0 0 1 1-1zM7.5 6.25h5M7.5 9.25h5M7.5 12.25h2.5');
 export const RenameIcon = icon('M12.5 4.5l3 3L8 15H5v-3z');
 export const MoveIcon = icon('M3.75 6.25h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1zM8.5 12h5M11.5 10l2 2-2 2');
 // Importar: una carpeta con una flecha que entra.
@@ -179,7 +181,14 @@ export const AlignCenterIcon = icon('M4 5.5h12M6 9h8M4 12.5h12M6 16h8', { stroke
 export const AlignRightIcon = icon('M4 5.5h12M8 9h8M4 12.5h12M8 16h8', { strokeWidth: 1.6 });
 export const ReplaceIcon = icon('M4.5 8.5a5.5 5.5 0 0 1 10-2.5M15.5 3.5v3h-3M15.5 11.5a5.5 5.5 0 0 1-10 2.5M4.5 16.5v-3h3');
 
+// Mostrar y ocultar las anotaciones de una foto en el carrete (P.20, AN9): un ojo; tachado, ocultas.
+export const EyeIcon = icon('M2.5 10s2.75-5 7.5-5 7.5 5 7.5 5-2.75 5-7.5 5-7.5-5-7.5-5zM10 7.75a2.25 2.25 0 1 1 0 4.5 2.25 2.25 0 0 1 0-4.5z');
+export const EyeOffIcon = icon('M2.5 10s2.75-5 7.5-5 7.5 5 7.5 5-2.75 5-7.5 5-7.5-5-7.5-5zM10 7.75a2.25 2.25 0 1 1 0 4.5 2.25 2.25 0 0 1 0-4.5zM3.5 3.5l13 13');
 // Sacar una foto (camera.ts): una cámara de fotos.
 export const CameraIcon = icon('M3 7a1 1 0 0 1 1-1h2.5l1.25-2h4.5l1.25 2H16a1 1 0 0 1 1 1v8.25a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM10 8.25a3 3 0 1 1 0 6 3 3 0 0 1 0-6z');
 // Filmar: una cámara de video.
 export const VideoIcon = icon('M3.5 6h8.75a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM13.25 9l4.25-2.5v7L13.25 11');
+// El asistente (Docs/Doc_Asistente.md): un destello.
+export const AssistantIcon = icon('M9 3.25l1.35 3.9 3.9 1.35-3.9 1.35L9 13.75l-1.35-3.9-3.9-1.35 3.9-1.35zM14.75 12l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z');
+// Los ajustes del asistente: dos reguladores.
+export const SettingsIcon = icon('M4 6.5h7.5M15 6.5h1M13.25 4.75v3.5M4 13.5h1.5M9 13.5h7M7.25 11.75v3.5');
