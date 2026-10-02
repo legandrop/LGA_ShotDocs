@@ -1019,8 +1019,8 @@ strict-origin-when-cross-origin` para toda la app, `public/robots.txt` con `Disa
 - **El portero:** con `x-shotdocs-link` acepta solo `POST /pass`, `POST /verify`, `POST /folder/list` y
   `GET /drive/status` (lo demás, `403 link_denied`), pregunta `plink_media_file` con la clave publicable y el header,
   nunca reenvía un `Authorization` y da pases de 2 horas (también en `/folder/list`). CORS acepta los dos headers.
-- **Pruebas:** `supabase/tests/link_publico_permisos.sql` (en `begin … rollback` contra la base real: pasa) y 49
-  mutantes de la migración, 45 detectados; los que no, son equivalentes: el chequeo de forma del token (la huella igual
+- **Pruebas:** `supabase/tests/link_publico_permisos.sql` (en `begin … rollback` contra la base real: pasa) y 48
+  mutantes de la migración, 45 detectados; los 3 que no, son equivalentes: el chequeo de forma del token (la huella igual
   rechaza), la guarda del token en la política (rendimiento) y el proyecto borrado (`user_can_share_page` ya da falso).
   Las 19 pruebas SQL de antes pasan con la migración (dos ajustes: la cuenta de políticas de `thumbs` y
   `comments_view`). `src/sync/linkMode.test.ts` (el visitante con el motor de verdad: solo la rama, solo bases, modo
