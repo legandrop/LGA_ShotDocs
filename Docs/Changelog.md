@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.134 :
+v0.0XX :
 
 Plantillas con anotaciones de fotos (P.23 y P.20). Una foto anotada llegaba limpia a una página creada desde una
 plantilla, y a la plantilla guardada desde una página: copian los bloques, y las anotaciones (`photoMarkup`) no están en
