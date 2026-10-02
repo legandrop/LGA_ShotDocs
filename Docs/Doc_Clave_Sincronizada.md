@@ -11,7 +11,7 @@ propuestas (CS1 a CS8, sección 14) y valen hasta que Lega diga otra cosa. Los t
 
 - **Qué cambia para la persona.** Carga su clave una vez (por ejemplo en la PC del estudio), toca *Sync across my
   devices* y guarda la frase que le da la app en su gestor de contraseñas. Al otro día, en el iPhone, *Assistant…* le
-  dice *Your key is synced. Enter your passphrase to use it here.*; pega la frase y listo. Sin la frase, nadie más puede
+  dice *Your key is synced. Enter your passphrase to use it on this device.*; pega la frase y listo. Sin la frase, nadie más puede
   usar la copia: ni el dueño del workspace, ni quien robe la base, ni Lega.
 - **Dónde vive la copia (CS1, CS2):** en una tabla propia, `assistant_key_sync`, del Supabase **del workspace donde la
   persona prende la sincronización** (uno alcanza: en el dispositivo la clave es por correo y sirve para todos los
@@ -112,9 +112,11 @@ Quién puede intentar qué, qué ve y qué lo frena:
 
 - **Frase olvidada.** No hay recuperación ni "pista". En *Assistant…*: *Forgot it? Paste your API key again and choose a
   new passphrase.* La fila nueva reemplaza a la vieja; los dispositivos que ya tenían la clave siguen igual.
-- **Cambiar la frase** (S2, *Change passphrase…*): pide la frase actual (así quien encuentra la sesión abierta no puede
-  dejar a la persona afuera) y la nueva; vuelve a cifrar con una sal nueva. Las copias de seguridad guardan la vieja
-  (arriba).
+- **Cambiar la frase** (S2, *Change passphrase…*): pide la frase actual y la nueva; vuelve a cifrar con una sal nueva.
+  Pedir la actual evita un cambio por error, **no es una barrera**: quien tenga la sesión abierta puede usar *Forgot
+  it?* y pisar la copia con otra clave y otra frase. El daño es que la persona no pueda abrir la copia en un dispositivo
+  nuevo (lo ve y la vuelve a cargar), nunca que se filtre su clave: la copia nueva no se abre con su frase. Las copias
+  de seguridad guardan la vieja (arriba).
 - **Varios workspaces.** Con una copia alcanza (el dispositivo comparte la clave entre workspaces por correo). Si la
   persona la quiere en otro, *Also sync in this workspace* (S2) pide la frase y sube otra copia; cada una es
   independiente (ver CS2). La copia queda en manos del dueño de **ese** workspace: por eso no se reparte sola.
@@ -123,7 +125,7 @@ Quién puede intentar qué, qué ve y qué lo frena:
 - **Dispositivo perdido o robado.** La copia de ese dispositivo no tiene frase: quien lo desbloquee con la sesión
   abierta la puede usar. El remedio es el del proveedor: **crear una clave nueva y borrar la vieja en su consola**,
   pegarla en *Assistant…* y *Update synced key* (pide la frase). Los demás dispositivos, al fallar la vieja, ven *Your
-  synced key changed. Enter your passphrase to update it.* (S2). La ayuda lo explica paso a paso.
+  synced key changed on another device. Enter your passphrase to update it here.* (S2). La ayuda lo explica paso a paso.
 - **Sacan a la persona del workspace.** Su fila queda hasta que el dueño borre su cuenta de ese Supabase (se borra con
   ella, `on delete cascade`). No le sirve a nadie sin la frase.
 
@@ -148,8 +150,8 @@ Derivar la llave de la frase más un cifrado de prueba; mediana de 5 corridas, e
 Argon2id con `hash-wasm` (WebAssembly, 29 KB sin comprimir). El prototipo del sobre completo (sección 4.3): cifrar
 113 ms y abrir 101 ms en Node 22.
 
-**El iPhone, estimado (no medido).** El WebKit de Playwright en Windows no es el de iOS: en Windows su WebCrypto usa
-otra biblioteca y por eso tarda cuatro a ocho veces más que Chromium. En iOS, PBKDF2 de WebCrypto lo hace el sistema
+**El iPhone, estimado (no medido).** El WebKit de Playwright en Windows no es el de iOS: tarda cuatro a ocho veces más que
+Chromium, probablemente porque en Windows su WebCrypto se apoya en otra biblioteca. En iOS, PBKDF2 de WebCrypto lo hace el sistema
 (CommonCrypto), con las instrucciones SHA-256 del procesador; un iPhone de los últimos años anda cerca de una PC en un
 solo núcleo. Estimado para 1 000 000 de vueltas: **0,2 a 0,5 s**; el peor caso razonable es el de WebKit en Windows,
 menos de 1 s. Pasa una vez por dispositivo (al desbloquear) y al cambiar la frase. La entrega S1 lo mide en el iPhone
@@ -376,8 +378,8 @@ dispositivos"): prender en uno, desbloquear en el otro, frase equivocada, *Stop 
 
 | | Qué | Criterio de aceptación | Riesgo |
 |---|---|---|---|
-| **S1** | La migración con sus pruebas SQL; el sobre (`src/assistant/keySync.ts`) con la frase generada y la propia; en *Assistant…*: *Turn on sync…*, *Unlock*, *Update synced key*, *Stop syncing*, los estados sin red, sin tabla y con *Off*; el panel sin clave con *Unlock your synced key*; la casilla de salir; la ayuda; la lista de la EFF con su aviso de licencia; la medición en el iPhone (sección 4.1) | Pruebas 1 a 6, 8, 9 y 10 en verde, con sus mutantes muertos; el recorrido en Chromium; ningún texto en claro en la red ni en lo guardado; la auditoría independiente (nivel alto: seguridad de un secreto) | **Alto**: un secreto de la persona en la base de otro |
-| **S2** | *Change passphrase…*, *Keep the key on this device*, el aviso de "cambió en otro dispositivo" y el botón en el 401, la escritura con `generation`, *Also sync in this workspace* | Pruebas 6 y 7 completas; el recorrido con dos dispositivos | Medio |
+| **S1** | La migración con sus pruebas SQL; el sobre (`src/assistant/keySync.ts`) con la frase generada y la propia; en *Assistant…*: *Turn on sync…*, *Unlock*, *Update synced key* (con la escritura condicional por `generation` de la sección 7, para no pisar otro dispositivo), *Stop syncing*, los estados sin red, sin tabla y con *Off*; el panel sin clave con *Unlock your synced key*; la casilla de salir; la ayuda; la lista de la EFF con su aviso de licencia; la medición en el iPhone (sección 4.1) | Pruebas 1 a 6, 8, 9 y 10 y la parte de la prueba 7 que no pisa otro dispositivo, en verde, con sus mutantes muertos; el recorrido en Chromium; ningún texto en claro en la red ni en lo guardado; la auditoría independiente (nivel alto: seguridad de un secreto) | **Alto**: un secreto de la persona en la base de otro |
+| **S2** | *Change passphrase…*, *Keep the key on this device*, el aviso de "cambió en otro dispositivo" y el botón en el 401, *Also sync in this workspace* | Pruebas 6 y 7 completas; el recorrido con dos dispositivos | Medio |
 
 **Recorrido de Lega (S1)**, con su clave de verdad y la migración aplicada en Wanka:
 
@@ -493,7 +495,8 @@ que volver a cifrarse, y para eso hace falta la frase.
   que sale de ella.
 - **B:** guardar en el dispositivo la llave que sale de la frase (no exportable), para actualizar sin pedirla.
 
-**Elegí A** porque así un dispositivo perdido no tiene nada que abra la copia del servidor ni que permita cambiarla.
+**Elegí A** porque así un dispositivo perdido no guarda nada que abra la copia del servidor (sí la clave local, como
+hoy, que se corta cambiándola en el proveedor).
 **Si preferís otra:** B ahorra pegar la frase una vez por cambio de clave.
 
 ### CS7 · Computadora prestada
