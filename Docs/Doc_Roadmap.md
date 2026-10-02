@@ -462,7 +462,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   permiso aparte; con páginas reales pide, casi seguro, el plan pago de Workers del dueño (US$ 5 por mes) o el MCP local. Entregas: A1 (texto elegido), A2
   (página, formato, política), A3 (pie de foto), M0 (prueba técnica del MCP: OAuth de Supabase con el registro cerrado,
   el rol del token, 10 ms de CPU), M1 (MCP de lectura; requiere el interruptor de D14), M2 (MCP que escribe), M3
-  (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos.
+  (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos. **La clave en todos tus
+  dispositivos (D72 → B, Lega 2026-10-02): diseño en `Doc_Clave_Sincronizada.md`** (sin código; auditado y corregido;
+  decisiones CS1 a CS9): una copia cifrada en el dispositivo con una frase de seis palabras que propone la app (PBKDF2-SHA256 de
+  1 000 000 de vueltas y AES-256-GCM, medidos), guardada en una tabla propia del Supabase del workspace donde la persona
+  la prende, que solo ella lee; el dueño ve que existe, no qué es. Entregas S1 (prender, desbloquear, dejar de
+  sincronizar, *Sign out other devices*, preguntar si cambia a dónde va la clave; riesgo alto, con auditoría) y S2
+  (cambiar la frase, aviso entre dispositivos, copia más vieja, computadora prestada). **D77 (Lega):** el MCP también
+  mueve y manda a la papelera, siempre con la confirmación de la persona y una casilla al conectar (dos pasos, la
+  pregunta directa del cliente si la tiene, *Undo* a un clic; `Doc_Asistente.md` 9.3 bis, IA11), y nunca cambia quién
+  ve algo; compartir e invitar, nunca. Va en M2. Al roadmap, sin diseño: que una sesión robada no pueda seguir una hora
+  con su token de acceso (acortar su vida en Supabase cuesta más pedidos de refresco; para decidir con M0).
 - **P.26 ⌘Z en el orden en que editaste** (Lega, 2026-10-02, al responder cómo se deshace un reemplazo en todo el
   proyecto): ⌘Z deshace lo último que hiciste aunque haya sido en otra página, y un *Replace all in project* se deshace
   entero en ese orden. **Diseño en `Doc_Deshacer.md`** (sin código; auditado y corregido; decisiones propuestas DH1 a

@@ -2,15 +2,16 @@
 
 v0.131 :
 
-Arreglos de las menciones, entrega 2 (lo que dejó su auditoría). **Sin prueba:** el paso de compartir desde la mención
-por `useShareGate` (sube lo pendiente antes y arma las bases después) no tenía ninguna; había 2 mutantes vivos. Ahora 5
-pruebas (sube antes, arma después y en ese orden, *Retry*, *Share anyway*, apagada) y los 9 mutantes de la integración
-mueren; es lo que faltaba para poder prender la privacidad de lo borrado. **La lista del `@` no volvía tras Esc o
-*Cancel*:** mientras se lee la pregunta el foco está en su botón y el campo olvida la posición (`onBlur`); enfocarlo
-por código no avisa que cambió la selección. `cancelAsk` la vuelve a leer; probado en Chromium y en jsdom. **La pregunta
-aclara** que se comparte en el acto aunque después no se mande el comentario (O5, y la ayuda). Sin migración: la versión
-mínima en `share_for_mention` (O4) no suma, `public.share` tampoco la mira; compartir en un archivado se deja (O3).
-[ Arreglos de las menciones: la prueba de compartir con la puerta de lo borrado, la lista del @ tras Esc y la pregunta más clara ]
+Dos cosas del asistente y las menciones. **Arreglos de las menciones, entrega 2:** compartir desde la mención por
+`useShareGate` no tenía prueba (2 mutantes vivos); ahora 5 pruebas y los 9 mutantes mueren, lo que faltaba para prender
+la privacidad de lo borrado. La lista del `@` no volvía tras Esc o *Cancel* (el campo olvidaba la posición y enfocarlo
+por código no la relee): `cancelAsk` la vuelve a leer. La pregunta aclara que se comparte en el acto. **Diseño, sin
+código, de la clave del asistente en todos tus dispositivos** (D72 → B, `Doc_Clave_Sincronizada.md`, CS1 a CS9): una
+copia cifrada en el dispositivo con una frase de seis palabras (PBKDF2 y AES-256-GCM) que solo lee la persona; para un
+dispositivo perdido, *Sign out other devices* y frase nueva. **Mover y borrar por el MCP con confirmación** (D77,
+`Doc_Asistente.md` 9.3 bis, IA11): solo proponen, se hacen con el sí de la persona, nunca cambian quién ve algo y tienen
+*Undo*; compartir e invitar, nunca. Sin migración.
+[ Arreglos de las menciones y el diseño de la clave del asistente sincronizada (D72) y de mover y borrar por el MCP (D77) ]
 
 v0.130 :
 
