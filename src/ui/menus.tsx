@@ -36,6 +36,7 @@ import {
 import { requestTemplates, templateTargetFor } from '../templates/templatesUi';
 import { isDayReportFolder, isReportPage } from '../templates/dayReport';
 import { requestDayReport, useDayReportFolder } from '../templates/dayReportUi';
+import { openSaveTemplate, useSaveTemplateOffer } from '../templates/ownTemplatesUi';
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
 import { openHelp } from '../help/helpUi';
 import { isPhoneLayout } from './commentsUi';
@@ -181,7 +182,9 @@ export function PageMenu(props: {
   const isReportFolder = isDayReportFolder(tree, props.pageId);
   // En un reporte no se ofrece marcarlo como carpeta (casi nadie lo quiere y suma un renglón en cada reporte).
   const thisRow = tree.get(props.pageId);
-  const offerReportFolder = isReportFolder || !(thisRow && isReportPage(thisRow));
+  const offerReportFolder = isReportFolder || !(thisRow && isReportPage(thisRow, tree));
+  // Las plantillas propias (Doc_Plantillas.md, 5.1): guardar esta página como plantilla (una copia en *Templates*).
+  const saveOffer = useSaveTemplateOffer(props.pageId);
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -221,6 +224,22 @@ export function PageMenu(props: {
           {tr('pageMenu.applyTemplate')}
         </button>
       )}
+      {saveOffer.save && (
+        <button
+          role="menuitem"
+          aria-disabled={saveOffer.blocked || undefined}
+          data-tip={saveOffer.blocked ? tr('pageMenu.saveAsTemplateBlocked') : undefined}
+          onClick={() => {
+            if (saveOffer.blocked) return;
+            props.onClose();
+            openSaveTemplate(props.pageId);
+          }}
+        >
+          <TemplateIcon />
+          {tr('pageMenu.saveAsTemplate')}
+        </button>
+      )}
+      {saveOffer.reuse && item(tr('pageMenu.useAsTemplate'), <TemplateIcon />, () => void tree.setSetting(props.pageId, 'template', {}))}
       {reportFolder &&
         item(tr('dayReport.new'), <DayReportIcon />, () => requestDayReport(props.pageId))}
       <button

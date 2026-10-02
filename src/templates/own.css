@@ -1,0 +1,78 @@
+/* Las plantillas propias (Docs/Doc_Plantillas.md, 5.2): la franja arriba del título de una plantilla. Primera carga. */
+
+.banner.template-banner {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.template-banner > svg {
+  flex: none;
+  color: var(--accent-text);
+}
+
+.template-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.template-banner-description {
+  color: var(--muted);
+}
+
+.template-banner-tag {
+  flex: none;
+}
+
+.template-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+/* Las ventanas *Save as template* y *Template settings* (se bajan con el editor, pero el estilo es chico). */
+.template-form {
+  width: min(460px, 100%);
+}
+
+.template-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.template-form-field {
+  display: grid;
+  gap: 4px;
+}
+
+.template-form-field textarea {
+  min-height: 64px;
+  resize: vertical;
+  font: inherit;
+}
+
+.template-form-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.template-form-check input {
+  margin-top: 3px;
+}
+
+.template-form p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.template-form .small {
+  font-size: 12px;
+}
