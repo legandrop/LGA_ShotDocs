@@ -195,6 +195,30 @@ describe('B.16: lo escrito adentro de algo que otro borra llega al servidor', ()
     expect((await c.docs.removedWriting(pageId)).map((n) => n.text)).toEqual(['DE-C ']);
   });
 
+  it('el estado lo avisa solo si la página no está abierta (abierta, el aviso está en la página)', async () => {
+    const server = new FakeServer();
+    const { a, b, pageId } = await twoBlocks(server);
+    // Abierta: el aviso queda en la página, el estado no dice nada.
+    const doc = await a.docs.open(pageId);
+    textOf(doc, 'b2')!.insert(0, 'ABIERTA ');
+    await a.docs.flush(pageId);
+    await edit(b, pageId, (d) => root(d).delete(1, 1));
+    await b.engine.syncNow();
+    await a.docs.pullPage(pageId, a.remote);
+    expect((await a.docs.removedWriting(pageId)).map((n) => n.text)).toEqual(['ABIERTA ']);
+    expect(a.engine.getStatus().notice).toBeNull();
+    a.docs.close(pageId);
+    await a.docs.flush(pageId);
+    // Cerrada: lo dice el estado, con el título.
+    await a.docs.indexSnapshot(pageId).then(({ doc: d }) => d.destroy());
+    await edit(a, pageId, (d) => textOf(d, 'b1')!.insert(0, 'CERRADA '));
+    await edit(b, pageId, (d) => root(d).delete(0, 1));
+    await b.engine.syncNow();
+    await a.docs.pullPage(pageId, a.remote);
+    expect(a.engine.getStatus().notice).toContain('P');
+    expect(a.engine.getStatus().notice).not.toBeNull();
+  });
+
   it('descartar el aviso borra solo los que se mostraron', async () => {
     const server = new FakeServer();
     const { a, b, pageId } = await twoBlocks(server);
@@ -425,5 +449,37 @@ describe('B.16: compactar lo guardado en orden', () => {
     const a = new Y.Doc();
     Y.applyUpdate(a, mergeRowsInOrder([first, second]));
     expect(a.getXmlFragment(CONTENT_FRAGMENT).toString()).toBe(collected.getXmlFragment(CONTENT_FRAGMENT).toString());
+  });
+
+  it('70 filas propias y una fila posterior que las trae como hueco: al abrir se compacta con el texto y llega al servidor', async () => {
+    const server = new FakeServer();
+    const { a, b, pageId } = await twoBlocks(server);
+    // Sin red: 70 ediciones de A, cada una una fila.
+    server.online = false;
+    const doc = await a.docs.open(pageId);
+    for (let i = 0; i < 70; i++) {
+      const t = textOf(doc, 'b2')!;
+      t.insert(t.length, String.fromCharCode(97 + (i % 26)));
+      await a.docs.flush(pageId);
+    }
+    a.docs.close(pageId);
+    server.online = true;
+    await edit(b, pageId, (d) => root(d).delete(1, 1));
+    await b.engine.syncNow();
+    // La fila que dejaría una versión anterior: el documento con GC y el borrado aplicado, entero.
+    const rows = await a.db.getAllFromIndex('docUpdates', 'pageId', pageId);
+    const collected = new Y.Doc();
+    Y.applyUpdate(collected, Y.mergeUpdates(rows.map((r) => r.data)));
+    Y.applyUpdate(collected, Y.mergeUpdates((server.updates.get(pageId) ?? []).map((u) => u.data)));
+    expect(rowText(Y.encodeStateAsUpdate(collected))).not.toContain('abcdefg');
+    await a.db.add('docUpdates', { pageId, data: Y.encodeStateAsUpdate(collected) });
+    expect((await a.db.getAllFromIndex('docUpdates', 'pageId', pageId)).length).toBeGreaterThan(64);
+    // Abrir compacta (`loadInto`): en orden, la fila con el texto gana.
+    await visible(a, pageId);
+    const after = await a.db.getAllFromIndex('docUpdates', 'pageId', pageId);
+    expect(after).toHaveLength(1);
+    expect(rowText(after[0].data)).toContain('abcdefghij');
+    await a.engine.syncNow();
+    expect(serverText(server, pageId)).toContain('abcdefghij');
   });
 });

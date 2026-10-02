@@ -192,7 +192,8 @@ export class SyncEngine {
     // cuando la página no está abierta (la sincronización la bajó de fondo).
     this.cleanups.push(
       docs.subscribeRemovedWriting((pageId) => {
-        if (this.stopped) return;
+        // Con la página abierta, el aviso ya está en la página (con el texto).
+        if (this.stopped || docs.peek(pageId)) return;
         const title = this.tree.get(pageId)?.title || t('common.untitled');
         this.patch({ notice: t('engine.removedWriting', { page: title }) });
       }),

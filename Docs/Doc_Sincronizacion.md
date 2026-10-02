@@ -333,7 +333,7 @@ servidor. La subida se armaba en un `Y.Doc` con GC (*garbage collection*: Yjs ca
 un hueco que solo dice cuánto medía). Si el dispositivo bajaba el borrado del otro **antes** de subir lo suyo, su
 texto ya estaba borrado en ese documento (cuelga de un bloque borrado) y viajaba como hueco. En el documento final
 ese texto iba a quedar borrado igual, pero se perdía para siempre: no quedaba en ninguna fila de `page_updates`
-(ni en el historial que se diseña en `lega/historial`), solo en el IndexedDB de quien lo escribió. Pasaba con lo
+(ni en el historial de versiones, en preparación), solo en el IndexedDB de quien lo escribió. Pasaba con lo
 escrito entre la subida y la bajada de un mismo ciclo (el ciclo sube y después baja), y con todo lo de una página si
 su subida vencía o la app estaba por debajo de la versión mínima. Lo encontró la auditoría del diseño del historial;
 `src/sync/uploadNoGc.test.ts` lo reproduce (la fila de A llegaba sin el texto).
@@ -343,13 +343,13 @@ su subida vencía o la app estaba por debajo de la versión mínima. Lo encontr�
 - **La subida se arma en un documento sin GC**, descartable, con las filas guardadas aplicadas **de a una y en
   orden** en una sola transacción (`applyRowsInOrder`). Sin GC, lo borrado conserva su texto; en orden, gana la
   primera copia de cada elemento (la que se guardó al escribirlo) y nunca una posterior que lo traiga como hueco
-  (`Y.mergeUpdates` puede quedarse con el hueco: ver `Doc_Historial.md`, 3.2). Lo demás no cambia: el documento
+  (`Y.mergeUpdates` puede quedarse con el hueco; lo midió el diseño del historial de versiones, en preparación). Lo demás no cambia: el documento
   abierto en el editor sigue con GC, lo guardado en IndexedDB es lo mismo (cada edición ya se guardaba con su texto)
   y la subida lleva los mismos elementos y los mismos borrados (`buildUpload` de B.15, igual).
 - **Qué cambia en el servidor:** la fila de cada subida trae también el texto de lo propio que ya estaba borrado al
   armarla: lo que otro borró mientras se escribía y **lo escrito y borrado entre dos subidas** (una subida cada
   1,2 s de pausa). Lo segundo es una consecuencia, no el objetivo: el historial lo va a poder mostrar, y lo borrado
-  ya viaja a quien puede ver la página (`Doc_Historial.md`, pregunta 2). Ojo con eso: algo pegado y borrado en el
+  ya viaja a quien puede ver la página (lo señaló el diseño del historial de versiones, en preparación). Ojo con eso: algo pegado y borrado en el
   mismo segundo (una contraseña, por ejemplo) ahora llega siempre al servidor; antes llegaba solo si justo había una
   subida en el medio.
 - **Tope:** si la subida sin GC pasa de 6 MB (`NO_GC_MAX_BYTES`; el servidor rechaza más de 8 MB) se vuelve a armar
@@ -398,7 +398,7 @@ que enterarse y tener su texto a mano:
   ni propiedades nuevas.
 - **Restaurar una copia** (`resetForRestore`): la subida entera ahora lleva todo lo borrado que el dispositivo tiene
   con texto (ver los números); con el tope de arriba nunca se queda sin subir.
-- **Compactar en el servidor** (`Doc_Compactar.md`, en `lega/compactar`): su snapshot ya se arma aplicando las filas
+- **Compactar en el servidor** (`Doc_Compactar.md`): su snapshot ya se arma aplicando las filas
   en orden en un `Y.Doc({ gc: false })`, así que conserva este texto. Con `Y.mergeUpdates` lo podía perder (una fila
   vieja que vuelve a subir todo con huecos gana).
 - **Compactar en el dispositivo** (`loadInto`, con más de 64 filas al abrir; también la búsqueda del proyecto): ahora
@@ -407,7 +407,7 @@ que enterarse y tener su texto a mano:
   edición guardaba el documento abierto entero, con GC, y lo borrado en memoria iba como hueco. Ahora guarda solo lo
   que el documento tiene además de lo que se cargó de IndexedDB (`loadedSV`): lo cargado ya está en las filas con su
   texto.
-- **Historial** (`Doc_Historial.md`, en `lega/historial`): es "la subida sin GC" de la entrega 2. Con esto, cada
+- **Historial de versiones** (en preparación): es "la subida sin GC" de su entrega 2. Con esto, cada
   elemento llega con su texto en su primera fila.
 
 **Números** (`src/ui/uploadNoGcMeasure.test.ts`, fuera de la suite: el editor real escribe letra por letra, cada
@@ -447,8 +447,9 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
   cerrar la app; la versión publicada (`fixtures/mainDocs.ts`) sobre la misma base con el aviso guardado; el tope de
   6 MB; *Download my unsynced changes*; «abcde» visto y «fghij» sin subir (el aviso dice solo «fghij»); después de
   restaurar una copia, lo de un tercero no se avisa (sí a quien lo escribió); descartar borra solo lo que se mostró;
-  el texto del aviso (orden, fotos por nombre, sin autores propios no avisa); y compactar en orden conserva el texto
-  que una fila posterior trae como hueco.
+  el texto del aviso (orden, fotos por nombre, sin autores propios no avisa); el estado avisa solo con la página
+  cerrada; y compactar en orden conserva el texto que una fila posterior trae como hueco (también al abrir con 70
+  filas propias más una fila hueco: falla si `loadInto` vuelve a `mergeUpdates`).
 - **`src/ui/collabRemovedWriting.test.ts`:** al azar con el editor real, tres dispositivos y uno de la versión
   publicada, escribiendo en párrafos, listas anidadas, celdas de tablas y secciones con el mapa de colapsar
   mientras otros borran bloques padres, tablas y secciones enteras; sin red, bajando antes de subir, respuestas que
