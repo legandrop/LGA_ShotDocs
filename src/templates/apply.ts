@@ -1,4 +1,6 @@
 import { BlockNoteEditor } from '@blocknote/core';
+import type { Node as PMNode } from '@tiptap/pm/model';
+import { TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { yXmlFragmentToBlocks } from '@blocknote/core/yjs';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
@@ -34,18 +36,62 @@ export function isEmptyPage(doc: Y.Doc): boolean {
 /** Lo que usa del editor de BlockNote (el de la página abierta, o uno sin pantalla en las pruebas). */
 export interface TemplateEditor {
   document: { id: string }[];
-  insertBlocks(blocks: never[], reference: string, placement: 'before' | 'after'): unknown;
+  insertBlocks(blocks: never[], reference: string, placement: 'before' | 'after'): { id: string }[] | unknown;
+  prosemirrorView?: { state: EditorState; dispatch(tr: Transaction): void } | null;
 }
 
 /**
  * Agrega los bloques de la plantilla antes del primer bloque de la página, con el editor (así entra en su deshacer).
  * Nunca reemplaza ni borra: lo que ya estaba (la semilla vacía, o lo que escribió otro dispositivo) queda debajo.
- * El editor les pone ids nuevos a todos los bloques.
+ * El editor les pone ids nuevos a todos los bloques. El cursor del editor queda al principio de lo agregado (el
+ * primer dato de la ficha): Enter en el título lleva ahí y no al párrafo vacío del pie (auditoría, O1).
  */
 export function insertTemplate(editor: TemplateEditor, blocks: TemplateBlock[]): void {
   const first = editor.document[0];
   if (!first) throw new Error('The page has no blocks to insert before.');
-  editor.insertBlocks(blocks as never[], first.id, 'before');
+  const inserted = editor.insertBlocks(blocks as never[], first.id, 'before');
+  const firstNew = Array.isArray(inserted) ? (inserted[0] as { id?: string } | undefined)?.id : undefined;
+  if (firstNew) cursorToStart(editor, firstNew);
+}
+
+/**
+ * Pone el cursor (sin llevar el foco) en el primer renglón escribible del bloque: en una tabla, la segunda celda de
+ * la primera fila (el valor del primer dato de una ficha) o la primera si hay una sola. Solo cambia la selección.
+ */
+function cursorToStart(editor: TemplateEditor, blockId: string): void {
+  const view = editor.prosemirrorView;
+  if (!view) return;
+  const doc = view.state.doc;
+  let block: { node: PMNode; pos: number } | null = null;
+  doc.descendants((node, pos) => {
+    if (block) return false;
+    if (node.type.name === 'blockContainer' && node.attrs.id === blockId) {
+      block = { node, pos };
+      return false;
+    }
+    return true;
+  });
+  if (!block) return;
+  const { node, pos } = block as { node: PMNode; pos: number };
+  const cells: number[] = [];
+  let textblock = -1;
+  node.descendants((child, offset) => {
+    const at = pos + 1 + offset;
+    if (child.type.name === 'tableCell' || child.type.name === 'tableHeader') {
+      if (cells.length < 2) cells.push(at);
+      return true;
+    }
+    if (child.isTextblock && textblock < 0) textblock = at;
+    return textblock < 0 || cells.length < 2;
+  });
+  // Adentro de la celda: celda → párrafo de la celda → texto.
+  const target = cells.length ? cells[Math.min(1, cells.length - 1)] + 2 : textblock >= 0 ? textblock + 1 : -1;
+  if (target < 0 || target > doc.content.size) return;
+  try {
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(doc, target)));
+  } catch {
+    // Una posición que no es de texto: el cursor queda donde estaba (nada se escribe).
+  }
 }
 
 // --- Una plantilla que es una página (4.2, pasos 1 y 2) ------------------------------------------------------------
