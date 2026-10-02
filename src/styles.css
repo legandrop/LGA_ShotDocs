@@ -7553,22 +7553,23 @@ button.folder-row-main:hover {
 .annotator-dock {
   display: flex;
   align-items: center;
-  gap: 2px;
   height: 54px;
   padding: 4px 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Las herramientas se deslizan si no entran; el punto de color queda siempre a la vista. */
+.annotator-dock .annotator-tools {
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
   touch-action: pan-x;
 }
 
-.annotator-dock::-webkit-scrollbar {
+.annotator-dock .annotator-tools::-webkit-scrollbar {
   display: none;
-}
-
-.annotator-dock .annotator-tools {
-  flex: none;
 }
 
 .annotator[data-compact] .annotator-dot {
@@ -7653,7 +7654,7 @@ button.folder-row-main:hover {
 }
 
 .annotator-sheet .annotator-field {
-  flex: 1 1 100%;
+  flex: 1 1 200px;
   min-height: 44px;
 }
 

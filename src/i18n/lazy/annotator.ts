@@ -87,7 +87,7 @@ export const annotator = {
   },
   'annotate.fitTipTouch': { en: "**Fit**\nThe whole photo · pinch with two fingers to zoom", es: "**Encuadrar**\nLa foto entera · pellizcá con dos dedos para ampliar" },
   'annotate.textHintTouch': { en: "Type the text", es: "Escribí el texto" },
-  'annotate.textDone': { en: "Done", es: "Listo" },
+  'annotate.textDone': { en: "OK", es: "OK" },
 } satisfies Dict;
 
 register(annotator);
