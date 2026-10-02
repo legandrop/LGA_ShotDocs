@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.091 :
+
+Un PDF adjunto se veía solo como un ícono y el carrete salteaba los adjuntos. Ahora la tarjeta de un PDF muestra su
+primera página: la dibuja con pdf.js (bajado aparte, solo cuando llega un PDF) el dispositivo que lo agrega, y viaja
+como la miniatura de una foto, sin pasar por el portero; lo ya visto se ve sin red. Se eligió sobre la miniatura de
+Drive, que llega tarde y pedía cambiar el portero. Si pdf.js no estaba, o el PDF es de antes, se hace al mostrarlo;
+si la pestaña se cierra mientras se dibuja, no se reintenta y el PDF sube igual. En el carrete, los adjuntos se ven
+en grande con *Open* y *Download*. Sin migración ni propiedades nuevas en el bloque.
+[ Adjuntos - vista previa del PDF y tarjeta grande en el carrete ]
+
 v0.090 :
 
 Subir `min_app_version` frenaba solo el contenido de las páginas: una pestaña vieja seguía registrando y subiendo

@@ -3,8 +3,8 @@
 LGA Shot Docs is released under the MIT License (see [LICENSE](LICENSE)). The web app is distributed
 together with third-party software and fonts. This file lists the ones whose licenses ask for more than
 the usual copyright notice: copyleft licenses and font licenses. Everything else the app ships
-(React, Yjs, Mantine, Supabase client, ProseMirror, Tiptap and their dependencies) is under MIT, ISC, BSD,
-Apache-2.0, 0BSD or CC0-1.0; their copyright notices and license texts are in each package in
+(React, Yjs, Mantine, Supabase client, ProseMirror, Tiptap, PDF.js and their dependencies) is under MIT, ISC,
+BSD, Apache-2.0, 0BSD or CC0-1.0; their copyright notices and license texts are in each package in
 `node_modules/` after `npm install`, and the exact versions are in `package-lock.json`.
 
 Reviewed for version 0.075 (2026-10-01), from the production dependencies in `package.json`. The published

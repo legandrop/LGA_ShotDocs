@@ -123,8 +123,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   pegar un PDF, un .zip o lo que sea; va al Drive del dueño como las fotos y se ve como una tarjeta con ícono,
   nombre y tamaño (el mismo bloque `image` con `sdmedia://`, sin tipo de bloque nuevo). Un PDF (o lo que el
   navegador sabe mostrar) se abre en una pestaña nueva; el resto se baja con su nombre; en el teléfono, un
-  toque abre una hoja. Falta: la vista previa (entrega 2), la tarjeta grande en el carrete y probar a mano con
-  el portero real.
+  toque abre una hoja. **Entrega 2 hecha (v0.091):** la primera página de un PDF como vista previa en la tarjeta
+  (pdf.js en el dispositivo que lo agrega, bajado aparte; viaja como la miniatura de una foto y se ve sin red), y los
+  adjuntos en grande en el carrete con *Open* y *Download*. Falta: probar a mano con el portero real, Safari y el
+  iPhone; la miniatura de Drive para Office, PSD y demás (CORS en `/t/` del portero y guardarla en el bucket
+  `thumbs`; `Doc_Adjuntos.md`, sección 4).
 - **P.7 Hecho (v0.050, primera entrega; migración 7 aplicada en Wanka): cuánto ocupa cada proyecto
   en el Drive.** El peso en el renglón de cada proyecto del selector, el total con su desglose en el diálogo
   de Google Drive (solo el dueño) y el total de la papelera de archivos, con la confirmación de vaciar

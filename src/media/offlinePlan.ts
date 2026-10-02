@@ -168,7 +168,7 @@ export function weigh(facts: readonly FileFacts[], olderMissing: number, safari:
   let thumbs = 0;
   for (const f of facts) {
     if (f.deleted) continue;
-    if (f.kind !== 'file' && f.thumbAt && !f.thumb) thumbs++;
+    if (f.thumbAt && !f.thumb) thumbs++;
     const known = f.size !== null;
     const size = f.size ?? 0;
     const original = f.ownBlob || f.copy;

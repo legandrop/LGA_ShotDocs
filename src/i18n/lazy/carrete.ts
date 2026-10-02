@@ -4,8 +4,10 @@ import type { Dict } from '../types';
 // El carrete de fotos y videos (se carga aparte, con Carrete.tsx).
 
 export const carrete = {
-  'carrete.label': { en: "Photos and videos", es: "Fotos y videos" },
+  'carrete.label': { en: "Photos, videos and files", es: "Fotos, videos y archivos" },
   'carrete.download': { en: "Download", es: "Descargar" },
+  'carrete.open': { en: "Open", es: "Abrir" },
+  'carrete.preparing': { en: "Preparing…", es: "Preparando…" },
   'carrete.downloadNamed': { en: "Download {name}", es: "Descargar {name}" },
   'carrete.downloadOffline': {
     en: "Download {name} (not available offline)",
@@ -56,6 +58,15 @@ export const carrete = {
   'carrete.failedPhotoReason': {
     en: "The full photo couldn't be loaded: {reason}",
     es: "La foto completa no se pudo cargar: {reason}",
+  },
+  'carrete.offlineFile': {
+    en: "You're offline, and this file isn't on this device. You can open or download it when you're back online.",
+    es: "Estás sin conexión, y este archivo no está en este dispositivo. Vas a poder abrirlo o bajarlo cuando vuelva la conexión.",
+  },
+  'carrete.failedFile': { en: "The file couldn't be prepared to open or download.", es: "El archivo no se pudo preparar para abrirlo o bajarlo." },
+  'carrete.failedFileReason': {
+    en: "The file couldn't be prepared to open or download: {reason}",
+    es: "El archivo no se pudo preparar para abrirlo o bajarlo: {reason}",
   },
 } satisfies Dict;
 
