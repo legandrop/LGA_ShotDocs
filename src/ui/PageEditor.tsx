@@ -239,7 +239,13 @@ export function PageEditor({ pageId }: { pageId: string }) {
         </p>
       )}
       {/* Las plantillas (Docs/Doc_Plantillas.md): la tira de la página vacía y la ventana *Templates*. */}
-      <TemplateHost pageId={pageId} doc={opening.doc} editor={findEditor} editable={opening.complete && canEdit} />
+      <TemplateHost
+        pageId={pageId}
+        doc={opening.doc}
+        editor={findEditor}
+        editable={opening.complete && canEdit}
+        complete={opening.complete}
+      />
       {/* Cambiar el idioma vuelve a abrir el editor (sus textos se eligen al crearlo); el documento es el mismo. */}
       <BlockEditor
         key={`${pageId}:${opening.complete}:${canEdit}:${tr.lang}:${remounts}`}

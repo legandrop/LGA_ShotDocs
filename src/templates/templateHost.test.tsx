@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import type { EditorView } from '@tiptap/pm/view';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prefs } from '../prefs';
 import { ServicesContext, type Services } from '../services';
@@ -8,7 +9,9 @@ import type { SupabaseRemote } from '../sync/remote';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { mountEditor, typeAt, unmountAll } from '../ui/collabHarness';
+import { IS_MAC } from '../ui/shortcuts';
 import { isEmptyPage } from './apply';
+import { blockedReason } from './TemplateHost';
 import { BUILTIN_ONSET, BUILTIN_PREPRO, BUILTIN_SHOT, builtinBlocks } from './builtin';
 
 // La tira *Start from a template*, la ventana *Templates* y *Apply template…* en la página de verdad (PageView con el
@@ -106,6 +109,41 @@ async function open(device: Device, pageId: string) {
   return host;
 }
 
+/** El editor de la página abierta (Tiptap lo deja en su elemento). */
+function pageView(host: HTMLElement): EditorView {
+  const dom = host.querySelector('.ProseMirror') as (HTMLElement & { editor?: { view: EditorView } }) | null;
+  expect(dom?.editor).toBeDefined();
+  return dom!.editor!.view;
+}
+
+/** Fila y celda de la tabla donde está el cursor (null si no está en una tabla). */
+function cellOfCursor(view: EditorView): { row: number; cell: number } | null {
+  const $from = view.state.selection.$from;
+  if ($from.parent.type.name !== 'tableParagraph') return null;
+  for (let d = $from.depth; d > 1; d--) {
+    const name = $from.node(d).type.name;
+    if (name === 'tableCell' || name === 'tableHeader') return { row: $from.index(d - 2), cell: $from.index(d - 1) };
+  }
+  return null;
+}
+
+/** Una tecla en el elemento. */
+function key(el: Element, k: string, init: KeyboardEventInit = {}) {
+  act(() => {
+    el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...init }));
+  });
+}
+/** Ctrl en Windows y Linux, ⌘ en la Mac. */
+const mod = (init: KeyboardEventInit = {}): KeyboardEventInit => (IS_MAC ? { metaKey: true, ...init } : { ctrlKey: true, ...init });
+
+/** Escribe en la página con otro editor sobre el mismo documento (como otra pestaña u otro dispositivo). */
+async function writeElsewhere(device: Device, pageId: string, text: string) {
+  const doc = await device.docs.open(pageId);
+  const other = mountEditor(doc, 'otra');
+  typeAt(other, 'initialBlockId', 'start', text);
+  device.docs.close(pageId);
+}
+
 const stripButtons = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>('.template-strip button')].map((b) => b.textContent);
 const click = (el: Element | null | undefined) => act(() => (el as HTMLElement).click());
 
@@ -162,6 +200,66 @@ describe('la tira de la página vacía', () => {
     expect(host.querySelector('.template-strip')).toBeNull();
   });
 
+  it('Enter en el título lleva el cursor al primer dato de la ficha (no al renglón vacío del pie)', async () => {
+    const { device } = await setup();
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    click(host.querySelector('.template-strip [data-template="onset"]'));
+    await wait(100);
+    const title = host.querySelector('.page-title')!;
+    expect(document.activeElement).toBe(title);
+    key(title, 'Enter');
+    await wait(50);
+    expect(cellOfCursor(pageView(host))).toEqual({ row: 0, cell: 1 });
+  });
+
+  it('Ctrl/⌘+Z en el título recién elegida la plantilla la saca entera; Ctrl/⌘+Shift+Z la devuelve', async () => {
+    const { device } = await setup();
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    click(host.querySelector('.template-strip [data-template="shot"]'));
+    await wait(100);
+    const doc = await device.docs.open(page);
+    const title = host.querySelector<HTMLTextAreaElement>('.page-title')!;
+    expect(document.activeElement).toBe(title);
+    expect(isEmptyPage(doc)).toBe(false);
+
+    key(title, 'z', mod());
+    await wait(50);
+    expect(isEmptyPage(doc)).toBe(true);
+    expect(document.activeElement).toBe(title);
+    key(title, 'z', mod({ shiftKey: true }));
+    await wait(50);
+    expect(isEmptyPage(doc)).toBe(false);
+
+    // Después de salir del título, Ctrl/⌘+Z ahí vuelve a ser del título y no toca la página (undoGuard.ts).
+    act(() => title.blur());
+    act(() => title.focus());
+    key(title, 'z', mod());
+    await wait(50);
+    expect(isEmptyPage(doc)).toBe(false);
+    device.docs.close(page);
+  });
+
+  it('si llega texto justo al elegir, no agrega la plantilla (se vuelve a mirar si está vacía al aplicar)', async () => {
+    const { device } = await setup();
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    const chip = host.querySelector('.template-strip [data-template="onset"]') as HTMLElement;
+    const doc = await device.docs.open(page);
+    const other = mountEditor(doc, 'otra');
+    // El texto y el clic en la misma pasada: la tira todavía está a la vista y el botón todavía llama a aplicar.
+    act(() => {
+      typeAt(other, 'initialBlockId', 'start', 'Hola');
+      chip.click();
+    });
+    await wait(100);
+    expect(device.tree.get(page)?.template_id ?? null).toBeNull();
+    expect(host.textContent).not.toContain('Camera package');
+    expect(host.textContent).toContain('Hola');
+    device.docs.close(page);
+  });
+
   it('en castellano, con las de fábrica en castellano', async () => {
     const { device } = await setup();
     act(() => prefs.set({ language: 'es' }));
@@ -190,6 +288,24 @@ describe('la ventana Templates y Apply template…', () => {
     expect(document.querySelector('.templates-dialog')).toBeNull();
     expect(device.tree.get(page)?.template_id).toBe(BUILTIN_PREPRO);
     expect(host.textContent).toContain('Elements to shoot');
+  });
+
+  it('con la ventana abierta llega texto de otro lado: los Use se apagan, dicen por qué y no agregan nada', async () => {
+    const { device } = await setup();
+    const page = await device.tree.create(null, '');
+    const host = await open(device, page);
+    click([...host.querySelectorAll('.template-strip button')].find((b) => b.textContent === 'More…'));
+    const use = () => document.querySelector<HTMLButtonElement>('.templates-dialog [data-template="onset"] button.primary')!;
+    expect(use().getAttribute('aria-disabled')).toBeNull();
+    await act(async () => writeElsewhere(device, page, 'Escrito en el iPhone'));
+    await wait(100);
+    expect(use().getAttribute('aria-disabled')).toBe('true');
+    expect(use().dataset.tip).toBe('Only on an empty page');
+    click(use());
+    await wait(100);
+    expect(device.tree.get(page)?.template_id ?? null).toBeNull();
+    expect(host.textContent).toContain('Escrito en el iPhone');
+    expect(host.textContent).not.toContain('Camera package');
   });
 
   it('Preview abre la vista previa sin tocar la página', async () => {
@@ -242,6 +358,9 @@ describe('la ventana Templates y Apply template…', () => {
     // Una página con título no ofrece la tira, pero el menú sí: el título queda como estaba.
     expect(device.tree.get(page)?.title).toBe('Escena 3');
     expect(host.textContent).toContain('Reference frame');
+    // Con título, el foco no va al título: va a la página, con el cursor en el primer dato de la ficha.
+    expect(host.querySelector('.ProseMirror')!.contains(document.activeElement)).toBe(true);
+    expect(cellOfCursor(pageView(host))).toEqual({ row: 0, cell: 1 });
 
     render();
     expect(item()!.getAttribute('aria-disabled')).toBe('true');
@@ -259,5 +378,36 @@ describe('la ventana Templates y Apply template…', () => {
     await open(device, page);
     expect(document.querySelector('.templates-dialog')).not.toBeNull();
     history.replaceState(null, '', '/');
+  });
+
+  it('Apply template… sobre una página no abierta y con texto: la abre y avisa por qué no, sin la ventana', async () => {
+    const { device } = await setup();
+    const page = await device.tree.create(null, 'Escena 5');
+    await writeElsewhere(device, page, 'Ya escrito');
+    const notices: unknown[] = [];
+    const listen = (e: Event) => notices.push((e as CustomEvent).detail);
+    window.addEventListener('shotdocs:notice', listen);
+    try {
+      const { requestTemplates } = await import('./templatesUi');
+      requestTemplates(page);
+      await open(device, page);
+      await wait(50);
+      expect(document.querySelector('.templates-dialog')).toBeNull();
+      expect(notices).toContain('Only on an empty page');
+    } finally {
+      window.removeEventListener('shotdocs:notice', listen);
+      history.replaceState(null, '', '/');
+    }
+  });
+
+  it('por qué se apagan los Use: cargando, sin permiso, con contenido', () => {
+    const tr = (k: string) => k;
+    const base = { complete: true, editor: true, editable: true, empty: true };
+    expect(blockedReason(base, tr)).toBeNull();
+    expect(blockedReason({ ...base, complete: false, editable: false }, tr)).toBe('templates.loading');
+    expect(blockedReason({ ...base, editor: false }, tr)).toBe('templates.loading');
+    expect(blockedReason({ ...base, editable: false }, tr)).toBe('templates.readOnly');
+    expect(blockedReason({ ...base, editable: false, editor: false }, tr)).toBe('templates.readOnly');
+    expect(blockedReason({ ...base, empty: false }, tr)).toBe('pageMenu.applyTemplateEmpty');
   });
 });

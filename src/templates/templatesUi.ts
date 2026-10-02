@@ -47,3 +47,26 @@ export function takeTemplatesRequest(pageId: string): boolean {
   pending = null;
   return fresh;
 }
+
+// Ctrl/⌘+Z justo después de elegir una plantilla. El foco queda en el título vacío (4.2, paso 5), y ahí Ctrl/⌘+Z es
+// del título, que no tiene nada para deshacer (el guardián del deshacer del editor no deja que el título deshaga la
+// página: undoGuard.ts). Mientras el título no se toque, Ctrl/⌘+Z y Ctrl/⌘+Shift+Z ahí deshacen y rehacen la página.
+const titleUndo = new Map<string, (redo: boolean) => void>();
+
+/** La página `pageId` acaba de recibir una plantilla con el foco en el título: su deshacer va a la página. */
+export function armTitleUndo(pageId: string, run: (redo: boolean) => void): () => void {
+  titleUndo.set(pageId, run);
+  return () => {
+    if (titleUndo.get(pageId) === run) titleUndo.delete(pageId);
+  };
+}
+
+/** Lo que hace Ctrl/⌘+Z en el título de `pageId` si la página acaba de recibir una plantilla (si no, `undefined`). */
+export function titleUndoFor(pageId: string): ((redo: boolean) => void) | undefined {
+  return titleUndo.get(pageId);
+}
+
+/** Se escribió en el título o se fue de ahí: Ctrl/⌘+Z vuelve a ser del título. */
+export function disarmTitleUndo(pageId: string): void {
+  titleUndo.delete(pageId);
+}

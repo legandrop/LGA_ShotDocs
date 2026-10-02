@@ -8,7 +8,7 @@ import { notify } from '../ui/notice';
 import { focusTitle } from '../ui/PageView';
 import { insertTemplate, isEmptyPage, type TemplateEditor } from './apply';
 import { BUILTIN_IDS, BUILTIN_KINDS, BUILTIN_SLUGS, builtinBlocks, builtinTexts, type BuiltinKind } from './builtin';
-import { registerTemplateTarget, takeTemplatesRequest } from './templatesUi';
+import { armTitleUndo, registerTemplateTarget, takeTemplatesRequest } from './templatesUi';
 import './templates.css';
 
 // Las plantillas en una página abierta (Docs/Doc_Plantillas.md, sección 4, entregas 0 y 1): la tira *Start from a
@@ -24,6 +24,15 @@ interface Props {
   editor: unknown;
   /** El editor se puede escribir: la página está completa en el dispositivo y la persona la puede editar. */
   editable: boolean;
+  /** El contenido de la página está entero en el dispositivo (si no, todavía se está bajando). */
+  complete: boolean;
+}
+
+/** Lo que el editor de BlockNote hace además de agregar: llevar el foco, deshacer y rehacer. */
+interface PageEditorLike extends TemplateEditor {
+  focus?(): void;
+  undo?(): void;
+  redo?(): void;
 }
 
 /** Se vuelve a leer con cada cambio del documento: escribir en la página la saca de "vacía". */
@@ -38,7 +47,7 @@ function useEmpty(doc: Y.Doc): boolean {
   return empty;
 }
 
-export function TemplateHost({ pageId, doc, editor, editable }: Props) {
+export function TemplateHost({ pageId, doc, editor, editable, complete }: Props) {
   const tree = useTree();
   const tr = useT();
   const empty = useEmpty(doc);
@@ -47,6 +56,17 @@ export function TemplateHost({ pageId, doc, editor, editable }: Props) {
   const hasChildren = tree.children(pageId).length > 0;
   const live = useRef({ editable, editor });
   live.current = { editable, editor };
+  // *Apply template…* desde la barra lateral sobre una página que no estaba abierta: se decide cuando terminó de cargar.
+  const [requested, setRequested] = useState(false);
+  // Ctrl/⌘+Z en el título justo después de elegir (templatesUi.ts): se suelta al salir de la página.
+  const titleUndo = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      titleUndo.current?.();
+      titleUndo.current = null;
+    },
+    [pageId],
+  );
 
   // Una página recién creada que ya tiene contenido deja de ofrecer plantillas (también si se escribió en otra
   // pestaña o llegó algo de otro dispositivo).
@@ -64,16 +84,25 @@ export function TemplateHost({ pageId, doc, editor, editable }: Props) {
     [pageId, doc],
   );
   useEffect(() => {
-    if (takeTemplatesRequest(pageId)) setDialog(true);
+    if (takeTemplatesRequest(pageId)) setRequested(true);
   }, [pageId]);
+  // Sin la página abierta el menú no sabía si estaba vacía. Ya cargada: vacía, la ventana; con contenido, el aviso de
+  // por qué no (en vez de una ventana con los *Use* apagados).
+  useEffect(() => {
+    if (!requested || !complete || (editable && !editor)) return;
+    setRequested(false);
+    if (editable && !isEmptyPage(doc)) notify(t('pageMenu.applyTemplateEmpty'));
+    else setDialog(true);
+  }, [requested, complete, editor, editable, doc]);
 
   const apply = useCallback(
     (kind: BuiltinKind) => {
       const { editable: canWrite, editor: current } = live.current;
       // Se vuelve a mirar en el momento: otro dispositivo pudo escribir mientras la ventana estaba abierta.
       if (!canWrite || !current || !isEmptyPage(doc)) return;
+      const pageEditor = current as PageEditorLike;
       try {
-        insertTemplate(current as TemplateEditor, builtinBlocks(kind, tr.lang));
+        insertTemplate(pageEditor, builtinBlocks(kind, tr.lang));
       } catch (err) {
         console.error('No se pudo agregar la plantilla', err);
         notify(t('templates.applyFailed'));
@@ -83,8 +112,16 @@ export function TemplateHost({ pageId, doc, editor, editable }: Props) {
       const row = tree.get(pageId);
       if (row && row.template_id !== BUILTIN_IDS[kind]) void tree.setPatch(pageId, { template_id: BUILTIN_IDS[kind] });
       void tree.dropFresh(pageId);
-      // El título, vacío y con el foco (sección 4.2, paso 5): lo que falta es nombrar la página.
-      if (!row?.title) focusTitle();
+      if (row?.title) {
+        // Con título, el foco va a la página: el cursor ya quedó en el primer dato de la ficha (insertTemplate).
+        pageEditor.focus?.();
+        return;
+      }
+      // El título, vacío y con el foco (sección 4.2, paso 5): lo que falta es nombrar la página. Mientras no se
+      // escriba ahí, Ctrl/⌘+Z en el título saca la plantilla (y Ctrl/⌘+Shift+Z la devuelve).
+      titleUndo.current?.();
+      titleUndo.current = armTitleUndo(pageId, (redo) => (redo ? pageEditor.redo?.() : pageEditor.undo?.()));
+      focusTitle();
     },
     [doc, tree, pageId, tr.lang],
   );
@@ -108,26 +145,43 @@ export function TemplateHost({ pageId, doc, editor, editable }: Props) {
           </div>
         </div>
       )}
-      {dialog && <TemplatesDialog editable={editable && !!editor} empty={empty} onUse={apply} onClose={() => setDialog(false)} />}
+      {dialog && (
+        <TemplatesDialog
+          blocked={blockedReason({ complete, editor: !!editor, editable, empty }, tr)}
+          onUse={apply}
+          onClose={() => setDialog(false)}
+        />
+      )}
     </>
   );
 }
 
+/**
+ * Por qué los *Use* de la ventana están apagados (null: se pueden usar). Mientras la página se baja, o el editor de
+ * quien puede editar se monta, es eso y no "no podés editar".
+ */
+export function blockedReason(
+  state: { complete: boolean; editor: boolean; editable: boolean; empty: boolean },
+  tr: (key: 'templates.loading' | 'templates.readOnly' | 'pageMenu.applyTemplateEmpty') => string,
+): string | null {
+  if (!state.complete || (state.editable && !state.editor)) return tr('templates.loading');
+  if (!state.editable) return tr('templates.readOnly');
+  if (!state.empty) return tr('pageMenu.applyTemplateEmpty');
+  return null;
+}
+
 /** La ventana *Templates* (sección 4.1): por ahora, las de fábrica (las propias llegan con la entrega 3). */
 function TemplatesDialog({
-  editable,
-  empty,
+  blocked,
   onUse,
   onClose,
 }: {
-  editable: boolean;
-  empty: boolean;
+  blocked: string | null;
   onUse: (kind: BuiltinKind) => void;
   onClose: () => void;
 }) {
   const tr = useT();
   const texts = builtinTexts(tr.lang);
-  const blocked = !editable ? tr('templates.readOnly') : !empty ? tr('pageMenu.applyTemplateEmpty') : null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();

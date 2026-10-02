@@ -20,6 +20,10 @@ export const templates = {
     en: "You can't edit this page.",
     es: "No podés editar esta página.",
   },
+  'templates.loading': {
+    en: "The page is still loading.",
+    es: "La página todavía se está cargando.",
+  },
   'templates.copyNote': {
     en: "The page gets a copy: changing a template later doesn't change pages already made with it. Internal — remove before sharing holds bids and vendors: delete that section before sharing the page with a client.",
     es: "La página recibe una copia: cambiar una plantilla después no cambia las páginas ya hechas con ella. Interno — borrar antes de compartir tiene cotizaciones y proveedores: borrá esa sección antes de compartir la página con un cliente.",
