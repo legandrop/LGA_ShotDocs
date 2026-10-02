@@ -1,15 +1,51 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.128 :
 
-El alto de las miniaturas de una tabla era fijo (96 px) y en una tabla de referencias se veían chicas o, en una lista
-larga de planos, ocupaban de más (D27, cambiada por Lega a B). Ahora cada tabla tiene su alto: *Thumbnail size* con
-*Small*, *Medium* y *Large* (64, 96 y 160 px), en la barra de una foto de la celda y en la de la tabla elegida con sus
-puntos; las fotos agrandadas a mano conservan su tamaño. Se guarda como propiedad de la tabla (`thumbHeight`, no un
-tipo nuevo; una decoración la lleva a la pantalla porque la vista de la tabla de BlockNote no redibuja sus atributos).
-La versión publicada la ignora y, si edita la tabla, vuelve a 96 sin perder fotos ni texto (probado). La impresión y el
-PDF de exportar salen con el mismo alto.
-[ Fotos en celdas, alto de las miniaturas - Thumbnail size por tabla: Small, Medium y Large ]
+Carpetas con guiones bajos (D3 → B) y dos diseños. Las carpetas que se sueltan en una página llegaban al Drive del dueño
+con espacios (`Día 2 - Puerto`), por la regla de v0.089; Lega decidió que ninguna carpeta del Drive lleve espacios.
+`driveFolderName` del portero vuelve a pasar cada tramo de espacios a `_`, también en subcarpetas, y conserva lo que ya
+protegía (controles, ZWJ entre emojis, corte por grafema); lo ya subido no se renombra y se encuentra por su marca.
+Diseños sin código, auditados y corregidos: **⌘Z en el orden en que editaste** (P.26, `Doc_Deshacer.md`: una línea de
+tiempo por proyecto arriba de las pilas de Yjs, con el reemplazo del proyecto adentro; antes, investigar B.21) y el
+**dictado al reporte** (P.27, `Doc_Dictado.md`: micrófono propio que transcribe con el proveedor de la persona y una
+lista de cambios con fila y columna que valida la app, con vista previa y deshacer).
+[ Carpetas con guiones bajos (D3 → B) y los diseños de deshacer y dictado ]
+
+v0.127 :
+
+Compactar (B.9), entrega 1: leer snapshots. Un dispositivo nuevo baja todas las filas de cada página, y una página muy
+editada llega a miles. Nueva migración `20261019120000_compactar_leer.sql` (`schema_version` 17, snapshots apagados):
+`page_snapshots` y la reserva en `page_compaction`, sin permisos directos; `pull_page_content`, que con un snapshot
+vigente lo manda primero y si no llama a `pull_page_updates`; y las funciones de quien compacta, para la entrega 2.
+Solo lo recibe quien ve lo borrado. En la app, `pullContent` (apagados, el mismo pedido de siempre), la época de
+contenido en `DocState`, un snapshot ilegible que no mueve el cursor y el reinicio de la página si su cadena se
+invalida. Sin snapshots, los pedidos son los de antes. Pruebas SQL en rollback con 60 mutantes y 32 del dispositivo.
+[ Compactar, entrega 1 - leer snapshots: la migración apagada, pull_page_content, la época de contenido y sus pruebas ]
+
+v0.126 :
+
+Asistente, entrega A2 (P.24): el asistente solo trabajaba sobre lo elegido y la política del workspace no tenía cómo
+cambiarse. El panel suma *Summarize page* (*Insert at top* / *Insert below*), *Translate page* (*Replace page content*,
+que traduce cada bloque en su lugar con el reemplazo de A1, o *Create translated subpage*, por `tree.create` y
+`writeNewPage`) y *Format as…* (viñetas, casillas, tabla, títulos; solo bloques que ya existen, un deshacer, la guarda
+más el tipo de cada bloque, sin partir bloques con hijos; no aplica si la respuesta deja afuera palabras de lo
+elegido y subraya las que agrega). Medido: cambiar el tipo rehace el texto en Yjs, así que lo
+escrito a la vez sin red queda en el historial; el diseño quedó corregido. Migración
+`20261017120000_asistente_politica_ventana.sql` (sin aplicar): `set_assistant_policy` para dueño y admins, con la
+sección *This workspace* en *Assistant…*.
+[ Asistente A2 - resumir y traducir la página, Format as… y la política del workspace ]
+
+v0.125 :
+
+Menciones en comentarios (P.21), entrega 2. Para mencionar a alguien que no veía la página había que ir a *Share*,
+compartirla y volver, y sin abrir la campana no se veía que había menciones. Nueva migración
+`20261016120000_menciones_e2.sql` (`schema_version` 16): `mention_candidates` suma a quienes no ven la página solo
+para el dueño y los admins que pueden compartirla, y `share_for_mention` la comparte con Comentar, solo esa página y
+sin tocar a quien ya la ve; pruebas en rollback y 19 mutantes. En la app, esas personas aparecen en gris bajo *Can't
+see this page* y elegir una pregunta *Share and mention*, por el mismo paso previo que *Share*. Además, un punto en el
+árbol (hueco en la madre plegada) y el número en el título de la pestaña y en el ícono de la app instalada.
+[ Menciones, entrega 2 - compartir desde la mención, el punto del árbol y el número en la pestaña y el ícono ]
 
 v0.124 :
 

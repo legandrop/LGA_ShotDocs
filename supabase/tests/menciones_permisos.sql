@@ -59,9 +59,9 @@ create function pg_temp.sorted(a uuid[]) returns uuid[] language sql as $$
   select coalesce(array_agg(x order by x), '{}') from unnest(a) x;
 $$;
 
--- La lista del `@` de quien llama, ordenada por id.
+-- La lista del `@` de quien llama (las filas con acceso), ordenada por id. Las sin acceso (entrega 2) se miran aparte.
 create function pg_temp.candidates(p uuid) returns uuid[] language sql as $$
-  select coalesce(array_agg(c.user_id order by c.user_id), '{}') from public.mention_candidates(p) c;
+  select coalesce(array_agg(c.user_id order by c.user_id), '{}') from public.mention_candidates(p) c where c.has_access;
 $$;
 
 create function pg_temp.unread() returns int language sql as $$
@@ -292,8 +292,10 @@ begin
     '00000000-0000-4000-8000-000000000e07', '00000000-0000-4000-8000-000000000e08',
     '00000000-0000-4000-8000-000000000e09', '00000000-0000-4000-8000-000000000e10']::uuid[]),
     format('caso 5: la lista de la dueña: %s', got);
-  assert not exists (select 1 from public.mention_candidates('00000000-0000-4000-8000-000000000eb2') c where not c.has_access),
-    'caso 5: la dueña recibe filas sin acceso en la entrega 1';
+  -- Desde la entrega 2 (ME2), la dueña, que puede compartir c, recibe sin acceso a quien no la ve: solo m0.
+  assert (select coalesce(array_agg(c.user_id), '{}') from public.mention_candidates('00000000-0000-4000-8000-000000000eb2') c
+          where not c.has_access) = array['00000000-0000-4000-8000-000000000e06']::uuid[],
+    'caso 5: las sin acceso de la dueña no son {m0}';
 end;
 $$;
 
@@ -301,6 +303,9 @@ select pg_temp.as_user('00000000-0000-4000-8000-000000000e02');
 do $$
 begin
   assert cardinality(pg_temp.candidates('00000000-0000-4000-8000-000000000eb2')) = 8, 'caso 5: el admin no ve a los 8';
+  -- El admin edita c (3) pero no puede compartirla: ninguna fila sin acceso.
+  assert not exists (select 1 from public.mention_candidates('00000000-0000-4000-8000-000000000eb2') c where not c.has_access),
+    'caso 5: el admin que no puede compartir recibe filas sin acceso';
   assert '00000000-0000-4000-8000-000000000e09' = any (pg_temp.candidates('00000000-0000-4000-8000-000000000eb2')),
     'caso 5: el admin no ve a g2';
 end;
@@ -315,6 +320,8 @@ begin
     'caso 5: mo ve a g2, que nunca comentó';
   assert not ('00000000-0000-4000-8000-000000000e06' = any (pg_temp.candidates('00000000-0000-4000-8000-000000000eb2'))),
     'caso 5: mo ve a m0, que no ve la página';
+  assert not exists (select 1 from public.mention_candidates('00000000-0000-4000-8000-000000000eb5') c),
+    'caso 5: mo recibe alguna fila (con o sin acceso) en su página x';
   assert cardinality(pg_temp.candidates('00000000-0000-4000-8000-000000000eb5')) = 0,
     format('caso 5: la lista de mo en su página x no está vacía: %s', pg_temp.candidates('00000000-0000-4000-8000-000000000eb5'));
 end;

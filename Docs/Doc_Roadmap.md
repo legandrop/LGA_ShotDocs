@@ -159,7 +159,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Lega: vista en vivo de la carpeta de Drive, subida directa a Google, sin tope y en el plan gratis.
   **Entrega 1 hecha (v0.081):** soltar una carpeta, la ventana de qué se sube, su cola propia (los bytes por el
   portero), la tarjeta, el visor con el carrete y bajar uno, retomar volviendo a soltarla, y el portero con la
-  regla de no salir del árbol. Las carpetas soltadas conservan su nombre en el Drive (D3, 2026-10-01). Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
+  regla de no salir del árbol. Las carpetas soltadas van al Drive sin espacios, con guiones bajos (D3 → B, 2026-10-02; antes, del 2026-10-01 a v0.127, conservaban su nombre). Falta: que Lega decida `drive.readonly` (ver lo agregado a mano en Drive), probar
   la subida directa a Google con el Drive real, "Agregar a esta carpeta", la cuadrícula, la lista sin red, "Seguir"
   en Chrome y Edge y el botón "Carpeta…" del menú `/`. **Entrega 2 hecha (*Bajar todo*, rama `lega/carpetas-zip`):**
   zip sin comprimir con Zip64 escrito a medida que llega en Chrome y Edge, o el árbol en una carpeta; en memoria con
@@ -405,7 +405,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
   que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Entrega 1 programada (v0.120;
   migración `20261015120000_menciones.sql` sin aplicar):** el `@` con la lista, el pintado, la cola, la campana y el
-  punto en el botón de comentarios; auditada y corregida. Faltan las entregas 2 y 3, y un detalle cosmético (O6 de la
+  punto en el botón de comentarios; auditada y corregida. **Entrega 2 programada (v0.125; migración
+  `20261016120000_menciones_e2.sql` sin aplicar, `schema_version` 16):** compartir desde la mención (dueño y admins que
+  pueden compartir la página, con Comentar y solo esa página), el punto en el árbol y el número en el título de la
+  pestaña y en el ícono de la app. Falta la entrega 3 (correo), y un detalle cosmético (O6 de la
   auditoría): un comentario con mención cuenta como 2 cambios sin subir (alta y menciones). **Diseño en `Doc_Menciones.md`** (auditado y
   corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
   ve la página; un miembro ve al equipo y a los clientes que ya comentaron (ME10); el dueño y los admins la comparten
@@ -414,12 +417,23 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
+  De la auditoría de la entrega 2 (ninguna pierde datos ni da acceso de más): falta una prueba que caiga si se saca el paso
+  previo de compartir (`useShareGate`), antes de prender D14 (O1); después de Esc o *Cancel* en la pregunta de compartir,
+  la lista del `@` no vuelve hasta tocar el campo (O2); se puede compartir desde la mención en un proyecto archivado, como
+  con *Share* (O3); no mira la versión mínima de la app de quien recibe (O4); si se descarta el comentario después de
+  compartir, la persona queda con acceso y sin mención (O5).
 - **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
   Lega). **A1 implementada (v0.118):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y
   la guarda de "cambió mientras pensaba", permisos, sin red, atajo, ayuda, CSP y la migración de `assistant_policy`
-  (sin aplicar; la aplica quien publica). Falta: A2, A3 y el MCP (M0 a M3); lo que Lega prueba con sus claves está en
-  "Cómo quedó A1". Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
+  (sin aplicar; la aplica quien publica). **A2 implementada (v0.126):** *Summarize page* (*Insert at top* / *Insert
+  below*), *Translate page* (*Replace page content* en su lugar o *Create translated subpage*), *Format as…* (viñetas,
+  casillas, tabla, títulos) y la política del workspace en *Assistant…* para dueño y admins, con su migración
+  `20261017120000_asistente_politica_ventana.sql` (sin aplicar). Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
+  sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
+  panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
+  cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;
+  *Format as… Headings* sobre un bloque Script le saca el Script sin decirlo en la vista previa. Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
   cuando lo elegido queda debajo; una traducción a japonés o chino de cerca de 20 000 caracteres todavía puede
   llegar cortada (se avisa y no se aplica; afinar el tope por idioma o por modelo); un modelo que razona por un servicio
   compatible (OpenRouter) no lleva el margen de tokens, y en OpenAI y Gemini se podría además bajar cuánto piensan
@@ -434,6 +448,28 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   (página, formato, política), A3 (pie de foto), M0 (prueba técnica del MCP: OAuth de Supabase con el registro cerrado,
   el rol del token, 10 ms de CPU), M1 (MCP de lectura; requiere el interruptor de D14), M2 (MCP que escribe), M3
   (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos.
+- **P.26 ⌘Z en el orden en que editaste** (Lega, 2026-10-02, al responder cómo se deshace un reemplazo en todo el
+  proyecto): ⌘Z deshace lo último que hiciste aunque haya sido en otra página, y un *Replace all in project* se deshace
+  entero en ese orden. **Diseño en `Doc_Deshacer.md`** (sin código; auditado y corregido; decisiones propuestas DH1 a
+  DH10): una línea de tiempo por proyecto y por pestaña
+  arriba de las pilas de Yjs de cada página, que sobreviven al cambiar de página (el documento retenido y la pila pasada
+  al editor nuevo, sin parchear y-prosemirror); ⌘Z en otra página te lleva y lo deshace a la vista; el reemplazo entra
+  en la pila de Yjs de las páginas editadas en la sesión (arregla un resto que deja hoy deshacer el reemplazo y después
+  lo escrito antes, también desde el *Undo* del panel) y por las anclas en las demás; ⌘⇧Z rehace todo, también el
+  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (condición: B.21, el límite de Yjs), 1 (la
+  línea de tiempo con las páginas, con la memoria medida con el editor real), 2 (el reemplazo adentro), 3 (anotar como un
+  paso). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
+- **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
+  sobre todo en el teléfono, y que la IA pase «este plano se filmó con un 50 mm, anotalo donde corresponda» a la celda
+  *Lens* de la fila de ese plano en el *On-Set Report*. **Diseño en `Doc_Dictado.md`** (sin código; decisiones propuestas
+  DI1 a DI9): el dictado común queda en el teclado del sistema; un solo micrófono propio, *Dictate to report*, que graba
+  en el dispositivo y transcribe con el proveedor de la persona (OpenAI o Gemini; el reconocimiento del navegador no
+  existe en la app instalada del iPhone); la página va como un mapa con direcciones y vuelve una lista de cambios
+  validada, con vista previa, *Apply* con la guarda y un deshacer; «este plano» por lo dicho, el cursor o el plano
+  activo, y si no, pregunta; sin red, una cola de notas que nunca se borra sola; sin tipos de bloque nuevos. Entregas:
+  V1 (texto dictado con el teclado → ubicar; requiere A2 de P.24 en `main`), V2 (la cola sin red), V3 (el micrófono
+  propio, guantes y ruido), V4 (plano activo, correcciones, la página del plano, el botón de acción del iPhone).
+  Queda para medir: transcripción adentro del teléfono (Whisper en WebAssembly), sin red y privada.
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.
@@ -506,10 +542,19 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    castellano y las plantillas, que todavía no existen (fase 3), con su nombre en cada idioma.
 9. **Compactar en el servidor** los updates de contenido (`page_snapshots`). Toca la regla de no perder
    datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes. **Diseño en
-   `Doc_Compactar.md`** (auditado, sin implementar): el snapshot se arma aplicando las filas en orden en un `Y.Doc`
+   `Doc_Compactar.md`** (auditado): el snapshot se arma aplicando las filas en orden en un `Y.Doc`
    sin GC (conserva lo borrado, D16), lo arma y lo comprueba el dispositivo de quien edita (D5), la base lo sirve
-   solo confirmado y válido, y `page_updates` no pierde nunca una fila (D4). Hoy no es urgente: ninguna página lo
-   necesita.
+   solo confirmado y válido, y `page_updates` no pierde nunca una fila (D4). **Entrega 1 hecha (v0.127): leer
+   snapshots** (la migración `20261019120000_compactar_leer.sql`, sin aplicar y con los snapshots apagados;
+   `pull_page_content`, la época de contenido y el reinicio de una página cuyo snapshot se invalidó). **Falta:** la
+   entrega 2 (armarlos en el dispositivo, `compact.ts`, con la prueba 1 y la del editor real) y la 3 (el script de
+   restaurar, probar de punta a punta, medir y prender `snapshot_min_version`). Hoy no es urgente: ninguna página lo
+   necesita. **De la auditoría de la entrega 1 (antes de prender):** (O1, medio-alto) al invalidar, `resetContent` de
+   `docs.ts` sube la página entera y propaga a todos el borrado de un snapshot malo: una página sin nada pendiente tiene
+   que descartar lo local y rearmarse con las filas del servidor (como `replace` de la base limpia); (O2) con snapshots
+   prendidos, que el reinicio lo decida solo la época de la respuesta, no la del árbol (hoy un árbol atrasado provoca una
+   subida entera de más); (O3) `invalidate_page_snapshot` pide `can_edit_page`: pedir `sees_deleted` como las demás; (O5)
+   al prender, subir `min_app_version` a la versión de lectura auditada en ese momento.
 
 10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la
@@ -653,6 +698,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    regeneró desde v0.107 y `editorSchemaFixture.test.ts` avisa si queda distinto de `editorSchema.ts`. Queda: la prueba
    no ve un atributo nuevo del nodo `photo` (el fixture usa el de hoy), y nada avisa si nadie lo regenera después de
    publicar un cambio del esquema: al publicar una versión que cambia `editorSchema.ts`, regenerarlo.
+
+21. **Restos del deshacer de Yjs (medido al diseñar P.26, `Doc_Deshacer.md`, sección 6).** Si algo que un deshacer
+   volvió a poner se parte escribiendo en el medio, deshacer más atrás deja restos y a veces se lleva un pedazo de texto
+   (un deshacer borró "ám" de "cámara"): en una página sola, con el ⌘Z de hoy, 14 de 3.000 corridas al azar terminan con
+   algo de menos (queda en el historial), igual con y sin la línea de tiempo de P.26. Es de `UndoManager` de Yjs (sigue
+   la copia vuelta a poner solo hasta el primer corte). **Condición de la entrega 1 de P.26** (con P.26 se deshace más
+   lejos): investigar si se corrige con un parche (como los de y-prosemirror) o se reporta arriba, y decidir antes de
+   publicar.
 
 ### C. Esperan a Lega
 

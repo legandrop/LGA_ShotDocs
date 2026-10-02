@@ -158,6 +158,11 @@ export class PageDocs {
    */
   private readonly unrecordedClients = new Map<string, Set<number>>();
   private readonly recordedClients = new Set<string>();
+  /**
+   * Páginas que bajan con `pullUpdates` (filas sueltas) aunque el servidor tenga `pull_page_content`: llegó un snapshot
+   * que esta versión no puede leer (Docs/Doc_Compactar.md, sección 5). Hasta que se vuelva a abrir la app.
+   */
+  private readonly rowsOnly = new Set<string>();
 
   constructor(
     private readonly db: LocalDb,
@@ -354,6 +359,9 @@ export class PageDocs {
           s.pending = undefined;
           s.rejected = undefined;
           s.lastError = undefined;
+          // Los snapshots de antes de restaurar ya no cuentan (Docs/Doc_Compactar.md, sección 9).
+          s.snapshotId = undefined;
+          s.contentEpoch = undefined;
         }),
       );
     }
@@ -660,31 +668,77 @@ export class PageDocs {
     );
   }
 
-  /** Baja lo nuevo de una página y lo guarda. Si está abierta, lo aplica también en el editor. */
-  pullPage(pageId: string, remote: Remote): Promise<number> {
+  /**
+   * Baja lo nuevo de una página y lo guarda. Si está abierta, lo aplica también en el editor. `contentEpoch`: la época de
+   * contenido que trae el árbol (compactar); si este dispositivo aplicó un snapshot de la página y la época cambió, la
+   * página se vuelve a bajar desde el principio (`epochChanged`).
+   */
+  pullPage(pageId: string, remote: Remote, { contentEpoch }: { contentEpoch?: number } = {}): Promise<number> {
     return this.withLock(pageId, async () => {
       // Lo escrito tiene que estar guardado antes de bajar: el aviso de B.16 mira lo guardado.
       await this.flush(pageId);
+      if (contentEpoch !== undefined && epochChanged(await this.db.get('docState', pageId), contentEpoch)) {
+        await this.resetContent(pageId, contentEpoch);
+      }
       let total = 0;
       // Si un lote vence el tope de tiempo (una red lenta con updates grandes), se pide uno más chico, hasta
       // de a uno (que tiene el tope más largo). Lo ya bajado queda guardado.
       let batch = PULL_BATCH;
+      // Vueltas a empezar por una época nueva que llegó con lo bajado (una sola alcanza; el tope es por las dudas).
+      let restarts = 0;
       for (;;) {
         const cursor = (await this.db.get('docState', pageId))?.cursor ?? 0;
+        // Con `pull_page_content` (compactar) salvo que un snapshot de esta página no se haya podido leer.
+        const content = remote.pullContent && !this.rowsOnly.has(pageId) ? remote.pullContent.bind(remote) : null;
         let updates: RemoteUpdate[];
         try {
-          updates = await remote.pullUpdates(pageId, cursor, batch);
+          updates = content ? await content(pageId, cursor, batch) : await remote.pullUpdates(pageId, cursor, batch);
         } catch (err) {
           if (!isTimeout(err) || batch === 1) throw err;
           batch = Math.max(1, Math.floor(batch / 10));
           continue;
         }
         if (updates.length === 0) break;
-        await this.applyRemote(pageId, updates);
+        const result = await this.applyRemote(pageId, updates);
+        if (result === 'snapshot_unreadable') {
+          // No se guardó nada ni se movió el cursor: la página se vuelve a pedir en filas sueltas, como siempre.
+          console.warn(`Página ${pageId}: no se pudo leer un snapshot del servidor; se bajan las filas.`);
+          this.rowsOnly.add(pageId);
+          continue;
+        }
+        if (result === 'reset') {
+          if (++restarts > 3) break;
+          continue;
+        }
         total += updates.length;
         if (updates.length < batch) break;
       }
       return total;
+    });
+  }
+
+  /**
+   * Un snapshot que este dispositivo aplicó dejó de valer (se invalidó su cadena: cambió la época de contenido de la
+   * página, Docs/Doc_Compactar.md, sección 12): la página se vuelve a bajar desde el principio (Yjs no duplica lo que ya
+   * tiene) y se olvidan las cuentas de lo que tiene el servidor (`syncedSV`, `syncedDS`), que el snapshot pudo hacer
+   * avanzar de más. Si la persona puede escribir la página, la página vuelve a subir entera una vez (lo propio que esas
+   * cuentas escondían). Lo guardado en el dispositivo no se toca.
+   */
+  private async resetContent(pageId: string, epoch: number): Promise<void> {
+    const writable = this.options.canWrite?.(pageId) !== false;
+    await updateDocState(this.db, pageId, (s) => {
+      s.cursor = 0;
+      s.syncedSV = undefined;
+      s.syncedDS = undefined;
+      s.syncedDSGeneration = undefined;
+      s.snapshotId = undefined;
+      s.contentEpoch = epoch;
+      // Un envío armado contra esas cuentas no se confirma: se arma de nuevo.
+      s.pending = undefined;
+      if (writable) {
+        s.ackedVersion = -1;
+        s.guardVersion = undefined;
+      }
     });
   }
 
@@ -696,19 +750,32 @@ export class PageDocs {
    * reenvía lo bajado, y lo propio sin confirmar sigue quedando afuera del vector, o sea, adentro de lo que
    * falta subir.
    */
-  private async applyRemote(pageId: string, updates: RemoteUpdate[]): Promise<void> {
+  private async applyRemote(pageId: string, updates: RemoteUpdate[]): Promise<'ok' | 'reset' | 'snapshot_unreadable'> {
     const decoded: ReturnType<typeof Y.decodeUpdate>[] = [];
+    let snapshotUnreadable = false;
     const valid = updates.filter((u) => {
       try {
         decoded.push(Y.decodeUpdate(u.data));
         return true;
       } catch {
+        // Un snapshot ilegible no se saltea como una fila: juntaría las filas `1..seq` enteras (Docs/Doc_Compactar.md,
+        // sección 5). No se guarda nada de este lote.
+        if (u.snapshotId) snapshotUnreadable = true;
         // Queda intacto en el servidor; este dispositivo no lo puede leer (por ejemplo, porque lo escribió
         // una versión más nueva de la app).
-        this.onWarning?.(t('docs.unreadable', { page: pageId, seq: u.seq }));
+        else this.onWarning?.(t('docs.unreadable', { page: pageId, seq: u.seq }));
         return false;
       }
     });
+    if (snapshotUnreadable) return 'snapshot_unreadable';
+    // La época de contenido vino en la misma respuesta (compactar): si este dispositivo aplicó un snapshot de la página
+    // y la época es otra, ese snapshot dejó de valer. No se guarda este lote: la página se vuelve a bajar entera.
+    const epoch = updates.find((u) => u.contentEpoch !== undefined)?.contentEpoch;
+    if (epoch !== undefined && epochChanged(await this.db.get('docState', pageId), epoch)) {
+      await this.resetContent(pageId, epoch);
+      return 'reset';
+    }
+    const snapshotId = [...valid].reverse().find((u) => u.snapshotId)?.snapshotId;
     const merged = valid.length > 0 ? Y.mergeUpdates(valid.map((u) => u.data)) : null;
     const maxSeq = Math.max(...updates.map((u) => u.seq));
 
@@ -738,7 +805,7 @@ export class PageDocs {
     const state = stored ?? emptyDocState(pageId);
     if (maxSeq <= state.cursor) {
       await tx.done;
-      return;
+      return 'ok';
     }
     if (merged) {
       if (cap) {
@@ -777,6 +844,9 @@ export class PageDocs {
     }
     state.cursor = maxSeq;
     if (valid.length < updates.length) state.unreadable = true;
+    // El último snapshot aplicado y la época de la misma respuesta (Docs/Doc_Compactar.md, sección 5).
+    if (snapshotId) state.snapshotId = snapshotId;
+    if (epoch !== undefined) state.contentEpoch = epoch;
     await tx.objectStore('docState').put(state);
     if (removed) {
       // En la misma transacción que lo bajado: si queda guardado, queda el aviso.
@@ -812,6 +882,7 @@ export class PageDocs {
         }
       }
     }
+    return 'ok';
   }
 
   /**
@@ -1342,6 +1413,15 @@ export function advanceSynced(
  * no hay, o se anotaron con otra generación del workspace (una versión anterior restauró una copia: borra
  * `syncedSV` pero no conoce este campo). Sin ellos se suben todos los borrados, como antes.
  */
+/**
+ * Si este dispositivo aplicó un snapshot de la página (`snapshotId`) y la época de contenido que manda el servidor es
+ * otra (no "mayor": después de restaurar una copia puede haber cambiado de cualquier forma). Sin snapshot aplicado, la
+ * época no importa: las filas no se invalidan nunca.
+ */
+export function epochChanged(state: DocState | undefined, epoch: number | undefined): boolean {
+  return epoch !== undefined && state?.snapshotId !== undefined && state.contentEpoch !== epoch;
+}
+
 export function knownDeletes(state: DocState, generation: number): Uint8Array | undefined {
   return state.syncedDS && state.syncedDSGeneration === generation ? state.syncedDS : undefined;
 }

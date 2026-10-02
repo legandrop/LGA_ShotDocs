@@ -1,7 +1,8 @@
 # Menciones en comentarios: «@persona»
 
-**Estado: entrega 1 programada, migración sin aplicar** (`20261015120000_menciones.sql`, `schema_version` 15; ver
-«Cómo quedó la entrega 1», abajo). Las entregas 2 y 3 siguen en diseño. Roadmap P.21; pedido de Lega del 2026-10-02.
+**Estado: entregas 1 y 2 programadas.** La migración de la entrega 1 (`20261015120000_menciones.sql`, `schema_version`
+15) ya está en la base de Wanka; la de la entrega 2 (`20261016120000_menciones_e2.sql`, `schema_version` 16), sin
+aplicar (ver «Cómo quedó la entrega 1» y «Cómo quedó la entrega 2», abajo). La entrega 3 (correo) sigue en diseño. Roadmap P.21; pedido de Lega del 2026-10-02.
 El diseño de abajo es el de partida: Se diseñó contra `main`
 v0.108, con la base en `schema_version` 13 y `min_app_version` 0.104. Toca permisos y la privacidad de quién ve a
 quién: cada entrega va con sus pruebas de permisos (casos negativos y mutantes) y su auditoría independiente. Las
@@ -62,6 +63,47 @@ auditoría», al final. **Va después del link público** (su migración sube a 
   abrirlos (entrega 3). ME10 sigue con lo seguro (un miembro ve a los clientes que ya comentaron).
 - **No hace falta subir `min_app_version`:** el texto no cambia de forma y una versión vieja que toma la cola pierde
   solo la operación `mentions`, que la nueva recupera de `meta`.
+
+## Cómo quedó la entrega 2
+
+- **La migración** `supabase/migrations/20261016120000_menciones_e2.sql` (sin aplicar; sube `schema_version` a 16):
+  - `mention_candidates` suma las filas `has_access = false`: los miembros activos (también invitados) que no ven la
+    página, nunca uno mismo ni quien sacaron del workspace, después de los que la ven. Solo si quien pide es dueño o
+    admin, **y** puede compartir esa página (`can_share`), **y** la página no está en la papelera.
+  - `share_for_mention(página, persona)`, con la misma condición: si no, `not_allowed` (también cuando la persona ya ve
+    la página: quien no puede compartir no averigua por la respuesta quién la ve); en la papelera, `page_in_trash`;
+    fuera del workspace, `member_not_found`. Si la persona ya ve la página (un reintento, o se la compartieron por otro
+    lado) devuelve `{"shared": false}` sin tocar nada: nunca sube ni baja el permiso de quien ya la ve. Si no, escribe
+    con `public.share(persona, null, página, 'comment')`: solo esa página (alcanza a las de abajo, como todo permiso),
+    nunca las de arriba ni el proyecto, siempre Comentar (un permiso quitado vuelve con Comentar, no con lo que tenía)
+    y con el reinicio de la privacidad de lo borrado, como *Share*.
+- **Las pruebas** `supabase/tests/menciones_e2_permisos.sql` (7 casos con 12 cuentas falsas creadas dentro de la
+  transacción) y el caso 5 de `menciones_permisos.sql` ajustado (la dueña ahora recibe a m0 sin acceso; el admin que no
+  puede compartir y el miembro dueño de un proyecto, ninguna fila). Corridas contra la base real dentro de
+  `begin … rollback`, nunca con `db:test`: las dos dan `ok` y las otras 21 pruebas del repo también. 19 mutantes de la
+  migración: 18 hacen caer una prueba; el que vive (sacar la comprobación de miembro de `share_for_mention`) es
+  equivalente, porque `public.share` hace la misma.
+- **La app** (`src/sync/mentions.ts`): `MentionCandidate.hasAccess`; en el dispositivo (`meta`
+  `mentionCandidates:<página>`) se guardan solo los que ven la página, y los de afuera quedan en memoria
+  (`outsidersFor`): compartir pide red, y una versión de la entrega 1 que leyera la lista guardada los ofrecería como si
+  vieran la página. `shareForMention` pasa a la persona a la lista con acceso y la vuelve a pedir.
+- **La interfaz**: en la lista del `@`, debajo de los que ven la página (hasta 8), el título *Can't see this page* y
+  hasta 4 más en gris, solo con red. Elegir a uno (↓ y Enter, o un clic) cierra la lista y abre la pregunta debajo del
+  campo (`src/ui/MentionShare.tsx`): *pedro can't see this page. Share it with them (Comment) and mention them?*, con
+  *Share and mention* enfocado y *Cancel*; Esc la cierra sin cancelar el comentario (atajo `mentionShareCancel`). Pasa
+  por `useShareGate`, como *Share*: sube antes lo pendiente de la página (o deja el aviso con *Retry* y *Share
+  anyway*) y después prepara las bases, con el progreso debajo del campo. Ya compartida, la mención se escribe donde
+  estaba el `@` (al final, si mientras tanto eso cambió). Un error (por ejemplo `page_in_trash`) queda en la pregunta.
+- **El punto del árbol** (`src/ui/mentionDots.tsx`, una línea en `Sidebar.tsx`): lleno en la página con una mención
+  sin leer; hueco en una madre plegada que la tiene adentro. Sale de lo que ya bajó la campana: no pide nada más.
+- **El número afuera de la app** (`src/ui/titleBadge.ts`): `(3) Plan · Shot Docs` en el título de la pestaña
+  (`PageView` pone su título con `setDocumentTitle`; si otro tomó el título, como imprimir con el nombre del PDF, no
+  lo pisa) y `navigator.setAppBadge` en el ícono de la app instalada: de 1 a 9, la marca sin número desde 10 (la base
+  cuenta hasta 10), nada con 0 ni al salir del workspace.
+- **Ayuda**: entrada nueva *Mention someone who can't see the page* (solo para dueño y admins); la de las menciones
+  suma el punto del árbol y el número.
+- **No hace falta subir `min_app_version`**: la entrega 1 publicada ya descarta las filas `has_access = false` y no
+  llama a `share_for_mention`; nada de lo que ella usa cambia.
 
 ## Reglas que no se rompen
 

@@ -108,6 +108,8 @@ const FOLDER_ZIP = '0.105';
 const CAMERA = '0.110';
 /** El asistente, entrega A1 (Docs/Doc_Asistente.md): la versión se pone al publicar, igual que en el changelog. */
 const ASSISTANT = '0.118';
+/** El asistente, entrega A2 (la página entera, *Format as…*, la política del workspace): la versión la pone quien publica. */
+const ASSISTANT_A2 = '0.126';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */
@@ -120,6 +122,8 @@ const PUBLIC_LINK = '0.111';
 const EXPORT_PDF = '0.122';
 /** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const MENTIONS = '0.120';
+/** Menciones, entrega 2: compartir desde la mención, el punto del árbol y el número afuera (la versión la pone quien publica). */
+const MENTIONS_SHARE = '0.125';
 /** Ver las anotaciones de las fotos (P.20, Doc_Anotar_Fotos.md, entrega 1): la versión se pone al publicar. */
 const PHOTO_MARKUP = '0.116';
 /** Anotar las fotos en la compu (P.20, entrega 2). El número lo pone quien publica. */
@@ -254,6 +258,33 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.assistantKey.text',
     words: ['clave', 'api key', 'key', 'proveedor', 'provider', 'anthropic', 'openai', 'gemini', 'openrouter', 'ollama', 'lm studio', 'tope', 'gasto', 'spending limit', 'olvidar', 'forget', 'local'],
     since: ASSISTANT,
+  },
+  {
+    id: 'assistantPage',
+    section: 'writing',
+    title: 'help.assistantPage.title',
+    text: 'help.assistantPage.text',
+    keys: { undo: 'undo' },
+    words: ['resumen', 'resumir', 'traducir página', 'subpágina', 'reemplazar', 'summary', 'summarize', 'translate page', 'subpage', 'replace', 'asistente', 'assistant'],
+    since: ASSISTANT_A2,
+  },
+  {
+    id: 'assistantFormat',
+    section: 'writing',
+    title: 'help.assistantFormat.title',
+    text: 'help.assistantFormat.text',
+    keys: { apply: 'assistantApply', undo: 'undo' },
+    words: ['formato', 'forma', 'viñetas', 'casillas', 'tabla', 'títulos', 'format', 'bullets', 'checklist', 'table', 'headings', 'asistente', 'assistant'],
+    since: ASSISTANT_A2,
+  },
+  {
+    id: 'assistantPolicy',
+    section: 'writing',
+    title: 'help.assistantPolicy.title',
+    text: 'help.assistantPolicy.text',
+    words: ['política', 'apagar', 'modelos locales', 'policy', 'turn off', 'local models', 'asistente', 'assistant', 'dueño', 'owner', 'admin'],
+    when: 'admin',
+    since: ASSISTANT_A2,
   },
 
   // --- Fotos y videos ---
@@ -441,6 +472,16 @@ export const HELP_ENTRIES: HelpEntry[] = [
     keys: { pick: 'mentionPick', close: 'mentionClose' },
     words: ['@', 'mention', 'mencionar', 'mención', 'campana', 'bell', 'notification', 'aviso', 'unread', 'sin leer'],
     since: MENTIONS,
+  },
+  {
+    id: 'mentionsShare',
+    section: 'comments',
+    title: 'help.mentionsShare.title',
+    text: 'help.mentionsShare.text',
+    keys: { cancel: 'mentionShareCancel' },
+    words: ['@', 'mention', 'mencionar', 'share', 'compartir', 'access', 'acceso'],
+    when: 'admin',
+    since: MENTIONS_SHARE,
   },
   { id: 'questions', section: 'comments', title: 'help.questions.title', text: 'help.questions.text', keys: { question: 'question' }, since: BEFORE_HELP },
 

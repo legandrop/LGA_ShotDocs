@@ -79,6 +79,10 @@ export const team = {
     en: "The page is not there anymore, or you cannot edit it (it needs “Edit”).",
     es: "La página ya no está, o no podés editarla (hace falta “Editar”).",
   },
+  'teamError.pageInTrash': {
+    en: "The page is in the trash: restore it before sharing it.",
+    es: "La página está en la papelera: restaurala antes de compartirla.",
+  },
   'teamError.projectNotFound': {
     en: "The project is not there anymore, or you cannot rename it (it needs “Edit & create pages”).",
     es: "El proyecto ya no está, o no podés renombrarlo (hace falta “Editar y crear páginas”).",
