@@ -79,7 +79,7 @@ const OFFLINE = '0.083';
 /** La que trajo colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2). */
 const COLLAPSE_2 = '0.084';
 /** El salto de hoja (fase 4, Docs/Doc_Hojas_PDF.md): la versión se pone al publicar, igual que en el changelog. */
-const PAGE_BREAK = '0.0XX';
+const PAGE_BREAK = '0.093';
 /**
  * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2).
  */

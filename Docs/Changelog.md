@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.093 :
 
 En una página con tamaño de hoja no había forma de forzar que algo empiece en una hoja nueva: los cortes eran
 solo automáticos. Ahora hay **salto de hoja**: desde el menú "/" (*Page break*) o con Ctrl+Enter (⌘↩ en la Mac).

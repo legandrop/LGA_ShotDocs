@@ -301,7 +301,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    la misma hoja (`@page`) y los mismos cortes, sin barra lateral ni controles, con las fotos grandes si el
    original está en el dispositivo, las tarjetas de Drive como link y Script con sus colores; una página
    libre sale en A4. En el teléfono la página se ve libre y las marcas van antes de los mismos bloques. Ver
-   `Doc_Hojas_PDF.md`. **Hecho también el salto de hoja** (v0.0XX): un párrafo con `pageBreak` (nunca un tipo de
+   `Doc_Hojas_PDF.md`. **Hecho también el salto de hoja** (v0.093): un párrafo con `pageBreak` (nunca un tipo de
    bloque nuevo), desde el menú "/" o con Ctrl/⌘+Enter; lo que sigue empieza hoja en las marcas y en el PDF.
    **Falta:** probar a mano en Safari y en el iPhone.
 8. **Hecho: castellano e inglés (D-16).** Toda la interfaz en los dos idiomas: pantallas, menús, diálogos,

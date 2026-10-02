@@ -232,7 +232,7 @@ de cortes").
   `break-after: page` o `page-break-after: always`. Deshacer: un solo Ctrl+Z (partir un párrafo va en dos pasos
   que el historial junta). Buscar: el rótulo no es texto y no aparece; lo escrito en el salto, sí. No hay exportar
   ni importar `.md` todavía: cuando exista, el salto tiene que ir como una línea propia que vuelva al importar.
-- **Una versión anterior a v0.0XX** (el esquema es igual de v0.083 a v0.092) ve un párrafo vacío o con su texto, sin línea, y no lo borra (las
+- **Una versión anterior a v0.093** (el esquema es igual de v0.083 a v0.092) ve un párrafo vacío o con su texto, sin línea, y no lo borra (las
   propiedades que no conoce quedan en el Y.Doc). Si escribe en ese renglón, pierde solo el salto; el texto y el id
   quedan. Como perder la propiedad deja el contenido intacto, **no hace falta subir `min_app_version`**.
 
