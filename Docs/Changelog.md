@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.127 :
 
 Compactar (B.9), entrega 1: leer snapshots. Un dispositivo nuevo baja todas las filas de cada página, y una página muy
 editada llega a miles. Nueva migración `20261019120000_compactar_leer.sql` (`schema_version` 17, snapshots apagados):
@@ -10,6 +10,19 @@ Solo lo recibe quien ve lo borrado. En la app, `pullContent` (apagados, el mismo
 contenido en `DocState`, un snapshot ilegible que no mueve el cursor y el reinicio de la página si su cadena se
 invalida. Sin snapshots, los pedidos son los de antes. Pruebas SQL en rollback con 60 mutantes y 32 del dispositivo.
 [ Compactar, entrega 1 - leer snapshots: la migración apagada, pull_page_content, la época de contenido y sus pruebas ]
+
+v0.126 :
+
+Asistente, entrega A2 (P.24): el asistente solo trabajaba sobre lo elegido y la política del workspace no tenía cómo
+cambiarse. El panel suma *Summarize page* (*Insert at top* / *Insert below*), *Translate page* (*Replace page content*,
+que traduce cada bloque en su lugar con el reemplazo de A1, o *Create translated subpage*, por `tree.create` y
+`writeNewPage`) y *Format as…* (viñetas, casillas, tabla, títulos; solo bloques que ya existen, un deshacer, la guarda
+más el tipo de cada bloque, sin partir bloques con hijos; no aplica si la respuesta deja afuera palabras de lo
+elegido y subraya las que agrega). Medido: cambiar el tipo rehace el texto en Yjs, así que lo
+escrito a la vez sin red queda en el historial; el diseño quedó corregido. Migración
+`20261017120000_asistente_politica_ventana.sql` (sin aplicar): `set_assistant_policy` para dueño y admins, con la
+sección *This workspace* en *Assistant…*.
+[ Asistente A2 - resumir y traducir la página, Format as… y la política del workspace ]
 
 v0.125 :
 

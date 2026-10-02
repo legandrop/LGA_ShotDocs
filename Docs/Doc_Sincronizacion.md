@@ -491,7 +491,7 @@ se guarda como hueco: es una copia de algo que ya está en las filas, no texto q
 
 ## Bajar con snapshots (compactar, B.9)
 
-Entrega 1 de `Doc_Compactar.md` (v0.0XX): la app sabe bajar snapshots, nadie los arma todavía.
+Entrega 1 de `Doc_Compactar.md` (v0.127): la app sabe bajar snapshots, nadie los arma todavía.
 
 - **El pedido.** `PageDocs.pullPage` baja con `remote.pullContent`: con los snapshots prendidos y la base en la versión
   17, `pull_page_content`; si no (apagados, una base sin la función), el mismo `pull_page_updates` de siempre. Un

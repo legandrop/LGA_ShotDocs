@@ -328,3 +328,112 @@
 .assistant-settings a {
   color: var(--accent-text);
 }
+
+/* --- Entrega A2: la página entera, Format as… y la política del workspace --- */
+
+/* El título de la sección "Whole page", separado de las acciones sobre lo elegido. */
+.assistant-section {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+/* Los bloques nuevos de la vista previa, con su forma (sin links ni imágenes de verdad). */
+.assistant-diff .md-heading {
+  font-weight: 650;
+}
+
+.assistant-diff .md-h1 {
+  font-size: 16px;
+}
+
+.assistant-diff .md-h2 {
+  font-size: 15px;
+}
+
+.assistant-diff .md-quote {
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--text-2);
+}
+
+.assistant-lead {
+  display: inline-block;
+  min-width: 1.3em;
+  color: var(--muted);
+}
+
+.assistant-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.assistant-table th,
+.assistant-table td {
+  padding: 4px 6px;
+  border: 1px solid var(--border-soft);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.assistant-table th {
+  font-weight: 650;
+  background: var(--surface);
+}
+
+/* La política del workspace, en los ajustes del asistente (dueño y admins). */
+.assistant-policy {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.assistant-policy h3 {
+  margin: 0;
+}
+
+.assistant-policy-options {
+  display: grid;
+  gap: 6px;
+}
+
+.assistant-policy-option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.assistant-policy-option.on {
+  border-color: var(--accent);
+}
+
+/* Un radio, no un campo: sin el ancho ni el borde de los campos de la ventana. */
+.assistant-policy-option input[type='radio'] {
+  flex: none;
+  width: auto;
+  height: auto;
+  margin: 3px 0 0;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: none;
+  accent-color: var(--accent);
+}
+
+.assistant-policy-option > span {
+  display: grid;
+  gap: 2px;
+}
+
+.assistant-policy-option .assistant-small {
+  margin: 0;
+}

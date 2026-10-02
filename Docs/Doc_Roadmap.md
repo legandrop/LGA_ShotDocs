@@ -424,8 +424,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Lega). **A1 implementada (v0.118):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y
   la guarda de "cambió mientras pensaba", permisos, sin red, atajo, ayuda, CSP y la migración de `assistant_policy`
-  (sin aplicar; la aplica quien publica). Falta: A2, A3 y el MCP (M0 a M3); lo que Lega prueba con sus claves está en
-  "Cómo quedó A1". Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
+  (sin aplicar; la aplica quien publica). **A2 implementada (v0.126):** *Summarize page* (*Insert at top* / *Insert
+  below*), *Translate page* (*Replace page content* en su lugar o *Create translated subpage*), *Format as…* (viñetas,
+  casillas, tabla, títulos) y la política del workspace en *Assistant…* para dueño y admins, con su migración
+  `20261017120000_asistente_politica_ventana.sql` (sin aplicar). Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
+  sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
+  panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
+  cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;
+  *Format as… Headings* sobre un bloque Script le saca el Script sin decirlo en la vista previa. Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
   cuando lo elegido queda debajo; una traducción a japonés o chino de cerca de 20 000 caracteres todavía puede
   llegar cortada (se avisa y no se aplica; afinar el tope por idioma o por modelo); un modelo que razona por un servicio
   compatible (OpenRouter) no lleva el margen de tokens, y en OpenAI y Gemini se podría además bajar cuánto piensan
@@ -514,12 +520,17 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
    datos: un snapshot nunca borra nada hasta estar confirmado, con pruebas antes. **Diseño en
    `Doc_Compactar.md`** (auditado): el snapshot se arma aplicando las filas en orden en un `Y.Doc`
    sin GC (conserva lo borrado, D16), lo arma y lo comprueba el dispositivo de quien edita (D5), la base lo sirve
-   solo confirmado y válido, y `page_updates` no pierde nunca una fila (D4). **Entrega 1 hecha (v0.0XX): leer
+   solo confirmado y válido, y `page_updates` no pierde nunca una fila (D4). **Entrega 1 hecha (v0.127): leer
    snapshots** (la migración `20261019120000_compactar_leer.sql`, sin aplicar y con los snapshots apagados;
    `pull_page_content`, la época de contenido y el reinicio de una página cuyo snapshot se invalidó). **Falta:** la
    entrega 2 (armarlos en el dispositivo, `compact.ts`, con la prueba 1 y la del editor real) y la 3 (el script de
    restaurar, probar de punta a punta, medir y prender `snapshot_min_version`). Hoy no es urgente: ninguna página lo
-   necesita.
+   necesita. **De la auditoría de la entrega 1 (antes de prender):** (O1, medio-alto) al invalidar, `resetContent` de
+   `docs.ts` sube la página entera y propaga a todos el borrado de un snapshot malo: una página sin nada pendiente tiene
+   que descartar lo local y rearmarse con las filas del servidor (como `replace` de la base limpia); (O2) con snapshots
+   prendidos, que el reinicio lo decida solo la época de la respuesta, no la del árbol (hoy un árbol atrasado provoca una
+   subida entera de más); (O3) `invalidate_page_snapshot` pide `can_edit_page`: pedir `sees_deleted` como las demás; (O5)
+   al prender, subir `min_app_version` a la versión de lectura auditada en ese momento.
 
 10. **Hecho lo principal: editar a la vez sin perder texto (v0.052).** Dos parches a y-prosemirror (el editor
    que se quedaba con lo de antes y deshacía cambios de otros; dos personas en el mismo párrafo vacío), la

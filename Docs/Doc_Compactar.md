@@ -1,6 +1,6 @@
 # Compactar el contenido en el servidor (`page_snapshots`)
 
-**Estado: entrega 1 implementada (LEER snapshots, v0.0XX; migración `20261019120000_compactar_leer.sql`, sin
+**Estado: entrega 1 implementada (LEER snapshots, v0.127; migración `20261019120000_compactar_leer.sql`, sin
 aplicar, con los snapshots apagados; ver "Cómo quedó la entrega 1", al final). Las entregas 2 y 3 (crearlos y
 prenderlos), sin implementar** (roadmap B.9, diseño del 2026-10-01). Toca la regla de no perder datos, así que va con
 pruebas antes de cualquier código que escriba en la base. **Revisado el 2026-10-01 con el diseño del historial
@@ -739,7 +739,7 @@ problemas menores. Todo quedó corregido en el texto:
 
 ## Cómo quedó la entrega 1 (LEER snapshots)
 
-Implementada en v0.0XX. Nadie arma snapshots todavía: la app solo sabe bajarlos. **Sin filas en `page_snapshots`, o con
+Implementada en v0.127. Nadie arma snapshots todavía: la app solo sabe bajarlos. **Sin filas en `page_snapshots`, o con
 los snapshots apagados (como deja la migración), la app hace exactamente los mismos pedidos que antes** y baja lo
 mismo (probado con el servidor en memoria y con el cliente de verdad contra un PostgREST de juguete). Se puede publicar
 sola. No hace falta subir `min_app_version`: no cambia nada de lo guardado ni de cómo se sube.
