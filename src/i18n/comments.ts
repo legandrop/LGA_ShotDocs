@@ -122,6 +122,7 @@ export const comments = {
   'mentions.someone': { en: "Someone", es: "Alguien" },
   'mentions.unreadDot': { en: "Unread", es: "Sin leer" },
   'comments.mentionedHere': { en: "You were mentioned here", es: "Te mencionaron acá" },
+  'mentions.mentionedInside': { en: "You were mentioned in a page inside", es: "Te mencionaron en una página de adentro" },
   'commentError.mentionsInvalid': {
     en: "The mentions in this comment are not valid.",
     es: "Las menciones de este comentario no son válidas.",

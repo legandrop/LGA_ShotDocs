@@ -9,6 +9,16 @@ export const commentsPanel = {
   'mentions.listLabel': { en: "People to mention", es: "Personas para mencionar" },
   'mentions.noMatch': { en: "No one with access matches", es: "Nadie con acceso coincide" },
   'mentions.max': { en: "Up to {max} people per comment", es: "Hasta {max} personas por comentario" },
+  // Compartir desde la mención (ME2, entrega 2): solo el dueño y los admins que pueden compartir la página.
+  'mentions.outsideHead': { en: "Can't see this page", es: "No ven esta página" },
+  'mentions.shareLabel': { en: "Share and mention", es: "Compartir y mencionar" },
+  'mentions.shareAsk': {
+    en: "{name} can't see this page. Share it with them (Comment) and mention them?",
+    es: "{name} no ve esta página. ¿Compartírsela con Comentar y mencionarle?",
+  },
+  'mentions.shareAndMention': { en: "Share and mention", es: "Compartir y mencionar" },
+  'mentions.sharing': { en: "Sharing…", es: "Compartiendo…" },
+  'mentions.shareOffline': { en: "Sharing needs a connection.", es: "Para compartir hace falta conexión." },
   'comments.notNotified': {
     en: { one: "{names} wasn't notified.", other: "{names} weren't notified." },
     es: { one: "No se le avisó a {names}.", other: "No se les avisó a {names}." },

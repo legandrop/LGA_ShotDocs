@@ -10,6 +10,41 @@ pencil draws* y el dedo mueve, la palma no dibuja; el texto se escribe en una ca
 toque. Tocar un tirador sin moverlo cambiaba la forma: ya no. Probado con iPhone e iPad emulados y WebKit.
 [ Anotar fotos, entrega 3 - el dedo, dos dedos para ampliar, el lápiz del iPad, la tira, la hoja y el texto del teléfono ]
 
+v0.126 :
+
+Asistente, entrega A2 (P.24): el asistente solo trabajaba sobre lo elegido y la política del workspace no tenía cómo
+cambiarse. El panel suma *Summarize page* (*Insert at top* / *Insert below*), *Translate page* (*Replace page content*,
+que traduce cada bloque en su lugar con el reemplazo de A1, o *Create translated subpage*, por `tree.create` y
+`writeNewPage`) y *Format as…* (viñetas, casillas, tabla, títulos; solo bloques que ya existen, un deshacer, la guarda
+más el tipo de cada bloque, sin partir bloques con hijos; no aplica si la respuesta deja afuera palabras de lo
+elegido y subraya las que agrega). Medido: cambiar el tipo rehace el texto en Yjs, así que lo
+escrito a la vez sin red queda en el historial; el diseño quedó corregido. Migración
+`20261017120000_asistente_politica_ventana.sql` (sin aplicar): `set_assistant_policy` para dueño y admins, con la
+sección *This workspace* en *Assistant…*.
+[ Asistente A2 - resumir y traducir la página, Format as… y la política del workspace ]
+
+v0.125 :
+
+Menciones en comentarios (P.21), entrega 2. Para mencionar a alguien que no veía la página había que ir a *Share*,
+compartirla y volver, y sin abrir la campana no se veía que había menciones. Nueva migración
+`20261016120000_menciones_e2.sql` (`schema_version` 16): `mention_candidates` suma a quienes no ven la página solo
+para el dueño y los admins que pueden compartirla, y `share_for_mention` la comparte con Comentar, solo esa página y
+sin tocar a quien ya la ve; pruebas en rollback y 19 mutantes. En la app, esas personas aparecen en gris bajo *Can't
+see this page* y elegir una pregunta *Share and mention*, por el mismo paso previo que *Share*. Además, un punto en el
+árbol (hueco en la madre plegada) y el número en el título de la pestaña y en el ícono de la app instalada.
+[ Menciones, entrega 2 - compartir desde la mención, el punto del árbol y el número en la pestaña y el ícono ]
+
+v0.124 :
+
+No se podía guardar una página como plantilla ni cambiar las de fábrica (P.23, entrega 3 de `Doc_Plantillas.md`). Ahora
+*Save as template…* (menú ⋯) copia la página a la carpeta *Templates* del proyecto, sin tocarla, con nombre, descripción
+y *Clear filled-in values* (vacía tablas y casillas, deja rótulos, saca fotos). Una plantilla es una página marcada
+(`settings.template`, sin migración): se edita escribiendo, con una franja arriba (*Template settings…*, *Stop using as
+template*). La ventana *Templates* suma las del proyecto, las de otros proyectos (sin sus fotos, con aviso) y
+*Customize*; una a medio bajar nunca se copia (*Wait*, *Use built-in*). *New day report* usa la plantilla de la carpeta y
+deja elegir entre varias; si no la ve, usa la de fábrica y avisa.
+[ Plantillas propias - guardar como plantilla, la carpeta Templates, editar, personalizar y usarlas en el reporte del día ]
+
 v0.123 :
 
 Anotar fotos en la compu (P.20, entrega 2 de `Doc_Anotar_Fotos.md`). Las anotaciones se veían pero no había con qué
