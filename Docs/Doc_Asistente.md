@@ -1128,13 +1128,13 @@ contenido). Migración `20261017120000_asistente_politica_ventana.sql` **sin apl
 ### Cómo se probó
 
 - **Pruebas nuevas (vitest):** `mdBlocks.test.ts` (6: los tipos por renglón, la tabla, las marcas, los links nuevos, el
-  resumen sin marcas, a bloques de BlockNote), `format.test.ts` (15, con el editor real: lo que se manda, adentro de
+  resumen sin marcas, a bloques de BlockNote), `format.test.ts` (17 con las de la auditoría, con el editor real: lo que se manda, adentro de
   una tabla, casillas con hijos y colores, partir en viñetas con la foto en línea, la tabla con la foto-bloque, títulos,
   ya con esa forma, hijos, la guarda del texto y de las propiedades, deshacer si no quedó lo pedido, sin Editar, sin la
   foto, editar a la vez sin red y la versión publicada `editorSchemaMain` abriendo lo aplicado), `pageActions.test.ts`
-  (9: lo que se manda con las celdas y sin direcciones, página vacía y larga, la respuesta con el título, *Replace page
+  (10 con la del permiso de la subpágina: lo que se manda con las celdas y sin direcciones, página vacía y larga, la respuesta con el título, *Replace page
   content* con ids, Script, foto, link y celdas, la guarda, la subpágina escrita en una página nueva que la versión
-  publicada abre igual, y agregar el resumen arriba y debajo) y `panelA2.test.tsx` (11: el recorrido del panel con las
+  publicada abre igual, y agregar el resumen arriba y debajo) y `panelA2.test.tsx` (12 con la de B1: el recorrido del panel con las
   tres acciones, sin Editar, *Off*, una respuesta sin título, y la ventana de la política para dueño, admin, miembro e
   invitado, el rechazo de la base y la base sin la función).
 - **Mutantes:** 23 de 23 mueren (las guardas de *Format as…*, los hijos, el permiso, deshacer lo que no quedó, las
@@ -1148,9 +1148,22 @@ contenido). Migración `20261017120000_asistente_politica_ventana.sql` **sin apl
   *Replace page content*, tres renglones a casillas, *Off* en la ventana → el panel lo dice), solo ver y el teléfono:
   36 de 36.
 
+### Correcciones de la auditoría
+
+La auditoría independiente de A2 dio "no pasa" por un bloqueante. Corregido en una ronda, con sus pruebas:
+
+| Hallazgo | Qué se cambió |
+|---|---|
+| B1. *Format as…* aplicaba una respuesta que dejaba afuera o inventaba texto (un renglón, una palabra, una fila), y la vista previa no lo mostraba | `planFormat` compara las palabras de lo elegido y de la respuesta (sin formato, puntuación ni mayúsculas). Si falta alguna, no se aplica: *The suggestion leaves out text that was selected ("Revisar", "baterías"). Nothing can be applied: try again, or copy it.* Solo se pueden caer las conjunciones entre ítems (*y*, *e*, *o*, *and*, *or*…). En una tabla cuenta que cada palabra aparezca (un rótulo repetido pasa a ser la columna). Las palabras que agrega la respuesta van subrayadas en la vista previa, con un aviso, y se puede aplicar (un encabezado de tabla es razonable) |
+| O1. Los comentarios de un bloque que *Format as…* rehace quedaban sin bloque | Los bloques nuevos heredan, en orden, los ids de los bloques de texto que reemplazan: un comentario anclado a uno de ellos sigue con bloque. Si la respuesta trae menos bloques (tres renglones a una tabla), los comentarios de los que sobran quedan sin bloque, como al borrarlos a mano (al roadmap) |
+| O2. La guarda de permiso de *Create translated subpage* no tenía prueba | `subpageAllowed` (Editar y crear, y el editor escribible), usada por el botón y otra vez al crear, con su prueba con permisos reales del equipo |
+
+Mutantes después de la ronda: 31 de 31 mueren (los 23 de antes y 8 nuevos de B1, O1 y O2).
+
 ### Lo que falta y lo que prueba Lega
 
 - Falta: A3 (pie de foto) y el MCP (M0 a M3). La política no se actualiza en vivo en un panel ya abierto de otra
-  persona (se lee al abrirlo y al cerrar los ajustes); el MCP la va a mirar en la base.
+  persona (se lee al abrirlo y al cerrar los ajustes); el MCP la va a mirar en la base. *Format as…* que junta varios
+  bloques en menos (una tabla) deja sin bloque los comentarios de los que sobran.
 - Lega, con sus claves: la prueba de aceptación de A2 (sección 14) con una página de rodaje real, en la compu y en el
   iPhone, y la ventana de la política con la migración aplicada.

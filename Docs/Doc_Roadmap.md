@@ -421,7 +421,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   casillas, tabla, títulos) y la política del workspace en *Assistant…* para dueño y admins, con su migración
   `20261017120000_asistente_politica_ventana.sql` (sin aplicar). Falta: A3 y el MCP (M0 a M3); lo que Lega prueba con
   sus claves está en "Cómo quedó A1" y "Cómo quedó A2". Quedó de A2 (chico): la política no se actualiza en vivo en un
-  panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto. Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
+  panel ya abierto (se lee al abrirlo); *Format as…* no conserva los colores de un bloque al que le cambia el texto, y
+  cuando junta varios bloques en menos (renglones a una tabla) los comentarios de los que sobran quedan sin bloque;
+  *Format as… Headings* sobre un bloque Script le saca el Script sin decirlo en la vista previa. Quedó de la auditoría de A1 (chico): la barra de formato de BlockNote se dibuja encima del panel
   cuando lo elegido queda debajo; una traducción a japonés o chino de cerca de 20 000 caracteres todavía puede
   llegar cortada (se avisa y no se aplica; afinar el tope por idioma o por modelo); un modelo que razona por un servicio
   compatible (OpenRouter) no lleva el margen de tokens, y en OpenAI y Gemini se podría además bajar cuánto piensan
