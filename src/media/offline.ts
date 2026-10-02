@@ -28,16 +28,18 @@ import {
   type OfflineOptions,
 } from './offlineStore';
 import { branchPages, estimateSharp, olderUrlsInDoc, wanted, weigh, type FileFacts, type Weights } from './offlinePlan';
+import { ensureMd5, freeOwn, ownBlock } from './ownFree';
 import { PorteroError, type VerifyResult } from './portero';
 import type { MediaQueue } from './queue';
 import { mediaIdsInDoc } from './usage';
 import type * as Y from 'yjs';
 import { treeContentGap, treeServerSeq } from '../sync/clean';
 
-// "Available offline" y el tope del espacio en el dispositivo (Docs/Doc_Copias_Locales.md, D-25). Esta entrega
-// (la 1) baja y mantiene al día lo marcado, y libera **solo** copias bajadas y nítidas, siempre después de un
-// aviso con el sí de la persona. Los originales agregados en este dispositivo no se liberan acá (entrega 2): ni
-// siquiera se arma su clave.
+// "Available offline" y el tope del espacio en el dispositivo (Docs/Doc_Copias_Locales.md, D-25). La entrega 1 baja y
+// mantiene al día lo marcado y libera copias bajadas y nítidas; la 2 libera también los originales agregados en este
+// dispositivo, solo con red, con un portero que sabe comprobar (`/verify`) y después de que la base y Drive confirman
+// el mismo archivo (MD5 incluido). Todo, siempre después de un aviso con el sí de la persona; la única excepción es
+// hacer lugar para un archivo nuevo, que libera sin preguntar copias bajadas y nítidas, nunca un original propio.
 
 const GB = 1024 * 1024 * 1024;
 const MB = 1024 * 1024;
@@ -64,6 +66,8 @@ export function reserveFor(quota: number): number {
 }
 
 const LIMIT_KEY = 'space:limit';
+/** Lo que se pide de más al hacer lugar para un archivo nuevo. */
+const ROOM_MARGIN = 200 * MB;
 const ROLLOUT_KEY = 'space:rollout';
 const SNOOZE_KEY = 'space:snooze';
 
@@ -102,11 +106,47 @@ export interface MarkView {
   needsUpdate: number;
 }
 
+/** Los originales agregados en este dispositivo que no pide ninguna marca (entrega 2). */
+export interface OwnUsage {
+  /** Los que se pueden ofrecer liberar ahora (con red y un portero con `verify`; Drive todavía los comprueba). */
+  freeable: number;
+  count: number;
+  /** Subidos hace menos de 14 días: quedan por ahora. */
+  recent: number;
+  recentCount: number;
+  /** Los que se podrían ofrecer pero hoy no: sin conexión, o el portero no sabe comprobar. */
+  held: 'offline' | 'server' | null;
+  heldBytes: number;
+}
+
+/** Por qué no se liberó un original propio al tocar *Free up* (para decirlo con el motivo). */
+export type OwnSkip = 'offline' | 'server' | 'notInDrive' | 'trash' | 'mismatch' | 'changed' | 'noAnswer';
+
+/** Una línea de *Show what*: `own`, un original agregado en este dispositivo (Drive lo comprueba al liberarlo). */
+export interface FreeCandidate {
+  id: string;
+  name: string;
+  bytes: number;
+  usedAt: number | null;
+  own?: boolean;
+}
+
+/** Lo que pasó en el último *Free up*. */
+export interface FreeReport {
+  freed: number;
+  /** Originales propios liberados. */
+  own: number;
+  skipped: Partial<Record<OwnSkip, number>>;
+  at: number;
+}
+
 export interface Usage {
   /** Lo que se guarda automáticamente (cuenta para el tope): originales propios, copias y nítidas sin marcar. */
   kept: number;
-  /** De eso, lo que esta entrega puede liberar (copias bajadas y nítidas sin marcar). */
+  /** De eso, lo que se puede ofrecer liberar: copias bajadas y nítidas sin marcar, y `own.freeable`. */
   freeable: number;
+  /** Los originales propios (entrega 2). */
+  own: OwnUsage;
   /** Originales propios que esperan subir (cuentan, no se liberan). */
   waiting: number;
   waitingCount: number;
@@ -117,8 +157,11 @@ export interface Usage {
 }
 
 export interface SpacePrompt {
-  /** `limit`: se pasó el tope; `mark`: una marca no tiene lugar. */
-  reason: 'limit' | 'mark';
+  /**
+   * `limit`: se pasó el tope; `mark`: una marca no tiene lugar; `room`: un archivo nuevo no entró y hay originales
+   * propios ya en Drive para ofrecer (nunca se liberan sin preguntar, sección 5.7).
+   */
+  reason: 'limit' | 'mark' | 'room';
   /** Lo que ocupa lo guardado automáticamente y el tope. */
   kept: number;
   limit: number | null;
@@ -141,6 +184,8 @@ export interface OfflineSnapshot {
   active: string | null;
   /** Archivos nuevos que no entraron en el dispositivo: se ofrece guardarlos para no perderlos. */
   unsaved: { name: string; size: number }[];
+  /** Lo que pasó en el último *Free up* (con los motivos de lo que no se liberó). */
+  report: FreeReport | null;
 }
 
 /** Lo que se calcula para la ventana de marcar, por partes (el indicador circular espera cada una). */
@@ -228,7 +273,9 @@ function parseContentRange(value: string | null): { start: number; end: number; 
 
 export class OfflineManager {
   private readonly listeners = new Set<() => void>();
-  private snapshot: OfflineSnapshot = { loaded: false, marks: [], limit: DEFAULT_LIMIT, usage: null, prompt: null, active: null, unsaved: [] };
+  private snapshot: OfflineSnapshot = { loaded: false, marks: [], limit: DEFAULT_LIMIT, usage: null, prompt: null, active: null, unsaved: [], report: null };
+  /** Lo que hacía falta para un archivo nuevo que no entró (se ofrece liberar originales propios). */
+  private roomNeeded = 0;
   private readonly now: () => number;
   private readonly progress = new Map<string, { done: number; total: number; bytesDone: number; bytesTotal: number; unavailable: number; waiting: number; pages: number; update: number }>();
   /** Lo abierto en esta sesión: no se libera (un video que se está mirando desde un `blob:`). */
@@ -326,7 +373,11 @@ export class OfflineManager {
     const day = Math.floor(this.now() / 86_400_000);
     if (this.touched.get(key) === day) return;
     this.touched.set(key, day);
-    if (this.deps.db) void touchCopy(this.deps.db, key, this.now()).catch(() => undefined);
+    const db = this.deps.db;
+    if (!db) return;
+    const now = this.now();
+    // Un original propio también anota su uso (entrega 2): ordena qué se ofrece liberar primero.
+    void (async () => touchCopy(db, key, now, !!(await db.getKey('files', key))))().catch(() => undefined);
   }
 
   /**
@@ -336,7 +387,7 @@ export class OfflineManager {
    * liberado; la cola vuelve a probar.
    */
   async makeRoom(bytes: number): Promise<number> {
-    const freed = await this.freeBytes(bytes + 200 * MB);
+    const freed = await this.freeBytes(bytes + ROOM_MARGIN);
     await this.refresh().catch(() => undefined);
     return freed;
   }
@@ -348,6 +399,9 @@ export class OfflineManager {
   rejected(file: Blob & { name?: string }): void {
     this.unsaved.push(file);
     this.set({ unsaved: this.unsaved.map((f) => ({ name: f.name ?? '', size: f.size })) });
+    // Los originales propios ya en Drive se ofrecen después, con el aviso de siempre (nunca en el acto: sección 5.7).
+    this.roomNeeded = Math.max(this.roomNeeded, file.size);
+    void this.refresh().catch(() => undefined);
   }
 
   /** El archivo que no entró, para guardarlo (y sacarlo de la lista). */
@@ -398,10 +452,15 @@ export class OfflineManager {
   /** Cuánto ocupa cada cosa, con las sumas propias (no con `estimate()`, que tarda en bajar). */
   async usage(): Promise<Usage> {
     const db = this.deps.db;
-    const out: Usage = { kept: 0, freeable: 0, waiting: 0, waitingCount: 0, offline: 0, gone: { count: 0, bytes: 0, ids: [] } };
+    const own: OwnUsage = { freeable: 0, count: 0, recent: 0, recentCount: 0, held: null, heldBytes: 0 };
+    const out: Usage = { kept: 0, freeable: 0, own, waiting: 0, waitingCount: 0, offline: 0, gone: { count: 0, bytes: 0, ids: [] } };
     if (!db) return out;
     const marks = await listMarks(db);
+    const rollout = await this.rollout();
+    const now = this.now();
     const records = (await db.getAll('files')) as MediaRecord[];
+    let candidates = 0;
+    let candidateCount = 0;
     for (const r of records) {
       if (!(await db.getKey('blobs', r.id))) continue;
       if (r.pending === 1) {
@@ -412,6 +471,25 @@ export class OfflineManager {
         out.offline += r.size;
       } else {
         out.kept += r.size;
+        // Lo que la entrega 2 puede ofrecer liberar (Drive lo comprueba recién al liberar).
+        const block = ownBlock(r, true, marks, now, rollout);
+        if (block === 'recent') {
+          own.recent += r.size;
+          own.recentCount++;
+        } else if (block === null && !this.opened.has(r.id)) {
+          candidates += r.size;
+          candidateCount++;
+        }
+      }
+    }
+    if (candidates > 0) {
+      if (!this.deps.online()) own.held = 'offline';
+      else if (!(await this.hasFeature('verify'))) own.held = 'server';
+      if (own.held) own.heldBytes = candidates;
+      else {
+        own.freeable = candidates;
+        own.count = candidateCount;
+        out.freeable += candidates;
       }
     }
     for (const e of await listCopies(db)) {
@@ -462,6 +540,11 @@ export class OfflineManager {
     if (!prompt && stopped && usage.freeable > 0 && this.now() >= snoozed) {
       prompt = { reason: 'mark', kept: usage.kept, limit, free: usage.freeable, count: 0, needed: 0, first };
     }
+    // Un archivo nuevo no entró: se ofrecen los originales propios que ya están en Drive (con el sí, no en el acto).
+    if (!prompt && this.roomNeeded > 0 && usage.own.freeable > 0) {
+      const needed = this.roomNeeded + ROOM_MARGIN;
+      prompt = { reason: 'room', kept: usage.kept, limit, free: Math.min(usage.own.freeable, needed), count: usage.own.count, needed, first: false };
+    }
     if (prompt && first) await db.put('meta', this.now(), 'space:prompted');
     // Lo bajado antes de contar ya está en `usage.offline`.
     this.written = Math.max(0, this.written - writtenBefore);
@@ -507,11 +590,17 @@ export class OfflineManager {
    * nuevo; `all`: todo (*Free up space*). Nunca toca lo marcado, lo `gone`, lo abierto en esta sesión ni un
    * original propio. Devuelve lo liberado.
    */
-  async freeUp(mode: 'over' | 'all'): Promise<number> {
+  async freeUp(mode: 'over' | 'all' | 'room', options: { own?: boolean } = {}): Promise<number> {
     const usage = await this.usage();
     const limit = await this.limit();
-    const goal = mode === 'all' ? Infinity : limit === null ? 0 : usage.kept - Math.floor(limit * 0.9);
-    const freed = await this.freeBytes(goal);
+    const goal =
+      mode === 'all' ? Infinity : mode === 'room' ? this.roomNeeded + ROOM_MARGIN : limit === null ? 0 : usage.kept - Math.floor(limit * 0.9);
+    const report: FreeReport = { freed: 0, own: 0, skipped: {}, at: this.now() };
+    // Con el sí de la persona: también los originales propios (salvo que quien llama pida solo copias).
+    const freed = await this.freeBytes(goal, options.own !== false ? report : null);
+    report.freed = freed;
+    if (mode === 'room') this.roomNeeded = 0;
+    this.set({ report });
     // Una marca que se detuvo por falta de lugar vuelve a probar.
     const db = this.deps.db;
     if (db) for (const m of await listMarks(db)) if (m.state === 'noSpace') await putMark(db, { ...m, state: 'downloading', error: null });
@@ -524,11 +613,11 @@ export class OfflineManager {
    * Lo que se ofrecería liberar, en orden (de la que hace más que no se abre a la más reciente): para "Show what".
    * Las nítidas de la página van en una sola línea (`id` vacío).
    */
-  async candidates(): Promise<{ id: string; name: string; bytes: number; usedAt: number | null }[]> {
+  async candidates(): Promise<FreeCandidate[]> {
     const db = this.deps.db;
     if (!db) return [];
     const marks = await listMarks(db);
-    const out: { id: string; name: string; bytes: number; usedAt: number | null }[] = [];
+    const out: FreeCandidate[] = [];
     const views = await this.deps.media.viewBytes();
     if (views > 0) out.push({ id: '', name: '', bytes: views, usedAt: null });
     const copies = (await listCopies(db)).filter((e) => !e.gone && !this.opened.has(e.id)).sort((a, b) => a.usedAt - b.usedAt);
@@ -539,11 +628,18 @@ export class OfflineManager {
       const known = await db.get('known', e.id);
       out.push({ id: e.id, name: known?.name ?? e.id, bytes, usedAt: e.usedAt });
     }
+    // Después, los originales agregados en este dispositivo (entrega 2), solo si hoy se pueden comprobar.
+    if (this.deps.online() && (await this.hasFeature('verify'))) {
+      for (const c of await this.ownCandidates()) out.push({ id: c.record.id, name: c.record.name, bytes: c.record.size, usedAt: c.usedAt, own: true });
+    }
     return out;
   }
 
-  /** Libera hasta `goal` bytes de lo que se puede (ver `freeUp`). */
-  private async freeBytes(goal: number): Promise<number> {
+  /**
+   * Libera hasta `goal` bytes de lo que se puede (ver `freeUp`). Con `own` (el reporte del sí de la persona), al
+   * final también los originales propios ya confirmados en Drive; sin él (hacer lugar para un archivo nuevo), nunca.
+   */
+  private async freeBytes(goal: number, own: FreeReport | null = null): Promise<number> {
     const db = this.deps.db;
     if (!db || !(goal > 0)) return 0;
     let freed = await this.deps.media.trimViews(goal);
@@ -580,6 +676,135 @@ export class OfflineManager {
         const bytes = await dropCopy(db, entry.id, { rev });
         freed += bytes;
         goal -= bytes;
+      }
+    }
+    if (own && goal > 0) freed += await this.freeOwnUpTo(goal, own);
+    return freed;
+  }
+
+  private async rollout(): Promise<number | null> {
+    const at = this.deps.db ? await this.deps.db.get('meta', ROLLOUT_KEY) : undefined;
+    return typeof at === 'number' ? at : null;
+  }
+
+  /**
+   * Los originales propios que el dispositivo deja liberar (sección 5.2: subidos y confirmados hace 14 días o más,
+   * sin nada pendiente, que ninguna marca pide, no abiertos en esta sesión), del que hace más que no se abre al más
+   * reciente (sin fecha de uso, la del estreno; a igualdad, del más viejo al más nuevo).
+   */
+  private async ownCandidates(): Promise<{ record: MediaRecord; usedAt: number }[]> {
+    const db = this.deps.db;
+    if (!db) return [];
+    const marks = await listMarks(db);
+    const rollout = await this.rollout();
+    const now = this.now();
+    const out: { record: MediaRecord; usedAt: number }[] = [];
+    for (const record of (await db.getAll('files')) as MediaRecord[]) {
+      if (this.opened.has(record.id)) continue;
+      if (ownBlock(record, !!(await db.getKey('blobs', record.id)), marks, now, rollout) !== null) continue;
+      const entry = await getCopy(db, record.id);
+      out.push({ record, usedAt: entry?.usedAt ?? rollout ?? record.createdAt });
+    }
+    return out.sort((a, b) => a.usedAt - b.usedAt || a.record.createdAt - b.record.createdAt);
+  }
+
+  /**
+   * Libera originales propios hasta `goal` (sección 5.3), de a lotes de 15 (un `/verify` cada uno): la base tiene que
+   * decir el mismo `drive_id`, fuera de las papeleras; Drive (`/verify`, sin caché), el mismo id, el mismo peso, la
+   * marca, fuera de su papelera y el mismo MD5 que el original del dispositivo (calculado acá, una vez). Recién ahí
+   * `freeOwn`, que repite lo del dispositivo en la transacción que borra. Sin red o con un portero sin `verify`, nada.
+   * Lo que no se libera queda contado en `report` con su motivo.
+   */
+  private async freeOwnUpTo(goal: number, report: FreeReport): Promise<number> {
+    const db = this.deps.db!;
+    const candidates = await this.ownCandidates();
+    if (candidates.length === 0) return 0;
+    const note = (why: OwnSkip, n = 1) => (report.skipped[why] = (report.skipped[why] ?? 0) + n);
+    if (!this.deps.online()) {
+      note('offline', candidates.length);
+      return 0;
+    }
+    if (!(await this.hasFeature('verify'))) {
+      note('server', candidates.length);
+      return 0;
+    }
+    const rev = await getRev(db);
+    const rollout = await this.rollout();
+    let freed = 0;
+    let at = 0;
+    while (at < candidates.length && freed < goal) {
+      // Un lote con lo justo para llegar al objetivo (no se calcula el MD5 de lo que no hace falta).
+      const batch: typeof candidates = [];
+      let sum = 0;
+      while (at < candidates.length && batch.length < 15 && freed + sum < goal) {
+        batch.push(candidates[at]);
+        sum += candidates[at].record.size;
+        at++;
+      }
+      let rows: MediaFileRow[];
+      try {
+        if (!this.deps.online()) throw new Error('offline');
+        rows = await this.deps.remote.fetchMediaFiles(batch.map((c) => c.record.id));
+      } catch {
+        note(this.deps.online() ? 'noAnswer' : 'offline', candidates.length - at + batch.length);
+        break;
+      }
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      const hashed: { record: MediaRecord; md5: string }[] = [];
+      for (const { record } of batch) {
+        const row = byId.get(record.id);
+        if (!row) {
+          note('notInDrive');
+          continue;
+        }
+        if (row.trashed_at || row.drive_trashed_at || row.purged_at) {
+          note('trash');
+          continue;
+        }
+        if (!row.drive_id || row.drive_id !== record.driveId) {
+          note('mismatch');
+          continue;
+        }
+        const md5 = await ensureMd5(db, record.id).catch(() => null);
+        if (!md5) {
+          note('changed');
+          continue;
+        }
+        hashed.push({ record, md5 });
+      }
+      if (hashed.length === 0) continue;
+      let results: Record<string, VerifyResult>;
+      try {
+        results = await this.deps.media.verify(hashed.map((c) => c.record.id));
+      } catch {
+        note(this.deps.online() ? 'noAnswer' : 'offline', candidates.length - at + hashed.length);
+        break;
+      }
+      for (const { record, md5 } of hashed) {
+        const r = results[record.id];
+        if (!r || 'code' in r) {
+          note(r && 'code' in r && r.code === 'drive_missing' ? 'notInDrive' : 'noAnswer');
+          continue;
+        }
+        if (r.trashed) {
+          note('trash');
+          continue;
+        }
+        if (r.driveId !== record.driveId || r.size !== record.size || !r.marked || !r.md5 || r.md5.toLowerCase() !== md5) {
+          note('mismatch');
+          continue;
+        }
+        // Se abrió mientras se comprobaba (el MD5 o `/verify` tardan): no se libera (en Safari, un video que se está
+        // mirando desde un `Blob` de IndexedDB puede cortarse si se borra su original).
+        if (this.opened.has(record.id)) {
+          note('changed');
+          continue;
+        }
+        const bytes = await freeOwn(db, record.id, { rev, driveId: r.driveId, size: r.size, md5, now: this.now(), rollout }).catch(() => 0);
+        if (bytes > 0) {
+          freed += bytes;
+          report.own++;
+        } else note('changed');
       }
     }
     return freed;

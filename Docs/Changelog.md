@@ -1,5 +1,24 @@
 # Changelog — LGA Shot Docs
 
+v0.140 :
+
+Deshacer en el orden en que editaste (P.26), entrega 1. La pila de ⌘Z de cada página moría al cambiar de página: el
+editor se desmontaba y y-prosemirror destruía su `UndoManager`. Ahora una línea de tiempo por proyecto y pestaña
+(`undoTimeline.ts`) guarda las listas de Yjs al irse, retiene el documento (`docs.open`) y se las pasa al editor nuevo
+sin parchear y-prosemirror. ⌘Z y ⌘⇧Z (`undoTimelineUi.ts`)
+siguen el orden entre páginas: si lo último fue en otra, la app va ahí, lo deshace a la vista y avisa con *Back*. Un paso
+por vez, la excepción de Yjs con dos personas atrapada (B.22), topes de 20 páginas y 1000 pasos. Deshacer un renglón
+propio ya no borra lo que otro escribió adentro (pasaba también antes). El reemplazo sigue igual (entrega 2).
+
+Copias locales, entrega 2 (P.10, D-25). Las fotos y los videos agregados en un dispositivo ocupaban lugar para siempre:
+la entrega 1 no los liberaba. Ahora *Free up* (aviso del tope, *Storage on this device* o un archivo nuevo que no
+entró) los libera con el sí de la persona, con red y un portero con `/verify`, subidos hace 14 días o más, sin marca
+que los pida y con la base y Drive confirmando el mismo archivo (id, peso, marca y MD5). `freeOwn`, la única que borra
+un original, repite todo en su transacción; queda la miniatura y lo que no se libera se dice con su motivo. Si una
+restauración lo vuelve a la cola, se enlaza sin bytes: el portero lo busca por la marca `sdFile` (también antes de
+abrir una subida, que sigue igual si la búsqueda falla). Hacer lugar sin preguntar nunca toca un original.
+[ Deshacer en orden entrega 1 y copias locales entrega 2 - ⌘Z y ⌘⇧Z entre páginas, y liberar los originales agregados en el dispositivo con Drive confirmado ]
+
 v0.139 :
 
 **Dictar al reporte, entregas V2 y V3** (P.27): sin red, *Save for later* solo dejaba la nota en el borrador de su

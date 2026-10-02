@@ -47,6 +47,12 @@ Lega.
    hechos y publicados** (v0.031 a v0.041, migraciones aplicadas en Wanka el 2026-09-30). Absorbe la vieja fase 2 (compartir un proyecto, una
    página o una subpágina con usuarios y con links legibles, D-13) y los que figuran abajo en "Resueltos
    adentro del plan".
+2. **La marca de un archivo en Drive, atada a su workspace** (auditoría de P.10, entrega 2, O4). El portero busca un
+   archivo de la app por su marca `sdFile` (el id) y el peso. Si una misma cuenta de Google y el mismo cliente OAuth
+   sirvieran a dos workspaces, un editor del B que conozca el id y el peso de un archivo del A podría registrarlo en B
+   y el portero de B lo enlazaría. Hoy hay un solo workspace por Drive. Antes de que dos workspaces compartan cuenta de
+   Google: sumar `sdWorkspace` a `appProperties` al subir y exigirlo en la búsqueda (o buscar solo adentro de la
+   carpeta del proyecto).
 
 ### P. Pedidos de Lega (2026-09-30), en este orden
 
@@ -182,9 +188,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   elegible, de fábrica 2 GB por workspace en cada dispositivo (pasado el tope, un aviso ofrece liberar las copias ya
   confirmadas en el Drive que hace más que no se abren, y se liberan recién con el sí; la miniatura queda), marcar una página o un proyecto para usarlo sin red (con una ventana de casillas y
   pesos), y "Espacio en este dispositivo" en el menú de la cuenta. **Diseño en `Doc_Copias_Locales.md`**
-  (rehecho con D-25; auditado y aprobado). **Entregas 0 y 1 implementadas** (v0.083, rama `lega/espacio-offline`);
-  falta la entrega 2 (liberar los originales agregados en el dispositivo, con su auditoría) y la medición del iPhone
-  casi lleno (sección 9.1).
+  (rehecho con D-25; auditado y aprobado). **Entregas 0 y 1 implementadas** (v0.083); **entrega 2 implementada**
+  (v0.140: liberar los originales agregados en el dispositivo con la base y Drive confirmando el mismo archivo, el
+  relink sin bytes y la búsqueda del portero por la marca; riesgo alto, con su auditoría antes de publicar). Falta la
+  medición del iPhone casi lleno (sección 9.1, la hace Lega) y la entrega 3 (*Drive folders* con P.9 y compartir un
+  archivo sin copia).
 - **P.11 Colapsar secciones por sus títulos, como en Coda** (Lega, 2026-09-30): cualquier título (H1, H2, H3…)
   se colapsa con un triángulo lleno a su izquierda (apunta a la derecha colapsado, abajo abierto). Colapsar un
   título esconde todo lo que sigue hasta el próximo título de su nivel o mayor (un H1 esconde sus H2 y H3, que
@@ -509,9 +517,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   al editor nuevo, sin parchear y-prosemirror); ⌘Z en otra página te lleva y lo deshace a la vista; el reemplazo entra
   en la pila de Yjs de las páginas editadas en la sesión (arregla un resto que deja hoy deshacer el reemplazo y después
   lo escrito antes, también desde el *Undo* del panel) y por las anclas en las demás; ⌘⇧Z rehace todo, también el
-  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (hecha, v0.132: B.21), 1 (la
-  línea de tiempo con las páginas, con la memoria medida con el editor real), 2 (el reemplazo adentro), 3 (anotar como un
-  paso). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
+  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (hecha, v0.132: B.21), 1 (**hecha,
+  v0.140**: la línea de tiempo con las páginas; la memoria medida en Chromium con el editor real, unos 19 MB con 20
+  páginas de 115 KB retenidas; falta medirla en el iPhone; `Doc_Deshacer.md`, sección 17), 2 (el reemplazo adentro, con
+  el *Undo* del panel fuera de orden, C1, y DH9), 3 (anotar como un paso). Pendientes chicos de la auditoría de la
+  entrega 1: pruebas para A5, A7 y A9 (`Doc_Deshacer.md`, 17.4; quedan cubiertos por el recorrido en el navegador, por
+  eso no frenaron) y la copia propia de lo ajeno que se va con un renglón deshecho (17.2, de Yjs, 1 en 300). Botones de deshacer en el teléfono y el árbol
+  (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
   sobre todo en el teléfono, y que la IA pase «este plano se filmó con un 50 mm, anotalo donde corresponda» a la celda
   *Lens* de la fila de ese plano en el *On-Set Report*. **V1 hecha (v0.135, `Doc_Dictado.md` sección 15):** *Dictate to
@@ -787,9 +799,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 22. **La excepción del ⌘Z de Yjs con dos personas** (la encontró la auditoría de la entrega 0 de P.26; ya pasaba antes del
    parche de B.21). Con dos personas editando la misma página, a veces `UndoManager.undo()` tira `TypeError` (`reading
    'client'`) en `redoItem`, cuando la copia del padre que tiene que volver ya fue recolectada (1 de 150 con dos editores
-   reales; 24 de 3.000 en un modelo de párrafos); qué deja ese ⌘Z en pantalla no está medido. Con la línea de tiempo (P.26, entrega 1) se
-   deshace más lejos: atraparla ahí (descartar el paso y avisar), medirla, y ver si se arregla con el parche de Yjs o se
-   reporta (`Doc_Deshacer.md`, 16.6).
+   reales; 24 de 3.000 en un modelo de párrafos); qué deja ese ⌘Z en pantalla no está medido. **Atrapada en la línea de
+   tiempo (P.26, entrega 1, v0.140):** el paso se descarta, se avisa y el ⌘Z se frena (probado simulando el error). En
+   900 corridas al azar de la línea de tiempo con el editor, también 300 con otra persona escribiendo y borrando texto,
+   no apareció ninguna. Falta: medirla con dos editores borrando y deshaciendo bloques enteros, y ver si se arregla con
+   el parche de Yjs o se reporta (`Doc_Deshacer.md`, 16.6 y 17).
 
 ### C. Esperan a Lega
 

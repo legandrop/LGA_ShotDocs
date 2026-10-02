@@ -166,8 +166,8 @@ export const help = {
   },
   'help.undo.title': { en: "Undo", es: "Deshacer" },
   'help.undo.text': {
-    en: "{undo} undoes, {redo} redoes. Deleting blocks, a section or the whole page is always a single undo step.",
-    es: "{undo} deshace, {redo} rehace. Borrar bloques, una sección o la página entera es siempre un solo paso de deshacer.",
+    en: "{undo} undoes, {redo} redoes, in the order you edited across the whole project: if your last change was on another page, the app takes you there and undoes it in view (Back returns you). It keeps working after you switch pages, until you reload. Deleting blocks, a section or the whole page is always a single undo step. Renaming, moving or trashing pages isn't undone this way.",
+    es: "{undo} deshace, {redo} rehace, en el orden en que editaste en todo el proyecto: si lo último fue en otra página, la app te lleva y lo deshace a la vista (Volver te devuelve). Sigue andando después de cambiar de página, hasta que recargues. Borrar bloques, una sección o la página entera es siempre un solo paso de deshacer. Renombrar, mover o mandar páginas a la papelera no se deshace así.",
   },
 
   // --- Fotos y videos ---
@@ -459,8 +459,8 @@ export const help = {
   },
   'help.storageDevice.title': { en: "Storage on this device", es: "Espacio en este dispositivo" },
   'help.storageDevice.text': {
-    en: "Storage on this device, in the account menu, shows how much Shot Docs keeps here and what is available offline. Copies of files already in Drive are kept up to a limit you choose (2 GB by default); past it, the app asks before removing the ones opened least recently. Pages marked offline, photos added on this device and anything not uploaded yet are never removed to make room.",
-    es: "Espacio en este dispositivo, en el menú de la cuenta, muestra cuánto guarda Shot Docs acá y qué está disponible sin conexión. Las copias de archivos que ya están en Drive se guardan hasta un tope que elegís (2 GB de fábrica); pasado el tope, la app pregunta antes de sacar las que hace más que no se abren. Lo marcado sin conexión, las fotos agregadas en este dispositivo y lo que todavía no se subió nunca se sacan para hacer lugar.",
+    en: "Storage on this device, in the account menu, shows how much Shot Docs keeps here and what is available offline. Copies of files already in Drive are kept up to a limit you choose (2 GB by default); past it, the app asks before removing the ones opened least recently. Photos, videos and other files added on this device can be freed too, with a connection, 14 days after they were uploaded and only after Drive confirms it has the same file; the thumbnail stays and the original opens from Drive. Pages marked offline and anything not uploaded yet are never removed.",
+    es: "Espacio en este dispositivo, en el menú de la cuenta, muestra cuánto guarda Shot Docs acá y qué está disponible sin conexión. Las copias de archivos que ya están en Drive se guardan hasta un tope que elegís (2 GB de fábrica); pasado el tope, la app pregunta antes de sacar las que hace más que no se abren. Las fotos, los videos y los demás archivos agregados en este dispositivo también se pueden liberar, con conexión, 14 días después de subirlos y solo después de que Drive confirma que tiene el mismo archivo; la miniatura queda y el original se abre desde Drive. Lo marcado sin conexión y lo que todavía no se subió nunca se sacan.",
   },
   'help.removedWriting.title': { en: "When someone deletes what you were writing in", es: "Cuando alguien borra donde estabas escribiendo" },
   'help.removedWriting.text': {

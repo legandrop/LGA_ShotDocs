@@ -18,6 +18,9 @@ its own project: a tree of pages you own.
   content and other pages; a "folder" is just a page with no content.
 - **Visual editor.** Headings, lists, checklists, tables and images. You never see Markdown; it is only
   used behind the scenes to import, export and back up your pages.
+- **Undo in the order you edited.** Ctrl/⌘+Z undoes your last change in the project even if it was on another page:
+  the app takes you there and undoes it in view (*Back* returns you). Ctrl/⌘+Shift+Z redoes. It lasts until you
+  reload the tab.
 - **Script text.** Paste a screenplay and turn it into *Script*: it shows in a screenplay typeface, with
   INT/EXT, DAY, NIGHT and DAWN/DUSK marked in color.
 - **Templates.** Reusable page layouts such as *Pre-production Notes*, *On-Set Report* or *Shot

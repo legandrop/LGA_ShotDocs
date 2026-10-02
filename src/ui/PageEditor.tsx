@@ -79,6 +79,10 @@ import { restoreInEditor } from './historyRestore';
 import { RemovedWritingBanner } from './RemovedWritingBanner';
 import { registerAssistantTarget, type AssistantEditor } from '../assistant/assistantUi';
 import { TemplateHost } from '../templates/TemplateHost';
+import { ySyncPluginKey, yUndoPluginKey } from 'y-prosemirror';
+import type { Node as PMNode } from '@tiptap/pm/model';
+import { undoTimelineFor } from './undoTimeline';
+import { revealChange } from './undoReveal';
 
 // El carrete se baja aparte, la primera vez que se abre (roadmap B.4).
 const Carrete = lazyPart(() => import('./Carrete').then((m) => m.Carrete));
@@ -265,6 +269,7 @@ export function PageEditor({ pageId }: { pageId: string }) {
         canComment={canComment}
         onEditor={setFindEditor}
         onBroken={remount}
+        inTimeline
       />
     </>
   );
@@ -306,6 +311,7 @@ export function BlockEditor({
   filesNotice,
   preview = false,
   marks,
+  inTimeline = false,
 }: {
   doc: Y.Doc;
   /** Lo colapsado para vos (P.11): se actualiza en el lugar, así un editor que se vuelve a crear lo conserva. */
@@ -333,8 +339,14 @@ export function BlockEditor({
    * el documento. Van con el documento que se muestra (el editor se crea de nuevo con cada uno).
    */
   marks?: HistoryMarksInput;
+  /**
+   * La página de verdad (no la práctica ni una versión del historial): su pila de deshacer va a la línea de tiempo del
+   * proyecto (P.26, undoTimeline.ts), que la guarda al irse y se la devuelve al volver.
+   */
+  inTimeline?: boolean;
 }) {
-  const { docs, files, media, user, db, folders, tree: pageTree, workspace } = useServices();
+  const services = useServices();
+  const { docs, files, media, user, db, folders, tree: pageTree, workspace } = services;
   const scheme = useScheme();
   const tr = useT();
   const editorRef = useRef<{ removeBlocks: (ids: string[]) => unknown; transact: (fn: (tr: { setMeta: (k: string, v: unknown) => unknown }) => void) => void } | null>(null);
@@ -466,6 +478,8 @@ export function BlockEditor({
                 const current = editorRef.current;
                 current?.transact((tr) => {
                   tr.setMeta(BACKGROUND_META, true);
+                  // Lo hizo la app, no la persona: no entra en la pila de deshacer (P.26, Doc_Deshacer.md, 3.4).
+                  tr.setMeta('addToHistory', false);
                   current.removeBlocks([blockId]);
                 });
               } catch {
@@ -549,6 +563,43 @@ export function BlockEditor({
       }),
     [docs, editor, pageId, onBroken],
   );
+
+  // Deshacer en el orden en que editaste (P.26, Docs/Doc_Deshacer.md, 3.2): al montarse la vista, la pila de deshacer de
+  // este editor toma lo que la línea de tiempo guardó de esta página (antes de que se pueda escribir); al irse, se la
+  // deja. Sin tocar y-prosemirror: su `UndoManager` usa las listas que se le pasan.
+  useEffect(() => {
+    if (!inTimeline || preview || filesNotice) return;
+    const timeline = undoTimelineFor(services);
+    let detach: (() => void) | null = null;
+    const start = () => {
+      detach?.();
+      detach = null;
+      const view = editor.prosemirrorView;
+      if (!view) return;
+      const um = (yUndoPluginKey.getState(view.state as never) as { undoManager?: Y.UndoManager } | undefined)?.undoManager;
+      if (!um) return;
+      const binding = (ySyncPluginKey.getState(view.state as never) as { binding?: object | null } | undefined)?.binding ?? null;
+      detach = timeline.attach(pageId, doc, um, {
+        binding,
+        editable: () => editableRef.current && view.editable,
+        dom: view.dom,
+        snapshot: () => view.state.doc,
+        reveal: (before, opts) => revealChange(view, before as PMNode, opts),
+      });
+    };
+    if (editor.domElement) start();
+    const offMount = editor.onMount(start);
+    const offUnmount = editor.onUnmount(() => {
+      detach?.();
+      detach = null;
+    });
+    return () => {
+      offMount();
+      offUnmount();
+      detach?.();
+      detach = null;
+    };
+  }, [editor, doc, pageId, inTimeline, preview, filesNotice, services]);
 
   // El historial de versiones (P.18, Docs/Doc_Historial.md, sección 6): restaurar es una edición por este editor, solo
   // mientras se pueda editar (y la página esté completa: `editable` ya lo dice).
@@ -636,6 +687,8 @@ export function BlockEditor({
               if (editor.getBlock(block.id)) {
                 editor.transact((tr) => {
                   tr.setMeta(BACKGROUND_META, true);
+                  // Lo hizo la app, no la persona: no entra en la pila de deshacer (P.26, Doc_Deshacer.md, 3.4).
+                  tr.setMeta('addToHistory', false);
                   editor.updateBlock(block.id, { props: { url: stored } } as never);
                 });
               }
