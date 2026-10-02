@@ -1,7 +1,7 @@
 # Deshacer en el orden en que editaste (P.26)
 
-**Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16) y 1 (v0.140: la línea de tiempo
-con las páginas; sección 17) hechas; 2 y 3 en diseño.** Pedido de Lega
+**Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16), 1 (v0.140: la línea de tiempo
+con las páginas; sección 17) y 2 (v0.0XX: el reemplazo adentro; sección 18) hechas; 3 en diseño.** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
 y se revisó contra v0.125. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el
@@ -542,7 +542,7 @@ otra sesión (medido).
    *B* y en *A*; desde *C*, tres ⌘Z deshacen *A*, *B* y *A* en ese orden, cada uno con su página en pantalla, y tres ⌘⇧Z
    lo vuelven; con otro dispositivo escribiendo en *A* a la vez, lo suyo queda; **la memoria medida con el editor real**
    (en Chromium y en el iPhone) con 20 páginas retenidas, para fijar el tope.
-2. **El reemplazo adentro.** La pila de Yjs en las páginas con historia, las anclas en las demás, `planRedo`, los avisos
+2. **Hecha (v0.0XX, sección 18): el reemplazo adentro.** La pila de Yjs en las páginas con historia, las anclas en las demás, `planRedo`, los avisos
    con *Redo*, DH9 y DH10. **Aceptación:** el ejemplo de Lega (3.5) en Chromium con 50 páginas: dos ⌘Z dejan las 50 como
    antes y lo escrito antes del reemplazo sale exacto (sin el "cámara" que queda hoy); ⌘⇧Z lo vuelve; sin red, igual.
 3. **Anotar como un paso.** Lo de una vez en el anotador como un paso al cerrarlo (es algo que hiciste en la página;
@@ -778,9 +778,77 @@ semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.te
 - La memoria en el iPhone con 20 páginas retenidas (si aprieta, el tope baja a 10) y el gesto de deshacer de iOS en la
   PWA instalada.
 - La excepción de Yjs con dos personas (B.22) medida con dos editores borrando bloques enteros.
-- Entregas 2 (el reemplazo adentro, C1, DH9, `planRedo`) y 3 (anotar como un paso).
+- Entregas 2 (el reemplazo adentro, C1, DH9, `planRedo`; hecha, sección 18) y 3 (anotar como un paso).
 - Pruebas que faltan (auditoría, O1): no limpiar el `meta` al montar (A5), los ⌘Z que llegan mientras cruza (A7, probado
-  en el navegador, sin prueba en la suite) y esperar a que el editor sea editable (A9). Al roadmap.
+  en el navegador, sin prueba en la suite) y esperar a que el editor sea editable (A9). **Hechas con la entrega 2**
+  (`undoTimeline.test.ts`; cada una falla con su mutante).
+
+## 18. Entrega 2: cómo quedó (v0.0XX)
+
+### 18.1 Qué se hizo
+
+- **`src/ui/undoTimeline.ts`**: el reemplazo es una entrada de la línea de tiempo (`ReplaceEntry`) con su número de orden.
+  `beginReplace` (con el primer cambio: borra lo que había para rehacer en el proyecto), `writeReplace` (en una página
+  con historia en la sesión, lo escrito entra como un paso de su pila de Yjs: el `UndoManager` del editor si está en
+  pantalla o uno de un momento, `tempManager`, con las mismas opciones y lo ajeno protegido; se corta el tiempo antes y
+  después), `endReplace`, `popReplace` (deshace o rehace **ese** paso de la página aunque no sea el de arriba; lo
+  contrario queda para rehacer, o se descarta fuera de orden) y `settleReplace` (pasa a la otra lista con las páginas
+  hechas, o sale). Los pasos de un reemplazo quedan marcados: `peek` no los ofrece como pasos de página, ofrece la
+  entrada. El tope olvida un reemplazo entero.
+- **`src/search/projectReplace.ts`**: `ReplaceHistory` (la línea de tiempo vista desde el reemplazo); `run` escribe cada
+  página por ella; `undo(opId, { inOrder })` usa la pila en las páginas con paso y las anclas en las demás; `redo` nuevo
+  (vuelve a escribir el registro en `meta`); lo escrito queda en memoria (`SavedOp`) para rehacer y para deshacer uno
+  que ya salió de los últimos 5 del panel.
+- **`src/search/replaceDoc.ts`**: `planRedo` (el espejo de `planUndo`). Además, el vecino de un borrado que se borró y
+  volvió con un deshacer (una copia de Yjs) cuenta como el mismo (`currentId`, abajo).
+- **`src/ui/replaceUi.ts`**: `undoReplace` y `redoReplace` con sus avisos ("Undid “camara” → “Camera” in 53 pages ·
+  Redo", "Redid … · Undo"). El *Undo* del aviso y del panel es en orden (como ⌘Z, con *Redo*) si el reemplazo es lo
+  último, y fuera de orden si no (DH10, C1).
+- **`src/ui/undoTimelineUi.ts`**: ⌘Z y ⌘⇧Z sobre un reemplazo lo hacen en todas sus páginas sin moverte; manteniendo
+  apretado se frena antes; mientras corre, los demás no hacen nada.
+- **`src/ui/ProjectSearch.tsx`** (DH9): recién reemplazado, ⌘Z y ⌘⇧Z en el panel (en el campo o en un botón) deshacen y
+  rehacen el reemplazo, hasta que se escriba en el campo de buscar o en el del reemplazo.
+- Ayuda (`help.undo.text`, `help.replaceProject.text` con `{redo}`), atajos (`shortcuts.ts`, `shortcutSources.ts`),
+  textos en inglés y castellano (`shell.ts`; los avisos de deshacer un reemplazo pasan de `lazy/search.ts` a `shell.ts`
+  porque ⌘Z los muestra sin el panel cargado) y el avance *Redoing…*.
+
+### 18.2 Diferencias con el diseño (decididas al implementar)
+
+- **Las anclas en orden entran en la pila cuando la página ya tiene historia.** Qué pasaba (la prueba al azar, semilla
+  3003): una página sin historia al reemplazar va por las anclas; después escribís adentro de "Camera" ("Camwkera").
+  Deshacer todo sale bien, pero al rehacer todo, `planRedo` escribe letras nuevas y lo que vuelve a poner Yjs ("wk")
+  sigue a las letras viejas: quedaba "wkCamera". Ahora, si al deshacer (o rehacer) en orden por las anclas la página ya
+  tiene historia, lo escrito entra en su pila como lo contrario (con `undoing` / `redoing` de Yjs, que no borra lo de
+  rehacer), así rehacer es el de Yjs y sale exacto.
+- **El vecino de un borrado que volvió con ⌘Z.** Deshacer un borrado por las anclas pide que los dos vecinos sigan
+  vivos y pegados. Si un vecino se borró y volvió con un deshacer, es una copia (otro id, la misma letra) y contaba como
+  cambiado: "la cámara roja" quedaba "la  roja" (semillas 3114 y 3285). Ahora se sigue la copia, como hace Yjs con las
+  posiciones relativas. Vale también para el *Undo* del panel de siempre.
+- **El *Undo* del aviso y del panel cuando el reemplazo es lo último** hace lo mismo que ⌘Z: queda para rehacer, con
+  *Redo* en el aviso (antes no había rehacer).
+- **Las páginas que no se pudieron deshacer** (papelera, sin permiso, sin bajar): su paso sale de la pila y quedan para
+  *Undo the rest* del panel, por las anclas; ⌘⇧Z rehace solo las que se deshicieron.
+- **Fuera de orden no borra lo de rehacer**: Yjs resuelve el orden y lo que estaba para rehacer sigue andando.
+- **Un reemplazo que no cambió nada no borra lo de rehacer** (`beginReplace` va con el primer cambio).
+- **Sin *Show*** en el aviso de ⌘Z cuando algo había cambiado: el aviso lo cuenta ("2 had changed…"); *Show* tampoco
+  existía antes. Al roadmap.
+- **A5, A7 y A9** (pruebas de la entrega 1) van con esta entrega.
+
+### 18.3 Lo medido
+
+| Prueba | Resultado |
+|---|---|
+| Aceptación en Chromium (arnés con la app de verdad, servidor en memoria, 53 páginas; Windows con Ctrl, Mac con ⌘, sin red y a 390 px) | *Replace all* "camara" → "Camera" en 53; ⌘Z en el panel lo deshace y ⌘⇧Z lo rehace (DH9); en Shot 12, ⌘Z saca lo escrito, ⌘Z deshace el reemplazo en las 53 sin moverte ("Undid … in 53 pages · Redo"), ⌘Z va a Shot 3 y deja "plano" exacto; tres ⌘⇧Z vuelven todo en orden; el otro dispositivo baja lo mismo; sin red queda pendiente y sube al volver; 0 errores en la consola. 60 de 60 comprobaciones |
+| El hueco de 1.3 (D167) con el editor real | "Toma 1: " exacto, también cambiando de página; sin la línea de tiempo, "Toma 1: cámara" (la prueba lo muestra) |
+| Al azar con el editor, reemplazos en las tres páginas (300 semillas de 40 acciones) | ver 18.5 |
+| `planRedo` al azar con otra persona (300 semillas) | nada del otro borrado, los dos iguales; sin el otro, exacto |
+| Pruebas de mutación | ver 18.5 |
+
+### 18.4 Lo que falta
+
+- *Show* en el aviso de ⌘Z de un reemplazo con páginas cambiadas.
+- La memoria en el iPhone (entrega 1) y el gesto de deshacer de iOS en la PWA instalada.
+- Entrega 3 (anotar como un paso).
 
 ## Correcciones de la auditoría (2026-10-02)
 
