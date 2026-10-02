@@ -316,11 +316,14 @@ export function collectSelection(state: EditorState): Selected | SelectError {
   return collectBetween(doc, from, to);
 }
 
-/** Lo que hay entre dos posiciones, como pedazos (lo usa también la comprobación después de aplicar). */
-export function collectBetween(doc: PMNode, from: number, to: number): Selected | SelectError {
+/**
+ * Lo que hay entre dos posiciones, como pedazos (lo usa también la comprobación después de aplicar). Con `cells` (la
+ * página entera, entrega A2), cada celda de una tabla es su propio pedazo: así *Translate page* traduce las tablas.
+ */
+export function collectBetween(doc: PMNode, from: number, to: number, opts: { cells?: boolean } = {}): Selected | SelectError {
   // Las dos puntas en la misma celda: solo esa celda. Si no, las tablas no se tocan (van como marca).
   const cellA = cellAt(doc, from);
-  const singleCell = cellA >= 0 && cellA === cellAt(doc, to);
+  const singleCell = !!opts.cells || (cellA >= 0 && cellA === cellAt(doc, to));
   const pieces: Piece[] = [];
   const photos = new Map<number, PMNode>();
   const links = new Map<number, Mark>();
