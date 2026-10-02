@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BlobSink, MemoryCapExceeded, MISSING_NAME, planFolder, refreshPass, runDownload, type DownloadPlan, type FileOut, type FolderLister, type MissingItem } from './folderZip';
+import { BlobSink, canRetry, MemoryCapExceeded, MISSING_NAME, planFolder, planRetry, refreshPass, runDownload, type DownloadPlan, type FileOut, type FolderLister, type MissingItem } from './folderZip';
 import { PorteroError, type FolderEntry, type FolderListing } from './portero';
 import { concat, hasPython, pythonReadZip, text } from '../test/zipCheck';
 
@@ -130,9 +130,9 @@ const TREE: Tree = {
   'leeme.txt': 'hola',
 };
 
-async function zipOf(plan: DownloadPlan, w: ReturnType<typeof world>, extra: Partial<Parameters<typeof runDownload>[2]> = {}, signal?: AbortSignal) {
+async function zipOf(plan: DownloadPlan, w: ReturnType<typeof world>, extra: Partial<Parameters<typeof runDownload>[2]> = {}, signal?: AbortSignal, retry = false) {
   const sink = new BlobSink();
-  const result = await runDownload(plan, { kind: 'zip', sink }, { fetch: w.fetcher, wait: noWait, online: () => true, missingText, ...extra }, { signal });
+  const result = await runDownload(plan, { kind: 'zip', sink }, { fetch: w.fetcher, wait: noWait, online: () => true, missingText, ...extra }, { signal, retry });
   return { result, bytes: new Uint8Array(await sink.blob().arrayBuffer()) };
 }
 
@@ -170,7 +170,7 @@ describe('Download all: recorrer la carpeta', () => {
     const plan = await planFolder(w.lister, 'carpeta-1', 'Referencias', { wait: async (ms) => void waits.push(ms) });
     expect(waits).toEqual([5000, 5000]);
     expect(plan.files.map((f) => f.path)).toEqual(['Fotos/Dia 2/a.jpg', 'Fotos/Dia 2/B.jpg', 'Fotos/b.jpg', 'Fotos/portada.png', 'leeme.txt']);
-    expect(plan.skipped[0]).toEqual({ path: 'Notas/', reason: 'folder', detail: 'not_found' });
+    expect(plan.skipped[0]).toEqual({ path: 'Notas/', reason: 'folder', detail: 'not_found', dirId: w.idOf('Notas') });
   });
 
   it('sin poder listar la carpeta misma, falla con el error del portero', async () => {
@@ -552,5 +552,288 @@ describe('Download all: a una carpeta del disco (Chrome y Edge)', () => {
     await expect(runDownload(plan, full.target, { fetch: w.fetcher, wait: noWait, online: () => true, missingText })).rejects.toMatchObject({
       name: 'QuotaExceededError',
     });
+  });
+});
+
+describe('Download all: un portero que deja de contestar sin cortar (R1)', () => {
+  /** Un pedido que no contesta nunca (ni la respuesta ni un error); solo la señal lo corta. */
+  const hang = (init?: RequestInit) =>
+    new Promise<Response>((_, fail) => {
+      if (init?.signal?.aborted) return fail(new DOMException('aborted', 'AbortError'));
+      init?.signal?.addEventListener('abort', () => fail(new DOMException('aborted', 'AbortError')), { once: true });
+    });
+
+  /** Una respuesta que entrega `first` bytes y después se queda quieta (sin cortarse). */
+  function stuckResponse(data: Uint8Array, first: number): Response {
+    let sent = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(ctrl) {
+        if (sent) return new Promise<void>(() => undefined);
+        sent = true;
+        ctrl.enqueue(data.slice(0, first));
+      },
+    });
+    return new Response(body, { status: 200, headers: { 'Content-Length': String(data.length) } });
+  }
+
+  it('sin respuesta (tampoco de /health): dice "No connection", espera y sigue solo cuando vuelve, sin saltear nada', async () => {
+    const w = world({ 'a.txt': 'aaa', 'b.txt': 'bbbb', 'c.txt': 'cc' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    // Colgado hasta que se probó el portero tres veces sin respuesta.
+    let healthHung = 0;
+    const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (healthHung < 3) {
+        if (String(input).endsWith('/health')) healthHung++;
+        return hang(init);
+      }
+      return w.fetcher(input, init);
+    }) as typeof fetch;
+    const states: boolean[] = [];
+    const sink = new BlobSink();
+    const result = await runDownload(
+      plan,
+      { kind: 'zip', sink },
+      { fetch: fetcher, wait: noWait, online: () => true, whenOnline: () => new Promise(() => undefined), probeMs: 1, stallMs: 20, missingText },
+      { onProgress: (p) => states.push(p.offline) },
+    );
+    expect(result.missing).toEqual([]);
+    expect(result.done).toBe(3);
+    expect(states).toContain(true);
+    expect(states.at(-1)).toBe(false);
+    expect(healthHung).toBe(3);
+  });
+
+  it('una respuesta que se queda quieta a mitad cuenta como un corte: sigue desde donde quedó (Range) y queda entera', async () => {
+    const big = 'z'.repeat(3000);
+    const w = world({ 'toma.mov': big });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const id = w.idOf('toma.mov');
+    const data = w.files.get(id)!;
+    w.behave.set(id, (_r, count) => (count === 1 ? stuckResponse(data, 1200) : 'normal'));
+    // El portero tampoco contesta /health una vez: se espera diciendo "No connection".
+    let healthHung = 0;
+    const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/health') && healthHung++ < 1) return hang(init);
+      return w.fetcher(input, init);
+    }) as typeof fetch;
+    const states: boolean[] = [];
+    const sink = new BlobSink();
+    const result = await runDownload(
+      { ...plan, files: plan.files.map((f) => ({ ...f, size: 5 * 1024 * 1024 })) },
+      { kind: 'zip', sink },
+      { fetch: fetcher, wait: noWait, online: () => true, whenOnline: () => new Promise(() => undefined), probeMs: 1, stallMs: 20, missingText },
+      { onProgress: (p) => states.push(p.offline) },
+    );
+    expect(result.missing).toEqual([]);
+    expect(states).toContain(true);
+    expect(w.requests.filter((r) => r.id === id).map((r) => r.range)).toEqual([null, 'bytes=1200-']);
+    if (hasPython) expect(text(pythonReadZip(new Uint8Array(await sink.blob().arrayBuffer())).entries[1])).toBe(big);
+  });
+
+  it('si el portero contesta /health, el archivo que no contesta gasta sus intentos y se saltea; lo demás se baja', async () => {
+    const w = world({ 'a.txt': 'aaa', 'b.txt': 'bbb' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const stuckUrl = plan.files.find((f) => f.path === 'a.txt')!.url;
+    let tries = 0;
+    const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith(stuckUrl)) {
+        tries++;
+        return hang(init);
+      }
+      return w.fetcher(input, init);
+    }) as typeof fetch;
+    const result = await runDownload(plan, { kind: 'zip', sink: new BlobSink() }, { fetch: fetcher, wait: noWait, online: () => true, probeMs: 1, stallMs: 20, missingText });
+    expect(result.done).toBe(1);
+    expect(result.missing).toEqual([{ path: 'a.txt', reason: 'failed', detail: 'The media server stopped answering.' }]);
+    expect(tries).toBe(4);
+  });
+
+  it('cancelar mientras el portero no contesta corta en el acto (no espera el tope)', async () => {
+    const w = world({ 'a.txt': 'aaa' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const ctrl = new AbortController();
+    const fetcher = ((_input: RequestInfo | URL, init?: RequestInit) => hang(init)) as typeof fetch;
+    const started = Date.now();
+    const run = runDownload(plan, { kind: 'zip', sink: new BlobSink() }, { fetch: fetcher, wait: noWait, online: () => true, stallMs: 60_000, missingText }, { signal: ctrl.signal });
+    setTimeout(() => ctrl.abort(), 30);
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' });
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it('cancelar mientras una respuesta está quieta a mitad también corta en el acto', async () => {
+    const w = world({ 'toma.mov': 'z'.repeat(3000) });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const id = w.idOf('toma.mov');
+    w.behave.set(id, () => stuckResponse(w.files.get(id)!, 100));
+    const ctrl = new AbortController();
+    const started = Date.now();
+    const run = runDownload(
+      { ...plan, files: plan.files.map((f) => ({ ...f, size: 5 * 1024 * 1024 })) },
+      { kind: 'zip', sink: new BlobSink() },
+      { fetch: w.fetcher, wait: noWait, online: () => true, stallMs: 60_000, missingText },
+      { signal: ctrl.signal, onProgress: (p) => p.bytesDone >= 100 && ctrl.abort() },
+    );
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' });
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+});
+
+describe('Download all: Retry missing', () => {
+  /** Un disco de mentira con borrar (la carpeta de *Download to a folder…*, que se reusa al reintentar). */
+  function disk() {
+    const written = new Map<string, string>();
+    const removed: string[] = [];
+    return {
+      written,
+      removed,
+      target: {
+        kind: 'dir' as const,
+        makeDir: async () => undefined,
+        makeFile: async (path: string): Promise<FileOut> => {
+          const parts: Uint8Array[] = [];
+          return {
+            write: async (c) => void parts.push(c.slice()),
+            close: async () => void written.set(path, new TextDecoder().decode(concat(parts))),
+            abort: async () => void written.delete(path),
+          };
+        },
+        remove: async (path: string) => {
+          removed.push(path);
+          written.delete(path);
+        },
+      },
+    };
+  }
+
+  it('qué se puede reintentar: lo que falló o quedó a medias y una subcarpeta con error del portero; no un ciclo ni lo de Google', () => {
+    expect(canRetry({ path: 'a', reason: 'failed' })).toBe(true);
+    expect(canRetry({ path: 'a', reason: 'incomplete' })).toBe(true);
+    expect(canRetry({ path: 'a/', reason: 'folder', detail: 'not_found', dirId: 'd1' })).toBe(true);
+    expect(canRetry({ path: 'a/', reason: 'folder', detail: 'loop' })).toBe(false);
+    expect(canRetry({ path: 'a', reason: 'shortcut' })).toBe(false);
+    expect(canRetry({ path: 'a', reason: 'google' })).toBe(false);
+  });
+
+  it('a un zip: baja solo lo que falló y la subcarpeta que no se listó, con lo de Google en la lista nueva', async () => {
+    const w = world(TREE);
+    w.failList.add(w.idOf('Notas'));
+    const plan = await planFolder(w.lister, 'carpeta-1', 'Referencias');
+    const broken = w.idOf('b.jpg');
+    w.behave.set(broken, () => new Response(JSON.stringify({ code: 'drive_missing' }), { status: 404 }));
+    const first = await zipOf(plan, w);
+    expect(first.result.missing.map((m) => `${m.path} ${m.reason}`)).toEqual([
+      'Notas/ folder',
+      'Acceso a otra cosa shortcut',
+      'Plan de rodaje google',
+      'Fotos/b.jpg failed',
+    ]);
+
+    // Vuelve el portero: la subcarpeta se lista y el archivo baja.
+    w.failList.clear();
+    w.behave.delete(broken);
+    const before = w.requests.length;
+    const retry = await planRetry(w.lister, 'carpeta-1', plan, first.result.missing);
+    expect(retry.files.map((f) => f.path)).toEqual(['Fotos/b.jpg', 'Notas/guion.txt', 'Notas/lista.txt']);
+    expect(retry.dirs.map((d) => d.path)).toEqual(['Notas']);
+    expect(retry.skipped.map((m) => m.reason)).toEqual(['shortcut', 'google']);
+    expect(retry.bytes).toBe(3 + new TextEncoder().encode('INT. PUERTO - DÍA').length + 5);
+    const second = await zipOf(retry, w, {}, undefined, true);
+    expect(second.result.done).toBe(3);
+    expect(second.result.missing.map((m) => m.reason)).toEqual(['shortcut', 'google']);
+    // Solo se pidieron los tres archivos (nada de lo que ya estaba).
+    expect(w.requests.slice(before).map((r) => r.id).sort()).toEqual([broken, w.idOf('guion.txt'), w.idOf('lista.txt')].sort());
+    if (hasPython) {
+      const zip = pythonReadZip(second.bytes);
+      expect(zip.bad).toBeNull();
+      expect(zip.entries.filter((e) => !e.dir).map((e) => e.name)).toEqual([
+        'Referencias/Fotos/b.jpg',
+        'Referencias/Notas/guion.txt',
+        'Referencias/Notas/lista.txt',
+        `Referencias/${MISSING_NAME}`,
+      ]);
+      expect(text(zip.entries.find((e) => e.name === 'Referencias/Notas/guion.txt'))).toBe('INT. PUERTO - DÍA');
+    }
+  });
+
+  it('a un zip, si ya no falta nada: igual lleva una lista nueva (vacía) que reemplaza a la vieja al descomprimir', async () => {
+    const w = world({ 'a.txt': 'aaa', 'b.txt': 'bb' });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const id = w.idOf('a.txt');
+    w.behave.set(id, (_r, count) => (count <= 4 ? new Response('{}', { status: 502 }) : 'normal'));
+    const first = await zipOf(plan, w);
+    expect(first.result.missing).toMatchObject([{ path: 'a.txt', reason: 'failed' }]);
+    const retry = await planRetry(w.lister, 'carpeta-1', plan, first.result.missing);
+    const seen: MissingItem[][] = [];
+    const second = await zipOf(retry, w, { missingText: (items) => (seen.push(items), items.length ? 'falta' : 'nada') }, undefined, true);
+    expect(second.result.missing).toEqual([]);
+    expect(seen).toEqual([[]]);
+    if (hasPython) {
+      const zip = pythonReadZip(second.bytes);
+      expect(zip.entries.filter((e) => !e.dir).map((e) => e.name)).toEqual(['X/a.txt', `X/${MISSING_NAME}`]);
+      expect(text(zip.entries.find((e) => e.name === `X/${MISSING_NAME}`))).toBe('nada');
+    }
+  });
+
+  it('a una carpeta: escribe lo que faltaba en la misma y, si ya no falta nada, borra la lista vieja', async () => {
+    const w = world({ Fotos: { 'a.jpg': 'AAAA' }, 'b.txt': 'bb', atajo: { shortcut: true } });
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const id = w.idOf('a.jpg');
+    w.behave.set(id, () => new Response('{}', { status: 404 }));
+    const d = disk();
+    const first = await runDownload(plan, d.target, { fetch: w.fetcher, wait: noWait, online: () => true, missingText });
+    expect(d.written.has('Fotos/a.jpg')).toBe(false);
+    expect(d.written.get(MISSING_NAME)).toContain('Fotos/a.jpg');
+
+    // Vuelve: la lista nueva tiene solo el acceso directo (no se borra: todavía falta algo).
+    w.behave.delete(id);
+    const retry = await planRetry(w.lister, 'carpeta-1', plan, first.missing);
+    const second = await runDownload(retry, d.target, { fetch: w.fetcher, wait: noWait, online: () => true, missingText }, { retry: true });
+    expect(second.done).toBe(1);
+    expect(d.written.get('Fotos/a.jpg')).toBe('AAAA');
+    expect(d.written.get(MISSING_NAME)).toBe('atajo shortcut'.replace(' ', String.fromCharCode(9)));
+    expect(d.removed).toEqual([]);
+    // Lo que sigue sin poder reintentarse no ofrece nada más.
+    expect(second.missing.some(canRetry)).toBe(false);
+
+    // Sin nada que no se pueda bajar: la lista vieja se borra.
+    const w2 = world({ 'a.txt': 'aaa' });
+    const plan2 = await planFolder(w2.lister, 'carpeta-1', 'Y');
+    w2.behave.set(w2.idOf('a.txt'), (_r, count) => (count === 1 ? new Response('{}', { status: 404 }) : 'normal'));
+    const d2 = disk();
+    const r1 = await runDownload(plan2, d2.target, { fetch: w2.fetcher, wait: noWait, online: () => true, missingText });
+    expect(d2.written.has(MISSING_NAME)).toBe(true);
+    const plan2b = await planRetry(w2.lister, 'carpeta-1', plan2, r1.missing);
+    const r2 = await runDownload(plan2b, d2.target, { fetch: w2.fetcher, wait: noWait, online: () => true, missingText }, { retry: true });
+    expect(r2.missing).toEqual([]);
+    expect(d2.removed).toEqual([MISSING_NAME]);
+    expect([...d2.written.keys()]).toEqual(['a.txt']);
+  });
+
+  it('una subcarpeta que vuelve a fallar sigue anotada (y se puede volver a reintentar); cancelar el listado corta', async () => {
+    const w = world({ Notas: { 'x.txt': 'x' }, 'a.txt': 'a' });
+    w.failList.add(w.idOf('Notas'));
+    const plan = await planFolder(w.lister, 'carpeta-1', 'X');
+    const retry = await planRetry(w.lister, 'carpeta-1', plan, plan.skipped);
+    expect(retry.files).toEqual([]);
+    expect(retry.skipped).toEqual([{ path: 'Notas/', reason: 'folder', detail: 'not_found', dirId: w.idOf('Notas') }]);
+    expect(retry.skipped.some(canRetry)).toBe(true);
+    const ctrl = new AbortController();
+    ctrl.abort();
+    await expect(planRetry(w.lister, 'carpeta-1', plan, plan.skipped, { signal: ctrl.signal })).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('Download all: Retry missing no reintenta lo que no cambia', () => {
+  it('una subcarpeta en ciclo queda anotada sin su id: no se ofrece reintentarla', async () => {
+    // `A` tiene adentro una carpeta con su mismo id (un ciclo, como puede armarlo un acceso raro de Drive).
+    const lister: FolderLister = {
+      async folderList(_file, dir = null) {
+        if (dir === null) return { entries: [{ type: 'folder', id: 'A', name: 'A', modified: null }], nextPageToken: null };
+        return { entries: [{ type: 'folder', id: 'A', name: 'Otra vez A', modified: null }], nextPageToken: null };
+      },
+    };
+    const plan = await planFolder(lister, 'carpeta-1', 'X');
+    expect(plan.skipped).toEqual([{ path: 'A/Otra vez A/', reason: 'folder', detail: 'loop' }]);
+    expect(plan.skipped.some(canRetry)).toBe(false);
   });
 });

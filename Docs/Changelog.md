@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.113 :
+v0.0XX :
 
 No había asistente (P.24, entrega A1 de `Doc_Asistente.md`). Menú de la cuenta → *Assistant…*: Anthropic, OpenAI,
 Gemini o uno compatible (OpenRouter, Ollama), la clave cifrada solo en el dispositivo y el modelo de la lista del
@@ -10,6 +10,40 @@ cambió en una edición que se deshace con un Ctrl/⌘+Z, y no aplica si el text
 links y bloques viajan como marcas que tienen que volver; aplicar pide Editar; sin red avisa. Salir ofrece olvidar la
 clave. CSP en `public/_headers`. Migración `assistant_policy` (de fábrica `on`), sin aplicar.
 [ Asistente A1 - corregir, mejorar, acortar y traducir lo elegido con la clave de cada uno, vista previa y aplicar con deshacer ]
+
+v0.115 :
+
+Exportar (P.22), entrega 0. El PDF y el zip de una rama necesitan dibujar cada página fuera de la pantalla con el
+esquema real, y no se sabía si eso respetaba los cortes ni cuánto tardaba. Nuevo en `src/export/`: un editor de
+exportación sin colaboración ni interfaz que, por página, lee los bloques de una copia (`docs.snapshot`), espera las
+imágenes, copia la vista de impresión de siempre y la pagina; el plan de la rama sin la papelera, con avance y
+*Cancel*; un proyecto de prueba y su medición en Chromium. Con 300 páginas y 2219 fotos: entre 14,5 y 38,9 s, lo
+guardado de cada página igual byte por byte y las hojas de las 300 iguales a las marcas de la pantalla. Nada cambia para
+el usuario todavía.
+[ Exportar, entrega 0 - el editor de exportación medido con 300 páginas ]
+
+v0.114 :
+
+No se podía compartir una página con alguien sin cuenta. Entregas 0 y 1 de `Doc_Link_Publico.md`: la prueba en la base
+real mostró que Storage revisa la política en cada pedido aunque la miniatura esté en caché, y la app quedó sin indexar
+(`noindex`). La migración `20261012120000_link_publico.sql` (sin aplicar) suma `public_links`, el uso por día y las
+funciones `plink_*` que validan el token en cada pedido: la página y lo de abajo, solo bases limpias, comentarios con
+nombre y topes por cantidad y bytes. Crear un link pide el interruptor de D14. En *Share*, *Anyone with the link* (*Can
+view*): copiar, vencer, *Reset link*; quien lo abre entra sin cuenta, en modo liviano, y recargar sigue en el link. Tras
+la auditoría: *Reset link* reinicia la base de la rama, `plink_media_files` calcula la rama una vez (614 ms a 8 ms) y
+cuenta, y lo ya abierto se vuelve a ver sin red. Ayuda nueva.
+[ Link público - Can view sin cuenta: migración, Share, la app del visitante y el portero ]
+
+v0.113 :
+
+Lo que quedó de *Download all* (P.9). Un portero que dejaba de contestar sin cortar la conexión dejaba la barra quieta:
+no había tope de lectura. Ahora cada pedido tiene uno sin avance (30 s hasta la respuesta o entre pedazos); pasado,
+cuenta como un corte: prueba `/health` (con su tope de 10 s) y, si tampoco contesta, dice "No connection" y sigue sola
+cuando vuelve. Faltaba *Retry missing*: baja solo lo que falló o quedó a medias y vuelve a listar las subcarpetas que no
+se abrieron; a una carpeta escribe en la misma (y borra la lista vieja si ya no falta nada), y cada ronda de un zip va
+a uno numerado (`<carpeta> (missing files).zip`, `(missing files 2).zip`…), para descomprimir encima del primero.
+Los nombres limpios de la app sacaban el ZWJ de los emojis compuestos (O4): ahora se queda entre dos emojis.
+[ Bajar todo - Retry missing, el tope sin avance y el ZWJ de los emojis ]
 
 v0.112 :
 

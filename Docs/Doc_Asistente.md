@@ -1,6 +1,6 @@
 # Asistente con la clave de cada usuario y servidor MCP (fase 5)
 
-**Estado: entrega A1 implementada (v0.113, ver "Cómo quedó A1" al final; su migración, sin aplicar); A2, A3 y el MCP, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
+**Estado: entrega A1 implementada (v0.0XX, ver "Cómo quedó A1" al final; su migración, sin aplicar); A2, A3 y el MCP, en diseño** (roadmap P.24; pedido de Lega del 2026-10-02, que decide entre las opciones
 de D-06 y D-07 y lo deja listo para programar por entregas). Las decisiones están propuestas (IA1 a IA10, sección 15) y
 valen hasta que Lega diga otra cosa. Se diseñó contra `main` v0.108. Precios, límites y CORS verificados el 2026-10-02
 en las páginas oficiales (sección 3, con la fuente de cada número); lo medido está en "Cómo se midió", al final.
@@ -937,7 +937,7 @@ MCP (IA2, IA10) con tres bloqueantes. Todo se corrigió en este documento:
 | O16. `main` ya usa la v0.109 | La entrada del changelog va como `v0.112 :`, se numera al juntar |
 | Faltaba la tabla de riesgos que pedía el encargo | Sección 14 bis |
 
-## Cómo quedó A1 (v0.113)
+## Cómo quedó A1 (v0.0XX)
 
 Implementada en `src/assistant/` (se baja aparte, la primera vez que se abre el panel o los ajustes: unos 44 KB más
 5 KB, sin tocar el paquete principal salvo el atajo, el host del panel y la ventana de salir). Migración

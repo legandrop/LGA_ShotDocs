@@ -86,6 +86,65 @@ export const teamDialogs = {
   'share.via.project': { en: "from the project", es: "desde el proyecto" },
   'share.via.page': { en: "from “{title}”", es: "desde “{title}”" },
   'share.via.pageAbove': { en: "a page above", es: "una página de arriba" },
+  // El link público, "General access" (Docs/Doc_Link_Publico.md, 3.11).
+  'share.link.general': { en: "General access", es: "Acceso general" },
+  'share.link.restricted': { en: "Restricted", es: "Restringido" },
+  'share.link.anyone': { en: "Anyone with the link", es: "Cualquiera con el link" },
+  'share.link.canView': { en: "Can view (and comment)", es: "Puede ver (y comentar)" },
+  'share.link.restrictedHint': {
+    en: "Only people with access can open it. With a link, anyone who has it opens this page and the ones inside, without an account.",
+    es: "Solo la abre quien tiene acceso. Con un link, cualquiera que lo tenga abre esta página y las de adentro, sin cuenta.",
+  },
+  'share.link.anyoneHint': {
+    en: "Anyone with the link can open this page and the ones inside, and comment with a name. Not for sensitive material.",
+    es: "Cualquiera con el link abre esta página y las de adentro, y comenta con un nombre. No es para material sensible.",
+  },
+  'share.link.cleanOff': {
+    en: "Links need the workspace setting that keeps deleted text out of shared pages. The owner of the workspace turns it on.",
+    es: "Los links necesitan el ajuste del workspace que deja afuera de lo compartido lo que se borró. Lo prende el dueño del workspace.",
+  },
+  'share.link.notAlive': {
+    en: "This link isn't working: it expired, or whoever created it can't share this page anymore. Reset link makes a new one.",
+    es: "Este link no anda: venció, o quien lo creó ya no puede compartir esta página. Renovar link crea uno nuevo.",
+  },
+  'share.link.copy': { en: "Copy link", es: "Copiar link" },
+  'share.link.copied': { en: "Link copied", es: "Link copiado" },
+  'share.link.reset': { en: "Reset link", es: "Renovar link" },
+  'share.link.resetConfirm': {
+    en: "The current link will stop working for everyone who has it.",
+    es: "El link actual va a dejar de andar para todos los que lo tienen.",
+  },
+  'share.link.expires': { en: "Expires", es: "Vence" },
+  'share.link.never': { en: "Never", es: "Nunca" },
+  'share.link.change': { en: "Change…", es: "Cambiar…" },
+  'share.link.days': {
+    en: { one: "In {count} day", other: "In {count} days" },
+    es: { one: "En {count} día", other: "En {count} días" },
+  },
+  'share.link.onDate': { en: "On a date…", es: "Una fecha…" },
+  'share.link.date': { en: "Expiry date", es: "Fecha de vencimiento" },
+  'share.link.datePrompt': { en: "Expires at the end of (YYYY-MM-DD):", es: "Vence al final del día (AAAA-MM-DD):" },
+  'share.link.badDate': { en: "Pick a date in the future.", es: "Elegí una fecha futura." },
+  'share.link.expiresOn': { en: "on {date}", es: "el {date}" },
+  'share.link.usage': {
+    en: "Today: opened {opens} times · {comments} comments · {mb} MB downloaded",
+    es: "Hoy: abierto {opens} veces · {comments} comentarios · {mb} MB bajados",
+  },
+  'share.link.limited': {
+    en: "Daily limit reached: new visits are paused until tomorrow. Reset link if it went too far.",
+    es: "Llegó al tope del día: las visitas nuevas siguen mañana. Si se escapó, Renovar link.",
+  },
+  'share.link.above': { en: "Anyone with the link to “{title}” can view this page.", es: "Cualquiera con el link de “{title}” puede ver esta página." },
+  'share.link.goAbove': { en: "Go to it", es: "Ir a esa" },
+  'share.link.visitors': { en: "the link", es: "el link" },
+  'share.link.deleteComments': {
+    en: { one: "Delete {count} comment from this link…", other: "Delete {count} comments from this link…" },
+    es: { one: "Borrar {count} comentario de este link…", other: "Borrar {count} comentarios de este link…" },
+  },
+  'share.link.deleteCommentsConfirm': {
+    en: { one: "Delete {count} comment written through this link?", other: "Delete {count} comments written through this link?" },
+    es: { one: "¿Borrar {count} comentario escrito con este link?", other: "¿Borrar {count} comentarios escritos con este link?" },
+  },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).

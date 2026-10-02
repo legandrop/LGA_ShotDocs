@@ -59,6 +59,11 @@ export interface CommentRow {
   imported_author_email?: string | null;
   /** Quien importó el comentario (una cuenta de la app). */
   imported_by?: string | null;
+  /**
+   * El nombre que escribió quien comentó con un link público (Docs/Doc_Link_Publico.md, 3.7); ausente o `null` en los
+   * demás. Se muestra siempre con "(via link)".
+   */
+  plink_author?: string | null;
 }
 
 /** Un comentario que viene de otra herramienta (`import_comment`, 20260930200000_comentarios_importados.sql). */
@@ -194,6 +199,8 @@ export interface CommentView {
   importedAuthorEmail: string | null;
   /** Quien lo importó (una cuenta de la app), o `null`. */
   importedBy: string | null;
+  /** El nombre de quien lo escribió con un link público, o `null` (se muestra con "(via link)"). */
+  linkAuthor?: string | null;
   createdAt: string;
   editedAt: string | null;
   deleted: boolean;
@@ -1188,6 +1195,7 @@ export function fromRow(r: CommentRow): ViewWithResolution {
     importedAuthor: r.imported_author ?? null,
     importedAuthorEmail: r.imported_author_email ?? null,
     importedBy: r.imported_by ?? null,
+    linkAuthor: r.plink_author ?? null,
     createdAt: r.created_at,
     editedAt: r.edited_at,
     deleted: !!r.deleted_at,

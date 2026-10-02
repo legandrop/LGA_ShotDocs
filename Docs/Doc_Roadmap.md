@@ -162,9 +162,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   en Chrome y Edge y el botón "Carpeta…" del menú `/`. **Entrega 2 hecha (*Bajar todo*, rama `lega/carpetas-zip`):**
   zip sin comprimir con Zip64 escrito a medida que llega en Chrome y Edge, o el árbol en una carpeta; en memoria con
   tope en Firefox, Safari y los teléfonos (D24); nombres de Drive limpios para Windows y la Mac (`.`, `..`, punto al
-  final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. Falta (BAJO): listar ~40 subcarpetas
-  por pedido (hoy una), Firefox sin tope por el service worker, *Retry missing*, los emojis compuestos que pierden el ZWJ
-  (O4 de la auditoría) y probar a mano en Safari, el iPhone y con el Drive real. Detalle en
+  final, `CON`…, a lo sumo 255 bytes) y cortes de 200 y 250 caracteres por grafema. *Retry missing*, el tope sin avance
+  de cada pedido (R1) y el ZWJ de los emojis compuestos en la app (O4), hechos (rama `lega/carpetas-restos`). Falta
+  (BAJO): listar ~40 subcarpetas por pedido (pide un cambio del portero: `/folder/list` con varias), el ZWJ en el
+  portero, Firefox sin tope por el service worker y probar a mano en Safari, el iPhone y con el Drive real. Detalle en
   `Doc_Carpetas.md`, "Cómo quedó" y "Cómo quedó (entrega 2)". Pendiente de los nombres (auditoría de D3, BAJO):
   - Mac y Windows: la marca de cada subcarpeta resume la ruta sin normalizar los acentos (la Mac da `í` en dos
     partes). Volver a soltar desde el otro sistema crea subcarpetas nuevas, con el mismo nombre, al lado de las de
@@ -283,7 +284,21 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Ojo: `npm run db:test` aplica las migraciones de verdad; esta se probó con un script en `begin … rollback`.
 - **P.19 Link público: *Anyone with the link*** (Lega, 2026-10-02): en *Share*, además de personas y correos, un link
   que cualquiera abre sin cuenta, con *Can view* (que siempre puede comentar) o *Can edit*; "debería estar seguro".
-  **Diseño en `Doc_Link_Publico.md`** (sin código; auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
+  **Entregas 0 y 1 hechas (v0.114: *Can view*, migración sin aplicar; ver "Cómo quedó" en `Doc_Link_Publico.md`).** Para
+  publicarla: aplicar la migración, prender el interruptor de D14 y subir la mínima. Falta: el ícono del árbol para las
+  páginas con link, el detalle *Can view link, created by…* para el equipo, y las entregas 2 y 3.
+  **Observaciones de las auditorías que quedaron para después** (ninguna pierde datos ni abre el link): `set_public_link`
+  revive un link vencido con la base de antes (le falta el `clean_reset`); en el visitante, *Open my workspace* desde la
+  cabecera del link, pruebas de las guardas de la interfaz (*Resolve*, papelera, preferencias, cartel del dominio,
+  modo liviano), avisar y ofrecer copiar los comentarios sin subir cuando el link muere, limpiar las bases locales de
+  links viejos, confirmar *Restricted* como *Reset link*, los plurales de «Today: opened 1 times», un texto propio del
+  link en vez de «Ask for edit access», `LinkRemote` cerrando también `namePageVersion`/`share`/`deleteProject`,
+  rechazar «(via link)» en el nombre, un selector de fecha en vez de `prompt()` al cambiar el vencimiento, la ayuda
+  según quién la lee; en la base, tiempos de un token que ya existe (el doc dice «cuesta lo mismo»), el costo sin contar
+  de `plink_tree(sig)` (26 ms con 423 páginas), el `max_rows` de PostgREST (1000: ramas más grandes llegan cortadas), la
+  prueba del portero de los pases de 2 horas en `/folder/list`, el texto de «cada archivo listado cuenta como un pase»,
+  y una línea de ayuda por `revoke_public_link` con la raíz en la papelera (`page_in_trash`).
+  **Diseño en `Doc_Link_Publico.md`** (auditado: aprobado con condiciones, ya corregido; D29 a D31): el token
   del link validado por la base en cada pedido (sin cuentas ni cambios en el login; las sesiones anónimas de Supabase no
   andan con el registro cerrado), solo la página y lo de abajo, como un invitado (base limpia de D14, sin historial ni
   papelera), comentarios con nombre *(via link)*, *Reset link* instantáneo y topes por link, por día y de por vida.
@@ -328,7 +343,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   volver; el zip de *Download all*). Lo exporta quien ve, solo su rama; nunca lo borrado (se exportan bloques, nunca el
   documento Yjs) ni la papelera. Volver: *Import Shot Docs archive…*, siempre a un proyecto nuevo. Entregas: 0 (el editor
   de exportación medido), 1 (PDF), 2 (zip), 3 (volver, con la migración de `imported_from`), 4 (carpetas de Drive,
-  reusar archivos, link público).
+  reusar archivos, link público). **Entrega 0 hecha (v0.115):** el editor de exportación en `src/export/`
+  (sin interfaz), medido con 300 páginas y 2219 fotos en Chromium: 14,5 a 38,9 s, nada guardado cambia y las hojas de
+  las 300 iguales a las marcas de la pantalla. Sigue la entrega 1 (PDF), con lo que dejó la auditoría de la 0: una foto
+  que no carga cuesta 14 s por página (dos esperas que se suman: una sola, más corta); el editor acumula el deshacer
+  y retiene las páginas anteriores (~0,4 MB cada 100: apagar el historial); exportar una rama sola corta distinto que la
+  pantalla en 8 de 25 casos (pierde el renglón de encabezado); una marca de texto desconocida borra ese texto en la
+  copia y el aviso no lo usa nadie; el proyecto de prueba no tiene páginas de hoja libre.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
   que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Diseño en `Doc_Menciones.md`** (sin
   código ni migración; auditado y corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
@@ -339,7 +360,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
 - **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
-  Lega). **A1 implementada (v0.113):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
+  Lega). **A1 implementada (v0.0XX):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y
   la guarda de "cambió mientras pensaba", permisos, sin red, atajo, ayuda, CSP y la migración de `assistant_policy`
   (sin aplicar; la aplica quien publica). Falta: A2, A3 y el MCP (M0 a M3); lo que Lega prueba con sus claves está en
