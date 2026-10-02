@@ -732,139 +732,179 @@ function rng(seed: number): () => number {
 const SEEDS = Number(process.env.OFFLINE_LARGO_SEEDS ?? 6);
 const FIRST_SEED = Number(process.env.OFFLINE_LARGO_FIRST ?? 1);
 
-describe('variantes al azar: semanas sin red con la v0.090, con y sin la mínima', () => {
-  for (let seed = FIRST_SEED; seed < FIRST_SEED + SEEDS; seed++) {
-    it(`semilla ${seed}`, async () => {
-      const r = rng(seed * 7919);
-      const pick = <T>(list: T[]): T => list[Math.floor(r() * list.length)];
-      const server = workspace();
-      vi.useFakeTimers({ toFake: ['Date'] });
-      const start = Date.parse('2026-10-01T09:00:00Z');
-      vi.setSystemTime(start);
-      let a = await device('v090', server, `a-${seed}-${crypto.randomUUID()}`, OLD);
-      const b = await device('actual', server, `b-${seed}-${crypto.randomUUID()}`, NEW);
-      const rodaje = await a.tree.create(null, 'Rodaje');
-      const pages = [rodaje];
-      for (let i = 0; i < 3; i++) pages.push(await a.tree.create(i === 0 ? rodaje : null, `Página ${i}`));
-      const base = (p: string, i: number) => `base-${pages.indexOf(p)}-${i}`;
-      for (const p of pages) await edit(a, p, [{ add: base(p, 1) }, { add: base(p, 2) }]);
-      await syncAll(a, b);
+// A con la v0.090 de verdad, o con la versión actual que queda vieja (esa, además, comenta y sigue trabajando con red
+// y la app vieja antes de actualizar: lo propio sigue editable y nada sale).
+for (const [kind, aVersion] of [
+  ['v090', OLD],
+  ['actual', '0.095'],
+] as const) {
+  describe(`variantes al azar: semanas sin red con la ${kind === 'v090' ? 'v0.090' : 'versión actual'}, con y sin la mínima`, () => {
+    for (let seed = FIRST_SEED; seed < FIRST_SEED + SEEDS; seed++) {
+      it(`semilla ${seed}`, async () => {
+        const r = rng(seed * 7919);
+        const pick = <T>(list: T[]): T => list[Math.floor(r() * list.length)];
+        const server = workspace();
+        vi.useFakeTimers({ toFake: ['Date'] });
+        const start = Date.parse('2026-10-01T09:00:00Z');
+        vi.setSystemTime(start);
+        let a = await device(kind, server, `a-${seed}-${crypto.randomUUID()}`, aVersion);
+        const b = await device('actual', server, `b-${seed}-${crypto.randomUUID()}`, NEW);
+        const rodaje = await a.tree.create(null, 'Rodaje');
+        const pages = [rodaje];
+        for (let i = 0; i < 3; i++) pages.push(await a.tree.create(i === 0 ? rodaje : null, `Página ${i}`));
+        const base = (p: string, i: number) => `base-${pages.indexOf(p)}-${i}`;
+        for (const p of pages) await edit(a, p, [{ add: base(p, 1) }, { add: base(p, 2) }]);
+        await syncAll(a, b);
 
-      // Lo que tiene que quedar: renglones (texto único), agregados a renglones, fotos y páginas nuevas.
-      const added = new Set<string>(pages.flatMap((p) => [base(p, 1), base(p, 2)]));
-      const removed = new Set<string>();
-      const appended: { line: string; token: string }[] = [];
-      const photos: {
-        id: string;
-        pageId: string;
-        name: string;
-        who: 'A' | 'B';
-      }[] = [];
-      const created: string[] = [];
-      let n = 0;
-      const raiseAt = r() < 0.6 ? 1 + Math.floor(r() * 12) : -1;
-      /** El renglón (de los que se siguen) que empieza un texto visto en una página. */
-      const keyOf = (line: string) => [...added].find((t) => line === t || line.startsWith(`${t} `));
+        // Lo que tiene que quedar: renglones (texto único), agregados a renglones, fotos y páginas nuevas.
+        const added = new Set<string>(pages.flatMap((p) => [base(p, 1), base(p, 2)]));
+        const removed = new Set<string>();
+        const appended: { line: string; token: string }[] = [];
+        const photos: {
+          id: string;
+          pageId: string;
+          name: string;
+          who: 'A' | 'B';
+        }[] = [];
+        const created: string[] = [];
+        const comments: string[] = [];
+        let n = 0;
+        const raiseAt = r() < 0.6 ? 1 + Math.floor(r() * 12) : -1;
+        /** El renglón (de los que se siguen) que empieza un texto visto en una página. */
+        const keyOf = (line: string) => [...added].find((t) => line === t || line.startsWith(`${t} `));
 
-      a.net.down = true;
-      const days = 6 + Math.floor(r() * 12);
-      for (let day = 1; day <= days; day++) {
-        vi.setSystemTime(start + day * DAY + Math.floor((r() * DAY) / 2));
-        if (day === raiseAt) server.settings = { ...server.settings!, minAppVersion: Number(NEW) };
-        for (const who of ['A', 'B'] as const) {
-          const steps = Math.floor(r() * 4);
-          for (let step = 0; step < steps; step++) {
-            const d = who === 'A' ? a : b;
-            // Cada uno toca solo lo que ve: B no ve las páginas que A creó sin red.
-            const page = pick(pages.filter((p) => d.tree.get(p)));
-            const roll = r();
-            if (roll < 0.3) {
-              const text = `${who}-${seed}-${++n}`;
-              added.add(text);
-              await edit(d, page, [{ add: text }]);
-            } else if (roll < 0.6) {
-              const lines = (await readLines(d, page)).filter((l) => !l.startsWith('[foto'));
-              const key = lines.length > 0 ? keyOf(pick(lines)) : undefined;
-              if (!key) continue;
-              if (roll < 0.45) {
-                removed.add(key);
-                await edit(d, page, [{ remove: key }]);
+        a.net.down = true;
+        const days = 6 + Math.floor(r() * 12);
+        for (let day = 1; day <= days; day++) {
+          vi.setSystemTime(start + day * DAY + Math.floor((r() * DAY) / 2));
+          if (day === raiseAt) server.settings = { ...server.settings!, minAppVersion: Number(NEW) };
+          for (const who of ['A', 'B'] as const) {
+            const steps = Math.floor(r() * 4);
+            for (let step = 0; step < steps; step++) {
+              const d = who === 'A' ? a : b;
+              // Cada uno toca solo lo que ve: B no ve las páginas que A creó sin red.
+              const page = pick(pages.filter((p) => d.tree.get(p)));
+              const roll = r();
+              if (roll < 0.3) {
+                const text = `${who}-${seed}-${++n}`;
+                added.add(text);
+                await edit(d, page, [{ add: text }]);
+              } else if (roll < 0.6) {
+                const lines = (await readLines(d, page)).filter((l) => !l.startsWith('[foto'));
+                const key = lines.length > 0 ? keyOf(pick(lines)) : undefined;
+                if (!key) continue;
+                if (roll < 0.45) {
+                  removed.add(key);
+                  await edit(d, page, [{ remove: key }]);
+                } else {
+                  const token = `+${who}${++n}`;
+                  appended.push({ line: key, token });
+                  await edit(d, page, [{ append: [key, ` ${token}`] }]);
+                }
+              } else if (roll < 0.7) {
+                const name = `IMG_${seed}_${++n}.JPG`;
+                photos.push({
+                  id: await addPhoto(d, page, name),
+                  pageId: page,
+                  name,
+                  who,
+                });
+              } else if (roll < 0.8) {
+                const id = await d.tree.create(r() < 0.5 ? rodaje : null, `${who} nueva ${++n}`);
+                pages.push(id);
+                created.push(id);
+                const text = `${who}-${seed}-${++n}`;
+                added.add(text);
+                await edit(d, id, [{ add: text }]);
+              } else if (roll < 0.87) {
+                await d.tree.rename(page, `${who} título ${++n}`);
+              } else if (who === 'A' && roll < 0.93) {
+                // Solo A mueve, y solo a la raíz o adentro de Rodaje (que nunca se mueve): no puede armar un ciclo.
+                if (page !== rodaje) await a.tree.move(page, r() < 0.5 ? rodaje : null);
+              } else if (who === 'A') {
+                // El sistema mata la app sin red, o la app intenta sincronizar sin red.
+                if (r() < 0.5) a = await reopen(a, server, kind, aVersion);
+                else {
+                  await a.engine.syncNow();
+                  await a.engine.syncMedia();
+                }
               } else {
-                const token = `+${who}${++n}`;
-                appended.push({ line: key, token });
-                await edit(d, page, [{ append: [key, ` ${token}`] }]);
+                // La v0.090 sube los comentarios aunque esté vieja: solo comenta B. Con la versión actual, los dos.
+                const author = kind === 'v090' ? b : d;
+                const body = `${author === a ? 'A' : 'B'} comenta ${++n}`;
+                await author.comments.add(page, null, body);
+                comments.push(body);
               }
-            } else if (roll < 0.7) {
-              const name = `IMG_${seed}_${++n}.JPG`;
-              photos.push({
-                id: await addPhoto(d, page, name),
-                pageId: page,
-                name,
-                who,
-              });
-            } else if (roll < 0.8) {
-              const id = await d.tree.create(r() < 0.5 ? rodaje : null, `${who} nueva ${++n}`);
-              pages.push(id);
-              created.push(id);
-              const text = `${who}-${seed}-${++n}`;
-              added.add(text);
-              await edit(d, id, [{ add: text }]);
-            } else if (roll < 0.87) {
-              await d.tree.rename(page, `${who} título ${++n}`);
-            } else if (who === 'A' && roll < 0.93) {
-              // Solo A mueve, y solo a la raíz o adentro de Rodaje (que nunca se mueve): no puede armar un ciclo.
-              if (page !== rodaje) await a.tree.move(page, r() < 0.5 ? rodaje : null);
-            } else if (who === 'A') {
-              // El sistema mata la app sin red, o la app intenta sincronizar sin red.
-              if (r() < 0.5) a = await reopen(a, server, 'v090', OLD);
-              else {
-                await a.engine.syncNow();
-                await a.engine.syncMedia();
-              }
-            } else {
-              await b.comments.add(page, null, `B comenta ${++n}`);
             }
+            if (who === 'B') await syncAll(b);
           }
-          if (who === 'B') await syncAll(b);
         }
-      }
 
-      // Vuelve la red con la v0.090.
-      a.net.down = false;
-      await syncAll(a);
-      const outdated = raiseAt > 0 && raiseAt <= days;
-      const st = a.engine.getStatus();
-      expect(st.outdated).toBe(outdated);
-      expect(st.failedOps + st.rejectedPages + st.failedMedia + st.failedComments).toBe(0);
-      if (outdated) {
-        // Nada del contenido ni de las fotos de A llegó al servidor.
-        for (const p of pages) expect(serverLines(server, p).filter((l) => l.startsWith(`A-${seed}-`) || l.includes(' +A'))).toEqual([]);
-        for (const ph of photos) if (ph.who === 'A') expect(server.mediaFiles.has(ph.id), ph.name).toBe(false);
-      }
+        // Vuelve la red con la versión vieja.
+        a.net.down = false;
+        await syncAll(a);
+        const outdated = raiseAt > 0 && raiseAt <= days;
+        const st = a.engine.getStatus();
+        expect(st.outdated).toBe(outdated);
+        expect(st.failedOps + st.rejectedPages + st.failedMedia + st.failedComments).toBe(0);
+        if (outdated) {
+          // Nada del contenido ni de las fotos de A llegó al servidor.
+          for (const p of pages) expect(serverLines(server, p).filter((l) => l.startsWith(`A-${seed}-`) || l.includes(' +A'))).toEqual([]);
+          for (const ph of photos) if (ph.who === 'A') expect(server.mediaFiles.has(ph.id), ph.name).toBe(false);
+        }
+        if (outdated && kind === 'actual') {
+          // Sigue trabajando con red y la app vieja: páginas nuevas (editables), lo propio que nadie más tocó (editable) y
+          // comentarios. Nada de eso sale todavía.
+          for (let k = 0; k < 3; k++) {
+            const id = await a.tree.create(rodaje, `A vieja ${++n}`);
+            pages.push(id);
+            created.push(id);
+            const text = `A-${seed}-${++n}`;
+            added.add(text);
+            expect(await a.engine.prefetchPage(id, 100)).toBe(true);
+            await edit(a, id, [{ add: text }]);
+            const own = pick(pages.filter((p) => a.tree.get(p)));
+            if (await a.engine.prefetchPage(own, 100)) {
+              const more = `A-${seed}-${++n}`;
+              added.add(more);
+              await edit(a, own, [{ add: more }]);
+            }
+            const body = `A vieja comenta ${++n}`;
+            await a.comments.add(own, null, body);
+            comments.push(body);
+            await syncAll(a);
+          }
+          expect(commentBodies(server).filter((body) => body?.startsWith('A '))).toEqual([]);
+          for (const id of created) if (a.tree.hasUnsentCreate(id)) expect(server.pages.has(id), id).toBe(false);
+          for (const p of pages) expect(serverLines(server, p).filter((l) => l.startsWith(`A-${seed}-`) || l.includes(' +A'))).toEqual([]);
+        }
 
-      // Se actualiza (sin la mínima, igual se actualiza después) y todos quedan iguales.
-      a = await reopen(a, server, 'actual', NEW);
-      await syncAll(a, b);
-      clean(a);
-      clean(b);
-      const c = await device('actual', server, `c-${seed}-${crypto.randomUUID()}`, NEW);
-      await syncAll(c);
-      const final = await sameEverywhere(server, [a, b, c]);
-      const all = Object.values(final).flat();
-      for (const text of added) {
-        const count = all.filter((l) => l === text || l.startsWith(`${text} `)).length;
-        expect(count, `renglón ${text}`).toBe(removed.has(text) ? 0 : 1);
-      }
-      for (const { line, token } of appended) {
-        const re = new RegExp(` \\${token}(?![0-9])`);
-        expect(all.filter((l) => re.test(l)).length, `agregado ${token} a ${line}`).toBe(removed.has(line) ? 0 : 1);
-      }
-      for (const { id, pageId, name } of photos) {
-        expect(final[pageId], name).toContain(`[foto ${id}]`);
-        expect(server.mediaFiles.get(id)?.drive_id, name).toBeTruthy();
-        expect(server.pageFiles.has(`${pageId}:${id}`), name).toBe(true);
-      }
-      for (const id of created) expect(server.pages.has(id), id).toBe(true);
-    }, 120_000);
-  }
-});
+        // Se actualiza (sin la mínima, igual se actualiza después) y todos quedan iguales.
+        a = await reopen(a, server, 'actual', NEW);
+        await syncAll(a, b);
+        clean(a);
+        clean(b);
+        const c = await device('actual', server, `c-${seed}-${crypto.randomUUID()}`, NEW);
+        await syncAll(c);
+        const final = await sameEverywhere(server, [a, b, c]);
+        const all = Object.values(final).flat();
+        for (const text of added) {
+          const count = all.filter((l) => l === text || l.startsWith(`${text} `)).length;
+          expect(count, `renglón ${text}`).toBe(removed.has(text) ? 0 : 1);
+        }
+        for (const { line, token } of appended) {
+          const re = new RegExp(` \\${token}(?![0-9])`);
+          expect(all.filter((l) => re.test(l)).length, `agregado ${token} a ${line}`).toBe(removed.has(line) ? 0 : 1);
+        }
+        for (const { id, pageId, name } of photos) {
+          expect(final[pageId], name).toContain(`[foto ${id}]`);
+          expect(server.mediaFiles.get(id)?.drive_id, name).toBeTruthy();
+          expect(server.pageFiles.has(`${pageId}:${id}`), name).toBe(true);
+        }
+        for (const id of created) expect(server.pages.has(id), id).toBe(true);
+        const bodies = commentBodies(server);
+        for (const body of comments) expect(bodies, body).toContain(body);
+      }, 120_000);
+    }
+  });
+}
