@@ -48,6 +48,15 @@ código): un PDF con toda la rama en orden, un índice con la hoja de cada pági
 Shot Docs como proyecto nuevo. Exporta quien ve, solo lo suyo; nunca lo borrado ni la papelera. Auditado: el zip no
 lleva ningún correo y cada foto tiene una vista JPEG. Decisiones EX1 a EX15 a confirmar.
 [ Exportar - diseño del PDF con índice y del zip para archivar y volver ]
+v0.0XX :
+
+Mencionar a alguien en un comentario no existía: nadie se enteraba de un comentario en una página que no tenía
+abierta. `Doc_Menciones.md` diseña *@persona* (P.21): solo a quien ya ve la página; un miembro ve al equipo y a los
+clientes que ya comentaron, un invitado solo a quienes participan y a quien le compartió algo; el texto sigue plano y
+quién es va en `comment_mentions`, así una versión vieja ve `@lega` sin perder nada; una campana (*9+*) que pregunta
+cada 60 segundos; sin red con la cola de siempre. Correo, después (grupo C). Auditado y corregido (va después del link
+público; compartir desde la mención, solo dueño y admins); ME1 a ME10, ME10 espera a Lega.
+[ Menciones - diseño de @persona en comentarios, con la campana y sin red ]
 
 v0.108 :
 
