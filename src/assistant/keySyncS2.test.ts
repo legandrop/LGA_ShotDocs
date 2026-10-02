@@ -118,6 +118,24 @@ describe('Change passphrase…', () => {
   });
 });
 
+describe('Change passphrase… desde un dispositivo atrasado (O5)', () => {
+  it('si la copia cambió en otro dispositivo antes del clic, este no queda anotado como al día', async () => {
+    const store = new KeySyncStore();
+    await saveSettings(EMAIL, ANT, KEY);
+    await turnOnSync(ctx(store), PHRASE);
+    // Otro dispositivo (otra base del dispositivo: otro correo) sube otra clave con la misma frase: generación 2.
+    await saveSettings('pc@otro.dispositivo', ANT, 'sk-ant-api03-OTRA-o7R8');
+    await updateSync({ ...ctx(store), email: 'pc@otro.dispositivo' }, PHRASE);
+    expect(store.rows.get(UID)!.generation).toBe(2);
+    expect(syncFor(await loadSettings(EMAIL), 'wanka', UID)?.generation).toBe(1);
+    await changePassphrase(ctx(store), PHRASE, NEW_PHRASE);
+    const after = store.rows.get(UID)!.generation;
+    expect(after).toBe(3);
+    // Este dispositivo sigue con la generación que abrió: la ventana le va a decir "cambió en otro dispositivo".
+    expect(syncFor(await loadSettings(EMAIL), 'wanka', UID)?.generation).toBe(1);
+  });
+});
+
 describe('una copia más vieja', () => {
   it('un dispositivo que ya abrió una copia rechaza una más vieja que repone el dueño; uno nuevo la abre (no se puede impedir)', async () => {
     const store = new KeySyncStore();

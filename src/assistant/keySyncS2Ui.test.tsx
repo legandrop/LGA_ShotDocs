@@ -189,7 +189,7 @@ describe('una copia más vieja y la copia que cambió', () => {
     expect(await readKey(EMAIL, { provider: 'anthropic' })).toBe('sk-ant-api03-NUEVA-n3W4');
   });
 
-  it('con la copia cambiada en otro dispositivo no ofrece Choose a new passphrase…, salvo que la clave de acá se haya cambiado', async () => {
+  it('con la copia cambiada en otro dispositivo no ofrece Choose a new passphrase…, ni aunque la clave de acá se haya cambiado (O3)', async () => {
     const store = new KeySyncStore();
     await saveSettings(EMAIL, ANT, KEY);
     await turnOnSync(wanka(store), PHRASE);
@@ -200,10 +200,71 @@ describe('una copia más vieja y la copia que cambió', () => {
     expect(section(host).textContent).not.toContain('Forgot it?');
     for (const r of roots.splice(0)) act(() => r.unmount());
     document.body.innerHTML = '';
-    // La persona pegó una clave nueva acá (perdió la frase nueva): ahora sí puede pisar la copia.
+    // Una clave pegada acá alguna vez (quizás hace semanas) no habilita pisar la copia más nueva; queda Stop syncing.
     await saveSettings(EMAIL, ANT, 'sk-ant-api03-PEGADA-p4G5');
     const again = await mount(store);
-    expect(button(again, 'Choose a new passphrase…')).toBeDefined();
+    expect(button(again, 'Choose a new passphrase…')).toBeUndefined();
+    expect(button(again, 'Stop syncing')).toBeDefined();
+  });
+});
+
+describe('correcciones de la auditoría de S2', () => {
+  async function tabOnlyUnlocked(store: KeySyncStore): Promise<HTMLElement> {
+    const host = await mount(store);
+    const box = [...section(host).querySelectorAll<HTMLLabelElement>('label.folder-check')].find((l) => l.textContent?.includes('Keep the key on this device'))!.querySelector('input')!;
+    await click(box);
+    await unlockWith(host, PHRASE);
+    await until(() => section(host).textContent?.includes('This key is only in this tab.'), 'solo en la pestaña');
+    return host;
+  }
+
+  it('O1: en la computadora prestada, Stop syncing no promete que la clave queda en el dispositivo', async () => {
+    const store = new KeySyncStore();
+    await syncedElsewhere(store);
+    const host = await tabOnlyUnlocked(store);
+    await click(button(host, 'Stop syncing'));
+    expect(section(host).textContent).toContain("Your key is only in this tab: after you reload, it won't be on this computer.");
+    expect(section(host).textContent).not.toContain('Your key stays on this device');
+    await click(button(host, 'Delete copy'));
+    await until(() => section(host).textContent?.includes('Your key is only in this tab until you reload.'), 'el aviso');
+  });
+
+  it('O2: Forget key en modo pestaña olvida solo la de la pestaña; la guardada de antes queda', async () => {
+    const store = new KeySyncStore();
+    await syncedElsewhere(store);
+    await saveSettings(EMAIL, ANT, 'sk-ant-api03-PROPIA-9999');
+    const host = await mount(store);
+    const box = [...section(host).querySelectorAll<HTMLLabelElement>('label.folder-check')].find((l) => l.textContent?.includes('Keep the key on this device'))!.querySelector('input')!;
+    await click(box);
+    await unlockWith(host, PHRASE);
+    await click(button(host, 'Use it'));
+    await until(() => section(host).textContent?.includes('This key is only in this tab.'), 'solo en la pestaña');
+    expect(await readKey(EMAIL, { provider: 'anthropic' })).toBe(KEY);
+    await click(button(host, 'Forget key'));
+    await until(() => host.textContent?.includes('Forgot the key in this tab. The key saved on this device before stays.'), 'el aviso');
+    expect(await readKey(EMAIL, { provider: 'anthropic' })).toBe('sk-ant-api03-PROPIA-9999');
+    expect((await loadSettings(EMAIL))?.tabOnly).toBeUndefined();
+  });
+
+  it('O4: si solo se pregunta por Voice, Keep my voice key toma la del asistente y deja la de Voice', async () => {
+    const store = new KeySyncStore();
+    await saveSettings(EMAIL, ANT, KEY);
+    await saveVoiceSettings(EMAIL, { source: 'own', provider: 'openai', model: '' }, 'sk-proj-VOZ-COPIA-1111');
+    await turnOnSync(wanka(store), PHRASE);
+    await closeAssistantDb();
+    await closeDictationDb();
+    indexedDB.deleteDatabase('shotdocs-assistant');
+    indexedDB.deleteDatabase(DICTATION_DB);
+    await saveVoiceSettings(EMAIL, { source: 'own', provider: 'openai', model: '' }, 'sk-proj-VOZ-MIA-2222');
+    const host = await mount(store);
+    await unlockWith(host, PHRASE);
+    expect(section(host).textContent).toContain('Replace the voice key on this device (…2222) with the synced one (…1111)?');
+    await click(button(host, 'Keep my voice key'));
+    await until(() => section(host).textContent?.includes('Your current voice key stays on this device.'), 'el aviso');
+    expect(section(host).textContent).not.toContain('Your current key stays on this device.');
+    expect(await readKey(EMAIL, { provider: 'anthropic' })).toBe(KEY);
+    const { readVoiceKey, resolveVoice } = await import('../dictation/voiceSettings');
+    expect(await readVoiceKey(EMAIL, (await resolveVoice(EMAIL))!)).toBe('sk-proj-VOZ-MIA-2222');
   });
 });
 

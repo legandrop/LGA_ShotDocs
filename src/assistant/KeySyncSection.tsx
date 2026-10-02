@@ -89,7 +89,8 @@ type View =
   | { kind: 'change' }
   | { kind: 'also' }
   | { kind: 'stop' }
-  | { kind: 'ask'; question: string; unlocked: string };
+  /** `voiceOnly`: lo único que se pregunta es la clave de *Voice* (la del asistente se toma igual). */
+  | { kind: 'ask'; question: string; unlocked: string; voiceOnly: boolean };
 type Message = { ok: boolean; text: string; reload?: boolean };
 
 interface Props {
@@ -243,7 +244,12 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
         pending.current = unlocked;
         // A dónde va y el final de la clave (nunca la clave) quedan a la vista mientras se pregunta: otro destino
         // (regla 6), o el mismo con otra clave que el dispositivo no sacó de esta copia (regla 5); lo mismo con *Voice*.
-        setView({ kind: 'ask', question: questionFor(unlocked, tr), unlocked: unlockedText(unlocked.payload, tr) });
+        setView({
+          kind: 'ask',
+          question: questionFor(unlocked, tr),
+          unlocked: unlockedText(unlocked.payload, tr),
+          voiceOnly: unlocked.decision === 'adopt' && !!unlocked.voiceAsk,
+        });
         return;
       }
       onSaved(await adoptUnlocked(ctx, unlocked, { tabOnly: !keepAtUnlock.current }));
@@ -262,9 +268,20 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
     });
 
   const keepMine = () => {
+    const unlocked = pending.current;
     pending.current = null;
+    const voiceOnly = view.kind === 'ask' && view.voiceOnly;
     setView({ kind: 'main' });
-    setMessage({ ok: true, text: tr('assistant.sync.kept') });
+    if (!voiceOnly || !unlocked) {
+      setMessage({ ok: true, text: tr('assistant.sync.kept') });
+      return;
+    }
+    // Solo se preguntó por *Voice*: la clave del asistente se toma y la de *Voice* del dispositivo queda.
+    void step(async () => {
+      const { voice: _voice, ...rest } = unlocked.payload;
+      onSaved(await adoptUnlocked(ctx, { ...unlocked, payload: rest }, { tabOnly: !keepAtUnlock.current }));
+      setMessage({ ok: true, text: `${unlockedText(rest, tr)} ${tr('assistant.sync.keptVoice')}` });
+    });
   };
 
   const turnOn = (e: FormEvent) => {
@@ -352,11 +369,13 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
     });
   };
 
+  // En la computadora prestada la clave no "queda en este dispositivo": vive en la pestaña y se va al recargar.
+  const tabOnlyNow = !!saved?.tabOnly;
   const stop = () =>
     void step(async () => {
       await stopSync(ctx);
       setView({ kind: 'main' });
-      setMessage({ ok: true, text: tr('assistant.sync.stopped') });
+      setMessage({ ok: true, text: tr(tabOnlyNow ? 'assistant.sync.stoppedTab' : 'assistant.sync.stopped') });
       await reload();
       await refresh();
     });
@@ -444,7 +463,7 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
   } else if (view.kind === 'stop') {
     body = (
       <>
-        <p>{tr('assistant.sync.stopText', { workspace: name })}</p>
+        <p>{tr(tabOnlyNow ? 'assistant.sync.stopTextTab' : 'assistant.sync.stopText', { workspace: name })}</p>
         <div className="modal-actions">
           {back}
           <button type="button" className="primary danger" disabled={disabled} onClick={stop}>
@@ -462,7 +481,7 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
         <p className="assistant-warning">{view.question}</p>
         <div className="modal-actions">
           <button type="button" disabled={busy} onClick={keepMine}>
-            {tr('assistant.sync.keepMine')}
+            {tr(view.voiceOnly ? 'assistant.sync.keepMyVoice' : 'assistant.sync.keepMine')}
           </button>
           <button type="button" className="primary" disabled={busy} onClick={useIt}>
             {tr('assistant.sync.useIt')}
@@ -535,9 +554,10 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
     );
   } else {
     // Hay copia y este dispositivo no la abrió (o cambió desde que la abrió): se pide la frase. *Forgot it?* no se ofrece
-    // si la persona tiene la copia en otro workspace (una fila plantada acá) ni si la copia cambió en otro dispositivo y
-    // la clave de este no se tocó: pisaría la nueva con la vieja (quizás la revocada de un dispositivo perdido).
-    const canForget = !elsewhere && (!changed || !!entry?.localChanged);
+    // si la persona tiene la copia en otro workspace (una fila plantada acá) ni si la copia cambió en otro dispositivo:
+    // pisaría la nueva con la clave de este, que puede ser vieja (quizás la revocada de un dispositivo perdido), aunque
+    // se haya pegado otra a mano alguna vez. Quien perdió la frase nueva usa *Stop syncing* y prende de nuevo, a la vista.
+    const canForget = !elsewhere && !changed;
     body = (
       <form className="assistant-sync-form" onSubmit={unlock}>
         <input className="sr-only" type="text" name="username" autoComplete="username" value="Shot Docs assistant key" readOnly tabIndex={-1} aria-hidden="true" />

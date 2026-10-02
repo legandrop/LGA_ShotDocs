@@ -524,6 +524,20 @@ export const assistant = {
     en: "Replace the voice key on this device (…{local}) with the synced one (…{synced})?",
     es: "¿Reemplazar la clave de voz de este dispositivo (…{local}) por la sincronizada (…{synced})?",
   },
+  'assistant.sync.stopTextTab': {
+    en: "Delete the synced copy from {workspace}? Your key is only in this tab: after you reload, it won't be on this computer.",
+    es: "¿Borrar la copia sincronizada de {workspace}? Tu clave está solo en esta pestaña: al recargar, no va a estar en esta computadora.",
+  },
+  'assistant.sync.stoppedTab': {
+    en: "The synced copy was deleted. Your key is only in this tab until you reload.",
+    es: "Se borró la copia sincronizada. Tu clave está solo en esta pestaña hasta que recargues.",
+  },
+  'assistant.sync.forgotTabKeepsSaved': {
+    en: "Forgot the key in this tab. The key saved on this device before stays.",
+    es: "Se olvidó la clave de esta pestaña. La que este dispositivo tenía guardada de antes queda.",
+  },
+  'assistant.sync.keepMyVoice': { en: "Keep my voice key", es: "Seguir con mi clave de voz" },
+  'assistant.sync.keptVoice': { en: "Your current voice key stays on this device.", es: "Tu clave de voz de ahora queda en este dispositivo." },
   'assistant.sync.updateHere': { en: "Enter your passphrase to update it here", es: "Escribir tu frase para actualizarla acá" },
 } satisfies Dict;
 

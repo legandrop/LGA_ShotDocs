@@ -378,7 +378,18 @@ export async function readKey(email: string, to: KeyDestination): Promise<string
   return new TextDecoder().decode(plain);
 }
 
-/** *Forget key*: saca la clave y los ajustes de la persona de este dispositivo (y de esta pestaña). */
+/**
+ * Con *Keep the key on this device* destildada, *Forget key* olvida SOLO la clave de esta pestaña: la que el dispositivo
+ * tenía guardada de antes no se toca y vuelve a valer (regla 5). Devuelve si había una en la pestaña.
+ */
+export function forgetTabKey(email: string): boolean {
+  return tabOnly.delete(norm(email));
+}
+
+/**
+ * Saca la clave y los ajustes de la persona de este dispositivo y de esta pestaña. Lo usa la casilla de salir (la persona
+ * pide olvidarla en este dispositivo); *Forget key* en modo pestaña usa `forgetTabKey`.
+ */
 export async function forgetKey(email: string): Promise<void> {
   tabOnly.delete(norm(email));
   const d = await db();
