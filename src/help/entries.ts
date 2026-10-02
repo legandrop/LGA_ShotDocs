@@ -79,10 +79,9 @@ const OFFLINE = '0.083';
 /** La que trajo colapsar para todos y mover la sección entera (Doc_Colapsar.md, 1b y 2). */
 const COLLAPSE_2 = '0.084';
 /**
- * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2). La versión la pone
- * quien numera la entrada del changelog (hoy `0.0XX`): cambiarla acá en la misma pasada.
+ * La vista previa de los PDF adjuntos y los adjuntos en el carrete (Doc_Adjuntos.md, entrega 2).
  */
-const ATTACH_PREVIEW = '0.0XX';
+const ATTACH_PREVIEW = '0.091';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
