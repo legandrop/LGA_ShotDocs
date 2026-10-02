@@ -187,7 +187,7 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Safari, Firefox y el iPhone.
 - **P.12 Buscar (urgente, Lega 2026-09-30). Entrega 1 hecha (v0.051): buscar y reemplazar en la página;
   entrega 2 hecha (v0.054): buscar en el proyecto con Ctrl/⌘+K** (`Doc_Buscar.md`, "Cómo quedó (entrega 1)" y
-  "(entrega 2)"). **Entrega 3 hecha (v0.0XX): reemplazar en todo el proyecto** (`Doc_Buscar.md`, "Reemplazar en el proyecto
+  "(entrega 2)"). **Entrega 3 hecha (v0.094): reemplazar en todo el proyecto** (`Doc_Buscar.md`, "Reemplazar en el proyecto
   (diseño)" y "Cómo quedó (entrega 3)"): la flecha en Ctrl/⌘+K, vista previa, una, la página o todas con confirmación,
   escrito en el Y.Doc de cada página que se puede editar y está completa, y *Undo* de todo lo que siga igual (también
   sin red y después de cerrar la app). Falta probarlo a mano en Safari, el iPhone y Firefox. Queda para después:

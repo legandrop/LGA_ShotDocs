@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.094 :
 
 Faltaba reemplazar en todo el proyecto: cambiar un nombre en cincuenta páginas era abrirlas de a una. Ahora la
 flecha del panel de Ctrl/⌘+K despliega el reemplazo: lista cada coincidencia con lo de antes tachado y lo nuevo

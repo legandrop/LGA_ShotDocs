@@ -85,7 +85,7 @@ const PAGE_BREAK = '0.093';
  */
 const ATTACH_PREVIEW = '0.091';
 /** Reemplazar en todo el proyecto (Doc_Buscar.md, "Reemplazar en el proyecto"). */
-const REPLACE_PROJECT = '0.0XX';
+const REPLACE_PROJECT = '0.094';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
