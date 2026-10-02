@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Deshacer en el orden en que editaste (P.26), entrega 1. La pila de ⌘Z de cada página moría al cambiar de página: el
+editor se desmontaba y y-prosemirror destruía su `UndoManager`. Ahora una línea de tiempo por proyecto y pestaña
+(`undoTimeline.ts`) guarda las listas de Yjs al irse, retiene el documento (`docs.open`) y se las pasa al editor nuevo
+sin parchear y-prosemirror. ⌘Z y ⌘⇧Z (`undoTimelineUi.ts`)
+siguen el orden entre páginas: si lo último fue en otra, la app va ahí, lo deshace a la vista y avisa con *Back*. Un paso
+por vez, la excepción de Yjs con dos personas atrapada (B.22), topes de 20 páginas y 1000 pasos. El reemplazo del
+proyecto sigue igual (entrega 2). Nada cambia en lo guardado.
+[ Deshacer en orden, entrega 1 - la línea de tiempo por proyecto: ⌘Z y ⌘⇧Z entre páginas ]
+
 v0.133 :
 
 Compactar (B.9), entrega 2: crear snapshots. Nadie armaba las copias resumidas que v0.127 sabe bajar. Nuevo

@@ -1,6 +1,7 @@
 # Deshacer en el orden en que editaste (P.26)
 
-**Estado: diseño; entrega 0 hecha (v0.132: el límite de Yjs, arreglado con un parche; sección 16).** Pedido de Lega
+**Estado: entregas 0 (v0.132: el límite de Yjs, arreglado con un parche; sección 16) y 1 (v0.0XX: la línea de tiempo
+con las páginas; sección 17) hechas; 2 y 3 en diseño.** Pedido de Lega
 del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
 no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
 y se revisó contra v0.125. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el
@@ -533,7 +534,7 @@ otra sesión (medido).
 ## 13. Entregas
 
 0. **Hecha (v0.132): el límite de Yjs de la sección 6 (B.21).** La causa, el parche y lo medido, en la sección 16.
-1. **La línea de tiempo con las páginas.** La pila de cada página que sobrevive al cambiar de página (retener y pasar
+1. **Hecha (v0.0XX, sección 17): la línea de tiempo con las páginas.** La pila de cada página que sobrevive al cambiar de página (retener y pasar
    la pila sin el meta del editor viejo, 3.2), ⌘Z y ⌘⇧Z en orden entre páginas (DH2), fuera del editor, quienes llaman
    directo al deshacer (3.4), lo de fondo fuera de la pila, topes, ayuda y atajos. **Aceptación:** escribir en *A*, en
    *B* y en *A*; desde *C*, tres ⌘Z deshacen *A*, *B* y *A* en ese orden, cada uno con su página en pantalla, y tres ⌘⇧Z
@@ -689,6 +690,81 @@ restos), sin cruzarse con este. **No hace falta subir `min_app_version`.**
 - **Al actualizar Yjs** (o al pasar a `@blocknote/core/y`, Yjs 14, `Doc_Colaboracion.md`): ver si la versión nueva ya lo
   trae; si no, rehacer el parche en los tres archivos y `npx patch-package yjs`. Las dos pruebas lo cubren. Conviene
   reportarlo a Yjs con los dos casos mínimos de 16.1.
+
+## 17. Entrega 1: cómo quedó (v0.0XX)
+
+### 17.1 Qué se hizo
+
+- **`src/ui/undoTimeline.ts`**: la línea de tiempo (una por instancia de servicios, `undoTimelineFor`). Cada página con
+  pasos tiene su entrada: el documento (retenido con `docs.open` desde el primer paso), y sus listas de Yjs mientras no
+  hay editor; con el editor en pantalla, las listas son las de su `UndoManager`. Cada paso lleva un número de orden
+  (`WeakMap` sobre el `StackItem`: el momento en que se creó o se extendió); el próximo ⌘Z es el paso de arriba con el
+  número más alto entre las páginas del proyecto (DH7). `step` le pasa a Yjs un paso por vez (los de abajo se sacan un
+  momento) y corta el tiempo después. Topes de 20 páginas y 1000 pasos (lo más viejo se olvida y se suelta su
+  documento); el aviso de `docs.ts` (`subscribeUnsupported`) suelta la referencia en el momento y deja una marca para
+  avisar en el próximo ⌘Z que llegue ahí.
+- **`src/ui/PageEditor.tsx`**: el editor de la página de verdad (no la práctica ni una versión del historial) se anota
+  al montarse la vista (`editor.onMount`) y se va al desmontarse. Lo que da: el `UndoManager` de y-prosemirror, su
+  *binding* (para borrarlo del `meta` de cada paso al irse), si se puede editar, y cómo mostrar un cambio
+  (`undoReveal.ts`: el cursor donde empieza la diferencia, abriendo la sección colapsada que lo esconde).
+- **`src/ui/undoTimelineUi.ts`** (montado en `Workspace.tsx`): ⌘Z, ⌘⇧Z y ⌘Y (Ctrl en Windows; `modPressed`/`isLetter`)
+  en `window`, en la fase de captura, con el foco en el editor de la página o fuera de un campo de texto (el árbol, un
+  botón); no con un diálogo, el carrete o el anotador abiertos, ni en el título, un comentario o la búsqueda. Va a la otra
+  página, espera hasta 10 s a que su editor esté listo y editable, deshace y avisa "Undone in “Shot 12” · Back".
+  Manteniendo apretado no cruza; mientras va, los ⌘Z que llegan no hacen nada. `undoGuard.ts` manda el `historyUndo`
+  del navegador (menú Edición, gesto de iOS) a la línea de tiempo.
+- **Lo de fondo, fuera de la pila** (`addToHistory: false`): pasar una imagen `data:` a archivo, sacar el bloque de una
+  subida que falló, poner la dirección al terminar de subir y renombrar un HEIC a `.jpg`.
+- **`historyRestore.ts`**: la marca *Restored from…* se entera también por la línea de tiempo (`subscribeStepPopped`)
+  cuando el paso se deshace con otro editor de la misma página.
+- Atajos (`shortcuts.ts`: `undo` y `redo` pasan a ser de la app; `shortcutSources.ts`), la ayuda (`help.undo.text`) y los
+  avisos en inglés y castellano (`src/i18n/shell.ts`).
+
+### 17.2 Diferencias con el diseño (decididas al implementar)
+
+- **Quienes llaman directo al `UndoManager` no se cambiaron.** El asistente, restaurar una versión y el título recién
+  creado desde una plantilla deshacen su propio paso, que siempre es el de arriba de la página en pantalla. En vez de
+  pasarlos por una función de la línea de tiempo, la línea de tiempo escucha los eventos de esa pila
+  (`stack-item-added`, `-updated`, `-popped`), así lo que hagan queda en el orden igual. Menos código tocado en zonas de
+  otros frentes, y un llamador nuevo tampoco puede dejar un paso que ella no conozca. La prueba de riesgo 6 (buscar
+  `.undo()` en `src`) no hace falta.
+- **Mientras el editor está en pantalla, las listas son las de su `UndoManager`.** Yjs reemplaza la lista de rehacer
+  (`clear`) con cada edición nueva: guardar la misma lista y compartirla no sirve. La línea de tiempo las lee del
+  `UndoManager` montado y se las queda al irse.
+- **C1 (el *Undo* del panel fuera de orden) y DH9 van con la entrega 2**: en esta entrega el reemplazo no cambia (anclas,
+  como hoy). Con las pilas que ahora sobreviven, el resto de 1.3 ("Toma 1: cámara") se puede ver también después de
+  cambiar de página; no se pierde nada, sobra texto, y lo arregla la entrega 2.
+- **B.22**: si Yjs tira el error al deshacer, el paso se descarta, se avisa "Nothing to undo there…" y ese ⌘Z se frena
+  (no sigue con el anterior aunque sea de la misma página: Yjs pudo haber dejado algo a medias).
+- **Una página en la papelera, borrada o sin permiso de editar**: se olvidan todos sus pasos (no solo el de arriba) y se
+  avisa una vez "Can't undo in “Shot 12”: it's in the trash. ⌘Z again for the previous change."
+- **El cursor**: un paso de antes de cambiar de página no guarda la selección del editor nuevo; al deshacerlo, el cursor
+  va donde empieza el cambio (y se abre la sección colapsada). Con el foco en el árbol y el paso en la misma página, solo
+  se mueve la vista.
+
+### 17.3 Lo medido
+
+| Prueba | Resultado |
+|---|---|
+| Aceptación en Chromium (arnés con la app de verdad, servidor en memoria; Windows con Ctrl y Mac con ⌘): escribir en A y en B, desde C dos ⌘Z y dos ⌘⇧Z, *Back* | cada paso en su página y en orden, con el aviso; en la Mac Ctrl+Z no hace nada; el otro dispositivo baja lo mismo; sin errores en la consola |
+| Pasear entre páginas sin escribir (retener documentos) | 0 filas nuevas en el dispositivo y en el servidor |
+| Memoria en Chromium con el editor real: 20 páginas retenidas con 5 pasos cada una | +13,2 MB con páginas de 60 KB (0,66 MB por página) y +19,1 MB con páginas de 115 KB (0,96 MB por página); sin borrar el `meta` del editor viejo, +31,5 MB con las de 115 KB (C2). El tope queda en 20 |
+| Al azar con el editor, 3 páginas y cambios de página (300 semillas de 40 acciones, ⌘Z y ⌘⇧Z en el medio) | deshacer todo: 300 de 300 exactas, 0 con letras de menos ni de más; rehacer todo: 300 de 300 |
+| Lo mismo borrando bloques enteros | deshacer todo: 297 de 300 exactas, 0 con letras de menos; rehacer todo: 300 de 300 |
+| Lo mismo con otra persona escribiendo y borrando en las tres | 0 letras del otro borradas por un deshacer; los dos iguales en 300 de 300; ninguna excepción de Yjs (B.22) |
+| Pruebas de mutación (cada protección sacada) | 8 de 9 hacen fallar alguna prueba: un paso por vez, retener el documento, borrar el `meta` del editor viejo, soltar al rearmarse, borrar lo de rehacer en las demás, el editor viejo con sus listas, soltar al olvidar, no pisar una lista. Sobrevive cortar el tiempo después de deshacer o rehacer: Yjs ya corta al deshacer, y no se puede rehacer con lo escrito todavía "abierto" (escribir borra lo de rehacer); queda como protección barata |
+| Versión vieja (el esquema anterior) abriendo lo deshecho y rehecho entre páginas | no escribe nada al abrir y ve el mismo texto |
+
+Las pruebas: `src/ui/undoTimeline.test.ts` (núcleo con `PageDocs` y el editor real), `undoTimelinePage.test.tsx` (la app
+en jsdom: otra página, *Back*, mantener apretado, el árbol, el título), `undoTimelineRandom.test.ts` (al azar; 12
+semillas en la suite, `TIMELINE_SEEDS` para más) y las de atajos (`shortcuts.test.ts`, `macShortcuts.test.ts`).
+
+### 17.4 Lo que falta
+
+- La memoria en el iPhone con 20 páginas retenidas (si aprieta, el tope baja a 10) y el gesto de deshacer de iOS en la
+  PWA instalada.
+- La excepción de Yjs con dos personas (B.22) medida con dos editores borrando bloques enteros.
+- Entregas 2 (el reemplazo adentro, C1, DH9, `planRedo`) y 3 (anotar como un paso).
 
 ## Correcciones de la auditoría (2026-10-02)
 

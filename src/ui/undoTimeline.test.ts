@@ -9,6 +9,7 @@ import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
 import { mountEditor, undoManager, view, yText, type Editor } from './collabHarness';
+import { previousSchema } from './photoHarness';
 import { revealChange } from './undoReveal';
 import { subscribeStepPopped, UndoTimeline, type TimelineDocs } from './undoTimeline';
 import { createUndoRunner } from './undoTimelineUi';
@@ -549,5 +550,32 @@ describe('la línea de tiempo', () => {
     expect(yText(app.doc!)).toMatch(/mío/);
     expect(yText(app.doc!)).toMatch(/ suyo/);
     b.docs.close(A);
+  });
+  it('una versión vieja (el esquema anterior) abre lo deshecho y rehecho entre páginas sin escribir nada', async () => {
+    const { d, ids, app, runner } = await setup(['A', 'B']);
+    const [A, B] = ids;
+    await app.go(A);
+    type(app.editor!, 'uno');
+    erase(app.editor!, 2);
+    await app.go(B);
+    type(app.editor!, 'dos');
+    await runner.run('undo');
+    await runner.run('undo');
+    await runner.run('redo');
+    app.leave();
+    for (const id of [A, B]) {
+      const doc = await d.docs.open(id);
+      const want = yText(doc);
+      let writes = 0;
+      const count = () => void writes++;
+      doc.on('update', count);
+      const old = mountEditor(doc, 'vieja', previousSchema);
+      mounted.push(old);
+      await tick();
+      expect(writes).toBe(0);
+      expect(yText(doc)).toBe(want);
+      doc.off('update', count);
+      d.docs.close(id);
+    }
   });
 });

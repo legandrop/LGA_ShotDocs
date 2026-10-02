@@ -487,9 +487,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   al editor nuevo, sin parchear y-prosemirror); ⌘Z en otra página te lleva y lo deshace a la vista; el reemplazo entra
   en la pila de Yjs de las páginas editadas en la sesión (arregla un resto que deja hoy deshacer el reemplazo y después
   lo escrito antes, también desde el *Undo* del panel) y por las anclas en las demás; ⌘⇧Z rehace todo, también el
-  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (hecha, v0.132: B.21), 1 (la
-  línea de tiempo con las páginas, con la memoria medida con el editor real), 2 (el reemplazo adentro), 3 (anotar como un
-  paso). Botones de deshacer en el teléfono y el árbol (mover, crear, papelera) quedan afuera (DH1, DH8).
+  reemplazo. Dura lo que la pestaña; nada cambia en lo guardado. Entregas: 0 (hecha, v0.132: B.21), 1 (**hecha,
+  v0.0XX**: la línea de tiempo con las páginas; la memoria medida en Chromium con el editor real, unos 19 MB con 20
+  páginas de 115 KB retenidas; falta medirla en el iPhone; `Doc_Deshacer.md`, sección 17), 2 (el reemplazo adentro, con
+  el *Undo* del panel fuera de orden, C1, y DH9), 3 (anotar como un paso). Botones de deshacer en el teléfono y el árbol
+  (mover, crear, papelera) quedan afuera (DH1, DH8).
 - **P.27 Dictado por voz y notas informales que se ubican en el reporte** (Lega, 2026-10-02): dictar en toda la app,
   sobre todo en el teléfono, y que la IA pase «este plano se filmó con un 50 mm, anotalo donde corresponda» a la celda
   *Lens* de la fila de ese plano en el *On-Set Report*. **Diseño en `Doc_Dictado.md`** (sin código; decisiones propuestas
@@ -749,9 +751,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 22. **La excepción del ⌘Z de Yjs con dos personas** (la encontró la auditoría de la entrega 0 de P.26; ya pasaba antes del
    parche de B.21). Con dos personas editando la misma página, a veces `UndoManager.undo()` tira `TypeError` (`reading
    'client'`) en `redoItem`, cuando la copia del padre que tiene que volver ya fue recolectada (1 de 150 con dos editores
-   reales; 24 de 3.000 en un modelo de párrafos); qué deja ese ⌘Z en pantalla no está medido. Con la línea de tiempo (P.26, entrega 1) se
-   deshace más lejos: atraparla ahí (descartar el paso y avisar), medirla, y ver si se arregla con el parche de Yjs o se
-   reporta (`Doc_Deshacer.md`, 16.6).
+   reales; 24 de 3.000 en un modelo de párrafos); qué deja ese ⌘Z en pantalla no está medido. **Atrapada en la línea de
+   tiempo (P.26, entrega 1, v0.0XX):** el paso se descarta, se avisa y el ⌘Z se frena (probado simulando el error). En
+   900 corridas al azar de la línea de tiempo con el editor, también 300 con otra persona escribiendo y borrando texto,
+   no apareció ninguna. Falta: medirla con dos editores borrando y deshaciendo bloques enteros, y ver si se arregla con
+   el parche de Yjs o se reporta (`Doc_Deshacer.md`, 16.6 y 17).
 
 ### C. Esperan a Lega
 
