@@ -926,6 +926,29 @@ C6; la 2 quedaba bloqueada por B1 y B2. Todo corregido arriba:
 | O16. `rls_auto_enable` | Sección 12 |
 | O18. Un `#link=` con otra dirección | 3.2: el cartel con el dominio, el cliente sin sesión, pruebas 2 y 4 |
 
+## Re-verificación de las correcciones (2026-10-02)
+
+Una segunda auditoría independiente re-verificó B1, B2 y B3: corregidos (B1: el prototipo pasa 71 de 71 casos y detecta 14
+de 16 mutantes; B2: con la cuarentena la base limpia se arma en 300 de 300 corridas, sin ella en 0; B3 se prueba en la
+entrega 0). Lo que encontró va así:
+
+- **Condiciones para programar la entrega 1** (*Can view*):
+  - **N1.** Los comentarios de un link no tienen tope de bytes: 10 000 caracteres (hasta 40 KB) por comentario y 200 por
+    día son unos 8 MB por día, y en unos 57 días la base del plan gratis queda en solo lectura. `plink_add_comment` y
+    `plink_edit_comment` llevan la guarda `db_bytes()`, un tope de bytes por link y día (1 MB) y uno de por vida, en la
+    tabla de 3.13 y en las pruebas de 6.1 con un mutante.
+  - **N2.** `plink_tree` y `plink_list_comments` sin `since` devuelven datos sin contarlos: cuentan sus bytes como
+    `plink_pull_page` (o al menos figuran en 3.13 como no contados), y `all_pull_bytes` lleva un tope mensual que deje
+    margen en los 5 GB de egress.
+  - La guarda mide como Supabase, la suma de todas las bases (`sum(pg_database_size(datname))`), no solo la actual.
+- **Entrega 0:** la prueba de caché suma el caso de un token válido de otro link (400 o 404, nunca `HIT`), con los
+  headers que manda supabase-js.
+- **Para la re-auditoría de 3.8.1 y 3.8.2 antes de la entrega 2** (*Can edit*): N3 (una subida rechazada por tamaño traba
+  lo que sigue en esa página desde ese dispositivo: el motor tiene un solo pendiente por página; la tabla de 3.8.3 dice
+  otra cosa), N4 (un link puede llevar una página a más de 8 MB de contenido válido y frenar su base limpia: tope por
+  página para lo que entra por links), N5 (la cuarentena prueba también `checkCleanBase`) y la idempotencia por
+  `client_update_id` antes de los topes.
+
 ## Cómo se midió
 
 Prototipos fuera del repo, con sus resultados en `res_*.txt`. No se creó ningún usuario, no se entró con login ni se tocó
