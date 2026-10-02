@@ -18,6 +18,10 @@ export const search = {
     en: { one: "Still downloading {count} page: something may be missing", other: "Still downloading {count} pages: something may be missing" },
     es: { one: "Todavía bajando {count} página: puede faltar algo", other: "Todavía bajando {count} páginas: puede faltar algo" },
   },
+  'search.missingOutdated': {
+    en: { one: "{count} page has newer changes: update the app to see them", other: "{count} pages have newer changes: update the app to see them" },
+    es: { one: "{count} página tiene cambios más nuevos: actualizá la app para verlos", other: "{count} páginas tienen cambios más nuevos: actualizá la app para verlos" },
+  },
   'search.missingOffline': {
     en: { one: "Offline: {count} page is not on this device yet", other: "Offline: {count} pages are not on this device yet" },
     es: { one: "Sin conexión: {count} página todavía no está en este dispositivo", other: "Sin conexión: {count} páginas todavía no están en este dispositivo" },
@@ -76,6 +80,7 @@ export const search = {
   'replace.block.permsUnknown': { en: "Permissions not loaded yet", es: "Todavía sin los permisos" },
   'replace.block.viewOnly': { en: "View only", es: "Solo lectura" },
   'replace.block.missing': { en: "Not downloaded yet", es: "Todavía sin bajar" },
+  'replace.block.missingOutdated': { en: "Has newer changes: update the app", es: "Tiene cambios más nuevos: actualizá la app" },
   'replace.block.unreadable': { en: "Couldn't be read entirely", es: "No se pudo leer entera" },
   'replace.block.rejected': { en: "The server rejected changes to this page", es: "El servidor rechazó cambios de esta página" },
   'replace.block.unsupported': { en: "This version can't show this page", es: "Esta versión no puede mostrar esta página" },

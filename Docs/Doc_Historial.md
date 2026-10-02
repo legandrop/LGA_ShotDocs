@@ -1,6 +1,6 @@
 # Historial de versiones de una página (P.18)
 
-**Estado: entrega 1 implementada (v0.0XX; ver "Cómo quedó (entrega 1)", al final, que manda sobre el diseño en lo que
+**Estado: entrega 1 implementada (v0.098; ver "Cómo quedó (entrega 1)", al final, que manda sobre el diseño en lo que
 toca); la migración `20261007120000_historial.sql` está escrita y probada en `begin … rollback` contra la base, SIN
 aplicar.** Pedido de Lega del 2026-10-01 (en el plan figuraba como fase 6). Toca la regla de no perder datos
 (restaurar es una edición) y los permisos (el historial muestra lo borrado), así que cada entrega va con sus pruebas y
@@ -809,7 +809,7 @@ lo sin subir, restaurar con el aviso y el Undo, y el editor que no está). Más 
 diccionario.
 
 **Ayuda:** la entrada *Version history* en la sección *Trash and history* (que se llamaba *Trash*), con el atajo y
-`since` en `0.0XX`.
+`since` en `0.098`.
 
 **Lo que falta (entregas 2 y 3):** los cambios marcados por persona (*Show changes*), el texto huérfano y el aviso en el
 dispositivo de quien escribió (con la subida sin GC de la otra rama), el Worker y la diferencia solo de lo tocado,

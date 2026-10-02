@@ -322,10 +322,15 @@ export const help = {
     en: "If someone deletes a block (or a list, a table or a section) while you are writing in it, the deletion wins for everyone. You get a notice on the page with what you wrote there, so you can copy it and paste it back.",
     es: "Si alguien borra un bloque (o una lista, una tabla o una sección) mientras escribís en él, el borrado gana para todos. Te aparece un aviso en la página con lo que escribiste ahí, para copiarlo y volver a pegarlo.",
   },
+  'help.updateApp.title': { en: "When the app asks to be updated", es: "Cuando la app pide actualizarse" },
+  'help.updateApp.text': {
+    en: "If the workspace needs a newer version, the sync status says Update the app: your changes wait on this device and upload after updating. It usually updates itself; if not, Update now in the sync status details. If the browser never loads the new version, Force the update appears there: with a connection, it reloads the app from the internet and keeps what is saved on this device; until it finishes installing, the app can't open offline. If the new version couldn't be installed (low storage or a dropped connection), free up space or find a better connection and tap Update now.",
+    es: "Si el workspace pide una versión más nueva, el estado de sincronización dice Actualizá la app: tus cambios esperan en este dispositivo y se suben después de actualizar. Normalmente se actualiza sola; si no, Actualizar ahora en el detalle del estado. Si el navegador nunca carga la versión nueva, ahí aparece Forzar la actualización: con conexión, recarga la app desde internet y conserva lo guardado en este dispositivo; hasta que termine de instalarse, la app no abre sin conexión. Si la versión nueva no se pudo instalar (poco espacio o se cortó la conexión), liberá espacio o buscá mejor conexión y tocá Actualizar ahora.",
+  },
   'help.syncSafe.title': { en: "Nothing gets lost", es: "No se pierde nada" },
   'help.syncSafe.text': {
-    en: "Every change is saved on this device first and uploads by itself, offline too. Edits made on two devices at the same time are merged, never overwritten. Signing out with changes not uploaded asks first.",
-    es: "Cada cambio se guarda primero en este dispositivo y se sube solo, también sin red. Lo que se edita a la vez en dos dispositivos se junta, nunca se pisa. Cerrar sesión con cambios sin subir pregunta antes.",
+    en: "Every change is saved on this device first and uploads by itself, offline too, even after weeks without a connection. If the workspace needs a newer version of the app, it usually updates itself when the connection returns (if not, Update now in the sync status) and then uploads everything; until then, pages someone else changed can be read but not edited. Edits made on two devices at the same time are merged, never overwritten. Signing out with changes not uploaded asks first.",
+    es: "Cada cambio se guarda primero en este dispositivo y se sube solo, también sin red y aunque pasen semanas. Si el workspace pide una versión más nueva de la app, normalmente se actualiza sola al volver la conexión (si no, Actualizar ahora en el estado de sincronización) y después sube todo; mientras tanto, las páginas que cambió otro se pueden leer pero no editar. Lo que se edita a la vez en dos dispositivos se junta, nunca se pisa. Cerrar sesión con cambios sin subir pregunta antes.",
   },
 
   // --- Hojas y PDF ---

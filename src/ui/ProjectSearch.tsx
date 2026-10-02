@@ -280,7 +280,11 @@ export function ProjectSearch({ onClose, onGo }: { onClose: () => void; onGo?: (
 
   const notices: string[] = [];
   if (typed && info.building && slow) notices.push(tr('search.searching'));
-  if (info.missing > 0) notices.push(tr(status.online ? 'search.missingOnline' : 'search.missingOffline', { count: info.missing }));
+  // Con la app vieja para el workspace no se baja contenido: esas páginas llegan al actualizar.
+  if (info.missing > 0) {
+    const key = !status.online ? 'search.missingOffline' : status.outdated ? 'search.missingOutdated' : 'search.missingOnline';
+    notices.push(tr(key, { count: info.missing }));
+  }
   if (info.unreadable > 0) notices.push(tr('search.unreadable', { count: info.unreadable }));
   const onlyTitles = titlesOnly(words);
 
