@@ -47,7 +47,7 @@ function dateText(iso: string | number, lang: string): string {
 const PHRASE_FIELD = { autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false } as const;
 
 type Remote = { kind: 'loading' } | { kind: 'ok'; meta: SyncMeta | null } | { kind: 'fail'; failure: SyncFailure };
-type View = { kind: 'main' } | { kind: 'turnOn'; overwrite?: { generation: number } } | { kind: 'update' } | { kind: 'replace' } | { kind: 'stop' } | { kind: 'ask'; host: string };
+type View = { kind: 'main' } | { kind: 'turnOn'; overwrite?: { generation: number } } | { kind: 'update' } | { kind: 'replace' } | { kind: 'stop' } | { kind: 'ask'; host: string; unlocked: string };
 type Message = { ok: boolean; text: string; reload?: boolean };
 
 interface Props {
@@ -106,6 +106,7 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
   /** La copia abierta mientras se pregunta si se usa (regla 6): en una `ref`, nunca en el estado. */
   const pending = useRef<Unlocked | null>(null);
   const newPhrase = useRef<PhraseHandle | null>(null);
+  const root = useRef<HTMLElement>(null);
   const [phraseReady, setPhraseReady] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -134,9 +135,11 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
     };
   }, [client, ref]);
 
-  // Al salir de una vista, la copia abierta que esperaba respuesta se suelta.
+  // Al salir de una vista, la copia abierta que esperaba respuesta se suelta. Al entrar en una, se ve entera (la
+  // ventana de ajustes es larga y en el teléfono la sección queda abajo).
   useEffect(() => {
     if (view.kind !== 'ask') pending.current = null;
+    if (view.kind !== 'main') root.current?.scrollIntoView?.({ block: 'nearest' });
   }, [view.kind]);
 
   const reload = async () => {
@@ -181,8 +184,8 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
       }
       if (unlocked.decision === 'ask') {
         pending.current = unlocked;
-        setView({ kind: 'ask', host: destinationLabel(unlocked.payload) });
-        setMessage({ ok: true, text: unlockedText(unlocked.payload, tr) });
+        // A dónde va y el final de la clave (nunca la clave) quedan a la vista mientras se pregunta.
+        setView({ kind: 'ask', host: destinationLabel(unlocked.payload), unlocked: unlockedText(unlocked.payload, tr) });
         return;
       }
       onSaved(await adoptUnlocked(ctx, unlocked));
@@ -330,6 +333,9 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
   } else if (view.kind === 'ask') {
     body = (
       <>
+        <p className="assistant-ok" role="status">
+          {view.unlocked}
+        </p>
         <p className="assistant-warning">{tr('assistant.sync.ask', { host: view.host })}</p>
         <div className="modal-actions">
           <button type="button" disabled={busy} onClick={keepMine}>
@@ -441,7 +447,7 @@ function Section({ saved, onSaved, online }: Props & { online: boolean }) {
   }
 
   return (
-    <section className="assistant-sync" aria-labelledby="assistant-sync-title">
+    <section ref={root} className="assistant-sync" aria-labelledby="assistant-sync-title">
       <h3 id="assistant-sync-title" className="pref-label">
         {tr('assistant.sync.title')}
       </h3>
