@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.118 :
+v0.0XX :
 
 *Download all* y *Retry missing* listaban una subcarpeta por pedido: una carpeta con 500 subcarpetas eran 505 pedidos al
 portero (el diseño decía ~40 por pedido). `POST /folder/list` acepta `dirs` (hasta 40 ids; `dir` sigue igual para el
