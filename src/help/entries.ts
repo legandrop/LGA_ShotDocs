@@ -94,6 +94,8 @@ const REPLACE_PROJECT = '0.094';
 const REMOVED_WRITING = '0.095';
 /** La que trajo "Update now" que espera la versión nueva y "Force the update" (Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red"). */
 const UPDATE_APP = '0.097';
+/** *Download all* de una carpeta (P.9, entrega 2, Doc_Carpetas.md): la versión se pone al publicar, igual que en el changelog. */
+const FOLDER_ZIP = '0.103';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
@@ -263,6 +265,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     when: 'portero',
     words: ['ver', 'visor', 'migas', 'bajar', 'download'],
     since: BEFORE_HELP,
+  },
+  {
+    id: 'folderDownload',
+    section: 'attachments',
+    title: 'help.folderDownload.title',
+    text: 'help.folderDownload.text',
+    when: 'portero',
+    words: ['bajar todo', 'download all', 'zip', 'descargar', 'carpeta entera', 'MISSING_FILES'],
+    since: FOLDER_ZIP,
   },
   {
     id: 'folderWho',

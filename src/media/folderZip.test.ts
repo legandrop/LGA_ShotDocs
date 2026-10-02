@@ -73,7 +73,7 @@ function world(tree: Tree, opts: { page?: number } = {}) {
     if (!data) return new Response(JSON.stringify({ error: 'This file is not in Google Drive anymore.', code: 'drive_missing' }), { status: 404 });
     const from = Number(/^bytes=(\d+)-$/.exec(range ?? '')?.[1] ?? 0);
     const body = data.subarray(from);
-    return new Response(body, {
+    return new Response(body as Uint8Array<ArrayBuffer>, {
       status: from ? 206 : 200,
       headers: { 'Content-Length': String(body.length), ...(from ? { 'Content-Range': `bytes ${from}-${data.length - 1}/${data.length}` } : {}) },
     });
@@ -87,7 +87,7 @@ function world(tree: Tree, opts: { page?: number } = {}) {
     behave,
     failList,
     setRate: (ids: (string | null)[]) => (rateOnce = new Set(ids)),
-    idOf: (name: string) => [...dirs.values()].flat().find((e) => e.name === name && 'id' in e)!.id as string,
+    idOf: (name: string) => ([...dirs.values()].flat().find((e) => e.name === name && 'id' in e) as { id: string }).id,
   };
 }
 

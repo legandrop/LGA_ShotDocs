@@ -320,7 +320,7 @@ export function BlockEditor({
   /** Carpetas soltadas que esperan "Subir" (P.9, Docs/Doc_Carpetas.md), dónde se soltaron. */
   const [folderAsk, setFolderAsk] = useState<{ sources: FolderSource[]; at: InsertAt | null; resumes: (string | null)[] } | null>(null);
   /** La carpeta abierta en el visor, y la que muestra cómo va su subida. */
-  const [folderView, setFolderView] = useState<{ id: string; name: string } | null>(null);
+  const [folderView, setFolderView] = useState<{ id: string; name: string; download?: boolean } | null>(null);
   const [folderUpload, setFolderUpload] = useState<string | null>(null);
   // Con el editor ya abierto, el carrete se baja cuando el navegador está libre: tocar una foto no espera.
   useEffect(() => preloadWhenIdle(Carrete), []);
@@ -977,6 +977,8 @@ export function BlockEditor({
   // ("Turn into"). `openAt` cambia en cada dibujo: la barra usa siempre el último.
   const openAtRef = useRef(openAt);
   openAtRef.current = openAt;
+  const folderInRef = useRef(folderIn);
+  folderInRef.current = folderIn;
   const formattingToolbar = useCallback(
     () => <PageFormattingToolbar items={toolbarItems} canComment={canComment} />,
     [toolbarItems, canComment],
@@ -992,6 +994,11 @@ export function BlockEditor({
       },
       canComment,
       onView: (key) => void openAtRef.current(key),
+      // *Download all* de una carpeta (P.9, entrega 2): su visor, con la descarga abierta.
+      onDownloadAll: (blockId) => {
+        const folder = folderInRef.current(blockId);
+        if (folder) setFolderView({ ...folder, download: true });
+      },
     }),
     [editor, media, canComment],
   );
@@ -1058,6 +1065,7 @@ export function BlockEditor({
         <FolderViewer
           fileId={folderView.id}
           name={folderView.name}
+          startDownload={!!folderView.download}
           onClose={() => setFolderView(null)}
           onShowUpload={() => {
             setFolderUpload(folderView.id);

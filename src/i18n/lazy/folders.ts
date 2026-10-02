@@ -163,6 +163,77 @@ export const folders = {
   'folders.uploadHere': { en: "Upload in progress", es: "Subida en curso" },
   'folders.showUpload': { en: "Show the upload", es: "Ver la subida" },
   'folders.breadcrumb': { en: "Folders", es: "Carpetas" },
+
+  // "Download all" (entrega 2, Docs/Doc_Carpetas.md, sección 9).
+  'folders.downloadAll': { en: "Download all", es: "Bajar todo" },
+  'folders.downloadAllTip': { en: "Everything inside, with its subfolders", es: "Todo lo de adentro, con sus subcarpetas" },
+  'folders.downloadAllOffline': {
+    en: "Downloading the whole folder needs a connection.",
+    es: "Para bajar la carpeta entera hace falta conexión.",
+  },
+  'folders.zipListing': { en: "Looking at what is inside… {files} in {dirs}", es: "Mirando lo que tiene adentro… {files} en {dirs}" },
+  'folders.zipSkipped': {
+    en: {
+      one: "{count} item is not downloaded (a shortcut, a Google document or a folder that could not be opened): it is listed in MISSING_FILES.txt.",
+      other: "{count} items are not downloaded (shortcuts, Google documents or folders that could not be opened): they are listed in MISSING_FILES.txt.",
+    },
+    es: {
+      one: "{count} cosa no se baja (un acceso directo, un documento de Google o una carpeta que no se pudo abrir): queda anotada en MISSING_FILES.txt.",
+      other: "{count} cosas no se bajan (accesos directos, documentos de Google o carpetas que no se pudieron abrir): quedan anotadas en MISSING_FILES.txt.",
+    },
+  },
+  'folders.zipEmpty': { en: "This folder is empty: there is nothing to download.", es: "Esta carpeta está vacía: no hay nada para bajar." },
+  'folders.zipAsZip': { en: "Download as .zip…", es: "Bajar como .zip…" },
+  'folders.zipAsZipTip': { en: "You choose where it goes; it is written as it arrives", es: "Elegís dónde va; se escribe a medida que llega" },
+  'folders.zipInMemory': { en: "Download as .zip", es: "Bajar como .zip" },
+  'folders.zipInMemoryTip': { en: "Built in this browser's memory: up to {max}", es: "Se arma en la memoria de este navegador: hasta {max}" },
+  'folders.zipToFolder': { en: "Download to a folder…", es: "Bajar a una carpeta…" },
+  'folders.zipToFolderTip': {
+    en: "Writes the folders and files as they are, without a zip",
+    es: "Escribe las carpetas y los archivos tal cual, sin zip",
+  },
+  'folders.zipTooBig': {
+    en: "Too big to download all at once in this browser ({size}; up to {max}). Download the files one by one, or download it all from a computer with Chrome or Edge.",
+    es: "Es demasiado para bajar todo junto en este navegador ({size}; hasta {max}). Bajá los archivos de a uno, o bajá todo desde una computadora con Chrome o Edge.",
+  },
+  'folders.zipWaitingOnline': { en: "No connection: it continues when it comes back.", es: "Sin conexión: sigue cuando vuelva." },
+  'folders.zipKeepOpen': { en: "Keep this tab open until it finishes.", es: "Dejá esta pestaña abierta hasta que termine." },
+  'folders.zipDoneFile': { en: "Done: {name} is saved.", es: "Listo: {name} quedó guardado." },
+  'folders.zipDoneDir': {
+    en: "Done: the folder {name} is in the folder you chose.",
+    es: "Listo: la carpeta {name} quedó en la carpeta que elegiste.",
+  },
+  'folders.zipReady': { en: "The zip is ready.", es: "El zip está listo." },
+  'folders.zipSave': { en: "Save {name}", es: "Guardar {name}" },
+  'folders.zipMissing': {
+    en: {
+      one: "{count} item is not in the download: it is listed in MISSING_FILES.txt.",
+      other: "{count} items are not in the download: they are listed in MISSING_FILES.txt.",
+    },
+    es: {
+      one: "{count} cosa no está en la descarga: queda anotada en MISSING_FILES.txt.",
+      other: "{count} cosas no están en la descarga: quedan anotadas en MISSING_FILES.txt.",
+    },
+  },
+  'folders.zipCancelled': { en: "Cancelled: nothing was saved.", es: "Cancelado: no se guardó nada." },
+  'folders.zipCancelledDir': {
+    en: "Cancelled: what was already downloaded stays in the folder you chose.",
+    es: "Cancelado: lo que ya se bajó queda en la carpeta que elegiste.",
+  },
+  'folders.zipFailed': { en: "The download stopped: {reason}", es: "La descarga se frenó: {reason}" },
+  // `MISSING_FILES.txt`, adentro del zip o de la carpeta.
+  'folders.missingHead': {
+    en: "These items from the folder \"{name}\" are not in this download ({date}):",
+    es: "Estas cosas de la carpeta \"{name}\" no están en esta descarga ({date}):",
+  },
+  'folders.missingShortcut': { en: "a Google Drive shortcut (the app does not follow them)", es: "un acceso directo de Google Drive (la app no los sigue)" },
+  'folders.missingGoogle': {
+    en: "a Google document (it cannot be downloaded from the app)",
+    es: "un documento de Google (no se puede bajar desde la app)",
+  },
+  'folders.missingFolder': { en: "a folder that could not be opened", es: "una carpeta que no se pudo abrir" },
+  'folders.missingFailed': { en: "could not be downloaded", es: "no se pudo bajar" },
+  'folders.missingIncomplete': { en: "incomplete: the download stopped in the middle", es: "incompleto: la descarga se cortó en el medio" },
 } satisfies Dict;
 
 // Se suma al diccionario cuando se carga la parte que lo usa (viaja con ella, no en la primera carga).
