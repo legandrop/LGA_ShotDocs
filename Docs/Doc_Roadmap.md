@@ -258,10 +258,9 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   `20261007120000_historial.sql`, aplicada desde v0.098. **Entrega 2 hecha (v0.103):**
   *Show changes* con lo agregado y lo borrado por persona (decoraciones, bloques rehechos apareados por id), el texto
   huérfano en su versión, el Worker con la página de respaldo, la diferencia solo de lo tocado y la lista que se
-  actualiza sola. **Entrega 3 hecha (v0.0XX):** versiones con nombre (`page_versions`: nombrar, renombrar, quitar,
-  *Only named versions*, *Restored from…*) y la caché `<base local>:history` con el historial sin red. **Falta:** aplicar
-  `20261011120000_versiones_con_nombre.sql` (con copia de seguridad; `schema_version` 13, después de la 12 de privacidad) y
-  medir en el iPhone. De la entrega 3, para después: la marca *Restored from…* se pierde si la app se cierra antes de
+  actualiza sola. **Entrega 3 hecha (v0.106):** versiones con nombre (`page_versions`: nombrar, renombrar, quitar,
+  *Only named versions*, *Restored from…*) y la caché `<base local>:history` con el historial sin red. Migración
+  `20261011120000_versiones_con_nombre.sql` aplicada (2026-10-02, `schema_version` 13). **Falta:** medir en el iPhone. De la entrega 3, para después: la marca *Restored from…* se pierde si la app se cierra antes de
   que la restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo); un
   Ctrl/⌘+Z de la restauración (en vez del *Undo* del aviso) no deja de lado la marca; (O3) renombrar pisa el nombre
   anterior sin rastro; (O7) cerrar la ventana de una copia restaurada que vuelve atrás el contador de `page_updates`

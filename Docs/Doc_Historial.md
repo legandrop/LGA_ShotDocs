@@ -1,6 +1,6 @@
 # Historial de versiones de una página (P.18)
 
-**Estado: entregas 1 (v0.098), 2 (v0.103) y 3 (v0.0XX) implementadas; ver "Cómo quedó" de cada una, al final, que
+**Estado: entregas 1 (v0.098), 2 (v0.103) y 3 (v0.106) implementadas; ver "Cómo quedó" de cada una, al final, que
 mandan sobre el diseño en lo que tocan. La migración de la entrega 1 (`20261007120000_historial.sql`) está aplicada
 desde v0.098; la de la entrega 3 (`20261011120000_versiones_con_nombre.sql`), probada en `begin … rollback` contra la
 base, SIN aplicar.** Pedido de Lega del 2026-10-01 (en el plan figuraba como fase 6). Toca la regla de no perder datos
@@ -973,7 +973,7 @@ versiones al azar). Corregido; manda sobre "Cómo quedó (entrega 2)" en lo que 
 
 Manda sobre lo de arriba en lo que toca. **Versiones con nombre, *Restored from…* y el historial sin red.**
 
-**La migración** (`supabase/migrations/20261011120000_versiones_con_nombre.sql`, sin aplicar; prueba
+**La migración** (`supabase/migrations/20261011120000_versiones_con_nombre.sql`, aplicada el 2026-10-02; prueba
 `supabase/tests/versiones_con_nombre_permisos.sql`). `page_versions` como en la sección 9, con dos cambios: `kind`
 `'named'` (con `label`) o `'restore'` (con `restored_from_seq` y sin `label`), atados por una restricción, y un índice
 único parcial para que una versión tenga un solo nombre vigente. Sin acceso directo (RLS sin políticas, `revoke all`).
@@ -1055,7 +1055,7 @@ en lo que toca:
 | **O4.** Reintentar nombrar con el id de un nombre que alguien sacó en el medio lo devolvía y la app lo volvía a mostrar | `name_page_version` da `version_not_found` (la pantalla pone la lista al día y lo dice) |
 | **O5.** Huecos de la prueba SQL: un origen inexistente menor que la fila en `mark_page_restored`, y sacar dos veces con otra persona | Casos nuevos (origen 0; d con nivel 4 saca otra vez y no pisa quién ni cuándo; el reintento de O4), más algunos de la auditoría: nombres con comillas, saltos de línea, 100 y 101 «ñ», nulo, un `seq` que solo existe en otra página, quien lo puso y bajó a Ver. 27 de 27 mutantes de la migración la hacen fallar |
 | **O6.** D13: la caché seguía en el dispositivo después de perder el permiso, hasta abrir ese historial con red o salir de la cuenta | `useHistoryCachePruning` (en la pantalla principal): con los permisos conocidos y la base en la versión del historial, cuando cambian los permisos o el árbol tira lo guardado de cada página cuyo historial ya no se ve (`canSeeHistory`; pasar a invitada tira todo). No crea la base si no existe |
-| **O8.** Versiones y cuentas de los docs | `HISTORY_NAMES` en `'0.0XX'` (la pone quien publica), «las otras 18», la app publicada hasta v0.105 |
+| **O8.** Versiones y cuentas de los docs | `HISTORY_NAMES` en `'0.106'` (la pone quien publica), «las otras 18», la app publicada hasta v0.105 |
 | O3. Renombrar pisa el nombre anterior sin rastro | Anotado: no es contenido de la página. Si hiciera falta, renombrar como «sacar + nombrar» (fila nueva) |
 | O7. Si una copia restaurada vuelve atrás el contador de `page_updates`, el `id` de la última fila guardada puede coincidir con otra | Anotado: la defensa real de la caché es la **generación** (el script de restauración la sube). Queda una ventana: abrir el historial antes de que el dispositivo se entere de la generación nueva. Para cerrarla, que `loadHistory` lea la generación del servidor antes de usar lo guardado |
 

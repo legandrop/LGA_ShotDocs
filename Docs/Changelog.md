@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.0XX :
+v0.106 :
 
 El historial no dejaba nombrar versiones ni se veía sin red (P.18, entrega 3): faltaban la tabla y la caché del
 diseño. La migración `20261011120000_versiones_con_nombre.sql` (sin aplicar) suma `page_versions`: un nombre que
