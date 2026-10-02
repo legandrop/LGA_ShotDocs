@@ -95,7 +95,7 @@ const REMOVED_WRITING = '0.095';
 /** La que trajo "Update now" que espera la versión nueva y "Force the update" (Doc_Sincronizacion.md, "Volver después de mucho tiempo sin red"). */
 const UPDATE_APP = '0.097';
 /** *Download all* de una carpeta (P.9, entrega 2, Doc_Carpetas.md): la versión se pone al publicar, igual que en el changelog. */
-const FOLDER_ZIP = '0.103';
+const FOLDER_ZIP = '0.104';
 
 export const HELP_ENTRIES: HelpEntry[] = [
   // --- Primeros pasos ---
