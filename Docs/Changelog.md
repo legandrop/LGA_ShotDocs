@@ -1,5 +1,17 @@
 # Changelog — LGA Shot Docs
 
+v0.130 :
+
+Arreglos de las menciones, entrega 2 (lo que dejó su auditoría). **Sin prueba:** el paso de compartir desde la mención
+por `useShareGate` (sube lo pendiente antes y arma las bases después) no tenía ninguna; había 2 mutantes vivos. Ahora 5
+pruebas (sube antes, arma después y en ese orden, *Retry*, *Share anyway*, apagada) y los 9 mutantes de la integración
+mueren; es lo que faltaba para poder prender la privacidad de lo borrado. **La lista del `@` no volvía tras Esc o
+*Cancel*:** mientras se lee la pregunta el foco está en su botón y el campo olvida la posición (`onBlur`); enfocarlo
+por código no avisa que cambió la selección. `cancelAsk` la vuelve a leer; probado en Chromium y en jsdom. **La pregunta
+aclara** que se comparte en el acto aunque después no se mande el comentario (O5, y la ayuda). Sin migración: la versión
+mínima en `share_for_mention` (O4) no suma, `public.share` tampoco la mira; compartir en un archivado se deja (O3).
+[ Arreglos de las menciones: la prueba de compartir con la puerta de lo borrado, la lista del @ tras Esc y la pregunta más clara ]
+
 v0.129 :
 
 Tres entregas de fotos y exportar. **El zip para archivar** (P.22, entrega 2): guardar un proyecto fuera de la app no

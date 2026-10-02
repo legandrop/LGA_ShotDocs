@@ -290,8 +290,8 @@ export const help = {
   },
   'help.mentionsShare.title': { en: "Mention someone who can't see the page", es: "Mencionar a alguien que no ve la página" },
   'help.mentionsShare.text': {
-    en: "If you're the owner or an admin and can share the page, the @ list also shows, in gray under “Can't see this page”, people who can't see it. Pick one and choose Share and mention: the page is shared with them with Comment (only that page and the ones inside it) and they're mentioned. It needs a connection. {cancel} closes the question without sharing.",
-    es: "Si sos dueño o admin y podés compartir la página, la lista del @ también muestra, en gris bajo «No ven esta página», a quienes no la ven. Elegí a alguien y tocá Compartir y mencionar: se le comparte la página con Comentar (solo esa página y las de adentro) y queda mencionado. Pide conexión. {cancel} cierra la pregunta sin compartir.",
+    en: "If you're the owner or an admin and can share the page, the @ list also shows, in gray under “Can't see this page”, people who can't see it. Pick one and choose Share and mention: the page is shared with them with Comment (only that page and the ones inside it) and they're mentioned. It's shared right away, even if you then don't send the comment. It needs a connection. {cancel} closes the question without sharing.",
+    es: "Si sos dueño o admin y podés compartir la página, la lista del @ también muestra, en gris bajo «No ven esta página», a quienes no la ven. Elegí a alguien y tocá Compartir y mencionar: se le comparte la página con Comentar (solo esa página y las de adentro) y queda mencionado. Se comparte en el momento, aunque después no mandes el comentario. Pide conexión. {cancel} cierra la pregunta sin compartir.",
   },
   'help.questions.title': { en: "Questions", es: "Preguntas" },
   'help.questions.text': {

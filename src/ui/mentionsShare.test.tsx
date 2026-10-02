@@ -177,6 +177,7 @@ describe('compartir desde la mención', () => {
     expect(host.querySelector('.mention-list')).toBeNull();
     const ask = host.querySelector<HTMLElement>('.mention-share')!;
     expect(ask.textContent).toContain("pedro can't see this page. Share it with them (Comment) and mention them?");
+    expect(ask.textContent).toContain("It's shared as soon as you choose Share and mention, even if you don't send the comment.");
     expect(textarea.value).toBe('Mirá @pe');
     expect(server.grants.some((g) => g.user_id === PEDRO)).toBe(false);
     const share = [...ask.querySelectorAll('button')].find((b) => b.textContent === 'Share and mention')!;
