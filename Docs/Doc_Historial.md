@@ -1,8 +1,9 @@
 # Historial de versiones de una página (P.18)
 
-**Estado: entregas 1 (v0.098) y 2 (v0.103) implementadas; ver "Cómo quedó (entrega 1)" y "Cómo quedó (entrega 2)", al
-final, que mandan sobre el diseño en lo que tocan; la migración `20261007120000_historial.sql` está escrita y probada en `begin … rollback` contra la base, SIN
-aplicar.** Pedido de Lega del 2026-10-01 (en el plan figuraba como fase 6). Toca la regla de no perder datos
+**Estado: entregas 1 (v0.098), 2 (v0.103) y 3 (v0.0XX) implementadas; ver "Cómo quedó" de cada una, al final, que
+mandan sobre el diseño en lo que tocan. La migración de la entrega 1 (`20261007120000_historial.sql`) está aplicada
+desde v0.098; la de la entrega 3 (`20261011120000_versiones_con_nombre.sql`), probada en `begin … rollback` contra la
+base, SIN aplicar.** Pedido de Lega del 2026-10-01 (en el plan figuraba como fase 6). Toca la regla de no perder datos
 (restaurar es una edición) y los permisos (el historial muestra lo borrado), así que cada entrega va con sus pruebas y
 su auditoría. **Diseño auditado:** lo que encontró la auditoría independiente del diseño está corregido en el texto
 ("Correcciones de la auditoría"). Las cuatro preguntas, **decididas el 2026-10-01** con la recomendación (sección 15).
@@ -786,7 +787,7 @@ puede editar):
 5. Se cierra el historial y queda el aviso *Restored the version from …* con **Undo**, que deshace solo la
    restauración (se va con la próxima edición). Sube como cualquier edición.
 
-**La migración** (`supabase/migrations/20261007120000_historial.sql`, sin aplicar): `page_history`,
+**La migración** (`supabase/migrations/20261007120000_historial.sql`; aplicada desde v0.098): `page_history`,
 `page_history_authors`, `private.check_history` (nivel 3, no invitado, ni la página ni una de arriba en la papelera),
 `schema_version` 11. **Cambio respecto del diseño:** en vez de sacar todo el `select` de `page_updates`, `authenticated`
 lee solo las columnas del contenido (`id, page_id, seq, client_update_id, update`): quién y cuándo ya no se leen directo,
@@ -942,7 +943,7 @@ y la restauración se deshace sola (*Couldn't restore this version. Nothing chan
 tocar restaurar (fuera de esta entrega).
 
 **Lo que falta:** la entrega 3 (nombrar versiones con `page_versions`, *Restored from…*, *Only named versions*, la caché
-y el historial sin red), medir en el iPhone, y aplicar la migración de la entrega 1. Detalles que quedaron así: el
+y el historial sin red) y medir en el iPhone (la migración de la entrega 1 ya estaba aplicada desde v0.098). Detalles que quedaron así: el
 tooltip de un tramo largo de una misma apertura (un autor de Yjs) dice la hora de su primera fila; un cambio solo de
 formato de texto (negrita) no se marca; en un bloque rehecho con fotos en línea, las fotos no se marcan.
 
@@ -964,3 +965,73 @@ versiones al azar). Corregido; manda sobre "Cómo quedó (entrega 2)" en lo que 
 | O2, O8, O9 y los mutantes M5 y M10 | Al roadmap (P.18), con su detalle |
 | R1 (re-verificación). Elegir solo lo borrado (un triple clic en un párrafo tachado) dejaba la copia al navegador, con los estilos de las marcas | Se copia ese texto como texto común (el documento no tiene tachado ni color: son decoraciones), sirve para recuperar un párrafo borrado |
 | R2 (re-verificación). Sin prueba propia: la fila del borrado heredada del bloque de arriba (O3) y el aviso de carga de la unión (O6) | Una prueba cada una en `historyDiff.test.ts` y `historyPanel.test.tsx`; las dos fallan con su mutante |
+
+## Cómo quedó (entrega 3)
+
+Manda sobre lo de arriba en lo que toca. **Versiones con nombre, *Restored from…* y el historial sin red.**
+
+**La migración** (`supabase/migrations/20261011120000_versiones_con_nombre.sql`, sin aplicar; prueba
+`supabase/tests/versiones_con_nombre_permisos.sql`). `page_versions` como en la sección 9, con dos cambios: `kind`
+`'named'` (con `label`) o `'restore'` (con `restored_from_seq` y sin `label`), atados por una restricción, y un índice
+único parcial para que una versión tenga un solo nombre vigente. Sin acceso directo (RLS sin políticas, `revoke all`).
+Funciones: `list_page_versions`, `name_page_version`, `rename_page_version`, `remove_page_version` y
+`mark_page_restored`, todas con `private.check_history` (nivel 3, no invitado, no en la papelera, también una de arriba,
+con la regla de v0.102). **Decisión tomada (sin Lega):** nombrar, cualquiera que ve el historial; renombrar y quitar,
+quien lo puso o nivel 4 sobre la página (lo del borrador de la sección 9), porque un nombre lo usa quien lo puso para
+encontrar esa versión; la marca de restauración, solo sobre una fila que subió quien llama, y no se renombra ni se
+quita. Las que escriben miran la versión mínima de B.17 antes de escribir (repetir lo ya hecho no escribe y anda). Un
+nombre solo se muestra si su fila sigue teniendo el `id` guardado (copia de seguridad restaurada). Sube
+`schema_version` a 13 (`NAMED_VERSIONS_SCHEMA_VERSION` en `src/sync/history.ts`): con 11 o 12 el historial anda igual,
+sin nombres ni filtro, y si la función no está (PGRST202) también.
+
+**Las sesiones se cortan en los nombres** (`PageHistory.setBreaks`, `versionBreaks`): después de cada fila con nombre
+(lo que se escriba después, aunque sea en la misma media hora, va a una versión nueva: la versión con nombre es
+exactamente esa fila) y antes de cada fila de restauración (la versión de antes de restaurar queda en la lista, como
+dice 6.3). El Worker recibe los cortes (`breaks`) y los guarda con lo demás para rearmarse en la página si se cae. Un
+nombre se muestra en la sesión que contiene su fila (si una sesión sin cambios en el contenido se juntó con ella, el
+contenido es el mismo).
+
+**En la pantalla** (`HistoryPanel.tsx`): cada versión tiene un ⋯ (en la computadora aparece al pasar o en la elegida;
+en el teléfono, siempre) con *Name this version*, o *Rename* y *Remove name*; el campo va en el renglón (Enter o salir
+guarda, Escape deja como estaba sin cerrar el historial; un nombre vacío no cambia nada: quitarlo es *Remove name*). El
+nombre va en el renglón y arriba, junto a la fecha. *Only named versions* deja las que tienen nombre y la actual. Un
+nombre ajeno sin nivel 4 no muestra el ⋯. Si otro dispositivo nombró la misma versión, la lista se pone al día y lo
+dice. Sin red, el ⋯ está apagado (*Naming versions needs a connection.*).
+
+***Restored from <fecha>*** (`historyLoad.ts`, `markRestoreLater`): el `seq` de la restauración se sabe recién cuando
+sube. Al restaurar se guarda una marca pendiente (en la caché) con la última fila que había; después de cada
+sincronización, cuando la página no tiene nada sin subir, se busca la primera fila **propia** posterior y se marca
+(`mark_page_restored`). Si la app se cierra antes, la termina la pantalla del historial la próxima vez que se abre esa
+página (`settleRestores`; una semana de plazo). El *Undo* del aviso la deja de lado (la fila que suba podría traer la
+restauración y el deshacer juntos). Es un rótulo: si se pierde, no se pierde nada de la página.
+
+**La caché** (`src/sync/historyCache.ts`, base `<base local>:history`). **Cambio respecto del diseño:** guarda las filas
+de `page_history` (y los correos y los nombres), no el documento armado y los metadatos: el historial se arma con el
+mismo código que con red (sin un segundo camino que pueda dar distinto) y lo que se ahorra es bajarlas, que es lo lento.
+Con red se baja solo lo posterior, pidiendo también la última guardada para comprobar su `id` (`loadPageHistory` con
+`start`); si no coincide, o si cambió la generación del workspace (`tree.knownGeneration`), se tira y se baja todo. Sin
+red, o si el servidor no contesta, se ve lo guardado con *Offline: showing the history up to <fecha>, the last time it
+was downloaded.*; restaurar y nombrar quedan apagados con su motivo, y se vuelve a pedir cuando vuelve la red (o, si el
+dispositivo creía tener red, después de la próxima sincronización: no en cada vuelta). Si la base dice `page_not_found`
+o `page_in_trash`, se tira lo de esa página. Tope de 50 MB, liberando las páginas abiertas hace más tiempo (una que sola
+pasa el tope no se guarda). Se borra al salir de la cuenta (el aviso `SIGNED_OUT`, también si Supabase invalida la
+sesión; la base local queda, puede tener cambios sin subir) y con las bases del workspace al sacarlo del dispositivo
+(`deleteWorkspaceDatabases`). Si el navegador no la deja abrir, el historial anda como en la entrega 2.
+
+**Versiones viejas:** la app publicada (v0.102, v0.103) no llama a nada de esto; con la migración aplicada sigue igual
+(la prueba SQL comprueba que `page_history` y `pull_page_updates` no cambian). No hay tipos de bloque ni propiedades
+nuevas.
+
+**Pruebas:** `supabase/tests/versiones_con_nombre_permisos.sql` (en `begin … rollback` contra la base, con un script
+propio: `ok`, y las otras 17 de `supabase/tests/` también con la migración puesta; 23 de 23 mutantes de la migración la
+hacen fallar), `src/sync/historyCache.test.ts` (6), `src/sync/historyLoad.test.ts` (10: lo guardado y lo nuevo, sin red,
+copia restaurada y generación, permiso perdido, sin migración, nombrar y los cortes, permisos y versión mínima en el
+servidor en memoria, *Restored from…* con la fila de otra persona en el medio y el *Undo*, las marcas pendientes, y que
+cortar en cualquier fila da lo que tenía el servidor), `src/ui/historyCacheCleanup.test.tsx` (2: salir de la cuenta y
+sacar el workspace) y 7 más en `historyPanel.test.tsx` (nombrar, renombrar, quitar y el filtro; lo escrito después de un
+nombre; nombre ajeno, base sin migrar y sin la función; sin red y otro dispositivo; *Restored from…*; sin red con lo
+guardado y al volver la red; sin nada guardado). Los mutantes de la app: en el informe de la tanda.
+
+**Lo que falta:** medir en el iPhone; aplicar la migración. Detalles que quedaron así: Ctrl/⌘+Z de la restauración (en
+vez del *Undo* del aviso) no deja de lado la marca; en el filtro, la versión actual se ve siempre aunque no tenga
+nombre.

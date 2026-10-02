@@ -180,7 +180,7 @@ export function markRestoreLater(deps: RestoreMarkDeps, pending: PendingRestore,
     if (stopped || running) return;
     running = true;
     try {
-      if (abandoned.has(pending.id)) return stop();
+      // Mientras la página tiene algo sin subir, la restauración todavía no está en el servidor (solo ahorra pedidos).
       if ((await deps.docs.unsyncedPages()).includes(pending.pageId)) return;
       const rows = await deps.remote.pageHistory(pending.pageId, pending.afterSeq, 50);
       const marked = await settleRestores(deps.remote, deps.cache, pending.pageId, rows, [pending]);

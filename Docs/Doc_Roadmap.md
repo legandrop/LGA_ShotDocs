@@ -254,11 +254,15 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   versiones salen de `page_updates` aplicadas en orden (sin guardar nada nuevo; cada fila ya tiene autor y hora
   puestos por la base) y restaurar es una edición por el editor que se deshace. **Entrega 1 hecha (v0.098):** la lista
   por sesión con quién y cuándo, ver una versión y restaurarla (Ctrl/⌘+Alt+Shift+H); la migración
-  `20261007120000_historial.sql` está **sin aplicar** (probada en `begin … rollback`). **Entrega 2 hecha (v0.103):**
+  `20261007120000_historial.sql`, aplicada desde v0.098. **Entrega 2 hecha (v0.103):**
   *Show changes* con lo agregado y lo borrado por persona (decoraciones, bloques rehechos apareados por id), el texto
   huérfano en su versión, el Worker con la página de respaldo, la diferencia solo de lo tocado y la lista que se
-  actualiza sola. **Falta:** aplicar la migración (con copia de seguridad), la entrega 3 (nombrar versiones, la caché
-  sin red) y medir en el iPhone. Encontrado por la prueba al azar: una versión con dos bloques del mismo id no se puede
+  actualiza sola. **Entrega 3 hecha (v0.0XX):** versiones con nombre (`page_versions`: nombrar, renombrar, quitar,
+  *Only named versions*, *Restored from…*) y la caché `<base local>:history` con el historial sin red. **Falta:** aplicar
+  `20261011120000_versiones_con_nombre.sql` (con copia de seguridad; `schema_version` 13, después de la de privacidad) y
+  medir en el iPhone. De la entrega 3, para después: la marca *Restored from…* se pierde si la app se cierra antes de
+  que la restauración suba y nunca se vuelve a abrir el historial de esa página en una semana (es solo un rótulo); un
+  Ctrl/⌘+Z de la restauración (en vez del *Undo* del aviso) no deja de lado la marca. Encontrado por la prueba al azar: una versión con dos bloques del mismo id no se puede
   restaurar (se deshace sola, sin perder nada; `Doc_Historial.md`, entrega 2; ya pasaba en v0.098). Arreglo propuesto:
   antes de restaurar, en la copia en memoria, darle un id nuevo al repetido (el segundo en el orden de Yjs), como hace el
   editor. **De la auditoría de la entrega 2, para después:** (O2) dos sangrías a la vez bajo el mismo bloque dejan dos

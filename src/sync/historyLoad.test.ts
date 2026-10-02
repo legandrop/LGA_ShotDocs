@@ -315,6 +315,9 @@ describe('Restored from…', () => {
     await a.engine.syncNow();
     await settleRestores(remote, cache, pageId, await remote.pageHistory(pageId, 0, 500));
     expect((await remote.listPageVersions(pageId)).length).toBe(1);
+    // Aunque una vuelta ya en marcha la tenga en la mano (o no haya caché), una marca dejada de lado no se guarda.
+    expect(await settleRestores(remote, null, pageId, await remote.pageHistory(pageId, 0, 500), [{ ...pending, id: 'm2', afterSeq: last }])).toEqual([]);
+    expect(await settleRestores(remote, null, pageId, await remote.pageHistory(pageId, 0, 500), [{ ...pending, id: 'm3', afterSeq: last }])).toHaveLength(1);
   });
 
   it('una marca pendiente de antes (la app se cerró) se termina al abrir el historial; una ajena o imposible se deja', async () => {
