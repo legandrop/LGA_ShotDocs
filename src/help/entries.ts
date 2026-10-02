@@ -122,6 +122,8 @@ const PUBLIC_LINK = '0.111';
 const EXPORT_PDF = '0.122';
 /** Exportar como zip (P.22, Doc_Exportar.md, entrega 2): la versión se pone al publicar. */
 const EXPORT_ZIP = '0.129';
+/** Volver a Shot Docs desde un zip exportado (P.22, entrega 3). */
+const IMPORT_ARCHIVE = '0.135';
 /** Las menciones en comentarios (P.21, Doc_Menciones.md, entrega 1): la versión se pone al publicar, igual que en el changelog. */
 const MENTIONS = '0.120';
 /** Menciones, entrega 2: compartir desde la mención, el punto del árbol y el número afuera (la versión la pone quien publica). */
@@ -678,6 +680,15 @@ export const HELP_ENTRIES: HelpEntry[] = [
     text: 'help.exportZip.text',
     words: ['zip', 'archivar', 'archive', 'backup', 'respaldo', 'markdown', 'html', 'originales', 'originals', 'descargar', 'download'],
     since: EXPORT_ZIP,
+  },
+  {
+    id: 'importArchive',
+    section: 'print',
+    title: 'help.importArchive.title',
+    text: 'help.importArchive.text',
+    words: ['importar', 'import', 'zip', 'archivo', 'archive', 'restaurar', 'restore', 'volver', 'proyecto nuevo', 'new project', 'respaldo', 'backup'],
+    since: IMPORT_ARCHIVE,
+    when: 'admin',
   },
 
   // --- Preferencias ---
