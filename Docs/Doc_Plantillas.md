@@ -693,9 +693,15 @@ falla sin él (`dayReportSync.test.ts`, `dayReportHost.test.tsx`, "correcciones 
 | Hallazgo | Corrección |
 |---|---|
 | **O1** *Create another* proponía el día siguiente | Si la fecha ya tiene un reporte, *Shoot day* propone su número (`suggestedDay`); cambiar la fecha lo vuelve a calcular salvo que la persona haya tocado el día. |
-| **O2** El primero deshecho dejaba una página vacía con cara de reporte | La propuesta no cuenta las páginas con título de reporte **vacías y completas** (se miran los 10 más recientes; una a medio bajar no se toma por vacía). Si se crea un reporte con esa fecha, se escribe en ella (título y plantilla al día) en vez de crear otro. No se escribe nada al deshacer. |
+| **O2** El primero deshecho dejaba una página vacía con cara de reporte | La propuesta no cuenta los **reportes hechos por la app** vacíos y completos (`isReusableReport`: `template_id` de *On-Set Report*, el título exacto `AAAA-MM-DD \| Day NN` y sin subpáginas; se miran los 10 más recientes; uno a medio bajar no se toma por vacío). Si se crea un reporte con esa fecha, se escribe en él en vez de crear otro. Una página de la persona con fecha en el título (*2026-10-04 Fotos de set*, vacía o con subpáginas) sigue contando como de ese día y **nunca** se reusa ni se renombra (re-verificación, B1). No se escribe nada al deshacer. |
 | **O3** Enter mientras se leía la carpeta no hacía nada | El botón queda habilitado: Enter se recuerda y se hace apenas llega la propuesta, con lo que la persona ya haya tocado respetado. El formulario valida solo (`noValidate`): el día vacío mientras carga frenaba el envío del navegador. |
-| **O4** Si fallaba escribir el contenido, el reintento duplicaba la página | `createDayReport` tira `DayReportWriteError` con el id; el reintento escribe en esa página. `writeNewPage` solo escribe en una página vacía: si el intento anterior llegó a escribir, no agrega otra copia. |
+| **O4** Si fallaba escribir el contenido, el reintento duplicaba la página | `createDayReport` tira `DayReportWriteError` con el id; el reintento escribe en esa página (también si se cambió la fecha: se le pone el título nuevo, que ya tenía la forma de reporte). `writeNewPage` solo escribe en una página vacía: si el intento anterior llegó a escribir, no agrega otra copia. |
 | **O5** Un invitado con *Edit & create pages* crea reportes | Coincide con la base; al roadmap como decisión del modelo de permisos. |
 | **O6** *Use for day reports* en el menú de cada reporte | Se esconde en las páginas que son reportes (salvo que ya estén marcadas como carpeta). |
 | **O7** En Dvorak el atajo es la tecla física N | Una línea en la ayuda: el atajo va por la posición de la tecla. |
+
+La re-verificación (sobre `7070d9d`) encontró que el reuso de O2 tomaba cualquier página vacía con la fecha al principio
+del título, también una carpeta de la persona, y le cambiaba el nombre (B1). Quedó limitado a los reportes hechos por la
+app, con pruebas de una carpeta con fecha con y sin subpágina, con texto, un reporte con subpágina y uno renombrado por
+la persona. Además, si el de fecha más alta no tiene número de día (una página de la persona), el día sale del número
+más alto de la carpeta + 1.
