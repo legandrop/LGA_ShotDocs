@@ -735,6 +735,9 @@ export function contentFingerprint(fragment: Y.XmlFragment): string {
   return `${text.length}:${h.toString(36)}`;
 }
 
+/** La imagen que muestran los editores sin pantalla de la importación (un GIF de un punto: nunca se pide nada). */
+export const HIDDEN_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+
 // Lo que tiene una página recién creada (la raíz inicial, `buildSeed`): un párrafo vacío.
 const SEED_NODES = new Set(['blockGroup', 'blockContainer', 'paragraph']);
 
@@ -783,6 +786,8 @@ export async function writePage(
   const editor = BlockNoteEditor.create(
     withCollaboration({
       ...editorSchemaOptions,
+      // Este editor no se ve: que no pida las fotos (un `sdmedia://` en un `<img>` es un pedido que falla).
+      resolveFileUrl: async () => HIDDEN_IMAGE,
       collaboration: { fragment, user: { name: 'Import', color: '#888888' } },
     }),
   ) as unknown as BlockNoteEditor<any, any, any>;

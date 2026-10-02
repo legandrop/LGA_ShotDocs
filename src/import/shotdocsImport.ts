@@ -18,7 +18,7 @@ import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
 import { editorSchemaOptions } from '../ui/editorSchema';
 import { PAGE_SIZES } from '../ui/pageFormat';
 import { cleanArchiveBlocks, textOnlyBlocks, type NoteKey } from './archiveBlocks';
-import { contentFingerprint, treePlan, writePage, type CodaManifestPage } from './codaImport';
+import { contentFingerprint, HIDDEN_IMAGE, treePlan, writePage, type CodaManifestPage } from './codaImport';
 import type { PageBlock } from './codaComments';
 
 // Volver a Shot Docs desde el zip que arma la app (P.22, entrega 3; Docs/Doc_Exportar.md, sección 3 y "Cómo quedó la
@@ -563,7 +563,9 @@ const breathe = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 function expectedFingerprint(blocks: PartialBlock<any, any, any>[]): string {
   const doc = new Y.Doc();
   const fragment = doc.getXmlFragment(CONTENT_FRAGMENT);
-  const editor = BlockNoteEditor.create(withCollaboration({ ...editorSchemaOptions, collaboration: { fragment, user: { name: 'Import', color: '#888888' } } })) as unknown as BlockNoteEditor<any, any, any>;
+  const editor = BlockNoteEditor.create(
+    withCollaboration({ ...editorSchemaOptions, resolveFileUrl: async () => HIDDEN_IMAGE, collaboration: { fragment, user: { name: 'Import', color: '#888888' } } }),
+  ) as unknown as BlockNoteEditor<any, any, any>;
   const host = document.createElement('div');
   host.style.display = 'none';
   document.body.appendChild(host);
