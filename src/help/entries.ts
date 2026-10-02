@@ -113,9 +113,9 @@ const ASSISTANT_A2 = '0.126';
 /** *Dictate to report* (Docs/Doc_Dictado.md, entrega V1): la versión la pone quien publica. */
 const DICTATION = '0.135';
 /** *Dictate to report*, entrega V2 (la cola sin red): la versión la pone quien publica. */
-const DICTATION_QUEUE = '0.136';
+const DICTATION_QUEUE = '0.0XX';
 /** *Dictate to report*, entrega V3 (el micrófono propio): la versión la pone quien publica. */
-const DICTATION_VOICE = '0.137';
+const DICTATION_VOICE = '0.0XX';
 /** Las plantillas de fábrica (Docs/Doc_Plantillas.md, entregas 0 y 1): la versión se ajusta al publicar. */
 const TEMPLATES = '0.117';
 /** Las plantillas propias (Docs/Doc_Plantillas.md, entrega 3): la versión la pone quien publica. */

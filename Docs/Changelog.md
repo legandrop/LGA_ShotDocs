@@ -1,6 +1,6 @@
 # Changelog — LGA Shot Docs
 
-v0.137 :
+v0.0XX :
 
 **Dictar al reporte, entrega V3** (P.27): el único micrófono era el del teclado, que no entiende bien la jerga mezclada
 y obliga a tocar un campo. *Dictate to report* suma un botón de 72 px: graba en pedazos de 1 s que se guardan como una
@@ -11,7 +11,7 @@ asistente o una segunda, cifrada en `shotdocs-dictation`; *Insert at cursor*; mi
 se transcribe sola al volver.
 [ Dictar al reporte V3 - el micrófono propio: grabar por pedazos, transcribir con la clave de la persona, Voz e insertar donde se escribía ]
 
-v0.136 :
+v0.0XX :
 
 **Dictar al reporte, entrega V2** (P.27): sin red, *Save for later* solo dejaba la nota en el borrador de su página y
 no había forma de juntar varias ni de verlas desde otra página. Ahora *Save for later* pasa la nota a una cola del

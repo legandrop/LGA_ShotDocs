@@ -1,6 +1,6 @@
 # Dictado por voz y notas informales que se ubican en el reporte
 
-**Estado: entregas V1 (v0.135), V2 (v0.136) y V3 (v0.137) implementadas**; V4, diseño. Cómo quedaron y lo que cambió
+**Estado: entregas V1 (v0.135), V2 (v0.0XX) y V3 (v0.0XX) implementadas**; V4, diseño. Cómo quedaron y lo que cambió
 al implementarlas: secciones 15 a 17, al final. Roadmap P.27; pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.123, con el
 asistente A1 publicado (v0.118) y A2 terminado en su rama (`lega/asistente-a2`, en auditoría). Las decisiones están
 propuestas (DI1 a DI9, sección 13) y valen hasta que Lega diga otra cosa. Lo medido está en "Cómo se midió", al final;
@@ -885,7 +885,7 @@ es equivalente (`applyChanges` también mira el permiso).
 celda y de un comentario en el iPhone y en Android, y Ctrl+Alt+Shift+D / ⌘⌥⇧D en navegadores
 reales (en Firefox para la Mac, Option puede llegar como AltGraph y el atajo no andaría).
 
-## 16. Cómo quedó V2 (v0.136)
+## 16. Cómo quedó V2 (v0.0XX)
 
 **Qué hay.** *Save for later* (sin red, o después de un pedido que falló) pasa la nota del campo a la cola del
 dispositivo y dice *Saved. It will be placed when you're back online*; el campo se vacía solo cuando la cola confirmó
@@ -925,7 +925,7 @@ con el proveedor falso: 24 de 24 en cada uno (las tres pruebas de aceptación, r
 las guardas de la cola: 10 de 11 mueren; el que vive (Ctrl+Enter sin mirar la política) es equivalente: *Place* vuelve a
 pedir la política antes de mandar.
 
-## 17. Cómo quedó V3 (v0.137)
+## 17. Cómo quedó V3 (v0.0XX)
 
 **Qué hay.** En *Dictate to report*, arriba del campo, el botón redondo de 72 px: tocar para grabar y otra vez para
 cortar. Mientras abre el micrófono dice *Getting the microphone…*; *Recording · 0:12 · tap to stop* aparece recién con el
