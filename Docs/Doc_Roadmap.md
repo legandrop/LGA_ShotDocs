@@ -332,10 +332,18 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   2 (el reporte del día), 3 (plantillas propias). **Entregas 0 y 1 hechas** (v0.117): la vista previa
   (`/practice?template=on-set`), la tira de la página nueva, *More…* y *Apply template…*. **Entrega 2 hecha**
   (v0.121): *New day report* (botón, globito, menú ⋯ y Ctrl/⌘+Alt+Shift+N), la carpeta de reportes marcada o deducida,
-  lo que se copia del día anterior, "ya existe" y el orden, sin red. **Falta** que Lega revise el contenido de las tres
-  (PL1) y pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico, y la entrega 3. De la
-  sección 6 quedaron para después el selector de plantilla del globito (con las propias, entrega 3) y la marca *2
-  reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6). Quedó de la auditoría de
+  lo que se copia del día anterior, "ya existe" y el orden, sin red. **Entrega 3 hecha** (v0.124): plantillas propias
+  (*Save as template…* con *Clear filled-in values*, la carpeta *Templates*, la franja con *Template settings…* y *Stop
+  using as template*, *Customize*, las de otros proyectos sin sus fotos, *Wait* / *Use built-in* a medio bajar y el
+  selector de plantilla del globito, con el aviso de O4). **Falta** que Lega revise el contenido de las tres (PL1) y
+  pruebe el atajo en Firefox y Safari de la Mac y con un teclado latinoamericano físico. Quedan para después la marca
+  *2 reports for…* en la barra lateral con la papelera ofrecida para el repetido sin tocar (O6), y en *Buscar en el
+  proyecto* la marca *Template* con *Replace all* que saltee las plantillas salvo *Include templates* (O9, va con la
+  búsqueda). De la auditoría de la entrega 3 (ninguna pierde contenido): dos dispositivos sin red que guardan su primera
+  plantilla crean dos carpetas *Templates* (O1); *Template settings* en un dispositivo y un cambio de formato en otro a la vez
+  pisan la descripción, la limitación conocida de `settings` (O2); guardar un reporte con *Use for day reports* cambia la
+  plantilla de la carpeta para todo el equipo (O3, decidido así: D94); un invitado con *Edit & create pages* guarda
+  plantillas, como permite la base (O4). Quedó de la auditoría de
   la entrega 1: *Exit* de la vista previa abierta desde la ventana va al inicio y no a la página donde se elegía
   (Atrás sí vuelve); y un aviso de ProseMirror en la consola al abrir la vista previa (sin efecto visible). De la
   auditoría de la entrega 2 (las demás observaciones, corregidas): un invitado con *Edit & create pages* crea reportes,
@@ -355,12 +363,20 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   páginas, buscar), 6 opcional (dibujar en un comentario).
   **Entregas 0 y 1 hechas (v0.116):** el mapa `photoMarkup` y su lectura segura (`src/media/markup.ts`), las pruebas de
   versiones publicadas, base limpia, historial y carrera, y el dibujo encima de la foto en línea, la de una celda, la
-  foto-bloque, el carrete (*Hide annotations*) y el PDF. Falta: subir `min_app_version` a esta versión al publicarla
-  (AN10) y la entrega 2 (el anotador, con la poda de AN11); medir el dedo a 60 y 120 Hz y las fotos HEIC de un iPhone
-  real (entrega 0, no se pudo sin teléfono).
-  Del PDF (auditoría O2): el grosor mínimo de 1 px se calcula con la caja en pantalla y la vista de impresión copia el
-  `<svg>` tal cual, así un trazo fino sale más grueso en papel (y una foto que en pantalla no cargó sale sin dibujo);
-  redibujar cada `svg.sd-markup` de la copia con el mínimo de su caja impresa, antes de la entrega 2.
+  foto-bloque, el carrete (*Hide annotations*) y el PDF.
+  **Entrega 2 hecha (v0.123):** el anotador en la compu (`src/ui/Annotator.tsx`): las nueve herramientas con las letras
+  de FrameRev, Shift y Alt, colores y grosor contra 1920 px, estilo por herramienta, deshacer propio por foto, escribir
+  al soltar, topes en bytes y la poda de AN11; *Annotate* en la barra de la foto y A en el carrete; el PDF con el
+  grosor mínimo de su caja impresa (la observación O2). Falta: que `min_app_version` esté en 0.116 o más al publicarla
+  (AN10); probar ⌘[ y ⌘] en Safari y Chrome de una Mac; la entrega 3 (el dedo y el lápiz del iPad), y medir el dedo a 60
+  y 120 Hz y las fotos HEIC de un iPhone real (entrega 0, no se pudo sin teléfono).
+  De la auditoría de la entrega 2 (`Doc_Anotar_Fotos.md`, "Correcciones de la auditoría de la entrega 2"), pendientes:
+  una prueba que caiga si la condición «página sincronizada» de `PageEditor` (red, nada sin subir, nada sin bajar) que
+  frena la poda se rompe (hoy, con `synced = async () => true`, la suite sigue en verde; la re-verificación lo comprobó en
+  el navegador); una prueba que caiga si `PageEditor` ofrece *Annotate* sin poder editar; un marco ilegible lo pisa la primera forma
+  (revisar el día que cambie `v`); una forma con grosor 0 y sin relleno no se ve pero se puede elegir (sirve para
+  borrarla; decidir); en el teléfono el anotador abre y un dedo dibuja sin pellizco: decidir si se esconde en pantallas
+  táctiles hasta la entrega 3; un workspace sin la migración del equipo no conoce los permisos y nunca poda.
 - **P.22 Exportar una página o un proyecto entero** (Lega, 2026-10-02): PDF y/o zip con las páginas y las fotos, para
   entregarle al cliente o archivar un proyecto terminado. **Diseño en `Doc_Exportar.md`** (sin código; EX1 a EX15 a
   confirmar por Lega; auditado con condiciones y corregido: ningún correo en el zip, vista JPEG de cada foto): un PDF para entregar (toda la rama en orden con un índice que dice la hoja de
@@ -393,7 +409,10 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
 - **P.21 Menciones en comentarios: *@persona*** (Lega, 2026-10-02): escribir `@` en un comentario, elegir a alguien y
   que le llegue un aviso en la app; por correo cuando haya clave de Resend (C.12). **Entrega 1 programada (v0.120;
   migración `20261015120000_menciones.sql` sin aplicar):** el `@` con la lista, el pintado, la cola, la campana y el
-  punto en el botón de comentarios; auditada y corregida. Faltan las entregas 2 y 3, y un detalle cosmético (O6 de la
+  punto en el botón de comentarios; auditada y corregida. **Entrega 2 programada (v0.125; migración
+  `20261016120000_menciones_e2.sql` sin aplicar, `schema_version` 16):** compartir desde la mención (dueño y admins que
+  pueden compartir la página, con Comentar y solo esa página), el punto en el árbol y el número en el título de la
+  pestaña y en el ícono de la app. Falta la entrega 3 (correo), y un detalle cosmético (O6 de la
   auditoría): un comentario con mención cuenta como 2 cambios sin subir (alta y menciones). **Diseño en `Doc_Menciones.md`** (auditado y
   corregido; decisiones propuestas ME1 a ME10, ME10 espera a Lega): solo a quien ya
   ve la página; un miembro ve al equipo y a los clientes que ya comentaron (ME10); el dueño y los admins la comparten
@@ -402,6 +421,11 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   nada; una campana con las no leídas que pregunta cada 60 segundos (sin Realtime); sin red con la cola de siempre;
   los visitantes del link no mencionan; las menciones de Coda se ven como `@Nombre`. Entregas: 1 (base, `@`, campana,
   sin red), 2 (compartir desde la mención, marcas en el árbol y en el ícono), 3 (correo, grupo C).
+  De la auditoría de la entrega 2 (ninguna pierde datos ni da acceso de más): falta una prueba que caiga si se saca el paso
+  previo de compartir (`useShareGate`), antes de prender D14 (O1); después de Esc o *Cancel* en la pregunta de compartir,
+  la lista del `@` no vuelve hasta tocar el campo (O2); se puede compartir desde la mención en un proyecto archivado, como
+  con *Share* (O3); no mira la versión mínima de la app de quien recibe (O4); si se descarta el comentario después de
+  compartir, la persona queda con acceso y sin mención (O5).
 - **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
   Lega). **A1 implementada (v0.118):** ajustes con los cuatro proveedores y la clave en el dispositivo, el panel con *Fix*,
   *Improve*, *Shorter*, *Translate to…* y *Ask…* sobre lo elegido, vista previa por palabras, *Apply* con un deshacer y

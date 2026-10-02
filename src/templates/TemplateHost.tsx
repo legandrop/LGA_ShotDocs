@@ -2,15 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type * as Y from 'yjs';
 import { t, useT } from '../i18n';
 import '../i18n/lazy/templates';
-import { navigate } from '../router';
+import { navigate, pagePath } from '../router';
 import { usePermissions, useServices, useTree } from '../services';
 import { notify } from '../ui/notice';
 import { focusTitle } from '../ui/PageView';
-import { insertTemplate, isEmptyPage, placeAtFirstDatum, placeAtSummary, type TemplateEditor } from './apply';
+import { insertTemplate, insertTemplateCopy, isEmptyPage, placeAtFirstDatum, placeAtSummary, type TemplateEditor } from './apply';
 import { BUILTIN_IDS, BUILTIN_KINDS, BUILTIN_SLUGS, builtinBlocks, builtinTexts, type BuiltinKind } from './builtin';
 import { reportTitle } from './dayReport';
-import { markReportFolder, planDayReport, reportBlocks } from './dayReportCreate';
+import { markReportFolder, planDayReport, reportBlocks, type ReportTemplate } from './dayReportCreate';
 import { takeReportFocus } from './dayReportUi';
+import { builtinOrigin, listTemplates, templateInfo, templatesFolderOf, type OwnTemplate } from './own';
+import { customizeBuiltin, readFailureText, readOwnTemplate } from './ownCopy';
 import { armTitleUndo, registerTemplateTarget, takeTemplatesRequest } from './templatesUi';
 import './templates.css';
 
@@ -111,42 +113,157 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
   // *On-Set Report* en una página vacía adentro de otra (6.2): es un reporte del día. Se llena con la fecha, el día y lo
   // del reporte anterior de la carpeta, toma el título `2026-10-02 | Day 01` si no tenía, y la carpeta queda marcada (si
   // la persona la puede editar; si no, se deduce por el reporte de adentro).
-  const applyDayReport = useCallback(async () => {
-    const row = tree.get(pageId);
-    if (!row?.parent_id) return;
-    let blocks;
-    let title: string;
-    try {
-      const plan = await planDayReport({ tree, docs, engine }, { parentId: row.parent_id, projectId: row.workspace_id }, { exclude: pageId });
-      blocks = reportBlocks(plan, plan.suggestion, tr.lang);
-      title = reportTitle(plan.suggestion.date, plan.suggestion.day, tr.lang);
-    } catch (err) {
-      console.error('Reporte del día: no se pudieron leer los reportes', err);
-      blocks = builtinBlocks('onset', tr.lang);
-      title = '';
-    }
-    const { editable: canWrite, editor: current } = live.current;
-    // Mientras se leía la carpeta pudo llegar algo (otro dispositivo) o se pudo escribir: se vuelve a mirar.
-    if (!canWrite || !current || !isEmptyPage(doc)) return;
-    const pageEditor = current as PageEditorLike;
-    try {
-      insertTemplate(pageEditor, blocks);
-    } catch (err) {
-      console.error('No se pudo agregar la plantilla', err);
-      notify(t('templates.applyFailed'));
-      return;
-    }
-    setDialog(false);
-    const now = tree.get(pageId);
-    const patch: { template_id?: string; title?: string } = {};
-    if (now?.template_id !== BUILTIN_IDS.onset) patch.template_id = BUILTIN_IDS.onset;
-    if (now && !now.title && title) patch.title = title;
-    if (Object.keys(patch).length) void tree.setPatch(pageId, patch);
-    void tree.dropFresh(pageId);
-    if (perms.canEditPage(row.parent_id)) void markReportFolder(tree, row.parent_id);
-    placeAtSummary(pageEditor);
-    pageEditor.focus?.();
-  }, [tree, docs, engine, perms, pageId, doc, tr.lang]);
+  // Con una plantilla propia con *Use for day reports* (entrega 3), lo mismo con sus bloques: la carpeta queda anotada
+  // con esa plantilla, así el próximo *New day report* sale de ella.
+  const applyDayReport = useCallback(
+    async (template: ReportTemplate | null = null) => {
+      const row = tree.get(pageId);
+      if (!row?.parent_id) return;
+      let blocks;
+      let title: string;
+      try {
+        const plan = await planDayReport({ tree, docs, engine }, { parentId: row.parent_id, projectId: row.workspace_id }, { exclude: pageId });
+        blocks = reportBlocks(plan, plan.suggestion, tr.lang, template);
+        title = reportTitle(plan.suggestion.date, plan.suggestion.day, tr.lang);
+      } catch (err) {
+        console.error('Reporte del día: no se pudieron leer los reportes', err);
+        blocks = template ? template.blocks : builtinBlocks('onset', tr.lang);
+        title = '';
+      }
+      const { editable: canWrite, editor: current } = live.current;
+      // Mientras se leía la carpeta pudo llegar algo (otro dispositivo) o se pudo escribir: se vuelve a mirar.
+      if (!canWrite || !current || !isEmptyPage(doc)) return;
+      const pageEditor = current as PageEditorLike;
+      try {
+        if (template) insertTemplateCopy(pageEditor, doc, { ok: true, blocks, collapsed: template.collapsed });
+        else insertTemplate(pageEditor, blocks);
+      } catch (err) {
+        console.error('No se pudo agregar la plantilla', err);
+        notify(t('templates.applyFailed'));
+        return;
+      }
+      setDialog(false);
+      const templateId = template?.id ?? BUILTIN_IDS.onset;
+      const now = tree.get(pageId);
+      const patch: { template_id?: string; title?: string } = {};
+      if (now?.template_id !== templateId) patch.template_id = templateId;
+      if (now && !now.title && title) patch.title = title;
+      if (Object.keys(patch).length) void tree.setPatch(pageId, patch);
+      void tree.dropFresh(pageId);
+      if (perms.canEditPage(row.parent_id)) void markReportFolder(tree, row.parent_id, template ? template.id : undefined);
+      if (template?.removed) notify(t('templates.mediaRemoved', { count: template.removed }));
+      placeAtSummary(pageEditor);
+      pageEditor.focus?.();
+    },
+    [tree, docs, engine, perms, pageId, doc, tr.lang],
+  );
+
+  // Después de agregar una plantilla común (de fábrica o propia), el foco. Con título, a la página (el cursor ya quedó
+  // en el primer dato); sin título, al título vacío (4.2, paso 5), y mientras no se escriba ahí, Ctrl/Cmd+Z en el título
+  // saca la plantilla (y Ctrl/Cmd+Shift+Z la devuelve).
+  const focusAfterInsert = useCallback(
+    (pageEditor: PageEditorLike) => {
+      if (tree.get(pageId)?.title) {
+        pageEditor.focus?.();
+        return;
+      }
+      titleUndo.current?.();
+      titleUndo.current = armTitleUndo(pageId, (redo) => {
+        if (!redo) {
+          pageEditor.undo?.();
+          return;
+        }
+        pageEditor.redo?.();
+        // Rehacer devuelve la selección que guardó el deshacer (el pie, o el rótulo de la ficha tras dos vueltas):
+        // Enter en el título tiene que seguir llevando al primer dato.
+        placeAtFirstDatum(pageEditor);
+      });
+      focusTitle();
+    },
+    [tree, pageId],
+  );
+
+  // Una plantilla propia que no terminó de bajar (4.2, paso 1; O2): nunca se copia a medias. *Wait* la usa sola al llegar.
+  const [notReady, setNotReady] = useState<string | null>(null);
+  const [waitFor, setWaitFor] = useState<string | null>(null);
+
+  /** Usa una plantilla propia (4.2): una copia en memoria, sin las fotos de otro proyecto. `missing`: no terminó de bajar. */
+  const applyOwn = useCallback(
+    async (templateId: string, options: { wait?: number } = {}): Promise<'missing' | void> => {
+      const row = tree.get(pageId);
+      if (!row) return;
+      const read = await readOwnTemplate({ tree, docs, engine }, templateId, row.workspace_id, options);
+      if (read.status === 'missing') {
+        setNotReady(templateId);
+        return 'missing';
+      }
+      setNotReady(null);
+      setWaitFor(null);
+      if (read.status !== 'ok') {
+        notify(readFailureText(read.status));
+        return;
+      }
+      if (templateInfo(read.row).dayReport && row.parent_id) {
+        await applyDayReport({ id: templateId, blocks: read.blocks, collapsed: read.collapsed, removed: read.removed });
+        return;
+      }
+      const { editable: canWrite, editor: current } = live.current;
+      // Se vuelve a mirar en el momento: otro dispositivo pudo escribir mientras se leía la plantilla.
+      if (!canWrite || !current || !isEmptyPage(doc)) return;
+      const pageEditor = current as PageEditorLike;
+      try {
+        insertTemplateCopy(pageEditor, doc, { ok: true, blocks: read.blocks, collapsed: read.collapsed });
+      } catch (err) {
+        console.error('No se pudo agregar la plantilla', err);
+        notify(t('templates.applyFailed'));
+        return;
+      }
+      setDialog(false);
+      if (tree.get(pageId)?.template_id !== templateId) void tree.setPatch(pageId, { template_id: templateId });
+      void tree.dropFresh(pageId);
+      if (read.removed) notify(t('templates.mediaRemoved', { count: read.removed }));
+      focusAfterInsert(pageEditor);
+    },
+    [tree, docs, engine, pageId, doc, applyDayReport, focusAfterInsert],
+  );
+
+  // *Wait*: se vuelve a intentar bajar la plantilla mientras la ventana siga abierta; al llegar, se usa.
+  useEffect(() => {
+    if (!waitFor || !dialog) return;
+    let alive = true;
+    void (async () => {
+      while (alive) {
+        const result = await applyOwn(waitFor, { wait: 5000 }).catch(() => 'missing' as const);
+        if (result !== 'missing' || !alive) return;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [waitFor, dialog, applyOwn]);
+  useEffect(() => {
+    if (dialog) return;
+    setNotReady(null);
+    setWaitFor(null);
+  }, [dialog]);
+
+  /** *Customize* (5.3): una copia de la de fábrica en *Templates*, que se abre para editarla. */
+  const customize = useCallback(
+    async (kind: BuiltinKind) => {
+      const row = tree.get(pageId);
+      if (!row) return;
+      try {
+        const id = await customizeBuiltin({ tree, docs, engine }, kind, row.workspace_id, tr.lang);
+        setDialog(false);
+        navigate(pagePath(id));
+      } catch (err) {
+        console.error('Personalizar plantilla: no se pudo', err);
+        notify(t('templates.customizeFailed'));
+      }
+    },
+    [tree, docs, engine, pageId, tr.lang],
+  );
 
   const apply = useCallback(
     (kind: BuiltinKind) => {
@@ -171,27 +288,9 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       void tree.dropFresh(pageId);
       // En la raíz del proyecto no hay carpeta de reportes (6.2): la página queda como una plantilla común.
       if (kind === 'onset') notify(t('dayReport.atRoot'));
-      if (row?.title) {
-        // Con título, el foco va a la página: el cursor ya quedó en el primer dato de la ficha (insertTemplate).
-        pageEditor.focus?.();
-        return;
-      }
-      // El título, vacío y con el foco (sección 4.2, paso 5): lo que falta es nombrar la página. Mientras no se
-      // escriba ahí, Ctrl/⌘+Z en el título saca la plantilla (y Ctrl/⌘+Shift+Z la devuelve).
-      titleUndo.current?.();
-      titleUndo.current = armTitleUndo(pageId, (redo) => {
-        if (!redo) {
-          pageEditor.undo?.();
-          return;
-        }
-        pageEditor.redo?.();
-        // Rehacer devuelve la selección que guardó el deshacer (el pie, o el rótulo de la ficha tras dos vueltas):
-        // Enter en el título tiene que seguir llevando al primer dato.
-        placeAtFirstDatum(pageEditor);
-      });
-      focusTitle();
+      focusAfterInsert(pageEditor);
     },
-    [doc, tree, pageId, tr.lang, applyDayReport],
+    [doc, tree, pageId, tr.lang, applyDayReport, focusAfterInsert],
   );
 
   const strip = fresh && empty && editable && !!editor && !hasChildren;
@@ -215,8 +314,14 @@ export function TemplateHost({ pageId, doc, editor, editable, complete }: Props)
       )}
       {dialog && (
         <TemplatesDialog
+          pageId={pageId}
           blocked={blockedReason({ complete, editor: !!editor, editable, empty }, tr)}
           onUse={apply}
+          onUseOwn={(id) => void applyOwn(id)}
+          onCustomize={(kind) => void customize(kind)}
+          notReady={notReady}
+          waiting={!!waitFor}
+          onWait={() => notReady && setWaitFor(notReady)}
           onClose={() => setDialog(false)}
         />
       )}
@@ -238,24 +343,82 @@ export function blockedReason(
   return null;
 }
 
-/** La ventana *Templates* (sección 4.1): por ahora, las de fábrica (las propias llegan con la entrega 3). */
+/**
+ * La ventana *Templates* (sección 4.1): *Built-in* (con *Preview* y *Customize*), *This project* y *Other projects* (las
+ * propias que la persona ve, con su descripción; *Open* para cambiarlas, que son páginas). Una de otro proyecto se usa sin
+ * sus fotos y archivos (PL10). Si una propia no terminó de bajar, el aviso con *Wait* y, si salió de una de fábrica,
+ * *Use built-in*.
+ */
 function TemplatesDialog({
+  pageId,
   blocked,
   onUse,
+  onUseOwn,
+  onCustomize,
+  notReady,
+  waiting,
+  onWait,
   onClose,
 }: {
+  pageId: string;
   blocked: string | null;
   onUse: (kind: BuiltinKind) => void;
+  onUseOwn: (id: string) => void;
+  onCustomize: (kind: BuiltinKind) => void;
+  notReady: string | null;
+  waiting: boolean;
+  onWait: () => void;
   onClose: () => void;
 }) {
   const tr = useT();
+  const tree = useTree();
+  const perms = usePermissions();
   const texts = builtinTexts(tr.lang);
+  const projectId = tree.get(pageId)?.workspace_id ?? tree.workspaceId;
+  const lists = listTemplates(tree, projectId, pageId);
+  const folder = templatesFolderOf(tree, projectId);
+  const canCustomize = folder ? perms.canCreateIn(folder.id, projectId) : perms.canCreateIn(null, projectId);
+  const fallback = builtinOrigin(notReady ? tree.get(notReady) : undefined);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  const useButton = (onClick: () => void, autoFocus = false) => (
+    <button
+      className="primary"
+      autoFocus={autoFocus && !blocked}
+      aria-disabled={blocked ? true : undefined}
+      data-tip={blocked ?? undefined}
+      onClick={() => !blocked && onClick()}
+    >
+      {tr('templates.use')}
+    </button>
+  );
+
+  const ownItem = ({ row, info }: OwnTemplate) => (
+    <li key={row.id} data-template-page={row.id}>
+      <div className="templates-item-text">
+        <strong>{row.title || tr('common.untitled')}</strong>
+        {info.description && <span className="muted">{info.description}</span>}
+      </div>
+      <div className="templates-item-actions">
+        <button
+          className="link"
+          data-tip={tr('templates.openTip')}
+          onClick={() => {
+            onClose();
+            navigate(pagePath(row.id));
+          }}
+        >
+          {tr('templates.open')}
+        </button>
+        {useButton(() => onUseOwn(row.id))}
+      </div>
+    </li>
+  );
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -287,18 +450,51 @@ function TemplatesDialog({
                   {tr('templates.preview')}
                 </button>
                 <button
-                  className="primary"
-                  autoFocus={i === 0 && !blocked}
-                  aria-disabled={blocked ? true : undefined}
-                  data-tip={blocked ?? undefined}
-                  onClick={() => !blocked && onUse(kind)}
+                  className="link"
+                  data-customize={kind}
+                  aria-disabled={canCustomize ? undefined : true}
+                  data-tip={canCustomize ? tr('templates.customizeTip') : tr('templates.createBlocked')}
+                  onClick={() => canCustomize && onCustomize(kind)}
                 >
-                  {tr('templates.use')}
+                  {tr('templates.customize')}
                 </button>
+                {useButton(() => onUse(kind), i === 0)}
               </div>
             </li>
           ))}
         </ul>
+        {lists.thisProject.length > 0 && (
+          <>
+            <p className="menu-label mono-label">{tr('templates.thisProject')}</p>
+            <ul className="templates-list">{lists.thisProject.map(ownItem)}</ul>
+          </>
+        )}
+        {lists.others.length > 0 && (
+          <>
+            <p className="menu-label mono-label">{tr('templates.otherProjects')}</p>
+            {lists.others.map(({ project, templates }) => (
+              <div key={project.id} className="templates-project" data-project={project.id}>
+                <p className="templates-project-name">{project.name}</p>
+                <ul className="templates-list">{templates.map(ownItem)}</ul>
+              </div>
+            ))}
+          </>
+        )}
+        {notReady && (
+          <div className="templates-waiting" role="status">
+            <p>{waiting ? tr('templates.waiting') : tr('templates.notDownloaded')}</p>
+            {!waiting && (
+              <div className="templates-item-actions">
+                <button onClick={onWait}>{tr('templates.wait')}</button>
+                {fallback && (
+                  <button className="primary" onClick={() => onUse(fallback)}>
+                    {tr('templates.useBuiltIn')}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {blocked && <p className="muted">{blocked}</p>}
         <p className="muted small">{tr('templates.copyNote')}</p>
         <div className="modal-actions">

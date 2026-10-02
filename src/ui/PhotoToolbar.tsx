@@ -14,6 +14,7 @@ import { photoKeyAtPos } from './inlinePhotoEditor';
 import { arrangeSelected, arrangeTarget, aspectAt, onlyPhotosSelected, selectedPhotos, setPhotoWidths } from './inlinePhotoSize';
 import {
   AlignButtons,
+  AnnotateButton,
   CommentButton,
   DeleteButton,
   DownloadButton,
@@ -246,6 +247,7 @@ export function PhotoToolbar() {
               <ViewButton url={choice.url} onView={() => choice.key && actions?.onView(choice.key)} />
               <DownloadButton url={choice.url} name={choice.name} />
               <SaveToRollButton url={choice.url} name={choice.name} />
+              <AnnotateButton url={choice.url} name={choice.name} kind={kind} />
             </>
           ),
           <PhotoSizeButtons />,

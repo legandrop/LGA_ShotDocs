@@ -47,6 +47,7 @@ export const help = {
   'help.place.markdown': { en: "Typed at the start of a line", es: "Escrito al principio de un renglón" },
   'help.place.photos': { en: "Photos", es: "Fotos" },
   'help.place.carrete': { en: "Full-screen viewer", es: "Carrete (pantalla completa)" },
+  'help.place.annotate': { en: "Annotating a photo", es: "Anotando una foto" },
   'help.place.find': { en: "Find bar", es: "Barra de buscar" },
   'help.place.comments': { en: "Comments", es: "Comentarios" },
   'help.place.tree': { en: "Page tree and sidebar", es: "Árbol de páginas y barra lateral" },
@@ -98,6 +99,11 @@ export const help = {
   'help.templates.text': {
     en: "A new empty page offers Start from a template: Pre-production Notes (one page per scene), On-Set Report (one per shoot day) or Shot Breakdown (one per VFX shot). More… describes each one and has Preview, to try it without saving anything. Keep writing and the strip goes away. Pick one, type the page name and {enter} takes you to its first field; {undo} takes it all back. Apply template… in the ⋯ menu does the same on any empty page. The page gets a copy in the app's language. Internal — remove before sharing holds bids and vendors: delete that section before sharing the page with a client.",
     es: "Una página nueva vacía ofrece Empezar con una plantilla: Notas de preproducción (una página por escena), Reporte de rodaje (una por día de rodaje) o Desglose de plano (una por plano de VFX). Más… cuenta qué trae cada una y tiene Ver, para probarla sin guardar nada. Si seguís escribiendo, la tira se va. Elegí una, escribí el nombre de la página y {enter} te lleva a su primer dato; {undo} la saca entera. Aplicar plantilla…, en el menú ⋯, hace lo mismo en cualquier página vacía. La página recibe una copia en el idioma de la app. Interno — borrar antes de compartir tiene cotizaciones y proveedores: borrá esa sección antes de compartir la página con un cliente.",
+  },
+  'help.ownTemplates.title': { en: "Your own templates", es: "Plantillas propias" },
+  'help.ownTemplates.text': {
+    en: "Save as template… in the ⋯ menu copies a page to the project's Templates folder (it's created the first time), with a name and a description; the page itself doesn't change. Clear filled-in values empties the tables (keeps headers and row labels), unchecks the checkboxes and leaves out photos and files. A template is a page: open it and write to change it. New pages get a copy, so pages already made don't change. Above its title, Template settings… has the description and Use for day reports, and Stop using as template turns it back into a normal page. Customize, next to each built-in one in Templates, makes your own copy to change. Templates lists this project's templates and the ones from other projects you can see; one from another project comes without its photos and files. With Use for day reports, New day report uses it, and lets you pick when there's more than one. Whoever sees the Templates folder sees its templates: share it with your team, not with clients.",
+    es: "Guardar como plantilla…, en el menú ⋯, copia una página a la carpeta Plantillas del proyecto (se crea la primera vez), con un nombre y una descripción; la página no cambia. Vaciar lo completado vacía las tablas (deja encabezados y rótulos), desmarca las casillas y no copia fotos ni archivos. Una plantilla es una página: abrila y escribí para cambiarla. Las páginas nuevas reciben una copia, así que las ya hechas no cambian. Arriba de su título, Ajustes de la plantilla… tiene la descripción y Usar para reportes del día, y Dejar de usar como plantilla la vuelve una página común. Personalizar, al lado de cada una de fábrica en Plantillas, hace una copia tuya para cambiarla. Plantillas muestra las de este proyecto y las de otros proyectos que ves; una de otro proyecto llega sin sus fotos ni archivos. Con Usar para reportes del día, Nuevo reporte del día la usa, y deja elegir cuando hay más de una. Quien ve la carpeta Plantillas ve sus plantillas: compartila con tu equipo, no con clientes.",
   },
   'help.dayReports.title': { en: "Day reports", es: "Reportes del día" },
   'help.dayReports.text': {
@@ -200,6 +206,11 @@ export const help = {
     en: "A photo can carry annotations drawn on top (arrows, circles, text, numbers, freehand strokes): they show on the page, in a table cell, in the full-screen viewer and in the PDF, and the original never changes. In the viewer, Hide annotations shows the clean photo just for you (nothing is saved). The same photo twice on a page shares its annotations; on another page it shows clean.",
     es: "Una foto puede llevar anotaciones dibujadas encima (flechas, círculos, texto, números, trazos a mano): se ven en la página, en una celda de una tabla, en el carrete y en el PDF, y el original nunca cambia. En el carrete, Ocultar anotaciones muestra la foto limpia solo para vos (no se guarda nada). La misma foto dos veces en una página comparte sus anotaciones; en otra página sale limpia.",
   },
+  'help.photosAnnotate.title': { en: "Annotate a photo", es: "Anotar una foto" },
+  'help.photosAnnotate.text': {
+    en: "If you can edit the page, select a photo from Drive and choose Annotate in its bar, or press {viewer} in the full-screen viewer. The tools and their letters are the ones in LGA FrameRev: V Select, R Rectangle, E Ellipse, A Arrow, L Line, P Pencil, M Marker, T Text, N Number. Shift draws a square, a circle or 45° lines; Alt (⌥ on the Mac) draws from the center. {width} make the selected shape under the pointer (or the next one) thinner or thicker, {next} always the next one; thickness counts pixels with the photo's long side at 1920. Each tool remembers its color and thickness on this device. Every shape is saved as you release it, also offline; {undo} only undoes what you did on this photo. {close} deselects, and with nothing selected closes. Whoever has the page open sees each shape appear. If you take an annotated photo out of the page, its annotations are cleared after 10 minutes with the page open (bringing the photo back later shows it clean).",
+    es: "Si podés editar la página, elegí una foto del Drive y tocá Anotar en su barra, o apretá {viewer} en el carrete. Las herramientas y sus letras son las de LGA FrameRev: V Elegir, R Rectángulo, E Elipse, A Flecha, L Línea, P Lápiz, M Marcador, T Texto, N Número. Shift dibuja un cuadrado, un círculo o líneas a 45°; Alt (⌥ en la Mac) dibuja desde el centro. {width} hacen más fina o más gruesa la forma elegida bajo el cursor (o la próxima), {next} siempre la próxima; el grosor cuenta píxeles con el lado largo de la foto a 1920. Cada herramienta recuerda su color y su grosor en este dispositivo. Cada forma se guarda apenas la soltás, también sin conexión; {undo} deshace solo lo que hiciste en esta foto. {close} deja de elegir, y sin nada elegido cierra. Quien tiene la página abierta ve aparecer cada forma. Si sacás una foto anotada de la página, sus anotaciones se borran a los 10 minutos con la página abierta (si después la foto vuelve, vuelve limpia).",
+  },
   'help.photosPhone.title': { en: "On the phone", es: "En el teléfono" },
   'help.photosPhone.text': {
     en: "Tap a photo to see it full size; back on the page, tap it again for its bar and handles. Photos in a row can show side by side or one under the other: Images in a row, in the account menu.",
@@ -264,8 +275,13 @@ export const help = {
   },
   'help.mentions.title': { en: "Mention someone in a comment", es: "Mencionar a alguien en un comentario" },
   'help.mentions.text': {
-    en: "In a comment, type @ and pick someone who can see the page: they get a notice in the bell at the top, with the number of unread mentions. {pick} choose from the list, {close} closes it without erasing what you wrote. Deleting the @name before sending removes the mention. A dot on the comments button means someone mentioned you on that page.",
-    es: "En un comentario, escribí @ y elegí a alguien que vea la página: le llega un aviso en la campana de arriba, con el número de menciones sin leer. {pick} eligen de la lista, {close} la cierra sin borrar lo escrito. Borrar el @nombre antes de mandar saca la mención. Un punto en el botón de comentarios quiere decir que te mencionaron en esa página.",
+    en: "In a comment, type @ and pick someone who can see the page: they get a notice in the bell at the top, with the number of unread mentions. {pick} choose from the list, {close} closes it without erasing what you wrote. Deleting the @name before sending removes the mention. A dot on the comments button and in the page tree means someone mentioned you on that page; the number also shows in the tab title and on the installed app's icon.",
+    es: "En un comentario, escribí @ y elegí a alguien que vea la página: le llega un aviso en la campana de arriba, con el número de menciones sin leer. {pick} eligen de la lista, {close} la cierra sin borrar lo escrito. Borrar el @nombre antes de mandar saca la mención. Un punto en el botón de comentarios y en el árbol de páginas quiere decir que te mencionaron en esa página; el número también aparece en el título de la pestaña y en el ícono de la app instalada.",
+  },
+  'help.mentionsShare.title': { en: "Mention someone who can't see the page", es: "Mencionar a alguien que no ve la página" },
+  'help.mentionsShare.text': {
+    en: "If you're the owner or an admin and can share the page, the @ list also shows, in gray under “Can't see this page”, people who can't see it. Pick one and choose Share and mention: the page is shared with them with Comment (only that page and the ones inside it) and they're mentioned. It needs a connection. {cancel} closes the question without sharing.",
+    es: "Si sos dueño o admin y podés compartir la página, la lista del @ también muestra, en gris bajo «No ven esta página», a quienes no la ven. Elegí a alguien y tocá Compartir y mencionar: se le comparte la página con Comentar (solo esa página y las de adentro) y queda mencionado. Pide conexión. {cancel} cierra la pregunta sin compartir.",
   },
   'help.questions.title': { en: "Questions", es: "Preguntas" },
   'help.questions.text': {
@@ -529,6 +545,28 @@ export const help = {
   'shortcut.carreteNext': { en: "Next", es: "Siguiente" },
   'shortcut.carreteEnds': { en: "First / last", es: "Primera / última" },
   'shortcut.carreteClose': { en: "Close", es: "Cerrar" },
+  'shortcut.carreteAnnotate': { en: "Annotate the photo (if you can edit the page)", es: "Anotar la foto (si podés editar la página)" },
+  'shortcut.annotateSelect': { en: "Select and move shapes", es: "Elegir y mover formas" },
+  'shortcut.annotateRectangle': { en: "Rectangle", es: "Rectángulo" },
+  'shortcut.annotateEllipse': { en: "Ellipse", es: "Elipse" },
+  'shortcut.annotateArrow': { en: "Arrow", es: "Flecha" },
+  'shortcut.annotateLine': { en: "Line", es: "Línea" },
+  'shortcut.annotatePencil': { en: "Pencil", es: "Lápiz" },
+  'shortcut.annotateMarker': { en: "Marker", es: "Marcador" },
+  'shortcut.annotateText': { en: "Text", es: "Texto" },
+  'shortcut.annotateNumber': { en: "Number (each click, the next one)", es: "Número (cada clic, el siguiente)" },
+  'shortcut.annotateWidth': {
+    en: "Thinner / thicker: the selected shape under the pointer, or the next one",
+    es: "Más fino / más grueso: la forma elegida bajo el cursor, o la próxima",
+  },
+  'shortcut.annotateWidthNext': { en: "Thinner / thicker, always the next shape", es: "Más fino / más grueso, siempre la próxima forma" },
+  'shortcut.annotateUndo': { en: "Undo (only on this photo)", es: "Deshacer (solo en esta foto)" },
+  'shortcut.annotateRedo': { en: "Redo", es: "Rehacer" },
+  'shortcut.annotateDelete': { en: "Delete the selected shapes", es: "Borrar las formas elegidas" },
+  'shortcut.annotateEscape': { en: "Deselect; with nothing selected, close", es: "Dejar de elegir; sin nada elegido, cerrar" },
+  'shortcut.annotateFit': { en: "Fit the whole photo", es: "Encuadrar la foto entera" },
+  'shortcut.annotatePan': { en: "Hold and drag to move the zoomed photo", es: "Mantener y arrastrar para mover la foto ampliada" },
+  'shortcut.annotateSave': { en: "Nothing to save: every shape is saved as you draw it", es: "Nada que guardar: cada forma se guarda apenas la dibujás" },
   'shortcut.findNext': { en: "Next match", es: "Coincidencia siguiente" },
   'shortcut.findPrev': { en: "Previous match", es: "Coincidencia anterior" },
   'shortcut.findClose': { en: "Close the bar (the match stays selected)", es: "Cerrar la barra (queda elegida la coincidencia)" },
@@ -558,6 +596,10 @@ export const help = {
   'shortcut.mentionClose': {
     en: "Close the @ list without erasing what you wrote",
     es: "Cerrar la lista del @ sin borrar lo escrito",
+  },
+  'shortcut.mentionShareCancel': {
+    en: "Close the question to share the page with someone you mention, without sharing",
+    es: "Cerrar la pregunta de compartir la página con quien mencionás, sin compartir",
   },
   'shortcut.versionName': {
     en: "Naming a version in the history: save / leave it as it was",

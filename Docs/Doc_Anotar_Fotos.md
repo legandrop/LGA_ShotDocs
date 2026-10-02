@@ -1,7 +1,7 @@
 # Anotar sobre las fotos (P.20)
 
-**Estado: entregas 0 y 1 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; ver "Cómo quedó" al final); el
-anotador (entrega 2) sigue en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
+**Estado: entregas 0, 1 y 2 hechas (v0.116: el mapa, sus pruebas y ver las anotaciones; v0.123: el anotador en la
+compu y la poda; ver "Cómo quedó" al final); el dedo y el lápiz (entrega 3) siguen en diseño.** Pedido de Lega del 2026-10-02. Se diseñó contra `main` v0.108. Las decisiones
 (AN1 a AN11, sección 12) son propuestas con la recomendación elegida: el número final lo pone quien las cierre con Lega.
 Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
 ("Correcciones de la auditoría").
@@ -621,3 +621,106 @@ sobre una imagen que no cargó, en la página y en el carrete (O1); el ojo dice 
 grosor mínimo de pantalla que queda en el PDF (O2) pasó al roadmap.
 
 **Falta para publicar:** subir `workspace_settings.min_app_version` a esta versión (AN10) antes de la entrega 2.
+
+## Cómo quedó la entrega 2 (anotar en la compu, v0.123)
+
+**El anotador** (`src/ui/Annotator.tsx`, se baja aparte como el carrete y solo lo abre quien puede editar la página):
+
+- **Abrir:** *Annotate* en la barra de la foto elegida (foto en línea y foto-bloque; solo una foto del Drive, nunca un
+  video ni un adjunto) o, en el carrete, el botón *Annotate* o la tecla **A** (el carrete se cierra y abre el anotador).
+  Sin permiso de editar, no hay botón ni tecla: `PageEditor.tsx` pasa `onAnnotate` solo con la página editable, las
+  barras de la foto ya solo se ven así, y la base rechaza la escritura igual (`push_page_update`).
+- **Las nueve herramientas** con las letras de FrameRev (V R E A L P M T N), Shift (cuadrado, círculo, 45°) y Alt
+  (desde el centro), los valores de fábrica de FrameRev y el estilo **recordado por herramienta en el dispositivo**
+  (`annotatorStyles.ts`; lo cambiado en una forma elegida queda como el de la próxima). Franja de propiedades: los 8
+  colores de AN6, recientes y *Custom*; grosor (barra de 0 a 40 y número hasta 999, contra la referencia de 1920 px de
+  AN7); opacidad; relleno (rectángulo y elipse) o fondo (texto, con tinta automática); punta abierta y en las dos
+  puntas (flecha); tamaño (texto y número). Cursor de pincel con el diámetro real en el lápiz y el marcador.
+- **Teclado** (`annotatorKeys.ts`, en la captura de `window`: nada de la página actúa debajo): `[` `]` cambian el
+  grosor de lo elegido si el cursor está encima y si no el de la próxima; Ctrl/⌘+`[` `]` siempre el de la próxima y se
+  frenan con `preventDefault` (⌘[ es "atrás" en la Mac); Ctrl/⌘+Z, Ctrl/⌘+Shift+Z y Ctrl/⌘+Y; Supr y Backspace; Esc
+  (termina el texto, deja de elegir y, sin nada elegido, cierra); F encuadra; la barra espaciadora apretada (o la
+  rueda apretada) mueve la foto ampliada; la rueda y el pellizco del trackpad amplían; Ctrl/⌘+S solo avisa que se
+  guarda solo. Todo en el registro (`shortcuts.ts`, lugar `annotate`, y `carreteAnnotate`) y en la ayuda
+  (*Annotate a photo*).
+- **Elegir:** clic, Shift+clic, recuadro; arrastrar mueve (escribe solo `posX`/`posY`); tiradores en las esquinas de
+  rectángulo, elipse y texto y en las puntas de flecha y línea (el lápiz y el número solo se mueven); doble clic en un
+  texto lo edita y en un número lo renumera.
+- **Escribir al soltar:** mientras se arrastra (dibujar, mover, un tirador, una barra de la franja) la forma vive solo
+  en la pantalla; se escribe una transacción al soltar. Escribir un valor igual al que hay no escribe nada (tocar el
+  mismo color dos veces no deja un hueco más). El lápiz se simplifica al soltar (Douglas-Peucker a medio píxel de
+  pantalla), relativo a su primer punto y redondeado al píxel del marco, con el tope de 5000 puntos.
+- **Deshacer propio:** un `Y.UndoManager` sobre el mapa con el origen `sd-markup:<fileId>`, uno por sesión del
+  anotador: lo de otro editor (llega por la red) y lo de otra foto no se deshacen. La poda tiene su propio origen.
+- **El marco:** si la foto no tenía anotaciones, el de la primera forma es la **medida del archivo**
+  (`files.width/height`, ya girada, del registro del dispositivo, también sin red: `MediaQueue.dimensions`) o, si no
+  se sabe, la del original cargado; **nunca la de la vista previa** (corrección B1). Sin ninguna de las dos, se ve la
+  foto y las herramientas de crear se apagan (*connect to the internet to annotate this photo for the first time*).
+  Nunca se reescribe. Un marco con `v` mayor abre en solo lectura (*Update the app to edit these annotations*).
+- **Topes en bytes codificados** (`src/media/markupLimits.ts`, sección 10): por foto, el contenido vivo de sus claves
+  (96 KB); por página, el de todas (512 KB); la base de la página con GC (2,5 MB). Se miden al abrir y después de cada
+  escritura (6 ms con una foto llena); al 80 % se avisa y al tope las herramientas de crear se apagan (elegir, mover y
+  borrar siguen). Medido: una flecha del anotador pesa 389 bytes (el id es un uuid), un rectángulo 391, un texto corto
+  496, un número 346, un trazo de 2 s a 60 Hz simplificado (39 puntos) 507; entran 265 flechas por foto.
+- **Sin red:** anota igual (todo va al documento de la página en el dispositivo) y sube al volver. Sin nada de la foto en
+  el dispositivo, el anotador lo dice (*This photo isn't on this device yet*) y las herramientas de crear se apagan.
+
+**La poda (AN11)** (`src/media/markupPrune.ts`, `startMarkupPrune`, la arranca `PageEditor.tsx`): con la página
+editable (que ya exige la página entera bajada), los permisos conocidos, fuera de la vista de una versión y **con la
+página sincronizada** (con red, nada propio sin subir y nada del servidor sin bajar; corrección B2: si no, se olvida lo
+contado y los 10 minutos vuelven a empezar), mira al abrir y cada minuto qué fotos anotadas no están en el contenido; anota desde cuándo con el reloj del dispositivo y poda las que llevan 10 minutos
+afuera (una transacción con su propio origen, `sd-markup-prune`). Una foto que vuelve (pegar, deshacer) deja de
+contar. No se arma junto con la base limpia: la base sale de las filas guardadas con el candado de la página y se salta
+si hay algo sin subir; la poda es una edición más que sube después. Lo que otro anotó sin red sobre la foto podada
+llega como clave nueva y lo saca la vuelta siguiente; todo sigue en `page_updates`.
+
+**El PDF con el grosor mínimo de la hoja** (auditoría O2 de la entrega 1): `fitPrintedMarkup` (`markupOverlay.ts`)
+redibuja cada `svg.sd-markup` de la vista de impresión con el mínimo de 1 px de su caja impresa (no el de la pantalla,
+que en un teléfono engrosaba los trazos finos en papel), y dibuja también las fotos que en pantalla no tenían dibujo
+porque la imagen no había cargado. Es una línea en `printView.ts`, solo para la vista que se imprime.
+
+**Pruebas:** `markupEdit.test.ts` (herramientas, letras, valores de fábrica, AN7, Shift y Alt, el lápiz, qué hay bajo
+el cursor, editar escribe solo lo que cambia), `markupLimits.test.ts`, `markupPrune.test.ts` (los 10 minutos, cortar
+y pegar, lo anotado sin red sobre una foto podada, el origen propio, la página a medio bajar), `annotatorKeys.test.ts`
+(⌘ en la Mac, Ctrl en Windows), `Annotator.test.tsx` (escribir al soltar, deshacer propio, lo de otro en vivo, **dos
+anotando a la vez la misma foto con trazos intercalados, también sin red**, solo lectura, el tope, un mapa malicioso,
+el mismo color dos veces, el texto a medio escribir al cerrarse solo), `annotatorCompat.test.ts` (**la versión
+publicada v0.117 y tres anteriores abren una página anotada con el anotador, la editan, sacan una foto anotada y el mapa
+vuelve intacto; una vieja escribiendo mientras alguien anota sin red**), `markupPrint.test.ts` y el carrete
+(`Carrete.test.tsx`: *Annotate* y A solo con permiso y solo en una foto).
+
+**En el navegador** (Chromium sin ventana, dos dispositivos con la misma página lado a lado y el servidor en memoria,
+sin login): flecha roja, círculo amarillo y texto, con cero escrituras durante el arrastre; el otro los ve sin recargar
+(sincronizando cada 400 ms: el servidor en memoria no tiene Realtime) y los dibuja sobre su foto; `[` `]` y Ctrl+`[`
+cambian el grosor sin navegar; mover y deshacer; con la red cortada anota, cuenta 1 cambio sin subir y al volver sube;
+dos anotadores abiertos dibujando a la vez (trazos intercalados) terminan con las mismas 10 formas y deshacer en uno
+saca solo lo suyo; el carrete abre el anotador con A; quien solo ve la página ve la flecha que dibuja otro, no tiene
+*Annotate* y la A no hace nada; la vista de impresión lleva las anotaciones con trazos de 1 px o más y `page.pdf()`
+las saca.
+
+**Decisiones tomadas sin Lega** (cambiables): la herramienta de la primera vez es Arrow (después, la última usada); el
+relleno de rectángulo y elipse es *Fill* con trazo y relleno al 40 % (el 0 % de FrameRev no se vería); el texto
+guarda siempre su caja (con 10 % de holgura, para que otra letra no lo corte) y *Background* le pone fondo con tinta
+automática y esquinas de 12; el anotador no suma una entrada al historial del navegador (cada forma ya está guardada y
+un texto a medio escribir se guarda al cerrarse solo); sin nada de la foto en el dispositivo, *Annotate* abre el
+anotador con el aviso en vez de estar apagado (saberlo antes pide preguntar a la cola por cada foto elegida); lo nuevo
+se dibuja adentro de la foto; `[` `]` toman lo elegido con el cursor en cualquier parte de su caja, no solo en sus
+tiradores.
+
+**Falta (Lega, con una Mac y sesión real):** que ⌘[ y ⌘] en Safari y Chrome cambien el grosor y no vayan "atrás"; la
+poda a los 10 minutos con la base limpia real; el anotador con una foto real del Drive (portero) y sin red con la
+miniatura. **Para publicar:** `workspace_settings.min_app_version` tiene que estar en 0.116 o más (AN10: la versión que
+dibuja las anotaciones); esta entrega no suma tipos de bloque ni propiedades, así que no hace falta subirla a esta.
+
+### Correcciones de la auditoría de la entrega 2 (2026-10-02)
+
+Auditoría independiente: **no aprobado**, con dos bloqueantes de arreglo chico. Lo que pedía y dónde quedó:
+
+| Hallazgo | Corrección |
+|---|---|
+| **B1** Dos que anotan por primera vez la misma foto a la vez, uno con el original y otro con la miniatura (sin red): el marco salía de lo que se veía, gana uno, y las formas del otro quedaban corridas y 2,5 veces más chicas | El marco de la primera forma es la medida del archivo (`MediaQueue.dimensions`: registro del dispositivo o la base) o la del original cargado; nunca la de la vista previa. Sin medida, no se crea nada (con aviso). Pruebas: dos anotadores sin red, uno con la miniatura, terminan con cada forma donde se dibujó (falla con el código anterior); sin medida no se escribe nada; la medida del registro sin red |
+| **B2** La poda corría sin red: un dispositivo sin red podaba las anotaciones de una foto que otro había vuelto a poner (mover, deshacer, cortar y pegar) | `startMarkupPrune` cuenta y poda solo con la página sincronizada (con red, nada sin subir ni sin bajar) y olvida lo contado si deja de estarlo. Pruebas con el editor de verdad: el caso de la auditoría queda con la foto y sus anotaciones; con red poda a los 10 minutos y un corte en el medio reinicia la cuenta; las compuertas (editar, permisos conocidos, historial) |
+| O1 La prueba del peso fallaba al azar (4 de 25: el `clientID` al azar cambiaba la cuenta) | `clientID` fijo al medir (12 de 12) |
+| O3 Ctrl+[ sin prueba que caiga | Prueba de que se frena (`defaultPrevented`) y de que una letra en el campo del grosor no cambia la herramienta |
+| O5 Un texto que otro borra mientras se edita se perdía | Se vuelve a crear con lo escrito, en el mismo lugar y con su letra (con prueba) |
+| O2, O3 (*Annotate* de `PageEditor` sin prueba), O4, O6, O7, O8, O9 | Al roadmap (P.20) |

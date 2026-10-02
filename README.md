@@ -20,7 +20,7 @@ its own project: a tree of pages you own.
 - **Script text.** Paste a screenplay and turn it into *Script*: it shows in a screenplay typeface, with
   INT/EXT, DAY, NIGHT and DAWN/DUSK marked in color.
 - **Templates.** Reusable page layouts such as *Pre-production Notes*, *On-Set Report* or *Shot
-  Breakdown*. Pick one when you create a page and start filling it in.
+  Breakdown*. Pick one when you create a page and start filling it in, or save any page as your own template.
 - **Works everywhere.** macOS, Windows and iPhone, from the same app.
 - **Real page sizes.** A page can be free-form or set to a paper size (A5, A4, A3, Letter), per page or
   for a whole branch. What you see while editing is exactly what the PDF export looks like.
@@ -100,6 +100,11 @@ In production (v0.049). What works today:
   (full, 1/2, 1/3, 1/4 of the page) put photos and videos side by side, *Arrange in rows* lays out a run of
   photos in rows of equal height, and on the phone each account chooses rows or stacked. The PDF keeps the
   rows and breaks sheets where the page shows them. Photos added before v0.078 keep working this way.
+- Annotate photos on a computer: *Annotate* in a photo's toolbar (or A in the full-screen viewer) draws arrows,
+  ellipses, rectangles, lines, pencil and marker strokes, text and numbered markers on top, with the tools, letters,
+  colors and thickness of LGA FrameRev. The original never changes; annotations show on the page, in table cells, in
+  the viewer and in the PDF, are saved as you draw (also offline) and appear live for everyone editing the page. Only
+  people who can edit the page annotate.
 - iPhone photos (HEIC) are converted to JPEG on your device when you add them to a page, so every browser
   shows them; the converter is downloaded only the first time it is needed.
 - Attach any file (PDF, zip, anything): drop or paste it, it goes to the owner's Drive and shows as a card;
@@ -141,9 +146,14 @@ In production (v0.049). What works today:
   page menu: *Fix spelling & grammar*, *Improve writing*, *Make shorter*, *Translate to…* or *Ask…*. The preview marks
   what changes word by word; *Apply* replaces it as one edit you undo with Ctrl+Z, and nothing is applied if the text
   changed while the assistant was working. Photos and links inside the selection stay.
+- Templates: a new empty page offers the three built-in ones, and *More…* lists them with your project's own templates
+  and the ones from other projects you can see. *Save as template…* in the page menu copies a page to the project's
+  *Templates* folder (optionally clearing the filled-in values); a template is a page you edit like any other, and new
+  pages get a copy. *New day report* creates the day's on-set report with today's date, the next shoot day and
+  yesterday's location and camera package, offline too, from the report folder's template.
 - Public [privacy policy](https://shotdocs.lega.com.ar/privacy) and [terms](https://shotdocs.lega.com.ar/terms) pages, readable without signing in.
 
-Templates, summarizing and translating whole pages, and connecting other AI apps (MCP) come later. The plan, the decisions and the roadmap are in
+Summarizing and translating whole pages, and connecting other AI apps (MCP) come later. The plan, the decisions and the roadmap are in
 [`Docs/`](Docs/index.md) (in Spanish).
 
 ## Development
