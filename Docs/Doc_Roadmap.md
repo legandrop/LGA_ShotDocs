@@ -293,6 +293,14 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   Depende del interruptor de la privacidad de lo borrado (B.18) prendido en Wanka. Entregas: 0 (prueba de los headers y
   de la caché de miniaturas en la base real, y `noindex`), 1 (*Can view*), 2 (*Can edit*, con topes por bytes y la
   cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
+- **P.20 Anotar sobre las fotos** (Lega, 2026-10-02): flechas, círculos, rectángulos, texto y lápiz encima de una
+  foto de set sin tocar el original, cómodo para quien usa LGA FrameRev (mismas letras, colores y grosores).
+  **Diseño en `Doc_Anotar_Fotos.md`** (sin código ni auditoría; decisiones AN1 a AN10 propuestas): las anotaciones en
+  un `Y.Map` del documento de la página, afuera del contenido y por archivo (como "colapsar para todos"), así una
+  versión vieja no las borra; un SVG encima de la foto en la página, la celda, el carrete y el PDF; la copia con
+  anotaciones se arma en el dispositivo al bajar; anota quien edita la página. Entregas: 0 (prueba técnica), 1 (ver),
+  2 (anotar en la compu), 3 (dedo y Apple Pencil), 4 (bajar, copiar y exportar a FrameRev), 5 (historial, copiar entre
+  páginas, buscar), 6 opcional (dibujar en un comentario).
 - **P.8 (a futuro, última prioridad) Ordenar la media por tamaño:** una lista de las fotos, videos y
   archivos del proyecto ordenados por lo que pesan, con el link a la página donde está cada uno, para
   decidir si se deja, se borra o se reemplaza. Para cuando un proyecto ocupa mucho en el Drive.

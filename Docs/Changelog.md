@@ -1,5 +1,15 @@
 # Changelog — LGA Shot Docs
 
+v0.109 :
+
+No había forma de anotar una foto de set (flechas, círculos, texto, lápiz) sin editarla afuera. `Doc_Anotar_Fotos.md`
+diseña P.20 tomando de referencia LGA FrameRev: las mismas letras de herramienta, el verde y los grosores por defecto,
+Shift y Alt, y los nombres de campo de su `.frproj`. Las anotaciones van en un mapa del documento de la página, afuera
+del contenido y por archivo, como "colapsar para todos": se guardan sin red, se fusionan entre dos, entran al historial
+y una versión vieja no las borra. Se dibujan encima de la foto en la página, el carrete y el PDF; el original no se toca
+y la copia anotada se arma al bajar. Diez decisiones propuestas (AN1 a AN10) y seis entregas. Sin código.
+[ Anotar fotos - diseño: anotaciones en el documento de la página, al estilo de FrameRev ]
+
 v0.108 :
 
 Compartir una página con alguien sin cuenta no existía: solo usuarios invitados. Faltaba un diseño seguro para
