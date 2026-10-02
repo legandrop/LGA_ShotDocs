@@ -88,6 +88,18 @@ export function subpageBlocks(doc: PMNode): unknown[] {
 }
 
 /**
+ * *Create translated subpage* pide Editar y crear sobre la página (crear adentro, `canCreateIn`) y que su editor se
+ * pueda escribir ahora. Lo usan el botón y, otra vez, el momento de crear (el permiso pudo cambiar mientras tanto).
+ */
+export function subpageAllowed(
+  perms: { canCreateIn(parentId: string | null, projectId: string): boolean; canEditPage(pageId: string): boolean },
+  page: { id: string; workspace_id: string } | undefined,
+  editable: boolean,
+): boolean {
+  return !!page && editable && perms.canEditPage(page.id) && perms.canCreateIn(page.id, page.workspace_id);
+}
+
+/**
  * Agrega un resumen arriba de todo o debajo del bloque del cursor, como UNA edición del editor (un Ctrl/⌘+Z la saca).
  * No toca nada de lo que hay: no hace falta la guarda de "cambió mientras pensaba".
  */

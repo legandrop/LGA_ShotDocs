@@ -12,7 +12,8 @@ import { schema as mainSchema } from '../ui/fixtures/editorSchemaMain';
 import { appliedDoc, applySuggestion } from './apply';
 import type { AssistantEditor } from './assistantUi';
 import { parseSummary, toPartialBlocks } from './mdBlocks';
-import { collectPage, insertSummary, parsePageTranslation, subpageBlocks, takePageSnapshot, TITLE_TOKEN } from './pageActions';
+import { collectPage, insertSummary, parsePageTranslation, subpageAllowed, subpageBlocks, takePageSnapshot, TITLE_TOKEN } from './pageActions';
+import { Permissions } from '../sync/access';
 import type { Snapshot } from './apply';
 import { buildRequest } from './prompt';
 
@@ -204,6 +205,28 @@ describe('Create translated subpage', () => {
     } finally {
       device.docs.close(child);
     }
+  });
+
+  it('el permiso: con Editar y crear sí; con Editar solo, con Ver o sin el editor escribible, no', async () => {
+    const server = new FakeServer();
+    server.enableTeam();
+    const owner = await makeDevice(server);
+    devices.push(owner);
+    const pageId = await owner.tree.create(null, 'Reporte');
+    await owner.engine.syncNow();
+    const levels = { 'u-crea': 'edit_pages', 'u-edita': 'edit', 'u-ve': 'view' } as const;
+    const got: Record<string, boolean> = {};
+    for (const [uid, level] of Object.entries(levels)) {
+      server.addMember(uid, 'member');
+      server.grant(uid, { pageId }, level);
+      const d = await makeDevice(server, crypto.randomUUID(), '0.021', {}, undefined, { id: uid, email: `${uid}@test` });
+      devices.push(d);
+      await d.engine.syncNow();
+      got[uid] = subpageAllowed(new Permissions(d.tree, d.access.get(), uid), d.tree.get(pageId), true);
+      if (uid === 'u-crea') got['u-crea sin editor'] = subpageAllowed(new Permissions(d.tree, d.access.get(), uid), d.tree.get(pageId), false);
+    }
+    expect(got).toEqual({ 'u-crea': true, 'u-crea sin editor': false, 'u-edita': false, 'u-ve': false });
+    expect(subpageAllowed(new Permissions(owner.tree, owner.access.get(), owner.remote.userId), undefined, true)).toBe(false);
   });
 
   it('si la página cambió mientras pensaba, no hay copia', () => {

@@ -130,10 +130,10 @@ describe('Format as…: aplicar', () => {
       ['bulletListItem', 'ISO 800 [foto]'],
       ['paragraph', 'Después'],
     ]);
-    // Ids nuevos y sin repetir.
+    // Sin ids repetidos; el primer bloque nuevo hereda el id del que reemplaza (un comentario anclado ahí sigue con bloque).
     const ids = ed.document.map((b) => b.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).not.toContain('p');
+    expect(ids[1]).toBe('p');
     ed.undo();
     expect(shape(ed)).toEqual([
       ['paragraph', 'Antes'],
@@ -154,6 +154,8 @@ describe('Format as…: aplicar', () => {
     const p = plan(fs, '| Toma | Lente |\n|---|---|\n| 1 | 35 mm |\n| 2 | 50 mm |\n⟦block:1⟧', 'table');
     expect(applyFormat(ed$(ed), view(ed), fs, p, true).ok).toBe(true);
     expect(ed.document.map((b) => b.type)).toEqual(['table', 'image']);
+    // La tabla hereda el id del primer renglón ('a'); el segundo ('b') sale (sus comentarios quedan sin bloque).
+    expect(ed.document.map((b) => b.id)).toEqual(['a', 'img']);
     const table = ed.document[0] as unknown as { content: { headerRows?: number; rows: { cells: { content: { text: string }[] }[] }[] } };
     expect(table.content.headerRows).toBe(1);
     expect(table.content.rows.map((r) => r.cells.map((c) => c.content.map((x) => x.text).join('')))).toEqual([

@@ -13,7 +13,7 @@ import { applyFormat, formatSnapshotFrom, FORMATS, planFormat, takeFormatSnapsho
 import { loadSettings, readKey, rememberLanguage, type AssistantSettings } from './keyStore';
 import { cleanAnswer, diffKeys, parseAnswer, plainNew, type Atom, type NewUnit, type OldUnit, type Parsed } from './markup';
 import { parseSummary, plainBlocks, toPartialBlocks, type MdBlock, type MdParsed } from './mdBlocks';
-import { insertSummary, parsePageTranslation, subpageBlocks, takePageSnapshot } from './pageActions';
+import { insertSummary, parsePageTranslation, subpageAllowed, subpageBlocks, takePageSnapshot } from './pageActions';
 import { fetchPolicy, policyAllows, type AssistantPolicy } from './policy';
 import { buildRequest, EDIT_ONLY, LANGUAGES, PAGE_ACTIONS, type Action } from './prompt';
 import { complete, isLocalProvider, PROVIDER_NAMES, ProviderError, type Usage } from './providers';
@@ -324,7 +324,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
 
   const canEdit = perms.canEditPage(pageId) && (target?.editable() ?? false);
   const row = tree.get(pageId);
-  const canCreate = !!row && perms.canCreateIn(pageId, row.workspace_id) && canEdit;
+  const canCreate = subpageAllowed(perms, row, target?.editable() ?? false);
   const hasEditor = !!target?.editor?.();
   const config = settings ? { provider: settings.provider, baseUrl: settings.baseUrl, model: settings.model } : null;
   const ready = !!settings && (settings.hasKey || settings.provider === 'compatible') && !!settings.model;
@@ -521,7 +521,7 @@ export function AssistantPanel({ pageId }: { pageId: string }) {
   const createSubpage = async (current: Run, title: string, parsed: Parsed) => {
     const view = target?.view() ?? null;
     const page = tree.get(pageId);
-    if (!view || !page || !perms.canCreateIn(pageId, page.workspace_id) || !(target?.editable() ?? false)) {
+    if (!view || !page || !subpageAllowed(perms, page, target?.editable() ?? false)) {
       setPhase({ kind: 'error', action: current.action, message: tr('assistant.subpage.denied') });
       return;
     }

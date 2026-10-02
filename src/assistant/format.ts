@@ -224,7 +224,15 @@ export function applyFormat(editor: AssistantEditor | null, view: EditorView | n
   try {
     asOneUndoStep(view.state, () => {
       if (plan.mode === 'replace') {
-        editor.replaceBlocks(fs.ids, toPartialBlocks(plan.blocks, fs.restore));
+        // Los bloques nuevos heredan, en orden, los ids de los bloques de texto que reemplazan: un comentario anclado a
+        // uno de ellos (`comments.block_id`) sigue teniendo bloque. Todos los viejos salen en la misma transacción, así
+        // que ningún id queda repetido; los de las marcas de bloque vuelven con el suyo.
+        const textIds = [...new Set(pieces.filter((p) => p.kind === 'text').map((p) => p.blockId))];
+        let next = 0;
+        const blocks = toPartialBlocks(plan.blocks, fs.restore).map((b, i) =>
+          plan.blocks[i].kind === 'marker' || next >= textIds.length ? b : { ...(b as object), id: textIds[next++] },
+        );
+        editor.replaceBlocks(fs.ids, blocks);
         changed = plan.blocks.length;
         return;
       }
