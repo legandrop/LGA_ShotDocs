@@ -252,9 +252,13 @@ cosa.
   por el servidor; la app llama directo al proveedor. Es lo más privado, pero hay que cargarla en cada
   dispositivo. La alternativa es guardarla cifrada en Supabase (Vault) y llamar al proveedor desde una
   función del servidor: se carga una vez y funciona en todos lados.
+  **Propuesta (2026-10-02, `Doc_Asistente.md`, IA1):** solo en el dispositivo, cifrada con una llave del navegador que
+  no se exporta, por correo; el pedido va directo al proveedor (IA3).
 - **D-07 · MCP.** Opción indicada: un servidor MCP en el portero de Cloudflare del workspace, que entra
   con la sesión del usuario y edita con sus permisos. Se hace en la fase 5, después del asistente de la
   app.
+  **Propuesta (2026-10-02, `Doc_Asistente.md`, IA2):** en el portero, con el OAuth del Supabase del workspace, un rol
+  propio para el token y la base limpia de D14; antes, la prueba técnica M0; plan B, un MCP local.
 - **D-08 · Formato por defecto de un proyecto nuevo.** Opción indicada: libre. El formato no se guarda
   en el proyecto: se fija por proyecto en sus páginas raíz y lo heredan las de abajo
   (`pages.settings.format`, `Plan_ShotDocs.md`, sección 10).

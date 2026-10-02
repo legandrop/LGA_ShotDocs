@@ -239,6 +239,7 @@ En Notion y en Coda lo que se ve al editar no es lo que sale en el PDF. Acá sí
   editar.
 - **MCP.** Además del asistente de la app, un servidor MCP para que un cliente externo lea y edite las
   páginas con los permisos del usuario (D-07).
+- **Diseño:** `Doc_Asistente.md` (P.24, 2026-10-02), con las decisiones IA1 a IA10.
 
 ## 12. Preguntas abiertas
 
