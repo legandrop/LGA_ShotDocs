@@ -13,6 +13,8 @@ export interface HistoryEngine {
   load(rows: HistoryRow[], pageId: string): Promise<HistorySummary>;
   /** Suma filas nuevas (el historial abierto que se actualiza solo). */
   append(rows: HistoryRow[]): Promise<HistorySummary>;
+  /** Corta las sesiones en las versiones con nombre y las restauraciones (`versionBreaks`). */
+  breaks(after: number[], before: number[]): Promise<HistorySummary>;
   /** La versión que termina en la fila `seq`. */
   version(seq: number): Promise<VersionPayload>;
   /** Sus cambios contra la anterior de la lista. */
@@ -50,7 +52,7 @@ export function createHistoryEngine(makeWorker: () => WorkerLike | null = defaul
   let nextId = 1;
   let destroyed = false;
   const pending = new Map<number, Pending>();
-  /** Lo que armó el historial (cargar y sumar filas), para volver a armarlo en la página si el Worker se cae. */
+  /** Lo que armó el historial (cargar, sumar filas, los cortes), para volver a armarlo en la página si el Worker se cae. */
   const log: { id: number; req: HistoryRequest }[] = [];
   let readyTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -123,7 +125,7 @@ export function createHistoryEngine(makeWorker: () => WorkerLike | null = defaul
   const send = <T extends HistoryReply>(req: HistoryRequest): Promise<T> => {
     if (destroyed) return Promise.reject(new Error('cancelled'));
     const id = nextId++;
-    if (req.op === 'load' || req.op === 'append') log.push({ id, req });
+    if (req.op === 'load' || req.op === 'append' || req.op === 'breaks') log.push({ id, req });
     return new Promise<T>((resolve, reject) => {
       const p: Pending = { id, req, resolve: resolve as (r: HistoryReply) => void, reject };
       if (core) return run(p);
@@ -144,6 +146,7 @@ export function createHistoryEngine(makeWorker: () => WorkerLike | null = defaul
       return send<HistorySummary>({ op: 'load', rows, pageId });
     },
     append: (rows) => send<HistorySummary>({ op: 'append', rows }),
+    breaks: (after, before) => send<HistorySummary>({ op: 'breaks', after, before }),
     version: (seq) => send<VersionPayload>({ op: 'version', seq }),
     changes: (seq) => send<VersionChanges>({ op: 'changes', seq }),
     destroy: () => {

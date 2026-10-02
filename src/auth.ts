@@ -1,6 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react';
 import type { WorkspaceConfig } from './workspace';
+import { deleteHistoryCache } from './sync/historyCache';
 
 export interface AuthUser {
   id: string;
@@ -47,6 +48,10 @@ export function useAuth(ws: WorkspaceConfig, client: SupabaseClient): AuthState 
           prev.status === 'signedIn' && prev.user.id === user.id ? prev : { status: 'signedIn', user },
         );
       } else if (event === 'SIGNED_OUT') {
+        // La caché del historial de versiones (quién y cuándo de cada cambio) no queda en el dispositivo de una cuenta
+        // que salió; la base local sí (puede tener cambios sin subir). Es una copia: se vuelve a bajar.
+        const last = readLastUser(ws);
+        if (last) void deleteHistoryCache(ws.storage.db(last.id)).catch(() => undefined);
         try {
           localStorage.removeItem(ws.storage.lastUser);
         } catch {

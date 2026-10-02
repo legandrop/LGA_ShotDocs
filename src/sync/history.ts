@@ -20,6 +20,12 @@ import { RemoteError, REQUEST_TIMEOUT } from './types';
 /** La versión de la base con `page_history` y `page_history_authors` (20261007120000_historial.sql). */
 export const HISTORY_SCHEMA_VERSION = 11;
 
+/**
+ * La versión de la base con `page_versions` (20261011120000_versiones_con_nombre.sql): nombrar versiones y las marcas
+ * de restauración. Con una base anterior, el historial anda igual, sin nombres.
+ */
+export const NAMED_VERSIONS_SCHEMA_VERSION = 13;
+
 /** Corte entre sesiones de edición. */
 export const SESSION_GAP_MS = 30 * 60_000;
 
@@ -39,6 +45,31 @@ export interface HistoryRow {
   /** Cuándo llegó al servidor (ISO). */
   createdAt: string;
   data: Uint8Array;
+}
+
+/**
+ * Un nombre de versión (`named`) o una marca de restauración (`restore`: la fila `seq` subió una restauración de la
+ * versión que terminaba en `restoredFromSeq`). Sale de `list_page_versions`; apunta a una fila, sin contenido.
+ */
+export interface PageVersionRow {
+  id: string;
+  seq: number;
+  kind: 'named' | 'restore';
+  label: string | null;
+  restoredFromSeq: number | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+/**
+ * Dónde se cortan las sesiones además del corte de 30 minutos: después de cada versión con nombre (lo que se escriba
+ * después ya no entra en ella) y antes de cada restauración (la versión de antes de restaurar queda en la lista).
+ */
+export function versionBreaks(versions: readonly PageVersionRow[]): { after: number[]; before: number[] } {
+  return {
+    after: versions.filter((v) => v.kind === 'named').map((v) => v.seq),
+    before: versions.filter((v) => v.kind === 'restore').map((v) => v.seq),
+  };
 }
 
 export interface HistorySession {
@@ -183,6 +214,9 @@ export class PageHistory {
   /** Los autores de Yjs de la semilla (estructura vacía, igual en todos los dispositivos: no se marca). */
   readonly seedClients: ReadonlySet<number>;
   private readonly gapMs: number;
+  /** Cortes forzados (ver `versionBreaks`): después de estas filas y antes de estas (por `seq`). */
+  private breakAfter = new Set<number>();
+  private breakBefore = new Set<number>();
 
   constructor(rows: readonly HistoryRow[], gapMs = SESSION_GAP_MS, pageId?: string) {
     this.doc = new Y.Doc({ gc: false });
@@ -242,6 +276,23 @@ export class PageHistory {
     this.snapshots.clear();
     this.buildSnapshots();
     return fresh.length;
+  }
+
+  /**
+   * Los cortes de las versiones con nombre y de las restauraciones (`versionBreaks`). Vuelve a armar las sesiones y los
+   * snapshots si cambiaron; devuelve si cambiaron.
+   */
+  setBreaks(after: Iterable<number>, before: Iterable<number>): boolean {
+    const a = new Set(after);
+    const b = new Set(before);
+    const same = (x: Set<number>, y: Set<number>) => x.size === y.size && [...x].every((v) => y.has(v));
+    if (same(a, this.breakAfter) && same(b, this.breakBefore)) return false;
+    this.breakAfter = a;
+    this.breakBefore = b;
+    this.sessions = this.group(this.gapMs);
+    this.snapshots.clear();
+    this.buildSnapshots();
+    return true;
   }
 
   /** La fila (índice) que trajo ese elemento, o -1. */
@@ -334,7 +385,8 @@ export class PageHistory {
     const raw: { first: number; last: number }[] = [];
     this.rows.forEach((row, i) => {
       const prev = raw[raw.length - 1];
-      if (prev && Date.parse(row.createdAt) - Date.parse(this.rows[i - 1].createdAt) <= gapMs) prev.last = i;
+      const forced = i > 0 && (this.breakAfter.has(this.rows[i - 1].seq) || this.breakBefore.has(row.seq));
+      if (prev && !forced && Date.parse(row.createdAt) - Date.parse(this.rows[i - 1].createdAt) <= gapMs) prev.last = i;
       else raw.push({ first: i, last: i });
     });
     // Una sesión sin cambios en el contenido se junta con la anterior (o, si es la primera, con la siguiente).
@@ -479,32 +531,54 @@ export interface LoadedHistory {
 /**
  * Baja el historial entero de una página, de a lotes. Como la bajada de la sincronización: si un lote vence, pide uno
  * más chico (50, 5, 1); de a uno tiene el tope más largo. Solo lee: no toca nada del dispositivo ni del servidor.
+ *
+ * `start`: las filas que el dispositivo ya tiene guardadas (la caché, historyCache.ts). Se baja solo lo posterior,
+ * pidiendo también la última guardada para comprobar que sigue siendo la misma (su `id`): si no (restauraron una copia
+ * de seguridad y el servidor volvió a usar los `seq`), se tira lo guardado y se baja todo (`reset`).
  */
 export async function loadPageHistory(
   remote: HistoryRemote,
   pageId: string,
   onProgress?: (rows: number) => void,
   isCancelled: () => boolean = () => false,
-): Promise<LoadedHistory> {
-  const rows: HistoryRow[] = [];
+  start: readonly HistoryRow[] = [],
+): Promise<LoadedHistory & { reset: boolean }> {
   const sizes = [500, 50, 5, 1];
   let size = 0;
-  for (;;) {
-    if (isCancelled()) throw new Error('cancelled');
-    let batch: HistoryRow[];
-    try {
-      batch = await remote.pageHistory(pageId, rows.length ? rows[rows.length - 1].seq : 0, sizes[size]);
-    } catch (err) {
-      if (err instanceof RemoteError && err.message === REQUEST_TIMEOUT && size < sizes.length - 1) {
-        size++;
-        continue;
+  const fetchBatch = async (after: number): Promise<HistoryRow[]> => {
+    for (;;) {
+      if (isCancelled()) throw new Error('cancelled');
+      try {
+        return await remote.pageHistory(pageId, after, sizes[size]);
+      } catch (err) {
+        if (err instanceof RemoteError && err.message === REQUEST_TIMEOUT && size < sizes.length - 1) {
+          size++;
+          continue;
+        }
+        throw err;
       }
-      throw err;
     }
+  };
+  let rows: HistoryRow[] = [];
+  let reset = false;
+  let done = false;
+  const known = start[start.length - 1];
+  if (known) {
+    const batch = await fetchBatch(known.seq - 1);
+    if (batch.length > 0 && batch[0].seq === known.seq && batch[0].id === known.id) {
+      rows = [...start, ...batch.slice(1)];
+      onProgress?.(rows.length);
+      done = batch.length < sizes[size];
+    } else {
+      reset = true;
+    }
+  }
+  while (!done) {
+    const batch = await fetchBatch(rows.length ? rows[rows.length - 1].seq : 0);
     rows.push(...batch);
     onProgress?.(rows.length);
-    if (batch.length < sizes[size]) break;
+    done = batch.length < sizes[size];
   }
   const authors = await remote.pageHistoryAuthors(pageId);
-  return { rows, emails: new Map(authors.map((a) => [a.user_id, a.email])) };
+  return { rows, emails: new Map(authors.map((a) => [a.user_id, a.email])), reset };
 }

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { t } from '../i18n';
 import { fromBase64, toBase64 } from '../lib/base64';
-import type { HistoryRow } from './history';
+import type { HistoryRow, PageVersionRow } from './history';
 import { THUMB_MAX_BYTES } from '../media/probe';
 import { MAX_FILE_BYTES } from './files';
 import { parseAccess, type AccessSnapshot, type GrantLevel, type Role } from './access';
@@ -228,6 +228,35 @@ export interface HistoryRemote {
   /** Las filas de `page_updates` posteriores a `afterSeq`, en orden, con autor y hora. */
   pageHistory(pageId: string, afterSeq: number, limit: number): Promise<HistoryRow[]>;
   pageHistoryAuthors(pageId: string): Promise<HistoryAuthor[]>;
+}
+
+/**
+ * Las versiones con nombre y las marcas de restauración (P.18, entrega 3; 20261011120000_versiones_con_nombre.sql). Los
+ * permisos del historial; renombrar y sacar el nombre, quien lo puso o nivel 4. Errores: `page_not_found`,
+ * `page_in_trash`, `version_named` (esa versión ya tiene nombre), `version_not_found`, `version_conflict`,
+ * `label_invalid`, `not_allowed`, `app_outdated`; `PGRST202` con la base sin migrar.
+ */
+export interface NamedVersionsRemote {
+  listPageVersions(pageId: string): Promise<PageVersionRow[]>;
+  /** `id` lo crea el dispositivo: reintentar el mismo pedido devuelve el mismo. */
+  namePageVersion(id: string, pageId: string, seq: number, label: string): Promise<PageVersionRow>;
+  renamePageVersion(id: string, label: string): Promise<PageVersionRow>;
+  removePageVersion(id: string): Promise<void>;
+  /** La fila `seq` (subida por esta sesión) es una restauración de la versión que terminaba en `fromSeq`. */
+  markPageRestored(id: string, pageId: string, seq: number, fromSeq: number): Promise<PageVersionRow>;
+}
+
+/** Una fila de `list_page_versions` (o de las funciones que escriben) como llega. */
+export function parsePageVersion(row: Record<string, unknown>): PageVersionRow {
+  return {
+    id: String(row.id),
+    seq: Number(row.seq),
+    kind: row.kind === 'restore' ? 'restore' : 'named',
+    label: row.label === null || row.label === undefined ? null : String(row.label),
+    restoredFromSeq: row.restored_from_seq === null || row.restored_from_seq === undefined ? null : Number(row.restored_from_seq),
+    createdBy: row.created_by === null || row.created_by === undefined ? null : String(row.created_by),
+    createdAt: String(row.created_at ?? ''),
+  };
 }
 
 /** Una fila de `trashed_projects` como llega (los números pueden venir como texto). */
@@ -479,7 +508,9 @@ export function parseProjectSize(row: Record<string, unknown>): ProjectSizeRow {
   };
 }
 
-export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRemote, ProjectStatesRemote, HistoryRemote {
+export class SupabaseRemote
+  implements Remote, MediaRemote, TeamRemote, SizesRemote, ProjectStatesRemote, HistoryRemote, NamedVersionsRemote
+{
   /** Desde cuándo la base no tiene `pages.settings`; se vuelve a probar cada tanto por si se migró. */
   private settingsMissingAt = 0;
 
@@ -724,6 +755,39 @@ export class SupabaseRemote implements Remote, MediaRemote, TeamRemote, SizesRem
     const { data, error, status } = await timed(this.client.rpc('page_history_authors', { p_page_id: pageId }));
     if (error) throw toRemoteError(error, status);
     return ((data ?? []) as { user_id: string; email: string }[]).map((r) => ({ user_id: String(r.user_id), email: String(r.email ?? '') }));
+  }
+
+  async listPageVersions(pageId: string): Promise<PageVersionRow[]> {
+    const { data, error, status } = await timed(this.client.rpc('list_page_versions', { p_page_id: pageId }));
+    if (error) throw toRemoteError(error, status);
+    return ((data ?? []) as Record<string, unknown>[]).map(parsePageVersion);
+  }
+
+  async namePageVersion(id: string, pageId: string, seq: number, label: string): Promise<PageVersionRow> {
+    const { data, error, status } = await timed(
+      this.client.rpc('name_page_version', { p_id: id, p_page_id: pageId, p_seq: seq, p_label: label }),
+    );
+    if (error) throw toRemoteError(error, status);
+    return parsePageVersion(data as Record<string, unknown>);
+  }
+
+  async renamePageVersion(id: string, label: string): Promise<PageVersionRow> {
+    const { data, error, status } = await timed(this.client.rpc('rename_page_version', { p_id: id, p_label: label }));
+    if (error) throw toRemoteError(error, status);
+    return parsePageVersion(data as Record<string, unknown>);
+  }
+
+  async removePageVersion(id: string): Promise<void> {
+    const { error, status } = await timed(this.client.rpc('remove_page_version', { p_id: id }));
+    if (error) throw toRemoteError(error, status);
+  }
+
+  async markPageRestored(id: string, pageId: string, seq: number, fromSeq: number): Promise<PageVersionRow> {
+    const { data, error, status } = await timed(
+      this.client.rpc('mark_page_restored', { p_id: id, p_page_id: pageId, p_seq: seq, p_from_seq: fromSeq }),
+    );
+    if (error) throw toRemoteError(error, status);
+    return parsePageVersion(data as Record<string, unknown>);
   }
 
   async uploadFile(path: string, data: ArrayBuffer, mime: string): Promise<void> {
