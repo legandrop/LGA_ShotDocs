@@ -27,9 +27,11 @@ import {
   SignOutIcon,
   StorageIcon,
   SystemIcon,
+  TemplateIcon,
   TrashIcon,
   VideoIcon,
 } from './icons';
+import { requestTemplates, templateTargetFor } from '../templates/templatesUi';
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
 import { openHelp } from '../help/helpUi';
 import { isPhoneLayout } from './commentsUi';
@@ -162,6 +164,9 @@ export function PageMenu(props: {
   const [asSeen, setAsSeen] = useState(printAsSeen);
   // Sacar una foto o filmar (camera.ts): en el teléfono, con la página abierta y editable.
   const camera = pageCameraFor(props.pageId);
+  // *Apply template…* (Docs/Doc_Plantillas.md, 4.1): solo con la página vacía. Si no está abierta, se abre y se ve allá.
+  const templateTarget = templateTargetFor(props.pageId);
+  const templateBlocked = !!templateTarget && !templateTarget.empty();
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -186,6 +191,21 @@ export function PageMenu(props: {
       {item(tr('pageMenu.newInside'), <PlusIcon />, props.onNewChild, false, canManage)}
       {item(tr('common.rename'), <RenameIcon />, props.onRename, false, canEdit)}
       {item(tr('pageMenu.move'), <MoveIcon />, props.onMove, false, canManage)}
+      {canEdit && (
+        <button
+          role="menuitem"
+          aria-disabled={templateBlocked || undefined}
+          data-tip={templateBlocked ? tr('pageMenu.applyTemplateEmpty') : undefined}
+          onClick={() => {
+            if (templateBlocked) return;
+            props.onClose();
+            requestTemplates(props.pageId);
+          }}
+        >
+          <TemplateIcon />
+          {tr('pageMenu.applyTemplate')}
+        </button>
+      )}
       <button
         role="menuitem"
         disabled={!canEdit}

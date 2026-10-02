@@ -25,11 +25,12 @@ import { offline } from './lazy/offline';
 import { projectStates } from './lazy/projectStates';
 import { search } from './lazy/search';
 import { teamDialogs } from './lazy/teamDialogs';
+import { templates } from './lazy/templates';
 import { tutorial } from './lazy/tutorial';
 import { parts, strings } from './strings';
 
 /** Las partes que viajan con lo que se baja aparte (ver `register` en index.ts). */
-const LAZY = { carrete, commentsPanel, drive, editor, folders, help, history, importCoda, install: installDialog, offline, projectStates, search, teamDialogs, tutorial };
+const LAZY = { carrete, commentsPanel, drive, editor, folders, help, history, importCoda, install: installDialog, offline, projectStates, search, teamDialogs, templates, tutorial };
 const ALL_PARTS: Record<string, Record<string, { en: Entry; es: Entry }>> = { ...parts, ...LAZY };
 const ALL = Object.assign({}, ...Object.values(ALL_PARTS)) as Record<Key, { en: Entry; es: Entry }>;
 

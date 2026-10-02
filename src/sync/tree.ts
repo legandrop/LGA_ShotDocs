@@ -12,6 +12,13 @@ export function compareSiblings(a: PageRow, b: PageRow): number {
 const PROJECTS_KEY = 'projects';
 /** El primer proyecto del dispositivo (`services.ts`): se reemplaza si el servidor deja de mandarlo (P.14). */
 const PRIMARY_KEY = 'workspaceId';
+/**
+ * Las páginas vacías creadas en este dispositivo (Docs/Doc_Plantillas.md, 4.1): solo en ellas aparece la tira
+ * *Start from a template*. En otro dispositivo la página llega vacía, pero su creador puede estar llenándola sin red.
+ */
+const FRESH_KEY = 'templateOffer';
+/** Cuántas se recuerdan (las más viejas se olvidan: una página vacía de hace cien páginas ya no ofrece nada). */
+const FRESH_MAX = 50;
 
 /** Clave entre dos vecinos. Si dos dispositivos generaron la misma clave, igual devuelve una válida. */
 export function keyBetween(before: string | null, after: string | null): string {
@@ -87,6 +94,7 @@ export class PageTree {
   /** El dispositivo ya bajó alguna vez la lista de proyectos (guardada en `meta`). */
   private projectsKnown = false;
   private primary: string;
+  private fresh: string[] = [];
 
   /** Se llama cuando entra un cambio local a la cola. */
   onQueued?: () => void;
@@ -115,12 +123,14 @@ export class PageTree {
   }
 
   async load(): Promise<void> {
-    const [rows, ops, failed, projects] = await Promise.all([
+    const [rows, ops, failed, projects, fresh] = await Promise.all([
       this.db.getAll('pages'),
       this.db.getAll('ops'),
       this.db.getAll('failedOps'),
       this.db.get('meta', PROJECTS_KEY) as Promise<ProjectRow[] | undefined>,
+      this.db.get('meta', FRESH_KEY).catch(() => undefined),
     ]);
+    this.fresh = Array.isArray(fresh) ? fresh.filter((id): id is string => typeof id === 'string') : [];
     this.snapshot = new Map(rows.map((r) => [r.id, r]));
     this.projectSnapshot = new Map((projects ?? []).map((p) => [p.id, p]));
     this.projectsKnown = projects !== undefined;
@@ -290,18 +300,44 @@ export class PageTree {
 
   // --- cambios locales -----------------------------------------------------------------------------
 
-  /** Crea una página adentro de `parentId`, o en la raíz de `projectId` (o del primer proyecto). */
-  async create(parentId: string | null, title = '', projectId?: string): Promise<string> {
+  /**
+   * Crea una página adentro de `parentId`, o en la raíz de `projectId` (o del primer proyecto). Una página sin título
+   * ni plantilla (la del "+") queda anotada como recién creada acá (`isFresh`): ofrece las plantillas.
+   */
+  async create(parentId: string | null, title = '', projectId?: string, options: { templateId?: string } = {}): Promise<string> {
     const parent = parentId ? this.view.get(parentId) : undefined;
     const workspaceId = parent?.workspace_id ?? projectId ?? this.workspaceId;
     const siblings = this.siblingsIn(parentId, workspaceId);
     const last = siblings.at(-1)?.sort_key ?? null;
     const id = crypto.randomUUID();
-    await this.enqueue({
-      kind: 'create',
-      page: { id, workspace_id: workspaceId, parent_id: parentId, title, sort_key: keyBetween(last, null) },
-    });
+    const page = { id, workspace_id: workspaceId, parent_id: parentId, title, sort_key: keyBetween(last, null) };
+    // Antes de encolar: la página se dibuja apenas entra a la cola y ya tiene que saberse nueva.
+    if (!title && !options.templateId) this.fresh = [...this.fresh.filter((f) => f !== id), id].slice(-FRESH_MAX);
+    await this.enqueue({ kind: 'create', page: options.templateId ? { ...page, template_id: options.templateId } : page });
+    if (!title && !options.templateId) await this.saveFresh();
     return id;
+  }
+
+  /** La página se creó vacía en este dispositivo y todavía no se llenó (Docs/Doc_Plantillas.md, 4.1). */
+  isFresh(id: string): boolean {
+    return this.fresh.includes(id);
+  }
+
+  /** La página ya no es "recién creada" (se escribió en ella o se le aplicó una plantilla). */
+  async dropFresh(id: string): Promise<void> {
+    if (!this.fresh.includes(id)) return;
+    this.fresh = this.fresh.filter((f) => f !== id);
+    this.notify();
+    await this.saveFresh();
+  }
+
+  /** Solo una comodidad: si no se puede guardar, la tira se ofrece hasta cerrar la app y nada más. */
+  private async saveFresh(): Promise<void> {
+    try {
+      await this.db.put('meta', this.fresh, FRESH_KEY);
+    } catch {
+      // Sin espacio o la base cerrada: no es un dato de la persona.
+    }
   }
 
   /** Crea un proyecto. Funciona sin red: sube antes que las páginas que se le creen. */
@@ -684,6 +720,10 @@ export class PageTree {
 
     this.view = view;
     this.childrenIndex = children;
+    this.notify();
+  }
+
+  private notify(): void {
     this.revision++;
     for (const fn of this.listeners) fn();
   }
