@@ -3,7 +3,9 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { CONTENT_FRAGMENT } from '../sync/structure';
 import { FakeServer, makeDevice, type Device } from '../sync/testing';
+import { mountEditor, unmountAll } from '../ui/collabHarness';
 import { SHARED_COLLAPSE_MAP } from '../ui/collapseEditor';
+import { schema as previousPublished } from '../ui/fixtures/editorSchemaAnterior';
 import { ExportCancelled, ExportEditor } from './exportEditor';
 import { exportPlan, renderPages, type ExportProgress } from './exportPages';
 import { readPageContent, readPageContentFromUpdate } from './pageContent';
@@ -242,6 +244,31 @@ describe('exportar: las páginas', () => {
     expect(JSON.stringify(content.blocks)).toContain('Queda');
     // El documento de verdad no se tocó (se leyó una copia).
     expect(Y.encodeStateAsUpdate(doc)).toEqual(original);
+  });
+
+  it('una página escrita por la versión anterior se exporta igual (el esquema de hoy la lee entera)', async () => {
+    const doc = new Y.Doc();
+    const old = mountEditor(doc, 'vieja', previousPublished);
+    old.replaceBlocks(old.document, [
+      { type: 'heading', props: { level: 2 }, content: 'Escena 12' },
+      { type: 'paragraph', props: { script: true }, content: 'INT. CASA - NOCHE' },
+      { type: 'paragraph', props: { question: true }, content: '¿Lente?' },
+      { type: 'image', props: { url: 'https://photos.test/vieja.jpg', name: 'vieja.jpg', previewWidth: 300 } },
+      { type: 'table', content: { type: 'tableContent', rows: [{ cells: [[{ type: 'text', text: '1A', styles: {} }], [{ type: 'text', text: '35mm', styles: {} }]] }] } },
+    ] as never);
+    const update = Y.encodeStateAsUpdate(doc);
+    unmountAll();
+    const content = readPageContentFromUpdate(update);
+    expect(content.unknown).toBeNull();
+    expect(content.blocks.map((b) => b.type)).toEqual(['heading', 'paragraph', 'paragraph', 'image', 'table']);
+    const e = await editor();
+    const page = await e.render({ id: 'p', title: 'Vieja', header: [], format: { size: 'A4', landscape: false }, blocks: content.blocks });
+    const root = page.view.root;
+    expect(root.querySelector('.script-line')?.textContent).toBe('INT. CASA - NOCHE');
+    expect(root.querySelector('.question-line')?.textContent).toBe('¿Lente?');
+    expect(root.querySelector('[data-content-type="image"] img')?.getAttribute('src')).toBe('https://photos.test/vieja.jpg');
+    expect(root.querySelector('table')?.textContent).toContain('35mm');
+    page.view.root.remove();
   });
 
   it('cancelar corta entre páginas, no deja vistas y el editor sigue sirviendo', async () => {
