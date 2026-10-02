@@ -1,5 +1,5 @@
-// Copia de src/ui/editorSchema.ts de la versión publicada antes del salto de hoja (igual de v0.083 a v0.088), para
-// probar que esa versión no borra un salto de hoja ni su texto (pageBreak.test.ts). No se toca.
+// Copia de src/ui/editorSchema.ts de la versión publicada antes del salto de hoja (igual de v0.083 a v0.092), para
+// probar que esa versión no borra un salto de hoja ni su texto (pageBreak.test.ts, pageBreakKeys.test.ts). No se toca.
 
 import {
   addDefaultPropsExternalHTML,

@@ -134,29 +134,59 @@ const scriptMarksPlugin = new Plugin<DecorationSet>({
 });
 
 /**
- * Pegar en un salto de hoja vacío: ProseMirror reemplaza el párrafo vacío por el pegado, con las propiedades de
- * fábrica, y el salto se perdía (el texto no). Si donde estaba quedó un párrafo, se le devuelve el salto: lo pegado
- * queda arriba de la línea y la hoja nueva empieza después, como si se hubiera escrito ahí. Si lo pegado empieza con
- * otra cosa (un título, una lista), el salto se pierde como antes; el contenido, nunca.
+ * Pegar adentro de un salto de hoja (vacío, o sobre su texto elegido): ProseMirror reemplaza el bloque por lo pegado,
+ * con las propiedades de fábrica, y el salto se perdía (el texto no). Después de pegar, el salto queda una sola vez,
+ * en el último bloque pegado: lo pegado va arriba de la línea y la hoja nueva empieza después, como si se hubiera
+ * escrito ahí. Si lo último pegado no es un párrafo (un título, una lista), el salto va en un párrafo vacío debajo.
  */
 const pageBreakPastePlugin = new Plugin({
   appendTransaction: (trs, oldState, newState) => {
     if (!trs.some((tr) => tr.getMeta('uiEvent') === 'paste')) return null;
-    const { $from } = oldState.selection;
+    const { $from, $to } = oldState.selection;
     const content = $from.parent;
-    if (content.type.name !== 'paragraph' || content.attrs[PAGE_BREAK_PROP] !== true || content.content.size !== 0) return null;
-    // Donde estaba el párrafo vacío, seguido por los cambios: ahí queda el primer bloque pegado.
-    // BlockNote cambia el bloque entero (el contenedor): el párrafo es el primer hijo del que quedó ahí.
-    let pos = $from.before($from.depth - 1);
-    for (const tr of trs) pos = tr.mapping.map(pos, -1);
-    const container = pos >= 0 && pos < newState.doc.content.size ? newState.doc.nodeAt(pos) : null;
-    if (container?.type.name !== 'blockContainer') return null;
-    pos += 1;
-    const node = container.firstChild;
-    if (node?.type.name !== 'paragraph' || node.attrs[PAGE_BREAK_PROP] === true) return null;
-    return newState.tr.setNodeAttribute(pos, PAGE_BREAK_PROP, true);
+    if (content.type.name !== 'paragraph' || content.attrs[PAGE_BREAK_PROP] !== true || !$from.sameParent($to)) return null;
+    if ($from.depth < 2 || $from.node($from.depth - 1).type.name !== 'blockContainer') return null;
+    // El bloque del salto, seguido por los cambios: lo pegado quedó entre `from` y `to`.
+    let from = $from.before($from.depth - 1);
+    let to = $from.after($from.depth - 1);
+    for (const tr of trs) {
+      from = tr.mapping.map(from, -1);
+      to = tr.mapping.map(to, 1);
+    }
+    if (!(from >= 0 && to <= newState.doc.content.size && from < to)) return null;
+    const $start = newState.doc.resolve(from);
+    const group = $start.parent;
+    const blocks: { pos: number; node: PMNode }[] = [];
+    for (let i = $start.index(), pos = from; i < group.childCount && pos < to; i++) {
+      const node = group.child(i);
+      if (node.type.name === 'blockContainer') blocks.push({ pos, node });
+      pos += node.nodeSize;
+    }
+    const last = blocks[blocks.length - 1];
+    if (!last) return null;
+    const tr = newState.tr;
+    // Un solo salto: se saca de los demás bloques pegados y queda en el último.
+    for (const b of blocks.slice(0, -1)) {
+      const first = b.node.firstChild;
+      if (first?.type.name === 'paragraph' && first.attrs[PAGE_BREAK_PROP] === true) tr.setNodeAttribute(b.pos + 1, PAGE_BREAK_PROP, false);
+    }
+    const lastFirst = last.node.firstChild;
+    if (lastFirst?.type.name === 'paragraph') {
+      if (lastFirst.attrs[PAGE_BREAK_PROP] !== true) tr.setNodeAttribute(last.pos + 1, PAGE_BREAK_PROP, true);
+    } else {
+      const schema = newState.schema;
+      const marker = schema.nodes.paragraph.create({ [PAGE_BREAK_PROP]: true });
+      tr.insert(last.pos + last.node.nodeSize, schema.nodes.blockContainer.create({ id: newBlockId() }, marker));
+    }
+    return tr.docChanged ? tr : null;
   },
 });
+
+function newBlockId(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 // El párrafo de BlockNote, con una propiedad más.
 const createParagraph = createBlockSpec(
@@ -356,19 +386,47 @@ export function insertPageBreakForSlashMenu(editor: BlockNoteEditor<any, any, an
 }
 
 /**
- * El teclado del salto de hoja, antes que el de BlockNote (si no, su Retroceso junta el bloque con el salto antes de
- * que lleguemos). Va en las extensiones del editor de la página (editorExtensions.ts).
+ * El cursor está en el texto propio del bloque (su contenido en línea), no en una celda de una tabla: ahí el
+ * principio del renglón es el de la celda, no el del bloque.
  */
-export const pageBreakExtension = createExtension({
-  key: 'shotdocs-page-break',
-  runsBefore: ['default'],
-  keyboardShortcuts: {
-    // Ctrl+Enter (⌘↩ en la Mac): un salto de hoja donde está el cursor, como en los procesadores de texto.
-    [PAGE_BREAK_SHORTCUT]: ({ editor }) => insertPageBreak(editor),
-    // Retroceso al principio del bloque que sigue a un salto: saca el salto (no junta el texto con él).
-    Backspace: ({ editor }) => removeBreakBefore(editor),
-  },
-});
+function inOwnContent(editor: BlockNoteEditor<any, any, any>): boolean {
+  const state = editor.prosemirrorState;
+  const info = getBlockInfoFromSelection(state);
+  return info.isBlockContainer && info.blockContent.node === state.selection.$from.parent;
+}
+
+/**
+ * Enter al principio de un salto con texto: un renglón común arriba y el salto queda uno solo (BlockNote copiaba el
+ * salto al renglón nuevo: dos saltos y la nota sola en una hoja).
+ */
+export function enterAtBreakStart(editor: BlockNoteEditor<any, any, any>): boolean {
+  const selection = editor.prosemirrorState.selection;
+  if (!selection.empty || selection.$from.parentOffset !== 0 || !inOwnContent(editor)) return false;
+  const { block } = editor.getTextCursorPosition() as unknown as { block: AnyBlock };
+  if (!isPageBreakBlock(block) || isEmptyContent(block)) return false;
+  editor.transact(() => {
+    editor.insertBlocks([{ type: 'paragraph', props: paragraphProps('paragraph') } as never], block.id, 'before');
+    editor.setTextCursorPosition(block.id, 'start');
+  });
+  return true;
+}
+
+/**
+ * Supr en un salto vacío: saca el salto (como en Word), en vez de subir el renglón de abajo adentro del salto. Con
+ * bloques adentro no hace nada distinto (los dejaría sueltos).
+ */
+export function deleteEmptyBreak(editor: BlockNoteEditor<any, any, any>): boolean {
+  const selection = editor.prosemirrorState.selection;
+  if (!selection.empty || !inOwnContent(editor)) return false;
+  const position = editor.getTextCursorPosition() as unknown as { block: AnyBlock; nextBlock?: AnyBlock };
+  const { block, nextBlock } = position;
+  if (!isPageBreakBlock(block) || !isEmptyContent(block) || block.children?.length || !nextBlock) return false;
+  editor.transact(() => {
+    editor.removeBlocks([block.id]);
+    editor.setTextCursorPosition(nextBlock.id, 'start');
+  });
+  return true;
+}
 
 /** Deja el cursor en un párrafo vacío nuevo después de `id` (un salto recién puesto). */
 function followWithParagraph(editor: BlockNoteEditor<any, any, any>, id: string): void {
@@ -383,7 +441,7 @@ function followWithParagraph(editor: BlockNoteEditor<any, any, any>, id: string)
  */
 export function removeBreakBefore(editor: BlockNoteEditor<any, any, any>): boolean {
   const selection = editor.prosemirrorState.selection;
-  if (!selection.empty || selection.$from.parentOffset !== 0) return false;
+  if (!selection.empty || selection.$from.parentOffset !== 0 || !inOwnContent(editor)) return false;
   let position: { block: AnyBlock; prevBlock?: AnyBlock };
   try {
     position = editor.getTextCursorPosition() as unknown as typeof position;

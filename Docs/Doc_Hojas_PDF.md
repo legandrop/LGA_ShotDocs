@@ -197,19 +197,26 @@ de cortes").
   cursor en un párrafo nuevo, en la hoja siguiente. **Ctrl+Enter** (⌘↩ en la Mac), como en Word y Google Docs:
   en un párrafo vacío, ese párrafo pasa a ser el salto; al principio de un bloque, el salto va antes; en el medio
   de un párrafo, lo parte y queda entre las dos partes (la segunda conserva sus propiedades: Script sigue Script);
-  al final, va después con un párrafo nuevo. En una tabla o una imagen no hace nada, y en un bloque de código no lo
+  al final, va después con un párrafo nuevo; al final de un título colapsado, hace primero lo de Enter (un renglón
+  después de lo escondido, sin abrir la sección) y ese renglón es el salto. En una tabla o una imagen no hace nada, y
+  en un bloque de código no lo
   toma: queda lo que ya hacía el editor (medido en Chromium: nada, el cursor sigue en el código y el código no
   cambia). Ctrl+Enter no lo usaba nadie en el editor (el de mandar un comentario es en su campo, otro lugar del
   registro).
 - **Cómo se saca.** Retroceso al principio del bloque que sigue: vacío se borra, con texto queda como párrafo
-  común. Sin esto, BlockNote juntaba el bloque con el salto y el texto subía arriba de la línea; por eso el teclado
-  va en una extensión que corre antes que la de BlockNote (`pageBreakExtension`). También se borra como cualquier
-  párrafo, o con *Paragraph* en la barra.
+  común (sin esto, BlockNote juntaba el bloque con el salto y el texto subía arriba de la línea). Solo al principio
+  del texto propio del bloque: el principio de una celda de tabla no cuenta. Supr en un salto vacío también lo saca,
+  como en Word (si no, el renglón de abajo subía adentro del salto). También se borra como cualquier párrafo, o con
+  *Paragraph* en la barra. El teclado está en `pageBreakExtension` (editorExtensions.ts).
+- **Enter en un salto.** Al principio de un salto con texto deja un renglón común arriba y el salto una sola vez
+  (BlockNote lo copiaba: dos saltos y la nota sola en una hoja). En el medio o al final, la parte nueva es un párrafo
+  común.
 - **Lo que se le pone encima.** Soltar o pegar un archivo o una carpeta en un salto vacío no lo reemplaza (el
-  archivo va debajo, como con una pregunta vacía). Pegar texto en un salto vacío lo deja adentro, arriba de la
-  línea: ProseMirror reemplaza el párrafo vacío por el pegado y el salto se perdía, así que se le devuelve al párrafo
-  que queda ahí (si lo pegado empieza con un título o una lista, el salto se pierde; el texto, nunca). Un link de
-  Drive pegado como tarjeta en el salto lo deja tarjeta y salto a la vez.
+  archivo va debajo, como con una pregunta vacía). Pegar adentro de un salto (vacío, sobre su texto elegido o en el
+  medio) deja lo pegado arriba de la línea y el salto una sola vez, en el último bloque pegado: ProseMirror reemplaza
+  el bloque por lo pegado, con las propiedades de fábrica, y el salto se perdía. Si lo último pegado no es un párrafo
+  (un título, una lista), el salto va en un renglón vacío debajo. Un link de Drive pegado como tarjeta en el salto lo
+  deja tarjeta y salto a la vez.
 - **Cómo se ve.** Una línea punteada con "PAGE BREAK" / "SALTO DE HOJA" (el rótulo es CSS y sale de
   `--sd-page-break-label`, en el idioma de la app): vacío, la línea pasa por el renglón; con texto, va debajo. En
   una página libre, más tenue: no hay hojas en pantalla, pero el PDF (A4) lo respeta. En el teléfono, igual.
@@ -225,18 +232,23 @@ de cortes").
   `break-after: page` o `page-break-after: always`. Deshacer: un solo Ctrl+Z (partir un párrafo va en dos pasos
   que el historial junta). Buscar: el rótulo no es texto y no aparece; lo escrito en el salto, sí. No hay exportar
   ni importar `.md` todavía: cuando exista, el salto tiene que ir como una línea propia que vuelva al importar.
-- **Una versión vieja** (hasta v0.088) ve un párrafo vacío o con su texto, sin línea, y no lo borra (las
+- **Una versión anterior a v0.0XX** (el esquema es igual de v0.083 a v0.092) ve un párrafo vacío o con su texto, sin línea, y no lo borra (las
   propiedades que no conoce quedan en el Y.Doc). Si escribe en ese renglón, pierde solo el salto; el texto y el id
   quedan. Como perder la propiedad deja el contenido intacto, **no hace falta subir `min_app_version`**.
 
 ### Cómo quedó
 
-- `src/ui/pageBreak.test.ts` (22 pruebas, más una en `fileDrop.test.ts` y otra en `driveCard.test.ts`): el cálculo con saltos (vacío, con texto, seguidos, al final, cuando ya
+- `src/ui/pageBreak.test.ts` (22 pruebas), `src/ui/pageBreakKeys.test.ts` (20), una en `fileDrop.test.ts` y otra en
+  `driveCard.test.ts`: el cálculo con saltos (vacío, con texto, seguidos, al final, cuando ya
   empieza hoja, un título antes, un bloque alto después), crear y sacar (también con el teclado real del editor de
   la página), el menú "/", partir un Script, copiar y pegar (HTML de la app y de afuera, `avoid-page` no es salto, pegar en un salto vacío), la vista de impresión
-  (esconde el vacío, el Y.Doc no cambia) y la **versión anterior** (`fixtures/editorSchemaV088.ts`, copia del
-  esquema publicado): abre la página, ve los párrafos con su texto, no borra ni desmarca nada al editar otro bloque
-  y, si escribe en el salto, conserva texto e id.
+  (esconde el vacío, el Y.Doc no cambia) y la **versión anterior** (`fixtures/editorSchemaAnterior.ts`, copia
+  del esquema publicado): abre la página sin subir ningún cambio, ve los párrafos con su texto, no borra ni desmarca
+  nada al editar otro bloque y, si escribe, hace Enter o Retroceso en un salto, conserva todo el texto. Y el teclado
+  alrededor del salto: Retroceso en las celdas de una tabla debajo de un salto (no lo saca), Enter al principio, en el
+  medio y al final de un salto con texto, Supr en un salto vacío, Ctrl+Enter con una selección, en una casilla y al
+  final de un título colapsado (la sección sigue colapsada), deshacer en un paso, mover una sección colapsada con un
+  salto adentro, y pegar adentro de un salto (texto, varios párrafos, un título al final, sobre el texto elegido).
 - En Chromium, con la página real sobre el servidor en memoria (sin login), 29 de 29: la línea; las marcas
   "Page 2" y "Page 3" antes de los bloques que siguen a cada salto; el PDF (`page.pdf`) con 3 hojas que empiezan
   donde marca la pantalla y sin el rótulo; Ctrl+Enter en el medio de un párrafo (4 hojas) y un solo Ctrl+Z; "/page
