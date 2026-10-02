@@ -294,12 +294,13 @@ locales, la segunda entrega de adjuntos (vista previa) y P.8.
   de la caché de miniaturas en la base real, y `noindex`), 1 (*Can view*), 2 (*Can edit*, con topes por bytes y la
   cuarentena de filas malas; se vuelve a auditar ese diseño antes de programarla), 3 (medir y ajustar los topes).
 - **P.24 Asistente con la clave de cada usuario y servidor MCP (fase 5)** (era C.11; 2026-10-02, ya sin esperar a
-  Lega). **Diseño en `Doc_Asistente.md`** (sin código; decisiones propuestas IA1 a IA10): la clave solo en el
-  dispositivo, cifrada y por persona (IA1, D-06); el pedido directo del navegador al proveedor (Anthropic, OpenAI, Google
+  Lega). **Diseño en `Doc_Asistente.md`** (sin código; decisiones propuestas IA1 a IA10; auditado, corregido): la clave
+  solo en el dispositivo y por persona (IA1, D-06; el cifrado solo evita verla por accidente); el pedido directo del navegador al proveedor (Anthropic, OpenAI, Google
   y compatibles con OpenAI, CORS probado); vista previa y aplicar como una edición que se deshace, sin aplicar si el
   texto cambió mientras el modelo pensaba; aplicar pide Editar; un interruptor del dueño (*On*, *Local models only*,
-  *Off*). El MCP en el portero (IA2, D-07), con el OAuth del Supabase del workspace, un rol propio para el token,
-  lectura de la base limpia de D14 y escritura opcional por proyecto con guarda. Entregas: A1 (texto elegido), A2
+  *Off*). El MCP en el portero (IA2, D-07), con el OAuth del Supabase del workspace, el token cerrado de fábrica,
+  lectura de la base limpia de D14 y escritura opcional por proyecto con guarda, nunca en páginas con invitados sin un
+  permiso aparte; con páginas reales pide, casi seguro, el plan pago de Workers del dueño (US$ 5 por mes) o el MCP local. Entregas: A1 (texto elegido), A2
   (página, formato, política), A3 (pie de foto), M0 (prueba técnica del MCP: OAuth de Supabase con el registro cerrado,
   el rol del token, 10 ms de CPU), M1 (MCP de lectura; requiere el interruptor de D14), M2 (MCP que escribe), M3
   (medir). Recortar, achicar y comprimir fotos no necesitan un modelo: van al roadmap de fotos.
