@@ -23,7 +23,7 @@ import { SyncEngine } from './engine';
 import { PageFiles } from './files';
 import { openLocalDb } from './localDb';
 import { CONTENT_FRAGMENT, normalizeStructure, seedIfEmpty } from './structure';
-import { FakeRemote, FakeServer, fakeProbe, fakeViewImage } from './testing';
+import { FakeRemote, FakeServer, WRITE_VERSION_SINCE, fakeProbe, fakeViewImage } from './testing';
 import { PageTree } from './tree';
 import { RemoteError, type PageRow } from './types';
 import { PageDocs as PageDocs090 } from './fixtures/v090/docs';
@@ -79,8 +79,12 @@ function cutRemote(remote: FakeRemote, net: Net): FakeRemote {
 }
 
 /** Lo común a las dos versiones: el servidor con su corte, los permisos, la cola de archivos y la de comentarios. */
-async function common(server: FakeServer, dbName: string, version: string, net: Net) {
-  const remote = cutRemote(new FakeRemote(server, version), net);
+async function common(server: FakeServer, dbName: string, version: string, net: Net, kind: 'v090' | 'actual') {
+  const fake = new FakeRemote(server, version);
+  // La v0.090 no manda su versión en un header: la base la frena (árbol y comentarios) solo con la mínima en la primera
+  // versión que lo manda o más (`WRITE_VERSION_SINCE`).
+  fake.versionHeader = kind === 'actual';
+  const remote = cutRemote(fake, net);
   const mediaDb: MediaDb = await openMediaDb(mediaDbName(dbName));
   const media = new MediaQueue(mediaDb, remote, {
     portero: (url) =>
@@ -116,7 +120,7 @@ async function device(
   version: string,
   net: Net = { down: false },
 ): Promise<Dev> {
-  const { remote, media, mediaDb, comments, commentsDb } = await common(server, dbName, version, net);
+  const { remote, media, mediaDb, comments, commentsDb } = await common(server, dbName, version, net, kind);
   const workspaceId = (await remote.ensureWorkspace().catch(() => null)) ?? server.workspaceId;
   let dev: Dev;
   if (kind === 'v090') {
@@ -408,11 +412,11 @@ interface Scene {
 }
 
 /** Antes de irse: A (la versión vieja) y B al día, con un proyecto armado. */
-async function before(server: FakeServer, aKind: 'v090' | 'actual', aVersion: string): Promise<Scene> {
+async function before(server: FakeServer, aKind: 'v090' | 'actual', aVersion: string, bVersion = NEW): Promise<Scene> {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-01T09:00:00Z'));
   const a = await device(aKind, server, `a-${crypto.randomUUID()}`, aVersion);
-  const b = await device('actual', server, `b-${crypto.randomUUID()}`, NEW);
+  const b = await device('actual', server, `b-${crypto.randomUUID()}`, bVersion);
   const rodaje = await a.tree.create(null, 'Rodaje');
   const escena12 = await a.tree.create(null, 'Escena 12');
   const escena14 = await a.tree.create(null, 'Escena 14');
@@ -435,7 +439,7 @@ async function before(server: FakeServer, aKind: 'v090' | 'actual', aVersion: st
 }
 
 /** Lo que hace cada uno durante las dos semanas. A sin red; B con red y la versión nueva. */
-async function twoWeeks(s: Scene, { raiseMin }: { raiseMin: boolean }) {
+async function twoWeeks(s: Scene, { raiseMin, min = Number(NEW) }: { raiseMin: boolean; min?: number }) {
   const { server, a, b } = s;
   a.net.down = true;
   const day = (n: number) => vi.setSystemTime(new Date(Date.parse('2026-10-01T09:00:00Z') + n * DAY));
@@ -478,7 +482,7 @@ async function twoWeeks(s: Scene, { raiseMin }: { raiseMin: boolean }) {
   await edit(b, s.notas, [{ add: 'B-N lentes alquilados' }]);
   await b.comments.add(s.escena12, null, 'B: el inserto ya está aprobado');
   await syncAll(b);
-  if (raiseMin) server.settings = { ...server.settings!, minAppVersion: Number(NEW) };
+  if (raiseMin) server.settings = { ...server.settings!, minAppVersion: min };
 
   day(9);
   // El sistema mata la app de A (pasa en el iPhone): la vuelve a abrir, sin red, con la misma versión.
@@ -611,6 +615,51 @@ describe('volver después de dos semanas sin red con la v0.090', () => {
     expectEverything(s, w, await sameEverywhere(server, [updated, b, c]));
   });
 
+  it('con la base que frena el árbol y los comentarios (B.17): la v0.090 no sube nada, no marca nada rechazado y al actualizar sale todo', async () => {
+    // La mínima en la primera versión que manda la versión en un header: la base rechaza (503, pasajero) los cambios
+    // del árbol y los comentarios de quien no lo manda. B y la versión a la que se actualiza A la mandan.
+    const since = WRITE_VERSION_SINCE.toFixed(3);
+    const s = await before(workspace(), 'v090', OLD, since);
+    const w = await twoWeeks(s, { raiseMin: true, min: WRITE_VERSION_SINCE });
+    const { server, b } = s;
+    const treeBefore = {
+      escena14: server.pages.get(s.escena14)?.parent_id ?? null,
+      notas: server.pages.get(s.notas)?.title,
+    };
+
+    const a = s.a;
+    a.net.down = false;
+    await syncAll(a);
+    const st = a.engine.getStatus();
+    expect(st.online).toBe(true);
+    expect(st.outdated).toBe(true);
+    // Nada rechazado (la v0.090 no ofrece descartar nada); el árbol sigue en su cola.
+    expect(st.failedOps + st.rejectedPages + st.failedMedia + st.failedComments).toBe(0);
+    expect(st.pendingOps).toBeGreaterThan(0);
+    expect(st.pendingComments).toBe(1);
+    nothingOfA(s, w);
+    expect(server.pages.has(w.dia2)).toBe(false);
+    expect(server.pages.get(s.escena14)?.parent_id ?? null).toBe(treeBefore.escena14);
+    expect(server.pages.get(s.notas)?.title).toBe(treeBefore.notas);
+    expect(commentBodies(server)).not.toContain('A: revisar el inserto con arte');
+    await allOfAOnDevice(a, s, w);
+    // Cerrar y abrir otra vez la v0.090 tampoco pierde nada.
+    const again = await reopen(a, server, 'v090', OLD);
+    await syncAll(again);
+    expect(again.engine.getStatus().failedOps + again.engine.getStatus().failedComments).toBe(0);
+    await allOfAOnDevice(again, s, w);
+
+    // Se actualiza: sube todo.
+    const updated = await reopen(again, server, 'actual', since);
+    await syncAll(updated, b);
+    clean(updated);
+    clean(b);
+    const c = await device('actual', server, `c-${crypto.randomUUID()}`, since);
+    await syncAll(c);
+    clean(c);
+    expectEverything(s, w, await sameEverywhere(server, [updated, b, c]));
+  });
+
   it('sin subir la mínima: la v0.090 sube todo directo al volver, sin pérdidas, y actualizar después no cambia nada', async () => {
     const s = await before(workspace(), 'v090', OLD);
     const w = await twoWeeks(s, { raiseMin: false });
@@ -733,12 +782,16 @@ const SEEDS = Number(process.env.OFFLINE_LARGO_SEEDS ?? 6);
 const FIRST_SEED = Number(process.env.OFFLINE_LARGO_FIRST ?? 1);
 
 // A con la v0.090 de verdad, o con la versión actual que queda vieja (esa, además, comenta y sigue trabajando con red
-// y la app vieja antes de actualizar: lo propio sigue editable y nada sale).
-for (const [kind, aVersion] of [
-  ['v090', OLD],
-  ['actual', '0.095'],
+// y la app vieja antes de actualizar: lo propio sigue editable y nada sale). Con la v0.090, también con la mínima en la
+// primera versión que manda su versión en un header (B.17): la base le frena el árbol y los comentarios, y A comenta.
+for (const [kind, aVersion, newVersion] of [
+  ['v090', OLD, NEW],
+  ['v090', OLD, WRITE_VERSION_SINCE.toFixed(3)],
+  ['actual', '0.095', NEW],
 ] as const) {
-  describe(`variantes al azar: semanas sin red con la ${kind === 'v090' ? 'v0.090' : 'versión actual'}, con y sin la mínima`, () => {
+  // La base frena los comentarios de la v0.090 solo con la mínima en el umbral del header.
+  const heldOld = kind === 'v090' && Number(newVersion) >= WRITE_VERSION_SINCE;
+  describe(`variantes al azar: semanas sin red con la ${kind === 'v090' ? 'v0.090' : 'versión actual'}, con y sin la mínima ${newVersion}`, () => {
     for (let seed = FIRST_SEED; seed < FIRST_SEED + SEEDS; seed++) {
       it(`semilla ${seed}`, async () => {
         const r = rng(seed * 7919);
@@ -748,7 +801,7 @@ for (const [kind, aVersion] of [
         const start = Date.parse('2026-10-01T09:00:00Z');
         vi.setSystemTime(start);
         let a = await device(kind, server, `a-${seed}-${crypto.randomUUID()}`, aVersion);
-        const b = await device('actual', server, `b-${seed}-${crypto.randomUUID()}`, NEW);
+        const b = await device('actual', server, `b-${seed}-${crypto.randomUUID()}`, newVersion);
         const rodaje = await a.tree.create(null, 'Rodaje');
         const pages = [rodaje];
         for (let i = 0; i < 3; i++) pages.push(await a.tree.create(i === 0 ? rodaje : null, `Página ${i}`));
@@ -777,7 +830,7 @@ for (const [kind, aVersion] of [
         const days = 6 + Math.floor(r() * 12);
         for (let day = 1; day <= days; day++) {
           vi.setSystemTime(start + day * DAY + Math.floor((r() * DAY) / 2));
-          if (day === raiseAt) server.settings = { ...server.settings!, minAppVersion: Number(NEW) };
+          if (day === raiseAt) server.settings = { ...server.settings!, minAppVersion: Number(newVersion) };
           for (const who of ['A', 'B'] as const) {
             const steps = Math.floor(r() * 4);
             for (let step = 0; step < steps; step++) {
@@ -829,8 +882,9 @@ for (const [kind, aVersion] of [
                   await a.engine.syncMedia();
                 }
               } else {
-                // La v0.090 sube los comentarios aunque esté vieja: solo comenta B. Con la versión actual, los dos.
-                const author = kind === 'v090' ? b : d;
+                // La v0.090 sube los comentarios aunque esté vieja, salvo que la base la frene: entonces (y con la versión
+                // actual) comentan los dos; si no, solo B.
+                const author = kind === 'v090' && !heldOld ? b : d;
                 const body = `${author === a ? 'A' : 'B'} comenta ${++n}`;
                 await author.comments.add(page, null, body);
                 comments.push(body);
@@ -880,11 +934,11 @@ for (const [kind, aVersion] of [
         }
 
         // Se actualiza (sin la mínima, igual se actualiza después) y todos quedan iguales.
-        a = await reopen(a, server, 'actual', NEW);
+        a = await reopen(a, server, 'actual', newVersion);
         await syncAll(a, b);
         clean(a);
         clean(b);
-        const c = await device('actual', server, `c-${seed}-${crypto.randomUUID()}`, NEW);
+        const c = await device('actual', server, `c-${seed}-${crypto.randomUUID()}`, newVersion);
         await syncAll(c);
         const final = await sameEverywhere(server, [a, b, c]);
         const all = Object.values(final).flat();

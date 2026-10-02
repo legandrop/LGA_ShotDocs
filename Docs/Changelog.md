@@ -1,5 +1,16 @@
 # Changelog — LGA Shot Docs
 
+v0.0XX :
+
+Una versión anterior a v0.097 abierta seguía subiendo cambios del árbol y comentarios aunque el workspace pidiera una
+más nueva: la base no sabía qué versión escribía (B.17). Ahora la app manda su versión en el header
+`x-shotdocs-version` y la migración `20261008120000_version_minima_arbol.sql` (sin aplicar) la mira en `pages`,
+`workspaces` y los comentarios; sin header rechaza solo con la mínima en esta versión o más. El rechazo es un 503
+`app_outdated`, que todas las versiones reintentan: el cambio queda en su cola, no en rechazados (donde se podía
+descartar), y sale al actualizar. Si suben la mínima a mitad de una subida, la app nueva deja el cambio en la cola y
+avisa. Además, *Update now* anota con `updatefound` toda instalación que falla, aunque falle antes de mirarla.
+[ Versión mínima en el árbol y los comentarios - header con la versión, 503 que no se pierde, instalación fallida ]
+
 v0.098 :
 
 No había forma de ver quién cambió una página ni de volver atrás (P.18). Diseño en `Doc_Historial.md` (auditado, con las

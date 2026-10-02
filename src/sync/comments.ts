@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { errorMessage, isNetworkError, isPermanent } from './types';
+import { APP_OUTDATED } from './remote';
 import { localize, stored, t } from '../i18n';
 
 // Comentarios y preguntas (paso 10 de Docs/Plan_Workspaces.md; Docs/Doc_Sincronizacion.md, "Comentarios y
@@ -322,6 +323,8 @@ export class CommentQueue {
   onQueued?: () => void;
   /** Cambió lo que cuenta el estado (pendientes, rechazados, error). */
   onChange?: () => void;
+  /** La base rechazó un cambio por la versión mínima del workspace (`app_outdated`): se ve el aviso de actualizar. */
+  onOutdated?: () => void;
 
   private ops: QueuedCommentOp[] = [];
   private readonly rows = new Map<string, Map<string, CommentRow>>();
@@ -752,6 +755,12 @@ export class CommentQueue {
       try {
         await this.send(entry.op);
       } catch (err) {
+        if (errorMessage(err) === APP_OUTDATED) {
+          // La base frena los comentarios por versión (B.17) y subieron la mínima entre la consulta y el pedido: este y
+          // los que siguen quedan en la cola, sin error ni rechazo, y salen al actualizar. El motor muestra el aviso.
+          this.onOutdated?.();
+          return;
+        }
         if (!isPermanent(err)) throw err;
         await this.fail(entry, commentErrorText(errorMessage(err), entry.op.kind));
         continue;
