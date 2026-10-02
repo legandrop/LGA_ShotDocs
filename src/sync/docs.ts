@@ -670,14 +670,15 @@ export class PageDocs {
 
   /**
    * Baja lo nuevo de una página y lo guarda. Si está abierta, lo aplica también en el editor. `contentEpoch`: la época de
-   * contenido que trae el árbol (compactar); si este dispositivo aplicó un snapshot de la página y la época cambió, la
-   * página se vuelve a bajar desde el principio (`epochChanged`).
+   * contenido que trae el árbol (compactar); si este dispositivo aplicó un snapshot de la página y el árbol trae una época
+   * más nueva, la página se rearma con lo del servidor (`epochBehind`, `resetContent`). Un árbol atrasado (leído antes de
+   * lo último bajado) no reinicia nada: la época que manda es la de la misma respuesta (auditoría de la entrega 1, O2).
    */
   pullPage(pageId: string, remote: Remote, { contentEpoch }: { contentEpoch?: number } = {}): Promise<number> {
     return this.withLock(pageId, async () => {
       // Lo escrito tiene que estar guardado antes de bajar: el aviso de B.16 mira lo guardado.
       await this.flush(pageId);
-      if (contentEpoch !== undefined && epochChanged(await this.db.get('docState', pageId), contentEpoch)) {
+      if (contentEpoch !== undefined && epochBehind(await this.db.get('docState', pageId), contentEpoch)) {
         await this.resetContent(pageId, contentEpoch);
       }
       let total = 0;
@@ -719,27 +720,50 @@ export class PageDocs {
 
   /**
    * Un snapshot que este dispositivo aplicó dejó de valer (se invalidó su cadena: cambió la época de contenido de la
-   * página, Docs/Doc_Compactar.md, sección 12): la página se vuelve a bajar desde el principio (Yjs no duplica lo que ya
-   * tiene) y se olvidan las cuentas de lo que tiene el servidor (`syncedSV`, `syncedDS`), que el snapshot pudo hacer
-   * avanzar de más. Si la persona puede escribir la página, la página vuelve a subir entera una vez (lo propio que esas
-   * cuentas escondían). Lo guardado en el dispositivo no se toca.
+   * página, Docs/Doc_Compactar.md, sección 12). Si la página no tiene nada sin subir (ni en memoria, ni marca, ni envío,
+   * ni versión sin confirmar, ni rechazo), **se tira lo guardado y se rearma con lo del servidor** (D110), en una sola
+   * transacción: filas locales, cursor, `syncedSV`, `syncedDS` y el snapshot. Todo lo que tenía ya está en el servidor,
+   * salvo lo que trajo el snapshot malo (un borrado o un elemento que las filas no tienen), que así no vuelve a subir y no
+   * llega a nadie. La página abierta se vuelve a armar desde lo guardado (`stale` y el aviso).
+   *
+   * Con algo sin subir, no se toca nada (`deferred`): lo propio sube primero, con las cuentas de siempre (que no dejan
+   * subir lo que trajo el snapshot: el servidor ya lo "tiene" según ellas), y el reinicio se hace en la próxima bajada.
+   * Antes (v0.127) se borraban las cuentas y la página volvía a subir entera: el borrado de un snapshot malo llegaba a
+   * todos (auditoría de la entrega 1, O1).
    */
-  private async resetContent(pageId: string, epoch: number): Promise<void> {
-    const writable = this.options.canWrite?.(pageId) !== false;
-    await updateDocState(this.db, pageId, (s) => {
-      s.cursor = 0;
-      s.syncedSV = undefined;
-      s.syncedDS = undefined;
-      s.syncedDSGeneration = undefined;
-      s.snapshotId = undefined;
-      s.contentEpoch = epoch;
-      // Un envío armado contra esas cuentas no se confirma: se arma de nuevo.
-      s.pending = undefined;
-      if (writable) {
-        s.ackedVersion = -1;
-        s.guardVersion = undefined;
-      }
-    });
+  private async resetContent(pageId: string, epoch: number): Promise<'rebuilt' | 'deferred'> {
+    if (!this.isSaved(pageId)) return 'deferred';
+    const tx = this.db.transaction(['docUpdates', 'docState', 'meta'], 'readwrite');
+    const [stored, dirty, keys] = await Promise.all([
+      tx.objectStore('docState').get(pageId),
+      tx.objectStore('meta').get(dirtyKey(pageId)),
+      tx.objectStore('docUpdates').index('pageId').getAllKeys(pageId),
+    ]);
+    const state = stored ?? emptyDocState(pageId);
+    if (dirty !== undefined || state.pending || state.rejected || hasUnsyncedContent(state, false)) {
+      await tx.done;
+      return 'deferred';
+    }
+    await Promise.all(keys.map((k) => tx.objectStore('docUpdates').delete(k)));
+    state.cursor = 0;
+    state.syncedSV = undefined;
+    state.syncedDS = undefined;
+    state.syncedDSGeneration = undefined;
+    state.snapshotId = undefined;
+    state.contentEpoch = epoch;
+    // Lo ilegible se vuelve a anotar si sigue ahí al bajar de nuevo.
+    state.unreadable = undefined;
+    state.lastError = undefined;
+    await tx.objectStore('docState').put(state);
+    await tx.done;
+    console.warn(`Página ${pageId}: se invalidó un snapshot que este dispositivo usó; se rearma con lo del servidor.`);
+    const live = this.live.get(pageId);
+    if (live) {
+      // El documento abierto tiene lo del snapshot: se vuelve a armar desde lo guardado (la página lo reabre).
+      live.stale = true;
+      for (const fn of this.unsupportedListeners) fn(pageId);
+    }
+    return 'rebuilt';
   }
 
   /**
@@ -771,9 +795,12 @@ export class PageDocs {
     // La época de contenido vino en la misma respuesta (compactar): si este dispositivo aplicó un snapshot de la página
     // y la época es otra, ese snapshot dejó de valer. No se guarda este lote: la página se vuelve a bajar entera.
     const epoch = updates.find((u) => u.contentEpoch !== undefined)?.contentEpoch;
+    // Con algo sin subir, el reinicio espera (`resetContent`): el lote se guarda como siempre, pero sin anotar la época
+    // ni el snapshot, así la próxima bajada lo vuelve a intentar.
+    let keepEpoch = false;
     if (epoch !== undefined && epochChanged(await this.db.get('docState', pageId), epoch)) {
-      await this.resetContent(pageId, epoch);
-      return 'reset';
+      if ((await this.resetContent(pageId, epoch)) === 'rebuilt') return 'reset';
+      keepEpoch = true;
     }
     const snapshotId = [...valid].reverse().find((u) => u.snapshotId)?.snapshotId;
     const merged = valid.length > 0 ? Y.mergeUpdates(valid.map((u) => u.data)) : null;
@@ -845,8 +872,10 @@ export class PageDocs {
     state.cursor = maxSeq;
     if (valid.length < updates.length) state.unreadable = true;
     // El último snapshot aplicado y la época de la misma respuesta (Docs/Doc_Compactar.md, sección 5).
-    if (snapshotId) state.snapshotId = snapshotId;
-    if (epoch !== undefined) state.contentEpoch = epoch;
+    if (!keepEpoch) {
+      if (snapshotId) state.snapshotId = snapshotId;
+      if (epoch !== undefined) state.contentEpoch = epoch;
+    }
     await tx.objectStore('docState').put(state);
     if (removed) {
       // En la misma transacción que lo bajado: si queda guardado, queda el aviso.
@@ -1420,6 +1449,16 @@ export function advanceSynced(
  */
 export function epochChanged(state: DocState | undefined, epoch: number | undefined): boolean {
   return epoch !== undefined && state?.snapshotId !== undefined && state.contentEpoch !== epoch;
+}
+
+/**
+ * Lo mismo con la época del árbol, que puede venir atrasada (leída antes de lo último bajado): solo si es **más nueva**
+ * que la anotada. La de la base nunca vuelve atrás (tampoco al restaurar una copia: el script lo cuida, y
+ * `resetForRestore` borra la anotada), así que una menor es un árbol viejo (auditoría de la entrega 1, O2).
+ */
+export function epochBehind(state: DocState | undefined, treeEpoch: number | undefined): boolean {
+  if (treeEpoch === undefined || state?.snapshotId === undefined) return false;
+  return state.contentEpoch === undefined || treeEpoch > state.contentEpoch;
 }
 
 export function knownDeletes(state: DocState, generation: number): Uint8Array | undefined {

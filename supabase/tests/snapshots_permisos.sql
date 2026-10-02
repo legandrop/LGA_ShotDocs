@@ -1,4 +1,5 @@
--- Pruebas de los snapshots de compactar, entrega 1 (20261019120000_compactar_leer.sql, Docs/Doc_Compactar.md, sección 15,
+-- Pruebas de los snapshots de compactar, entregas 1 y 2 (20261019120000_compactar_leer.sql y
+-- 20261020120000_compactar_crear.sql, Docs/Doc_Compactar.md, sección 15,
 -- prueba 5). Con los snapshots apagados, o sin ninguno, `pull_page_content` devuelve lo mismo que `pull_page_updates`;
 -- un snapshot se sirve solo confirmado y válido, y solo a quien ve lo borrado (nunca a Ver, Comentar ni a un invitado,
 -- tampoco con la privacidad de lo borrado prendida); nadie lee las tablas directo; reservar, subir, confirmar, saltear
@@ -583,13 +584,18 @@ begin
   perform pg_temp.as_user('d1a1');
   assert not public.confirm_page_snapshot(s3, pg_temp.sha('CAkK')), 'confirma un eslabón sobre una base que ya no es la vigente';
   assert pg_temp.content('d1b0') = '123:CwwN:s:1,124:Bw==:1,125:Bw==:1', 's4 no se sirve: ' || left(pg_temp.content('d1b0'), 80);
-  -- Invalidar: Comentar no; un invitado con Editar sí (puede editar la página); invalida s2 y s4 (la cadena entera).
+  -- Invalidar: Comentar no; un invitado con Editar tampoco (no ve lo borrado: 20261020120000_compactar_crear.sql);
+  -- Editar sí, e invalida s2 y s4 (la cadena entera).
   perform pg_temp.as_user('d1a3');
   perform pg_temp.expect_error(format('select public.invalidate_page_snapshot(%L, %L)', s2, 'x'), 'not_allowed', 'c invalida');
   perform pg_temp.as_user('d1a6');
   perform pg_temp.expect_error(format('select public.invalidate_page_snapshot(%L, %L)', s2, 'x'), 'snapshot_not_found', 'x invalida');
   perform pg_temp.as_user('d1a5');
-  assert public.invalidate_page_snapshot(s2, 'test'), 'g no invalida';
+  perform pg_temp.expect_error(format('select public.invalidate_page_snapshot(%L, %L)', s2, 'x'), 'not_allowed', 'g invalida');
+  perform pg_temp.as_postgres();
+  assert (pg_temp.snap(s2)).invalid_at is null, 'el rechazo al invitado invalida igual';
+  perform pg_temp.as_user('d1a1');
+  assert public.invalidate_page_snapshot(s2, 'test'), 'e no invalida';
   assert not public.invalidate_page_snapshot(s2, 'test'), 'invalidar dos veces da true';
   perform pg_temp.as_postgres();
   assert (pg_temp.snap(s4)).invalid_at is not null, 'invalidar s2 no invalida s4 (la cadena)';

@@ -1683,7 +1683,8 @@ export class FakeRemote
 
   async invalidateSnapshot(id: string, reason: string): Promise<boolean> {
     const sn = this.snapshotById(id);
-    if (this.team && this.server.pageLevel(this.userId, sn.pageId) < 3) throw this.denied('not_allowed');
+    // Quien ve lo borrado, como el resto de compactar (20261020120000_compactar_crear.sql; antes, Editar alcanzaba).
+    if (!this.server.seesDeleted(this.userId, sn.pageId)) throw this.denied('not_allowed');
     return this.server.invalidateChain(sn.pageId, sn.chainId, reason.slice(0, 500)) > 0;
   }
 
