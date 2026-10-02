@@ -412,7 +412,7 @@ contesta midiendo (10.3): un modelo barato puede equivocarse más de fila, y la 
 - **El botón *Dictate*:** en el teléfono, un botón redondo de 56 px abajo a la derecha de la página (encima del
   indicador de sincronización), solo con Editar y la política que lo permite; en la compu, en la barra de la página y
   con **Ctrl/⌘+Alt+Shift+D** (registro `dictate`, con `modPressed`; ⌘⌥⇧D en la Mac, sin AltGr; a verificar contra los
-  atajos del sistema). Su tooltip dice solo el atajo.
+  atajos del sistema). Su tooltip, como el de los otros botones de solo ícono, dice el nombre y el atajo.
 - **La hoja *Dictate to report*** (en el teléfono, desde abajo, sin tapar la fila resaltada; en la compu, el panel de la
   derecha, el mismo lugar que el asistente): el campo de texto (donde el teclado dicta), el micrófono grande (V3), la
   chapita del plano (V4), *Place* y *Save for later*; después, la vista previa con *Apply*, *Discard*, *Try again* y
@@ -842,9 +842,10 @@ política recordada, para que el botón del teléfono la mire sin bajar los prov
   teléfono, arriba, sobre la hoja).
 - **La nota en el dispositivo**: base propia `shotdocs-dictation` con `drafts` y, ya creado y vacío, `notes` (la cola de
   V2, así V2 no sube la versión de la base). Un borrador por correo, workspace y página: el texto mientras se escribe y lo
-  que quedó en *Couldn't place*. Si *Apply* ubicó todo, el borrador se vacía solo (lo dicho ya está en la página); si
-  queda algo, sigue hasta *Add to Summary* de cada pedazo o *Done* (que pregunta *Discard N unplaced items?*).
-  *Save for later* (sin red) cierra la hoja con la nota guardada.
+  que quedó en *Couldn't place*, y **la última nota aplicada tal como se escribió** (*Your note*, con *Copy*): se ve en
+  la vista previa y sigue a la vista, también al cerrar y abrir, hasta *Done* o *New note*, por si el modelo se salteó
+  una parte sin decirlo (B1 de la auditoría). Lo pendiente sigue hasta *Add to Summary* de cada pedazo o *Done* (que
+  pregunta *Discard N unplaced items?*). *Save for later* (sin red) cierra la hoja con la nota guardada.
 - ***Undo* de la hoja** deshace el paso de *Apply* solo si sigue siendo el último de la página (si no, dice que se
   deshaga con Ctrl/⌘+Z), y devuelve la nota al campo y saca de *Couldn't place* lo que había agregado ese *Apply*.
 - **`ask` con cambios**: si la respuesta pregunta, los cambios que trae se ignoran; el segundo pedido lleva la nota, la
@@ -860,12 +861,21 @@ política recordada, para que el botón del teléfono la mire sin bajar los prov
 prueba abre lo aplicado con el esquema publicado (`editorSchemaMain`) y no cambia nada. **No hace falta subir
 `min_app_version`.** Sin migración.
 
-**Pruebas.** 54 de Vitest en `src/dictation/` (el mapa, el validador, aplicar con el editor real y con dos editores sin
+- **Correcciones de la auditoría de V1:** un solo cambio por lugar también con `appendText` (escribir y agregar en el
+  mismo párrafo vacío chocaban al aplicar); un *Apply* que falla a mitad no deja nada en rehacer; *Row chosen by the
+  assistant* mira también el setup cuando la nota lo dice pegado al plano («12_010 setup 4», «12_010_4»); en las filas
+  vacías, si la nota le puso la *Slate* a una, lo que vaya a otra fila vacía sin *Slate* va a *Couldn't place*; lo
+  deshecho con *Undo* sale de `RECENT`.
+
+**Pruebas.** 66 de Vitest en `src/dictation/` (el mapa, el validador, aplicar con el editor real y con dos editores sin
 red, la hoja con un proveedor simulado y dónde aparece) más las del registro de atajos y la ayuda. Recorrido en Chromium
 sin login con un proveedor falso local: 41 de 41 (R1, R2, R7, *ask*, solo ver, *Off*, sin red, teléfono de 390 px y
-castellano). Mutantes: 13 de 14 mueren; el que vive, insertar la fila con `updateBlock` de la tabla, es equivalente hoy:
-y-prosemirror compara las filas iguales y no las rehace, así que lo que otro escribe sin red en otra fila queda igual (la
-prueba lo comprueba); se deja la inserción como un nodo, que no depende de ese diff.
+castellano). Mutantes del autor: 13 de 14 mueren; el que vive, insertar la fila con `updateBlock` de la tabla, es
+equivalente hoy: y-prosemirror compara las filas iguales y no las rehace, así que lo que otro escribe sin red en otra
+fila queda igual (la prueba lo comprueba); se deja la inserción como un nodo, que no depende de ese diff. Mutantes de la
+auditoría y de sus correcciones: 24 de 25; el que vive, Ctrl+Enter sin permiso, es equivalente (`applyChanges` también
+mira el permiso).
 
 **Lo que prueba Lega** (no se puede acá): la calidad con una clave real (10.3), el dictado del teclado dentro de una
-celda y de un comentario en el iPhone y en Android, y Ctrl+Alt+Shift+D / ⌘⌥⇧D en navegadores reales.
+celda y de un comentario en el iPhone y en Android, y Ctrl+Alt+Shift+D / ⌘⌥⇧D en navegadores
+reales (en Firefox para la Mac, Option puede llegar como AltGraph y el atajo no andaría).

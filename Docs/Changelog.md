@@ -7,8 +7,9 @@ había que buscar la fila y la columna a mano. *Dictate to report* (el micrófon
 teléfono o Ctrl/⌘+Alt+Shift+D) toma la nota escrita o dictada con el teclado del sistema, manda la página como un mapa
 con direcciones al proveedor del asistente y valida la lista de cambios contra el mapa (rótulos de fila y columna, lo de
 antes, marcas). La vista previa muestra cada cambio con su casilla y el destino armado por la app; *Apply* aplica lo
-tildado en un paso de deshacer, con la guarda. Lo destildado y lo no ubicado quedan en *Couldn't place*, guardados en el
-dispositivo. Sin tipos de bloque nuevos ni migración; `min_app_version` no cambia.
+tildado en un paso de deshacer, con la guarda. Lo destildado y lo no ubicado quedan en *Couldn't place*, y la nota
+escrita sigue a la vista hasta *Done*, guardadas en el dispositivo. Sin tipos de bloque nuevos ni migración;
+`min_app_version` no cambia.
 [ Dictar al reporte: la nota informal que el asistente ubica en el reporte, con vista previa y deshacer ]
 v0.132 :
 
