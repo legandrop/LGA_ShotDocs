@@ -11,7 +11,7 @@ import { mountEditor, undoManager, unmountAll, view, type Editor } from '../ui/c
 import { legacyStorageNames, WANKA_LOCAL_KEY } from '../workspace';
 import { closeAssistant, registerAssistantTarget, type AssistantEditor } from '../assistant/assistantUi';
 import { closeAssistantDb, saveSettings } from '../assistant/keyStore';
-import { DictationPanel, forgetRecent } from './DictationPanel';
+import { DictationPanel, DOUBLE_TAP_MS, forgetRecent } from './DictationPanel';
 import { closeDictation } from './dictationUi';
 import { closeDictationDb, loadDraft } from './drafts';
 import { answer, cellText, cursorAt, mapOf, reportBlocks, targetBy } from './fixtures/report';
@@ -227,6 +227,12 @@ describe('Dictate to report', () => {
     // La nota sigue en el dispositivo hasta Done o New note (B1), y la hoja la muestra.
     expect((await draft(s.pageId))?.applied).toBe('este plano se filmó con un 50 mm, anotalo donde corresponda');
     expect(s.host.querySelector('.dictation-kept')?.textContent).toContain('Your note “este plano se filmó con un 50 mm, anotalo donde corresponda”');
+    // N1: un doble toque en Apply no deshace (el segundo toque cae en el botón que aparece y se ignora).
+    await click(button(s.host, 'Undo'));
+    expect(cellText(s.ed, 3, 3, 3)).toBe('50 mm');
+    await click(button(s.host, 'Done'));
+    expect(s.host.querySelector('.dictation-kept')).toBeTruthy();
+    await wait(DOUBLE_TAP_MS);
     await click(button(s.host, 'Undo'));
     expect(cellText(s.ed, 3, 3, 3)).toBe('');
     // La nota vuelve al campo.
@@ -324,6 +330,7 @@ describe('Dictate to report', () => {
     await place(s.host, 'el 12_010 setup 3 con un 50 y HDRI');
     await click(s.host.querySelectorAll<HTMLInputElement>('.dictation-change input[type=checkbox]')[1]);
     await click(button(s.host, 'Apply'));
+    await wait(DOUBLE_TAP_MS);
     await click(button(s.host, 'New note'));
     expect(s.host.querySelector('.dictation-kept')).toBeNull();
     await place(s.host, 'clean plate y otra toma');
@@ -443,6 +450,7 @@ describe('Dictate to report', () => {
     await until(() => !!button(s.host, 'Apply'));
     await ctrlEnter();
     expect(cellText(s.ed, 3, 3, 3)).toBe('50 mm');
+    await wait(DOUBLE_TAP_MS);
     await click(button(s.host, 'New note'));
     await place(s.host, 'no, era un 35');
     expect(p.user(1)).toContain('RECENT\n- Setups & takes › 12 · 010 · 3 › Lens · Filters (ND, diffusion, pola): "" → "50 mm"');

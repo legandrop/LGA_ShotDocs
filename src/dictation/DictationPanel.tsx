@@ -45,6 +45,9 @@ interface Run {
 const recentByPage = new Map<string, (RecentChange & { at: number })[]>();
 const RECENT_MS = 10 * 60 * 1000;
 
+/** Lo que dura el resguardo contra el doble toque después de *Apply* (N1 de la re-verificación de V1). */
+export const DOUBLE_TAP_MS = 600;
+
 function recentOf(pageId: string): RecentChange[] {
   const now = Date.now();
   const list = (recentByPage.get(pageId) ?? []).filter((r) => now - r.at < RECENT_MS);
@@ -141,6 +144,9 @@ export function DictationPanel({ pageId }: { pageId: string }) {
   const [confirm, setConfirm] = useState<'discardNote' | 'done' | null>(null);
   const [focused, setFocused] = useState<number | null>(null);
   const run = useRef<Run | null>(null);
+  /** Cuándo se aplicó (N1): los botones que aparecen en el lugar de *Apply* no toman el segundo toque de un doble toque. */
+  const appliedAt = useRef(0);
+  const tooSoon = () => Date.now() - appliedAt.current < DOUBLE_TAP_MS;
   const abort = useRef<AbortController | null>(null);
   const root = useRef<HTMLElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -348,11 +354,12 @@ export function DictationPanel({ pageId }: { pageId: string }) {
     recentByPage.set(pageId, list);
     run.current = null;
     setFocused(null);
+    appliedAt.current = Date.now();
     setPhase({ kind: 'applied', count: res.changed, undo: res.undo, note: current.note, added: added.map((a) => a.id), at });
   };
 
   const undo = () => {
-    if (phase.kind !== 'applied') return;
+    if (phase.kind !== 'applied' || tooSoon()) return;
     if (!undoApplied(target?.view() ?? null, phase.undo)) {
       setPhase({ ...phase, message: tr('dictation.undoLater', { undo: shortcutLabel('undo') }) });
       return;
@@ -395,12 +402,14 @@ export function DictationPanel({ pageId }: { pageId: string }) {
 
   /** *New note*: la nota ya aplicada se vacía (lo que no se ubicó sigue en *Couldn't place*). */
   const newNote = () => {
+    if (tooSoon()) return;
     setApplied('');
     persist(text, pending);
     backToNote();
   };
 
   const done = () => {
+    if (phase.kind === 'applied' && tooSoon()) return;
     if (pending.length > 0) {
       setConfirm('done');
       return;
@@ -762,13 +771,14 @@ export function DictationPanel({ pageId }: { pageId: string }) {
                 {phase.message && <p className="assistant-notice">{phase.message}</p>}
                 {keptBox}
                 <div className="assistant-buttons">
-                  <button className="dictation-big" onClick={undo}>
-                    {tr('dictation.undo')}
-                  </button>
+                  {/* *Done* primero y *Undo* al final, lejos de donde estaba *Apply* (N1). */}
                   <button className="primary dictation-big" onClick={done}>
                     {tr('dictation.done')}
                   </button>
                   <button onClick={newNote}>{tr('dictation.another')}</button>
+                  <button className="dictation-big" onClick={undo}>
+                    {tr('dictation.undo')}
+                  </button>
                 </div>
                 {confirmBox}
                 {pendingBox}

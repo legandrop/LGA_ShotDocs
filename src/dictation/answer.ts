@@ -313,6 +313,8 @@ export function validateAnswer(answer: string, map: PageMap, ctx: ValidateContex
   };
   const changes: Change[] = [];
   const used = new Set<string>();
+  /** Los lugares donde solo se agregó (`appendText`): ahí puede ir otro agregado, no una escritura. */
+  const appended = new Set<string>();
   const shotsAdded = new Set<string>();
   // La *Slate* que escribe la nota en cada fila vacía (las filas vacías tienen todas el mismo rótulo).
   const slates = new Map<string, string>();
@@ -427,12 +429,14 @@ export function validateAnswer(answer: string, map: PageMap, ctx: ValidateContex
     if (op === 'appendText') {
       const t = map.targets.get(normAddr(r.at));
       const text = (str(r.text) || newText).trim();
-      // Un solo cambio por lugar: escribir y agregar en el mismo párrafo vacío chocarían al aplicar.
-      if (!t || t.kind !== 'block' || !text || used.has(t.addr)) {
+      // Escribir y agregar en el mismo lugar chocarían al aplicar; varios agregados al mismo lugar, no (cada uno va
+      // debajo del anterior: N2 de la re-verificación).
+      if (!t || t.kind !== 'block' || !text || (used.has(t.addr) && !appended.has(t.addr))) {
         keepOut(r);
         continue;
       }
       used.add(t.addr);
+      appended.add(t.addr);
       const atoms = parseNew(text, null, seen);
       if (atoms === 'marker') {
         keepOut(r);

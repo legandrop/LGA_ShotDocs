@@ -323,3 +323,56 @@ describe('aplicar, correcciones de la auditoría', () => {
     expect(um.redoStack.length).toBe(0);
   });
 });
+
+describe('aplicar, re-verificación', () => {
+  it('N2: dos appendText al mismo título y dos debajo del mismo párrafo quedan en el orden de la respuesta', () => {
+    const ed = reportEditor();
+    const map = mapOf(ed);
+    const summary = targetBy(map, (t) => t.code === 'H2' && t.plain === 'Summary');
+    const camera = targetBy(map, (t) => t.code === 'H2' && t.plain === 'Camera package');
+    expect(
+      apply(
+        ed,
+        map,
+        plan(map, [
+          { op: 'appendText', at: summary.addr, text: 'uno' },
+          { op: 'appendText', at: summary.addr, text: 'dos' },
+          { op: 'appendText', at: summary.addr, text: 'tres' },
+          { op: 'appendText', at: camera.addr, text: 'cuatro' },
+        ]),
+      ).ok,
+    ).toBe(true);
+    const texts = ed.document.map((b) => blockText(ed, b.id));
+    const at = texts.indexOf('Summary');
+    expect(texts.slice(at + 1, at + 4)).toEqual(['uno', 'dos', 'tres']);
+    undoManager(ed).stopCapturing();
+    // Debajo de un párrafo con texto.
+    const map2 = mapOf(ed);
+    const uno = targetBy(map2, (t) => t.plain === 'uno');
+    expect(apply(ed, map2, plan(map2, [{ op: 'appendText', at: uno.addr, text: 'a' }, { op: 'appendText', at: uno.addr, text: 'b' }])).ok).toBe(true);
+    const after = ed.document.map((b) => blockText(ed, b.id));
+    expect(after.slice(at + 1, at + 6)).toEqual(['uno', 'a', 'b', 'dos', 'tres']);
+  });
+
+  it('N3: si había algo para rehacer, un Apply que falla a mitad tampoco deja nada en rehacer', () => {
+    const ed = reportEditor();
+    const map0 = mapOf(ed);
+    const v = view(ed);
+    // Algo escrito y deshecho: queda para rehacer.
+    v.dispatch(v.state.tr.insertText('x', map0.targets.get('T1 r4 c2')!.start));
+    const um = undoManager(ed);
+    um.stopCapturing();
+    um.undo();
+    expect(um.redoStack.length).toBe(1);
+    const map = mapOf(ed);
+    const summary = targetBy(map, (t) => t.code === 'P' && t.section === 'Summary');
+    const [write] = plan(map, [{ op: 'setText', at: summary.addr, label: '', old: '', new: 'nublado' }]);
+    const [add] = plan(map, [{ op: 'appendText', at: summary.addr, text: 'llovió' }]);
+    const before = JSON.stringify(v.state.doc.toJSON());
+    expect(apply(ed, map, [write, add])).toEqual({ ok: false, reason: 'failed' });
+    expect(JSON.stringify(view(ed).state.doc.toJSON())).toBe(before);
+    // Rehacer no vuelve a poner lo aplicado a medias.
+    while (um.redoStack.length) um.redo();
+    expect(JSON.stringify(view(ed).state.doc.toJSON())).not.toContain('llovió');
+  });
+});

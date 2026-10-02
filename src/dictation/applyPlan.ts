@@ -200,40 +200,46 @@ function siblingBlock(type: string, text: string): Record<string, unknown> {
 /**
  * Agrega un texto en un bloque (`appendText`, *Add to Summary*): si es un título, al final de su sección (en su primer
  * párrafo vacío, o en uno nuevo); si es un bloque vacío, adentro; si no, como un bloque nuevo debajo. `null` (sin
- * id): al final de la página. Devuelve si quedó.
+ * id): al final de la página. Devuelve el id del bloque donde quedó el texto (para encadenar el siguiente), o `null`.
  */
-function appendIn(view: EditorView, editor: AssistantEditor, blockId: string | null, text: string): boolean {
+function appendIn(view: EditorView, editor: AssistantEditor, blockId: string | null, text: string): string | null {
   const { doc } = view.state;
   const before = view.state.doc;
+  const fill = (pos: number, id: string) => {
+    view.dispatch(view.state.tr.insertText(text, pos + 2).setMeta(BACKGROUND_META, true));
+    return id;
+  };
+  const insert = (block: Record<string, unknown>, ref: string) => {
+    const made = editor.insertBlocks([block], ref, 'after') as { id?: string }[] | undefined;
+    return made?.[0]?.id ?? null;
+  };
+  let id: string | null;
   if (!blockId) {
     const last = editor.document[editor.document.length - 1];
-    if (!last) return false;
+    if (!last) return null;
     const lastNode = findBlock(doc, last.id);
     const empty = lastNode?.node.firstChild?.type.name === 'paragraph' && lastNode.node.firstChild.content.size === 0;
-    if (empty && lastNode) view.dispatch(view.state.tr.insertText(text, lastNode.pos + 2).setMeta(BACKGROUND_META, true));
-    else editor.insertBlocks([{ type: 'paragraph', content: text }], last.id, 'after');
-    return !view.state.doc.eq(before);
-  }
-  const at = findBlock(doc, blockId);
-  const content = at?.node.firstChild;
-  if (!at || !content) return false;
-  if (content.type.name === 'heading') {
-    const blocks = sectionBlocks(doc, blockId);
-    const emptyPara = blocks.find((b) => b.node.firstChild?.type.name === 'paragraph' && b.node.firstChild.content.size === 0 && b.node.childCount === 1);
-    if (emptyPara) {
-      const p = findBlock(doc, emptyPara.id)!;
-      view.dispatch(view.state.tr.insertText(text, p.pos + 2).setMeta(BACKGROUND_META, true));
-    } else {
-      // Después del último bloque con algo de la sección (los vacíos del final quedan abajo).
-      const filled = [...blocks].reverse().find((b) => (b.node.firstChild?.content.size ?? 0) > 0 || b.node.firstChild?.type.name !== 'paragraph');
-      editor.insertBlocks([{ type: 'paragraph', content: text }], filled?.id ?? blockId, 'after');
-    }
-  } else if (content.isTextblock && content.content.size === 0) {
-    view.dispatch(view.state.tr.insertText(text, at.pos + 2).setMeta(BACKGROUND_META, true));
+    id = empty && lastNode ? fill(lastNode.pos, last.id) : insert({ type: 'paragraph', content: text }, last.id);
   } else {
-    editor.insertBlocks([siblingBlock(content.type.name, text)], blockId, 'after');
+    const at = findBlock(doc, blockId);
+    const content = at?.node.firstChild;
+    if (!at || !content) return null;
+    if (content.type.name === 'heading') {
+      const blocks = sectionBlocks(doc, blockId);
+      const emptyPara = blocks.find((b) => b.node.firstChild?.type.name === 'paragraph' && b.node.firstChild.content.size === 0 && b.node.childCount === 1);
+      if (emptyPara) id = fill(findBlock(doc, emptyPara.id)!.pos, emptyPara.id);
+      else {
+        // Después del último bloque con algo de la sección (los vacíos del final quedan abajo).
+        const filled = [...blocks].reverse().find((b) => (b.node.firstChild?.content.size ?? 0) > 0 || b.node.firstChild?.type.name !== 'paragraph');
+        id = insert({ type: 'paragraph', content: text }, filled?.id ?? blockId);
+      }
+    } else if (content.isTextblock && content.content.size === 0) {
+      id = fill(at.pos, blockId);
+    } else {
+      id = insert(siblingBlock(content.type.name, text), blockId);
+    }
   }
-  return !view.state.doc.eq(before);
+  return view.state.doc.eq(before) ? null : id;
 }
 
 /** Si la página ya tiene la sección de ese plano (mirando la página de ahora). */
@@ -285,6 +291,8 @@ export function applyChanges(
   if (changes.length === 0) return { ok: true, changed: 0, undo: null };
   const state = view.state;
   const planned: Planned[] = [];
+  /** El último bloque escrito por los `appendText` de cada lugar (el siguiente va debajo). */
+  const chain = new Map<string, string>();
   for (const change of changes) {
     const t = change.target;
     switch (change.op) {
@@ -326,7 +334,18 @@ export function applyChanges(
         const at = t && findBlock(state.doc, t.blockId);
         if (!t || !at || !editor) return { ok: false, reason: 'changed' };
         const text = atomsPlain(change.atoms ?? []);
-        planned.push({ change, order: at.pos + at.node.nodeSize, run: () => appendIn(view, editor, t.blockId, text) });
+        // Varios `appendText` al mismo lugar (N2 de la re-verificación): se aplican en el orden de la respuesta y cada
+        // uno va debajo del anterior (el primero, donde corresponda), así quedan en ese orden.
+        const same = planned.filter((p) => p.change.op === 'appendText' && p.change.target?.blockId === t.blockId).length;
+        planned.push({
+          change,
+          order: at.pos + at.node.nodeSize - same / 1000,
+          run: () => {
+            const id = appendIn(view, editor, chain.get(t.blockId) ?? t.blockId, text);
+            if (id) chain.set(t.blockId, id);
+            return !!id;
+          },
+        });
         break;
       }
       case 'addRow': {
@@ -371,7 +390,6 @@ export function applyChanges(
   }
   const undo = undoManagerOf(view.state);
   const before = undo?.undoStack.length ?? 0;
-  const redoBefore = undo?.redoStack.length ?? 0;
   // Del último lugar al primero: lo que se escribe abajo no corre lo de arriba.
   planned.sort((a, b) => b.order - a.order);
   let ok = true;
@@ -391,7 +409,7 @@ export function applyChanges(
   // Un solo paso de deshacer (si no, algo se partió: se deshace todo).
   if (ok && undo && undo.undoStack.length !== before + 1) ok = false;
   if (!ok) {
-    rollback(undo, before, redoBefore);
+    rollback(undo, before);
     return { ok: false, reason: 'failed' };
   }
   return { ok: true, changed: planned.length, undo: undo ? { depth: undo.undoStack.length, item: undo.undoStack[undo.undoStack.length - 1] } : null };
@@ -401,8 +419,11 @@ export function applyChanges(
  * Vuelve atrás lo que haya quedado de un *Apply* a medias, sin dejarlo en la pila de rehacer (Ctrl+Shift+Z no lo vuelve
  * a poner).
  */
-function rollback(undo: Y.UndoManager | null, before: number, redoBefore: number): void {
+function rollback(undo: Y.UndoManager | null, before: number): void {
   if (!undo) return;
+  // Lo que había para rehacer ya lo vació el primer cambio aplicado (como cualquier edición): lo que se saca es solo lo
+  // que dejan en rehacer estos `undo()` (N3 de la re-verificación: antes se medía antes de aplicar).
+  const redoBefore = undo.redoStack.length;
   while (undo.undoStack.length > before) undo.undo();
   undo.redoStack.splice(redoBefore);
 }
@@ -425,17 +446,16 @@ export function addToSummary(view: EditorView | null, editor: AssistantEditor | 
   const id = summaryId && findBlock(view.state.doc, summaryId) ? summaryId : null;
   const undo = undoManagerOf(view.state);
   const before = undo?.undoStack.length ?? 0;
-  const redoBefore = undo?.redoStack.length ?? 0;
   try {
     let done = false;
     asOneUndoStep(view.state, () => {
-      done = appendIn(view, editor, id, text.trim());
+      done = !!appendIn(view, editor, id, text.trim());
     });
-    if (!done) rollback(undo, before, redoBefore);
+    if (!done) rollback(undo, before);
     return done;
   } catch (err) {
     console.error('Dictado: no se pudo agregar al resumen', err);
-    rollback(undo, before, redoBefore);
+    rollback(undo, before);
     return false;
   }
 }
