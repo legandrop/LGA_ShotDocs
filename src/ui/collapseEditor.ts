@@ -31,6 +31,7 @@ import { BACKGROUND_META, FIND_REPLACE_META } from './editorMeta';
 import { isFindReplaceTransaction, setFindCollapseHooks, type FindCollapseHooks } from './findEditor';
 import { isLetter, modPressed } from './findUi';
 import { notify } from './notice';
+import { PAGE_BREAK_PROP } from './editorSchema';
 import { dropTarget, movedSelection, planKeyboardMove, planSectionDrag } from './sectionMove';
 
 // Colapsar secciones por sus títulos (P.11, Docs/Doc_Colapsar.md), en el editor. Como las filas de fotos
@@ -943,12 +944,12 @@ export function dropSection(view: EditorView, pos: number): boolean {
 
 // --- Teclado ---------------------------------------------------------------------------------------------
 
-/** El título colapsado donde está la selección (de texto). */
-function collapsedHeadingAt(state: EditorState): { at: BlockAt; record: HeadingRecord; text: PMNode; offset: number } | null {
+/** El título colapsado donde está la selección (de texto): su cabeza o, con `fromStart`, su principio. */
+function collapsedHeadingAt(state: EditorState, fromStart = false): { at: BlockAt; record: HeadingRecord; text: PMNode; offset: number } | null {
   const s = collapseKey.getState(state);
   const sel = state.selection;
   if (!s || !(sel instanceof TextSelection)) return null;
-  const $head = sel.$head;
+  const $head = fromStart ? sel.$from : sel.$head;
   const text = $head.parent;
   if (text.type.name !== 'heading' || $head.depth < 2) return null;
   const container = $head.node($head.depth - 1);
@@ -959,21 +960,26 @@ function collapsedHeadingAt(state: EditorState): { at: BlockAt; record: HeadingR
   return { at, record, text, offset: $head.parentOffset };
 }
 
-/** Enter al final de un título colapsado: un renglón nuevo después de lo escondido, sin abrirlo. */
-function enterAfter(view: EditorView): boolean {
+/**
+ * Enter al final de un título colapsado: un renglón nuevo después de lo escondido, sin abrirlo. Con `anywhere`, lo
+ * mismo con el cursor en cualquier lugar del título salvo el principio, o con una selección que empieza en el título
+ * (aunque siga en los bloques de abajo): no lo parte ni borra nada.
+ */
+function enterAfter(view: EditorView, anywhere = false): boolean {
   const state = view.state;
-  const found = collapsedHeadingAt(state);
-  if (!found || !state.selection.empty) return false;
+  const found = collapsedHeadingAt(state, anywhere);
+  if (!found || (!anywhere && !state.selection.empty)) return false;
   const { at, record, text, offset } = found;
   const tr = state.tr;
-  if (offset === 0 && text.content.size > 0) {
+  if (anywhere) {
+    if (state.selection.empty && offset === 0 && text.content.size > 0) return false;
+  } else if (offset === 0 && text.content.size > 0) {
     // Al principio (con texto): un renglón vacío arriba del título, que sigue colapsado.
     const schema = state.schema;
     tr.insert(at.pos, schema.nodes.blockContainer.create({ id: newBlockId() }, schema.nodes.paragraph.create()));
     view.dispatch(tr.scrollIntoView());
     return true;
-  }
-  if (offset !== text.content.size) return false;
+  } else if (offset !== text.content.size) return false;
   const section = sectionAt(state.doc, at.pos, record)!;
   const next = section.group.maybeChild(section.end);
   const s = collapseKey.getState(state)!;
@@ -998,12 +1004,12 @@ function enterAfter(view: EditorView): boolean {
 /**
  * Lo que hace Enter al final de un título colapsado (un renglón después de lo escondido, sin abrir la sección), para
  * otra tecla que quiere lo mismo: Ctrl/⌘+Enter, que después convierte ese renglón en un salto de hoja
- * (editorExtensions.ts). `false` si el cursor no está al final de un título colapsado.
+ * (editorExtensions.ts). Vale con el cursor en cualquier lugar del título (también en el medio, o con una selección
+ * que empieza en el título, aunque siga abajo): partirlo abriría la sección, así que no se parte. `false` si no está en un título colapsado, o si está
+ * al principio de su texto (ahí el salto va antes del título, sin tocar la sección).
  */
 export function enterAfterCollapsedHeading(view: EditorView): boolean {
-  const found = collapsedHeadingAt(view.state);
-  if (!found || !view.state.selection.empty || found.offset !== found.text.content.size) return false;
-  return enterAfter(view);
+  return enterAfter(view, true);
 }
 
 /**
@@ -1017,6 +1023,8 @@ function deleteAtEnd(view: EditorView): boolean {
   const state = view.state;
   const sel = state.selection;
   if (!(sel instanceof TextSelection) || !sel.empty || sel.$head.parentOffset !== sel.$head.parent.content.size) return false;
+  // Un salto de hoja vacío lo saca su propio Supr (deleteEmptyBreak, editorSchema.ts), que deja lo de abajo donde está.
+  if (sel.$head.parent.content.size === 0 && sel.$head.parent.attrs[PAGE_BREAK_PROP] === true) return false;
   const found = collapsedHeadingAt(state);
   if (found) return hidesSomething(sectionAt(state.doc, found.at.pos, found.record));
   const s = collapseKey.getState(state);
@@ -1608,7 +1616,7 @@ export const collapseExtension = createExtension(({ options }: ExtensionOptions<
     // Mover la sección entera (1b); sin nada colapsado en juego, el de BlockNote.
     [shortcutKeys('moveUp')[0]]: withView((view) => moveByKeyboard(view, 'up')),
     [shortcutKeys('moveDown')[0]]: withView((view) => moveByKeyboard(view, 'down')),
-    Enter: withView(enterAfter),
+    Enter: withView((view) => enterAfter(view)),
     Delete: withView(deleteAtEnd),
     Backspace: withView(backspaceAfter),
     ArrowDown: withView((view) => skipForward(view, 'down', false)),

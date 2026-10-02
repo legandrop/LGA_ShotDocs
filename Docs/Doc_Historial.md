@@ -847,3 +847,11 @@ historial no cambia: aplica las filas en orden y cada elemento queda con la prim
 la misma página, al azar, con restauraciones y con texto escrito y borrado antes de subir; cada versión es igual a lo
 que tenía el servidor. La mutante de `mergeUpdates` ahora usa la versión publicada para la subida entera con huecos:
 con esta, que sube sin GC, ya no aparecen.
+
+## Ajustes de la re-verificación
+
+La re-verificación de la auditoría pasó sin bloqueantes, con tres ajustes: `src/ui/historyRestoreCheck.test.ts` (si un
+plugin descarta un tramo, restaurar deshace lo aplicado y no dice "Restored"; con dos tramos, Ctrl/⌘+Z deshace todo en un
+paso y rehacer lo vuelve a poner), una restauración que el editor intentó y deshizo dice *Couldn't restore this version.
+Nothing changed.* (antes decía que la página no estaba abierta para editar), y la segunda confirmación (cuando otra
+persona cambió la página mientras tanto) conserva la cuenta de fotos mandadas a la papelera de Drive.
