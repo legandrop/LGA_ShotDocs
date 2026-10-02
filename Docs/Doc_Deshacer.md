@@ -1,7 +1,8 @@
 # Deshacer en el orden en que editaste (P.26)
 
-**Estado: diseño, sin código.** Pedido de Lega del 2026-10-02, al responder cómo se deshace un reemplazo en todo el
-proyecto (una pregunta de su lista de decisiones; no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
+**Estado: diseño; entrega 0 hecha (v0.130: el límite de Yjs, arreglado con un parche; sección 16).** Pedido de Lega
+del 2026-10-02, al responder cómo se deshace un reemplazo en todo el proyecto (una pregunta de su lista de decisiones;
+no es la D-10 de `Doc_Decisiones.md`). Se diseñó contra `main` v0.123
 y se revisó contra v0.125. Las decisiones (DH1 a DH10, sección 11) son propuestas con la recomendación elegida: el
 número final lo pone quien las cierre con Lega. Lo medido salió de prototipos en pruebas que no se versionan (sección
 9). Auditado el 2026-10-02 (aprobado con condiciones): las correcciones ya están en el texto y resumidas al final
@@ -29,9 +30,10 @@ número final lo pone quien las cierre con Lega. Lo medido salió de prototipos 
   documento). Los reemplazos siguen en el panel con *Undo*, como hoy.
 - **No cambia nada guardado**: ni el documento, ni el registro de reemplazos, ni la base. Sin migración, sin
   `min_app_version`; una versión vieja no se entera.
-- **Entregas:** 1 la línea de tiempo con las páginas, 2 el reemplazo adentro, 3 anotar fotos como un paso. **Antes de
-  la entrega 1** hay que investigar un límite del deshacer de Yjs que ya existe hoy (a veces deja restos o se lleva un
-  pedazo de texto, B.21 del roadmap): con la línea de tiempo se deshace más lejos que hoy y se vería más (sección 6).
+- **Entregas:** 1 la línea de tiempo con las páginas, 2 el reemplazo adentro, 3 anotar fotos como un paso. **La
+  entrega 0 está hecha (v0.130):** el deshacer de Yjs dejaba restos y a veces se llevaba texto de antes (B.21) porque
+  seguía lo que otro deshacer volvió a poner solo hasta el primer corte; un parche a Yjs lo sigue entero. Medido: de
+  1.844 a 3.000 de 3.000 exactas y de 14 a 0 con algo de menos (sección 16).
 
 ## Reglas que no se rompen
 
@@ -282,15 +284,14 @@ Reemplazaste en 50 páginas; después escribiste en *Shot 12*; antes del reempla
 - **Lo que deshacés se rehace**: ⌘⇧Z para todo lo de la línea de tiempo, también el reemplazo (hoy no tiene rehacer).
 - **Retener un documento** usa `docs.open`: la página cuenta como abierta (la guardia de versión queda armada, como con
   el editor en pantalla), nada se destruye con ediciones sin guardar.
-- **Un límite de Yjs que ya existe hoy** (no lo trae este diseño, pero lo hace más probable): si algo que un deshacer
-  volvió a poner se parte escribiendo en el medio, deshacer más atrás puede dejar restos ("la ía" en vez de "la ") y, a
-  veces, **llevarse un pedazo de texto**: en un caso, un solo deshacer borró "ám" de "cámara" (texto original que un
-  deshacer anterior había vuelto a poner). Medido por la auditoría con la **misma** secuencia al azar en una página, con
-  el deshacer de Yjs tal cual y con "un paso por vez" de la línea de tiempo: **idénticos**, 1.844 de 3.000 exactas al
-  deshacer todo y **14 de 3.000 con algo de menos** en los dos (el texto está en el historial de versiones). O sea, por
-  página la línea de tiempo hace exactamente lo de hoy. Pero hoy la pila muere al cambiar de página y se deshace poco;
-  con la línea de tiempo se llega más atrás, y esto se vería más. **Por eso es condición de la entrega 1: investigarlo
-  (un parche como los de y-prosemirror, o reportarlo a Yjs) y decidir antes de publicar** (B.21 del roadmap).
+- **Un límite de Yjs que existía antes de este diseño, arreglado en la entrega 0 (v0.130, sección 16).** Si algo que un
+  deshacer volvió a poner se partía escribiendo en el medio, deshacer más atrás dejaba restos ("la ía" en vez de "la ")
+  y, a veces, **se llevaba un pedazo de texto**: en un caso, un solo deshacer borró "ám" de "cámara" (texto original
+  que un deshacer anterior había vuelto a poner). Medido por la auditoría con la **misma** secuencia al azar en una
+  página, con el deshacer de Yjs tal cual y con "un paso por vez" de la línea de tiempo: idénticos, 1.844 de 3.000
+  exactas al deshacer todo y **14 de 3.000 con algo de menos** en los dos. Con el parche de Yjs: **3.000 de 3.000
+  exactas y 0 con algo de menos**, también idénticos con y sin "un paso por vez". Con el editor real y Enter y
+  Backspace en el medio: de 68 de 300 con restos y 1 con algo de menos a 0 y 0.
 
 ## 7. Versiones viejas
 
@@ -512,8 +513,10 @@ otra sesión (medido).
   (`planRedo`, en `replaceDoc.test.ts` con sus casos y al azar); *Undo* del panel fuera de orden (DH10): por la pila en
   las páginas con historia, y después ⌘Z, ⌘Z deja "Toma 1: " exacto; con el otro a la vez (al azar, `TIMELINE_SEEDS`):
   nada del otro borrado y los dos iguales.
-- **El límite de Yjs** (entrega 0): la misma secuencia al azar con y sin "un paso por vez", 3.000 semillas, contando las
-  "con algo de menos"; con el parche, si lo hay, en cero.
+- **El límite de Yjs** (entrega 0, hecha): `src/ui/yjsUndoRedone.test.ts` (los casos mínimos, el archivo de `require`,
+  3.000 semillas al azar y 500 con otra persona a la vez) y `src/ui/yjsUndoRedoneEditor.test.ts` (con el editor real,
+  Enter y Backspace). En la entrega 1, la prueba al azar de la línea de tiempo cuenta además las "con algo de menos":
+  tienen que seguir en cero con "un paso por vez".
 - **Pantalla** (jsdom, la app de verdad): ⌘Z en otra página (va, muestra, deshace, *Back*); mantener apretado no cruza;
   ⌘Z con el foco en el árbol; en el título y en un comentario no; el campo del panel recién reemplazado (DH9); los avisos;
   ⌘Z en la Mac sí y Ctrl+Z en la Mac no (`macShortcuts.test.ts`); el registro de atajos (`shortcuts.test.ts`).
@@ -525,10 +528,7 @@ otra sesión (medido).
 
 ## 13. Entregas
 
-0. **Antes de la entrega 1 (condición): el límite de Yjs de la sección 6 (B.21).** Encontrar en `UndoManager` por qué
-   un deshacer sigue la copia vuelta a poner solo hasta el primer corte, y decidir: un parche (como los de
-   y-prosemirror, con su prueba al azar de 3.000 semillas en cero "con algo de menos") o reportarlo a Yjs y publicar
-   igual sabiendo el número. **Aceptación:** la decisión anotada con su medición.
+0. **Hecha (v0.130): el límite de Yjs de la sección 6 (B.21).** La causa, el parche y lo medido, en la sección 16.
 1. **La línea de tiempo con las páginas.** La pila de cada página que sobrevive al cambiar de página (retener y pasar
    la pila sin el meta del editor viejo, 3.2), ⌘Z y ⌘⇧Z en orden entre páginas (DH2), fuera del editor, quienes llaman
    directo al deshacer (3.4), lo de fondo fuera de la pila, topes, ayuda y atajos. **Aceptación:** escribir en *A*, en
@@ -557,9 +557,9 @@ Cada entrega con su auditoría antes de publicar.
    retiene el editor viejo entero en memoria, 3.2) y, al deshacer un paso de antes del cambio de página, el cursor no
    vuelve solo; la línea de tiempo muestra el bloque.
 4. **Saltar de página puede sorprender** (DH2). El aviso con *Back* y no cruzar manteniendo apretado lo atenúan.
-5. **El límite de Yjs de la sección 6** (restos, y a veces un pedazo de texto de menos, al deshacer mucho con deshacer y
-   rehacer en el medio) ya existe; por página la línea de tiempo hace lo mismo que hoy (medido), pero se deshace más
-   lejos y se vería más. Condición de la entrega 1 (entrega 0).
+5. **El límite de Yjs de la sección 6** quedó arreglado con un parche a Yjs (entrega 0, sección 16). Lo que queda es un
+   parche más que rehacer al actualizar Yjs (las pruebas y el build lo avisan) y un caso raro sin letras de menos ni de
+   más: las mismas letras en otro orden (16.4).
 6. **Quien llame directo al `UndoManager`** (código nuevo que se olvide de la línea de tiempo) deja pasos que ella no
    conoce. Una prueba recorre `src` buscando `.undo()` y `.redo()` sobre un `UndoManager` fuera de la línea de tiempo.
 7. **Rehacer un reemplazo por las anclas** (`planRedo`) es código nuevo con la misma regla que `planUndo`; necesita sus
@@ -572,6 +572,90 @@ Cada entrega con su auditoría antes de publicar.
   leer IndexedDB).
 - El uso de memoria real en el iPhone con 20 páginas retenidas.
 - El orden de armado y desmontado de React al cambiar de página (3.2, "Cuándo"): leído, no medido con la app entera.
+
+## 16. Entrega 0: el límite de Yjs (B.21), cómo quedó (v0.130)
+
+### 16.1 La causa
+
+Deshacer un borrado no revive las letras borradas: Yjs escribe **copias** nuevas y anota en cada letra original dónde
+quedó su copia (`item.redone`, solo en memoria; no viaja ni se guarda). Al deshacer después lo que se había escrito,
+`popStackItem` (`UndoManager.js`) busca lo que hoy ocupa ese texto con `followRedone`, que devuelve **un solo item**: el
+que tiene la primera letra de la copia (el propio Yjs lo marca: `@todo This should return several items`). Y se borra
+ese item entero. De ahí salen los dos síntomas:
+
+- **Restos.** Si después se escribió en el medio de la copia, Yjs la partió en dos items: se borra el primero y el
+  segundo queda. Caso mínimo: escribir "Xx" en "abcdefgh", borrarlo, ⌘Z, escribir "Yy" entre la X y la x, deshacer
+  todo: queda "abcdefxgh".
+- **Texto de menos.** Si un mismo deshacer volvió a poner varias cosas seguidas, sus copias tienen relojes seguidos y
+  Yjs las junta en un solo item (`mergeWith`). Buscar la copia de una sola letra devuelve el item juntado, y se borra
+  todo: también la copia de texto de antes. Caso mínimo: escribir "Xx" en "abcdefgh", borrar la "f", ⌘Z, borrar "xfg",
+  deshacer todo: queda "abcdegh" (se fue la "f", que era de antes).
+
+El mismo "solo la primera parte de la copia" aparece en `redoItem` (`Item.js`) al ubicar lo que vuelve a un texto que se
+volvió a crear (un renglón juntado con Backspace y deshecho): el vecino izquierdo era la primera parte de su copia, y lo
+vuelto aparecía en el medio del vecino ("abXcdYef" en vez de "abXYcdef").
+
+### 16.2 El arreglo
+
+Un parche a Yjs (`patches/yjs+13.6.33.patch`, con `patch-package`, igual que el de y-prosemirror), marcado
+`LGA-SHOTDOCS-PATCH (B.21)` en `dist/yjs.mjs` (la app y las pruebas), `dist/yjs.cjs` (`require`) y `src`:
+
+- `popStackItem` sigue la copia **en todo su largo**: una copia tiene el mismo largo que lo copiado y relojes seguidos,
+  así que lo que ocupa hoy lo insertado es el tramo exacto `[redone, redone + largo)`, partido en los bordes y siguiendo
+  las copias de las copias (`lgaFollowRedoneRange`). Primero se juntan los items y después se siguen las copias (nada se
+  parte mientras se recorre), en el mismo orden de antes: se borra al revés, los hijos antes que los padres (el filtro
+  que protege los párrafos, `defaultDeleteFilter`, mira si quedaron vacíos).
+- `redoItem` toma como vecino izquierdo la copia de la **última** letra del vecino.
+- `yjs` queda fijo en `13.6.33` en `package.json` (si sube, el parche no aplica y `npm ci` falla). `vite.config.ts`
+  (`assertYjsPatched`) no deja correr ni el build ni las pruebas sin el parche.
+
+Deshacer sigue sacando solo lo propio: las copias son siempre del propio dispositivo, y lo que otro escribió adentro
+tiene otro cliente y no entra en el tramo.
+
+### 16.3 Lo medido
+
+| Prueba | Sin el parche | Con el parche |
+|---|---|---|
+| Al azar, una página (el generador de la auditoría, 60 acciones; 3.000 semillas): deshacer todo | 1.844 exactas, 14 con algo de menos | **3.000 exactas, 0** |
+| Lo mismo con "un paso por vez" (la línea de tiempo) | idéntico: 1.844 y 14 | **idéntico: 3.000 y 0** |
+| Rehacer todo después de deshacer todo (contra lo último más lo que quedaba para rehacer) | 3.000 exactas | 3.000 exactas |
+| Con otra persona escribiendo a la vez (3.000 corridas, dos documentos conectados) | 219 con restos propios, 3 con texto de antes de menos | **0 y 0**; nada del otro se va y los dos iguales, en los dos casos |
+| Con el editor real (BlockNote, 300 semillas de 40 acciones con Enter, Backspace, ⌘Z y ⌘⇧Z) | 226 exactas, 68 con letras de más, 1 con letras de menos, 295 rehacen exacto | **299 exactas, 0, 0, 300** |
+| Lo mismo, 2.000 semillas de 20 acciones | — | 1.999 exactas, 0 con letras de más o de menos |
+
+Las pruebas: `src/ui/yjsUndoRedone.test.ts` (los tres casos mínimos, `dist/yjs.cjs`, 3.000 semillas y 500 con otra
+persona) y `src/ui/yjsUndoRedoneEditor.test.ts` (los dos casos con el editor y 150 semillas). Todas fallan sin el parche
+(comprobado con la librería original).
+
+### 16.4 Lo que queda
+
+**Las mismas letras en otro orden**, sin nada de más ni de menos: 1 de 300 con el editor (semilla 123, "segundo rglónen"
+en vez de "segundo renglón") y 1 de 2.000 con 20 acciones. Pasa cuando lo que vuelve tiene como vecino algo que se borró
+y volvió en otro lado: Yjs lo ubica al lado del original borrado y no de su copia. Seguir la copia también en ese caso
+no lo arregla del todo (se probó: la semilla de 20 acciones sigue igual y rehacer empeora de 300 a 297 exactas), así que
+no se tocó. Es raro, se ve, se arregla escribiendo y no pierde nada: la prueba del editor lo deja anotado como caso
+conocido.
+
+### 16.5 Versiones viejas y otros dispositivos
+
+`redone` vive solo en la memoria del dispositivo (Yjs no lo guarda ni lo manda). Lo que hace el parche es decidir qué
+borra y dónde escribe **el deshacer de este dispositivo**; lo que sale son borrados e inserciones comunes que una
+versión vieja aplica como cualquier edición. Una versión vieja en otro dispositivo sigue con su ⌘Z de antes (con
+restos), sin cruzarse con este. **No hace falta subir `min_app_version`.**
+
+### 16.6 Lo que cambia para la entrega 1
+
+- La comparación "un paso por vez" contra el deshacer de Yjs tal cual da idéntico con el parche: el diseño de 3.4 no
+  cambia.
+- Con la línea de tiempo se deshace más lejos, que era lo que hacía visible el límite: ya no es condición.
+- `redone` está en los items del documento, no en el `UndoManager`: pasar las listas de un editor al siguiente (3.2) y
+  el `UndoManager` temporal del reemplazo (3.3) lo usan igual. Un documento rearmado lo pierde, que ya era la razón por
+  la que la pila no sobrevive a recargar.
+- La prueba al azar de la línea de tiempo (sección 12) cuenta las "con algo de menos" y las "con letras de más": cero
+  con el parche.
+- **Al actualizar Yjs** (o al pasar a `@blocknote/core/y`, Yjs 14, `Doc_Colaboracion.md`): ver si la versión nueva ya lo
+  trae; si no, rehacer el parche en los tres archivos y `npx patch-package yjs`. Las dos pruebas lo cubren. Conviene
+  reportarlo a Yjs con los dos casos mínimos de 16.1.
 
 ## Correcciones de la auditoría (2026-10-02)
 

@@ -224,6 +224,14 @@ escribía ahí creaba su propio texto; después los juntaba copiando uno en el o
    (algo que se perdía ahora queda). Revisar el caso, actualizar la tabla de arriba y la prueba.
 4. Correr la prueba de punta a punta `e2e.mjs` (dos dispositivos que se fusionan).
 
+### Yjs también lleva un parche (v0.130)
+
+`patches/yjs+13.6.33.patch` (Yjs fijo en 13.6.33): el deshacer sigue entera la copia que otro deshacer volvió a poner
+(sin él dejaba restos y a veces se llevaba texto de antes). La causa, el arreglo y lo medido están en
+`Doc_Deshacer.md`, sección 16. Al actualizar Yjs: ver si la versión nueva lo trae; si no, rehacerlo en `dist/yjs.mjs`,
+`dist/yjs.cjs` y `src` (marca `LGA-SHOTDOCS-PATCH (B.21)`), regenerar con `npx patch-package yjs` y correr
+`src/ui/yjsUndoRedone*.test.ts`. `vite.config.ts` (`assertYjsPatched`) no deja correr nada sin el parche.
+
 ### A futuro: `@blocknote/core/y` (y-prosemirror 2, Yjs 14)
 
 BlockNote ya trae una integración nueva (`@blocknote/core/y`, sobre y-prosemirror 2 y Yjs 14) que compara
