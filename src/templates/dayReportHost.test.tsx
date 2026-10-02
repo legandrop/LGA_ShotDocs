@@ -145,9 +145,11 @@ function setInput(el: HTMLInputElement, value: string) {
   });
 }
 
-/** Espera a que el globito haya leído la carpeta (el botón principal se habilita). */
+/** Espera a que el globito haya leído la carpeta (se va *Reading the previous report…*). */
 async function popoverReady() {
-  for (let i = 0; i < 60 && (!popover() || popover()!.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled); i++) await wait(30);
+  const loading = () => !popover() || popover()!.textContent!.includes('Reading the previous report');
+  for (let i = 0; i < 60 && loading(); i++) await wait(30);
+  expect(loading()).toBe(false);
   expect(popover()!.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(false);
 }
 
@@ -276,7 +278,40 @@ describe('el botón New day report y su globito', () => {
     await popoverReady();
     click([...popover()!.querySelectorAll('button')].find((b) => b.textContent === 'Create another'));
     for (let i = 0; i < 40 && device.tree.children(folder).length < 2; i++) await wait(30);
-    expect(device.tree.children(folder).map((p) => p.title)).toEqual([`${localDate()} | Day 01`, `${localDate()} | Day 02`]);
+    // O1: otro del mismo día es el mismo día de rodaje (una segunda unidad, un día partido).
+    expect(device.tree.children(folder).map((p) => p.title)).toEqual([`${localDate()} | Day 01`, `${localDate()} | Day 01`]);
+  });
+
+  it('O3: Enter mientras se lee la carpeta se recuerda y crea apenas llega la propuesta', async () => {
+    const { device, folder } = await setup().then(async ({ device }) => {
+      const folder = await device.tree.create(null, 'Reportes');
+      const deps = { tree: device.tree, docs: device.docs, engine: device.engine };
+      const plan = await planDayReport(deps, { parentId: folder, projectId: device.tree.workspaceId });
+      await createDayReport(deps, plan, { ...plan.suggestion, date: addDays(localDate(), -1), location: 'Galpón' }, 'en', { canMark: true });
+      return { device, folder };
+    });
+    const host = await open(device, folder);
+    // La lectura de los reportes queda frenada hasta soltarla.
+    const realSnapshot = device.docs.snapshot.bind(device.docs);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    device.docs.snapshot = (async (id: string) => {
+      await gate;
+      return realSnapshot(id);
+    }) as typeof device.docs.snapshot;
+    click(host.querySelector('.day-report-button'));
+    for (let i = 0; i < 40 && !popover(); i++) await wait(20);
+    expect(popover()!.textContent).toContain('Reading the previous report');
+    const submitButton = popover()!.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(submitButton.disabled).toBe(false);
+    act(() => popover()!.requestSubmit());
+    await wait(50);
+    expect(device.tree.children(folder).length).toBe(1);
+    release();
+    for (let i = 0; i < 60 && location.pathname === '/'; i++) await wait(30);
+    const kids = device.tree.children(folder);
+    expect(kids.map((p) => p.title)).toEqual([`${addDays(localDate(), -1)} | Day 01`, `${localDate()} | Day 02`]);
+    expect(location.pathname).toBe(`/p/${kids[1].id}`);
   });
 
   it('el atajo abre y cierra el globito (también por la posición de la tecla); con AltGr no', async () => {
@@ -371,6 +406,21 @@ describe('el menú de la página', () => {
     click(item('Stop using for day reports'));
     await wait(30);
     expect(device.tree.get(folder)?.settings?.dayReports).toBe(false);
+  });
+
+  it('O6: en un reporte no se ofrece Use for day reports; en la carpeta, Stop using sí', async () => {
+    const { device } = await setup();
+    const folder = await device.tree.create(null, 'Reportes');
+    const deps = { tree: device.tree, docs: device.docs, engine: device.engine };
+    const plan = await planDayReport(deps, { parentId: folder, projectId: device.tree.workspaceId });
+    const report = await createDayReport(deps, plan, plan.suggestion, 'en', { canMark: true });
+    let item = await menuFor(device, report);
+    expect(item('New day report')).toBeDefined();
+    expect(item('Use for day reports')).toBeUndefined();
+    expect(item('Stop using for day reports')).toBeUndefined();
+    for (const r of roots.splice(0)) act(() => r.unmount());
+    item = await menuFor(device, folder);
+    expect(item('Stop using for day reports')).toBeDefined();
   });
 
   it('New day report sobre una carpeta que no está abierta la abre y muestra el globito', async () => {

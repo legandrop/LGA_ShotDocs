@@ -34,7 +34,7 @@ import {
   VideoIcon,
 } from './icons';
 import { requestTemplates, templateTargetFor } from '../templates/templatesUi';
-import { isDayReportFolder } from '../templates/dayReport';
+import { isDayReportFolder, isReportPage } from '../templates/dayReport';
 import { requestDayReport, useDayReportFolder } from '../templates/dayReportUi';
 import { offlineSupported, openOffline, openStorage } from './SpaceHost';
 import { openHelp } from '../help/helpUi';
@@ -179,6 +179,9 @@ export function PageMenu(props: {
   // reportes (con permiso para crear ahí), y marcar o dejar de usar una página como carpeta de reportes.
   const reportFolder = useDayReportFolder(props.pageId);
   const isReportFolder = isDayReportFolder(tree, props.pageId);
+  // En un reporte no se ofrece marcarlo como carpeta (casi nadie lo quiere y suma un renglón en cada reporte).
+  const thisRow = tree.get(props.pageId);
+  const offerReportFolder = isReportFolder || !(thisRow && isReportPage(thisRow));
 
   const item = (label: string, icon: ReactNode, action: () => void, danger = false, enabled = true) => (
     <button
@@ -339,7 +342,7 @@ export function PageMenu(props: {
         </button>
       )}
       {/* La carpeta de reportes a mano (6.2): puede haber varias (una por unidad). Dejarla gana sobre lo deducido. */}
-      {canEdit && (
+      {canEdit && offerReportFolder && (
         <button
           role="menuitem"
           data-tip={isReportFolder ? undefined : tr('pageMenu.useForDayReportsTip')}

@@ -7,6 +7,7 @@ import type { PageTree } from '../sync/tree';
 import type { PageRow } from '../sync/types';
 import { editorSchemaOptions, schema } from '../ui/editorSchema';
 import { findUnknownContent } from '../ui/unknownContent';
+import { isEmptyPage } from './apply';
 import { builtinBlocks, type TemplateBlock } from './builtin';
 import { BUILTIN_ONSET } from './builtinIds';
 import { dateAtStart, dayInTitle, dayReportsMark, localDate, reportTitle } from './dayReport';
@@ -35,8 +36,14 @@ export interface DayReportPlan {
   /** Dónde va el reporte: la carpeta (o `null`, la raíz del proyecto). */
   parentId: string | null;
   projectId: string;
-  /** Los reportes, en el orden de la carpeta. */
+  /** Los reportes, en el orden de la carpeta (sin los vacíos de `emptyReports`). */
   reports: ReportEntry[];
+  /**
+   * Páginas con título de reporte pero sin contenido, completas en el dispositivo: una a la que se le deshizo la
+   * plantilla, o una que se creó y no se pudo llenar (auditoría, O2 y O4). No cuentan como reportes y, si la fecha
+   * coincide, el reporte nuevo se escribe en ella en vez de crear otra.
+   */
+  emptyReports: ReportEntry[];
   /** El de fecha más alta (el "de ayer"), o `null` si no hay. */
   last: ReportEntry | null;
   /** Lo que se leyó de `last` (null si no hay, o si no se pudo leer). */
@@ -49,6 +56,8 @@ export interface DayReportPlan {
 
 /** Cuántos documentos se leen como mucho buscando la fila *Date* de páginas sin fecha en el título. */
 const MAX_DATE_READS = 40;
+/** Cuántos reportes, de la fecha más alta para atrás, se miran por si están vacíos (los más viejos se dan por llenos). */
+const EMPTY_CHECKS = 10;
 
 type Reader = BlockNoteEditor;
 
@@ -75,13 +84,16 @@ export async function planDayReport(
     (p) => p.id !== options.exclude,
   );
   let reader: Reader | null = null;
-  const read = new Map<string, ReportFacts | null>();
-  const factsOf = async (id: string): Promise<ReportFacts | null> => {
-    if (read.has(id)) return read.get(id)!;
+  const read = new Map<string, { facts: ReportFacts | null; empty: boolean }>();
+  const readPage = async (id: string): Promise<{ facts: ReportFacts | null; empty: boolean }> => {
+    const known = read.get(id);
+    if (known) return known;
     let facts: ReportFacts | null = null;
+    let empty = false;
     try {
       const saved = await docs.snapshot(id);
       try {
+        empty = isEmptyPage(saved.doc);
         // Algo que esta versión no conoce: no se lee (el título sigue valiendo).
         if (saved.supported && !findUnknownContent(saved.doc)) facts = readFacts(blocksOf((reader ??= newReader()), saved.doc));
       } finally {
@@ -90,9 +102,14 @@ export async function planDayReport(
     } catch (err) {
       console.warn('Reporte del día: no se pudo leer la página', id, err);
     }
-    read.set(id, facts);
-    return facts;
+    const result = { facts, empty };
+    read.set(id, result);
+    return result;
   };
+  const factsOf = async (id: string) => (await readPage(id)).facts;
+  /** Vacía de verdad: lo guardado no tiene nada y no le falta nada del servidor (una a medio bajar se ve vacía). */
+  const isEmptyReport = async (id: string) =>
+    (await readPage(id)).empty && !(await deps.engine.isMissingContent(id).catch(() => true));
 
   const reports: ReportEntry[] = [];
   let reads = 0;
@@ -107,6 +124,15 @@ export async function planDayReport(
     }
     if (date) reports.push({ id: p.id, title: p.title, date, day });
   }
+  // Los vacíos no cuentan (O2): se miran los más recientes, que es donde aparecen (el que se acaba de deshacer o de
+  // crear sin poder llenarlo).
+  const recent = reports
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => (a.r.date === b.r.date ? b.i - a.i : a.r.date < b.r.date ? 1 : -1))
+    .slice(0, EMPTY_CHECKS);
+  const emptyReports: ReportEntry[] = [];
+  for (const { r } of recent) if (await isEmptyReport(r.id)) emptyReports.push(r);
+  if (emptyReports.length) reports.splice(0, reports.length, ...reports.filter((r) => !emptyReports.includes(r)));
   // El de fecha más alta; con dos del mismo día, el que está más abajo en la carpeta.
   let last: ReportEntry | null = null;
   for (const r of reports) if (!last || r.date >= last.date) last = r;
@@ -117,6 +143,7 @@ export async function planDayReport(
     parentId: target.parentId,
     projectId: target.projectId,
     reports,
+    emptyReports,
     last,
     facts,
     lastIncomplete,
@@ -131,6 +158,17 @@ export async function planDayReport(
 /** Los reportes de la carpeta con esa fecha (PL8: *already exists*). */
 export function reportsOn(plan: DayReportPlan, date: string): ReportEntry[] {
   return plan.reports.filter((r) => r.date === date);
+}
+
+/**
+ * El día de rodaje que propone el globito para esa fecha (O1): si ya hay un reporte ese día, su número (*Create
+ * another* es una segunda unidad o un día partido: el mismo día de rodaje); si no, el siguiente al último.
+ */
+export function suggestedDay(plan: DayReportPlan, date: string): number {
+  const same = reportsOn(plan, date)
+    .map((r) => r.day)
+    .filter((d): d is number => d !== null);
+  return same.at(-1) ?? plan.suggestion.day;
 }
 
 /**
@@ -163,37 +201,75 @@ export async function markReportFolder(tree: PageTree, folderId: string): Promis
   await tree.setSetting(folderId, 'dayReports', {});
 }
 
+/** La página del reporte quedó creada pero no se pudo escribir su contenido (O4): el reintento la usa. */
+export class DayReportWriteError extends Error {
+  constructor(
+    readonly pageId: string,
+    readonly cause: unknown,
+  ) {
+    super('The day report page was created but its content could not be written.');
+  }
+}
+
 /**
  * Crea el reporte: la página (con `template_id` de *On-Set Report*, en su lugar de la carpeta), su contenido y la marca de
- * la carpeta (si la persona puede editarla). Devuelve el id de la página nueva. Todo local: sin red, igual.
+ * la carpeta (si la persona puede editarla). Devuelve el id de la página. Todo local: sin red, igual.
+ *
+ * No duplica (O4): con `reuse` (la página que dejó un intento que falló al escribir) o con una página vacía de la
+ * carpeta con esa fecha (`plan.emptyReports`), escribe en ella, con el título y la plantilla al día, en vez de crear otra.
+ * Solo se escribe en una página vacía y completa: si ya tiene algo (el intento anterior llegó a escribir), no se agrega
+ * otra copia. Si escribir falla, tira `DayReportWriteError` con el id, para reintentar sobre la misma página.
  */
 export async function createDayReport(
   deps: DayReportDeps,
   plan: DayReportPlan,
   input: DayReportInput,
   lang: string,
-  options: { canMark: boolean },
+  options: { canMark: boolean; reuse?: string },
 ): Promise<string> {
+  const { tree } = deps;
   const blocks = reportBlocks(plan, input, lang);
-  if (plan.parentId && options.canMark) await markReportFolder(deps.tree, plan.parentId);
-  const id = await deps.tree.create(plan.parentId, reportTitle(input.date, input.day, lang), plan.projectId, {
-    templateId: BUILTIN_ONSET,
-    before: placeBefore(plan, input.date),
-  });
-  await writeNewPage(deps.docs, id, blocks);
+  const title = reportTitle(input.date, input.day, lang);
+  if (plan.parentId && options.canMark) await markReportFolder(tree, plan.parentId);
+  const usable = (id: string | undefined): id is string => {
+    const row = id ? tree.get(id) : undefined;
+    return !!row && !tree.isTrashed(row.id) && row.parent_id === plan.parentId && row.workspace_id === plan.projectId;
+  };
+  const candidate = options.reuse ?? plan.emptyReports.find((r) => r.date === input.date)?.id;
+  let id: string;
+  if (usable(candidate)) {
+    id = candidate;
+    const row = tree.get(id)!;
+    const patch: { title?: string; template_id?: string } = {};
+    if (row.title !== title) patch.title = title;
+    if (row.template_id !== BUILTIN_ONSET) patch.template_id = BUILTIN_ONSET;
+    if (Object.keys(patch).length) await tree.setPatch(id, patch);
+  } else {
+    id = await tree.create(plan.parentId, title, plan.projectId, { templateId: BUILTIN_ONSET, before: placeBefore(plan, input.date) });
+  }
+  try {
+    await writeNewPage(deps.docs, id, blocks);
+  } catch (err) {
+    throw new DayReportWriteError(id, err);
+  }
   return id;
 }
 
 /**
- * Escribe los bloques en una página nueva sin abrirla, como lo haría el editor (y como `writePage` de la importación):
+ * Escribe los bloques en una página vacía sin abrirla, como lo haría el editor (y como `writePage` de la importación):
  * el documento con la semilla, un editor sin pantalla, y los bloques agregados ANTES del primero (el párrafo vacío de
- * la semilla queda al final). Nunca reemplaza: si algo ya estaba, queda debajo.
+ * la semilla queda al final). Nunca reemplaza ni borra. Si la página ya tiene contenido (un intento anterior llegó a
+ * escribir), no agrega nada: solo espera a que lo de antes quede guardado.
  */
 export async function writeNewPage(docs: DayReportDeps['docs'], pageId: string, blocks: TemplateBlock[]): Promise<void> {
   const doc = await docs.open(pageId, { seed: true });
   try {
-    // Una página recién creada no puede tener nada desconocido; si lo tuviera, el editor lo borraría: no se toca.
+    // Algo que esta versión no conoce: el editor lo borraría. No se toca.
     if (findUnknownContent(doc)) throw new Error('The page has content this version does not know.');
+    if (!isEmptyPage(doc)) {
+      await docs.flush(pageId);
+      return;
+    }
     const editor = BlockNoteEditor.create(
       withCollaboration({
         ...editorSchemaOptions,

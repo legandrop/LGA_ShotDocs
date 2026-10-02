@@ -14,7 +14,17 @@ import { insertTemplate, isEmptyPage } from './apply';
 import { BUILTIN_ONSET } from './builtinIds';
 import { dayReportsMark, isDayReportFolder, reportTitle } from './dayReport';
 import { readFacts } from './dayReportFacts';
-import { createDayReport, markReportFolder, planDayReport, placeBefore, reportBlocks, reportsOn } from './dayReportCreate';
+import {
+  createDayReport,
+  DayReportWriteError,
+  markReportFolder,
+  planDayReport,
+  placeBefore,
+  reportBlocks,
+  reportsOn,
+  suggestedDay,
+  writeNewPage,
+} from './dayReportCreate';
 
 // La prueba de aceptación de la entrega 2 (Docs/Doc_Plantillas.md, sección 11) con el servidor en memoria: en una
 // carpeta *Reportes*, el primero desde la tira (queda `… | Day 01` y la carpeta queda marcada); se escribe una locación y
@@ -243,8 +253,11 @@ describe('el reporte del día: la prueba de aceptación', () => {
     const empty = await planDayReport(deps(a), { parentId: folder, projectId: a.tree.workspaceId }, { now: DAY1 });
     expect(empty.suggestion).toEqual({ date: '2026-10-01', day: 1, location: '' });
     expect(empty.last).toBeNull();
-    await a.tree.create(folder, '2026-09-29 | Ensayo');
-    await a.tree.create(folder, '2026-09-30 | Prueba de cámara');
+    // Con algo escrito: una página con fecha pero vacía no cuenta (O2).
+    for (const title of ['2026-09-29 | Ensayo', '2026-09-30 | Prueba de cámara']) {
+      const id = await a.tree.create(folder, title);
+      await writeNewPage(a.docs, id, [{ type: 'paragraph', content: 'Notas' }]);
+    }
     const plan = await planDayReport(deps(a), { parentId: folder, projectId: a.tree.workspaceId }, { now: DAY1 });
     expect(plan.suggestion.day).toBe(3);
   });
@@ -269,6 +282,97 @@ describe('el reporte del día: la prueba de aceptación', () => {
     missing.clear();
     const after = await planDayReport({ ...deps(a), engine }, { parentId: folder, projectId: a.tree.workspaceId }, { now: DAY2 });
     expect(after.lastIncomplete).toBe(false);
+  });
+});
+
+describe('correcciones de la auditoría', () => {
+  it('O1: otro reporte con una fecha que ya tiene uno propone el mismo día de rodaje', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const folder = await a.tree.create(null, 'Reportes');
+    for (const now of [DAY1, DAY2]) {
+      const plan = await planDayReport(deps(a), { parentId: folder, projectId: a.tree.workspaceId }, { now });
+      await createDayReport(deps(a), plan, plan.suggestion, 'en', { canMark: true });
+    }
+    const plan = await planDayReport(deps(a), { parentId: folder, projectId: a.tree.workspaceId }, { now: DAY2 });
+    expect(plan.suggestion.day).toBe(3);
+    expect(suggestedDay(plan, '2026-10-02')).toBe(2);
+    expect(suggestedDay(plan, '2026-10-01')).toBe(1);
+    expect(suggestedDay(plan, '2026-10-03')).toBe(3);
+  });
+
+  it('O2: el primero deshecho (página con título de reporte y vacía) no cuenta, y el próximo se escribe en ella', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const folder = await a.tree.create(null, 'Reportes');
+    const first = await firstFromStrip(a, folder, DAY1);
+    // Deshacer la plantilla: la página queda vacía con su título y su template_id.
+    const editor = editors.at(-1)!;
+    editor.removeBlocks(editor.document.slice(0, -1).map((b) => b.id));
+    await tick();
+    await a.docs.flush(first);
+    for (const e of editors.splice(0)) e.unmount();
+    a.docs.close(first);
+    expect(a.tree.get(first)?.title).toBe('2026-10-01 | Day 01');
+
+    const plan = await planDayReport(deps(a), { parentId: folder, projectId: a.tree.workspaceId }, { now: DAY1 });
+    expect(plan.reports).toEqual([]);
+    expect(plan.emptyReports.map((r) => r.id)).toEqual([first]);
+    expect(plan.suggestion.day).toBe(1);
+    expect(reportsOn(plan, '2026-10-01')).toEqual([]);
+    // Crear ese día usa la página vacía: no queda un segundo Day 01.
+    const id = await createDayReport(deps(a), plan, plan.suggestion, 'en', { canMark: true });
+    expect(id).toBe(first);
+    expect(a.tree.children(folder).length).toBe(1);
+    expect((await factsOn(a, first)).facts.date).toBe('2026-10-01');
+
+    // Una página "vacía" a la que le falta contenido del servidor no es vacía: no se toca.
+    const other = await a.tree.create(folder, '2026-10-02 | Day 02', undefined, { templateId: BUILTIN_ONSET });
+    const engine = { isMissingContent: async (pageId: string) => pageId === other };
+    const later = await planDayReport({ ...deps(a), engine }, { parentId: folder, projectId: a.tree.workspaceId }, { now: DAY2 });
+    expect(later.emptyReports).toEqual([]);
+    expect(reportsOn(later, '2026-10-02').map((r) => r.id)).toEqual([other]);
+  });
+
+  it('O4: si escribir el contenido falla, el reintento usa la página ya creada (no la duplica)', async () => {
+    const server = new FakeServer();
+    const a = await device(server);
+    const folder = await a.tree.create(null, 'Reportes');
+    const plan = await planDayReport(deps(a), { parentId: folder, projectId: a.tree.workspaceId }, { now: DAY1 });
+    const realOpen = a.docs.open.bind(a.docs);
+    let fail = true;
+    const docs = {
+      ...deps(a).docs,
+      open: async (id: string, o?: { seed?: boolean }) => {
+        if (fail) {
+          fail = false;
+          throw new Error('QuotaExceededError');
+        }
+        return realOpen(id, o);
+      },
+      close: a.docs.close.bind(a.docs),
+      flush: a.docs.flush.bind(a.docs),
+      snapshot: a.docs.snapshot.bind(a.docs),
+    };
+    let failed: DayReportWriteError | null = null;
+    try {
+      await createDayReport({ ...deps(a), docs }, plan, plan.suggestion, 'en', { canMark: true });
+    } catch (err) {
+      failed = err as DayReportWriteError;
+    }
+    expect(failed).toBeInstanceOf(DayReportWriteError);
+    expect(a.tree.children(folder).map((p) => p.id)).toEqual([failed!.pageId]);
+    const id = await createDayReport({ ...deps(a), docs }, plan, plan.suggestion, 'en', { canMark: true, reuse: failed!.pageId });
+    expect(id).toBe(failed!.pageId);
+    expect(a.tree.children(folder).length).toBe(1);
+    const made = await factsOn(a, id);
+    expect(made.facts.date).toBe('2026-10-01');
+    // Otra vez con la página ya llena: no agrega una segunda copia.
+    const count = made.blocks.length;
+    await createDayReport(deps(a), plan, plan.suggestion, 'en', { canMark: true, reuse: id });
+    expect((await factsOn(a, id)).blocks.length).toBe(count);
+    // Sin `reuse`, la página vacía de la fecha también se reusaría (O2): tampoco duplica.
+    expect(a.tree.children(folder).length).toBe(1);
   });
 });
 

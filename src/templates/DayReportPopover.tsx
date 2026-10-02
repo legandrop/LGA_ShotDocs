@@ -6,7 +6,7 @@ import { usePermissions, useServices, useTree } from '../services';
 import { useFloating } from '../ui/menus';
 import { notify } from '../ui/notice';
 import { dayName, isValidDate, localDate } from './dayReport';
-import { createDayReport, planDayReport, reportsOn, type DayReportPlan } from './dayReportCreate';
+import { createDayReport, DayReportWriteError, planDayReport, reportsOn, suggestedDay, type DayReportPlan } from './dayReportCreate';
 import { requestReportFocus } from './dayReportUi';
 
 // El globito del reporte del día (Docs/Doc_Plantillas.md, 6.3): la fecha de hoy (hora del dispositivo), el día de
@@ -34,6 +34,14 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const close = useRef(onClose);
   close.current = onClose;
+  // Lo que la persona ya tocó mientras se leía la carpeta no se pisa con la propuesta.
+  const touched = useRef({ date: false, day: false, location: false });
+  const dateNow = useRef(date);
+  dateNow.current = date;
+  // Enter antes de que termine de leer la carpeta (O3): se recuerda y se hace apenas llega la propuesta.
+  const [queued, setQueued] = useState(false);
+  // La página que dejó un intento que no pudo escribir el contenido (O4): el reintento la usa en vez de crear otra.
+  const failedPage = useRef<string | undefined>(undefined);
 
   // La propuesta: se lee una vez al abrir (lo que se escribe en los campos manda desde ahí).
   useEffect(() => {
@@ -44,9 +52,11 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
       .then((next) => {
         if (cancelled) return;
         setPlan(next);
-        setDate(next.suggestion.date);
-        setDay(String(next.suggestion.day));
-        setLocation(next.suggestion.location);
+        const t = touched.current;
+        const chosen = t.date && isValidDate(dateNow.current) ? dateNow.current : next.suggestion.date;
+        if (!t.date) setDate(chosen);
+        if (!t.day) setDay(String(suggestedDay(next, chosen)));
+        if (!t.location) setLocation(next.suggestion.location);
       })
       .catch((err) => {
         console.error('Reporte del día: no se pudieron leer los reportes', err);
@@ -77,13 +87,14 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
         plan,
         { date, day: dayNumber, location: location.replace(/\s+/g, ' ').trim() },
         tr.lang,
-        { canMark: perms.canEditPage(folderId) },
+        { canMark: perms.canEditPage(folderId), reuse: failedPage.current },
       );
       onClose();
       requestReportFocus(id);
       navigate(pagePath(id));
     } catch (err) {
       console.error('Reporte del día: no se pudo crear', err);
+      if (err instanceof DayReportWriteError) failedPage.current = err.pageId;
       notify(t('dayReport.failed'));
       setBusy(false);
     }
@@ -95,6 +106,22 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
     onClose();
     navigate(pagePath(target.id));
   };
+
+  const submit = () => {
+    if (!plan) {
+      setQueued(true);
+      return;
+    }
+    if (existing.length) openExisting();
+    else void create();
+  };
+  useEffect(() => {
+    if (!plan || !queued) return;
+    setQueued(false);
+    submit();
+    // `submit` es el de este dibujo, con la propuesta ya puesta en los campos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, queued]);
 
   const existsText =
     existing.length > 1
@@ -109,26 +136,45 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
       className="day-report-popover"
       role="dialog"
       aria-label={tr('dayReport.new')}
+      // Los campos se validan acá (la fecha y el día): mientras se lee la carpeta el día está vacío y Enter se recuerda.
+      noValidate
       onSubmit={(e) => {
         e.preventDefault();
-        if (existing.length) openExisting();
-        else void create();
+        submit();
       }}
     >
       <h2>{tr('dayReport.new')}</h2>
       <div className="day-report-row">
         <label className="day-report-field">
           <span className="pref-label">{tr('dayReport.date')}</span>
-          <input type="date" value={date} required onChange={(e) => setDate(e.target.value)} />
+          <input
+            type="date"
+            value={date}
+            required
+            onChange={(e) => {
+              touched.current.date = true;
+              setDate(e.target.value);
+              // El día que va con esa fecha (O1): el del reporte que ya la tiene, o el siguiente al último.
+              if (plan && !touched.current.day && isValidDate(e.target.value)) setDay(String(suggestedDay(plan, e.target.value)));
+            }}
+          />
         </label>
         <label className="day-report-field">
           <span className="pref-label">{tr('dayReport.day')}</span>
-          <input type="number" inputMode="numeric" min={1} max={9999} value={day} required onChange={(e) => setDay(e.target.value)} />
+          <input type="number" inputMode="numeric" min={1} max={9999} value={day} required onChange={(e) => {
+              touched.current.day = true;
+              setDay(e.target.value);
+            }}
+          />
         </label>
       </div>
       <label className="day-report-field">
         <span className="pref-label">{tr('dayReport.location')}</span>
-        <input type="text" value={location} maxLength={200} onChange={(e) => setLocation(e.target.value)} />
+        <input type="text" value={location} maxLength={200} onChange={(e) => {
+            touched.current.location = true;
+            setLocation(e.target.value);
+          }}
+        />
       </label>
       {plan?.lastIncomplete && <p className="notice-line warn">{tr('dayReport.incomplete')}</p>}
       {existsText && (
@@ -143,7 +189,12 @@ export function DayReportPopover({ folderId, anchor, onClose }: Props) {
             {tr('dayReport.createAnother')}
           </button>
         )}
-        <button type="submit" className="primary" disabled={!plan || busy || !validDate || (!existing.length && !validDay)}>
+        <button
+          type="submit"
+          className="primary"
+          // Mientras se lee la carpeta queda habilitado: Enter se recuerda y se hace al terminar (O3).
+          disabled={busy || (!!plan && (!validDate || (!existing.length && !validDay)))}
+        >
           {existing.length ? tr('dayReport.open') : tr('dayReport.create')}
         </button>
       </div>
